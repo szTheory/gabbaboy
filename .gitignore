@@ -27,3 +27,4 @@ CMakeUserPresets.json
 
 # Temporary OpenGSD runtime state (retain planning documents)
 .planning/.tmp/
+.planning/research/.cache/
