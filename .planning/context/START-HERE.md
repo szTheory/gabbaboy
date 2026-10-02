@@ -2,6 +2,10 @@
 
 GabbaBoy's OpenGSD project is initialized. **Phase 1 has not started.** The owner explicitly selected research plus initialization now, with a stop before Phase 1.
 
+**Completed stage:** project research and initialization (`gsd-new-project`). **Implementation phases completed:** 0 of 6.
+
+**Next stage:** discuss Phase 1 — Portable Foundation and Original ROM Tracer. No Phase 1 context or implementation plans exist yet. This discussion turns the existing research into phase-specific decisions (the tiny ROM/opcode subset, model/boot defaults, public timing/ownership contract, and initial build/release scope). Reuse settled project decisions rather than repeating the kickoff or broad research. After that context is recorded, the expected next command is `$gsd-plan-phase 1`; verify the actual artifacts before recommending it.
+
 Open a fresh session in this repository and run:
 
 ```text
