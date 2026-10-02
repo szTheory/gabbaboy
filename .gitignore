@@ -1,0 +1,29 @@
+# Local build products
+/build/
+/out/
+/dist/
+/coverage/
+*.profraw
+*.profdata
+*.gcda
+*.gcno
+
+# Credentials and machine-local settings
+.env
+.env.*
+!.env.example
+CMakeUserPresets.json
+.DS_Store
+
+# Private inputs and saves; permissioned public fixtures must be explicitly admitted
+/roms/
+/private/
+*.gb
+*.gbc
+*.gba
+*.sav
+*.srm
+*.state
+
+# Temporary OpenGSD runtime state (retain planning documents)
+.planning/.tmp/
