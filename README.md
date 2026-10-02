@@ -11,5 +11,6 @@ The intended product is a dependency-light core, a small optional macOS desktop 
 - [Roadmap](.planning/ROADMAP.md)
 - [Current state and next action](.planning/STATE.md)
 - [Contributor workflow](AGENTS.md)
+- [Fresh-context continuation](.planning/context/START-HERE.md)
 
 Original project material is MIT licensed. Third-party material retains its own license. Game images and proprietary boot ROMs are not included.

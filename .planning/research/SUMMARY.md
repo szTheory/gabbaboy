@@ -153,7 +153,7 @@ The same original fixture and public API grow through guest execution, interacti
 - **Phase 6:** actual remote protections/App credentials, artifact retention/publication, signing availability, Playstead consumption contract and measured performance budgets.
 - **Next milestone:** CGB-E versus CGB-C/D corpus coverage, undocumented clock/FIFO behavior, RTC interchange, snapshot compatibility and independent hardware evidence where sources disagree.
 
-**Requirements handoff:** map each initial deliverable to one verifiable requirement and owner phase; maintain a separate deferred requirement list for CGB/mappers/RTC/states/Playstead integration. Avoid universal compatibility, fixed percentage speed goals, undefined “all tests,” and stable ABI promises. [DECISIONS.md](../DECISIONS.md) records adopted constraints versus provisional recommendations. The active ROADMAP should select scope from this proposal and the BRIEF; this synthesis is evidence, not an immutable plan.
+**Requirements handoff:** map each initial deliverable to one verifiable requirement and owner phase; maintain a separate deferred requirement list for CGB/mappers/RTC/states/Playstead integration. Avoid universal compatibility, fixed percentage speed goals, undefined “all tests,” and stable ABI promises. [DECISIONS.md](../context/DECISIONS.md) records adopted constraints versus provisional recommendations. The active ROADMAP should select scope from this proposal and the BRIEF; this synthesis is evidence, not an immutable plan.
 
 ## Sources
 

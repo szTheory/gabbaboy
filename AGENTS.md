@@ -2,7 +2,7 @@
 
 ## Identity and current state
 
-GabbaBoy targets **Game Boy and Game Boy Color**. Copied NES/Neo Geo/Elixir examples are background, not implementation requirements. Read `.planning/STATE.md`, `.planning/PROJECT.md`, and `.planning/research/SUMMARY.md` before substantial work. If a file is missing during bootstrap, read `.planning/BRIEF.md` and continue initialization; never claim an unimplemented emulator works.
+GabbaBoy targets **Game Boy and Game Boy Color**. Copied NES/Neo Geo/Elixir examples are background, not implementation requirements. Read `.planning/STATE.md`, `.planning/PROJECT.md`, and `.planning/research/SUMMARY.md` before substantial work. If a file is missing during bootstrap, read `.planning/context/BRIEF.md` and continue initialization; never claim an unimplemented emulator works.
 
 ## Workflow contract
 
@@ -27,6 +27,6 @@ GabbaBoy targets **Game Boy and Game Boy Color**. Copied NES/Neo Geo/Elixir exam
 
 ## Durable memory
 
-Keep `.planning/research/INDEX.md` as the navigation entry point, topic documents as evidence, `DECISIONS.md` as adopted choices, `ROADMAP.md` as active milestone detail, and `FUTURE-MILESTONES.md` as revisable direction. Update `LESSONS.md` with concrete cause, evidence, remedy, applicability, and verification; export only concise sanitized lessons for sibling projects. Local precedent may be incomplete or superseded.
+Keep `.planning/research/INDEX.md` as the navigation entry point, topic documents as evidence, `.planning/context/DECISIONS.md` as adopted choices, `.planning/ROADMAP.md` as active milestone detail, and `.planning/context/FUTURE-MILESTONES.md` as revisable direction. Update `.planning/context/LESSONS.md` with concrete cause, evidence, remedy, applicability, and verification; export only concise sanitized lessons for sibling projects. Local precedent may be incomplete or superseded.
 
 No phase is complete solely because documents were written, tests were listed, or a video/audio screenshot looked plausible.

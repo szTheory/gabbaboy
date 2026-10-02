@@ -4,7 +4,7 @@ Updated: 2026-10-02. Target: original C Game Boy / Game Boy Color core. These do
 
 ## Start here
 
-Read [SUMMARY.md](SUMMARY.md) for the integrated recommendation, six-phase initial DMG proposal, reconciled conflicts and open evidence gaps. [PROJECT.md](../PROJECT.md) defines product intent; [BRIEF.md](../BRIEF.md) preserves owner priorities; [WORKFLOW.md](../WORKFLOW.md) defines authorization and mandatory phase pauses. [DECISIONS.md](../DECISIONS.md) distinguishes adopted constraints from recommendations. Once written, ROADMAP.md is active milestone scope and FUTURE-MILESTONES.md is revisable direction; research proposals do not automatically add work.
+Read [SUMMARY.md](SUMMARY.md) for the integrated recommendation, six-phase initial DMG proposal, reconciled conflicts and open evidence gaps. [PROJECT.md](../PROJECT.md) defines product intent; [BRIEF.md](../context/BRIEF.md) preserves owner priorities; [WORKFLOW.md](../context/WORKFLOW.md) defines authorization and mandatory phase pauses. [DECISIONS.md](../context/DECISIONS.md) distinguishes adopted constraints from recommendations. [ROADMAP.md](../ROADMAP.md) is active milestone scope and [FUTURE-MILESTONES.md](../context/FUTURE-MILESTONES.md) is revisable direction; research proposals do not automatically add work.
 
 ## Route a question
 

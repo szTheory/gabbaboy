@@ -35,7 +35,7 @@ None yet — all emulator capabilities require implementation and evidence.
 
 ## Context
 
-- The founding brief is [BRIEF.md](BRIEF.md). Detailed evidence and tradeoffs live in [research/](research/).
+- The founding brief is [BRIEF.md](context/BRIEF.md). Detailed evidence and tradeoffs live in [research/](research).
 - Sibling emulators are developing concurrently. Recent fixes and experiments in GlueyNeo, Nesturbator, and Playstead are useful precedent, with evidence strength recorded separately from intentions.
 - Playstead is an intended consumer, not a prerequisite for first gameplay. An optional SDL player allows direct macOS use and exercises the same public API as external consumers.
 - Mature OSS delivery practices from lattice_stripe and ExifCleaner inform CI and release design when still relevant to this C library.

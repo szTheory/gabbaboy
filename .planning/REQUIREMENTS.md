@@ -75,7 +75,7 @@ These remain project commitments to refine at the next milestone. They are not h
 
 ## Later candidates
 
-BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, MGB/other DMG/CGB revisions, Camera/Printer/IR, MBC7/tilt/HuC controllers, GBS playback, richer debugging, rewind/runahead, web/mobile ports, and measured platform-specific optimizations. Details and triggers: [FUTURE-MILESTONES.md](FUTURE-MILESTONES.md).
+BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, MGB/other DMG/CGB revisions, Camera/Printer/IR, MBC7/tilt/HuC controllers, GBS playback, richer debugging, rewind/runahead, web/mobile ports, and measured platform-specific optimizations. Details and triggers: [FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md).
 
 ## Out of scope
 
@@ -90,7 +90,45 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 
 ## Traceability
 
-The roadmapper populates one phase per active requirement and confirms zero unmapped requirements before initialization completes.
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| BASE-01 | Phase 1 | Pending |
+| BASE-02 | Phase 1 | Pending |
+| BASE-03 | Phase 1 | Pending |
+| BASE-04 | Phase 1 | Pending |
+| BASE-05 | Phase 1 | Pending |
+| BASE-06 | Phase 1 | Pending |
+| BASE-07 | Phase 1 | Pending |
+| BASE-08 | Phase 1 | Pending |
+| CPU-01 | Phase 2 | Pending |
+| CPU-02 | Phase 2 | Pending |
+| CPU-03 | Phase 2 | Pending |
+| CPU-04 | Phase 2 | Pending |
+| CPU-05 | Phase 2 | Pending |
+| VIDEO-01 | Phase 3 | Pending |
+| VIDEO-02 | Phase 3 | Pending |
+| VIDEO-03 | Phase 3 | Pending |
+| VIDEO-04 | Phase 3 | Pending |
+| VIDEO-05 | Phase 3 | Pending |
+| SAVE-01 | Phase 4 | Pending |
+| SAVE-02 | Phase 4 | Pending |
+| SAVE-03 | Phase 4 | Pending |
+| SAVE-04 | Phase 4 | Pending |
+| AUDIO-01 | Phase 5 | Pending |
+| AUDIO-02 | Phase 5 | Pending |
+| AUDIO-03 | Phase 5 | Pending |
+| HOST-01 | Phase 5 | Pending |
+| HOST-02 | Phase 5 | Pending |
+| SHIP-01 | Phase 6 | Pending |
+| SHIP-02 | Phase 6 | Pending |
+| SHIP-03 | Phase 6 | Pending |
+| SHIP-04 | Phase 6 | Pending |
+| SHIP-05 | Phase 6 | Pending |
+| SHIP-06 | Phase 6 | Pending |
+| SHIP-07 | Phase 6 | Pending |
+| SHIP-08 | Phase 6 | Pending |
+
+**Active coverage:** 35/35 requirements mapped exactly once; 0 unmapped, 0 duplicates. All remain pending. Next-milestone requirements and later candidates are excluded from active coverage.
 
 ---
 Last updated: 2026-10-02 after research synthesis; all requirements remain pending.
