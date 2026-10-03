@@ -16,8 +16,8 @@ Every requirement below must map to exactly one phase. Completion needs implemen
 - [x] **BASE-04**: A caller can execute a tiny original GB ROM through the real CPU/bus path with a declared opcode subset and bounded run/trace result; unsupported execution is reported explicitly and no synthetic framebuffer substitutes for guest execution.
 - [x] **BASE-05**: A maintainer can reproduce each admitted public fixture from a manifest recording source, license/notice, immutable revision or original source, build recipe, digest, model/boot applicability, pass protocol, and timeout.
 - [x] **BASE-06**: An external C consumer and C++ consumer can link an installed `GabbaBoy::core`, execute the original tracer, and use the public header without private include paths or frontend dependencies.
-- [ ] **BASE-07**: A contributor receives a required CI result that confirms the intended tests actually ran, including loader/lifecycle errors and ASan/UBSan coverage; missing fixtures, missing mandatory cases, failures, and timeouts cannot appear green.
-- [ ] **BASE-08**: A contributor can use a documented remote/PR workflow and download a clearly labeled foundation-preview core/runner artifact tied to its source revision, with a basic installation smoke result and honest limitations.
+- [x] **BASE-07**: A contributor receives a required CI result that confirms the intended tests actually ran, including loader/lifecycle errors and ASan/UBSan coverage; missing fixtures, missing mandatory cases, failures, and timeouts cannot appear green.
+- [x] **BASE-08**: A contributor can use a documented remote/PR workflow and download a clearly labeled foundation-preview core/runner artifact tied to its source revision, with a basic installation smoke result and honest limitations.
 
 ### DMG CPU, bus, and time
 
@@ -98,8 +98,8 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | BASE-04 | Phase 1 | Complete |
 | BASE-05 | Phase 1 | Complete |
 | BASE-06 | Phase 1 | Complete |
-| BASE-07 | Phase 1 | Pending |
-| BASE-08 | Phase 1 | Pending |
+| BASE-07 | Phase 1 | Complete |
+| BASE-08 | Phase 1 | Complete |
 | CPU-01 | Phase 2 | Pending |
 | CPU-02 | Phase 2 | Pending |
 | CPU-03 | Phase 2 | Pending |
@@ -128,7 +128,7 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | SHIP-07 | Phase 6 | Pending |
 | SHIP-08 | Phase 6 | Pending |
 
-**Active coverage:** 35/35 requirements mapped exactly once; 0 unmapped, 0 duplicates. All remain pending. Next-milestone requirements and later candidates are excluded from active coverage.
+**Active coverage:** 35/35 requirements mapped exactly once; 0 unmapped, 0 duplicates. Eight are complete and 27 remain pending. Next-milestone requirements and later candidates are excluded from active coverage.
 
 ---
-Last updated: 2026-10-02 after research synthesis; all requirements remain pending.
+Last updated: 2026-10-03 after exact-revision hosted evidence for BASE-07 and BASE-08; 8 active requirements are complete and 27 remain pending.

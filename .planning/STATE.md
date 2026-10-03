@@ -3,17 +3,17 @@ gsd_state_version: "1.0"
 milestone: v0.1
 current_phase: 01
 current_phase_name: Portable Foundation and Original ROM Tracer
-status: executing
-stopped_at: Plan 05 Task 1 complete; blocked at Task 2 pending the canonical GitHub URL or confirmation that no accessible remote exists.
-last_updated: "2026-10-03T14:01:47.548Z"
+status: verifying
+stopped_at: Completed Phase GB-01 Plan 05 execution; exact-SHA documentation run and phase-wide verification pending
+last_updated: "2026-10-03T15:35:36.902Z"
 last_activity: 2026-10-03
-last_activity_desc: Phase GB-01-05 Task 1 completed; Task 2 is awaiting owner response at the blocking remote checkpoint.
-state_head: 8d536a6eee6570dae164e7a5c1075725b0c565f2
+last_activity_desc: Plan GB-01-05 execution complete; all five Phase 1 plans have summaries; phase-wide verification is pending
+state_head: 59b104ef5ba95f7dd48e6dd3f4732f49f4cc77de
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 5
-  completed_plans: 4
+  completed_plans: 5
 milestone_name: limited DMG preview
 ---
 
@@ -30,10 +30,10 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-02)
 
 Phase: GB-01 (Portable Foundation and Original ROM Tracer) — EXECUTING
 Plan: 5 of 5
-Status: Executing Phase GB-01
-Last activity: 2026-10-03 — Plan GB-01-04 completed; Plan GB-01-05 is next
+Status: Phase complete — ready for verification
+Last activity: 2026-10-03 — Plan GB-01-05 execution complete; all five Phase 1 plans have summaries; phase-wide verification is pending
 
-Progress: [████████░░] 80% of Phase 1 plans
+Progress: [██████████] 100% of Phase 1 execution plans have summaries; phase verification pending
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Progress: [████████░░] 80% of Phase 1 plans
 | Phase 01 P02 | 7 min | 2 tasks | 7 files |
 | Phase 01 P03 | 94 min | 3 tasks | 10 files |
 | Phase 01 P04 | 31 min | 2 tasks | 12 files |
+| Phase 01 P05 | 84 min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 01]: The official CMake 3.25.3 floor script and RGBDS 1.0.1 fixture reproduction passed locally in Ubuntu x86_64 containers; hosted CI evidence is pending.
 - [Phase 01]: Pin explicit native runner labels and require every evidence job plus its exact test inventory; do not infer product OS support from runner labels.
 - [Phase 01]: Keep hosted CI and branch-protection evidence pending until exact-revision remote results are observed; fixture-repro is a separate status context.
+- [Phase GB-01]: Qualify preview packages and contributor claims against an exact PR SHA; query the artifact API for per-run expiry and report it without calling temporary artifacts releases.
 
 ### Pending Todos
 
@@ -78,9 +80,8 @@ None outside the roadmap.
 
 ### Blockers/Concerns
 
-- The fixture-specific DMG-CPU-B tracer, bounded API/loader contracts, relocated consumers, local CMake floor, and fixture reproduction have local evidence; general CPU/gameplay behavior and hardware-backed emulator evidence remain absent. BASE-01 through BASE-06 are locally complete; 29 of 35 active requirements remain pending, including BASE-07 until exact-revision hosted CI evidence exists.
-- No Git remote or branch-protection configuration is available. Native hosted matrix results and preview artifact publication remain pending; local passes are not hosted evidence.
 - Phase 1 records the post-boot profile, tracer opcode subset, fixture/tool pins, and bounded time/output contracts. Native host support floors, signing, and live Playstead integration remain unverified.
+- General CPU and gameplay behavior plus hardware-backed emulator evidence remain absent; Phase 1 demonstrates only the limited bootless DMG-CPU-B original-ROM tracer. Phase 1 remote checks and temporary preview artifacts have hosted evidence.
 
 ## Deferred Items
 
@@ -88,9 +89,9 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-03T14:01:47.517Z
-Stopped at: Plan 05 Task 1 complete; blocked at Task 2 pending the canonical GitHub URL or confirmation that no accessible remote exists.
+Last session: 2026-10-03T15:35:36.872Z
+Stopped at: Completed Phase GB-01 Plan 05 execution; exact-SHA documentation run and phase-wide verification pending
 Resume file: .planning/phases/GB-01-portable-foundation-and-original-rom-tracer/continue.md
-Next command in fresh context: $gsd-execute-phase 1
-Completed workflow stage: Phase GB-01 Plans 01–04 execution plus Plan 05 Task 1 — portable tracer core, bounded API/loader, relocatable C/C++ package, local CI/test inventory, and extracted preview package smoke. 4 of 5 Phase 1 plans are complete; Phase 1 remains active.
-Next stage: Resume Phase 1 Plan 05 Task 2, the blocking checkpoint for the canonical GitHub URL or confirmation that no accessible remote exists. Continue with `$gsd-execute-phase 1`; stop after Phase 1.
+Next command in fresh context: $gsd-discuss-phase 2
+Completed workflow stage: Phase GB-01 Plan 05 execution complete; Phase 1 Plans 01–05 all have summaries; phase-wide verifier pending
+Next stage: After Phase 1 verification passes and the owner chooses to continue: Phase 2 — DMG CPU, Bus, and Time. Run $gsd-discuss-phase 2.
