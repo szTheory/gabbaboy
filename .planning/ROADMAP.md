@@ -24,7 +24,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 ### Phase 1: Portable Foundation and Original ROM Tracer
 
-**Goal**: Developers can build, embed, and obtain an installable core/runner that executes an original GB ROM through a bounded public contract.
+**Goal**: As a developer, I want to run an original ROM with an installable GB core via a bounded API, so that I can embed it.
 **Mode:** mvp
 **Depends on**: Nothing (first phase)
 **Requirements**: BASE-01, BASE-02, BASE-03, BASE-04, BASE-05, BASE-06, BASE-07, BASE-08
