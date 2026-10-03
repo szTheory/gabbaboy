@@ -61,7 +61,7 @@ void gbb_destroy(gbb_instance *instance);
 gbb_error gbb_reset(gbb_instance *instance);
 /* ROM bytes are copied on success; caller storage may be released immediately.
  * A failed replacement leaves the current ROM and machine state unchanged.
- * Supports only exact-size ROM-only images up to 8 MiB with no cartridge RAM. */
+ * Supports only exact-size 32 KiB ROM-only images with no cartridge RAM. */
 gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_size);
 /* Runs only whole supported instructions. Budget/consumed values are uint64
  * half-dot ticks. An instruction is preflighted and won't start unless its

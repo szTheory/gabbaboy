@@ -43,7 +43,7 @@ static gbb_error validate_header(const uint8_t *rom, size_t size) {
     if (size < 0x150) return GBB_ROM_TRUNCATED;
     if (size > GBB_MAX_ROM_SIZE) return GBB_ROM_TOO_LARGE;
     if (rom[0x147] != 0) return GBB_UNSUPPORTED_CARTRIDGE;
-    if (rom[0x148] > 8) return GBB_UNSUPPORTED_ROM_SIZE;
+    if (rom[0x148] > 0) return GBB_UNSUPPORTED_ROM_SIZE;
     if (rom[0x149] != 0) return GBB_UNSUPPORTED_RAM_SIZE;
     size_t declared = 32768u << rom[0x148];
     if (size < declared) return GBB_ROM_TRUNCATED;

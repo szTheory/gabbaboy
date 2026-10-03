@@ -7,6 +7,7 @@ loader_oversized
 loader_invalid_header
 loader_unsupported_cartridge
 loader_unsupported_rom_size
+loader_unsupported_declared_size
 loader_unsupported_ram_size
 loader_length_mismatch
 loader_excess_actual

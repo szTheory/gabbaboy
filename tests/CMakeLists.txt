@@ -14,7 +14,7 @@ add_executable(test_loader test_loader.c)
 target_link_libraries(test_loader PRIVATE GabbaBoy::core)
 target_compile_features(test_loader PRIVATE c_std_17)
 set_target_properties(test_loader PROPERTIES C_EXTENSIONS OFF)
-foreach(case truncated oversized invalid_header unsupported_cartridge unsupported_rom_size unsupported_ram_size length_mismatch excess_actual null_arguments non_destructive)
+foreach(case truncated oversized invalid_header unsupported_cartridge unsupported_rom_size unsupported_declared_size unsupported_ram_size length_mismatch excess_actual null_arguments non_destructive)
   add_test(NAME loader_${case} COMMAND test_loader ${case} ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 endforeach()
 
