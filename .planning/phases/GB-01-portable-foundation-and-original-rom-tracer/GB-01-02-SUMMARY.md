@@ -127,7 +127,7 @@ None - no external service configuration required.
 - BASE-07's local CTest inventory is established, but its requirement remains pending until Plan 04's sanitizer and required hosted CI checks execute.
 - No new hardware-backed or general CPU/gameplay evidence is claimed. Execution remains limited to the original fixture, declared opcode subset, and deterministic bootless DMG-CPU-B profile.
 
-## Verification Evidence
+## Test Evidence
 
 - Task 1: `cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build --output-on-failure --no-tests=error -R 'instance_lifecycle|independent_instances|run_bounds|trace_capacity'` — 4 named cases passed.
 - Task 2: `cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build --output-on-failure --no-tests=error -R 'loader_|tracer_(success|failure|unsupported|timeout|trace)'` — 15 named cases passed.
