@@ -101,8 +101,8 @@ assert_run "$preview_run_id" "Preview package" '.headSha == "'"$pr_sha"'" and .e
 retention_days=$(awk '$1 == "PREVIEW_RETENTION_DAYS:" { print $2; exit }' .github/workflows/preview.yml)
 [ -n "$retention_days" ] || fail "Could not read configured PREVIEW_RETENTION_DAYS from preview.yml."
 artifact_api="repos/$repository/actions/runs/$preview_run_id/artifacts"
-evidence_root="${TMPDIR:-/tmp}/gabbaboy-pr-evidence-$$"
-mkdir -p "$evidence_root"
+evidence_root=$(mktemp -d "${TMPDIR:-/tmp}/gabbaboy-pr-evidence.XXXXXX") ||
+  fail "Could not create a private evidence staging directory."
 cleanup() {
   rm -rf "$evidence_root"
 }
