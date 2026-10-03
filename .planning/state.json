@@ -1,0 +1,43 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": "v0.1",
+  "phases": [
+    {
+      "number": "1",
+      "name": "Portable Foundation and Original ROM Tracer",
+      "status": "pending"
+    },
+    {
+      "number": "2",
+      "name": "DMG CPU, Bus, and Time",
+      "status": "pending"
+    },
+    {
+      "number": "3",
+      "name": "Visible Interactive DMG",
+      "status": "pending"
+    },
+    {
+      "number": "4",
+      "name": "MBC1 and Safe Battery Continuation",
+      "status": "pending"
+    },
+    {
+      "number": "5",
+      "name": "DMG Audio and Stable Playback",
+      "status": "pending"
+    },
+    {
+      "number": "6",
+      "name": "Qualified DMG Release and Consumer Handoff",
+      "status": "pending"
+    }
+  ],
+  "next": {
+    "command": "$gsd-execute-phase 1",
+    "label": "Execute Phase 1",
+    "reason": "Phase 1 planning is complete; implementation has not started"
+  },
+  "updated_at": "2026-10-03T06:00:23.127Z"
+}

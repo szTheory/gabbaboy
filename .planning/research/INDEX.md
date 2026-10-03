@@ -18,6 +18,10 @@ Read [SUMMARY.md](SUMMARY.md) for the integrated recommendation, six-phase initi
 | What actually works in siblings, and what was corrected? | [PRECEDENT.md](PRECEDENT.md) | Repository-relative source/review paths and observed revisions; distinguish source, recorded run, current dirty work and proposal |
 | How do CI, release, safety, performance and adoption evidence work? | [QUALITY-AND-DELIVERY.md](QUALITY-AND-DELIVERY.md) | [ASan](https://clang.llvm.org/docs/AddressSanitizer.html), [UBSan](https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html), [GitHub tokens](https://docs.github.com/en/actions/concepts/security/github_token), [required checks](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks), [Apple notarization](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow) |
 
+## Current phase evidence
+
+- [Phase 1 planning research](../phases/GB-01-portable-foundation-and-original-rom-tracer/01-RESEARCH.md) narrows the initial fixture to the named DMG-CPU-B post-boot profile, records candidate opcode/tool/host-floor choices, and identifies what still needs implementation or hosted evidence. It is planning evidence only; it does not qualify an emulator or CI run.
+
 ## Evidence freshness and confidence
 
 - The research set was inspected on **2026-10-02**. Web research confidence is **MEDIUM** under the installed research classifier. This records limitations of the evidence process, not popularity, market standing or automatic hardware correctness.
