@@ -9,7 +9,7 @@ created: "2026-10-02"
 
 # Phase 01 — Validation Strategy
 
-> Phase validation contract with implementation evidence recorded below. The strategy remains unsigned until the phase-wide review resolves its remaining probe signals.
+> Phase validation contract with implementation evidence recorded below. The strategy remains unsigned while its named concurrency and classification probe signals are unresolved; these do not replace the passing Phase 1 requirements evidence.
 
 ---
 
@@ -38,14 +38,14 @@ created: "2026-10-02"
 
 | Requirement | Secure behavior / evidence | Test Type | Automated Command or Gate | File Exists | Status |
 |-------------|----------------------------|-----------|---------------------------|-------------|--------|
-| BASE-01 | Offline configure/build/test/install after dependencies are prepared, including headless runner | integration | Schema-6 preset smoke and exact CMake 3.25.3 configure/build/test/install/relocation/consumer floor lane | ✅ | ✅ local and hosted; CMake floor passed in CI run `37131835427` |
-| BASE-02 | Independent opaque instances, lifecycle, ownership, errors, and thread-use contract | unit/integration | 25-case CTest suite, including named lifecycle cases | ✅ | ✅ 25/25 local CTest and required native lanes |
-| BASE-03 | Bounded parsing; malformed input leaves active state unchanged; unsupported cartridges fail explicitly | unit/security | Named loader boundary cases in the required CTest inventory | ✅ | ✅ local and required native lanes |
+| BASE-01 | Offline configure/build/test/install after dependencies are prepared, including headless runner | integration | Schema-6 preset smoke and exact CMake 3.25.3 configure/build/test/install/relocation/consumer floor lane | ✅ | ✅ local and hosted; CMake floor passed in CI run `37141965336` |
+| BASE-02 | Independent opaque instances, lifecycle, ownership, errors, and thread-use contract | unit/integration | 26-case CTest suite, including named lifecycle cases | ✅ | ✅ 26/26 local CTest and required native lanes |
+| BASE-03 | Bounded parsing; malformed input leaves active state unchanged; unsupported cartridges fail explicitly | unit/security | Named loader boundary cases in the required CTest inventory | ✅ | ✅ local and required native lanes, including the 64 KiB declared-size rejection regression |
 | BASE-04 | Guest RAM result protocol, bounded trace/time, unsupported execution, timeout and negative controls | integration | Named tracer cases in the required CTest inventory | ✅ | ✅ local and required native lanes |
-| BASE-05 | Fixture source, rights, build recipe, applicability, protocol, timeout, digest, and regenerated-byte equality | reproducibility | Offline CMake `fixture_digest` plus pinned-RGBDS regeneration run | ✅ | ✅ fixture run `37131835525`, context `fixture-repro` |
-| BASE-06 | Relocated installed package works from public headers in external C and C++ consumers | integration | Installed-runner and native C/C++ consumer smoke on Linux x64, macOS arm64, and Windows x64 | ✅ | ✅ required CI run `37131835427`; preview C/C++ consumers passed on Linux/macOS |
-| BASE-07 | Explicit expected-test inventory, loader/lifecycle cases, and ASan/UBSan actually ran | CI contract | Exact-SHA `required-native` aggregate plus explicit test inventory | ✅ | ✅ run SHA `59b104e`, CI run `37131835427`, including Windows 25-case inventory and Linux ASan/UBSan |
-| BASE-08 | Full install-tree package and smoke evidence identify tested source revision, digest, and retention limits | artifact smoke | Extracted Linux x64/macOS arm64 tar artifacts, installed runner/consumers, sidecar and API metadata | ✅ | ✅ preview run `37131835440`; exact artifact evidence below |
+| BASE-05 | Fixture source, rights, build recipe, applicability, protocol, timeout, digest, and regenerated-byte equality | reproducibility | Offline CMake `fixture_digest` plus pinned-RGBDS regeneration run | ✅ | ✅ fixture run `37141965338`, context `fixture-repro` |
+| BASE-06 | Relocated installed package works from public headers in external C and C++ consumers | integration | Installed-runner and native C/C++ consumer smoke on Linux x64, macOS arm64, and Windows x64 | ✅ | ✅ required CI run `37141965336`; preview C/C++ consumers passed on Linux/macOS |
+| BASE-07 | Explicit expected-test inventory, loader/lifecycle cases, and ASan/UBSan actually ran | CI contract | Exact-SHA `required-native` aggregate plus explicit test inventory | ✅ | ✅ source SHA `8396096`, CI run `37141965336`, including Windows inventory and Linux ASan/UBSan |
+| BASE-08 | Full install-tree package and smoke evidence identify tested source revision, digest, and retention limits | artifact smoke | Extracted Linux x64/macOS arm64 tar artifacts, installed runner/consumers, sidecar and API metadata | ✅ | ✅ preview run `37141965332`; exact artifact evidence below |
 
 ---
 
@@ -61,18 +61,18 @@ created: "2026-10-02"
 
 ## Hosted Evidence (Run-Scoped Sample)
 
-The public PR is [#1](https://github.com/szTheory/gabbaboy/pull/1). For this sample, the verifier recorded source SHA `59b104ef5ba95f7dd48e6dd3f4732f49f4cc77de` as equal to local `HEAD`, the PR `headRefOid`, and all three workflow run head SHAs. `gh pr checks --required` reported passing buckets for `required-native`, `fixture-repro`, and `preview-package-smoke`. The required branch-protection contexts were read back from GitHub and match those three names.
+The public PR is [#1](https://github.com/szTheory/gabbaboy/pull/1). For this implementation sample, the verifier recorded source SHA `8396096ad17500974b30657af91fd2ef9ad51237` as equal to local `HEAD`, the PR `headRefOid`, and all three workflow run head SHAs. `gh pr checks --required` reported passing buckets for `required-native`, `fixture-repro`, and `preview-package-smoke`. The required branch-protection contexts were read back from GitHub and match those three names.
 
 | Evidence | Run | Result |
 |----------|-----|--------|
-| Native CI | `37131835427` | Success: Linux x64, macOS arm64, Windows x64, Linux ASan/UBSan, CMake 3.25.3 floor, and `required-native` |
-| Fixture reproduction | `37131835525` | Success: `fixture-repro` regenerated and matched the checked-in ROM |
-| Preview packages | `37131835440` | Success: Linux x64 and macOS arm64 package smoke plus `preview-package-smoke` aggregate |
+| Native CI | `37141965336` | Success: Linux x64, macOS arm64, Windows x64, Linux ASan/UBSan, CMake 3.25.3 floor, and `required-native` |
+| Fixture reproduction | `37141965338` | Success: `fixture-repro` regenerated and matched the checked-in ROM |
+| Preview packages | `37141965332` | Success: Linux x64 and macOS arm64 package smoke plus `preview-package-smoke` aggregate |
 
 | Artifact | GitHub artifact digest | Package SHA-256 | API created at | API expires at | Sidecar retention |
 |----------|------------------------|-----------------|----------------|----------------|-------------------|
-| `preview-linux-x64` | `sha256:97b2b5f705d2e37601ab6a87ae43f057f6760363b7671e5bf08a84bed40dafad` | `23b65ad30aca49be9ab2b68976168ce03509a8c69bf42bb0ee0f28d4ef5a59a0` | `2026-10-03T15:03:47Z` | `2026-10-17T15:03:47Z` | 14 days |
-| `preview-macos-arm64` | `sha256:ee0f0aa0c894b7f3d410c67eb7c1b2ecb9ecc300e93ea7c4297a9610132c9a98` | `b93c0c2601472ee6dae84b77920d27e790bde1a0f1235ef67c7b87ecf35efe0c` | `2026-10-03T15:03:55Z` | `2026-10-17T15:03:53Z` | 14 days |
+| `preview-linux-x64` | `sha256:b2e3d57aa5cc8527bd05c2ee11d8e006495dd30193b38a08e828e11e60bd092b` | `045c5c063c48f5e125452f7053f670a75474059fa2e26e84dd365f88994a2726` | `2026-10-03T17:51:15Z` | `2026-10-17T17:51:14Z` | 14 days |
+| `preview-macos-arm64` | `sha256:d95990eab682cae084a5992777167a5fc6c71011eafa2326d8b74a5311499097` | `62462139dc88d4228b29cf2ea47d26176f3047dfc968a11f870d1a1f1143aef3` | `2026-10-03T17:51:19Z` | `2026-10-17T17:51:18Z` | 14 days |
 
 The digest in GitHub's artifact API identifies the uploaded workflow artifact; the package SHA-256 identifies the `.tar.gz` inside it. The verifier downloaded and extracted both exact-run artifacts, ran the installed runner and external C/C++ consumers from the extracted package, and matched the package digest, source SHA, smoke marker, and configured retention against each sidecar. Artifacts are run-scoped, expire at the API timestamps above, and are not durable releases. There is no Windows preview download.
 
@@ -80,7 +80,7 @@ Remediation history is retained to make earlier hosted failures explicit. Run `3
 
 ## Probe Disposition
 
-Unresolved items remain `unresolved` and `flagged-unverified` until their named execution/test trigger produces evidence; task prose is not closure. The phase-level probe set retains BASE-01 concurrency, BASE-02 idempotency and concurrency, BASE-03/04/06/07 unclassified review signals, and BASE-08 concurrency. For BASE-05, the auto-probe's adjacency, empty-input and stable-order prompts describe collection semantics and do not apply to fixture provenance/digest; those three are explicitly dispositioned as not applicable, while BASE-05 retains one unclassified review signal until provenance and regeneration evidence exist. No signal is silently auto-dismissed.
+Unresolved items remain `unresolved` and `flagged-unverified` until their named execution/test trigger produces evidence; task prose is not closure. The phase-level probe set retains BASE-01 concurrency, BASE-02 idempotency and concurrency, BASE-03/04/06/07 unclassified review signals, and BASE-08 concurrency. BASE-05 fixture provenance and regeneration have implementation evidence; its auto-probe prompts about adjacency, empty-input and stable-order describe collection semantics and do not apply to fixture identity. The phase validation contract remains draft because the remaining named probe signals have not been classified as applicable, inapplicable, or satisfied by their declared evidence.
 
 ---
 

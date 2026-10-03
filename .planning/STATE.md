@@ -5,10 +5,10 @@ current_phase: 2
 current_phase_name: DMG CPU, Bus, and Time
 status: planning
 stopped_at: Phase 1 complete, ready to plan Phase 2
-last_updated: "2026-10-03T16:33:25Z"
+last_updated: "2026-10-03T19:07:05Z"
 last_activity: 2026-10-03
-last_activity_desc: Phase 1 complete, transitioned to Phase 2
-state_head: 97d73a7cfadb8b90edea2e406566ff0a254c4865
+last_activity_desc: Phase 1 verification and handoff refreshed; stopped before Phase 2
+state_head: 8396096ad17500974b30657af91fd2ef9ad51237
 progress:
   total_phases: 6
   completed_phases: 1
@@ -69,12 +69,13 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 01]: Reset retains the loaded ROM while restoring deterministic post-boot CPU state and clearing guest RAM and emulated time.
 - [Phase 01]: The installed export explicitly maps the core library to GabbaBoy::core.
 - [Phase 01]: Installed consumer tests are registered only when the relocated prefix exists, preserving ordinary offline CTest runs.
-- [Phase 01]: CI uses explicit runner labels and a fail-closed 25-case CTest inventory; runner images are not product OS claims.
+- [Phase 01]: CI uses explicit runner labels and a fail-closed 26-case installed CTest inventory with a 23-case core subset; runner images are not product OS claims.
 - [Phase 01]: The official CMake 3.25.3 floor script and RGBDS 1.0.1 fixture reproduction passed locally in Ubuntu x86_64 containers and on PR #1; run-scoped hosted evidence is recorded in 01-VALIDATION.md.
 - [Phase 01]: Pin explicit native runner labels and require every evidence job plus its exact test inventory; do not infer product OS support from runner labels.
 - [Phase 01]: Keep hosted CI and branch-protection evidence pending until exact-revision remote results are observed; fixture-repro is a separate status context.
 - [Phase GB-01]: Qualify preview packages and contributor claims against an exact PR SHA; query the artifact API for per-run expiry and report it without calling temporary artifacts releases.
 - [Phase 01]: The bootless DMG-CPU-B tracer verifies the bounded API and guest path, not hardware-qualified memory mapping; Phase 2 owns that evidence.
+- [Phase 01]: At verified implementation SHA `8396096ad17500974b30657af91fd2ef9ad51237`, all five roadmap truths and eight BASE requirements passed, standard code review was clean, and required PR contexts plus both package artifacts passed exact-SHA verification.
 
 ### Pending Todos
 
@@ -83,7 +84,7 @@ None outside the roadmap.
 ### Blockers/Concerns
 
 - Phase 2 must establish CPU behavior and hardware-qualified memory mapping; the Phase 1 tracer's fixture-only RAM behavior is not conformance evidence.
-- PR #1 remains open for owner review. Its required checks and Linux/macOS preview package smoke passed; temporary artifacts expire 2026-10-17 and are not release archives.
+- PR #1 remains open for owner review. Required contexts and Linux/macOS package smoke passed for implementation SHA `8396096ad17500974b30657af91fd2ef9ad51237`; those temporary artifacts expire 2026-10-17 and are not release archives.
 - Native host support floors, signing, and live Playstead integration remain unverified for later release/adoption work.
 
 ## Deferred Items
@@ -92,10 +93,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-03T16:33:25Z
-Stopped at: Phase 1 complete, ready to plan Phase 2
+Last session: 2026-10-03T19:07:05Z
+Stopped at: Phase 1 complete and verified; ready to plan Phase 2
 Resume file: None
 Next command in fresh context: $gsd-discuss-phase 2
 Continuation note: [continue.md](phases/GB-01-portable-foundation-and-original-rom-tracer/continue.md)
-Completed workflow stage: Phase 1 plans 01–05 executed and Phase 1 goal verification passed.
+Completed workflow stage: Phase 1 plans 01–05 executed; goal-backward verification passed 5/5 roadmap truths and 8/8 BASE requirements. Standard code review is clean.
 Next stage: Phase 2 — DMG CPU, Bus, and Time. Run $gsd-discuss-phase 2.

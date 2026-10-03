@@ -49,7 +49,9 @@ The runner reads the ROM file; the core receives a validated copy through its
 public C API. The guest starts at cartridge entry 0x0100, stores 0x5A at 0xA000,
 reads and compares it, then writes 0xA5 (success) or 0xEE (failure) at 0xA001.
 The core executes only the fixture's listed instruction subset through its ROM
-and RAM bus. Runs use a 200,000 half-dot maximum and a 256-record caller-owned
+and RAM bus. The current ROM-only loader accepts an exact-size 32 KiB image;
+other declared ROM sizes are rejected until their address mapping is supported.
+Runs use a 200,000 half-dot maximum and a 256-record caller-owned
 trace; the core stops explicitly on trace exhaustion. The runner formats a
 bounded portion of that trace.
 
@@ -122,25 +124,25 @@ smoke result, capability limits, and the configured 14-day retention. GitHub's
 artifact API reports each run's actual `expires_at`; expiry belongs to that run
 and does not promise durable availability.
 
-The hosted evidence sample below was verified from PR #1 at source revision
-`59b104ef5ba95f7dd48e6dd3f4732f49f4cc77de`. The CI run, fixture-reproduction
+The hosted implementation sample below was verified from PR #1 at source
+revision `8396096ad17500974b30657af91fd2ef9ad51237`. The CI run, fixture-reproduction
 run, required contexts, both artifacts, and downloaded package bytes all
 matched that exact SHA. See the [PR](https://github.com/szTheory/gabbaboy/pull/1)
-and its [preview workflow run](https://github.com/szTheory/gabbaboy/actions/runs/37131835440).
+and its [preview workflow run](https://github.com/szTheory/gabbaboy/actions/runs/37141965332).
 
 | Artifact | GitHub artifact digest | Smoked package SHA-256 | API created at | API expires at |
 |----------|------------------------|------------------------|----------------|----------------|
-| `preview-linux-x64` | `sha256:97b2b5f705d2e37601ab6a87ae43f057f6760363b7671e5bf08a84bed40dafad` | `23b65ad30aca49be9ab2b68976168ce03509a8c69bf42bb0ee0f28d4ef5a59a0` | `2026-10-03T15:03:47Z` | `2026-10-17T15:03:47Z` |
-| `preview-macos-arm64` | `sha256:ee0f0aa0c894b7f3d410c67eb7c1b2ecb9ecc300e93ea7c4297a9610132c9a98` | `b93c0c2601472ee6dae84b77920d27e790bde1a0f1235ef67c7b87ecf35efe0c` | `2026-10-03T15:03:55Z` | `2026-10-17T15:03:53Z` |
+| `preview-linux-x64` | `sha256:b2e3d57aa5cc8527bd05c2ee11d8e006495dd30193b38a08e828e11e60bd092b` | `045c5c063c48f5e125452f7053f670a75474059fa2e26e84dd365f88994a2726` | `2026-10-03T17:51:15Z` | `2026-10-17T17:51:14Z` |
+| `preview-macos-arm64` | `sha256:d95990eab682cae084a5992777167a5fc6c71011eafa2326d8b74a5311499097` | `62462139dc88d4228b29cf2ea47d26176f3047dfc968a11f870d1a1f1143aef3` | `2026-10-03T17:51:19Z` | `2026-10-17T17:51:18Z` |
 
 To reproduce the ROM locally, prepare RGBDS v1.0.1 explicitly and run the
 three commands recorded in the manifest. Ordinary builds and `fixture_digest`
 do not install or invoke RGBDS. Runner labels describe CI images; they do not
 by themselves establish GabbaBoy's minimum supported operating systems. The
 public repository is `https://github.com/szTheory/gabbaboy`, and `main` requires
-the three contexts listed above. For the recorded sample, CI run `37131835427`
-passed `required-native`, fixture run `37131835525` passed `fixture-repro`, and
-preview run `37131835440` passed both platform smoke jobs and the aggregate
+the three contexts listed above. For the recorded sample, CI run `37141965336`
+passed `required-native`, fixture run `37141965338` passed `fixture-repro`, and
+preview run `37141965332` passed both platform smoke jobs and the aggregate
 `preview-package-smoke` context. The CMake 3.25.3 floor and Linux/Windows native
 consumer checks therefore have hosted evidence on this revision.
 
