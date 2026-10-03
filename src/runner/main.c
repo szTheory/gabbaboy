@@ -2,8 +2,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-#define TRACE_CAPACITY 256u
+#define TRACE_CAPACITY 16384u
 #define RUN_BUDGET_HALF_DOTS UINT64_C(200000)
 
 int main(int argc, char **argv) {
@@ -20,17 +21,20 @@ int main(int argc, char **argv) {
     gbb_instance *machine=NULL;
     if (gbb_create(GBB_PROFILE_DMG_CPU_B,&machine)!=GBB_OK || gbb_load_rom(machine,rom,size)!=GBB_OK) { free(rom); gbb_destroy(machine); fprintf(stderr,"invalid-fixture: unsupported or malformed ROM\n"); return 2; }
     free(rom);
-    gbb_trace_record trace[TRACE_CAPACITY];
+    gbb_trace_record *trace=calloc(TRACE_CAPACITY,sizeof(*trace));
+    if (trace == NULL) { gbb_destroy(machine); fprintf(stderr,"runner-error: trace allocation failed\n"); return 2; }
     gbb_run_result result=gbb_run(machine,RUN_BUDGET_HALF_DOTS,trace,TRACE_CAPACITY);
     uint8_t status=gbb_peek_ram(machine,0xA001);
-    const char *outcome=status==0xA5 ? "pass" : status==0xEE ? "guest-failure" :
-        result.reason==GBB_STOP_UNSUPPORTED_OPCODE ? "unsupported" : "timeout";
+    const char *outcome=result.reason==GBB_STOP_UNSUPPORTED_OPCODE ? "unsupported" :
+        result.reason==GBB_STOP_TRACE_FULL ? "trace-exhausted" :
+        status==0xEE ? "guest-failure" :
+        result.reason==GBB_STOP_BUDGET && status==0xA5 ? "pass" : "timeout";
     printf("fixture=original-ram-tracer profile=DMG-CPU-B outcome=%s stop=%s half_dots=%llu trace_records=%zu\n",
            outcome,result.reason==GBB_STOP_BUDGET?"budget":result.reason==GBB_STOP_TRACE_FULL?"trace-full":"unsupported-opcode",
            (unsigned long long)result.consumed_half_dots,result.trace_count);
     for (size_t i=0;i<result.trace_count && i<12;i++)
         printf("trace time=%llu pc=%04x opcode=%02x state=A:%02x F:%02x HL:%02x%02x\n",
                (unsigned long long)trace[i].time_half_dots,trace[i].pc,trace[i].opcode[0],trace[i].a,trace[i].f,trace[i].h,trace[i].l);
-    gbb_destroy(machine);
-    return status==0xA5 ? 0 : status==0xEE ? 1 : 3;
+    gbb_destroy(machine); free(trace);
+    return strcmp(outcome,"pass")==0 ? 0 : strcmp(outcome,"guest-failure")==0 ? 1 : 3;
 }

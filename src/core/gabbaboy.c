@@ -47,7 +47,7 @@ static gbb_error validate_header(const uint8_t *rom, size_t size) {
     if (rom[0x149] != 0) return GBB_UNSUPPORTED_RAM_SIZE;
     size_t declared = 32768u << rom[0x148];
     if (size < declared) return GBB_ROM_TRUNCATED;
-    if (size != declared) return GBB_INVALID_ROM;
+    if (size != declared) return GBB_ROM_SIZE_MISMATCH;
     uint8_t checksum = 0;
     for (size_t i = 0x134; i <= 0x14C; ++i) checksum = (uint8_t)(checksum - rom[i] - 1u);
     return checksum == rom[0x14D] ? GBB_OK : GBB_INVALID_ROM;

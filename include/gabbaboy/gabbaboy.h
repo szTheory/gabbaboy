@@ -18,13 +18,14 @@ typedef enum {
     GBB_OK = 0,
     GBB_INVALID_ARGUMENT,
     GBB_UNSUPPORTED_PROFILE,
-    GBB_INVALID_ROM,
-    GBB_ROM_TRUNCATED,
-    GBB_ROM_TOO_LARGE,
-    GBB_UNSUPPORTED_CARTRIDGE,
-    GBB_UNSUPPORTED_ROM_SIZE,
-    GBB_UNSUPPORTED_RAM_SIZE,
-    GBB_OUT_OF_MEMORY
+    GBB_INVALID_ROM,          /* malformed header or header checksum */
+    GBB_ROM_TRUNCATED,        /* image ends before header or declared ROM size */
+    GBB_ROM_TOO_LARGE,        /* actual image exceeds the 8 MiB hard limit */
+    GBB_ROM_SIZE_MISMATCH,    /* actual image is longer than its declared ROM size */
+    GBB_UNSUPPORTED_CARTRIDGE,/* cartridge type is not ROM-only */
+    GBB_UNSUPPORTED_ROM_SIZE, /* header declares an unsupported ROM size code */
+    GBB_UNSUPPORTED_RAM_SIZE, /* cartridge header declares external RAM */
+    GBB_OUT_OF_MEMORY         /* allocation failed; live instance is unchanged */
 } gbb_error;
 
 typedef enum {
