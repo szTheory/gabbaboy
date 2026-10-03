@@ -2,12 +2,16 @@ if(NOT DEFINED GBB_INSTALL_PREFIX)
   message(FATAL_ERROR "GBB_INSTALL_PREFIX is required")
 endif()
 
-include(GNUInstallDirs)
-set(prefix "${GBB_INSTALL_PREFIX}")
-set(header "${prefix}/${CMAKE_INSTALL_INCLUDEDIR}/gabbaboy/gabbaboy.h")
-set(runner "${prefix}/${CMAKE_INSTALL_BINDIR}/gabbaboy-runner${CMAKE_EXECUTABLE_SUFFIX}")
-set(fixture_dir "${prefix}/${CMAKE_INSTALL_DATADIR}/gabbaboy/fixtures/tracer")
-set(package_dir "${prefix}/${CMAKE_INSTALL_LIBDIR}/cmake/GabbaBoy")
+get_filename_component(prefix "${GBB_INSTALL_PREFIX}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_LIST_DIR}/..")
+set(header "${prefix}/include/gabbaboy/gabbaboy.h")
+set(runner "${prefix}/bin/gabbaboy-runner${CMAKE_EXECUTABLE_SUFFIX}")
+set(fixture_dir "${prefix}/share/gabbaboy/fixtures/tracer")
+file(GLOB package_configs LIST_DIRECTORIES false "${prefix}/*/cmake/GabbaBoy/GabbaBoyConfig.cmake")
+list(LENGTH package_configs package_config_count)
+if(NOT package_config_count EQUAL 1)
+  message(FATAL_ERROR "Expected one installed GabbaBoy config under the prefix, found ${package_config_count}")
+endif()
+get_filename_component(package_dir "${package_configs}" DIRECTORY)
 foreach(required IN ITEMS
     "${header}"
     "${runner}"
@@ -33,3 +37,19 @@ foreach(metadata IN LISTS metadata_files)
 endforeach()
 
 message(STATUS "Installed GabbaBoy package contents and relocatable metadata verified at ${prefix}")
+
+if(DEFINED GBB_RUNNER_WORKDIR)
+  get_filename_component(runner_workdir "${GBB_RUNNER_WORKDIR}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_LIST_DIR}/..")
+  file(MAKE_DIRECTORY "${runner_workdir}")
+  execute_process(
+    COMMAND "${CMAKE_COMMAND}" -E chdir "${runner_workdir}"
+      "${runner}" "${fixture_dir}/tracer.gb"
+    RESULT_VARIABLE runner_result
+    OUTPUT_VARIABLE runner_output
+    ERROR_VARIABLE runner_error)
+  if(NOT runner_result EQUAL 0 OR NOT runner_output MATCHES "outcome=pass" OR
+     NOT runner_output MATCHES "trace_records=[1-9][0-9]*")
+    message(FATAL_ERROR "Installed runner failed from unrelated working directory (${runner_result}): ${runner_output}${runner_error}")
+  endif()
+  message(STATUS "Installed runner passed with installed fixture from ${runner_workdir}")
+endif()
