@@ -1,6 +1,19 @@
 cmake_minimum_required(VERSION 3.25)
 project(GabbaBoy VERSION 0.1.0 LANGUAGES C)
 
+option(GABBABOY_ENABLE_SANITIZERS
+  "Enable AddressSanitizer and UndefinedBehaviorSanitizer on Linux" OFF)
+if(GABBABOY_ENABLE_SANITIZERS)
+  if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "GABBABOY_ENABLE_SANITIZERS is supported only on Linux")
+  endif()
+  if(NOT CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    message(FATAL_ERROR "GABBABOY_ENABLE_SANITIZERS requires GCC or Clang")
+  endif()
+  add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=address,undefined)
+endif()
+
 include(CTest)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)

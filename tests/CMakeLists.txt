@@ -1,4 +1,5 @@
 set(GBB_TEST_INSTALL_PREFIX "" CACHE PATH "Relocated install prefix used by installed-package smoke tests")
+include(${PROJECT_SOURCE_DIR}/cmake/ExpectedTests.cmake)
 
 add_executable(test_api test_api.c)
 target_link_libraries(test_api PRIVATE GabbaBoy::core)
@@ -50,3 +51,5 @@ if(GBB_TEST_INSTALL_PREFIX AND EXISTS "${GBB_TEST_INSTALL_PREFIX}")
         -P ${PROJECT_SOURCE_DIR}/cmake/RunInstalledConsumer.cmake)
   endforeach()
 endif()
+
+gabbaboy_verify_registered_tests()
