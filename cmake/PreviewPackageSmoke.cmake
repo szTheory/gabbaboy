@@ -27,7 +27,7 @@ endif()
 
 foreach(required IN ITEMS
     "${install_prefix}/include/gabbaboy/gabbaboy.h"
-    "${install_prefix}/bin/gabbaboy-runner${CMAKE_EXECUTABLE_SUFFIX}"
+    "${install_prefix}/bin/gabbaboy-runner${GBB_EXECUTABLE_SUFFIX}"
     "${install_prefix}/share/gabbaboy/fixtures/tracer/tracer.gb"
     "${install_prefix}/share/gabbaboy/fixtures/tracer/manifest.json"
     "${install_prefix}/share/gabbaboy/fixtures/tracer/LICENSE.txt")
