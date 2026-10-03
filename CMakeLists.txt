@@ -15,6 +15,14 @@ target_compile_features(gabbaboy-runner PRIVATE c_std_17)
 set_target_properties(gabbaboy-runner PROPERTIES C_EXTENSIONS OFF)
 
 if(BUILD_TESTING)
+  add_executable(test_api tests/test_api.c)
+  target_link_libraries(test_api PRIVATE GabbaBoy::core)
+  target_compile_features(test_api PRIVATE c_std_17)
+  set_target_properties(test_api PROPERTIES C_EXTENSIONS OFF)
+  add_test(NAME instance_lifecycle COMMAND test_api instance_lifecycle ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
+  add_test(NAME independent_instances COMMAND test_api independent_instances ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
+  add_test(NAME run_bounds COMMAND test_api run_bounds ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
+  add_test(NAME trace_capacity COMMAND test_api trace_capacity ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
   add_test(NAME tracer_smoke COMMAND gabbaboy-runner ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
   add_test(NAME fixture_digest
     COMMAND ${CMAKE_COMMAND}

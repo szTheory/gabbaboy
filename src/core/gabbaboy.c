@@ -14,6 +14,17 @@ struct gbb_instance {
     int loaded;
 };
 
+#define GBB_MAX_ROM_SIZE ((size_t)8u * 1024u * 1024u)
+
+static void reset_state(gbb_instance *m) {
+    m->a = 0x01; m->f = 0x80; m->b = 0x00; m->c = 0x13;
+    m->d = 0x00; m->e = 0xD8; m->h = 0x01; m->l = 0x4D;
+    m->pc = 0x0100; m->sp = 0xFFFE;
+    m->div = 0xAB; m->stat = 0x85;
+    memset(m->ram, 0, sizeof(m->ram));
+    m->time_half_dots = 0;
+}
+
 static uint8_t read8(const gbb_instance *m, uint16_t address) {
     if (address < m->rom_size) return m->rom[address];
     if (address >= 0xA000 && address <= 0xBFFF) return m->ram[address - 0xA000];
@@ -27,13 +38,19 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
 static uint16_t hl(const gbb_instance *m) { return (uint16_t)(((uint16_t)m->h << 8) | m->l); }
 static void set_hl(gbb_instance *m, uint16_t value) { m->h = (uint8_t)(value >> 8); m->l = (uint8_t)value; }
 
-static int header_valid(const uint8_t *rom, size_t size) {
-    if (size < 0x150 || rom[0x147] != 0 || rom[0x148] > 8 || rom[0x149] != 0) return 0;
+static gbb_error validate_header(const uint8_t *rom, size_t size) {
+    if (rom == NULL || size == 0) return GBB_INVALID_ARGUMENT;
+    if (size < 0x150) return GBB_ROM_TRUNCATED;
+    if (size > GBB_MAX_ROM_SIZE) return GBB_ROM_TOO_LARGE;
+    if (rom[0x147] != 0) return GBB_UNSUPPORTED_CARTRIDGE;
+    if (rom[0x148] > 8) return GBB_UNSUPPORTED_ROM_SIZE;
+    if (rom[0x149] != 0) return GBB_UNSUPPORTED_RAM_SIZE;
     size_t declared = 32768u << rom[0x148];
-    if (declared != size) return 0;
+    if (size < declared) return GBB_ROM_TRUNCATED;
+    if (size != declared) return GBB_INVALID_ROM;
     uint8_t checksum = 0;
     for (size_t i = 0x134; i <= 0x14C; ++i) checksum = (uint8_t)(checksum - rom[i] - 1u);
-    return checksum == rom[0x14D];
+    return checksum == rom[0x14D] ? GBB_OK : GBB_INVALID_ROM;
 }
 
 gbb_error gbb_create(gbb_profile profile, gbb_instance **out_instance) {
@@ -42,11 +59,7 @@ gbb_error gbb_create(gbb_profile profile, gbb_instance **out_instance) {
     if (profile != GBB_PROFILE_DMG_CPU_B) return GBB_UNSUPPORTED_PROFILE;
     gbb_instance *m = calloc(1, sizeof(*m));
     if (m == NULL) return GBB_OUT_OF_MEMORY;
-    m->a = 0x01; m->f = 0x80; m->b = 0x00; m->c = 0x13;
-    m->d = 0x00; m->e = 0xD8; m->h = 0x01; m->l = 0x4D;
-    m->pc = 0x0100; m->sp = 0xFFFE;
-    m->div = 0xAB; m->stat = 0x85;
-    memset(m->ram, 0, sizeof(m->ram)); /* Deterministic emulator policy; hardware RAM is not specified. */
+    reset_state(m); /* RAM fill is emulator policy; hardware power-on RAM is unspecified. */
     *out_instance = m;
     return GBB_OK;
 }
@@ -55,21 +68,23 @@ void gbb_destroy(gbb_instance *instance) {
     if (instance != NULL) { free(instance->rom); free(instance); }
 }
 
+gbb_error gbb_reset(gbb_instance *instance) {
+    if (instance == NULL) return GBB_INVALID_ARGUMENT;
+    reset_state(instance);
+    return GBB_OK;
+}
+
 gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_size) {
-    if (instance == NULL || rom == NULL) return GBB_INVALID_ARGUMENT;
-    if (!header_valid(rom, rom_size)) return GBB_INVALID_ROM;
+    if (instance == NULL) return GBB_INVALID_ARGUMENT;
+    gbb_error validation = validate_header(rom, rom_size);
+    if (validation != GBB_OK) return validation;
     uint8_t *copy = malloc(rom_size);
     if (copy == NULL) return GBB_OUT_OF_MEMORY;
     memcpy(copy, rom, rom_size);
     free(instance->rom);
     instance->rom = copy;
     instance->rom_size = rom_size;
-    memset(instance->ram, 0, sizeof(instance->ram));
-    instance->a = 0x01; instance->f = rom[0x14D] == 0 ? 0x80 : 0xB0;
-    instance->b = 0; instance->c = 0x13; instance->d = 0; instance->e = 0xD8;
-    instance->h = 1; instance->l = 0x4D; instance->pc = 0x100; instance->sp = 0xFFFE;
-    instance->div = 0xAB; instance->stat = 0x85;
-    instance->time_half_dots = 0;
+    reset_state(instance);
     instance->loaded = 1;
     return GBB_OK;
 }

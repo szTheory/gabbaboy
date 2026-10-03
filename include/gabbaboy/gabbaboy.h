@@ -19,6 +19,11 @@ typedef enum {
     GBB_INVALID_ARGUMENT,
     GBB_UNSUPPORTED_PROFILE,
     GBB_INVALID_ROM,
+    GBB_ROM_TRUNCATED,
+    GBB_ROM_TOO_LARGE,
+    GBB_UNSUPPORTED_CARTRIDGE,
+    GBB_UNSUPPORTED_ROM_SIZE,
+    GBB_UNSUPPORTED_RAM_SIZE,
     GBB_OUT_OF_MEMORY
 } gbb_error;
 
@@ -44,11 +49,29 @@ typedef struct {
     size_t trace_count;
 } gbb_run_result;
 
+/* The opaque instance owns its mutable state and a private copy of a loaded ROM.
+ * Create/load may allocate; run/reset/peek do not. Each instance may be called
+ * by one thread at a time. Separate instances have no shared mutable state.
+ * The only implemented model is bootless DMG-CPU-B deterministic post-boot. */
 gbb_error gbb_create(gbb_profile profile, gbb_instance **out_instance);
 void gbb_destroy(gbb_instance *instance);
+/* Reset restores the documented post-boot CPU/profile state, clears guest RAM
+ * and emulated time, and retains the currently loaded ROM. */
+gbb_error gbb_reset(gbb_instance *instance);
+/* ROM bytes are copied on success; caller storage may be released immediately.
+ * A failed replacement leaves the current ROM and machine state unchanged.
+ * Supports only exact-size ROM-only images up to 8 MiB with no cartridge RAM. */
 gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_size);
+/* Runs only whole supported instructions. Budget/consumed values are uint64
+ * half-dot ticks. An instruction is preflighted and won't start unless its
+ * full cost fits. Trace records are optional caller-owned storage; the core
+ * writes no more than capacity, allocates nothing, and never overwrites prior
+ * records. trace=NULL is valid only with capacity=0. Trace bytes are snapshots
+ * at instruction boundaries and remain owned by the caller. */
 gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
                        gbb_trace_record *trace, size_t trace_capacity);
+/* Side-effect-free debug read of the fixture's cartridge RAM window. Invalid
+ * instance/address returns 0xFF. No pointer into instance storage is exposed. */
 uint8_t gbb_peek_ram(const gbb_instance *instance, uint16_t address);
 
 #ifdef __cplusplus
