@@ -22,6 +22,9 @@ jobs:
           curl --fail --location --silent --show-error \
             https://github.com/gbdev/rgbds/releases/download/v1.0.1/rgbds-linux-x86_64.tar.xz \
             -o "$release_dir/rgbds-linux-x86_64.tar.xz"
+          printf '%s  %s\n' \
+            '80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9' \
+            "$release_dir/rgbds-linux-x86_64.tar.xz" | sha256sum --check --status
           tar -xJf "$release_dir/rgbds-linux-x86_64.tar.xz" -C "$release_dir"
           echo "$release_dir" >> "$GITHUB_PATH"
       - name: Confirm assembler version and reproduce fixture bytes
