@@ -37,9 +37,9 @@ Progress: [██████████] 100% of Phase 1 execution plans have 
 
 ## Performance Metrics
 
-- Total plans completed: 4
-- Average duration / total execution time: 36.5 min / 146 min recorded for Plans 01–04.
-- Per-phase metrics / recent trend: Phase 1 Plans 01–04 completed; four plans measured.
+- Total plans completed: 5
+- Average duration / total execution time: 46 min / 230 min recorded for Plans 01–05.
+- Per-phase metrics / recent trend: Phase 1 Plans 01–05 completed; five plans measured.
 - Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline; bounded API and fixture behavior have local CTest evidence.
 
 **Per-Plan Metrics:**
@@ -68,8 +68,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 01]: Reset retains the loaded ROM while restoring deterministic post-boot CPU state and clearing guest RAM and emulated time.
 - [Phase 01]: The installed export explicitly maps the core library to GabbaBoy::core.
 - [Phase 01]: Installed consumer tests are registered only when the relocated prefix exists, preserving ordinary offline CTest runs.
-- [Phase 01]: CI uses explicit runner labels and a fail-closed 24-case CTest inventory; runner images are not product OS claims.
-- [Phase 01]: The official CMake 3.25.3 floor script and RGBDS 1.0.1 fixture reproduction passed locally in Ubuntu x86_64 containers; hosted CI evidence is pending.
+- [Phase 01]: CI uses explicit runner labels and a fail-closed 25-case CTest inventory; runner images are not product OS claims.
+- [Phase 01]: The official CMake 3.25.3 floor script and RGBDS 1.0.1 fixture reproduction passed locally in Ubuntu x86_64 containers and on PR #1; run-scoped hosted evidence is recorded in 01-VALIDATION.md.
 - [Phase 01]: Pin explicit native runner labels and require every evidence job plus its exact test inventory; do not infer product OS support from runner labels.
 - [Phase 01]: Keep hosted CI and branch-protection evidence pending until exact-revision remote results are observed; fixture-repro is a separate status context.
 - [Phase GB-01]: Qualify preview packages and contributor claims against an exact PR SHA; query the artifact API for per-run expiry and report it without calling temporary artifacts releases.
