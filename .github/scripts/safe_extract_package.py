@@ -7,6 +7,15 @@ from pathlib import Path, PurePosixPath
 import stat
 import sys
 import tarfile
+from types import SimpleNamespace
+
+
+# Preview archives are currently only a few MiB. These documented ceilings
+# leave substantial headroom while bounding parsing, disk use, and copy work.
+MAX_COMPRESSED_BYTES = 64 * 1024 * 1024
+MAX_MEMBERS = 4096
+MAX_EXPANDED_BYTES = 512 * 1024 * 1024
+COPY_CHUNK_BYTES = 1024 * 1024
 
 
 def checked_name(member):
@@ -27,12 +36,22 @@ def checked_name(member):
 
 def validate_members(members):
     paths = {}
+    declared_total = 0
     for member in members:
+        if len(paths) >= MAX_MEMBERS:
+            raise ValueError(f"archive has more than {MAX_MEMBERS} members")
+        if member.size < 0:
+            raise ValueError(f"negative archive member size: {member.name!r}")
+        if member.size > MAX_EXPANDED_BYTES:
+            raise ValueError(f"archive member exceeds {MAX_EXPANDED_BYTES} expanded-byte limit: {member.name!r}")
+        if declared_total > MAX_EXPANDED_BYTES - member.size:
+            raise ValueError(f"archive exceeds {MAX_EXPANDED_BYTES} aggregate expanded-byte limit")
         path = checked_name(member)
         key = path.as_posix()
         if key in paths:
             raise ValueError(f"duplicate archive path: {key!r}")
         paths[key] = member
+        declared_total += member.size
 
     prefix = paths.get("installed-prefix")
     if prefix is None or prefix.type != tarfile.DIRTYPE:
@@ -48,6 +67,10 @@ def validate_members(members):
 
 
 def extract(archive_path, destination):
+    archive_file = Path(archive_path)
+    compressed_size = archive_file.stat().st_size
+    if compressed_size > MAX_COMPRESSED_BYTES:
+        raise ValueError(f"compressed archive exceeds {MAX_COMPRESSED_BYTES}-byte limit")
     root = Path(destination)
     if root.is_symlink():
         raise ValueError("destination must not be a symbolic link")
@@ -55,9 +78,12 @@ def extract(archive_path, destination):
         raise ValueError("destination must be an empty directory")
     root.mkdir(parents=True, exist_ok=True)
 
-    with tarfile.open(archive_path, mode="r:gz") as archive:
-        paths = validate_members(archive.getmembers())
+    with tarfile.open(archive_file, mode="r:gz") as archive:
+        # Iteration streams headers and payload positioning; unlike getmembers(),
+        # this stops at MAX_MEMBERS without first materializing an unbounded list.
+        paths = validate_members(iter(archive))
 
+        copied_total = 0
         for key, member in paths.items():
             target = root.joinpath(*PurePosixPath(key).parts)
             parent = target.parent
@@ -82,14 +108,35 @@ def extract(archive_path, destination):
                 flags |= os.O_NOFOLLOW
             fd = os.open(target, flags, 0o755 if member.mode & 0o111 else 0o644)
             with os.fdopen(fd, "wb") as output, source:
+                copied_member = 0
                 while True:
-                    chunk = source.read(1024 * 1024)
+                    # Read at most one byte beyond the declared length so an
+                    # unexpected overlong stream is rejected before writing it.
+                    remaining = member.size - copied_member
+                    chunk = source.read(min(COPY_CHUNK_BYTES, remaining + 1))
                     if not chunk:
                         break
+                    copied_member += len(chunk)
+                    copied_total += len(chunk)
+                    if copied_member > member.size:
+                        raise ValueError(f"archive member exceeds declared size: {key!r}")
+                    if copied_total > MAX_EXPANDED_BYTES:
+                        raise ValueError(f"archive exceeds {MAX_EXPANDED_BYTES} aggregate expanded-byte limit")
                     output.write(chunk)
+                if copied_member != member.size:
+                    raise ValueError(
+                        f"archive member size mismatch for {key!r}: declared {member.size}, copied {copied_member}"
+                    )
 
 
 def self_test():
+    def expect_rejection(label, members):
+        try:
+            validate_members(members)
+        except ValueError:
+            return
+        raise AssertionError(f"{label} accepted")
+
     def archive_bytes(entries):
         data = io.BytesIO()
         with tarfile.open(fileobj=data, mode="w:gz") as archive:
@@ -135,7 +182,21 @@ def self_test():
         except ValueError:
             continue
         raise AssertionError(f"unsafe archive accepted: {entries!r}")
-    print("PASS safe package extraction adversarial validation")
+
+    root = SimpleNamespace(name="installed-prefix/", type=tarfile.DIRTYPE, size=0)
+    too_many = [root] + [
+        SimpleNamespace(name=f"installed-prefix/f{i}", type=tarfile.REGTYPE, size=0)
+        for i in range(MAX_MEMBERS)
+    ]
+    expect_rejection("member-count limit", too_many)
+
+    over_total = [
+        root,
+        SimpleNamespace(name="installed-prefix/a", type=tarfile.REGTYPE, size=MAX_EXPANDED_BYTES // 2),
+        SimpleNamespace(name="installed-prefix/b", type=tarfile.REGTYPE, size=MAX_EXPANDED_BYTES // 2 + 1),
+    ]
+    expect_rejection("aggregate-size limit", over_total)
+    print("PASS safe package extraction adversarial validation (including member-count and aggregate-size limits)")
 
 
 if __name__ == "__main__":
