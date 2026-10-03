@@ -35,9 +35,9 @@
     }
   ],
   "next": {
-    "command": "$gsd-execute-phase 1",
-    "label": "Execute Phase 1",
-    "reason": "Phase 1 planning is complete; implementation has not started"
+    "command": "/gsd:progress --next",
+    "label": "Advance to the next step",
+    "reason": "Phase 01 of 6 · executing"
   },
-  "updated_at": "2026-10-03T06:00:23.127Z"
+  "updated_at": "2026-10-03T11:19:25.650Z"
 }

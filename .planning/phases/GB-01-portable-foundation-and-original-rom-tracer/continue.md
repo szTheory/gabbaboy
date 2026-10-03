@@ -1,10 +1,12 @@
 # Continue: Phase 1 execution
 
-**Completed stage:** Phase 1 planning. Phase 1 implementation has not started.
+**Completed stage:** Phase GB-01-01 execution — original tracer core and fixture provenance. Plan 01 of 5 is complete; Phase 1 remains active.
 
-Five plans are ready in five dependency-ordered waves. Planning checks passed: all five plans are structurally valid; command-path and failure-direction scans have zero blockers or warnings; all 11 trackable context decisions and all 19 Phase 1 requirements/decisions are covered. These are planning checks only. No implementation builds or tests have run, and the 35 active requirements remain pending.
+Plan 01 is committed as `48cab4a` and `c75a470`. Local CMake/Ninja build, tracer smoke, and fixture digest checks passed; RGBDS v1.0.1 regeneration matched the checked ROM byte-for-byte, and a wrong manifest digest failed as expected. This proves only the original fixture under the named deterministic DMG-CPU-B profile. Phase-level requirements remain pending; lifecycle, malformed-input controls, installed consumers, full CI, and hosted artifacts are not yet proven.
 
 The plans incorporate the accepted small-dependency-tree preference: the core stays standard-library-only; RGBDS is isolated to fixture regeneration CI. They pin the DMG post-boot flag profile and CMake 3.25.3 floor check. Implementation must produce the evidence those plans request. Hosted remote/PR/artifact evidence remains pending because no origin is configured. Plan 05 retains a checkpoint to provide the canonical repository endpoint or report that hosting is unavailable.
+
+**Next plan:** GB-01-02 — bounded lifecycle, loader, and output/error contract.
 
 **Next command:** `$gsd-execute-phase 1`
 

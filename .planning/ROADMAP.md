@@ -36,7 +36,12 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. A contributor receives a required CI result proving that loader/lifecycle error cases and ASan/UBSan checks actually ran; missing mandatory fixtures/cases, failures, and timeouts fail the gate. (BASE-07)
 5. A contributor can use the configured remote/PR workflow and download a revision-linked foundation-preview core/runner with an installation smoke result and explicit capability limits. (BASE-08)
 
-**Plans**: 5 plans in 5 dependency-ordered waves; see [Phase 1 plans](phases/GB-01-portable-foundation-and-original-rom-tracer/).
+**Plans**: 1/5 plans executed in 5 dependency-ordered waves; see [Phase 1 plans](phases/GB-01-portable-foundation-and-original-rom-tracer/).
+- [x] 01-01-PLAN.md
+- [ ] 01-02-PLAN.md
+- [ ] 01-03-PLAN.md
+- [ ] 01-04-PLAN.md
+- [ ] 01-05-PLAN.md
 
 ### Phase 2: DMG CPU, Bus, and Time
 
@@ -125,7 +130,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Portable Foundation and Original ROM Tracer | 0/5 | Ready to execute | - |
+| 1. Portable Foundation and Original ROM Tracer | 1/5 | In Progress|  |
 | 2. DMG CPU, Bus, and Time | 0/TBD | Not started | - |
 | 3. Visible Interactive DMG | 0/TBD | Not started | - |
 | 4. MBC1 and Safe Battery Continuation | 0/TBD | Not started | - |
@@ -138,4 +143,4 @@ All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](
 
 Automate authorized work within each phase, then inspect current verification/release/consumer evidence, update traceability and [lessons](context/LESSONS.md), triage issues/PRs, report limitations and the exact next command, and **stop**. Never auto-advance phases or milestones; keep both auto-advance flags false. Credential, hardware, or perceptual gaps must be recorded honestly with the smallest necessary human action, never converted into passing evidence. Remote/CI setup begins in Phase 1; absent access remains an explicit completion limitation.
 
-Phase 1 planning is complete; Phase 1 implementation has not started. Next command: `$gsd-execute-phase 1`.
+Phase 1 Plan 01 is complete with local tracer and fixture-digest evidence; Plans 02–05 remain. Next plan: GB-01-02 bounded lifecycle, loader, and output/error contract. Continue with `$gsd-execute-phase 1` and stop after Phase 1.
