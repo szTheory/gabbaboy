@@ -1,30 +1,18 @@
 # Fresh-context continuation
 
-GabbaBoy's OpenGSD project is initialized. **Phase 1 has not started.** The owner explicitly selected research plus initialization now, with a stop before Phase 1.
+GabbaBoy's OpenGSD project is initialized. **Phase 1 discussion is complete; Phase 1 implementation has not started.** The owner accepted the discussion recommendations. Implementation phases completed: 0 of 6.
 
-**Completed stage:** project research and initialization (`gsd-new-project`). **Implementation phases completed:** 0 of 6.
+**Completed stage:** Phase 1 discussion and context capture (`gsd-discuss-phase 1`). The locked choices and remaining planning discretion are in the Phase 1 context; the alternatives and research lenses are preserved in the discussion log.
 
-**Next stage:** discuss Phase 1 — Portable Foundation and Original ROM Tracer. No Phase 1 context or implementation plans exist yet. This discussion turns the existing research into phase-specific decisions (the tiny ROM/opcode subset, model/boot defaults, public timing/ownership contract, and initial build/release scope). Reuse settled project decisions rather than repeating the kickoff or broad research. After that context is recorded, the expected next command is `$gsd-plan-phase 1`; verify the actual artifacts before recommending it.
+**Next stage:** plan Phase 1 — Portable Foundation and Original ROM Tracer. Read `AGENTS.md`, `.planning/STATE.md`, `.planning/PROJECT.md`, `.planning/REQUIREMENTS.md`, `.planning/ROADMAP.md`, the Phase 1 context, and its canonical research references. Reuse the accepted decisions and existing research. Planning should pin exact model-applicable startup values and opcode inventory, immutable tool/action versions, and OS floors backed by actual checks. Preserve the project’s small, flat dependency preference and keep RGBDS isolated to fixture verification. Do not execute the phase or auto-advance.
 
 Open a fresh session in this repository and run:
 
 ```text
-$gsd-discuss-phase 1
+$gsd-plan-phase 1
 ```
 
-Optional accompanying text:
-
-```text
-Read AGENTS.md, .planning/STATE.md, .planning/PROJECT.md,
-.planning/REQUIREMENTS.md, .planning/ROADMAP.md, and
-.planning/research/INDEX.md. Use the recorded research and recent sibling
-lessons; revisit only the decisions Phase 1 actually needs. GabbaBoy is a
-C Game Boy / Game Boy Color core. The current milestone is a limited DMG
-preview, with CGB next. Automate verification and shipping within the
-authorized phase, and stop after every phase. Do not auto-advance.
-```
-
-`$gsd-new-project` is unnecessary here because initialization is complete. `$gsd-progress` is the recovery/status command if the next session needs orientation; `$gsd-plan-phase 1` can plan directly when discussion is intentionally skipped.
+`$gsd-new-project` and `$gsd-discuss-phase 1` are already complete and should not be repeated. Owner controls continuation after each phase.
 
 ## Durable entry points
 
