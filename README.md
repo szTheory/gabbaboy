@@ -1,16 +1,47 @@
 # GabbaBoy
 
-A portable C emulator core for **Nintendo Game Boy and Game Boy Color**, designed for accurate behavior, clear code, and straightforward frontend integration.
+GabbaBoy is an original portable C17 Game Boy / Game Boy Color project. The
+current implementation is only a headless DMG-CPU-B tracer foundation. It is
+not a general emulator and does not execute a Nintendo boot ROM, support CGB,
+or run commercial games.
 
-**Status: research and project setup. There is no runnable emulator yet.**
+## Build and run the tracer
 
-The intended product is a dependency-light core, a small optional macOS desktop player, and an integration path for Playstead and other frontends. Development will ship progressively useful releases with reproducible correctness and performance evidence.
+Requirements: CMake 3.25 or newer, Ninja, and a C17 compiler. RGBDS is needed
+only to reproduce the checked-in fixture; the normal build is offline.
 
-- [Project goals](.planning/PROJECT.md)
-- [Research index](.planning/research/INDEX.md)
-- [Roadmap](.planning/ROADMAP.md)
-- [Current state and next action](.planning/STATE.md)
-- [Contributor workflow](AGENTS.md)
-- [Fresh-context continuation](.planning/context/START-HERE.md)
+```sh
+cmake --preset phase1
+cmake --build --preset phase1
+ctest --preset phase1 --output-on-failure --no-tests=error
+./build/gabbaboy-runner fixtures/tracer/tracer.gb
+```
 
-Original project material is MIT licensed. Third-party material retains its own license. Game images and proprietary boot ROMs are not included.
+The runner reads the ROM file; the core receives a validated copy through its
+public C API. The guest starts at cartridge entry 0x0100, stores 0x5A at 0xA000,
+reads and compares it, then writes 0xA5 (success) or 0xEE (failure) at 0xA001.
+The core executes only the fixture's listed instruction subset through its ROM
+and RAM bus. Runs use a 200,000 half-dot maximum and a 256-record caller-owned
+trace; the core stops explicitly on trace exhaustion. The runner formats a
+bounded portion of that trace.
+
+## Profile and evidence limits
+
+The deterministic profile is named `DMG-CPU-B` and skips boot at 0x0100. The
+CPU handoff values for this fixture are A=01, F=B0, B=00, C=13, D=00, E=D8,
+H=01, L=4D, PC=0100, SP=FFFE. The nonzero header checksum selects F=B0 under the
+profile rule. DIV=AB and STAT=85 are recorded as DMG/MGB handoff values, but
+this tracer does not implement I/O behavior. WRAM/HRAM are hardware-volatile;
+zero fill is an emulator policy, not a hardware claim. These applicable DMG
+values follow [Pan Docs: Power Up Sequence](https://raw.githubusercontent.com/gbdev/pandocs/master/src/Power_Up_Sequence.md).
+
+The fixture provenance, exact RGBDS v1.0.1 regeneration command, SHA-256,
+success/failure protocol, reachable instruction inventory, authored license,
+and exclusions are in [fixtures/tracer/manifest.json](fixtures/tracer/manifest.json).
+`fixture_digest` verifies the committed ROM identity without requiring RGBDS.
+The fixture is authored project material under the root MIT license; it does
+not contain a boot ROM or the Nintendo logo.
+
+This evidence proves only that this original fixture reaches its guest RAM
+success state under the named deterministic profile. It is not hardware-backed
+validation, boot execution, broad DMG CPU coverage, CGB support, or gameplay.

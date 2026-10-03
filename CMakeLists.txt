@@ -16,4 +16,9 @@ set_target_properties(gabbaboy-runner PROPERTIES C_EXTENSIONS OFF)
 
 if(BUILD_TESTING)
   add_test(NAME tracer_smoke COMMAND gabbaboy-runner ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
+  add_test(NAME fixture_digest
+    COMMAND ${CMAKE_COMMAND}
+      -DROM=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tracer/tracer.gb
+      -DMANIFEST=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tracer/manifest.json
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
 endif()
