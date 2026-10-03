@@ -16,6 +16,8 @@ from types import SimpleNamespace
 # leave substantial headroom while bounding parsing, disk use, and copy work.
 MAX_COMPRESSED_BYTES = 64 * 1024 * 1024
 MAX_MEMBERS = 4096
+# Preview prefixes are shallow; this cap bounds ancestry validation for hostile paths.
+MAX_PATH_COMPONENTS = 64
 MAX_EXPANDED_BYTES = 512 * 1024 * 1024
 MAX_ARCHIVE_STREAM_BYTES = 576 * 1024 * 1024
 MAX_EXTENSION_HEADERS = 8192
@@ -94,6 +96,9 @@ def checked_name(member):
     raw = member.name
     if not raw or raw.startswith("/") or "\\" in raw:
         raise ValueError(f"unsafe archive path: {raw!r}")
+    component_count = raw.count("/") + (0 if raw.endswith("/") else 1)
+    if component_count > MAX_PATH_COMPONENTS:
+        raise ValueError(f"archive path exceeds {MAX_PATH_COMPONENTS}-component limit: {raw!r}")
     parts = raw.split("/")
     if parts[-1] == "":
         parts.pop()
@@ -283,6 +288,16 @@ def self_test():
     ]
     expect_rejection("member-count limit", too_many)
 
+    too_deep = [
+        root,
+        SimpleNamespace(
+            name="installed-prefix/" + "/".join(f"d{i}" for i in range(MAX_PATH_COMPONENTS)),
+            type=tarfile.REGTYPE,
+            size=0,
+        ),
+    ]
+    expect_rejection("path-depth limit", too_deep)
+
     over_total = [
         root,
         SimpleNamespace(name="installed-prefix/a", type=tarfile.REGTYPE, size=MAX_EXPANDED_BYTES // 2),
@@ -300,7 +315,7 @@ def self_test():
     else:
         raise AssertionError("decompressed-stream limit accepted excess bytes")
     print(
-        "PASS safe package extraction adversarial validation (member count, aggregate size, "
+        "PASS safe package extraction adversarial validation (member count, path depth, aggregate size, "
         "and decompressed stream bounds)"
     )
 
