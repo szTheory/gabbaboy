@@ -1,9 +1,11 @@
 ---
 phase: GB-01-portable-foundation-and-original-rom-tracer
-verified: 2026-10-03T17:53:27Z
+verified: 2026-10-03T19:13:20Z
 status: passed
 score: 5/5 roadmap truths verified
-revision: 8396096ad17500974b30657af91fd2ef9ad51237
+requirements_score: 8/8 BASE requirements satisfied
+revision: 5aed7792bb03880de53a2d2640afe3ad656877d6
+implementation_revision: 8396096ad17500974b30657af91fd2ef9ad51237
 covered_files:
   - .github/scripts/safe_extract_package.py
   - .github/scripts/verify-cmake-floor.sh
@@ -51,17 +53,13 @@ covered_files:
   - tests/test_api.c
   - tests/test_loader.c
   - tests/test_tracer.c
-covered_digest: "v2:sha256:84d2e6263741ca6c1ba2b44949bd5e47a55b7baeb180a01253dfe9c8aaec9970"
+covered_digest: "v2:sha256:ce0bcf41464056938438db6444960d8c45f959387dcec6edc746223906cda14c"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
-  previous_status: gaps_found
-  previous_score: 3/5
-  gaps_closed:
-    - ROM-only headers declaring more than 32 KiB are rejected before allocation, and a valid-checksum 64 KiB replacement regression proves the active 32 KiB machine remains usable.
-    - Downloaded preview packages are validated and safely extracted with bounded paths, members, expansion, stream reads, and regular-file-only writes before consumer execution.
-    - Required CI and fixture-reproduction workflows passed for the exact verified source SHA.
-    - Linux and macOS preview artifacts passed installed-package smoke and exact source, package-digest, and retention verification for the exact verified source SHA.
+  previous_status: passed
+  previous_score: 5/5
+  gaps_closed: []
   gaps_remaining: []
   regressions: []
 deferred:
@@ -73,10 +71,11 @@ deferred:
 # Phase 1: Portable Foundation and Original ROM Tracer Verification Report
 
 **Phase Goal:** As a developer, I want to run an original ROM with an installable GB core via a bounded API, so that I can embed it.
-**Verified:** 2026-10-03T17:53:27Z
+**Verified:** 2026-10-03T19:13:20Z
 **Status:** passed
-**Revision:** `8396096ad17500974b30657af91fd2ef9ad51237`
-**Re-verification:** Yes — after the code-review fixes and at the current checkout revision.
+**Current revision:** `5aed7792bb03880de53a2d2640afe3ad656877d6` (documentation-only closeout)
+**Verified implementation revision:** `8396096ad17500974b30657af91fd2ef9ad51237`
+**Re-verification:** Yes — after documentation closeout. The implementation tree and clean standard-depth review are unchanged from the exact hosted-tested implementation revision.
 
 ## User Flow Coverage
 
@@ -88,7 +87,7 @@ User story validator accepted the roadmap goal. The flow below checks observable
 | Install and embed | A relocated install exposes `GabbaBoy::core` and the public header to independent C and C++ consumers. | macOS CTest and Linux CMake-floor relocated CTest each passed runner, C, and C++ consumer tests. | ✓ VERIFIED |
 | Run the original ROM | The guest code executes through the decoder/bus subset and yields its guest-derived pass state and bounded trace. | `build/gabbaboy-runner fixtures/tracer/tracer.gb` returned `outcome=pass`, `half_dots=200000`, `trace_records=8337`; first trace is entry `0x0100` followed by `0x0150` at half-dot 32. | ✓ VERIFIED |
 | Reject unsafe cartridge inputs | Unsupported or malformed replacement images return explicit errors without damaging a loaded instance. | Full test suite includes unsupported-size and non-destructive cases; 64 KiB valid-checksum regression expects `GBB_UNSUPPORTED_ROM_SIZE` and checks continued execution of prior ROM. | ✓ VERIFIED |
-| Use the hosted PR and download a qualified preview | Required checks and downloadable package artifacts qualify the exact source revision. | `sh .github/scripts/verify-pr-evidence.sh` passed for local HEAD, PR #1 head, workflow runs, both downloaded package artifacts, sidecars, smoke results and API expiry metadata; all identify `8396096ad17500974b30657af91fd2ef9ad51237`. | ✓ VERIFIED |
+| Use the hosted PR and download a qualified preview | Required checks and downloadable package artifacts qualify the phase implementation revision. | At implementation HEAD `8396096ad17500974b30657af91fd2ef9ad51237`, the evidence verifier passed for PR #1, runs and both artifacts. Current local HEAD is a documentation-only commit; rerunning the verifier fails closed because PR #1 remains at the verified implementation SHA. | ✓ VERIFIED |
 
 ## Goal Achievement
 
@@ -100,7 +99,7 @@ User story validator accepted the roadmap goal. The flow below checks observable
 | 2 | Opaque instances support documented creation, reset, run, destruction, independent state, and bounded ownership/error rules. | ✓ VERIFIED | Public header documents ownership, thread and model constraints; CTest lifecycle, independent-instance, run-budget and trace-capacity cases passed on macOS and Linux sanitizer build. |
 | 3 | Malformed, excessive, unsupported, or invalid ROM loads return bounded explicit errors without mutating a usable loaded instance. | ✓ VERIFIED | Loader validates null/length, header checksum/type/size and exact length before allocation/mutation. The new 64 KiB declared-size regression passed in local CTest, ASan/UBSan CTest, and CMake-floor CTest. |
 | 4 | The original authored ROM executes its declared subset through the decoder and bus, reports explicit unsupported/failure states, and produces bounded deterministic trace output with reproducible rights and recipe evidence. | ✓ VERIFIED | Runner output is guest-derived; 26-case CTest passed. RGBDS v1.0.1 Linux archive digest was checked; local regeneration byte-compared equal to the fixture and manifest SHA-256 `85d84babe64e852babc55fe355919f9d2f8013f90dc56550d58e972470321f77`. Manifest and MIT notice document applicability and exclusions. |
-| 5 | Current-revision required CI proves mandatory cases and sanitizers ran, and a current-revision preview package is available with installed-consumer smoke and honest limits. | ✓ VERIFIED | Exact current-SHA CI run `37141965336`, fixture run `37141965338`, preview run `37141965332`; required contexts pass, both hosted installed-package smoke jobs pass, and the exact artifact verifier matched downloaded archives and sidecars to source SHA, digest, smoke and 14-day retention. |
+| 5 | Required CI proves mandatory cases and sanitizers ran, and a revision-linked preview package is available with installed-consumer smoke and honest limits. | ✓ VERIFIED | The exact hosted source SHA is `8396096ad17500974b30657af91fd2ef9ad51237`; CI run `37141965336`, fixture run `37141965338`, and preview run `37141965332` pass. The later `5aed779` closeout changes only Markdown docs/state and does not alter the tested implementation or artifacts. |
 
 **Score:** 5/5 roadmap truths verified; behavior-unverified: 0.
 
@@ -115,12 +114,13 @@ User story validator accepted the roadmap goal. The flow below checks observable
 | `fixtures/tracer/{tracer.asm,tracer.gb,manifest.json,LICENSE.txt}` | Original fixture with rights, digest, recipe and protocol | ✓ VERIFIED | Pinned RGBDS v1.0.1 reproduction passed byte equality and digest. Claims exclude boot ROM, hardware conformance, general gameplay and CGB. |
 | `tests/test_api.c`, `tests/test_loader.c`, `tests/test_tracer.c` | Lifecycle, bounds, loader, fixture positive/negative controls | ✓ VERIFIED | All registered applicable cases ran in local normal and sanitizer CTest. |
 | `tests/consumers/{c,cpp}` | External consumers of installed `GabbaBoy::core` | ✓ VERIFIED | Both consumers built and executed against relocated install on macOS and in the Linux CMake-floor lane. |
-| `.github/workflows/ci.yml`, `tests/expected-tests.txt`, inventory script | Native, sanitizer, CMake-floor jobs and fail-closed test inventory | ✓ VERIFIED | Local macOS inventory verified 26 installed cases; Linux ASan/UBSan verified 23 core/package cases; CMake-floor verified 23 base and 26 relocated cases. Exact-SHA hosted CI run `37141965336` passed required-native. |
+| `.github/workflows/ci.yml`, `tests/expected-tests.txt`, inventory script | Native, sanitizer, CMake-floor jobs and fail-closed test inventory | ✓ VERIFIED | Local macOS inventory verified 26 installed cases; Linux ASan/UBSan verified 23 core/package cases; CMake-floor verified 23 base and 26 relocated cases. Exact implementation-SHA hosted CI run `37141965336` passed required-native. |
 | `.github/workflows/fixture-repro.yml` | Digest-pinned RGBDS reproduction | ✓ VERIFIED | Pinned v1.0.1 archive SHA and byte reproduction passed locally; exact-SHA GitHub fixture run `37141965338` passed. |
 | `.github/workflows/preview.yml`, `cmake/PreviewPackageSmoke.cmake` | Exact archive is safely extracted, relocated and smoke-tested | ✓ VERIFIED | Local normal/sanitizer/floor preview smoke passed; exact-SHA hosted run `37141965332` passed Linux and macOS installed-package smoke jobs. |
 | `.github/scripts/safe_extract_package.py` | Bounded regular-file-only safe archive extraction | ✓ VERIFIED | `--self-test` passed symlink, hardlink, special-file, traversal, absolute/out-of-prefix path, duplicate, file-parent conflict, member count, path depth, expanded-size and decompressed-stream checks. |
-| `.github/scripts/verify-pr-evidence.sh` | Exact source/check/run/artifact chain verifier | ✓ VERIFIED | Passed at exact HEAD; verified required contexts, workflow runs, downloaded Linux/macOS artifacts, sidecars and API metadata. |
+| `.github/scripts/verify-pr-evidence.sh` | Exact source/check/run/artifact chain verifier | ✓ VERIFIED AT IMPLEMENTATION SHA | Passed when HEAD was `8396096…`; verified required contexts, workflow runs, downloaded Linux/macOS artifacts, sidecars and API metadata. Current invocation fails closed on the docs-only HEAD/PR SHA difference, as designed. |
 | `README.md` and `01-VALIDATION.md` | Accurate build, integration, evidence and limitation guidance | ✓ VERIFIED | Scope claims remain limited; exact current run evidence is recorded below and older run-scoped samples are distinguished. |
+| `.planning/STATE.md`, `continue.md`, `LESSONS.md`, `DECISIONS.md` | Current phase handoff and evidence-derived memory | ✓ VERIFIED | Closeout records Phase 1 complete at implementation SHA `8396096…`, keeps Phase 2 as the next phase, preserves the exact `$gsd-discuss-phase 2` route, and carries review-derived loader/archive safeguards and hardware-mapping limits. |
 
 ## Key Link Verification
 
@@ -132,8 +132,8 @@ User story validator accepted the roadmap goal. The flow below checks observable
 | `src/core/gabbaboy.c` | `src/runner/main.c` | API result drives runner output | ✓ WIRED | Runner uses API stop reason and guest RAM marker, not a static success result. |
 | CMake install export | `tests/consumers/c` and `tests/consumers/cpp` | `find_package` and `GabbaBoy::core` | ✓ WIRED | Both external projects compiled and ran using relocated install only. |
 | `tests/expected-tests.txt` | CI inventory verifier | CTest JUnit inventory comparison | ✓ WIRED | Local normal/sanitizer/floor inventories passed with expected core-only or installed selection. |
-| `ci.yml` | `preview.yml` | Matching successful workflow SHA | ✓ WIRED | Exact current-SHA CI and preview runs passed. |
-| Preview archive | Safe extractor and artifact sidecar verifier | Validate-before-write then consumer smoke | ✓ WIRED | Extractor adversarial suite and local package tests pass; exact hosted Linux/macOS archives were downloaded and their metadata verified. |
+| `ci.yml` | `preview.yml` | Matching successful workflow SHA | ✓ WIRED | Exact implementation-SHA CI and preview runs passed; closeout added no workflow changes. |
+| Preview archive | Safe extractor and artifact sidecar verifier | Validate-before-write then consumer smoke | ✓ WIRED | Extractor adversarial suite and local package tests pass; exact hosted implementation-SHA Linux/macOS archives were downloaded and their metadata verified. |
 
 ## Data-Flow Trace
 
@@ -151,7 +151,8 @@ User story validator accepted the roadmap goal. The flow below checks observable
 | Official CMake floor and relocation | `bash .github/scripts/verify-cmake-floor.sh` under Ubuntu 22.04 x86_64 | Official archive digest/version passed; 23/23 floor tests and 26/26 relocated tests; both inventories, install, runner, C/C++ consumers passed. | ✓ PASS |
 | Pinned fixture reproduction | RGBDS v1.0.1 archive SHA verification, assemble/link/fix, `cmp`, manifest SHA comparison | Exact byte match; SHA-256 `85d84babe64e852babc55fe355919f9d2f8013f90dc56550d58e972470321f77`. | ✓ PASS |
 | Safe extraction adversarial cases | `python3 .github/scripts/safe_extract_package.py --self-test` | Passed all path/type/resource-bound rejection tests. | ✓ PASS |
-| Current remote evidence chain | `sh .github/scripts/verify-pr-evidence.sh` | Passed for repository `szTheory/gabbaboy`, PR #1, exact HEAD `8396096ad17500974b30657af91fd2ef9ad51237`; CI `37141965336`, fixture `37141965338`, preview `37141965332`. | ✓ PASS |
+| Hosted evidence at implementation revision | `sh .github/scripts/verify-pr-evidence.sh` | Passed when local HEAD, PR #1 and workflow runs were all `8396096ad17500974b30657af91fd2ef9ad51237`; CI `37141965336`, fixture `37141965338`, preview `37141965332`. | ✓ PASS |
+| Verifier at documentation-only closeout HEAD | `sh .github/scripts/verify-pr-evidence.sh` | Failed closed: local HEAD `5aed7792bb03880de53a2d2640afe3ad656877d6` differs from PR head `8396096ad17500974b30657af91fd2ef9ad51237`. `git diff --name-only 8396096..HEAD` contains only Markdown files. | ℹ️ INFO — implementation evidence remains bound to `8396096…`; latest closeout commit has no hosted run. |
 | Goal-visible ROM result | `build/gabbaboy-runner fixtures/tracer/tracer.gb` | `outcome=pass`, `half_dots=200000`, `trace_records=8337`; deterministic guest pass marker. | ✓ PASS |
 
 ## Probe Execution
@@ -179,7 +180,7 @@ All Phase 1 requirements are represented in the five plans; no Phase 1 requireme
 
 ## Exact Hosted Evidence
 
-`sh .github/scripts/verify-pr-evidence.sh` passed. PR #1's head, local HEAD, successful pull-request workflow runs, sidecars and package source metadata all matched `8396096ad17500974b30657af91fd2ef9ad51237`. Required contexts `required-native`, `fixture-repro`, and `preview-package-smoke` passed. The exact fixture job reproduced the checked-in ROM; the preview run passed both installed-package smoke jobs. Each artifact was downloaded, safely extracted, and checked against the sidecar's package digest, source SHA, smoke result and configured 14-day retention.
+On implementation SHA `8396096ad17500974b30657af91fd2ef9ad51237`, `sh .github/scripts/verify-pr-evidence.sh` passed: PR #1's head, local HEAD at that time, successful pull-request workflow runs, sidecars and package source metadata all matched. Required contexts `required-native`, `fixture-repro`, and `preview-package-smoke` passed. The exact fixture job reproduced the checked-in ROM; the preview run passed both installed-package smoke jobs. Each artifact was downloaded, safely extracted, and checked against the sidecar's package digest, source SHA, smoke result and configured 14-day retention. At this report refresh, local HEAD was docs-only SHA `5aed7792bb03880de53a2d2640afe3ad656877d6`, while PR #1 remained at `8396096ad17500974b30657af91fd2ef9ad51237`; rerunning the verifier at `5aed7792bb03880de53a2d2640afe3ad656877d6` failed closed because the local and PR heads differed. Hosted checks for `5aed7792bb03880de53a2d2640afe3ad656877d6` were pending at report time. The evidence below therefore covers implementation SHA `8396096ad17500974b30657af91fd2ef9ad51237`, not the docs-only closeout commit.
 
 | Evidence | Run | Result |
 |---|---:|---|
@@ -206,9 +207,9 @@ This deliverable is an installable headless C17 core and an authored bootless DM
 
 ## Gaps Summary
 
-No blocking gaps remain. Local code, loader boundaries, package extraction, fixture provenance, installation/consumer behavior, Linux sanitizer and CMake floor evidence pass. Exact-revision hosted CI, fixture regeneration and Linux/macOS preview artifact evidence now pass for the same verified SHA. No manual UAT is required for these headless, automatically checked contracts. Hardware qualification and perceptual behavior are explicitly deferred/out of scope for this phase.
+No blocking phase-goal gaps remain for the implementation revision `8396096ad17500974b30657af91fd2ef9ad51237`. Local code, loader boundaries, package extraction, fixture provenance, installation/consumer behavior, Linux sanitizer and CMake floor evidence pass. Exact-revision hosted CI, fixture regeneration and Linux/macOS preview artifact evidence pass for that same implementation SHA. The later local HEAD `5aed7792bb03880de53a2d2640afe3ad656877d6` only changes Markdown closeout files; the exact hosted-evidence script was rerun and failed closed because GitHub PR #1 is still at the implementation SHA. The current docs commit itself has no hosted check result, so it is not represented as a green remote revision. No manual UAT is required for these headless, automatically checked contracts. Hardware qualification and perceptual behavior are explicitly deferred/out of scope for this phase.
 
 ---
 
-_Verified: 2026-10-03T17:53:27Z_
+_Verified: 2026-10-03T19:13:20Z_
 _Verifier: the agent (gsd-verifier)_
