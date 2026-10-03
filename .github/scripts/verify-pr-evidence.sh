@@ -17,6 +17,11 @@ fi
 if ! command -v cmake >/dev/null 2>&1; then
   fail "CMake is required to verify downloaded preview packages."
 fi
+if ! command -v python3 >/dev/null 2>&1; then
+  fail "Python 3 is required to safely inspect and extract downloaded preview packages."
+fi
+python3 "$script_dir/safe_extract_package.py" --self-test ||
+  fail "Safe package extraction adversarial validation failed."
 
 repository=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) ||
   fail "The current checkout is not associated with an accessible GitHub repository."
@@ -137,18 +142,8 @@ verify_artifact() {
 
   package_extract="$artifact_dir/extracted"
   mkdir -p "$package_extract"
-  cmake -E tar tzf "$package_file" | awk '
-    /^\// { unsafe = 1 }
-    {
-      count = split($0, parts, "/")
-      for (i = 1; i <= count; i++) if (parts[i] == "..") unsafe = 1
-    }
-    END { exit unsafe }
-  ' || fail "Package $package_name contains an unsafe archive path."
-  (
-    cd "$package_extract"
-    cmake -E tar xzf "$package_file"
-  ) || fail "Could not extract package $package_name."
+  python3 "$script_dir/safe_extract_package.py" "$package_file" "$package_extract" ||
+    fail "Package $package_name failed safe validation or extraction."
   extracted_prefix="$package_extract/installed-prefix"
   [ -d "$extracted_prefix" ] || fail "Extracted package $package_name has no installed-prefix tree."
   [ -f "$extracted_prefix/include/gabbaboy/gabbaboy.h" ] || fail "Extracted package $package_name is missing its public header."
