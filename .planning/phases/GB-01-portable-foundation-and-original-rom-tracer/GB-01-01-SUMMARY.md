@@ -12,8 +12,8 @@ affects: [01-02, 01-03, 01-04, 01-05]
 actuals:
   tokens: 5352
   tasks: 2
-  commits: 2
-commits: 2
+  commits: 3
+commits: 3
 plan_head_before: ae2dbed7359938354b5005fdc41085d7d32ab0eb
 tech-stack:
   added: [C17, CMake 3.25+, RGBDS 1.0.1 fixture tool]
@@ -48,7 +48,7 @@ coverage:
         ref: "RGBDS v1.0.1 regeneration and byte comparison; corrupted manifest digest rejection"
         status: pass
     human_judgment: false
-duration: 8min
+duration: 14min
 completed: 2026-10-03
 status: complete
 ---
@@ -59,9 +59,9 @@ status: complete
 
 ## Performance
 
-- **Duration:** 8 min
+- **Duration:** 14 min
 - **Started:** 2026-10-03T11:09:13Z (phase executor start recorded in STATE.md)
-- **Completed:** 2026-10-03T11:17:08Z
+- **Completed:** 2026-10-03T11:23:00Z
 - **Tasks:** 2
 - **Files modified:** 11
 
@@ -77,7 +77,7 @@ status: complete
 1. **Task 1: Run the original guest RAM tracer through the public core** - `48cab4a` (`feat`)
 2. **Task 2: Record fixture provenance and deterministic profile evidence** - `c75a470` (`docs`)
 
-**Measured plan commits:** 2 from `ae2dbed7359938354b5005fdc41085d7d32ab0eb` to `HEAD` before metadata close-out.
+**Measured commits at this summary write:** 3 from `ae2dbed7359938354b5005fdc41085d7d32ab0eb` to `HEAD`, including the first summary/state close-out commit.
 
 ## Files Created/Modified
 

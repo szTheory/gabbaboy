@@ -38,7 +38,7 @@ Progress: [██░░░░░░░░] 20% of Phase 1 plans
 ## Performance Metrics
 
 - Total plans completed: 1
-- Average duration / total execution time: 8 min recorded for Plan 01.
+- Average duration / total execution time: 14 min recorded for Plan 01.
 - Per-phase metrics / recent trend: Phase 1 Plan 01 completed; one plan measured.
 - Emulator correctness, speed, memory, and CI baselines: Not established beyond the original tracer fixture smoke.
 
@@ -46,7 +46,7 @@ Progress: [██░░░░░░░░] 20% of Phase 1 plans
 
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
-| Phase 01 P01 | 8 | 2 tasks | 11 files |
+| Phase 01 P01 | 14 | 2 tasks | 11 files |
 
 ## Accumulated Context
 
