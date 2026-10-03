@@ -4,11 +4,11 @@ milestone: v0.1
 current_phase: 2
 current_phase_name: DMG CPU, Bus, and Time
 status: planning
-stopped_at: Phase 1 complete, ready to plan Phase 2
-last_updated: "2026-10-03T19:07:05Z"
+stopped_at: Phase 1 complete, paused before Phase 2 discussion
+last_updated: "2026-10-03T20:22:44Z"
 last_activity: 2026-10-03
-last_activity_desc: Phase 1 verification and handoff refreshed; stopped before Phase 2
-state_head: 8396096ad17500974b30657af91fd2ef9ad51237
+last_activity_desc: Phase 1 closeout recorded; paused before Phase 2 discussion
+state_head: 9f1df9bd0a70e50033f7d8cbcbff778e3bfd94e3
 progress:
   total_phases: 6
   completed_phases: 1
@@ -76,6 +76,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-01]: Qualify preview packages and contributor claims against an exact PR SHA; query the artifact API for per-run expiry and report it without calling temporary artifacts releases.
 - [Phase 01]: The bootless DMG-CPU-B tracer verifies the bounded API and guest path, not hardware-qualified memory mapping; Phase 2 owns that evidence.
 - [Phase 01]: At verified implementation SHA `8396096ad17500974b30657af91fd2ef9ad51237`, all five roadmap truths and eight BASE requirements passed, standard code review was clean, and required PR contexts plus both package artifacts passed exact-SHA verification.
+- [Phase 01]: Final exact hosted evidence also passed at docs-only PR SHA `9f1df9bd0a70e50033f7d8cbcbff778e3bfd94e3` after the Phase 1 closeout documentation was committed; the implementation is unchanged from SHA `8396096ad17500974b30657af91fd2ef9ad51237`.
 
 ### Pending Todos
 
@@ -84,7 +85,7 @@ None outside the roadmap.
 ### Blockers/Concerns
 
 - Phase 2 must establish CPU behavior and hardware-qualified memory mapping; the Phase 1 tracer's fixture-only RAM behavior is not conformance evidence.
-- PR #1 remains open for owner review. Required contexts and Linux/macOS package smoke passed for implementation SHA `8396096ad17500974b30657af91fd2ef9ad51237`; those temporary artifacts expire 2026-10-17 and are not release archives.
+- PR #1 remains open for owner review at exact hosted SHA `9f1df9bd0a70e50033f7d8cbcbff778e3bfd94e3`. Required contexts passed; both Linux/macOS preview packages passed exact digest/source/consumer verification and expire 2026-10-17T19:19Z. They are temporary artifacts, not releases.
 - Native host support floors, signing, and live Playstead integration remain unverified for later release/adoption work.
 
 ## Deferred Items
@@ -93,10 +94,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-03T19:07:05Z
-Stopped at: Phase 1 complete and verified; ready to plan Phase 2
-Resume file: None
+Last session: 2026-10-03T20:22:44Z
+Stopped at: Phase 1 complete and verified; paused before Phase 2 discussion
+Resume file: [.continue-here.md](.continue-here.md)
 Next command in fresh context: $gsd-discuss-phase 2
 Continuation note: [continue.md](phases/GB-01-portable-foundation-and-original-rom-tracer/continue.md)
-Completed workflow stage: Phase 1 plans 01–05 executed; goal-backward verification passed 5/5 roadmap truths and 8/8 BASE requirements. Standard code review is clean.
+Completed workflow stage: Phase 1 plans 01–05 executed; goal-backward verification passed 5/5 roadmap truths and 8/8 BASE requirements. Standard code review is clean, and exact hosted checks passed at PR SHA `9f1df9bd0a70e50033f7d8cbcbff778e3bfd94e3`.
 Next stage: Phase 2 — DMG CPU, Bus, and Time. Run $gsd-discuss-phase 2.
