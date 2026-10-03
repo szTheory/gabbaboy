@@ -17,8 +17,8 @@ actuals:
   tasks: 2
   commits: 3
 commits: 3
-plan_head_before: db9f7b98adbac11c608500be1f94bba72240787b
-plan_head_after: 585ff3aeb5f78bddf85c2753ffcd683795432f82
+plan_head_before: 0f4d60737178efee58887d0833547de52c4e67d2
+plan_head_after: fc6c764460163ac7e48fcb4cc35661c35db50c04
 tech-stack:
   added: []
   patterns:
@@ -104,12 +104,12 @@ status: complete
 
 ## Task Commits
 
-1. **Task 1: Require native matrix, executed-case inventory, and Linux sanitizers** — `63c305e` (`feat`)
-2. **Task 2: Rebuild the fixture with pinned RGBDS in isolated CI** — `ae737bf` (`feat`)
+1. **Task 1: Require native matrix, executed-case inventory, and Linux sanitizers** — `c8007a7` (`feat`)
+2. **Task 2: Rebuild the fixture with pinned RGBDS in isolated CI** — `918d555` (`feat`)
 
-3. **Plan closeout correction: document local CMake 3.25.3 evidence** — `585ff3a` (`docs`)
+3. **Plan closeout correction: document local CMake 3.25.3 evidence** — `fc6c764` (`docs`)
 
-**Measured plan commits:** 3, from `db9f7b98adbac11c608500be1f94bba72240787b` through `585ff3aeb5f78bddf85c2753ffcd683795432f82`.
+**Measured plan commits:** 3, from `0f4d60737178efee58887d0833547de52c4e67d2` through `fc6c764460163ac7e48fcb4cc35661c35db50c04`.
 
 ## Files Created/Modified
 
@@ -148,7 +148,7 @@ status: complete
 - **Fix:** Added a Linux-only GCC/Clang sanitizer option and a CMake inventory check; the workflow compares executed JUnit cases, rejects skips, and gates all five evidence jobs.
 - **Files modified:** `CMakeLists.txt`, `CMakePresets.json`, `tests/CMakeLists.txt`, `cmake/ExpectedTests.cmake`, `tests/expected-tests.txt`, `.github/scripts/verify-test-inventory.sh`, `.github/workflows/ci.yml`
 - **Verification:** 21 sanitizer cases and 24 installed cases passed; deliberate skipped and incomplete reports were rejected.
-- **Committed in:** `63c305e`
+- **Committed in:** `c8007a7`
 
 **2. [Rule 1 - Bug] Matched the RGBDS version output used by the reproducibility job**
 - **Found during:** Task 2
@@ -156,7 +156,7 @@ status: complete
 - **Fix:** Checked the tool's actual version string, then verified the official release binary rebuilt identical bytes and manifest digest.
 - **Files modified:** `.github/workflows/fixture-repro.yml`
 - **Verification:** The pinned RGBDS 1.0.1 reproduction passed in an Ubuntu x86_64 container.
-- **Committed in:** `ae737bf`
+- **Committed in:** `918d555`
 
 **3. [Rule 1 - Bug] Wrote CTest JUnit reports to the selected build directory**
 - **Found during:** Task 1
@@ -164,14 +164,14 @@ status: complete
 - **Fix:** Use a report basename for `--test-dir` and preset runs; use the resulting build-directory path when checking it. The floor script writes its report to an absolute temporary path.
 - **Files modified:** `.github/workflows/ci.yml`, `.github/scripts/verify-cmake-floor.sh`
 - **Verification:** Local macOS and Linux reports matched the exact expected 24 and 21 test inventories; incomplete and skipped report controls failed.
-- **Committed in:** `63c305e`
+- **Committed in:** `c8007a7`
 
 **4. [Rule 2 - Missing Critical] Ignored generated preset build directories**
 - **Found during:** Task 1
 - **Issue:** The new `build-asan` and CMake floor presets produce repository-root build directories outside the existing `/build/` ignore rule.
 - **Fix:** Added `/build-*/` to `.gitignore` so local verification outputs do not appear as source changes.
 - **Verification:** Generated sanitizer and floor directories remained untracked build output; the final working tree contains only pre-existing `.gsd/` and `.planning/milestone.lock` untracked entries.
-- **Committed in:** `63c305e`
+- **Committed in:** `c8007a7`
 
 **5. [Rule 1 - Bug] Updated the CMake floor statement after its local verification passed**
 - **Found during:** Plan closeout
@@ -179,7 +179,7 @@ status: complete
 - **Fix:** Record the local container result while keeping hosted CI and other OS/compiler evidence pending.
 - **Files modified:** `README.md`
 - **Verification:** The floor script passed official digest, version, configure/build/test/install, relocation, runner, and C/C++ consumer checks.
-- **Committed in:** `585ff3a`
+- **Committed in:** `fc6c764`
 
 **Total deviations:** 5 auto-fixed (Rule 1: 3; Rule 2: 2). **Impact on plan:** These changes supply the missing enforcement, correct workflow reporting, and accurate evidence documentation needed to make the planned CI checks executable and fail closed.
 
@@ -205,6 +205,6 @@ None for local build or fixture regeneration beyond explicitly preparing RGBDS v
 
 ## Self-Check: PASSED
 
-- All six created key files exist; task commits `63c305e` and `ae737bf` plus documentation correction `585ff3a` exist.
+- All six created key files exist; task commits `c8007a7` and `918d555` plus documentation correction `fc6c764` exist.
 - The measured plan commit count is 3 from the recorded base through the plan-change head.
 - No tracked files were deleted, no stub patterns were found in plan changes, and final local verification passed after the resolved attempts described above.

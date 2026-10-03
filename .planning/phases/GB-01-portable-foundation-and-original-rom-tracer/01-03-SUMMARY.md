@@ -17,8 +17,8 @@ actuals:
   tasks: 3
   commits: 2
 commits: 2
-plan_head_before: 84bc83ce862df66bcf9aa9b6d93c5dd5ef237ab2
-plan_head_after: 98a15c4a7ef9abbbe8699e80444b922be2d5baac
+plan_head_before: 102b5bf9c5ce5b7a7205293a8a3e211c68e0e4da
+plan_head_after: 775444fd42959499baa4e63715040b6139d317ed
 tech-stack:
   added: []
   patterns: ["GNUInstallDirs with install-tree target exports", "Downstream C/C++ projects consume only the relocated package"]
@@ -76,8 +76,8 @@ status: complete
 ## Task Commits
 
 1. **Task 1: Prepare the ignored package staging prefix** — no commit; it created only the ignored `build/package-prefix` directory.
-2. **Task 2: Export and install a relocatable `GabbaBoy::core` package** — `a48f254` (`feat(GB-01-03): install relocatable core package`).
-3. **Task 3: Execute the original tracer from relocated C and C++ consumers** — `98a15c4` (`feat(GB-01-03): verify relocated C and C++ consumers`).
+2. **Task 2: Export and install a relocatable `GabbaBoy::core` package** — `b32ef4a` (`feat(GB-01-03): install relocatable core package`).
+3. **Task 3: Execute the original tracer from relocated C and C++ consumers** — `775444f` (`feat(GB-01-03): verify relocated C and C++ consumers`).
 
 ## Files Created/Modified
 
@@ -105,7 +105,7 @@ status: complete
 - **Fix:** Set `EXPORT_NAME core`; consumers allocate a bounded 16,384-record trace and use the fixture's 200,000 half-dot budget.
 - **Files modified:** `CMakeLists.txt`, `tests/consumers/c/main.c`, `tests/consumers/cpp/main.cpp`
 - **Verification:** Both installed CTest consumers pass and assert the guest RAM success marker and nonempty bounded trace.
-- **Committed in:** `98a15c4`
+- **Committed in:** `775444f`
 
 **2. [Rule 1 - Bug] Made relocated-runner paths independent of the caller's working directory**
 - **Found during:** Task 3
@@ -113,7 +113,7 @@ status: complete
 - **Fix:** Normalize prefix and runner working directory to absolute paths in the package verification script.
 - **Files modified:** `cmake/VerifyInstalledPackage.cmake`
 - **Verification:** Installed runner passes with the installed fixture from a separate working directory.
-- **Committed in:** `98a15c4`
+- **Committed in:** `775444f`
 
 **3. [Rule 1 - Bug] Kept normal CTest independent of a stale install-prefix cache entry**
 - **Found during:** Task 3
@@ -121,7 +121,7 @@ status: complete
 - **Fix:** Register installed-package tests only when the configured relocated prefix currently exists.
 - **Files modified:** `tests/CMakeLists.txt`
 - **Verification:** Clean ordinary CTest passed 21/21 cases before installation; after relocation, installed runner and consumer CTests passed 3/3.
-- **Committed in:** `98a15c4`
+- **Committed in:** `775444f`
 
 **Total deviations:** 3 auto-fixed (Rule 1: 3). **Impact:** Fixes ensure the exported consumer name, relocated runner, and clean offline test flow meet the plan's stated contracts.
 
@@ -142,7 +142,7 @@ None - no external service configuration required.
 ## Self-Check: PASSED
 
 - The installed header, runner, fixture, manifest, license, package config, and target export exist in the relocated prefix.
-- Commits `a48f254` and `98a15c4` exist; measured plan commits are 2 from base `84bc83ce862df66bcf9aa9b6d93c5dd5ef237ab2` through `98a15c4a7ef9abbbe8699e80444b922be2d5baac`.
+- Commits `b32ef4a` and `775444f` exist; measured plan commits are 2 from base `102b5bf9c5ce5b7a7205293a8a3e211c68e0e4da` through `775444fd42959499baa4e63715040b6139d317ed`.
 - Clean local suite passed 21/21 tests; installed runner and C/C++ consumer suite passed 3/3 tests.
 
 ---

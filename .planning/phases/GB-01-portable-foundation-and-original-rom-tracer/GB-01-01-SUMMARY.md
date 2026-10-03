@@ -14,7 +14,7 @@ actuals:
   tasks: 2
   commits: 3
 commits: 3
-plan_head_before: ae2dbed7359938354b5005fdc41085d7d32ab0eb
+plan_head_before: 572900f2b59d7210d431552367c4ebceeca6fb19
 tech-stack:
   added: [C17, CMake 3.25+, RGBDS 1.0.1 fixture tool]
   patterns: [instance-owned state, instruction-atomic half-dot budgeting, caller-owned fixed trace]
@@ -74,10 +74,10 @@ status: complete
 
 ## Task Commits
 
-1. **Task 1: Run the original guest RAM tracer through the public core** - `48cab4a` (`feat`)
-2. **Task 2: Record fixture provenance and deterministic profile evidence** - `c75a470` (`docs`)
+1. **Task 1: Run the original guest RAM tracer through the public core** - `1e22f70` (`feat`)
+2. **Task 2: Record fixture provenance and deterministic profile evidence** - `da823d2` (`docs`)
 
-**Measured commits at this summary write:** 3 from `ae2dbed7359938354b5005fdc41085d7d32ab0eb` to `HEAD`, including the first summary/state close-out commit.
+**Measured commits at this summary write:** 3 from `572900f2b59d7210d431552367c4ebceeca6fb19` to `HEAD`, including the first summary/state close-out commit.
 
 ## Files Created/Modified
 
@@ -104,7 +104,7 @@ status: complete
 - **Fix:** Set the instruction cost to 32 half-dots and verified trace time advances from the 0x0100 jump boundary by 32.
 - **Files modified:** `src/core/gabbaboy.c`
 - **Verification:** Tracer smoke passed and emitted entry at time 0 followed by target instruction at time 32.
-- **Committed in:** `48cab4a`
+- **Committed in:** `1e22f70`
 
 **2. [Rule 2 - Missing Critical] Bound supported declared ROM-size codes before shifting**
 - **Found during:** Task 1
@@ -112,7 +112,7 @@ status: complete
 - **Fix:** Reject codes above the maximum supported 8 MiB ROM-only image before calculating the declared length; exact declared/actual size matching is required.
 - **Files modified:** `src/core/gabbaboy.c`
 - **Verification:** Valid 32 KiB fixture loaded and ran; loader code rejects out-of-range codes before allocation or instance mutation.
-- **Committed in:** `48cab4a`
+- **Committed in:** `1e22f70`
 
 **Total deviations:** 2 auto-fixed (1 bug, 1 critical input-bound check).
 
@@ -142,5 +142,5 @@ Plan 01-02 owns lifecycle/repeated-instance contracts, malformed loader controls
 ## Self-Check: PASSED
 
 - Summary file exists at the plan-declared output path.
-- Task commits `48cab4a` and `c75a470` exist in git history.
+- Task commits `1e22f70` and `da823d2` exist in git history.
 - OpenGSD detects `GB-01-01-SUMMARY.md` in the phase directory.

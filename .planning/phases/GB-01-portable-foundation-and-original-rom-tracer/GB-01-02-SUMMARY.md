@@ -17,8 +17,8 @@ actuals:
   tasks: 2
   commits: 2
 commits: 2
-plan_head_before: 052c700ce0ad0c30e8c8339f798beca9ffcd1822
-plan_head_after: 6246fc1efe4411c5d293da6e53a41f4375d82480
+plan_head_before: 246fd91838aced751e2022d62397d3ae5074ab37
+plan_head_after: c69fd162eea188bc9a3069324ca4e7f32ec06aa7
 tech-stack:
   added: []
   patterns: ["Parse candidate ROMs before replacing live state", "Use caller-owned bounded traces and whole-instruction budget preflight"]
@@ -89,10 +89,10 @@ status: complete
 
 ## Task Commits
 
-1. **Task 1: Lock lifecycle, ownership, and strict run/trace boundaries** - `e6829b2` (feat)
-2. **Task 2: Reject malformed cartridges without partial mutation** - `6246fc1` (feat)
+1. **Task 1: Lock lifecycle, ownership, and strict run/trace boundaries** - `410ffd8` (feat)
+2. **Task 2: Reject malformed cartridges without partial mutation** - `c69fd16` (feat)
 
-**Measured commits at summary write:** 2 from `052c700ce0ad0c30e8c8339f798beca9ffcd1822` to `6246fc1efe4411c5d293da6e53a41f4375d82480`.
+**Measured commits at summary write:** 2 from `246fd91838aced751e2022d62397d3ae5074ab37` to `c69fd162eea188bc9a3069324ca4e7f32ec06aa7`.
 
 ## Files Created/Modified
 
@@ -142,7 +142,7 @@ Plan 01-03 is next and owns installed C/C++ consumer checks. Continue with `$gsd
 ## Self-Check: PASSED
 
 - The created test files and modified build/API/core/runner files exist.
-- Task commits `e6829b2` and `6246fc1` exist in Git history.
+- Task commits `410ffd8` and `c69fd16` exist in Git history.
 - Every named acceptance case passed, and the complete local CTest suite ran all 21 registered tests.
 
 ---
