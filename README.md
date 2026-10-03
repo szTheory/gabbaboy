@@ -10,11 +10,12 @@ or run commercial games.
 Requirements: CMake 3.25 or newer, Ninja, and a C17 compiler. RGBDS is needed
 only to reproduce the checked-in fixture; the normal configure, build, test,
 and install flow uses checked-in files and does not access the network. Install
-these tools explicitly before starting. The schema-6 preset accepts CMake 3.25,
-but that minimum is not yet qualified: this checkout has been exercised locally
-with CMake 4.4.3, Ninja 1.13.2, Apple Clang 21.0.0, and macOS 26.6.2. The CMake
-3.25.3 floor and other OS/compiler combinations remain unverified until native
-CI completes.
+these tools explicitly before starting. The schema-6 preset accepts CMake 3.25.
+The CMake 3.25.3 floor script passed locally in an Ubuntu 22.04 x86_64
+container, including install relocation and external consumers. This checkout
+has also been exercised locally with CMake 4.4.3, Ninja 1.13.2, Apple Clang
+21.0.0, and macOS 26.6.2. The hosted floor lane and other OS/compiler
+combinations remain unverified until native CI completes.
 
 ```sh
 cmake --preset phase1
@@ -101,8 +102,8 @@ three commands recorded in the manifest. Ordinary builds and `fixture_digest`
 do not install or invoke RGBDS. Runner labels describe CI images; they do not
 by themselves establish GabbaBoy's minimum supported operating systems. This
 checkout has no configured remote, so hosted status checks and branch
-protection have not yet been observed. CMake 3.25.3 and non-macOS native
-consumer evidence remain pending hosted CI.
+protection have not yet been observed. The hosted CMake 3.25.3 result and
+non-macOS native consumer evidence remain pending hosted CI.
 
 This evidence proves only that this original fixture reaches its guest RAM
 success state under the named deterministic profile. It is not hardware-backed
