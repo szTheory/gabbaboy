@@ -36,10 +36,10 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. A contributor receives a required CI result proving that loader/lifecycle error cases and ASan/UBSan checks actually ran; missing mandatory fixtures/cases, failures, and timeouts fail the gate. (BASE-07)
 5. A contributor can use the configured remote/PR workflow and download a revision-linked foundation-preview core/runner with an installation smoke result and explicit capability limits. (BASE-08)
 
-**Plans**: 2/5 plans executed in 5 dependency-ordered waves; see [Phase 1 plans](phases/GB-01-portable-foundation-and-original-rom-tracer/).
+**Plans**: 3/5 plans executed in 5 dependency-ordered waves; see [Phase 1 plans](phases/GB-01-portable-foundation-and-original-rom-tracer/).
 - [x] 01-01-PLAN.md
 - [x] 01-02-PLAN.md
-- [ ] 01-03-PLAN.md
+- [x] 01-03-PLAN.md
 - [ ] 01-04-PLAN.md
 - [ ] 01-05-PLAN.md
 
@@ -130,7 +130,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Portable Foundation and Original ROM Tracer | 2/5 | In Progress|  |
+| 1. Portable Foundation and Original ROM Tracer | 3/5 | In Progress|  |
 | 2. DMG CPU, Bus, and Time | 0/TBD | Not started | - |
 | 3. Visible Interactive DMG | 0/TBD | Not started | - |
 | 4. MBC1 and Safe Battery Continuation | 0/TBD | Not started | - |

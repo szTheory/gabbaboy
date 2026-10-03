@@ -1,12 +1,12 @@
 # Continue: Phase 1 execution
 
-**Completed stage:** Phase GB-01-02 execution — bounded lifecycle, loader, and output/error contract. Plans 01 and 02 of 5 are complete; Phase 1 remains active.
+**Completed stage:** Phase GB-01-03 execution — relocatable installed package and C/C++ consumer verification. Plans 01–03 of 5 are complete; Phase 1 remains active.
 
-Plan 01 is committed as `48cab4a` and `c75a470`. Plan 02 is committed as `e6829b2` and `6246fc1`; all 21 local CTest cases pass, including lifecycle, loader-boundary, and distinct tracer negative controls. The runner reports the original fixture as pass under the named deterministic DMG-CPU-B profile. This remains narrow fixture evidence, not general CPU or gameplay support. Installed consumers, required CI, and hosted artifacts are not yet proven.
+Plan 03 is committed as `a48f254` and `98a15c4`, with summary commit `0be34c9`. All 21 ordinary CTest cases pass. After install and relocation, the runner and both C/C++ external consumers pass 3/3 tests from the relocated prefix; the runner uses the installed fixture from an unrelated working directory. Local evidence is macOS arm64 only. The fixture remains narrow DMG-CPU-B evidence, not general CPU or gameplay support. Native Linux/Windows runs, the CMake 3.25.3 floor, required CI, and hosted artifacts are not yet proven.
 
-The plans incorporate the accepted small-dependency-tree preference: the core stays standard-library-only; RGBDS is isolated to fixture regeneration CI. They pin the DMG post-boot flag profile and CMake 3.25.3 floor check. Implementation must produce the evidence those plans request. Hosted remote/PR/artifact evidence remains pending because no origin is configured. Plan 05 retains a checkpoint to provide the canonical repository endpoint or report that hosting is unavailable.
+The plans incorporate the accepted small-dependency-tree preference: the core stays standard-library-only; RGBDS is isolated to fixture regeneration CI. The package exports only the public C interface and makes no stable ABI promise. Hosted remote/PR/artifact evidence remains pending because no origin is configured. Plan 05 retains a checkpoint to provide the canonical repository endpoint or report that hosting is unavailable.
 
-**Next plan:** GB-01-03 — installed C/C++ consumers and package verification.
+**Next stage:** Phase 1 Plan 04 — native CI matrix, sanitizers, and CMake 3.25.3 floor verification.
 
 **Next command:** `$gsd-execute-phase 1`
 
