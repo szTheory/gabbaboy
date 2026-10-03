@@ -31,6 +31,14 @@ add_test(NAME fixture_digest
     -DROM=${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb
     -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/tracer/manifest.json
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
+add_test(NAME preview_package_smoke
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR}
+    -DGBB_BINARY_DIR=${PROJECT_BINARY_DIR}
+    -DGBB_CMAKE_COMMAND=${CMAKE_COMMAND}
+    -DGBB_GENERATOR=${CMAKE_GENERATOR}
+    -DGBB_CONFIGURATION=$<CONFIG>
+    -P ${PROJECT_SOURCE_DIR}/cmake/PreviewPackageSmoke.cmake)
 
 if(GBB_TEST_INSTALL_PREFIX AND EXISTS "${GBB_TEST_INSTALL_PREFIX}")
   get_filename_component(GBB_TEST_INSTALL_PREFIX_ABSOLUTE
