@@ -127,8 +127,17 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | SHIP-06 | Phase 6 | Pending |
 | SHIP-07 | Phase 6 | Pending |
 | SHIP-08 | Phase 6 | Pending |
+| CGB-01 | Next milestone | Deferred |
+| CGB-02 | Next milestone | Deferred |
+| CGB-03 | Next milestone | Deferred |
+| CART-01 | Next milestone | Deferred |
+| RTC-01 | Next milestone | Deferred |
+| STATE-01 | Next milestone | Deferred |
+| INT-01 | Next milestone | Deferred |
 
 **Active coverage:** 35/35 requirements mapped exactly once; 0 unmapped, 0 duplicates. Eight are complete and 27 remain pending. Next-milestone requirements and later candidates are excluded from active coverage.
 
+**Next-milestone traceability:** 7/7 GB/GBC breadth commitments are mapped to the next milestone and remain outside the active v0.1 count.
+
 ---
-Last updated: 2026-10-03 after exact-revision hosted evidence for BASE-07 and BASE-08; 8 active requirements are complete and 27 remain pending.
+Last updated: 2026-10-03 after Phase 1 verification; 8 active requirements are complete, 27 remain pending, and 7 next-milestone commitments are explicitly deferred.

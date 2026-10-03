@@ -1,11 +1,13 @@
-# Continue: Phase 1 verification handoff
+# Continue: Phase 1 complete
 
-**Completed stage:** Phase GB-01 Plan 05 execution is complete. All 5 of 5 Phase 1 plans have summaries. Phase 1 remains pending its phase-wide verifier; do not start Phase 2 until that verification passes.
+**Completed stage:** Phase 1 — Portable Foundation and Original ROM Tracer. Plans 01–05 are executed, and the goal-backward verifier passed 8/8 truths with no human UAT requirement. See [01-VERIFICATION.md](01-VERIFICATION.md).
 
-**Plan 05 result:** Public repository [szTheory/gabbaboy](https://github.com/szTheory/gabbaboy), PR [#1](https://github.com/szTheory/gabbaboy/pull/1), with required contexts `required-native`, `fixture-repro`, and `preview-package-smoke`. The last fully verified code SHA was `59b104ef5ba95f7dd48e6dd3f4732f49f4cc77de`; all three exact-SHA workflow runs passed and both Linux/macOS packages passed extracted runner and C/C++ consumer verification. Its run-scoped artifact digests, package hashes, and API expiries are recorded as a historical sample in README and `01-VALIDATION.md`. After the planning metadata commit is pushed, verify the new documentation SHA with `.github/scripts/verify-pr-evidence.sh`; capture its API-reported expiry in the execution result, since expiry is per-run.
+**Verified implementation revision:** `97d73a7cfadb8b90edea2e406566ff0a254c4865`. On that exact PR head, `required-native`, `fixture-repro`, and `preview-package-smoke` passed; the evidence verifier checked the Linux and macOS package bytes and installed consumers. The verifier report records the artifact hashes and actual expiry timestamps. Artifacts are temporary workflow outputs, not releases.
 
-**Evidence limits:** Artifacts are temporary run artifacts, not releases. No Windows preview package is published. The emulator remains the limited DMG-CPU-B original-ROM tracer; this is not full CPU/gameplay, CGB, boot-ROM, or hardware-backed evidence. Earlier hosted failures and their fixes are documented in `01-VALIDATION.md`.
+**Scope boundary:** The demonstrated emulator remains a bootless DMG-CPU-B original-ROM tracer. Hardware-qualified address-space behavior, broader CPU/gameplay compatibility, and CGB support remain future work. Phase 2 must establish the memory map against applicable evidence.
 
-**Phase status:** Phase 1 plans are executed 5/5; phase-wide verification and sign-off remain pending. Both `workflow.auto_advance` and `workflow._auto_chain_active` remain false. Do not merge PR #1 or begin another phase in this continuation.
+**Closeout note:** OpenGSD 1.15.0 displayed `7/5` because two tracked `01-01-SUMMARY.md` and `01-02-SUMMARY.md` symlinks point to the corresponding `GB-01-*` summaries. There are exactly five Phase 1 plan files and five unique plan summaries; ROADMAP and STATE record 5/5. The seven GB/GBC breadth requirements have separate deferred traceability rows and are excluded from active v0.1 coverage.
 
-**Next phase:** Phase 2 — **DMG CPU, Bus, and Time**. Once Phase 1 verification passes and the owner chooses to continue, run `$gsd-discuss-phase 2`.
+**Repository:** [szTheory/gabbaboy](https://github.com/szTheory/gabbaboy). PR [#1](https://github.com/szTheory/gabbaboy/pull/1) remains open for owner review; no open issues were found. Both `workflow.auto_advance` and `workflow._auto_chain_active` are false. Do not begin Phase 2 in this continuation.
+
+**Next phase:** Phase 2 — **DMG CPU, Bus, and Time**. Exact next command: `$gsd-discuss-phase 2`.

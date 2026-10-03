@@ -1,19 +1,20 @@
 ---
 gsd_state_version: "1.0"
 milestone: v0.1
-current_phase: 01
-current_phase_name: Portable Foundation and Original ROM Tracer
-status: verifying
-stopped_at: Completed Phase GB-01 Plan 05 execution; exact-SHA documentation run and phase-wide verification pending
-last_updated: "2026-10-03T15:35:36.902Z"
+current_phase: 2
+current_phase_name: DMG CPU, Bus, and Time
+status: planning
+stopped_at: Phase 1 complete, ready to plan Phase 2
+last_updated: "2026-10-03T16:33:25Z"
 last_activity: 2026-10-03
-last_activity_desc: Plan GB-01-05 execution complete; all five Phase 1 plans have summaries; phase-wide verification is pending
-state_head: 59b104ef5ba95f7dd48e6dd3f4732f49f4cc77de
+last_activity_desc: Phase 1 complete, transitioned to Phase 2
+state_head: 97d73a7cfadb8b90edea2e406566ff0a254c4865
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
   completed_plans: 5
+  percent: 17
 milestone_name: limited DMG preview
 ---
 
@@ -21,19 +22,19 @@ milestone_name: limited DMG preview
 
 ## Project Reference
 
-See: [PROJECT.md](PROJECT.md) (updated 2026-10-02)
+See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase GB-01 — Portable Foundation and Original ROM Tracer
+**Current focus:** Phase 2 — DMG CPU, Bus, and Time
 
 ## Current Position
 
-Phase: GB-01 (Portable Foundation and Original ROM Tracer) — EXECUTING
-Plan: 5 of 5
-Status: Phase complete — ready for verification
-Last activity: 2026-10-03 — Plan GB-01-05 execution complete; all five Phase 1 plans have summaries; phase-wide verification is pending
+Phase: 2 — DMG CPU, Bus, and Time
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-10-03 — Phase 1 complete, transitioned to Phase 2
 
-Progress: [██████████] 100% of Phase 1 execution plans have summaries; phase verification pending
+Progress: [██░░░░░░░░] 17% of milestone phases complete; Phase 1 has 5/5 plans and passed verification
 
 ## Performance Metrics
 
@@ -73,6 +74,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 01]: Pin explicit native runner labels and require every evidence job plus its exact test inventory; do not infer product OS support from runner labels.
 - [Phase 01]: Keep hosted CI and branch-protection evidence pending until exact-revision remote results are observed; fixture-repro is a separate status context.
 - [Phase GB-01]: Qualify preview packages and contributor claims against an exact PR SHA; query the artifact API for per-run expiry and report it without calling temporary artifacts releases.
+- [Phase 01]: The bootless DMG-CPU-B tracer verifies the bounded API and guest path, not hardware-qualified memory mapping; Phase 2 owns that evidence.
 
 ### Pending Todos
 
@@ -80,8 +82,9 @@ None outside the roadmap.
 
 ### Blockers/Concerns
 
-- Phase 1 records the post-boot profile, tracer opcode subset, fixture/tool pins, and bounded time/output contracts. Native host support floors, signing, and live Playstead integration remain unverified.
-- General CPU and gameplay behavior plus hardware-backed emulator evidence remain absent; Phase 1 demonstrates only the limited bootless DMG-CPU-B original-ROM tracer. Phase 1 remote checks and temporary preview artifacts have hosted evidence.
+- Phase 2 must establish CPU behavior and hardware-qualified memory mapping; the Phase 1 tracer's fixture-only RAM behavior is not conformance evidence.
+- PR #1 remains open for owner review. Its required checks and Linux/macOS preview package smoke passed; temporary artifacts expire 2026-10-17 and are not release archives.
+- Native host support floors, signing, and live Playstead integration remain unverified for later release/adoption work.
 
 ## Deferred Items
 
@@ -89,9 +92,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-03T15:35:36.872Z
-Stopped at: Completed Phase GB-01 Plan 05 execution; exact-SHA documentation run and phase-wide verification pending
-Resume file: .planning/phases/GB-01-portable-foundation-and-original-rom-tracer/continue.md
+Last session: 2026-10-03T16:33:25Z
+Stopped at: Phase 1 complete, ready to plan Phase 2
+Resume file: None
 Next command in fresh context: $gsd-discuss-phase 2
-Completed workflow stage: Phase GB-01 Plan 05 execution complete; Phase 1 Plans 01–05 all have summaries; phase-wide verifier pending
-Next stage: After Phase 1 verification passes and the owner chooses to continue: Phase 2 — DMG CPU, Bus, and Time. Run $gsd-discuss-phase 2.
+Continuation note: [continue.md](phases/GB-01-portable-foundation-and-original-rom-tracer/continue.md)
+Completed workflow stage: Phase 1 plans 01–05 executed and Phase 1 goal verification passed.
+Next stage: Phase 2 — DMG CPU, Bus, and Time. Run $gsd-discuss-phase 2.
