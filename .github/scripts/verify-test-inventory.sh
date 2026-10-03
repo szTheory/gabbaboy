@@ -20,7 +20,7 @@ fi
 expected=$(mktemp)
 actual=$(mktemp)
 trap 'rm -f "$expected" "$actual"' EXIT
-cat "$expected_file" > "$expected"
+awk '{ sub(/\r$/, ""); print }' "$expected_file" > "$expected"
 if [[ "$inventory" == "--core-only" ]]; then
   sed -i.bak '/^installed_/d' "$expected"
   rm -f "$expected.bak"
