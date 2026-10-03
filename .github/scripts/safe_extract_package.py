@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Validate and extract the regular-file installed-prefix from a package tarball."""
 
+import gzip
 import io
 import os
+from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 import stat
 import sys
@@ -15,7 +17,77 @@ from types import SimpleNamespace
 MAX_COMPRESSED_BYTES = 64 * 1024 * 1024
 MAX_MEMBERS = 4096
 MAX_EXPANDED_BYTES = 512 * 1024 * 1024
+MAX_ARCHIVE_STREAM_BYTES = 576 * 1024 * 1024
+MAX_EXTENSION_HEADERS = 8192
+MAX_EXTENSION_BYTES = 64 * 1024
+MAX_TOTAL_EXTENSION_BYTES = 8 * 1024 * 1024
+MAX_TAR_READ_BYTES = 64 * 1024
 COPY_CHUNK_BYTES = 1024 * 1024
+
+
+class BoundedReader:
+    """Limit bytes exposed from a decompressor to the tar parser."""
+
+    def __init__(self, source, limit=MAX_ARCHIVE_STREAM_BYTES):
+        self.source = source
+        self.limit = limit
+        self.bytes_read = 0
+
+    def read(self, size=-1):
+        if size is None or size < 0:
+            raise ValueError("unbounded reads are not allowed from the archive stream")
+        if size == 0:
+            return b""
+        remaining = self.limit - self.bytes_read
+        request_size = min(size, MAX_TAR_READ_BYTES, remaining + 1)
+        data = self.source.read(request_size)
+        if len(data) > remaining:
+            raise ValueError(f"tar stream exceeds {self.limit}-byte decompressed-archive limit")
+        self.bytes_read += len(data)
+        return data
+
+
+def bounded_tarinfo_class():
+    """Reject excessive hidden PAX/GNU metadata before tarfile reads it."""
+    stats = {"headers": 0, "bytes": 0}
+    extension_types = (
+        tarfile.GNUTYPE_LONGNAME,
+        tarfile.GNUTYPE_LONGLINK,
+        tarfile.GNUTYPE_SPARSE,
+        tarfile.XHDTYPE,
+        tarfile.XGLTYPE,
+        tarfile.SOLARIS_XHDTYPE,
+    )
+
+    class BoundedTarInfo(tarfile.TarInfo):
+        def _proc_member(self, archive):
+            if self.type in extension_types:
+                stats["headers"] += 1
+                stats["bytes"] += self.size
+                if stats["headers"] > MAX_EXTENSION_HEADERS:
+                    raise ValueError(f"archive exceeds {MAX_EXTENSION_HEADERS} extended-header limit")
+                if self.size < 0 or self.size > MAX_EXTENSION_BYTES:
+                    raise ValueError(f"extended tar header exceeds {MAX_EXTENSION_BYTES}-byte limit")
+                if stats["bytes"] > MAX_TOTAL_EXTENSION_BYTES:
+                    raise ValueError(
+                        f"archive exceeds {MAX_TOTAL_EXTENSION_BYTES} aggregate extended-header limit"
+                    )
+            return super()._proc_member(archive)
+
+    return BoundedTarInfo
+
+
+@contextmanager
+def open_bounded_tar(archive_path):
+    with Path(archive_path).open("rb") as compressed_file:
+        with gzip.GzipFile(fileobj=compressed_file, mode="rb") as decompressed_file:
+            bounded_file = BoundedReader(decompressed_file)
+            with tarfile.open(
+                fileobj=bounded_file,
+                mode="r|",
+                tarinfo=bounded_tarinfo_class(),
+            ) as archive:
+                yield archive, bounded_file
 
 
 def checked_name(member):
@@ -78,13 +150,23 @@ def extract(archive_path, destination):
         raise ValueError("destination must be an empty directory")
     root.mkdir(parents=True, exist_ok=True)
 
-    with tarfile.open(archive_file, mode="r:gz") as archive:
-        # Iteration streams headers and payload positioning; unlike getmembers(),
-        # this stops at MAX_MEMBERS without first materializing an unbounded list.
+    # Validate all visible names/types before writing anything. The tar parser
+    # itself is fed through a bounded gzip stream, including hidden metadata and
+    # padding that TarInfo.size does not account for.
+    with open_bounded_tar(archive_file) as (archive, _bounded_file):
         paths = validate_members(iter(archive))
 
+    # A second bounded pass is needed because streaming tar mode cannot seek back
+    # to extract members after full-archive validation.
+    with open_bounded_tar(archive_file) as (archive, bounded_file):
         copied_total = 0
-        for key, member in paths.items():
+        seen = set()
+        for member in archive:
+            key = checked_name(member).as_posix()
+            expected = paths.get(key)
+            if expected is None or (member.type, member.size) != (expected.type, expected.size):
+                raise ValueError(f"archive changed between validation and extraction: {key!r}")
+            seen.add(key)
             target = root.joinpath(*PurePosixPath(key).parts)
             parent = target.parent
             parent.mkdir(parents=True, exist_ok=True)
@@ -127,6 +209,10 @@ def extract(archive_path, destination):
                     raise ValueError(
                         f"archive member size mismatch for {key!r}: declared {member.size}, copied {copied_member}"
                     )
+        if seen != set(paths):
+            raise ValueError("archive changed between validation and extraction")
+        if bounded_file.bytes_read > MAX_ARCHIVE_STREAM_BYTES:
+            raise ValueError(f"tar stream exceeds {MAX_ARCHIVE_STREAM_BYTES}-byte decompressed-archive limit")
 
 
 def self_test():
@@ -177,8 +263,15 @@ def self_test():
     ]
     for entries in cases:
         try:
-            with tarfile.open(fileobj=io.BytesIO(archive_bytes(entries)), mode="r:gz") as archive:
-                validate_members(archive.getmembers())
+            compressed = io.BytesIO(archive_bytes(entries))
+            with gzip.GzipFile(fileobj=compressed, mode="rb") as decompressed:
+                bounded = BoundedReader(decompressed)
+                with tarfile.open(
+                    fileobj=bounded,
+                    mode="r|",
+                    tarinfo=bounded_tarinfo_class(),
+                ) as archive:
+                    validate_members(iter(archive))
         except ValueError:
             continue
         raise AssertionError(f"unsafe archive accepted: {entries!r}")
@@ -196,7 +289,20 @@ def self_test():
         SimpleNamespace(name="installed-prefix/b", type=tarfile.REGTYPE, size=MAX_EXPANDED_BYTES // 2 + 1),
     ]
     expect_rejection("aggregate-size limit", over_total)
-    print("PASS safe package extraction adversarial validation (including member-count and aggregate-size limits)")
+
+    source = io.BytesIO(b"decompressed bytes beyond cap")
+    bounded = BoundedReader(source, limit=16)
+    try:
+        bounded.read(1024)
+    except ValueError:
+        if source.tell() != 17:
+            raise AssertionError(f"bounded reader consumed {source.tell()} bytes, expected at most 17")
+    else:
+        raise AssertionError("decompressed-stream limit accepted excess bytes")
+    print(
+        "PASS safe package extraction adversarial validation (member count, aggregate size, "
+        "and decompressed stream bounds)"
+    )
 
 
 if __name__ == "__main__":
