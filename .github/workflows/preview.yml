@@ -1,9 +1,8 @@
 name: preview-package-smoke
 
 on:
-  workflow_run:
-    workflows: [ci]
-    types: [completed]
+  pull_request:
+    branches: [main]
 
 permissions:
   actions: read
@@ -15,25 +14,39 @@ env:
 jobs:
   installed-package-smoke-linux-x64:
     name: installed-package-smoke-linux-x64
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
       - name: Verify matching successful required CI run
         env:
           GH_TOKEN: ${{ github.token }}
-          CI_RUN_ID: ${{ github.event.workflow_run.id }}
-          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_REPO: ${{ github.repository }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          run_json=$(gh run view "$CI_RUN_ID" --json conclusion,headSha,jobs)
-          printf '%s' "$run_json" | jq -e --arg sha "$EXPECTED_SHA" '
-            .conclusion == "success" and .headSha == $sha and
-            any(.jobs[]; .name == "required-native" and .conclusion == "success")
-          ' >/dev/null
+          deadline=$((SECONDS + 1500))
+          ci_run_id=
+          while (( SECONDS < deadline )); do
+            ci_run_id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${EXPECTED_SHA}&event=pull_request&per_page=20" \
+              --jq ".workflow_runs | map(select(.head_sha == \"${EXPECTED_SHA}\" and .event == \"pull_request\")) | sort_by(.run_number) | last | .id // empty")
+            if [[ -n "$ci_run_id" && "$ci_run_id" != null ]]; then
+              status=$(gh run view "$ci_run_id" --json status --jq '.status')
+              if [[ "$status" == completed ]]; then
+                passed=$(gh run view "$ci_run_id" --json conclusion,headSha,event,jobs --jq ".conclusion == \"success\" and .headSha == \"${EXPECTED_SHA}\" and .event == \"pull_request\" and any(.jobs[]; .name == \"required-native\" and .conclusion == \"success\")")
+                [[ "$passed" == true ]] || {
+                  echo "The exact pull-request CI run did not pass required-native for $EXPECTED_SHA." >&2
+                  exit 1
+                }
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo "No completed successful pull-request CI run for $EXPECTED_SHA appeared within 25 minutes." >&2
+          exit 1
       - name: Check out tested source revision
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Configure, build, and install
         run: |
           cmake --preset phase1
@@ -49,7 +62,7 @@ jobs:
           cp "$archive" build/preview-artifact/gabbaboy-preview-linux-x64.tar.gz
           cat > build/preview-artifact/artifact-metadata.json <<EOF
           {
-            "source_sha": "${{ github.event.workflow_run.head_sha }}",
+            "source_sha": "${{ github.event.pull_request.head.sha }}",
             "package_sha256": "$digest",
             "smoke_result": "passed",
             "capability_limits": "DMG-CPU-B tracer foundation only; no boot ROM, complete CPU, gameplay, CGB, or Windows package",
@@ -66,25 +79,39 @@ jobs:
 
   installed-package-smoke-macos-arm64:
     name: installed-package-smoke-macos-arm64
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: macos-14
     timeout-minutes: 30
     steps:
       - name: Verify matching successful required CI run
         env:
           GH_TOKEN: ${{ github.token }}
-          CI_RUN_ID: ${{ github.event.workflow_run.id }}
-          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_REPO: ${{ github.repository }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          run_json=$(gh run view "$CI_RUN_ID" --json conclusion,headSha,jobs)
-          printf '%s' "$run_json" | jq -e --arg sha "$EXPECTED_SHA" '
-            .conclusion == "success" and .headSha == $sha and
-            any(.jobs[]; .name == "required-native" and .conclusion == "success")
-          ' >/dev/null
+          deadline=$((SECONDS + 1500))
+          ci_run_id=
+          while (( SECONDS < deadline )); do
+            ci_run_id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${EXPECTED_SHA}&event=pull_request&per_page=20" \
+              --jq ".workflow_runs | map(select(.head_sha == \"${EXPECTED_SHA}\" and .event == \"pull_request\")) | sort_by(.run_number) | last | .id // empty")
+            if [[ -n "$ci_run_id" && "$ci_run_id" != null ]]; then
+              status=$(gh run view "$ci_run_id" --json status --jq '.status')
+              if [[ "$status" == completed ]]; then
+                passed=$(gh run view "$ci_run_id" --json conclusion,headSha,event,jobs --jq ".conclusion == \"success\" and .headSha == \"${EXPECTED_SHA}\" and .event == \"pull_request\" and any(.jobs[]; .name == \"required-native\" and .conclusion == \"success\")")
+                [[ "$passed" == true ]] || {
+                  echo "The exact pull-request CI run did not pass required-native for $EXPECTED_SHA." >&2
+                  exit 1
+                }
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo "No completed successful pull-request CI run for $EXPECTED_SHA appeared within 25 minutes." >&2
+          exit 1
       - name: Check out tested source revision
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Configure, build, and install
         run: |
           cmake --preset phase1
@@ -100,7 +127,7 @@ jobs:
           cp "$archive" build/preview-artifact/gabbaboy-preview-macos-arm64.tar.gz
           cat > build/preview-artifact/artifact-metadata.json <<EOF
           {
-            "source_sha": "${{ github.event.workflow_run.head_sha }}",
+            "source_sha": "${{ github.event.pull_request.head.sha }}",
             "package_sha256": "$digest",
             "smoke_result": "passed",
             "capability_limits": "DMG-CPU-B tracer foundation only; no boot ROM, complete CPU, gameplay, CGB, or Windows package",
@@ -114,3 +141,25 @@ jobs:
           path: build/preview-artifact/*
           retention-days: ${{ env.PREVIEW_RETENTION_DAYS }}
           if-no-files-found: error
+
+  preview-package-smoke:
+    name: preview-package-smoke
+    if: always()
+    needs:
+      - installed-package-smoke-linux-x64
+      - installed-package-smoke-macos-arm64
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Reject missing or failed platform package smoke jobs
+        env:
+          LINUX_X64: ${{ needs.installed-package-smoke-linux-x64.result }}
+          MACOS_ARM64: ${{ needs.installed-package-smoke-macos-arm64.result }}
+        run: |
+          for result in "$LINUX_X64" "$MACOS_ARM64"; do
+            if [[ "$result" != success ]]; then
+              echo "Required preview package smoke did not succeed: $result" >&2
+              exit 1
+            fi
+          done
+          echo "Both exact-revision installed package smokes succeeded."

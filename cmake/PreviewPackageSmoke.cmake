@@ -3,6 +3,9 @@ foreach(required_var IN ITEMS GBB_SOURCE_DIR GBB_BINARY_DIR GBB_CMAKE_COMMAND GB
     message(FATAL_ERROR "${required_var} is required")
   endif()
 endforeach()
+if(NOT DEFINED GBB_EXECUTABLE_SUFFIX)
+  message(FATAL_ERROR "GBB_EXECUTABLE_SUFFIX is required")
+endif()
 
 get_filename_component(source_dir "${GBB_SOURCE_DIR}" ABSOLUTE)
 get_filename_component(binary_dir "${GBB_BINARY_DIR}" ABSOLUTE)
@@ -39,14 +42,14 @@ if(NOT package_configs)
 endif()
 
 execute_process(
-  COMMAND "${GBB_CMAKE_COMMAND}" -E tar cf "${archive}" -- installed-prefix
+  COMMAND "${GBB_CMAKE_COMMAND}" -E tar czf "${archive}" -- installed-prefix
   WORKING_DIRECTORY "${smoke_root}"
   RESULT_VARIABLE archive_result OUTPUT_VARIABLE archive_output ERROR_VARIABLE archive_error)
 if(NOT archive_result EQUAL 0 OR NOT EXISTS "${archive}")
   message(FATAL_ERROR "Installed package archive failed (${archive_result}): ${archive_output}${archive_error}")
 endif()
 execute_process(
-  COMMAND "${GBB_CMAKE_COMMAND}" -E tar xf "${archive}"
+  COMMAND "${GBB_CMAKE_COMMAND}" -E tar xzf "${archive}"
   WORKING_DIRECTORY "${extract_root}"
   RESULT_VARIABLE extract_result OUTPUT_VARIABLE extract_output ERROR_VARIABLE extract_error)
 if(NOT extract_result EQUAL 0)
@@ -57,6 +60,7 @@ set(extracted_prefix "${extract_root}/installed-prefix")
 execute_process(
   COMMAND "${GBB_CMAKE_COMMAND}"
     "-DGBB_INSTALL_PREFIX=${extracted_prefix}"
+    "-DGBB_EXECUTABLE_SUFFIX=${GBB_EXECUTABLE_SUFFIX}"
     "-DGBB_RUNNER_WORKDIR=${runner_workdir}"
     "-DGBB_FORBIDDEN_PATHS=${source_dir};${binary_dir}"
     -P "${source_dir}/cmake/VerifyInstalledPackage.cmake"
@@ -66,12 +70,18 @@ if(NOT runner_result EQUAL 0)
 endif()
 
 foreach(language IN ITEMS c cpp)
+  set(consumer_configure_command
+    "${GBB_CMAKE_COMMAND}" -S "${source_dir}/tests/consumers/${language}"
+    -B "${smoke_root}/consumer-${language}"
+    -G "${GBB_GENERATOR}"
+    "-DCMAKE_PREFIX_PATH=${extracted_prefix}"
+    "-DGBB_TRACER_ROM=${extracted_prefix}/share/gabbaboy/fixtures/tracer/tracer.gb")
+  if(DEFINED GBB_SANITIZER_LINK_OPTIONS AND NOT GBB_SANITIZER_LINK_OPTIONS STREQUAL "")
+    list(APPEND consumer_configure_command
+      "-DCMAKE_EXE_LINKER_FLAGS=${GBB_SANITIZER_LINK_OPTIONS}")
+  endif()
   execute_process(
-    COMMAND "${GBB_CMAKE_COMMAND}" -S "${source_dir}/tests/consumers/${language}"
-      -B "${smoke_root}/consumer-${language}"
-      -G "${GBB_GENERATOR}"
-      "-DCMAKE_PREFIX_PATH=${extracted_prefix}"
-      "-DGBB_TRACER_ROM=${extracted_prefix}/share/gabbaboy/fixtures/tracer/tracer.gb"
+    COMMAND ${consumer_configure_command}
     RESULT_VARIABLE configure_result OUTPUT_VARIABLE configure_output ERROR_VARIABLE configure_error)
   if(NOT configure_result EQUAL 0)
     message(FATAL_ERROR "Extracted ${language} consumer configure failed (${configure_result}): ${configure_output}${configure_error}")
@@ -85,9 +95,9 @@ foreach(language IN ITEMS c cpp)
   if(NOT build_result EQUAL 0)
     message(FATAL_ERROR "Extracted ${language} consumer build failed (${build_result}): ${build_output}${build_error}")
   endif()
-  set(consumer "${smoke_root}/consumer-${language}/consumer-${language}${CMAKE_EXECUTABLE_SUFFIX}")
-  if(DEFINED GBB_CONFIGURATION AND EXISTS "${smoke_root}/consumer-${language}/${GBB_CONFIGURATION}/consumer-${language}${CMAKE_EXECUTABLE_SUFFIX}")
-    set(consumer "${smoke_root}/consumer-${language}/${GBB_CONFIGURATION}/consumer-${language}${CMAKE_EXECUTABLE_SUFFIX}")
+  set(consumer "${smoke_root}/consumer-${language}/consumer-${language}${GBB_EXECUTABLE_SUFFIX}")
+  if(DEFINED GBB_CONFIGURATION AND EXISTS "${smoke_root}/consumer-${language}/${GBB_CONFIGURATION}/consumer-${language}${GBB_EXECUTABLE_SUFFIX}")
+    set(consumer "${smoke_root}/consumer-${language}/${GBB_CONFIGURATION}/consumer-${language}${GBB_EXECUTABLE_SUFFIX}")
   endif()
   execute_process(COMMAND "${consumer}" "${extracted_prefix}/share/gabbaboy/fixtures/tracer/tracer.gb"
     RESULT_VARIABLE consumer_result OUTPUT_VARIABLE consumer_output ERROR_VARIABLE consumer_error)

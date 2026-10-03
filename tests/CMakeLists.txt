@@ -31,12 +31,18 @@ add_test(NAME fixture_digest
     -DROM=${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb
     -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/tracer/manifest.json
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
+set(GBB_TEST_SANITIZER_LINK_OPTIONS "")
+if(GABBABOY_ENABLE_SANITIZERS)
+  set(GBB_TEST_SANITIZER_LINK_OPTIONS "-fsanitize=address,undefined")
+endif()
 add_test(NAME preview_package_smoke
   COMMAND ${CMAKE_COMMAND}
     -DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR}
     -DGBB_BINARY_DIR=${PROJECT_BINARY_DIR}
     -DGBB_CMAKE_COMMAND=${CMAKE_COMMAND}
     -DGBB_GENERATOR=${CMAKE_GENERATOR}
+    -DGBB_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}
+    -DGBB_SANITIZER_LINK_OPTIONS=${GBB_TEST_SANITIZER_LINK_OPTIONS}
     -DGBB_CONFIGURATION=$<CONFIG>
     -P ${PROJECT_SOURCE_DIR}/cmake/PreviewPackageSmoke.cmake)
 
@@ -46,17 +52,19 @@ if(GBB_TEST_INSTALL_PREFIX AND EXISTS "${GBB_TEST_INSTALL_PREFIX}")
   add_test(NAME installed_runner_smoke
     COMMAND ${CMAKE_COMMAND}
       -DGBB_INSTALL_PREFIX=${GBB_TEST_INSTALL_PREFIX_ABSOLUTE}
+      -DGBB_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}
       -DGBB_RUNNER_WORKDIR=${PROJECT_BINARY_DIR}/installed-runner-cwd
       -P ${PROJECT_SOURCE_DIR}/cmake/VerifyInstalledPackage.cmake)
   foreach(language IN ITEMS c cpp)
     add_test(NAME installed_consumer_${language}
       COMMAND ${CMAKE_COMMAND}
         -DGBB_INSTALL_PREFIX=${GBB_TEST_INSTALL_PREFIX_ABSOLUTE}
-        -DGBB_CONSUMER_SOURCE=${PROJECT_SOURCE_DIR}/tests/consumers/${language}
-        -DGBB_CONSUMER_BINARY=${PROJECT_BINARY_DIR}/consumer-${language}
-        -DGBB_LANGUAGE=${language}
-        -DGBB_CONFIGURATION=$<CONFIG>
-        -P ${PROJECT_SOURCE_DIR}/cmake/RunInstalledConsumer.cmake)
+      -DGBB_CONSUMER_SOURCE=${PROJECT_SOURCE_DIR}/tests/consumers/${language}
+      -DGBB_CONSUMER_BINARY=${PROJECT_BINARY_DIR}/consumer-${language}
+      -DGBB_LANGUAGE=${language}
+      -DGBB_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}
+      -DGBB_CONFIGURATION=$<CONFIG>
+      -P ${PROJECT_SOURCE_DIR}/cmake/RunInstalledConsumer.cmake)
   endforeach()
 endif()
 
