@@ -1,13 +1,13 @@
 # Continue: Phase 1 execution
 
-**Completed stage:** Phase GB-01-03 execution — relocatable installed package and C/C++ consumer verification. Plans 01–03 of 5 are complete; Phase 1 remains active.
+**Completed stage:** Phase GB-01-04 execution — native CI/test inventory, Linux sanitizers, CMake 3.25.3 floor verification, and fixture reproduction. Plans 01–04 of 5 are complete; Phase 1 remains active.
 
-Plan 03 is committed as `a48f254` and `98a15c4`, with summary commit `0be34c9`. All 21 ordinary CTest cases pass. After install and relocation, the runner and both C/C++ external consumers pass 3/3 tests from the relocated prefix; the runner uses the installed fixture from an unrelated working directory. Local evidence is macOS arm64 only. The fixture remains narrow DMG-CPU-B evidence, not general CPU or gameplay support. Native Linux/Windows runs, the CMake 3.25.3 floor, required CI, and hosted artifacts are not yet proven.
+Task commits: `63c305e` and `ae737bf`; the Plan 04 summary and state/roadmap metadata are the remaining close-out artifacts. Local macOS CTest passed 24/24. In an Ubuntu 22.04 x86_64 container, all 21 ASan/UBSan cases passed, the official CMake 3.25.3 archive digest was verified, and relocated runner plus C/C++ consumers passed 24/24. Pinned RGBDS 1.0.1 reproduced the authored ROM byte-for-byte and matched its manifest digest. The fixture remains narrow bootless DMG-CPU-B evidence, not general CPU, hardware, CGB, or gameplay support.
 
-The plans incorporate the accepted small-dependency-tree preference: the core stays standard-library-only; RGBDS is isolated to fixture regeneration CI. The package exports only the public C interface and makes no stable ABI promise. Hosted remote/PR/artifact evidence remains pending because no origin is configured. Plan 05 retains a checkpoint to provide the canonical repository endpoint or report that hosting is unavailable.
+The native Linux/macOS/Windows CI and separate `fixture-repro` workflow definitions pass local syntax/inventory checks. No Git remote exists, so hosted job results, branch-protection required-check configuration, and Windows execution remain unverified; do not describe local runs as hosted evidence. BASE-05 is complete from the reviewed project-authored MIT fixture plus the pinned local regeneration. BASE-07 and BASE-08 remain pending hosted results and artifact evidence.
 
-**Next stage:** Phase 1 Plan 04 — native CI matrix, sanitizers, and CMake 3.25.3 floor verification.
+**Next stage:** Phase 1 Plan 05 — revision-linked Foundation Preview Packages.
 
 **Next command:** `$gsd-execute-phase 1`
 
-Follow the repository pause rule: complete and verify Phase 1, then stop before Phase 2.
+Follow the repository pause rule: complete Phase 1, then stop before Phase 2.
