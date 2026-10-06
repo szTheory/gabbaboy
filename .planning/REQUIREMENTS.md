@@ -21,7 +21,7 @@ Every requirement below must map to exactly one phase. Completion needs implemen
 
 ### DMG CPU, bus, and time
 
-- [ ] **CPU-01**: The declared DMG profile executes the documented base and CB SM83 instruction sets with correct tested flag, arithmetic, address, and bus-access timing behavior; illegal opcode behavior is explicit.
+- [x] **CPU-01**: The declared DMG profile executes the documented base and CB SM83 instruction sets with correct tested flag, arithmetic, address, and bus-access timing behavior; illegal opcode behavior is explicit.
 - [ ] **CPU-02**: The core produces the expected interrupt entry, EI delay, HALT/HALT-bug, STOP, reset, and deterministic post-boot behavior under model-applicable tests.
 - [x] **CPU-03**: Memory mapping, divider/timer edges and reload races, and disconnected serial behavior match declared DMG evidence at observable access boundaries.
 - [x] **CPU-04**: Equal timestamped inputs and emulated time produce equal supported state/output when execution is partitioned differently; LCD-off, HALT/STOP, lockup, and exhausted output capacity return within the caller's bounded contract.
@@ -100,7 +100,7 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | BASE-06 | Phase 1 | Complete |
 | BASE-07 | Phase 1 | Complete |
 | BASE-08 | Phase 1 | Complete |
-| CPU-01 | Phase 2 | Pending |
+| CPU-01 | Phase 2 | Complete |
 | CPU-02 | Phase 2 | Pending |
 | CPU-03 | Phase 2 | Complete |
 | CPU-04 | Phase 2 | Complete |

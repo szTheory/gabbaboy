@@ -79,7 +79,7 @@ status: complete
 1. **Task 1: Execute a conditional guest call and stack round-trip** - `7f4d6ed` (test), `6a972fe` (feat)
 2. **Task 2: Complete legal base opcode matrix and unused-opcode lockup** - `e7c55ce` (feat)
 
-**Plan metadata:** the three task commits above are the measured plan commits; summary/state metadata is committed separately.
+**Plan metadata:** `b359d29` (summary); final state/roadmap metadata commit is recorded separately.
 
 ## Files Created/Modified
 
