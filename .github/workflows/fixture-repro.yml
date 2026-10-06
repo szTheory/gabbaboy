@@ -46,82 +46,22 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Fetch and verify pinned WLA-DX source
+      - name: Compare pinned Mooneye ROM bytes
         shell: bash
-        run: |
-          set -euo pipefail
-          revision=91c52b1f4ef3cc8ba3c0638f7536539579af6a9f
-          git_dir="$RUNNER_TEMP/wla-dx-git"
-          mkdir -p "$git_dir"
-          git -C "$git_dir" init -q
-          git -C "$git_dir" remote add origin https://github.com/vhelin/wla-dx.git
-          git -C "$git_dir" fetch --depth=1 origin "$revision"
-          git -C "$git_dir" checkout --detach FETCH_HEAD
-          [[ "$(git -C "$git_dir" rev-parse HEAD)" == "$revision" ]]
-          archive_sha=24a95d77a79feeb70d1de87d66749c006e37337308ce9c00e44efac4c46ab976
-          archive="$RUNNER_TEMP/wla-dx-source.tar"
-          git -C "$git_dir" archive --output="$archive" HEAD
-          printf '%s  %s\n' "$archive_sha" "$archive" | sha256sum --check
-          wla_source_dir="$RUNNER_TEMP/wla-dx-source"
-          mkdir -p "$wla_source_dir"
-          tar -xf "$archive" -C "$wla_source_dir"
-      - name: Fetch the pinned Mooneye fixture source
-        shell: bash
-        run: |
-          set -euo pipefail
-          revision=31510e12eea6286d36eea060a6adde755e1067aa
-          git_dir="$RUNNER_TEMP/mooneye-git"
-          mkdir -p "$git_dir"
-          git -C "$git_dir" init -q
-          git -C "$git_dir" remote add origin https://github.com/Gekkio/mooneye-test-suite.git
-          git -C "$git_dir" fetch --depth=1 origin "$revision"
-          git -C "$git_dir" checkout --detach FETCH_HEAD
-          [[ "$(git -C "$git_dir" rev-parse HEAD)" == "$revision" ]]
-          source_dir="$RUNNER_TEMP/mooneye-source"
-          mkdir -p "$source_dir"
-          git -C "$git_dir" archive --output="$RUNNER_TEMP/mooneye-source.tar" HEAD
-          tar -xf "$RUNNER_TEMP/mooneye-source.tar" -C "$source_dir"
-      - name: Build pinned assembler and reproduce all eligible ROM bytes
-        shell: bash
-        run: |
-          set -euo pipefail
-          source_dir="$RUNNER_TEMP/wla-dx-source"
-          build_dir="$RUNNER_TEMP/wla-dx-build"
-          install_dir="$RUNNER_TEMP/wla-dx-install"
-          cmake -S "$source_dir" -B "$build_dir" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$install_dir"
-          cmake --build "$build_dir" --config Release --target wla-gb wlalink -j4
-          assembler="$build_dir/binaries/wla-gb"
-          linker="$build_dir/binaries/wlalink"
-          assembler_version=$("$assembler" 2>&1 || true)
-          linker_version=$("$linker" 2>&1 || true)
-          grep -F 'wla-gb 10.7 (28.6.2026)' <<<"$assembler_version"
-          grep -F 'wlalink 5.22 (28.6.2026)' <<<"$linker_version"
-
-          fixture_dir="$GITHUB_WORKSPACE/fixtures/mooneye"
-          upstream_common="$RUNNER_TEMP/mooneye-source/common"
-          mooneye_source="$RUNNER_TEMP/mooneye-source"
-          build_root="$RUNNER_TEMP/mooneye-build"
-          cc -std=c17 -O2 "$fixture_dir/font-source.c" -o "$RUNNER_TEMP/font-source"
-          "$RUNNER_TEMP/font-source" "$upstream_common/font.bin"
-          printf '%s  %s\n' \
-            '23ba65cb93433b65e7ddcae5f8a7dd2ca232491793848644e625875c6dd6ae43' \
-            "$upstream_common/font.bin" | sha256sum --check
-
-          for case_name in daa tim00 tim00_div_trigger; do
-            case "$case_name" in
-              daa) source_path=acceptance/instr/daa.s ;;
-              tim00|tim00_div_trigger) source_path="acceptance/timer/$case_name.s" ;;
-            esac
-            object="$build_root/${source_path%.s}.o"
-            link_file="$build_root/${source_path%.s}.link"
-            rom="$RUNNER_TEMP/$case_name.gb"
-            mkdir -p "$(dirname "$object")"
-            "$assembler" -I "$upstream_common" -o "$object" "$mooneye_source/$source_path"
-            printf '[objects]\n%s\n' "$object" > "$link_file"
-            "$linker" -d -S "$link_file" "$rom"
-            cmp "$fixture_dir/$case_name.gb" "$rom"
-            expected=$(jq -r --arg rom "$case_name.gb" '.fixtures[] | select(.rom == $rom) | .sha256' "$fixture_dir/manifest.json")
-            actual=$(sha256sum "$rom" | awk '{print $1}')
-            [[ -n "$expected" && "$actual" == "$expected" ]]
-            echo "Reproduced $case_name.gb ($actual)"
-          done
+        env:
+          GBB_REPRO_OUTPUT_DIR: ${{ runner.temp }}/mooneye-evidence
+        run: bash tests/scripts/reproduce-mooneye.sh --compare fixtures/mooneye
+      - name: Retain Mooneye inputs, ROM pairs, and byte reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mooneye-byte-evidence
+          path: |
+            ${{ runner.temp }}/mooneye-evidence/inputs.txt
+            ${{ runner.temp }}/mooneye-evidence/cmake-configure.log
+            ${{ runner.temp }}/mooneye-evidence/cmake-build.log
+            ${{ runner.temp }}/mooneye-evidence/daa
+            ${{ runner.temp }}/mooneye-evidence/tim00
+            ${{ runner.temp }}/mooneye-evidence/tim00_div_trigger
+          if-no-files-found: warn
+          retention-days: 7
