@@ -211,7 +211,7 @@ static int check_return_case(uint8_t opcode, int taken, int pending, uint8_t cos
     };
     const uint8_t *setup = pending ? pending_setup : ordinary_setup;
     size_t setup_size = pending ? sizeof(pending_setup) : sizeof(ordinary_setup);
-    uint64_t setup_time = pending ? 112u : 72u;
+    uint64_t setup_time = pending ? 152u : 72u;
     uint16_t return_pc = pending ? 0x010e : 0x0106;
     make_rom(rom, setup, setup_size);
     rom[0x150] = opcode;

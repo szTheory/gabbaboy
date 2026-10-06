@@ -656,7 +656,11 @@ static void execute(gbb_instance *m, uint8_t cost) {
         if(take){ push16(m,(uint16_t)(pc+3u-(m->halt_bug?1u:0u)),32,40); m->pc=dst; } else m->pc=(uint16_t)(pc+3);
     } else if ((op&0xE7u)==0xC0u || op==0xC9 || op==0xD9) {
         int take=op==0xC9||op==0xD9||condition_true(m,(op>>3)&3u);
-        if(take){ m->pc=pop16(m,16,24); if (op == 0xD9) { m->ime=1; m->ime_delay=0; } } else m->pc=(uint16_t)(pc+1);
+        if(take){
+            uint64_t low_phase = op == 0xC9 || op == 0xD9 ? 8u : 16u;
+            m->pc=pop16(m,low_phase,low_phase+8u);
+            if (op == 0xD9) { m->ime=1; m->ime_delay=0; }
+        } else m->pc=(uint16_t)(pc+1);
     } else if ((op&0xCFu)==0xC1u) { set_stack_pair(m,(op>>4)&3u,pop16(m,8,16)); m->pc=(uint16_t)(pc+1); }
     else if ((op&0xCFu)==0xC5u) { push16(m,stack_pair(m,(op>>4)&3u),16,24); m->pc=(uint16_t)(pc+1); }
     else if ((op&0xC7u)==0xC6u) { uint8_t value=instruction_byte(m,pc,1); alu(m,(op>>3)&7u,value); m->pc=(uint16_t)(pc+2); }
