@@ -13,6 +13,8 @@ cpu_base_matrix
 cpu_illegal_lockup
 cpu_flags_edges
 cpu_timed_access
+cpu_cb_wram
+cpu_cb_budget
 loader_truncated
 loader_oversized
 loader_invalid_header

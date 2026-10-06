@@ -3,7 +3,11 @@
 #include <stdio.h>
 #include <string.h>
 
-#define REQUIRE(x) do { if (!(x)) { fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #x); return 1; } } while (0)
+static const char *active_case = "unknown";
+#define REQUIRE(x) do { if (!(x)) { \
+    printf("TAP version 13\n1..1\nnot ok 1 - cpu_%s\n  ---\n  message: \"assertion failed at %s:%d\"\n  ...\n", active_case, __FILE__, __LINE__); \
+    return 1; \
+} } while (0)
 
 typedef struct {
     uint64_t time_half_dots;
@@ -179,13 +183,49 @@ static int timed_access(void) {
     gbb_destroy(m); return 0;
 }
 
+static int cb_wram(void) {
+    uint8_t rom[32768];
+    const uint8_t program[]={0x21,0x00,0xC0,0x3E,0x01,0x77,0x37,0xCB,0x46,0xCB,0x86,0x00};
+    make_rom(rom,program,sizeof(program));
+    gbb_instance *m=NULL; REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B,&m)==GBB_OK); REQUIRE(gbb_load_rom(m,rom,sizeof(rom))==GBB_OK);
+    gbb_trace_record trace[20]={{0}}; gbb_test_bus_event events[8]={{0}}; gbb_test_observer_set(m,events,8);
+    gbb_run_result r=gbb_run(m,128,trace,20);
+    REQUIRE(r.reason==GBB_STOP_BUDGET && r.consumed_half_dots==128);
+    REQUIRE(gbb_peek_ram(m,0xC000)==0);
+    REQUIRE(r.trace_count>=7);
+    REQUIRE(trace[4].pc==0x107 && trace[5].pc==0x109 && trace[6].pc==0x10B);
+    REQUIRE(trace[4].f==0x10); /* SCF establishes carry before BIT. */
+    REQUIRE(trace[5].f==0xB0); /* BIT sets Z/H and preserves carry. */
+    REQUIRE(trace[6].f==0xB0); /* RES preserves every flag. */
+    REQUIRE(gbb_test_observer_count(m)==3);
+    REQUIRE(events[0].time_half_dots==48 && events[0].address==0xC000 && events[0].access==2 && events[0].value==1);
+    REQUIRE(events[1].time_half_dots==80 && events[1].address==0xC000 && events[1].access==1 && events[1].value==1);
+    REQUIRE(events[2].time_half_dots==112 && events[2].address==0xC000 && events[2].access==2 && events[2].value==0);
+    gbb_destroy(m); return 0;
+}
+
+static int cb_budget(void) {
+    uint8_t rom[32768]; const uint8_t program[]={0x21,0x00,0xC0,0x3E,0x01,0x77,0x37,0xCB,0x46}; make_rom(rom,program,sizeof(program));
+    gbb_instance *m=NULL; REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B,&m)==GBB_OK); REQUIRE(gbb_load_rom(m,rom,sizeof(rom))==GBB_OK);
+    gbb_trace_record trace[5]={{0}}; gbb_test_bus_event events[4]={{0}}; gbb_test_observer_set(m,events,4);
+    gbb_run_result r=gbb_run(m,95,trace,5);
+    REQUIRE(r.reason==GBB_STOP_BUDGET && r.consumed_half_dots==88 && r.trace_count==5);
+    REQUIRE(trace[4].pc==0x107 && gbb_peek_ram(m,0xC000)==1);
+    REQUIRE(gbb_test_observer_count(m)==2 && events[0].time_half_dots==48 && events[0].value==1);
+    REQUIRE(events[1].time_half_dots==80 && events[1].access==1 && events[1].value==1);
+    gbb_destroy(m); return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
+    active_case=argv[1];
     if (strcmp(argv[1], "call_stack") == 0) return call_stack();
     if (strcmp(argv[1], "conditional_budget") == 0) return conditional_budget();
     if (strcmp(argv[1], "base_matrix") == 0) return base_matrix();
     if (strcmp(argv[1], "illegal_lockup") == 0) return illegal_lockup();
     if (strcmp(argv[1], "flags_edges") == 0) return flags_edges();
     if (strcmp(argv[1], "timed_access") == 0) return timed_access();
+    if (strcmp(argv[1], "cb_wram") == 0) return cb_wram();
+    if (strcmp(argv[1], "cb_budget") == 0) return cb_budget();
     return 2;
 }
