@@ -2,6 +2,10 @@ instance_lifecycle
 independent_instances
 run_bounds
 trace_capacity
+bus_wram_guest
+bus_echo_hram
+bus_absent_cart
+bus_preflight
 loader_truncated
 loader_oversized
 loader_invalid_header

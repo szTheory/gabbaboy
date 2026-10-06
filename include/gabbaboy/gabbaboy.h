@@ -32,7 +32,8 @@ typedef enum {
     GBB_STOP_BUDGET = 0,
     GBB_STOP_UNSUPPORTED_OPCODE,
     GBB_STOP_TRACE_FULL,
-    GBB_STOP_INVALID_STATE
+    GBB_STOP_INVALID_STATE,
+    GBB_STOP_UNSUPPORTED_BUS
 } gbb_stop_reason;
 
 typedef struct {

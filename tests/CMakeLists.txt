@@ -10,6 +10,14 @@ add_test(NAME independent_instances COMMAND test_api independent_instances ${PRO
 add_test(NAME run_bounds COMMAND test_api run_bounds ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 add_test(NAME trace_capacity COMMAND test_api trace_capacity ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 
+add_executable(test_bus test_bus.c)
+target_link_libraries(test_bus PRIVATE GabbaBoy::core)
+target_compile_features(test_bus PRIVATE c_std_17)
+set_target_properties(test_bus PROPERTIES C_EXTENSIONS OFF)
+foreach(case wram_guest echo_hram absent_cart preflight)
+  add_test(NAME bus_${case} COMMAND test_bus ${case})
+endforeach()
+
 add_executable(test_loader test_loader.c)
 target_link_libraries(test_loader PRIVATE GabbaBoy::core)
 target_compile_features(test_loader PRIVATE c_std_17)
