@@ -112,8 +112,8 @@ static uint16_t expected_first_pc(unsigned op) {
     if ((op & 0xe7u) == 0xc2u) return expected_condition((op >> 3) & 3u) ? 0x0100 : 0x0103;
     if (op == 0xcd) return 0x0100;
     if ((op & 0xe7u) == 0xc4u) return expected_condition((op >> 3) & 3u) ? 0x0100 : 0x0103;
-    if (op == 0xc9 || op == 0xd9) return 0xff00;
-    if ((op & 0xe7u) == 0xc0u) return expected_condition((op >> 3) & 3u) ? 0xff00 : 0x0101;
+    if (op == 0xc9 || op == 0xd9) return 0xe000; /* FFFF is IE and reads back with unused bits high. */
+    if ((op & 0xe7u) == 0xc0u) return expected_condition((op >> 3) & 3u) ? 0xe000 : 0x0101;
     if ((op & 0xc7u) == 0xc7u) return (uint16_t)(op & 0x38u);
     if (op == 0xe9) return 0x014d;
     if (op == 0x10 || op == 0x18 || (op & 0xe7u) == 0x20u ||
@@ -139,10 +139,17 @@ static int base_matrix(void) {
         gbb_run_result r=gbb_run(m,96,trace,10);
         int illegal=0; for(size_t i=0;i<sizeof(holes);++i) if(holes[i]==op) illegal=1;
         if(illegal) REQUIRE(r.reason==GBB_STOP_LOCKUP && r.lockup_pc==0x100 && r.lockup_opcode==op);
-        else {
+        else if (op == 0x76) {
+            REQUIRE(r.reason == GBB_STOP_HALTED_IDLE && r.consumed_half_dots == 8);
+            REQUIRE(r.trace_count == 1 && trace[0].pc == 0x0100);
+        } else if (op == 0x10) {
+            REQUIRE(r.reason == GBB_STOP_STOPPED && r.consumed_half_dots == 8);
+            REQUIRE(r.trace_count == 1 && trace[0].pc == 0x0100);
+        } else {
             REQUIRE(r.reason==GBB_STOP_BUDGET && r.consumed_half_dots>0);
             REQUIRE(r.trace_count>=2);
             REQUIRE(trace[1].time_half_dots==expected_first_cost(op));
+            if (trace[1].pc != expected_first_pc(op)) fprintf(stderr, "opcode %02x PC got %04x expected %04x\n", op, trace[1].pc, expected_first_pc(op));
             REQUIRE(trace[1].pc==expected_first_pc(op));
             REQUIRE((trace[1].f&0x0f)==0);
         }

@@ -13,6 +13,8 @@ struct gbb_instance {
     uint8_t ie, interrupt_flags;
     uint8_t ime_delay;
     int ime;
+    uint8_t divider_phase;
+    int halted, stopped, halt_bug;
     uint16_t pc, sp;
     uint64_t time_half_dots;
     uint16_t lockup_pc;
@@ -63,6 +65,10 @@ static void reset_state(gbb_instance *m) {
     m->interrupt_flags = 0;
     m->ime_delay = 0;
     m->ime = 0;
+    m->divider_phase = 0;
+    m->halted = 0;
+    m->stopped = 0;
+    m->halt_bug = 0;
     memset(m->wram, 0, sizeof(m->wram));
     memset(m->hram, 0, sizeof(m->hram));
     m->time_half_dots = 0;
@@ -72,6 +78,7 @@ static void reset_state(gbb_instance *m) {
 }
 
 static uint8_t read8(const gbb_instance *m, uint16_t address) {
+    if (address == 0xFF04) return m->div;
     if (address == 0xFF0F) return (uint8_t)(0xE0u | m->interrupt_flags);
     if (address == 0xFFFF) return (uint8_t)(0xE0u | m->ie);
     if (address < m->rom_size) return m->rom[address];
@@ -88,7 +95,8 @@ static uint8_t bus_read(gbb_instance *m, uint16_t address, uint64_t offset) {
 }
 
 static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
-    if (address == 0xFF0F) m->interrupt_flags = (uint8_t)(value & 0x1Fu);
+    if (address == 0xFF04) { m->div = 0; m->divider_phase = 0; }
+    else if (address == 0xFF0F) m->interrupt_flags = (uint8_t)(value & 0x1Fu);
     else if (address == 0xFFFF) m->ie = (uint8_t)(value & 0x1Fu);
     else if (address >= 0xC000 && address <= 0xDFFF) m->wram[address - 0xC000] = value;
     else if (address >= 0xE000 && address <= 0xFDFF) m->wram[address - 0xE000] = value;
@@ -101,13 +109,26 @@ static void bus_write(gbb_instance *m, uint16_t address, uint8_t value, uint64_t
 }
 
 static int read_supported(uint16_t address) {
-    return address < 0x8000 ||
+    return address < 0x8000 || address == 0xFF04 || address == 0xFF0F || address == 0xFFFF ||
            (address >= 0xC000 && address <= 0xDFFF) ||
            (address >= 0xE000 && address <= 0xFDFF) ||
            (address >= 0xFF80 && address <= 0xFFFE);
 }
 
 static uint16_t hl(const gbb_instance *m) { return (uint16_t)(((uint16_t)m->h << 8) | m->l); }
+static unsigned pending_interrupt(const gbb_instance *m);
+
+static uint8_t instruction_byte(const gbb_instance *m, uint16_t pc, unsigned offset) {
+    if (m->halt_bug && offset != 0) --offset;
+    return read8(m, (uint16_t)(pc + offset));
+}
+
+static void advance_devices(gbb_instance *m, uint64_t half_dots) {
+    uint64_t phase = (uint64_t)m->divider_phase + half_dots;
+    m->div = (uint8_t)(m->div + (uint8_t)(phase / 128u));
+    m->divider_phase = (uint8_t)(phase % 128u);
+    m->time_half_dots += half_dots;
+}
 static void set_hl(gbb_instance *m, uint16_t value) { m->h = (uint8_t)(value >> 8); m->l = (uint8_t)value; }
 
 static gbb_error validate_header(const uint8_t *rom, size_t size) {
@@ -181,7 +202,7 @@ static decoded decode(const gbb_instance *m) {
     uint8_t op = read8(m, m->pc);
     if (is_unused_opcode(op)) return (decoded){1, 0, 0};
     if (op == 0xCB) {
-        uint8_t extension = read8(m, (uint16_t)(m->pc + 1u));
+        uint8_t extension = instruction_byte(m, m->pc, 1);
         unsigned group = extension >> 6;
         unsigned target = extension & 7u;
         uint8_t ticks = target == 6u ? (uint8_t)(group == 1u ? 24u : 32u) : 16u;
@@ -336,7 +357,11 @@ static uint16_t pop16(gbb_instance *m, uint64_t low_time, uint64_t high_time) {
 static void execute(gbb_instance *m, uint8_t cost) {
     uint16_t pc=m->pc; uint8_t op=read8(m,pc); uint64_t base=0;
     if (op>=0x40 && op<=0x7F) {
-        if (op==0x76) { m->pc=(uint16_t)(pc+1); }
+        if (op==0x76) {
+            if (!m->ime && pending_interrupt(m) < 5) m->halt_bug=1;
+            else m->halted=1;
+            m->pc=(uint16_t)(pc+1);
+        }
         else { uint8_t value=get_reg(m,op&7u,8); set_reg(m,(op>>3)&7u,value,16); m->pc=(uint16_t)(pc+1); }
     } else if (op>=0x80 && op<=0xBF) {
         uint8_t value=get_reg(m,op&7u,8); alu(m,(op>>3)&7u,value); m->pc=(uint16_t)(pc+1);
@@ -347,29 +372,29 @@ static void execute(gbb_instance *m, uint8_t cost) {
         else m->f=(uint8_t)(carry|(value==0?0x80:0)|((old&15u)==15u?0x20:0));
         set_reg(m,reg,value,16); m->pc=(uint16_t)(pc+1);
     } else if ((op&0xC7u)==0x06u) {
-        uint8_t value=read8(m,(uint16_t)(pc+1)); set_reg(m,(op>>3)&7u,value,16); m->pc=(uint16_t)(pc+2);
+        uint8_t value=instruction_byte(m,pc,1); set_reg(m,(op>>3)&7u,value,16); m->pc=(uint16_t)(pc+2);
     } else if ((op&0xCFu)==0x01u) {
-        uint16_t value=(uint16_t)(read8(m,pc+1)|((uint16_t)read8(m,pc+2)<<8)); set_pair(m,(op>>4)&3u,value); m->pc=(uint16_t)(pc+3);
+        uint16_t value=(uint16_t)(instruction_byte(m,pc,1)|((uint16_t)instruction_byte(m,pc,2)<<8)); set_pair(m,(op>>4)&3u,value); m->pc=(uint16_t)(pc+3);
     } else if ((op&0xCFu)==0x03u || (op&0xCFu)==0x0Bu) {
         unsigned pair=(op>>4)&3u; uint16_t value=pair_value(m,pair); set_pair(m,pair,(uint16_t)(value+((op&8u)?-1:1))); m->pc=(uint16_t)(pc+1);
     } else if ((op&0xCFu)==0x09u) {
         uint16_t lhs=hl(m), rhs=pair_value(m,(op>>4)&3u); uint32_t sum=(uint32_t)lhs+rhs;
         m->f=(uint8_t)((m->f&0x80u)|(((lhs&0xFFFu)+(rhs&0xFFFu)>0xFFFu)?0x20u:0)|(sum>0xFFFFu?0x10u:0)); set_hl(m,(uint16_t)sum); m->pc=(uint16_t)(pc+1);
     } else if ((op&0xE7u)==0x20u) {
-        int8_t offset=(int8_t)read8(m,pc+1); m->pc=(uint16_t)(pc+2); if(condition_true(m,(op>>3)&3u)) m->pc=(uint16_t)(m->pc+offset);
-    } else if (op==0x18) { m->pc=(uint16_t)(pc+2+(int8_t)read8(m,pc+1)); }
-    else if ((op&0xE7u)==0xC2u) { uint16_t dst=(uint16_t)(read8(m,pc+1)|((uint16_t)read8(m,pc+2)<<8)); m->pc=condition_true(m,(op>>3)&3u)?dst:(uint16_t)(pc+3); }
-    else if (op==0xC3) m->pc=(uint16_t)(read8(m,pc+1)|((uint16_t)read8(m,pc+2)<<8));
+        int8_t offset=(int8_t)instruction_byte(m,pc,1); m->pc=(uint16_t)(pc+2); if(condition_true(m,(op>>3)&3u)) m->pc=(uint16_t)(m->pc+offset);
+    } else if (op==0x18) { m->pc=(uint16_t)(pc+2+(int8_t)instruction_byte(m,pc,1)); }
+    else if ((op&0xE7u)==0xC2u) { uint16_t dst=(uint16_t)(instruction_byte(m,pc,1)|((uint16_t)instruction_byte(m,pc,2)<<8)); m->pc=condition_true(m,(op>>3)&3u)?dst:(uint16_t)(pc+3); }
+    else if (op==0xC3) m->pc=(uint16_t)(instruction_byte(m,pc,1)|((uint16_t)instruction_byte(m,pc,2)<<8));
     else if ((op&0xE7u)==0xC4u || op==0xCD) {
-        uint16_t dst=(uint16_t)(read8(m,pc+1)|((uint16_t)read8(m,pc+2)<<8)); int take=op==0xCD||condition_true(m,(op>>3)&3u);
-        if(take){ push16(m,(uint16_t)(pc+3),32,40); m->pc=dst; } else m->pc=(uint16_t)(pc+3);
+        uint16_t dst=(uint16_t)(instruction_byte(m,pc,1)|((uint16_t)instruction_byte(m,pc,2)<<8)); int take=op==0xCD||condition_true(m,(op>>3)&3u);
+        if(take){ push16(m,(uint16_t)(pc+3u-(m->halt_bug?1u:0u)),32,40); m->pc=dst; } else m->pc=(uint16_t)(pc+3);
     } else if ((op&0xE7u)==0xC0u || op==0xC9 || op==0xD9) {
         int take=op==0xC9||op==0xD9||condition_true(m,(op>>3)&3u);
         if(take){ m->pc=pop16(m,16,24); if (op == 0xD9) { m->ime=1; m->ime_delay=0; } } else m->pc=(uint16_t)(pc+1);
     } else if ((op&0xCFu)==0xC1u) { set_stack_pair(m,(op>>4)&3u,pop16(m,8,16)); m->pc=(uint16_t)(pc+1); }
     else if ((op&0xCFu)==0xC5u) { push16(m,stack_pair(m,(op>>4)&3u),16,24); m->pc=(uint16_t)(pc+1); }
-    else if ((op&0xC7u)==0xC6u) { uint8_t value=read8(m,pc+1); alu(m,(op>>3)&7u,value); m->pc=(uint16_t)(pc+2); }
-    else if ((op&0xC7u)==0xC7u) { push16(m,(uint16_t)(pc+1),16,24); m->pc=(uint16_t)(op&0x38u); }
+    else if ((op&0xC7u)==0xC6u) { uint8_t value=instruction_byte(m,pc,1); alu(m,(op>>3)&7u,value); m->pc=(uint16_t)(pc+2); }
+    else if ((op&0xC7u)==0xC7u) { push16(m,(uint16_t)(pc+(m->halt_bug?0u:1u)),16,24); m->pc=(uint16_t)(op&0x38u); }
     else {
         switch(op) {
             case 0x00: m->pc++; break;
@@ -381,8 +406,8 @@ static void execute(gbb_instance *m, uint8_t cost) {
             case 0x2A: m->a=bus_read(m,hl(m),8); set_hl(m,(uint16_t)(hl(m)+1)); m->pc++; break;
             case 0x32: bus_write(m,hl(m),m->a,8); set_hl(m,(uint16_t)(hl(m)-1)); m->pc++; break;
             case 0x3A: m->a=bus_read(m,hl(m),8); set_hl(m,(uint16_t)(hl(m)-1)); m->pc++; break;
-            case 0x08: { uint16_t addr=(uint16_t)(read8(m,pc+1)|((uint16_t)read8(m,pc+2)<<8)); bus_write(m,addr,(uint8_t)m->sp,24); bus_write(m,(uint16_t)(addr+1),(uint8_t)(m->sp>>8),32); m->pc+=3; break; }
-            case 0x10: m->pc=(uint16_t)(pc+2); break;
+            case 0x08: { uint16_t addr=(uint16_t)(instruction_byte(m,pc,1)|((uint16_t)instruction_byte(m,pc,2)<<8)); bus_write(m,addr,(uint8_t)m->sp,24); bus_write(m,(uint16_t)(addr+1),(uint8_t)(m->sp>>8),32); m->pc+=3; break; }
+            case 0x10: m->pc=(uint16_t)(pc+2); m->div=0; m->divider_phase=0; m->stopped=1; break;
             case 0x07: { uint8_t c=(uint8_t)(m->a>>7); m->a=(uint8_t)((m->a<<1)|c); m->f=c?0x10:0; m->pc++; break; }
             case 0x0F: { uint8_t c=(uint8_t)(m->a&1); m->a=(uint8_t)((m->a>>1)|(c<<7)); m->f=c?0x10:0; m->pc++; break; }
             case 0x17: { uint8_t c=(uint8_t)(m->a>>7), old=(uint8_t)((m->f>>4)&1); m->a=(uint8_t)((m->a<<1)|old); m->f=c?0x10:0; m->pc++; break; }
@@ -391,19 +416,19 @@ static void execute(gbb_instance *m, uint8_t cost) {
             case 0x2F: m->a=(uint8_t)~m->a; m->f=(uint8_t)((m->f&0x90u)|0x60u); m->pc++; break;
             case 0x37: m->f=(uint8_t)((m->f&0x80u)|0x10u); m->pc++; break;
             case 0x3F: m->f=(uint8_t)((m->f&0x80u)|((m->f&0x10u)?0:0x10u)); m->pc++; break;
-            case 0xE0: bus_write(m,(uint16_t)(0xFF00u+read8(m,pc+1)),m->a,16); m->pc+=2; break;
+            case 0xE0: bus_write(m,(uint16_t)(0xFF00u+instruction_byte(m,pc,1)),m->a,16); m->pc+=2; break;
             case 0xE2: bus_write(m,(uint16_t)(0xFF00u+m->c),m->a,8); m->pc++; break;
-            case 0xF0: m->a=bus_read(m,(uint16_t)(0xFF00u+read8(m,pc+1)),16); m->pc+=2; break;
+            case 0xF0: m->a=bus_read(m,(uint16_t)(0xFF00u+instruction_byte(m,pc,1)),16); m->pc+=2; break;
             case 0xF2: m->a=bus_read(m,(uint16_t)(0xFF00u+m->c),8); m->pc++; break;
-            case 0xEA: { uint16_t addr=(uint16_t)(read8(m,pc+1)|((uint16_t)read8(m,pc+2)<<8)); bus_write(m,addr,m->a,24); m->pc+=3; break; }
-            case 0xFA: { uint16_t addr=(uint16_t)(read8(m,pc+1)|((uint16_t)read8(m,pc+2)<<8)); m->a=bus_read(m,addr,24); m->pc+=3; break; }
-            case 0xE8: case 0xF8: { uint8_t e=read8(m,pc+1); uint16_t old=m->sp; uint16_t value=(uint16_t)(old+(int8_t)e); uint8_t flags=(uint8_t)(((old&15u)+(e&15u)>15u?0x20u:0)|((old&255u)+e>255u?0x10u:0)); if(op==0xE8)m->sp=value;else set_hl(m,value);m->f=flags;m->pc+=2;break; }
+            case 0xEA: { uint16_t addr=(uint16_t)(instruction_byte(m,pc,1)|((uint16_t)instruction_byte(m,pc,2)<<8)); bus_write(m,addr,m->a,24); m->pc+=3; break; }
+            case 0xFA: { uint16_t addr=(uint16_t)(instruction_byte(m,pc,1)|((uint16_t)instruction_byte(m,pc,2)<<8)); m->a=bus_read(m,addr,24); m->pc+=3; break; }
+            case 0xE8: case 0xF8: { uint8_t e=instruction_byte(m,pc,1); uint16_t old=m->sp; uint16_t value=(uint16_t)(old+(int8_t)e); uint8_t flags=(uint8_t)(((old&15u)+(e&15u)>15u?0x20u:0)|((old&255u)+e>255u?0x10u:0)); if(op==0xE8)m->sp=value;else set_hl(m,value);m->f=flags;m->pc+=2;break; }
             case 0xF9: m->sp=hl(m); m->pc++; break;
             case 0xE9: m->pc=hl(m); break;
             case 0xF3: m->ime=0; m->ime_delay=0; m->pc++; break;
             case 0xFB: m->ime_delay=2; m->pc++; break;
             case 0xCB: {
-                uint8_t extension = read8(m, (uint16_t)(pc + 1u));
+                uint8_t extension = instruction_byte(m, pc, 1);
                 execute_cb(m, pc, extension);
                 break;
             }
@@ -411,7 +436,7 @@ static void execute(gbb_instance *m, uint8_t cost) {
         }
     }
     m->f &= 0xF0u;
-    m->time_half_dots += cost;
+    advance_devices(m, cost);
 }
 
 static unsigned pending_interrupt(const gbb_instance *m) {
@@ -428,7 +453,8 @@ static void enter_interrupt(gbb_instance *m, unsigned bit) {
     observe_bus(m, 8, 0xFF0F, 2, (uint8_t)(0xE0u | m->interrupt_flags));
     push16(m, m->pc, 16, 24);
     m->pc = (uint16_t)(0x0040u + bit * 8u);
-    m->time_half_dots += 40;
+    m->halted = 0;
+    advance_devices(m, 40);
 }
 
 static void save_trace(const gbb_instance *m, decoded d, gbb_trace_record *r) {
@@ -438,12 +464,20 @@ static void save_trace(const gbb_instance *m, decoded d, gbb_trace_record *r) {
     r->a=m->a; r->f=m->f; r->b=m->b; r->c=m->c; r->d=m->d; r->e=m->e; r->h=m->h; r->l=m->l; r->sp=m->sp;
 }
 
+static int halt_bug_keeps_control_target(const gbb_instance *m, uint8_t op) {
+    if (op == 0xC3 || op == 0xC9 || op == 0xCD || op == 0xD9 || op == 0xE9 || (op & 0xC7u) == 0xC7u) return 1;
+    if ((op & 0xE7u) == 0xC0u || (op & 0xE7u) == 0xC2u || (op & 0xE7u) == 0xC4u)
+        return condition_true(m, (op >> 3) & 3u);
+    return 0;
+}
+
 gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
                        gbb_trace_record *trace, size_t trace_capacity) {
     gbb_run_result result={0, GBB_STOP_BUDGET, 0, 0, 0};
     if (instance == NULL || !instance->loaded || (trace == NULL && trace_capacity != 0)) { result.reason=GBB_STOP_INVALID_STATE; return result; }
     while (result.consumed_half_dots < budget_half_dots) {
         if (instance->locked) { result.reason=GBB_STOP_LOCKUP; result.lockup_pc=instance->lockup_pc; result.lockup_opcode=instance->lockup_opcode; return result; }
+        if (instance->stopped) { result.reason=GBB_STOP_STOPPED; return result; }
         unsigned interrupt = instance->ime ? pending_interrupt(instance) : 5;
         if (interrupt < 5) {
             if (40u > budget_half_dots - result.consumed_half_dots) return result;
@@ -451,6 +485,19 @@ gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
             enter_interrupt(instance, interrupt);
             result.consumed_half_dots += 40;
             continue;
+        }
+        if (instance->halted) {
+            if ((instance->ie & instance->interrupt_flags & 0x1Fu) != 0) {
+                instance->halted=0;
+                continue;
+            }
+            uint64_t idle = ((budget_half_dots - result.consumed_half_dots) / 8u) * 8u;
+            if (idle == 0) return result;
+            if (UINT64_MAX - instance->time_half_dots < idle) { result.reason=GBB_STOP_INVALID_STATE; return result; }
+            advance_devices(instance, idle);
+            result.consumed_half_dots += idle;
+            result.reason=GBB_STOP_HALTED_IDLE;
+            return result;
         }
         decoded d=decode(instance);
         if (!d.supported) {
@@ -470,9 +517,22 @@ gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
         }
         if (trace != NULL && result.trace_count == trace_capacity) { result.reason=GBB_STOP_TRACE_FULL; return result; }
         if (trace != NULL) save_trace(instance,d,&trace[result.trace_count++]);
+        int consume_halt_bug=instance->halt_bug;
+        int keeps_control_target=consume_halt_bug && halt_bug_keeps_control_target(instance,opcode);
         execute(instance,cost);
+        if (consume_halt_bug) {
+            if (!keeps_control_target) instance->pc=(uint16_t)(instance->pc-1u);
+            instance->halt_bug=0;
+        }
         result.consumed_half_dots += cost;
         if (instance->ime_delay != 0 && --instance->ime_delay == 0) instance->ime = 1;
+        if (instance->stopped) {
+            instance->div=0;
+            instance->divider_phase=0;
+            result.reason=GBB_STOP_STOPPED;
+            return result;
+        }
+        if (instance->halted) { result.reason=GBB_STOP_HALTED_IDLE; return result; }
     }
     return result;
 }

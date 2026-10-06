@@ -73,18 +73,29 @@ static int interrupt_ei_delay(void) {
     gbb_instance *m = make_machine(p, sizeof(p)); REQUIRE(m != NULL);
     gbb_trace_record t[8] = {{0}};
     gbb_run_result r = gbb_run(m, 96, t, 8);
-    REQUIRE(r.consumed_half_dots == 96 && r.trace_count == 6);
-    REQUIRE(t[5].pc == 0x10a && t[5].b == 1);
+    REQUIRE(r.consumed_half_dots == 96 && r.trace_count == 5);
+    REQUIRE(t[4].pc == 0x109);
     r = gbb_run(m, 40, t, 8);
     REQUIRE(r.consumed_half_dots == 40 && r.trace_count == 0);
     r = gbb_run(m, 8, t, 8);
-    REQUIRE(r.trace_count == 1 && t[0].pc == 0x40);
+    REQUIRE(r.trace_count == 1 && t[0].pc == 0x40 && t[0].b == 1);
+    gbb_destroy(m);
+
+    const uint8_t di_program[] = {0x3e,1,0xea,0xff,0xff,0xea,0x0f,0xff,0xfb,0xf3,0x00,0x00};
+    m = make_machine(di_program, sizeof(di_program)); REQUIRE(m != NULL);
+    r = gbb_run(m, 96, t, 8); REQUIRE(r.consumed_half_dots == 96);
+    r = gbb_run(m, 8, t, 8); REQUIRE(r.consumed_half_dots == 8 && r.trace_count == 1 && t[0].pc == 0x10a);
+    r = gbb_run(m, 8, t, 8); REQUIRE(r.consumed_half_dots == 8 && r.trace_count == 1 && t[0].pc == 0x10b);
     gbb_destroy(m); return 0;
 }
 
 static int interrupt_priority(void) {
     const uint8_t p[] = {0x3e,3,0xea,0xff,0xff,0xea,0x0f,0xff,0xfb,0x00};
-    gbb_instance *m = make_machine(p, sizeof(p)); REQUIRE(m != NULL);
+    uint8_t rom[32768]; make_rom(rom, p, sizeof(p));
+    const uint8_t handler[] = {0xfa,0x0f,0xff,0xea,0x00,0xc0,0xd9};
+    memcpy(rom + 0x40, handler, sizeof(handler));
+    gbb_instance *m = NULL; REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
     gbb_test_bus_event e[12] = {{0}}; gbb_test_observer_set(m, e, 12);
     gbb_trace_record t[12] = {{0}};
     gbb_run_result r = gbb_run(m, 96, t, 12); REQUIRE(r.consumed_half_dots == 96);
@@ -92,6 +103,9 @@ static int interrupt_priority(void) {
     r = gbb_run(m, 64, t, 12); REQUIRE(r.consumed_half_dots == 64);
     REQUIRE(gbb_peek_ram(m, 0xc000) == 0xe2);
     REQUIRE(t[0].pc == 0x40);
+    r = gbb_run(m, 32, t, 12); REQUIRE(r.consumed_half_dots == 32);
+    r = gbb_run(m, 40, t, 12); REQUIRE(r.consumed_half_dots == 40);
+    r = gbb_run(m, 8, t, 12); REQUIRE(r.trace_count == 1 && t[0].pc == 0x48);
     gbb_destroy(m); return 0;
 }
 
@@ -106,9 +120,15 @@ static int halt_idle(void) {
 static int halt_bug(void) {
     const uint8_t p[] = {0x3e,1,0xea,0xff,0xff,0xea,0x0f,0xff,0x76,0x04,0x00};
     gbb_instance *m = make_machine(p, sizeof(p)); REQUIRE(m != NULL);
-    gbb_trace_record t[2] = {{0}}; gbb_run_result r = gbb_run(m, 88, t, 2); REQUIRE(r.consumed_half_dots == 88);
+    gbb_trace_record t[8] = {{0}}; gbb_run_result r = gbb_run(m, 88, t, 8); REQUIRE(r.consumed_half_dots == 88);
     r = gbb_run(m, 8, t, 2); REQUIRE(r.consumed_half_dots == 8);
     r = gbb_run(m, 8, t, 2); REQUIRE(r.consumed_half_dots == 8 && t[0].pc == 0x109 && t[0].b == 1);
+    gbb_destroy(m);
+    const uint8_t immediate_program[] = {0x3e,1,0xea,0xff,0xff,0xea,0x0f,0xff,0x76,0x06,0x99,0x00};
+    m = make_machine(immediate_program, sizeof(immediate_program)); REQUIRE(m != NULL);
+    r = gbb_run(m, 88, t, 8); REQUIRE(r.consumed_half_dots == 88);
+    r = gbb_run(m, 16, t, 2); REQUIRE(r.consumed_half_dots == 16);
+    r = gbb_run(m, 8, t, 2); REQUIRE(r.trace_count == 1 && t[0].pc == 0x10a && t[0].b == 0x06);
     gbb_destroy(m); return 0;
 }
 

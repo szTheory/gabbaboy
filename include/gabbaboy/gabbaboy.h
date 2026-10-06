@@ -34,7 +34,9 @@ typedef enum {
     GBB_STOP_TRACE_FULL,
     GBB_STOP_INVALID_STATE,
     GBB_STOP_UNSUPPORTED_BUS,
-    GBB_STOP_LOCKUP
+    GBB_STOP_LOCKUP,
+    GBB_STOP_HALTED_IDLE,    /* eligible idle ticks advanced; machine remains halted */
+    GBB_STOP_STOPPED         /* STOP entered; oscillator remains paused until modeled wake */
 } gbb_stop_reason;
 
 typedef struct {
@@ -67,7 +69,10 @@ gbb_error gbb_reset(gbb_instance *instance);
  * A failed replacement leaves the current ROM and machine state unchanged.
  * Supports only exact-size 32 KiB ROM-only images with no cartridge RAM. */
 gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_size);
-/* Runs only whole supported instructions. Budget/consumed values are uint64
+/* Runs whole supported instructions. GBB_STOP_HALTED_IDLE means the run has
+ * consumed eligible idle ticks and the CPU remains halted; GBB_STOP_STOPPED
+ * means STOP is waiting for a modeled wake event. The caller's budget bounds
+ * all idle progression. Budget/consumed values are uint64
  * half-dot ticks. An instruction is preflighted and won't start unless its
  * full cost fits. Trace records are optional caller-owned storage; the core
  * writes no more than capacity, allocates nothing, and never overwrites prior
