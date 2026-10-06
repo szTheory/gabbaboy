@@ -19,4 +19,6 @@ Each `source_closure` in `manifest.json` lists the acceptance source and every f
 
 The reviewed but excluded candidates are recorded explicitly in `manifest.json`: `acceptance/interrupts/ie_push.s` uses PPU-safe setup, and `acceptance/serial/boot_sclk_align-dmgABCmgb.s` measures boot-relative clock alignment. Manual-only, emulator-only, PPU-dependent, boot-dependent, and non-DMG/revision-inapplicable suite entries remain outside the eligible denominator.
 
+The DAA execution budget is 2,000,000 half-dots. At the pinned source revision, `acceptance/instr/daa.s` initializes BC to `$80*16` and runs that 2,048-case loop twice. Its loop executes at least 25 instructions per case; the instruction timing floor is 328 half-dots per case (1,343,488 total), before setup, any failing diagnostic path, and the final completion protocol. The prior 200,000-half-dot preparation limit could not cover even the successful test workload. The revised budget remains finite and was selected above that source-derived floor; it does not change ROM bytes, logic, ID, or eligibility.
+
 Normal build and tests consume only the checked-in `.gb` files. Reproduction requires the explicit pinned sources and WLA-DX build above; no normal test invokes the network, compiler, or assembler.

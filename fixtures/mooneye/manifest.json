@@ -87,7 +87,7 @@
         "fail": "Registers B,C,D,E,H,L are 0x42 at the LD B,B breakpoint; the guest then loops.",
         "runner_support": "Current generic runner does not interpret the Mooneye register protocol; preparation run is recorded separately."
       },
-      "timeout_half_dots": 200000,
+      "timeout_half_dots": 2000000,
       "build_recipe": [
         "cc -std=c17 -O2 fixtures/mooneye/font-source.c -o <tmp>/font-source",
         "<tmp>/font-source <upstream>/common/font.bin",

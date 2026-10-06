@@ -104,11 +104,50 @@ add_executable(test_runner test_runner.c)
 target_link_libraries(test_runner PRIVATE GabbaBoy::core)
 target_compile_features(test_runner PRIVATE c_std_17)
 set_target_properties(test_runner PROPERTIES C_EXTENSIONS OFF)
-foreach(case pass fail timeout unsupported missing_fixture bad_manifest zero_eligible)
+foreach(case pass fail timeout unsupported zero_eligible)
   add_test(NAME runner_${case} COMMAND test_runner runner_${case})
 endforeach()
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/runner-missing-fixture")
+configure_file("${PROJECT_SOURCE_DIR}/fixtures/mooneye/manifest.json"
+  "${PROJECT_BINARY_DIR}/runner-missing-fixture/manifest.json" COPYONLY)
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/runner-bad-digest")
+configure_file("${PROJECT_SOURCE_DIR}/fixtures/mooneye/manifest.json"
+  "${PROJECT_BINARY_DIR}/runner-bad-digest/manifest.json" COPYONLY)
+string(REPEAT "A" 32768 GBB_INVALID_ROM_BYTES)
+file(WRITE "${PROJECT_BINARY_DIR}/runner-bad-digest/daa.gb" "${GBB_INVALID_ROM_BYTES}")
+add_test(NAME runner_missing_fixture
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_RUNNER=$<TARGET_FILE:gabbaboy-runner>
+    -DGBB_MANIFEST=${PROJECT_BINARY_DIR}/runner-missing-fixture/manifest.json
+    -DGBB_MODE=missing -P ${PROJECT_SOURCE_DIR}/tests/expect_runner_failure.cmake)
+add_test(NAME runner_bad_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_RUNNER=$<TARGET_FILE:gabbaboy-runner>
+    -DGBB_MANIFEST=${PROJECT_BINARY_DIR}/runner-bad-digest/manifest.json
+    -DGBB_MODE=digest -P ${PROJECT_SOURCE_DIR}/tests/expect_runner_failure.cmake)
+file(WRITE "${PROJECT_BINARY_DIR}/runner-bad-manifest.json" "{}")
+file(READ "${PROJECT_SOURCE_DIR}/fixtures/mooneye/manifest.json" GBB_TAMPERED_MANIFEST)
+string(REPLACE "\"model\": \"DMG-CPU-B\"" "\"model\": \"CGB-E\"" GBB_TAMPERED_MANIFEST "${GBB_TAMPERED_MANIFEST}")
+string(REPLACE "\"boot\": \"Skipped; bootless DMG-CPU-B profile starts at the cartridge entry point 0x0100.\""
+  "\"boot\": \"Booted profile.\"" GBB_TAMPERED_MANIFEST "${GBB_TAMPERED_MANIFEST}")
+file(WRITE "${PROJECT_BINARY_DIR}/runner-wrong-metadata.json" "${GBB_TAMPERED_MANIFEST}")
+add_test(NAME runner_bad_manifest
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_RUNNER=$<TARGET_FILE:gabbaboy-runner>
+    -DGBB_MANIFEST=${PROJECT_BINARY_DIR}/runner-bad-manifest.json
+    -DGBB_MODE=manifest -P ${PROJECT_SOURCE_DIR}/tests/expect_runner_failure.cmake)
+add_test(NAME runner_bad_metadata
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_RUNNER=$<TARGET_FILE:gabbaboy-runner>
+    -DGBB_MANIFEST=${PROJECT_BINARY_DIR}/runner-wrong-metadata.json
+    -DGBB_MODE=manifest -P ${PROJECT_SOURCE_DIR}/tests/expect_runner_failure.cmake)
 add_test(NAME mooneye_required_suite
   COMMAND gabbaboy-runner --manifest ${PROJECT_SOURCE_DIR}/fixtures/mooneye/manifest.json --suite --receipt)
+foreach(case daa tim00 tim00-div-trigger)
+  add_test(NAME mooneye_case_${case}
+    COMMAND gabbaboy-runner --manifest ${PROJECT_SOURCE_DIR}/fixtures/mooneye/manifest.json --case ${case} --receipt)
+  set_tests_properties(mooneye_case_${case} PROPERTIES PASS_REGULAR_EXPRESSION "status=pass")
+endforeach()
 set(GBB_TEST_SANITIZER_LINK_OPTIONS "")
 if(GABBABOY_ENABLE_SANITIZERS)
   set(GBB_TEST_SANITIZER_LINK_OPTIONS "-fsanitize=address,undefined")

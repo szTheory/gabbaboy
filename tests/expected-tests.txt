@@ -80,6 +80,11 @@ runner_fail
 runner_timeout
 runner_unsupported
 runner_missing_fixture
+runner_bad_digest
 runner_bad_manifest
+runner_bad_metadata
 runner_zero_eligible
 mooneye_required_suite
+mooneye_case_daa
+mooneye_case_tim00
+mooneye_case_tim00-div-trigger

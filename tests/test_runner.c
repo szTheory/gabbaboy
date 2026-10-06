@@ -22,20 +22,17 @@ int main(int argc, char **argv) {
         REQUIRE(strcmp(protocol_status(&record,1),"fail")==0);
     } else if (strcmp(argv[1], "runner_timeout") == 0) {
         REQUIRE(protocol_status(&record,1)==NULL);
-        REQUIRE(strcmp(cases[0].id,"mooneye-acceptance-instr-daa")==0 && cases[0].budget==UINT64_C(200000));
+        REQUIRE(strcmp(budget_status(2000000,2000000),"timeout")==0);
+        REQUIRE(cases[0].budget==UINT64_C(2000000));
     } else if (strcmp(argv[1], "runner_unsupported") == 0) {
         REQUIRE(protocol_status(&record,1)==NULL);
+        REQUIRE(strcmp(unsupported_core_stop(GBB_STOP_UNSUPPORTED_BUS),"unsupported")==0);
+        REQUIRE(unsupported_core_stop(GBB_STOP_BUDGET)==NULL);
         REQUIRE(strcmp(cases[1].category,"timer")==0 && strcmp(cases[2].category,"timer")==0);
-    } else if (strcmp(argv[1], "runner_missing_fixture") == 0) {
-        char path[4096];
-        REQUIRE(locate_rom("/definitely-absent/manifest.json",cases[0].rom,path));
-        FILE *f=fopen(path,"rb");
-        REQUIRE(f==NULL);
-    } else if (strcmp(argv[1], "runner_bad_manifest") == 0) {
-        uint8_t bytes[MAX_MANIFEST+1]={0};size_t n=1;
-        REQUIRE(!hash_matches(bytes,n,"7c3367fc5882fab5bffca422d60b69847a80ac7b7407b2742b3fb0f03f4790ba"));
     } else if (strcmp(argv[1], "runner_zero_eligible") == 0) {
-        REQUIRE(sizeof(cases)/sizeof(cases[0])==3);
+        REQUIRE(!suite_counts_valid(0,0));
+        REQUIRE(suite_counts_valid(3,3));
+        REQUIRE(!suite_counts_valid(3,2));
     } else { return 2; }
     return 0;
 }

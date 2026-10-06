@@ -30,7 +30,7 @@ typedef struct {
 } fixture_case;
 
 static const fixture_case cases[] = {
-    {"mooneye-acceptance-instr-daa", "daa", "cpu", "daa.gb", "96cd0e02a85f6f035b1c1947d36a8ad2d8e51963f636b833f05559f021eef57e", "03,05,08,0d,15,22", "42,42,42,42,42,42", UINT64_C(200000)},
+    {"mooneye-acceptance-instr-daa", "daa", "cpu", "daa.gb", "96cd0e02a85f6f035b1c1947d36a8ad2d8e51963f636b833f05559f021eef57e", "03,05,08,0d,15,22", "42,42,42,42,42,42", UINT64_C(2000000)},
     {"mooneye-acceptance-timer-tim00", "tim00", "timer", "tim00.gb", "6edc430a09522294c96d1eef63a0f1a99078f4401060980048ec5a68640e11bd", "03,05,08,0d,15,22", "42,42,42,42,42,42", UINT64_C(200000)},
     {"mooneye-acceptance-timer-tim00-div-trigger", "tim00-div-trigger", "timer", "tim00_div_trigger.gb", "468d426c4fe6a850a28f4116bd127d471be6adf2ef5dd0f89f2db67ffe212242", "03,05,08,0d,15,22", "42,42,42,42,42,42", UINT64_C(200000)}
 };
@@ -66,10 +66,12 @@ static int read_bounded(const char *path, uint8_t *buffer, size_t capacity, size
     if(failed||n>capacity)return 0; *length=n; return 1;
 }
 static int hash_matches(const uint8_t *bytes,size_t length,const char *expected) { sha256_ctx c;char hash[65];sha_init(&c);sha_update(&c,bytes,length);sha_final(&c,hash);return strcmp(hash,expected)==0; }
+static int manifest_bytes_valid(const uint8_t *bytes,size_t length) {
+    static const char expected[]="76204bc792a5a767f3d7430edfe5542698953507fe268de6a0154b7cb02bcc3e";
+    return hash_matches(bytes,length,expected);
+}
 static int manifest_valid(const char *path, uint8_t bytes[MAX_MANIFEST+1], size_t *length) {
-    static const char expected[]="7c3367fc5882fab5bffca422d60b69847a80ac7b7407b2742b3fb0f03f4790ba";
-    if(!read_bounded(path,bytes,MAX_MANIFEST,length)||!hash_matches(bytes,*length,expected))return 0;
-    return 1;
+    return read_bounded(path,bytes,MAX_MANIFEST,length)&&manifest_bytes_valid(bytes,*length);
 }
 static const fixture_case *select_case(const char *name) {
     for(size_t i=0;i<sizeof(cases)/sizeof(cases[0]);i++)if(strcmp(name,cases[i].id)==0||strcmp(name,cases[i].alias)==0)return &cases[i];
@@ -80,6 +82,21 @@ static int locate_rom(const char *manifest,const char *rom,char path[4096]) {
     size_t dir=slash?(size_t)(slash-manifest+1):0; if(dir+strlen(rom)>=4095)return 0;
     memcpy(path,manifest,dir);strcpy(path+dir,rom);return 1;
 }
+static int case_rom_valid(const fixture_case *fc,const char *manifest) {
+    char path[4096];uint8_t bytes[MAX_ROM+1];size_t length=0;
+    return locate_rom(manifest,fc->rom,path)&&read_bounded(path,bytes,MAX_ROM,&length)&&
+           length==MAX_ROM&&hash_matches(bytes,length,fc->sha256);
+}
+static const char *unsupported_core_stop(gbb_stop_reason reason) {
+    if(reason==GBB_STOP_UNSUPPORTED_BUS||reason==GBB_STOP_UNSUPPORTED_OPCODE||
+       reason==GBB_STOP_LOCKUP||reason==GBB_STOP_INVALID_STATE||reason==GBB_STOP_STOPPED||
+       reason==GBB_STOP_HALTED_IDLE||reason==GBB_STOP_NO_PROGRESS)return "unsupported";
+    return NULL;
+}
+static const char *budget_status(uint64_t ticks,uint64_t budget) {
+    return ticks>=budget?"timeout":NULL;
+}
+static int suite_counts_valid(size_t eligible,size_t executed) { return eligible!=0&&eligible==executed; }
 static const char *protocol_status(const gbb_trace_record *trace,size_t count) {
     for(size_t i=0;i<count;i++) if(trace[i].opcode[0]==0x40) {
         if(trace[i].b==3&&trace[i].c==5&&trace[i].d==8&&trace[i].e==13&&trace[i].h==21&&trace[i].l==34)return "pass";
@@ -92,8 +109,9 @@ static void retain_recent(gbb_diagnostic_record recent[RECENT_CAPACITY],size_t *
 }
 static int run_one(const fixture_case *fc,const char *manifest,int receipt,size_t eligible,size_t *executed) {
     char rom_path[4096];uint8_t rom[MAX_ROM+1];size_t rom_size=0;
-    if(!locate_rom(manifest,fc->rom,rom_path)||!read_bounded(rom_path,rom,MAX_ROM,&rom_size)||rom_size!=MAX_ROM||!hash_matches(rom,rom_size,fc->sha256)){
-        if(receipt)printf("case=%s category=%s status=unsupported reason=missing-or-invalid-fixture\n",fc->id,fc->category);
+    if(!case_rom_valid(fc,manifest)||!locate_rom(manifest,fc->rom,rom_path)||
+       !read_bounded(rom_path,rom,MAX_ROM,&rom_size)||rom_size!=MAX_ROM||!hash_matches(rom,rom_size,fc->sha256)){
+        if(receipt)printf("case=%s category=%s status=unsupported reason=missing-or-invalid-fixture source_revision=31510e12eea6286d36eea060a6adde755e1067aa fixture_sha256=%s profile=DMG-CPU-B boot=skipped protocol=mooneye-ld-b-b eligible=%zu executed=%zu\n",fc->id,fc->category,fc->sha256,eligible,*executed);
         return 3;
     }
     gbb_instance *m=NULL;if(gbb_create(GBB_PROFILE_DMG_CPU_B,&m)!=GBB_OK||gbb_load_rom(m,rom,rom_size)!=GBB_OK){gbb_destroy(m);return 3;}
@@ -105,23 +123,50 @@ static int run_one(const fixture_case *fc,const char *manifest,int receipt,size_
         status=protocol_status(trace,r.trace_count);
         if(status)break;
         if(r.reason==GBB_STOP_TRACE_FULL||r.reason==GBB_STOP_OUTPUT_FULL)continue;
-        if(r.reason==GBB_STOP_UNSUPPORTED_BUS||r.reason==GBB_STOP_UNSUPPORTED_OPCODE||r.reason==GBB_STOP_LOCKUP||r.reason==GBB_STOP_INVALID_STATE||r.reason==GBB_STOP_STOPPED){status="unsupported";stop="core-stop";break;}
-        if(r.reason==GBB_STOP_HALTED_IDLE){status="unsupported";stop="halted";break;}
+        const char *core_status=unsupported_core_stop(r.reason);
+        if(core_status){status=core_status;stop=r.reason==GBB_STOP_HALTED_IDLE?"halted":"core-stop";break;}
         if(r.consumed_half_dots==0)break;
     }
-    if(!status)status="timeout";
+    if(!status)status=budget_status(ticks,fc->budget);
+    if(!status)status="unsupported";
     ++*executed;
     int code=strcmp(status,"pass")==0?0:strcmp(status,"fail")==0?1:3;
     if(receipt){
-        printf("case=%s category=%s status=%s source_revision=31510e12eea6286d36eea060a6adde755e1067aa build_revision=%s build_qualified=%s fixture_sha256=%s profile=DMG-CPU-B boot=skipped protocol=mooneye-ld-b-b ticks=%llu eligible=%zu executed=%zu stop=%s recent=%zu\n",
-          fc->id,fc->category,status,GBB_BUILD_REVISION,GBB_BUILD_QUALIFIED?"true":"false",fc->sha256,(unsigned long long)ticks,eligible,*executed,stop,recent_count);
+        printf("case=%s category=%s status=%s source_revision=31510e12eea6286d36eea060a6adde755e1067aa core_revision=%s runner_revision=%s build_qualified=%s fixture_sha256=%s profile=DMG-CPU-B boot=skipped protocol=mooneye-ld-b-b ticks=%llu budget=%llu eligible=%zu executed=%zu stop=%s recent=%zu\n",
+          fc->id,fc->category,status,GBB_BUILD_REVISION,GBB_BUILD_REVISION,GBB_BUILD_QUALIFIED?"true":"false",fc->sha256,(unsigned long long)ticks,(unsigned long long)fc->budget,eligible,*executed,stop,recent_count);
         size_t start=recent_count>8?recent_count-8:0;
         for(size_t i=start;i<recent_count;i++)printf("diag time=%llu kind=%u pc=%04x opcode=%02x address=%04x value=%02x timer=%02x\n",(unsigned long long)recent[i].time_half_dots,(unsigned)recent[i].kind,recent[i].pc,recent[i].opcode,recent[i].address,recent[i].value,recent[i].timer_state);
     }
     gbb_destroy(m);return code;
 }
 
+static int run_original_tracer(const char *path) {
+    FILE *file=fopen(path,"rb");if(!file){fprintf(stderr,"invalid-fixture: cannot open ROM\n");return 2;}
+    if(fseek(file,0,SEEK_END)!=0){fclose(file);return 2;}long length=ftell(file);
+    if(length<0||length>8*1024*1024||fseek(file,0,SEEK_SET)!=0){fclose(file);fprintf(stderr,"invalid-fixture: size out of bounds\n");return 2;}
+    size_t size=(size_t)length;uint8_t *rom=malloc(size);
+    if(!rom||fread(rom,1,size,file)!=size){free(rom);fclose(file);return 2;}fclose(file);
+    gbb_instance *machine=NULL;
+    if(gbb_create(GBB_PROFILE_DMG_CPU_B,&machine)!=GBB_OK||gbb_load_rom(machine,rom,size)!=GBB_OK){free(rom);gbb_destroy(machine);fprintf(stderr,"invalid-fixture: unsupported or malformed ROM\n");return 2;}
+    free(rom);gbb_trace_record *trace=calloc(16384,sizeof(*trace));
+    if(!trace){gbb_destroy(machine);fprintf(stderr,"runner-error: trace allocation failed\n");return 2;}
+    gbb_run_result result=gbb_run(machine,UINT64_C(200000),trace,16384);uint8_t value=gbb_peek_ram(machine,0xC001);
+    const char *outcome=result.reason==GBB_STOP_LOCKUP?"lockup":result.reason==GBB_STOP_UNSUPPORTED_OPCODE?"unsupported":
+      result.reason==GBB_STOP_UNSUPPORTED_BUS?"unsupported-bus":result.reason==GBB_STOP_TRACE_FULL?"trace-exhausted":
+      result.reason==GBB_STOP_HALTED_IDLE?"halted-idle":result.reason==GBB_STOP_STOPPED?"stopped":
+      value==0xEE?"guest-failure":result.reason==GBB_STOP_BUDGET&&value==0xA5?"pass":"timeout";
+    printf("fixture=original-wram-tracer profile=DMG-CPU-B outcome=%s stop=%s half_dots=%llu trace_records=%zu\n",outcome,
+      result.reason==GBB_STOP_BUDGET?"budget":result.reason==GBB_STOP_TRACE_FULL?"trace-full":result.reason==GBB_STOP_UNSUPPORTED_BUS?"unsupported-bus":
+      result.reason==GBB_STOP_LOCKUP?"lockup":result.reason==GBB_STOP_HALTED_IDLE?"halted-idle":result.reason==GBB_STOP_STOPPED?"stopped":"unsupported-opcode",
+      (unsigned long long)result.consumed_half_dots,result.trace_count);
+    for(size_t i=0;i<result.trace_count&&i<12;i++)printf("trace time=%llu pc=%04x opcode=%02x state=A:%02x F:%02x HL:%02x%02x\n",
+      (unsigned long long)trace[i].time_half_dots,trace[i].pc,trace[i].opcode[0],trace[i].a,trace[i].f,trace[i].h,trace[i].l);
+    gbb_destroy(machine);free(trace);
+    return strcmp(outcome,"pass")==0?0:strcmp(outcome,"guest-failure")==0?1:3;
+}
+
 int main(int argc,char **argv) {
+    if(argc==2&&strncmp(argv[1],"--",2)!=0)return run_original_tracer(argv[1]);
     const char *manifest=NULL,*selected=NULL;int receipt=0,suite=0;
     for(int i=1;i<argc;i++){
         if(strcmp(argv[i],"--manifest")==0&&i+1<argc)manifest=argv[++i];
@@ -136,8 +181,8 @@ int main(int argc,char **argv) {
     size_t eligible=suite?sizeof(cases)/sizeof(cases[0]):1,executed=0;int suite_code=0;
     if(suite){
         for(size_t i=0;i<eligible;i++){int code=run_one(&cases[i],manifest,receipt,eligible,&executed);if(code!=0&&suite_code==0)suite_code=code;}
-        if(receipt)printf("suite eligible=%zu executed=%zu status=%s\n",eligible,executed,executed==eligible&&suite_code==0?"pass":"fail");
-        return executed==eligible?suite_code:2;
+        if(receipt)printf("suite eligible=%zu executed=%zu status=%s\n",eligible,executed,suite_counts_valid(eligible,executed)&&suite_code==0?"pass":"fail");
+        return suite_counts_valid(eligible,executed)?suite_code:2;
     }
     const fixture_case *fc=select_case(selected);if(!fc){fprintf(stderr,"unknown-case\n");return 2;}
     return run_one(fc,manifest,receipt,eligible,&executed);
