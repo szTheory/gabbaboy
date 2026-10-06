@@ -696,7 +696,7 @@ static void execute(gbb_instance *m, uint8_t cost) {
             case 0xF9: m->sp=hl(m); m->pc++; break;
             case 0xE9: m->pc=hl(m); break;
             case 0xF3: m->ime=0; m->ime_delay=0; m->pc++; break;
-            case 0xFB: m->ime_delay=2; m->pc++; break;
+            case 0xFB: if (m->ime_delay == 0) m->ime_delay=2; m->pc++; break;
             case 0xCB: {
                 uint8_t extension = instruction_byte(m, pc, 1);
                 execute_cb(m, pc, extension);
