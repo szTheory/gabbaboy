@@ -17,4 +17,6 @@ Each `source_closure` in `manifest.json` lists the acceptance source and every f
 
 `acceptance/instr/daa.s` identifies itself as an exhaustive DAA input/flag test and declares DMG pass. `acceptance/timer/tim00.s` declares DMG-family pass and checks 4096 Hz timer increments. `acceptance/timer/tim00_div_trigger.s` declares DMG-family pass and checks the DIV reset falling edge. All enter through the standard cartridge header with boot skipped. Their per-case protocol and finite execution budgets are in the manifest.
 
+The reviewed but excluded candidates are recorded explicitly in `manifest.json`: `acceptance/interrupts/ie_push.s` uses PPU-safe setup, and `acceptance/serial/boot_sclk_align-dmgABCmgb.s` measures boot-relative clock alignment. Manual-only, emulator-only, PPU-dependent, boot-dependent, and non-DMG/revision-inapplicable suite entries remain outside the eligible denominator.
+
 Normal build and tests consume only the checked-in `.gb` files. Reproduction requires the explicit pinned sources and WLA-DX build above; no normal test invokes the network, compiler, or assembler.

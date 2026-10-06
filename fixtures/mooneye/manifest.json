@@ -26,6 +26,16 @@
   },
   "inventory_status": "complete",
   "required_roms": ["daa.gb", "tim00.gb", "tim00_div_trigger.gb"],
+  "excluded_candidates": [
+    {
+      "source_path": "acceptance/interrupts/ie_push.s",
+      "reason": "Uses disable_ppu_safe setup; this phase excludes PPU-dependent candidates and does not claim that setup is inert in the no-PPU profile."
+    },
+    {
+      "source_path": "acceptance/serial/boot_sclk_align-dmgABCmgb.s",
+      "reason": "Checks serial clock alignment relative to boot and is explicitly boot-state-dependent; the admitted profile skips the boot ROM."
+    }
+  ],
   "fixtures": [
     {
       "id": "mooneye-acceptance-instr-daa",
