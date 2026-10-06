@@ -1,5 +1,6 @@
 #include "gabbaboy/gabbaboy.h"
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,7 +28,10 @@ static gbb_instance *load_program(const uint8_t *program, size_t length) {
     uint8_t *rom = calloc(1, 32768);
     if (rom == NULL) return NULL;
     memcpy(rom + 0x100, program, length);
+    /* E7 plus the 25 header bytes' decrements wraps the checksum to zero. */
+    rom[0x134] = 0xe7;
     fix_checksum(rom);
+    assert(rom[0x14d] == 0);
     gbb_instance *machine = NULL;
     if (gbb_create(GBB_PROFILE_DMG_CPU_B, &machine) != GBB_OK ||
         gbb_load_rom(machine, rom, 32768) != GBB_OK) {
