@@ -30,19 +30,19 @@ int main(int argc, char **argv) {
         gbb_trace_record records[256];
         gbb_run_result first = gbb_run(a, 80, records, 256);
         REQUIRE(first.consumed_half_dots == 80 && first.trace_count > 0);
-        REQUIRE(gbb_peek_ram(a, 0xA000) == 0x5A);
+        REQUIRE(gbb_peek_ram(a, 0xC000) == 0x5A);
         REQUIRE(gbb_reset(a) == GBB_OK);
-        REQUIRE(gbb_peek_ram(a, 0xA000) == 0);
+        REQUIRE(gbb_peek_ram(a, 0xC000) == 0);
         gbb_run_result reset = gbb_run(a, 32, records, 256);
         REQUIRE(reset.consumed_half_dots == 32 && records[0].pc == 0x0100 && records[0].time_half_dots == 0);
         gbb_destroy(a); gbb_destroy(b); free(rom); return 0;
     }
     if (strcmp(argv[1], "independent_instances") == 0) {
         REQUIRE(gbb_run(a, 80, NULL, 0).consumed_half_dots == 80);
-        REQUIRE(gbb_peek_ram(a, 0xA000) == 0x5A);
-        REQUIRE(gbb_peek_ram(b, 0xA000) == 0);
+        REQUIRE(gbb_peek_ram(a, 0xC000) == 0x5A);
+        REQUIRE(gbb_peek_ram(b, 0xC000) == 0);
         REQUIRE(gbb_run(b, 32, NULL, 0).consumed_half_dots == 32);
-        REQUIRE(gbb_peek_ram(b, 0xA000) == 0);
+        REQUIRE(gbb_peek_ram(b, 0xC000) == 0);
         gbb_destroy(a); gbb_destroy(b); free(rom); return 0;
     }
     if (strcmp(argv[1], "run_bounds") == 0) {

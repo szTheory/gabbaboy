@@ -5,7 +5,7 @@ SECTION "Entry", ROM0[$0100]
 
 SECTION "Program", ROM0[$0150]
 Start:
-    ld hl, $A000
+    ld hl, $C000
     ld a, $5A
     ld [hl], a
     ld a, [hl]

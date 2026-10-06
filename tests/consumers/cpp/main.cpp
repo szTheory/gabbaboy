@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
     if (error == GBB_OK && trace != nullptr) result = gbb_run(machine, UINT64_C(200000), trace, 16384);
     bool passed = error == GBB_OK && result.reason == GBB_STOP_BUDGET &&
         trace != nullptr && result.trace_count > 0 && result.trace_count <= 16384 &&
-        gbb_peek_ram(machine, 0xA001) == 0xA5;
+        gbb_peek_ram(machine, 0xC001) == 0xA5;
     gbb_destroy(machine);
     std::free(trace);
     if (!passed) std::fprintf(stderr, "C++ consumer tracer failed (error=%d, stop=%d)\n", error, result.reason);

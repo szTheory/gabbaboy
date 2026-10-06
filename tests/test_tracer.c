@@ -30,11 +30,11 @@ int main(int argc, char **argv) {
     size_t capacity = strcmp(argv[1], "trace") == 0 ? 1 : 16384;
     uint64_t budget = strcmp(argv[1], "timeout") == 0 ? 1 : UINT64_C(200000);
     gbb_run_result r = gbb_run(m, budget, trace, capacity);
-    uint8_t marker = gbb_peek_ram(m, 0xA001);
+    uint8_t marker = gbb_peek_ram(m, 0xC001);
     if (strcmp(argv[1], "success") == 0) {
         REQUIRE(marker == 0xA5 && r.reason == GBB_STOP_BUDGET && r.trace_count > 0);
     } else if (strcmp(argv[1], "failure") == 0) {
-        REQUIRE(gbb_peek_ram(m, 0xA000) == 0x00);
+        REQUIRE(gbb_peek_ram(m, 0xC000) == 0x00);
         REQUIRE(marker == 0xEE && marker != 0xA5);
     } else if (strcmp(argv[1], "unsupported") == 0) {
         REQUIRE(r.reason == GBB_STOP_UNSUPPORTED_OPCODE && marker != 0xA5);

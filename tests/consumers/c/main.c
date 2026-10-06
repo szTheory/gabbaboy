@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
     if (error == GBB_OK && trace != NULL) result = gbb_run(machine, UINT64_C(200000), trace, 16384);
     int passed = error == GBB_OK && result.reason == GBB_STOP_BUDGET &&
         trace != NULL && result.trace_count > 0 && result.trace_count <= 16384 &&
-        gbb_peek_ram(machine, 0xA001) == 0xA5;
+        gbb_peek_ram(machine, 0xC001) == 0xA5;
     gbb_destroy(machine);
     free(trace);
     if (!passed) fprintf(stderr, "C consumer tracer failed (error=%d, stop=%d)\n", error, result.reason);
