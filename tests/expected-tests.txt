@@ -75,3 +75,11 @@ diagnostics_exact
 diagnostics_short
 diagnostics_null
 diagnostics_canary
+runner_pass
+runner_fail
+runner_timeout
+runner_unsupported
+runner_missing_fixture
+runner_bad_manifest
+runner_zero_eligible
+mooneye_required_suite
