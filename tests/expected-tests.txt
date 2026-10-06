@@ -57,6 +57,8 @@ fixture_digest
 installed_runner_smoke
 installed_consumer_c
 installed_consumer_cpp
+installed_consumer_phase2_c
+installed_consumer_phase2_cpp
 preview_package_smoke
 timer_guest_overflow
 timer_mid_instruction

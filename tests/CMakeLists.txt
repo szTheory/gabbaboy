@@ -182,6 +182,15 @@ if(GBB_TEST_INSTALL_PREFIX AND EXISTS "${GBB_TEST_INSTALL_PREFIX}")
       -DGBB_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}
       -DGBB_CONFIGURATION=$<CONFIG>
       -P ${PROJECT_SOURCE_DIR}/cmake/RunInstalledConsumer.cmake)
+    add_test(NAME installed_consumer_phase2_${language}
+      COMMAND ${CMAKE_COMMAND}
+        -DGBB_INSTALL_PREFIX=${GBB_TEST_INSTALL_PREFIX_ABSOLUTE}
+        -DGBB_CONSUMER_SOURCE=${PROJECT_SOURCE_DIR}/tests/consumers/${language}
+        -DGBB_CONSUMER_BINARY=${PROJECT_BINARY_DIR}/consumer-phase2-${language}
+        -DGBB_LANGUAGE=${language}
+        -DGBB_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}
+        -DGBB_CONFIGURATION=$<CONFIG>
+        -P ${PROJECT_SOURCE_DIR}/cmake/RunInstalledConsumer.cmake)
   endforeach()
 endif()
 

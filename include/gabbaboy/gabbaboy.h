@@ -102,12 +102,17 @@ gbb_error gbb_reset(gbb_instance *instance);
  * A failed replacement leaves the current ROM and machine state unchanged.
  * Supports only exact-size 32 KiB ROM-only images with no cartridge RAM. */
 gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_size);
-/* Copies a nondecreasing timestamp batch into a fixed 64-event per-instance
- * queue. Ties retain caller order. STOP_WAKE value 1 represents a modeled
- * selected input-line transition; SERIAL_EDGE value is the bit sampled in.
- * Empty batches, including NULL/0, succeed. Invalid pointers return
- * GBB_INVALID_ARGUMENT; malformed, past or unordered events return
- * GBB_INVALID_EVENT; excess capacity returns GBB_EVENT_QUEUE_FULL. */
+/* Copies events into a fixed 64-event per-instance queue. Timestamps are
+ * absolute half-dot ticks and must be nondecreasing within the batch and no
+ * earlier than the instance's current time. Equal timestamps keep caller
+ * order. STOP_WAKE value 1 represents a modeled selected input-line
+ * transition; SERIAL_EDGE value is the input bit sampled by the disconnected
+ * serial endpoint. This is not full JOYP selection or a host wall-clock input
+ * API. Admission is atomic: invalid batches and batches exceeding remaining
+ * capacity append nothing. Empty batches, including NULL/0, succeed. Invalid
+ * pointers return GBB_INVALID_ARGUMENT; malformed, past or unordered events
+ * return GBB_INVALID_EVENT; excess capacity returns GBB_EVENT_QUEUE_FULL.
+ * Consumed events free queue capacity. */
 gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events, size_t count);
 /* Runs whole supported instructions. GBB_STOP_HALTED_IDLE means the run has
  * consumed eligible idle ticks and the CPU remains halted; GBB_STOP_STOPPED
@@ -116,7 +121,10 @@ gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events
  * oscillator work remains frozen. An accepted wake is applied at its timestamp
  * before another CPU fetch. The caller's budget bounds all idle progression.
  * Budget/consumed values are uint64 half-dot ticks. An instruction is
- * preflighted and won't start unless its full cost fits. Trace records are optional caller-owned storage; the core
+ * preflighted and won't start unless its full cost fits. GBB_STOP_NO_PROGRESS
+ * is distinct from STOPPED, HALTED_IDLE, LOCKUP, UNSUPPORTED_BUS,
+ * INVALID_STATE, OUTPUT_FULL and normal GBB_STOP_BUDGET completion. Trace
+ * records are optional caller-owned storage; the core
  * writes no more than capacity, allocates nothing, and never overwrites prior
  * records. trace=NULL is valid only with capacity=0. Trace bytes are snapshots
  * at instruction boundaries and remain owned by the caller. */
@@ -127,7 +135,8 @@ gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
  * is measured in records, records are chronological, and actual written
  * counts are returned. The core allocates/formats nothing. Diagnostics reserve
  * a complete operation before it mutates state; an insufficient reserve stops
- * with GBB_STOP_OUTPUT_FULL and writes no record for that operation. */
+ * with GBB_STOP_OUTPUT_FULL and writes no record for that operation. Trace and
+ * diagnostic counts report records written by this call. */
 gbb_run_result gbb_run_ex(gbb_instance *instance, uint64_t budget_half_dots,
                           gbb_trace_record *trace, size_t trace_capacity,
                           gbb_diagnostic_record *diagnostics,
