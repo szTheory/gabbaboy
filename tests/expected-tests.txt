@@ -49,3 +49,5 @@ installed_runner_smoke
 installed_consumer_c
 installed_consumer_cpp
 preview_package_smoke
+timer_guest_overflow
+timer_mid_instruction
