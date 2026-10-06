@@ -126,8 +126,8 @@ fixture digest, exact core/runner revision, profile, boot mode, protocol,
 consumed ticks, finite budget, eligible/executed counts and recent bounded
 diagnostics. `mooneye_required_suite` and the per-case CTests run offline
 against checked-in ROM bytes. Fixture
-reproduction is a separate manually dispatched workflow using the pinned
-WLA-DX source revision; it is not a routine PR network dependency.
+reproduction runs in a separate workflow using pinned RGBDS and WLA-DX
+source revisions. Ordinary core tests use checked-in bytes and remain offline.
 
 ## Continuous integration and fixture reproduction
 
@@ -140,8 +140,9 @@ UndefinedBehaviorSanitizer. `cmake-floor-3.25.3`
 downloads the official Linux x64 archive, verifies its published SHA-256, and
 checks configure, build, test, install, relocation, and consumer use. The
 `required-native` aggregate fails if any required evidence job is missing,
-skipped, failed, or timed out. Fixture reproduction uses pinned WLA-DX and is
-manually dispatched so ordinary pull requests remain offline.
+skipped, failed, or timed out. The separate `fixture-repro` workflow reproduces the original tracer and
+all eligible Mooneye ROMs on pull requests, pushes, and manual dispatch.
+Its network and assembler preparation stay outside the ordinary test jobs.
 
 ### Pull requests and preview packages
 
