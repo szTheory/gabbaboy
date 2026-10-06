@@ -9,7 +9,7 @@ created: "2026-10-06"
 
 # Phase 2 — Validation Strategy
 
-This records the validation contract and execution audit. Research is in [02-RESEARCH.md](02-RESEARCH.md); [02-PLAN-CHECK.md](02-PLAN-CHECK.md) records independent plan review. The audit is finished, but Nyquist compliance and Wave 0 completion remain false: five correctness/applicability gaps remain after independent review and goal verification.
+This records the validation contract and execution audit. Research is in [02-RESEARCH.md](02-RESEARCH.md); [02-PLAN-CHECK.md](02-PLAN-CHECK.md) records independent plan review. The audit is finished, but Nyquist compliance and Wave 0 completion remain false: seven correctness/applicability/hosted gaps remain after independent review and goal verification.
 
 ## Test Infrastructure
 
@@ -56,8 +56,8 @@ Commands below use `cmake --preset phase1 && cmake --build --preset phase1 && ct
 | 02-05-T2 | 05 | 5 | CPU-03,04 | T-02-09,10,11 | Source-qualified selector/reload/race/serial and unsupported overlap | `^(timer_(selectors\|div_write\|tac_write\|tima_collision\|tma_collision)\|serial_(internal_disconnected\|external_pending\|unqualified_overlap))$` | `tests/test_serial.c` created T2; per-instance timed bus observer from 02-02 | pass |
 | 02-06-T1 | 06 | 6 | CPU-02,04 | T-02-12 | STOP DIV reset, frozen devices, bounded master-time wait/wake, zero/exact budget | `^event_(stop_wake\|boundary)$` | `tests/test_events.c` created T1 | pass |
 | 02-06-T2 | 06 | 6 | CPU-03,04 | T-02-12,13 | Atomic queue/partition/external edges/overflow and existing trace canary | `^(event_(queue_order\|queue_atomic\|partition\|deadline_inside\|external_serial_edges\|time_overflow)\|run_output_capacity)$` | events tests extended T2; diagnostics remain 02-08 | pass |
-| 02-07-T1 | 07 | 7 | CPU-01,05 | T-02-14,15,SC | Pinned WLA CPU ROM, digest, real guest | `cmake -DGBB_MOONEYE_DIR=fixtures/mooneye -P cmake/VerifyMooneye.cmake` and finite runner outcome | `fixtures/mooneye/daa.gb` and verifier created T1 | digest/reproduction pass; protocol blocked |
-| 02-07-T2 | 07 | 7 | CPU-03,05 | T-02-14,15,SC | Nonzero CPU/timer eligible set and digests | `cmake -DGBB_MOONEYE_DIR=fixtures/mooneye -P cmake/VerifyMooneye.cmake` | timer ROMs created T2 | digest/reproduction pass; protocol blocked |
+| 02-07-T1 | 07 | 7 | CPU-01,05 | T-02-14,15,SC | Pinned WLA CPU ROM, digest, real guest | `cmake -DGBB_MOONEYE_DIR=fixtures/mooneye -P cmake/VerifyMooneye.cmake` and finite runner outcome | `fixtures/mooneye/daa.gb` and verifier created T1 | digest pass; hosted reproduction and protocol blocked |
+| 02-07-T2 | 07 | 7 | CPU-03,05 | T-02-14,15,SC | Nonzero CPU/timer eligible set and digests | `cmake -DGBB_MOONEYE_DIR=fixtures/mooneye -P cmake/VerifyMooneye.cmake` | timer ROMs created T2 | digest pass; hosted reproduction and protocol blocked |
 | 02-07-T3 | 07 | 7 | CPU-05 | T-02-14,15 | Offline corpus inventory CTest registration | `^mooneye_(fixture_digest\|eligible_inventory)$` | CTest/inventory created T3 | pass |
 | 02-08-T1 | 08 | 8 | CPU-04,05 | T-02-17,18 | Direct diagnostic zero/exact/short/null/canary and repeatable ROM receipt | `^diagnostics_(zero\|exact\|short\|null\|canary)$` plus two-run Python receipt command in plan | `tests/test_diagnostics.c` created and registered T1; runner controls T2 | partial — required corpus fails |
 | 02-08-T2 | 08 | 8 | CPU-05 | T-02-16,17 | Four status controls; fail-closed suite | `^(runner_(pass\|fail\|timeout\|unsupported\|missing_fixture\|bad_manifest\|zero_eligible)\|mooneye_required_suite)$` | runner tests extended T2 | partial — required corpus fails |
@@ -108,8 +108,10 @@ No routine human UAT is required. The remaining corpus issue is a source/impleme
 
 | Metric | Count |
 |---|---|
-| Gaps found | 5 |
+| Gaps found | 7 |
 | Resolved | 0 |
-| Escalated | 5 |
+| Escalated | 7 |
 
-Independent code review adds four core gaps: startup F, RET/RETI stack phases, consecutive EI, and interrupt diagnostic ordering. The initial corpus gap plus these four are the five distinct entries in the verification report. Named per-task passes above describe the registered cases; they do not establish the uncovered behaviors. All CPU requirements remain pending.
+Independent code review adds four core gaps: startup F, RET/RETI stack phases, consecutive EI, and interrupt diagnostic ordering. The initial corpus gap plus these four and the subsequent Windows manifest/reproduction failures are the seven distinct entries in the verification report. Named per-task passes above describe the registered cases; they do not establish the uncovered behaviors. All CPU requirements remain pending.
+
+Hosted qualification at PR head `a91d8e7` is failing: Linux/macOS native 95/99, ASan/UBSan and CMake floor 90/94, Windows 93/99. Windows reports invalid-manifest for two negative controls; the Mooneye reproduction job reports different DAA bytes. Earlier local reproduction does not establish cross-host reproduction. See [hosted evidence](02-HOSTED-EVIDENCE.md); both causes remain unresolved.

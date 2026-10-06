@@ -4,7 +4,7 @@ milestone: v0.1
 current_phase: 02
 current_phase_name: DMG CPU, Bus, and Time
 status: gaps_found
-stopped_at: Phase 2 execution and independent verification finished; five blockers require gap planning
+stopped_at: Phase 2 execution and independent verification finished; seven blockers require gap planning
 last_updated: "2026-10-06T21:50:17Z"
 last_activity: 2026-10-06
 last_activity_desc: Nine plans executed; Phase 2 verification returned gaps_found
@@ -31,7 +31,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 Phase: GB-02 (DMG CPU, Bus, and Time) — GAPS FOUND
 Plan: 9 of 9
 Status: Nine plans executed; independent verification blocks phase completion
-Last activity: 2026-10-06 — Five review/verification blockers recorded; all CPU requirements remain pending
+Last activity: 2026-10-06 — Seven review/verification/hosted blockers recorded; all CPU requirements remain pending
 
 Progress: [██░░░░░░░░] 17% of milestone phases complete; Phase 1 has 5/5 plans and passed verification
 
@@ -39,7 +39,7 @@ Progress: [██░░░░░░░░] 17% of milestone phases complete; Pha
 
 - Total unique plans executed: 14; plan execution does not imply phase qualification.
 - Average duration / total execution time: 27 min / 377 min recorded for Phase 1 Plans 01–05 and Phase 2 Plans 01–09.
-- Per-phase metrics / recent trend: Phase 1 complete; all nine Phase 2 plans executed, with five corrective gaps remaining.
+- Per-phase metrics / recent trend: Phase 1 complete; all nine Phase 2 plans executed, with seven corrective gaps remaining.
 - Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. Current Linux normal and ASan/UBSan suites each fail four of 94 tests; relocated-install qualification fails four of 99. Earlier corpus passes are superseded by the corrected unsupported-read guard.
 
 **Per-Plan Metrics:**
@@ -115,7 +115,7 @@ None outside the roadmap.
 
 - Independent [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md) returned `gaps_found`: startup F, RET/RETI stack phases, consecutive EI, interrupt diagnostic ordering, and corpus admission/completion. No CPU requirement is complete.
 - At source `c583e33`, Linux normal and ASan/UBSan runs each executed 94 cases with four failures and no skips; no sanitizer finding was reported. The relocated install executed 99 cases with the same four failures; all five installed API checks passed. Prior-phase regression selection passed 24/24. Required corpus IDs remain fixed at three.
-- Required Mooneye cases read PPU LY before assertions/result protocol, contrary to Phase 2's PPU exclusion. T-02-15 remains open; fresh exact-revision hosted qualification is not green.
+- Required Mooneye cases read PPU LY before assertions/result protocol, contrary to Phase 2's PPU exclusion. T-02-14/15 remain open. [Hosted evidence](phases/GB-02-dmg-cpu-bus-and-time/02-HOSTED-EVIDENCE.md) adds Windows manifest rejection and a DAA reproduction mismatch; required CI failed at PR head `a91d8e7`.
 - [Draft PR #2](https://github.com/szTheory/gabbaboy/pull/2) publishes the Phase 2 implementation and gap reports for review, stacked on Phase 1 PR #1. Retarget and requalify after the foundation lands; no merge or release. Boundary triage found no open issues; PR #1 remains open.
 - PR #1 remains open for owner review at exact hosted SHA `9f1df9bd0a70e50033f7d8cbcbff778e3bfd94e3`. Required contexts passed; both Linux/macOS preview packages passed exact digest/source/consumer verification and expire 2026-10-17T19:19Z. They are temporary artifacts, not releases.
 - Native host support floors, signing, and live Playstead integration remain unverified for later release/adoption work.
@@ -127,7 +127,7 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 ## Session Continuity
 
 Last session: 2026-10-06
-Stopped at: Phase 2 execution and independent review/verification finished with five blockers
+Stopped at: Phase 2 execution and independent review/verification finished with seven blockers
 Resume file: .planning/.continue-here.md
 Next command in fresh context: $gsd-plan-phase 2 --gaps
 Continuation note: [.continue-here.md](.continue-here.md)

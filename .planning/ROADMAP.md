@@ -57,7 +57,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. Equal timestamped inputs and elapsed emulated time produce equal supported state/output across different run partitions; LCD-off, HALT/STOP, lockup, and full output capacity return within the caller's bounded contract. (CPU-04)
 5. A headless run reports pass/fail/timeout/unsupported against a pinned eligible CPU/timer corpus with model/boot/protocol identity and sufficient retained trace evidence to reproduce failures. (CPU-05)
 
-**Plans**: 9/9 plans executed in 9 dependency-ordered waves; independent verification found five blockers. Phase completion and CPU-01..05 remain pending. See [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md). Next command: `$gsd-plan-phase 2 --gaps`.
+**Plans**: 9/9 plans executed in 9 dependency-ordered waves; independent verification and hosted evidence found seven blockers. Phase completion and CPU-01..05 remain pending. See [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md). Next command: `$gsd-plan-phase 2 --gaps`.
 **Wave 1**
 - [x] 02-01-PLAN.md — ROM-only bus and WRAM tracer
 

@@ -2,7 +2,7 @@
 phase: "GB-02"
 slug: "dmg-cpu-bus-and-time"
 status: blocked
-threats_open: 1
+threats_open: 2
 asvs_level: 1
 created: "2026-10-06"
 ---
@@ -38,7 +38,7 @@ Guest ROM/opcodes and caller timestamps cross into instance state; finite output
 | T-02-12 | Tampering | event queue | high | mitigate | Atomic batch validation, fixed capacity and tie-order tests. Evidence: matching focused tests and current source boundary. | closed |
 | T-02-13 | Denial of service | uint64 time/output | high | mitigate | Checked arithmetic, preflighted slots, canaries and finite progress tests. Evidence: matching focused tests and current source boundary. | closed |
 | T-02-SC (02-06) | Tampering | package installs | low | accept | Plan-authored acceptance: no package-manager install in core tasks; ordinary test jobs use checked-in bytes. Explicit pinned fixture/tool preparation stays in separate reproduction workflow. | closed |
-| T-02-14 | Tampering | fixture bytes | high | mitigate | Immutable source/builder revisions, SHA-256 and byte reproduction. Evidence: matching focused tests and current source boundary. | closed |
+| T-02-14 | Tampering | fixture bytes | high | mitigate | Pins and stored digests are recorded, but hosted DAA reproduction differs at byte 335; timer comparisons are not reached. Cross-host reproduction is not qualified. | open |
 | T-02-15 | Repudiation | asset license/model claim | high | mitigate | Rights and pins recorded, but all required ROMs read unsupported LY before their advertised completion protocol. Runtime qualification contradicts phase applicability; source-qualified repair required. | open |
 | T-02-SC (02-07) | Tampering | WLA-DX tool preparation | high | mitigate | Pinned immutable revision, isolated temp build and verified archive/source; no package-manager install or ordinary network tests. Evidence: matching focused tests and current source boundary. | closed |
 | T-02-16 | Tampering | corpus denominator | high | mitigate | Required nonzero immutable IDs, exact executed set, negative skip controls. Evidence: matching focused tests and current source boundary. | closed |
@@ -57,8 +57,8 @@ The seven low-severity package-install entries were accepted explicitly in their
 
 | Date | Total | Closed | Blocking open | Evidence |
 |---|---|---|---|---|
-| 2026-10-06 | 29 | 28 | 1 | Typed L1 auditor, corrective guest regressions, source-audited common reporting path, fresh Linux normal/sanitizer execution |
+| 2026-10-06 | 29 | 27 | 2 | Typed L1 auditor, corrective regressions, source-audited reporting path, local execution and failing hosted evidence |
 
 ## Remaining Gate
 
-T-02-15 remains high-severity OPEN. DAA stops at PC `6958` and the timer cases at PC `4BEB`, executing `F0 44` (LY read). The shared `quit` path probes PPU before its callback and result breakpoint. The fixed three-case corpus is retained, and four required CTests fail. Source metadata and byte reproduction are not sufficient runtime eligibility evidence. See `02-VALIDATION.md` and `fixtures/mooneye/SOURCES.md`. Do not complete Phase 2 or advance Phase 3 until qualified.
+T-02-14 and T-02-15 remain high-severity OPEN. DAA stops at PC `6958` and the timer cases at PC `4BEB`, executing `F0 44` (LY read). The shared `quit` path probes PPU before its callback and result breakpoint. The fixed three-case corpus is retained, and four required CTests fail. Hosted reproduction also fails and its cause is unresolved. Source metadata and earlier local reproduction are not sufficient eligibility evidence. See `02-VALIDATION.md`, `02-HOSTED-EVIDENCE.md`, and `fixtures/mooneye/SOURCES.md`. Do not complete Phase 2 or advance Phase 3 until qualified.
