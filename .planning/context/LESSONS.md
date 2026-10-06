@@ -36,6 +36,30 @@ Status: observed / reproduced / adopted / superseded
 
 The implementation and planning lessons follow; retain their distinct evidence classes.
 
+### GB-CORPUS-001 / 2026-10-06 / Phase 2 verification
+
+- **Cause and evidence:** A read guard covered only some addressing families; other unsupported reads returned `FF`. This let three CPU/timer ROMs traverse an unsupported PPU reporting dependency and appeared to qualify a corpus excluded by the phase contract.
+- **Remedy:** Preflight every instruction/fetch/conditional-stack read, reject unsupported access without partial mutation, and audit the whole fixture path through assertion callbacks and result reporting. Keep failed IDs and denominator intact while planning a qualified completion path.
+- **Applies when:** A narrow emulator or protocol implementation admits third-party diagnostics with shared setup/reporting code.
+- **Verification:** Corrective read-family, wrap and HALT regressions pass. At `c583e33`, normal and sanitizer suites each fail four of 94 cases; all three required ROMs stop at `F0 44` before their result protocol. Prior corpus passes are superseded, not completion evidence.
+- **Status:** Boundary defect corrected; corpus admission/completion remains open in CR-05 and T-02-15.
+
+### GB-CI-003 / 2026-10-06 / Failed test inventories
+
+- **Cause and evidence:** Exact testcase names alone allowed a synthetic report containing a failed testcase to pass the inventory checker.
+- **Remedy:** Reject JUnit failure and error elements before accepting exact nonempty names and no skips. Set an explicit CMake policy baseline in standalone verification scripts.
+- **Applies when:** CI uses a second report parser to certify mandatory test execution.
+- **Verification:** Synthetic failure/error reports now return nonzero; the passing control returns zero. Current failing corpus reports are rejected. The CMake 3.28 script-mode fixture checks execute after the 3.25 policy baseline correction.
+- **Status:** Reproduced and corrected in `c583e33`.
+
+### GB-CPU-001 / 2026-10-06 / Instruction matrices
+
+- **Cause and evidence:** Broad opcode matrices asserted totals and final state but missed RET/RETI bus phases, consecutive EI, ROM-dependent startup flags, and interrupt diagnostic chronology. Independent source review found all four gaps while registered focused cases passed.
+- **Remedy:** Qualify transition and timed-access claims with independent sequences, including device deadlines inside CPU operations and consecutive control instructions.
+- **Applies when:** Instruction totals or final registers stand in for internal observable timing behavior.
+- **Verification:** CR-01..04 are structured in the current goal report and remain open; no passing targeted regression yet closes them.
+- **Status:** Observed; gap planning required.
+
 ### GB-FIXTURE-001 / 2026-10-06 / Phase 2 fixture admission
 
 - **Cause and evidence:** Mooneye's root MIT license did not close redistribution rights for every included asset. The pinned common include identifies Darkrose's font and links to an asset page, but the pinned suite tree has no font source or font-specific license.

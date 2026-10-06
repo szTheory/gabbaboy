@@ -3,12 +3,12 @@ gsd_state_version: "1.0"
 milestone: v0.1
 current_phase: 02
 current_phase_name: DMG CPU, Bus, and Time
-status: executing
-stopped_at: Completed GB-02-09-PLAN.md; Phase 2 implementation ready for independent verification
-last_updated: "2026-10-06T21:06:00.537Z"
+status: gaps_found
+stopped_at: Phase 2 execution and independent verification finished; five blockers require gap planning
+last_updated: "2026-10-06T21:50:17Z"
 last_activity: 2026-10-06
-last_activity_desc: Plan GB-02-08 complete; Phase GB-02 remains in progress
-state_head: da876a654a3306e44794b2cec7e90b3bb607bee9
+last_activity_desc: Nine plans executed; Phase 2 verification returned gaps_found
+state_head: c583e338a48f70e83573da700722dcbefa4b705a
 progress:
   total_phases: 6
   completed_phases: 1
@@ -28,19 +28,19 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 
 ## Current Position
 
-Phase: GB-02 (DMG CPU, Bus, and Time) — EXECUTING
+Phase: GB-02 (DMG CPU, Bus, and Time) — GAPS FOUND
 Plan: 9 of 9
-Status: Executing Phase GB-02
-Last activity: 2026-10-06 — Plan GB-02-08 complete; Phase GB-02 remains in progress
+Status: Nine plans executed; independent verification blocks phase completion
+Last activity: 2026-10-06 — Five review/verification blockers recorded; all CPU requirements remain pending
 
 Progress: [██░░░░░░░░] 17% of milestone phases complete; Phase 1 has 5/5 plans and passed verification
 
 ## Performance Metrics
 
-- Total plans completed: 13
-- Average duration / total execution time: 28 min / 369 min recorded for Phase 1 Plans 01–05 and Phase 2 Plans 01–08.
-- Per-phase metrics / recent trend: Phase 1 Plans 01–05 complete; Phase 2 Plans 01–08 complete, with one implementation plan remaining.
-- Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline; bounded API and offline fixture qualification have local CTest evidence (90/90 after Plan 02-08).
+- Total unique plans executed: 14; plan execution does not imply phase qualification.
+- Average duration / total execution time: 27 min / 377 min recorded for Phase 1 Plans 01–05 and Phase 2 Plans 01–09.
+- Per-phase metrics / recent trend: Phase 1 complete; all nine Phase 2 plans executed, with five corrective gaps remaining.
+- Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. Current Linux normal and ASan/UBSan suites each fail four of 94 tests; relocated-install qualification fails four of 99. Earlier corpus passes are superseded by the corrected unsupported-read guard.
 
 **Per-Plan Metrics:**
 
@@ -57,8 +57,6 @@ Progress: [██░░░░░░░░] 17% of milestone phases complete; Pha
 | Phase 02 P04 | 16min | 2 tasks | 7 files |
 | Phase GB-02 P05 | 18 | 2 tasks | 5 files |
 | Phase GB-02 P06 | 6 min | 2 tasks | 7 files |
-| Phase GB-02 P06 | 6min | 2 tasks | 7 files |
-| Phase GB-02 P08 | 8 min | 2 tasks | 10 files |
 | Phase GB-02 P07 | 20 | 3 tasks | 12 files |
 | Phase GB-02 P08 | 8 min | 2 tasks | 10 files |
 | Phase GB-02 P09 | 8 min | 2 tasks | 10 files |
@@ -100,13 +98,14 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-02]: STOP waits advance only the bounded master timeline; oscillator-driven CPU, divider, timer, and internal serial state stays frozen.
 - [Phase GB-02]: Timestamped input uses a fixed 64-event queue with atomic admission and stable caller order for equal timestamps.
 - [Phase GB-02]: The source-qualified eligible denominator remains fixed regardless of emulator outcomes.
-- [Phase GB-02]: Replace the unlicensed Mooneye font with an original same-size zero asset while preserving hardware-test logic.
+- [Phase GB-02]: Replace the separately unqualified Mooneye font asset with an original same-size zero asset while preserving hardware-test logic.
 - [Phase GB-02]: The tracer-only preparation runner does not qualify Mooneye guests; strict protocol-aware results belong to Plan 02-08.
 - [Phase GB-02]: LD B,B remains an ordinary CPU instruction; the host runner alone classifies Mooneye register results.
 - [Phase GB-02]: DAA runner budget is 2000000 half-dots based on the pinned source's 4096-case workload and 1343488-half-dot minimum.
 - [Phase GB-02]: The strict eligible corpus denominator remains one CPU and two timer fixtures regardless of emulator outcome.
 - [Phase GB-02]: Installed C and C++ consumers verify the fixed timestamped-event queue, bounded results, and caller-owned diagnostics through the relocated public package.
-- [Phase GB-02]: Fixture reproduction is manually dispatched with pinned WLA-DX and Mooneye sources; ordinary test inventories remain offline and use checked-in ROM bytes.
+- [Phase GB-02]: Separate fixture reproduction runs on PR/push/manual triggers with pinned tools and sources; ordinary test inventories remain offline and use checked-in ROM bytes.
+- [Phase GB-02]: Do not fabricate LY or bypass assertions to close corpus failures; valid digests/reproduction do not prove phase applicability.
 
 ### Pending Todos
 
@@ -114,8 +113,9 @@ None outside the roadmap.
 
 ### Blockers/Concerns
 
-- Phase 2 must establish CPU behavior and hardware-qualified memory mapping; the Phase 1 tracer's fixture-only RAM behavior is not conformance evidence.
-- Phase 2 planning passed independent review and 17/17 requirement/decision gap checks. All implementation, fixture admission, installed-consumer, sanitizer and exact-revision hosted results remain pending.
+- Independent [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md) returned `gaps_found`: startup F, RET/RETI stack phases, consecutive EI, interrupt diagnostic ordering, and corpus admission/completion. No CPU requirement is complete.
+- At source `c583e33`, Linux normal and ASan/UBSan runs each executed 94 cases with four failures and no skips; no sanitizer finding was reported. The relocated install executed 99 cases with the same four failures; all five installed API checks passed. Prior-phase regression selection passed 24/24. Required corpus IDs remain fixed at three.
+- Required Mooneye cases read PPU LY before assertions/result protocol, contrary to Phase 2's PPU exclusion. T-02-15 remains open; fresh exact-revision hosted qualification is not green.
 - PR #1 remains open for owner review at exact hosted SHA `9f1df9bd0a70e50033f7d8cbcbff778e3bfd94e3`. Required contexts passed; both Linux/macOS preview packages passed exact digest/source/consumer verification and expire 2026-10-17T19:19Z. They are temporary artifacts, not releases.
 - Native host support floors, signing, and live Playstead integration remain unverified for later release/adoption work.
 
@@ -125,11 +125,11 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-06T21:06:00.500Z
-Stopped at: Completed GB-02-09-PLAN.md; Phase 2 implementation ready for independent verification
+Last session: 2026-10-06
+Stopped at: Phase 2 execution and independent review/verification finished with five blockers
 Resume file: .planning/.continue-here.md
-Next command in fresh context: $gsd-execute-phase 2
+Next command in fresh context: $gsd-plan-phase 2 --gaps
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: Phase 2 Plan 02-08 execution — caller-owned diagnostics and strict manifest-driven Mooneye qualification. Phase 2 remains in progress; Phase 1 remains the last completed implementation phase.
-Next stage: Phase 2 Plan 02-09 — installed consumer handoff and complete offline CI qualification. Run `$gsd-execute-phase 2` to select the remaining plan from current artifacts.
-Following implementation phase: Phase 3 — Visible Interactive DMG, only after Phase 2 verification and owner direction. Both auto-advance flags remain false.
+Completed workflow stage: Phase 2 plan execution (9/9) and independent review/verification. The phase itself remains incomplete; Phase 1 is the last completed implementation phase.
+Next stage: Phase 2 gap planning from the current verification report. Run `$gsd-plan-phase 2 --gaps`; reuse existing research and decisions.
+Next implementation phase: Phase 3 — Visible Interactive DMG, paused until Phase 2 gaps and required checks are closed and the owner chooses to continue. Both auto-advance flags remain false.
