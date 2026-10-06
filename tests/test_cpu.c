@@ -65,9 +65,63 @@ static int conditional_budget(void) {
     return 0;
 }
 
+static int base_matrix(void) {
+    static const uint8_t holes[] = {0xd3,0xdb,0xdd,0xe3,0xe4,0xeb,0xec,0xed,0xf4,0xfc,0xfd};
+    uint8_t rom[32768];
+    for (unsigned op = 0; op < 256; ++op) {
+        uint8_t program[] = {(uint8_t)op,0x00,0x01,0x00};
+        make_rom(rom,program,sizeof(program));
+        gbb_instance *m=NULL;
+        REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B,&m)==GBB_OK);
+        REQUIRE(gbb_load_rom(m,rom,sizeof(rom))==GBB_OK);
+        gbb_run_result r=gbb_run(m,64,NULL,0);
+        int illegal=0; for(size_t i=0;i<sizeof(holes);++i) if(holes[i]==op) illegal=1;
+        if(illegal) REQUIRE(r.reason==GBB_STOP_LOCKUP && r.lockup_pc==0x100 && r.lockup_opcode==op);
+        else REQUIRE(r.reason==GBB_STOP_BUDGET && r.consumed_half_dots>0);
+        gbb_destroy(m);
+    }
+    return 0;
+}
+
+static int illegal_lockup(void) {
+    uint8_t rom[32768]; const uint8_t program[]={0xd3,0x00}; make_rom(rom,program,sizeof(program));
+    gbb_instance *m=NULL; REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B,&m)==GBB_OK); REQUIRE(gbb_load_rom(m,rom,sizeof(rom))==GBB_OK);
+    gbb_run_result first=gbb_run(m,100,NULL,0);
+    REQUIRE(first.reason==GBB_STOP_LOCKUP && first.consumed_half_dots==0 && first.lockup_pc==0x100 && first.lockup_opcode==0xd3);
+    gbb_run_result again=gbb_run(m,100,NULL,0);
+    REQUIRE(again.reason==GBB_STOP_LOCKUP && again.consumed_half_dots==0 && again.lockup_pc==first.lockup_pc && again.lockup_opcode==first.lockup_opcode);
+    REQUIRE(gbb_reset(m)==GBB_OK);
+    gbb_run_result reset=gbb_run(m,8,NULL,0);
+    REQUIRE(reset.reason==GBB_STOP_LOCKUP && reset.lockup_pc==0x100);
+    gbb_destroy(m); return 0;
+}
+
+static int flags_edges(void) {
+    uint8_t rom[32768]; const uint8_t program[]={0x3e,0x0f,0xc6,0x01,0x00}; make_rom(rom,program,sizeof(program));
+    gbb_instance *m=NULL; REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B,&m)==GBB_OK); REQUIRE(gbb_load_rom(m,rom,sizeof(rom))==GBB_OK);
+    gbb_trace_record trace[3]={{0}}; gbb_run_result r=gbb_run(m,40,trace,3);
+    REQUIRE(r.consumed_half_dots==40 && r.trace_count==3);
+    REQUIRE(trace[2].a==0x10 && trace[2].f==0x20 && (trace[2].f&0x0f)==0);
+    gbb_destroy(m); return 0;
+}
+
+static int timed_access(void) {
+    uint8_t rom[32768]; const uint8_t program[]={0x02,0x00}; make_rom(rom,program,sizeof(program));
+    gbb_instance *m=NULL; REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B,&m)==GBB_OK); REQUIRE(gbb_load_rom(m,rom,sizeof(rom))==GBB_OK);
+    gbb_test_bus_event events[4]={{0}}; gbb_test_observer_set(m,events,4);
+    gbb_run_result r=gbb_run(m,16,NULL,0);
+    REQUIRE(r.consumed_half_dots==16 && gbb_test_observer_count(m)==1);
+    REQUIRE(events[0].time_half_dots==8 && events[0].address==0x0013 && events[0].access==2 && events[0].value==1);
+    gbb_destroy(m); return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
     if (strcmp(argv[1], "call_stack") == 0) return call_stack();
     if (strcmp(argv[1], "conditional_budget") == 0) return conditional_budget();
+    if (strcmp(argv[1], "base_matrix") == 0) return base_matrix();
+    if (strcmp(argv[1], "illegal_lockup") == 0) return illegal_lockup();
+    if (strcmp(argv[1], "flags_edges") == 0) return flags_edges();
+    if (strcmp(argv[1], "timed_access") == 0) return timed_access();
     return 2;
 }

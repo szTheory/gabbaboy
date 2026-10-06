@@ -28,8 +28,8 @@ int main(int argc, char **argv) {
     REQUIRE(gbb_load_rom(b, rom, rom_size) == GBB_OK);
     if (strcmp(argv[1], "instance_lifecycle") == 0) {
         gbb_trace_record records[256];
-        gbb_run_result first = gbb_run(a, 80, records, 256);
-        REQUIRE(first.consumed_half_dots == 80 && first.trace_count > 0);
+        gbb_run_result first = gbb_run(a, 88, records, 256);
+        REQUIRE(first.consumed_half_dots == 88 && first.trace_count > 0);
         REQUIRE(gbb_peek_ram(a, 0xC000) == 0x5A);
         REQUIRE(gbb_reset(a) == GBB_OK);
         REQUIRE(gbb_peek_ram(a, 0xC000) == 0);
@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
         gbb_destroy(a); gbb_destroy(b); free(rom); return 0;
     }
     if (strcmp(argv[1], "independent_instances") == 0) {
-        REQUIRE(gbb_run(a, 80, NULL, 0).consumed_half_dots == 80);
+        REQUIRE(gbb_run(a, 88, NULL, 0).consumed_half_dots == 88);
         REQUIRE(gbb_peek_ram(a, 0xC000) == 0x5A);
         REQUIRE(gbb_peek_ram(b, 0xC000) == 0);
         REQUIRE(gbb_run(b, 32, NULL, 0).consumed_half_dots == 32);
@@ -64,6 +64,18 @@ int main(int argc, char **argv) {
         gbb_run_result full = gbb_run(a, 64, records, 1);
         REQUIRE(full.reason == GBB_STOP_TRACE_FULL && full.trace_count == 1 && full.consumed_half_dots == 32);
         REQUIRE(records[1].pc == 0xBEEF);
+        gbb_destroy(a); gbb_destroy(b); free(rom); return 0;
+    }
+    if (strcmp(argv[1], "illegal_lockup") == 0) {
+        rom[0x100] = 0xD3; /* An unused SM83 encoding must report persistent LOCKUP. */
+        REQUIRE(gbb_load_rom(a, rom, rom_size) == GBB_OK);
+        gbb_run_result first = gbb_run(a, 100, NULL, 0);
+        REQUIRE(first.reason == GBB_STOP_LOCKUP && first.lockup_pc == 0x100 && first.lockup_opcode == 0xD3);
+        gbb_run_result again = gbb_run(a, 100, NULL, 0);
+        REQUIRE(again.reason == GBB_STOP_LOCKUP && again.consumed_half_dots == 0 && again.lockup_pc == first.lockup_pc);
+        REQUIRE(gbb_reset(a) == GBB_OK);
+        gbb_run_result reset = gbb_run(a, 100, NULL, 0);
+        REQUIRE(reset.reason == GBB_STOP_LOCKUP && reset.lockup_pc == 0x100 && reset.lockup_opcode == 0xD3);
         gbb_destroy(a); gbb_destroy(b); free(rom); return 0;
     }
     return 2;

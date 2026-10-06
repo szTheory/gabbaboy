@@ -33,7 +33,8 @@ typedef enum {
     GBB_STOP_UNSUPPORTED_OPCODE,
     GBB_STOP_TRACE_FULL,
     GBB_STOP_INVALID_STATE,
-    GBB_STOP_UNSUPPORTED_BUS
+    GBB_STOP_UNSUPPORTED_BUS,
+    GBB_STOP_LOCKUP
 } gbb_stop_reason;
 
 typedef struct {
@@ -49,6 +50,8 @@ typedef struct {
     uint64_t consumed_half_dots;
     gbb_stop_reason reason;
     size_t trace_count;
+    uint16_t lockup_pc;
+    uint8_t lockup_opcode;
 } gbb_run_result;
 
 /* The opaque instance owns its mutable state and a private copy of a loaded ROM.

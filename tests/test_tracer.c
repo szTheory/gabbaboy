@@ -21,6 +21,7 @@ int main(int argc, char **argv) {
     size_t size = 0; uint8_t *rom = read_rom(argv[2], &size);
     REQUIRE(rom != NULL);
     if (strcmp(argv[1], "failure") == 0) rom[0x154] = 0x00; /* Guest stores/reads the wrong RAM value. */
+    /* Historical case name retained: D3 is an unused SM83 encoding and locks up. */
     if (strcmp(argv[1], "unsupported") == 0) rom[0x150] = 0xD3;
     gbb_instance *m = NULL;
     REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK);
@@ -37,7 +38,7 @@ int main(int argc, char **argv) {
         REQUIRE(gbb_peek_ram(m, 0xC000) == 0x00);
         REQUIRE(marker == 0xEE && marker != 0xA5);
     } else if (strcmp(argv[1], "unsupported") == 0) {
-        REQUIRE(r.reason == GBB_STOP_UNSUPPORTED_OPCODE && marker != 0xA5);
+        REQUIRE(r.reason == GBB_STOP_LOCKUP && r.lockup_pc == 0x150 && r.lockup_opcode == 0xD3 && marker != 0xA5);
     } else if (strcmp(argv[1], "timeout") == 0) {
         REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 0 && marker == 0);
     } else if (strcmp(argv[1], "trace") == 0) {

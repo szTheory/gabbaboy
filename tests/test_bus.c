@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
         m = load_program(write_program, sizeof(write_program));
         REQUIRE(m != NULL);
         r = gbb_run(m, 48, NULL, 0);
-        REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 48);
+        REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 40);
         REQUIRE(gbb_peek_ram(m, 0xA000) == 0xFF);
         gbb_destroy(m);
         PASS("bus_absent_cart");

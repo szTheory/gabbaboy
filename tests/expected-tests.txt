@@ -2,12 +2,17 @@ instance_lifecycle
 independent_instances
 run_bounds
 trace_capacity
+illegal_lockup_api
 bus_wram_guest
 bus_echo_hram
 bus_absent_cart
 bus_preflight
 cpu_call_stack
 cpu_conditional_budget
+cpu_base_matrix
+cpu_illegal_lockup
+cpu_flags_edges
+cpu_timed_access
 loader_truncated
 loader_oversized
 loader_invalid_header

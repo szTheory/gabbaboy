@@ -25,13 +25,14 @@ int main(int argc, char **argv) {
     if (trace == NULL) { gbb_destroy(machine); fprintf(stderr,"runner-error: trace allocation failed\n"); return 2; }
     gbb_run_result result=gbb_run(machine,RUN_BUDGET_HALF_DOTS,trace,TRACE_CAPACITY);
     uint8_t status=gbb_peek_ram(machine,0xC001);
-    const char *outcome=result.reason==GBB_STOP_UNSUPPORTED_OPCODE ? "unsupported" :
+    const char *outcome=result.reason==GBB_STOP_LOCKUP ? "lockup" :
+        result.reason==GBB_STOP_UNSUPPORTED_OPCODE ? "unsupported" :
         result.reason==GBB_STOP_UNSUPPORTED_BUS ? "unsupported-bus" :
         result.reason==GBB_STOP_TRACE_FULL ? "trace-exhausted" :
         status==0xEE ? "guest-failure" :
         result.reason==GBB_STOP_BUDGET && status==0xA5 ? "pass" : "timeout";
     printf("fixture=original-wram-tracer profile=DMG-CPU-B outcome=%s stop=%s half_dots=%llu trace_records=%zu\n",
-           outcome,result.reason==GBB_STOP_BUDGET?"budget":result.reason==GBB_STOP_TRACE_FULL?"trace-full":result.reason==GBB_STOP_UNSUPPORTED_BUS?"unsupported-bus":"unsupported-opcode",
+           outcome,result.reason==GBB_STOP_BUDGET?"budget":result.reason==GBB_STOP_TRACE_FULL?"trace-full":result.reason==GBB_STOP_UNSUPPORTED_BUS?"unsupported-bus":result.reason==GBB_STOP_LOCKUP?"lockup":"unsupported-opcode",
            (unsigned long long)result.consumed_half_dots,result.trace_count);
     for (size_t i=0;i<result.trace_count && i<12;i++)
         printf("trace time=%llu pc=%04x opcode=%02x state=A:%02x F:%02x HL:%02x%02x\n",
