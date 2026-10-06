@@ -220,6 +220,83 @@ static int cb_budget(void) {
     gbb_destroy(m); return 0;
 }
 
+static uint8_t cb_expected(uint8_t value, uint8_t flags, unsigned op, uint8_t *next_flags) {
+    unsigned group=op>>6, function=(op>>3)&7u, bit=function;
+    uint8_t result=value, carry=(uint8_t)(flags&0x10u);
+    if(group==0u) {
+        switch(function) {
+            case 0: carry=(uint8_t)(value>>7); result=(uint8_t)((value<<1)|carry); break;
+            case 1: carry=(uint8_t)(value&1u); result=(uint8_t)((value>>1)|(carry<<7)); break;
+            case 2: { uint8_t out=(uint8_t)(value>>7); result=(uint8_t)((value<<1)|(carry!=0)); carry=out; break; }
+            case 3: { uint8_t out=(uint8_t)(value&1u); result=(uint8_t)((value>>1)|(carry!=0?0x80u:0)); carry=out; break; }
+            case 4: carry=(uint8_t)(value>>7); result=(uint8_t)(value<<1); break;
+            case 5: carry=(uint8_t)(value&1u); result=(uint8_t)((value>>1)|(value&0x80u)); break;
+            case 6: carry=0; result=(uint8_t)((value<<4)|(value>>4)); break;
+            default: carry=(uint8_t)(value&1u); result=(uint8_t)(value>>1); break;
+        }
+        *next_flags=(uint8_t)((result==0?0x80u:0)|(carry?0x10u:0));
+    } else if(group==1u) {
+        *next_flags=(uint8_t)((flags&0x10u)|0x20u|((value&(1u<<bit))==0?0x80u:0));
+    } else {
+        result=group==2u?(uint8_t)(value&~(1u<<bit)):(uint8_t)(value|(1u<<bit));
+        *next_flags=flags;
+    }
+    return result;
+}
+
+static int cb_matrix(void) {
+    uint8_t rom[32768]; gbb_trace_record trace[6];
+    for(unsigned op=0;op<256;++op) {
+        const uint8_t program[]={0x21,0x00,0xC0,0x3E,0xA5,0x77,0x37,0xCB,(uint8_t)op,0x00};
+        make_rom(rom,program,sizeof(program));
+        gbb_instance *m=NULL; REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B,&m)==GBB_OK); REQUIRE(gbb_load_rom(m,rom,sizeof(rom))==GBB_OK);
+        memset(trace,0,sizeof(trace));
+        unsigned target=op&7u, cost=target==6u?((op>>6)==1u?24u:32u):16u;
+        gbb_run_result r=gbb_run(m,72u+cost,trace,6);
+        REQUIRE(r.reason==GBB_STOP_BUDGET && r.consumed_half_dots==72u+cost && r.trace_count==6);
+        REQUIRE(trace[4].pc==0x107 && trace[5].pc==0x109);
+        uint8_t before[8]={0x00,0x13,0x00,0xD8,0xC0,0x00,0xA5,0xA5};
+        uint8_t flags=0x90, expected_flags=0;
+        uint8_t expected=cb_expected(before[target],flags,op,&expected_flags);
+        uint8_t after[8]={trace[5].b,trace[5].c,trace[5].d,trace[5].e,trace[5].h,trace[5].l,gbb_peek_ram(m,0xC000),trace[5].a};
+        REQUIRE(trace[5].f==expected_flags);
+        for(unsigned reg=0;reg<8;++reg) REQUIRE(after[reg]==(reg==target?expected:before[reg]));
+        gbb_destroy(m);
+    }
+    return 0;
+}
+
+static int cb_flags_edges(void) {
+    static const uint8_t values[]={0x00,0x01,0x7F,0x80,0xFF};
+    static const uint8_t operations[]={0x00,0x08,0x10,0x18,0x20,0x28,0x30,0x38};
+    for(size_t i=0;i<sizeof(values);++i) for(size_t j=0;j<sizeof(operations);++j) {
+        uint8_t rom[32768]; const uint8_t program[]={0x06,values[i],0x37,0xCB,operations[j],0x00}; make_rom(rom,program,sizeof(program));
+        gbb_instance *m=NULL; REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B,&m)==GBB_OK); REQUIRE(gbb_load_rom(m,rom,sizeof(rom))==GBB_OK);
+        gbb_trace_record trace[4]={{0}}; unsigned cost=16;
+        gbb_run_result r=gbb_run(m,48,trace,4);
+        REQUIRE(r.reason==GBB_STOP_BUDGET && r.consumed_half_dots==48 && r.trace_count==4);
+        uint8_t expected_flags=0, expected=cb_expected(values[i],0x90,operations[j],&expected_flags);
+        REQUIRE(trace[3].b==expected && trace[3].f==expected_flags);
+        gbb_destroy(m); (void)cost;
+    }
+    return 0;
+}
+
+static int cb_timed_access(void) {
+    uint8_t rom[32768]; const uint8_t program[]={0x21,0x00,0xC0,0x3E,0xA5,0x77,0x37,0xCB,0x46,0xCB,0x86,0x00}; make_rom(rom,program,sizeof(program));
+    gbb_instance *m=NULL; REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B,&m)==GBB_OK); REQUIRE(gbb_load_rom(m,rom,sizeof(rom))==GBB_OK);
+    gbb_test_bus_event events[8]={{0}}; gbb_test_observer_set(m,events,8); gbb_trace_record trace[7]={{0}};
+    gbb_run_result r=gbb_run(m,128,trace,7);
+    REQUIRE(r.reason==GBB_STOP_BUDGET && r.consumed_half_dots==128 && r.trace_count==7);
+    REQUIRE(gbb_test_observer_count(m)==4);
+    REQUIRE(events[0].address==0xC000 && events[0].access==2 && events[0].time_half_dots==56);
+    REQUIRE(events[1].address==0xC000 && events[1].access==1 && events[1].time_half_dots==80);
+    REQUIRE(events[2].address==0xC000 && events[2].access==1 && events[2].time_half_dots==104);
+    REQUIRE(events[3].address==0xC000 && events[3].access==2 && events[3].time_half_dots==112);
+    REQUIRE(gbb_peek_ram(m,0xC000)==0xA4);
+    gbb_destroy(m); return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
     active_case=argv[1];
@@ -231,5 +308,8 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "timed_access") == 0) return timed_access();
     if (strcmp(argv[1], "cb_wram") == 0) return cb_wram();
     if (strcmp(argv[1], "cb_budget") == 0) return cb_budget();
+    if (strcmp(argv[1], "cb_matrix") == 0) return cb_matrix();
+    if (strcmp(argv[1], "cb_flags_edges") == 0) return cb_flags_edges();
+    if (strcmp(argv[1], "cb_timed_access") == 0) return cb_timed_access();
     return 2;
 }

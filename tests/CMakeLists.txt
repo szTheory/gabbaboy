@@ -23,7 +23,7 @@ add_executable(test_cpu test_cpu.c)
 target_link_libraries(test_cpu PRIVATE GabbaBoy::core)
 target_compile_features(test_cpu PRIVATE c_std_17)
 set_target_properties(test_cpu PROPERTIES C_EXTENSIONS OFF)
-foreach(case call_stack conditional_budget base_matrix illegal_lockup flags_edges timed_access cb_wram cb_budget)
+foreach(case call_stack conditional_budget base_matrix illegal_lockup flags_edges timed_access cb_wram cb_budget cb_matrix cb_flags_edges cb_timed_access)
   add_test(NAME cpu_${case} COMMAND test_cpu ${case})
 endforeach()
 
