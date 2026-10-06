@@ -116,6 +116,7 @@ None outside the roadmap.
 - Independent [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md) returned `gaps_found`: startup F, RET/RETI stack phases, consecutive EI, interrupt diagnostic ordering, and corpus admission/completion. No CPU requirement is complete.
 - At source `c583e33`, Linux normal and ASan/UBSan runs each executed 94 cases with four failures and no skips; no sanitizer finding was reported. The relocated install executed 99 cases with the same four failures; all five installed API checks passed. Prior-phase regression selection passed 24/24. Required corpus IDs remain fixed at three.
 - Required Mooneye cases read PPU LY before assertions/result protocol, contrary to Phase 2's PPU exclusion. T-02-15 remains open; fresh exact-revision hosted qualification is not green.
+- [Draft PR #2](https://github.com/szTheory/gabbaboy/pull/2) publishes the Phase 2 implementation and gap reports for review, stacked on Phase 1 PR #1. Retarget and requalify after the foundation lands; no merge or release. Boundary triage found no open issues; PR #1 remains open.
 - PR #1 remains open for owner review at exact hosted SHA `9f1df9bd0a70e50033f7d8cbcbff778e3bfd94e3`. Required contexts passed; both Linux/macOS preview packages passed exact digest/source/consumer verification and expire 2026-10-17T19:19Z. They are temporary artifacts, not releases.
 - Native host support floors, signing, and live Playstead integration remain unverified for later release/adoption work.
 
