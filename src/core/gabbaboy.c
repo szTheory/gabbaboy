@@ -10,6 +10,9 @@ struct gbb_instance {
     uint8_t hram[127];
     uint8_t a, f, b, c, d, e, h, l;
     uint8_t div, stat;
+    uint8_t ie, interrupt_flags;
+    uint8_t ime_delay;
+    int ime;
     uint16_t pc, sp;
     uint64_t time_half_dots;
     uint16_t lockup_pc;
@@ -56,6 +59,10 @@ static void reset_state(gbb_instance *m) {
     m->d = 0x00; m->e = 0xD8; m->h = 0x01; m->l = 0x4D;
     m->pc = 0x0100; m->sp = 0xFFFE;
     m->div = 0xAB; m->stat = 0x85;
+    m->ie = 0;
+    m->interrupt_flags = 0;
+    m->ime_delay = 0;
+    m->ime = 0;
     memset(m->wram, 0, sizeof(m->wram));
     memset(m->hram, 0, sizeof(m->hram));
     m->time_half_dots = 0;
@@ -65,6 +72,8 @@ static void reset_state(gbb_instance *m) {
 }
 
 static uint8_t read8(const gbb_instance *m, uint16_t address) {
+    if (address == 0xFF0F) return (uint8_t)(0xE0u | m->interrupt_flags);
+    if (address == 0xFFFF) return (uint8_t)(0xE0u | m->ie);
     if (address < m->rom_size) return m->rom[address];
     if (address >= 0xC000 && address <= 0xDFFF) return m->wram[address - 0xC000];
     if (address >= 0xE000 && address <= 0xFDFF) return m->wram[address - 0xE000];
@@ -79,7 +88,9 @@ static uint8_t bus_read(gbb_instance *m, uint16_t address, uint64_t offset) {
 }
 
 static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
-    if (address >= 0xC000 && address <= 0xDFFF) m->wram[address - 0xC000] = value;
+    if (address == 0xFF0F) m->interrupt_flags = (uint8_t)(value & 0x1Fu);
+    else if (address == 0xFFFF) m->ie = (uint8_t)(value & 0x1Fu);
+    else if (address >= 0xC000 && address <= 0xDFFF) m->wram[address - 0xC000] = value;
     else if (address >= 0xE000 && address <= 0xFDFF) m->wram[address - 0xE000] = value;
     else if (address >= 0xFF80 && address <= 0xFFFE) m->hram[address - 0xFF80] = value;
 }
@@ -354,7 +365,7 @@ static void execute(gbb_instance *m, uint8_t cost) {
         if(take){ push16(m,(uint16_t)(pc+3),32,40); m->pc=dst; } else m->pc=(uint16_t)(pc+3);
     } else if ((op&0xE7u)==0xC0u || op==0xC9 || op==0xD9) {
         int take=op==0xC9||op==0xD9||condition_true(m,(op>>3)&3u);
-        if(take){ m->pc=pop16(m,16,24); } else m->pc=(uint16_t)(pc+1);
+        if(take){ m->pc=pop16(m,16,24); if (op == 0xD9) { m->ime=1; m->ime_delay=0; } } else m->pc=(uint16_t)(pc+1);
     } else if ((op&0xCFu)==0xC1u) { set_stack_pair(m,(op>>4)&3u,pop16(m,8,16)); m->pc=(uint16_t)(pc+1); }
     else if ((op&0xCFu)==0xC5u) { push16(m,stack_pair(m,(op>>4)&3u),16,24); m->pc=(uint16_t)(pc+1); }
     else if ((op&0xC7u)==0xC6u) { uint8_t value=read8(m,pc+1); alu(m,(op>>3)&7u,value); m->pc=(uint16_t)(pc+2); }
@@ -389,7 +400,8 @@ static void execute(gbb_instance *m, uint8_t cost) {
             case 0xE8: case 0xF8: { uint8_t e=read8(m,pc+1); uint16_t old=m->sp; uint16_t value=(uint16_t)(old+(int8_t)e); uint8_t flags=(uint8_t)(((old&15u)+(e&15u)>15u?0x20u:0)|((old&255u)+e>255u?0x10u:0)); if(op==0xE8)m->sp=value;else set_hl(m,value);m->f=flags;m->pc+=2;break; }
             case 0xF9: m->sp=hl(m); m->pc++; break;
             case 0xE9: m->pc=hl(m); break;
-            case 0xF3: case 0xFB: m->pc++; break; /* Interrupt-enable sequencing is owned by the control-state plan. */
+            case 0xF3: m->ime=0; m->ime_delay=0; m->pc++; break;
+            case 0xFB: m->ime_delay=2; m->pc++; break;
             case 0xCB: {
                 uint8_t extension = read8(m, (uint16_t)(pc + 1u));
                 execute_cb(m, pc, extension);
@@ -400,6 +412,23 @@ static void execute(gbb_instance *m, uint8_t cost) {
     }
     m->f &= 0xF0u;
     m->time_half_dots += cost;
+}
+
+static unsigned pending_interrupt(const gbb_instance *m) {
+    uint8_t pending = (uint8_t)(m->ie & m->interrupt_flags & 0x1Fu);
+    for (unsigned bit = 0; bit < 5; ++bit) if (pending & (1u << bit)) return bit;
+    return 5;
+}
+
+static void enter_interrupt(gbb_instance *m, unsigned bit) {
+    uint8_t mask = (uint8_t)(1u << bit);
+    m->ime = 0;
+    m->ime_delay = 0;
+    m->interrupt_flags = (uint8_t)(m->interrupt_flags & (uint8_t)~mask);
+    observe_bus(m, 8, 0xFF0F, 2, (uint8_t)(0xE0u | m->interrupt_flags));
+    push16(m, m->pc, 16, 24);
+    m->pc = (uint16_t)(0x0040u + bit * 8u);
+    m->time_half_dots += 40;
 }
 
 static void save_trace(const gbb_instance *m, decoded d, gbb_trace_record *r) {
@@ -415,6 +444,14 @@ gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
     if (instance == NULL || !instance->loaded || (trace == NULL && trace_capacity != 0)) { result.reason=GBB_STOP_INVALID_STATE; return result; }
     while (result.consumed_half_dots < budget_half_dots) {
         if (instance->locked) { result.reason=GBB_STOP_LOCKUP; result.lockup_pc=instance->lockup_pc; result.lockup_opcode=instance->lockup_opcode; return result; }
+        unsigned interrupt = instance->ime ? pending_interrupt(instance) : 5;
+        if (interrupt < 5) {
+            if (40u > budget_half_dots - result.consumed_half_dots) return result;
+            if (UINT64_MAX - instance->time_half_dots < 40u) { result.reason=GBB_STOP_INVALID_STATE; return result; }
+            enter_interrupt(instance, interrupt);
+            result.consumed_half_dots += 40;
+            continue;
+        }
         decoded d=decode(instance);
         if (!d.supported) {
             instance->locked=1; instance->lockup_pc=instance->pc; instance->lockup_opcode=read8(instance,instance->pc);
@@ -435,6 +472,7 @@ gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
         if (trace != NULL) save_trace(instance,d,&trace[result.trace_count++]);
         execute(instance,cost);
         result.consumed_half_dots += cost;
+        if (instance->ime_delay != 0 && --instance->ime_delay == 0) instance->ime = 1;
     }
     return result;
 }

@@ -47,9 +47,10 @@ static int interrupt_entry(void) {
     REQUIRE(gbb_test_observer_count(m) == 2);
     r = gbb_run(m, 40, trace, 8);
     REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 40 && r.trace_count == 0);
-    REQUIRE(gbb_test_observer_count(m) == 6);
-    REQUIRE(events[3].time_half_dots == 104 && events[3].address == 0xfffd && events[3].value == 0x01);
-    REQUIRE(events[4].time_half_dots == 112 && events[4].address == 0xfffc && events[4].value == 0x0a);
+    REQUIRE(gbb_test_observer_count(m) == 5);
+    REQUIRE(events[2].time_half_dots == 104 && events[2].address == 0xff0f && events[2].value == 0xe0);
+    REQUIRE(events[3].time_half_dots == 112 && events[3].address == 0xfffd && events[3].value == 0x01);
+    REQUIRE(events[4].time_half_dots == 120 && events[4].address == 0xfffc && events[4].value == 0x0a);
     gbb_destroy(m);
     return 0;
 }
