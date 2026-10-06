@@ -4,16 +4,16 @@ milestone: v0.1
 current_phase: 02
 current_phase_name: DMG CPU, Bus, and Time
 status: executing
-stopped_at: Completed GB-02-05-PLAN.md
-last_updated: "2026-10-06T20:01:14.318Z"
+stopped_at: Completed GB-02-06-PLAN.md
+last_updated: "2026-10-06T20:11:27.577Z"
 last_activity: 2026-10-06
-last_activity_desc: Plan GB-02-04 complete; Phase GB-02 remains in progress
-state_head: 2754cac0188b616f3018c2cc564b1acdba2bfe2e
+last_activity_desc: Plan GB-02-06 complete; Phase GB-02 remains in progress
+state_head: 415f4ec366eb394318ee51b8816a8e2d053a86f0
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 14
-  completed_plans: 10
+  completed_plans: 11
 milestone_name: limited DMG preview
 ---
 
@@ -29,18 +29,18 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 ## Current Position
 
 Phase: GB-02 (DMG CPU, Bus, and Time) — EXECUTING
-Plan: 6 of 9
+Plan: 7 of 9
 Status: Executing Phase GB-02
-Last activity: 2026-10-06 — Phase GB-02 execution started
+Last activity: 2026-10-06 — Plan GB-02-06 complete; Phase GB-02 remains in progress
 
 Progress: [██░░░░░░░░] 17% of milestone phases complete; Phase 1 has 5/5 plans and passed verification
 
 ## Performance Metrics
 
-- Total plans completed: 5
-- Average duration / total execution time: 46 min / 230 min recorded for Plans 01–05.
-- Per-phase metrics / recent trend: Phase 1 Plans 01–05 completed; five plans measured.
-- Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline; bounded API and fixture behavior have local CTest evidence.
+- Total plans completed: 11
+- Average duration / total execution time: 31 min / 341 min recorded for Phase 1 Plans 01–05 and Phase 2 Plans 01–06.
+- Per-phase metrics / recent trend: Phase 1 Plans 01–05 complete; Phase 2 Plans 01–06 complete, with three implementation plans remaining.
+- Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline; bounded API and fixture behavior have local CTest evidence (70/70 after Plan 02-06).
 
 **Per-Plan Metrics:**
 
@@ -56,6 +56,8 @@ Progress: [██░░░░░░░░] 17% of milestone phases complete; Pha
 | Phase 02 P03 | 6 | 2 tasks | 4 files |
 | Phase 02 P04 | 16min | 2 tasks | 7 files |
 | Phase GB-02 P05 | 18 | 2 tasks | 5 files |
+| Phase GB-02 P06 | 6 min | 2 tasks | 7 files |
+| Phase GB-02 P06 | 6min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -91,6 +93,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 02]: Interrupt entry costs 40 half-dots, selects the lowest enabled pending bit, clears it, and pushes the interrupted PC on timed bus phases.
 - [Phase 02]: HALT idle advances eligible time in whole 8-half-dot cycles; STOP remains stopped until the timestamped wake path in Plan 02-06.
 - [Phase GB-02]: Timer divider falling edges and qualified TIMA/TMA reload collisions run at timed bus phases; serial overlap without qualified ordering returns bounded unsupported.
+- [Phase GB-02]: STOP waits advance only the bounded master timeline; oscillator-driven CPU, divider, timer, and internal serial state stays frozen.
+- [Phase GB-02]: Timestamped input uses a fixed 64-event queue with atomic admission and stable caller order for equal timestamps.
 
 ### Pending Todos
 
@@ -109,11 +113,11 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-06T20:01:14.295Z
-Stopped at: Completed GB-02-05-PLAN.md
-Resume file: .planning/phases/GB-02-dmg-cpu-bus-and-time/02-06-PLAN.md
+Last session: 2026-10-06T20:11:27.555Z
+Stopped at: Completed GB-02-06-PLAN.md
+Resume file: .planning/phases/GB-02-dmg-cpu-bus-and-time/02-07-PLAN.md
 Next command in fresh context: $gsd-execute-phase 2
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: Phase 2 Plan 02-05 execution — timer races and disconnected serial. Phase 1 remains the last completed implementation phase; Phase 2 itself is not complete.
-Next stage: Phase 2 Plan 02-06 execution — timestamped inputs and bounded partitioned runs. Run $gsd-execute-phase 2.
+Completed workflow stage: Phase 2 Plan 02-06 execution — timestamped inputs and bounded partitioned runs. Phase 1 remains the last completed implementation phase; Phase 2 itself is not complete.
+Next stage: Phase 2 Plan 02-07 execution — pinned CPU/timer diagnostic fixtures. Run $gsd-execute-phase 2.
 Following implementation phase: Phase 3 — Visible Interactive DMG, only after Phase 2 verification and owner direction. Both auto-advance flags remain false.
