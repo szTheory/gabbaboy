@@ -77,7 +77,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Configure ASan and UBSan
-        run: cmake --preset phase1-asan
+        run: cmake --preset phase1-asan -DGBB_TEST_INSTALL_PREFIX=
       - name: Confirm sanitizer cache option
         run: cmake -LA -N build-asan | grep -q '^GABBABOY_ENABLE_SANITIZERS:BOOL=ON$'
       - name: Build and capture compiler/link commands
