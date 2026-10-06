@@ -10,6 +10,7 @@ struct gbb_instance {
     uint8_t hram[127];
     uint8_t a, f, b, c, d, e, h, l;
     uint8_t div, stat, tima, tma, tac;
+    uint8_t serial_data, serial_control, serial_bits;
     uint8_t ie, interrupt_flags;
     uint8_t ime_delay;
     int ime;
@@ -17,9 +18,11 @@ struct gbb_instance {
     uint16_t divider_counter;
     int timer_signal;
     int timer_reload_pending;
-    uint64_t timer_reload_at;
+    uint8_t timer_reload_remaining;
     uint64_t timer_reloaded_at;
     uint64_t instruction_start_half_dots;
+    uint16_t serial_edge_remaining;
+    int serial_active, serial_unsupported;
     int halted, stopped, halt_bug;
     uint16_t pc, sp;
     uint64_t time_half_dots;
@@ -68,6 +71,7 @@ static void reset_state(gbb_instance *m) {
     m->pc = 0x0100; m->sp = 0xFFFE;
     m->div = 0xAB; m->stat = 0x85;
     m->tima = 0; m->tma = 0; m->tac = 0;
+    m->serial_data = 0; m->serial_control = 0x7Eu; m->serial_bits = 0;
     m->ie = 0;
     m->interrupt_flags = 0;
     m->ime_delay = 0;
@@ -76,9 +80,12 @@ static void reset_state(gbb_instance *m) {
     m->divider_counter = 0xAB00u;
     m->timer_signal = 0;
     m->timer_reload_pending = 0;
-    m->timer_reload_at = 0;
+    m->timer_reload_remaining = 0;
     m->timer_reloaded_at = UINT64_MAX;
     m->instruction_start_half_dots = 0;
+    m->serial_edge_remaining = 0;
+    m->serial_active = 0;
+    m->serial_unsupported = 0;
     m->halted = 0;
     m->stopped = 0;
     m->halt_bug = 0;
@@ -95,6 +102,8 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
     if (address == 0xFF05) return m->tima;
     if (address == 0xFF06) return m->tma;
     if (address == 0xFF07) return (uint8_t)(0xF8u | m->tac);
+    if (address == 0xFF01) return m->serial_data;
+    if (address == 0xFF02) return (uint8_t)(0x7Eu | m->serial_control);
     if (address == 0xFF0F) return (uint8_t)(0xE0u | m->interrupt_flags);
     if (address == 0xFFFF) return (uint8_t)(0xE0u | m->ie);
     if (address < m->rom_size) return m->rom[address];
@@ -127,7 +136,7 @@ static void timer_increment(gbb_instance *m, uint64_t at) {
     if (m->tima == 0xFFu) {
         m->tima = 0;
         m->timer_reload_pending = 1;
-        m->timer_reload_at = at + 8u;
+        m->timer_reload_remaining = 8u;
         observe_bus(m, 0, 0xFF05, 3, m->tima);
     } else {
         ++m->tima;
@@ -141,10 +150,8 @@ static void timer_set_signal(gbb_instance *m, int next, uint64_t at) {
 
 static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     if (address == 0xFF04) {
-        int old = timer_input(m);
         m->divider_counter = 0; m->div = 0; m->divider_phase = 0;
         timer_set_signal(m, timer_input(m), m->time_half_dots);
-        (void)old;
     }
     else if (address == 0xFF05) {
         if (m->time_half_dots == m->timer_reloaded_at) { /* reload wins this sampled write */ }
@@ -155,10 +162,24 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
         if (m->time_half_dots == m->timer_reloaded_at) m->tima = value;
     }
     else if (address == 0xFF07) {
-        int old = timer_input(m);
         m->tac = (uint8_t)(value & 7u);
         timer_set_signal(m, timer_input(m), m->time_half_dots);
-        (void)old;
+    }
+    else if (address == 0xFF01) {
+        if (m->serial_active) m->serial_unsupported = 1;
+        else m->serial_data = value;
+    }
+    else if (address == 0xFF02) {
+        if (m->serial_active) {
+            m->serial_unsupported = 1;
+        } else {
+            m->serial_control = (uint8_t)(value & 0x81u);
+            if (value & 0x80u) {
+                m->serial_active = 1;
+                m->serial_bits = 0;
+                if (value & 1u) m->serial_edge_remaining = 1024u;
+            }
+        }
     }
     else if (address == 0xFF0F) m->interrupt_flags = (uint8_t)(value & 0x1Fu);
     else if (address == 0xFFFF) m->ie = (uint8_t)(value & 0x1Fu);
@@ -168,13 +189,18 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
 }
 
 static void bus_write(gbb_instance *m, uint16_t address, uint8_t value, uint64_t offset) {
-    advance_devices_to(m, m->instruction_start_half_dots + offset);
+    uint64_t timestamp = m->instruction_start_half_dots + offset;
+    /* TMA feeds the reload when the write shares its exact reload timestamp. */
+    if (address == 0xFF06 && m->timer_reload_pending && timestamp >= m->time_half_dots &&
+        timestamp - m->time_half_dots == m->timer_reload_remaining)
+        m->tma = value;
+    advance_devices_to(m, timestamp);
     observe_bus(m, 0, address, 2, value);
     write8(m, address, value);
 }
 
 static int read_supported(uint16_t address) {
-    return address < 0x8000 || (address >= 0xFF04 && address <= 0xFF07) || address == 0xFF0F || address == 0xFFFF ||
+    return address < 0x8000 || (address >= 0xFF01 && address <= 0xFF07) || address == 0xFF0F || address == 0xFFFF ||
            (address >= 0xC000 && address <= 0xDFFF) ||
            (address >= 0xE000 && address <= 0xFDFF) ||
            (address >= 0xFF80 && address <= 0xFFFE);
@@ -191,13 +217,25 @@ static uint8_t instruction_byte(const gbb_instance *m, uint16_t pc, unsigned off
 static void advance_devices_to(gbb_instance *m, uint64_t target) {
     while (m->time_half_dots < target) {
         ++m->time_half_dots;
-        if (m->timer_reload_pending && m->time_half_dots == m->timer_reload_at) {
+        if (m->timer_reload_pending && m->timer_reload_remaining != 0 &&
+            --m->timer_reload_remaining == 0) {
             m->tima = m->tma;
             m->timer_reload_pending = 0;
             m->timer_reloaded_at = m->time_half_dots;
             m->interrupt_flags |= 0x04u;
             observe_bus(m, 0, 0xFF05, 3, m->tima);
             observe_bus(m, 0, 0xFF0F, 3, (uint8_t)(0xE0u | m->interrupt_flags));
+        }
+        if (m->serial_active && (m->serial_control & 1u) != 0 &&
+            m->serial_edge_remaining != 0 && --m->serial_edge_remaining == 0) {
+            m->serial_data = (uint8_t)((m->serial_data << 1) | 1u);
+            if (++m->serial_bits == 8u) {
+                m->serial_active = 0;
+                m->serial_control &= 1u;
+                m->interrupt_flags |= 0x08u;
+            } else {
+                m->serial_edge_remaining = 1024u;
+            }
         }
         m->divider_phase ^= 1u;
         if (m->divider_phase == 0) {
@@ -614,6 +652,11 @@ gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
             instance->div=0;
             instance->divider_phase=0;
             result.reason=GBB_STOP_STOPPED;
+            return result;
+        }
+        if (instance->serial_unsupported) {
+            instance->serial_unsupported = 0;
+            result.reason = GBB_STOP_UNSUPPORTED_BUS;
             return result;
         }
         if (instance->halted) { result.reason=GBB_STOP_HALTED_IDLE; return result; }
