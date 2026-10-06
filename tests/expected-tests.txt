@@ -6,6 +6,8 @@ bus_wram_guest
 bus_echo_hram
 bus_absent_cart
 bus_preflight
+cpu_call_stack
+cpu_conditional_budget
 loader_truncated
 loader_oversized
 loader_invalid_header
