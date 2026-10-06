@@ -23,6 +23,47 @@ The DAA execution budget is 2,000,000 half-dots. At the pinned source revision, 
 
 Normal build and tests consume only the checked-in `.gb` files. Reproduction requires the explicit pinned sources and WLA-DX build above; no normal test invokes the network, compiler, or assembler.
 
+## Cross-host byte reproduction (open)
+
+`bash tests/scripts/reproduce-mooneye.sh --diagnose fixtures/mooneye` is the
+explicit networked preparation command. It verifies the source revisions and
+trees, the WLA-DX archive, the original `font-source.c` digest, its generated
+2032-byte font digest, and the tool versions before assembling. It retains
+both ROMs, linker symbols, per-case source digests, inputs, and every differing
+offset in a bounded 32 KiB per-ROM comparison. `--compare` applies the same
+recipe and fails unless all three ROMs match their checked-in bytes and
+manifest SHA-256 digests. The separate hosted fixture job runs `--compare`;
+ordinary CTest remains offline.
+
+At hosted Linux/x86_64 run
+[`37548445032`](https://github.com/szTheory/gabbaboy/actions/runs/37548445032)
+for commit `6afd54ba713501118cf8dfc2e2e30a9fc46bcd55`, all source/tool/font
+pins passed. The three 32,768-byte outputs differed:
+
+| ROM | Checked-in SHA-256 | Hosted rebuilt SHA-256 | Differing bytes |
+|---|---|---|---:|
+| `daa.gb` | `96cd0e02a85f6f035b1c1947d36a8ad2d8e51963f636b833f05559f021eef57e` | `262f110744705dc4ee0f4b42473dd1e260c2dace8f999117a540a1e33c19de87` | 83 |
+| `tim00.gb` | `6edc430a09522294c96d1eef63a0f1a99078f4401060980048ec5a68640e11bd` | `a006ae787a76f90c7040c901940af5a112436f1d2c03b7f086d7d528b3e6288e` | 209 |
+| `tim00_div_trigger.gb` | `468d426c4fe6a850a28f4116bd127d471be6adf2ef5dd0f89f2db67ffe212242` | `a6b8b1c3387acbb251111f9e4fa0936e7646d666b6963194885e290d6431d0b5` | 209 |
+
+The first differing offset is 334 in every ROM (two checksum bytes at 334–335).
+The DAA byte at 335 is `9e` in the checked-in ROM and `2a` in the Linux
+build. These checksum differences are consequences of different payloads:
+DAA also differs at 488, 542, 594 and later offsets; each timer differs from
+18423 onward. The retained symbol maps show same-size sections exchanging
+addresses on Linux and macOS, while source SHA-256 values and build flags
+match. In pinned WLA-DX `wlalink/write.c`, `_sections_sort` compares priority
+and size but returns `-1` even when both fields are equal; `sort_sections`
+passes this comparator to `qsort`. This violates `qsort`'s ordering contract,
+so the libc-specific order of tied sections changes their addresses and ROM
+references. A macOS/arm64 rebuild with the same input revisions and flags
+matches all three checked-in digests. Neither the `-nS` alternative nor a
+checksum-only adjustment reproduces these checked-in bytes. A deterministic
+linker fix or newly qualified fixture bytes needs a separate reviewed tool
+recipe; no substitute command is qualified here. T-02-14 and verification
+gap 7 remain open. The fixed three-case denominator and checked-in bytes are
+unchanged, and no corpus admission follows this failed cross-host compare.
+
 ## Qualification gap discovered during phase verification
 
 The fixed three-case inventory is retained. Full unsupported-read preflight exposed a shared reporting dependency: `common/lib/quit.s` calls `is_ppu_broken` before invoking the assertion/reporting callback and reaching the `LD B,B` result breakpoint; `common/lib/is_ppu_broken.s` reads LY (`FF44`). This phase has no PPU/LY implementation. All three checked-in ROMs therefore stop as unsupported with the advertised protocol. Earlier passes depended on the generic unsupported-address `FF` fallback and are superseded. The corpus gate remains failing; no fixture bytes, test logic, required IDs, or expectations were pruned to recover a pass. A source-qualified completion path or replacement corpus must be planned and verified before CPU-05 is complete.

@@ -127,8 +127,11 @@ for name in names:
              f'rebuilt_length={len(rebuilt)}', f'manifest_sha256={pin["sha256"]}',
              f'expected_sha256={expected_sha}', f'rebuilt_sha256={rebuilt_sha}',
              f'differing_offsets_count={len(offsets)}',
-             'differing_offsets_first_64=' + ','.join(map(str, offsets[:64])),
+             'differing_offsets_all=' + ','.join(map(str, offsets)),
              f'first_difference={first if first is not None else "none"}']
+    if name == 'daa':
+        lines += [f'byte_335_expected={expected[335]:02x}',
+                  f'byte_335_rebuilt={rebuilt[335]:02x}']
     if first is not None:
         lo, hi = max(0, first - 16), min(max(len(expected), len(rebuilt)), first + 17)
         lines += [f'window_range=[{lo},{hi})',
