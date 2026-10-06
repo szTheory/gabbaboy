@@ -4,16 +4,16 @@ milestone: v0.1
 current_phase: 02
 current_phase_name: DMG CPU, Bus, and Time
 status: executing
-stopped_at: Completed GB-02-08-PLAN.md
-last_updated: "2026-10-06T20:52:29.328Z"
+stopped_at: Completed GB-02-09-PLAN.md; Phase 2 implementation ready for independent verification
+last_updated: "2026-10-06T21:06:00.537Z"
 last_activity: 2026-10-06
 last_activity_desc: Plan GB-02-08 complete; Phase GB-02 remains in progress
-state_head: 4d3115e8944262686e4944575295691ab9df2180
+state_head: da876a654a3306e44794b2cec7e90b3bb607bee9
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 14
-  completed_plans: 13
+  completed_plans: 14
 milestone_name: limited DMG preview
 ---
 
@@ -61,6 +61,7 @@ Progress: [██░░░░░░░░] 17% of milestone phases complete; Pha
 | Phase GB-02 P08 | 8 min | 2 tasks | 10 files |
 | Phase GB-02 P07 | 20 | 3 tasks | 12 files |
 | Phase GB-02 P08 | 8 min | 2 tasks | 10 files |
+| Phase GB-02 P09 | 8 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -104,6 +105,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-02]: LD B,B remains an ordinary CPU instruction; the host runner alone classifies Mooneye register results.
 - [Phase GB-02]: DAA runner budget is 2000000 half-dots based on the pinned source's 4096-case workload and 1343488-half-dot minimum.
 - [Phase GB-02]: The strict eligible corpus denominator remains one CPU and two timer fixtures regardless of emulator outcome.
+- [Phase GB-02]: Installed C and C++ consumers verify the fixed timestamped-event queue, bounded results, and caller-owned diagnostics through the relocated public package.
+- [Phase GB-02]: Fixture reproduction is manually dispatched with pinned WLA-DX and Mooneye sources; ordinary test inventories remain offline and use checked-in ROM bytes.
 
 ### Pending Todos
 
@@ -122,9 +125,9 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-06T20:52:29.298Z
-Stopped at: Completed GB-02-08-PLAN.md
-Resume file: .planning/phases/GB-02-dmg-cpu-bus-and-time/02-09-PLAN.md
+Last session: 2026-10-06T21:06:00.500Z
+Stopped at: Completed GB-02-09-PLAN.md; Phase 2 implementation ready for independent verification
+Resume file: .planning/.continue-here.md
 Next command in fresh context: $gsd-execute-phase 2
 Continuation note: [.continue-here.md](.continue-here.md)
 Completed workflow stage: Phase 2 Plan 02-08 execution — caller-owned diagnostics and strict manifest-driven Mooneye qualification. Phase 2 remains in progress; Phase 1 remains the last completed implementation phase.
