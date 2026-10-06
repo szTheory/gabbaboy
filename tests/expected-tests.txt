@@ -68,3 +68,5 @@ timer_tma_collision
 serial_internal_disconnected
 serial_external_pending
 serial_unqualified_overlap
+mooneye_fixture_digest
+mooneye_eligible_inventory

@@ -83,6 +83,14 @@ add_test(NAME fixture_digest
     -DROM=${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb
     -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/tracer/manifest.json
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
+add_test(NAME mooneye_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneye.cmake)
+add_test(NAME mooneye_eligible_inventory
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneye.cmake)
 set(GBB_TEST_SANITIZER_LINK_OPTIONS "")
 if(GABBABOY_ENABLE_SANITIZERS)
   set(GBB_TEST_SANITIZER_LINK_OPTIONS "-fsanitize=address,undefined")
