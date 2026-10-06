@@ -4,16 +4,16 @@ milestone: v0.1
 current_phase: 02
 current_phase_name: DMG CPU, Bus, and Time
 status: executing
-stopped_at: Completed GB-02 Plan 02-10 gap closure; Phase 2 remains executing
-last_updated: "2026-10-06T23:42:25.446Z"
+stopped_at: Completed GB-02 gap-closure Plans 02-10 and 02-13; Phase 2 remains executing
+last_updated: "2026-10-06T23:53:56Z"
 last_activity: 2026-10-06
-last_activity_desc: Gap-closure Plan 02-10 executed; Phase GB-02 remains incomplete
-state_head: 3231d21460b2f009085751774d6d2e3263badcbd
+last_activity_desc: Gap-closure Plan 02-13 diagnosed cross-host Mooneye fixture divergence; Phase GB-02 remains incomplete
+state_head: 8a8f918f6acf5d7cf27e646faea80eb748b7205b
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 21
-  completed_plans: 15
+  completed_plans: 16
 milestone_name: limited DMG preview
 ---
 
@@ -31,16 +31,16 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 Phase: GB-02 (DMG CPU, Bus, and Time) — EXECUTING
 Plan: 11 of 16
 Status: Executing Phase GB-02
-Last activity: 2026-10-06 — Completed quick task 261006-r6w: Fix the bus_unsupported_stack fixture so RET NC tests its intended condition under checksum-selected DMG startup flags; validate the offline test inventory
+Last activity: 2026-10-06 — Completed gap-closure Plan 02-13 after resolving the 02-10 bus_unsupported_stack fixture regression; the exact hosted Mooneye byte comparison still fails and corpus qualification remains open
 
 Progress: [██░░░░░░░░] 17% of milestone phases complete; Phase 1 has 5/5 plans and passed verification
 
 ## Performance Metrics
 
-- Total unique plans executed: 14; plan execution does not imply phase qualification.
-- Average duration / total execution time: 27 min / 377 min recorded for Phase 1 Plans 01–05 and Phase 2 Plans 01–09.
-- Per-phase metrics / recent trend: Phase 1 complete; the original nine Phase 2 plans and gap-closure Plan 02-10 are executed, with six gap-closure plans remaining.
-- Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. Plan 02-10 focused selections passed 3/3 each; the 96-case offline inventory passed 91/96, with the known four Mooneye failures and one stale RET-NC fixture assumption. Earlier corpus passes are superseded by the corrected unsupported-read guard.
+- Total unique plans executed: 16; plan execution does not imply phase qualification.
+- Average duration / total execution time: 25 min / 395 min recorded for Phase 1 Plans 01–05 and Phase 2 Plans 01–10 and 02-13.
+- Per-phase metrics / recent trend: Phase 1 complete; the original nine Phase 2 plans and gap-closure Plans 02-10 and 02-13 are executed, with five gap-closure plans remaining.
+- Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. Plan 02-10 focused selections passed 3/3 each; after the quick fixture repair, the 96-case offline inventory passed 92/96 with no skips and only the four documented Mooneye unsupported-LY failures. Hosted cross-host fixture comparison remains failing.
 
 **Per-Plan Metrics:**
 
@@ -61,6 +61,7 @@ Progress: [██░░░░░░░░] 17% of milestone phases complete; Pha
 | Phase GB-02 P08 | 8 min | 2 tasks | 10 files |
 | Phase GB-02 P09 | 8 min | 2 tasks | 10 files |
 | Phase GB-02 P10 | 10 min | 2 tasks | 5 files |
+| Phase GB-02 P13 | 8 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -109,6 +110,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-02]: Do not fabricate LY or bypass assertions to close corpus failures; valid digests/reproduction do not prove phase applicability.
 - [Phase GB-02]: DMG-CPU-B startup F is selected from the retained ROM header checksum at load and reset.
 - [Phase GB-02]: RET and RETI stack reads use offsets 8/16; taken conditional RET retains 16/24 and untaken RET performs no stack read.
+- [Phase GB-02]: Keep checked-in Mooneye ROM bytes and the fixed three-case denominator unchanged until a deterministic cross-host linker recipe is qualified.
 
 ### Pending Todos
 
@@ -116,9 +118,9 @@ None outside the roadmap.
 
 ### Blockers/Concerns
 
-- Independent [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md) returned `gaps_found`; Plan 02-10 has focused corrections for startup F and RET/RETI phases. Consecutive EI, interrupt diagnostic ordering, corpus admission/completion, and independent re-verification remain. No CPU requirement is complete.
+- Independent [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md) returned `gaps_found`; Plan 02-10 corrected startup F and RET/RETI phases. Consecutive EI, interrupt diagnostic ordering, Windows manifest portability, source-qualified corpus admission, final runner evidence, and independent re-verification remain. No CPU requirement is complete.
 - At source `c583e33`, Linux normal and ASan/UBSan runs each executed 94 cases with four failures and no skips; no sanitizer finding was reported. The relocated install executed 99 cases with the same four failures; all five installed API checks passed. Prior-phase regression selection passed 24/24. Required corpus IDs remain fixed at three.
-- Required Mooneye cases read PPU LY before assertions/result protocol, contrary to Phase 2's PPU exclusion. T-02-14/15 remain open. [Hosted evidence](phases/GB-02-dmg-cpu-bus-and-time/02-HOSTED-EVIDENCE.md) adds Windows manifest rejection and a DAA reproduction mismatch; required CI failed at PR head `a91d8e7`.
+- Required Mooneye cases read PPU LY before assertions/result protocol, contrary to Phase 2's PPU exclusion. T-02-14/15 remain open. Plan 02-13's exact hosted run 37548730397 built DAA and both timer ROMs but failed byte comparison on Linux; local Darwin comparison passed. The mismatch is traced to WLA-DX's invalid equal-priority/size `qsort` tie comparator, but no cross-host recipe or replacement fixture set is qualified. The three pinned ROMs and denominator remain unchanged. Earlier [hosted evidence](phases/GB-02-dmg-cpu-bus-and-time/02-HOSTED-EVIDENCE.md) records Windows manifest rejection and required CI failures at PR head `a91d8e7`.
 - [Draft PR #2](https://github.com/szTheory/gabbaboy/pull/2) publishes the Phase 2 implementation and gap reports for review, stacked on Phase 1 PR #1. Retarget and requalify after the foundation lands; no merge or release. Boundary triage found no open issues; PR #1 remains open.
 - PR #1 remains open for owner review at exact hosted SHA `9f1df9bd0a70e50033f7d8cbcbff778e3bfd94e3`. Required contexts passed; both Linux/macOS preview packages passed exact digest/source/consumer verification and expire 2026-10-17T19:19Z. They are temporary artifacts, not releases.
 - Native host support floors, signing, and live Playstead integration remain unverified for later release/adoption work.
@@ -136,11 +138,11 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-06T23:31:18.985Z
-Stopped at: Completed Phase GB-02 gap-closure Plan 02-10; Phase 2 remains executing
+Last session: 2026-10-06T23:53:56Z
+Stopped at: Completed Phase GB-02 gap-closure Plans 02-10 and 02-13; Phase 2 remains executing
 Resume file: .planning/.continue-here.md
 Next command in fresh context: $gsd-execute-phase 2 --gaps-only
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: Phase GB-02 Plan 02-10 gap-closure execution. Checksum-selected startup flags and return stack timing corrections are implemented; focused selections pass. Phase 2 remains incomplete and Phase 1 is the last completed implementation phase.
-Next stage: Continue Phase GB-02 gap-closure execution with plans 02-11 through 02-16. Run `$gsd-execute-phase 2 --gaps-only` to resume the remaining gap plans.
+Completed workflow stage: Phase GB-02 gap-closure execution for Plans 02-10 and 02-13. The bus fixture regression is corrected and the 96-case offline inventory has 92 passes; Plan 02-13 isolates a cross-host WLA-DX section-order mismatch, so CPU-05 and fixture qualification remain open. Phase 2 remains incomplete and Phase 1 is the last completed implementation phase.
+Next stage: Continue Phase GB-02 gap-closure execution at ready Plan 02-11, then follow the declared dependencies through Plans 02-12 and 02-14–02-16. Run `$gsd-execute-phase 2 --gaps-only` to resume.
 Next implementation phase: Phase 3 — Visible Interactive DMG, paused until Phase 2 gaps and required checks are closed and the owner chooses to continue. Both auto-advance flags remain false.
