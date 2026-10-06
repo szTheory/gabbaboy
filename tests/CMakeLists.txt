@@ -27,6 +27,13 @@ foreach(case call_stack conditional_budget base_matrix illegal_lockup flags_edge
   add_test(NAME cpu_${case} COMMAND test_cpu ${case})
 endforeach()
 
+add_executable(test_control test_control.c)
+target_link_libraries(test_control PRIVATE GabbaBoy::core)
+target_compile_features(test_control PRIVATE c_std_17)
+set_target_properties(test_control PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME interrupt_entry COMMAND test_control interrupt_entry)
+add_test(NAME interrupt_budget COMMAND test_control interrupt_budget)
+
 add_executable(test_loader test_loader.c)
 target_link_libraries(test_loader PRIVATE GabbaBoy::core)
 target_compile_features(test_loader PRIVATE c_std_17)

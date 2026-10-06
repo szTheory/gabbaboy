@@ -18,6 +18,8 @@ cpu_cb_budget
 cpu_cb_matrix
 cpu_cb_flags_edges
 cpu_cb_timed_access
+interrupt_entry
+interrupt_budget
 loader_truncated
 loader_oversized
 loader_invalid_header
