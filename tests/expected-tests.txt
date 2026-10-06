@@ -33,6 +33,7 @@ halt_timer_partition
 halt_bug
 stop_wait
 reset_profile
+reset_header_flags
 reset_lockup
 event_stop_wake
 event_boundary

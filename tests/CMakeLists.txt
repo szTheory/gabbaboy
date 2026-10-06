@@ -49,7 +49,7 @@ target_compile_features(test_control PRIVATE c_std_17)
 set_target_properties(test_control PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME interrupt_entry COMMAND test_control interrupt_entry)
 add_test(NAME interrupt_budget COMMAND test_control interrupt_budget)
-foreach(case interrupt_ei_delay interrupt_priority halt_idle halt_timer_partition halt_bug stop_wait reset_profile reset_lockup)
+foreach(case interrupt_ei_delay interrupt_priority halt_idle halt_timer_partition halt_bug stop_wait reset_profile reset_header_flags reset_lockup)
   add_test(NAME ${case} COMMAND test_control ${case})
 endforeach()
 

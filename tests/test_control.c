@@ -215,8 +215,57 @@ static int reset_profile(void) {
     gbb_trace_record t[1] = {{0}}; gbb_run_result r = gbb_run(m, 8, t, 1); REQUIRE(r.consumed_half_dots == 8);
     REQUIRE(gbb_reset(m) == GBB_OK);
     r = gbb_run(m, 8, t, 1);
-    REQUIRE(r.consumed_half_dots == 8 && t[0].time_half_dots == 0 && t[0].pc == 0x100 && t[0].sp == 0xfffe && t[0].a == 1 && t[0].f == 0x80);
+    REQUIRE(r.consumed_half_dots == 8 && t[0].time_half_dots == 0 && t[0].pc == 0x100 && t[0].sp == 0xfffe && t[0].a == 1 && t[0].f == 0xb0);
     gbb_destroy(m); return 0;
+}
+
+static int expect_header_profile(uint8_t checksum, uint8_t expected_f, uint16_t branch_pc) {
+    uint8_t rom[32768];
+    const uint8_t program[] = {0x38, 0x02, 0x00, 0x00, 0x00}; /* JR C,+2; checksum controls the first branch. */
+    make_rom(rom, program, sizeof(program));
+    if (checksum == 0) {
+        /* With this zero-filled header, title byte E7 balances the 25 checksum steps to exactly zero. */
+        rom[0x134] = 0xe7;
+        rom[0x14d] = 0;
+    }
+    REQUIRE(rom[0x14d] == checksum);
+
+    gbb_instance *m = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
+    gbb_trace_record trace[4] = {{0}};
+    gbb_run_result r = gbb_run(m, 32, trace, 4);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 32);
+    REQUIRE(r.trace_count >= 2 && trace[0].pc == 0x0100 && trace[0].f == expected_f);
+    REQUIRE(trace[1].pc == branch_pc);
+
+    REQUIRE(gbb_reset(m) == GBB_OK);
+    r = gbb_run(m, 32, trace, 4);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 32);
+    REQUIRE(r.trace_count >= 2 && trace[0].time_half_dots == 0 && trace[0].pc == 0x0100);
+    REQUIRE(trace[0].f == expected_f && trace[1].pc == branch_pc);
+
+    gbb_trace_record before = {0}, after = {0};
+    gbb_test_cpu_snapshot(m, &before);
+    uint8_t invalid_replacement[sizeof(rom)];
+    memcpy(invalid_replacement, rom, sizeof(rom));
+    invalid_replacement[0x14d] ^= 1u;
+    REQUIRE(gbb_load_rom(m, invalid_replacement, sizeof(invalid_replacement)) == GBB_INVALID_ROM);
+    gbb_test_cpu_snapshot(m, &after);
+    REQUIRE(memcmp(&before, &after, sizeof(before)) == 0);
+
+    REQUIRE(gbb_reset(m) == GBB_OK);
+    r = gbb_run(m, 32, trace, 4);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 32);
+    REQUIRE(r.trace_count >= 2 && trace[0].f == expected_f && trace[1].pc == branch_pc);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int reset_header_flags(void) {
+    REQUIRE(expect_header_profile(0x00, 0x80, 0x0102) == 0);
+    REQUIRE(expect_header_profile(0xe7, 0xb0, 0x0104) == 0);
+    return 0;
 }
 
 static int reset_lockup(void) {
@@ -239,6 +288,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "halt_bug") == 0) return halt_bug();
     if (strcmp(argv[1], "stop_wait") == 0) return stop_wait();
     if (strcmp(argv[1], "reset_profile") == 0) return reset_profile();
+    if (strcmp(argv[1], "reset_header_flags") == 0) return reset_header_flags();
     if (strcmp(argv[1], "reset_lockup") == 0) return reset_lockup();
     return 2;
 }
