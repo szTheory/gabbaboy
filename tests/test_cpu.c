@@ -65,6 +65,63 @@ static int conditional_budget(void) {
     return 0;
 }
 
+static int expected_condition(unsigned condition) {
+    /* The generated ROM starts from F=80: NZ=false, Z=true, NC=true, C=false. */
+    return condition == 1 || condition == 2;
+}
+
+static unsigned expected_first_cost(unsigned op) {
+    if ((op & 0xc7u) == 0x06u) return ((op >> 3) & 7u) == 6u ? 24u : 16u;
+    if ((op & 0xcfu) == 0x01u) return 24;
+    if ((op & 0xcfu) == 0x03u || (op & 0xcfu) == 0x0bu || (op & 0xcfu) == 0x09u) return 16;
+    if ((op & 0xc7u) == 0x04u || (op & 0xc7u) == 0x05u) return ((op >> 3) & 7u) == 6u ? 24u : 8u;
+    if (op >= 0x40 && op <= 0x7f) return op == 0x76 || ((op & 7u) != 6u && ((op >> 3) & 7u) != 6u) ? 8u : 16u;
+    if (op >= 0x80 && op <= 0xbf) return (op & 7u) == 6u ? 16u : 8u;
+    if ((op & 0xe7u) == 0x20u) return expected_condition((op >> 3) & 3u) ? 24u : 16u;
+    if ((op & 0xe7u) == 0xc0u) return expected_condition((op >> 3) & 3u) ? 40u : 16u;
+    if ((op & 0xe7u) == 0xc2u) return expected_condition((op >> 3) & 3u) ? 32u : 24u;
+    if ((op & 0xe7u) == 0xc4u) return expected_condition((op >> 3) & 3u) ? 48u : 24u;
+    if ((op & 0xcfu) == 0xc1u) return 24;
+    if ((op & 0xcfu) == 0xc5u) return 32;
+    if ((op & 0xc7u) == 0xc6u) return 16;
+    if ((op & 0xc7u) == 0xc7u) return 32;
+    switch (op) {
+        case 0x08: return 40;
+        case 0x10: case 0x18: case 0xe0: case 0xf0: return op == 0x18 ? 24u : op == 0x10 ? 8u : 24u;
+        case 0x02: case 0x0a: case 0x12: case 0x1a: case 0x22: case 0x2a: case 0x32: case 0x3a: return 16;
+        case 0xc3: return 32;
+        case 0xc9: case 0xd9: return 32;
+        case 0xcd: return 48;
+        case 0xe2: case 0xf2: case 0xf9: return 16;
+        case 0xe8: return 48;
+        case 0xe9: case 0xf3: case 0xfb: return 8;
+        case 0xea: case 0xfa: return 32;
+        case 0xf8: return 24;
+        case 0xcb: return 16;
+        default: return 8;
+    }
+}
+
+static uint16_t expected_first_pc(unsigned op) {
+    if ((op & 0xe7u) == 0x20u || op == 0x18) return 0x0102;
+    if (op == 0xc3) return 0x0100;
+    if ((op & 0xe7u) == 0xc2u) return expected_condition((op >> 3) & 3u) ? 0x0100 : 0x0103;
+    if (op == 0xcd) return 0x0100;
+    if ((op & 0xe7u) == 0xc4u) return expected_condition((op >> 3) & 3u) ? 0x0100 : 0x0103;
+    if (op == 0xc9 || op == 0xd9) return 0xff00;
+    if ((op & 0xe7u) == 0xc0u) return expected_condition((op >> 3) & 3u) ? 0xff00 : 0x0101;
+    if ((op & 0xc7u) == 0xc7u) return (uint16_t)(op & 0x38u);
+    if (op == 0xe9) return 0x014d;
+    if (op == 0x10 || op == 0x18 || (op & 0xe7u) == 0x20u ||
+        (op & 0xc7u) == 0x06u || (op & 0xc7u) == 0xc6u ||
+        op == 0xe0 || op == 0xe8 || op == 0xf0 || op == 0xf8)
+        return 0x0102;
+    if ((op & 0xcfu) == 0x01u || op == 0x08 || op == 0xea || op == 0xfa ||
+        (op & 0xe7u) == 0xc2u || (op & 0xe7u) == 0xc4u) return 0x0103;
+    if (op == 0xcb) return 0x0102;
+    return 0x0101;
+}
+
 static int base_matrix(void) {
     static const uint8_t holes[] = {0xd3,0xdb,0xdd,0xe3,0xe4,0xeb,0xec,0xed,0xf4,0xfc,0xfd};
     uint8_t rom[32768];
@@ -74,10 +131,17 @@ static int base_matrix(void) {
         gbb_instance *m=NULL;
         REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B,&m)==GBB_OK);
         REQUIRE(gbb_load_rom(m,rom,sizeof(rom))==GBB_OK);
-        gbb_run_result r=gbb_run(m,64,NULL,0);
+        gbb_trace_record trace[10]={{0}};
+        gbb_run_result r=gbb_run(m,96,trace,10);
         int illegal=0; for(size_t i=0;i<sizeof(holes);++i) if(holes[i]==op) illegal=1;
         if(illegal) REQUIRE(r.reason==GBB_STOP_LOCKUP && r.lockup_pc==0x100 && r.lockup_opcode==op);
-        else REQUIRE(r.reason==GBB_STOP_BUDGET && r.consumed_half_dots>0);
+        else {
+            REQUIRE(r.reason==GBB_STOP_BUDGET && r.consumed_half_dots>0);
+            REQUIRE(r.trace_count>=2);
+            REQUIRE(trace[1].time_half_dots==expected_first_cost(op));
+            REQUIRE(trace[1].pc==expected_first_pc(op));
+            REQUIRE((trace[1].f&0x0f)==0);
+        }
         gbb_destroy(m);
     }
     return 0;
