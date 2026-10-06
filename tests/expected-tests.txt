@@ -28,6 +28,7 @@ cpu_cb_timed_access
 interrupt_entry
 interrupt_budget
 interrupt_ei_delay
+interrupt_ei_chain
 interrupt_priority
 halt_idle
 halt_timer_partition

@@ -90,6 +90,33 @@ static int interrupt_ei_delay(void) {
     gbb_destroy(m); return 0;
 }
 
+static int interrupt_ei_chain(void) {
+    /* IE and IF are armed by t=80. The first EI retires at 88; the
+     * second EI retires at 96, when the first enable becomes visible. */
+    const uint8_t p[] = {0x3e,1,0xea,0xff,0xff,0xea,0x0f,0xff,0xfb,0xfb,0x00};
+    gbb_instance *whole = make_machine(p, sizeof(p)); REQUIRE(whole != NULL);
+    gbb_instance *split = make_machine(p, sizeof(p)); REQUIRE(split != NULL);
+    gbb_trace_record tw[8] = {{0}}, ts[8] = {{0}}, sw = {0}, ss = {0};
+    gbb_run_result r = gbb_run(whole, 136, tw, 8);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 136 && r.trace_count == 5);
+    REQUIRE(tw[3].pc == 0x108 && tw[3].time_half_dots == 80);
+    REQUIRE(tw[4].pc == 0x109 && tw[4].time_half_dots == 88);
+    gbb_test_cpu_snapshot(whole, &sw);
+    REQUIRE(sw.pc == 0x40 && sw.sp == 0xfffc && sw.time_half_dots == 136);
+    REQUIRE(gbb_peek_ram(whole, 0xfffc) == 0x0a && gbb_peek_ram(whole, 0xfffd) == 0x01);
+    r = gbb_run(split, 88, ts, 8);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 88 && r.trace_count == 4);
+    r = gbb_run(split, 8, ts + 4, 4);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 8 && r.trace_count == 1);
+    r = gbb_run(split, 40, ts + 5, 3);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 40 && r.trace_count == 0);
+    gbb_test_cpu_snapshot(split, &ss);
+    REQUIRE(memcmp(tw, ts, 5 * sizeof(*tw)) == 0 && memcmp(&sw, &ss, sizeof(sw)) == 0);
+    REQUIRE(gbb_peek_ram(split, 0xfffc) == 0x0a && gbb_peek_ram(split, 0xfffd) == 0x01);
+    gbb_destroy(whole); gbb_destroy(split);
+    return 0;
+}
+
 static int interrupt_priority(void) {
     const uint8_t p[] = {0x3e,3,0xea,0xff,0xff,0xea,0x0f,0xff,0xfb,0x00};
     uint8_t rom[32768]; make_rom(rom, p, sizeof(p));
@@ -282,6 +309,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "interrupt_entry") == 0) return interrupt_entry();
     if (strcmp(argv[1], "interrupt_budget") == 0) return interrupt_budget();
     if (strcmp(argv[1], "interrupt_ei_delay") == 0) return interrupt_ei_delay();
+    if (strcmp(argv[1], "interrupt_ei_chain") == 0) return interrupt_ei_chain();
     if (strcmp(argv[1], "interrupt_priority") == 0) return interrupt_priority();
     if (strcmp(argv[1], "halt_idle") == 0) return halt_idle();
     if (strcmp(argv[1], "halt_timer_partition") == 0) return halt_timer_partition();
