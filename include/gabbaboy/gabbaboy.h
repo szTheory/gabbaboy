@@ -25,7 +25,9 @@ typedef enum {
     GBB_UNSUPPORTED_CARTRIDGE,/* cartridge type is not ROM-only */
     GBB_UNSUPPORTED_ROM_SIZE, /* header declares an unsupported ROM size code */
     GBB_UNSUPPORTED_RAM_SIZE, /* cartridge header declares external RAM */
-    GBB_OUT_OF_MEMORY         /* allocation failed; live instance is unchanged */
+    GBB_OUT_OF_MEMORY,        /* allocation failed; live instance is unchanged */
+    GBB_EVENT_QUEUE_FULL,
+    GBB_INVALID_EVENT
 } gbb_error;
 
 typedef enum {
@@ -36,8 +38,21 @@ typedef enum {
     GBB_STOP_UNSUPPORTED_BUS,
     GBB_STOP_LOCKUP,
     GBB_STOP_HALTED_IDLE,    /* eligible idle ticks advanced; machine remains halted */
-    GBB_STOP_STOPPED         /* STOP entered; oscillator remains paused until modeled wake */
+    GBB_STOP_STOPPED,        /* STOP entered; oscillator remains paused until modeled wake */
+    GBB_STOP_NO_PROGRESS,
+    GBB_STOP_OUTPUT_FULL = GBB_STOP_TRACE_FULL
 } gbb_stop_reason;
+
+typedef enum {
+    GBB_INPUT_STOP_WAKE = 1,
+    GBB_INPUT_SERIAL_EDGE
+} gbb_input_event_kind;
+
+typedef struct {
+    uint64_t at_half_dots;
+    gbb_input_event_kind kind;
+    uint8_t value;
+} gbb_input_event;
 
 typedef struct {
     uint64_t time_half_dots;
@@ -69,6 +84,10 @@ gbb_error gbb_reset(gbb_instance *instance);
  * A failed replacement leaves the current ROM and machine state unchanged.
  * Supports only exact-size 32 KiB ROM-only images with no cartridge RAM. */
 gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_size);
+/* Copies a nondecreasing timestamp batch into a fixed 64-event per-instance
+ * queue. Ties retain caller order. STOP_WAKE value 1 represents a modeled
+ * selected input-line transition; SERIAL_EDGE value is the bit sampled in. */
+gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events, size_t count);
 /* Runs whole supported instructions. GBB_STOP_HALTED_IDLE means the run has
  * consumed eligible idle ticks and the CPU remains halted; GBB_STOP_STOPPED
  * means STOP is waiting for a modeled wake event. The caller's budget bounds

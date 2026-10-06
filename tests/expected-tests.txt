@@ -27,6 +27,8 @@ halt_bug
 stop_wait
 reset_profile
 reset_lockup
+event_stop_wake
+event_boundary
 loader_truncated
 loader_oversized
 loader_invalid_header

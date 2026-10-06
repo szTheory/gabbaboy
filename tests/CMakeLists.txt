@@ -53,6 +53,14 @@ foreach(case interrupt_ei_delay interrupt_priority halt_idle halt_bug stop_wait 
   add_test(NAME ${case} COMMAND test_control ${case})
 endforeach()
 
+add_executable(test_events test_events.c)
+target_link_libraries(test_events PRIVATE GabbaBoy::core)
+target_compile_features(test_events PRIVATE c_std_17)
+set_target_properties(test_events PROPERTIES C_EXTENSIONS OFF)
+foreach(case event_stop_wake event_boundary)
+  add_test(NAME ${case} COMMAND test_events ${case})
+endforeach()
+
 add_executable(test_loader test_loader.c)
 target_link_libraries(test_loader PRIVATE GabbaBoy::core)
 target_compile_features(test_loader PRIVATE c_std_17)
