@@ -12,6 +12,7 @@ bus_unsupported_stack
 bus_unsupported_fetch
 bus_halt_bug_fetch
 cpu_call_stack
+cpu_return_phases
 cpu_conditional_budget
 cpu_base_matrix
 cpu_illegal_lockup

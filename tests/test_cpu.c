@@ -17,13 +17,14 @@ typedef struct {
 } gbb_test_bus_event;
 extern void gbb_test_observer_set(gbb_instance *, gbb_test_bus_event *, size_t);
 extern size_t gbb_test_observer_count(const gbb_instance *);
+extern void gbb_test_cpu_snapshot(const gbb_instance *, gbb_trace_record *);
 
 static void make_rom(uint8_t rom[32768], const uint8_t *program, size_t size) {
     memset(rom, 0, 32768);
     memcpy(rom + 0x100, program, size);
-    uint8_t checksum = 0;
-    for (size_t i = 0x134; i <= 0x14c; ++i) checksum = (uint8_t)(checksum - rom[i] - 1u);
-    rom[0x14d] = checksum;
+    /* Generic CPU cases use checksum zero so their independent F=80 setup stays stable. */
+    rom[0x134] = 0xe7;
+    rom[0x14d] = 0;
 }
 
 static int call_stack(void) {
@@ -47,8 +48,8 @@ static int call_stack(void) {
     REQUIRE(gbb_test_observer_count(m) >= 4);
     REQUIRE(events[0].time_half_dots == 32 && events[0].address == 0xfffd && events[0].access == 2 && events[0].value == 0x01);
     REQUIRE(events[1].time_half_dots == 40 && events[1].address == 0xfffc && events[1].access == 2 && events[1].value == 0x03);
-    REQUIRE(events[2].time_half_dots == 64 && events[2].address == 0xfffc && events[2].access == 1 && events[2].value == 0x03);
-    REQUIRE(events[3].time_half_dots == 72 && events[3].address == 0xfffd && events[3].access == 1 && events[3].value == 0x01);
+    REQUIRE(events[2].time_half_dots == 56 && events[2].address == 0xfffc && events[2].access == 1 && events[2].value == 0x03);
+    REQUIRE(events[3].time_half_dots == 64 && events[3].address == 0xfffd && events[3].access == 1 && events[3].value == 0x01);
     gbb_destroy(m);
     return 0;
 }
@@ -198,6 +199,87 @@ static int timed_access(void) {
     REQUIRE(r.consumed_half_dots==16 && gbb_test_observer_count(m)==1);
     REQUIRE(events[0].time_half_dots==8 && events[0].address==0x0013 && events[0].access==2 && events[0].value==1);
     gbb_destroy(m); return 0;
+}
+
+static int check_return_case(uint8_t opcode, int taken, int pending, uint8_t cost,
+                             uint8_t low_phase, uint8_t high_phase) {
+    uint8_t rom[32768];
+    static const uint8_t ordinary_setup[] = {0x31, 0x02, 0xc0, 0xcd, 0x50, 0x01};
+    static const uint8_t pending_setup[] = {
+        0x3e, 0x01, 0xea, 0xff, 0xff, 0xea, 0x0f, 0xff,
+        0x31, 0x02, 0xc0, 0xcd, 0x50, 0x01
+    };
+    const uint8_t *setup = pending ? pending_setup : ordinary_setup;
+    size_t setup_size = pending ? sizeof(pending_setup) : sizeof(ordinary_setup);
+    uint64_t setup_time = pending ? 112u : 72u;
+    uint16_t return_pc = pending ? 0x010e : 0x0106;
+    make_rom(rom, setup, setup_size);
+    rom[0x150] = opcode;
+
+    gbb_instance *m = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
+    gbb_run_result r = gbb_run(m, setup_time, NULL, 0);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == setup_time);
+
+    gbb_test_bus_event events[8] = {{0}};
+    gbb_test_observer_set(m, events, 8);
+    gbb_trace_record before = {0}, after = {0}, trace[2] = {{0}};
+    gbb_test_cpu_snapshot(m, &before);
+    r = gbb_run(m, (uint64_t)cost - 1u, trace, 2);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 0 && r.trace_count == 0);
+    gbb_test_cpu_snapshot(m, &after);
+    REQUIRE(memcmp(&before, &after, sizeof(before)) == 0);
+    REQUIRE(gbb_test_observer_count(m) == 0);
+
+    r = gbb_run(m, cost, trace, 2);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == cost && r.trace_count == 1);
+    REQUIRE(trace[0].time_half_dots == setup_time && trace[0].pc == 0x0150);
+    REQUIRE(trace[0].sp == 0xc000 && trace[0].f == 0x80);
+    gbb_test_cpu_snapshot(m, &after);
+    REQUIRE(after.time_half_dots == setup_time + cost && after.f == 0x80);
+
+    if (taken) {
+        REQUIRE(gbb_test_observer_count(m) == 2);
+        REQUIRE(events[0].time_half_dots == setup_time + low_phase);
+        REQUIRE(events[0].address == 0xc000 && events[0].access == 1 && events[0].value == (uint8_t)return_pc);
+        REQUIRE(events[1].time_half_dots == setup_time + high_phase);
+        REQUIRE(events[1].address == 0xc001 && events[1].access == 1 && events[1].value == (uint8_t)(return_pc >> 8));
+        REQUIRE(after.pc == return_pc && after.sp == 0xc002);
+    } else {
+        REQUIRE(gbb_test_observer_count(m) == 0);
+        REQUIRE(after.pc == 0x0151 && after.sp == 0xc000);
+    }
+
+    if (pending) {
+        before = after;
+        r = gbb_run(m, 39, trace, 2);
+        REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 0 && r.trace_count == 0);
+        gbb_test_cpu_snapshot(m, &after);
+        REQUIRE(memcmp(&before, &after, sizeof(before)) == 0);
+        REQUIRE(gbb_test_observer_count(m) == 2);
+
+        r = gbb_run(m, 40, trace, 2);
+        REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 40);
+        gbb_test_cpu_snapshot(m, &after);
+        REQUIRE(after.pc == 0x0040 && after.sp == 0xc000 && after.time_half_dots == setup_time + cost + 40u);
+        REQUIRE(gbb_test_observer_count(m) == 5);
+        REQUIRE(events[2].time_half_dots == setup_time + cost + 8u && events[2].address == 0xff0f);
+        REQUIRE(events[3].time_half_dots == setup_time + cost + 16u && events[3].address == 0xc001);
+        REQUIRE(events[4].time_half_dots == setup_time + cost + 24u && events[4].address == 0xc000);
+    }
+
+    gbb_destroy(m);
+    return 0;
+}
+
+static int return_phases(void) {
+    /* Opcode timing contract: RET/RETI read at M2/M3; taken RET cc adds its condition cycle first. */
+    REQUIRE(check_return_case(0xc9, 1, 0, 32, 8, 16) == 0);
+    REQUIRE(check_return_case(0xd9, 1, 1, 32, 8, 16) == 0);
+    REQUIRE(check_return_case(0xc8, 1, 0, 40, 16, 24) == 0);
+    REQUIRE(check_return_case(0xc0, 0, 0, 16, 0, 0) == 0);
+    return 0;
 }
 
 static int address_wrap(void) {
@@ -379,6 +461,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "illegal_lockup") == 0) return illegal_lockup();
     if (strcmp(argv[1], "flags_edges") == 0) return flags_edges();
     if (strcmp(argv[1], "timed_access") == 0) return timed_access();
+    if (strcmp(argv[1], "return_phases") == 0) return return_phases();
     if (strcmp(argv[1], "address_wrap") == 0) return address_wrap();
     if (strcmp(argv[1], "stack_wrap") == 0) return stack_wrap();
     if (strcmp(argv[1], "cb_wram") == 0) return cb_wram();
