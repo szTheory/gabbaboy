@@ -4,16 +4,16 @@ milestone: v0.1
 current_phase: 02
 current_phase_name: DMG CPU, Bus, and Time
 status: executing
-stopped_at: Completed GB-02-02-PLAN.md; Phase GB-02 remains in progress
-last_updated: "2026-10-06T18:35:38.420Z"
+stopped_at: Completed GB-02-03-PLAN.md
+last_updated: "2026-10-06T19:06:26.512Z"
 last_activity: 2026-10-06
-last_activity_desc: Plan GB-02-02 complete; Phase GB-02 remains in progress
-state_head: b359d29a48b57246abbbef50775a1a66abb00aa4
+last_activity_desc: Plan GB-02-03 complete; Phase GB-02 remains in progress
+state_head: 4d9ab5b2070a0503361f0e5ea885792cada4ed55
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 14
-  completed_plans: 7
+  completed_plans: 8
 milestone_name: limited DMG preview
 ---
 
@@ -29,7 +29,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 ## Current Position
 
 Phase: GB-02 (DMG CPU, Bus, and Time) — EXECUTING
-Plan: 3 of 9
+Plan: 4 of 9
 Status: Executing Phase GB-02
 Last activity: 2026-10-06 — Phase GB-02 execution started
 
@@ -53,6 +53,7 @@ Progress: [██░░░░░░░░] 17% of milestone phases complete; Pha
 | Phase 01 P05 | 84 min | 3 tasks | 15 files |
 | Phase GB-02 P01 | 22min | 2 tasks | 14 files |
 | Phase GB-02 P02 | 43 min | 2 tasks | 10 files |
+| Phase 02 P03 | 6 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-02]: The original tracer moved its protocol from fixture-policy A000 RAM to WRAM C000/C001.
 - [Phase GB-02]: RGBDS 1.0.1 fixture regeneration uses the SHA-verified official macOS archive.
 - [Phase GB-02]: Unused SM83 encodings persistently lock with original PC/opcode until reset; CB-prefixed instruction semantics are owned by Plan 02-03.
+- [Phase 02]: CB register operations cost 16 half-dots; BIT (HL) costs 24; other (HL) CB operations cost 32.
+- [Phase 02]: BIT preserves carry and sets H; RES and SET preserve flags; rotate/shift groups set Z and carry from their results.
 
 ### Pending Todos
 
@@ -101,11 +104,11 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-06T18:35:38.375Z
-Stopped at: Completed GB-02-02-PLAN.md; Phase GB-02 remains in progress
-Resume file: .planning/phases/GB-02-dmg-cpu-bus-and-time/02-03-PLAN.md
+Last session: 2026-10-06T19:06:26.484Z
+Stopped at: Completed GB-02-03-PLAN.md
+Resume file: .planning/phases/GB-02-dmg-cpu-bus-and-time/02-04-PLAN.md
 Next command in fresh context: $gsd-execute-phase 2
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: Phase 2 Plan 02-01 execution — ROM-only bus and WRAM tracer. Phase 1 remains the last completed implementation phase; Phase 2 itself is not complete.
-Next stage: Phase 2 Plan 02-02 execution — continue DMG CPU, Bus, and Time. Run $gsd-execute-phase 2.
+Completed workflow stage: Phase 2 Plan 02-03 execution — complete CB SM83 instructions. Phase 1 remains the last completed implementation phase; Phase 2 itself is not complete.
+Next stage: Phase 2 Plan 02-04 execution — CPU control states and interrupts. Run $gsd-execute-phase 2.
 Following implementation phase: Phase 3 — Visible Interactive DMG, only after Phase 2 verification and owner direction. Both auto-advance flags remain false.
