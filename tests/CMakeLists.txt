@@ -57,7 +57,8 @@ add_executable(test_events test_events.c)
 target_link_libraries(test_events PRIVATE GabbaBoy::core)
 target_compile_features(test_events PRIVATE c_std_17)
 set_target_properties(test_events PROPERTIES C_EXTENSIONS OFF)
-foreach(case event_stop_wake event_boundary)
+foreach(case event_stop_wake event_boundary event_queue_order event_queue_atomic event_partition
+             event_deadline_inside event_external_serial_edges event_time_overflow run_output_capacity)
   add_test(NAME ${case} COMMAND test_events ${case})
 endforeach()
 

@@ -29,6 +29,13 @@ reset_profile
 reset_lockup
 event_stop_wake
 event_boundary
+event_queue_order
+event_queue_atomic
+event_partition
+event_deadline_inside
+event_external_serial_edges
+event_time_overflow
+run_output_capacity
 loader_truncated
 loader_oversized
 loader_invalid_header

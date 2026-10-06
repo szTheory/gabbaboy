@@ -86,7 +86,10 @@ gbb_error gbb_reset(gbb_instance *instance);
 gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_size);
 /* Copies a nondecreasing timestamp batch into a fixed 64-event per-instance
  * queue. Ties retain caller order. STOP_WAKE value 1 represents a modeled
- * selected input-line transition; SERIAL_EDGE value is the bit sampled in. */
+ * selected input-line transition; SERIAL_EDGE value is the bit sampled in.
+ * Empty batches, including NULL/0, succeed. Invalid pointers return
+ * GBB_INVALID_ARGUMENT; malformed, past or unordered events return
+ * GBB_INVALID_EVENT; excess capacity returns GBB_EVENT_QUEUE_FULL. */
 gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events, size_t count);
 /* Runs whole supported instructions. GBB_STOP_HALTED_IDLE means the run has
  * consumed eligible idle ticks and the CPU remains halted; GBB_STOP_STOPPED
