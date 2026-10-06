@@ -93,10 +93,12 @@ gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_si
 gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events, size_t count);
 /* Runs whole supported instructions. GBB_STOP_HALTED_IDLE means the run has
  * consumed eligible idle ticks and the CPU remains halted; GBB_STOP_STOPPED
- * means STOP is waiting for a modeled wake event. The caller's budget bounds
- * all idle progression. Budget/consumed values are uint64
- * half-dot ticks. An instruction is preflighted and won't start unless its
- * full cost fits. Trace records are optional caller-owned storage; the core
+ * means STOP is waiting for a modeled wake event. A positive STOP wait can
+ * consume master timeline ticks while CPU, divider, timer and internal serial
+ * oscillator work remains frozen. An accepted wake is applied at its timestamp
+ * before another CPU fetch. The caller's budget bounds all idle progression.
+ * Budget/consumed values are uint64 half-dot ticks. An instruction is
+ * preflighted and won't start unless its full cost fits. Trace records are optional caller-owned storage; the core
  * writes no more than capacity, allocates nothing, and never overwrites prior
  * records. trace=NULL is valid only with capacity=0. Trace bytes are snapshots
  * at instruction boundaries and remain owned by the caller. */

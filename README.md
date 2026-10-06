@@ -69,6 +69,14 @@ records. Errors distinguish invalid arguments/profile, malformed or
 unsupported ROMs, allocation failure, unsupported opcodes, and bounded trace
 exhaustion. The API and ABI may evolve; no stable ABI promise is made.
 
+`gbb_queue_events` copies up to 64 ordered absolute half-dot events into each
+instance. Equal timestamps keep caller order. The core accepts modeled STOP
+wake transitions and external serial input bits; it does not implement full
+joypad selection. A STOP wait can advance the bounded master timeline while
+the CPU, divider, timer, and internal serial oscillator stay frozen. A wake at
+the budget boundary is consumed before the next instruction, which still needs
+its full instruction budget. No wall clock participates.
+
 ## Profile and evidence limits
 
 The deterministic profile is named `DMG-CPU-B` and skips boot at 0x0100. The
