@@ -12,11 +12,11 @@ provides:
   - Private timed bus observer and CPU matrix, flags, stack, and lockup regressions
 affects: [GB-02-dmg-cpu-bus-and-time/02-03, cpu, runner]
 actuals:
-  tokens: 8818
+  tokens: 9620
   tasks: 2
-  commits: 3
+  commits: 6
 plan_head_before: d21fa1508c6e3da8f6764b89722ffd940bf0bab2
-plan_head_after: e7c55cef0db2b7a87cb15b9f91668c531690f5e7
+plan_head_after: 6533c554c40668226d7b13b36e764edb76e3be41
 tech-stack:
   added: []
   patterns: [private per-instance timed bus observation, complete-instruction cycle preflight]
@@ -50,7 +50,7 @@ coverage:
         ref: tests/test_cpu.c#call_stack,conditional_budget,flags_edges,timed_access
         status: pass
     human_judgment: false
-duration: 38min
+duration: 43min
 completed: 2026-10-06
 status: complete
 ---
@@ -61,7 +61,7 @@ status: complete
 
 ## Performance
 
-- **Duration:** 38 min
+- **Duration:** 43 min
 - **Started:** 2026-10-06T17:57:00Z
 - **Completed:** 2026-10-06T18:35:00Z
 - **Tasks:** 2
@@ -72,14 +72,15 @@ status: complete
 - Added conditional CALL/RET execution with stack byte ordering, branch-specific cost preflight, and per-instance timestamp/address/access/value bus observations.
 - Implemented base opcode classification and execution, arithmetic/flag updates, and persistent D3-family lockup that returns the original PC/opcode until reset.
 - Updated API, runner, tracer, and legacy timing assertions; added 6 named CPU cases plus API lockup coverage.
+- Independently checked next PC and first-instruction timing for every legal unprefixed encoding, in addition to flag, bus, and lockup edge cases.
 - Verified the complete offline CTest suite and installed C/C++ consumers: 37/37 passed.
 
 ## Task Commits
 
 1. **Task 1: Execute a conditional guest call and stack round-trip** - `7f4d6ed` (test), `6a972fe` (feat)
-2. **Task 2: Complete legal base opcode matrix and unused-opcode lockup** - `e7c55ce` (feat)
+2. **Task 2: Complete legal base opcode matrix and unused-opcode lockup** - `e7c55ce` (feat), `6533c55` (test)
 
-**Plan metadata:** `b359d29` (summary); final state/roadmap metadata commit is recorded separately.
+**Plan metadata:** `b359d29` (summary), `12bc224` (state/roadmap); final test-evidence reconciliation is committed separately.
 
 ## Files Created/Modified
 
@@ -134,4 +135,5 @@ Plan 02-02 is complete; Phase GB-02 remains in progress. Plan 02-03 owns CB-pref
 
 - Summary file exists at the required phase path.
 - Task commit hashes `7f4d6ed`, `6a972fe`, and `e7c55ce` are present in current HEAD ancestry.
-- Measured ledger range contains three commits from `d21fa1508c6e3da8f6764b89722ffd940bf0bab2` through `e7c55cef0db2b7a87cb15b9f91668c531690f5e7`.
+- Measured ledger range contains six commits from `d21fa1508c6e3da8f6764b89722ffd940bf0bab2` through `6533c554c40668226d7b13b36e764edb76e3be41`.
+- Summary and state metadata commits `b359d29` and `12bc224` are present in current HEAD ancestry.
