@@ -51,3 +51,11 @@ installed_consumer_cpp
 preview_package_smoke
 timer_guest_overflow
 timer_mid_instruction
+timer_selectors
+timer_div_write
+timer_tac_write
+timer_tima_collision
+timer_tma_collision
+serial_internal_disconnected
+serial_external_pending
+serial_unqualified_overlap
