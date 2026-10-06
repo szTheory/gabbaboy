@@ -5,10 +5,10 @@ current_phase: 02
 current_phase_name: DMG CPU, Bus, and Time
 status: executing
 stopped_at: Completed GB-02 Plan 02-10 gap closure; Phase 2 remains executing
-last_updated: "2026-10-06T23:31:19.027Z"
+last_updated: "2026-10-06T23:42:25.446Z"
 last_activity: 2026-10-06
 last_activity_desc: Gap-closure Plan 02-10 executed; Phase GB-02 remains incomplete
-state_head: 3066a5665164363c849f9f045c0563c401de6f18
+state_head: 3231d21460b2f009085751774d6d2e3263badcbd
 progress:
   total_phases: 6
   completed_phases: 1
@@ -31,7 +31,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 Phase: GB-02 (DMG CPU, Bus, and Time) — EXECUTING
 Plan: 11 of 16
 Status: Executing Phase GB-02
-Last activity: 2026-10-06 — Gap-closure Plan 02-10 executed; Phase GB-02 remains incomplete
+Last activity: 2026-10-06 — Completed quick task 261006-r6w: Fix the bus_unsupported_stack fixture so RET NC tests its intended condition under checksum-selected DMG startup flags; validate the offline test inventory
 
 Progress: [██░░░░░░░░] 17% of milestone phases complete; Phase 1 has 5/5 plans and passed verification
 
@@ -122,7 +122,13 @@ None outside the roadmap.
 - [Draft PR #2](https://github.com/szTheory/gabbaboy/pull/2) publishes the Phase 2 implementation and gap reports for review, stacked on Phase 1 PR #1. Retarget and requalify after the foundation lands; no merge or release. Boundary triage found no open issues; PR #1 remains open.
 - PR #1 remains open for owner review at exact hosted SHA `9f1df9bd0a70e50033f7d8cbcbff778e3bfd94e3`. Required contexts passed; both Linux/macOS preview packages passed exact digest/source/consumer verification and expire 2026-10-17T19:19Z. They are temporary artifacts, not releases.
 - Native host support floors, signing, and live Playstead integration remain unverified for later release/adoption work.
-- Plan 02-10 full offline CTest was 91/96: four documented Mooneye unsupported-bus failures plus bus_unsupported_stack, whose checksum-nonzero synthetic ROM now starts with F=0xB0 while its RET NC fixture assumes C=0. A fixture correction requires tests/test_bus.c, outside this plan file allowlist; keep CPU-01/02/04 pending independent Phase 2 verification.
+- Plan 02-10 initially exposed a stale bus fixture assumption: checksum-selected startup flags made its `RET NC` case start with carry set. Quick task 261006-r6w corrected the generated ROM to a valid zero-checksum profile. A fresh full offline report now has all 96 expected cases, no skips, 92 passes, and only the four documented Mooneye unsupported-LY failures; CPU-01/02/04 remain pending independent Phase 2 verification.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 261006-r6w | Fix the bus_unsupported_stack fixture so RET NC tests its intended condition under checksum-selected DMG startup flags; validate the offline test inventory. | 2026-10-06 | 3231d21 | [261006-r6w-fix-the-bus-unsupported-stack-fixture-so](./quick/261006-r6w-fix-the-bus-unsupported-stack-fixture-so/) |
 
 ## Deferred Items
 
