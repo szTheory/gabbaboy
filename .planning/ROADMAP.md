@@ -57,9 +57,9 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. Equal timestamped inputs and elapsed emulated time produce equal supported state/output across different run partitions; LCD-off, HALT/STOP, lockup, and full output capacity return within the caller's bounded contract. (CPU-04)
 5. A headless run reports pass/fail/timeout/unsupported against a pinned eligible CPU/timer corpus with model/boot/protocol identity and sufficient retained trace evidence to reproduce failures. (CPU-05)
 
-**Plans**: 9 planned in 9 dependency-ordered waves; implementation pending.
+**Plans**: 1/9 plans executedned in 9 dependency-ordered waves; implementation pending.
 **Wave 1**
-- [ ] 02-01-PLAN.md — ROM-only bus and WRAM tracer
+- [x] 02-01-PLAN.md — ROM-only bus and WRAM tracer
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 02-02-PLAN.md — complete base SM83 instructions and lockup
@@ -157,7 +157,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Portable Foundation and Original ROM Tracer | 5/5 | Complete    | 2026-10-03 |
-| 2. DMG CPU, Bus, and Time | 0/TBD | Not started | - |
+| 2. DMG CPU, Bus, and Time | 1/9 | In Progress | - |
 | 3. Visible Interactive DMG | 0/TBD | Not started | - |
 | 4. MBC1 and Safe Battery Continuation | 0/TBD | Not started | - |
 | 5. DMG Audio and Stable Playback | 0/TBD | Not started | - |

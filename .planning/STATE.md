@@ -1,19 +1,19 @@
 ---
 gsd_state_version: "1.0"
 milestone: v0.1
-current_phase: 2
+current_phase: 02
 current_phase_name: DMG CPU, Bus, and Time
 status: executing
-stopped_at: Phase 2 planning complete; execution not started
-last_updated: "2026-10-06T17:23:02.244Z"
+stopped_at: Completed GB-02-01-PLAN.md; Phase 2 execution remains in progress
+last_updated: "2026-10-06T17:57:27.678Z"
 last_activity: 2026-10-06
-last_activity_desc: Phase 2 nine-plan contract reviewed; paused before execution
-state_head: 11ea3e4d80bce92638e7537c640cd1db46b410c8
+last_activity_desc: Phase GB-02 execution started
+state_head: 7b58f895c669985f5c2cb1f45b0fe38514f7a6b8
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 14
-  completed_plans: 5
+  completed_plans: 6
 milestone_name: limited DMG preview
 ---
 
@@ -24,14 +24,14 @@ milestone_name: limited DMG preview
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 2 — DMG CPU, Bus, and Time
+**Current focus:** Phase GB-02 — DMG CPU, Bus, and Time
 
 ## Current Position
 
-Phase: 2 (DMG CPU, Bus, and Time) — READY TO EXECUTE
-Plan: 0/9 executed; 9 plans in 9 waves ready
-Status: Ready to execute
-Last activity: 2026-10-06 — Phase 2 planning reviewed; all five requirements and 12 decisions covered
+Phase: GB-02 (DMG CPU, Bus, and Time) — EXECUTING
+Plan: 2 of 9
+Status: Executing Phase GB-02
+Last activity: 2026-10-06 — Phase GB-02 execution started
 
 Progress: [██░░░░░░░░] 17% of milestone phases complete; Phase 1 has 5/5 plans and passed verification
 
@@ -51,6 +51,7 @@ Progress: [██░░░░░░░░] 17% of milestone phases complete; Pha
 | Phase 01 P03 | 94 min | 3 tasks | 10 files |
 | Phase 01 P04 | 31 min | 2 tasks | 12 files |
 | Phase 01 P05 | 84 min | 3 tasks | 15 files |
+| Phase GB-02 P01 | 22min | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -76,6 +77,10 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 01]: The bootless DMG-CPU-B tracer verifies the bounded API and guest path, not hardware-qualified memory mapping; Phase 2 owns that evidence.
 - [Phase 01]: At verified implementation SHA `8396096ad17500974b30657af91fd2ef9ad51237`, all five roadmap truths and eight BASE requirements passed, standard code review was clean, and required PR contexts plus both package artifacts passed exact-SHA verification.
 - [Phase 01]: Final exact hosted evidence also passed at docs-only PR SHA `9f1df9bd0a70e50033f7d8cbcbff778e3bfd94e3` after the Phase 1 closeout documentation was committed; the implementation is unchanged from SHA `8396096ad17500974b30657af91fd2ef9ad51237`.
+- [Phase GB-02]: ROM-only A000-BFFF reads stop as unsupported bus and writes have no effect.
+- [Phase GB-02]: The side-effect-free peek API exposes WRAM, its echo, and HRAM only.
+- [Phase GB-02]: The original tracer moved its protocol from fixture-policy A000 RAM to WRAM C000/C001.
+- [Phase GB-02]: RGBDS 1.0.1 fixture regeneration uses the SHA-verified official macOS archive.
 
 ### Pending Todos
 
@@ -94,11 +99,11 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-06
-Stopped at: Phase 2 planning complete; execution not started
-Resume file: .planning/phases/GB-02-dmg-cpu-bus-and-time/02-01-PLAN.md
+Last session: 2026-10-06T17:57:27.630Z
+Stopped at: Completed GB-02-01-PLAN.md; Phase 2 execution remains in progress
+Resume file: .planning/phases/GB-02-dmg-cpu-bus-and-time/02-02-PLAN.md
 Next command in fresh context: $gsd-execute-phase 2
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: Phase 2 planning — DMG CPU, Bus, and Time. Phase 1 remains the last completed implementation phase; Phase 2 itself is not complete.
-Next stage: Phase 2 execution — DMG CPU, Bus, and Time. Run $gsd-execute-phase 2.
+Completed workflow stage: Phase 2 Plan 02-01 execution — ROM-only bus and WRAM tracer. Phase 1 remains the last completed implementation phase; Phase 2 itself is not complete.
+Next stage: Phase 2 Plan 02-02 execution — continue DMG CPU, Bus, and Time. Run $gsd-execute-phase 2.
 Following implementation phase: Phase 3 — Visible Interactive DMG, only after Phase 2 verification and owner direction. Both auto-advance flags remain false.
