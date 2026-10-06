@@ -4,16 +4,16 @@ milestone: v0.1
 current_phase: 02
 current_phase_name: DMG CPU, Bus, and Time
 status: executing
-stopped_at: Completed GB-02-07-PLAN.md
-last_updated: "2026-10-06T20:38:35.482Z"
+stopped_at: Completed GB-02-08-PLAN.md
+last_updated: "2026-10-06T20:52:29.328Z"
 last_activity: 2026-10-06
-last_activity_desc: Plan GB-02-07 complete; Phase GB-02 remains in progress
-state_head: 4479be2df870c0bd46fd5d4cb1f0e9693c279863
+last_activity_desc: Plan GB-02-08 complete; Phase GB-02 remains in progress
+state_head: 4d3115e8944262686e4944575295691ab9df2180
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 14
-  completed_plans: 12
+  completed_plans: 13
 milestone_name: limited DMG preview
 ---
 
@@ -29,18 +29,18 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 ## Current Position
 
 Phase: GB-02 (DMG CPU, Bus, and Time) — EXECUTING
-Plan: 8 of 9
+Plan: 9 of 9
 Status: Executing Phase GB-02
-Last activity: 2026-10-06 — Plan GB-02-07 complete; Phase GB-02 remains in progress
+Last activity: 2026-10-06 — Plan GB-02-08 complete; Phase GB-02 remains in progress
 
 Progress: [██░░░░░░░░] 17% of milestone phases complete; Phase 1 has 5/5 plans and passed verification
 
 ## Performance Metrics
 
-- Total plans completed: 12
-- Average duration / total execution time: 30 min / 361 min recorded for Phase 1 Plans 01–05 and Phase 2 Plans 01–07.
-- Per-phase metrics / recent trend: Phase 1 Plans 01–05 complete; Phase 2 Plans 01–07 complete, with two implementation plans remaining.
-- Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline; bounded API and offline fixture inventory have local CTest evidence (72/72 after Plan 02-07).
+- Total plans completed: 13
+- Average duration / total execution time: 28 min / 369 min recorded for Phase 1 Plans 01–05 and Phase 2 Plans 01–08.
+- Per-phase metrics / recent trend: Phase 1 Plans 01–05 complete; Phase 2 Plans 01–08 complete, with one implementation plan remaining.
+- Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline; bounded API and offline fixture qualification have local CTest evidence (90/90 after Plan 02-08).
 
 **Per-Plan Metrics:**
 
@@ -58,7 +58,9 @@ Progress: [██░░░░░░░░] 17% of milestone phases complete; Pha
 | Phase GB-02 P05 | 18 | 2 tasks | 5 files |
 | Phase GB-02 P06 | 6 min | 2 tasks | 7 files |
 | Phase GB-02 P06 | 6min | 2 tasks | 7 files |
+| Phase GB-02 P08 | 8 min | 2 tasks | 10 files |
 | Phase GB-02 P07 | 20 | 3 tasks | 12 files |
+| Phase GB-02 P08 | 8 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -99,6 +101,9 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-02]: The source-qualified eligible denominator remains fixed regardless of emulator outcomes.
 - [Phase GB-02]: Replace the unlicensed Mooneye font with an original same-size zero asset while preserving hardware-test logic.
 - [Phase GB-02]: The tracer-only preparation runner does not qualify Mooneye guests; strict protocol-aware results belong to Plan 02-08.
+- [Phase GB-02]: LD B,B remains an ordinary CPU instruction; the host runner alone classifies Mooneye register results.
+- [Phase GB-02]: DAA runner budget is 2000000 half-dots based on the pinned source's 4096-case workload and 1343488-half-dot minimum.
+- [Phase GB-02]: The strict eligible corpus denominator remains one CPU and two timer fixtures regardless of emulator outcome.
 
 ### Pending Todos
 
@@ -117,11 +122,11 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-06T20:38:35.459Z
-Stopped at: Completed GB-02-07-PLAN.md
-Resume file: .planning/phases/GB-02-dmg-cpu-bus-and-time/02-08-PLAN.md
+Last session: 2026-10-06T20:52:29.298Z
+Stopped at: Completed GB-02-08-PLAN.md
+Resume file: .planning/phases/GB-02-dmg-cpu-bus-and-time/02-09-PLAN.md
 Next command in fresh context: $gsd-execute-phase 2
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: Phase 2 Plan 02-07 execution — pinned offline CPU/timer diagnostic fixtures. Phase 2 remains in progress; Phase 1 remains the last completed implementation phase.
-Next stage: Phase 2 Plan 02-08 execution — manifest-driven Mooneye runner qualification and bounded diagnostic receipts. Run $gsd-execute-phase 2.
+Completed workflow stage: Phase 2 Plan 02-08 execution — caller-owned diagnostics and strict manifest-driven Mooneye qualification. Phase 2 remains in progress; Phase 1 remains the last completed implementation phase.
+Next stage: Phase 2 Plan 02-09 — installed consumer handoff and complete offline CI qualification. Run `$gsd-execute-phase 2` to select the remaining plan from current artifacts.
 Following implementation phase: Phase 3 — Visible Interactive DMG, only after Phase 2 verification and owner direction. Both auto-advance flags remain false.

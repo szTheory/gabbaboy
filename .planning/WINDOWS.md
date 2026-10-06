@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 1
+open_count: 2
 waived_count: 0
 fixed_count: 0
-total_count: 1
-last_updated: 2026-10-06T19:26:33.657Z
+total_count: 2
+last_updated: 2026-10-06T20:51:58.126Z
 ---
 
 # Broken Windows Ledger
@@ -16,6 +16,7 @@ last_updated: 2026-10-06T19:26:33.657Z
 | id | phase | kind | file | line | description | status | reason | recorded_at | resolved_at |
 |----|-------|------|------|------|-------------|--------|--------|-------------|-------------|
 | 1 | 02 | deviation | tests/test_cpu.c |  | Updated opcode matrix expectations for explicit HALT/STOP outcomes and IE register reads. | open |  | 2026-10-06T19:26:33.657Z |  |
+| 2 | 02 | deviation | fixtures/mooneye/manifest.json |  | Raised DAA's finite execution budget from 200000 to 2000000 half-dots after pinned source workload analysis showed 4096 cases require at least 1343488 half-dots before setup and completion protocol. | open |  | 2026-10-06T20:51:58.126Z |  |
 
 ````json
 [
@@ -29,6 +30,19 @@ last_updated: 2026-10-06T19:26:33.657Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-10-06T19:26:33.657Z",
+    "resolved_at": null,
+    "milestone": "v0.1"
+  },
+  {
+    "id": 2,
+    "kind": "deviation",
+    "phase": "02",
+    "file": "fixtures/mooneye/manifest.json",
+    "line": null,
+    "description": "Raised DAA's finite execution budget from 200000 to 2000000 half-dots after pinned source workload analysis showed 4096 cases require at least 1343488 half-dots before setup and completion protocol.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-06T20:51:58.126Z",
     "resolved_at": null,
     "milestone": "v0.1"
   }
