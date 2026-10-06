@@ -169,7 +169,13 @@ static int condition_true(const gbb_instance *m, unsigned condition) {
 static decoded decode(const gbb_instance *m) {
     uint8_t op = read8(m, m->pc);
     if (is_unused_opcode(op)) return (decoded){1, 0, 0};
-    if (op == 0xCB) return (decoded){2, 16, 1};
+    if (op == 0xCB) {
+        uint8_t extension = read8(m, (uint16_t)(m->pc + 1u));
+        unsigned group = extension >> 6;
+        unsigned target = extension & 7u;
+        uint8_t ticks = target == 6u ? (uint8_t)(group == 1u ? 24u : 32u) : 16u;
+        return (decoded){2, ticks, 1};
+    }
     if ((op & 0xC7u) == 0x06u) return (decoded){2, (uint8_t)(((op >> 3) & 7u) == 6u ? 24 : 16), 1};
     if ((op & 0xCFu) == 0x01u) return (decoded){3, 24, 1};
     if ((op & 0xCFu) == 0x03u || (op & 0xCFu) == 0x0Bu || (op & 0xCFu) == 0x09u) return (decoded){1, 16, 1};
@@ -246,6 +252,21 @@ static void set_reg(gbb_instance *m, unsigned reg, uint8_t value, uint64_t offse
         case 0: m->b=value; break; case 1: m->c=value; break; case 2: m->d=value; break; case 3: m->e=value; break;
         case 4: m->h=value; break; case 5: m->l=value; break; case 6: bus_write(m,hl(m),value,offset); break; default: m->a=value; break;
     }
+}
+
+static void execute_cb_bit_res(gbb_instance *m, uint16_t pc, uint8_t extension) {
+    unsigned group = extension >> 6;
+    unsigned bit = (extension >> 3) & 7u;
+    unsigned target = extension & 7u;
+    uint8_t value = get_reg(m, target, 16);
+    if (group == 1u) {
+        uint8_t carry = (uint8_t)(m->f & 0x10u);
+        m->f = (uint8_t)(carry | 0x20u | ((value & (uint8_t)(1u << bit)) == 0 ? 0x80u : 0));
+    } else {
+        value = (uint8_t)(value & (uint8_t)~(1u << bit));
+        set_reg(m, target, value, 24);
+    }
+    m->pc = (uint16_t)(pc + 2u);
 }
 
 static uint8_t add8(gbb_instance *m, uint8_t lhs, uint8_t rhs, unsigned carry) {
@@ -350,7 +371,15 @@ static void execute(gbb_instance *m, uint8_t cost) {
             case 0xF9: m->sp=hl(m); m->pc++; break;
             case 0xE9: m->pc=hl(m); break;
             case 0xF3: case 0xFB: m->pc++; break; /* Interrupt-enable sequencing is owned by the control-state plan. */
-            case 0xCB: m->pc=(uint16_t)(pc+2); break; /* Extension semantics are supplied by the CB plan. */
+            case 0xCB: {
+                uint8_t extension = read8(m, (uint16_t)(pc + 1u));
+                unsigned group = extension >> 6;
+                if (group == 1u || group == 2u || group == 3u)
+                    execute_cb_bit_res(m, pc, extension);
+                else
+                    m->pc = (uint16_t)(pc + 2u); /* Rotate/shift group is completed by the CB matrix task. */
+                break;
+            }
             default: m->pc=(uint16_t)(pc+1); break;
         }
     }

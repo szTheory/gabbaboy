@@ -194,13 +194,14 @@ static int cb_wram(void) {
     REQUIRE(gbb_peek_ram(m,0xC000)==0);
     REQUIRE(r.trace_count>=7);
     REQUIRE(trace[4].pc==0x107 && trace[5].pc==0x109 && trace[6].pc==0x10B);
-    REQUIRE(trace[4].f==0x10); /* SCF establishes carry before BIT. */
-    REQUIRE(trace[5].f==0xB0); /* BIT sets Z/H and preserves carry. */
-    REQUIRE(trace[6].f==0xB0); /* RES preserves every flag. */
-    REQUIRE(gbb_test_observer_count(m)==3);
-    REQUIRE(events[0].time_half_dots==48 && events[0].address==0xC000 && events[0].access==2 && events[0].value==1);
+    REQUIRE(trace[4].f==0x90); /* SCF establishes carry before BIT. */
+    REQUIRE(trace[5].f==0x30); /* BIT sets H and preserves carry; bit zero is set. */
+    REQUIRE(trace[6].f==0x30); /* RES preserves every flag. */
+    REQUIRE(gbb_test_observer_count(m)==4);
+    REQUIRE(events[0].time_half_dots==56 && events[0].address==0xC000 && events[0].access==2 && events[0].value==1);
     REQUIRE(events[1].time_half_dots==80 && events[1].address==0xC000 && events[1].access==1 && events[1].value==1);
-    REQUIRE(events[2].time_half_dots==112 && events[2].address==0xC000 && events[2].access==2 && events[2].value==0);
+    REQUIRE(events[2].time_half_dots==104 && events[2].address==0xC000 && events[2].access==1 && events[2].value==1);
+    REQUIRE(events[3].time_half_dots==112 && events[3].address==0xC000 && events[3].access==2 && events[3].value==0);
     gbb_destroy(m); return 0;
 }
 
@@ -211,8 +212,11 @@ static int cb_budget(void) {
     gbb_run_result r=gbb_run(m,95,trace,5);
     REQUIRE(r.reason==GBB_STOP_BUDGET && r.consumed_half_dots==88 && r.trace_count==5);
     REQUIRE(trace[4].pc==0x107 && gbb_peek_ram(m,0xC000)==1);
-    REQUIRE(gbb_test_observer_count(m)==2 && events[0].time_half_dots==48 && events[0].value==1);
-    REQUIRE(events[1].time_half_dots==80 && events[1].access==1 && events[1].value==1);
+    REQUIRE(gbb_test_observer_count(m)==2);
+    REQUIRE(events[0].time_half_dots==56);
+    REQUIRE(events[0].value==1);
+    REQUIRE(events[1].time_half_dots==80);
+    REQUIRE(events[1].access==1 && events[1].value==1);
     gbb_destroy(m); return 0;
 }
 
