@@ -5,6 +5,15 @@
 
 #define REQUIRE(x) do { if (!(x)) { fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #x); return 1; } } while (0)
 
+typedef struct {
+    uint64_t time_half_dots;
+    uint16_t address;
+    uint8_t access;
+    uint8_t value;
+} gbb_test_bus_event;
+extern void gbb_test_observer_set(gbb_instance *, gbb_test_bus_event *, size_t);
+extern size_t gbb_test_observer_count(const gbb_instance *);
+
 static void make_rom(uint8_t rom[32768], const uint8_t *program, size_t size) {
     memset(rom, 0, 32768);
     memcpy(rom + 0x100, program, size);
@@ -22,13 +31,20 @@ static int call_stack(void) {
     REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK);
     REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
     gbb_trace_record trace[4] = {{0}};
-    gbb_run_result r = gbb_run(m, 88, trace, 4);
+    gbb_test_bus_event events[8] = {{0}};
+    gbb_test_observer_set(m, events, 8);
+    gbb_run_result r = gbb_run(m, 80, trace, 4);
     REQUIRE(r.reason == GBB_STOP_BUDGET);
-    REQUIRE(r.consumed_half_dots == 88);
-    REQUIRE(r.trace_count == 3);
-    REQUIRE(trace[0].pc == 0x100 && trace[1].pc == 0x150 && trace[2].pc == 0x103);
+    REQUIRE(r.consumed_half_dots == 80);
+    REQUIRE(r.trace_count == 2);
+    REQUIRE(trace[0].pc == 0x100 && trace[1].pc == 0x150);
     REQUIRE(gbb_peek_ram(m, 0xfffd) == 0x01);
     REQUIRE(gbb_peek_ram(m, 0xfffc) == 0x03);
+    REQUIRE(gbb_test_observer_count(m) >= 4);
+    REQUIRE(events[0].time_half_dots == 32 && events[0].address == 0xfffd && events[0].access == 2 && events[0].value == 0x01);
+    REQUIRE(events[1].time_half_dots == 40 && events[1].address == 0xfffc && events[1].access == 2 && events[1].value == 0x03);
+    REQUIRE(events[2].time_half_dots == 64 && events[2].address == 0xfffc && events[2].access == 1 && events[2].value == 0x03);
+    REQUIRE(events[3].time_half_dots == 72 && events[3].address == 0xfffd && events[3].access == 1 && events[3].value == 0x01);
     gbb_destroy(m);
     return 0;
 }

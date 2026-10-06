@@ -12,8 +12,39 @@ struct gbb_instance {
     uint8_t div, stat;
     uint16_t pc, sp;
     uint64_t time_half_dots;
+    struct gbb_test_bus_event *test_events;
+    size_t test_event_capacity;
+    size_t test_event_count;
     int loaded;
 };
+
+typedef struct gbb_test_bus_event {
+    uint64_t time_half_dots;
+    uint16_t address;
+    uint8_t access;
+    uint8_t value;
+} gbb_test_bus_event;
+
+void gbb_test_observer_set(gbb_instance *m, gbb_test_bus_event *events, size_t capacity) {
+    if (m == NULL) return;
+    m->test_events = events;
+    m->test_event_capacity = capacity;
+    m->test_event_count = 0;
+}
+
+size_t gbb_test_observer_count(const gbb_instance *m) {
+    return m == NULL ? 0 : m->test_event_count;
+}
+
+static void observe_bus(gbb_instance *m, uint64_t offset, uint16_t address, uint8_t access, uint8_t value) {
+    if (m->test_events != NULL && m->test_event_count < m->test_event_capacity) {
+        gbb_test_bus_event *event = &m->test_events[m->test_event_count++];
+        event->time_half_dots = m->time_half_dots + offset;
+        event->address = address;
+        event->access = access;
+        event->value = value;
+    }
+}
 
 #define GBB_MAX_ROM_SIZE ((size_t)8u * 1024u * 1024u)
 
@@ -35,10 +66,21 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
     return 0xFF;
 }
 
+static uint8_t bus_read(gbb_instance *m, uint16_t address, uint64_t offset) {
+    uint8_t value = read8(m, address);
+    observe_bus(m, offset, address, 1, value);
+    return value;
+}
+
 static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     if (address >= 0xC000 && address <= 0xDFFF) m->wram[address - 0xC000] = value;
     else if (address >= 0xE000 && address <= 0xFDFF) m->wram[address - 0xE000] = value;
     else if (address >= 0xFF80 && address <= 0xFFFE) m->hram[address - 0xFF80] = value;
+}
+
+static void bus_write(gbb_instance *m, uint16_t address, uint8_t value, uint64_t offset) {
+    observe_bus(m, offset, address, 2, value);
+    write8(m, address, value);
 }
 
 static int read_supported(uint16_t address) {
@@ -113,6 +155,11 @@ static decoded decode(const gbb_instance *m) {
         case 0x77: case 0x7E: case 0x23: return (decoded){1, 8, 1};
         case 0xFE: return (decoded){2, 16, 1}; /* CP d8 */
         case 0x20: return (decoded){2, 0, 1}; /* JR NZ,r8; branch cost depends on flags */
+        case 0xC4: return (decoded){3, 0, 1}; /* CALL NZ,a16 */
+        case 0xCC: return (decoded){3, 0, 1}; /* CALL Z,a16 */
+        case 0xD4: return (decoded){3, 0, 1}; /* CALL NC,a16 */
+        case 0xDC: return (decoded){3, 0, 1}; /* CALL C,a16 */
+        case 0xC9: return (decoded){1, 32, 1}; /* RET */
         case 0x18: return (decoded){2, 0, 1}; /* JR r8 */
         default: return (decoded){1, 0, 0};
     }
@@ -122,6 +169,10 @@ static uint8_t instruction_cost(const gbb_instance *m, decoded d) {
     uint8_t op = read8(m, m->pc);
     if (op == 0x18) return 24;
     if (op == 0x20) return (m->f & 0x80) == 0 ? 24 : 16;
+    if (op == 0xC4) return (m->f & 0x80) == 0 ? 48 : 24;
+    if (op == 0xCC) return (m->f & 0x80) != 0 ? 48 : 24;
+    if (op == 0xD4) return (m->f & 0x10) == 0 ? 48 : 24;
+    if (op == 0xDC) return (m->f & 0x10) != 0 ? 48 : 24;
     return d.ticks;
 }
 
@@ -148,6 +199,23 @@ static void execute(gbb_instance *m, uint8_t cost) {
             m->pc+=2; break;
         }
         case 0x20: { int8_t rel=(int8_t)read8(m,pc+1); m->pc+=2; if ((m->f&0x80)==0) m->pc=(uint16_t)(m->pc+rel); break; }
+        case 0xC4: case 0xCC: case 0xD4: case 0xDC: {
+            uint16_t destination=(uint16_t)(read8(m,pc+1) | ((uint16_t)read8(m,pc+2)<<8));
+            int condition = op==0xC4 ? (m->f&0x80)==0 : op==0xCC ? (m->f&0x80)!=0 : op==0xD4 ? (m->f&0x10)==0 : (m->f&0x10)!=0;
+            if (condition) {
+                uint16_t ret=(uint16_t)(pc+3);
+                --m->sp; bus_write(m,m->sp,(uint8_t)(ret>>8),32);
+                --m->sp; bus_write(m,m->sp,(uint8_t)ret,40);
+                m->pc=destination;
+            } else m->pc=(uint16_t)(pc+3);
+            break;
+        }
+        case 0xC9: {
+            uint8_t lo=bus_read(m,m->sp,16); ++m->sp;
+            uint8_t hi=bus_read(m,m->sp,24); ++m->sp;
+            m->pc=(uint16_t)(lo | ((uint16_t)hi<<8));
+            break;
+        }
         case 0x18: m->pc=(uint16_t)(pc+2+(int8_t)read8(m,pc+1)); break;
         default: break;
     }
