@@ -254,16 +254,35 @@ static void set_reg(gbb_instance *m, unsigned reg, uint8_t value, uint64_t offse
     }
 }
 
-static void execute_cb_bit_res(gbb_instance *m, uint16_t pc, uint8_t extension) {
+static void execute_cb(gbb_instance *m, uint16_t pc, uint8_t extension) {
     unsigned group = extension >> 6;
-    unsigned bit = (extension >> 3) & 7u;
+    unsigned operation = (extension >> 3) & 7u;
     unsigned target = extension & 7u;
     uint8_t value = get_reg(m, target, 16);
-    if (group == 1u) {
+    if (group == 0u) {
+        uint8_t carry_in = (uint8_t)((m->f & 0x10u) != 0);
+        uint8_t carry_out = 0;
+        switch (operation) {
+            case 0: carry_out = (uint8_t)(value >> 7); value = (uint8_t)((value << 1) | carry_out); break;
+            case 1: carry_out = (uint8_t)(value & 1u); value = (uint8_t)((value >> 1) | (carry_out << 7)); break;
+            case 2: { uint8_t out = (uint8_t)(value >> 7); value = (uint8_t)((value << 1) | carry_in); carry_out = out; break; }
+            case 3: { uint8_t out = (uint8_t)(value & 1u); value = (uint8_t)((value >> 1) | (carry_in << 7)); carry_out = out; break; }
+            case 4: carry_out = (uint8_t)(value >> 7); value = (uint8_t)(value << 1); break;
+            case 5: carry_out = (uint8_t)(value & 1u); value = (uint8_t)((value >> 1) | (value & 0x80u)); break;
+            case 6: value = (uint8_t)((value << 4) | (value >> 4)); break;
+            default: carry_out = (uint8_t)(value & 1u); value = (uint8_t)(value >> 1); break;
+        }
+        m->f = (uint8_t)((value == 0 ? 0x80u : 0u) | (carry_out ? 0x10u : 0u));
+        set_reg(m, target, value, 24);
+    } else if (group == 1u) {
+        unsigned bit = operation;
         uint8_t carry = (uint8_t)(m->f & 0x10u);
         m->f = (uint8_t)(carry | 0x20u | ((value & (uint8_t)(1u << bit)) == 0 ? 0x80u : 0));
+    } else if (group == 2u) {
+        value = (uint8_t)(value & (uint8_t)~(1u << operation));
+        set_reg(m, target, value, 24);
     } else {
-        value = (uint8_t)(value & (uint8_t)~(1u << bit));
+        value = (uint8_t)(value | (uint8_t)(1u << operation));
         set_reg(m, target, value, 24);
     }
     m->pc = (uint16_t)(pc + 2u);
@@ -373,11 +392,7 @@ static void execute(gbb_instance *m, uint8_t cost) {
             case 0xF3: case 0xFB: m->pc++; break; /* Interrupt-enable sequencing is owned by the control-state plan. */
             case 0xCB: {
                 uint8_t extension = read8(m, (uint16_t)(pc + 1u));
-                unsigned group = extension >> 6;
-                if (group == 1u || group == 2u || group == 3u)
-                    execute_cb_bit_res(m, pc, extension);
-                else
-                    m->pc = (uint16_t)(pc + 2u); /* Rotate/shift group is completed by the CB matrix task. */
+                execute_cb(m, pc, extension);
                 break;
             }
             default: m->pc=(uint16_t)(pc+1); break;
