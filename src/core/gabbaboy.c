@@ -117,7 +117,9 @@ static void observe_bus(gbb_instance *m, uint64_t offset, uint16_t address, uint
 #define GBB_MAX_ROM_SIZE ((size_t)8u * 1024u * 1024u)
 
 static void reset_state(gbb_instance *m) {
-    m->a = 0x01; m->f = 0x80; m->b = 0x00; m->c = 0x13;
+    m->a = 0x01;
+    m->f = m->rom != NULL && m->rom_size > 0x14Du && m->rom[0x14Du] != 0 ? 0xB0u : 0x80u;
+    m->b = 0x00; m->c = 0x13;
     m->d = 0x00; m->e = 0xD8; m->h = 0x01; m->l = 0x4D;
     m->pc = 0x0100; m->sp = 0xFFFE;
     m->div = 0xAB; m->stat = 0x85;
