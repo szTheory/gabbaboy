@@ -190,6 +190,62 @@ static int timed_access(void) {
     gbb_destroy(m); return 0;
 }
 
+static int address_wrap(void) {
+    uint8_t rom[32768];
+    const uint8_t p[] = {0x31,0x34,0x12,0x08,0xff,0xff,0xfa,0x00,0x00,0x00};
+    make_rom(rom, p, sizeof(p)); rom[0] = 0x9a;
+    gbb_instance *m = NULL; REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
+    gbb_test_bus_event e[4] = {{0}}; gbb_test_observer_set(m, e, 4);
+    gbb_trace_record t[4] = {{0}}; gbb_run_result r = gbb_run(m, 104, t, 4);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 104 && r.trace_count == 4);
+    REQUIRE(e[0].address == 0xffff && e[0].value == 0x34 && e[0].access == 2 && e[0].time_half_dots == 48);
+    REQUIRE(e[1].address == 0x0000 && e[1].value == 0x12 && e[1].access == 2 && e[1].time_half_dots == 56);
+    REQUIRE(e[2].address == 0x0000 && e[2].value == 0x9a && e[2].access == 1);
+    REQUIRE(t[3].a == 0x9a && t[3].sp == 0x1234); /* ROM write at zero was ignored. */
+    gbb_destroy(m);
+    /* Opcode F6 comes from IE=16 with its unused high bits; its immediate wraps to ROM zero. */
+    const uint8_t fetch[] = {0x3e,0x16,0xea,0xff,0xff,0xc3,0xff,0xff};
+    make_rom(rom, fetch, sizeof(fetch)); rom[0] = 0x01;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
+    r = gbb_run(m, 80, NULL, 0); REQUIRE(r.consumed_half_dots == 80);
+    r = gbb_run(m, 24, t, 4);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 24 && r.trace_count == 2);
+    REQUIRE(t[0].pc == 0xffff && t[0].opcode[0] == 0xf6 && t[0].opcode[1] == 0x01);
+    REQUIRE(t[1].pc == 0x0001 && t[1].a == 0x17);
+    gbb_destroy(m); return 0;
+}
+
+static int stack_wrap(void) {
+    uint8_t rom[32768];
+    const uint8_t pop[] = {0x31,0xff,0xff,0x3e,4,0xea,0xff,0xff,0xc1,0x00};
+    make_rom(rom, pop, sizeof(pop)); rom[0] = 0x12;
+    gbb_instance *m = NULL; REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
+    REQUIRE(gbb_run(m, 72, NULL, 0).consumed_half_dots == 72);
+    gbb_test_bus_event e[4] = {{0}}; gbb_test_observer_set(m, e, 4);
+    gbb_trace_record t[2] = {{0}}; gbb_run_result r = gbb_run(m, 32, t, 2);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 32 && r.trace_count == 2);
+    REQUIRE(e[0].address == 0xffff && e[0].value == 0xe4 && e[0].access == 1 && e[0].time_half_dots == 80);
+    REQUIRE(e[1].address == 0x0000 && e[1].value == 0x12 && e[1].access == 1 && e[1].time_half_dots == 88);
+    REQUIRE(t[1].sp == 0x0001 && t[1].b == 0x12 && t[1].c == 0xe4);
+    gbb_destroy(m);
+    const uint8_t push[] = {0x01,0x56,0x12,0x31,0x01,0x00,0xc5,0xfa,0x00,0x00,0x00};
+    make_rom(rom, push, sizeof(push)); rom[0] = 0x34;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
+    REQUIRE(gbb_run(m, 48, NULL, 0).consumed_half_dots == 48);
+    gbb_test_observer_set(m, e, 4);
+    r = gbb_run(m, 72, t, 2);
+    REQUIRE(r.reason == GBB_STOP_TRACE_FULL && r.consumed_half_dots == 64 && r.trace_count == 2);
+    REQUIRE(e[0].address == 0x0000 && e[0].value == 0x12 && e[0].access == 2 && e[0].time_half_dots == 64);
+    REQUIRE(e[1].address == 0xffff && e[1].value == 0x56 && e[1].access == 2 && e[1].time_half_dots == 72);
+    r = gbb_run(m, 8, t, 2);
+    REQUIRE(r.trace_count == 1 && t[0].sp == 0xffff && t[0].a == 0x34);
+    gbb_destroy(m); return 0;
+}
+
 static int cb_wram(void) {
     uint8_t rom[32768];
     const uint8_t program[]={0x21,0x00,0xC0,0x3E,0x01,0x77,0x37,0xCB,0x46,0xCB,0x86,0x00};
@@ -313,6 +369,8 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "illegal_lockup") == 0) return illegal_lockup();
     if (strcmp(argv[1], "flags_edges") == 0) return flags_edges();
     if (strcmp(argv[1], "timed_access") == 0) return timed_access();
+    if (strcmp(argv[1], "address_wrap") == 0) return address_wrap();
+    if (strcmp(argv[1], "stack_wrap") == 0) return stack_wrap();
     if (strcmp(argv[1], "cb_wram") == 0) return cb_wram();
     if (strcmp(argv[1], "cb_budget") == 0) return cb_budget();
     if (strcmp(argv[1], "cb_matrix") == 0) return cb_matrix();

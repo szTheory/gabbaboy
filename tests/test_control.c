@@ -11,6 +11,7 @@ typedef struct {
 } gbb_test_bus_event;
 extern void gbb_test_observer_set(gbb_instance *, gbb_test_bus_event *, size_t);
 extern size_t gbb_test_observer_count(const gbb_instance *);
+extern void gbb_test_cpu_snapshot(const gbb_instance *, gbb_trace_record *);
 
 static const char *active_case = "unknown";
 #define REQUIRE(x) do { if (!(x)) { \
@@ -117,6 +118,53 @@ static int halt_idle(void) {
     gbb_destroy(m); return 0;
 }
 
+static int halt_timer_partition(void) {
+    /* TAC bit 5 overflows at t=200 and reloads/raises IF at t=208.
+     * HALT starts at t=184, so wake must be sampled before the budget ends. */
+    const uint8_t p[] = {0x3e,4,0xea,0xff,0xff,0xaf,0xe0,4,0x3e,0xff,
+        0xe0,5,0x3e,6,0xe0,7,0xfb,0x00,0x76};
+    uint8_t rom[32768]; make_rom(rom, p, sizeof(p));
+    const uint8_t handler[] = {0x3e,0x55,0xea,0x00,0xc0,0x76};
+    memcpy(rom + 0x50, handler, sizeof(handler));
+    gbb_instance *whole = NULL, *split = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &whole) == GBB_OK);
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &split) == GBB_OK);
+    REQUIRE(gbb_load_rom(whole, rom, sizeof(rom)) == GBB_OK);
+    REQUIRE(gbb_load_rom(split, rom, sizeof(rom)) == GBB_OK);
+    REQUIRE(gbb_run(whole, 184, NULL, 0).consumed_half_dots == 184);
+    REQUIRE(gbb_run(split, 184, NULL, 0).consumed_half_dots == 184);
+    gbb_trace_record before, after;
+    gbb_test_cpu_snapshot(whole, &before);
+    gbb_run_result r = gbb_run(whole, 0, NULL, 0);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 0);
+    r = gbb_run(whole, 7, NULL, 0);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 0);
+    gbb_test_cpu_snapshot(whole, &after); REQUIRE(memcmp(&before, &after, sizeof(before)) == 0);
+    gbb_test_bus_event ew[16] = {{0}}, es[16] = {{0}};
+    gbb_test_observer_set(whole, ew, 16); gbb_test_observer_set(split, es, 16);
+    gbb_trace_record tw[4] = {{0}}, ts[4] = {{0}};
+    r = gbb_run(whole, 120, tw, 4);
+    REQUIRE(r.reason == GBB_STOP_HALTED_IDLE && r.consumed_half_dots == 120);
+    REQUIRE(r.trace_count == 3 && gbb_peek_ram(whole, 0xc000) == 0x55);
+    REQUIRE(tw[0].pc == 0x50 && tw[0].time_half_dots == 248);
+    r = gbb_run(split, 8, ts, 4);
+    REQUIRE(r.reason == GBB_STOP_HALTED_IDLE && r.consumed_half_dots == 8 && r.trace_count == 0);
+    r = gbb_run(split, 56, ts, 4);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 56 && r.trace_count == 0);
+    r = gbb_run(split, 56, ts, 4);
+    REQUIRE(r.reason == GBB_STOP_HALTED_IDLE && r.consumed_half_dots == 56 && r.trace_count == 3);
+    REQUIRE(memcmp(tw, ts, 3 * sizeof(*tw)) == 0);
+    gbb_test_cpu_snapshot(whole, &before); gbb_test_cpu_snapshot(split, &after);
+    REQUIRE(memcmp(&before, &after, sizeof(before)) == 0 && before.time_half_dots == 304);
+    REQUIRE(gbb_peek_ram(split, 0xc000) == 0x55);
+    REQUIRE(gbb_test_observer_count(whole) == gbb_test_observer_count(split));
+    for (size_t i = 0; i < gbb_test_observer_count(whole); ++i) {
+        REQUIRE(ew[i].time_half_dots == es[i].time_half_dots && ew[i].address == es[i].address);
+        REQUIRE(ew[i].access == es[i].access && ew[i].value == es[i].value);
+    }
+    gbb_destroy(whole); gbb_destroy(split); return 0;
+}
+
 static int halt_bug(void) {
     const uint8_t p[] = {0x3e,1,0xea,0xff,0xff,0xea,0x0f,0xff,0x76,0x04,0x00};
     gbb_instance *m = make_machine(p, sizeof(p)); REQUIRE(m != NULL);
@@ -165,6 +213,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "interrupt_ei_delay") == 0) return interrupt_ei_delay();
     if (strcmp(argv[1], "interrupt_priority") == 0) return interrupt_priority();
     if (strcmp(argv[1], "halt_idle") == 0) return halt_idle();
+    if (strcmp(argv[1], "halt_timer_partition") == 0) return halt_timer_partition();
     if (strcmp(argv[1], "halt_bug") == 0) return halt_bug();
     if (strcmp(argv[1], "stop_wait") == 0) return stop_wait();
     if (strcmp(argv[1], "reset_profile") == 0) return reset_profile();

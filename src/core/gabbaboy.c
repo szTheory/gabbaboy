@@ -689,6 +689,11 @@ static void save_trace(const gbb_instance *m, decoded d, gbb_trace_record *r) {
     r->a=m->a; r->f=m->f; r->b=m->b; r->c=m->c; r->d=m->d; r->e=m->e; r->h=m->h; r->l=m->l; r->sp=m->sp;
 }
 
+/* Private regression seam, like the bus observer: no guest execution or reads. */
+void gbb_test_cpu_snapshot(const gbb_instance *m, gbb_trace_record *record) {
+    if (m != NULL && record != NULL) save_trace(m, (decoded){0, 0, 1}, record);
+}
+
 static int halt_bug_keeps_control_target(const gbb_instance *m, uint8_t op) {
     if (op == 0xC3 || op == 0xC9 || op == 0xCD || op == 0xD9 || op == 0xE9 || (op & 0xC7u) == 0xC7u) return 1;
     if ((op & 0xE7u) == 0xC0u || (op & 0xE7u) == 0xC2u || (op & 0xE7u) == 0xC4u)
