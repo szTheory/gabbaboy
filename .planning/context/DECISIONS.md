@@ -1,6 +1,6 @@
 # GabbaBoy decision register
 
-Updated: 2026-10-03 after Phase 1 verification. Initialization recommendations remain hypotheses unless an outcome below records adoption; Phase 1 decisions link to current evidence.
+Updated: 2026-10-06 after Phase 2 planning. Initialization recommendations remain hypotheses unless an outcome below records adoption; implementation evidence remains separate from a reviewed plan.
 
 **Status vocabulary:** **Adopted constraint** comes from owner/project policy; **Recommended** is the selected planning default awaiting phase-specific implementation review; **Verified observation** is an inspected fact with a limited scope, not a product capability. Implementation evidence must be linked separately before any recommendation is called working. Options below are considered alternatives, not pending permission requests.
 
@@ -28,6 +28,12 @@ Updated: 2026-10-03 after Phase 1 verification. Initialization recommendations r
 | D-020 | Use installed OpenGSD lineage and inherited session model. **Adopted constraint / Verified runtime observation** | Installed `runtime-identity` returned `@opengsd/gsd-core` 1.15.0 during Phase 1 execution; this establishes tool identity only. | [WORKFLOW](WORKFLOW.md); recheck identity on tool-path/install changes. |
 | D-021 | Keep Phase 1 claims to the bootless DMG-CPU-B original-ROM tracer; defer hardware-qualified address-space behavior to Phase 2. **Verified boundary** | The real tracer validates API, packaging, and guest execution, but fixture-only RAM backing does not establish cartridge or complete DMG memory mapping. | [Phase 1 verification](../phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md); expand only with Phase 2 model-applicable evidence. |
 | D-022 | Fail closed on ROM-only cartridge sizes other than exactly 32 KiB until their mapping is implemented. **Verified API boundary** | Accepting larger headers without bank mapping let ROM bytes collide with the external-RAM address window. The loader now rejects unsupported size codes before mutating the loaded instance. | [Phase 1 verification](../phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md) and `loader_unsupported_declared_size`; revisit when a mapper and applicable tests are added. |
+
+## Phase 2 adopted planning contract
+
+The 12 adopted decisions in [02-CONTEXT.md](../phases/GB-02-dmg-cpu-bus-and-time/02-CONTEXT.md) are covered by the nine independently reviewed plans. [02-RESEARCH.md](../phases/GB-02-dmg-cpu-bus-and-time/02-RESEARCH.md) records three concrete clarifications: nonresponding cartridge reads are undefined in the hardware reference, so the scoped core returns unsupported bus for absent external-RAM reads; STOP consumes bounded master event time while CPU/divider/timer/internal serial remain frozen; and Mooneye's common font requires separate rights closure or a documented original replacement before fixture admission. Source-qualified timer/serial expectations and unsupported unqualified overlaps remain bounded by the named model/profile.
+
+These are adopted implementation directions, not working emulator capabilities. Fixture preparation, all test results, consumer qualification and exact-revision remote checks remain pending. Revisit only for conflicting primary evidence or an implementation counterexample; preserve source provenance rather than regenerating expectations from the core.
 
 ## Decisions still requiring concrete phase evidence
 

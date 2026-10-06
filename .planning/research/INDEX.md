@@ -22,6 +22,7 @@ Read [SUMMARY.md](SUMMARY.md) for the integrated recommendation, six-phase initi
 
 - [Phase 1 planning research](../phases/GB-01-portable-foundation-and-original-rom-tracer/01-RESEARCH.md) narrows the initial fixture to the named DMG-CPU-B post-boot profile, records candidate opcode/tool/host-floor choices, and identifies what still needs implementation or hosted evidence. It is planning evidence only; it does not qualify an emulator or CI run.
 - [Phase 2 planning research](../phases/GB-02-dmg-cpu-bus-and-time/02-RESEARCH.md) covers timed SM83 execution, CPU-visible mapping, timer/serial behavior and a pinned Mooneye candidate set. Mooneye fixture reproduction needs WLA-DX; ordinary tests will consume reviewed checked-in bytes. Gekkio revision 192 §12.1 documents undefined reads when no cartridge device responds, so no universal absent-RAM byte is qualified. Fixture admission and implementation evidence remain pending. [Validation contract](../phases/GB-02-dmg-cpu-bus-and-time/02-VALIDATION.md).
+- Phase 2's selected Mooneye common font has separate author licensing; a root MIT notice does not establish rights for font-derived fixture bytes. The research records that closure and independently sourced timer expectations; [reviewed plans](../phases/GB-02-dmg-cpu-bus-and-time/02-PLAN-CHECK.md) assign admission and verification before any qualification claim.
 
 ## Evidence freshness and confidence
 

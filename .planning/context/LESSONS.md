@@ -34,7 +34,23 @@ Status: observed / reproduced / adopted / superseded
 | XFER-004 | Timing and save correctness require hidden in-flight state, not only visible registers | Exercise split-run equivalence and save/load continuation at intermediate device events | Proposed adaptation; implementation pending |
 | XFER-005 | Upstream automation behavior changes; copied CI folklore can be stale | Recheck official GitHub token/event rules during workflow implementation and verify target-repo behavior | Source-checked recommendation; repository verification pending |
 
-The first implementation-derived lesson follows; continue adding entries with evidence as phases ship.
+The implementation and planning lessons follow; retain their distinct evidence classes.
+
+### GB-FIXTURE-001 / 2026-10-06 / Phase 2 planning
+
+- **Cause and evidence:** Mooneye's root MIT license did not close redistribution rights for every included asset. The pinned common include identifies Darkrose's font; its author page gives `font.c` separate GPLv3-or-later terms. See the source links and closure analysis in `02-RESEARCH.md`.
+- **Remedy:** Plan 02-07 inventories the source/include/asset closure and retains the applicable notices and source, or uses a documented original replacement without changing the hardware-test logic or host protocol. Digest and eligibility checks must include the resulting bytes and adaptation identity.
+- **Applies when:** Compiling third-party test ROMs whose includes contain independently licensed assets.
+- **Verification:** Primary-source inspection completed during planning; no fixture has been imported or qualified. Execution must verify rights metadata, reproducible bytes and protocol reachability before admission.
+- **Status:** Observed and adopted as an admission check; implementation pending.
+
+### GB-CI-002 / 2026-10-06 / Phase 2 planning review
+
+- **Cause and evidence:** Plan 02-09 repeated the relative JUnit path error recorded in GB-CI-001 despite passing structural review. A fresh temporary one-test CTest run confirmed that `--test-dir <dir> --output-junit build/probe.xml` writes beneath `<dir>/build/`, not the caller's directory.
+- **Remedy:** Use report basenames for preset/test-dir invocations, then verify the corresponding selected-directory path; clear cached installed-prefix configuration for a core-only inventory. Plan 02-09 now states both rules.
+- **Applies when:** Planning CTest evidence commands for fresh or reused build configurations.
+- **Verification:** Temporary tooling probe passed 1/1 and the predicted report existed. Phase 2 tests and installed inventory remain pending; structural review alone does not prove runnable command behavior.
+- **Status:** Reproduced and reconciled in the plan.
 
 ## GabbaBoy implementation lessons
 
