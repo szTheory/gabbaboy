@@ -36,13 +36,13 @@ Status: observed / reproduced / adopted / superseded
 
 The implementation and planning lessons follow; retain their distinct evidence classes.
 
-### GB-FIXTURE-001 / 2026-10-06 / Phase 2 planning
+### GB-FIXTURE-001 / 2026-10-06 / Phase 2 fixture admission
 
-- **Cause and evidence:** Mooneye's root MIT license did not close redistribution rights for every included asset. The pinned common include identifies Darkrose's font; its author page gives `font.c` separate GPLv3-or-later terms. See the source links and closure analysis in `02-RESEARCH.md`.
-- **Remedy:** Plan 02-07 inventories the source/include/asset closure and retains the applicable notices and source, or uses a documented original replacement without changing the hardware-test logic or host protocol. Digest and eligibility checks must include the resulting bytes and adaptation identity.
-- **Applies when:** Compiling third-party test ROMs whose includes contain independently licensed assets.
-- **Verification:** Primary-source inspection completed during planning; no fixture has been imported or qualified. Execution must verify rights metadata, reproducible bytes and protocol reachability before admission.
-- **Status:** Observed and adopted as an admission check; implementation pending.
+- **Cause and evidence:** Mooneye's root MIT license did not close redistribution rights for every included asset. The pinned common include identifies Darkrose's font and links to an asset page, but the pinned suite tree has no font source or font-specific license.
+- **Remedy:** Plan 02-07 replaces only the bundled 2032-byte font asset with an original zero-filled image, preserving ROM layout and test instructions/protocol. It records source/include closure, notices, replacement digest, immutable WLA-DX pin, and generated ROM digests.
+- **Applies when:** Compiling third-party diagnostic ROMs whose common includes embed independently licensed artwork.
+- **Verification:** `font-source.c` generated the recorded 2032-byte asset; three ROMs were assembled from Mooneye commit `31510e12eea6286d36eea060a6adde755e1067aa` with WLA-DX commit `91c52b1f4ef3cc8ba3c0638f7536539579af6a9f`. Offline digest/inventory checks and the full 72-case CTest suite passed. Generic-runner timeout/unsupported-bus results do not qualify guest behavior; Plan 02-08 owns protocol-aware results.
+- **Status:** Original replacement and source-qualified offline admission implemented; strict guest qualification remains pending.
 
 ### GB-CI-002 / 2026-10-06 / Phase 2 planning review
 
