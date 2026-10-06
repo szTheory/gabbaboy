@@ -54,34 +54,37 @@ int main(int argc, char **argv) {
             0x3E,0x42, 0xE0,0x06,       /* TMA=42 */
             0x3E,0xFF, 0xE0,0x05,       /* TIMA=FF */
             0x3E,0x05, 0xE0,0x07,       /* TAC: enabled, divider bit 3 */
-            0x21,0x00,0xC0, 0x7E,       /* LD A,(C000), long enough for the edge */
-            0xF0,0x05, 0xEA,0x00,0xC0, /* record TIMA via WRAM */
-            0xF0,0x0F, 0xEA,0x01,0xC0  /* record IF via WRAM */
+            0x00,                       /* place the first falling edge at the next timed read */
+            0xF0,0x05, 0xEA,0x00,0xC0, /* record TIMA zero window via WRAM */
+            0xF0,0x05, 0xEA,0x01,0xC0, /* record reloaded TIMA via WRAM */
+            0xF0,0x0F, 0xEA,0x02,0xC0  /* record timer IF via WRAM */
         };
         gbb_instance *m = load_program(program, sizeof(program));
         REQUIRE(m != NULL);
         gbb_test_bus_event events[32] = {{0}};
         gbb_test_observer_set(m, events, 32);
-        gbb_trace_record trace[16] = {{0}};
-        gbb_run_result r = gbb_run(m, 400, trace, 16);
+        gbb_trace_record trace[80] = {{0}};
+        gbb_run_result r = gbb_run(m, 400, trace, 80);
         REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 400);
         size_t count = gbb_test_observer_count(m);
-        size_t zero = find_event(events, count, 0xFF05, 1, 0);
-        size_t reload = zero < count ? find_event(events, count, 0xFF05, 1, zero + 1) : count;
-        size_t interrupt = find_event(events, count, 0xFF0F, 1, 0);
+        size_t zero = find_event(events, count, 0xFF05, 3, 0);
+        size_t reload = zero < count ? find_event(events, count, 0xFF05, 3, zero + 1) : count;
+        size_t interrupt = find_event(events, count, 0xFF0F, 3, 0);
         REQUIRE(zero < count && events[zero].value == 0x00);
         REQUIRE(reload < count && events[reload].value == 0x42);
         REQUIRE(interrupt < count && (events[interrupt].value & 0x04u) != 0);
         REQUIRE(events[reload].time_half_dots == events[zero].time_half_dots + 8u);
         REQUIRE(events[interrupt].time_half_dots >= events[reload].time_half_dots);
         REQUIRE(gbb_peek_ram(m, 0xC000) == 0x42);
-        REQUIRE((gbb_peek_ram(m, 0xC001) & 0x04u) != 0);
+        REQUIRE(gbb_peek_ram(m, 0xC001) == 0x44);
+        REQUIRE((gbb_peek_ram(m, 0xC002) & 0x04u) != 0);
         gbb_destroy(m);
         PASS("timer_guest_overflow");
     }
     if (strcmp(argv[1], "mid_instruction") == 0) {
         /* The divider edge at 32 half-dots occurs during this 48-half-dot guest instruction. */
         const uint8_t program[] = {
+            0x3E,0x65, 0xE0,0x06,       /* TMA=65 */
             0x3E,0xFF, 0xE0,0x05,       /* TIMA=FF */
             0x3E,0x05, 0xE0,0x07,       /* TAC enabled, bit 3 */
             0x08,0x00,0xC0,              /* LD (C000),SP: timed bus writes around internal phases */
@@ -92,15 +95,16 @@ int main(int argc, char **argv) {
         REQUIRE(m != NULL);
         gbb_test_bus_event events[24] = {{0}};
         gbb_test_observer_set(m, events, 24);
-        gbb_trace_record trace[16] = {{0}};
-        gbb_run_result r = gbb_run(m, 200, trace, 16);
-        REQUIRE(r.consumed_half_dots == 200);
+        gbb_trace_record trace[80] = {{0}};
+        gbb_run_result r = gbb_run(m, 240, trace, 80);
+        REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 240);
         size_t count = gbb_test_observer_count(m);
-        size_t overflow = find_event(events, count, 0xFF05, 1, 0);
-        size_t read_tima = overflow < count ? find_event(events, count, 0xFF05, 1, overflow + 1) : count;
-        REQUIRE(overflow < count && events[overflow].value == 0x00);
-        REQUIRE(read_tima < count && events[read_tima].value == 0xFF);
-        REQUIRE(gbb_peek_ram(m, 0xC002) == 0xFF);
+        size_t overflow = find_event(events, count, 0xFF05, 3, 0);
+        size_t reload = overflow < count ? find_event(events, count, 0xFF05, 3, overflow + 1) : count;
+        size_t write_inside = find_event(events, count, 0xC000, 2, 0);
+        REQUIRE(overflow < count && reload < count && events[reload].time_half_dots == events[overflow].time_half_dots + 8u);
+        REQUIRE(write_inside < count && events[write_inside].time_half_dots >= events[overflow].time_half_dots + 8u);
+        REQUIRE(gbb_peek_ram(m, 0xC002) == 0x66);
         gbb_destroy(m);
         PASS("timer_mid_instruction");
     }

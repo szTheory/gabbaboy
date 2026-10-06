@@ -9,11 +9,17 @@ struct gbb_instance {
     uint8_t wram[8192];
     uint8_t hram[127];
     uint8_t a, f, b, c, d, e, h, l;
-    uint8_t div, stat;
+    uint8_t div, stat, tima, tma, tac;
     uint8_t ie, interrupt_flags;
     uint8_t ime_delay;
     int ime;
     uint8_t divider_phase;
+    uint16_t divider_counter;
+    int timer_signal;
+    int timer_reload_pending;
+    uint64_t timer_reload_at;
+    uint64_t timer_reloaded_at;
+    uint64_t instruction_start_half_dots;
     int halted, stopped, halt_bug;
     uint16_t pc, sp;
     uint64_t time_half_dots;
@@ -61,11 +67,18 @@ static void reset_state(gbb_instance *m) {
     m->d = 0x00; m->e = 0xD8; m->h = 0x01; m->l = 0x4D;
     m->pc = 0x0100; m->sp = 0xFFFE;
     m->div = 0xAB; m->stat = 0x85;
+    m->tima = 0; m->tma = 0; m->tac = 0;
     m->ie = 0;
     m->interrupt_flags = 0;
     m->ime_delay = 0;
     m->ime = 0;
     m->divider_phase = 0;
+    m->divider_counter = 0xAB00u;
+    m->timer_signal = 0;
+    m->timer_reload_pending = 0;
+    m->timer_reload_at = 0;
+    m->timer_reloaded_at = UINT64_MAX;
+    m->instruction_start_half_dots = 0;
     m->halted = 0;
     m->stopped = 0;
     m->halt_bug = 0;
@@ -79,6 +92,9 @@ static void reset_state(gbb_instance *m) {
 
 static uint8_t read8(const gbb_instance *m, uint16_t address) {
     if (address == 0xFF04) return m->div;
+    if (address == 0xFF05) return m->tima;
+    if (address == 0xFF06) return m->tma;
+    if (address == 0xFF07) return (uint8_t)(0xF8u | m->tac);
     if (address == 0xFF0F) return (uint8_t)(0xE0u | m->interrupt_flags);
     if (address == 0xFFFF) return (uint8_t)(0xE0u | m->ie);
     if (address < m->rom_size) return m->rom[address];
@@ -88,14 +104,62 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
     return 0xFF;
 }
 
+static void advance_devices_to(gbb_instance *m, uint64_t target);
+
 static uint8_t bus_read(gbb_instance *m, uint16_t address, uint64_t offset) {
+    advance_devices_to(m, m->instruction_start_half_dots + offset);
     uint8_t value = read8(m, address);
-    observe_bus(m, offset, address, 1, value);
+    observe_bus(m, 0, address, 1, value);
     return value;
 }
 
+static unsigned timer_bit(uint8_t tac) {
+    static const uint8_t bits[4] = {9, 3, 5, 7};
+    return bits[tac & 3u];
+}
+
+static int timer_input(const gbb_instance *m) {
+    return (m->tac & 4u) != 0 && ((m->divider_counter >> timer_bit(m->tac)) & 1u) != 0;
+}
+
+static void timer_increment(gbb_instance *m, uint64_t at) {
+    if (m->timer_reload_pending) return;
+    if (m->tima == 0xFFu) {
+        m->tima = 0;
+        m->timer_reload_pending = 1;
+        m->timer_reload_at = at + 8u;
+        observe_bus(m, 0, 0xFF05, 3, m->tima);
+    } else {
+        ++m->tima;
+    }
+}
+
+static void timer_set_signal(gbb_instance *m, int next, uint64_t at) {
+    if (m->timer_signal && !next) timer_increment(m, at);
+    m->timer_signal = next;
+}
+
 static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
-    if (address == 0xFF04) { m->div = 0; m->divider_phase = 0; }
+    if (address == 0xFF04) {
+        int old = timer_input(m);
+        m->divider_counter = 0; m->div = 0; m->divider_phase = 0;
+        timer_set_signal(m, timer_input(m), m->time_half_dots);
+        (void)old;
+    }
+    else if (address == 0xFF05) {
+        if (m->time_half_dots == m->timer_reloaded_at) { /* reload wins this sampled write */ }
+        else { m->tima = value; m->timer_reload_pending = 0; }
+    }
+    else if (address == 0xFF06) {
+        m->tma = value;
+        if (m->time_half_dots == m->timer_reloaded_at) m->tima = value;
+    }
+    else if (address == 0xFF07) {
+        int old = timer_input(m);
+        m->tac = (uint8_t)(value & 7u);
+        timer_set_signal(m, timer_input(m), m->time_half_dots);
+        (void)old;
+    }
     else if (address == 0xFF0F) m->interrupt_flags = (uint8_t)(value & 0x1Fu);
     else if (address == 0xFFFF) m->ie = (uint8_t)(value & 0x1Fu);
     else if (address >= 0xC000 && address <= 0xDFFF) m->wram[address - 0xC000] = value;
@@ -104,12 +168,13 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
 }
 
 static void bus_write(gbb_instance *m, uint16_t address, uint8_t value, uint64_t offset) {
-    observe_bus(m, offset, address, 2, value);
+    advance_devices_to(m, m->instruction_start_half_dots + offset);
+    observe_bus(m, 0, address, 2, value);
     write8(m, address, value);
 }
 
 static int read_supported(uint16_t address) {
-    return address < 0x8000 || address == 0xFF04 || address == 0xFF0F || address == 0xFFFF ||
+    return address < 0x8000 || (address >= 0xFF04 && address <= 0xFF07) || address == 0xFF0F || address == 0xFFFF ||
            (address >= 0xC000 && address <= 0xDFFF) ||
            (address >= 0xE000 && address <= 0xFDFF) ||
            (address >= 0xFF80 && address <= 0xFFFE);
@@ -123,11 +188,28 @@ static uint8_t instruction_byte(const gbb_instance *m, uint16_t pc, unsigned off
     return read8(m, (uint16_t)(pc + offset));
 }
 
+static void advance_devices_to(gbb_instance *m, uint64_t target) {
+    while (m->time_half_dots < target) {
+        ++m->time_half_dots;
+        if (m->timer_reload_pending && m->time_half_dots == m->timer_reload_at) {
+            m->tima = m->tma;
+            m->timer_reload_pending = 0;
+            m->timer_reloaded_at = m->time_half_dots;
+            m->interrupt_flags |= 0x04u;
+            observe_bus(m, 0, 0xFF05, 3, m->tima);
+            observe_bus(m, 0, 0xFF0F, 3, (uint8_t)(0xE0u | m->interrupt_flags));
+        }
+        m->divider_phase ^= 1u;
+        if (m->divider_phase == 0) {
+            ++m->divider_counter;
+            m->div = (uint8_t)(m->divider_counter >> 8);
+            timer_set_signal(m, timer_input(m), m->time_half_dots);
+        }
+    }
+}
+
 static void advance_devices(gbb_instance *m, uint64_t half_dots) {
-    uint64_t phase = (uint64_t)m->divider_phase + half_dots;
-    m->div = (uint8_t)(m->div + (uint8_t)(phase / 128u));
-    m->divider_phase = (uint8_t)(phase % 128u);
-    m->time_half_dots += half_dots;
+    advance_devices_to(m, m->time_half_dots + half_dots);
 }
 static void set_hl(gbb_instance *m, uint16_t value) { m->h = (uint8_t)(value >> 8); m->l = (uint8_t)value; }
 
@@ -436,7 +518,6 @@ static void execute(gbb_instance *m, uint8_t cost) {
         }
     }
     m->f &= 0xF0u;
-    advance_devices(m, cost);
 }
 
 static unsigned pending_interrupt(const gbb_instance *m) {
@@ -454,7 +535,6 @@ static void enter_interrupt(gbb_instance *m, unsigned bit) {
     push16(m, m->pc, 16, 24);
     m->pc = (uint16_t)(0x0040u + bit * 8u);
     m->halted = 0;
-    advance_devices(m, 40);
 }
 
 static void save_trace(const gbb_instance *m, decoded d, gbb_trace_record *r) {
@@ -482,7 +562,9 @@ gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
         if (interrupt < 5) {
             if (40u > budget_half_dots - result.consumed_half_dots) return result;
             if (UINT64_MAX - instance->time_half_dots < 40u) { result.reason=GBB_STOP_INVALID_STATE; return result; }
+            instance->instruction_start_half_dots = instance->time_half_dots;
             enter_interrupt(instance, interrupt);
+            advance_devices_to(instance, instance->instruction_start_half_dots + 40u);
             result.consumed_half_dots += 40;
             continue;
         }
@@ -519,7 +601,9 @@ gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
         if (trace != NULL) save_trace(instance,d,&trace[result.trace_count++]);
         int consume_halt_bug=instance->halt_bug;
         int keeps_control_target=consume_halt_bug && halt_bug_keeps_control_target(instance,opcode);
+        instance->instruction_start_half_dots = instance->time_half_dots;
         execute(instance,cost);
+        advance_devices_to(instance, instance->instruction_start_half_dots + cost);
         if (consume_halt_bug) {
             if (!keeps_control_target) instance->pc=(uint16_t)(instance->pc-1u);
             instance->halt_bug=0;
