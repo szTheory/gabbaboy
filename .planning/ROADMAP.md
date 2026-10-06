@@ -57,7 +57,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. Equal timestamped inputs and elapsed emulated time produce equal supported state/output across different run partitions; LCD-off, HALT/STOP, lockup, and full output capacity return within the caller's bounded contract. (CPU-04)
 5. A headless run reports pass/fail/timeout/unsupported against a pinned eligible CPU/timer corpus with model/boot/protocol identity and sufficient retained trace evidence to reproduce failures. (CPU-05)
 
-**Plans**: 9/9 plans executed in 9 dependency-ordered waves; independent verification and hosted evidence found seven blockers. Phase completion and CPU-01..05 remain pending. See [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md). Next command: `$gsd-plan-phase 2 --gaps`.
+**Plans**: 16 total: the original 9/9 plans are executed and 7 gap-closure plans are planned and pending. Independent verification still has seven blockers; phase completion and CPU-01..05 remain pending. See [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md). Next command: `$gsd-execute-phase 2 --gaps-only`.
 **Wave 1**
 - [x] 02-01-PLAN.md — ROM-only bus and WRAM tracer
 
@@ -84,6 +84,27 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 **Wave 9** *(blocked on Wave 8 completion)*
 - [x] 02-09-PLAN.md — installed consumers, CI and documentation
+
+**Gap-closure waves** *(execute with `$gsd-execute-phase 2 --gaps-only`)*
+
+**Gap wave 1**
+- [ ] 02-10-PLAN.md — checksum-derived post-boot flags and RET/RETI phases
+- [ ] 02-13-PLAN.md — diagnose and repair pinned fixture byte reproduction
+
+**Gap wave 2** *(blocked on Gap wave 1 completion)*
+- [ ] 02-11-PLAN.md — consecutive EI semantics and chronological interrupt diagnostics
+
+**Gap wave 3** *(blocked on Gap wave 2 completion)*
+- [ ] 02-12-PLAN.md — Windows manifest portability and distinct negative-control results
+
+**Gap wave 4** *(blocked on Gap wave 3 and 02-13 completion)*
+- [ ] 02-14-PLAN.md — source-qualify PPU-independent corpus candidates and result protocol
+
+**Gap wave 5** *(blocked on Gap wave 4 completion)*
+- [ ] 02-15-PLAN.md — admit only qualified fixtures and reproduce final bytes
+
+**Gap wave 6** *(blocked on Gap wave 5 completion)*
+- [ ] 02-16-PLAN.md — verify runner protocol, inventory, and final exact-revision evidence
 
 ### Phase 3: Visible Interactive DMG
 

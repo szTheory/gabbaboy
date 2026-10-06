@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
 milestone: v0.1
-current_phase: 02
+current_phase: 2
 current_phase_name: DMG CPU, Bus, and Time
 status: gaps_found
-stopped_at: Phase 2 execution and independent verification finished; seven blockers require gap planning
-last_updated: "2026-10-06T21:50:17Z"
+stopped_at: Phase 2 gap-closure planning and independent plan verification finished; seven plans are ready to execute
+last_updated: "2026-10-06T22:39:13Z"
 last_activity: 2026-10-06
-last_activity_desc: Nine plans executed; Phase 2 verification returned gaps_found
-state_head: c583e338a48f70e83573da700722dcbefa4b705a
+last_activity_desc: Seven Phase 2 gap-closure plans created and independently checked; original nine plans remain executed
+state_head: 0d9700ab85b91724b9215c2028a9895599da7ec3
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 14
+  total_plans: 21
   completed_plans: 14
 milestone_name: limited DMG preview
 ---
@@ -28,10 +28,10 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 
 ## Current Position
 
-Phase: GB-02 (DMG CPU, Bus, and Time) — GAPS FOUND
-Plan: 9 of 9
-Status: Nine plans executed; independent verification blocks phase completion
-Last activity: 2026-10-06 — Seven review/verification/hosted blockers recorded; all CPU requirements remain pending
+Phase: 2 (DMG CPU, Bus, and Time) — GAPS FOUND; GAP PLANS READY
+Plan: 9 original plans executed of 16 total; 7 gap-closure plans pending
+Status: Independent verification still blocks phase completion; gap plans passed plan review
+Last activity: 2026-10-06 — Seven gap-closure plans created and independently checked; CPU-01..05 remain pending
 
 Progress: [██░░░░░░░░] 17% of milestone phases complete; Phase 1 has 5/5 plans and passed verification
 
@@ -39,7 +39,7 @@ Progress: [██░░░░░░░░] 17% of milestone phases complete; Pha
 
 - Total unique plans executed: 14; plan execution does not imply phase qualification.
 - Average duration / total execution time: 27 min / 377 min recorded for Phase 1 Plans 01–05 and Phase 2 Plans 01–09.
-- Per-phase metrics / recent trend: Phase 1 complete; all nine Phase 2 plans executed, with seven corrective gaps remaining.
+- Per-phase metrics / recent trend: Phase 1 complete; the original nine Phase 2 plans are executed and seven gap-closure plans are pending.
 - Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. Current Linux normal and ASan/UBSan suites each fail four of 94 tests; relocated-install qualification fails four of 99. Earlier corpus passes are superseded by the corrected unsupported-read guard.
 
 **Per-Plan Metrics:**
@@ -127,10 +127,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 ## Session Continuity
 
 Last session: 2026-10-06
-Stopped at: Phase 2 execution and independent review/verification finished with seven blockers
+Stopped at: Phase 2 gap-closure planning finished; seven reviewed gap plans are ready to execute
 Resume file: .planning/.continue-here.md
-Next command in fresh context: $gsd-plan-phase 2 --gaps
+Next command in fresh context: $gsd-execute-phase 2 --gaps-only
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: Phase 2 plan execution (9/9) and independent review/verification. The phase itself remains incomplete; Phase 1 is the last completed implementation phase.
-Next stage: Phase 2 gap planning from the current verification report. Run `$gsd-plan-phase 2 --gaps`; reuse existing research and decisions.
+Completed workflow stage: Phase 2 gap-closure planning for seven verification blockers (plans 02-10 through 02-16), with independent plan verification passed. The original nine plans were executed; Phase 2 itself remains incomplete and Phase 1 is the last completed implementation phase.
+Next stage: Phase 2 gap-closure execution. Run `$gsd-execute-phase 2 --gaps-only` to execute only the seven new closure plans.
 Next implementation phase: Phase 3 — Visible Interactive DMG, paused until Phase 2 gaps and required checks are closed and the owner chooses to continue. Both auto-advance flags remain false.
