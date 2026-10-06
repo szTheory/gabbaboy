@@ -1,0 +1,91 @@
+{
+  "suite": {
+    "name": "Mooneye Test Suite",
+    "revision": "31510e12eea6286d36eea060a6adde755e1067aa",
+    "tree_sha1": "2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
+    "license": "MIT; see LICENSE.txt",
+    "upstream": "https://github.com/Gekkio/mooneye-test-suite/tree/31510e12eea6286d36eea060a6adde755e1067aa"
+  },
+  "replacement_asset": {
+    "path": "font.bin",
+    "source": "Original fixed-size zero-filled replacement emitted by font-source.c; no Darkrose font glyphs are included.",
+    "size_bytes": 2032,
+    "sha256": "23ba65cb93433b65e7ddcae5f8a7dd2ca232491793848644e625875c6dd6ae43",
+    "notice": "See FONT-LICENSE.txt"
+  },
+  "builder": {
+    "name": "WLA-DX",
+    "version": "10.7",
+    "source_revision": "91c52b1f4ef3cc8ba3c0638f7536539579af6a9f",
+    "source_tree_sha1": "8495d61b96847950e65b1809bf9c7daaccdbd20b",
+    "git_archive_sha256": "24a95d77a79feeb70d1de87d66749c006e37337308ce9c00e44efac4c46ab976",
+    "assembler_version_output": "wla-gb 10.7 (28.6.2026)",
+    "linker_version_output": "wlalink 5.22 (28.6.2026)",
+    "source_url": "https://github.com/vhelin/wla-dx/tree/91c52b1f4ef3cc8ba3c0638f7536539579af6a9f",
+    "source_license": "GPL-2.0-or-later; build tool only, not linked into fixture ROMs"
+  },
+  "inventory_status": "cpu-only-in-progress",
+  "required_roms": ["daa.gb"],
+  "fixtures": [
+    {
+      "id": "mooneye-acceptance-instr-daa",
+      "category": "cpu",
+      "eligible": true,
+      "eligibility_basis": "Pinned acceptance source exercises the CPU DAA instruction and its input/flag matrix; source declares hardware-verified pass results for DMG, including DMG-CPU-B. It enters at cartridge code and uses no boot ROM or PPU result as an oracle.",
+      "source_path": "acceptance/instr/daa.s",
+      "source_closure": [
+        "acceptance/instr/daa.s",
+        "common/common.s",
+        "common/hardware.s",
+        "common/macros.s",
+        "common/lib/check_asserts_cb.s",
+        "common/lib/clear_oam.s",
+        "common/lib/clear_vram.s",
+        "common/lib/clear_wram.s",
+        "common/lib/disable_ppu_safe.s",
+        "common/lib/is_ppu_broken.s",
+        "common/lib/is_serial_broken.s",
+        "common/lib/memcmp.s",
+        "common/lib/memcpy.s",
+        "common/lib/memset.s",
+        "common/lib/print_bin1.s",
+        "common/lib/print_bin4.s",
+        "common/lib/print_bin8.s",
+        "common/lib/print_hex4.s",
+        "common/lib/print_hex8.s",
+        "common/lib/print_inline_string.s",
+        "common/lib/print_load_font.s",
+        "common/lib/print_newline.s",
+        "common/lib/print_reg_dump.s",
+        "common/lib/print_string.s",
+        "common/lib/quit.s",
+        "common/lib/quit_dump_mem.s",
+        "common/lib/reset_screen.s",
+        "common/lib/serial_send_byte.s",
+        "common/lib/wait_ly_with_timeout.s"
+      ],
+      "rom": "daa.gb",
+      "size_bytes": 32768,
+      "sha256": "96cd0e02a85f6f035b1c1947d36a8ad2d8e51963f636b833f05559f021eef57e",
+      "license": "MIT; see LICENSE.txt",
+      "asset_notice": "FONT-LICENSE.txt",
+      "model": "DMG-CPU-B",
+      "boot": "Skipped; bootless DMG-CPU-B profile starts at the cartridge entry point 0x0100.",
+      "oracle_class": "Mooneye hardware-author acceptance test; source reports DMG pass.",
+      "protocol": {
+        "pass": "Registers B,C,D,E,H,L are 3,5,8,13,21,34 at the LD B,B breakpoint; the guest then loops.",
+        "fail": "Registers B,C,D,E,H,L are 0x42 at the LD B,B breakpoint; the guest then loops.",
+        "runner_support": "Current generic runner does not interpret the Mooneye register protocol; preparation run is recorded separately."
+      },
+      "timeout_half_dots": 200000,
+      "build_recipe": [
+        "cc -std=c17 -O2 fixtures/mooneye/font-source.c -o <tmp>/font-source",
+        "<tmp>/font-source <upstream>/common/font.bin",
+        "wla-gb -I <upstream>/common -o <tmp>/build/acceptance/instr/daa.o <upstream>/acceptance/instr/daa.s",
+        "printf '[objects]\\n%s\\n' <tmp>/build/acceptance/instr/daa.o > <tmp>/build/acceptance/instr/daa.link",
+        "wlalink -d -S <tmp>/build/acceptance/instr/daa.link <tmp>/daa.gb"
+      ],
+      "preparation_outcome": "timeout: public runner used its finite 200000-half-dot budget but does not recognize the Mooneye breakpoint/register protocol. This does not affect eligibility."
+    }
+  ]
+}

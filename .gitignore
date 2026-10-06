@@ -25,6 +25,9 @@ CMakeUserPresets.json
 *.sav
 *.srm
 *.state
+!/fixtures/mooneye/daa.gb
+!/fixtures/mooneye/tim00.gb
+!/fixtures/mooneye/tim00_div_trigger.gb
 
 # Temporary OpenGSD runtime state (retain planning documents)
 .planning/.tmp/
