@@ -162,6 +162,28 @@ static int halt_timer_partition(void) {
         REQUIRE(ew[i].time_half_dots == es[i].time_half_dots && ew[i].address == es[i].address);
         REQUIRE(ew[i].access == es[i].access && ew[i].value == es[i].value);
     }
+    gbb_destroy(whole); gbb_destroy(split);
+    /* With IME clear, the same timer wake resumes the following instruction
+     * without vectoring or consuming the pending interrupt. */
+    const uint8_t no_ime[] = {0x3e,4,0xea,0xff,0xff,0xaf,0xe0,4,0x3e,0xff,
+        0xe0,5,0x3e,6,0xe0,7,0x00,0x00,0x76,0x3e,0x77,0xea,0x00,0xc0};
+    make_rom(rom, no_ime, sizeof(no_ime));
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &whole) == GBB_OK);
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &split) == GBB_OK);
+    REQUIRE(gbb_load_rom(whole, rom, sizeof(rom)) == GBB_OK);
+    REQUIRE(gbb_load_rom(split, rom, sizeof(rom)) == GBB_OK);
+    REQUIRE(gbb_run(whole, 184, NULL, 0).consumed_half_dots == 184);
+    REQUIRE(gbb_run(split, 184, NULL, 0).consumed_half_dots == 184);
+    r = gbb_run(whole, 72, tw, 4);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 72 && r.trace_count == 2);
+    r = gbb_run(split, 24, ts, 4);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 24 && r.trace_count == 0);
+    r = gbb_run(split, 48, ts, 4);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 48 && r.trace_count == 2);
+    REQUIRE(memcmp(tw, ts, 2 * sizeof(*tw)) == 0);
+    gbb_test_cpu_snapshot(whole, &before); gbb_test_cpu_snapshot(split, &after);
+    REQUIRE(memcmp(&before, &after, sizeof(before)) == 0 && before.time_half_dots == 256);
+    REQUIRE(gbb_peek_ram(whole, 0xc000) == 0x77 && gbb_peek_ram(split, 0xc000) == 0x77);
     gbb_destroy(whole); gbb_destroy(split); return 0;
 }
 

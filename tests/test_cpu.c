@@ -131,12 +131,20 @@ static int base_matrix(void) {
     uint8_t rom[32768];
     for (unsigned op = 0; op < 256; ++op) {
         uint8_t program[] = {(uint8_t)op,0x00,0x01,0x00};
+        /* This is the legal decode/timing matrix; absent-I/O rejection has its
+         * own tests. Point LDH reads at implemented DIV, not deferred JOYP/APU. */
+        if (op == 0xf0) program[1] = 0x04;
         make_rom(rom,program,sizeof(program));
+        if (op == 0xf2) {
+            const uint8_t indexed[] = {0x0e,0x04,0xf2,0x00};
+            make_rom(rom, indexed, sizeof(indexed));
+        }
         gbb_instance *m=NULL;
         REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B,&m)==GBB_OK);
         REQUIRE(gbb_load_rom(m,rom,sizeof(rom))==GBB_OK);
-        gbb_trace_record trace[10]={{0}};
-        gbb_run_result r=gbb_run(m,96,trace,10);
+        if (op == 0xf2) REQUIRE(gbb_run(m,16,NULL,0).consumed_half_dots==16);
+        gbb_trace_record trace[16]={{0}};
+        gbb_run_result r=gbb_run(m,96,trace,16);
         int illegal=0; for(size_t i=0;i<sizeof(holes);++i) if(holes[i]==op) illegal=1;
         if(illegal) REQUIRE(r.reason==GBB_STOP_LOCKUP && r.lockup_pc==0x100 && r.lockup_opcode==op);
         else if (op == 0x76) {
@@ -146,11 +154,13 @@ static int base_matrix(void) {
             REQUIRE(r.reason == GBB_STOP_STOPPED && r.consumed_half_dots == 8);
             REQUIRE(r.trace_count == 1 && trace[0].pc == 0x0100);
         } else {
+            if (r.reason != GBB_STOP_BUDGET) fprintf(stderr, "opcode %02x stopped with reason %u after %llu half-dots\n", op, (unsigned)r.reason, (unsigned long long)r.consumed_half_dots);
             REQUIRE(r.reason==GBB_STOP_BUDGET && r.consumed_half_dots>0);
             REQUIRE(r.trace_count>=2);
-            REQUIRE(trace[1].time_half_dots==expected_first_cost(op));
-            if (trace[1].pc != expected_first_pc(op)) fprintf(stderr, "opcode %02x PC got %04x expected %04x\n", op, trace[1].pc, expected_first_pc(op));
-            REQUIRE(trace[1].pc==expected_first_pc(op));
+            REQUIRE(trace[1].time_half_dots==expected_first_cost(op)+(op==0xf2?16u:0u));
+            uint16_t expected_pc=(uint16_t)(expected_first_pc(op)+(op==0xf2?2u:0u));
+            if (trace[1].pc != expected_pc) fprintf(stderr, "opcode %02x PC got %04x expected %04x\n", op, trace[1].pc, expected_pc);
+            REQUIRE(trace[1].pc==expected_pc);
             REQUIRE((trace[1].f&0x0f)==0);
         }
         gbb_destroy(m);

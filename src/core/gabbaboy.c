@@ -254,7 +254,8 @@ static void bus_write(gbb_instance *m, uint16_t address, uint8_t value, uint64_t
 }
 
 static int read_supported(uint16_t address) {
-    return address < 0x8000 || (address >= 0xFF01 && address <= 0xFF07) || address == 0xFF0F || address == 0xFFFF ||
+    return address < 0x8000 || address == 0xFF01 || address == 0xFF02 ||
+           (address >= 0xFF04 && address <= 0xFF07) || address == 0xFF0F || address == 0xFFFF ||
            (address >= 0xC000 && address <= 0xDFFF) ||
            (address >= 0xE000 && address <= 0xFDFF) ||
            (address >= 0xFF80 && address <= 0xFFFE);
@@ -289,9 +290,13 @@ static void apply_input_events_now(gbb_instance *m) {
     }
 }
 
-static uint8_t instruction_byte(const gbb_instance *m, uint16_t pc, unsigned offset) {
+static uint16_t instruction_address(const gbb_instance *m, uint16_t pc, unsigned offset) {
     if (m->halt_bug && offset != 0) --offset;
-    return read8(m, (uint16_t)(pc + offset));
+    return (uint16_t)(pc + offset);
+}
+
+static uint8_t instruction_byte(const gbb_instance *m, uint16_t pc, unsigned offset) {
+    return read8(m, instruction_address(m, pc, offset));
 }
 
 static void advance_devices_to(gbb_instance *m, uint64_t target) {
@@ -478,6 +483,38 @@ static uint16_t pair_value(const gbb_instance *m, unsigned pair) {
         case 1: return (uint16_t)(((uint16_t)m->d << 8) | m->e);
         case 2: return hl(m);
         default: return m->sp;
+    }
+}
+
+static int instruction_reads_supported(const gbb_instance *m, decoded d, uint8_t op) {
+    /* Address checks have no bus phases or side effects. Every byte is checked
+     * before an instruction can change registers, RAM, devices or outputs. */
+    for (unsigned i = 0; i < d.size; ++i)
+        if (!read_supported(instruction_address(m, m->pc, i))) return 0;
+
+    if (op == 0xCB)
+        return (instruction_byte(m, m->pc, 1) & 7u) != 6u || read_supported(hl(m));
+    if ((op >= 0x40 && op <= 0x7F && op != 0x76 && (op & 7u) == 6u) ||
+        (op >= 0x80 && op <= 0xBF && (op & 7u) == 6u) ||
+        (((op & 0xC7u) == 0x04u || (op & 0xC7u) == 0x05u) && ((op >> 3) & 7u) == 6u) ||
+        op == 0x2A || op == 0x3A)
+        return read_supported(hl(m));
+
+    if ((op & 0xCFu) == 0xC1u || op == 0xC9 || op == 0xD9 ||
+        ((op & 0xE7u) == 0xC0u && condition_true(m, (op >> 3) & 3u)))
+        return read_supported(m->sp) && read_supported((uint16_t)(m->sp + 1u));
+
+    switch (op) {
+        case 0x0A: return read_supported(pair_value(m, 0));
+        case 0x1A: return read_supported(pair_value(m, 1));
+        case 0xF0: return read_supported((uint16_t)(0xFF00u + instruction_byte(m, m->pc, 1)));
+        case 0xF2: return read_supported((uint16_t)(0xFF00u + m->c));
+        case 0xFA: {
+            uint16_t address = (uint16_t)(instruction_byte(m, m->pc, 1) |
+                               ((uint16_t)instruction_byte(m, m->pc, 2) << 8));
+            return read_supported(address);
+        }
+        default: return 1; /* Writes to absent ROM-only regions remain ignored. */
     }
 }
 
@@ -685,7 +722,7 @@ static void enter_interrupt(gbb_instance *m, unsigned bit) {
 static void save_trace(const gbb_instance *m, decoded d, gbb_trace_record *r) {
     memset(r, 0, sizeof(*r));
     r->time_half_dots = m->time_half_dots; r->pc = m->pc; r->opcode_size = d.size;
-    for (uint8_t i = 0; i < d.size && i < 3; ++i) r->opcode[i] = read8(m, (uint16_t)(m->pc + i));
+    for (uint8_t i = 0; i < d.size && i < 3; ++i) r->opcode[i] = instruction_byte(m, m->pc, i);
     r->a=m->a; r->f=m->f; r->b=m->b; r->c=m->c; r->d=m->d; r->e=m->e; r->h=m->h; r->l=m->l; r->sp=m->sp;
 }
 
@@ -753,14 +790,28 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
         if (instance->halted) {
             if ((instance->ie & instance->interrupt_flags & 0x1Fu) != 0) {
                 instance->halted=0;
+                result.reason=GBB_STOP_BUDGET;
                 continue;
             }
-            uint64_t idle = ((budget_half_dots - result.consumed_half_dots) / 8u) * 8u;
-            if (idle == 0) return result;
-            if (UINT64_MAX - instance->time_half_dots < idle) { result.reason=GBB_STOP_INVALID_STATE; return result; }
-            advance_devices(instance, idle);
-            result.consumed_half_dots += idle;
+            if (budget_half_dots - result.consumed_half_dots < 8u) return result;
+            if (UINT64_MAX - instance->time_half_dots < 8u) { result.reason=GBB_STOP_INVALID_STATE; return result; }
+            /* HALT samples wake conditions at each machine-cycle boundary.
+             * A timer/serial interrupt midway through a long budget must wake
+             * at the same boundary as it does through shorter run calls. */
+            advance_devices(instance, 8u);
+            result.consumed_half_dots += 8u;
             result.reason=GBB_STOP_HALTED_IDLE;
+            if ((instance->ie & instance->interrupt_flags & 0x1Fu) != 0) {
+                instance->halted=0;
+                result.reason=GBB_STOP_BUDGET;
+            }
+            continue;
+        }
+        if (!read_supported(instance->pc)) { result.reason=GBB_STOP_UNSUPPORTED_BUS; return result; }
+        uint8_t opcode = read8(instance, instance->pc);
+        /* CB decoding consumes its extension byte, so check it before decode. */
+        if (opcode == 0xCB && !read_supported(instruction_address(instance, instance->pc, 1))) {
+            result.reason=GBB_STOP_UNSUPPORTED_BUS;
             return result;
         }
         decoded d=decode(instance);
@@ -768,8 +819,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             instance->locked=1; instance->lockup_pc=instance->pc; instance->lockup_opcode=read8(instance,instance->pc);
             result.reason=GBB_STOP_LOCKUP; result.lockup_pc=instance->lockup_pc; result.lockup_opcode=instance->lockup_opcode; return result;
         }
-        uint8_t opcode = read8(instance, instance->pc);
-        if (opcode == 0x7E && !read_supported(hl(instance))) {
+        if (!instruction_reads_supported(instance, d, opcode)) {
             result.reason = GBB_STOP_UNSUPPORTED_BUS;
             return result;
         }

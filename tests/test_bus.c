@@ -127,7 +127,22 @@ static int unsupported_stack(void) {
     gbb_trace_record t[4]; gbb_run_result r = gbb_run(m, 64, t, 4);
     REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 64 && r.trace_count == 4);
     REQUIRE(t[3].pc == 0x105 && t[3].sp == 0xa000);
-    gbb_destroy(m); return 0;
+    gbb_destroy(m);
+    const uint8_t other_untaken[] = {0x31,0x00,0xa0,0xb7,0xc8,0x37,0xd0,0x00};
+    m = load_program(other_untaken, sizeof(other_untaken)); REQUIRE(m != NULL);
+    gbb_trace_record all[6]; r = gbb_run(m, 80, all, 6);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 80 && r.trace_count == 6);
+    REQUIRE(all[5].pc == 0x107 && all[5].sp == 0xa000);
+    gbb_destroy(m);
+    const uint8_t taken_nz[] = {0x31,0x00,0xa0,0xb7,0xc0};
+    m = load_program(taken_nz, sizeof(taken_nz)); REQUIRE(m != NULL);
+    REQUIRE(gbb_run(m, 32, NULL, 0).consumed_half_dots == 32);
+    REQUIRE(reject_atomically(m) == 0); gbb_destroy(m);
+    const uint8_t taken_c[] = {0x31,0x00,0xa0,0x37,0xd8};
+    m = load_program(taken_c, sizeof(taken_c)); REQUIRE(m != NULL);
+    REQUIRE(gbb_run(m, 32, NULL, 0).consumed_half_dots == 32);
+    REQUIRE(reject_atomically(m) == 0); gbb_destroy(m);
+    return 0;
 }
 
 static int unsupported_fetch(void) {
