@@ -4,6 +4,7 @@
 
 - Mooneye Test Suite: commit `31510e12eea6286d36eea060a6adde755e1067aa`, tree `b85060c35fa7baeaac7d1f128e3fd32e8b47a90e`. The source declares MIT; the notice is retained in `LICENSE.txt`.
 - WLA-DX: commit `91c52b1f4ef3cc8ba3c0638f7536539579af6a9f`, tree `8495d61b96847950e65b1809bf9c7daaccdbd20b`; `git archive` SHA-256 `24a95d77a79feeb70d1de87d66749c006e37337308ce9c00e44efac4c46ab976`. It builds the ROMs with `wla-gb 10.7 (28.6.2026)` and `wlalink 5.22 (28.6.2026)`. Its GPL-2.0-or-later license covers the build tool, which is not linked into fixtures.
+- Tool build, after verifying the archive digest: `cmake -S <tool-source> -B <tmp>/wla-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=<tmp>/wla-install`, then `cmake --build <tmp>/wla-build --config Release -j4`. The selected binaries are `<tmp>/wla-build/binaries/wla-gb` and `wlalink`; their version output is recorded above and in `manifest.json`.
 - The pinned suite `Makefile` invokes WLA-DX with `wla-gb -I <absolute common directory> -o <object> <test source>`, then writes a one-object `[objects]` link file and invokes `wlalink -d -S <link file> <ROM>`. The exact per-fixture commands and output digest are recorded in `manifest.json`.
 
 ## Asset rights

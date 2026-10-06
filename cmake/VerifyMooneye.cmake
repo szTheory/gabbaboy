@@ -140,5 +140,15 @@ if(NOT builder_revision STREQUAL "91c52b1f4ef3cc8ba3c0638f7536539579af6a9f" OR
    NOT builder_version STREQUAL "10.7")
   message(FATAL_ERROR "Fixture builder pin must remain WLA-DX 10.7 at the reviewed immutable revision")
 endif()
+string(JSON suite_revision GET "${manifest_json}" suite revision)
+string(JSON suite_tree GET "${manifest_json}" suite tree_sha1)
+string(JSON builder_tree GET "${manifest_json}" builder source_tree_sha1)
+string(JSON builder_archive_sha GET "${manifest_json}" builder git_archive_sha256)
+if(NOT suite_revision STREQUAL "31510e12eea6286d36eea060a6adde755e1067aa" OR
+   NOT suite_tree STREQUAL "2b8c52424a49a2a7466cf631fd8992c53d0de2fa" OR
+   NOT builder_tree STREQUAL "8495d61b96847950e65b1809bf9c7daaccdbd20b" OR
+   NOT builder_archive_sha STREQUAL "24a95d77a79feeb70d1de87d66749c006e37337308ce9c00e44efac4c46ab976")
+  message(FATAL_ERROR "Mooneye source or WLA-DX source digest does not match the reviewed immutable pin")
+endif()
 
 message(STATUS "Verified ${fixture_count} eligible Mooneye ROM(s): ${cpu_count} CPU, ${timer_count} timer (${inventory_status})")
