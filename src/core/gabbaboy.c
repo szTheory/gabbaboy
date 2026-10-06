@@ -4,6 +4,7 @@
 #include <string.h>
 
 #define GBB_INPUT_EVENT_CAPACITY 64u
+#define GBB_DIAGNOSTIC_OPERATION_RESERVE 16u
 
 struct gbb_instance {
     uint8_t *rom;
@@ -37,7 +38,51 @@ struct gbb_instance {
     size_t test_event_capacity;
     size_t test_event_count;
     int loaded;
+    gbb_diagnostic_record *diagnostic_output;
+    size_t diagnostic_output_capacity;
+    size_t diagnostic_output_count;
+    gbb_diagnostic_record *diagnostic_operation;
+    size_t diagnostic_operation_count;
+    uint16_t diagnostic_pc;
+    uint8_t diagnostic_opcode;
 };
+
+static uint8_t diagnostic_timer_state(const gbb_instance *m) {
+    return (uint8_t)((m->tac & 7u) | (m->timer_reload_pending ? 0x08u : 0u) |
+                     (m->timer_signal ? 0x10u : 0u));
+}
+
+static void diagnostic_add(gbb_instance *m, gbb_diagnostic_kind kind,
+                           uint64_t time, uint16_t address, uint8_t value) {
+    if (m->diagnostic_operation == NULL ||
+        m->diagnostic_operation_count >= GBB_DIAGNOSTIC_OPERATION_RESERVE) return;
+    gbb_diagnostic_record *record = &m->diagnostic_operation[m->diagnostic_operation_count++];
+    record->time_half_dots = time;
+    record->kind = kind;
+    record->pc = m->diagnostic_pc;
+    record->opcode = m->diagnostic_opcode;
+    record->address = address;
+    record->value = value;
+    record->timer_state = diagnostic_timer_state(m);
+}
+
+static void diagnostic_begin(gbb_instance *m, gbb_diagnostic_record records[GBB_DIAGNOSTIC_OPERATION_RESERVE], uint16_t pc, uint8_t opcode) {
+    if (m->diagnostic_output == NULL) return;
+    m->diagnostic_operation = records;
+    m->diagnostic_operation_count = 0;
+    m->diagnostic_pc = pc;
+    m->diagnostic_opcode = opcode;
+    diagnostic_add(m, GBB_DIAGNOSTIC_INSTRUCTION, m->time_half_dots, 0, opcode);
+}
+
+static void diagnostic_commit(gbb_instance *m) {
+    if (m->diagnostic_output == NULL || m->diagnostic_operation == NULL) return;
+    memcpy(m->diagnostic_output + m->diagnostic_output_count, m->diagnostic_operation,
+           m->diagnostic_operation_count * sizeof(*m->diagnostic_output));
+    m->diagnostic_output_count += m->diagnostic_operation_count;
+    m->diagnostic_operation = NULL;
+    m->diagnostic_operation_count = 0;
+}
 
 typedef struct gbb_test_bus_event {
     uint64_t time_half_dots;
@@ -58,6 +103,8 @@ size_t gbb_test_observer_count(const gbb_instance *m) {
 }
 
 static void observe_bus(gbb_instance *m, uint64_t offset, uint16_t address, uint8_t access, uint8_t value) {
+    if (access == 1) diagnostic_add(m, GBB_DIAGNOSTIC_BUS_READ, m->time_half_dots + offset, address, value);
+    else if (access == 2) diagnostic_add(m, GBB_DIAGNOSTIC_BUS_WRITE, m->time_half_dots + offset, address, value);
     if (m->test_events != NULL && m->test_event_count < m->test_event_capacity) {
         gbb_test_bus_event *event = &m->test_events[m->test_event_count++];
         event->time_half_dots = m->time_half_dots + offset;
@@ -143,8 +190,10 @@ static void timer_increment(gbb_instance *m, uint64_t at) {
         m->timer_reload_pending = 1;
         m->timer_reload_remaining = 8u;
         observe_bus(m, 0, 0xFF05, 3, m->tima);
+        diagnostic_add(m, GBB_DIAGNOSTIC_TIMER, at, 0xFF05, m->tima);
     } else {
         ++m->tima;
+        diagnostic_add(m, GBB_DIAGNOSTIC_TIMER, at, 0xFF05, m->tima);
     }
 }
 
@@ -257,6 +306,7 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
             m->interrupt_flags |= 0x04u;
             observe_bus(m, 0, 0xFF05, 3, m->tima);
             observe_bus(m, 0, 0xFF0F, 3, (uint8_t)(0xE0u | m->interrupt_flags));
+            diagnostic_add(m, GBB_DIAGNOSTIC_TIMER, m->time_half_dots, 0xFF05, m->tima);
         }
         if (m->serial_active && (m->serial_control & 1u) != 0 &&
             m->serial_edge_remaining != 0 && --m->serial_edge_remaining == 0) {
@@ -646,9 +696,9 @@ static int halt_bug_keeps_control_target(const gbb_instance *m, uint8_t op) {
     return 0;
 }
 
-gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
-                       gbb_trace_record *trace, size_t trace_capacity) {
-    gbb_run_result result={0, GBB_STOP_BUDGET, 0, 0, 0};
+static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_half_dots,
+                                       gbb_trace_record *trace, size_t trace_capacity) {
+    gbb_run_result result={0, GBB_STOP_BUDGET, 0, 0, 0, 0};
     if (instance == NULL || !instance->loaded || (trace == NULL && trace_capacity != 0)) { result.reason=GBB_STOP_INVALID_STATE; return result; }
     if (budget_half_dots != 0) apply_input_events_now(instance);
     while (result.consumed_half_dots < budget_half_dots) {
@@ -682,9 +732,16 @@ gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
         if (interrupt < 5) {
             if (40u > budget_half_dots - result.consumed_half_dots) return result;
             if (UINT64_MAX - instance->time_half_dots < 40u) { result.reason=GBB_STOP_INVALID_STATE; return result; }
+            gbb_diagnostic_record operation[GBB_DIAGNOSTIC_OPERATION_RESERVE];
+            if (instance->diagnostic_output != NULL &&
+                instance->diagnostic_output_capacity - instance->diagnostic_output_count < GBB_DIAGNOSTIC_OPERATION_RESERVE) {
+                result.reason=GBB_STOP_OUTPUT_FULL; return result;
+            }
+            diagnostic_begin(instance, operation, instance->pc, 0);
             instance->instruction_start_half_dots = instance->time_half_dots;
             enter_interrupt(instance, interrupt);
             advance_devices_to(instance, instance->instruction_start_half_dots + 40u);
+            diagnostic_commit(instance);
             result.consumed_half_dots += 40;
             continue;
         }
@@ -718,10 +775,16 @@ gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
             return result;
         }
         if (trace != NULL && result.trace_count == trace_capacity) { result.reason=GBB_STOP_TRACE_FULL; return result; }
+        gbb_diagnostic_record operation[GBB_DIAGNOSTIC_OPERATION_RESERVE];
+        if (instance->diagnostic_output != NULL &&
+            instance->diagnostic_output_capacity - instance->diagnostic_output_count < GBB_DIAGNOSTIC_OPERATION_RESERVE) {
+            result.reason=GBB_STOP_OUTPUT_FULL; return result;
+        }
         if (trace != NULL) save_trace(instance,d,&trace[result.trace_count++]);
         int consume_halt_bug=instance->halt_bug;
         int keeps_control_target=consume_halt_bug && halt_bug_keeps_control_target(instance,opcode);
         instance->instruction_start_half_dots = instance->time_half_dots;
+        diagnostic_begin(instance, operation, instance->pc, opcode);
         execute(instance,cost);
         advance_devices_to(instance, instance->instruction_start_half_dots + cost);
         if (consume_halt_bug) {
@@ -729,6 +792,7 @@ gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
             instance->halt_bug=0;
         }
         result.consumed_half_dots += cost;
+        diagnostic_commit(instance);
         if (instance->ime_delay != 0 && --instance->ime_delay == 0) instance->ime = 1;
         if (instance->stopped) {
             instance->divider_counter = 0;
@@ -746,6 +810,33 @@ gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
         if (instance->halted) { result.reason=GBB_STOP_HALTED_IDLE; return result; }
     }
     return result;
+}
+
+gbb_run_result gbb_run_ex(gbb_instance *instance, uint64_t budget_half_dots,
+                          gbb_trace_record *trace, size_t trace_capacity,
+                          gbb_diagnostic_record *diagnostics, size_t diagnostic_capacity) {
+    gbb_run_result invalid={0, GBB_STOP_INVALID_STATE, 0, 0, 0, 0};
+    if ((diagnostics == NULL && diagnostic_capacity != 0) ||
+        (instance != NULL && instance->diagnostic_output != NULL)) return invalid;
+    if (instance != NULL) {
+        instance->diagnostic_output = diagnostics;
+        instance->diagnostic_output_capacity = diagnostic_capacity;
+        instance->diagnostic_output_count = 0;
+        instance->diagnostic_operation = NULL;
+    }
+    gbb_run_result result=gbb_run_internal(instance, budget_half_dots, trace, trace_capacity);
+    if (instance != NULL) {
+        result.diagnostic_count = instance->diagnostic_output_count;
+        instance->diagnostic_output = NULL;
+        instance->diagnostic_output_capacity = 0;
+        instance->diagnostic_operation = NULL;
+    }
+    return result;
+}
+
+gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
+                       gbb_trace_record *trace, size_t trace_capacity) {
+    return gbb_run_ex(instance, budget_half_dots, trace, trace_capacity, NULL, 0);
 }
 
 uint8_t gbb_peek_ram(const gbb_instance *instance, uint16_t address) {

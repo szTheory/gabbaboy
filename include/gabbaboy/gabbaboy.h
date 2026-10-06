@@ -63,10 +63,28 @@ typedef struct {
     uint16_t sp;
 } gbb_trace_record;
 
+typedef enum {
+    GBB_DIAGNOSTIC_INSTRUCTION = 1,
+    GBB_DIAGNOSTIC_BUS_READ,
+    GBB_DIAGNOSTIC_BUS_WRITE,
+    GBB_DIAGNOSTIC_TIMER
+} gbb_diagnostic_kind;
+
+typedef struct {
+    uint64_t time_half_dots;
+    gbb_diagnostic_kind kind;
+    uint16_t pc;
+    uint8_t opcode;
+    uint16_t address;
+    uint8_t value;
+    uint8_t timer_state;
+} gbb_diagnostic_record;
+
 typedef struct {
     uint64_t consumed_half_dots;
     gbb_stop_reason reason;
     size_t trace_count;
+    size_t diagnostic_count;
     uint16_t lockup_pc;
     uint8_t lockup_opcode;
 } gbb_run_result;
@@ -104,6 +122,16 @@ gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events
  * at instruction boundaries and remain owned by the caller. */
 gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
                        gbb_trace_record *trace, size_t trace_capacity);
+/* Extended run with optional caller-owned diagnostics. Both output buffers
+ * remain owned by the caller. NULL is valid only with zero capacity; capacity
+ * is measured in records, records are chronological, and actual written
+ * counts are returned. The core allocates/formats nothing. Diagnostics reserve
+ * a complete operation before it mutates state; an insufficient reserve stops
+ * with GBB_STOP_OUTPUT_FULL and writes no record for that operation. */
+gbb_run_result gbb_run_ex(gbb_instance *instance, uint64_t budget_half_dots,
+                          gbb_trace_record *trace, size_t trace_capacity,
+                          gbb_diagnostic_record *diagnostics,
+                          size_t diagnostic_capacity);
 /* Side-effect-free debug read of WRAM (C000-DFFF and its E000-FDFF echo) or
  * HRAM (FF80-FFFE). Other addresses and a null instance return 0xFF. No
  * pointer into instance storage is exposed. */

@@ -70,3 +70,8 @@ serial_external_pending
 serial_unqualified_overlap
 mooneye_fixture_digest
 mooneye_eligible_inventory
+diagnostics_zero
+diagnostics_exact
+diagnostics_short
+diagnostics_null
+diagnostics_canary

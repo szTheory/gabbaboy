@@ -91,6 +91,14 @@ add_test(NAME mooneye_eligible_inventory
   COMMAND ${CMAKE_COMMAND}
     -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneye.cmake)
+
+add_executable(test_diagnostics test_diagnostics.c)
+target_link_libraries(test_diagnostics PRIVATE GabbaBoy::core)
+target_compile_features(test_diagnostics PRIVATE c_std_17)
+set_target_properties(test_diagnostics PROPERTIES C_EXTENSIONS OFF)
+foreach(case zero exact short null canary)
+  add_test(NAME diagnostics_${case} COMMAND test_diagnostics diagnostics_${case})
+endforeach()
 set(GBB_TEST_SANITIZER_LINK_OPTIONS "")
 if(GABBABOY_ENABLE_SANITIZERS)
   set(GBB_TEST_SANITIZER_LINK_OPTIONS "-fsanitize=address,undefined")
