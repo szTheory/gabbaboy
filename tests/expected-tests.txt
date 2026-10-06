@@ -20,6 +20,13 @@ cpu_cb_flags_edges
 cpu_cb_timed_access
 interrupt_entry
 interrupt_budget
+interrupt_ei_delay
+interrupt_priority
+halt_idle
+halt_bug
+stop_wait
+reset_profile
+reset_lockup
 loader_truncated
 loader_oversized
 loader_invalid_header

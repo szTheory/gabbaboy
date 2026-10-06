@@ -57,10 +57,97 @@ static int interrupt_entry(void) {
 
 static int interrupt_budget(void) { return interrupt_entry(); }
 
+static gbb_instance *make_machine(const uint8_t *program, size_t size) {
+    uint8_t rom[32768];
+    make_rom(rom, program, size);
+    gbb_instance *m = NULL;
+    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &m) != GBB_OK || gbb_load_rom(m, rom, sizeof(rom)) != GBB_OK) {
+        gbb_destroy(m);
+        return NULL;
+    }
+    return m;
+}
+
+static int interrupt_ei_delay(void) {
+    const uint8_t p[] = {0x3e,1,0xea,0xff,0xff,0xea,0x0f,0xff,0xfb,0x04,0x00};
+    gbb_instance *m = make_machine(p, sizeof(p)); REQUIRE(m != NULL);
+    gbb_trace_record t[8] = {{0}};
+    gbb_run_result r = gbb_run(m, 96, t, 8);
+    REQUIRE(r.consumed_half_dots == 96 && r.trace_count == 6);
+    REQUIRE(t[5].pc == 0x10a && t[5].b == 1);
+    r = gbb_run(m, 40, t, 8);
+    REQUIRE(r.consumed_half_dots == 40 && r.trace_count == 0);
+    r = gbb_run(m, 8, t, 8);
+    REQUIRE(r.trace_count == 1 && t[0].pc == 0x40);
+    gbb_destroy(m); return 0;
+}
+
+static int interrupt_priority(void) {
+    const uint8_t p[] = {0x3e,3,0xea,0xff,0xff,0xea,0x0f,0xff,0xfb,0x00};
+    gbb_instance *m = make_machine(p, sizeof(p)); REQUIRE(m != NULL);
+    gbb_test_bus_event e[12] = {{0}}; gbb_test_observer_set(m, e, 12);
+    gbb_trace_record t[12] = {{0}};
+    gbb_run_result r = gbb_run(m, 96, t, 12); REQUIRE(r.consumed_half_dots == 96);
+    r = gbb_run(m, 40, t, 12); REQUIRE(r.consumed_half_dots == 40);
+    r = gbb_run(m, 64, t, 12); REQUIRE(r.consumed_half_dots == 64);
+    REQUIRE(gbb_peek_ram(m, 0xc000) == 0xe2);
+    REQUIRE(t[0].pc == 0x40);
+    gbb_destroy(m); return 0;
+}
+
+static int halt_idle(void) {
+    const uint8_t p[] = {0x76,0x04,0x00}; gbb_instance *m = make_machine(p, sizeof(p)); REQUIRE(m != NULL);
+    gbb_trace_record t[2] = {{0}}; gbb_run_result r = gbb_run(m, 8, t, 2);
+    REQUIRE(r.reason == (gbb_stop_reason)6 && r.consumed_half_dots == 8 && r.trace_count == 1);
+    r = gbb_run(m, 16, t, 2); REQUIRE(r.reason == (gbb_stop_reason)6 && r.consumed_half_dots == 16);
+    gbb_destroy(m); return 0;
+}
+
+static int halt_bug(void) {
+    const uint8_t p[] = {0x3e,1,0xea,0xff,0xff,0xea,0x0f,0xff,0x76,0x04,0x00};
+    gbb_instance *m = make_machine(p, sizeof(p)); REQUIRE(m != NULL);
+    gbb_trace_record t[2] = {{0}}; gbb_run_result r = gbb_run(m, 88, t, 2); REQUIRE(r.consumed_half_dots == 88);
+    r = gbb_run(m, 8, t, 2); REQUIRE(r.consumed_half_dots == 8);
+    r = gbb_run(m, 8, t, 2); REQUIRE(r.consumed_half_dots == 8 && t[0].pc == 0x109 && t[0].b == 1);
+    gbb_destroy(m); return 0;
+}
+
+static int stop_wait(void) {
+    const uint8_t p[] = {0x10,0x00,0x04}; gbb_instance *m = make_machine(p, sizeof(p)); REQUIRE(m != NULL);
+    gbb_trace_record t[2] = {{0}}; gbb_run_result r = gbb_run(m, 8, t, 2);
+    REQUIRE(r.reason == (gbb_stop_reason)7 && r.consumed_half_dots == 8 && t[0].pc == 0x100);
+    r = gbb_run(m, 64, t, 2); REQUIRE(r.reason == (gbb_stop_reason)7 && r.consumed_half_dots == 0 && r.trace_count == 0);
+    gbb_destroy(m); return 0;
+}
+
+static int reset_profile(void) {
+    const uint8_t p[] = {0x00}; gbb_instance *m = make_machine(p, sizeof(p)); REQUIRE(m != NULL);
+    gbb_trace_record t[1] = {{0}}; gbb_run_result r = gbb_run(m, 8, t, 1); REQUIRE(r.consumed_half_dots == 8);
+    REQUIRE(gbb_reset(m) == GBB_OK);
+    r = gbb_run(m, 8, t, 1);
+    REQUIRE(r.consumed_half_dots == 8 && t[0].time_half_dots == 0 && t[0].pc == 0x100 && t[0].sp == 0xfffe && t[0].a == 1 && t[0].f == 0x80);
+    gbb_destroy(m); return 0;
+}
+
+static int reset_lockup(void) {
+    const uint8_t p[] = {0xd3,0x00}; gbb_instance *m = make_machine(p, sizeof(p)); REQUIRE(m != NULL);
+    gbb_run_result r = gbb_run(m, 8, NULL, 0); REQUIRE(r.reason == GBB_STOP_LOCKUP);
+    REQUIRE(gbb_reset(m) == GBB_OK);
+    r = gbb_run(m, 8, NULL, 0); REQUIRE(r.reason == GBB_STOP_LOCKUP && r.lockup_pc == 0x100 && r.lockup_opcode == 0xd3);
+    gbb_destroy(m); return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
     active_case = argv[1];
     if (strcmp(argv[1], "interrupt_entry") == 0) return interrupt_entry();
     if (strcmp(argv[1], "interrupt_budget") == 0) return interrupt_budget();
+    if (strcmp(argv[1], "interrupt_ei_delay") == 0) return interrupt_ei_delay();
+    if (strcmp(argv[1], "interrupt_priority") == 0) return interrupt_priority();
+    if (strcmp(argv[1], "halt_idle") == 0) return halt_idle();
+    if (strcmp(argv[1], "halt_bug") == 0) return halt_bug();
+    if (strcmp(argv[1], "stop_wait") == 0) return stop_wait();
+    if (strcmp(argv[1], "reset_profile") == 0) return reset_profile();
+    if (strcmp(argv[1], "reset_lockup") == 0) return reset_lockup();
     return 2;
 }
