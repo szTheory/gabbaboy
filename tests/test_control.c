@@ -136,7 +136,7 @@ static int stop_wait(void) {
     const uint8_t p[] = {0x10,0x00,0x04}; gbb_instance *m = make_machine(p, sizeof(p)); REQUIRE(m != NULL);
     gbb_trace_record t[2] = {{0}}; gbb_run_result r = gbb_run(m, 8, t, 2);
     REQUIRE(r.reason == (gbb_stop_reason)7 && r.consumed_half_dots == 8 && t[0].pc == 0x100);
-    r = gbb_run(m, 64, t, 2); REQUIRE(r.reason == (gbb_stop_reason)7 && r.consumed_half_dots == 0 && r.trace_count == 0);
+    r = gbb_run(m, 64, t, 2); REQUIRE(r.reason == GBB_STOP_STOPPED && r.consumed_half_dots == 64 && r.trace_count == 0);
     gbb_destroy(m); return 0;
 }
 
