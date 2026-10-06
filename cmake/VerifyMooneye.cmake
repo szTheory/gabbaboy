@@ -1,3 +1,5 @@
+cmake_minimum_required(VERSION 3.25)
+
 if(NOT DEFINED GBB_MOONEYE_DIR)
   message(FATAL_ERROR "GBB_MOONEYE_DIR is required")
 endif()

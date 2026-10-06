@@ -101,9 +101,9 @@ zero fill is an emulator policy, not a hardware claim. The implementation
 executes documented legal base and CB instructions, interrupt entry and delay,
 HALT/HALT-bug, STOP/wake, reset, WRAM/echo/HRAM and IE/IF behavior. The
 ROM-only profile rejects cartridge RAM and does not emulate a responding
-device in 0xA000–0xBFFF. Reads from that absent window currently return 0xFF as
-an implementation result; the electrical value without a responding device
-is unspecified and is not a hardware-qualified claim. DIV/TAC timer increments
+device in 0xA000–0xBFFF. Guest reads from that absent window stop as unsupported before instruction
+mutation; side-effect-free peek returns 0xFF outside exposed RAM. The electrical
+value without a responding device is unspecified and is not a qualified claim. DIV/TAC timer increments
 use selected divider falling edges, including the tested reset-edge and reload
 collision behavior. Disconnected internal serial shifts in high bits;
 external-clock transfers wait for supplied edges. Unqualified active serial
@@ -125,7 +125,11 @@ separate as `pass`, `fail`, `timeout` and `unsupported`; receipts record the
 fixture digest, exact core/runner revision, profile, boot mode, protocol,
 consumed ticks, finite budget, eligible/executed counts and recent bounded
 diagnostics. `mooneye_required_suite` and the per-case CTests run offline
-against checked-in ROM bytes. Fixture
+against checked-in ROM bytes. Phase 2 qualification is currently incomplete:
+all three ROMs reach an unsupported LY read in the shared reporting path before
+the expected breakpoint. The strict gate fails and retains all three required
+IDs; earlier passes through the unsupported-address fallback are superseded.
+See the qualification gap in `fixtures/mooneye/SOURCES.md`. Fixture
 reproduction runs in a separate workflow using pinned RGBDS and WLA-DX
 source revisions. Ordinary core tests use checked-in bytes and remain offline.
 
