@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define GBB_INPUT_EVENT_CAPACITY 64u
+
 struct gbb_instance {
     uint8_t *rom;
     size_t rom_size;
@@ -26,6 +28,8 @@ struct gbb_instance {
     int halted, stopped, halt_bug;
     uint16_t pc, sp;
     uint64_t time_half_dots;
+    gbb_input_event input_events[GBB_INPUT_EVENT_CAPACITY];
+    size_t input_event_count;
     uint16_t lockup_pc;
     uint8_t lockup_opcode;
     int locked;
@@ -92,6 +96,7 @@ static void reset_state(gbb_instance *m) {
     memset(m->wram, 0, sizeof(m->wram));
     memset(m->hram, 0, sizeof(m->hram));
     m->time_half_dots = 0;
+    m->input_event_count = 0;
     m->lockup_pc = 0;
     m->lockup_opcode = 0;
     m->locked = 0;
@@ -209,6 +214,32 @@ static int read_supported(uint16_t address) {
 static uint16_t hl(const gbb_instance *m) { return (uint16_t)(((uint16_t)m->h << 8) | m->l); }
 static unsigned pending_interrupt(const gbb_instance *m);
 
+static void shift_external_serial(gbb_instance *m, uint8_t bit) {
+    if (!m->serial_active || (m->serial_control & 1u) != 0) return;
+    m->serial_data = (uint8_t)((m->serial_data << 1) | bit);
+    if (++m->serial_bits == 8u) {
+        m->serial_active = 0;
+        m->serial_control &= 1u;
+        m->interrupt_flags |= 0x08u;
+    }
+}
+
+static void apply_input_events_now(gbb_instance *m) {
+    while (m->input_event_count != 0 &&
+           m->input_events[0].at_half_dots == m->time_half_dots) {
+        gbb_input_event event = m->input_events[0];
+        --m->input_event_count;
+        if (m->input_event_count != 0)
+            memmove(m->input_events, m->input_events + 1,
+                    m->input_event_count * sizeof(m->input_events[0]));
+        if (event.kind == GBB_INPUT_STOP_WAKE) {
+            if (m->stopped && event.value == 1u) m->stopped = 0;
+        } else if (event.kind == GBB_INPUT_SERIAL_EDGE) {
+            shift_external_serial(m, event.value);
+        }
+    }
+}
+
 static uint8_t instruction_byte(const gbb_instance *m, uint16_t pc, unsigned offset) {
     if (m->halt_bug && offset != 0) --offset;
     return read8(m, (uint16_t)(pc + offset));
@@ -217,6 +248,7 @@ static uint8_t instruction_byte(const gbb_instance *m, uint16_t pc, unsigned off
 static void advance_devices_to(gbb_instance *m, uint64_t target) {
     while (m->time_half_dots < target) {
         ++m->time_half_dots;
+        apply_input_events_now(m);
         if (m->timer_reload_pending && m->timer_reload_remaining != 0 &&
             --m->timer_reload_remaining == 0) {
             m->tima = m->tma;
@@ -244,6 +276,31 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
             timer_set_signal(m, timer_input(m), m->time_half_dots);
         }
     }
+}
+
+gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events,
+                           size_t count) {
+    if (instance == NULL || (events == NULL && count != 0)) return GBB_INVALID_ARGUMENT;
+    if (count == 0) return GBB_OK;
+    if (count > GBB_INPUT_EVENT_CAPACITY - instance->input_event_count)
+        return GBB_EVENT_QUEUE_FULL;
+    uint64_t previous = instance->time_half_dots;
+    if (instance->input_event_count != 0)
+        previous = instance->input_events[instance->input_event_count - 1].at_half_dots;
+    for (size_t i = 0; i < count; ++i) {
+        const gbb_input_event *event = &events[i];
+        if (event->at_half_dots < instance->time_half_dots || event->at_half_dots < previous)
+            return GBB_INVALID_EVENT;
+        if ((event->kind == GBB_INPUT_STOP_WAKE && event->value != 1u) ||
+            (event->kind == GBB_INPUT_SERIAL_EDGE && event->value > 1u) ||
+            (event->kind != GBB_INPUT_STOP_WAKE && event->kind != GBB_INPUT_SERIAL_EDGE))
+            return GBB_INVALID_EVENT;
+        previous = event->at_half_dots;
+    }
+    memcpy(instance->input_events + instance->input_event_count, events,
+           count * sizeof(*events));
+    instance->input_event_count += count;
+    return GBB_OK;
 }
 
 static void advance_devices(gbb_instance *m, uint64_t half_dots) {
@@ -527,7 +584,7 @@ static void execute(gbb_instance *m, uint8_t cost) {
             case 0x32: bus_write(m,hl(m),m->a,8); set_hl(m,(uint16_t)(hl(m)-1)); m->pc++; break;
             case 0x3A: m->a=bus_read(m,hl(m),8); set_hl(m,(uint16_t)(hl(m)-1)); m->pc++; break;
             case 0x08: { uint16_t addr=(uint16_t)(instruction_byte(m,pc,1)|((uint16_t)instruction_byte(m,pc,2)<<8)); bus_write(m,addr,(uint8_t)m->sp,24); bus_write(m,(uint16_t)(addr+1),(uint8_t)(m->sp>>8),32); m->pc+=3; break; }
-            case 0x10: m->pc=(uint16_t)(pc+2); m->div=0; m->divider_phase=0; m->stopped=1; break;
+            case 0x10: m->pc=(uint16_t)(pc+2); m->stopped=1; break;
             case 0x07: { uint8_t c=(uint8_t)(m->a>>7); m->a=(uint8_t)((m->a<<1)|c); m->f=c?0x10:0; m->pc++; break; }
             case 0x0F: { uint8_t c=(uint8_t)(m->a&1); m->a=(uint8_t)((m->a>>1)|(c<<7)); m->f=c?0x10:0; m->pc++; break; }
             case 0x17: { uint8_t c=(uint8_t)(m->a>>7), old=(uint8_t)((m->f>>4)&1); m->a=(uint8_t)((m->a<<1)|old); m->f=c?0x10:0; m->pc++; break; }
@@ -593,9 +650,34 @@ gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
                        gbb_trace_record *trace, size_t trace_capacity) {
     gbb_run_result result={0, GBB_STOP_BUDGET, 0, 0, 0};
     if (instance == NULL || !instance->loaded || (trace == NULL && trace_capacity != 0)) { result.reason=GBB_STOP_INVALID_STATE; return result; }
+    if (budget_half_dots != 0) apply_input_events_now(instance);
     while (result.consumed_half_dots < budget_half_dots) {
         if (instance->locked) { result.reason=GBB_STOP_LOCKUP; result.lockup_pc=instance->lockup_pc; result.lockup_opcode=instance->lockup_opcode; return result; }
-        if (instance->stopped) { result.reason=GBB_STOP_STOPPED; return result; }
+        if (instance->stopped) {
+            uint64_t remaining = budget_half_dots - result.consumed_half_dots;
+            uint64_t available = UINT64_MAX - instance->time_half_dots;
+            uint64_t step = remaining < available ? remaining : available;
+            if (instance->input_event_count != 0) {
+                uint64_t deadline = instance->input_events[0].at_half_dots;
+                uint64_t until_event = deadline - instance->time_half_dots;
+                if (until_event <= step) step = until_event;
+            }
+            if (step != 0) {
+                instance->time_half_dots += step;
+                result.consumed_half_dots += step;
+                apply_input_events_now(instance);
+            }
+            if (instance->stopped) {
+                result.reason = step < remaining && instance->time_half_dots == UINT64_MAX
+                    ? GBB_STOP_INVALID_STATE : GBB_STOP_STOPPED;
+                return result;
+            }
+            if (result.consumed_half_dots == budget_half_dots) {
+                result.reason = GBB_STOP_NO_PROGRESS;
+                return result;
+            }
+            continue;
+        }
         unsigned interrupt = instance->ime ? pending_interrupt(instance) : 5;
         if (interrupt < 5) {
             if (40u > budget_half_dots - result.consumed_half_dots) return result;
@@ -649,8 +731,10 @@ gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
         result.consumed_half_dots += cost;
         if (instance->ime_delay != 0 && --instance->ime_delay == 0) instance->ime = 1;
         if (instance->stopped) {
-            instance->div=0;
-            instance->divider_phase=0;
+            instance->divider_counter = 0;
+            instance->div = 0;
+            instance->divider_phase = 0;
+            timer_set_signal(instance, timer_input(instance), instance->time_half_dots);
             result.reason=GBB_STOP_STOPPED;
             return result;
         }

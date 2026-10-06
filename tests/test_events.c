@@ -30,7 +30,7 @@ static gbb_instance *load_program(const uint8_t *program, size_t size) {
 }
 
 static int event_stop_wake(void) {
-    const uint8_t p[] = {0x10,0x00,0x04};
+    const uint8_t p[] = {0x10,0x00,0xF0,0x04,0xEA,0x00,0xC0};
     gbb_instance *m = load_program(p, sizeof(p)); REQUIRE(m != NULL);
     gbb_trace_record trace[2] = {{0}};
     gbb_run_result r = gbb_run(m, 8, trace, 2);
@@ -39,6 +39,15 @@ static int event_stop_wake(void) {
     REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 0 && r.trace_count == 0);
     r = gbb_run(m, 24, trace, 2);
     REQUIRE(r.reason == GBB_STOP_STOPPED && r.consumed_half_dots == 24 && r.trace_count == 0);
+    const gbb_input_event wake = {44, GBB_INPUT_STOP_WAKE, 1};
+    REQUIRE(gbb_queue_events(m, &wake, 1) == GBB_OK);
+    r = gbb_run(m, 12, trace, 2);
+    REQUIRE(r.reason == GBB_STOP_NO_PROGRESS && r.consumed_half_dots == 12 && r.trace_count == 0);
+    r = gbb_run(m, 24, trace, 2);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 24 && r.trace_count == 1);
+    r = gbb_run(m, 32, trace, 2);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 32);
+    REQUIRE(gbb_peek_ram(m, 0xC000) == 0);
     gbb_destroy(m);
     return 0;
 }
@@ -47,7 +56,7 @@ static int event_boundary(void) {
     const uint8_t p[] = {0x00};
     gbb_instance *m = load_program(p, sizeof(p)); REQUIRE(m != NULL);
     gbb_run_result r = gbb_run(m, 7, NULL, 0);
-    REQUIRE(r.reason == GBB_STOP_NO_PROGRESS && r.consumed_half_dots == 0);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 0);
     r = gbb_run(m, 8, NULL, 0);
     REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 8);
     gbb_destroy(m);
