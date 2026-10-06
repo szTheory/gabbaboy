@@ -49,8 +49,9 @@ int main(int argc, char **argv) {
         const uint8_t program[] = {0x21,0x00,0xC0,0x3E,0x91,0x77,0x21,0x00,0xE0,0x7E};
         gbb_instance *m = load_program(program, sizeof(program));
         REQUIRE(m != NULL);
-        gbb_run_result r = gbb_run(m, 64, NULL, 0);
-        REQUIRE(r.consumed_half_dots == 80 && gbb_peek_ram(m, 0xE000) == 0x91);
+        gbb_run_result r = gbb_run(m, 80, NULL, 0);
+        REQUIRE(r.consumed_half_dots == 80);
+        REQUIRE(gbb_peek_ram(m, 0xE000) == 0x91);
         gbb_destroy(m);
         const uint8_t hram[] = {0x21,0x80,0xFF,0x3E,0x37,0x77,0x7E};
         m = load_program(hram, sizeof(hram));

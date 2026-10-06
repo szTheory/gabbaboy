@@ -6,7 +6,8 @@
 struct gbb_instance {
     uint8_t *rom;
     size_t rom_size;
-    uint8_t ram[8192];
+    uint8_t wram[8192];
+    uint8_t hram[127];
     uint8_t a, f, b, c, d, e, h, l;
     uint8_t div, stat;
     uint16_t pc, sp;
@@ -21,18 +22,30 @@ static void reset_state(gbb_instance *m) {
     m->d = 0x00; m->e = 0xD8; m->h = 0x01; m->l = 0x4D;
     m->pc = 0x0100; m->sp = 0xFFFE;
     m->div = 0xAB; m->stat = 0x85;
-    memset(m->ram, 0, sizeof(m->ram));
+    memset(m->wram, 0, sizeof(m->wram));
+    memset(m->hram, 0, sizeof(m->hram));
     m->time_half_dots = 0;
 }
 
 static uint8_t read8(const gbb_instance *m, uint16_t address) {
     if (address < m->rom_size) return m->rom[address];
-    if (address >= 0xA000 && address <= 0xBFFF) return m->ram[address - 0xA000];
+    if (address >= 0xC000 && address <= 0xDFFF) return m->wram[address - 0xC000];
+    if (address >= 0xE000 && address <= 0xFDFF) return m->wram[address - 0xE000];
+    if (address >= 0xFF80 && address <= 0xFFFE) return m->hram[address - 0xFF80];
     return 0xFF;
 }
 
 static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
-    if (address >= 0xA000 && address <= 0xBFFF) m->ram[address - 0xA000] = value;
+    if (address >= 0xC000 && address <= 0xDFFF) m->wram[address - 0xC000] = value;
+    else if (address >= 0xE000 && address <= 0xFDFF) m->wram[address - 0xE000] = value;
+    else if (address >= 0xFF80 && address <= 0xFFFE) m->hram[address - 0xFF80] = value;
+}
+
+static int read_supported(uint16_t address) {
+    return address < 0x8000 ||
+           (address >= 0xC000 && address <= 0xDFFF) ||
+           (address >= 0xE000 && address <= 0xFDFF) ||
+           (address >= 0xFF80 && address <= 0xFFFE);
 }
 
 static uint16_t hl(const gbb_instance *m) { return (uint16_t)(((uint16_t)m->h << 8) | m->l); }
@@ -148,8 +161,17 @@ gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
     while (result.consumed_half_dots < budget_half_dots) {
         decoded d=decode(instance);
         if (!d.supported) { result.reason=GBB_STOP_UNSUPPORTED_OPCODE; return result; }
+        uint8_t opcode = read8(instance, instance->pc);
+        if (opcode == 0x7E && !read_supported(hl(instance))) {
+            result.reason = GBB_STOP_UNSUPPORTED_BUS;
+            return result;
+        }
         uint8_t cost=instruction_cost(instance,d);
         if (cost > budget_half_dots-result.consumed_half_dots) return result;
+        if (UINT64_MAX - instance->time_half_dots < cost) {
+            result.reason = GBB_STOP_INVALID_STATE;
+            return result;
+        }
         if (trace != NULL && result.trace_count == trace_capacity) { result.reason=GBB_STOP_TRACE_FULL; return result; }
         if (trace != NULL) save_trace(instance,d,&trace[result.trace_count++]);
         execute(instance,cost);
@@ -159,6 +181,9 @@ gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
 }
 
 uint8_t gbb_peek_ram(const gbb_instance *instance, uint16_t address) {
-    if (instance == NULL || address < 0xA000 || address > 0xBFFF) return 0xFF;
-    return instance->ram[address - 0xA000];
+    if (instance == NULL) return 0xFF;
+    if (address >= 0xC000 && address <= 0xDFFF) return instance->wram[address - 0xC000];
+    if (address >= 0xE000 && address <= 0xFDFF) return instance->wram[address - 0xE000];
+    if (address >= 0xFF80 && address <= 0xFFFE) return instance->hram[address - 0xFF80];
+    return 0xFF;
 }

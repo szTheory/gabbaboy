@@ -72,8 +72,9 @@ gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_si
  * at instruction boundaries and remain owned by the caller. */
 gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
                        gbb_trace_record *trace, size_t trace_capacity);
-/* Side-effect-free debug read of the fixture's cartridge RAM window. Invalid
- * instance/address returns 0xFF. No pointer into instance storage is exposed. */
+/* Side-effect-free debug read of WRAM (C000-DFFF and its E000-FDFF echo) or
+ * HRAM (FF80-FFFE). Other addresses and a null instance return 0xFF. No
+ * pointer into instance storage is exposed. */
 uint8_t gbb_peek_ram(const gbb_instance *instance, uint16_t address);
 
 #ifdef __cplusplus
