@@ -43,6 +43,22 @@ int main(int argc, char **argv) {
         REQUIRE(gbb_peek_ram(b, 0xC000) == 0);
         REQUIRE(gbb_run(b, 32, NULL, 0).consumed_half_dots == 32);
         REQUIRE(gbb_peek_ram(b, 0xC000) == 0);
+        gbb_run_result frame_run = gbb_run(a, UINT64_C(145000), NULL, 0);
+        REQUIRE(frame_run.reason == GBB_STOP_BUDGET);
+        uint8_t frame[160u * 144u];
+        gbb_frame_info frame_info = {0};
+        REQUIRE(gbb_copy_frame(a, frame, sizeof(frame), 160, &frame_info) == GBB_OK);
+        REQUIRE(frame_info.width == 160 && frame_info.height == 144 && frame_info.generation > 0);
+        uint8_t untouched_frame[sizeof(frame)];
+        memset(untouched_frame, 0xA5, sizeof(untouched_frame));
+        memcpy(frame, untouched_frame, sizeof(frame));
+        gbb_frame_info untouched_info;
+        memset(&untouched_info, 0x5A, sizeof(untouched_info));
+        gbb_frame_info untouched_info_snapshot;
+        memcpy(&untouched_info_snapshot, &untouched_info, sizeof(untouched_info));
+        REQUIRE(gbb_copy_frame(b, frame, sizeof(frame), 160, &untouched_info) == GBB_FRAME_NOT_READY);
+        REQUIRE(memcmp(frame, untouched_frame, sizeof(frame)) == 0);
+        REQUIRE(memcmp(&untouched_info, &untouched_info_snapshot, sizeof(untouched_info)) == 0);
         gbb_destroy(a); gbb_destroy(b); free(rom); return 0;
     }
     if (strcmp(argv[1], "run_bounds") == 0) {

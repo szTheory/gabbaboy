@@ -1,6 +1,7 @@
 #include "gabbaboy/gabbaboy.h"
 
 #include <stdio.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -653,6 +654,126 @@ static int ppu_timing_partition(void) {
     return 0;
 }
 
+static int frame_copy_failures(void) {
+    guest_program p = {0};
+    start_guest(&p);
+    gbb_instance *machine = load_guest(&p, 0x91);
+    gbb_instance *control = load_guest(&p, 0x91);
+    REQUIRE(machine != NULL && control != NULL);
+
+    uint8_t pixels[PIXELS];
+    uint8_t pixels_before[sizeof(pixels)];
+    memset(pixels, 0xA5, sizeof(pixels));
+    memcpy(pixels_before, pixels, sizeof(pixels));
+    gbb_frame_info info;
+    gbb_frame_info info_before;
+    memset(&info, 0x5A, sizeof(info));
+    memcpy(&info_before, &info, sizeof(info));
+
+    REQUIRE(gbb_copy_frame(NULL, pixels, sizeof(pixels), WIDTH, &info) == GBB_INVALID_ARGUMENT);
+    REQUIRE(gbb_copy_frame(machine, NULL, sizeof(pixels), WIDTH, &info) == GBB_INVALID_ARGUMENT);
+    REQUIRE(gbb_copy_frame(machine, pixels, sizeof(pixels), WIDTH, NULL) == GBB_INVALID_ARGUMENT);
+    REQUIRE(gbb_copy_frame(machine, pixels, sizeof(pixels), WIDTH - 1u, &info) == GBB_INVALID_ARGUMENT);
+    REQUIRE(gbb_copy_frame(machine, pixels, sizeof(pixels) - 1u, WIDTH, &info) == GBB_INVALID_ARGUMENT);
+    REQUIRE(gbb_copy_frame(machine, pixels, SIZE_MAX, SIZE_MAX, &info) == GBB_INVALID_ARGUMENT);
+    REQUIRE(gbb_copy_frame(machine, pixels, sizeof(pixels), WIDTH, &info) == GBB_FRAME_NOT_READY);
+    REQUIRE(memcmp(pixels, pixels_before, sizeof(pixels)) == 0);
+    REQUIRE(memcmp(&info, &info_before, sizeof(info)) == 0);
+
+    gbb_run_result subject_run = gbb_run(machine, UINT64_C(145000), NULL, 0);
+    gbb_run_result control_run = gbb_run(control, UINT64_C(145000), NULL, 0);
+    REQUIRE(subject_run.reason == GBB_STOP_BUDGET && control_run.reason == GBB_STOP_BUDGET);
+    REQUIRE(subject_run.consumed_half_dots == control_run.consumed_half_dots);
+
+    union {
+        max_align_t alignment;
+        gbb_frame_info info;
+        uint8_t pixels[PIXELS];
+    } overlap;
+    memset(&overlap, 0x3C, sizeof(overlap));
+    gbb_frame_info *overlap_info = &overlap.info;
+    uint8_t overlap_before[sizeof(overlap)];
+    memcpy(overlap_before, &overlap, sizeof(overlap));
+    REQUIRE(gbb_copy_frame(machine, overlap.pixels, sizeof(overlap.pixels), WIDTH,
+                           overlap_info) == GBB_INVALID_ARGUMENT);
+    REQUIRE(memcmp(&overlap, overlap_before, sizeof(overlap)) == 0);
+
+    uint8_t actual[PIXELS], expected[PIXELS];
+    gbb_frame_info actual_info = {0}, expected_info = {0};
+    REQUIRE(gbb_copy_frame(machine, actual, sizeof(actual), WIDTH, &actual_info) == GBB_OK);
+    REQUIRE(gbb_copy_frame(control, expected, sizeof(expected), WIDTH, &expected_info) == GBB_OK);
+    REQUIRE(memcmp(actual, expected, sizeof(actual)) == 0);
+    REQUIRE(actual_info.width == expected_info.width && actual_info.height == expected_info.height);
+    REQUIRE(actual_info.generation == expected_info.generation);
+    REQUIRE(actual_info.completion_half_dots == expected_info.completion_half_dots);
+    gbb_destroy(machine);
+    gbb_destroy(control);
+    return 0;
+}
+
+static int frame_generation_lifecycle(void) {
+    guest_program p = {0};
+    start_guest(&p);
+    gbb_instance *machine = load_guest(&p, 0x91);
+    REQUIRE(machine != NULL);
+
+    enum { PAD = 3u, PITCH = WIDTH + PAD,
+           REQUIRED = (HEIGHT - 1u) * PITCH + WIDTH };
+    uint8_t guarded[REQUIRED + PAD + 2u];
+    memset(guarded, 0xA5, sizeof(guarded));
+    uint8_t guarded_before[sizeof(guarded)];
+    memcpy(guarded_before, guarded, sizeof(guarded));
+    gbb_frame_info info;
+    gbb_frame_info info_before;
+    memset(&info, 0x5A, sizeof(info));
+    memcpy(&info_before, &info, sizeof(info));
+    REQUIRE(gbb_copy_frame(machine, guarded + 1u, REQUIRED, PITCH, &info) == GBB_FRAME_NOT_READY);
+    REQUIRE(memcmp(guarded, guarded_before, sizeof(guarded)) == 0);
+    REQUIRE(memcmp(&info, &info_before, sizeof(info)) == 0);
+
+    gbb_run_result run = gbb_run(machine, UINT64_C(145000), NULL, 0);
+    REQUIRE(run.reason == GBB_STOP_BUDGET);
+    REQUIRE(gbb_copy_frame(machine, guarded + 1u, REQUIRED, PITCH, &info) == GBB_OK);
+    REQUIRE(info.width == WIDTH && info.height == HEIGHT && info.generation > 0);
+    REQUIRE(guarded[0] == 0xA5 && guarded[sizeof(guarded) - 1u] == 0xA5);
+    for (size_t y = 0; y < HEIGHT; ++y) {
+        for (size_t x = 0; x < WIDTH; ++x)
+            REQUIRE(guarded[1u + y * PITCH + x] <= 3u);
+        for (size_t x = WIDTH; x < PITCH; ++x)
+            REQUIRE(guarded[1u + y * PITCH + x] == 0xA5);
+    }
+
+    uint8_t repeated[PIXELS];
+    gbb_frame_info repeated_info = {0};
+    REQUIRE(gbb_copy_frame(machine, repeated, sizeof(repeated), WIDTH, &repeated_info) == GBB_OK);
+    REQUIRE(repeated_info.generation == info.generation);
+    REQUIRE(repeated_info.completion_half_dots == info.completion_half_dots);
+    for (size_t y = 0; y < HEIGHT; ++y)
+        REQUIRE(memcmp(guarded + 1u + y * PITCH, repeated + y * WIDTH, WIDTH) == 0);
+
+    run = gbb_run(machine, 912, NULL, 0);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 912);
+    gbb_frame_info partial_info = {0};
+    REQUIRE(gbb_copy_frame(machine, repeated, sizeof(repeated), WIDTH, &partial_info) == GBB_OK);
+    REQUIRE(partial_info.generation == info.generation);
+    REQUIRE(partial_info.completion_half_dots == info.completion_half_dots);
+    for (size_t y = 0; y < HEIGHT; ++y)
+        REQUIRE(memcmp(guarded + 1u + y * PITCH, repeated + y * WIDTH, WIDTH) == 0);
+
+    REQUIRE(gbb_reset(machine) == GBB_OK);
+    memset(repeated, 0xB6, sizeof(repeated));
+    uint8_t repeated_before[sizeof(repeated)];
+    memcpy(repeated_before, repeated, sizeof(repeated));
+    memset(&partial_info, 0xC7, sizeof(partial_info));
+    gbb_frame_info reset_info_before;
+    memcpy(&reset_info_before, &partial_info, sizeof(partial_info));
+    REQUIRE(gbb_copy_frame(machine, repeated, sizeof(repeated), WIDTH, &partial_info) == GBB_FRAME_NOT_READY);
+    REQUIRE(memcmp(repeated, repeated_before, sizeof(repeated)) == 0);
+    REQUIRE(memcmp(&partial_info, &reset_info_before, sizeof(partial_info)) == 0);
+    gbb_destroy(machine);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
     if (strcmp(argv[1], "frame_composition_bg") == 0) return frame_composition_bg();
@@ -664,5 +785,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "ppu_timing_lcd") == 0) return ppu_timing_lcd();
     if (strcmp(argv[1], "ppu_timing_fetch") == 0) return ppu_timing_fetch();
     if (strcmp(argv[1], "ppu_timing_partition") == 0) return ppu_timing_partition();
+    if (strcmp(argv[1], "frame_copy_failures") == 0) return frame_copy_failures();
+    if (strcmp(argv[1], "frame_generation_lifecycle") == 0) return frame_generation_lifecycle();
     return 2;
 }
