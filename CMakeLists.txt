@@ -63,18 +63,22 @@ target_compile_definitions(gabbaboy-runner PRIVATE
 if(GABBABOY_BUILD_PLAYER)
   find_package(SDL3 3.4.18 EXACT CONFIG REQUIRED)
 
-  add_library(gabbaboy-player-input STATIC src/player/input.c)
-  target_include_directories(gabbaboy-player-input PUBLIC
+  add_library(gabbaboy-player-adapter STATIC
+    src/player/input.c
+    src/player/presentation.c
+    src/player/session.c)
+  target_include_directories(gabbaboy-player-adapter PUBLIC
     "${PROJECT_SOURCE_DIR}/src/player")
-  target_link_libraries(gabbaboy-player-input PUBLIC GabbaBoy::core SDL3::SDL3)
-  target_compile_features(gabbaboy-player-input PUBLIC c_std_17)
-  set_target_properties(gabbaboy-player-input PROPERTIES C_EXTENSIONS OFF)
+  target_link_libraries(gabbaboy-player-adapter PUBLIC GabbaBoy::core SDL3::SDL3)
+  target_compile_features(gabbaboy-player-adapter PUBLIC c_std_17)
+  set_target_properties(gabbaboy-player-adapter PROPERTIES C_EXTENSIONS OFF)
 
   add_executable(gabbaboy-player src/player/main.c)
-  target_link_libraries(gabbaboy-player PRIVATE gabbaboy-player-input SDL3::SDL3)
+  target_link_libraries(gabbaboy-player PRIVATE gabbaboy-player-adapter SDL3::SDL3)
   target_compile_features(gabbaboy-player PRIVATE c_std_17)
   target_compile_definitions(gabbaboy-player PRIVATE
-    GABBABOY_PLAYER_DEMO_ROM=\"${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb\")
+    GABBABOY_PLAYER_DEMO_ROM=\"${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb\"
+    GABBABOY_PLAYER_INVALID_ROM=\"${PROJECT_SOURCE_DIR}/fixtures/visible-demo/LICENSE.txt\")
   set_target_properties(gabbaboy-player PROPERTIES C_EXTENSIONS OFF)
 endif()
 

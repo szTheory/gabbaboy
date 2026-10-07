@@ -1,4 +1,14 @@
 player_input_events
 player_input_focus
 player_input_time
+player_presentation_hidpi
+player_presentation_integer
+player_presentation_large
+player_presentation_letterbox
+player_presentation_native
+player_presentation_odd
+player_presentation_resize
+player_presentation_undersized
+player_session_replacement_failure
+player_session_replacement_success
 player_smoke
