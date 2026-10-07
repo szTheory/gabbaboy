@@ -25,7 +25,11 @@
     "source_license": "GPL-2.0-or-later; build tool only, not linked into fixture ROMs"
   },
   "inventory_status": "complete",
-  "required_roms": ["daa.gb", "tim00.gb", "tim00_div_trigger.gb"],
+  "required_roms": [
+    "daa.gb",
+    "tim00.gb",
+    "tim00_div_trigger.gb"
+  ],
   "excluded_candidates": [
     {
       "source_path": "acceptance/interrupts/ie_push.s",
@@ -76,7 +80,7 @@
       ],
       "rom": "daa.gb",
       "size_bytes": 32768,
-      "sha256": "96cd0e02a85f6f035b1c1947d36a8ad2d8e51963f636b833f05559f021eef57e",
+      "sha256": "3a39eda77a09b817e4e38004a3d117990565fb797e8a4f470920f1b7608f0a08",
       "license": "MIT; see LICENSE.txt",
       "asset_notice": "FONT-LICENSE.txt",
       "model": "DMG-CPU-B",
@@ -89,13 +93,21 @@
       },
       "timeout_half_dots": 2000000,
       "build_recipe": [
-        "cc -std=c17 -O2 fixtures/mooneye/font-source.c -o <tmp>/font-source",
-        "<tmp>/font-source <upstream>/common/font.bin",
-        "wla-gb -I <upstream>/common -o <tmp>/build/acceptance/instr/daa.o <upstream>/acceptance/instr/daa.s",
-        "printf '[objects]\\n%s\\n' <tmp>/build/acceptance/instr/daa.o > <tmp>/build/acceptance/instr/daa.link",
-        "wlalink -d -S <tmp>/build/acceptance/instr/daa.link <tmp>/daa.gb"
+        "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
+        "generate the pinned 2032-byte zero replacement asset from fixtures/mooneye/font-source.c",
+        "apply the reviewed source-only headless report patch (SHA-256 c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d)",
+        "assemble acceptance/instr/daa.s with pinned WLA-DX 10.7",
+        "link with wlalink -nS -d -S; -nS preserves source section order"
       ],
-      "preparation_outcome": "timeout: public runner reached its finite 200000-half-dot budget but does not recognize the Mooneye breakpoint/register protocol. This does not affect eligibility."
+      "preparation_outcome": "Derived candidate passed the positive source callback and LD B,B result protocol; the induced DAA failure control also returned the six-0x42 result, with zero PPU bus accesses. This protocol probe is not full CPU-05 runner qualification.",
+      "candidate_derivation": {
+        "original_rom_sha256": "96cd0e02a85f6f035b1c1947d36a8ad2d8e51963f636b833f05559f021eef57e",
+        "harness_patch_sha256": "c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d",
+        "deterministic_linker_strategy": "wlalink -nS preserves input appearance order",
+        "deterministic_tool_patch_sha256": null,
+        "qualified_head_sha": "93647ac98b7f8437cc9640e3dec437bba4f11e9c",
+        "hosted_run_id": 37561292904
+      }
     },
     {
       "id": "mooneye-acceptance-timer-tim00",
@@ -136,7 +148,7 @@
       ],
       "rom": "tim00.gb",
       "size_bytes": 32768,
-      "sha256": "6edc430a09522294c96d1eef63a0f1a99078f4401060980048ec5a68640e11bd",
+      "sha256": "476b2332de3f2d6604f8e1478daa8cbc7c59c89c50837fd47cc95e96e784d4f7",
       "license": "MIT; see LICENSE.txt",
       "asset_notice": "FONT-LICENSE.txt",
       "model": "DMG-CPU-B",
@@ -150,13 +162,21 @@
       },
       "timeout_half_dots": 200000,
       "build_recipe": [
-        "cc -std=c17 -O2 fixtures/mooneye/font-source.c -o <tmp>/font-source",
-        "<tmp>/font-source <upstream>/common/font.bin",
-        "wla-gb -I <upstream>/common -o <tmp>/build/acceptance/timer/tim00.o <upstream>/acceptance/timer/tim00.s",
-        "printf '[objects]\\n%s\\n' <tmp>/build/acceptance/timer/tim00.o > <tmp>/build/acceptance/timer/tim00.link",
-        "wlalink -d -S <tmp>/build/acceptance/timer/tim00.link <tmp>/tim00.gb"
+        "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
+        "generate the pinned 2032-byte zero replacement asset from fixtures/mooneye/font-source.c",
+        "apply the reviewed source-only headless report patch (SHA-256 c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d)",
+        "assemble acceptance/timer/tim00.s with pinned WLA-DX 10.7",
+        "link with wlalink -nS -d -S; -nS preserves source section order"
       ],
-      "preparation_outcome": "unsupported: public runner stopped with unsupported-bus at 38136 half-dots. This guest result does not affect source-qualified eligibility."
+      "preparation_outcome": "Derived candidate passed the positive source callback and LD B,B result protocol; the induced DAA failure control also returned the six-0x42 result, with zero PPU bus accesses. This protocol probe is not full CPU-05 runner qualification.",
+      "candidate_derivation": {
+        "original_rom_sha256": "6edc430a09522294c96d1eef63a0f1a99078f4401060980048ec5a68640e11bd",
+        "harness_patch_sha256": "c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d",
+        "deterministic_linker_strategy": "wlalink -nS preserves input appearance order",
+        "deterministic_tool_patch_sha256": null,
+        "qualified_head_sha": "93647ac98b7f8437cc9640e3dec437bba4f11e9c",
+        "hosted_run_id": 37561292904
+      }
     },
     {
       "id": "mooneye-acceptance-timer-tim00-div-trigger",
@@ -197,7 +217,7 @@
       ],
       "rom": "tim00_div_trigger.gb",
       "size_bytes": 32768,
-      "sha256": "468d426c4fe6a850a28f4116bd127d471be6adf2ef5dd0f89f2db67ffe212242",
+      "sha256": "566da853858061c69866c47cc31b85b1fef003d4c088c8e8dbb26973da9944da",
       "license": "MIT; see LICENSE.txt",
       "asset_notice": "FONT-LICENSE.txt",
       "model": "DMG-CPU-B",
@@ -211,13 +231,45 @@
       },
       "timeout_half_dots": 200000,
       "build_recipe": [
-        "cc -std=c17 -O2 fixtures/mooneye/font-source.c -o <tmp>/font-source",
-        "<tmp>/font-source <upstream>/common/font.bin",
-        "wla-gb -I <upstream>/common -o <tmp>/build/acceptance/timer/tim00_div_trigger.o <upstream>/acceptance/timer/tim00_div_trigger.s",
-        "printf '[objects]\\n%s\\n' <tmp>/build/acceptance/timer/tim00_div_trigger.o > <tmp>/build/acceptance/timer/tim00_div_trigger.link",
-        "wlalink -d -S <tmp>/build/acceptance/timer/tim00_div_trigger.link <tmp>/tim00_div_trigger.gb"
+        "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
+        "generate the pinned 2032-byte zero replacement asset from fixtures/mooneye/font-source.c",
+        "apply the reviewed source-only headless report patch (SHA-256 c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d)",
+        "assemble acceptance/timer/tim00_div_trigger.s with pinned WLA-DX 10.7",
+        "link with wlalink -nS -d -S; -nS preserves source section order"
       ],
-      "preparation_outcome": "unsupported: public runner stopped with unsupported-bus at 36008 half-dots. This guest result does not affect source-qualified eligibility."
+      "preparation_outcome": "Derived candidate passed the positive source callback and LD B,B result protocol; the induced DAA failure control also returned the six-0x42 result, with zero PPU bus accesses. This protocol probe is not full CPU-05 runner qualification.",
+      "candidate_derivation": {
+        "original_rom_sha256": "468d426c4fe6a850a28f4116bd127d471be6adf2ef5dd0f89f2db67ffe212242",
+        "harness_patch_sha256": "c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d",
+        "deterministic_linker_strategy": "wlalink -nS preserves input appearance order",
+        "deterministic_tool_patch_sha256": null,
+        "qualified_head_sha": "93647ac98b7f8437cc9640e3dec437bba4f11e9c",
+        "hosted_run_id": 37561292904
+      }
     }
-  ]
+  ],
+  "candidate_admission": {
+    "status": "qualified",
+    "recipe_status": "qualified",
+    "qualification_status": "qualified",
+    "qualified_head_sha": "93647ac98b7f8437cc9640e3dec437bba4f11e9c",
+    "hosted_run_id": 37561292904,
+    "hosted_run_url": "https://github.com/szTheory/gabbaboy/actions/runs/37561292904",
+    "candidate_lock_sha256": "47e9f03b56a29629f7d1ca93d3f06f2af6dd7afea1ad7f4e7f25fe4e9b4bb2a4",
+    "pre_admission_manifest_sha256": "76204bc792a5a767f3d7430edfe5542698953507fe268de6a0154b7cb02bcc3e",
+    "harness_patch_sha256": "c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d",
+    "deterministic_linker_strategy": "wlalink -nS preserves input appearance order",
+    "local_host": "Darwin/arm64",
+    "hosted_host": "Linux/x86_64",
+    "byte_identical_all_candidates": true,
+    "eligible_ids": [
+      "mooneye-acceptance-instr-daa",
+      "mooneye-acceptance-timer-tim00",
+      "mooneye-acceptance-timer-tim00-div-trigger"
+    ],
+    "category_counts": {
+      "cpu": 1,
+      "timer": 2
+    }
+  }
 }

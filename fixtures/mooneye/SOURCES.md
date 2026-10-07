@@ -66,9 +66,9 @@ denominator and checked-in bytes remained unchanged, and no corpus admission
 followed that historical comparison. The derived candidate recipe and its
 current exact-SHA result are recorded separately below.
 
-## Qualification gap discovered during phase verification
+## Original upstream-ROM protocol gap discovered during phase verification
 
-The fixed three-case inventory is retained. Full unsupported-read preflight exposed a shared reporting dependency: `common/lib/quit.s` calls `is_ppu_broken` before invoking the assertion/reporting callback and reaching the `LD B,B` result breakpoint; `common/lib/is_ppu_broken.s` reads LY (`FF44`). This phase has no PPU/LY implementation. All three checked-in ROMs therefore stop as unsupported with the advertised protocol. Earlier passes depended on the generic unsupported-address `FF` fallback and are superseded. The corpus gate remains failing; no fixture bytes, test logic, required IDs, or expectations were pruned to recover a pass. A source-qualified completion path or replacement corpus must be planned and verified before CPU-05 is complete.
+The fixed three-case inventory is retained. Full unsupported-read preflight exposed a shared reporting dependency in the **original upstream-built ROMs**: `common/lib/quit.s` calls `is_ppu_broken` before invoking the assertion/reporting callback and reaching the `LD B,B` result breakpoint; `common/lib/is_ppu_broken.s` reads LY (`FF44`). This phase has no PPU/LY implementation. Those original ROMs therefore stop as unsupported with the advertised protocol. Earlier passes depended on the generic unsupported-address `FF` fallback and are superseded. Plan 02-17 subsequently admitted a source-qualified derivative after exact local/hosted byte comparison and positive/negative protocol checks. This candidate admission does not complete CPU-05; Plan 02-16 still must verify runner behavior, inventory, and phase-level evidence.
 
 <!-- BEGIN PLAN 02-17 candidate qualification -->
 ## Derived candidate cross-host qualification
@@ -77,5 +77,7 @@ The fixed three-case inventory is retained. Full unsupported-read preflight expo
 - Exact pushed source revision: `93647ac98b7f8437cc9640e3dec437bba4f11e9c`.
 - Hosted `fixture-repro.yml` run: [37561292904](https://github.com/szTheory/gabbaboy/actions/runs/37561292904).
 - Local candidate comparison: `qualified`; protocol probes: `qualified`; provenance/rights review: `qualified`; hosted Linux comparison: `qualified`.
-- All three 32,768-byte candidate ROMs matched byte-for-byte between local Darwin/arm64 and the retained hosted Linux artifact at the exact source revision. The immutable original ROM digests and the one-CPU/two-timer denominator remain recorded separately.
+- All three 32,768-byte candidate ROMs matched byte-for-byte between local Darwin/arm64 and the retained hosted Linux artifact at the exact source revision: DAA `3a39eda77a09b817e4e38004a3d117990565fb797e8a4f470920f1b7608f0a08`, TIM00 `476b2332de3f2d6604f8e1478daa8cbc7c59c89c50837fd47cc95e96e784d4f7`, and TIM00 DIV trigger `566da853858061c69866c47cc31b85b1fef003d4c088c8e8dbb26973da9944da`.
+- The staged candidate set passed source/tool/patch identity, source closure, MIT/font notices, DMG-CPU-B bootless profile, finite budget and protocol checks. Strict `cmake -DGBB_MOONEYE_DIR=fixtures/mooneye -P cmake/VerifyMooneye.cmake` passed with 1 CPU and 2 timer entries. The promoted manifest SHA-256 is `98a1799b8be9c022ac13467a552890fb12bdd706017e42e12c944ec618d60527`.
+- The immutable original manifest and ROM Git-blob digests remain in `pre-admission-baseline.json`; promotion did not alter the exact IDs or one-CPU/two-timer denominator. The rollback self-test passed before promotion. CPU-05 remains pending the independent runner and Phase 2 verification in Plan 02-16.
 <!-- END PLAN 02-17 candidate qualification -->
