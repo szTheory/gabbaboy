@@ -339,14 +339,14 @@ else
 fi
 
 comparison_json="$local_dir/hosted-comparison.json"
-if ! python3 - "$repo_root" "$local_dir" "$artifact_dir" "$artifact_lock" "$artifact_report" "$head_sha" "$run_lock_sha" "$comparison_json" <<'PY'
+if ! python3 - "$repo_root" "$local_dir" "$artifact_dir" "$artifact_lock" "$artifact_report" "$head_sha" "$run_lock_sha" "$run_id" "$comparison_json" <<'PY'
 import hashlib
 import json
 import pathlib
 import sys
 
 root, local_dir, artifact_dir, artifact_lock_path, artifact_report_path = map(pathlib.Path, sys.argv[1:6])
-head, expected_lock_sha, output_path = sys.argv[6:]
+head, expected_lock_sha, run_id, output_path = sys.argv[6:]
 lock_path = root / 'fixtures/mooneye/candidate-digests.json'
 expected_lock = json.loads(lock_path.read_text())
 hosted_lock_bytes = artifact_lock_path.read_bytes()
@@ -419,7 +419,7 @@ for item in expected_lock.get('candidates', []):
     cases.append(case)
     (artifact_dir / name.removesuffix('.gb') / 'local-byte-comparison.json').write_text(json.dumps(case, indent=2) + '\n')
 record = {
-    'head_sha': head, 'run_id': None, 'host': hosted_report.get('host'),
+    'head_sha': head, 'run_id': int(run_id), 'host': hosted_report.get('host'),
     'workflow_path': '.github/workflows/fixture-repro.yml', 'cases': cases,
     'byte_identical': len(cases) == 3 and all(case.get('byte_identical') for case in cases),
 }

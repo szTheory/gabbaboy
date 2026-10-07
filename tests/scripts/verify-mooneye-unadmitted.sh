@@ -18,9 +18,9 @@ while (($#)); do
 done
 [[ -n "$baseline_arg" ]] || { echo '--baseline is required' >&2; exit 2; }
 case "$mode" in
-  --assert-baseline|--restore-and-verify|--self-test-rollback) ;;
+  --assert-baseline|--restore-and-verify|--self-test-rollback|--self-test-hosted-binding|--verify-hosted-binding) ;;
   --stage-validate-and-promote) [[ -n "$stage_arg" ]] || { echo '--stage is required' >&2; exit 2; } ;;
-  *) echo 'usage: verify-mooneye-unadmitted.sh --assert-baseline|--restore-and-verify|--self-test-rollback|--stage-validate-and-promote --baseline PATH --root DIR [--stage DIR]' >&2; exit 2 ;;
+  *) echo 'usage: verify-mooneye-unadmitted.sh --assert-baseline|--restore-and-verify|--self-test-rollback|--self-test-hosted-binding|--verify-hosted-binding|--stage-validate-and-promote --baseline PATH --root DIR [--stage DIR]' >&2; exit 2 ;;
 esac
 
 if [[ "$root_arg" == /* ]]; then root=$root_arg; else root="$repo_root/$root_arg"; fi
@@ -50,6 +50,136 @@ baseline = json.loads(baseline_path.read_text())
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
+
+def verify_hosted_candidate_binding(lock, local_output, committed_lock_bytes):
+    expected_lock_sha = lock.get('committed_lock_sha256')
+    if not isinstance(expected_lock_sha, str) or len(expected_lock_sha) != 64 or sha(committed_lock_bytes) != expected_lock_sha:
+        raise SystemExit('candidate lock digest does not match the exact qualified Git revision')
+
+    artifact_dir = local_output / 'hosted-artifact'
+    artifact_lock_path = artifact_dir / 'candidate-digests.json'
+    artifact_report_path = artifact_dir / 'candidate-comparison.json'
+    local_report_path = local_output / 'hosted-comparison.json'
+    if not artifact_lock_path.is_file() or not artifact_report_path.is_file() or not local_report_path.is_file():
+        raise SystemExit('retained exact-hosted candidate evidence is incomplete')
+    artifact_lock_bytes = artifact_lock_path.read_bytes()
+    if artifact_lock_bytes != committed_lock_bytes:
+        raise SystemExit('retained artifact candidate lock is not the exact lock from the qualified Git revision')
+
+    committed_lock = json.loads(committed_lock_bytes)
+    if lock.get('candidates') != committed_lock.get('candidates'):
+        raise SystemExit('mutable candidate digests differ from the exact qualified Git lock')
+    candidates = committed_lock.get('candidates', [])
+    expected_roms = {'daa.gb', 'tim00.gb', 'tim00_div_trigger.gb'}
+    if len(candidates) != 3 or {item.get('rom') for item in candidates} != expected_roms:
+        raise SystemExit('exact hosted candidate lock does not contain the fixed three-ROM set')
+
+    head = lock.get('head_sha')
+    run_id = lock.get('run_id')
+    if not isinstance(head, str) or len(head) != 40 or not isinstance(run_id, int):
+        raise SystemExit('candidate lock lacks an exact hosted revision or run ID')
+    local_report = json.loads(local_report_path.read_bytes())
+    if (local_report.get('head_sha') != head or local_report.get('run_id') != run_id or
+            local_report.get('host') != 'Linux/x86_64' or
+            local_report.get('workflow_path') != '.github/workflows/fixture-repro.yml' or
+            local_report.get('byte_identical') is not True):
+        raise SystemExit('local exact-hosted verification receipt does not bind this head and run')
+    hosted_report = json.loads(artifact_report_path.read_bytes())
+    if (hosted_report.get('head_sha') != head or hosted_report.get('host') != 'Linux/x86_64' or
+            hosted_report.get('local_status') != 'qualified'):
+        raise SystemExit('retained hosted comparison report does not bind the exact Linux revision')
+
+    local_cases = {item.get('rom'): item for item in local_report.get('cases', [])}
+    hosted_cases = {item.get('rom'): item for item in hosted_report.get('cases', [])}
+    if set(local_cases) != expected_roms or set(hosted_cases) != expected_roms:
+        raise SystemExit('exact-hosted reports do not cover all three candidate ROMs')
+    for candidate in candidates:
+        rom_name = candidate['rom']
+        stem = pathlib.Path(rom_name).stem
+        local_rom = local_output / stem / 'rebuilt.gb'
+        hosted_rom = artifact_dir / stem / 'rebuilt.gb'
+        if not local_rom.is_file() or not hosted_rom.is_file():
+            raise SystemExit(f'exact-hosted candidate bytes are missing: {rom_name}')
+        local_bytes = local_rom.read_bytes()
+        hosted_bytes = hosted_rom.read_bytes()
+        expected_sha = candidate.get('sha256')
+        expected_size = candidate.get('size_bytes')
+        if (local_bytes != hosted_bytes or len(local_bytes) != expected_size or
+                sha(local_bytes) != expected_sha or sha(hosted_bytes) != expected_sha):
+            raise SystemExit(f'local candidate bytes are not identical to the exact hosted artifact: {rom_name}')
+        local_case = local_cases[rom_name]
+        hosted_case = hosted_cases[rom_name]
+        if (local_case.get('byte_identical') is not True or
+                local_case.get('local_sha256') != expected_sha or
+                local_case.get('hosted_sha256') != expected_sha or
+                hosted_case.get('lock_match') is not True or
+                hosted_case.get('expected_sha256') != expected_sha or
+                hosted_case.get('actual_sha256') != expected_sha):
+            raise SystemExit(f'exact-hosted byte comparison receipt is invalid: {rom_name}')
+
+def self_test_hosted_candidate_binding():
+    with tempfile.TemporaryDirectory(prefix='gabbaboy-hosted-binding-') as temp_text:
+        base = pathlib.Path(temp_text)
+        local_output = base / 'local'
+        artifact_dir = local_output / 'hosted-artifact'
+        artifact_dir.mkdir(parents=True)
+        head = 'a' * 40
+        candidates = []
+        for index, rom_name in enumerate(('daa.gb', 'tim00.gb', 'tim00_div_trigger.gb'), start=1):
+            raw = bytes([index]) * 32768
+            candidates.append({
+                'id': rom_name.removesuffix('.gb'), 'rom': rom_name,
+                'sha256': sha(raw), 'size_bytes': len(raw),
+            })
+            stem = pathlib.Path(rom_name).stem
+            for directory in (local_output / stem, artifact_dir / stem):
+                directory.mkdir(parents=True, exist_ok=True)
+                (directory / 'rebuilt.gb').write_bytes(raw)
+        committed_lock = json.dumps({'recipe_status': 'qualified', 'candidates': candidates}, indent=2).encode()
+        (artifact_dir / 'candidate-digests.json').write_bytes(committed_lock)
+        local_report = {
+            'head_sha': head, 'run_id': 12345, 'host': 'Linux/x86_64',
+            'workflow_path': '.github/workflows/fixture-repro.yml', 'byte_identical': True,
+            'cases': [
+                {'rom': item['rom'], 'byte_identical': True,
+                 'local_sha256': item['sha256'], 'hosted_sha256': item['sha256']}
+                for item in candidates
+            ],
+        }
+        hosted_report = {
+            'head_sha': head, 'host': 'Linux/x86_64', 'local_status': 'qualified',
+            'cases': [
+                {'rom': item['rom'], 'lock_match': True,
+                 'expected_sha256': item['sha256'], 'actual_sha256': item['sha256']}
+                for item in candidates
+            ],
+        }
+        (local_output / 'hosted-comparison.json').write_text(json.dumps(local_report))
+        (artifact_dir / 'candidate-comparison.json').write_text(json.dumps(hosted_report))
+        lock = {
+            'head_sha': head, 'run_id': 12345,
+            'committed_lock_sha256': sha(committed_lock), 'candidates': candidates,
+        }
+        verify_hosted_candidate_binding(lock, local_output, committed_lock)
+
+        changed_lock = json.loads(json.dumps(lock))
+        changed_lock['candidates'][0]['sha256'] = '0' * 64
+        try:
+            verify_hosted_candidate_binding(changed_lock, local_output, committed_lock)
+        except SystemExit:
+            pass
+        else:
+            raise SystemExit('hosted-binding self-test accepted a tampered mutable candidate digest')
+
+        local_rom = local_output / 'daa' / 'rebuilt.gb'
+        original = local_rom.read_bytes()
+        local_rom.write_bytes(bytes([0xff]) + original[1:])
+        try:
+            verify_hosted_candidate_binding(lock, local_output, committed_lock)
+        except SystemExit:
+            pass
+        else:
+            raise SystemExit('hosted-binding self-test accepted local bytes differing from the hosted artifact')
 
 def safe_relative(value):
     path = pathlib.PurePosixPath(value)
@@ -169,15 +299,20 @@ def stage_candidate_set():
     cases = hosted.get('cases', [])
     if len(cases) != 3 or any(case.get('byte_identical') is not True for case in cases):
         raise SystemExit('hosted exact-byte comparison did not pass for all three cases')
-    if sha(lock_path.read_bytes()) == '':
-        raise SystemExit('candidate lock digest could not be computed')
-
     live_manifest = verify_baseline(root)
     baseline_manifest_digest = baseline['manifest_sha256']
     local_relative = safe_relative(lock.get('local_output', ''))
     local_output = root / local_relative
     if not local_output.is_dir():
         raise SystemExit('reverified local candidate output directory is missing')
+    try:
+        committed_lock_bytes = subprocess.check_output([
+            'git', '-C', str(repo), 'show',
+            f"{lock['head_sha']}:fixtures/mooneye/candidate-digests.json",
+        ])
+    except subprocess.CalledProcessError as exc:
+        raise SystemExit('qualified candidate lock revision is unavailable in local Git history') from exc
+    verify_hosted_candidate_binding(lock, local_output, committed_lock_bytes)
     check_source_and_rights(live_manifest, lock, local_output)
 
     ids, counts, required_roms = current_denominator(live_manifest)
@@ -254,8 +389,9 @@ def stage_candidate_set():
     staged_ids, staged_counts, staged_required = current_denominator(parsed)
     if staged_ids != ids or staged_counts != {'cpu': 1, 'timer': 2} or staged_required != required_roms:
         raise SystemExit('staged manifest changed the exact eligible IDs or one-CPU/two-timer denominator')
-    if parsed.get('candidate_admission', {}).get('candidate_lock_sha256') != sha(lock_path.read_bytes()):
-        raise SystemExit('staged manifest candidate lock digest does not bind the evidence')
+    admission = parsed.get('candidate_admission', {})
+    if admission.get('candidate_lock_sha256') != sha(lock_path.read_bytes()):
+        raise SystemExit('staged manifest candidate lock digest does not bind the qualification record')
     for staged_file in staged_roms:
         content = (staged / staged_file['path']).read_bytes()
         if sha(content) != staged_file['sha256'] or len(content) != staged_file['size_bytes']:
@@ -290,8 +426,25 @@ if mode == '--assert-baseline':
 elif mode == '--restore-and-verify':
     restore_baseline(root)
     print(json.dumps({'rollback': 'restored-and-verified', 'source_head': baseline['source_head'], 'manifest_sha256': baseline['manifest_sha256'], 'eligible_ids': baseline['eligible_ids'], 'category_counts': baseline['category_counts']}, indent=2))
+elif mode == '--self-test-hosted-binding':
+    self_test_hosted_candidate_binding()
+    print(json.dumps({'hosted_binding_self_test': 'passed', 'tampered_lock_rejected': True, 'local_hosted_byte_mismatch_rejected': True}, indent=2))
+elif mode == '--verify-hosted-binding':
+    lock_path = root / 'fixtures/mooneye/candidate-digests.json'
+    lock = json.loads(lock_path.read_bytes())
+    local_output = root / safe_relative(lock.get('local_output', ''))
+    try:
+        committed_lock_bytes = subprocess.check_output([
+            'git', '-C', str(repo), 'show',
+            f"{lock['head_sha']}:fixtures/mooneye/candidate-digests.json",
+        ])
+    except (KeyError, subprocess.CalledProcessError) as exc:
+        raise SystemExit('qualified candidate lock revision is unavailable in local Git history') from exc
+    verify_hosted_candidate_binding(lock, local_output, committed_lock_bytes)
+    print(json.dumps({'hosted_candidate_binding': 'verified', 'head_sha': lock['head_sha'], 'run_id': lock['run_id'], 'roms': 3}, indent=2))
 elif mode == '--self-test-rollback':
     verify_baseline(root)
+    self_test_hosted_candidate_binding()
     with tempfile.TemporaryDirectory(prefix='gabbaboy-mooneye-rollback-') as temp_text:
         temp_root = pathlib.Path(temp_text)
         for value in [baseline['manifest_path']] + [item['path'] for item in baseline['roms']]:
@@ -307,7 +460,7 @@ elif mode == '--self-test-rollback':
             raw[0] ^= 0xff
             target.write_bytes(raw)
         restore_baseline(temp_root)
-    print(json.dumps({'rollback_self_test': 'passed', 'simulated_files': 4, 'manifest_sha256': baseline['manifest_sha256'], 'eligible_ids': baseline['eligible_ids'], 'category_counts': baseline['category_counts']}, indent=2))
+    print(json.dumps({'rollback_self_test': 'passed', 'hosted_binding_self_test': 'passed', 'simulated_files': 4, 'manifest_sha256': baseline['manifest_sha256'], 'eligible_ids': baseline['eligible_ids'], 'category_counts': baseline['category_counts']}, indent=2))
 elif mode == '--stage-validate-and-promote':
     stage_candidate_set()
 PY

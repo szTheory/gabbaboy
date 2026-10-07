@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
 # Networked, pinned source preparation followed by public-core protocol probes.
 set -euo pipefail
+if [[ $# -eq 1 && "$1" == --self-test-order ]]; then
+  self_test_only=true
+elif [[ $# -eq 0 ]]; then
+  self_test_only=false
+else
+  echo "usage: $0 [--self-test-order]" >&2
+  exit 2
+fi
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/gabbaboy-candidate.XXXXXXXX")
-GBB_REPRO_OUTPUT_DIR="$work_dir" bash tests/scripts/reproduce-mooneye.sh --candidate fixtures/mooneye
 
 cat > "$work_dir/probe.c" <<'C'
 #include "gabbaboy/gabbaboy.h"
@@ -15,7 +22,64 @@ cat > "$work_dir/probe.c" <<'C'
 static gbb_trace_record trace[8192];
 static gbb_diagnostic_record diagnostics[32768];
 
+/* Returns 1 at a valid result breakpoint, 0 when this batch has no result,
+ * and -1 for a malformed or out-of-order result protocol. */
+static int observe_protocol_trace(const gbb_trace_record *records, size_t count,
+                                  unsigned long callback, unsigned long breakpoint,
+                                  int expect_failure, int *saw_callback,
+                                  int *saw_breakpoint) {
+    for (size_t i = 0; i < count; ++i) {
+        const gbb_trace_record *t = &records[i];
+        if (t->pc == breakpoint) {
+            *saw_breakpoint = 1;
+            if (t->opcode[0] != 0x40 || !*saw_callback) return -1;
+            int pass_regs = t->b == 3 && t->c == 5 && t->d == 8 &&
+                t->e == 13 && t->h == 21 && t->l == 34;
+            int fail_regs = t->b == 0x42 && t->c == 0x42 && t->d == 0x42 &&
+                t->e == 0x42 && t->h == 0x42 && t->l == 0x42;
+            if ((expect_failure && !fail_regs) || (!expect_failure && !pass_regs)) return -1;
+            return 1;
+        }
+        if (t->pc == callback) *saw_callback = 1;
+    }
+    return 0;
+}
+
+static int protocol_order_self_test(void) {
+    gbb_trace_record records[2] = {0};
+    const unsigned long callback = 0x2000;
+    const unsigned long breakpoint = 0x1000;
+    records[0].pc = (uint16_t)breakpoint;
+    records[0].opcode[0] = 0x40;
+    records[0].b = 3; records[0].c = 5; records[0].d = 8;
+    records[0].e = 13; records[0].h = 21; records[0].l = 34;
+    records[1].pc = (uint16_t)callback;
+    int saw_callback = 0, saw_breakpoint = 0;
+    if (observe_protocol_trace(records, 2, callback, breakpoint, 0,
+                               &saw_callback, &saw_breakpoint) != -1 ||
+        !saw_breakpoint || saw_callback) {
+        fprintf(stderr, "protocol-order self-test accepted callback after result\n");
+        return 1;
+    }
+    records[0].pc = (uint16_t)callback;
+    records[1].pc = (uint16_t)breakpoint;
+    records[1].opcode[0] = 0x40;
+    records[1].b = 3; records[1].c = 5; records[1].d = 8;
+    records[1].e = 13; records[1].h = 21; records[1].l = 34;
+    saw_callback = 0; saw_breakpoint = 0;
+    if (observe_protocol_trace(records, 2, callback, breakpoint, 0,
+                               &saw_callback, &saw_breakpoint) != 1 ||
+        !saw_callback || !saw_breakpoint) {
+        fprintf(stderr, "protocol-order self-test rejected callback before result\n");
+        return 1;
+    }
+    puts("protocol_order_self_test=passed");
+    return 0;
+}
+
 int main(int argc, char **argv) {
+    if (argc == 2 && strcmp(argv[1], "--protocol-order-self-test") == 0)
+        return protocol_order_self_test();
     if (argc != 5) return 2;
     FILE *f = fopen(argv[1], "rb");
     if (!f) return 2;
@@ -44,19 +108,12 @@ int main(int argc, char **argv) {
                 (d->address >= 0xff40 && d->address <= 0xff4b) ||
                 (d->address >= 0xff68 && d->address <= 0xff6b)) ppu_access = 1;
         }
-        for (size_t i = 0; i < r.trace_count; ++i) {
-            gbb_trace_record *t = &trace[i];
-            if (t->pc == callback) saw_callback = 1;
-            if (t->pc != breakpoint || t->opcode[0] != 0x40) continue;
-            saw_breakpoint = 1;
-            int pass_regs = t->b == 3 && t->c == 5 && t->d == 8 &&
-                t->e == 13 && t->h == 21 && t->l == 34;
-            int fail_regs = t->b == 0x42 && t->c == 0x42 && t->d == 0x42 &&
-                t->e == 0x42 && t->h == 0x42 && t->l == 0x42;
-            if ((expect_failure && !fail_regs) || (!expect_failure && !pass_regs)) {
-                fprintf(stderr, "wrong breakpoint registers at %04x\n", t->pc);
-                return 1;
-            }
+        int protocol = observe_protocol_trace(trace, r.trace_count, callback, breakpoint,
+                                              expect_failure, &saw_callback,
+                                              &saw_breakpoint);
+        if (protocol < 0) {
+            fprintf(stderr, "invalid or out-of-order result protocol at %04lx\n", breakpoint);
+            return 1;
         }
         if (ppu_access) { fprintf(stderr, "PPU bus access observed\n"); return 1; }
         if (saw_breakpoint) break;
@@ -78,6 +135,11 @@ int main(int argc, char **argv) {
 }
 C
 cc -std=c17 -O2 -I include src/core/gabbaboy.c "$work_dir/probe.c" -o "$work_dir/probe"
+"$work_dir/probe" --protocol-order-self-test
+if [[ "$self_test_only" == true ]]; then
+  exit 0
+fi
+GBB_REPRO_OUTPUT_DIR="$work_dir" bash tests/scripts/reproduce-mooneye.sh --candidate fixtures/mooneye
 symbol() {
   awk -v label="$2" '$2 == label { split($1, a, ":"); print a[2]; exit }' "$1"
 }
