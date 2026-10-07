@@ -35,6 +35,12 @@ static int visible_composition(const char *path) {
     for (unsigned y = 0; y < 144; ++y) {
         for (unsigned x = 0; x < 160; ++x) {
             uint8_t expected = x < 8 && y < 8 ? 1u : 0u;
+            if (pixels[y * 160u + x] != expected)
+                fprintf(stderr, "pixel mismatch at %u,%u: got %u expected %u; generation=%llu completion=%llu consumed=%llu\n",
+                        x, y, pixels[y * 160u + x], expected,
+                        (unsigned long long)info.generation,
+                        (unsigned long long)info.completion_half_dots,
+                        (unsigned long long)run.consumed_half_dots);
             REQUIRE(pixels[y * 160u + x] == expected);
         }
     }
@@ -43,29 +49,72 @@ static int visible_composition(const char *path) {
     return 0;
 }
 
+static int check_visible_tile(const uint8_t *pixels, uint8_t tile_shade) {
+    for (unsigned y = 0; y < 144; ++y) {
+        for (unsigned x = 0; x < 160; ++x) {
+            uint8_t expected = x < 8 && y < 8 ? tile_shade : 0u;
+            if (pixels[y * 160u + x] != expected)
+                fprintf(stderr, "gameplay pixel mismatch at %u,%u: got %u expected %u\n",
+                        x, y, pixels[y * 160u + x], expected);
+            REQUIRE(pixels[y * 160u + x] == expected);
+        }
+    }
+    return 0;
+}
+
 static int visible_gameplay(const char *path) {
     size_t size = 0;
     uint8_t *rom = read_rom(path, &size);
     REQUIRE(rom != NULL);
-    gbb_instance *m = NULL;
-    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK);
-    REQUIRE(gbb_load_rom(m, rom, size) == GBB_OK);
-    gbb_run_result run = gbb_run(m, UINT64_C(180000), NULL, 0);
+    gbb_instance *whole = NULL;
+    gbb_instance *partitioned = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &whole) == GBB_OK);
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &partitioned) == GBB_OK);
+    REQUIRE(gbb_load_rom(whole, rom, size) == GBB_OK);
+    REQUIRE(gbb_load_rom(partitioned, rom, size) == GBB_OK);
+    gbb_run_result run = gbb_run(whole, UINT64_C(180000), NULL, 0);
     REQUIRE(run.reason == GBB_STOP_BUDGET);
+    gbb_run_result split = gbb_run(partitioned, UINT64_C(180000), NULL, 0);
+    REQUIRE(split.reason == GBB_STOP_BUDGET);
     uint64_t base = run.consumed_half_dots;
+    REQUIRE(split.consumed_half_dots == base);
     const gbb_input_event events[] = {
         {base + 8u, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_A},
         {base + 50008u, GBB_INPUT_BUTTON_RELEASE, GBB_BUTTON_A}
     };
-    REQUIRE(gbb_queue_events(m, events, 2) == GBB_OK);
-    run = gbb_run(m, UINT64_C(280000), NULL, 0);
+    REQUIRE(gbb_queue_events(whole, events, 2) == GBB_OK);
+    REQUIRE(gbb_queue_events(partitioned, events, 2) == GBB_OK);
+    run = gbb_run(whole, UINT64_C(250000), NULL, 0);
     REQUIRE(run.reason == GBB_STOP_BUDGET);
-    uint8_t pixels[160u * 144u];
-    gbb_frame_info info = {0};
-    REQUIRE(gbb_copy_frame(m, pixels, sizeof(pixels), 160, &info) == GBB_OK);
-    REQUIRE(gbb_peek_ram(m, 0xC000) == 1 && gbb_peek_ram(m, 0xC001) == 1);
-    REQUIRE(pixels[0] == 1u);
-    gbb_destroy(m);
+    split = gbb_run(partitioned, UINT64_C(80000), NULL, 0);
+    REQUIRE(split.reason == GBB_STOP_BUDGET);
+    split = gbb_run(partitioned, UINT64_C(90000), NULL, 0);
+    REQUIRE(split.reason == GBB_STOP_BUDGET);
+    split = gbb_run(partitioned, UINT64_C(80000), NULL, 0);
+    REQUIRE(split.reason == GBB_STOP_BUDGET);
+    uint8_t whole_pixels[160u * 144u];
+    uint8_t split_pixels[160u * 144u];
+    gbb_frame_info whole_info = {0}, split_info = {0};
+    REQUIRE(gbb_copy_frame(whole, whole_pixels, sizeof(whole_pixels), 160, &whole_info) == GBB_OK);
+    REQUIRE(gbb_copy_frame(partitioned, split_pixels, sizeof(split_pixels), 160, &split_info) == GBB_OK);
+    REQUIRE(whole_info.generation == split_info.generation);
+    REQUIRE(memcmp(whole_pixels, split_pixels, sizeof(whole_pixels)) == 0);
+    REQUIRE(check_visible_tile(whole_pixels, 2u) == 0);
+    REQUIRE(check_visible_tile(split_pixels, 2u) == 0);
+    REQUIRE(gbb_peek_ram(whole, 0xC000) == 1 && gbb_peek_ram(whole, 0xC001) == 1);
+    REQUIRE(gbb_peek_ram(partitioned, 0xC000) == 1 && gbb_peek_ram(partitioned, 0xC001) == 1);
+
+    run = gbb_run(whole, UINT64_C(150000), NULL, 0);
+    REQUIRE(run.reason == GBB_STOP_BUDGET);
+    split = gbb_run(partitioned, UINT64_C(150000), NULL, 0);
+    REQUIRE(split.reason == GBB_STOP_BUDGET);
+    REQUIRE(gbb_copy_frame(whole, whole_pixels, sizeof(whole_pixels), 160, &whole_info) == GBB_OK);
+    REQUIRE(gbb_copy_frame(partitioned, split_pixels, sizeof(split_pixels), 160, &split_info) == GBB_OK);
+    REQUIRE(whole_info.generation == split_info.generation);
+    REQUIRE(memcmp(whole_pixels, split_pixels, sizeof(whole_pixels)) == 0);
+    REQUIRE(check_visible_tile(whole_pixels, 1u) == 0);
+    gbb_destroy(partitioned);
+    gbb_destroy(whole);
     free(rom);
     return 0;
 }

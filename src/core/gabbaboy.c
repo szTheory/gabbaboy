@@ -5,12 +5,26 @@
 
 #define GBB_INPUT_EVENT_CAPACITY 64u
 #define GBB_DIAGNOSTIC_OPERATION_RESERVE 16u
+#define GBB_FRAME_WIDTH 160u
+#define GBB_FRAME_HEIGHT 144u
+#define GBB_FRAME_PIXELS (GBB_FRAME_WIDTH * GBB_FRAME_HEIGHT)
 
 struct gbb_instance {
     uint8_t *rom;
     size_t rom_size;
     uint8_t wram[8192];
     uint8_t hram[127];
+    uint8_t vram[8192];
+    uint8_t frame_working[GBB_FRAME_PIXELS];
+    uint8_t frame_completed[GBB_FRAME_PIXELS];
+    uint64_t frame_generation;
+    uint64_t frame_completion_half_dots;
+    uint16_t ppu_dot;
+    uint8_t ppu_half_phase;
+    uint8_t ppu_mode;
+    uint8_t lcdc, scy, scx, ly, lyc, bgp, obp0, obp1, wy, wx;
+    uint8_t joypad_select;
+    uint8_t joypad_buttons;
     uint8_t a, f, b, c, d, e, h, l;
     uint8_t div, stat, tima, tma, tac;
     uint8_t serial_data, serial_control, serial_bits;
@@ -122,7 +136,7 @@ static void reset_state(gbb_instance *m) {
     m->b = 0x00; m->c = 0x13;
     m->d = 0x00; m->e = 0xD8; m->h = 0x01; m->l = 0x4D;
     m->pc = 0x0100; m->sp = 0xFFFE;
-    m->div = 0xAB; m->stat = 0x85;
+    m->div = 0xAB; m->stat = 0;
     m->tima = 0; m->tma = 0; m->tac = 0;
     m->serial_data = 0; m->serial_control = 0x7Eu; m->serial_bits = 0;
     m->ie = 0;
@@ -144,6 +158,26 @@ static void reset_state(gbb_instance *m) {
     m->halt_bug = 0;
     memset(m->wram, 0, sizeof(m->wram));
     memset(m->hram, 0, sizeof(m->hram));
+    memset(m->vram, 0, sizeof(m->vram));
+    memset(m->frame_working, 0, sizeof(m->frame_working));
+    memset(m->frame_completed, 0, sizeof(m->frame_completed));
+    m->frame_generation = 0;
+    m->frame_completion_half_dots = 0;
+    m->ppu_dot = 0;
+    m->ppu_half_phase = 0;
+    m->ppu_mode = 2;
+    m->lcdc = 0x91;
+    m->scy = 0;
+    m->scx = 0;
+    m->ly = 0;
+    m->lyc = 0;
+    m->bgp = 0xFC;
+    m->obp0 = 0xFF;
+    m->obp1 = 0xFF;
+    m->wy = 0;
+    m->wx = 0;
+    m->joypad_select = 0x30;
+    m->joypad_buttons = 0;
     m->time_half_dots = 0;
     m->input_event_count = 0;
     m->lockup_pc = 0;
@@ -151,15 +185,44 @@ static void reset_state(gbb_instance *m) {
     m->locked = 0;
 }
 
+static uint8_t joypad_value(const gbb_instance *m) {
+    uint8_t lines = 0x0Fu;
+    if ((m->joypad_select & 0x20u) == 0)
+        lines &= (uint8_t)~((m->joypad_buttons >> 4) & 0x0Fu);
+    if ((m->joypad_select & 0x10u) == 0)
+        lines &= (uint8_t)~(m->joypad_buttons & 0x0Fu);
+    return (uint8_t)(0xC0u | m->joypad_select | lines);
+}
+
+static int cpu_vram_access_allowed(const gbb_instance *m) {
+    return (m->lcdc & 0x80u) == 0 || m->ppu_mode != 3u;
+}
+
 static uint8_t read8(const gbb_instance *m, uint16_t address) {
+    if (address == 0xFF00) return joypad_value(m);
     if (address == 0xFF04) return m->div;
     if (address == 0xFF05) return m->tima;
     if (address == 0xFF06) return m->tma;
     if (address == 0xFF07) return (uint8_t)(0xF8u | m->tac);
     if (address == 0xFF01) return m->serial_data;
     if (address == 0xFF02) return (uint8_t)(0x7Eu | m->serial_control);
+    if (address == 0xFF40) return m->lcdc;
+    if (address == 0xFF41)
+        return (uint8_t)(0x80u | (m->stat & 0x78u) |
+                         (m->ly == m->lyc ? 0x04u : 0u) | m->ppu_mode);
+    if (address == 0xFF42) return m->scy;
+    if (address == 0xFF43) return m->scx;
+    if (address == 0xFF44) return m->ly;
+    if (address == 0xFF45) return m->lyc;
+    if (address == 0xFF47) return m->bgp;
+    if (address == 0xFF48) return m->obp0;
+    if (address == 0xFF49) return m->obp1;
+    if (address == 0xFF4A) return m->wy;
+    if (address == 0xFF4B) return m->wx;
     if (address == 0xFF0F) return (uint8_t)(0xE0u | m->interrupt_flags);
     if (address == 0xFFFF) return (uint8_t)(0xE0u | m->ie);
+    if (address >= 0x8000 && address <= 0x9FFF)
+        return cpu_vram_access_allowed(m) ? m->vram[address - 0x8000] : 0xFF;
     if (address < m->rom_size) return m->rom[address];
     if (address >= 0xC000 && address <= 0xDFFF) return m->wram[address - 0xC000];
     if (address >= 0xE000 && address <= 0xFDFF) return m->wram[address - 0xE000];
@@ -205,7 +268,34 @@ static void timer_set_signal(gbb_instance *m, int next, uint64_t at) {
 }
 
 static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
-    if (address == 0xFF04) {
+    if (address >= 0x8000 && address <= 0x9FFF) {
+        if (cpu_vram_access_allowed(m)) m->vram[address - 0x8000] = value;
+    }
+    else if (address == 0xFF00) m->joypad_select = (uint8_t)(value & 0x30u);
+    else if (address == 0xFF40) {
+        uint8_t old = m->lcdc;
+        m->lcdc = value;
+        if ((value & 0x80u) == 0) {
+            m->ppu_dot = 0;
+            m->ly = 0;
+            m->ppu_mode = 0;
+        } else if ((old & 0x80u) == 0) {
+            m->ppu_dot = 0;
+            m->ly = 0;
+            m->ppu_mode = 2;
+        }
+    }
+    else if (address == 0xFF41) m->stat = (uint8_t)(value & 0x78u);
+    else if (address == 0xFF42) m->scy = value;
+    else if (address == 0xFF43) m->scx = value;
+    else if (address == 0xFF44) { /* LY is read-only in the guest interface. */ }
+    else if (address == 0xFF45) m->lyc = value;
+    else if (address == 0xFF47) m->bgp = value;
+    else if (address == 0xFF48) m->obp0 = value;
+    else if (address == 0xFF49) m->obp1 = value;
+    else if (address == 0xFF4A) m->wy = value;
+    else if (address == 0xFF4B) m->wx = value;
+    else if (address == 0xFF04) {
         m->divider_counter = 0; m->div = 0; m->divider_phase = 0;
         timer_set_signal(m, timer_input(m), m->time_half_dots);
     }
@@ -256,8 +346,10 @@ static void bus_write(gbb_instance *m, uint16_t address, uint8_t value, uint64_t
 }
 
 static int read_supported(uint16_t address) {
-    return address < 0x8000 || address == 0xFF01 || address == 0xFF02 ||
+    return address < 0x8000 || address == 0xFF00 || address == 0xFF01 || address == 0xFF02 ||
            (address >= 0xFF04 && address <= 0xFF07) || address == 0xFF0F || address == 0xFFFF ||
+           (address >= 0xFF40 && address <= 0xFF45) ||
+           (address >= 0xFF47 && address <= 0xFF4B) ||
            (address >= 0xC000 && address <= 0xDFFF) ||
            (address >= 0xE000 && address <= 0xFDFF) ||
            (address >= 0xFF80 && address <= 0xFFFE);
@@ -288,6 +380,10 @@ static void apply_input_events_now(gbb_instance *m) {
             if (m->stopped && event.value == 1u) m->stopped = 0;
         } else if (event.kind == GBB_INPUT_SERIAL_EDGE) {
             shift_external_serial(m, event.value);
+        } else if (event.kind == GBB_INPUT_BUTTON_PRESS) {
+            m->joypad_buttons |= (uint8_t)(1u << event.value);
+        } else if (event.kind == GBB_INPUT_BUTTON_RELEASE) {
+            m->joypad_buttons &= (uint8_t)~(1u << event.value);
         }
     }
 }
@@ -299,6 +395,51 @@ static uint16_t instruction_address(const gbb_instance *m, uint16_t pc, unsigned
 
 static uint8_t instruction_byte(const gbb_instance *m, uint16_t pc, unsigned offset) {
     return read8(m, instruction_address(m, pc, offset));
+}
+
+static uint8_t ppu_bg_shade(const gbb_instance *m, unsigned x) {
+    if ((m->lcdc & 0x01u) == 0) return (uint8_t)(m->bgp & 3u);
+    uint8_t bg_x = (uint8_t)(x + m->scx);
+    uint8_t bg_y = (uint8_t)(m->ly + m->scy);
+    uint16_t map_base = (m->lcdc & 0x08u) != 0 ? 0x1C00u : 0x1800u;
+    uint16_t map_index = (uint16_t)(((bg_y >> 3) * 32u) + (bg_x >> 3));
+    uint8_t tile = m->vram[map_base + map_index];
+    uint16_t tile_base = (m->lcdc & 0x10u) != 0
+        ? (uint16_t)tile * 16u
+        : (uint16_t)(0x1000 + (int16_t)(int8_t)tile * 16);
+    uint16_t row = (uint16_t)((bg_y & 7u) * 2u);
+    uint8_t bit = (uint8_t)(7u - (bg_x & 7u));
+    uint8_t low = m->vram[tile_base + row];
+    uint8_t high = m->vram[tile_base + row + 1u];
+    uint8_t color = (uint8_t)(((low >> bit) & 1u) | (((high >> bit) & 1u) << 1));
+    return (uint8_t)((m->bgp >> (color * 2u)) & 3u);
+}
+
+static void ppu_advance_dot(gbb_instance *m) {
+    if ((m->lcdc & 0x80u) == 0) return;
+    if (m->ppu_dot < 455u) {
+        ++m->ppu_dot;
+    } else {
+        m->ppu_dot = 0;
+        ++m->ly;
+        if (m->ly == 154u) m->ly = 0;
+        if (m->ly == GBB_FRAME_HEIGHT) {
+            memcpy(m->frame_completed, m->frame_working, sizeof(m->frame_completed));
+            if (m->frame_generation != UINT64_MAX) ++m->frame_generation;
+            m->frame_completion_half_dots = m->time_half_dots;
+        }
+    }
+    if (m->ly >= GBB_FRAME_HEIGHT) {
+        m->ppu_mode = 1;
+    } else {
+        if (m->ppu_dot >= 92u && m->ppu_dot <= 251u) {
+            unsigned x = (unsigned)(m->ppu_dot - 92u);
+            m->frame_working[(unsigned)m->ly * GBB_FRAME_WIDTH + x] = ppu_bg_shade(m, x);
+        }
+        if (m->ppu_dot < 80u) m->ppu_mode = 2;
+        else if (m->ppu_dot < 252u) m->ppu_mode = 3;
+        else m->ppu_mode = 0;
+    }
 }
 
 static void advance_devices_to(gbb_instance *m, uint64_t target) {
@@ -332,6 +473,8 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
             m->div = (uint8_t)(m->divider_counter >> 8);
             timer_set_signal(m, timer_input(m), m->time_half_dots);
         }
+        m->ppu_half_phase ^= 1u;
+        if (m->ppu_half_phase == 0) ppu_advance_dot(m);
     }
 }
 
@@ -350,7 +493,10 @@ gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events
             return GBB_INVALID_EVENT;
         if ((event->kind == GBB_INPUT_STOP_WAKE && event->value != 1u) ||
             (event->kind == GBB_INPUT_SERIAL_EDGE && event->value > 1u) ||
-            (event->kind != GBB_INPUT_STOP_WAKE && event->kind != GBB_INPUT_SERIAL_EDGE))
+            ((event->kind == GBB_INPUT_BUTTON_PRESS || event->kind == GBB_INPUT_BUTTON_RELEASE) &&
+             event->value > GBB_BUTTON_START) ||
+            (event->kind != GBB_INPUT_STOP_WAKE && event->kind != GBB_INPUT_SERIAL_EDGE &&
+             event->kind != GBB_INPUT_BUTTON_PRESS && event->kind != GBB_INPUT_BUTTON_RELEASE))
             return GBB_INVALID_EVENT;
         previous = event->at_half_dots;
     }
@@ -363,10 +509,21 @@ gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events
 gbb_error gbb_copy_frame(const gbb_instance *instance, uint8_t *pixels,
                          size_t capacity_bytes, size_t pitch_bytes,
                          gbb_frame_info *out_info) {
-    (void)capacity_bytes;
-    (void)pitch_bytes;
     if (instance == NULL || pixels == NULL || out_info == NULL) return GBB_INVALID_ARGUMENT;
-    return GBB_FRAME_NOT_READY;
+    if (pitch_bytes < GBB_FRAME_WIDTH ||
+        pitch_bytes > (SIZE_MAX - GBB_FRAME_WIDTH) / (GBB_FRAME_HEIGHT - 1u))
+        return GBB_INVALID_ARGUMENT;
+    size_t required = (GBB_FRAME_HEIGHT - 1u) * pitch_bytes + GBB_FRAME_WIDTH;
+    if (capacity_bytes < required) return GBB_INVALID_ARGUMENT;
+    if (instance->frame_generation == 0) return GBB_FRAME_NOT_READY;
+    for (size_t y = 0; y < GBB_FRAME_HEIGHT; ++y)
+        memcpy(pixels + y * pitch_bytes,
+               instance->frame_completed + y * GBB_FRAME_WIDTH, GBB_FRAME_WIDTH);
+    gbb_frame_info info = {GBB_FRAME_WIDTH, GBB_FRAME_HEIGHT,
+                           instance->frame_generation,
+                           instance->frame_completion_half_dots};
+    *out_info = info;
+    return GBB_OK;
 }
 
 static void advance_devices(gbb_instance *m, uint64_t half_dots) {

@@ -9,7 +9,7 @@ Start:
     di
     xor a
     ldh [$FF40], a            ; LCD off while the owned VRAM pattern is initialized
-    ld hl, $8000
+    ld hl, $8010              ; keep tile 0 blank for the rest of the background map
     ld a, $FF
     ld [hl], a
     inc hl
@@ -62,35 +62,49 @@ Start:
     xor a                   ; tile 2 low plane is zero
     ld [hl], a
     inc hl
-    ld [hl], a
-    inc hl
-    ld [hl], a
-    inc hl
-    ld [hl], a
-    inc hl
-    ld [hl], a
-    inc hl
-    ld [hl], a
-    inc hl
-    ld [hl], a
-    inc hl
-    ld [hl], a
-    inc hl
     ld a, $FF               ; high plane selects color number 2
     ld [hl], a
     inc hl
+    xor a
     ld [hl], a
     inc hl
+    ld a, $FF
     ld [hl], a
     inc hl
+    xor a
     ld [hl], a
     inc hl
+    ld a, $FF
     ld [hl], a
     inc hl
+    xor a
     ld [hl], a
     inc hl
+    ld a, $FF
     ld [hl], a
     inc hl
+    xor a
+    ld [hl], a
+    inc hl
+    ld a, $FF
+    ld [hl], a
+    inc hl
+    xor a
+    ld [hl], a
+    inc hl
+    ld a, $FF
+    ld [hl], a
+    inc hl
+    xor a
+    ld [hl], a
+    inc hl
+    ld a, $FF
+    ld [hl], a
+    inc hl
+    xor a
+    ld [hl], a
+    inc hl
+    ld a, $FF
     ld [hl], a
     inc hl
 
@@ -124,6 +138,11 @@ ReleasePoll:
     jr z, ReleasePoll
     ld a, $01
     ld [$C001], a
+
+ReleaseFrameExit:
+    ldh a, [$FF44]
+    cp $90
+    jr nc, ReleaseFrameExit  ; leave the current VBlank before waiting for another
 
 ReleaseWait:
     ldh a, [$FF44]

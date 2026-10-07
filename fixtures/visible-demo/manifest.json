@@ -12,7 +12,7 @@
   },
   "rom": "demo.gb",
   "size_bytes": 32768,
-  "sha256": "66db7cf1d81529e665b90eea6ef7839f09b50331165102bc9f803ddf32f9e5ca",
+  "sha256": "38afb54b40f4b6612906c7a68e367199d8bff135508a39d7acdc996bf3d86530",
   "profile": {
     "name": "DMG-CPU-B",
     "boot": "Skipped; bootless profile starts at cartridge entry 0x0100.",
@@ -23,9 +23,9 @@
     "display_setup": "With LCD disabled, the guest writes tile 1 as color number 1 and tile 2 as color number 2, selects BGP identity mapping, places tile 1 at map cell 0, and enables the background.",
     "initial_expected_image": "Shade 1 in pixels x=0..7,y=0..7; shade 0 in every other pixel.",
     "input": "Host queues active-low A press at baseline_time+8 half-dots and release at baseline_time+50008 half-dots; guest polls the action row at FF00.",
-    "visible_response": "After detecting press, guest waits for LY>=144 then sets map cell 0 to tile 2; after release, it waits for LY>=144 and restores tile 1.",
+    "visible_response": "After detecting press, guest waits for LY>=144 then sets map cell 0 to tile 2; after release, it waits for visible LY<144 and the next LY>=144 before restoring tile 1.",
     "guest_outcome": "WRAM C000 becomes 1 after the press is handled; WRAM C001 becomes 1 after release is observed.",
-    "timeout_half_dots": 460000
+    "timeout_half_dots": 600000
   },
   "scope_limits": [
     "No boot-ROM execution",

@@ -126,11 +126,12 @@ gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_si
 /* Copies events into a fixed 64-event per-instance queue. Timestamps are
  * absolute half-dot ticks and must be nondecreasing within the batch and no
  * earlier than the instance's current time. Equal timestamps keep caller
- * order. STOP_WAKE value 1 represents a modeled selected input-line
- * transition; SERIAL_EDGE value is the input bit sampled by the disconnected
- * serial endpoint; BUTTON_PRESS/RELEASE value is a gbb_button identifier.
- * Button events are consumed by active-low FF00 row polling. This is not a
- * host wall-clock input API. Admission is atomic: invalid batches and batches exceeding remaining
+ * order. STOP_WAKE value 1 is a separate modeled STOP wake; SERIAL_EDGE value
+ * is the input bit sampled by the disconnected serial endpoint;
+ * BUTTON_PRESS/RELEASE value is a gbb_button identifier. Button events are
+ * consumed by active-low FF00 row polling. STOP_WAKE does not imply a JOYP
+ * interrupt, and this is not a host wall-clock input API. Admission is atomic:
+ * invalid batches and batches exceeding remaining
  * capacity append nothing. Empty batches, including NULL/0, succeed. Invalid
  * pointers return GBB_INVALID_ARGUMENT; malformed, past or unordered events
  * return GBB_INVALID_EVENT; excess capacity returns GBB_EVENT_QUEUE_FULL.
@@ -140,7 +141,9 @@ gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events
  * is a DMG shade index in [0,3]. pitch_bytes is the destination row stride;
  * capacity_bytes must cover the last active pixel. Output remains caller-owned,
  * the core allocates nothing, and no pointer into instance storage is exposed.
- * Returns GBB_FRAME_NOT_READY until a complete frame has been produced. */
+ * Returns GBB_FRAME_NOT_READY until a complete frame has been produced; reset
+ * invalidates the completed frame. Invalid pointers, pitch or capacity return
+ * GBB_INVALID_ARGUMENT. out_info must not overlap the pixel destination. */
 gbb_error gbb_copy_frame(const gbb_instance *instance, uint8_t *pixels,
                          size_t capacity_bytes, size_t pitch_bytes,
                          gbb_frame_info *out_info);

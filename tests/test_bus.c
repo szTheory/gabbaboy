@@ -74,7 +74,7 @@ static int unsupported_reads(void) {
     /* Each operand family must reject before a timed read, flag change or HL update. */
     static const uint8_t hl_reads[] = {0x46,0x4e,0x56,0x5e,0x66,0x6e,0x7e,
         0x86,0x8e,0x96,0x9e,0xa6,0xae,0xb6,0xbe,0x34,0x35,0x2a,0x3a};
-    static const uint16_t absent[] = {0x8000,0xa000,0xfe00,0xff00,0xff03,0xff08,0xff7f};
+    static const uint16_t absent[] = {0x8000,0xa000,0xfe00,0xff03,0xff08,0xff7f};
     for (size_t a = 0; a < sizeof(absent) / sizeof(absent[0]); ++a) {
         for (size_t i = 0; i < sizeof(hl_reads); ++i) {
             const uint8_t p[] = {0x21,(uint8_t)absent[a],(uint8_t)(absent[a] >> 8),hl_reads[i]};
@@ -100,7 +100,7 @@ static int unsupported_reads(void) {
         gbb_instance *m = load_program(p, sizeof(p)); REQUIRE(m != NULL);
         REQUIRE(reject_atomically(m) == 0); gbb_destroy(m);
     }
-    static const uint8_t missing_io[] = {0x00,0x03,0x08,0x7f};
+    static const uint8_t missing_io[] = {0x03,0x08,0x7f};
     for (size_t i = 0; i < sizeof(missing_io); ++i) {
         const uint8_t immediate[] = {0xf0,missing_io[i]};
         gbb_instance *m = load_program(immediate, sizeof(immediate)); REQUIRE(m != NULL);
