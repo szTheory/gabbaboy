@@ -17,9 +17,9 @@ typedef struct {
     SDL_Surface *surface;
     SDL_Renderer *renderer;
     SDL_Texture *texture;
-    uint64_t cursor_half_dots;
     uint64_t displayed_generation;
     bool running;
+    bool needs_redraw;
 } player;
 
 static bool read_demo(uint8_t rom[PLAYER_ROM_SIZE]) {
@@ -50,7 +50,6 @@ static bool create_machine(player *app) {
         fprintf(stderr, "Could not load the owned demo ROM (error %d)\n", (int)load_result);
         return false;
     }
-    player_input_reset(&app->input);
     return true;
 }
 
@@ -97,18 +96,28 @@ static bool create_video(player *app, bool hidden) {
     return true;
 }
 
-static bool advance_to(player *app, uint64_t target_half_dots) {
-    while (app->cursor_half_dots < target_half_dots) {
-        const uint64_t remaining = target_half_dots - app->cursor_half_dots;
-        const uint64_t budget = remaining > UINT64_MAX - PLAYER_MAX_OPERATION_HALF_DOTS
-            ? remaining : remaining + PLAYER_MAX_OPERATION_HALF_DOTS;
+static bool advance_to(player *app, uint64_t target_half_dots, bool finish_target) {
+    while (app->input.guest_cursor_half_dots < target_half_dots) {
+        const uint64_t remaining =
+            target_half_dots - app->input.guest_cursor_half_dots;
+        const uint64_t budget = finish_target &&
+            remaining <= UINT64_MAX - PLAYER_MAX_OPERATION_HALF_DOTS
+            ? remaining + PLAYER_MAX_OPERATION_HALF_DOTS : remaining;
         const gbb_run_result result = gbb_run(app->machine, budget, NULL, 0);
-        app->cursor_half_dots += result.consumed_half_dots;
-        if (result.reason != GBB_STOP_BUDGET || result.consumed_half_dots == 0) {
-            fprintf(stderr, "Guest stopped at half-dot %llu (reason %d)\n",
-                    (unsigned long long)app->cursor_half_dots, (int)result.reason);
+        if (result.consumed_half_dots >
+            UINT64_MAX - app->input.guest_cursor_half_dots) {
+            fputs("Guest timeline overflow\n", stderr);
             return false;
         }
+        player_input_reconcile(&app->input,
+            app->input.guest_cursor_half_dots + result.consumed_half_dots);
+        if (result.reason != GBB_STOP_BUDGET) {
+            fprintf(stderr, "Guest stopped at half-dot %llu (reason %d)\n",
+                    (unsigned long long)app->input.guest_cursor_half_dots,
+                    (int)result.reason);
+            return false;
+        }
+        if (result.consumed_half_dots == 0) return !finish_target;
     }
     return true;
 }
@@ -144,6 +153,7 @@ static bool update_frame(player *app, bool required) {
         return false;
     }
     app->displayed_generation = info.generation;
+    app->needs_redraw = true;
     return true;
 }
 
@@ -162,6 +172,7 @@ static bool draw_frame(player *app) {
         fprintf(stderr, "SDL_RenderPresent: %s\n", SDL_GetError());
         return false;
     }
+    app->needs_redraw = false;
     return true;
 }
 
@@ -170,15 +181,36 @@ static bool handle_event(player *app, const SDL_Event *event) {
         app->running = false;
         return true;
     }
+    if (event->type == SDL_EVENT_WINDOW_EXPOSED) app->needs_redraw = true;
     if (event->type == SDL_EVENT_KEY_DOWN || event->type == SDL_EVENT_KEY_UP) {
         const bool pressed = event->type == SDL_EVENT_KEY_DOWN;
         const gbb_error result = player_input_key(&app->input, app->machine,
-                                                  app->cursor_half_dots,
+                                                  event->key.timestamp,
                                                   event->key.scancode, pressed,
                                                   pressed && event->key.repeat);
         if (result != GBB_OK) {
-            fprintf(stderr, "Could not queue keyboard input (error %d)\n", (int)result);
-            return false;
+            const gbb_error release_result = player_input_focus_lost(
+                &app->input, app->machine, event->key.timestamp);
+            fprintf(stderr,
+                    "Input paused: keyboard transition failed (error %d); release recovery %s.\n",
+                    (int)result, release_result == GBB_OK ? "queued" : "pending");
+        }
+    }
+    if (event->type == SDL_EVENT_WINDOW_FOCUS_LOST) {
+        const gbb_error result = player_input_focus_lost(&app->input, app->machine,
+                                                         event->window.timestamp);
+        if (result != GBB_OK)
+            fprintf(stderr, "Input remains paused; focus-loss release is pending (error %d).\n",
+                    (int)result);
+    }
+    if (event->type == SDL_EVENT_WINDOW_FOCUS_GAINED) {
+        const gbb_error result = player_input_retry_focus_releases(
+            &app->input, app->machine, event->window.timestamp);
+        if (result != GBB_OK) {
+            fprintf(stderr, "Input remains paused; queued releases could not be admitted (error %d).\n",
+                    (int)result);
+        } else if (!player_input_resume(&app->input, SDL_GetTicksNS())) {
+            fprintf(stderr, "Input remains paused until pending button releases are admitted.\n");
         }
     }
     return true;
@@ -205,18 +237,30 @@ static bool push_key(player *app, Uint32 type, SDL_Scancode scancode, Uint64 tim
 }
 
 static bool run_smoke(player *app) {
-    if (!push_key(app, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_Z, 1) || !pump_events(app) ||
-        !advance_to(app, PLAYER_FRAME_HALF_DOTS) || !update_frame(app, true) ||
-        !draw_frame(app)) return false;
-    if (gbb_peek_ram(app->machine, 0xC000) != 1) {
-        fputs("Injected A press did not reach the visible demo guest result\n", stderr);
+    uint64_t press_ns, release_ns;
+    if (!player_input_half_dots_to_nanoseconds(8, &press_ns) ||
+        !player_input_half_dots_to_nanoseconds(50008, &release_ns) ||
+        app->input.host_anchor_ns > UINT64_MAX - release_ns) {
+        fputs("Could not construct finite smoke event timestamps\n", stderr);
         return false;
     }
-    if (!push_key(app, SDL_EVENT_KEY_UP, SDL_SCANCODE_Z, 2) || !pump_events(app) ||
-        !advance_to(app, PLAYER_FRAME_HALF_DOTS * 2u) || !update_frame(app, true) ||
-        !draw_frame(app)) return false;
-    if (gbb_peek_ram(app->machine, 0xC001) != 1) {
-        fputs("Injected A release did not reach the visible demo guest result\n", stderr);
+    const uint64_t press_at = app->input.host_anchor_ns + press_ns;
+    const uint64_t release_at = app->input.host_anchor_ns + release_ns;
+    if (!push_key(app, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_Z, press_at) ||
+        !pump_events(app) ||
+        !push_key(app, SDL_EVENT_KEY_UP, SDL_SCANCODE_Z, release_at) ||
+        !pump_events(app)) return false;
+    if (app->input.pending_count != 2 ||
+        app->input.pending[0].at_half_dots != 8 ||
+        app->input.pending[1].at_half_dots != 50008) {
+        fputs("Injected SDL timestamps did not map to the expected guest half-dots\n", stderr);
+        return false;
+    }
+    if (!advance_to(app, PLAYER_FRAME_HALF_DOTS, true) ||
+        !update_frame(app, true) || !draw_frame(app)) return false;
+    if (gbb_peek_ram(app->machine, 0xC000) != 1 ||
+        gbb_peek_ram(app->machine, 0xC001) != 1) {
+        fputs("Injected A transitions did not reach the visible demo guest results\n", stderr);
         return false;
     }
     printf("player smoke passed: frame=%llu A-press=%u A-release=%u\n",
@@ -244,6 +288,7 @@ int main(int argc, char **argv) {
     player app;
     memset(&app, 0, sizeof(app));
     app.running = true;
+    app.needs_redraw = true;
     if (!create_machine(&app)) {
         destroy_player(&app);
         return 1;
@@ -258,6 +303,7 @@ int main(int argc, char **argv) {
         SDL_Quit();
         return 1;
     }
+    player_input_reset(&app.input, SDL_GetTicksNS());
 
     bool passed = true;
     if (smoke) {
@@ -265,12 +311,32 @@ int main(int argc, char **argv) {
     } else {
         while (app.running) {
             if (!pump_events(&app)) { passed = false; break; }
-            if (!advance_to(&app, app.cursor_half_dots + PLAYER_FRAME_HALF_DOTS) ||
-                !update_frame(&app, false) || !draw_frame(&app)) {
+            uint64_t target_half_dots;
+            if (!app.input.paused &&
+                !player_input_guest_target(&app.input, SDL_GetTicksNS(),
+                                           &target_half_dots)) {
+                player_input_pause(&app.input);
+                fputs("Input paused because the host clock exceeds the guest timeline.\n",
+                      stderr);
+            }
+            if (!app.input.paused) {
+                const uint64_t cursor = app.input.guest_cursor_half_dots;
+                const uint64_t bounded_target = cursor >
+                    UINT64_MAX - PLAYER_FRAME_HALF_DOTS
+                    ? UINT64_MAX : cursor + PLAYER_FRAME_HALF_DOTS;
+                if (target_half_dots > bounded_target)
+                    target_half_dots = bounded_target;
+                if (!advance_to(&app, target_half_dots, false)) {
+                    passed = false;
+                    break;
+                }
+            }
+            if (!update_frame(&app, false) ||
+                (app.needs_redraw && !draw_frame(&app))) {
                 passed = false;
                 break;
             }
-            SDL_Delay(16);
+            SDL_Delay(1);
         }
     }
     destroy_player(&app);

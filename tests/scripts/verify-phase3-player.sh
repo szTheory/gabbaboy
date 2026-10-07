@@ -64,12 +64,19 @@ ctest --test-dir "${APP_BUILD}" --output-on-failure --no-tests=error -R '^player
 
 SDL_LICENSE_SHA256="$(shasum -a 256 "${BUILD_ROOT}/SDL3-LICENSE.txt" | awk '{print $1}')"
 SOURCE_REVISION="$(git -C "${ROOT_DIR}" rev-parse HEAD)"
+if [[ -z "$(git -C "${ROOT_DIR}" status --porcelain --untracked-files=all -- \
+    CMakeLists.txt include src tests cmake fixtures)" ]]; then
+  SOURCE_TREE_STATE="clean"
+else
+  SOURCE_TREE_STATE="dirty"
+fi
 cat >"${BUILD_ROOT}/receipt.txt" <<EOF
 SDL version: ${SDL_VERSION}
 SDL official source URL: ${SDL_URL}
 SDL source archive SHA-256: ${SDL_SHA256}
 SDL license SHA-256: ${SDL_LICENSE_SHA256}
 Project source revision: ${SOURCE_REVISION}
+Project source tree: ${SOURCE_TREE_STATE}
 Player CTest selection: player_*
 EOF
 printf 'Player verification passed for SDL %s; source digest %s; license digest %s\n' \
