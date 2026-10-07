@@ -270,7 +270,7 @@ PY
 mode=${1:---build-package}
 case "$mode" in
   --build-package)
-    [[ $# -eq 1 ]] || fail 'usage: verify-phase3-player.sh [--build-package] | --verify-package ARTIFACT-DIR'
+    [[ $# -le 1 ]] || fail 'usage: verify-phase3-player.sh [--build-package] | --verify-package ARTIFACT-DIR'
     ;;
   --verify-package)
     [[ $# -eq 2 ]] || fail 'usage: verify-phase3-player.sh [--build-package] | --verify-package ARTIFACT-DIR'
