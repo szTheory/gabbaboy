@@ -14,6 +14,8 @@ if(GABBABOY_ENABLE_SANITIZERS)
   add_link_options(-fsanitize=address,undefined)
 endif()
 
+option(GABBABOY_BUILD_PLAYER "Build the optional SDL3 player" OFF)
+
 include(CTest)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -57,6 +59,24 @@ target_compile_definitions(gabbaboy_core PRIVATE
 target_compile_definitions(gabbaboy-runner PRIVATE
   GBB_BUILD_REVISION="${GABBABOY_BUILD_REVISION}"
   GBB_BUILD_QUALIFIED=${GABBABOY_BUILD_QUALIFIED})
+
+if(GABBABOY_BUILD_PLAYER)
+  find_package(SDL3 3.4.18 EXACT CONFIG REQUIRED)
+
+  add_library(gabbaboy-player-input STATIC src/player/input.c)
+  target_include_directories(gabbaboy-player-input PUBLIC
+    "${PROJECT_SOURCE_DIR}/src/player")
+  target_link_libraries(gabbaboy-player-input PUBLIC GabbaBoy::core SDL3::SDL3)
+  target_compile_features(gabbaboy-player-input PUBLIC c_std_17)
+  set_target_properties(gabbaboy-player-input PROPERTIES C_EXTENSIONS OFF)
+
+  add_executable(gabbaboy-player src/player/main.c)
+  target_link_libraries(gabbaboy-player PRIVATE gabbaboy-player-input SDL3::SDL3)
+  target_compile_features(gabbaboy-player PRIVATE c_std_17)
+  target_compile_definitions(gabbaboy-player PRIVATE
+    GABBABOY_PLAYER_DEMO_ROM=\"${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb\")
+  set_target_properties(gabbaboy-player PROPERTIES C_EXTENSIONS OFF)
+endif()
 
 set(GABBABOY_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/GabbaBoy")
 configure_package_config_file(

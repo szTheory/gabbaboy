@@ -48,7 +48,7 @@
 | VIDEO-01 | The declared DMG profile renders background, window, and sprites with LCD/STAT transitions and a dot-sensitive fetch design demonstrated by separate composition and timing cases. | Pan Docs rendering/FIFO details support a dot-stepped fetcher and isolated raster cases; image fixtures should verify composition independently. |
 | VIDEO-02 | OAM DMA, VRAM/OAM access restrictions, and CPU/PPU/DMA contention produce expected model-specific observable results. | Pan Docs documents access windows and 160 M-cycle DMG DMA duration; its board-revision qualification means tests must state what DMG-CPU-B evidence does and does not establish. |
 | VIDEO-03 | Timestamped joypad transitions affect the guest deterministically, including selection/interrupt behavior; the public API and SDL keyboard path exercise the same input boundary. | Pan Docs defines active-low matrix/read selection; finer interrupt sampling behavior remains an explicit source gap and needs focused cases before locking expected edges. |
-| VIDEO-04 | A macOS user can launch the optional player, open a supported ROM-only image, play an original or explicitly permissioned interactive GB fixture, resize with correct aspect/integer scaling, pause, reset, and quit with actionable errors. | SDL3 3.4.16 official release and SDL CMake, keyboard, dialog, high-DPI, and logical-presentation documentation provide current adapter/build details. |
+| VIDEO-04 | A macOS user can launch the optional player, open a supported ROM-only image, play an original or explicitly permissioned interactive GB fixture, resize with correct aspect/integer scaling, pause, reset, and quit with actionable errors. | SDL3 3.4.18 official release and SDL CMake, keyboard, dialog, high-DPI, and logical-presentation documentation provide current adapter/build details. |
 | VIDEO-05 | Automated checks distinguish image composition, raster timing, and scripted gameplay outcomes, and the visible preview clearly identifies still-incomplete audio/persistence support. | Split expected-image, focused timing/contention, and scripted guest tests; run exact-revision optional macOS build/package smoke and bind any artifact to its source digest. |
 </phase_requirements>
 
@@ -67,7 +67,7 @@
 
 ## Summary
 
-**Primary recommendation:** Extend the existing half-dot/event core in place with an instance-owned dot-stepped PPU, bounded completed-frame copy, and button transitions; keep SDL3 3.4.16 in a separate optional macOS target using the imported CMake target. Use authored images for composition, source-qualified focused cases for mode/fetch/DMA timing, and a scripted original ROM for deterministic gameplay. [CITED: https://gbdev.io/pandocs/Rendering] [CITED: https://gbdev.io/pandocs/pixel_fifo] [CITED: https://wiki.libsdl.org/SDL3/README-cmake] [CITED: https://github.com/libsdl-org/SDL/releases]
+**Primary recommendation:** Extend the existing half-dot/event core in place with an instance-owned dot-stepped PPU, bounded completed-frame copy, and button transitions; keep SDL3 3.4.18 in a separate optional macOS target using the imported CMake target. Use authored images for composition, source-qualified focused cases for mode/fetch/DMA timing, and a scripted original ROM for deterministic gameplay. [CITED: https://gbdev.io/pandocs/Rendering] [CITED: https://gbdev.io/pandocs/pixel_fifo] [CITED: https://wiki.libsdl.org/SDL3/README-cmake] [CITED: https://github.com/libsdl-org/SDL/releases]
 
 The JOYP matrix and active-low read behavior are documented, but the exact interrupt sampling/selection interaction requested by D-08 is not established by Pan Docs' JOYP chapter. Gekkio's hardware-research note reports synchronous sampling behavior, while not clearly identifying a DMG-CPU-B-specific setup. Treat that as a research lead, not a final expected-value oracle: planning should record this applicability limitation and define the direct selection/press/release cases while avoiding a stronger hardware claim than the source supports. [CITED: https://gbdev.io/pandocs/Joypad_Input] [CITED: https://gekkio.fi/blog/2017/game-boy-research-status/]
 
@@ -97,7 +97,7 @@ The environment has CMake 4.4.3 and Xcode 26.6; RGBDS and SDL3 are not installed
 | Library / component | Version | Purpose | Why standard |
 |---------------------|---------|---------|--------------|
 | Existing GabbaBoy C core and public API | C17 [VERIFIED: CMakeLists.txt:21-28; `target_compile_features(gabbaboy_core PUBLIC c_std_17)`; `set_target_properties(gabbaboy_core PROPERTIES C_EXTENSIONS OFF)`] | Own the PPU, JOYP, DMA, time, and bounded video/input API | This is the existing portable product boundary; preserve instance ownership and do not add SDL to core. [VERIFIED: include/gabbaboy/gabbaboy.h:92-114; `The opaque instance owns its mutable state and a private copy of a loaded ROM.`; `Copies events into a fixed 64-event per-instance queue.`] |
-| SDL3 | 3.4.16, current official release observed 2026-10-07 | Optional macOS keyboard/window/render/file-dialog adapter | SDL 3.2.0 introduced the needed logical-presentation, keyboard, and dialog APIs; 3.4.16 is the latest stable upstream release observed and contains those APIs. Pin this exact patch in opt-in CI, then verify its source archive digest. [CITED: https://github.com/libsdl-org/SDL/releases] [CITED: https://wiki.libsdl.org/SDL3/SDL_SetRenderLogicalPresentation] [CITED: https://wiki.libsdl.org/SDL3/SDL_KeyboardEvent] [CITED: https://wiki.libsdl.org/SDL3/SDL_ShowOpenFileDialog] |
+| SDL3 | 3.4.18, current official release observed 2026-10-07 | Optional macOS keyboard/window/render/file-dialog adapter | SDL 3.2.0 introduced the needed logical-presentation, keyboard, and dialog APIs; 3.4.18 is the latest stable upstream release observed and contains those APIs. Its release notes also include a macOS fix for windows lingering after `SDL_Quit()`, directly relevant to the target player. Pin this exact patch in opt-in CI, then verify its source archive digest. [CITED: https://github.com/libsdl-org/SDL/releases/tag/release-3.4.18] [CITED: https://wiki.libsdl.org/SDL3/SDL_SetRenderLogicalPresentation] [CITED: https://wiki.libsdl.org/SDL3/SDL_KeyboardEvent] [CITED: https://wiki.libsdl.org/SDL3/SDL_ShowOpenFileDialog] |
 | RGBDS | 1.0.1 | Reproduce the owned interactive fixture | Reuse the project's already locked assembler path; ordinary tests consume bytes and remain offline. [VERIFIED: fixtures/tracer/manifest.json:6-14; `"assembler": "RGBDS"`; `"version": "1.0.1"`; `"archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645"`] |
 
 ### Supporting
@@ -117,7 +117,7 @@ The environment has CMake 4.4.3 and Xcode 26.6; RGBDS and SDL3 are not installed
 
 **Installation / discovery:** Keep the routine core build unchanged and offline. When enabled, use an explicit SDL3 package source/version and `find_package(SDL3 CONFIG REQUIRED)`; do not use an unpinned `FetchContent` network fetch. The official upstream CMake integration documents shared/static config targets and macOS framework builds. [CITED: https://wiki.libsdl.org/SDL3/README-cmake]
 
-**Version verification:** SDL3 3.4.16 was the latest stable upstream release observed in the official releases page, published 2026-09-02; the release listed source/archive SHA-256 values. RGBDS 1.0.1 is the already pinned local fixture tool, but it is not installed in this environment. [CITED: https://github.com/libsdl-org/SDL/releases] [VERIFIED: fixtures/tracer/manifest.json:7-11; `"version": "1.0.1"`; `"archive": "rgbds-macos.zip"`; `"archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645"`]
+**Version verification:** SDL3 3.4.18 was the latest stable upstream release observed on 2026-10-07, published 2026-10-02. The official release lists the source archive SHA-256 `9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3`. This patch also fixes macOS windows lingering after `SDL_Quit()`, so it supersedes the earlier 3.4.16 recommendation for this macOS player. RGBDS 1.0.1 is the already pinned local fixture tool, but it is not installed in this environment. [CITED: https://github.com/libsdl-org/SDL/releases/tag/release-3.4.18] [VERIFIED: fixtures/tracer/manifest.json:7-11; `"version": "1.0.1"`; `"archive": "rgbds-macos.zip"`; `"archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645"`]
 
 ## Package Legitimacy Audit
 
@@ -125,7 +125,7 @@ SDL3 is a native upstream C library acquired as an explicitly pinned upstream re
 
 | Package | Registry | Age | Downloads | Source Repo | Verdict | Disposition |
 |---------|----------|-----|-----------|-------------|---------|-------------|
-| SDL3 3.4.16 | Official upstream source archive | Published 2026-09-02 | Not reported in consulted source | github.com/libsdl-org/SDL | Official source, checksum published | Use only for opt-in player build; verify archive bytes and include license notice |
+| SDL3 3.4.18 | Official upstream source archive | Published 2026-10-02 | Not reported in consulted source | github.com/libsdl-org/SDL | Official source, SHA-256 `9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3` | Use only for opt-in player build; verify archive bytes and include license notice |
 | RGBDS 1.0.1 | Official upstream release archive | Already pinned in project | Not reported in consulted source | github.com/gbdev/rgbds | Existing fixture tool | Reuse existing verified pin; no new dependency |
 
 **Packages removed due to SLOP verdict:** none; no registry package candidates were proposed.
@@ -253,7 +253,7 @@ Use `SDL_SetRenderLogicalPresentation(renderer, 160, 144, SDL_LOGICAL_PRESENTATI
 ```cmake
 option(GABBABOY_BUILD_PLAYER "Build optional SDL3 player" OFF)
 if(GABBABOY_BUILD_PLAYER)
-  find_package(SDL3 3.4.16 EXACT CONFIG REQUIRED)
+  find_package(SDL3 3.4.18 EXACT CONFIG REQUIRED)
   add_executable(gabbaboy-player src/player/main.c)
   target_link_libraries(gabbaboy-player PRIVATE GabbaBoy::core SDL3::SDL3)
 endif()
@@ -306,7 +306,7 @@ The API documents fixed capacity, absolute timestamps, stable equal-time order, 
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
 | A1 | The Gekkio 2017 JOYP interrupt observation is contextual only and does not establish DMG-CPU-B expected behavior. | Summary / Pattern 1 | Treating an unpinned observation as this profile's hardware truth could encode the wrong edge model. |
-| A2 | SDL3 3.4.16 package config is usable with the repository's CMake 3.25 floor and target macOS runner without additional project dependency changes. | Standard Stack | Configuration/linkage can fail or need an explicit runner/toolchain arrangement. |
+| A2 | SDL3 3.4.18 package config is usable with the repository's CMake 3.25 floor and target macOS runner without additional project dependency changes. | Standard Stack | Configuration/linkage can fail or need an explicit runner/toolchain arrangement. |
 | A3 | The macOS player can use SDL's built-in file dialog and built-in renderer for both display and legible status/help treatment without a separate text package. | Pattern 3 | If custom text rendering is inadequate, product accessibility/discoverability requires another project-owned implementation decision. |
 | A4 | An owned ROM can exercise all target composition assertions and a short deterministic gameplay sequence within the current declared CPU instruction scope. | Fixture / validation map | The fixture may require CPU functionality outside the existing emulator; scope/fixture mechanics would need adjustment. |
 | A5 | No physical DMG-CPU-B observation can be obtained in the current environment. | Summary / limitations | This environment has no physical hardware evidence; a later owner may add such evidence from a real device. |
@@ -319,7 +319,7 @@ The open questions below were converted into explicit plan gates. Their outcomes
 |-------|---------------------|----------------|
 | DMG-CPU-B JOYP interrupt sampling | **Unresolved hardware fact.** Pan Docs establishes active-low matrix selection; the available Gekkio observation is not pinned to DMG-CPU-B and is context only. No exact edge behavior is selected. | Before encoding JOYP IF edge/selection behavior, plan 03-04 must record a primary, model-applicable source and focused cases. If none is found, leave the IRQ behavior and VIDEO-03 completion blocked; do not substitute SDL behavior, a fixture, or another emulator. |
 | Dot-sensitive PPU edge scope | Implement the locked BG/window/object, LCD/STAT/fetch and DMA requirements using per-case source/model records. Treat uncertain sprite/window/FIFO and arbitration edges as explicit exclusions from claims until applicable evidence exists. | Plans 03-02 and 03-03 require the source matrix before exact timing/contention assertions; an unsupported edge cannot count as an eligible passing case or silently narrow VIDEO-01/02. |
-| SDL acquisition and artifact form | Use the optional SDL3 3.4.16 CMake package from an official immutable release source, checking its published digest before any opt-in provisioning. Package only a run-scoped preview bound to the tested revision with SDL notices and digests. | Plans 03-05/03-09 keep provisioning outside default configure, run the smoke from downloaded bytes, and make no signing/notarization claim. If a trusted immutable checksum or exact-head macOS runner is unavailable, the corresponding check remains pending. |
+| SDL acquisition and artifact form | Use the optional SDL3 3.4.18 CMake package from an official immutable release source, checking its published digest before any opt-in provisioning. Package only a run-scoped preview bound to the tested revision with SDL notices and digests. | Plans 03-05/03-09 keep provisioning outside default configure, run the smoke from downloaded bytes, and make no signing/notarization claim. If a trusted immutable checksum or exact-head macOS runner is unavailable, the corresponding check remains pending. |
 
 ## Environment Availability
 

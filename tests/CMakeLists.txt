@@ -206,6 +206,10 @@ add_test(NAME preview_package_smoke
     -DGBB_CONFIGURATION=$<CONFIG>
     -P ${PROJECT_SOURCE_DIR}/cmake/PreviewPackageSmoke.cmake)
 
+if(GABBABOY_BUILD_PLAYER)
+  add_subdirectory(player)
+endif()
+
 if(GBB_TEST_INSTALL_PREFIX AND EXISTS "${GBB_TEST_INSTALL_PREFIX}")
   get_filename_component(GBB_TEST_INSTALL_PREFIX_ABSOLUTE
     "${GBB_TEST_INSTALL_PREFIX}" ABSOLUTE BASE_DIR "${PROJECT_BINARY_DIR}")
