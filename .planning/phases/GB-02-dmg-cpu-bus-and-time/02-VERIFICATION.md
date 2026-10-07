@@ -1,12 +1,9 @@
 ---
 phase: GB-02-dmg-cpu-bus-and-time
-verified: 2026-10-06T21:56:50Z
-status: gaps_found
-score: 1/5 roadmap truths verified
+verified: 2026-10-07T12:39:59Z
+status: passed
+score: 5/5 roadmap truths verified
 covered_files:
-  - .github/scripts/verify-test-inventory.sh
-  - .github/workflows/ci.yml
-  - .github/workflows/fixture-repro.yml
   - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-01-PLAN.md
   - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-01-SUMMARY.md
   - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-02-PLAN.md
@@ -25,134 +22,60 @@ covered_files:
   - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-08-SUMMARY.md
   - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-09-PLAN.md
   - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-09-SUMMARY.md
-  - CMakeLists.txt
-  - README.md
-  - cmake/ExpectedTests.cmake
-  - cmake/VerifyMooneye.cmake
-  - fixtures/mooneye/FONT-LICENSE.txt
-  - fixtures/mooneye/LICENSE.txt
-  - fixtures/mooneye/SOURCES.md
-  - fixtures/mooneye/daa.gb
-  - fixtures/mooneye/font-source.c
-  - fixtures/mooneye/manifest.json
-  - fixtures/mooneye/tim00.gb
-  - fixtures/mooneye/tim00_div_trigger.gb
-  - fixtures/tracer/manifest.json
-  - fixtures/tracer/tracer.asm
-  - fixtures/tracer/tracer.gb
-  - include/gabbaboy/gabbaboy.h
-  - src/core/gabbaboy.c
-  - src/runner/main.c
+  - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-10-PLAN.md
+  - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-10-SUMMARY.md
+  - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-11-PLAN.md
+  - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-11-SUMMARY.md
+  - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-12-PLAN.md
+  - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-12-SUMMARY.md
+  - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-13-PLAN.md
+  - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-13-SUMMARY.md
+  - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-14-PLAN.md
+  - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-14-SUMMARY.md
+  - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-15-PLAN.md
+  - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-15-SUMMARY.md
+  - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-16-PLAN.md
+  - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-16-SUMMARY.md
+  - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-17-PLAN.md
+  - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-17-SUMMARY.md
+  - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-18-PLAN.md
+  - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-18-SUMMARY.md
   - tests/CMakeLists.txt
-  - tests/consumers/c/main.c
-  - tests/consumers/cpp/main.cpp
   - tests/expected-tests.txt
-  - tests/scripts/verify-phase2-installed.sh
-  - tests/test_api.c
-  - tests/test_bus.c
-  - tests/test_control.c
   - tests/test_cpu.c
-  - tests/test_diagnostics.c
-  - tests/test_events.c
-  - tests/test_loader.c
-  - tests/test_runner.c
-  - tests/test_serial.c
-  - tests/test_timer.c
-  - tests/test_tracer.c
-covered_digest: "v3:sha256:52418e7d4a9a52d65fd07b8c0d723764faeee5f39dcd747cd91c4fc360a017d1"
+covered_digest: "v3:sha256:594ba565963913973e72ff4e20cdc9406bde18b1e7279dc54f35d557fb0fc59a"
 behavior_unverified: 0
 overrides_applied: 0
-gaps:
-  - truth: "[CR-01] The declared post-boot DMG profile initializes F according to the loaded ROM header checksum."
-    status: failed
-    reason: "reset_state hard-codes F to 0x80. The declared profile requires F=0x80 for a zero header checksum and F=0xB0 for a nonzero checksum, including after reset."
-    artifacts:
-      - path: "src/core/gabbaboy.c"
-        issue: "reset_state sets F=0x80 without consulting the loaded ROM checksum."
-    missing:
-      - "Derive post-boot/reset F from the loaded ROM's checksum profile, with regression cases for zero and nonzero checksums."
-  - truth: "[CR-02] Unconditional RET and RETI read the stack at the declared timed bus phases."
-    status: failed
-    reason: "The shared RET/RETI branch uses the later stack-read offsets intended for taken conditional RET."
-    artifacts:
-      - path: "src/core/gabbaboy.c"
-        issue: "Unconditional RET/RETI call pop16 at offsets 16/24, while POP uses offsets 8/16."
-    missing:
-      - "Use POP-PC stack-read phases for RET/RETI; retain the additional condition-check cycle for taken RET cc."
-      - "Add independent bus-observer regressions for RET, RETI, and taken RET cc."
-  - truth: "[CR-05] The eligible Mooneye corpus excludes PPU-dependent cases and reaches the declared CPU/timer result protocol."
-    status: failed
-    reason: "D-09 excludes PPU-dependent source closures, but all three admitted closures reach common/lib/is_ppu_broken.s and read LY at FF44 before assertions and the LD B,B protocol. Rights and stored digests are recorded, but applicability admission is not valid and hosted byte reproduction fails. All three current runs stop unsupported."
-    artifacts:
-      - path: "fixtures/mooneye/manifest.json"
-        issue: "Three PPU-dependent source closures are admitted into the eligible denominator despite the D-09 exclusion."
-      - path: "fixtures/mooneye/SOURCES.md"
-        issue: "The LY/protocol dependency is documented as a gap, but the admitted closures remain unchanged."
-    missing:
-      - "Provide a source-qualified completion path or admit qualified replacement fixtures while retaining required nonzero CPU/timer coverage and strict gates; do not recover a pass by merely dropping failed IDs."
-      - "Reproduce and digest-check any changed fixture bytes, then require every eligible CPU/timer ROM to reach its real result protocol and pass the strict offline suite."
-  - truth: "[CR-03] A pending IME enable is not postponed by consecutive EI instructions."
-    status: failed
-    reason: "Each EI unconditionally resets ime_delay to 2. With EI; EI and a pending enabled interrupt, the second EI restarts the delay and allows the following opcode to execute before interrupt entry."
-    artifacts:
-      - path: "src/core/gabbaboy.c"
-        issue: "Opcode 0xFB assigns ime_delay=2 without preserving an already active EI delay."
-      - path: "tests/test_control.c"
-        issue: "EI delay cases cover EI+NOP and EI+DI, but not consecutive EI with a pending interrupt."
-    missing:
-      - "Preserve the scheduled enable across consecutive EI instructions and test vector entry before the next opcode."
-  - truth: "[CR-04] Interrupt diagnostics are emitted in nondecreasing timestamp order."
-    status: failed
-    reason: "Interrupt entry appends IF acknowledgement at start+8 before push16 advances devices through start+16; a timer diagnostic in that interval is appended later despite an earlier timestamp."
-    artifacts:
-      - path: "src/core/gabbaboy.c"
-        issue: "enter_interrupt observes IF at offset 8, then push16 advances the device timeline to offset 16."
-    missing:
-      - "Advance device diagnostics in timestamp order around IF acknowledgement and stack writes."
-      - "Add an interrupt-entry case with a timer deadline inside the entry window and assert adjacent diagnostic timestamps are nondecreasing."
-  - truth: "The Windows runner distinguishes missing-fixture and bad-digest failures from invalid manifest data."
-    status: failed
-    reason: "At current PR head a91d8e72a9dff186f342cf487a70b91b17f3193d, the Windows inventory reports invalid-manifest for both negative controls instead of their expected missing-fixture and bad-digest reasons. Manifest portability is broken on this supported CI lane. Raw Windows manifest bytes were not captured; line-ending sensitivity is only a hypothesis."
-    artifacts:
-      - path: "src/runner/main.c"
-        issue: "Manifest parsing/hashing rejects the Windows-consumed bytes before the missing-fixture and bad-digest checks can report their expected reasons."
-      - path: "tests/test_runner.c"
-        issue: "Windows negative controls fail for invalid-manifest, not the expected reason, in PR CI run 37536888483."
-      - path: ".github/workflows/ci.yml"
-        issue: "The required Windows native lane is red (93/99 pass)."
-    missing:
-      - "Capture and inspect the actual Windows manifest bytes; determine and fix a deterministic cross-platform byte/line-ending policy without weakening digest or malformed-manifest checks."
-      - "Make the missing-fixture and bad-digest controls pass on Windows with their intended distinct reasons, then rerun the Windows required inventory."
-  - truth: "The pinned WLA-DX recipe reproduces each admitted Mooneye ROM byte-for-byte across the supported build hosts."
-    status: failed
-    reason: "Hosted fixture reproduction fails on the DAA output: `cmp` reports a difference at byte 335, the first global checksum byte, and stops before timer comparisons. This is a reproducibility failure; the root cause is not established. A prior equivalent run was on PR head d5a0acc891de908f161bd6e8419a7901c9621cb6, not the current head."
-    artifacts:
-      - path: ".github/workflows/fixture-repro.yml"
-        issue: "Current-head run 37536888492 passes tracer reproduction but fails the Mooneye fixture reproduction job."
-      - path: "fixtures/mooneye/manifest.json"
-        issue: "The pinned recipe/source/digest set does not currently reproduce DAA bytes on the hosted Linux builder."
-      - path: "fixtures/mooneye/daa.gb"
-        issue: "Rebuilt DAA differs at byte 335; fixture digest cannot be revalidated through this hosted recipe."
-    missing:
-      - "Compare the rebuilt DAA bytes against the checked-in ROM and identify the exact build/source/toolchain cause; do not infer that line endings or a global checksum alone explain it."
-      - "Qualify one deterministic pinned build recipe across hosts and verify all ROM bytes and digests, including both timer fixtures, before claiming reproducibility."
+re_verification:
+  previous_status: gaps_found
+  previous_score: 4/5
+  gaps_closed:
+    - "D-01: Every documented legal unprefixed base opcode now has value-level semantic coverage, with branch, address, arithmetic-boundary, and timed-bus assertions."
+  gaps_remaining: []
+  regressions: []
+verification_history:
+  - verified: 2026-10-07T08:12:48Z
+    status: gaps_found
+    score: 4/5
+    gap: "D-01 base-opcode matrix lacked sufficiently broad value-level semantic assertions."
+  - verified: 2026-10-07T08:12:48Z
+    status: gaps_found
+    score: 1/5
+    gaps_closed_later:
+      - "CR-01 through CR-05, Windows manifest distinctions, and deterministic fixture-byte qualification."
+  - verified: 2026-10-07T12:39:59Z
+    status: passed
+    score: 5/5
+    gap_closed: "D-01/CPU-01 base-opcode semantic evidence."
 ---
 
 # Phase 2: DMG CPU, Bus, and Time Verification Report
 
 **Phase Goal:** As a core integrator, I want to run the declared DMG instruction and timing behavior deterministically, so that I can reproduce diagnostic failures.
-**Verified:** 2026-10-06T21:56:50Z
-**Status:** gaps_found
-**Re-verification:** No — initial verification
-
-## User Flow Coverage
-
-| Step | Expected | Evidence in codebase | Status |
-|---|---|---|---|
-| Load and run through the public core | An integrator can load a declared ROM-only DMG profile and execute guest instructions within bounded calls. | Public API, ROM validation, CPU/bus implementation, and installed C/C++ consumers are present. The fresh relocated Linux check passed all five installed runner/C/C++ checks. | ✓ VERIFIED |
-| Observe deterministic instruction, device, and partition behavior | Repeating an equal timestamped input/time workload across partitions yields the same supported state and outputs. | `tests/test_events.c` covers equal-time queue ordering, atomic rejection, partition equality and device deadlines; timer/serial/cpu focused cases pass. Known CPU profile and RET timing defects remain, so the full declared profile behavior is not achieved. | ✗ FAILED |
-| Reproduce diagnostic corpus results | The pinned CPU/timer cases reach their declared guest result protocol and produce retained evidence. | At revision `c583e338a48f70e83573da700722dcbefa4b705a`, normal and ASan/UBSan Linux runs each execute 94 cases: 90 pass, 4 fail, 0 skip. The three ROMs stop as unsupported at the common LY `FF44` read; the strict corpus gate exits 8. | ✗ FAILED |
-| Reproduce fixture bytes from pinned sources | Maintainers can regenerate all checked-in fixture bytes exactly with the pinned recipes. | Current-head fixture run 37536888492 fails Mooneye reproduction while tracer reproduction passes. Its earlier related run 37536827063 reports DAA `cmp` difference at byte 335 and does not reach timer comparisons; that earlier run used a different PR head. | ✗ FAILED |
+**Verified:** 2026-10-07T12:39:59Z
+**Implementation revision:** `cf28e90270be24d9528bfa8a1e4055a2b8485989`; current branch HEAD `8891b4d9965338954ec6cfe0133270761e9b34dc` adds only the audited security document.
+**Status:** passed
+**Re-verification:** Yes — after closure of the prior D-01/CPU-01 gap by Plan 02-18.
 
 ## Goal Achievement
 
@@ -160,131 +83,122 @@ gaps:
 
 | # | Truth | Status | Evidence |
 |---|---|---|---|
-| 1 | The declared DMG profile produces expected base/CB instruction, flag, arithmetic, address, and bus-access timing results, with explicit illegal-opcode behavior. (CPU-01) | ✗ FAILED | Source review at `src/core/gabbaboy.c:119-120,655-658` shows startup F ignores the ROM header checksum and unconditional RET/RETI use offsets 16/24. RGBDS v1.0.1 documents RET/RETI as four cycles and taken RET cc as five; RET/RETI are POP-PC paths. Existing broad tests pass but do not check these phases. [Pinned RGBDS opcode reference](https://rgbds.gbdev.io/docs/v1.0.1/gbz80.7). |
-| 2 | Model-applicable cases observe expected interrupt entry, EI delay, HALT/HALT-bug, STOP, reset, and deterministic post-boot results. (CPU-02) | ✗ FAILED | `tests/test_control.c` exercises a single EI followed by a NOP and an interrupt, but not consecutive EI. `src/core/gabbaboy.c:693,851` resets then decrements the delay, so EI;EI extends the pending enable. `reset_state` also hard-codes F. |
-| 3 | Guests observe the declared memory mapping, divider/timer edges and reload races, and disconnected serial behavior at timed access boundaries. (CPU-03) | ✓ VERIFIED (owned cases only; requirement remains pending) | Owned bus, timer and serial test families pass in the 90/94 normal run and cover supported map, divider edge/reload collisions and disconnected serial behavior. Fixture rights, digests and byte reproduction are valid, but the admitted source closures violate D-09's PPU-dependency exclusion and therefore do not qualify applicability. CPU-03 remains pending while the phase gate fails. |
-| 4 | Equal timestamped inputs and elapsed emulated time produce equal supported state/output across different run partitions; LCD-off, HALT/STOP, lockup, and full output capacity return within the caller's bounded contract. (CPU-04) | ✗ FAILED | Event partition and bounded outcome cases pass, but interrupt diagnostic records can be out of chronological order: `enter_interrupt` appends IF at `start+8` before `push16` advances devices through `start+16` (`src/core/gabbaboy.c:711-717`). The public API promises chronological diagnostics. |
-| 5 | A headless run reports pass/fail/timeout/unsupported against a pinned eligible CPU/timer corpus with model/boot/protocol identity and sufficient retained trace evidence to reproduce failures. (CPU-05) | ✗ FAILED | Runner controls cover the four status classes and malformed/missing fixture paths. On the actual fixed set, `final.log` records `eligible=3 executed=3 status=fail`; DAA, tim00, and tim00-div-trigger each report `status=unsupported`, `stop=core-stop`, with 128 recent diagnostics, before reaching the LD B,B protocol. CTest exits 8. |
+| 1 | Declared DMG profile produces expected base/CB instruction, flag, arithmetic, address and bus-timing results, with explicit illegal-opcode behavior. (CPU-01) | ✓ VERIFIED | The new legal-base matrix checks full register/flag/SP/PC post-state for every documented legal base encoding against a separately authored expected-state function. Additional tests enumerate taken and untaken JR/JP/CALL/RET conditions, arithmetic/carry boundaries, address effects, stack bytes, and timed observer values/order/half-dot offsets. Eleven unused opcodes remain separate lockup cases. All five focused CPU base tests passed; see test-quality audit below. |
+| 2 | Model-applicable cases observe expected interrupt entry, EI delay, HALT/HALT-bug, STOP, reset and deterministic post-boot results. (CPU-02) | ✓ VERIFIED | Prior gap closure regressions cover checksum-selected F on load/reset, RET/RETI phase timing, consecutive EI, interrupt ordering/priority, HALT/HALT-bug, STOP, lockup persistence and reset. These passed the recorded full local inventory and exact-revision hosted gates. |
+| 3 | Guests observe declared mapping, divider/timer edges/reload races, and disconnected serial at timed boundaries. (CPU-03) | ✓ VERIFIED | Direct bus, timer selector/write/reload/collision, and disconnected serial regressions assert guest-visible values and timed boundaries. Strict corpus includes two timer cases and passes. |
+| 4 | Equal timestamped inputs/time yield equal supported state/output across partitions; HALT/STOP/lockup/output exhaustion remain bounded. (CPU-04) | ✓ VERIFIED | Queue order/atomicity, partition snapshots, deadline, HALT timer partition, diagnostic chronology, output-capacity canary, and distinct stop results are covered by named tests and the complete local inventory. |
+| 5 | Headless runs report pass/fail/timeout/unsupported against a pinned eligible CPU/timer corpus with model/boot/protocol identity and replay evidence. (CPU-05) | ✓ VERIFIED | The fixed denominator is three derived reporting closures (one CPU, two timer); runner verifies callback then exact result PC, source/tool/patch/ROM digests, bootless DMG-CPU-B profile, finite budget, and bounded diagnostics. The exact hosted fixture run passes. Original upstream PPU-dependent reporting paths remain excluded and are not described as hardware-qualified. |
 
-**Score:** 1/5 roadmap truths verified; behavior-unverified: 0.
+**Score:** 5/5 roadmap truths verified; behavior-unverified: 0.
 
-### Plan Must-Haves (Deduplicated)
+### Re-verification of Prior Gaps and Plan Must-Haves
 
-| Plan truth | Status | Evidence |
+The earlier verification first reported seven implementation/provenance gaps at 1/5. Those were closed and carried into the 2026-10-07 08:12 verification, which scored 4/5 and isolated D-01. Plan 02-18 closes that remaining gap. The original 1/5 and subsequent 4/5 outcomes are retained in `verification_history` above.
+
+| Prior plan truth | Status | Evidence |
 |---|---|---|
-| D-01 base instruction, CB semantics, and model-specific interrupt behavior | ✗ FAILED | RET/RETI timed stack phases and startup flags are wrong; consecutive EI restarts the delay. CB matrix and other instruction coverage pass. |
-| D-02 unused opcodes lock persistently; reset clears lockup | ✓ VERIFIED | `tests/test_cpu.c` illegal-lockup case and `tests/test_control.c` reset-lockup case pass in the reported full run. |
-| D-03 ROM-only WRAM/echo/HRAM mapping and unsupported absent-cartridge reads | ✓ VERIFIED | `tests/test_bus.c` runs guest WRAM/echo/HRAM and absent cartridge cases; unsupported reads are explicit. |
-| D-04 divider falling edges, writes, reload and collision rules | ✓ VERIFIED | `tests/test_timer.c` selector, DIV/TAC, overflow/reload, TIMA/TMA collision cases pass in the full run. |
-| D-05 disconnected serial behavior; runner alone interprets LD B,B | ✓ VERIFIED | `tests/test_serial.c` internal/external clock cases pass; core decodes LD B,B as ordinary instruction while `src/runner/main.c` recognizes the result protocol. |
-| D-06 full instruction/deadline preflight preserves state and consumes no time on incomplete operations | ✓ VERIFIED | Bus, conditional-stack, CB-budget, event-boundary, timer-mid-instruction, and diagnostic-capacity cases pass; bounded admission paths are present in `gbb_run`/`gbb_run_ex`. |
-| D-07 timestamped queue validation and partition equality | ✓ VERIFIED | `tests/test_events.c` covers equal timestamp caller order, atomic invalid/excess batch rejection and equal-elapsed partition behavior; cases pass. |
-| D-08 bounded lockup, HALT/STOP, unsupported bus and output-full outcomes | ✓ VERIFIED | Control, bus and output-capacity tests pass; outcomes are distinct and bounded. |
-| D-09 nonzero immutable eligible set independently admitted by source/license/model/boot/protocol review and excluding PPU-dependent closures | ✗ FAILED | The entries have recorded sources, rights and stored digests, but all three admitted closures include `is_ppu_broken.s`, which reads LY (`FF44`) before assertions/protocol. The context excludes PPU-dependent closures from the denominator, so applicability admission is invalid. Hosted byte reproduction is independently failing under D-10. |
-| D-10 pinned source/include/asset closure, builder, notices, digests, profile, boot, protocol, budget and reproducible bytes | ✗ FAILED | Manifest provenance and rights are recorded, but hosted Mooneye reproduction fails at DAA byte 335; timer ROM byte comparisons are not reached. Windows also rejects manifest bytes before expected negative-control outcomes. |
-| D-11 distinct runner statuses, eligible/executed counts and bounded diagnostic receipts | ✗ FAILED | Linux controls and receipts work, but hosted Windows reports invalid-manifest for missing-fixture and bad-digest controls instead of their distinct expected reasons. |
-| D-12 installed C/C++ public consumers and offline tests | ✓ VERIFIED | Relocated install helper and fresh installed consumers pass. The Linux suite used checked-in bytes with no network dependency. |
+| D-01: Legal base instruction registers, flags, addresses, branch paths and timed bus phases are tested. | ✓ VERIFIED | `base_matrix` loops over all 256 encodings, separately classifies the eleven illegal bytes, and checks all architectural registers, flags, SP, and PC for every legal opcode. `base_conditional_paths` covers taken/untaken paths for all conditions in JR/JP/CALL/RET. `base_arithmetic_edges` covers ADC/SBC/CP, DAA, INC/DEC, 16-bit and signed-SP arithmetic, and rotate boundaries. `base_address_effects` checks indirect, HL post-update, high-memory, absolute, read-modify-write, stack and bus observer timing/value/order. Expected states are authored in test code and do not read output to populate the oracle. |
+| D-02: Unused opcodes lock persistently with PC/opcode until reset. | ✓ VERIFIED | `illegal_lockup` asserts zero consumed time, exact PC/opcode, persistence on a second run, and reset behavior; the matrix keeps illegal cases distinct. |
+| D-03: ROM-only WRAM/echo/HRAM and absent-cartridge behavior are explicit. | ✓ VERIFIED | Bus guest and unsupported-read tests assert mapping and bounded unsupported behavior; peek scope is documented. |
+| D-04: Divider falling edges, writes, reload and collision rules are tested. | ✓ VERIFIED | Timer selector, DIV/TAC writes, overflow/reload and TIMA/TMA collision cases assert exact state/timing. |
+| D-05: Disconnected serial behavior is explicit; host runner interprets LD B,B. | ✓ VERIFIED | Serial regressions and runner protocol tests distinguish core instruction execution from host callback/result interpretation. |
+| D-06: Full operation/deadline preflight preserves state and consumes no time on incomplete operations. | ✓ VERIFIED | Bus, stack, CB, event, timer and diagnostic-capacity boundary tests compare state snapshots/canaries and zero-consumption outcomes. |
+| D-07: Timestamped queue validation and partition equality hold. | ✓ VERIFIED | Equal-time order, atomic rejection and partition snapshot tests assert resulting state/output. |
+| D-08: Lockup, HALT/STOP, unsupported bus and output-full results are bounded/distinct. | ✓ VERIFIED | Named public result and output-capacity cases assert stop reasons and caller-bound behavior. |
+| D-09/D-10: Fixed eligible corpus is reviewed and pinned candidate fixtures reproduce exactly. | ✓ VERIFIED | Eligibility/rights/source provenance, callback protocol, immutable original blobs, candidate digests, and local/hosted byte identity are recorded. The original PPU-dependent ROM result path remains explicitly ineligible. |
+| D-11/D-12 and Plans 02-16/02-17: Runner statuses, denominator, relocated consumers, exact-host evidence, fixture binding. | ✓ VERIFIED | Runner negative controls, strict denominator, installed C/C++ consumers and hosted artifact binding pass. The prior verification documents the evidence and limitations; a quick regression check found the relevant artifacts still present. |
 
-## Required Artifacts
-
-The runtime artifact-query verbs returned `total: 0` for the phase PLAN files, so they provided no per-artifact evaluation. I checked the declared artifacts and their use directly.
+### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |---|---|---|---|
-| `include/gabbaboy/gabbaboy.h` | Public bounded CPU/time/API contract | ✓ VERIFIED | Substantive API declarations and contracts are consumed by core, runner, and installed C/C++ examples. |
-| `src/core/gabbaboy.c` | CPU, bus, timer, serial, interrupt, event and diagnostic implementation | ✗ FAILED | Substantive and wired, but has four core correctness defects described in CR-01 through CR-04. |
-| `tests/test_cpu.c`, `tests/test_control.c` | CPU matrices and state/timing regressions | ⚠️ PARTIAL | Registered and executed, but miss RET/RETI stack phases and repeated-EI behavior; tests therefore cannot protect those claims. |
-| `tests/test_bus.c`, `tests/test_timer.c`, `tests/test_serial.c`, `tests/test_events.c` | Mapped bus, timed devices and deterministic events | ✓ VERIFIED | Real guest programs drive supported address/device paths; named focused cases pass. |
-| `fixtures/mooneye/manifest.json`, `fixtures/mooneye/*.gb` | Pinned, applicable corpus, source identity and protocol | ✗ FAILED | Sources, rights and checked-in digest records exist; applicability is invalid because all three closures are PPU-dependent, and current hosted reproduction fails for DAA before timer comparisons. Runtime also stops before protocol completion. |
-| `src/runner/main.c`, `tests/test_runner.c`, `tests/test_diagnostics.c` | Distinct statuses and replayable bounded receipts | ⚠️ PARTIAL | Correctly reports unsupported and emits bounded history, but current admitted ROMs all fail before protocol results. |
-| `tests/scripts/verify-phase2-installed.sh`, C/C++ consumers | Relocated public package/time consumer checks | ✓ VERIFIED | Fresh relocated Linux install executed the installed runner, C consumer and C++ consumer checks successfully. |
-| `.github/workflows/ci.yml`, `tests/expected-tests.txt`, `.github/scripts/verify-test-inventory.sh` | Fail-closed CI inventory and sanitizer checks | ✗ FAILED | At PR head `a91d8e72a9dff186f342cf487a70b91b17f3193d`, hosted CI run 37536888483 fails required Linux, macOS, sanitizer, CMake-floor and Windows lanes. The inventory correctly rejects failures; this revision has no green qualification. |
-| `.github/workflows/fixture-repro.yml` | Rebuild pinned fixture bytes and compare them to checked-in digests | ✗ FAILED | Current-head run 37536888492 passes RGBDS tracer reproduction but fails the Mooneye reproduction job; the earlier detailed run finds DAA differs at byte 335 before timers. |
+| `src/core/gabbaboy.c`, `include/gabbaboy/gabbaboy.h` | CPU, bus, timer, serial, interrupt, event behavior and public bounded contract | ✓ VERIFIED | Substantive core is wired through `gbb_run`; existing direct regressions and consumer tests exercise it. Plan 02-18 makes no core/API changes. |
+| `tests/test_cpu.c` | CPU semantic, flag, address and timing evidence | ✓ VERIFIED | New cases are registered in CTest and dispatch through `main`; their implementations use fixed test programs and expected values. Focused tests passed 5/5. |
+| `tests/CMakeLists.txt`, `tests/expected-tests.txt` | Registered and fail-closed required inventory | ✓ VERIFIED | Three new named tests are registered and required; saved full-suite report verifies 104 executed with zero skipped. |
+| Runner, manifest, fixture provenance and CI scripts | Strict source-qualified corpus and exact-revision evidence | ✓ VERIFIED | Prior artifacts remain present and tied to passing hosted CI and fixture runs for the implementation SHA. |
+| Relocated installed package and C/C++ consumers | Public package adoption path | ✓ VERIFIED | Recorded installed verification passed 109/109 after fresh relocation. |
 
-## Key Link Verification
+### Key Link Verification
 
 | From | To | Via | Status | Details |
 |---|---|---|---|---|
-| `gbb_run` | timed `read8`/`write8` and bus outcome | instruction preflight then timed bus phases | ✓ WIRED | Real guest bus cases exercise state, bus access, and unsupported stop paths. |
-| opcode metadata | preflight cost | decoder metadata and instruction cost | ✓ WIRED | Full costs are computed before execution; whole-operation bounds cases pass. |
-| instruction execution | timed CPU/timer phases | bus observer and device timeline | ⚠️ PARTIAL | RET/RETI select wrong phases; interrupt entry appends the IF diagnostic before advancing device time to later stack phases. |
-| IE/IF/IME | interrupt preflight, stack and vector | `pending_interrupt` / `enter_interrupt` | ⚠️ PARTIAL | Vector/stack path is exercised; repeated EI has incorrect delay semantics and diagnostic order can break. |
-| timestamp queue | instance state and STOP wake/device deadlines | queue admission then event timeline | ✓ WIRED | Queue and partition cases pass with instance-owned inputs. |
-| timer/serial registers | falling edges, reload and serial completion | timed bus writes and `advance_devices_to` | ✓ WIRED | Named timer/serial tests exercise real decoded writes and timed callbacks. |
-| pinned fixture sources | checked-in ROM/digest and offline CTest | WLA-DX recipe, verifier and manifest | ⚠️ PARTIAL | Recipe, source and manifest are connected, but current hosted Mooneye reproduction fails at DAA byte 335; timer comparisons are not reached. |
-| eligible manifest | runner denominator and per-ROM result | `run_one` / suite inventory | ✓ WIRED | Denominator remains 3 and executed count is 3; each result is unsupported, so qualification fails honestly. |
-| fixture bytes | runner protocol and diagnostic receipt | load, guest execution, LD B,B result and recent trace | ⚠️ PARTIAL | Real ROM bytes flow through the core and receipts retain history, but unsupported LY prevents the declared protocol stage. |
-| installed `GabbaBoy::core` | C/C++ consumers and timestamped API | relocated package configure/link/run | ✓ WIRED | Fresh installed consumer checks passed. |
-| CTest inventory | CI result | expected test list and JUnit failure gate | ✓ WIRED | The gate detects failed rows and exits nonzero; current corpus failures therefore stop qualification. |
+| `gbb_run` | Timed CPU/bus/device helpers | Preflight, timed access and device advancement | ✓ WIRED | Direct guest bus/timer/serial regressions exercise the shared run path. |
+| Base/CB decoder | Execution, trace and timing | Decode metadata and instruction dispatch | ✓ WIRED | The legal base matrix asserts each encoding's resulting state and cost; CB matrix asserts all 256 CB operations. |
+| Test executable cases | CTest and expected inventory | CMake registration, argv dispatch, inventory names | ✓ WIRED | Each of the five base semantic case names is present in registration, dispatch, and inventory; all five pass. |
+| Candidate source/patch/tool | Checked-in ROM bytes | Pinned recipe, hosted qualification and digest lock | ✓ WIRED | Local and hosted candidate byte arrays were compared at the qualification head, and the exact current PR fixture run passed. |
+| Manifest | Strict runner result | Fixed cases and callback/result protocol | ✓ WIRED | Runner emits pass only after the callback and exact result breakpoint; fixed eligible denominator remains 3. |
+| Installed target | C/C++ external consumers | Relocated configure/link/run | ✓ WIRED | Fresh relocated installation and both consumers pass. |
 
-## Data-Flow Trace (Level 4)
+### Data-Flow Trace
 
-| Artifact | Data variable | Source | Produces real data | Status |
+| Artifact | Data | Source | Real data | Status |
 |---|---|---|---|---|
-| Runner → core | loaded ROM and machine state | Checked-in, digest-verified fixture bytes pass through `gbb_load_rom` and the decoder/bus | Yes; no synthetic pass data | ✓ FLOWING |
-| Core → diagnostic records | instruction, bus, timer, and result/stop state | Per-call caller-owned output populated during actual execution | Yes; failing cases retain 128 recent records | ✓ FLOWING, with chronological-order defect during interrupt entry |
-| Manifest → suite result | eligible/executed counts and each protocol result | Fixed three-entry manifest-driven loop | Yes; output states 3 eligible, 3 executed, suite fail | ✓ FLOWING, but required protocol is unreachable |
+| Test vectors → core | Opcode bytes, operands and initial guest state | Test-authored finite ROM programs | Yes; deterministic guest execution | ✓ FLOWING |
+| Core → semantic assertions | Registers, flags, SP, PC, bus events | Public trace records and test observer after execution | Yes; asserted against separately authored expected values | ✓ FLOWING |
+| Runner → receipt | ROM execution status, callback/result PC, time and diagnostics | Digest-checked fixture bytes through public core | Yes | ✓ FLOWING |
+| Installed consumers → package | Public API behavior | Fresh relocated install | Yes | ✓ FLOWING |
 
-## Behavioral Spot-Checks
+### Behavioral Spot-Checks
 
-| Behavior | Command/evidence | Result | Status |
+| Behavior | Command | Result | Status |
 |---|---|---|---|
-| Full normal Linux suite | `/private/tmp/gabbaboy-phase2-boundary-normal/final.log`, revision `c583e338a48f70e83573da700722dcbefa4b705a` | 90/94 pass, 4 fail, 0 skipped; CTest exit 8. Failures: required suite and all three individual Mooneye cases. | ✗ FAIL |
-| Full Linux ASan/UBSan suite | Supplied independent run evidence for the same source revision | 90/94 pass, same four corpus failures, 0 skipped; no sanitizer finding. | ✗ FAIL |
-| Relocated installed qualification | `/private/tmp/gabbaboy-boundary-helper-final.log` | 95/99 pass, same four corpus failures; all five installed runner/C/C++ checks pass; helper exits 8 and stops. | ✗ FAIL |
-| Current-head hosted CI | [PR run 37536888483](https://github.com/szTheory/gabbaboy/actions/runs/37536888483), `a91d8e72a9dff186f342cf487a70b91b17f3193d` | Linux/macOS 95/99, ASan/UBSan 90/94, CMake floor 90/94, Windows 93/99; all lanes fail. Windows also misclassifies two negative controls. Required aggregate rejects failed lanes. | ✗ FAIL |
-| Current-head fixture reproduction | [Fixture run 37536888492](https://github.com/szTheory/gabbaboy/actions/runs/37536888492) | Tracer reproduction passes; Mooneye reproduction fails. | ✗ FAIL |
-| Prior detailed Mooneye reproduction | [Fixture run 37536827063](https://github.com/szTheory/gabbaboy/actions/runs/37536827063), prior head `d5a0acc891de908f161bd6e8419a7901c9621cb6` | DAA comparison differs at byte 335, the first global checksum byte; timer comparisons are not reached. This is prior-head evidence, not proof of current-head byte details or root cause. | ✗ FAIL |
-| Required corpus protocol | Normal log and installed helper receipts | All three report `status=unsupported`; common `quit.s` path reads LY `FF44` before the LD B,B result signature. Fixed denominator remains 3/3, with suite status fail. | ✗ FAIL |
-| RET/RETI phase timing | `src/core/gabbaboy.c:655-658`, compared with pinned RGBDS instruction reference | Shared implementation calls `pop16(...,16,24)` for unconditional RET/RETI; POP uses `8,16`; official reference identifies RET/RETI as four-cycle POP-PC forms and taken RET cc as five cycles. Existing tests do not assert these phases. | ✗ FAIL |
-| Consecutive EI | `src/core/gabbaboy.c:693,851`; `tests/test_control.c:72-90` | EI resets delay to 2 on each opcode; current regression covers EI+NOP and EI+DI, not EI+EI. The second EI postpones enable. | ✗ FAIL |
-| Interrupt diagnostic ordering | `src/core/gabbaboy.c:711-717` | IF record at offset 8 is appended before `push16` advances devices through offset 16. A timer record in that interval can be appended later with an earlier timestamp. | ✗ FAIL |
-| Post-boot F profile | `src/core/gabbaboy.c:119-120`; README profile definition | Reset always sets F to `0x80`; declared profile selects `0x80` for zero checksum and `0xB0` for nonzero checksum. | ✗ FAIL |
+| New base semantic cases | `ctest --test-dir build --output-on-failure --no-tests=error -R '^cpu_base_(matrix|conditional_paths|arithmetic_edges|address_effects|semantic_tracer)$'` | 5/5 passed | ✓ PASS |
+| Exact saved core inventory | `bash .github/scripts/verify-test-inventory.sh build/phase2-ctest.xml tests/expected-tests.txt --core-only` | 104 executed; none skipped | ✓ PASS |
+| Relocated installed inventory | `bash tests/scripts/verify-phase2-installed.sh` (recorded Plan 02-18 evidence) | 109/109 passed, including installed C/C++ consumers | ✓ PASS |
+| Exact hosted CI revision | `bash tests/scripts/verify-phase2-hosted.sh` (recorded Plan 02-18 evidence) | Implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`; CI run 37620710587 passed | ✓ PASS |
+| Exact hosted fixture reproduction | Included in exact hosted gate | Run 37620710600 passed | ✓ PASS |
 
-## Probe Execution
+Hosted evidence is attributed to the exact implementation SHA; the current branch head `8891b4d9965338954ec6cfe0133270761e9b34dc` adds only the audited security document, so it does not alter the tested source revision. The temporary upstream CMake download failure was rerun successfully on the same SHA.
 
-No `probe-*.sh` paths are declared by the plans or discovered in the project. The strict CTest suite and installed helper are the phase's runnable acceptance probes; both were executed in independent Linux builds and failed on the same four corpus cases. No substitute probe was used.
+### Probe Execution
+
+The candidate protocol probe was declared by earlier active plans and is recorded as independently run by the previous verification. Plan 02-18 adds no probe-based acceptance.
 
 | Probe | Command | Result | Status |
 |---|---|---|---|
-| Normal and ASan/UBSan full suite | Linux phase2 CTest inventories | Same four Mooneye failures; 90/94 pass in each run | FAILED |
-| Installed package helper | `bash tests/scripts/verify-phase2-installed.sh` in Linux AMD64 container | 95/99 pass; helper rejects failed suite; installed consumer cases themselves pass | FAILED |
-| Current-head Windows negative controls | PR CI run 37536888483 at `a91d8e72a9dff186f342cf487a70b91b17f3193d` | 93/99 pass; missing-fixture and bad-digest controls report invalid-manifest instead of their expected distinct reasons. Raw Windows manifest bytes were not captured; line endings remain a hypothesis. | FAILED |
-| Hosted fixture byte reproduction | Current-head run 37536888492; detailed prior-head run 37536827063 | Current run fails Mooneye reproduction. Prior detailed run shows DAA differs at byte 335 and does not reach timer comparisons. Root cause is unconfirmed. | FAILED |
+| Candidate protocol/PPU independence | `bash tests/scripts/probe-mooneye-candidate.sh` | Three positive cases plus induced failure; callback/result ordering correct; zero PPU access | PASS |
+| Callback-order negative control | `bash tests/scripts/probe-mooneye-candidate.sh --self-test-order` | Accepts valid order and rejects callback-after-result | PASS |
 
-## Requirements Coverage
+### Test Quality Audit
+
+| Test File / Area | Requirement | Active | Assertion and oracle review | Verdict |
+|---|---|---:|---|---|
+| `tests/test_cpu.c:base_matrix` | CPU-01 / D-01 | Yes | Iterates every byte, separates all eleven illegal encodings, and compares legal instruction post-state to expected values. The expected-state helper derives values from test setup and opcode contract, not from the observed trace. | Adequate |
+| `base_conditional_paths` | CPU-01 / D-01 | Yes | Exercises both outcomes for NZ/Z/NC/C in JR, JP, CALL and RET; checks flags, PC, SP, path cost, stack bytes and timed accesses. | Adequate |
+| `base_arithmetic_edges` | CPU-01 / D-01 | Yes | Independent expected vectors cover ADC/SBC carry and half-carry/borrow, CP, DAA, INC/DEC, ADD HL, signed SP offsets and rotations. | Adequate |
+| `base_address_effects` | CPU-01 / D-01 | Yes | Checks indirect loads/stores, HL post-increment/decrement, high-memory/absolute access, read-modify-write, exact bus address/direction/value/order/time, and memory result. | Adequate |
+| `illegal_lockup` and base matrix holes | CPU-01 / D-02 | Yes | Eleven illegal bytes remain distinct from legal semantic expectations; lockup persistence/reset is asserted. | Adequate |
+| Existing control, bus, timer, serial, event, runner and CB tests | CPU-02..CPU-05 | Yes | Assertions cover guest-visible state, traces, timing, bounded outcomes, protocol and fixed corpus behavior. | Adequate |
+
+Disconfirmation pass: a test that could pass without proving its named behavior was addressed by checking the new state oracle against authored data and verifying the executable is both CTest-registered and included in the expected inventory. The error/negative paths remain covered by illegal-opcode lockup, branch untaken paths, induced runner failure, malformed manifest/digest controls, unsupported bus behavior, and bounded-capacity cases. No unresolved blocker was found.
+
+### Requirements Coverage
 
 | Requirement | Source plans | Description | Status | Evidence |
 |---|---|---|---|---|
-| CPU-01 | 02-02, 02-03, 02-07, 02-09 | Correct tested base/CB semantics, flags, addresses and bus timing; explicit illegal behavior | BLOCKED | The base matrix misses wrong RET/RETI bus phases, and startup F is profile-inaccurate. Lockup and CB coverage pass but do not satisfy the whole contract. |
-| CPU-02 | 02-04, 02-06, 02-09 | Interrupt, EI delay, HALT/HALT-bug, STOP, reset and deterministic post-boot behavior | BLOCKED | Repeated EI postpones IME; post-boot F ignores checksum. Other control tests passing cannot close those required states. |
-| CPU-03 | 02-01, 02-05, 02-06, 02-07, 02-09 | Declared memory map, divider/timer edges/reload races and disconnected serial behavior | BLOCKED — requirement remains pending | Owned bus/timer/serial cases pass for the declared implementation paths, but the required eligible set is not validly admitted: timer ROM closures are PPU-dependent. This supports the owned-case verdict above but does not complete CPU-03 qualification. |
-| CPU-04 | 02-01, 02-02, 02-04, 02-06, 02-08, 02-09 | Partition determinism and bounded LCD-off/HALT/STOP/lockup/output outcomes | BLOCKED | Event partitions and bounded stops pass, but diagnostics can be returned out of timestamp order during interrupt entry, violating deterministic caller evidence. |
-| CPU-05 | 02-07, 02-08, 02-09 | Pinned CPU/timer corpus reports scoped results and retained replay evidence | BLOCKED | The admitted closures are PPU-dependent and stop unsupported before protocol completion; hosted Windows misclassifies negative controls, and current hosted fixture reproduction fails byte comparison. Strict suite and required CI are red. |
+| CPU-01 | 02-02, 02-03, 02-07, 02-09, 02-10, 02-16, 02-17, 02-18 | Base/CB semantics, flags, addresses, timing, explicit illegal behavior | SATISFIED | All legal base opcode state assertions, CB value matrix, branch/address/timed-bus cases, and eleven illegal lockups are covered; full/local and exact hosted checks pass. |
+| CPU-02 | 02-04, 02-06, 02-09, 02-10, 02-11, 02-16 | Interrupts, EI, HALT/STOP, reset and bootless profile | SATISFIED | Focused model-applicable regressions pass in the verified inventory. |
+| CPU-03 | 02-01, 02-05, 02-06, 02-07, 02-09, 02-11, 02-14, 02-16 | Memory map, timer races and disconnected serial | SATISFIED | Direct bus/device tests and two eligible timer diagnostics pass. |
+| CPU-04 | 02-01, 02-02, 02-04, 02-06, 02-08, 02-09, 02-10, 02-11, 02-16 | Partition equivalence and bounded outcomes | SATISFIED | Partition comparisons and distinct bounded-result tests pass. |
+| CPU-05 | 02-07, 02-08, 02-09, 02-14, 02-16, 02-17 | Fixed eligible corpus, honest statuses and replay evidence | SATISFIED | Three-case fixed denominator, protocol receipts, fixture provenance, exact digest identity, and hosted fixture reproduction pass. |
 
-All five requirements are mapped in the phase plans and roadmap; none is orphaned. REQUIREMENTS.md still marks all five pending, consistent with this report.
+No orphaned Phase 2 requirements were found: ROADMAP.md maps CPU-01 through CPU-05 and all five are declared by the phase plans and covered above.
 
-## Anti-Patterns Found
+### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
-|---|---|---|---|---|
-| — | — | No unreferenced TBD/FIXME/XXX debt markers, placeholder implementations, or hardcoded empty guest-output stubs found in the reviewed implementation set. | — | — |
+|---|---:|---|---|---|
+| None | — | No unreferenced TBD/FIXME/XXX markers, placeholder implementations, empty implementations, or hardcoded empty user-facing data were found in the Plan 02-18 changed test files. | — | No anti-pattern gap. |
 
-## Human Verification Required
+### Human Verification Required
 
-None. The identified gaps are deterministic implementation and corpus-qualification defects with automated reproduction paths; manual acknowledgement cannot close them. No routine UAT is required for this headless phase.
+None. Phase 2 is automated core and diagnostic behavior. No physical Game Boy hardware run is claimed; the project records that limitation explicitly, and hardware interaction is not a roadmap criterion for this phase.
 
-## Hosted Qualification Evidence
+### Gaps Summary
 
-GitHub run metadata confirms CI run [37536888483](https://github.com/szTheory/gabbaboy/actions/runs/37536888483) and fixture run [37536888492](https://github.com/szTheory/gabbaboy/actions/runs/37536888492) are completed failures at PR head `a91d8e72a9dff186f342cf487a70b91b17f3193d`. CI reports Linux and macOS at 95/99, ASan/UBSan at 90/94, CMake floor at 90/94, and Windows at 93/99. All lanes fail on the four unsupported-LY corpus tests; Windows also fails missing-fixture and bad-digest negative controls because they report invalid-manifest. No sanitizer finding marker appears in inspected sanitizer failure evidence, but that lane remains failed. The fixture run passes the original tracer and fails Mooneye fixture reproduction.
-
-The detailed prior run [37536827063](https://github.com/szTheory/gabbaboy/actions/runs/37536827063) belongs to prior PR head `d5a0acc891de908f161bd6e8419a7901c9621cb6`. Its log verifies pinned WLA-DX versions and font digest, then reports the DAA output differs at byte 335, the first global checksum byte; timer comparisons are not reached. This does not establish Linux cross-host reproduction from earlier local claims. The cause is unresolved. Windows line-ending sensitivity is also only a hypothesis because raw manifest bytes were not captured.
-
-## Gaps Summary
-
-Seven actionable gaps block the goal: (CR-01) derive reset/post-boot F from the loaded ROM checksum profile; (CR-02) correct RET/RETI timed stack reads and add direct phase regressions; (CR-03) preserve scheduled EI enable across consecutive EI; (CR-04) emit timer and IF/stack diagnostics in chronological order; (CR-05) exclude PPU-dependent corpus closures and make eligible tests reach the declared protocol; (6) fix Windows manifest portability so missing-fixture and bad-digest controls retain their distinct reasons without weakening validation; and (7) resolve the Mooneye byte mismatch and qualify a deterministic pinned cross-host recipe. The core defects and corpus, portability, and fixture reproduction gaps remain open; no CPU requirement or phase completion is claimed. These gaps are not explicitly completed by later milestone success criteria, so they remain actionable in Phase 2.
+No remaining gaps. Plan 02-18 closes the sole D-01/CPU-01 evidence gap with independent semantic assertions for the legal unprefixed base instruction set, explicit conditional outcomes, boundary arithmetic, address effects and timed bus accesses. The prior CPU-02 through CPU-05 truths remain verified. Local inventories, relocated consumers, and exact-SHA hosted CI and fixture-reproduction checks pass. The scope remains the declared bootless DMG profile and fixed derived diagnostic corpus; it does not establish physical hardware qualification or general game compatibility.
 
 ---
 
-_Verified: 2026-10-06T21:56:50Z_
+_Verified: 2026-10-07T12:39:59Z_
 _Verifier: the agent (gsd-verifier)_

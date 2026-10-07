@@ -42,7 +42,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Remedy:** Preflight every instruction/fetch/conditional-stack read, reject unsupported access without partial mutation, and audit the whole fixture path through assertion callbacks and result reporting. Keep failed IDs and denominator intact while planning a qualified completion path.
 - **Applies when:** A narrow emulator or protocol implementation admits third-party diagnostics with shared setup/reporting code.
 - **Verification:** Corrective read-family, wrap and HALT regressions pass. At `c583e33`, normal and sanitizer suites each fail four of 94 cases; all three required ROMs stop at `F0 44` before their result protocol. Prior corpus passes are superseded, not completion evidence.
-- **Status:** Boundary defect corrected; corpus admission/completion remains open in CR-05 and T-02-15.
+- **Status:** The unsupported-read boundary and source-qualified derived corpus are verified. Original PPU/LY-dependent upstream reporting remains ineligible; the admitted derived denominator is three cases, verified by current offline and hosted gates.
 
 ### GB-CI-003 / 2026-10-06 / Failed test inventories
 
@@ -57,16 +57,16 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Cause and evidence:** Broad opcode matrices asserted totals and final state but missed RET/RETI bus phases, consecutive EI, ROM-dependent startup flags, and interrupt diagnostic chronology. Independent source review found all four gaps while registered focused cases passed.
 - **Remedy:** Qualify transition and timed-access claims with independent sequences, including device deadlines inside CPU operations and consecutive control instructions.
 - **Applies when:** Instruction totals or final registers stand in for internal observable timing behavior.
-- **Verification:** CR-01..04 are structured in the current goal report and remain open; no passing targeted regression yet closes them.
-- **Status:** Observed; gap planning required.
+- **Verification:** Plans 02-10 and 02-11 added startup-F, RET/RETI phase, consecutive-EI and interrupt-diagnostic regressions; Plan 02-18 added full legal base-opcode state/branch/address/bus assertions. The final verifier passed 5/5 roadmap truths at code SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`.
+- **Status:** Closed by targeted regressions and independent verification; preserve the separation between test coverage and hardware qualification.
 
 ### GB-FIXTURE-001 / 2026-10-06 / Phase 2 fixture admission
 
 - **Cause and evidence:** Mooneye's root MIT license did not close redistribution rights for every included asset. The pinned common include identifies Darkrose's font and links to an asset page, but the pinned suite tree has no font source or font-specific license.
 - **Remedy:** Plan 02-07 replaces only the bundled 2032-byte font asset with an original zero-filled image, preserving ROM layout and test instructions/protocol. It records source/include closure, notices, replacement digest, immutable WLA-DX pin, and generated ROM digests.
 - **Applies when:** Compiling third-party diagnostic ROMs whose common includes embed independently licensed artwork.
-- **Verification:** `font-source.c` generated the recorded 2032-byte asset; three ROMs were assembled from Mooneye commit `31510e12eea6286d36eea060a6adde755e1067aa` with WLA-DX commit `91c52b1f4ef3cc8ba3c0638f7536539579af6a9f`. Offline digest/inventory checks and the full 72-case CTest suite passed. Generic-runner timeout/unsupported-bus results do not qualify guest behavior; Plan 02-08 owns protocol-aware results.
-- **Status:** Original replacement and offline digest checks implemented; corpus applicability and runtime completion are blocked. Hosted byte reproduction later failed, superseding any general reproducibility claim.
+- **Verification:** The original replacement/font rights and source closure are recorded; candidate bytes match across local and hosted runs, and the protocol-aware runner passes its fixed 1-CPU/2-timer denominator. Current exact hosted fixture run 37620710600 passed at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`.
+- **Status:** Derived headless corpus admission and reproduction are verified. Original PPU-dependent ROM paths remain excluded and are not hardware-qualified.
 
 ### GB-CI-002 / 2026-10-06 / Phase 2 planning review
 
@@ -74,7 +74,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Remedy:** Use report basenames for preset/test-dir invocations, then verify the corresponding selected-directory path; clear cached installed-prefix configuration for a core-only inventory. Plan 02-09 now states both rules.
 - **Applies when:** Planning CTest evidence commands for fresh or reused build configurations.
 - **Verification:** Temporary tooling probe passed 1/1 and the predicted report existed. Phase 2 tests and installed inventory remain pending; structural review alone does not prove runnable command behavior.
-- **Status:** Reproduced and reconciled in the plan.
+- **Status:** Reproduced, reconciled in the plan, and included in passing current CTest inventory checks.
 
 ## GabbaBoy implementation lessons
 
@@ -127,5 +127,13 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Cause and evidence:** Local qualification missed two cross-host boundaries. Hosted Windows rejects manifest bytes before intended negative-control reasons, and pinned Linux fixture reproduction differs in DAA beginning at byte 335. Neither cause is established; line endings are only a Windows hypothesis.
 - **Remedy:** Capture actual consumed/generated bytes, compare all differences, and qualify deterministic checkout/build recipes before changing expected digests or weakening strict validation.
 - **Applies when:** Exact byte hashes and generated fixtures cross checkout, compiler, assembler or host boundaries.
-- **Verification:** PR-head `a91d8e7` CI and fixture runs complete with failure; Linux/macOS native 95/99, sanitizer/floor 90/94 and Windows 93/99. Tracer reproduction passes while Mooneye reproduction fails. These two additional gaps are persisted in the goal report.
-- **Status:** Observed; both qualification gaps remain open.
+- **Verification:** The later deterministic `wlalink -nS -d -S` recipe produced exact candidate bytes across local and hosted runs. Windows manifest distinctions and exact inventory controls were corrected. The current implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989` passed hosted CI run 37620710587 and fixture reproduction run 37620710600.
+- **Status:** Closed for the documented derived headless corpus. Original upstream reporting paths remain excluded.
+
+### GB-CPU-002 / 2026-10-07 / Base-opcode semantic evidence
+
+- **Cause and evidence:** The earlier base-opcode matrix visited every encoding but mostly asserted dispatch, PC/cost and flag shape. Independent verification scored CPU-01/D-01 incomplete because those checks did not prove each legal operation's register, flag, branch, address and bus effects.
+- **Remedy:** Keep a test-authored expected architectural state independent from core execution, assert each legal opcode's state, enumerate taken and untaken conditional paths, add boundary arithmetic and timed address-effect vectors, and keep the eleven illegal encodings in separate lockup cases. Do not force a failing baseline when existing behavior is already correct.
+- **Applies when:** An instruction matrix is used as evidence for semantic completeness or timing behavior.
+- **Verification:** Five focused Plan 02-18 tests passed; the local suite and inventory passed 104/104 with no skips; installed C/C++ and inventory passed 109/109; independent verification passed 5/5 at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`.
+- **Status:** Resolved with an independent expected-state oracle and exact-revision evidence; physical hardware behavior remains a separate limitation.

@@ -3,17 +3,17 @@ gsd_state_version: "1.0"
 milestone: v0.1
 current_phase: 02
 current_phase_name: DMG CPU, Bus, and Time
-status: Ready for independent verification
-stopped_at: Completed GB-02 Plan 02-16 runner and exact-revision qualification; independent verification next
-last_updated: "2026-10-07T03:08:02.575Z"
+status: Phase 2 complete; paused before Phase 3
+stopped_at: Phase GB-02 execution, verification, security audit, and Nyquist validation complete; owner handoff before Phase 3
+last_updated: "2026-10-07"
 last_activity: 2026-10-07
-last_activity_desc: Plan 02-16 passed runner, offline/relocated inventory, and exact-PR-SHA hosted gates; CPU-01 through CPU-05 remain pending independent verification.
-state_head: f7ca7b0b7e7b6fb91a821b7aaf8545bdeb9471ca
+last_activity_desc: Plan 02-18 closed the CPU-01/D-01 gap; independent verification passed 5/5, security closed 45/45 threats, and Nyquist validation resolved 8/8 gaps.
+state_head: cf28e90270be24d9528bfa8a1e4055a2b8485989
 progress:
   total_phases: 6
-  completed_phases: 1
-  total_plans: 21
-  completed_plans: 21
+  completed_phases: 2
+  total_plans: 22
+  completed_plans: 22
 milestone_name: limited DMG preview
 ---
 
@@ -24,23 +24,23 @@ milestone_name: limited DMG preview
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase GB-02 — DMG CPU, Bus, and Time
+**Current focus:** Phase GB-02 is complete; Phase GB-03 is paused until the owner chooses to continue.
 
 ## Current Position
 
-Phase: GB-02 (DMG CPU, Bus, and Time) — EXECUTING
-Plan: 16 of 16
-Status: Ready for independent verification
-Last activity: 2026-10-07 — Plan 02-16 passed runner, offline/relocated inventory, and exact-PR-SHA hosted gates; CPU-01 through CPU-05 remain pending independent verification.
+Phase: GB-02 (DMG CPU, Bus, and Time) — COMPLETE
+Plan: 02-18 gap closure complete; no runnable Phase 2 plan remains
+Status: Goal-backward verification passed; paused before Phase 3 by project workflow contract
+Last activity: 2026-10-07 — Verification passed 5/5 roadmap truths; all 45 registered threats are closed; Nyquist is compliant with 8/8 gaps resolved.
 
-Progress: [██░░░░░░░░] 17% of milestone phases complete; Phase 1 has 5/5 plans and passed verification
+Progress: [███░░░░░░░] 33% of milestone phases complete; Phases 1 and 2 passed verification.
 
 ## Performance Metrics
 
-- Total unique plans executed: 21; plan execution does not imply phase qualification.
-- Average duration / total execution time: 24 min / 502 min recorded across 21 plans.
-- Per-phase metrics / recent trend: Phase 1 complete; all 16 live Phase GB-02 plans now have summaries, including Plan 02-16. Plan 02-15 is superseded after its preserved halt. Independent Phase 2 verification is next.
-- Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. The latest local offline core inventory passed 100/100 with no skips; relocated installed inventory passed 105/105, including C/C++ consumers. The runner passed all three admitted derived candidates with the fixed one-CPU/two-timer denominator. Final PR SHA `8481d603b780af7889832ea3a8d3ad84d2439ba5` passed Linux, macOS, Windows, Linux ASan/UBSan, CMake-floor relocation, and original/candidate fixture-reproduction jobs. The original ROM reporting paths remain PPU/LY-limited; no physical hardware test occurred. CPU-01 through CPU-05 remain pending independent Phase 2 verification.
+- Total unique plans executed: 22; Phase 2 completion is based on goal verification, not task count alone.
+- Average duration / total execution time: 24 min / 527 min recorded across 22 plans.
+- Per-phase metrics / recent trend: Phases 1 and 2 are complete. All 17 runnable Phase 2 plans have summaries; Plan 02-15 is superseded/non-runnable and remains historical.
+- Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. At implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`, the local offline inventory passed 104/104 with no skips, the relocated installed C/C++ inventory passed 109/109, the runner passed its fixed one-CPU/two-timer derived corpus, hosted CI run 37620710587 passed, and fixture reproduction run 37620710600 passed. Independent verification passed all five CPU requirements. Original upstream PPU-dependent reporting paths remain excluded; no physical DMG hardware test occurred.
 
 **Per-Plan Metrics:**
 
@@ -67,6 +67,7 @@ Progress: [██░░░░░░░░] 17% of milestone phases complete; Pha
 | Phase GB-02 P14 | 8 min | 2 tasks | 4 files |
 | Phase GB-02 P17 | 54 min | 3 tasks | 12 files |
 | Phase 02 P16 | 24min | 2 tasks | 6 files |
+| Phase 02 P18 | 25 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -121,6 +122,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 02]: Bind Mooneye pass/fail to its source-qualified callback and exact result PC.
 - [Phase 02]: Label candidate fixtures as derived headless reporting closures and retain the unchanged upstream assertions; do not infer original-ROM PPU applicability or hardware qualification.
 - [Phase 02]: Keep CPU-01 through CPU-05 pending until independent phase verification assesses the final local and exact-SHA hosted evidence.
+- [Phase GB-02]: On 2026-10-07, independent verification passed CPU-01 through CPU-05 and all five roadmap truths at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`. Final local, installed-consumer, and exact hosted evidence is recorded in Phase 2 verification and validation; original upstream PPU-dependent results and physical hardware behavior remain outside the claim.
 
 ### Pending Todos
 
@@ -128,13 +130,10 @@ None outside the roadmap.
 
 ### Blockers/Concerns
 
-- Independent [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md) previously returned `gaps_found`; Plans 02-10 and 02-11 added focused corrections for startup/return phases, EI scheduling, and interrupt diagnostic chronology. Plan 02-12 resolved Windows manifest portability and distinct negative-control receipts. Plan 02-17 admitted the derived fixture set, and Plan 02-16 now passed runner, local/relocated inventory, and exact-SHA hosted checks. CPU-01 through CPU-05 remain pending until an independent verifier reassesses all seven gaps and requirement traceability.
-- Plan 02-16's local core inventory ran 100/100 with no skips; the relocated installed inventory ran 105/105 with installed C/C++ consumers passing, and its fresh core-only inventory ran 100/100. Final PR head `8481d603b780af7889832ea3a8d3ad84d2439ba5` passed CI run 37564610248 and fixture-reproduction run 37564610420, including Windows and Linux ASan/UBSan. The fixed eligible corpus remains one CPU and two timer candidates.
-- The original Mooneye ROMs use a PPU-dependent reporting path and remain captured as immutable pre-admission blobs. Plan 02-13's exact hosted run 37548730397 documented original-ROM byte differences caused by WLA-DX's invalid equal-priority/size `qsort` tie comparator. Plan 02-17 qualified a derivative using `wlalink -nS -d -S`; run 37561292904 matched all three 32,768-byte outputs exactly and the one-CPU/two-timer denominator was retained. Earlier [hosted evidence](phases/GB-02-dmg-cpu-bus-and-time/02-HOSTED-EVIDENCE.md) records Windows manifest rejection and required CI failures at PR head `a91d8e7`.
-- [Draft PR #2](https://github.com/szTheory/gabbaboy/pull/2) publishes the Phase 2 implementation and gap reports for review, stacked on Phase 1 PR #1. Retarget and requalify after the foundation lands; no merge or release. Boundary triage found no open issues; PR #1 remains open.
-- PR #1 remains open for owner review at exact hosted SHA `9f1df9bd0a70e50033f7d8cbcbff778e3bfd94e3`. Required contexts passed; both Linux/macOS preview packages passed exact digest/source/consumer verification and expire 2026-10-17T19:19Z. They are temporary artifacts, not releases.
-- Native host support floors, signing, and live Playstead integration remain unverified for later release/adoption work.
-- Plan 02-14's source audit established the derivative callback/result path with zero observed PPU bus accesses; Plan 02-17 admitted candidates after source/rights/provenance and protocol review; Plan 02-16 verified runner receipts and final exact-revision evidence. CPU-01 through CPU-05 remain pending independent Phase 2 verification.
+- Phase 2 has no open verification or security blocker. All five requirements are complete at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`; see [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), [validation](phases/GB-02-dmg-cpu-bus-and-time/02-VALIDATION.md), and [security](phases/GB-02-dmg-cpu-bus-and-time/02-SECURITY.md).
+- The admitted corpus is three derived headless reporting closures (one CPU, two timer). Original Mooneye reporting paths depend on PPU/LY behavior outside scope and remain excluded. No physical DMG-CPU-B observation occurred; no hardware qualification is claimed.
+- Draft PR #2 remains on the Phase 2 branch, stacked on PR #1. Neither PR was merged or released as part of this phase handoff. Phase-boundary issue/PR triage found no open repository issues requiring Phase 2 work.
+- Native host support floors beyond the verified CI matrix, signing, and live Playstead integration remain later release/adoption work.
 
 ### Quick Tasks Completed
 
@@ -148,11 +147,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-07T03:08:02.537Z
-Stopped at: Completed GB-02 Plan 02-16 runner and exact-revision qualification; independent verification next
+Last session: 2026-10-07
+Stopped at: Phase GB-02 complete after gap-only execution, verification, security audit, and Nyquist validation; owner handoff before Phase 3
 Resume file: .planning/.continue-here.md
-Next command in fresh context: $gsd-execute-phase 2 --gaps-only
+Next command in fresh context: $gsd-discuss-phase 3
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: Executed Phase GB-02 Plans 02-17 and 02-16. Plan 02-17 admitted the three derived candidates after hosted byte identity and provenance/protocol review. Plan 02-16 qualified callback/result-PC behavior, the fixed denominator, induced failure handling, local/relocated inventories, corpus limits, and final hosted gates at PR SHA 8481d603b780af7889832ea3a8d3ad84d2439ba5 (CI 37564610248; fixture reproduction 37564610420). CPU-01 through CPU-05 and Phase 2 remain pending independent verification.
-Next stage: Run $gsd-execute-phase 2 --gaps-only for independent Phase GB-02 gap verification and requirement traceability.
-Next implementation phase: Phase 3 — Visible Interactive DMG, paused until Phase 2 gaps and required checks are closed and the owner chooses to continue. Both auto-advance flags remain false.
+Completed workflow stage: **Phase GB-02 execution and closeout.** Plan 02-18 added independent legal base-opcode semantic assertions; the verifier passed 5/5 roadmap truths, the security audit closed 45/45 threats, and Nyquist validation resolved 8/8 gaps with no escalation. Local CTest passed 104/104, installed C/C++ consumers passed 109/109, and implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989` passed exact hosted CI and fixture reproduction. The code review is clean; no physical hardware test is claimed.
+Next phase: **Phase 3 — Visible Interactive DMG**. It has not started. Keep workflow auto-advance and auto-chain false; wait for the owner to choose to continue with the exact command `$gsd-discuss-phase 3`.

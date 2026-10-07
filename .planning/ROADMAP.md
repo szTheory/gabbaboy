@@ -14,7 +14,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 ## Phases
 
 - [x] **Phase 1: Portable Foundation and Original ROM Tracer** - Build, embed, and download a bounded real-ROM tracer. (completed 2026-10-03)
-- [ ] **Phase 2: DMG CPU, Bus, and Time** - Execute scoped DMG diagnostics with reproducible timing and bounded progress.
+- [x] **Phase 2: DMG CPU, Bus, and Time** - Execute scoped DMG diagnostics with reproducible timing and bounded progress. (completed 2026-10-07)
 - [ ] **Phase 3: Visible Interactive DMG** - Play an original or permissioned ROM-only fixture in a macOS preview.
 - [ ] **Phase 4: MBC1 and Safe Battery Continuation** - Retain meaningful guest progress across fresh processes without corrupting good saves.
 - [ ] **Phase 5: DMG Audio and Stable Playback** - Hear paced sound and recover cleanly from host input/device transitions.
@@ -57,7 +57,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. Equal timestamped inputs and elapsed emulated time produce equal supported state/output across different run partitions; LCD-off, HALT/STOP, lockup, and full output capacity return within the caller's bounded contract. (CPU-04)
 5. A headless run reports pass/fail/timeout/unsupported against a pinned eligible CPU/timer corpus with model/boot/protocol identity and sufficient retained trace evidence to reproduce failures. (CPU-05)
 
-**Plans**: All 16 live plans now have summaries: the original 9/9 plans, gap-closure Plans 02-10 through 02-14, and Plans 02-16 and 02-17. Plan 02-15 is explicitly superseded and non-runnable; its halted summary remains historical evidence. Candidate admission, runner protocol, local/relocated inventories, and final exact-PR-SHA hosted evidence passed. Phase status remains **Gaps found** pending independent verification and requirement traceability. See [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md) and [Plan 02-16 evidence](phases/GB-02-dmg-cpu-bus-and-time/02-16-SUMMARY.md). Next command: `$gsd-execute-phase 2 --gaps-only`.
+**Plans**: All 17 runnable plans have summaries: the original nine, gap-closure Plans 02-10 through 02-14, and Plans 02-16 through 02-18. Plan 02-15 is explicitly superseded and non-runnable; its halted summary remains historical evidence. The goal-backward verifier passed all five roadmap truths, the security audit closed all 45 registered threats, and the Nyquist audit resolved all eight identified coverage gaps with no escalation. At implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`, the local 104-case inventory, relocated 109-case inventory, exact hosted CI run 37620710587, and fixture reproduction run 37620710600 passed. See [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), [validation](phases/GB-02-dmg-cpu-bus-and-time/02-VALIDATION.md), and [security](phases/GB-02-dmg-cpu-bus-and-time/02-SECURITY.md). No physical DMG-CPU-B observation is claimed. Phase 3 remains paused until the owner chooses to continue; next command: `$gsd-discuss-phase 3`.
 **Wave 1**
 - [x] 02-01-PLAN.md — ROM-only bus and WRAM tracer
 
@@ -106,6 +106,9 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 **Gap wave 6** *(blocked on Gap wave 5 qualification/admission outcome)*
 - [x] 02-16-PLAN.md — verify runner protocol, inventory, and final exact-revision evidence
+
+**Gap wave 7** *(closes the independently verified CPU-01/D-01 semantic coverage gap)*
+- [x] 02-18-PLAN.md — assert legal base-opcode architectural semantics, branch paths, address effects and timed bus behavior
 
 ### Phase 3: Visible Interactive DMG
 
@@ -179,7 +182,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Portable Foundation and Original ROM Tracer | 5/5 | Complete    | 2026-10-03 |
-| 2. DMG CPU, Bus, and Time | 16/16 | Gaps found | - |
+| 2. DMG CPU, Bus, and Time | 17/17 | Complete | 2026-10-07 |
 | 3. Visible Interactive DMG | 0/TBD | Not started | - |
 | 4. MBC1 and Safe Battery Continuation | 0/TBD | Not started | - |
 | 5. DMG Audio and Stable Playback | 0/TBD | Not started | - |
@@ -191,4 +194,4 @@ All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](
 
 Automate authorized work within each phase, then inspect current verification/release/consumer evidence, update traceability and [lessons](context/LESSONS.md), triage issues/PRs, report limitations and the exact next command, and **stop**. Never auto-advance phases or milestones; keep both auto-advance flags false. Credential, hardware, or perceptual gaps must be recorded honestly with the smallest necessary human action, never converted into passing evidence. Remote/CI setup begins in Phase 1; absent access remains an explicit completion limitation.
 
-Phase 1 Plans 01–05 are complete. Goal-backward verification passed 5/5 roadmap truths and all 8 BASE requirements; standard code review is clean. At exact PR head `9f1df9bd0a70e50033f7d8cbcbff778e3bfd94e3`, required-native, fixture-repro, and preview-package-smoke passed, and both downloaded preview packages passed exact digest/source/consumer verification. PR #1 remains open for owner review. The next phase is Phase 2 — DMG CPU, Bus, and Time. Continue with `$gsd-discuss-phase 2` and stop after Phase 2.
+Phase 1 Plans 01–05 are complete. Goal-backward verification passed 5/5 roadmap truths and all 8 BASE requirements; standard code review is clean. Phase 2 Plans 02-01 through 02-14 and 02-16 through 02-18 are complete; 02-15 remains superseded/non-runnable. Phase 2 passed 5/5 roadmap truths, all five CPU requirements, 45/45 security threats, Nyquist validation and code review. The implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989` passed local and installed inventories and exact hosted CI/fixture checks; no physical DMG hardware test is claimed. PR #2 remains a draft on the phase branch. Stop here. The next phase is **Phase 3 — Visible Interactive DMG**; continue only when the owner chooses with `$gsd-discuss-phase 3`.

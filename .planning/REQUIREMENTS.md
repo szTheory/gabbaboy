@@ -21,11 +21,11 @@ Every requirement below must map to exactly one phase. Completion needs implemen
 
 ### DMG CPU, bus, and time
 
-- [ ] **CPU-01**: The declared DMG profile executes the documented base and CB SM83 instruction sets with correct tested flag, arithmetic, address, and bus-access timing behavior; illegal opcode behavior is explicit.
-- [ ] **CPU-02**: The core produces the expected interrupt entry, EI delay, HALT/HALT-bug, STOP, reset, and deterministic post-boot behavior under model-applicable tests.
-- [ ] **CPU-03**: Memory mapping, divider/timer edges and reload races, and disconnected serial behavior match declared DMG evidence at observable access boundaries.
-- [ ] **CPU-04**: Equal timestamped inputs and emulated time produce equal supported state/output when execution is partitioned differently; LCD-off, HALT/STOP, lockup, and exhausted output capacity return within the caller's bounded contract.
-- [ ] **CPU-05**: A headless run reports pass/fail/timeout/unsupported for an explicitly pinned eligible CPU/timer corpus with expected protocol and model/boot configuration, retaining enough trace evidence to reproduce failures.
+- [x] **CPU-01**: The declared DMG profile executes the documented base and CB SM83 instruction sets with correct tested flag, arithmetic, address, and bus-access timing behavior; illegal opcode behavior is explicit.
+- [x] **CPU-02**: The core produces the expected interrupt entry, EI delay, HALT/HALT-bug, STOP, reset, and deterministic post-boot behavior under model-applicable tests.
+- [x] **CPU-03**: Memory mapping, divider/timer edges and reload races, and disconnected serial behavior match declared DMG evidence at observable access boundaries.
+- [x] **CPU-04**: Equal timestamped inputs and emulated time produce equal supported state/output when execution is partitioned differently; LCD-off, HALT/STOP, lockup, and exhausted output capacity return within the caller's bounded contract.
+- [x] **CPU-05**: A headless run reports pass/fail/timeout/unsupported for an explicitly pinned eligible CPU/timer corpus with expected protocol and model/boot configuration, retaining enough trace evidence to reproduce failures.
 
 ### Visible interactive DMG
 
@@ -100,11 +100,11 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | BASE-06 | Phase 1 | Complete |
 | BASE-07 | Phase 1 | Complete |
 | BASE-08 | Phase 1 | Complete |
-| CPU-01 | Phase 2 | Pending |
-| CPU-02 | Phase 2 | Pending |
-| CPU-03 | Phase 2 | Pending |
-| CPU-04 | Phase 2 | Pending |
-| CPU-05 | Phase 2 | Pending |
+| CPU-01 | Phase 2 | Complete |
+| CPU-02 | Phase 2 | Complete |
+| CPU-03 | Phase 2 | Complete |
+| CPU-04 | Phase 2 | Complete |
+| CPU-05 | Phase 2 | Complete |
 | VIDEO-01 | Phase 3 | Pending |
 | VIDEO-02 | Phase 3 | Pending |
 | VIDEO-03 | Phase 3 | Pending |
@@ -135,9 +135,9 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | STATE-01 | Next milestone | Deferred |
 | INT-01 | Next milestone | Deferred |
 
-**Active coverage:** 35/35 requirements mapped exactly once; 0 unmapped, 0 duplicates. Eight are complete and 27 remain pending. Next-milestone requirements and later candidates are excluded from active coverage.
+**Active coverage:** 35/35 requirements mapped exactly once; 0 unmapped, 0 duplicates. Thirteen are complete and 22 remain pending. Next-milestone requirements and later candidates are excluded from active coverage.
 
 **Next-milestone traceability:** 7/7 GB/GBC breadth commitments are mapped to the next milestone and remain outside the active v0.1 count.
 
 ---
-Last updated: 2026-10-03 after Phase 1 verification; 8 active requirements are complete, 27 remain pending, and 7 next-milestone commitments are explicitly deferred.
+Last updated: 2026-10-07 after Phase 2 verification; 13 active requirements are complete, 22 remain pending, and 7 next-milestone commitments are explicitly deferred.

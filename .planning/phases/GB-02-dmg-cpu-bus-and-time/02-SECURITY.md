@@ -10,7 +10,7 @@ audited: "2026-10-07"
 
 # Phase 2 — Security
 
-The read-only security auditor verified the original 29 plan-authored entries at L1. A second audit on 2026-10-07 verified the later Plan 02-13 through 02-17 threats against current code, retained fixture artifacts, local regressions, and fresh hosted checks for PR head `03a22919417303dc9df2906c4135bf5ff124e7aa`; those 41 scoped threats are closed with evidence below. Plan 02-18 adds three mitigation threats that remain open until its CPU-01 semantic tests and final checks pass; its low-severity package-install acceptance is recorded as closed. These fixture and runner mitigations do not establish full CPU/timing conformance or phase completion. Original upstream Mooneye reporting paths remain PPU/LY-dependent and ineligible; the admitted fixtures are documented derived headless variants.
+The read-only L1 audits verified the original plan-authored threats and the later fixture, runner, and cross-host mitigations. The final 2026-10-07 audit verified all 45 registered entries: the prior 42 closures and accepted risks plus the three Plan 02-18 mitigations. The five scoped checks included T-02-14 and T-02-15 at the owner's request, along with T-02-31 through T-02-33. Original upstream Mooneye reporting paths remain PPU/LY-dependent and ineligible; the admitted fixtures are documented derived headless variants. No physical DMG-CPU-B observation is claimed.
 
 ## Trust Boundaries
 
@@ -30,7 +30,7 @@ Guest ROM/opcodes and caller timestamps cross into instance state; finite output
 | T-02-06 | Denial of service | CB decoder | medium | mitigate | Full 256-byte inventory and finite per-instruction cost. Evidence: matching focused tests and current source boundary. | closed |
 | T-02-SC (02-03) | Tampering | package installs | low | accept | Plan-authored acceptance: no package-manager install in core tasks; ordinary test jobs use checked-in bytes. Explicit pinned fixture/tool preparation stays in separate reproduction workflow. | closed |
 | T-02-07 | Denial of service | HALT/STOP/lockup | high | mitigate | Bounded idle time and distinct stopped outcomes in named tests. Evidence: matching focused tests and current source boundary. | closed |
-| T-02-08 | Tampering | interrupt stack | medium | mitigate | Full-entry bounds preflight and stack byte-order/vector regressions. The independent diagnostic chronology defect remains open as CR-04; this closure covers bounded stack mutation. | closed |
+| T-02-08 | Tampering | interrupt stack | medium | mitigate | Full-entry bounds preflight and stack byte-order/vector regressions. The separate diagnostic chronology issue from CR-04 was repaired and tested in Plan 02-11; this row covers bounded stack mutation. | closed |
 | T-02-SC (02-04) | Tampering | package installs | low | accept | Plan-authored acceptance: no package-manager install in core tasks; ordinary test jobs use checked-in bytes. Explicit pinned fixture/tool preparation stays in separate reproduction workflow. | closed |
 | T-02-09 | Denial of service | timer deadline loop | high | mitigate | Monotonic checked time, finite work per tick, bounded call budget. Evidence: matching focused tests and current source boundary. | closed |
 | T-02-10 | Tampering | timer reload collision | medium | mitigate | Exact boundary cases and explicit write/deadline order. Evidence: matching focused tests and current source boundary. | closed |
@@ -75,13 +75,14 @@ The twelve low-severity package-install entries were accepted explicitly in thei
 | Date | Total | Closed | Blocking open | Evidence |
 |---|---|---|---|---|
 | 2026-10-06 | 29 | 27 | 2 | Typed L1 auditor, corrective regressions, source-audited reporting path, local execution and failing hosted evidence |
-| 2026-10-07 (Plan 02-18 intake; not an audit) | 45 | 42 | 3 | Plan 02-18 threat model added; T-02-31 through T-02-33 await implementation and security audit; T-02-SC (02-18) accepted |
+| 2026-10-07 (Plan 02-18 intake; superseded) | 45 | 42 | 3 | Initial intake recorded three new threats before execution; the final audit below closes them. T-02-SC (02-18) was accepted in its plan |
+| 2026-10-07 (final Phase 2 audit) | 45 | 45 | 0 | Typed L1 auditor closed the five scoped entries T-02-14, T-02-15, T-02-31, T-02-32, and T-02-33; the previous 42 entries remain closed |
 
 ## Remaining Gate
 
-The 2026-10-06 audit remains as historical evidence of the earlier unsupported-LY and cross-host-byte failures. Plans 02-13 through 02-17 resolved those fixture gates for the derived headless variants, and the 2026-10-07 audits closed the mapped threats on current code and exact-head hosted evidence. The original upstream ROM reporting paths remain ineligible, and no physical DMG hardware run is claimed. Phase requirements remain for the independent phase verifier; this security record does not imply requirement completion.
+The 2026-10-06 audit remains historical evidence of the earlier unsupported-LY and cross-host-byte failures. Plans 02-13 through 02-17 resolved those fixture gates for the derived headless variants, and the 2026-10-07 audits closed the mapped threats on current code and exact-head hosted evidence. The original upstream ROM reporting paths remain ineligible, and no physical DMG hardware run is claimed. Phase requirements are verified separately in `02-VERIFICATION.md`; this security record covers threat status only.
 
-## Security Audit 2026-10-07
+## Security Audit 2026-10-07 — Plans 02-13 to 02-17
 
 | Metric | Count |
 |---|---|
@@ -89,7 +90,7 @@ The 2026-10-06 audit remains as historical evidence of the earlier unsupported-L
 | Closed | 41 |
 | Open | 0 |
 
-## Security Audit 2026-10-07
+## Security Audit 2026-10-07 — Final Phase 2 Closeout
 
 | Metric | Count |
 |---|---|
