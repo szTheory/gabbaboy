@@ -91,6 +91,7 @@ diagnostics_canary
 runner_pass
 runner_fail
 runner_wrong_breakpoint
+runner_guest_failure
 runner_timeout
 runner_unsupported
 runner_missing_fixture

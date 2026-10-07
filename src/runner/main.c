@@ -18,6 +18,12 @@
 #define RUN_CHUNK UINT64_C(2048)
 #define TRACE_CAPACITY 128u
 #define DIAGNOSTIC_CAPACITY 4096u
+#define MOONEYE_SOURCE_REVISION "31510e12eea6286d36eea060a6adde755e1067aa"
+#define MOONEYE_SOURCE_TREE "2b8c52424a49a2a7466cf631fd8992c53d0de2fa"
+#define MOONEYE_PATCH_SHA256 "c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d"
+#define MOONEYE_BUILDER_REVISION "91c52b1f4ef3cc8ba3c0638f7536539579af6a9f"
+#define MOONEYE_BUILDER_ARCHIVE_SHA256 "24a95d77a79feeb70d1de87d66749c006e37337308ce9c00e44efac4c46ab976"
+#define MOONEYE_MANIFEST_SHA256 "98a1799b8be9c022ac13467a552890fb12bdd706017e42e12c944ec618d60527"
 
 typedef struct {
     const char *id;
@@ -25,15 +31,32 @@ typedef struct {
     const char *category;
     const char *rom;
     const char *sha256;
-    const char *protocol_pass;
-    const char *protocol_fail;
+    const char *original_sha256;
+    const char *source_path;
+    uint16_t pass_callback_pc;
+    uint16_t fail_callback_pc;
+    uint16_t result_pc;
+    uint8_t pass_registers[6];
+    uint8_t fail_registers[6];
     uint64_t budget;
 } fixture_case;
 
 static const fixture_case cases[] = {
-    {"mooneye-acceptance-instr-daa", "daa", "cpu", "daa.gb", "96cd0e02a85f6f035b1c1947d36a8ad2d8e51963f636b833f05559f021eef57e", "03,05,08,0d,15,22", "42,42,42,42,42,42", UINT64_C(2000000)},
-    {"mooneye-acceptance-timer-tim00", "tim00", "timer", "tim00.gb", "6edc430a09522294c96d1eef63a0f1a99078f4401060980048ec5a68640e11bd", "03,05,08,0d,15,22", "42,42,42,42,42,42", UINT64_C(200000)},
-    {"mooneye-acceptance-timer-tim00-div-trigger", "tim00-div-trigger", "timer", "tim00_div_trigger.gb", "468d426c4fe6a850a28f4116bd127d471be6adf2ef5dd0f89f2db67ffe212242", "03,05,08,0d,15,22", "42,42,42,42,42,42", UINT64_C(200000)}
+    {"mooneye-acceptance-instr-daa", "daa", "cpu", "daa.gb",
+     "3a39eda77a09b817e4e38004a3d117990565fb797e8a4f470920f1b7608f0a08",
+     "96cd0e02a85f6f035b1c1947d36a8ad2d8e51963f636b833f05559f021eef57e",
+     "acceptance/instr/daa.s", 0x0166, 0x01b3, 0x409a,
+     {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(2000000)},
+    {"mooneye-acceptance-timer-tim00", "tim00", "timer", "tim00.gb",
+     "476b2332de3f2d6604f8e1478daa8cbc7c59c89c50837fd47cc95e96e784d4f7",
+     "6edc430a09522294c96d1eef63a0f1a99078f4401060980048ec5a68640e11bd",
+     "acceptance/timer/tim00.s", 0x4000, 0x4000, 0x4327,
+     {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(200000)},
+    {"mooneye-acceptance-timer-tim00-div-trigger", "tim00-div-trigger", "timer", "tim00_div_trigger.gb",
+     "566da853858061c69866c47cc31b85b1fef003d4c088c8e8dbb26973da9944da",
+     "468d426c4fe6a850a28f4116bd127d471be6adf2ef5dd0f89f2db67ffe212242",
+     "acceptance/timer/tim00_div_trigger.s", 0x4000, 0x4000, 0x4327,
+     {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(200000)}
 };
 
 /* Small standalone SHA-256 implementation keeps fixture verification offline. */
@@ -68,7 +91,7 @@ static int read_bounded(const char *path, uint8_t *buffer, size_t capacity, size
 }
 static int hash_matches(const uint8_t *bytes,size_t length,const char *expected) { sha256_ctx c;char hash[65];sha_init(&c);sha_update(&c,bytes,length);sha_final(&c,hash);return strcmp(hash,expected)==0; }
 static int manifest_bytes_valid(const uint8_t *bytes,size_t length) {
-    static const char expected[]="76204bc792a5a767f3d7430edfe5542698953507fe268de6a0154b7cb02bcc3e";
+    static const char expected[]=MOONEYE_MANIFEST_SHA256;
     return hash_matches(bytes,length,expected);
 }
 static int manifest_valid(const char *path, uint8_t bytes[MAX_MANIFEST+1], size_t *length) {
@@ -109,30 +132,66 @@ static const char *budget_status(uint64_t ticks,uint64_t budget) {
     return ticks>=budget?"timeout":NULL;
 }
 static int suite_counts_valid(size_t eligible,size_t executed) { return eligible!=0&&eligible==executed; }
-static const char *protocol_status(const gbb_trace_record *trace,size_t count) {
-    for(size_t i=0;i<count;i++) if(trace[i].opcode[0]==0x40) {
-        if(trace[i].b==3&&trace[i].c==5&&trace[i].d==8&&trace[i].e==13&&trace[i].h==21&&trace[i].l==34)return "pass";
-        if(trace[i].b==0x42&&trace[i].c==0x42&&trace[i].d==0x42&&trace[i].e==0x42&&trace[i].h==0x42&&trace[i].l==0x42)return "fail";
+typedef struct {
+    int pass_callback_seen;
+    int fail_callback_seen;
+} protocol_progress;
+typedef struct {
+    int reached_result;
+    uint16_t result_pc;
+    uint16_t callback_pc;
+    const char *callback_result;
+    const char *reason;
+} protocol_evidence;
+static int registers_match(const gbb_trace_record *record,const uint8_t expected[6]) {
+    return record->b==expected[0]&&record->c==expected[1]&&record->d==expected[2]&&
+           record->e==expected[3]&&record->h==expected[4]&&record->l==expected[5];
+}
+static const char *protocol_status(const fixture_case *fc,const gbb_trace_record *trace,size_t count,
+                                   protocol_progress *progress,protocol_evidence *evidence) {
+    for(size_t i=0;i<count;i++) {
+        const gbb_trace_record *record=&trace[i];
+        if(record->pc==fc->pass_callback_pc)progress->pass_callback_seen=1;
+        if(record->pc==fc->fail_callback_pc)progress->fail_callback_seen=1;
+        if(record->pc!=fc->result_pc||record->opcode[0]!=0x40)continue;
+        evidence->reached_result=1;
+        evidence->result_pc=record->pc;
+        if(registers_match(record,fc->pass_registers)&&progress->pass_callback_seen) {
+            evidence->callback_pc=fc->pass_callback_pc;
+            evidence->callback_result="pass";
+            evidence->reason=NULL;
+            return "pass";
+        }
+        if(registers_match(record,fc->fail_registers)&&progress->fail_callback_seen) {
+            evidence->callback_pc=fc->fail_callback_pc;
+            evidence->callback_result="fail";
+            evidence->reason=NULL;
+            return "fail";
+        }
+        evidence->reason=!progress->pass_callback_seen&&!progress->fail_callback_seen?
+            "callback-not-reached":"unexpected-register-result";
+        return "unsupported";
     }
     return NULL;
 }
 static void retain_recent(gbb_diagnostic_record recent[RECENT_CAPACITY],size_t *used,const gbb_diagnostic_record *add,size_t count) {
     for(size_t i=0;i<count;i++){if(*used<RECENT_CAPACITY)recent[(*used)++]=add[i];else{memmove(recent,recent+1,(RECENT_CAPACITY-1)*sizeof(*recent));recent[RECENT_CAPACITY-1]=add[i];}}
 }
-static int run_one(const fixture_case *fc,const char *manifest,int receipt,size_t eligible,size_t *executed) {
-    uint8_t rom[MAX_ROM+1];size_t rom_size=0;
-    const char *fixture_error=load_case_rom(fc,manifest,rom,&rom_size);
-    if(fixture_error!=NULL){
-        if(receipt)printf("case=%s category=%s status=unsupported reason=%s source_revision=31510e12eea6286d36eea060a6adde755e1067aa fixture_sha256=%s profile=DMG-CPU-B boot=skipped protocol=mooneye-ld-b-b eligible=%zu executed=%zu\n",fc->id,fc->category,fixture_error,fc->sha256,eligible,*executed);
-        return 3;
-    }
-    gbb_instance *m=NULL;if(gbb_create(GBB_PROFILE_DMG_CPU_B,&m)!=GBB_OK||gbb_load_rom(m,rom,rom_size)!=GBB_OK){gbb_destroy(m);return 3;}
-    gbb_trace_record trace[TRACE_CAPACITY];gbb_diagnostic_record diagnostics[DIAGNOSTIC_CAPACITY],recent[RECENT_CAPACITY];size_t recent_count=0;
+static const char *run_guest(const fixture_case *fc,const uint8_t *rom,size_t rom_size,
+                             protocol_evidence *evidence,uint64_t *ticks_out,
+                             const char **stop_out,
+                             gbb_diagnostic_record recent[RECENT_CAPACITY],
+                             size_t *recent_count_out) {
+    memset(evidence,0,sizeof(*evidence));
+    *ticks_out=0;*stop_out="core-load";*recent_count_out=0;
+    gbb_instance *m=NULL;if(gbb_create(GBB_PROFILE_DMG_CPU_B,&m)!=GBB_OK||gbb_load_rom(m,rom,rom_size)!=GBB_OK){gbb_destroy(m);return "unsupported";}
+    gbb_trace_record trace[TRACE_CAPACITY];gbb_diagnostic_record diagnostics[DIAGNOSTIC_CAPACITY];size_t recent_count=0;
+    protocol_progress progress={0};
     uint64_t ticks=0;const char *status=NULL;const char *stop="budget";
     while(ticks<fc->budget&&!status){
         gbb_run_result r=gbb_run_ex(m,fc->budget-ticks< RUN_CHUNK?fc->budget-ticks:RUN_CHUNK,trace,TRACE_CAPACITY,diagnostics,DIAGNOSTIC_CAPACITY);
         ticks+=r.consumed_half_dots;retain_recent(recent,&recent_count,diagnostics,r.diagnostic_count);
-        status=protocol_status(trace,r.trace_count);
+        status=protocol_status(fc,trace,r.trace_count,&progress,evidence);
         if(status)break;
         if(r.reason==GBB_STOP_TRACE_FULL||r.reason==GBB_STOP_OUTPUT_FULL)continue;
         const char *core_status=unsupported_core_stop(r.reason);
@@ -141,15 +200,33 @@ static int run_one(const fixture_case *fc,const char *manifest,int receipt,size_
     }
     if(!status)status=budget_status(ticks,fc->budget);
     if(!status)status="unsupported";
+    if(evidence->reached_result)stop="protocol-result";
+    else if(strcmp(status,"pass")==0||strcmp(status,"fail")==0)stop="protocol-result";
+    *ticks_out=ticks;*stop_out=stop;*recent_count_out=recent_count;
+    gbb_destroy(m);
+    return status;
+}
+static int run_one(const fixture_case *fc,const char *manifest,int receipt,size_t eligible,size_t *executed) {
+    uint8_t rom[MAX_ROM+1];size_t rom_size=0;
+    const char *fixture_error=load_case_rom(fc,manifest,rom,&rom_size);
+    if(fixture_error!=NULL){
+        if(receipt)printf("case=%s category=%s status=unsupported reason=%s manifest_sha256=%s source_revision=%s source_tree=%s source_path=%s report_patch_sha256=%s original_rom_sha256=%s fixture_sha256=%s fixture_origin=derived-headless-report-closure profile=DMG-CPU-B boot=skipped protocol=mooneye-ld-b-b protocol_stage=not-reached eligible=%zu executed=%zu\n",fc->id,fc->category,fixture_error,MOONEYE_MANIFEST_SHA256,MOONEYE_SOURCE_REVISION,MOONEYE_SOURCE_TREE,fc->source_path,MOONEYE_PATCH_SHA256,fc->original_sha256,fc->sha256,eligible,*executed);
+        return 3;
+    }
+    protocol_evidence evidence;uint64_t ticks=0;size_t recent_count=0;const char *stop=NULL;
+    gbb_diagnostic_record recent[RECENT_CAPACITY];
+    const char *status=run_guest(fc,rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
     ++*executed;
     int code=strcmp(status,"pass")==0?0:strcmp(status,"fail")==0?1:3;
     if(receipt){
-        printf("case=%s category=%s status=%s source_revision=31510e12eea6286d36eea060a6adde755e1067aa core_revision=%s runner_revision=%s build_qualified=%s fixture_sha256=%s profile=DMG-CPU-B boot=skipped protocol=mooneye-ld-b-b ticks=%llu budget=%llu eligible=%zu executed=%zu stop=%s recent=%zu\n",
-          fc->id,fc->category,status,GBB_BUILD_REVISION,GBB_BUILD_REVISION,GBB_BUILD_QUALIFIED?"true":"false",fc->sha256,(unsigned long long)ticks,(unsigned long long)fc->budget,eligible,*executed,stop,recent_count);
+        const char *stage=evidence.callback_result?"callback-then-ld-b-b":
+            evidence.reached_result?"ld-b-b-without-expected-callback":"not-reached";
+        printf("case=%s category=%s status=%s manifest_sha256=%s source_revision=%s source_tree=%s source_path=%s report_patch_sha256=%s builder_revision=%s builder_archive_sha256=%s original_rom_sha256=%s fixture_sha256=%s fixture_origin=derived-headless-report-closure upstream_assertions=unchanged core_revision=%s runner_revision=%s build_qualified=%s profile=DMG-CPU-B boot=skipped protocol=mooneye-ld-b-b protocol_stage=%s callback_result=%s callback_pc=%04x result_pc=%04x protocol_reason=%s ticks=%llu budget=%llu eligible=%zu executed=%zu stop=%s recent=%zu\n",
+          fc->id,fc->category,status,MOONEYE_MANIFEST_SHA256,MOONEYE_SOURCE_REVISION,MOONEYE_SOURCE_TREE,fc->source_path,MOONEYE_PATCH_SHA256,MOONEYE_BUILDER_REVISION,MOONEYE_BUILDER_ARCHIVE_SHA256,fc->original_sha256,fc->sha256,GBB_BUILD_REVISION,GBB_BUILD_REVISION,GBB_BUILD_QUALIFIED?"true":"false",stage,evidence.callback_result?evidence.callback_result:"none",evidence.callback_pc,evidence.result_pc,evidence.reason?evidence.reason:"none",(unsigned long long)ticks,(unsigned long long)fc->budget,eligible,*executed,stop,recent_count);
         size_t start=recent_count>8?recent_count-8:0;
         for(size_t i=start;i<recent_count;i++)printf("diag time=%llu kind=%u pc=%04x opcode=%02x address=%04x value=%02x timer=%02x\n",(unsigned long long)recent[i].time_half_dots,(unsigned)recent[i].kind,recent[i].pc,recent[i].opcode,recent[i].address,recent[i].value,recent[i].timer_state);
     }
-    gbb_destroy(m);return code;
+    return code;
 }
 
 static int run_original_tracer(const char *path) {
