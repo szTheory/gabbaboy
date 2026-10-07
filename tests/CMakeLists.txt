@@ -80,6 +80,14 @@ endforeach()
 foreach(case frame_composition_tracer joypad_gameplay_tracer)
   add_test(NAME ${case} COMMAND test_tracer ${case} ${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb)
 endforeach()
+
+add_executable(test_ppu test_ppu.c)
+target_link_libraries(test_ppu PRIVATE GabbaBoy::core)
+target_compile_features(test_ppu PRIVATE c_std_17)
+set_target_properties(test_ppu PROPERTIES C_EXTENSIONS OFF)
+foreach(case frame_composition_bg frame_composition_window frame_composition_sprites frame_composition_priority)
+  add_test(NAME ${case} COMMAND test_ppu ${case})
+endforeach()
 add_test(NAME tracer_smoke COMMAND gabbaboy-runner ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 add_test(NAME fixture_digest
   COMMAND ${CMAKE_COMMAND}

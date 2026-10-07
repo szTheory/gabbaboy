@@ -69,6 +69,10 @@ tracer_timeout
 tracer_trace
 frame_composition_tracer
 joypad_gameplay_tracer
+frame_composition_bg
+frame_composition_window
+frame_composition_sprites
+frame_composition_priority
 tracer_smoke
 fixture_digest
 visible_fixture_digest
