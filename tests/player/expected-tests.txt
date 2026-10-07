@@ -1,6 +1,7 @@
 player_input_events
 player_input_focus
 player_input_time
+player_limitations
 player_presentation_hidpi
 player_presentation_integer
 player_presentation_large
