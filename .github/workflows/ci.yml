@@ -1,0 +1,131 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  native-linux:
+    name: native-linux-x64
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Configure
+        run: |
+          mkdir -p build/package-prefix
+          cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$GITHUB_WORKSPACE/build/package-prefix"
+      - name: Build
+        run: cmake --build --preset phase1 --verbose
+      - name: Install package
+        run: cmake --install build --prefix build/package-prefix
+      - name: Run and verify required test inventory
+        run: |
+          ctest --test-dir build --output-on-failure --no-tests=error --output-junit ctest.xml
+          bash .github/scripts/verify-test-inventory.sh build/ctest.xml tests/expected-tests.txt --installed
+
+  native-macos:
+    name: native-macos-arm64
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Configure
+        run: |
+          mkdir -p build/package-prefix
+          cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$GITHUB_WORKSPACE/build/package-prefix"
+      - name: Build
+        run: cmake --build --preset phase1 --verbose
+      - name: Install package
+        run: cmake --install build --prefix build/package-prefix
+      - name: Run and verify required test inventory
+        run: |
+          ctest --test-dir build --output-on-failure --no-tests=error --output-junit ctest.xml
+          bash .github/scripts/verify-test-inventory.sh build/ctest.xml tests/expected-tests.txt --installed
+
+  native-windows:
+    name: native-windows-x64
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Configure
+        run: |
+          New-Item -ItemType Directory -Force build/package-prefix | Out-Null
+          cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$env:GITHUB_WORKSPACE/build/package-prefix"
+      - name: Build
+        run: cmake --build --preset phase1 --verbose
+      - name: Install package
+        run: cmake --install build --prefix build/package-prefix
+      - name: Run and verify required test inventory
+        shell: bash
+        run: |
+          ctest --test-dir build --output-on-failure --no-tests=error --output-junit ctest.xml
+          bash .github/scripts/verify-test-inventory.sh build/ctest.xml tests/expected-tests.txt --installed
+
+  linux-sanitizers:
+    name: linux-asan-ubsan
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Configure ASan and UBSan
+        run: cmake --preset phase1-asan
+      - name: Confirm sanitizer cache option
+        run: cmake -LA -N build-asan | grep -q '^GABBABOY_ENABLE_SANITIZERS:BOOL=ON$'
+      - name: Build and capture compiler/link commands
+        run: cmake --build --preset phase1-asan --verbose 2>&1 | tee build-asan/build.stdout
+      - name: Confirm compiler and linker sanitizer flags
+        run: |
+          grep -E -- '-fsanitize=address,undefined.* -c ' build-asan/build.stdout
+          grep -E -- '-fsanitize=address,undefined.* -o [^ ]+ .*libgabbaboy_core' build-asan/build.stdout
+          grep -F -- '-fsanitize=address,undefined' build-asan/build.ninja
+      - name: Run and verify nonempty test inventory
+        run: |
+          ctest --preset phase1-asan --output-on-failure --no-tests=error --output-junit ctest.xml
+          bash .github/scripts/verify-test-inventory.sh build-asan/ctest.xml tests/expected-tests.txt
+
+  cmake-floor-3-25-3:
+    name: cmake-floor-3.25.3
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Verify CMake 3.25.3 configure/build/test/install and relocation
+        run: bash .github/scripts/verify-cmake-floor.sh
+
+  required-native:
+    name: required-native
+    if: always()
+    needs:
+      - native-linux
+      - native-macos
+      - native-windows
+      - linux-sanitizers
+      - cmake-floor-3-25-3
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Reject missing, skipped, failed, or timed-out required jobs
+        env:
+          NATIVE_LINUX: ${{ needs.native-linux.result }}
+          NATIVE_MACOS: ${{ needs.native-macos.result }}
+          NATIVE_WINDOWS: ${{ needs.native-windows.result }}
+          LINUX_SANITIZERS: ${{ needs.linux-sanitizers.result }}
+          CMAKE_FLOOR: ${{ needs.cmake-floor-3-25-3.result }}
+        run: |
+          for result in "$NATIVE_LINUX" "$NATIVE_MACOS" "$NATIVE_WINDOWS" "$LINUX_SANITIZERS" "$CMAKE_FLOOR"; do
+            if [[ "$result" != success ]]; then
+              echo "Required evidence job did not succeed: $result" >&2
+              exit 1
+            fi
+          done
+          echo "All required native, sanitizer, and CMake floor jobs succeeded."

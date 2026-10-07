@@ -10,14 +10,14 @@ Every requirement below must map to exactly one phase. Completion needs implemen
 
 ### Foundation and real guest execution
 
-- [ ] **BASE-01**: A developer can configure, build, test, and install the C17 core and headless runner using documented CMake/Ninja/CTest commands without SDL or network access after explicit dependency preparation.
-- [ ] **BASE-02**: An integrator can create, reset, run, and destroy independent opaque instances through a documented C API with explicit model, ownership, error, lifetime, and thread-use rules.
-- [ ] **BASE-03**: A caller can load a supported bounded ROM image and receive an explicit non-destructive error for truncated, oversized, unsupported, or invalid input; unsupported cartridge types are never silently guessed.
-- [ ] **BASE-04**: A caller can execute a tiny original GB ROM through the real CPU/bus path with a declared opcode subset and bounded run/trace result; unsupported execution is reported explicitly and no synthetic framebuffer substitutes for guest execution.
-- [ ] **BASE-05**: A maintainer can reproduce each admitted public fixture from a manifest recording source, license/notice, immutable revision or original source, build recipe, digest, model/boot applicability, pass protocol, and timeout.
-- [ ] **BASE-06**: An external C consumer and C++ consumer can link an installed `GabbaBoy::core`, execute the original tracer, and use the public header without private include paths or frontend dependencies.
-- [ ] **BASE-07**: A contributor receives a required CI result that confirms the intended tests actually ran, including loader/lifecycle errors and ASan/UBSan coverage; missing fixtures, missing mandatory cases, failures, and timeouts cannot appear green.
-- [ ] **BASE-08**: A contributor can use a documented remote/PR workflow and download a clearly labeled foundation-preview core/runner artifact tied to its source revision, with a basic installation smoke result and honest limitations.
+- [x] **BASE-01**: A developer can configure, build, test, and install the C17 core and headless runner using documented CMake/Ninja/CTest commands without SDL or network access after explicit dependency preparation.
+- [x] **BASE-02**: An integrator can create, reset, run, and destroy independent opaque instances through a documented C API with explicit model, ownership, error, lifetime, and thread-use rules.
+- [x] **BASE-03**: A caller can load a supported bounded ROM image and receive an explicit non-destructive error for truncated, oversized, unsupported, or invalid input; unsupported cartridge types are never silently guessed.
+- [x] **BASE-04**: A caller can execute a tiny original GB ROM through the real CPU/bus path with a declared opcode subset and bounded run/trace result; unsupported execution is reported explicitly and no synthetic framebuffer substitutes for guest execution.
+- [x] **BASE-05**: A maintainer can reproduce each admitted public fixture from a manifest recording source, license/notice, immutable revision or original source, build recipe, digest, model/boot applicability, pass protocol, and timeout.
+- [x] **BASE-06**: An external C consumer and C++ consumer can link an installed `GabbaBoy::core`, execute the original tracer, and use the public header without private include paths or frontend dependencies.
+- [x] **BASE-07**: A contributor receives a required CI result that confirms the intended tests actually ran, including loader/lifecycle errors and ASan/UBSan coverage; missing fixtures, missing mandatory cases, failures, and timeouts cannot appear green.
+- [x] **BASE-08**: A contributor can use a documented remote/PR workflow and download a clearly labeled foundation-preview core/runner artifact tied to its source revision, with a basic installation smoke result and honest limitations.
 
 ### DMG CPU, bus, and time
 
@@ -92,14 +92,14 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BASE-01 | Phase 1 | Pending |
-| BASE-02 | Phase 1 | Pending |
-| BASE-03 | Phase 1 | Pending |
-| BASE-04 | Phase 1 | Pending |
-| BASE-05 | Phase 1 | Pending |
-| BASE-06 | Phase 1 | Pending |
-| BASE-07 | Phase 1 | Pending |
-| BASE-08 | Phase 1 | Pending |
+| BASE-01 | Phase 1 | Complete |
+| BASE-02 | Phase 1 | Complete |
+| BASE-03 | Phase 1 | Complete |
+| BASE-04 | Phase 1 | Complete |
+| BASE-05 | Phase 1 | Complete |
+| BASE-06 | Phase 1 | Complete |
+| BASE-07 | Phase 1 | Complete |
+| BASE-08 | Phase 1 | Complete |
 | CPU-01 | Phase 2 | Pending |
 | CPU-02 | Phase 2 | Pending |
 | CPU-03 | Phase 2 | Pending |
@@ -127,8 +127,17 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | SHIP-06 | Phase 6 | Pending |
 | SHIP-07 | Phase 6 | Pending |
 | SHIP-08 | Phase 6 | Pending |
+| CGB-01 | Next milestone | Deferred |
+| CGB-02 | Next milestone | Deferred |
+| CGB-03 | Next milestone | Deferred |
+| CART-01 | Next milestone | Deferred |
+| RTC-01 | Next milestone | Deferred |
+| STATE-01 | Next milestone | Deferred |
+| INT-01 | Next milestone | Deferred |
 
-**Active coverage:** 35/35 requirements mapped exactly once; 0 unmapped, 0 duplicates. All remain pending. Next-milestone requirements and later candidates are excluded from active coverage.
+**Active coverage:** 35/35 requirements mapped exactly once; 0 unmapped, 0 duplicates. Eight are complete and 27 remain pending. Next-milestone requirements and later candidates are excluded from active coverage.
+
+**Next-milestone traceability:** 7/7 GB/GBC breadth commitments are mapped to the next milestone and remain outside the active v0.1 count.
 
 ---
-Last updated: 2026-10-02 after research synthesis; all requirements remain pending.
+Last updated: 2026-10-03 after Phase 1 verification; 8 active requirements are complete, 27 remain pending, and 7 next-milestone commitments are explicitly deferred.

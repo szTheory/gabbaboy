@@ -6,6 +6,8 @@ Recorded 2026-10-02. Authority: the owner's founding request and confirmed endpo
 
 The installed runtime returned `{"packageName":"@opengsd/gsd-core","version":"1.14.0"}` from `runtime-identity --raw` during initialization. The installed `gsd-new-project` skill and `new-project.md` workflow were read. [OpenGSD's official repository](https://github.com/open-gsd/gsd-core) describes the discuss → plan → execute → verify → ship loop and the `@opengsd/gsd-core` package (retrieved 2026-10-02). Local installed behavior is the authority for the current session; recheck upstream changes at a future upgrade.
 
+During Phase 1 planning on 2026-10-02, the active `gsd_run` PATH launcher reported version 1.15.0, while a separately invoked direct tool path reported 1.14.0. All phase workflow actions and final plan-structure checks use `gsd_run` 1.15.0; the alternate-path invocation was read-only and is not the workflow runtime. Recheck `gsd_run runtime-identity` if the launcher or runtime path changes.
+
 Use Codex skill commands such as `$gsd-progress`, `$gsd-discuss-phase 1`, and `$gsd-plan-phase 1`. Do not rerun `$gsd-new-project` against a completed initialization. Do not install a similarly named predecessor or silently upgrade the working runtime as part of emulator implementation.
 
 ## Authorized execution and stopping rule

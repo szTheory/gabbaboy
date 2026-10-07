@@ -2,7 +2,7 @@
 
 ## What This Is
 
-GabbaBoy is a portable C emulator core for Nintendo Game Boy (DMG) and Game Boy Color (CGB), with a small optional desktop player and an integration path for Playstead and other frontends. It aims to make accurate emulation, safe saves, useful diagnostics, and measured performance easy for players, integrators, and developers to rely on. The repository is currently a research and planning foundation; no emulation capabilities are implemented yet.
+GabbaBoy is a portable C17 emulator core for Nintendo Game Boy (DMG) and Game Boy Color (CGB), with a planned optional desktop player and an integration path for Playstead and other frontends. Phase 1 delivers an installable headless core and runner, an opaque bounded C API, and a project-authored ROM tracer for a narrow bootless DMG-CPU-B profile. General gameplay, hardware-qualified memory behavior, CGB execution, and the desktop player remain future work.
 
 ## Core Value
 
@@ -12,7 +12,9 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 
 ### Validated
 
-None yet — all emulator capabilities require implementation and evidence.
+- ✓ Portable C17 core and headless runner with an installable `GabbaBoy::core` export — Phase 1.
+- ✓ Bounded opaque-instance API and original-ROM tracer with explicit fixture provenance and limited DMG-CPU-B claims — Phase 1.
+- ✓ Relocated C and C++ consumers, required CI inventory, and revision-qualified Linux/macOS preview packages — Phase 1.
 
 ### Active
 
@@ -68,6 +70,7 @@ None yet — all emulator capabilities require implementation and evidence.
 | Inherit the session model | User can change model between phases without stale hardcoded model IDs | Adopted configuration |
 | PR-based phase branches | Keep main releasable and retain review/verification evidence | Adopted configuration |
 | Corpus-qualified claims and measurements | A passing subset is not universal hardware/game compatibility | Required |
+| Bootless DMG-CPU-B tracer as the first delivered slice | A real guest path validates the portable API and install flow while keeping hardware, gameplay, and CGB claims bounded | Verified in Phase 1; memory-map conformance continues in Phase 2 |
 
 ## Evolution
 
@@ -76,4 +79,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-10-02 during OpenGSD initialization.
+Last updated: 2026-10-03 after Phase 1 verification and closeout.

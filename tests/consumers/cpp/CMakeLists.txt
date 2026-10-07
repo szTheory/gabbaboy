@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.25)
+project(GabbaBoyCppConsumer LANGUAGES CXX)
+
+find_package(GabbaBoy CONFIG REQUIRED)
+if(NOT EXISTS "${GBB_TRACER_ROM}")
+  message(FATAL_ERROR "GBB_TRACER_ROM must name the installed tracer fixture")
+endif()
+add_executable(consumer-cpp main.cpp)
+target_link_libraries(consumer-cpp PRIVATE GabbaBoy::core)
+target_compile_features(consumer-cpp PRIVATE cxx_std_17)

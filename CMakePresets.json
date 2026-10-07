@@ -1,0 +1,22 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    { "name": "phase1", "generator": "Ninja", "binaryDir": "${sourceDir}/build", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "BUILD_TESTING": "ON" } },
+    { "name": "cmake-3.25.3", "generator": "Ninja", "binaryDir": "${sourceDir}/build-cmake-3.25.3", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "BUILD_TESTING": "ON" } },
+    { "name": "cmake-3.25.3-relocated", "generator": "Ninja", "binaryDir": "${sourceDir}/build-cmake-3.25.3-relocated", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "BUILD_TESTING": "ON", "GBB_TEST_INSTALL_PREFIX": "${sourceDir}/build-cmake-3.25.3/package-prefix-relocated" } },
+    { "name": "phase1-asan", "generator": "Ninja", "binaryDir": "${sourceDir}/build-asan", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "BUILD_TESTING": "ON", "GABBABOY_ENABLE_SANITIZERS": "ON" } }
+  ],
+  "buildPresets": [
+    { "name": "phase1", "configurePreset": "phase1" },
+    { "name": "cmake-3.25.3", "configurePreset": "cmake-3.25.3" },
+    { "name": "cmake-3.25.3-relocated", "configurePreset": "cmake-3.25.3-relocated" },
+    { "name": "phase1-asan", "configurePreset": "phase1-asan" }
+  ],
+  "testPresets": [
+    { "name": "phase1", "configurePreset": "phase1", "output": { "outputOnFailure": true } },
+    { "name": "cmake-3.25.3", "configurePreset": "cmake-3.25.3", "output": { "outputOnFailure": true } },
+    { "name": "cmake-3.25.3-relocated", "configurePreset": "cmake-3.25.3-relocated", "output": { "outputOnFailure": true } },
+    { "name": "phase1-asan", "configurePreset": "phase1-asan", "output": { "outputOnFailure": true } }
+  ]
+}

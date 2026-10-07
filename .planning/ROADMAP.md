@@ -13,7 +13,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 ## Phases
 
-- [ ] **Phase 1: Portable Foundation and Original ROM Tracer** - Build, embed, and download a bounded real-ROM tracer.
+- [x] **Phase 1: Portable Foundation and Original ROM Tracer** - Build, embed, and download a bounded real-ROM tracer. (completed 2026-10-03)
 - [ ] **Phase 2: DMG CPU, Bus, and Time** - Execute scoped DMG diagnostics with reproducible timing and bounded progress.
 - [ ] **Phase 3: Visible Interactive DMG** - Play an original or permissioned ROM-only fixture in a macOS preview.
 - [ ] **Phase 4: MBC1 and Safe Battery Continuation** - Retain meaningful guest progress across fresh processes without corrupting good saves.
@@ -24,7 +24,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 ### Phase 1: Portable Foundation and Original ROM Tracer
 
-**Goal**: Developers can build, embed, and obtain an installable core/runner that executes an original GB ROM through a bounded public contract.
+**Goal**: As a developer, I want to run an original ROM with an installable GB core via a bounded API, so that I can embed it.
 **Mode:** mvp
 **Depends on**: Nothing (first phase)
 **Requirements**: BASE-01, BASE-02, BASE-03, BASE-04, BASE-05, BASE-06, BASE-07, BASE-08
@@ -36,7 +36,12 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. A contributor receives a required CI result proving that loader/lifecycle error cases and ASan/UBSan checks actually ran; missing mandatory fixtures/cases, failures, and timeouts fail the gate. (BASE-07)
 5. A contributor can use the configured remote/PR workflow and download a revision-linked foundation-preview core/runner with an installation smoke result and explicit capability limits. (BASE-08)
 
-**Plans**: TBD
+**Plans**: 5/5 plans complete in 5 dependency-ordered waves; see [Phase 1 plans](phases/GB-01-portable-foundation-and-original-rom-tracer/).
+- [x] 01-01-PLAN.md
+- [x] 01-02-PLAN.md
+- [x] 01-03-PLAN.md
+- [x] 01-04-PLAN.md
+- [x] 01-05-PLAN.md
 
 ### Phase 2: DMG CPU, Bus, and Time
 
@@ -125,7 +130,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Portable Foundation and Original ROM Tracer | 0/TBD | Not started | - |
+| 1. Portable Foundation and Original ROM Tracer | 5/5 | Complete    | 2026-10-03 |
 | 2. DMG CPU, Bus, and Time | 0/TBD | Not started | - |
 | 3. Visible Interactive DMG | 0/TBD | Not started | - |
 | 4. MBC1 and Safe Battery Continuation | 0/TBD | Not started | - |
@@ -134,8 +139,8 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 ## Execution Contract
 
-All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](REQUIREMENTS.md); all remain pending. Safety, fixture rights, documentation, install consumers, and release evidence expand as each boundary arrives. Phase 6 qualifies the completed product; it does not postpone basic safety or packaging until the end.
+All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](REQUIREMENTS.md). BASE-01 through BASE-06 have local implementation and verification evidence; BASE-07 and BASE-08 remain pending exact-revision hosted CI, required-check, and artifact evidence. Safety, fixture rights, documentation, install consumers, and release evidence expand as each boundary arrives. Phase 6 qualifies the completed product; it does not postpone basic safety or packaging until the end.
 
 Automate authorized work within each phase, then inspect current verification/release/consumer evidence, update traceability and [lessons](context/LESSONS.md), triage issues/PRs, report limitations and the exact next command, and **stop**. Never auto-advance phases or milestones; keep both auto-advance flags false. Credential, hardware, or perceptual gaps must be recorded honestly with the smallest necessary human action, never converted into passing evidence. Remote/CI setup begins in Phase 1; absent access remains an explicit completion limitation.
 
-Initialization stops before Phase 1. Next, in fresh context: `$gsd-discuss-phase 1`.
+Phase 1 Plans 01–04 are complete. Plan 04 added the native CI and fixture-reproduction gates; local Linux x86_64 container and macOS test results passed, while hosted status, branch protection, and Windows results remain unverified because no remote is configured. Next plan: GB-01-05 revision-linked Foundation Preview Packages. Continue with `$gsd-execute-phase 1` and stop after Phase 1.
