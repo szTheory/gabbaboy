@@ -110,11 +110,11 @@ PY
   [[ -s "$package_metadata" ]] || fail 'extracted package is missing source and SDL metadata'
   otool -L "$player_bin" | grep -Fq '@rpath/libSDL3.0.dylib' ||
     fail 'packaged executable does not reference its bundled SDL3 library'
-  otool -l "$player_bin" | grep -Fq '@executable_path/../lib' ||
-    fail 'packaged executable does not resolve SDL3 through its relative package path'
-  if otool -l "$player_bin" | grep -Fq "$SDL_PREFIX"; then
-    fail 'packaged executable retains the build-host SDL path'
-  fi
+  packaged_rpaths=$(otool -l "$player_bin" | awk '
+    /cmd LC_RPATH/ { getline; getline; if ($1 == "path") { $1 = ""; sub(/^ /, ""); sub(/ \(offset.*/, ""); print } }
+  ')
+  [[ "$packaged_rpaths" == '@executable_path/../lib' ]] ||
+    fail "packaged executable must have only the bundled SDL RPATH (found: ${packaged_rpaths:-none})"
 
   python3 - "$ROOT_DIR" "$archive" "$build_receipt" "$fixture_manifest" \
     "$demo_rom" "$demo_license" "$project_license" "$sdl_license" "$package_metadata" \
