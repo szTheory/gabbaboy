@@ -167,6 +167,10 @@ if metadata.get('signed') is not False or metadata.get('notarized') is not False
     raise SystemExit('preview package metadata must not claim signing or notarization')
 if metadata.get('hardware_qualified') is not False:
     raise SystemExit('preview package metadata must not claim hardware qualification')
+if metadata.get('audio_implemented') is not False:
+    raise SystemExit('preview package metadata audio_implemented must be JSON false because audio is not implemented')
+if metadata.get('battery_persistence_implemented') is not False:
+    raise SystemExit('preview package metadata battery_persistence_implemented must be JSON false because battery persistence is not implemented')
 if receipt.get('github_run_id') != metadata.get('github_run_id') or receipt.get('github_run_attempt') != metadata.get('github_run_attempt'):
     raise SystemExit('candidate receipt and package metadata run identities differ')
 print(f"candidate_package_sha256={digest(archive)}")
