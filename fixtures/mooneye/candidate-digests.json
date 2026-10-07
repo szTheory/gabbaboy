@@ -4,11 +4,11 @@
   "strategy_id": "source-order",
   "recipe_status": "qualified",
   "local_status": "qualified",
-  "hosted_status": "open",
+  "hosted_status": "qualified",
   "protocol_status": "qualified",
   "provenance_status": "qualified",
-  "qualification_status": "open",
-  "open_reason": "hosted candidate bytes, recipe identity, or retained source provenance did not match the local evidence",
+  "qualification_status": "qualified",
+  "open_reason": null,
   "source_head": "bdf214bc978548baa3b501c90b2efc5c654c5279",
   "recipe_script_sha256": "6a634e873400afa5c753b538ee85c11b91b8c4c6d684d9a950fcaafa7b862316",
   "suite": {
@@ -112,10 +112,49 @@
       "repeat_size_bytes": 32768
     }
   ],
-  "head_sha": "10c976615d993c289af2ea66f2c4d9bcb044b11c",
-  "run_id": 37561037471,
-  "run_url": "https://github.com/szTheory/gabbaboy/actions/runs/37561037471",
-  "qualification_gate": "hosted",
-  "local_output": "build/mooneye-candidate-local/run.7mkb6BOE",
-  "committed_lock_sha256": "eba8d57f28c6923f451bb9b03760843175674c9d612b115aea581b8db0ec8656"
+  "head_sha": "93647ac98b7f8437cc9640e3dec437bba4f11e9c",
+  "run_id": 37561292904,
+  "run_url": "https://github.com/szTheory/gabbaboy/actions/runs/37561292904",
+  "qualification_gate": "none",
+  "local_output": "build/mooneye-candidate-local/run.pYConlHI",
+  "committed_lock_sha256": "c67bac354d6477af25543ecaf00cc02b814f8a1b1bcae9cc91e48c254e09ad91",
+  "hosted_comparison": {
+    "head_sha": "93647ac98b7f8437cc9640e3dec437bba4f11e9c",
+    "run_id": null,
+    "host": "Linux/x86_64",
+    "workflow_path": ".github/workflows/fixture-repro.yml",
+    "cases": [
+      {
+        "rom": "daa.gb",
+        "local_sha256": "3a39eda77a09b817e4e38004a3d117990565fb797e8a4f470920f1b7608f0a08",
+        "hosted_sha256": "3a39eda77a09b817e4e38004a3d117990565fb797e8a4f470920f1b7608f0a08",
+        "local_size_bytes": 32768,
+        "hosted_size_bytes": 32768,
+        "byte_identical": true,
+        "different_byte_count": 0,
+        "first_difference": null
+      },
+      {
+        "rom": "tim00.gb",
+        "local_sha256": "476b2332de3f2d6604f8e1478daa8cbc7c59c89c50837fd47cc95e96e784d4f7",
+        "hosted_sha256": "476b2332de3f2d6604f8e1478daa8cbc7c59c89c50837fd47cc95e96e784d4f7",
+        "local_size_bytes": 32768,
+        "hosted_size_bytes": 32768,
+        "byte_identical": true,
+        "different_byte_count": 0,
+        "first_difference": null
+      },
+      {
+        "rom": "tim00_div_trigger.gb",
+        "local_sha256": "566da853858061c69866c47cc31b85b1fef003d4c088c8e8dbb26973da9944da",
+        "hosted_sha256": "566da853858061c69866c47cc31b85b1fef003d4c088c8e8dbb26973da9944da",
+        "local_size_bytes": 32768,
+        "hosted_size_bytes": 32768,
+        "byte_identical": true,
+        "different_byte_count": 0,
+        "first_difference": null
+      }
+    ],
+    "byte_identical": true
+  }
 }

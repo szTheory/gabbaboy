@@ -73,9 +73,9 @@ The fixed three-case inventory is retained. Full unsupported-read preflight expo
 <!-- BEGIN PLAN 02-17 candidate qualification -->
 ## Derived candidate cross-host qualification
 
-- Gate: `open`; failed or pending gate: `hosted`.
-- Exact pushed source revision: `10c976615d993c289af2ea66f2c4d9bcb044b11c`.
-- Hosted `fixture-repro.yml` run: [37561037471](https://github.com/szTheory/gabbaboy/actions/runs/37561037471).
-- Local candidate comparison: `qualified`; protocol probes: `qualified`; provenance/rights review: `qualified`; hosted Linux comparison: `open`.
-- Open reason: hosted candidate bytes, recipe identity, or retained source provenance did not match the local evidence. The checked-in ROMs, required manifest, and denominator remain at the captured pre-admission baseline.
+- Gate: `qualified`; failed or pending gate: `none`.
+- Exact pushed source revision: `93647ac98b7f8437cc9640e3dec437bba4f11e9c`.
+- Hosted `fixture-repro.yml` run: [37561292904](https://github.com/szTheory/gabbaboy/actions/runs/37561292904).
+- Local candidate comparison: `qualified`; protocol probes: `qualified`; provenance/rights review: `qualified`; hosted Linux comparison: `qualified`.
+- All three 32,768-byte candidate ROMs matched byte-for-byte between local Darwin/arm64 and the retained hosted Linux artifact at the exact source revision. The immutable original ROM digests and the one-CPU/two-timer denominator remain recorded separately.
 <!-- END PLAN 02-17 candidate qualification -->
