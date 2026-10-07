@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.1
 current_phase: 03
-current_phase_name: visible-interactive-dmg
-status: ready_to_execute
-stopped_at: Phase 3 gap-closure Plans 03-10 and 03-11 ready; VIDEO-02/03 verification gaps remain
-last_updated: "2026-10-07"
+current_phase_name: Visible Interactive DMG
+status: executing
+stopped_at: Plan 03-10 complete with unavailable hardware evidence recorded; Plan 03-11 is next
+last_updated: "2026-10-07T22:06:15Z"
 last_activity: 2026-10-07
-last_activity_desc: Phase 3 planning complete; Wave 10 gap-closure Plans 03-10/03-11 ready for execution
-state_head: a6496d260024f896b830646a0228caf433e08a1c
+last_activity_desc: Plan GB-03-10 completed; Plan GB-03-11 next
+state_head: 405568397d3a8a6fe5dda4d8420e145e8744fdce
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 33
-  completed_plans: 29
+  completed_plans: 32
 milestone_name: limited DMG preview
 ---
 
@@ -24,21 +24,21 @@ milestone_name: limited DMG preview
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 3 — Visible Interactive DMG
+**Current focus:** Phase GB-03 — Visible Interactive DMG
 
 ## Current Position
 
-Phase: 03 (visible-interactive-dmg) — READY TO EXECUTE
-Plan: 9 of 11 planned complete; Wave 10 gap-closure Plans 03-10 and 03-11 are ready
-Status: Ready to execute
-Last activity: 2026-10-07 — Phase 3 gap planning and independent plan review complete
+Phase: GB-03 (Visible Interactive DMG) — EXECUTING
+Plan: 11 of 11
+Status: Executing Phase GB-03
+Last activity: 2026-10-07 — Plan GB-03-10 completed; Plan GB-03-11 is next
 
 Progress: [███░░░░░░░] 33% of milestone phases complete; Phases 1 and 2 passed verification.
 
 ## Performance Metrics
 
 - Unique plans: 27; average duration / total execution time: 25 min / 670 min. Phase 2 completion is based on goal verification, not task count alone.
-- Per-phase metrics / recent trend: Phases 1 and 2 are verified complete; the original nine Phase 3 plans have summaries, and two Wave 10 gap-closure plans are ready to execute. Phase 3 still has VIDEO-02/03 evidence gaps. Plan 02-15 is superseded/non-runnable and remains historical.
+- Per-phase metrics / recent trend: Phases 1 and 2 are verified complete; ten of eleven Phase 3 plans have summaries, with Plan 03-11 next. Phase 3 still has VIDEO-02/03 evidence gaps. Plan 02-15 is superseded/non-runnable and remains historical.
 - Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. At implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`, the local offline inventory passed 104/104 with no skips, the relocated installed C/C++ inventory passed 109/109, the runner passed its fixed one-CPU/two-timer derived corpus, hosted CI run 37620710587 passed, and fixture reproduction run 37620710600 passed. Independent verification passed all five CPU requirements. Original upstream PPU-dependent reporting paths remain excluded; no physical DMG hardware test occurred.
 
 **Per-Plan Metrics:**
@@ -69,6 +69,7 @@ Progress: [███░░░░░░░] 33% of milestone phases complete; Pha
 | Phase 02 P18 | 25 min | 2 tasks | 5 files |
 | Phase GB-03 P01/P02 | 20/30 min | 1/2 tasks | 10/5 files |
 | Phase GB-03 P03/P04/P05/P06/P07/P08/P09 | 79/11/19/15/10/12/24 min | 2/2/2/2/2/2/2 tasks | 6/10/8/11/9/3/5 files |
+| Phase GB-03 P10 | 9+ min (lower bound; exact start not captured) | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -127,7 +128,7 @@ None outside the roadmap.
 - The admitted corpus is three derived headless reporting closures (one CPU, two timer). Original Mooneye reporting paths depend on PPU/LY behavior outside scope and remain excluded. No physical DMG-CPU-B observation occurred; no hardware qualification is claimed.
 - Phase 1 PR #1 and Phase 2 PR #2 were merged on 2026-10-07 after their required exact-head checks passed. Current GitHub triage found no open PRs or issues. Phase 2 verification is limited to its documented DMG-CPU-B CPU/timer scope; no physical DMG observation or PPU qualification is claimed.
 - The original nine Phase 3 plans are complete. VIDEO-01, VIDEO-04, and VIDEO-05 are complete; exact-head CI run 37686137977 and downloaded-package consumer run 37686137834 passed at source `fd62c48d84b8339435fefd008147f0c06f696e0e`. VIDEO-02 simultaneous PPU/DMA evidence and D-08/VIDEO-03 JOYP interrupt evidence remain open. Live desktop perception and physical DMG-CPU-B observation are unavailable. Gap-closure Plans 03-10/03-11 are ready; execute those before Phase 4 or claiming Phase 3 complete.
-- Phase 3 gap planning added Wave 10 Plans 03-10 and 03-11. Independent review passed all 11 plan structures, all 14 context decisions, all seven unresolved probe-edge dispositions, and 23 automated commands with explicit failure directions. Phase verification remains `gaps_found`; 03-10 preserves VIDEO-02/03 as open where CPU-B applicability is unsupported and includes a provenance-complete human hardware checkpoint. Execute only the authorized gap plans next; do not start Phase 4 or claim Phase 3 complete.
+- Phase 3 gap execution is in progress. Plan 03-10 is complete with commits `eff0896`, `30187c9`, and `2c73591`; its Task 3 disposition records that no lawful, available observation setup or raw record was available to this run. DMA/PPU passed 14 focused cases, JOYP/events passed 8, and the combined DMA/JOYP filter passed 14. Plan 03-11 is next. Phase verification remains `gaps_found`; VIDEO-02 and D-08/VIDEO-03 stay open where CPU-B applicability is unsupported. Do not start Phase 4 or claim Phase 3 complete.
 - Native host support floors beyond the verified CI matrix, signing, and live Playstead integration remain later release/adoption work.
 
 ### Quick Tasks Completed
@@ -143,9 +144,9 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 ## Session Continuity
 
 Last session: 2026-10-07
-Stopped at: Phase GB-03 planning complete; Wave 10 gap-closure Plans 03-10 and 03-11 are ready; VIDEO-02/03 gaps remain
+Stopped at: Phase GB-03 gap execution; Plan 03-10 is complete with its unavailable-observation dependency recorded; Plan 03-11 is next
 Resume file: .planning/.continue-here.md
 Next command in fresh context: $gsd-execute-phase 3 --gaps-only
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: **Phase 3 planning — Wave 10 gap-closure Plans 03-10 and 03-11.** The final plan check passed all 11 plan structures, all 14 context decisions, and 23 runnable commands with explicit failure directions. Phase verification remains `gaps_found`: VIDEO-02 and D-08/VIDEO-03 stay open unless source-applicable or provenance-complete CPU-B evidence closes them. Continue with `$gsd-execute-phase 3 --gaps-only`; stop after Phase 3 and keep both auto-advance flags false.
+Completed workflow stage: **Phase 3 gap execution — Plan 03-10.** The source ledger leaves unsupported DMA collision and JOYP IF timing unqualified; the manual transcription and schematic revision are corrected; the unavailable hardware setup is recorded as an unresolved dependency. The automated focused filters passed. Continue with Plan 03-11 using `$gsd-execute-phase 3 --gaps-only`; its prior plans now have summaries, so do not repeat completed work. Stop after Phase 3 and keep both auto-advance flags false.
 Next roadmap phase: **Phase 4 — MBC1 and Safe Battery Continuation.** It has not started; do not start it until Phase 3 gap execution and verification are complete.
