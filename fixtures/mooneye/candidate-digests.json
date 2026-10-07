@@ -8,7 +8,7 @@
   "protocol_status": "qualified",
   "provenance_status": "qualified",
   "qualification_status": "open",
-  "open_reason": "exact-SHA workflow did not complete successfully (status=completed, conclusion=failure)",
+  "open_reason": "hosted candidate bytes, recipe identity, or retained source provenance did not match the local evidence",
   "source_head": "bdf214bc978548baa3b501c90b2efc5c654c5279",
   "recipe_script_sha256": "6a634e873400afa5c753b538ee85c11b91b8c4c6d684d9a950fcaafa7b862316",
   "suite": {
@@ -112,9 +112,10 @@
       "repeat_size_bytes": 32768
     }
   ],
-  "head_sha": "e2bdaa5197b7587a8514aaf638a732f343cd4c5a",
-  "run_id": 37560817154,
-  "run_url": "https://github.com/szTheory/gabbaboy/actions/runs/37560817154",
+  "head_sha": "10c976615d993c289af2ea66f2c4d9bcb044b11c",
+  "run_id": 37561037471,
+  "run_url": "https://github.com/szTheory/gabbaboy/actions/runs/37561037471",
   "qualification_gate": "hosted",
-  "local_output": "build/mooneye-candidate-local"
+  "local_output": "build/mooneye-candidate-local/run.7mkb6BOE",
+  "committed_lock_sha256": "eba8d57f28c6923f451bb9b03760843175674c9d612b115aea581b8db0ec8656"
 }

@@ -265,7 +265,7 @@ get_exact_runs() {
   gh api -X GET "repos/$repo_slug/actions/workflows/fixture-repro.yml/runs" \
     -f branch="$branch" -f head_sha="$head_sha" -F per_page=100 2>/dev/null |
     jq -c --arg sha "$head_sha" --arg path "$expected_run_path" \
-      '[.workflow_runs[] | select(.head_sha == $sha and .path == $path)] | sort_by(.created_at)'
+      '[.workflow_runs[] | select(.head_sha == $sha and .path == $path and (.event == "push" or .event == "workflow_dispatch"))] | sort_by(.created_at)'
 }
 get_run_by_id() {
   gh api "repos/$repo_slug/actions/runs/$1" 2>/dev/null
@@ -307,9 +307,10 @@ else
   run=$(get_run_by_id "$run_id") || fail_open hosted 'recorded hosted workflow run is unavailable'
   actual_run_head=$(jq -r '.head_sha // empty' <<< "$run")
   actual_run_path=$(jq -r '.path // empty' <<< "$run")
+  actual_run_event=$(jq -r '.event // empty' <<< "$run")
   run_status=$(jq -r '.status // empty' <<< "$run")
   run_conclusion=$(jq -r '.conclusion // empty' <<< "$run")
-  [[ "$actual_run_head" == "$head_sha" && "$actual_run_path" == "$expected_run_path" ]] || fail_open hosted 'recorded hosted run path or exact head SHA no longer matches'
+  [[ "$actual_run_head" == "$head_sha" && "$actual_run_path" == "$expected_run_path" && ( "$actual_run_event" == push || "$actual_run_event" == workflow_dispatch ) ]] || fail_open hosted 'recorded hosted run event, path, or exact head SHA no longer matches'
 fi
 
 actual_run_head=${actual_run_head:-$(jq -r '.head_sha // empty' <<< "$run")}

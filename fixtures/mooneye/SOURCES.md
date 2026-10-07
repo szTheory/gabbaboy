@@ -74,8 +74,8 @@ The fixed three-case inventory is retained. Full unsupported-read preflight expo
 ## Derived candidate cross-host qualification
 
 - Gate: `open`; failed or pending gate: `hosted`.
-- Exact pushed source revision: `e2bdaa5197b7587a8514aaf638a732f343cd4c5a`.
-- Hosted `fixture-repro.yml` run: [37560817154](https://github.com/szTheory/gabbaboy/actions/runs/37560817154).
+- Exact pushed source revision: `10c976615d993c289af2ea66f2c4d9bcb044b11c`.
+- Hosted `fixture-repro.yml` run: [37561037471](https://github.com/szTheory/gabbaboy/actions/runs/37561037471).
 - Local candidate comparison: `qualified`; protocol probes: `qualified`; provenance/rights review: `qualified`; hosted Linux comparison: `open`.
-- Open reason: exact-SHA workflow did not complete successfully (status=completed, conclusion=failure). The checked-in ROMs, required manifest, and denominator remain at the captured pre-admission baseline.
+- Open reason: hosted candidate bytes, recipe identity, or retained source provenance did not match the local evidence. The checked-in ROMs, required manifest, and denominator remain at the captured pre-admission baseline.
 <!-- END PLAN 02-17 candidate qualification -->
