@@ -164,3 +164,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** The optional SDL smoke compares helper and renderer geometry and reads software-rendered pixels at viewport edges for native, odd, letterboxed, and high-density sizes; all optional player cases pass 14/14.
 - **Source:** `src/player/main.c`, `src/player/presentation.c`, `tests/player/test_presentation.c`, and [SDL3 logical presentation](https://wiki.libsdl.org/SDL3/SDL_SetRenderLogicalPresentation).
 - **Status:** Reproduced and adopted; native desktop perception remains unverified because this environment has no desktop display.
+
+### GB-ARTIFACT-002 / 2026-10-07 / Plan GB-03-09 relocated SDL package
+
+- **Cause and evidence:** The package consumer originally compared the executable's RPATH to the consumer runner's expected build prefix. Separate hosted jobs need not share a workspace path, so that comparison could miss an extra build-host RPATH even while the expected package RPATH was present.
+- **Remedy:** Parse every `LC_RPATH` entry and require the packaged executable to have exactly `@executable_path/../lib`; launch the binary after safe extraction to prove the bundled dylib and package-relative demo work together.
+- **Applies when:** A native application is copied from one build machine to a separate artifact consumer or end-user installation.
+- **Verification:** The extracted package passed locally; exact-head CI run 37686137977 built the clean arm64 candidate and preview run 37686137834 downloaded and smoke-tested its bytes. Both required aggregates passed.
+- **Source:** `tests/scripts/verify-phase3-player.sh`, `.github/workflows/ci.yml`, `.github/workflows/preview.yml`, and `.planning/phases/GB-03-visible-interactive-dmg/03-09-SUMMARY.md`.
+- **Status:** Fixed and verified for the SDL3 preview package; it does not establish general macOS signing or distribution behavior.

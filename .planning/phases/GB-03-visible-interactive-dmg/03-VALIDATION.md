@@ -53,8 +53,8 @@ created: "2026-10-07"
 | 03-07-02 | 03-07 | 7 | VIDEO-03 | T-03-29, T-03-31 | Invalid queues reject atomically; installed C/C++ consumers exercise public API | unit / consumer | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(event_queue_atomic|event_queue_failure_precedence|event_queue_order|event_partition|event_time_overflow|joypad_selection|joypad_queue_atomic|joypad_equal_time|joypad_partition|frame_copy_failures|frame_generation_lifecycle)$'`; `bash tests/scripts/verify-phase2-installed.sh` | `tests/test_events.c`; `tests/consumers/c/main.c`; `tests/consumers/cpp/main.cpp` | focused cases passed 11/11; relocated installed inventory 137/137 and core-only inventory 132/132 passed, no skips |
 | 03-08-01 | 03-08 | 8 | VIDEO-05 | T-03-32 | Rebuilt fixture bytes match checked-in size and digest | fixture / provenance | bash tests/scripts/reproduce-visible-demo.sh | tests/scripts/reproduce-visible-demo.sh | passed locally with pinned macOS RGBDS v1.0.1; wrong-version and mutated-byte controls failed closed |
 | 03-08-02 | 03-08 | 8 | VIDEO-05 | T-03-32, T-03-33 | Hosted fixture job uses pinned tool and exact checkout receipt | hosted CI | Exact-head fixture-repro lane | .github/workflows/fixture-repro.yml | passed at 53f9f56cacbe6676b2c0db1dddf12dd0e44fa4f3 in run 37683636738; uploaded receipt identity verified |
-| 03-09-01 | 03-09 | 9 | VIDEO-04, VIDEO-05 | T-03-34, T-03-36 | Optional macOS lane uses the pinned dependency and nonempty player smoke | hosted build / integration | Exact-head opt-in macOS player job | Planned in 03-09 | pending |
-| 03-09-02 | 03-09 | 9 | VIDEO-04, VIDEO-05 | T-03-35 | Downloaded package digest/notices and extracted-byte smoke match exact revision | package / consumer | Exact-head downloaded-package smoke | Planned in 03-09 | pending |
+| 03-09-01 | 03-09 | 9 | VIDEO-04, VIDEO-05 | T-03-34, T-03-36 | Optional macOS lane uses pinned dependency and nonempty player smoke | hosted build / integration | Exact-head opt-in macOS player job | CI run 37686137977; clean source `fd62c48d84b8339435fefd008147f0c06f696e0e`; 14/14 local player tests | passed |
+| 03-09-02 | 03-09 | 9 | VIDEO-04, VIDEO-05 | T-03-35 | Downloaded package digest/notices and extracted-byte smoke match exact revision | package / consumer | Exact-head downloaded-package smoke | Preview run 37686137834; artifact SHA-256 `cd0ce476c34a91ab9de2a6ee5e084a0ecff94b95f5015d1aa7b41bc9f88e175f`; verified receipt and locally replayed extracted smoke | passed |
 
 ---
 
@@ -78,5 +78,7 @@ All scoped software behavior has an automated verification path. Physical DMG-CP
 - [ ] No watch-mode flags
 - [ ] Feedback latency measured and recorded
 - [ ] `nyquist_compliant: true` set in frontmatter after audit
+
+Plan 03-09's two automated package tasks passed. The phase-level Nyquist flag remains false because the D-08 JOYP source/evidence gate is still open; Plan 03-04-02 remains an explicit hardware/model-applicability evidence gap, not a skipped or fabricated test.
 
 **Approval:** pending

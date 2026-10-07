@@ -4,16 +4,16 @@ milestone: v0.1
 current_phase: 3
 current_phase_name: Visible Interactive DMG
 status: executing
-stopped_at: Phase 3 Plan 03-08 complete; Plan 03-09 is next
-last_updated: "2026-10-07T20:40:21Z"
+stopped_at: Phase 3 Plan 03-09 complete; phase verification gaps remain
+last_updated: "2026-10-07T21:04:10Z"
 last_activity: 2026-10-07
-last_activity_desc: Phase 3 Wave 8 Plan 03-08 complete; Wave 9 Plan 03-09 is next
-state_head: 53f9f56
+last_activity_desc: Phase 3 Wave 9 Plan 03-09 complete; VIDEO-02/03 evidence gaps remain
+state_head: fd62c48
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 31
-  completed_plans: 28
+  completed_plans: 29
 milestone_name: limited DMG preview
 ---
 
@@ -29,16 +29,16 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 ## Current Position
 
 Phase: 3 (Visible Interactive DMG) — EXECUTING
-Plan: 9 of 9 (next)
+Plan: 9 of 9 planned complete; phase verification gaps remain
 Status: Executing Phase 3
-Last activity: 2026-10-07 — Plan 03-08 execution and exact-revision fixture verification complete
+Last activity: 2026-10-07 — Plan 03-09 exact-head macOS package verification complete
 
 Progress: [███░░░░░░░] 33% of milestone phases complete; Phases 1 and 2 passed verification.
 
 ## Performance Metrics
 
 - Unique plans: 27; average duration / total execution time: 25 min / 670 min. Phase 2 completion is based on goal verification, not task count alone.
-- Per-phase metrics / recent trend: Phases 1 and 2 are complete; Phase 3 is at 8/9 plans. All runnable Phase 2 plans have summaries; Plan 02-15 is superseded/non-runnable and remains historical.
+- Per-phase metrics / recent trend: Phases 1 and 2 are verified complete; all nine planned Phase 3 plans have summaries, but Phase 3 still has VIDEO-02/03 evidence gaps. Plan 02-15 is superseded/non-runnable and remains historical.
 - Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. At implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`, the local offline inventory passed 104/104 with no skips, the relocated installed C/C++ inventory passed 109/109, the runner passed its fixed one-CPU/two-timer derived corpus, hosted CI run 37620710587 passed, and fixture reproduction run 37620710600 passed. Independent verification passed all five CPU requirements. Original upstream PPU-dependent reporting paths remain excluded; no physical DMG hardware test occurred.
 
 **Per-Plan Metrics:**
@@ -68,7 +68,7 @@ Progress: [███░░░░░░░] 33% of milestone phases complete; Pha
 | Phase 02 P16 | 24min | 2 tasks | 6 files |
 | Phase 02 P18 | 25 min | 2 tasks | 5 files |
 | Phase GB-03 P01/P02 | 20/30 min | 1/2 tasks | 10/5 files |
-| Phase GB-03 P03/P04/P05/P06/P07/P08 | 79/11/19/15/10/12 min | 2/2/2/2/2/2 tasks | 6/10/8/11/9/3 files |
+| Phase GB-03 P03/P04/P05/P06/P07/P08/P09 | 79/11/19/15/10/12/24 min | 2/2/2/2/2/2/2 tasks | 6/10/8/11/9/3/5 files |
 
 ## Accumulated Context
 
@@ -126,7 +126,7 @@ None outside the roadmap.
 - Phase 2 has no open verification or security blocker. All five requirements are complete at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`; see [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), [validation](phases/GB-02-dmg-cpu-bus-and-time/02-VALIDATION.md), and [security](phases/GB-02-dmg-cpu-bus-and-time/02-SECURITY.md).
 - The admitted corpus is three derived headless reporting closures (one CPU, two timer). Original Mooneye reporting paths depend on PPU/LY behavior outside scope and remain excluded. No physical DMG-CPU-B observation occurred; no hardware qualification is claimed.
 - Phase 1 PR #1 and Phase 2 PR #2 were merged on 2026-10-07 after their required exact-head checks passed. Current GitHub triage found no open PRs or issues. Phase 2 verification is limited to its documented DMG-CPU-B CPU/timer scope; no physical DMG observation or PPU qualification is claimed.
-- Phase 3 is executing: Plans 03-01 through 03-08 are complete (8/9). VIDEO-02 still lacks qualified simultaneous CPU/PPU/DMA collision evidence; D-08 JOYP interrupt sampling/selection remains open after the Nintendo manual, hardware note, and die-derived schematic audit. VIDEO-03 remains incomplete. The SDL native window and status text have not had a live visual check because this environment has no desktop display. Plan 03-08 fixture reproduction passed locally and in hosted run 37683636738 at source SHA `53f9f56cacbe6676b2c0db1dddf12dd0e44fa4f3`; Plan 03-09 exact-revision package qualification remains. Do not claim phase completion while these evidence gaps remain. No physical DMG-CPU-B observation occurred.
+- Phase 3 has all nine planned plans complete. VIDEO-01, VIDEO-04, and VIDEO-05 are complete; exact-head CI run 37686137977 and downloaded-package consumer run 37686137834 passed at source `fd62c48d84b8339435fefd008147f0c06f696e0e`. VIDEO-02 simultaneous PPU/DMA evidence and D-08/VIDEO-03 JOYP interrupt evidence remain open. Live desktop perception and physical DMG-CPU-B observation are unavailable. Phase 3 remains executing; do not start Phase 4 or claim phase completion.
 - Native host support floors beyond the verified CI matrix, signing, and live Playstead integration remain later release/adoption work.
 
 ### Quick Tasks Completed
@@ -142,9 +142,9 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 ## Session Continuity
 
 Last session: 2026-10-07
-Stopped at: Phase GB-03 Wave 8 / Plan 03-08 complete; continuing with Wave 9 / Plan 03-09
+Stopped at: Phase GB-03 Wave 9 / Plan 03-09 complete; phase verification reports VIDEO-02/03 gaps
 Resume file: .planning/.continue-here.md
-Next command in fresh context: $gsd-execute-phase 3 --wave 9
+Next command in fresh context: $gsd-plan-phase 3 --gaps
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: **Phase 3 execution — Wave 8, Plan 03-08.** At source commit `53f9f56cacbe6676b2c0db1dddf12dd0e44fa4f3`, local reproduction matched the exact 32 KiB checked-in ROM; full offline CTest passed 132/132. Hosted fixture-repro run 37683636738 passed at that same SHA, and its run-scoped receipt was downloaded and verified. D-08 JOYP interrupt timing, VIDEO-02 simultaneous PPU/DMA evidence, package qualification, and live desktop perception remain open; no physical DMG-CPU-B observation occurred. Keep both auto-advance flags false.
-Next phase: **Phase 3 — Visible Interactive DMG, Wave 9 (Plan 03-09: exact-revision macOS preview package qualification).** Continue with `$gsd-execute-phase 3 --wave 9`; stop after Phase 3 before Phase 4.
+Completed workflow stage: **Phase 3 execution — Wave 9, Plan 03-09.** At code revision `fd62c48d84b8339435fefd008147f0c06f696e0e`, full offline CTest passed 132/132, optional player tests passed 14/14, and exact-head CI/preview runs 37686137977 and 37686137834 passed. Their downloaded package and receipt were verified. VIDEO-02 and D-08/VIDEO-03 evidence remain open; the phase is not complete. Keep both auto-advance flags false.
+Next roadmap phase: **Phase 4 — MBC1 and Safe Battery Continuation.** Do not start it until Phase 3 evidence gaps are resolved. Continue with `$gsd-plan-phase 3 --gaps`; stop before Phase 4.

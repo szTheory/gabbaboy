@@ -150,7 +150,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 - [x] 03-08-PLAN.md — reproducible original fixture and pinned hosted reproduction
 
 **Wave 9** *(blocked on Wave 8 completion)*
-- [ ] 03-09-PLAN.md — exact-revision macOS preview package qualification
+- [x] 03-09-PLAN.md — exact-revision macOS preview package qualification
 
 **UI hint**: yes
 
@@ -221,4 +221,4 @@ All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](
 
 Automate authorized work within each phase, then inspect current verification/release/consumer evidence, update traceability and [lessons](context/LESSONS.md), triage issues/PRs, report limitations and the exact next command, and **stop**. Never auto-advance phases or milestones; keep both auto-advance flags false. Credential, hardware, or perceptual gaps must be recorded honestly with the smallest necessary human action, never converted into passing evidence. Remote/CI setup begins in Phase 1; absent access remains an explicit completion limitation.
 
-Phase 1 Plans 01–05 are complete. Goal-backward verification passed 5/5 roadmap truths and all 8 BASE requirements; standard code review is clean. Phase 2 Plans 02-01 through 02-14 and 02-16 through 02-18 are complete; 02-15 remains superseded/non-runnable. Phase 2 passed 5/5 roadmap truths, all five CPU requirements, 45/45 security threats, Nyquist validation and code review; no physical DMG hardware test is claimed. Phase 3 is executing: Plans 03-01 through 03-08 are complete (8/9). The original fixture reproduced byte-for-byte locally and in exact-revision hosted run 37683636738. D-08 JOYP interrupt timing, VIDEO-02 simultaneous PPU/DMA evidence, and exact-revision package qualification remain open; live desktop perception is unavailable. The exact continuation command is `$gsd-execute-phase 3 --wave 9`. Keep both auto-advance flags false and stop after Phase 3.
+Phase 1 Plans 01–05 are complete. Goal-backward verification passed 5/5 roadmap truths and all 8 BASE requirements; standard code review is clean. Phase 2 Plans 02-01 through 02-14 and 02-16 through 02-18 are complete; 02-15 remains superseded/non-runnable. Phase 2 passed 5/5 roadmap truths, all five CPU requirements, 45/45 security threats, Nyquist validation and code review; no physical DMG hardware test is claimed. All nine currently planned Phase 3 plans are complete. VIDEO-01, VIDEO-04, and VIDEO-05 are complete, including exact-head CI run 37686137977 and downloaded-package consumer run 37686137834 at `fd62c48d84b8339435fefd008147f0c06f696e0e`. Phase 3 remains executing with VIDEO-02 simultaneous PPU/DMA evidence and D-08/VIDEO-03 JOYP interrupt evidence open; live desktop perception and physical DMG-CPU-B observation remain unavailable. The exact next command is `$gsd-plan-phase 3 --gaps`; keep both auto-advance flags false and stop before Phase 4: MBC1 and Safe Battery Continuation.
