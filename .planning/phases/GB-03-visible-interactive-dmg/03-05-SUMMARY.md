@@ -65,7 +65,7 @@ coverage:
         status: pass
     human_judgment: false
   - id: D3
-    description: "The normal SDL window has not received a live visual/perceptual check in this headless environment."
+    description: "The normal SDL window has not received a live visual/perceptual check in the current environment because no desktop display is available."
     verification: []
     human_judgment: true
     rationale: "Automated smoke verifies copied frames and SDL rendering through an offscreen software renderer, but cannot judge the native desktop window. The smallest follow-up is to launch the optional player on a desktop and confirm the demo is visible and responsive."

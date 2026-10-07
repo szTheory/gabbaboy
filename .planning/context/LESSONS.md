@@ -155,3 +155,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** `dma_hram` and all nine DMA cases pass; the Linux ASan/UBSan DMA/bus subset passed 13/13.
 - **Source:** `tests/test_dma.c` and the captured guest bus/trace during fixture debugging.
 - **Status:** Reproduced, bounded, and verified.
+
+### GB-PLAYER-001 / 2026-10-07 / Plan GB-03-06 integer-scaled presentation
+
+- **Cause and evidence:** SDL3 integer logical presentation computes a mathematically centered rectangle, which can have half-pixel x/y coordinates when an odd number of drawable pixels remain in the letterbox margins (for example, 327×299 produces a 320×288 viewport at 3.5,5.5). A pure geometry helper using integer origins would otherwise disagree with SDL or leave the final pixel placement untested.
+- **Remedy:** Keep SDL's integer logical scale, derive the desired whole-pixel origin from drawable-pixel dimensions, and apply the difference as a logical-coordinate offset before rendering. Suppress the frame if a window surface falls below native dimensions.
+- **Applies when:** A renderer uses integer logical scaling but requires pixel-aligned, centered presentation on odd output sizes.
+- **Verification:** The optional SDL smoke compares helper and renderer geometry and reads software-rendered pixels at viewport edges for native, odd, letterboxed, and high-density sizes; all optional player cases pass 14/14.
+- **Source:** `src/player/main.c`, `src/player/presentation.c`, `tests/player/test_presentation.c`, and [SDL3 logical presentation](https://wiki.libsdl.org/SDL3/SDL_SetRenderLogicalPresentation).
+- **Status:** Reproduced and adopted; native desktop perception remains unverified because this environment has no desktop display.
