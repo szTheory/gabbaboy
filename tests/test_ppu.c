@@ -25,6 +25,8 @@ typedef struct {
 
 extern void gbb_test_observer_set(gbb_instance *, gbb_test_bus_event *, size_t);
 extern size_t gbb_test_observer_count(const gbb_instance *);
+extern void gbb_test_ppu_observer_set(gbb_instance *, gbb_test_bus_event *, size_t);
+extern size_t gbb_test_ppu_observer_count(const gbb_instance *);
 
 static void emit(guest_program *p, uint8_t byte) {
     if (p->size < sizeof(p->bytes)) p->bytes[p->size++] = byte;
@@ -98,6 +100,102 @@ static gbb_instance *load_guest_with_tail(const guest_program *p, uint8_t lcdc,
 
 static gbb_instance *load_guest(const guest_program *p, uint8_t lcdc) {
     return load_guest_with_tail(p, lcdc, NULL, 0);
+}
+
+static void emit_read_to_wram(guest_program *p, uint8_t register_address,
+                              uint16_t ram_address) {
+    emit(p, 0xF0); emit(p, register_address); /* LDH A,[n] */
+    emit(p, 0xEA); emit(p, (uint8_t)ram_address); /* LD [nn],A */
+    emit(p, (uint8_t)(ram_address >> 8));
+}
+
+static const gbb_test_bus_event *find_bus_event(const gbb_test_bus_event *events,
+                                                 size_t count, uint16_t address,
+                                                 uint8_t access, int value) {
+    for (size_t i = 0; i < count; ++i)
+        if (events[i].address == address && events[i].access == access &&
+            (value < 0 || events[i].value == (uint8_t)value)) return &events[i];
+    return NULL;
+}
+
+static const gbb_test_bus_event *find_ppu_event(const gbb_test_bus_event *events,
+                                                 size_t count, uint8_t access,
+                                                 int value,
+                                                 uint64_t at_or_after) {
+    for (size_t i = 0; i < count; ++i)
+        if (events[i].access == access &&
+            (value < 0 || events[i].value == (uint8_t)value) &&
+            events[i].time_half_dots >= at_or_after) return &events[i];
+    return NULL;
+}
+
+static int stat_sample(uint8_t scx, uint8_t lcdc, unsigned nop_count,
+                       uint8_t stat, uint8_t lyc, uint64_t expected_delta,
+                       uint8_t expected_mode) {
+    guest_program p = {0};
+    start_guest(&p);
+    emit_reg(&p, 0x41, stat);
+    emit_reg(&p, 0x45, lyc);
+    emit_reg(&p, 0x43, scx);
+    uint8_t tail[256];
+    if (nop_count + 5u > sizeof(tail)) return 1;
+    memset(tail, 0, nop_count);
+    tail[nop_count] = 0xF0; tail[nop_count + 1u] = 0x41;
+    tail[nop_count + 2u] = 0xEA; tail[nop_count + 3u] = 0x00;
+    tail[nop_count + 4u] = 0xC0;
+    gbb_instance *machine = load_guest_with_tail(&p, lcdc, tail, nop_count + 5u);
+    REQUIRE(machine != NULL);
+    gbb_test_bus_event events[512];
+    gbb_test_observer_set(machine, events, 512);
+    gbb_run_result run = gbb_run(machine, (uint64_t)nop_count * 8u + 1024u, NULL, 0);
+    REQUIRE(run.reason == GBB_STOP_BUDGET);
+    size_t count = gbb_test_observer_count(machine);
+    const gbb_test_bus_event *enable = find_bus_event(events, count, 0xFF40, 2, lcdc);
+    const gbb_test_bus_event *read = find_bus_event(events, count, 0xFF41, 1, -1);
+    REQUIRE(enable != NULL && read != NULL);
+    REQUIRE(read->time_half_dots - enable->time_half_dots == expected_delta);
+    REQUIRE((read->value & 3u) == expected_mode);
+    REQUIRE(gbb_peek_ram(machine, 0xC000) == read->value);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int fetch_mode0_dot(uint8_t scx, uint8_t lcdc, uint8_t wy, uint8_t wx,
+                           const uint8_t *oam, size_t oam_size,
+                           uint16_t expected_dot) {
+    guest_program p = {0};
+    start_guest(&p);
+    emit_reg(&p, 0x43, scx);
+    emit_reg(&p, 0x4A, wy);
+    emit_reg(&p, 0x4B, wx);
+    if (oam != NULL) emit_bytes(&p, 0xFE00, oam, oam_size);
+    gbb_instance *machine = load_guest(&p, lcdc);
+    REQUIRE(machine != NULL);
+    gbb_test_bus_event bus_events[256];
+    gbb_test_bus_event ppu_events[64];
+    gbb_test_observer_set(machine, bus_events, 256);
+    gbb_test_ppu_observer_set(machine, ppu_events, 64);
+    gbb_run_result run = gbb_run(machine, 1800, NULL, 0);
+    REQUIRE(run.reason == GBB_STOP_BUDGET);
+    size_t bus_count = gbb_test_observer_count(machine);
+    size_t ppu_count = gbb_test_ppu_observer_count(machine);
+    const gbb_test_bus_event *enable = find_bus_event(bus_events, bus_count, 0xFF40, 2, lcdc);
+    REQUIRE(enable != NULL);
+    const gbb_test_bus_event *mode0 = find_ppu_event(ppu_events, ppu_count, 4, 0,
+                                                      enable->time_half_dots);
+    if (mode0 == NULL) {
+        fprintf(stderr, "missing mode0 scx=%u lcdc=%02x wx=%u objects=%zu count=%zu enable=%llu\n",
+                scx, lcdc, wx, oam_size / 4u, ppu_count,
+                (unsigned long long)enable->time_half_dots);
+        for (size_t i = 0; i < ppu_count; ++i)
+            fprintf(stderr, "ppu[%zu] t=%llu access=%u value=%u\n", i,
+                    (unsigned long long)ppu_events[i].time_half_dots,
+                    ppu_events[i].access, ppu_events[i].value);
+    }
+    REQUIRE(mode0 != NULL);
+    REQUIRE(mode0->time_half_dots - enable->time_half_dots == (uint64_t)expected_dot * 2u);
+    gbb_destroy(machine);
+    return 0;
 }
 
 static int copy_completed_frame(gbb_instance *machine, uint8_t pixels[PIXELS]) {
@@ -301,35 +399,257 @@ static int frame_composition_priority(void) {
 }
 
 static int ppu_timing_fetch(void) {
+    REQUIRE(stat_sample(3, 0x91, 60, 0, 0, 504, 3) == 0);
+    REQUIRE(fetch_mode0_dot(0, 0xF1, 0, 7, NULL, 0, 258) == 0);
+    REQUIRE(fetch_mode0_dot(3, 0xF1, 0, 0, NULL, 0, 260) == 0);
+
+    const uint8_t object_x8[] = {16, 8, 0, 0};
+    const uint8_t object_x14[] = {16, 14, 0, 0};
+    const uint8_t objects_same_tile[] = {16, 8, 0, 0, 16, 12, 0, 0};
+    REQUIRE(fetch_mode0_dot(0, 0x93, 0, 0, object_x8, sizeof(object_x8), 263) == 0);
+    REQUIRE(fetch_mode0_dot(0, 0x93, 0, 0, object_x14, sizeof(object_x14), 258) == 0);
+    REQUIRE(fetch_mode0_dot(0, 0x93, 0, 0, objects_same_tile,
+                            sizeof(objects_same_tile), 269) == 0);
+    return 0;
+}
+
+static int ppu_timing_modes(void) {
     guest_program p = {0};
     start_guest(&p);
-    emit_reg(&p, 0x43, 3);             /* Three fine-scroll pixels add three transfer dots. */
-    uint8_t tail[65];
-    memset(tail, 0x00, 60);            /* 60 NOPs place the STAT sample at dot 252. */
-    tail[60] = 0xF0; tail[61] = 0x41;  /* LDH A,[STAT] */
-    tail[62] = 0xEA; tail[63] = 0x00; tail[64] = 0xC0; /* LD [C000],A */
-    gbb_instance *machine = load_guest_with_tail(&p, 0x91, tail, sizeof(tail));
+    gbb_instance *machine = load_guest(&p, 0x91);
     REQUIRE(machine != NULL);
-    gbb_test_bus_event events[64];
-    gbb_test_observer_set(machine, events, 64);
-    gbb_run_result run = gbb_run(machine, UINT64_C(1800), NULL, 0);
+    gbb_test_bus_event bus_events[256], ppu_events[64];
+    gbb_test_observer_set(machine, bus_events, 256);
+    gbb_test_ppu_observer_set(machine, ppu_events, 64);
+    gbb_run_result run = gbb_run(machine, 1100, NULL, 0);
     REQUIRE(run.reason == GBB_STOP_BUDGET);
-    size_t count = gbb_test_observer_count(machine);
-    const gbb_test_bus_event *enable = NULL, *stat_read = NULL;
-    for (size_t i = 0; i < count; ++i) {
-        if (events[i].address == 0xFF40 && events[i].access == 2 && events[i].value == 0x91)
-            enable = &events[i];
-        if (events[i].address == 0xFF41 && events[i].access == 1) {
-            stat_read = &events[i];
-            break;
-        }
-    }
+    size_t bus_count = gbb_test_observer_count(machine);
+    size_t ppu_count = gbb_test_ppu_observer_count(machine);
+    const gbb_test_bus_event *enable = find_bus_event(bus_events, bus_count, 0xFF40, 2, 0x91);
     REQUIRE(enable != NULL);
-    REQUIRE(stat_read != NULL);
-    REQUIRE(stat_read->time_half_dots - enable->time_half_dots == 504u);
-    REQUIRE((stat_read->value & 3u) == 3u);
-    REQUIRE(gbb_peek_ram(machine, 0xC000) == stat_read->value);
+    const gbb_test_bus_event *mode3 = find_ppu_event(ppu_events, ppu_count, 4, 3,
+                                                      enable->time_half_dots);
+    const gbb_test_bus_event *mode0 = find_ppu_event(ppu_events, ppu_count, 4, 0,
+                                                      enable->time_half_dots);
+    const gbb_test_bus_event *next_mode2 = find_ppu_event(ppu_events, ppu_count, 4, 2,
+                                                           enable->time_half_dots + 1u);
+    REQUIRE(mode3 != NULL && mode0 != NULL && next_mode2 != NULL);
+    REQUIRE(mode3->time_half_dots - enable->time_half_dots == 160u);
+    REQUIRE(mode0->time_half_dots - enable->time_half_dots == 504u);
+    REQUIRE(next_mode2->time_half_dots - enable->time_half_dots == 912u);
     gbb_destroy(machine);
+
+    REQUIRE(stat_sample(0, 0x91, 59, 0, 0, 496, 3) == 0);
+    REQUIRE(stat_sample(0, 0x91, 60, 0, 0, 504, 0) == 0);
+    REQUIRE(stat_sample(0, 0x91, 61, 0, 0, 512, 0) == 0);
+    REQUIRE(stat_sample(0, 0x91, 111, 0, 0, 912, 2) == 0);
+    return 0;
+}
+
+static int ppu_timing_stat(void) {
+    guest_program p = {0};
+    start_guest(&p);
+    emit_reg(&p, 0x41, 0x28);          /* Mode 0 and Mode 2 share one STAT line. */
+    gbb_instance *machine = load_guest(&p, 0x91);
+    REQUIRE(machine != NULL);
+    gbb_test_bus_event bus_events[256], ppu_events[64];
+    gbb_test_observer_set(machine, bus_events, 256);
+    gbb_test_ppu_observer_set(machine, ppu_events, 64);
+    gbb_run_result run = gbb_run(machine, 1600, NULL, 0);
+    REQUIRE(run.reason == GBB_STOP_BUDGET);
+    size_t bus_count = gbb_test_observer_count(machine);
+    size_t ppu_count = gbb_test_ppu_observer_count(machine);
+    const gbb_test_bus_event *enable = find_bus_event(bus_events, bus_count, 0xFF40, 2, 0x91);
+    REQUIRE(enable != NULL);
+    uint64_t irq_times[4] = {0};
+    size_t irq_count = 0;
+    for (size_t i = 0; i < ppu_count; ++i) {
+        if (ppu_events[i].access == 5 && irq_count < 4)
+            irq_times[irq_count++] = ppu_events[i].time_half_dots;
+    }
+    REQUIRE(irq_count == 3);
+    REQUIRE(irq_times[0] == enable->time_half_dots);
+    REQUIRE(irq_times[1] - enable->time_half_dots == 504u);
+    REQUIRE(irq_times[2] - enable->time_half_dots == 1416u);
+    gbb_destroy(machine);
+
+    memset(&p, 0, sizeof(p));
+    start_guest(&p);
+    emit_reg(&p, 0x41, 0x40);          /* LYC=1 is the sole enabled source. */
+    emit_reg(&p, 0x45, 1);
+    machine = load_guest(&p, 0x91);
+    REQUIRE(machine != NULL);
+    gbb_test_bus_event line_bus[256], line_ppu[64];
+    gbb_test_observer_set(machine, line_bus, 256);
+    gbb_test_ppu_observer_set(machine, line_ppu, 64);
+    run = gbb_run(machine, 1100, NULL, 0);
+    REQUIRE(run.reason == GBB_STOP_BUDGET);
+    bus_count = gbb_test_observer_count(machine);
+    ppu_count = gbb_test_ppu_observer_count(machine);
+    enable = find_bus_event(line_bus, bus_count, 0xFF40, 2, 0x91);
+    REQUIRE(enable != NULL);
+    irq_count = 0;
+    for (size_t i = 0; i < ppu_count; ++i)
+        if (line_ppu[i].access == 5) {
+            REQUIRE(line_ppu[i].time_half_dots - enable->time_half_dots == 912u);
+            ++irq_count;
+        }
+    REQUIRE(irq_count == 1);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int ppu_timing_lcd(void) {
+    guest_program p = {0}, tail = {0};
+    start_guest(&p);
+    emit_reg(&p, 0x41, 0xFF);          /* only STAT interrupt-enable bits are writable */
+    emit_reg(&p, 0x42, 0x12);
+    emit_reg(&p, 0x43, 0x34);
+    emit_reg(&p, 0x44, 0x55);          /* LY writes are ignored. */
+    emit_reg(&p, 0x45, 0);
+    emit_reg(&p, 0x47, 0xAB);
+    emit_reg(&p, 0x48, 0xCD);
+    emit_reg(&p, 0x49, 0xEF);
+    emit_reg(&p, 0x4A, 1);
+    emit_reg(&p, 0x4B, 7);
+    emit_read_to_wram(&tail, 0x41, 0xC000);
+    emit_read_to_wram(&tail, 0x40, 0xC001);
+    emit_read_to_wram(&tail, 0x42, 0xC002);
+    emit_read_to_wram(&tail, 0x43, 0xC003);
+    emit_read_to_wram(&tail, 0x44, 0xC004);
+    emit_read_to_wram(&tail, 0x45, 0xC005);
+    emit_read_to_wram(&tail, 0x47, 0xC006);
+    emit_read_to_wram(&tail, 0x48, 0xC007);
+    emit_read_to_wram(&tail, 0x49, 0xC008);
+    emit_read_to_wram(&tail, 0x4A, 0xC009);
+    emit_read_to_wram(&tail, 0x4B, 0xC00A);
+    emit_reg(&tail, 0x40, 0);
+    emit_read_to_wram(&tail, 0x44, 0xC00B);
+    emit_read_to_wram(&tail, 0x41, 0xC00C);
+    emit_read_to_wram(&tail, 0x40, 0xC00D);
+    emit_reg(&tail, 0x40, 0x91);
+    emit_read_to_wram(&tail, 0x44, 0xC00E);
+    emit_read_to_wram(&tail, 0x41, 0xC00F);
+    gbb_instance *machine = load_guest_with_tail(&p, 0x91, tail.bytes, tail.size);
+    REQUIRE(machine != NULL);
+    gbb_run_result run = gbb_run(machine, 5000, NULL, 0);
+    REQUIRE(run.reason == GBB_STOP_BUDGET);
+    REQUIRE(gbb_peek_ram(machine, 0xC000) == 0xFE);
+    REQUIRE(gbb_peek_ram(machine, 0xC001) == 0x91);
+    REQUIRE(gbb_peek_ram(machine, 0xC002) == 0x12);
+    REQUIRE(gbb_peek_ram(machine, 0xC003) == 0x34);
+    REQUIRE(gbb_peek_ram(machine, 0xC004) == 0);
+    REQUIRE(gbb_peek_ram(machine, 0xC005) == 0);
+    REQUIRE(gbb_peek_ram(machine, 0xC006) == 0xAB);
+    REQUIRE(gbb_peek_ram(machine, 0xC007) == 0xCD);
+    REQUIRE(gbb_peek_ram(machine, 0xC008) == 0xEF);
+    REQUIRE(gbb_peek_ram(machine, 0xC009) == 1);
+    REQUIRE(gbb_peek_ram(machine, 0xC00A) == 7);
+    REQUIRE(gbb_peek_ram(machine, 0xC00B) == 0);
+    REQUIRE(gbb_peek_ram(machine, 0xC00C) == 0xFC);
+    REQUIRE(gbb_peek_ram(machine, 0xC00D) == 0);
+    REQUIRE(gbb_peek_ram(machine, 0xC00E) == 0);
+    REQUIRE(gbb_peek_ram(machine, 0xC00F) == 0xFE);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int ppu_timing_partition(void) {
+    guest_program p = {0};
+    start_guest(&p);
+    emit_reg(&p, 0x41, 0x20);
+    const uint8_t halt[] = {0x76};
+    gbb_instance *whole = load_guest_with_tail(&p, 0x91, halt, sizeof(halt));
+    gbb_instance *parts = load_guest_with_tail(&p, 0x91, halt, sizeof(halt));
+    REQUIRE(whole != NULL && parts != NULL);
+    gbb_test_bus_event whole_bus[128], parts_bus[128];
+    gbb_test_bus_event whole_ppu[1024], parts_ppu[1024];
+    gbb_test_observer_set(whole, whole_bus, 128);
+    gbb_test_observer_set(parts, parts_bus, 128);
+    gbb_test_ppu_observer_set(whole, whole_ppu, 1024);
+    gbb_test_ppu_observer_set(parts, parts_ppu, 1024);
+    gbb_run_result run = gbb_run(whole, 2000, NULL, 0);
+    REQUIRE(run.reason == GBB_STOP_HALTED_IDLE);
+    gbb_run_result setup_parts = gbb_run(parts, 2000, NULL, 0);
+    REQUIRE(setup_parts.reason == GBB_STOP_HALTED_IDLE &&
+            setup_parts.consumed_half_dots == run.consumed_half_dots);
+    run = gbb_run(whole, 145000, NULL, 0);
+    REQUIRE(run.reason == GBB_STOP_HALTED_IDLE && run.consumed_half_dots == 145000u);
+    static const uint64_t partitions[] = {8, 16, 80, 912, 456, 1312, 10000, 12000,
+                                          30000, 50000, 40216};
+    uint64_t total = 0;
+    for (size_t i = 0; i < sizeof(partitions) / sizeof(partitions[0]); ++i) {
+        run = gbb_run(parts, partitions[i], NULL, 0);
+        REQUIRE(run.reason == GBB_STOP_HALTED_IDLE &&
+                run.consumed_half_dots == partitions[i]);
+        total += run.consumed_half_dots;
+    }
+    REQUIRE(total == 145000u);
+    size_t whole_bus_count = gbb_test_observer_count(whole);
+    size_t parts_bus_count = gbb_test_observer_count(parts);
+    size_t whole_ppu_count = gbb_test_ppu_observer_count(whole);
+    size_t parts_ppu_count = gbb_test_ppu_observer_count(parts);
+    REQUIRE(whole_bus_count == parts_bus_count);
+    REQUIRE(memcmp(whole_bus, parts_bus, whole_bus_count * sizeof(*whole_bus)) == 0);
+    REQUIRE(whole_ppu_count == parts_ppu_count);
+    REQUIRE(memcmp(whole_ppu, parts_ppu, whole_ppu_count * sizeof(*whole_ppu)) == 0);
+    const gbb_test_bus_event *enable = find_bus_event(whole_bus, whole_bus_count,
+                                                       0xFF40, 2, 0x91);
+    REQUIRE(enable != NULL);
+    const gbb_test_bus_event *vblank = find_ppu_event(whole_ppu, whole_ppu_count,
+                                                       7, -1,
+                                                       enable->time_half_dots);
+    const gbb_test_bus_event *ly_wrap = find_ppu_event(whole_ppu, whole_ppu_count,
+                                                        6, 0,
+                                                        enable->time_half_dots + 1u);
+    REQUIRE(vblank != NULL && ly_wrap != NULL);
+    REQUIRE((vblank->value & 1u) != 0);
+    REQUIRE(vblank->time_half_dots - enable->time_half_dots == 144u * 912u);
+    REQUIRE(ly_wrap->time_half_dots - enable->time_half_dots == 154u * 912u);
+    uint8_t whole_frame[PIXELS], parts_frame[PIXELS];
+    gbb_frame_info whole_info = {0}, parts_info = {0};
+    REQUIRE(gbb_copy_frame(whole, whole_frame, PIXELS, WIDTH, &whole_info) == GBB_OK);
+    REQUIRE(gbb_copy_frame(parts, parts_frame, PIXELS, WIDTH, &parts_info) == GBB_OK);
+    REQUIRE(whole_info.generation == parts_info.generation);
+    REQUIRE(whole_info.completion_half_dots == parts_info.completion_half_dots);
+    REQUIRE(whole_info.completion_half_dots == vblank->time_half_dots);
+    REQUIRE(memcmp(whole_frame, parts_frame, sizeof(whole_frame)) == 0);
+    /* A budget too small for the next instruction must leave device time untouched. */
+    guest_program live = {0};
+    start_guest(&live);
+    gbb_instance *short_budget = load_guest(&live, 0x91);
+    REQUIRE(short_budget != NULL);
+    gbb_test_bus_event short_ppu[64];
+    gbb_test_ppu_observer_set(short_budget, short_ppu, 64);
+    run = gbb_run(short_budget, 1, NULL, 0);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 0);
+    REQUIRE(gbb_test_ppu_observer_count(short_budget) == 0);
+    gbb_destroy(short_budget);
+
+    /* VBlank is visible through IF, and the guest-visible LY register wraps after line 153. */
+    memset(&p, 0, sizeof(p));
+    start_guest(&p);
+    const uint8_t poll_if[] = {0xF0, 0x0F, 0xEA, 0x10, 0xC0, 0x18, 0xF9};
+    gbb_instance *interrupt_guest = load_guest_with_tail(&p, 0x91, poll_if,
+                                                          sizeof(poll_if));
+    REQUIRE(interrupt_guest != NULL);
+    run = gbb_run(interrupt_guest, 132000, NULL, 0);
+    REQUIRE(run.reason == GBB_STOP_BUDGET);
+    REQUIRE((gbb_peek_ram(interrupt_guest, 0xC010) & 1u) != 0);
+    gbb_destroy(interrupt_guest);
+
+    memset(&p, 0, sizeof(p));
+    start_guest(&p);
+    const uint8_t poll_ly[] = {0xF0, 0x44, 0xEA, 0x11, 0xC0, 0x18, 0xF9};
+    gbb_instance *ly_guest = load_guest_with_tail(&p, 0x91, poll_ly,
+                                                   sizeof(poll_ly));
+    REQUIRE(ly_guest != NULL);
+    run = gbb_run(ly_guest, 141000, NULL, 0);
+    REQUIRE(run.reason == GBB_STOP_BUDGET);
+    REQUIRE(gbb_peek_ram(ly_guest, 0xC011) == 0);
+    gbb_destroy(ly_guest);
+    gbb_destroy(whole);
+    gbb_destroy(parts);
     return 0;
 }
 
@@ -339,6 +659,10 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "frame_composition_window") == 0) return frame_composition_window();
     if (strcmp(argv[1], "frame_composition_sprites") == 0) return frame_composition_sprites();
     if (strcmp(argv[1], "frame_composition_priority") == 0) return frame_composition_priority();
+    if (strcmp(argv[1], "ppu_timing_modes") == 0) return ppu_timing_modes();
+    if (strcmp(argv[1], "ppu_timing_stat") == 0) return ppu_timing_stat();
+    if (strcmp(argv[1], "ppu_timing_lcd") == 0) return ppu_timing_lcd();
     if (strcmp(argv[1], "ppu_timing_fetch") == 0) return ppu_timing_fetch();
+    if (strcmp(argv[1], "ppu_timing_partition") == 0) return ppu_timing_partition();
     return 2;
 }

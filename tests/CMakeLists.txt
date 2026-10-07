@@ -86,7 +86,8 @@ target_link_libraries(test_ppu PRIVATE GabbaBoy::core)
 target_compile_features(test_ppu PRIVATE c_std_17)
 set_target_properties(test_ppu PROPERTIES C_EXTENSIONS OFF)
 foreach(case frame_composition_bg frame_composition_window frame_composition_sprites frame_composition_priority
-             ppu_timing_fetch)
+             ppu_timing_modes ppu_timing_stat ppu_timing_lcd ppu_timing_fetch
+             ppu_timing_partition)
   add_test(NAME ${case} COMMAND test_ppu ${case})
 endforeach()
 add_test(NAME tracer_smoke COMMAND gabbaboy-runner ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)

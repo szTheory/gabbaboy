@@ -10,6 +10,7 @@
 #define GBB_FRAME_PIXELS (GBB_FRAME_WIDTH * GBB_FRAME_HEIGHT)
 #define GBB_OAM_BYTES 160u
 #define GBB_LINE_OBJECT_LIMIT 10u
+#define GBB_PPU_FIFO_CAPACITY 16u
 
 struct gbb_instance {
     uint8_t *rom;
@@ -25,6 +26,15 @@ struct gbb_instance {
     uint16_t ppu_dot;
     uint8_t ppu_half_phase;
     uint8_t ppu_mode;
+    uint8_t ppu_stat_line;
+    uint8_t ppu_fifo[GBB_PPU_FIFO_CAPACITY];
+    uint8_t ppu_fifo_head, ppu_fifo_count;
+    uint8_t ppu_fetch_stage, ppu_fetch_phase;
+    uint16_t ppu_fetch_enqueued;
+    uint8_t ppu_transfer_age, ppu_output_x, ppu_scroll_discard, ppu_fine_scroll;
+    uint8_t ppu_mode3_stall, ppu_window_started, ppu_transfer_complete;
+    uint16_t ppu_objects_stalled;
+    uint32_t ppu_object_tiles_fetched;
     uint8_t ppu_selected_objects[GBB_LINE_OBJECT_LIMIT];
     uint8_t ppu_selected_object_count;
     uint8_t ppu_window_line;
@@ -58,6 +68,9 @@ struct gbb_instance {
     struct gbb_test_bus_event *test_events;
     size_t test_event_capacity;
     size_t test_event_count;
+    struct gbb_test_bus_event *test_ppu_events;
+    size_t test_ppu_event_capacity;
+    size_t test_ppu_event_count;
     int loaded;
     gbb_diagnostic_record *diagnostic_output;
     size_t diagnostic_output_capacity;
@@ -123,11 +136,62 @@ size_t gbb_test_observer_count(const gbb_instance *m) {
     return m == NULL ? 0 : m->test_event_count;
 }
 
+void gbb_test_ppu_observer_set(gbb_instance *m, gbb_test_bus_event *events,
+                               size_t capacity) {
+    if (m == NULL) return;
+    m->test_ppu_events = events;
+    m->test_ppu_event_capacity = capacity;
+    m->test_ppu_event_count = 0;
+}
+
+size_t gbb_test_ppu_observer_count(const gbb_instance *m) {
+    return m == NULL ? 0 : m->test_ppu_event_count;
+}
+
+static void observe_ppu(gbb_instance *m, uint16_t address, uint8_t access,
+                        uint8_t value) {
+    if (m->test_ppu_events != NULL &&
+        m->test_ppu_event_count < m->test_ppu_event_capacity) {
+        gbb_test_bus_event *event = &m->test_ppu_events[m->test_ppu_event_count++];
+        memset(event, 0, sizeof(*event));
+        event->time_half_dots = m->time_half_dots;
+        event->address = address;
+        event->access = access;
+        event->value = value;
+    }
+}
+
+static void ppu_update_stat_line(gbb_instance *m);
+
+static void ppu_set_mode(gbb_instance *m, uint8_t mode) {
+    if (m->ppu_mode != mode) {
+        m->ppu_mode = mode;
+        observe_ppu(m, 0xFF41, 4, mode);
+        ppu_update_stat_line(m);
+    }
+}
+
+static void ppu_update_stat_line(gbb_instance *m) {
+    int line = 0;
+    if ((m->lcdc & 0x80u) != 0) {
+        line = (((m->ppu_mode == 0u) && ((m->stat & 0x08u) != 0)) ||
+                ((m->ppu_mode == 1u) && ((m->stat & 0x10u) != 0)) ||
+                ((m->ppu_mode == 2u) && ((m->stat & 0x20u) != 0)) ||
+                ((m->ly == m->lyc) && ((m->stat & 0x40u) != 0)));
+    }
+    if (line && !m->ppu_stat_line) {
+        m->interrupt_flags |= 0x02u;
+        observe_ppu(m, 0xFF0F, 5, (uint8_t)(0xE0u | m->interrupt_flags));
+    }
+    m->ppu_stat_line = (uint8_t)line;
+}
+
 static void observe_bus(gbb_instance *m, uint64_t offset, uint16_t address, uint8_t access, uint8_t value) {
     if (access == 1) diagnostic_add(m, GBB_DIAGNOSTIC_BUS_READ, m->time_half_dots + offset, address, value);
     else if (access == 2) diagnostic_add(m, GBB_DIAGNOSTIC_BUS_WRITE, m->time_half_dots + offset, address, value);
     if (m->test_events != NULL && m->test_event_count < m->test_event_capacity) {
         gbb_test_bus_event *event = &m->test_events[m->test_event_count++];
+        memset(event, 0, sizeof(*event));
         event->time_half_dots = m->time_half_dots + offset;
         event->address = address;
         event->access = access;
@@ -174,6 +238,22 @@ static void reset_state(gbb_instance *m) {
     m->ppu_dot = 0;
     m->ppu_half_phase = 0;
     m->ppu_mode = 2;
+    m->ppu_stat_line = 0;
+    memset(m->ppu_fifo, 0, sizeof(m->ppu_fifo));
+    m->ppu_fifo_head = 0;
+    m->ppu_fifo_count = 0;
+    m->ppu_fetch_stage = 0;
+    m->ppu_fetch_phase = 0;
+    m->ppu_fetch_enqueued = 0;
+    m->ppu_transfer_age = 0;
+    m->ppu_output_x = 0;
+    m->ppu_scroll_discard = 0;
+    m->ppu_fine_scroll = 0;
+    m->ppu_mode3_stall = 0;
+    m->ppu_window_started = 0;
+    m->ppu_transfer_complete = 0;
+    m->ppu_objects_stalled = 0;
+    m->ppu_object_tiles_fetched = 0;
     memset(m->ppu_selected_objects, 0, sizeof(m->ppu_selected_objects));
     m->ppu_selected_object_count = 0;
     m->ppu_window_line = 0;
@@ -300,27 +380,38 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
         m->lcdc = value;
         if ((value & 0x80u) == 0) {
             m->ppu_dot = 0;
+            m->ppu_half_phase = 0;
             m->ly = 0;
-            m->ppu_mode = 0;
+            ppu_set_mode(m, 0);
             m->ppu_selected_object_count = 0;
             m->ppu_window_line = 0;
             m->ppu_window_line_drawn = 0;
+            m->ppu_transfer_complete = 0;
+            m->ppu_fifo_count = 0;
             memset(m->frame_working, 0, sizeof(m->frame_working));
+            ppu_update_stat_line(m);
         } else if ((old & 0x80u) == 0) {
             m->ppu_dot = 0;
+            m->ppu_half_phase = 0;
             m->ly = 0;
-            m->ppu_mode = 2;
+            ppu_set_mode(m, 2);
             m->ppu_selected_object_count = 0;
             m->ppu_window_line = 0;
             m->ppu_window_line_drawn = 0;
             ppu_select_objects(m);
         }
     }
-    else if (address == 0xFF41) m->stat = (uint8_t)(value & 0x78u);
+    else if (address == 0xFF41) {
+        m->stat = (uint8_t)(value & 0x78u);
+        ppu_update_stat_line(m);
+    }
     else if (address == 0xFF42) m->scy = value;
     else if (address == 0xFF43) m->scx = value;
     else if (address == 0xFF44) { /* LY is read-only in the guest interface. */ }
-    else if (address == 0xFF45) m->lyc = value;
+    else if (address == 0xFF45) {
+        m->lyc = value;
+        ppu_update_stat_line(m);
+    }
     else if (address == 0xFF47) m->bgp = value;
     else if (address == 0xFF48) m->obp0 = value;
     else if (address == 0xFF49) m->obp1 = value;
@@ -545,6 +636,131 @@ static uint8_t ppu_pixel_shade(gbb_instance *m, unsigned x) {
     return ppu_palette_shade(m->bgp, background);
 }
 
+static void ppu_begin_transfer(gbb_instance *m) {
+    m->ppu_fifo_head = 0;
+    m->ppu_fifo_count = 0;
+    m->ppu_fetch_stage = 0;
+    m->ppu_fetch_phase = 0;
+    m->ppu_fetch_enqueued = 0;
+    m->ppu_transfer_age = 0;
+    m->ppu_output_x = 0;
+    m->ppu_fine_scroll = (uint8_t)(m->scx & 7u);
+    m->ppu_scroll_discard = m->ppu_fine_scroll;
+    m->ppu_mode3_stall = 0;
+    m->ppu_window_started = 0;
+    m->ppu_transfer_complete = 0;
+    m->ppu_objects_stalled = 0;
+    m->ppu_object_tiles_fetched = 0;
+}
+
+static void ppu_fetcher_step(gbb_instance *m) {
+    uint16_t needed = (uint16_t)(GBB_FRAME_WIDTH + m->ppu_fine_scroll);
+    if (m->ppu_fetch_enqueued >= needed) return;
+    if (m->ppu_fetch_stage == 3u && m->ppu_fetch_phase == 1u) {
+        if (m->ppu_fifo_count > 8u) return;
+        uint16_t remaining = (uint16_t)(needed - m->ppu_fetch_enqueued);
+        uint8_t push_count = (uint8_t)(remaining < 8u ? remaining : 8u);
+        for (uint8_t i = 0; i < push_count; ++i) {
+            uint8_t tail = (uint8_t)((m->ppu_fifo_head + m->ppu_fifo_count) %
+                                     GBB_PPU_FIFO_CAPACITY);
+            /* Queue bounded screen-pixel slots; shading stays in the common compositor. */
+            m->ppu_fifo[tail] = m->ppu_fetch_enqueued < m->ppu_fine_scroll
+                ? UINT8_MAX
+                : (uint8_t)(m->ppu_fetch_enqueued - m->ppu_fine_scroll);
+            ++m->ppu_fifo_count;
+            ++m->ppu_fetch_enqueued;
+        }
+        m->ppu_fetch_phase = 0;
+        m->ppu_fetch_stage = 0;
+        return;
+    }
+    if (++m->ppu_fetch_phase == 2u) {
+        m->ppu_fetch_phase = 0;
+        m->ppu_fetch_stage = (uint8_t)((m->ppu_fetch_stage + 1u) & 3u);
+    }
+}
+
+static int ppu_window_should_start(const gbb_instance *m) {
+    if (m->ppu_window_started || (m->lcdc & 0x21u) != 0x21u ||
+        m->ly < m->wy || m->wx > 166u) return 0;
+    unsigned start_x = m->wx < 7u ? 0u : (unsigned)m->wx - 7u;
+    return m->ppu_output_x == start_x;
+}
+
+static int ppu_object_should_stall(gbb_instance *m, uint8_t *stall) {
+    if ((m->lcdc & 0x02u) == 0) return 0;
+    unsigned fine_scroll = m->ppu_fine_scroll;
+    for (uint8_t i = 0; i < m->ppu_selected_object_count; ++i) {
+        uint16_t object_bit = (uint16_t)(1u << i);
+        if ((m->ppu_objects_stalled & object_bit) != 0) continue;
+        unsigned offset = (unsigned)m->ppu_selected_objects[i] * 4u;
+        int left = (int)m->oam[offset + 1u] - 8;
+        /* X=0 is wholly offscreen; negative starts are outside this timing claim. */
+        if (left < 0 || left >= (int)GBB_FRAME_WIDTH ||
+            left != (int)m->ppu_output_x) continue;
+        m->ppu_objects_stalled |= object_bit;
+        unsigned tile = ((unsigned)left + fine_scroll) >> 3;
+        uint32_t tile_bit = tile < 32u ? (UINT32_C(1) << tile) : 0;
+        if (tile_bit != 0 && (m->ppu_object_tiles_fetched & tile_bit) != 0) {
+            *stall = 6u;
+        } else {
+            unsigned fetch_offset = ((unsigned)left + fine_scroll) & 7u;
+            if (fetch_offset > 5u) fetch_offset = 5u;
+            *stall = (uint8_t)(11u - fetch_offset);
+            m->ppu_object_tiles_fetched |= tile_bit;
+        }
+        return 1;
+    }
+    return 0;
+}
+
+static void ppu_transfer_dot(gbb_instance *m) {
+    if (m->ppu_transfer_complete) {
+        ppu_set_mode(m, 0);
+        return;
+    }
+    ppu_fetcher_step(m);
+    if (m->ppu_transfer_age < 12u) {
+        ++m->ppu_transfer_age;
+        if (m->ppu_transfer_age < 12u) return;
+    }
+    if (m->ppu_mode3_stall != 0) {
+        --m->ppu_mode3_stall;
+        return;
+    }
+    if (m->ppu_fifo_count == 0) return;
+
+    uint8_t fetched_slot = m->ppu_fifo[m->ppu_fifo_head];
+    if (fetched_slot == UINT8_MAX && m->ppu_scroll_discard != 0) {
+        m->ppu_fifo_head = (uint8_t)((m->ppu_fifo_head + 1u) % GBB_PPU_FIFO_CAPACITY);
+        --m->ppu_fifo_count;
+        --m->ppu_scroll_discard;
+        return;
+    }
+    if (fetched_slot >= GBB_FRAME_WIDTH || fetched_slot != m->ppu_output_x) {
+        m->ppu_transfer_complete = 1;
+        return;
+    }
+    if (ppu_window_should_start(m)) {
+        m->ppu_window_started = 1;
+        m->ppu_mode3_stall = (uint8_t)(m->wx == 0u && (m->scx & 7u) != 0 ? 5u : 6u);
+        --m->ppu_mode3_stall;
+        return;
+    }
+    uint8_t object_stall = 0;
+    if (ppu_object_should_stall(m, &object_stall)) {
+        m->ppu_mode3_stall = object_stall;
+        --m->ppu_mode3_stall;
+        return;
+    }
+
+    m->ppu_fifo_head = (uint8_t)((m->ppu_fifo_head + 1u) % GBB_PPU_FIFO_CAPACITY);
+    --m->ppu_fifo_count;
+    m->frame_working[(unsigned)m->ly * GBB_FRAME_WIDTH + fetched_slot] =
+        ppu_pixel_shade(m, fetched_slot);
+    if (++m->ppu_output_x == GBB_FRAME_WIDTH) m->ppu_transfer_complete = 1;
+}
+
 static void ppu_advance_dot(gbb_instance *m) {
     if ((m->lcdc & 0x80u) == 0) return;
     if (m->ppu_dot < 455u) {
@@ -559,24 +775,29 @@ static void ppu_advance_dot(gbb_instance *m) {
             m->ly = 0;
             m->ppu_window_line = 0;
         }
+        observe_ppu(m, 0xFF44, 6, m->ly);
         m->ppu_window_line_drawn = 0;
+        m->ppu_transfer_complete = 0;
         if (m->ly < GBB_FRAME_HEIGHT) ppu_select_objects(m);
         if (m->ly == GBB_FRAME_HEIGHT) {
             memcpy(m->frame_completed, m->frame_working, sizeof(m->frame_completed));
             if (m->frame_generation != UINT64_MAX) ++m->frame_generation;
             m->frame_completion_half_dots = m->time_half_dots;
+            m->interrupt_flags |= 0x01u;
+            observe_ppu(m, 0xFF0F, 7, (uint8_t)(0xE0u | m->interrupt_flags));
         }
+        ppu_set_mode(m, m->ly >= GBB_FRAME_HEIGHT ? 1u : 2u);
+        ppu_update_stat_line(m);
     }
     if (m->ly >= GBB_FRAME_HEIGHT) {
-        m->ppu_mode = 1;
-    } else {
-        if (m->ppu_dot >= 92u && m->ppu_dot <= 251u) {
-            unsigned x = (unsigned)(m->ppu_dot - 92u);
-            m->frame_working[(unsigned)m->ly * GBB_FRAME_WIDTH + x] = ppu_pixel_shade(m, x);
-        }
-        if (m->ppu_dot < 80u) m->ppu_mode = 2;
-        else if (m->ppu_dot < 252u) m->ppu_mode = 3;
-        else m->ppu_mode = 0;
+        ppu_set_mode(m, 1);
+    } else if (m->ppu_dot < 80u) {
+        ppu_set_mode(m, 2);
+    } else if (m->ppu_dot == 80u) {
+        ppu_begin_transfer(m);
+        ppu_set_mode(m, 3);
+    } else if (m->ppu_mode == 3u) {
+        ppu_transfer_dot(m);
     }
 }
 
