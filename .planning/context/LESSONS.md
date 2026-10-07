@@ -182,3 +182,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** The independent re-review passed all 11 plan structures, 14 tracked decisions, and seven probe-edge dispositions. The failure-direction probe found 23 commands with explicit failure statements and zero findings. This validates the plan filters and naming contract; implementation-level selection remains pending execution.
 - **Source:** `.planning/phases/GB-03-visible-interactive-dmg/03-10-PLAN.md` and `03-PLAN-CHECK.md`.
 - **Status:** Corrected in the executable gap plan; implementation evidence is pending.
+
+### GB-EVIDENCE-001 / 2026-10-07 / Plan GB-03-10 source trace
+
+- **Cause and evidence:** Text extraction flattened the Nintendo manual's superscript `2^4` to `24`, and the earlier DMG-CPU-B schematic URL used a commit SHA that did not resolve upstream. The printed manual page shows the exponent, while the verified schematic commit provides the referenced FF00, clock/reset, and FF0F source files.
+- **Remedy:** Visually inspect scanned notation when typography changes a technical value, independently resolve immutable source revisions, and fetch the cited files before pinning a source claim. Keep derived-circuit connectivity separate from a validated timing trace.
+- **Applies when:** Evidence is transcribed from scanned PDFs or OCR, or technical claims depend on external immutable revision links and reverse-engineered diagrams.
+- **Verification:** The printed manual page was checked visually; all three schematic files were fetched from the verified commit. The JOYP/event CTest filter passed 8/8; exact CPU-B JOYP sample timing remains open.
+- **Source:** `.planning/phases/GB-03-visible-interactive-dmg/03-RESEARCH.md`, `docs/dmg-video-evidence.md`, and the linked Nintendo manual and pinned schematic source.
+- **Status:** Transcription and source pin corrected; no unsupported interrupt behavior was promoted.
