@@ -173,3 +173,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** The extracted package passed locally; exact-head CI run 37686137977 built the clean arm64 candidate and preview run 37686137834 downloaded and smoke-tested its bytes. Both required aggregates passed.
 - **Source:** `tests/scripts/verify-phase3-player.sh`, `.github/workflows/ci.yml`, `.github/workflows/preview.yml`, and `.planning/phases/GB-03-visible-interactive-dmg/03-09-SUMMARY.md`.
 - **Status:** Fixed and verified for the SDL3 preview package; it does not establish general macOS signing or distribution behavior.
+
+### GB-GSD-002 / 2026-10-07 / Phase 3 gap-plan test selection
+
+- **Cause and evidence:** The first independent plan review found that enumerated CTest regexes could match existing DMA/JOYP tests while omitting newly added collision or sampling cases, so the planned commands could pass without running the cases they were meant to verify.
+- **Remedy:** Require new DMA cases to use the `dma_*` family and new JOYP cases to use `joypad_*`; use family-wide CTest filters in each relevant task and checkpoint.
+- **Applies when:** A plan adds registered tests to an existing CTest suite and its verification command selects cases by regex.
+- **Verification:** The independent re-review passed all 11 plan structures, 14 tracked decisions, and seven probe-edge dispositions. The failure-direction probe found 23 commands with explicit failure statements and zero findings. This validates the plan filters and naming contract; implementation-level selection remains pending execution.
+- **Source:** `.planning/phases/GB-03-visible-interactive-dmg/03-10-PLAN.md` and `03-PLAN-CHECK.md`.
+- **Status:** Corrected in the executable gap plan; implementation evidence is pending.
