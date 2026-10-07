@@ -1,5 +1,6 @@
 #include "gabbaboy/gabbaboy.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -79,13 +80,24 @@ static const fixture_case *select_case(const char *name) {
 }
 static int locate_rom(const char *manifest,const char *rom,char path[4096]) {
     size_t n=strlen(manifest); if(n==0||n>=4000)return 0; const char *slash=strrchr(manifest,'/');
+    const char *backslash=strrchr(manifest,'\\');
+    if(backslash!=NULL&&(slash==NULL||backslash>slash))slash=backslash;
     size_t dir=slash?(size_t)(slash-manifest+1):0; if(dir+strlen(rom)>=4095)return 0;
     memcpy(path,manifest,dir);strcpy(path+dir,rom);return 1;
 }
-static int case_rom_valid(const fixture_case *fc,const char *manifest) {
-    char path[4096];uint8_t bytes[MAX_ROM+1];size_t length=0;
-    return locate_rom(manifest,fc->rom,path)&&read_bounded(path,bytes,MAX_ROM,&length)&&
-           length==MAX_ROM&&hash_matches(bytes,length,fc->sha256);
+static const char *load_case_rom(const fixture_case *fc,const char *manifest,uint8_t rom[MAX_ROM+1],size_t *length) {
+    char path[4096];
+    if(!locate_rom(manifest,fc->rom,path))return "invalid-fixture-path";
+    FILE *file=fopen(path,"rb");
+    if(file==NULL)return errno==ENOENT?"missing-fixture":"fixture-read-error";
+    size_t n=fread(rom,1,MAX_ROM+1,file);
+    int failed=ferror(file);
+    if(fclose(file)!=0)failed=1;
+    if(failed)return "fixture-read-error";
+    if(n!=MAX_ROM)return "bad-size";
+    if(!hash_matches(rom,n,fc->sha256))return "bad-digest";
+    *length=n;
+    return NULL;
 }
 static const char *unsupported_core_stop(gbb_stop_reason reason) {
     if(reason==GBB_STOP_UNSUPPORTED_BUS||reason==GBB_STOP_UNSUPPORTED_OPCODE||
@@ -108,10 +120,10 @@ static void retain_recent(gbb_diagnostic_record recent[RECENT_CAPACITY],size_t *
     for(size_t i=0;i<count;i++){if(*used<RECENT_CAPACITY)recent[(*used)++]=add[i];else{memmove(recent,recent+1,(RECENT_CAPACITY-1)*sizeof(*recent));recent[RECENT_CAPACITY-1]=add[i];}}
 }
 static int run_one(const fixture_case *fc,const char *manifest,int receipt,size_t eligible,size_t *executed) {
-    char rom_path[4096];uint8_t rom[MAX_ROM+1];size_t rom_size=0;
-    if(!case_rom_valid(fc,manifest)||!locate_rom(manifest,fc->rom,rom_path)||
-       !read_bounded(rom_path,rom,MAX_ROM,&rom_size)||rom_size!=MAX_ROM||!hash_matches(rom,rom_size,fc->sha256)){
-        if(receipt)printf("case=%s category=%s status=unsupported reason=missing-or-invalid-fixture source_revision=31510e12eea6286d36eea060a6adde755e1067aa fixture_sha256=%s profile=DMG-CPU-B boot=skipped protocol=mooneye-ld-b-b eligible=%zu executed=%zu\n",fc->id,fc->category,fc->sha256,eligible,*executed);
+    uint8_t rom[MAX_ROM+1];size_t rom_size=0;
+    const char *fixture_error=load_case_rom(fc,manifest,rom,&rom_size);
+    if(fixture_error!=NULL){
+        if(receipt)printf("case=%s category=%s status=unsupported reason=%s source_revision=31510e12eea6286d36eea060a6adde755e1067aa fixture_sha256=%s profile=DMG-CPU-B boot=skipped protocol=mooneye-ld-b-b eligible=%zu executed=%zu\n",fc->id,fc->category,fixture_error,fc->sha256,eligible,*executed);
         return 3;
     }
     gbb_instance *m=NULL;if(gbb_create(GBB_PROFILE_DMG_CPU_B,&m)!=GBB_OK||gbb_load_rom(m,rom,rom_size)!=GBB_OK){gbb_destroy(m);return 3;}

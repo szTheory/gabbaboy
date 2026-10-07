@@ -37,6 +37,10 @@ if [[ ${1:-} == --capture ]]; then
       fi
     done
   } | tee "$output/report.txt"
+  if grep -q '_equals_blob=no' "$output/report.txt"; then
+    echo 'Windows manifest bytes differ from the pinned Git blob' >&2
+    exit 1
+  fi
   exit 0
 fi
 
