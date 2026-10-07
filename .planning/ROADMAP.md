@@ -98,7 +98,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 - [x] 02-12-PLAN.md — Windows manifest portability and distinct negative-control results
 
 **Gap wave 4** *(blocked on Gap wave 3 and 02-13 completion)*
-- [ ] 02-14-PLAN.md — source-qualify PPU-independent corpus candidates and result protocol
+- [x] 02-14-PLAN.md — source-qualify PPU-independent corpus candidates and result protocol (local source/protocol probe passed; hosted candidate bytes and corpus admission remain open)
 
 **Gap wave 5** *(blocked on Gap wave 4 completion)*
 - [ ] 02-15-PLAN.md — admit only qualified fixtures and reproduce final bytes
