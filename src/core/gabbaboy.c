@@ -718,8 +718,10 @@ static void enter_interrupt(gbb_instance *m, unsigned bit) {
     uint8_t mask = (uint8_t)(1u << bit);
     m->ime = 0;
     m->ime_delay = 0;
+    /* Device deadlines at the acknowledge phase precede the IF bus write. */
+    advance_devices_to(m, m->instruction_start_half_dots + 8u);
     m->interrupt_flags = (uint8_t)(m->interrupt_flags & (uint8_t)~mask);
-    observe_bus(m, 8, 0xFF0F, 2, (uint8_t)(0xE0u | m->interrupt_flags));
+    observe_bus(m, 0, 0xFF0F, 2, (uint8_t)(0xE0u | m->interrupt_flags));
     push16(m, m->pc, 16, 24);
     m->pc = (uint16_t)(0x0040u + bit * 8u);
     m->halted = 0;

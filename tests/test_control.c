@@ -149,7 +149,7 @@ static int interrupt_diagnostic_order(void) {
     for (size_t i = 1; i < r.diagnostic_count; ++i)
         REQUIRE(ew[i - 1].time_half_dots <= ew[i].time_half_dots);
     gbb_test_cpu_snapshot(whole, &after);
-    REQUIRE(after.pc == 0x50 && after.sp == 0xfffc && after.time_half_dots == 248);
+    REQUIRE(after.pc == 0x40 && after.sp == 0xfffc && after.time_half_dots == 248);
     REQUIRE(gbb_peek_ram(whole, 0xfffc) == 0x15 && gbb_peek_ram(whole, 0xfffd) == 0x01);
     r = gbb_run_ex(split, 40, NULL, 0, es, 16);
     REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 40 && r.diagnostic_count == 6);
