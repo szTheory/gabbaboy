@@ -140,11 +140,14 @@ gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_si
 gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events, size_t count);
 /* Copies the latest completed 160x144 frame as one byte per pixel. Each byte
  * is a DMG shade index in [0,3]. pitch_bytes is the destination row stride;
- * capacity_bytes must cover the last active pixel. Output remains caller-owned,
+ * capacity_bytes must cover (height-1)*pitch_bytes + width bytes. The entire
+ * capacity_bytes range must not overlap out_info. Output remains caller-owned,
  * the core allocates nothing, and no pointer into instance storage is exposed.
- * Returns GBB_FRAME_NOT_READY until a complete frame has been produced; reset
- * invalidates the completed frame. Invalid pointers, pitch or capacity return
- * GBB_INVALID_ARGUMENT. out_info must not overlap the pixel destination. */
+ * Checked arithmetic, pointers, pitch, capacity, and overlap are validated
+ * before either output is written. Invalid ranges return GBB_INVALID_ARGUMENT;
+ * GBB_FRAME_NOT_READY is returned only after valid arguments are established.
+ * Reset invalidates the completed frame. On every error, pixels and out_info
+ * remain unchanged. */
 gbb_error gbb_copy_frame(const gbb_instance *instance, uint8_t *pixels,
                          size_t capacity_bytes, size_t pitch_bytes,
                          gbb_frame_info *out_info);

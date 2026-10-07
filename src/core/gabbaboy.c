@@ -968,6 +968,16 @@ gbb_error gbb_copy_frame(const gbb_instance *instance, uint8_t *pixels,
         return GBB_INVALID_ARGUMENT;
     size_t required = (GBB_FRAME_HEIGHT - 1u) * pitch_bytes + GBB_FRAME_WIDTH;
     if (capacity_bytes < required) return GBB_INVALID_ARGUMENT;
+
+    uintptr_t pixels_begin = (uintptr_t)(void *)pixels;
+    uintptr_t info_begin = (uintptr_t)(void *)out_info;
+    if (capacity_bytes > UINTPTR_MAX - pixels_begin ||
+        sizeof(*out_info) > UINTPTR_MAX - info_begin)
+        return GBB_INVALID_ARGUMENT;
+    uintptr_t pixels_end = pixels_begin + capacity_bytes;
+    uintptr_t info_end = info_begin + sizeof(*out_info);
+    if (pixels_begin < info_end && info_begin < pixels_end)
+        return GBB_INVALID_ARGUMENT;
     if (instance->frame_generation == 0) return GBB_FRAME_NOT_READY;
     for (size_t y = 0; y < GBB_FRAME_HEIGHT; ++y)
         memcpy(pixels + y * pitch_bytes,
