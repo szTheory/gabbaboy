@@ -7,8 +7,9 @@
 #define WIDTH 160u
 #define HEIGHT 144u
 #define PIXELS (WIDTH * HEIGHT)
+static const char *active_case = "unknown";
 #define REQUIRE(x) do { if (!(x)) { \
-    fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #x); return 1; \
+    printf("TAP version 13\n1..1\nnot ok 1 - %s\n  ---\n  message: \"assertion at line %d: %s\"\n  ...\n", active_case, __LINE__, #x); return 1; \
 } } while (0)
 
 typedef struct {
@@ -221,27 +222,47 @@ static int run_frame(gbb_instance *machine, uint8_t pixels[PIXELS]) {
 static int expect_dma_object(uint8_t source_page, int restart) {
     gbb_instance *machine = load_dma_guest(source_page, restart, 0, 0, 0);
     REQUIRE(machine != NULL);
-    gbb_test_dma_event events[162];
+    gbb_test_dma_event events[400];
     gbb_test_dma_observer_set(machine, events, sizeof(events) / sizeof(events[0]));
     uint8_t *pixels = malloc(PIXELS);
     REQUIRE(pixels != NULL);
     REQUIRE(run_frame(machine, pixels) == 0);
-    REQUIRE(pixels[3] == 3u); /* source byte 0x10 creates OBJ color 1 at x=3 */
-    REQUIRE(gbb_peek_ram(machine, 0xC204) == source_page);
-    REQUIRE(gbb_test_dma_observer_count(machine) == 162u);
+    REQUIRE(pixels[3] == (restart ? 0u : 3u));
+    REQUIRE(gbb_peek_ram(machine, 0xC204) == (restart ? 0xD0u : source_page));
+    size_t event_count = gbb_test_dma_observer_count(machine);
+    REQUIRE(event_count >= 162u);
     REQUIRE(events[0].access == 1u && events[0].address == 0xFF46u);
     REQUIRE(events[0].value == source_page);
     uint64_t start = events[0].time_half_dots;
     REQUIRE(events[1].access == 2u && events[1].address == 0xFE00u);
     REQUIRE(events[1].value == 16u && events[1].time_half_dots == start + 8u);
-    for (unsigned i = 0; i < 160u; ++i) {
+    if (!restart) REQUIRE(event_count == 162u);
+    for (unsigned i = 0; i < 160u && !restart; ++i) {
         REQUIRE(events[i + 1u].access == 2u);
         REQUIRE(events[i + 1u].address == (uint16_t)(0xFE00u + i));
         REQUIRE(events[i + 1u].time_half_dots == start + ((uint64_t)i + 1u) * 8u);
         if (i >= 4u) REQUIRE(events[i + 1u].value == 0u);
     }
-    REQUIRE(events[161].access == 3u && events[161].address == 0xFF46u);
-    REQUIRE(events[161].time_half_dots == start + 1280u);
+    if (!restart) {
+        REQUIRE(events[161].access == 3u && events[161].address == 0xFF46u);
+        REQUIRE(events[161].time_half_dots == start + 1280u);
+    } else {
+        size_t restart_start = 1u;
+        while (restart_start < event_count &&
+               !(events[restart_start].access == 1u && events[restart_start].address == 0xFF46u))
+            ++restart_start;
+        REQUIRE(restart_start < event_count);
+        REQUIRE(events[restart_start].value == 0xD0u);
+        REQUIRE(events[restart_start + 1u].access == 2u &&
+                events[restart_start + 1u].address == 0xFE00u &&
+                events[restart_start + 1u].value == 0u);
+        for (unsigned i = 0; i < 160u; ++i) {
+            REQUIRE(events[restart_start + 1u + i].access == 2u);
+            REQUIRE(events[restart_start + 1u + i].address == (uint16_t)(0xFE00u + i));
+        }
+        REQUIRE(events[restart_start + 161u].access == 3u);
+        REQUIRE(events[restart_start + 161u].address == 0xFF46u);
+    }
     free(pixels);
     gbb_destroy(machine);
     return 0;
@@ -315,7 +336,61 @@ static int dma_source_mapping(void) {
     return 0;
 }
 
-static int dma_restart(void) { return expect_dma_object(0xC0, 1); }
+static int dma_start(void) {
+    /* Corresponds to the pinned oam_dma_start.s fresh-transfer M=0/M=1/M=2
+     * boundary and B=$D7,C=$01,D=$D7,E=$00 result tuple. This owned guest
+     * checks the bounded copy cadence; it does not recreate PPU arbitration. */
+    return expect_dma_object(0xD7u, 0);
+}
+
+static int dma_restart(void) { return expect_dma_object(0xC0u, 1); }
+
+static int run_budget(gbb_instance *machine, uint64_t budget);
+
+/* The pinned Mooneye acceptance/oam_dma/reg_read.s checks that FF46 reads
+ * retain the last written page before/after transfers and across restarts.
+ * This is an original guest sequence: it copies that observable register
+ * contract, not the upstream ROM or its PPU/DMA collision setup. */
+static int dma_register_readback(void) {
+    uint8_t rom[32768] = {0};
+    rom[0x100] = 0xC3; rom[0x101] = 0x50; rom[0x102] = 0x01;
+    static const uint8_t routine[] = {
+        0x3E, 0x9F, 0xE0, 0x46,       /* start page 9F, matching reg_read.s */
+        0xF0, 0x46, 0xE0, 0xD0,       /* read immediate FF46 */
+        0x3E, 0x42, 0xE0, 0x46,       /* restart value 42, matching reg_read.s */
+        0xF0, 0x46, 0xE0, 0xD1,       /* read during replacement */
+        0x76 /* keep execution in HRAM while the restarted transfer finishes */
+    };
+    small_program p = {{0}, 0};
+    uint16_t source_address = 0;
+    emit_copy_to_hram(&p, &source_address, routine, sizeof(routine));
+    memcpy(rom + 0x150, p.bytes, p.size);
+    memcpy(rom + source_address, routine, sizeof(routine));
+    rom[0x134] = 0xE7;
+    uint8_t checksum = 0;
+    for (size_t i = 0x134; i <= 0x14C; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14D] = checksum;
+    gbb_instance *m = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
+    REQUIRE(run_budget(m, 5000u) == 0);
+    REQUIRE(gbb_peek_ram(m, 0xFFD0u) == 0x9Fu);
+    REQUIRE(gbb_peek_ram(m, 0xFFD1u) == 0x42u);
+    gbb_destroy(m);
+    m = load_dma_guest(0x8Fu, 0, 0, 0, 0);
+    REQUIRE(m != NULL);
+    uint8_t pixels[PIXELS];
+    REQUIRE(run_frame(m, pixels) == 0);
+    REQUIRE(gbb_peek_ram(m, 0xC204u) == 0x8Fu);
+    gbb_destroy(m);
+    m = load_dma_guest(0x3Fu, 0, 0, 0, 0);
+    REQUIRE(m != NULL);
+    REQUIRE(run_frame(m, pixels) == 0);
+    REQUIRE(gbb_peek_ram(m, 0xC204u) == 0x3Fu);
+    gbb_destroy(m);
+    return 0;
+}
 
 static int dma_hram(void) {
     gbb_instance *machine = load_dma_guest(0xC0, 0, 1, 0, 0);
@@ -575,8 +650,15 @@ static int dma_oam_lock(void) { return check_ppu_lock(0xFE00u, 0); }
 
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
+    active_case = argv[1];
     if (strcmp(argv[1], "dma_progress") == 0) return dma_progress();
+    if (strcmp(argv[1], "dma_start") == 0) return dma_start();
     if (strcmp(argv[1], "dma_restart") == 0) return dma_restart();
+    if (strcmp(argv[1], "dma_register_readback") == 0) {
+        int result = dma_register_readback();
+        if (result == 0) printf("TAP version 13\n1..1\nok 1 - dma_register_readback\n");
+        return result;
+    }
     if (strcmp(argv[1], "dma_source_mapping") == 0) return dma_source_mapping();
     if (strcmp(argv[1], "dma_hram") == 0) return dma_hram();
     if (strcmp(argv[1], "dma_interrupt_stack") == 0) return dma_interrupt_stack();

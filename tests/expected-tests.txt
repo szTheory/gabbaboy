@@ -82,7 +82,9 @@ ppu_timing_partition
 frame_copy_failures
 frame_generation_lifecycle
 dma_progress
+dma_start
 dma_restart
+dma_register_readback
 dma_source_mapping
 dma_hram
 dma_interrupt_stack
