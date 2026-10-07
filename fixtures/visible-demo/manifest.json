@@ -2,13 +2,16 @@
   "id": "original-visible-interactive-dmg",
   "source": "demo.asm",
   "source_identity": "Original GabbaBoy project-authored assembly",
+  "source_sha256": "930a92621fe3b5a862a50aee6f79bdae3f6bb8d8fe24f546a5d5ab737782d1ee",
   "license": "MIT; see LICENSE.txt and repository LICENSE",
   "build": {
     "assembler": "RGBDS",
     "version": "1.0.1",
     "archive": "rgbds-macos.zip",
     "archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
-    "recipe": "rgbasm -o /tmp/demo.o fixtures/visible-demo/demo.asm && rgblink -o /tmp/demo.gb /tmp/demo.o && rgbfix -f hg -p 0 -m 0 -r 0 /tmp/demo.gb"
+    "ci_archive": "rgbds-linux-x86_64.tar.xz",
+    "ci_archive_sha256": "80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9",
+    "recipe": "rgbasm -o <work>/demo.o fixtures/visible-demo/demo.asm && rgblink -o <work>/demo.gb <work>/demo.o && rgbfix -f hg -p 0 -m 0 -r 0 <work>/demo.gb"
   },
   "rom": "demo.gb",
   "size_bytes": 32768,
