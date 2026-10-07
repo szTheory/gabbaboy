@@ -389,6 +389,36 @@ static int dma_register_readback(void) {
     REQUIRE(run_frame(m, pixels) == 0);
     REQUIRE(gbb_peek_ram(m, 0xC204u) == 0x3Fu);
     gbb_destroy(m);
+
+    /* Original HRAM guest analogue of reg_read.s's two active writes: 90 is
+     * decremented to 8F, then 40 to 3F; read each latest value and again after
+     * the bounded transfer wait. The invalid source page is only a register
+     * readback probe and does not change D-024's implemented source envelope. */
+    uint8_t restart_rom[32768] = {0};
+    restart_rom[0x100] = 0xC3; restart_rom[0x101] = 0x50; restart_rom[0x102] = 0x01;
+    static const uint8_t restart_routine[] = {
+        0x3E, 0x90, 0x3D, 0xE0, 0x46, 0xF0, 0x46, 0xE0, 0xD2,
+        0x3E, 0x40, 0x3D, 0xE0, 0x46, 0xF0, 0x46, 0xE0, 0xD3,
+        0x76
+    };
+    small_program restart_program = {{0}, 0};
+    source_address = 0;
+    emit_copy_to_hram(&restart_program, &source_address, restart_routine,
+                      sizeof(restart_routine));
+    memcpy(restart_rom + 0x150, restart_program.bytes, restart_program.size);
+    memcpy(restart_rom + source_address, restart_routine, sizeof(restart_routine));
+    restart_rom[0x134] = 0xE7;
+    checksum = 0;
+    for (size_t i = 0x134; i <= 0x14C; ++i)
+        checksum = (uint8_t)(checksum - restart_rom[i] - 1u);
+    restart_rom[0x14D] = checksum;
+    m = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, restart_rom, sizeof(restart_rom)) == GBB_OK);
+    REQUIRE(run_budget(m, 5000u) == 0);
+    REQUIRE(gbb_peek_ram(m, 0xFFD2u) == 0x8Fu);
+    REQUIRE(gbb_peek_ram(m, 0xFFD3u) == 0x3Fu);
+    gbb_destroy(m);
     return 0;
 }
 

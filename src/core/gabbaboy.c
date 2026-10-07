@@ -347,7 +347,7 @@ static int cpu_hram_address(uint16_t address) {
 static void ppu_select_objects(gbb_instance *m);
 
 static uint8_t read8(const gbb_instance *m, uint16_t address) {
-    if (m->dma_active && !cpu_hram_address(address)) return 0xFFu;
+    if (m->dma_active && !cpu_hram_address(address) && address != 0xFF46u) return 0xFFu;
     if (address == 0xFF00) return joypad_value(m);
     if (address == 0xFF04) return m->div;
     if (address == 0xFF05) return m->tima;
@@ -420,7 +420,7 @@ static void timer_set_signal(gbb_instance *m, int next, uint64_t at) {
 }
 
 static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
-    if (m->dma_active && !cpu_hram_address(address)) return;
+    if (m->dma_active && !cpu_hram_address(address) && address != 0xFF46u) return;
     if (address >= 0x8000 && address <= 0x9FFF) {
         if (cpu_vram_access_allowed(m)) m->vram[address - 0x8000] = value;
     }
