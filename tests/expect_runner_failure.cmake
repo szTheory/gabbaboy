@@ -4,7 +4,7 @@ endif()
 if(GBB_MODE STREQUAL "missing")
   execute_process(COMMAND "${GBB_RUNNER}" --manifest "${GBB_MANIFEST}" --case daa --receipt
     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
-  set(expected "eligible=1 executed=0")
+  set(expected "reason=missing-fixture.*eligible=1 executed=0")
 elseif(GBB_MODE STREQUAL "manifest")
   execute_process(COMMAND "${GBB_RUNNER}" --manifest "${GBB_MANIFEST}" --suite
     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
@@ -12,7 +12,7 @@ elseif(GBB_MODE STREQUAL "manifest")
 elseif(GBB_MODE STREQUAL "digest")
   execute_process(COMMAND "${GBB_RUNNER}" --manifest "${GBB_MANIFEST}" --case daa --receipt
     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
-  set(expected "missing-or-invalid-fixture.*eligible=1 executed=0")
+  set(expected "reason=bad-digest.*eligible=1 executed=0")
 else()
   message(FATAL_ERROR "unknown runner negative control")
 endif()
