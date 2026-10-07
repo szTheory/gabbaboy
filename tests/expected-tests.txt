@@ -78,6 +78,11 @@ ppu_timing_stat
 ppu_timing_lcd
 ppu_timing_fetch
 ppu_timing_partition
+dma_progress
+dma_restart
+dma_source_mapping
+dma_hram
+dma_partition
 tracer_smoke
 fixture_digest
 visible_fixture_digest

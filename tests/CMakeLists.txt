@@ -90,6 +90,15 @@ foreach(case frame_composition_bg frame_composition_window frame_composition_spr
              ppu_timing_partition)
   add_test(NAME ${case} COMMAND test_ppu ${case})
 endforeach()
+
+add_executable(test_dma test_dma.c)
+target_link_libraries(test_dma PRIVATE GabbaBoy::core)
+target_compile_features(test_dma PRIVATE c_std_17)
+set_target_properties(test_dma PROPERTIES C_EXTENSIONS OFF)
+foreach(case dma_progress dma_restart dma_source_mapping dma_hram dma_partition)
+  add_test(NAME ${case} COMMAND test_dma ${case})
+endforeach()
+
 add_test(NAME tracer_smoke COMMAND gabbaboy-runner ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 add_test(NAME fixture_digest
   COMMAND ${CMAKE_COMMAND}
