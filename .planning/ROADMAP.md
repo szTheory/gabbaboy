@@ -57,7 +57,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. Equal timestamped inputs and elapsed emulated time produce equal supported state/output across different run partitions; LCD-off, HALT/STOP, lockup, and full output capacity return within the caller's bounded contract. (CPU-04)
 5. A headless run reports pass/fail/timeout/unsupported against a pinned eligible CPU/timer corpus with model/boot/protocol identity and sufficient retained trace evidence to reproduce failures. (CPU-05)
 
-**Plans**: All 17 runnable plans have summaries: the original nine, gap-closure Plans 02-10 through 02-14, and Plans 02-16 through 02-18. Plan 02-15 is explicitly superseded and non-runnable; its halted summary remains historical evidence. The goal-backward verifier passed all five roadmap truths, the security audit closed all 45 registered threats, and the Nyquist audit resolved all eight identified coverage gaps with no escalation. At implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`, the local 104-case inventory, relocated 109-case inventory, exact hosted CI run 37620710587, and fixture reproduction run 37620710600 passed. See [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), [validation](phases/GB-02-dmg-cpu-bus-and-time/02-VALIDATION.md), and [security](phases/GB-02-dmg-cpu-bus-and-time/02-SECURITY.md). No physical DMG-CPU-B observation is claimed. Phase 3 remains paused until the owner chooses to continue; next command: `$gsd-discuss-phase 3`.
+**Plans**: All 17 runnable plans have summaries: the original nine, gap-closure Plans 02-10 through 02-14, and Plans 02-16 through 02-18. Plan 02-15 is explicitly superseded and non-runnable; its halted summary remains historical evidence. The goal-backward verifier passed all five roadmap truths, the security audit closed all 45 registered threats, and the Nyquist audit resolved all eight identified coverage gaps with no escalation. At implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`, the local 104-case inventory, relocated 109-case inventory, exact hosted CI run 37620710587, and fixture reproduction run 37620710600 passed. See [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), [validation](phases/GB-02-dmg-cpu-bus-and-time/02-VALIDATION.md), and [security](phases/GB-02-dmg-cpu-bus-and-time/02-SECURITY.md). No physical DMG-CPU-B observation is claimed. Phase 3 began on 2026-10-07 and remains in progress; see its current verification and evidence route below.
 **Wave 1**
 - [x] 02-01-PLAN.md — ROM-only bus and WRAM tracer
 
@@ -112,7 +112,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 ### Phase 3: Visible Interactive DMG
 
-**Goal**: A macOS user can play a legal interactive ROM-only GB fixture with deterministic input and evidenced DMG video behavior.
+**Goal**: As a Mac user, I want to play a legal GB ROM with timed input and video evidence, so that I can verify the DMG preview.
 **Mode:** mvp
 **Depends on**: Phase 2
 **Requirements**: VIDEO-01, VIDEO-02, VIDEO-03, VIDEO-04, VIDEO-05
@@ -124,7 +124,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. A macOS user can open and play an original or permissioned ROM-only fixture, resize with correct aspect/integer scaling, pause, reset, and quit; errors are actionable. (VIDEO-04)
 5. Automated evidence separately reports image composition, raster timing, and scripted gameplay; the visible preview labels incomplete audio and persistence. (VIDEO-05)
 
-**Plans:** All 11 plans have summaries across 10 dependency-ordered waves; gap-closure Plans 03-10 and 03-11 occupy Wave 10. Phase verification remains open on VIDEO-02 and VIDEO-03 model-applicability evidence, so Phase 3 remains in progress.
+**Plans:** All 12 plans have summaries across 11 dependency-ordered waves. The latest goal-backward audit is `gaps_found` (2/5 truths): VIDEO-01 and VIDEO-05 pass; VIDEO-02 is partial; VIDEO-03 is failed because JOYP IF is unimplemented; VIDEO-04 still needs a live packaged-window/key-input check. A current-source launch attempt failed with `SDL_Init: The video driver did not add any displays`. The pinned DMG-CPU-B circuit model was reviewed but does not supply the missing exact outcomes. Keep Phase 3 in progress. After a reliable published source states the exact DMG-CPU-B result, or a documented test on an identified DMG-CPU-B records its setup, exact input timing, measured results, and raw logs, run `$gsd-plan-phase 3 --gaps`; do not repeat gap planning while evidence is unchanged.
 **Wave 1**
 - [x] 03-01-PLAN.md — playable production-core tracer with timestamped input and copied frames
 
@@ -155,6 +155,9 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 **Gap wave 10** *(closes only the remaining evidence and limitation-test gaps; both plans depend on Wave 9)*
 - [x] 03-10-PLAN.md — source-applicable DMA/JOYP evidence and provenance-gated CPU-B observation
 - [x] 03-11-PLAN.md — automated audio and battery-persistence limitation assertions
+
+**Gap wave 11** *(source-backed DMA startup/restart/readback; depends on Wave 10)*
+- [x] 03-12-PLAN.md — FF46 startup window, active restart, and register readback; simultaneous PPU/DMA arbitration and JOYP IF remain open
 
 **UI hint**: yes
 
@@ -214,7 +217,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 |-------|----------------|--------|-----------|
 | 1. Portable Foundation and Original ROM Tracer | 5/5 | Complete    | 2026-10-03 |
 | 2. DMG CPU, Bus, and Time | 17/17 | Complete | 2026-10-07 |
-| 3. Visible Interactive DMG | 11/11 | In Progress | - |
+| 3. Visible Interactive DMG | 12/12 | In Progress | - |
 | 4. MBC1 and Safe Battery Continuation | 0/TBD | Not started | - |
 | 5. DMG Audio and Stable Playback | 0/TBD | Not started | - |
 | 6. Qualified DMG Release and Consumer Handoff | 0/TBD | Not started | - |
@@ -225,4 +228,4 @@ All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](
 
 Automate authorized work within each phase, then inspect current verification/release/consumer evidence, update traceability and [lessons](context/LESSONS.md), triage issues/PRs, report limitations and the exact next command, and **stop**. Never auto-advance phases or milestones; keep both auto-advance flags false. Credential, hardware, or perceptual gaps must be recorded honestly with the smallest necessary human action, never converted into passing evidence. Remote/CI setup begins in Phase 1; absent access remains an explicit completion limitation.
 
-Phase 1 Plans 01–05 are complete. Goal-backward verification passed 5/5 roadmap truths and all 8 BASE requirements; standard code review is clean. Phase 2 Plans 02-01 through 02-14 and 02-16 through 02-18 are complete; 02-15 remains superseded/non-runnable. Phase 2 passed 5/5 roadmap truths, all five CPU requirements, 45/45 security threats, Nyquist validation and code review; no physical DMG hardware test is claimed. The original nine Phase 3 plans are complete; gap-closure Plans 03-10 and 03-11 are ready in Wave 10. VIDEO-01, VIDEO-04, and VIDEO-05 are complete, including exact-head CI run 37686137977 and downloaded-package consumer run 37686137834 at `fd62c48d84b8339435fefd008147f0c06f696e0e`. Phase 3 remains open with VIDEO-02 simultaneous PPU/DMA evidence and D-08/VIDEO-03 JOYP interrupt evidence unresolved; live desktop perception and physical DMG-CPU-B observation remain unavailable. The exact next command is `$gsd-execute-phase 3 --gaps-only`; keep both auto-advance flags false and stop before Phase 4: MBC1 and Safe Battery Continuation.
+Phase 1 Plans 01–05 are complete. Goal-backward verification passed 5/5 roadmap truths and all 8 BASE requirements; standard code review is clean. Phase 2 Plans 02-01 through 02-14 and 02-16 through 02-18 are complete; 02-15 remains superseded/non-runnable. Phase 2 passed 5/5 roadmap truths, all five CPU requirements, 45/45 security threats, Nyquist validation and code review; no physical DMG hardware test is claimed. All 12 Phase 3 plans are summarized through gap wave 11. Its current verification is 2/5 truths: VIDEO-01/05 pass, VIDEO-02 is partial, VIDEO-03 lacks JOYP interrupt generation, and VIDEO-04 still needs a visible packaged-window/key check. Fresh `phase1` CTest passed 134/134. Earlier player/package CI receipts refer to SHA `fd62c48d84b8339435fefd008147f0c06f696e0e`, so there is no current-head hosted-CI claim. A desktop launch attempt found no available display. A pinned DMG-CPU-B circuit model was reviewed but does not give the missing exact collision or joypad-interrupt results. To close VIDEO-02/03, first obtain a reliable published source that states the exact result for DMG-CPU-B or a documented test on an identified DMG-CPU-B with its setup, exact input timing, measured results, and raw logs. To close VIDEO-04, open the packaged app on a display-equipped Mac and confirm the demo is visible and responds to one mapped key. After qualifying hardware evidence changes, run `$gsd-plan-phase 3 --gaps`; do not repeat gap planning while evidence is unchanged. Keep both auto-advance flags false and stop before Phase 4: MBC1 and Safe Battery Continuation.

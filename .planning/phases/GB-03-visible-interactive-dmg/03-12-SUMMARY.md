@@ -126,6 +126,13 @@ The measured plan commit count is 7 from baseline `905bed7b1959a1e1f438cb7da6ffd
 - **Verification:** The `dma_start` RED failed on B=`$01`; after the fix, the focused DMA set and full 134-case CTest suite passed.
 - **Committed in:** `a1a084a`.
 
+**3. [Scope limitation] Keep the owned startup probe narrower than the full upstream result tuple**
+- **Found during:** Final source-to-test comparison for Task 1.
+- **Issue:** The pinned `oam_dma_start.s` ends with B=`$D7`, C=`$01`, D=`$D7`, E=`$00`; the owned `dma_start` guest directly checks the M=1 `INC B` observation and the first `$D7` DMA byte, not all four final registers.
+- **Resolution:** The plan and evidence text distinguish the owned M=1/first-byte checks from the upstream full tuple. No test is described as reproducing the full Mooneye case, and no extra timing behavior is inferred.
+- **Files modified:** `03-12-PLAN.md`, `tests/test_dma.c`, `03-12-SUMMARY.md`.
+- **Verification:** Current full core CTest passed 134/134; the narrower local assertions are explicit in `docs/dmg-video-evidence.md`.
+
 ## TDD Evidence
 
 - **RED:** `dma_register_readback` failed because its guest read of FF46 immediately after starting DMA did not return `$9F`. The unchanged TAP report was accepted as `RED_EVIDENCE_OK`; semantic inspection confirmed the target reached the intended guest assertion.
@@ -134,6 +141,8 @@ The measured plan commit count is 7 from baseline `905bed7b1959a1e1f438cb7da6ffd
 - **REFACTOR:** No separate refactor was needed. The later test refinement added exact one-cycle-before/after assertions for replacement completion.
 
 Both RED records were generated from real TAP output and passed the OpenGSD `tdd-red-evidence` classifier before their corresponding GREEN commits.
+
+The owned fresh-start test deliberately asserts only the M=1 `INC B` observation and the first DMA byte. The full B/C/D/E tuple remains an upstream source result; this plan does not claim to reproduce it locally.
 
 ## Issues Encountered
 
@@ -149,7 +158,7 @@ Phase 3 remains executing. VIDEO-02 stays open for simultaneous active PPU/DMA a
 
 ## Self-Check: PASSED
 
-All seven plan-owned implementation, test, documentation, and summary files exist, and all seven measured plan commits are ancestors of the current branch head.
+All seven plan-owned implementation, test, documentation, and summary files exist, and all seven measured plan commits are ancestors of the current branch head. Two code issues were auto-fixed; the startup probe's narrower correspondence to the upstream tuple is documented as a scope limitation.
 
 ---
 *Phase: GB-03-visible-interactive-dmg*

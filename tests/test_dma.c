@@ -337,11 +337,12 @@ static int dma_source_mapping(void) {
 }
 
 static int dma_start(void) {
-    /* Corresponds to the pinned oam_dma_start.s fresh-transfer M=0/M=1/M=2
-     * boundary and result tuple. This original guest places INC B in OAM,
+    /* Corresponds to the first-round fresh-transfer M=0/M=1/M=2 access window
+     * in pinned oam_dma_start.s. This original guest places INC B in OAM,
      * starts DMA by executing LD (HL),A from the OAM echo predecessor, and
      * observes the first startup instruction before the transfer can replace
-     * it. The PPU remains disabled, so no scan/fetch arbitration is involved. */
+     * it. It does not reproduce the upstream test's complete final register
+     * tuple. The PPU remains disabled, so no scan/fetch arbitration is involved. */
     uint8_t rom[32768] = {0};
     rom[0x100] = 0xC3; rom[0x101] = 0x50; rom[0x102] = 0x01;
     small_program p = {{0}, 0};

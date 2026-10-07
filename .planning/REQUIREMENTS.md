@@ -32,7 +32,7 @@ Every requirement below must map to exactly one phase. Completion needs implemen
 - [x] **VIDEO-01**: The declared DMG profile renders background, window, and sprites with LCD/STAT transitions and a dot-sensitive fetch design demonstrated by separate composition and timing cases.
 - [ ] **VIDEO-02**: OAM DMA, VRAM/OAM access restrictions, and CPU/PPU/DMA contention produce expected model-specific observable results.
 - [ ] **VIDEO-03**: Timestamped joypad transitions affect the guest deterministically, including selection/interrupt behavior; the public API and SDL keyboard path exercise the same input boundary.
-- [x] **VIDEO-04**: A macOS user can launch the optional player, open a supported ROM-only image, play an original or explicitly permissioned interactive GB fixture, resize with correct aspect/integer scaling, pause, reset, and quit with actionable errors.
+- [ ] **VIDEO-04**: A macOS user can launch the optional player, open a supported ROM-only image, play an original or explicitly permissioned interactive GB fixture, resize with correct aspect/integer scaling, pause, reset, and quit with actionable errors.
 - [x] **VIDEO-05**: Automated checks distinguish image composition, raster timing, and scripted gameplay outcomes, and the visible preview clearly identifies still-incomplete audio/persistence support.
 
 ### Cartridge banking and battery continuation
@@ -108,7 +108,7 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | VIDEO-01 | Phase 3 | Complete |
 | VIDEO-02 | Phase 3 | Pending |
 | VIDEO-03 | Phase 3 | Pending |
-| VIDEO-04 | Phase 3 | Complete |
+| VIDEO-04 | Phase 3 | Pending — live packaged-window and key-input check |
 | VIDEO-05 | Phase 3 | Complete |
 | SAVE-01 | Phase 4 | Pending |
 | SAVE-02 | Phase 4 | Pending |

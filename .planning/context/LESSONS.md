@@ -191,3 +191,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** The printed manual page was checked visually; all three schematic files were fetched from the verified commit. The JOYP/event CTest filter passed 8/8; exact CPU-B JOYP sample timing remains open.
 - **Source:** `.planning/phases/GB-03-visible-interactive-dmg/03-RESEARCH.md`, `docs/dmg-video-evidence.md`, and the linked Nintendo manual and pinned schematic source.
 - **Status:** Transcription and source pin corrected; no unsupported interrupt behavior was promoted.
+
+### GB-GSD-003 / 2026-10-07 / Phase 3 gap loop
+
+- **Cause and evidence:** Phase 3 had summaries for all 12 plans, but its latest goal check still found external hardware and visible-window evidence missing. Re-running gap planning without new evidence could only restate those gaps. An invalid MVP story format had also blocked the verifier before it could report the true 2/5 result.
+- **Remedy:** Keep the phase goal in the required user-story format, run goal verification once after a meaningful implementation change, and write the exact missing evidence in plain English. Do not plan or execute another gap wave until a qualifying source, identified-hardware test record, or display-based observation changes the evidence. Keep automatic phase advancement off.
+- **Applies when:** Plans are complete but acceptance still depends on hardware, a live display, credentials, or another external observation unavailable in the current environment.
+- **Verification:** OpenGSD 1.16.0 accepted the normalized story; current Phase 3 verification reports `gaps_found` at 2/5; fresh `phase1` CTest passed 134/134; SDL could not create a window because this environment has no display. The reviewed CPU-B circuit model did not establish the missing collision or joypad-interrupt result.
+- **Source:** `.planning/phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md`, `.planning/phases/GB-03-visible-interactive-dmg/03-RESEARCH.md`, and `.planning/ROADMAP.md`.
+- **Status:** Adopted for the active Phase 3 evidence gate.

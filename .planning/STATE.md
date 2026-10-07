@@ -4,16 +4,16 @@ milestone: v0.1
 current_phase: 03
 current_phase_name: Visible Interactive DMG
 status: executing
-stopped_at: Plans 03-10 and 03-11 complete; Phase 3 remains open on VIDEO-02/03 applicability evidence
-last_updated: "2026-10-07T22:14:39Z"
+stopped_at: Phase 3 verification refreshed; 2/5 truths verified, with VIDEO-02/03 evidence and VIDEO-04 live-window check still open
+last_updated: "2026-10-07T23:22:56Z"
 last_activity: 2026-10-07
-last_activity_desc: Plan GB-03-11 completed; Phase 3 verification remains open on VIDEO-02/03 evidence
-state_head: 405568397d3a8a6fe5dda4d8420e145e8744fdce
+last_activity_desc: Rechecked Phase 3 at 2/5; SDL could not open a window because this environment has no display
+state_head: 427313a613f38676358638557676b9f72a188bd2
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 33
-  completed_plans: 33
+  total_plans: 34
+  completed_plans: 34
 milestone_name: limited DMG preview
 ---
 
@@ -29,16 +29,16 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 ## Current Position
 
 Phase: GB-03 (Visible Interactive DMG) — EXECUTING
-Plan: 11 of 11; all plan summaries are complete
+Plan: 12 of 12; all plan summaries are complete
 Status: Executing Phase GB-03
-Last activity: 2026-10-07 — Plan GB-03-11 summarized; Phase 3 verification remains open
+Last activity: 2026-10-07 — Plan GB-03-12 summarized; refreshed Phase 3 verification remains open at 2/5
 
-Progress: [███░░░░░░░] 33% of milestone phases complete; Phases 1 and 2 passed verification.
+Progress: [███░░░░░░░] 33% of milestone phases complete; Phases 1 and 2 passed verification. Phase 3 has 12/12 plan summaries and remains unverified at 2/5 truths.
 
 ## Performance Metrics
 
-- Unique plans: 27; average duration / total execution time: 25 min / 670 min. Phase 2 completion is based on goal verification, not task count alone.
-- Per-phase metrics / recent trend: Phases 1 and 2 are verified complete; all eleven Phase 3 plans have summaries, but Phase 3 remains unverified with VIDEO-02/03 evidence gaps. Plan 02-15 is superseded/non-runnable and remains historical.
+- Unique plans: 28; average duration / total execution time: 25 min / 700 min. Phase 2 completion is based on goal verification, not task count alone.
+- Per-phase metrics / recent trend: Phases 1 and 2 are verified complete; all twelve Phase 3 plans have summaries, but the latest audit is `gaps_found` at 2/5 truths. VIDEO-02/03 remain open, and VIDEO-04 still needs a visible macOS window/key check. Fresh `phase1` CTest passed 134/134; no current-head hosted-CI claim is made. Plan 02-15 is superseded/non-runnable and remains historical.
 - Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. At implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`, the local offline inventory passed 104/104 with no skips, the relocated installed C/C++ inventory passed 109/109, the runner passed its fixed one-CPU/two-timer derived corpus, hosted CI run 37620710587 passed, and fixture reproduction run 37620710600 passed. Independent verification passed all five CPU requirements. Original upstream PPU-dependent reporting paths remain excluded; no physical DMG hardware test occurred.
 
 **Per-Plan Metrics:**
@@ -71,6 +71,7 @@ Progress: [███░░░░░░░] 33% of milestone phases complete; Pha
 | Phase GB-03 P03/P04/P05/P06/P07/P08/P09 | 79/11/19/15/10/12/24 min | 2/2/2/2/2/2/2 tasks | 6/10/8/11/9/3/5 files |
 | Phase GB-03 P10 | 9+ min (lower bound; exact start not captured) | 3 tasks | 4 files |
 | Phase GB-03 P11 | 4min+ minimum recorded | 2 tasks | 6 files |
+| Phase GB-03 P12 | ~30 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -119,6 +120,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-03]: Plan 03-03 adopts the narrower Nintendo-manual `$8000–$DFFF` DMA source range despite a pinned Pan Docs conflict; exact simultaneous PPU/DMA collision behavior remains unqualified.
 - [Phase GB-03]: FF00 active-low row polling consumes timestamped button events; JOYP interrupt behavior remains gated by D-08. The optional SDL3 player bounds and transactionally replaces ROMs, keeps mutations on the event loop, and uses pixel-aligned integer scaling. The public frame API checks output extents/overlap before writes, and queue capacity precedes entry validation; relocated consumers test both APIs. RGBDS 1.0.1 fixture reproduction now binds assembly source, exact ROM bytes, and pinned archive digests locally and in hosted CI; this is not gameplay or hardware evidence. SDL3 3.4.18 and host timing remain isolated to the adapter.
 - [Phase GB-03]: Player help and downloaded-package metadata now assert the preview's audio and battery-persistence limitations; those checks do not establish emulator feature behavior or hardware qualification.
+- [Phase GB-03]: Pinned Mooneye cases support the fresh DMA access window, active FF46 restart, and register readback; a focused owned guest suite covers those cases. The upstream README lists a DMG-CPU-B in its hardware fleet but publishes no per-test/per-unit raw log. This evidence does not cover simultaneous PPU/DMA arbitration or JOYP interrupt timing.
 
 ### Pending Todos
 
@@ -129,8 +131,7 @@ None outside the roadmap.
 - Phase 2 has no open verification or security blocker. All five requirements are complete at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`; see [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), [validation](phases/GB-02-dmg-cpu-bus-and-time/02-VALIDATION.md), and [security](phases/GB-02-dmg-cpu-bus-and-time/02-SECURITY.md).
 - The admitted corpus is three derived headless reporting closures (one CPU, two timer). Original Mooneye reporting paths depend on PPU/LY behavior outside scope and remain excluded. No physical DMG-CPU-B observation occurred; no hardware qualification is claimed.
 - Phase 1 PR #1 and Phase 2 PR #2 were merged on 2026-10-07 after their required exact-head checks passed. Current GitHub triage found no open PRs or issues. Phase 2 verification is limited to its documented DMG-CPU-B CPU/timer scope; no physical DMG observation or PPU qualification is claimed.
-- Plans 03-10 and 03-11 are now summarized. VIDEO-01/04/05 have supporting evidence; VIDEO-02 simultaneous PPU/DMA applicability and D-08/VIDEO-03 JOYP interrupt timing remain open. Live desktop perception and physical DMG-CPU-B observation are unavailable. Do not claim Phase 3 complete or start Phase 4.
-- Phase 3 has summaries for all 11 plans. Plan 03-10 records that no lawful, available owner-controlled observation setup or raw record was available; Plan 03-11 adds exact limitation-text and strict downloaded-package metadata checks. The full core suite passed 132/132 and the optional player/package consumer passed. VIDEO-02 and D-08/VIDEO-03 remain open where CPU-B applicability is unsupported. The existing verification report predates Plans 03-10/03-11; do not claim Phase 3 complete or start Phase 4. Re-run gap planning only after new applicable primary-source evidence or a provenance-complete observation record exists, to avoid repeating the same evidence gap.
+- Phase 3 has summaries for all 12 plans. After the MVP goal format was normalized, the latest verification report records 2/5 roadmap truths and `gaps_found`: VIDEO-01/05 pass, VIDEO-02 is partial, VIDEO-03 has no JOYP IF implementation, and VIDEO-04 needs live packaged-window/key evidence. Fresh `phase1` CTest passed 134/134. A current-source desktop launch attempt failed because SDL reported no available displays. No current-head hosted-CI claim, physical CPU-B observation, or live window is claimed. The pinned DMG-CPU-B gate-level simulator was reviewed but supplies neither the exact collision results nor JOYP input-to-IF cases; it is not used to set expected behavior. Close VIDEO-02/03 only with a reliable published source stating the exact CPU-B result or an identified CPU-B test record with setup, exact input timing, measured results, and raw logs. Complete the small VIDEO-04 live-window/key check on a display-equipped Mac. Do not repeat gap planning without changed evidence, claim Phase 3 complete, or start Phase 4.
 - Native host support floors beyond the verified CI matrix, signing, and live Playstead integration remain later release/adoption work.
 
 ### Quick Tasks Completed
@@ -146,9 +147,9 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 ## Session Continuity
 
 Last session: 2026-10-07
-Stopped at: Phase GB-03 gap execution; Plans 03-10/03-11 are summarized, with VIDEO-02/03 applicability evidence still open
+Stopped at: Phase GB-03 verification after Plan 03-12; 2/5 truths verified, with VIDEO-02/03 hardware evidence and VIDEO-04 visible-window/key check open
 Resume file: .planning/.continue-here.md
-Next command in fresh context: $gsd-plan-phase 3 --gaps (only after new applicable evidence is available)
+Next command in fresh context: $gsd-plan-phase 3 --gaps (only after a reliable published source states the exact DMG-CPU-B result, or a documented test on an identified DMG-CPU-B records its setup, exact input timing, measured results, and raw logs; do not rerun while evidence is unchanged)
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: **Phase 3 gap execution — Plans 03-10 and 03-11.** Plan 03-10 corrected the JOYP source trace and documented the unavailable CPU-B observation setup; Plan 03-11 added automated player limitation and extracted-package metadata checks. All 11 plans have summaries. The core CTest suite passed 132/132, and the optional player/package consumer passed. Phase verification remains open for VIDEO-02 simultaneous DMA/PPU applicability and D-08/VIDEO-03 JOYP interrupt timing; the current verification report predates the last two plans. Do not repeat gap planning without new applicable primary-source evidence or a provenance-complete hardware observation record. Keep both auto-advance flags false.
-Next roadmap phase: **Phase 4 — MBC1 and Safe Battery Continuation.** It has not started; do not start it until Phase 3 verification is complete. When new applicable evidence is available, the exact next GSD command is `$gsd-plan-phase 3 --gaps`.
+Completed workflow stage: **Phase 3 gap execution — Plan 03-12, followed by a refreshed Phase 3 verification.** The MVP story format is corrected without changing the planned behavior. All 12 Phase 3 plans have summaries; verification reports 2/5 truths and `gaps_found`. VIDEO-02 has partial DMA coverage but lacks exact simultaneous CPU/PPU/DMA results; VIDEO-03 lacks JOYP interrupt generation and qualified expected cases; VIDEO-04 still needs a visible packaged-window/key check. Fresh `phase1` CTest passed 134/134. SDL could not open a window because this environment has no display. The pinned DMG-CPU-B circuit model does not give the missing collision or joypad-interrupt results, so it cannot set the expected behavior. To close VIDEO-02/03, we need either a reliable published source that states the exact DMG-CPU-B result, or a documented test on an identified DMG-CPU-B with its setup, exact input timing, measured results, and raw logs. Do not repeat gap planning until that evidence changes. Keep both auto-advance flags false.
+Next roadmap phase: **Phase 4 — MBC1 and Safe Battery Continuation.** It has not started; do not start it until Phase 3 verification passes. After the hardware evidence above changes, the exact next GSD command is `$gsd-plan-phase 3 --gaps`.
