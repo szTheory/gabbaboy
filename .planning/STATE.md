@@ -1,13 +1,13 @@
 ---
 gsd_state_version: "1.0"
 milestone: v0.1
-current_phase: 02
-current_phase_name: DMG CPU, Bus, and Time
-status: Phase 2 complete; paused before Phase 3
-stopped_at: Phase GB-02 execution, verification, security audit, and Nyquist validation complete; owner handoff before Phase 3
+current_phase: 03
+current_phase_name: Visible Interactive DMG
+status: Phase 3 discussion complete; paused before planning
+stopped_at: Phase GB-03 discussion and recommendation lock complete; owner handoff before Phase 3 planning
 last_updated: "2026-10-07"
 last_activity: 2026-10-07
-last_activity_desc: Plan 02-18 closed the CPU-01/D-01 gap; independent verification passed 5/5, security closed 45/45 threats, and Nyquist validation resolved 8/8 gaps.
+last_activity_desc: Phase 3 recommendation fan-out and adversarial review completed; the owner locked the context. Phase 2 remains verified and both PRs are merged.
 state_head: cf28e90270be24d9528bfa8a1e4055a2b8485989
 progress:
   total_phases: 6
@@ -24,14 +24,14 @@ milestone_name: limited DMG preview
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase GB-02 is complete; Phase GB-03 is paused until the owner chooses to continue.
+**Current focus:** Phase GB-02 is complete. Phase GB-03 discussion is recorded and locked; planning is paused for the owner handoff.
 
 ## Current Position
 
-Phase: GB-02 (DMG CPU, Bus, and Time) — COMPLETE
-Plan: 02-18 gap closure complete; no runnable Phase 2 plan remains
-Status: Goal-backward verification passed; paused before Phase 3 by project workflow contract
-Last activity: 2026-10-07 — Verification passed 5/5 roadmap truths; all 45 registered threats are closed; Nyquist is compliant with 8/8 gaps resolved.
+Phase: GB-03 (Visible Interactive DMG) — DISCUSSION COMPLETE
+Plan: No Phase 3 plan exists yet; context and discussion log are recorded
+Status: Recommendation package locked; paused before Phase 3 planning by project workflow contract
+Last activity: 2026-10-07 — Five cross-specialty research passes plus an adversarial assumptions review informed the locked Phase 3 context.
 
 Progress: [███░░░░░░░] 33% of milestone phases complete; Phases 1 and 2 passed verification.
 
@@ -123,6 +123,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 02]: Label candidate fixtures as derived headless reporting closures and retain the unchanged upstream assertions; do not infer original-ROM PPU applicability or hardware qualification.
 - [Phase 02]: Keep CPU-01 through CPU-05 pending until independent phase verification assesses the final local and exact-SHA hosted evidence.
 - [Phase GB-02]: On 2026-10-07, independent verification passed CPU-01 through CPU-05 and all five roadmap truths at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`. Final local, installed-consumer, and exact hosted evidence is recorded in Phase 2 verification and validation; original upstream PPU-dependent results and physical hardware behavior remain outside the claim.
+- [Phase GB-03]: Keep the playable original ROM fixture separate from PPU composition, raster timing, DMA/access, and scripted gameplay oracles; fixture byte reproducibility does not establish DMG-CPU-B applicability.
 
 ### Pending Todos
 
@@ -132,7 +133,8 @@ None outside the roadmap.
 
 - Phase 2 has no open verification or security blocker. All five requirements are complete at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`; see [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), [validation](phases/GB-02-dmg-cpu-bus-and-time/02-VALIDATION.md), and [security](phases/GB-02-dmg-cpu-bus-and-time/02-SECURITY.md).
 - The admitted corpus is three derived headless reporting closures (one CPU, two timer). Original Mooneye reporting paths depend on PPU/LY behavior outside scope and remain excluded. No physical DMG-CPU-B observation occurred; no hardware qualification is claimed.
-- Draft PR #2 remains on the Phase 2 branch, stacked on PR #1. Neither PR was merged or released as part of this phase handoff. Phase-boundary issue/PR triage found no open repository issues requiring Phase 2 work.
+- Phase 1 PR #1 and Phase 2 PR #2 were merged on 2026-10-07 after their required exact-head checks passed. Current GitHub triage found no open PRs or issues. Phase 2 verification is limited to its documented DMG-CPU-B CPU/timer scope; no physical DMG observation or PPU qualification is claimed.
+- Phase 3 has a locked context but no plan or implementation. Its next step is planning; do not auto-advance into execution.
 - Native host support floors beyond the verified CI matrix, signing, and live Playstead integration remain later release/adoption work.
 
 ### Quick Tasks Completed
@@ -148,9 +150,9 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 ## Session Continuity
 
 Last session: 2026-10-07
-Stopped at: Phase GB-02 complete after gap-only execution, verification, security audit, and Nyquist validation; owner handoff before Phase 3
+Stopped at: Phase GB-03 discussion, research synthesis, and owner decision lock; handoff before planning
 Resume file: .planning/.continue-here.md
-Next command in fresh context: $gsd-discuss-phase 3
+Next command in fresh context: $gsd-plan-phase 3
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: **Phase GB-02 execution and closeout.** Plan 02-18 added independent legal base-opcode semantic assertions; the verifier passed 5/5 roadmap truths, the security audit closed 45/45 threats, and Nyquist validation resolved 8/8 gaps with no escalation. Local CTest passed 104/104, installed C/C++ consumers passed 109/109, and implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989` passed exact hosted CI and fixture reproduction. The code review is clean; no physical hardware test is claimed.
-Next phase: **Phase 3 — Visible Interactive DMG**. It has not started. Keep workflow auto-advance and auto-chain false; wait for the owner to choose to continue with the exact command `$gsd-discuss-phase 3`.
+Completed workflow stage: **Phase 3 discussion.** The owner locked an original, reproducible interactive fixture; separate PPU composition, timing, DMA/access and gameplay evidence; timestamped JOYP transitions; a minimal optional SDL3 player; integer scaling; explicit audio/persistence limitations; and exact-revision preview evidence. Phase 2 implementation verification remains recorded above and in its verification, validation, and security artifacts. PRs #1 and #2 are merged; current GitHub triage found no open PRs or issues.
+Next action: plan **Phase 3 — Visible Interactive DMG**. It has not been planned or executed. Keep `workflow.auto_advance` and `workflow._auto_chain_active` false; the exact next command is `$gsd-plan-phase 3`.
