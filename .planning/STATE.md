@@ -4,11 +4,11 @@ milestone: v0.1
 current_phase: 3
 current_phase_name: Visible Interactive DMG
 status: executing
-stopped_at: Phase 3 Plan 03-01 complete; Plan 03-02 is next
-last_updated: "2026-10-07T17:23:31.995Z"
+stopped_at: Phase 3 Plan 03-02 complete; Plan 03-03 is next
+last_updated: "2026-10-07T18:13:15Z"
 last_activity: 2026-10-07
-last_activity_desc: Phase 3 Plan 03-01 complete; Plan 03-02 ready
-state_head: 75b927271c42bc7c9ab444df9717fd62dc82438c
+last_activity_desc: Phase 3 Plan 03-02 execution and verification complete; Plan 03-03 ready
+state_head: 2e1fdc8bbf862133ca4c06ca3f50cc55a3accb87
 progress:
   total_phases: 6
   completed_phases: 2
@@ -29,9 +29,9 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 ## Current Position
 
 Phase: 3 (Visible Interactive DMG) — EXECUTING
-Plan: 2 of 9
+Plan: 3 of 9 (next)
 Status: Executing Phase 3
-Last activity: 2026-10-07 — Plan 03-01 execution and verification complete
+Last activity: 2026-10-07 — Plan 03-02 execution and verification complete
 
 Progress: [███░░░░░░░] 33% of milestone phases complete; Phases 1 and 2 passed verification.
 
@@ -69,6 +69,7 @@ Progress: [███░░░░░░░] 33% of milestone phases complete; Pha
 | Phase 02 P16 | 24min | 2 tasks | 6 files |
 | Phase 02 P18 | 25 min | 2 tasks | 5 files |
 | Phase GB-03 P01 | 20 min | 1 task | 10 files |
+| Phase GB-03 P02 | 30 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -113,6 +114,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-02]: On 2026-10-07, independent verification passed CPU-01 through CPU-05 and all five roadmap truths at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`. Final local, installed-consumer, and exact hosted evidence is recorded in Phase 2 verification and validation; original upstream PPU-dependent results and physical hardware behavior remain outside the claim.
 - [Phase GB-03]: Keep the playable original ROM fixture separate from PPU composition, raster timing, DMA/access, and scripted gameplay oracles; fixture byte reproducibility does not establish DMG-CPU-B applicability.
 - [Phase GB-03]: The initial background renderer advances dots on the emulated timeline and publishes a completed shade frame at VBlank entry; it is not hardware-qualified raster timing.
+- [Phase GB-03]: Plan 03-02 adds fixed per-instance transfer slots and source-qualified mode/STAT/fetch expectations; the slot model does not claim electrical or CPU-B FIFO equivalence.
 - [Phase GB-03]: FF00 active-low row polling consumes timestamped button events; JOYP interrupt behavior remains gated by D-08.
 
 ### Pending Todos
@@ -124,7 +126,7 @@ None outside the roadmap.
 - Phase 2 has no open verification or security blocker. All five requirements are complete at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`; see [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), [validation](phases/GB-02-dmg-cpu-bus-and-time/02-VALIDATION.md), and [security](phases/GB-02-dmg-cpu-bus-and-time/02-SECURITY.md).
 - The admitted corpus is three derived headless reporting closures (one CPU, two timer). Original Mooneye reporting paths depend on PPU/LY behavior outside scope and remain excluded. No physical DMG-CPU-B observation occurred; no hardware qualification is claimed.
 - Phase 1 PR #1 and Phase 2 PR #2 were merged on 2026-10-07 after their required exact-head checks passed. Current GitHub triage found no open PRs or issues. Phase 2 verification is limited to its documented DMG-CPU-B CPU/timer scope; no physical DMG observation or PPU qualification is claimed.
-- Phase 3 is executing: Plan 03-01 is complete (1/9), and Plan 03-02 is next. Exact DMG-CPU-B JOYP interrupt behavior remains evidence-gated by D-08; do not claim phase completion if the applicable primary-source gate remains open. No physical DMG hardware behavior is claimed.
+- Phase 3 is executing: Plans 03-01 and 03-02 are complete (2/9); Plan 03-03 is next. Exact DMG-CPU-B JOYP interrupt behavior remains evidence-gated by D-08; do not claim phase completion if the applicable primary-source gate remains open. No physical DMG hardware behavior is claimed.
 - Native host support floors beyond the verified CI matrix, signing, and live Playstead integration remain later release/adoption work.
 
 ### Quick Tasks Completed
@@ -140,9 +142,9 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 ## Session Continuity
 
 Last session: 2026-10-07
-Stopped at: Phase GB-03 Plan 03-01 complete; continuing with Plan 03-02
+Stopped at: Phase GB-03 Plan 03-02 complete; continuing with Plan 03-03
 Resume file: .planning/.continue-here.md
-Next command in fresh context: $gsd-execute-phase 3
+Next command in fresh context: $gsd-execute-phase 3 --wave 3
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: **Phase 3 execution — Wave 1, Plan 03-01.** The original polling ROM produces checked frames and responds to timestamped A input; the focused tests and full 107-test suite pass. Phase 3 remains executing, with eight plans outstanding and the D-08 JOYP interrupt gate retained. Keep both auto-advance flags false.
-Next phase: **Phase 3 — Visible Interactive DMG, Wave 2 (Plan 03-02: background/window/object composition and dot-sensitive LCD/STAT behavior).** Continue with `$gsd-execute-phase 3`; stop after Phase 3 before Phase 4.
+Completed workflow stage: **Phase 3 execution — Wave 2, Plan 03-02.** Independent composition and timing cases pass 14/14; the full suite and sanitizer lane remain for Phase 3 closeout. Phase 3 remains executing, with seven plans outstanding and the D-08 JOYP interrupt gate retained. Keep both auto-advance flags false.
+Next phase: **Phase 3 — Visible Interactive DMG, Wave 3 (Plan 03-03: timed OAM DMA and CPU/PPU contention).** Continue with `$gsd-execute-phase 3 --wave 3`; stop after Phase 3 before Phase 4.
