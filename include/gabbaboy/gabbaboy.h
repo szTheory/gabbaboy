@@ -129,8 +129,9 @@ gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_si
  * order. STOP_WAKE value 1 is a separate modeled STOP wake; SERIAL_EDGE value
  * is the input bit sampled by the disconnected serial endpoint;
  * BUTTON_PRESS/RELEASE value is a gbb_button identifier. Button events are
- * consumed by active-low FF00 row polling. STOP_WAKE does not imply a JOYP
- * interrupt, and this is not a host wall-clock input API. Admission is atomic:
+ * consumed by active-low FF00 row polling; JOYP IF generation is not modeled
+ * while its DMG-CPU-B evidence gate remains open. STOP_WAKE does not imply a
+ * JOYP interrupt, and this is not a host wall-clock input API. Admission is atomic:
  * invalid batches and batches exceeding remaining
  * capacity append nothing. Empty batches, including NULL/0, succeed. Invalid
  * pointers return GBB_INVALID_ARGUMENT; malformed, past or unordered events

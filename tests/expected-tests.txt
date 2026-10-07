@@ -83,6 +83,10 @@ dma_restart
 dma_source_mapping
 dma_hram
 dma_interrupt_stack
+joypad_selection
+joypad_queue_atomic
+joypad_equal_time
+joypad_partition
 dma_partition
 dma_vram_lock
 dma_oam_lock
