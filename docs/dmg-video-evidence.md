@@ -22,6 +22,22 @@ The mirror-hosted scan of Nintendo's *Game Boy Programming Manual*, Chapter 2 §
 
 The test programs are original guest-authored bytes. No upstream ROM, package, or new fixture dependency was admitted. Restart acceptance, external cartridge RAM mapping, blocked-bus electrical values, coincident CPU/DMA/PPU ownership, and revision-specific OAM corruption remain open evidence gaps rather than qualified behaviors.
 
+## Joypad matrix and interrupt evidence
+
+The pinned [Pan Docs Joypad Input section](https://github.com/gbdev/pandocs/blob/0191af06ac49661587dcde3d57a241a626b8df75/src/Joypad_Input.md) describes the active-low P14/P15 matrix and selected-row reads, but not the exact JOYP interrupt sampling sequence. Nintendo's [*Game Boy Programming Manual* v1.1](https://archive.org/download/GameBoyProgManVer1.1/GameBoyProgManVer1.1.pdf), Chapter 1 §2.4.1 and §2.4.4, pp. 24–26, documents the direction/action row mapping, two reads after selecting P14, six reads after selecting P15, and a negative-edge input interrupt that requires a low period of 24 source-oscillator periods (DMG: 4 MHz). This is primary DMG-family documentation, but it does not pin the pulse-sampling phase or row-switch/held-key interaction to DMG-CPU-B. The [2017 hardware research note](https://gekkio.fi/blog/2017/game-boy-research-status/) reports synchronous samples where two low observations can request the interrupt even with a high interval between them; the exact clock count and CPU revision were not established there. The manual's continuous-low threshold does not resolve that observed sampling sequence.
+
+A DMG-CPU-B-specific [die-derived schematic set](https://github.com/msinger/dmg-schematics/tree/786f8c8aaac7ae507eac2a59f2a7d3d5e91dfe66/dmg_cpu_b) includes the [FF00 joypad](https://github.com/msinger/dmg-schematics/blob/786f8c8aaac7ae507eac2a59f2a7d3d5e91dfe66/dmg_cpu_b/ff00_joyp.kicad_sch) and [FF0F interrupt](https://github.com/msinger/dmg-schematics/blob/786f8c8aaac7ae507eac2a59f2a7d3d5e91dfe66/dmg_cpu_b/ff0f_int.kicad_sch) sheets. It shows clocked input sampling and an `INT_JP` path, making it a useful CPU-B-specific research source, but the reconstructed schematic has not been traced end-to-end into independently expected half-dot cases for press, release, held-key row switching, and just-before/at/after sample edges. The manual, hardware note, and die-derived circuit therefore do not yet close D-08 as an executable CPU-B behavior contract. No JOYP interrupt edge is implemented or asserted; VIDEO-03 remains incomplete.
+
+| Case | Asserted behavior | Evidence and qualification |
+|---|---|---|
+| `joypad_selection` | Guest writes each P14/P15 selection, performs two P14 reads or six P15 reads, then checks active-low results for each button, both rows, neither row, and all buttons together. Two instances retain independent button state. | Nintendo Programming Manual §2.4.1 and pinned Pan Docs establish matrix selection/read semantics and settling guidance. This is a guest-visible model test, not a physical CPU-B observation. |
+| `joypad_queue_atomic` | Invalid batches append nothing; past timestamps and capacity overflow are rejected; a full 64-event queue is accepted, a further event is rejected, and reset clears pending/held input. | Public API contract and direct finite guest reads. No IRQ result is inferred from these queue checks. |
+| `joypad_equal_time` | Press/release events at one timestamp retain caller order and produce the corresponding polled state. | Deterministic queue contract; software behavior only. |
+| `joypad_partition` | Whole and adjacent-partition runs consume the same press/release timestamps and produce identical guest-visible samples. | Metamorphic determinism check; it does not qualify hardware sampling or interrupt timing. |
+| JOYP interrupt selection/transition | No IF assertion is made for selection writes, held keys, or press/release transitions. | D-08 remains open: Nintendo documents a 24-source-cycle low threshold, while the hardware note reports a synchronous multi-sample effect and the DMG-CPU-B die-derived circuit has not been traced to exact expected timestamps. VIDEO-03 is therefore not complete. |
+
+The original guest-authored polling tests consume only the public event queue and FF00 register path. SDL behavior, emulator agreement, and the visible-demo fixture are not used as interrupt evidence.
+
 ## Image composition cases
 
 | Case | Guest setup and independent expected result | Evidence class | Scope / caveat |
