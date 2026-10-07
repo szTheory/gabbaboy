@@ -92,7 +92,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 - [x] 02-13-PLAN.md — diagnose and repair pinned fixture byte reproduction (diagnostic complete; exact cross-host byte qualification remains open)
 
 **Gap wave 2** *(blocked on Gap wave 1 completion)*
-- [ ] 02-11-PLAN.md — consecutive EI semantics and chronological interrupt diagnostics
+- [x] 02-11-PLAN.md — consecutive EI semantics and chronological interrupt diagnostics
 
 **Gap wave 3** *(blocked on Gap wave 2 completion)*
 - [ ] 02-12-PLAN.md — Windows manifest portability and distinct negative-control results
