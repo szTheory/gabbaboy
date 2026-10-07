@@ -14,7 +14,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 ## Phases
 
 - [x] **Phase 1: Portable Foundation and Original ROM Tracer** - Build, embed, and download a bounded real-ROM tracer. (completed 2026-10-03)
-- [ ] **Phase 2: DMG CPU, Bus, and Time** - Execute scoped DMG diagnostics with reproducible timing and bounded progress.
+- [x] **Phase 2: DMG CPU, Bus, and Time** - Execute scoped DMG diagnostics with reproducible timing and bounded progress. (completed 2026-10-07)
 - [ ] **Phase 3: Visible Interactive DMG** - Play an original or permissioned ROM-only fixture in a macOS preview.
 - [ ] **Phase 4: MBC1 and Safe Battery Continuation** - Retain meaningful guest progress across fresh processes without corrupting good saves.
 - [ ] **Phase 5: DMG Audio and Stable Playback** - Hear paced sound and recover cleanly from host input/device transitions.
@@ -45,7 +45,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 ### Phase 2: DMG CPU, Bus, and Time
 
-**Goal**: Integrators can run the declared DMG instruction and timing behavior deterministically and reproduce diagnostic failures.
+**Goal**: As a core integrator, I want to run the declared DMG instruction and timing behavior deterministically, so that I can reproduce diagnostic failures.
 **Mode:** mvp
 **Depends on**: Phase 1
 **Requirements**: CPU-01, CPU-02, CPU-03, CPU-04, CPU-05
@@ -57,7 +57,58 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. Equal timestamped inputs and elapsed emulated time produce equal supported state/output across different run partitions; LCD-off, HALT/STOP, lockup, and full output capacity return within the caller's bounded contract. (CPU-04)
 5. A headless run reports pass/fail/timeout/unsupported against a pinned eligible CPU/timer corpus with model/boot/protocol identity and sufficient retained trace evidence to reproduce failures. (CPU-05)
 
-**Plans**: TBD
+**Plans**: All 17 runnable plans have summaries: the original nine, gap-closure Plans 02-10 through 02-14, and Plans 02-16 through 02-18. Plan 02-15 is explicitly superseded and non-runnable; its halted summary remains historical evidence. The goal-backward verifier passed all five roadmap truths, the security audit closed all 45 registered threats, and the Nyquist audit resolved all eight identified coverage gaps with no escalation. At implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`, the local 104-case inventory, relocated 109-case inventory, exact hosted CI run 37620710587, and fixture reproduction run 37620710600 passed. See [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), [validation](phases/GB-02-dmg-cpu-bus-and-time/02-VALIDATION.md), and [security](phases/GB-02-dmg-cpu-bus-and-time/02-SECURITY.md). No physical DMG-CPU-B observation is claimed. Phase 3 remains paused until the owner chooses to continue; next command: `$gsd-discuss-phase 3`.
+**Wave 1**
+- [x] 02-01-PLAN.md — ROM-only bus and WRAM tracer
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [x] 02-02-PLAN.md — complete base SM83 instructions and lockup
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [x] 02-03-PLAN.md — complete CB SM83 instructions
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [x] 02-04-PLAN.md — interrupts, HALT, STOP and reset
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [x] 02-05-PLAN.md — timer races and disconnected serial
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [x] 02-06-PLAN.md — timestamped inputs and bounded partitioned runs
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [x] 02-07-PLAN.md — pinned offline CPU/timer diagnostics
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [x] 02-08-PLAN.md — runner protocols, statuses and receipts
+
+**Wave 9** *(blocked on Wave 8 completion)*
+- [x] 02-09-PLAN.md — installed consumers, CI and documentation
+
+**Gap-closure waves** *(execute with `$gsd-execute-phase 2 --gaps-only`)*
+
+**Gap wave 1**
+- [x] 02-10-PLAN.md — checksum-derived post-boot flags and RET/RETI phases
+- [x] 02-13-PLAN.md — diagnose and repair pinned fixture byte reproduction (diagnostic complete; exact cross-host byte qualification remains open)
+
+**Gap wave 2** *(blocked on Gap wave 1 completion)*
+- [x] 02-11-PLAN.md — consecutive EI semantics and chronological interrupt diagnostics
+
+**Gap wave 3** *(blocked on Gap wave 2 completion)*
+- [x] 02-12-PLAN.md — Windows manifest portability and distinct negative-control results
+
+**Gap wave 4** *(blocked on Gap wave 3 and 02-13 completion)*
+- [x] 02-14-PLAN.md — source-qualify PPU-independent corpus candidates and result protocol (source/protocol path later qualified and admitted by Plan 02-17)
+
+**Gap wave 5** *(blocked on Gap wave 4 completion)*
+- 02-15-PLAN.md — superseded/non-runnable; retain 02-15-SUMMARY.md as historical evidence
+- [x] 02-17-PLAN.md — qualify deterministic candidate-aware cross-host bytes and admit fixtures after exact hosted byte identity
+
+**Gap wave 6** *(blocked on Gap wave 5 qualification/admission outcome)*
+- [x] 02-16-PLAN.md — verify runner protocol, inventory, and final exact-revision evidence
+
+**Gap wave 7** *(closes the independently verified CPU-01/D-01 semantic coverage gap)*
+- [x] 02-18-PLAN.md — assert legal base-opcode architectural semantics, branch paths, address effects and timed bus behavior
 
 ### Phase 3: Visible Interactive DMG
 
@@ -131,7 +182,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Portable Foundation and Original ROM Tracer | 5/5 | Complete    | 2026-10-03 |
-| 2. DMG CPU, Bus, and Time | 0/TBD | Not started | - |
+| 2. DMG CPU, Bus, and Time | 17/17 | Complete | 2026-10-07 |
 | 3. Visible Interactive DMG | 0/TBD | Not started | - |
 | 4. MBC1 and Safe Battery Continuation | 0/TBD | Not started | - |
 | 5. DMG Audio and Stable Playback | 0/TBD | Not started | - |
@@ -139,8 +190,8 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 ## Execution Contract
 
-All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](REQUIREMENTS.md). BASE-01 through BASE-06 have local implementation and verification evidence; BASE-07 and BASE-08 remain pending exact-revision hosted CI, required-check, and artifact evidence. Safety, fixture rights, documentation, install consumers, and release evidence expand as each boundary arrives. Phase 6 qualifies the completed product; it does not postpone basic safety or packaging until the end.
+All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](REQUIREMENTS.md). Phase 1's BASE-01 through BASE-08 are satisfied at the verified implementation revision; exact hosted CI, fixture reproduction, and Linux/macOS package evidence also passed at the docs-only PR head recorded in [Phase 1 verification](phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md). Requirements for later phases remain pending their own implementation and evidence. Safety, fixture rights, documentation, install consumers, and release evidence expand as each boundary arrives. Phase 6 qualifies the completed product; it does not postpone basic safety or packaging until the end.
 
 Automate authorized work within each phase, then inspect current verification/release/consumer evidence, update traceability and [lessons](context/LESSONS.md), triage issues/PRs, report limitations and the exact next command, and **stop**. Never auto-advance phases or milestones; keep both auto-advance flags false. Credential, hardware, or perceptual gaps must be recorded honestly with the smallest necessary human action, never converted into passing evidence. Remote/CI setup begins in Phase 1; absent access remains an explicit completion limitation.
 
-Phase 1 Plans 01–04 are complete. Plan 04 added the native CI and fixture-reproduction gates; local Linux x86_64 container and macOS test results passed, while hosted status, branch protection, and Windows results remain unverified because no remote is configured. Next plan: GB-01-05 revision-linked Foundation Preview Packages. Continue with `$gsd-execute-phase 1` and stop after Phase 1.
+Phase 1 Plans 01–05 are complete. Goal-backward verification passed 5/5 roadmap truths and all 8 BASE requirements; standard code review is clean. Phase 2 Plans 02-01 through 02-14 and 02-16 through 02-18 are complete; 02-15 remains superseded/non-runnable. Phase 2 passed 5/5 roadmap truths, all five CPU requirements, 45/45 security threats, Nyquist validation and code review. The implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989` passed local and installed inventories and exact hosted CI/fixture checks; no physical DMG hardware test is claimed. PR #2 remains a draft on the phase branch. Stop here. The next phase is **Phase 3 — Visible Interactive DMG**; continue only when the owner chooses with `$gsd-discuss-phase 3`.

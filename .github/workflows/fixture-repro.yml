@@ -3,6 +3,7 @@ name: fixture-repro
 on:
   pull_request:
   push:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -37,3 +38,64 @@ jobs:
           expected=$(sed -nE 's/.*"sha256": "([0-9a-f]{64})".*/\1/p' fixtures/tracer/manifest.json | head -n 1)
           actual=$(sha256sum "$RUNNER_TEMP/tracer.gb" | cut -d ' ' -f 1)
           [[ -n "$expected" && "$actual" == "$expected" ]]
+
+  mooneye-original-repro:
+    name: mooneye-original-repro
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Diagnose immutable upstream-built Mooneye ROM bytes
+        shell: bash
+        env:
+          GBB_REPRO_OUTPUT_DIR: ${{ runner.temp }}/mooneye-evidence
+        run: bash tests/scripts/reproduce-mooneye.sh --diagnose fixtures/mooneye
+      - name: Retain immutable-original reproduction evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mooneye-original-evidence
+          path: |
+            ${{ runner.temp }}/mooneye-evidence/inputs.txt
+            ${{ runner.temp }}/mooneye-evidence/cmake-configure.log
+            ${{ runner.temp }}/mooneye-evidence/cmake-build.log
+            ${{ runner.temp }}/mooneye-evidence/daa
+            ${{ runner.temp }}/mooneye-evidence/tim00
+            ${{ runner.temp }}/mooneye-evidence/tim00_div_trigger
+          if-no-files-found: warn
+          retention-days: 30
+
+  mooneye-candidate-repro:
+    name: mooneye-candidate-repro
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Stage bounded source and rights identities
+        shell: bash
+        run: |
+          provenance="$RUNNER_TEMP/mooneye-candidate-evidence/provenance"
+          mkdir -p "$provenance"
+          cp fixtures/mooneye/manifest.json fixtures/mooneye/pre-admission-baseline.json \
+            fixtures/mooneye/headless-report.patch fixtures/mooneye/font-source.c \
+            fixtures/mooneye/LICENSE.txt fixtures/mooneye/FONT-LICENSE.txt \
+            fixtures/mooneye/ELIGIBILITY.md fixtures/mooneye/SOURCES.md "$provenance/"
+      - name: Compare the three derived candidates against the provisional lock
+        shell: bash
+        env:
+          GBB_REPRO_OUTPUT_DIR: ${{ runner.temp }}/mooneye-candidate-evidence
+          GBB_WLA_ORDERING_STRATEGY: source-order
+        run: bash tests/scripts/reproduce-mooneye.sh --candidate-compare fixtures/mooneye
+      - name: Retain exact-SHA candidate ROMs, reports, and provenance
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mooneye-candidate-evidence
+          path: |
+            ${{ runner.temp }}/mooneye-candidate-evidence
+          if-no-files-found: error
+          retention-days: 30

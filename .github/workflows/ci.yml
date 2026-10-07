@@ -63,6 +63,17 @@ jobs:
         run: cmake --build --preset phase1 --verbose
       - name: Install package
         run: cmake --install build --prefix build/package-prefix
+      - name: Capture exact Windows manifest bytes
+        shell: bash
+        run: bash tests/scripts/inspect-windows-manifest.sh --capture build/windows-manifest-bytes
+      - name: Retain raw Windows manifest evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-manifest-bytes
+          path: build/windows-manifest-bytes
+          if-no-files-found: error
+          retention-days: 7
       - name: Run and verify required test inventory
         shell: bash
         run: |
@@ -77,7 +88,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Configure ASan and UBSan
-        run: cmake --preset phase1-asan
+        run: cmake --preset phase1-asan -DGBB_TEST_INSTALL_PREFIX=
       - name: Confirm sanitizer cache option
         run: cmake -LA -N build-asan | grep -q '^GABBABOY_ENABLE_SANITIZERS:BOOL=ON$'
       - name: Build and capture compiler/link commands

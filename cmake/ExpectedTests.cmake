@@ -10,7 +10,8 @@ function(gabbaboy_verify_registered_tests)
   set(expected_tests "${GABBABOY_EXPECTED_TESTS}")
   if(NOT GBB_TEST_INSTALL_PREFIX OR NOT EXISTS "${GBB_TEST_INSTALL_PREFIX}")
     list(REMOVE_ITEM expected_tests
-      installed_runner_smoke installed_consumer_c installed_consumer_cpp)
+      installed_runner_smoke installed_consumer_c installed_consumer_cpp
+      installed_consumer_phase2_c installed_consumer_phase2_cpp)
   endif()
   list(SORT expected_tests)
   if(NOT registered_tests STREQUAL expected_tests)

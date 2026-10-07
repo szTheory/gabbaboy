@@ -12,6 +12,11 @@ inventory=${3:---core-only}
 [[ -s "$report" ]] || { echo "Missing or empty CTest report: $report" >&2; exit 1; }
 [[ -s "$expected_file" ]] || { echo "Missing or empty expected inventory: $expected_file" >&2; exit 1; }
 
+if grep -Eq '<(failure|error)([[:space:]>]|/)' "$report"; then
+  echo "CTest report contains failed or errored cases" >&2
+  exit 1
+fi
+
 if grep -Eq '<skipped([[:space:]>]|/)' "$report"; then
   echo "CTest report contains skipped cases" >&2
   exit 1

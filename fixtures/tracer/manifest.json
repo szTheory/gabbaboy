@@ -1,15 +1,17 @@
 {
-  "id": "original-ram-tracer",
+  "id": "original-wram-tracer",
   "source": "tracer.asm",
   "source_identity": "Original GabbaBoy project-authored assembly",
   "license": "MIT; see LICENSE.txt and repository LICENSE",
   "build": {
     "assembler": "RGBDS",
     "version": "1.0.1",
+    "archive": "rgbds-macos.zip",
+    "archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
     "recipe": "rgbasm -o /tmp/tracer.o fixtures/tracer/tracer.asm && rgblink -o /tmp/tracer.gb /tmp/tracer.o && rgbfix -f hg -p 0 -m 0 -r 0 /tmp/tracer.gb"
   },
   "rom": "tracer.gb",
-  "sha256": "85d84babe64e852babc55fe355919f9d2f8013f90dc56550d58e972470321f77",
+  "sha256": "ded6a499118b57539710892d58b4d7ced2269f08d447eed1451201d8ad65ec8d",
   "profile": {
     "name": "DMG-CPU-B",
     "boot": "skipped; starts at cartridge entry 0x0100",
@@ -19,14 +21,14 @@
     "ram_policy": "Emulator-defined zero fill; hardware WRAM/HRAM power-up contents are unspecified"
   },
   "protocol": {
-    "guest_ram_write": "Write 0x5A to 0xA000, read it back and compare",
-    "success": "0xA001=0xA5 after the compare succeeds; loop at 0x015F",
-    "failure": "0xA001=0xEE after compare failure; loop at 0x0165",
+    "guest_ram_write": "Write 0x5A to WRAM address 0xC000, read it back and compare",
+    "success": "0xC001=0xA5 after the compare succeeds; loop at 0x015F",
+    "failure": "0xC001=0xEE after compare failure; loop at 0x0165",
     "timeout_half_dots": 200000
   },
   "reachable_opcodes": [
     { "address": "0x0100", "bytes": "C3 50 01", "instruction": "JP 0x0150" },
-    { "address": "0x0150", "bytes": "21 00 A0", "instruction": "LD HL,0xA000" },
+    { "address": "0x0150", "bytes": "21 00 C0", "instruction": "LD HL,0xC000" },
     { "address": "0x0153", "bytes": "3E 5A", "instruction": "LD A,0x5A" },
     { "address": "0x0155", "bytes": "77", "instruction": "LD [HL],A" },
     { "address": "0x0156", "bytes": "7E", "instruction": "LD A,[HL]" },
@@ -45,6 +47,7 @@
     "No boot-ROM execution",
     "No general DMG CPU support beyond the listed reachable opcodes",
     "No CGB, I/O devices, display, audio, mapper, save, or gameplay claim",
-    "This fixture is profile validation, not a hardware oracle"
+    "This fixture is profile validation, not a hardware oracle",
+    "Phase 1 used A000 as emulator fixture policy; this protocol uses DMG WRAM and does not claim cartridge RAM"
   ]
 }

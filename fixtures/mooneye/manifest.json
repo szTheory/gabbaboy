@@ -1,0 +1,275 @@
+{
+  "suite": {
+    "name": "Mooneye Test Suite",
+    "revision": "31510e12eea6286d36eea060a6adde755e1067aa",
+    "tree_sha1": "2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
+    "license": "MIT; see LICENSE.txt",
+    "upstream": "https://github.com/Gekkio/mooneye-test-suite/tree/31510e12eea6286d36eea060a6adde755e1067aa"
+  },
+  "replacement_asset": {
+    "path": "font.bin",
+    "source": "Original fixed-size zero-filled replacement emitted by font-source.c; no Darkrose font glyphs are included.",
+    "size_bytes": 2032,
+    "sha256": "23ba65cb93433b65e7ddcae5f8a7dd2ca232491793848644e625875c6dd6ae43",
+    "notice": "See FONT-LICENSE.txt"
+  },
+  "builder": {
+    "name": "WLA-DX",
+    "version": "10.7",
+    "source_revision": "91c52b1f4ef3cc8ba3c0638f7536539579af6a9f",
+    "source_tree_sha1": "8495d61b96847950e65b1809bf9c7daaccdbd20b",
+    "git_archive_sha256": "24a95d77a79feeb70d1de87d66749c006e37337308ce9c00e44efac4c46ab976",
+    "assembler_version_output": "wla-gb 10.7 (28.6.2026)",
+    "linker_version_output": "wlalink 5.22 (28.6.2026)",
+    "source_url": "https://github.com/vhelin/wla-dx/tree/91c52b1f4ef3cc8ba3c0638f7536539579af6a9f",
+    "source_license": "GPL-2.0-or-later; build tool only, not linked into fixture ROMs"
+  },
+  "inventory_status": "complete",
+  "required_roms": [
+    "daa.gb",
+    "tim00.gb",
+    "tim00_div_trigger.gb"
+  ],
+  "excluded_candidates": [
+    {
+      "source_path": "acceptance/interrupts/ie_push.s",
+      "reason": "Uses disable_ppu_safe setup; this phase excludes PPU-dependent candidates and does not claim that setup is inert in the no-PPU profile."
+    },
+    {
+      "source_path": "acceptance/serial/boot_sclk_align-dmgABCmgb.s",
+      "reason": "Checks serial clock alignment relative to boot and is explicitly boot-state-dependent; the admitted profile skips the boot ROM."
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "mooneye-acceptance-instr-daa",
+      "category": "cpu",
+      "eligible": true,
+      "eligibility_basis": "Pinned acceptance source exercises the CPU DAA instruction and its input/flag matrix; source declares hardware-verified pass results for DMG, including DMG-CPU-B. It enters at cartridge code and uses no boot ROM or PPU result as an oracle.",
+      "source_path": "acceptance/instr/daa.s",
+      "source_closure": [
+        "acceptance/instr/daa.s",
+        "common/common.s",
+        "common/hardware.s",
+        "common/macros.s",
+        "common/lib/check_asserts_cb.s",
+        "common/lib/clear_oam.s",
+        "common/lib/clear_vram.s",
+        "common/lib/clear_wram.s",
+        "common/lib/disable_ppu_safe.s",
+        "common/lib/is_ppu_broken.s",
+        "common/lib/is_serial_broken.s",
+        "common/lib/memcmp.s",
+        "common/lib/memcpy.s",
+        "common/lib/memset.s",
+        "common/lib/print_bin1.s",
+        "common/lib/print_bin4.s",
+        "common/lib/print_bin8.s",
+        "common/lib/print_hex4.s",
+        "common/lib/print_hex8.s",
+        "common/lib/print_inline_string.s",
+        "common/lib/print_load_font.s",
+        "common/lib/print_newline.s",
+        "common/lib/print_reg_dump.s",
+        "common/lib/print_string.s",
+        "common/lib/quit.s",
+        "common/lib/quit_dump_mem.s",
+        "common/lib/reset_screen.s",
+        "common/lib/serial_send_byte.s",
+        "common/lib/wait_ly_with_timeout.s"
+      ],
+      "rom": "daa.gb",
+      "size_bytes": 32768,
+      "sha256": "3a39eda77a09b817e4e38004a3d117990565fb797e8a4f470920f1b7608f0a08",
+      "license": "MIT; see LICENSE.txt",
+      "asset_notice": "FONT-LICENSE.txt",
+      "model": "DMG-CPU-B",
+      "boot": "Skipped; bootless DMG-CPU-B profile starts at the cartridge entry point 0x0100.",
+      "oracle_class": "Mooneye hardware-author acceptance test; source reports DMG pass.",
+      "protocol": {
+        "pass": "Registers B,C,D,E,H,L are 3,5,8,13,21,34 at the LD B,B breakpoint; the guest then loops.",
+        "fail": "Registers B,C,D,E,H,L are 0x42 at the LD B,B breakpoint; the guest then loops.",
+        "runner_support": "Current generic runner does not interpret the Mooneye register protocol; preparation run is recorded separately."
+      },
+      "timeout_half_dots": 2000000,
+      "build_recipe": [
+        "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
+        "generate the pinned 2032-byte zero replacement asset from fixtures/mooneye/font-source.c",
+        "apply the reviewed source-only headless report patch (SHA-256 c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d)",
+        "assemble acceptance/instr/daa.s with pinned WLA-DX 10.7",
+        "link with wlalink -nS -d -S; -nS preserves source section order"
+      ],
+      "preparation_outcome": "Derived candidate passed the positive source callback and LD B,B result protocol; the induced DAA failure control also returned the six-0x42 result, with zero PPU bus accesses. This protocol probe is not full CPU-05 runner qualification.",
+      "candidate_derivation": {
+        "original_rom_sha256": "96cd0e02a85f6f035b1c1947d36a8ad2d8e51963f636b833f05559f021eef57e",
+        "harness_patch_sha256": "c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d",
+        "deterministic_linker_strategy": "wlalink -nS preserves input appearance order",
+        "deterministic_tool_patch_sha256": null,
+        "qualified_head_sha": "93647ac98b7f8437cc9640e3dec437bba4f11e9c",
+        "hosted_run_id": 37561292904
+      }
+    },
+    {
+      "id": "mooneye-acceptance-timer-tim00",
+      "category": "timer",
+      "eligible": true,
+      "eligibility_basis": "Pinned acceptance source checks the 4096 Hz timer edge and declares pass on DMG hardware, including DMG-CPU-B. It accesses DIV/TIMA/TMA/TAC and CPU registers without requiring boot-ROM state or PPU behavior.",
+      "source_path": "acceptance/timer/tim00.s",
+      "source_closure": [
+        "acceptance/timer/tim00.s",
+        "common/common.s",
+        "common/hardware.s",
+        "common/macros.s",
+        "common/lib/check_asserts_cb.s",
+        "common/lib/clear_oam.s",
+        "common/lib/clear_vram.s",
+        "common/lib/clear_wram.s",
+        "common/lib/disable_ppu_safe.s",
+        "common/lib/is_ppu_broken.s",
+        "common/lib/is_serial_broken.s",
+        "common/lib/memcmp.s",
+        "common/lib/memcpy.s",
+        "common/lib/memset.s",
+        "common/lib/print_bin1.s",
+        "common/lib/print_bin4.s",
+        "common/lib/print_bin8.s",
+        "common/lib/print_hex4.s",
+        "common/lib/print_hex8.s",
+        "common/lib/print_inline_string.s",
+        "common/lib/print_load_font.s",
+        "common/lib/print_newline.s",
+        "common/lib/print_reg_dump.s",
+        "common/lib/print_string.s",
+        "common/lib/quit.s",
+        "common/lib/quit_dump_mem.s",
+        "common/lib/reset_screen.s",
+        "common/lib/serial_send_byte.s",
+        "common/lib/wait_ly_with_timeout.s"
+      ],
+      "rom": "tim00.gb",
+      "size_bytes": 32768,
+      "sha256": "476b2332de3f2d6604f8e1478daa8cbc7c59c89c50837fd47cc95e96e784d4f7",
+      "license": "MIT; see LICENSE.txt",
+      "asset_notice": "FONT-LICENSE.txt",
+      "model": "DMG-CPU-B",
+      "boot": "Skipped; bootless DMG-CPU-B profile starts at the cartridge entry point 0x0100.",
+      "oracle_class": "Mooneye hardware-author acceptance test; source reports DMG pass.",
+      "protocol": {
+        "assertions": "D=0x04 and E=0x05 before the common quit routine.",
+        "pass": "Registers B,C,D,E,H,L are 3,5,8,13,21,34 at the LD B,B breakpoint; the guest then loops.",
+        "fail": "Registers B,C,D,E,H,L are 0x42 at the LD B,B breakpoint; the guest then loops.",
+        "runner_support": "Current generic runner does not interpret the Mooneye register protocol; preparation run is recorded separately."
+      },
+      "timeout_half_dots": 200000,
+      "build_recipe": [
+        "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
+        "generate the pinned 2032-byte zero replacement asset from fixtures/mooneye/font-source.c",
+        "apply the reviewed source-only headless report patch (SHA-256 c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d)",
+        "assemble acceptance/timer/tim00.s with pinned WLA-DX 10.7",
+        "link with wlalink -nS -d -S; -nS preserves source section order"
+      ],
+      "preparation_outcome": "Derived candidate passed the positive source callback and LD B,B result protocol; the induced DAA failure control also returned the six-0x42 result, with zero PPU bus accesses. This protocol probe is not full CPU-05 runner qualification.",
+      "candidate_derivation": {
+        "original_rom_sha256": "6edc430a09522294c96d1eef63a0f1a99078f4401060980048ec5a68640e11bd",
+        "harness_patch_sha256": "c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d",
+        "deterministic_linker_strategy": "wlalink -nS preserves input appearance order",
+        "deterministic_tool_patch_sha256": null,
+        "qualified_head_sha": "93647ac98b7f8437cc9640e3dec437bba4f11e9c",
+        "hosted_run_id": 37561292904
+      }
+    },
+    {
+      "id": "mooneye-acceptance-timer-tim00-div-trigger",
+      "category": "timer",
+      "eligible": true,
+      "eligibility_basis": "Pinned acceptance source checks the falling edge caused by resetting DIV while its selected timer input is high; it declares pass on DMG hardware, including DMG-CPU-B. It requires no boot ROM or PPU behavior.",
+      "source_path": "acceptance/timer/tim00_div_trigger.s",
+      "source_closure": [
+        "acceptance/timer/tim00_div_trigger.s",
+        "common/common.s",
+        "common/hardware.s",
+        "common/macros.s",
+        "common/lib/check_asserts_cb.s",
+        "common/lib/clear_oam.s",
+        "common/lib/clear_vram.s",
+        "common/lib/clear_wram.s",
+        "common/lib/disable_ppu_safe.s",
+        "common/lib/is_ppu_broken.s",
+        "common/lib/is_serial_broken.s",
+        "common/lib/memcmp.s",
+        "common/lib/memcpy.s",
+        "common/lib/memset.s",
+        "common/lib/print_bin1.s",
+        "common/lib/print_bin4.s",
+        "common/lib/print_bin8.s",
+        "common/lib/print_hex4.s",
+        "common/lib/print_hex8.s",
+        "common/lib/print_inline_string.s",
+        "common/lib/print_load_font.s",
+        "common/lib/print_newline.s",
+        "common/lib/print_reg_dump.s",
+        "common/lib/print_string.s",
+        "common/lib/quit.s",
+        "common/lib/quit_dump_mem.s",
+        "common/lib/reset_screen.s",
+        "common/lib/serial_send_byte.s",
+        "common/lib/wait_ly_with_timeout.s"
+      ],
+      "rom": "tim00_div_trigger.gb",
+      "size_bytes": 32768,
+      "sha256": "566da853858061c69866c47cc31b85b1fef003d4c088c8e8dbb26973da9944da",
+      "license": "MIT; see LICENSE.txt",
+      "asset_notice": "FONT-LICENSE.txt",
+      "model": "DMG-CPU-B",
+      "boot": "Skipped; bootless DMG-CPU-B profile starts at the cartridge entry point 0x0100.",
+      "oracle_class": "Mooneye hardware-author acceptance test; source reports DMG pass.",
+      "protocol": {
+        "assertions": "D=0x04 and E=0x05 before the common quit routine.",
+        "pass": "Registers B,C,D,E,H,L are 3,5,8,13,21,34 at the LD B,B breakpoint; the guest then loops.",
+        "fail": "Registers B,C,D,E,H,L are 0x42 at the LD B,B breakpoint; the guest then loops.",
+        "runner_support": "Current generic runner does not interpret the Mooneye register protocol; preparation run is recorded separately."
+      },
+      "timeout_half_dots": 200000,
+      "build_recipe": [
+        "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
+        "generate the pinned 2032-byte zero replacement asset from fixtures/mooneye/font-source.c",
+        "apply the reviewed source-only headless report patch (SHA-256 c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d)",
+        "assemble acceptance/timer/tim00_div_trigger.s with pinned WLA-DX 10.7",
+        "link with wlalink -nS -d -S; -nS preserves source section order"
+      ],
+      "preparation_outcome": "Derived candidate passed the positive source callback and LD B,B result protocol; the induced DAA failure control also returned the six-0x42 result, with zero PPU bus accesses. This protocol probe is not full CPU-05 runner qualification.",
+      "candidate_derivation": {
+        "original_rom_sha256": "468d426c4fe6a850a28f4116bd127d471be6adf2ef5dd0f89f2db67ffe212242",
+        "harness_patch_sha256": "c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d",
+        "deterministic_linker_strategy": "wlalink -nS preserves input appearance order",
+        "deterministic_tool_patch_sha256": null,
+        "qualified_head_sha": "93647ac98b7f8437cc9640e3dec437bba4f11e9c",
+        "hosted_run_id": 37561292904
+      }
+    }
+  ],
+  "candidate_admission": {
+    "status": "qualified",
+    "recipe_status": "qualified",
+    "qualification_status": "qualified",
+    "qualified_head_sha": "93647ac98b7f8437cc9640e3dec437bba4f11e9c",
+    "hosted_run_id": 37561292904,
+    "hosted_run_url": "https://github.com/szTheory/gabbaboy/actions/runs/37561292904",
+    "candidate_lock_sha256": "47e9f03b56a29629f7d1ca93d3f06f2af6dd7afea1ad7f4e7f25fe4e9b4bb2a4",
+    "pre_admission_manifest_sha256": "76204bc792a5a767f3d7430edfe5542698953507fe268de6a0154b7cb02bcc3e",
+    "harness_patch_sha256": "c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d",
+    "deterministic_linker_strategy": "wlalink -nS preserves input appearance order",
+    "local_host": "Darwin/arm64",
+    "hosted_host": "Linux/x86_64",
+    "byte_identical_all_candidates": true,
+    "eligible_ids": [
+      "mooneye-acceptance-instr-daa",
+      "mooneye-acceptance-timer-tim00",
+      "mooneye-acceptance-timer-tim00-div-trigger"
+    ],
+    "category_counts": {
+      "cpu": 1,
+      "timer": 2
+    }
+  }
+}

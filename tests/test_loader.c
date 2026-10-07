@@ -54,19 +54,19 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "null_arguments") == 0) {
         REQUIRE(gbb_load_rom(m, NULL, size) == GBB_INVALID_ARGUMENT);
         REQUIRE(gbb_load_rom(m, rom, 0) == GBB_INVALID_ARGUMENT);
-        REQUIRE(gbb_peek_ram(m, 0xA000) == 0);
+        REQUIRE(gbb_peek_ram(m, 0xC000) == 0);
         gbb_destroy(m); free(rom); free(bad); return 0;
     }
     else if (strcmp(argv[1], "non_destructive") == 0) { bad[0x147] = 1; fix_header_checksum(bad); expected = GBB_UNSUPPORTED_CARTRIDGE; }
     else return 2;
-    REQUIRE(gbb_run(m, 80, NULL, 0).consumed_half_dots == 80);
-    REQUIRE(gbb_peek_ram(m, 0xA000) == 0x5A);
+    REQUIRE(gbb_run(m, 88, NULL, 0).consumed_half_dots == 88);
+    REQUIRE(gbb_peek_ram(m, 0xC000) == 0x5A);
     REQUIRE(gbb_load_rom(m, bad, bad_size) == expected);
-    REQUIRE(gbb_peek_ram(m, 0xA000) == 0x5A);
+    REQUIRE(gbb_peek_ram(m, 0xC000) == 0x5A);
     if (strcmp(argv[1], "non_destructive") == 0 || strcmp(argv[1], "unsupported_declared_size") == 0) {
         gbb_run_result result = gbb_run(m, 4096, NULL, 0);
         REQUIRE(result.reason == GBB_STOP_BUDGET);
-        REQUIRE(gbb_peek_ram(m, 0xA001) == 0xA5);
+        REQUIRE(gbb_peek_ram(m, 0xC001) == 0xA5);
     }
     gbb_destroy(m); free(rom); free(bad); return 0;
 }

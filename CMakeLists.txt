@@ -32,6 +32,32 @@ target_link_libraries(gabbaboy-runner PRIVATE GabbaBoy::core)
 target_compile_features(gabbaboy-runner PRIVATE c_std_17)
 set_target_properties(gabbaboy-runner PROPERTIES C_EXTENSIONS OFF)
 
+execute_process(COMMAND git rev-parse --verify HEAD
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+  OUTPUT_VARIABLE GABBABOY_BUILD_REVISION OUTPUT_STRIP_TRAILING_WHITESPACE
+  RESULT_VARIABLE GABBABOY_GIT_RESULT ERROR_QUIET)
+string(LENGTH "${GABBABOY_BUILD_REVISION}" GABBABOY_BUILD_REVISION_LENGTH)
+if(NOT GABBABOY_GIT_RESULT EQUAL 0 OR
+   NOT GABBABOY_BUILD_REVISION MATCHES "^[0-9a-fA-F]+$" OR
+   GABBABOY_BUILD_REVISION_LENGTH LESS 40 OR GABBABOY_BUILD_REVISION_LENGTH GREATER 64)
+  set(GABBABOY_BUILD_REVISION "unknown")
+  set(GABBABOY_BUILD_QUALIFIED 0)
+else()
+  execute_process(COMMAND git diff --quiet HEAD -- CMakeLists.txt include/gabbaboy/gabbaboy.h src/core/gabbaboy.c src/runner/main.c
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" RESULT_VARIABLE GABBABOY_SOURCE_DIRTY ERROR_QUIET)
+  if(GABBABOY_SOURCE_DIRTY EQUAL 0)
+    set(GABBABOY_BUILD_QUALIFIED 1)
+  else()
+    set(GABBABOY_BUILD_QUALIFIED 0)
+  endif()
+endif()
+target_compile_definitions(gabbaboy_core PRIVATE
+  GBB_BUILD_REVISION="${GABBABOY_BUILD_REVISION}"
+  GBB_BUILD_QUALIFIED=${GABBABOY_BUILD_QUALIFIED})
+target_compile_definitions(gabbaboy-runner PRIVATE
+  GBB_BUILD_REVISION="${GABBABOY_BUILD_REVISION}"
+  GBB_BUILD_QUALIFIED=${GABBABOY_BUILD_QUALIFIED})
+
 set(GABBABOY_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/GabbaBoy")
 configure_package_config_file(
   cmake/GabbaBoyConfig.cmake.in
