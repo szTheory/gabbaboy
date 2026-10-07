@@ -16,6 +16,16 @@ typedef struct {
     size_t size;
 } guest_program;
 
+typedef struct {
+    uint64_t time_half_dots;
+    uint16_t address;
+    uint8_t access;
+    uint8_t value;
+} gbb_test_bus_event;
+
+extern void gbb_test_observer_set(gbb_instance *, gbb_test_bus_event *, size_t);
+extern size_t gbb_test_observer_count(const gbb_instance *);
+
 static void emit(guest_program *p, uint8_t byte) {
     if (p->size < sizeof(p->bytes)) p->bytes[p->size++] = byte;
 }
@@ -57,13 +67,16 @@ static void start_guest(guest_program *p) {
     emit(p, 0xE0); emit(p, 0x40);      /* LCD off while VRAM/OAM are authored */
 }
 
-static gbb_instance *load_guest(const guest_program *p, uint8_t lcdc) {
-    if (p->size > sizeof(p->bytes) - 4u) return NULL;
+static gbb_instance *load_guest_with_tail(const guest_program *p, uint8_t lcdc,
+                                          const uint8_t *tail, size_t tail_size) {
+    if (p->size > sizeof(p->bytes) - 4u || tail_size > sizeof(p->bytes) - p->size - 4u)
+        return NULL;
     uint8_t rom[32768] = {0};
     /* Keep the guest body beyond the cartridge header and checksum bytes. */
     rom[0x100] = 0xC3; rom[0x101] = 0x50; rom[0x102] = 0x01;
     guest_program complete = *p;
     emit_reg(&complete, 0x40, lcdc);
+    for (size_t i = 0; i < tail_size; ++i) emit(&complete, tail[i]);
     /* The LCDC write above must occur before the steady-state loop. */
     memcpy(rom + 0x150, complete.bytes, complete.size);
     size_t pc = 0x150u + complete.size;
@@ -81,6 +94,10 @@ static gbb_instance *load_guest(const guest_program *p, uint8_t lcdc) {
         return NULL;
     }
     return machine;
+}
+
+static gbb_instance *load_guest(const guest_program *p, uint8_t lcdc) {
+    return load_guest_with_tail(p, lcdc, NULL, 0);
 }
 
 static int copy_completed_frame(gbb_instance *machine, uint8_t pixels[PIXELS]) {
@@ -283,11 +300,45 @@ static int frame_composition_priority(void) {
     return 0;
 }
 
+static int ppu_timing_fetch(void) {
+    guest_program p = {0};
+    start_guest(&p);
+    emit_reg(&p, 0x43, 3);             /* Three fine-scroll pixels add three transfer dots. */
+    uint8_t tail[65];
+    memset(tail, 0x00, 60);            /* 60 NOPs place the STAT sample at dot 252. */
+    tail[60] = 0xF0; tail[61] = 0x41;  /* LDH A,[STAT] */
+    tail[62] = 0xEA; tail[63] = 0x00; tail[64] = 0xC0; /* LD [C000],A */
+    gbb_instance *machine = load_guest_with_tail(&p, 0x91, tail, sizeof(tail));
+    REQUIRE(machine != NULL);
+    gbb_test_bus_event events[64];
+    gbb_test_observer_set(machine, events, 64);
+    gbb_run_result run = gbb_run(machine, UINT64_C(1800), NULL, 0);
+    REQUIRE(run.reason == GBB_STOP_BUDGET);
+    size_t count = gbb_test_observer_count(machine);
+    const gbb_test_bus_event *enable = NULL, *stat_read = NULL;
+    for (size_t i = 0; i < count; ++i) {
+        if (events[i].address == 0xFF40 && events[i].access == 2 && events[i].value == 0x91)
+            enable = &events[i];
+        if (events[i].address == 0xFF41 && events[i].access == 1) {
+            stat_read = &events[i];
+            break;
+        }
+    }
+    REQUIRE(enable != NULL);
+    REQUIRE(stat_read != NULL);
+    REQUIRE(stat_read->time_half_dots - enable->time_half_dots == 504u);
+    REQUIRE((stat_read->value & 3u) == 3u);
+    REQUIRE(gbb_peek_ram(machine, 0xC000) == stat_read->value);
+    gbb_destroy(machine);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
     if (strcmp(argv[1], "frame_composition_bg") == 0) return frame_composition_bg();
     if (strcmp(argv[1], "frame_composition_window") == 0) return frame_composition_window();
     if (strcmp(argv[1], "frame_composition_sprites") == 0) return frame_composition_sprites();
     if (strcmp(argv[1], "frame_composition_priority") == 0) return frame_composition_priority();
+    if (strcmp(argv[1], "ppu_timing_fetch") == 0) return ppu_timing_fetch();
     return 2;
 }
