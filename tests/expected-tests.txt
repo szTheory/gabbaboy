@@ -67,8 +67,11 @@ tracer_failure
 tracer_unsupported
 tracer_timeout
 tracer_trace
+frame_composition_tracer
+joypad_gameplay_tracer
 tracer_smoke
 fixture_digest
+visible_fixture_digest
 installed_runner_smoke
 installed_consumer_c
 installed_consumer_cpp

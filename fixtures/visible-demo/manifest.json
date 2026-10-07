@@ -1,0 +1,37 @@
+{
+  "id": "original-visible-interactive-dmg",
+  "source": "demo.asm",
+  "source_identity": "Original GabbaBoy project-authored assembly",
+  "license": "MIT; see LICENSE.txt and repository LICENSE",
+  "build": {
+    "assembler": "RGBDS",
+    "version": "1.0.1",
+    "archive": "rgbds-macos.zip",
+    "archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
+    "recipe": "rgbasm -o /tmp/demo.o fixtures/visible-demo/demo.asm && rgblink -o /tmp/demo.gb /tmp/demo.o && rgbfix -f hg -p 0 -m 0 -r 0 /tmp/demo.gb"
+  },
+  "rom": "demo.gb",
+  "size_bytes": 32768,
+  "sha256": "66db7cf1d81529e665b90eea6ef7839f09b50331165102bc9f803ddf32f9e5ca",
+  "profile": {
+    "name": "DMG-CPU-B",
+    "boot": "Skipped; bootless profile starts at cartridge entry 0x0100.",
+    "applicability": "Owned software fixture for the deterministic bootless DMG-CPU-B emulator profile; not physical hardware evidence.",
+    "ram_policy": "Emulator-defined zero fill; hardware WRAM/HRAM power-up contents are unspecified."
+  },
+  "protocol": {
+    "display_setup": "With LCD disabled, the guest writes tile 1 as color number 1 and tile 2 as color number 2, selects BGP identity mapping, places tile 1 at map cell 0, and enables the background.",
+    "initial_expected_image": "Shade 1 in pixels x=0..7,y=0..7; shade 0 in every other pixel.",
+    "input": "Host queues active-low A press at baseline_time+8 half-dots and release at baseline_time+50008 half-dots; guest polls the action row at FF00.",
+    "visible_response": "After detecting press, guest waits for LY>=144 then sets map cell 0 to tile 2; after release, it waits for LY>=144 and restores tile 1.",
+    "guest_outcome": "WRAM C000 becomes 1 after the press is handled; WRAM C001 becomes 1 after release is observed.",
+    "timeout_half_dots": 460000
+  },
+  "scope_limits": [
+    "No boot-ROM execution",
+    "No physical DMG-CPU-B observation",
+    "No exact JOYP interrupt or wake behavior claim",
+    "No window, object, audio, mapper, save or color hardware claim",
+    "The authored expected image and scripted guest outcome are separate from timing and hardware evidence"
+  ]
+}

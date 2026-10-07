@@ -1,0 +1,7 @@
+The original GabbaBoy visible demo assembly and resulting fixture-specific code
+are authored project material, Copyright (c) 2026 GabbaBoy contributors, and
+licensed under the MIT License in the repository root.
+
+The fixture was assembled with RGBDS v1.0.1. RGBDS is a build tool and is not
+included in the fixture or required to build or run GabbaBoy. The ROM is
+bootless and does not execute a Nintendo boot ROM.

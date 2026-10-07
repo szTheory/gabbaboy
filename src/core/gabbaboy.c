@@ -360,6 +360,15 @@ gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events
     return GBB_OK;
 }
 
+gbb_error gbb_copy_frame(const gbb_instance *instance, uint8_t *pixels,
+                         size_t capacity_bytes, size_t pitch_bytes,
+                         gbb_frame_info *out_info) {
+    (void)capacity_bytes;
+    (void)pitch_bytes;
+    if (instance == NULL || pixels == NULL || out_info == NULL) return GBB_INVALID_ARGUMENT;
+    return GBB_FRAME_NOT_READY;
+}
+
 static void advance_devices(gbb_instance *m, uint64_t half_dots) {
     advance_devices_to(m, m->time_half_dots + half_dots);
 }

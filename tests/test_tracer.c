@@ -16,8 +16,66 @@ static uint8_t *read_rom(const char *path, size_t *size) {
     fclose(f); *size = (size_t)n; return p;
 }
 
+static int visible_composition(const char *path) {
+    size_t size = 0;
+    uint8_t *rom = read_rom(path, &size);
+    REQUIRE(rom != NULL);
+    gbb_instance *m = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, rom, size) == GBB_OK);
+    gbb_run_result run = gbb_run(m, UINT64_C(180000), NULL, 0);
+    uint8_t pixels[160u * 144u];
+    gbb_frame_info info = {0};
+    gbb_error frame_error = gbb_copy_frame(m, pixels, sizeof(pixels), 160, &info);
+    if (frame_error != GBB_OK) fprintf(stderr, "frame copy returned %d\n", frame_error);
+    REQUIRE(frame_error == GBB_OK);
+    REQUIRE(run.reason == GBB_STOP_BUDGET);
+    REQUIRE(info.width == 160 && info.height == 144 && info.generation != 0);
+    REQUIRE(info.completion_half_dots <= run.consumed_half_dots);
+    for (unsigned y = 0; y < 144; ++y) {
+        for (unsigned x = 0; x < 160; ++x) {
+            uint8_t expected = x < 8 && y < 8 ? 1u : 0u;
+            REQUIRE(pixels[y * 160u + x] == expected);
+        }
+    }
+    gbb_destroy(m);
+    free(rom);
+    return 0;
+}
+
+static int visible_gameplay(const char *path) {
+    size_t size = 0;
+    uint8_t *rom = read_rom(path, &size);
+    REQUIRE(rom != NULL);
+    gbb_instance *m = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, rom, size) == GBB_OK);
+    gbb_run_result run = gbb_run(m, UINT64_C(180000), NULL, 0);
+    REQUIRE(run.reason == GBB_STOP_BUDGET);
+    uint64_t base = run.consumed_half_dots;
+    const gbb_input_event events[] = {
+        {base + 8u, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_A},
+        {base + 50008u, GBB_INPUT_BUTTON_RELEASE, GBB_BUTTON_A}
+    };
+    REQUIRE(gbb_queue_events(m, events, 2) == GBB_OK);
+    run = gbb_run(m, UINT64_C(280000), NULL, 0);
+    REQUIRE(run.reason == GBB_STOP_BUDGET);
+    uint8_t pixels[160u * 144u];
+    gbb_frame_info info = {0};
+    REQUIRE(gbb_copy_frame(m, pixels, sizeof(pixels), 160, &info) == GBB_OK);
+    REQUIRE(gbb_peek_ram(m, 0xC000) == 1 && gbb_peek_ram(m, 0xC001) == 1);
+    REQUIRE(pixels[0] == 1u);
+    gbb_destroy(m);
+    free(rom);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 3) return 2;
+    if (strcmp(argv[1], "frame_composition_tracer") == 0)
+        return visible_composition(argv[2]);
+    if (strcmp(argv[1], "joypad_gameplay_tracer") == 0)
+        return visible_gameplay(argv[2]);
     size_t size = 0; uint8_t *rom = read_rom(argv[2], &size);
     REQUIRE(rom != NULL);
     if (strcmp(argv[1], "failure") == 0) rom[0x154] = 0x00; /* Guest stores/reads the wrong RAM value. */

@@ -77,11 +77,19 @@ set_target_properties(test_tracer PROPERTIES C_EXTENSIONS OFF)
 foreach(case success failure unsupported timeout trace)
   add_test(NAME tracer_${case} COMMAND test_tracer ${case} ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 endforeach()
+foreach(case frame_composition_tracer joypad_gameplay_tracer)
+  add_test(NAME ${case} COMMAND test_tracer ${case} ${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb)
+endforeach()
 add_test(NAME tracer_smoke COMMAND gabbaboy-runner ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 add_test(NAME fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DROM=${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb
     -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/tracer/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
+add_test(NAME visible_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DROM=${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb
+    -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/visible-demo/manifest.json
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
 add_test(NAME mooneye_fixture_digest
   COMMAND ${CMAKE_COMMAND}
