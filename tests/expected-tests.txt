@@ -82,6 +82,7 @@ dma_progress
 dma_restart
 dma_source_mapping
 dma_hram
+dma_interrupt_stack
 dma_partition
 tracer_smoke
 fixture_digest

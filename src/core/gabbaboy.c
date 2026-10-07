@@ -9,8 +9,11 @@
 #define GBB_FRAME_HEIGHT 144u
 #define GBB_FRAME_PIXELS (GBB_FRAME_WIDTH * GBB_FRAME_HEIGHT)
 #define GBB_OAM_BYTES 160u
+#define GBB_DMA_BYTE_PERIOD_HALF_DOTS 8u
 #define GBB_LINE_OBJECT_LIMIT 10u
 #define GBB_PPU_FIFO_CAPACITY 16u
+
+typedef struct gbb_test_dma_event gbb_test_dma_event;
 
 struct gbb_instance {
     uint8_t *rom;
@@ -39,6 +42,8 @@ struct gbb_instance {
     uint8_t ppu_selected_object_count;
     uint8_t ppu_window_line;
     uint8_t ppu_window_line_drawn;
+    uint8_t dma_register, dma_page, dma_pending_page, dma_index, dma_phase;
+    int dma_active, dma_start_pending;
     uint8_t lcdc, scy, scx, ly, lyc, bgp, obp0, obp1, wy, wx;
     uint8_t joypad_select;
     uint8_t joypad_buttons;
@@ -71,6 +76,9 @@ struct gbb_instance {
     struct gbb_test_bus_event *test_ppu_events;
     size_t test_ppu_event_capacity;
     size_t test_ppu_event_count;
+    gbb_test_dma_event *test_dma_events;
+    size_t test_dma_event_capacity;
+    size_t test_dma_event_count;
     int loaded;
     gbb_diagnostic_record *diagnostic_output;
     size_t diagnostic_output_capacity;
@@ -125,6 +133,13 @@ typedef struct gbb_test_bus_event {
     uint8_t value;
 } gbb_test_bus_event;
 
+struct gbb_test_dma_event {
+    uint64_t time_half_dots;
+    uint16_t address;
+    uint8_t access;
+    uint8_t value;
+};
+
 void gbb_test_observer_set(gbb_instance *m, gbb_test_bus_event *events, size_t capacity) {
     if (m == NULL) return;
     m->test_events = events;
@@ -146,6 +161,30 @@ void gbb_test_ppu_observer_set(gbb_instance *m, gbb_test_bus_event *events,
 
 size_t gbb_test_ppu_observer_count(const gbb_instance *m) {
     return m == NULL ? 0 : m->test_ppu_event_count;
+}
+
+void gbb_test_dma_observer_set(gbb_instance *m, gbb_test_dma_event *events,
+                               size_t capacity) {
+    if (m == NULL) return;
+    m->test_dma_events = events;
+    m->test_dma_event_capacity = capacity;
+    m->test_dma_event_count = 0;
+}
+
+size_t gbb_test_dma_observer_count(const gbb_instance *m) {
+    return m == NULL ? 0 : m->test_dma_event_count;
+}
+
+static void observe_dma(gbb_instance *m, uint16_t address, uint8_t access,
+                        uint8_t value) {
+    if (m->test_dma_events != NULL &&
+        m->test_dma_event_count < m->test_dma_event_capacity) {
+        gbb_test_dma_event *event = &m->test_dma_events[m->test_dma_event_count++];
+        event->time_half_dots = m->time_half_dots;
+        event->address = address;
+        event->access = access;
+        event->value = value;
+    }
 }
 
 static void observe_ppu(gbb_instance *m, uint16_t address, uint8_t access,
@@ -224,6 +263,13 @@ static void reset_state(gbb_instance *m) {
     m->serial_edge_remaining = 0;
     m->serial_active = 0;
     m->serial_unsupported = 0;
+    m->dma_register = 0xFFu;
+    m->dma_page = 0;
+    m->dma_pending_page = 0;
+    m->dma_index = 0;
+    m->dma_phase = 0;
+    m->dma_active = 0;
+    m->dma_start_pending = 0;
     m->halted = 0;
     m->stopped = 0;
     m->halt_bug = 0;
@@ -294,9 +340,14 @@ static int cpu_oam_access_allowed(const gbb_instance *m) {
     return (m->lcdc & 0x80u) == 0 || m->ppu_mode == 0u || m->ppu_mode == 1u;
 }
 
+static int cpu_hram_address(uint16_t address) {
+    return address >= 0xFF80u && address <= 0xFFFEu;
+}
+
 static void ppu_select_objects(gbb_instance *m);
 
 static uint8_t read8(const gbb_instance *m, uint16_t address) {
+    if (m->dma_active && !cpu_hram_address(address)) return 0xFFu;
     if (address == 0xFF00) return joypad_value(m);
     if (address == 0xFF04) return m->div;
     if (address == 0xFF05) return m->tima;
@@ -312,6 +363,7 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
     if (address == 0xFF43) return m->scx;
     if (address == 0xFF44) return m->ly;
     if (address == 0xFF45) return m->lyc;
+    if (address == 0xFF46) return m->dma_register;
     if (address == 0xFF47) return m->bgp;
     if (address == 0xFF48) return m->obp0;
     if (address == 0xFF49) return m->obp1;
@@ -368,6 +420,7 @@ static void timer_set_signal(gbb_instance *m, int next, uint64_t at) {
 }
 
 static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
+    if (m->dma_active && !cpu_hram_address(address)) return;
     if (address >= 0x8000 && address <= 0x9FFF) {
         if (cpu_vram_access_allowed(m)) m->vram[address - 0x8000] = value;
     }
@@ -411,6 +464,11 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     else if (address == 0xFF45) {
         m->lyc = value;
         ppu_update_stat_line(m);
+    }
+    else if (address == 0xFF46) {
+        m->dma_register = value;
+        m->dma_pending_page = value;
+        m->dma_start_pending = 1;
     }
     else if (address == 0xFF47) m->bgp = value;
     else if (address == 0xFF48) m->obp0 = value;
@@ -470,7 +528,7 @@ static void bus_write(gbb_instance *m, uint16_t address, uint8_t value, uint64_t
 static int read_supported(uint16_t address) {
     return address < 0x8000 || address == 0xFF00 || address == 0xFF01 || address == 0xFF02 ||
            (address >= 0xFF04 && address <= 0xFF07) || address == 0xFF0F || address == 0xFFFF ||
-           (address >= 0xFF40 && address <= 0xFF45) ||
+           (address >= 0xFF40 && address <= 0xFF46) ||
            (address >= 0xFF47 && address <= 0xFF4B) ||
            (address >= 0xC000 && address <= 0xDFFF) ||
            (address >= 0xE000 && address <= 0xFDFF) ||
@@ -801,6 +859,40 @@ static void ppu_advance_dot(gbb_instance *m) {
     }
 }
 
+static uint8_t dma_source_read(const gbb_instance *m, uint16_t address) {
+    if (address >= 0x8000u && address <= 0x9FFFu)
+        return m->vram[address - 0x8000u];
+    if (address >= 0xC000u && address <= 0xDFFFu)
+        return m->wram[address - 0xC000u];
+    /* The ROM-only profile has no external cartridge RAM. Other source pages
+     * are outside the DMG manual's 8000-DFFF DMA range. */
+    return 0xFFu;
+}
+
+static void dma_start(gbb_instance *m) {
+    m->dma_page = m->dma_pending_page;
+    m->dma_index = 0;
+    m->dma_phase = 0;
+    m->dma_active = 1;
+    m->dma_start_pending = 0;
+    observe_dma(m, 0xFF46u, 1, m->dma_page);
+}
+
+static void dma_advance_half_dot(gbb_instance *m) {
+    if (!m->dma_active) return;
+    if (++m->dma_phase < GBB_DMA_BYTE_PERIOD_HALF_DOTS) return;
+    m->dma_phase = 0;
+    uint16_t source = (uint16_t)(((uint16_t)m->dma_page << 8) | m->dma_index);
+    uint8_t value = dma_source_read(m, source);
+    m->oam[m->dma_index] = value;
+    observe_dma(m, (uint16_t)(0xFE00u + m->dma_index), 2, value);
+    ++m->dma_index;
+    if (m->dma_index == GBB_OAM_BYTES) {
+        m->dma_active = 0;
+        observe_dma(m, 0xFF46u, 3, m->dma_page);
+    }
+}
+
 static void advance_devices_to(gbb_instance *m, uint64_t target) {
     while (m->time_half_dots < target) {
         ++m->time_half_dots;
@@ -832,6 +924,7 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
             m->div = (uint8_t)(m->divider_counter >> 8);
             timer_set_signal(m, timer_input(m), m->time_half_dots);
         }
+        dma_advance_half_dot(m);
         m->ppu_half_phase ^= 1u;
         if (m->ppu_half_phase == 0) ppu_advance_dot(m);
     }
@@ -1375,6 +1468,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
         diagnostic_begin(instance, operation, instance->pc, opcode);
         execute(instance,cost);
         advance_devices_to(instance, instance->instruction_start_half_dots + cost);
+        if (instance->dma_start_pending) dma_start(instance);
         if (consume_halt_bug) {
             if (!keeps_control_target) instance->pc=(uint16_t)(instance->pc-1u);
             instance->halt_bug=0;
