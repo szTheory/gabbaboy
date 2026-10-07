@@ -338,9 +338,52 @@ static int dma_source_mapping(void) {
 
 static int dma_start(void) {
     /* Corresponds to the pinned oam_dma_start.s fresh-transfer M=0/M=1/M=2
-     * boundary and B=$D7,C=$01,D=$D7,E=$00 result tuple. This owned guest
-     * checks the bounded copy cadence; it does not recreate PPU arbitration. */
-    return expect_dma_object(0xD7u, 0);
+     * boundary and result tuple. This original guest places INC B in OAM,
+     * starts DMA by executing LD (HL),A from the OAM echo predecessor, and
+     * observes the first startup instruction before the transfer can replace
+     * it. The PPU remains disabled, so no scan/fetch arbitration is involved. */
+    uint8_t rom[32768] = {0};
+    rom[0x100] = 0xC3; rom[0x101] = 0x50; rom[0x102] = 0x01;
+    small_program p = {{0}, 0};
+    emit(&p, 0xAF); emit(&p, 0xE0); emit(&p, 0x40); /* LCD off */
+    emit_memory_byte(&p, 0x8000u, 0xD7u); /* DMA page begins with RST $10 */
+    emit(&p, 0x21); emit16(&p, 0xFE00u); /* initialize OAM with INC B */
+    emit(&p, 0x06); emit(&p, 0xA0u);
+    emit(&p, 0x3E); emit(&p, 0x04u);
+    size_t fill_loop = p.size;
+    emit(&p, 0x22); emit(&p, 0x05); emit(&p, 0x20);
+    size_t fill_relative = p.size;
+    emit(&p, (uint8_t)((int)fill_loop - (int)(fill_relative + 1u)));
+    emit_memory_byte(&p, 0xFDFFu, 0x77u); /* opcode LD (HL),A at FDFF */
+    emit(&p, 0x21); emit16(&p, 0xFF46u);
+    emit(&p, 0x3E); emit(&p, 0x80u);
+    emit(&p, 0x06); emit(&p, 0x00u); /* B=0; first OAM instruction increments it */
+    emit(&p, 0xC3); emit16(&p, 0xFDFFu);
+    memcpy(rom + 0x150, p.bytes, p.size);
+    rom[0x10] = 0x76; /* wait in RST $10 vector until the DMA source bus releases */
+    rom[0x38] = 0x76; /* DMG blocked-bus open value can also dispatch RST $38 */
+    rom[0x134] = 0xE7;
+    uint8_t checksum = 0;
+    for (size_t i = 0x134; i <= 0x14C; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14D] = checksum;
+    gbb_instance *m = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
+    gbb_test_dma_event events[162];
+    gbb_test_dma_observer_set(m, events, 162);
+    gbb_run_result run = gbb_run(m, 12000u, NULL, 0);
+    REQUIRE(run.reason == GBB_STOP_HALTED_IDLE);
+    REQUIRE(gbb_test_dma_observer_count(m) == 162u);
+    gbb_trace_record snapshot;
+    extern void gbb_test_cpu_snapshot(const gbb_instance *, gbb_trace_record *);
+    gbb_test_cpu_snapshot(m, &snapshot);
+    REQUIRE(snapshot.b == 1u); /* upstream B=$01 startup observation */
+    REQUIRE(events[0].access == 1u && events[0].value == 0x80u);
+    REQUIRE(events[1].address == 0xFE00u && events[1].value == 0xD7u);
+    REQUIRE(events[161].access == 3u && events[161].address == 0xFF46u);
+    gbb_destroy(m);
+    return 0;
 }
 
 static int dma_restart(void) {
