@@ -124,7 +124,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. A macOS user can open and play an original or permissioned ROM-only fixture, resize with correct aspect/integer scaling, pause, reset, and quit; errors are actionable. (VIDEO-04)
 5. Automated evidence separately reports image composition, raster timing, and scripted gameplay; the visible preview labels incomplete audio and persistence. (VIDEO-05)
 
-**Plans:** 10/11 plans executed across 10 dependency-ordered waves; gap-closure Plans 03-10 and 03-11 occupy Wave 10.
+**Plans:** All 11 plans have summaries across 10 dependency-ordered waves; gap-closure Plans 03-10 and 03-11 occupy Wave 10. Phase verification remains open on VIDEO-02 and VIDEO-03 model-applicability evidence, so Phase 3 remains in progress.
 **Wave 1**
 - [x] 03-01-PLAN.md — playable production-core tracer with timestamped input and copied frames
 
@@ -154,7 +154,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 **Gap wave 10** *(closes only the remaining evidence and limitation-test gaps; both plans depend on Wave 9)*
 - [x] 03-10-PLAN.md — source-applicable DMA/JOYP evidence and provenance-gated CPU-B observation
-- [ ] 03-11-PLAN.md — automated audio and battery-persistence limitation assertions
+- [x] 03-11-PLAN.md — automated audio and battery-persistence limitation assertions
 
 **UI hint**: yes
 
@@ -214,7 +214,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 |-------|----------------|--------|-----------|
 | 1. Portable Foundation and Original ROM Tracer | 5/5 | Complete    | 2026-10-03 |
 | 2. DMG CPU, Bus, and Time | 17/17 | Complete | 2026-10-07 |
-| 3. Visible Interactive DMG | 10/11 | In Progress | - |
+| 3. Visible Interactive DMG | 11/11 | In Progress | - |
 | 4. MBC1 and Safe Battery Continuation | 0/TBD | Not started | - |
 | 5. DMG Audio and Stable Playback | 0/TBD | Not started | - |
 | 6. Qualified DMG Release and Consumer Handoff | 0/TBD | Not started | - |
