@@ -95,7 +95,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 - [x] 02-11-PLAN.md — consecutive EI semantics and chronological interrupt diagnostics
 
 **Gap wave 3** *(blocked on Gap wave 2 completion)*
-- [ ] 02-12-PLAN.md — Windows manifest portability and distinct negative-control results
+- [x] 02-12-PLAN.md — Windows manifest portability and distinct negative-control results
 
 **Gap wave 4** *(blocked on Gap wave 3 and 02-13 completion)*
 - [ ] 02-14-PLAN.md — source-qualify PPU-independent corpus candidates and result protocol
