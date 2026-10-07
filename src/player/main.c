@@ -1,4 +1,5 @@
 #include "input.h"
+#include "limitations.h"
 #include "presentation.h"
 #include "session.h"
 
@@ -275,8 +276,9 @@ static void show_help(player *app) {
         "D-pad: arrow keys\nA / B: Z / X\nStart / Select: Return / Right Shift\n"
         "Pause / resume: Space\nReset current ROM: R\n\n"
         "Status: %.160s\n"
-        "Audio and battery-save persistence are not implemented.",
-        rom_basename(app->current_rom_path), app->status[0] == '\0' ? "Ready" : app->status);
+        "%s",
+        rom_basename(app->current_rom_path), app->status[0] == '\0' ? "Ready" : app->status,
+        GBB_PLAYER_LIMITATIONS_TEXT);
     if (!SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION,
                                   "GabbaBoy Controls and Limitations",
                                   message, app->window))
