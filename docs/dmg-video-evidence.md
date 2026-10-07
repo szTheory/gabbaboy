@@ -20,6 +20,16 @@ The mirror-hosted scan of Nintendo's *Game Boy Programming Manual*, Chapter 2 §
 | `dma_vram_lock`, `dma_oam_lock` | Guest reads/writes verify LCD-off and mode 0/1 access; reads straddle the mode 2→3 and mode 3→0 ownership changes at recorded bus timestamps; reads return `$FF` while locked, and writes during each lock preserve the prior value. | DMG mode access expectations follow the pinned Accessing VRAM and OAM section. The closest mode 2→3 guest reads are 8 half-dots on either side; mode 3→0 reads also straddle the transition. No CPU-B board was available for direct observation. |
 | `dma_contention` | Bounded work confirms per-instance DMA state is isolated and reset stops an in-flight transfer without later byte events. | OAM scan/render collisions during DMA are revision-dependent in the source and deliberately have no pass/fail outcome here. The test does not treat reset/isolation as proof of collision behavior; exact CPU-B primary evidence remains unavailable. |
 
+### Simultaneous PPU/DMA applicability
+
+No new collision assertion is added because the available sources do not provide an exact DMG-CPU-B expected outcome for these cases. The existing focused `dma_*` and `ppu_timing_*` families remain registered in both `tests/CMakeLists.txt` and `tests/expected-tests.txt`; `dma_contention` tests reset/isolation, not a CPU/PPU/DMA collision.
+
+| Collision scenario | Pinned-source statement | Applicability and test disposition |
+|---|---|---|
+| DMA overlaps PPU mode 2 OAM scan | Pan Docs says most PPU revisions read objects as off-screen while DMA is active. | “Most revisions” does not identify DMG-CPU-B. No object-visibility pass/fail expectation is asserted. |
+| DMA overlaps PPU mode 3 object fetch | Pan Docs describes the PPU reading the 16-bit word currently written by DMA, with revision-dependent effects. | The source does not qualify the result to this CPU-B path. No tile/attribute corruption expectation is asserted. |
+| CPU, PPU, and DMA contend at one timestamp | The available manual and pinned Pan Docs do not define a CPU-B tie-break for the exact simultaneous access used by this core. | The implementation's ordering remains policy. No test promotes it to hardware behavior. |
+
 The test programs are original guest-authored bytes. No upstream ROM, package, or new fixture dependency was admitted. Restart acceptance, external cartridge RAM mapping, blocked-bus electrical values, coincident CPU/DMA/PPU ownership, and revision-specific OAM corruption remain open evidence gaps rather than qualified behaviors.
 
 ## Joypad matrix and interrupt evidence
