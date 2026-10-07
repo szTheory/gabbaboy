@@ -126,7 +126,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 **Plans:** 9 plans across 9 dependency-ordered waves
 **Wave 1**
-- [ ] 03-01-PLAN.md — playable production-core tracer with timestamped input and copied frames
+- [x] 03-01-PLAN.md — playable production-core tracer with timestamped input and copied frames
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 03-02-PLAN.md — background/window/object composition and dot-sensitive LCD/STAT behavior
@@ -210,7 +210,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 |-------|----------------|--------|-----------|
 | 1. Portable Foundation and Original ROM Tracer | 5/5 | Complete    | 2026-10-03 |
 | 2. DMG CPU, Bus, and Time | 17/17 | Complete | 2026-10-07 |
-| 3. Visible Interactive DMG | 0/9 | Planned; ready to execute | - |
+| 3. Visible Interactive DMG | 1/9 | In Progress | - |
 | 4. MBC1 and Safe Battery Continuation | 0/TBD | Not started | - |
 | 5. DMG Audio and Stable Playback | 0/TBD | Not started | - |
 | 6. Qualified DMG Release and Consumer Handoff | 0/TBD | Not started | - |
@@ -221,4 +221,4 @@ All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](
 
 Automate authorized work within each phase, then inspect current verification/release/consumer evidence, update traceability and [lessons](context/LESSONS.md), triage issues/PRs, report limitations and the exact next command, and **stop**. Never auto-advance phases or milestones; keep both auto-advance flags false. Credential, hardware, or perceptual gaps must be recorded honestly with the smallest necessary human action, never converted into passing evidence. Remote/CI setup begins in Phase 1; absent access remains an explicit completion limitation.
 
-Phase 1 Plans 01–05 are complete. Goal-backward verification passed 5/5 roadmap truths and all 8 BASE requirements; standard code review is clean. Phase 2 Plans 02-01 through 02-14 and 02-16 through 02-18 are complete; 02-15 remains superseded/non-runnable. Phase 2 passed 5/5 roadmap truths, all five CPU requirements, 45/45 security threats, Nyquist validation and code review. The implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989` passed local and installed inventories and exact hosted CI/fixture checks; no physical DMG hardware test is claimed. Phase 3 planning is complete: nine plans span nine waves, and the phase has not been executed. Stop here before Phase 3 execution; the exact next command is `$gsd-execute-phase 3` when the owner chooses to proceed. Keep both auto-advance flags false.
+Phase 1 Plans 01–05 are complete. Goal-backward verification passed 5/5 roadmap truths and all 8 BASE requirements; standard code review is clean. Phase 2 Plans 02-01 through 02-14 and 02-16 through 02-18 are complete; 02-15 remains superseded/non-runnable. Phase 2 passed 5/5 roadmap truths, all five CPU requirements, 45/45 security threats, Nyquist validation and code review. The implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989` passed local and installed inventories and exact hosted CI/fixture checks; no physical DMG hardware test is claimed. Phase 3 is executing: Plan 03-01 is complete at the tested feature branch, 1/9 plans; Plan 03-02 is next. The exact continuation command is `$gsd-execute-phase 3`. Keep both auto-advance flags false and stop after Phase 3.
