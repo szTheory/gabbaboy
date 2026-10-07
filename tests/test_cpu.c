@@ -191,6 +191,31 @@ static int flags_edges(void) {
     gbb_destroy(m); return 0;
 }
 
+static int base_semantic_tracer(void) {
+    uint8_t rom[32768];
+    const uint8_t program[]={
+        0x3e,0xff, 0xc6,0x01, /* A=FF; ADD A,1 -> A=00, Z/H/C */
+        0x3e,0x00, 0xd6,0x01, /* A=00; SUB 1 -> A=FF, N/H/C */
+        0x3e,0x00, 0xfe,0x00, /* A=00; CP 0 -> A stays 00, Z/N */
+        0x00
+    };
+    make_rom(rom,program,sizeof(program));
+    gbb_instance *m=NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B,&m)==GBB_OK);
+    REQUIRE(gbb_load_rom(m,rom,sizeof(rom))==GBB_OK);
+    gbb_trace_record trace[8]={{0}};
+    gbb_run_result r=gbb_run(m,104,trace,8);
+    REQUIRE(r.reason==GBB_STOP_BUDGET && r.consumed_half_dots==104 && r.trace_count==7);
+    REQUIRE(trace[2].pc==0x0104 && trace[2].time_half_dots==32);
+    REQUIRE(trace[2].a==0x00 && trace[2].f==0xb0 && (trace[2].f&0x0f)==0);
+    REQUIRE(trace[4].pc==0x0108 && trace[4].time_half_dots==64);
+    REQUIRE(trace[4].a==0xff && trace[4].f==0x70 && (trace[4].f&0x0f)==0);
+    REQUIRE(trace[6].pc==0x010c && trace[6].time_half_dots==96);
+    REQUIRE(trace[6].a==0x00 && trace[6].f==0xc0 && (trace[6].f&0x0f)==0);
+    gbb_destroy(m);
+    return 0;
+}
+
 static int timed_access(void) {
     uint8_t rom[32768]; const uint8_t program[]={0x02,0x00}; make_rom(rom,program,sizeof(program));
     gbb_instance *m=NULL; REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B,&m)==GBB_OK); REQUIRE(gbb_load_rom(m,rom,sizeof(rom))==GBB_OK);
@@ -460,6 +485,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "base_matrix") == 0) return base_matrix();
     if (strcmp(argv[1], "illegal_lockup") == 0) return illegal_lockup();
     if (strcmp(argv[1], "flags_edges") == 0) return flags_edges();
+    if (strcmp(argv[1], "base_semantic_tracer") == 0) return base_semantic_tracer();
     if (strcmp(argv[1], "timed_access") == 0) return timed_access();
     if (strcmp(argv[1], "return_phases") == 0) return return_phases();
     if (strcmp(argv[1], "address_wrap") == 0) return address_wrap();
