@@ -151,6 +151,8 @@ static gbb_instance *load_dma_guest(uint8_t source_page, int restart,
     }
     routine[routine_size++] = 0xC3; routine[routine_size++] = 0x00;
     routine[routine_size++] = 0x02;      /* JP 0200 */
+    /* Probe scratch at FF B0+ must remain beyond the copied HRAM routine. */
+    if (probe_cpu_access && routine_size > 0x30u) return NULL;
 
     uint16_t source_address = 0;
     emit_copy_to_hram(&main_program, &source_address, routine, routine_size);
