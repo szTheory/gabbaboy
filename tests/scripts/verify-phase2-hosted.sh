@@ -34,14 +34,38 @@ local_sha=$(git rev-parse HEAD)
 [ "$pr_state" = OPEN ] || fail "PR #$pr_number is not open."
 [ "$local_branch" = "$pr_branch" ] || fail "Current branch $local_branch does not match PR head $pr_branch."
 [ "$local_sha" = "$pr_sha" ] || fail "Local HEAD $local_sha differs from PR head $pr_sha."
+for path in src/runner/main.c tests/test_runner.c tests/CMakeLists.txt tests/expected-tests.txt README.md tests/scripts/verify-phase2-hosted.sh; do
+  git ls-files --error-unmatch "$path" >/dev/null 2>&1 || fail "Plan file is not committed: $path."
+  git diff --quiet HEAD -- "$path" || fail "Plan file has uncommitted changes outside exact PR SHA: $path."
+done
 
-required_json=$(gh pr checks "$pr_number" --required --json name,bucket 2>/dev/null) ||
-  fail "Unable to inspect required PR contexts."
+required_json=$(gh pr checks "$pr_number" --json name,bucket 2>/dev/null) ||
+  fail "Unable to inspect PR check contexts."
 required_count=$(jq 'length' <<<"$required_json")
-[ "$required_count" -gt 0 ] || fail "The PR has no required check contexts."
+[ "$required_count" -gt 0 ] || fail "The PR has no check contexts."
 jq -e 'all(.[]; .bucket == "pass")' <<<"$required_json" >/dev/null ||
-  fail "At least one required PR context is missing, queued, skipped, cancelled, failed, or stale."
+  fail "At least one PR context is queued, skipped, cancelled, failed, or stale."
 required_names=$(jq -r '.[].name' <<<"$required_json" | sort -u | paste -sd, -)
+
+# Pin the phase's required contexts explicitly. PR #2 is stacked on a phase
+# branch without GitHub branch protection, so `gh pr checks --required` is empty.
+required_contexts=(
+  required-native
+  native-linux-x64
+  native-macos-arm64
+  native-windows-x64
+  linux-asan-ubsan
+  cmake-floor-3.25.3
+  fixture-repro
+  mooneye-original-repro
+  mooneye-candidate-repro
+)
+for context in "${required_contexts[@]}"; do
+  context_count=$(jq --arg name "$context" '[.[] | select(.name == $name)] | length' <<<"$required_json")
+  [ "$context_count" -gt 0 ] || fail "Required phase check context is missing: $context."
+  jq -e --arg name "$context" '[.[] | select(.name == $name)] | all(.[]; .bucket == "pass")' \
+    <<<"$required_json" >/dev/null || fail "Required phase check context did not pass: $context."
+done
 
 find_successful_run() {
   local workflow=$1

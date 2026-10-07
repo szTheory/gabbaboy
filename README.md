@@ -161,8 +161,8 @@ the original tracer, retains diagnostics for the immutable upstream Mooneye
 ROMs, and compares the derived candidates on pull requests, pushes, and manual
 dispatch. Its network and assembler preparation stay outside ordinary test
 jobs. Run `bash tests/scripts/verify-phase2-hosted.sh` to require completed,
-successful CI and fixture-reproduction jobs plus all required PR contexts at
-the exact open-PR head SHA.
+successful CI and fixture-reproduction jobs plus all phase-required PR
+contexts at the exact open-PR head SHA.
 
 ### Pull requests and preview packages
 
