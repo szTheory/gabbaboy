@@ -131,12 +131,13 @@ gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_si
  * BUTTON_PRESS/RELEASE value is a gbb_button identifier. Button events are
  * consumed by active-low FF00 row polling; JOYP IF generation is not modeled
  * while its DMG-CPU-B evidence gate remains open. STOP_WAKE does not imply a
- * JOYP interrupt, and this is not a host wall-clock input API. Admission is atomic:
- * invalid batches and batches exceeding remaining
- * capacity append nothing. Empty batches, including NULL/0, succeed. Invalid
- * pointers return GBB_INVALID_ARGUMENT; malformed, past or unordered events
- * return GBB_INVALID_EVENT; excess capacity returns GBB_EVENT_QUEUE_FULL.
- * Consumed events free queue capacity. */
+ * JOYP interrupt, and this is not a host wall-clock input API. Admission is
+ * atomic: an invalid top-level pointer returns GBB_INVALID_ARGUMENT; empty
+ * batches, including NULL/0, succeed. For nonempty batches with valid pointers,
+ * remaining capacity is checked before event contents, so an over-capacity
+ * batch returns GBB_EVENT_QUEUE_FULL even if an entry is malformed. Otherwise,
+ * malformed, past or unordered events return GBB_INVALID_EVENT. Rejected
+ * batches append nothing. Consumed events free queue capacity. */
 gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events, size_t count);
 /* Copies the latest completed 160x144 frame as one byte per pixel. Each byte
  * is a DMG shade index in [0,3]. pitch_bytes is the destination row stride;
