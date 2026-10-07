@@ -3,6 +3,7 @@
 #include "session.h"
 
 #include <stdatomic.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -51,14 +52,56 @@ typedef struct {
     bool quit_after_dialog;
 } player;
 
-static bool create_machine(player *app) {
+static char *duplicate_path(const char *path) {
+    const size_t length = strlen(path);
+    if (length == SIZE_MAX) return NULL;
+    char *copy = malloc(length + 1u);
+    if (copy != NULL) memcpy(copy, path, length + 1u);
+    return copy;
+}
+
+static char *packaged_demo_rom_path(void) {
+    static const char relative_path[] =
+        "../share/gabbaboy/fixtures/visible-demo/demo.gb";
+    const char *base_path = SDL_GetBasePath();
+    if (base_path == NULL) return NULL;
+    const size_t base_length = strlen(base_path);
+    const bool has_separator = base_length > 0u &&
+        (base_path[base_length - 1u] == '/' || base_path[base_length - 1u] == '\\');
+    const size_t relative_length = sizeof(relative_path) - 1u;
+    const size_t separator_length = has_separator ? 0u : 1u;
+    if (base_length > SIZE_MAX - separator_length - relative_length - 1u) return NULL;
+    char *candidate = malloc(base_length + separator_length + relative_length + 1u);
+    if (candidate == NULL) return NULL;
+    memcpy(candidate, base_path, base_length);
+    size_t offset = base_length;
+    if (!has_separator) candidate[offset++] = '/';
+    memcpy(candidate + offset, relative_path, relative_length + 1u);
+    FILE *rom = fopen(candidate, "rb");
+    if (rom == NULL) {
+        free(candidate);
+        return NULL;
+    }
+    fclose(rom);
+    return candidate;
+}
+
+static char *resolve_demo_rom_path(const char *requested_path,
+                                   bool require_packaged_path) {
+    if (requested_path != NULL) return duplicate_path(requested_path);
+    char *packaged_path = packaged_demo_rom_path();
+    if (packaged_path != NULL || require_packaged_path) return packaged_path;
+    return duplicate_path(GABBABOY_PLAYER_DEMO_ROM);
+}
+
+static bool create_machine(player *app, const char *demo_rom_path) {
     if (gbb_create(GBB_PROFILE_DMG_CPU_B, &app->machine) != GBB_OK) {
         fputs("Could not create the DMG-CPU-B machine\n", stderr);
         return false;
     }
     char error[192];
     if (!player_session_replace_rom(app->machine, &app->current_rom_path,
-                                    GABBABOY_PLAYER_DEMO_ROM,
+                                    demo_rom_path,
                                     error, sizeof(error))) {
         fprintf(stderr, "Could not load the owned demo ROM: %s\n", error);
         return false;
@@ -726,7 +769,8 @@ static bool verify_software_layouts(void) {
     return true;
 }
 
-static bool run_smoke(player *app) {
+static bool run_smoke(player *app, const char *demo_rom_path,
+                      const char *invalid_rom_path) {
     if (!verify_software_layouts()) return false;
     uint64_t press_ns, release_ns;
     if (!player_input_half_dots_to_nanoseconds(8, &press_ns) ||
@@ -758,7 +802,7 @@ static bool run_smoke(player *app) {
     app->dialog_pending = true;
     app->dialog_was_paused = false;
     player_input_pause(&app->input);
-    if (!push_dialog_result(app, PLAYER_DIALOG_SELECTED, GABBABOY_PLAYER_INVALID_ROM) ||
+    if (!push_dialog_result(app, PLAYER_DIALOG_SELECTED, invalid_rom_path) ||
         !pump_events(app) || app->dialog_pending ||
         app->current_rom_path != original_path ||
         gbb_peek_ram(app->machine, 0xC000) != 1 ||
@@ -771,10 +815,10 @@ static bool run_smoke(player *app) {
     app->dialog_pending = true;
     app->dialog_was_paused = false;
     player_input_pause(&app->input);
-    if (!push_dialog_result(app, PLAYER_DIALOG_SELECTED, GABBABOY_PLAYER_DEMO_ROM) ||
+    if (!push_dialog_result(app, PLAYER_DIALOG_SELECTED, demo_rom_path) ||
         !pump_events(app) || app->dialog_pending ||
         app->current_rom_path == path_before_success ||
-        strcmp(app->current_rom_path, GABBABOY_PLAYER_DEMO_ROM) != 0 ||
+        strcmp(app->current_rom_path, demo_rom_path) != 0 ||
         gbb_peek_ram(app->machine, 0xC000) != 0 ||
         gbb_peek_ram(app->machine, 0xC001) != 0 ||
         app->input.guest_cursor_half_dots != 0 || app->input.pending_count != 0) {
@@ -799,11 +843,19 @@ static void destroy_player(player *app) {
 }
 
 int main(int argc, char **argv) {
-    const bool smoke = argc == 2 && strcmp(argv[1], "--smoke") == 0;
-    if (argc > 2 || (argc == 2 && !smoke)) {
-        fprintf(stderr, "usage: %s [--smoke]\n", argv[0]);
+    const bool smoke = argc >= 2 && strcmp(argv[1], "--smoke") == 0;
+    const bool package_smoke = argc == 3 &&
+                               strcmp(argv[1], "--smoke-package") == 0;
+    if ((smoke && argc != 2 && argc != 4) ||
+        (package_smoke == false && argc > 1 && !smoke) ||
+        (package_smoke && argc != 3)) {
+        fprintf(stderr, "usage: %s [--smoke [demo-rom invalid-rom] | --smoke-package invalid-rom]\n",
+                argv[0]);
         return 2;
     }
+    const char *requested_demo_rom = smoke && argc == 4 ? argv[2] : NULL;
+    const char *invalid_rom = smoke && argc == 4 ? argv[3] :
+        (package_smoke ? argv[2] : GABBABOY_PLAYER_INVALID_ROM);
 
     player app;
     memset(&app, 0, sizeof(app));
@@ -812,24 +864,34 @@ int main(int argc, char **argv) {
     app.window_focused = true;
     atomic_init(&app.dialog_callback_done, false);
     atomic_init(&app.dialog_delivery_failed, false);
-    if (!create_machine(&app)) {
-        destroy_player(&app);
+    if (!SDL_Init((smoke || package_smoke) ? SDL_INIT_EVENTS : SDL_INIT_VIDEO)) {
+        fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
     }
-    if (!SDL_Init(smoke ? SDL_INIT_EVENTS : SDL_INIT_VIDEO)) {
-        fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
+    char *demo_rom_path = resolve_demo_rom_path(requested_demo_rom,
+                                                 package_smoke);
+    if (demo_rom_path == NULL) {
+        fputs("Could not resolve the packaged demo ROM\n", stderr);
+        SDL_Quit();
+        return 1;
+    }
+    if (!create_machine(&app, demo_rom_path)) {
         destroy_player(&app);
+        free(demo_rom_path);
+        SDL_Quit();
         return 1;
     }
     app.dialog_event_type = SDL_RegisterEvents(1);
     if (app.dialog_event_type == (Uint32)-1) {
         fprintf(stderr, "SDL_RegisterEvents: %s\n", SDL_GetError());
         destroy_player(&app);
+        free(demo_rom_path);
         SDL_Quit();
         return 1;
     }
-    if (!create_video(&app, smoke)) {
+    if (!create_video(&app, smoke || package_smoke)) {
         destroy_player(&app);
+        free(demo_rom_path);
         SDL_Quit();
         return 1;
     }
@@ -837,8 +899,8 @@ int main(int argc, char **argv) {
     set_status(&app, "Ready");
 
     bool passed = true;
-    if (smoke) {
-        passed = run_smoke(&app);
+    if (smoke || package_smoke) {
+        passed = run_smoke(&app, demo_rom_path, invalid_rom);
     } else {
         while (app.running) {
             if (!pump_events(&app)) { passed = false; break; }
@@ -872,6 +934,7 @@ int main(int argc, char **argv) {
         }
     }
     destroy_player(&app);
+    free(demo_rom_path);
     SDL_Quit();
     return passed ? 0 : 1;
 }
