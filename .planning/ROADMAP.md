@@ -144,7 +144,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 - [x] 03-06-PLAN.md — ROM controls, high-DPI integer presentation, and visible limitations
 
 **Wave 7** *(blocked on Wave 6 completion)*
-- [ ] 03-07-PLAN.md — public API failure boundaries and installed C/C++ consumers
+- [x] 03-07-PLAN.md — public API failure boundaries and installed C/C++ consumers
 
 **Wave 8** *(blocked on Wave 7 completion)*
 - [ ] 03-08-PLAN.md — reproducible original fixture and pinned hosted reproduction
@@ -210,7 +210,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 |-------|----------------|--------|-----------|
 | 1. Portable Foundation and Original ROM Tracer | 5/5 | Complete    | 2026-10-03 |
 | 2. DMG CPU, Bus, and Time | 17/17 | Complete | 2026-10-07 |
-| 3. Visible Interactive DMG | 6/9 | In Progress | - |
+| 3. Visible Interactive DMG | 7/9 | In Progress | - |
 | 4. MBC1 and Safe Battery Continuation | 0/TBD | Not started | - |
 | 5. DMG Audio and Stable Playback | 0/TBD | Not started | - |
 | 6. Qualified DMG Release and Consumer Handoff | 0/TBD | Not started | - |
@@ -221,4 +221,4 @@ All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](
 
 Automate authorized work within each phase, then inspect current verification/release/consumer evidence, update traceability and [lessons](context/LESSONS.md), triage issues/PRs, report limitations and the exact next command, and **stop**. Never auto-advance phases or milestones; keep both auto-advance flags false. Credential, hardware, or perceptual gaps must be recorded honestly with the smallest necessary human action, never converted into passing evidence. Remote/CI setup begins in Phase 1; absent access remains an explicit completion limitation.
 
-Phase 1 Plans 01–05 are complete. Goal-backward verification passed 5/5 roadmap truths and all 8 BASE requirements; standard code review is clean. Phase 2 Plans 02-01 through 02-14 and 02-16 through 02-18 are complete; 02-15 remains superseded/non-runnable. Phase 2 passed 5/5 roadmap truths, all five CPU requirements, 45/45 security threats, Nyquist validation and code review; no physical DMG hardware test is claimed. Phase 3 is executing: Plans 03-01 through 03-06 are complete (6/9). D-08 JOYP interrupt timing and VIDEO-02 simultaneous PPU/DMA evidence remain open; live desktop perception, fixture reproduction, and exact-revision package qualification are outstanding. The exact continuation command is `$gsd-execute-phase 3 --wave 7`. Keep both auto-advance flags false and stop after Phase 3.
+Phase 1 Plans 01–05 are complete. Goal-backward verification passed 5/5 roadmap truths and all 8 BASE requirements; standard code review is clean. Phase 2 Plans 02-01 through 02-14 and 02-16 through 02-18 are complete; 02-15 remains superseded/non-runnable. Phase 2 passed 5/5 roadmap truths, all five CPU requirements, 45/45 security threats, Nyquist validation and code review; no physical DMG hardware test is claimed. Phase 3 is executing: Plans 03-01 through 03-07 are complete (7/9). D-08 JOYP interrupt timing and VIDEO-02 simultaneous PPU/DMA evidence remain open; live desktop perception, fixture reproduction, and exact-revision package qualification are outstanding. The exact continuation command is `$gsd-execute-phase 3 --wave 8`. Keep both auto-advance flags false and stop after Phase 3.
