@@ -16,6 +16,9 @@ cpu_return_phases
 cpu_conditional_budget
 cpu_base_matrix
 cpu_base_semantic_tracer
+cpu_base_conditional_paths
+cpu_base_arithmetic_edges
+cpu_base_address_effects
 cpu_illegal_lockup
 cpu_flags_edges
 cpu_timed_access
