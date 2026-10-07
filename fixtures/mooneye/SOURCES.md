@@ -23,7 +23,7 @@ The DAA execution budget is 2,000,000 half-dots. At the pinned source revision, 
 
 Normal build and tests consume only the checked-in `.gb` files. Reproduction requires the explicit pinned sources and WLA-DX build above; no normal test invokes the network, compiler, or assembler.
 
-## Cross-host byte reproduction (open)
+## Original-ROM cross-host byte reproduction (historical)
 
 `bash tests/scripts/reproduce-mooneye.sh --diagnose fixtures/mooneye` is the
 explicit networked preparation command. It verifies the source revisions and
@@ -60,9 +60,11 @@ references. A macOS/arm64 rebuild with the same input revisions and flags
 matches all three checked-in digests. Neither the `-nS` alternative nor a
 checksum-only adjustment reproduces these checked-in bytes. A deterministic
 linker fix or newly qualified fixture bytes needs a separate reviewed tool
-recipe; no substitute command is qualified here. T-02-14 and verification
-gap 7 remain open. The fixed three-case denominator and checked-in bytes are
-unchanged, and no corpus admission follows this failed cross-host compare.
+recipe; no substitute command was qualified at that revision. This report
+records the original-ROM linker divergence only. The fixed three-case
+denominator and checked-in bytes remained unchanged, and no corpus admission
+followed that historical comparison. The derived candidate recipe and its
+current exact-SHA result are recorded separately below.
 
 ## Qualification gap discovered during phase verification
 
