@@ -95,7 +95,7 @@ static gbb_instance *load_dma_guest(uint8_t source_page, int restart,
     if (source_page != 0x80u)
         emit_source_record(&main_program, (uint16_t)((uint16_t)source_page << 8), 16u);
     if (restart)
-        emit_source_record(&main_program, 0xD000, 0u); /* replacement would hide OBJ 0 */
+        emit_source_record(&main_program, 0xD000, 1u); /* replacement would hide OBJ 0 */
     if (interrupt_probe) {
         emit(&main_program, 0x31); emit16(&main_program, 0xC002); /* SP=C002 */
         emit(&main_program, 0x3E); emit(&main_program, 1u);
@@ -134,14 +134,14 @@ static gbb_instance *load_dma_guest(uint8_t source_page, int restart,
     }
     if (boundary_probe) {
         routine[routine_size++] = 0x21; routine[routine_size++] = 0x00;
-        routine[routine_size++] = 0xC0; /* LD HL,C000 */
+        routine[routine_size++] = boundary_probe == 2 ? 0xFE : 0xC0;
         routine[routine_size++] = 0x06; routine[routine_size++] = 0x25;
         routine[routine_size++] = 0x05; /* 37-cycle loop and six NOPs */
         routine[routine_size++] = 0x20; routine[routine_size++] = 0xFD;
         for (unsigned i = 0; i < 6; ++i) routine[routine_size++] = 0x00;
-        routine[routine_size++] = 0x2A; /* reads immediately before and after end */
-        routine[routine_size++] = 0x2A;
-        routine[routine_size++] = 0x2A;
+        routine[routine_size++] = boundary_probe == 2 ? 0x7E : 0x2A;
+        routine[routine_size++] = boundary_probe == 2 ? 0x7E : 0x2A;
+        routine[routine_size++] = boundary_probe == 2 ? 0x7E : 0x2A;
     } else {
         routine[routine_size++] = 0x06; routine[routine_size++] = 0x28; /* 40 M-cycles */
         routine[routine_size++] = 0x05;      /* DEC B */
@@ -255,7 +255,7 @@ static int expect_dma_object(uint8_t source_page, int restart) {
         REQUIRE(events[restart_start].value == 0xD0u);
         REQUIRE(events[restart_start + 1u].access == 2u &&
                 events[restart_start + 1u].address == 0xFE00u &&
-                events[restart_start + 1u].value == 0u);
+                events[restart_start + 1u].value == 1u);
         for (unsigned i = 0; i < 160u; ++i) {
             REQUIRE(events[restart_start + 1u + i].access == 2u);
             REQUIRE(events[restart_start + 1u + i].address == (uint16_t)(0xFE00u + i));
@@ -343,7 +343,35 @@ static int dma_start(void) {
     return expect_dma_object(0xD7u, 0);
 }
 
-static int dma_restart(void) { return expect_dma_object(0xC0u, 1); }
+static int dma_restart(void) {
+    REQUIRE(expect_dma_object(0xC0u, 1) == 0);
+    gbb_instance *m = load_dma_guest(0xC0u, 1, 0, 2, 0);
+    REQUIRE(m != NULL);
+    gbb_test_dma_event dma[400];
+    gbb_test_bus_event bus[512];
+    gbb_test_dma_observer_set(m, dma, 400);
+    gbb_test_observer_set(m, bus, 512);
+    uint8_t pixels[PIXELS];
+    REQUIRE(run_frame(m, pixels) == 0);
+    size_t dn = gbb_test_dma_observer_count(m), bn = gbb_test_observer_count(m);
+    uint64_t restart_at = 0;
+    for (size_t i = 0; i < dn; ++i)
+        if (dma[i].access == 1u && dma[i].value == 0xD0u) restart_at = dma[i].time_half_dots;
+    REQUIRE(restart_at != 0);
+    static const uint64_t deltas[] = {1272u, 1288u, 1304u};
+    static const uint8_t values[] = {0xFFu, 0x01u, 0x01u};
+    size_t found = 0;
+    for (size_t i = 0; i < bn; ++i)
+        if (bus[i].address == 0xFE00u && bus[i].access == 1u) {
+            REQUIRE(found < 3u);
+            REQUIRE(bus[i].time_half_dots == restart_at + deltas[found]);
+            REQUIRE(bus[i].value == values[found]);
+            ++found;
+        }
+    REQUIRE(found == 3u);
+    gbb_destroy(m);
+    return 0;
+}
 
 static int run_budget(gbb_instance *machine, uint64_t budget);
 
