@@ -137,3 +137,21 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Applies when:** An instruction matrix is used as evidence for semantic completeness or timing behavior.
 - **Verification:** Five focused Plan 02-18 tests passed; the local suite and inventory passed 104/104 with no skips; installed C/C++ and inventory passed 109/109; independent verification passed 5/5 at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`.
 - **Status:** Resolved with an independent expected-state oracle and exact-revision evidence; physical hardware behavior remains a separate limitation.
+
+### GB-VIDEO-001 / 2026-10-07 / Plan GB-03-03 bus reachability
+
+- **Cause and evidence:** `read8` and `write8` already applied PPU mode restrictions to VRAM/OAM, but `read_supported` excluded those addresses. Guest instructions stopped during preflight, so the timed lockout logic could not be observed.
+- **Remedy:** Admit only mapped VRAM `$8000–$9FFF` and OAM `$FE00–$FE9F` in the bus preflight; keep cartridge RAM and unusable `$FEA0–$FEFF` unsupported. Retarget unsupported-boundary tests and exercise mode access through guest bus timestamps.
+- **Applies when:** A device read/write path exists but instruction preflight separately declares which guest addresses can participate.
+- **Verification:** DMA/PPU integration filter passed 23/23, full local CTest passed 125/125, and the current DMA/bus ASan/UBSan subset passed 13/13. Exact CPU-B contention remains outside these software results.
+- **Source:** `src/core/gabbaboy.c`, `tests/test_bus.c`, `tests/test_dma.c`, and `docs/dmg-video-evidence.md`.
+- **Status:** Fixed and verified for the declared model behavior; hardware applicability limits remain explicit.
+
+### GB-TEST-001 / 2026-10-07 / Plan GB-03-03 HRAM guest fixture
+
+- **Cause and evidence:** Extending a copied HRAM guest routine past 32 bytes caused its `$FFA0` scratch slot to overwrite byte 32 of the executing routine. The routine then read `$FF` as a loop immediate and restarted rather than reaching the post-transfer checks.
+- **Remedy:** Move scratch bytes to `$FFB0+`, outside the routine, and reject generated probe routines larger than the 48-byte space before that scratch region.
+- **Applies when:** A test program is copied into emulated memory and shares that address space with test scratch storage.
+- **Verification:** `dma_hram` and all nine DMA cases pass; the Linux ASan/UBSan DMA/bus subset passed 13/13.
+- **Source:** `tests/test_dma.c` and the captured guest bus/trace during fixture debugging.
+- **Status:** Reproduced, bounded, and verified.
