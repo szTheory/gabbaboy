@@ -58,25 +58,18 @@ static void start_guest(guest_program *p) {
 }
 
 static gbb_instance *load_guest(const guest_program *p, uint8_t lcdc) {
+    if (p->size > sizeof(p->bytes) - 4u) return NULL;
     uint8_t rom[32768] = {0};
     /* Keep the guest body beyond the cartridge header and checksum bytes. */
     rom[0x100] = 0xC3; rom[0x101] = 0x50; rom[0x102] = 0x01;
-    memcpy(rom + 0x150, p->bytes, p->size);
-    size_t pc = 0x150u + p->size;
-    rom[pc++] = 0x18; rom[pc++] = 0xFE; /* JR -2 */
-    rom[0x134] = 0xE7;
-    uint8_t checksum = 0;
-    for (size_t i = 0x134; i <= 0x14C; ++i)
-        checksum = (uint8_t)(checksum - rom[i] - 1u);
-    rom[0x14D] = checksum;
-
     guest_program complete = *p;
     emit_reg(&complete, 0x40, lcdc);
     /* The LCDC write above must occur before the steady-state loop. */
     memcpy(rom + 0x150, complete.bytes, complete.size);
-    pc = 0x150u + complete.size;
+    size_t pc = 0x150u + complete.size;
     rom[pc++] = 0x18; rom[pc++] = 0xFE;
-    checksum = 0;
+    rom[0x134] = 0xE7;
+    uint8_t checksum = 0;
     for (size_t i = 0x134; i <= 0x14C; ++i)
         checksum = (uint8_t)(checksum - rom[i] - 1u);
     rom[0x14D] = checksum;
@@ -186,6 +179,8 @@ static int frame_composition_window(void) {
     window_tile_data[1] = 0xFF;        /* row 0: color 2 */
     window_tile_data[2] = 0xFF;        /* row 1: color 3 */
     window_tile_data[3] = 0xFF;
+    for (unsigned row = 2; row < 8; ++row)
+        window_tile_data[row * 2u] = 0xFF; /* remaining rows: color 1 */
     emit_bytes(&p, 0x8010, window_tile_data, sizeof(window_tile_data));
     const uint8_t window_tile = 1;
     emit_bytes(&p, 0x9C00, &window_tile, 1);
@@ -221,8 +216,9 @@ static int frame_composition_sprites(void) {
     memset(expected, 0, sizeof(expected));
     for (unsigned y = 0; y < 8; ++y) {
         for (unsigned x = 0; x < 8; ++x) expected[y * WIDTH + x] = 2;
-        expected[y * WIDTH + 15] = 1; /* horizontal flip moves source x=0 to screen x=15 */
-        for (unsigned x = 16; x < 24; ++x) expected[y * WIDTH + x] = 3;
+        if (y == 0) expected[y * WIDTH + 15] = 1; /* X flip moves source x=0 to x=15 */
+        if (y == 0)
+            for (unsigned x = 16; x < 24; ++x) expected[y * WIDTH + x] = 3;
         for (unsigned x = 24; x < 32; ++x) expected[y * WIDTH + x] = 3;
     }
     REQUIRE(run_image("sprites_8x8_flip_palettes", &p, 0x93, expected, 0) == 0);
@@ -248,7 +244,7 @@ static int frame_composition_priority(void) {
     guest_program p = {0};
     uint8_t expected[PIXELS];
     const uint8_t overlap_oam[] = {
-        16, 8, 0, 0,                 /* transparent, but first in OAM */
+        16, 8, 4, 0,                 /* transparent, but first in OAM */
         16, 16, 1, 0x80,             /* behind nonzero BG */
         16, 12, 2, 0,                 /* smaller X wins in overlap */
         16, 12, 1, 0                  /* equal X loses to lower OAM index */
@@ -279,6 +275,7 @@ static int frame_composition_priority(void) {
     emit_bytes(&p, 0xFE00, ten, sizeof(ten));
     emit_bytes(&p, 0xFE28, eleventh, sizeof(eleventh));
     emit_reg(&p, 0x47, 0xE4);
+    emit_reg(&p, 0x48, 0xE4);
     memset(expected, 0, sizeof(expected));
     for (unsigned y = 0; y < 8; ++y)
         for (unsigned x = 0; x < 80; ++x) expected[y * WIDTH + x] = 1;

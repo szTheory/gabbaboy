@@ -8,6 +8,8 @@
 #define GBB_FRAME_WIDTH 160u
 #define GBB_FRAME_HEIGHT 144u
 #define GBB_FRAME_PIXELS (GBB_FRAME_WIDTH * GBB_FRAME_HEIGHT)
+#define GBB_OAM_BYTES 160u
+#define GBB_LINE_OBJECT_LIMIT 10u
 
 struct gbb_instance {
     uint8_t *rom;
@@ -15,6 +17,7 @@ struct gbb_instance {
     uint8_t wram[8192];
     uint8_t hram[127];
     uint8_t vram[8192];
+    uint8_t oam[GBB_OAM_BYTES];
     uint8_t frame_working[GBB_FRAME_PIXELS];
     uint8_t frame_completed[GBB_FRAME_PIXELS];
     uint64_t frame_generation;
@@ -22,6 +25,10 @@ struct gbb_instance {
     uint16_t ppu_dot;
     uint8_t ppu_half_phase;
     uint8_t ppu_mode;
+    uint8_t ppu_selected_objects[GBB_LINE_OBJECT_LIMIT];
+    uint8_t ppu_selected_object_count;
+    uint8_t ppu_window_line;
+    uint8_t ppu_window_line_drawn;
     uint8_t lcdc, scy, scx, ly, lyc, bgp, obp0, obp1, wy, wx;
     uint8_t joypad_select;
     uint8_t joypad_buttons;
@@ -159,6 +166,7 @@ static void reset_state(gbb_instance *m) {
     memset(m->wram, 0, sizeof(m->wram));
     memset(m->hram, 0, sizeof(m->hram));
     memset(m->vram, 0, sizeof(m->vram));
+    memset(m->oam, 0, sizeof(m->oam));
     memset(m->frame_working, 0, sizeof(m->frame_working));
     memset(m->frame_completed, 0, sizeof(m->frame_completed));
     m->frame_generation = 0;
@@ -166,6 +174,10 @@ static void reset_state(gbb_instance *m) {
     m->ppu_dot = 0;
     m->ppu_half_phase = 0;
     m->ppu_mode = 2;
+    memset(m->ppu_selected_objects, 0, sizeof(m->ppu_selected_objects));
+    m->ppu_selected_object_count = 0;
+    m->ppu_window_line = 0;
+    m->ppu_window_line_drawn = 0;
     m->lcdc = 0x91;
     m->scy = 0;
     m->scx = 0;
@@ -198,6 +210,12 @@ static int cpu_vram_access_allowed(const gbb_instance *m) {
     return (m->lcdc & 0x80u) == 0 || m->ppu_mode != 3u;
 }
 
+static int cpu_oam_access_allowed(const gbb_instance *m) {
+    return (m->lcdc & 0x80u) == 0 || m->ppu_mode == 0u || m->ppu_mode == 1u;
+}
+
+static void ppu_select_objects(gbb_instance *m);
+
 static uint8_t read8(const gbb_instance *m, uint16_t address) {
     if (address == 0xFF00) return joypad_value(m);
     if (address == 0xFF04) return m->div;
@@ -223,6 +241,8 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
     if (address == 0xFFFF) return (uint8_t)(0xE0u | m->ie);
     if (address >= 0x8000 && address <= 0x9FFF)
         return cpu_vram_access_allowed(m) ? m->vram[address - 0x8000] : 0xFF;
+    if (address >= 0xFE00 && address <= 0xFE9F)
+        return cpu_oam_access_allowed(m) ? m->oam[address - 0xFE00] : 0xFF;
     if (address < m->rom_size) return m->rom[address];
     if (address >= 0xC000 && address <= 0xDFFF) return m->wram[address - 0xC000];
     if (address >= 0xE000 && address <= 0xFDFF) return m->wram[address - 0xE000];
@@ -271,6 +291,9 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     if (address >= 0x8000 && address <= 0x9FFF) {
         if (cpu_vram_access_allowed(m)) m->vram[address - 0x8000] = value;
     }
+    else if (address >= 0xFE00 && address <= 0xFE9F) {
+        if (cpu_oam_access_allowed(m)) m->oam[address - 0xFE00] = value;
+    }
     else if (address == 0xFF00) m->joypad_select = (uint8_t)(value & 0x30u);
     else if (address == 0xFF40) {
         uint8_t old = m->lcdc;
@@ -279,10 +302,18 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
             m->ppu_dot = 0;
             m->ly = 0;
             m->ppu_mode = 0;
+            m->ppu_selected_object_count = 0;
+            m->ppu_window_line = 0;
+            m->ppu_window_line_drawn = 0;
+            memset(m->frame_working, 0, sizeof(m->frame_working));
         } else if ((old & 0x80u) == 0) {
             m->ppu_dot = 0;
             m->ly = 0;
             m->ppu_mode = 2;
+            m->ppu_selected_object_count = 0;
+            m->ppu_window_line = 0;
+            m->ppu_window_line_drawn = 0;
+            ppu_select_objects(m);
         }
     }
     else if (address == 0xFF41) m->stat = (uint8_t)(value & 0x78u);
@@ -397,22 +428,121 @@ static uint8_t instruction_byte(const gbb_instance *m, uint16_t pc, unsigned off
     return read8(m, instruction_address(m, pc, offset));
 }
 
-static uint8_t ppu_bg_shade(const gbb_instance *m, unsigned x) {
-    if ((m->lcdc & 0x01u) == 0) return (uint8_t)(m->bgp & 3u);
-    uint8_t bg_x = (uint8_t)(x + m->scx);
-    uint8_t bg_y = (uint8_t)(m->ly + m->scy);
-    uint16_t map_base = (m->lcdc & 0x08u) != 0 ? 0x1C00u : 0x1800u;
-    uint16_t map_index = (uint16_t)(((bg_y >> 3) * 32u) + (bg_x >> 3));
-    uint8_t tile = m->vram[map_base + map_index];
-    uint16_t tile_base = (m->lcdc & 0x10u) != 0
-        ? (uint16_t)tile * 16u
-        : (uint16_t)(0x1000 + (int16_t)(int8_t)tile * 16);
-    uint16_t row = (uint16_t)((bg_y & 7u) * 2u);
-    uint8_t bit = (uint8_t)(7u - (bg_x & 7u));
-    uint8_t low = m->vram[tile_base + row];
-    uint8_t high = m->vram[tile_base + row + 1u];
-    uint8_t color = (uint8_t)(((low >> bit) & 1u) | (((high >> bit) & 1u) << 1));
-    return (uint8_t)((m->bgp >> (color * 2u)) & 3u);
+static uint8_t ppu_tile_color(const gbb_instance *m, uint8_t tile,
+                              unsigned row, unsigned column, int object) {
+    int tile_base;
+    if (object || (m->lcdc & 0x10u) != 0) {
+        tile_base = (int)tile * 16;
+    } else {
+        tile_base = 0x1000 + (int)(int8_t)tile * 16;
+    }
+    if (tile_base < 0 || tile_base + 15 >= 0x1800 || row >= 8u || column >= 8u)
+        return 0;
+    unsigned address = (unsigned)tile_base + row * 2u;
+    uint8_t bit = (uint8_t)(7u - column);
+    uint8_t low = m->vram[address];
+    uint8_t high = m->vram[address + 1u];
+    return (uint8_t)(((low >> bit) & 1u) | (((high >> bit) & 1u) << 1));
+}
+
+static int ppu_window_visible_at(const gbb_instance *m, unsigned x) {
+    if ((m->lcdc & 0x21u) != 0x21u || m->ly < m->wy || m->wx > 166u)
+        return 0;
+    int left = (int)m->wx - 7;
+    return (int)x >= left;
+}
+
+static uint8_t ppu_background_color(const gbb_instance *m, unsigned x) {
+    int window = (m->lcdc & 0x01u) != 0 && ppu_window_visible_at(m, x);
+    unsigned source_x;
+    unsigned source_y;
+    uint16_t map_base;
+    if (window) {
+        source_x = (unsigned)((int)x - ((int)m->wx - 7));
+        source_y = m->ppu_window_line;
+        map_base = (m->lcdc & 0x40u) != 0 ? 0x1C00u : 0x1800u;
+    } else {
+        source_x = (uint8_t)(x + m->scx);
+        source_y = (uint8_t)(m->ly + m->scy);
+        map_base = (m->lcdc & 0x08u) != 0 ? 0x1C00u : 0x1800u;
+    }
+    uint16_t map_index = (uint16_t)(((source_y >> 3) * 32u) + ((source_x & 0xFFu) >> 3));
+    uint16_t map_address = (uint16_t)(map_base + map_index);
+    if (map_address >= sizeof(m->vram)) return 0;
+    uint8_t tile = m->vram[map_address];
+    return ppu_tile_color(m, tile, source_y & 7u, source_x & 7u, 0);
+}
+
+static void ppu_select_objects(gbb_instance *m) {
+    m->ppu_selected_object_count = 0;
+    unsigned height = (m->lcdc & 0x04u) != 0 ? 16u : 8u;
+    for (unsigned index = 0; index < 40u &&
+         m->ppu_selected_object_count < GBB_LINE_OBJECT_LIMIT; ++index) {
+        unsigned offset = index * 4u;
+        int top = (int)m->oam[offset] - 16;
+        if ((int)m->ly >= top && (int)m->ly < top + (int)height)
+            m->ppu_selected_objects[m->ppu_selected_object_count++] = (uint8_t)index;
+    }
+}
+
+static int ppu_object_color(const gbb_instance *m, unsigned x, uint8_t *color,
+                            uint8_t *attributes) {
+    if ((m->lcdc & 0x02u) == 0) return 0;
+    int found = 0;
+    int best_left = 0;
+    unsigned best_index = 0;
+    uint8_t best_color = 0;
+    uint8_t best_attributes = 0;
+    unsigned height = (m->lcdc & 0x04u) != 0 ? 16u : 8u;
+    for (unsigned selected = 0; selected < m->ppu_selected_object_count; ++selected) {
+        unsigned index = m->ppu_selected_objects[selected];
+        unsigned offset = index * 4u;
+        int left = (int)m->oam[offset + 1u] - 8;
+        int local_x = (int)x - left;
+        if (local_x < 0 || local_x >= 8) continue;
+        int row = (int)m->ly - ((int)m->oam[offset] - 16);
+        if (row < 0 || row >= (int)height) continue;
+        uint8_t attributes = m->oam[offset + 3u];
+        if ((attributes & 0x40u) != 0) row = (int)height - 1 - row;
+        unsigned tile = m->oam[offset + 2u];
+        if (height == 16u) {
+            tile &= ~1u;
+            tile += (unsigned)row >> 3;
+        }
+        unsigned source_x = (attributes & 0x20u) != 0
+            ? 7u - (unsigned)local_x : (unsigned)local_x;
+        uint8_t candidate = ppu_tile_color(m, (uint8_t)tile,
+                                           (unsigned)row & 7u, source_x, 1);
+        if (candidate == 0) continue; /* OBJ color 0 is transparent before palette lookup. */
+        if (!found || left < best_left || (left == best_left && index < best_index)) {
+            found = 1;
+            best_left = left;
+            best_index = index;
+            best_color = candidate;
+            best_attributes = attributes;
+        }
+    }
+    if (!found) return 0;
+    *color = best_color;
+    *attributes = best_attributes;
+    return 1;
+}
+
+static uint8_t ppu_palette_shade(uint8_t palette, uint8_t color) {
+    return (uint8_t)((palette >> (color * 2u)) & 3u);
+}
+
+static uint8_t ppu_pixel_shade(gbb_instance *m, unsigned x) {
+    uint8_t background = (m->lcdc & 0x01u) != 0 ? ppu_background_color(m, x) : 0;
+    if ((m->lcdc & 0x01u) != 0 && ppu_window_visible_at(m, x))
+        m->ppu_window_line_drawn = 1;
+    uint8_t object = 0, attributes = 0;
+    if (ppu_object_color(m, x, &object, &attributes) &&
+        ((attributes & 0x80u) == 0 || background == 0)) {
+        uint8_t palette = (attributes & 0x10u) != 0 ? m->obp1 : m->obp0;
+        return ppu_palette_shade(palette, object);
+    }
+    return ppu_palette_shade(m->bgp, background);
 }
 
 static void ppu_advance_dot(gbb_instance *m) {
@@ -420,9 +550,17 @@ static void ppu_advance_dot(gbb_instance *m) {
     if (m->ppu_dot < 455u) {
         ++m->ppu_dot;
     } else {
+        if (m->ly < GBB_FRAME_HEIGHT && m->ppu_window_line_drawn &&
+            m->ppu_window_line != UINT8_MAX)
+            ++m->ppu_window_line;
         m->ppu_dot = 0;
         ++m->ly;
-        if (m->ly == 154u) m->ly = 0;
+        if (m->ly == 154u) {
+            m->ly = 0;
+            m->ppu_window_line = 0;
+        }
+        m->ppu_window_line_drawn = 0;
+        if (m->ly < GBB_FRAME_HEIGHT) ppu_select_objects(m);
         if (m->ly == GBB_FRAME_HEIGHT) {
             memcpy(m->frame_completed, m->frame_working, sizeof(m->frame_completed));
             if (m->frame_generation != UINT64_MAX) ++m->frame_generation;
@@ -434,7 +572,7 @@ static void ppu_advance_dot(gbb_instance *m) {
     } else {
         if (m->ppu_dot >= 92u && m->ppu_dot <= 251u) {
             unsigned x = (unsigned)(m->ppu_dot - 92u);
-            m->frame_working[(unsigned)m->ly * GBB_FRAME_WIDTH + x] = ppu_bg_shade(m, x);
+            m->frame_working[(unsigned)m->ly * GBB_FRAME_WIDTH + x] = ppu_pixel_shade(m, x);
         }
         if (m->ppu_dot < 80u) m->ppu_mode = 2;
         else if (m->ppu_dot < 252u) m->ppu_mode = 3;
