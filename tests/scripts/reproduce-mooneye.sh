@@ -2,8 +2,8 @@
 # Explicit, networked fixture preparation. Ordinary CTest uses checked-in ROMs.
 set -euo pipefail
 
-if [[ $# != 2 || ( $1 != --diagnose && $1 != --compare ) ]]; then
-  echo "usage: $0 --diagnose|--compare fixtures/mooneye" >&2
+if [[ $# != 2 || ( $1 != --diagnose && $1 != --compare && $1 != --candidate ) ]]; then
+  echo "usage: $0 --diagnose|--compare|--candidate fixtures/mooneye" >&2
   exit 2
 fi
 mode=$1
@@ -70,12 +70,24 @@ common_dir="$source_dir/common"
 cc -std=c17 -O2 "$fixture_dir/font-source.c" -o "$work_dir/font-source"
 "$work_dir/font-source" "$common_dir/font.bin"
 pin_sha "$common_dir/font.bin" "$font_digest"
+if [[ "$mode" == --candidate ]]; then
+  patch_file="$fixture_dir/headless-report.patch"
+  patch_digest=$(sha256_file "$patch_file")
+  (cd "$source_dir" && patch --batch --fuzz=0 -p1 < "$patch_file") > "$work_dir/patch.log"
+  printf 'candidate_patch_sha256=%s\n' "$patch_digest" > "$work_dir/candidate.txt"
+  printf 'candidate_source_revision=%s\n' "$suite_rev" >> "$work_dir/candidate.txt"
+  for source_path in acceptance/instr/daa.s acceptance/timer/tim00.s acceptance/timer/tim00_div_trigger.s; do
+    git -C "$work_dir/mooneye-git" show "HEAD:$source_path" | shasum -a 256 | cut -d ' ' -f 1 > "$work_dir/acceptance-upstream.sha"
+    cmp -s "$work_dir/acceptance-upstream.sha" <(sha256_file "$source_dir/$source_path") || { echo "acceptance source changed: $source_path" >&2; exit 1; }
+  done
+fi
 {
   printf 'host=%s\n' "$(uname -s)/$(uname -m)"
   printf 'run_revision=%s\n' "$(git rev-parse HEAD)"
   printf 'suite_revision=%s\nsuite_tree=%s\n' "$suite_rev" "$suite_tree"
   printf 'tool_revision=%s\ntool_tree=%s\ntool_archive_sha256=%s\n' "$tool_rev" "$tool_tree" "$tool_archive"
   printf 'font_source_sha256=%s\nfont_sha256=%s\n' "$(sha256_file "$fixture_dir/font-source.c")" "$font_digest"
+  if [[ "$mode" == --candidate ]]; then printf 'candidate_patch_sha256=%s\n' "$patch_digest"; fi
   printf 'assembler=%s\nlinker=%s\n' "$assembler_version" "$linker_version"
   printf 'cmake_flags=-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=<workspace>/wla-dx-install\n'
   printf 'font_flags=cc -std=c17 -O2\nassembly_flags=-I <suite>/common -o <object> <source>\nlink_flags=-d -S <link> <rom>\n'
@@ -98,6 +110,13 @@ for case_name in daa tim00 tim00_div_trigger; do
   "$linker" -d -S "$link_file" "$rom" > "$case_dir/linker.log" 2>&1
   printf 'source_path=%s\nsource_sha256=%s\n' "$source_path" "$(sha256_file "$source_dir/$source_path")" > "$case_dir/source.txt"
 done
+
+if [[ "$mode" == --candidate ]]; then
+  for case_name in daa tim00 tim00_div_trigger; do
+    printf 'candidate=%s sha256=%s\n' "$case_name" "$(sha256_file "$work_dir/$case_name/rebuilt.gb")"
+  done
+  exit 0
+fi
 
 python3 - "$fixture_dir" "$work_dir" "$mode" <<'PY'
 import hashlib

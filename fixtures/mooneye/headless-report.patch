@@ -1,0 +1,56 @@
+--- a/common/common.s
++++ b/common/common.s
+@@ -83,2 +82,0 @@
+-.include "lib/clear_oam.s"
+-.include "lib/clear_vram.s"
+@@ -86,2 +83,0 @@
+-.include "lib/disable_ppu_safe.s"
+-.include "lib/is_ppu_broken.s"
+@@ -98 +93,0 @@
+-.include "lib/print_load_font.s"
+@@ -104 +98,0 @@
+-.include "lib/reset_screen.s"
+@@ -106 +99,0 @@
+-.include "lib/wait_ly_with_timeout.s"
+@@ -119,8 +111,0 @@
+-.bank 1 slot 1
+-.section "Font" free
+-font:
+-  ; 8x8 ASCII bitmap font by Darkrose
+-  ; http://opengameart.org/content/8x8-ascii-bitmap-font-with-c-source
+-  .incbin "font.bin" fsize FONT_SIZE
+-.ends
+-
+--- a/common/lib/quit.s
++++ b/common/lib/quit.s
+@@ -35,7 +34,0 @@
+-  call is_ppu_broken
+-  jr c, @callback
+-
+-  call disable_ppu_safe
+-  call reset_screen
+-  call print_load_font
+-
+@@ -43 +36 @@
+-    ld hl, $9800
++    ld hl, $c000
+@@ -49,17 +41,0 @@
+-    push de
+-    call is_ppu_broken
+-    jr c, @report_result
+-
+-    enable_ppu
+-
+-    ld a, 143
+-    call wait_ly_with_timeout
+-    jr c, @report_result
+-    ld a, 144
+-    call wait_ly_with_timeout
+-    ; Extra vblank to account for initial (invisible) frame
+-    ld a, 143
+-    call wait_ly_with_timeout
+-    ld a, 144
+-    call wait_ly_with_timeout
+-
+@@ -67 +42,0 @@
+-    pop de
