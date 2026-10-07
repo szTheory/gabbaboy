@@ -122,16 +122,28 @@ result protocol and finite per-case budgets are documented in
 keeps the fixed denominator at three and fails if any case is missing,
 unsupported, times out or fails its register protocol. Runner outcomes remain
 separate as `pass`, `fail`, `timeout` and `unsupported`; receipts record the
-fixture digest, exact core/runner revision, profile, boot mode, protocol,
-consumed ticks, finite budget, eligible/executed counts and recent bounded
-diagnostics. `mooneye_required_suite` and the per-case CTests run offline
-against checked-in ROM bytes. Phase 2 qualification is currently incomplete:
-all three ROMs reach an unsupported LY read in the shared reporting path before
-the expected breakpoint. The strict gate fails and retains all three required
-IDs; earlier passes through the unsupported-address fallback are superseded.
-See the qualification gap in `fixtures/mooneye/SOURCES.md`. Fixture
-reproduction runs in a separate workflow using pinned RGBDS and WLA-DX
-source revisions. Ordinary core tests use checked-in bytes and remain offline.
+fixture and manifest digests, immutable Mooneye source revision/tree and test
+path, report-patch and builder identities, original and derived ROM digests,
+exact core/runner revision, profile, boot mode, callback and `LD B,B` result
+locations, consumed ticks, finite budget, eligible/executed counts and recent
+bounded diagnostics. A pass requires the source-qualified callback followed by
+the exact symbol-addressed `LD B,B` result breakpoint with the expected
+registers; matching values at another instruction cannot pass.
+
+The checked-in candidates are derived headless reporting closures. Their patch
+removes PPU-only reporting setup while preserving the pinned acceptance roots,
+assertions, callbacks and result protocol. Candidate receipts report both the
+original upstream ROM digest and the derived ROM digest, so their result scope
+is explicit. The original upstream-built ROMs still reach an unsupported LY
+read before their callback in this PPU-free phase. Candidate success therefore
+does not claim that the original ROM bytes ran unchanged or that a physical
+Game Boy was tested. The fixed one-CPU/two-timer denominator remains three, and
+CPU-01 through CPU-05 remain pending fresh exact-PR-SHA checks and independent
+Phase 2 verification.
+`mooneye_required_suite` and the per-case CTests run offline against the
+checked-in derived bytes. Fixture reproduction runs separately with pinned
+RGBDS/WLA-DX sources and reports original-ROM diagnostics alongside exact
+candidate byte comparison. Ordinary core tests remain offline.
 
 ## Continuous integration and fixture reproduction
 
@@ -144,9 +156,13 @@ UndefinedBehaviorSanitizer. `cmake-floor-3.25.3`
 downloads the official Linux x64 archive, verifies its published SHA-256, and
 checks configure, build, test, install, relocation, and consumer use. The
 `required-native` aggregate fails if any required evidence job is missing,
-skipped, failed, or timed out. The separate `fixture-repro` workflow reproduces the original tracer and
-all eligible Mooneye ROMs on pull requests, pushes, and manual dispatch.
-Its network and assembler preparation stay outside the ordinary test jobs.
+skipped, failed, or timed out. The separate `fixture-repro` workflow rebuilds
+the original tracer, retains diagnostics for the immutable upstream Mooneye
+ROMs, and compares the derived candidates on pull requests, pushes, and manual
+dispatch. Its network and assembler preparation stay outside ordinary test
+jobs. Run `bash tests/scripts/verify-phase2-hosted.sh` to require completed,
+successful CI and fixture-reproduction jobs plus all required PR contexts at
+the exact open-PR head SHA.
 
 ### Pull requests and preview packages
 
