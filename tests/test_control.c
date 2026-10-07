@@ -117,6 +117,49 @@ static int interrupt_ei_chain(void) {
     return 0;
 }
 
+static int interrupt_diagnostic_order(void) {
+    /* DIV resets at t=144. TAC selects bit 3 at t=184 while low, so its
+     * next falling edge overflows TIMA at t=208; reload is at t=216.
+     * VBlank IF is pending when EI;NOP retires at t=208, making reload
+     * coincide with the entry's IF acknowledgement phase. */
+    const uint8_t p[] = {0x3e,1,0xea,0xff,0xff,0xea,0x0f,0xff,
+        0x3e,0xff,0xe0,5,0xaf,0xe0,4,0x3e,5,0xe0,7,0xfb,0x00};
+    gbb_instance *whole = make_machine(p, sizeof(p)); REQUIRE(whole != NULL);
+    gbb_instance *split = make_machine(p, sizeof(p)); REQUIRE(split != NULL);
+    gbb_run_result r = gbb_run(whole, 208, NULL, 0);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 208);
+    REQUIRE(gbb_run(split, 80, NULL, 0).consumed_half_dots == 80);
+    REQUIRE(gbb_run(split, 128, NULL, 0).consumed_half_dots == 128);
+    gbb_trace_record before = {0}, after = {0};
+    gbb_test_cpu_snapshot(whole, &before);
+    REQUIRE(before.time_half_dots == 208 && before.pc == 0x115 && before.sp == 0xfffe);
+    gbb_diagnostic_record ew[16] = {{0}}, es[16] = {{0}};
+    r = gbb_run_ex(whole, 39, NULL, 0, ew, 16);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 0 && r.diagnostic_count == 0);
+    gbb_test_cpu_snapshot(whole, &after);
+    REQUIRE(memcmp(&before, &after, sizeof(before)) == 0 && ew[0].kind == 0);
+    r = gbb_run_ex(whole, 40, NULL, 0, ew, 16);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 40 && r.diagnostic_count == 6);
+    REQUIRE(ew[0].kind == GBB_DIAGNOSTIC_INSTRUCTION && ew[0].time_half_dots == 208);
+    REQUIRE(ew[1].kind == GBB_DIAGNOSTIC_TIMER && ew[1].time_half_dots == 216 && ew[1].address == 0xff05);
+    REQUIRE(ew[2].kind == GBB_DIAGNOSTIC_BUS_WRITE && ew[2].time_half_dots == 216 && ew[2].address == 0xff0f && ew[2].value == 0xe4);
+    REQUIRE(ew[3].kind == GBB_DIAGNOSTIC_BUS_WRITE && ew[3].time_half_dots == 224 && ew[3].address == 0xfffd && ew[3].value == 0x01);
+    REQUIRE(ew[4].kind == GBB_DIAGNOSTIC_BUS_WRITE && ew[4].time_half_dots == 232 && ew[4].address == 0xfffc && ew[4].value == 0x15);
+    REQUIRE(ew[5].kind == GBB_DIAGNOSTIC_TIMER && ew[5].time_half_dots == 240 && ew[5].address == 0xff05 && ew[5].value == 1);
+    for (size_t i = 1; i < r.diagnostic_count; ++i)
+        REQUIRE(ew[i - 1].time_half_dots <= ew[i].time_half_dots);
+    gbb_test_cpu_snapshot(whole, &after);
+    REQUIRE(after.pc == 0x50 && after.sp == 0xfffc && after.time_half_dots == 248);
+    REQUIRE(gbb_peek_ram(whole, 0xfffc) == 0x15 && gbb_peek_ram(whole, 0xfffd) == 0x01);
+    r = gbb_run_ex(split, 40, NULL, 0, es, 16);
+    REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 40 && r.diagnostic_count == 6);
+    REQUIRE(memcmp(ew, es, 6 * sizeof(*ew)) == 0);
+    gbb_test_cpu_snapshot(split, &before);
+    REQUIRE(memcmp(&before, &after, sizeof(before)) == 0);
+    gbb_destroy(whole); gbb_destroy(split);
+    return 0;
+}
+
 static int interrupt_priority(void) {
     const uint8_t p[] = {0x3e,3,0xea,0xff,0xff,0xea,0x0f,0xff,0xfb,0x00};
     uint8_t rom[32768]; make_rom(rom, p, sizeof(p));
@@ -310,6 +353,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "interrupt_budget") == 0) return interrupt_budget();
     if (strcmp(argv[1], "interrupt_ei_delay") == 0) return interrupt_ei_delay();
     if (strcmp(argv[1], "interrupt_ei_chain") == 0) return interrupt_ei_chain();
+    if (strcmp(argv[1], "interrupt_diagnostic_order") == 0) return interrupt_diagnostic_order();
     if (strcmp(argv[1], "interrupt_priority") == 0) return interrupt_priority();
     if (strcmp(argv[1], "halt_idle") == 0) return halt_idle();
     if (strcmp(argv[1], "halt_timer_partition") == 0) return halt_timer_partition();

@@ -29,6 +29,7 @@ interrupt_entry
 interrupt_budget
 interrupt_ei_delay
 interrupt_ei_chain
+interrupt_diagnostic_order
 interrupt_priority
 halt_idle
 halt_timer_partition
