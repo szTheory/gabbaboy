@@ -57,7 +57,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. Equal timestamped inputs and elapsed emulated time produce equal supported state/output across different run partitions; LCD-off, HALT/STOP, lockup, and full output capacity return within the caller's bounded contract. (CPU-04)
 5. A headless run reports pass/fail/timeout/unsupported against a pinned eligible CPU/timer corpus with model/boot/protocol identity and sufficient retained trace evidence to reproduce failures. (CPU-05)
 
-**Plans**: 16 live plans: the original 9/9 plans are executed and 7 live gap-closure plans remain. Plan 02-15 is explicitly superseded and non-runnable; its halted summary remains historical evidence. Independent verification still has seven blockers; phase completion and CPU-01..05 remain pending. See [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md). Next command: `$gsd-execute-phase 2 --gaps-only`.
+**Plans**: 16 live plans: the original 9/9 plans, gap-closure Plans 02-10 through 02-14, and Plan 02-17 are executed; Plan 02-16 remains. Plan 02-15 is explicitly superseded and non-runnable; its halted summary remains historical evidence. The candidate byte/provenance/protocol gate is admitted, while independent runner and Phase 2 verification remain pending. See [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md). Next command: `$gsd-execute-phase 2 --gaps-only`.
 **Wave 1**
 - [x] 02-01-PLAN.md — ROM-only bus and WRAM tracer
 
@@ -98,11 +98,11 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 - [x] 02-12-PLAN.md — Windows manifest portability and distinct negative-control results
 
 **Gap wave 4** *(blocked on Gap wave 3 and 02-13 completion)*
-- [x] 02-14-PLAN.md — source-qualify PPU-independent corpus candidates and result protocol (local source/protocol probe passed; hosted candidate bytes and corpus admission remain open)
+- [x] 02-14-PLAN.md — source-qualify PPU-independent corpus candidates and result protocol (source/protocol path later qualified and admitted by Plan 02-17)
 
 **Gap wave 5** *(blocked on Gap wave 4 completion)*
 - 02-15-PLAN.md — superseded/non-runnable; retain 02-15-SUMMARY.md as historical evidence
-- [ ] 02-17-PLAN.md — qualify deterministic candidate-aware cross-host bytes and conditionally admit fixtures
+- [x] 02-17-PLAN.md — qualify deterministic candidate-aware cross-host bytes and admit fixtures after exact hosted byte identity
 
 **Gap wave 6** *(blocked on Gap wave 5 qualification/admission outcome)*
 - [ ] 02-16-PLAN.md — verify runner protocol, inventory, and final exact-revision evidence
@@ -179,7 +179,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Portable Foundation and Original ROM Tracer | 5/5 | Complete    | 2026-10-03 |
-| 2. DMG CPU, Bus, and Time | 10/16 | Gaps found | - |
+| 2. DMG CPU, Bus, and Time | 15/16 | Gaps found | - |
 | 3. Visible Interactive DMG | 0/TBD | Not started | - |
 | 4. MBC1 and Safe Battery Continuation | 0/TBD | Not started | - |
 | 5. DMG Audio and Stable Playback | 0/TBD | Not started | - |

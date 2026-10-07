@@ -4,16 +4,16 @@ milestone: v0.1
 current_phase: 02
 current_phase_name: DMG CPU, Bus, and Time
 status: executing
-stopped_at: Completed Phase GB-02 gap-closure planning for Plan 02-17; Phase 2 remains executing
-last_updated: "2026-10-07T01:18:57.545Z"
+stopped_at: Completed Plan GB-02-17 candidate qualification and admission; Phase 2 remains executing
+last_updated: "2026-10-07T02:37:49Z"
 last_activity: 2026-10-07
-last_activity_desc: Added the 02-17 cross-host qualification plan, superseded halted 02-15, and routed 02-16 after 02-17; no implementation or fixture admission occurred
+last_activity_desc: Executed Plan 02-17; all three derived candidates matched the exact hosted Linux run, passed provenance/protocol gates, and were admitted with the one-CPU/two-timer denominator; CPU-05 remains pending Plan 02-16
 state_head: 8cfd3040f1e0443b40708fd777f9664751483236
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 21
-  completed_plans: 19
+  completed_plans: 20
 milestone_name: limited DMG preview
 ---
 
@@ -28,19 +28,19 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 
 ## Current Position
 
-Phase: GB-02 (DMG CPU, Bus, and Time) — READY TO EXECUTE
-Plan: 02-17 ready; 02-16 follows after its qualification outcome
+Phase: GB-02 (DMG CPU, Bus, and Time) — EXECUTING
+Plan: 02-17 complete; 02-16 is next
 Status: Executing Phase GB-02
-Last activity: 2026-10-07 — Completed Phase GB-02 gap-closure planning for Plan 02-17. Plan 02-15 is superseded/non-runnable with its halted summary preserved; the phase plan index routes to 02-17 first and then 02-16.
+Last activity: 2026-10-07 — Plan 02-17 admitted all three derived candidates after exact local/hosted byte identity, protocol and provenance checks. Plan 02-15 remains superseded with its halted summary preserved; Plan 02-16 is next. CPU-05 and Phase 2 remain pending independent runner and phase verification.
 
 Progress: [██░░░░░░░░] 17% of milestone phases complete; Phase 1 has 5/5 plans and passed verification
 
 ## Performance Metrics
 
-- Total unique plans executed: 19; plan execution does not imply phase qualification.
-- Average duration / total execution time: 22 min / 424 min recorded for Phase 1 Plans 01–05 and Phase 2 Plans 01–14.
-- Per-phase metrics / recent trend: Phase 1 complete; the original nine Phase 2 plans and gap-closure Plans 02-10 through 02-14 are executed. Plan 02-15 is superseded after its preserved halt; live gap plans 02-17 and 02-16 remain, in that dependency order.
-- Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. The latest local offline inventory ran 98 tests with 94 passes and no skips; Windows installed inventory ran 103 tests with 99 passes and no skips. Both have only the four documented Mooneye unsupported-LY failures. Hosted cross-host fixture comparison remains failing.
+- Total unique plans executed: 20; plan execution does not imply phase qualification.
+- Average duration / total execution time: 24 min / 478 min recorded for Phase 1 Plans 01–05 and Phase 2 Plans 01–14 plus Plan 02-17.
+- Per-phase metrics / recent trend: Phase 1 complete; the original nine Phase 2 plans and gap-closure Plans 02-10 through 02-14 and 02-17 are executed. Plan 02-15 is superseded after its preserved halt; Plan 02-16 remains.
+- Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. The latest local offline inventory ran 98 tests with 94 passes and no skips; Windows installed inventory ran 103 tests with 99 passes and no skips. Both retain the four documented unsupported-LY failures for the original ROMs. The exact derived candidate bytes now match local Darwin/arm64 and hosted Linux/x86_64; strict manifest verification passed. Plan 02-16 still owns runner and phase qualification.
 
 **Per-Plan Metrics:**
 
@@ -65,6 +65,7 @@ Progress: [██░░░░░░░░] 17% of milestone phases complete; Pha
 | Phase GB-02 P12 | 9 min | 2 tasks | 6 files |
 | Phase GB-02 P13 | 8 min | 2 tasks | 3 files |
 | Phase GB-02 P14 | 8 min | 2 tasks | 4 files |
+| Phase GB-02 P17 | 54 min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-02]: RET and RETI stack reads use offsets 8/16; taken conditional RET retains 16/24 and untaken RET performs no stack read.
 - [Phase GB-02]: Keep checked-in Mooneye ROM bytes and the fixed three-case denominator unchanged until a deterministic cross-host linker recipe is qualified.
 - [Phase GB-02]: Preserve the pinned Mooneye manifest's exact raw bytes at checkout with a path-scoped `-text` attribute; continue strict SHA-256 admission.
+- [Phase GB-02]: Pin candidate linker ordering to `wlalink -nS -d -S`; admit derived fixtures only after exact local/hosted byte identity, source/rights provenance, protocol probes, and strict manifest verification.
 
 ### Pending Todos
 
@@ -122,10 +124,10 @@ None outside the roadmap.
 
 ### Blockers/Concerns
 
-- Independent [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md) returned `gaps_found`; Plans 02-10 and 02-11 now have focused corrections for startup/return phases, EI scheduling, and interrupt diagnostic chronology. Plan 02-12 resolved Windows manifest portability and distinct negative-control receipts at the tested revision. Plan 02-14 locally source-audited and probed a PPU-independent reporting derivative, but hosted candidate reproduction and final admission remain open. No CPU requirement is complete.
+- Independent [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md) returned `gaps_found`; Plans 02-10 and 02-11 now have focused corrections for startup/return phases, EI scheduling, and interrupt diagnostic chronology. Plan 02-12 resolved Windows manifest portability and distinct negative-control receipts at the tested revision. Plan 02-17 closed the candidate byte/provenance/protocol admission gate. Plan 02-16 still must verify runner behavior and exact-revision phase evidence. No CPU requirement is complete.
 - The latest local offline CTest inventory ran 98/98: 94 passed and the four known Mooneye unsupported-LY cases failed, with no skips. The exact Windows installed inventory ran 103/103: 99 passed and the same four failures; all four Windows manifest/fixture controls passed and raw bytes matched the Git blob. Earlier at `c583e33`, Linux normal and ASan/UBSan each ran 94 cases with the same four failures and no sanitizer finding; the relocated install ran 99 with the same failures and five installed API checks passing. Prior-phase regression selection passed 24/24. Required corpus IDs remain fixed at three.
-- Required Mooneye cases read PPU LY before assertions/result protocol, contrary to Phase 2's PPU exclusion. T-02-14/15 remain open. Plan 02-13's exact hosted run 37548730397 built DAA and both timer ROMs but failed byte comparison on Linux; local Darwin comparison passed. The mismatch is traced to WLA-DX's invalid equal-priority/size `qsort` tie comparator, but no cross-host recipe or replacement fixture set is qualified. The three pinned ROMs and denominator remain unchanged. Earlier [hosted evidence](phases/GB-02-dmg-cpu-bus-and-time/02-HOSTED-EVIDENCE.md) records Windows manifest rejection and required CI failures at PR head `a91d8e7`.
-- Plan 02-14's [source audit and candidate probe](phases/GB-02-dmg-cpu-bus-and-time/02-14-SUMMARY.md) passed locally for three positive candidates and an induced DAA negative control, with zero observed PPU bus accesses. The tracked derivative preserves original acceptance assertions and is not admitted; hosted Linux candidate byte evidence is still absent.
+- The original Mooneye ROMs use a PPU-dependent reporting path and remain captured as immutable pre-admission blobs. Plan 02-13's exact hosted run 37548730397 documented original-ROM byte differences caused by WLA-DX's invalid equal-priority/size `qsort` tie comparator. Plan 02-17 qualified a derivative using `wlalink -nS -d -S`; run 37561292904 matched all three 32,768-byte outputs exactly and the one-CPU/two-timer denominator was retained. Earlier [hosted evidence](phases/GB-02-dmg-cpu-bus-and-time/02-HOSTED-EVIDENCE.md) records Windows manifest rejection and required CI failures at PR head `a91d8e7`.
+- Plan 02-14's [source audit and candidate probe](phases/GB-02-dmg-cpu-bus-and-time/02-14-SUMMARY.md) established the derivative callback/result path with zero observed PPU bus accesses. Plan 02-17's manifest admission passed source/rights/provenance and protocol review; strict offline digest verification reports 1 CPU and 2 timer candidates. CPU-05 remains pending until Plan 02-16 verifies runner receipts and independent Phase 2 evidence.
 - [Draft PR #2](https://github.com/szTheory/gabbaboy/pull/2) publishes the Phase 2 implementation and gap reports for review, stacked on Phase 1 PR #1. Retarget and requalify after the foundation lands; no merge or release. Boundary triage found no open issues; PR #1 remains open.
 - PR #1 remains open for owner review at exact hosted SHA `9f1df9bd0a70e50033f7d8cbcbff778e3bfd94e3`. Required contexts passed; both Linux/macOS preview packages passed exact digest/source/consumer verification and expire 2026-10-17T19:19Z. They are temporary artifacts, not releases.
 - Native host support floors, signing, and live Playstead integration remain unverified for later release/adoption work.
@@ -143,11 +145,11 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-07T01:04:28Z
-Stopped at: Completed Phase GB-02 gap-closure planning for Plan 02-17; Phase 2 remains executing
+Last session: 2026-10-07T02:37:49Z
+Stopped at: Completed Phase GB-02 Plan 02-17 candidate qualification and admission; Phase 2 remains executing
 Resume file: .planning/.continue-here.md
 Next command in fresh context: $gsd-execute-phase 2 --gaps-only
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: Phase GB-02 gap-closure planning for Plan 02-17. This is a planning handoff; no implementation, hosted candidate comparison, or fixture admission occurred. Plan 02-15 is superseded/non-runnable and its halted summary remains historical evidence. Plan 02-17 adds a retained exact-SHA hosted candidate comparison and an executable pre-admission baseline guard; the index places only 02-17 in the ready set. CPU-05 and fixture qualification remain open.
-Next stage: Execute Phase GB-02 gap-closure Plan 02-17 first; Plan 02-16 follows its qualification/admission outcome. Run `$gsd-execute-phase 2 --gaps-only` to resume.
+Completed workflow stage: Executed Phase GB-02 gap-closure Plan 02-17. The deterministic `wlalink -nS -d -S` recipe produced three repeatable local candidates whose complete bytes matched hosted Linux run 37561292904 at source revision `93647ac98b7f8437cc9640e3dec437bba4f11e9c`; source/rights/protocol gates passed and the staged candidates were admitted. The original manifest/ROM hashes and one-CPU/two-timer denominator are retained in the baseline record. Plan 02-15 is superseded/non-runnable and its halted summary remains unchanged. CPU-05 and Phase 2 remain incomplete because runner/inventory and independent phase verification are still pending.
+Next stage: Execute Phase GB-02 Plan 02-16, “verify runner protocol, inventory, and final exact-revision evidence.” Run `$gsd-execute-phase 2 --gaps-only` to resume.
 Next implementation phase: Phase 3 — Visible Interactive DMG, paused until Phase 2 gaps and required checks are closed and the owner chooses to continue. Both auto-advance flags remain false.
