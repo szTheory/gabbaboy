@@ -63,6 +63,17 @@ jobs:
         run: cmake --build --preset phase1 --verbose
       - name: Install package
         run: cmake --install build --prefix build/package-prefix
+      - name: Capture exact Windows manifest bytes
+        shell: bash
+        run: bash tests/scripts/inspect-windows-manifest.sh --capture build/windows-manifest-bytes
+      - name: Retain raw Windows manifest evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-manifest-bytes
+          path: build/windows-manifest-bytes
+          if-no-files-found: error
+          retention-days: 7
       - name: Run and verify required test inventory
         shell: bash
         run: |
