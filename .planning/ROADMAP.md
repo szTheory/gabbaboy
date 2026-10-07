@@ -57,7 +57,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. Equal timestamped inputs and elapsed emulated time produce equal supported state/output across different run partitions; LCD-off, HALT/STOP, lockup, and full output capacity return within the caller's bounded contract. (CPU-04)
 5. A headless run reports pass/fail/timeout/unsupported against a pinned eligible CPU/timer corpus with model/boot/protocol identity and sufficient retained trace evidence to reproduce failures. (CPU-05)
 
-**Plans**: 16 total: the original 9/9 plans are executed and 7 gap-closure plans are planned and pending. Independent verification still has seven blockers; phase completion and CPU-01..05 remain pending. See [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md). Next command: `$gsd-execute-phase 2 --gaps-only`.
+**Plans**: 16 live plans: the original 9/9 plans are executed and 7 live gap-closure plans remain. Plan 02-15 is explicitly superseded and non-runnable; its halted summary remains historical evidence. Independent verification still has seven blockers; phase completion and CPU-01..05 remain pending. See [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md). Next command: `$gsd-execute-phase 2 --gaps-only`.
 **Wave 1**
 - [x] 02-01-PLAN.md — ROM-only bus and WRAM tracer
 
@@ -101,9 +101,10 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 - [x] 02-14-PLAN.md — source-qualify PPU-independent corpus candidates and result protocol (local source/protocol probe passed; hosted candidate bytes and corpus admission remain open)
 
 **Gap wave 5** *(blocked on Gap wave 4 completion)*
-- [ ] 02-15-PLAN.md — admit only qualified fixtures and reproduce final bytes
+- 02-15-PLAN.md — superseded/non-runnable; retain 02-15-SUMMARY.md as historical evidence
+- [ ] 02-17-PLAN.md — qualify deterministic candidate-aware cross-host bytes and conditionally admit fixtures
 
-**Gap wave 6** *(blocked on Gap wave 5 completion)*
+**Gap wave 6** *(blocked on Gap wave 5 qualification/admission outcome)*
 - [ ] 02-16-PLAN.md — verify runner protocol, inventory, and final exact-revision evidence
 
 ### Phase 3: Visible Interactive DMG

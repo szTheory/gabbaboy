@@ -4,11 +4,11 @@ milestone: v0.1
 current_phase: 02
 current_phase_name: DMG CPU, Bus, and Time
 status: executing
-stopped_at: Completed GB-02 gap-closure Plans 02-10 through 02-14; Phase 2 remains executing
-last_updated: "2026-10-07T00:26:49Z"
-last_activity: 2026-10-06
-last_activity_desc: Gap-closure Plan 02-14 source-audited and locally probed a PPU-independent derivative; hosted candidate qualification and admission remain open
-state_head: 1d93abbc35fc1352e9f4e6de5e2f76c0ec035cd2
+stopped_at: Completed Phase GB-02 gap-closure planning for Plan 02-17; Phase 2 remains executing
+last_updated: "2026-10-07T01:18:57.545Z"
+last_activity: 2026-10-07
+last_activity_desc: Added the 02-17 cross-host qualification plan, superseded halted 02-15, and routed 02-16 after 02-17; no implementation or fixture admission occurred
+state_head: 8cfd3040f1e0443b40708fd777f9664751483236
 progress:
   total_phases: 6
   completed_phases: 1
@@ -28,10 +28,10 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 
 ## Current Position
 
-Phase: GB-02 (DMG CPU, Bus, and Time) — EXECUTING
-Plan: 15 of 16
+Phase: GB-02 (DMG CPU, Bus, and Time) — READY TO EXECUTE
+Plan: 02-17 ready; 02-16 follows after its qualification outcome
 Status: Executing Phase GB-02
-Last activity: 2026-10-06 — Completed gap-closure Plan 02-14: three Mooneye CPU/timer sources have a locally probed PPU-independent derivative; no fixture has been admitted
+Last activity: 2026-10-07 — Completed Phase GB-02 gap-closure planning for Plan 02-17. Plan 02-15 is superseded/non-runnable with its halted summary preserved; the phase plan index routes to 02-17 first and then 02-16.
 
 Progress: [██░░░░░░░░] 17% of milestone phases complete; Phase 1 has 5/5 plans and passed verification
 
@@ -39,7 +39,7 @@ Progress: [██░░░░░░░░] 17% of milestone phases complete; Pha
 
 - Total unique plans executed: 19; plan execution does not imply phase qualification.
 - Average duration / total execution time: 22 min / 424 min recorded for Phase 1 Plans 01–05 and Phase 2 Plans 01–14.
-- Per-phase metrics / recent trend: Phase 1 complete; the original nine Phase 2 plans and gap-closure Plans 02-10 through 02-14 are executed, with two gap-closure plans remaining.
+- Per-phase metrics / recent trend: Phase 1 complete; the original nine Phase 2 plans and gap-closure Plans 02-10 through 02-14 are executed. Plan 02-15 is superseded after its preserved halt; live gap plans 02-17 and 02-16 remain, in that dependency order.
 - Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. The latest local offline inventory ran 98 tests with 94 passes and no skips; Windows installed inventory ran 103 tests with 99 passes and no skips. Both have only the four documented Mooneye unsupported-LY failures. Hosted cross-host fixture comparison remains failing.
 
 **Per-Plan Metrics:**
@@ -143,11 +143,11 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-07T00:26:49Z
-Stopped at: Completed Phase GB-02 gap-closure Plans 02-10 through 02-14; Phase 2 remains executing
+Last session: 2026-10-07T01:04:28Z
+Stopped at: Completed Phase GB-02 gap-closure planning for Plan 02-17; Phase 2 remains executing
 Resume file: .planning/.continue-here.md
 Next command in fresh context: $gsd-execute-phase 2 --gaps-only
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: Phase GB-02 gap-closure execution for Plans 02-10 through 02-14. Plan 02-11's six focused interrupt selections pass. Plan 02-12 used exact Windows artifacts to establish and repair manifest CRLF conversion at checkout; four named controls pass. Plan 02-14 source-audited and locally probed a patched reporting closure for three candidates and an induced DAA failure, without admitting fixtures. The local 98-case and Windows 103-case inventories have 94 and 99 passes respectively. Plan 02-13's cross-host WLA-DX section-order mismatch remains, so CPU-05 and fixture qualification are open. Phase 2 remains incomplete and Phase 1 is the last completed implementation phase.
-Next stage: Continue Phase GB-02 gap-closure execution at ready Plan 02-15, then follow the declared dependency to Plan 02-16. Run `$gsd-execute-phase 2 --gaps-only` to resume.
+Completed workflow stage: Phase GB-02 gap-closure planning for Plan 02-17. This is a planning handoff; no implementation, hosted candidate comparison, or fixture admission occurred. Plan 02-15 is superseded/non-runnable and its halted summary remains historical evidence. Plan 02-17 adds a retained exact-SHA hosted candidate comparison and an executable pre-admission baseline guard; the index places only 02-17 in the ready set. CPU-05 and fixture qualification remain open.
+Next stage: Execute Phase GB-02 gap-closure Plan 02-17 first; Plan 02-16 follows its qualification/admission outcome. Run `$gsd-execute-phase 2 --gaps-only` to resume.
 Next implementation phase: Phase 3 — Visible Interactive DMG, paused until Phase 2 gaps and required checks are closed and the owner chooses to continue. Both auto-advance flags remain false.
