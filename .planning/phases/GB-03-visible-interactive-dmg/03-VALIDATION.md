@@ -1,9 +1,9 @@
 ---
 phase: "GB-03"
 slug: "visible-interactive-dmg"
-status: draft
+status: executing
 nyquist_compliant: false
-wave_0_complete: false
+wave_0_complete: true
 created: "2026-10-07"
 ---
 
@@ -38,15 +38,15 @@ created: "2026-10-07"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 03-01-01 | 03-01 | 1 | VIDEO-01, VIDEO-03, VIDEO-05 | T-03-01, T-03-02 | Owned ROM, independently expected frame, timestamped polling response | unit / integration | ctest --preset phase1 --output-on-failure --no-tests=error -R '^(frame_composition_tracer|joypad_gameplay_tracer|visible_fixture_digest)$' | Planned in 03-01 | pending |
-| 03-02-01 | 03-02 | 2 | VIDEO-01, VIDEO-05 | T-03-05 | Separate authored BG/window/object composition images | unit / regression | ctest --preset phase1 --output-on-failure --no-tests=error -R '^frame_composition_' | Planned in 03-02 | pending |
-| 03-02-02 | 03-02 | 2 | VIDEO-01, VIDEO-05 | T-03-06, T-03-07 | Mode/STAT/fetch boundaries have source/profile qualification | unit / regression | ctest --preset phase1 --output-on-failure --no-tests=error -R '^ppu_timing_' | Planned in 03-02 | pending |
+| 03-01-01 | 03-01 | 1 | VIDEO-01, VIDEO-03, VIDEO-05 | T-03-01, T-03-02 | Owned ROM, independently expected frame, timestamped polling response | unit / integration | Focused tracer/digest selection; full `ctest --preset phase1` | tests/test_tracer.c; visible fixture manifest | passed focused selection; full suite 107/107; fixture reproduced with pinned RGBDS digest |
+| 03-02-01 | 03-02 | 2 | VIDEO-01, VIDEO-05 | T-03-05 | Separate authored BG/window/object composition images | unit / regression | Plan 03-02 verification selection | tests/test_tracer.c; tests/test_ppu.c | passed 14/14 plan verification selection |
+| 03-02-02 | 03-02 | 2 | VIDEO-01, VIDEO-05 | T-03-06, T-03-07 | Mode/STAT/fetch boundaries have source/profile qualification | unit / regression | Plan 03-02 verification selection | tests/test_ppu.c | passed 14/14 combined plan verification selection; hardware timing remains unclaimed |
 | 03-03-01 | 03-03 | 3 | VIDEO-02, VIDEO-05 | T-03-08, T-03-10 | DMA progress, mapping, HRAM access and partitions are bounded | unit / regression | ctest --preset phase1 --output-on-failure --no-tests=error -R '^dma_.*$' | tests/test_dma.c | passed 9/9 locally and under Linux ASan/UBSan |
 | 03-03-02 | 03-03 | 3 | VIDEO-02, VIDEO-05 | T-03-09, T-03-10 | Lockouts/contention distinguish initiators and model applicability | unit / regression | ctest --preset phase1 --output-on-failure --no-tests=error -R '^(dma_.*|ppu_timing_.*|frame_composition_.*|joypad_gameplay_tracer|bus_(preflight|unsupported_stack|unsupported_fetch))$' | tests/test_dma.c; docs/dmg-video-evidence.md | passed 23/23; disputed PPU/DMA collision outcome remains unqualified |
 | 03-04-01 | 03-04 | 4 | VIDEO-03 | T-03-14, T-03-16 | Queue and active-low matrix behavior is atomic and deterministic | unit / regression | ctest --preset phase1 --output-on-failure --no-tests=error -R '^(joypad_selection|joypad_queue_atomic|joypad_equal_time|joypad_partition)$'; full offline suite | tests/test_joypad.c | passed 4/4 focused; full suite passed 129/129 locally |
 | 03-04-02 | 03-04 | 4 | VIDEO-03 | T-03-15 | Exact IF assertions are added only after the D-08 source gate closes | source qualification / evidence gate | Retained by design: no interrupt tests registered because exact DMG-CPU-B cases remain unsupported by available evidence | docs/dmg-video-evidence.md; 03-RESEARCH.md | D-08 remains open; no guessed IF behavior; VIDEO-03 remains incomplete |
-| 03-05-01 | 03-05 | 5 | VIDEO-03, VIDEO-04, VIDEO-05 | T-03-21, T-03-23 | Optional real SDL input/render path stays outside the default core graph | integration / build | bash tests/scripts/verify-phase3-player.sh | Planned in 03-05 | pending |
-| 03-05-02 | 03-05 | 5 | VIDEO-03, VIDEO-04 | T-03-21, T-03-22 | Host time conversion, repeats, pause/reset and focus-loss release capacity are tested | integration / regression | bash tests/scripts/verify-phase3-player.sh | Planned in 03-05 | pending |
+| 03-05-01 | 03-05 | 5 | VIDEO-03, VIDEO-04, VIDEO-05 | T-03-21, T-03-23 | Optional SDL input/render path stays outside the default core graph | integration / build | `bash tests/scripts/verify-phase3-player.sh` | `tests/player/test_input.c`; `src/player/main.c` | passed 4/4; official SDL 3.4.18 source digest verified; smoke used offscreen renderer because no desktop display is available |
+| 03-05-02 | 03-05 | 5 | VIDEO-03, VIDEO-04 | T-03-21, T-03-22 | Host time conversion, repeats, pause/reset and focus-loss release capacity are tested | integration / regression | `bash tests/scripts/verify-phase3-player.sh`; full `ctest --preset phase1` | `tests/player/test_input.c` | passed 4/4 optional tests and full core suite 129/129; no live-window perceptual check available |
 | 03-06-01 | 03-06 | 6 | VIDEO-04, VIDEO-05 | T-03-25, T-03-27 | ROM replacement is transactional and limitation/status text is visible | integration / adapter | bash tests/scripts/verify-phase3-player.sh | Planned in 03-06 | pending |
 | 03-06-02 | 03-06 | 6 | VIDEO-04 | T-03-26 | Drawable geometry is integer-scaled, centered and overflow-safe | unit / adapter | bash tests/scripts/verify-phase3-player.sh | Planned in 03-06 | pending |
 | 03-07-01 | 03-07 | 7 | VIDEO-01, VIDEO-05 | T-03-28, T-03-30 | Invalid frame copies preserve caller storage and metadata | unit / regression | ctest --preset phase1 --output-on-failure --no-tests=error -R '^(frame_copy_|frame_generation_|independent_instances)$' | Planned in 03-07 | pending |

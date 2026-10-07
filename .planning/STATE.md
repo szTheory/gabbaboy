@@ -4,16 +4,16 @@ milestone: v0.1
 current_phase: 3
 current_phase_name: Visible Interactive DMG
 status: executing
-stopped_at: Phase 3 Plan 03-04 complete; Plan 03-05 is next
-last_updated: "2026-10-07T19:44:55Z"
+stopped_at: Phase 3 Plan 03-05 complete; Plan 03-06 is next
+last_updated: "2026-10-07T20:03:00Z"
 last_activity: 2026-10-07
-last_activity_desc: Phase 3 Wave 4 Plan 03-04 complete; Wave 5 Plan 03-05 is next
-state_head: 065ae59
+last_activity_desc: Phase 3 Wave 5 Plan 03-05 complete; Wave 6 Plan 03-06 is next
+state_head: 9ef104a
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 31
-  completed_plans: 24
+  completed_plans: 25
 milestone_name: limited DMG preview
 ---
 
@@ -29,16 +29,16 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 ## Current Position
 
 Phase: 3 (Visible Interactive DMG) — EXECUTING
-Plan: 5 of 9 (next)
+Plan: 6 of 9 (next)
 Status: Executing Phase 3
-Last activity: 2026-10-07 — Plan 03-04 execution and verification complete
+Last activity: 2026-10-07 — Plan 03-05 execution and verification complete
 
 Progress: [███░░░░░░░] 33% of milestone phases complete; Phases 1 and 2 passed verification.
 
 ## Performance Metrics
 
-- Unique plans: 24; average duration / total execution time: 26 min / 626 min. Phase 2 completion is based on goal verification, not task count alone.
-- Per-phase metrics / recent trend: Phases 1 and 2 are complete; Phase 3 is at 4/9 plans. All runnable Phase 2 plans have summaries; Plan 02-15 is superseded/non-runnable and remains historical.
+- Unique plans: 25; average duration / total execution time: 26 min / 645 min. Phase 2 completion is based on goal verification, not task count alone.
+- Per-phase metrics / recent trend: Phases 1 and 2 are complete; Phase 3 is at 5/9 plans. All runnable Phase 2 plans have summaries; Plan 02-15 is superseded/non-runnable and remains historical.
 - Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. At implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`, the local offline inventory passed 104/104 with no skips, the relocated installed C/C++ inventory passed 109/109, the runner passed its fixed one-CPU/two-timer derived corpus, hosted CI run 37620710587 passed, and fixture reproduction run 37620710600 passed. Independent verification passed all five CPU requirements. Original upstream PPU-dependent reporting paths remain excluded; no physical DMG hardware test occurred.
 
 **Per-Plan Metrics:**
@@ -68,7 +68,7 @@ Progress: [███░░░░░░░] 33% of milestone phases complete; Pha
 | Phase 02 P16 | 24min | 2 tasks | 6 files |
 | Phase 02 P18 | 25 min | 2 tasks | 5 files |
 | Phase GB-03 P01/P02 | 20/30 min | 1/2 tasks | 10/5 files |
-| Phase GB-03 P03/P04 | 79/11 min | 2/2 tasks | 6/10 files |
+| Phase GB-03 P03/P04/P05 | 79/11/19 min | 2/2/2 tasks | 6/10/8 files |
 
 ## Accumulated Context
 
@@ -115,7 +115,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-03]: The initial background renderer advances dots on the emulated timeline and publishes a completed shade frame at VBlank entry; it is not hardware-qualified raster timing.
 - [Phase GB-03]: Plan 03-02 adds fixed per-instance transfer slots and source-qualified mode/STAT/fetch expectations; the slot model does not claim electrical or CPU-B FIFO equivalence.
 - [Phase GB-03]: Plan 03-03 adopts the narrower Nintendo-manual `$8000–$DFFF` DMA source range despite a pinned Pan Docs conflict; exact simultaneous PPU/DMA collision behavior remains unqualified.
-- [Phase GB-03]: FF00 active-low row polling consumes timestamped button events; JOYP interrupt behavior remains gated by D-08.
+- [Phase GB-03]: FF00 active-low row polling consumes timestamped button events; JOYP interrupt behavior remains gated by D-08. SDL3 3.4.18 stays behind the optional player build, with checked host-time mapping and eight reserved focus-loss release slots.
 
 ### Pending Todos
 
@@ -126,7 +126,7 @@ None outside the roadmap.
 - Phase 2 has no open verification or security blocker. All five requirements are complete at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`; see [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), [validation](phases/GB-02-dmg-cpu-bus-and-time/02-VALIDATION.md), and [security](phases/GB-02-dmg-cpu-bus-and-time/02-SECURITY.md).
 - The admitted corpus is three derived headless reporting closures (one CPU, two timer). Original Mooneye reporting paths depend on PPU/LY behavior outside scope and remain excluded. No physical DMG-CPU-B observation occurred; no hardware qualification is claimed.
 - Phase 1 PR #1 and Phase 2 PR #2 were merged on 2026-10-07 after their required exact-head checks passed. Current GitHub triage found no open PRs or issues. Phase 2 verification is limited to its documented DMG-CPU-B CPU/timer scope; no physical DMG observation or PPU qualification is claimed.
-- Phase 3 is executing: Plans 03-01 through 03-04 are complete (4/9). VIDEO-02 still lacks qualified simultaneous CPU/PPU/DMA collision evidence; D-08 JOYP interrupt sampling/selection remains open after the Nintendo manual, hardware note, and die-derived schematic audit. VIDEO-03 remains incomplete. Do not claim phase completion while either evidence gate remains open. No physical DMG-CPU-B observation occurred.
+- Phase 3 is executing: Plans 03-01 through 03-05 are complete (5/9). VIDEO-02 still lacks qualified simultaneous CPU/PPU/DMA collision evidence; D-08 JOYP interrupt sampling/selection remains open after the Nintendo manual, hardware note, and die-derived schematic audit. VIDEO-03 remains incomplete. The SDL native window has not had a live visual check because this environment has no desktop display. Do not claim phase completion while either evidence gate remains open. No physical DMG-CPU-B observation occurred.
 - Native host support floors beyond the verified CI matrix, signing, and live Playstead integration remain later release/adoption work.
 
 ### Quick Tasks Completed
@@ -142,9 +142,9 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 ## Session Continuity
 
 Last session: 2026-10-07
-Stopped at: Phase GB-03 Wave 4 / Plan 03-04 complete; continuing with Wave 5 / Plan 03-05
+Stopped at: Phase GB-03 Wave 5 / Plan 03-05 complete; continuing with Wave 6 / Plan 03-06
 Resume file: .planning/.continue-here.md
-Next command in fresh context: $gsd-execute-phase 3 --wave 5
+Next command in fresh context: $gsd-execute-phase 3 --wave 6
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: **Phase 3 execution — Wave 4, Plan 03-04.** The four focused JOYP matrix/queue tests passed and the full local CTest inventory passed 129/129. Nintendo's programming manual, a hardware research note, and the DMG-CPU-B die-derived schematic set do not establish exact interrupt sample timestamps; no guessed IF behavior or placeholder interrupt tests were added. VIDEO-02 and VIDEO-03 remain incomplete. Keep both auto-advance flags false.
-Next phase: **Phase 3 — Visible Interactive DMG, Wave 5 (Plan 03-05: optional SDL3 player and deterministic host input).** Continue with `$gsd-execute-phase 3 --wave 5`; stop after Phase 3 before Phase 4.
+Completed workflow stage: **Phase 3 execution — Wave 5, Plan 03-05.** SDL3 3.4.18 source digest verification passed; the optional player inventory passed 4/4 and the offline core suite passed 129/129 on commit `9ef104a`. Offscreen smoke verified frame copy/render and guest input; a live window visual check is unavailable without a desktop display. D-08 JOYP interrupt timing and VIDEO-02 simultaneous PPU/DMA evidence remain open. Keep both auto-advance flags false.
+Next phase: **Phase 3 — Visible Interactive DMG, Wave 6 (Plan 03-06: ROM/session controls and integer high-DPI presentation).** Continue with `$gsd-execute-phase 3 --wave 6`; stop after Phase 3 before Phase 4.
