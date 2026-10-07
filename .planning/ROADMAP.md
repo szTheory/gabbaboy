@@ -124,7 +124,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. A macOS user can open and play an original or permissioned ROM-only fixture, resize with correct aspect/integer scaling, pause, reset, and quit; errors are actionable. (VIDEO-04)
 5. Automated evidence separately reports image composition, raster timing, and scripted gameplay; the visible preview labels incomplete audio and persistence. (VIDEO-05)
 
-**Plans:** 9 plans across 9 dependency-ordered waves
+**Plans:** 11 plans across 10 dependency-ordered waves; gap-closure Plans 03-10 and 03-11 occupy Wave 10.
 **Wave 1**
 - [x] 03-01-PLAN.md — playable production-core tracer with timestamped input and copied frames
 
@@ -151,6 +151,10 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 **Wave 9** *(blocked on Wave 8 completion)*
 - [x] 03-09-PLAN.md — exact-revision macOS preview package qualification
+
+**Gap wave 10** *(closes only the remaining evidence and limitation-test gaps; both plans depend on Wave 9)*
+- [ ] 03-10-PLAN.md — source-applicable DMA/JOYP evidence and provenance-gated CPU-B observation
+- [ ] 03-11-PLAN.md — automated audio and battery-persistence limitation assertions
 
 **UI hint**: yes
 
@@ -221,4 +225,4 @@ All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](
 
 Automate authorized work within each phase, then inspect current verification/release/consumer evidence, update traceability and [lessons](context/LESSONS.md), triage issues/PRs, report limitations and the exact next command, and **stop**. Never auto-advance phases or milestones; keep both auto-advance flags false. Credential, hardware, or perceptual gaps must be recorded honestly with the smallest necessary human action, never converted into passing evidence. Remote/CI setup begins in Phase 1; absent access remains an explicit completion limitation.
 
-Phase 1 Plans 01–05 are complete. Goal-backward verification passed 5/5 roadmap truths and all 8 BASE requirements; standard code review is clean. Phase 2 Plans 02-01 through 02-14 and 02-16 through 02-18 are complete; 02-15 remains superseded/non-runnable. Phase 2 passed 5/5 roadmap truths, all five CPU requirements, 45/45 security threats, Nyquist validation and code review; no physical DMG hardware test is claimed. All nine currently planned Phase 3 plans are complete. VIDEO-01, VIDEO-04, and VIDEO-05 are complete, including exact-head CI run 37686137977 and downloaded-package consumer run 37686137834 at `fd62c48d84b8339435fefd008147f0c06f696e0e`. Phase 3 remains executing with VIDEO-02 simultaneous PPU/DMA evidence and D-08/VIDEO-03 JOYP interrupt evidence open; live desktop perception and physical DMG-CPU-B observation remain unavailable. The exact next command is `$gsd-plan-phase 3 --gaps`; keep both auto-advance flags false and stop before Phase 4: MBC1 and Safe Battery Continuation.
+Phase 1 Plans 01–05 are complete. Goal-backward verification passed 5/5 roadmap truths and all 8 BASE requirements; standard code review is clean. Phase 2 Plans 02-01 through 02-14 and 02-16 through 02-18 are complete; 02-15 remains superseded/non-runnable. Phase 2 passed 5/5 roadmap truths, all five CPU requirements, 45/45 security threats, Nyquist validation and code review; no physical DMG hardware test is claimed. The original nine Phase 3 plans are complete; gap-closure Plans 03-10 and 03-11 are ready in Wave 10. VIDEO-01, VIDEO-04, and VIDEO-05 are complete, including exact-head CI run 37686137977 and downloaded-package consumer run 37686137834 at `fd62c48d84b8339435fefd008147f0c06f696e0e`. Phase 3 remains open with VIDEO-02 simultaneous PPU/DMA evidence and D-08/VIDEO-03 JOYP interrupt evidence unresolved; live desktop perception and physical DMG-CPU-B observation remain unavailable. The exact next command is `$gsd-execute-phase 3 --gaps-only`; keep both auto-advance flags false and stop before Phase 4: MBC1 and Safe Battery Continuation.
