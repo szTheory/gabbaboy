@@ -69,3 +69,13 @@ current exact-SHA result are recorded separately below.
 ## Qualification gap discovered during phase verification
 
 The fixed three-case inventory is retained. Full unsupported-read preflight exposed a shared reporting dependency: `common/lib/quit.s` calls `is_ppu_broken` before invoking the assertion/reporting callback and reaching the `LD B,B` result breakpoint; `common/lib/is_ppu_broken.s` reads LY (`FF44`). This phase has no PPU/LY implementation. All three checked-in ROMs therefore stop as unsupported with the advertised protocol. Earlier passes depended on the generic unsupported-address `FF` fallback and are superseded. The corpus gate remains failing; no fixture bytes, test logic, required IDs, or expectations were pruned to recover a pass. A source-qualified completion path or replacement corpus must be planned and verified before CPU-05 is complete.
+
+<!-- BEGIN PLAN 02-17 candidate qualification -->
+## Derived candidate cross-host qualification
+
+- Gate: `open`; failed or pending gate: `hosted`.
+- Exact pushed source revision: `e2bdaa5197b7587a8514aaf638a732f343cd4c5a`.
+- Hosted `fixture-repro.yml` run: [37560817154](https://github.com/szTheory/gabbaboy/actions/runs/37560817154).
+- Local candidate comparison: `qualified`; protocol probes: `qualified`; provenance/rights review: `qualified`; hosted Linux comparison: `open`.
+- Open reason: exact-SHA workflow did not complete successfully (status=completed, conclusion=failure). The checked-in ROMs, required manifest, and denominator remain at the captured pre-admission baseline.
+<!-- END PLAN 02-17 candidate qualification -->
