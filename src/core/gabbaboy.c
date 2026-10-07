@@ -526,7 +526,8 @@ static void bus_write(gbb_instance *m, uint16_t address, uint8_t value, uint64_t
 }
 
 static int read_supported(uint16_t address) {
-    return address < 0x8000 || address == 0xFF00 || address == 0xFF01 || address == 0xFF02 ||
+    return address < 0xA000 || (address >= 0xFE00 && address <= 0xFE9F) ||
+           address == 0xFF00 || address == 0xFF01 || address == 0xFF02 ||
            (address >= 0xFF04 && address <= 0xFF07) || address == 0xFF0F || address == 0xFFFF ||
            (address >= 0xFF40 && address <= 0xFF46) ||
            (address >= 0xFF47 && address <= 0xFF4B) ||
