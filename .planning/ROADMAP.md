@@ -124,7 +124,34 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. A macOS user can open and play an original or permissioned ROM-only fixture, resize with correct aspect/integer scaling, pause, reset, and quit; errors are actionable. (VIDEO-04)
 5. Automated evidence separately reports image composition, raster timing, and scripted gameplay; the visible preview labels incomplete audio and persistence. (VIDEO-05)
 
-**Plans**: TBD
+**Plans:** 9 plans across 9 dependency-ordered waves
+**Wave 1**
+- [ ] 03-01-PLAN.md — playable production-core tracer with timestamped input and copied frames
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 03-02-PLAN.md — background/window/object composition and dot-sensitive LCD/STAT behavior
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 03-03-PLAN.md — OAM DMA, memory restrictions, and CPU/PPU/DMA contention
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 03-04-PLAN.md — bounded joypad matrix and evidence-gated interrupt behavior
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 03-05-PLAN.md — optional SDL3 player and deterministic host input timing
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 03-06-PLAN.md — ROM controls, high-DPI integer presentation, and visible limitations
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 03-07-PLAN.md — public API failure boundaries and installed C/C++ consumers
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [ ] 03-08-PLAN.md — reproducible original fixture and pinned hosted reproduction
+
+**Wave 9** *(blocked on Wave 8 completion)*
+- [ ] 03-09-PLAN.md — exact-revision macOS preview package qualification
+
 **UI hint**: yes
 
 ### Phase 4: MBC1 and Safe Battery Continuation
@@ -183,7 +210,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 |-------|----------------|--------|-----------|
 | 1. Portable Foundation and Original ROM Tracer | 5/5 | Complete    | 2026-10-03 |
 | 2. DMG CPU, Bus, and Time | 17/17 | Complete | 2026-10-07 |
-| 3. Visible Interactive DMG | 0/TBD | Context ready; planning paused | - |
+| 3. Visible Interactive DMG | 0/9 | Planned; ready to execute | - |
 | 4. MBC1 and Safe Battery Continuation | 0/TBD | Not started | - |
 | 5. DMG Audio and Stable Playback | 0/TBD | Not started | - |
 | 6. Qualified DMG Release and Consumer Handoff | 0/TBD | Not started | - |
@@ -194,4 +221,4 @@ All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](
 
 Automate authorized work within each phase, then inspect current verification/release/consumer evidence, update traceability and [lessons](context/LESSONS.md), triage issues/PRs, report limitations and the exact next command, and **stop**. Never auto-advance phases or milestones; keep both auto-advance flags false. Credential, hardware, or perceptual gaps must be recorded honestly with the smallest necessary human action, never converted into passing evidence. Remote/CI setup begins in Phase 1; absent access remains an explicit completion limitation.
 
-Phase 1 Plans 01–05 are complete. Goal-backward verification passed 5/5 roadmap truths and all 8 BASE requirements; standard code review is clean. Phase 2 Plans 02-01 through 02-14 and 02-16 through 02-18 are complete; 02-15 remains superseded/non-runnable. Phase 2 passed 5/5 roadmap truths, all five CPU requirements, 45/45 security threats, Nyquist validation and code review. The implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989` passed local and installed inventories and exact hosted CI/fixture checks; no physical DMG hardware test is claimed. PR #2 remains a draft on the phase branch. Stop here. The next phase is **Phase 3 — Visible Interactive DMG**; continue only when the owner chooses with `$gsd-discuss-phase 3`.
+Phase 1 Plans 01–05 are complete. Goal-backward verification passed 5/5 roadmap truths and all 8 BASE requirements; standard code review is clean. Phase 2 Plans 02-01 through 02-14 and 02-16 through 02-18 are complete; 02-15 remains superseded/non-runnable. Phase 2 passed 5/5 roadmap truths, all five CPU requirements, 45/45 security threats, Nyquist validation and code review. The implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989` passed local and installed inventories and exact hosted CI/fixture checks; no physical DMG hardware test is claimed. Phase 3 planning is complete: nine plans span nine waves, and the phase has not been executed. Stop here before Phase 3 execution; the exact next command is `$gsd-execute-phase 3` when the owner chooses to proceed. Keep both auto-advance flags false.

@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
 milestone: v0.1
-current_phase: 03
+current_phase: 3
 current_phase_name: Visible Interactive DMG
-status: Phase 3 discussion complete; paused before planning
-stopped_at: Phase GB-03 discussion and recommendation lock complete; owner handoff before Phase 3 planning
-last_updated: "2026-10-07"
+status: executing
+stopped_at: Phase 3 plans verified; owner handoff before Phase 3 execution
+last_updated: "2026-10-07T17:23:31.995Z"
 last_activity: 2026-10-07
-last_activity_desc: Phase 3 recommendation fan-out and adversarial review completed; the owner locked the context. Phase 2 remains verified and both PRs are merged.
-state_head: cf28e90270be24d9528bfa8a1e4055a2b8485989
+last_activity_desc: Phase 3 execution started
+state_head: 75b927271c42bc7c9ab444df9717fd62dc82438c
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 22
+  total_plans: 31
   completed_plans: 22
 milestone_name: limited DMG preview
 ---
@@ -24,14 +24,14 @@ milestone_name: limited DMG preview
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase GB-02 is complete. Phase GB-03 discussion is recorded and locked; planning is paused for the owner handoff.
+**Current focus:** Phase 3 — Visible Interactive DMG
 
 ## Current Position
 
-Phase: GB-03 (Visible Interactive DMG) — DISCUSSION COMPLETE
-Plan: No Phase 3 plan exists yet; context and discussion log are recorded
-Status: Recommendation package locked; paused before Phase 3 planning by project workflow contract
-Last activity: 2026-10-07 — Five cross-specialty research passes plus an adversarial assumptions review informed the locked Phase 3 context.
+Phase: 3 (Visible Interactive DMG) — EXECUTING
+Plan: 1 of 9
+Status: Executing Phase 3
+Last activity: 2026-10-07 — Phase 3 execution started
 
 Progress: [███░░░░░░░] 33% of milestone phases complete; Phases 1 and 2 passed verification.
 
@@ -134,7 +134,7 @@ None outside the roadmap.
 - Phase 2 has no open verification or security blocker. All five requirements are complete at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`; see [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), [validation](phases/GB-02-dmg-cpu-bus-and-time/02-VALIDATION.md), and [security](phases/GB-02-dmg-cpu-bus-and-time/02-SECURITY.md).
 - The admitted corpus is three derived headless reporting closures (one CPU, two timer). Original Mooneye reporting paths depend on PPU/LY behavior outside scope and remain excluded. No physical DMG-CPU-B observation occurred; no hardware qualification is claimed.
 - Phase 1 PR #1 and Phase 2 PR #2 were merged on 2026-10-07 after their required exact-head checks passed. Current GitHub triage found no open PRs or issues. Phase 2 verification is limited to its documented DMG-CPU-B CPU/timer scope; no physical DMG observation or PPU qualification is claimed.
-- Phase 3 has a locked context but no plan or implementation. Its next step is planning; do not auto-advance into execution.
+- Phase 3 has nine verified plans but no implementation. Exact DMG-CPU-B JOYP interrupt behavior remains evidence-gated by D-08; do not claim phase completion if the applicable primary-source gate remains open. No physical DMG hardware behavior is claimed. The next authorized workflow step is Phase 3 execution, followed by the mandatory pause before Phase 4.
 - Native host support floors beyond the verified CI matrix, signing, and live Playstead integration remain later release/adoption work.
 
 ### Quick Tasks Completed
@@ -150,9 +150,9 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 ## Session Continuity
 
 Last session: 2026-10-07
-Stopped at: Phase GB-03 discussion, research synthesis, and owner decision lock; handoff before planning
+Stopped at: Phase GB-03 planning verified; handoff before execution
 Resume file: .planning/.continue-here.md
-Next command in fresh context: $gsd-plan-phase 3
+Next command in fresh context: $gsd-execute-phase 3
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: **Phase 3 discussion.** The owner locked an original, reproducible interactive fixture; separate PPU composition, timing, DMA/access and gameplay evidence; timestamped JOYP transitions; a minimal optional SDL3 player; integer scaling; explicit audio/persistence limitations; and exact-revision preview evidence. Phase 2 implementation verification remains recorded above and in its verification, validation, and security artifacts. PRs #1 and #2 are merged; current GitHub triage found no open PRs or issues.
-Next action: plan **Phase 3 — Visible Interactive DMG**. It has not been planned or executed. Keep `workflow.auto_advance` and `workflow._auto_chain_active` false; the exact next command is `$gsd-plan-phase 3`.
+Completed workflow stage: **Phase 3 planning — Visible Interactive DMG.** Nine plans cover all five VIDEO requirements and all fourteen locked decisions; the final plan check passed with no blockers or warnings. Phase 2 implementation verification remains recorded above and in its verification, validation, and security artifacts. PRs #1 and #2 are merged; current GitHub triage found no open PRs or issues.
+Next phase: **Phase 3 — Visible Interactive DMG (execution).** No Phase 3 implementation has run. Keep `workflow.auto_advance` and `workflow._auto_chain_active` false; the exact next command is `$gsd-execute-phase 3`. Stop after Phase 3 before Phase 4.
