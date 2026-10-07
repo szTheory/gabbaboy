@@ -43,7 +43,7 @@ struct gbb_instance {
     uint8_t ppu_window_line;
     uint8_t ppu_window_line_drawn;
     uint8_t dma_register, dma_page, dma_pending_page, dma_index, dma_phase;
-    int dma_active, dma_start_pending;
+    int dma_active, dma_start_pending, dma_cpu_blocked;
     uint8_t lcdc, scy, scx, ly, lyc, bgp, obp0, obp1, wy, wx;
     uint8_t joypad_select;
     uint8_t joypad_buttons;
@@ -270,6 +270,7 @@ static void reset_state(gbb_instance *m) {
     m->dma_phase = 0;
     m->dma_active = 0;
     m->dma_start_pending = 0;
+    m->dma_cpu_blocked = 0;
     m->halted = 0;
     m->stopped = 0;
     m->halt_bug = 0;
@@ -347,7 +348,8 @@ static int cpu_hram_address(uint16_t address) {
 static void ppu_select_objects(gbb_instance *m);
 
 static uint8_t read8(const gbb_instance *m, uint16_t address) {
-    if (m->dma_active && !cpu_hram_address(address) && address != 0xFF46u) return 0xFFu;
+    if (m->dma_active && m->dma_cpu_blocked &&
+        !cpu_hram_address(address) && address != 0xFF46u) return 0xFFu;
     if (address == 0xFF00) return joypad_value(m);
     if (address == 0xFF04) return m->div;
     if (address == 0xFF05) return m->tima;
@@ -420,7 +422,8 @@ static void timer_set_signal(gbb_instance *m, int next, uint64_t at) {
 }
 
 static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
-    if (m->dma_active && !cpu_hram_address(address) && address != 0xFF46u) return;
+    if (m->dma_active && m->dma_cpu_blocked &&
+        !cpu_hram_address(address) && address != 0xFF46u) return;
     if (address >= 0x8000 && address <= 0x9FFF) {
         if (cpu_vram_access_allowed(m)) m->vram[address - 0x8000] = value;
     }
@@ -875,6 +878,7 @@ static void dma_start(gbb_instance *m) {
     m->dma_index = 0;
     m->dma_phase = 0;
     m->dma_active = 1;
+    m->dma_cpu_blocked = 0;
     m->dma_start_pending = 0;
     observe_dma(m, 0xFF46u, 1, m->dma_page);
 }
@@ -883,6 +887,7 @@ static void dma_advance_half_dot(gbb_instance *m) {
     if (!m->dma_active) return;
     if (++m->dma_phase < GBB_DMA_BYTE_PERIOD_HALF_DOTS) return;
     m->dma_phase = 0;
+    m->dma_cpu_blocked = 1;
     uint16_t source = (uint16_t)(((uint16_t)m->dma_page << 8) | m->dma_index);
     uint8_t value = dma_source_read(m, source);
     m->oam[m->dma_index] = value;
