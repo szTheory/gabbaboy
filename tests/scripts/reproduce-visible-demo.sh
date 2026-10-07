@@ -105,6 +105,7 @@ if rebuilt != checked_in:
     fail('rebuilt ROM bytes differ from the checked-in visible demo')
 
 archive_path = os.environ.get('GBB_RGBDS_ARCHIVE')
+archive_name = build['ci_archive']
 archive_sha = build['ci_archive_sha256']
 if archive_path:
     archive = pathlib.Path(archive_path)
@@ -114,6 +115,8 @@ if archive_path:
     allowed_pins = {build['archive_sha256'], build['ci_archive_sha256']}
     if archive_sha not in allowed_pins:
         fail(f'RGBDS release archive SHA-256 is not pinned: {archive_sha}')
+    if archive_sha == build['archive_sha256']:
+        archive_name = build['archive']
 if os.environ.get('GBB_RGBDS_ARCHIVE_SHA256') and os.environ['GBB_RGBDS_ARCHIVE_SHA256'] != archive_sha:
     fail('downloaded RGBDS archive digest differs from the fixture manifest')
 
@@ -159,7 +162,7 @@ if receipt_path:
         'reproduction_command': reproduction_command,
         'tool': 'RGBDS',
         'tool_version': build['version'],
-        'archive': build['ci_archive'],
+        'archive': archive_name,
         'archive_sha256': archive_sha,
         'source': f"fixtures/visible-demo/{manifest['source']}",
         'source_sha256': source_sha,
