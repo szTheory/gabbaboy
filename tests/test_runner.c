@@ -20,6 +20,10 @@ int main(int argc, char **argv) {
     } else if (strcmp(argv[1], "runner_fail") == 0) {
         record.b=record.c=record.d=record.e=record.h=record.l=0x42;
         REQUIRE(strcmp(protocol_status(&record,1),"fail")==0);
+    } else if (strcmp(argv[1], "runner_wrong_breakpoint") == 0) {
+        record.pc = 0x0200; /* A matching LD B,B signature outside the source symbol is not a result. */
+        record.b=3;record.c=5;record.d=8;record.e=13;record.h=21;record.l=34;
+        REQUIRE(protocol_status(&record,1)==NULL);
     } else if (strcmp(argv[1], "runner_timeout") == 0) {
         REQUIRE(protocol_status(&record,1)==NULL);
         REQUIRE(strcmp(budget_status(2000000,2000000),"timeout")==0);
