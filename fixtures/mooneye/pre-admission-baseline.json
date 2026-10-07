@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "source_head": "bdf214bc978548baa3b501c90b2efc5c654c5279",
+  "manifest_path": "fixtures/mooneye/manifest.json",
+  "manifest_sha256": "76204bc792a5a767f3d7430edfe5542698953507fe268de6a0154b7cb02bcc3e",
+  "eligible_ids": [
+    "mooneye-acceptance-instr-daa",
+    "mooneye-acceptance-timer-tim00",
+    "mooneye-acceptance-timer-tim00-div-trigger"
+  ],
+  "category_counts": {
+    "cpu": 1,
+    "timer": 2
+  },
+  "required_roms": [
+    "daa.gb",
+    "tim00.gb",
+    "tim00_div_trigger.gb"
+  ],
+  "roms": [
+    {
+      "id": "mooneye-acceptance-instr-daa",
+      "category": "cpu",
+      "path": "fixtures/mooneye/daa.gb",
+      "size_bytes": 32768,
+      "git_blob_sha256": "96cd0e02a85f6f035b1c1947d36a8ad2d8e51963f636b833f05559f021eef57e",
+      "manifest_sha256": "96cd0e02a85f6f035b1c1947d36a8ad2d8e51963f636b833f05559f021eef57e"
+    },
+    {
+      "id": "mooneye-acceptance-timer-tim00",
+      "category": "timer",
+      "path": "fixtures/mooneye/tim00.gb",
+      "size_bytes": 32768,
+      "git_blob_sha256": "6edc430a09522294c96d1eef63a0f1a99078f4401060980048ec5a68640e11bd",
+      "manifest_sha256": "6edc430a09522294c96d1eef63a0f1a99078f4401060980048ec5a68640e11bd"
+    },
+    {
+      "id": "mooneye-acceptance-timer-tim00-div-trigger",
+      "category": "timer",
+      "path": "fixtures/mooneye/tim00_div_trigger.gb",
+      "size_bytes": 32768,
+      "git_blob_sha256": "468d426c4fe6a850a28f4116bd127d471be6adf2ef5dd0f89f2db67ffe212242",
+      "manifest_sha256": "468d426c4fe6a850a28f4116bd127d471be6adf2ef5dd0f89f2db67ffe212242"
+    }
+  ]
+}
