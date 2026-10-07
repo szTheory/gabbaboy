@@ -95,7 +95,8 @@ add_executable(test_dma test_dma.c)
 target_link_libraries(test_dma PRIVATE GabbaBoy::core)
 target_compile_features(test_dma PRIVATE c_std_17)
 set_target_properties(test_dma PROPERTIES C_EXTENSIONS OFF)
-foreach(case dma_progress dma_restart dma_source_mapping dma_hram dma_interrupt_stack dma_partition)
+foreach(case dma_progress dma_restart dma_source_mapping dma_hram dma_interrupt_stack dma_partition
+             dma_vram_lock dma_oam_lock dma_contention)
   add_test(NAME ${case} COMMAND test_dma ${case})
 endforeach()
 

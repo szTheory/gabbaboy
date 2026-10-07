@@ -84,6 +84,9 @@ dma_source_mapping
 dma_hram
 dma_interrupt_stack
 dma_partition
+dma_vram_lock
+dma_oam_lock
+dma_contention
 tracer_smoke
 fixture_digest
 visible_fixture_digest

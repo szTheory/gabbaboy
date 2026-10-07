@@ -102,7 +102,7 @@ static gbb_instance *load_dma_guest(uint8_t source_page, int restart,
         emit(&main_program, 0xEA); emit16(&main_program, 0xFFFF); /* enable VBlank */
     }
 
-    uint8_t routine[32];
+    uint8_t routine[64];
     size_t routine_size = 0;
     routine[routine_size++] = 0x3E; routine[routine_size++] = source_page;
     if (interrupt_probe) routine[routine_size++] = 0xFB; /* EI, then FF46 */
@@ -115,9 +115,21 @@ static gbb_instance *load_dma_guest(uint8_t source_page, int restart,
         routine[routine_size++] = 0x01; routine[routine_size++] = 0x00;
         routine[routine_size++] = 0xC0; /* LD BC,C000 */
         routine[routine_size++] = 0x0A;  /* blocked CPU read -> A */
-        routine[routine_size++] = 0xE0; routine[routine_size++] = 0xA0;
+        routine[routine_size++] = 0xE0; routine[routine_size++] = 0xB0;
         routine[routine_size++] = 0x3E; routine[routine_size++] = 0x77;
         routine[routine_size++] = 0x02;  /* blocked CPU write to C000 */
+        routine[routine_size++] = 0x21; routine[routine_size++] = 0x00;
+        routine[routine_size++] = 0x80; /* LD HL,8000 */
+        routine[routine_size++] = 0x7E;  /* blocked VRAM read -> FF */
+        routine[routine_size++] = 0xE0; routine[routine_size++] = 0xB1;
+        routine[routine_size++] = 0x3E; routine[routine_size++] = 0x77;
+        routine[routine_size++] = 0x77;  /* blocked VRAM write */
+        routine[routine_size++] = 0x21; routine[routine_size++] = 0x00;
+        routine[routine_size++] = 0xFE; /* LD HL,FE00 */
+        routine[routine_size++] = 0x7E;  /* blocked OAM read -> FF */
+        routine[routine_size++] = 0xE0; routine[routine_size++] = 0xB2;
+        routine[routine_size++] = 0x3E; routine[routine_size++] = 0x77;
+        routine[routine_size++] = 0x77;  /* blocked OAM write */
     }
     if (boundary_probe) {
         routine[routine_size++] = 0x21; routine[routine_size++] = 0x00;
@@ -148,10 +160,18 @@ static gbb_instance *load_dma_guest(uint8_t source_page, int restart,
     /* After DMA, enable the LCD and halt while one complete frame is produced. */
     size_t post = 0x0200;
     if (probe_cpu_access) {
-        rom[post++] = 0xF0; rom[post++] = 0xA0; /* LDH A,[A0] */
+        rom[post++] = 0xF0; rom[post++] = 0xB0; /* blocked WRAM read result */
         rom[post++] = 0xEA; rom[post++] = 0x00; rom[post++] = 0xC2;
         rom[post++] = 0xFA; rom[post++] = 0x00; rom[post++] = 0xC0;
         rom[post++] = 0xEA; rom[post++] = 0x01; rom[post++] = 0xC2;
+        rom[post++] = 0xF0; rom[post++] = 0xB1;
+        rom[post++] = 0xEA; rom[post++] = 0x02; rom[post++] = 0xC2;
+        rom[post++] = 0xF0; rom[post++] = 0xB2;
+        rom[post++] = 0xEA; rom[post++] = 0x03; rom[post++] = 0xC2;
+        rom[post++] = 0xFA; rom[post++] = 0x00; rom[post++] = 0x80;
+        rom[post++] = 0xEA; rom[post++] = 0x05; rom[post++] = 0xC2;
+        rom[post++] = 0xFA; rom[post++] = 0x00; rom[post++] = 0xFE;
+        rom[post++] = 0xEA; rom[post++] = 0x06; rom[post++] = 0xC2;
     }
     rom[post++] = 0xF0; rom[post++] = 0x46; /* read FF46 after completion */
     rom[post++] = 0xEA; rom[post++] = 0x04; rom[post++] = 0xC2;
@@ -306,6 +326,10 @@ static int dma_hram(void) {
     REQUIRE(gbb_test_dma_observer_count(machine) == 162u);
     REQUIRE(gbb_peek_ram(machine, 0xC200) == 0xFFu);
     REQUIRE(gbb_peek_ram(machine, 0xC201) == 16u);
+    REQUIRE(gbb_peek_ram(machine, 0xC202) == 0xFFu);
+    REQUIRE(gbb_peek_ram(machine, 0xC203) == 0xFFu);
+    REQUIRE(gbb_peek_ram(machine, 0xC205) == 16u);
+    REQUIRE(gbb_peek_ram(machine, 0xC206) == 16u);
     gbb_destroy(machine);
     return 0;
 }
@@ -403,6 +427,150 @@ static int dma_partition(void) {
     return 0;
 }
 
+static int dma_contention(void) {
+    gbb_instance *active = load_dma_guest(0xC0, 0, 0, 0, 0);
+    gbb_instance *idle = load_dma_guest(0xC0, 0, 0, 0, 0);
+    REQUIRE(active != NULL && idle != NULL);
+    gbb_test_dma_event active_events[162], idle_events[162];
+    gbb_test_dma_observer_set(active, active_events, 162);
+    gbb_test_dma_observer_set(idle, idle_events, 162);
+
+    for (size_t step = 0; step < 1000u && gbb_test_dma_observer_count(active) == 0; ++step) {
+        gbb_trace_record one;
+        gbb_run_result run = gbb_run(active, 128u, &one, 1u);
+        REQUIRE(run.consumed_half_dots != 0);
+        REQUIRE(run.reason == GBB_STOP_TRACE_FULL || run.reason == GBB_STOP_BUDGET);
+    }
+    REQUIRE(gbb_test_dma_observer_count(active) == 1u);
+    uint64_t start = active_events[0].time_half_dots;
+    REQUIRE(active_events[0].address == 0xFF46u && active_events[0].access == 1u);
+
+    gbb_run_result in_flight = gbb_run(active, 64u, NULL, 0);
+    REQUIRE(in_flight.consumed_half_dots != 0u && in_flight.consumed_half_dots <= 64u);
+    size_t in_flight_count = gbb_test_dma_observer_count(active);
+    REQUIRE(in_flight_count > 1u && in_flight_count < 162u);
+    for (size_t i = 1; i < in_flight_count; ++i) {
+        REQUIRE(active_events[i].address == (uint16_t)(0xFE00u + i - 1u));
+        REQUIRE(active_events[i].access == 2u);
+        REQUIRE(active_events[i].time_half_dots == start + (uint64_t)i * 8u);
+    }
+
+    gbb_run_result independent = gbb_run(idle, 128u, NULL, 0);
+    REQUIRE(independent.consumed_half_dots != 0u && independent.consumed_half_dots <= 128u);
+    REQUIRE(gbb_test_dma_observer_count(idle) == 0u);
+
+    REQUIRE(gbb_reset(active) == GBB_OK);
+    size_t reset_count = gbb_test_dma_observer_count(active);
+    REQUIRE(reset_count == in_flight_count);
+    gbb_run_result after_reset = gbb_run(active, 128u, NULL, 0);
+    REQUIRE(after_reset.consumed_half_dots != 0u && after_reset.consumed_half_dots <= 128u);
+    REQUIRE(gbb_test_dma_observer_count(active) == reset_count);
+    REQUIRE(gbb_test_dma_observer_count(idle) == 0u);
+
+    gbb_destroy(active);
+    gbb_destroy(idle);
+    return 0;
+}
+
+static void rom_emit8(uint8_t rom[32768], size_t *pc, uint8_t value) {
+    if (*pc < 32768u) rom[(*pc)++] = value;
+}
+
+static void rom_emit16(uint8_t rom[32768], size_t *pc, uint16_t value) {
+    rom_emit8(rom, pc, (uint8_t)value);
+    rom_emit8(rom, pc, (uint8_t)(value >> 8));
+}
+
+static gbb_instance *load_lock_guest(uint16_t address) {
+    uint8_t rom[32768] = {0};
+    rom[0x100] = 0xC3; rom[0x101] = 0x50; rom[0x102] = 0x01;
+    size_t pc = 0x150;
+    rom_emit8(rom, &pc, 0xAF); /* LCD off */
+    rom_emit8(rom, &pc, 0xE0); rom_emit8(rom, &pc, 0x40);
+    rom_emit8(rom, &pc, 0x21); rom_emit16(rom, &pc, address);
+    rom_emit8(rom, &pc, 0x3E); rom_emit8(rom, &pc, 0x55);
+    rom_emit8(rom, &pc, 0x77); /* initialize while LCD is off */
+    rom_emit8(rom, &pc, 0x7E); /* LCD-off read returns the initialized byte */
+    rom_emit8(rom, &pc, 0x3E); rom_emit8(rom, &pc, 0x91);
+    rom_emit8(rom, &pc, 0xE0); rom_emit8(rom, &pc, 0x40); /* enable; anchor T */
+    rom_emit8(rom, &pc, 0x7E); /* mode 2 read at T+16 */
+    rom_emit8(rom, &pc, 0x3E); rom_emit8(rom, &pc, 0x33);
+    rom_emit8(rom, &pc, 0x77); /* mode 2 write at T+40 */
+    for (unsigned i = 0; i < 11u; ++i) rom_emit8(rom, &pc, 0x00);
+    rom_emit8(rom, &pc, 0x7E); /* immediately before mode 2 -> 3 */
+    rom_emit8(rom, &pc, 0x7E); /* immediately after mode 2 -> 3 */
+    rom_emit8(rom, &pc, 0x7E); /* mode 3 read at T+168 */
+    rom_emit8(rom, &pc, 0x3E); rom_emit8(rom, &pc, 0xAA);
+    rom_emit8(rom, &pc, 0x77); /* mode 3 write at T+192 */
+    for (unsigned i = 0; i < 33u; ++i) rom_emit8(rom, &pc, 0x00);
+    rom_emit8(rom, &pc, 0x7E); /* mode 3 read at T+496 */
+    rom_emit8(rom, &pc, 0x7E); /* first following HBlank read at T+512 */
+    rom_emit8(rom, &pc, 0x3E); rom_emit8(rom, &pc, 0x66);
+    rom_emit8(rom, &pc, 0x77); /* mode 0 write bus phase at T+544 */
+    for (unsigned i = 0; i < 16346u; ++i) rom_emit8(rom, &pc, 0x00);
+    rom_emit8(rom, &pc, 0x7E); /* VBlank/mode 1 read at T+131328 */
+    rom_emit8(rom, &pc, 0x76);
+    rom[0x134] = 0xE7;
+    uint8_t checksum = 0;
+    for (size_t i = 0x134; i <= 0x14C; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14D] = checksum;
+    gbb_instance *machine = NULL;
+    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &machine) != GBB_OK ||
+        gbb_load_rom(machine, rom, sizeof(rom)) != GBB_OK) {
+        gbb_destroy(machine);
+        return NULL;
+    }
+    return machine;
+}
+
+static int check_ppu_lock(uint16_t address, int vram) {
+    gbb_instance *machine = load_lock_guest(address);
+    REQUIRE(machine != NULL);
+    gbb_test_bus_event events[32];
+    gbb_test_observer_set(machine, events, 32);
+    gbb_run_result run = gbb_run(machine, 140000u, NULL, 0);
+    if (run.reason != GBB_STOP_HALTED_IDLE && run.reason != GBB_STOP_BUDGET)
+        fprintf(stderr, "lock guest stopped reason=%d consumed=%llu\n", run.reason,
+                (unsigned long long)run.consumed_half_dots);
+    REQUIRE(run.reason == GBB_STOP_HALTED_IDLE || run.reason == GBB_STOP_BUDGET);
+    size_t count = gbb_test_observer_count(machine);
+    uint64_t enable = UINT64_MAX;
+    for (size_t i = 0; i < count; ++i)
+        if (events[i].address == 0xFF40u && events[i].access == 2u &&
+            events[i].value == 0x91u) enable = events[i].time_half_dots;
+    REQUIRE(enable != UINT64_MAX);
+    static const uint64_t read_deltas[] = {16u, 152u, 168u, 184u, 496u, 512u, 131328u};
+    uint8_t expected[7];
+    if (vram) {
+        const uint8_t values[] = {0x55u, 0x33u, 0xFFu, 0xFFu, 0xFFu, 0x33u, 0x66u};
+        memcpy(expected, values, sizeof(expected));
+    } else {
+        const uint8_t values[] = {0xFFu, 0xFFu, 0xFFu, 0xFFu, 0xFFu, 0x55u, 0x66u};
+        memcpy(expected, values, sizeof(expected));
+    }
+    size_t reads = 0, lcd_off_reads = 0;
+    for (size_t i = 0; i < count; ++i) {
+        if (events[i].address != address || events[i].access != 1u) continue;
+        if (events[i].time_half_dots < enable) {
+            REQUIRE(events[i].value == 0x55u);
+            ++lcd_off_reads;
+            continue;
+        }
+        REQUIRE(reads < 7u);
+        REQUIRE(events[i].time_half_dots == enable + read_deltas[reads]);
+        REQUIRE(events[i].value == expected[reads]);
+        ++reads;
+    }
+    REQUIRE(lcd_off_reads == 1u);
+    REQUIRE(reads == 7u);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int dma_vram_lock(void) { return check_ppu_lock(0x8000u, 1); }
+static int dma_oam_lock(void) { return check_ppu_lock(0xFE00u, 0); }
+
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
     if (strcmp(argv[1], "dma_progress") == 0) return dma_progress();
@@ -411,5 +579,8 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "dma_hram") == 0) return dma_hram();
     if (strcmp(argv[1], "dma_interrupt_stack") == 0) return dma_interrupt_stack();
     if (strcmp(argv[1], "dma_partition") == 0) return dma_partition();
+    if (strcmp(argv[1], "dma_contention") == 0) return dma_contention();
+    if (strcmp(argv[1], "dma_vram_lock") == 0) return dma_vram_lock();
+    if (strcmp(argv[1], "dma_oam_lock") == 0) return dma_oam_lock();
     return 2;
 }
