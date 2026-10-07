@@ -4,10 +4,14 @@ verified: 2026-10-07T22:45:20Z
 status: gaps_found
 score: 3/5 roadmap truths verified
 covered_files:
-  - .planning/phases/GB-03-visible-interactive-dmg/03-CONTEXT.md
-  - .planning/phases/GB-03-visible-interactive-dmg/03-RESEARCH.md
-  - .planning/phases/GB-03-visible-interactive-dmg/03-VALIDATION.md
-  - .planning/phases/GB-03-visible-interactive-dmg/03-PLAN-CHECK.md
+  - .github/workflows/ci.yml
+  - .github/workflows/fixture-repro.yml
+  - .github/workflows/preview.yml
+  - .planning/.continue-here.md
+  - .planning/REQUIREMENTS.md
+  - .planning/ROADMAP.md
+  - .planning/STATE.md
+  - .planning/context/LESSONS.md
   - .planning/phases/GB-03-visible-interactive-dmg/03-01-PLAN.md
   - .planning/phases/GB-03-visible-interactive-dmg/03-01-SUMMARY.md
   - .planning/phases/GB-03-visible-interactive-dmg/03-02-PLAN.md
@@ -26,34 +30,34 @@ covered_files:
   - .planning/phases/GB-03-visible-interactive-dmg/03-08-SUMMARY.md
   - .planning/phases/GB-03-visible-interactive-dmg/03-09-PLAN.md
   - .planning/phases/GB-03-visible-interactive-dmg/03-09-SUMMARY.md
+  - .planning/phases/GB-03-visible-interactive-dmg/03-10-PLAN.md
   - .planning/phases/GB-03-visible-interactive-dmg/03-10-SUMMARY.md
+  - .planning/phases/GB-03-visible-interactive-dmg/03-11-PLAN.md
   - .planning/phases/GB-03-visible-interactive-dmg/03-11-SUMMARY.md
   - .planning/phases/GB-03-visible-interactive-dmg/03-12-PLAN.md
   - .planning/phases/GB-03-visible-interactive-dmg/03-12-SUMMARY.md
+  - .planning/phases/GB-03-visible-interactive-dmg/03-CONTEXT.md
+  - .planning/phases/GB-03-visible-interactive-dmg/03-PLAN-CHECK.md
+  - .planning/phases/GB-03-visible-interactive-dmg/03-RESEARCH.md
   - .planning/phases/GB-03-visible-interactive-dmg/03-SECURITY.md
-  - src/core/gabbaboy.c
-  - src/player/main.c
-  - tests/test_ppu.c
-  - tests/test_dma.c
-  - tests/test_joypad.c
-  - tests/test_tracer.c
-  - tests/player/test_input.c
-  - tests/player/test_session.c
-  - tests/player/test_presentation.c
-  - tests/scripts/verify-phase3-player.sh
-  - tests/scripts/reproduce-visible-demo.sh
-  - .github/workflows/ci.yml
-  - .github/workflows/preview.yml
-  - .github/workflows/fixture-repro.yml
+  - .planning/phases/GB-03-visible-interactive-dmg/03-VALIDATION.md
+  - .planning/research/INDEX.md
   - docs/dmg-video-evidence.md
   - docs/preview.md
-  - .planning/REQUIREMENTS.md
-  - .planning/ROADMAP.md
-  - .planning/STATE.md
-  - .planning/.continue-here.md
-  - .planning/context/LESSONS.md
-  - .planning/research/INDEX.md
-covered_digest: "v3:sha256:fcd7cab8b71c8d3534b4410c7b71dfcc9531e4b42316941b1026246b80c05ff9"
+  - src/core/gabbaboy.c
+  - src/player/main.c
+  - tests/CMakeLists.txt
+  - tests/expected-tests.txt
+  - tests/player/test_input.c
+  - tests/player/test_presentation.c
+  - tests/player/test_session.c
+  - tests/scripts/reproduce-visible-demo.sh
+  - tests/scripts/verify-phase3-player.sh
+  - tests/test_dma.c
+  - tests/test_joypad.c
+  - tests/test_ppu.c
+  - tests/test_tracer.c
+covered_digest: "v3:sha256:78551f10c007f352f81b21714a6e88efe5c9caec6dea7557bf0da91185a3d560"
 behavior_unverified: 2
 overrides_applied: 0
 gaps_remaining:
