@@ -13,6 +13,92 @@
     } \
 } while (0)
 
+static bool verify_pause_transition(void) {
+    player app = {0};
+    gbb_instance *reference = NULL;
+    gbb_audio_frame app_before[804] = {{0}};
+    gbb_audio_frame reference_before[804] = {{0}};
+    gbb_audio_frame app_after[804] = {{0}};
+    gbb_audio_frame reference_after[804] = {{0}};
+    size_t app_before_count = 0u;
+    size_t reference_before_count = 0u;
+    size_t app_after_count = 0u;
+    size_t reference_after_count = 0u;
+    bool passed = false;
+
+    app.save_lock_fd = -1;
+    app.running = true;
+    app.window_focused = true;
+    app.skip_final_save = true;
+    app.machine = create_authored_audio_guest(GABBABOY_PLAYER_DEMO_ROM);
+    app.audio = player_audio_test_create(true);
+    reference = create_authored_audio_guest(GABBABOY_PLAYER_DEMO_ROM);
+    if (app.machine == NULL || app.audio == NULL || reference == NULL) {
+        fputs("Could not create pause-transition audio guests\n", stderr);
+        goto cleanup;
+    }
+    player_input_reset(&app.input, SDL_GetTicksNS());
+
+    const gbb_run_result app_before_run = gbb_run_audio(
+        app.machine, 140448u, app_before, 804u, &app_before_count);
+    const gbb_run_result reference_before_run = gbb_run_audio(
+        reference, 140448u, reference_before, 804u, &reference_before_count);
+    if (app_before_run.reason != GBB_STOP_BUDGET ||
+        reference_before_run.reason != GBB_STOP_BUDGET ||
+        app_before_run.consumed_half_dots != 140448u ||
+        reference_before_run.consumed_half_dots != 140448u ||
+        app_before_count == 0u || app_before_count != reference_before_count ||
+        memcmp(app_before, reference_before,
+               app_before_count * sizeof(app_before[0])) != 0 ||
+        !player_audio_submit(app.audio, app_before,
+                             (unsigned)app_before_count)) {
+        fputs("Could not establish matching active pulse playback before pause\n",
+              stderr);
+        goto cleanup;
+    }
+    player_input_reconcile(&app.input, app_before_run.consumed_half_dots);
+    const uint64_t paused_guest_cursor = app.input.guest_cursor_half_dots;
+
+    if (!push_key(&app, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE,
+                  SDL_GetTicksNS()) || !pump_events(&app) ||
+        !app.user_paused || !app.input.paused ||
+        player_audio_test_queued(app.audio) != 0u ||
+        player_audio_flushed_bytes(app.audio) !=
+            app_before_count * sizeof(app_before[0]) ||
+        app.input.guest_cursor_half_dots != paused_guest_cursor) {
+        fputs("Space pause did not preserve guest cursor and clear host PCM\n",
+              stderr);
+        goto cleanup;
+    }
+    if (!push_key(&app, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE,
+                  SDL_GetTicksNS()) || !pump_events(&app) ||
+        app.user_paused || app.input.paused ||
+        app.input.guest_cursor_half_dots != paused_guest_cursor) {
+        fputs("Space resume did not restore the active input session\n", stderr);
+        goto cleanup;
+    }
+
+    const gbb_run_result app_after_run = gbb_run_audio(
+        app.machine, 140448u, app_after, 804u, &app_after_count);
+    const gbb_run_result reference_after_run = gbb_run_audio(
+        reference, 140448u, reference_after, 804u, &reference_after_count);
+    if (app_after_run.reason != GBB_STOP_BUDGET ||
+        reference_after_run.reason != GBB_STOP_BUDGET ||
+        app_after_run.consumed_half_dots != reference_after_run.consumed_half_dots ||
+        app_after_count != reference_after_count || app_after_count == 0u ||
+        memcmp(app_after, reference_after,
+               app_after_count * sizeof(app_after[0])) != 0) {
+        fputs("Space pause/resume changed the guest APU continuation\n", stderr);
+        goto cleanup;
+    }
+    passed = true;
+
+cleanup:
+    destroy_player(&app);
+    if (reference != NULL) gbb_destroy(reference);
+    return passed;
+}
+
 int main(void) {
     char root_template[] = "/tmp/gabbaboy-reset-transition-XXXXXX";
     char rom_path[256] = {0};
@@ -52,6 +138,9 @@ int main(void) {
         goto cleanup;
     }
     player_session_remove_battery_file(&identity);
+
+    CHECK(verify_pause_transition(),
+          "normal Space pause/resume did not preserve APU history and clear PCM");
 
     session_started = true;
     if (!start_smoke_battery_session(&session, rom_path)) goto cleanup;
@@ -182,6 +271,6 @@ cleanup:
         passed = false;
     }
     if (sdl_initialized) SDL_Quit();
-    if (passed) puts("player reset transition passed: R saved before guest reset; cancel preserved queued input and PCM; retry reset both");
+    if (passed) puts("player transitions passed: Space preserved APU history and cleared PCM; R saved before guest reset; cancel preserved queues; retry reset both");
     return passed ? 0 : 1;
 }

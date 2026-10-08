@@ -1,6 +1,6 @@
 ---
 phase: GB-05-dmg-audio-and-stable-playback
-reviewed: 2026-10-08T17:56:57Z
+reviewed: 2026-10-08T18:04:04Z
 depth: standard
 files_reviewed: 29
 files_reviewed_list:
@@ -43,7 +43,7 @@ status: clean
 
 # Phase GB-05: Code Review Report
 
-**Reviewed:** 2026-10-08T17:56:57Z
+**Reviewed:** 2026-10-08T18:04:04Z
 **Depth:** standard
 **Files Reviewed:** 29
 **Status:** clean
@@ -54,7 +54,7 @@ Re-reviewed the original 26-file Phase GB-05 scope, the new reset-transition tes
 
 The measurement endpoint derives the target sample count with integer-floor arithmetic from the same 48 kHz / 8,388,608-half-dot rate as the core phase accumulator. It writes and submits only the in-window PCM prefix, requires that exact sample count, and leaves actual elapsed half-dots independently bounded. The parser validates exact count and equal digest/count across partitions while the receipt and docs describe why actual elapsed values can vary within the instruction boundary.
 
-The new test injects a one-shot battery rename failure, confirms reset remains pending with active guest, pending input, and queued PCM preserved, cancels and checks the same state remains, then retries via R and verifies the battery was saved before reset using an independent guest. It checks reset cleanup of input/audio queues and removes the temporary ROM/save state on all exits. The test target uses existing SDL, core, session, audio, input, and presentation sources without adding a dependency. No remaining correctness, security, or quality defects were found in the reviewed scope.
+The test exercises both app-level pause and reset routes. The Space pause transition clears the queued PCM and accounts for its bytes without changing the guest cursor; resuming and advancing the app core yields the same PCM continuation as an untouched reference instance. The helper destroys only initialized app resources and skips final saves on cleanup. The reset path injects a one-shot battery rename failure, confirms reset remains pending with active guest, pending input, and queued PCM preserved, cancels and checks the same state remains, then retries via R and verifies the battery was saved before reset using an independent guest. It checks reset cleanup of input/audio queues and removes the temporary ROM/save state on all exits. The test target uses existing SDL, core, session, audio, input, and presentation sources without adding a dependency. No remaining correctness, security, or quality defects were found in the reviewed scope.
 
 All reviewed files meet quality standards. No issues found.
 
@@ -64,6 +64,6 @@ No findings.
 
 ---
 
-_Reviewed: 2026-10-08T17:56:57Z_
+_Reviewed: 2026-10-08T18:04:04Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
