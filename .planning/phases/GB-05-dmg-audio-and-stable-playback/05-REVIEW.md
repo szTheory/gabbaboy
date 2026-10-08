@@ -1,6 +1,6 @@
 ---
 phase: GB-05-dmg-audio-and-stable-playback
-reviewed: 2026-10-08T17:29:32Z
+reviewed: 2026-10-08T17:34:00Z
 depth: standard
 files_reviewed: 26
 files_reviewed_list:
@@ -40,14 +40,16 @@ status: clean
 
 # Phase GB-05: Code Review Report
 
-**Reviewed:** 2026-10-08T17:29:32Z
+**Reviewed:** 2026-10-08T17:34:00Z
 **Depth:** standard
 **Files Reviewed:** 26
 **Status:** clean
 
 ## Summary
 
-Re-reviewed all 26 files in the original Phase GB-05 scope, including the current title and smoke changes. CR-01 remains resolved: the SDL callback records ring-backed PCM bytes rejected by a stream write, accounts for the unsubmitted remainder when a frame is split, and resets that partial-frame state. The saturating counter is initialized and required to be lock-free, callback and saturation tests cover it, measurement output and receipts include it, the parser requires zero failures, and the behavior is documented. The smoke assertion checks the same title formatter used by the window and permits either valid run state. Its saturation setup clears consumed ring state before continuing. No remaining correctness, security, or quality defects were found in the reviewed scope.
+Re-reviewed all 26 files in the original Phase GB-05 scope against the current tree. CR-01 remains resolved: the SDL callback records ring-backed PCM bytes rejected by a stream write, accounts for the unsubmitted remainder when a frame is split, and resets that partial-frame state. The saturating counter is initialized and required to be lock-free; callback and saturation tests cover it; measurement output and receipts include it; the parser requires zero failures; and the behavior is documented. The smoke assertion checks the same title formatter used by the window and permits either valid run state. Its saturation setup clears consumed ring state before continuing.
+
+The measurement endpoint derives the target sample count with integer-floor arithmetic from the same 48 kHz / 8,388,608-half-dot rate as the core phase accumulator. It writes and submits only the in-window PCM prefix, requires that exact sample count, and leaves actual elapsed half-dots independently bounded. The parser validates exact count and equal digest/count across partitions while the receipt and docs describe why actual elapsed values can vary within the instruction boundary. No remaining correctness, security, or quality defects were found in the reviewed scope.
 
 All reviewed files meet quality standards. No issues found.
 
@@ -57,6 +59,6 @@ No findings.
 
 ---
 
-_Reviewed: 2026-10-08T17:29:32Z_
+_Reviewed: 2026-10-08T17:34:00Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
