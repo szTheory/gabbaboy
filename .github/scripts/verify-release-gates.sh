@@ -1,0 +1,275 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+mode=${1:-}
+
+check_config() {
+  python3 - "$ROOT" <<'PY'
+import json, pathlib, re, sys
+root = pathlib.Path(sys.argv[1])
+config = json.loads((root / "release-please-config.json").read_text())
+package = config.get("packages", {}).get(".", {})
+if package.get("draft") is not True or package.get("force-tag-creation") is not True:
+    raise SystemExit("release-please must create one unpublished draft and immediate tag")
+workflow = (root / ".github/workflows/release.yml").read_text()
+entrypoint = (root / ".github/workflows/release-please.yml").read_text()
+for output in ("release_created", "tag_name", "sha"):
+    if f"${{{{ steps.release.outputs.{output} }}}}" not in workflow:
+        raise SystemExit(f"same-workflow output is missing: {output}")
+if "uses: ./.github/workflows/release.yml" not in entrypoint or "workflow_call:" not in workflow:
+    raise SystemExit("release-please outputs are not routed through the same workflow run")
+if not re.search(r"googleapis/release-please-action@[0-9a-f]{40}", workflow):
+    raise SystemExit("release-please action is not pinned to a full commit SHA")
+if "pull_request_target:" in workflow:
+    raise SystemExit("candidate workflow contains an untrusted privileged checkout")
+if workflow.count("gh release edit") != 1:
+    raise SystemExit("workflow must have exactly one durable publication transition")
+publish = workflow.find("publish-qualified-release:")
+transition = workflow.find("gh release edit", publish)
+final_gate = workflow.find("--check-draft-final", publish)
+if publish < 0 or final_gate < publish or transition < final_gate:
+    raise SystemExit("publication is not downstream of the exact final downloaded-byte gate")
+PY
+}
+
+check_required_checks() {
+  local rules_json=$1 runs_json=$2 expected_sha=$3
+  python3 - "$rules_json" "$runs_json" "$expected_sha" <<'PY'
+import json, pathlib, re, sys
+rules = json.loads(pathlib.Path(sys.argv[1]).read_text())
+runs = json.loads(pathlib.Path(sys.argv[2]).read_text())
+expected = sys.argv[3]
+if not re.fullmatch(r"[0-9a-f]{40}", expected):
+    raise SystemExit("expected PR head is not a full commit SHA")
+checks = rules.get("required_status_checks", {}).get("checks")
+if checks is None:
+    checks = [{"context": name} for name in rules.get("required_status_checks", {}).get("contexts", [])]
+required = {item.get("context"): item.get("app_id") for item in checks if item.get("context")}
+if not {"required-native", "fixture-repro", "preview-package-smoke"}.issubset(required):
+    raise SystemExit("repository branch rules omit one of the three recorded required contexts")
+observed = {}
+for run in runs.get("check_runs", []):
+    if run.get("head_sha") == expected and run.get("status") == "completed":
+        observed.setdefault(run.get("name"), []).append(run)
+for context, app_id in required.items():
+    matches = observed.get(context, [])
+    if len(matches) != 1:
+        raise SystemExit(f"required context {context!r} has {len(matches)} exact-head completed check runs")
+    run = matches[0]
+    if run.get("conclusion") != "success":
+        raise SystemExit(f"required context {context!r} concluded {run.get('conclusion')!r}")
+    if app_id is not None and run.get("app", {}).get("id") != app_id:
+        raise SystemExit(f"required context {context!r} came from the wrong GitHub App")
+PY
+}
+
+check_asset_inventory() {
+  local api_json=$1 downloaded_dir=$2 tag=$3 source_sha=$4 release_id=$5
+  python3 - "$api_json" "$downloaded_dir" "$tag" "$source_sha" "$release_id" <<'PY'
+import hashlib, json, pathlib, re, sys
+api_path, directory, tag, source_sha, release_id = sys.argv[1:]
+assets = json.loads(pathlib.Path(api_path).read_text())
+root = pathlib.Path(directory)
+required = {
+    "candidate-receipt.json", "candidate-platform-manifest.json",
+    "gabbaboy-core-linux-x64.tar.gz", "gabbaboy-notices.txt", "source-receipt.json",
+    "build-receipt.json", "gabbaboy-core-macos-arm64.tar.gz",
+    "gabbaboy-core-macos-arm64.tar.gz.sha256", "gabbaboy-build-receipt-macos-arm64.json",
+    "gabbaboy-preview-macos-arm64.tar.gz", "gabbaboy-preview-macos-arm64-build-receipt.json",
+    "gabbaboy-core-windows-x64.tar.gz", "gabbaboy-core-windows-x64.tar.gz.sha256",
+    "gabbaboy-build-receipt-windows-x64.json", "support-ledger-v0.1.0.json",
+    "release-performance-receipt.json",
+}
+names = [asset.get("name") for asset in assets]
+actual_names = set(names)
+if len(names) != len(actual_names) or actual_names not in (required, required | {"SHA256SUMS", "release-receipt.json"}):
+    raise SystemExit(f"draft asset inventory differs: missing={sorted(required-actual_names)}, extra={sorted(actual_names-required)}")
+if not re.fullmatch(r"v\d+\.\d+\.\d+", tag) or not re.fullmatch(r"[0-9a-f]{40}", source_sha):
+    raise SystemExit("release tag/source identity is malformed")
+for asset in assets:
+    path = root / asset["name"]
+    if not path.is_file():
+        raise SystemExit(f"downloaded draft asset is missing: {asset['name']}")
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    api_digest = asset.get("digest")
+    if api_digest and api_digest != "sha256:" + digest:
+        raise SystemExit(f"GitHub API digest differs from downloaded bytes: {asset['name']}")
+    if not isinstance(asset.get("id"), int):
+        raise SystemExit(f"GitHub API asset ID is missing: {asset['name']}")
+    if asset["name"].endswith(".tar.gz.sha256"):
+        archive = asset["name"][:-7]
+        expected = path.read_text().split()[0]
+        actual = hashlib.sha256((root / archive).read_bytes()).hexdigest()
+        if expected != actual:
+            raise SystemExit(f"archive checksum file mismatch: {archive}")
+for name in ("source-receipt.json", "candidate-receipt.json"):
+    receipt = json.loads((root / name).read_text())
+    for field, value in (("tag_name", tag), ("source_sha", source_sha), ("release_id", release_id), ("draft", True)):
+        if receipt.get(field) != value:
+            raise SystemExit(f"{name} has mismatched {field}")
+sidecar = json.loads((root / "support-ledger-v0.1.0.json").read_text())
+if sidecar.get("tag") != tag or sidecar.get("source_sha") != source_sha:
+    raise SystemExit("support sidecar is not bound to the exact tag/source")
+if not re.fullmatch(r"[0-9a-f]{40}", sidecar.get("ledger", {}).get("git_blob_oid", "")):
+    raise SystemExit("support sidecar is missing its tagged ledger blob identity")
+manifest = json.loads((root / "candidate-platform-manifest.json").read_text())
+if manifest.get("source_sha") != source_sha:
+    raise SystemExit("platform manifest source SHA differs from candidate")
+listed = {item["name"]: item["sha256"] for item in manifest.get("assets", [])}
+for name in required - {"candidate-platform-manifest.json"}:
+    if name not in listed or listed[name] != hashlib.sha256((root / name).read_bytes()).hexdigest():
+        raise SystemExit(f"platform manifest does not bind downloaded bytes: {name}")
+PY
+}
+
+check_final_receipt() {
+  local assets_json=$1 directory=$2 tag=$3 source_sha=$4 release_id=$5
+  python3 - "$assets_json" "$directory" "$tag" "$source_sha" "$release_id" <<'PY'
+import hashlib, json, pathlib, sys
+assets = json.loads(pathlib.Path(sys.argv[1]).read_text())
+root = pathlib.Path(sys.argv[2])
+tag, source, release_id = sys.argv[3:]
+if len(assets) != 18 or len({a.get("name") for a in assets}) != 18:
+    raise SystemExit("published candidate must contain exactly 18 unique assets including final receipts")
+receipt = json.loads((root / "release-receipt.json").read_text())
+if receipt.get("tag") != tag or receipt.get("source_sha") != source or str(receipt.get("release_id")) != release_id:
+    raise SystemExit("release receipt tag, source SHA, or release ID mismatch")
+manifest_sha = hashlib.sha256((root / "SHA256SUMS").read_bytes()).hexdigest()
+if receipt.get("sha256sums_sha256") != manifest_sha:
+    raise SystemExit("release receipt does not bind the final SHA256SUMS manifest")
+listed = {}
+for line in (root / "SHA256SUMS").read_text().splitlines():
+    digest, name = line.split(None, 1)
+    listed[name.lstrip("* ")] = digest
+for name, digest in listed.items():
+    if name not in {asset["name"] for asset in assets}:
+        raise SystemExit(f"SHA256SUMS names an absent API asset: {name}")
+    if hashlib.sha256((root / name).read_bytes()).hexdigest() != digest:
+        raise SystemExit(f"SHA256SUMS differs from downloaded bytes: {name}")
+if set(listed) != {asset["name"] for asset in assets} - {"SHA256SUMS", "release-receipt.json"}:
+    raise SystemExit("SHA256SUMS must cover every candidate asset and omit its own/final receipt digest")
+for asset in assets:
+    path = root / asset["name"]
+    if not path.is_file():
+        raise SystemExit(f"final downloaded asset missing: {asset['name']}")
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if asset.get("digest") and asset["digest"] != "sha256:" + digest:
+        raise SystemExit(f"GitHub API digest differs from final downloaded bytes: {asset['name']}")
+PY
+}
+
+case "$mode" in
+  --self-test)
+    [[ $# -eq 1 ]] || fail 'usage: verify-release-gates.sh --self-test'
+    check_config
+    temp=$(mktemp -d "${TMPDIR:-/tmp}/gb-release-gates.XXXXXX")
+    trap 'rm -rf "$temp"' EXIT HUP INT TERM
+    python3 - "$temp" <<'PY'
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+head = "a" * 40
+rules = {"required_status_checks": {"checks": [
+    {"context": "required-native", "app_id": 15368},
+    {"context": "fixture-repro", "app_id": 15368},
+    {"context": "preview-package-smoke", "app_id": None}]}}
+runs = {"check_runs": [{"name": name, "head_sha": head, "status": "completed", "conclusion": "success",
+                         "app": {"id": app_id}}
+                        for name, app_id in (("required-native", 15368), ("fixture-repro", 15368),
+                                             ("preview-package-smoke", 15368))]}
+(root / "rules.json").write_text(json.dumps(rules))
+(root / "runs.json").write_text(json.dumps(runs))
+PY
+    check_required_checks "$temp/rules.json" "$temp/runs.json" "$(printf 'a%.0s' {1..40})"
+    for mutation in stale failed omitted wrong-app; do
+      cp "$temp/runs.json" "$temp/$mutation.json"
+      python3 - "$temp/$mutation.json" "$mutation" <<'PY'
+import json, pathlib, sys
+path, kind = pathlib.Path(sys.argv[1]), sys.argv[2]
+data = json.loads(path.read_text())
+if kind == "stale": data["check_runs"][0]["head_sha"] = "b" * 40
+elif kind == "failed": data["check_runs"][0]["conclusion"] = "failure"
+elif kind == "omitted": data["check_runs"].pop()
+elif kind == "wrong-app": data["check_runs"][0]["app"]["id"] = 1
+path.write_text(json.dumps(data))
+PY
+      if check_required_checks "$temp/rules.json" "$temp/$mutation.json" "$(printf 'a%.0s' {1..40})" >/dev/null 2>&1; then
+        fail "exact-head gate accepted $mutation required-check evidence"
+      fi
+      printf 'rejected: %s required-check evidence\n' "$mutation"
+    done
+    printf 'PASS: release configuration and exact-head required-check gate\n'
+    ;;
+  --check-pr)
+    [[ $# -eq 3 ]] || fail 'usage: verify-release-gates.sh --check-pr PR_NUMBER EXPECTED_HEAD_SHA'
+    command -v gh >/dev/null || fail 'GitHub CLI is required'
+    gh auth status >/dev/null 2>&1 || fail 'GitHub CLI authentication is unavailable'
+    repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+    rules=$(gh api "repos/$repo/branches/main/protection")
+    pr=$(gh api "repos/$repo/pulls/$2")
+    [[ $(jq -r .base.ref <<<"$pr") == main && $(jq -r .state <<<"$pr") == open ]] || fail 'version PR is not open against main'
+    [[ $(jq -r .head.sha <<<"$pr") == "$3" ]] || fail 'version PR head differs from the expected final revision'
+    [[ $(jq -r .draft <<<"$pr") == false ]] || fail 'version PR remains a draft'
+    [[ $(jq -r .mergeable_state <<<"$pr") == clean ]] || fail 'GitHub does not report current merge eligibility'
+    checks=$(gh api "repos/$repo/commits/$3/check-runs?per_page=100")
+    tmp=$(mktemp -d "${TMPDIR:-/tmp}/gb-required-checks.XXXXXX")
+    trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+    printf '%s\n' "$rules" > "$tmp/rules.json"
+    printf '%s\n' "$checks" > "$tmp/checks.json"
+    check_required_checks "$tmp/rules.json" "$tmp/checks.json" "$3"
+    printf 'PASS: PR #%s exact head is eligible under current required checks\n' "$2"
+    ;;
+  --check-draft)
+    [[ $# -eq 4 ]] || fail 'usage: verify-release-gates.sh --check-draft RELEASE_ID TAG SOURCE_SHA'
+    command -v gh >/dev/null || fail 'GitHub CLI is required'
+    repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+    release=$(gh api "repos/$repo/releases/$2")
+    [[ $(jq -r .draft <<<"$release") == true ]] || fail 'release is already published'
+    [[ $(jq -r .tag_name <<<"$release") == "$3" ]] || fail 'draft release tag differs'
+    [[ $(gh api "repos/$repo/commits/$3" --jq .sha) == "$4" ]] || fail 'release tag target differs from the frozen source SHA'
+    assets=$(gh api "repos/$repo/releases/$2/assets?per_page=100")
+    tmp=$(mktemp -d "${TMPDIR:-/tmp}/gb-release-assets.XXXXXX")
+    trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+    gh release download "$3" --repo "$repo" --dir "$tmp"
+    printf '%s\n' "$assets" > "$tmp/api-assets.json"
+    check_asset_inventory "$tmp/api-assets.json" "$tmp" "$3" "$4" "$2"
+    printf 'PASS: draft bytes and IDs match the frozen tag/source; no publication performed\n'
+    ;;
+  --check-merged-source)
+    [[ $# -eq 2 ]] || fail 'usage: verify-release-gates.sh --check-merged-source MERGE_COMMIT_SHA'
+    command -v gh >/dev/null || fail 'GitHub CLI is required'
+    repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+    prs=$(gh api "repos/$repo/commits/$2/pulls")
+    matched=$(jq --arg sha "$2" '[.[] | select(.merged_at != null and .base.ref == "main" and .merge_commit_sha == $sha)]' <<<"$prs")
+    [[ $(jq length <<<"$matched") == 1 ]] || fail 'release source does not map to exactly one merged main PR'
+    pr_number=$(jq -r '.[0].number' <<<"$matched")
+    pr_head=$(jq -r '.[0].head.sha' <<<"$matched")
+    rules=$(gh api "repos/$repo/branches/main/protection")
+    checks=$(gh api "repos/$repo/commits/$pr_head/check-runs?per_page=100")
+    tmp=$(mktemp -d "${TMPDIR:-/tmp}/gb-merged-checks.XXXXXX")
+    trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+    printf '%s\n' "$rules" > "$tmp/rules.json"
+    printf '%s\n' "$checks" > "$tmp/checks.json"
+    check_required_checks "$tmp/rules.json" "$tmp/checks.json" "$pr_head"
+    printf 'PASS: merged PR #%s is backed by exact-head checks on %s\n' "$pr_number" "$pr_head"
+    ;;
+  --check-draft-final)
+    [[ $# -eq 4 ]] || fail 'usage: verify-release-gates.sh --check-draft-final RELEASE_ID TAG SOURCE_SHA'
+    command -v gh >/dev/null || fail 'GitHub CLI is required'
+    repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+    release=$(gh api "repos/$repo/releases/$2")
+    [[ $(jq -r .draft <<<"$release") == true ]] || fail 'release is already published'
+    [[ $(jq -r .tag_name <<<"$release") == "$3" ]] || fail 'draft release tag differs'
+    [[ $(gh api "repos/$repo/commits/$3" --jq .sha) == "$4" ]] || fail 'release tag target differs from frozen source SHA'
+    assets=$(gh api "repos/$repo/releases/$2/assets?per_page=100")
+    tmp=$(mktemp -d "${TMPDIR:-/tmp}/gb-release-final.XXXXXX")
+    trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+    gh release download "$3" --repo "$repo" --dir "$tmp"
+    printf '%s\n' "$assets" > "$tmp/api-assets.json"
+    check_asset_inventory "$tmp/api-assets.json" "$tmp" "$3" "$4" "$2"
+    check_final_receipt "$tmp/api-assets.json" "$tmp" "$3" "$4" "$2"
+    printf 'PASS: final draft receipt and all downloaded bytes qualify; no publication performed\n'
+    ;;
+  *) fail 'usage: verify-release-gates.sh --self-test | --check-pr PR_NUMBER EXPECTED_HEAD_SHA | --check-merged-source MERGE_SHA | --check-draft RELEASE_ID TAG SOURCE_SHA | --check-draft-final RELEASE_ID TAG SOURCE_SHA' ;;
+esac
