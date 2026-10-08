@@ -1,0 +1,10 @@
+{
+  "command": "build/phase3-player/gabbaboy/tests/player/test_player_audio player_audio_lifecycle",
+  "exitCode": 1,
+  "output": "TAP version 13\n1..1\nnot ok 1 - player_audio_lifecycle\n",
+  "targetTest": "player_audio_lifecycle",
+  "targetFile": "tests/player/test_audio.c",
+  "expected": "Pause/session transitions quiesce adapter state, clear pending host PCM, count exact flushed bytes, and allow fresh frames afterward.",
+  "actual": "The target assertion failed because the clear scaffold returned without dropping the queued adapter frames.",
+  "semanticAssessment": "The named lifecycle test executed and failed on the planned queue-clear assertion after a partial-frame callback. It was not a build, fixture, or setup failure; this is valid RED evidence."
+}

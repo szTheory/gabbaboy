@@ -1,0 +1,10 @@
+{
+  "command": "build/phase3-player/gabbaboy/tests/player/test_player_input player_input_focus_audio fixtures/visible-demo/demo.gb",
+  "exitCode": 1,
+  "output": "TAP version 13\n1..1\nnot ok 1 - player_input_focus_audio\n",
+  "targetTest": "player_input_focus_audio",
+  "targetFile": "tests/player/test_input.c",
+  "expected": "Focus gain retries pending releases, reanchors host pacing, and resumes only when intentional pause is false.",
+  "actual": "The target assertion failed after the unpaused focus-gain request because the policy helper was still a no-op scaffold.",
+  "semanticAssessment": "The named case executed and failed on the planned focus-resume policy assertion. Its setup and focus-loss release passed, so this is valid RED evidence for the focus-gain decision contract."
+}

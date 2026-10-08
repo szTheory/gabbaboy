@@ -12,6 +12,29 @@
 #define GBB_DMA_BYTE_PERIOD_HALF_DOTS 8u
 #define GBB_LINE_OBJECT_LIMIT 10u
 #define GBB_PPU_FIFO_CAPACITY 16u
+#define GBB_AUDIO_CLOCK_HALF_DOTS UINT64_C(8388608)
+#define GBB_AUDIO_SAMPLE_RATE UINT64_C(48000)
+#define GBB_AUDIO_EVENT_PHASES 8u
+#define GBB_AUDIO_EVENT_TAPS 16u
+#define GBB_AUDIO_HPF_Q15 32648
+typedef struct {
+    uint8_t sweep, duty_length, envelope, frequency_low, control;
+    uint16_t length, frequency, timer, sweep_shadow;
+    uint8_t phase, volume, envelope_timer, sweep_timer;
+    int enabled, sweep_enabled, sweep_negate_used;
+} apu_pulse_channel;
+typedef struct {
+    uint8_t dac, length_reg, level, frequency_low, control;
+    uint8_t ram[16], position;
+    uint16_t length, timer;
+    int enabled;
+} apu_wave_channel;
+typedef struct {
+    uint8_t length_reg, envelope, polynomial, control, volume, envelope_timer;
+    uint16_t length, lfsr;
+    uint32_t timer;
+    int enabled;
+} apu_noise_channel;
 typedef struct {
     uint8_t type;
     size_t ram_size;
@@ -72,6 +95,20 @@ struct gbb_instance {
     int ime;
     uint8_t divider_phase;
     uint16_t divider_counter;
+    apu_pulse_channel apu_pulse[2];
+    apu_wave_channel apu_wave;
+    apu_noise_channel apu_noise;
+    uint8_t apu_nr50, apu_nr51, apu_power, apu_sequencer_step;
+    uint64_t apu_sample_phase;
+    int64_t audio_event_ring[2][GBB_AUDIO_EVENT_TAPS];
+    uint8_t audio_event_head;
+    int32_t audio_mix_level[2];
+    int32_t audio_hpf_input[2];
+    int32_t audio_hpf_output[2];
+    gbb_audio_frame *audio_frames;
+    size_t audio_frame_capacity;
+    size_t audio_frame_count;
+    int audio_run_active;
     int timer_signal;
     int timer_reload_pending;
     uint8_t timer_reload_remaining;
@@ -105,6 +142,115 @@ struct gbb_instance {
     uint16_t diagnostic_pc;
     uint8_t diagnostic_opcode;
 };
+
+static int16_t audio_saturate_s16(int64_t value) {
+    if (value > INT16_MAX) value = INT16_MAX;
+    if (value < INT16_MIN) value = INT16_MIN;
+    return (int16_t)value;
+}
+
+static int64_t audio_round_q15(int64_t value) {
+    if (value >= 0) return (value + 16384) / 32768;
+    return -((-value + 16384) / 32768);
+}
+
+/* Bounded 8-phase, 16-sample windowed-sinc step responses in Q15. */
+static const int16_t audio_step_q15[GBB_AUDIO_EVENT_PHASES][GBB_AUDIO_EVENT_TAPS] = {
+    {16384, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767},
+    {14336, 18431, 22527, 26623, 29695, 31743, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767},
+    {12288, 16384, 20480, 24575, 28671, 30719, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767},
+    {10240, 14336, 18431, 22527, 26623, 29695, 31743, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767},
+    {8192, 12288, 16384, 20480, 24575, 28671, 30719, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767},
+    {6144, 10240, 14336, 18431, 22527, 26623, 29695, 31743, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767},
+    {4096, 8192, 12288, 16384, 20480, 24575, 28671, 30719, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767}
+};
+
+static void audio_add_edge(gbb_instance *m, unsigned channel, int32_t delta,
+                           unsigned phase) {
+    for (unsigned tap = 0u; tap < GBB_AUDIO_EVENT_TAPS; ++tap) {
+        const unsigned slot = ((unsigned)m->audio_event_head + tap) % GBB_AUDIO_EVENT_TAPS;
+        const int64_t contribution = (int64_t)delta *
+            ((int32_t)audio_step_q15[phase][tap] - 32767);
+        m->audio_event_ring[channel][slot] += contribution;
+    }
+}
+
+static gbb_audio_frame audio_process_sample(gbb_instance *m) {
+    int16_t output[2];
+    for (unsigned channel = 0u; channel < 2u; ++channel) {
+        const unsigned slot = m->audio_event_head;
+        const int64_t sample = audio_saturate_s16(audio_round_q15(
+            (int64_t)m->audio_mix_level[channel] * 32768 +
+            m->audio_event_ring[channel][slot]));
+        m->audio_event_ring[channel][slot] = 0;
+        const int64_t hp = sample - m->audio_hpf_input[channel] +
+            audio_round_q15((int64_t)m->audio_hpf_output[channel] * GBB_AUDIO_HPF_Q15);
+        m->audio_hpf_input[channel] = audio_saturate_s16(sample);
+        m->audio_hpf_output[channel] = (int32_t)audio_saturate_s16(hp);
+        output[channel] = (int16_t)m->audio_hpf_output[channel];
+    }
+    m->audio_event_head = (uint8_t)((m->audio_event_head + 1u) % GBB_AUDIO_EVENT_TAPS);
+    return (gbb_audio_frame){output[0], output[1]};
+}
+
+static void audio_current_mix(const gbb_instance *m, int32_t *left, int32_t *right) {
+    static const uint8_t duty_pattern[4] = {0x01u, 0x81u, 0x87u, 0x7Eu};
+    *left = 0; *right = 0;
+    for (unsigned i = 0u; i < 2u; ++i) {
+        const apu_pulse_channel *pulse = &m->apu_pulse[i];
+        const uint8_t duty = (uint8_t)(pulse->duty_length >> 6);
+        int32_t sample = 0;
+        if (pulse->enabled && pulse->volume != 0u &&
+            ((duty_pattern[duty] >> pulse->phase) & 1u) != 0u)
+            sample = (int32_t)pulse->volume * 2048 - 16384;
+        if ((m->apu_nr51 & (1u << i)) != 0u)
+            *right += sample * (int32_t)((m->apu_nr50 & 7u) + 1u);
+        if ((m->apu_nr51 & (1u << (i + 4u))) != 0u)
+            *left += sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u);
+    }
+    int32_t wave_sample = 0;
+    if (m->apu_wave.enabled && m->apu_wave.level != 0u) {
+        const uint8_t packed = m->apu_wave.ram[m->apu_wave.position >> 1];
+        const uint8_t digital = (m->apu_wave.position & 1u) == 0u
+            ? (uint8_t)(packed >> 4) : (uint8_t)(packed & 0x0Fu);
+        const unsigned shift = (m->apu_wave.level >> 5) - 1u;
+        wave_sample = (int32_t)(digital >> shift) * 2048 - 16384;
+    }
+    if ((m->apu_nr51 & 0x04u) != 0u)
+        *right += wave_sample * (int32_t)((m->apu_nr50 & 7u) + 1u);
+    if ((m->apu_nr51 & 0x40u) != 0u)
+        *left += wave_sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u);
+    int32_t noise_sample = 0;
+    if (m->apu_noise.enabled && m->apu_noise.volume != 0u &&
+        (m->apu_noise.lfsr & 1u) == 0u)
+        noise_sample = (int32_t)m->apu_noise.volume * 2048 - 16384;
+    if ((m->apu_nr51 & 0x08u) != 0u)
+        *right += noise_sample * (int32_t)((m->apu_nr50 & 7u) + 1u);
+    if ((m->apu_nr51 & 0x80u) != 0u)
+        *left += noise_sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u);
+}
+
+void gbb_test_audio_kernel(gbb_instance *m, const int32_t *left,
+                           const int32_t *right, size_t count,
+                           gbb_audio_frame *output) {
+    if (m == NULL || left == NULL || right == NULL || output == NULL) return;
+    for (size_t i = 0u; i < count; ++i) {
+        audio_add_edge(m, 0u, left[i] - m->audio_mix_level[0], 0u);
+        audio_add_edge(m, 1u, right[i] - m->audio_mix_level[1], 0u);
+        m->audio_mix_level[0] = left[i]; m->audio_mix_level[1] = right[i];
+        output[i] = audio_process_sample(m);
+    }
+}
+
+void gbb_test_audio_edge(gbb_instance *m, int32_t left_delta, int32_t right_delta,
+                         unsigned phase, gbb_audio_frame *output) {
+    if (m == NULL || output == NULL || phase >= GBB_AUDIO_EVENT_PHASES) return;
+    audio_add_edge(m, 0u, left_delta, phase);
+    audio_add_edge(m, 1u, right_delta, phase);
+    m->audio_mix_level[0] += left_delta;
+    m->audio_mix_level[1] += right_delta;
+    *output = audio_process_sample(m);
+}
 
 static uint8_t diagnostic_timer_state(const gbb_instance *m) {
     return (uint8_t)((m->tac & 7u) | (m->timer_reload_pending ? 0x08u : 0u) |
@@ -302,6 +448,17 @@ static void reset_state(gbb_instance *m) {
     m->ime = 0;
     m->divider_phase = 0;
     m->divider_counter = 0xAB00u;
+    memset(m->apu_pulse, 0, sizeof(m->apu_pulse));
+    memset(&m->apu_wave, 0, sizeof(m->apu_wave));
+    memset(&m->apu_noise, 0, sizeof(m->apu_noise));
+    m->apu_nr50 = 0u; m->apu_nr51 = 0xFFu; m->apu_power = 1u;
+    m->apu_sequencer_step = 0u;
+    m->apu_sample_phase = 0u;
+    memset(m->audio_event_ring, 0, sizeof(m->audio_event_ring));
+    m->audio_event_head = 0u;
+    m->audio_mix_level[0] = m->audio_mix_level[1] = 0;
+    memset(m->audio_hpf_input, 0, sizeof(m->audio_hpf_input));
+    memset(m->audio_hpf_output, 0, sizeof(m->audio_hpf_output));
     m->timer_signal = 0;
     m->timer_reload_pending = 0;
     m->timer_reload_remaining = 0;
@@ -398,6 +555,57 @@ static int cpu_oam_access_allowed(const gbb_instance *m) {
     return (m->lcdc & 0x80u) == 0 || m->ppu_mode == 0u || m->ppu_mode == 1u;
 }
 
+static uint16_t apu_pulse_frequency(const apu_pulse_channel *pulse) {
+    return (uint16_t)(pulse->frequency_low | ((pulse->control & 7u) << 8));
+}
+
+static uint32_t apu_noise_period(const apu_noise_channel *noise) {
+    static const uint8_t divisor[8] = {8u,16u,32u,48u,64u,80u,96u,112u};
+    return ((uint32_t)divisor[noise->polynomial & 7u] << (noise->polynomial >> 4)) * 2u;
+}
+
+static void apu_pulse_trigger(gbb_instance *m, unsigned index) {
+    apu_pulse_channel *pulse = &m->apu_pulse[index];
+    int sweep_overflow = 0;
+    pulse->frequency = apu_pulse_frequency(pulse);
+    pulse->timer = (uint16_t)((2048u - pulse->frequency) * 64u);
+    pulse->phase = 0u;
+    pulse->volume = (uint8_t)(pulse->envelope >> 4);
+    pulse->envelope_timer = (uint8_t)((pulse->envelope & 7u) == 0u ? 8u : pulse->envelope & 7u);
+    if (pulse->length == 0u) pulse->length = 64u;
+    if (index == 0u) {
+        const uint8_t period = (uint8_t)((pulse->sweep >> 4) & 7u);
+        const uint8_t shift = (uint8_t)(pulse->sweep & 7u);
+        pulse->sweep_shadow = pulse->frequency;
+        pulse->sweep_timer = period == 0u ? 8u : period;
+        pulse->sweep_enabled = period != 0u || shift != 0u;
+        pulse->sweep_negate_used = 0;
+        if (shift != 0u) {
+            int32_t delta = (int32_t)(pulse->sweep_shadow >> shift);
+            if ((pulse->sweep & 8u) != 0u) {
+                pulse->sweep_negate_used = 1;
+                delta = -delta;
+            }
+            if ((int32_t)pulse->sweep_shadow + delta > 2047 ||
+                (int32_t)pulse->sweep_shadow + delta < 0) sweep_overflow = 1;
+        }
+    }
+    pulse->enabled = m->apu_power && (pulse->envelope & 0xF8u) != 0u &&
+                     !sweep_overflow;
+}
+
+static void apu_power_off(gbb_instance *m) {
+    memset(m->apu_pulse, 0, sizeof(m->apu_pulse));
+    memset(&m->apu_noise, 0, sizeof(m->apu_noise));
+    /* Wave RAM survives NR52 power-off in this scoped DMG software model. */
+    memset(&m->apu_wave, 0, offsetof(apu_wave_channel, ram));
+    memset((uint8_t *)&m->apu_wave + offsetof(apu_wave_channel, position), 0,
+           sizeof(m->apu_wave) - offsetof(apu_wave_channel, position));
+    m->apu_nr50 = 0u;
+    m->apu_nr51 = 0u;
+    m->apu_sequencer_step = 0u;
+}
+
 static int cpu_hram_address(uint16_t address) {
     return address >= 0xFF80u && address <= 0xFFFEu;
 }
@@ -414,6 +622,38 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
     if (address == 0xFF07) return (uint8_t)(0xF8u | m->tac);
     if (address == 0xFF01) return m->serial_data;
     if (address == 0xFF02) return (uint8_t)(0x7Eu | m->serial_control);
+    if (address == 0xFF10) return (uint8_t)(0x80u | m->apu_pulse[0].sweep);
+    if (address == 0xFF11) return (uint8_t)(0x3Fu | (m->apu_pulse[0].duty_length & 0xC0u));
+    if (address == 0xFF12) return m->apu_pulse[0].envelope;
+    if (address == 0xFF13) return 0xFFu;
+    if (address == 0xFF14) return (uint8_t)(0xBFu | (m->apu_pulse[0].control & 0x40u));
+    if (address == 0xFF16) return (uint8_t)(0x3Fu | (m->apu_pulse[1].duty_length & 0xC0u));
+    if (address == 0xFF17) return m->apu_pulse[1].envelope;
+    if (address == 0xFF18) return 0xFFu;
+    if (address == 0xFF19) return (uint8_t)(0xBFu | (m->apu_pulse[1].control & 0x40u));
+    if (address == 0xFF1A) return (uint8_t)(0x7Fu | (m->apu_wave.dac & 0x80u));
+    if (address == 0xFF1B) return 0xFFu;
+    if (address == 0xFF1C) return (uint8_t)(0x9Fu | (m->apu_wave.level & 0x60u));
+    if (address == 0xFF1D) return 0xFFu;
+    if (address == 0xFF1E) return (uint8_t)(0xBFu | (m->apu_wave.control & 0x40u));
+    if (address == 0xFF20) return 0xFFu;
+    if (address == 0xFF21) return m->apu_noise.envelope;
+    if (address == 0xFF22) return m->apu_noise.polynomial;
+    if (address == 0xFF23) return (uint8_t)(0xBFu | (m->apu_noise.control & 0x40u));
+    if (address >= 0xFF30u && address <= 0xFF3Fu) {
+        unsigned index = address - 0xFF30u;
+        /* Active access aliases the current byte in this revision-scoped software model. */
+        if (m->apu_wave.enabled) index = m->apu_wave.position >> 1;
+        return m->apu_wave.ram[index];
+    }
+    if (address == 0xFF24) return m->apu_nr50;
+    if (address == 0xFF25) return m->apu_nr51;
+    if (address == 0xFF26)
+        return (uint8_t)(0x70u | (m->apu_power ? 0x80u : 0u) |
+                         (m->apu_pulse[0].enabled ? 1u : 0u) |
+                         (m->apu_pulse[1].enabled ? 2u : 0u) |
+                         (m->apu_wave.enabled ? 4u : 0u) |
+                         (m->apu_noise.enabled ? 8u : 0u));
     if (address == 0xFF40) return m->lcdc;
     if (address == 0xFF41)
         return (uint8_t)(0x80u | (m->stat & 0x78u) |
@@ -489,6 +729,8 @@ static void timer_set_signal(gbb_instance *m, int next, uint64_t at) {
     if (m->timer_signal && !next) timer_increment(m, at);
     m->timer_signal = next;
 }
+
+static void apu_sequencer_clock(gbb_instance *m);
 
 static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     if (m->dma_active && m->dma_cpu_blocked &&
@@ -577,8 +819,10 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     else if (address == 0xFF4A) m->wy = value;
     else if (address == 0xFF4B) m->wx = value;
     else if (address == 0xFF04) {
+        int apu_falling_edge = (m->divider_counter & 0x1000u) != 0u;
         m->divider_counter = 0; m->div = 0; m->divider_phase = 0;
         timer_set_signal(m, timer_input(m), m->time_half_dots);
+        if (apu_falling_edge) apu_sequencer_clock(m);
     }
     else if (address == 0xFF05) {
         if (m->time_half_dots == m->timer_reloaded_at) { /* reload wins this sampled write */ }
@@ -608,6 +852,92 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
             }
         }
     }
+    else if (address == 0xFF26) {
+        if ((value & 0x80u) == 0u) { m->apu_power = 0u; apu_power_off(m); }
+        else if (!m->apu_power) { m->apu_power = 1u; m->apu_sequencer_step = 0u; }
+    }
+    else if (address >= 0xFF30u && address <= 0xFF3Fu) {
+        unsigned index = address - 0xFF30u;
+        /* CPU-B revision variation in active wave-RAM access is not hardware-qualified. */
+        if (m->apu_wave.enabled) index = m->apu_wave.position >> 1;
+        m->apu_wave.ram[index] = value;
+    }
+    else if (m->apu_power && address == 0xFF10) {
+        if (m->apu_pulse[0].sweep_negate_used &&
+            (m->apu_pulse[0].sweep & 8u) != 0u && (value & 8u) == 0u)
+            m->apu_pulse[0].enabled = 0;
+        m->apu_pulse[0].sweep = (uint8_t)(value & 0x7Fu);
+    }
+    else if (m->apu_power && address == 0xFF11) {
+        m->apu_pulse[0].duty_length = value;
+        m->apu_pulse[0].length = (uint16_t)(64u - (value & 0x3Fu));
+    }
+    else if (m->apu_power && address == 0xFF12) {
+        m->apu_pulse[0].envelope = value;
+        if ((value & 0xF8u) == 0u) m->apu_pulse[0].enabled = 0;
+    }
+    else if (m->apu_power && address == 0xFF13) m->apu_pulse[0].frequency_low = value;
+    else if (m->apu_power && address == 0xFF14) {
+        m->apu_pulse[0].control = (uint8_t)(value & 0x47u);
+        if ((value & 0x80u) != 0u) apu_pulse_trigger(m, 0u);
+    }
+    else if (m->apu_power && address == 0xFF16) {
+        m->apu_pulse[1].duty_length = value;
+        m->apu_pulse[1].length = (uint16_t)(64u - (value & 0x3Fu));
+    }
+    else if (m->apu_power && address == 0xFF17) {
+        m->apu_pulse[1].envelope = value;
+        if ((value & 0xF8u) == 0u) m->apu_pulse[1].enabled = 0;
+    }
+    else if (m->apu_power && address == 0xFF18) m->apu_pulse[1].frequency_low = value;
+    else if (m->apu_power && address == 0xFF19) {
+        m->apu_pulse[1].control = (uint8_t)(value & 0x47u);
+        if ((value & 0x80u) != 0u) apu_pulse_trigger(m, 1u);
+    }
+    else if (m->apu_power && address == 0xFF1A) {
+        m->apu_wave.dac = (uint8_t)(value & 0x80u);
+        if (m->apu_wave.dac == 0u) m->apu_wave.enabled = 0;
+    }
+    else if (m->apu_power && address == 0xFF1B) {
+        m->apu_wave.length_reg = value;
+        m->apu_wave.length = (uint16_t)(256u - value);
+    }
+    else if (m->apu_power && address == 0xFF1C) m->apu_wave.level = (uint8_t)(value & 0x60u);
+    else if (m->apu_power && address == 0xFF1D) m->apu_wave.frequency_low = value;
+    else if (m->apu_power && address == 0xFF1E) {
+        m->apu_wave.control = (uint8_t)(value & 0x47u);
+        if ((value & 0x80u) != 0u) {
+            uint16_t frequency = (uint16_t)(m->apu_wave.frequency_low |
+                                            ((m->apu_wave.control & 7u) << 8));
+            m->apu_wave.timer = (uint16_t)((2048u - frequency) * 2u);
+            m->apu_wave.position = 0u;
+            if (m->apu_wave.length == 0u) m->apu_wave.length = 256u;
+            m->apu_wave.enabled = m->apu_power && m->apu_wave.dac != 0u;
+        }
+    }
+    else if (m->apu_power && address == 0xFF20) {
+        m->apu_noise.length_reg = (uint8_t)(value & 0x3Fu);
+        m->apu_noise.length = (uint16_t)(64u - m->apu_noise.length_reg);
+    }
+    else if (m->apu_power && address == 0xFF21) {
+        m->apu_noise.envelope = value;
+        if ((value & 0xF8u) == 0u) m->apu_noise.enabled = 0;
+    }
+    else if (m->apu_power && address == 0xFF22) m->apu_noise.polynomial = value;
+    else if (m->apu_power && address == 0xFF23) {
+        m->apu_noise.control = (uint8_t)(value & 0x40u);
+        if ((value & 0x80u) != 0u) {
+            m->apu_noise.timer = apu_noise_period(&m->apu_noise);
+            m->apu_noise.lfsr = 0x7FFFu;
+            m->apu_noise.volume = (uint8_t)(m->apu_noise.envelope >> 4);
+            m->apu_noise.envelope_timer = (uint8_t)((m->apu_noise.envelope & 7u) == 0u
+                ? 8u : m->apu_noise.envelope & 7u);
+            if (m->apu_noise.length == 0u) m->apu_noise.length = 64u;
+            m->apu_noise.enabled = m->apu_power && (m->apu_noise.envelope & 0xF8u) != 0u;
+        }
+    }
+    else if (m->apu_power && address == 0xFF24) m->apu_nr50 = value;
+    else if (m->apu_power && address == 0xFF25) m->apu_nr51 = value;
     else if (address == 0xFF0F) m->interrupt_flags = (uint8_t)(value & 0x1Fu);
     else if (address == 0xFFFF) m->ie = (uint8_t)(value & 0x1Fu);
     else if (address >= 0xC000 && address <= 0xDFFF) m->wram[address - 0xC000] = value;
@@ -632,6 +962,12 @@ static int read_supported(const gbb_instance *m, uint16_t address) {
             ((m->cartridge_ram != NULL && m->cartridge_ram_size != 0u) ||
              cartridge_is_mbc1(m))) ||
            address == 0xFF00 || address == 0xFF01 || address == 0xFF02 ||
+           (address >= 0xFF10 && address <= 0xFF14) ||
+           (address >= 0xFF16 && address <= 0xFF19) ||
+           (address >= 0xFF1A && address <= 0xFF1E) ||
+           (address >= 0xFF20 && address <= 0xFF23) ||
+           (address >= 0xFF30 && address <= 0xFF3F) ||
+           (address >= 0xFF24 && address <= 0xFF26) ||
            (address >= 0xFF04 && address <= 0xFF07) || address == 0xFF0F || address == 0xFFFF ||
            (address >= 0xFF40 && address <= 0xFF46) ||
            (address >= 0xFF47 && address <= 0xFF4B) ||
@@ -1049,6 +1385,73 @@ static void dma_advance_half_dot(gbb_instance *m) {
     }
 }
 
+static void apu_sequencer_clock(gbb_instance *m) {
+    if (!m->apu_power) return;
+    const uint8_t step = m->apu_sequencer_step;
+    if ((step & 1u) == 0u) {
+        for (unsigned i = 0u; i < 2u; ++i) {
+            apu_pulse_channel *pulse = &m->apu_pulse[i];
+            if ((pulse->control & 0x40u) != 0u && pulse->length != 0u &&
+                --pulse->length == 0u) pulse->enabled = 0;
+        }
+        if ((m->apu_wave.control & 0x40u) != 0u && m->apu_wave.length != 0u &&
+            --m->apu_wave.length == 0u) m->apu_wave.enabled = 0;
+        if ((m->apu_noise.control & 0x40u) != 0u && m->apu_noise.length != 0u &&
+            --m->apu_noise.length == 0u) m->apu_noise.enabled = 0;
+    }
+    if (step == 2u || step == 6u) {
+        apu_pulse_channel *pulse = &m->apu_pulse[0];
+        const uint8_t period = (uint8_t)((pulse->sweep >> 4) & 7u);
+        if (pulse->sweep_timer != 0u && --pulse->sweep_timer == 0u) {
+            pulse->sweep_timer = period == 0u ? 8u : period;
+            if (pulse->sweep_enabled && period != 0u) {
+                const uint8_t shift = (uint8_t)(pulse->sweep & 7u);
+                if (shift != 0u) {
+                    const int32_t delta = (int32_t)(pulse->sweep_shadow >> shift);
+                    int32_t next;
+                    if ((pulse->sweep & 8u) != 0u) {
+                        pulse->sweep_negate_used = 1;
+                        next = (int32_t)pulse->sweep_shadow - delta;
+                    } else {
+                        next = (int32_t)pulse->sweep_shadow + delta;
+                    }
+                    if (next > 2047 || next < 0) pulse->enabled = 0;
+                    else {
+                        pulse->sweep_shadow = (uint16_t)next;
+                        pulse->frequency = (uint16_t)next;
+                        pulse->frequency_low = (uint8_t)next;
+                        pulse->control = (uint8_t)((pulse->control & 0x40u) | ((uint16_t)next >> 8));
+                        pulse->timer = (uint16_t)((2048u - (uint16_t)next) * 64u);
+                        if (next + ((uint16_t)next >> shift) > 2047) pulse->enabled = 0;
+                    }
+                }
+            }
+        }
+    }
+    if (step == 7u) {
+        for (unsigned i = 0u; i < 2u; ++i) {
+            apu_pulse_channel *pulse = &m->apu_pulse[i];
+            const uint8_t period = (uint8_t)(pulse->envelope & 7u);
+            if (period != 0u && pulse->envelope_timer != 0u &&
+                --pulse->envelope_timer == 0u) {
+                pulse->envelope_timer = period;
+                if ((pulse->envelope & 8u) != 0u) {
+                    if (pulse->volume < 15u) ++pulse->volume;
+                } else if (pulse->volume > 0u) --pulse->volume;
+            }
+        }
+        const uint8_t noise_period = (uint8_t)(m->apu_noise.envelope & 7u);
+        if (noise_period != 0u && m->apu_noise.envelope_timer != 0u &&
+            --m->apu_noise.envelope_timer == 0u) {
+            m->apu_noise.envelope_timer = noise_period;
+            if ((m->apu_noise.envelope & 8u) != 0u) {
+                if (m->apu_noise.volume < 15u) ++m->apu_noise.volume;
+            } else if (m->apu_noise.volume > 0u) --m->apu_noise.volume;
+        }
+    }
+    m->apu_sequencer_step = (uint8_t)((step + 1u) & 7u);
+}
+
 static void advance_devices_to(gbb_instance *m, uint64_t target) {
     while (m->time_half_dots < target) {
         ++m->time_half_dots;
@@ -1076,9 +1479,61 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
         }
         m->divider_phase ^= 1u;
         if (m->divider_phase == 0) {
+            const int apu_signal_before = (m->divider_counter & 0x1000u) != 0u;
             ++m->divider_counter;
             m->div = (uint8_t)(m->divider_counter >> 8);
             timer_set_signal(m, timer_input(m), m->time_half_dots);
+            if (apu_signal_before && (m->divider_counter & 0x1000u) == 0u)
+                apu_sequencer_clock(m);
+        }
+        for (unsigned i = 0u; i < 2u; ++i) {
+            apu_pulse_channel *pulse = &m->apu_pulse[i];
+            if (pulse->enabled) {
+                if (pulse->timer > 1u) --pulse->timer;
+                else {
+                    pulse->timer = (uint16_t)((2048u - pulse->frequency) * 64u);
+                    pulse->phase = (uint8_t)((pulse->phase + 1u) & 7u);
+                }
+            }
+        }
+        if (m->apu_wave.enabled) {
+            if (m->apu_wave.timer > 1u) --m->apu_wave.timer;
+            else {
+                uint16_t frequency = (uint16_t)(m->apu_wave.frequency_low |
+                                                ((m->apu_wave.control & 7u) << 8));
+                m->apu_wave.timer = (uint16_t)((2048u - frequency) * 2u);
+                m->apu_wave.position = (uint8_t)((m->apu_wave.position + 1u) & 31u);
+            }
+        }
+        if (m->apu_noise.enabled) {
+            if (m->apu_noise.timer > 1u) --m->apu_noise.timer;
+            else {
+                m->apu_noise.timer = apu_noise_period(&m->apu_noise);
+                uint16_t feedback = (uint16_t)((m->apu_noise.lfsr ^
+                                                (m->apu_noise.lfsr >> 1)) & 1u);
+                m->apu_noise.lfsr = (uint16_t)((m->apu_noise.lfsr >> 1) |
+                                               (feedback << 14));
+                if ((m->apu_noise.polynomial & 8u) != 0u)
+                    m->apu_noise.lfsr = (uint16_t)((m->apu_noise.lfsr & ~(uint16_t)0x40u) |
+                                                   (feedback << 6));
+            }
+        }
+        m->apu_sample_phase += GBB_AUDIO_SAMPLE_RATE;
+        int32_t left, right;
+        audio_current_mix(m, &left, &right);
+        if (left != m->audio_mix_level[0] || right != m->audio_mix_level[1]) {
+            const unsigned phase = (unsigned)((m->apu_sample_phase * GBB_AUDIO_EVENT_PHASES) /
+                                               GBB_AUDIO_CLOCK_HALF_DOTS) % GBB_AUDIO_EVENT_PHASES;
+            audio_add_edge(m, 0u, left - m->audio_mix_level[0], phase);
+            audio_add_edge(m, 1u, right - m->audio_mix_level[1], phase);
+            m->audio_mix_level[0] = left; m->audio_mix_level[1] = right;
+        }
+        if (m->apu_sample_phase >= GBB_AUDIO_CLOCK_HALF_DOTS) {
+            m->apu_sample_phase -= GBB_AUDIO_CLOCK_HALF_DOTS;
+            const gbb_audio_frame frame = audio_process_sample(m);
+            if (m->audio_frames != NULL &&
+                m->audio_frame_count < m->audio_frame_capacity)
+                m->audio_frames[m->audio_frame_count++] = frame;
         }
         dma_advance_half_dot(m);
         m->ppu_half_phase ^= 1u;
@@ -1142,6 +1597,13 @@ gbb_error gbb_copy_frame(const gbb_instance *instance, uint8_t *pixels,
                            instance->frame_completion_half_dots};
     *out_info = info;
     return GBB_OK;
+}
+
+static int audio_preflight(const gbb_instance *m, uint64_t half_dots) {
+    if (!m->audio_run_active) return 1;
+    const uint64_t samples = (m->apu_sample_phase +
+        half_dots * GBB_AUDIO_SAMPLE_RATE) / GBB_AUDIO_CLOCK_HALF_DOTS;
+    return samples <= (uint64_t)(m->audio_frame_capacity - m->audio_frame_count);
 }
 
 static void advance_devices(gbb_instance *m, uint64_t half_dots) {
@@ -1675,6 +2137,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
         unsigned interrupt = instance->ime ? pending_interrupt(instance) : 5;
         if (interrupt < 5) {
             if (40u > budget_half_dots - result.consumed_half_dots) return result;
+            if (!audio_preflight(instance, 40u)) { result.reason=GBB_STOP_OUTPUT_FULL; return result; }
             if (UINT64_MAX - instance->time_half_dots < 40u) { result.reason=GBB_STOP_INVALID_STATE; return result; }
             gbb_diagnostic_record operation[GBB_DIAGNOSTIC_OPERATION_RESERVE];
             if (instance->diagnostic_output != NULL &&
@@ -1696,6 +2159,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 continue;
             }
             if (budget_half_dots - result.consumed_half_dots < 8u) return result;
+            if (!audio_preflight(instance, 8u)) { result.reason=GBB_STOP_OUTPUT_FULL; return result; }
             if (UINT64_MAX - instance->time_half_dots < 8u) { result.reason=GBB_STOP_INVALID_STATE; return result; }
             /* HALT samples wake conditions at each machine-cycle boundary.
              * A timer/serial interrupt midway through a long budget must wake
@@ -1727,6 +2191,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
         }
         uint8_t cost=instruction_cost(instance,d);
         if (cost > budget_half_dots-result.consumed_half_dots) return result;
+        if (!audio_preflight(instance, cost)) { result.reason=GBB_STOP_OUTPUT_FULL; return result; }
         if (UINT64_MAX - instance->time_half_dots < cost) {
             result.reason = GBB_STOP_INVALID_STATE;
             return result;
@@ -1795,6 +2260,40 @@ gbb_run_result gbb_run_ex(gbb_instance *instance, uint64_t budget_half_dots,
 gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
                        gbb_trace_record *trace, size_t trace_capacity) {
     return gbb_run_ex(instance, budget_half_dots, trace, trace_capacity, NULL, 0);
+}
+
+gbb_run_result gbb_run_audio(gbb_instance *instance, uint64_t budget_half_dots,
+                             gbb_audio_frame *frames, size_t frame_capacity,
+                             size_t *out_frame_count) {
+    gbb_run_result invalid = {0, GBB_STOP_INVALID_STATE, 0, 0, 0, 0};
+    if (out_frame_count == NULL) return invalid;
+    *out_frame_count = 0u;
+    if ((frames == NULL && frame_capacity != 0u) || instance == NULL ||
+        instance->audio_run_active || instance->diagnostic_output != NULL)
+        return invalid;
+    if (frames != NULL && frame_capacity != 0u) {
+        if (frame_capacity > SIZE_MAX / sizeof(*frames)) return invalid;
+        const uintptr_t frame_begin = (uintptr_t)(void *)frames;
+        const uintptr_t count_begin = (uintptr_t)(void *)out_frame_count;
+        const size_t frame_bytes = frame_capacity * sizeof(*frames);
+        if (frame_bytes > UINTPTR_MAX - frame_begin ||
+            sizeof(*out_frame_count) > UINTPTR_MAX - count_begin)
+            return invalid;
+        const uintptr_t frame_end = frame_begin + frame_bytes;
+        const uintptr_t count_end = count_begin + sizeof(*out_frame_count);
+        if (frame_begin < count_end && count_begin < frame_end) return invalid;
+    }
+    instance->audio_frames = frames;
+    instance->audio_frame_capacity = frame_capacity;
+    instance->audio_frame_count = 0u;
+    instance->audio_run_active = 1;
+    gbb_run_result result = gbb_run_internal(instance, budget_half_dots, NULL, 0u);
+    *out_frame_count = instance->audio_frame_count;
+    instance->audio_frames = NULL;
+    instance->audio_frame_capacity = 0u;
+    instance->audio_frame_count = 0u;
+    instance->audio_run_active = 0;
+    return result;
 }
 
 uint8_t gbb_peek_ram(const gbb_instance *instance, uint16_t address) {

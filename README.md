@@ -3,9 +3,21 @@
 GabbaBoy is an original portable C17 Game Boy / Game Boy Color project. Its
 headless core implements a declared, bootless DMG-CPU-B software profile with
 CPU, bus, timer, serial, joypad, video, and scoped cartridge behavior. The
-optional macOS player supports standard MBC1 battery-backed RAM and managed
-save continuation. It does not execute a Nintendo boot ROM, implement audio
-or CGB, or establish general game compatibility or physical-hardware accuracy.
+optional macOS player supports standard MBC1 battery-backed RAM, managed save
+continuation, and SDL3 playback of the core's scoped DMG-CPU-B digital APU
+model. The project does not execute a Nintendo boot ROM or support CGB/VIN,
+and it makes no general game compatibility or physical-hardware accuracy claim.
+
+## Audio and playback evidence
+
+The core emits caller-owned 48 kHz signed 16-bit interleaved stereo PCM from
+four modeled DMG channels. The optional player uses a bounded SDL3 queue and
+host-only volume controls. Its measurement script records a five-second
+authored pulse workload, exact source revision, PCM digest, queue counters,
+and application-side underflow/backpressure labels. SDL dummy and software
+results do not establish hardware starvation, physical hotplug, analog output,
+or listening quality. See the [audio and playback contract](docs/audio-and-playback.md)
+and [DMG preview guide](docs/preview.md).
 
 ## Build and run the tracer
 

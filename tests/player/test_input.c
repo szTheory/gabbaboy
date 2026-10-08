@@ -213,14 +213,128 @@ static int player_input_focus(const char *demo_path) {
     return 0;
 }
 
+static int player_input_sources(const char *demo_path) {
+    gbb_instance *machine = load_demo(demo_path);
+    REQUIRE(machine != NULL);
+    player_input_state state;
+    player_input_reset(&state, 1000u);
+    REQUIRE(player_input_gamepad_added(&state, 11u));
+    REQUIRE(player_input_gamepad_added(&state, 22u));
+    REQUIRE(player_input_key(&state, machine, 1000u, SDL_SCANCODE_Z,
+                            true, false) == GBB_OK);
+    REQUIRE(player_input_gamepad_button(&state, machine, 1000u, 11u,
+            SDL_GAMEPAD_BUTTON_SOUTH, true) == GBB_OK);
+    REQUIRE(player_input_gamepad_button(&state, machine, 1000u, 11u,
+            SDL_GAMEPAD_BUTTON_DPAD_RIGHT, true) == GBB_OK);
+    REQUIRE(player_input_gamepad_button(&state, machine, 1000u, 22u,
+            SDL_GAMEPAD_BUTTON_DPAD_DOWN, true) == GBB_OK);
+    REQUIRE(state.held_buttons == ((1u << GBB_BUTTON_A) |
+            (1u << GBB_BUTTON_RIGHT) | (1u << GBB_BUTTON_DOWN)));
+    REQUIRE(player_input_gamepad_removed(&state, machine, 1000u, 11u) == GBB_OK);
+    REQUIRE(state.held_buttons == ((1u << GBB_BUTTON_A) |
+            (1u << GBB_BUTTON_DOWN)));
+    REQUIRE(state.pending_count == 4u);
+    REQUIRE(state.pending[3].kind == GBB_INPUT_BUTTON_RELEASE &&
+            state.pending[3].value == GBB_BUTTON_RIGHT);
+    REQUIRE(player_input_key(&state, machine, 1000u, SDL_SCANCODE_Z,
+                            false, false) == GBB_OK);
+    REQUIRE(state.held_buttons == (1u << GBB_BUTTON_DOWN));
+    REQUIRE(player_input_gamepad_removed(&state, machine, 1000u, 22u) == GBB_OK);
+    REQUIRE(state.held_buttons == 0u);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int player_input_reconnect(const char *demo_path) {
+    gbb_instance *machine = load_demo(demo_path);
+    REQUIRE(machine != NULL);
+    player_input_state state;
+    player_input_reset(&state, 0u);
+    REQUIRE(player_input_gamepad_added(&state, 41u));
+    REQUIRE(player_input_gamepad_button(&state, machine, 0u, 41u,
+            SDL_GAMEPAD_BUTTON_DPAD_LEFT, true) == GBB_OK);
+    REQUIRE(player_input_gamepad_removed(&state, machine, 0u, 41u) == GBB_OK);
+    REQUIRE(state.held_buttons == 0u && state.pending_count == 2u);
+    REQUIRE(state.pending[0].kind == GBB_INPUT_BUTTON_PRESS &&
+            state.pending[1].kind == GBB_INPUT_BUTTON_RELEASE &&
+            state.pending[0].value == GBB_BUTTON_LEFT &&
+            state.pending[1].value == GBB_BUTTON_LEFT &&
+            state.pending[0].at_half_dots == state.pending[1].at_half_dots);
+    REQUIRE(player_input_gamepad_added(&state, 41u));
+    REQUIRE(player_input_gamepad_button(&state, machine, 0u, 41u,
+            SDL_GAMEPAD_BUTTON_DPAD_LEFT, false) == GBB_OK);
+    REQUIRE(state.pending_count == 2u && state.held_buttons == 0u);
+    REQUIRE(player_input_gamepad_button(&state, machine, 0u, 41u,
+            SDL_GAMEPAD_BUTTON_DPAD_LEFT, true) == GBB_OK);
+    REQUIRE(state.pending_count == 3u && state.held_buttons == (1u << GBB_BUTTON_LEFT));
+    REQUIRE(state.pending[2].kind == GBB_INPUT_BUTTON_PRESS &&
+            state.pending[2].value == GBB_BUTTON_LEFT &&
+            state.pending[2].at_half_dots == state.pending[0].at_half_dots);
+
+    gbb_input_event fill[PLAYER_INPUT_QUEUE_CAPACITY - 3u];
+    for (size_t i = 0; i < sizeof(fill) / sizeof(fill[0]); ++i)
+        fill[i] = (gbb_input_event){0u, GBB_INPUT_STOP_WAKE, 1u};
+    REQUIRE(gbb_queue_events(machine, fill, sizeof(fill) / sizeof(fill[0])) == GBB_OK);
+    REQUIRE(player_input_gamepad_removed(&state, machine, 0u, 41u) ==
+            GBB_EVENT_QUEUE_FULL);
+    REQUIRE(state.release_pending_buttons == (1u << GBB_BUTTON_LEFT) &&
+            state.held_buttons == (1u << GBB_BUTTON_LEFT));
+    REQUIRE(player_input_retry_focus_releases(&state, machine, 0u) ==
+            GBB_EVENT_QUEUE_FULL);
+    const gbb_run_result run = gbb_run(machine, 500u, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots > 0u);
+    player_input_reconcile(&state, run.consumed_half_dots);
+    REQUIRE(player_input_retry_focus_releases(&state, machine, 0u) == GBB_OK);
+    REQUIRE(state.release_pending_buttons == 0u && state.held_buttons == 0u &&
+            state.pending_count == 1u);
+    REQUIRE(state.pending[0].kind == GBB_INPUT_BUTTON_RELEASE &&
+            state.pending[0].value == GBB_BUTTON_LEFT);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int player_input_focus_audio(const char *demo_path) {
+    (void)demo_path;
+    gbb_instance *machine = create_empty_machine();
+    REQUIRE(machine != NULL);
+    player_input_state state;
+    player_input_reset(&state, 1000u);
+    REQUIRE(player_input_gamepad_added(&state, 91u));
+    REQUIRE(player_input_gamepad_button(&state, machine, 1100u, 91u,
+            SDL_GAMEPAD_BUTTON_SOUTH, true) == GBB_OK);
+    REQUIRE(state.held_buttons == (1u << GBB_BUTTON_A));
+    REQUIRE(player_input_focus_lost(&state, machine, 1200u) == GBB_OK);
+    REQUIRE(state.paused && state.held_buttons == 0u &&
+            state.release_pending_buttons == 0u);
+    const uint64_t original_anchor = state.host_anchor_ns;
+    REQUIRE(player_input_focus_gained(&state, machine, 1300u, 5000u, true) == GBB_OK);
+    REQUIRE(state.paused && state.host_anchor_ns == original_anchor);
+    REQUIRE(player_input_focus_gained(&state, machine, 1400u, 6000u, false) == GBB_OK);
+    REQUIRE(!state.paused && state.host_anchor_ns == 6000u &&
+            state.guest_anchor_half_dots == state.guest_cursor_half_dots);
+    gbb_destroy(machine);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 3) return 2;
     active_case = argv[1];
+    puts("TAP version 13");
+    puts("1..1");
+    fflush(stdout);
+    int result = 2;
     if (strcmp(active_case, "player_input_time") == 0)
-        return player_input_time(argv[2]);
-    if (strcmp(active_case, "player_input_events") == 0)
-        return player_input_events(argv[2]);
-    if (strcmp(active_case, "player_input_focus") == 0)
-        return player_input_focus(argv[2]);
-    return 2;
+        result = player_input_time(argv[2]);
+    else if (strcmp(active_case, "player_input_events") == 0)
+        result = player_input_events(argv[2]);
+    else if (strcmp(active_case, "player_input_focus") == 0)
+        result = player_input_focus(argv[2]);
+    else if (strcmp(active_case, "player_input_sources") == 0)
+        result = player_input_sources(argv[2]);
+    else if (strcmp(active_case, "player_input_reconnect") == 0)
+        result = player_input_reconnect(argv[2]);
+    else if (strcmp(active_case, "player_input_focus_audio") == 0)
+        result = player_input_focus_audio(argv[2]);
+    printf("%s 1 - %s\n", result == 0 ? "ok" : "not ok", active_case);
+    return result;
 }

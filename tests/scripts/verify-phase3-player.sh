@@ -119,6 +119,22 @@ PY
      -s "$project_license" && -s "$sdl_license" ]] ||
     fail 'extracted package is missing a license notice'
   [[ -s "$package_metadata" ]] || fail 'extracted package is missing source and SDL metadata'
+  local package_help="$BUILD_ROOT/downloaded-package-help.txt"
+  "$player_bin" --help >"$package_help" 2>&1 || {
+    cat "$package_help" >&2
+    fail 'extracted package player help did not run'
+  }
+  grep -Fq '48 kHz signed 16-bit interleaved stereo' "$package_help" ||
+    fail 'extracted package help does not state the PCM format'
+  grep -Fq 'default 100%, range 0%-200%' "$package_help" ||
+    fail 'extracted package help does not state the host gain default and range'
+  grep -Fq 'Gamepad: D-pad moves; bottom/South maps to A, right/East maps to B; Start/Back map to Start/Select.' \
+    "$package_help" ||
+    fail 'extracted package help does not document the supported gamepad mapping'
+  grep -Fq 'window title keeps the current gain visible' "$package_help" ||
+    fail 'extracted package help does not state the persistent title gain indicator'
+  grep -Fq 'application PCM underflow is not hardware starvation' "$package_help" ||
+    fail 'extracted package help omits the application-underflow evidence boundary'
   otool -L "$player_bin" | grep -Fq '@rpath/libSDL3.0.dylib' ||
     fail 'packaged executable does not reference its bundled SDL3 library'
   packaged_rpaths=$(otool -l "$player_bin" | awk '
@@ -199,8 +215,14 @@ if metadata.get('signed') is not False or metadata.get('notarized') is not False
     raise SystemExit('preview package metadata must not claim signing or notarization')
 if metadata.get('hardware_qualified') is not False:
     raise SystemExit('preview package metadata must not claim hardware qualification')
-if metadata.get('audio_implemented') is not False:
-    raise SystemExit('preview package metadata audio_implemented must be JSON false because audio is not implemented')
+if metadata.get('audio_implemented') is not True:
+    raise SystemExit('preview package metadata must report the implemented DMG audio path')
+if metadata.get('audio_model_scope') != 'DMG-CPU-B scoped digital APU model; no CGB/VIN or hardware/revision qualification':
+    raise SystemExit('preview package audio model scope is missing or inaccurate')
+if metadata.get('audio_format') != '48000 Hz signed 16-bit interleaved stereo':
+    raise SystemExit('preview package audio format is missing or inaccurate')
+if metadata.get('audio_gain_default_percent') != 100 or metadata.get('audio_gain_range_percent') != [0, 200]:
+    raise SystemExit('preview package audio gain metadata is missing or inaccurate')
 if metadata.get('battery_persistence_implemented') is not True:
     raise SystemExit('preview package metadata battery_persistence_implemented must be JSON true because the MBC1 battery path is implemented')
 if receipt.get('github_run_id') != metadata.get('github_run_id') or receipt.get('github_run_attempt') != metadata.get('github_run_attempt'):
@@ -325,6 +347,10 @@ case "$mode" in
   *) fail 'usage: verify-phase3-player.sh [--build-package] | --verify-package ARTIFACT-DIR' ;;
 esac
 
+# The package lane qualifies the SDL software path, never physical hotplug or
+# audible output. Set this before any player/test process can initialize SDL.
+export SDL_AUDIO_DRIVER=dummy
+
 for tool in python3 shasum otool; do
   command -v "$tool" >/dev/null 2>&1 || fail "required macOS verification tool is missing: $tool"
 done
@@ -385,6 +411,30 @@ SDL_LICENSE_SHA256=$(sha256_file "$SDL_SOURCE/LICENSE.txt")
 PLAYER_BIN="$APP_BUILD/gabbaboy-player"
 [[ -x "$PLAYER_BIN" ]] || fail 'player build did not produce gabbaboy-player'
 [[ -s "$SDL_PREFIX/lib/libSDL3.0.dylib" ]] || fail 'pinned SDL build did not install libSDL3.0.dylib'
+DUMMY_AUDIO_OUTPUT=$("$PLAYER_BIN" --audio-dummy-smoke 2>&1) || {
+  printf '%s\n' "$DUMMY_AUDIO_OUTPUT" >&2
+  fail 'built player could not open, stream, close, and recover on SDL dummy audio'
+}
+printf '%s\n' "$DUMMY_AUDIO_OUTPUT"
+grep -Fq 'audio dummy smoke passed: driver=dummy open/stream/close/recovery' \
+  <<< "$DUMMY_AUDIO_OUTPUT" ||
+  fail 'built player did not expose the forced SDL dummy backend smoke receipt'
+
+PLAYER_HELP_OUTPUT=$("$PLAYER_BIN" --help 2>&1) || {
+  printf '%s\n' "$PLAYER_HELP_OUTPUT" >&2
+  fail 'built player help did not run'
+}
+grep -Fq '48 kHz signed 16-bit interleaved stereo' <<< "$PLAYER_HELP_OUTPUT" ||
+  fail 'built player help does not state the PCM format'
+grep -Fq 'default 100%, range 0%-200%' <<< "$PLAYER_HELP_OUTPUT" ||
+  fail 'built player help does not state the host gain default and range'
+grep -Fq 'Gamepad: D-pad moves; bottom/South maps to A, right/East maps to B; Start/Back map to Start/Select.' \
+  <<< "$PLAYER_HELP_OUTPUT" ||
+  fail 'built player help does not document the supported gamepad mapping'
+grep -Fq 'window title keeps the current gain visible' <<< "$PLAYER_HELP_OUTPUT" ||
+  fail 'built player help does not state the persistent title gain indicator'
+grep -Fq 'application PCM underflow is not hardware starvation' <<< "$PLAYER_HELP_OUTPUT" ||
+  fail 'built player help omits the application-underflow evidence boundary'
 
 STAGE_ROOT="$BUILD_ROOT/package-stage"
 PACKAGE_PREFIX="$STAGE_ROOT/installed-prefix"
@@ -477,7 +527,11 @@ metadata = {
     'demo_rom_sha256': manifest['sha256'],
     'demo_rom_size_bytes': manifest['size_bytes'],
     'demo_license': 'MIT',
-    'audio_implemented': False,
+    'audio_implemented': True,
+    'audio_model_scope': 'DMG-CPU-B scoped digital APU model; no CGB/VIN or hardware/revision qualification',
+    'audio_format': '48000 Hz signed 16-bit interleaved stereo',
+    'audio_gain_default_percent': 100,
+    'audio_gain_range_percent': [0, 200],
     'battery_persistence_implemented': True,
     'battery_persistence_scope': 'standard MBC1 type 0x03 with 8 KiB battery RAM; exact-ROM identity; atomic save and recovery; software fixture continuation',
     'battery_fixture_sha256': battery_manifest['sha256'],

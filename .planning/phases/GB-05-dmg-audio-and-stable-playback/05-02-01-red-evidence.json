@@ -1,0 +1,10 @@
+{
+  "command": "./build/tests/test_apu apu_pulse",
+  "exitCode": 1,
+  "output": "TAP version 13\n1..1\nnot ok 1 - apu_pulse\n",
+  "targetTest": "apu_pulse",
+  "targetFile": "tests/test_apu.c",
+  "expected": "Guest writes to pulse two's NR22 volume register are readable through the guest bus.",
+  "actual": "The target assertion failed because the register read returned the unmapped-register value.",
+  "semanticAssessment": "The target test executed and failed on the planned pulse-two NR22 readback assertion. Build and fixture setup succeeded; this is valid RED evidence for missing pulse-two register decoding."
+}

@@ -1,0 +1,10 @@
+{
+  "command": "build/phase3-player/gabbaboy/tests/player/test_player_input player_input_sources fixtures/visible-demo/demo.gb",
+  "exitCode": 1,
+  "output": "TAP version 13\n1..1\nnot ok 1 - player_input_sources\n",
+  "targetTest": "player_input_sources",
+  "targetFile": "tests/player/test_input.c",
+  "expected": "Keyboard and independently held controller contributions remain in the guest button aggregate; removing one controller releases only its unique buttons.",
+  "actual": "The target assertion on the aggregate held_buttons failed after controller button events because the new API scaffold did not yet apply controller contributions.",
+  "semanticAssessment": "The named test executed and failed on the planned guest-button ownership assertion. TAP reports exactly one failing target; build and fixture loading succeeded, so this is valid RED evidence."
+}

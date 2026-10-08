@@ -1,6 +1,6 @@
 # GabbaBoy research index
 
-Updated: 2026-10-07. Target: original C Game Boy / Game Boy Color core. These documents establish research and recommendations; they do not establish an implemented emulator.
+Updated: 2026-10-08. Target: original C Game Boy / Game Boy Color core. These documents establish research and recommendations; they do not establish an implemented emulator.
 
 ## Start here
 
@@ -14,6 +14,7 @@ Read [SUMMARY.md](SUMMARY.md) for the integrated recommendation, six-phase initi
 | What should the first player deliver, and what waits? | [FEATURES.md](FEATURES.md), [SUMMARY.md](SUMMARY.md) | [SameBoy features](https://sameboy.github.io/features/), [SameBoy changes](https://sameboy.github.io/changelog/), [BGB](https://bgb.bircd.org/) |
 | How should time, models, bus, device state and adapters fit? | [ARCHITECTURE.md](ARCHITECTURE.md) | [Pan Docs](https://github.com/gbdev/pandocs), [Gekkio reference](https://gekkio.fi/files/gb-docs/gbctr.pdf), [BESS](https://github.com/LIJI32/SameBoy/blob/master/BESS.md) |
 | Which hardware rules, tests, model exclusions and fixture rights apply? | [HARDWARE-AND-VALIDATION.md](HARDWARE-AND-VALIDATION.md) | [Mooneye](https://github.com/Gekkio/mooneye-test-suite), [dmg-acid2](https://github.com/mattcurrie/dmg-acid2), [cgb-acid2](https://github.com/mattcurrie/cgb-acid2), [Mealybug](https://github.com/mattcurrie/mealybug-tearoom-tests), [SameSuite](https://github.com/LIJI32/SameSuite), [MagenTests](https://github.com/alloncm/MagenTests) |
+| How should DMG audio, fixed PCM, resampling, and SDL playback be scoped? | [AUDIO-OUTPUT.md](AUDIO-OUTPUT.md) | [Pan Docs audio](https://gbdev.io/pandocs/Audio.html), [SDL3 audio streams](https://wiki.libsdl.org/SDL3/SDL_AudioStream), [Blip_Buffer author reference](https://www.slack.net/~ant/bl-synth/) |
 | What failures must gates detect? | [PITFALLS.md](PITFALLS.md) | Hardware sources above; linked sibling review and source records in [PRECEDENT.md](PRECEDENT.md) |
 | What actually works in siblings, and what was corrected? | [PRECEDENT.md](PRECEDENT.md) | Repository-relative source/review paths and observed revisions; distinguish source, recorded run, current dirty work and proposal |
 | How do CI, release, safety, performance and adoption evidence work? | [QUALITY-AND-DELIVERY.md](QUALITY-AND-DELIVERY.md) | [ASan](https://clang.llvm.org/docs/AddressSanitizer.html), [UBSan](https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html), [GitHub tokens](https://docs.github.com/en/actions/concepts/security/github_token), [required checks](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks), [Apple notarization](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow) |
@@ -24,6 +25,7 @@ Read [SUMMARY.md](SUMMARY.md) for the integrated recommendation, six-phase initi
 - [Phase 2 planning research](../phases/GB-02-dmg-cpu-bus-and-time/02-RESEARCH.md) covers timed SM83 execution, CPU-visible mapping, timer/serial behavior and a pinned Mooneye candidate set. Mooneye fixture reproduction needs WLA-DX; ordinary tests will consume reviewed checked-in bytes. Gekkio revision 192 §12.1 documents undefined reads when no cartridge device responds, so no universal absent-RAM byte is qualified. Fixture admission and implementation evidence remain pending. [Validation contract](../phases/GB-02-dmg-cpu-bus-and-time/02-VALIDATION.md).
 - Phase 2's selected Mooneye common font has separate author licensing; a root MIT notice does not establish rights for font-derived fixture bytes. The research records that closure and independently sourced timer expectations; [reviewed plans](../phases/GB-02-dmg-cpu-bus-and-time/02-PLAN-CHECK.md) assign admission and verification before any qualification claim.
 - [Phase 3 planning research](../phases/GB-03-visible-interactive-dmg/03-RESEARCH.md) records the model-applicability boundary for PPU/DMA and JOYP behavior. Plan 03-09 adds exact-head macOS arm64 package and downloaded-byte evidence; see its [summary](../phases/GB-03-visible-interactive-dmg/03-09-SUMMARY.md) and [validation contract](../phases/GB-03-visible-interactive-dmg/03-VALIDATION.md). VIDEO-02 and VIDEO-03 remain open despite the package pass.
+- [Phase 5 discussion context](../phases/GB-05-dmg-audio-and-stable-playback/05-CONTEXT.md) and [audio output research](AUDIO-OUTPUT.md) record the selected scoped DMG APU model, 48 kHz PCM contract, resampler/dependency decision, SDL callback/ring boundary, honest queue metrics, and hardware/perceptual evidence limits. These are planning decisions, not implemented playback or a physical DMG qualification.
 
 ## Evidence freshness and confidence
 

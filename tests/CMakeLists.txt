@@ -50,6 +50,37 @@ foreach(case guest_overflow mid_instruction selectors div_write tac_write tima_c
   add_test(NAME timer_${case} COMMAND test_timer ${case})
 endforeach()
 
+add_executable(test_audio test_audio.c)
+target_link_libraries(test_audio PRIVATE GabbaBoy::core)
+target_compile_features(test_audio PRIVATE c_std_17)
+set_target_properties(test_audio PROPERTIES C_EXTENSIONS OFF)
+foreach(case tracer capacity signal fractional_edges partition filter
+             rounding saturation api_edges)
+  add_test(NAME audio_${case} COMMAND test_audio audio_${case})
+endforeach()
+
+add_library(gabbaboy_core_alloc_probe OBJECT "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c")
+target_include_directories(gabbaboy_core_alloc_probe PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(gabbaboy_core_alloc_probe PRIVATE c_std_17)
+target_compile_definitions(gabbaboy_core_alloc_probe PRIVATE
+  malloc=gbb_test_malloc calloc=gbb_test_calloc
+  realloc=gbb_test_realloc free=gbb_test_free)
+set_target_properties(gabbaboy_core_alloc_probe PROPERTIES C_EXTENSIONS OFF)
+add_executable(test_audio_no_alloc test_audio_no_alloc.c
+  $<TARGET_OBJECTS:gabbaboy_core_alloc_probe>)
+target_include_directories(test_audio_no_alloc PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_audio_no_alloc PRIVATE c_std_17)
+set_target_properties(test_audio_no_alloc PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME audio_no_alloc COMMAND test_audio_no_alloc)
+
+add_executable(test_apu test_apu.c)
+target_link_libraries(test_apu PRIVATE GabbaBoy::core)
+target_compile_features(test_apu PRIVATE c_std_17)
+set_target_properties(test_apu PROPERTIES C_EXTENSIONS OFF)
+foreach(case pulse mixer sequencer timeline wave noise envelope sweep power)
+  add_test(NAME apu_${case} COMMAND test_apu apu_${case})
+endforeach()
+
 add_executable(test_serial test_serial.c)
 target_link_libraries(test_serial PRIVATE GabbaBoy::core)
 target_compile_features(test_serial PRIVATE c_std_17)

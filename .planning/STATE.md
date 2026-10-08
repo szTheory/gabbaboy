@@ -1,20 +1,20 @@
 ---
 gsd_state_version: "1.0"
 milestone: v0.1
-current_phase: 5
-current_phase_name: DMG Audio and Stable Playback
+current_phase: 6
+current_phase_name: Qualified DMG Release and Consumer Handoff
 status: planning
-stopped_at: Phase 4 complete, ready to plan Phase 5
-last_updated: "2026-10-08T04:55:02.469Z"
+stopped_at: Phase 5 complete, ready to plan Phase 6
+last_updated: "2026-10-08T18:11:38.699Z"
 last_activity: 2026-10-08
-last_activity_desc: Phase 4 complete, transitioned to Phase 5
-state_head: 79f83f627ffb3631811b2f39b23081117ebaab8f
+last_activity_desc: Phase 5 complete, transitioned to Phase 6
+state_head: 557d4f6243e164375844cb5f962ac77a8468eaad
 progress:
   total_phases: 6
-  completed_phases: 4
-  total_plans: 42
-  completed_plans: 42
-  percent: 67
+  completed_phases: 5
+  total_plans: 49
+  completed_plans: 49
+  percent: 83
 milestone_name: limited DMG preview
 ---
 
@@ -25,21 +25,23 @@ milestone_name: limited DMG preview
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase GB-04 — MBC1 and Safe Battery Continuation (complete; stopped at phase boundary)
+**Current focus:** Phase GB-06 — Qualified DMG Release and Consumer Handoff
 
 ## Current Position
 
-Phase: 5 — DMG Audio and Stable Playback
+Phase: 6 — Qualified DMG Release and Consumer Handoff
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-10-08 — Phase 4 complete, transitioned to Phase 5
+Last activity: 2026-10-08 — Phase 5 complete, transitioned to Phase 6
 
-Progress: [███████░░░] 67% of milestone phases complete. Phases 1–4 passed goal verification. Phase 4 has 7/7 plan summaries and 4/4 verified goal truths; the core inventory passed 155/155, the relocated package inventory passed 160/160 plus a 155/155 core-only subset, the macOS player/package inventory passed 37/37, and exact hosted PR checks and downloaded Linux/macOS/player package receipts passed on source head `79f83f627ffb3631811b2f39b23081117ebaab8f`. The Windows fixture-byte checkout issue was fixed with narrow Git attributes and re-reviewed clean. See the Phase 4 verification, validation, security, and UI review artifacts. No physical MBC1/DMG or storage power-loss qualification is claimed. Stop here; Phase 5 is next and not started.
+Progress: ███████░░░ [████████░░] 83% of milestone phases complete. Phases 1–5 passed goal verification. Phase 5 completed all seven plans and passed 22/22 goal truths at source `206e107210e750ff0fe647a19b82600b17e98ee3`. Its final local evidence includes core CTest 174/174, the pinned SDL 3.4.18 player/package verifier 50/50, and a clean-tree 300-frame two-partition receipt with identical 241,094-frame PCM digests. See the linked Phase 5 verification and validation reports. CGB/VIN, physical playback/hotplug, and perceptual output remain unqualified.
+
+Phase 5 closeout: The app-level lifecycle test exercises Space pause/resume and R reset through SDL events, checking APU continuation, host PCM clearing, save failure/cancel/retry, and persisted battery recovery. Code review is clean and the security report records zero open threats. The dummy backend and injected events establish software-path behavior only; no physical device, hotplug, or perceptual result is claimed. Phase 6 has not started.
 
 ## Performance Metrics
 
-- Unique plans: 28; average duration / total execution time: 25 min / 700 min. Phase 2 completion is based on goal verification, not task count alone.
-- Per-phase metrics / recent trend: Phases 1–3 are verified complete; Phase 3 has 13/13 plan summaries, 5/5 goal truths, 33/33 UAT checks, a user-confirmed packaged Z press/release, and 141/141 local CTest. PR #4's required exact-head checks passed before merge. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B measurement is claimed. Plan 02-15 is superseded/non-runnable and remains historical.
+- Unique plans: 49; average duration / total execution time: 25 min / 700 min. Phase completion follows goal verification, not task count alone.
+- Per-phase metrics / recent trend: Phases 1–5 are verified complete. Phase 3 has 13/13 plan summaries, 5/5 goal truths, 33/33 UAT checks, a user-confirmed packaged Z press/release, and 141/141 local CTest. PR #4's required exact-head checks passed before merge. Phase 5's current local exact-head evidence is in `GB-05-dmg-audio-and-stable-playback/05-VERIFICATION.md` and `05-VALIDATION.md`; confirm exact-head remote PR checks before any merge rather than inferring them from local results. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B measurement is claimed. Plan 02-15 is superseded/non-runnable and remains historical.
 - Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. At implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`, the local offline inventory passed 104/104 with no skips, the relocated installed C/C++ inventory passed 109/109, the runner passed its fixed one-CPU/two-timer derived corpus, hosted CI run 37620710587 passed, and fixture reproduction run 37620710600 passed. Independent verification passed all five CPU requirements. Original upstream PPU-dependent reporting paths remain excluded; no physical DMG hardware test occurred.
 
 **Per-Plan Metrics:**
@@ -81,6 +83,13 @@ Progress: [███████░░░] 67% of milestone phases complete. Pha
 | Phase 04 P05 | 7min | 2 tasks | 11 files |
 | Phase 04 P06 | 10 min | 2 tasks | 13 files |
 | Phase 04 P07 | 18 min | 2 tasks | documentation, evidence, and workflow metadata |
+| Phase GB-05 P01 | 13min | 2 tasks | 8 files |
+| Phase GB-05 P02 | 17min | 2 tasks | 5 files |
+| Phase GB-05 P03 | 21min | 2 tasks | 8 files |
+| Phase GB-05 P04 | 62 min | 2 tasks | 7 files |
+| Phase GB-05 P05 | 12 min | 2 tasks | 6 files |
+| Phase 05 P06 | 25 min | 3 tasks | 14 files |
+| Phase GB-05 P07 | 32min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -138,6 +147,20 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 04]: On final save failure, require retry, explicit continue without saving, or cancellation before quit, reset, or replacement.
 - [Phase 04]: Keep the original MBC1 battery fixture source, rights, manifest, pinned RGBDS recipe, and checked-in bytes together; ordinary tests verify the digest offline.
 - [Phase 04]: Prove guest continuation with separate bounded processes and distinct missing-save, wrong-ROM-envelope, and altered-payload controls; this is software evidence, not physical hardware qualification.
+- [Phase GB-05]: Expose audio-aware stepping as gbb_run_audio with caller-owned 48 kHz stereo frames; keep legacy run calls muted.
+- [Phase GB-05]: Plan 05-03 adds wave/noise channels and all 16 NR52 status combinations as authored deterministic software-model evidence; active wave-RAM current-byte aliasing is an unqualified revision-scoped assumption. AUDIO-01 is complete for the documented digital model; analog, physical hardware, and perceptual output are not qualified.
+- [Phase GB-05]: Active wave-RAM accesses alias the current byte in the scoped deterministic model; CPU-B revision variation is unqualified.
+- [Phase GB-05]: Use an original per-instance Q15 8-tap FIR and the D-02 48 kHz high-pass approximation; preserve DSP history across output calls and reset it on APU reset.
+- [Phase GB-05]: Reject overflowing PCM frame extents and overlap with the returned count before guest work; initialize a valid count output to zero.
+- [Phase GB-05]: SDL callback services exact requested bytes and retains partial stereo frames across callbacks to avoid queue overrun.
+- [Phase GB-05]: Unavailable audio sinks discard and count PCM immediately while preserving host-paced guest execution.
+- [Phase GB-05]: Player gain is host-only, defaults to 100%, and is adjusted with bracket keys.
+- [Phase GB-05]: Keep per-controller input keyed by stable SDL joystick IDs in a fixed bounded source table, and admit aggregate button changes to the guest queue before committing source state.
+- [Phase GB-05]: Quiesce callbacks before counting and clearing ring, partial-frame, and SDL-stream PCM; perform reset and replacement host cleanup only after existing save transitions succeed.
+- [Phase GB-05]: Treat SDL dummy audio and injected device events as software-path evidence; physical hotplug and audible quality remain unqualified.
+- [Phase GB-05]: Bind the sustained result to the committed source revision, Release build, scoped DMG model, original licensed fixture, and PCM digest.
+- [Phase GB-05]: Keep SDL queued-input bytes and application PCM underflow explicitly separate from playback latency and hardware starvation.
+- [Phase GB-05]: Report dummy backend and default-device availability as software/device-presence evidence only; do not claim physical hotplug or perceptual qualification.
 
 ### Pending Todos
 
@@ -163,10 +186,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-08 — Phase GB-04 execution and verification complete
-Stopped at: Phase 4 complete, ready to plan Phase 5
-Resume file: .planning/.continue-here.md
-Next command in fresh context: $gsd-discuss-phase 5
+Last session: 2026-10-08T18:11:38.699Z
+Stopped at: Phase 5 complete, ready to plan Phase 6
+Resume file: None
+Next command in fresh context: $gsd-discuss-phase 6
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: **Phase GB-04 execution and goal verification, Phase 4 of 6.** All seven plans are complete; SAVE-01 through SAVE-04 passed goal-backward verification. PR #8's exact source-head CI, fixture reproduction, and package-consumer checks passed; see [04-VERIFICATION.md](phases/GB-04-mbc1-and-safe-battery-continuation/04-VERIFICATION.md) and [04-VALIDATION.md](phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md). Keep both auto-advance flags false and stop here.
-Next roadmap phase: **Phase 5 — DMG Audio and Stable Playback**. It has not started. The exact next command is `$gsd-discuss-phase 5`.
+Completed workflow stage: Phase 5 goal verification and phase closeout, within the six-phase milestone.
+Next phase: Phase 6 — Qualified DMG Release and Consumer Handoff. The phase is not started; discuss it using the exact command above.

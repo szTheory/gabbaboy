@@ -108,6 +108,11 @@ typedef struct {
 } gbb_run_result;
 
 typedef struct {
+    int16_t left;
+    int16_t right;
+} gbb_audio_frame;
+
+typedef struct {
     uint32_t width;
     uint32_t height;
     uint64_t generation;
@@ -205,6 +210,17 @@ gbb_run_result gbb_run_ex(gbb_instance *instance, uint64_t budget_half_dots,
                           gbb_trace_record *trace, size_t trace_capacity,
                           gbb_diagnostic_record *diagnostics,
                           size_t diagnostic_capacity);
+/* Audio-aware run. Emits 48 kHz signed 16-bit interleaved stereo frames
+ * (left, right) into caller-owned storage; the core allocates nothing. Capacity
+ * is measured in frames. A NULL frame buffer is valid only with zero capacity;
+ * an overflowing extent or overlap with out_frame_count is invalid. The count
+ * output is set to zero before validation and to the number of frames written
+ * on return. If the next whole instruction could exceed capacity, it stops
+ * before mutating guest state with GBB_STOP_OUTPUT_FULL. Frames remain owned by
+ * the caller. Legacy gbb_run/gbb_run_ex advance the APU muted. */
+gbb_run_result gbb_run_audio(gbb_instance *instance, uint64_t budget_half_dots,
+                             gbb_audio_frame *frames, size_t frame_capacity,
+                             size_t *out_frame_count);
 /* Side-effect-free debug read of WRAM (C000-DFFF and its E000-FDFF echo) or
  * HRAM (FF80-FFFE). Other addresses and a null instance return 0xFF. No
  * pointer into instance storage is exposed. */

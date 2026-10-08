@@ -1,0 +1,10 @@
+{
+  "command": "build/tests/test_apu apu_power 2>/tmp/gbb-apu-power-red-stderr.log",
+  "exitCode": 1,
+  "output": "TAP version 13\n1..1\nnot ok 1 - apu_power\n",
+  "targetTest": "apu_power",
+  "targetFile": "tests/test_apu.c",
+  "expected": "NR52 reports all combinations of the four channel-enable bits and clears channel status on power-off.",
+  "actual": "The channel-status matrix fails while noise registers and the channel-four NR52 bit are unmapped.",
+  "semanticAssessment": "The named TAP target executed and failed for the planned four-channel power behavior, not setup or discovery."
+}

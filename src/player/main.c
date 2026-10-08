@@ -2,6 +2,7 @@
 #include "limitations.h"
 #include "presentation.h"
 #include "session.h"
+#include "audio.h"
 
 #include <stdatomic.h>
 #include <errno.h>
@@ -20,6 +21,9 @@
 #define PLAYER_FRAME_HALF_DOTS UINT64_C(140448)
 #define PLAYER_MAX_OPERATION_HALF_DOTS UINT64_C(40)
 #define PLAYER_BATTERY_SMOKE_HALF_DOTS UINT64_C(200000)
+#define PLAYER_AUDIO_MEASURE_VIDEO_FRAMES UINT64_C(300)
+#define PLAYER_AUDIO_MEASURE_SAMPLE_RATE_HZ UINT64_C(48000)
+#define PLAYER_AUDIO_SMALL_PARTITION_HALF_DOTS UINT64_C(792)
 #define PLAYER_TITLE_SIZE 512u
 
 typedef enum {
@@ -44,8 +48,15 @@ typedef enum {
 } player_transition;
 
 typedef struct {
+    SDL_JoystickID id;
+    SDL_Gamepad *handle;
+} player_gamepad;
+
+typedef struct {
     gbb_instance *machine;
+    player_audio *audio;
     player_input_state input;
+    player_gamepad gamepads[PLAYER_INPUT_GAMEPAD_CAPACITY];
     SDL_Window *window;
     SDL_Surface *surface;
     SDL_Renderer *renderer;
@@ -87,6 +98,333 @@ static void request_quit(player *app);
 static void begin_transition(player *app, player_transition transition,
                              const char *replacement_path);
 static void destroy_player(player *app);
+
+static bool read_measurement_rom(const char *rom_path, uint8_t rom[32768]) {
+    FILE *file = fopen(rom_path, "rb");
+    if (file == NULL) return false;
+    const bool sized = fseek(file, 0L, SEEK_END) == 0 && ftell(file) == 32768L &&
+        fseek(file, 0L, SEEK_SET) == 0;
+    const bool read = sized && fread(rom, 1u, 32768u, file) == 32768u;
+    const bool closed = fclose(file) == 0;
+    return read && closed;
+}
+
+static gbb_instance *create_authored_audio_guest(const char *rom_path) {
+    uint8_t rom[32768];
+    if (rom_path == NULL || !read_measurement_rom(rom_path, rom)) {
+        fputs("Could not read the 32 KiB project-owned audio workload fixture\n",
+              stderr);
+        return NULL;
+    }
+    static const uint8_t program[] = {
+        0x3Eu, 0x80u, 0xEAu, 0x26u, 0xFFu, /* NR52: power on */
+        0x3Eu, 0x77u, 0xEAu, 0x24u, 0xFFu, /* NR50: full left/right level */
+        0x3Eu, 0x11u, 0xEAu, 0x25u, 0xFFu, /* NR51: route pulse one to both */
+        0x3Eu, 0xF0u, 0xEAu, 0x12u, 0xFFu, /* NR12: pulse DAC/envelope */
+        0x3Eu, 0x80u, 0xEAu, 0x11u, 0xFFu, /* NR11: duty and length */
+        0x3Eu, 0xF0u, 0xEAu, 0x13u, 0xFFu, /* NR13: frequency low */
+        0x3Eu, 0x87u, 0xEAu, 0x14u, 0xFFu, /* NR14: trigger and frequency */
+        0x18u, 0xFEu
+    };
+    memcpy(rom + 0x100u, program, sizeof(program));
+    uint8_t checksum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14Du] = checksum;
+    gbb_instance *machine = NULL;
+    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &machine) != GBB_OK ||
+        machine == NULL || gbb_load_rom(machine, rom, sizeof(rom)) != GBB_OK) {
+        gbb_destroy(machine);
+        fputs("Could not load the authored pulse audio workload\n", stderr);
+        return NULL;
+    }
+    return machine;
+}
+
+static bool run_pulse_audio_smoke(player *app, const char *rom_path) {
+    gbb_instance *machine = create_authored_audio_guest(rom_path);
+    if (machine == NULL) return false;
+    gbb_audio_frame frames[512];
+    uint64_t elapsed = 0u;
+    uint64_t produced = 0u;
+    uint64_t nonzero = 0u;
+    uint64_t submitted = 0u;
+    const uint64_t target = PLAYER_FRAME_HALF_DOTS;
+    while (elapsed < target) {
+        size_t count = 0u;
+        const uint64_t remain = target - elapsed;
+        const gbb_run_result result = gbb_run_audio(machine,
+            remain + PLAYER_MAX_OPERATION_HALF_DOTS, frames, 512u, &count);
+        elapsed += result.consumed_half_dots;
+        produced += count;
+        for (size_t i = 0u; i < count; ++i)
+            if (frames[i].left != 0 || frames[i].right != 0) ++nonzero;
+        if (count != 0u && app->audio != NULL) {
+            if (!player_audio_submit(app->audio, frames, (unsigned)count)) {
+                fputs("Authored pulse PCM could not enter the player ring\n", stderr);
+                gbb_destroy(machine);
+                return false;
+            }
+            submitted += count;
+        }
+        if (result.reason != GBB_STOP_BUDGET && result.reason != GBB_STOP_OUTPUT_FULL) {
+            fprintf(stderr, "Pulse smoke guest stopped with reason %d\n", (int)result.reason);
+            gbb_destroy(machine);
+            return false;
+        }
+        if (result.consumed_half_dots == 0u && count == 0u) {
+            fputs("Pulse smoke guest made no progress\n", stderr);
+            gbb_destroy(machine);
+            return false;
+        }
+    }
+    gbb_destroy(machine);
+    if (produced == 0u || nonzero == 0u ||
+        (app->audio != NULL && submitted == 0u)) {
+        fputs("Authored pulse guest did not produce nonzero PCM for the SDL adapter\n", stderr);
+        return false;
+    }
+    printf("audio smoke: guest_frames=%llu nonzero_frames=%llu submitted_frames=%llu sink=%s unavailable_discard_frames=%llu underflow_frames=%llu backpressure_events=%llu high_water_frames=%u queued_input_bytes=%llu\n",
+        (unsigned long long)produced, (unsigned long long)nonzero,
+        (unsigned long long)submitted,
+        player_audio_available(app->audio) ? "sdl" : "unavailable",
+        (unsigned long long)player_audio_unavailable_frames(app->audio),
+        (unsigned long long)(app->audio != NULL ? player_audio_underflow(app->audio) : 0u),
+        (unsigned long long)(app->audio != NULL ? player_audio_backpressure_events(app->audio) : 0u),
+        app->audio != NULL ? player_audio_high_water(app->audio) : 0u,
+        (unsigned long long)player_audio_queued_input_bytes(app->audio));
+    return true;
+}
+
+static bool write_pcm_s16le(const gbb_audio_frame *frames, size_t count) {
+    uint8_t bytes[512u * sizeof(gbb_audio_frame)];
+    if (count > 512u) return false;
+    for (size_t i = 0u; i < count; ++i) {
+        const uint16_t left = (uint16_t)frames[i].left;
+        const uint16_t right = (uint16_t)frames[i].right;
+        bytes[i * 4u] = (uint8_t)(left & 0xFFu);
+        bytes[i * 4u + 1u] = (uint8_t)(left >> 8u);
+        bytes[i * 4u + 2u] = (uint8_t)(right & 0xFFu);
+        bytes[i * 4u + 3u] = (uint8_t)(right >> 8u);
+    }
+    return fwrite(bytes, sizeof(bytes[0]), count * sizeof(gbb_audio_frame), stdout) ==
+        count * sizeof(gbb_audio_frame);
+}
+
+static bool run_audio_measure(const char *partition, const char *rom_path) {
+    const char *driver = SDL_GetCurrentAudioDriver();
+    if (driver == NULL || strcmp(driver, "dummy") != 0) {
+        fprintf(stderr, "Audio measurement requires SDL_AUDIO_DRIVER=dummy; got %s\n",
+                driver == NULL ? "<none>" : driver);
+        return false;
+    }
+    const uint64_t partition_half_dots = strcmp(partition, "frame") == 0
+        ? PLAYER_FRAME_HALF_DOTS
+        : strcmp(partition, "792") == 0
+            ? PLAYER_AUDIO_SMALL_PARTITION_HALF_DOTS : 0u;
+    if (partition_half_dots == 0u) {
+        fputs("Audio measurement partition must be 'frame' or '792'\n", stderr);
+        return false;
+    }
+    player_audio *audio = player_audio_create();
+    gbb_instance *machine = create_authored_audio_guest(rom_path);
+    if (audio == NULL || !player_audio_available(audio) || machine == NULL) {
+        fputs("Audio measurement could not open the SDL dummy stream or load its guest\n",
+              stderr);
+        player_audio_destroy(audio);
+        gbb_destroy(machine);
+        return false;
+    }
+
+    const uint64_t target_half_dots =
+        PLAYER_FRAME_HALF_DOTS * PLAYER_AUDIO_MEASURE_VIDEO_FRAMES;
+    const uint64_t target_sample_count =
+        target_half_dots * PLAYER_AUDIO_MEASURE_SAMPLE_RATE_HZ /
+        UINT64_C(8388608);
+    uint64_t elapsed_half_dots = 0u;
+    uint64_t sample_count = 0u;
+    bool passed = true;
+    while (elapsed_half_dots < target_half_dots) {
+        unsigned capacity = player_audio_capacity(audio);
+        if (capacity == 0u) {
+            player_audio_note_backpressure(audio);
+            SDL_Delay(1u);
+            continue;
+        }
+        if (capacity > 512u) capacity = 512u;
+        const uint64_t remaining = target_half_dots - elapsed_half_dots;
+        uint64_t budget = partition_half_dots;
+        if (budget > remaining) budget = remaining + PLAYER_MAX_OPERATION_HALF_DOTS;
+        gbb_audio_frame frames[512];
+        size_t count = 0u;
+        const gbb_run_result result = gbb_run_audio(machine, budget, frames,
+                                                     capacity, &count);
+        size_t output_count = count;
+        if (sample_count >= target_sample_count) {
+            output_count = 0u;
+        } else if (output_count > target_sample_count - sample_count) {
+            output_count = (size_t)(target_sample_count - sample_count);
+        }
+        if (output_count != 0u) {
+            if (!write_pcm_s16le(frames, output_count) ||
+                !player_audio_submit(audio, frames, (unsigned)output_count)) {
+                fputs("Audio measurement could not preserve and submit every PCM frame\n",
+                      stderr);
+                passed = false;
+                break;
+            }
+            sample_count += output_count;
+        }
+        if ((result.reason != GBB_STOP_BUDGET &&
+             result.reason != GBB_STOP_OUTPUT_FULL) ||
+            result.consumed_half_dots > budget ||
+            (result.consumed_half_dots == 0u && count == 0u)) {
+            fprintf(stderr, "Audio measurement guest stopped without bounded progress (reason=%d)\n",
+                    (int)result.reason);
+            passed = false;
+            break;
+        }
+        if (result.consumed_half_dots > UINT64_MAX - elapsed_half_dots) {
+            fputs("Audio measurement guest timeline overflowed\n", stderr);
+            passed = false;
+            break;
+        }
+        elapsed_half_dots += result.consumed_half_dots;
+    }
+
+    if (passed && (elapsed_half_dots < target_half_dots ||
+        elapsed_half_dots - target_half_dots > PLAYER_MAX_OPERATION_HALF_DOTS ||
+        sample_count != target_sample_count || fflush(stdout) != 0)) {
+        fputs("Audio measurement did not finish within its declared timeline or exact PCM count\n",
+              stderr);
+        passed = false;
+    }
+    if (passed) {
+        const uint64_t queued_input_bytes = player_audio_queued_input_bytes(audio);
+        if (!player_audio_clear(audio)) {
+            fputs("Audio measurement could not quiesce and count its final host backlog\n",
+                  stderr);
+            passed = false;
+        } else {
+            const uint64_t flushed_bytes = (uint64_t)player_audio_flushed_bytes(audio);
+            const uint64_t unavailable_frames =
+                (uint64_t)player_audio_unavailable_frames(audio);
+            const uint64_t stream_write_failures =
+                (uint64_t)player_audio_sink_failures(audio);
+            const uint64_t stream_write_failure_pcm_bytes =
+                (uint64_t)player_audio_sink_failure_pcm_bytes(audio);
+            const uint64_t unavailable_bytes = unavailable_frames >
+                UINT64_MAX / sizeof(gbb_audio_frame)
+                ? UINT64_MAX
+                : unavailable_frames * sizeof(gbb_audio_frame);
+            const uint64_t discard_bytes = UINT64_MAX - flushed_bytes <
+                unavailable_bytes ? UINT64_MAX : flushed_bytes + unavailable_bytes;
+            fprintf(stderr,
+                "audio_measure model=DMG-CPU-B workload=authored-pulse-control-loop-v1 driver=dummy duration_video_frames=%llu duration_half_dots=%llu elapsed_half_dots=%llu sample_rate_hz=48000 pcm_format=s16le_stereo sample_count=%llu ring_target_frames=%u ring_ceiling_frames=%u ring_high_water_frames=%u app_pcm_underflow_frames=%llu app_pcm_underflow_events=%llu producer_backpressure_events=%llu intentionally_discarded_host_frames=%llu intentionally_discarded_host_partial_bytes=%llu audio_stream_write_failures=%llu audio_stream_write_failure_pcm_bytes=%llu sdl_queued_input_bytes=%llu\n",
+                (unsigned long long)PLAYER_AUDIO_MEASURE_VIDEO_FRAMES,
+                (unsigned long long)target_half_dots,
+                (unsigned long long)elapsed_half_dots,
+                (unsigned long long)sample_count,
+                player_audio_target_frames(), player_audio_ring_ceiling_frames(),
+                player_audio_high_water(audio),
+                (unsigned long long)player_audio_underflow(audio),
+                (unsigned long long)player_audio_underflow_events(audio),
+                (unsigned long long)player_audio_backpressure_events(audio),
+                (unsigned long long)(discard_bytes / sizeof(gbb_audio_frame)),
+                (unsigned long long)(discard_bytes % sizeof(gbb_audio_frame)),
+                (unsigned long long)stream_write_failures,
+                (unsigned long long)stream_write_failure_pcm_bytes,
+                (unsigned long long)queued_input_bytes);
+            if (stream_write_failures != 0u ||
+                stream_write_failure_pcm_bytes != 0u) {
+                fputs("Audio measurement observed rejected SDL stream writes\n",
+                      stderr);
+                passed = false;
+            }
+        }
+    }
+    gbb_destroy(machine);
+    player_audio_destroy(audio);
+    return passed;
+}
+
+static void report_default_audio_device(void) {
+    const char *driver = SDL_GetCurrentAudioDriver();
+    player_audio *audio = player_audio_create();
+    printf("default_audio_device=%s driver=%s\n",
+           player_audio_available(audio) ? "available" : "unavailable",
+           driver == NULL ? "<none>" : driver);
+    player_audio_destroy(audio);
+}
+
+static void print_player_help(void) {
+    fputs(
+        "GabbaBoy is a bootless DMG-CPU-B software preview.\n\n"
+        "Controls: Command-O opens a ROM; Command-Q quits; arrows move; Z/X are A/B; "
+        "Return/Right Shift are Start/Select; Space pauses; R resets; S saves; F1 opens help.\n"
+        "Gamepad: D-pad moves; bottom/South maps to A, right/East maps to B; "
+        "Start/Back map to Start/Select.\n"
+        "Volume: [ and ] change host gain in 10% steps; default 100%, range 0%-200%.\n\n"
+        "The window title keeps the current gain visible alongside run/pause and audio status.\n\n"
+        "Audio output is 48 kHz signed 16-bit interleaved stereo. The optional SDL3 player "
+        "uses a bounded queue. If no device opens, PCM is discarded and counted while the "
+        "guest keeps its host-paced timeline. Pause/focus cleanup and device recovery clear "
+        "host backlog; reset and successful ROM replacement clear it after save transitions.\n\n"
+        "Evidence: the APU is a deterministic DMG-CPU-B digital software model. CGB/VIN, "
+        "physical or revision-specific hardware behavior, and listening quality are not "
+        "qualified. SDL queued-input bytes are not latency; application PCM underflow is "
+        "not hardware starvation.\n\n"
+        "Developer diagnostics: --audio-dummy-smoke checks SDL dummy open/stream/close/recovery; "
+        "--audio-measure frame|792 demo-rom emits bounded PCM for the scripted receipt; "
+        "--audio-device-status reports default-device availability without playing a workload.\n",
+        stdout);
+}
+
+static bool run_audio_dummy_smoke(void) {
+    const char *driver = SDL_GetCurrentAudioDriver();
+    if (driver == NULL || strcmp(driver, "dummy") != 0) {
+        fprintf(stderr, "Expected SDL dummy audio backend, got: %s\n",
+                driver == NULL ? "<none>" : driver);
+        return false;
+    }
+    player_audio *audio = player_audio_create();
+    if (audio == NULL || !player_audio_available(audio)) {
+        fputs("Could not open SDL dummy audio stream\n", stderr);
+        player_audio_destroy(audio);
+        return false;
+    }
+    gbb_audio_frame frames[8];
+    for (unsigned i = 0; i < 8u; ++i)
+        frames[i] = (gbb_audio_frame){(int16_t)(i + 1u), (int16_t)-(int)(i + 1u)};
+    if (!player_audio_submit(audio, frames, 8u)) {
+        fputs("Could not stream PCM to SDL dummy audio\n", stderr);
+        player_audio_destroy(audio);
+        return false;
+    }
+    SDL_Delay(10);
+    if (!player_audio_handle_device_event(audio,
+            SDL_EVENT_AUDIO_DEVICE_REMOVED, 1u, false) ||
+        !player_audio_handle_device_event(audio,
+            SDL_EVENT_AUDIO_DEVICE_ADDED, 1u, false) ||
+        !player_audio_available(audio) ||
+        !player_audio_submit(audio, frames, 8u)) {
+        fputs("SDL dummy audio device event recovery failed\n", stderr);
+        player_audio_destroy(audio);
+        return false;
+    }
+    SDL_Delay(10);
+    player_audio_destroy(audio);
+
+    audio = player_audio_create();
+    if (audio == NULL || !player_audio_available(audio)) {
+        fputs("Could not reopen SDL dummy audio stream after close\n", stderr);
+        player_audio_destroy(audio);
+        return false;
+    }
+    player_audio_destroy(audio);
+    printf("audio dummy smoke passed: driver=%s open/stream/close/recovery\n", driver);
+    return true;
+}
 
 static char *duplicate_path(const char *path) {
     const size_t length = strlen(path);
@@ -235,7 +573,24 @@ static bool advance_to(player *app, uint64_t target_half_dots, bool finish_targe
         const uint64_t budget = finish_target &&
             remaining <= UINT64_MAX - PLAYER_MAX_OPERATION_HALF_DOTS
             ? remaining + PLAYER_MAX_OPERATION_HALF_DOTS : remaining;
-        const gbb_run_result result = gbb_run(app->machine, budget, NULL, 0);
+        gbb_run_result result;
+        if (app->audio != NULL) {
+            gbb_audio_frame frames[512];
+            unsigned capacity = player_audio_capacity(app->audio);
+            if (capacity > 512u) capacity = 512u;
+            if (capacity == 0u) {
+                player_audio_note_backpressure(app->audio);
+                return !finish_target;
+            }
+            size_t count = 0u;
+            result = gbb_run_audio(app->machine, budget, frames, capacity, &count);
+            if (count != 0u && !player_audio_submit(app->audio, frames, (unsigned)count)) {
+                fputs("Audio producer capacity changed before publication\n", stderr);
+                return false;
+            }
+        } else {
+            result = gbb_run(app->machine, budget, NULL, 0);
+        }
         if (result.consumed_half_dots >
             UINT64_MAX - app->input.guest_cursor_half_dots) {
             fputs("Guest timeline overflow\n", stderr);
@@ -243,13 +598,13 @@ static bool advance_to(player *app, uint64_t target_half_dots, bool finish_targe
         }
         player_input_reconcile(&app->input,
             app->input.guest_cursor_half_dots + result.consumed_half_dots);
-        if (result.reason != GBB_STOP_BUDGET) {
+        if (result.reason != GBB_STOP_BUDGET && result.reason != GBB_STOP_OUTPUT_FULL) {
             fprintf(stderr, "Guest stopped at half-dot %llu (reason %d)\n",
                     (unsigned long long)app->input.guest_cursor_half_dots,
                     (int)result.reason);
             return false;
         }
-        if (result.consumed_half_dots == 0) return !finish_target;
+        if (result.consumed_half_dots == 0) return !finish_target || result.reason == GBB_STOP_OUTPUT_FULL;
     }
     return true;
 }
@@ -308,19 +663,25 @@ static size_t utf8_prefix(const char *text, size_t maximum) {
     return length;
 }
 
-static void update_window_title(player *app) {
-    if (app->window == NULL) return;
+static void format_window_title(const player *app, char *title, size_t title_size) {
     const char *base = rom_basename(app->current_rom_path);
     char short_name[160];
     const size_t base_length = utf8_prefix(base, sizeof(short_name) - 1u);
     memcpy(short_name, base, base_length);
     short_name[base_length] = '\0';
-    char title[PLAYER_TITLE_SIZE];
-    (void)snprintf(title, sizeof(title),
-        "GabbaBoy | %s | %s | %s | \xe2\x8c\x98O Open, \xe2\x8c\x98Q Quit, F1 Help | Audio unavailable",
+    (void)snprintf(title, title_size,
+        "GabbaBoy | %s | %s | Gain %u%% | %s | \xe2\x8c\x98O Open, \xe2\x8c\x98Q Quit, F1 Help | %s",
         short_name, app->user_paused || app->input.paused ? "Paused" : "Running",
+        (unsigned)(player_audio_gain(app->audio) * 100.0f),
         app->save_status_active ? app->save_status :
-            (app->status[0] == '\0' ? "Ready" : app->status));
+            (app->status[0] == '\0' ? "Ready" : app->status),
+        player_audio_available(app->audio) ? "Audio ready" : "Audio unavailable");
+}
+
+static void update_window_title(player *app) {
+    if (app->window == NULL) return;
+    char title[PLAYER_TITLE_SIZE];
+    format_window_title(app, title, sizeof(title));
     (void)SDL_SetWindowTitle(app->window, title);
 }
 
@@ -333,16 +694,30 @@ static void show_help(player *app) {
     const bool resume_after = !app->user_paused && app->window_focused &&
                               !app->dialog_pending;
     (void)player_input_focus_lost(&app->input, app->machine, SDL_GetTicksNS());
-    char message[1024];
+    if (!player_audio_clear(app->audio))
+        set_status(app, "Audio flush failed before the help dialog");
+    char message[2048];
     (void)snprintf(message, sizeof(message),
         "Current ROM: %s\n\n"
         "Open ROM: Command-O\nQuit: Command-Q\n"
         "D-pad: arrow keys\nA / B: Z / X\nStart / Select: Return / Right Shift\n"
-        "Pause / resume: Space\nReset current ROM: R\nSave now / retry: S\n\n"
+        "Gamepad: D-pad moves; bottom/South maps to A, right/East maps to B; "
+        "Start/Back map to Start/Select.\n"
+        "Pause / resume: Space\nVolume down / up: [ / ]\n"
+        "Reset current ROM: R\nSave now / retry: S\n\n"
+        "Audio: 48 kHz signed 16-bit interleaved stereo; current host gain is %u%% "
+        "(default 100%%, range 0-200%%). The window title keeps the current gain visible. "
+        "If no device opens, PCM is discarded and counted.\n"
+        "Pause/focus cleanup and device recovery clear host backlog; reset and successful "
+        "replacement clear it after save transitions.\n"
+        "The APU is a DMG-CPU-B digital model. CGB/VIN, physical/revision-specific behavior, "
+        "and listening quality are not qualified. SDL queued-input bytes are not latency; "
+        "application PCM underflow is not hardware starvation.\n\n"
         "A blocked final save offers R to retry, C to continue without saving, or Escape to cancel.\n"
         "Status: %.160s\n"
         "%s",
-        rom_basename(app->current_rom_path), app->save_status_active
+        rom_basename(app->current_rom_path),
+        (unsigned)(player_audio_gain(app->audio) * 100.0f), app->save_status_active
             ? app->save_status : (app->status[0] == '\0' ? "Ready" : app->status),
         GBB_PLAYER_LIMITATIONS_TEXT);
     if (!SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION,
@@ -439,11 +814,19 @@ static void recover_input_after_dialog(player *app) {
     }
 }
 
+/* Lifecycle transition table:
+ * transition              guest/APU history     host PCM
+ * pause/focus/dialog      frozen and retained   quiesce, clear, count
+ * reset                   reset after save      clear only after reset succeeds
+ * ROM replacement         commit after save     clear only after replacement succeeds
+ * device removal/addition guest clock unchanged default migration, then clear/reopen
+ */
 static void reset_session(player *app) {
     if (gbb_reset(app->machine) != GBB_OK) {
         set_status(app, "Reset failed; the current ROM remains loaded");
         return;
     }
+    const bool audio_cleared = player_audio_clear(app->audio);
     app->user_paused = false;
     player_input_reset(&app->input, SDL_GetTicksNS());
     if (!app->window_focused || app->dialog_pending)
@@ -454,9 +837,11 @@ static void reset_session(player *app) {
     if (app->save_identity.battery_backed)
         (void)gbb_battery_generation(app->machine, &generation);
     player_save_cadence_reset(&app->save_cadence, generation);
-    set_status(app, app->save_identity.battery_backed
-        ? "Current ROM reset; battery RAM remains in memory"
-        : "Current ROM reset");
+    set_status(app, !audio_cleared
+        ? "Current ROM reset; audio backlog cleanup failed"
+        : (app->save_identity.battery_backed
+            ? "Current ROM reset; battery RAM remains in memory"
+            : "Current ROM reset"));
 }
 
 static bool same_save_identity(const player_save_identity *left,
@@ -509,6 +894,7 @@ static bool replace_session_rom(player *app, const char *path) {
     if (!reuses_lock) candidate_lock_fd = -1;
     if (old_machine != NULL) gbb_destroy(old_machine);
     free(old_path);
+    const bool audio_cleared = player_audio_clear(app->audio);
     if (!reuses_lock) {
         int release_fd = old_lock_fd;
         player_session_unlock_battery(&release_fd);
@@ -525,7 +911,9 @@ static bool replace_session_rom(player *app, const char *path) {
     player_save_cadence_reset(&app->save_cadence, generation);
     app->save_retry_required = false;
     app->save_status_active = false;
-    if (!battery_loaded)
+    if (!audio_cleared)
+        set_status(app, "ROM loaded; audio backlog cleanup failed");
+    else if (!battery_loaded)
         set_status(app, error);
     else if (app->save_identity.battery_backed)
         set_status(app, "Battery RAM loaded; changes are in memory until saved");
@@ -745,11 +1133,14 @@ static void request_open_rom(player *app) {
     app->dialog_pending = true;
     const gbb_error release_result = player_input_focus_lost(
         &app->input, app->machine, SDL_GetTicksNS());
+    const bool audio_cleared = player_audio_clear(app->audio);
     atomic_store_explicit(&app->dialog_callback_done, false, memory_order_relaxed);
     atomic_store_explicit(&app->dialog_delivery_failed, false, memory_order_relaxed);
-    set_status(app, release_result == GBB_OK
-        ? "Choose one supported Game Boy ROM"
-        : "Choose a ROM; held-button release remains pending");
+    set_status(app, !audio_cleared
+        ? "Choose a ROM; audio backlog cleanup failed"
+        : (release_result == GBB_OK
+            ? "Choose one supported Game Boy ROM"
+            : "Choose a ROM; held-button release remains pending"));
     SDL_ShowOpenFileDialog(open_dialog_callback, app, app->window, filters,
                            (int)(sizeof(filters) / sizeof(filters[0])), NULL, false);
 }
@@ -759,9 +1150,12 @@ static void toggle_pause(player *app) {
         app->user_paused = true;
         const gbb_error releases = player_input_focus_lost(
             &app->input, app->machine, SDL_GetTicksNS());
-        set_status(app, releases == GBB_OK
-            ? "Paused; held buttons released"
-            : "Paused; held-button release remains pending");
+        const bool audio_cleared = player_audio_clear(app->audio);
+        set_status(app, !audio_cleared
+            ? "Paused; audio backlog cleanup failed"
+            : (releases == GBB_OK
+                ? "Paused; held buttons released"
+                : "Paused; held-button release remains pending"));
         return;
     }
     app->user_paused = false;
@@ -820,6 +1214,18 @@ static void handle_key(player *app, const SDL_KeyboardEvent *key, bool pressed) 
             toggle_pause(app);
             return;
         }
+        if (!app->dialog_pending && (key->scancode == SDL_SCANCODE_LEFTBRACKET ||
+                                     key->scancode == SDL_SCANCODE_RIGHTBRACKET)) {
+            const int direction = key->scancode == SDL_SCANCODE_RIGHTBRACKET
+                ? 1 : -1;
+            if (player_audio_adjust_gain(app->audio, direction)) {
+                char volume_status[64];
+                (void)snprintf(volume_status, sizeof(volume_status),
+                    "Volume %u%%", (unsigned)(player_audio_gain(app->audio) * 100.0f));
+                set_status(app, volume_status);
+            }
+            return;
+        }
         if (!app->dialog_pending && key->scancode == SDL_SCANCODE_R) {
             begin_transition(app, PLAYER_TRANSITION_RESET, NULL);
             return;
@@ -846,6 +1252,45 @@ static void handle_key(player *app, const SDL_KeyboardEvent *key, bool pressed) 
     }
 }
 
+static player_gamepad *find_player_gamepad(player *app, SDL_JoystickID id) {
+    for (unsigned i = 0; i < PLAYER_INPUT_GAMEPAD_CAPACITY; ++i)
+        if (app->gamepads[i].handle != NULL && app->gamepads[i].id == id)
+            return &app->gamepads[i];
+    return NULL;
+}
+
+static void handle_gamepad_added(player *app, SDL_JoystickID id) {
+    if (id == 0 || find_player_gamepad(app, id) != NULL) return;
+    player_gamepad *slot = NULL;
+    for (unsigned i = 0; i < PLAYER_INPUT_GAMEPAD_CAPACITY; ++i) {
+        if (app->gamepads[i].handle == NULL) {
+            slot = &app->gamepads[i];
+            break;
+        }
+    }
+    if (slot == NULL) return;
+    SDL_Gamepad *handle = SDL_OpenGamepad(id);
+    if (handle == NULL) return;
+    if (!player_input_gamepad_added(&app->input, id)) {
+        SDL_CloseGamepad(handle);
+        return;
+    }
+    *slot = (player_gamepad){id, handle};
+}
+
+static void handle_gamepad_removed(player *app, SDL_JoystickID id,
+                                   uint64_t timestamp_ns) {
+    const gbb_error result = player_input_gamepad_removed(
+        &app->input, app->machine, timestamp_ns, id);
+    player_gamepad *gamepad = find_player_gamepad(app, id);
+    if (gamepad != NULL) {
+        SDL_CloseGamepad(gamepad->handle);
+        *gamepad = (player_gamepad){0};
+    }
+    if (result != GBB_OK)
+        set_status(app, "Controller removed; its button release is pending");
+}
+
 static bool handle_event(player *app, const SDL_Event *event) {
     if (event->type == app->dialog_event_type) {
         player_dialog_result *result = event->user.data1;
@@ -866,31 +1311,59 @@ static bool handle_event(player *app, const SDL_Event *event) {
     }
     if (event->type == SDL_EVENT_KEY_DOWN || event->type == SDL_EVENT_KEY_UP)
         handle_key(app, &event->key, event->type == SDL_EVENT_KEY_DOWN);
+    if (event->type == SDL_EVENT_GAMEPAD_ADDED)
+        handle_gamepad_added(app, event->gdevice.which);
+    if (event->type == SDL_EVENT_GAMEPAD_REMOVED)
+        handle_gamepad_removed(app, event->gdevice.which,
+                               event->gdevice.timestamp);
+    if (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ||
+        event->type == SDL_EVENT_GAMEPAD_BUTTON_UP) {
+        const gbb_error result = player_input_gamepad_button(
+            &app->input, app->machine, event->gbutton.timestamp,
+            event->gbutton.which, (SDL_GamepadButton)event->gbutton.button,
+            event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN);
+        if (result != GBB_OK) {
+            const gbb_error released = player_input_focus_lost(
+                &app->input, app->machine, event->gbutton.timestamp);
+            app->user_paused = true;
+            set_status(app, released == GBB_OK
+                ? "Controller input paused after a guest queue error"
+                : "Controller input paused; held-button release remains pending");
+        }
+    }
+    if (event->type == SDL_EVENT_AUDIO_DEVICE_REMOVED ||
+        event->type == SDL_EVENT_AUDIO_DEVICE_ADDED) {
+        const bool handled = player_audio_handle_device_event(
+            app->audio, event->adevice.type, event->adevice.which,
+            event->adevice.recording);
+        if (!handled || !player_audio_available(app->audio))
+            set_status(app, "Audio unavailable; guest playback continues through the counted sink");
+        else
+            set_status(app, "Audio ready; guest clock unchanged");
+    }
     if (event->type == SDL_EVENT_WINDOW_FOCUS_LOST) {
         app->window_focused = false;
         const gbb_error result = player_input_focus_lost(&app->input, app->machine,
                                                          event->window.timestamp);
-        if (result != GBB_OK)
+        const bool audio_cleared = player_audio_clear(app->audio);
+        if (!audio_cleared)
+            set_status(app, "Focus lost; audio backlog cleanup failed");
+        else if (result != GBB_OK)
             set_status(app, "Focus lost; held-button releases remain pending");
         else
             set_status(app, "Focus lost; input paused and held buttons released");
     }
     if (event->type == SDL_EVENT_WINDOW_FOCUS_GAINED) {
         app->window_focused = true;
-        const gbb_error result = player_input_retry_focus_releases(
-            &app->input, app->machine, event->window.timestamp);
+        const gbb_error result = player_input_focus_gained(
+            &app->input, app->machine, event->window.timestamp,
+            SDL_GetTicksNS(), app->user_paused || app->dialog_pending);
         if (result != GBB_OK) {
             app->user_paused = true;
             set_status(app, "Input remains paused until held-button releases are admitted");
         } else if (!app->dialog_pending) {
-            if (!app->user_paused &&
-                !player_input_resume(&app->input, SDL_GetTicksNS())) {
-                app->user_paused = true;
-                set_status(app, "Input remains paused until held-button releases are admitted");
-            } else {
-                set_status(app, app->user_paused
-                    ? "Focus returned; paused by user" : "Running");
-            }
+            set_status(app, app->user_paused
+                ? "Focus returned; paused by user" : "Running");
         }
     }
     return true;
@@ -1368,6 +1841,30 @@ static bool run_smoke(player *app, const char *demo_rom_path,
                       const char *executable,
                       const char *battery_fixture_path) {
     if (!verify_software_layouts()) return false;
+    char title[PLAYER_TITLE_SIZE];
+    format_window_title(app, title, sizeof(title));
+    if ((strstr(title, "Running") == NULL && strstr(title, "Paused") == NULL) ||
+        strstr(title, "Gain 100%") == NULL ||
+        (strstr(title, "Audio ready") == NULL &&
+         strstr(title, "Audio unavailable") == NULL)) {
+        fprintf(stderr, "Player title is missing run, gain, or audio status: %s\n", title);
+        return false;
+    }
+    if (!player_audio_adjust_gain(app->audio, 1)) {
+        fputs("Player smoke could not raise the host gain\n", stderr);
+        return false;
+    }
+    format_window_title(app, title, sizeof(title));
+    const bool gain_visible = strstr(title, "Gain 110%") != NULL;
+    if (!player_audio_adjust_gain(app->audio, -1)) {
+        fputs("Player smoke could not restore the host gain\n", stderr);
+        return false;
+    }
+    update_window_title(app);
+    if (!gain_visible) {
+        fputs("Player title did not update with the current host gain\n", stderr);
+        return false;
+    }
     uint64_t press_ns, release_ns;
     if (!player_input_half_dots_to_nanoseconds(8, &press_ns) ||
         !player_input_half_dots_to_nanoseconds(50008, &release_ns) ||
@@ -1389,6 +1886,7 @@ static bool run_smoke(player *app, const char *demo_rom_path,
     }
     if (!advance_to(app, PLAYER_FRAME_HALF_DOTS, true) ||
         !update_frame(app, true) || !draw_frame(app)) return false;
+    if (!run_pulse_audio_smoke(app, demo_rom_path)) return false;
     if (gbb_peek_ram(app->machine, 0xC000) != 1 ||
         gbb_peek_ram(app->machine, 0xC001) != 1) {
         fputs("Injected A transitions did not reach the visible demo guest results\n", stderr);
@@ -1471,6 +1969,11 @@ static bool run_smoke(player *app, const char *demo_rom_path,
 }
 
 static void destroy_player(player *app) {
+    for (unsigned i = 0; i < PLAYER_INPUT_GAMEPAD_CAPACITY; ++i) {
+        if (app->gamepads[i].handle != NULL)
+            SDL_CloseGamepad(app->gamepads[i].handle);
+        app->gamepads[i] = (player_gamepad){0};
+    }
     if (app->machine != NULL && app->save_identity.battery_backed &&
         !app->skip_final_save) {
         if (!attempt_battery_save(app, false)) {
@@ -1485,6 +1988,7 @@ static void destroy_player(player *app) {
     if (app->surface != NULL) SDL_DestroySurface(app->surface);
     if (app->machine != NULL) gbb_destroy(app->machine);
     player_session_unlock_battery(&app->save_lock_fd);
+    player_audio_destroy(app->audio);
     free(app->current_rom_path);
     free(app->pending_rom_path);
     app->texture = NULL;
@@ -1497,7 +2001,14 @@ static void destroy_player(player *app) {
 }
 
 int main(int argc, char **argv) {
+    const bool help_requested = argc == 2 && strcmp(argv[1], "--help") == 0;
     const bool smoke = argc >= 2 && strcmp(argv[1], "--smoke") == 0;
+    const bool audio_dummy_smoke = argc == 2 &&
+        strcmp(argv[1], "--audio-dummy-smoke") == 0;
+    const bool audio_measure = argc == 4 &&
+        strcmp(argv[1], "--audio-measure") == 0;
+    const bool audio_device_status = argc == 2 &&
+        strcmp(argv[1], "--audio-device-status") == 0;
     const bool package_smoke = argc == 3 &&
                                strcmp(argv[1], "--smoke-package") == 0;
     const bool battery_store = argc == 3 &&
@@ -1506,12 +2017,18 @@ int main(int argc, char **argv) {
                                 strcmp(argv[1], "--battery-smoke-resume") == 0;
     const bool battery_smoke = battery_store || battery_resume;
     if ((smoke && argc != 2 && argc != 4) ||
+        (audio_measure && argc != 4) ||
         (package_smoke && argc != 3) ||
         (battery_smoke && argc != 3) ||
-        (!smoke && !package_smoke && !battery_smoke && argc > 1)) {
-        fprintf(stderr, "usage: %s [--smoke [demo-rom invalid-rom] | --smoke-package invalid-rom]\n",
+        (!help_requested && !smoke && !audio_dummy_smoke && !audio_measure && !audio_device_status &&
+         !package_smoke && !battery_smoke && argc > 1)) {
+        fprintf(stderr, "usage: %s [--help | --smoke [demo-rom invalid-rom] | --smoke-package invalid-rom | --audio-dummy-smoke | --audio-measure frame|792 demo-rom | --audio-device-status]\n",
                 argv[0]);
         return 2;
+    }
+    if (help_requested) {
+        print_player_help();
+        return 0;
     }
     const char *requested_demo_rom = battery_smoke ? argv[2] :
         (smoke && argc == 4 ? argv[2] : NULL);
@@ -1526,10 +2043,37 @@ int main(int argc, char **argv) {
     app.window_focused = true;
     atomic_init(&app.dialog_callback_done, false);
     atomic_init(&app.dialog_delivery_failed, false);
-    if (!SDL_Init((smoke || package_smoke || battery_smoke)
-                      ? SDL_INIT_EVENTS : SDL_INIT_VIDEO)) {
+    Uint32 init_flags = SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD;
+    if (smoke || audio_dummy_smoke || package_smoke || battery_smoke ||
+        audio_measure)
+        init_flags = SDL_INIT_EVENTS | SDL_INIT_AUDIO;
+    else if (audio_device_status)
+        init_flags = SDL_INIT_AUDIO;
+    if (!SDL_Init(init_flags)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
+    }
+    if (audio_dummy_smoke) {
+        const bool passed = run_audio_dummy_smoke();
+        SDL_Quit();
+        return passed ? 0 : 1;
+    }
+    if (audio_measure) {
+        const bool passed = run_audio_measure(argv[2], argv[3]);
+        SDL_Quit();
+        return passed ? 0 : 1;
+    }
+    if (audio_device_status) {
+        report_default_audio_device();
+        SDL_Quit();
+        return 0;
+    }
+    app.audio = player_audio_create();
+    if (app.audio == NULL || !player_audio_available(app.audio)) {
+        set_status(&app,
+            "Audio unavailable; PCM is discarded and counted without a queue");
+        fputs("Audio unavailable; PCM is discarded and counted without a queue\n",
+              stderr);
     }
     char *demo_rom_path = resolve_demo_rom_path(requested_demo_rom,
                                                  package_smoke);
@@ -1611,6 +2155,15 @@ int main(int argc, char **argv) {
                 if (!advance_to(&app, target_half_dots, false)) {
                     passed = false;
                     break;
+                }
+                if (app.input.release_pending_buttons != 0u) {
+                    const gbb_error retried = player_input_retry_focus_releases(
+                        &app.input, app.machine, SDL_GetTicksNS());
+                    if (retried != GBB_OK && retried != GBB_EVENT_QUEUE_FULL) {
+                        player_input_pause(&app.input);
+                        app.user_paused = true;
+                        set_status(&app, "Input paused while a release could not be queued");
+                    }
                 }
             }
             update_battery_save(&app);
