@@ -101,9 +101,13 @@ program of an in-memory copy of the original project-owned visible demo; the
 fixture remains unchanged. The fixture is MIT-licensed and its ROM digest is
 `38afb54b40f4b6612906c7a68e367199d8bff135508a39d7acdc996bf3d86530`, recorded
 with its source and rights notice in `fixtures/visible-demo/manifest.json`.
-The fixed partition outputs must have identical elapsed guest time, frame
-count, and PCM SHA-256. A timeout is 30 seconds per route by default and can be
-changed with `GBB_AUDIO_MEASURE_TIMEOUT_SECONDS` (1–300 seconds).
+Each route writes and submits the exact 48 kHz sample count for the declared
+300-frame emulated interval. A whole-instruction boundary may make the recorded
+elapsed half-dot totals differ by at most the bounded operation tail; PCM
+generated beyond the target interval is excluded from the output and SDL ring.
+The in-window sample count and PCM SHA-256 must match exactly across partitions.
+A timeout is 30 seconds per route by default and can be changed with
+`GBB_AUDIO_MEASURE_TIMEOUT_SECONDS` (1–300 seconds).
 
 The JSON receipt records the full Git revision, relevant source-tree status,
 Release build, model, workload and fixture identities, PCM format/digest/count,

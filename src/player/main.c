@@ -22,6 +22,7 @@
 #define PLAYER_MAX_OPERATION_HALF_DOTS UINT64_C(40)
 #define PLAYER_BATTERY_SMOKE_HALF_DOTS UINT64_C(200000)
 #define PLAYER_AUDIO_MEASURE_VIDEO_FRAMES UINT64_C(300)
+#define PLAYER_AUDIO_MEASURE_SAMPLE_RATE_HZ UINT64_C(48000)
 #define PLAYER_AUDIO_SMALL_PARTITION_HALF_DOTS UINT64_C(792)
 #define PLAYER_TITLE_SIZE 512u
 
@@ -237,6 +238,9 @@ static bool run_audio_measure(const char *partition, const char *rom_path) {
 
     const uint64_t target_half_dots =
         PLAYER_FRAME_HALF_DOTS * PLAYER_AUDIO_MEASURE_VIDEO_FRAMES;
+    const uint64_t target_sample_count =
+        target_half_dots * PLAYER_AUDIO_MEASURE_SAMPLE_RATE_HZ /
+        UINT64_C(8388608);
     uint64_t elapsed_half_dots = 0u;
     uint64_t sample_count = 0u;
     bool passed = true;
@@ -255,15 +259,21 @@ static bool run_audio_measure(const char *partition, const char *rom_path) {
         size_t count = 0u;
         const gbb_run_result result = gbb_run_audio(machine, budget, frames,
                                                      capacity, &count);
-        if (count != 0u) {
-            if (!write_pcm_s16le(frames, count) ||
-                !player_audio_submit(audio, frames, (unsigned)count)) {
+        size_t output_count = count;
+        if (sample_count >= target_sample_count) {
+            output_count = 0u;
+        } else if (output_count > target_sample_count - sample_count) {
+            output_count = (size_t)(target_sample_count - sample_count);
+        }
+        if (output_count != 0u) {
+            if (!write_pcm_s16le(frames, output_count) ||
+                !player_audio_submit(audio, frames, (unsigned)output_count)) {
                 fputs("Audio measurement could not preserve and submit every PCM frame\n",
                       stderr);
                 passed = false;
                 break;
             }
-            sample_count += count;
+            sample_count += output_count;
         }
         if ((result.reason != GBB_STOP_BUDGET &&
              result.reason != GBB_STOP_OUTPUT_FULL) ||
@@ -284,8 +294,8 @@ static bool run_audio_measure(const char *partition, const char *rom_path) {
 
     if (passed && (elapsed_half_dots < target_half_dots ||
         elapsed_half_dots - target_half_dots > PLAYER_MAX_OPERATION_HALF_DOTS ||
-        sample_count == 0u || fflush(stdout) != 0)) {
-        fputs("Audio measurement did not finish within its declared timeline or PCM bounds\n",
+        sample_count != target_sample_count || fflush(stdout) != 0)) {
+        fputs("Audio measurement did not finish within its declared timeline or exact PCM count\n",
               stderr);
         passed = false;
     }

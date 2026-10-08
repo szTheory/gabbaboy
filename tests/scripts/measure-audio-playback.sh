@@ -112,6 +112,7 @@ required = {
     'audio_stream_write_failure_pcm_bytes', 'sdl_queued_input_bytes',
 }
 target_half_dots = 300 * 140448
+target_sample_count = target_half_dots * 48000 // 8388608
 measured_runs = []
 for partition in ('frame', '792'):
     pcm_path = work_dir / f'{partition}.pcm'
@@ -140,8 +141,8 @@ for partition in ('frame', '792'):
     count = int(fields['sample_count'])
     byte_count = pcm_path.stat().st_size
     require(byte_count % 4 == 0 and count == byte_count // 4 and
-            200000 <= count <= 260000,
-            f'{partition} PCM byte length/count is inconsistent or outside 200000..260000 frames')
+            count == target_sample_count and 200000 <= count <= 260000,
+            f'{partition} PCM bytes/count do not match the exact target-window sample count')
     require(int(fields['ring_target_frames']) == 1606 and
             int(fields['ring_ceiling_frames']) == 3214,
             f'{partition} receipt does not report the configured two/four-frame queue values')
@@ -177,9 +178,8 @@ for partition in ('frame', '792'):
     })
 
 require(measured_runs[0]['pcm_sha256'] == measured_runs[1]['pcm_sha256'] and
-        measured_runs[0]['sample_count'] == measured_runs[1]['sample_count'] and
-        measured_runs[0]['elapsed_half_dots'] == measured_runs[1]['elapsed_half_dots'],
-        'PCM digest, exact sample count, or elapsed guest time differs across frame and 792-half-dot partitions')
+        measured_runs[0]['sample_count'] == measured_runs[1]['sample_count'],
+        'PCM digest or exact in-window sample count differs across frame and 792-half-dot partitions')
 
 default_env = os.environ.copy()
 default_env.pop('SDL_AUDIO_DRIVER', None)
@@ -251,7 +251,9 @@ source_receipt = {
     'dummy_backend_open_stream_close_recovery': 'passed',
     'default_audio_device_availability': default_status,
     'evidence_boundary': (
-        'Dummy SDL and deterministic software counters only; queued input bytes are not latency, '
+        'PCM files contain the exact in-window sample count; up to one instruction-boundary tail is '
+        'excluded from PCM while actual elapsed half-dots remain in each partition record. '
+        'Dummy SDL and software counters only; queued input bytes are not latency, '
         'application PCM underflow is not hardware starvation, and no physical hotplug or '
         'perceptual audio result is claimed.'
     ),
