@@ -31,8 +31,9 @@ bool player_session_replace_rom(gbb_instance *machine, char **in_out_path,
                                 player_save_identity *out_identity,
                                 char *out_error, size_t error_capacity);
 /* Loads a validated, player-managed battery envelope before guest execution.
- * Missing saves keep the core's deterministic fresh-RAM policy. Invalid saves
- * are left untouched and disable persistence for the current session. */
+ * Missing saves keep the core's deterministic fresh-RAM policy. Rejected
+ * regular files are preserved under a unique recovery name before fresh RAM
+ * is used; unsafe or unpreservable files disable persistence for the session. */
 bool player_session_load_battery(gbb_instance *machine,
                                  player_save_identity *identity,
                                  char *out_error, size_t error_capacity);
@@ -44,5 +45,26 @@ bool player_session_save_battery(gbb_instance *machine,
 bool player_session_identify_rom(const uint8_t *rom, size_t rom_size,
                                  player_save_identity *out_identity);
 void player_session_remove_battery_file(const player_save_identity *identity);
+
+#ifdef GBB_PLAYER_SESSION_TESTING
+typedef enum {
+    PLAYER_SESSION_TEST_FAULT_NONE = 0,
+    PLAYER_SESSION_TEST_FAULT_TEMP_CREATE,
+    PLAYER_SESSION_TEST_FAULT_SHORT_WRITE,
+    PLAYER_SESSION_TEST_FAULT_FILE_SYNC,
+    PLAYER_SESSION_TEST_FAULT_RENAME,
+    PLAYER_SESSION_TEST_FAULT_DIRECTORY_SYNC,
+    PLAYER_SESSION_TEST_FAULT_RECOVERY_RENAME,
+    PLAYER_SESSION_TEST_FAULT_LOCK_ACQUIRE,
+    PLAYER_SESSION_TEST_INTERRUPT_BEFORE_RENAME,
+    PLAYER_SESSION_TEST_INTERRUPT_AFTER_RENAME
+} player_session_test_fault_stage;
+
+/* Narrow test-only controls; production builds do not expose these symbols. */
+void player_session_test_set_pref_path(const char *path);
+void player_session_test_set_fault(player_session_test_fault_stage stage);
+char *player_session_test_battery_file_path(
+    const player_save_identity *identity);
+#endif
 
 #endif

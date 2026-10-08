@@ -9,7 +9,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/stdio.h>
 #include <unistd.h>
+#ifdef GBB_PLAYER_SESSION_TESTING
+#include <signal.h>
+#endif
 
 #define PLAYER_SESSION_MAX_ROM_SIZE (2u * 1024u * 1024u)
 #define PLAYER_SESSION_MAX_RAM_SIZE 32768u
@@ -17,6 +21,30 @@
 #define PLAYER_SAVE_MAX_SIZE (PLAYER_SAVE_HEADER_SIZE + PLAYER_SESSION_MAX_RAM_SIZE)
 #define PLAYER_SAVE_MAGIC "GBBBSAVE"
 #define PLAYER_SAVE_VERSION 1u
+
+#ifdef GBB_PLAYER_SESSION_TESTING
+static player_session_test_fault_stage test_fault_stage;
+static const char *test_pref_path;
+static uint32_t recovery_sequence;
+
+void player_session_test_set_pref_path(const char *path) {
+    test_pref_path = path;
+}
+
+void player_session_test_set_fault(player_session_test_fault_stage stage) {
+    test_fault_stage = stage;
+}
+
+static bool consume_test_fault(player_session_test_fault_stage stage) {
+    if (test_fault_stage != stage) return false;
+    test_fault_stage = PLAYER_SESSION_TEST_FAULT_NONE;
+    return true;
+}
+
+static void stop_for_test_interrupt(player_session_test_fault_stage stage) {
+    if (consume_test_fault(stage)) (void)raise(SIGSTOP);
+}
+#endif
 
 static void set_error(char *out_error, size_t capacity, const char *message) {
     if (out_error == NULL || capacity == 0u) return;
@@ -208,11 +236,31 @@ static uint32_t get_u32_le(const uint8_t *bytes) {
 
 static char *battery_file_path(const player_save_identity *identity) {
     if (identity == NULL || !identity->battery_backed) return NULL;
-    char *directory = SDL_GetPrefPath("GabbaBoy", "GabbaBoy");
+    char *directory = NULL;
+    bool directory_from_sdl = true;
+#ifdef GBB_PLAYER_SESSION_TESTING
+    if (test_pref_path != NULL) {
+        const size_t root_length = strlen(test_pref_path);
+        const bool has_separator = root_length > 0u &&
+                                   test_pref_path[root_length - 1u] == '/';
+        directory = malloc(root_length + (has_separator ? 1u : 2u));
+        directory_from_sdl = false;
+        if (directory != NULL) {
+            memcpy(directory, test_pref_path, root_length);
+            size_t directory_index = root_length;
+            if (!has_separator) directory[directory_index++] = '/';
+            directory[directory_index] = '\0';
+        }
+    } else
+#endif
+    {
+        directory = SDL_GetPrefPath("GabbaBoy", "GabbaBoy");
+    }
     if (directory == NULL) return NULL;
     const size_t directory_length = strlen(directory);
     if (directory_length > PLAYER_SESSION_PATH_LIMIT) {
-        SDL_free(directory);
+        if (directory_from_sdl) SDL_free(directory);
+        else free(directory);
         return NULL;
     }
     char digest[65];
@@ -223,29 +271,47 @@ static char *battery_file_path(const player_save_identity *identity) {
     }
     digest[64] = '\0';
     char suffix[32];
-    const int suffix_length = snprintf(suffix, sizeof(suffix), "-%02x-%08x.gbb",
+    const int suffix_length = snprintf(suffix, sizeof(suffix),
+                                       "-mbc1-%02x-%08x.gbb",
                                        identity->cartridge_type,
                                        identity->ram_size);
     if (suffix_length < 0 || (size_t)suffix_length >= sizeof(suffix) ||
         directory_length > PLAYER_SESSION_PATH_LIMIT - (size_t)suffix_length - 65u) {
-        SDL_free(directory);
+        if (directory_from_sdl) SDL_free(directory);
+        else free(directory);
         return NULL;
     }
     const size_t path_length = directory_length + 64u + (size_t)suffix_length;
+    if (path_length > PLAYER_SESSION_PATH_LIMIT - 64u) {
+        if (directory_from_sdl) SDL_free(directory);
+        else free(directory);
+        return NULL;
+    }
     char *path = malloc(path_length + 1u);
     if (path != NULL) {
         memcpy(path, directory, directory_length);
         memcpy(path + directory_length, digest, 64u);
         memcpy(path + directory_length + 64u, suffix, (size_t)suffix_length + 1u);
     }
-    SDL_free(directory);
+    if (directory_from_sdl) SDL_free(directory);
+    else free(directory);
     return path;
 }
 
+#ifdef GBB_PLAYER_SESSION_TESTING
+char *player_session_test_battery_file_path(
+    const player_save_identity *identity) {
+    return battery_file_path(identity);
+}
+#endif
+
 static bool read_save_file(const char *path, uint8_t *bytes, size_t capacity,
-                           size_t *out_size, bool *out_missing) {
+                           size_t *out_size, bool *out_missing,
+                           bool *out_recoverable, struct stat *out_info) {
     *out_missing = false;
-    const int fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    *out_recoverable = false;
+    *out_size = 0u;
+    const int fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
     if (fd < 0) {
         if (errno == ENOENT) {
             *out_missing = true;
@@ -254,8 +320,13 @@ static bool read_save_file(const char *path, uint8_t *bytes, size_t capacity,
         return false;
     }
     struct stat info;
-    if (fstat(fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_size < 0 ||
-        (uintmax_t)info.st_size > capacity) {
+    if (fstat(fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_size < 0) {
+        (void)close(fd);
+        return false;
+    }
+    *out_info = info;
+    *out_recoverable = true;
+    if ((uintmax_t)info.st_size > capacity) {
         (void)close(fd);
         return false;
     }
@@ -273,10 +344,68 @@ static bool read_save_file(const char *path, uint8_t *bytes, size_t capacity,
         }
         break;
     }
+    struct stat after;
+    const bool stable = fstat(fd, &after) == 0 &&
+                        after.st_dev == info.st_dev &&
+                        after.st_ino == info.st_ino &&
+                        after.st_size == info.st_size &&
+                        total == (size_t)info.st_size;
     const int close_result = close(fd);
-    if (close_result != 0) return false;
+    if (!stable || close_result != 0) return false;
     *out_size = total;
     return true;
+}
+
+static bool sync_save_directory(const char *path);
+
+static bool same_file_identity(const struct stat *left,
+                               const struct stat *right) {
+    return S_ISREG(right->st_mode) && left->st_dev == right->st_dev &&
+           left->st_ino == right->st_ino;
+}
+
+static bool preserve_rejected_save(const char *path,
+                                   const struct stat *expected_info) {
+    struct stat current_info;
+    if (lstat(path, &current_info) != 0 ||
+        !same_file_identity(expected_info, &current_info))
+        return false;
+
+    char recovery_path[PLAYER_SESSION_PATH_LIMIT + 1u];
+    const size_t path_length = strlen(path);
+    for (unsigned attempt = 0u; attempt < 100u; ++attempt) {
+#ifdef GBB_PLAYER_SESSION_TESTING
+        ++recovery_sequence;
+        if (recovery_sequence == 0u) ++recovery_sequence;
+        const uint32_t sequence = recovery_sequence;
+#else
+        const uint32_t sequence = (uint32_t)attempt + 1u;
+#endif
+        char suffix[48];
+        const int written = snprintf(suffix, sizeof(suffix),
+                                     ".recovery-%ld-%08x",
+                                     (long)getpid(), sequence);
+        if (written < 0 || (size_t)written >= sizeof(suffix) ||
+            path_length + (size_t)written > PLAYER_SESSION_PATH_LIMIT)
+            return false;
+        memcpy(recovery_path, path, path_length);
+        memcpy(recovery_path + path_length, suffix, (size_t)written + 1u);
+#ifdef GBB_PLAYER_SESSION_TESTING
+        if (consume_test_fault(PLAYER_SESSION_TEST_FAULT_RECOVERY_RENAME)) {
+            errno = EIO;
+            return false;
+        }
+#endif
+        if (renameatx_np(AT_FDCWD, path, AT_FDCWD, recovery_path,
+                         RENAME_EXCL) == 0) {
+            if (sync_save_directory(recovery_path)) return true;
+            (void)renameatx_np(AT_FDCWD, recovery_path, AT_FDCWD, path,
+                               RENAME_EXCL);
+            return false;
+        }
+        if (errno != EEXIST) return false;
+    }
+    return false;
 }
 
 static bool decode_save(const uint8_t *bytes, size_t size,
@@ -306,7 +435,10 @@ bool player_session_load_battery(gbb_instance *machine,
     if (!identity->battery_backed) return true;
     size_t ram_size = 0u;
     if (gbb_battery_size(machine, &ram_size) != GBB_OK ||
-        ram_size != identity->ram_size || ram_size > PLAYER_SESSION_MAX_RAM_SIZE) {
+        ram_size != identity->ram_size ||
+        (ram_size != 8192u && ram_size != 32768u) ||
+        ram_size > PLAYER_SESSION_MAX_RAM_SIZE ||
+        identity->cartridge_type != 0x03u) {
         identity->persistence_enabled = false;
         set_error(out_error, error_capacity, "Battery RAM does not match the loaded cartridge.");
         return false;
@@ -320,25 +452,57 @@ bool player_session_load_battery(gbb_instance *machine,
     uint8_t bytes[PLAYER_SAVE_MAX_SIZE + 1u];
     size_t file_size = 0u;
     bool missing = false;
-    if (!read_save_file(path, bytes, sizeof(bytes), &file_size, &missing)) {
+    bool recoverable = false;
+    struct stat file_info;
+    const bool read_ok = read_save_file(path, bytes, sizeof(bytes), &file_size,
+                                        &missing, &recoverable, &file_info);
+    if (!read_ok && !recoverable) {
         free(path);
         identity->persistence_enabled = false;
         set_error(out_error, error_capacity, "The existing save could not be read safely; persistence is disabled.");
         return false;
     }
-    free(path);
     if (missing) {
+        free(path);
         identity->saved_generation = 0u;
         identity->persistence_enabled = true;
         return true;
     }
     uint8_t ram[PLAYER_SESSION_MAX_RAM_SIZE];
-    if (!decode_save(bytes, file_size, identity, ram) ||
+    const bool valid_envelope = read_ok &&
+                                decode_save(bytes, file_size, identity, ram);
+    if (valid_envelope &&
         gbb_import_battery(machine, ram, ram_size) != GBB_OK) {
+        free(path);
         identity->persistence_enabled = false;
-        set_error(out_error, error_capacity, "The existing save is invalid or belongs to a different cartridge; persistence is disabled.");
+        set_error(out_error, error_capacity, "The valid save could not be imported; the original file was left untouched.");
         return false;
     }
+    if (!valid_envelope) {
+        const bool preserved = recoverable &&
+                               preserve_rejected_save(path, &file_info);
+        free(path);
+        if (!preserved) {
+            identity->persistence_enabled = false;
+            set_error(out_error, error_capacity, "The existing save could not be preserved; battery saving is disabled.");
+            return false;
+        }
+        memset(ram, 0xFF, ram_size);
+        if (gbb_import_battery(machine, ram, ram_size) != GBB_OK) {
+            identity->persistence_enabled = false;
+            set_error(out_error, error_capacity, "The rejected save was preserved, but fresh battery RAM could not be initialized.");
+            return false;
+        }
+        if (gbb_battery_generation(machine, &identity->saved_generation) != GBB_OK) {
+            identity->persistence_enabled = false;
+            set_error(out_error, error_capacity, "The rejected save was preserved, but battery state could not be recorded.");
+            return false;
+        }
+        identity->persistence_enabled = true;
+        set_error(out_error, error_capacity, "The existing save was rejected and preserved; fresh RAM is active.");
+        return false;
+    }
+    free(path);
     if (gbb_battery_generation(machine, &identity->saved_generation) != GBB_OK) {
         identity->persistence_enabled = false;
         set_error(out_error, error_capacity, "Could not record the loaded battery generation.");
@@ -350,8 +514,23 @@ bool player_session_load_battery(gbb_instance *machine,
 
 static bool write_all(int fd, const uint8_t *bytes, size_t size) {
     size_t written = 0u;
+#ifdef GBB_PLAYER_SESSION_TESTING
+    const bool inject_short_write =
+        consume_test_fault(PLAYER_SESSION_TEST_FAULT_SHORT_WRITE);
+    const size_t stop_after = size / 2u;
+#endif
     while (written < size) {
-        const ssize_t count = write(fd, bytes + written, size - written);
+        size_t remaining = size - written;
+#ifdef GBB_PLAYER_SESSION_TESTING
+        if (inject_short_write && written < stop_after &&
+            remaining > stop_after - written)
+            remaining = stop_after - written;
+        if (inject_short_write && written >= stop_after) {
+            errno = EIO;
+            return false;
+        }
+#endif
+        const ssize_t count = write(fd, bytes + written, remaining);
         if (count > 0) {
             written += (size_t)count;
             continue;
@@ -363,6 +542,12 @@ static bool write_all(int fd, const uint8_t *bytes, size_t size) {
 }
 
 static bool sync_save_directory(const char *path) {
+#ifdef GBB_PLAYER_SESSION_TESTING
+    if (consume_test_fault(PLAYER_SESSION_TEST_FAULT_DIRECTORY_SYNC)) {
+        errno = EIO;
+        return false;
+    }
+#endif
     char directory[PLAYER_SESSION_PATH_LIMIT + 1u];
     const size_t length = strlen(path);
     if (length == 0u || length > PLAYER_SESSION_PATH_LIMIT) return false;
@@ -382,14 +567,32 @@ static bool sync_save_directory(const char *path) {
     return false;
 }
 
+static bool save_target_is_replaceable(const char *path) {
+    struct stat info;
+    if (lstat(path, &info) == 0) {
+        if (S_ISREG(info.st_mode) && !S_ISLNK(info.st_mode)) return true;
+        errno = EINVAL;
+        return false;
+    }
+    return errno == ENOENT;
+}
+
 static bool atomic_save(const char *path, const uint8_t *bytes, size_t size) {
     const size_t path_length = strlen(path);
     static const char suffix[] = ".tmp.XXXXXX";
     if (path_length > PLAYER_SESSION_PATH_LIMIT - (sizeof(suffix) - 1u)) return false;
+    if (!save_target_is_replaceable(path)) return false;
     char temporary[PLAYER_SESSION_PATH_LIMIT + 1u];
     memcpy(temporary, path, path_length);
     memcpy(temporary + path_length, suffix, sizeof(suffix));
-    const int fd = mkstemp(temporary);
+#ifdef GBB_PLAYER_SESSION_TESTING
+    const bool fail_temp_create =
+        consume_test_fault(PLAYER_SESSION_TEST_FAULT_TEMP_CREATE);
+#else
+    const bool fail_temp_create = false;
+#endif
+    const int fd = fail_temp_create ? -1 : mkstemp(temporary);
+    if (fail_temp_create) errno = EIO;
     if (fd < 0) {
         fprintf(stderr, "Battery save temporary creation failed: %s\n",
                 strerror(errno));
@@ -402,15 +605,35 @@ static bool atomic_save(const char *path, const uint8_t *bytes, size_t size) {
     if (ok && !write_all(fd, bytes, size)) {
         ok = false; failed_at = "write"; failure_errno = errno;
     }
-    if (ok && fsync(fd) != 0) {
+#ifdef GBB_PLAYER_SESSION_TESTING
+    const bool fail_file_sync =
+        consume_test_fault(PLAYER_SESSION_TEST_FAULT_FILE_SYNC);
+#else
+    const bool fail_file_sync = false;
+#endif
+    if (ok && (fail_file_sync || fsync(fd) != 0)) {
+        if (fail_file_sync) errno = EIO;
         ok = false; failed_at = "file sync"; failure_errno = errno;
     }
     if (close(fd) != 0 && ok) {
         ok = false; failed_at = "close"; failure_errno = errno;
     }
-    if (ok && rename(temporary, path) != 0) {
+#ifdef GBB_PLAYER_SESSION_TESTING
+    stop_for_test_interrupt(PLAYER_SESSION_TEST_INTERRUPT_BEFORE_RENAME);
+    const bool fail_rename = consume_test_fault(PLAYER_SESSION_TEST_FAULT_RENAME);
+#else
+    const bool fail_rename = false;
+#endif
+    if (ok && !save_target_is_replaceable(path)) {
+        ok = false; failed_at = "target validation"; failure_errno = errno;
+    }
+    if (ok && (fail_rename || rename(temporary, path) != 0)) {
+        if (fail_rename) errno = EIO;
         ok = false; failed_at = "rename"; failure_errno = errno;
     }
+#ifdef GBB_PLAYER_SESSION_TESTING
+    if (ok) stop_for_test_interrupt(PLAYER_SESSION_TEST_INTERRUPT_AFTER_RENAME);
+#endif
     if (ok && !sync_save_directory(path)) {
         ok = false; failed_at = "directory sync"; failure_errno = errno;
     }

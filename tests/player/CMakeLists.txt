@@ -23,16 +23,31 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       set_target_properties(test_player_presentation PROPERTIES C_EXTENSIONS OFF)
     endif()
     add_test(NAME ${test_name} COMMAND test_player_presentation ${test_name})
-  elseif(test_name MATCHES "^player_session_(replacement_success|replacement_failure)$")
+  elseif(test_name MATCHES "^player_session_[a-z0-9_]+$")
     if(NOT TARGET test_player_session)
+      add_library(gabbaboy-player-session-test STATIC
+        "${PROJECT_SOURCE_DIR}/src/player/session.c")
+      target_include_directories(gabbaboy-player-session-test PUBLIC
+        "${PROJECT_SOURCE_DIR}/src/player")
+      target_link_libraries(gabbaboy-player-session-test PUBLIC
+        GabbaBoy::core SDL3::SDL3)
+      target_compile_features(gabbaboy-player-session-test PUBLIC c_std_17)
+      target_compile_definitions(gabbaboy-player-session-test PRIVATE
+        GBB_PLAYER_SESSION_TESTING)
+      set_target_properties(gabbaboy-player-session-test PROPERTIES
+        C_EXTENSIONS OFF)
       add_executable(test_player_session test_session.c)
-      target_link_libraries(test_player_session PRIVATE gabbaboy-player-adapter)
+      target_link_libraries(test_player_session PRIVATE
+        gabbaboy-player-session-test)
       target_compile_features(test_player_session PRIVATE c_std_17)
+      target_compile_definitions(test_player_session PRIVATE
+        GBB_PLAYER_SESSION_TESTING)
       set_target_properties(test_player_session PROPERTIES C_EXTENSIONS OFF)
     endif()
     add_test(NAME ${test_name} COMMAND test_player_session ${test_name}
       ${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb
-      ${CMAKE_CURRENT_BINARY_DIR}/${test_name}-temp.gb)
+      ${CMAKE_CURRENT_BINARY_DIR}/${test_name}-temp.gb
+      ${CMAKE_CURRENT_BINARY_DIR}/${test_name}-data)
   elseif(test_name STREQUAL "player_smoke")
     add_test(NAME player_smoke COMMAND gabbaboy-player --smoke)
   elseif(test_name STREQUAL "player_limitations")
