@@ -21,6 +21,8 @@
 #define PLAYER_FRAME_HALF_DOTS UINT64_C(140448)
 #define PLAYER_MAX_OPERATION_HALF_DOTS UINT64_C(40)
 #define PLAYER_BATTERY_SMOKE_HALF_DOTS UINT64_C(200000)
+#define PLAYER_AUDIO_MEASURE_VIDEO_FRAMES UINT64_C(300)
+#define PLAYER_AUDIO_SMALL_PARTITION_HALF_DOTS UINT64_C(792)
 #define PLAYER_TITLE_SIZE 512u
 
 typedef enum {
@@ -96,19 +98,31 @@ static void begin_transition(player *app, player_transition transition,
                              const char *replacement_path);
 static void destroy_player(player *app);
 
-static bool run_pulse_audio_smoke(player *app, const char *rom_path) {
-    size_t rom_size = 0u;
-    uint8_t *rom = SDL_LoadFile(rom_path, &rom_size);
-    if (rom == NULL || rom_size != 32768u) {
-        SDL_free(rom);
-        fputs("Could not prepare the authored pulse smoke guest\n", stderr);
-        return false;
+static bool read_measurement_rom(const char *rom_path, uint8_t rom[32768]) {
+    FILE *file = fopen(rom_path, "rb");
+    if (file == NULL) return false;
+    const bool sized = fseek(file, 0L, SEEK_END) == 0 && ftell(file) == 32768L &&
+        fseek(file, 0L, SEEK_SET) == 0;
+    const bool read = sized && fread(rom, 1u, 32768u, file) == 32768u;
+    const bool closed = fclose(file) == 0;
+    return read && closed;
+}
+
+static gbb_instance *create_authored_audio_guest(const char *rom_path) {
+    uint8_t rom[32768];
+    if (rom_path == NULL || !read_measurement_rom(rom_path, rom)) {
+        fputs("Could not read the 32 KiB project-owned audio workload fixture\n",
+              stderr);
+        return NULL;
     }
     static const uint8_t program[] = {
-        0x3Eu, 0xF0u, 0xEAu, 0x12u, 0xFFu, /* NR12: DAC on, volume 15 */
-        0x3Eu, 0x80u, 0xEAu, 0x11u, 0xFFu, /* NR11: 12.5% duty */
-        0x3Eu, 0xF0u, 0xEAu, 0x13u, 0xFFu, /* NR13 frequency */
-        0x3Eu, 0x87u, 0xEAu, 0x14u, 0xFFu, /* NR14 trigger */
+        0x3Eu, 0x80u, 0xEAu, 0x26u, 0xFFu, /* NR52: power on */
+        0x3Eu, 0x77u, 0xEAu, 0x24u, 0xFFu, /* NR50: full left/right level */
+        0x3Eu, 0x11u, 0xEAu, 0x25u, 0xFFu, /* NR51: route pulse one to both */
+        0x3Eu, 0xF0u, 0xEAu, 0x12u, 0xFFu, /* NR12: pulse DAC/envelope */
+        0x3Eu, 0x80u, 0xEAu, 0x11u, 0xFFu, /* NR11: duty and length */
+        0x3Eu, 0xF0u, 0xEAu, 0x13u, 0xFFu, /* NR13: frequency low */
+        0x3Eu, 0x87u, 0xEAu, 0x14u, 0xFFu, /* NR14: trigger and frequency */
         0x18u, 0xFEu
     };
     memcpy(rom + 0x100u, program, sizeof(program));
@@ -117,14 +131,18 @@ static bool run_pulse_audio_smoke(player *app, const char *rom_path) {
         checksum = (uint8_t)(checksum - rom[i] - 1u);
     rom[0x14Du] = checksum;
     gbb_instance *machine = NULL;
-    const bool loaded = gbb_create(GBB_PROFILE_DMG_CPU_B, &machine) == GBB_OK &&
-        gbb_load_rom(machine, rom, rom_size) == GBB_OK;
-    SDL_free(rom);
-    if (!loaded) {
+    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &machine) != GBB_OK ||
+        machine == NULL || gbb_load_rom(machine, rom, sizeof(rom)) != GBB_OK) {
         gbb_destroy(machine);
-        fputs("Could not load the authored pulse smoke guest\n", stderr);
-        return false;
+        fputs("Could not load the authored pulse audio workload\n", stderr);
+        return NULL;
     }
+    return machine;
+}
+
+static bool run_pulse_audio_smoke(player *app, const char *rom_path) {
+    gbb_instance *machine = create_authored_audio_guest(rom_path);
+    if (machine == NULL) return false;
     gbb_audio_frame frames[512];
     uint64_t elapsed = 0u;
     uint64_t produced = 0u;
@@ -175,6 +193,146 @@ static bool run_pulse_audio_smoke(player *app, const char *rom_path) {
         app->audio != NULL ? player_audio_high_water(app->audio) : 0u,
         (unsigned long long)player_audio_queued_input_bytes(app->audio));
     return true;
+}
+
+static bool write_pcm_s16le(const gbb_audio_frame *frames, size_t count) {
+    uint8_t bytes[512u * sizeof(gbb_audio_frame)];
+    if (count > 512u) return false;
+    for (size_t i = 0u; i < count; ++i) {
+        const uint16_t left = (uint16_t)frames[i].left;
+        const uint16_t right = (uint16_t)frames[i].right;
+        bytes[i * 4u] = (uint8_t)(left & 0xFFu);
+        bytes[i * 4u + 1u] = (uint8_t)(left >> 8u);
+        bytes[i * 4u + 2u] = (uint8_t)(right & 0xFFu);
+        bytes[i * 4u + 3u] = (uint8_t)(right >> 8u);
+    }
+    return fwrite(bytes, sizeof(bytes[0]), count * sizeof(gbb_audio_frame), stdout) ==
+        count * sizeof(gbb_audio_frame);
+}
+
+static bool run_audio_measure(const char *partition, const char *rom_path) {
+    const char *driver = SDL_GetCurrentAudioDriver();
+    if (driver == NULL || strcmp(driver, "dummy") != 0) {
+        fprintf(stderr, "Audio measurement requires SDL_AUDIO_DRIVER=dummy; got %s\n",
+                driver == NULL ? "<none>" : driver);
+        return false;
+    }
+    const uint64_t partition_half_dots = strcmp(partition, "frame") == 0
+        ? PLAYER_FRAME_HALF_DOTS
+        : strcmp(partition, "792") == 0
+            ? PLAYER_AUDIO_SMALL_PARTITION_HALF_DOTS : 0u;
+    if (partition_half_dots == 0u) {
+        fputs("Audio measurement partition must be 'frame' or '792'\n", stderr);
+        return false;
+    }
+    player_audio *audio = player_audio_create();
+    gbb_instance *machine = create_authored_audio_guest(rom_path);
+    if (audio == NULL || !player_audio_available(audio) || machine == NULL) {
+        fputs("Audio measurement could not open the SDL dummy stream or load its guest\n",
+              stderr);
+        player_audio_destroy(audio);
+        gbb_destroy(machine);
+        return false;
+    }
+
+    const uint64_t target_half_dots =
+        PLAYER_FRAME_HALF_DOTS * PLAYER_AUDIO_MEASURE_VIDEO_FRAMES;
+    uint64_t elapsed_half_dots = 0u;
+    uint64_t sample_count = 0u;
+    bool passed = true;
+    while (elapsed_half_dots < target_half_dots) {
+        unsigned capacity = player_audio_capacity(audio);
+        if (capacity == 0u) {
+            player_audio_note_backpressure(audio);
+            SDL_Delay(1u);
+            continue;
+        }
+        if (capacity > 512u) capacity = 512u;
+        const uint64_t remaining = target_half_dots - elapsed_half_dots;
+        uint64_t budget = partition_half_dots;
+        if (budget > remaining) budget = remaining + PLAYER_MAX_OPERATION_HALF_DOTS;
+        gbb_audio_frame frames[512];
+        size_t count = 0u;
+        const gbb_run_result result = gbb_run_audio(machine, budget, frames,
+                                                     capacity, &count);
+        if (count != 0u) {
+            if (!write_pcm_s16le(frames, count) ||
+                !player_audio_submit(audio, frames, (unsigned)count)) {
+                fputs("Audio measurement could not preserve and submit every PCM frame\n",
+                      stderr);
+                passed = false;
+                break;
+            }
+            sample_count += count;
+        }
+        if ((result.reason != GBB_STOP_BUDGET &&
+             result.reason != GBB_STOP_OUTPUT_FULL) ||
+            result.consumed_half_dots > budget ||
+            (result.consumed_half_dots == 0u && count == 0u)) {
+            fprintf(stderr, "Audio measurement guest stopped without bounded progress (reason=%d)\n",
+                    (int)result.reason);
+            passed = false;
+            break;
+        }
+        if (result.consumed_half_dots > UINT64_MAX - elapsed_half_dots) {
+            fputs("Audio measurement guest timeline overflowed\n", stderr);
+            passed = false;
+            break;
+        }
+        elapsed_half_dots += result.consumed_half_dots;
+    }
+
+    if (passed && (elapsed_half_dots < target_half_dots ||
+        elapsed_half_dots - target_half_dots > PLAYER_MAX_OPERATION_HALF_DOTS ||
+        sample_count == 0u || fflush(stdout) != 0)) {
+        fputs("Audio measurement did not finish within its declared timeline or PCM bounds\n",
+              stderr);
+        passed = false;
+    }
+    if (passed) {
+        const uint64_t queued_input_bytes = player_audio_queued_input_bytes(audio);
+        if (!player_audio_clear(audio)) {
+            fputs("Audio measurement could not quiesce and count its final host backlog\n",
+                  stderr);
+            passed = false;
+        } else {
+            const uint64_t flushed_bytes = (uint64_t)player_audio_flushed_bytes(audio);
+            const uint64_t unavailable_frames =
+                (uint64_t)player_audio_unavailable_frames(audio);
+            const uint64_t unavailable_bytes = unavailable_frames >
+                UINT64_MAX / sizeof(gbb_audio_frame)
+                ? UINT64_MAX
+                : unavailable_frames * sizeof(gbb_audio_frame);
+            const uint64_t discard_bytes = UINT64_MAX - flushed_bytes <
+                unavailable_bytes ? UINT64_MAX : flushed_bytes + unavailable_bytes;
+            fprintf(stderr,
+                "audio_measure model=DMG-CPU-B workload=authored-pulse-control-loop-v1 driver=dummy duration_video_frames=%llu duration_half_dots=%llu elapsed_half_dots=%llu sample_rate_hz=48000 pcm_format=s16le_stereo sample_count=%llu ring_target_frames=%u ring_ceiling_frames=%u ring_high_water_frames=%u app_pcm_underflow_frames=%llu app_pcm_underflow_events=%llu producer_backpressure_events=%llu intentionally_discarded_host_frames=%llu intentionally_discarded_host_partial_bytes=%llu sdl_queued_input_bytes=%llu\n",
+                (unsigned long long)PLAYER_AUDIO_MEASURE_VIDEO_FRAMES,
+                (unsigned long long)target_half_dots,
+                (unsigned long long)elapsed_half_dots,
+                (unsigned long long)sample_count,
+                player_audio_target_frames(), player_audio_ring_ceiling_frames(),
+                player_audio_high_water(audio),
+                (unsigned long long)player_audio_underflow(audio),
+                (unsigned long long)player_audio_underflow_events(audio),
+                (unsigned long long)player_audio_backpressure_events(audio),
+                (unsigned long long)(discard_bytes / sizeof(gbb_audio_frame)),
+                (unsigned long long)(discard_bytes % sizeof(gbb_audio_frame)),
+                (unsigned long long)queued_input_bytes);
+        }
+    }
+    gbb_destroy(machine);
+    player_audio_destroy(audio);
+    return passed;
+}
+
+static void report_default_audio_device(void) {
+    const char *driver = SDL_GetCurrentAudioDriver();
+    player_audio *audio = player_audio_create();
+    printf("default_audio_device=%s driver=%s\n",
+           player_audio_available(audio) ? "available" : "unavailable",
+           driver == NULL ? "<none>" : driver);
+    player_audio_destroy(audio);
 }
 
 static bool run_audio_dummy_smoke(void) {
@@ -1761,6 +1919,10 @@ int main(int argc, char **argv) {
     const bool smoke = argc >= 2 && strcmp(argv[1], "--smoke") == 0;
     const bool audio_dummy_smoke = argc == 2 &&
         strcmp(argv[1], "--audio-dummy-smoke") == 0;
+    const bool audio_measure = argc == 4 &&
+        strcmp(argv[1], "--audio-measure") == 0;
+    const bool audio_device_status = argc == 2 &&
+        strcmp(argv[1], "--audio-device-status") == 0;
     const bool package_smoke = argc == 3 &&
                                strcmp(argv[1], "--smoke-package") == 0;
     const bool battery_store = argc == 3 &&
@@ -1769,10 +1931,12 @@ int main(int argc, char **argv) {
                                 strcmp(argv[1], "--battery-smoke-resume") == 0;
     const bool battery_smoke = battery_store || battery_resume;
     if ((smoke && argc != 2 && argc != 4) ||
+        (audio_measure && argc != 4) ||
         (package_smoke && argc != 3) ||
         (battery_smoke && argc != 3) ||
-        (!smoke && !audio_dummy_smoke && !package_smoke && !battery_smoke && argc > 1)) {
-        fprintf(stderr, "usage: %s [--smoke [demo-rom invalid-rom] | --smoke-package invalid-rom | --audio-dummy-smoke]\n",
+        (!smoke && !audio_dummy_smoke && !audio_measure && !audio_device_status &&
+         !package_smoke && !battery_smoke && argc > 1)) {
+        fprintf(stderr, "usage: %s [--smoke [demo-rom invalid-rom] | --smoke-package invalid-rom | --audio-dummy-smoke | --audio-measure frame|792 demo-rom | --audio-device-status]\n",
                 argv[0]);
         return 2;
     }
@@ -1789,9 +1953,13 @@ int main(int argc, char **argv) {
     app.window_focused = true;
     atomic_init(&app.dialog_callback_done, false);
     atomic_init(&app.dialog_delivery_failed, false);
-    if (!SDL_Init((smoke || audio_dummy_smoke || package_smoke || battery_smoke)
-                      ? SDL_INIT_EVENTS | SDL_INIT_AUDIO
-                      : SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
+    Uint32 init_flags = SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD;
+    if (smoke || audio_dummy_smoke || package_smoke || battery_smoke ||
+        audio_measure)
+        init_flags = SDL_INIT_EVENTS | SDL_INIT_AUDIO;
+    else if (audio_device_status)
+        init_flags = SDL_INIT_AUDIO;
+    if (!SDL_Init(init_flags)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
     }
@@ -1799,6 +1967,16 @@ int main(int argc, char **argv) {
         const bool passed = run_audio_dummy_smoke();
         SDL_Quit();
         return passed ? 0 : 1;
+    }
+    if (audio_measure) {
+        const bool passed = run_audio_measure(argv[2], argv[3]);
+        SDL_Quit();
+        return passed ? 0 : 1;
+    }
+    if (audio_device_status) {
+        report_default_audio_device();
+        SDL_Quit();
+        return 0;
     }
     app.audio = player_audio_create();
     if (app.audio == NULL || !player_audio_available(app.audio)) {

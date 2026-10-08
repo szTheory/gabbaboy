@@ -14,6 +14,8 @@ typedef bool (*player_audio_write_fn)(void *userdata, const void *bytes,
 player_audio *player_audio_create(void);
 void player_audio_destroy(player_audio *audio);
 unsigned player_audio_capacity(const player_audio *audio);
+unsigned player_audio_target_frames(void);
+unsigned player_audio_ring_ceiling_frames(void);
 bool player_audio_submit(player_audio *audio, const gbb_audio_frame *frames,
                          unsigned count);
 bool player_audio_clear(player_audio *audio);
@@ -21,6 +23,7 @@ uint_fast64_t player_audio_flushed_bytes(const player_audio *audio);
 bool player_audio_handle_device_event(player_audio *audio, uint32_t event_type,
                                       uint32_t device_id, bool recording);
 uint_fast64_t player_audio_underflow(const player_audio *audio);
+uint_fast64_t player_audio_underflow_events(const player_audio *audio);
 uint_fast64_t player_audio_backpressure_events(const player_audio *audio);
 void player_audio_note_backpressure(player_audio *audio);
 unsigned player_audio_high_water(const player_audio *audio);

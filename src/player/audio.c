@@ -7,6 +7,7 @@
 
 #define PLAYER_AUDIO_RING_FRAMES 4096u
 #define PLAYER_AUDIO_RING_MASK (PLAYER_AUDIO_RING_FRAMES - 1u)
+#define PLAYER_AUDIO_TARGET_FRAMES 1606u
 #define PLAYER_AUDIO_RING_LIMIT_FRAMES 3214u
 #define PLAYER_AUDIO_CALLBACK_CHUNK 256u
 #define PLAYER_AUDIO_GAIN_STEP 0.1f
@@ -23,6 +24,7 @@ struct player_audio {
     atomic_uint write_index;
     atomic_uint high_water_frames;
     atomic_uint_fast64_t underflow_frames;
+    atomic_uint_fast64_t underflow_events;
     atomic_uint_fast64_t backpressure_events;
     atomic_uint_fast64_t unavailable_frames;
     atomic_uint_fast64_t sink_failures;
@@ -67,6 +69,7 @@ static void player_audio_transfer(player_audio *audio, int requested_bytes,
     /* SDL gives bytes as a positive int; ceil avoids signed addition overflow. */
     unsigned remaining = (unsigned)requested_bytes;
     uint8_t block[PLAYER_AUDIO_CALLBACK_CHUNK * sizeof(gbb_audio_frame)];
+    bool underflow_event = false;
     while (remaining != 0u) {
         const unsigned count = remaining < sizeof(block)
             ? remaining : (unsigned)sizeof(block);
@@ -102,6 +105,7 @@ static void player_audio_transfer(player_audio *audio, int requested_bytes,
                 audio->pending_offset = 0u;
         }
         if (missing_bytes != 0u) {
+            underflow_event = true;
             const unsigned absent = audio->underflow_partial_bytes + missing_bytes;
             counter_add(&audio->underflow_frames,
                         absent / (unsigned)sizeof(gbb_audio_frame));
@@ -109,11 +113,14 @@ static void player_audio_transfer(player_audio *audio, int requested_bytes,
                 absent % (unsigned)sizeof(gbb_audio_frame);
         }
         if (!write_fn(userdata, block, count)) {
+            if (underflow_event)
+                counter_add(&audio->underflow_events, 1u);
             counter_add(&audio->sink_failures, 1u);
             return;
         }
         remaining -= count;
     }
+    if (underflow_event) counter_add(&audio->underflow_events, 1u);
 }
 
 static void SDLCALL player_audio_get(void *userdata, SDL_AudioStream *stream,
@@ -129,6 +136,7 @@ static bool player_audio_counters_lock_free(player_audio *audio) {
         atomic_is_lock_free(&audio->write_index) &&
         atomic_is_lock_free(&audio->high_water_frames) &&
         atomic_is_lock_free(&audio->underflow_frames) &&
+        atomic_is_lock_free(&audio->underflow_events) &&
         atomic_is_lock_free(&audio->backpressure_events) &&
         atomic_is_lock_free(&audio->unavailable_frames) &&
         atomic_is_lock_free(&audio->sink_failures);
@@ -139,6 +147,7 @@ static void player_audio_init(player_audio *audio) {
     atomic_init(&audio->write_index, 0u);
     atomic_init(&audio->high_water_frames, 0u);
     atomic_init(&audio->underflow_frames, 0u);
+    atomic_init(&audio->underflow_events, 0u);
     atomic_init(&audio->backpressure_events, 0u);
     atomic_init(&audio->unavailable_frames, 0u);
     atomic_init(&audio->sink_failures, 0u);
@@ -168,6 +177,14 @@ unsigned player_audio_capacity(const player_audio *audio) {
     const unsigned used = player_audio_used(audio);
     return used >= PLAYER_AUDIO_RING_LIMIT_FRAMES
         ? 0u : PLAYER_AUDIO_RING_LIMIT_FRAMES - used;
+}
+
+unsigned player_audio_target_frames(void) {
+    return PLAYER_AUDIO_TARGET_FRAMES;
+}
+
+unsigned player_audio_ring_ceiling_frames(void) {
+    return PLAYER_AUDIO_RING_LIMIT_FRAMES;
 }
 
 bool player_audio_submit(player_audio *audio, const gbb_audio_frame *frames,
@@ -328,6 +345,11 @@ void player_audio_note_backpressure(player_audio *audio) {
 
 uint_fast64_t player_audio_underflow(const player_audio *audio) {
     return audio == NULL ? 0u : atomic_load_explicit(&audio->underflow_frames,
+                                                     memory_order_relaxed);
+}
+
+uint_fast64_t player_audio_underflow_events(const player_audio *audio) {
+    return audio == NULL ? 0u : atomic_load_explicit(&audio->underflow_events,
                                                      memory_order_relaxed);
 }
 
