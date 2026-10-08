@@ -246,8 +246,7 @@ static int player_input_sources(const char *demo_path) {
 }
 
 static int player_input_reconnect(const char *demo_path) {
-    (void)demo_path;
-    gbb_instance *machine = create_empty_machine();
+    gbb_instance *machine = load_demo(demo_path);
     REQUIRE(machine != NULL);
     player_input_state state;
     player_input_reset(&state, 0u);

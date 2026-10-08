@@ -337,10 +337,13 @@ gbb_error player_input_focus_gained(player_input_state *state,
                                     uint64_t host_timestamp_ns,
                                     uint64_t host_now_ns,
                                     bool intentional_pause) {
-    (void)state;
-    (void)machine;
-    (void)host_timestamp_ns;
-    (void)host_now_ns;
-    (void)intentional_pause;
-    return GBB_OK;
+    if (state == NULL || machine == NULL) return GBB_INVALID_ARGUMENT;
+    const gbb_error releases = player_input_retry_focus_releases(
+        state, machine, host_timestamp_ns);
+    if (releases != GBB_OK) return releases;
+    if (intentional_pause) {
+        player_input_pause(state);
+        return GBB_OK;
+    }
+    return player_input_resume(state, host_now_ns) ? GBB_OK : GBB_INVALID_EVENT;
 }

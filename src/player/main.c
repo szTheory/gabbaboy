@@ -1056,20 +1056,15 @@ static bool handle_event(player *app, const SDL_Event *event) {
     }
     if (event->type == SDL_EVENT_WINDOW_FOCUS_GAINED) {
         app->window_focused = true;
-        const gbb_error result = player_input_retry_focus_releases(
-            &app->input, app->machine, event->window.timestamp);
+        const gbb_error result = player_input_focus_gained(
+            &app->input, app->machine, event->window.timestamp,
+            SDL_GetTicksNS(), app->user_paused || app->dialog_pending);
         if (result != GBB_OK) {
             app->user_paused = true;
             set_status(app, "Input remains paused until held-button releases are admitted");
         } else if (!app->dialog_pending) {
-            if (!app->user_paused &&
-                !player_input_resume(&app->input, SDL_GetTicksNS())) {
-                app->user_paused = true;
-                set_status(app, "Input remains paused until held-button releases are admitted");
-            } else {
-                set_status(app, app->user_paused
-                    ? "Focus returned; paused by user" : "Running");
-            }
+            set_status(app, app->user_paused
+                ? "Focus returned; paused by user" : "Running");
         }
     }
     return true;
