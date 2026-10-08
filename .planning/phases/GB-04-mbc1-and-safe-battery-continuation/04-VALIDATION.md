@@ -1,8 +1,8 @@
 ---
 phase: "GB-04"
 slug: "mbc1-and-safe-battery-continuation"
-status: executing
-nyquist_compliant: false
+status: validated
+nyquist_compliant: true
 wave_0_complete: true
 created: "2026-10-08"
 ---
@@ -117,7 +117,16 @@ or manual-dispatch-only result is not green evidence.
 - [x] Every task has `<automated>` verify and a named failing direction.
 - [x] Required inventory, original fixture reproduction, exact-head CI/consumer and threat validations are mapped.
 - [x] Focused and full local suites executed; counts are recorded below.
+- [x] Every scoped software requirement has named automated coverage; no manual-only software acceptance remains.
 - [ ] Hosted exact-head and downloaded artifact evidence inspected.
-- [ ] `nyquist_compliant: true` set only after execution supports it.
+- [x] `nyquist_compliant: true` is supported by the executed per-task coverage map.
 
-**Approval:** local execution evidence is complete; exact-head hosted checks remain pending.
+**Approval:** local execution and Nyquist coverage are validated; exact-head hosted checks remain pending for phase closeout.
+
+## Validation Audit 2026-10-08
+
+| Metric | Count |
+|---|---|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
