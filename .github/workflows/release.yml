@@ -732,6 +732,10 @@ jobs:
               if receipt.get("source_sha") != source_sha or receipt.get("platform") != platform:
                   raise SystemExit(f"build receipt identity mismatch for {platform}")
               evidence[platform] = receipt
+          linux = json.loads((root / "build-receipt.json").read_text())
+          if linux.get("source_sha") != source_sha or linux.get("asset_name") != "gabbaboy-core-linux-x64.tar.gz":
+              raise SystemExit("Linux build receipt identity mismatch")
+          evidence["linux-x64"] = linux.get("build")
           preview = json.loads((root / "gabbaboy-preview-macos-arm64-build-receipt.json").read_text())
           if preview.get("source_revision") != source_sha or preview.get("result") != "passed":
               raise SystemExit("player build receipt identity or result mismatch")
