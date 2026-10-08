@@ -2,7 +2,7 @@
 phase: "GB-03"
 slug: "visible-interactive-dmg"
 status: executing
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: true
 created: "2026-10-07"
 ---
@@ -44,7 +44,7 @@ created: "2026-10-07"
 | 03-03-01 | 03-03 | 3 | VIDEO-02, VIDEO-05 | T-03-08, T-03-10 | DMA progress, mapping, HRAM access and partitions are bounded | unit / regression | ctest --preset phase1 --output-on-failure --no-tests=error -R '^dma_.*$' | tests/test_dma.c | passed 9/9 locally and under Linux ASan/UBSan |
 | 03-03-02 | 03-03 | 3 | VIDEO-02, VIDEO-05 | T-03-09, T-03-10 | Lockouts/contention distinguish initiators and model applicability | unit / regression | ctest --preset phase1 --output-on-failure --no-tests=error -R '^(dma_.*|ppu_timing_.*|frame_composition_.*|joypad_gameplay_tracer|bus_(preflight|unsupported_stack|unsupported_fetch))$' | tests/test_dma.c; docs/dmg-video-evidence.md | passed 23/23; disputed PPU/DMA collision outcome remains unqualified |
 | 03-04-01 | 03-04 | 4 | VIDEO-03 | T-03-14, T-03-16 | Queue and active-low matrix behavior is atomic and deterministic | unit / regression | ctest --preset phase1 --output-on-failure --no-tests=error -R '^(joypad_selection|joypad_queue_atomic|joypad_equal_time|joypad_partition)$'; full offline suite | tests/test_joypad.c | passed 4/4 focused; full suite passed 129/129 locally |
-| 03-04-02 | 03-04 | 4 | VIDEO-03 | T-03-15 | Exact IF assertions are added only after the D-08 source gate closes | source qualification / evidence gate | Retained by design: no interrupt tests registered because exact DMG-CPU-B cases remain unsupported by available evidence | docs/dmg-video-evidence.md; 03-RESEARCH.md | D-08 remains open; no guessed IF behavior; VIDEO-03 remains incomplete |
+| 03-04-02 | 03-04 | 4 | VIDEO-03 | T-03-15 | Exact IF assertions are added only after the D-08 source gate closes | source qualification / evidence gate | Superseded by adopted D-025 software-model policy and Plan 03-13 guest regression | docs/dmg-video-evidence.md; 03-RESEARCH.md | Hardware phase and low-duration qualification remain open; no physical CPU-B result is claimed |
 | 03-05-01 | 03-05 | 5 | VIDEO-03, VIDEO-04, VIDEO-05 | T-03-21, T-03-23 | Optional SDL input/render path stays outside the default core graph | integration / build | `bash tests/scripts/verify-phase3-player.sh` | `tests/player/test_input.c`; `src/player/main.c` | passed 4/4; official SDL 3.4.18 source digest verified; smoke used offscreen renderer because no desktop display is available |
 | 03-05-02 | 03-05 | 5 | VIDEO-03, VIDEO-04 | T-03-21, T-03-22 | Host time conversion, repeats, pause/reset and focus-loss release capacity are tested | integration / regression | `bash tests/scripts/verify-phase3-player.sh`; full `ctest --preset phase1` | `tests/player/test_input.c` | passed 4/4 optional tests and full core suite 129/129; no live-window perceptual check available |
 | 03-06-01 | 03-06 | 6 | VIDEO-04, VIDEO-05 | T-03-25, T-03-27 | ROM replacement is transactional and limitation/status text is visible | integration / adapter | `bash tests/scripts/verify-phase3-player.sh` | `tests/player/test_session.c`; `src/player/main.c`; `docs/preview.md` | passed injected success/failure event path and bounded invalid-file cases within optional suite 14/14; live desktop text check unavailable |
@@ -55,6 +55,9 @@ created: "2026-10-07"
 | 03-08-02 | 03-08 | 8 | VIDEO-05 | T-03-32, T-03-33 | Hosted fixture job uses pinned tool and exact checkout receipt | hosted CI | Exact-head fixture-repro lane | .github/workflows/fixture-repro.yml | passed at 53f9f56cacbe6676b2c0db1dddf12dd0e44fa4f3 in run 37683636738; uploaded receipt identity verified |
 | 03-09-01 | 03-09 | 9 | VIDEO-04, VIDEO-05 | T-03-34, T-03-36 | Optional macOS lane uses pinned dependency and nonempty player smoke | hosted build / integration | Exact-head opt-in macOS player job | CI run 37686137977; clean source `fd62c48d84b8339435fefd008147f0c06f696e0e`; 14/14 local player tests | passed |
 | 03-09-02 | 03-09 | 9 | VIDEO-04, VIDEO-05 | T-03-35 | Downloaded package digest/notices and extracted-byte smoke match exact revision | package / consumer | Exact-head downloaded-package smoke | Preview run 37686137834; artifact SHA-256 `cd0ce476c34a91ab9de2a6ee5e084a0ecff94b95f5015d1aa7b41bc9f88e175f`; verified receipt and locally replayed extracted smoke | passed |
+| 03-13-01 | 03-13 | gap 12 | VIDEO-03 | T-03-43 | Ordered selected-pin transitions request guest-visible IF.4 | unit / guest regression | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error -R '^joypad_'` | `tests/test_joypad.c`; `tests/CMakeLists.txt`; `tests/expected-tests.txt` | passed 6/6 including P10–P13, selected/unselected, held-selector, second-pin, duplicate, shared-pin releases, sticky IF, IE=0, equal-time ordering, and FF00/FF0F partition-equivalent results; CPU-B pulse/sample phase remains unmeasured |
+| 03-13-02 | 03-13 | gap 12 | VIDEO-02 | T-03-44 | Owned guests check mode-2 overlap, mode-3 word boundaries, CPU mode access, and same-dot DMA/PPU/CPU result | unit / guest regression | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(dma_ppu_overlap|dma_active_mode_matrix|dma_ppu_word_boundaries|dma_ppu_cpu_collision)$'` | `tests/test_dma.c`; `tests/CMakeLists.txt`; `tests/expected-tests.txt` | passed 4/4: baseline/partial/ended-before-scan controls; before/after byte-boundary pixels; active DMA VRAM/OAM reads/writes in modes 0–3; same-half-dot DMA byte, PPU fetch, CPU `$FF` read; scan/tie partition equivalence; CPU-B timing and revision scope remain unmeasured |
+| 03-13-03 | 03-13 | gap 12 | VIDEO-02, VIDEO-03 | T-03-45 | Source provenance and claim limits reconcile to execution evidence | full core regression | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error && git diff --check` | `docs/dmg-video-evidence.md`; `03-VERIFICATION.md`; `03-13-SUMMARY.md` | passed 139/139 at implementation revision before documentation-only reconciliation; diff check passed; VIDEO-04 visible packaged-window/key evidence and exact CPU-B timing remain unclaimed |
 
 ---
 
@@ -72,13 +75,13 @@ All scoped software behavior has an automated verification path. Physical DMG-CP
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or explicit evidence-gate dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] First feedback slice covers validation gaps without a foundation-only lead plan
-- [ ] No watch-mode flags
-- [ ] Feedback latency measured and recorded
-- [ ] `nyquist_compliant: true` set in frontmatter after audit
+- [x] All tasks have `<automated>` verify or explicit evidence-gate dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] First feedback slice covers validation gaps without a foundation-only lead plan
+- [x] No watch-mode flags
+- [x] Feedback latency measured and recorded
+- [x] `nyquist_compliant: true` set after all focused tests and the full suite passed
 
-Plan 03-09's two automated package tasks passed. The phase-level Nyquist flag remains false because the D-08 JOYP source/evidence gate is still open; Plan 03-04-02 remains an explicit hardware/model-applicability evidence gap, not a skipped or fabricated test.
+Plan 03-09's two automated package tasks passed. Plan 03-13 adopts confidence-qualified software behavior with original guest checks. The registered matrix covers ordered JOYP edges, all active-DMA CPU VRAM/OAM cells in PPU modes 0–3, mode-2 overlap controls, adjacent DMA-byte/fetch boundaries, and a same-half-dot three-way collision. Tests do not claim physical CPU-B pulse phase, lane timing, or PPU-revision qualification.
 
-**Approval:** pending
+**Approval:** executor-confirmed 2026-10-08 after focused and full local core suites passed; live VIDEO-04 perceptual check remains a separate open verification item.

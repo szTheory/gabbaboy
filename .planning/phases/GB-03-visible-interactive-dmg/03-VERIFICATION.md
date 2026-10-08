@@ -1,8 +1,8 @@
 ---
 phase: GB-03-visible-interactive-dmg
-verified: 2026-10-07T23:12:54Z
+verified: 2026-10-08T00:26:01Z
 status: gaps_found
-score: 2/5 roadmap truths verified
+score: 4/5 roadmap truths verified
 covered_files:
   - .github/workflows/ci.yml
   - .github/workflows/fixture-repro.yml
@@ -52,38 +52,24 @@ behavior_unverified: 0
 overrides_applied: 0
 re_verification:
   previous_status: gaps_found
-  previous_score: 3/5
+  previous_score: 2/5
   gaps_closed:
-    - "Source-backed DMA startup M=1 access/first byte now has an original guest regression."
-    - "Active FF46 restart, latest register readback, and replacement completion boundaries now have original guest regressions."
+    - "VIDEO-02: original guests assert active-DMA CPU VRAM/OAM access in PPU modes 0–3, mode-2 overlap controls, mode-3 DMA-word boundaries, same-half-dot DMA/PPU/CPU results, and partition invariance under D-025."
+    - "VIDEO-03: original guest assertions cover selected JOYP pin falling edges, sticky IF, IE independence, held/repeated keys, selector changes, shared pins, event order, and partition invariance."
   gaps_remaining:
-    - "VIDEO-02 simultaneous PPU/DMA arbitration and exact CPU-B collision behavior remain unqualified."
-    - "VIDEO-03 JOYP IF behavior is absent and lacks model-applicable expected cases."
     - "VIDEO-04 live packaged-window and key-input behavior was not observed because this environment has no SDL display."
   regressions: []
 gaps:
-  - truth: "Guests observe model-specific OAM DMA, VRAM/OAM restrictions, and CPU/PPU/DMA contention results. (VIDEO-02)"
-    status: partial
-    reason: "Startup, restart, readback, source mapping, HRAM restrictions, and PPU lockouts pass current-source tests. No test asserts DMA overlapping active PPU OAM scan/object fetch or a same-timestamp CPU/PPU/DMA access. Pan Docs says most PPU revisions; pinned Mooneye sources provide no retained per-test/per-unit logs. A pinned DMG-CPU-B gate-level simulation was reviewed, but its published MGB-specific sprite case and model-dependent collision report do not supply these exact DMG-CPU-B expected values; the phase plan also excludes another emulator as the oracle. The deterministic implementation is not qualified for DMG-CPU-B collision outcomes."
+  - truth: "A macOS user can visibly open the packaged player and confirm the demo responds to a mapped key. (VIDEO-04)"
+    status: needs_human
+    reason: "This environment has no SDL display (`SDL_Init: The video driver did not add any displays`). Automated player/package evidence does not prove a visible window or live keyboard interaction."
     artifacts:
-      - path: docs/dmg-video-evidence.md
-        issue: "Mode-2 scan, mode-3 object fetch, and same-timestamp arbitration remain unqualified for CPU-B."
-      - path: tests/test_dma.c
-        issue: "dma_contention checks isolation/reset with PPU disabled; it does not assert simultaneous PPU/DMA behavior."
+      - path: src/player/main.c
+        issue: "Current packaged window and mapped-key response need a display-equipped Mac observation."
+      - path: docs/preview.md
+        issue: "Automated evidence exists; perceptual window check remains open."
     missing:
-      - "A reliable published source stating the exact DMG-CPU-B result, or a documented test on an identified DMG-CPU-B with setup, exact input timing, measured results, and raw logs; then add regressions for those outcomes."
-  - truth: "Timestamped joypad transitions produce deterministic selection/interrupt behavior through both the public API and SDL keyboard path. (VIDEO-03)"
-    status: failed
-    reason: "Polling and SDL event timing are implemented, but joypad interrupt behavior is not. FF00 writes only update joypad_select; queued button events only update joypad_buttons; no JOYP path sets IF bit 4. test_joypad.c never reads FF0F. Primary sources document matrix/low-duration behavior, not exact CPU-B sampling phase or selection/held-key timing. The pinned DMG-CPU-B gate-level simulation's published test table has no joypad input-to-IF case, and Plan 03-04 prohibits using another emulator implementation as the expected-value source."
-    artifacts:
-      - path: src/core/gabbaboy.c
-        issue: "No joypad interrupt request on selected-row or button transitions."
-      - path: tests/test_joypad.c
-        issue: "Polling and queue tests only; no IF/interrupt assertion."
-      - path: docs/dmg-video-evidence.md
-        issue: "D-08 records missing CPU-B sampling phase and expected cases."
-    missing:
-      - "First obtain an exact source or CPU-B observation for press/release, row selection, held keys, and threshold boundaries; then implement the evidenced IF behavior and test it through public API and SDL input."
+      - "On a display-equipped Mac, launch the packaged player, confirm the demo appears, and press one mapped key."
 decision_coverage:
   honored: 14
   total: 14
@@ -91,6 +77,8 @@ decision_coverage:
 ---
 
 # Phase 3: Visible Interactive DMG Verification Report
+
+> The original 2/5 audit below is retained as historical baseline. The current goal-backward result is the fresh audit appended at the end of this file.
 
 **Phase Goal:** As a Mac user, I want to play a legal GB ROM with timed input and video evidence, so that I can verify the DMG preview.
 **Verified:** 2026-10-07T23:12:54Z
@@ -171,6 +159,20 @@ GSD artifact checks passed 29/29 structured entries in Plans 03-01–03-11. Plan
 | Core JOYP | Joypad IF tests | Button/selection changes → IF bit 4 | NOT WIRED | No IF update in core and no FF0F assertion in tests. |
 | SDL keyboard/player | Public API and SDL renderer | Timed event and completed frame | WIRED | Current-source input and smoke tests passed. |
 
+## Fresh goal-backward audit — 2026-10-08
+
+**Result:** 4/5 roadmap truths verified; `gaps_found`. Phase 3 remains in progress because VIDEO-04 requires an actual display observation.
+
+| # | Roadmap truth | Status | Current evidence |
+|---|---|---|---|
+| 1 | VIDEO-01 composition and dot-sensitive PPU behavior | VERIFIED | Existing independent frame composition and PPU timing guest tests pass. |
+| 2 | VIDEO-02 DMA, access restrictions, and CPU/PPU/DMA outcomes | VERIFIED for the declared D-025 software model | `dma_active_mode_matrix`, `dma_ppu_overlap`, `dma_ppu_word_boundaries`, and `dma_ppu_cpu_collision` pass. The matrix covers active DMA and PPU modes 0–3; controls and pixels verify scan suppression and aligned-word fetch; the exact guest tie asserts DMA byte, rendered pair, CPU `$FF`, and partition equivalence. CPU-B lane/timing and universal revision parity remain unmeasured. |
+| 3 | VIDEO-03 timestamped joypad selection and interrupt behavior | VERIFIED for the documented selected falling-edge software contract | Six focused `joypad_*` cases pass, including FF0F/FF00 observations, sticky IF, IE=0, selected/unselected pins, held-selector, shared pins, equal-time ordering, and partition equivalence. CPU-B pulse qualification and sample phase remain unmeasured. |
+| 4 | VIDEO-04 visible macOS packaged player and live input | NEEDS HUMAN | The available environment has no SDL display (`SDL_Init: The video driver did not add any displays`); a live window/key response was not observed. Earlier hosted package receipts are stale for this revision. |
+| 5 | VIDEO-05 evidence separation and limitation labeling | VERIFIED | Source provenance, original guest results, and hardware/software evidence boundaries are recorded in `docs/dmg-video-evidence.md`; the full SDL-free core inventory passed 139/139. |
+
+The source-backed behavior in VIDEO-02/03 follows the adopted D-025 confidence-qualified policy, not a claim of physical DMG-CPU-B qualification. Fresh local validation at implementation commit `6901129` ran the complete `phase1` CTest inventory: 139/139 passed; `git diff --check` passed. No current-head hosted CI or hardware observation is claimed. The only remaining phase truth is the actual packaged-window/demo/key observation on a display-equipped Mac.
+
 ## Data-Flow Trace
 
 | Path | Source → output | Status |
@@ -219,6 +221,14 @@ Disabled-test scan found none. No expected values are generated by the system un
 
 ## Security and Human Limitations
 
+### Plan 03-13 execution evidence (not a goal-backward verdict)
+
+After the historical verification above, Plan 03-13 added a selected JOYP falling-edge IF.4 software model and an original guest for selected presses on P10–P13 plus an unselected-row control. It also added an original DMA/PPU overlap guest with baseline sprite pixels, a selected object whose modeled mode-3 fetch uses the aligned current DMA destination word, a later mode-2 entry suppressed during DMA, a next-line overlap, and separate DMA-byte/timestamp assertions. The pinned documentation and emulator-source provenance and exact model-policy boundaries are recorded in `docs/dmg-video-evidence.md` and `03-RESEARCH.md`.
+
+Fresh local evidence at implementation commit `0f481ae` (with this documentation update pending) is: `joypad_` selection passed 6/6; `dma_ppu_overlap` passed 1/1; the selected PPU composition/timing and DMA/start/restart/lock set passed 16/16; the complete `phase1` inventory passed 136/136 with zero missing tests; and `git diff --check` passed. The JOYP test does not yet cover release, duplicate/shared-row/held-selector/second-edge IF behavior or JOYP run-partition equivalence. The DMA test does not yet cover all active-DMA PPU-mode access cells, every scan/fetch start/end boundary, word-update before/after, an exact DMA→PPU→CPU same-half-dot assertion, or partition splits at those events. Existing tests retain and pass the fresh-start M-cycle and FF46 read/restart exceptions. No dependency or third-party ROM was added.
+
+The previous independent goal-backward result remains the historical baseline of `gaps_found`, 2/5 truths. It has not been updated from this execution record; a fresh goal-backward verification must inspect the current committed revision before changing roadmap truth or requirement status. VIDEO-04 still requires a packaged-window/key observation on a display-equipped Mac. No physical DMG-CPU-B measurement and no exact-head hosted CI result are claimed.
+
 03-SECURITY.md still lists T-03-27 (“Preview limitations”) as an open medium issue below the high-severity blocking threshold. Current player_limitations passed, but this verification did not rerun downloaded-package metadata assertions or refresh that audit.
 
 No physical DMG-CPU-B observation occurred. Mooneye documents DMG-family acceptance assertions and a CPU-B unit in its manually tested fleet, but retains no per-test/per-unit logs. The Nintendo manual and CPU-B reverse-engineered schematics do not establish exact JOYP sample phase. SDL smoke used a software renderer; no live macOS window was perceptually checked.
@@ -231,13 +241,13 @@ Follow-up attempt on 2026-10-07: the fresh current-source `gabbaboy-player` exec
 
 ## Advisory (New Scope, Unevidenced)
 
-None. VIDEO-02 and VIDEO-03 are carried-forward gaps with concrete evidence boundaries.
+Plan 03-13 supplies new source-backed software behavior and focused guest tests for VIDEO-02/03; those additional subcases must be included in the next goal-backward audit. The full mode/DMA access matrix, word-update/tie boundaries, three-way CPU/PPU/DMA guest outcome, and broader JOYP IF transition cases remain uncovered in the current plan execution evidence.
 
 ## Gaps Summary and Smallest Next Action
 
-Plan 03-12 closes source-backed DMA startup M=1, active FF46 restart, and readback subcases; it does not qualify simultaneous PPU/DMA behavior. JOYP polling works, but interrupt generation is absent.
+Plan 03-12 preserves the source-backed fresh DMA startup M-cycle and FF46 restart/readback exceptions. Plan 03-13 adds a source-selected JOYP IF.4 model and focused DMA/PPU scan/fetch guest evidence, but the planned full access matrix, exact update/tie boundaries, same-half-dot CPU/PPU/DMA guest outcome, and additional JOYP IF cases still need implementation or explicit narrowing. No exact CPU-B values are claimed.
 
-For VIDEO-04, open the packaged app on a Mac with a display and confirm the demo is visible and responds to a mapped key. To close VIDEO-02/VIDEO-03, we need either a reliable published source stating the exact DMG-CPU-B result or a documented test on an identified DMG-CPU-B. Record the unit/revision and setup, ROM and boot profile, exact input timing, measured results, repeat count, and raw logs. Cover DMA during PPU scan/fetch and simultaneous CPU/PPU/DMA access, plus joypad press/release, row selection with a held button, and samples just before/at/after the timing threshold with FF0F reads. Only after the technical evidence changes should we run `$gsd-plan-phase 3 --gaps` to plan regressions; do not repeat gap planning while evidence is unchanged.
+For VIDEO-04, open the packaged app on a Mac with a display and confirm the demo is visible and responds to a mapped key. The next workflow action is a fresh goal-backward audit of the current committed Plan 03-13 evidence; it must retain the 2/5 baseline until it verifies a different result. Do not re-run gap planning before that audit. If it identifies executable software gaps, plan only those; if only true hardware/perceptual limits remain, keep them open without another churn loop.
 
 Phase 3 remains in progress. Stop; do not advance to Phase 4.
 
@@ -245,3 +255,17 @@ Phase 3 remains in progress. Stop; do not advance to Phase 4.
 
 _Verified: 2026-10-07T23:12:54Z_
 _Verifier: gsd-verifier — current-source goal-backward audit_
+
+## Current goal-backward verdict — 2026-10-08T00:26:01Z
+
+This verdict supersedes every historical status, gap, and recommendation above. It was refreshed after Plan 03-13 implementation and the complete local CTest run.
+
+| # | Requirement truth | Result | Evidence and boundary |
+|---|---|---|---|
+| 1 | VIDEO-01 composition and raster timing | PASS | Existing independent composition and PPU timing guests pass. |
+| 2 | VIDEO-02 DMA, bus restrictions, and CPU/PPU/DMA behavior | PASS under D-025 software model | New original guests cover the active-DMA VRAM/OAM matrix in modes 0–3, scan overlap controls, DMA word-boundary pixels, one same-half-dot DMA/PPU/CPU outcome, and run-partition equivalence. Exact CPU-B byte lane/timing and PPU-revision parity remain unmeasured. |
+| 3 | VIDEO-03 ordered JOYP selection/interrupt behavior | PASS under selected falling-edge software contract | Six JOYP cases assert FF00/FF0F outcomes, edge and no-edge cases, sticky IF, IE independence, equal-time ordering, and partition equivalence. CPU-B pulse-duration qualification and sample phase remain unmeasured. |
+| 4 | VIDEO-04 visible packaged window and live key response | NEEDS HUMAN | SDL cannot add a display in this environment. The actual window/demo/key response remains unobserved. |
+| 5 | VIDEO-05 independent evidence and limitations | PASS | Evidence classes and limitations are explicit; the SDL-free core suite is 139/139. |
+
+**Fresh score:** 4/5. **Phase status:** incomplete; only VIDEO-04 remains open. The next exact workflow command is `$gsd-verify-work 3` after the display-based observation. No current-head hosted CI, physical CPU-B qualification, or live-window observation is claimed. The Phase 4 — MBC1 and Safe Battery Continuation — work has not started.

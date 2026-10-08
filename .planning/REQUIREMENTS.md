@@ -30,8 +30,8 @@ Every requirement below must map to exactly one phase. Completion needs implemen
 ### Visible interactive DMG
 
 - [x] **VIDEO-01**: The declared DMG profile renders background, window, and sprites with LCD/STAT transitions and a dot-sensitive fetch design demonstrated by separate composition and timing cases.
-- [ ] **VIDEO-02**: OAM DMA, VRAM/OAM access restrictions, and CPU/PPU/DMA contention produce expected model-specific observable results.
-- [ ] **VIDEO-03**: Timestamped joypad transitions affect the guest deterministically, including selection/interrupt behavior; the public API and SDL keyboard path exercise the same input boundary.
+- [x] **VIDEO-02**: OAM DMA, VRAM/OAM access restrictions, and CPU/PPU/DMA contention produce expected model-specific observable results under the D-025 confidence-qualified software model; exact CPU-B lane/timing and universal revision parity remain unmeasured.
+- [x] **VIDEO-03**: Timestamped joypad transitions affect the guest deterministically, including the documented selected falling-edge IF.4 software contract; exact CPU-B pulse qualification/sample phase remain unmeasured.
 - [ ] **VIDEO-04**: A macOS user can launch the optional player, open a supported ROM-only image, play an original or explicitly permissioned interactive GB fixture, resize with correct aspect/integer scaling, pause, reset, and quit with actionable errors.
 - [x] **VIDEO-05**: Automated checks distinguish image composition, raster timing, and scripted gameplay outcomes, and the visible preview clearly identifies still-incomplete audio/persistence support.
 
@@ -106,8 +106,8 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | CPU-04 | Phase 2 | Complete |
 | CPU-05 | Phase 2 | Complete |
 | VIDEO-01 | Phase 3 | Complete |
-| VIDEO-02 | Phase 3 | Pending |
-| VIDEO-03 | Phase 3 | Pending |
+| VIDEO-02 | Phase 3 | Complete — D-025 software model, exact CPU-B behavior unmeasured |
+| VIDEO-03 | Phase 3 | Complete — selected falling-edge software contract, exact CPU-B timing unmeasured |
 | VIDEO-04 | Phase 3 | Pending — live packaged-window and key-input check |
 | VIDEO-05 | Phase 3 | Complete |
 | SAVE-01 | Phase 4 | Pending |
@@ -135,9 +135,9 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | STATE-01 | Next milestone | Deferred |
 | INT-01 | Next milestone | Deferred |
 
-**Active coverage:** 35/35 requirements mapped exactly once; 0 unmapped, 0 duplicates. Thirteen are complete and 22 remain pending. Next-milestone requirements and later candidates are excluded from active coverage.
+**Active coverage:** 35/35 requirements mapped exactly once; 0 unmapped, 0 duplicates. Fifteen are complete and 20 remain pending. Next-milestone requirements and later candidates are excluded from active coverage.
 
 **Next-milestone traceability:** 7/7 GB/GBC breadth commitments are mapped to the next milestone and remain outside the active v0.1 count.
 
 ---
-Last updated: 2026-10-07 after Phase 2 verification; 13 active requirements are complete, 22 remain pending, and 7 next-milestone commitments are explicitly deferred.
+Last updated: 2026-10-08 after Phase 3 Plan 03-13 verification; 15 active requirements are complete, 20 remain pending, and 7 next-milestone commitments are explicitly deferred.
