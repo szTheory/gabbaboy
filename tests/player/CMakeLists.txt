@@ -93,6 +93,25 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       ${CMAKE_CURRENT_BINARY_DIR}/${test_name}-data)
   elseif(test_name STREQUAL "player_smoke")
     add_test(NAME player_smoke COMMAND gabbaboy-player --smoke)
+  elseif(test_name STREQUAL "player_reset_transition")
+    add_executable(test_player_reset_transition
+      test_reset_transition.c
+      "${PROJECT_SOURCE_DIR}/src/player/audio.c"
+      "${PROJECT_SOURCE_DIR}/src/player/input.c"
+      "${PROJECT_SOURCE_DIR}/src/player/presentation.c")
+    target_link_libraries(test_player_reset_transition PRIVATE
+      gabbaboy-player-session-test)
+    target_compile_features(test_player_reset_transition PRIVATE c_std_17)
+    target_compile_definitions(test_player_reset_transition PRIVATE
+      GBB_PLAYER_AUDIO_TESTING GBB_PLAYER_SESSION_TESTING
+      GABBABOY_PLAYER_DEMO_ROM="${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb"
+      GABBABOY_PLAYER_INVALID_ROM="${PROJECT_SOURCE_DIR}/fixtures/visible-demo/LICENSE.txt")
+    set_target_properties(test_player_reset_transition PROPERTIES
+      C_EXTENSIONS OFF)
+    add_test(NAME player_reset_transition
+      COMMAND test_player_reset_transition)
+    set_tests_properties(player_reset_transition PROPERTIES
+      ENVIRONMENT "SDL_AUDIO_DRIVER=dummy")
   elseif(test_name STREQUAL "player_limitations")
     if(NOT TARGET test_player_limitations)
       add_executable(test_player_limitations test_limitations.c)

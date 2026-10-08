@@ -47,3 +47,4 @@ player_audio_lifecycle
 player_audio_replacement
 player_audio_unavailable
 player_smoke
+player_reset_transition
