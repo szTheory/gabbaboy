@@ -253,9 +253,9 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. An adopter can inspect a support ledger naming DMG revision, boot profile, mapper scope, corpus revision, executed eligible denominator, failures/exclusions, and known issues, alongside reproducible fixed-workload speed, memory/allocation, trace, build, and CI baselines with output digests, samples, environment, and uncertainty. Budgets follow measured variance; subset pass rates are not all-game compatibility. (SHIP-05, SHIP-06)
 5. Maintainers can reproduce bounded loader/battery/API fuzz and boundary-regression results under applicable sanitizers; minimized findings enter fast regression coverage while longer exploration remains separately runnable. (SHIP-07)
 
-**Plans**: 7 plans in 6 dependency-ordered waves
+**Plans**: 1/7 plans executed in 6 dependency-ordered waves
 **Wave 1**
-- [ ] 06-01-PLAN.md — Release-please draft and trusted Linux core candidate
+- [x] 06-01-PLAN.md — Release-please draft and trusted Linux core candidate
 - [ ] 06-05-PLAN.md — Loader/battery boundary regression and bounded fuzz
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -284,7 +284,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 | 3. Visible Interactive DMG | 13/13 | Complete    | 2026-10-07 |
 | 4. MBC1 and Safe Battery Continuation | 7/7 | Complete    | 2026-10-08 |
 | 5. DMG Audio and Stable Playback | 7/7 | Complete    | 2026-10-08 |
-| 6. Qualified DMG Release and Consumer Handoff | 0/7 | Ready to execute | - |
+| 6. Qualified DMG Release and Consumer Handoff | 1/7 | In Progress | - |
 
 ## Execution Contract
 
@@ -292,4 +292,4 @@ All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](
 
 Automate authorized work within each phase, then inspect current verification/release/consumer evidence, update traceability and [lessons](context/LESSONS.md), triage issues/PRs, report limitations and the exact next command, and **stop**. Never auto-advance phases or milestones; keep both auto-advance flags false. Credential, hardware, or perceptual gaps must be recorded honestly with the smallest necessary human action, never converted into passing evidence. Remote/CI setup begins in Phase 1; absent access remains an explicit completion limitation.
 
-Phases 1–5 are independently verified complete; Phase 2 Plan 02-15 remains superseded/non-runnable. Phase 4's seven plans have execution summaries and its final 4/4 goal verification, core/player/installed package tests, exact hosted PR checks, and downloaded package evidence are recorded in its phase artifacts. Phase 5 passed 22/22 goal truths and its final local core/player/measurement gates; the phase reports preserve the hardware and perceptual evidence limits. Phase 6 — Qualified DMG Release and Consumer Handoff — has seven reviewed plans in six dependency-ordered waves; implementation has not started. The exact next command is `$gsd-execute-phase 6`. Stop after Phase 6 and await the owner's next direction.
+Phases 1–5 are independently verified complete; Phase 2 Plan 02-15 remains superseded/non-runnable. Phase 4's seven plans have execution summaries and its final 4/4 goal verification, core/player/installed package tests, exact hosted PR checks, and downloaded package evidence are recorded in its phase artifacts. Phase 5 passed 22/22 goal truths and its final local core/player/measurement gates; the phase reports preserve the hardware and perceptual evidence limits. Phase 6 — Qualified DMG Release and Consumer Handoff — has seven reviewed plans in six dependency-ordered waves; Plan 06-01 is complete and the phase is in progress. Resume the phase with `$gsd-execute-phase 6`, then stop at the Phase 6 boundary.
