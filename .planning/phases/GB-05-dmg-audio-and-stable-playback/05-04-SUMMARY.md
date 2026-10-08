@@ -142,5 +142,6 @@ Plan 05-04 is complete within **Phase GB-05 — DMG Audio and Stable Playback**.
 ## Self-Check: PASSED
 
 - Summary file exists at the required phase path.
-- Task commits `8da9392` and `0ce27da` are ancestors of the recorded plan head.
-- Correction commit `1287ca1` is present, and the plan ledger measures 4 commits from `689a0fb53c06d022bcb684b5634515aa5b85dea0` through `1287ca131936a230617f0e37f159c3d825d4b3f6`.
+- Task commits `8da9392`, `0ce27da`, and correction `1287ca1` are ancestors of the recorded plan head.
+- The plan ledger measures 4 commits from `689a0fb53c06d022bcb684b5634515aa5b85dea0` through `1287ca131936a230617f0e37f159c3d825d4b3f6`.
+- `.planning/STATE.md` reflects the 10/10 audio/API inventory and updated event-kernel evidence.
