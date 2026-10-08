@@ -38,8 +38,16 @@ static void make_base_rom(uint8_t rom[ROM_BYTES]) {
     fix_header_checksum(rom);
 }
 
-static int battery_api_fuzz(void) {
-    uint32_t random_state = UINT32_C(0x04C0FFEE);
+static void digest_u64(uint64_t *digest, uint64_t value) {
+    for (unsigned byte = 0u; byte < 8u; ++byte) {
+        *digest ^= (uint8_t)(value >> (byte * 8u));
+        *digest *= UINT64_C(1099511628211);
+    }
+}
+
+static int battery_api_fuzz(uint32_t seed, uint64_t *digest_out) {
+    uint32_t random_state = seed;
+    uint64_t digest = UINT64_C(1469598103934665603);
     uint8_t base_rom[ROM_BYTES];
     uint8_t candidate_rom[ROM_BYTES];
     uint8_t input[MAX_IMPORT_BYTES];
@@ -71,6 +79,17 @@ static int battery_api_fuzz(void) {
         uint64_t generation_before = UINT64_MAX;
         REQUIRE(gbb_battery_generation(machine, &generation_before) == GBB_OK);
 
+        REQUIRE(gbb_import_battery(machine, input, SIZE_MAX) ==
+                GBB_BATTERY_SIZE_MISMATCH);
+        uint8_t after_overflow_length[BATTERY_BYTES];
+        REQUIRE(gbb_copy_battery(machine, after_overflow_length,
+                                 sizeof(after_overflow_length)) == GBB_OK);
+        REQUIRE(memcmp(after_overflow_length, before, sizeof(before)) == 0);
+        uint64_t generation_after_overflow = UINT64_MAX;
+        REQUIRE(gbb_battery_generation(machine,
+                &generation_after_overflow) == GBB_OK);
+        REQUIRE(generation_after_overflow == generation_before);
+
         const gbb_error import_result =
             gbb_import_battery(machine, input, import_size);
         if (import_size == BATTERY_BYTES) {
@@ -84,6 +103,8 @@ static int battery_api_fuzz(void) {
             REQUIRE(gbb_battery_generation(machine, &generation_after) == GBB_OK);
             REQUIRE(generation_after == generation_before);
         }
+        digest_u64(&digest, (uint64_t)import_result);
+        digest_u64(&digest, import_size);
         REQUIRE(output[0] == 0xA7u);
         REQUIRE(output[sizeof(output) - 1u] == 0xA7u);
 
@@ -113,6 +134,7 @@ static int battery_api_fuzz(void) {
         REQUIRE(gbb_battery_generation(machine, &generation_before_load) == GBB_OK);
         const gbb_error load_result =
             gbb_load_rom(machine, candidate_rom, sizeof(candidate_rom));
+        digest_u64(&digest, (uint64_t)load_result);
         if (load_result != GBB_OK) {
             uint8_t after_rejected_load[BATTERY_BYTES];
             REQUIRE(gbb_copy_battery(machine, after_rejected_load,
@@ -140,6 +162,8 @@ static int battery_api_fuzz(void) {
 
         const gbb_run_result run =
             gbb_run(machine, FUZZ_RUN_BUDGET, NULL, 0u);
+        digest_u64(&digest, run.consumed_half_dots);
+        digest_u64(&digest, (uint64_t)run.reason);
         REQUIRE(run.consumed_half_dots <= FUZZ_RUN_BUDGET);
         REQUIRE(run.reason == GBB_STOP_BUDGET ||
                 run.reason == GBB_STOP_UNSUPPORTED_BUS ||
@@ -147,9 +171,18 @@ static int battery_api_fuzz(void) {
     }
 
     gbb_destroy(machine);
+    *digest_out = digest;
     return 0;
 }
 
 int main(void) {
-    return battery_api_fuzz();
+    uint64_t first = 0u;
+    uint64_t replay = 0u;
+    if (battery_api_fuzz(UINT32_C(0x04C0FFEE), &first) != 0) return 1;
+    if (battery_api_fuzz(UINT32_C(0x04C0FFEE), &replay) != 0) return 1;
+    if (first != replay) {
+        fprintf(stderr, "battery_api_fuzz seed replay digest mismatch\n");
+        return 1;
+    }
+    return 0;
 }
