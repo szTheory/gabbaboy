@@ -30,6 +30,23 @@ static gbb_instance *load_program(const uint8_t *program, size_t size) {
     return m;
 }
 
+static gbb_instance *load_large_program(const uint8_t *program, size_t size) {
+    uint8_t rom[32768] = {0};
+    rom[0x100] = 0xC3; rom[0x101] = 0x50; rom[0x102] = 0x01;
+    memcpy(rom + 0x150, program, size);
+    uint8_t checksum = 0;
+    for (size_t i = 0x134; i <= 0x14c; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14d] = checksum;
+    gbb_instance *m = NULL;
+    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &m) != GBB_OK ||
+        gbb_load_rom(m, rom, sizeof(rom)) != GBB_OK) {
+        gbb_destroy(m);
+        return NULL;
+    }
+    return m;
+}
+
 static size_t build_probe(uint8_t *program, const uint8_t *selections,
                           const uint16_t *destinations, size_t count) {
     size_t n = 0;
@@ -60,6 +77,17 @@ static uint64_t probe_cost(const uint8_t *selections, size_t count) {
 static int run_exact(gbb_instance *m, uint64_t half_dots) {
     gbb_run_result r = gbb_run(m, half_dots, NULL, 0);
     return r.reason != GBB_STOP_BUDGET || r.consumed_half_dots != half_dots;
+}
+
+static int run_partition(gbb_instance *m, uint64_t budget) {
+    while (budget != 0u) {
+        gbb_run_result r = gbb_run(m, budget, NULL, 0);
+        if ((r.reason != GBB_STOP_BUDGET && r.reason != GBB_STOP_HALTED_IDLE) ||
+            r.consumed_half_dots > budget) return 1;
+        if (r.consumed_half_dots == 0u) return budget < 32u ? 0 : 1;
+        budget -= r.consumed_half_dots;
+    }
+    return 0;
 }
 
 static uint8_t expected_selected_value(uint8_t selection, uint8_t button) {
@@ -258,6 +286,69 @@ static int joypad_interrupt(void) {
     REQUIRE(run_exact(m, 16u + 24u + 12u * 8u + 24u + 32u) == 0);
     REQUIRE(gbb_peek_ram(m, 0xC000) == 0xE0u);
     gbb_destroy(m);
+
+    /* Pin-level edge matrix: expose a held action-row press, clear IF and
+       repeat the same selector, then press a second pin and duplicate it.
+       With both rows selected, Right shares P10 with A: pressing/releasing
+       only one source must leave the combined pin low without a new edge. */
+    static const uint8_t edge_program[] = {
+        0xAF,0xEA,0xFF,0xFF,             /* IE=0 */
+        0x3E,0x05,0xE0,0x0F,             /* preserve pre-set IF bits */
+        0x3E,0x30,0xE0,0x00,             /* neither row selected */
+        0x3E,0x10,0xE0,0x00,             /* expose held A -> IF.4 */
+        0xF0,0x0F,0xEA,0x00,0xC0,        /* C000 = 15 */
+        0xAF,0xE0,0x0F,                  /* clear IF */
+        0x3E,0x10,0xE0,0x00,             /* held selector write has no edge */
+        0xF0,0x0F,0xEA,0x01,0xC0,        /* C001 = 00 */
+        0x00,0x00,                       /* second-pin event at 360 */
+        0xF0,0x0F,0xEA,0x02,0xC0,        /* C002 = 10 */
+        0xAF,0xE0,0x0F,                  /* clear IF */
+        0x00,0x00,                       /* duplicate press at 460 */
+        0xF0,0x0F,0xEA,0x03,0xC0,        /* C003 = 00 */
+        0x3E,0x00,0xE0,0x00,             /* select both rows */
+        0xAF,0xE0,0x0F,                  /* clear IF */
+        0x00,                            /* shared-pin press at 600 */
+        0xF0,0x0F,0xEA,0x04,0xC0,        /* C004 = 00 */
+        0x00,                            /* release A at 664 */
+        0xF0,0x00,0xEA,0x05,0xC0,        /* C005 = CC, Right keeps P10 low */
+        0xF0,0x00,0xEA,0x06,0xC0,        /* C006 = CD after Right release */
+        0xF0,0x0F,0xEA,0x07,0xC0,        /* C007 = 00; release made no edge */
+        0xAF,0xE0,0x0F,                  /* clear IF before a new Right edge */
+        0x00,0x00,                       /* press Right at 890 */
+        0xF0,0x0F,0xEA,0x08,0xC0         /* C008 = 10 */
+    };
+    gbb_instance *edges = load_large_program(edge_program, sizeof(edge_program));
+    gbb_instance *edge_parts = load_large_program(edge_program, sizeof(edge_program));
+    REQUIRE(edges != NULL && edge_parts != NULL);
+    const gbb_input_event edge_events[] = {
+        {0, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_A},
+        {360, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_B},
+        {460, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_B},
+        {600, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_RIGHT},
+        {664, GBB_INPUT_BUTTON_RELEASE, GBB_BUTTON_A},
+        {720, GBB_INPUT_BUTTON_RELEASE, GBB_BUTTON_RIGHT},
+        {890, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_RIGHT}
+    };
+    REQUIRE(gbb_queue_events(edges, edge_events,
+                             sizeof(edge_events) / sizeof(edge_events[0])) == GBB_OK);
+    REQUIRE(gbb_queue_events(edge_parts, edge_events,
+                             sizeof(edge_events) / sizeof(edge_events[0])) == GBB_OK);
+    REQUIRE(run_exact(edges, 1600u) == 0);
+    static const uint64_t edge_partitions[] = {360u,240u,64u,224u,712u};
+    for (size_t i = 0; i < sizeof(edge_partitions) / sizeof(edge_partitions[0]); ++i)
+        REQUIRE(run_partition(edge_parts, edge_partitions[i]) == 0);
+    static const uint8_t edge_expected[] = {
+        0xF5,0xE0,0xF0,0xE0,0xE0,0xCC,0xCD,0xE0,0xF0
+    };
+    for (size_t i = 0; i < sizeof(edge_expected); ++i) {
+        uint8_t actual = gbb_peek_ram(edges, (uint16_t)(0xC000u + i));
+        if (actual != edge_expected[i])
+            fprintf(stderr, "JOYP edge result %zu expected %02x got %02x\n",
+                    i, edge_expected[i], actual);
+        REQUIRE(actual == edge_expected[i]);
+        REQUIRE(gbb_peek_ram(edge_parts, (uint16_t)(0xC000u + i)) == actual);
+    }
+    gbb_destroy(edges); gbb_destroy(edge_parts);
     return 0;
 }
 
