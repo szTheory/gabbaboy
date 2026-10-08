@@ -31,15 +31,15 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 Phase: GB-06 (Qualified DMG Release and Consumer Handoff) — EXECUTING
 Plan: 2 of 7
 Status: Executing Phase GB-06
-Last activity: 2026-10-08 — Phase GB-06 execution started
+Last activity: 2026-10-08 — Phase GB-06 Plan 06-05 completed; phase execution continues
 
 Progress: ███████░░░ [████████░░] 83% of milestone phases complete. Phases 1–5 passed goal verification. Phase 5 completed all seven plans and passed 22/22 goal truths at source `206e107210e750ff0fe647a19b82600b17e98ee3`. Its final local evidence includes core CTest 174/174, the pinned SDL 3.4.18 player/package verifier 50/50, and a clean-tree 300-frame two-partition receipt with identical 241,094-frame PCM digests. See the linked Phase 5 verification and validation reports. CGB/VIN, physical playback/hotplug, and perceptual output remain unqualified.
 
-Phase 5 closeout: The app-level lifecycle test exercises Space pause/resume and R reset through SDL events, checking APU continuation, host PCM clearing, save failure/cancel/retry, and persisted battery recovery. Code review is clean and the security report records zero open threats. The dummy backend and injected events establish software-path behavior only; no physical device, hotplug, or perceptual result is claimed. Phase 6 Plan 06-01 is complete; hosted Linux release evidence and final publication remain pending.
+Phase 5 closeout: The app-level lifecycle test exercises Space pause/resume and R reset through SDL events, checking APU continuation, host PCM clearing, save failure/cancel/retry, and persisted battery recovery. Code review is clean and the security report records zero open threats. The dummy backend and injected events establish software-path behavior only; no physical device, hotplug, or perceptual result is claimed. Phase 6 Plans 06-01 and 06-05 are complete; the remaining dependency-ordered plans, hosted release evidence, and final publication remain pending.
 
 ## Performance Metrics
 
-- Completed unique plans: 50; average duration / total execution time: 28 min / 867 min. Phase 6 has seven reviewed plans; Plan 06-01 is complete and the phase remains in progress pending hosted evidence and later release gates. Phase completion follows goal verification, not task count alone.
+- Completed unique plans: 51; recorded execution total: 886 min. Phase 6 has seven reviewed plans; Plans 06-01 and 06-05 are complete and the phase remains in progress pending remaining plans, hosted evidence, and later release gates. Phase completion follows goal verification, not task count alone.
 - Per-phase metrics / recent trend: Phases 1–5 are verified complete. Phase 3 has 13/13 plan summaries, 5/5 goal truths, 33/33 UAT checks, a user-confirmed packaged Z press/release, and 141/141 local CTest. PR #4's required exact-head checks passed before merge. Phase 5's current local exact-head evidence is in `GB-05-dmg-audio-and-stable-playback/05-VERIFICATION.md` and `05-VALIDATION.md`; confirm exact-head remote PR checks before any merge rather than inferring them from local results. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B measurement is claimed. Plan 02-15 is superseded/non-runnable and remains historical.
 - Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. At implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`, the local offline inventory passed 104/104 with no skips, the relocated installed C/C++ inventory passed 109/109, the runner passed its fixed one-CPU/two-timer derived corpus, hosted CI run 37620710587 passed, and fixture reproduction run 37620710600 passed. Independent verification passed all five CPU requirements. Original upstream PPU-dependent reporting paths remain excluded; no physical DMG hardware test occurred.
 
@@ -90,6 +90,7 @@ Phase 5 closeout: The app-level lifecycle test exercises Space pause/resume and 
 | Phase 05 P06 | 25 min | 3 tasks | 14 files |
 | Phase GB-05 P07 | 32min | 2 tasks | 12 files |
 | Phase GB-06 P01 | 167 | 2 tasks | 7 files |
+| Phase GB-06 P05 | 19 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -165,6 +166,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-06]: Use GITHUB_TOKEN for version PRs and preserve the normal exact-head workflow approval gate.
 - [Phase GB-06]: Keep the Linux candidate unpublished until the final Phase 6 release gate.
 - [Phase GB-06]: Keep source, build, and downloaded-byte evidence in separate digest-linked receipts.
+- [Phase GB-06]: Keep deterministic loader/battery/API regressions mandatory and enable compiler-integrated libFuzzer only when the matching Clang runtime is available; bound each input's size and work.
 
 ### Pending Todos
 
@@ -190,10 +192,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-08T22:44:06.316Z
-Stopped at: Completed GB-06-01-PLAN.md
-Resume file: .planning/phases/GB-06-qualified-dmg-release-and-consumer-handoff/06-05-PLAN.md
+Last session: 2026-10-08T23:03:16Z
+Stopped at: Completed GB-06-05-PLAN.md
+Resume file: .planning/.continue-here.md
 Next command in fresh context: $gsd-execute-phase 6
 Continuation note: [.continue-here.md](.continue-here.md)
 Completed workflow stage: Phase 6 planning, after context gathering and Phase 5 goal verification/closeout, within the six-phase milestone.
-Next phase: Phase 6 — Qualified DMG Release and Consumer Handoff. Plan 06-01 is complete; Plan 06-05 remains in Wave 1, followed by the remaining dependency-ordered plans. Resume with `$gsd-execute-phase 6`, then stop at the Phase 6 boundary.
+Next phase: Phase 6 — Qualified DMG Release and Consumer Handoff. Plans 06-01 and 06-05 are complete; continue with the remaining dependency-ordered plans using `$gsd-execute-phase 6`, then stop at the Phase 6 boundary.
