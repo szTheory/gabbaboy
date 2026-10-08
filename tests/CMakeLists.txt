@@ -62,7 +62,7 @@ add_executable(test_apu test_apu.c)
 target_link_libraries(test_apu PRIVATE GabbaBoy::core)
 target_compile_features(test_apu PRIVATE c_std_17)
 set_target_properties(test_apu PROPERTIES C_EXTENSIONS OFF)
-foreach(case pulse mixer sequencer timeline wave)
+foreach(case pulse mixer sequencer timeline wave noise power)
   add_test(NAME apu_${case} COMMAND test_apu apu_${case})
 endforeach()
 

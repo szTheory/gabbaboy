@@ -140,6 +140,8 @@ apu_mixer
 apu_sequencer
 apu_timeline
 apu_wave
+apu_noise
+apu_power
 serial_internal_disconnected
 serial_external_pending
 serial_unqualified_overlap

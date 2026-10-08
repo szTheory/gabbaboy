@@ -1,0 +1,10 @@
+{
+  "command": "build/tests/test_apu apu_noise 2>/tmp/gbb-apu-noise-red-stderr.log",
+  "exitCode": 1,
+  "output": "TAP version 13\n1..1\nnot ok 1 - apu_noise\n",
+  "targetTest": "apu_noise",
+  "targetFile": "tests/test_apu.c",
+  "expected": "NR41-NR44 readback and channel-four status work, and a routed noise program emits PCM.",
+  "actual": "The guest stops with GBB_STOP_UNSUPPORTED_BUS before saving noise register observations.",
+  "semanticAssessment": "The named TAP target executed and failed because channel-four register reads are absent from the core's supported-bus model."
+}

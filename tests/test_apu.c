@@ -194,6 +194,97 @@ static int wave_channel(void) {
     return ok ? 0 : 1;
 }
 
+static int noise_channel(void) {
+    static const uint8_t program[] = {
+        0x3E,0x80,0xE0,0x26, 0x3E,0x3F,0xE0,0x20,
+        0x3E,0xF2,0xE0,0x21, 0x3E,0x08,0xE0,0x22,
+        0x3E,0xC0,0xE0,0x23, 0x3E,0x07,0xE0,0x24,
+        0x3E,0x08,0xE0,0x25,
+        0xF0,0x21,0xEA,0x00,0xC0, 0xF0,0x22,0xEA,0x01,0xC0,
+        0xF0,0x23,0xEA,0x02,0xC0, 0xF0,0x26,0xEA,0x03,0xC0,
+        0x18,0xFE
+    };
+    gbb_instance *m = machine_with_program(program, sizeof(program));
+    if (m == NULL) return 1;
+    gbb_audio_frame frames[32] = {{0}};
+    size_t count = 0u;
+    gbb_run_result r = gbb_run_audio(m, 4096u, frames, 32u, &count);
+    int audible = 0;
+    for (size_t i = 0u; i < count; ++i) audible |= frames[i].right != 0;
+    int ok = r.reason == GBB_STOP_BUDGET &&
+             gbb_peek_ram(m, 0xC000u) == 0xF2u &&
+             gbb_peek_ram(m, 0xC001u) == 0x08u &&
+             gbb_peek_ram(m, 0xC002u) == 0xFFu &&
+             gbb_peek_ram(m, 0xC003u) == 0xF8u && audible;
+    if (!ok) fprintf(stderr, "noise reason=%d count=%zu state=%02x,%02x,%02x,%02x audible=%d\n",
+                     r.reason, count, gbb_peek_ram(m, 0xC000u),
+                     gbb_peek_ram(m, 0xC001u), gbb_peek_ram(m, 0xC002u),
+                     gbb_peek_ram(m, 0xC003u), audible);
+    gbb_destroy(m);
+    return ok ? 0 : 1;
+}
+
+static void emit_write(uint8_t *program, size_t *length, uint8_t reg, uint8_t value) {
+    program[(*length)++] = 0x3Eu;
+    program[(*length)++] = value;
+    program[(*length)++] = 0xE0u;
+    program[(*length)++] = reg;
+}
+
+static int channel_power_matrix(void) {
+    static const uint8_t setup[][2] = {
+        {0x26,0x80}, {0x11,0x80}, {0x12,0xF0}, {0x14,0x80},
+        {0x16,0x80}, {0x17,0xF0}, {0x19,0x80},
+        {0x30,0xFF}, {0x1A,0x80}, {0x1C,0x20}, {0x1E,0x80},
+        {0x20,0x3F}, {0x21,0xF0}, {0x22,0x00}, {0x23,0x80}
+    };
+    for (unsigned mask = 0u; mask < 16u; ++mask) {
+        uint8_t program[192];
+        size_t n = 0u;
+        program[n++] = 0xF0u; program[n++] = 0x26u;
+        program[n++] = 0xEAu; program[n++] = 0x01u;
+        program[n++] = 0xC0u;
+        for (size_t i = 0u; i < sizeof(setup) / sizeof(setup[0]); ++i)
+            emit_write(program, &n, setup[i][0], setup[i][1]);
+        if ((mask & 1u) == 0u) emit_write(program, &n, 0x12u, 0x00u);
+        if ((mask & 2u) == 0u) emit_write(program, &n, 0x17u, 0x00u);
+        if ((mask & 4u) == 0u) emit_write(program, &n, 0x1Au, 0x00u);
+        if ((mask & 8u) == 0u) emit_write(program, &n, 0x21u, 0x00u);
+        program[n++] = 0xF0u; program[n++] = 0x26u;
+        program[n++] = 0xEAu; program[n++] = 0x00u;
+        program[n++] = 0xC0u; program[n++] = 0x18u; program[n++] = 0xFEu;
+        gbb_instance *m = machine_with_program(program, n);
+        if (m == NULL) return 1;
+        gbb_run_result r = gbb_run(m, 8192u, NULL, 0u);
+        int ok = r.reason == GBB_STOP_BUDGET &&
+                 gbb_peek_ram(m, 0xC001u) == 0xF0u &&
+                 gbb_peek_ram(m, 0xC000u) == (uint8_t)(0xF0u | mask);
+        gbb_destroy(m);
+        if (!ok) return 1;
+    }
+    return 0;
+}
+
+static int power_transitions(void) {
+    static const uint8_t program[] = {
+        0x3E,0x80,0xE0,0x26, 0x3E,0x3F,0xE0,0x20,
+        0x3E,0xF0,0xE0,0x21, 0x3E,0x80,0xE0,0x23,
+        0xF0,0x26,0xEA,0x00,0xC0, 0xAF,0xE0,0x26,
+        0xF0,0x26,0xEA,0x01,0xC0, 0x3E,0xFF,0xE0,0x21,
+        0x3E,0x80,0xE0,0x26, 0xF0,0x26,0xEA,0x02,0xC0,
+        0x18,0xFE
+    };
+    gbb_instance *m = machine_with_program(program, sizeof(program));
+    if (m == NULL) return 1;
+    gbb_run_result r = gbb_run(m, 8192u, NULL, 0u);
+    int ok = r.reason == GBB_STOP_BUDGET &&
+             gbb_peek_ram(m, 0xC000u) == 0xF8u &&
+             gbb_peek_ram(m, 0xC001u) == 0x70u &&
+             gbb_peek_ram(m, 0xC002u) == 0xF0u;
+    gbb_destroy(m);
+    return ok ? 0 : 1;
+}
+
 int main(int argc, char **argv) {
     const char *name = argc > 1 ? argv[1] : "apu_pulse";
     printf("TAP version 13\n1..1\n");
@@ -218,6 +309,16 @@ int main(int argc, char **argv) {
     if (strcmp(name, "apu_wave") == 0) {
         if (wave_channel() != 0) { printf("not ok 1 - apu_wave\n"); return 1; }
         printf("ok 1 - apu_wave\n"); return 0;
+    }
+    if (strcmp(name, "apu_noise") == 0) {
+        if (noise_channel() != 0) { printf("not ok 1 - apu_noise\n"); return 1; }
+        printf("ok 1 - apu_noise\n"); return 0;
+    }
+    if (strcmp(name, "apu_power") == 0) {
+        if (channel_power_matrix() != 0 || power_transitions() != 0) {
+            printf("not ok 1 - apu_power\n"); return 1;
+        }
+        printf("ok 1 - apu_power\n"); return 0;
     }
     printf("not ok 1 - %s # case not implemented yet\n", name);
     return 1;
