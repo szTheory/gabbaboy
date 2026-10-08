@@ -60,6 +60,11 @@ gbb_error player_input_gamepad_removed(player_input_state *state,
                                        SDL_JoystickID id);
 void player_input_pause(player_input_state *state);
 bool player_input_resume(player_input_state *state, uint64_t host_now_ns);
+gbb_error player_input_focus_gained(player_input_state *state,
+                                    gbb_instance *machine,
+                                    uint64_t host_timestamp_ns,
+                                    uint64_t host_now_ns,
+                                    bool intentional_pause);
 gbb_error player_input_focus_lost(player_input_state *state,
                                   gbb_instance *machine,
                                   uint64_t host_timestamp_ns);

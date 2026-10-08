@@ -1,5 +1,8 @@
 player_input_events
 player_input_focus
+player_input_focus_audio
+player_input_reconnect
+player_input_sources
 player_input_time
 player_limitations
 player_presentation_hidpi

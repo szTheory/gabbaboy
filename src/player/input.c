@@ -331,3 +331,16 @@ gbb_error player_input_focus_lost(player_input_state *state,
         state->gamepads[i].held_buttons = 0u;
     return player_input_retry_focus_releases(state, machine, host_timestamp_ns);
 }
+
+gbb_error player_input_focus_gained(player_input_state *state,
+                                    gbb_instance *machine,
+                                    uint64_t host_timestamp_ns,
+                                    uint64_t host_now_ns,
+                                    bool intentional_pause) {
+    (void)state;
+    (void)machine;
+    (void)host_timestamp_ns;
+    (void)host_now_ns;
+    (void)intentional_pause;
+    return GBB_OK;
+}
