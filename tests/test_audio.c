@@ -307,21 +307,76 @@ static int audio_filter(const char *case_name) {
     PASS();
 }
 
+static int audio_rounding(const char *case_name) {
+    gbb_instance *positive = load_nops();
+    gbb_instance *negative = load_nops();
+    REQUIRE(positive != NULL && negative != NULL);
+    const int32_t positive_step[2] = {4096, 4096};
+    const int32_t negative_step[2] = {-4096, -4096};
+    gbb_audio_frame positive_output[2] = {{0}}, negative_output[2] = {{0}};
+    gbb_test_audio_kernel(positive, positive_step, positive_step, 2u,
+                          positive_output);
+    gbb_test_audio_kernel(negative, negative_step, negative_step, 2u,
+                          negative_output);
+    REQUIRE(positive_output[0].left == 2048 &&
+            positive_output[1].left == 4089);
+    REQUIRE(negative_output[0].left == -2048 &&
+            negative_output[1].left == -4089);
+    REQUIRE(positive_output[0].left == positive_output[0].right &&
+            positive_output[1].left == positive_output[1].right &&
+            negative_output[0].left == negative_output[0].right &&
+            negative_output[1].left == negative_output[1].right);
+    gbb_destroy(positive);
+    gbb_destroy(negative);
+    PASS();
+}
+
+static int audio_saturation(const char *case_name) {
+    gbb_instance *positive = load_nops();
+    gbb_instance *negative = load_nops();
+    REQUIRE(positive != NULL && negative != NULL);
+    const int32_t positive_peak[1] = {INT32_MAX};
+    const int32_t negative_peak[1] = {INT32_MIN};
+    gbb_audio_frame positive_output[1] = {{0}}, negative_output[1] = {{0}};
+    gbb_test_audio_kernel(positive, positive_peak, positive_peak, 1u,
+                          positive_output);
+    gbb_test_audio_kernel(negative, negative_peak, negative_peak, 1u,
+                          negative_output);
+    REQUIRE(positive_output[0].left == INT16_MAX &&
+            positive_output[0].right == INT16_MAX);
+    REQUIRE(negative_output[0].left == INT16_MIN &&
+            negative_output[0].right == INT16_MIN);
+    gbb_destroy(positive);
+    gbb_destroy(negative);
+    PASS();
+}
+
 static int audio_api_edges(const char *case_name) {
     gbb_instance *overlap_machine = load_nops();
     gbb_instance *overflow_machine = load_nops();
     gbb_instance *overlap_baseline = load_nops();
     gbb_instance *overflow_baseline = load_nops();
+    gbb_instance *empty_machine = NULL;
     REQUIRE(overlap_machine != NULL && overflow_machine != NULL &&
             overlap_baseline != NULL && overflow_baseline != NULL);
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &empty_machine) == GBB_OK);
+    gbb_audio_frame guard = {1234, -4321};
+    size_t count = SIZE_MAX;
     union { size_t count; gbb_audio_frame frame; } overlap = {.count = SIZE_MAX};
     gbb_run_result result = gbb_run_audio(overlap_machine, 8u, &overlap.frame,
                                           1u, &overlap.count);
     REQUIRE(result.reason == GBB_STOP_INVALID_STATE && result.consumed_half_dots == 0u);
     REQUIRE(overlap.count == 0u);
 
-    gbb_audio_frame guard = {1234, -4321};
-    size_t count = SIZE_MAX;
+    count = SIZE_MAX;
+    result = gbb_run_audio(empty_machine, 8u, &guard, 1u, &count);
+    REQUIRE(result.reason == GBB_STOP_INVALID_STATE &&
+            result.consumed_half_dots == 0u && count == 0u);
+    result = gbb_run_audio(overflow_machine, 0u, &guard, 1u, &count);
+    REQUIRE(result.reason == GBB_STOP_BUDGET &&
+            result.consumed_half_dots == 0u && count == 0u);
+    REQUIRE(guard.left == 1234 && guard.right == -4321);
+
     result = gbb_run_audio(overflow_machine, 8u, &guard, SIZE_MAX, &count);
     REQUIRE(result.reason == GBB_STOP_INVALID_STATE && result.consumed_half_dots == 0u);
     REQUIRE(count == 0u && guard.left == 1234 && guard.right == -4321);
@@ -341,6 +396,7 @@ static int audio_api_edges(const char *case_name) {
     REQUIRE(actual.pc == expected.pc && actual.time_half_dots == expected.time_half_dots);
     gbb_destroy(overlap_machine); gbb_destroy(overflow_machine);
     gbb_destroy(overlap_baseline); gbb_destroy(overflow_baseline);
+    gbb_destroy(empty_machine);
     PASS();
 }
 
@@ -354,6 +410,8 @@ int main(int argc, char **argv) {
     if (strcmp(case_name, "audio_fractional_edges") == 0) return audio_fractional_edges(case_name);
     if (strcmp(case_name, "audio_partition") == 0) return audio_partition(case_name);
     if (strcmp(case_name, "audio_filter") == 0) return audio_filter(case_name);
+    if (strcmp(case_name, "audio_rounding") == 0) return audio_rounding(case_name);
+    if (strcmp(case_name, "audio_saturation") == 0) return audio_saturation(case_name);
     if (strcmp(case_name, "audio_api_edges") == 0) return audio_api_edges(case_name);
     return 2;
 }

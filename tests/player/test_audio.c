@@ -170,6 +170,13 @@ static int player_audio_pacing(void) {
                                &output);
     REQUIRE(output.count == (size_t)initial * sizeof(*frames) &&
             player_audio_capacity(audio) == initial);
+    REQUIRE(player_audio_submit(audio, frames, initial));
+    REQUIRE(player_audio_capacity(audio) == 0u);
+    REQUIRE(player_audio_clear(audio));
+    REQUIRE(player_audio_test_queued(audio) == 0u &&
+            player_audio_capacity(audio) == initial);
+    REQUIRE(player_audio_flushed_bytes(audio) ==
+            (uint_fast64_t)initial * sizeof(*frames));
     free(frames);
     player_audio_destroy(audio);
     return 0;
@@ -258,6 +265,21 @@ static int player_audio_device(void) {
     }
     REQUIRE(SDL_GetCurrentAudioDriver() != NULL &&
             strcmp(SDL_GetCurrentAudioDriver(), "dummy") == 0);
+    player_audio *pending = player_audio_test_create(true);
+    REQUIRE(pending != NULL);
+    gbb_audio_frame stale[3] = {frame_for(7u), frame_for(8u), frame_for(9u)};
+    REQUIRE(player_audio_submit(pending, stale, 3u));
+    REQUIRE(player_audio_handle_device_event(pending,
+            SDL_EVENT_AUDIO_DEVICE_REMOVED, 123u, false));
+    REQUIRE(!player_audio_available(pending) &&
+            player_audio_test_queued(pending) == 0u &&
+            player_audio_flushed_bytes(pending) == sizeof(stale));
+    REQUIRE(player_audio_handle_device_event(pending,
+            SDL_EVENT_AUDIO_DEVICE_ADDED, 456u, false));
+    REQUIRE(player_audio_available(pending) &&
+            player_audio_test_queued(pending) == 0u);
+    player_audio_destroy(pending);
+
     player_audio *audio = player_audio_create();
     REQUIRE(audio != NULL && player_audio_available(audio));
     REQUIRE(player_audio_handle_device_event(audio, SDL_EVENT_AUDIO_DEVICE_REMOVED,

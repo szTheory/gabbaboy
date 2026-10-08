@@ -135,10 +135,13 @@ timer_tima_collision
 timer_tma_collision
 audio_tracer
 audio_capacity
+audio_no_alloc
 audio_signal
 audio_fractional_edges
 audio_partition
 audio_filter
+audio_rounding
+audio_saturation
 audio_api_edges
 apu_pulse
 apu_mixer
@@ -146,6 +149,8 @@ apu_sequencer
 apu_timeline
 apu_wave
 apu_noise
+apu_envelope
+apu_sweep
 apu_power
 serial_internal_disconnected
 serial_external_pending
