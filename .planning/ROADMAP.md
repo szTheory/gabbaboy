@@ -253,7 +253,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. An adopter can inspect a support ledger naming DMG revision, boot profile, mapper scope, corpus revision, executed eligible denominator, failures/exclusions, and known issues, alongside reproducible fixed-workload speed, memory/allocation, trace, build, and CI baselines with output digests, samples, environment, and uncertainty. Budgets follow measured variance; subset pass rates are not all-game compatibility. (SHIP-05, SHIP-06)
 5. Maintainers can reproduce bounded loader/battery/API fuzz and boundary-regression results under applicable sanitizers; minimized findings enter fast regression coverage while longer exploration remains separately runnable. (SHIP-07)
 
-**Plans**: 3/7 plans executed in 6 dependency-ordered waves
+**Plans**: 4/7 plans executed in 6 dependency-ordered waves
 **Wave 1**
 - [x] 06-01-PLAN.md — Release-please draft and trusted Linux core candidate
 - [x] 06-05-PLAN.md — Loader/battery boundary regression and bounded fuzz
@@ -262,9 +262,9 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 - [x] 06-02-PLAN.md — Downloaded core matrix and macOS player qualification
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 06-04-PLAN.md — Support ledger and reproducible performance evidence
+- [x] 06-04-PLAN.md — Support ledger and reproducible performance evidence
 
-**Wave 4** *(blocked on Wave 3 completion)*
+**Wave 4** *(ready after Wave 3 completion)*
 - [ ] 06-03-PLAN.md — Relocated native C example and adopter documentation
 
 **Wave 5** *(blocked on Wave 4 completion)*
@@ -284,7 +284,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 | 3. Visible Interactive DMG | 13/13 | Complete    | 2026-10-07 |
 | 4. MBC1 and Safe Battery Continuation | 7/7 | Complete    | 2026-10-08 |
 | 5. DMG Audio and Stable Playback | 7/7 | Complete    | 2026-10-08 |
-| 6. Qualified DMG Release and Consumer Handoff | 3/7 | In Progress | - |
+| 6. Qualified DMG Release and Consumer Handoff | 4/7 | In Progress | - |
 
 ## Execution Contract
 
