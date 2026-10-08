@@ -2,6 +2,8 @@
 
 The optional SDL3 player opens the original project-owned 32 KiB demo on startup. It presents copied frames from the core at a 10:9 aspect ratio with nearest-neighbor integer scaling, including on high-density displays. It accepts 32 KiB ROM-only images and the core's documented standard-MBC1 header matrix; MBC1M remains unsupported, with a conservative detector that cannot identify every special-wiring image.
 
+See [Cartridge and battery save contract](cartridge-and-saves.md) for the exact supported header matrix, save envelope, recovery behavior, and integration API.
+
 The portable core and its normal tests do not need SDL. To build and verify the optional player with the official, digest-checked SDL3 3.4.18 source on macOS, run:
 
 ```sh
@@ -34,4 +36,4 @@ The window title shows the active ROM filename, run/pause state, Open/Quit short
 
 The player accepts exact 32 KiB ROM-only images and standard MBC1 images supported by the core (types `$01`–`$03`, ROM size codes `$00`–`$06`, and the documented no-RAM/8-KiB/32-KiB header matrix). Battery persistence applies only to type `$03` with 8 or 32 KiB RAM. Type `$02` RAM is volatile for the loaded session. Save files use GabbaBoy's versioned, identity-bound envelope in the SDL per-user preferences directory. Malformed or wrong-identity saves are preserved under a recovery name before fresh `$FF` RAM is used; if preservation fails, persistence is disabled and the original file remains untouched. A stable per-save advisory lock blocks a second cooperating GabbaBoy writer; external tools do not honor this lock automatically. The file-dialog filter is only a hint; every selected file goes through the bounded core loader. If a replacement is truncated, malformed, unsupported, too large, cannot be read, or its save lock cannot be acquired, the current ROM and guest state remain active and the window title reports the issue.
 
-The preview targets the bootless DMG-CPU-B profile. It does not implement audio, MBC1M, RTC, CGB, full-machine snapshots, or arbitrary raw `.sav` import/export. Passing software tests does not establish physical DMG/MBC1 behavior, a live-window perceptual review, signing, notarization, or release readiness. The native window has not been visually checked in the current environment because no desktop display is available.
+The preview targets the bootless DMG-CPU-B profile. It does not implement audio, MBC1M, RTC, CGB, full-machine snapshots, or arbitrary raw `.sav` import/export. Passing software tests does not establish physical DMG/MBC1 behavior, current live-window appearance, signing, notarization, or release readiness. The package smoke uses an offscreen software renderer and verifies file-backed continuation rather than perceptual quality.

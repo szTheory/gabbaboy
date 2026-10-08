@@ -1,10 +1,11 @@
 # GabbaBoy
 
-GabbaBoy is an original portable C17 Game Boy / Game Boy Color project. The
-current headless core implements a declared, bootless DMG-CPU-B CPU, bus, timer,
-serial and deterministic-time profile, exercised by owned tests and three
-source-pinned CPU/timer diagnostic ROMs. It does not execute a Nintendo boot
-ROM, render video, support CGB or establish general game compatibility.
+GabbaBoy is an original portable C17 Game Boy / Game Boy Color project. Its
+headless core implements a declared, bootless DMG-CPU-B software profile with
+CPU, bus, timer, serial, joypad, video, and scoped cartridge behavior. The
+optional macOS player supports standard MBC1 battery-backed RAM and managed
+save continuation. It does not execute a Nintendo boot ROM, implement audio
+or CGB, or establish general game compatibility or physical-hardware accuracy.
 
 ## Build and run the tracer
 
@@ -89,6 +90,17 @@ diagnostics into caller-owned storage. It reserves space for a complete
 operation before mutation; insufficient capacity returns output-full without
 writing that operation's records. The core does not allocate or format
 diagnostics.
+
+## Cartridge banking and battery saves
+
+The core supports 32 KiB ROM-only images and a declared standard-MBC1 header
+matrix. Battery import/export is a bounded caller-owned core API; filesystem
+persistence belongs to the optional player. The player keys saves to the exact
+ROM bytes and uses an atomic, versioned GabbaBoy envelope. It preserves rejected
+save files for recovery and blocks concurrent cooperating player sessions.
+See [Cartridge and battery save contract](docs/cartridge-and-saves.md) for the
+exact cartridge matrix, API errors and ownership, save format, recovery rules,
+and evidence limits.
 
 ## Profile and evidence limits
 
