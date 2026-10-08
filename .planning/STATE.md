@@ -4,16 +4,16 @@ milestone: v0.1
 current_phase: 04
 current_phase_name: MBC1 and Safe Battery Continuation
 status: executing
-stopped_at: Completed GB-04-04-PLAN.md; Plan 04-05 is next
-last_updated: "2026-10-08T03:53:22.699Z"
+stopped_at: Completed GB-04-05-PLAN.md; Plan 04-06 is next
+last_updated: "2026-10-08T04:02:34.000Z"
 last_activity: 2026-10-08
-last_activity_desc: Completed GB-04 Plan 04-04; Plan 04-05 is next
-state_head: 6c92b8934893c54a5c6b1d0338ba970b146c5a9d
+last_activity_desc: Completed GB-04 Plan 04-05; Plan 04-06 is next
+state_head: 3464ac895b6e8a95317b48677c518e39d0d7386e
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 42
-  completed_plans: 39
+  completed_plans: 40
 milestone_name: limited DMG preview
 ---
 
@@ -29,11 +29,11 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 ## Current Position
 
 Phase: GB-04 (MBC1 and Safe Battery Continuation) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 Status: Executing Phase GB-04
-Last activity: 2026-10-08 — Plan 04-04 completed; Plan 04-05 is next
+Last activity: 2026-10-08 — Plan 04-05 completed; Plan 04-06 is next
 
-Progress: [█████░░░░░] 50% of milestone phases complete; Phases 1–3 passed verification. Phase 3 has 13/13 plan summaries, 5/5 goal truths, and 33/33 UAT checks. Phase 4 has 4/7 plan summaries. Plan 04-04 added the player save lock, bounded autosave cadence, and explicit final-save choices; its 33/33 player inventory and extracted-package smoke passed at the recorded source revision. Phase 04-05 is next; full Phase 4 validation remains pending.
+Progress: [█████░░░░░] 50% of milestone phases complete; Phases 1–3 passed verification. Phase 3 has 13/13 plan summaries, 5/5 goal truths, and 33/33 UAT checks. Phase 4 has 5/7 plan summaries. Plan 04-05 added an original, digest-pinned MBC1 battery fixture and four bounded fresh-process continuation cases; RGBDS reproduction was byte-identical, the core inventory passed 154/154, and the committed-revision player inventory plus package smoke passed 37/37 at `a6d06b0cd4c4ff601570745a22c2feaa1213d59b`. Plan 04-06 is next; full Phase 4 validation remains pending.
 
 ## Performance Metrics
 
@@ -77,6 +77,7 @@ Progress: [█████░░░░░] 50% of milestone phases complete; Pha
 | Phase 04 P02 | 8min | 2 tasks | 7 files |
 | Phase 04 P03 | 14min | 2 tasks | 5 files |
 | Phase 04 P04 | 11min | 2 tasks | 8 files |
+| Phase 04 P05 | 7min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -132,6 +133,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 04]: Hold a nonblocking exclusive advisory lock for the lifetime of each battery-backed player session; the guarantee covers cooperating GabbaBoy processes.
 - [Phase 04]: Drive autosave from the core dirty generation and monotonic host time: two seconds quiet or ten seconds maximum age.
 - [Phase 04]: On final save failure, require retry, explicit continue without saving, or cancellation before quit, reset, or replacement.
+- [Phase 04]: Keep the original MBC1 battery fixture source, rights, manifest, pinned RGBDS recipe, and checked-in bytes together; ordinary tests verify the digest offline.
+- [Phase 04]: Prove guest continuation with separate bounded processes and distinct missing-save, wrong-ROM-envelope, and altered-payload controls; this is software evidence, not physical hardware qualification.
 
 ### Pending Todos
 
@@ -157,10 +160,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-08T03:53:22.655Z
-Stopped at: Completed GB-04-04-PLAN.md; Plan 04-05 is next
-Resume file: .planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-05-PLAN.md
-Next command in fresh context: $gsd-execute-phase 4 (continue with Plan 04-05; stop at the Phase 4 boundary)
+Last session: 2026-10-08T04:02:34.000Z
+Stopped at: Completed GB-04-05-PLAN.md; Plan 04-06 is next
+Resume file: .planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-06-PLAN.md
+Next command in fresh context: $gsd-execute-phase 4 (continue with Plan 04-06; stop at the Phase 4 boundary)
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: **Phase GB-04 execution, Plan 04-04 of 7.** Battery session locking, host-time autosave, visible failures, and final-transition choices are implemented and locally verified. See [04-04-SUMMARY.md](phases/GB-04-mbc1-and-safe-battery-continuation/04-04-SUMMARY.md). Phase 4 remains in progress; continue with its fixture and fresh-process continuation plan, then complete remaining CI and evidence closeout. Keep both auto-advance flags false and stop at the Phase 4 boundary.
-Next roadmap phase: **Phase 5 — DMG Audio and Stable Playback**, only after Phase 4 is completed and handed off. The exact next command is `$gsd-execute-phase 4`; continue with Plan 04-05 and stop after Phase 4.
+Completed workflow stage: **Phase GB-04 execution, Plan 04-05 of 7.** The project-authored MBC1 battery fixture reproduces byte-for-byte with pinned RGBDS 1.0.1; separate-process resume, missing-save, wrong-ROM, and altered-payload controls pass. See [04-05-SUMMARY.md](phases/GB-04-mbc1-and-safe-battery-continuation/04-05-SUMMARY.md). Phase 4 remains in progress; continue with Plan 04-06, then Plan 04-07 and phase verification. Keep both auto-advance flags false and stop at the Phase 4 boundary.
+Next roadmap phase: **Phase 5 — DMG Audio and Stable Playback**, only after Phase 4 is completed and handed off. The exact next command is `$gsd-execute-phase 4`; continue with Plan 04-06 and stop after Phase 4.
