@@ -4,16 +4,16 @@ milestone: v0.1
 current_phase: 05
 current_phase_name: DMG Audio and Stable Playback
 status: executing
-stopped_at: Completed GB-05-05-PLAN.md
-last_updated: "2026-10-08T15:23:28.496Z"
+stopped_at: Completed GB-05-06-PLAN.md
+last_updated: "2026-10-08T15:58:20.562Z"
 last_activity: 2026-10-08
-last_activity_desc: Phase GB-05 execution started
-state_head: a07a4b27a3047f8bd5b3bc2b71c60a3b44f6643e
+last_activity_desc: Plan GB-05-06 execution completed; Phase GB-05 remains active
+state_head: af438212384028307c7de3d3b3868258dae7c81a
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 49
-  completed_plans: 47
+  completed_plans: 48
 milestone_name: limited DMG preview
 ---
 
@@ -29,11 +29,13 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 ## Current Position
 
 Phase: GB-05 (DMG Audio and Stable Playback) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Executing Phase GB-05
 Last activity: 2026-10-08 — Phase GB-05 execution started
 
-Progress: [███████░░░] 67% of milestone phases complete. Phases 1–4 passed goal verification. Phase 4 has 7/7 plan summaries and 4/4 verified goal truths; the core inventory passed 155/155, the relocated package inventory passed 160/160 plus a 155/155 core-only subset, the macOS player/package inventory passed 37/37, and exact hosted PR checks and downloaded Linux/macOS/player package receipts passed on source head `79f83f627ffb3631811b2f39b23081117ebaab8f`. The Windows fixture-byte checkout issue was fixed with narrow Git attributes and re-reviewed clean. See the Phase 4 verification, validation, security, and UI review artifacts. Phase 5 has seven plans in seven dependency-ordered waves; Plans 05-01 through 05-05 have summaries. Plan 05-04's signal/filter/partition/API inventory passed 10/10 and AUDIO-02 is complete for the declared software bounds. Plan 05-05 passed the packaged-player inventory 42/42 twice, including the five new ring/gain/sink cases and extracted-package smoke; AUDIO-03 is complete for the tested adapter scope. The bounded PCM model, physical DMG output, and perceptual quality remain unqualified. Phase 5 remains active.
+Progress: [███████░░░] 67% of milestone phases complete. Phases 1–4 passed goal verification. Phase 4 has 7/7 plan summaries and 4/4 verified goal truths; the core inventory passed 155/155, the relocated package inventory passed 160/160 plus a 155/155 core-only subset, the macOS player/package inventory passed 37/37, and exact hosted PR checks and downloaded Linux/macOS/player package receipts passed on source head `79f83f627ffb3631811b2f39b23081117ebaab8f`. The Windows fixture-byte checkout issue was fixed with narrow Git attributes and re-reviewed clean. See the Phase 4 verification, validation, security, and UI review artifacts. Phase 5 has seven plans in seven dependency-ordered waves; Plans 05-01 through 05-06 have summaries. Plan 05-04's signal/filter/partition/API inventory passed 10/10 and AUDIO-02 is complete for the declared software bounds. Plan 05-05 passed the packaged-player inventory 42/42 twice, including the five new ring/gain/sink cases and extracted-package smoke; AUDIO-03 is complete for the tested adapter scope. Plan 05-06 passed the input/audio lifecycle inventory 48/48 at source af438212; HOST-01 and HOST-02 are complete for the tested software scope. The bounded PCM model, physical device hotplug/output, and perceptual quality remain unqualified. Phase 5 remains active with Plan 05-07 next.
+
+Plan 05-06 update: The input/audio lifecycle inventory passed 48/48 at commit `af438212384028307c7de3d3b3868258dae7c81a`; HOST-01 and HOST-02 are complete for the tested software scope. Phase 5 now has summaries through Plan 05-06, with Plan 05-07 next. The pinned SDL dummy run establishes software-path behavior only; physical hotplug and audible quality remain unqualified.
 
 ## Performance Metrics
 
@@ -85,6 +87,7 @@ Progress: [███████░░░] 67% of milestone phases complete. Pha
 | Phase GB-05 P03 | 21min | 2 tasks | 8 files |
 | Phase GB-05 P04 | 62 min | 2 tasks | 7 files |
 | Phase GB-05 P05 | 12 min | 2 tasks | 6 files |
+| Phase 05 P06 | 25 min | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -150,6 +153,9 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-05]: SDL callback services exact requested bytes and retains partial stereo frames across callbacks to avoid queue overrun.
 - [Phase GB-05]: Unavailable audio sinks discard and count PCM immediately while preserving host-paced guest execution.
 - [Phase GB-05]: Player gain is host-only, defaults to 100%, and is adjusted with bracket keys.
+- [Phase GB-05]: Keep per-controller input keyed by stable SDL joystick IDs in a fixed bounded source table, and admit aggregate button changes to the guest queue before committing source state.
+- [Phase GB-05]: Quiesce callbacks before counting and clearing ring, partial-frame, and SDL-stream PCM; perform reset and replacement host cleanup only after existing save transitions succeed.
+- [Phase GB-05]: Treat SDL dummy audio and injected device events as software-path evidence; physical hotplug and audible quality remain unqualified.
 
 ### Pending Todos
 
@@ -175,10 +181,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-08T15:23:28.336Z
-Stopped at: Completed GB-05-05-PLAN.md
-Resume file: .planning/phases/GB-05-dmg-audio-and-stable-playback/05-06-PLAN.md
+Last session: 2026-10-08T15:58:20.498Z
+Stopped at: Completed GB-05-06-PLAN.md
+Resume file: .planning/.continue-here.md
 Next command in fresh context: $gsd-execute-phase 5
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: **Plan GB-05-05 execution, within Phase 5 of 6.** The SDL adapter inventory passed 5/5 and the packaged-player verifier passed 42/42 twice. The ring preserves exact variable-byte requests and host gain/unavailable-sink policy leaves guest time host-paced. No physical DMG or perceptual audio qualification is claimed. Keep both auto-advance flags false.
-Next plan: **GB-05 Plan 05-06 — input ownership and lifecycle recovery**, within Phase 5 — DMG Audio and Stable Playback. The exact continuation command is `$gsd-execute-phase 5`. After Phase 5 is verified, the next phase is **Phase 6 — Qualified DMG Release and Consumer Handoff**.
+Completed workflow stage: **Plan GB-05-06 execution, within Phase 5 of 6.** Six named input cases and eight audio cases passed in the 48/48 player inventory. The packaged verifier passed at source `af438212` with extracted-package smoke and a forced SDL dummy-backend receipt. This is software-path evidence only; physical hotplug and audible quality remain unqualified. Keep both auto-advance flags false.
+Next plan: **GB-05 Plan 05-07 — sustained queue evidence and consumer documentation**, within Phase 5 — DMG Audio and Stable Playback. The exact continuation command is `$gsd-execute-phase 5`. After Phase 5 is verified, the next phase is **Phase 6 — Qualified DMG Release and Consumer Handoff**.
