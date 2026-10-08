@@ -4,16 +4,16 @@ milestone: v0.1
 current_phase: 05
 current_phase_name: DMG Audio and Stable Playback
 status: executing
-stopped_at: Completed GB-05-03-PLAN.md
-last_updated: "2026-10-08T13:47:55Z"
+stopped_at: Completed GB-05-04-PLAN.md
+last_updated: "2026-10-08T14:56:50.633Z"
 last_activity: 2026-10-08
 last_activity_desc: Phase GB-05 execution started
-state_head: 8aeae9d8a38ca3509c6c08c400e43106e4e15a59
+state_head: 0ce27da03f33085a48e9a570c83cc4dcb9ecb4c7
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 49
-  completed_plans: 45
+  completed_plans: 46
 milestone_name: limited DMG preview
 ---
 
@@ -29,11 +29,11 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 ## Current Position
 
 Phase: GB-05 (DMG Audio and Stable Playback) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Status: Executing Phase GB-05
 Last activity: 2026-10-08 — Phase GB-05 execution started
 
-Progress: [███████░░░] 67% of milestone phases complete. Phases 1–4 passed goal verification. Phase 4 has 7/7 plan summaries and 4/4 verified goal truths; the core inventory passed 155/155, the relocated package inventory passed 160/160 plus a 155/155 core-only subset, the macOS player/package inventory passed 37/37, and exact hosted PR checks and downloaded Linux/macOS/player package receipts passed on source head `79f83f627ffb3631811b2f39b23081117ebaab8f`. The Windows fixture-byte checkout issue was fixed with narrow Git attributes and re-reviewed clean. See the Phase 4 verification, validation, security, and UI review artifacts. Phase 5 has seven plans in seven dependency-ordered waves; Plans 05-01 through 05-03 are complete with summaries. Plan 05-03's scoped APU/tracer regressions passed 8/8, completing AUDIO-01's deterministic digital-channel scope with explicit revision and perceptual limits. Phase 5 remains in progress; no physical DMG or perceptual audio qualification is claimed.
+Progress: [███████░░░] 67% of milestone phases complete. Phases 1–4 passed goal verification. Phase 4 has 7/7 plan summaries and 4/4 verified goal truths; the core inventory passed 155/155, the relocated package inventory passed 160/160 plus a 155/155 core-only subset, the macOS player/package inventory passed 37/37, and exact hosted PR checks and downloaded Linux/macOS/player package receipts passed on source head `79f83f627ffb3631811b2f39b23081117ebaab8f`. The Windows fixture-byte checkout issue was fixed with narrow Git attributes and re-reviewed clean. See the Phase 4 verification, validation, security, and UI review artifacts. Phase 5 has seven plans in seven dependency-ordered waves; Plans 05-01 through 05-04 have summaries. Plan 05-04's named signal/filter/partition/API inventory passed 9/9 and AUDIO-02 is complete for the declared software bounds. The implementation uses a fixed-phase sample-domain FIR; sub-frame event aliasing remains uncharacterized. Phase 5 remains active, with no physical DMG or perceptual audio qualification claimed.
 
 ## Performance Metrics
 
@@ -83,6 +83,7 @@ Progress: [███████░░░] 67% of milestone phases complete. Pha
 | Phase GB-05 P01 | 13min | 2 tasks | 8 files |
 | Phase GB-05 P02 | 17min | 2 tasks | 5 files |
 | Phase GB-05 P03 | 21min | 2 tasks | 8 files |
+| Phase GB-05 P04 | 62 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -143,6 +144,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-05]: Expose audio-aware stepping as gbb_run_audio with caller-owned 48 kHz stereo frames; keep legacy run calls muted.
 - [Phase GB-05]: Plan 05-03 adds wave/noise channels and all 16 NR52 status combinations as authored deterministic software-model evidence; active wave-RAM current-byte aliasing is an unqualified revision-scoped assumption. AUDIO-01 is complete for the documented digital model; analog, physical hardware, and perceptual output are not qualified.
 - [Phase GB-05]: Active wave-RAM accesses alias the current byte in the scoped deterministic model; CPU-B revision variation is unqualified.
+- [Phase GB-05]: Use an original per-instance Q15 8-tap FIR and the D-02 48 kHz high-pass approximation; preserve DSP history across output calls and reset it on APU reset.
+- [Phase GB-05]: Reject overflowing PCM frame extents and overlap with the returned count before guest work; initialize a valid count output to zero.
 
 ### Pending Todos
 
@@ -168,10 +171,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-08T13:47:55Z
-Stopped at: Completed GB-05-03-PLAN.md
-Resume file: .planning/phases/GB-05-dmg-audio-and-stable-playback/05-04-PLAN.md
+Last session: 2026-10-08T14:56:50.532Z
+Stopped at: Completed GB-05-04-PLAN.md
+Resume file: .planning/phases/GB-05-dmg-audio-and-stable-playback/05-05-PLAN.md
 Next command in fresh context: $gsd-execute-phase 5
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: **Plan GB-05-03 execution, within Phase 5 of 6.** The four-channel authored APU/tracer tests passed 8/8 and AUDIO-01 is complete for the deterministic digital software model. No physical DMG, analog-output, or perceptual qualification is claimed. Phase 5 remains active; AUDIO-02, AUDIO-03, HOST-01, and HOST-02 remain pending. Keep both auto-advance flags false.
-Next plan: **GB-05 Plan 05-04 — Fixed-point resampler, high-pass and bounded PCM API**, within Phase 5 — DMG Audio and Stable Playback. The exact continuation command is `$gsd-execute-phase 5`. After Phase 5 is verified, the next phase is **Phase 6 — Qualified DMG Release and Consumer Handoff**.
+Completed workflow stage: **Plan GB-05-04 execution, within Phase 5 of 6.** The analytical signal/filter/partition and caller-buffer tests passed; AUDIO-02 is complete at the documented software bounds, but physical/perceptual output and sub-frame event aliasing remain unqualified. Keep both auto-advance flags false.
+Next plan: **GB-05 Plan 05-05 — SDL bounded audio transport, gain and sink policy**, within Phase 5 — DMG Audio and Stable Playback. The exact continuation command is `$gsd-execute-phase 5`. After Phase 5 is verified, the next phase is **Phase 6 — Qualified DMG Release and Consumer Handoff**.

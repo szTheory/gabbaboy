@@ -215,7 +215,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. Keyboard/basic controller input recovers across focus loss and disconnect/reconnect; host input reset cannot leave guest buttons stuck. (HOST-01)
 5. Pause/resume, reset, ROM replacement, and audio-device transitions follow documented flush/recovery behavior without mixing stale video/audio/input/battery state between sessions. (HOST-02)
 
-**Plans**: 3/7 plans executed in 7 dependency-ordered waves; planning complete, execution in progress.
+**Plans**: 4/7 plans executed in 7 dependency-ordered waves; planning complete, execution in progress.
 **Wave 1**
 - [x] 05-01-PLAN.md — original pulse guest through caller PCM and SDL tracer
 
@@ -226,7 +226,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 - [x] 05-03-PLAN.md — wave, noise and four-channel power matrix
 
 **Wave 4** *(depends on Wave 3)*
-- [ ] 05-04-PLAN.md — fixed-point resampler, high-pass and bounded PCM API
+- [x] 05-04-PLAN.md — fixed-point resampler, high-pass and bounded PCM API
 
 **Wave 5** *(depends on Wave 4)*
 - [ ] 05-05-PLAN.md — SPSC/SDL playback, gain and pacing metrics
@@ -264,7 +264,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 | 2. DMG CPU, Bus, and Time | 17/17 | Complete | 2026-10-07 |
 | 3. Visible Interactive DMG | 13/13 | Complete    | 2026-10-07 |
 | 4. MBC1 and Safe Battery Continuation | 7/7 | Complete    | 2026-10-08 |
-| 5. DMG Audio and Stable Playback | 3/7 | In Progress | - |
+| 5. DMG Audio and Stable Playback | 4/7 | In Progress | - |
 | 6. Qualified DMG Release and Consumer Handoff | 0/TBD | Not started | - |
 
 ## Execution Contract
