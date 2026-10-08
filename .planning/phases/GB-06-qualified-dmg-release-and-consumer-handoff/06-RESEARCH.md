@@ -179,7 +179,7 @@ Extend existing locations rather than create a generic release framework: keep w
 
 ### Pattern 2: One-build release evidence chain
 
-**What:** Bind version and tag, exact source SHA, clean-tree result, toolchain/runner/build config, fixture/corpus manifest identities, package SHA-256, downloaded-byte smoke result, notices and release notes into one validated receipt/sidecar. Create the GitHub Release as draft, attach assets, qualify downloaded assets, then publish without rebuilding. GitHub recommends draft/attach/publish for immutable releases; after publication tags/assets lock. [CITED: https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases]
+**What:** Bind version and tag, exact source SHA, clean-tree result, toolchain/runner/build config, fixture/corpus manifest identities, package SHA-256, downloaded-byte smoke result, notices and release notes into one validated receipt/sidecar. Configure manifest release-please with `draft: true` and `force-tag-creation: true`: its release step creates the draft and immediate matching tag, whereas default manifest release publishes at once and a draft may otherwise have no tag until publication. Its action exposes `release_created`, `tag_name`, and `sha`; route candidate jobs from those outputs in the same workflow, check the existing release is still unpublished, append assets to that draft, download and qualify them, then publish without rebuilding. Do not create a second draft. The same-workflow route avoids relying on a tag event suppressed when release-please uses GITHUB_TOKEN. [CITED: https://github.com/googleapis/release-please/blob/main/docs/manifest-releaser.md; https://github.com/googleapis/release-please-action; https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases]
 
 **When to use:** Final release and any release candidate intended for publication. Temporary Actions artifact is still preview evidence. [VERIFIED: `.planning/phases/GB-06-qualified-dmg-release-and-consumer-handoff/06-CONTEXT.md:18-23`]
 
@@ -196,6 +196,7 @@ Extend existing locations rather than create a generic release framework: keep w
 ### Anti-Patterns to Avoid
 
 - **Release on build success:** Build success does not qualify final asset bytes or consumer behavior. Hash and test the downloaded asset itself; never rebuild after qualification. [CITED: https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases]
+- **Letting release-please publish first:** Manifest release defaults to an already published GitHub Release. Set `draft: true` and `force-tag-creation: true`, require `release_created` plus exact `tag_name`/`sha`, and inspect the existing release's draft status before asset work; otherwise final-byte smoke cannot gate publication. [CITED: https://github.com/googleapis/release-please/blob/main/docs/manifest-releaser.md; https://github.com/googleapis/release-please-action]
 - **Mutable release workflow reference:** Pin Actions to full commit SHA; GitHub documents it as the immutable action reference. [CITED: https://docs.github.com/en/actions/reference/security/secure-use]
 - **Privileged PR execution:** Do not checkout/run PR-controlled code in `pull_request_target`; GitHub warns this event has base-repository write token/secrets by default. [CITED: https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target]
 - **Assuming bot PR checks ran:** `GITHUB_TOKEN`-created PR events enter approval-required state; verify required checks on exact PR head and preserve that human approval gate unless a scoped GitHub App token is provisioned. Manual dispatch does not count as a PR status. [CITED: https://docs.github.com/en/actions/concepts/security/github_token]
@@ -221,7 +222,7 @@ Extend existing locations rather than create a generic release framework: keep w
 
 **What goes wrong:** Release asset is rebuilt, re-packed, or replaced after smoke and digest comparison.  
 **Why it happens:** Build artifacts and GitHub release assets are treated as interchangeable names rather than byte identities.  
-**How to avoid:** Build once from clean exact tag; capture archive hash; upload draft; download the release asset; compare SHA and receipts; smoke those downloaded bytes; publish without rebuilding.  
+**How to avoid:** Have release-please create the one unpublished draft and immediate tag, build once from that clean exact tag, capture archive hash, append to the existing draft, download the release asset, compare SHA and receipts, smoke those downloaded bytes, and publish without rebuilding.
 **Warning signs:** Sidecar says one hash while API/download reports another; source SHA/version missing; release job builds again after smoke. [CITED: https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases; VERIFIED: existing digest check at `tests/scripts/verify-phase3-player.sh:56-98`]
 
 ### Pitfall 2: Required checks missing on bot-created release PR
@@ -357,6 +358,7 @@ The test framework and current named cases are defined by existing registrations
 - [ ] Fixed core benchmark receipt for speed, memory/allocation and trace/no-trace pairing; record pilot variance before any budget.
 - [ ] Clang libFuzzer loader/stateful API targets plus bounded CI seed/reproducer command; keep existing deterministic suite.
 - [ ] Release workflow trigger/auth/cache/failure-propagation integration exercise on actual target repository and exact PR head.
+- [ ] Validate release-please `draft: true` plus `force-tag-creation: true`, same-workflow `release_created`/`tag_name`/`sha` candidate routing, one existing unpublished draft, and guarded retry against the same draft/tag/prior exact-head proof.
 
 ## Security Domain
 
