@@ -127,34 +127,10 @@ int main(int argc, char **argv) {
     gbb_error error = gbb_create(GBB_PROFILE_DMG_CPU_B, &machine);
     if (error == GBB_OK) error = gbb_load_rom(machine, rom, rom_size);
     free(rom);
-    gbb_instance *battery_machine = NULL;
-    if (error == GBB_OK)
-        error = gbb_create(GBB_PROFILE_DMG_CPU_B, &battery_machine);
-    if (error == GBB_OK)
-        error = gbb_load_rom(battery_machine, battery_rom, battery_rom_size);
-    free(battery_rom);
     if (error != GBB_OK) {
         fprintf(stderr, "GabbaBoy create/load failed: %d\n", (int)error);
         gbb_destroy(machine);
-        gbb_destroy(battery_machine);
-        return 1;
-    }
-
-    size_t battery_size = 0;
-    error = gbb_battery_size(battery_machine, &battery_size);
-    FILE *saved_file = fopen(argv[3], "rb");
-    int resuming = saved_file != NULL;
-    if (saved_file != NULL && fclose(saved_file) != 0) {
-        fprintf(stderr, "could not close host save file\n");
-        gbb_destroy(machine);
-        gbb_destroy(battery_machine);
-        return 1;
-    }
-    if (error != GBB_OK || battery_size == 0 || battery_size > 32768u ||
-        !load_optional_battery(battery_machine, argv[3], battery_size)) {
-        fprintf(stderr, "battery import failed or cartridge has no bounded battery RAM\n");
-        gbb_destroy(machine);
-        gbb_destroy(battery_machine);
+        free(battery_rom);
         return 1;
     }
 
@@ -166,7 +142,7 @@ int main(int argc, char **argv) {
     if (error != GBB_OK) {
         fprintf(stderr, "timestamped input admission failed: %d\n", (int)error);
         gbb_destroy(machine);
-        gbb_destroy(battery_machine);
+        free(battery_rom);
         return 1;
     }
 
@@ -181,19 +157,7 @@ int main(int argc, char **argv) {
                 (int)run.reason, (unsigned long long)run.consumed_half_dots,
                 audio_count);
         gbb_destroy(machine);
-        gbb_destroy(battery_machine);
-        return 1;
-    }
-    gbb_run_result battery_run = gbb_run(battery_machine, RUN_BUDGET_HALF_DOTS,
-                                         NULL, 0);
-    if (battery_run.reason != GBB_STOP_BUDGET ||
-        battery_run.consumed_half_dots > RUN_BUDGET_HALF_DOTS ||
-        (resuming && gbb_peek_ram(battery_machine, 0xC001u) != 0xA5u) ||
-        (!resuming && (gbb_peek_ram(battery_machine, 0xC000u) != 0x01u ||
-                       gbb_peek_ram(battery_machine, 0xC002u) != 0xE1u))) {
-        fprintf(stderr, "battery continuation fixture did not reach its expected branch\n");
-        gbb_destroy(machine);
-        gbb_destroy(battery_machine);
+        free(battery_rom);
         return 1;
     }
 
@@ -205,18 +169,50 @@ int main(int argc, char **argv) {
         frame_info.height != FRAME_HEIGHT) {
         fprintf(stderr, "caller-owned frame copy failed: %d\n", (int)error);
         gbb_destroy(machine);
-        gbb_destroy(battery_machine);
+        free(battery_rom);
+        return 1;
+    }
+
+    error = gbb_load_rom(machine, battery_rom, battery_rom_size);
+    free(battery_rom);
+    if (error != GBB_OK) {
+        fprintf(stderr, "battery fixture load failed: %d\n", (int)error);
+        gbb_destroy(machine);
+        return 1;
+    }
+    size_t battery_size = 0;
+    error = gbb_battery_size(machine, &battery_size);
+    FILE *saved_file = fopen(argv[3], "rb");
+    int resuming = saved_file != NULL;
+    if (saved_file != NULL && fclose(saved_file) != 0) {
+        fprintf(stderr, "could not close host save file\n");
+        gbb_destroy(machine);
+        return 1;
+    }
+    if (error != GBB_OK || battery_size == 0 || battery_size > 32768u ||
+        !load_optional_battery(machine, argv[3], battery_size)) {
+        fprintf(stderr, "battery import failed or cartridge has no bounded battery RAM\n");
+        gbb_destroy(machine);
+        return 1;
+    }
+    gbb_run_result battery_run = gbb_run(machine, RUN_BUDGET_HALF_DOTS, NULL, 0);
+    if (battery_run.reason != GBB_STOP_BUDGET ||
+        battery_run.consumed_half_dots > RUN_BUDGET_HALF_DOTS ||
+        (resuming && gbb_peek_ram(machine, 0xC001u) != 0xA5u) ||
+        (!resuming && (gbb_peek_ram(machine, 0xC000u) != 0x01u ||
+                       gbb_peek_ram(machine, 0xC002u) != 0xE1u))) {
+        fprintf(stderr, "battery continuation fixture did not reach its expected branch\n");
+        gbb_destroy(machine);
         return 1;
     }
 
     uint8_t battery[32768];
-    error = gbb_copy_battery(battery_machine, battery, sizeof(battery));
+    error = gbb_copy_battery(machine, battery, sizeof(battery));
     if (error != GBB_OK ||
         !write_battery_atomically(argv[3], battery, battery_size)) {
         fprintf(stderr, "battery export or atomic host replacement failed: %d\n",
                 (int)error);
         gbb_destroy(machine);
-        gbb_destroy(battery_machine);
         return 1;
     }
 
@@ -225,6 +221,5 @@ int main(int argc, char **argv) {
            (unsigned long long)RUN_BUDGET_HALF_DOTS,
            frame_info.width, frame_info.height, audio_count, battery_size);
     gbb_destroy(machine);
-    gbb_destroy(battery_machine);
     return 0;
 }
