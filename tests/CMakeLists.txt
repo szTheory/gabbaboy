@@ -132,6 +132,42 @@ foreach(case truncated oversized invalid_header unsupported_cartridge unsupporte
   add_test(NAME loader_${case} COMMAND test_loader ${case} ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 endforeach()
 
+add_executable(test_loader_fuzz test_loader_fuzz.c)
+target_link_libraries(test_loader_fuzz PRIVATE GabbaBoy::core)
+target_compile_features(test_loader_fuzz PRIVATE c_std_17)
+set_target_properties(test_loader_fuzz PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME loader_boundary_fuzz
+  COMMAND test_loader_fuzz ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
+
+add_executable(test_fuzz_core test_fuzz_core.c fuzz_core.c)
+target_link_libraries(test_fuzz_core PRIVATE GabbaBoy::core)
+target_compile_features(test_fuzz_core PRIVATE c_std_17)
+target_compile_definitions(test_fuzz_core PRIVATE GBB_FUZZ_STANDALONE_TEST=1)
+set_target_properties(test_fuzz_core PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME fuzz_core_regressions COMMAND test_fuzz_core)
+
+if(CMAKE_C_COMPILER_ID MATCHES "Clang")
+  include(CheckCSourceCompiles)
+  set(_gbb_saved_required_flags "${CMAKE_REQUIRED_FLAGS}")
+  set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -fsanitize=fuzzer,address,undefined")
+  check_c_source_compiles(
+    "#include <stdint.h>\n#include <stddef.h>\nint LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) { (void)data; (void)size; return 0; }"
+    GBB_HAS_CLANG_LIBFUZZER_RUNTIME)
+  set(CMAKE_REQUIRED_FLAGS "${_gbb_saved_required_flags}")
+  unset(_gbb_saved_required_flags)
+  if(GBB_HAS_CLANG_LIBFUZZER_RUNTIME)
+    add_executable(fuzz_core fuzz_core.c ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c)
+    target_include_directories(fuzz_core PRIVATE ${PROJECT_SOURCE_DIR}/include)
+    target_compile_features(fuzz_core PRIVATE c_std_17)
+    target_compile_options(fuzz_core PRIVATE -fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer)
+    target_link_options(fuzz_core PRIVATE -fsanitize=fuzzer,address,undefined)
+    set_target_properties(fuzz_core PROPERTIES C_EXTENSIONS OFF)
+    message(STATUS "Bounded compiler-integrated libFuzzer target enabled")
+  else()
+    message(STATUS "Matching Clang libFuzzer runtime unavailable; deterministic sanitizer regressions remain enabled")
+  endif()
+endif()
+
 add_executable(test_tracer test_tracer.c)
 target_link_libraries(test_tracer PRIVATE GabbaBoy::core)
 target_compile_features(test_tracer PRIVATE c_std_17)

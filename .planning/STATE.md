@@ -1,20 +1,19 @@
 ---
 gsd_state_version: "1.0"
 milestone: v0.1
-current_phase: 6
+current_phase: 06
 current_phase_name: Qualified DMG Release and Consumer Handoff
-status: planning
-stopped_at: Phase 5 complete, ready to plan Phase 6
-last_updated: "2026-10-08T18:11:38.699Z"
+status: executing
+stopped_at: Completed GB-06-07-PLAN.md
+last_updated: "2026-10-08T23:38:07.572Z"
 last_activity: 2026-10-08
-last_activity_desc: Phase 5 complete, transitioned to Phase 6
-state_head: 557d4f6243e164375844cb5f962ac77a8468eaad
+last_activity_desc: Phase GB-06 Plan 06-07 completed; Wave 6 Plan 06-06 remains
+state_head: 6017b8ffc3a7e623b52672578b364aa0873e5324
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 49
-  completed_plans: 49
-  percent: 83
+  total_plans: 56
+  completed_plans: 55
 milestone_name: limited DMG preview
 ---
 
@@ -29,18 +28,18 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 
 ## Current Position
 
-Phase: 6 — Qualified DMG Release and Consumer Handoff
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-10-08 — Phase 5 complete, transitioned to Phase 6
+Phase: GB-06 (Qualified DMG Release and Consumer Handoff) — EXECUTING
+Plan: 6 of 7
+Status: Executing Phase GB-06
+Last activity: 2026-10-08 — Phase GB-06 Plan 06-07 completed; Wave 6 Plan 06-06 remains
 
 Progress: ███████░░░ [████████░░] 83% of milestone phases complete. Phases 1–5 passed goal verification. Phase 5 completed all seven plans and passed 22/22 goal truths at source `206e107210e750ff0fe647a19b82600b17e98ee3`. Its final local evidence includes core CTest 174/174, the pinned SDL 3.4.18 player/package verifier 50/50, and a clean-tree 300-frame two-partition receipt with identical 241,094-frame PCM digests. See the linked Phase 5 verification and validation reports. CGB/VIN, physical playback/hotplug, and perceptual output remain unqualified.
 
-Phase 5 closeout: The app-level lifecycle test exercises Space pause/resume and R reset through SDL events, checking APU continuation, host PCM clearing, save failure/cancel/retry, and persisted battery recovery. Code review is clean and the security report records zero open threats. The dummy backend and injected events establish software-path behavior only; no physical device, hotplug, or perceptual result is claimed. Phase 6 has not started.
+Phase 5 closeout: The app-level lifecycle test exercises Space pause/resume and R reset through SDL events, checking APU continuation, host PCM clearing, save failure/cancel/retry, and persisted battery recovery. Code review is clean and the security report records zero open threats. The dummy backend and injected events establish software-path behavior only; no physical device, hotplug, or perceptual result is claimed. Phase 6 Plans 06-01 through 06-05 and 06-07 are complete. Wave 6 Plan 06-06 remains for exact-head hosted evidence, downloaded asset smokes, and the final gated release transition.
 
 ## Performance Metrics
 
-- Unique plans: 49; average duration / total execution time: 25 min / 700 min. Phase completion follows goal verification, not task count alone.
+- Completed unique plans: 55; recorded execution total: 907 min. Phase 6 has seven reviewed plans; Plans 06-01 through 06-05 and 06-07 are complete, with Plan 06-06 still required for hosted evidence and the final release gate. Phase completion follows goal verification, not task count alone.
 - Per-phase metrics / recent trend: Phases 1–5 are verified complete. Phase 3 has 13/13 plan summaries, 5/5 goal truths, 33/33 UAT checks, a user-confirmed packaged Z press/release, and 141/141 local CTest. PR #4's required exact-head checks passed before merge. Phase 5's current local exact-head evidence is in `GB-05-dmg-audio-and-stable-playback/05-VERIFICATION.md` and `05-VALIDATION.md`; confirm exact-head remote PR checks before any merge rather than inferring them from local results. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B measurement is claimed. Plan 02-15 is superseded/non-runnable and remains historical.
 - Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. At implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`, the local offline inventory passed 104/104 with no skips, the relocated installed C/C++ inventory passed 109/109, the runner passed its fixed one-CPU/two-timer derived corpus, hosted CI run 37620710587 passed, and fixture reproduction run 37620710600 passed. Independent verification passed all five CPU requirements. Original upstream PPU-dependent reporting paths remain excluded; no physical DMG hardware test occurred.
 
@@ -90,6 +89,12 @@ Phase 5 closeout: The app-level lifecycle test exercises Space pause/resume and 
 | Phase GB-05 P05 | 12 min | 2 tasks | 6 files |
 | Phase 05 P06 | 25 min | 3 tasks | 14 files |
 | Phase GB-05 P07 | 32min | 2 tasks | 12 files |
+| Phase GB-06 P01 | 167 | 2 tasks | 7 files |
+| Phase GB-06 P05 | 19 min | 2 tasks | 8 files |
+| Phase GB-06 P02 | 8 | 2 tasks | 3 files |
+| Phase GB-06 P04 | 8 min | 2 tasks | 6 files |
+| Phase GB-06 P03 | 6 min | 2 tasks | 8 files |
+| Phase GB-06 P07 | 7min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -161,6 +166,19 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-05]: Bind the sustained result to the committed source revision, Release build, scoped DMG model, original licensed fixture, and PCM digest.
 - [Phase GB-05]: Keep SDL queued-input bytes and application PCM underflow explicitly separate from playback latency and hardware starvation.
 - [Phase GB-05]: Report dummy backend and default-device availability as software/device-presence evidence only; do not claim physical hotplug or perceptual qualification.
+- [Phase GB-06]: CMake PROJECT_VERSION remains the product version source; release-please updates the matching v-prefixed tag version.
+- [Phase GB-06]: Use GITHUB_TOKEN for version PRs and preserve the normal exact-head workflow approval gate.
+- [Phase GB-06]: Keep the Linux candidate unpublished until the final Phase 6 release gate.
+- [Phase GB-06]: Keep source, build, and downloaded-byte evidence in separate digest-linked receipts.
+- [Phase GB-06]: Keep deterministic loader/battery/API regressions mandatory and enable compiler-integrated libFuzzer only when the matching Clang runtime is available; bound each input's size and work.
+- [Phase GB-06]: Keep downloaded Windows release archive qualification on the existing native consumer lane and reuse the current C and C++ consumer projects.
+- [Phase GB-06]: Force SDL dummy audio and video for the macOS player package smoke; report software-only behavior.
+- [Phase GB-06]: Require an exact core/player release asset set and hash manifest before a platform candidate is ready.
+- [Phase GB-06]: Keep stable support facts in a tracked versioned ledger and bind the exact tagged ledger blob and source SHA in a separate release sidecar.
+- [Phase GB-06]: Record fixed-workload speed, process peak RSS, trace pairing, build duration, exact-source hosted check durations, and uncertainty; keep budgets advisory until repeated variance justifies one.
+- [Phase GB-06]: Use the installed visible-demo fixture for successful frame output and sequentially load the MBC1 continuation fixture into the same opaque instance for save transfer.
+- [Phase GB-06]: Install the visible-demo ROM with its manifest and license so the relocated native example needs no source-tree path.
+- [Phase GB-06]: Keep raw battery persistence host-owned and replace only after an exclusive temporary file is flushed.
 
 ### Pending Todos
 
@@ -186,10 +204,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-08T18:11:38.699Z
-Stopped at: Phase 5 complete, ready to plan Phase 6
-Resume file: None
-Next command in fresh context: $gsd-discuss-phase 6
+Last session: 2026-10-08T23:38:07.475Z
+Stopped at: Completed GB-06-07-PLAN.md
+Resume file: .planning/.continue-here.md
+Next command in fresh context: $gsd-execute-phase 6
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: Phase 5 goal verification and phase closeout, within the six-phase milestone.
-Next phase: Phase 6 — Qualified DMG Release and Consumer Handoff. The phase is not started; discuss it using the exact command above.
+Completed workflow stage: Phase GB-06 Wave 5 Plan 06-07 execution; pre-tag release documentation and API coverage are committed and locally verified. The six-phase milestone remains in progress.
+Next phase: Phase 6 — Qualified DMG Release and Consumer Handoff. Plans 06-01 through 06-05 and 06-07 are complete; continue with Wave 6 Plan 06-06 using `$gsd-execute-phase 6`, then stop at the Phase 6 boundary.

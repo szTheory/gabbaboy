@@ -103,6 +103,10 @@ jobs:
         run: |
           ctest --preset phase1-asan --output-on-failure --no-tests=error --output-junit ctest.xml
           bash .github/scripts/verify-test-inventory.sh build-asan/ctest.xml tests/expected-tests.txt
+      - name: Verify bounded fuzz harness and deterministic reproducers
+        run: |
+          bash tests/scripts/run-bounded-fuzz.sh --self-test
+          GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --fast
 
   cmake-floor-3-25-3:
     name: cmake-floor-3.25.3

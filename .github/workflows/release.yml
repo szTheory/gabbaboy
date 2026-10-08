@@ -1,0 +1,1055 @@
+name: release-candidate-workflow
+
+on:
+  workflow_call:
+    inputs:
+      retry:
+        type: boolean
+        required: false
+        default: false
+      tag_name:
+        type: string
+        required: false
+        default: ''
+      source_sha:
+        type: string
+        required: false
+        default: ''
+      release_id:
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gabbaboy-release-${{ inputs.retry && inputs.tag_name || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # This deliberately uses GITHUB_TOKEN. Its PR events do not start later
+  # workflows; the repository's normal approval gate must release those exact-
+  # head CI checks before the version PR can merge.
+  release:
+    if: ${{ inputs.retry != true }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - name: Require trusted repository main branch
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_REF: ${{ github.ref }}
+        run: |
+          [[ "$GH_REPO" == szTheory/gabbaboy && "$GH_REF" == refs/heads/main ]] || {
+            echo "Release automation runs only for trusted pushes to szTheory/gabbaboy main." >&2
+            exit 1
+          }
+      - name: Create version PR or unpublished draft and immediate tag
+        id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ github.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  candidate:
+    name: downloaded-linux-x64-candidate
+    needs: [release]
+    if: ${{ always() && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true')) }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    permissions:
+      actions: read
+      checks: read
+      contents: write
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RETRY: ${{ inputs.retry }}
+      INPUT_TAG: ${{ inputs.tag_name }}
+      INPUT_SOURCE_SHA: ${{ inputs.source_sha }}
+      INPUT_RELEASE_ID: ${{ inputs.release_id }}
+      RELEASE_TAG: ${{ inputs.retry && inputs.tag_name || needs.release.outputs.tag_name }}
+      SOURCE_SHA: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
+      RELEASE_NOTES_OUTPUT: ${{ needs.release.outputs.release_created }}
+    steps:
+      - name: Require trusted repository, main workflow ref, and exact tag identity
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GH_REPO" == szTheory/gabbaboy && "$GITHUB_REF" == refs/heads/main ]] || {
+            echo "Candidate builds run only from trusted main workflow runs." >&2
+            exit 1
+          }
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Missing or malformed release-please tag/source output." >&2
+            exit 1
+          }
+          if [[ "$RETRY" == true ]]; then
+            [[ "$INPUT_RELEASE_ID" =~ ^[0-9]+$ ]] || { echo "Retry requires an existing draft release ID." >&2; exit 1; }
+          else
+            [[ "$RELEASE_NOTES_OUTPUT" == true ]] || { echo "release_created was not true." >&2; exit 1; }
+          fi
+          api_commit=$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq '.sha')
+          [[ "$api_commit" == "$SOURCE_SHA" ]] || { echo "Trusted tag does not resolve to the exact release-please source SHA." >&2; exit 1; }
+          release_json=$(gh api "repos/$GH_REPO/releases?per_page=100")
+          matches=$(jq --arg tag "$RELEASE_TAG" '[.[] | select(.tag_name == $tag)] | length' <<<"$release_json")
+          [[ "$matches" == 1 ]] || { echo "Expected exactly one existing draft for $RELEASE_TAG, found $matches." >&2; exit 1; }
+          release_id=$(jq --arg tag "$RELEASE_TAG" -r '.[] | select(.tag_name == $tag) | .id' <<<"$release_json")
+          draft=$(jq --arg tag "$RELEASE_TAG" -r '.[] | select(.tag_name == $tag) | .draft' <<<"$release_json")
+          body=$(jq --arg tag "$RELEASE_TAG" -r '.[] | select(.tag_name == $tag) | .body' <<<"$release_json")
+          [[ "$draft" == true && -n "$body" && "$body" != null ]] || { echo "Matching release is published or lacks release notes." >&2; exit 1; }
+          if [[ "$RETRY" == true && "$release_id" != "$INPUT_RELEASE_ID" ]]; then
+            echo "Retry release ID differs from the supplied existing draft." >&2
+            exit 1
+          fi
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+          notes_file="$RUNNER_TEMP/release-metadata-notes.txt"
+          printf '%s\n' "$body" > "$notes_file"
+          echo "release_notes_file=$notes_file" >> "$GITHUB_OUTPUT"
+          version=${RELEASE_TAG#v}
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Check out exact tagged source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+      - name: Verify merged PR exact-head required evidence
+        id: proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          prs=$(gh api "repos/$GH_REPO/commits/$SOURCE_SHA/pulls")
+          count=$(jq '[.[] | select(.merged_at != null and .base.ref == "main" and .merge_commit_sha == env.SOURCE_SHA)] | length' <<<"$prs")
+          [[ "$count" == 1 ]] || { echo "Tagged source does not map to exactly one merged main PR." >&2; exit 1; }
+          pr=$(jq -c '[.[] | select(.merged_at != null and .base.ref == "main" and .merge_commit_sha == env.SOURCE_SHA)][0]' <<<"$prs")
+          pr_number=$(jq -r '.number' <<<"$pr")
+          pr_head=$(jq -r '.head.sha' <<<"$pr")
+          pr_merge=$(jq -r '.merge_commit_sha' <<<"$pr")
+          [[ "$pr_merge" == "$SOURCE_SHA" && "$pr_head" =~ ^[0-9a-f]{40}$ ]] || { echo "Merged PR evidence has stale or malformed SHA fields." >&2; exit 1; }
+          required=$(gh pr checks "$pr_number" --required --json name,bucket)
+          [[ $(jq 'length' <<<"$required") -gt 0 ]] || { echo "No required checks were found." >&2; exit 1; }
+          [[ $(jq 'all(.[]; .bucket == "pass")' <<<"$required") == true ]] || { echo "A required check is missing, skipped, stale, or failing." >&2; exit 1; }
+          for context in required-native preview-package-smoke; do
+            [[ $(jq --arg name "$context" 'any(.[]; .name == $name and .bucket == "pass")' <<<"$required") == true ]] || { echo "Required exact-head context missing: $context" >&2; exit 1; }
+          done
+          [[ $(jq 'any(.[]; (.name | endswith("fixture-repro")) and .bucket == "pass")' <<<"$required") == true ]] || { echo "Required exact-head fixture-repro context missing." >&2; exit 1; }
+          printf 'head_sha=%s\nmerge_commit_sha=%s\npr_number=%s\n' "$pr_head" "$pr_merge" "$pr_number" >> "$GITHUB_OUTPUT"
+      - name: Record or revalidate source identity receipt
+        env:
+          RELEASE_ID: ${{ steps.identity.outputs.release_id }}
+          RELEASE_VERSION: ${{ steps.identity.outputs.version }}
+          RELEASE_NOTES_FILE: ${{ steps.identity.outputs.release_notes_file }}
+          PR_HEAD_SHA: ${{ steps.proof.outputs.head_sha }}
+          PR_MERGE_SHA: ${{ steps.proof.outputs.merge_commit_sha }}
+          PR_NUMBER: ${{ steps.proof.outputs.pr_number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" && -z "$(git status --porcelain --untracked-files=all)" ]] || {
+            echo "Tagged source checkout is not clean and exact." >&2
+            exit 1
+          }
+          mkdir -p build
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib
+          notes = pathlib.Path(os.environ["RELEASE_NOTES_FILE"]).read_text()
+          notice_sha = hashlib.sha256(pathlib.Path("LICENSE").read_bytes()).hexdigest()
+          receipt = {
+              "schema_version": 1,
+              "version": os.environ["RELEASE_VERSION"],
+              "tag_name": os.environ["RELEASE_TAG"],
+              "source_sha": os.environ["SOURCE_SHA"],
+              "release_id": os.environ["RELEASE_ID"],
+              "draft": True,
+              "source_clean": True,
+              "notice_sha256": notice_sha,
+              "release_notes": notes,
+              "release_notes_sha256": hashlib.sha256(notes.encode()).hexdigest(),
+              "prior_pr_proof": {
+                  "head_sha": os.environ["PR_HEAD_SHA"],
+                  "merge_commit_sha": os.environ["PR_MERGE_SHA"],
+                  "pr_number": int(os.environ["PR_NUMBER"]),
+                  "required_checks": "passed",
+              },
+          }
+          pathlib.Path("build/source-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+          PY
+          assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
+          count=$(jq '[.[] | select(.name == "source-receipt.json")] | length' <<<"$assets")
+          [[ "$count" -le 1 ]] || { echo "Draft has duplicate source identity receipts." >&2; exit 1; }
+          if [[ "$count" == 1 ]]; then
+            mkdir -p build/existing
+            gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern source-receipt.json --dir build/existing
+            cmp -s build/source-receipt.json build/existing/source-receipt.json || { echo "Existing source receipt differs." >&2; exit 1; }
+            cp build/existing/source-receipt.json build/source-receipt.json
+          else
+            gh release upload "$RELEASE_TAG" build/source-receipt.json --repo "$GH_REPO"
+          fi
+      - name: Revalidate a previously qualified candidate before retry
+        env:
+          RELEASE_ID: ${{ steps.identity.outputs.release_id }}
+          RELEASE_VERSION: ${{ steps.identity.outputs.version }}
+          RELEASE_NOTES_FILE: ${{ steps.identity.outputs.release_notes_file }}
+          PR_HEAD_SHA: ${{ steps.proof.outputs.head_sha }}
+          PR_MERGE_SHA: ${{ steps.proof.outputs.merge_commit_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
+          receipt_count=$(jq '[.[] | select(.name == "candidate-receipt.json")] | length' <<<"$assets")
+          [[ "$receipt_count" -le 1 ]] || { echo "Draft has duplicate candidate receipts." >&2; exit 1; }
+          if [[ "$receipt_count" == 1 ]]; then
+            for name in gabbaboy-core-linux-x64.tar.gz gabbaboy-notices.txt source-receipt.json build-receipt.json; do
+              count=$(jq --arg name "$name" '[.[] | select(.name == $name)] | length' <<<"$assets")
+              [[ "$count" == 1 ]] || { echo "Qualified receipt exists without exactly one $name attachment." >&2; exit 1; }
+            done
+            mkdir -p build/reuse
+            gh release download "$RELEASE_TAG" --repo "$GH_REPO" \
+              --pattern candidate-receipt.json --pattern gabbaboy-core-linux-x64.tar.gz \
+              --pattern gabbaboy-notices.txt --pattern source-receipt.json \
+              --pattern build-receipt.json --dir build/reuse
+            tests/scripts/verify-release-candidate.sh --verify \
+              build/reuse/candidate-receipt.json build/reuse/gabbaboy-core-linux-x64.tar.gz \
+              "$RELEASE_VERSION" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
+              build/reuse/gabbaboy-notices.txt build/reuse/source-receipt.json \
+              build/reuse/build-receipt.json
+            python3 - build/reuse/candidate-receipt.json "$RELEASE_NOTES_FILE" <<'PY'
+          import hashlib, json, os, pathlib, sys
+          receipt = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          proof = receipt.get("prior_pr_proof", {})
+          if proof.get("head_sha") != os.environ["PR_HEAD_SHA"] or proof.get("merge_commit_sha") != os.environ["PR_MERGE_SHA"]:
+              raise SystemExit("Stored receipt has different exact-head PR evidence.")
+          notes_sha = hashlib.sha256(pathlib.Path(sys.argv[2]).read_bytes()).hexdigest()
+          notice_sha = hashlib.sha256(pathlib.Path("build/reuse/gabbaboy-notices.txt").read_bytes()).hexdigest()
+          if receipt.get("release_notes_sha256") != notes_sha or receipt.get("notice_sha256") != notice_sha:
+              raise SystemExit("Stored receipt does not match current release notes/notices.")
+          PY
+            echo CANDIDATE_REUSED=true >> "$GITHUB_ENV"
+          else
+            echo CANDIDATE_REUSED=false >> "$GITHUB_ENV"
+          fi
+      - name: Configure and build cache-free release core
+        if: env.CANDIDATE_REUSED != 'true'
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DGABBABOY_BUILD_PLAYER=OFF
+          source_version=$(sed -nE 's/^project\(GabbaBoy VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt | head -n 1)
+          [[ "$source_version" == "${{ steps.identity.outputs.version }}" ]] || {
+            echo "CMake PROJECT_VERSION does not match the release tag." >&2
+            exit 1
+          }
+          cmake --build build/release --parallel 2
+          cmake --install build/release --prefix build/release-stage
+          mkdir -p build/release-stage/share/gabbaboy
+          cp LICENSE build/release-stage/share/gabbaboy/LICENSE.txt
+          SOURCE_DATE_EPOCH=$(git show -s --format=%ct "$SOURCE_SHA")
+          export SOURCE_DATE_EPOCH
+          tar --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --numeric-owner \
+            -czf build/gabbaboy-core-linux-x64.tar.gz -C build/release-stage include lib bin share
+      - name: Append only byte-identical archive to the existing draft
+        if: env.CANDIDATE_REUSED != 'true'
+        env:
+          RELEASE_ID: ${{ steps.identity.outputs.release_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset_sha=$(sha256sum build/gabbaboy-core-linux-x64.tar.gz | cut -d ' ' -f1)
+          source_receipt_sha=$(sha256sum build/source-receipt.json | cut -d ' ' -f1)
+          tracer_sha=$(sha256sum fixtures/tracer/manifest.json | cut -d ' ' -f1)
+          battery_sha=$(sha256sum fixtures/mbc1-continuation/manifest.json | cut -d ' ' -f1)
+          compiler=$(cc --version | head -n1)
+          cmake_version=$(cmake --version | head -n1)
+          runner="ubuntu-22.04/${ImageOS:-unknown}/${ImageVersion:-unknown}"
+          export asset_sha source_receipt_sha tracer_sha battery_sha compiler cmake_version runner
+          python3 - <<'PY'
+          import json, os, pathlib
+          receipt = {
+              "schema_version": 1,
+              "version": os.environ["RELEASE_TAG"][1:],
+              "tag_name": os.environ["RELEASE_TAG"],
+              "source_sha": os.environ["SOURCE_SHA"],
+              "release_id": os.environ["RELEASE_ID"],
+              "source_receipt_sha256": os.environ["source_receipt_sha"],
+              "asset_name": "gabbaboy-core-linux-x64.tar.gz",
+              "asset_sha256": os.environ["asset_sha"],
+              "build": {
+                  "compiler": os.environ["compiler"],
+                  "cmake": os.environ["cmake_version"],
+                  "runner": os.environ["runner"],
+                  "configuration": "Release",
+                  "fixture_manifest_sha256": os.environ["tracer_sha"],
+                  "corpus_manifest_sha256": os.environ["battery_sha"],
+              },
+              "fixtures": {
+                  "tracer_manifest_sha256": os.environ["tracer_sha"],
+                  "battery_manifest_sha256": os.environ["battery_sha"],
+              },
+          }
+          pathlib.Path("build/build-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+          PY
+          build_receipt_count=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100" --jq '[.[] | select(.name == "build-receipt.json")] | length')
+          [[ "$build_receipt_count" -le 1 ]] || { echo "Draft has duplicate build receipts." >&2; exit 1; }
+          if [[ "$build_receipt_count" == 1 ]]; then
+            mkdir -p build/existing
+            gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern build-receipt.json --dir build/existing
+            cmp -s build/build-receipt.json build/existing/build-receipt.json || { echo "Existing build receipt differs." >&2; exit 1; }
+          else
+            gh release upload "$RELEASE_TAG" build/build-receipt.json --repo "$GH_REPO"
+          fi
+          assets=$(gh api "repos/$GH_REPO/releases/${{ steps.identity.outputs.release_id }}/assets?per_page=100")
+          count=$(jq '[.[] | select(.name == "gabbaboy-core-linux-x64.tar.gz")] | length' <<<"$assets")
+          [[ "$count" -le 1 ]] || { echo "Draft has duplicate core archive assets." >&2; exit 1; }
+          if [[ "$count" == 1 ]]; then
+            mkdir -p build/existing
+            gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-linux-x64.tar.gz --dir build/existing
+            cmp -s build/release/gabbaboy-core-linux-x64.tar.gz build/existing/gabbaboy-core-linux-x64.tar.gz || {
+              echo "Existing draft archive differs from the rebuilt bytes; refusing replacement." >&2
+              exit 1
+            }
+          else
+            gh release upload "$RELEASE_TAG" build/release/gabbaboy-core-linux-x64.tar.gz --repo "$GH_REPO"
+          fi
+          license_count=$(jq '[.[] | select(.name == "gabbaboy-notices.txt")] | length' <<<"$assets")
+          [[ "$license_count" -le 1 ]] || { echo "Draft has duplicate notice assets." >&2; exit 1; }
+          if [[ "$license_count" == 1 ]]; then
+            mkdir -p build/existing
+            gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-notices.txt --dir build/existing
+            cmp -s LICENSE build/existing/gabbaboy-notices.txt || { echo "Existing notice bytes differ." >&2; exit 1; }
+          else
+            cp LICENSE build/gabbaboy-notices.txt
+            gh release upload "$RELEASE_TAG" build/gabbaboy-notices.txt --repo "$GH_REPO"
+          fi
+      - name: Download exact draft bytes and smoke relocated C/C++ consumers
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/downloaded build/consumer-work
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" \
+            --pattern gabbaboy-core-linux-x64.tar.gz --pattern gabbaboy-notices.txt \
+            --pattern source-receipt.json --pattern build-receipt.json --dir build/downloaded
+          [[ $(sha256sum build/downloaded/gabbaboy-notices.txt | cut -d ' ' -f1) == $(sha256sum LICENSE | cut -d ' ' -f1) ]] || {
+            echo "Downloaded notice bytes differ from the tagged source notice." >&2
+            exit 1
+          }
+          tests/scripts/verify-release-candidate.sh --extract \
+            build/downloaded/gabbaboy-core-linux-x64.tar.gz build/extracted
+          prefix="$PWD/build/extracted"
+          cmake -DGBB_INSTALL_PREFIX="$prefix" -DGBB_EXECUTABLE_SUFFIX= \
+            -DGBB_RUNNER_WORKDIR="$PWD/build/consumer-work/runner" \
+            "-DGBB_FORBIDDEN_PATHS=$GITHUB_WORKSPACE;$GITHUB_WORKSPACE/build" \
+            -P cmake/VerifyInstalledPackage.cmake
+          for language in c cpp; do
+            cmake -S "tests/consumers/$language" -B "build/consumer-work/$language" \
+              -DCMAKE_PREFIX_PATH="$prefix" \
+              -DGBB_TRACER_ROM="$prefix/share/gabbaboy/fixtures/tracer/tracer.gb"
+            cmake --build "build/consumer-work/$language" --parallel 2
+            "build/consumer-work/$language/consumer-$language" \
+              "$prefix/share/gabbaboy/fixtures/tracer/tracer.gb"
+          done
+      - name: Write or revalidate downloaded-byte candidate receipt
+        env:
+          RELEASE_ID: ${{ steps.identity.outputs.release_id }}
+          RELEASE_VERSION: ${{ steps.identity.outputs.version }}
+          RELEASE_NOTES_FILE: ${{ steps.identity.outputs.release_notes_file }}
+          PR_HEAD_SHA: ${{ steps.proof.outputs.head_sha }}
+          PR_MERGE_SHA: ${{ steps.proof.outputs.merge_commit_sha }}
+          PR_NUMBER: ${{ steps.proof.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          # Derive the digest from bytes downloaded from the existing GitHub draft.
+          asset_sha=$(sha256sum build/downloaded/gabbaboy-core-linux-x64.tar.gz | cut -d ' ' -f1)
+          notice_sha=$(sha256sum build/downloaded/gabbaboy-notices.txt | cut -d ' ' -f1)
+          source_receipt_sha=$(sha256sum build/downloaded/source-receipt.json | cut -d ' ' -f1)
+          build_receipt_sha=$(sha256sum build/downloaded/build-receipt.json | cut -d ' ' -f1)
+          tracer_sha=$(sha256sum fixtures/tracer/manifest.json | cut -d ' ' -f1)
+          battery_sha=$(sha256sum fixtures/mbc1-continuation/manifest.json | cut -d ' ' -f1)
+          cmake_version=$(cmake --version | head -n1)
+          compiler=$(cc --version | head -n1)
+          runner=$(uname -a)
+          export asset_sha notice_sha source_receipt_sha build_receipt_sha tracer_sha battery_sha cmake_version compiler runner
+          assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
+          receipt_count=$(jq '[.[] | select(.name == "candidate-receipt.json")] | length' <<<"$assets")
+          [[ "$receipt_count" -le 1 ]] || { echo "Draft has duplicate candidate receipts." >&2; exit 1; }
+          if [[ "$receipt_count" == 1 ]]; then
+            mkdir -p build/existing
+            gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern candidate-receipt.json --dir build/existing
+            tests/scripts/verify-release-candidate.sh --verify \
+              build/existing/candidate-receipt.json build/downloaded/gabbaboy-core-linux-x64.tar.gz \
+              "$RELEASE_VERSION" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
+              build/downloaded/gabbaboy-notices.txt build/downloaded/source-receipt.json \
+              build/downloaded/build-receipt.json
+            python3 - build/existing/candidate-receipt.json "$RELEASE_NOTES_FILE" <<'PY'
+          import hashlib, json, os, pathlib, sys
+          receipt = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          proof = receipt.get("prior_pr_proof", {})
+          if proof.get("head_sha") != os.environ["PR_HEAD_SHA"] or proof.get("merge_commit_sha") != os.environ["PR_MERGE_SHA"]:
+              raise SystemExit("Stored receipt was produced from different exact-head PR evidence.")
+          notes_sha = hashlib.sha256(pathlib.Path(sys.argv[2]).read_bytes()).hexdigest()
+          notice_sha = hashlib.sha256(pathlib.Path("build/downloaded/gabbaboy-notices.txt").read_bytes()).hexdigest()
+          if receipt.get("release_notes_sha256") != notes_sha or receipt.get("notice_sha256") != notice_sha:
+              raise SystemExit("Stored receipt does not match the current release notes and notice bytes.")
+          PY
+          else
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib
+          notes = pathlib.Path(os.environ["RELEASE_NOTES_FILE"]).read_text()
+          receipt = {
+              "schema_version": 1,
+              "version": os.environ["RELEASE_VERSION"],
+              "tag_name": os.environ["RELEASE_TAG"],
+              "source_sha": os.environ["SOURCE_SHA"],
+              "release_id": os.environ["RELEASE_ID"],
+              "draft": True,
+              "source_clean": True,
+              "smoke_result": "passed",
+              "notice_file": "gabbaboy-notices.txt",
+              "notice_sha256": os.environ["notice_sha"],
+              "release_notes": notes,
+              "release_notes_sha256": hashlib.sha256(notes.encode()).hexdigest(),
+              "source_receipt_sha256": os.environ["source_receipt_sha"],
+              "build_receipt_sha256": os.environ["build_receipt_sha"],
+              "build": {
+                  "compiler": os.environ["compiler"],
+                  "cmake": os.environ["cmake_version"],
+                  "runner": os.environ["runner"],
+                  "configuration": "Release",
+                  "fixture_manifest_sha256": os.environ["tracer_sha"],
+                  "corpus_manifest_sha256": os.environ["battery_sha"],
+              },
+              "fixtures": {
+                  "tracer_manifest_sha256": os.environ["tracer_sha"],
+                  "battery_manifest_sha256": os.environ["battery_sha"],
+              },
+              "assets": [{"name": "gabbaboy-core-linux-x64.tar.gz", "sha256": os.environ["asset_sha"]}],
+              "prior_pr_proof": {
+                  "head_sha": os.environ["PR_HEAD_SHA"],
+                  "merge_commit_sha": os.environ["PR_MERGE_SHA"],
+                  "pr_number": int(os.environ["PR_NUMBER"]),
+                  "required_checks": "passed",
+              },
+          }
+          pathlib.Path("build/downloaded/candidate-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+          PY
+          current_release=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID")
+          [[ $(jq -r '.draft' <<<"$current_release") == true && \
+             $(jq -r '.tag_name' <<<"$current_release") == "$RELEASE_TAG" ]] || {
+            echo "Draft status or tag changed during candidate qualification." >&2
+            exit 1
+          }
+          [[ $(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq '.sha') == "$SOURCE_SHA" ]] || {
+            echo "Tag target changed during candidate qualification." >&2
+            exit 1
+          }
+          tests/scripts/verify-release-candidate.sh --verify \
+            build/downloaded/candidate-receipt.json build/downloaded/gabbaboy-core-linux-x64.tar.gz \
+            "$RELEASE_VERSION" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
+            build/downloaded/gabbaboy-notices.txt build/downloaded/source-receipt.json \
+            build/downloaded/build-receipt.json
+            gh release upload "$RELEASE_TAG" build/downloaded/candidate-receipt.json --repo "$GH_REPO"
+          fi
+          echo "Candidate is qualified and remains a draft. Only the final 06-06 gate may publish it."
+
+  candidate-macos:
+    name: downloaded-macos-arm64-candidates
+    needs: [release, candidate]
+    if: ${{ always() && needs.candidate.result == 'success' && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true')) }}
+    runs-on: macos-14
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.retry && inputs.tag_name || needs.release.outputs.tag_name }}
+      SOURCE_SHA: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
+      RELEASE_ID: ${{ inputs.retry && inputs.release_id || '' }}
+      GBB_EXPECTED_SOURCE_REVISION: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
+      SOURCE_REVISION: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
+      GBB_VERIFIED_OUTPUT_DIR: build/release-player-verified
+    steps:
+      - name: Require trusted candidate identity and unpublished matching draft
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GH_REPO" == szTheory/gabbaboy && "$GITHUB_REF" == refs/heads/main ]] || exit 1
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          [[ "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" == "$SOURCE_SHA" ]] || exit 1
+          release_json=$(gh api "repos/$GH_REPO/releases?per_page=100")
+          [[ $(jq --arg tag "$RELEASE_TAG" '[.[] | select(.tag_name == $tag and .draft == true)] | length' <<<"$release_json") == 1 ]] || {
+            echo "Expected exactly one unpublished draft for $RELEASE_TAG." >&2; exit 1;
+          }
+          actual_id=$(jq --arg tag "$RELEASE_TAG" -r '.[] | select(.tag_name == $tag) | .id' <<<"$release_json")
+          if [[ -n "$RELEASE_ID" ]]; then [[ "$actual_id" == "$RELEASE_ID" ]] || exit 1; fi
+          echo "RELEASE_ID=$actual_id" >> "$GITHUB_ENV"
+      - name: Check out exact trusted tag source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+      - name: Verify checked out source version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=${RELEASE_TAG#v}
+          source_version=$(sed -nE 's/^project\(GabbaBoy VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt | head -n1)
+          [[ "$source_version" == "$version" ]] || { echo "Tag and checked out CMake version differ." >&2; exit 1; }
+      - name: Select a complete existing macOS candidate or a clean build
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
+          names=(gabbaboy-core-macos-arm64.tar.gz gabbaboy-core-macos-arm64.tar.gz.sha256 gabbaboy-build-receipt-macos-arm64.json gabbaboy-preview-macos-arm64.tar.gz gabbaboy-preview-macos-arm64-build-receipt.json)
+          present=0
+          for name in "${names[@]}"; do
+            count=$(jq --arg name "$name" '[.[] | select(.name == $name)] | length' <<<"$assets")
+            [[ "$count" -le 1 ]] || { echo "Duplicate draft attachment: $name" >&2; exit 1; }
+            (( count == 1 )) && present=$((present + 1))
+          done
+          if (( present == 0 )); then
+            echo REUSE_MACOS_CANDIDATE=false >> "$GITHUB_ENV"
+          elif (( present == ${#names[@]} )); then
+            mkdir -p build/reuse
+            gh release download "$RELEASE_TAG" --repo "$GH_REPO" \
+              --pattern gabbaboy-core-macos-arm64.tar.gz \
+              --pattern gabbaboy-core-macos-arm64.tar.gz.sha256 \
+              --pattern gabbaboy-build-receipt-macos-arm64.json \
+              --pattern gabbaboy-preview-macos-arm64.tar.gz \
+              --pattern gabbaboy-preview-macos-arm64-build-receipt.json --dir build/reuse
+            cp build/reuse/gabbaboy-core-macos-arm64.tar.gz build/
+            cp build/reuse/gabbaboy-core-macos-arm64.tar.gz.sha256 build/
+            cp build/reuse/gabbaboy-build-receipt-macos-arm64.json build/
+            cp build/reuse/gabbaboy-preview-macos-arm64.tar.gz build/
+            cp build/reuse/gabbaboy-preview-macos-arm64-build-receipt.json build/
+            echo REUSE_MACOS_CANDIDATE=true >> "$GITHUB_ENV"
+          else
+            echo "Draft contains a partial macOS candidate asset set; refusing to rebuild or replace bytes." >&2
+            exit 1
+          fi
+      - name: Build and package macOS arm64 core once
+        if: env.REUSE_MACOS_CANDIDATE != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/release-core -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DGABBABOY_BUILD_PLAYER=OFF
+          cmake --build build/release-core --parallel 2
+          cmake --install build/release-core --prefix build/release-stage
+          mkdir -p build/release-stage/share/gabbaboy
+          cp LICENSE build/release-stage/share/gabbaboy/LICENSE.txt
+          SOURCE_DATE_EPOCH=$(git show -s --format=%ct "$SOURCE_SHA")
+          export SOURCE_DATE_EPOCH
+          tar --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --numeric-owner -czf build/gabbaboy-core-macos-arm64.tar.gz -C build/release-stage include lib bin share
+          shasum -a 256 build/gabbaboy-core-macos-arm64.tar.gz | awk '{print $1}' > build/gabbaboy-core-macos-arm64.tar.gz.sha256
+          python3 - <<'PY'
+          import json, os, pathlib, platform, subprocess
+          cc = subprocess.run(["cc", "--version"], check=True, text=True, capture_output=True).stdout.splitlines()[0]
+          cmake = subprocess.run(["cmake", "--version"], check=True, text=True, capture_output=True).stdout.splitlines()[0]
+          pathlib.Path("build/gabbaboy-build-receipt-macos-arm64.json").write_text(json.dumps({
+              "schema_version": 1, "platform": "macos-arm64", "runner": "macos-14",
+              "os": platform.platform(), "architecture": platform.machine(), "compiler": cc,
+              "cmake": cmake, "configuration": "Release", "source_sha": os.environ["SOURCE_SHA"]
+          }, indent=2) + "\n")
+          PY
+      - name: Build pinned SDL player and verify extracted package
+        if: env.REUSE_MACOS_CANDIDATE != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tests/scripts/verify-phase3-player.sh --build-package
+          cp build/phase3-player/preview-candidate/gabbaboy-preview-macos-arm64.tar.gz build/
+          cp build/phase3-player/preview-candidate/build-receipt.json build/gabbaboy-preview-macos-arm64-build-receipt.json
+      - name: Attach macOS candidate bytes to the unpublished draft
+        if: env.REUSE_MACOS_CANDIDATE != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          current=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID")
+          [[ $(jq -r .draft <<<"$current") == true && $(jq -r .tag_name <<<"$current") == "$RELEASE_TAG" ]] || exit 1
+          for file in build/gabbaboy-core-macos-arm64.tar.gz build/gabbaboy-core-macos-arm64.tar.gz.sha256 build/gabbaboy-build-receipt-macos-arm64.json build/gabbaboy-preview-macos-arm64.tar.gz build/gabbaboy-preview-macos-arm64-build-receipt.json; do
+            name=$(basename "$file")
+            count=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100" | jq --arg name "$name" '[.[] | select(.name == $name)] | length')
+            [[ "$count" -le 1 ]] || { echo "Duplicate draft attachment: $name" >&2; exit 1; }
+            if [[ "$count" == 1 ]]; then
+              mkdir -p build/existing
+              gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern "$name" --dir build/existing
+              cmp -s "$file" "build/existing/$name" || { echo "Retry asset differs: $name" >&2; exit 1; }
+            else
+              gh release upload "$RELEASE_TAG" "$file" --repo "$GH_REPO"
+            fi
+          done
+      - name: Download and smoke the attached player archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          current=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID")
+          [[ $(jq -r .draft <<<"$current") == true && $(jq -r .tag_name <<<"$current") == "$RELEASE_TAG" ]] || exit 1
+          mkdir -p build/downloaded-player
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-preview-macos-arm64.tar.gz --pattern gabbaboy-preview-macos-arm64-build-receipt.json --dir build/downloaded-player
+          cp build/downloaded-player/gabbaboy-preview-macos-arm64-build-receipt.json build/downloaded-player/build-receipt.json
+          GBB_VERIFIED_OUTPUT_DIR=build/release-player-downloaded bash tests/scripts/verify-phase3-player.sh --verify-package build/downloaded-player
+          mkdir -p build/downloaded-core build/extracted-core build/consumer-work
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-macos-arm64.tar.gz --pattern gabbaboy-core-macos-arm64.tar.gz.sha256 --dir build/downloaded-core
+          expected=$(cut -d ' ' -f1 build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz.sha256)
+          actual=$(shasum -a 256 build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz | cut -d ' ' -f1)
+          [[ "$expected" == "$actual" ]] || { echo "Downloaded macOS core archive digest mismatch." >&2; exit 1; }
+          python3 tests/scripts/verify-release-candidate.sh --extract build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz build/extracted-core
+          prefix="$PWD/build/extracted-core"
+          cmake -DGBB_INSTALL_PREFIX="$prefix" -DGBB_EXECUTABLE_SUFFIX= -DGBB_RUNNER_WORKDIR="$PWD/build/consumer-work/runner" "-DGBB_FORBIDDEN_PATHS=$GITHUB_WORKSPACE;$GITHUB_WORKSPACE/build" -P cmake/VerifyInstalledPackage.cmake
+          for language in c cpp; do
+            cmake -S "tests/consumers/$language" -B "build/consumer-work/$language" -DCMAKE_PREFIX_PATH="$prefix" -DGBB_TRACER_ROM="$prefix/share/gabbaboy/fixtures/tracer/tracer.gb"
+            cmake --build "build/consumer-work/$language" --parallel 2
+            "build/consumer-work/$language/consumer-$language" "$prefix/share/gabbaboy/fixtures/tracer/tracer.gb"
+          done
+
+  candidate-windows:
+    name: downloaded-windows-x64-core-candidate
+    needs: [release, candidate-macos]
+    if: ${{ always() && needs.candidate-macos.result == 'success' && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true')) }}
+    runs-on: windows-2022
+    timeout-minutes: 35
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.retry && inputs.tag_name || needs.release.outputs.tag_name }}
+      SOURCE_SHA: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
+      RELEASE_ID: ${{ inputs.retry && inputs.release_id || '' }}
+    steps:
+      - name: Require trusted candidate identity and unpublished matching draft
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GH_REPO" == szTheory/gabbaboy && "$GITHUB_REF" == refs/heads/main ]] || exit 1
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          [[ "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" == "$SOURCE_SHA" ]] || exit 1
+          release_json=$(gh api "repos/$GH_REPO/releases?per_page=100")
+          [[ $(jq --arg tag "$RELEASE_TAG" '[.[] | select(.tag_name == $tag and .draft == true)] | length' <<<"$release_json") == 1 ]] || exit 1
+          actual_id=$(jq --arg tag "$RELEASE_TAG" -r '.[] | select(.tag_name == $tag) | .id' <<<"$release_json")
+          if [[ -n "$RELEASE_ID" ]]; then [[ "$actual_id" == "$RELEASE_ID" ]] || exit 1; fi
+          echo "RELEASE_ID=$actual_id" >> "$GITHUB_ENV"
+      - name: Check out exact trusted tag source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+      - name: Verify checked out source version
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_version=$(sed -nE 's/^project\(GabbaBoy VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt | head -n1)
+          [[ "$source_version" == "${RELEASE_TAG#v}" ]] || exit 1
+      - name: Select an existing Windows archive or a clean build
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
+          names=(gabbaboy-core-windows-x64.tar.gz gabbaboy-core-windows-x64.tar.gz.sha256 gabbaboy-build-receipt-windows-x64.json)
+          present=0
+          for name in "${names[@]}"; do
+            count=$(jq --arg name "$name" '[.[] | select(.name == $name)] | length' <<<"$assets")
+            [[ "$count" -le 1 ]] || { echo "Duplicate draft attachment: $name" >&2; exit 1; }
+            (( count == 1 )) && present=$((present + 1))
+          done
+          if (( present == 0 )); then
+            echo REUSE_WINDOWS_CANDIDATE=false >> "$GITHUB_ENV"
+          elif (( present == ${#names[@]} )); then
+            mkdir -p build/reuse
+            gh release download "$RELEASE_TAG" --repo "$GH_REPO" \
+              --pattern gabbaboy-core-windows-x64.tar.gz \
+              --pattern gabbaboy-core-windows-x64.tar.gz.sha256 \
+              --pattern gabbaboy-build-receipt-windows-x64.json --dir build/reuse
+            cp build/reuse/gabbaboy-core-windows-x64.tar.gz build/
+            cp build/reuse/gabbaboy-core-windows-x64.tar.gz.sha256 build/
+            cp build/reuse/gabbaboy-build-receipt-windows-x64.json build/
+            echo REUSE_WINDOWS_CANDIDATE=true >> "$GITHUB_ENV"
+          else
+            echo "Draft contains a partial Windows candidate asset set; refusing to rebuild or replace bytes." >&2
+            exit 1
+          fi
+      - name: Build and package Windows x64 core once
+        if: env.REUSE_WINDOWS_CANDIDATE != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/release-core -A x64 -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DGABBABOY_BUILD_PLAYER=OFF
+          cmake --build build/release-core --config Release --parallel 2
+          cmake --install build/release-core --config Release --prefix build/release-stage
+          mkdir -p build/release-stage/share/gabbaboy
+          cp LICENSE build/release-stage/share/gabbaboy/LICENSE.txt
+          tar -czf build/gabbaboy-core-windows-x64.tar.gz -C build/release-stage include lib bin share
+          sha256sum build/gabbaboy-core-windows-x64.tar.gz | awk '{print $1}' > build/gabbaboy-core-windows-x64.tar.gz.sha256
+          python3 - <<'PY'
+          import json, os, pathlib, platform, re, subprocess
+          cache = pathlib.Path("build/release-core/CMakeCache.txt").read_text()
+          match = re.search(r"^CMAKE_C_COMPILER_VERSION:INTERNAL=(.+)$", cache, re.M)
+          if not match: raise SystemExit("CMake did not record the selected MSVC compiler version")
+          cmake = subprocess.run(["cmake", "--version"], check=True, text=True, capture_output=True).stdout.splitlines()[0]
+          pathlib.Path("build/gabbaboy-build-receipt-windows-x64.json").write_text(json.dumps({
+              "schema_version": 1, "platform": "windows-x64", "runner": "windows-2022",
+              "os": platform.platform(), "architecture": platform.machine(),
+              "compiler": "MSVC " + match.group(1) + " via Visual Studio 17 2022 x64",
+              "cmake": cmake, "configuration": "Release", "source_sha": os.environ["SOURCE_SHA"]
+          }, indent=2) + "\n")
+          PY
+      - name: Attach Windows bytes to the unpublished draft
+        if: env.REUSE_WINDOWS_CANDIDATE != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          current=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID")
+          [[ $(jq -r .draft <<<"$current") == true && $(jq -r .tag_name <<<"$current") == "$RELEASE_TAG" ]] || exit 1
+          for file in build/gabbaboy-core-windows-x64.tar.gz build/gabbaboy-core-windows-x64.tar.gz.sha256 build/gabbaboy-build-receipt-windows-x64.json; do
+            name=$(basename "$file")
+            count=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100" | jq --arg name "$name" '[.[] | select(.name == $name)] | length')
+            [[ "$count" -le 1 ]] || { echo "Duplicate draft attachment: $name" >&2; exit 1; }
+            if [[ "$count" == 1 ]]; then
+              mkdir -p build/existing
+              gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern "$name" --dir build/existing
+              cmp -s "$file" "build/existing/$name" || { echo "Retry asset differs: $name" >&2; exit 1; }
+            else
+              gh release upload "$RELEASE_TAG" "$file" --repo "$GH_REPO"
+            fi
+          done
+      - name: Download and qualify Windows release archive using the existing native consumer lane
+        shell: bash
+        run: |
+          set -euo pipefail
+          current=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID")
+          [[ $(jq -r .draft <<<"$current") == true && $(jq -r .tag_name <<<"$current") == "$RELEASE_TAG" ]] || exit 1
+          mkdir -p build/downloaded build/extracted build/consumer-work
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-windows-x64.tar.gz --pattern gabbaboy-core-windows-x64.tar.gz.sha256 --dir build/downloaded
+          (cd build/downloaded && sha256sum --check gabbaboy-core-windows-x64.tar.gz.sha256)
+          python tests/scripts/verify-release-candidate.sh --extract build/downloaded/gabbaboy-core-windows-x64.tar.gz build/extracted
+          prefix="$PWD/build/extracted"
+          cmake -DGBB_INSTALL_PREFIX="$prefix" -DGBB_EXECUTABLE_SUFFIX=.exe -DGBB_CONFIGURATION=Release -DGBB_RUNNER_WORKDIR="$PWD/build/consumer-work/runner" "-DGBB_FORBIDDEN_PATHS=$GITHUB_WORKSPACE;$GITHUB_WORKSPACE/build" -P cmake/VerifyInstalledPackage.cmake
+          for language in c cpp; do
+            cmake -S "tests/consumers/$language" -B "build/consumer-work/$language" -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH="$prefix" -DGBB_TRACER_ROM="$prefix/share/gabbaboy/fixtures/tracer/tracer.gb"
+            cmake --build "build/consumer-work/$language" --config Release --parallel 2
+            "build/consumer-work/$language/Release/consumer-$language.exe" "$prefix/share/gabbaboy/fixtures/tracer/tracer.gb"
+          done
+          # This adds exact downloaded-byte verification while reusing the existing native consumer sources and toolchain.
+
+  candidate-platform-manifest:
+    name: fail-closed-platform-asset-manifest
+    needs: [release, candidate, candidate-macos, candidate-windows]
+    if: ${{ always() && needs.candidate.result == 'success' && needs.candidate-macos.result == 'success' && needs.candidate-windows.result == 'success' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.retry && inputs.tag_name || needs.release.outputs.tag_name }}
+      SOURCE_SHA: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
+      RELEASE_ID: ${{ inputs.retry && inputs.release_id || '' }}
+    steps:
+      - name: Check out exact tagged source for support and performance receipts
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+      - name: Generate or reuse exact-tag support and performance evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GH_REPO" == szTheory/gabbaboy && "$GITHUB_REF" == refs/heads/main ]] || exit 1
+          [[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" && "$(git rev-parse "$RELEASE_TAG^{commit}")" == "$SOURCE_SHA" ]] || exit 1
+          release_json=$(gh api "repos/$GH_REPO/releases?per_page=100")
+          [[ $(jq --arg tag "$RELEASE_TAG" '[.[] | select(.tag_name == $tag and .draft == true)] | length' <<<"$release_json") == 1 ]] || exit 1
+          release_id=$(jq --arg tag "$RELEASE_TAG" -r '.[] | select(.tag_name == $tag) | .id' <<<"$release_json")
+          if [[ -n "$RELEASE_ID" ]]; then [[ "$release_id" == "$RELEASE_ID" ]] || exit 1; fi
+          mkdir -p build/release-proof
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern source-receipt.json --dir build/release-proof
+          pr_head_sha=$(jq -r '.prior_pr_proof.head_sha' build/release-proof/source-receipt.json)
+          pr_merge_sha=$(jq -r '.prior_pr_proof.merge_commit_sha' build/release-proof/source-receipt.json)
+          [[ "$pr_head_sha" =~ ^[0-9a-f]{40}$ && "$pr_merge_sha" == "$SOURCE_SHA" ]] || {
+            echo "Source receipt does not bind an exact PR head to this release merge commit." >&2; exit 1;
+          }
+          mkdir -p build
+          python3 tests/scripts/verify-support-ledger.py --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --output build/support-ledger-v0.1.0.json
+          gh api "repos/$GH_REPO/commits/$pr_head_sha/check-runs?per_page=100" > build/all-head-check-runs.json
+          jq --arg expected_head "$pr_head_sha" \
+            '[.check_runs[] | select(.head_sha == $expected_head and .status == "completed" and .conclusion == "success") | {id, name, started_at, completed_at, conclusion, head_sha}]' \
+            build/all-head-check-runs.json > build/hosted-check-runs.json
+          assets=$(gh api "repos/$GH_REPO/releases/$release_id/assets?per_page=100")
+          for name in support-ledger-v0.1.0.json release-performance-receipt.json; do
+            # shellcheck disable=SC2016
+            count=$(jq --arg name "$name" '[.[] | select(.name == $name)] | length' <<<"$assets")
+            [[ "$count" -le 1 ]] || { echo "Duplicate release evidence asset: $name" >&2; exit 1; }
+          done
+          if [[ $(jq '[.[] | select(.name == "release-performance-receipt.json")] | length' <<<"$assets") == 1 ]]; then
+            mkdir -p build/existing
+            gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern release-performance-receipt.json --dir build/existing
+            RELEASE_CHECK_HEAD_SHA="$pr_head_sha" python3 - "$SOURCE_SHA" "$RELEASE_TAG" build/existing/release-performance-receipt.json <<'PY'
+          import json, pathlib, sys
+          import os
+          source, tag, path = sys.argv[1:]
+          data = json.loads(pathlib.Path(path).read_text())
+          if data.get("source_sha") != source or data.get("release_tag") != tag or data.get("trace_pair_digest_equal") is not True or data.get("hosted_check_head_sha") != os.environ["RELEASE_CHECK_HEAD_SHA"]:
+              raise SystemExit("Existing performance receipt is stale or invalid")
+          PY
+            cp build/existing/release-performance-receipt.json build/
+          else
+            SOURCE_SHA="$SOURCE_SHA" RELEASE_TAG="$RELEASE_TAG" EXPECTED_CHECK_HEAD_SHA="$pr_head_sha" HOSTED_CHECKS_JSON=build/hosted-check-runs.json \
+              bash tests/scripts/measure-release-baseline.sh --self-test
+          fi
+          python3 tests/scripts/verify-support-ledger.py --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" \
+            --verify-sidecar build/support-ledger-v0.1.0.json
+          RELEASE_CHECK_HEAD_SHA="$pr_head_sha" python3 - "$SOURCE_SHA" "$RELEASE_TAG" build/release-performance-receipt.json <<'PY'
+          import json, pathlib, sys
+          import os
+          source, tag, path = sys.argv[1:]
+          data = json.loads(pathlib.Path(path).read_text())
+          if data.get("source_sha") != source or data.get("release_tag") != tag or data.get("trace_pair_digest_equal") is not True or data.get("hosted_check_head_sha") != os.environ["RELEASE_CHECK_HEAD_SHA"] or not data.get("hosted_exact_source_check_durations"):
+              raise SystemExit("Performance receipt is missing exact source, tag, paired digest, or hosted CI duration evidence")
+          PY
+          for name in support-ledger-v0.1.0.json release-performance-receipt.json; do
+            # shellcheck disable=SC2016
+            count=$(gh api "repos/$GH_REPO/releases/$release_id/assets?per_page=100" | jq --arg name "$name" '[.[] | select(.name == $name)] | length')
+            if [[ "$count" == 1 ]]; then
+              mkdir -p build/existing
+              gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern "$name" --dir build/existing
+              cmp -s "build/$name" "build/existing/$name" || { echo "Existing release evidence differs: $name" >&2; exit 1; }
+            else
+              gh release upload "$RELEASE_TAG" "build/$name" --repo "$GH_REPO"
+            fi
+          done
+      - name: Validate the exact candidate asset set after platform smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GH_REPO" == szTheory/gabbaboy && "$GITHUB_REF" == refs/heads/main ]] || exit 1
+          release_json=$(gh api "repos/$GH_REPO/releases?per_page=100")
+          [[ $(jq --arg tag "$RELEASE_TAG" '[.[] | select(.tag_name == $tag and .draft == true)] | length' <<<"$release_json") == 1 ]] || exit 1
+          release_id=$(jq --arg tag "$RELEASE_TAG" -r '.[] | select(.tag_name == $tag) | .id' <<<"$release_json")
+          if [[ -n "$RELEASE_ID" ]]; then [[ "$release_id" == "$RELEASE_ID" ]] || exit 1; fi
+          [[ $(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha) == "$SOURCE_SHA" ]] || exit 1
+          assets=$(gh api "repos/$GH_REPO/releases/$release_id/assets?per_page=100")
+          python3 - "$assets" <<'PY'
+          import json, sys
+          rows = json.loads(sys.argv[1])
+          names = [row["name"] for row in rows]
+          expected = {
+              "candidate-receipt.json", "gabbaboy-core-linux-x64.tar.gz", "gabbaboy-notices.txt",
+              "source-receipt.json", "build-receipt.json", "gabbaboy-core-macos-arm64.tar.gz",
+              "gabbaboy-core-macos-arm64.tar.gz.sha256", "gabbaboy-build-receipt-macos-arm64.json",
+              "gabbaboy-preview-macos-arm64.tar.gz", "gabbaboy-preview-macos-arm64-build-receipt.json",
+              "gabbaboy-core-windows-x64.tar.gz", "gabbaboy-core-windows-x64.tar.gz.sha256",
+              "gabbaboy-build-receipt-windows-x64.json", "support-ledger-v0.1.0.json",
+              "release-performance-receipt.json",
+          }
+          if len(names) != len(set(names)):
+              raise SystemExit("release draft contains duplicate asset names")
+          actual = set(names)
+          if actual not in (expected, expected | {"candidate-platform-manifest.json"}):
+              raise SystemExit(f"candidate asset set mismatch; missing={sorted(expected-actual)} unknown={sorted(actual-expected)}")
+          PY
+          mkdir -p build/downloaded
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern 'gabbaboy-core-*' --pattern 'gabbaboy-preview-*' --pattern 'gabbaboy-build-receipt-*' --pattern candidate-receipt.json --pattern gabbaboy-notices.txt --pattern source-receipt.json --pattern build-receipt.json --pattern support-ledger-v0.1.0.json --pattern release-performance-receipt.json --dir build/downloaded
+          for platform in macos-arm64 windows-x64; do
+            (cd build/downloaded && sha256sum --check "gabbaboy-core-$platform.tar.gz.sha256")
+          done
+          python3 - "$SOURCE_SHA" <<'PY'
+          import hashlib, json, pathlib, sys
+          source_sha = sys.argv[1]
+          root = pathlib.Path("build/downloaded")
+          assets = []
+          for path in sorted(root.iterdir()):
+              if not path.is_file(): raise SystemExit(f"unexpected non-file release asset: {path.name}")
+              assets.append({"name": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+          required = {"candidate-receipt.json", "gabbaboy-core-linux-x64.tar.gz", "gabbaboy-notices.txt",
+                      "source-receipt.json", "build-receipt.json", "gabbaboy-core-macos-arm64.tar.gz",
+                      "gabbaboy-core-macos-arm64.tar.gz.sha256", "gabbaboy-build-receipt-macos-arm64.json",
+                      "gabbaboy-preview-macos-arm64.tar.gz", "gabbaboy-preview-macos-arm64-build-receipt.json",
+                      "gabbaboy-core-windows-x64.tar.gz", "gabbaboy-core-windows-x64.tar.gz.sha256",
+                      "gabbaboy-build-receipt-windows-x64.json", "support-ledger-v0.1.0.json",
+                      "release-performance-receipt.json"}
+          if {item["name"] for item in assets} != required:
+              raise SystemExit("downloaded release asset set differs from the qualified exact set")
+          for evidence_name in ("support-ledger-v0.1.0.json", "release-performance-receipt.json"):
+              if not any(item["name"] == evidence_name for item in assets):
+                  raise SystemExit(f"generated source evidence missing from manifest: {evidence_name}")
+          evidence = {}
+          for platform in ("macos-arm64", "windows-x64"):
+              receipt = json.loads((root / f"gabbaboy-build-receipt-{platform}.json").read_text())
+              if receipt.get("source_sha") != source_sha or receipt.get("platform") != platform:
+                  raise SystemExit(f"build receipt identity mismatch for {platform}")
+              evidence[platform] = receipt
+          linux = json.loads((root / "build-receipt.json").read_text())
+          if linux.get("source_sha") != source_sha or linux.get("asset_name") != "gabbaboy-core-linux-x64.tar.gz":
+              raise SystemExit("Linux build receipt identity mismatch")
+          evidence["linux-x64"] = linux.get("build")
+          preview = json.loads((root / "gabbaboy-preview-macos-arm64-build-receipt.json").read_text())
+          if preview.get("source_revision") != source_sha or preview.get("result") != "passed":
+              raise SystemExit("player build receipt identity or result mismatch")
+          data = {"schema_version": 1, "source_sha": source_sha, "assets": assets, "builds": evidence,
+                  "support_sidecar": "support-ledger-v0.1.0.json",
+                  "performance_receipt": "release-performance-receipt.json",
+                  "player_build_receipt": "gabbaboy-preview-macos-arm64-build-receipt.json",
+                  "downloaded_smoke": "Linux/macOS/Windows core consumers and macOS player passed",
+                  "hardware_qualified": False, "signed": False, "notarized": False}
+          pathlib.Path("build/candidate-platform-manifest.json").write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+          PY
+          current=$(gh api "repos/$GH_REPO/releases/$release_id")
+          [[ $(jq -r .draft <<<"$current") == true && $(jq -r .tag_name <<<"$current") == "$RELEASE_TAG" ]] || exit 1
+          count=$(gh api "repos/$GH_REPO/releases/$release_id/assets?per_page=100" --jq '[.[] | select(.name == "candidate-platform-manifest.json")] | length')
+          [[ "$count" -le 1 ]] || exit 1
+          if [[ "$count" == 1 ]]; then
+            mkdir -p build/existing
+            gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern candidate-platform-manifest.json --dir build/existing
+            cmp -s build/candidate-platform-manifest.json build/existing/candidate-platform-manifest.json || exit 1
+          else
+            gh release upload "$RELEASE_TAG" build/candidate-platform-manifest.json --repo "$GH_REPO"
+          fi
+
+  publish-qualified-release:
+    name: final-downloaded-byte-gate-and-publish
+    needs: [release, candidate, candidate-macos, candidate-windows, candidate-platform-manifest]
+    if: ${{ always() && needs.candidate.result == 'success' && needs.candidate-macos.result == 'success' && needs.candidate-windows.result == 'success' && needs.candidate-platform-manifest.result == 'success' && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true')) }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      checks: read
+      contents: write
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.retry && inputs.tag_name || needs.release.outputs.tag_name }}
+      SOURCE_SHA: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
+      INPUT_RELEASE_ID: ${{ inputs.retry && inputs.release_id || '' }}
+    steps:
+      - name: Require trusted source and all candidate jobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GH_REPO" == szTheory/gabbaboy && "$GITHUB_REF" == refs/heads/main ]] || exit 1
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          [[ "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" == "$SOURCE_SHA" ]] || {
+            echo "Release tag does not resolve to release-please's exact source SHA." >&2; exit 1;
+          }
+          version=${RELEASE_TAG#v}
+          source_version=$(gh api "repos/$GH_REPO/contents/CMakeLists.txt?ref=$SOURCE_SHA" --jq .content | base64 --decode | sed -nE 's/^project\(GabbaBoy VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -n1)
+          [[ "$source_version" == "$version" ]] || { echo "Release tag and exact tagged CMake version differ." >&2; exit 1; }
+          release_json=$(gh api "repos/$GH_REPO/releases?per_page=100")
+          [[ $(jq --arg tag "$RELEASE_TAG" '[.[] | select(.tag_name == $tag)] | length' <<<"$release_json") == 1 ]] || {
+            echo "Expected exactly one GitHub Release for the tag." >&2; exit 1;
+          }
+          release_id=$(jq --arg tag "$RELEASE_TAG" -r '.[] | select(.tag_name == $tag) | .id' <<<"$release_json")
+          [[ $(jq --arg tag "$RELEASE_TAG" -r '.[] | select(.tag_name == $tag) | .draft' <<<"$release_json") == true ]] || {
+            echo "The existing release is not an unpublished draft." >&2; exit 1;
+          }
+          [[ -z "$INPUT_RELEASE_ID" || "$INPUT_RELEASE_ID" == "$release_id" ]] || {
+            echo "Retry release ID differs from the existing draft." >&2; exit 1;
+          }
+          echo "RELEASE_ID=$release_id" >> "$GITHUB_ENV"
+      - name: Check out exact tagged source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+      - name: Revalidate merged PR and exact-head required contexts
+        run: bash .github/scripts/verify-release-gates.sh --check-merged-source "$SOURCE_SHA"
+      - name: Validate draft candidate and all downloaded platform bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash .github/scripts/verify-release-gates.sh --check-draft "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"
+          mkdir -p build/release-final
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --dir build/release-final
+          api_assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
+          printf '%s\n' "$api_assets" > build/release-final/api-assets.json
+          # shellcheck disable=SC2016
+          python3 - "$api_assets" build/release-final "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" <<'PY'
+          import hashlib, json, pathlib, sys
+          rows = json.loads(sys.argv[1])
+          root = pathlib.Path(sys.argv[2])
+          tag, source, release_id = sys.argv[3:]
+          names = [row["name"] for row in rows]
+          if len(names) != len(set(names)):
+              raise SystemExit("duplicate draft asset names")
+          files = sorted(p for p in root.iterdir() if p.is_file() and p.name != "api-assets.json")
+          if {p.name for p in files} != set(names):
+              raise SystemExit("downloaded files do not exactly match GitHub's draft asset inventory")
+          sums = "".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n" for p in files)
+          (root / "SHA256SUMS").write_text(sums)
+          manifest = json.loads((root / "candidate-platform-manifest.json").read_text())
+          proof = json.loads((root / "candidate-receipt.json").read_text()).get("prior_pr_proof", {})
+          release = {
+              "schema_version": 1,
+              "version": tag[1:],
+              "tag": tag,
+              "source_sha": source,
+              "release_id": release_id,
+              "draft": True,
+              "signed": False,
+              "notarized": False,
+              "hardware_qualified": False,
+              "sha256sums_sha256": hashlib.sha256((root / "SHA256SUMS").read_bytes()).hexdigest(),
+              "prior_pr_proof": proof,
+              "downloaded_smoke": "Linux, macOS, and Windows core consumers plus macOS player passed on exact draft bytes",
+              "assets": [{"name": row["name"], "id": row["id"], "sha256": hashlib.sha256((root / row["name"]).read_bytes()).hexdigest()}
+                         for row in rows],
+              "support_sidecar": "support-ledger-v0.1.0.json",
+              "support_sidecar_sha256": hashlib.sha256((root / "support-ledger-v0.1.0.json").read_bytes()).hexdigest(),
+              "candidate_manifest_sha256": hashlib.sha256((root / "candidate-platform-manifest.json").read_bytes()).hexdigest(),
+              "builds": manifest.get("builds", {}),
+              "limits": ["DMG-CPU-B deterministic software profile only", "no physical DMG observation", "no Developer ID signature or notarization"],
+          }
+          (root / "release-receipt.json").write_text(json.dumps(release, indent=2, sort_keys=True) + "\n")
+          PY
+          for name in SHA256SUMS release-receipt.json; do
+            # shellcheck disable=SC2016
+            count=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100" | jq --arg name "$name" '[.[] | select(.name == $name)] | length')
+            [[ "$count" -le 1 ]] || { echo "Duplicate final release metadata: $name" >&2; exit 1; }
+            if [[ "$count" == 1 ]]; then
+              mkdir -p build/release-final/existing
+              gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern "$name" --dir build/release-final/existing
+              cmp -s "build/release-final/$name" "build/release-final/existing/$name" || {
+                echo "Existing final release metadata differs; refusing replacement." >&2; exit 1;
+              }
+            else
+              gh release upload "$RELEASE_TAG" "build/release-final/$name" --repo "$GH_REPO"
+            fi
+          done
+      - name: Recheck final API inventory and downloaded receipts
+        run: bash .github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"
+      - name: Publish the one qualified draft
+        shell: bash
+        run: |
+          set -euo pipefail
+          before=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID")
+          [[ $(jq -r .draft <<<"$before") == true && $(jq -r .tag_name <<<"$before") == "$RELEASE_TAG" ]] || {
+            echo "Draft changed before the one-way publish transition." >&2; exit 1;
+          }
+          [[ "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" == "$SOURCE_SHA" ]] || exit 1
+          gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag
+          after=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID")
+          [[ $(jq -r .draft <<<"$after") == false && $(jq -r .tag_name <<<"$after") == "$RELEASE_TAG" ]] || {
+            echo "Published release readback did not preserve tag/draft transition." >&2; exit 1;
+          }
+          assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
+          python3 - "$assets" build/release-final/api-assets.json <<'PY'
+          import json, pathlib, sys
+          after, before = map(lambda value: json.loads(pathlib.Path(value).read_text()) if pathlib.Path(value).is_file() else json.loads(value), sys.argv[1:])
+          def inventory(rows): return sorted((r["id"], r["name"], r.get("digest")) for r in rows)
+          old = json.loads(pathlib.Path(sys.argv[2]).read_text())
+          if not set(inventory(old)).issubset(set(inventory(after))):
+              raise SystemExit("published release readback changed or removed a previously qualified asset")
+          if {r["name"] for r in after} != {r["name"] for r in old} | {"SHA256SUMS", "release-receipt.json"}:
+              raise SystemExit("published release readback has an unexpected asset inventory")
+          PY
+          echo "Published the exact qualified release $RELEASE_TAG ($SOURCE_SHA) with unsigned status recorded."

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(GabbaBoy VERSION 0.1.0 LANGUAGES C)
+project(GabbaBoy VERSION 0.1.0 LANGUAGES C) # x-release-please-version
 
 option(GABBABOY_ENABLE_SANITIZERS
   "Enable AddressSanitizer and UndefinedBehaviorSanitizer on Linux" OFF)
@@ -104,6 +104,11 @@ install(FILES
   fixtures/tracer/LICENSE.txt
   DESTINATION "${CMAKE_INSTALL_DATADIR}/gabbaboy/fixtures/tracer")
 install(FILES
+  fixtures/visible-demo/demo.gb
+  fixtures/visible-demo/manifest.json
+  fixtures/visible-demo/LICENSE.txt
+  DESTINATION "${CMAKE_INSTALL_DATADIR}/gabbaboy/fixtures/visible-demo")
+install(FILES
   fixtures/mbc1-continuation/continuation.asm
   fixtures/mbc1-continuation/continuation.gb
   fixtures/mbc1-continuation/manifest.json
@@ -119,5 +124,12 @@ install(FILES
   DESTINATION "${GABBABOY_CMAKE_INSTALL_DIR}")
 
 if(BUILD_TESTING)
+  add_executable(measure_core tests/measure_core.c)
+  target_link_libraries(measure_core PRIVATE GabbaBoy::core)
+  target_compile_features(measure_core PRIVATE c_std_17)
+  set_target_properties(measure_core PROPERTIES C_EXTENSIONS OFF)
+  if(WIN32)
+    target_link_libraries(measure_core PRIVATE Psapi)
+  endif()
   add_subdirectory(tests)
 endif()

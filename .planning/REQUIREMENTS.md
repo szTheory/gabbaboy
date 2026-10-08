@@ -58,7 +58,7 @@ Every requirement below must map to exactly one phase. Completion needs implemen
 - [ ] **SHIP-04**: An adopter can follow current build, API ownership/time/input/output, integration, save recovery, support, upgrade, and troubleshooting documentation, including a reproducible Playstead-oriented native consumer example and an honest live-integration status.
 - [ ] **SHIP-05**: The release support ledger names the DMG revision, boot profile, mapper scope, corpus revision, executed eligible denominator, failures/exclusions, and known issues; CPU/image pass rates are not presented as all-game compatibility.
 - [ ] **SHIP-06**: Reproducible fixed-workload runs establish initial speed, memory/allocation, trace overhead, build, and CI baselines with output digests, samples, environment, and uncertainty; performance budgets follow measured variance and never trade correctness for score.
-- [ ] **SHIP-07**: Meaningful loader/battery/API fuzz targets and boundary regressions run under applicable sanitizers with bounded resources; minimized findings join fast regression coverage while longer exploration runs separately.
+- [x] **SHIP-07**: Meaningful loader/battery/API fuzz targets and boundary regressions run under applicable sanitizers with bounded resources; minimized findings join fast regression coverage while longer exploration runs separately.
 - [ ] **SHIP-08**: Required PR checks, bot-triggered CI, merge eligibility, release triggering, cache behavior, and failure propagation are exercised on the target repository; no stale revision, skipped required lane, or untrusted privileged execution can authorize publication.
 
 ## Next milestone requirements — GB/GBC breadth
@@ -125,7 +125,7 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | SHIP-04 | Phase 6 | Pending |
 | SHIP-05 | Phase 6 | Pending |
 | SHIP-06 | Phase 6 | Pending |
-| SHIP-07 | Phase 6 | Pending |
+| SHIP-07 | Phase 6 | Complete |
 | SHIP-08 | Phase 6 | Pending |
 | CGB-01 | Next milestone | Deferred |
 | CGB-02 | Next milestone | Deferred |

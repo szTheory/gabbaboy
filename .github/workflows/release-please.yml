@@ -1,0 +1,43 @@
+name: release-please
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      retry:
+        description: Resume candidate smoke for an existing unpublished draft
+        required: true
+        type: boolean
+        default: false
+      tag_name:
+        description: Existing matching version tag (retry only)
+        required: false
+        type: string
+      source_sha:
+        description: Existing tag's full source SHA (retry only)
+        required: false
+        type: string
+      release_id:
+        description: Existing unpublished draft release ID (retry only)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: release-candidate
+    uses: ./.github/workflows/release.yml
+    with:
+      retry: ${{ inputs.retry || false }}
+      tag_name: ${{ inputs.tag_name || '' }}
+      source_sha: ${{ inputs.source_sha || '' }}
+      release_id: ${{ inputs.release_id || '' }}
+    permissions:
+      actions: read
+      checks: read
+      contents: write
+      issues: write
+      pull-requests: write

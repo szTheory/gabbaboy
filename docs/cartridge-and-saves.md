@@ -63,6 +63,12 @@ individual instance. Different instances share no mutable state.
 
 This API transfers raw RAM bytes in memory. It does not define an on-disk
 format and does not import arbitrary emulator `.sav` files.
+The host chooses and bounds the file, checks that its length exactly matches
+`gbb_battery_size`, and decides how to preserve and atomically replace prior
+data. The runnable installed C example in
+[native-integration.md](native-integration.md) demonstrates raw transfer and
+a temporary-file replacement; it is not the SDL player's checksummed envelope
+or a general-purpose save manager.
 
 ## Player save identity and version 1 format
 
