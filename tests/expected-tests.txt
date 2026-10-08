@@ -97,6 +97,7 @@ dma_partition
 dma_vram_lock
 dma_oam_lock
 dma_contention
+dma_ppu_overlap
 tracer_smoke
 fixture_digest
 visible_fixture_digest

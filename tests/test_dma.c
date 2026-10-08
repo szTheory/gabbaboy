@@ -13,7 +13,7 @@ static const char *active_case = "unknown";
 } } while (0)
 
 typedef struct {
-    uint8_t bytes[128];
+    uint8_t bytes[4096];
     size_t size;
 } small_program;
 
@@ -651,6 +651,71 @@ static int dma_contention(void) {
     return 0;
 }
 
+static gbb_instance *load_ppu_dma_overlap_guest(unsigned delay_nops) {
+    small_program p = {{0}, 0};
+    emit(&p, 0xAF); emit(&p, 0xE0); emit(&p, 0x40); /* LCD off */
+    emit(&p, 0x3E); emit(&p, 0xE4); emit(&p, 0xE0); emit(&p, 0x48); /* OBP0 */
+    emit(&p, 0xAF); emit(&p, 0xE0); emit(&p, 0x47); /* BGP maps background to 0 */
+    for (unsigned row = 0; row < 8; ++row) {
+        emit_memory_byte(&p, (uint16_t)(0x8000u + row * 2u), 0xFFu); /* OBJ 1 */
+        emit_memory_byte(&p, (uint16_t)(0x8001u + row * 2u), 0x00u);
+        emit_memory_byte(&p, (uint16_t)(0x8010u + row * 2u), 0x00u); /* OBJ 2 */
+        emit_memory_byte(&p, (uint16_t)(0x8011u + row * 2u), 0xFFu);
+    }
+    emit_source_record(&p, 0xFE00u, 16u);
+    emit_memory_byte(&p, 0xFE01u, 8u);
+    emit_memory_byte(&p, 0xFE02u, 0u);
+    emit_memory_byte(&p, 0xFE03u, 0u);
+    emit_source_record(&p, 0xFE04u, 17u);
+    emit_memory_byte(&p, 0xFE05u, 8u);
+    emit_memory_byte(&p, 0xFE06u, 0u);
+    emit_memory_byte(&p, 0xFE07u, 0u);
+    for (unsigned i = 0; i < 160u; ++i) {
+        /* DMA destination words are tile 1 / attributes 0. */
+        uint8_t byte = i == 0u ? 16u : i == 1u ? 8u : i < 4u ? 0u :
+                       ((i & 1u) == 0 ? 1u : 0u);
+        emit_memory_byte(&p, (uint16_t)(0xC000u + i), byte);
+    }
+    uint8_t routine[48];
+    size_t rn = 0;
+    routine[rn++] = 0x3E; routine[rn++] = 0x93; /* LCD + BG + OBJ */
+    routine[rn++] = 0xE0; routine[rn++] = 0x40;
+    for (unsigned i = 0; i < delay_nops; ++i) routine[rn++] = 0x00;
+    routine[rn++] = 0x3E; routine[rn++] = 0xC0;
+    routine[rn++] = 0xE0; routine[rn++] = 0x46;
+    routine[rn++] = 0x76; /* HALT in HRAM during DMA */
+    uint16_t routine_address = 0;
+    emit_copy_to_hram(&p, &routine_address, routine, rn);
+
+    uint8_t rom[32768] = {0};
+    rom[0x100] = 0xC3; rom[0x101] = 0x50; rom[0x102] = 0x01;
+    memcpy(rom + 0x150, p.bytes, p.size);
+    rom[0x134] = 0xE7;
+    uint8_t checksum = 0;
+    for (size_t i = 0x134; i <= 0x14C; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14D] = checksum;
+    gbb_instance *machine = NULL;
+    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &machine) != GBB_OK ||
+        gbb_load_rom(machine, rom, sizeof(rom)) != GBB_OK) {
+        gbb_destroy(machine);
+        return NULL;
+    }
+    (void)routine_address;
+    return machine;
+}
+
+static int dma_ppu_overlap(void) {
+    uint8_t pixels[PIXELS];
+    gbb_instance *machine = load_ppu_dma_overlap_guest(0u);
+    REQUIRE(machine != NULL);
+    REQUIRE(run_frame(machine, pixels) == 0);
+    REQUIRE(pixels[0] == 2u); /* scanned before DMA; fetch latches DMA word */
+    REQUIRE(pixels[WIDTH] == 0u); /* line-1 object was scanned during DMA */
+    gbb_destroy(machine);
+    return 0;
+}
+
 static void rom_emit8(uint8_t rom[32768], size_t *pc, uint8_t value) {
     if (*pc < 32768u) rom[(*pc)++] = value;
 }
@@ -766,6 +831,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "dma_interrupt_stack") == 0) return dma_interrupt_stack();
     if (strcmp(argv[1], "dma_partition") == 0) return dma_partition();
     if (strcmp(argv[1], "dma_contention") == 0) return dma_contention();
+    if (strcmp(argv[1], "dma_ppu_overlap") == 0) return dma_ppu_overlap();
     if (strcmp(argv[1], "dma_vram_lock") == 0) return dma_vram_lock();
     if (strcmp(argv[1], "dma_oam_lock") == 0) return dma_oam_lock();
     return 2;
