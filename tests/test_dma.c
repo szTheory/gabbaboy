@@ -797,6 +797,44 @@ static int dma_oam_entry39(void) {
     return 0;
 }
 
+static int dma_oam_entry39_reset(void) {
+    gbb_instance *machine = load_oam_entry39_guest();
+    REQUIRE(machine != NULL);
+    uint8_t pixels[PIXELS];
+    gbb_test_bus_event events[1200];
+    gbb_test_ppu_observer_set(machine, events, 1200u);
+    REQUIRE(run_frame(machine, pixels) == 0);
+    REQUIRE(pixels[0] == 1u);
+    size_t count = gbb_test_ppu_observer_count(machine);
+    int saw_entry39 = 0;
+    for (size_t i = 0; i < count; ++i)
+        if (events[i].access == 9u && events[i].address == 0xFE27u)
+            saw_entry39 = 1;
+    REQUIRE(saw_entry39); /* complete the first scan so the cursor reaches 40 */
+
+    REQUIRE(gbb_reset(machine) == GBB_OK);
+    gbb_test_ppu_observer_set(machine, events, 1200u);
+    gbb_run_result startup = gbb_run(machine, 32u, NULL, 0);
+    REQUIRE(startup.reason == GBB_STOP_BUDGET);
+    count = gbb_test_ppu_observer_count(machine);
+    int saw_first_post_reset_scan = 0;
+    for (size_t i = 0; i < count; ++i)
+        if (events[i].access == 9u && events[i].address == 0xFE00u)
+            saw_first_post_reset_scan = 1;
+    REQUIRE(saw_first_post_reset_scan); /* before the guest's LCD-off setup */
+
+    REQUIRE(run_frame(machine, pixels) == 0);
+    REQUIRE(pixels[0] == 1u);
+    count = gbb_test_ppu_observer_count(machine);
+    saw_entry39 = 0;
+    for (size_t i = 0; i < count; ++i)
+        if (events[i].access == 9u && events[i].address == 0xFE27u)
+            saw_entry39 = 1;
+    REQUIRE(saw_entry39);
+    gbb_destroy(machine);
+    return 0;
+}
+
 static int dma_ppu_overlap(void) {
     uint8_t pixels[PIXELS];
     gbb_instance *baseline = load_ppu_dma_overlap_guest(0u, 0, UINT32_MAX, 0, 8u, 0u);
@@ -1210,6 +1248,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "dma_contention") == 0) return dma_contention();
     if (strcmp(argv[1], "dma_ppu_overlap") == 0) return dma_ppu_overlap();
     if (strcmp(argv[1], "dma_oam_entry39") == 0) return dma_oam_entry39();
+    if (strcmp(argv[1], "dma_oam_entry39_reset") == 0) return dma_oam_entry39_reset();
     if (strcmp(argv[1], "dma_ppu_cpu_collision") == 0) return dma_ppu_cpu_collision();
     if (strcmp(argv[1], "dma_ppu_word_boundaries") == 0) return dma_ppu_word_boundaries();
     if (strcmp(argv[1], "dma_active_mode_matrix") == 0) return dma_active_mode_matrix();

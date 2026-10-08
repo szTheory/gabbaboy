@@ -291,6 +291,7 @@ static void reset_state(gbb_instance *m) {
     m->ppu_half_phase = 0;
     m->ppu_mode = 2;
     m->ppu_stat_line = 0;
+    m->ppu_scan_index = 0;
     memset(m->ppu_fifo, 0, sizeof(m->ppu_fifo));
     m->ppu_fifo_head = 0;
     m->ppu_fifo_count = 0;
