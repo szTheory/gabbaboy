@@ -11,6 +11,12 @@ add_test(NAME run_bounds COMMAND test_api run_bounds ${PROJECT_SOURCE_DIR}/fixtu
 add_test(NAME trace_capacity COMMAND test_api trace_capacity ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 add_test(NAME illegal_lockup_api COMMAND test_api illegal_lockup ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 
+add_executable(test_cartridge test_cartridge.c)
+target_link_libraries(test_cartridge PRIVATE GabbaBoy::core)
+target_compile_features(test_cartridge PRIVATE c_std_17)
+set_target_properties(test_cartridge PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cartridge_tracer COMMAND test_cartridge cartridge_tracer)
+
 add_executable(test_bus test_bus.c)
 target_link_libraries(test_bus PRIVATE GabbaBoy::core)
 target_compile_features(test_bus PRIVATE c_std_17)
