@@ -20,9 +20,10 @@ typedef enum {
     GBB_UNSUPPORTED_PROFILE,
     GBB_INVALID_ROM,          /* malformed header or header checksum */
     GBB_ROM_TRUNCATED,        /* image ends before header or declared ROM size */
-    GBB_ROM_TOO_LARGE,        /* actual image exceeds the 8 MiB hard limit */
+    GBB_ROM_TOO_LARGE,        /* actual image exceeds the 2 MiB hard limit */
     GBB_ROM_SIZE_MISMATCH,    /* actual image is longer than its declared ROM size */
     GBB_UNSUPPORTED_CARTRIDGE,/* cartridge type is outside the supported matrix */
+    GBB_UNSUPPORTED_CARTRIDGE_VARIANT, /* recognized MBC1M wiring is unsupported */
     GBB_UNSUPPORTED_ROM_SIZE, /* header declares an unsupported ROM size code */
     GBB_UNSUPPORTED_RAM_SIZE, /* cartridge header declares external RAM */
     GBB_NO_BATTERY,           /* loaded cartridge has no battery-backed RAM */
@@ -124,10 +125,13 @@ void gbb_destroy(gbb_instance *instance);
 gbb_error gbb_reset(gbb_instance *instance);
 /* ROM bytes are copied on success; caller storage may be released immediately.
  * A failed replacement leaves the current ROM and machine state unchanged.
- * Supports exact-size 32 KiB ROM-only images and the Phase 4 32 KiB MBC1
- * battery type ($03) with 8 KiB RAM. Battery RAM starts at $FF for a newly
- * loaded image; this is a deterministic software policy, not a hardware
- * power-on claim. */
+ * Supports 32 KiB ROM-only images and standard MBC1 types $01-$03, ROM-size
+ * codes $00-$06, and the documented no-RAM/8-KiB/32-KiB header matrix. 32-KiB
+ * RAM is accepted only through 512 KiB ROM; larger MBC1 images may declare
+ * only 8-KiB RAM. The conservative, recognized MBC1M logo/header candidate
+ * returns GBB_UNSUPPORTED_CARTRIDGE_VARIANT; this does not identify every
+ * special-wiring image. New cartridge RAM starts at $FF as deterministic
+ * software policy, not a hardware power-on claim. */
 gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_size);
 /* Battery RAM is available only for supported battery-backed cartridges.
  * Query the exact size, then copy/import through caller-owned buffers. No core

@@ -2,6 +2,8 @@ instance_lifecycle
 independent_instances
 cartridge_tracer
 cartridge_bank_matrix
+cartridge_ram_banks
+cartridge_no_ram_reads
 run_bounds
 trace_capacity
 illegal_lockup_api
@@ -65,6 +67,8 @@ loader_length_mismatch
 loader_excess_actual
 loader_null_arguments
 loader_non_destructive
+loader_mbc1_matrix
+loader_mbc1m_variant
 tracer_success
 tracer_failure
 tracer_unsupported

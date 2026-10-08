@@ -33,6 +33,8 @@ static const char *rom_error(gbb_error error) {
         return "The selected ROM length does not match its declared size.";
     case GBB_UNSUPPORTED_CARTRIDGE:
         return "This cartridge type is not supported by the current preview.";
+    case GBB_UNSUPPORTED_CARTRIDGE_VARIANT:
+        return "This MBC1 multicart wiring is not supported by the current preview.";
     case GBB_UNSUPPORTED_ROM_SIZE:
         return "This cartridge ROM size is not supported by the current preview.";
     case GBB_UNSUPPORTED_RAM_SIZE:

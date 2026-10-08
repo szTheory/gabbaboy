@@ -5,7 +5,7 @@
 
 int main(void) {
     static const char expected[] =
-        "Audio is not implemented. Battery saves support only the current MBC1 type $03 8 KiB RAM profile.";
+        "Audio is not implemented. Battery saves support standard MBC1 type $03 with 8 or 32 KiB RAM.";
 
     if (strcmp(GBB_PLAYER_LIMITATIONS_TEXT, expected) != 0) {
         fprintf(stderr, "player limitation text differs from the supported preview claim\n");
