@@ -8,16 +8,21 @@
 | Read branch protection and ruleset requirements | INTEGRATE | Release eligibility must use live required contexts, not a stale planning snapshot. |
 | Read pull requests, changed files, head SHA, base SHA, and merge eligibility | INTEGRATE | Validate the release-please PR and its exact candidate revision. |
 | Create/update the version pull request through release-please | INTEGRATE | Required version and tag workflow. |
+| Merge the reviewed version PR when protected checks pass | INTEGRATE | The final gated merge creates the release source revision; branch protection remains authoritative. |
 | Read required check contexts and check-run conclusions for the exact PR head | INTEGRATE | Missing, stale, skipped, cancelled, timed-out, or failed evidence must block promotion. |
 | Read workflow-run status and relevant Actions evidence | INTEGRATE | Diagnose whether required exact-head evidence completed successfully. |
-| Create a draft GitHub Release for the trusted version tag | INTEGRATE | Hold the candidate while exact bytes and metadata are qualified. |
+| Read and verify the version tag and target commit SHA | INTEGRATE | Bind the trusted version tag to the final merged source revision. |
+| Create one unpublished draft and force its matching tag | INTEGRATE | Keep release assets private while making the exact tag available for candidate builds. |
+| Read draft release identity and unpublished status | INTEGRATE | Reuse the same draft and block work if it is missing, duplicated, or published early. |
+| Route candidate jobs from release-please action outputs | INTEGRATE | Use release_created, tag_name, and sha in the same workflow despite suppressed tag events. |
+| Resume candidate work against the existing qualified draft | INTEGRATE | Retry only after rechecking draft/tag/SHA and saved exact-head PR evidence. |
 | Upload and enumerate release assets and read their metadata/digests | INTEGRATE | Bind the draft to the tested asset bytes and sidecars. |
 | Download release assets for relocated package/player smoke | INTEGRATE | Smoke the bytes that will be published rather than rebuilding after qualification. |
 | Publish the qualified draft and read back the final release/assets | INTEGRATE | Confirm durable publication preserves the approved bytes and evidence. |
 | Generate and verify artifact attestations when enabled | INTEGRATE | Use provenance where available and verifiable; report capability/access failures without claiming an attestation. |
 | Read open issues and pull requests for the phase-boundary triage | INTEGRATE | Record relevant release/adopter reports and access limitations at the handoff. |
 | Create or edit issues, labels, discussions, comments, or project-board items | OPT-OUT | Phase 6 only inspects open issue/PR state; it does not authorize or require external user communication or project-board changes. |
-| Merge pull requests, bypass protection, or modify branch rulesets | OPT-OUT | Release automation must prove eligibility and preserve existing owner/repository protection; it does not administer or bypass repository policy. |
+| Bypass protection or modify branch rulesets | OPT-OUT | Release automation must prove eligibility and preserve existing repository policy. |
 | Dispatch arbitrary workflows or use manual dispatch as release evidence | OPT-OUT | Manual dispatch cannot replace required checks on the exact version-PR head or trusted tag path. |
 | Delete releases/assets or mutate a published release | OPT-OUT | Published release identity and bytes are a durable contract; repair requires a separately reviewed repository policy. |
 | Provision App credentials or change Actions approval settings | OPT-OUT | Credential provisioning and approval policy are owner-operated; the plan records the operational gate and uses least privilege when provisioned. |
