@@ -82,6 +82,7 @@ package = config.get("packages", {}).get(".", {})
 version = re.search(r"^project\(GabbaBoy VERSION ([0-9]+\.[0-9]+\.[0-9]+)", (root / "CMakeLists.txt").read_text(), re.M)
 workflow = (root / ".github/workflows/release.yml").read_text()
 entrypoint = (root / ".github/workflows/release-please.yml").read_text()
+player_verifier = (root / "tests/scripts/verify-phase3-player.sh").read_text()
 if not version or manifest.get(".") != version.group(1):
     raise SystemExit("release manifest and CMake PROJECT_VERSION do not match")
 if package.get("draft") is not True or package.get("force-tag-creation") is not True or package.get("include-component-in-tag") is not False or package.get("include-v-in-tag") is not True:
@@ -91,6 +92,19 @@ if not re.search(r"googleapis/release-please-action@[0-9a-f]{40}", workflow):
 for required in ("outputs.release_created == 'true'", "api_commit", "draft", "commits/$SOURCE_SHA/pulls", "gh pr checks", "RETRY"):
     if required not in workflow:
         raise SystemExit(f"release route is missing fail-closed contract: {required}")
+for required in (
+    "runs-on: macos-14", "runs-on: windows-2022",
+    "gabbaboy-core-macos-arm64.tar.gz", "gabbaboy-core-windows-x64.tar.gz",
+    "gabbaboy-preview-macos-arm64.tar.gz", "candidate-platform-manifest.json",
+    "--verify-package", "Visual Studio 17 2022", "--check",
+):
+    if required not in workflow:
+        raise SystemExit(f"release route is missing downloaded platform qualification: {required}")
+if "needs: [release, candidate-macos]" not in workflow:
+    raise SystemExit("Windows downloaded-archive verification must run after the existing native Linux and macOS lanes")
+for required in ("SDL_AUDIO_DRIVER=dummy", "SDL_VIDEO_DRIVER=dummy", "--smoke-package", "packaged MBC1 continuation fixture resumed in a fresh process"):
+    if required not in player_verifier:
+        raise SystemExit(f"downloaded player verification is missing scripted lifecycle evidence: {required}")
 if "pull_request_target:" in workflow or "release: {" in workflow or "gh release edit" in workflow:
     raise SystemExit("candidate workflow contains a privileged PR route or an early publication path")
 if "workflow_call:" not in workflow or "uses: ./.github/workflows/release.yml" not in entrypoint:
