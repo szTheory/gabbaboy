@@ -97,6 +97,8 @@ for required in (
     "gabbaboy-core-macos-arm64.tar.gz", "gabbaboy-core-windows-x64.tar.gz",
     "gabbaboy-preview-macos-arm64.tar.gz", "candidate-platform-manifest.json",
     "--verify-package", "Visual Studio 17 2022", "--check",
+    "REUSE_MACOS_CANDIDATE", "REUSE_WINDOWS_CANDIDATE",
+    "refusing to rebuild or replace bytes",
 ):
     if required not in workflow:
         raise SystemExit(f"release route is missing downloaded platform qualification: {required}")

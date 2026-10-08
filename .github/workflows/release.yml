@@ -501,7 +501,40 @@ jobs:
         with:
           ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 0
+      - name: Select a complete existing macOS candidate or a clean build
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
+          names=(gabbaboy-core-macos-arm64.tar.gz gabbaboy-core-macos-arm64.tar.gz.sha256 gabbaboy-build-receipt-macos-arm64.json gabbaboy-preview-macos-arm64.tar.gz gabbaboy-preview-macos-arm64-build-receipt.json)
+          present=0
+          for name in "${names[@]}"; do
+            count=$(jq --arg name "$name" '[.[] | select(.name == $name)] | length' <<<"$assets")
+            [[ "$count" -le 1 ]] || { echo "Duplicate draft attachment: $name" >&2; exit 1; }
+            (( count == 1 )) && present=$((present + 1))
+          done
+          if (( present == 0 )); then
+            echo REUSE_MACOS_CANDIDATE=false >> "$GITHUB_ENV"
+          elif (( present == ${#names[@]} )); then
+            mkdir -p build/reuse
+            gh release download "$RELEASE_TAG" --repo "$GH_REPO" \
+              --pattern gabbaboy-core-macos-arm64.tar.gz \
+              --pattern gabbaboy-core-macos-arm64.tar.gz.sha256 \
+              --pattern gabbaboy-build-receipt-macos-arm64.json \
+              --pattern gabbaboy-preview-macos-arm64.tar.gz \
+              --pattern gabbaboy-preview-macos-arm64-build-receipt.json --dir build/reuse
+            cp build/reuse/gabbaboy-core-macos-arm64.tar.gz build/
+            cp build/reuse/gabbaboy-core-macos-arm64.tar.gz.sha256 build/
+            cp build/reuse/gabbaboy-build-receipt-macos-arm64.json build/
+            cp build/reuse/gabbaboy-preview-macos-arm64.tar.gz build/
+            cp build/reuse/gabbaboy-preview-macos-arm64-build-receipt.json build/
+            echo REUSE_MACOS_CANDIDATE=true >> "$GITHUB_ENV"
+          else
+            echo "Draft contains a partial macOS candidate asset set; refusing to rebuild or replace bytes." >&2
+            exit 1
+          fi
       - name: Build and package macOS arm64 core once
+        if: env.REUSE_MACOS_CANDIDATE != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -525,6 +558,7 @@ jobs:
           }, indent=2) + "\n")
           PY
       - name: Build pinned SDL player and verify extracted package
+        if: env.REUSE_MACOS_CANDIDATE != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -532,6 +566,7 @@ jobs:
           cp build/phase3-player/preview-candidate/gabbaboy-preview-macos-arm64.tar.gz build/
           cp build/phase3-player/preview-candidate/build-receipt.json build/gabbaboy-preview-macos-arm64-build-receipt.json
       - name: Attach macOS candidate bytes to the unpublished draft
+        if: env.REUSE_MACOS_CANDIDATE != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -606,7 +641,36 @@ jobs:
         with:
           ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 0
+      - name: Select an existing Windows archive or a clean build
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
+          names=(gabbaboy-core-windows-x64.tar.gz gabbaboy-core-windows-x64.tar.gz.sha256 gabbaboy-build-receipt-windows-x64.json)
+          present=0
+          for name in "${names[@]}"; do
+            count=$(jq --arg name "$name" '[.[] | select(.name == $name)] | length' <<<"$assets")
+            [[ "$count" -le 1 ]] || { echo "Duplicate draft attachment: $name" >&2; exit 1; }
+            (( count == 1 )) && present=$((present + 1))
+          done
+          if (( present == 0 )); then
+            echo REUSE_WINDOWS_CANDIDATE=false >> "$GITHUB_ENV"
+          elif (( present == ${#names[@]} )); then
+            mkdir -p build/reuse
+            gh release download "$RELEASE_TAG" --repo "$GH_REPO" \
+              --pattern gabbaboy-core-windows-x64.tar.gz \
+              --pattern gabbaboy-core-windows-x64.tar.gz.sha256 \
+              --pattern gabbaboy-build-receipt-windows-x64.json --dir build/reuse
+            cp build/reuse/gabbaboy-core-windows-x64.tar.gz build/
+            cp build/reuse/gabbaboy-core-windows-x64.tar.gz.sha256 build/
+            cp build/reuse/gabbaboy-build-receipt-windows-x64.json build/
+            echo REUSE_WINDOWS_CANDIDATE=true >> "$GITHUB_ENV"
+          else
+            echo "Draft contains a partial Windows candidate asset set; refusing to rebuild or replace bytes." >&2
+            exit 1
+          fi
       - name: Build and package Windows x64 core once
+        if: env.REUSE_WINDOWS_CANDIDATE != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -631,6 +695,7 @@ jobs:
           }, indent=2) + "\n")
           PY
       - name: Attach Windows bytes to the unpublished draft
+        if: env.REUSE_WINDOWS_CANDIDATE != 'true'
         shell: bash
         run: |
           set -euo pipefail
