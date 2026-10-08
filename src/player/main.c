@@ -45,9 +45,15 @@ typedef enum {
 } player_transition;
 
 typedef struct {
+    SDL_JoystickID id;
+    SDL_Gamepad *handle;
+} player_gamepad;
+
+typedef struct {
     gbb_instance *machine;
     player_audio *audio;
     player_input_state input;
+    player_gamepad gamepads[PLAYER_INPUT_GAMEPAD_CAPACITY];
     SDL_Window *window;
     SDL_Surface *surface;
     SDL_Renderer *renderer;
@@ -960,6 +966,45 @@ static void handle_key(player *app, const SDL_KeyboardEvent *key, bool pressed) 
     }
 }
 
+static player_gamepad *find_player_gamepad(player *app, SDL_JoystickID id) {
+    for (unsigned i = 0; i < PLAYER_INPUT_GAMEPAD_CAPACITY; ++i)
+        if (app->gamepads[i].handle != NULL && app->gamepads[i].id == id)
+            return &app->gamepads[i];
+    return NULL;
+}
+
+static void handle_gamepad_added(player *app, SDL_JoystickID id) {
+    if (id == 0 || find_player_gamepad(app, id) != NULL) return;
+    player_gamepad *slot = NULL;
+    for (unsigned i = 0; i < PLAYER_INPUT_GAMEPAD_CAPACITY; ++i) {
+        if (app->gamepads[i].handle == NULL) {
+            slot = &app->gamepads[i];
+            break;
+        }
+    }
+    if (slot == NULL) return;
+    SDL_Gamepad *handle = SDL_OpenGamepad(id);
+    if (handle == NULL) return;
+    if (!player_input_gamepad_added(&app->input, id)) {
+        SDL_CloseGamepad(handle);
+        return;
+    }
+    *slot = (player_gamepad){id, handle};
+}
+
+static void handle_gamepad_removed(player *app, SDL_JoystickID id,
+                                   uint64_t timestamp_ns) {
+    const gbb_error result = player_input_gamepad_removed(
+        &app->input, app->machine, timestamp_ns, id);
+    player_gamepad *gamepad = find_player_gamepad(app, id);
+    if (gamepad != NULL) {
+        SDL_CloseGamepad(gamepad->handle);
+        *gamepad = (player_gamepad){0};
+    }
+    if (result != GBB_OK)
+        set_status(app, "Controller removed; its button release is pending");
+}
+
 static bool handle_event(player *app, const SDL_Event *event) {
     if (event->type == app->dialog_event_type) {
         player_dialog_result *result = event->user.data1;
@@ -980,6 +1025,26 @@ static bool handle_event(player *app, const SDL_Event *event) {
     }
     if (event->type == SDL_EVENT_KEY_DOWN || event->type == SDL_EVENT_KEY_UP)
         handle_key(app, &event->key, event->type == SDL_EVENT_KEY_DOWN);
+    if (event->type == SDL_EVENT_GAMEPAD_ADDED)
+        handle_gamepad_added(app, event->gdevice.which);
+    if (event->type == SDL_EVENT_GAMEPAD_REMOVED)
+        handle_gamepad_removed(app, event->gdevice.which,
+                               event->gdevice.timestamp);
+    if (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ||
+        event->type == SDL_EVENT_GAMEPAD_BUTTON_UP) {
+        const gbb_error result = player_input_gamepad_button(
+            &app->input, app->machine, event->gbutton.timestamp,
+            event->gbutton.which, (SDL_GamepadButton)event->gbutton.button,
+            event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN);
+        if (result != GBB_OK) {
+            const gbb_error released = player_input_focus_lost(
+                &app->input, app->machine, event->gbutton.timestamp);
+            app->user_paused = true;
+            set_status(app, released == GBB_OK
+                ? "Controller input paused after a guest queue error"
+                : "Controller input paused; held-button release remains pending");
+        }
+    }
     if (event->type == SDL_EVENT_WINDOW_FOCUS_LOST) {
         app->window_focused = false;
         const gbb_error result = player_input_focus_lost(&app->input, app->machine,
@@ -1586,6 +1651,11 @@ static bool run_smoke(player *app, const char *demo_rom_path,
 }
 
 static void destroy_player(player *app) {
+    for (unsigned i = 0; i < PLAYER_INPUT_GAMEPAD_CAPACITY; ++i) {
+        if (app->gamepads[i].handle != NULL)
+            SDL_CloseGamepad(app->gamepads[i].handle);
+        app->gamepads[i] = (player_gamepad){0};
+    }
     if (app->machine != NULL && app->save_identity.battery_backed &&
         !app->skip_final_save) {
         if (!attempt_battery_save(app, false)) {
@@ -1644,7 +1714,7 @@ int main(int argc, char **argv) {
     atomic_init(&app.dialog_delivery_failed, false);
     if (!SDL_Init((smoke || package_smoke || battery_smoke)
                       ? SDL_INIT_EVENTS | SDL_INIT_AUDIO
-                      : SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
+                      : SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
     }
@@ -1735,6 +1805,15 @@ int main(int argc, char **argv) {
                 if (!advance_to(&app, target_half_dots, false)) {
                     passed = false;
                     break;
+                }
+                if (app.input.release_pending_buttons != 0u) {
+                    const gbb_error retried = player_input_retry_focus_releases(
+                        &app.input, app.machine, SDL_GetTicksNS());
+                    if (retried != GBB_OK && retried != GBB_EVENT_QUEUE_FULL) {
+                        player_input_pause(&app.input);
+                        app.user_paused = true;
+                        set_status(&app, "Input paused while a release could not be queued");
+                    }
                 }
             }
             update_battery_save(&app);
