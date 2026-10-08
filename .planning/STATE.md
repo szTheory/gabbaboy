@@ -1,19 +1,20 @@
 ---
 gsd_state_version: "1.0"
 milestone: v0.1
-current_phase: 03
-current_phase_name: Visible Interactive DMG
-status: executing
-stopped_at: Phase 3 gap execution Plan 03-13 complete; fresh goal-backward audit 4/5, VIDEO-04 live-window check remains open
-last_updated: "2026-10-08T00:38:55Z"
+current_phase: 4
+current_phase_name: MBC1 and Safe Battery Continuation
+status: planning
+stopped_at: Phase 3 complete, ready to plan Phase 4
+last_updated: "2026-10-08T00:57:05.730Z"
 last_activity: 2026-10-08
-last_activity_desc: Completed Plan 03-13 gap execution and review fixes; phase1 suite passed 141/141; fresh audit verified 4/5 truths with VIDEO-04 human check remaining
-state_head: 427313a613f38676358638557676b9f72a188bd2
+last_activity_desc: Phase 3 complete, transitioned to Phase 4
+state_head: 4e0a226ca03f2e799011d5aac271836f009afa83
 progress:
   total_phases: 6
-  completed_phases: 2
-  total_plans: 34
-  completed_plans: 34
+  completed_phases: 3
+  total_plans: 35
+  completed_plans: 35
+  percent: 50
 milestone_name: limited DMG preview
 ---
 
@@ -21,24 +22,24 @@ milestone_name: limited DMG preview
 
 ## Project Reference
 
-See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
+See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase GB-03 — Visible Interactive DMG
+**Current focus:** Phase GB-04 — MBC1 and Safe Battery Continuation
 
 ## Current Position
 
-Phase: GB-03 (Visible Interactive DMG) — EXECUTING
-Plan: 13 of 13; Plan 03-13 gap execution, review fixes, and fresh Phase 3 audit recorded; VIDEO-04 visible-window/key check remains
-Status: Executing Phase GB-03
-Last activity: 2026-10-08 — Plan GB-03-13 completed JOYP/DMA/PPU guest matrices and review fixes; full core suite passed 141/141; fresh audit verified 4/5 truths
+Phase: 4 — MBC1 and Safe Battery Continuation
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-10-07 — Phase 3 verification and UAT passed; Phase 3 marked complete
 
-Progress: [███░░░░░░░] 33% of milestone phases complete; Phases 1 and 2 passed verification. Phase 3 has 13/13 plan summaries and a fresh 4/5 goal audit; only the live VIDEO-04 display check remains.
+Progress: [█████░░░░░] 50% of milestone phases complete; Phases 1–3 passed verification. Phase 3 has 13/13 plan summaries, 5/5 goal truths, and 33/33 UAT checks. Phase 4 is ready to discuss and has not started.
 
 ## Performance Metrics
 
 - Unique plans: 28; average duration / total execution time: 25 min / 700 min. Phase 2 completion is based on goal verification, not task count alone.
-- Per-phase metrics / recent trend: Phases 1 and 2 are verified complete; all thirteen Phase 3 plans have summaries. Fresh audit is `human_needed` at 4/5 truths: VIDEO-02/03 pass under D-025 software-model evidence policy; VIDEO-04 still needs a visible macOS window/key check. Fresh `phase1` CTest passed 141/141; no current-head hosted-CI or physical CPU-B claim is made. Plan 02-15 is superseded/non-runnable and remains historical.
+- Per-phase metrics / recent trend: Phases 1–3 are verified complete; Phase 3 has 13/13 plan summaries, 5/5 goal truths, 33/33 UAT checks, a user-confirmed packaged Z press/release, and 141/141 local CTest. PR #4's required exact-head checks passed before merge. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B measurement is claimed. Plan 02-15 is superseded/non-runnable and remains historical.
 - Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. At implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`, the local offline inventory passed 104/104 with no skips, the relocated installed C/C++ inventory passed 109/109, the runner passed its fixed one-CPU/two-timer derived corpus, hosted CI run 37620710587 passed, and fixture reproduction run 37620710600 passed. Independent verification passed all five CPU requirements. Original upstream PPU-dependent reporting paths remain excluded; no physical DMG hardware test occurred.
 
 **Per-Plan Metrics:**
@@ -122,6 +123,9 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-03]: FF00 active-low row polling consumes timestamped button events; JOYP interrupt behavior remains gated by D-08. The optional SDL3 player bounds and transactionally replaces ROMs, keeps mutations on the event loop, and uses pixel-aligned integer scaling. The public frame API checks output extents/overlap before writes, and queue capacity precedes entry validation; relocated consumers test both APIs. RGBDS 1.0.1 fixture reproduction now binds assembly source, exact ROM bytes, and pinned archive digests locally and in hosted CI; this is not gameplay or hardware evidence. SDL3 3.4.18 and host timing remain isolated to the adapter.
 - [Phase GB-03]: Player help and downloaded-package metadata now assert the preview's audio and battery-persistence limitations; those checks do not establish emulator feature behavior or hardware qualification.
 - [Phase GB-03]: Pinned Mooneye cases support the fresh DMA access window, active FF46 restart, and register readback; a focused owned guest suite covers those cases. The upstream README lists a DMG-CPU-B in its hardware fleet but publishes no per-test/per-unit raw log. This evidence does not cover simultaneous PPU/DMA arbitration or JOYP interrupt timing.
+- [Phase GB-03]: D-025 adopts a deterministic, confidence-qualified source-backed software model for documented but revision-sensitive JOYP and DMA/PPU behavior; exact CPU-B phases and revision parity remain unmeasured.
+- [Phase GB-03]: The optional SDL3 macOS preview displayed the owned demo; the user confirmed holding Z darkens a tile and release restores it. Audio and battery persistence remain clearly identified as unimplemented.
+- [Phase GB-03]: Final verification passed 5/5 truths and UAT 33/33; PR #4 passed required exact-head checks and merged as `2b49dc5`.
 
 ### Pending Todos
 
@@ -132,7 +136,7 @@ None outside the roadmap.
 - Phase 2 has no open verification or security blocker. All five requirements are complete at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`; see [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), [validation](phases/GB-02-dmg-cpu-bus-and-time/02-VALIDATION.md), and [security](phases/GB-02-dmg-cpu-bus-and-time/02-SECURITY.md).
 - The admitted corpus is three derived headless reporting closures (one CPU, two timer). Original Mooneye reporting paths depend on PPU/LY behavior outside scope and remain excluded. No physical DMG-CPU-B observation occurred; no hardware qualification is claimed.
 - Phase 1 PR #1 and Phase 2 PR #2 were merged on 2026-10-07 after their required exact-head checks passed. Current GitHub triage found no open PRs or issues. Phase 2 verification is limited to its documented DMG-CPU-B CPU/timer scope; no physical DMG observation or PPU qualification is claimed.
-- Phase 3 has summaries for all 13 plans. Fresh verification records `human_needed`, 4/5 roadmap truths: VIDEO-01/02/03/05 pass under declared software/source evidence classes; VIDEO-04 needs the packaged player opened on a display-equipped Mac and one mapped key checked. Fresh `phase1` CTest passed 141/141 and the code review is clean. This environment has no SDL display. No current-head hosted-CI claim, physical CPU-B qualification, or live window is claimed; exact CPU-B phase/lane and PPU revision parity remain unmeasured. D-025 explicitly authorizes the deterministic source-backed model. Do not repeat gap planning, claim Phase 3 complete, or start Phase 4 before the remaining visible check.
+- Phase 3 is complete with 5/5 verified truths, 33/33 UAT passes, 141/141 local CTest, clean code review, and required exact-head PR #4 checks. One medium threat, T-03-27, remains below the configured high-severity block threshold; revisit its automated preview-limitation assertion during release work. Exact CPU-B timing/lane and universal PPU-revision parity remain unmeasured; these are explicit evidence limits, not Phase 3 blockers under D-025.
 - Native host support floors beyond the verified CI matrix, signing, and live Playstead integration remain later release/adoption work.
 
 ### Quick Tasks Completed
@@ -148,9 +152,9 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 ## Session Continuity
 
 Last session: 2026-10-07
-Stopped at: Phase GB-03 gap execution and review after Plan 03-13; fresh goal-backward verification is `human_needed` at 4/5 truths, VIDEO-04 visible-window/key evidence remains open
+Stopped at: Phase 3 complete; Phase 4 is ready for discussion and has not started
 Resume file: .planning/.continue-here.md
-Next command in fresh context: $gsd-verify-work 3 (after the remaining display-based check; do not start Phase 4 before Phase 3 verification passes)
+Next command in fresh context: $gsd-discuss-phase 4 (Phase 4 has no CONTEXT.md; stop after discussion/planning/execution at its phase boundary)
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: **Phase 3 gap execution and code review — Plan 03-13, followed by fresh Phase 3 goal-backward verification.** All 13 Phase 3 plans have summaries; verification reports `human_needed` at 4/5 truths. VIDEO-02/03 pass under D-025's confidence-qualified source-backed software model, with exact CPU-B behavior still unmeasured. VIDEO-04 needs the packaged demo visibly opened and one mapped key tested on a display-equipped Mac. Fresh `phase1` CTest passed 141/141; code review is clean. This environment has no SDL display. Do not claim Phase 3 complete or start Phase 4 before the visible check and verification. Keep both auto-advance flags false.
-Next roadmap phase: **Phase 4 — MBC1 and Safe Battery Continuation.** It has not started. After the visible VIDEO-04 check, the exact next GSD command is `$gsd-verify-work 3`; proceed to Phase 4 only after that verification passes.
+Completed workflow stage: **Phase 3 final goal-backward verification, user UAT, and phase closeout.** All 13 plans are summarized; the final verification passed 5/5 truths and UAT passed 33/33. The user confirmed the packaged preview responds to mapped Z press/release. PR #4 merged after required exact-head CI passed. VIDEO-02/03 use D-025's confidence-qualified software model; exact CPU-B timing and universal revision behavior remain unmeasured. Keep both auto-advance flags false and stop before Phase 4.
+Next roadmap phase: **Phase 4 — MBC1 and Safe Battery Continuation.** It has not started and has no `CONTEXT.md`; the exact next command is `$gsd-discuss-phase 4`. After the owner chooses to continue, stop again at Phase 4's boundary.

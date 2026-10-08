@@ -15,7 +15,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 - [x] **Phase 1: Portable Foundation and Original ROM Tracer** - Build, embed, and download a bounded real-ROM tracer. (completed 2026-10-03)
 - [x] **Phase 2: DMG CPU, Bus, and Time** - Execute scoped DMG diagnostics with reproducible timing and bounded progress. (completed 2026-10-07)
-- [ ] **Phase 3: Visible Interactive DMG** - Play an original or permissioned ROM-only fixture in a macOS preview.
+- [x] **Phase 3: Visible Interactive DMG** - Play an original or permissioned ROM-only fixture in a macOS preview. (completed 2026-10-07)
 - [ ] **Phase 4: MBC1 and Safe Battery Continuation** - Retain meaningful guest progress across fresh processes without corrupting good saves.
 - [ ] **Phase 5: DMG Audio and Stable Playback** - Hear paced sound and recover cleanly from host input/device transitions.
 - [ ] **Phase 6: Qualified DMG Release and Consumer Handoff** - Download evidenced packages and reproduce native adoption with honest support claims.
@@ -124,7 +124,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. A macOS user can open and play an original or permissioned ROM-only fixture, resize with correct aspect/integer scaling, pause, reset, and quit; errors are actionable. (VIDEO-04)
 5. Automated evidence separately reports image composition, raster timing, and scripted gameplay; the visible preview labels incomplete audio and persistence. (VIDEO-05)
 
-**Plans:** All 13 plans have summaries across 12 dependency-ordered waves. Fresh goal-backward verification is `gaps_found` (4/5 truths): VIDEO-01/02/03/05 pass under the declared evidence classes, including D-025's confidence-qualified software model; VIDEO-04 still needs a live packaged-window/key-input check on a display-equipped Mac. The SDL launch attempt here failed with `SDL_Init: The video driver did not add any displays`. Exact CPU-B lane/timing and PPU-revision behavior remain unmeasured. Keep Phase 3 in progress and stop at this phase boundary; do not plan more gaps or start Phase 4 before the visible check and verification.
+**Plans:** All 13 plans have summaries across 12 dependency-ordered waves. Final goal-backward verification passed 5/5 truths, and all 33 UAT checks passed, including the user's live report that holding mapped Z darkens the demo tile and release restores it. The full local core suite passed 141/141; PR #4 passed required exact-head checks and merged at `2b49dc5`. VIDEO-02/03 remain bounded to D-025's confidence-qualified software model; exact CPU-B timing/lane and PPU-revision behavior remain unmeasured.
 **Wave 1**
 - [x] 03-01-PLAN.md — playable production-core tracer with timestamped input and copied frames
 
@@ -160,7 +160,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 - [x] 03-12-PLAN.md — FF46 startup window, active restart, and register readback; simultaneous PPU/DMA arbitration and JOYP IF remain open
 
 **Gap wave 12** *(source-backed software-model behavior and focused guest checks; execution does not complete Phase 3)*
-- [x] 03-13-PLAN.md — JOYP edge matrix, DMA/PPU scan/fetch controls, active-DMA mode matrix, word boundaries, and same-half-dot guest tie; VIDEO-04 live check remains
+- [x] 03-13-PLAN.md — JOYP edge matrix, DMA/PPU scan/fetch controls, active-DMA mode matrix, word boundaries, and same-half-dot guest tie; Phase 3 UAT is complete
 
 **UI hint**: yes
 
@@ -220,7 +220,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 |-------|----------------|--------|-----------|
 | 1. Portable Foundation and Original ROM Tracer | 5/5 | Complete    | 2026-10-03 |
 | 2. DMG CPU, Bus, and Time | 17/17 | Complete | 2026-10-07 |
-| 3. Visible Interactive DMG | 12/12 | In Progress | - |
+| 3. Visible Interactive DMG | 13/13 | Complete    | 2026-10-07 |
 | 4. MBC1 and Safe Battery Continuation | 0/TBD | Not started | - |
 | 5. DMG Audio and Stable Playback | 0/TBD | Not started | - |
 | 6. Qualified DMG Release and Consumer Handoff | 0/TBD | Not started | - |
@@ -231,4 +231,4 @@ All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](
 
 Automate authorized work within each phase, then inspect current verification/release/consumer evidence, update traceability and [lessons](context/LESSONS.md), triage issues/PRs, report limitations and the exact next command, and **stop**. Never auto-advance phases or milestones; keep both auto-advance flags false. Credential, hardware, or perceptual gaps must be recorded honestly with the smallest necessary human action, never converted into passing evidence. Remote/CI setup begins in Phase 1; absent access remains an explicit completion limitation.
 
-Phase 1 Plans 01–05 are complete. Goal-backward verification passed 5/5 roadmap truths and all 8 BASE requirements; standard code review is clean. Phase 2 Plans 02-01 through 02-14 and 02-16 through 02-18 are complete; 02-15 remains superseded/non-runnable. Phase 2 passed 5/5 roadmap truths, all five CPU requirements, 45/45 security threats, Nyquist validation and code review; no physical DMG hardware test is claimed. Phase 3 has 13 plan summaries through gap wave 12. Fresh goal-backward verification is 4/5: VIDEO-01/02/03/05 pass under their declared evidence classes, including D-025 software-model coverage; only VIDEO-04's visible packaged-window/key check remains. The full local `phase1` suite passed 139/139. Earlier player/package CI receipts are stale for current source, so no current-head hosted-CI claim is made. This environment has no SDL display; no physical CPU-B qualification or live window observation is claimed. Keep both auto-advance flags false and stop at Phase 3. Phase 4 — MBC1 and Safe Battery Continuation — has not started.
+Phase 1 Plans 01–05 and Phase 2's 17 runnable plans are verified complete; Phase 2 Plan 02-15 remains superseded/non-runnable. Phase 3's 13 plans are complete, final verification passed 5/5 truths, and 33/33 UAT checks passed, including the user's live packaged-window Z press/release observation. The complete local `phase1` suite passed 141/141. PR #4 passed required exact-head CI and merged at `2b49dc5`; the Phase 3 security gate reports zero high-severity open threats. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B or universal PPU-revision claim is made. Stop at the Phase 3 boundary. Phase 4 — MBC1 and Safe Battery Continuation — is next and has not started.
