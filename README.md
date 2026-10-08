@@ -19,6 +19,18 @@ results do not establish hardware starvation, physical hotplug, analog output,
 or listening quality. See the [audio and playback contract](docs/audio-and-playback.md)
 and [DMG preview guide](docs/preview.md).
 
+## Native consumers and support scope
+
+The install exports `GabbaBoy::core` for C17 consumers. The
+[native integration guide](docs/native-integration.md) walks through the
+relocated C example, bounded stepping, timestamped input, caller-owned frame
+and audio buffers, and host-owned battery persistence. The
+[versioned support ledger](docs/support/v0.1.0.md) defines the exact DMG-CPU-B,
+cartridge, and eligible corpus scope; a release attaches a separate
+`support-ledger-v<version>.json` bound to the tagged source and ledger blob.
+Playstead remains a future integration: its inspected adapter is currently
+GBA/mGBA through an external process.
+
 ## Build and run the tracer
 
 Requirements: CMake 3.25 or newer, Ninja, and a C17 compiler. RGBDS is needed

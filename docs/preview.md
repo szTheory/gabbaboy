@@ -4,6 +4,14 @@ The optional SDL3 player opens the original project-owned 32 KiB demo on startup
 
 See [Cartridge and battery save contract](cartridge-and-saves.md) for the exact supported header matrix, save envelope, recovery behavior, and integration API.
 
+For a relocated installed C consumer, including bounded stepping, timestamped
+input, caller-owned video/audio, and host battery import/export, see the
+[native integration guide](native-integration.md). Its Playstead section
+describes a possible future adapter seam; no live Game Boy integration exists.
+The tracked [v0.1.0 support ledger](support/v0.1.0.md) states the model and
+corpus limits. The release's separate `support-ledger-v<version>.json`
+attachment binds that ledger to the exact tagged source revision.
+
 The portable core and its normal tests do not need SDL. To build and verify the optional player with the official, digest-checked SDL3 3.4.18 source on macOS, run:
 
 ```sh
