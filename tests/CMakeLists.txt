@@ -137,6 +137,11 @@ add_test(NAME visible_fixture_digest
     -DROM=${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb
     -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/visible-demo/manifest.json
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
+add_test(NAME mbc1_continuation_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DROM=${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/continuation.gb
+    -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
 add_test(NAME mooneye_fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye

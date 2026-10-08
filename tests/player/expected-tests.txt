@@ -30,4 +30,8 @@ player_session_special
 player_session_symlink
 player_session_target_type_rejection
 player_session_temp_create_failure
+player_continuation_resume
+player_continuation_missing_save
+player_continuation_wrong_rom
+player_continuation_mutated_payload
 player_smoke

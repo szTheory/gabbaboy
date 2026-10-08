@@ -118,6 +118,7 @@ dma_ppu_word_boundaries
 tracer_smoke
 fixture_digest
 visible_fixture_digest
+mbc1_continuation_fixture_digest
 installed_runner_smoke
 installed_consumer_c
 installed_consumer_cpp

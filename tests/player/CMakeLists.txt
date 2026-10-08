@@ -48,6 +48,20 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       ${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb
       ${CMAKE_CURRENT_BINARY_DIR}/${test_name}-temp.gb
       ${CMAKE_CURRENT_BINARY_DIR}/${test_name}-data)
+  elseif(test_name MATCHES "^player_continuation_(resume|missing_save|wrong_rom|mutated_payload)$")
+    if(NOT TARGET test_player_continuation)
+      add_executable(test_player_continuation test_continuation.c)
+      target_link_libraries(test_player_continuation PRIVATE
+        gabbaboy-player-session-test)
+      target_compile_features(test_player_continuation PRIVATE c_std_17)
+      target_compile_definitions(test_player_continuation PRIVATE
+        GBB_PLAYER_SESSION_TESTING)
+      set_target_properties(test_player_continuation PROPERTIES
+        C_EXTENSIONS OFF)
+    endif()
+    add_test(NAME ${test_name} COMMAND test_player_continuation ${test_name}
+      ${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/continuation.gb
+      ${CMAKE_CURRENT_BINARY_DIR}/${test_name}-data)
   elseif(test_name STREQUAL "player_smoke")
     add_test(NAME player_smoke COMMAND gabbaboy-player --smoke)
   elseif(test_name STREQUAL "player_limitations")
