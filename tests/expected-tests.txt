@@ -64,6 +64,7 @@ event_external_serial_edges
 event_time_overflow
 run_output_capacity
 loader_truncated
+loader_boundary_fuzz
 loader_oversized
 loader_invalid_header
 loader_unsupported_cartridge
