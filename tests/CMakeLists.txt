@@ -66,7 +66,7 @@ add_executable(test_joypad test_joypad.c)
 target_link_libraries(test_joypad PRIVATE GabbaBoy::core)
 target_compile_features(test_joypad PRIVATE c_std_17)
 set_target_properties(test_joypad PROPERTIES C_EXTENSIONS OFF)
-foreach(case joypad_selection joypad_queue_atomic joypad_equal_time joypad_partition)
+foreach(case joypad_selection joypad_queue_atomic joypad_equal_time joypad_partition joypad_interrupt)
   add_test(NAME ${case} COMMAND test_joypad ${case})
 endforeach()
 

@@ -228,6 +228,39 @@ static int joypad_partition(void) {
     return 0;
 }
 
+static int joypad_interrupt(void) {
+    /* Select each row, then accept an event after the guest write. The guest
+       stores FF0F so these assertions observe the public CPU-visible path. */
+    for (uint8_t button = 0; button < 8; ++button) {
+        uint8_t program[48] = {0x3E, (uint8_t)(button < 4 ? 0x20 : 0x10),
+                               0xE0, 0x00};
+        size_t n = 4;
+        for (unsigned i = 0; i < 12; ++i) program[n++] = 0x00;
+        program[n++] = 0xF0; program[n++] = 0x0F;
+        program[n++] = 0xEA; program[n++] = 0x00; program[n++] = 0xC0;
+        gbb_instance *m = load_program(program, n); REQUIRE(m != NULL);
+        const gbb_input_event press = {100, GBB_INPUT_BUTTON_PRESS, button};
+        REQUIRE(gbb_queue_events(m, &press, 1) == GBB_OK);
+        REQUIRE(run_exact(m, 16u + 24u + 12u * 8u + 24u + 32u) == 0);
+        REQUIRE(gbb_peek_ram(m, 0xC000) == 0xF0u);
+        gbb_destroy(m);
+    }
+
+    /* A press on an unselected row and a release do not request IF.4. */
+    const uint8_t program[] = {
+        0x3E,0x10, 0xE0,0x00,
+        0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+        0xF0,0x0F, 0xEA,0x00,0xC0
+    };
+    gbb_instance *m = load_program(program, sizeof(program)); REQUIRE(m != NULL);
+    const gbb_input_event unselected = {100, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_RIGHT};
+    REQUIRE(gbb_queue_events(m, &unselected, 1) == GBB_OK);
+    REQUIRE(run_exact(m, 16u + 24u + 12u * 8u + 24u + 32u) == 0);
+    REQUIRE(gbb_peek_ram(m, 0xC000) == 0xE0u);
+    gbb_destroy(m);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
     active_case = argv[1];
@@ -235,5 +268,6 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "joypad_queue_atomic") == 0) return joypad_queue_atomic();
     if (strcmp(argv[1], "joypad_equal_time") == 0) return joypad_equal_time();
     if (strcmp(argv[1], "joypad_partition") == 0) return joypad_partition();
+    if (strcmp(argv[1], "joypad_interrupt") == 0) return joypad_interrupt();
     return 2;
 }

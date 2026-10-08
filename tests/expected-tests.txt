@@ -92,6 +92,7 @@ joypad_selection
 joypad_queue_atomic
 joypad_equal_time
 joypad_partition
+joypad_interrupt
 dma_partition
 dma_vram_lock
 dma_oam_lock
