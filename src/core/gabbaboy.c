@@ -39,7 +39,12 @@ struct gbb_instance {
     uint16_t ppu_objects_stalled;
     uint32_t ppu_object_tiles_fetched;
     uint8_t ppu_selected_objects[GBB_LINE_OBJECT_LIMIT];
+    uint8_t ppu_selected_y[GBB_LINE_OBJECT_LIMIT];
+    uint8_t ppu_selected_x[GBB_LINE_OBJECT_LIMIT];
+    uint8_t ppu_selected_tile[GBB_LINE_OBJECT_LIMIT];
+    uint8_t ppu_selected_attributes[GBB_LINE_OBJECT_LIMIT];
     uint8_t ppu_selected_object_count;
+    uint8_t ppu_scan_index;
     uint8_t ppu_window_line;
     uint8_t ppu_window_line_drawn;
     uint8_t dma_register, dma_page, dma_pending_page, dma_index, dma_phase;
@@ -354,7 +359,7 @@ static int cpu_hram_address(uint16_t address) {
     return address >= 0xFF80u && address <= 0xFFFEu;
 }
 
-static void ppu_select_objects(gbb_instance *m);
+static void ppu_begin_object_scan(gbb_instance *m);
 
 static uint8_t read8(const gbb_instance *m, uint16_t address) {
     if (m->dma_active && m->dma_cpu_blocked &&
@@ -467,7 +472,7 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
             m->ppu_selected_object_count = 0;
             m->ppu_window_line = 0;
             m->ppu_window_line_drawn = 0;
-            ppu_select_objects(m);
+            ppu_begin_object_scan(m);
         }
     }
     else if (address == 0xFF41) {
@@ -643,16 +648,30 @@ static uint8_t ppu_background_color(const gbb_instance *m, unsigned x) {
     return ppu_tile_color(m, tile, source_y & 7u, source_x & 7u, 0);
 }
 
-static void ppu_select_objects(gbb_instance *m) {
+static void ppu_begin_object_scan(gbb_instance *m) {
     m->ppu_selected_object_count = 0;
+    m->ppu_scan_index = 0;
+}
+
+/* Sample one OAM entry every two modeled mode-2 dots. If DMA overlaps that
+ * read, this software model treats the candidate as off-screen for the line.
+ * The scan-dot placement remains policy, not measured CPU-B timing. */
+static void ppu_scan_object(gbb_instance *m, unsigned index) {
+    if (index >= 40u) return;
+    m->ppu_scan_index = (uint8_t)(index + 1u);
+    if (m->dma_active || m->ppu_selected_object_count >= GBB_LINE_OBJECT_LIMIT)
+        return;
     unsigned height = (m->lcdc & 0x04u) != 0 ? 16u : 8u;
-    for (unsigned index = 0; index < 40u &&
-         m->ppu_selected_object_count < GBB_LINE_OBJECT_LIMIT; ++index) {
-        unsigned offset = index * 4u;
-        int top = (int)m->oam[offset] - 16;
-        if ((int)m->ly >= top && (int)m->ly < top + (int)height)
-            m->ppu_selected_objects[m->ppu_selected_object_count++] = (uint8_t)index;
-    }
+    unsigned offset = index * 4u;
+    uint8_t y = m->oam[offset];
+    int top = (int)y - 16;
+    if ((int)m->ly < top || (int)m->ly >= top + (int)height) return;
+    uint8_t slot = m->ppu_selected_object_count++;
+    m->ppu_selected_objects[slot] = (uint8_t)index;
+    m->ppu_selected_y[slot] = y;
+    m->ppu_selected_x[slot] = m->oam[offset + 1u];
+    m->ppu_selected_tile[slot] = m->oam[offset + 2u];
+    m->ppu_selected_attributes[slot] = m->oam[offset + 3u];
 }
 
 static int ppu_object_color(const gbb_instance *m, unsigned x, uint8_t *color,
@@ -666,15 +685,14 @@ static int ppu_object_color(const gbb_instance *m, unsigned x, uint8_t *color,
     unsigned height = (m->lcdc & 0x04u) != 0 ? 16u : 8u;
     for (unsigned selected = 0; selected < m->ppu_selected_object_count; ++selected) {
         unsigned index = m->ppu_selected_objects[selected];
-        unsigned offset = index * 4u;
-        int left = (int)m->oam[offset + 1u] - 8;
+        int left = (int)m->ppu_selected_x[selected] - 8;
         int local_x = (int)x - left;
         if (local_x < 0 || local_x >= 8) continue;
-        int row = (int)m->ly - ((int)m->oam[offset] - 16);
+        int row = (int)m->ly - ((int)m->ppu_selected_y[selected] - 16);
         if (row < 0 || row >= (int)height) continue;
-        uint8_t attributes = m->oam[offset + 3u];
+        uint8_t attributes = m->ppu_selected_attributes[selected];
         if ((attributes & 0x40u) != 0) row = (int)height - 1 - row;
-        unsigned tile = m->oam[offset + 2u];
+        unsigned tile = m->ppu_selected_tile[selected];
         if (height == 16u) {
             tile &= ~1u;
             tile += (unsigned)row >> 3;
@@ -773,11 +791,24 @@ static int ppu_object_should_stall(gbb_instance *m, uint8_t *stall) {
         uint16_t object_bit = (uint16_t)(1u << i);
         if ((m->ppu_objects_stalled & object_bit) != 0) continue;
         unsigned offset = (unsigned)m->ppu_selected_objects[i] * 4u;
-        int left = (int)m->oam[offset + 1u] - 8;
+        int left = (int)m->ppu_selected_x[i] - 8;
         /* X=0 is wholly offscreen; negative starts are outside this timing claim. */
         if (left < 0 || left >= (int)GBB_FRAME_WIDTH ||
             left != (int)m->ppu_output_x) continue;
         m->ppu_objects_stalled |= object_bit;
+        if (m->dma_active) {
+            /* advance_devices_to advances the DMA byte before this PPU event.
+             * The aligned word read is the declared deterministic model; its
+             * CPU-B lane and tie timing remain unmeasured. */
+            unsigned word = (unsigned)m->dma_index & ~1u;
+            if (word + 1u < GBB_OAM_BYTES) {
+                m->ppu_selected_tile[i] = m->oam[word];
+                m->ppu_selected_attributes[i] = m->oam[word + 1u];
+            }
+        } else {
+            m->ppu_selected_tile[i] = m->oam[offset + 2u];
+            m->ppu_selected_attributes[i] = m->oam[offset + 3u];
+        }
         unsigned tile = ((unsigned)left + fine_scroll) >> 3;
         uint32_t tile_bit = tile < 32u ? (UINT32_C(1) << tile) : 0;
         if (tile_bit != 0 && (m->ppu_object_tiles_fetched & tile_bit) != 0) {
@@ -857,7 +888,7 @@ static void ppu_advance_dot(gbb_instance *m) {
         observe_ppu(m, 0xFF44, 6, m->ly);
         m->ppu_window_line_drawn = 0;
         m->ppu_transfer_complete = 0;
-        if (m->ly < GBB_FRAME_HEIGHT) ppu_select_objects(m);
+        if (m->ly < GBB_FRAME_HEIGHT) ppu_begin_object_scan(m);
         if (m->ly == GBB_FRAME_HEIGHT) {
             memcpy(m->frame_completed, m->frame_working, sizeof(m->frame_completed));
             if (m->frame_generation != UINT64_MAX) ++m->frame_generation;
@@ -872,6 +903,8 @@ static void ppu_advance_dot(gbb_instance *m) {
         ppu_set_mode(m, 1);
     } else if (m->ppu_dot < 80u) {
         ppu_set_mode(m, 2);
+        if ((m->ppu_dot & 1u) == 0u)
+            ppu_scan_object(m, (unsigned)(m->ppu_dot / 2u) - 1u);
     } else if (m->ppu_dot == 80u) {
         ppu_begin_transfer(m);
         ppu_set_mode(m, 3);
