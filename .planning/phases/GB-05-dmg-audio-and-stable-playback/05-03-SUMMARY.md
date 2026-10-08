@@ -12,9 +12,9 @@ provides:
   - Four-channel NR52 status and power-off/on behavior, including reset and channel-mask coverage.
 affects: [audio, APU, playback, GB-05]
 actuals:
-  tokens: 6841.5
+  tokens: 6997.25
   tasks: 2
-  commits: 4
+  commits: 6
 tech-stack:
   added: []
   patterns: [authored guest register programs, per-instance channel state, emulated half-dot channel clocks]
@@ -52,12 +52,12 @@ coverage:
         status: pass
     human_judgment: false
 metrics:
-  duration: 13min
+  duration: 21min
   completed: 2026-10-08
   status: complete
   plan_head_before: 40909fad63998504eb9ddc12e2d876f4eb8307d2
-  plan_head_after: 2fcadb3ca6d600bb8de4e5a42837b15f2a506b3e
-  commits: 4
+  plan_head_after: 8aeae9d8a38ca3509c6c08c400e43106e4e15a59
+  commits: 6
 ---
 
 # Phase 5 Plan 03: Wave, Noise, and Four-Channel Power Summary
@@ -66,9 +66,9 @@ metrics:
 
 ## Performance
 
-- **Duration:** 13 min
+- **Duration:** 21 min
 - **Started:** 2026-10-08T13:26:34Z
-- **Completed:** 2026-10-08T13:39:50Z
+- **Completed:** 2026-10-08T13:47:12Z
 - **Tasks:** 2
 - **Files modified:** 8 plan files, plus this summary and required tracking artifacts
 
@@ -88,8 +88,9 @@ The authored tests establish the deterministic DMG software model and its digita
 2. **Task 1 GREEN: implement wave channel and wave RAM** — `96dfd9f` (`feat`)
 3. **Task 2 RED: add noise and four-channel power cases** — `ea45cfa` (`test`)
 4. **Task 2 GREEN: implement noise channel and APU power matrix** — `2fcadb3` (`feat`)
+5. **Task 2 test correction: complete reset wave-RAM readback** — `8aeae9d` (`test`)
 
-The measured plan base was `40909fad63998504eb9ddc12e2d876f4eb8307d2`; four commits follow it through `2fcadb3ca6d600bb8de4e5a42837b15f2a506b3e`.
+The initial plan metadata closeout `42233a2` preceded the final reset-test correction. The measured plan base was `40909fad63998504eb9ddc12e2d876f4eb8307d2`; six commits follow it through `8aeae9d8a38ca3509c6c08c400e43106e4e15a59` (five task commits and that earlier metadata commit).
 
 ## Files Created/Modified
 
@@ -124,12 +125,21 @@ The measured plan base was `40909fad63998504eb9ddc12e2d876f4eb8307d2`; four comm
 - **Verification:** All 16 channel masks and both power transitions passed in `apu_power`.
 - **Committed in:** `2fcadb3`
 
-**Total deviations:** 2 test-fixture corrections. **Impact:** No scope change; both corrections made the authored expectations execute as intended.
+**3. [Rule 1 - Test fixture] Extended the reset run through the wave-RAM readback.**
+- **Found during:** Final verification
+- **Issue:** The reset run budget ended after starting the wave-RAM read, so the assertion could observe cleared work RAM without completing its guest store.
+- **Fix:** Extended the run budget to include the read and store instructions before checking the value.
+- **Files modified:** `tests/test_apu.c`
+- **Verification:** The complete APU/tracer inventory passed 8/8.
+- **Committed in:** `8aeae9d`
+
+**Total deviations:** 3 test-fixture corrections. **Impact:** No scope change; corrections made the authored expectations execute as intended.
 
 ## TDD Gate Compliance
 
 - **Task 05-03-01:** The target `apu_wave` failed because wave RAM/register support was absent; the classifier returned `RED_EVIDENCE_OK`. The wave implementation then passed the target and existing pulse/mixer/tracer regressions.
 - **Task 05-03-02:** Both `apu_noise` and `apu_power` failed before implementation for missing noise registers and four-channel status. Both reports returned `RED_EVIDENCE_OK`; the implementation commit followed, and both targets passed.
+- A final test-only correction extended the reset run to complete wave-RAM readback; it followed the Task 2 GREEN commit and did not change core behavior.
 
 ## Automated Results
 
@@ -152,4 +162,5 @@ Plan 05-03 is complete. Continue within Phase GB-05 with Plan 05-04, which speci
 
 - Summary file exists at the required phase path.
 - Task commits `d40a2eb`, `96dfd9f`, `ea45cfa`, and `2fcadb3` are ancestors of the recorded plan head.
-- The persisted-base measurement counts four task commits through `2fcadb3`.
+- Task commits `d40a2eb`, `96dfd9f`, `ea45cfa`, `2fcadb3`, and `8aeae9d` are ancestors of the recorded plan head.
+- The measured base range contains six commits, including the earlier metadata closeout.
