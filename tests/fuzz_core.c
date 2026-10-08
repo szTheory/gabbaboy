@@ -52,10 +52,9 @@ static void fuzz_stateful_api(gbb_instance *machine, const uint8_t *data,
     uint8_t output[FUZZ_BATTERY_BYTES + 2u];
     size_t cursor = 1u;
     uint64_t input_half_dots = 0u;
-    const size_t operations = size > 1u ?
-        ((size - 1u) < FUZZ_OPERATION_LIMIT ? size - 1u : FUZZ_OPERATION_LIMIT) : 0u;
 
-    for (size_t operation = 0u; operation < operations; ++operation) {
+    for (size_t operation = 0u;
+         operation < FUZZ_OPERATION_LIMIT && cursor < size; ++operation) {
         const uint8_t selector = data[cursor++];
         if (selector % 6u == 0u && cursor < size) {
             size_t length = (size_t)(data[cursor++] % 32u);
@@ -107,7 +106,7 @@ static void fuzz_stateful_api(gbb_instance *machine, const uint8_t *data,
     }
 }
 
-int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+int gbb_fuzz_core_one_input(const uint8_t *data, size_t size) {
     if (data == NULL || size == 0u || size > FUZZ_INPUT_LIMIT) return 0;
 
     gbb_instance *machine = NULL;
@@ -124,3 +123,9 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     gbb_destroy(machine);
     return 0;
 }
+
+#ifndef GBB_FUZZ_STANDALONE_TEST
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    return gbb_fuzz_core_one_input(data, size);
+}
+#endif

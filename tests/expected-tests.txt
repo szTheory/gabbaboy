@@ -65,6 +65,7 @@ event_time_overflow
 run_output_capacity
 loader_truncated
 loader_boundary_fuzz
+fuzz_core_regressions
 loader_oversized
 loader_invalid_header
 loader_unsupported_cartridge

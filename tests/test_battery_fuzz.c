@@ -117,6 +117,10 @@ static int battery_api_fuzz(uint32_t seed, uint64_t *digest_out) {
             REQUIRE(memcmp(output + 1u, before, sizeof(before)) == 0);
         REQUIRE(output[0] == 0x5Cu);
         REQUIRE(output[sizeof(output) - 1u] == 0x5Cu);
+        for (size_t i = 0u; i < BATTERY_BYTES; ++i) {
+            digest ^= output[i + 1u];
+            digest *= UINT64_C(1099511628211);
+        }
 
         memcpy(candidate_rom, base_rom, sizeof(candidate_rom));
         const uint32_t header_case = random_next(&random_state);
@@ -164,6 +168,8 @@ static int battery_api_fuzz(uint32_t seed, uint64_t *digest_out) {
             gbb_run(machine, FUZZ_RUN_BUDGET, NULL, 0u);
         digest_u64(&digest, run.consumed_half_dots);
         digest_u64(&digest, (uint64_t)run.reason);
+        digest_u64(&digest, gbb_peek_ram(machine, 0xC000u));
+        digest_u64(&digest, gbb_peek_ram(machine, 0xC001u));
         REQUIRE(run.consumed_half_dots <= FUZZ_RUN_BUDGET);
         REQUIRE(run.reason == GBB_STOP_BUDGET ||
                 run.reason == GBB_STOP_UNSUPPORTED_BUS ||

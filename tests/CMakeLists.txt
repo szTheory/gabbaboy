@@ -139,6 +139,13 @@ set_target_properties(test_loader_fuzz PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME loader_boundary_fuzz
   COMMAND test_loader_fuzz ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 
+add_executable(test_fuzz_core test_fuzz_core.c fuzz_core.c)
+target_link_libraries(test_fuzz_core PRIVATE GabbaBoy::core)
+target_compile_features(test_fuzz_core PRIVATE c_std_17)
+target_compile_definitions(test_fuzz_core PRIVATE GBB_FUZZ_STANDALONE_TEST=1)
+set_target_properties(test_fuzz_core PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME fuzz_core_regressions COMMAND test_fuzz_core)
+
 if(CMAKE_C_COMPILER_ID MATCHES "Clang")
   include(CheckCSourceCompiles)
   set(_gbb_saved_required_flags "${CMAKE_REQUIRED_FLAGS}")

@@ -30,6 +30,7 @@ case "$MODE" in
   --self-test)
     grep -q '^loader_boundary_fuzz$' "$ROOT/tests/expected-tests.txt"
     grep -q '^battery_api_fuzz$' "$ROOT/tests/expected-tests.txt"
+    grep -q '^fuzz_core_regressions$' "$ROOT/tests/expected-tests.txt"
     grep -q 'FUZZ_INPUT_LIMIT 65536u' "$ROOT/tests/fuzz_core.c"
     grep -q 'FUZZ_OPERATION_LIMIT 16u' "$ROOT/tests/fuzz_core.c"
     grep -q 'FUZZ_RUN_LIMIT UINT64_C(2048)' "$ROOT/tests/fuzz_core.c"
@@ -46,9 +47,11 @@ case "$MODE" in
     ;;
   --fast)
     [[ -d "$BUILD_DIR" ]] || { echo "Build directory not found: $BUILD_DIR" >&2; exit 2; }
-    cmake --build "$BUILD_DIR" --target test_loader_fuzz test_battery_fuzz
+    BUILD_DIR=$(cd "$BUILD_DIR" && pwd)
+    fuzz_binary="$BUILD_DIR/tests/fuzz_core"
+    cmake --build "$BUILD_DIR" --target test_loader_fuzz test_battery_fuzz test_fuzz_core
     ctest --test-dir "$BUILD_DIR" --output-on-failure --no-tests=error \
-      -R '^(battery_api_fuzz|loader_boundary_fuzz)$'
+      -R '^(battery_api_fuzz|loader_boundary_fuzz|fuzz_core_regressions)$'
     if grep -q '^GABBABOY_ENABLE_SANITIZERS:BOOL=ON$' "$BUILD_DIR/CMakeCache.txt"; then
       sanitizer_status=asan-ubsan
     else
@@ -58,9 +61,18 @@ case "$MODE" in
       corpus=$(mktemp -d "${TMPDIR:-/tmp}/gbb-fuzz-seeds.XXXXXX")
       cp "$ROOT/fixtures/tracer/tracer.gb" "$corpus/tracer.gb"
       mkdir -p "$BUILD_DIR/fuzz-artifacts"
-      "$fuzz_binary" "$corpus" -runs=128 -seed=1 -max_len=65536 \
+      (cd "$BUILD_DIR" && "$fuzz_binary" "$corpus" -runs=128 -seed=1 -max_len=65536 \
         -timeout=2 -rss_limit_mb=512 -jobs=1 -workers=1 \
-        -artifact_prefix="$BUILD_DIR/fuzz-artifacts/"
+        -artifact_prefix="$BUILD_DIR/fuzz-artifacts/")
+      rm -rf "$corpus"
+    elif grep -q '^GBB_HAS_CLANG_LIBFUZZER_RUNTIME:INTERNAL=1$' "$BUILD_DIR/CMakeCache.txt"; then
+      cmake --build "$BUILD_DIR" --target fuzz_core
+      corpus=$(mktemp -d "${TMPDIR:-/tmp}/gbb-fuzz-seeds.XXXXXX")
+      cp "$ROOT/fixtures/tracer/tracer.gb" "$corpus/tracer.gb"
+      mkdir -p "$BUILD_DIR/fuzz-artifacts"
+      (cd "$BUILD_DIR" && "$fuzz_binary" "$corpus" -runs=128 -seed=1 -max_len=65536 \
+        -timeout=2 -rss_limit_mb=512 -jobs=1 -workers=1 \
+        -artifact_prefix="$BUILD_DIR/fuzz-artifacts/")
       rm -rf "$corpus"
     else
       echo "fuzzer=unsupported configured fuzz_core target unavailable; sanitizer=$sanitizer_status deterministic_regressions=passed"
@@ -71,13 +83,18 @@ case "$MODE" in
       echo "fuzzer=unsupported build a matching Clang libFuzzer target before exploration" >&2
       exit 2
     }
-    corpus=$(mktemp -d "${TMPDIR:-/tmp}/gbb-fuzz-seeds.XXXXXX")
-    cp "$ROOT/fixtures/tracer/tracer.gb" "$corpus/tracer.gb"
+    BUILD_DIR=$(cd "$BUILD_DIR" && pwd)
+    fuzz_binary="$BUILD_DIR/tests/fuzz_core"
+    corpus="$BUILD_DIR/fuzz-corpus"
+    mkdir -p "$corpus"
+    if [[ ! -f "$corpus/tracer.gb" ]]; then
+      cp "$ROOT/fixtures/tracer/tracer.gb" "$corpus/tracer.gb"
+    fi
     mkdir -p "$BUILD_DIR/fuzz-artifacts"
-    "$fuzz_binary" "$corpus" -max_len=65536 -max_total_time=60 \
+    (cd "$BUILD_DIR" && "$fuzz_binary" "$corpus" -max_len=65536 -max_total_time=60 \
       -timeout=2 -rss_limit_mb=512 -jobs=1 -workers=1 \
-      -artifact_prefix="$BUILD_DIR/fuzz-artifacts/"
-    rm -rf "$corpus"
+      -artifact_prefix="$BUILD_DIR/fuzz-artifacts/")
+    echo "Minimized corpus retained at $corpus"
     ;;
   *)
     echo "Usage: $0 --self-test | --fast | --explore" >&2
