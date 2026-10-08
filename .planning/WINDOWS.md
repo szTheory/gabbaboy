@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 3
+open_count: 5
 waived_count: 0
 fixed_count: 0
-total_count: 3
-last_updated: 2026-10-08T13:03:33.944Z
+total_count: 5
+last_updated: 2026-10-08T13:44:31.569Z
 ---
 
 # Broken Windows Ledger
@@ -18,6 +18,8 @@ last_updated: 2026-10-08T13:03:33.944Z
 | 1 | 02 | deviation | tests/test_cpu.c |  | Updated opcode matrix expectations for explicit HALT/STOP outcomes and IE register reads. | open |  | 2026-10-06T19:26:33.657Z |  |
 | 2 | 02 | deviation | fixtures/mooneye/manifest.json |  | Raised DAA's finite execution budget from 200000 to 2000000 half-dots after pinned source workload analysis showed 4096 cases require at least 1343488 half-dots before setup and completion protocol. | open |  | 2026-10-06T20:51:58.126Z |  |
 | 3 | 05 | deviation | src/player/audio.c |  | Ring-full producer stalls are counted with lock-free 64-bit backpressure events. | open |  | 2026-10-08T13:03:33.944Z |  |
+| 4 | 05 | deviation | tests/test_apu.c |  | Corrected the wave guest program DAC register address and trigger setup after its PCM assertion stayed silent. | open |  | 2026-10-08T13:44:31.478Z |  |
+| 5 | 05 | deviation | tests/test_apu.c |  | Moved the generated channel-mask program past ROM header checksum offset 0x14D so checksum generation cannot alter instructions. | open |  | 2026-10-08T13:44:31.569Z |  |
 
 ````json
 [
@@ -57,6 +59,32 @@ last_updated: 2026-10-08T13:03:33.944Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-10-08T13:03:33.944Z",
+    "resolved_at": null,
+    "milestone": "v0.1"
+  },
+  {
+    "id": 4,
+    "kind": "deviation",
+    "phase": "05",
+    "file": "tests/test_apu.c",
+    "line": null,
+    "description": "Corrected the wave guest program DAC register address and trigger setup after its PCM assertion stayed silent.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-08T13:44:31.478Z",
+    "resolved_at": null,
+    "milestone": "v0.1"
+  },
+  {
+    "id": 5,
+    "kind": "deviation",
+    "phase": "05",
+    "file": "tests/test_apu.c",
+    "line": null,
+    "description": "Moved the generated channel-mask program past ROM header checksum offset 0x14D so checksum generation cannot alter instructions.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-08T13:44:31.569Z",
     "resolved_at": null,
     "milestone": "v0.1"
   }
