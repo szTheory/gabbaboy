@@ -26,6 +26,7 @@ struct player_audio {
     atomic_uint_fast64_t backpressure_events;
     atomic_uint_fast64_t unavailable_frames;
     atomic_uint_fast64_t sink_failures;
+    atomic_uint_fast64_t flushed_bytes;
     float gain;
     uint8_t pending_frame[sizeof(gbb_audio_frame)];
     unsigned pending_offset;
@@ -141,6 +142,7 @@ static void player_audio_init(player_audio *audio) {
     atomic_init(&audio->backpressure_events, 0u);
     atomic_init(&audio->unavailable_frames, 0u);
     atomic_init(&audio->sink_failures, 0u);
+    atomic_init(&audio->flushed_bytes, 0u);
     audio->gain = 1.0f;
 }
 
@@ -201,20 +203,91 @@ bool player_audio_submit(player_audio *audio, const gbb_audio_frame *frames,
 }
 
 bool player_audio_clear(player_audio *audio) {
-    return audio != NULL;
+    if (audio == NULL) return false;
+    SDL_AudioStream *stream = audio->stream;
+    bool paused_by_us = false;
+    if (stream != NULL) {
+        if (!SDL_AudioStreamDevicePaused(stream))
+            paused_by_us = SDL_PauseAudioStreamDevice(stream);
+        if (!SDL_LockAudioStream(stream)) {
+            if (paused_by_us) (void)SDL_ResumeAudioStreamDevice(stream);
+            return false;
+        }
+    }
+
+    const unsigned write = atomic_load_explicit(&audio->write_index,
+                                                memory_order_relaxed);
+    const unsigned read = atomic_load_explicit(&audio->read_index,
+                                               memory_order_acquire);
+    const unsigned queued_frames = write - read;
+    uint_fast64_t discard_bytes =
+        (uint_fast64_t)queued_frames * sizeof(gbb_audio_frame);
+    if (audio->pending_offset != 0u)
+        discard_bytes += sizeof(gbb_audio_frame) - audio->pending_offset;
+    if (stream != NULL) {
+        const int queued = SDL_GetAudioStreamQueued(stream);
+        if (queued > 0 && UINT_FAST64_MAX - discard_bytes >= (uint_fast64_t)queued)
+            discard_bytes += (uint_fast64_t)queued;
+        else if (queued > 0)
+            discard_bytes = UINT_FAST64_MAX;
+        if (!SDL_ClearAudioStream(stream)) {
+            (void)SDL_UnlockAudioStream(stream);
+            if (paused_by_us) (void)SDL_ResumeAudioStreamDevice(stream);
+            return false;
+        }
+    }
+
+    atomic_store_explicit(&audio->read_index, write, memory_order_release);
+    audio->pending_offset = 0u;
+    audio->underflow_partial_bytes = 0u;
+    counter_add(&audio->flushed_bytes, discard_bytes);
+
+    if (stream != NULL) {
+        const bool unlocked = SDL_UnlockAudioStream(stream);
+        const bool resumed = !paused_by_us || SDL_ResumeAudioStreamDevice(stream);
+        if (!unlocked || !resumed) return false;
+    }
+    return true;
 }
 
 uint_fast64_t player_audio_flushed_bytes(const player_audio *audio) {
-    (void)audio;
-    return 0u;
+    return audio == NULL ? 0u : atomic_load_explicit(&audio->flushed_bytes,
+                                                     memory_order_relaxed);
 }
 
 bool player_audio_handle_device_event(player_audio *audio, uint32_t event_type,
                                       uint32_t device_id, bool recording) {
-    (void)event_type;
     (void)device_id;
-    (void)recording;
-    return audio != NULL;
+    if (audio == NULL) return false;
+    if (recording) return true;
+    if (event_type == SDL_EVENT_AUDIO_DEVICE_REMOVED) {
+        if (!player_audio_clear(audio)) return false;
+        if (audio->stream == NULL) {
+            audio->sink_available = false;
+            return true;
+        }
+        const SDL_AudioDeviceID bound = SDL_GetAudioStreamDevice(audio->stream);
+        if (bound != 0 && !SDL_AudioStreamDevicePaused(audio->stream)) {
+            /* SDL's default-device stream migrated successfully. */
+            audio->sink_available = true;
+            return true;
+        }
+        if (!player_audio_close(audio)) {
+            audio->sink_available = false;
+            return false;
+        }
+        audio->sink_available = false;
+        return true;
+    }
+    if (event_type == SDL_EVENT_AUDIO_DEVICE_ADDED) {
+        if (audio->stream != NULL && audio->sink_available)
+            return player_audio_clear(audio);
+        if (audio->stream != NULL && !player_audio_close(audio)) return false;
+        audio->sink_available = false;
+        if (!player_audio_open(audio)) return false;
+        return player_audio_clear(audio);
+    }
+    return false;
 }
 
 static bool player_audio_close(player_audio *audio) {
@@ -333,7 +406,7 @@ unsigned player_audio_test_queued(const player_audio *audio) {
 }
 
 bool player_audio_test_drop_device(player_audio *audio) {
-    (void)audio;
-    return false;
+    if (audio == NULL || audio->stream == NULL) return false;
+    return player_audio_close(audio);
 }
 #endif

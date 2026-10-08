@@ -177,6 +177,52 @@ static bool run_pulse_audio_smoke(player *app, const char *rom_path) {
     return true;
 }
 
+static bool run_audio_dummy_smoke(void) {
+    const char *driver = SDL_GetCurrentAudioDriver();
+    if (driver == NULL || strcmp(driver, "dummy") != 0) {
+        fprintf(stderr, "Expected SDL dummy audio backend, got: %s\n",
+                driver == NULL ? "<none>" : driver);
+        return false;
+    }
+    player_audio *audio = player_audio_create();
+    if (audio == NULL || !player_audio_available(audio)) {
+        fputs("Could not open SDL dummy audio stream\n", stderr);
+        player_audio_destroy(audio);
+        return false;
+    }
+    gbb_audio_frame frames[8];
+    for (unsigned i = 0; i < 8u; ++i)
+        frames[i] = (gbb_audio_frame){(int16_t)(i + 1u), (int16_t)-(int)(i + 1u)};
+    if (!player_audio_submit(audio, frames, 8u)) {
+        fputs("Could not stream PCM to SDL dummy audio\n", stderr);
+        player_audio_destroy(audio);
+        return false;
+    }
+    SDL_Delay(10);
+    if (!player_audio_handle_device_event(audio,
+            SDL_EVENT_AUDIO_DEVICE_REMOVED, 1u, false) ||
+        !player_audio_handle_device_event(audio,
+            SDL_EVENT_AUDIO_DEVICE_ADDED, 1u, false) ||
+        !player_audio_available(audio) ||
+        !player_audio_submit(audio, frames, 8u)) {
+        fputs("SDL dummy audio device event recovery failed\n", stderr);
+        player_audio_destroy(audio);
+        return false;
+    }
+    SDL_Delay(10);
+    player_audio_destroy(audio);
+
+    audio = player_audio_create();
+    if (audio == NULL || !player_audio_available(audio)) {
+        fputs("Could not reopen SDL dummy audio stream after close\n", stderr);
+        player_audio_destroy(audio);
+        return false;
+    }
+    player_audio_destroy(audio);
+    printf("audio dummy smoke passed: driver=%s open/stream/close/recovery\n", driver);
+    return true;
+}
+
 static char *duplicate_path(const char *path) {
     const size_t length = strlen(path);
     if (length == SIZE_MAX) return NULL;
@@ -440,6 +486,8 @@ static void show_help(player *app) {
     const bool resume_after = !app->user_paused && app->window_focused &&
                               !app->dialog_pending;
     (void)player_input_focus_lost(&app->input, app->machine, SDL_GetTicksNS());
+    if (!player_audio_clear(app->audio))
+        set_status(app, "Audio flush failed before the help dialog");
     char message[1024];
     (void)snprintf(message, sizeof(message),
         "Current ROM: %s\n\n"
@@ -547,11 +595,19 @@ static void recover_input_after_dialog(player *app) {
     }
 }
 
+/* Lifecycle transition table:
+ * transition              guest/APU history     host PCM
+ * pause/focus/dialog      frozen and retained   quiesce, clear, count
+ * reset                   reset after save      clear only after reset succeeds
+ * ROM replacement         commit after save     clear only after replacement succeeds
+ * device removal/addition guest clock unchanged default migration, then clear/reopen
+ */
 static void reset_session(player *app) {
     if (gbb_reset(app->machine) != GBB_OK) {
         set_status(app, "Reset failed; the current ROM remains loaded");
         return;
     }
+    const bool audio_cleared = player_audio_clear(app->audio);
     app->user_paused = false;
     player_input_reset(&app->input, SDL_GetTicksNS());
     if (!app->window_focused || app->dialog_pending)
@@ -562,9 +618,11 @@ static void reset_session(player *app) {
     if (app->save_identity.battery_backed)
         (void)gbb_battery_generation(app->machine, &generation);
     player_save_cadence_reset(&app->save_cadence, generation);
-    set_status(app, app->save_identity.battery_backed
-        ? "Current ROM reset; battery RAM remains in memory"
-        : "Current ROM reset");
+    set_status(app, !audio_cleared
+        ? "Current ROM reset; audio backlog cleanup failed"
+        : (app->save_identity.battery_backed
+            ? "Current ROM reset; battery RAM remains in memory"
+            : "Current ROM reset"));
 }
 
 static bool same_save_identity(const player_save_identity *left,
@@ -617,6 +675,7 @@ static bool replace_session_rom(player *app, const char *path) {
     if (!reuses_lock) candidate_lock_fd = -1;
     if (old_machine != NULL) gbb_destroy(old_machine);
     free(old_path);
+    const bool audio_cleared = player_audio_clear(app->audio);
     if (!reuses_lock) {
         int release_fd = old_lock_fd;
         player_session_unlock_battery(&release_fd);
@@ -633,7 +692,9 @@ static bool replace_session_rom(player *app, const char *path) {
     player_save_cadence_reset(&app->save_cadence, generation);
     app->save_retry_required = false;
     app->save_status_active = false;
-    if (!battery_loaded)
+    if (!audio_cleared)
+        set_status(app, "ROM loaded; audio backlog cleanup failed");
+    else if (!battery_loaded)
         set_status(app, error);
     else if (app->save_identity.battery_backed)
         set_status(app, "Battery RAM loaded; changes are in memory until saved");
@@ -853,11 +914,14 @@ static void request_open_rom(player *app) {
     app->dialog_pending = true;
     const gbb_error release_result = player_input_focus_lost(
         &app->input, app->machine, SDL_GetTicksNS());
+    const bool audio_cleared = player_audio_clear(app->audio);
     atomic_store_explicit(&app->dialog_callback_done, false, memory_order_relaxed);
     atomic_store_explicit(&app->dialog_delivery_failed, false, memory_order_relaxed);
-    set_status(app, release_result == GBB_OK
-        ? "Choose one supported Game Boy ROM"
-        : "Choose a ROM; held-button release remains pending");
+    set_status(app, !audio_cleared
+        ? "Choose a ROM; audio backlog cleanup failed"
+        : (release_result == GBB_OK
+            ? "Choose one supported Game Boy ROM"
+            : "Choose a ROM; held-button release remains pending"));
     SDL_ShowOpenFileDialog(open_dialog_callback, app, app->window, filters,
                            (int)(sizeof(filters) / sizeof(filters[0])), NULL, false);
 }
@@ -867,9 +931,12 @@ static void toggle_pause(player *app) {
         app->user_paused = true;
         const gbb_error releases = player_input_focus_lost(
             &app->input, app->machine, SDL_GetTicksNS());
-        set_status(app, releases == GBB_OK
-            ? "Paused; held buttons released"
-            : "Paused; held-button release remains pending");
+        const bool audio_cleared = player_audio_clear(app->audio);
+        set_status(app, !audio_cleared
+            ? "Paused; audio backlog cleanup failed"
+            : (releases == GBB_OK
+                ? "Paused; held buttons released"
+                : "Paused; held-button release remains pending"));
         return;
     }
     app->user_paused = false;
@@ -1045,11 +1112,24 @@ static bool handle_event(player *app, const SDL_Event *event) {
                 : "Controller input paused; held-button release remains pending");
         }
     }
+    if (event->type == SDL_EVENT_AUDIO_DEVICE_REMOVED ||
+        event->type == SDL_EVENT_AUDIO_DEVICE_ADDED) {
+        const bool handled = player_audio_handle_device_event(
+            app->audio, event->adevice.type, event->adevice.which,
+            event->adevice.recording);
+        if (!handled || !player_audio_available(app->audio))
+            set_status(app, "Audio unavailable; guest playback continues through the counted sink");
+        else
+            set_status(app, "Audio ready; guest clock unchanged");
+    }
     if (event->type == SDL_EVENT_WINDOW_FOCUS_LOST) {
         app->window_focused = false;
         const gbb_error result = player_input_focus_lost(&app->input, app->machine,
                                                          event->window.timestamp);
-        if (result != GBB_OK)
+        const bool audio_cleared = player_audio_clear(app->audio);
+        if (!audio_cleared)
+            set_status(app, "Focus lost; audio backlog cleanup failed");
+        else if (result != GBB_OK)
             set_status(app, "Focus lost; held-button releases remain pending");
         else
             set_status(app, "Focus lost; input paused and held buttons released");
@@ -1679,6 +1759,8 @@ static void destroy_player(player *app) {
 
 int main(int argc, char **argv) {
     const bool smoke = argc >= 2 && strcmp(argv[1], "--smoke") == 0;
+    const bool audio_dummy_smoke = argc == 2 &&
+        strcmp(argv[1], "--audio-dummy-smoke") == 0;
     const bool package_smoke = argc == 3 &&
                                strcmp(argv[1], "--smoke-package") == 0;
     const bool battery_store = argc == 3 &&
@@ -1689,8 +1771,8 @@ int main(int argc, char **argv) {
     if ((smoke && argc != 2 && argc != 4) ||
         (package_smoke && argc != 3) ||
         (battery_smoke && argc != 3) ||
-        (!smoke && !package_smoke && !battery_smoke && argc > 1)) {
-        fprintf(stderr, "usage: %s [--smoke [demo-rom invalid-rom] | --smoke-package invalid-rom]\n",
+        (!smoke && !audio_dummy_smoke && !package_smoke && !battery_smoke && argc > 1)) {
+        fprintf(stderr, "usage: %s [--smoke [demo-rom invalid-rom] | --smoke-package invalid-rom | --audio-dummy-smoke]\n",
                 argv[0]);
         return 2;
     }
@@ -1707,11 +1789,16 @@ int main(int argc, char **argv) {
     app.window_focused = true;
     atomic_init(&app.dialog_callback_done, false);
     atomic_init(&app.dialog_delivery_failed, false);
-    if (!SDL_Init((smoke || package_smoke || battery_smoke)
+    if (!SDL_Init((smoke || audio_dummy_smoke || package_smoke || battery_smoke)
                       ? SDL_INIT_EVENTS | SDL_INIT_AUDIO
                       : SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
+    }
+    if (audio_dummy_smoke) {
+        const bool passed = run_audio_dummy_smoke();
+        SDL_Quit();
+        return passed ? 0 : 1;
     }
     app.audio = player_audio_create();
     if (app.audio == NULL || !player_audio_available(app.audio)) {

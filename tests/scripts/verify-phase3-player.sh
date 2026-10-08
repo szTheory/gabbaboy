@@ -325,6 +325,10 @@ case "$mode" in
   *) fail 'usage: verify-phase3-player.sh [--build-package] | --verify-package ARTIFACT-DIR' ;;
 esac
 
+# The package lane qualifies the SDL software path, never physical hotplug or
+# audible output. Set this before any player/test process can initialize SDL.
+export SDL_AUDIO_DRIVER=dummy
+
 for tool in python3 shasum otool; do
   command -v "$tool" >/dev/null 2>&1 || fail "required macOS verification tool is missing: $tool"
 done
@@ -385,6 +389,14 @@ SDL_LICENSE_SHA256=$(sha256_file "$SDL_SOURCE/LICENSE.txt")
 PLAYER_BIN="$APP_BUILD/gabbaboy-player"
 [[ -x "$PLAYER_BIN" ]] || fail 'player build did not produce gabbaboy-player'
 [[ -s "$SDL_PREFIX/lib/libSDL3.0.dylib" ]] || fail 'pinned SDL build did not install libSDL3.0.dylib'
+DUMMY_AUDIO_OUTPUT=$("$PLAYER_BIN" --audio-dummy-smoke 2>&1) || {
+  printf '%s\n' "$DUMMY_AUDIO_OUTPUT" >&2
+  fail 'built player could not open, stream, close, and recover on SDL dummy audio'
+}
+printf '%s\n' "$DUMMY_AUDIO_OUTPUT"
+grep -Fq 'audio dummy smoke passed: driver=dummy open/stream/close/recovery' \
+  <<< "$DUMMY_AUDIO_OUTPUT" ||
+  fail 'built player did not expose the forced SDL dummy backend smoke receipt'
 
 STAGE_ROOT="$BUILD_ROOT/package-stage"
 PACKAGE_PREFIX="$STAGE_ROOT/installed-prefix"
