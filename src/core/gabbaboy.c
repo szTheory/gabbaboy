@@ -914,9 +914,15 @@ static void ppu_advance_dot(gbb_instance *m) {
         ppu_set_mode(m, 1);
     } else if (m->ppu_dot < 80u) {
         ppu_set_mode(m, 2);
-        if ((m->ppu_dot & 1u) == 0u)
-            ppu_scan_object(m, (unsigned)(m->ppu_dot / 2u) - 1u);
+        if (m->ppu_dot != 0u && (m->ppu_dot & 1u) == 0u)
+            ppu_scan_object(m, m->ppu_scan_index);
     } else if (m->ppu_dot == 80u) {
+        /* The per-dot cadence above samples entries 0-38 at dots 2-78.
+         * Complete the 40-entry OAM scan at the mode-2 boundary before
+         * mode 3 begins. This keeps scan ordering explicit and avoids
+         * deriving an unsigned index from dot zero on line wrap. */
+        if (m->ppu_scan_index < 40u)
+            ppu_scan_object(m, m->ppu_scan_index);
         ppu_begin_transfer(m);
         ppu_set_mode(m, 3);
     } else if (m->ppu_mode == 3u) {

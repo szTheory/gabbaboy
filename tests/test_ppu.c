@@ -453,9 +453,9 @@ static int ppu_timing_stat(void) {
     emit_reg(&p, 0x41, 0x28);          /* Mode 0 and Mode 2 share one STAT line. */
     gbb_instance *machine = load_guest(&p, 0x91);
     REQUIRE(machine != NULL);
-    gbb_test_bus_event bus_events[256], ppu_events[64];
+    gbb_test_bus_event bus_events[256], ppu_events[128];
     gbb_test_observer_set(machine, bus_events, 256);
-    gbb_test_ppu_observer_set(machine, ppu_events, 64);
+    gbb_test_ppu_observer_set(machine, ppu_events, 128);
     gbb_run_result run = gbb_run(machine, 1600, NULL, 0);
     REQUIRE(run.reason == GBB_STOP_BUDGET);
     size_t bus_count = gbb_test_observer_count(machine);
@@ -480,9 +480,9 @@ static int ppu_timing_stat(void) {
     emit_reg(&p, 0x45, 1);
     machine = load_guest(&p, 0x91);
     REQUIRE(machine != NULL);
-    gbb_test_bus_event line_bus[256], line_ppu[64];
+    gbb_test_bus_event line_bus[256], line_ppu[128];
     gbb_test_observer_set(machine, line_bus, 256);
-    gbb_test_ppu_observer_set(machine, line_ppu, 64);
+    gbb_test_ppu_observer_set(machine, line_ppu, 128);
     run = gbb_run(machine, 1100, NULL, 0);
     REQUIRE(run.reason == GBB_STOP_BUDGET);
     bus_count = gbb_test_observer_count(machine);

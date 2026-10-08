@@ -104,7 +104,8 @@ target_link_libraries(test_dma PRIVATE GabbaBoy::core)
 target_compile_features(test_dma PRIVATE c_std_17)
 set_target_properties(test_dma PROPERTIES C_EXTENSIONS OFF)
 foreach(case dma_progress dma_start dma_restart dma_register_readback dma_source_mapping dma_hram dma_interrupt_stack dma_partition
-             dma_vram_lock dma_oam_lock dma_contention dma_ppu_overlap dma_active_mode_matrix dma_ppu_cpu_collision dma_ppu_word_boundaries)
+             dma_vram_lock dma_oam_lock dma_contention dma_ppu_overlap dma_oam_entry39
+             dma_active_mode_matrix dma_ppu_cpu_collision dma_ppu_word_boundaries)
   add_test(NAME ${case} COMMAND test_dma ${case})
 endforeach()
 

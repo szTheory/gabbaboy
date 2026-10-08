@@ -98,6 +98,7 @@ dma_vram_lock
 dma_oam_lock
 dma_contention
 dma_ppu_overlap
+dma_oam_entry39
 dma_active_mode_matrix
 dma_ppu_cpu_collision
 dma_ppu_word_boundaries

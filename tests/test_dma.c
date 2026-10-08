@@ -741,6 +741,62 @@ static gbb_instance *load_ppu_dma_overlap_guest(unsigned delay_nops, int dma_ena
     return machine;
 }
 
+static gbb_instance *load_oam_entry39_guest(void) {
+    small_program p = {{0}, 0};
+    emit(&p, 0xAF); emit(&p, 0xE0); emit(&p, 0x40); /* LCD off */
+    emit(&p, 0x3E); emit(&p, 0xE4); emit(&p, 0xE0); emit(&p, 0x48); /* OBP0 */
+    emit(&p, 0xAF); emit(&p, 0xE0); emit(&p, 0x47); /* BG color 0 */
+    for (unsigned row = 0; row < 8u; ++row) {
+        emit_memory_byte(&p, (uint16_t)(0x8000u + row * 2u), 0xFFu);
+        emit_memory_byte(&p, (uint16_t)(0x8001u + row * 2u), 0x00u);
+    }
+    /* Entries 0-38 retain their zero-filled offscreen Y coordinate. */
+    emit_memory_byte(&p, 0xFE9Cu, 16u); /* OAM entry 39: y=0 on line 0 */
+    emit_memory_byte(&p, 0xFE9Du, 8u);  /* x=0 */
+    emit_memory_byte(&p, 0xFE9Eu, 0u);  /* tile 0 */
+    emit_memory_byte(&p, 0xFE9Fu, 0u);
+    emit(&p, 0x3E); emit(&p, 0x82); emit(&p, 0xE0); emit(&p, 0x40); /* LCD + OBJ */
+    emit(&p, 0x76); /* HALT */
+
+    uint8_t rom[32768] = {0};
+    rom[0x100] = 0xC3; rom[0x101] = 0x50; rom[0x102] = 0x01;
+    memcpy(rom + 0x150, p.bytes, p.size);
+    rom[0x134] = 0xE7;
+    uint8_t checksum = 0;
+    for (size_t i = 0x134; i <= 0x14Cu; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14D] = checksum;
+    gbb_instance *machine = NULL;
+    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &machine) != GBB_OK ||
+        gbb_load_rom(machine, rom, sizeof(rom)) != GBB_OK) {
+        gbb_destroy(machine);
+        return NULL;
+    }
+    return machine;
+}
+
+static int dma_oam_entry39(void) {
+    gbb_instance *machine = load_oam_entry39_guest();
+    REQUIRE(machine != NULL);
+    uint8_t pixels[PIXELS];
+    gbb_test_bus_event events[1200];
+    gbb_test_ppu_observer_set(machine, events, 1200u);
+    REQUIRE(run_frame(machine, pixels) == 0);
+    REQUIRE(pixels[0] == 1u); /* entry 39 is the only visible sprite */
+    size_t count = gbb_test_ppu_observer_count(machine);
+    int found_entry39 = 0;
+    for (size_t i = 0; i < count; ++i) {
+        if (events[i].access == 9u && events[i].address == 0xFE27u) {
+            REQUIRE(events[i].value == 1u);
+            found_entry39 = 1;
+            break;
+        }
+    }
+    REQUIRE(found_entry39);
+    gbb_destroy(machine);
+    return 0;
+}
+
 static int dma_ppu_overlap(void) {
     uint8_t pixels[PIXELS];
     gbb_instance *baseline = load_ppu_dma_overlap_guest(0u, 0, UINT32_MAX, 0, 8u, 0u);
@@ -1153,6 +1209,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "dma_partition") == 0) return dma_partition();
     if (strcmp(argv[1], "dma_contention") == 0) return dma_contention();
     if (strcmp(argv[1], "dma_ppu_overlap") == 0) return dma_ppu_overlap();
+    if (strcmp(argv[1], "dma_oam_entry39") == 0) return dma_oam_entry39();
     if (strcmp(argv[1], "dma_ppu_cpu_collision") == 0) return dma_ppu_cpu_collision();
     if (strcmp(argv[1], "dma_ppu_word_boundaries") == 0) return dma_ppu_word_boundaries();
     if (strcmp(argv[1], "dma_active_mode_matrix") == 0) return dma_active_mode_matrix();
