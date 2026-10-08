@@ -18,6 +18,8 @@ extern void gbb_test_observer_set(gbb_instance *, gbb_test_bus_event *, size_t);
 extern size_t gbb_test_observer_count(const gbb_instance *);
 extern void gbb_test_audio_kernel(gbb_instance *, const int32_t *, const int32_t *,
                                   size_t, gbb_audio_frame *);
+extern void gbb_test_audio_edge(gbb_instance *, int32_t, int32_t, unsigned,
+                                gbb_audio_frame *);
 
 static void fix_checksum(uint8_t *rom) {
     uint8_t sum = 0u;
@@ -231,6 +233,20 @@ static int audio_signal(const char *case_name) {
     PASS();
 }
 
+static int audio_fractional_edges(const char *case_name) {
+    gbb_instance *machines[3] = {load_nops(), load_nops(), load_nops()};
+    REQUIRE(machines[0] != NULL && machines[1] != NULL && machines[2] != NULL);
+    gbb_audio_frame frames[3] = {{0}};
+    gbb_test_audio_edge(machines[0], 12000, 12000, 0u, &frames[0]);
+    gbb_test_audio_edge(machines[1], 12000, 12000, 3u, &frames[1]);
+    gbb_test_audio_edge(machines[2], 12000, 12000, 7u, &frames[2]);
+    REQUIRE(frames[0].left > frames[1].left && frames[1].left > frames[2].left);
+    REQUIRE(frames[0].left == frames[0].right && frames[1].left == frames[1].right &&
+            frames[2].left == frames[2].right);
+    for (unsigned i = 0u; i < 3u; ++i) gbb_destroy(machines[i]);
+    PASS();
+}
+
 static int audio_partition(const char *case_name) {
     static const uint8_t program[] = {
         0x3Eu, 0xF0u, 0xEAu, 0x12u, 0xFFu, 0x3Eu, 0x80u,
@@ -335,6 +351,7 @@ int main(int argc, char **argv) {
     if (strcmp(case_name, "audio_tracer") == 0) return audio_tracer(case_name);
     if (strcmp(case_name, "audio_capacity") == 0) return audio_capacity(case_name);
     if (strcmp(case_name, "audio_signal") == 0) return audio_signal(case_name);
+    if (strcmp(case_name, "audio_fractional_edges") == 0) return audio_fractional_edges(case_name);
     if (strcmp(case_name, "audio_partition") == 0) return audio_partition(case_name);
     if (strcmp(case_name, "audio_filter") == 0) return audio_filter(case_name);
     if (strcmp(case_name, "audio_api_edges") == 0) return audio_api_edges(case_name);

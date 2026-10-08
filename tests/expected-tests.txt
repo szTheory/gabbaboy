@@ -136,6 +136,7 @@ timer_tma_collision
 audio_tracer
 audio_capacity
 audio_signal
+audio_fractional_edges
 audio_partition
 audio_filter
 audio_api_edges

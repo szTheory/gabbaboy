@@ -14,7 +14,8 @@
 #define GBB_PPU_FIFO_CAPACITY 16u
 #define GBB_AUDIO_CLOCK_HALF_DOTS UINT64_C(8388608)
 #define GBB_AUDIO_SAMPLE_RATE UINT64_C(48000)
-#define GBB_AUDIO_FILTER_TAPS 8u
+#define GBB_AUDIO_EVENT_PHASES 8u
+#define GBB_AUDIO_EVENT_TAPS 16u
 #define GBB_AUDIO_HPF_Q15 32648
 typedef struct {
     uint8_t sweep, duty_length, envelope, frequency_low, control;
@@ -99,8 +100,9 @@ struct gbb_instance {
     apu_noise_channel apu_noise;
     uint8_t apu_nr50, apu_nr51, apu_power, apu_sequencer_step;
     uint64_t apu_sample_phase;
-    int32_t audio_history[2][GBB_AUDIO_FILTER_TAPS];
-    uint8_t audio_history_head;
+    int64_t audio_event_ring[2][GBB_AUDIO_EVENT_TAPS];
+    uint8_t audio_event_head;
+    int32_t audio_mix_level[2];
     int32_t audio_hpf_input[2];
     int32_t audio_hpf_output[2];
     gbb_audio_frame *audio_frames;
@@ -152,41 +154,102 @@ static int64_t audio_round_q15(int64_t value) {
     return -((-value + 16384) / 32768);
 }
 
-/* Original fixed-phase, 8-tap Q15 FIR followed by the 48 kHz DMG HPF model. */
-static gbb_audio_frame audio_process_sample(gbb_instance *m, int32_t left,
-                                            int32_t right) {
-    static const int16_t coefficients[GBB_AUDIO_FILTER_TAPS] = {
-        682, 2731, 5461, 7510, 7510, 5461, 2731, 682
-    };
-    const int32_t input[2] = {left, right};
+/* Bounded 8-phase, 16-sample windowed-sinc step responses in Q15. */
+static const int16_t audio_step_q15[GBB_AUDIO_EVENT_PHASES][GBB_AUDIO_EVENT_TAPS] = {
+    {16384, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767},
+    {14336, 18431, 22527, 26623, 29695, 31743, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767},
+    {12288, 16384, 20480, 24575, 28671, 30719, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767},
+    {10240, 14336, 18431, 22527, 26623, 29695, 31743, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767},
+    {8192, 12288, 16384, 20480, 24575, 28671, 30719, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767},
+    {6144, 10240, 14336, 18431, 22527, 26623, 29695, 31743, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767},
+    {4096, 8192, 12288, 16384, 20480, 24575, 28671, 30719, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767}
+};
+
+static void audio_add_edge(gbb_instance *m, unsigned channel, int32_t delta,
+                           unsigned phase) {
+    for (unsigned tap = 0u; tap < GBB_AUDIO_EVENT_TAPS; ++tap) {
+        const unsigned slot = ((unsigned)m->audio_event_head + tap) % GBB_AUDIO_EVENT_TAPS;
+        const int64_t contribution = (int64_t)delta *
+            ((int32_t)audio_step_q15[phase][tap] - 32767);
+        m->audio_event_ring[channel][slot] += contribution;
+    }
+}
+
+static gbb_audio_frame audio_process_sample(gbb_instance *m) {
     int16_t output[2];
     for (unsigned channel = 0u; channel < 2u; ++channel) {
-        m->audio_history[channel][m->audio_history_head] = input[channel];
-        int64_t filtered = 0;
-        for (unsigned tap = 0u; tap < GBB_AUDIO_FILTER_TAPS; ++tap) {
-            unsigned index = ((unsigned)m->audio_history_head +
-                              GBB_AUDIO_FILTER_TAPS - tap) &
-                             (GBB_AUDIO_FILTER_TAPS - 1u);
-            filtered += (int64_t)m->audio_history[channel][index] * coefficients[tap];
-        }
-        const int64_t sample = audio_saturate_s16(audio_round_q15(filtered));
+        const unsigned slot = m->audio_event_head;
+        const int64_t sample = audio_saturate_s16(audio_round_q15(
+            (int64_t)m->audio_mix_level[channel] * 32768 +
+            m->audio_event_ring[channel][slot]));
+        m->audio_event_ring[channel][slot] = 0;
         const int64_t hp = sample - m->audio_hpf_input[channel] +
             audio_round_q15((int64_t)m->audio_hpf_output[channel] * GBB_AUDIO_HPF_Q15);
         m->audio_hpf_input[channel] = audio_saturate_s16(sample);
         m->audio_hpf_output[channel] = (int32_t)audio_saturate_s16(hp);
         output[channel] = (int16_t)m->audio_hpf_output[channel];
     }
-    m->audio_history_head = (uint8_t)((m->audio_history_head + 1u) &
-                                      (GBB_AUDIO_FILTER_TAPS - 1u));
+    m->audio_event_head = (uint8_t)((m->audio_event_head + 1u) % GBB_AUDIO_EVENT_TAPS);
     return (gbb_audio_frame){output[0], output[1]};
+}
+
+static void audio_current_mix(const gbb_instance *m, int32_t *left, int32_t *right) {
+    static const uint8_t duty_pattern[4] = {0x01u, 0x81u, 0x87u, 0x7Eu};
+    *left = 0; *right = 0;
+    for (unsigned i = 0u; i < 2u; ++i) {
+        const apu_pulse_channel *pulse = &m->apu_pulse[i];
+        const uint8_t duty = (uint8_t)(pulse->duty_length >> 6);
+        int32_t sample = 0;
+        if (pulse->enabled && pulse->volume != 0u &&
+            ((duty_pattern[duty] >> pulse->phase) & 1u) != 0u)
+            sample = (int32_t)pulse->volume * 2048 - 16384;
+        if ((m->apu_nr51 & (1u << i)) != 0u)
+            *right += sample * (int32_t)((m->apu_nr50 & 7u) + 1u);
+        if ((m->apu_nr51 & (1u << (i + 4u))) != 0u)
+            *left += sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u);
+    }
+    int32_t wave_sample = 0;
+    if (m->apu_wave.enabled && m->apu_wave.level != 0u) {
+        const uint8_t packed = m->apu_wave.ram[m->apu_wave.position >> 1];
+        const uint8_t digital = (m->apu_wave.position & 1u) == 0u
+            ? (uint8_t)(packed >> 4) : (uint8_t)(packed & 0x0Fu);
+        const unsigned shift = (m->apu_wave.level >> 5) - 1u;
+        wave_sample = (int32_t)(digital >> shift) * 2048 - 16384;
+    }
+    if ((m->apu_nr51 & 0x04u) != 0u)
+        *right += wave_sample * (int32_t)((m->apu_nr50 & 7u) + 1u);
+    if ((m->apu_nr51 & 0x40u) != 0u)
+        *left += wave_sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u);
+    int32_t noise_sample = 0;
+    if (m->apu_noise.enabled && m->apu_noise.volume != 0u &&
+        (m->apu_noise.lfsr & 1u) == 0u)
+        noise_sample = (int32_t)m->apu_noise.volume * 2048 - 16384;
+    if ((m->apu_nr51 & 0x08u) != 0u)
+        *right += noise_sample * (int32_t)((m->apu_nr50 & 7u) + 1u);
+    if ((m->apu_nr51 & 0x80u) != 0u)
+        *left += noise_sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u);
 }
 
 void gbb_test_audio_kernel(gbb_instance *m, const int32_t *left,
                            const int32_t *right, size_t count,
                            gbb_audio_frame *output) {
     if (m == NULL || left == NULL || right == NULL || output == NULL) return;
-    for (size_t i = 0u; i < count; ++i)
-        output[i] = audio_process_sample(m, left[i], right[i]);
+    for (size_t i = 0u; i < count; ++i) {
+        audio_add_edge(m, 0u, left[i] - m->audio_mix_level[0], 0u);
+        audio_add_edge(m, 1u, right[i] - m->audio_mix_level[1], 0u);
+        m->audio_mix_level[0] = left[i]; m->audio_mix_level[1] = right[i];
+        output[i] = audio_process_sample(m);
+    }
+}
+
+void gbb_test_audio_edge(gbb_instance *m, int32_t left_delta, int32_t right_delta,
+                         unsigned phase, gbb_audio_frame *output) {
+    if (m == NULL || output == NULL || phase >= GBB_AUDIO_EVENT_PHASES) return;
+    audio_add_edge(m, 0u, left_delta, phase);
+    audio_add_edge(m, 1u, right_delta, phase);
+    m->audio_mix_level[0] += left_delta;
+    m->audio_mix_level[1] += right_delta;
+    *output = audio_process_sample(m);
 }
 
 static uint8_t diagnostic_timer_state(const gbb_instance *m) {
@@ -391,8 +454,9 @@ static void reset_state(gbb_instance *m) {
     m->apu_nr50 = 0u; m->apu_nr51 = 0xFFu; m->apu_power = 1u;
     m->apu_sequencer_step = 0u;
     m->apu_sample_phase = 0u;
-    memset(m->audio_history, 0, sizeof(m->audio_history));
-    m->audio_history_head = 0u;
+    memset(m->audio_event_ring, 0, sizeof(m->audio_event_ring));
+    m->audio_event_head = 0u;
+    m->audio_mix_level[0] = m->audio_mix_level[1] = 0;
     memset(m->audio_hpf_input, 0, sizeof(m->audio_hpf_input));
     memset(m->audio_hpf_output, 0, sizeof(m->audio_hpf_output));
     m->timer_signal = 0;
@@ -1455,48 +1519,21 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
             }
         }
         m->apu_sample_phase += GBB_AUDIO_SAMPLE_RATE;
+        int32_t left, right;
+        audio_current_mix(m, &left, &right);
+        if (left != m->audio_mix_level[0] || right != m->audio_mix_level[1]) {
+            const unsigned phase = (unsigned)((m->apu_sample_phase * GBB_AUDIO_EVENT_PHASES) /
+                                               GBB_AUDIO_CLOCK_HALF_DOTS) % GBB_AUDIO_EVENT_PHASES;
+            audio_add_edge(m, 0u, left - m->audio_mix_level[0], phase);
+            audio_add_edge(m, 1u, right - m->audio_mix_level[1], phase);
+            m->audio_mix_level[0] = left; m->audio_mix_level[1] = right;
+        }
         if (m->apu_sample_phase >= GBB_AUDIO_CLOCK_HALF_DOTS) {
             m->apu_sample_phase -= GBB_AUDIO_CLOCK_HALF_DOTS;
-            {
-                static const uint8_t duty_pattern[4] = {0x01u, 0x81u, 0x87u, 0x7Eu};
-                int32_t left = 0, right = 0;
-                for (unsigned i = 0u; i < 2u; ++i) {
-                    const apu_pulse_channel *pulse = &m->apu_pulse[i];
-                    const uint8_t duty = (uint8_t)(pulse->duty_length >> 6);
-                    int32_t sample = 0;
-                    if (pulse->enabled && pulse->volume != 0u &&
-                        ((duty_pattern[duty] >> pulse->phase) & 1u) != 0u)
-                        sample = (int32_t)pulse->volume * 2048 - 16384;
-                    if ((m->apu_nr51 & (1u << i)) != 0u)
-                        right += sample * (int32_t)((m->apu_nr50 & 7u) + 1u);
-                    if ((m->apu_nr51 & (1u << (i + 4u))) != 0u)
-                        left += sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u);
-                }
-                int32_t wave_sample = 0;
-                if (m->apu_wave.enabled && m->apu_wave.level != 0u) {
-                    uint8_t packed = m->apu_wave.ram[m->apu_wave.position >> 1];
-                    uint8_t digital = (m->apu_wave.position & 1u) == 0u
-                        ? (uint8_t)(packed >> 4) : (uint8_t)(packed & 0x0Fu);
-                    unsigned shift = (m->apu_wave.level >> 5) - 1u;
-                    wave_sample = (int32_t)(digital >> shift) * 2048 - 16384;
-                }
-                if ((m->apu_nr51 & 0x04u) != 0u)
-                    right += wave_sample * (int32_t)((m->apu_nr50 & 7u) + 1u);
-                if ((m->apu_nr51 & 0x40u) != 0u)
-                    left += wave_sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u);
-                int32_t noise_sample = 0;
-                if (m->apu_noise.enabled && m->apu_noise.volume != 0u &&
-                    (m->apu_noise.lfsr & 1u) == 0u)
-                    noise_sample = (int32_t)m->apu_noise.volume * 2048 - 16384;
-                if ((m->apu_nr51 & 0x08u) != 0u)
-                    right += noise_sample * (int32_t)((m->apu_nr50 & 7u) + 1u);
-                if ((m->apu_nr51 & 0x80u) != 0u)
-                    left += noise_sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u);
-                const gbb_audio_frame frame = audio_process_sample(m, left, right);
-                if (m->audio_frames != NULL &&
-                    m->audio_frame_count < m->audio_frame_capacity)
-                    m->audio_frames[m->audio_frame_count++] = frame;
-            }
+            const gbb_audio_frame frame = audio_process_sample(m);
+            if (m->audio_frames != NULL &&
+                m->audio_frame_count < m->audio_frame_capacity)
+                m->audio_frames[m->audio_frame_count++] = frame;
         }
         dma_advance_half_dot(m);
         m->ppu_half_phase ^= 1u;

@@ -19,13 +19,24 @@ The kernel acceptance limits are: impulse peak no greater than the input peak;
 the 1/8-duty periodic reference retains at least 1,000 output units of peak;
 alternating Nyquist input is at most 32 output units after a 2,048-frame zero
 warmup; and a positive step decays to between 6,000 and 7,000 units by frame
-256. These are bounded software-model signal checks, not a psychoacoustic
-rating. The DMG-style high-pass charge factor is scaled from Pan Docs'
-approximation to 48 kHz as `0.999958^(4194304/48000)`, approximately `0.99634`;
-the filter uses Q15 coefficient 32648, nearest rounding with ties away from
-zero, and s16 saturation. The original FIR has eight fixed Q15 taps
-`[682,2731,5461,7510,7510,5461,2731,682]`, phase zero, no runtime table
-generation, and no data-dependent work.
+256. An additional authored edge test injects the same level change at phases
+0, 3/8, and 7/8 of an output interval and requires distinct, ordered first
+samples. These checks establish bounded responses for the listed vectors and
+fractional-phase sensitivity; they do not establish general passband ripple,
+alias rejection across all frequencies, or perceptual quality. The DMG-style
+high-pass charge factor is scaled from Pan Docs' approximation to 48 kHz as
+`0.999958^(4194304/48000)`, approximately `0.99634`; the filter uses Q15
+coefficient 32648, nearest rounding with ties away from zero, and s16
+saturation.
+
+The original kernel detects mixed-level changes on each emulated half-dot,
+maps their position into one of eight fixed fractional phases, and deposits
+Q15 step-response corrections into a 16-frame per-instance ring. A bounded
+16-tap update is performed only when a channel mix changes; each emitted frame
+consumes one ring slot. The Q15 table is static, with no runtime generation,
+allocations, dependencies, or data-dependent loop bounds. Accumulation uses
+signed 64-bit intermediates and final s16 saturation. APU reset clears the
+event ring, phase, mix baseline, and HPF history.
 
 All completed PCM must be byte-identical and have identical frame counts when
 the same guest timeline is run whole, in two halves, or in repeated 792
@@ -34,21 +45,17 @@ survive output-call boundaries; APU reset clears them.
 
 ## Bounded throughput method
 
-The per-emulated-half-dot work is fixed: channel state advancement, one bounded
-mix/filter operation when a 48 kHz frame deadline is crossed, and fixed-size
-history updates. There are no data-dependent loops, allocations, device calls,
-or external DSP packages in the core path. The throughput gate is structural
-and deterministic: one bounded operation per half-dot and at most one PCM frame
-per crossing. A diagnostic timing sample used revision `8da9392` (the source
-state subsequently committed at that revision), the `phase1` CMake preset
-(Debug, Apple clang 21.0.0, Darwin arm64), and the `audio_signal` workload: 4,144
-stereo frames through the kernel, 66,304 fixed-tap multiply-accumulates, with
-FNV-1a 64 PCM digest `18b8e1d6fb25b7a1`. The method launched the test process
-three warm-up times and measured 30 further process wall-time samples with a
-monotonic clock; median was 2.268 ms, median absolute deviation 0.209 ms, and
-range 1.861–3.333 ms. This includes process startup and test setup, so it is a
-reproducibility/upper-bound diagnostic rather than an isolated kernel speed
-claim. It does not establish perceptual or hardware quality.
+The per-emulated-half-dot work is fixed: channel state advancement and a bounded
+mix comparison; a changed mix performs at most 16 table updates per channel,
+and each 48 kHz crossing consumes one ring slot. The throughput bound is
+therefore independent of caller buffer size and edge spacing. There are no
+allocations, device calls, or external DSP packages in the core path. The
+current authored signal-vector digest is FNV-1a 64
+`202a3e9f96f3cead`; the guest partition PCM digest is
+`b5bb127cdda6a035`. The previous FIR timing sample is not evidence for this
+kernel and is retired; no isolated timing sample is claimed here. Signal tests
+remain software-model evidence only, separate from perceptual or physical
+hardware qualification.
 
 ## API storage and backpressure
 
