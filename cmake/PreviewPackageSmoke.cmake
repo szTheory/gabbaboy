@@ -120,6 +120,10 @@ set(example_configure_command
   "-DCMAKE_PREFIX_PATH=${extracted_prefix}"
   "-DGBB_ROM_PATH=${extracted_prefix}/share/gabbaboy/fixtures/visible-demo/demo.gb"
   "-DGBB_BATTERY_ROM_PATH=${extracted_prefix}/share/gabbaboy/fixtures/mbc1-continuation/continuation.gb")
+if(DEFINED GBB_SANITIZER_LINK_OPTIONS AND NOT GBB_SANITIZER_LINK_OPTIONS STREQUAL "")
+  list(APPEND example_configure_command
+    "-DCMAKE_EXE_LINKER_FLAGS=${GBB_SANITIZER_LINK_OPTIONS}")
+endif()
 execute_process(COMMAND ${example_configure_command}
   RESULT_VARIABLE example_configure_result OUTPUT_VARIABLE example_configure_output ERROR_VARIABLE example_configure_error)
 if(NOT example_configure_result EQUAL 0)
