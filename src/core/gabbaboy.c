@@ -333,6 +333,15 @@ static uint8_t joypad_value(const gbb_instance *m) {
     return (uint8_t)(0xC0u | m->joypad_select | lines);
 }
 
+/* Request JOYP IF at the ordered software boundary that changes the selected
+ * active-low pins. Pin settling, bounce, and CPU-B sampling latency are outside
+ * this event-boundary model. */
+static void joypad_request_falling_edge(gbb_instance *m, uint8_t previous) {
+    uint8_t current = (uint8_t)(joypad_value(m) & 0x0Fu);
+    if ((previous & (uint8_t)~current & 0x0Fu) != 0)
+        m->interrupt_flags |= 0x10u;
+}
+
 static int cpu_vram_access_allowed(const gbb_instance *m) {
     return (m->lcdc & 0x80u) == 0 || m->ppu_mode != 3u;
 }
@@ -430,7 +439,11 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     else if (address >= 0xFE00 && address <= 0xFE9F) {
         if (cpu_oam_access_allowed(m)) m->oam[address - 0xFE00] = value;
     }
-    else if (address == 0xFF00) m->joypad_select = (uint8_t)(value & 0x30u);
+    else if (address == 0xFF00) {
+        uint8_t previous = (uint8_t)(joypad_value(m) & 0x0Fu);
+        m->joypad_select = (uint8_t)(value & 0x30u);
+        joypad_request_falling_edge(m, previous);
+    }
     else if (address == 0xFF40) {
         uint8_t old = m->lcdc;
         m->lcdc = value;
@@ -565,9 +578,13 @@ static void apply_input_events_now(gbb_instance *m) {
         } else if (event.kind == GBB_INPUT_SERIAL_EDGE) {
             shift_external_serial(m, event.value);
         } else if (event.kind == GBB_INPUT_BUTTON_PRESS) {
+            uint8_t previous = (uint8_t)(joypad_value(m) & 0x0Fu);
             m->joypad_buttons |= (uint8_t)(1u << event.value);
+            joypad_request_falling_edge(m, previous);
         } else if (event.kind == GBB_INPUT_BUTTON_RELEASE) {
+            uint8_t previous = (uint8_t)(joypad_value(m) & 0x0Fu);
             m->joypad_buttons &= (uint8_t)~(1u << event.value);
+            joypad_request_falling_edge(m, previous);
         }
     }
 }
