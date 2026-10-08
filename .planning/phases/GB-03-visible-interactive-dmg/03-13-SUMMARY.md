@@ -73,6 +73,7 @@ plan_head_after: ddac31aefcbe316f4443a08ad668ee912365102f
 - Added independently authored DMA/PPU guests for full/partial scan overlap, nonoverlap controls, active-DMA CPU VRAM/OAM access in PPU modes 0–3, before/after word-update pixels, exact same-half-dot DMA→PPU→CPU collision, and split-run equivalence.
 - Refreshed evidence and requirement records: VIDEO-02/03 pass under their confidence-qualified contracts; VIDEO-04 remains open for the actual packaged window/demo/key observation.
 - Preserved the 03-12 startup window and FF46 start/restart/readback exceptions. The active-DMA access matrix applies to the normal blocked interval only.
+- Follow-up review fixed the omitted 40th OAM entry and reset-time scan cursor; new guest regressions cover both cases. A fresh review of the affected core and tests is clean.
 
 ## Task Commits
 
@@ -111,9 +112,10 @@ The local environment has no SDL display (`SDL_Init: The video driver did not ad
 
 - `ctest --preset phase1 --output-on-failure --no-tests=error -R '^joypad_'` — 6/6 passed.
 - `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(dma_ppu_overlap|dma_active_mode_matrix|dma_ppu_word_boundaries|dma_ppu_cpu_collision)$'` — 4/4 passed.
-- `cmake --preset phase1 && cmake --build --preset phase1 --parallel 2 && ctest --preset phase1 --output-on-failure --no-tests=error` — 139/139 passed.
+- `cmake --preset phase1 && cmake --build --preset phase1 --parallel 2 && ctest --preset phase1 --output-on-failure --no-tests=error` — 141/141 passed after the review fixes.
+- Fresh code review at `eb31afd` — clean, 0 findings; focused JOYP/PPU/DMA regressions passed 17/17.
 - `git diff --check` — passed.
-- Fresh goal-backward audit: 4/5 truths; VIDEO-01/02/03/05 pass under declared evidence classes; VIDEO-04 needs a display-equipped Mac observation. No exact-head hosted CI was run.
+- Fresh goal-backward audit: `human_needed`, 4/5 truths; VIDEO-01/02/03/05 pass under declared evidence classes; VIDEO-04 needs a display-equipped Mac observation. No exact-head hosted CI was run.
 
 ## Next Phase Readiness
 

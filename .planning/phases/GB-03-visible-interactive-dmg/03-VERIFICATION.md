@@ -1,12 +1,9 @@
 ---
 phase: GB-03-visible-interactive-dmg
-verified: 2026-10-08T00:26:01Z
-status: gaps_found
+verified: 2026-10-08T00:38:55Z
+status: human_needed
 score: 4/5 roadmap truths verified
 covered_files:
-  - .github/workflows/ci.yml
-  - .github/workflows/fixture-repro.yml
-  - .github/workflows/preview.yml
   - .planning/phases/GB-03-visible-interactive-dmg/03-01-PLAN.md
   - .planning/phases/GB-03-visible-interactive-dmg/03-01-SUMMARY.md
   - .planning/phases/GB-03-visible-interactive-dmg/03-02-PLAN.md
@@ -31,45 +28,32 @@ covered_files:
   - .planning/phases/GB-03-visible-interactive-dmg/03-11-SUMMARY.md
   - .planning/phases/GB-03-visible-interactive-dmg/03-12-PLAN.md
   - .planning/phases/GB-03-visible-interactive-dmg/03-12-SUMMARY.md
-  - .planning/phases/GB-03-visible-interactive-dmg/03-RESEARCH.md
+  - .planning/phases/GB-03-visible-interactive-dmg/03-13-PLAN.md
+  - .planning/phases/GB-03-visible-interactive-dmg/03-13-SUMMARY.md
+  - .planning/phases/GB-03-visible-interactive-dmg/03-REVIEW.md
+  - .planning/phases/GB-03-visible-interactive-dmg/03-VALIDATION.md
   - docs/dmg-video-evidence.md
-  - docs/preview.md
   - src/core/gabbaboy.c
-  - src/player/main.c
   - tests/CMakeLists.txt
   - tests/expected-tests.txt
-  - tests/player/test_input.c
-  - tests/player/test_presentation.c
-  - tests/player/test_session.c
-  - tests/scripts/reproduce-visible-demo.sh
-  - tests/scripts/verify-phase3-player.sh
   - tests/test_dma.c
   - tests/test_joypad.c
   - tests/test_ppu.c
-  - tests/test_tracer.c
-covered_digest: "v3:sha256:7a16dde255090f16a63465f5654b406a66c1ff77aa4cb909cd2835d91f238135"
+covered_digest: "v3:sha256:7f3bf9d2b0a5dee5e485ace99c8cf44dce6c73119d6642007011026d9baff48a"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
   previous_status: gaps_found
   previous_score: 2/5
   gaps_closed:
-    - "VIDEO-02: original guests assert active-DMA CPU VRAM/OAM access in PPU modes 0–3, mode-2 overlap controls, mode-3 DMA-word boundaries, same-half-dot DMA/PPU/CPU results, and partition invariance under D-025."
-    - "VIDEO-03: original guest assertions cover selected JOYP pin falling edges, sticky IF, IE independence, held/repeated keys, selector changes, shared pins, event order, and partition invariance."
-  gaps_remaining:
-    - "VIDEO-04 live packaged-window and key-input behavior was not observed because this environment has no SDL display."
+    - "VIDEO-02: source-backed deterministic software behavior for active-DMA CPU VRAM/OAM access, mode-2 overlap, mode-3 fetch words, same-half-dot DMA/PPU/CPU results, and partition invariance is covered under D-025."
+    - "VIDEO-03: the selected falling-edge IF.4 software contract is covered for timestamped public input and wired SDL input events, including sticky IF, IE independence, selector changes, shared pins, ordering, and partition invariance."
+  gaps_remaining: []
   regressions: []
-gaps:
-  - truth: "A macOS user can visibly open the packaged player and confirm the demo responds to a mapped key. (VIDEO-04)"
-    status: needs_human
-    reason: "This environment has no SDL display (`SDL_Init: The video driver did not add any displays`). Automated player/package evidence does not prove a visible window or live keyboard interaction."
-    artifacts:
-      - path: src/player/main.c
-        issue: "Current packaged window and mapped-key response need a display-equipped Mac observation."
-      - path: docs/preview.md
-        issue: "Automated evidence exists; perceptual window check remains open."
-    missing:
-      - "On a display-equipped Mac, launch the packaged player, confirm the demo appears, and press one mapped key."
+human_verification:
+  - test: "Open the packaged player and demo on a display-equipped Mac, then press one mapped key."
+    expected: "The demo is visibly rendered and responds to the mapped key."
+    why_human: "SDL reports that this environment has no display; offscreen software-renderer and input-queue tests cannot prove a visible macOS window or live keyboard response."
 decision_coverage:
   honored: 14
   total: 14
@@ -78,13 +62,13 @@ decision_coverage:
 
 # Phase 3: Visible Interactive DMG Verification Report
 
-> The original 2/5 audit below is retained as historical baseline. The current goal-backward result is the fresh audit appended at the end of this file.
+> Historical audit details below are retained for traceability and are superseded by the latest goal-backward re-verification at the end of this file. Use the frontmatter and latest section for current status.
 
 **Phase Goal:** As a Mac user, I want to play a legal GB ROM with timed input and video evidence, so that I can verify the DMG preview.
 **Verified:** 2026-10-07T23:12:54Z
 **Implementation revision:** 427313a613f38676358638557676b9f72a188bd2 plus the current working-tree test and planning changes; no current-head hosted CI claim.
-**Status:** gaps found — Phase 3 is not complete; do not start Phase 4.
-**Re-verification:** Yes — after Plan 03-12 DMA gap closure.
+**Historical status (superseded):** gaps found — this result predates Plan 03-13 and the current code-review fixes.
+**Historical re-verification:** After Plan 03-12 DMA gap closure.
 
 ## User Flow Coverage
 
@@ -269,3 +253,51 @@ This verdict supersedes every historical status, gap, and recommendation above. 
 | 5 | VIDEO-05 independent evidence and limitations | PASS | Evidence classes and limitations are explicit; the SDL-free core suite is 139/139. |
 
 **Fresh score:** 4/5. **Phase status:** incomplete; only VIDEO-04 remains open. The next exact workflow command is `$gsd-verify-work 3` after the display-based observation. No current-head hosted CI, physical CPU-B qualification, or live-window observation is claimed. The Phase 4 — MBC1 and Safe Battery Continuation — work has not started.
+
+## Current goal-backward re-verification — 2026-10-08T00:38:55Z
+
+This result supersedes the older evidence above. Verification targets current branch revision `eb31afd` (`fix(03-13): reset OAM scan cursor`) after the two review fixes. D-025 authorizes selecting and testing a deterministic source-backed software model for undocumented or revision-qualified behavior; it does not turn emulator agreement or documentation into a physical CPU-B measurement.
+
+### User Flow Coverage
+
+User story: “As a Mac user, I want to play a legal GB ROM with timed input and video evidence, so that I can verify the DMG preview.”
+
+| Step | Expected | Evidence | Status |
+|---|---|---|---|
+| Open and play the fixture | The legal original demo loads and produces a frame. | Fixture digest/reproduction, gameplay tracer, player session and software-renderer smoke checks are registered and covered by the current suite. The packaged window cannot be displayed here. | NEEDS HUMAN for visible window |
+| Press a control | Timestamped input reaches the guest and updates selected JOYP reads and IF.4 under the documented software contract. | `player_input_key` maps SDL scancodes to public queued events; original guests assert selected pin/IF behavior, while player input tests assert mapping and queue admission. | VERIFIED for software model; live key remains part of VIDEO-04 |
+| Inspect video evidence | Composition, raster timing, and gameplay are separately asserted and limitations are visible. | Independent composition/timing/gameplay tests, fixture identity, and `docs/preview.md` limitation assertions are included in the phase inventory. | VERIFIED |
+| Confirm the preview on a Mac | A visible packaged window shows the demo and responds to a mapped key. | No display is available; the attempted launch reports `SDL_Init: The video driver did not add any displays`. | NEEDS HUMAN |
+
+**User-story outcome:** Not fully verified because the packaged preview could not be seen or operated on a display-equipped Mac.
+
+### Roadmap Truths and Requirements Coverage
+
+| # | Truth / requirement | Status | Evidence and boundary |
+|---|---|---|---|
+| 1 | VIDEO-01: composition, LCD/STAT transitions, dot-sensitive fetch | VERIFIED | Separate authored background/window/sprite/priority outputs and PPU timing guests assert expected pixels and timestamps. |
+| 2 | VIDEO-02: model-specific DMA, access restrictions, CPU/PPU/DMA contention | VERIFIED under D-025 software model | `dma_active_mode_matrix`, `dma_ppu_overlap`, `dma_ppu_word_boundaries`, `dma_ppu_cpu_collision`, `dma_oam_entry39`, and `dma_oam_entry39_reset` assert access behavior, per-entry scan suppression, latched fetch words, selected same-dot ordering, and reset/partition behavior. The exact word/lane behavior on CPU-B and PPU-revision applicability remain unmeasured. |
+| 3 | VIDEO-03: timestamped selection/interrupt behavior through public API and SDL keyboard path | VERIFIED under the selected falling-edge software contract | `joypad_interrupt` asserts FF00/FF0F outcomes for selected/unselected pins, selector changes, sticky IF, IE=0, duplicate/shared pins, event ordering, and partition equivalence. SDL mapping enqueues those same public input events; `player_input_events` covers mapping and admission. Manual low-duration guidance and CPU-B pulse/sample timing are not modeled or claimed. |
+| 4 | VIDEO-04: packaged macOS user flow, sizing, controls, actionable errors | NEEDS HUMAN | Automated session, scaling, controls, error, and offscreen-renderer checks are present; actual visible window and live key response were unavailable because there is no SDL display. |
+| 5 | VIDEO-05: distinct composition/timing/gameplay evidence and limitation labels | VERIFIED | Evidence matrix, original fixture identity, preview limitation text, and registered regression coverage are present. |
+
+All five VIDEO requirements are claimed by plans; none is orphaned. Decision coverage reports all 14/14 trackable Phase 3 decisions honored. VIDEO-02/03 completion is bounded to the cited documented software model and repository event-order policy. There is no physical CPU-B qualification claim.
+
+### Current Validation, Review, and Test Quality
+
+- Full registered local CTest suite: **141/141 passed** at `eb31afd`; the code-review report records the same exact count. `git diff --check HEAD` passed for current tracked changes.
+- Code review: **clean**, with 0 critical, 0 warning, 0 info findings across six reviewed implementation/test files; review confirms entry-39 scan and reset-cursor fixes and their named regressions.
+- New focused model cases include `joypad_interrupt`, `dma_ppu_overlap`, `dma_ppu_word_boundaries`, `dma_ppu_cpu_collision`, `dma_active_mode_matrix`, `dma_oam_entry39`, and `dma_oam_entry39_reset`; all are registered in CMake and the fail-closed expected-test inventory.
+- Test-quality scan: no disabled requirement tests, circular expected-value generation, or unreferenced `TBD`/`FIXME`/`XXX` markers found in reviewed phase changes. CPU/PPU/DMA pixels and bus values are authored expectations; emulator source is cross-check evidence, not the oracle.
+- No Phase 3 probe is declared. The existing Mooneye candidate probe is Phase 2 and is not used as Phase 3 proof.
+- Current-head hosted CI and downloaded-package qualification are not claimed. Earlier package receipts are for a different source revision.
+
+### Human Verification Required
+
+**Packaged preview visibility and live key response** — On a Mac with a display, launch the packaged player with its bundled legal demo, confirm the demo is visible, and press one mapped key. Expected: the visible demo responds. The current environment cannot perform this observation because SDL cannot add a display; no result is inferred from the offscreen renderer.
+
+### Remaining Work
+
+VIDEO-01/02/03/05 have current code and test evidence. VIDEO-02 and VIDEO-03 are complete only for D-025’s source-backed deterministic software rules, not measured DMG-CPU-B timing or universal hardware behavior. The only phase-level acceptance item still awaiting evidence is VIDEO-04’s visible packaged-window/key interaction. Keep Phase 3 open and do not advance to Phase 4 until that human check and final verification are done.
+
+**Next command after the display check:** `$gsd-verify-work 3`.
