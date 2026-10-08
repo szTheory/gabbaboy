@@ -46,14 +46,14 @@ created: "2026-10-08"
 | 05-02-02 | 02 | 2 | AUDIO-01 | T-05-03 | Edge/timeline bounded | model CTest | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(apu_(sequencer\|timeline)\|timer_\|halt_\|stop_)'` | ❌ task creates cases | ⬜ pending |
 | 05-03-01 | 03 | 3 | AUDIO-01 | T-05-04 | Fixed wave RAM and indices | model CTest | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^apu_wave$'` | ❌ task creates case | ⬜ pending |
 | 05-03-02 | 03 | 3 | AUDIO-01 | T-05-04 | Bounded noise period/LFSR | model CTest | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(apu_noise\|apu_power)$'` | ❌ task creates cases | ⬜ pending |
-| 05-04-01 | 04 | 4 | AUDIO-01/02 | T-05-06 | Checked DSP arithmetic | independent analytical signal CTest | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^audio_(signal\|partition\|filter)$'` | ❌ task creates cases | ⬜ pending |
+| 05-04-01 | 04 | 4 | AUDIO-01/02 | T-05-06 | Predeclared signal limits before tuning; checked DSP arithmetic | authored impulse/step/periodic references, exact count/partition PCM, bounded-throughput receipt | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^audio_(signal\|partition\|filter)$'` | ❌ task creates cases and docs limits | ⬜ pending |
 | 05-04-02 | 04 | 4 | AUDIO-02 | T-05-05 | Caller buffer guard | API CTest | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(audio_\|run_output_capacity$)'` | ❌ task creates edge case | ⬜ pending |
-| 05-05-01 | 05 | 5 | AUDIO-02/03 | T-05-07/08 | SPSC wrap/quiescence | concurrent adapter + player verifier | `bash tests/scripts/verify-phase3-player.sh` | ❌ task creates cases | ⬜ pending |
+| 05-05-01 | 05 | 5 | AUDIO-02/03 | T-05-07/08 | Request-bounded fixed-chunk callback, SPSC wrap/quiescence | zero/partial-frame/empty/over-ring/arithmetic-boundary byte requests plus concurrent adapter | `bash tests/scripts/verify-phase3-player.sh` | ❌ task creates cases | ⬜ pending |
 | 05-05-02 | 05 | 5 | AUDIO-03 | T-05-07 | No-device sink bounded | SDL adapter + player verifier | `bash tests/scripts/verify-phase3-player.sh` | ❌ task creates cases | ⬜ pending |
 | 05-06-01 | 06 | 6 | HOST-01 | T-05-09 | Per-source release | existing player input smoke | `bash tests/scripts/verify-phase3-player.sh` | ✅ existing verifier | ⬜ pending |
 | 05-06-02 | 06 | 6 | HOST-01 | T-05-09 | Per-source release | player input CTest | `bash tests/scripts/verify-phase3-player.sh` | ❌ task creates cases | ⬜ pending |
-| 05-06-03 | 06 | 6 | HOST-02 | T-05-10/11 | Commit before host clear | lifecycle/player CTest | `bash tests/scripts/verify-phase3-player.sh` | ❌ task creates cases | ⬜ pending |
-| 05-07-01 | 07 | 7 | AUDIO-03 | T-05-12/13 | Bounded receipt and fixture rights | sustained script | `bash tests/scripts/verify-phase3-player.sh && bash tests/scripts/measure-audio-playback.sh` | ❌ task creates script | ⬜ pending |
+| 05-06-03 | 06 | 6 | HOST-02 | T-05-10/11 | Commit before host clear and callback quiescence | injected SDL removed/added recovery plus pinned-SDL3 CI dummy open/stream/close; backend absence fails lane | `bash tests/scripts/verify-phase3-player.sh` | ❌ task creates cases and extends verifier | ⬜ pending |
+| 05-07-01 | 07 | 7 | AUDIO-03 | T-05-12/13 | Bounded receipt and fixture rights | sustained dummy-driver script, open/stream/close status and distinct real-device status | `bash tests/scripts/verify-phase3-player.sh && bash tests/scripts/measure-audio-playback.sh` | ❌ task creates script | ⬜ pending |
 | 05-07-02 | 07 | 7 | AUDIO-01/02/03, HOST-01/02 | T-05-12/13 | Consumer truthfulness | full inventory + package/script | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error && bash tests/scripts/verify-phase3-player.sh && bash tests/scripts/measure-audio-playback.sh` | scripts exist after 05-07-01 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
@@ -119,9 +119,9 @@ Flagged-unverified: no unlicensed ROM/audio fixture enters the repository; 05-07
 | REQ | HOST-01 focus/controller source recovery | 06, 07 | COVERED |
 | REQ | HOST-02 session/device transition recovery | 06, 07 | COVERED |
 | RESEARCH | Core/adapter responsibility boundary, divider timeline and no extra package | 01–05 | COVERED |
-| RESEARCH | Original kernel/high-pass and analytical quality floor | 04 | COVERED |
-| RESEARCH | Callback request bound, SPSC lock-free/wrap/quiescence | 05 | COVERED |
-| RESEARCH | SDL device-open availability and default-device recovery assumption | 05, 06, 07 | COVERED with environment availability flagged |
+| RESEARCH | Resolved resampler criteria: independent authored references, predeclared numeric and throughput limits before tuning, exact count/partition PCM; no perceptual/hardware claim | 04-01 | COVERED as implementation-time evidence gate; pending |
+| RESEARCH | Resolved callback sizing: current positive int byte bound, fixed chunks, partial-frame/empty/over-ring/arithmetic cases, quiescence | 05-01 | COVERED as implementation-time evidence gate; pending |
+| RESEARCH | Resolved CI transition smoke: pinned SDL3 dummy backend required, open/stream/close, injected added/removed events, stale-buffer clearing | 06-03, 07-01 | COVERED as software-path evidence gate; pending; real hardware unclaimed |
 | RESEARCH | Evidence classes, fixture rights, metric labels and sustained receipt | 01–07 | COVERED |
 | CONTEXT | D-01 four channels/registers/DIV sequencer | 01, 02, 03, 07 | COVERED |
 | CONTEXT | D-02 fixed-point approximate DMG high-pass | 04, 07 | COVERED |
@@ -136,4 +136,4 @@ Flagged-unverified: no unlicensed ROM/audio fixture enters the repository; 05-07
 | CONTEXT | D-11 separated evidence and legal fixtures | 01–07 | COVERED |
 | CONTEXT | D-12 exact sustained metrics and limits | 05, 07 | COVERED |
 
-Deferred CGB audio, VIN, board calibration, external DSP libraries, device-selection UI and physical/perceptual qualification are exclusions under 05-CONTEXT.md, not coverage gaps. The three research open questions remain execution-time measurements/assumptions, with explicit tasks above; none is silently accepted as an empirical result.
+Deferred CGB audio, VIN, board calibration, external DSP libraries, device-selection UI and physical/perceptual qualification are exclusions under 05-CONTEXT.md, not coverage gaps. The three research questions are resolved for planning by tasks 05-04-01, 05-05-01, 05-06-03 and 05-07-01. Their measurements and software smoke remain pending execution; no physical hotplug, audible quality or hardware result is marked passing.

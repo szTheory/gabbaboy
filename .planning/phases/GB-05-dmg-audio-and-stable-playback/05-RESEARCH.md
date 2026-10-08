@@ -1,7 +1,7 @@
 # Phase 5: DMG Audio and Stable Playback - Research
 
-**Researched:** 2026-10-08  
-**Domain:** DMG APU modeling, bounded deterministic PCM, SDL3 playback, input and session lifecycle  
+**Researched:** 2026-10-08
+**Domain:** DMG APU modeling, bounded deterministic PCM, SDL3 playback, input and session lifecycle
 **Confidence:** MEDIUM
 
 <user_constraints>
@@ -172,32 +172,32 @@ Volume is player gain, not an edit to emulated NR50/NR51. SDL stream gain 1.0 me
 
 ### Sequencer edge and power-state ordering
 
-**What goes wrong:** Length/envelope/sweep events shift after DIV writes, HALT/STOP, reset, or a run-call split.  
+**What goes wrong:** Length/envelope/sweep events shift after DIV writes, HALT/STOP, reset, or a run-call split.
 **Prevention:** Integrate APU sequencing with the existing emulated divider transition, and lock behavior with explicit edge tests around writes and oscillator state. Do not conflate CPU machine cycles with APU ticks. [CITED: https://gbdev.io/pandocs/Audio_Registers.html]
 
 ### Nonlinear period-to-sample mapping and aliasing
 
-**What goes wrong:** Naive per-frame output or linear interpolation masks event timing, changes results by chunk partition, or aliases the pulse/noise output.  
+**What goes wrong:** Naive per-frame output or linear interpolation masks event timing, changes results by chunk partition, or aliases the pulse/noise output.
 **Prevention:** Keep fixed-point phase per instance, specify all rounding/saturation, measure the response using independently authored impulses/steps/periodic signals, and assert exact counts and chunk equality. This recommendation is the locked design choice; its final kernel dimensions/quality floor remain agent discretion and need test evidence.
 
 ### SPSC false assumptions
 
-**What goes wrong:** A ring appears correct under a single host but races on wrap, uses a non-lock-free atomic, or shares indices incorrectly during clear/shutdown.  
+**What goes wrong:** A ring appears correct under a single host but races on wrap, uses a non-lock-free atomic, or shares indices incorrectly during clear/shutdown.
 **Prevention:** Document producer/consumer ownership, acquire/release handoff, full/empty convention, arithmetic wrap proof, counter widths, target `atomic_is_lock_free` evidence, stress tests, and callback quiescence before lifecycle mutation. [VERIFIED: `05-CONTEXT.md`, D-06 and Discretion]
 
 ### SDL callback buffering misunderstood
 
-**What goes wrong:** Treating callback request sizes as fixed frames, assuming submitted bytes are already played, or assuming a shortage counter identifies hardware starvation.  
-**Prevention:** Use current `additional_amount` bytes and explicit bytes-per-frame conversion, bound callback work against a documented request ceiling, and label counts as application PCM underflow. SDL says request amounts may change from call to call and can be overestimated by stream buffering/resampling. [CITED: https://wiki.libsdl.org/SDL3/SDL_AudioStreamCallback] [CITED: https://wiki.libsdl.org/SDL3/SDL_GetAudioStreamQueued]
+**What goes wrong:** Treating callback request sizes as fixed frames, assuming submitted bytes are already played, or assuming a shortage counter identifies hardware starvation.
+**Prevention:** Use the current positive `additional_amount` byte request and overflow-safe four-byte-frame arithmetic; process it in fixed-size chunks with a fixed scratch buffer and zero-fill missing data. The current positive `int` request bounds work; SDL promises no fixed per-device request ceiling. Count missing whole source frames as application PCM underflow. SDL says request amounts can change and be overestimated by stream buffering/resampling. [CITED: https://wiki.libsdl.org/SDL3/SDL_AudioStreamCallback] [CITED: https://wiki.libsdl.org/SDL3/SDL_GetAudioStreamQueued]
 
 ### Stale state on pause, focus and session transitions
 
-**What goes wrong:** Old frames play after resume or ROM replacement; focus gain unexpectedly overrides intentional pause; source disconnect leaves input down.  
+**What goes wrong:** Old frames play after resume or ROM replacement; focus gain unexpectedly overrides intentional pause; source disconnect leaves input down.
 **Prevention:** Create a transition matrix that separately states guest/APU state, input release, ring clear/count, SDL stream clear, battery flush outcome, and callback quiescence for pause, focus loss/gain, reset, successful/failed ROM replacement, device migration/reopen, and shutdown. Test adversarial orderings, especially device loss while paused and replacement with queued output. [VERIFIED: `05-CONTEXT.md`, D-09 and D-10]
 
 ### Filter model overclaim
 
-**What goes wrong:** A Pan Docs digital/software approximation is presented as measured output from every DMG-CPU-B.  
+**What goes wrong:** A Pan Docs digital/software approximation is presented as measured output from every DMG-CPU-B.
 **Prevention:** Keep channel/mixer expectations separate from filtered PCM and host conversion; identify the chosen coefficient as an approximation and require identified device/listening evidence for perceptual claims. [CITED: https://gbdev.io/pandocs/Audio_details.html]
 
 ## Validation Architecture
@@ -265,7 +265,7 @@ typedef void (SDLCALL *SDL_AudioStreamCallback)(
     int additional_amount, int total_amount);
 ```
 
-Use `additional_amount` in bytes, not as an assumed fixed callback frame count; align to the app input bytes-per-frame and cap work according to supported SDL behavior and the chosen adapter policy. SDL docs: [callback](https://wiki.libsdl.org/SDL3/SDL_AudioStreamCallback), [open stream](https://wiki.libsdl.org/SDL3/SDL_OpenAudioDeviceStream), [put data](https://wiki.libsdl.org/SDL3/SDL_PutAudioStreamData).
+Use the current positive `additional_amount` byte request, not an assumed fixed callback frame count. Convert with checked four-byte s16-stereo frame arithmetic, then process the request through fixed-size scratch chunks and silence-fill unavailable bytes or whole missing frames. The positive `int` request is the work bound; no device-independent callback-size ceiling is documented. SDL docs: [callback](https://wiki.libsdl.org/SDL3/SDL_AudioStreamCallback), [open stream](https://wiki.libsdl.org/SDL3/SDL_OpenAudioDeviceStream), [put data](https://wiki.libsdl.org/SDL3/SDL_PutAudioStreamData).
 
 ## State of the Art
 
@@ -284,20 +284,13 @@ Use `additional_amount` in bytes, not as an assumed fixed callback frame count; 
 | A2 | A small original band-limited fixed-point kernel can meet the still-to-be-defined correctness and throughput floor without a package. | Standard Stack / resampling | If analytical quality or measured throughput fails, kernel design must be revisited; dependency remains a separately reviewed decision. |
 | A3 | Fixed 48 kHz output plus SDL conversion meets the intended frontends' needs for the v0.1 phase. | PCM contract | Future embedding consumers needing another rate may require a later versioned API, not hidden runtime negotiation here. |
 
-## Open Questions
+## Resolved Planning Questions
 
-1. **What is the testable minimum passband/alias/signal-response floor for the original resampler?**
-   - What we know: format, fixed point, bounded operation, and independent response fixtures are locked.
-   - What's unclear: the numerical acceptance threshold and table/kernel dimensions are not chosen.
-   - Recommendation: planner schedules analytical reference calculations and measured throughput as explicit evidence; don't claim perceptual quality from a numerical fixture alone.
-2. **How are SDL callback request sizes bounded for the supported stream configuration?**
-   - What we know: SDL says requested byte amounts can vary and may be overestimated due to buffering/resampling.
-   - What's unclear: concrete worst-case adapter scratch capacity on all supported macOS devices.
-   - Recommendation: inspect SDL3 contract and the actual configured stream behavior; ensure callback can safely satisfy the current request with bounded scratch/copy policy or explicitly count/fail safely. [CITED: https://wiki.libsdl.org/SDL3/SDL_AudioStreamCallback]
-3. **Which exact automated smoke can validate device transitions in CI?**
-   - What we know: physical/perceptual claims are out of scope; software ring tests are automatable.
-   - What's unclear: whether the repository's CI runner exposes a usable SDL audio device.
-   - Recommendation: separate deterministic adapter tests from device-open smoke; if CI has no device, report that availability gap honestly and use a virtual/fake stream boundary only if already available without adding a dependency.
+These questions are resolved for planning through explicit task ownership and evidence gates. The numerical measurements and SDL software-path results are execution deliverables; none has been measured or passed at this planning stage.
+
+1. **Resampler acceptance floor — task 05-04-01.** Construct independent, project-authored impulse, step and periodic reference signals. Before tuning any kernel coefficient or dimension, predeclare exact numerical passband, alias and signal/error limits plus the bounded-throughput measurement method. The task must prove those limits, exact sample counts and byte-identical PCM across run partitions, and record the chosen limits, revision, build, workload, digest, timing method, samples and uncertainty in `docs/audio-and-playback.md`. Hardware/reference material does not supply a universal numerical threshold for this original kernel, and a signal test cannot qualify physical DMG output or perceived audio quality. D-02/D-04/D-11.
+2. **SDL callback sizing — task 05-05-01.** SDL supplies a varying `additional_amount` in bytes, including zero, and may overestimate it. Treat the current positive `int` value as the request/work bound; convert to four-byte s16-stereo frames with checked arithmetic, transfer through a fixed-size scratch/chunk buffer, and zero-fill unavailable bytes and missing whole frames without app allocation, guest work or required-core-PCM discard. The task must prove zero, irregular/partial-frame, ring-empty, request-larger-than-ring and arithmetic-boundary cases; missing whole frames have a distinct application counter. Preserve callback quiescence and thread ownership. SDL documents no fixed ceiling per device, so no universal scratch capacity can be asserted beforehand. [CITED: https://wiki.libsdl.org/SDL3/SDL_AudioStreamCallback] D-06/D-07/D-11.
+3. **CI device-transition smoke — tasks 05-06-03 and 05-07-01.** Require deterministic ring tests plus a pinned-SDL3 CI player lane that forces `SDL_AUDIO_DRIVER=dummy` before SDL initialization, checks that this backend is actually available in the built binary, and fails that lane when the promised backend is absent. Task 05-06-03 injects `SDL_EVENT_AUDIO_DEVICE_REMOVED` and `SDL_EVENT_AUDIO_DEVICE_ADDED` through the player event path, proving recovery and stale-buffer clearing; task 05-07-01 records a bounded dummy-driver open/stream/close receipt and exact software counters. Use SDL default-device migration where available and explicit reopen as fallback. The dummy driver is paced by default (`SDL_AUDIO_DUMMY_TIMESCALE`, available since 3.2.0); upstream `SDL_DUMMYAUDIO` defaults ON, which is not proof of this project's binary configuration. An injected event or dummy driver proves software paths only; physical hotplug and audible quality require separate real-device/listening evidence and are outside automated acceptance. [CITED: https://wiki.libsdl.org/SDL3/SDL_HINT_AUDIO_DRIVER] [CITED: https://wiki.libsdl.org/SDL3/SDL_HINT_AUDIO_DUMMY_TIMESCALE] [CITED: https://wiki.libsdl.org/SDL3/SDL_AudioDeviceEvent] [CITED: https://github.com/libsdl-org/SDL/blob/main/CMakeLists.txt] D-10/D-11/D-12.
 
 ## Environment Availability
 
@@ -321,6 +314,10 @@ Phase implementation uses existing project dependencies. Runtime identity was ch
 - [Pan Docs — Audio Details](https://gbdev.io/pandocs/Audio_details.html) — generator/DAC/mixer/filter model. Search result; direct page fetch was unavailable.
 - [SDL3 `SDL_OpenAudioDeviceStream`](https://wiki.libsdl.org/SDL3/SDL_OpenAudioDeviceStream) — default device, app stream format, callback setup, initially paused device, destroy semantics; opened directly 2026-10-08.
 - [SDL3 `SDL_AudioStreamCallback`](https://wiki.libsdl.org/SDL3/SDL_AudioStreamCallback) — variable callback byte request, any-thread behavior, callback constraints; opened directly 2026-10-08.
+- [SDL3 `SDL_HINT_AUDIO_DRIVER`](https://wiki.libsdl.org/SDL3/SDL_HINT_AUDIO_DRIVER) — `SDL_AUDIO_DRIVER` selects a named backend before initialization; checked 2026-10-08.
+- [SDL3 `SDL_HINT_AUDIO_DUMMY_TIMESCALE`](https://wiki.libsdl.org/SDL3/SDL_HINT_AUDIO_DUMMY_TIMESCALE) — dummy-driver pacing hint exists since SDL 3.2.0; checked 2026-10-08.
+- [SDL3 `SDL_AudioDeviceEvent`](https://wiki.libsdl.org/SDL3/SDL_AudioDeviceEvent) — added/removed event types and playback indicator; checked 2026-10-08.
+- [SDL upstream CMake options](https://github.com/libsdl-org/SDL/blob/main/CMakeLists.txt) — `SDL_DUMMYAUDIO` upstream default ON, conditional on `SDL_AUDIO`; this does not prove a given built binary includes it; checked 2026-10-08.
 - [SDL3 `SDL_PutAudioStreamData`](https://wiki.libsdl.org/SDL3/SDL_PutAudioStreamData) — copies input for later conversion, callback locking caveat; opened directly 2026-10-08.
 - [SDL3 `SDL_GetAudioStreamQueued`](https://wiki.libsdl.org/SDL3/SDL_GetAudioStreamQueued) — queued input-byte semantics and lack of direct output-byte conversion; opened directly 2026-10-08.
 - [SDL3 `SDL_SetAudioStreamGain`](https://wiki.libsdl.org/SDL3/SDL_SetAudioStreamGain) — gain meaning/default and thread safety; opened directly 2026-10-08.
@@ -340,5 +337,5 @@ Phase implementation uses existing project dependencies. Runtime identity was ch
 - Architecture: HIGH for core/adapter ownership and explicit context decisions; MEDIUM for custom kernel and ring engineering, which need proof in implementation.
 - Pitfalls: HIGH for SDL documentation caveats and project constraints; MEDIUM for hardware-model behavior due target revision limits.
 
-**Research date:** 2026-10-08  
+**Research date:** 2026-10-08
 **Valid until:** 2026-11-07 for stable emulator/API architecture; recheck SDL docs before implementation if SDL version changes.
