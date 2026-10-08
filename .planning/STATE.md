@@ -4,16 +4,16 @@ milestone: v0.1
 current_phase: 06
 current_phase_name: Qualified DMG Release and Consumer Handoff
 status: executing
-stopped_at: Completed GB-06-04-PLAN.md
-last_updated: "2026-10-08T23:23:08.000Z"
+stopped_at: Completed GB-06-03-PLAN.md
+last_updated: "2026-10-08T23:31:44.689Z"
 last_activity: 2026-10-08
-last_activity_desc: Phase GB-06 Plan 06-04 completed; Phase 6 execution continues
-state_head: 5c9332202530240cfac7c038dacf66a09ae29ad0
+last_activity_desc: Phase GB-06 Plan 06-03 completed; Phase 6 execution continues
+state_head: 8e6735c4dece426de1ab93202701e04e691f64a8
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 56
-  completed_plans: 53
+  completed_plans: 54
 milestone_name: limited DMG preview
 ---
 
@@ -29,17 +29,17 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 ## Current Position
 
 Phase: GB-06 (Qualified DMG Release and Consumer Handoff) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Status: Executing Phase GB-06
-Last activity: 2026-10-08 — Phase GB-06 Plan 06-04 completed; phase execution continues
+Last activity: 2026-10-08 — Phase GB-06 Plan 06-03 completed; phase execution continues
 
 Progress: ███████░░░ [████████░░] 83% of milestone phases complete. Phases 1–5 passed goal verification. Phase 5 completed all seven plans and passed 22/22 goal truths at source `206e107210e750ff0fe647a19b82600b17e98ee3`. Its final local evidence includes core CTest 174/174, the pinned SDL 3.4.18 player/package verifier 50/50, and a clean-tree 300-frame two-partition receipt with identical 241,094-frame PCM digests. See the linked Phase 5 verification and validation reports. CGB/VIN, physical playback/hotplug, and perceptual output remain unqualified.
 
-Phase 5 closeout: The app-level lifecycle test exercises Space pause/resume and R reset through SDL events, checking APU continuation, host PCM clearing, save failure/cancel/retry, and persisted battery recovery. Code review is clean and the security report records zero open threats. The dummy backend and injected events establish software-path behavior only; no physical device, hotplug, or perceptual result is claimed. Phase 6 Plans 06-01, 06-02, 06-04, and 06-05 are complete. Wave 4 Plan 06-03 is next; hosted release evidence and final publication remain gated to Plan 06-06.
+Phase 5 closeout: The app-level lifecycle test exercises Space pause/resume and R reset through SDL events, checking APU continuation, host PCM clearing, save failure/cancel/retry, and persisted battery recovery. Code review is clean and the security report records zero open threats. The dummy backend and injected events establish software-path behavior only; no physical device, hotplug, or perceptual result is claimed. Phase 6 Plans 06-01 through 06-05 are complete. Wave 5 Plan 06-07 is next; hosted release evidence and final publication remain gated to Plan 06-06.
 
 ## Performance Metrics
 
-- Completed unique plans: 53; recorded execution total: 894 min. Phase 6 has seven reviewed plans; Plans 06-01, 06-02, 06-04, and 06-05 are complete and the phase remains in progress pending Plans 06-03, 06-07, hosted evidence, and the final release gate. Phase completion follows goal verification, not task count alone.
+- Completed unique plans: 54; recorded execution total: 900 min. Phase 6 has seven reviewed plans; Plans 06-01 through 06-05 are complete and the phase remains in progress pending Plans 06-07, hosted evidence, and the final release gate. Phase completion follows goal verification, not task count alone.
 - Per-phase metrics / recent trend: Phases 1–5 are verified complete. Phase 3 has 13/13 plan summaries, 5/5 goal truths, 33/33 UAT checks, a user-confirmed packaged Z press/release, and 141/141 local CTest. PR #4's required exact-head checks passed before merge. Phase 5's current local exact-head evidence is in `GB-05-dmg-audio-and-stable-playback/05-VERIFICATION.md` and `05-VALIDATION.md`; confirm exact-head remote PR checks before any merge rather than inferring them from local results. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B measurement is claimed. Plan 02-15 is superseded/non-runnable and remains historical.
 - Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. At implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`, the local offline inventory passed 104/104 with no skips, the relocated installed C/C++ inventory passed 109/109, the runner passed its fixed one-CPU/two-timer derived corpus, hosted CI run 37620710587 passed, and fixture reproduction run 37620710600 passed. Independent verification passed all five CPU requirements. Original upstream PPU-dependent reporting paths remain excluded; no physical DMG hardware test occurred.
 
@@ -93,6 +93,7 @@ Phase 5 closeout: The app-level lifecycle test exercises Space pause/resume and 
 | Phase GB-06 P05 | 19 min | 2 tasks | 8 files |
 | Phase GB-06 P02 | 8 | 2 tasks | 3 files |
 | Phase GB-06 P04 | 8 min | 2 tasks | 6 files |
+| Phase GB-06 P03 | 6 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -174,6 +175,9 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-06]: Require an exact core/player release asset set and hash manifest before a platform candidate is ready.
 - [Phase GB-06]: Keep stable support facts in a tracked versioned ledger and bind the exact tagged ledger blob and source SHA in a separate release sidecar.
 - [Phase GB-06]: Record fixed-workload speed, process peak RSS, trace pairing, build duration, exact-source hosted check durations, and uncertainty; keep budgets advisory until repeated variance justifies one.
+- [Phase GB-06]: Use the installed visible-demo fixture for successful frame output and sequentially load the MBC1 continuation fixture into the same opaque instance for save transfer.
+- [Phase GB-06]: Install the visible-demo ROM with its manifest and license so the relocated native example needs no source-tree path.
+- [Phase GB-06]: Keep raw battery persistence host-owned and replace only after an exclusive temporary file is flushed.
 
 ### Pending Todos
 
@@ -199,10 +203,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-08T23:23:08.000Z
-Stopped at: Completed GB-06-04-PLAN.md
+Last session: 2026-10-08T23:31:44.582Z
+Stopped at: Completed GB-06-03-PLAN.md
 Resume file: .planning/.continue-here.md
 Next command in fresh context: $gsd-execute-phase 6
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: Phase GB-06 Plan 06-04 execution; the six-phase milestone remains in progress.
-Next phase: Phase 6 — Qualified DMG Release and Consumer Handoff. Plans 06-01, 06-02, 06-04, and 06-05 are complete; continue with Wave 4 Plan 06-03 using `$gsd-execute-phase 6`, then stop at the Phase 6 boundary.
+Completed workflow stage: Phase GB-06 Plan 06-03 execution; the six-phase milestone remains in progress.
+Next phase: Phase 6 — Qualified DMG Release and Consumer Handoff. Plans 06-01 through 06-05 are complete; continue with Wave 5 Plan 06-07 using `$gsd-execute-phase 6`, then stop at the Phase 6 boundary.
