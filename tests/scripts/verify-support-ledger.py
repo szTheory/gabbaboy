@@ -5,10 +5,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 LEDGER = pathlib.Path("docs/support/v0.1.0.md")
@@ -134,26 +137,26 @@ def validate_manifest_set(data: dict, manifests: dict[str, bytes]) -> list[dict]
     return identities
 
 
-def git(*args: str) -> bytes:
+def git(*args: str, cwd: pathlib.Path = ROOT) -> bytes:
     try:
-        return subprocess.check_output(["git", *args], cwd=ROOT, stderr=subprocess.PIPE)
+        return subprocess.check_output(["git", *args], cwd=cwd, stderr=subprocess.PIPE)
     except subprocess.CalledProcessError as error:
         fail(f"git {' '.join(args)} failed: {error.stderr.decode(errors='replace').strip()}")
 
 
-def build_sidecar(tag: str, source_sha: str) -> dict:
+def build_sidecar(tag: str, source_sha: str, repo_root: pathlib.Path = ROOT) -> dict:
     if not re.fullmatch(r"v0\.1\.0", tag):
         fail("tag must match this versioned ledger")
     if not re.fullmatch(r"[0-9a-f]{40}", source_sha):
         fail("source SHA must be a full lowercase Git commit SHA")
-    actual_sha = git("rev-parse", f"{tag}^{{commit}}").decode().strip()
+    actual_sha = git("rev-parse", f"{tag}^{{commit}}", cwd=repo_root).decode().strip()
     if actual_sha != source_sha:
         fail("supplied source SHA does not resolve from the requested tag")
-    ledger_raw = git("show", f"{tag}:{LEDGER.as_posix()}")
+    ledger_raw = git("show", f"{tag}:{LEDGER.as_posix()}", cwd=repo_root)
     data = parse_ledger(ledger_raw)
-    manifests = {path: git("show", f"{tag}:{path}") for path in data["manifest_paths"]}
+    manifests = {path: git("show", f"{tag}:{path}", cwd=repo_root) for path in data["manifest_paths"]}
     identities = validate_manifest_set(data, manifests)
-    blob_oid = git("rev-parse", f"{tag}:{LEDGER.as_posix()}").decode().strip()
+    blob_oid = git("rev-parse", f"{tag}:{LEDGER.as_posix()}", cwd=repo_root).decode().strip()
     return {
         "schema_version": 1,
         "version": data["version"],
@@ -224,7 +227,34 @@ def self_test() -> None:
         except ValueError:
             continue
         fail("self-test accepted altered sidecar identity")
-    print("support ledger self-test passed: scope, corpus order, digests, malformed UTF-8, duplicate keys, denominator and claim controls")
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-support-ledger-") as temporary:
+        repository = pathlib.Path(temporary)
+        for relative in [LEDGER.as_posix(), *data["manifest_paths"]]:
+            destination = repository / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / relative, destination)
+        environment = dict(os.environ)
+        environment.update({"GIT_AUTHOR_NAME": "GabbaBoy Test", "GIT_AUTHOR_EMAIL": "test@example.invalid",
+                            "GIT_COMMITTER_NAME": "GabbaBoy Test", "GIT_COMMITTER_EMAIL": "test@example.invalid"})
+        subprocess.run(["git", "init", "-q"], cwd=repository, env=environment, check=True)
+        subprocess.run(["git", "add", LEDGER.as_posix(), *data["manifest_paths"]],
+                       cwd=repository, env=environment, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "fixture"], cwd=repository,
+                       env=environment, check=True)
+        fake_sha = git("rev-parse", "HEAD", cwd=repository).decode().strip()
+        subprocess.run(["git", "tag", "v0.1.0", fake_sha], cwd=repository, env=environment, check=True)
+        generated = build_sidecar("v0.1.0", fake_sha, repository)
+        if generated["source_sha"] != fake_sha or generated["ledger"]["sha256"] != hashlib.sha256(raw).hexdigest():
+            fail("self-test generated sidecar does not bind exact source and ledger bytes")
+        for key in ("source_sha", "ledger", "fixture_manifest_identities"):
+            altered = dict(generated)
+            altered[key] = None
+            try:
+                verify_sidecar_data(altered, generated)
+            except ValueError:
+                continue
+            fail(f"self-test accepted altered sidecar {key}")
+    print("support ledger self-test passed: tagged sidecar binding, scope, corpus order, digests, malformed UTF-8, duplicate keys, denominator and claim controls")
 
 
 def main() -> int:
