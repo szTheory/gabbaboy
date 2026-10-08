@@ -1,6 +1,6 @@
 ---
 phase: GB-05-dmg-audio-and-stable-playback
-reviewed: 2026-10-08T17:10:00Z
+reviewed: 2026-10-08T17:26:39Z
 depth: standard
 files_reviewed: 26
 files_reviewed_list:
@@ -31,38 +31,32 @@ files_reviewed_list:
   - tests/test_audio_no_alloc.c
   - .github/workflows/preview.yml
 findings:
-  critical: 1
+  critical: 0
   warning: 0
   info: 0
-  total: 1
-status: issues_found
+  total: 0
+status: clean
 ---
 
 # Phase GB-05: Code Review Report
 
-**Reviewed:** 2026-10-08T17:10:00Z
+**Reviewed:** 2026-10-08T17:26:39Z
 **Depth:** standard
 **Files Reviewed:** 26
-**Status:** issues_found
+**Status:** clean
 
 ## Summary
 
-Reviewed the Phase GB-05 core audio/APU implementation, SDL playback and input adapters, test and measurement code, public documentation, package workflow, and the current uncommitted help/title updates. One blocker remains in the SDL audio callback error path: PCM has already been removed from the ring before SDL confirms it accepted the data, and a failed write drops that PCM without counting the dropped frames.
+Re-reviewed all 26 files in the original Phase GB-05 scope, including current help/title changes. CR-01 from the prior review is resolved: the SDL callback now records ring-backed PCM bytes rejected by the stream write, accounts for the unsubmitted remainder when a frame is split, and resets that partial-frame state. The failure-byte counter is initialized and required to be lock-free, saturates safely, is exercised by callback and saturation tests, appears in measurement output and receipts, is required to be zero by the measurement parser, and is documented. No remaining correctness, security, or quality defects were found in the reviewed scope.
 
-## Critical Issues
+All reviewed files meet quality standards. No issues found.
 
-### CR-01: BLOCKER — SDL stream write failure drops dequeued PCM
+## Narrative Findings (AI reviewer)
 
-**File:** `src/player/audio.c:90-105`
-**Issue:** The callback copies frames from the SPSC ring and advances `read_index` at line 93 before calling `write_fn` at line 115. If `SDL_PutAudioStreamData` fails, the function returns after incrementing only `sink_failures`; the already-consumed frames are neither restored nor added to the intentionally-discarded-host-frame accounting. Playback therefore loses audio on a sink write failure while the documented counters do not report that loss.
-**Fix:** Preserve each callback chunk until its stream write succeeds, or on failure explicitly count all PCM bytes removed from the ring/pending frame as discarded and transition the sink into a recovery/unavailable state. Add a callback test where the writer rejects a nonempty block and assert no PCM loss is unaccounted for.
-
-## Warnings
-
-## Info
+No findings.
 
 ---
 
-_Reviewed: 2026-10-08T17:10:00Z_
+_Reviewed: 2026-10-08T17:26:39Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
