@@ -54,7 +54,7 @@ add_executable(test_audio test_audio.c)
 target_link_libraries(test_audio PRIVATE GabbaBoy::core)
 target_compile_features(test_audio PRIVATE c_std_17)
 set_target_properties(test_audio PROPERTIES C_EXTENSIONS OFF)
-foreach(case tracer capacity)
+foreach(case tracer capacity signal partition filter)
   add_test(NAME audio_${case} COMMAND test_audio audio_${case})
 endforeach()
 

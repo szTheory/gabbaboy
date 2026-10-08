@@ -135,6 +135,9 @@ timer_tima_collision
 timer_tma_collision
 audio_tracer
 audio_capacity
+audio_signal
+audio_partition
+audio_filter
 apu_pulse
 apu_mixer
 apu_sequencer

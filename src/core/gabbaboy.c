@@ -14,6 +14,8 @@
 #define GBB_PPU_FIFO_CAPACITY 16u
 #define GBB_AUDIO_CLOCK_HALF_DOTS UINT64_C(8388608)
 #define GBB_AUDIO_SAMPLE_RATE UINT64_C(48000)
+#define GBB_AUDIO_FILTER_TAPS 8u
+#define GBB_AUDIO_HPF_Q15 32648
 typedef struct {
     uint8_t sweep, duty_length, envelope, frequency_low, control;
     uint16_t length, frequency, timer, sweep_shadow;
@@ -97,6 +99,10 @@ struct gbb_instance {
     apu_noise_channel apu_noise;
     uint8_t apu_nr50, apu_nr51, apu_power, apu_sequencer_step;
     uint64_t apu_sample_phase;
+    int32_t audio_history[2][GBB_AUDIO_FILTER_TAPS];
+    uint8_t audio_history_head;
+    int32_t audio_hpf_input[2];
+    int32_t audio_hpf_output[2];
     gbb_audio_frame *audio_frames;
     size_t audio_frame_capacity;
     size_t audio_frame_count;
@@ -134,6 +140,54 @@ struct gbb_instance {
     uint16_t diagnostic_pc;
     uint8_t diagnostic_opcode;
 };
+
+static int16_t audio_saturate_s16(int64_t value) {
+    if (value > INT16_MAX) value = INT16_MAX;
+    if (value < INT16_MIN) value = INT16_MIN;
+    return (int16_t)value;
+}
+
+static int64_t audio_round_q15(int64_t value) {
+    if (value >= 0) return (value + 16384) / 32768;
+    return -((-value + 16384) / 32768);
+}
+
+/* Original fixed-phase, 8-tap Q15 FIR followed by the 48 kHz DMG HPF model. */
+static gbb_audio_frame audio_process_sample(gbb_instance *m, int32_t left,
+                                            int32_t right) {
+    static const int16_t coefficients[GBB_AUDIO_FILTER_TAPS] = {
+        682, 2731, 5461, 7510, 7510, 5461, 2731, 682
+    };
+    const int32_t input[2] = {left, right};
+    int16_t output[2];
+    for (unsigned channel = 0u; channel < 2u; ++channel) {
+        m->audio_history[channel][m->audio_history_head] = input[channel];
+        int64_t filtered = 0;
+        for (unsigned tap = 0u; tap < GBB_AUDIO_FILTER_TAPS; ++tap) {
+            unsigned index = ((unsigned)m->audio_history_head +
+                              GBB_AUDIO_FILTER_TAPS - tap) &
+                             (GBB_AUDIO_FILTER_TAPS - 1u);
+            filtered += (int64_t)m->audio_history[channel][index] * coefficients[tap];
+        }
+        const int64_t sample = audio_saturate_s16(audio_round_q15(filtered));
+        const int64_t hp = sample - m->audio_hpf_input[channel] +
+            audio_round_q15((int64_t)m->audio_hpf_output[channel] * GBB_AUDIO_HPF_Q15);
+        m->audio_hpf_input[channel] = audio_saturate_s16(sample);
+        m->audio_hpf_output[channel] = (int32_t)audio_saturate_s16(hp);
+        output[channel] = (int16_t)m->audio_hpf_output[channel];
+    }
+    m->audio_history_head = (uint8_t)((m->audio_history_head + 1u) &
+                                      (GBB_AUDIO_FILTER_TAPS - 1u));
+    return (gbb_audio_frame){output[0], output[1]};
+}
+
+void gbb_test_audio_kernel(gbb_instance *m, const int32_t *left,
+                           const int32_t *right, size_t count,
+                           gbb_audio_frame *output) {
+    if (m == NULL || left == NULL || right == NULL || output == NULL) return;
+    for (size_t i = 0u; i < count; ++i)
+        output[i] = audio_process_sample(m, left[i], right[i]);
+}
 
 static uint8_t diagnostic_timer_state(const gbb_instance *m) {
     return (uint8_t)((m->tac & 7u) | (m->timer_reload_pending ? 0x08u : 0u) |
@@ -337,6 +391,10 @@ static void reset_state(gbb_instance *m) {
     m->apu_nr50 = 0u; m->apu_nr51 = 0xFFu; m->apu_power = 1u;
     m->apu_sequencer_step = 0u;
     m->apu_sample_phase = 0u;
+    memset(m->audio_history, 0, sizeof(m->audio_history));
+    m->audio_history_head = 0u;
+    memset(m->audio_hpf_input, 0, sizeof(m->audio_hpf_input));
+    memset(m->audio_hpf_output, 0, sizeof(m->audio_hpf_output));
     m->timer_signal = 0;
     m->timer_reload_pending = 0;
     m->timer_reload_remaining = 0;
@@ -1399,7 +1457,7 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
         m->apu_sample_phase += GBB_AUDIO_SAMPLE_RATE;
         if (m->apu_sample_phase >= GBB_AUDIO_CLOCK_HALF_DOTS) {
             m->apu_sample_phase -= GBB_AUDIO_CLOCK_HALF_DOTS;
-            if (m->audio_frames != NULL && m->audio_frame_count < m->audio_frame_capacity) {
+            {
                 static const uint8_t duty_pattern[4] = {0x01u, 0x81u, 0x87u, 0x7Eu};
                 int32_t left = 0, right = 0;
                 for (unsigned i = 0u; i < 2u; ++i) {
@@ -1434,12 +1492,10 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
                     right += noise_sample * (int32_t)((m->apu_nr50 & 7u) + 1u);
                 if ((m->apu_nr51 & 0x80u) != 0u)
                     left += noise_sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u);
-                if (left > INT16_MAX) left = INT16_MAX;
-                if (left < INT16_MIN) left = INT16_MIN;
-                if (right > INT16_MAX) right = INT16_MAX;
-                if (right < INT16_MIN) right = INT16_MIN;
-                m->audio_frames[m->audio_frame_count++] =
-                    (gbb_audio_frame){(int16_t)left, (int16_t)right};
+                const gbb_audio_frame frame = audio_process_sample(m, left, right);
+                if (m->audio_frames != NULL &&
+                    m->audio_frame_count < m->audio_frame_capacity)
+                    m->audio_frames[m->audio_frame_count++] = frame;
             }
         }
         dma_advance_half_dot(m);

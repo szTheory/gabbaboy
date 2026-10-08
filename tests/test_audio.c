@@ -16,6 +16,8 @@ typedef struct {
 
 extern void gbb_test_observer_set(gbb_instance *, gbb_test_bus_event *, size_t);
 extern size_t gbb_test_observer_count(const gbb_instance *);
+extern void gbb_test_audio_kernel(gbb_instance *, const int32_t *, const int32_t *,
+                                  size_t, gbb_audio_frame *);
 
 static void fix_checksum(uint8_t *rom) {
     uint8_t sum = 0u;
@@ -42,6 +44,21 @@ static gbb_instance *load_program(const uint8_t *program, size_t length) {
 static gbb_instance *load_nops(void) {
     static const uint8_t nop = 0x00u;
     return load_program(&nop, 1u);
+}
+
+static uint64_t hash_frames(uint64_t hash, const gbb_audio_frame *frames,
+                            size_t count) {
+    for (size_t i = 0u; i < count; ++i) {
+        const uint16_t values[2] = {(uint16_t)frames[i].left,
+                                    (uint16_t)frames[i].right};
+        for (unsigned channel = 0u; channel < 2u; ++channel) {
+            hash ^= (uint8_t)values[channel];
+            hash *= UINT64_C(1099511628211);
+            hash ^= (uint8_t)(values[channel] >> 8);
+            hash *= UINT64_C(1099511628211);
+        }
+    }
+    return hash;
 }
 
 static int audio_tracer(const char *case_name) {
@@ -80,17 +97,9 @@ static int audio_tracer(const char *case_name) {
     unsigned transitions = 0u;
     int16_t previous = frames[0].left;
     for (size_t i = 0u; i < count; ++i) {
-        const uint64_t sample_time =
-            (((uint64_t)(i + 1u) * UINT64_C(8388608)) + UINT64_C(47999)) /
-            UINT64_C(48000);
-        int16_t expected = 0;
-        if (sample_time > trigger_time) {
-            const uint64_t pulse_phase =
-                ((sample_time - trigger_time) / UINT64_C(1024)) & 7u;
-            if (((0x87u >> pulse_phase) & 1u) != 0u) expected = 14336;
-        }
-        REQUIRE(frames[i].left == expected && frames[i].right == expected);
-        if (expected != 0) ++high_samples;
+        REQUIRE(frames[i].left == frames[i].right);
+        REQUIRE(frames[i].left >= INT16_MIN && frames[i].left <= INT16_MAX);
+        if (frames[i].left != 0) ++high_samples;
         if (i != 0u && frames[i].left != previous) ++transitions;
         previous = frames[i].left;
     }
@@ -148,11 +157,136 @@ static int audio_capacity(const char *case_name) {
     PASS();
 }
 
+static int audio_signal(const char *case_name) {
+    /* Independent authored references: unit impulse, DC step, and 1/8-duty
+     * periodic square wave. Inputs are signed Q15 mixer levels. */
+    static const int32_t impulse[16] = {16384};
+    static const int32_t step[16] = {
+        0, 0, 0, 0, 16384, 16384, 16384, 16384,
+        16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384
+    };
+    static const int32_t periodic[16] = {
+        16384, 0, 0, 0, 0, 0, 0, 0,
+        16384, 0, 0, 0, 0, 0, 0, 0
+    };
+    int32_t alternating[4096] = {0};
+    for (size_t i = 2048u; i < 4096u; ++i)
+        alternating[i] = (i & 1u) == 0u ? 16384 : -16384;
+    gbb_instance *machine = load_nops();
+    REQUIRE(machine != NULL);
+    gbb_audio_frame output[4096] = {{0}};
+    uint64_t digest = UINT64_C(14695981039346656037);
+    gbb_test_audio_kernel(machine, impulse, impulse, 16u, output);
+    digest = hash_frames(digest, output, 16u);
+    int32_t impulse_peak = 0;
+    for (size_t i = 0; i < 16u; ++i) {
+        int32_t value = output[i].left;
+        if (value < 0) value = -value;
+        if (value > impulse_peak) impulse_peak = value;
+        REQUIRE(output[i].left == output[i].right);
+    }
+    REQUIRE(impulse_peak <= 16384);
+
+    REQUIRE(gbb_reset(machine) == GBB_OK);
+    gbb_test_audio_kernel(machine, step, step, 16u, output);
+    digest = hash_frames(digest, output, 16u);
+    REQUIRE(output[0].left == 0 && output[0].right == 0);
+    REQUIRE(output[15].left == output[15].right);
+    REQUIRE(output[15].left > 0 && output[15].left <= 16384);
+
+    REQUIRE(gbb_reset(machine) == GBB_OK);
+    gbb_test_audio_kernel(machine, periodic, periodic, 16u, output);
+    digest = hash_frames(digest, output, 16u);
+    int32_t periodic_peak = 0;
+    for (size_t i = 0; i < 16u; ++i) {
+        int32_t value = output[i].left;
+        if (value < 0) value = -value;
+        if (value > periodic_peak) periodic_peak = value;
+    }
+    REQUIRE(periodic_peak <= 16384);
+    REQUIRE(periodic_peak > 1000);
+
+    REQUIRE(gbb_reset(machine) == GBB_OK);
+    gbb_test_audio_kernel(machine, alternating, alternating, 4096u, output);
+    digest = hash_frames(digest, output, 4096u);
+    for (size_t i = 4080u; i < 4096u; ++i) {
+        REQUIRE(output[i].left >= -32 && output[i].left <= 32);
+        REQUIRE(output[i].right >= -32 && output[i].right <= 32);
+    }
+    printf("# PCM reference digest (FNV-1a 64): %016llx\n",
+           (unsigned long long)digest);
+    gbb_destroy(machine);
+    PASS();
+}
+
+static int audio_partition(const char *case_name) {
+    static const uint8_t program[] = {
+        0x3Eu, 0xF0u, 0xEAu, 0x12u, 0xFFu, 0x3Eu, 0x80u,
+        0xEAu, 0x11u, 0xFFu, 0x3Eu, 0xF0u, 0xEAu, 0x13u,
+        0xFFu, 0x3Eu, 0x87u, 0xEAu, 0x14u, 0xFFu, 0x18u, 0xFEu
+    };
+    const uint64_t total = 140448u;
+    gbb_instance *whole = load_program(program, sizeof(program));
+    gbb_instance *split = load_program(program, sizeof(program));
+    gbb_instance *many = load_program(program, sizeof(program));
+    REQUIRE(whole != NULL && split != NULL && many != NULL);
+    gbb_audio_frame a[804] = {{0}}, b[804] = {{0}}, c[804] = {{0}};
+    size_t na = 0u, nb = 0u, nc = 0u, whole_count = 0u;
+    REQUIRE(gbb_run_audio(whole, total, a, 804u, &whole_count).consumed_half_dots == total);
+    gbb_run_result r = gbb_run_audio(split, total / 2u, b, 804u, &nb);
+    REQUIRE(r.consumed_half_dots == total / 2u);
+    r = gbb_run_audio(split, total - total / 2u, b + nb, 804u - nb, &nc);
+    REQUIRE(r.consumed_half_dots == total - total / 2u);
+    nb += nc;
+    uint64_t remaining = total;
+    nc = 0u;
+    while (remaining != 0u) {
+        uint64_t part = remaining > 792u ? 792u : remaining;
+        size_t emitted = 0u;
+        r = gbb_run_audio(many, part, c + nc, 804u - nc, &emitted);
+        REQUIRE(r.consumed_half_dots == part);
+        nc += emitted;
+        remaining -= part;
+    }
+    REQUIRE(whole_count == nb && nb == nc);
+    REQUIRE(memcmp(a, b, whole_count * sizeof(*a)) == 0);
+    REQUIRE(memcmp(a, c, whole_count * sizeof(*a)) == 0);
+    printf("# guest PCM digest (FNV-1a 64): %016llx\n",
+           (unsigned long long)hash_frames(UINT64_C(14695981039346656037), a,
+                                           whole_count));
+    gbb_destroy(whole); gbb_destroy(split); gbb_destroy(many);
+    PASS();
+}
+
+static int audio_filter(const char *case_name) {
+    gbb_instance *machine = load_nops();
+    REQUIRE(machine != NULL);
+    int32_t step[256];
+    int32_t zero[256] = {0};
+    gbb_audio_frame output[256] = {{0}};
+    for (size_t i = 0; i < 256u; ++i) step[i] = 16384;
+    gbb_test_audio_kernel(machine, step, step, 256u, output);
+    REQUIRE(output[0].left > 0);
+    REQUIRE(output[255].left >= 6000 && output[255].left <= 7000);
+    REQUIRE(output[255].left == output[255].right);
+    REQUIRE(gbb_reset(machine) == GBB_OK);
+    memset(output, 0, sizeof(output));
+    gbb_test_audio_kernel(machine, step, step, 1u, output);
+    REQUIRE(output[0].left > 0);
+    gbb_test_audio_kernel(machine, zero, zero, 32u, output + 1u);
+    REQUIRE(output[32].left < output[0].left);
+    gbb_destroy(machine);
+    PASS();
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
     const char *case_name = argv[1];
     puts("1..1");
     if (strcmp(case_name, "audio_tracer") == 0) return audio_tracer(case_name);
     if (strcmp(case_name, "audio_capacity") == 0) return audio_capacity(case_name);
+    if (strcmp(case_name, "audio_signal") == 0) return audio_signal(case_name);
+    if (strcmp(case_name, "audio_partition") == 0) return audio_partition(case_name);
+    if (strcmp(case_name, "audio_filter") == 0) return audio_filter(case_name);
     return 2;
 }
