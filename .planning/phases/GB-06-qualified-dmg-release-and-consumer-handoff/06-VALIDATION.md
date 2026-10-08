@@ -39,17 +39,18 @@ The planned checks below remain pending. Plan IDs, waves, and threat references 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command / Evidence | Existing Coverage | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-----------------------------|-------------------|--------|
 | 06-01-01 | 01 | 1 | SHIP-01, SHIP-03, SHIP-08 | T-06-01/02/03 | Trusted tag and exact downloaded Linux archive reach relocated C/C++ smoke | Release tracer | `bash tests/scripts/verify-release-candidate.sh --self-test`; hosted draft download/consumer receipt | Existing preview relocation verifier | pending |
-| 06-01-02 | 01 | 1 | SHIP-03, SHIP-08 | T-06-01/03 | Version PR and v tag share CMake version and exact source; required PR checks cannot be bypassed | Workflow contract | Candidate self-test plus target repository bot PR evidence | Existing exact-head PR verifier | pending |
+| 06-01-02 | 01 | 1 | SHIP-03, SHIP-08 | T-06-01/03 | Reviewed version PR route requires protected exact-head merge and matching tag after all phase source lands | Workflow contract | Candidate self-test; live merge/tag deferred to 06-06-01 | Existing exact-head PR verifier | pending |
 | 06-05-01 | 05 | 1 | SHIP-07 | T-06-11/12 | Loader/battery/API boundary failure remains atomic and bounded | ASan/UBSan regression | `cmake --preset phase1-asan && cmake --build --preset phase1-asan && ctest --preset phase1-asan --output-on-failure --no-tests=error -R '^(battery_api_fuzz|loader_)'` | Existing loader/battery inventory | pending |
 | 06-05-02 | 05 | 1 | SHIP-07 | T-06-11/12 | Fuzz input/work/time/memory caps and replay are explicit | Compiler-integrated fuzz | `bash tests/scripts/run-bounded-fuzz.sh --self-test`; available Clang libFuzzer lane | Existing battery deterministic seed | pending |
 | 06-02-01 | 02 | 2 | SHIP-01, SHIP-03 | T-06-04/05 | Three downloaded core archives resolve only public GabbaBoy::core on tested matrix | Package integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^preview_package_smoke$'`; hosted Linux/macOS/Windows asset receipts | Existing native Windows C/C++ relocated CI | pending |
 | 06-02-02 | 02 | 2 | SHIP-02, SHIP-03 | T-06-05/06 | Exact macOS player bytes pass legal load/input/frame/PCM/save/exit/reopen | Player integration | `bash tests/scripts/verify-phase3-player.sh`; downloaded asset receipt | Existing pinned SDL package verifier | pending |
-| 06-03-01 | 03 | 3 | SHIP-01, SHIP-04 | T-06-07/08 | Native C example uses relocated public API and host-owned battery | Consumer integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^preview_package_smoke$'` | Existing C/C++ relocated smoke | pending |
-| 06-03-02 | 03 | 3 | SHIP-04 | T-06-07/08 | Docs match example, save/API behavior and Playstead boundary | Documentation + consumer | Relocated package smoke and documented build invocation | Existing README and cartridge/save docs | pending |
-| 06-04-01 | 04 | 3 | SHIP-05, SHIP-03 | T-06-09 | Ledger binds scope, denominator and exclusions to exact source/corpus | Ledger validation | `python3 tests/scripts/verify-support-ledger.py --self-test` | Existing fixture/corpus manifests | pending |
+| 06-04-01 | 04 | 3 | SHIP-05, SHIP-03 | T-06-09 | Tracked ledger holds stable scope/corpus; separate post-tag sidecar binds tagged ledger blob digest to exact source SHA without self-reference | Ledger and sidecar validation | `python3 tests/scripts/verify-support-ledger.py --self-test`; post-tag sidecar check | Existing fixture/corpus manifests | pending |
 | 06-04-02 | 04 | 3 | SHIP-06, SHIP-03 | T-06-10 | Fixed workload trace pair has equal digest and measured variance | Baseline receipt | `bash tests/scripts/measure-release-baseline.sh --self-test` | Existing audio measurement receipt | pending |
-| 06-06-01 | 06 | 4 | SHIP-08, SHIP-03 | T-06-13 | Exact bot PR head has all live required contexts and merge eligibility | Hosted gate | `bash .github/scripts/verify-release-gates.sh --self-test`; live `gh` evidence | Existing PR gate scripts | pending |
-| 06-06-02 | 06 | 4 | SHIP-01–SHIP-08 | T-06-13/14/15 | Exact qualified bytes and truthful notices/trust/report sidecars are published | Final release | Candidate and gate self-tests; published release API/download/hash and asset smoke | Draft release path planned in 06-01 | pending |
+| 06-03-01 | 03 | 4 | SHIP-01, SHIP-04 | T-06-07/08 | Native C example uses relocated public API and host-owned battery | Consumer integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^preview_package_smoke$'` | Existing C/C++ relocated smoke | pending |
+| 06-03-02 | 03 | 4 | SHIP-04 | T-06-07/08 | Docs match example, tracked ledger/release-sidecar relationship, save/API behavior and Playstead boundary | Documentation + consumer | Relocated package smoke and documented build invocation | Existing README and cartridge/save docs | pending |
+| 06-03-03 | 03 | 4 | SHIP-03, SHIP-04, SHIP-08 | T-06-16 | Tracked release notices, notes, guidance and API coverage are final before tag | Release documentation | Candidate self-test; coverage matrix validation before seal | Existing notices and fixture manifests | pending |
+| 06-06-01 | 06 | 5 | SHIP-08, SHIP-03 | T-06-13 | Final bot PR has all live exact-head required checks; actual protected merge creates matching trusted tag; no source changes follow | Hosted gate | `bash .github/scripts/verify-release-gates.sh --self-test`; live `gh` merge/tag evidence | Existing PR gate scripts | pending |
+| 06-06-02 | 06 | 5 | SHIP-01–SHIP-08 | T-06-13/14/15 | Exact qualified bytes and generated post-tag support sidecar are published without source edits or self-hash | Final release | Candidate and gate self-tests; published release API/download/hash, sidecar/ledger digest and asset smoke | Draft release path planned in 06-01 | pending |
 
 ## Spec-less Edge Probe Assumptions
 
@@ -64,10 +65,10 @@ The prohibition recall pass surfaced product-specific claim boundaries: do not p
 - Add or extend the final macOS package smoke to test load/input/video/audio/save/exit/reopen on the downloaded release archive.
 - Qualify the exact downloaded Windows x64 core release archive; native Windows installed-consumer CI already exists, so no duplicate native consumer lane is planned.
 - Add the Playstead-oriented relocated C example and verify it from outside the source/build tree.
-- Add a versioned support ledger and a structural check against corpus/fixture identity.
+- Add a tracked versioned support ledger for stable scope/corpus facts, plus a post-tag generated release sidecar binding the exact source SHA and tagged ledger blob digest without cyclic hashes.
 - Add a fixed core measurement receipt for speed, memory/allocation, and trace/no-trace digest pairing; record variance before any budget.
 - Add bounded loader and stateful battery/API fuzz coverage only where the existing harnesses leave a concrete gap; keep compiler-integrated fuzzing optional when the matching runtime is unavailable.
-- Produce the decided GitHub API capability matrix before phase seal; the planner's file-edit scope leaves COVERAGE.md for task 06-06-02.
+- Produce the decided GitHub API capability matrix in task 06-03-03 before the final release PR/tag; validate it again before phase seal.
 
 ## Manual-Only / External Evidence
 
