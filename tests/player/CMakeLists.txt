@@ -1,11 +1,23 @@
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/expected-tests.txt"
   GABBABOY_PLAYER_EXPECTED_TESTS)
+target_compile_definitions(gabbaboy-player-adapter PRIVATE
+  GBB_PLAYER_AUDIO_TESTING)
 if(NOT GABBABOY_PLAYER_EXPECTED_TESTS)
   message(FATAL_ERROR "The optional player CTest inventory must not be empty")
 endif()
 
 foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
-  if(test_name MATCHES "^player_input_(time|events|focus)$")
+  if(test_name MATCHES "^player_audio_(ring|concurrent|pacing|gain|unavailable)$")
+    if(NOT TARGET test_player_audio)
+      add_executable(test_player_audio test_audio.c)
+      target_link_libraries(test_player_audio PRIVATE gabbaboy-player-adapter)
+      target_compile_features(test_player_audio PRIVATE c_std_17)
+      target_compile_definitions(test_player_audio PRIVATE
+        GBB_PLAYER_AUDIO_TESTING)
+      set_target_properties(test_player_audio PROPERTIES C_EXTENSIONS OFF)
+    endif()
+    add_test(NAME ${test_name} COMMAND test_player_audio ${test_name})
+  elseif(test_name MATCHES "^player_input_(time|events|focus)$")
     if(NOT TARGET test_player_input)
       add_executable(test_player_input test_input.c)
       target_link_libraries(test_player_input PRIVATE gabbaboy-player-adapter)

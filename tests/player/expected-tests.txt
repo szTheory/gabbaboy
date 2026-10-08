@@ -34,4 +34,9 @@ player_continuation_resume
 player_continuation_missing_save
 player_continuation_wrong_rom
 player_continuation_mutated_payload
+player_audio_ring
+player_audio_concurrent
+player_audio_pacing
+player_audio_gain
+player_audio_unavailable
 player_smoke
