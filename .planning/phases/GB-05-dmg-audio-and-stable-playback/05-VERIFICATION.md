@@ -1,6 +1,6 @@
 ---
 phase: GB-05-dmg-audio-and-stable-playback
-verified: 2026-10-08T18:05:22Z
+verified: 2026-10-08T18:11:00Z
 status: passed
 score: 22/22 truths verified
 covered_files:
@@ -21,7 +21,7 @@ covered_files:
   - tests/player/CMakeLists.txt
   - tests/player/expected-tests.txt
   - tests/player/test_reset_transition.c
-covered_digest: "v3:sha256:be2bcfb75f5d76388526532c225dc85f319074ffacfae49f5067e1e7693d1cf1"
+covered_digest: "v3:sha256:e644b9df9381473b755ef02f63767b05a753b65d73b7f987bb728b26121a707b"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
@@ -37,7 +37,7 @@ re_verification:
 # Phase 5: DMG Audio and Stable Playback Verification Report
 
 **Phase Goal:** As a player, I want to play DMG games with paced sound, so that controls remain responsive through device changes.  
-**Verified:** 2026-10-08T18:05:22Z  
+**Verified:** 2026-10-08T18:11:00Z
 **Status:** passed  
 **Re-verification:** Yes — after adding app-level pause/resume and R-reset behavioral evidence
 
@@ -188,5 +188,5 @@ All 22 observable truths and all five requirements are verified. The app-level t
 
 ---
 
-_Verified: 2026-10-08T18:05:22Z_  
+_Verified: 2026-10-08T18:11:00Z_
 _Verifier: the agent (gsd-verifier)_

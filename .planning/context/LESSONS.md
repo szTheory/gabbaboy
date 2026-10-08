@@ -227,3 +227,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** `HOME` alone reproduced the failure. With `CFFIXED_USER_HOME` redirected, targeted `player_smoke` passed, then the complete pinned SDL 3.4.18 package/player verifier passed 37/37 and fresh-process MBC1 continuation passed. The full core CTest regression suite passed 155/155.
 - **Source:** `tests/scripts/verify-phase3-player.sh`, `src/player/main.c`, `src/player/session.c`, and pinned `SDL3-3.4.18/src/filesystem/cocoa/SDL_sysfilesystem.m`.
 - **Status:** Environment root cause confirmed and local regression coverage restored; no product-code change required.
+
+### GB-GSD-005 / 2026-10-08 / Verify composite player lifecycle paths
+
+- **Cause and evidence:** HOST-02 combined pause, reset, replacement, and device transitions. Component tests and source tracing initially left the normal R-reset event path without combined behavior evidence; after that gap was closed, a fresh goal-backward pass found the normal Space pause/resume path also lacked app-level evidence that host PCM clears while guest APU history is retained.
+- **Remedy:** For composite lifecycle requirements, drive each consequential app event through the real event pump. Assert host queue effects and session state directly; compare resumed guest output to an uninterrupted reference when preservation of emulated history is required.
+- **Applies when:** A success criterion combines multiple user-triggered transitions and component-level tests do not prove their orchestration order.
+- **Verification:** `tests/player/test_reset_transition.c` exercises Space pause/resume with exact PCM flush accounting and resumed PCM equality against an uninterrupted guest, plus R-reset save failure, cancel, retry, and persisted battery recovery. Final player/package CTest passed 50/50, and Phase 5 goal verification passed 22/22 at `d4d847abc9fd75229312c7530f2d69a7b2e08d94`.
+- **Source:** `tests/player/test_reset_transition.c`, Phase 5 verification and validation reports.
+- **Status:** Adopted for app-level lifecycle transition coverage; no hardware or perceptual claim follows from this software test.

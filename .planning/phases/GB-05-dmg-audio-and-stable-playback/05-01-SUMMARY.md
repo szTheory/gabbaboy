@@ -127,7 +127,7 @@ The run path was also inspected for allocation calls: `gbb_run_audio` and its ex
 - `cmake --preset phase1 -DGABBABOY_BUILD_PLAYER=OFF` — passed.
 - `cmake --build --preset phase1` — passed.
 - `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(instance_lifecycle$|run_output_capacity$|audio_(tracer|capacity))$'` — 4/4 passed.
-- `bash tests/scripts/verify-phase3-player.sh` — passed; packaged-player CTest inventory 37/37 passed, authored pulse PCM reached SDL, and downloaded-package smoke passed.
+- Player package verifier `tests/scripts/verify-phase3-player.sh` passed; packaged-player CTest inventory 37/37 passed, authored pulse PCM reached SDL, and downloaded-package smoke passed.
 - The sandbox blocked SDL's normal macOS preferences path with `EPERM`; checks were rerun successfully with `CFFIXED_USER_HOME=/private/tmp/gabbaboy-home` and `SDL_AUDIODRIVER=dummy`. The script built its pinned SDL 3.4.18 dependency.
 
 ## Issues Encountered

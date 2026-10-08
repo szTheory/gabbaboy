@@ -17,7 +17,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 - [x] **Phase 2: DMG CPU, Bus, and Time** - Execute scoped DMG diagnostics with reproducible timing and bounded progress. (completed 2026-10-07)
 - [x] **Phase 3: Visible Interactive DMG** - Play an original or permissioned ROM-only fixture in a macOS preview. (completed 2026-10-07)
 - [x] **Phase 4: MBC1 and Safe Battery Continuation** - Retain meaningful guest progress across fresh processes without corrupting good saves. (completed 2026-10-08)
-- [ ] **Phase 5: DMG Audio and Stable Playback** - Hear paced sound and recover cleanly from host input/device transitions.
+- [x] **Phase 5: DMG Audio and Stable Playback** - Hear paced sound and recover cleanly from host input/device transitions. (completed 2026-10-08)
 - [ ] **Phase 6: Qualified DMG Release and Consumer Handoff** - Download evidenced packages and reproduce native adoption with honest support claims.
 
 ## Phase Details
@@ -215,7 +215,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. Keyboard/basic controller input recovers across focus loss and disconnect/reconnect; host input reset cannot leave guest buttons stuck. (HOST-01)
 5. Pause/resume, reset, ROM replacement, and audio-device transitions follow documented flush/recovery behavior without mixing stale video/audio/input/battery state between sessions. (HOST-02)
 
-**Plans**: 7/7 plans executed in 7 dependency-ordered waves; planning complete, execution in progress.
+**Plans**: 7/7 plans complete in 7 dependency-ordered waves. Goal-backward verification passed 22/22 truths at source `d4d847abc9fd75229312c7530f2d69a7b2e08d94`; final local evidence passed core CTest 174/174 and pinned SDL player/package 50/50, plus the exact two-partition 300-frame PCM receipt. App-level pause/resume and reset transition behavior is covered. See [verification](phases/GB-05-dmg-audio-and-stable-playback/05-VERIFICATION.md), [validation](phases/GB-05-dmg-audio-and-stable-playback/05-VALIDATION.md), [review](phases/GB-05-dmg-audio-and-stable-playback/05-REVIEW.md), and [security](phases/GB-05-dmg-audio-and-stable-playback/05-SECURITY.md). Hardware, physical hotplug, and perceptual audio remain unqualified.
 **Wave 1**
 - [x] 05-01-PLAN.md — original pulse guest through caller PCM and SDL tracer
 
@@ -264,7 +264,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 | 2. DMG CPU, Bus, and Time | 17/17 | Complete | 2026-10-07 |
 | 3. Visible Interactive DMG | 13/13 | Complete    | 2026-10-07 |
 | 4. MBC1 and Safe Battery Continuation | 7/7 | Complete    | 2026-10-08 |
-| 5. DMG Audio and Stable Playback | 7/7 | In Progress | - |
+| 5. DMG Audio and Stable Playback | 7/7 | Complete    | 2026-10-08 |
 | 6. Qualified DMG Release and Consumer Handoff | 0/TBD | Not started | - |
 
 ## Execution Contract
@@ -273,4 +273,4 @@ All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](
 
 Automate authorized work within each phase, then inspect current verification/release/consumer evidence, update traceability and [lessons](context/LESSONS.md), triage issues/PRs, report limitations and the exact next command, and **stop**. Never auto-advance phases or milestones; keep both auto-advance flags false. Credential, hardware, or perceptual gaps must be recorded honestly with the smallest necessary human action, never converted into passing evidence. Remote/CI setup begins in Phase 1; absent access remains an explicit completion limitation.
 
-Phases 1–4 are independently verified complete; Phase 2 Plan 02-15 remains superseded/non-runnable. Phase 4's seven plans have execution summaries and its final 4/4 goal verification, core/player/installed package tests, exact hosted PR checks, and downloaded package evidence are recorded in its phase artifacts. Phase 5 has seven plans in seven dependency-ordered waves; Plan 05-01 is complete and the phase remains in progress. Plan 05-02 is next within Phase 5. The exact next command is `$gsd-execute-phase 5`.
+Phases 1–5 are independently verified complete; Phase 2 Plan 02-15 remains superseded/non-runnable. Phase 4's seven plans have execution summaries and its final 4/4 goal verification, core/player/installed package tests, exact hosted PR checks, and downloaded package evidence are recorded in its phase artifacts. Phase 5 passed 22/22 goal truths and its final local core/player/measurement gates; the phase reports preserve the hardware and perceptual evidence limits. Phase 6 — Qualified DMG Release and Consumer Handoff — is next and has not started. The exact next command is `$gsd-discuss-phase 6`.

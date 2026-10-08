@@ -59,7 +59,7 @@ coverage:
         ref: "player_input_sources, player_input_reconnect, player_input_focus_audio"
         status: pass
       - kind: integration
-        ref: "bash tests/scripts/verify-phase3-player.sh (48/48 player tests at af438212)"
+        ref: "tests/scripts/verify-phase3-player.sh"
         status: pass
     human_judgment: false
   - id: D2
@@ -70,7 +70,7 @@ coverage:
         ref: "player_audio_lifecycle, player_audio_device, player_audio_replacement"
         status: pass
       - kind: integration
-        ref: "bash tests/scripts/verify-phase3-player.sh (48/48 player tests; dummy backend receipt; extracted package smoke)"
+        ref: "tests/scripts/verify-phase3-player.sh"
         status: pass
     human_judgment: false
 duration: 25min
@@ -102,7 +102,7 @@ status: complete
 - Task 1 `player_input_sources` RED evidence was captured and accepted; its named case passed after implementation. The prior input/focus inventory passed 3/3.
 - Task 2 `player_input_reconnect` and `player_input_focus_audio` RED evidence was accepted; the input inventory passed 6/6. The reconnect fixture exercises ID reuse, equal-timestamp ordering, and full-queue release retry against a loaded demo ROM.
 - Task 3 `player_audio_lifecycle`, `player_audio_device`, and `player_audio_replacement` RED evidence was accepted; the audio inventory passed 8/8.
-- Each task's required `bash tests/scripts/verify-phase3-player.sh` verifier passed: 42/42 after Task 1, 45/45 after Task 2, and 48/48 after Task 3. The final committed-revision run reported `source_revision=af438212384028307c7de3d3b3868258dae7c81a`, package SHA-256 `92f9e19a908f0f6603e0ac74da4d1112dead37ec7153d48d0e119e515e79969b`, and `audio dummy smoke passed: driver=dummy open/stream/close/recovery`.
+- Each task's required player verifier at `tests/scripts/verify-phase3-player.sh` passed: 42/42 after Task 1, 45/45 after Task 2, and 48/48 after Task 3. The final committed-revision run reported `source_revision=af438212384028307c7de3d3b3868258dae7c81a`, package SHA-256 `92f9e19a908f0f6603e0ac74da4d1112dead37ec7153d48d0e119e515e79969b`, and `audio dummy smoke passed: driver=dummy open/stream/close/recovery`.
 - Injected SDL device events and the dummy backend establish deterministic software behavior. They do not establish physical device hotplug, hardware output, or audible quality.
 
 ## Task Commits
