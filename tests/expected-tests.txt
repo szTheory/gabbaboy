@@ -10,6 +10,7 @@ battery_errors
 battery_no_battery
 battery_lifecycle
 battery_instances
+battery_api_fuzz
 run_bounds
 trace_capacity
 illegal_lockup_api

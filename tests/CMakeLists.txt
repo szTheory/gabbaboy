@@ -28,6 +28,12 @@ foreach(case roundtrip8 roundtrip32 errors no_battery lifecycle instances)
   add_test(NAME battery_${case} COMMAND test_battery battery_${case})
 endforeach()
 
+add_executable(test_battery_fuzz test_battery_fuzz.c)
+target_link_libraries(test_battery_fuzz PRIVATE GabbaBoy::core)
+target_compile_features(test_battery_fuzz PRIVATE c_std_17)
+set_target_properties(test_battery_fuzz PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME battery_api_fuzz COMMAND test_battery_fuzz)
+
 add_executable(test_bus test_bus.c)
 target_link_libraries(test_bus PRIVATE GabbaBoy::core)
 target_compile_features(test_bus PRIVATE c_std_17)
