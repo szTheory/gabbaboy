@@ -48,6 +48,13 @@ int main(void) {
 
     audio = player_audio_test_create(true);
     REQUIRE(audio != NULL);
+    atomic_store_explicit(&audio->sink_failure_pcm_bytes, maximum - 2u,
+                          memory_order_relaxed);
+    REQUIRE(player_audio_submit(audio, frames, 4u));
+    player_audio_test_callback(audio, 4, reject_audio, NULL);
+    REQUIRE(player_audio_sink_failure_pcm_bytes(audio) == maximum);
+    REQUIRE(player_audio_clear(audio));
+
     atomic_store_explicit(&audio->backpressure_events, maximum - 1u,
                           memory_order_relaxed);
     gbb_audio_frame full_ring[3214] = {{0}};

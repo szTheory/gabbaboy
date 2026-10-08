@@ -28,6 +28,7 @@ struct player_audio {
     atomic_uint_fast64_t backpressure_events;
     atomic_uint_fast64_t unavailable_frames;
     atomic_uint_fast64_t sink_failures;
+    atomic_uint_fast64_t sink_failure_pcm_bytes;
     atomic_uint_fast64_t flushed_bytes;
     float gain;
     uint8_t pending_frame[sizeof(gbb_audio_frame)];
@@ -75,6 +76,7 @@ static void player_audio_transfer(player_audio *audio, int requested_bytes,
             ? remaining : (unsigned)sizeof(block);
         unsigned offset = 0u;
         unsigned missing_bytes = 0u;
+        unsigned ring_bytes = 0u;
         while (offset < count) {
             if (audio->pending_offset == 0u) {
                 const unsigned read = atomic_load_explicit(&audio->read_index,
@@ -100,6 +102,7 @@ static void player_audio_transfer(player_audio *audio, int requested_bytes,
             memcpy(block + offset, audio->pending_frame + audio->pending_offset,
                    copy);
             offset += copy;
+            ring_bytes += copy;
             audio->pending_offset += copy;
             if (audio->pending_offset == sizeof(gbb_audio_frame))
                 audio->pending_offset = 0u;
@@ -116,6 +119,13 @@ static void player_audio_transfer(player_audio *audio, int requested_bytes,
             if (underflow_event)
                 counter_add(&audio->underflow_events, 1u);
             counter_add(&audio->sink_failures, 1u);
+            if (audio->pending_offset != 0u) {
+                /* A rejected partial frame cannot be completed in a later block. */
+                ring_bytes += (unsigned)sizeof(gbb_audio_frame) -
+                              audio->pending_offset;
+                audio->pending_offset = 0u;
+            }
+            counter_add(&audio->sink_failure_pcm_bytes, ring_bytes);
             return;
         }
         remaining -= count;
@@ -139,7 +149,8 @@ static bool player_audio_counters_lock_free(player_audio *audio) {
         atomic_is_lock_free(&audio->underflow_events) &&
         atomic_is_lock_free(&audio->backpressure_events) &&
         atomic_is_lock_free(&audio->unavailable_frames) &&
-        atomic_is_lock_free(&audio->sink_failures);
+        atomic_is_lock_free(&audio->sink_failures) &&
+        atomic_is_lock_free(&audio->sink_failure_pcm_bytes);
 }
 
 static void player_audio_init(player_audio *audio) {
@@ -151,6 +162,7 @@ static void player_audio_init(player_audio *audio) {
     atomic_init(&audio->backpressure_events, 0u);
     atomic_init(&audio->unavailable_frames, 0u);
     atomic_init(&audio->sink_failures, 0u);
+    atomic_init(&audio->sink_failure_pcm_bytes, 0u);
     atomic_init(&audio->flushed_bytes, 0u);
     audio->gain = 1.0f;
 }
@@ -381,6 +393,11 @@ bool player_audio_adjust_gain(player_audio *audio, int direction) {
 uint_fast64_t player_audio_sink_failures(const player_audio *audio) {
     return audio == NULL ? 0u : atomic_load_explicit(&audio->sink_failures,
                                                      memory_order_relaxed);
+}
+
+uint_fast64_t player_audio_sink_failure_pcm_bytes(const player_audio *audio) {
+    return audio == NULL ? 0u : atomic_load_explicit(
+        &audio->sink_failure_pcm_bytes, memory_order_relaxed);
 }
 
 bool player_audio_available(const player_audio *audio) {

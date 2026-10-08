@@ -128,6 +128,11 @@ PY
     fail 'extracted package help does not state the PCM format'
   grep -Fq 'default 100%, range 0%-200%' "$package_help" ||
     fail 'extracted package help does not state the host gain default and range'
+  grep -Fq 'Gamepad: D-pad moves; bottom/South maps to A, right/East maps to B; Start/Back map to Start/Select.' \
+    "$package_help" ||
+    fail 'extracted package help does not document the supported gamepad mapping'
+  grep -Fq 'window title keeps the current gain visible' "$package_help" ||
+    fail 'extracted package help does not state the persistent title gain indicator'
   grep -Fq 'application PCM underflow is not hardware starvation' "$package_help" ||
     fail 'extracted package help omits the application-underflow evidence boundary'
   otool -L "$player_bin" | grep -Fq '@rpath/libSDL3.0.dylib' ||
@@ -423,6 +428,11 @@ grep -Fq '48 kHz signed 16-bit interleaved stereo' <<< "$PLAYER_HELP_OUTPUT" ||
   fail 'built player help does not state the PCM format'
 grep -Fq 'default 100%, range 0%-200%' <<< "$PLAYER_HELP_OUTPUT" ||
   fail 'built player help does not state the host gain default and range'
+grep -Fq 'Gamepad: D-pad moves; bottom/South maps to A, right/East maps to B; Start/Back map to Start/Select.' \
+  <<< "$PLAYER_HELP_OUTPUT" ||
+  fail 'built player help does not document the supported gamepad mapping'
+grep -Fq 'window title keeps the current gain visible' <<< "$PLAYER_HELP_OUTPUT" ||
+  fail 'built player help does not state the persistent title gain indicator'
 grep -Fq 'application PCM underflow is not hardware starvation' <<< "$PLAYER_HELP_OUTPUT" ||
   fail 'built player help omits the application-underflow evidence boundary'
 

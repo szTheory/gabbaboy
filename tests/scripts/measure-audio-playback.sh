@@ -108,7 +108,8 @@ required = {
     'ring_target_frames', 'ring_ceiling_frames', 'ring_high_water_frames',
     'app_pcm_underflow_frames', 'app_pcm_underflow_events',
     'producer_backpressure_events', 'intentionally_discarded_host_frames',
-    'intentionally_discarded_host_partial_bytes', 'sdl_queued_input_bytes',
+    'intentionally_discarded_host_partial_bytes', 'audio_stream_write_failures',
+    'audio_stream_write_failure_pcm_bytes', 'sdl_queued_input_bytes',
 }
 target_half_dots = 300 * 140448
 measured_runs = []
@@ -158,6 +159,10 @@ for partition in ('frame', '792'):
     partial = int(fields['intentionally_discarded_host_partial_bytes'])
     require(0 <= discarded <= count and 0 <= partial <= 3,
             f'{partition} intentionally discarded host data exceeds produced PCM bounds')
+    stream_failures = int(fields['audio_stream_write_failures'])
+    stream_failure_bytes = int(fields['audio_stream_write_failure_pcm_bytes'])
+    require(stream_failures == 0 and stream_failure_bytes == 0,
+            f'{partition} SDL stream rejected writes: {stream_failures} failures / {stream_failure_bytes} PCM bytes')
     queued_bytes = int(fields['sdl_queued_input_bytes'])
     require(0 <= queued_bytes <= 65536,
             f'{partition} SDL queued-input byte count is outside the declared 0..65536 range')
@@ -228,6 +233,14 @@ source_receipt = {
     },
     'intentionally_discarded_host_frames_by_partition': {
         run['partition']: run['metrics']['intentionally_discarded_host_frames']
+        for run in measured_runs
+    },
+    'audio_stream_write_failures_by_partition': {
+        run['partition']: run['metrics']['audio_stream_write_failures']
+        for run in measured_runs
+    },
+    'audio_stream_write_failure_pcm_bytes_by_partition': {
+        run['partition']: run['metrics']['audio_stream_write_failure_pcm_bytes']
         for run in measured_runs
     },
     'sdl_queued_input_bytes_by_partition': {

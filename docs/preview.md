@@ -34,15 +34,18 @@ After a local build succeeds, launch `build/phase3-player/gabbaboy/gabbaboy-play
 | Open a ROM | Command-O |
 | Quit | Command-Q |
 | D-pad | Arrow keys |
+| D-pad | Gamepad D-pad |
 | A / B | Z / X |
+| A / B | Gamepad bottom/South / right/East buttons |
 | Start / Select | Return / Right Shift |
+| Start / Select | Gamepad Start / Back |
 | Pause / resume | Space |
 | Host volume down / up | [ / ] (10% steps) |
 | Reset the current ROM | R |
 | Save battery RAM now / retry a failed save | S |
 | Show controls and limitations | F1 |
 
-The window title shows the active ROM filename, run/pause state, Open/Quit shortcuts, audio sink status, and the current status. Host gain defaults to 100% and ranges from 0% to 200%; it does not change guest APU registers. If no audio device opens, the player discards and counts PCM while keeping guest execution host-paced. Changed battery RAM autosaves after 2 seconds without a change or after 10 seconds at most. A failed autosave stays visible in the title and F1 help until a save succeeds. Before reset, ROM replacement, or quit, a failed final save pauses the transition: press R to retry, C to continue without saving, or Escape to cancel. During that prompt, R means retry; otherwise it resets the ROM. The F1 help panel shows the key map, 48 kHz s16 stereo format, gain range, recovery behavior, status, and evidence limits.
+The window title shows the active ROM filename, run/pause state, current host gain, Open/Quit shortcuts, audio sink status, and the current status. Host gain defaults to 100% and ranges from 0% to 200%; it does not change guest APU registers. If no audio device opens, the player discards and counts PCM while keeping guest execution host-paced. Changed battery RAM autosaves after 2 seconds without a change or after 10 seconds at most. A failed autosave stays visible in the title and F1 help until a save succeeds. Before reset, ROM replacement, or quit, a failed final save pauses the transition: press R to retry, C to continue without saving, or Escape to cancel. During that prompt, R means retry; otherwise it resets the ROM. The F1 help panel shows keyboard and gamepad mappings, 48 kHz s16 stereo format, gain range, recovery behavior, status, and evidence limits.
 
 ## Supported images and limits
 

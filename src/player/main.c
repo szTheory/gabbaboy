@@ -299,6 +299,10 @@ static bool run_audio_measure(const char *partition, const char *rom_path) {
             const uint64_t flushed_bytes = (uint64_t)player_audio_flushed_bytes(audio);
             const uint64_t unavailable_frames =
                 (uint64_t)player_audio_unavailable_frames(audio);
+            const uint64_t stream_write_failures =
+                (uint64_t)player_audio_sink_failures(audio);
+            const uint64_t stream_write_failure_pcm_bytes =
+                (uint64_t)player_audio_sink_failure_pcm_bytes(audio);
             const uint64_t unavailable_bytes = unavailable_frames >
                 UINT64_MAX / sizeof(gbb_audio_frame)
                 ? UINT64_MAX
@@ -306,7 +310,7 @@ static bool run_audio_measure(const char *partition, const char *rom_path) {
             const uint64_t discard_bytes = UINT64_MAX - flushed_bytes <
                 unavailable_bytes ? UINT64_MAX : flushed_bytes + unavailable_bytes;
             fprintf(stderr,
-                "audio_measure model=DMG-CPU-B workload=authored-pulse-control-loop-v1 driver=dummy duration_video_frames=%llu duration_half_dots=%llu elapsed_half_dots=%llu sample_rate_hz=48000 pcm_format=s16le_stereo sample_count=%llu ring_target_frames=%u ring_ceiling_frames=%u ring_high_water_frames=%u app_pcm_underflow_frames=%llu app_pcm_underflow_events=%llu producer_backpressure_events=%llu intentionally_discarded_host_frames=%llu intentionally_discarded_host_partial_bytes=%llu sdl_queued_input_bytes=%llu\n",
+                "audio_measure model=DMG-CPU-B workload=authored-pulse-control-loop-v1 driver=dummy duration_video_frames=%llu duration_half_dots=%llu elapsed_half_dots=%llu sample_rate_hz=48000 pcm_format=s16le_stereo sample_count=%llu ring_target_frames=%u ring_ceiling_frames=%u ring_high_water_frames=%u app_pcm_underflow_frames=%llu app_pcm_underflow_events=%llu producer_backpressure_events=%llu intentionally_discarded_host_frames=%llu intentionally_discarded_host_partial_bytes=%llu audio_stream_write_failures=%llu audio_stream_write_failure_pcm_bytes=%llu sdl_queued_input_bytes=%llu\n",
                 (unsigned long long)PLAYER_AUDIO_MEASURE_VIDEO_FRAMES,
                 (unsigned long long)target_half_dots,
                 (unsigned long long)elapsed_half_dots,
@@ -318,7 +322,15 @@ static bool run_audio_measure(const char *partition, const char *rom_path) {
                 (unsigned long long)player_audio_backpressure_events(audio),
                 (unsigned long long)(discard_bytes / sizeof(gbb_audio_frame)),
                 (unsigned long long)(discard_bytes % sizeof(gbb_audio_frame)),
+                (unsigned long long)stream_write_failures,
+                (unsigned long long)stream_write_failure_pcm_bytes,
                 (unsigned long long)queued_input_bytes);
+            if (stream_write_failures != 0u ||
+                stream_write_failure_pcm_bytes != 0u) {
+                fputs("Audio measurement observed rejected SDL stream writes\n",
+                      stderr);
+                passed = false;
+            }
         }
     }
     gbb_destroy(machine);
@@ -340,7 +352,10 @@ static void print_player_help(void) {
         "GabbaBoy is a bootless DMG-CPU-B software preview.\n\n"
         "Controls: Command-O opens a ROM; Command-Q quits; arrows move; Z/X are A/B; "
         "Return/Right Shift are Start/Select; Space pauses; R resets; S saves; F1 opens help.\n"
+        "Gamepad: D-pad moves; bottom/South maps to A, right/East maps to B; "
+        "Start/Back map to Start/Select.\n"
         "Volume: [ and ] change host gain in 10% steps; default 100%, range 0%-200%.\n\n"
+        "The window title keeps the current gain visible alongside run/pause and audio status.\n\n"
         "Audio output is 48 kHz signed 16-bit interleaved stereo. The optional SDL3 player "
         "uses a bounded queue. If no device opens, PCM is discarded and counted while the "
         "guest keeps its host-paced timeline. Pause/focus cleanup and device recovery clear "
@@ -638,20 +653,25 @@ static size_t utf8_prefix(const char *text, size_t maximum) {
     return length;
 }
 
-static void update_window_title(player *app) {
-    if (app->window == NULL) return;
+static void format_window_title(const player *app, char *title, size_t title_size) {
     const char *base = rom_basename(app->current_rom_path);
     char short_name[160];
     const size_t base_length = utf8_prefix(base, sizeof(short_name) - 1u);
     memcpy(short_name, base, base_length);
     short_name[base_length] = '\0';
-    char title[PLAYER_TITLE_SIZE];
-    (void)snprintf(title, sizeof(title),
-        "GabbaBoy | %s | %s | %s | \xe2\x8c\x98O Open, \xe2\x8c\x98Q Quit, F1 Help | %s",
+    (void)snprintf(title, title_size,
+        "GabbaBoy | %s | %s | Gain %u%% | %s | \xe2\x8c\x98O Open, \xe2\x8c\x98Q Quit, F1 Help | %s",
         short_name, app->user_paused || app->input.paused ? "Paused" : "Running",
+        (unsigned)(player_audio_gain(app->audio) * 100.0f),
         app->save_status_active ? app->save_status :
             (app->status[0] == '\0' ? "Ready" : app->status),
         player_audio_available(app->audio) ? "Audio ready" : "Audio unavailable");
+}
+
+static void update_window_title(player *app) {
+    if (app->window == NULL) return;
+    char title[PLAYER_TITLE_SIZE];
+    format_window_title(app, title, sizeof(title));
     (void)SDL_SetWindowTitle(app->window, title);
 }
 
@@ -671,10 +691,13 @@ static void show_help(player *app) {
         "Current ROM: %s\n\n"
         "Open ROM: Command-O\nQuit: Command-Q\n"
         "D-pad: arrow keys\nA / B: Z / X\nStart / Select: Return / Right Shift\n"
+        "Gamepad: D-pad moves; bottom/South maps to A, right/East maps to B; "
+        "Start/Back map to Start/Select.\n"
         "Pause / resume: Space\nVolume down / up: [ / ]\n"
         "Reset current ROM: R\nSave now / retry: S\n\n"
-        "Audio: 48 kHz signed 16-bit interleaved stereo; host gain defaults to 100%% and "
-        "ranges from 0-200%%. If no device opens, PCM is discarded and counted.\n"
+        "Audio: 48 kHz signed 16-bit interleaved stereo; current host gain is %u%% "
+        "(default 100%%, range 0-200%%). The window title keeps the current gain visible. "
+        "If no device opens, PCM is discarded and counted.\n"
         "Pause/focus cleanup and device recovery clear host backlog; reset and successful "
         "replacement clear it after save transitions.\n"
         "The APU is a DMG-CPU-B digital model. CGB/VIN, physical/revision-specific behavior, "
@@ -683,7 +706,8 @@ static void show_help(player *app) {
         "A blocked final save offers R to retry, C to continue without saving, or Escape to cancel.\n"
         "Status: %.160s\n"
         "%s",
-        rom_basename(app->current_rom_path), app->save_status_active
+        rom_basename(app->current_rom_path),
+        (unsigned)(player_audio_gain(app->audio) * 100.0f), app->save_status_active
             ? app->save_status : (app->status[0] == '\0' ? "Ready" : app->status),
         GBB_PLAYER_LIMITATIONS_TEXT);
     if (!SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION,
@@ -1807,6 +1831,30 @@ static bool run_smoke(player *app, const char *demo_rom_path,
                       const char *executable,
                       const char *battery_fixture_path) {
     if (!verify_software_layouts()) return false;
+    char title[PLAYER_TITLE_SIZE];
+    format_window_title(app, title, sizeof(title));
+    if ((strstr(title, "Running") == NULL && strstr(title, "Paused") == NULL) ||
+        strstr(title, "Gain 100%") == NULL ||
+        (strstr(title, "Audio ready") == NULL &&
+         strstr(title, "Audio unavailable") == NULL)) {
+        fprintf(stderr, "Player title is missing run, gain, or audio status: %s\n", title);
+        return false;
+    }
+    if (!player_audio_adjust_gain(app->audio, 1)) {
+        fputs("Player smoke could not raise the host gain\n", stderr);
+        return false;
+    }
+    format_window_title(app, title, sizeof(title));
+    const bool gain_visible = strstr(title, "Gain 110%") != NULL;
+    if (!player_audio_adjust_gain(app->audio, -1)) {
+        fputs("Player smoke could not restore the host gain\n", stderr);
+        return false;
+    }
+    update_window_title(app);
+    if (!gain_visible) {
+        fputs("Player title did not update with the current host gain\n", stderr);
+        return false;
+    }
     uint64_t press_ns, release_ns;
     if (!player_input_half_dots_to_nanoseconds(8, &press_ns) ||
         !player_input_half_dots_to_nanoseconds(50008, &release_ns) ||

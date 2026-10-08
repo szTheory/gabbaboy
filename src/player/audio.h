@@ -30,6 +30,7 @@ unsigned player_audio_high_water(const player_audio *audio);
 float player_audio_gain(const player_audio *audio);
 bool player_audio_adjust_gain(player_audio *audio, int direction);
 uint_fast64_t player_audio_sink_failures(const player_audio *audio);
+uint_fast64_t player_audio_sink_failure_pcm_bytes(const player_audio *audio);
 bool player_audio_available(const player_audio *audio);
 uint_fast64_t player_audio_unavailable_frames(const player_audio *audio);
 uint64_t player_audio_queued_input_bytes(const player_audio *audio);

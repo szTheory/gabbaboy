@@ -80,8 +80,25 @@ static int player_audio_ring(void) {
     player_audio_test_callback(audio, boundary_bytes, reject_frames, &calls);
     REQUIRE(calls == 1u);
     REQUIRE(player_audio_sink_failures(audio) == 1u);
+    REQUIRE(player_audio_sink_failure_pcm_bytes(audio) ==
+            12u * sizeof(gbb_audio_frame));
     REQUIRE(player_audio_high_water(audio) >= 12u);
     REQUIRE(player_audio_backpressure_events(audio) == 0u);
+
+    const gbb_audio_frame rejected[2] = {frame_for(70u), frame_for(71u)};
+    REQUIRE(player_audio_submit(audio, rejected, 2u));
+    calls = 0u;
+    player_audio_test_callback(audio, 3, reject_frames, &calls);
+    REQUIRE(calls == 1u);
+    REQUIRE(player_audio_sink_failures(audio) == 2u);
+    REQUIRE(player_audio_sink_failure_pcm_bytes(audio) ==
+            13u * sizeof(gbb_audio_frame));
+    REQUIRE(player_audio_test_queued(audio) == 1u);
+    capture recovered = {0};
+    player_audio_test_callback(audio, (int)sizeof(gbb_audio_frame),
+                               capture_frames, &recovered);
+    REQUIRE(recovered.count == sizeof(gbb_audio_frame));
+    REQUIRE(memcmp(recovered.bytes, &rejected[1], sizeof(gbb_audio_frame)) == 0);
     player_audio_destroy(audio);
     return 0;
 }

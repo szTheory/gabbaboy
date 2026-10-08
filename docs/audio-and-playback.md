@@ -129,6 +129,11 @@ Counter names retain their scope:
 - `intentionally_discarded_host_frames` counts PCM deliberately removed when a
   sink is unavailable or a host queue is cleared. It does not claim that the
   physical device played or dropped those frames.
+- `audio_stream_write_failures` counts SDL callback writes that the audio stream
+  rejected. `audio_stream_write_failure_pcm_bytes` counts ring-backed PCM bytes
+  consumed by rejected writes, including the unsubmitted tail of a partial
+  frame that cannot be resumed safely. Zero-filled underflow bytes are excluded.
+  This is adapter-side loss accounting; it does not establish hardware playback.
 - `sdl_queued_input_bytes` is SDL's queued input-byte count. It is not ring
   occupancy, played-frame count, output backlog, latency, or proof of device
   starvation.
