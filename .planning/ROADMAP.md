@@ -177,7 +177,28 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 3. The player follows documented atomic replacement, recovery, and concurrent-writer rules; failed writes preserve the last good save and visibly report failure. (SAVE-03)
 4. An original GB fixture saves, exits, reopens in a fresh instance/process, and resumes behavior dependent on prior bytes; empty/wrong-save controls demonstrate a meaningful continuation oracle. (SAVE-04)
 
-**Plans**: TBD
+**Plans**: Seven plans across seven dependency-ordered waves; execution not started. Independent structure, requirement/decision coverage, failure-direction, and post-hook coverage checks passed. See the phase plans and [validation checklist](phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md); execution evidence remains pending.
+**Wave 1**
+- [ ] 04-01-PLAN.md
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 04-02-PLAN.md
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 04-03-PLAN.md
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 04-04-PLAN.md
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 04-05-PLAN.md
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 04-06-PLAN.md
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 04-07-PLAN.md
+
 **UI hint**: yes
 
 ### Phase 5: DMG Audio and Stable Playback
@@ -221,7 +242,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 | 1. Portable Foundation and Original ROM Tracer | 5/5 | Complete    | 2026-10-03 |
 | 2. DMG CPU, Bus, and Time | 17/17 | Complete | 2026-10-07 |
 | 3. Visible Interactive DMG | 13/13 | Complete    | 2026-10-07 |
-| 4. MBC1 and Safe Battery Continuation | 0/TBD | Not started | - |
+| 4. MBC1 and Safe Battery Continuation | 0/7 | Planned     | - |
 | 5. DMG Audio and Stable Playback | 0/TBD | Not started | - |
 | 6. Qualified DMG Release and Consumer Handoff | 0/TBD | Not started | - |
 
@@ -231,4 +252,4 @@ All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](
 
 Automate authorized work within each phase, then inspect current verification/release/consumer evidence, update traceability and [lessons](context/LESSONS.md), triage issues/PRs, report limitations and the exact next command, and **stop**. Never auto-advance phases or milestones; keep both auto-advance flags false. Credential, hardware, or perceptual gaps must be recorded honestly with the smallest necessary human action, never converted into passing evidence. Remote/CI setup begins in Phase 1; absent access remains an explicit completion limitation.
 
-Phase 1 Plans 01–05 and Phase 2's 17 runnable plans are verified complete; Phase 2 Plan 02-15 remains superseded/non-runnable. Phase 3's 13 plans are complete, final verification passed 5/5 truths, and 33/33 UAT checks passed, including the user's live packaged-window Z press/release observation. The complete local `phase1` suite passed 141/141. PR #4 passed required exact-head CI and merged at `2b49dc5`; the Phase 3 security gate reports zero high-severity open threats. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B or universal PPU-revision claim is made. Stop at the Phase 3 boundary. Phase 4 — MBC1 and Safe Battery Continuation — is next and has not started.
+Phase 1 Plans 01–05 and Phase 2's 17 runnable plans are verified complete; Phase 2 Plan 02-15 remains superseded/non-runnable. Phase 3's 13 plans are complete, final verification passed 5/5 truths, and 33/33 UAT checks passed, including the user's live packaged-window Z press/release observation. The complete local `phase1` suite passed 141/141. PR #4 passed required exact-head CI and merged at `2b49dc5`; the Phase 3 security gate reports zero high-severity open threats. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B or universal PPU-revision claim is made. Phase 4 planning is complete with seven independently checked plans in seven waves; implementation and validation evidence have not started. Stop at the Phase 4 boundary. The next command is `$gsd-execute-phase 4`.

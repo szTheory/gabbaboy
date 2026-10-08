@@ -4,15 +4,15 @@ milestone: v0.1
 current_phase: 4
 current_phase_name: MBC1 and Safe Battery Continuation
 status: planning
-stopped_at: Phase 4 context gathered
-last_updated: "2026-10-08T01:15:45.098Z"
+stopped_at: Phase 4 planning complete
+last_updated: "2026-10-08T01:53:10Z"
 last_activity: 2026-10-08
-last_activity_desc: Phase 3 complete, transitioned to Phase 4
-state_head: 000846eb43bb835fec39d871929ced930a320c36
+last_activity_desc: Phase 4 planned and independently checked; execution not started
+state_head: 8000d85bdf680d0e8ef38c7bfe8767f42b834311
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 35
+  total_plans: 42
   completed_plans: 35
 milestone_name: limited DMG preview
 ---
@@ -29,11 +29,11 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 ## Current Position
 
 Phase: 4 — MBC1 and Safe Battery Continuation
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-10-08 — Phase 4 discussion and context captured; ready to plan
+Plan: 7 plans created across 7 dependency-ordered waves; execution not started
+Status: Ready to execute
+Last activity: 2026-10-08 — Phase 4 plans created and independently checked
 
-Progress: [█████░░░░░] 50% of milestone phases complete; Phases 1–3 passed verification. Phase 3 has 13/13 plan summaries, 5/5 goal truths, and 33/33 UAT checks. Phase 4 discussion is complete and its context is ready for planning; Phase 4 implementation has not started.
+Progress: [█████░░░░░] 50% of milestone phases complete; Phases 1–3 passed verification. Phase 3 has 13/13 plan summaries, 5/5 goal truths, and 33/33 UAT checks. Phase 4 planning is complete: seven plans are ordered across seven waves, and independent structure, coverage, and failure-direction checks passed. Phase 4 implementation has not started; its validation artifact awaits execution evidence.
 
 ## Performance Metrics
 
@@ -151,9 +151,9 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 ## Session Continuity
 
 Last session: 2026-10-08
-Stopped at: Phase 4 discussion/context gathered; ready to plan Phase 4
-Resume file: .planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-CONTEXT.md
-Next command in fresh context: $gsd-plan-phase 4 (Phase 4 context and discussion log are recorded; stop at the Phase 4 boundary)
+Stopped at: Phase 4 planning and independent plan verification complete; ready to execute Phase 4
+Resume file: .planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-01-PLAN.md
+Next command in fresh context: $gsd-execute-phase 4 (seven plans are ready; execute Phase 4 and stop at its boundary)
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: **Phase 4 discussion and context capture.** The owner authorized a broad, recommendation-led review; specialist reviews and primary documentation informed the locked context at [04-CONTEXT.md](phases/GB-04-mbc1-and-safe-battery-continuation/04-CONTEXT.md), with alternatives recorded in [04-DISCUSSION-LOG.md](phases/GB-04-mbc1-and-safe-battery-continuation/04-DISCUSSION-LOG.md). Phase 4 itself is not complete and no implementation plan has run. Keep both auto-advance flags false and stop at each Phase 4 workflow boundary.
-Next roadmap phase: **Phase 4 — MBC1 and Safe Battery Continuation**, now ready for planning. The exact next command is `$gsd-plan-phase 4`; after planning, stop and report the next command rather than advancing automatically.
+Completed workflow stage: **Phase 4 planning and independent plan verification.** Seven plans are ordered across seven dependency-ordered waves; the independent checker passed plan structure, requirement/decision coverage, specific failure directions, and the 20-item post-hook coverage gate. Research and the locked scope are in [04-RESEARCH.md](phases/GB-04-mbc1-and-safe-battery-continuation/04-RESEARCH.md) and [04-CONTEXT.md](phases/GB-04-mbc1-and-safe-battery-continuation/04-CONTEXT.md); the execution evidence checklist is [04-VALIDATION.md](phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md), whose run evidence remains pending. Phase 4 is not complete and implementation has not started. Keep both auto-advance flags false and stop at each Phase 4 workflow boundary.
+Next roadmap phase: **Phase 4 — MBC1 and Safe Battery Continuation**, ready for execution. The exact next command is `$gsd-execute-phase 4`; execute Phase 4, then stop and report the next command rather than advancing automatically.
