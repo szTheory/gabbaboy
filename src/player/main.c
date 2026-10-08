@@ -19,6 +19,7 @@
 #define PLAYER_FRAME_HEIGHT 144u
 #define PLAYER_FRAME_HALF_DOTS UINT64_C(140448)
 #define PLAYER_MAX_OPERATION_HALF_DOTS UINT64_C(40)
+#define PLAYER_BATTERY_SMOKE_HALF_DOTS UINT64_C(200000)
 #define PLAYER_TITLE_SIZE 512u
 
 typedef enum {
@@ -95,15 +96,13 @@ static char *duplicate_path(const char *path) {
     return copy;
 }
 
-static char *packaged_demo_rom_path(void) {
-    static const char relative_path[] =
-        "../share/gabbaboy/fixtures/visible-demo/demo.gb";
+static char *packaged_fixture_path(const char *relative_path) {
     const char *base_path = SDL_GetBasePath();
     if (base_path == NULL) return NULL;
     const size_t base_length = strlen(base_path);
     const bool has_separator = base_length > 0u &&
         (base_path[base_length - 1u] == '/' || base_path[base_length - 1u] == '\\');
-    const size_t relative_length = sizeof(relative_path) - 1u;
+    const size_t relative_length = strlen(relative_path);
     const size_t separator_length = has_separator ? 0u : 1u;
     if (base_length > SIZE_MAX - separator_length - relative_length - 1u) return NULL;
     char *candidate = malloc(base_length + separator_length + relative_length + 1u);
@@ -119,6 +118,16 @@ static char *packaged_demo_rom_path(void) {
     }
     fclose(rom);
     return candidate;
+}
+
+static char *packaged_demo_rom_path(void) {
+    return packaged_fixture_path(
+        "../share/gabbaboy/fixtures/visible-demo/demo.gb");
+}
+
+static char *packaged_battery_rom_path(void) {
+    return packaged_fixture_path(
+        "../share/gabbaboy/fixtures/mbc1-continuation/continuation.gb");
 }
 
 static char *resolve_demo_rom_path(const char *requested_path,
@@ -1224,13 +1233,21 @@ static bool run_save_transition_smoke(void) {
 static bool run_battery_smoke_guest(player *app, bool resume) {
     if (!app->save_identity.battery_backed ||
         !app->save_identity.persistence_enabled) return false;
-    const gbb_run_result result = gbb_run(app->machine, 512u, NULL, 0u);
-    if (result.reason != GBB_STOP_HALTED_IDLE) {
+    const gbb_run_result result = gbb_run(app->machine,
+        PLAYER_BATTERY_SMOKE_HALF_DOTS, NULL, 0u);
+    if (result.reason != GBB_STOP_HALTED_IDLE &&
+        result.reason != GBB_STOP_BUDGET) {
         fprintf(stderr, "Battery smoke guest stopped with reason %d after %llu half-dots\n",
                 (int)result.reason, (unsigned long long)result.consumed_half_dots);
         return false;
     }
     if (!resume) {
+        if (app->save_identity.ram_size == 8192u &&
+            gbb_peek_ram(app->machine, 0xC002u) == 0xE1u &&
+            gbb_peek_ram(app->machine, 0xC000u) != 1u) {
+            fputs("Battery fixture did not take its fresh-RAM branch\n", stderr);
+            return false;
+        }
         uint64_t generation = 0u;
         if (gbb_battery_generation(app->machine, &generation) != GBB_OK ||
             generation == 0u) {
@@ -1245,7 +1262,11 @@ static bool run_battery_smoke_guest(player *app, bool resume) {
         }
         return true;
     }
-    if (gbb_peek_ram(app->machine, 0xC000u) != 1u) {
+    const bool continuation_marker =
+        gbb_peek_ram(app->machine, 0xC001u) == 0xA5u &&
+        gbb_peek_ram(app->machine, 0xC004u) == 1u;
+    const bool smoke_rom_marker = gbb_peek_ram(app->machine, 0xC000u) == 1u;
+    if (!continuation_marker && !smoke_rom_marker) {
         fputs("Fresh-process guest did not take the persisted-byte success path\n", stderr);
         return false;
     }
@@ -1294,29 +1315,58 @@ static bool run_battery_child(const char *executable, const char *mode,
     }
 }
 
-static bool run_battery_process_smoke(const char *executable) {
-    char rom_path[128];
+static bool identify_smoke_rom(const char *rom_path,
+                               player_save_identity *out_identity) {
+    gbb_instance *machine = NULL;
+    char *owned_path = NULL;
+    char error[192];
+    const bool created = gbb_create(GBB_PROFILE_DMG_CPU_B, &machine) == GBB_OK;
+    const bool loaded = created && player_session_replace_rom(
+        machine, &owned_path, rom_path, out_identity, error, sizeof(error));
+    if (machine != NULL) gbb_destroy(machine);
+    free(owned_path);
+    return loaded && out_identity->battery_backed &&
+           out_identity->ram_size == 8192u;
+}
+
+static bool run_battery_process_smoke(const char *executable,
+                                      const char *fixture_rom_path) {
+    char generated_rom_path[128];
     player_save_identity identity;
-    if (!write_smoke_rom(rom_path, sizeof(rom_path), &identity)) {
-        fputs("Could not create the bounded battery smoke ROM\n", stderr);
+    const char *rom_path = fixture_rom_path;
+    const bool generated_rom = fixture_rom_path == NULL;
+    if (generated_rom) {
+        if (!write_smoke_rom(generated_rom_path, sizeof(generated_rom_path),
+                             &identity)) {
+            fputs("Could not create the bounded battery smoke ROM\n", stderr);
+            return false;
+        }
+        rom_path = generated_rom_path;
+    } else if (!identify_smoke_rom(rom_path, &identity)) {
+        fputs("Packaged battery fixture did not pass bounded cartridge validation\n",
+              stderr);
         return false;
     }
+    player_session_remove_battery_file(&identity);
     const bool stored = run_battery_child(executable, "--battery-smoke-store",
                                           rom_path);
     const bool resumed = stored && run_battery_child(
         executable, "--battery-smoke-resume", rom_path);
     player_session_remove_battery_file(&identity);
-    (void)unlink(rom_path);
+    if (generated_rom) (void)unlink(rom_path);
     if (!stored || !resumed) {
         fputs("Two-process battery continuation smoke failed\n", stderr);
         return false;
     }
+    if (!generated_rom)
+        puts("packaged MBC1 continuation fixture resumed in a fresh process");
     return true;
 }
 
 static bool run_smoke(player *app, const char *demo_rom_path,
                       const char *invalid_rom_path,
-                      const char *executable) {
+                      const char *executable,
+                      const char *battery_fixture_path) {
     if (!verify_software_layouts()) return false;
     uint64_t press_ns, release_ns;
     if (!player_input_half_dots_to_nanoseconds(8, &press_ns) ||
@@ -1412,7 +1462,7 @@ static bool run_smoke(player *app, const char *demo_rom_path,
     if (!advance_to(app, PLAYER_FRAME_HALF_DOTS, true) ||
         !update_frame(app, true) || !draw_frame(app)) return false;
 
-    if (!run_battery_process_smoke(executable)) return false;
+    if (!run_battery_process_smoke(executable, battery_fixture_path)) return false;
     if (!run_save_transition_smoke()) return false;
 
     printf("player smoke passed: frame=%llu; replacement lock conflict preserved the session; save retry, cancel, and continue choices passed\n",
@@ -1488,8 +1538,17 @@ int main(int argc, char **argv) {
         SDL_Quit();
         return 1;
     }
+    char *battery_fixture_path = package_smoke
+        ? packaged_battery_rom_path() : NULL;
+    if (package_smoke && battery_fixture_path == NULL) {
+        fputs("Could not resolve the packaged MBC1 continuation fixture\n", stderr);
+        free(demo_rom_path);
+        SDL_Quit();
+        return 1;
+    }
     if (!create_machine(&app, demo_rom_path)) {
         destroy_player(&app);
+        free(battery_fixture_path);
         free(demo_rom_path);
         SDL_Quit();
         return 1;
@@ -1498,6 +1557,7 @@ int main(int argc, char **argv) {
     if (app.dialog_event_type == (Uint32)-1) {
         fprintf(stderr, "SDL_RegisterEvents: %s\n", SDL_GetError());
         destroy_player(&app);
+        free(battery_fixture_path);
         free(demo_rom_path);
         SDL_Quit();
         return 1;
@@ -1509,12 +1569,14 @@ int main(int argc, char **argv) {
             !app.save_identity.persistence_enabled)
             fputs("Battery smoke could not load a clean save state\n", stderr);
         destroy_player(&app);
+        free(battery_fixture_path);
         free(demo_rom_path);
         SDL_Quit();
         return battery_passed && !app.save_flush_failed ? 0 : 1;
     }
     if (!create_video(&app, smoke || package_smoke)) {
         destroy_player(&app);
+        free(battery_fixture_path);
         free(demo_rom_path);
         SDL_Quit();
         return 1;
@@ -1525,7 +1587,8 @@ int main(int argc, char **argv) {
 
     bool passed = true;
     if (smoke || package_smoke) {
-        passed = run_smoke(&app, demo_rom_path, invalid_rom, argv[0]);
+        passed = run_smoke(&app, demo_rom_path, invalid_rom, argv[0],
+                           battery_fixture_path);
     } else {
         while (app.running) {
             if (!pump_events(&app)) { passed = false; break; }
@@ -1560,6 +1623,7 @@ int main(int argc, char **argv) {
         }
     }
     destroy_player(&app);
+    free(battery_fixture_path);
     free(demo_rom_path);
     SDL_Quit();
     return passed && !app.save_flush_failed ? 0 : 1;

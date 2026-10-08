@@ -102,6 +102,12 @@ install(FILES
   fixtures/tracer/manifest.json
   fixtures/tracer/LICENSE.txt
   DESTINATION "${CMAKE_INSTALL_DATADIR}/gabbaboy/fixtures/tracer")
+install(FILES
+  fixtures/mbc1-continuation/continuation.asm
+  fixtures/mbc1-continuation/continuation.gb
+  fixtures/mbc1-continuation/manifest.json
+  fixtures/mbc1-continuation/LICENSE.txt
+  DESTINATION "${CMAKE_INSTALL_DATADIR}/gabbaboy/fixtures/mbc1-continuation")
 install(EXPORT GabbaBoyTargets
   FILE GabbaBoyTargets.cmake
   NAMESPACE GabbaBoy::
