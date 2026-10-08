@@ -37,10 +37,10 @@ Every requirement below must map to exactly one phase. Completion needs implemen
 
 ### Cartridge banking and battery continuation
 
-- [ ] **SAVE-01**: The core supports a declared set of standard MBC1 ROM/RAM/battery configurations with tested banking and enable rules, while excluded variants and other mappers produce explicit errors.
-- [ ] **SAVE-02**: A frontend can import/export bounded battery data with documented cartridge identity/size rules; malformed imports leave the live state unchanged.
-- [ ] **SAVE-03**: The player persists battery data with a documented atomic replacement, recovery, and concurrent-writer policy; failed writes preserve the last good save and report failure visibly.
-- [ ] **SAVE-04**: An original GB fixture saves progress, exits, reopens in a fresh instance/process, and resumes behavior that depends on the previous bytes; empty/wrong-save controls prove the continuation oracle is meaningful.
+- [x] **SAVE-01**: The core supports a declared set of standard MBC1 ROM/RAM/battery configurations with tested banking and enable rules, while excluded variants and other mappers produce explicit errors.
+- [x] **SAVE-02**: A frontend can import/export bounded battery data with documented cartridge identity/size rules; malformed imports leave the live state unchanged.
+- [x] **SAVE-03**: The player persists battery data with a documented atomic replacement, recovery, and concurrent-writer policy; failed writes preserve the last good save and report failure visibly.
+- [x] **SAVE-04**: An original GB fixture saves progress, exits, reopens in a fresh instance/process, and resumes behavior that depends on the previous bytes; empty/wrong-save controls prove the continuation oracle is meaningful.
 
 ### Sound and stable playback
 
@@ -110,10 +110,10 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | VIDEO-03 | Phase 3 | Complete — selected falling-edge software contract, exact CPU-B timing unmeasured |
 | VIDEO-04 | Phase 3 | Complete — packaged window and mapped Z press/release confirmed by user in 03-UAT.md |
 | VIDEO-05 | Phase 3 | Complete |
-| SAVE-01 | Phase 4 | Pending |
-| SAVE-02 | Phase 4 | Pending |
-| SAVE-03 | Phase 4 | Pending |
-| SAVE-04 | Phase 4 | Pending |
+| SAVE-01 | Phase 4 | Complete — support matrix, banking, enable and exclusion cases; see Phase 4 verification |
+| SAVE-02 | Phase 4 | Complete — bounded identity/size API and non-mutating rejection; see Phase 4 verification |
+| SAVE-03 | Phase 4 | Complete — atomic persistence, recovery, cooperating-writer and visible failure behavior; see Phase 4 verification |
+| SAVE-04 | Phase 4 | Complete — byte-reproducible original fixture and fresh-process positive/negative controls; see Phase 4 verification |
 | AUDIO-01 | Phase 5 | Pending |
 | AUDIO-02 | Phase 5 | Pending |
 | AUDIO-03 | Phase 5 | Pending |
@@ -135,9 +135,9 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | STATE-01 | Next milestone | Deferred |
 | INT-01 | Next milestone | Deferred |
 
-**Active coverage:** 35/35 requirements mapped exactly once; 0 unmapped, 0 duplicates. Fifteen are complete and 20 remain pending. Next-milestone requirements and later candidates are excluded from active coverage.
+**Active coverage:** 35/35 requirements mapped exactly once; 0 unmapped, 0 duplicates. Twenty-two are complete (BASE-01–08, CPU-01–05, VIDEO-01–05, and SAVE-01–04) and 13 remain pending (AUDIO/HOST and SHIP). Next-milestone requirements and later candidates are excluded from active coverage. Phase 4 completion evidence is recorded in [verification](phases/GB-04-mbc1-and-safe-battery-continuation/04-VERIFICATION.md), [validation](phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md), and [security](phases/GB-04-mbc1-and-safe-battery-continuation/04-SECURITY.md).
 
 **Next-milestone traceability:** 7/7 GB/GBC breadth commitments are mapped to the next milestone and remain outside the active v0.1 count.
 
 ---
-Last updated: 2026-10-08 after Phase 3 Plan 03-13 verification; 15 active requirements are complete, 20 remain pending, and 7 next-milestone commitments are explicitly deferred.
+Last updated: 2026-10-08 after Phase 4 goal verification; 22 active requirements are complete, 13 remain pending, and 7 next-milestone commitments are explicitly deferred.

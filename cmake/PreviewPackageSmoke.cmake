@@ -30,7 +30,11 @@ foreach(required IN ITEMS
     "${install_prefix}/bin/gabbaboy-runner${GBB_EXECUTABLE_SUFFIX}"
     "${install_prefix}/share/gabbaboy/fixtures/tracer/tracer.gb"
     "${install_prefix}/share/gabbaboy/fixtures/tracer/manifest.json"
-    "${install_prefix}/share/gabbaboy/fixtures/tracer/LICENSE.txt")
+    "${install_prefix}/share/gabbaboy/fixtures/tracer/LICENSE.txt"
+    "${install_prefix}/share/gabbaboy/fixtures/mbc1-continuation/continuation.asm"
+    "${install_prefix}/share/gabbaboy/fixtures/mbc1-continuation/continuation.gb"
+    "${install_prefix}/share/gabbaboy/fixtures/mbc1-continuation/manifest.json"
+    "${install_prefix}/share/gabbaboy/fixtures/mbc1-continuation/LICENSE.txt")
   if(NOT EXISTS "${required}")
     message(FATAL_ERROR "Clean installed package is missing: ${required}")
   endif()

@@ -12,12 +12,24 @@
 #define GBB_DMA_BYTE_PERIOD_HALF_DOTS 8u
 #define GBB_LINE_OBJECT_LIMIT 10u
 #define GBB_PPU_FIFO_CAPACITY 16u
+typedef struct {
+    uint8_t type;
+    size_t ram_size;
+} cartridge_info;
 
 typedef struct gbb_test_dma_event gbb_test_dma_event;
 
 struct gbb_instance {
     uint8_t *rom;
     size_t rom_size;
+    uint8_t *cartridge_ram;
+    size_t cartridge_ram_size;
+    uint64_t battery_generation;
+    uint8_t cartridge_type;
+    uint8_t mbc1_rom_bank_low;
+    uint8_t mbc1_rom_bank_high;
+    uint8_t mbc1_mode;
+    int mbc1_ram_enabled;
     uint8_t wram[8192];
     uint8_t hram[127];
     uint8_t vram[8192];
@@ -243,9 +255,39 @@ static void observe_bus(gbb_instance *m, uint64_t offset, uint16_t address, uint
     }
 }
 
-#define GBB_MAX_ROM_SIZE ((size_t)8u * 1024u * 1024u)
+#define GBB_MAX_ROM_SIZE ((size_t)2u * 1024u * 1024u)
+
+static int cartridge_is_mbc1(const gbb_instance *m) {
+    return m->cartridge_type >= 0x01u && m->cartridge_type <= 0x03u;
+}
+
+static size_t mbc1_rom_bank_mask(const gbb_instance *m) {
+    return m->rom_size / 0x4000u - 1u;
+}
+
+static size_t mbc1_rom_bank(const gbb_instance *m, uint16_t address) {
+    const size_t mask = mbc1_rom_bank_mask(m);
+    if (address < 0x4000u)
+        return m->mbc1_mode ? ((size_t)m->mbc1_rom_bank_high << 5) & mask : 0u;
+
+    /* Translate zero before masking: a small ROM can disconnect upper lines. */
+    const size_t low = m->mbc1_rom_bank_low == 0u ? 1u : m->mbc1_rom_bank_low;
+    return (((size_t)m->mbc1_rom_bank_high << 5) | low) & mask;
+}
+
+static size_t mbc1_ram_offset(const gbb_instance *m, uint16_t address) {
+    const size_t bank_size = 0x2000u;
+    const size_t bank_count = m->cartridge_ram_size / bank_size;
+    const size_t bank = m->mbc1_mode && bank_count > 1u
+        ? ((size_t)m->mbc1_rom_bank_high & (bank_count - 1u)) : 0u;
+    return bank * bank_size + (size_t)(address - 0xA000u);
+}
 
 static void reset_state(gbb_instance *m) {
+    m->mbc1_rom_bank_low = 1u;
+    m->mbc1_rom_bank_high = 0u;
+    m->mbc1_mode = 0u;
+    m->mbc1_ram_enabled = 0;
     m->a = 0x01;
     m->f = m->rom != NULL && m->rom_size > 0x14Du && m->rom[0x14Du] != 0 ? 0xB0u : 0x80u;
     m->b = 0x00; m->c = 0x13;
@@ -392,7 +434,19 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
         return cpu_vram_access_allowed(m) ? m->vram[address - 0x8000] : 0xFF;
     if (address >= 0xFE00 && address <= 0xFE9F)
         return cpu_oam_access_allowed(m) ? m->oam[address - 0xFE00] : 0xFF;
-    if (address < m->rom_size) return m->rom[address];
+    if (address < 0x8000u) {
+        if (m->rom == NULL || address >= m->rom_size) return 0xFFu;
+        if (!cartridge_is_mbc1(m)) return m->rom[address];
+        const size_t bank = mbc1_rom_bank(m, address);
+        const size_t offset = bank * 0x4000u + (size_t)(address & 0x3FFFu);
+        return offset < m->rom_size ? m->rom[offset] : 0xFFu;
+    }
+    if (address >= 0xA000u && address <= 0xBFFFu) {
+        if (m->mbc1_ram_enabled && m->cartridge_ram != NULL &&
+            m->cartridge_ram_size != 0u)
+            return m->cartridge_ram[mbc1_ram_offset(m, address)];
+        return 0xFFu;
+    }
     if (address >= 0xC000 && address <= 0xDFFF) return m->wram[address - 0xC000];
     if (address >= 0xE000 && address <= 0xFDFF) return m->wram[address - 0xE000];
     if (address >= 0xFF80 && address <= 0xFFFE) return m->hram[address - 0xFF80];
@@ -439,11 +493,36 @@ static void timer_set_signal(gbb_instance *m, int next, uint64_t at) {
 static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     if (m->dma_active && m->dma_cpu_blocked &&
         !cpu_hram_address(address) && address != 0xFF46u) return;
-    if (address >= 0x8000 && address <= 0x9FFF) {
+    if (address < 0x8000u) {
+        if (cartridge_is_mbc1(m)) {
+            if (address < 0x2000u)
+                m->mbc1_ram_enabled = (value & 0x0Fu) == 0x0Au;
+            else if (address < 0x4000u)
+                m->mbc1_rom_bank_low = value & 0x1Fu;
+            else if (address < 0x6000u)
+                m->mbc1_rom_bank_high = value & 0x03u;
+            else
+                m->mbc1_mode = value & 0x01u;
+        }
+    }
+    else if (address >= 0x8000 && address <= 0x9FFF) {
         if (cpu_vram_access_allowed(m)) m->vram[address - 0x8000] = value;
     }
     else if (address >= 0xFE00 && address <= 0xFE9F) {
         if (cpu_oam_access_allowed(m)) m->oam[address - 0xFE00] = value;
+    }
+    else if (address >= 0xA000u && address <= 0xBFFFu) {
+        if (m->mbc1_ram_enabled && m->cartridge_ram != NULL &&
+            m->cartridge_ram_size != 0u) {
+            const size_t offset = mbc1_ram_offset(m, address);
+            const uint8_t previous = m->cartridge_ram[offset];
+            if (previous != value) {
+                m->cartridge_ram[offset] = value;
+                if (m->cartridge_type == 0x03u &&
+                    m->battery_generation != UINT64_MAX)
+                    ++m->battery_generation;
+            }
+        }
     }
     else if (address == 0xFF00) {
         uint8_t previous = (uint8_t)(joypad_value(m) & 0x0Fu);
@@ -547,8 +626,11 @@ static void bus_write(gbb_instance *m, uint16_t address, uint8_t value, uint64_t
     write8(m, address, value);
 }
 
-static int read_supported(uint16_t address) {
+static int read_supported(const gbb_instance *m, uint16_t address) {
     return address < 0xA000 || (address >= 0xFE00 && address <= 0xFE9F) ||
+           (address >= 0xA000 && address <= 0xBFFF && m != NULL &&
+            ((m->cartridge_ram != NULL && m->cartridge_ram_size != 0u) ||
+             cartridge_is_mbc1(m))) ||
            address == 0xFF00 || address == 0xFF01 || address == 0xFF02 ||
            (address >= 0xFF04 && address <= 0xFF07) || address == 0xFF0F || address == 0xFFFF ||
            (address >= 0xFF40 && address <= 0xFF46) ||
@@ -1067,19 +1149,66 @@ static void advance_devices(gbb_instance *m, uint64_t half_dots) {
 }
 static void set_hl(gbb_instance *m, uint16_t value) { m->h = (uint8_t)(value >> 8); m->l = (uint8_t)value; }
 
-static gbb_error validate_header(const uint8_t *rom, size_t size) {
+static int recognized_mbc1m_candidate(const uint8_t *rom, size_t size) {
+    static const uint8_t nintendo_logo[48] = {
+        0xCEu, 0xEDu, 0x66u, 0x66u, 0xCCu, 0x0Du, 0x00u, 0x0Bu,
+        0x03u, 0x73u, 0x00u, 0x83u, 0x00u, 0x0Cu, 0x00u, 0x0Du,
+        0x00u, 0x08u, 0x11u, 0x1Fu, 0x88u, 0x89u, 0x00u, 0x0Eu,
+        0xDCu, 0xCCu, 0x6Eu, 0xE6u, 0xDDu, 0xDDu, 0xD9u, 0x99u,
+        0xBBu, 0xBBu, 0x67u, 0x63u, 0x6Eu, 0x0Eu, 0xECu, 0xCCu,
+        0xDDu, 0xDCu, 0x99u, 0x9Fu, 0xBBu, 0xB9u, 0x33u, 0x3Eu
+    };
+    const size_t bank = 0x10u * 0x4000u;
+    if (size < bank + 0x150u ||
+        memcmp(rom + bank + 0x104u, nintendo_logo, sizeof(nintendo_logo)) != 0)
+        return 0;
+    uint8_t checksum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+        checksum = (uint8_t)(checksum - rom[bank + i] - 1u);
+    return checksum == rom[bank + 0x14Du] &&
+           rom[bank + 0x147u] >= 0x01u && rom[bank + 0x147u] <= 0x03u;
+}
+
+static gbb_error validate_header(const uint8_t *rom, size_t size,
+                                 cartridge_info *out_info) {
     if (rom == NULL || size == 0) return GBB_INVALID_ARGUMENT;
     if (size < 0x150) return GBB_ROM_TRUNCATED;
     if (size > GBB_MAX_ROM_SIZE) return GBB_ROM_TOO_LARGE;
-    if (rom[0x147] != 0) return GBB_UNSUPPORTED_CARTRIDGE;
-    if (rom[0x148] > 0) return GBB_UNSUPPORTED_ROM_SIZE;
-    if (rom[0x149] != 0) return GBB_UNSUPPORTED_RAM_SIZE;
-    size_t declared = 32768u << rom[0x148];
+    const uint8_t type = rom[0x147];
+    const uint8_t rom_size_code = rom[0x148];
+    const uint8_t ram_size_code = rom[0x149];
+    size_t ram_size = 0u;
+    const int is_mbc1 = type >= 0x01u && type <= 0x03u;
+    if (type != 0x00u && !is_mbc1)
+        return GBB_UNSUPPORTED_CARTRIDGE;
+    if ((!is_mbc1 && rom_size_code != 0u) ||
+        (is_mbc1 && rom_size_code > 0x06u))
+        return GBB_UNSUPPORTED_ROM_SIZE;
+
+    if (type == 0x00u || type == 0x01u) {
+        if (ram_size_code != 0u) return GBB_UNSUPPORTED_RAM_SIZE;
+    } else if (ram_size_code == 0x02u) {
+        ram_size = 8192u;
+    } else if (ram_size_code == 0x03u && rom_size_code <= 0x04u) {
+        ram_size = 32768u;
+    } else {
+        return GBB_UNSUPPORTED_RAM_SIZE;
+    }
+
+    const size_t declared = (size_t)32768u << rom_size_code;
     if (size < declared) return GBB_ROM_TRUNCATED;
     if (size != declared) return GBB_ROM_SIZE_MISMATCH;
     uint8_t checksum = 0;
     for (size_t i = 0x134; i <= 0x14C; ++i) checksum = (uint8_t)(checksum - rom[i] - 1u);
-    return checksum == rom[0x14D] ? GBB_OK : GBB_INVALID_ROM;
+    if (checksum != rom[0x14D]) return GBB_INVALID_ROM;
+    if (is_mbc1 && declared >= 512u * 1024u &&
+        recognized_mbc1m_candidate(rom, size))
+        return GBB_UNSUPPORTED_CARTRIDGE_VARIANT;
+    if (out_info != NULL) {
+        out_info->type = type;
+        out_info->ram_size = ram_size;
+    }
+    return GBB_OK;
 }
 
 gbb_error gbb_create(gbb_profile profile, gbb_instance **out_instance) {
@@ -1094,7 +1223,11 @@ gbb_error gbb_create(gbb_profile profile, gbb_instance **out_instance) {
 }
 
 void gbb_destroy(gbb_instance *instance) {
-    if (instance != NULL) { free(instance->rom); free(instance); }
+    if (instance != NULL) {
+        free(instance->rom);
+        free(instance->cartridge_ram);
+        free(instance);
+    }
 }
 
 gbb_error gbb_reset(gbb_instance *instance) {
@@ -1105,16 +1238,75 @@ gbb_error gbb_reset(gbb_instance *instance) {
 
 gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_size) {
     if (instance == NULL) return GBB_INVALID_ARGUMENT;
-    gbb_error validation = validate_header(rom, rom_size);
+    cartridge_info info = {0};
+    gbb_error validation = validate_header(rom, rom_size, &info);
     if (validation != GBB_OK) return validation;
     uint8_t *copy = malloc(rom_size);
     if (copy == NULL) return GBB_OUT_OF_MEMORY;
     memcpy(copy, rom, rom_size);
+    uint8_t *new_ram = NULL;
+    if (info.ram_size != 0u) {
+        new_ram = malloc(info.ram_size);
+        if (new_ram == NULL) {
+            free(copy);
+            return GBB_OUT_OF_MEMORY;
+        }
+        memset(new_ram, 0xFF, info.ram_size);
+    }
     free(instance->rom);
+    free(instance->cartridge_ram);
     instance->rom = copy;
     instance->rom_size = rom_size;
+    instance->cartridge_ram = new_ram;
+    instance->cartridge_ram_size = info.ram_size;
+    instance->battery_generation = 0u;
+    instance->cartridge_type = info.type;
     reset_state(instance);
     instance->loaded = 1;
+    return GBB_OK;
+}
+
+static int has_battery_ram(const gbb_instance *instance) {
+    return instance != NULL && instance->loaded &&
+           instance->cartridge_type == 0x03u &&
+           instance->cartridge_ram != NULL &&
+           instance->cartridge_ram_size != 0u;
+}
+
+gbb_error gbb_battery_size(const gbb_instance *instance, size_t *out_size) {
+    if (instance == NULL || out_size == NULL) return GBB_INVALID_ARGUMENT;
+    if (!has_battery_ram(instance)) return GBB_NO_BATTERY;
+    *out_size = instance->cartridge_ram_size;
+    return GBB_OK;
+}
+
+gbb_error gbb_copy_battery(const gbb_instance *instance, uint8_t *out_bytes,
+                           size_t capacity_bytes) {
+    if (instance == NULL || out_bytes == NULL) return GBB_INVALID_ARGUMENT;
+    if (!has_battery_ram(instance)) return GBB_NO_BATTERY;
+    if (capacity_bytes < instance->cartridge_ram_size) return GBB_BUFFER_TOO_SMALL;
+    memcpy(out_bytes, instance->cartridge_ram, instance->cartridge_ram_size);
+    return GBB_OK;
+}
+
+gbb_error gbb_import_battery(gbb_instance *instance, const uint8_t *bytes,
+                             size_t size_bytes) {
+    if (instance == NULL || bytes == NULL) return GBB_INVALID_ARGUMENT;
+    if (!has_battery_ram(instance)) return GBB_NO_BATTERY;
+    if (size_bytes != instance->cartridge_ram_size) return GBB_BATTERY_SIZE_MISMATCH;
+    if (memcmp(instance->cartridge_ram, bytes, size_bytes) != 0) {
+        memcpy(instance->cartridge_ram, bytes, size_bytes);
+        if (instance->battery_generation != UINT64_MAX)
+            ++instance->battery_generation;
+    }
+    return GBB_OK;
+}
+
+gbb_error gbb_battery_generation(const gbb_instance *instance,
+                                 uint64_t *out_generation) {
+    if (instance == NULL || out_generation == NULL) return GBB_INVALID_ARGUMENT;
+    if (!has_battery_ram(instance)) return GBB_NO_BATTERY;
+    *out_generation = instance->battery_generation;
     return GBB_OK;
 }
 
@@ -1194,29 +1386,29 @@ static int instruction_reads_supported(const gbb_instance *m, decoded d, uint8_t
     /* Address checks have no bus phases or side effects. Every byte is checked
      * before an instruction can change registers, RAM, devices or outputs. */
     for (unsigned i = 0; i < d.size; ++i)
-        if (!read_supported(instruction_address(m, m->pc, i))) return 0;
+        if (!read_supported(m, instruction_address(m, m->pc, i))) return 0;
 
     if (op == 0xCB)
-        return (instruction_byte(m, m->pc, 1) & 7u) != 6u || read_supported(hl(m));
+        return (instruction_byte(m, m->pc, 1) & 7u) != 6u || read_supported(m, hl(m));
     if ((op >= 0x40 && op <= 0x7F && op != 0x76 && (op & 7u) == 6u) ||
         (op >= 0x80 && op <= 0xBF && (op & 7u) == 6u) ||
         (((op & 0xC7u) == 0x04u || (op & 0xC7u) == 0x05u) && ((op >> 3) & 7u) == 6u) ||
         op == 0x2A || op == 0x3A)
-        return read_supported(hl(m));
+        return read_supported(m, hl(m));
 
     if ((op & 0xCFu) == 0xC1u || op == 0xC9 || op == 0xD9 ||
         ((op & 0xE7u) == 0xC0u && condition_true(m, (op >> 3) & 3u)))
-        return read_supported(m->sp) && read_supported((uint16_t)(m->sp + 1u));
+        return read_supported(m, m->sp) && read_supported(m, (uint16_t)(m->sp + 1u));
 
     switch (op) {
-        case 0x0A: return read_supported(pair_value(m, 0));
-        case 0x1A: return read_supported(pair_value(m, 1));
-        case 0xF0: return read_supported((uint16_t)(0xFF00u + instruction_byte(m, m->pc, 1)));
-        case 0xF2: return read_supported((uint16_t)(0xFF00u + m->c));
+        case 0x0A: return read_supported(m, pair_value(m, 0));
+        case 0x1A: return read_supported(m, pair_value(m, 1));
+        case 0xF0: return read_supported(m, (uint16_t)(0xFF00u + instruction_byte(m, m->pc, 1)));
+        case 0xF2: return read_supported(m, (uint16_t)(0xFF00u + m->c));
         case 0xFA: {
             uint16_t address = (uint16_t)(instruction_byte(m, m->pc, 1) |
                                ((uint16_t)instruction_byte(m, m->pc, 2) << 8));
-            return read_supported(address);
+            return read_supported(m, address);
         }
         default: return 1; /* Writes to absent ROM-only regions remain ignored. */
     }
@@ -1517,10 +1709,10 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             }
             continue;
         }
-        if (!read_supported(instance->pc)) { result.reason=GBB_STOP_UNSUPPORTED_BUS; return result; }
+        if (!read_supported(instance, instance->pc)) { result.reason=GBB_STOP_UNSUPPORTED_BUS; return result; }
         uint8_t opcode = read8(instance, instance->pc);
         /* CB decoding consumes its extension byte, so check it before decode. */
-        if (opcode == 0xCB && !read_supported(instruction_address(instance, instance->pc, 1))) {
+        if (opcode == 0xCB && !read_supported(instance, instruction_address(instance, instance->pc, 1))) {
             result.reason=GBB_STOP_UNSUPPORTED_BUS;
             return result;
         }

@@ -1,0 +1,46 @@
+{
+  "id": "original-mbc1-battery-continuation",
+  "source": "continuation.asm",
+  "source_identity": "Original GabbaBoy project-authored assembly",
+  "source_sha256": "ad82e0cd51eeb6d536421d20c4a5b88ee0c019a4e699c2c75de077a20c82ba94",
+  "license": "MIT; see LICENSE.txt and repository LICENSE",
+  "build": {
+    "assembler": "RGBDS",
+    "version": "1.0.1",
+    "archive": "rgbds-macos.zip",
+    "archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
+    "ci_archive": "rgbds-linux-x86_64.tar.xz",
+    "ci_archive_sha256": "80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9",
+    "recipe": "rgbasm -o <work>/continuation.o fixtures/mbc1-continuation/continuation.asm && rgblink -o <work>/continuation.gb <work>/continuation.o && rgbfix -f hg -p 0 -m 3 -r 2 <work>/continuation.gb"
+  },
+  "rom": "continuation.gb",
+  "size_bytes": 32768,
+  "sha256": "f89bf3884ff10a702aa117f2963e6fe9ea8aeac3a9bc003f52b6c5ca6abfbbd2",
+  "cartridge": {
+    "mapper": "standard MBC1",
+    "type": "0x03 (MBC1 + RAM + battery)",
+    "rom_size_code": "0x00 (32 KiB)",
+    "ram_size_code": "0x02 (8 KiB)"
+  },
+  "profile": {
+    "name": "DMG-CPU-B",
+    "boot": "Skipped; starts at cartridge entry 0x0100.",
+    "applicability": "Original software continuation fixture for the deterministic bootless DMG-CPU-B profile; not physical hardware evidence."
+  },
+  "protocol": {
+    "progress_record": "The first fresh-RAM run enables MBC1 RAM and writes the tuple 0x47, 0x42, 0x17 at 0xA000-0xA002.",
+    "stored_marker": "WRAM C000=0x01 and C002=0xE1 mark the missing-save/fresh-RAM branch after it writes progress.",
+    "resume_success": "Only an intact imported tuple 0x47, 0x42, 0x17 sets WRAM C001=0xA5 and C004=0x01.",
+    "invalid_record": "A nonempty tuple with invalid bytes sets WRAM C003=0xEE and cannot reach the resume-success branch.",
+    "wrong_rom_control": "A checksum-correct variant changes only a title byte; its independent save key is seeded with the original ROM's valid envelope. Adapter identity rejection must preserve that envelope, report a warning, initialize fresh RAM, and keep C001 clear.",
+    "timeout_half_dots": 200000,
+    "evidence": "A distinct fresh process observes the saved bytes; this is software continuation evidence only."
+  },
+  "scope_limits": [
+    "No boot-ROM execution",
+    "No physical DMG-CPU-B or MBC1 hardware observation",
+    "No CGB, RTC, MBC1M, or other mapper behavior claim",
+    "The guest protocol tests file-backed continuation separately from mapper/API correctness",
+    "The save envelope checksum detects accidental corruption and is not authentication"
+  ]
+}

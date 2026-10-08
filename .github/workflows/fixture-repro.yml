@@ -27,13 +27,20 @@ jobs:
           root = pathlib.Path.cwd()
           visible = json.loads((root / 'fixtures/visible-demo/manifest.json').read_text())
           tracer = json.loads((root / 'fixtures/tracer/manifest.json').read_text())
+          continuation = json.loads((root / 'fixtures/mbc1-continuation/manifest.json').read_text())
           build = visible['build']
           tracer_build = tracer['build']
+          continuation_build = continuation['build']
           if build.get('version') != '1.0.1' or build.get('version') != tracer_build.get('version'):
               raise SystemExit('visible demo RGBDS version differs from the established v1.0.1 pin')
+          if build.get('version') != continuation_build.get('version'):
+              raise SystemExit('MBC1 continuation RGBDS version differs from the established v1.0.1 pin')
           if (build.get('archive'), build.get('archive_sha256')) != (
                   tracer_build.get('archive'), tracer_build.get('archive_sha256')):
               raise SystemExit('visible demo macOS RGBDS archive differs from the established tracer pin')
+          if (build.get('archive'), build.get('archive_sha256')) != (
+                  continuation_build.get('archive'), continuation_build.get('archive_sha256')):
+              raise SystemExit('MBC1 continuation macOS RGBDS archive differs from the established fixture pin')
           archive = build.get('ci_archive')
           digest = build.get('ci_archive_sha256')
           if archive != 'rgbds-linux-x86_64.tar.xz':
@@ -88,6 +95,13 @@ jobs:
           GBB_RGBDS_ARCHIVE="$RUNNER_TEMP/rgbds-$RGBDS_RELEASE_VERSION/$RGBDS_ARCHIVE" \
             GBB_RGBDS_ARCHIVE_SHA256="$RGBDS_ARCHIVE_SHA256" \
             bash tests/scripts/reproduce-visible-demo.sh
+      - name: Reproduce MBC1 battery continuation fixture bytes
+        shell: bash
+        run: |
+          test -s tests/expected-tests.txt
+          GBB_RGBDS_ARCHIVE="$RUNNER_TEMP/rgbds-$RGBDS_RELEASE_VERSION/$RGBDS_ARCHIVE" \
+            GBB_RGBDS_ARCHIVE_SHA256="$RGBDS_ARCHIVE_SHA256" \
+            bash tests/scripts/reproduce-mbc1-continuation.sh
       - name: Retain visible demo identity receipt
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

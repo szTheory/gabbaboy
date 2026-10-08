@@ -1,2 +1,8 @@
 # The runner admits this pinned manifest by its exact Git blob SHA-256.
 fixtures/mooneye/manifest.json -text
+
+# Fixture provenance digests cover exact source and ROM bytes across Windows checkouts.
+fixtures/mbc1-continuation/continuation.asm text eol=lf
+fixtures/mbc1-continuation/manifest.json text eol=lf
+fixtures/mbc1-continuation/LICENSE.txt text eol=lf
+fixtures/mbc1-continuation/continuation.gb -text

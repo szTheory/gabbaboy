@@ -11,6 +11,29 @@ add_test(NAME run_bounds COMMAND test_api run_bounds ${PROJECT_SOURCE_DIR}/fixtu
 add_test(NAME trace_capacity COMMAND test_api trace_capacity ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 add_test(NAME illegal_lockup_api COMMAND test_api illegal_lockup ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 
+add_executable(test_cartridge test_cartridge.c)
+target_link_libraries(test_cartridge PRIVATE GabbaBoy::core)
+target_compile_features(test_cartridge PRIVATE c_std_17)
+set_target_properties(test_cartridge PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cartridge_tracer COMMAND test_cartridge cartridge_tracer)
+add_test(NAME cartridge_bank_matrix COMMAND test_cartridge cartridge_bank_matrix)
+add_test(NAME cartridge_ram_banks COMMAND test_cartridge cartridge_ram_banks)
+add_test(NAME cartridge_no_ram_reads COMMAND test_cartridge cartridge_no_ram_reads)
+
+add_executable(test_battery test_battery.c)
+target_link_libraries(test_battery PRIVATE GabbaBoy::core)
+target_compile_features(test_battery PRIVATE c_std_17)
+set_target_properties(test_battery PROPERTIES C_EXTENSIONS OFF)
+foreach(case roundtrip8 roundtrip32 errors no_battery lifecycle instances)
+  add_test(NAME battery_${case} COMMAND test_battery battery_${case})
+endforeach()
+
+add_executable(test_battery_fuzz test_battery_fuzz.c)
+target_link_libraries(test_battery_fuzz PRIVATE GabbaBoy::core)
+target_compile_features(test_battery_fuzz PRIVATE c_std_17)
+set_target_properties(test_battery_fuzz PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME battery_api_fuzz COMMAND test_battery_fuzz)
+
 add_executable(test_bus test_bus.c)
 target_link_libraries(test_bus PRIVATE GabbaBoy::core)
 target_compile_features(test_bus PRIVATE c_std_17)
@@ -74,7 +97,7 @@ add_executable(test_loader test_loader.c)
 target_link_libraries(test_loader PRIVATE GabbaBoy::core)
 target_compile_features(test_loader PRIVATE c_std_17)
 set_target_properties(test_loader PROPERTIES C_EXTENSIONS OFF)
-foreach(case truncated oversized invalid_header unsupported_cartridge unsupported_rom_size unsupported_declared_size unsupported_ram_size length_mismatch excess_actual null_arguments non_destructive)
+foreach(case truncated oversized invalid_header unsupported_cartridge unsupported_rom_size unsupported_declared_size unsupported_ram_size length_mismatch excess_actual null_arguments non_destructive mbc1_matrix mbc1m_variant)
   add_test(NAME loader_${case} COMMAND test_loader ${case} ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 endforeach()
 
@@ -119,6 +142,11 @@ add_test(NAME visible_fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DROM=${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb
     -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/visible-demo/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
+add_test(NAME mbc1_continuation_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DROM=${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/continuation.gb
+    -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/manifest.json
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
 add_test(NAME mooneye_fixture_digest
   COMMAND ${CMAKE_COMMAND}

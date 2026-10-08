@@ -28,6 +28,7 @@ CMakeUserPresets.json
 !/fixtures/mooneye/daa.gb
 !/fixtures/mooneye/tim00.gb
 !/fixtures/mooneye/tim00_div_trigger.gb
+!/fixtures/mbc1-continuation/continuation.gb
 
 # Temporary OpenGSD runtime state (retain planning documents)
 .planning/.tmp/

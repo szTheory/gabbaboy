@@ -66,7 +66,7 @@ jobs:
             "source_sha": "${{ github.event.pull_request.head.sha }}",
             "package_sha256": "$digest",
             "smoke_result": "passed",
-            "capability_limits": "DMG-CPU-B tracer foundation only; no boot ROM, complete CPU, gameplay, CGB, or Windows package",
+            "capability_limits": "Bootless DMG-CPU-B core with standard MBC1 and bounded battery API; this package omits the SDL player/save UI, boot ROM, audio, CGB, broad game compatibility, and physical hardware qualification",
             "retention_days": $PREVIEW_RETENTION_DAYS
           }
           EOF
@@ -131,7 +131,7 @@ jobs:
             "source_sha": "${{ github.event.pull_request.head.sha }}",
             "package_sha256": "$digest",
             "smoke_result": "passed",
-            "capability_limits": "DMG-CPU-B tracer foundation only; no boot ROM, complete CPU, gameplay, CGB, or Windows package",
+            "capability_limits": "Bootless DMG-CPU-B core with standard MBC1 and bounded battery API; this package omits the SDL player/save UI, boot ROM, audio, CGB, broad game compatibility, and physical hardware qualification",
             "retention_days": $PREVIEW_RETENTION_DAYS
           }
           EOF
