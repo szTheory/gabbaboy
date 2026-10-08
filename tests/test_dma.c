@@ -35,6 +35,8 @@ extern void gbb_test_dma_observer_set(gbb_instance *, gbb_test_dma_event *, size
 extern size_t gbb_test_dma_observer_count(const gbb_instance *);
 extern void gbb_test_observer_set(gbb_instance *, gbb_test_bus_event *, size_t);
 extern size_t gbb_test_observer_count(const gbb_instance *);
+extern void gbb_test_ppu_observer_set(gbb_instance *, gbb_test_bus_event *, size_t);
+extern size_t gbb_test_ppu_observer_count(const gbb_instance *);
 
 static void emit(small_program *p, uint8_t value) {
     if (p->size < sizeof(p->bytes)) p->bytes[p->size++] = value;
@@ -651,7 +653,9 @@ static int dma_contention(void) {
     return 0;
 }
 
-static gbb_instance *load_ppu_dma_overlap_guest(unsigned delay_nops, int dma_enabled) {
+static gbb_instance *load_ppu_dma_overlap_guest(unsigned delay_nops, int dma_enabled,
+                                                 unsigned cpu_nops, int dma_before_lcd,
+                                                 uint8_t object_x, uint8_t fine_scroll) {
     small_program p = {{0}, 0};
     emit(&p, 0xAF); emit(&p, 0xE0); emit(&p, 0x40); /* LCD off */
     emit(&p, 0x3E); emit(&p, 0xE4); emit(&p, 0xE0); emit(&p, 0x48); /* OBP0 */
@@ -663,29 +667,57 @@ static gbb_instance *load_ppu_dma_overlap_guest(unsigned delay_nops, int dma_ena
         emit_memory_byte(&p, (uint16_t)(0x8011u + row * 2u), 0xFFu);
     }
     emit_source_record(&p, 0xFE00u, 16u);
-    emit_memory_byte(&p, 0xFE01u, 8u);
+    emit_memory_byte(&p, 0xFE01u, object_x);
     emit_memory_byte(&p, 0xFE02u, 0u);
     emit_memory_byte(&p, 0xFE03u, 0u);
     emit_source_record(&p, 0xFE04u, 17u);
     emit_memory_byte(&p, 0xFE05u, 8u);
     emit_memory_byte(&p, 0xFE06u, 0u);
     emit_memory_byte(&p, 0xFE07u, 0u);
+    emit_memory_byte(&p, 0xFE10u, 0u);  /* old aligned DMA word, object is offscreen */
+    emit_memory_byte(&p, 0xFE11u, 0x10u); /* old attributes select OBP1 */
     emit_source_record(&p, 0xFE78u, 16u); /* object 30, sampled after DMA starts */
     emit_memory_byte(&p, 0xFE79u, 24u);
     for (unsigned i = 0; i < 160u; ++i) {
         /* DMA destination words are tile 1 / attributes 0. */
-        uint8_t byte = i == 0u ? 16u : i == 1u ? 8u : i < 4u ? 0u :
+        uint8_t byte = i == 0u ? 16u : i == 1u ? object_x : i == 2u ? 1u :
+                       i == 3u ? 0u : i == 4u ? 17u : i == 5u ? 8u :
+                       i == 6u ? 1u : i == 7u ? 0u : i == 120u ? 16u :
+                       i == 121u ? 24u : i == 122u ? 1u : i == 123u ? 0u :
                        ((i & 1u) == 0 ? 1u : 0u);
         emit_memory_byte(&p, (uint16_t)(0xC000u + i), byte);
     }
     uint8_t routine[48];
     size_t rn = 0;
-    routine[rn++] = 0x3E; routine[rn++] = 0x93; /* LCD + BG + OBJ */
-    routine[rn++] = 0xE0; routine[rn++] = 0x40;
-    for (unsigned i = 0; i < delay_nops; ++i) routine[rn++] = 0x00;
-    if (dma_enabled) {
+    if (cpu_nops != UINT32_MAX) {
+        routine[rn++] = 0x21; routine[rn++] = 0x00; routine[rn++] = 0xFE;
+    }
+    if (dma_before_lcd) {
         routine[rn++] = 0x3E; routine[rn++] = 0xC0;
         routine[rn++] = 0xE0; routine[rn++] = 0x46;
+        routine[rn++] = 0x06; routine[rn++] = 40u;
+        size_t loop = rn;
+        routine[rn++] = 0x05;
+        routine[rn++] = 0x20;
+        routine[rn++] = (uint8_t)((int)loop - (int)(rn + 1u));
+        routine[rn++] = 0x3E; routine[rn++] = 0x93;
+        routine[rn++] = 0xE0; routine[rn++] = 0x40;
+    } else {
+        if (fine_scroll != 0u) {
+            routine[rn++] = 0x3E; routine[rn++] = fine_scroll;
+            routine[rn++] = 0xE0; routine[rn++] = 0x43;
+        }
+        routine[rn++] = 0x3E; routine[rn++] = 0x93; /* LCD + BG + OBJ */
+        routine[rn++] = 0xE0; routine[rn++] = 0x40;
+        for (unsigned i = 0; i < delay_nops; ++i) routine[rn++] = 0x00;
+        if (dma_enabled) {
+            routine[rn++] = 0x3E; routine[rn++] = 0xC0;
+            routine[rn++] = 0xE0; routine[rn++] = 0x46;
+        }
+    }
+    if (cpu_nops != UINT32_MAX) {
+        for (unsigned i = 0; i < cpu_nops; ++i) routine[rn++] = 0x00;
+        routine[rn++] = 0x7E; /* blocked OAM read, timestamped by test observer */
     }
     routine[rn++] = 0x76; /* HALT in HRAM during DMA */
     uint16_t routine_address = 0;
@@ -711,18 +743,20 @@ static gbb_instance *load_ppu_dma_overlap_guest(unsigned delay_nops, int dma_ena
 
 static int dma_ppu_overlap(void) {
     uint8_t pixels[PIXELS];
-    gbb_instance *baseline = load_ppu_dma_overlap_guest(0u, 0);
+    gbb_instance *baseline = load_ppu_dma_overlap_guest(0u, 0, UINT32_MAX, 0, 8u, 0u);
     REQUIRE(baseline != NULL);
     REQUIRE(run_frame(baseline, pixels) == 0);
     REQUIRE(pixels[0] == 1u && pixels[16] == 1u && pixels[WIDTH] == 1u);
     gbb_destroy(baseline);
 
-    gbb_instance *machine = load_ppu_dma_overlap_guest(0u, 1);
+    gbb_instance *machine = load_ppu_dma_overlap_guest(0u, 1, UINT32_MAX, 0, 8u, 0u);
     REQUIRE(machine != NULL);
     gbb_test_dma_event dma[162];
+    gbb_test_bus_event fetches[1200];
     gbb_test_dma_observer_set(machine, dma, 162);
+    gbb_test_ppu_observer_set(machine, fetches, 1200);
     REQUIRE(run_frame(machine, pixels) == 0);
-    REQUIRE(pixels[0] == 2u); /* scanned before DMA; fetch latches DMA word */
+    REQUIRE(pixels[0] == 3u); /* first byte updated; paired attribute is still pre-DMA */
     REQUIRE(pixels[16] == 0u); /* later mode-2 entry sampled during DMA */
     REQUIRE(pixels[WIDTH] == 0u); /* line-1 object was scanned during DMA */
     REQUIRE(gbb_test_dma_observer_count(machine) == 162u);
@@ -731,6 +765,275 @@ static int dma_ppu_overlap(void) {
     REQUIRE(dma[1].time_half_dots == dma[0].time_half_dots + 8u);
     REQUIRE(dma[160].address == 0xFE9Fu && dma[161].access == 3u);
     gbb_destroy(machine);
+    gbb_instance *partial = load_ppu_dma_overlap_guest(10u, 1, UINT32_MAX, 0, 8u, 0u);
+    REQUIRE(partial != NULL);
+    gbb_test_bus_event scan_events[1200];
+    gbb_test_ppu_observer_set(partial, scan_events, 1200);
+    REQUIRE(run_frame(partial, pixels) == 0);
+    REQUIRE(pixels[16] == 2u && pixels[WIDTH] == 0u);
+    uint64_t scan_boundary = 0;
+    size_t scan_count = gbb_test_ppu_observer_count(partial);
+    for (size_t i = 0; i < scan_count; ++i)
+        if (scan_events[i].access == 9u && scan_events[i].address == 0xFE1Eu) {
+            scan_boundary = scan_events[i].time_half_dots;
+            REQUIRE(scan_events[i].value == 1u);
+            break;
+        }
+    REQUIRE(scan_boundary != 0u);
+    gbb_destroy(partial);
+
+    gbb_instance *scan_parts = load_ppu_dma_overlap_guest(10u, 1, UINT32_MAX, 0, 8u, 0u);
+    REQUIRE(scan_parts != NULL);
+    gbb_test_bus_event split_scan_events[1200];
+    gbb_test_ppu_observer_set(scan_parts, split_scan_events, 1200);
+    REQUIRE(run_budget(scan_parts, scan_boundary - 32u) == 0);
+    REQUIRE(run_budget(scan_parts, 32u) == 0);
+    REQUIRE(run_budget(scan_parts, 180000u - scan_boundary) == 0);
+    uint8_t split_scan_pixels[PIXELS];
+    gbb_frame_info split_scan_info = {0};
+    REQUIRE(gbb_copy_frame(scan_parts, split_scan_pixels, PIXELS, WIDTH,
+                           &split_scan_info) == GBB_OK);
+    REQUIRE(memcmp(pixels, split_scan_pixels, PIXELS) == 0);
+    REQUIRE(gbb_test_ppu_observer_count(scan_parts) == scan_count);
+    for (size_t i = 0; i < scan_count; ++i) {
+        REQUIRE(split_scan_events[i].time_half_dots == scan_events[i].time_half_dots);
+        REQUIRE(split_scan_events[i].address == scan_events[i].address);
+        REQUIRE(split_scan_events[i].access == scan_events[i].access);
+        REQUIRE(split_scan_events[i].value == scan_events[i].value);
+    }
+    gbb_destroy(scan_parts);
+
+    gbb_instance *ended_before_scan = load_ppu_dma_overlap_guest(0u, 1, UINT32_MAX, 1, 8u, 0u);
+    REQUIRE(ended_before_scan != NULL);
+    REQUIRE(run_frame(ended_before_scan, pixels) == 0);
+    REQUIRE(pixels[0] == 2u && pixels[16] == 2u && pixels[WIDTH] == 2u);
+    gbb_destroy(ended_before_scan);
+
+    return 0;
+}
+
+static int dma_ppu_word_boundaries(void) {
+    static const uint8_t object_x[] = {8u, 14u};
+    static const int expected_delta[] = {-2, 2};
+    static const unsigned pixel_x[] = {0u, 6u};
+    static const unsigned dma_event_index[] = {18u, 19u};
+    static const uint8_t expected_shade[] = {3u, 2u};
+    uint8_t pixels[PIXELS];
+    for (size_t scenario = 0; scenario < 2u; ++scenario) {
+        gbb_instance *machine = load_ppu_dma_overlap_guest(0u, 1, 16u, 0,
+                                                            object_x[scenario], 3u);
+        REQUIRE(machine != NULL);
+        gbb_test_dma_event dma[162];
+        gbb_test_bus_event ppu[1200];
+        gbb_test_dma_observer_set(machine, dma, 162);
+        gbb_test_ppu_observer_set(machine, ppu, 1200);
+        REQUIRE(run_frame(machine, pixels) == 0);
+        REQUIRE(gbb_test_dma_observer_count(machine) == 162u);
+        uint64_t fetch_time = 0;
+        uint8_t fetched_tile = 0xFFu;
+        size_t count = gbb_test_ppu_observer_count(machine);
+        for (size_t i = 0; i < count; ++i)
+            if (ppu[i].access == 8u && ppu[i].address == 0xFE00u) {
+                fetch_time = ppu[i].time_half_dots;
+                fetched_tile = ppu[i].value;
+                break;
+            }
+        REQUIRE(fetch_time != 0u && fetched_tile == 1u);
+        REQUIRE(dma[dma_event_index[scenario]].access == 2u);
+        REQUIRE((int64_t)fetch_time -
+                (int64_t)dma[dma_event_index[scenario]].time_half_dots ==
+                expected_delta[scenario]);
+        REQUIRE(pixels[pixel_x[scenario]] == expected_shade[scenario]);
+        gbb_destroy(machine);
+    }
+    return 0;
+}
+
+static int dma_ppu_cpu_collision(void) {
+    uint8_t pixels[PIXELS];
+    gbb_instance *machine = load_ppu_dma_overlap_guest(0u, 1, 16u, 0, 8u, 0u);
+    gbb_instance *parts = load_ppu_dma_overlap_guest(0u, 1, 16u, 0, 8u, 0u);
+    REQUIRE(machine != NULL && parts != NULL);
+    gbb_test_dma_event dma[162];
+    gbb_test_bus_event bus[6000], ppu[1200];
+    gbb_test_dma_event part_dma[162];
+    gbb_test_bus_event part_bus[6000], part_ppu[1200];
+    gbb_test_dma_observer_set(machine, dma, 162);
+    gbb_test_observer_set(machine, bus, 6000);
+    gbb_test_ppu_observer_set(machine, ppu, 1200);
+    gbb_test_dma_observer_set(parts, part_dma, 162);
+    gbb_test_observer_set(parts, part_bus, 6000);
+    gbb_test_ppu_observer_set(parts, part_ppu, 1200);
+    REQUIRE(run_frame(machine, pixels) == 0);
+    size_t dn = gbb_test_dma_observer_count(machine);
+    size_t bn = gbb_test_observer_count(machine);
+    size_t pn = gbb_test_ppu_observer_count(machine);
+    REQUIRE(dn == 162u);
+    uint64_t collision = 0;
+    unsigned dma_matches = 0, ppu_matches = 0, cpu_matches = 0;
+    for (size_t i = 1; i < dn; ++i) {
+        if (dma[i].address != 0xFE10u || dma[i].access != 2u || dma[i].value != 1u) continue;
+        for (size_t j = 0; j < pn; ++j)
+            if (ppu[j].address == 0xFE00u && ppu[j].access == 8u &&
+                ppu[j].time_half_dots == dma[i].time_half_dots && ppu[j].value == 1u) {
+                collision = ppu[j].time_half_dots;
+                ++dma_matches;
+                ++ppu_matches;
+            }
+        for (size_t j = 0; j < bn; ++j)
+            if (bus[j].address == 0xFE00u && bus[j].access == 1u &&
+                bus[j].time_half_dots == dma[i].time_half_dots && bus[j].value == 0xFFu) {
+                collision = bus[j].time_half_dots;
+                ++cpu_matches;
+            }
+    }
+    REQUIRE(collision != 0u && dma_matches == 1u && ppu_matches == 1u && cpu_matches == 1u);
+    REQUIRE(dma[16].address == 0xFE0Fu && dma[17].address == 0xFE10u);
+    REQUIRE(dma[17].time_half_dots == collision && dma[17].value == 1u);
+    REQUIRE(pixels[0] == 3u); /* DMA-first tie sees tile 1 and the still-old OBP1 attribute */
+    REQUIRE(pixels[16] == 0u); /* overlapping object remains suppressed */
+    REQUIRE(run_budget(parts, collision - 32u) == 0);
+    REQUIRE(run_budget(parts, 32u) == 0); /* second call straddles the observed collision */
+    REQUIRE(run_budget(parts, 180000u - collision) == 0);
+    uint8_t part_pixels[PIXELS];
+    gbb_frame_info part_info = {0};
+    REQUIRE(gbb_copy_frame(parts, part_pixels, PIXELS, WIDTH, &part_info) == GBB_OK);
+    REQUIRE(part_pixels[0] == 3u && part_pixels[16] == 0u);
+    REQUIRE(gbb_test_dma_observer_count(parts) == dn);
+    REQUIRE(gbb_test_observer_count(parts) == bn);
+    REQUIRE(gbb_test_ppu_observer_count(parts) == pn);
+    for (size_t i = 0; i < dn; ++i) {
+        REQUIRE(dma[i].time_half_dots == part_dma[i].time_half_dots);
+        REQUIRE(dma[i].address == part_dma[i].address);
+        REQUIRE(dma[i].access == part_dma[i].access);
+        REQUIRE(dma[i].value == part_dma[i].value);
+    }
+    for (size_t i = 0; i < bn; ++i)
+        REQUIRE(memcmp(&bus[i], &part_bus[i], sizeof(bus[i])) == 0);
+    for (size_t i = 0; i < pn; ++i)
+        REQUIRE(memcmp(&ppu[i], &part_ppu[i], sizeof(ppu[i])) == 0);
+    REQUIRE(memcmp(pixels, part_pixels, PIXELS) == 0);
+    gbb_destroy(parts);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static gbb_instance *load_active_mode_guest(uint8_t target_mode) {
+    small_program p = {{0}, 0};
+    emit(&p, 0xAF); emit(&p, 0xE0); emit(&p, 0x40); /* LCD off */
+    emit_memory_byte(&p, 0x8000u, 0x11u);
+    emit_memory_byte(&p, 0xFE00u, 0x22u);
+    emit_memory_byte(&p, 0xC000u, 0x44u);
+    uint8_t routine[64];
+    size_t n = 0;
+    routine[n++] = 0x21; routine[n++] = 0x00; routine[n++] = 0xFE;
+    routine[n++] = 0x06; routine[n++] = 0x77;   /* value for both bus writes */
+    routine[n++] = 0x3E; routine[n++] = 0x91; /* LCD + BG */
+    routine[n++] = 0xE0; routine[n++] = 0x40;
+    if (target_mode != 2u) {
+        size_t loop = n;
+        routine[n++] = 0xF0; routine[n++] = 0x41; /* STAT */
+        routine[n++] = 0xE6; routine[n++] = 0x03;
+        routine[n++] = 0xFE; routine[n++] = target_mode;
+        routine[n++] = 0x20;
+        routine[n] = (uint8_t)((int)loop - (int)(n + 1u));
+        ++n;
+    }
+    routine[n++] = 0x3E; routine[n++] = 0xC0;
+    routine[n++] = 0xE0; routine[n++] = 0x46; /* DMA in selected PPU mode */
+    routine[n++] = 0x7E;                         /* OAM read */
+    routine[n++] = 0x78;                         /* LD A,B */
+    routine[n++] = 0x77;                         /* OAM write */
+    routine[n++] = 0x26; routine[n++] = 0x80;   /* HL=8000 */
+    routine[n++] = 0x7E;                         /* VRAM read */
+    routine[n++] = 0x78;
+    routine[n++] = 0x77;                         /* VRAM write */
+    routine[n++] = 0x06; routine[n++] = 0xFF;
+    size_t wait = n;
+    routine[n++] = 0x05; routine[n++] = 0x20;
+    routine[n] = (uint8_t)((int)wait - (int)(n + 1u));
+    ++n;
+    routine[n++] = 0xAF; routine[n++] = 0xE0; routine[n++] = 0x40; /* LCD off */
+    routine[n++] = 0xFA; routine[n++] = 0x00; routine[n++] = 0x80;
+    routine[n++] = 0xEA; routine[n++] = 0x00; routine[n++] = 0xC1;
+    routine[n++] = 0xFA; routine[n++] = 0x00; routine[n++] = 0xFE;
+    routine[n++] = 0xEA; routine[n++] = 0x01; routine[n++] = 0xC1;
+    routine[n++] = 0x76;
+    uint16_t routine_address = 0;
+    emit_copy_to_hram(&p, &routine_address, routine, n);
+    uint8_t rom[32768] = {0};
+    rom[0x100] = 0xC3; rom[0x101] = 0x50; rom[0x102] = 0x01;
+    memcpy(rom + 0x150, p.bytes, p.size);
+    rom[0x134] = 0xE7;
+    uint8_t checksum = 0;
+    for (size_t i = 0x134; i <= 0x14C; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14D] = checksum;
+    gbb_instance *machine = NULL;
+    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &machine) != GBB_OK ||
+        gbb_load_rom(machine, rom, sizeof(rom)) != GBB_OK) {
+        gbb_destroy(machine);
+        return NULL;
+    }
+    (void)routine_address;
+    return machine;
+}
+
+static uint8_t ppu_mode_at(const gbb_test_bus_event *events, size_t count,
+                           uint64_t time) {
+    uint8_t mode = 0xFFu;
+    for (size_t i = 0; i < count; ++i)
+        if (events[i].access == 4u && events[i].time_half_dots <= time)
+            mode = events[i].value;
+    return mode;
+}
+
+static int dma_active_mode_matrix(void) {
+    for (uint8_t target = 0; target < 4u; ++target) {
+        gbb_instance *machine = load_active_mode_guest(target);
+        REQUIRE(machine != NULL);
+        gbb_test_dma_event dma[162];
+        gbb_test_bus_event bus[6000], ppu[1200];
+        gbb_test_dma_observer_set(machine, dma, 162);
+        gbb_test_observer_set(machine, bus, 6000);
+        gbb_test_ppu_observer_set(machine, ppu, 1200);
+        gbb_run_result run = gbb_run(machine, 150000u, NULL, 0);
+        REQUIRE(run.reason == GBB_STOP_HALTED_IDLE || run.reason == GBB_STOP_BUDGET);
+        size_t dn = gbb_test_dma_observer_count(machine);
+        size_t bn = gbb_test_observer_count(machine);
+        size_t pn = gbb_test_ppu_observer_count(machine);
+        REQUIRE(dn == 162u);
+        uint64_t start = dma[0].time_half_dots;
+        REQUIRE(ppu_mode_at(ppu, pn, start) == target);
+        unsigned vram_reads = 0, vram_writes = 0, oam_reads = 0, oam_writes = 0;
+        for (size_t i = 0; i < bn; ++i) {
+            if (bus[i].time_half_dots < start ||
+                bus[i].time_half_dots > start + 1280u ||
+                (bus[i].address != 0x8000u && bus[i].address != 0xFE00u)) continue;
+            if (bus[i].address == 0x8000u && bus[i].access == 1u) {
+                REQUIRE(bus[i].value == 0xFFu);
+                REQUIRE(ppu_mode_at(ppu, pn, bus[i].time_half_dots) == target);
+                ++vram_reads;
+            } else if (bus[i].address == 0x8000u && bus[i].access == 2u) {
+                REQUIRE(bus[i].value == 0x77u);
+                REQUIRE(ppu_mode_at(ppu, pn, bus[i].time_half_dots) == target);
+                ++vram_writes;
+            } else if (bus[i].address == 0xFE00u && bus[i].access == 1u) {
+                REQUIRE(bus[i].value == 0xFFu);
+                REQUIRE(ppu_mode_at(ppu, pn, bus[i].time_half_dots) == target);
+                ++oam_reads;
+            } else if (bus[i].address == 0xFE00u && bus[i].access == 2u) {
+                REQUIRE(bus[i].value == 0x77u);
+                REQUIRE(ppu_mode_at(ppu, pn, bus[i].time_half_dots) == target);
+                ++oam_writes;
+            }
+        }
+        REQUIRE(vram_reads == 1u && vram_writes == 1u);
+        REQUIRE(oam_reads == 1u && oam_writes == 1u);
+        REQUIRE(gbb_peek_ram(machine, 0xC100u) == 0x11u);
+        REQUIRE(gbb_peek_ram(machine, 0xC101u) == 0x44u);
+        gbb_destroy(machine);
+    }
     return 0;
 }
 
@@ -850,6 +1153,9 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "dma_partition") == 0) return dma_partition();
     if (strcmp(argv[1], "dma_contention") == 0) return dma_contention();
     if (strcmp(argv[1], "dma_ppu_overlap") == 0) return dma_ppu_overlap();
+    if (strcmp(argv[1], "dma_ppu_cpu_collision") == 0) return dma_ppu_cpu_collision();
+    if (strcmp(argv[1], "dma_ppu_word_boundaries") == 0) return dma_ppu_word_boundaries();
+    if (strcmp(argv[1], "dma_active_mode_matrix") == 0) return dma_active_mode_matrix();
     if (strcmp(argv[1], "dma_vram_lock") == 0) return dma_vram_lock();
     if (strcmp(argv[1], "dma_oam_lock") == 0) return dma_oam_lock();
     return 2;

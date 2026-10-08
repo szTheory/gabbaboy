@@ -659,6 +659,11 @@ static void ppu_begin_object_scan(gbb_instance *m) {
 static void ppu_scan_object(gbb_instance *m, unsigned index) {
     if (index >= 40u) return;
     m->ppu_scan_index = (uint8_t)(index + 1u);
+    /* Private observer access 9 marks the per-entry mode-2 sample; value 0
+     * means DMA suppressed the candidate, value 1 means OAM was sampled. */
+    if (m->ly == 0u)
+        observe_ppu(m, (uint16_t)(0xFE00u + index), 9,
+                    (uint8_t)(m->dma_active ? 0u : 1u));
     if (m->dma_active || m->ppu_selected_object_count >= GBB_LINE_OBJECT_LIMIT)
         return;
     unsigned height = (m->lcdc & 0x04u) != 0 ? 16u : 8u;
@@ -809,6 +814,12 @@ static int ppu_object_should_stall(gbb_instance *m, uint8_t *stall) {
             m->ppu_selected_tile[i] = m->oam[offset + 2u];
             m->ppu_selected_attributes[i] = m->oam[offset + 3u];
         }
+        /* Private test observer: access 8 marks the selected-object fetch
+         * boundary and records its latched tile. It is not part of the public
+         * emulator API or guest-visible state. */
+        if (m->ly == 0u)
+            observe_ppu(m, (uint16_t)(0xFE00u + m->ppu_selected_objects[i]), 8,
+                        m->ppu_selected_tile[i]);
         unsigned tile = ((unsigned)left + fine_scroll) >> 3;
         uint32_t tile_bit = tile < 32u ? (UINT32_C(1) << tile) : 0;
         if (tile_bit != 0 && (m->ppu_object_tiles_fetched & tile_bit) != 0) {
