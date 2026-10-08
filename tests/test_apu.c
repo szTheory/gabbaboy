@@ -299,7 +299,7 @@ static int power_transitions(void) {
                      gbb_peek_ram(m, 0xC001u), gbb_peek_ram(m, 0xC002u));
     ok = ok && gbb_reset(m) == GBB_OK;
     if (ok) {
-        r = gbb_run(m, 112u, NULL, 0u);
+        r = gbb_run(m, 144u, NULL, 0u);
         ok = r.reason == GBB_STOP_BUDGET &&
              gbb_peek_ram(m, 0xC005u) == 0xF0u &&
              gbb_peek_ram(m, 0xC006u) == 0x00u;
