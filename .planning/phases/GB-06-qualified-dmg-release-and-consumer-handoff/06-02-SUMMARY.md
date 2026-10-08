@@ -16,12 +16,12 @@ affects: [06-04, 06-06, release-automation, adopter-packages]
 
 # Actuals (#2632); measured diff bytes/4 over the declared files.
 actuals:
-  tokens: 6250
+  tokens: 7231
   tasks: 2
-  commits: 3
-commits: 3
+  commits: 5
+commits: 5
 plan_head_before: 966a4d053887449b1bff0616515d15ea7ac03354
-plan_head_after: 619f7d1b3fe19e13af5ba162b9443a8dc7601a67
+plan_head_after: 087bc4ba2558f9346804f43883b756b83828114c
 
 # Tech tracking
 tech-stack:
@@ -101,9 +101,9 @@ status: complete
 
 ## Performance
 
-- **Duration:** 5 min
+- **Duration:** 8 min
 - **Started:** 2026-10-08T23:05:26Z
-- **Completed:** 2026-10-08T23:10:10Z
+- **Completed:** 2026-10-08T23:13:26Z
 - **Tasks:** 2
 - **Files modified:** 3
 
@@ -111,6 +111,7 @@ status: complete
 
 - Added sequential macOS and Windows jobs that verify trusted tag identity, preserve draft status, build each core archive once, attach immutable-by-comparison bytes, download them, check archive digests, safely extract, and run relocated C/C++ consumers.
 - Reused the existing Windows native C/C++ consumer projects and Visual Studio toolchain for the downloaded archive check; no new package or framework dependency was added.
+- Guarded platform retries so a complete existing macOS or Windows candidate is reused and re-smoked; a partial asset set fails closed instead of rebuilding and replacing bytes.
 - Wired the pinned SDL 3.4.18 player tarball into the same draft and made its verifier force SDL dummy audio/video before testing package notices, demo input/frame/PCM, battery save, exit, and fresh-process continuation.
 - Added a final exact asset-set gate and `candidate-platform-manifest.json` with source SHA, archive digests, platform toolchain details, and explicit software-only trust limits.
 
@@ -119,6 +120,9 @@ status: complete
 1. **06-02-01: Qualify three downloaded core archives** — `b429b4e` (`feat`)
 2. **06-02-01: Include Linux provenance in platform manifest** — `c3b584f` (`fix`)
 3. **06-02-02: Qualify the downloaded macOS player and legal continuation** — `619f7d1` (`fix`)
+4. **06-02-01: Reuse qualified platform bytes on retry** — `087bc4b` (`fix`)
+
+An earlier plan-summary bookkeeping commit, `257b25c`, was replaced by this final summary after the retry fix; the measured commit count includes it.
 
 ## Files Created/Modified
 
@@ -138,12 +142,13 @@ None. `cmake/PreviewPackageSmoke.cmake` and `.github/scripts/safe_extract_packag
 
 ## Issues Encountered
 
+- Retry builds would have changed the player tarball because package metadata records the Actions run ID. The workflow now reuses complete existing platform byte sets without rebuilding, revalidates the downloaded bytes, and rejects partial sets; `actionlint` and the candidate self-test passed.
 - The first sandboxed player-verifier run could not create its synthetic lock file under the macOS per-user Application Support directory. The same required command passed after it was rerun with normal host filesystem access; no application data was left behind by the verifier.
 - Live hosted tag, draft upload/download, and Windows runner evidence remain pending Plan 06-06, as designed. This local machine is macOS arm64 and does not establish Windows or Linux release qualification.
 
 ## Verification
 
-- `actionlint .github/workflows/release.yml .github/workflows/release-please.yml` — passed.
+- `actionlint .github/workflows/release.yml .github/workflows/release-please.yml` — passed after the retry-reuse changes.
 - `bash -n tests/scripts/verify-release-candidate.sh tests/scripts/verify-phase3-player.sh` — passed.
 - `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error -R '^preview_package_smoke$'` — passed, 1/1 relocated package test.
 - `bash tests/scripts/verify-release-candidate.sh --self-test` — passed: installed archive, relocated C/C++ consumer build/run, receipt and altered-byte rejection, and traversal rejection.
@@ -165,4 +170,4 @@ The phase-level SHIP-01, SHIP-02, and SHIP-03 checkboxes remain pending until th
 ## Self-Check: PASSED
 
 - Summary file is present at the planned path.
-- Task commits `b429b4e`, `c3b584f`, and `619f7d1` are ancestors of the current phase branch HEAD.
+- Task commits `b429b4e`, `c3b584f`, `619f7d1`, and `087bc4b` are ancestors of the current phase branch HEAD.
