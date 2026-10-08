@@ -203,7 +203,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 ### Phase 5: DMG Audio and Stable Playback
 
-**Goal**: Players hear paced DMG sound and retain responsive controls through normal playback and host-device transitions.
+**Goal**: As a player, I want to play DMG games with paced sound, so that controls remain responsive through device changes.
 **Mode:** mvp
 **Depends on**: Phase 4
 **Requirements**: AUDIO-01, AUDIO-02, AUDIO-03, HOST-01, HOST-02
