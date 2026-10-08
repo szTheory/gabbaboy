@@ -13,7 +13,7 @@ affects: [GB-06-03, GB-06-06, release-support, performance-evidence]
 actuals:
   tokens: 12981
   tasks: 2
-  commits: 3
+  commits: 4
 tech-stack:
   added: []
   patterns:
@@ -129,7 +129,7 @@ None. The release-bound tagged sidecar and exact-head hosted duration receipt ar
 
 ## Self-Check: PASSED
 
-- All six declared source files exist and the three plan commits are ancestors of `HEAD`.
+- All six declared source files exist and the four task commits are ancestors of `HEAD`.
 - Plan commit count was measured from the persisted `gsd-plan-head-before-GB-06-04` ledger: 4.
 - Owner scratch remains unstaged and unmodified by this plan: `.planning/HANDOFF.json`, `.planning/config.json`, `.planning/context/DECISIONS.md`, Phase 3 context/research files, `.planning/state.json`, and `.planning/milestone.lock`.
 
