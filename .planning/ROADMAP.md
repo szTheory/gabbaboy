@@ -177,18 +177,18 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 3. The player follows documented atomic replacement, recovery, and concurrent-writer rules; failed writes preserve the last good save and visibly report failure. (SAVE-03)
 4. An original GB fixture saves, exits, reopens in a fresh instance/process, and resumes behavior dependent on prior bytes; empty/wrong-save controls demonstrate a meaningful continuation oracle. (SAVE-04)
 
-**Plans**: Seven plans across seven dependency-ordered waves; execution not started. Independent structure, requirement/decision coverage, failure-direction, and post-hook coverage checks passed. See the phase plans and [validation checklist](phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md); execution evidence remains pending.
+**Plans**: Seven plans across seven dependency-ordered waves; four plans have execution summaries. Independent structure, requirement/decision coverage, failure-direction, and post-hook coverage checks passed. See the phase plans, latest [Plan 04-04 summary](phases/GB-04-mbc1-and-safe-battery-continuation/04-04-SUMMARY.md), and [validation checklist](phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md); full Phase 4 evidence remains pending.
 **Wave 1**
-- [ ] 04-01-PLAN.md
+- [x] 04-01-PLAN.md
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 04-02-PLAN.md
+- [x] 04-02-PLAN.md
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 04-03-PLAN.md
+- [x] 04-03-PLAN.md
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 04-04-PLAN.md
+- [x] 04-04-PLAN.md
 
 **Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 04-05-PLAN.md
@@ -242,7 +242,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 | 1. Portable Foundation and Original ROM Tracer | 5/5 | Complete    | 2026-10-03 |
 | 2. DMG CPU, Bus, and Time | 17/17 | Complete | 2026-10-07 |
 | 3. Visible Interactive DMG | 13/13 | Complete    | 2026-10-07 |
-| 4. MBC1 and Safe Battery Continuation | 0/7 | Planned     | - |
+| 4. MBC1 and Safe Battery Continuation | 4/7 | In Progress | - |
 | 5. DMG Audio and Stable Playback | 0/TBD | Not started | - |
 | 6. Qualified DMG Release and Consumer Handoff | 0/TBD | Not started | - |
 

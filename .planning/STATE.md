@@ -1,19 +1,19 @@
 ---
 gsd_state_version: "1.0"
 milestone: v0.1
-current_phase: 4
+current_phase: 04
 current_phase_name: MBC1 and Safe Battery Continuation
-status: planning
-stopped_at: Phase 4 planning complete
-last_updated: "2026-10-08T01:53:10Z"
+status: executing
+stopped_at: Completed GB-04-04-PLAN.md; Plan 04-05 is next
+last_updated: "2026-10-08T03:53:22.699Z"
 last_activity: 2026-10-08
-last_activity_desc: Phase 4 planned and independently checked; execution not started
-state_head: 8000d85bdf680d0e8ef38c7bfe8767f42b834311
+last_activity_desc: Completed GB-04 Plan 04-04; Plan 04-05 is next
+state_head: 6c92b8934893c54a5c6b1d0338ba970b146c5a9d
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 42
-  completed_plans: 35
+  completed_plans: 39
 milestone_name: limited DMG preview
 ---
 
@@ -28,12 +28,12 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 
 ## Current Position
 
-Phase: 4 — MBC1 and Safe Battery Continuation
-Plan: 7 plans created across 7 dependency-ordered waves; execution not started
-Status: Ready to execute
-Last activity: 2026-10-08 — Phase 4 plans created and independently checked
+Phase: GB-04 (MBC1 and Safe Battery Continuation) — EXECUTING
+Plan: 5 of 7
+Status: Executing Phase GB-04
+Last activity: 2026-10-08 — Plan 04-04 completed; Plan 04-05 is next
 
-Progress: [█████░░░░░] 50% of milestone phases complete; Phases 1–3 passed verification. Phase 3 has 13/13 plan summaries, 5/5 goal truths, and 33/33 UAT checks. Phase 4 planning is complete: seven plans are ordered across seven waves, and independent structure, coverage, and failure-direction checks passed. Phase 4 implementation has not started; its validation artifact awaits execution evidence.
+Progress: [█████░░░░░] 50% of milestone phases complete; Phases 1–3 passed verification. Phase 3 has 13/13 plan summaries, 5/5 goal truths, and 33/33 UAT checks. Phase 4 has 4/7 plan summaries. Plan 04-04 added the player save lock, bounded autosave cadence, and explicit final-save choices; its 33/33 player inventory and extracted-package smoke passed at the recorded source revision. Phase 04-05 is next; full Phase 4 validation remains pending.
 
 ## Performance Metrics
 
@@ -73,6 +73,10 @@ Progress: [█████░░░░░] 50% of milestone phases complete; Pha
 | Phase GB-03 P11 | 4min+ minimum recorded | 2 tasks | 6 files |
 | Phase GB-03 P12 | ~30 min | 2 tasks | 6 files |
 | Phase GB-03 P13 | not captured | 3 tasks | implementation, tests, evidence and continuity files |
+| Phase 04 P01 | 13 | 2 tasks | 12 files |
+| Phase 04 P02 | 8min | 2 tasks | 7 files |
+| Phase 04 P03 | 14min | 2 tasks | 5 files |
+| Phase 04 P04 | 11min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -125,6 +129,9 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-03]: D-025 adopts a deterministic, confidence-qualified source-backed software model for documented but revision-sensitive JOYP and DMA/PPU behavior; exact CPU-B phases and revision parity remain unmeasured.
 - [Phase GB-03]: The optional SDL3 macOS preview displayed the owned demo; the user confirmed holding Z darkens a tile and release restores it. Audio and battery persistence remain clearly identified as unimplemented.
 - [Phase GB-03]: Final verification passed 5/5 truths and UAT 33/33; PR #4 passed required exact-head checks and merged as `2b49dc5`.
+- [Phase 04]: Hold a nonblocking exclusive advisory lock for the lifetime of each battery-backed player session; the guarantee covers cooperating GabbaBoy processes.
+- [Phase 04]: Drive autosave from the core dirty generation and monotonic host time: two seconds quiet or ten seconds maximum age.
+- [Phase 04]: On final save failure, require retry, explicit continue without saving, or cancellation before quit, reset, or replacement.
 
 ### Pending Todos
 
@@ -150,10 +157,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-08
-Stopped at: Phase 4 planning and independent plan verification complete; ready to execute Phase 4
-Resume file: .planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-01-PLAN.md
-Next command in fresh context: $gsd-execute-phase 4 (seven plans are ready; execute Phase 4 and stop at its boundary)
+Last session: 2026-10-08T03:53:22.655Z
+Stopped at: Completed GB-04-04-PLAN.md; Plan 04-05 is next
+Resume file: .planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-05-PLAN.md
+Next command in fresh context: $gsd-execute-phase 4 (continue with Plan 04-05; stop at the Phase 4 boundary)
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: **Phase 4 planning and independent plan verification.** Seven plans are ordered across seven dependency-ordered waves; the independent checker passed plan structure, requirement/decision coverage, specific failure directions, and the 20-item post-hook coverage gate. Research and the locked scope are in [04-RESEARCH.md](phases/GB-04-mbc1-and-safe-battery-continuation/04-RESEARCH.md) and [04-CONTEXT.md](phases/GB-04-mbc1-and-safe-battery-continuation/04-CONTEXT.md); the execution evidence checklist is [04-VALIDATION.md](phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md), whose run evidence remains pending. Phase 4 is not complete and implementation has not started. Keep both auto-advance flags false and stop at each Phase 4 workflow boundary.
-Next roadmap phase: **Phase 4 — MBC1 and Safe Battery Continuation**, ready for execution. The exact next command is `$gsd-execute-phase 4`; execute Phase 4, then stop and report the next command rather than advancing automatically.
+Completed workflow stage: **Phase GB-04 execution, Plan 04-04 of 7.** Battery session locking, host-time autosave, visible failures, and final-transition choices are implemented and locally verified. See [04-04-SUMMARY.md](phases/GB-04-mbc1-and-safe-battery-continuation/04-04-SUMMARY.md). Phase 4 remains in progress; continue with its fixture and fresh-process continuation plan, then complete remaining CI and evidence closeout. Keep both auto-advance flags false and stop at the Phase 4 boundary.
+Next roadmap phase: **Phase 5 — DMG Audio and Stable Playback**, only after Phase 4 is completed and handed off. The exact next command is `$gsd-execute-phase 4`; continue with Plan 04-05 and stop after Phase 4.
