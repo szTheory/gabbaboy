@@ -4,6 +4,12 @@ cartridge_tracer
 cartridge_bank_matrix
 cartridge_ram_banks
 cartridge_no_ram_reads
+battery_roundtrip8
+battery_roundtrip32
+battery_errors
+battery_no_battery
+battery_lifecycle
+battery_instances
 run_bounds
 trace_capacity
 illegal_lockup_api
