@@ -81,11 +81,11 @@ The fixture is project-authored, MIT-licensed, 32 KiB, and declares standard MBC
 1. **Task 1: Author and reproduce the battery-dependent MBC1 guest program** — `fb0d247` (`feat(04-05): add reproducible battery continuation fixture`)
 2. **Task 2: Assert fresh-process guest success and independent negative controls** — `a6d06b0` (`test(04-05): verify fresh-process battery continuation controls`)
 
-## Verification Evidence
+## Test Results
 
 - The pinned RGBDS 1.0.1 reproduction passed with the macOS archive SHA-256 `2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645`. Source SHA-256: `ad82e0cd51eeb6d536421d20c4a5b88ee0c019a4e699c2c75de077a20c82ba94`; ROM SHA-256: `f89bf3884ff10a702aa117f2963e6fe9ea8aeac3a9bc003f52b6c5ca6abfbbd2`.
 - `ctest --preset phase1 --output-on-failure --no-tests=error` passed **154/154** tests, including `mbc1_continuation_fixture_digest`.
-- `bash tests/scripts/verify-phase3-player.sh` passed **37/37** optional player tests and the extracted-package smoke at source revision `a6d06b0cd4c4ff601570745a22c2feaa1213d59b`. Package SHA-256: `6a0d54abe29decdbe4902119d925385b22acdbee819726b8faeb03417ff358d2`; SDL license receipt SHA-256: `1c040b8271b37e5076359f8fd54240e371114112924d2df81ef87c7d6a1dfdfd`.
+- The command using `bash` and `tests/scripts/verify-phase3-player.sh` passed **37/37** optional player tests and the extracted-package smoke at source revision `a6d06b0cd4c4ff601570745a22c2feaa1213d59b`. Package SHA-256: `6a0d54abe29decdbe4902119d925385b22acdbee819726b8faeb03417ff358d2`; SDL license receipt SHA-256: `1c040b8271b37e5076359f8fd54240e371114112924d2df81ef87c7d6a1dfdfd`.
 - The four named continuation cases each use a bounded subprocess and isolated temporary preferences directory. The resume case checks guest WRAM markers after save import; the wrong-ROM case seeds the variant's independently computed save key with the original valid envelope and verifies warning plus exact recovery preservation; the altered-payload case verifies rejection and preserved bytes.
 - `git diff --check` passed. The task commits contain only the planned fixture/test files and the narrow `.gitignore` allowlist for this permissioned public ROM.
 
