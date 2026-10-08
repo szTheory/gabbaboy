@@ -138,6 +138,7 @@ audio_capacity
 audio_signal
 audio_partition
 audio_filter
+audio_api_edges
 apu_pulse
 apu_mixer
 apu_sequencer

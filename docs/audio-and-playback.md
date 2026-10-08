@@ -10,9 +10,10 @@ perceived sound quality.
 
 The original project-authored signal references are a unit impulse, a zero to
 positive step, and a periodic 1/8-duty pulse train. Inputs use signed Q15 mixer
-levels. The test workload has 16 samples for the resampler vectors and 256
-samples for high-pass settling. No imported ROM or third-party signal fixture
-is used.
+levels. The impulse, step, and periodic vectors each contain 16 frames; the
+Nyquist test has a 2,048-frame zero warmup followed by 2,048 alternating frames;
+the high-pass settling vector has 256 frames. No imported ROM or third-party
+signal fixture is used.
 
 The kernel acceptance limits are: impulse peak no greater than the input peak;
 the 1/8-duty periodic reference retains at least 1,000 output units of peak;
@@ -27,7 +28,7 @@ zero, and s16 saturation. The original FIR has eight fixed Q15 taps
 generation, and no data-dependent work.
 
 All completed PCM must be byte-identical and have identical frame counts when
-the same guest timeline is run whole, in two halves, or in repeated 800
+the same guest timeline is run whole, in two halves, or in repeated 792
 half-dot partitions. Sample phase and filter history are per instance and
 survive output-call boundaries; APU reset clears them.
 
@@ -38,20 +39,29 @@ mix/filter operation when a 48 kHz frame deadline is crossed, and fixed-size
 history updates. There are no data-dependent loops, allocations, device calls,
 or external DSP packages in the core path. The throughput gate is structural
 and deterministic: one bounded operation per half-dot and at most one PCM frame
-per crossing. No host timing result is claimed until measured against a named
-build, workload, digest, sample count, and uncertainty. This plan's signal tests
-therefore distinguish exact software behavior and analytical bounds from
-perceptual or hardware qualification.
+per crossing. A diagnostic timing sample used revision `8da9392` (the source
+state subsequently committed at that revision), the `phase1` CMake preset
+(Debug, Apple clang 21.0.0, Darwin arm64), and the `audio_signal` workload: 4,144
+stereo frames through the kernel, 66,304 fixed-tap multiply-accumulates, with
+FNV-1a 64 PCM digest `18b8e1d6fb25b7a1`. The method launched the test process
+three warm-up times and measured 30 further process wall-time samples with a
+monotonic clock; median was 2.268 ms, median absolute deviation 0.209 ms, and
+range 1.861–3.333 ms. This includes process startup and test setup, so it is a
+reproducibility/upper-bound diagnostic rather than an isolated kernel speed
+claim. It does not establish perceptual or hardware quality.
 
 ## API storage and backpressure
 
 `gbb_run_audio` writes whole frames to caller-owned memory. `frame_capacity` is
 measured in frames, not samples or bytes. A NULL frame pointer is accepted only
-with zero capacity. The core preflights the next indivisible instruction and
-returns `GBB_STOP_OUTPUT_FULL` before it starts if required output will not fit;
+with zero capacity. An overflowing frame extent or overlap between frame and
+count storage is rejected before guest work; the count output is initialized to
+zero. The core preflights the next indivisible instruction and returns
+`GBB_STOP_OUTPUT_FULL` before it starts if required output will not fit;
 `out_frame_count` reports frames written by that call. The caller must consume
 or preserve those frames before reusing the storage. There is no hidden queue
-and no silent PCM drop.
+and no silent PCM drop. Legacy `gbb_run` and `gbb_run_ex` explicitly advance the
+APU muted, without PCM storage.
 
 The DMG high-pass filter is a documented software approximation. It does not
 model board variation, passive components, DAC analog behavior, host conversion,

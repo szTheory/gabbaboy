@@ -2229,10 +2229,23 @@ gbb_run_result gbb_run_audio(gbb_instance *instance, uint64_t budget_half_dots,
                              gbb_audio_frame *frames, size_t frame_capacity,
                              size_t *out_frame_count) {
     gbb_run_result invalid = {0, GBB_STOP_INVALID_STATE, 0, 0, 0, 0};
-    if (out_frame_count != NULL) *out_frame_count = 0u;
-    if (out_frame_count == NULL || (frames == NULL && frame_capacity != 0u) ||
-        instance == NULL || instance->audio_run_active || instance->diagnostic_output != NULL)
+    if (out_frame_count == NULL) return invalid;
+    *out_frame_count = 0u;
+    if ((frames == NULL && frame_capacity != 0u) || instance == NULL ||
+        instance->audio_run_active || instance->diagnostic_output != NULL)
         return invalid;
+    if (frames != NULL && frame_capacity != 0u) {
+        if (frame_capacity > SIZE_MAX / sizeof(*frames)) return invalid;
+        const uintptr_t frame_begin = (uintptr_t)(void *)frames;
+        const uintptr_t count_begin = (uintptr_t)(void *)out_frame_count;
+        const size_t frame_bytes = frame_capacity * sizeof(*frames);
+        if (frame_bytes > UINTPTR_MAX - frame_begin ||
+            sizeof(*out_frame_count) > UINTPTR_MAX - count_begin)
+            return invalid;
+        const uintptr_t frame_end = frame_begin + frame_bytes;
+        const uintptr_t count_end = count_begin + sizeof(*out_frame_count);
+        if (frame_begin < count_end && count_begin < frame_end) return invalid;
+    }
     instance->audio_frames = frames;
     instance->audio_frame_capacity = frame_capacity;
     instance->audio_frame_count = 0u;

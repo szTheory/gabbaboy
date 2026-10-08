@@ -134,10 +134,22 @@ static int audio_capacity(const char *case_name) {
     REQUIRE(result.consumed_half_dots > 0u && result.consumed_half_dots < 400u);
     REQUIRE(count == 1u);
     REQUIRE(guarded.before == 0xA55AA55Au && guarded.after == 0x5AA55AA5u);
+    gbb_audio_frame expected_frames[8] = {{0}}, retry_frames[8] = {{0}};
+    size_t expected_count = 0u, retry_count = 0u;
+    gbb_run_result expected_run = gbb_run_audio(baseline, 400u, expected_frames,
+                                                8u, &expected_count);
+    REQUIRE(expected_run.reason == GBB_STOP_BUDGET &&
+            expected_run.consumed_half_dots == 400u);
+    gbb_run_result retry_run = gbb_run_audio(short_output, 400u - result.consumed_half_dots,
+                                             retry_frames, 7u, &retry_count);
+    REQUIRE(retry_run.reason == GBB_STOP_BUDGET &&
+            retry_run.consumed_half_dots == 400u - result.consumed_half_dots);
+    REQUIRE(count + retry_count == expected_count);
+    REQUIRE(memcmp(&guarded.frame, expected_frames, sizeof(guarded.frame)) == 0);
+    REQUIRE(memcmp(retry_frames, expected_frames + 1u,
+                   retry_count * sizeof(*retry_frames)) == 0);
     gbb_trace_record actual = {0}, expected = {0};
     REQUIRE(gbb_run(short_output, 8u, &actual, 1u).consumed_half_dots == 8u);
-    REQUIRE(gbb_run(baseline, result.consumed_half_dots, NULL, 0u)
-                .consumed_half_dots == result.consumed_half_dots);
     REQUIRE(gbb_run(baseline, 8u, &expected, 1u).consumed_half_dots == 8u);
     REQUIRE(actual.time_half_dots == expected.time_half_dots &&
             actual.pc == expected.pc && actual.a == expected.a &&
@@ -279,6 +291,43 @@ static int audio_filter(const char *case_name) {
     PASS();
 }
 
+static int audio_api_edges(const char *case_name) {
+    gbb_instance *overlap_machine = load_nops();
+    gbb_instance *overflow_machine = load_nops();
+    gbb_instance *overlap_baseline = load_nops();
+    gbb_instance *overflow_baseline = load_nops();
+    REQUIRE(overlap_machine != NULL && overflow_machine != NULL &&
+            overlap_baseline != NULL && overflow_baseline != NULL);
+    union { size_t count; gbb_audio_frame frame; } overlap = {.count = SIZE_MAX};
+    gbb_run_result result = gbb_run_audio(overlap_machine, 8u, &overlap.frame,
+                                          1u, &overlap.count);
+    REQUIRE(result.reason == GBB_STOP_INVALID_STATE && result.consumed_half_dots == 0u);
+    REQUIRE(overlap.count == 0u);
+
+    gbb_audio_frame guard = {1234, -4321};
+    size_t count = SIZE_MAX;
+    result = gbb_run_audio(overflow_machine, 8u, &guard, SIZE_MAX, &count);
+    REQUIRE(result.reason == GBB_STOP_INVALID_STATE && result.consumed_half_dots == 0u);
+    REQUIRE(count == 0u && guard.left == 1234 && guard.right == -4321);
+    result = gbb_run_audio(overflow_machine, 8u, NULL, 1u, &count);
+    REQUIRE(result.reason == GBB_STOP_INVALID_STATE && result.consumed_half_dots == 0u);
+    REQUIRE(count == 0u);
+    result = gbb_run_audio(overflow_machine, 8u, &guard, 0u, NULL);
+    REQUIRE(result.reason == GBB_STOP_INVALID_STATE && result.consumed_half_dots == 0u);
+    REQUIRE(guard.left == 1234 && guard.right == -4321);
+
+    gbb_trace_record actual = {0}, expected = {0};
+    REQUIRE(gbb_run(overlap_machine, 8u, &actual, 1u).consumed_half_dots == 8u);
+    REQUIRE(gbb_run(overlap_baseline, 8u, &expected, 1u).consumed_half_dots == 8u);
+    REQUIRE(actual.pc == expected.pc && actual.time_half_dots == expected.time_half_dots);
+    REQUIRE(gbb_run(overflow_machine, 8u, &actual, 1u).consumed_half_dots == 8u);
+    REQUIRE(gbb_run(overflow_baseline, 8u, &expected, 1u).consumed_half_dots == 8u);
+    REQUIRE(actual.pc == expected.pc && actual.time_half_dots == expected.time_half_dots);
+    gbb_destroy(overlap_machine); gbb_destroy(overflow_machine);
+    gbb_destroy(overlap_baseline); gbb_destroy(overflow_baseline);
+    PASS();
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
     const char *case_name = argv[1];
@@ -288,5 +337,6 @@ int main(int argc, char **argv) {
     if (strcmp(case_name, "audio_signal") == 0) return audio_signal(case_name);
     if (strcmp(case_name, "audio_partition") == 0) return audio_partition(case_name);
     if (strcmp(case_name, "audio_filter") == 0) return audio_filter(case_name);
+    if (strcmp(case_name, "audio_api_edges") == 0) return audio_api_edges(case_name);
     return 2;
 }
