@@ -176,6 +176,11 @@ def build_sidecar(tag: str, source_sha: str) -> dict:
     }
 
 
+def verify_sidecar_data(observed: dict, expected: dict) -> None:
+    if not isinstance(observed, dict) or observed != expected:
+        fail("sidecar source SHA, tagged ledger blob, or fixture/corpus identity differs from the tag")
+
+
 def self_test() -> None:
     raw = (ROOT / LEDGER).read_bytes()
     data = parse_ledger(raw)
@@ -210,11 +215,15 @@ def self_test() -> None:
     fixture_sidecar = {"tag": "v0.1.0", "source_sha": "a" * 40,
                        "ledger_sha256": hashlib.sha256(raw).hexdigest(),
                        "manifest_sha256": data["manifest_sha256"]}
-    for key, value in (("source_sha", "b" * 40), ("ledger_sha256", "0" * 64)):
+    for key, value in (("source_sha", "b" * 40), ("ledger_sha256", "0" * 64),
+                       ("manifest_sha256", {"fixtures/tracer/manifest.json": "0" * 64})):
         altered = dict(fixture_sidecar)
         altered[key] = value
-        if altered == fixture_sidecar:
-            fail("self-test did not detect altered sidecar identity")
+        try:
+            verify_sidecar_data(altered, fixture_sidecar)
+        except ValueError:
+            continue
+        fail("self-test accepted altered sidecar identity")
     print("support ledger self-test passed: scope, corpus order, digests, malformed UTF-8, duplicate keys, denominator and claim controls")
 
 
@@ -235,8 +244,7 @@ def main() -> int:
         sidecar = build_sidecar(args.tag, args.source_sha)
         if args.verify_sidecar:
             observed = json.loads(args.verify_sidecar.read_text(encoding="utf-8"))
-            if observed != sidecar:
-                fail("sidecar source SHA, tagged ledger blob, or fixture/corpus identity differs from the tag")
+            verify_sidecar_data(observed, sidecar)
             print(f"verified source-bound support sidecar for {args.tag} ({args.source_sha})")
         else:
             args.output.parent.mkdir(parents=True, exist_ok=True)
