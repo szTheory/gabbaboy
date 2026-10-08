@@ -16,6 +16,10 @@ void player_audio_destroy(player_audio *audio);
 unsigned player_audio_capacity(const player_audio *audio);
 bool player_audio_submit(player_audio *audio, const gbb_audio_frame *frames,
                          unsigned count);
+bool player_audio_clear(player_audio *audio);
+uint_fast64_t player_audio_flushed_bytes(const player_audio *audio);
+bool player_audio_handle_device_event(player_audio *audio, uint32_t event_type,
+                                      uint32_t device_id, bool recording);
 uint_fast64_t player_audio_underflow(const player_audio *audio);
 uint_fast64_t player_audio_backpressure_events(const player_audio *audio);
 void player_audio_note_backpressure(player_audio *audio);
@@ -34,6 +38,7 @@ void player_audio_test_callback(player_audio *audio, int requested_bytes,
 bool player_audio_test_set_indices(player_audio *audio, unsigned read,
                                    unsigned write);
 unsigned player_audio_test_queued(const player_audio *audio);
+bool player_audio_test_drop_device(player_audio *audio);
 #endif
 
 #endif

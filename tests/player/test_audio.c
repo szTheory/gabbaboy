@@ -1,4 +1,5 @@
 #include "audio.h"
+#include "session.h"
 #include <SDL3/SDL.h>
 
 #include <stdio.h>
@@ -202,8 +203,14 @@ static int player_audio_unavailable(void) {
     REQUIRE(player_audio_sink_failures(audio) == 0u);
     player_audio_destroy(audio);
 
-    REQUIRE(SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy"));
-    REQUIRE(SDL_Init(SDL_INIT_AUDIO));
+    if (SDL_WasInit(SDL_INIT_AUDIO) == 0u) {
+        const char *audio_driver = getenv("SDL_AUDIO_DRIVER");
+        if (audio_driver == NULL)
+            REQUIRE(SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy"));
+        REQUIRE(SDL_Init(SDL_INIT_AUDIO));
+    }
+    REQUIRE(SDL_GetCurrentAudioDriver() != NULL &&
+            strcmp(SDL_GetCurrentAudioDriver(), "dummy") == 0);
     player_audio *dummy = player_audio_create();
     REQUIRE(dummy != NULL && player_audio_available(dummy));
     gbb_audio_frame signal[8];
@@ -215,16 +222,119 @@ static int player_audio_unavailable(void) {
     return 0;
 }
 
+static int player_audio_lifecycle(void) {
+    player_audio *audio = player_audio_test_create(true);
+    REQUIRE(audio != NULL);
+    gbb_audio_frame old_frames[2] = {frame_for(17u), frame_for(18u)};
+    REQUIRE(player_audio_submit(audio, old_frames, 2u));
+    capture output = {0};
+    player_audio_test_callback(audio, 1, capture_frames, &output);
+    REQUIRE(output.count == 1u && player_audio_test_queued(audio) == 1u);
+    REQUIRE(player_audio_clear(audio));
+    REQUIRE(player_audio_test_queued(audio) == 0u);
+    REQUIRE(player_audio_flushed_bytes(audio) == 7u);
+    player_audio_test_callback(audio, 4, capture_frames, &output);
+    REQUIRE(output.count == 5u);
+    for (size_t i = 1u; i < 5u; ++i) REQUIRE(output.bytes[i] == 0u);
+    REQUIRE(player_audio_underflow(audio) == 1u);
+
+    const gbb_audio_frame fresh = frame_for(99u);
+    REQUIRE(player_audio_submit(audio, &fresh, 1u));
+    player_audio_test_callback(audio, 4, capture_frames, &output);
+    REQUIRE(output.count == 9u &&
+            memcmp(output.bytes + 5u, &fresh, sizeof(fresh)) == 0);
+    player_audio_destroy(audio);
+    return 0;
+}
+
+static int player_audio_device(void) {
+    bool initialized_here = false;
+    if (SDL_WasInit(SDL_INIT_AUDIO) == 0u) {
+        const char *audio_driver = getenv("SDL_AUDIO_DRIVER");
+        if (audio_driver == NULL)
+            REQUIRE(SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy"));
+        REQUIRE(SDL_Init(SDL_INIT_AUDIO));
+        initialized_here = true;
+    }
+    REQUIRE(SDL_GetCurrentAudioDriver() != NULL &&
+            strcmp(SDL_GetCurrentAudioDriver(), "dummy") == 0);
+    player_audio *audio = player_audio_create();
+    REQUIRE(audio != NULL && player_audio_available(audio));
+    REQUIRE(player_audio_handle_device_event(audio, SDL_EVENT_AUDIO_DEVICE_REMOVED,
+                                             123u, true));
+    REQUIRE(player_audio_available(audio));
+    REQUIRE(player_audio_handle_device_event(audio, SDL_EVENT_AUDIO_DEVICE_REMOVED,
+                                             123u, false));
+    REQUIRE(player_audio_available(audio));
+    REQUIRE(player_audio_handle_device_event(audio, SDL_EVENT_AUDIO_DEVICE_ADDED,
+                                             456u, false));
+    REQUIRE(player_audio_available(audio));
+    REQUIRE(player_audio_test_drop_device(audio));
+    REQUIRE(!player_audio_available(audio));
+    REQUIRE(player_audio_handle_device_event(audio, SDL_EVENT_AUDIO_DEVICE_REMOVED,
+                                             123u, false));
+    REQUIRE(player_audio_handle_device_event(audio, SDL_EVENT_AUDIO_DEVICE_ADDED,
+                                             456u, false));
+    REQUIRE(player_audio_available(audio));
+    REQUIRE(strcmp(SDL_GetCurrentAudioDriver(), "dummy") == 0);
+    player_audio_destroy(audio);
+    if (initialized_here) SDL_QuitSubSystem(SDL_INIT_AUDIO);
+    return 0;
+}
+
+static int player_audio_replacement(const char *demo_path,
+                                    const char *missing_path) {
+    gbb_instance *machine = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &machine) == GBB_OK);
+    player_save_identity identity;
+    char error[192];
+    char *active_path = NULL;
+    REQUIRE(player_session_replace_rom(machine, &active_path, demo_path,
+            &identity, error, sizeof(error)));
+    player_audio *audio = player_audio_test_create(true);
+    REQUIRE(audio != NULL);
+    gbb_audio_frame queued[2] = {frame_for(31u), frame_for(32u)};
+    REQUIRE(player_audio_submit(audio, queued, 2u));
+    REQUIRE(player_save_transition_resolve(true, false,
+            PLAYER_SAVE_TRANSITION_RETRY) == PLAYER_SAVE_TRANSITION_WAIT);
+    REQUIRE(player_audio_test_queued(audio) == 2u);
+    REQUIRE(!player_session_replace_rom(machine, &active_path, missing_path,
+            &identity, error, sizeof(error)));
+    REQUIRE(strcmp(active_path, demo_path) == 0);
+    REQUIRE(player_audio_test_queued(audio) == 2u);
+    REQUIRE(player_session_replace_rom(machine, &active_path, demo_path,
+            &identity, error, sizeof(error)));
+    REQUIRE(player_audio_clear(audio));
+    REQUIRE(player_audio_test_queued(audio) == 0u &&
+            player_audio_flushed_bytes(audio) == sizeof(queued));
+    player_audio_destroy(audio);
+    free(active_path);
+    gbb_destroy(machine);
+    return 0;
+}
+
 int main(int argc, char **argv) {
-    if (argc != 2) return 2;
-    if (strcmp(argv[1], "player_audio_ring") == 0) return player_audio_ring();
-    if (strcmp(argv[1], "player_audio_concurrent") == 0)
-        return player_audio_concurrent();
-    if (strcmp(argv[1], "player_audio_pacing") == 0)
-        return player_audio_pacing();
-    if (strcmp(argv[1], "player_audio_gain") == 0)
-        return test_player_audio_gain();
-    if (strcmp(argv[1], "player_audio_unavailable") == 0)
-        return player_audio_unavailable();
-    return 2;
+    if (argc < 2) return 2;
+    const char *active_case = argv[1];
+    puts("TAP version 13");
+    puts("1..1");
+    fflush(stdout);
+    int result = 2;
+    if (strcmp(active_case, "player_audio_ring") == 0) result = player_audio_ring();
+    else if (strcmp(active_case, "player_audio_concurrent") == 0)
+        result = player_audio_concurrent();
+    else if (strcmp(active_case, "player_audio_pacing") == 0)
+        result = player_audio_pacing();
+    else if (strcmp(active_case, "player_audio_gain") == 0)
+        result = test_player_audio_gain();
+    else if (strcmp(active_case, "player_audio_unavailable") == 0)
+        result = player_audio_unavailable();
+    else if (strcmp(active_case, "player_audio_lifecycle") == 0)
+        result = player_audio_lifecycle();
+    else if (strcmp(active_case, "player_audio_device") == 0)
+        result = player_audio_device();
+    else if (strcmp(active_case, "player_audio_replacement") == 0 && argc == 4)
+        result = player_audio_replacement(argv[2], argv[3]);
+    printf("%s 1 - %s\n", result == 0 ? "ok" : "not ok", active_case);
+    return result;
 }

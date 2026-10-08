@@ -41,5 +41,8 @@ player_audio_ring
 player_audio_concurrent
 player_audio_pacing
 player_audio_gain
+player_audio_device
+player_audio_lifecycle
+player_audio_replacement
 player_audio_unavailable
 player_smoke

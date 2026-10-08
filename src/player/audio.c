@@ -200,6 +200,23 @@ bool player_audio_submit(player_audio *audio, const gbb_audio_frame *frames,
     return true;
 }
 
+bool player_audio_clear(player_audio *audio) {
+    return audio != NULL;
+}
+
+uint_fast64_t player_audio_flushed_bytes(const player_audio *audio) {
+    (void)audio;
+    return 0u;
+}
+
+bool player_audio_handle_device_event(player_audio *audio, uint32_t event_type,
+                                      uint32_t device_id, bool recording) {
+    (void)event_type;
+    (void)device_id;
+    (void)recording;
+    return audio != NULL;
+}
+
 static bool player_audio_close(player_audio *audio) {
     if (audio == NULL || audio->stream == NULL) return true;
     SDL_AudioStream *stream = audio->stream;
@@ -313,5 +330,10 @@ bool player_audio_test_set_indices(player_audio *audio, unsigned read,
 
 unsigned player_audio_test_queued(const player_audio *audio) {
     return audio == NULL ? 0u : player_audio_used(audio);
+}
+
+bool player_audio_test_drop_device(player_audio *audio) {
+    (void)audio;
+    return false;
 }
 #endif
