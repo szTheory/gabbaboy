@@ -335,6 +335,26 @@ static void report_default_audio_device(void) {
     player_audio_destroy(audio);
 }
 
+static void print_player_help(void) {
+    fputs(
+        "GabbaBoy is a bootless DMG-CPU-B software preview.\n\n"
+        "Controls: Command-O opens a ROM; Command-Q quits; arrows move; Z/X are A/B; "
+        "Return/Right Shift are Start/Select; Space pauses; R resets; S saves; F1 opens help.\n"
+        "Volume: [ and ] change host gain in 10% steps; default 100%, range 0%-200%.\n\n"
+        "Audio output is 48 kHz signed 16-bit interleaved stereo. The optional SDL3 player "
+        "uses a bounded queue. If no device opens, PCM is discarded and counted while the "
+        "guest keeps its host-paced timeline. Pause/focus cleanup and device recovery clear "
+        "host backlog; reset and successful ROM replacement clear it after save transitions.\n\n"
+        "Evidence: the APU is a deterministic DMG-CPU-B digital software model. CGB/VIN, "
+        "physical or revision-specific hardware behavior, and listening quality are not "
+        "qualified. SDL queued-input bytes are not latency; application PCM underflow is "
+        "not hardware starvation.\n\n"
+        "Developer diagnostics: --audio-dummy-smoke checks SDL dummy open/stream/close/recovery; "
+        "--audio-measure frame|792 demo-rom emits bounded PCM for the scripted receipt; "
+        "--audio-device-status reports default-device availability without playing a workload.\n",
+        stdout);
+}
+
 static bool run_audio_dummy_smoke(void) {
     const char *driver = SDL_GetCurrentAudioDriver();
     if (driver == NULL || strcmp(driver, "dummy") != 0) {
@@ -646,13 +666,20 @@ static void show_help(player *app) {
     (void)player_input_focus_lost(&app->input, app->machine, SDL_GetTicksNS());
     if (!player_audio_clear(app->audio))
         set_status(app, "Audio flush failed before the help dialog");
-    char message[1024];
+    char message[2048];
     (void)snprintf(message, sizeof(message),
         "Current ROM: %s\n\n"
         "Open ROM: Command-O\nQuit: Command-Q\n"
         "D-pad: arrow keys\nA / B: Z / X\nStart / Select: Return / Right Shift\n"
         "Pause / resume: Space\nVolume down / up: [ / ]\n"
         "Reset current ROM: R\nSave now / retry: S\n\n"
+        "Audio: 48 kHz signed 16-bit interleaved stereo; host gain defaults to 100%% and "
+        "ranges from 0-200%%. If no device opens, PCM is discarded and counted.\n"
+        "Pause/focus cleanup and device recovery clear host backlog; reset and successful "
+        "replacement clear it after save transitions.\n"
+        "The APU is a DMG-CPU-B digital model. CGB/VIN, physical/revision-specific behavior, "
+        "and listening quality are not qualified. SDL queued-input bytes are not latency; "
+        "application PCM underflow is not hardware starvation.\n\n"
         "A blocked final save offers R to retry, C to continue without saving, or Escape to cancel.\n"
         "Status: %.160s\n"
         "%s",
@@ -1916,6 +1943,7 @@ static void destroy_player(player *app) {
 }
 
 int main(int argc, char **argv) {
+    const bool help_requested = argc == 2 && strcmp(argv[1], "--help") == 0;
     const bool smoke = argc >= 2 && strcmp(argv[1], "--smoke") == 0;
     const bool audio_dummy_smoke = argc == 2 &&
         strcmp(argv[1], "--audio-dummy-smoke") == 0;
@@ -1934,11 +1962,15 @@ int main(int argc, char **argv) {
         (audio_measure && argc != 4) ||
         (package_smoke && argc != 3) ||
         (battery_smoke && argc != 3) ||
-        (!smoke && !audio_dummy_smoke && !audio_measure && !audio_device_status &&
+        (!help_requested && !smoke && !audio_dummy_smoke && !audio_measure && !audio_device_status &&
          !package_smoke && !battery_smoke && argc > 1)) {
-        fprintf(stderr, "usage: %s [--smoke [demo-rom invalid-rom] | --smoke-package invalid-rom | --audio-dummy-smoke | --audio-measure frame|792 demo-rom | --audio-device-status]\n",
+        fprintf(stderr, "usage: %s [--help | --smoke [demo-rom invalid-rom] | --smoke-package invalid-rom | --audio-dummy-smoke | --audio-measure frame|792 demo-rom | --audio-device-status]\n",
                 argv[0]);
         return 2;
+    }
+    if (help_requested) {
+        print_player_help();
+        return 0;
     }
     const char *requested_demo_rom = battery_smoke ? argv[2] :
         (smoke && argc == 4 ? argv[2] : NULL);

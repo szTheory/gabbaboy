@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 9
+open_count: 10
 waived_count: 0
 fixed_count: 0
-total_count: 9
-last_updated: 2026-10-08T16:00:39.497Z
+total_count: 10
+last_updated: 2026-10-08T16:24:49.415Z
 ---
 
 # Broken Windows Ledger
@@ -24,6 +24,7 @@ last_updated: 2026-10-08T16:00:39.497Z
 | 7 | 05 | deviation | src/player/input.c |  | The Task 1 input implementation was staged in its RED test commit after the failing assertion was captured; behavior and classifier evidence still verified before the GREEN commit. | open |  | 2026-10-08T15:55:21.063Z |  |
 | 8 | 05 | deviation | tests/player/test_input.c |  | The reconnect queue-full fixture now loads the demo ROM so its retry case has a live guest timeline. | open |  | 2026-10-08T15:55:37.132Z |  |
 | 9 | 05 | deviation | src/player/audio.h |  | Added the existing internal adapter header to the task scope so new audio transition functions have declarations shared by main and tests. | open |  | 2026-10-08T16:00:39.497Z |  |
+| 10 | 05 | deviation | .github/workflows/preview.yml |  | Corrected stale preview capability claims and package metadata to describe the implemented scoped DMG audio contract. | open |  | 2026-10-08T16:24:49.415Z |  |
 
 ````json
 [
@@ -141,6 +142,19 @@ last_updated: 2026-10-08T16:00:39.497Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-10-08T16:00:39.497Z",
+    "resolved_at": null,
+    "milestone": "v0.1"
+  },
+  {
+    "id": 10,
+    "kind": "deviation",
+    "phase": "05",
+    "file": ".github/workflows/preview.yml",
+    "line": null,
+    "description": "Corrected stale preview capability claims and package metadata to describe the implemented scoped DMG audio contract.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-08T16:24:49.415Z",
     "resolved_at": null,
     "milestone": "v0.1"
   }
