@@ -119,5 +119,12 @@ install(FILES
   DESTINATION "${GABBABOY_CMAKE_INSTALL_DIR}")
 
 if(BUILD_TESTING)
+  add_executable(measure_core tests/measure_core.c)
+  target_link_libraries(measure_core PRIVATE GabbaBoy::core)
+  target_compile_features(measure_core PRIVATE c_std_17)
+  set_target_properties(measure_core PROPERTIES C_EXTENSIONS OFF)
+  if(WIN32)
+    target_link_libraries(measure_core PRIVATE Psapi)
+  endif()
   add_subdirectory(tests)
 endif()
