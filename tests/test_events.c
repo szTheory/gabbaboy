@@ -141,6 +141,46 @@ static int event_queue_atomic(void) {
     return 0;
 }
 
+static int event_queue_failure_precedence(void) {
+    const uint8_t p[] = {0x10,0x00,0x18,0xFE};
+    gbb_instance *m = load_program(p, sizeof(p)); REQUIRE(m != NULL);
+    gbb_run_result r = gbb_run(m, 8, NULL, 0);
+    REQUIRE(r.reason == GBB_STOP_STOPPED && r.consumed_half_dots == 8);
+
+    const gbb_input_event malformed[] = {
+        {20, GBB_INPUT_STOP_WAKE, 1},
+        {30, (gbb_input_event_kind)99, 0}
+    };
+    REQUIRE(gbb_queue_events(m, malformed, 2) == GBB_INVALID_EVENT);
+    r = gbb_run(m, 32, NULL, 0);
+    REQUIRE(r.reason == GBB_STOP_STOPPED && r.consumed_half_dots == 32);
+
+    REQUIRE(gbb_reset(m) == GBB_OK);
+    r = gbb_run(m, 8, NULL, 0);
+    REQUIRE(r.reason == GBB_STOP_STOPPED && r.consumed_half_dots == 8);
+    gbb_input_event oversized[65];
+    for (size_t i = 0; i < 65; ++i)
+        oversized[i] = (gbb_input_event){20, GBB_INPUT_STOP_WAKE, 1};
+    oversized[64] = (gbb_input_event){21, (gbb_input_event_kind)99, 0};
+    REQUIRE(gbb_queue_events(m, oversized, 65) == GBB_EVENT_QUEUE_FULL);
+    r = gbb_run(m, 32, NULL, 0);
+    REQUIRE(r.reason == GBB_STOP_STOPPED && r.consumed_half_dots == 32);
+
+    REQUIRE(gbb_reset(m) == GBB_OK);
+    r = gbb_run(m, 8, NULL, 0);
+    REQUIRE(r.reason == GBB_STOP_STOPPED && r.consumed_half_dots == 8);
+    gbb_input_event full[64];
+    for (size_t i = 0; i < 64; ++i)
+        full[i] = (gbb_input_event){100, GBB_INPUT_STOP_WAKE, 1};
+    REQUIRE(gbb_queue_events(m, full, 64) == GBB_OK);
+    const gbb_input_event malformed_excess = {101, (gbb_input_event_kind)99, 0};
+    REQUIRE(gbb_queue_events(m, &malformed_excess, 1) == GBB_EVENT_QUEUE_FULL);
+    r = gbb_run(m, 32, NULL, 0);
+    REQUIRE(r.reason == GBB_STOP_STOPPED && r.consumed_half_dots == 32);
+    gbb_destroy(m);
+    return 0;
+}
+
 static int event_partition(void) {
     gbb_instance *whole = serial_machine(); REQUIRE(whole != NULL);
     gbb_instance *parts = serial_machine(); REQUIRE(parts != NULL);
@@ -228,6 +268,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "event_boundary") == 0) return event_boundary();
     if (strcmp(argv[1], "event_queue_order") == 0) return event_queue_order();
     if (strcmp(argv[1], "event_queue_atomic") == 0) return event_queue_atomic();
+    if (strcmp(argv[1], "event_queue_failure_precedence") == 0) return event_queue_failure_precedence();
     if (strcmp(argv[1], "event_partition") == 0) return event_partition();
     if (strcmp(argv[1], "event_deadline_inside") == 0) return event_deadline_inside();
     if (strcmp(argv[1], "event_external_serial_edges") == 0) return event_external_serial_edges();

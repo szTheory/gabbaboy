@@ -2,6 +2,7 @@ name: ci
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   push:
 
 permissions:
@@ -113,6 +114,32 @@ jobs:
       - name: Verify CMake 3.25.3 configure/build/test/install and relocation
         run: bash .github/scripts/verify-cmake-floor.sh
 
+  macos-player-package:
+    name: macos-player-package
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-macos-player')
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact pull request source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Build, test, and package the optional SDL3 player
+        shell: bash
+        env:
+          GBB_EXPECTED_SOURCE_REVISION: ${{ github.event.pull_request.head.sha }}
+        run: bash tests/scripts/verify-phase3-player.sh --build-package
+      - name: Retain run-scoped candidate for downloaded-byte verification
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase3-player-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/phase3-player/preview-candidate/gabbaboy-preview-macos-arm64.tar.gz
+            build/phase3-player/preview-candidate/build-receipt.json
+          if-no-files-found: error
+          retention-days: 1
+
   required-native:
     name: required-native
     if: always()
@@ -122,6 +149,7 @@ jobs:
       - native-windows
       - linux-sanitizers
       - cmake-floor-3-25-3
+      - macos-player-package
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
@@ -132,6 +160,8 @@ jobs:
           NATIVE_WINDOWS: ${{ needs.native-windows.result }}
           LINUX_SANITIZERS: ${{ needs.linux-sanitizers.result }}
           CMAKE_FLOOR: ${{ needs.cmake-floor-3-25-3.result }}
+          PLAYER_REQUESTED: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-macos-player') }}
+          PLAYER_RESULT: ${{ needs.macos-player-package.result }}
         run: |
           for result in "$NATIVE_LINUX" "$NATIVE_MACOS" "$NATIVE_WINDOWS" "$LINUX_SANITIZERS" "$CMAKE_FLOOR"; do
             if [[ "$result" != success ]]; then
@@ -139,4 +169,12 @@ jobs:
               exit 1
             fi
           done
+          if [[ "$PLAYER_REQUESTED" == true && "$PLAYER_RESULT" != success ]]; then
+            echo "Requested macOS player package evidence did not succeed: $PLAYER_RESULT" >&2
+            exit 1
+          fi
+          if [[ "$PLAYER_REQUESTED" != true && "$PLAYER_RESULT" != skipped && "$PLAYER_RESULT" != success ]]; then
+            echo "Unexpected macOS player job result: $PLAYER_RESULT" >&2
+            exit 1
+          fi
           echo "All required native, sanitizer, and CMake floor jobs succeeded."

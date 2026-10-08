@@ -27,7 +27,8 @@ typedef enum {
     GBB_UNSUPPORTED_RAM_SIZE, /* cartridge header declares external RAM */
     GBB_OUT_OF_MEMORY,        /* allocation failed; live instance is unchanged */
     GBB_EVENT_QUEUE_FULL,
-    GBB_INVALID_EVENT
+    GBB_INVALID_EVENT,
+    GBB_FRAME_NOT_READY
 } gbb_error;
 
 typedef enum {
@@ -45,8 +46,21 @@ typedef enum {
 
 typedef enum {
     GBB_INPUT_STOP_WAKE = 1,
-    GBB_INPUT_SERIAL_EDGE
+    GBB_INPUT_SERIAL_EDGE = 2,
+    GBB_INPUT_BUTTON_PRESS = 3,
+    GBB_INPUT_BUTTON_RELEASE = 4
 } gbb_input_event_kind;
+
+typedef enum {
+    GBB_BUTTON_RIGHT = 0,
+    GBB_BUTTON_LEFT = 1,
+    GBB_BUTTON_UP = 2,
+    GBB_BUTTON_DOWN = 3,
+    GBB_BUTTON_A = 4,
+    GBB_BUTTON_B = 5,
+    GBB_BUTTON_SELECT = 6,
+    GBB_BUTTON_START = 7
+} gbb_button;
 
 typedef struct {
     uint64_t at_half_dots;
@@ -89,6 +103,13 @@ typedef struct {
     uint8_t lockup_opcode;
 } gbb_run_result;
 
+typedef struct {
+    uint32_t width;
+    uint32_t height;
+    uint64_t generation;
+    uint64_t completion_half_dots;
+} gbb_frame_info;
+
 /* The opaque instance owns its mutable state and a private copy of a loaded ROM.
  * Create/load may allocate; run/reset/peek do not. Each instance may be called
  * by one thread at a time. Separate instances have no shared mutable state.
@@ -105,15 +126,32 @@ gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_si
 /* Copies events into a fixed 64-event per-instance queue. Timestamps are
  * absolute half-dot ticks and must be nondecreasing within the batch and no
  * earlier than the instance's current time. Equal timestamps keep caller
- * order. STOP_WAKE value 1 represents a modeled selected input-line
- * transition; SERIAL_EDGE value is the input bit sampled by the disconnected
- * serial endpoint. This is not full JOYP selection or a host wall-clock input
- * API. Admission is atomic: invalid batches and batches exceeding remaining
- * capacity append nothing. Empty batches, including NULL/0, succeed. Invalid
- * pointers return GBB_INVALID_ARGUMENT; malformed, past or unordered events
- * return GBB_INVALID_EVENT; excess capacity returns GBB_EVENT_QUEUE_FULL.
- * Consumed events free queue capacity. */
+ * order. STOP_WAKE value 1 is a separate modeled STOP wake; SERIAL_EDGE value
+ * is the input bit sampled by the disconnected serial endpoint;
+ * BUTTON_PRESS/RELEASE value is a gbb_button identifier. Button events are
+ * consumed by active-low FF00 row polling; JOYP IF generation is not modeled
+ * while its DMG-CPU-B evidence gate remains open. STOP_WAKE does not imply a
+ * JOYP interrupt, and this is not a host wall-clock input API. Admission is
+ * atomic: an invalid top-level pointer returns GBB_INVALID_ARGUMENT; empty
+ * batches, including NULL/0, succeed. For nonempty batches with valid pointers,
+ * remaining capacity is checked before event contents, so an over-capacity
+ * batch returns GBB_EVENT_QUEUE_FULL even if an entry is malformed. Otherwise,
+ * malformed, past or unordered events return GBB_INVALID_EVENT. Rejected
+ * batches append nothing. Consumed events free queue capacity. */
 gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events, size_t count);
+/* Copies the latest completed 160x144 frame as one byte per pixel. Each byte
+ * is a DMG shade index in [0,3]. pitch_bytes is the destination row stride;
+ * capacity_bytes must cover (height-1)*pitch_bytes + width bytes. The entire
+ * capacity_bytes range must not overlap out_info. Output remains caller-owned,
+ * the core allocates nothing, and no pointer into instance storage is exposed.
+ * Checked arithmetic, pointers, pitch, capacity, and overlap are validated
+ * before either output is written. Invalid ranges return GBB_INVALID_ARGUMENT;
+ * GBB_FRAME_NOT_READY is returned only after valid arguments are established.
+ * Reset invalidates the completed frame. On every error, pixels and out_info
+ * remain unchanged. */
+gbb_error gbb_copy_frame(const gbb_instance *instance, uint8_t *pixels,
+                         size_t capacity_bytes, size_t pitch_bytes,
+                         gbb_frame_info *out_info);
 /* Runs whole supported instructions. GBB_STOP_HALTED_IDLE means the run has
  * consumed eligible idle ticks and the CPU remains halted; GBB_STOP_STOPPED
  * means STOP is waiting for a modeled wake event. A positive STOP wait can

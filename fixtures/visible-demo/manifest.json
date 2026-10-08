@@ -1,0 +1,40 @@
+{
+  "id": "original-visible-interactive-dmg",
+  "source": "demo.asm",
+  "source_identity": "Original GabbaBoy project-authored assembly",
+  "source_sha256": "930a92621fe3b5a862a50aee6f79bdae3f6bb8d8fe24f546a5d5ab737782d1ee",
+  "license": "MIT; see LICENSE.txt and repository LICENSE",
+  "build": {
+    "assembler": "RGBDS",
+    "version": "1.0.1",
+    "archive": "rgbds-macos.zip",
+    "archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
+    "ci_archive": "rgbds-linux-x86_64.tar.xz",
+    "ci_archive_sha256": "80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9",
+    "recipe": "rgbasm -o <work>/demo.o fixtures/visible-demo/demo.asm && rgblink -o <work>/demo.gb <work>/demo.o && rgbfix -f hg -p 0 -m 0 -r 0 <work>/demo.gb"
+  },
+  "rom": "demo.gb",
+  "size_bytes": 32768,
+  "sha256": "38afb54b40f4b6612906c7a68e367199d8bff135508a39d7acdc996bf3d86530",
+  "profile": {
+    "name": "DMG-CPU-B",
+    "boot": "Skipped; bootless profile starts at cartridge entry 0x0100.",
+    "applicability": "Owned software fixture for the deterministic bootless DMG-CPU-B emulator profile; not physical hardware evidence.",
+    "ram_policy": "Emulator-defined zero fill; hardware WRAM/HRAM power-up contents are unspecified."
+  },
+  "protocol": {
+    "display_setup": "With LCD disabled, the guest writes tile 1 as color number 1 and tile 2 as color number 2, selects BGP identity mapping, places tile 1 at map cell 0, and enables the background.",
+    "initial_expected_image": "Shade 1 in pixels x=0..7,y=0..7; shade 0 in every other pixel.",
+    "input": "Host queues active-low A press at baseline_time+8 half-dots and release at baseline_time+50008 half-dots; guest polls the action row at FF00.",
+    "visible_response": "After detecting press, guest waits for LY>=144 then sets map cell 0 to tile 2; after release, it waits for visible LY<144 and the next LY>=144 before restoring tile 1.",
+    "guest_outcome": "WRAM C000 becomes 1 after the press is handled; WRAM C001 becomes 1 after release is observed.",
+    "timeout_half_dots": 600000
+  },
+  "scope_limits": [
+    "No boot-ROM execution",
+    "No physical DMG-CPU-B observation",
+    "No exact JOYP interrupt or wake behavior claim",
+    "No window, object, audio, mapper, save or color hardware claim",
+    "The authored expected image and scripted guest outcome are separate from timing and hardware evidence"
+  ]
+}

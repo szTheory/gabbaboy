@@ -137,3 +137,75 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Applies when:** An instruction matrix is used as evidence for semantic completeness or timing behavior.
 - **Verification:** Five focused Plan 02-18 tests passed; the local suite and inventory passed 104/104 with no skips; installed C/C++ and inventory passed 109/109; independent verification passed 5/5 at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`.
 - **Status:** Resolved with an independent expected-state oracle and exact-revision evidence; physical hardware behavior remains a separate limitation.
+
+### GB-VIDEO-001 / 2026-10-07 / Plan GB-03-03 bus reachability
+
+- **Cause and evidence:** `read8` and `write8` already applied PPU mode restrictions to VRAM/OAM, but `read_supported` excluded those addresses. Guest instructions stopped during preflight, so the timed lockout logic could not be observed.
+- **Remedy:** Admit only mapped VRAM `$8000–$9FFF` and OAM `$FE00–$FE9F` in the bus preflight; keep cartridge RAM and unusable `$FEA0–$FEFF` unsupported. Retarget unsupported-boundary tests and exercise mode access through guest bus timestamps.
+- **Applies when:** A device read/write path exists but instruction preflight separately declares which guest addresses can participate.
+- **Verification:** DMA/PPU integration filter passed 23/23, full local CTest passed 125/125, and the current DMA/bus ASan/UBSan subset passed 13/13. Exact CPU-B contention remains outside these software results.
+- **Source:** `src/core/gabbaboy.c`, `tests/test_bus.c`, `tests/test_dma.c`, and `docs/dmg-video-evidence.md`.
+- **Status:** Fixed and verified for the declared model behavior; hardware applicability limits remain explicit.
+
+### GB-TEST-001 / 2026-10-07 / Plan GB-03-03 HRAM guest fixture
+
+- **Cause and evidence:** Extending a copied HRAM guest routine past 32 bytes caused its `$FFA0` scratch slot to overwrite byte 32 of the executing routine. The routine then read `$FF` as a loop immediate and restarted rather than reaching the post-transfer checks.
+- **Remedy:** Move scratch bytes to `$FFB0+`, outside the routine, and reject generated probe routines larger than the 48-byte space before that scratch region.
+- **Applies when:** A test program is copied into emulated memory and shares that address space with test scratch storage.
+- **Verification:** `dma_hram` and all nine DMA cases pass; the Linux ASan/UBSan DMA/bus subset passed 13/13.
+- **Source:** `tests/test_dma.c` and the captured guest bus/trace during fixture debugging.
+- **Status:** Reproduced, bounded, and verified.
+
+### GB-PLAYER-001 / 2026-10-07 / Plan GB-03-06 integer-scaled presentation
+
+- **Cause and evidence:** SDL3 integer logical presentation computes a mathematically centered rectangle, which can have half-pixel x/y coordinates when an odd number of drawable pixels remain in the letterbox margins (for example, 327×299 produces a 320×288 viewport at 3.5,5.5). A pure geometry helper using integer origins would otherwise disagree with SDL or leave the final pixel placement untested.
+- **Remedy:** Keep SDL's integer logical scale, derive the desired whole-pixel origin from drawable-pixel dimensions, and apply the difference as a logical-coordinate offset before rendering. Suppress the frame if a window surface falls below native dimensions.
+- **Applies when:** A renderer uses integer logical scaling but requires pixel-aligned, centered presentation on odd output sizes.
+- **Verification:** The optional SDL smoke compares helper and renderer geometry and reads software-rendered pixels at viewport edges for native, odd, letterboxed, and high-density sizes; all optional player cases pass 14/14.
+- **Source:** `src/player/main.c`, `src/player/presentation.c`, `tests/player/test_presentation.c`, and [SDL3 logical presentation](https://wiki.libsdl.org/SDL3/SDL_SetRenderLogicalPresentation).
+- **Status:** Reproduced and adopted; native desktop perception remains unverified because this environment has no desktop display.
+
+### GB-ARTIFACT-002 / 2026-10-07 / Plan GB-03-09 relocated SDL package
+
+- **Cause and evidence:** The package consumer originally compared the executable's RPATH to the consumer runner's expected build prefix. Separate hosted jobs need not share a workspace path, so that comparison could miss an extra build-host RPATH even while the expected package RPATH was present.
+- **Remedy:** Parse every `LC_RPATH` entry and require the packaged executable to have exactly `@executable_path/../lib`; launch the binary after safe extraction to prove the bundled dylib and package-relative demo work together.
+- **Applies when:** A native application is copied from one build machine to a separate artifact consumer or end-user installation.
+- **Verification:** The extracted package passed locally; exact-head CI run 37686137977 built the clean arm64 candidate and preview run 37686137834 downloaded and smoke-tested its bytes. Both required aggregates passed.
+- **Source:** `tests/scripts/verify-phase3-player.sh`, `.github/workflows/ci.yml`, `.github/workflows/preview.yml`, and `.planning/phases/GB-03-visible-interactive-dmg/03-09-SUMMARY.md`.
+- **Status:** Fixed and verified for the SDL3 preview package; it does not establish general macOS signing or distribution behavior.
+
+### GB-GSD-002 / 2026-10-07 / Phase 3 gap-plan test selection
+
+- **Cause and evidence:** The first independent plan review found that enumerated CTest regexes could match existing DMA/JOYP tests while omitting newly added collision or sampling cases, so the planned commands could pass without running the cases they were meant to verify.
+- **Remedy:** Require new DMA cases to use the `dma_*` family and new JOYP cases to use `joypad_*`; use family-wide CTest filters in each relevant task and checkpoint.
+- **Applies when:** A plan adds registered tests to an existing CTest suite and its verification command selects cases by regex.
+- **Verification:** The independent re-review passed all 11 plan structures, 14 tracked decisions, and seven probe-edge dispositions. The failure-direction probe found 23 commands with explicit failure statements and zero findings. This validates the plan filters and naming contract; implementation-level selection remains pending execution.
+- **Source:** `.planning/phases/GB-03-visible-interactive-dmg/03-10-PLAN.md` and `03-PLAN-CHECK.md`.
+- **Status:** Corrected in the executable gap plan; implementation evidence is pending.
+
+### GB-EVIDENCE-001 / 2026-10-07 / Plan GB-03-10 source trace
+
+- **Cause and evidence:** Text extraction flattened the Nintendo manual's superscript `2^4` to `24`, and the earlier DMG-CPU-B schematic URL used a commit SHA that did not resolve upstream. The printed manual page shows the exponent, while the verified schematic commit provides the referenced FF00, clock/reset, and FF0F source files.
+- **Remedy:** Visually inspect scanned notation when typography changes a technical value, independently resolve immutable source revisions, and fetch the cited files before pinning a source claim. Keep derived-circuit connectivity separate from a validated timing trace.
+- **Applies when:** Evidence is transcribed from scanned PDFs or OCR, or technical claims depend on external immutable revision links and reverse-engineered diagrams.
+- **Verification:** The printed manual page was checked visually; all three schematic files were fetched from the verified commit. The JOYP/event CTest filter passed 8/8; exact CPU-B JOYP sample timing remains open.
+- **Source:** `.planning/phases/GB-03-visible-interactive-dmg/03-RESEARCH.md`, `docs/dmg-video-evidence.md`, and the linked Nintendo manual and pinned schematic source.
+- **Status:** Transcription and source pin corrected; no unsupported interrupt behavior was promoted.
+
+### GB-GSD-003 / 2026-10-07 / Phase 3 gap loop
+
+- **Cause and evidence:** Phase 3 had summaries for all 12 plans, but its latest goal check still found external hardware and visible-window evidence missing. Re-running gap planning without new evidence could only restate those gaps. An invalid MVP story format had also blocked the verifier before it could report the true 2/5 result.
+- **Remedy:** Keep the phase goal in the required user-story format, run goal verification once after a meaningful implementation change, and write the exact missing evidence in plain English. Do not plan or execute another gap wave until a qualifying source, identified-hardware test record, or display-based observation changes the evidence. Keep automatic phase advancement off.
+- **Applies when:** Plans are complete but acceptance still depends on hardware, a live display, credentials, or another external observation unavailable in the current environment.
+- **Verification:** OpenGSD 1.16.0 accepted the normalized story; current Phase 3 verification reports `gaps_found` at 2/5; fresh `phase1` CTest passed 134/134; SDL could not create a window because this environment has no display. The reviewed CPU-B circuit model did not establish the missing collision or joypad-interrupt result.
+- **Source:** `.planning/phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md`, `.planning/phases/GB-03-visible-interactive-dmg/03-RESEARCH.md`, and `.planning/ROADMAP.md`.
+- **Status:** Superseded by GB-GSD-004: its rule to wait for new CPU-B evidence was too strict for documented, reverse-engineered behavior where a deterministic software model was explicitly authorized.
+
+### GB-GSD-004 / 2026-10-07 / Use confidence-qualified software models to close documented behavior gaps
+
+- **Cause and evidence:** Phase 3 gap planning repeated because exact DMG-CPU-B collision and JOYP sampling values were unavailable, even though pinned Pan Docs describes broad OAM-DMA/PPU behavior, Nintendo's manual documents JOYP matrix/negative-edge behavior, and established emulators provide implementation cross-checks. The owner explicitly directed the project to use the best supported published information and label uncertainty; D-025 records that decision.
+- **Remedy:** For behavior supported at a useful level by primary docs or reverse-engineering sources, select the narrowest deterministic software model, cross-check it against established implementations, explain policy choices in code/evidence, and add original guest controls. Keep chip-specific phases and unavailable physical observations open. After meaningful code and current tests change, run a fresh goal-backward audit before changing requirement status or planning another gap wave; stop at the phase boundary.
+- **Applies when:** Published Game Boy documentation and pinned emulator/reverse-engineering sources support broad behavior but do not settle exact silicon revision, phase, lane, or collision outcomes.
+- **Verification:** Plan 03-13 adds the selected JOYP IF.4 edge matrix, all active-DMA VRAM/OAM CPU access cells in PPU modes 0–3, mode-2 scan overlap controls, before/after DMA word-boundary pixels, the same-half-dot DMA/PPU/CPU guest collision, and partition-equivalence checks. Follow-up review fixed entry-39 scanning and reset-cursor handling, with guest regressions for both. Focused JOYP/DMA/PPU review checks passed 17/17; the full SDL-free `phase1` suite passed 141/141 and `git diff --check` passed. Fresh goal-backward verification is 4/5 with `human_needed`; only VIDEO-04's actual packaged-window/key observation remains. Exact CPU-B electrical timing, byte lane, low-pulse qualification, and PPU-revision parity remain unmeasured.
+- **Source:** D-025 in `.planning/context/DECISIONS.md`, the 2026-10-07 addendum in `.planning/phases/GB-03-visible-interactive-dmg/03-RESEARCH.md`, `.planning/phases/GB-03-visible-interactive-dmg/03-13-SUMMARY.md`, and `docs/dmg-video-evidence.md`.
+- **Status:** Applied to VIDEO-02/03 in Phase 3 under confidence-qualified software behavior; VIDEO-04 remains open for display-based verification.

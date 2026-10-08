@@ -57,9 +57,17 @@ add_executable(test_events test_events.c)
 target_link_libraries(test_events PRIVATE GabbaBoy::core)
 target_compile_features(test_events PRIVATE c_std_17)
 set_target_properties(test_events PROPERTIES C_EXTENSIONS OFF)
-foreach(case event_stop_wake event_boundary event_queue_order event_queue_atomic event_partition
+foreach(case event_stop_wake event_boundary event_queue_order event_queue_atomic event_queue_failure_precedence event_partition
              event_deadline_inside event_external_serial_edges event_time_overflow run_output_capacity)
   add_test(NAME ${case} COMMAND test_events ${case})
+endforeach()
+
+add_executable(test_joypad test_joypad.c)
+target_link_libraries(test_joypad PRIVATE GabbaBoy::core)
+target_compile_features(test_joypad PRIVATE c_std_17)
+set_target_properties(test_joypad PROPERTIES C_EXTENSIONS OFF)
+foreach(case joypad_selection joypad_queue_atomic joypad_equal_time joypad_partition joypad_interrupt)
+  add_test(NAME ${case} COMMAND test_joypad ${case})
 endforeach()
 
 add_executable(test_loader test_loader.c)
@@ -77,11 +85,40 @@ set_target_properties(test_tracer PROPERTIES C_EXTENSIONS OFF)
 foreach(case success failure unsupported timeout trace)
   add_test(NAME tracer_${case} COMMAND test_tracer ${case} ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 endforeach()
+foreach(case frame_composition_tracer joypad_gameplay_tracer)
+  add_test(NAME ${case} COMMAND test_tracer ${case} ${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb)
+endforeach()
+
+add_executable(test_ppu test_ppu.c)
+target_link_libraries(test_ppu PRIVATE GabbaBoy::core)
+target_compile_features(test_ppu PRIVATE c_std_17)
+set_target_properties(test_ppu PROPERTIES C_EXTENSIONS OFF)
+foreach(case frame_composition_bg frame_composition_window frame_composition_sprites frame_composition_priority
+             ppu_timing_modes ppu_timing_stat ppu_timing_lcd ppu_timing_fetch
+             ppu_timing_partition frame_copy_failures frame_generation_lifecycle)
+  add_test(NAME ${case} COMMAND test_ppu ${case})
+endforeach()
+
+add_executable(test_dma test_dma.c)
+target_link_libraries(test_dma PRIVATE GabbaBoy::core)
+target_compile_features(test_dma PRIVATE c_std_17)
+set_target_properties(test_dma PROPERTIES C_EXTENSIONS OFF)
+foreach(case dma_progress dma_start dma_restart dma_register_readback dma_source_mapping dma_hram dma_interrupt_stack dma_partition
+             dma_vram_lock dma_oam_lock dma_contention dma_ppu_overlap dma_oam_entry39 dma_oam_entry39_reset
+             dma_active_mode_matrix dma_ppu_cpu_collision dma_ppu_word_boundaries)
+  add_test(NAME ${case} COMMAND test_dma ${case})
+endforeach()
+
 add_test(NAME tracer_smoke COMMAND gabbaboy-runner ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 add_test(NAME fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DROM=${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb
     -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/tracer/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
+add_test(NAME visible_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DROM=${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb
+    -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/visible-demo/manifest.json
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
 add_test(NAME mooneye_fixture_digest
   COMMAND ${CMAKE_COMMAND}
@@ -169,6 +206,10 @@ add_test(NAME preview_package_smoke
     -DGBB_SANITIZER_LINK_OPTIONS=${GBB_TEST_SANITIZER_LINK_OPTIONS}
     -DGBB_CONFIGURATION=$<CONFIG>
     -P ${PROJECT_SOURCE_DIR}/cmake/PreviewPackageSmoke.cmake)
+
+if(GABBABOY_BUILD_PLAYER)
+  add_subdirectory(player)
+endif()
 
 if(GBB_TEST_INSTALL_PREFIX AND EXISTS "${GBB_TEST_INSTALL_PREFIX}")
   get_filename_component(GBB_TEST_INSTALL_PREFIX_ABSOLUTE

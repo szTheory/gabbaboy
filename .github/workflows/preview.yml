@@ -3,6 +3,7 @@ name: preview-package-smoke
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, labeled]
 
 permissions:
   actions: read
@@ -142,12 +143,96 @@ jobs:
           retention-days: ${{ env.PREVIEW_RETENTION_DAYS }}
           if-no-files-found: error
 
+  player-package-smoke-macos:
+    name: player-package-smoke-macos
+    if: contains(github.event.pull_request.labels.*.name, 'run-macos-player')
+    runs-on: macos-14
+    timeout-minutes: 35
+    steps:
+      - name: Find the exact successful optional player build run
+        id: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Expected PR head is not a full Git SHA." >&2
+            exit 1
+          }
+          deadline=$((SECONDS + 1800))
+          while (( SECONDS < deadline )); do
+            runs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${EXPECTED_SHA}&event=pull_request&per_page=20" \
+              --jq ".workflow_runs | map(select(.head_sha == \"${EXPECTED_SHA}\" and .event == \"pull_request\")) | sort_by(.run_number) | reverse | .[].id")
+            while IFS= read -r run_id; do
+              [[ -n "$run_id" ]] || continue
+              run=$(gh run view "$run_id" --json status,conclusion,headSha,event,attempt,jobs)
+              status=$(jq -r '.status' <<<"$run")
+              [[ "$status" == completed ]] || continue
+              player_result=$(jq -r '[.jobs[] | select(.name == "macos-player-package")][0].conclusion // "missing"' <<<"$run")
+              required_result=$(jq -r '[.jobs[] | select(.name == "required-native")][0].conclusion // "missing"' <<<"$run")
+              if [[ "$player_result" == success && "$required_result" == success ]]; then
+                source_sha=$(jq -r '.headSha' <<<"$run")
+                event=$(jq -r '.event' <<<"$run")
+                [[ "$source_sha" == "$EXPECTED_SHA" && "$event" == pull_request ]] || {
+                  echo "Selected CI run is not for the exact pull-request head." >&2
+                  exit 1
+                }
+                printf 'run_id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
+                printf 'run_attempt=%s\n' "$(jq -r '.attempt' <<<"$run")" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              if [[ "$player_result" == failure || "$player_result" == cancelled || "$player_result" == timed_out || "$player_result" == action_required ]]; then
+                echo "Optional player package job failed in exact-head CI run $run_id ($player_result)." >&2
+                exit 1
+              fi
+              if [[ "$required_result" == failure || "$required_result" == cancelled || "$required_result" == timed_out || "$required_result" == action_required ]]; then
+                echo "Required CI aggregate failed in exact-head run $run_id ($required_result)." >&2
+                exit 1
+              fi
+            done <<<"$runs"
+            sleep 10
+          done
+          echo "No exact-head pull-request CI run completed the optional player package and required-native checks within 30 minutes." >&2
+          exit 1
+      - name: Check out exact pull request head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Download run-scoped candidate package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GBB_BUILD_RUN_ID: ${{ steps.candidate.outputs.run_id }}
+          GBB_BUILD_RUN_ATTEMPT: ${{ steps.candidate.outputs.run_attempt }}
+        run: |
+          gh run download "$GBB_BUILD_RUN_ID" \
+            --name "phase3-player-candidate-${GBB_BUILD_RUN_ID}-${GBB_BUILD_RUN_ATTEMPT}" \
+            --dir "$RUNNER_TEMP/player-candidate"
+      - name: Verify downloaded package bytes and create consumer receipt
+        env:
+          GBB_EXPECTED_SOURCE_REVISION: ${{ github.event.pull_request.head.sha }}
+          GBB_EXPECTED_BUILD_RUN_ID: ${{ steps.candidate.outputs.run_id }}
+          GBB_EXPECTED_BUILD_RUN_ATTEMPT: ${{ steps.candidate.outputs.run_attempt }}
+          GBB_VERIFIED_OUTPUT_DIR: ${{ runner.temp }}/verified-player-artifact
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: bash tests/scripts/verify-phase3-player.sh --verify-package "$RUNNER_TEMP/player-candidate"
+      - name: Upload qualified macOS player preview and receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: preview-player-macos-arm64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/verified-player-artifact/*
+          retention-days: ${{ env.PREVIEW_RETENTION_DAYS }}
+          if-no-files-found: error
+
   preview-package-smoke:
     name: preview-package-smoke
     if: always()
     needs:
       - installed-package-smoke-linux-x64
       - installed-package-smoke-macos-arm64
+      - player-package-smoke-macos
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
@@ -155,6 +240,8 @@ jobs:
         env:
           LINUX_X64: ${{ needs.installed-package-smoke-linux-x64.result }}
           MACOS_ARM64: ${{ needs.installed-package-smoke-macos-arm64.result }}
+          PLAYER_REQUESTED: ${{ contains(github.event.pull_request.labels.*.name, 'run-macos-player') }}
+          PLAYER_RESULT: ${{ needs.player-package-smoke-macos.result }}
         run: |
           for result in "$LINUX_X64" "$MACOS_ARM64"; do
             if [[ "$result" != success ]]; then
@@ -162,4 +249,12 @@ jobs:
               exit 1
             fi
           done
-          echo "Both exact-revision installed package smokes succeeded."
+          if [[ "$PLAYER_REQUESTED" == true && "$PLAYER_RESULT" != success ]]; then
+            echo "Requested downloaded macOS player package verification did not succeed: $PLAYER_RESULT" >&2
+            exit 1
+          fi
+          if [[ "$PLAYER_REQUESTED" != true && "$PLAYER_RESULT" != skipped && "$PLAYER_RESULT" != success ]]; then
+            echo "Unexpected optional macOS player verification result: $PLAYER_RESULT" >&2
+            exit 1
+          fi
+          echo "Required exact-revision installed package smokes succeeded."

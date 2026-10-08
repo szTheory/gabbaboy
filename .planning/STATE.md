@@ -3,17 +3,17 @@ gsd_state_version: "1.0"
 milestone: v0.1
 current_phase: 03
 current_phase_name: Visible Interactive DMG
-status: Phase 3 discussion complete; paused before planning
-stopped_at: Phase GB-03 discussion and recommendation lock complete; owner handoff before Phase 3 planning
-last_updated: "2026-10-07"
-last_activity: 2026-10-07
-last_activity_desc: Phase 3 recommendation fan-out and adversarial review completed; the owner locked the context. Phase 2 remains verified and both PRs are merged.
-state_head: cf28e90270be24d9528bfa8a1e4055a2b8485989
+status: executing
+stopped_at: Phase 3 gap execution Plan 03-13 complete; fresh goal-backward audit 4/5, VIDEO-04 live-window check remains open
+last_updated: "2026-10-08T00:38:55Z"
+last_activity: 2026-10-08
+last_activity_desc: Completed Plan 03-13 gap execution and review fixes; phase1 suite passed 141/141; fresh audit verified 4/5 truths with VIDEO-04 human check remaining
+state_head: 427313a613f38676358638557676b9f72a188bd2
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 22
-  completed_plans: 22
+  total_plans: 34
+  completed_plans: 34
 milestone_name: limited DMG preview
 ---
 
@@ -24,22 +24,21 @@ milestone_name: limited DMG preview
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-03)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase GB-02 is complete. Phase GB-03 discussion is recorded and locked; planning is paused for the owner handoff.
+**Current focus:** Phase GB-03 — Visible Interactive DMG
 
 ## Current Position
 
-Phase: GB-03 (Visible Interactive DMG) — DISCUSSION COMPLETE
-Plan: No Phase 3 plan exists yet; context and discussion log are recorded
-Status: Recommendation package locked; paused before Phase 3 planning by project workflow contract
-Last activity: 2026-10-07 — Five cross-specialty research passes plus an adversarial assumptions review informed the locked Phase 3 context.
+Phase: GB-03 (Visible Interactive DMG) — EXECUTING
+Plan: 13 of 13; Plan 03-13 gap execution, review fixes, and fresh Phase 3 audit recorded; VIDEO-04 visible-window/key check remains
+Status: Executing Phase GB-03
+Last activity: 2026-10-08 — Plan GB-03-13 completed JOYP/DMA/PPU guest matrices and review fixes; full core suite passed 141/141; fresh audit verified 4/5 truths
 
-Progress: [███░░░░░░░] 33% of milestone phases complete; Phases 1 and 2 passed verification.
+Progress: [███░░░░░░░] 33% of milestone phases complete; Phases 1 and 2 passed verification. Phase 3 has 13/13 plan summaries and a fresh 4/5 goal audit; only the live VIDEO-04 display check remains.
 
 ## Performance Metrics
 
-- Total unique plans executed: 22; Phase 2 completion is based on goal verification, not task count alone.
-- Average duration / total execution time: 24 min / 527 min recorded across 22 plans.
-- Per-phase metrics / recent trend: Phases 1 and 2 are complete. All 17 runnable Phase 2 plans have summaries; Plan 02-15 is superseded/non-runnable and remains historical.
+- Unique plans: 28; average duration / total execution time: 25 min / 700 min. Phase 2 completion is based on goal verification, not task count alone.
+- Per-phase metrics / recent trend: Phases 1 and 2 are verified complete; all thirteen Phase 3 plans have summaries. Fresh audit is `human_needed` at 4/5 truths: VIDEO-02/03 pass under D-025 software-model evidence policy; VIDEO-04 still needs a visible macOS window/key check. Fresh `phase1` CTest passed 141/141; no current-head hosted-CI or physical CPU-B claim is made. Plan 02-15 is superseded/non-runnable and remains historical.
 - Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. At implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`, the local offline inventory passed 104/104 with no skips, the relocated installed C/C++ inventory passed 109/109, the runner passed its fixed one-CPU/two-timer derived corpus, hosted CI run 37620710587 passed, and fixture reproduction run 37620710600 passed. Independent verification passed all five CPU requirements. Original upstream PPU-dependent reporting paths remain excluded; no physical DMG hardware test occurred.
 
 **Per-Plan Metrics:**
@@ -68,6 +67,12 @@ Progress: [███░░░░░░░] 33% of milestone phases complete; Pha
 | Phase GB-02 P17 | 54 min | 3 tasks | 12 files |
 | Phase 02 P16 | 24min | 2 tasks | 6 files |
 | Phase 02 P18 | 25 min | 2 tasks | 5 files |
+| Phase GB-03 P01/P02 | 20/30 min | 1/2 tasks | 10/5 files |
+| Phase GB-03 P03/P04/P05/P06/P07/P08/P09 | 79/11/19/15/10/12/24 min | 2/2/2/2/2/2/2 tasks | 6/10/8/11/9/3/5 files |
+| Phase GB-03 P10 | 9+ min (lower bound; exact start not captured) | 3 tasks | 4 files |
+| Phase GB-03 P11 | 4min+ minimum recorded | 2 tasks | 6 files |
+| Phase GB-03 P12 | ~30 min | 2 tasks | 6 files |
+| Phase GB-03 P13 | not captured | 3 tasks | implementation, tests, evidence and continuity files |
 
 ## Accumulated Context
 
@@ -105,25 +110,18 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-02]: Timer divider falling edges and qualified TIMA/TMA reload collisions run at timed bus phases; serial overlap without qualified ordering returns bounded unsupported.
 - [Phase GB-02]: STOP waits advance only the bounded master timeline; oscillator-driven CPU, divider, timer, and internal serial state stays frozen.
 - [Phase GB-02]: Timestamped input uses a fixed 64-event queue with atomic admission and stable caller order for equal timestamps.
-- [Phase GB-02]: The source-qualified eligible denominator remains fixed regardless of emulator outcomes.
-- [Phase GB-02]: Replace the separately unqualified Mooneye font asset with an original same-size zero asset while preserving hardware-test logic.
-- [Phase GB-02]: The tracer-only preparation runner does not qualify Mooneye guests; strict protocol-aware results belong to Plan 02-08.
-- [Phase GB-02]: LD B,B remains an ordinary CPU instruction; the host runner alone classifies Mooneye register results.
-- [Phase GB-02]: DAA runner budget is 2000000 half-dots based on the pinned source's 4096-case workload and 1343488-half-dot minimum.
-- [Phase GB-02]: The strict eligible corpus denominator remains one CPU and two timer fixtures regardless of emulator outcome.
-- [Phase GB-02]: Installed C and C++ consumers verify the fixed timestamped-event queue, bounded results, and caller-owned diagnostics through the relocated public package.
-- [Phase GB-02]: Separate fixture reproduction runs on PR/push/manual triggers with pinned tools and sources; ordinary test inventories remain offline and use checked-in ROM bytes.
-- [Phase GB-02]: Do not fabricate LY or bypass assertions to close corpus failures; valid digests/reproduction do not prove phase applicability.
-- [Phase GB-02]: DMG-CPU-B startup F is selected from the retained ROM header checksum at load and reset.
-- [Phase GB-02]: RET and RETI stack reads use offsets 8/16; taken conditional RET retains 16/24 and untaken RET performs no stack read.
-- [Phase GB-02]: Keep checked-in Mooneye ROM bytes and the fixed three-case denominator unchanged until a deterministic cross-host linker recipe is qualified.
-- [Phase GB-02]: Preserve the pinned Mooneye manifest's exact raw bytes at checkout with a path-scoped `-text` attribute; continue strict SHA-256 admission.
-- [Phase GB-02]: Pin candidate linker ordering to `wlalink -nS -d -S`; admit derived fixtures only after exact local/hosted byte identity, source/rights provenance, protocol probes, and strict manifest verification.
-- [Phase 02]: Bind Mooneye pass/fail to its source-qualified callback and exact result PC.
-- [Phase 02]: Label candidate fixtures as derived headless reporting closures and retain the unchanged upstream assertions; do not infer original-ROM PPU applicability or hardware qualification.
-- [Phase 02]: Keep CPU-01 through CPU-05 pending until independent phase verification assesses the final local and exact-SHA hosted evidence.
+- [Phase GB-02]: Keep the eligible CPU/timer corpus denominator fixed; guest assertions, callbacks and exact result PCs classify outcomes, while digests alone never qualify applicability.
+- [Phase GB-02]: Preserve derived fixture bytes, rights and pinned reproduction procedures; original PPU-dependent behavior and physical hardware remain outside the corpus claim.
+- [Phase GB-02]: CPU, timer, interrupts, HALT/STOP and reset semantics are covered by the completed Phase 2 verification and validation artifacts.
+- [Phase GB-02]: Installed C/C++ consumers and hosted exact-revision checks cover the Phase 2 public package; see the linked verification artifacts.
 - [Phase GB-02]: On 2026-10-07, independent verification passed CPU-01 through CPU-05 and all five roadmap truths at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`. Final local, installed-consumer, and exact hosted evidence is recorded in Phase 2 verification and validation; original upstream PPU-dependent results and physical hardware behavior remain outside the claim.
 - [Phase GB-03]: Keep the playable original ROM fixture separate from PPU composition, raster timing, DMA/access, and scripted gameplay oracles; fixture byte reproducibility does not establish DMG-CPU-B applicability.
+- [Phase GB-03]: The initial background renderer advances dots on the emulated timeline and publishes a completed shade frame at VBlank entry; it is not hardware-qualified raster timing.
+- [Phase GB-03]: Plan 03-02 adds fixed per-instance transfer slots and source-qualified mode/STAT/fetch expectations; the slot model does not claim electrical or CPU-B FIFO equivalence.
+- [Phase GB-03]: Plan 03-03 adopts the narrower Nintendo-manual `$8000–$DFFF` DMA source range despite a pinned Pan Docs conflict; exact simultaneous PPU/DMA collision behavior remains unqualified.
+- [Phase GB-03]: FF00 active-low row polling consumes timestamped button events; JOYP interrupt behavior remains gated by D-08. The optional SDL3 player bounds and transactionally replaces ROMs, keeps mutations on the event loop, and uses pixel-aligned integer scaling. The public frame API checks output extents/overlap before writes, and queue capacity precedes entry validation; relocated consumers test both APIs. RGBDS 1.0.1 fixture reproduction now binds assembly source, exact ROM bytes, and pinned archive digests locally and in hosted CI; this is not gameplay or hardware evidence. SDL3 3.4.18 and host timing remain isolated to the adapter.
+- [Phase GB-03]: Player help and downloaded-package metadata now assert the preview's audio and battery-persistence limitations; those checks do not establish emulator feature behavior or hardware qualification.
+- [Phase GB-03]: Pinned Mooneye cases support the fresh DMA access window, active FF46 restart, and register readback; a focused owned guest suite covers those cases. The upstream README lists a DMG-CPU-B in its hardware fleet but publishes no per-test/per-unit raw log. This evidence does not cover simultaneous PPU/DMA arbitration or JOYP interrupt timing.
 
 ### Pending Todos
 
@@ -134,7 +132,7 @@ None outside the roadmap.
 - Phase 2 has no open verification or security blocker. All five requirements are complete at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`; see [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), [validation](phases/GB-02-dmg-cpu-bus-and-time/02-VALIDATION.md), and [security](phases/GB-02-dmg-cpu-bus-and-time/02-SECURITY.md).
 - The admitted corpus is three derived headless reporting closures (one CPU, two timer). Original Mooneye reporting paths depend on PPU/LY behavior outside scope and remain excluded. No physical DMG-CPU-B observation occurred; no hardware qualification is claimed.
 - Phase 1 PR #1 and Phase 2 PR #2 were merged on 2026-10-07 after their required exact-head checks passed. Current GitHub triage found no open PRs or issues. Phase 2 verification is limited to its documented DMG-CPU-B CPU/timer scope; no physical DMG observation or PPU qualification is claimed.
-- Phase 3 has a locked context but no plan or implementation. Its next step is planning; do not auto-advance into execution.
+- Phase 3 has summaries for all 13 plans. Fresh verification records `human_needed`, 4/5 roadmap truths: VIDEO-01/02/03/05 pass under declared software/source evidence classes; VIDEO-04 needs the packaged player opened on a display-equipped Mac and one mapped key checked. Fresh `phase1` CTest passed 141/141 and the code review is clean. This environment has no SDL display. No current-head hosted-CI claim, physical CPU-B qualification, or live window is claimed; exact CPU-B phase/lane and PPU revision parity remain unmeasured. D-025 explicitly authorizes the deterministic source-backed model. Do not repeat gap planning, claim Phase 3 complete, or start Phase 4 before the remaining visible check.
 - Native host support floors beyond the verified CI matrix, signing, and live Playstead integration remain later release/adoption work.
 
 ### Quick Tasks Completed
@@ -150,9 +148,9 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 ## Session Continuity
 
 Last session: 2026-10-07
-Stopped at: Phase GB-03 discussion, research synthesis, and owner decision lock; handoff before planning
+Stopped at: Phase GB-03 gap execution and review after Plan 03-13; fresh goal-backward verification is `human_needed` at 4/5 truths, VIDEO-04 visible-window/key evidence remains open
 Resume file: .planning/.continue-here.md
-Next command in fresh context: $gsd-plan-phase 3
+Next command in fresh context: $gsd-verify-work 3 (after the remaining display-based check; do not start Phase 4 before Phase 3 verification passes)
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: **Phase 3 discussion.** The owner locked an original, reproducible interactive fixture; separate PPU composition, timing, DMA/access and gameplay evidence; timestamped JOYP transitions; a minimal optional SDL3 player; integer scaling; explicit audio/persistence limitations; and exact-revision preview evidence. Phase 2 implementation verification remains recorded above and in its verification, validation, and security artifacts. PRs #1 and #2 are merged; current GitHub triage found no open PRs or issues.
-Next action: plan **Phase 3 — Visible Interactive DMG**. It has not been planned or executed. Keep `workflow.auto_advance` and `workflow._auto_chain_active` false; the exact next command is `$gsd-plan-phase 3`.
+Completed workflow stage: **Phase 3 gap execution and code review — Plan 03-13, followed by fresh Phase 3 goal-backward verification.** All 13 Phase 3 plans have summaries; verification reports `human_needed` at 4/5 truths. VIDEO-02/03 pass under D-025's confidence-qualified source-backed software model, with exact CPU-B behavior still unmeasured. VIDEO-04 needs the packaged demo visibly opened and one mapped key tested on a display-equipped Mac. Fresh `phase1` CTest passed 141/141; code review is clean. This environment has no SDL display. Do not claim Phase 3 complete or start Phase 4 before the visible check and verification. Keep both auto-advance flags false.
+Next roadmap phase: **Phase 4 — MBC1 and Safe Battery Continuation.** It has not started. After the visible VIDEO-04 check, the exact next GSD command is `$gsd-verify-work 3`; proceed to Phase 4 only after that verification passes.

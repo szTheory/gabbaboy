@@ -74,7 +74,7 @@ static int unsupported_reads(void) {
     /* Each operand family must reject before a timed read, flag change or HL update. */
     static const uint8_t hl_reads[] = {0x46,0x4e,0x56,0x5e,0x66,0x6e,0x7e,
         0x86,0x8e,0x96,0x9e,0xa6,0xae,0xb6,0xbe,0x34,0x35,0x2a,0x3a};
-    static const uint16_t absent[] = {0x8000,0xa000,0xfe00,0xff00,0xff03,0xff08,0xff7f};
+    static const uint16_t absent[] = {0xa000,0xff03,0xff08,0xff7f};
     for (size_t a = 0; a < sizeof(absent) / sizeof(absent[0]); ++a) {
         for (size_t i = 0; i < sizeof(hl_reads); ++i) {
             const uint8_t p[] = {0x21,(uint8_t)absent[a],(uint8_t)(absent[a] >> 8),hl_reads[i]};
@@ -100,7 +100,7 @@ static int unsupported_reads(void) {
         gbb_instance *m = load_program(p, sizeof(p)); REQUIRE(m != NULL);
         REQUIRE(reject_atomically(m) == 0); gbb_destroy(m);
     }
-    static const uint8_t missing_io[] = {0x00,0x03,0x08,0x7f};
+    static const uint8_t missing_io[] = {0x03,0x08,0x7f};
     for (size_t i = 0; i < sizeof(missing_io); ++i) {
         const uint8_t immediate[] = {0xf0,missing_io[i]};
         gbb_instance *m = load_program(immediate, sizeof(immediate)); REQUIRE(m != NULL);
@@ -114,8 +114,8 @@ static int unsupported_reads(void) {
 }
 
 static int unsupported_stack(void) {
-    /* FDFF itself is readable echo RAM; its second stack byte at FE00 is absent. */
-    static const uint16_t addresses[] = {0xa000,0xfdff,0xff02};
+    /* FE9F is the last OAM byte; its second stack byte at FEA0 is unusable. */
+    static const uint16_t addresses[] = {0xa000,0xfe9f,0xff02};
     static const uint8_t reads[] = {0xc1,0xd1,0xe1,0xf1,0xc9,0xd9,0xc8,0xd0};
     for (size_t a = 0; a < sizeof(addresses) / sizeof(addresses[0]); ++a) {
         for (size_t i = 0; i < sizeof(reads); ++i) {
@@ -150,8 +150,8 @@ static int unsupported_stack(void) {
 }
 
 static int unsupported_fetch(void) {
-    static const uint16_t pc[] = {0x8000,0xa000,0xfe00,0xff03,0x7fff,0x7fff,0x7ffe};
-    static const uint8_t opcode[] = {0,0,0,0,0x06,0xcb,0x01};
+    static const uint16_t pc[] = {0xa000,0xfea0,0xff03};
+    static const uint8_t opcode[] = {0,0,0};
     for (size_t i = 0; i < sizeof(pc) / sizeof(pc[0]); ++i) {
         uint8_t rom[32768] = {0};
         rom[0x100] = 0xc3; rom[0x101] = (uint8_t)pc[i]; rom[0x102] = (uint8_t)(pc[i] >> 8);
@@ -159,12 +159,16 @@ static int unsupported_fetch(void) {
         fix_checksum(rom); gbb_instance *m = NULL;
         REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK);
         REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
-        REQUIRE(gbb_run(m, 32, NULL, 0).consumed_half_dots == 32);
+        gbb_run_result initial = gbb_run(m, 32, NULL, 0);
+        REQUIRE(initial.consumed_half_dots == 32);
         REQUIRE(reject_atomically(m) == 0); gbb_destroy(m);
     }
-    const uint8_t echo_operand[] = {0x21,0xff,0xdd,0x3e,0x06,0x77,0xc3,0xff,0xfd};
-    gbb_instance *m = load_program(echo_operand, sizeof(echo_operand)); REQUIRE(m != NULL);
-    REQUIRE(gbb_run(m, 88, NULL, 0).consumed_half_dots == 88);
+    /* The last OAM byte holds an immediate opcode whose operand lies in FEA0. */
+    const uint8_t oam_operand[] = {0xaf,0xe0,0x40,0x21,0x9f,0xfe,0x3e,0x06,
+                                  0x77,0xc3,0x9f,0xfe};
+    gbb_instance *m = load_program(oam_operand, sizeof(oam_operand)); REQUIRE(m != NULL);
+    gbb_run_result r = gbb_run(m, 192, NULL, 0);
+    REQUIRE(r.reason == GBB_STOP_UNSUPPORTED_BUS && r.consumed_half_dots != 0);
     REQUIRE(reject_atomically(m) == 0); gbb_destroy(m);
     return 0;
 }
@@ -172,11 +176,11 @@ static int unsupported_fetch(void) {
 static int halt_bug_fetch(void) {
     static const uint8_t opcodes[] = {0x06,0xcb,0x01};
     for (size_t i = 0; i < sizeof(opcodes); ++i) {
-        uint16_t at = opcodes[i] == 0x01 ? 0x7ffe : 0x7fff;
+        uint16_t at = 0x0200;
         const uint8_t p[] = {0x3e,1,0xea,0xff,0xff,0xea,0x0f,0xff,0xc3,(uint8_t)(at-1u),(uint8_t)((at-1u)>>8)};
         uint8_t rom[32768] = {0}; memcpy(rom + 0x100, p, sizeof(p));
         rom[at-1u] = 0x76; rom[at] = opcodes[i];
-        if (at == 0x7ffe) rom[0x7fff] = 0x12;
+        if (opcodes[i] == 0x01) rom[at + 1u] = 0x12;
         fix_checksum(rom); gbb_instance *m = NULL;
         REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK);
         REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
@@ -185,10 +189,15 @@ static int halt_bug_fetch(void) {
         gbb_run_result r = gbb_run(m, cost, &trace, 1);
         REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == cost && r.trace_count == 1);
         REQUIRE(trace.pc == at && trace.opcode[0] == opcodes[i] && trace.opcode[1] == opcodes[i]);
-        gbb_test_cpu_snapshot(m, &snapshot); REQUIRE(snapshot.pc == 0x8000);
+        uint16_t next_pc = (uint16_t)(at + (opcodes[i] == 0x01 ? 2u : 1u));
+        gbb_test_cpu_snapshot(m, &snapshot); REQUIRE(snapshot.pc == next_pc);
         if (opcodes[i] == 0x06) REQUIRE(snapshot.b == 0x06);
         if (opcodes[i] == 0x01) REQUIRE(snapshot.b == 0x12 && snapshot.c == 0x01);
-        REQUIRE(reject_atomically(m) == 0); gbb_destroy(m);
+        gbb_trace_record next;
+        r = gbb_run(m, 8, &next, 1);
+        REQUIRE(r.reason == GBB_STOP_BUDGET && r.consumed_half_dots == 8 && r.trace_count == 1);
+        REQUIRE(next.pc == next_pc);
+        gbb_destroy(m);
     }
     return 0;
 }
