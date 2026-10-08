@@ -85,6 +85,7 @@ static bool attempt_battery_save(player *app, bool show_saved_status);
 static void request_quit(player *app);
 static void begin_transition(player *app, player_transition transition,
                              const char *replacement_path);
+static void destroy_player(player *app);
 
 static char *duplicate_path(const char *path) {
     const size_t length = strlen(path);
@@ -1120,6 +1121,106 @@ static bool write_smoke_rom(char *out_path, size_t path_capacity,
     return true;
 }
 
+static bool start_smoke_battery_session(player *app, const char *rom_path) {
+    memset(app, 0, sizeof(*app));
+    app->save_lock_fd = -1;
+    app->running = true;
+    app->window_focused = true;
+    atomic_init(&app->dialog_callback_done, false);
+    atomic_init(&app->dialog_delivery_failed, false);
+    return create_machine(app, rom_path);
+}
+
+static bool run_smoke_battery_guest(player *app, bool expect_resume) {
+    const gbb_run_result result = gbb_run(app->machine, 512u, NULL, 0u);
+    if (result.reason != GBB_STOP_HALTED_IDLE) return false;
+    return (gbb_peek_ram(app->machine, 0xC000u) == 1u) == expect_resume;
+}
+
+static void send_smoke_transition_key(player *app, SDL_Scancode scancode) {
+    SDL_KeyboardEvent key;
+    SDL_zero(key);
+    key.timestamp = SDL_GetTicksNS();
+    key.scancode = scancode;
+    handle_key(app, &key, true);
+}
+
+static bool run_save_transition_smoke(void) {
+    char rom_path[256];
+    player_save_identity identity;
+    if (!write_smoke_rom(rom_path, sizeof(rom_path), &identity)) return false;
+    player_session_remove_battery_file(&identity);
+
+    player session;
+    bool ok = start_smoke_battery_session(&session, rom_path);
+    if (ok) {
+        const gbb_run_result result = gbb_run(session.machine, 512u, NULL, 0u);
+        ok = result.reason == GBB_STOP_HALTED_IDLE &&
+             session.save_identity.saved_generation == 0u;
+    }
+    if (ok) {
+        session.save_identity.persistence_enabled = false;
+        begin_transition(&session, PLAYER_TRANSITION_QUIT, NULL);
+        ok = session.pending_transition == PLAYER_TRANSITION_QUIT &&
+             session.save_status_active &&
+             strstr(session.save_status, "R retry") != NULL &&
+             strstr(session.save_status, "C continue without saving") != NULL &&
+             strstr(session.save_status, "Esc cancel") != NULL;
+    }
+    if (ok) {
+        send_smoke_transition_key(&session, SDL_SCANCODE_ESCAPE);
+        ok = session.running &&
+             session.pending_transition == PLAYER_TRANSITION_NONE &&
+             session.save_status_active &&
+             strstr(session.save_status, "Press S to retry") != NULL;
+    }
+    if (ok) {
+        session.save_identity.persistence_enabled = false;
+        begin_transition(&session, PLAYER_TRANSITION_QUIT, NULL);
+        session.save_identity.persistence_enabled = true;
+        send_smoke_transition_key(&session, SDL_SCANCODE_R);
+        ok = !session.running &&
+             session.pending_transition == PLAYER_TRANSITION_NONE &&
+             !session.save_status_active;
+    }
+    session.skip_final_save = true;
+    destroy_player(&session);
+
+    if (ok) ok = start_smoke_battery_session(&session, rom_path) &&
+                 run_smoke_battery_guest(&session, true);
+    session.skip_final_save = true;
+    destroy_player(&session);
+    player_session_remove_battery_file(&identity);
+
+    if (ok) ok = start_smoke_battery_session(&session, rom_path);
+    if (ok) {
+        const gbb_run_result result = gbb_run(session.machine, 512u, NULL, 0u);
+        ok = result.reason == GBB_STOP_HALTED_IDLE;
+    }
+    if (ok) {
+        session.save_identity.persistence_enabled = false;
+        begin_transition(&session, PLAYER_TRANSITION_QUIT, NULL);
+        ok = session.pending_transition == PLAYER_TRANSITION_QUIT &&
+             session.save_status_active;
+    }
+    if (ok) {
+        send_smoke_transition_key(&session, SDL_SCANCODE_C);
+        ok = !session.running && session.skip_final_save &&
+             session.pending_transition == PLAYER_TRANSITION_NONE;
+    }
+    session.skip_final_save = true;
+    destroy_player(&session);
+
+    if (ok) ok = start_smoke_battery_session(&session, rom_path) &&
+                 run_smoke_battery_guest(&session, false);
+    session.skip_final_save = true;
+    destroy_player(&session);
+    player_session_remove_battery_file(&identity);
+    (void)unlink(rom_path);
+    if (!ok) fputs("Battery transition retry/cancel/continue smoke failed\n", stderr);
+    return ok;
+}
+
 static bool run_battery_smoke_guest(player *app, bool resume) {
     if (!app->save_identity.battery_backed ||
         !app->save_identity.persistence_enabled) return false;
@@ -1312,8 +1413,9 @@ static bool run_smoke(player *app, const char *demo_rom_path,
         !update_frame(app, true) || !draw_frame(app)) return false;
 
     if (!run_battery_process_smoke(executable)) return false;
+    if (!run_save_transition_smoke()) return false;
 
-    printf("player smoke passed: frame=%llu; failed replacement preserved the session and successful replacement reset it\n",
+    printf("player smoke passed: frame=%llu; replacement lock conflict preserved the session; save retry, cancel, and continue choices passed\n",
            (unsigned long long)app->displayed_generation);
     return true;
 }
@@ -1335,6 +1437,13 @@ static void destroy_player(player *app) {
     player_session_unlock_battery(&app->save_lock_fd);
     free(app->current_rom_path);
     free(app->pending_rom_path);
+    app->texture = NULL;
+    app->renderer = NULL;
+    app->window = NULL;
+    app->surface = NULL;
+    app->machine = NULL;
+    app->current_rom_path = NULL;
+    app->pending_rom_path = NULL;
 }
 
 int main(int argc, char **argv) {
