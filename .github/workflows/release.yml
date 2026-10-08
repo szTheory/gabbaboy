@@ -762,11 +762,19 @@ jobs:
           [[ $(jq --arg tag "$RELEASE_TAG" '[.[] | select(.tag_name == $tag and .draft == true)] | length' <<<"$release_json") == 1 ]] || exit 1
           release_id=$(jq --arg tag "$RELEASE_TAG" -r '.[] | select(.tag_name == $tag) | .id' <<<"$release_json")
           if [[ -n "$RELEASE_ID" ]]; then [[ "$release_id" == "$RELEASE_ID" ]] || exit 1; fi
+          mkdir -p build/release-proof
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern source-receipt.json --dir build/release-proof
+          pr_head_sha=$(jq -r '.prior_pr_proof.head_sha' build/release-proof/source-receipt.json)
+          pr_merge_sha=$(jq -r '.prior_pr_proof.merge_commit_sha' build/release-proof/source-receipt.json)
+          [[ "$pr_head_sha" =~ ^[0-9a-f]{40}$ && "$pr_merge_sha" == "$SOURCE_SHA" ]] || {
+            echo "Source receipt does not bind an exact PR head to this release merge commit." >&2; exit 1;
+          }
           mkdir -p build
           python3 tests/scripts/verify-support-ledger.py --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --output build/support-ledger-v0.1.0.json
-          gh api "repos/$GH_REPO/commits/$SOURCE_SHA/check-runs?per_page=100" \
-            --jq '[.check_runs[] | select(.status == "completed" and .conclusion == "success") | {id, name, started_at, completed_at, conclusion, head_sha}]' \
-            > build/hosted-check-runs.json
+          gh api "repos/$GH_REPO/commits/$pr_head_sha/check-runs?per_page=100" > build/all-head-check-runs.json
+          jq --arg expected_head "$pr_head_sha" \
+            '[.check_runs[] | select(.head_sha == $expected_head and .status == "completed" and .conclusion == "success") | {id, name, started_at, completed_at, conclusion, head_sha}]' \
+            build/all-head-check-runs.json > build/hosted-check-runs.json
           assets=$(gh api "repos/$GH_REPO/releases/$release_id/assets?per_page=100")
           for name in support-ledger-v0.1.0.json release-performance-receipt.json; do
             # shellcheck disable=SC2016
@@ -776,25 +784,27 @@ jobs:
           if [[ $(jq '[.[] | select(.name == "release-performance-receipt.json")] | length' <<<"$assets") == 1 ]]; then
             mkdir -p build/existing
             gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern release-performance-receipt.json --dir build/existing
-            python3 - "$SOURCE_SHA" "$RELEASE_TAG" build/existing/release-performance-receipt.json <<'PY'
+            RELEASE_CHECK_HEAD_SHA="$pr_head_sha" python3 - "$SOURCE_SHA" "$RELEASE_TAG" build/existing/release-performance-receipt.json <<'PY'
           import json, pathlib, sys
+          import os
           source, tag, path = sys.argv[1:]
           data = json.loads(pathlib.Path(path).read_text())
-          if data.get("source_sha") != source or data.get("release_tag") != tag or data.get("trace_pair_digest_equal") is not True:
+          if data.get("source_sha") != source or data.get("release_tag") != tag or data.get("trace_pair_digest_equal") is not True or data.get("hosted_check_head_sha") != os.environ["RELEASE_CHECK_HEAD_SHA"]:
               raise SystemExit("Existing performance receipt is stale or invalid")
           PY
             cp build/existing/release-performance-receipt.json build/
           else
-            SOURCE_SHA="$SOURCE_SHA" RELEASE_TAG="$RELEASE_TAG" HOSTED_CHECKS_JSON=build/hosted-check-runs.json \
+            SOURCE_SHA="$SOURCE_SHA" RELEASE_TAG="$RELEASE_TAG" EXPECTED_CHECK_HEAD_SHA="$pr_head_sha" HOSTED_CHECKS_JSON=build/hosted-check-runs.json \
               bash tests/scripts/measure-release-baseline.sh --self-test
           fi
           python3 tests/scripts/verify-support-ledger.py --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" \
             --verify-sidecar build/support-ledger-v0.1.0.json
-          python3 - "$SOURCE_SHA" "$RELEASE_TAG" build/release-performance-receipt.json <<'PY'
+          RELEASE_CHECK_HEAD_SHA="$pr_head_sha" python3 - "$SOURCE_SHA" "$RELEASE_TAG" build/release-performance-receipt.json <<'PY'
           import json, pathlib, sys
+          import os
           source, tag, path = sys.argv[1:]
           data = json.loads(pathlib.Path(path).read_text())
-          if data.get("source_sha") != source or data.get("release_tag") != tag or data.get("trace_pair_digest_equal") is not True or not data.get("hosted_exact_source_check_durations"):
+          if data.get("source_sha") != source or data.get("release_tag") != tag or data.get("trace_pair_digest_equal") is not True or data.get("hosted_check_head_sha") != os.environ["RELEASE_CHECK_HEAD_SHA"] or not data.get("hosted_exact_source_check_durations"):
               raise SystemExit("Performance receipt is missing exact source, tag, paired digest, or hosted CI duration evidence")
           PY
           for name in support-ledger-v0.1.0.json release-performance-receipt.json; do

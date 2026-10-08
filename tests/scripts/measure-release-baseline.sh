@@ -121,6 +121,10 @@ if self_test == "True":
 
 revision = source_digest()
 require(re.fullmatch(r"[0-9a-f]{40}", revision) is not None, "Git did not provide a full source SHA")
+expected_check_sha = os.environ.get("EXPECTED_CHECK_HEAD_SHA", "")
+if expected_check_sha:
+    require(re.fullmatch(r"[0-9a-f]{40}", expected_check_sha) is not None,
+            "expected hosted-check head is not a full commit SHA")
 if expected_sha:
     require(expected_sha == revision and tag, "release source identity does not match checked out HEAD")
     require(subprocess.check_output(["git","rev-parse",f"{tag}^{{commit}}"],cwd=root,text=True).strip() == revision,
@@ -202,8 +206,9 @@ print(f"observed trace delta: {trace_delta_ns:.0f} ns ({trace_delta_percent:.2f}
 
 hosted = hosted_rows(checks_file)
 if expected_sha:
-    require(hosted and all(row.get("head_sha") in (None, revision) for row in hosted),
-            "tagged receipt requires exact-source successful hosted check durations")
+    expected_check_head = expected_check_sha or revision
+    require(hosted and all(row.get("head_sha") == expected_check_head for row in hosted),
+            "tagged receipt requires successful hosted check durations on the exact merged PR head")
 receipt = {
     "schema_version": 1, "result": "passed", "source_sha": revision,
     "release_tag": tag or None, "source_tree_state": "clean" if expected_sha else
@@ -226,6 +231,7 @@ receipt = {
     "existing_allocation_assertion": {"test": "audio_no_alloc", "result": "passed",
                                       "scope": "gabbaboy_run_audio path only; separate from the timed gbb_run workload"},
     "allocation_measured_for_timed_workload": False,
+    "hosted_check_head_sha": expected_check_sha or (revision if expected_sha else None),
     "uncertainty_method": "raw samples; median, min/max, sample standard deviation and approximate 95% mean margin (1.96*sd/sqrt(n)); advisory only",
     "interference_and_limits": ["host scheduling and concurrent load affect timing; no CPU isolation is claimed",
                                  "peak RSS includes executable, loader, ROM, and trace storage; it is not core heap-only memory",
