@@ -4,16 +4,16 @@ milestone: v0.1
 current_phase: 05
 current_phase_name: DMG Audio and Stable Playback
 status: executing
-stopped_at: Completed GB-05-01-PLAN.md
-last_updated: "2026-10-08T13:02:22.988Z"
+stopped_at: Completed GB-05-02-PLAN.md
+last_updated: "2026-10-08T13:23:20.513Z"
 last_activity: 2026-10-08
 last_activity_desc: Phase GB-05 execution started
-state_head: 321fdb4ecd1319888a0a431c0b1b72dbb4a21ccc
+state_head: d444076f57293c858f2ed2e03e8e46fac7445b52
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 49
-  completed_plans: 43
+  completed_plans: 44
 milestone_name: limited DMG preview
 ---
 
@@ -29,11 +29,11 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 ## Current Position
 
 Phase: GB-05 (DMG Audio and Stable Playback) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Executing Phase GB-05
 Last activity: 2026-10-08 — Phase GB-05 execution started
 
-Progress: [███████░░░] 67% of milestone phases complete. Phases 1–4 passed goal verification. Phase 4 has 7/7 plan summaries and 4/4 verified goal truths; the core inventory passed 155/155, the relocated package inventory passed 160/160 plus a 155/155 core-only subset, the macOS player/package inventory passed 37/37, and exact hosted PR checks and downloaded Linux/macOS/player package receipts passed on source head `79f83f627ffb3631811b2f39b23081117ebaab8f`. The Windows fixture-byte checkout issue was fixed with narrow Git attributes and re-reviewed clean. See the Phase 4 verification, validation, security, and UI review artifacts. Phase 5 has seven verified plans in seven dependency-ordered waves; Plan 05-01 is complete and recorded in [05-01-SUMMARY.md](phases/GB-05-dmg-audio-and-stable-playback/05-01-SUMMARY.md). The selected core/audio CTests passed 4/4 and the packaged-player suite passed 37/37, including an authored pulse guest submitting nonzero PCM to SDL. Phase 5 remains in progress; Plan 05-02 is next. No physical DMG/audio-device hotplug or perceptual audio qualification is claimed.
+Progress: [███████░░░] 67% of milestone phases complete. Phases 1–4 passed goal verification. Phase 4 has 7/7 plan summaries and 4/4 verified goal truths; the core inventory passed 155/155, the relocated package inventory passed 160/160 plus a 155/155 core-only subset, the macOS player/package inventory passed 37/37, and exact hosted PR checks and downloaded Linux/macOS/player package receipts passed on source head `79f83f627ffb3631811b2f39b23081117ebaab8f`. The Windows fixture-byte checkout issue was fixed with narrow Git attributes and re-reviewed clean. See the Phase 4 verification, validation, security, and UI review artifacts. Phase 5 has seven plans in seven dependency-ordered waves; Plans 05-01 and 05-02 are complete with summaries. Plan 05-02's scoped APU/timing regressions passed 16/16. Phase 5 remains in progress; no physical DMG or perceptual audio qualification is claimed.
 
 ## Performance Metrics
 
@@ -81,6 +81,7 @@ Progress: [███████░░░] 67% of milestone phases complete. Pha
 | Phase 04 P06 | 10 min | 2 tasks | 13 files |
 | Phase 04 P07 | 18 min | 2 tasks | documentation, evidence, and workflow metadata |
 | Phase GB-05 P01 | 13min | 2 tasks | 8 files |
+| Phase GB-05 P02 | 17min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -139,6 +140,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 04]: Keep the original MBC1 battery fixture source, rights, manifest, pinned RGBDS recipe, and checked-in bytes together; ordinary tests verify the digest offline.
 - [Phase 04]: Prove guest continuation with separate bounded processes and distinct missing-save, wrong-ROM-envelope, and altered-payload controls; this is software evidence, not physical hardware qualification.
 - [Phase GB-05]: Expose audio-aware stepping as gbb_run_audio with caller-owned 48 kHz stereo frames; keep legacy run calls muted.
+- [Phase GB-05]: Plan 05-02 adds dual pulse channels and divider-clocked sequencing as authored deterministic software-model evidence; AUDIO-01 remains pending for the remaining APU channels and phase scope.
 
 ### Pending Todos
 
@@ -164,10 +166,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-08T13:02:22.930Z
-Stopped at: Completed GB-05-01-PLAN.md
-Resume file: .planning/phases/GB-05-dmg-audio-and-stable-playback/05-02-PLAN.md
+Last session: 2026-10-08T13:23:20.468Z
+Stopped at: Completed GB-05-02-PLAN.md
+Resume file: .planning/phases/GB-05-dmg-audio-and-stable-playback/05-03-PLAN.md
 Next command in fresh context: $gsd-execute-phase 5
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: **Plan GB-05-01 execution, within Phase 5 of 6.** The tracer and named audio regressions passed on the Phase 5 branch. Phase 5 remains in progress and none of AUDIO-01/02/03 is marked complete yet. Keep both auto-advance flags false.
-Next plan: **GB-05 Plan 05-02 — Both pulse channels and divider sequencer**, within Phase 5 — DMG Audio and Stable Playback. The exact next command is `$gsd-execute-phase 5`.
+Completed workflow stage: **Plan GB-05-02 execution, within Phase 5 of 6.** The authored pulse/mixer and divider timeline tests passed 16/16; this is deterministic software-model evidence and does not qualify physical DMG behavior. Phase 5 remains in progress and AUDIO-01/02/03 remain pending. Keep both auto-advance flags false.
+Next plan: **GB-05 Plan 05-03 — Wave, noise and four-channel power matrix**, within Phase 5 — DMG Audio and Stable Playback. The exact next command is `$gsd-execute-phase 5`.
