@@ -482,6 +482,155 @@ static int session_max_size(const char *root) {
     return 0;
 }
 
+static int child_lock_attempt(const player_save_identity *identity,
+                              bool expect_busy) {
+    const pid_t child = fork();
+    if (child < 0) return 1;
+    if (child == 0) {
+        int lock_fd = -1;
+        char error[256];
+        const player_session_lock_result result =
+            player_session_lock_battery(identity, &lock_fd,
+                                        error, sizeof(error));
+        if (expect_busy) {
+            _exit(result == PLAYER_SESSION_LOCK_BUSY &&
+                  strstr(error, "Another GabbaBoy process") != NULL ? 0 : 3);
+        }
+        if (result != PLAYER_SESSION_LOCK_ACQUIRED) _exit(4);
+        player_session_unlock_battery(&lock_fd);
+        _exit(0);
+    }
+    int status = 0;
+    if (waitpid(child, &status, 0) != child || !WIFEXITED(status)) return 2;
+    return WEXITSTATUS(status);
+}
+
+static int session_lock_lifecycle(const char *root) {
+    uint8_t rom[TEST_ROM_SIZE];
+    make_test_rom(rom, 0x92u);
+    player_save_identity identity = {0};
+    REQUIRE(identify_test_rom(rom, &identity));
+    char *save_path = test_save_path(&identity);
+    REQUIRE(save_path != NULL);
+    char lock_path[4096];
+    const int lock_length = snprintf(lock_path, sizeof(lock_path),
+                                     "%s.lock", save_path);
+    REQUIRE(lock_length >= 0 && (size_t)lock_length < sizeof(lock_path));
+    struct stat info;
+    REQUIRE(lstat(save_path, &info) != 0 && errno == ENOENT);
+    REQUIRE(lstat(lock_path, &info) != 0 && errno == ENOENT);
+
+    int lock_fd = -1;
+    char error[256];
+    REQUIRE(player_session_lock_battery(&identity, &lock_fd,
+        error, sizeof(error)) == PLAYER_SESSION_LOCK_ACQUIRED);
+    REQUIRE(lock_fd >= 0);
+    REQUIRE(lstat(lock_path, &info) == 0 && S_ISREG(info.st_mode));
+    REQUIRE(lstat(save_path, &info) != 0 && errno == ENOENT);
+
+    int injected_fd = -1;
+    player_session_test_set_fault(PLAYER_SESSION_TEST_FAULT_LOCK_ACQUIRE);
+    REQUIRE(player_session_lock_battery(&identity, &injected_fd,
+        error, sizeof(error)) == PLAYER_SESSION_LOCK_ERROR);
+    REQUIRE(injected_fd == -1 && error[0] != '\0');
+    REQUIRE(child_lock_attempt(&identity, true) == 0);
+    player_session_unlock_battery(&lock_fd);
+    REQUIRE(lock_fd == -1);
+    REQUIRE(child_lock_attempt(&identity, false) == 0);
+
+    REQUIRE(unlink(lock_path) == 0);
+    char sentinel_path[4096];
+    REQUIRE(path_join(sentinel_path, sizeof(sentinel_path), root, "lock-target"));
+    static const uint8_t sentinel[] = {4u, 5u, 6u};
+    REQUIRE(write_test_file(sentinel_path, sentinel, sizeof(sentinel)));
+    REQUIRE(symlink(sentinel_path, lock_path) == 0);
+    lock_fd = -1;
+    REQUIRE(player_session_lock_battery(&identity, &lock_fd,
+        error, sizeof(error)) == PLAYER_SESSION_LOCK_ERROR);
+    REQUIRE(lock_fd == -1);
+    uint8_t sentinel_copy[8];
+    size_t sentinel_size = 0u;
+    REQUIRE(read_test_file(sentinel_path, sentinel_copy,
+                           sizeof(sentinel_copy), &sentinel_size));
+    REQUIRE(sentinel_size == sizeof(sentinel));
+    REQUIRE(memcmp(sentinel_copy, sentinel, sizeof(sentinel)) == 0);
+
+    char no_battery_root[4096];
+    REQUIRE(path_join(no_battery_root, sizeof(no_battery_root), root,
+                      "no-battery"));
+    REQUIRE(mkdir(no_battery_root, 0700) == 0);
+    player_session_test_set_pref_path(no_battery_root);
+    uint8_t rom_only[TEST_ROM_SIZE];
+    make_test_rom(rom_only, 0u);
+    rom_only[0x147u] = 0x00u;
+    rom_only[0x149u] = 0x00u;
+    fix_test_rom_checksum(rom_only);
+    player_save_identity no_battery = {0};
+    REQUIRE(identify_test_rom(rom_only, &no_battery));
+    REQUIRE(!no_battery.battery_backed);
+    lock_fd = -1;
+    REQUIRE(player_session_lock_battery(&no_battery, &lock_fd,
+        error, sizeof(error)) == PLAYER_SESSION_LOCK_ACQUIRED);
+    REQUIRE(lock_fd == -1);
+    REQUIRE(test_save_path(&no_battery) == NULL);
+    DIR *directory = opendir(no_battery_root);
+    REQUIRE(directory != NULL);
+    struct dirent *entry;
+    unsigned entry_count = 0u;
+    while ((entry = readdir(directory)) != NULL)
+        if (strcmp(entry->d_name, ".") != 0 &&
+            strcmp(entry->d_name, "..") != 0) ++entry_count;
+    REQUIRE(closedir(directory) == 0);
+    REQUIRE(entry_count == 0u);
+    free(save_path);
+    remove_tree(root);
+    return 0;
+}
+
+static int session_save_cadence(void) {
+    player_save_cadence cadence = {0};
+    player_save_cadence_reset(&cadence, 0u);
+    REQUIRE(!player_save_cadence_observe(&cadence, 0u, 0u, 0u));
+    REQUIRE(!player_save_cadence_observe(&cadence, 1u, 0u, 0u));
+    REQUIRE(!player_save_cadence_observe(&cadence, 1u, 0u,
+                                         UINT64_C(1999999999)));
+    REQUIRE(player_save_cadence_observe(&cadence, 1u, 0u,
+                                        UINT64_C(2000000000)));
+    player_save_cadence_reset(&cadence, 1u);
+    REQUIRE(!player_save_cadence_observe(&cadence, 2u, 1u, 0u));
+    REQUIRE(!player_save_cadence_observe(&cadence, 3u, 1u,
+                                         UINT64_C(1000000000)));
+    REQUIRE(!player_save_cadence_observe(&cadence, 4u, 1u,
+                                         UINT64_C(3000000000)));
+    REQUIRE(!player_save_cadence_observe(&cadence, 5u, 1u,
+                                         UINT64_C(5000000000)));
+    REQUIRE(!player_save_cadence_observe(&cadence, 6u, 1u,
+                                         UINT64_C(7000000000)));
+    REQUIRE(!player_save_cadence_observe(&cadence, 7u, 1u,
+                                         UINT64_C(9000000000)));
+    REQUIRE(player_save_cadence_observe(&cadence, 7u, 1u,
+                                        UINT64_C(10000000000)));
+    REQUIRE(!player_save_cadence_observe(&cadence, 7u, 7u,
+                                         UINT64_C(10000000001)));
+    REQUIRE(!cadence.dirty);
+    return 0;
+}
+
+static int session_transition_choices(void) {
+    REQUIRE(player_save_transition_resolve(false, false,
+        PLAYER_SAVE_TRANSITION_RETRY) == PLAYER_SAVE_TRANSITION_SAVED);
+    REQUIRE(player_save_transition_resolve(true, true,
+        PLAYER_SAVE_TRANSITION_RETRY) == PLAYER_SAVE_TRANSITION_SAVED);
+    REQUIRE(player_save_transition_resolve(true, false,
+        PLAYER_SAVE_TRANSITION_RETRY) == PLAYER_SAVE_TRANSITION_WAIT);
+    REQUIRE(player_save_transition_resolve(true, false,
+        PLAYER_SAVE_TRANSITION_CONTINUE) ==
+        PLAYER_SAVE_TRANSITION_CONTINUE_UNSAVED);
+    REQUIRE(player_save_transition_resolve(true, false,
+        PLAYER_SAVE_TRANSITION_CANCEL) == PLAYER_SAVE_TRANSITION_CANCELLED);
+    return 0;
+}
+
 static int session_reject_matrix(const char *root) {
     uint8_t rom[TEST_ROM_SIZE];
     uint8_t initial[TEST_BATTERY_SIZE];
@@ -849,6 +998,12 @@ int main(int argc, char **argv) {
         result = replacement_success(argv[2]);
     else if (strcmp(argv[1], "player_session_identity") == 0)
         result = session_identity(argv[4]);
+    else if (strcmp(argv[1], "player_session_lock_lifecycle") == 0)
+        result = session_lock_lifecycle(argv[4]);
+    else if (strcmp(argv[1], "player_session_save_cadence") == 0)
+        result = session_save_cadence();
+    else if (strcmp(argv[1], "player_session_transition_choices") == 0)
+        result = session_transition_choices();
     else if (strcmp(argv[1], "player_session_max_size") == 0)
         result = session_max_size(argv[4]);
     else if (strcmp(argv[1], "player_session_reject_matrix") == 0)

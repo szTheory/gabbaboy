@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/stdio.h>
 #include <unistd.h>
@@ -693,8 +694,144 @@ bool player_session_save_battery(gbb_instance *machine,
     return true;
 }
 
+static char *battery_lock_file_path(const player_save_identity *identity) {
+    char *save_path = battery_file_path(identity);
+    if (save_path == NULL) return NULL;
+    const size_t length = strlen(save_path);
+    static const char suffix[] = ".lock";
+    if (length > PLAYER_SESSION_PATH_LIMIT - (sizeof(suffix) - 1u)) {
+        free(save_path);
+        return NULL;
+    }
+    char *lock_path = malloc(length + sizeof(suffix));
+    if (lock_path != NULL) {
+        memcpy(lock_path, save_path, length);
+        memcpy(lock_path + length, suffix, sizeof(suffix));
+    }
+    free(save_path);
+    return lock_path;
+}
+
+player_session_lock_result player_session_lock_battery(
+    const player_save_identity *identity, int *out_lock_fd,
+    char *out_error, size_t error_capacity) {
+    if (out_error != NULL && error_capacity > 0u) out_error[0] = '\0';
+    if (identity == NULL || out_lock_fd == NULL) {
+        set_error(out_error, error_capacity, "The player session is unavailable.");
+        return PLAYER_SESSION_LOCK_ERROR;
+    }
+    *out_lock_fd = -1;
+    if (!identity->battery_backed) return PLAYER_SESSION_LOCK_ACQUIRED;
+    char *path = battery_lock_file_path(identity);
+    if (path == NULL) {
+        set_error(out_error, error_capacity, "The per-user save directory is unavailable.");
+        return PLAYER_SESSION_LOCK_ERROR;
+    }
+    const int fd = open(path, O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW,
+                        S_IRUSR | S_IWUSR);
+    if (fd < 0) {
+        free(path);
+        set_error(out_error, error_capacity, "Could not open the battery session lock safely.");
+        return PLAYER_SESSION_LOCK_ERROR;
+    }
+    struct stat opened_info, path_info;
+    if (fstat(fd, &opened_info) != 0 || !S_ISREG(opened_info.st_mode) ||
+        lstat(path, &path_info) != 0 ||
+        !same_file_identity(&opened_info, &path_info)) {
+        (void)close(fd);
+        free(path);
+        set_error(out_error, error_capacity, "The battery session lock is not a stable regular file.");
+        return PLAYER_SESSION_LOCK_ERROR;
+    }
+    free(path);
+#ifdef GBB_PLAYER_SESSION_TESTING
+    if (consume_test_fault(PLAYER_SESSION_TEST_FAULT_LOCK_ACQUIRE)) {
+        errno = EIO;
+        (void)close(fd);
+        set_error(out_error, error_capacity, "Could not acquire the battery session lock.");
+        return PLAYER_SESSION_LOCK_ERROR;
+    }
+#endif
+    if (flock(fd, LOCK_EX | LOCK_NB) != 0) {
+        const int lock_errno = errno;
+        (void)close(fd);
+        if (lock_errno == EWOULDBLOCK || lock_errno == EAGAIN) {
+            set_error(out_error, error_capacity,
+                      "Another GabbaBoy process is using this battery save.");
+            return PLAYER_SESSION_LOCK_BUSY;
+        }
+        set_error(out_error, error_capacity,
+                  "Could not acquire the battery session lock.");
+        return PLAYER_SESSION_LOCK_ERROR;
+    }
+    *out_lock_fd = fd;
+    return PLAYER_SESSION_LOCK_ACQUIRED;
+}
+
+void player_session_unlock_battery(int *in_out_lock_fd) {
+    if (in_out_lock_fd == NULL || *in_out_lock_fd < 0) return;
+    (void)flock(*in_out_lock_fd, LOCK_UN);
+    (void)close(*in_out_lock_fd);
+    *in_out_lock_fd = -1;
+}
+
+void player_save_cadence_reset(player_save_cadence *cadence,
+                               uint64_t generation) {
+    if (cadence == NULL) return;
+    cadence->observed_generation = generation;
+    cadence->first_dirty_ns = 0u;
+    cadence->last_change_ns = 0u;
+    cadence->dirty = false;
+}
+
+bool player_save_cadence_observe(player_save_cadence *cadence,
+                                 uint64_t generation,
+                                 uint64_t saved_generation,
+                                 uint64_t host_time_ns) {
+    if (cadence == NULL) return false;
+    if (generation == saved_generation) {
+        player_save_cadence_reset(cadence, generation);
+        return false;
+    }
+    if (!cadence->dirty) {
+        cadence->dirty = true;
+        cadence->observed_generation = generation;
+        cadence->first_dirty_ns = host_time_ns;
+        cadence->last_change_ns = host_time_ns;
+    } else if (generation != cadence->observed_generation) {
+        cadence->observed_generation = generation;
+        cadence->last_change_ns = host_time_ns;
+    }
+    const bool quiet_elapsed = host_time_ns >= cadence->last_change_ns &&
+        host_time_ns - cadence->last_change_ns >= UINT64_C(2000000000);
+    const bool maximum_age_elapsed = host_time_ns >= cadence->first_dirty_ns &&
+        host_time_ns - cadence->first_dirty_ns >= UINT64_C(10000000000);
+    return quiet_elapsed || maximum_age_elapsed;
+}
+
+player_save_transition_result player_save_transition_resolve(
+    bool battery_backed, bool save_succeeded,
+    player_save_transition_choice choice) {
+    if (!battery_backed || save_succeeded)
+        return PLAYER_SAVE_TRANSITION_SAVED;
+    switch (choice) {
+    case PLAYER_SAVE_TRANSITION_CONTINUE:
+        return PLAYER_SAVE_TRANSITION_CONTINUE_UNSAVED;
+    case PLAYER_SAVE_TRANSITION_CANCEL:
+        return PLAYER_SAVE_TRANSITION_CANCELLED;
+    case PLAYER_SAVE_TRANSITION_RETRY:
+    default:
+        return PLAYER_SAVE_TRANSITION_WAIT;
+    }
+}
+
 void player_session_remove_battery_file(const player_save_identity *identity) {
     char *path = battery_file_path(identity);
+    if (path != NULL) {
+        (void)unlink(path);
+        free(path);
+    }
+    path = battery_lock_file_path(identity);
     if (path != NULL) {
         (void)unlink(path);
         free(path);

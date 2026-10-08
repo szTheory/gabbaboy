@@ -18,6 +18,32 @@ typedef struct {
     bool persistence_enabled;
 } player_save_identity;
 
+typedef enum {
+    PLAYER_SESSION_LOCK_ACQUIRED = 0,
+    PLAYER_SESSION_LOCK_BUSY,
+    PLAYER_SESSION_LOCK_ERROR
+} player_session_lock_result;
+
+typedef struct {
+    uint64_t observed_generation;
+    uint64_t first_dirty_ns;
+    uint64_t last_change_ns;
+    bool dirty;
+} player_save_cadence;
+
+typedef enum {
+    PLAYER_SAVE_TRANSITION_WAIT = 0,
+    PLAYER_SAVE_TRANSITION_SAVED,
+    PLAYER_SAVE_TRANSITION_CONTINUE_UNSAVED,
+    PLAYER_SAVE_TRANSITION_CANCELLED
+} player_save_transition_result;
+
+typedef enum {
+    PLAYER_SAVE_TRANSITION_RETRY = 0,
+    PLAYER_SAVE_TRANSITION_CONTINUE,
+    PLAYER_SAVE_TRANSITION_CANCEL
+} player_save_transition_choice;
+
 /* Player save envelope v1 is serialized field-by-field, little-endian: bytes
  * 0..7 magic "GBBBSAVE", 8..9 version 1, 10..41 exact-ROM SHA-256, 42
  * cartridge type, 43..46 RAM length, 47..50 IEEE CRC-32, then exactly the
@@ -41,6 +67,24 @@ bool player_session_load_battery(gbb_instance *machine,
 bool player_session_save_battery(gbb_instance *machine,
                                  player_save_identity *identity,
                                  char *out_error, size_t error_capacity);
+/* The caller holds this advisory lock for the full writable battery session. */
+player_session_lock_result player_session_lock_battery(
+    const player_save_identity *identity, int *out_lock_fd,
+    char *out_error, size_t error_capacity);
+void player_session_unlock_battery(int *in_out_lock_fd);
+/* Observe host monotonic time and the core generation; due is quiet >=2s or
+ * dirty age >=10s. Guest time is never used for save cadence. */
+void player_save_cadence_reset(player_save_cadence *cadence,
+                               uint64_t generation);
+bool player_save_cadence_observe(player_save_cadence *cadence,
+                                 uint64_t generation,
+                                 uint64_t saved_generation,
+                                 uint64_t host_time_ns);
+/* Resolve a blocked lifecycle transition without allowing a failed save to
+ * proceed unless the user explicitly chooses continue-without-saving. */
+player_save_transition_result player_save_transition_resolve(
+    bool battery_backed, bool save_succeeded,
+    player_save_transition_choice choice);
 /* Narrow helpers used by the deterministic multi-process player smoke. */
 bool player_session_identify_rom(const uint8_t *rom, size_t rom_size,
                                  player_save_identity *out_identity);
