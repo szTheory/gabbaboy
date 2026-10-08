@@ -12,6 +12,8 @@
 #define GBB_DMA_BYTE_PERIOD_HALF_DOTS 8u
 #define GBB_LINE_OBJECT_LIMIT 10u
 #define GBB_PPU_FIFO_CAPACITY 16u
+#define GBB_AUDIO_CLOCK_HALF_DOTS UINT64_C(8388608)
+#define GBB_AUDIO_SAMPLE_RATE UINT64_C(48000)
 typedef struct {
     uint8_t type;
     size_t ram_size;
@@ -72,6 +74,14 @@ struct gbb_instance {
     int ime;
     uint8_t divider_phase;
     uint16_t divider_counter;
+    uint8_t apu_nr11, apu_nr12, apu_nr13, apu_nr14;
+    uint8_t apu_pulse_phase;
+    uint16_t apu_pulse_timer;
+    uint64_t apu_sample_phase;
+    gbb_audio_frame *audio_frames;
+    size_t audio_frame_capacity;
+    size_t audio_frame_count;
+    int audio_run_active;
     int timer_signal;
     int timer_reload_pending;
     uint8_t timer_reload_remaining;
@@ -302,6 +312,10 @@ static void reset_state(gbb_instance *m) {
     m->ime = 0;
     m->divider_phase = 0;
     m->divider_counter = 0xAB00u;
+    m->apu_nr11 = 0u; m->apu_nr12 = 0u; m->apu_nr13 = 0u; m->apu_nr14 = 0u;
+    m->apu_pulse_phase = 0u;
+    m->apu_pulse_timer = 0u;
+    m->apu_sample_phase = 0u;
     m->timer_signal = 0;
     m->timer_reload_pending = 0;
     m->timer_reload_remaining = 0;
@@ -414,6 +428,14 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
     if (address == 0xFF07) return (uint8_t)(0xF8u | m->tac);
     if (address == 0xFF01) return m->serial_data;
     if (address == 0xFF02) return (uint8_t)(0x7Eu | m->serial_control);
+    if (address == 0xFF11) return (uint8_t)(0x3Fu | (m->apu_nr11 & 0xC0u));
+    if (address == 0xFF12) return m->apu_nr12;
+    if (address == 0xFF13) return 0xFFu;
+    if (address == 0xFF14) return (uint8_t)(0xBFu | (m->apu_nr14 & 0x40u));
+    if (address == 0xFF11) return (uint8_t)(0x3Fu | (m->apu_nr11 & 0xC0u));
+    if (address == 0xFF12) return m->apu_nr12;
+    if (address == 0xFF13) return 0xFFu;
+    if (address == 0xFF14) return (uint8_t)(0xBFu | (m->apu_nr14 & 0x40u));
     if (address == 0xFF40) return m->lcdc;
     if (address == 0xFF41)
         return (uint8_t)(0x80u | (m->stat & 0x78u) |
@@ -608,6 +630,22 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
             }
         }
     }
+    else if (address == 0xFF11) m->apu_nr11 = value;
+    else if (address == 0xFF12) {
+        m->apu_nr12 = value;
+        if ((value & 0xF8u) == 0u) m->apu_nr14 &= 0x7Fu;
+    }
+    else if (address == 0xFF13) m->apu_nr13 = value;
+    else if (address == 0xFF14) {
+        m->apu_nr14 = (uint8_t)(value & 0x47u);
+        if ((value & 0x80u) != 0u && (m->apu_nr12 & 0xF8u) != 0u) {
+            m->apu_nr14 |= 0x80u;
+            m->apu_pulse_phase = 0u;
+            const uint16_t frequency = (uint16_t)(m->apu_nr13 |
+                ((uint16_t)(value & 7u) << 8));
+            m->apu_pulse_timer = (uint16_t)((2048u - frequency) * 64u);
+        }
+    }
     else if (address == 0xFF0F) m->interrupt_flags = (uint8_t)(value & 0x1Fu);
     else if (address == 0xFFFF) m->ie = (uint8_t)(value & 0x1Fu);
     else if (address >= 0xC000 && address <= 0xDFFF) m->wram[address - 0xC000] = value;
@@ -632,6 +670,7 @@ static int read_supported(const gbb_instance *m, uint16_t address) {
             ((m->cartridge_ram != NULL && m->cartridge_ram_size != 0u) ||
              cartridge_is_mbc1(m))) ||
            address == 0xFF00 || address == 0xFF01 || address == 0xFF02 ||
+           (address >= 0xFF11 && address <= 0xFF14) ||
            (address >= 0xFF04 && address <= 0xFF07) || address == 0xFF0F || address == 0xFFFF ||
            (address >= 0xFF40 && address <= 0xFF46) ||
            (address >= 0xFF47 && address <= 0xFF4B) ||
@@ -1080,6 +1119,29 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
             m->div = (uint8_t)(m->divider_counter >> 8);
             timer_set_signal(m, timer_input(m), m->time_half_dots);
         }
+        if ((m->apu_nr14 & 0x80u) != 0u) {
+            if (m->apu_pulse_timer > 1u) --m->apu_pulse_timer;
+            else {
+                const uint16_t frequency = (uint16_t)(m->apu_nr13 |
+                    ((uint16_t)(m->apu_nr14 & 7u) << 8));
+                m->apu_pulse_timer = (uint16_t)((2048u - frequency) * 64u);
+                m->apu_pulse_phase = (uint8_t)((m->apu_pulse_phase + 1u) & 7u);
+            }
+        }
+        m->apu_sample_phase += GBB_AUDIO_SAMPLE_RATE;
+        if (m->apu_sample_phase >= GBB_AUDIO_CLOCK_HALF_DOTS) {
+            m->apu_sample_phase -= GBB_AUDIO_CLOCK_HALF_DOTS;
+            if (m->audio_frames != NULL && m->audio_frame_count < m->audio_frame_capacity) {
+                static const uint8_t duty_pattern[4] = {0x01u, 0x81u, 0x87u, 0x7Eu};
+                int16_t sample = 0;
+                const uint8_t volume = (uint8_t)(m->apu_nr12 >> 4);
+                const uint8_t duty = (uint8_t)(m->apu_nr11 >> 6);
+                if ((m->apu_nr14 & 0x80u) != 0u && volume != 0u &&
+                    ((duty_pattern[duty] >> m->apu_pulse_phase) & 1u) != 0u)
+                    sample = (int16_t)((int)volume * 2048 - 16384);
+                m->audio_frames[m->audio_frame_count++] = (gbb_audio_frame){sample, sample};
+            }
+        }
         dma_advance_half_dot(m);
         m->ppu_half_phase ^= 1u;
         if (m->ppu_half_phase == 0) ppu_advance_dot(m);
@@ -1142,6 +1204,13 @@ gbb_error gbb_copy_frame(const gbb_instance *instance, uint8_t *pixels,
                            instance->frame_completion_half_dots};
     *out_info = info;
     return GBB_OK;
+}
+
+static int audio_preflight(const gbb_instance *m, uint64_t half_dots) {
+    if (!m->audio_run_active) return 1;
+    const uint64_t samples = (m->apu_sample_phase +
+        half_dots * GBB_AUDIO_SAMPLE_RATE) / GBB_AUDIO_CLOCK_HALF_DOTS;
+    return samples <= (uint64_t)(m->audio_frame_capacity - m->audio_frame_count);
 }
 
 static void advance_devices(gbb_instance *m, uint64_t half_dots) {
@@ -1675,6 +1744,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
         unsigned interrupt = instance->ime ? pending_interrupt(instance) : 5;
         if (interrupt < 5) {
             if (40u > budget_half_dots - result.consumed_half_dots) return result;
+            if (!audio_preflight(instance, 40u)) { result.reason=GBB_STOP_OUTPUT_FULL; return result; }
             if (UINT64_MAX - instance->time_half_dots < 40u) { result.reason=GBB_STOP_INVALID_STATE; return result; }
             gbb_diagnostic_record operation[GBB_DIAGNOSTIC_OPERATION_RESERVE];
             if (instance->diagnostic_output != NULL &&
@@ -1696,6 +1766,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 continue;
             }
             if (budget_half_dots - result.consumed_half_dots < 8u) return result;
+            if (!audio_preflight(instance, 8u)) { result.reason=GBB_STOP_OUTPUT_FULL; return result; }
             if (UINT64_MAX - instance->time_half_dots < 8u) { result.reason=GBB_STOP_INVALID_STATE; return result; }
             /* HALT samples wake conditions at each machine-cycle boundary.
              * A timer/serial interrupt midway through a long budget must wake
@@ -1727,6 +1798,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
         }
         uint8_t cost=instruction_cost(instance,d);
         if (cost > budget_half_dots-result.consumed_half_dots) return result;
+        if (!audio_preflight(instance, cost)) { result.reason=GBB_STOP_OUTPUT_FULL; return result; }
         if (UINT64_MAX - instance->time_half_dots < cost) {
             result.reason = GBB_STOP_INVALID_STATE;
             return result;
@@ -1795,6 +1867,27 @@ gbb_run_result gbb_run_ex(gbb_instance *instance, uint64_t budget_half_dots,
 gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
                        gbb_trace_record *trace, size_t trace_capacity) {
     return gbb_run_ex(instance, budget_half_dots, trace, trace_capacity, NULL, 0);
+}
+
+gbb_run_result gbb_run_audio(gbb_instance *instance, uint64_t budget_half_dots,
+                             gbb_audio_frame *frames, size_t frame_capacity,
+                             size_t *out_frame_count) {
+    gbb_run_result invalid = {0, GBB_STOP_INVALID_STATE, 0, 0, 0, 0};
+    if (out_frame_count != NULL) *out_frame_count = 0u;
+    if (out_frame_count == NULL || (frames == NULL && frame_capacity != 0u) ||
+        instance == NULL || instance->audio_run_active || instance->diagnostic_output != NULL)
+        return invalid;
+    instance->audio_frames = frames;
+    instance->audio_frame_capacity = frame_capacity;
+    instance->audio_frame_count = 0u;
+    instance->audio_run_active = 1;
+    gbb_run_result result = gbb_run_internal(instance, budget_half_dots, NULL, 0u);
+    *out_frame_count = instance->audio_frame_count;
+    instance->audio_frames = NULL;
+    instance->audio_frame_capacity = 0u;
+    instance->audio_frame_count = 0u;
+    instance->audio_run_active = 0;
+    return result;
 }
 
 uint8_t gbb_peek_ram(const gbb_instance *instance, uint16_t address) {

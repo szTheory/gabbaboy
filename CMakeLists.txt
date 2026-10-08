@@ -64,6 +64,7 @@ if(GABBABOY_BUILD_PLAYER)
   find_package(SDL3 3.4.18 EXACT CONFIG REQUIRED)
 
   add_library(gabbaboy-player-adapter STATIC
+    src/player/audio.c
     src/player/input.c
     src/player/presentation.c
     src/player/session.c)
