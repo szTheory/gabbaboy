@@ -2,6 +2,7 @@
 #include "limitations.h"
 #include "presentation.h"
 #include "session.h"
+#include "audio.h"
 
 #include <stdatomic.h>
 #include <errno.h>
@@ -21,17 +22,6 @@
 #define PLAYER_MAX_OPERATION_HALF_DOTS UINT64_C(40)
 #define PLAYER_BATTERY_SMOKE_HALF_DOTS UINT64_C(200000)
 #define PLAYER_TITLE_SIZE 512u
-
-typedef struct player_audio player_audio;
-player_audio *player_audio_create(void);
-void player_audio_destroy(player_audio *audio);
-unsigned player_audio_capacity(const player_audio *audio);
-bool player_audio_submit(player_audio *audio, const gbb_audio_frame *frames,
-                         unsigned count);
-uint_fast64_t player_audio_underflow(const player_audio *audio);
-uint_fast64_t player_audio_backpressure_events(const player_audio *audio);
-void player_audio_note_backpressure(player_audio *audio);
-unsigned player_audio_high_water(const player_audio *audio);
 
 typedef enum {
     PLAYER_DIALOG_SELECTED = 1,
@@ -169,12 +159,15 @@ static bool run_pulse_audio_smoke(player *app, const char *rom_path) {
         fputs("Authored pulse guest did not produce nonzero PCM for the SDL adapter\n", stderr);
         return false;
     }
-    printf("audio smoke: guest_frames=%llu nonzero_frames=%llu submitted_frames=%llu sink=%s underflow_frames=%llu backpressure_events=%llu high_water_frames=%u\n",
+    printf("audio smoke: guest_frames=%llu nonzero_frames=%llu submitted_frames=%llu sink=%s unavailable_discard_frames=%llu underflow_frames=%llu backpressure_events=%llu high_water_frames=%u queued_input_bytes=%llu\n",
         (unsigned long long)produced, (unsigned long long)nonzero,
-        (unsigned long long)submitted, app->audio != NULL ? "sdl" : "unavailable",
+        (unsigned long long)submitted,
+        player_audio_available(app->audio) ? "sdl" : "unavailable",
+        (unsigned long long)player_audio_unavailable_frames(app->audio),
         (unsigned long long)(app->audio != NULL ? player_audio_underflow(app->audio) : 0u),
         (unsigned long long)(app->audio != NULL ? player_audio_backpressure_events(app->audio) : 0u),
-        app->audio != NULL ? player_audio_high_water(app->audio) : 0u);
+        app->audio != NULL ? player_audio_high_water(app->audio) : 0u,
+        (unsigned long long)player_audio_queued_input_bytes(app->audio));
     return true;
 }
 
@@ -428,7 +421,7 @@ static void update_window_title(player *app) {
         short_name, app->user_paused || app->input.paused ? "Paused" : "Running",
         app->save_status_active ? app->save_status :
             (app->status[0] == '\0' ? "Ready" : app->status),
-        app->audio != NULL ? "Audio ready" : "Audio unavailable");
+        player_audio_available(app->audio) ? "Audio ready" : "Audio unavailable");
     (void)SDL_SetWindowTitle(app->window, title);
 }
 
@@ -446,7 +439,8 @@ static void show_help(player *app) {
         "Current ROM: %s\n\n"
         "Open ROM: Command-O\nQuit: Command-Q\n"
         "D-pad: arrow keys\nA / B: Z / X\nStart / Select: Return / Right Shift\n"
-        "Pause / resume: Space\nReset current ROM: R\nSave now / retry: S\n\n"
+        "Pause / resume: Space\nVolume down / up: [ / ]\n"
+        "Reset current ROM: R\nSave now / retry: S\n\n"
         "A blocked final save offers R to retry, C to continue without saving, or Escape to cancel.\n"
         "Status: %.160s\n"
         "%s",
@@ -926,6 +920,18 @@ static void handle_key(player *app, const SDL_KeyboardEvent *key, bool pressed) 
         }
         if (!app->dialog_pending && key->scancode == SDL_SCANCODE_SPACE) {
             toggle_pause(app);
+            return;
+        }
+        if (!app->dialog_pending && (key->scancode == SDL_SCANCODE_LEFTBRACKET ||
+                                     key->scancode == SDL_SCANCODE_RIGHTBRACKET)) {
+            const int direction = key->scancode == SDL_SCANCODE_RIGHTBRACKET
+                ? 1 : -1;
+            if (player_audio_adjust_gain(app->audio, direction)) {
+                char volume_status[64];
+                (void)snprintf(volume_status, sizeof(volume_status),
+                    "Volume %u%%", (unsigned)(player_audio_gain(app->audio) * 100.0f));
+                set_status(app, volume_status);
+            }
             return;
         }
         if (!app->dialog_pending && key->scancode == SDL_SCANCODE_R) {
@@ -1643,9 +1649,11 @@ int main(int argc, char **argv) {
         return 1;
     }
     app.audio = player_audio_create();
-    if (app.audio == NULL) {
-        set_status(&app, "Audio unavailable; continuing with a muted host sink");
-        fputs("Audio unavailable; continuing with a muted host sink\n", stderr);
+    if (app.audio == NULL || !player_audio_available(app.audio)) {
+        set_status(&app,
+            "Audio unavailable; PCM is discarded and counted without a queue");
+        fputs("Audio unavailable; PCM is discarded and counted without a queue\n",
+              stderr);
     }
     char *demo_rom_path = resolve_demo_rom_path(requested_demo_rom,
                                                  package_smoke);
