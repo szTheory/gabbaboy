@@ -1,0 +1,11 @@
+{
+  "command": "build/tests/test_apu apu_wave 2>/tmp/gbb-apu-wave-red-stderr.log",
+  "exitCode": 1,
+  "output": "TAP version 13\n1..1\nnot ok 1 - apu_wave\n",
+  "targetTest": "apu_wave",
+  "targetFile": "tests/test_apu.c",
+  "expected": "The wave channel register program completes, reads back wave RAM and NR30/NR34/NR52, and produces routed PCM.",
+  "actual": "GBB_STOP_UNSUPPORTED_BUS (reason=4) occurs before the guest stores any observed values; wave-register support is absent.",
+  "consoleOutput": "wave reason=4 count=0 state=00,00,00,00 audible=0\n",
+  "semanticAssessment": "The named TAP target executed and failed for the planned behavior: FF30 wave RAM is not accepted by the core's supported-bus map."
+}

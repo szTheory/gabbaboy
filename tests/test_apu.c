@@ -163,6 +163,37 @@ static int timeline_halt_stop(void) {
     return ok ? 0 : 1;
 }
 
+static int wave_channel(void) {
+    static const uint8_t program[] = {
+        0x3E,0x80,0xE0,0x26, 0x3E,0xF0,0xE0,0x30,
+        0xF0,0x30,0xEA,0x00,0xC0, 0x3E,0x80,0xE0,0x30,
+        0x3E,0x12,0xE0,0x1A, 0x3E,0x40,0xE0,0x1B,
+        0x3E,0x20,0xE0,0x1C, 0x3E,0xFF,0xE0,0x1D,
+        0x3E,0x87,0xE0,0x1E, 0x3E,0x47,0xE0,0x24,
+        0x3E,0x44,0xE0,0x25, 0xF0,0x1A,0xEA,0x01,0xC0,
+        0xF0,0x1E,0xEA,0x02,0xC0, 0xF0,0x26,0xEA,0x03,0xC0,
+        0x18,0xFE
+    };
+    gbb_instance *m = machine_with_program(program, sizeof(program));
+    if (m == NULL) return 1;
+    gbb_audio_frame frames[32] = {{0}};
+    size_t count = 0u;
+    gbb_run_result r = gbb_run_audio(m, 4096u, frames, 32u, &count);
+    int audible = 0;
+    for (size_t i = 0u; i < count; ++i) audible |= frames[i].right != 0;
+    int ok = r.reason == GBB_STOP_BUDGET &&
+             gbb_peek_ram(m, 0xC000u) == 0xF0u &&
+             gbb_peek_ram(m, 0xC001u) == 0xFFu &&
+             gbb_peek_ram(m, 0xC002u) == 0xFFu &&
+             gbb_peek_ram(m, 0xC003u) == 0xF4u && audible;
+    if (!ok) fprintf(stderr, "wave reason=%d count=%zu state=%02x,%02x,%02x,%02x audible=%d\n",
+                     r.reason, count, gbb_peek_ram(m, 0xC000u),
+                     gbb_peek_ram(m, 0xC001u), gbb_peek_ram(m, 0xC002u),
+                     gbb_peek_ram(m, 0xC003u), audible);
+    gbb_destroy(m);
+    return ok ? 0 : 1;
+}
+
 int main(int argc, char **argv) {
     const char *name = argc > 1 ? argv[1] : "apu_pulse";
     printf("TAP version 13\n1..1\n");
@@ -183,6 +214,10 @@ int main(int argc, char **argv) {
             printf("not ok 1 - apu_timeline\n"); return 1;
         }
         printf("ok 1 - apu_timeline\n"); return 0;
+    }
+    if (strcmp(name, "apu_wave") == 0) {
+        if (wave_channel() != 0) { printf("not ok 1 - apu_wave\n"); return 1; }
+        printf("ok 1 - apu_wave\n"); return 0;
     }
     printf("not ok 1 - %s # case not implemented yet\n", name);
     return 1;
