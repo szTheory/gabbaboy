@@ -2,7 +2,7 @@
 
 ## What This Is
 
-GabbaBoy is a portable C17 emulator core for Nintendo Game Boy (DMG) and Game Boy Color (CGB), with a planned optional desktop player and an integration path for Playstead and other frontends. Phase 1 delivers an installable headless core and runner, an opaque bounded C API, and a project-authored ROM tracer for a narrow bootless DMG-CPU-B profile. General gameplay, hardware-qualified memory behavior, CGB execution, and the desktop player remain future work.
+GabbaBoy is a portable C17 emulator core for Nintendo Game Boy (DMG) and Game Boy Color (CGB), with an integration path for Playstead and other frontends. It now includes an optional SDL3 macOS preview that runs a project-authored interactive ROM-only demo through the bounded public API. The preview demonstrates a limited bootless DMG profile; broad game compatibility, full hardware qualification, CGB execution, audio, and battery continuation remain future work.
 
 ## Core Value
 
@@ -15,6 +15,7 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 - ✓ Portable C17 core and headless runner with an installable `GabbaBoy::core` export — Phase 1.
 - ✓ Bounded opaque-instance API and original-ROM tracer with explicit fixture provenance and limited DMG-CPU-B claims — Phase 1.
 - ✓ Relocated C and C++ consumers, required CI inventory, and revision-qualified Linux/macOS preview packages — Phase 1.
+- ✓ Interactive optional SDL3 macOS DMG preview, original ROM-only demo, timed input/frame output, and explicit audio/persistence limits — Phase 3.
 
 ### Active
 
@@ -71,6 +72,7 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 | PR-based phase branches | Keep main releasable and retain review/verification evidence | Adopted configuration |
 | Corpus-qualified claims and measurements | A passing subset is not universal hardware/game compatibility | Required |
 | Bootless DMG-CPU-B tracer as the first delivered slice | A real guest path validates the portable API and install flow while keeping hardware, gameplay, and CGB claims bounded | Verified in Phase 1; memory-map conformance continues in Phase 2 |
+| Confidence-qualified software models for documented but revision-sensitive behavior | Select a deterministic model from primary documentation and reverse-engineering sources, cross-check implementations, and state the remaining silicon uncertainty | Adopted in Phase 3 for JOYP and DMA/PPU behavior under D-025 |
 
 ## Evolution
 
@@ -79,4 +81,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-10-03 after Phase 1 verification and closeout.
+Last updated: 2026-10-07 after Phase 3 verification and closeout.

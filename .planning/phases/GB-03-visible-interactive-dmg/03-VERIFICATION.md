@@ -1,8 +1,8 @@
 ---
 phase: GB-03-visible-interactive-dmg
-verified: 2026-10-08T00:38:55Z
-status: human_needed
-score: 4/5 roadmap truths verified
+verified: "2026-10-08T00:58:48Z"
+status: passed
+score: 5/5 roadmap truths verified
 covered_files:
   - .planning/phases/GB-03-visible-interactive-dmg/03-01-PLAN.md
   - .planning/phases/GB-03-visible-interactive-dmg/03-01-SUMMARY.md
@@ -301,3 +301,11 @@ All five VIDEO requirements are claimed by plans; none is orphaned. Decision cov
 VIDEO-01/02/03/05 have current code and test evidence. VIDEO-02 and VIDEO-03 are complete only for D-025’s source-backed deterministic software rules, not measured DMG-CPU-B timing or universal hardware behavior. The only phase-level acceptance item still awaiting evidence is VIDEO-04’s visible packaged-window/key interaction. Keep Phase 3 open and do not advance to Phase 4 until that human check and final verification are done.
 
 **Next command after the display check:** `$gsd-verify-work 3`.
+
+## Final Phase 3 verification and UAT closeout
+
+This closeout supersedes the earlier historical `human_needed` snapshots above. Final goal-backward verification passed 5/5 truths, and `.planning/phases/GB-03-visible-interactive-dmg/03-UAT.md` records 33 passes, zero issues, zero pending checks, and zero skipped checks. The user operated the packaged player and reported: “yeah when i hold Z keyboard key it changes from a lighter green to a darker green, then back again when i release”. The visible demo responded to the mapped Z press and release; VIDEO-04 is verified.
+
+The complete local `phase1` CTest suite passed 141/141 at code revision `eb31afd`; code review was clean. PR #4 passed its required exact-head contexts (`required-native`, `fixture-repro`, and `preview-package-smoke`) at `4c8c4af142e5a89c857ddf345f52a1020332cf7b` and merged as `2b49dc5b42851572d352b772f31b219da2eadc1b`. Hosted native, sanitizer, installed-consumer, and preview-package checks passed; a duplicate macOS package job was skipped while a separate exact-head package job passed.
+
+VIDEO-02/03 remain complete only under D-025's confidence-qualified deterministic software model. Exact DMG-CPU-B collision/input timing, DMA lane behavior, and universal PPU-revision parity remain unmeasured and unclaimed. Phase 3 is complete; Phase 4 — MBC1 and Safe Battery Continuation — is next and has not started.
