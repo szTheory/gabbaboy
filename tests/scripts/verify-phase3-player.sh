@@ -169,8 +169,8 @@ if metadata.get('hardware_qualified') is not False:
     raise SystemExit('preview package metadata must not claim hardware qualification')
 if metadata.get('audio_implemented') is not False:
     raise SystemExit('preview package metadata audio_implemented must be JSON false because audio is not implemented')
-if metadata.get('battery_persistence_implemented') is not False:
-    raise SystemExit('preview package metadata battery_persistence_implemented must be JSON false because battery persistence is not implemented')
+if metadata.get('battery_persistence_implemented') is not True:
+    raise SystemExit('preview package metadata battery_persistence_implemented must be JSON true because the MBC1 battery path is implemented')
 if receipt.get('github_run_id') != metadata.get('github_run_id') or receipt.get('github_run_attempt') != metadata.get('github_run_attempt'):
     raise SystemExit('candidate receipt and package metadata run identities differ')
 print(f"candidate_package_sha256={digest(archive)}")
@@ -412,7 +412,7 @@ metadata = {
     'demo_rom_size_bytes': manifest['size_bytes'],
     'demo_license': 'MIT',
     'audio_implemented': False,
-    'battery_persistence_implemented': False,
+    'battery_persistence_implemented': True,
     'signed': False,
     'notarized': False,
     'hardware_qualified': False,

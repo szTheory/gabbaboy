@@ -22,9 +22,12 @@ typedef enum {
     GBB_ROM_TRUNCATED,        /* image ends before header or declared ROM size */
     GBB_ROM_TOO_LARGE,        /* actual image exceeds the 8 MiB hard limit */
     GBB_ROM_SIZE_MISMATCH,    /* actual image is longer than its declared ROM size */
-    GBB_UNSUPPORTED_CARTRIDGE,/* cartridge type is not ROM-only */
+    GBB_UNSUPPORTED_CARTRIDGE,/* cartridge type is outside the supported matrix */
     GBB_UNSUPPORTED_ROM_SIZE, /* header declares an unsupported ROM size code */
     GBB_UNSUPPORTED_RAM_SIZE, /* cartridge header declares external RAM */
+    GBB_NO_BATTERY,           /* loaded cartridge has no battery-backed RAM */
+    GBB_BUFFER_TOO_SMALL,     /* caller output buffer cannot hold all battery RAM */
+    GBB_BATTERY_SIZE_MISMATCH,/* battery import is not the exact cartridge RAM size */
     GBB_OUT_OF_MEMORY,        /* allocation failed; live instance is unchanged */
     GBB_EVENT_QUEUE_FULL,
     GBB_INVALID_EVENT,
@@ -116,13 +119,32 @@ typedef struct {
  * The only implemented model is bootless DMG-CPU-B deterministic post-boot. */
 gbb_error gbb_create(gbb_profile profile, gbb_instance **out_instance);
 void gbb_destroy(gbb_instance *instance);
-/* Reset restores the documented post-boot CPU/profile state, clears guest RAM
- * and emulated time, and retains the currently loaded ROM. */
+/* Reset restores the documented post-boot CPU/profile state, clears work RAM
+ * and emulated time, and retains the loaded ROM and cartridge RAM. */
 gbb_error gbb_reset(gbb_instance *instance);
 /* ROM bytes are copied on success; caller storage may be released immediately.
  * A failed replacement leaves the current ROM and machine state unchanged.
- * Supports only exact-size 32 KiB ROM-only images with no cartridge RAM. */
+ * Supports exact-size 32 KiB ROM-only images and the Phase 4 32 KiB MBC1
+ * battery type ($03) with 8 KiB RAM. Battery RAM starts at $FF for a newly
+ * loaded image; this is a deterministic software policy, not a hardware
+ * power-on claim. */
 gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_size);
+/* Battery RAM is available only for supported battery-backed cartridges.
+ * Query the exact size, then copy/import through caller-owned buffers. No core
+ * filesystem access or mutable instance pointer is exposed. A successful
+ * import validates its full exact size before changing live RAM; it advances
+ * the generation once only when at least one byte changes. Changed guest
+ * writes advance the generation once per changed byte; unchanged writes do
+ * not. Reset preserves RAM and generation, while successful ROM replacement
+ * starts a fresh $FF image with generation zero. On errors, output values and
+ * live RAM remain unchanged. */
+gbb_error gbb_battery_size(const gbb_instance *instance, size_t *out_size);
+gbb_error gbb_copy_battery(const gbb_instance *instance, uint8_t *out_bytes,
+                           size_t capacity_bytes);
+gbb_error gbb_import_battery(gbb_instance *instance, const uint8_t *bytes,
+                             size_t size_bytes);
+gbb_error gbb_battery_generation(const gbb_instance *instance,
+                                 uint64_t *out_generation);
 /* Copies events into a fixed 64-event per-instance queue. Timestamps are
  * absolute half-dot ticks and must be nondecreasing within the batch and no
  * earlier than the instance's current time. Equal timestamps keep caller

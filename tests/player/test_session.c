@@ -70,9 +70,10 @@ static int replacement_failure(const char *demo_path, const char *missing_path) 
     gbb_instance *machine = create_machine();
     REQUIRE(machine != NULL);
     char *current_path = NULL;
+    player_save_identity identity = {0};
     char error[256];
     REQUIRE(player_session_replace_rom(machine, &current_path, demo_path,
-                                       error, sizeof(error)));
+                                       &identity, error, sizeof(error)));
     REQUIRE(strcmp(current_path, demo_path) == 0);
     REQUIRE(run_visible_press(machine) == 0);
 
@@ -82,7 +83,7 @@ static int replacement_failure(const char *demo_path, const char *missing_path) 
     REQUIRE(gbb_copy_frame(machine, pixels, sizeof(pixels), 160, &before) == GBB_OK);
     REQUIRE(write_truncated_file(missing_path));
     REQUIRE(!player_session_replace_rom(machine, &current_path, missing_path,
-                                        error, sizeof(error)));
+                                        &identity, error, sizeof(error)));
     REQUIRE(strstr(error, "truncated") != NULL);
     REQUIRE(require_unchanged(machine, current_path, original_path, error) == 0);
     gbb_frame_info after;
@@ -92,19 +93,19 @@ static int replacement_failure(const char *demo_path, const char *missing_path) 
 
     (void)remove(missing_path);
     REQUIRE(!player_session_replace_rom(machine, &current_path, missing_path,
-                                        error, sizeof(error)));
+                                        &identity, error, sizeof(error)));
     REQUIRE(require_unchanged(machine, current_path, original_path, error) == 0);
 
     REQUIRE(write_oversized_file(missing_path));
     REQUIRE(!player_session_replace_rom(machine, &current_path, missing_path,
-                                        error, sizeof(error)));
-    REQUIRE(strstr(error, "32 KiB") != NULL);
+                                        &identity, error, sizeof(error)));
+    REQUIRE(error[0] != '\0');
     REQUIRE(require_unchanged(machine, current_path, original_path, error) == 0);
 
     REQUIRE(write_unsupported_cartridge(missing_path, demo_path));
     REQUIRE(!player_session_replace_rom(machine, &current_path, missing_path,
-                                        error, sizeof(error)));
-    REQUIRE(strstr(error, "ROM-only") != NULL);
+                                        &identity, error, sizeof(error)));
+    REQUIRE(strstr(error, "cartridge type") != NULL);
     REQUIRE(require_unchanged(machine, current_path, original_path, error) == 0);
     free(current_path);
     gbb_destroy(machine);
@@ -116,12 +117,13 @@ static int replacement_success(const char *demo_path) {
     gbb_instance *machine = create_machine();
     REQUIRE(machine != NULL);
     char *current_path = NULL;
+    player_save_identity identity = {0};
     char error[256];
     REQUIRE(player_session_replace_rom(machine, &current_path, demo_path,
-                                       error, sizeof(error)));
+                                       &identity, error, sizeof(error)));
     REQUIRE(run_visible_press(machine) == 0);
     REQUIRE(player_session_replace_rom(machine, &current_path, demo_path,
-                                       error, sizeof(error)));
+                                       &identity, error, sizeof(error)));
     REQUIRE(strcmp(current_path, demo_path) == 0 && error[0] == '\0');
     REQUIRE(gbb_peek_ram(machine, 0xC000) == 0 && gbb_peek_ram(machine, 0xC001) == 0);
     free(current_path);

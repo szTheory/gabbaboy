@@ -4,10 +4,16 @@
 #include "session.h"
 
 #include <stdatomic.h>
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <spawn.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <time.h>
+#include <unistd.h>
 
 #define PLAYER_FRAME_WIDTH 160u
 #define PLAYER_FRAME_HEIGHT 144u
@@ -38,6 +44,7 @@ typedef struct {
     SDL_Texture *texture;
     SDL_FRect frame_destination;
     char *current_rom_path;
+    player_save_identity save_identity;
     char status[192];
     Uint32 dialog_event_type;
     uint64_t displayed_generation;
@@ -51,7 +58,12 @@ typedef struct {
     bool dialog_pending;
     bool dialog_was_paused;
     bool quit_after_dialog;
+    bool save_flush_failed;
 } player;
+
+extern char **environ;
+
+static void set_status(player *app, const char *status);
 
 static char *duplicate_path(const char *path) {
     const size_t length = strlen(path);
@@ -102,10 +114,19 @@ static bool create_machine(player *app, const char *demo_rom_path) {
     }
     char error[192];
     if (!player_session_replace_rom(app->machine, &app->current_rom_path,
-                                    demo_rom_path,
+                                    demo_rom_path, &app->save_identity,
                                     error, sizeof(error))) {
         fprintf(stderr, "Could not load the owned demo ROM: %s\n", error);
         return false;
+    }
+    if (!player_session_load_battery(app->machine, &app->save_identity,
+                                     error, sizeof(error))) {
+        set_status(app, error);
+        fprintf(stderr, "Battery save warning: %s\n", error);
+    } else if (app->save_identity.battery_backed) {
+        set_status(app, "Battery RAM ready; changes save on exit");
+    } else {
+        set_status(app, "Ready");
     }
     return true;
 }
@@ -254,7 +275,7 @@ static void update_window_title(player *app) {
     short_name[base_length] = '\0';
     char title[PLAYER_TITLE_SIZE];
     (void)snprintf(title, sizeof(title),
-        "GabbaBoy | %s | %s | %s | \xe2\x8c\x98O Open, \xe2\x8c\x98Q Quit, F1 Help | Audio/saves unavailable",
+        "GabbaBoy | %s | %s | %s | \xe2\x8c\x98O Open, \xe2\x8c\x98Q Quit, F1 Help | Audio unavailable",
         short_name, app->user_paused || app->input.paused ? "Paused" : "Running",
         app->status[0] == '\0' ? "Ready" : app->status);
     (void)SDL_SetWindowTitle(app->window, title);
@@ -374,6 +395,12 @@ static void recover_input_after_dialog(player *app) {
 }
 
 static void reset_session(player *app) {
+    char error[192];
+    if (!player_session_save_battery(app->machine, &app->save_identity,
+                                     error, sizeof(error))) {
+        set_status(app, error);
+        return;
+    }
     if (gbb_reset(app->machine) != GBB_OK) {
         set_status(app, "Reset failed; the current ROM remains loaded");
         return;
@@ -389,18 +416,31 @@ static void reset_session(player *app) {
 
 static bool replace_session_rom(player *app, const char *path) {
     char error[192];
-    if (!player_session_replace_rom(app->machine, &app->current_rom_path,
-                                    path, error, sizeof(error))) {
+    if (!player_session_save_battery(app->machine, &app->save_identity,
+                                     error, sizeof(error))) {
         set_status(app, error);
         return false;
     }
+    if (!player_session_replace_rom(app->machine, &app->current_rom_path,
+                                    path, &app->save_identity,
+                                    error, sizeof(error))) {
+        set_status(app, error);
+        return false;
+    }
+    const bool battery_loaded = player_session_load_battery(
+        app->machine, &app->save_identity, error, sizeof(error));
     app->user_paused = app->dialog_was_paused;
     player_input_reset(&app->input, SDL_GetTicksNS());
     if (app->user_paused || !app->window_focused || app->dialog_pending)
         player_input_pause(&app->input);
     app->displayed_generation = 0;
     app->needs_redraw = true;
-    set_status(app, "ROM loaded; input and display state reset");
+    if (!battery_loaded)
+        set_status(app, error);
+    else if (app->save_identity.battery_backed)
+        set_status(app, "Battery RAM ready; changes save on exit");
+    else
+        set_status(app, "ROM loaded; input and display state reset");
     return true;
 }
 
@@ -771,8 +811,149 @@ static bool verify_software_layouts(void) {
     return true;
 }
 
+static bool write_smoke_rom(char *out_path, size_t path_capacity,
+                            player_save_identity *out_identity) {
+    static const uint8_t program[] = {
+        0x3E, 0x0A,             /* LD A,$0A: enable cartridge RAM */
+        0xEA, 0x00, 0x00,       /* LD ($0000),A */
+        0xFA, 0x00, 0xA0,       /* LD A,($A000) */
+        0xFE, 0x5A,             /* CP $5A */
+        0x28, 0x06,             /* JR Z,success */
+        0x3E, 0x5A,             /* first process stores the marker */
+        0xEA, 0x00, 0xA0,
+        0x76,
+        0x3E, 0x01,             /* resumed process reaches success */
+        0xEA, 0x00, 0xC0,
+        0x76
+    };
+    uint8_t rom[32768];
+    memset(rom, 0, sizeof(rom));
+    memcpy(rom + 0x100u, program, sizeof(program));
+    rom[0x147u] = 0x03u;
+    rom[0x148u] = 0x00u;
+    rom[0x149u] = 0x02u;
+    uint8_t checksum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14Du] = checksum;
+    if (!player_session_identify_rom(rom, sizeof(rom), out_identity)) return false;
+
+    char template_path[] = "/tmp/gabbaboy-battery-smoke-XXXXXX";
+    const int fd = mkstemp(template_path);
+    if (fd < 0) return false;
+    size_t written = 0u;
+    while (written < sizeof(rom)) {
+        const ssize_t count = write(fd, rom + written, sizeof(rom) - written);
+        if (count > 0) written += (size_t)count;
+        else if (count < 0 && errno == EINTR) continue;
+        else break;
+    }
+    const int close_result = close(fd);
+    if (written != sizeof(rom) || close_result != 0 ||
+        strlen(template_path) + 1u > path_capacity) {
+        (void)unlink(template_path);
+        return false;
+    }
+    memcpy(out_path, template_path, strlen(template_path) + 1u);
+    return true;
+}
+
+static bool run_battery_smoke_guest(player *app, bool resume) {
+    if (!app->save_identity.battery_backed ||
+        !app->save_identity.persistence_enabled) return false;
+    const gbb_run_result result = gbb_run(app->machine, 512u, NULL, 0u);
+    if (result.reason != GBB_STOP_HALTED_IDLE) {
+        fprintf(stderr, "Battery smoke guest stopped with reason %d after %llu half-dots\n",
+                (int)result.reason, (unsigned long long)result.consumed_half_dots);
+        return false;
+    }
+    if (!resume) {
+        uint64_t generation = 0u;
+        if (gbb_battery_generation(app->machine, &generation) != GBB_OK ||
+            generation == 0u) {
+            fputs("Battery smoke guest did not change cartridge RAM\n", stderr);
+            return false;
+        }
+        char error[192];
+        if (!player_session_save_battery(app->machine, &app->save_identity,
+                                         error, sizeof(error))) {
+            fprintf(stderr, "Battery smoke save failed: %s\n", error);
+            return false;
+        }
+        return true;
+    }
+    if (gbb_peek_ram(app->machine, 0xC000u) != 1u) {
+        fputs("Fresh-process guest did not take the persisted-byte success path\n", stderr);
+        return false;
+    }
+    return true;
+}
+
+static bool run_battery_child(const char *executable, const char *mode,
+                              const char *rom_path) {
+    char *const arguments[] = {(char *)executable, (char *)mode,
+                               (char *)rom_path, NULL};
+    pid_t child = 0;
+    const int spawn_result = posix_spawnp(&child, executable, NULL, NULL,
+                                          arguments, environ);
+    if (spawn_result != 0) {
+        fputs("Could not launch the bounded battery smoke child\n", stderr);
+        return false;
+    }
+    struct timespec started;
+    if (clock_gettime(CLOCK_MONOTONIC, &started) != 0) {
+        (void)kill(child, SIGKILL);
+        (void)waitpid(child, NULL, 0);
+        return false;
+    }
+    for (;;) {
+        int status = 0;
+        const pid_t waited = waitpid(child, &status, WNOHANG);
+        if (waited == child) return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+        if (waited < 0 && errno != EINTR) return false;
+        struct timespec now;
+        if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+            (void)kill(child, SIGKILL);
+            (void)waitpid(child, NULL, 0);
+            return false;
+        }
+        const int64_t elapsed_ns =
+            (int64_t)(now.tv_sec - started.tv_sec) * INT64_C(1000000000) +
+            (int64_t)now.tv_nsec - (int64_t)started.tv_nsec;
+        if (elapsed_ns >= INT64_C(5000000000)) {
+            (void)kill(child, SIGKILL);
+            (void)waitpid(child, NULL, 0);
+            fputs("Battery smoke child exceeded its 5-second process bound\n", stderr);
+            return false;
+        }
+        const struct timespec pause = {0, 10000000};
+        while (nanosleep(&pause, NULL) != 0 && errno == EINTR) { }
+    }
+}
+
+static bool run_battery_process_smoke(const char *executable) {
+    char rom_path[128];
+    player_save_identity identity;
+    if (!write_smoke_rom(rom_path, sizeof(rom_path), &identity)) {
+        fputs("Could not create the bounded battery smoke ROM\n", stderr);
+        return false;
+    }
+    const bool stored = run_battery_child(executable, "--battery-smoke-store",
+                                          rom_path);
+    const bool resumed = stored && run_battery_child(
+        executable, "--battery-smoke-resume", rom_path);
+    player_session_remove_battery_file(&identity);
+    (void)unlink(rom_path);
+    if (!stored || !resumed) {
+        fputs("Two-process battery continuation smoke failed\n", stderr);
+        return false;
+    }
+    return true;
+}
+
 static bool run_smoke(player *app, const char *demo_rom_path,
-                      const char *invalid_rom_path) {
+                      const char *invalid_rom_path,
+                      const char *executable) {
     if (!verify_software_layouts()) return false;
     uint64_t press_ns, release_ns;
     if (!player_input_half_dots_to_nanoseconds(8, &press_ns) ||
@@ -830,12 +1011,23 @@ static bool run_smoke(player *app, const char *demo_rom_path,
     if (!advance_to(app, PLAYER_FRAME_HALF_DOTS, true) ||
         !update_frame(app, true) || !draw_frame(app)) return false;
 
+    if (!run_battery_process_smoke(executable)) return false;
+
     printf("player smoke passed: frame=%llu; failed replacement preserved the session and successful replacement reset it\n",
            (unsigned long long)app->displayed_generation);
     return true;
 }
 
 static void destroy_player(player *app) {
+    if (app->machine != NULL && app->save_identity.battery_backed &&
+        app->save_identity.persistence_enabled) {
+        char error[192];
+        if (!player_session_save_battery(app->machine, &app->save_identity,
+                                         error, sizeof(error))) {
+            fprintf(stderr, "Battery save failed at exit: %s\n", error);
+            app->save_flush_failed = true;
+        }
+    }
     if (app->texture != NULL) SDL_DestroyTexture(app->texture);
     if (app->renderer != NULL) SDL_DestroyRenderer(app->renderer);
     if (app->window != NULL) SDL_DestroyWindow(app->window);
@@ -848,14 +1040,21 @@ int main(int argc, char **argv) {
     const bool smoke = argc >= 2 && strcmp(argv[1], "--smoke") == 0;
     const bool package_smoke = argc == 3 &&
                                strcmp(argv[1], "--smoke-package") == 0;
+    const bool battery_store = argc == 3 &&
+                               strcmp(argv[1], "--battery-smoke-store") == 0;
+    const bool battery_resume = argc == 3 &&
+                                strcmp(argv[1], "--battery-smoke-resume") == 0;
+    const bool battery_smoke = battery_store || battery_resume;
     if ((smoke && argc != 2 && argc != 4) ||
-        (package_smoke == false && argc > 1 && !smoke) ||
-        (package_smoke && argc != 3)) {
+        (package_smoke && argc != 3) ||
+        (battery_smoke && argc != 3) ||
+        (!smoke && !package_smoke && !battery_smoke && argc > 1)) {
         fprintf(stderr, "usage: %s [--smoke [demo-rom invalid-rom] | --smoke-package invalid-rom]\n",
                 argv[0]);
         return 2;
     }
-    const char *requested_demo_rom = smoke && argc == 4 ? argv[2] : NULL;
+    const char *requested_demo_rom = battery_smoke ? argv[2] :
+        (smoke && argc == 4 ? argv[2] : NULL);
     const char *invalid_rom = smoke && argc == 4 ? argv[3] :
         (package_smoke ? argv[2] : GABBABOY_PLAYER_INVALID_ROM);
 
@@ -866,7 +1065,8 @@ int main(int argc, char **argv) {
     app.window_focused = true;
     atomic_init(&app.dialog_callback_done, false);
     atomic_init(&app.dialog_delivery_failed, false);
-    if (!SDL_Init((smoke || package_smoke) ? SDL_INIT_EVENTS : SDL_INIT_VIDEO)) {
+    if (!SDL_Init((smoke || package_smoke || battery_smoke)
+                      ? SDL_INIT_EVENTS : SDL_INIT_VIDEO)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
     }
@@ -891,6 +1091,17 @@ int main(int argc, char **argv) {
         SDL_Quit();
         return 1;
     }
+    if (battery_smoke) {
+        const bool battery_passed = !app.save_flush_failed &&
+            run_battery_smoke_guest(&app, battery_resume);
+        if (!battery_passed && app.save_identity.battery_backed &&
+            !app.save_identity.persistence_enabled)
+            fputs("Battery smoke could not load a clean save state\n", stderr);
+        destroy_player(&app);
+        free(demo_rom_path);
+        SDL_Quit();
+        return battery_passed && !app.save_flush_failed ? 0 : 1;
+    }
     if (!create_video(&app, smoke || package_smoke)) {
         destroy_player(&app);
         free(demo_rom_path);
@@ -898,11 +1109,12 @@ int main(int argc, char **argv) {
         return 1;
     }
     player_input_reset(&app.input, SDL_GetTicksNS());
-    set_status(&app, "Ready");
+    if (app.status[0] == '\0') set_status(&app, "Ready");
+    else update_window_title(&app);
 
     bool passed = true;
     if (smoke || package_smoke) {
-        passed = run_smoke(&app, demo_rom_path, invalid_rom);
+        passed = run_smoke(&app, demo_rom_path, invalid_rom, argv[0]);
     } else {
         while (app.running) {
             if (!pump_events(&app)) { passed = false; break; }
@@ -938,5 +1150,5 @@ int main(int argc, char **argv) {
     destroy_player(&app);
     free(demo_rom_path);
     SDL_Quit();
-    return passed ? 0 : 1;
+    return passed && !app.save_flush_failed ? 0 : 1;
 }
