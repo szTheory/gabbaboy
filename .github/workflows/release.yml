@@ -146,6 +146,57 @@ jobs:
           done
           [[ $(jq 'any(.[]; (.name | endswith("fixture-repro")) and .bucket == "pass")' <<<"$required") == true ]] || { echo "Required exact-head fixture-repro context missing." >&2; exit 1; }
           printf 'head_sha=%s\nmerge_commit_sha=%s\npr_number=%s\n' "$pr_head" "$pr_merge" "$pr_number" >> "$GITHUB_OUTPUT"
+      - name: Record or revalidate source identity receipt
+        env:
+          RELEASE_ID: ${{ steps.identity.outputs.release_id }}
+          RELEASE_VERSION: ${{ steps.identity.outputs.version }}
+          RELEASE_NOTES_FILE: ${{ steps.identity.outputs.release_notes_file }}
+          PR_HEAD_SHA: ${{ steps.proof.outputs.head_sha }}
+          PR_MERGE_SHA: ${{ steps.proof.outputs.merge_commit_sha }}
+          PR_NUMBER: ${{ steps.proof.outputs.pr_number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" && -z "$(git status --porcelain --untracked-files=all)" ]] || {
+            echo "Tagged source checkout is not clean and exact." >&2
+            exit 1
+          }
+          mkdir -p build
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib
+          notes = pathlib.Path(os.environ["RELEASE_NOTES_FILE"]).read_text()
+          notice_sha = hashlib.sha256(pathlib.Path("LICENSE").read_bytes()).hexdigest()
+          receipt = {
+              "schema_version": 1,
+              "version": os.environ["RELEASE_VERSION"],
+              "tag_name": os.environ["RELEASE_TAG"],
+              "source_sha": os.environ["SOURCE_SHA"],
+              "release_id": os.environ["RELEASE_ID"],
+              "draft": True,
+              "source_clean": True,
+              "notice_sha256": notice_sha,
+              "release_notes": notes,
+              "release_notes_sha256": hashlib.sha256(notes.encode()).hexdigest(),
+              "prior_pr_proof": {
+                  "head_sha": os.environ["PR_HEAD_SHA"],
+                  "merge_commit_sha": os.environ["PR_MERGE_SHA"],
+                  "pr_number": int(os.environ["PR_NUMBER"]),
+                  "required_checks": "passed",
+              },
+          }
+          pathlib.Path("build/source-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+          PY
+          assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
+          count=$(jq '[.[] | select(.name == "source-receipt.json")] | length' <<<"$assets")
+          [[ "$count" -le 1 ]] || { echo "Draft has duplicate source identity receipts." >&2; exit 1; }
+          if [[ "$count" == 1 ]]; then
+            mkdir -p build/existing
+            gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern source-receipt.json --dir build/existing
+            cmp -s build/source-receipt.json build/existing/source-receipt.json || { echo "Existing source receipt differs." >&2; exit 1; }
+            cp build/existing/source-receipt.json build/source-receipt.json
+          else
+            gh release upload "$RELEASE_TAG" build/source-receipt.json --repo "$GH_REPO"
+          fi
       - name: Revalidate a previously qualified candidate before retry
         env:
           RELEASE_ID: ${{ steps.identity.outputs.release_id }}
@@ -160,18 +211,20 @@ jobs:
           receipt_count=$(jq '[.[] | select(.name == "candidate-receipt.json")] | length' <<<"$assets")
           [[ "$receipt_count" -le 1 ]] || { echo "Draft has duplicate candidate receipts." >&2; exit 1; }
           if [[ "$receipt_count" == 1 ]]; then
-            for name in gabbaboy-core-linux-x64.tar.gz gabbaboy-notices.txt; do
+            for name in gabbaboy-core-linux-x64.tar.gz gabbaboy-notices.txt source-receipt.json build-receipt.json; do
               count=$(jq --arg name "$name" '[.[] | select(.name == $name)] | length' <<<"$assets")
               [[ "$count" == 1 ]] || { echo "Qualified receipt exists without exactly one $name attachment." >&2; exit 1; }
             done
             mkdir -p build/reuse
             gh release download "$RELEASE_TAG" --repo "$GH_REPO" \
               --pattern candidate-receipt.json --pattern gabbaboy-core-linux-x64.tar.gz \
-              --pattern gabbaboy-notices.txt --dir build/reuse
+              --pattern gabbaboy-notices.txt --pattern source-receipt.json \
+              --pattern build-receipt.json --dir build/reuse
             tests/scripts/verify-release-candidate.sh --verify \
               build/reuse/candidate-receipt.json build/reuse/gabbaboy-core-linux-x64.tar.gz \
               "$RELEASE_VERSION" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
-              build/reuse/gabbaboy-notices.txt
+              build/reuse/gabbaboy-notices.txt build/reuse/source-receipt.json \
+              build/reuse/build-receipt.json
             python3 - build/reuse/candidate-receipt.json "$RELEASE_NOTES_FILE" <<'PY'
           import hashlib, json, os, pathlib, sys
           receipt = json.loads(pathlib.Path(sys.argv[1]).read_text())
@@ -187,11 +240,6 @@ jobs:
           else
             echo CANDIDATE_REUSED=false >> "$GITHUB_ENV"
           fi
-      - name: Verify exact source checkout is clean
-        run: |
-          set -euo pipefail
-          [[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" ]] || { echo "Checkout does not match tagged source SHA." >&2; exit 1; }
-          [[ -z "$(git status --porcelain --untracked-files=all)" ]] || { echo "Tagged source checkout is dirty." >&2; exit 1; }
       - name: Configure and build cache-free release core
         if: env.CANDIDATE_REUSED != 'true'
         run: |
@@ -212,9 +260,54 @@ jobs:
             -czf build/gabbaboy-core-linux-x64.tar.gz -C build/release-stage include lib bin share
       - name: Append only byte-identical archive to the existing draft
         if: env.CANDIDATE_REUSED != 'true'
+        env:
+          RELEASE_ID: ${{ steps.identity.outputs.release_id }}
         shell: bash
         run: |
           set -euo pipefail
+          asset_sha=$(sha256sum build/gabbaboy-core-linux-x64.tar.gz | cut -d ' ' -f1)
+          source_receipt_sha=$(sha256sum build/source-receipt.json | cut -d ' ' -f1)
+          tracer_sha=$(sha256sum fixtures/tracer/manifest.json | cut -d ' ' -f1)
+          battery_sha=$(sha256sum fixtures/mbc1-continuation/manifest.json | cut -d ' ' -f1)
+          compiler=$(cc --version | head -n1)
+          cmake_version=$(cmake --version | head -n1)
+          runner="ubuntu-22.04/${ImageOS:-unknown}/${ImageVersion:-unknown}"
+          export asset_sha source_receipt_sha tracer_sha battery_sha compiler cmake_version runner
+          python3 - <<'PY'
+          import json, os, pathlib
+          receipt = {
+              "schema_version": 1,
+              "version": os.environ["RELEASE_TAG"][1:],
+              "tag_name": os.environ["RELEASE_TAG"],
+              "source_sha": os.environ["SOURCE_SHA"],
+              "release_id": os.environ["RELEASE_ID"],
+              "source_receipt_sha256": os.environ["source_receipt_sha"],
+              "asset_name": "gabbaboy-core-linux-x64.tar.gz",
+              "asset_sha256": os.environ["asset_sha"],
+              "build": {
+                  "compiler": os.environ["compiler"],
+                  "cmake": os.environ["cmake_version"],
+                  "runner": os.environ["runner"],
+                  "configuration": "Release",
+                  "fixture_manifest_sha256": os.environ["tracer_sha"],
+                  "corpus_manifest_sha256": os.environ["battery_sha"],
+              },
+              "fixtures": {
+                  "tracer_manifest_sha256": os.environ["tracer_sha"],
+                  "battery_manifest_sha256": os.environ["battery_sha"],
+              },
+          }
+          pathlib.Path("build/build-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+          PY
+          build_receipt_count=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100" --jq '[.[] | select(.name == "build-receipt.json")] | length')
+          [[ "$build_receipt_count" -le 1 ]] || { echo "Draft has duplicate build receipts." >&2; exit 1; }
+          if [[ "$build_receipt_count" == 1 ]]; then
+            mkdir -p build/existing
+            gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern build-receipt.json --dir build/existing
+            cmp -s build/build-receipt.json build/existing/build-receipt.json || { echo "Existing build receipt differs." >&2; exit 1; }
+          else
+            gh release upload "$RELEASE_TAG" build/build-receipt.json --repo "$GH_REPO"
+          fi
           assets=$(gh api "repos/$GH_REPO/releases/${{ steps.identity.outputs.release_id }}/assets?per_page=100")
           count=$(jq '[.[] | select(.name == "gabbaboy-core-linux-x64.tar.gz")] | length' <<<"$assets")
           [[ "$count" -le 1 ]] || { echo "Draft has duplicate core archive assets." >&2; exit 1; }
@@ -235,7 +328,8 @@ jobs:
             gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-notices.txt --dir build/existing
             cmp -s LICENSE build/existing/gabbaboy-notices.txt || { echo "Existing notice bytes differ." >&2; exit 1; }
           else
-            gh release upload "$RELEASE_TAG" LICENSE#gabbaboy-notices.txt --repo "$GH_REPO"
+            cp LICENSE build/gabbaboy-notices.txt
+            gh release upload "$RELEASE_TAG" build/gabbaboy-notices.txt --repo "$GH_REPO"
           fi
       - name: Download exact draft bytes and smoke relocated C/C++ consumers
         shell: bash
@@ -243,7 +337,8 @@ jobs:
           set -euo pipefail
           mkdir -p build/downloaded build/consumer-work
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" \
-            --pattern gabbaboy-core-linux-x64.tar.gz --pattern gabbaboy-notices.txt --dir build/downloaded
+            --pattern gabbaboy-core-linux-x64.tar.gz --pattern gabbaboy-notices.txt \
+            --pattern source-receipt.json --pattern build-receipt.json --dir build/downloaded
           [[ $(sha256sum build/downloaded/gabbaboy-notices.txt | cut -d ' ' -f1) == $(sha256sum LICENSE | cut -d ' ' -f1) ]] || {
             echo "Downloaded notice bytes differ from the tagged source notice." >&2
             exit 1
@@ -276,12 +371,14 @@ jobs:
           # Derive the digest from bytes downloaded from the existing GitHub draft.
           asset_sha=$(sha256sum build/downloaded/gabbaboy-core-linux-x64.tar.gz | cut -d ' ' -f1)
           notice_sha=$(sha256sum build/downloaded/gabbaboy-notices.txt | cut -d ' ' -f1)
+          source_receipt_sha=$(sha256sum build/downloaded/source-receipt.json | cut -d ' ' -f1)
+          build_receipt_sha=$(sha256sum build/downloaded/build-receipt.json | cut -d ' ' -f1)
           tracer_sha=$(sha256sum fixtures/tracer/manifest.json | cut -d ' ' -f1)
           battery_sha=$(sha256sum fixtures/mbc1-continuation/manifest.json | cut -d ' ' -f1)
           cmake_version=$(cmake --version | head -n1)
           compiler=$(cc --version | head -n1)
           runner=$(uname -a)
-          export asset_sha notice_sha tracer_sha battery_sha cmake_version compiler runner
+          export asset_sha notice_sha source_receipt_sha build_receipt_sha tracer_sha battery_sha cmake_version compiler runner
           assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
           receipt_count=$(jq '[.[] | select(.name == "candidate-receipt.json")] | length' <<<"$assets")
           [[ "$receipt_count" -le 1 ]] || { echo "Draft has duplicate candidate receipts." >&2; exit 1; }
@@ -291,7 +388,8 @@ jobs:
             tests/scripts/verify-release-candidate.sh --verify \
               build/existing/candidate-receipt.json build/downloaded/gabbaboy-core-linux-x64.tar.gz \
               "$RELEASE_VERSION" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
-              build/downloaded/gabbaboy-notices.txt
+              build/downloaded/gabbaboy-notices.txt build/downloaded/source-receipt.json \
+              build/downloaded/build-receipt.json
             python3 - build/existing/candidate-receipt.json "$RELEASE_NOTES_FILE" <<'PY'
           import hashlib, json, os, pathlib, sys
           receipt = json.loads(pathlib.Path(sys.argv[1]).read_text())
@@ -320,6 +418,8 @@ jobs:
               "notice_sha256": os.environ["notice_sha"],
               "release_notes": notes,
               "release_notes_sha256": hashlib.sha256(notes.encode()).hexdigest(),
+              "source_receipt_sha256": os.environ["source_receipt_sha"],
+              "build_receipt_sha256": os.environ["build_receipt_sha"],
               "build": {
                   "compiler": os.environ["compiler"],
                   "cmake": os.environ["cmake_version"],
@@ -342,10 +442,21 @@ jobs:
           }
           pathlib.Path("build/downloaded/candidate-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
           PY
+          current_release=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID")
+          [[ $(jq -r '.draft' <<<"$current_release") == true && \
+             $(jq -r '.tag_name' <<<"$current_release") == "$RELEASE_TAG" ]] || {
+            echo "Draft status or tag changed during candidate qualification." >&2
+            exit 1
+          }
+          [[ $(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq '.sha') == "$SOURCE_SHA" ]] || {
+            echo "Tag target changed during candidate qualification." >&2
+            exit 1
+          }
           tests/scripts/verify-release-candidate.sh --verify \
             build/downloaded/candidate-receipt.json build/downloaded/gabbaboy-core-linux-x64.tar.gz \
             "$RELEASE_VERSION" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
-            build/downloaded/gabbaboy-notices.txt
+            build/downloaded/gabbaboy-notices.txt build/downloaded/source-receipt.json \
+            build/downloaded/build-receipt.json
             gh release upload "$RELEASE_TAG" build/downloaded/candidate-receipt.json --repo "$GH_REPO"
           fi
           echo "Candidate is qualified and remains a draft. Only the final 06-06 gate may publish it."

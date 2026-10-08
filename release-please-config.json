@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "packages": {
+    ".": {
+      "package-name": "GabbaBoy",
+      "include-component-in-tag": false,
+      "include-v-in-tag": true,
+      "draft": true,
+      "force-tag-creation": true,
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": ["CMakeLists.txt"]
+    }
+  }
+}
