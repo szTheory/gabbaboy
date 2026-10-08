@@ -21,6 +21,12 @@ typedef struct {
     int enabled, sweep_enabled, sweep_negate_used;
 } apu_pulse_channel;
 typedef struct {
+    uint8_t dac, length_reg, level, frequency_low, control;
+    uint8_t ram[16], position;
+    uint16_t length, timer;
+    int enabled;
+} apu_wave_channel;
+typedef struct {
     uint8_t type;
     size_t ram_size;
 } cartridge_info;
@@ -81,6 +87,7 @@ struct gbb_instance {
     uint8_t divider_phase;
     uint16_t divider_counter;
     apu_pulse_channel apu_pulse[2];
+    apu_wave_channel apu_wave;
     uint8_t apu_nr50, apu_nr51, apu_power, apu_sequencer_step;
     uint64_t apu_sample_phase;
     gbb_audio_frame *audio_frames;
@@ -318,6 +325,7 @@ static void reset_state(gbb_instance *m) {
     m->divider_phase = 0;
     m->divider_counter = 0xAB00u;
     memset(m->apu_pulse, 0, sizeof(m->apu_pulse));
+    memset(&m->apu_wave, 0, sizeof(m->apu_wave));
     m->apu_nr50 = 0u; m->apu_nr51 = 0xFFu; m->apu_power = 1u;
     m->apu_sequencer_step = 0u;
     m->apu_sample_phase = 0u;
@@ -453,6 +461,10 @@ static void apu_pulse_trigger(gbb_instance *m, unsigned index) {
 
 static void apu_power_off(gbb_instance *m) {
     memset(m->apu_pulse, 0, sizeof(m->apu_pulse));
+    /* Wave RAM survives NR52 power-off in this scoped DMG software model. */
+    memset(&m->apu_wave, 0, offsetof(apu_wave_channel, ram));
+    memset((uint8_t *)&m->apu_wave + offsetof(apu_wave_channel, position), 0,
+           sizeof(m->apu_wave) - offsetof(apu_wave_channel, position));
     m->apu_nr50 = 0u;
     m->apu_nr51 = 0u;
     m->apu_sequencer_step = 0u;
@@ -483,12 +495,23 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
     if (address == 0xFF17) return m->apu_pulse[1].envelope;
     if (address == 0xFF18) return 0xFFu;
     if (address == 0xFF19) return (uint8_t)(0xBFu | (m->apu_pulse[1].control & 0x40u));
+    if (address == 0xFF1A) return (uint8_t)(0x7Fu | (m->apu_wave.dac & 0x80u));
+    if (address == 0xFF1B) return 0xFFu;
+    if (address == 0xFF1C) return (uint8_t)(0x9Fu | (m->apu_wave.level & 0x60u));
+    if (address == 0xFF1D) return 0xFFu;
+    if (address == 0xFF1E) return (uint8_t)(0xBFu | (m->apu_wave.control & 0x40u));
+    if (address >= 0xFF30u && address <= 0xFF3Fu) {
+        unsigned index = address - 0xFF30u;
+        if (m->apu_wave.enabled) index = m->apu_wave.position >> 1;
+        return m->apu_wave.ram[index];
+    }
     if (address == 0xFF24) return m->apu_nr50;
     if (address == 0xFF25) return m->apu_nr51;
     if (address == 0xFF26)
         return (uint8_t)(0x70u | (m->apu_power ? 0x80u : 0u) |
                          (m->apu_pulse[0].enabled ? 1u : 0u) |
-                         (m->apu_pulse[1].enabled ? 2u : 0u));
+                         (m->apu_pulse[1].enabled ? 2u : 0u) |
+                         (m->apu_wave.enabled ? 4u : 0u));
     if (address == 0xFF40) return m->lcdc;
     if (address == 0xFF41)
         return (uint8_t)(0x80u | (m->stat & 0x78u) |
@@ -691,6 +714,11 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
         if ((value & 0x80u) == 0u) { m->apu_power = 0u; apu_power_off(m); }
         else if (!m->apu_power) { m->apu_power = 1u; m->apu_sequencer_step = 0u; }
     }
+    else if (address >= 0xFF30u && address <= 0xFF3Fu) {
+        unsigned index = address - 0xFF30u;
+        if (m->apu_wave.enabled) index = m->apu_wave.position >> 1;
+        m->apu_wave.ram[index] = value;
+    }
     else if (m->apu_power && address == 0xFF10) {
         if (m->apu_pulse[0].sweep_negate_used &&
             (m->apu_pulse[0].sweep & 8u) != 0u && (value & 8u) == 0u)
@@ -723,6 +751,27 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
         m->apu_pulse[1].control = (uint8_t)(value & 0x47u);
         if ((value & 0x80u) != 0u) apu_pulse_trigger(m, 1u);
     }
+    else if (m->apu_power && address == 0xFF1A) {
+        m->apu_wave.dac = (uint8_t)(value & 0x80u);
+        if (m->apu_wave.dac == 0u) m->apu_wave.enabled = 0;
+    }
+    else if (m->apu_power && address == 0xFF1B) {
+        m->apu_wave.length_reg = value;
+        m->apu_wave.length = (uint16_t)(256u - value);
+    }
+    else if (m->apu_power && address == 0xFF1C) m->apu_wave.level = (uint8_t)(value & 0x60u);
+    else if (m->apu_power && address == 0xFF1D) m->apu_wave.frequency_low = value;
+    else if (m->apu_power && address == 0xFF1E) {
+        m->apu_wave.control = (uint8_t)(value & 0x47u);
+        if ((value & 0x80u) != 0u) {
+            uint16_t frequency = (uint16_t)(m->apu_wave.frequency_low |
+                                            ((m->apu_wave.control & 7u) << 8));
+            m->apu_wave.timer = (uint16_t)((2048u - frequency) * 2u);
+            m->apu_wave.position = 0u;
+            if (m->apu_wave.length == 0u) m->apu_wave.length = 256u;
+            m->apu_wave.enabled = m->apu_power && m->apu_wave.dac != 0u;
+        }
+    }
     else if (m->apu_power && address == 0xFF24) m->apu_nr50 = value;
     else if (m->apu_power && address == 0xFF25) m->apu_nr51 = value;
     else if (address == 0xFF0F) m->interrupt_flags = (uint8_t)(value & 0x1Fu);
@@ -751,6 +800,8 @@ static int read_supported(const gbb_instance *m, uint16_t address) {
            address == 0xFF00 || address == 0xFF01 || address == 0xFF02 ||
            (address >= 0xFF10 && address <= 0xFF14) ||
            (address >= 0xFF16 && address <= 0xFF19) ||
+           (address >= 0xFF1A && address <= 0xFF1E) ||
+           (address >= 0xFF30 && address <= 0xFF3F) ||
            (address >= 0xFF24 && address <= 0xFF26) ||
            (address >= 0xFF04 && address <= 0xFF07) || address == 0xFF0F || address == 0xFFFF ||
            (address >= 0xFF40 && address <= 0xFF46) ||
@@ -1178,6 +1229,8 @@ static void apu_sequencer_clock(gbb_instance *m) {
             if ((pulse->control & 0x40u) != 0u && pulse->length != 0u &&
                 --pulse->length == 0u) pulse->enabled = 0;
         }
+        if ((m->apu_wave.control & 0x40u) != 0u && m->apu_wave.length != 0u &&
+            --m->apu_wave.length == 0u) m->apu_wave.enabled = 0;
     }
     if (step == 2u || step == 6u) {
         apu_pulse_channel *pulse = &m->apu_pulse[0];
@@ -1268,6 +1321,15 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
                 }
             }
         }
+        if (m->apu_wave.enabled) {
+            if (m->apu_wave.timer > 1u) --m->apu_wave.timer;
+            else {
+                uint16_t frequency = (uint16_t)(m->apu_wave.frequency_low |
+                                                ((m->apu_wave.control & 7u) << 8));
+                m->apu_wave.timer = (uint16_t)((2048u - frequency) * 2u);
+                m->apu_wave.position = (uint8_t)((m->apu_wave.position + 1u) & 31u);
+            }
+        }
         m->apu_sample_phase += GBB_AUDIO_SAMPLE_RATE;
         if (m->apu_sample_phase >= GBB_AUDIO_CLOCK_HALF_DOTS) {
             m->apu_sample_phase -= GBB_AUDIO_CLOCK_HALF_DOTS;
@@ -1286,6 +1348,18 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
                     if ((m->apu_nr51 & (1u << (i + 4u))) != 0u)
                         left += sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u);
                 }
+                int32_t wave_sample = 0;
+                if (m->apu_wave.enabled && m->apu_wave.level != 0u) {
+                    uint8_t packed = m->apu_wave.ram[m->apu_wave.position >> 1];
+                    uint8_t digital = (m->apu_wave.position & 1u) == 0u
+                        ? (uint8_t)(packed >> 4) : (uint8_t)(packed & 0x0Fu);
+                    unsigned shift = (m->apu_wave.level >> 5) - 1u;
+                    wave_sample = (int32_t)(digital >> shift) * 2048 - 16384;
+                }
+                if ((m->apu_nr51 & 0x04u) != 0u)
+                    right += wave_sample * (int32_t)((m->apu_nr50 & 7u) + 1u);
+                if ((m->apu_nr51 & 0x40u) != 0u)
+                    left += wave_sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u);
                 if (left > INT16_MAX) left = INT16_MAX;
                 if (left < INT16_MIN) left = INT16_MIN;
                 if (right > INT16_MAX) right = INT16_MAX;
