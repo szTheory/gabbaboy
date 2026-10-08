@@ -104,6 +104,11 @@ install(FILES
   fixtures/tracer/LICENSE.txt
   DESTINATION "${CMAKE_INSTALL_DATADIR}/gabbaboy/fixtures/tracer")
 install(FILES
+  fixtures/visible-demo/demo.gb
+  fixtures/visible-demo/manifest.json
+  fixtures/visible-demo/LICENSE.txt
+  DESTINATION "${CMAKE_INSTALL_DATADIR}/gabbaboy/fixtures/visible-demo")
+install(FILES
   fixtures/mbc1-continuation/continuation.asm
   fixtures/mbc1-continuation/continuation.gb
   fixtures/mbc1-continuation/manifest.json

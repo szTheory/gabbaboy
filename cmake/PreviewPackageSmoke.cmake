@@ -31,6 +31,9 @@ foreach(required IN ITEMS
     "${install_prefix}/share/gabbaboy/fixtures/tracer/tracer.gb"
     "${install_prefix}/share/gabbaboy/fixtures/tracer/manifest.json"
     "${install_prefix}/share/gabbaboy/fixtures/tracer/LICENSE.txt"
+    "${install_prefix}/share/gabbaboy/fixtures/visible-demo/demo.gb"
+    "${install_prefix}/share/gabbaboy/fixtures/visible-demo/manifest.json"
+    "${install_prefix}/share/gabbaboy/fixtures/visible-demo/LICENSE.txt"
     "${install_prefix}/share/gabbaboy/fixtures/mbc1-continuation/continuation.asm"
     "${install_prefix}/share/gabbaboy/fixtures/mbc1-continuation/continuation.gb"
     "${install_prefix}/share/gabbaboy/fixtures/mbc1-continuation/manifest.json"
@@ -109,5 +112,45 @@ foreach(language IN ITEMS c cpp)
     message(FATAL_ERROR "Extracted ${language} consumer failed (${consumer_result}): ${consumer_output}${consumer_error}")
   endif()
 endforeach()
+
+set(example_configure_command
+  "${GBB_CMAKE_COMMAND}" -S "${source_dir}/examples/relocated-c"
+  -B "${smoke_root}/consumer-relocated-c"
+  -G "${GBB_GENERATOR}"
+  "-DCMAKE_PREFIX_PATH=${extracted_prefix}"
+  "-DGBB_ROM_PATH=${extracted_prefix}/share/gabbaboy/fixtures/visible-demo/demo.gb"
+  "-DGBB_BATTERY_ROM_PATH=${extracted_prefix}/share/gabbaboy/fixtures/mbc1-continuation/continuation.gb")
+execute_process(COMMAND ${example_configure_command}
+  RESULT_VARIABLE example_configure_result OUTPUT_VARIABLE example_configure_output ERROR_VARIABLE example_configure_error)
+if(NOT example_configure_result EQUAL 0)
+  message(FATAL_ERROR "Relocated C example configure failed (${example_configure_result}): ${example_configure_output}${example_configure_error}")
+endif()
+set(example_build_command "${GBB_CMAKE_COMMAND}" --build "${smoke_root}/consumer-relocated-c")
+if(DEFINED GBB_CONFIGURATION AND NOT GBB_CONFIGURATION STREQUAL "")
+  list(APPEND example_build_command --config "${GBB_CONFIGURATION}")
+endif()
+execute_process(COMMAND ${example_build_command}
+  RESULT_VARIABLE example_build_result OUTPUT_VARIABLE example_build_output ERROR_VARIABLE example_build_error)
+if(NOT example_build_result EQUAL 0)
+  message(FATAL_ERROR "Relocated C example build failed (${example_build_result}): ${example_build_output}${example_build_error}")
+endif()
+set(example_executable "${smoke_root}/consumer-relocated-c/relocated-c${GBB_EXECUTABLE_SUFFIX}")
+if(DEFINED GBB_CONFIGURATION AND EXISTS "${smoke_root}/consumer-relocated-c/${GBB_CONFIGURATION}/relocated-c${GBB_EXECUTABLE_SUFFIX}")
+  set(example_executable "${smoke_root}/consumer-relocated-c/${GBB_CONFIGURATION}/relocated-c${GBB_EXECUTABLE_SUFFIX}")
+endif()
+foreach(run_index RANGE 1 2)
+  execute_process(COMMAND "${example_executable}"
+    "${extracted_prefix}/share/gabbaboy/fixtures/visible-demo/demo.gb"
+    "${extracted_prefix}/share/gabbaboy/fixtures/mbc1-continuation/continuation.gb"
+    "${runner_workdir}/example-battery.sav"
+    WORKING_DIRECTORY "${runner_workdir}"
+    RESULT_VARIABLE example_result OUTPUT_VARIABLE example_output ERROR_VARIABLE example_error)
+  if(NOT example_result EQUAL 0)
+    message(FATAL_ERROR "Relocated C example run ${run_index} failed (${example_result}): ${example_output}${example_error}")
+  endif()
+endforeach()
+if(NOT EXISTS "${runner_workdir}/example-battery.sav")
+  message(FATAL_ERROR "Relocated C example did not export its host battery file")
+endif()
 
 message(STATUS "Full installed package archive passed relocation, runner, and external C/C++ consumer smokes: ${archive}")

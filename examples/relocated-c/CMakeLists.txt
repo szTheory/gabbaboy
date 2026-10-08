@@ -1,0 +1,18 @@
+cmake_minimum_required(VERSION 3.25)
+project(GabbaBoyRelocatedC LANGUAGES C)
+
+find_package(GabbaBoy CONFIG REQUIRED)
+foreach(required_var IN ITEMS GBB_ROM_PATH GBB_BATTERY_ROM_PATH)
+  if(NOT DEFINED ${required_var} OR "${${required_var}}" STREQUAL "")
+    message(FATAL_ERROR "${required_var} is required")
+  endif()
+endforeach()
+foreach(rom_path IN ITEMS GBB_ROM_PATH GBB_BATTERY_ROM_PATH)
+  if(NOT EXISTS "${${rom_path}}")
+    message(FATAL_ERROR "${rom_path} does not exist: ${${rom_path}}")
+  endif()
+endforeach()
+
+add_executable(relocated-c main.c)
+target_link_libraries(relocated-c PRIVATE GabbaBoy::core)
+target_compile_features(relocated-c PRIVATE c_std_17)
