@@ -3,7 +3,7 @@ status: complete
 phase: GB-03-visible-interactive-dmg
 source: [03-01-SUMMARY.md, 03-02-SUMMARY.md, 03-03-SUMMARY.md, 03-04-SUMMARY.md, 03-05-SUMMARY.md, 03-06-SUMMARY.md, 03-07-SUMMARY.md, 03-08-SUMMARY.md, 03-09-SUMMARY.md, 03-10-SUMMARY.md, 03-11-SUMMARY.md, 03-12-SUMMARY.md, 03-13-SUMMARY.md]
 started: 2026-10-08T00:52:50Z
-updated: 2026-10-08T00:52:53.717Z
+updated: 2026-10-08T00:58:25.977Z
 ---
 
 ## Current Test
@@ -169,9 +169,10 @@ source: automated
 coverage_id: D2
 
 ### 27. 03-03-SUMMARY.md D3
-expected: "Exact simultaneous PPU/DMA collision effects are qualified for DMG-CPU-B."
-result: skipped
-reason: "D-025 sets Phase 3 acceptance to the documented, confidence-qualified deterministic software model. The exact physical DMG-CPU-B collision outcome remains unmeasured and is not claimed."
+expected: "D-025 acceptance: DMA/PPU collision behavior is covered by the confidence-qualified deterministic software model, with exact CPU-B behavior explicitly unclaimed."
+result: pass
+source: evidence-review
+evidence: "D-025 supersedes this historical CPU-B-only checkpoint. Plan 03-13's dma_ppu_overlap, dma_ppu_word_boundaries, and dma_ppu_cpu_collision guests pass for the adopted software model; exact physical CPU-B collision behavior remains unmeasured and is not claimed."
 coverage_id: D3
 
 ### 28. 03-04-SUMMARY.md D2
@@ -182,17 +183,17 @@ evidence: "Exact DMG-CPU-B sampling remains explicitly unmeasured; the selected 
 coverage_id: D2
 
 ### 29. 03-05-SUMMARY.md D3
-expected: "The normal SDL window has not received a live visual/perceptual check in the current environment because no desktop display is available."
+expected: "The packaged SDL player displays the demo and responds to a mapped key; holding Z darkens the tile and releasing Z restores it."
 result: pass
 source: user
 reported: "yeah when i hold Z keyboard key it changes from a lighter green to a darker green, then back again when i release"
 coverage_id: D3
 
 ### 30. 03-06-SUMMARY.md D3
-expected: "The native desktop window and its status text have not received a live visual check because no desktop display is available in this environment."
+expected: "The native window shows the demo and Running/Ready status with controls, and the mapped Z press/release visibly changes and restores the tile."
 result: pass
 source: desktop-observation
-evidence: "The native window showed demo.gb, Running/Ready status, and controls; the user confirmed the Z press changed the visible tile and release restored it."
+evidence: "The packaged player showed demo.gb, Running/Ready status, and controls. The user confirmed the Z press darkened the visible tile and release restored the lighter green."
 coverage_id: D3
 
 ### 31. 03-10-SUMMARY.md D1
@@ -219,10 +220,10 @@ coverage_id: D2
 ## Summary
 
 total: 33
-passed: 32
+passed: 33
 issues: 0
 pending: 0
-skipped: 1
+skipped: 0
 
 ## Gaps
 
@@ -232,5 +233,4 @@ skipped: 1
 
 - The user opened the visible demo and reported that holding Z changed a tile from light green to dark green and releasing Z restored it.
 - The live window used the packaged executable, SDL library, and owned demo fixture in a temporary local macOS app wrapper. The title and status were visible; no product source or dependency changed for the wrapper.
-- Exact CPU-B collision and JOYP sampling measurements remain unclaimed. The one historical CPU-B-only collision checkpoint is skipped because D-025 explicitly narrows Phase 3 acceptance to a documented, confidence-qualified software model.
-
+- Exact CPU-B collision and JOYP sampling measurements remain unclaimed. D-025 supersedes the historical CPU-B-only collision checkpoint with a documented, confidence-qualified deterministic software-model acceptance criterion.
