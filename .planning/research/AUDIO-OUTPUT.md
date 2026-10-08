@@ -1,0 +1,48 @@
+# DMG audio output and host playback
+
+Updated: 2026-10-08. Target: the scoped, bootless DMG-CPU-B software model in GabbaBoy v0.1. This is planning evidence and a recommendation; it does not establish implemented or hardware-qualified audio.
+
+## APU behavior and fidelity boundary
+
+Pan Docs describes four generator/DAC channels, stereo routing through NR51, master level through NR50, and a divider-driven sequencer. The frame sequencer advances from a falling DIV-APU edge at 512 Hz; length, envelope, and sweep work are derived from that sequencer rather than CPU instruction counts. Integrate it with the existing emulated divider/timeline and preserve its phase across run-call boundaries. Treat DIV writes and STOP/reset ordering as explicit edge cases. See [Pan Docs Audio](https://gbdev.io/pandocs/Audio.html), [Audio Registers](https://gbdev.io/pandocs/Audio_Registers.html), and [Audio Details](https://gbdev.io/pandocs/Audio_details.html).
+
+The recommended scope is the four DMG channels and documented register/sequencer behavior, under the project's existing deterministic software-model policy. Digital register/channel expectations should be checked separately from output filtering and host-device conversion. Pan Docs describes the DMG's analog high-pass path and gives a software approximation:
+
+```text
+out = input - capacitor
+capacitor = input - out * charge_factor
+charge_factor(rate) = 0.999958^(4194304 / rate)
+```
+
+For a 48 kHz output this is approximately `0.99634` per sample. A small original fixed-point per-instance filter can use that documented DMG-style coefficient, with exact rounding and saturation specified. Reset its history with APU reset; retain it across ordinary output-buffer boundaries. This model is evidence of a chosen approximation, not measurement of every DMG-CPU-B board, component tolerance, headphone/speaker path, or host chain. Keep VIN, CGB audio differences, and physical board qualification out of this phase.
+
+## PCM and resampling decision
+
+Use a fixed 48 kHz signed 16-bit interleaved stereo core output: left then right samples, with a fixed-point integer mix, declared rounding, and saturation. Stereo is required for NR51 panning; choosing one core rate and representation makes generated PCM repeatable and lets SDL adapt to each device. Buffer ownership stays with the caller and calls do not allocate.
+
+Game Boy channel levels change on emulated edges. Box/hold is cheap but aliases the square-wave harmonics; linear interpolation softens edges but is not a band-limited anti-alias filter. Shay Green's [Blip_Buffer](https://github.com/blarggs-audio-libraries/Blip_Buffer) is an established event-driven band-limited option, but it adds C++ integration and LGPL compliance work to this C17 core. The project's preference for a flat dependency tree and the lack of a measured need favor a small original fixed-point band-limited-step/polyphase resampler, bounded per emulated event/sample, with fixed state and signal-response fixtures. Do not copy upstream code; use the published method as design background. No subjective or hardware-fidelity claim follows from deterministic PCM alone.
+
+The current `gbb_run` contract executes whole instructions and already uses caller-owned diagnostic capacity plus `GBB_STOP_OUTPUT_FULL`. Extend that shape with an audio-aware run path that writes to caller-owned stereo frames, preflights enough room before an indivisible instruction, and returns the actual frame count. If capacity cannot hold the next required output, stop before advancing that operation and report output-full; never overwrite or discard. Document any no-audio stepping path as an explicit request to run muted. Keep output deterministic across different run chunk sizes. The frontend owns the frame buffer lifetime.
+
+## SDL3 playback and queue evidence
+
+The macOS adapter can use [SDL_OpenAudioDeviceStream](https://wiki.libsdl.org/SDL3/SDL_OpenAudioDeviceStream) on the system default playback device. SDL streams accept a source format and adapt chunked input to the actual device's format; SDL's documented default device behavior supports migration when the system default changes. Use SDL conversion for device rate/format and keep it outside the emulated APU. Use [SDL_SetAudioStreamGain](https://wiki.libsdl.org/SDL3/SDL_SetAudioStreamGain) for host volume, default 100%, with simple documented keyboard increase/decrease keys. Do not rewrite emulated NR50/NR51 when the user changes host loudness.
+
+To meet the phase's underflow-measurement requirement without advancing the guest on an audio thread, produce PCM on the existing main/event-loop thread and publish it to a fixed-capacity single-producer/single-consumer ring. An SDL audio-stream callback consumes only that adapter ring, zero-fills a shortage, and updates lock-free counters; it never calls the core, allocates, blocks, logs, or performs device lifecycle work. Count requested frames the ring could not supply as **application PCM underflow**, not confirmed hardware underrun. Count ring high-water and producer backpressure; when the ring is full, stop/pace the guest producer until space is available rather than drop frames. Specify atomic ordering and wrap behavior, and synchronize callback shutdown before clearing/destroying its ring. The ring and the core instance have separate ownership; the core retains its one-thread-at-a-time contract.
+
+SDL's [stream callback](https://wiki.libsdl.org/SDL3/SDL_AudioStreamCallback) may run on any thread and request variable byte amounts, so callback work must stay bounded and independent of guest execution. `SDL_GetAudioStreamQueued` reports bytes submitted to the stream, not output frames already played or end-to-end device latency; use it only as a backlog measure, never as proof of hardware underrun. Open with a small initial target of about two video frames and a four-frame ring ceiling, then record a sustained scripted workload and tune only if data shows a problem. These are starting bounds, not measured latency claims. If audio initialization or recovery fails, show audio unavailable, keep the guest running through an explicit counted host-sink policy, and avoid accumulating stale samples.
+
+## Lifecycle, input, and evidence
+
+Keep the gamepad/controller on SDL's existing event-loop path. Track which host source contributed each held button. On controller removal, release that source's buttons and start a reconnected controller neutral. Preserve Phase 3 focus behavior: focus loss pauses and queues releases; focus gain re-anchors host pacing and resumes only if the user had not intentionally paused.
+
+Pause freezes guest advancement while preserving APU and filter history; clear callback-ring/SDL-pending samples and resume with fresh PCM. Reset first follows Phase 4's battery flush/recovery contract, then resets the APU and output history. Successful ROM replacement flushes the old battery session, then clears old input/video/audio and starts a clean guest. A failed replacement preserves the running session. Device transitions use SDL default migration when available; if an explicit reopen is needed, quiesce the callback, discard/count old pending samples, and restart with a fresh bounded queue. Do not change guest clock semantics to chase host playback.
+
+Keep evidence classes distinct: authored register/sequencer tests, independent PCM/resampler signal fixtures, host ring stress counters, SDL device-open/conversion/recovery checks, and any eventual physical listening/hardware observation are separate. Use project-authored reproducible fixtures; Blargg fixture redistribution rights remain unresolved in existing research and are not inherited by this phase. Automated queue and PCM checks can verify determinism and application starvation but cannot establish the sound of every physical DMG revision. The smallest additional evidence needed for a subjective playback-quality claim is a clearly scoped listening observation on named hardware/output equipment; it is not required to claim the software-model behaviors above.
+
+## Primary and author references
+
+- [Pan Docs: Audio](https://gbdev.io/pandocs/Audio.html), [registers](https://gbdev.io/pandocs/Audio_Registers.html), and [details](https://gbdev.io/pandocs/Audio_details.html) — channel/register behavior, sequencer timing, and the explicitly approximate DMG output filter.
+- [Gekkio, Game Boy: Complete Technical Reference](https://gekkio.fi/files/gb-docs/gbctr.pdf) — hardware/revision context for reading and register behavior; source agreement is not hardware measurement.
+- [SDL_OpenAudioDeviceStream](https://wiki.libsdl.org/SDL3/SDL_OpenAudioDeviceStream), [SDL_AudioStream](https://wiki.libsdl.org/SDL3/SDL_AudioStream), [SDL_AudioStreamCallback](https://wiki.libsdl.org/SDL3/SDL_AudioStreamCallback), [SDL_GetAudioStreamQueued](https://wiki.libsdl.org/SDL3/SDL_GetAudioStreamQueued), [SDL_SetAudioStreamGain](https://wiki.libsdl.org/SDL3/SDL_SetAudioStreamGain), and [SDL_ClearAudioStream](https://wiki.libsdl.org/SDL3/SDL_ClearAudioStream) — official SDL3 behavior and limits.
+- [Band-Limited Sound Synthesis](https://www.slack.net/~ant/bl-synth/) and [Blip_Buffer](https://github.com/blarggs-audio-libraries/Blip_Buffer) — author explanation and implementation reference for event-driven band-limited resampling; not a dependency recommendation or permission to copy code.
