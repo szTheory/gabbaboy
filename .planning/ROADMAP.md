@@ -253,13 +253,13 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. An adopter can inspect a support ledger naming DMG revision, boot profile, mapper scope, corpus revision, executed eligible denominator, failures/exclusions, and known issues, alongside reproducible fixed-workload speed, memory/allocation, trace, build, and CI baselines with output digests, samples, environment, and uncertainty. Budgets follow measured variance; subset pass rates are not all-game compatibility. (SHIP-05, SHIP-06)
 5. Maintainers can reproduce bounded loader/battery/API fuzz and boundary-regression results under applicable sanitizers; minimized findings enter fast regression coverage while longer exploration remains separately runnable. (SHIP-07)
 
-**Plans**: 2/7 plans executed in 6 dependency-ordered waves
+**Plans**: 3/7 plans executed in 6 dependency-ordered waves
 **Wave 1**
 - [x] 06-01-PLAN.md — Release-please draft and trusted Linux core candidate
 - [x] 06-05-PLAN.md — Loader/battery boundary regression and bounded fuzz
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 06-02-PLAN.md — Downloaded core matrix and macOS player qualification
+- [x] 06-02-PLAN.md — Downloaded core matrix and macOS player qualification
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 06-04-PLAN.md — Support ledger and reproducible performance evidence
@@ -284,7 +284,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 | 3. Visible Interactive DMG | 13/13 | Complete    | 2026-10-07 |
 | 4. MBC1 and Safe Battery Continuation | 7/7 | Complete    | 2026-10-08 |
 | 5. DMG Audio and Stable Playback | 7/7 | Complete    | 2026-10-08 |
-| 6. Qualified DMG Release and Consumer Handoff | 2/7 | In Progress | - |
+| 6. Qualified DMG Release and Consumer Handoff | 3/7 | In Progress | - |
 
 ## Execution Contract
 
