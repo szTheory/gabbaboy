@@ -1,6 +1,7 @@
 instance_lifecycle
 independent_instances
 cartridge_tracer
+cartridge_bank_matrix
 run_bounds
 trace_capacity
 illegal_lockup_api

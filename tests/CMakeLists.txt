@@ -16,6 +16,7 @@ target_link_libraries(test_cartridge PRIVATE GabbaBoy::core)
 target_compile_features(test_cartridge PRIVATE c_std_17)
 set_target_properties(test_cartridge PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME cartridge_tracer COMMAND test_cartridge cartridge_tracer)
+add_test(NAME cartridge_bank_matrix COMMAND test_cartridge cartridge_bank_matrix)
 
 add_executable(test_bus test_bus.c)
 target_link_libraries(test_bus PRIVATE GabbaBoy::core)
