@@ -215,7 +215,27 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. Keyboard/basic controller input recovers across focus loss and disconnect/reconnect; host input reset cannot leave guest buttons stuck. (HOST-01)
 5. Pause/resume, reset, ROM replacement, and audio-device transitions follow documented flush/recovery behavior without mixing stale video/audio/input/battery state between sessions. (HOST-02)
 
-**Plans**: TBD
+**Plans**: 7 plans in 7 dependency-ordered waves; planning complete, execution pending.
+**Wave 1**
+- [ ] 05-01-PLAN.md — original pulse guest through caller PCM and SDL tracer
+
+**Wave 2** *(depends on Wave 1)*
+- [ ] 05-02-PLAN.md — both pulse channels and divider sequencer
+
+**Wave 3** *(depends on Wave 2)*
+- [ ] 05-03-PLAN.md — wave, noise and four-channel power matrix
+
+**Wave 4** *(depends on Wave 3)*
+- [ ] 05-04-PLAN.md — fixed-point resampler, high-pass and bounded PCM API
+
+**Wave 5** *(depends on Wave 4)*
+- [ ] 05-05-PLAN.md — SPSC/SDL playback, gain and pacing metrics
+
+**Wave 6** *(depends on Wave 5)*
+- [ ] 05-06-PLAN.md — input ownership and lifecycle recovery
+
+**Wave 7** *(depends on Wave 6)*
+- [ ] 05-07-PLAN.md — sustained queue evidence and consumer documentation
 **UI hint**: yes
 
 ### Phase 6: Qualified DMG Release and Consumer Handoff
@@ -243,7 +263,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 | 2. DMG CPU, Bus, and Time | 17/17 | Complete | 2026-10-07 |
 | 3. Visible Interactive DMG | 13/13 | Complete    | 2026-10-07 |
 | 4. MBC1 and Safe Battery Continuation | 7/7 | Complete    | 2026-10-08 |
-| 5. DMG Audio and Stable Playback | 0/TBD | Not started | - |
+| 5. DMG Audio and Stable Playback | 0/7 | Planned; execution pending | - |
 | 6. Qualified DMG Release and Consumer Handoff | 0/TBD | Not started | - |
 
 ## Execution Contract
@@ -252,4 +272,4 @@ All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](
 
 Automate authorized work within each phase, then inspect current verification/release/consumer evidence, update traceability and [lessons](context/LESSONS.md), triage issues/PRs, report limitations and the exact next command, and **stop**. Never auto-advance phases or milestones; keep both auto-advance flags false. Credential, hardware, or perceptual gaps must be recorded honestly with the smallest necessary human action, never converted into passing evidence. Remote/CI setup begins in Phase 1; absent access remains an explicit completion limitation.
 
-Phase 1 Plans 01–05 and Phase 2's 17 runnable plans are verified complete; Phase 2 Plan 02-15 remains superseded/non-runnable. Phase 3's 13 plans are complete, final verification passed 5/5 truths, and 33/33 UAT checks passed, including the user's live packaged-window Z press/release observation. The complete local `phase1` suite passed 141/141. PR #4 passed required exact-head CI and merged at `2b49dc5`; the Phase 3 security gate reports zero high-severity open threats. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B or universal PPU-revision claim is made. Phase 4 planning is complete with seven independently checked plans in seven waves; Plan 04-05 is complete with byte-identical fixture reproduction, 154/154 core tests, and 37/37 player tests plus package smoke at its recorded revision. Phase 4 remains active; continue with Plan 04-06 and complete its phase verification before stopping at the phase boundary. The exact next command is `$gsd-execute-phase 4`.
+Phases 1–4 are independently verified complete; Phase 2 Plan 02-15 remains superseded/non-runnable. Phase 4's seven plans have execution summaries and its final 4/4 goal verification, core/player/installed package tests, exact hosted PR checks, and downloaded package evidence are recorded in its phase artifacts. Phase 5 planning contains seven pending plans in seven dependency-ordered waves. Its implementation and verification have not started. The exact next command after this planning handoff is `$gsd-execute-phase 5`.
