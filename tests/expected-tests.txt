@@ -135,6 +135,10 @@ timer_tima_collision
 timer_tma_collision
 audio_tracer
 audio_capacity
+apu_pulse
+apu_mixer
+apu_sequencer
+apu_timeline
 serial_internal_disconnected
 serial_external_pending
 serial_unqualified_overlap
