@@ -16,8 +16,8 @@ struct player_audio {
     SDL_AudioStream *stream;
     atomic_uint read_index;
     atomic_uint write_index;
-    atomic_uint underflow_frames;
-    atomic_uint backpressure_frames;
+    atomic_uint_fast64_t underflow_frames;
+    atomic_uint_fast64_t backpressure_events;
     atomic_uint high_water_frames;
     gbb_audio_frame ring[PLAYER_AUDIO_RING_FRAMES];
 };
@@ -64,12 +64,12 @@ static bool player_audio_open(player_audio *audio) {
     atomic_init(&audio->read_index, 0u);
     atomic_init(&audio->write_index, 0u);
     atomic_init(&audio->underflow_frames, 0u);
-    atomic_init(&audio->backpressure_frames, 0u);
+    atomic_init(&audio->backpressure_events, 0u);
     atomic_init(&audio->high_water_frames, 0u);
     if (!atomic_is_lock_free(&audio->read_index) ||
         !atomic_is_lock_free(&audio->write_index) ||
         !atomic_is_lock_free(&audio->underflow_frames) ||
-        !atomic_is_lock_free(&audio->backpressure_frames) ||
+        !atomic_is_lock_free(&audio->backpressure_events) ||
         !atomic_is_lock_free(&audio->high_water_frames)) return false;
     const SDL_AudioSpec spec = {SDL_AUDIO_S16, 2, 48000};
     audio->stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
@@ -89,7 +89,7 @@ bool player_audio_submit(player_audio *audio, const gbb_audio_frame *frames,
     const unsigned read = atomic_load_explicit(&audio->read_index, memory_order_acquire);
     const unsigned used = write - read;
     if (count > PLAYER_AUDIO_RING_LIMIT_FRAMES - used) {
-        atomic_fetch_add_explicit(&audio->backpressure_frames, count, memory_order_relaxed);
+        atomic_fetch_add_explicit(&audio->backpressure_events, 1u, memory_order_relaxed);
         return false;
     }
     for (unsigned i = 0u; i < count; ++i)
@@ -129,12 +129,16 @@ void player_audio_destroy(player_audio *audio) {
     free(audio);
 }
 
-unsigned player_audio_underflow(const player_audio *audio) {
+void player_audio_note_backpressure(player_audio *audio) {
+    atomic_fetch_add_explicit(&audio->backpressure_events, 1u, memory_order_relaxed);
+}
+
+uint_fast64_t player_audio_underflow(const player_audio *audio) {
     return atomic_load_explicit(&audio->underflow_frames, memory_order_relaxed);
 }
 
-unsigned player_audio_backpressure(const player_audio *audio) {
-    return atomic_load_explicit(&audio->backpressure_frames, memory_order_relaxed);
+uint_fast64_t player_audio_backpressure_events(const player_audio *audio) {
+    return atomic_load_explicit(&audio->backpressure_events, memory_order_relaxed);
 }
 
 unsigned player_audio_high_water(const player_audio *audio) {

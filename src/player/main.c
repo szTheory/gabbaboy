@@ -28,8 +28,9 @@ void player_audio_destroy(player_audio *audio);
 unsigned player_audio_capacity(const player_audio *audio);
 bool player_audio_submit(player_audio *audio, const gbb_audio_frame *frames,
                          unsigned count);
-unsigned player_audio_underflow(const player_audio *audio);
-unsigned player_audio_backpressure(const player_audio *audio);
+uint_fast64_t player_audio_underflow(const player_audio *audio);
+uint_fast64_t player_audio_backpressure_events(const player_audio *audio);
+void player_audio_note_backpressure(player_audio *audio);
 unsigned player_audio_high_water(const player_audio *audio);
 
 typedef enum {
@@ -168,11 +169,11 @@ static bool run_pulse_audio_smoke(player *app, const char *rom_path) {
         fputs("Authored pulse guest did not produce nonzero PCM for the SDL adapter\n", stderr);
         return false;
     }
-    printf("audio smoke: guest_frames=%llu nonzero_frames=%llu submitted_frames=%llu sink=%s underflow_frames=%u backpressure_frames=%u high_water_frames=%u\n",
+    printf("audio smoke: guest_frames=%llu nonzero_frames=%llu submitted_frames=%llu sink=%s underflow_frames=%llu backpressure_events=%llu high_water_frames=%u\n",
         (unsigned long long)produced, (unsigned long long)nonzero,
         (unsigned long long)submitted, app->audio != NULL ? "sdl" : "unavailable",
-        app->audio != NULL ? player_audio_underflow(app->audio) : 0u,
-        app->audio != NULL ? player_audio_backpressure(app->audio) : 0u,
+        (unsigned long long)(app->audio != NULL ? player_audio_underflow(app->audio) : 0u),
+        (unsigned long long)(app->audio != NULL ? player_audio_backpressure_events(app->audio) : 0u),
         app->audio != NULL ? player_audio_high_water(app->audio) : 0u);
     return true;
 }
@@ -329,7 +330,10 @@ static bool advance_to(player *app, uint64_t target_half_dots, bool finish_targe
             gbb_audio_frame frames[512];
             unsigned capacity = player_audio_capacity(app->audio);
             if (capacity > 512u) capacity = 512u;
-            if (capacity == 0u) return !finish_target;
+            if (capacity == 0u) {
+                player_audio_note_backpressure(app->audio);
+                return !finish_target;
+            }
             size_t count = 0u;
             result = gbb_run_audio(app->machine, budget, frames, capacity, &count);
             if (count != 0u && !player_audio_submit(app->audio, frames, (unsigned)count)) {
