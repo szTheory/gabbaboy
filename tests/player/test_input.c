@@ -213,14 +213,53 @@ static int player_input_focus(const char *demo_path) {
     return 0;
 }
 
+static int player_input_sources(const char *demo_path) {
+    gbb_instance *machine = load_demo(demo_path);
+    REQUIRE(machine != NULL);
+    player_input_state state;
+    player_input_reset(&state, 1000u);
+    REQUIRE(player_input_gamepad_added(&state, 11u));
+    REQUIRE(player_input_gamepad_added(&state, 22u));
+    REQUIRE(player_input_key(&state, machine, 1000u, SDL_SCANCODE_Z,
+                            true, false) == GBB_OK);
+    REQUIRE(player_input_gamepad_button(&state, machine, 1000u, 11u,
+            SDL_GAMEPAD_BUTTON_SOUTH, true) == GBB_OK);
+    REQUIRE(player_input_gamepad_button(&state, machine, 1000u, 11u,
+            SDL_GAMEPAD_BUTTON_DPAD_RIGHT, true) == GBB_OK);
+    REQUIRE(player_input_gamepad_button(&state, machine, 1000u, 22u,
+            SDL_GAMEPAD_BUTTON_DPAD_DOWN, true) == GBB_OK);
+    REQUIRE(state.held_buttons == ((1u << GBB_BUTTON_A) |
+            (1u << GBB_BUTTON_RIGHT) | (1u << GBB_BUTTON_DOWN)));
+    REQUIRE(player_input_gamepad_removed(&state, machine, 1000u, 11u) == GBB_OK);
+    REQUIRE(state.held_buttons == ((1u << GBB_BUTTON_A) |
+            (1u << GBB_BUTTON_DOWN)));
+    REQUIRE(state.pending_count == 4u);
+    REQUIRE(state.pending[3].kind == GBB_INPUT_BUTTON_RELEASE &&
+            state.pending[3].value == GBB_BUTTON_RIGHT);
+    REQUIRE(player_input_key(&state, machine, 1000u, SDL_SCANCODE_Z,
+                            false, false) == GBB_OK);
+    REQUIRE(state.held_buttons == (1u << GBB_BUTTON_DOWN));
+    REQUIRE(player_input_gamepad_removed(&state, machine, 1000u, 22u) == GBB_OK);
+    REQUIRE(state.held_buttons == 0u);
+    gbb_destroy(machine);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 3) return 2;
     active_case = argv[1];
+    puts("TAP version 13");
+    puts("1..1");
+    fflush(stdout);
+    int result = 2;
     if (strcmp(active_case, "player_input_time") == 0)
-        return player_input_time(argv[2]);
-    if (strcmp(active_case, "player_input_events") == 0)
-        return player_input_events(argv[2]);
-    if (strcmp(active_case, "player_input_focus") == 0)
-        return player_input_focus(argv[2]);
-    return 2;
+        result = player_input_time(argv[2]);
+    else if (strcmp(active_case, "player_input_events") == 0)
+        result = player_input_events(argv[2]);
+    else if (strcmp(active_case, "player_input_focus") == 0)
+        result = player_input_focus(argv[2]);
+    else if (strcmp(active_case, "player_input_sources") == 0)
+        result = player_input_sources(argv[2]);
+    printf("%s 1 - %s\n", result == 0 ? "ok" : "not ok", active_case);
+    return result;
 }

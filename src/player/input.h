@@ -12,7 +12,14 @@
 #define PLAYER_INPUT_QUEUE_CAPACITY 64u
 #define PLAYER_INPUT_NORMAL_CAPACITY 56u
 #define PLAYER_INPUT_BUTTON_COUNT 8u
+#define PLAYER_INPUT_GAMEPAD_CAPACITY 4u
 #define PLAYER_DMG_HALF_DOT_RATE_HZ UINT64_C(8388608)
+
+typedef struct {
+    SDL_JoystickID id;
+    uint8_t held_buttons;
+    bool active;
+} player_input_gamepad_source;
 
 typedef struct {
     uint64_t host_anchor_ns;
@@ -20,6 +27,8 @@ typedef struct {
     uint64_t guest_cursor_half_dots;
     gbb_input_event pending[PLAYER_INPUT_QUEUE_CAPACITY];
     size_t pending_count;
+    uint8_t keyboard_buttons;
+    player_input_gamepad_source gamepads[PLAYER_INPUT_GAMEPAD_CAPACITY];
     uint8_t held_buttons;
     uint8_t release_pending_buttons;
     bool paused;
@@ -38,6 +47,17 @@ bool player_input_guest_target(const player_input_state *state,
 gbb_error player_input_key(player_input_state *state, gbb_instance *machine,
                            uint64_t host_timestamp_ns, SDL_Scancode scancode,
                            bool pressed, bool repeat);
+bool player_input_gamepad_added(player_input_state *state, SDL_JoystickID id);
+gbb_error player_input_gamepad_button(player_input_state *state,
+                                      gbb_instance *machine,
+                                      uint64_t host_timestamp_ns,
+                                      SDL_JoystickID id,
+                                      SDL_GamepadButton button,
+                                      bool pressed);
+gbb_error player_input_gamepad_removed(player_input_state *state,
+                                       gbb_instance *machine,
+                                       uint64_t host_timestamp_ns,
+                                       SDL_JoystickID id);
 void player_input_pause(player_input_state *state);
 bool player_input_resume(player_input_state *state, uint64_t host_now_ns);
 gbb_error player_input_focus_lost(player_input_state *state,

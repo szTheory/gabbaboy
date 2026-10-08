@@ -41,6 +41,19 @@ void player_input_reset(player_input_state *state, uint64_t host_now_ns) {
     state->host_anchor_ns = host_now_ns;
 }
 
+bool player_input_gamepad_added(player_input_state *state, SDL_JoystickID id) {
+    if (state == NULL || id == 0) return false;
+    for (unsigned i = 0; i < PLAYER_INPUT_GAMEPAD_CAPACITY; ++i) {
+        if (state->gamepads[i].active && state->gamepads[i].id == id) return true;
+    }
+    for (unsigned i = 0; i < PLAYER_INPUT_GAMEPAD_CAPACITY; ++i) {
+        if (state->gamepads[i].active) continue;
+        state->gamepads[i] = (player_input_gamepad_source){id, 0, true};
+        return true;
+    }
+    return false;
+}
+
 void player_input_reconcile(player_input_state *state,
                             uint64_t guest_cursor_half_dots) {
     if (state == NULL || guest_cursor_half_dots < state->guest_cursor_half_dots)
@@ -118,6 +131,128 @@ static void append_pending(player_input_state *state,
     state->pending_count += count;
 }
 
+static uint8_t input_source_buttons(const player_input_state *state,
+                                   bool replace_keyboard,
+                                   uint8_t keyboard_buttons,
+                                   int replace_gamepad,
+                                   uint8_t gamepad_buttons) {
+    uint8_t buttons = replace_keyboard ? keyboard_buttons
+                                        : state->keyboard_buttons;
+    for (unsigned i = 0; i < PLAYER_INPUT_GAMEPAD_CAPACITY; ++i) {
+        const player_input_gamepad_source *source = &state->gamepads[i];
+        if (!source->active) continue;
+        buttons |= (int)i == replace_gamepad ? gamepad_buttons
+                                               : source->held_buttons;
+    }
+    return buttons;
+}
+
+static bool map_gamepad_button(SDL_GamepadButton source, gbb_button *button) {
+    if (button == NULL) return false;
+    switch (source) {
+    case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: *button = GBB_BUTTON_RIGHT; return true;
+    case SDL_GAMEPAD_BUTTON_DPAD_LEFT: *button = GBB_BUTTON_LEFT; return true;
+    case SDL_GAMEPAD_BUTTON_DPAD_UP: *button = GBB_BUTTON_UP; return true;
+    case SDL_GAMEPAD_BUTTON_DPAD_DOWN: *button = GBB_BUTTON_DOWN; return true;
+    case SDL_GAMEPAD_BUTTON_SOUTH: *button = GBB_BUTTON_A; return true;
+    case SDL_GAMEPAD_BUTTON_EAST: *button = GBB_BUTTON_B; return true;
+    case SDL_GAMEPAD_BUTTON_START: *button = GBB_BUTTON_START; return true;
+    case SDL_GAMEPAD_BUTTON_BACK: *button = GBB_BUTTON_SELECT; return true;
+    default: return false;
+    }
+}
+
+static gbb_error queue_button_delta(player_input_state *state,
+                                    gbb_instance *machine,
+                                    uint64_t host_timestamp_ns,
+                                    uint8_t old_buttons,
+                                    uint8_t new_buttons,
+                                    size_t capacity) {
+    const uint8_t changed = old_buttons ^ new_buttons;
+    if (changed == 0u) return GBB_OK;
+    gbb_input_event events[PLAYER_INPUT_BUTTON_COUNT];
+    size_t count = 0u;
+    uint64_t at_half_dots;
+    if (!schedule_time(state, host_timestamp_ns, &at_half_dots))
+        return GBB_INVALID_EVENT;
+    for (unsigned button = 0; button < PLAYER_INPUT_BUTTON_COUNT; ++button) {
+        const uint8_t mask = (uint8_t)(1u << button);
+        if ((changed & mask) == 0u) continue;
+        events[count++] = (gbb_input_event){
+            at_half_dots,
+            (new_buttons & mask) != 0u ? GBB_INPUT_BUTTON_PRESS
+                                       : GBB_INPUT_BUTTON_RELEASE,
+            (uint8_t)button
+        };
+    }
+    if (!pending_has_room(state, count, capacity)) return GBB_EVENT_QUEUE_FULL;
+    const gbb_error result = gbb_queue_events(machine, events, count);
+    if (result != GBB_OK) return result;
+    append_pending(state, events, count);
+    state->held_buttons = new_buttons;
+    return GBB_OK;
+}
+
+gbb_error player_input_gamepad_button(player_input_state *state,
+                                      gbb_instance *machine,
+                                      uint64_t host_timestamp_ns,
+                                      SDL_JoystickID id,
+                                      SDL_GamepadButton button,
+                                      bool pressed) {
+    if (state == NULL || machine == NULL) return GBB_INVALID_ARGUMENT;
+    if (state->paused || state->release_pending_buttons != 0u) return GBB_OK;
+    gbb_button guest_button;
+    if (!map_gamepad_button(button, &guest_button)) return GBB_OK;
+    for (unsigned i = 0; i < PLAYER_INPUT_GAMEPAD_CAPACITY; ++i) {
+        player_input_gamepad_source *source = &state->gamepads[i];
+        if (!source->active || source->id != id) continue;
+        const uint8_t mask = (uint8_t)(1u << (unsigned)guest_button);
+        const bool was_held = (source->held_buttons & mask) != 0u;
+        if (was_held == pressed) return GBB_OK;
+        const uint8_t proposed = pressed
+            ? (uint8_t)(source->held_buttons | mask)
+            : (uint8_t)(source->held_buttons & (uint8_t)~mask);
+        const uint8_t aggregate = input_source_buttons(state, false, 0u,
+                                                        (int)i, proposed);
+        const gbb_error result = queue_button_delta(state, machine,
+            host_timestamp_ns, state->held_buttons, aggregate,
+            PLAYER_INPUT_NORMAL_CAPACITY);
+        if (result == GBB_OK) source->held_buttons = proposed;
+        return result;
+    }
+    return GBB_OK;
+}
+
+gbb_error player_input_gamepad_removed(player_input_state *state,
+                                       gbb_instance *machine,
+                                       uint64_t host_timestamp_ns,
+                                       SDL_JoystickID id) {
+    if (state == NULL || machine == NULL) return GBB_INVALID_ARGUMENT;
+    for (unsigned i = 0; i < PLAYER_INPUT_GAMEPAD_CAPACITY; ++i) {
+        player_input_gamepad_source *source = &state->gamepads[i];
+        if (!source->active || source->id != id) continue;
+        source->active = false;
+        source->id = 0;
+        source->held_buttons = 0;
+        const uint8_t aggregate = input_source_buttons(state, false, 0u, -1, 0u);
+        const uint8_t releases = state->held_buttons & (uint8_t)~aggregate;
+        if (releases == 0u) {
+            state->held_buttons = aggregate;
+            return GBB_OK;
+        }
+        if (state->release_pending_buttons != 0u) {
+            state->release_pending_buttons |= releases;
+            return GBB_OK;
+        }
+        const gbb_error result = queue_button_delta(state, machine,
+            host_timestamp_ns, state->held_buttons, aggregate,
+            PLAYER_INPUT_QUEUE_CAPACITY);
+        if (result != GBB_OK) state->release_pending_buttons |= releases;
+        return result;
+    }
+    return GBB_OK;
+}
+
 gbb_error player_input_key(player_input_state *state, gbb_instance *machine,
                            uint64_t host_timestamp_ns, SDL_Scancode scancode,
                            bool pressed, bool repeat) {
@@ -128,25 +263,17 @@ gbb_error player_input_key(player_input_state *state, gbb_instance *machine,
     gbb_button button;
     if (!map_scancode(scancode, &button)) return GBB_OK;
     const uint8_t mask = (uint8_t)(1u << (unsigned)button);
-    const bool was_held = (state->held_buttons & mask) != 0;
+    const bool was_held = (state->keyboard_buttons & mask) != 0;
     if (was_held == pressed) return GBB_OK;
-    if (!pending_has_room(state, 1, PLAYER_INPUT_NORMAL_CAPACITY))
-        return GBB_EVENT_QUEUE_FULL;
-
-    uint64_t at_half_dots;
-    if (!schedule_time(state, host_timestamp_ns, &at_half_dots))
-        return GBB_INVALID_EVENT;
-    const gbb_input_event event = {
-        at_half_dots,
-        pressed ? GBB_INPUT_BUTTON_PRESS : GBB_INPUT_BUTTON_RELEASE,
-        (uint8_t)button
-    };
-    const gbb_error result = gbb_queue_events(machine, &event, 1);
-    if (result != GBB_OK) return result;
-    append_pending(state, &event, 1);
-    if (pressed) state->held_buttons |= mask;
-    else state->held_buttons &= (uint8_t)~mask;
-    return GBB_OK;
+    const uint8_t proposed = pressed
+        ? (uint8_t)(state->keyboard_buttons | mask)
+        : (uint8_t)(state->keyboard_buttons & (uint8_t)~mask);
+    const uint8_t aggregate = input_source_buttons(state, true, proposed, -1, 0u);
+    const gbb_error result = queue_button_delta(state, machine,
+        host_timestamp_ns, state->held_buttons, aggregate,
+        PLAYER_INPUT_NORMAL_CAPACITY);
+    if (result == GBB_OK) state->keyboard_buttons = proposed;
+    return result;
 }
 
 void player_input_pause(player_input_state *state) {
@@ -167,7 +294,6 @@ gbb_error player_input_retry_focus_releases(player_input_state *state,
     if (state == NULL || machine == NULL) return GBB_INVALID_ARGUMENT;
     const uint8_t mask = state->release_pending_buttons;
     if (mask == 0) return GBB_OK;
-    if (!state->paused) return GBB_INVALID_EVENT;
 
     gbb_input_event releases[PLAYER_INPUT_BUTTON_COUNT];
     size_t count = 0;
@@ -190,7 +316,7 @@ gbb_error player_input_retry_focus_releases(player_input_state *state,
     if (result != GBB_OK) return result;
     append_pending(state, releases, count);
     state->held_buttons &= (uint8_t)~mask;
-    state->release_pending_buttons = 0;
+    state->release_pending_buttons &= (uint8_t)~mask;
     return GBB_OK;
 }
 
@@ -200,5 +326,8 @@ gbb_error player_input_focus_lost(player_input_state *state,
     if (state == NULL || machine == NULL) return GBB_INVALID_ARGUMENT;
     state->paused = true;
     state->release_pending_buttons |= state->held_buttons;
+    state->keyboard_buttons = 0u;
+    for (unsigned i = 0; i < PLAYER_INPUT_GAMEPAD_CAPACITY; ++i)
+        state->gamepads[i].held_buttons = 0u;
     return player_input_retry_focus_releases(state, machine, host_timestamp_ns);
 }
