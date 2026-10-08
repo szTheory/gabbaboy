@@ -46,7 +46,7 @@ Every requirement below must map to exactly one phase. Completion needs implemen
 
 - [x] **AUDIO-01**: All four DMG sound channels, register behavior, and divider-driven sequencer produce the expected scoped digital APU results, with analog/revision approximations documented.
 - [x] **AUDIO-02**: A frontend receives deterministic bounded PCM with documented format, sample-rate/resampling policy, buffer lifetime, and backpressure behavior; stepping does not allocate or silently lose required output.
-- [ ] **AUDIO-03**: The macOS player provides paced sound and volume control without changing guest clock semantics, with bounded queues and measured underrun/overrun behavior during sustained scripted play.
+- [x] **AUDIO-03**: The macOS player provides paced sound and volume control without changing guest clock semantics, with bounded queues and measured underrun/overrun behavior during sustained scripted play.
 - [ ] **HOST-01**: Keyboard and basic controller input remain usable across focus loss and disconnect/reconnect; the guest cannot retain a stuck pressed button after a host input reset.
 - [ ] **HOST-02**: Pause/resume, reset, ROM replacement, and audio-device transitions follow documented flush/recovery rules without mixing stale video/audio/input/battery state between sessions.
 
@@ -116,7 +116,7 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | SAVE-04 | Phase 4 | Complete — byte-reproducible original fixture and fresh-process positive/negative controls; see Phase 4 verification |
 | AUDIO-01 | Phase 5 | Complete |
 | AUDIO-02 | Phase 5 | Complete |
-| AUDIO-03 | Phase 5 | Pending |
+| AUDIO-03 | Phase 5 | Complete |
 | HOST-01 | Phase 5 | Pending |
 | HOST-02 | Phase 5 | Pending |
 | SHIP-01 | Phase 6 | Pending |
