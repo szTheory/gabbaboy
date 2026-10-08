@@ -1,9 +1,11 @@
 #include <gabbaboy/gabbaboy.h>
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -55,7 +57,13 @@ static int read_bounded_file(const char *path, uint8_t **out_bytes,
 }
 
 static int make_temp_path(const char *path, char *out, size_t capacity) {
-    int written = snprintf(out, capacity, "%s.tmp", path);
+    unsigned long process_id = 0;
+#ifdef _WIN32
+    process_id = (unsigned long)GetCurrentProcessId();
+#else
+    process_id = (unsigned long)getpid();
+#endif
+    int written = snprintf(out, capacity, "%s.tmp.%lu", path, process_id);
     return written > 0 && (size_t)written < capacity;
 }
 
@@ -73,8 +81,29 @@ static int write_battery_atomically(const char *save_path,
                                     const uint8_t *bytes, size_t size) {
     char temp_path[4096];
     if (!make_temp_path(save_path, temp_path, sizeof(temp_path))) return 0;
-    FILE *file = fopen(temp_path, "wb");
-    if (file == NULL) return 0;
+    int descriptor;
+#ifdef _WIN32
+    descriptor = _open(temp_path, _O_CREAT | _O_EXCL | _O_WRONLY | _O_BINARY,
+                       _S_IREAD | _S_IWRITE);
+#else
+    descriptor = open(temp_path, O_CREAT | O_EXCL | O_WRONLY | O_NOFOLLOW,
+                      S_IRUSR | S_IWUSR);
+#endif
+    if (descriptor < 0) return 0;
+#ifdef _WIN32
+    FILE *file = _fdopen(descriptor, "wb");
+#else
+    FILE *file = fdopen(descriptor, "wb");
+#endif
+    if (file == NULL) {
+#ifdef _WIN32
+        (void)_close(descriptor);
+#else
+        (void)close(descriptor);
+#endif
+        (void)remove(temp_path);
+        return 0;
+    }
     int ok = fwrite(bytes, 1, size, file) == size && fflush(file) == 0;
 #ifdef _WIN32
     if (ok && _commit(_fileno(file)) != 0) ok = 0;
