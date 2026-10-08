@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Authored register programs exercise the deterministic DMG software model, not hardware. */
+
 static void checksum(uint8_t *rom) {
     uint8_t sum = 0;
     for (size_t i = 0x134; i <= 0x14Cu; ++i) sum = (uint8_t)(sum - rom[i] - 1u);
@@ -253,12 +255,15 @@ static int channel_power_matrix(void) {
         program[n++] = 0xF0u; program[n++] = 0x26u;
         program[n++] = 0xEAu; program[n++] = 0x00u;
         program[n++] = 0xC0u; program[n++] = 0x18u; program[n++] = 0xFEu;
-        gbb_instance *m = machine_with_program(program, n);
+        gbb_instance *m = machine_with_delayed_program(program, n, 0u);
         if (m == NULL) return 1;
         gbb_run_result r = gbb_run(m, 8192u, NULL, 0u);
         int ok = r.reason == GBB_STOP_BUDGET &&
                  gbb_peek_ram(m, 0xC001u) == 0xF0u &&
                  gbb_peek_ram(m, 0xC000u) == (uint8_t)(0xF0u | mask);
+        if (!ok) fprintf(stderr, "power mask=%u reason=%d initial=%02x status=%02x expected=%02x\n",
+                         mask, r.reason, gbb_peek_ram(m, 0xC001u),
+                         gbb_peek_ram(m, 0xC000u), (unsigned)(0xF0u | mask));
         gbb_destroy(m);
         if (!ok) return 1;
     }
@@ -267,20 +272,38 @@ static int channel_power_matrix(void) {
 
 static int power_transitions(void) {
     static const uint8_t program[] = {
-        0x3E,0x80,0xE0,0x26, 0x3E,0x3F,0xE0,0x20,
-        0x3E,0xF0,0xE0,0x21, 0x3E,0x80,0xE0,0x23,
+        0xF0,0x26,0xEA,0x05,0xC0, 0xF0,0x30,0xEA,0x06,0xC0,
+        0x3E,0x80,0xE0,0x26,
+        0x3E,0x80,0xE0,0x11, 0x3E,0xF0,0xE0,0x12, 0x3E,0x80,0xE0,0x14,
+        0x3E,0x80,0xE0,0x16, 0x3E,0xF0,0xE0,0x17, 0x3E,0x80,0xE0,0x19,
+        0x3E,0xF0,0xE0,0x30, 0x3E,0x80,0xE0,0x1A,
+        0x3E,0x20,0xE0,0x1C, 0x3E,0x80,0xE0,0x1E,
+        0x3E,0x3F,0xE0,0x20, 0x3E,0xF0,0xE0,0x21, 0x3E,0x80,0xE0,0x23,
         0xF0,0x26,0xEA,0x00,0xC0, 0xAF,0xE0,0x26,
         0xF0,0x26,0xEA,0x01,0xC0, 0x3E,0xFF,0xE0,0x21,
         0x3E,0x80,0xE0,0x26, 0xF0,0x26,0xEA,0x02,0xC0,
+        0xF0,0x21,0xEA,0x03,0xC0, 0xF0,0x30,0xEA,0x04,0xC0,
         0x18,0xFE
     };
-    gbb_instance *m = machine_with_program(program, sizeof(program));
+    gbb_instance *m = machine_with_delayed_program(program, sizeof(program), 0u);
     if (m == NULL) return 1;
     gbb_run_result r = gbb_run(m, 8192u, NULL, 0u);
     int ok = r.reason == GBB_STOP_BUDGET &&
-             gbb_peek_ram(m, 0xC000u) == 0xF8u &&
+             gbb_peek_ram(m, 0xC000u) == 0xFFu &&
              gbb_peek_ram(m, 0xC001u) == 0x70u &&
-             gbb_peek_ram(m, 0xC002u) == 0xF0u;
+             gbb_peek_ram(m, 0xC002u) == 0xF0u &&
+             gbb_peek_ram(m, 0xC003u) == 0x00u &&
+             gbb_peek_ram(m, 0xC004u) == 0xF0u;
+    if (!ok) fprintf(stderr, "transitions reason=%d statuses=%02x,%02x,%02x\n",
+                     r.reason, gbb_peek_ram(m, 0xC000u),
+                     gbb_peek_ram(m, 0xC001u), gbb_peek_ram(m, 0xC002u));
+    ok = ok && gbb_reset(m) == GBB_OK;
+    if (ok) {
+        r = gbb_run(m, 112u, NULL, 0u);
+        ok = r.reason == GBB_STOP_BUDGET &&
+             gbb_peek_ram(m, 0xC005u) == 0xF0u &&
+             gbb_peek_ram(m, 0xC006u) == 0x00u;
+    }
     gbb_destroy(m);
     return ok ? 0 : 1;
 }
