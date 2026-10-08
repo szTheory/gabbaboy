@@ -347,9 +347,12 @@ case "$mode" in
   *) fail 'usage: verify-phase3-player.sh [--build-package] | --verify-package ARTIFACT-DIR' ;;
 esac
 
-# The package lane qualifies the SDL software path, never physical hotplug or
-# audible output. Set this before any player/test process can initialize SDL.
+# The package lane qualifies only SDL's scripted software path, never physical
+# presentation, hotplug, or audible output. Force both virtual backends before
+# any player/test process can initialize SDL so the downloaded-package receipt
+# is independent of the runner's attached devices.
 export SDL_AUDIO_DRIVER=dummy
+export SDL_VIDEO_DRIVER=dummy
 
 for tool in python3 shasum otool; do
   command -v "$tool" >/dev/null 2>&1 || fail "required macOS verification tool is missing: $tool"
