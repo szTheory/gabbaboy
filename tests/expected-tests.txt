@@ -133,6 +133,8 @@ timer_div_write
 timer_tac_write
 timer_tima_collision
 timer_tma_collision
+audio_tracer
+audio_capacity
 serial_internal_disconnected
 serial_external_pending
 serial_unqualified_overlap

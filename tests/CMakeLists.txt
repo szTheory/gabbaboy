@@ -50,6 +50,14 @@ foreach(case guest_overflow mid_instruction selectors div_write tac_write tima_c
   add_test(NAME timer_${case} COMMAND test_timer ${case})
 endforeach()
 
+add_executable(test_audio test_audio.c)
+target_link_libraries(test_audio PRIVATE GabbaBoy::core)
+target_compile_features(test_audio PRIVATE c_std_17)
+set_target_properties(test_audio PROPERTIES C_EXTENSIONS OFF)
+foreach(case tracer capacity)
+  add_test(NAME audio_${case} COMMAND test_audio audio_${case})
+endforeach()
+
 add_executable(test_serial test_serial.c)
 target_link_libraries(test_serial PRIVATE GabbaBoy::core)
 target_compile_features(test_serial PRIVATE c_std_17)
