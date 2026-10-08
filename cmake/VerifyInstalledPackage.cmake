@@ -49,7 +49,8 @@ file(SHA256 "${battery_fixture_dir}/continuation.gb" installed_battery_digest)
 file(SHA256 "${battery_fixture_dir}/continuation.asm" installed_battery_source_digest)
 if(NOT installed_battery_digest STREQUAL battery_rom_digest OR
    NOT installed_battery_source_digest STREQUAL battery_source_digest)
-  message(FATAL_ERROR "Installed battery fixture bytes differ from their manifest digests")
+  message(FATAL_ERROR
+    "Installed battery fixture digest mismatch: ROM expected ${battery_rom_digest}, got ${installed_battery_digest}; source expected ${battery_source_digest}, got ${installed_battery_source_digest}")
 endif()
 file(SIZE "${battery_fixture_dir}/continuation.gb" installed_battery_size)
 if(NOT installed_battery_size EQUAL 32768)
