@@ -13,9 +13,9 @@ audited: "2026-10-08"
 The read-only L1 audit checked all seven plan-authored threat registers against
 the implementation, named regression cases, local package checks, and published
 evidence. The 15 phase-specific threats and seven repeated no-package-install
-entries have controls or documented acceptance. Hosted exact-head checks remain
-a separate closeout gate in `04-VALIDATION.md`; this audit does not treat them as
-passed. No physical hardware or power-loss qualification is claimed.
+entries have controls or documented acceptance. The final exact-head CI and
+package receipts are recorded separately in `04-VALIDATION.md`. No physical
+hardware or power-loss qualification is claimed.
 
 ## Trust Boundaries
 
@@ -42,8 +42,8 @@ passed. No physical hardware or power-loss qualification is claimed.
 | T-04-08 | Tampering | Concurrent player | high | mitigate | A nonblocking exclusive lock covers each battery-backed session; `player_session_lock_lifecycle` exercises conflict and release. The guarantee is limited to cooperating processes. | closed |
 | T-04-09 | Repudiation | Player status | medium | mitigate | Dirty generation, autosave bounds, persistent failure state, and explicit final-flush choices are exercised by cadence and transition-choice tests. | closed |
 | T-04-10 | Spoofing | Continuation oracle | medium | mitigate | Separate-process resume distinguishes missing save, wrong ROM identity, and altered payload through named negative controls and guest markers. | closed |
-| T-04-11 | Tampering | Fixture artifact | medium | mitigate | Original source, license, source/ROM digests, pinned RGBDS recipe, and byte-identical reproduction are recorded in the fixture manifest and evidence ledger. | closed |
-| T-04-12 | Repudiation | CI inventory | high | mitigate | Named nonempty test inventories fail on missing, skipped, failed, or timed-out cases. Local core and installed inventories passed; hosted exact-head inventory remains an explicit phase-closeout gate. | closed |
+| T-04-11 | Tampering | Fixture artifact | medium | mitigate | Original source, license, source/ROM digests, pinned RGBDS recipe, and byte-identical reproduction are recorded in the fixture manifest and evidence ledger. Path-specific Git attributes preserve assembly LF and ROM bytes on Windows; fresh Windows checkout and exact-head fixture reproduction passed. | closed |
+| T-04-12 | Repudiation | CI inventory | high | mitigate | Named nonempty test inventories fail on missing, skipped, failed, or timed-out cases. Exact PR-head required-native, Linux ASan/UBSan, CMake floor, Linux/macOS/Windows inventories, fixture reproduction, and package consumers passed; run IDs and receipts are recorded in `04-VALIDATION.md`. | closed |
 | T-04-13 | Information disclosure | Public logs | medium | mitigate | Logs use repository-relative fixture identifiers and digests, not save payloads or local paths; the public-doc privacy scan was clean. | closed |
 | T-04-14 | Repudiation | Support ledger | medium | mitigate | `docs/mbc1-evidence.md` names test denominators, source revision, fixture digests, evidence classes, and the hosted exact-head gate. | closed |
 | T-04-15 | Information disclosure | Published evidence | medium | mitigate | Public contract and evidence documents contain no local home paths, save payloads, email addresses, or machine identifiers; privacy scan passed. | closed |
@@ -66,6 +66,7 @@ passed. No physical hardware or power-loss qualification is claimed.
 | Audit Date | Threats Total | Closed | Open | Run By |
 |---|---:|---:|---:|---|
 | 2026-10-08 | 22 | 22 | 0 | Phase executor, L1 artifact and source review |
+| 2026-10-08 | 22 | 22 | 0 | Phase executor, final Windows fixture and exact-head evidence cross-check |
 
 ## Sign-Off
 
@@ -74,4 +75,4 @@ passed. No physical hardware or power-loss qualification is claimed.
 - [x] `threats_open: 0` confirmed
 - [x] `status: verified` set in frontmatter
 
-**Approval:** verified 2026-10-08; exact hosted CI and package receipts remain required by phase validation before phase closeout.
+**Approval:** verified 2026-10-08; final exact-head CI, fixture reproduction, and downloaded package receipts passed as recorded in phase validation.

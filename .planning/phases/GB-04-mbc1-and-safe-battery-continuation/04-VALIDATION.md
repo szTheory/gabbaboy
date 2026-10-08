@@ -9,7 +9,7 @@ created: "2026-10-08"
 
 # Phase GB-04 — Validation Strategy
 
-This validation contract began as a plan. Its task rows now record executed local evidence; exact-head hosted checks remain a separate phase-closeout gate. A prior phase's green result is not Phase 4 evidence.
+This validation contract began as a plan. Its task rows now record executed local evidence, and the final exact-head hosted checks and package receipts are recorded below. A prior phase's green result is not Phase 4 evidence.
 
 ## Test Infrastructure
 
@@ -44,7 +44,7 @@ This validation contract began as a plan. Its task rows now record executed loca
 | 04-03-02 atomic write | 3 | SAVE-03 | T-04-06 | Fails when player verifier is nonzero or injected write/sync/rename/recovery/interruption exposes changed old target or partial target | `bash tests/scripts/verify-phase3-player.sh` | `tests/player/test_session.c` fault-stage cases | pass |
 | 04-04-01 lock | 4 | SAVE-03 | T-04-08 | Fails when player verifier is nonzero, second writer succeeds under lock, post-release writer fails or no-battery save appears | `bash tests/scripts/verify-phase3-player.sh` | `tests/player/test_session.c` two-process and injected lock cases | pass |
 | 04-04-02 cadence/UX | 4 | SAVE-03 | T-04-09 | Fails when player verifier is nonzero, unchanged store saves, dirty age exceeds 10s, or final transition silently loses progress | `bash tests/scripts/verify-phase3-player.sh` | `tests/player/test_session.c` and player smoke | pass |
-| 04-05-01 authored fixture | 5 | SAVE-04 | T-04-11 | Fails when RGBDS tool/notice/source is missing or wrong, digest changes or reproduced bytes differ | `bash tests/scripts/reproduce-mbc1-continuation.sh` | fixture manifest and reproduction script planned | pass |
+| 04-05-01 authored fixture | 5 | SAVE-04 | T-04-11 | Fails when RGBDS tool/notice/source is missing or wrong, digest changes or reproduced bytes differ | `bash tests/scripts/reproduce-mbc1-continuation.sh` | fixture manifest, path-specific Windows text/binary attributes, and reproduction script | pass |
 | 04-05-02 continuation | 5 | SAVE-04 | T-04-10 | Fails when player case is missing/nonzero, fresh-process success absent, distinct MISSING_SAVE_EMPTY/WRONG_ROM_IDENTITY_REJECTED markers collapse, or corruption reaches success | `bash tests/scripts/verify-phase3-player.sh` | `tests/player/test_continuation.c`, player inventory, core fixture digest | pass |
 | 04-06-01 consumers/fuzz | 6 | SAVE-02/03 | T-04-12/13 | Fails when battery selection is empty/nonzero, fuzz/sanitizer assertion fires or relocated C/C++ consumer cannot compile/link/run | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error -R '^battery_' && bash tests/scripts/verify-phase2-installed.sh` | `tests/test_battery_fuzz.c`, installed consumers | pass |
 | 04-06-02 CI/package | 6 | SAVE-03/04 | T-04-12/13 | Fails when full inventory is missing/skipped/nonzero, player/package source receipt fails, or reproduction digest differs | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error && bash tests/scripts/verify-phase3-player.sh && bash tests/scripts/reproduce-mbc1-continuation.sh` | three workflows, package verifier and inventory | pass |
@@ -57,7 +57,7 @@ The repeated `T-04-SC` supply-chain row is accepted because these plans introduc
 
 ## Executed Local Results
 
-The final local software/package pass used source revision
+The final local software/package pass used implementation revision
 `918ec265d1ab2a94292fe12c52a16563de8926b1`:
 
 - Core CTest: **155/155** passed, including battery fuzz, mapper matrix, and
@@ -68,6 +68,16 @@ The final local software/package pass used source revision
 - macOS player and extracted-package verifier: **37/37** passed. The package
   reopened the MBC1 continuation fixture in a fresh process. Candidate package
   SHA-256: `dc2b8ebdeee56fb73a5d14bbfa5c2872ab2cfcbebd2180cd3740814fedded9d2`.
+- The phase-boundary regression run rebuilt the core and passed **155/155**;
+  the fresh macOS player/package rerun passed **37/37** and produced a verified
+  extracted package with SHA-256
+  `97af58d5b118c0cf26f45ed3d45401e0bb8a71b02a2c63269b20358f07eab3e4` at
+  source `79f83f627ffb3631811b2f39b23081117ebaab8f`. In this sandbox, the
+  first player smoke run could not create its synthetic lock file because
+  SDL's macOS preference directory
+  resolves through Foundation rather than the `HOME` environment variable.
+  Redirecting `CFFIXED_USER_HOME` to an isolated `/private/tmp` directory made
+  the complete player verifier pass; no product-code change was needed.
 - The RGBDS 1.0.1 macOS archive SHA-256
   `2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645`
   reproduced the source and checked-in ROM digests byte-for-byte.
@@ -75,13 +85,23 @@ The final local software/package pass used source revision
   `actionlint` passed for the updated preview workflow; a privacy scan found
   no home paths or personal identifiers in published docs.
 - Linux ASan/UBSan was not run on this macOS host. It remains required on the
-  exact hosted PR head. The install build showed the already-known
+  hosted PR head. The install build showed the already-known
   unsequenced-access warning in `tests/test_dma.c:702`; this phase did not
   change that file.
 
+After Windows CI exposed CRLF conversion of the authored assembly source,
+`95c076d` added path-specific `.gitattributes` rules: text inputs check out
+with LF, while the generated ROM remains byte-for-byte binary. A Windows-style
+checkout with `core.autocrlf=true` retained the manifest's source and ROM
+digests. The fixture/package verifier now reports both expected and actual
+digests on mismatch. The corrected implementation passed the local core
+inventory (155/155) and relocated package verifier (160/160 plus 155/155
+core-only, no skips); exact hosted evidence below repeats these checks on the
+current PR head.
+
 At Phase 4 triage on 2026-10-08, authenticated GitHub queries found no
-pre-existing open issues or pull requests. The Phase 4 pull request is created
-after the remaining plan artifacts are committed.
+pre-existing open issues or pull requests. Phase 4 work and closeout are in
+PR #8; its current exact-head evidence is recorded below.
 
 ## Required Inventory, Fixture and Hosted Gates
 
@@ -100,16 +120,42 @@ Mapper expectations from Pan Docs/Gekkio plus source cross-checks are documented
 
 ## Hosted Exact-Head Status
 
-**Pending until the finished Phase 4 pull request is inspected.** Require the
-current PR-head `required-native` aggregate, `native-linux-x64`,
-`native-macos-arm64`, `native-windows-x64`, `linux-asan-ubsan`,
-`cmake-floor-3.25.3`, `fixture-repro`, `mooneye-original-repro`, and
-`mooneye-candidate-repro` contexts to pass on that exact SHA. Also inspect the
-`preview-package-smoke` aggregate and exact-SHA Linux/macOS installed-package
-receipts. Apply `run-macos-player` to request `macos-player-package`, then
-require the downloaded-byte `player-package-smoke-macos` consumer to match the
-same PR SHA and candidate build run. A skipped, stale, canceled, unavailable,
-or manual-dispatch-only result is not green evidence.
+PR #8's current exact head `79f83f627ffb3631811b2f39b23081117ebaab8f`
+passed all Phase 4 hosted gates. It includes the merge of the already-merged
+planning PR from `main`; the source and fixture fix under test are unchanged
+from `95c076d`.
+
+- `ci` pull-request run **37728192665** passed: `required-native`
+  (113151357960), `native-linux-x64` (113151047504), `native-macos-arm64`
+  (113151047562), `native-windows-x64` (113151047530), `linux-asan-ubsan`
+  (113151047292), `cmake-floor-3.25.3` (113151047475), and
+  `macos-player-package` (113151047510). Windows captured raw manifest bytes
+  and passed the required installed inventory; no job was skipped.
+- `fixture-repro` pull-request run **37728192634** passed `fixture-repro`
+  (113151047353), `mooneye-original-repro` (113151047346), and
+  `mooneye-candidate-repro` (113151046938), including byte reproduction of
+  the MBC1 continuation fixture with pinned RGBDS 1.0.1.
+- `preview-package-smoke` pull-request run **37728192674** passed the aggregate
+  (113151467275), Linux installed consumer (113151047069), macOS installed
+  consumer (113151047303), and downloaded macOS player consumer
+  (113151047564). Each artifact receipt identifies the same source SHA.
+
+Downloaded and locally re-hashed package bytes match the receipts:
+
+| Package | Source SHA | Package SHA-256 | Receipt |
+|---|---|---|---|
+| Linux core preview | `79f83f627ffb3631811b2f39b23081117ebaab8f` | `74e893cdadd453dd13c981b7324448f824d53baad5388fa2217ed54743491ca2` | `smoke_result: passed` |
+| macOS core preview | `79f83f627ffb3631811b2f39b23081117ebaab8f` | `5c5284633295504167ac689a5207fa3debba52e81f7231d18e01e64330efebf2` | `smoke_result: passed` |
+| macOS player preview | `79f83f627ffb3631811b2f39b23081117ebaab8f` | `44fbac8b86eee0a1dc1565848a3febee2692e85edc117545a7d8d6d386a26d17` | `result: passed`; fresh-process MBC1 continuation |
+
+The player receipt also records fixture source digest
+`ad82e0cd51eeb6d536421d20c4a5b88ee0c019a4e699c2c75de077a20c82ba94`, ROM
+digest `f89bf3884ff10a702aa117f2963e6fe9ea8aeac3a9bc003f52b6c5ca6abfbbd2`,
+SDL 3.4.18 archive digest, and `hardware_qualified: false`, `signed: false`,
+`notarized: false`. The package smoke drove SDL keyboard events into the demo,
+produced a completed frame, and resumed battery progress in a fresh process.
+No skipped, stale, canceled, unavailable, or manual-dispatch-only result was
+used as passing evidence.
 
 ## Validation Sign-Off
 
@@ -117,11 +163,15 @@ or manual-dispatch-only result is not green evidence.
 - [x] Every task has `<automated>` verify and a named failing direction.
 - [x] Required inventory, original fixture reproduction, exact-head CI/consumer and threat validations are mapped.
 - [x] Focused and full local suites executed; counts are recorded below.
+- [x] Prior-phase regression gate executed with the full core and macOS player
+      test inventories; both passed with no skipped cases.
 - [x] Every scoped software requirement has named automated coverage; no manual-only software acceptance remains.
-- [ ] Hosted exact-head and downloaded artifact evidence inspected.
+- [x] Hosted exact-head and downloaded artifact evidence inspected and
+      package bytes re-hashed against receipts.
 - [x] `nyquist_compliant: true` is supported by the executed per-task coverage map.
 
-**Approval:** local execution and Nyquist coverage are validated; exact-head hosted checks remain pending for phase closeout.
+**Approval:** local execution, Nyquist coverage, source review, threat gate,
+exact-head hosted checks, and downloaded package receipts are validated.
 
 ## Validation Audit 2026-10-08
 

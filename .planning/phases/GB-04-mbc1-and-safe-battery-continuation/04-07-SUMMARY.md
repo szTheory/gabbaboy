@@ -9,7 +9,7 @@ requires:
 provides:
   - Public cartridge and battery-save contract linked from README and preview guidance
   - Evidence ledger mapping SAVE-01 through SAVE-04 to named tests and provenance classes
-  - Phase validation record with local run counts and an explicit exact-head hosted gate
+  - Phase validation record with local run counts, exact-head hosted checks, and downloaded package receipts
 affects: [phase-verification, adopter-guidance, release-evidence]
 actuals:
   tasks: 2
@@ -26,7 +26,7 @@ key-files:
     - docs/preview.md
     - .github/workflows/preview.yml
     - .planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md
-requirements-completed: []
+requirements-completed: [SAVE-01, SAVE-02, SAVE-03, SAVE-04]
 coverage:
   - id: D1
     description: Public support, ownership, persistence, recovery, and concurrency claims match the implementation and identify the supported software profile and exclusions.
@@ -41,7 +41,7 @@ coverage:
     requirement: SAVE-01/SAVE-02/SAVE-03/SAVE-04
     verification:
       - kind: integration
-        ref: "docs/mbc1-evidence.md; privacy and whitespace checks; exact hosted PR-head checks remain pending"
+        ref: "docs/mbc1-evidence.md; privacy/whitespace checks; exact-head PR CI and package receipts recorded in 04-VALIDATION.md"
         status: pass
     human_judgment: false
   - id: D3
@@ -91,17 +91,34 @@ validation matrix from a planning contract to locally executed evidence.
 - The relocated package verifier passed **160/160** cases, including external
   C and C++ consumers; its core-only subset passed **155/155** with no skips.
 - The macOS player/package verifier passed **37/37** tests and confirmed
-  fresh-process continuation from the extracted package. Candidate package
-  SHA-256: `dc2b8ebdeee56fb73a5d14bbfa5c2872ab2cfcbebd2180cd3740814fedded9d2`.
+  fresh-process continuation from the extracted package. The final local
+  closeout package at source `79f83f627ffb3631811b2f39b23081117ebaab8f` had
+  SHA-256 `97af58d5b118c0cf26f45ed3d45401e0bb8a71b02a2c63269b20358f07eab3e4`.
+- At phase closeout, the prior-phase regression run again passed **155/155**
+  core tests and **37/37** player/package tests. The first local player smoke
+  attempt was blocked by the sandbox's macOS preferences path; redirecting
+  `CFFIXED_USER_HOME` to an isolated temporary directory resolved the test
+  environment constraint without changing product code.
 - Pinned RGBDS 1.0.1 reproduced the original fixture byte-for-byte. Its archive,
   source, and ROM digests are recorded in the evidence ledger.
 - `actionlint` passed for the preview workflow. Tracked and new-file whitespace
   checks passed, and a privacy scan found no local home paths or personal
   identifiers in the public evidence documents.
-- This macOS host did not run Linux ASan/UBSan. Hosted exact-head checks and
-  downloaded package receipts remain required before the phase can be marked
-  complete. No physical MBC1/DMG observation or power-loss qualification is
-  claimed.
+- Windows initially exposed CRLF conversion of the checked-in assembly source
+  during checkout. Commit `95c076d` added path-specific Git attributes that
+  preserve LF for text inputs and raw bytes for the ROM, and improved digest
+  mismatch diagnostics. A fresh Windows-style checkout preserved the fixture
+  hashes; Windows then passed the exact 160-case installed inventory.
+- On exact PR head `79f83f627ffb3631811b2f39b23081117ebaab8f`, hosted Linux
+  ASan/UBSan, CMake 3.25.3, Linux/macOS/Windows native inventories, the
+  required-native aggregate, fixture reproduction, and Linux/macOS/player
+  package smoke all passed. Run IDs, package digests, and receipt contents are
+  recorded in `04-VALIDATION.md`.
+- Source review returned zero findings. No physical MBC1/DMG observation or
+  storage power-loss qualification is claimed. The code-only UI audit scored
+  13/24 with advisory findings about persistent status visibility and the
+  discoverability of keyboard-only final-save choices; it found no blocker,
+  and no visual screenshots were available for this native SDL interface.
 
 ## Decisions and Evidence Limits
 
@@ -121,16 +138,15 @@ validation matrix from a planning contract to locally executed evidence.
 ## Requirement Traceability
 
 This plan maps SAVE-01 through SAVE-04 to named executable cases and public
-claims. Shared requirements remain unmarked as completed until the exact
-hosted PR head, sanitizer lane, and package receipts are inspected during phase
-verification.
+claims. All four requirements are complete after goal-backward verification;
+the phase verification, validation, security, and evidence-ledger artifacts
+retain their evidence boundaries and exact hosted run records.
 
 ## Next
 
-Open the Phase 4 PR and inspect the exact-head hosted gates, then run phase
-verification. The phase boundary remains in force; after Phase 4 is complete,
-stop before Phase 5 — DMG Audio and Stable Playback. Its discussion command is
-`$gsd-discuss-phase 5`.
+Phase 4 goal verification and exact-head checks are complete on PR #8. The
+phase boundary remains in force; stop before Phase 5 — DMG Audio and Stable
+Playback. Its discussion command is `$gsd-discuss-phase 5`.
 
 ---
 *Phase: GB-04-mbc1-and-safe-battery-continuation*

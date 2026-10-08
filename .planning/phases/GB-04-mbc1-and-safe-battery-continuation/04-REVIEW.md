@@ -1,9 +1,10 @@
 ---
 phase: GB-04-mbc1-and-safe-battery-continuation
-reviewed: 2026-10-08T04:24:44Z
+reviewed: 2026-10-08T04:34:30Z
 depth: standard
-files_reviewed: 25
+files_reviewed: 26
 files_reviewed_list:
+  - .gitattributes
   - .github/workflows/fixture-repro.yml
   - .github/workflows/preview.yml
   - CMakeLists.txt
@@ -39,14 +40,16 @@ status: clean
 
 # Phase 4: Code Review Report
 
-**Reviewed:** 2026-10-08T04:24:44Z
+**Reviewed:** 2026-10-08T04:34:30Z
 **Depth:** standard
-**Files Reviewed:** 25
+**Files Reviewed:** 26
 **Status:** clean
 
 ## Summary
 
-Reviewed the Phase 4 cartridge mapper and battery API, player save lifecycle and filesystem boundaries, fixture reproduction/package workflows, and the changed core, installed-consumer, and player tests. I found no demonstrated correctness, security, or maintainability defects in the reviewed source. The save loader bounds and validates files before import, rejects symlinks and non-regular targets, preserves rejected regular saves without overwriting an existing recovery file, and uses a temporary file plus synchronization and atomic replacement for writes. The MBC1 implementation and public battery operations preserve the documented size, ownership, and failed-operation behavior.
+Reviewed the Phase 4 cartridge mapper and battery API, player save lifecycle and filesystem boundaries, fixture reproduction/package workflows, and the changed core, installed-consumer, and player tests. Re-reviewed the final PR head `95c076df9676309e0d14482d8588363fc2da4e13`, including the Windows checkout fix and its installed-package digest check. The `.gitattributes` rules force LF checkouts for the assembly, manifest, and license, and disable text conversion for the binary ROM; a fresh Git checkout with `core.autocrlf=true` retained the manifest's expected assembly and ROM SHA-256 digests. The package diagnostic reports each expected and observed digest while preserving the existing fail-closed comparison. I found no demonstrated correctness, security, or maintainability defects.
+
+The earlier Phase 4 review also found that the save loader bounds and validates files before import, rejects symlinks and non-regular targets, preserves rejected regular saves without overwriting an existing recovery file, and uses a temporary file plus synchronization and atomic replacement for writes. The MBC1 implementation and public battery operations preserve the documented size, ownership, and failed-operation behavior.
 
 All reviewed files meet quality standards. No issues found.
 
@@ -56,6 +59,6 @@ No findings.
 
 ---
 
-_Reviewed: 2026-10-08T04:24:44Z_
+_Reviewed: 2026-10-08T04:34:30Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_

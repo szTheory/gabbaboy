@@ -55,10 +55,9 @@ Plan 04-07 validation and package run used source revision
 
 ## Issue and PR triage
 
-On 2026-10-08, authenticated GitHub queries found no pre-existing open issues
-or pull requests for the repository. There was no outstanding external review
-queue to carry into the Phase 4 PR; the phase PR is created after all planned
-artifacts are committed.
+At Phase 4 closeout on 2026-10-08, authenticated GitHub queries found no
+unrelated open issues or pull requests. PR #8 is the Phase 4 review vehicle;
+its final closeout revision must pass the exact-head checks before merge.
 
 Earlier plan summaries record the focused matrix and API selections, recovery
 and atomic-write fault cases, lock/cadence behavior, and initial separate-
@@ -87,21 +86,36 @@ and is not authentication.
 
 ## Hosted exact-head evidence
 
-The Phase 4 hosted gate must be inspected on the final open-PR head. The
-required workflow contexts are `required-native`, `native-linux-x64`,
-`native-macos-arm64`, `native-windows-x64`, `linux-asan-ubsan`,
-`cmake-floor-3.25.3`, `fixture-repro`, `mooneye-original-repro`, and
-`mooneye-candidate-repro`. The optional player lane is requested with the
-`run-macos-player` label and must include `macos-player-package`; the downloaded
-consumer receipt must match the same PR head and package build run. The
-`preview-package-smoke` aggregate must also pass its exact-head package checks.
+On 2026-10-08, PR #8's exact source-and-fixture head was
+`79f83f627ffb3631811b2f39b23081117ebaab8f`. All three pull-request workflow
+runs below passed on that SHA. The detailed job IDs, downloaded receipt
+contents, and package re-hash results are recorded in the
+[Phase 4 validation record](../.planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md).
 
-These hosted results are **pending** until the exact PR head, job conclusions,
-and package/fixture receipts are observed. A local result, skipped optional
-lane, manual-dispatch run, or successful older SHA does not satisfy this gate.
-The current PR URL, exact head SHA, workflow run IDs, and outcomes are to be
-checked from the active branch before phase verification; consult the live PR
-checks and associated run receipts for current status.
+- CI run **37728192665** passed `required-native`, `native-linux-x64`,
+  `native-macos-arm64`, `native-windows-x64`, `linux-asan-ubsan`,
+  `cmake-floor-3.25.3`, and `macos-player-package`.
+- Fixture run **37728192634** passed `fixture-repro`,
+  `mooneye-original-repro`, and `mooneye-candidate-repro`, including
+  byte-for-byte reproduction of the MBC1 continuation fixture.
+- Preview package run **37728192674** passed the aggregate, installed Linux
+  and macOS consumers, and downloaded macOS player smoke. Each receipt named
+  source SHA `79f83f627ffb3631811b2f39b23081117ebaab8f`.
+
+The downloaded package bytes were locally re-hashed against their receipts:
+
+| Package | Source SHA | Package SHA-256 | Smoke result |
+|---|---|---|---|
+| Linux core preview | `79f83f627ffb3631811b2f39b23081117ebaab8f` | `74e893cdadd453dd13c981b7324448f824d53baad5388fa2217ed54743491ca2` | passed |
+| macOS core preview | `79f83f627ffb3631811b2f39b23081117ebaab8f` | `5c5284633295504167ac689a5207fa3debba52e81f7231d18e01e64330efebf2` | passed |
+| macOS player preview | `79f83f627ffb3631811b2f39b23081117ebaab8f` | `44fbac8b86eee0a1dc1565848a3febee2692e85edc117545a7d8d6d386a26d17` | passed; fresh-process continuation |
+
+The player receipt reports `hardware_qualified: false`, `signed: false`, and
+`notarized: false`. The documented result applies to the exact source head
+above. The final closeout documentation revision is a separate PR head and
+must pass its own required exact-head checks before merge. Skipped, stale,
+canceled, unavailable, or manual-dispatch-only results do not satisfy that
+final-head gate.
 
 ## Scope exclusions
 

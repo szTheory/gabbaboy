@@ -1,19 +1,20 @@
 ---
 gsd_state_version: "1.0"
 milestone: v0.1
-current_phase: 04
-current_phase_name: MBC1 and Safe Battery Continuation
-status: executing
-stopped_at: Completed Phase 4 Plan 04-06; Plan 04-07 is next
-last_updated: "2026-10-08T04:14:05.117Z"
+current_phase: 5
+current_phase_name: DMG Audio and Stable Playback
+status: planning
+stopped_at: Phase 4 complete, ready to plan Phase 5
+last_updated: "2026-10-08T04:55:02.469Z"
 last_activity: 2026-10-08
-last_activity_desc: Completed GB-04 Plan 04-05; Plan 04-06 is next
-state_head: 054adf0670395c93c1323fb1d22dee41e568fe6b
+last_activity_desc: Phase 4 complete, transitioned to Phase 5
+state_head: 79f83f627ffb3631811b2f39b23081117ebaab8f
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 42
-  completed_plans: 41
+  completed_plans: 42
+  percent: 67
 milestone_name: limited DMG preview
 ---
 
@@ -24,16 +25,16 @@ milestone_name: limited DMG preview
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase GB-04 — MBC1 and Safe Battery Continuation
+**Current focus:** Phase GB-04 — MBC1 and Safe Battery Continuation (complete; stopped at phase boundary)
 
 ## Current Position
 
-Phase: GB-04 (MBC1 and Safe Battery Continuation) — EXECUTING
-Plan: 7 of 7
-Status: Executing Phase GB-04
-Last activity: 2026-10-08 — Plan 04-05 completed; Plan 04-06 is next
+Phase: 5 — DMG Audio and Stable Playback
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-10-08 — Phase 4 complete, transitioned to Phase 5
 
-Progress: [█████░░░░░] 50% of milestone phases complete; Phases 1–3 passed verification. Phase 3 has 13/13 plan summaries, 5/5 goal truths, and 33/33 UAT checks. Phase 4 has 5/7 plan summaries. Plan 04-05 added an original, digest-pinned MBC1 battery fixture and four bounded fresh-process continuation cases; RGBDS reproduction was byte-identical, the core inventory passed 154/154, and the committed-revision player inventory plus package smoke passed 37/37 at `a6d06b0cd4c4ff601570745a22c2feaa1213d59b`. Plan 04-06 is next; full Phase 4 validation remains pending.
+Progress: [███████░░░] 67% of milestone phases complete. Phases 1–4 passed goal verification. Phase 4 has 7/7 plan summaries and 4/4 verified goal truths; the core inventory passed 155/155, the relocated package inventory passed 160/160 plus a 155/155 core-only subset, the macOS player/package inventory passed 37/37, and exact hosted PR checks and downloaded Linux/macOS/player package receipts passed on source head `79f83f627ffb3631811b2f39b23081117ebaab8f`. The Windows fixture-byte checkout issue was fixed with narrow Git attributes and re-reviewed clean. See the Phase 4 verification, validation, security, and UI review artifacts. No physical MBC1/DMG or storage power-loss qualification is claimed. Stop here; Phase 5 is next and not started.
 
 ## Performance Metrics
 
@@ -79,6 +80,7 @@ Progress: [█████░░░░░] 50% of milestone phases complete; Pha
 | Phase 04 P04 | 11min | 2 tasks | 8 files |
 | Phase 04 P05 | 7min | 2 tasks | 11 files |
 | Phase 04 P06 | 10 min | 2 tasks | 13 files |
+| Phase 04 P07 | 18 min | 2 tasks | documentation, evidence, and workflow metadata |
 
 ## Accumulated Context
 
@@ -161,10 +163,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-08T04:14:05.074Z
-Stopped at: Completed Phase 4 Plan 04-06; Plan 04-07 is next
+Last session: 2026-10-08 — Phase GB-04 execution and verification complete
+Stopped at: Phase 4 complete, ready to plan Phase 5
 Resume file: .planning/.continue-here.md
-Next command in fresh context: $gsd-execute-phase 4 (continue with Plan 04-06; stop at the Phase 4 boundary)
+Next command in fresh context: $gsd-discuss-phase 5
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: **Phase GB-04 execution, Plan 04-05 of 7.** The project-authored MBC1 battery fixture reproduces byte-for-byte with pinned RGBDS 1.0.1; separate-process resume, missing-save, wrong-ROM, and altered-payload controls pass. See [04-05-SUMMARY.md](phases/GB-04-mbc1-and-safe-battery-continuation/04-05-SUMMARY.md). Phase 4 remains in progress; continue with Plan 04-06, then Plan 04-07 and phase verification. Keep both auto-advance flags false and stop at the Phase 4 boundary.
-Next roadmap phase: **Phase 5 — DMG Audio and Stable Playback**, only after Phase 4 is completed and handed off. The exact next command is `$gsd-execute-phase 4`; continue with Plan 04-06 and stop after Phase 4.
+Completed workflow stage: **Phase GB-04 execution and goal verification, Phase 4 of 6.** All seven plans are complete; SAVE-01 through SAVE-04 passed goal-backward verification. PR #8's exact source-head CI, fixture reproduction, and package-consumer checks passed; see [04-VERIFICATION.md](phases/GB-04-mbc1-and-safe-battery-continuation/04-VERIFICATION.md) and [04-VALIDATION.md](phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md). Keep both auto-advance flags false and stop here.
+Next roadmap phase: **Phase 5 — DMG Audio and Stable Playback**. It has not started. The exact next command is `$gsd-discuss-phase 5`.

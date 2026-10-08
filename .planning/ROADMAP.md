@@ -16,7 +16,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 - [x] **Phase 1: Portable Foundation and Original ROM Tracer** - Build, embed, and download a bounded real-ROM tracer. (completed 2026-10-03)
 - [x] **Phase 2: DMG CPU, Bus, and Time** - Execute scoped DMG diagnostics with reproducible timing and bounded progress. (completed 2026-10-07)
 - [x] **Phase 3: Visible Interactive DMG** - Play an original or permissioned ROM-only fixture in a macOS preview. (completed 2026-10-07)
-- [ ] **Phase 4: MBC1 and Safe Battery Continuation** - Retain meaningful guest progress across fresh processes without corrupting good saves.
+- [x] **Phase 4: MBC1 and Safe Battery Continuation** - Retain meaningful guest progress across fresh processes without corrupting good saves. (completed 2026-10-08)
 - [ ] **Phase 5: DMG Audio and Stable Playback** - Hear paced sound and recover cleanly from host input/device transitions.
 - [ ] **Phase 6: Qualified DMG Release and Consumer Handoff** - Download evidenced packages and reproduce native adoption with honest support claims.
 
@@ -166,7 +166,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 ### Phase 4: MBC1 and Safe Battery Continuation
 
-**Goal**: Players can use declared MBC1 cartridges and resume meaningful saved progress after restarting without losing their last good save on failure.
+**Goal**: As a player, I want to resume supported MBC1 games from battery saves, so that failures preserve my last good progress.
 **Mode:** mvp
 **Depends on**: Phase 3
 **Requirements**: SAVE-01, SAVE-02, SAVE-03, SAVE-04
@@ -177,7 +177,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 3. The player follows documented atomic replacement, recovery, and concurrent-writer rules; failed writes preserve the last good save and visibly report failure. (SAVE-03)
 4. An original GB fixture saves, exits, reopens in a fresh instance/process, and resumes behavior dependent on prior bytes; empty/wrong-save controls demonstrate a meaningful continuation oracle. (SAVE-04)
 
-**Plans**: Seven plans across seven dependency-ordered waves; five plans have execution summaries. Independent structure, requirement/decision coverage, failure-direction, and post-hook coverage checks passed. Plan 04-05 added a byte-reproducible original MBC1 battery fixture and separate-process resume/missing-save/wrong-ROM/altered-payload tests; local core/player verification passed. See the latest [Plan 04-05 summary](phases/GB-04-mbc1-and-safe-battery-continuation/04-05-SUMMARY.md) and [validation checklist](phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md); full Phase 4 evidence remains pending.
+**Plans**: All seven plans across seven dependency-ordered waves have execution summaries. Goal-backward verification passed all four success criteria and SAVE-01 through SAVE-04. The full core inventory passed 155/155; the relocated install passed 160/160 plus a 155/155 core-only inventory; the macOS player/package verifier passed 37/37; pinned RGBDS 1.0.1 reproduced the original fixture byte-for-byte. Exact PR-head CI, fixture reproduction, and downloaded Linux/macOS/player package receipts passed after the Windows checkout line-ending fix. The source review is clean; the UI audit recorded advisory status-visibility improvements without a phase blocker. See [verification](phases/GB-04-mbc1-and-safe-battery-continuation/04-VERIFICATION.md), [validation](phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md), [security](phases/GB-04-mbc1-and-safe-battery-continuation/04-SECURITY.md), and the [evidence ledger](../docs/mbc1-evidence.md). No physical DMG/MBC1 or storage power-loss qualification is claimed. Stop at this phase boundary; the next phase is Phase 5 — DMG Audio and Stable Playback.
 **Wave 1**
 - [x] 04-01-PLAN.md
 
@@ -197,7 +197,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 - [x] 04-06-PLAN.md
 
 **Wave 7** *(blocked on Wave 6 completion)*
-- [ ] 04-07-PLAN.md
+- [x] 04-07-PLAN.md
 
 **UI hint**: yes
 
@@ -242,7 +242,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 | 1. Portable Foundation and Original ROM Tracer | 5/5 | Complete    | 2026-10-03 |
 | 2. DMG CPU, Bus, and Time | 17/17 | Complete | 2026-10-07 |
 | 3. Visible Interactive DMG | 13/13 | Complete    | 2026-10-07 |
-| 4. MBC1 and Safe Battery Continuation | 6/7 | In Progress | - |
+| 4. MBC1 and Safe Battery Continuation | 7/7 | Complete    | 2026-10-08 |
 | 5. DMG Audio and Stable Playback | 0/TBD | Not started | - |
 | 6. Qualified DMG Release and Consumer Handoff | 0/TBD | Not started | - |
 
