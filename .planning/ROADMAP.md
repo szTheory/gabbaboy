@@ -18,7 +18,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 - [x] **Phase 3: Visible Interactive DMG** - 13 plans are complete; refreshed canonical verification passed 5/5 roadmap truths and existing UAT passed 34/34 on 2026-10-09. The output-directory helper now rejects candidate/output ancestor overlap, with 8/8 direct regressions and current macOS player/package evidence. (completed 2026-10-09)
 - [x] **Phase 4: MBC1 and Safe Battery Continuation** - Retain meaningful guest progress across fresh processes without corrupting good saves. (implementation completed 2026-10-08; canonical verification refreshed 2026-10-09)
 - [x] **Phase 5: DMG Audio and Stable Playback** - Hear paced sound and recover cleanly from host input/device transitions. (implementation completed 2026-10-08; refreshed verification passed 17/17 truths on 2026-10-09)
-- [x] **Phase 6: Qualified DMG Release and Consumer Handoff** - Download evidenced packages and reproduce native adoption with honest support claims. (implementation completed 2026-10-09; prior 5/5 verification is stale after the shared helper change; refresh after Phase 5)
+- [x] **Phase 6: Qualified DMG Release and Consumer Handoff** - Download evidenced packages and reproduce native adoption with honest support claims. (implementation completed 2026-10-09; prior 5/5 verification is stale after the shared helper change; verification refresh is next)
 
 ## Phase Details
 
