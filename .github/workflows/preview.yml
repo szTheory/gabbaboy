@@ -3,7 +3,7 @@ name: preview-package-smoke
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened]
 
 permissions:
   actions: read
@@ -145,11 +145,10 @@ jobs:
 
   player-package-smoke-macos:
     name: player-package-smoke-macos
-    if: contains(github.event.pull_request.labels.*.name, 'run-macos-player')
     runs-on: macos-14
     timeout-minutes: 35
     steps:
-      - name: Find the exact successful optional player build run
+      - name: Find the exact successful player build run
         id: candidate
         env:
           GH_TOKEN: ${{ github.token }}
@@ -184,7 +183,7 @@ jobs:
                 exit 0
               fi
               if [[ "$player_result" == failure || "$player_result" == cancelled || "$player_result" == timed_out || "$player_result" == action_required ]]; then
-                echo "Optional player package job failed in exact-head CI run $run_id ($player_result)." >&2
+                echo "Required player package job failed in exact-head CI run $run_id ($player_result)." >&2
                 exit 1
               fi
               if [[ "$required_result" == failure || "$required_result" == cancelled || "$required_result" == timed_out || "$required_result" == action_required ]]; then
@@ -194,7 +193,7 @@ jobs:
             done <<<"$runs"
             sleep 10
           done
-          echo "No exact-head pull-request CI run completed the optional player package and required-native checks within 30 minutes." >&2
+          echo "No exact-head pull-request CI run completed the player package and required-native checks within 30 minutes." >&2
           exit 1
       - name: Check out exact pull request head
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -240,7 +239,7 @@ jobs:
         env:
           LINUX_X64: ${{ needs.installed-package-smoke-linux-x64.result }}
           MACOS_ARM64: ${{ needs.installed-package-smoke-macos-arm64.result }}
-          PLAYER_REQUESTED: ${{ contains(github.event.pull_request.labels.*.name, 'run-macos-player') }}
+          PLAYER_REQUESTED: ${{ github.event_name == 'pull_request' }}
           PLAYER_RESULT: ${{ needs.player-package-smoke-macos.result }}
         run: |
           for result in "$LINUX_X64" "$MACOS_ARM64"; do
@@ -250,7 +249,7 @@ jobs:
             fi
           done
           if [[ "$PLAYER_REQUESTED" == true && "$PLAYER_RESULT" != success ]]; then
-            echo "Requested downloaded macOS player package verification did not succeed: $PLAYER_RESULT" >&2
+            echo "Required downloaded macOS player package verification did not succeed: $PLAYER_RESULT" >&2
             exit 1
           fi
           if [[ "$PLAYER_REQUESTED" != true && "$PLAYER_RESULT" != skipped && "$PLAYER_RESULT" != success ]]; then

@@ -272,3 +272,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** The reviewed tests passed in the full local CTest suite, 179/179; the final source recheck reported clean with all reset, concurrency, timeout, Windows cleanup, and help-output findings resolved. PR #35 head `d1e5fdb3b23256f06694cd8d91613638612bccb8` was merged as `96f76dec9a675ede45da8d75bd72a5141c7419e4`; all required exact-head contexts passed: `required-native` run `37928170860`, `fixture-repro` run `37928170722`, and `preview-package-smoke` run `37928170973`. The two preview artifacts were independently checked for sidecar provenance, retention, digest, and safe extraction.
 - **Source:** `tests/test_api.c`, `tests/test_instance_concurrency.c`, `tests/CMakeLists.txt`, and Phase 1 `01-REVIEW.md` / `01-VALIDATION.md`.
 - **Status:** Corrected locally; exact-revision hosted validation is pending.
+
+### GB-SMOKE-001 / 2026-10-09 / Isolate SDL player smoke preferences
+
+- **Cause and evidence:** The player smoke's synthetic battery lock uses SDL's per-user preferences path. On macOS, SDL 3.4.18 resolves this through Cocoa's `NSApplicationSupportDirectory`; a plain `HOME` override does not redirect Foundation, and a sandboxed run can fail or touch normal user saves.
+- **Remedy:** Give the `player_smoke` CTest a build-local `HOME` and `CFFIXED_USER_HOME`. Give the downloaded-package smoke a unique temporary home and remove it on exit. Keep production save routing unchanged and do not weaken lock checks.
+- **Applies when:** Native macOS tests or package smokes exercise application preferences, battery saves, or lock files in restricted environments.
+- **Verification:** `player_smoke` passed under its CTest environment; all 50 player tests passed; the pinned SDL 3.4.18 package build and extracted-byte smoke passed with MBC1 continuation. Full 229-test suite and exact-revision hosted PR evidence are tracked separately.
+- **Source:** `tests/player/CMakeLists.txt`, `tests/scripts/verify-phase3-player.sh`, `src/player/main.c`, and existing lesson GB-TEST-001.
+- **Status:** Adopted locally; exact-revision hosted validation is pending.

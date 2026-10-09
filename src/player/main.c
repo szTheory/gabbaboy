@@ -25,6 +25,14 @@
 #define PLAYER_AUDIO_MEASURE_SAMPLE_RATE_HZ UINT64_C(48000)
 #define PLAYER_AUDIO_SMALL_PARTITION_HALF_DOTS UINT64_C(792)
 #define PLAYER_TITLE_SIZE 512u
+#define PLAYER_SMOKE_TARGET_PIXEL_X 8u
+#define PLAYER_SMOKE_TARGET_PIXEL_Y 8u
+#define PLAYER_SMOKE_FRAME_LIMIT 3u
+
+static const uint8_t player_palette_rgba[4][4] = {
+    {224, 248, 208, 255}, {136, 192, 112, 255},
+    {52, 104, 86, 255}, {8, 24, 32, 255}
+};
 
 typedef enum {
     PLAYER_DIALOG_SELECTED = 1,
@@ -621,10 +629,6 @@ static bool update_frame(player *app, bool required) {
     }
     if (info.generation == app->displayed_generation) return true;
 
-    static const uint8_t palette[4][4] = {
-        {224, 248, 208, 255}, {136, 192, 112, 255},
-        {52, 104, 86, 255}, {8, 24, 32, 255}
-    };
     uint8_t rgba[PLAYER_FRAME_WIDTH * PLAYER_FRAME_HEIGHT * 4u];
     for (size_t i = 0; i < sizeof(shades); ++i) {
         const unsigned shade = shades[i];
@@ -632,7 +636,7 @@ static bool update_frame(player *app, bool required) {
             fputs("Core returned a shade index outside [0,3]\n", stderr);
             return false;
         }
-        memcpy(rgba + i * 4u, palette[shade], 4u);
+        memcpy(rgba + i * 4u, player_palette_rgba[shade], 4u);
     }
     if (!SDL_UpdateTexture(app->texture, NULL, rgba,
                            (int)(PLAYER_FRAME_WIDTH * 4u))) {
@@ -796,6 +800,36 @@ static bool draw_frame(player *app) {
         return false;
     }
     app->needs_redraw = false;
+    return true;
+}
+
+static bool smoke_render_next_frame(player *app) {
+    if (app->input.guest_cursor_half_dots >
+        UINT64_MAX - PLAYER_FRAME_HALF_DOTS) {
+        fputs("Player smoke guest timeline overflowed while sampling a frame\n",
+              stderr);
+        return false;
+    }
+    const uint64_t target = app->input.guest_cursor_half_dots +
+                            PLAYER_FRAME_HALF_DOTS;
+    return advance_to(app, target, true) && update_frame(app, true) &&
+           draw_frame(app);
+}
+
+static bool smoke_read_demo_target_pixel(player *app, uint8_t rgba[4]) {
+    if (app->surface == NULL || rgba == NULL ||
+        app->surface->w <= (int)PLAYER_SMOKE_TARGET_PIXEL_X ||
+        app->surface->h <= (int)PLAYER_SMOKE_TARGET_PIXEL_Y ||
+        !SDL_LockSurface(app->surface)) {
+        fprintf(stderr, "Player smoke could not lock its rendered surface: %s\n",
+                SDL_GetError());
+        return false;
+    }
+    const uint8_t *pixel = (const uint8_t *)app->surface->pixels +
+        (size_t)PLAYER_SMOKE_TARGET_PIXEL_Y * (size_t)app->surface->pitch +
+        (size_t)PLAYER_SMOKE_TARGET_PIXEL_X * 4u;
+    memcpy(rgba, pixel, 4u);
+    SDL_UnlockSurface(app->surface);
     return true;
 }
 
@@ -1425,6 +1459,59 @@ static bool push_key(player *app, Uint32 type, SDL_Scancode scancode, Uint64 tim
     return SDL_PushEvent(&event);
 }
 
+static bool smoke_send_z(player *app, bool down) {
+    if (app->input.guest_cursor_half_dots <
+        app->input.guest_anchor_half_dots) {
+        fputs("Player smoke guest cursor preceded its input anchor\n", stderr);
+        return false;
+    }
+    const uint64_t elapsed_half_dots = app->input.guest_cursor_half_dots -
+                                       app->input.guest_anchor_half_dots;
+    if (elapsed_half_dots > UINT64_MAX - 8u) {
+        fputs("Player smoke input timestamp overflowed\n", stderr);
+        return false;
+    }
+    uint64_t elapsed_ns = 0u;
+    if (!player_input_half_dots_to_nanoseconds(elapsed_half_dots + 8u,
+                                               &elapsed_ns) ||
+        app->input.host_anchor_ns > UINT64_MAX - elapsed_ns) {
+        fputs("Player smoke could not construct a bounded SDL key timestamp\n",
+              stderr);
+        return false;
+    }
+    const Uint32 event_type = down ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
+    if (!push_key(app, event_type, SDL_SCANCODE_Z,
+                  app->input.host_anchor_ns + elapsed_ns) ||
+        !pump_events(app)) {
+        fprintf(stderr, "Player smoke could not deliver SDL Z %s: %s\n",
+                down ? "down" : "up", SDL_GetError());
+        return false;
+    }
+    return true;
+}
+
+static bool smoke_wait_for_demo_shade(player *app, unsigned shade,
+                                      const char *state) {
+    if (shade >= sizeof(player_palette_rgba) / sizeof(player_palette_rgba[0]))
+        return false;
+    uint8_t actual[4] = {0u, 0u, 0u, 0u};
+    for (unsigned frame = 0u; frame < PLAYER_SMOKE_FRAME_LIMIT; ++frame) {
+        if (!smoke_render_next_frame(app) ||
+            !smoke_read_demo_target_pixel(app, actual)) return false;
+        if (memcmp(actual, player_palette_rgba[shade], sizeof(actual)) == 0)
+            return true;
+    }
+    fprintf(stderr,
+            "Player smoke %s target pixel was RGBA %u,%u,%u,%u; expected shade %u RGBA %u,%u,%u,%u\n",
+            state, (unsigned)actual[0], (unsigned)actual[1],
+            (unsigned)actual[2], (unsigned)actual[3], shade,
+            (unsigned)player_palette_rgba[shade][0],
+            (unsigned)player_palette_rgba[shade][1],
+            (unsigned)player_palette_rgba[shade][2],
+            (unsigned)player_palette_rgba[shade][3]);
+    return false;
+}
+
 static bool push_dialog_result(player *app, player_dialog_result_code code,
                                const char *path) {
     size_t path_length = 0;
@@ -1865,27 +1952,24 @@ static bool run_smoke(player *app, const char *demo_rom_path,
         fputs("Player title did not update with the current host gain\n", stderr);
         return false;
     }
-    uint64_t press_ns, release_ns;
-    if (!player_input_half_dots_to_nanoseconds(8, &press_ns) ||
-        !player_input_half_dots_to_nanoseconds(50008, &release_ns) ||
-        app->input.host_anchor_ns > UINT64_MAX - release_ns) {
-        fputs("Could not construct finite smoke event timestamps\n", stderr);
+    if (!smoke_wait_for_demo_shade(app, 1u, "initial")) return false;
+    if (!smoke_send_z(app, true) ||
+        !smoke_wait_for_demo_shade(app, 2u, "while Z is held")) return false;
+    if (gbb_peek_ram(app->machine, 0xC000u) != 1u) {
+        fputs("Injected SDL Z-down did not reach the visible demo guest\n", stderr);
         return false;
     }
-    const uint64_t press_at = app->input.host_anchor_ns + press_ns;
-    const uint64_t release_at = app->input.host_anchor_ns + release_ns;
-    if (!push_key(app, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_Z, press_at) ||
-        !pump_events(app) ||
-        !push_key(app, SDL_EVENT_KEY_UP, SDL_SCANCODE_Z, release_at) ||
-        !pump_events(app)) return false;
-    if (app->input.pending_count != 2 ||
-        app->input.pending[0].at_half_dots != 8 ||
-        app->input.pending[1].at_half_dots != 50008) {
-        fputs("Injected SDL timestamps did not map to the expected guest half-dots\n", stderr);
+    if (!smoke_send_z(app, false) ||
+        !smoke_wait_for_demo_shade(app, 1u, "after Z is released")) return false;
+    if (gbb_peek_ram(app->machine, 0xC001u) != 1u) {
+        fputs("Injected SDL Z-up did not reach the visible demo guest\n", stderr);
         return false;
     }
-    if (!advance_to(app, PLAYER_FRAME_HALF_DOTS, true) ||
-        !update_frame(app, true) || !draw_frame(app)) return false;
+    if (!player_audio_clear(app->audio)) {
+        fputs("Player smoke could not isolate the authored audio workload\n",
+              stderr);
+        return false;
+    }
     if (!run_pulse_audio_smoke(app, demo_rom_path)) return false;
     if (gbb_peek_ram(app->machine, 0xC000) != 1 ||
         gbb_peek_ram(app->machine, 0xC001) != 1) {
@@ -1963,7 +2047,7 @@ static bool run_smoke(player *app, const char *demo_rom_path,
     if (!run_battery_process_smoke(executable, battery_fixture_path)) return false;
     if (!run_save_transition_smoke()) return false;
 
-    printf("player smoke passed: frame=%llu; replacement lock conflict preserved the session; save retry, cancel, and continue choices passed\n",
+    printf("player smoke passed: SDL Z-down rendered the darker demo tile and Z-up restored the lighter tile; replacement lock conflict preserved the session; save retry, cancel, and continue choices passed (frame=%llu)\n",
            (unsigned long long)app->displayed_generation);
     return true;
 }

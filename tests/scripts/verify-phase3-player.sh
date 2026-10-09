@@ -15,11 +15,19 @@ ARTIFACT_DIR="${BUILD_ROOT}/preview-candidate"
 FINAL_ARTIFACT_DIR="${GBB_VERIFIED_OUTPUT_DIR:-${BUILD_ROOT}/preview-verified-artifact}"
 EXTRACT_DIR="${BUILD_ROOT}/downloaded-package"
 EXPECTED_SOURCE_REVISION="${GBB_EXPECTED_SOURCE_REVISION:-}"
+PLAYER_SMOKE_HOME=""
 
 fail() {
   printf 'ERROR: %s\n' "$*" >&2
   exit 1
 }
+
+cleanup_player_smoke_home() {
+  if [[ -n "$PLAYER_SMOKE_HOME" && -d "$PLAYER_SMOKE_HOME" ]]; then
+    rm -rf -- "$PLAYER_SMOKE_HOME"
+  fi
+}
+trap cleanup_player_smoke_home EXIT
 
 sha256_file() {
   shasum -a 256 "$1" | awk '{print $1}'
@@ -360,6 +368,10 @@ done
 [[ "$(uname -s)" == Darwin && "$(uname -m)" == arm64 ]] ||
   fail 'the optional SDL3 player package and consumer smoke require macOS arm64'
 verify_checkout
+PLAYER_SMOKE_HOME=$(mktemp -d "${TMPDIR:-/tmp}/gabbaboy-player-smoke-home.XXXXXX") ||
+  fail 'could not create isolated player smoke preferences'
+export HOME="$PLAYER_SMOKE_HOME"
+export CFFIXED_USER_HOME="$PLAYER_SMOKE_HOME"
 
 if [[ "$mode" == --verify-package ]]; then
   verify_package "$2" true

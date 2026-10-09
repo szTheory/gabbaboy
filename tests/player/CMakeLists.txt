@@ -93,6 +93,10 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       ${CMAKE_CURRENT_BINARY_DIR}/${test_name}-data)
   elseif(test_name STREQUAL "player_smoke")
     add_test(NAME player_smoke COMMAND gabbaboy-player --smoke)
+    set(player_smoke_home "${CMAKE_CURRENT_BINARY_DIR}/player-smoke-home")
+    file(MAKE_DIRECTORY "${player_smoke_home}")
+    set_tests_properties(player_smoke PROPERTIES
+      ENVIRONMENT "HOME=${player_smoke_home};CFFIXED_USER_HOME=${player_smoke_home}")
   elseif(test_name STREQUAL "player_reset_transition")
     add_executable(test_player_reset_transition
       test_reset_transition.c

@@ -219,26 +219,28 @@ coverage_id: D2
 
 ### 34. Current packaged preview and live key response
 expected: "The current packaged Mac player visibly displays the bundled legal demo; holding Z darkens the target tile and releasing Z restores its lighter shade."
-result: pending
-source: human
-evidence: "The prior 2026-10-08 observation covers the earlier package. Phase 5 later changed keyboard aggregation and player event integration; a current display-equipped Mac observation is still needed."
+result: pass
+source: user
+reported: "I see the square go from lighter green to darker green when I press and hold, and back to lighter green when I release."
+evidence: "On 2026-10-09, the user confirmed the current packaged GabbaBoy player displayed the bundled demo and the target square darkened while Z was held, then returned to lighter green on release."
 coverage_id: VIDEO-04
 
 ## Summary
 
 total: 34
-passed: 33
+passed: 34
 issues: 0
-pending: 1
+pending: 0
 skipped: 0
 
 ## Gaps
 
-- Current packaged preview visibility and live Z press/release behavior need one display-equipped Mac observation after the Phase 5 player changes.
+- None. The current packaged preview and live Z press/release behavior were confirmed on 2026-10-09.
 
 ## Evidence Notes
 
 - The user opened the visible demo and reported that holding Z changed a tile from light green to dark green and releasing Z restored it.
 - The live window used the packaged executable, SDL library, and owned demo fixture in a temporary local macOS app wrapper. The title and status were visible; no product source or dependency changed for the wrapper.
 - That observation remains valid for the package tested on 2026-10-08. It does not qualify the current package after subsequent Phase 5 keyboard/event changes; see pending test 34.
+- The 2026-10-09 user observation closes test 34 for the package built with the Phase 5 keyboard/event integration.
 - Exact CPU-B collision and JOYP sampling measurements remain unclaimed. D-025 supersedes the historical CPU-B-only collision checkpoint with a documented, confidence-qualified deterministic software-model acceptance criterion.
