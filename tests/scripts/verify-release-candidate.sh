@@ -83,6 +83,7 @@ version = re.search(r"^project\(GabbaBoy VERSION ([0-9]+\.[0-9]+\.[0-9]+)", (roo
 workflow = (root / ".github/workflows/release.yml").read_text()
 entrypoint = (root / ".github/workflows/release-please.yml").read_text()
 player_verifier = (root / "tests/scripts/verify-phase3-player.sh").read_text()
+published_asset_verifier = (root / ".github/scripts/verify-published-release-assets.py").read_text()
 if not version or manifest.get(".") != version.group(1):
     raise SystemExit("release manifest and CMake PROJECT_VERSION do not match")
 if package.get("draft") is not True or package.get("force-tag-creation") is not True or package.get("include-component-in-tag") is not False or package.get("include-v-in-tag") is not True:
@@ -107,8 +108,31 @@ if "needs: [release, candidate-macos]" not in workflow:
 for required in ("SDL_AUDIO_DRIVER=dummy", "SDL_VIDEO_DRIVER=dummy", "--smoke-package", "packaged MBC1 continuation fixture resumed in a fresh process"):
     if required not in player_verifier:
         raise SystemExit(f"downloaded player verification is missing scripted lifecycle evidence: {required}")
-if "pull_request_target:" in workflow or "release: {" in workflow or "gh release edit" in workflow:
-    raise SystemExit("candidate workflow contains a privileged PR route or an early publication path")
+if "pull_request_target:" in workflow or "release: {" in workflow:
+    raise SystemExit("candidate workflow contains a privileged PR route")
+def validate_publication_contract(text):
+    gate = text.find('bash .github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"')
+    publish = text.find('gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag')
+    if gate < 0 or publish < 0 or gate > publish:
+        raise ValueError("publication must occur only after the final downloaded-byte gate")
+    if 'python3 .github/scripts/verify-published-release-assets.py "$assets" build/release-final/api-assets.json' not in text:
+        raise ValueError("published API response must use the tested direct-JSON inventory verifier")
+    if "json.loads(after_json)" not in published_asset_verifier or "Path(after_json).is_file" in published_asset_verifier:
+        raise ValueError("published API asset verifier must parse response JSON directly, not treat it as a path")
+try:
+    validate_publication_contract(workflow)
+except ValueError as error:
+    raise SystemExit(str(error))
+mutated_publication = workflow.replace(
+    'bash .github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"',
+    "echo removed-final-gate", 1,
+)
+try:
+    validate_publication_contract(mutated_publication)
+except ValueError:
+    pass
+else:
+    raise SystemExit("release workflow self-test accepted publication without the final downloaded-byte gate")
 if "workflow_call:" not in workflow or "uses: ./.github/workflows/release.yml" not in entrypoint:
     raise SystemExit("release-please outputs and candidate jobs are not connected in one workflow run")
 PY

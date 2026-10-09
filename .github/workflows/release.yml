@@ -1098,14 +1098,5 @@ jobs:
             echo "Published release readback did not preserve tag/draft transition." >&2; exit 1;
           }
           assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
-          python3 - "$assets" build/release-final/api-assets.json <<'PY'
-          import json, pathlib, sys
-          after, before = map(lambda value: json.loads(pathlib.Path(value).read_text()) if pathlib.Path(value).is_file() else json.loads(value), sys.argv[1:])
-          def inventory(rows): return sorted((r["id"], r["name"], r.get("digest")) for r in rows)
-          old = json.loads(pathlib.Path(sys.argv[2]).read_text())
-          if not set(inventory(old)).issubset(set(inventory(after))):
-              raise SystemExit("published release readback changed or removed a previously qualified asset")
-          if {r["name"] for r in after} != {r["name"] for r in old} | {"SHA256SUMS", "release-receipt.json"}:
-              raise SystemExit("published release readback has an unexpected asset inventory")
-          PY
+          python3 .github/scripts/verify-published-release-assets.py "$assets" build/release-final/api-assets.json
           echo "Published the exact qualified release $RELEASE_TAG ($SOURCE_SHA) with unsigned status recorded."
