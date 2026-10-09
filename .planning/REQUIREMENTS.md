@@ -21,26 +21,26 @@ Every requirement below must map to exactly one phase. Completion needs implemen
 
 ### DMG CPU, bus, and time
 
-- [x] **CPU-01**: The declared DMG profile executes the documented base and CB SM83 instruction sets with correct tested flag, arithmetic, address, and bus-access timing behavior; illegal opcode behavior is explicit.
-- [x] **CPU-02**: The core produces the expected interrupt entry, EI delay, HALT/HALT-bug, STOP, reset, and deterministic post-boot behavior under model-applicable tests.
-- [x] **CPU-03**: Memory mapping, divider/timer edges and reload races, and disconnected serial behavior match declared DMG evidence at observable access boundaries.
-- [x] **CPU-04**: Equal timestamped inputs and emulated time produce equal supported state/output when execution is partitioned differently; LCD-off, HALT/STOP, lockup, and exhausted output capacity return within the caller's bounded contract.
-- [x] **CPU-05**: A headless run reports pass/fail/timeout/unsupported for an explicitly pinned eligible CPU/timer corpus with expected protocol and model/boot configuration, retaining enough trace evidence to reproduce failures.
+- [ ] **CPU-01**: The declared DMG profile executes the documented base and CB SM83 instruction sets with correct tested flag, arithmetic, address, and bus-access timing behavior; illegal opcode behavior is explicit.
+- [ ] **CPU-02**: The core produces the expected interrupt entry, EI delay, HALT/HALT-bug, STOP, reset, and deterministic post-boot behavior under model-applicable tests.
+- [ ] **CPU-03**: Memory mapping, divider/timer edges and reload races, and disconnected serial behavior match declared DMG evidence at observable access boundaries.
+- [ ] **CPU-04**: Equal timestamped inputs and emulated time produce equal supported state/output when execution is partitioned differently; LCD-off, HALT/STOP, lockup, and exhausted output capacity return within the caller's bounded contract.
+- [ ] **CPU-05**: A headless run reports pass/fail/timeout/unsupported for an explicitly pinned eligible CPU/timer corpus with expected protocol and model/boot configuration, retaining enough trace evidence to reproduce failures.
 
 ### Visible interactive DMG
 
-- [x] **VIDEO-01**: The declared DMG profile renders background, window, and sprites with LCD/STAT transitions and a dot-sensitive fetch design demonstrated by separate composition and timing cases.
-- [x] **VIDEO-02**: OAM DMA, VRAM/OAM access restrictions, and CPU/PPU/DMA contention produce expected model-specific observable results under the D-025 confidence-qualified software model; exact CPU-B lane/timing and universal revision parity remain unmeasured.
-- [x] **VIDEO-03**: Timestamped joypad transitions affect the guest deterministically, including the documented selected falling-edge IF.4 software contract; exact CPU-B pulse qualification/sample phase remain unmeasured.
-- [x] **VIDEO-04**: A macOS user can launch the optional player, open a supported ROM-only image, play an original or explicitly permissioned interactive GB fixture, resize with correct aspect/integer scaling, pause, reset, and quit with actionable errors.
-- [x] **VIDEO-05**: Automated checks distinguish image composition, raster timing, and scripted gameplay outcomes, and the visible preview clearly identifies still-incomplete audio/persistence support.
+- [ ] **VIDEO-01**: The declared DMG profile renders background, window, and sprites with LCD/STAT transitions and a dot-sensitive fetch design demonstrated by separate composition and timing cases.
+- [ ] **VIDEO-02**: OAM DMA, VRAM/OAM access restrictions, and CPU/PPU/DMA contention produce expected model-specific observable results under the D-025 confidence-qualified software model; exact CPU-B lane/timing and universal revision parity remain unmeasured.
+- [ ] **VIDEO-03**: Timestamped joypad transitions affect the guest deterministically, including the documented selected falling-edge IF.4 software contract; exact CPU-B pulse qualification/sample phase remain unmeasured.
+- [ ] **VIDEO-04**: A macOS user can launch the optional player, open a supported ROM-only image, play an original or explicitly permissioned interactive GB fixture, resize with correct aspect/integer scaling, pause, reset, and quit with actionable errors.
+- [ ] **VIDEO-05**: Automated checks distinguish image composition, raster timing, and scripted gameplay outcomes, and the visible preview clearly identifies still-incomplete audio/persistence support.
 
 ### Cartridge banking and battery continuation
 
-- [x] **SAVE-01**: The core supports a declared set of standard MBC1 ROM/RAM/battery configurations with tested banking and enable rules, while excluded variants and other mappers produce explicit errors.
-- [x] **SAVE-02**: A frontend can import/export bounded battery data with documented cartridge identity/size rules; malformed imports leave the live state unchanged.
-- [x] **SAVE-03**: The player persists battery data with a documented atomic replacement, recovery, and concurrent-writer policy; failed writes preserve the last good save and report failure visibly.
-- [x] **SAVE-04**: An original GB fixture saves progress, exits, reopens in a fresh instance/process, and resumes behavior that depends on the previous bytes; empty/wrong-save controls prove the continuation oracle is meaningful.
+- [ ] **SAVE-01**: The core supports a declared set of standard MBC1 ROM/RAM/battery configurations with tested banking and enable rules, while excluded variants and other mappers produce explicit errors.
+- [ ] **SAVE-02**: A frontend can import/export bounded battery data with documented cartridge identity/size rules; malformed imports leave the live state unchanged.
+- [ ] **SAVE-03**: The player persists battery data with a documented atomic replacement, recovery, and concurrent-writer policy; failed writes preserve the last good save and report failure visibly.
+- [ ] **SAVE-04**: An original GB fixture saves progress, exits, reopens in a fresh instance/process, and resumes behavior that depends on the previous bytes; empty/wrong-save controls prove the continuation oracle is meaningful.
 
 ### Sound and stable playback
 
@@ -92,28 +92,28 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BASE-01 | Phase 1 | Complete |
-| BASE-02 | Phase 1 | Complete |
-| BASE-03 | Phase 1 | Complete |
-| BASE-04 | Phase 1 | Complete |
-| BASE-05 | Phase 1 | Complete |
-| BASE-06 | Phase 1 | Complete |
-| BASE-07 | Phase 1 | Complete |
-| BASE-08 | Phase 1 | Complete |
-| CPU-01 | Phase 2 | Complete |
-| CPU-02 | Phase 2 | Complete |
-| CPU-03 | Phase 2 | Complete |
-| CPU-04 | Phase 2 | Complete |
-| CPU-05 | Phase 2 | Complete |
-| VIDEO-01 | Phase 3 | Complete |
-| VIDEO-02 | Phase 3 | Complete — D-025 software model, exact CPU-B behavior unmeasured |
-| VIDEO-03 | Phase 3 | Complete — selected falling-edge software contract, exact CPU-B timing unmeasured |
-| VIDEO-04 | Phase 3 | Complete — packaged window and mapped Z press/release confirmed by user in 03-UAT.md |
-| VIDEO-05 | Phase 3 | Complete |
-| SAVE-01 | Phase 4 | Complete — support matrix, banking, enable and exclusion cases; see Phase 4 verification |
-| SAVE-02 | Phase 4 | Complete — bounded identity/size API and non-mutating rejection; see Phase 4 verification |
-| SAVE-03 | Phase 4 | Complete — atomic persistence, recovery, cooperating-writer and visible failure behavior; see Phase 4 verification |
-| SAVE-04 | Phase 4 | Complete — byte-reproducible original fixture and fresh-process positive/negative controls; see Phase 4 verification |
+| BASE-01 | Phase 1 | Complete — canonical verification passed 5/5; see [verification](phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md) |
+| BASE-02 | Phase 1 | Complete — canonical verification passed 5/5; see [verification](phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md) |
+| BASE-03 | Phase 1 | Complete — canonical verification passed 5/5; see [verification](phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md) |
+| BASE-04 | Phase 1 | Complete — canonical verification passed 5/5; see [verification](phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md) |
+| BASE-05 | Phase 1 | Complete — canonical verification passed 5/5; see [verification](phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md) |
+| BASE-06 | Phase 1 | Complete — canonical verification passed 5/5; see [verification](phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md) |
+| BASE-07 | Phase 1 | Complete — canonical verification passed 5/5; see [verification](phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md) |
+| BASE-08 | Phase 1 | Complete — exact PR #35 required checks and package evidence verified; see [verification](phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md) |
+| CPU-01 | Phase 2 | Pending re-verification — historical report passed; current canonical report stale |
+| CPU-02 | Phase 2 | Pending re-verification — historical report passed; current canonical report stale |
+| CPU-03 | Phase 2 | Pending re-verification — historical report passed; current canonical report stale |
+| CPU-04 | Phase 2 | Pending re-verification — historical report passed; current canonical report stale |
+| CPU-05 | Phase 2 | Pending re-verification — historical report passed; current canonical report stale |
+| VIDEO-01 | Phase 3 | Pending re-verification — historical report passed; current canonical report stale |
+| VIDEO-02 | Phase 3 | Pending re-verification — historical report passed; current canonical report stale |
+| VIDEO-03 | Phase 3 | Pending re-verification — historical report passed; current canonical report stale |
+| VIDEO-04 | Phase 3 | Pending re-verification — historical report passed; current canonical report stale |
+| VIDEO-05 | Phase 3 | Pending re-verification — historical report passed; current canonical report stale |
+| SAVE-01 | Phase 4 | Pending re-verification — historical report passed; current canonical report stale |
+| SAVE-02 | Phase 4 | Pending re-verification — historical report passed; current canonical report stale |
+| SAVE-03 | Phase 4 | Pending re-verification — historical report passed; current canonical report stale |
+| SAVE-04 | Phase 4 | Pending re-verification — historical report passed; current canonical report stale |
 | AUDIO-01 | Phase 5 | Complete |
 | AUDIO-02 | Phase 5 | Complete |
 | AUDIO-03 | Phase 5 | Complete |
@@ -135,9 +135,9 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | STATE-01 | Next milestone | Deferred |
 | INT-01 | Next milestone | Deferred |
 
-**Active coverage:** 35/35 requirements mapped exactly once; all 35 are complete, with 0 unmapped, 0 duplicates, and 0 pending. Next-milestone requirements and later candidates are excluded from active coverage. Phase 6 goal-backward evidence is recorded in [verification](phases/GB-06-qualified-dmg-release-and-consumer-handoff/06-VERIFICATION.md), with review and security dispositions in the same phase directory.
+**Active coverage:** 35/35 requirements are mapped exactly once; 21 have current passing evidence and 14 await re-verification because Phases 2–4 remain stale in the canonical OpenGSD gate. Phase 1's BASE-01 through BASE-08 passed fresh verification on 2026-10-09. There are 0 unmapped requirements and 0 duplicates. Next-milestone requirements and later candidates are excluded from active coverage. See [the v0.1 milestone audit](v0.1-MILESTONE-AUDIT.md).
 
 **Next-milestone traceability:** 7/7 GB/GBC breadth commitments are mapped to the next milestone and remain outside the active v0.1 count.
 
 ---
-Last updated: 2026-10-09 after Phase 6 goal verification; all 35 active requirements are complete, and 7 next-milestone commitments are explicitly deferred.
+Last updated: 2026-10-09 after Phase 1 verification refresh; 21 active requirements have current passing evidence, 14 await refreshed verification, and 7 next-milestone commitments remain deferred.
