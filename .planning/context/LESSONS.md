@@ -278,6 +278,6 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Cause and evidence:** The player smoke's synthetic battery lock uses SDL's per-user preferences path. On macOS, SDL 3.4.18 resolves this through Cocoa's `NSApplicationSupportDirectory`; a plain `HOME` override does not redirect Foundation, and a sandboxed run can fail or touch normal user saves.
 - **Remedy:** Give the `player_smoke` CTest a build-local `HOME` and `CFFIXED_USER_HOME`. Give the downloaded-package smoke a unique temporary home and remove it on exit. Keep production save routing unchanged and do not weaken lock checks.
 - **Applies when:** Native macOS tests or package smokes exercise application preferences, battery saves, or lock files in restricted environments.
-- **Verification:** `player_smoke` passed under its CTest environment; all 50 player tests passed; the pinned SDL 3.4.18 package build and extracted-byte smoke passed with MBC1 continuation. Full 229-test suite and exact-revision hosted PR evidence are tracked separately.
+- **Verification:** `player_smoke` passed under its CTest environment; all 50 player tests passed; the pinned SDL 3.4.18 package build and extracted-byte smoke passed with MBC1 continuation; the combined suite passed 229/229. Exact PR head `de966868057c1fb5b3bca5b4cdac50cadf3bae57` passed required-native, fixture-repro, and preview-package-smoke in runs 37942469774, 37942469816, and 37942469925.
 - **Source:** `tests/player/CMakeLists.txt`, `tests/scripts/verify-phase3-player.sh`, `src/player/main.c`, and existing lesson GB-TEST-001.
-- **Status:** Adopted locally; exact-revision hosted validation is pending.
+- **Status:** Adopted and exact-revision hosted validation passed.
