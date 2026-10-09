@@ -4,7 +4,9 @@ Notable GabbaBoy changes are recorded here. The protected release-please version
 pull request creates the numbered release section from merged commits; that
 reviewed file and the release notes attached to the matching draft are the
 source for the tagged release. Do not edit or publish a numbered entry outside
-that version pull request.
+that version pull request. The first qualified release is v0.1.0; its initial
+Release-As marker is a one-time bootstrap, and later versions follow merged
+conventional commits.
 
 ## Unreleased
 
