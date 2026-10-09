@@ -31,9 +31,17 @@ def validate_verifier_invocations(text):
 def validate_extractor_destinations(text):
     if re.search(r"(?m)^\s*mkdir(?:\s+-p)?\s+[^\n]*\bbuild/extracted(?:-core)?(?:\s|$)", text):
         raise ValueError("safe release extractor destination must not be pre-created")
+def validate_performance_receipt_path(text):
+    pattern = (r"bash tests/scripts/measure-release-baseline\.sh --self-test\s+"
+               r"test -s build/release-measure/release-performance-receipt\.json\s+"
+               r"cp build/release-measure/release-performance-receipt\.json build/\s+"
+               r"cmp -s build/release-measure/release-performance-receipt\.json build/release-performance-receipt\.json")
+    if not re.search(pattern, text):
+        raise ValueError("generated performance receipt must be validated and copied byte-identically to its canonical build path")
 try:
     validate_verifier_invocations(workflow)
     validate_extractor_destinations(workflow)
+    validate_performance_receipt_path(workflow)
 except ValueError as error:
     raise SystemExit(str(error))
 mutated_workflow = workflow.replace("bash tests/scripts/verify-release-candidate.sh", "python tests/scripts/verify-release-candidate.sh", 1)
@@ -51,6 +59,12 @@ except ValueError:
     pass
 else:
     raise SystemExit("release workflow self-test accepted a pre-created safe-extractor destination")
+try:
+    validate_performance_receipt_path(workflow.replace("cp build/release-measure/release-performance-receipt.json build/", "", 1))
+except ValueError:
+    pass
+else:
+    raise SystemExit("release workflow self-test accepted a missing performance receipt path mapping")
 for output in ("release_created", "tag_name", "sha"):
     if f"${{{{ steps.release.outputs.{output} }}}}" not in workflow:
         raise SystemExit(f"same-workflow output is missing: {output}")

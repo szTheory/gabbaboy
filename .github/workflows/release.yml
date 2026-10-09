@@ -844,6 +844,9 @@ jobs:
           else
             SOURCE_SHA="$SOURCE_SHA" RELEASE_TAG="$RELEASE_TAG" EXPECTED_CHECK_HEAD_SHA="$pr_head_sha" HOSTED_CHECKS_JSON=build/hosted-check-runs.json \
               bash tests/scripts/measure-release-baseline.sh --self-test
+            test -s build/release-measure/release-performance-receipt.json
+            cp build/release-measure/release-performance-receipt.json build/
+            cmp -s build/release-measure/release-performance-receipt.json build/release-performance-receipt.json
           fi
           python3 tests/scripts/verify-support-ledger.py --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" \
             --verify-sidecar build/support-ledger-v0.1.0.json
