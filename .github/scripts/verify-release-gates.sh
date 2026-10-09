@@ -61,11 +61,28 @@ def validate_downloaded_sidecars(text):
     )
     if "sha256sum --check" in text or any(call not in text for call in required):
         raise ValueError("every downloaded Mac/Windows digest-only sidecar must use the strict byte-check helper")
+def validate_isolated_release_readbacks(text):
+    section_start = text.find('for name in support-ledger-v0.1.0.json release-performance-receipt.json; do')
+    section_end = text.find('      - name: Validate the exact candidate asset set after platform smoke', section_start)
+    if section_start < 0 or section_end < 0:
+        raise ValueError("release evidence attachment/readback section is missing")
+    section = text[section_start:section_end]
+    required = (
+        'existing_dir="build/existing/$name"',
+        'mkdir -p "$existing_dir"',
+        '--pattern "$name" --dir "$existing_dir"',
+        'cmp -s "build/$name" "$existing_dir/$name"',
+    )
+    if any(item not in section for item in required):
+        raise ValueError("each existing release evidence asset must be downloaded into its own readback directory")
+    if re.search(r'gh release download[^\\n]*--pattern "\$name"[^\\n]*--dir build/existing(?:\s|$)', section):
+        raise ValueError("per-asset release downloads must not reuse the shared readback directory")
 try:
     validate_verifier_invocations(workflow)
     validate_extractor_destinations(workflow)
     validate_performance_receipt_path(workflow)
     validate_downloaded_sidecars(workflow)
+    validate_isolated_release_readbacks(workflow)
 except ValueError as error:
     raise SystemExit(str(error))
 mutated_workflow = workflow.replace("bash tests/scripts/verify-release-candidate.sh", "python tests/scripts/verify-release-candidate.sh", 1)
@@ -95,6 +112,12 @@ except ValueError:
     pass
 else:
     raise SystemExit("release workflow self-test accepted sha256sum --check for a digest-only sidecar")
+try:
+    validate_isolated_release_readbacks(workflow.replace('existing_dir="build/existing/$name"', 'existing_dir="build/existing"', 1))
+except ValueError:
+    pass
+else:
+    raise SystemExit("release workflow self-test accepted a shared release evidence readback directory")
 for output in ("release_created", "tag_name", "sha"):
     if f"${{{{ steps.release.outputs.{output} }}}}" not in workflow:
         raise SystemExit(f"same-workflow output is missing: {output}")
