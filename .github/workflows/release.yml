@@ -619,7 +619,7 @@ jobs:
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-preview-macos-arm64.tar.gz --pattern gabbaboy-preview-macos-arm64-build-receipt.json --dir build/downloaded-player
           cp build/downloaded-player/gabbaboy-preview-macos-arm64-build-receipt.json build/downloaded-player/build-receipt.json
           GBB_VERIFIED_OUTPUT_DIR=build/release-player-downloaded bash tests/scripts/verify-phase3-player.sh --verify-package build/downloaded-player
-          mkdir -p build/downloaded-core build/extracted-core build/consumer-work
+          mkdir -p build/downloaded-core build/consumer-work
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-macos-arm64.tar.gz --pattern gabbaboy-core-macos-arm64.tar.gz.sha256 --dir build/downloaded-core
           expected=$(cut -d ' ' -f1 build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz.sha256)
           actual=$(shasum -a 256 build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz | cut -d ' ' -f1)
