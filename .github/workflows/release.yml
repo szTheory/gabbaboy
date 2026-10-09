@@ -226,7 +226,7 @@ jobs:
               --pattern candidate-receipt.json --pattern gabbaboy-core-linux-x64.tar.gz \
               --pattern gabbaboy-notices.txt --pattern source-receipt.json \
               --pattern build-receipt.json --dir build/reuse
-            tests/scripts/verify-release-candidate.sh --verify \
+            bash tests/scripts/verify-release-candidate.sh --verify \
               build/reuse/candidate-receipt.json build/reuse/gabbaboy-core-linux-x64.tar.gz \
               "$RELEASE_VERSION" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
               build/reuse/gabbaboy-notices.txt build/reuse/source-receipt.json \
@@ -349,7 +349,7 @@ jobs:
             echo "Downloaded notice bytes differ from the tagged source notice." >&2
             exit 1
           }
-          tests/scripts/verify-release-candidate.sh --extract \
+          bash tests/scripts/verify-release-candidate.sh --extract \
             build/downloaded/gabbaboy-core-linux-x64.tar.gz build/extracted
           prefix="$PWD/build/extracted"
           cmake -DGBB_INSTALL_PREFIX="$prefix" -DGBB_EXECUTABLE_SUFFIX= \
@@ -392,7 +392,7 @@ jobs:
           if [[ "$receipt_count" == 1 ]]; then
             mkdir -p build/existing
             gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern candidate-receipt.json --dir build/existing
-            tests/scripts/verify-release-candidate.sh --verify \
+            bash tests/scripts/verify-release-candidate.sh --verify \
               build/existing/candidate-receipt.json build/downloaded/gabbaboy-core-linux-x64.tar.gz \
               "$RELEASE_VERSION" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
               build/downloaded/gabbaboy-notices.txt build/downloaded/source-receipt.json \
@@ -463,7 +463,7 @@ jobs:
             echo "Tag target changed during candidate qualification." >&2
             exit 1
           }
-          tests/scripts/verify-release-candidate.sh --verify \
+          bash tests/scripts/verify-release-candidate.sh --verify \
             build/downloaded/candidate-receipt.json build/downloaded/gabbaboy-core-linux-x64.tar.gz \
             "$RELEASE_VERSION" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
             build/downloaded/gabbaboy-notices.txt build/downloaded/source-receipt.json \
@@ -770,7 +770,7 @@ jobs:
           bash build/verify-release-gates.sh --check-digest-sidecar \
             build/downloaded/gabbaboy-core-windows-x64.tar.gz.sha256 \
             build/downloaded/gabbaboy-core-windows-x64.tar.gz
-          python tests/scripts/verify-release-candidate.sh --extract build/downloaded/gabbaboy-core-windows-x64.tar.gz build/extracted
+          bash tests/scripts/verify-release-candidate.sh --extract build/downloaded/gabbaboy-core-windows-x64.tar.gz build/extracted
           prefix="$PWD/build/extracted"
           cmake -DGBB_INSTALL_PREFIX="$prefix" -DGBB_EXECUTABLE_SUFFIX=.exe -DGBB_CONFIGURATION=Release -DGBB_RUNNER_WORKDIR="$PWD/build/consumer-work/runner" "-DGBB_FORBIDDEN_PATHS=$GITHUB_WORKSPACE;$GITHUB_WORKSPACE/build" -P cmake/VerifyInstalledPackage.cmake
           for language in c cpp; do
