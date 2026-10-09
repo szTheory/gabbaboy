@@ -699,7 +699,8 @@ static gbb_instance *load_ppu_dma_overlap_guest(unsigned delay_nops, int dma_ena
         size_t loop = rn;
         routine[rn++] = 0x05;
         routine[rn++] = 0x20;
-        routine[rn++] = (uint8_t)((int)loop - (int)(rn + 1u));
+        routine[rn] = (uint8_t)((int)loop - (int)(rn + 1u));
+        ++rn;
         routine[rn++] = 0x3E; routine[rn++] = 0x93;
         routine[rn++] = 0xE0; routine[rn++] = 0x40;
     } else {
