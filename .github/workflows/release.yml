@@ -766,7 +766,10 @@ jobs:
           [[ $(jq -r .draft <<<"$current") == true && $(jq -r .tag_name <<<"$current") == "$RELEASE_TAG" ]] || exit 1
           mkdir -p build/downloaded build/extracted build/consumer-work
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-windows-x64.tar.gz --pattern gabbaboy-core-windows-x64.tar.gz.sha256 --dir build/downloaded
-          (cd build/downloaded && sha256sum --check gabbaboy-core-windows-x64.tar.gz.sha256)
+          git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > build/verify-release-gates.sh
+          bash build/verify-release-gates.sh --check-digest-sidecar \
+            build/downloaded/gabbaboy-core-windows-x64.tar.gz.sha256 \
+            build/downloaded/gabbaboy-core-windows-x64.tar.gz
           python tests/scripts/verify-release-candidate.sh --extract build/downloaded/gabbaboy-core-windows-x64.tar.gz build/extracted
           prefix="$PWD/build/extracted"
           cmake -DGBB_INSTALL_PREFIX="$prefix" -DGBB_EXECUTABLE_SUFFIX=.exe -DGBB_CONFIGURATION=Release -DGBB_RUNNER_WORKDIR="$PWD/build/consumer-work/runner" "-DGBB_FORBIDDEN_PATHS=$GITHUB_WORKSPACE;$GITHUB_WORKSPACE/build" -P cmake/VerifyInstalledPackage.cmake
