@@ -140,6 +140,32 @@ if 'git show "${GITHUB_SHA}:.github/scripts/verify-release-source-proof.py"' not
     raise SystemExit("final lane does not load the trusted source-proof verifier from its workflow revision")
 if not re.search(r'--check-merged-source "\$SOURCE_SHA" "\$RELEASE_TAG" "\$RELEASE_ID" \\\s+build/release-final/source-receipt\.json "\$RUNNER_TEMP/verify-release-source-proof\.py"', workflow):
     raise SystemExit("final lane does not validate its downloaded source receipt against live PR/check evidence")
+source_mode_start = gate_source.find("\n  --check-merged-source)\n")
+source_mode_end = gate_source.find("\n  --check-draft-final)\n", source_mode_start)
+if source_mode_start < 0 or source_mode_end < 0:
+    raise SystemExit("source-proof mode is missing")
+source_mode = gate_source[source_mode_start + 1:source_mode_end]
+def validate_source_proof_temp_paths(text):
+    checks = [
+        'tmp=$(mktemp -d "${TMPDIR:-/tmp}/gb-source-checks.XXXXXX")' in text,
+        '"$tmp/pull-request.json"' in text,
+        '"$tmp/check-runs.json"' in text,
+        'trap \'rm -rf "$tmp"\' EXIT HUP INT TERM' in text,
+        '"${receipt}.pull-request.json"' not in text,
+        '"${receipt}.check-runs.json"' not in text,
+    ]
+    if not all(checks):
+        raise ValueError("source-proof API responses must use a cleaned temporary directory outside the downloaded asset inventory")
+try:
+    validate_source_proof_temp_paths(source_mode)
+except ValueError as error:
+    raise SystemExit(str(error))
+try:
+    validate_source_proof_temp_paths(source_mode.replace('tmp=$(mktemp -d "${TMPDIR:-/tmp}/gb-source-checks.XXXXXX")', 'tmp="${receipt}.pull-request.json"', 1))
+except ValueError:
+    pass
+else:
+    raise SystemExit("release gate self-test accepted source-proof responses written into the asset inventory")
 if 'branches/main/protection' in workflow[workflow.find('publish-qualified-release:'):]:
     raise SystemExit("final lane must not require admin-only branch protection API access")
 if not re.search(r"googleapis/release-please-action@[0-9a-f]{40}", workflow):
@@ -509,10 +535,12 @@ PY
     proof=$(jq -er '.prior_pr_proof | select(.pr_number > 0 and (.head_sha | test("^[0-9a-f]{40}$")))' "$receipt")
     pr_number=$(jq -r .pr_number <<<"$proof")
     pr_head=$(jq -r .head_sha <<<"$proof")
-    gh api "repos/$repo/pulls/$pr_number" > "${receipt}.pull-request.json"
-    gh api "repos/$repo/commits/$pr_head/check-runs?per_page=100" > "${receipt}.check-runs.json"
-    python3 "$proof_verifier" --receipt "$receipt" --pull-request "${receipt}.pull-request.json" \
-      --check-runs "${receipt}.check-runs.json" --tag "$tag" --source-sha "$source_sha" --release-id "$release_id"
+    tmp=$(mktemp -d "${TMPDIR:-/tmp}/gb-source-checks.XXXXXX")
+    trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+    gh api "repos/$repo/pulls/$pr_number" > "$tmp/pull-request.json"
+    gh api "repos/$repo/commits/$pr_head/check-runs?per_page=100" > "$tmp/check-runs.json"
+    python3 "$proof_verifier" --receipt "$receipt" --pull-request "$tmp/pull-request.json" \
+      --check-runs "$tmp/check-runs.json" --tag "$tag" --source-sha "$source_sha" --release-id "$release_id"
     ;;
   --check-draft-final)
     [[ $# -eq 4 ]] || fail 'usage: verify-release-gates.sh --check-draft-final RELEASE_ID TAG SOURCE_SHA'
