@@ -314,12 +314,12 @@ jobs:
           if [[ "$count" == 1 ]]; then
             mkdir -p build/existing
             gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-linux-x64.tar.gz --dir build/existing
-            cmp -s build/release/gabbaboy-core-linux-x64.tar.gz build/existing/gabbaboy-core-linux-x64.tar.gz || {
+            cmp -s build/gabbaboy-core-linux-x64.tar.gz build/existing/gabbaboy-core-linux-x64.tar.gz || {
               echo "Existing draft archive differs from the rebuilt bytes; refusing replacement." >&2
               exit 1
             }
           else
-            gh release upload "$RELEASE_TAG" build/release/gabbaboy-core-linux-x64.tar.gz --repo "$GH_REPO"
+            gh release upload "$RELEASE_TAG" build/gabbaboy-core-linux-x64.tar.gz --repo "$GH_REPO"
           fi
           license_count=$(jq '[.[] | select(.name == "gabbaboy-notices.txt")] | length' <<<"$assets")
           [[ "$license_count" -le 1 ]] || { echo "Draft has duplicate notice assets." >&2; exit 1; }
