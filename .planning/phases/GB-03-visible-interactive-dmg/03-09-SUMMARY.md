@@ -130,3 +130,7 @@ The nine currently planned Phase 3 plans are complete, but the phase verifier mu
 - The optional player lane and artifact consumer both passed on the exact PR head; downloaded build and consumer receipts, package digest, and fixture/license identity were independently checked.
 - Full offline CTest passed 132/132 and the optional player suite passed 14/14; no extra dependency was introduced.
 - VIDEO-04 and VIDEO-05 are mapped to exact evidence. VIDEO-02 and VIDEO-03 remain open; this plan summary does not mark the phase complete.
+
+## Automation Follow-up 2026-10-09
+
+The original opt-in package lane is now required on every pull request. `player_smoke` asserts the initial shade, the darker rendered tile while SDL Z is held, and restoration after SDL Z-up, along with the guest's press/release markers. The downloaded-package consumer reruns that same assertion against extracted artifact bytes. CTest and package verification isolate synthetic save files under test-only preferences. Local verification passed all 50 player tests and the package smoke. Exact PR head `de966868057c1fb5b3bca5b4cdac50cadf3bae57` passed `macos-player-package` and `required-native` in CI run 37942469774; `player-package-smoke-macos` and `preview-package-smoke` passed in preview run 37942469925; fixture reproduction passed in run 37942469816.

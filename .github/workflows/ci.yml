@@ -2,7 +2,7 @@ name: ci
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened]
   push:
 
 permissions:
@@ -120,7 +120,7 @@ jobs:
 
   macos-player-package:
     name: macos-player-package
-    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-macos-player')
+    if: github.event_name == 'pull_request'
     runs-on: macos-14
     timeout-minutes: 45
     steps:
@@ -164,7 +164,7 @@ jobs:
           NATIVE_WINDOWS: ${{ needs.native-windows.result }}
           LINUX_SANITIZERS: ${{ needs.linux-sanitizers.result }}
           CMAKE_FLOOR: ${{ needs.cmake-floor-3-25-3.result }}
-          PLAYER_REQUESTED: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-macos-player') }}
+          PLAYER_REQUESTED: ${{ github.event_name == 'pull_request' }}
           PLAYER_RESULT: ${{ needs.macos-player-package.result }}
         run: |
           for result in "$NATIVE_LINUX" "$NATIVE_MACOS" "$NATIVE_WINDOWS" "$LINUX_SANITIZERS" "$CMAKE_FLOOR"; do
@@ -174,7 +174,7 @@ jobs:
             fi
           done
           if [[ "$PLAYER_REQUESTED" == true && "$PLAYER_RESULT" != success ]]; then
-            echo "Requested macOS player package evidence did not succeed: $PLAYER_RESULT" >&2
+            echo "Required macOS player package evidence did not succeed: $PLAYER_RESULT" >&2
             exit 1
           fi
           if [[ "$PLAYER_REQUESTED" != true && "$PLAYER_RESULT" != skipped && "$PLAYER_RESULT" != success ]]; then
