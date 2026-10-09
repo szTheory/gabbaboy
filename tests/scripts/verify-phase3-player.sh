@@ -291,8 +291,9 @@ PY
           "$build_run_attempt" != "$GBB_EXPECTED_BUILD_RUN_ATTEMPT" ]]; then
       fail 'candidate package build attempt differs from the selected CI run attempt'
     fi
-    rm -rf -- "$FINAL_ARTIFACT_DIR"
-    mkdir -p "$FINAL_ARTIFACT_DIR"
+    FINAL_ARTIFACT_DIR=$(python3 "$ROOT_DIR/tests/scripts/verified_player_output_dir.py" \
+      "$ROOT_DIR" "$FINAL_ARTIFACT_DIR") ||
+      fail 'could not safely prepare the verified artifact output directory'
     cp "$archive" "$FINAL_ARTIFACT_DIR/gabbaboy-preview-macos-arm64.tar.gz"
     python3 - "$FINAL_ARTIFACT_DIR/verified-receipt.json" "$archive" \
       "$expected_sha" "$build_run_id" "$build_run_attempt" \
