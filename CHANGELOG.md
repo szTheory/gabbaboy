@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.1.0](https://github.com/szTheory/gabbaboy/compare/v0.1.0...v0.1.0) (2026-10-09)
+## [0.1.0](https://github.com/szTheory/gabbaboy/releases/tag/v0.1.0) (2026-10-09)
 
 
 ### Features
