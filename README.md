@@ -48,7 +48,11 @@ cmake --preset phase1
 cmake --build --preset phase1
 ctest --preset phase1 --output-on-failure --no-tests=error
 ./build/gabbaboy-runner fixtures/tracer/tracer.gb
+./build/gabbaboy-runner --help
 ```
+
+The runner's `--help` output lists its ROM, manifest-case, and manifest-suite
+invocation forms; argument errors point back to that help text.
 
 The default test preset is offline and uses only checked-in fixture bytes. For
 an exact installed-package check, run `bash tests/scripts/verify-phase2-installed.sh`;

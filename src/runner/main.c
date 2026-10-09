@@ -254,17 +254,27 @@ static int run_original_tracer(const char *path) {
     return strcmp(outcome,"pass")==0?0:strcmp(outcome,"guest-failure")==0?1:3;
 }
 
+static void print_usage(FILE *stream, const char *program) {
+    fprintf(stream,
+      "Usage:\n"
+      "  %s <rom.gb>\n"
+      "  %s --manifest <manifest.json> --case <id> [--receipt]\n"
+      "  %s --manifest <manifest.json> --suite [--receipt]\n",
+      program, program, program);
+}
+
 int main(int argc,char **argv) {
     if(argc==2&&strncmp(argv[1],"--",2)!=0)return run_original_tracer(argv[1]);
     const char *manifest=NULL,*selected=NULL;int receipt=0,suite=0;
     for(int i=1;i<argc;i++){
-        if(strcmp(argv[i],"--manifest")==0&&i+1<argc)manifest=argv[++i];
+        if(strcmp(argv[i],"--help")==0){print_usage(stdout,argv[0]);return 0;}
+        else if(strcmp(argv[i],"--manifest")==0&&i+1<argc)manifest=argv[++i];
         else if(strcmp(argv[i],"--case")==0&&i+1<argc)selected=argv[++i];
         else if(strcmp(argv[i],"--suite")==0)suite=1;
         else if(strcmp(argv[i],"--receipt")==0)receipt=1;
-        else {fprintf(stderr,"invalid-arguments\n");return 2;}
+        else {fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
     }
-    if(!manifest||(!suite&&!selected)||(suite&&selected)){fprintf(stderr,"invalid-arguments\n");return 2;}
+    if(!manifest||(!suite&&!selected)||(suite&&selected)){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
     uint8_t manifest_bytes[MAX_MANIFEST+1];size_t manifest_length=0;
     if(!manifest_valid(manifest,manifest_bytes,&manifest_length)){fprintf(stderr,"invalid-manifest\n");return 2;}
     size_t eligible=suite?sizeof(cases)/sizeof(cases[0]):1,executed=0;int suite_code=0;
@@ -273,6 +283,6 @@ int main(int argc,char **argv) {
         if(receipt)printf("suite eligible=%zu executed=%zu status=%s\n",eligible,executed,suite_counts_valid(eligible,executed)&&suite_code==0?"pass":"fail");
         return suite_counts_valid(eligible,executed)?suite_code:2;
     }
-    const fixture_case *fc=select_case(selected);if(!fc){fprintf(stderr,"unknown-case\n");return 2;}
+    const fixture_case *fc=select_case(selected);if(!fc){fprintf(stderr,"unknown-case: use --help for invocation forms\n");return 2;}
     return run_one(fc,manifest,receipt,eligible,&executed);
 }

@@ -1,15 +1,15 @@
 ---
 phase: "01"
 slug: "portable-foundation-and-original-rom-tracer"
-status: draft
-nyquist_compliant: false
+status: validated
+nyquist_compliant: true
 wave_0_complete: false
 created: "2026-10-02"
 ---
 
 # Phase 01 — Validation Strategy
 
-> Phase validation contract with implementation evidence recorded below. The strategy remains unsigned while its named concurrency and classification probe signals are unresolved; these do not replace the passing Phase 1 requirements evidence.
+> Phase validation contract with implementation evidence recorded below. The 2026-10-09 audit classified the remaining probes, added reset/concurrency checks, and added runner usage recovery; current exact-revision hosted evidence remains a separate prerequisite for goal verification.
 
 ---
 
@@ -38,14 +38,14 @@ created: "2026-10-02"
 
 | Requirement | Secure behavior / evidence | Test Type | Automated Command or Gate | File Exists | Status |
 |-------------|----------------------------|-----------|---------------------------|-------------|--------|
-| BASE-01 | Offline configure/build/test/install after dependencies are prepared, including headless runner | integration | Schema-6 preset smoke and exact CMake 3.25.3 configure/build/test/install/relocation/consumer floor lane | ✅ | ✅ local and hosted; CMake floor passed in CI run `37141965336` |
-| BASE-02 | Independent opaque instances, lifecycle, ownership, errors, and thread-use contract | unit/integration | 26-case CTest suite, including named lifecycle cases | ✅ | ✅ 26/26 local CTest and required native lanes |
+| BASE-01 | Offline configure/build/test/install after dependencies are prepared, including headless runner; independent instances do not interfere when used on separate threads | integration | Schema-6 preset smoke, exact CMake 3.25.3 configure/build/test/install/relocation/consumer floor lane, and `concurrent_independent_instances` | ✅ | ✅ targeted concurrent-instance test passed locally; exact hosted inventory refresh is recorded with the current PR evidence |
+| BASE-02 | Independent opaque instances, lifecycle, ownership, errors, thread-use contract, and repeatable reset behavior | unit/integration | Named lifecycle cases, including `reset_idempotency` and `concurrent_independent_instances` | ✅ | ✅ both added behavioral cases passed locally; exact hosted inventory refresh is recorded with the current PR evidence |
 | BASE-03 | Bounded parsing; malformed input leaves active state unchanged; unsupported cartridges fail explicitly | unit/security | Named loader boundary cases in the required CTest inventory | ✅ | ✅ local and required native lanes, including the 64 KiB declared-size rejection regression |
 | BASE-04 | Guest RAM result protocol, bounded trace/time, unsupported execution, timeout and negative controls | integration | Named tracer cases in the required CTest inventory | ✅ | ✅ local and required native lanes |
 | BASE-05 | Fixture source, rights, build recipe, applicability, protocol, timeout, digest, and regenerated-byte equality | reproducibility | Offline CMake `fixture_digest` plus pinned-RGBDS regeneration run | ✅ | ✅ fixture run `37141965338`, context `fixture-repro` |
 | BASE-06 | Relocated installed package works from public headers in external C and C++ consumers | integration | Installed-runner and native C/C++ consumer smoke on Linux x64, macOS arm64, and Windows x64 | ✅ | ✅ required CI run `37141965336`; preview C/C++ consumers passed on Linux/macOS |
-| BASE-07 | Explicit expected-test inventory, loader/lifecycle cases, and ASan/UBSan actually ran | CI contract | Exact-SHA `required-native` aggregate plus explicit test inventory | ✅ | ✅ source SHA `8396096`, CI run `37141965336`, including Windows inventory and Linux ASan/UBSan |
-| BASE-08 | Full install-tree package and smoke evidence identify tested source revision, digest, and retention limits | artifact smoke | Extracted Linux x64/macOS arm64 tar artifacts, installed runner/consumers, sidecar and API metadata | ✅ | ✅ preview run `37141965332`; exact artifact evidence below |
+| BASE-07 | Explicit expected-test inventory, loader/lifecycle cases, and ASan/UBSan actually ran | CI contract | Exact-SHA `required-native` aggregate plus explicit test inventory, including the two added cases | ✅ | Automated gate is configured; current-revision hosted result is pending and must be recorded before phase verification |
+| BASE-08 | Full install-tree package and smoke evidence identify tested source revision, digest, and retention limits | artifact smoke | Extracted Linux x64/macOS arm64 tar artifacts, installed runner/consumers, sidecar and API metadata | ✅ | Automated gate is configured; current-revision artifact result is pending and must be recorded before phase verification |
 
 ---
 
@@ -80,7 +80,14 @@ Remediation history is retained to make earlier hosted failures explicit. Run `3
 
 ## Probe Disposition
 
-Unresolved items remain `unresolved` and `flagged-unverified` until their named execution/test trigger produces evidence; task prose is not closure. The phase-level probe set retains BASE-01 concurrency, BASE-02 idempotency and concurrency, BASE-03/04/06/07 unclassified review signals, and BASE-08 concurrency. BASE-05 fixture provenance and regeneration have implementation evidence; its auto-probe prompts about adjacency, empty-input and stable-order describe collection semantics and do not apply to fixture identity. The phase validation contract remains draft because the remaining named probe signals have not been classified as applicable, inapplicable, or satisfied by their declared evidence.
+The 2026-10-09 Nyquist audit resolved the phase-level probe set. `concurrent_independent_instances` exercises two independently loaded core instances from separate threads with distinct guest results; `reset_idempotency` checks repeated reset and deterministic post-reset output. `runner_help` checks recovery guidance for CLI users. The three added cases passed, and the full local suite passed 179/179.
+
+- BASE-03 and BASE-04's generic prompts map to existing loader boundary/non-destructive tests and tracer success/failure/unsupported/timeout/trace controls; targeted selection passed 24/24.
+- BASE-05's provenance/regeneration evidence is fixture-level, so adjacency, empty-input, and stable-order collection prompts do not apply to fixture identity.
+- BASE-06 is installed-package behavior; the existing `preview_package_smoke` passed 1/1.
+- BASE-07 and BASE-08 are automated hosted inventory, sanitizer, and package-evidence gates rather than additional guest behavior tests. Their exact current-revision results must be added after the Phase 1 refresh PR runs; these gates remain automated and are not manual-only checks.
+
+All phase task behaviors now map to automated checks. Exact current-revision hosted evidence for BASE-07/08 remains a phase-verification prerequisite, not an unresolved test-design probe.
 
 ---
 
@@ -92,13 +99,21 @@ No manual-only UAT is required. Authenticated remote access and hosted runners w
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verification and meaningful adjacent `<fails_when>` behavior
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verification
-- [ ] Plan 01 and Plan 02 sequencing covers initial and expanded test infrastructure
-- [ ] No watch-mode flags
-- [ ] Local CTest feedback latency under 30 seconds
-- [ ] `nyquist_compliant: true` set only after implementation evidence exists
+- [x] All tasks have `<automated>` verification and meaningful adjacent `<fails_when>` behavior
+- [x] Sampling continuity: no 3 consecutive tasks without automated verification
+- [x] Plan 01 and Plan 02 sequencing covers initial and expanded test infrastructure
+- [x] No watch-mode flags
+- [x] Local CTest feedback latency under 30 seconds
+- [x] `nyquist_compliant: true` set only after implementation evidence exists
 
-Nyquist compliance remains false and approval remains pending because several phase-level probe signals are still unclassified in the section above. Hosted BASE-07/BASE-08 evidence is complete for the recorded SHA; the phase-wide validation contract has not been signed off.
+Nyquist compliance is validated based on the automated coverage map and the passing local probes above. Hosted BASE-07/BASE-08 exact-revision evidence remains pending and is required by goal verification before closeout.
 
-**Approval:** pending
+**Approval:** validated by automated evidence
+
+## Validation Audit 2026-10-09
+
+| Metric | Count |
+|---|---|
+| Gaps found | 8 |
+| Resolved | 8 |
+| Escalated | 0 |

@@ -7,9 +7,18 @@ target_compile_features(test_api PRIVATE c_std_17)
 set_target_properties(test_api PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME instance_lifecycle COMMAND test_api instance_lifecycle ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 add_test(NAME independent_instances COMMAND test_api independent_instances ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
+add_test(NAME reset_idempotency COMMAND test_api reset_idempotency ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 add_test(NAME run_bounds COMMAND test_api run_bounds ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 add_test(NAME trace_capacity COMMAND test_api trace_capacity ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 add_test(NAME illegal_lockup_api COMMAND test_api illegal_lockup ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
+
+find_package(Threads REQUIRED)
+add_executable(test_instance_concurrency test_instance_concurrency.c)
+target_link_libraries(test_instance_concurrency PRIVATE GabbaBoy::core Threads::Threads)
+target_compile_features(test_instance_concurrency PRIVATE c_std_17)
+set_target_properties(test_instance_concurrency PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME concurrent_independent_instances COMMAND test_instance_concurrency
+  ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
 
 add_executable(test_cartridge test_cartridge.c)
 target_link_libraries(test_cartridge PRIVATE GabbaBoy::core)
@@ -236,6 +245,10 @@ add_executable(test_runner test_runner.c)
 target_link_libraries(test_runner PRIVATE GabbaBoy::core)
 target_compile_features(test_runner PRIVATE c_std_17)
 set_target_properties(test_runner PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME runner_help
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_RUNNER=$<TARGET_FILE:gabbaboy-runner>
+    -P ${PROJECT_SOURCE_DIR}/tests/verify_runner_help.cmake)
 foreach(case pass fail wrong_breakpoint timeout unsupported zero_eligible)
   add_test(NAME runner_${case} COMMAND test_runner runner_${case})
 endforeach()
@@ -281,6 +294,17 @@ foreach(case daa tim00 tim00-div-trigger)
   add_test(NAME mooneye_case_${case}
     COMMAND gabbaboy-runner --manifest ${PROJECT_SOURCE_DIR}/fixtures/mooneye/manifest.json --case ${case} --receipt)
 endforeach()
+# Bound guest-runner test processes in host wall time as well as emulated half-dots.
+# CTest terminates a stalled process and reports a failed case instead of hanging CI.
+set_tests_properties(
+  tracer_success tracer_failure tracer_unsupported tracer_timeout tracer_trace
+  frame_composition_tracer joypad_gameplay_tracer tracer_smoke
+  runner_pass runner_help runner_fail runner_wrong_breakpoint runner_timeout runner_unsupported
+  runner_zero_eligible runner_guest_failure runner_missing_fixture runner_bad_digest
+  runner_bad_manifest runner_bad_metadata
+  concurrent_independent_instances
+  mooneye_required_suite mooneye_case_daa mooneye_case_tim00 mooneye_case_tim00-div-trigger
+  PROPERTIES TIMEOUT 30)
 set_tests_properties(mooneye_case_daa PROPERTIES PASS_REGULAR_EXPRESSION
   "status=pass.*source_revision=31510e12eea6286d36eea060a6adde755e1067aa.*report_patch_sha256=c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d.*fixture_origin=derived-headless-report-closure upstream_assertions=unchanged.*protocol_stage=callback-then-ld-b-b callback_result=pass callback_pc=0166 result_pc=409a")
 set_tests_properties(mooneye_case_tim00 PROPERTIES PASS_REGULAR_EXPRESSION

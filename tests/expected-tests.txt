@@ -1,5 +1,7 @@
 instance_lifecycle
 independent_instances
+concurrent_independent_instances
+reset_idempotency
 cartridge_tracer
 cartridge_bank_matrix
 cartridge_ram_banks
@@ -165,6 +167,7 @@ diagnostics_short
 diagnostics_null
 diagnostics_canary
 runner_pass
+runner_help
 runner_fail
 runner_wrong_breakpoint
 runner_guest_failure
