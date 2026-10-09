@@ -1,21 +1,21 @@
 ---
 gsd_state_version: "1.0"
 milestone: v0.1
-current_phase: 02
-current_phase_name: DMG CPU, Bus, and Time
+current_phase: 03
+current_phase_name: Visible Interactive DMG
 status: executing
-stopped_at: Phase GB-01 verification refresh complete; stop at phase boundary
-last_updated: "2026-10-09T12:20:14Z"
+stopped_at: Phase GB-02 canonical verification refresh complete; stop at the phase boundary
+last_updated: "2026-10-09T12:47:59.036Z"
 last_activity: 2026-10-09
-last_activity_desc: Phase GB-01 canonical verification refreshed; Phase 2 refresh is next
-state_head: d1e5fdb3b23256f06694cd8d91613638612bccb8
+last_activity_desc: Phase GB-02 canonical verification refresh passed; Phase 3 refresh is next
+state_head: fdb11360a8e6baaf1930dae1d9131e8b6c188458
 progress:
   total_phases: 6
   completed_phases: 6
   total_plans: 56
   completed_plans: 56
   percent: 100
-  verified_phases: 3
+  verified_phases: 4
 milestone_name: limited DMG preview
 ---
 
@@ -26,24 +26,24 @@ milestone_name: limited DMG preview
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase GB-02 — DMG CPU, Bus, and Time (canonical verification refresh)
+**Current focus:** Phase GB-03 — Visible Interactive DMG (canonical verification refresh)
 
 ## Current Position
 
-Phase: GB-02 (DMG CPU, Bus, and Time) — verification refresh next
-Plans: 17 runnable plans already have summaries; no plan execution remains
-Status: Phase 1 verification refresh passed; stopped at the required phase boundary
-Last activity: 2026-10-09 — Phase 1 canonical verification refreshed
+Phase: GB-03 (Visible Interactive DMG) — canonical verification refresh next
+Plans: 13 plans already have summaries; no plan execution remains
+Status: Phase 2 verification refresh passed; stopped at the required phase boundary
+Last activity: 2026-10-09 — Phase GB-02 canonical verification refreshed
 
-All six phases have completed plan execution (56/56 plans). Canonical verification now passes for Phases 1, 5, and 6; Phases 2–4 remain stale after covered files changed. Phase 1 passed all five roadmap truths, BASE-01 through BASE-08, the focused 26/26 test selection, and the previously recorded full 179/179 CTest inventory. PR #35's exact required contexts passed at head `d1e5fdb3b23256f06694cd8d91613638612bccb8` and merged as `96f76dec9a675ede45da8d75bd72a5141c7419e4`. See the [Phase 1 verification](phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md) and [v0.1 milestone audit](v0.1-MILESTONE-AUDIT.md).
+All six phases have completed plan execution (56/56 runnable plans). Canonical verification now passes for Phases 1, 2, 5, and 6; Phases 3–4 remain stale. Phase 2 passed all five roadmap truths and CPU-01 through CPU-05; its focused Phase 2 selection passed 88/88 and current full local CTest passed 179/179. Live receipts passed for all three admitted cases and the protocol probe reported zero PPU accesses. See the [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), [Phase 1 verification](phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md), and [v0.1 milestone audit](v0.1-MILESTONE-AUDIT.md).
 
-Phase 6 claims remain scoped: software-scripted package/player checks do not establish physical hardware or perceptual behavior. Signing/notarization and live Playstead GB integration are not claimed. The v0.1 milestone is not ready to archive until Phases 2–4 have fresh canonical verification. Exact next command: `$gsd-execute-phase 2`.
+Phase 2 remains scoped to the three source-qualified derived CPU/timer reporting closures; no physical DMG-CPU-B observation or broad compatibility claim is made. Phase 6 software package/player checks do not establish physical hardware or perceptual behavior. Signing/notarization and live Playstead GB integration are not claimed. The v0.1 milestone is not ready to archive until Phases 3–4 have fresh canonical verification. Exact next command: `$gsd-execute-phase 3`.
 
 ## Performance Metrics
 
 - Completed unique plans: 56; recorded execution total: 1002 min. Phase 6 completed all seven reviewed plans in six dependency-ordered waves and passed all five goal truths.
-- Per-phase metrics / recent trend: Current canonical reports pass for Phases 1, 5, and 6; Phases 2–4 remain stale. Phase 3's historical report records 13/13 plan summaries, 5/5 goal truths, 33/33 UAT checks, the user-confirmed packaged Z press/release, and 141/141 local CTest. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B measurement is claimed. Plan 02-15 is superseded/non-runnable and remains historical. The audit found CPU-02 and CPU-05 missing from Phase 2 summary `requirements_completed` metadata.
-- Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. At implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`, the local offline inventory passed 104/104 with no skips, the relocated installed C/C++ inventory passed 109/109, the runner passed its fixed one-CPU/two-timer derived corpus, hosted CI run 37620710587 passed, and fixture reproduction run 37620710600 passed. Independent verification passed all five CPU requirements. Original upstream PPU-dependent reporting paths remain excluded; no physical DMG hardware test occurred.
+- Per-phase metrics / recent trend: Current canonical reports pass for Phases 1, 2, 5, and 6; Phases 3–4 remain stale. Phase 3's historical report records 13/13 plan summaries, 5/5 goal truths, 33/33 UAT checks, the user-confirmed packaged Z press/release, and 141/141 local CTest. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B measurement is claimed. Plan 02-15 is superseded/non-runnable and remains historical.
+- Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. The current Phase 2 refresh passed 179/179 local CTest, 88/88 focused Phase 2 cases, three eligible runner receipts, and the protocol probe with zero PPU accesses. Historical exact evidence at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989` includes the 104/104 offline core inventory, 109/109 relocated installed C/C++ inventory, hosted CI run 37620710587, and fixture reproduction run 37620710600. Original upstream PPU-dependent reporting paths remain excluded; no physical DMG hardware test occurred.
 
 **Per-Plan Metrics:**
 
@@ -189,11 +189,11 @@ None outside the roadmap.
 
 ### Blockers/Concerns
 
-- The v0.1 audit found canonical verification stale for Phases 1–4. The audit integration checker found 6/6 cross-phase flows wired with no broken connection; this is an evidence-freshness gap, not a finding that those implementations regressed.
+- The v0.1 audit found canonical verification stale for Phases 1–4. Phases 1 and 2 now have fresh passing canonical reports; Phases 3–4 remain stale. The audit integration checker found 6/6 cross-phase flows wired with no broken connection; this is an evidence-freshness gap, not a finding that those implementations regressed.
 - Main branch protection now enforces the three strict required CI contexts for administrators. Follow-up readback showed no required approving-review gate. PR #34 predates admin enforcement and had no recorded approval; its exact required CI contexts were green when merged.
 - Phase 1's refreshed validation report is `validated` and Nyquist-compliant, with 179/179 local CTest. Phase 3 validation is still `executing`, not `validated`, despite compliant/wave-complete flags.
 
-- Phase 2's historical verifier passed all five requirements at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`, but current canonical verification is stale. CPU-02 and CPU-05 also lack summary frontmatter completion entries. Refresh through `$gsd-execute-phase 2` after the Phase 1 stop; see the [milestone audit](v0.1-MILESTONE-AUDIT.md).
+- Phase 2's refreshed canonical verifier passed all five requirements and roadmap truths. The current full local CTest run passed 179/179, the focused Phase 2 selection passed 88/88, all three admitted headless runner cases passed, and the protocol probe recorded zero PPU accesses. No physical DMG-CPU-B observation or broad compatibility claim is made. See [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md).
 - The admitted corpus is three derived headless reporting closures (one CPU, two timer). Original Mooneye reporting paths depend on PPU/LY behavior outside scope and remain excluded. No physical DMG-CPU-B observation occurred; no hardware qualification is claimed.
 - Phase 1 PR #1 and Phase 2 PR #2 were merged on 2026-10-07 after their required exact-head checks passed. Current GitHub triage found no open PRs or issues. Phase 2 verification is limited to its documented DMG-CPU-B CPU/timer scope; no physical DMG observation or PPU qualification is claimed.
 - Phase 6 has no open goal, requirement, review, or high/blocking security finding. The release workflow's original post-publication readback failure was repaired before closeout; the live release API and a fresh download reconcile the published 18-asset inventory.
@@ -211,10 +211,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-09T12:20:14Z
-Stopped at: Phase GB-01 verification refresh complete; Phase 2 refresh is next
+Last session: 2026-10-09T12:47:59Z
+Stopped at: Phase GB-02 canonical verification refresh complete; Phase 3 refresh is next
 Resume file: .planning/.continue-here.md
-Next command in fresh context: $gsd-execute-phase 2
+Next command in fresh context: $gsd-execute-phase 3
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: Phase 1 — Portable Foundation and Original ROM Tracer canonical verification refresh. Verification passed 5/5 roadmap truths; BASE-01 through BASE-08 are current. The v0.1 milestone remains unarchived; Phases 2–4 need fresh canonical verification.
-Next phase: Phase 2 — DMG CPU, Bus, and Time (canonical verification refresh). Exact next command: `$gsd-execute-phase 2`. Stop at that phase boundary.
+Completed workflow stage: Phase 2 — DMG CPU, Bus, and Time canonical verification refresh. Verification passed 5/5 roadmap truths and CPU-01 through CPU-05; the v0.1 milestone remains unarchived. Phases 3–4 need fresh canonical verification.
+Next phase: Phase 3 — Visible Interactive DMG (canonical verification refresh). Exact next command: `$gsd-execute-phase 3`. Stop at that phase boundary.

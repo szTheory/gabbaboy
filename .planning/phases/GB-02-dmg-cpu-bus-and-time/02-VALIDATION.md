@@ -149,3 +149,11 @@ The seven gaps in the historical audit closed through Plans 02-10 to 02-17: four
 Current run evidence: focused base semantic selection passed 5/5; a fresh local CTest run passed 104/104 and the core inventory checker reported no skips. The current phase verification records 109/109 relocated installed checks, exact hosted CI run [37620710587](https://github.com/szTheory/gabbaboy/actions/runs/37620710587), and exact fixture-reproduction run [37620710600](https://github.com/szTheory/gabbaboy/actions/runs/37620710600) for implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`. Independent phase verification is passed 5/5 with zero behavior unverified in [02-VERIFICATION.md](02-VERIFICATION.md).
 
 No additional test file was needed: the only gap identified in this audit, CPU-01/D-01, is covered by the registered 02-18 tests. No implementation bug is escalated. Physical DMG-CPU-B observation remains unavailable and is recorded as a hardware evidence limitation, not an automated coverage gap or manual UAT requirement. The original upstream Mooneye ROMs remain PPU/LY-limited; the passing fixed corpus uses source-qualified derived reporting closures and does not claim original-ROM PPU behavior or hardware qualification.
+
+## Validation Audit 2026-10-09
+
+| Metric | Count |
+|---|---|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
