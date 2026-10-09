@@ -76,3 +76,11 @@ The audit found no unregistered threat flags. The summaries contain no `## Threa
 - [x] `status: verified` set in frontmatter.
 
 **Approval:** verified 2026-10-07
+
+## Security Audit 2026-10-09
+
+| Metric | Count |
+|---|---|
+| Threats found | 31 |
+| Closed | 30 |
+| Open | 1 |

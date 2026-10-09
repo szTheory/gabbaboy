@@ -1,14 +1,14 @@
 ---
-status: complete
+status: testing
 phase: GB-03-visible-interactive-dmg
 source: [03-01-SUMMARY.md, 03-02-SUMMARY.md, 03-03-SUMMARY.md, 03-04-SUMMARY.md, 03-05-SUMMARY.md, 03-06-SUMMARY.md, 03-07-SUMMARY.md, 03-08-SUMMARY.md, 03-09-SUMMARY.md, 03-10-SUMMARY.md, 03-11-SUMMARY.md, 03-12-SUMMARY.md, 03-13-SUMMARY.md]
 started: 2026-10-08T00:52:50Z
-updated: 2026-10-08T00:58:25.977Z
+updated: 2026-10-09T13:20:39Z
 ---
 
 ## Current Test
 
-[testing complete]
+[testing: current packaged-window check remains]
 
 ## Tests
 
@@ -217,20 +217,28 @@ source: evidence-review
 evidence: "Pinned source provenance and unresolved arbitration boundaries are recorded; D-025 permits the source-backed model without a physical CPU-B claim."
 coverage_id: D2
 
+### 34. Current packaged preview and live key response
+expected: "The current packaged Mac player visibly displays the bundled legal demo; holding Z darkens the target tile and releasing Z restores its lighter shade."
+result: pending
+source: human
+evidence: "The prior 2026-10-08 observation covers the earlier package. Phase 5 later changed keyboard aggregation and player event integration; a current display-equipped Mac observation is still needed."
+coverage_id: VIDEO-04
+
 ## Summary
 
-total: 33
+total: 34
 passed: 33
 issues: 0
-pending: 0
+pending: 1
 skipped: 0
 
 ## Gaps
 
-[none]
+- Current packaged preview visibility and live Z press/release behavior need one display-equipped Mac observation after the Phase 5 player changes.
 
 ## Evidence Notes
 
 - The user opened the visible demo and reported that holding Z changed a tile from light green to dark green and releasing Z restored it.
 - The live window used the packaged executable, SDL library, and owned demo fixture in a temporary local macOS app wrapper. The title and status were visible; no product source or dependency changed for the wrapper.
+- That observation remains valid for the package tested on 2026-10-08. It does not qualify the current package after subsequent Phase 5 keyboard/event changes; see pending test 34.
 - Exact CPU-B collision and JOYP sampling measurements remain unclaimed. D-025 supersedes the historical CPU-B-only collision checkpoint with a documented, confidence-qualified deterministic software-model acceptance criterion.

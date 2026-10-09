@@ -105,11 +105,11 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | CPU-03 | Phase 2 | Complete — canonical verification passed 5/5; see [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md) |
 | CPU-04 | Phase 2 | Complete — canonical verification passed 5/5; see [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md) |
 | CPU-05 | Phase 2 | Complete — canonical verification passed 5/5; see [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md) |
-| VIDEO-01 | Phase 3 | Pending re-verification — historical report passed; current canonical report stale |
-| VIDEO-02 | Phase 3 | Pending re-verification — historical report passed; current canonical report stale |
-| VIDEO-03 | Phase 3 | Pending re-verification — historical report passed; current canonical report stale |
-| VIDEO-04 | Phase 3 | Pending re-verification — historical report passed; current canonical report stale |
-| VIDEO-05 | Phase 3 | Pending re-verification — historical report passed; current canonical report stale |
+| VIDEO-01 | Phase 3 | Current verification passed — composition and raster timing covered by the fresh 179/179 suite; see [verification](phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md) |
+| VIDEO-02 | Phase 3 | Current verification passed under D-025 software model — physical CPU-B timing/lane behavior remains unclaimed; see [verification](phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md) |
+| VIDEO-03 | Phase 3 | Current verification passed under selected falling-edge software contract — current visible SDL response is tracked under VIDEO-04; see [verification](phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md) |
+| VIDEO-04 | Phase 3 | Human verification needed — current packaged window and live Z response need one observation; see [UAT](phases/GB-03-visible-interactive-dmg/03-UAT.md) |
+| VIDEO-05 | Phase 3 | Current verification passed — evidence classes and preview limitations are covered; see [verification](phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md) |
 | SAVE-01 | Phase 4 | Pending re-verification — historical report passed; current canonical report stale |
 | SAVE-02 | Phase 4 | Pending re-verification — historical report passed; current canonical report stale |
 | SAVE-03 | Phase 4 | Pending re-verification — historical report passed; current canonical report stale |
@@ -135,9 +135,9 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | STATE-01 | Next milestone | Deferred |
 | INT-01 | Next milestone | Deferred |
 
-**Active coverage:** 35/35 requirements are mapped exactly once; 21 have current passing evidence and 14 await re-verification because Phases 2–4 remain stale in the canonical OpenGSD gate. Phase 1's BASE-01 through BASE-08 passed fresh verification on 2026-10-09. There are 0 unmapped requirements and 0 duplicates. Next-milestone requirements and later candidates are excluded from active coverage. See [the v0.1 milestone audit](v0.1-MILESTONE-AUDIT.md).
+**Active coverage:** 35/35 requirements are mapped exactly once; 30 have current passing evidence and five remain open (VIDEO-04 needs a current package observation; SAVE-01 through SAVE-04 await Phase 4 verification). Phases 1–3, 5, and 6 have fresh canonical reports, with Phase 3 marked `human_needed` at 4/5 roadmap truths. There are 0 unmapped requirements and 0 duplicates. Next-milestone requirements and later candidates are excluded from active coverage. See [the v0.1 milestone audit](v0.1-MILESTONE-AUDIT.md).
 
 **Next-milestone traceability:** 7/7 GB/GBC breadth commitments are mapped to the next milestone and remain outside the active v0.1 count.
 
 ---
-Last updated: 2026-10-09 after Phase 1 verification refresh; 21 active requirements have current passing evidence, 14 await refreshed verification, and 7 next-milestone commitments remain deferred.
+Last updated: 2026-10-09 after Phase 3 verification refresh; 30 active requirements have current passing evidence, one Phase 3 acceptance needs human verification, four Phase 4 requirements await refresh, and 7 next-milestone commitments remain deferred.

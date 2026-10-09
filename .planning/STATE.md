@@ -4,10 +4,10 @@ milestone: v0.1
 current_phase: 03
 current_phase_name: Visible Interactive DMG
 status: executing
-stopped_at: Phase GB-02 canonical verification refresh complete; stop at the phase boundary
-last_updated: "2026-10-09T12:47:59.036Z"
+stopped_at: Phase GB-03 canonical verification refresh; VIDEO-04 needs a current packaged-window observation
+last_updated: "2026-10-09T13:20:39Z"
 last_activity: 2026-10-09
-last_activity_desc: Phase GB-02 canonical verification refresh passed; Phase 3 refresh is next
+last_activity_desc: Phase GB-03 fresh verification is human_needed at 4/5 truths; one current package check remains
 state_head: fdb11360a8e6baaf1930dae1d9131e8b6c188458
 progress:
   total_phases: 6
@@ -32,17 +32,17 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 
 Phase: GB-03 (Visible Interactive DMG) — canonical verification refresh next
 Plans: 13 plans already have summaries; no plan execution remains
-Status: Phase 2 verification refresh passed; stopped at the required phase boundary
-Last activity: 2026-10-09 — Phase GB-02 canonical verification refreshed
+Status: Phase 3 verification refresh is human_needed at 4/5 roadmap truths; stopped at the required phase boundary
+Last activity: 2026-10-09 — Phase GB-03 canonical verification refreshed
 
-All six phases have completed plan execution (56/56 runnable plans). Canonical verification now passes for Phases 1, 2, 5, and 6; Phases 3–4 remain stale. Phase 2 passed all five roadmap truths and CPU-01 through CPU-05; its focused Phase 2 selection passed 88/88 and current full local CTest passed 179/179. Live receipts passed for all three admitted cases and the protocol probe reported zero PPU accesses. See the [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), [Phase 1 verification](phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md), and [v0.1 milestone audit](v0.1-MILESTONE-AUDIT.md).
+All six phases have completed plan execution (56/56 runnable plans). Canonical verification passes for Phases 1, 2, 5, and 6; Phase 3 is `human_needed` at 4/5 truths and Phase 4 awaits refresh. Thirty active requirements have current passing evidence; VIDEO-04 and SAVE-01 through SAVE-04 remain open. Phase 3's current full local CTest passed 179/179, but the current packaged window and live Z response need a Mac observation because Phase 5 changed player input/event handling. See the [Phase 3 verification](phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md), [Phase 3 UAT](phases/GB-03-visible-interactive-dmg/03-UAT.md), [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), and [v0.1 milestone audit](v0.1-MILESTONE-AUDIT.md).
 
 Phase 2 remains scoped to the three source-qualified derived CPU/timer reporting closures; no physical DMG-CPU-B observation or broad compatibility claim is made. Phase 6 software package/player checks do not establish physical hardware or perceptual behavior. Signing/notarization and live Playstead GB integration are not claimed. The v0.1 milestone is not ready to archive until Phases 3–4 have fresh canonical verification. Exact next command: `$gsd-execute-phase 3`.
 
 ## Performance Metrics
 
 - Completed unique plans: 56; recorded execution total: 1002 min. Phase 6 completed all seven reviewed plans in six dependency-ordered waves and passed all five goal truths.
-- Per-phase metrics / recent trend: Current canonical reports pass for Phases 1, 2, 5, and 6; Phases 3–4 remain stale. Phase 3's historical report records 13/13 plan summaries, 5/5 goal truths, 33/33 UAT checks, the user-confirmed packaged Z press/release, and 141/141 local CTest. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B measurement is claimed. Plan 02-15 is superseded/non-runnable and remains historical.
+- Per-phase metrics / recent trend: Current canonical reports pass for Phases 1, 2, 5, and 6; Phase 3 is `human_needed` and Phase 4 remains stale. Phase 3 has 13/13 plan summaries, fresh 4/5 goal truths, 33/34 UAT checks closed (the prior package's Z report remains historical evidence), and 179/179 current local CTest. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B measurement is claimed. Plan 02-15 is superseded/non-runnable and remains historical.
 - Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. The current Phase 2 refresh passed 179/179 local CTest, 88/88 focused Phase 2 cases, three eligible runner receipts, and the protocol probe with zero PPU accesses. Historical exact evidence at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989` includes the 104/104 offline core inventory, 109/109 relocated installed C/C++ inventory, hosted CI run 37620710587, and fixture reproduction run 37620710600. Original upstream PPU-dependent reporting paths remain excluded; no physical DMG hardware test occurred.
 
 **Per-Plan Metrics:**
@@ -189,9 +189,9 @@ None outside the roadmap.
 
 ### Blockers/Concerns
 
-- The v0.1 audit found canonical verification stale for Phases 1–4. Phases 1 and 2 now have fresh passing canonical reports; Phases 3–4 remain stale. The audit integration checker found 6/6 cross-phase flows wired with no broken connection; this is an evidence-freshness gap, not a finding that those implementations regressed.
+- The v0.1 audit found canonical verification stale for Phases 1–4. Phases 1 and 2 now have fresh passing reports; Phase 3 is `human_needed` for the current packaged-player observation; Phase 4 remains stale. The audit integration checker found 6/6 cross-phase flows wired with no broken connection; this is an evidence-freshness gap, not a finding that those implementations regressed.
 - Main branch protection now enforces the three strict required CI contexts for administrators. Follow-up readback showed no required approving-review gate. PR #34 predates admin enforcement and had no recorded approval; its exact required CI contexts were green when merged.
-- Phase 1's refreshed validation report is `validated` and Nyquist-compliant, with 179/179 local CTest. Phase 3 validation is still `executing`, not `validated`, despite compliant/wave-complete flags.
+- Phase 1's refreshed validation report is `validated` and Nyquist-compliant, with 179/179 local CTest. Phase 3 Nyquist validation is `validated`; its separate UAT remains open for the current packaged-player observation.
 
 - Phase 2's refreshed canonical verifier passed all five requirements and roadmap truths. The current full local CTest run passed 179/179, the focused Phase 2 selection passed 88/88, all three admitted headless runner cases passed, and the protocol probe recorded zero PPU accesses. No physical DMG-CPU-B observation or broad compatibility claim is made. See [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md).
 - The admitted corpus is three derived headless reporting closures (one CPU, two timer). Original Mooneye reporting paths depend on PPU/LY behavior outside scope and remain excluded. No physical DMG-CPU-B observation occurred; no hardware qualification is claimed.
@@ -211,10 +211,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-09T12:47:59Z
-Stopped at: Phase GB-02 canonical verification refresh complete; Phase 3 refresh is next
+Last session: 2026-10-09T13:20:39Z
+Stopped at: Phase GB-03 canonical verification refresh; current packaged-player observation is pending
 Resume file: .planning/.continue-here.md
-Next command in fresh context: $gsd-execute-phase 3
+Next command in fresh context: $gsd-verify-work
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: Phase 2 — DMG CPU, Bus, and Time canonical verification refresh. Verification passed 5/5 roadmap truths and CPU-01 through CPU-05; the v0.1 milestone remains unarchived. Phases 3–4 need fresh canonical verification.
-Next phase: Phase 3 — Visible Interactive DMG (canonical verification refresh). Exact next command: `$gsd-execute-phase 3`. Stop at that phase boundary.
+Completed workflow stage: Phase 3 — Visible Interactive DMG canonical verification refresh. Current verification passed 4/5 roadmap truths; the full CTest suite passed 179/179, and source/security reviews are recorded. VIDEO-04 remains `human_needed`: on a display-equipped Mac, launch the current packaged player with its bundled demo, confirm the demo is visible, then hold and release Z to confirm the target tile darkens and restores. The prior 2026-10-08 user observation remains evidence for the earlier package only. The v0.1 milestone remains unarchived.
+Next phase: Phase 4 — MBC1 and Safe Battery Continuation, only after Phase 3 verification closes. Exact next command: `$gsd-verify-work`. Stop at the Phase 3 boundary; do not auto-advance.

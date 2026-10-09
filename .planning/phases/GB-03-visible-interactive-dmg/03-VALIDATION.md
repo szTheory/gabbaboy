@@ -1,7 +1,7 @@
 ---
 phase: "GB-03"
 slug: "visible-interactive-dmg"
-status: executing
+status: validated
 nyquist_compliant: true
 wave_0_complete: true
 created: "2026-10-07"
@@ -82,6 +82,14 @@ All scoped software behavior has an automated verification path. Physical DMG-CP
 - [x] Feedback latency measured and recorded
 - [x] `nyquist_compliant: true` set after all focused tests and the full suite passed
 
-Plan 03-09's two automated package tasks passed. Plan 03-13 adopts confidence-qualified software behavior with original guest checks. The registered matrix covers ordered JOYP edges, all active-DMA CPU VRAM/OAM cells in PPU modes 0–3, mode-2 overlap controls, adjacent DMA-byte/fetch boundaries, and a same-half-dot three-way collision. Follow-up review regressions cover OAM entry 39 and scan-cursor reset. The full suite is 141/141; review is clean. Tests do not claim physical CPU-B pulse phase, lane timing, or PPU-revision qualification.
+Plan 03-09's two automated package tasks passed. Plan 03-13 adopts confidence-qualified software behavior with original guest checks. The registered matrix covers ordered JOYP edges, all active-DMA CPU VRAM/OAM cells in PPU modes 0–3, mode-2 overlap controls, adjacent DMA-byte/fetch boundaries, and a same-half-dot three-way collision. Follow-up review regressions cover OAM entry 39 and scan-cursor reset. The full current CTest suite passed 179/179 on the Phase 3 refresh branch after correcting the test helper's unsequenced `rn` access. The 2026-10-08 packaged-player UAT records visible Z press/release behavior for the package tested then; the current packaged player still needs one live check after Phase 5 input/event changes. See pending test 34 in `03-UAT.md`. Tests do not claim physical CPU-B pulse phase, lane timing, or PPU-revision qualification.
 
-**Approval:** executor-confirmed 2026-10-08 after focused and full local core suites passed; live VIDEO-04 perceptual check remains a separate open verification item.
+**Approval:** automated validation refreshed 2026-10-09 after current full CTest 179/179. UAT remains open for the current packaged-player observation. Physical DMG-CPU-B pulse phase, lane timing, and PPU-revision qualification remain outside the evidence.
+
+## Validation Audit 2026-10-09
+
+| Metric | Count |
+|---|---|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
