@@ -125,6 +125,12 @@ jobs:
         with:
           ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 0
+      - name: Load trusted control-plane receipt verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > "$RUNNER_TEMP/verify-release-gates.sh"
+          chmod +x "$RUNNER_TEMP/verify-release-gates.sh"
       - name: Verify merged PR exact-head required evidence
         id: proof
         shell: bash
@@ -377,8 +383,9 @@ jobs:
           battery_sha=$(sha256sum fixtures/mbc1-continuation/manifest.json | cut -d ' ' -f1)
           cmake_version=$(cmake --version | head -n1)
           compiler=$(cc --version | head -n1)
-          runner=$(uname -a)
-          export asset_sha notice_sha source_receipt_sha build_receipt_sha tracer_sha battery_sha cmake_version compiler runner
+          smoke_runner=$(uname -a)
+          build_runner=$(jq -er '.build.runner' build/downloaded/build-receipt.json)
+          export asset_sha notice_sha source_receipt_sha build_receipt_sha tracer_sha battery_sha cmake_version compiler smoke_runner build_runner
           assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
           receipt_count=$(jq '[.[] | select(.name == "candidate-receipt.json")] | length' <<<"$assets")
           [[ "$receipt_count" -le 1 ]] || { echo "Draft has duplicate candidate receipts." >&2; exit 1; }
@@ -401,6 +408,9 @@ jobs:
           if receipt.get("release_notes_sha256") != notes_sha or receipt.get("notice_sha256") != notice_sha:
               raise SystemExit("Stored receipt does not match the current release notes and notice bytes.")
           PY
+            "$RUNNER_TEMP/verify-release-gates.sh" --check-runner-evidence \
+              build/existing/candidate-receipt.json build/downloaded/build-receipt.json \
+              "$RELEASE_TAG" "$SOURCE_SHA" "$smoke_runner"
           else
           python3 - <<'PY'
           import hashlib, json, os, pathlib
@@ -423,11 +433,12 @@ jobs:
               "build": {
                   "compiler": os.environ["compiler"],
                   "cmake": os.environ["cmake_version"],
-                  "runner": os.environ["runner"],
+                  "runner": os.environ["build_runner"],
                   "configuration": "Release",
                   "fixture_manifest_sha256": os.environ["tracer_sha"],
                   "corpus_manifest_sha256": os.environ["battery_sha"],
               },
+              "smoke": {"runner": os.environ["smoke_runner"]},
               "fixtures": {
                   "tracer_manifest_sha256": os.environ["tracer_sha"],
                   "battery_manifest_sha256": os.environ["battery_sha"],
@@ -457,6 +468,9 @@ jobs:
             "$RELEASE_VERSION" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
             build/downloaded/gabbaboy-notices.txt build/downloaded/source-receipt.json \
             build/downloaded/build-receipt.json
+          "$RUNNER_TEMP/verify-release-gates.sh" --check-runner-evidence \
+            build/downloaded/candidate-receipt.json build/downloaded/build-receipt.json \
+            "$RELEASE_TAG" "$SOURCE_SHA" "$smoke_runner"
             gh release upload "$RELEASE_TAG" build/downloaded/candidate-receipt.json --repo "$GH_REPO"
           fi
           echo "Candidate is qualified and remains a draft. Only the final 06-06 gate may publish it."

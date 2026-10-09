@@ -13,6 +13,16 @@ config = json.loads((root / "release-please-config.json").read_text())
 package = config.get("packages", {}).get(".", {})
 if package.get("draft") is not True or package.get("force-tag-creation") is not True:
     raise SystemExit("release-please must create one unpublished draft and immediate tag")
+excluded = package.get("exclude-paths", [])
+expected_excluded = {".github/workflows", ".github/scripts"}
+if set(excluded) != expected_excluded:
+    raise SystemExit("release-please must exclude only the workflow and release-control script paths")
+def excluded_path(path):
+    return any(path == prefix or path.startswith(prefix + "/") for prefix in excluded)
+if not excluded_path(".github/workflows/release.yml") or not excluded_path(".github/scripts/verify-release-gates.sh"):
+    raise SystemExit("release-control-plane paths are not excluded from release parsing")
+if excluded_path("src/gabbaboy.c") or excluded_path("CMakeLists.txt"):
+    raise SystemExit("release-please exclusion incorrectly hides product source/version paths")
 workflow = (root / ".github/workflows/release.yml").read_text()
 entrypoint = (root / ".github/workflows/release-please.yml").read_text()
 for output in ("release_created", "tag_name", "sha"):
@@ -160,6 +170,29 @@ for asset in assets:
 PY
 }
 
+check_runner_evidence() {
+  local receipt_path=$1 build_path=$2 tag=$3 source_sha=$4 smoke_runner=$5
+  python3 - "$receipt_path" "$build_path" "$tag" "$source_sha" "$smoke_runner" <<'PY'
+import hashlib, json, pathlib, re, sys
+receipt_path, build_path, expected_tag, expected_source, expected_smoke_runner = sys.argv[1:]
+receipt = json.loads(pathlib.Path(receipt_path).read_text())
+build_receipt_bytes = pathlib.Path(build_path).read_bytes()
+build_receipt = json.loads(build_receipt_bytes)
+if receipt.get("tag_name") != expected_tag or receipt.get("source_sha") != expected_source:
+    raise SystemExit("candidate runner evidence has a mismatched tag or source SHA")
+if not re.fullmatch(r"v\d+\.\d+\.\d+", expected_tag) or not re.fullmatch(r"[0-9a-f]{40}", expected_source):
+    raise SystemExit("expected tag/source identity is malformed")
+if receipt.get("build_receipt_sha256") != hashlib.sha256(build_receipt_bytes).hexdigest():
+    raise SystemExit("candidate does not bind the exact downloaded build receipt bytes")
+candidate_build_runner = receipt.get("build", {}).get("runner")
+recorded_build_runner = build_receipt.get("build", {}).get("runner")
+if not recorded_build_runner or candidate_build_runner != recorded_build_runner:
+    raise SystemExit("candidate build runner differs from the build receipt provenance")
+if receipt.get("smoke", {}).get("runner") != expected_smoke_runner or not expected_smoke_runner:
+    raise SystemExit("candidate smoke runner differs from the downloaded-byte smoke environment")
+PY
+}
+
 case "$mode" in
   --self-test)
     [[ $# -eq 1 ]] || fail 'usage: verify-release-gates.sh --self-test'
@@ -199,6 +232,39 @@ PY
       fi
       printf 'rejected: %s required-check evidence\n' "$mutation"
     done
+    mkdir -p "$temp/runner"
+    python3 - "$temp/runner" <<'PY'
+import hashlib, json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+build = {"tag_name": "v0.1.0", "source_sha": "a" * 40,
+         "build": {"runner": "ubuntu-22.04/ubuntu22/20261004.315.1"}}
+(root / "build.json").write_text(json.dumps(build))
+candidate = {"tag_name": "v0.1.0", "source_sha": "a" * 40,
+             "build_receipt_sha256": hashlib.sha256((root / "build.json").read_bytes()).hexdigest(),
+             "build": {"runner": build["build"]["runner"]},
+             "smoke": {"runner": "Linux smoke-host 6.8.0 x86_64 GNU/Linux"}}
+(root / "candidate.json").write_text(json.dumps(candidate))
+PY
+    check_runner_evidence "$temp/runner/candidate.json" "$temp/runner/build.json" \
+      v0.1.0 "$(printf 'a%.0s' {1..40})" 'Linux smoke-host 6.8.0 x86_64 GNU/Linux'
+    for mutation in tag source digest; do
+      cp "$temp/runner/candidate.json" "$temp/runner/$mutation.json"
+      python3 - "$temp/runner/$mutation.json" "$mutation" <<'PY'
+import json, pathlib, sys
+path, kind = pathlib.Path(sys.argv[1]), sys.argv[2]
+data = json.loads(path.read_text())
+if kind == "tag": data["tag_name"] = "v0.1.1"
+elif kind == "source": data["source_sha"] = "b" * 40
+elif kind == "digest": data["build_receipt_sha256"] = "0" * 64
+path.write_text(json.dumps(data))
+PY
+      if check_runner_evidence "$temp/runner/$mutation.json" "$temp/runner/build.json" \
+        v0.1.0 "$(printf 'a%.0s' {1..40})" 'Linux smoke-host 6.8.0 x86_64 GNU/Linux' >/dev/null 2>&1; then
+        fail "runner evidence gate accepted $mutation mismatch"
+      fi
+      printf 'rejected: runner evidence %s mismatch\n' "$mutation"
+    done
+    printf 'PASS: distinct build/smoke runner identities and bound release evidence\n'
     printf 'PASS: release configuration and exact-head required-check gate\n'
     ;;
   --check-pr)
@@ -271,5 +337,10 @@ PY
     check_final_receipt "$tmp/api-assets.json" "$tmp" "$3" "$4" "$2"
     printf 'PASS: final draft receipt and all downloaded bytes qualify; no publication performed\n'
     ;;
-  *) fail 'usage: verify-release-gates.sh --self-test | --check-pr PR_NUMBER EXPECTED_HEAD_SHA | --check-merged-source MERGE_SHA | --check-draft RELEASE_ID TAG SOURCE_SHA | --check-draft-final RELEASE_ID TAG SOURCE_SHA' ;;
+  --check-runner-evidence)
+    [[ $# -eq 6 ]] || fail 'usage: verify-release-gates.sh --check-runner-evidence CANDIDATE_RECEIPT BUILD_RECEIPT TAG SOURCE_SHA SMOKE_RUNNER'
+    check_runner_evidence "$2" "$3" "$4" "$5" "$6"
+    printf 'PASS: build and download-smoke runner evidence is independently bound\n'
+    ;;
+  *) fail 'usage: verify-release-gates.sh --self-test | --check-pr PR_NUMBER EXPECTED_HEAD_SHA | --check-merged-source MERGE_SHA | --check-draft RELEASE_ID TAG SOURCE_SHA | --check-draft-final RELEASE_ID TAG SOURCE_SHA | --check-runner-evidence CANDIDATE_RECEIPT BUILD_RECEIPT TAG SOURCE_SHA SMOKE_RUNNER' ;;
 esac
