@@ -113,7 +113,7 @@ The plan frontmatter uses scalar artifact/link lists that are not interpreted by
 | Package bytes | Candidate macOS package | SHA-256 12cbb579ccd5a2c0f05fd33b7b534f81ff15bac788ef7605136d145d56368232; receipt reports source tree dirty. | PASS (local artifact only) |
 | Fixture reproduction | Pinned RGBDS 1.0.1 reproduction and hosted fixture lane | The Phase 4 record reports byte-identical reproduction; historical hosted fixture run 37728192634 passed at source 79f83f627ffb3631811b2f39b23081117ebaab8f. | PASS (historical exact head) |
 
-The current checkout contains the same targeted O_NONBLOCK ROM-open change and FIFO regression inspected above. The local suite/package evidence is explicitly scoped to the recorded root-checkout revision and dirty tree; no hosted CI result is claimed for that patch.
+The current checkout contains the targeted O_NONBLOCK ROM-open change and FIFO regression inspected above. The local suite/package evidence is explicitly scoped to the recorded root-checkout revision and dirty tree. The same source/test patch was subsequently hosted and passed the exact PR #43 code head `9b9d58a009b175256b09fe074e3f44e1aa0320e7`; run details are below.
 
 ### Probe Execution
 
@@ -159,7 +159,7 @@ None for the scoped software acceptance criteria; automated tests cover the requ
 
 ### Hosted and Hardware Evidence Boundaries
 
-Historical hosted CI, fixture reproduction, and package-consumer results passed at exact source revision 79f83f627ffb3631811b2f39b23081117ebaab8f (including CI run 37728192665, fixture run 37728192634, and package smoke run 37728192674). Those results do **not** cover the later local FIFO patch. No current hosted result is claimed for the patch; a new exact-head hosted run remains necessary before calling that revision hosted-green. No physical MBC1/DMG observation or storage power-loss qualification is claimed.
+Historical hosted CI, fixture reproduction, and package-consumer results passed at exact source revision `79f83f627ffb3631811b2f39b23081117ebaab8f` (CI run 37728192665, fixture run 37728192634, package smoke run 37728192674). Those results remain scoped to that earlier revision. The FIFO patch was hosted on PR #43 at exact code head `9b9d58a009b175256b09fe074e3f44e1aa0320e7`: CI run 37964888409 passed `required-native`, Linux/macOS/Windows native jobs, Linux ASan/UBSan, CMake 3.25.3 floor, and the macOS player package; fixture run 37964888352 passed original and candidate fixture reproduction; package smoke run 37964888373 passed Linux and macOS installed consumers plus the macOS player package. No skipped job was counted as passing. No physical MBC1/DMG observation or storage power-loss qualification is claimed.
 
 ### Gaps Summary
 

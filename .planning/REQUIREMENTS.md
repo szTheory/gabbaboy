@@ -110,9 +110,9 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | VIDEO-03 | Phase 3 | Complete under the selected falling-edge software contract — exact CPU-B pulse/sample timing remains unmeasured; see [verification](phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md) |
 | VIDEO-04 | Phase 3 | Complete — package smoke and current packaged-window Z press/release UAT passed; see [verification](phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md) and [UAT](phases/GB-03-visible-interactive-dmg/03-UAT.md) |
 | VIDEO-05 | Phase 3 | Complete — evidence classes and preview limitations are covered; see [verification](phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md) |
-| SAVE-01 | Phase 4 | Complete — canonical verification passed 7/7 truths; see [verification](phases/GB-04-mbc1-and-safe-battery-continuation/04-VERIFICATION.md) |
+| SAVE-01 | Phase 4 | Complete — canonical verification passed 7/7 truths; FIFO hardening passed exact-head hosted CI; see [verification](phases/GB-04-mbc1-and-safe-battery-continuation/04-VERIFICATION.md) and [validation](phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md) |
 | SAVE-02 | Phase 4 | Complete — bounded transfer and non-mutation behavior verified; see [verification](phases/GB-04-mbc1-and-safe-battery-continuation/04-VERIFICATION.md) |
-| SAVE-03 | Phase 4 | Complete — atomic persistence, recovery, locks, transitions, and FIFO replacement failure verified; see [verification](phases/GB-04-mbc1-and-safe-battery-continuation/04-VERIFICATION.md) |
+| SAVE-03 | Phase 4 | Complete — atomic persistence, recovery, locks, transitions, and FIFO replacement failure verified locally and on exact-head hosted CI; see [verification](phases/GB-04-mbc1-and-safe-battery-continuation/04-VERIFICATION.md) and [validation](phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md) |
 | SAVE-04 | Phase 4 | Complete — fresh-process continuation and negative controls verified; see [verification](phases/GB-04-mbc1-and-safe-battery-continuation/04-VERIFICATION.md) |
 | AUDIO-01 | Phase 5 | Complete |
 | AUDIO-02 | Phase 5 | Complete |
@@ -135,9 +135,9 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | STATE-01 | Next milestone | Deferred |
 | INT-01 | Next milestone | Deferred |
 
-**Active coverage:** 35/35 requirements are mapped exactly once and have current canonical passing evidence, including SAVE-01 through SAVE-04. Phases 1–6 have fresh canonical reports. There are 0 unmapped requirements, 0 duplicates, and 0 active requirements left open. Next-milestone requirements and later candidates are excluded from active coverage. Rerun [the v0.1 milestone audit](v0.1-MILESTONE-AUDIT.md) now that Phase 4 verification is fresh.
+**Active coverage:** 35/35 requirements are mapped exactly once and have current canonical passing evidence, including SAVE-01 through SAVE-04. Phases 1–6 have fresh canonical reports. There are 0 unmapped requirements, 0 duplicates, and 0 active requirements left open. Next-milestone requirements and later candidates are excluded from active coverage. Rerun [the v0.1 milestone audit](v0.1-MILESTONE-AUDIT.md) now that Phase 4 verification and exact-head hosted evidence are current.
 
 **Next-milestone traceability:** 7/7 GB/GBC breadth commitments are mapped to the next milestone and remain outside the active v0.1 count.
 
 ---
-Last updated: 2026-10-09 after Phase 4 verification refresh; all 35 active requirements have current passing evidence, and 7 next-milestone commitments remain deferred.
+Last updated: 2026-10-09 after Phase 4 exact-head CI; all 35 active requirements have current passing evidence, and 7 next-milestone commitments remain deferred.

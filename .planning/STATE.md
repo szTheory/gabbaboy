@@ -4,10 +4,10 @@ milestone: v0.1
 current_phase: 04
 current_phase_name: MBC1 and Safe Battery Continuation
 status: executing
-stopped_at: Phase GB-04 verification passed; stop before v0.1 milestone audit
-last_updated: "2026-10-09T17:10:35Z"
+stopped_at: Phase GB-04 verification and exact-head hosted checks passed; stop before v0.1 milestone audit
+last_updated: "2026-10-09T17:17:17Z"
 last_activity: 2026-10-09
-last_activity_desc: Phase GB-04 verification passed 7/7 truths; exact hosted checks for the FIFO hardening patch remain to be completed
+last_activity_desc: Phase GB-04 verification passed 7/7 truths; FIFO hardening passed exact-head PR #43 CI, fixture, and package checks
 state_head: 60f2adffee34f64b0c197e99bf4f8a9ab1278283
 progress:
   total_phases: 6
@@ -26,16 +26,16 @@ milestone_name: limited DMG preview
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase GB-04 — MBC1 and Safe Battery Continuation (verified; current FIFO patch awaits exact hosted PR checks)
+**Current focus:** Phase GB-04 — MBC1 and Safe Battery Continuation (verified; FIFO hardening passed exact-head PR #43 checks)
 
 ## Current Position
 
 Phase: GB-04 — MBC1 and Safe Battery Continuation (complete)
 Plans: 7 plans already have summaries; no plan execution remains
-Status: canonical verification passed 7/7 truths and SAVE-01 through SAVE-04; the local FIFO hardening patch still needs exact hosted PR checks before merge
+Status: canonical verification passed 7/7 truths and SAVE-01 through SAVE-04; FIFO hardening passed exact-head PR #43 CI, fixture reproduction, and package smoke; squash merge follows after the final PR-head check gate
 Last activity: 2026-10-09 — Phase GB-04 canonical verification passed 7/7 truths
 
-All six phases have completed plan execution (56/56 runnable plans) and now have fresh canonical verification. All 35 active requirements pass, including the Phase 4 MBC1 and battery requirements. The current local core CTest passed 179/179; the pinned macOS player/package verifier passed 50/50 with the FIFO ROM-path regression and fresh-process continuation. Those results cover a local FIFO patch; its exact hosted PR-head checks must pass before the code is merged or described as hosted-green. The earlier Phase 4 exact hosted evidence remains scoped to source `79f83f627ffb3631811b2f39b23081117ebaab8f`. Phase 3's packaged demo and Z press/release response are confirmed in UAT test 34. See the [Phase 4 verification](phases/GB-04-mbc1-and-safe-battery-continuation/04-VERIFICATION.md), [Phase 4 validation](phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md), [Phase 3 UAT](phases/GB-03-visible-interactive-dmg/03-UAT.md), [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), and [v0.1 milestone audit](v0.1-MILESTONE-AUDIT.md).
+All six phases have completed plan execution (56/56 runnable plans) and now have fresh canonical verification. All 35 active requirements pass, including the Phase 4 MBC1 and battery requirements. The local core CTest passed 179/179; the pinned macOS player/package verifier passed 50/50 with the FIFO ROM-path regression and fresh-process continuation. PR #43 exact code head `9b9d58a009b175256b09fe074e3f44e1aa0320e7` then passed required hosted CI, fixture-reproduction, and installed-package/player smoke workflows (runs 37964888409, 37964888352, and 37964888373). The earlier Phase 4 exact hosted evidence remains scoped to source `79f83f627ffb3631811b2f39b23081117ebaab8f`. Phase 3's packaged demo and Z press/release response are confirmed in UAT test 34. See the [Phase 4 verification](phases/GB-04-mbc1-and-safe-battery-continuation/04-VERIFICATION.md), [Phase 4 validation](phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md), [Phase 3 UAT](phases/GB-03-visible-interactive-dmg/03-UAT.md), [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), and [v0.1 milestone audit](v0.1-MILESTONE-AUDIT.md).
 
 Phase 2 remains scoped to the three source-qualified derived CPU/timer reporting closures; no physical DMG-CPU-B observation or broad compatibility claim is made. Phase 3's UAT observation confirms this packaged player's visible demo and Z response, not physical hardware behavior. Phase 6 software package/player checks do not establish physical hardware or perceptual behavior. Signing/notarization and live Playstead GB integration are not claimed. The v0.1 milestone is not ready to archive until Phase 4 has fresh canonical verification. Exact next command: `$gsd-execute-phase GB-04-mbc1-and-safe-battery-continuation`.
 
@@ -190,7 +190,7 @@ None outside the roadmap.
 
 ### Blockers/Concerns
 
-- The previous v0.1 audit found stale canonical verification for Phases 1–4. All six phases now have fresh passing reports, and the prior integration checker found 6/6 flows wired. Rerun the milestone audit after exact hosted checks for the current FIFO hardening PR pass and merge.
+- The previous v0.1 audit found stale canonical verification for Phases 1–4. All six phases now have fresh passing reports, and the prior integration checker found 6/6 flows wired. Rerun the milestone audit after PR #43 is squash-merged; do not run the audit during Phase 4 closeout.
 - Main branch protection now enforces the three strict required CI contexts for administrators. Follow-up readback showed no required approving-review gate. PR #34 predates admin enforcement and had no recorded approval; its exact required CI contexts were green when merged.
 - Phase 1's refreshed validation report is `validated` and Nyquist-compliant, with 179/179 local CTest. Phase 3 Nyquist validation is `validated`, and its UAT is complete at 34/34.
 
@@ -212,10 +212,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-09T17:10:35Z
-Stopped at: Phase GB-04 verification passed; current FIFO hardening awaits exact hosted PR checks before milestone audit
+Last session: 2026-10-09T17:17:17Z
+Stopped at: Phase GB-04 verification and exact-head hosted checks passed; stop before v0.1 milestone audit
 Resume file: .planning/.continue-here.md
 Next command in fresh context: $gsd-audit-milestone v0.1
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: Phase 4 — MBC1 and Safe Battery Continuation canonical verification, Phase 4 of 6. All 7 plans have summaries; the refreshed report passed 7/7 truths and SAVE-01 through SAVE-04. Local tests passed 179/179 core and 50/50 player/package, including nonblocking FIFO ROM-path rejection and fresh-process MBC1 continuation. The code review is clean, the security audit closed 22/22 threats, and the UI audit's 13/24 status-visibility recommendations remain advisory. Historical hosted Phase 4 CI is tied to `79f83f627ffb3631811b2f39b23081117ebaab8f`; the new FIFO patch requires its own exact PR-head checks before merge. Physical hardware and storage power-loss behavior remain unqualified.
-Next sequential phase: Phase 5 — DMG Audio and Stable Playback (already complete); Phase 6 — Qualified DMG Release and Consumer Handoff is also complete. After the Phase 4 patch's exact hosted checks pass and it is merged, the next GSD stage is the v0.1 milestone audit. Exact command: `$gsd-audit-milestone v0.1`. Stop after Phase 4 and do not auto-advance into the audit. Keep both auto-advance flags false.
+Completed workflow stage: Phase 4 — MBC1 and Safe Battery Continuation canonical verification, Phase 4 of 6. All 7 plans have summaries; the refreshed report passed 7/7 truths and SAVE-01 through SAVE-04. Local tests passed 179/179 core and 50/50 player/package, including nonblocking FIFO ROM-path rejection and fresh-process MBC1 continuation. PR #43 exact code head `9b9d58a009b175256b09fe074e3f44e1aa0320e7` passed current hosted CI, fixture reproduction, and package consumer workflows; see 04-VALIDATION.md for run IDs. The code review is clean, the security audit closed 22/22 threats, and the UI audit's 13/24 status-visibility recommendations remain advisory. Physical hardware and storage power-loss behavior remain unqualified.
+Next sequential phase: Phase 5 — DMG Audio and Stable Playback (already complete); Phase 6 — Qualified DMG Release and Consumer Handoff is also complete. After PR #43 is squash-merged, the next GSD stage is the v0.1 milestone audit. Exact command: `$gsd-audit-milestone v0.1`. Stop after Phase 4 and do not auto-advance into the audit. Keep both auto-advance flags false.
