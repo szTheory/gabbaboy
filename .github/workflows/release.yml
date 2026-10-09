@@ -764,7 +764,7 @@ jobs:
           set -euo pipefail
           current=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID")
           [[ $(jq -r .draft <<<"$current") == true && $(jq -r .tag_name <<<"$current") == "$RELEASE_TAG" ]] || exit 1
-          mkdir -p build/downloaded build/extracted build/consumer-work
+          mkdir -p build/downloaded build/consumer-work
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-windows-x64.tar.gz --pattern gabbaboy-core-windows-x64.tar.gz.sha256 --dir build/downloaded
           git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > build/verify-release-gates.sh
           bash build/verify-release-gates.sh --check-digest-sidecar \
