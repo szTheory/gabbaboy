@@ -37,6 +37,32 @@ int main(int argc, char **argv) {
         REQUIRE(reset.consumed_half_dots == 32 && records[0].pc == 0x0100 && records[0].time_half_dots == 0);
         gbb_destroy(a); gbb_destroy(b); free(rom); return 0;
     }
+    if (strcmp(argv[1], "reset_idempotency") == 0) {
+        gbb_trace_record first_trace[32] = {{0}};
+        gbb_trace_record second_trace[32] = {{0}};
+        gbb_run_result first = gbb_run(a, 88, first_trace, 32);
+        REQUIRE(first.reason == GBB_STOP_BUDGET && first.consumed_half_dots == 88);
+        REQUIRE(gbb_peek_ram(a, 0xC000) == 0x5A);
+        REQUIRE(gbb_reset(a) == GBB_OK);
+        REQUIRE(gbb_reset(a) == GBB_OK);
+        REQUIRE(gbb_peek_ram(a, 0xC000) == 0);
+        gbb_run_result after_reset = gbb_run(a, 88, first_trace, 32);
+        REQUIRE(after_reset.reason == GBB_STOP_BUDGET && after_reset.consumed_half_dots == 88);
+        REQUIRE(after_reset.trace_count <= 32);
+        REQUIRE(gbb_peek_ram(a, 0xC000) == 0x5A);
+        REQUIRE(gbb_reset(a) == GBB_OK);
+        gbb_run_result after_second_reset = gbb_run(a, 88, second_trace, 32);
+        REQUIRE(after_second_reset.reason == GBB_STOP_BUDGET && after_second_reset.consumed_half_dots == 88);
+        REQUIRE(after_second_reset.trace_count <= 32);
+        REQUIRE(gbb_peek_ram(a, 0xC000) == 0x5A);
+        REQUIRE(after_reset.reason == after_second_reset.reason);
+        REQUIRE(after_reset.consumed_half_dots == after_second_reset.consumed_half_dots);
+        REQUIRE(after_reset.trace_count == after_second_reset.trace_count);
+        REQUIRE(memcmp(first_trace, second_trace,
+                       after_reset.trace_count * sizeof(first_trace[0])) == 0);
+        REQUIRE(gbb_peek_ram(a, 0xC000) == 0x5A);
+        gbb_destroy(a); gbb_destroy(b); free(rom); return 0;
+    }
     if (strcmp(argv[1], "independent_instances") == 0) {
         REQUIRE(gbb_run(a, 88, NULL, 0).consumed_half_dots == 88);
         REQUIRE(gbb_peek_ram(a, 0xC000) == 0x5A);
