@@ -15,7 +15,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 - [x] **Phase 1: Portable Foundation and Original ROM Tracer** - Build, embed, and download a bounded real-ROM tracer. (completed 2026-10-03)
 - [x] **Phase 2: DMG CPU, Bus, and Time** - Execute scoped DMG diagnostics with reproducible timing and bounded progress. (completed 2026-10-07)
-- [x] **Phase 3: Visible Interactive DMG** - Play an original or permissioned ROM-only fixture in a macOS preview. (completed 2026-10-07)
+- [ ] **Phase 3: Visible Interactive DMG** - 13 plans are complete; current verification needs one packaged-window and live-key observation after later player changes.
 - [x] **Phase 4: MBC1 and Safe Battery Continuation** - Retain meaningful guest progress across fresh processes without corrupting good saves. (completed 2026-10-08)
 - [x] **Phase 5: DMG Audio and Stable Playback** - Hear paced sound and recover cleanly from host input/device transitions. (completed 2026-10-08)
 - [x] **Phase 6: Qualified DMG Release and Consumer Handoff** - Download evidenced packages and reproduce native adoption with honest support claims. (completed 2026-10-09)
@@ -125,7 +125,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. A macOS user can open and play an original or permissioned ROM-only fixture, resize with correct aspect/integer scaling, pause, reset, and quit; errors are actionable. (VIDEO-04)
 5. Automated evidence separately reports image composition, raster timing, and scripted gameplay; the visible preview labels incomplete audio and persistence. (VIDEO-05)
 
-**Plans:** All 13 plans have summaries across 12 dependency-ordered waves. Final goal-backward verification passed 5/5 truths, and all 33 UAT checks passed, including the user's live report that holding mapped Z darkens the demo tile and release restores it. The full local core suite passed 141/141; PR #4 passed required exact-head checks and merged at `2b49dc5`. VIDEO-02/03 remain bounded to D-025's confidence-qualified software model; exact CPU-B timing/lane and PPU-revision behavior remain unmeasured.
+**Plans:** All 13 plans have summaries across 12 dependency-ordered waves. The historical verifier passed 5/5 truths and 33/33 UAT checks for the then-current player. Fresh verification on 2026-10-09 passes 4/5 truths: the full local CTest suite passed 179/179 and the current code/review/security evidence is clean, while VIDEO-04 needs one live packaged-window/key observation after Phase 5 input/event changes. UAT records 33 historical passes plus one pending current-package check. VIDEO-02/03 remain bounded to D-025's confidence-qualified software model; exact CPU-B timing/lane and PPU-revision behavior remain unmeasured. See [verification](phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md) and [UAT](phases/GB-03-visible-interactive-dmg/03-UAT.md).
 **Wave 1**
 - [x] 03-01-PLAN.md — playable production-core tracer with timestamped input and copied frames
 
@@ -161,7 +161,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 - [x] 03-12-PLAN.md — FF46 startup window, active restart, and register readback; simultaneous PPU/DMA arbitration and JOYP IF remain open
 
 **Gap wave 12** *(source-backed software-model behavior and focused guest checks; execution does not complete Phase 3)*
-- [x] 03-13-PLAN.md — JOYP edge matrix, DMA/PPU scan/fetch controls, active-DMA mode matrix, word boundaries, and same-half-dot guest tie; Phase 3 UAT is complete
+- [x] 03-13-PLAN.md — JOYP edge matrix, DMA/PPU scan/fetch controls, active-DMA mode matrix, word boundaries, and same-half-dot guest tie; historical UAT is complete, current packaged-player UAT remains pending
 
 **UI hint**: yes
 
@@ -282,15 +282,15 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 |-------|----------------|--------|-----------|
 | 1. Portable Foundation and Original ROM Tracer | 5/5 | Complete    | 2026-10-03 |
 | 2. DMG CPU, Bus, and Time | 17/17 | Complete    | 2026-10-07 |
-| 3. Visible Interactive DMG | 13/13 | Complete    | 2026-10-07 |
+| 3. Visible Interactive DMG | 13/13 | Human check pending | — |
 | 4. MBC1 and Safe Battery Continuation | 7/7 | Complete    | 2026-10-08 |
 | 5. DMG Audio and Stable Playback | 7/7 | Complete    | 2026-10-08 |
 | 6. Qualified DMG Release and Consumer Handoff | 7/7 | Complete | 2026-10-09 |
 
 ## Execution Contract
 
-All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](REQUIREMENTS.md). Fresh canonical verification passes for Phases 1, 2, 5, and 6; Phases 3–4 remain stale and await one-phase-at-a-time refresh. Twenty-six requirements have current passing evidence and nine await refresh. The v0.1 milestone audit found 6/6 cross-phase flows wired with no broken connection. Phase 1's fresh report and Phase 2's current report carry their focused and full local test evidence; Phase 2's exact hosted checks remain scoped to implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`. See [the milestone audit](v0.1-MILESTONE-AUDIT.md). Safety, fixture rights, documentation, install consumers, and release evidence expand as each boundary arrives. Phase 6 qualifies the completed product; it does not postpone basic safety or packaging until the end.
+All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](REQUIREMENTS.md). Current canonical verification passes Phases 1, 2, 5, and 6; Phase 3 is `human_needed` (4/5 truths) and Phase 4 awaits refresh. Thirty requirements have current passing evidence; VIDEO-04 needs a current packaged-player observation and SAVE-01 through SAVE-04 await Phase 4 verification. The v0.1 milestone audit found 6/6 cross-phase flows wired with no broken connection. Phase 3's current full CTest passed 179/179; Phase 2's exact hosted checks remain scoped to implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`. See [the milestone audit](v0.1-MILESTONE-AUDIT.md). Safety, fixture rights, documentation, install consumers, and release evidence expand as each boundary arrives. Phase 6 qualifies the completed product; it does not postpone basic safety or packaging until the end.
 
 Automate authorized work within each phase, then inspect current verification/release/consumer evidence, update traceability and [lessons](context/LESSONS.md), triage issues/PRs, report limitations and the exact next command, and **stop**. Never auto-advance phases or milestones; keep both auto-advance flags false. Credential, hardware, or perceptual gaps must be recorded honestly with the smallest necessary human action, never converted into passing evidence. Remote/CI setup begins in Phase 1; absent access remains an explicit completion limitation.
 
-All six phases have completed plan execution; Phase 2 Plan 02-15 remains superseded/non-runnable. Current canonical verification passes for Phases 1, 2, 5, and 6; Phases 3–4 remain stale, leaving nine active requirements to refresh. Phase 2 passed 5/5 goal truths and CPU-01 through CPU-05; its current full local CTest passed 179/179 and its focused selection passed 88/88. The admitted corpus remains three source-qualified derived headless reporting closures; no physical hardware or broad compatibility claim is made. Phase 6's release has 18/18 assets reconciled, while physical hardware, perceptual output, signing/notarization, and live Playstead GB integration remain unqualified. Completed workflow stage: Phase 2 — DMG CPU, Bus, and Time canonical verification refresh. Next phase: Phase 3 — Visible Interactive DMG (canonical verification refresh). Run `$gsd-execute-phase 3` and stop at that phase boundary.
+All six phases have completed plan execution; Phase 2 Plan 02-15 remains superseded/non-runnable. Current canonical verification passes for Phases 1, 2, 5, and 6; Phase 3 is `human_needed` at 4/5 truths and Phase 4 awaits refresh. Thirty active requirements have current passing evidence and five remain open. Phase 2 passed 5/5 goal truths and CPU-01 through CPU-05; its current full local CTest passed 179/179 and focused selection passed 88/88. Phase 3's current full local CTest passed 179/179; the current packaged display/key response needs one human observation. The admitted corpus remains three source-qualified derived headless reporting closures; no physical hardware or broad compatibility claim is made. Phase 6's release has 18/18 assets reconciled, while physical hardware, perceptual output, signing/notarization, and live Playstead GB integration remain unqualified. Completed workflow stage: Phase 3 — Visible Interactive DMG canonical verification refresh (4/5 truths; current packaged-player check pending). Next phase: Phase 4 — MBC1 and Safe Battery Continuation, after Phase 3 verification is closed. Exact next command: `$gsd-verify-work`. Stop at the Phase 3 boundary; do not auto-advance.
