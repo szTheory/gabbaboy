@@ -624,7 +624,7 @@ jobs:
           expected=$(cut -d ' ' -f1 build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz.sha256)
           actual=$(shasum -a 256 build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz | cut -d ' ' -f1)
           [[ "$expected" == "$actual" ]] || { echo "Downloaded macOS core archive digest mismatch." >&2; exit 1; }
-          python3 tests/scripts/verify-release-candidate.sh --extract build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz build/extracted-core
+          bash tests/scripts/verify-release-candidate.sh --extract build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz build/extracted-core
           prefix="$PWD/build/extracted-core"
           cmake -DGBB_INSTALL_PREFIX="$prefix" -DGBB_EXECUTABLE_SUFFIX= -DGBB_RUNNER_WORKDIR="$PWD/build/consumer-work/runner" "-DGBB_FORBIDDEN_PATHS=$GITHUB_WORKSPACE;$GITHUB_WORKSPACE/build" -P cmake/VerifyInstalledPackage.cmake
           for language in c cpp; do
