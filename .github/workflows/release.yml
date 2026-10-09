@@ -713,14 +713,29 @@ jobs:
           sha256sum build/gabbaboy-core-windows-x64.tar.gz | awk '{print $1}' > build/gabbaboy-core-windows-x64.tar.gz.sha256
           python3 - <<'PY'
           import json, os, pathlib, platform, re, subprocess
-          cache = pathlib.Path("build/release-core/CMakeCache.txt").read_text()
-          match = re.search(r"^CMAKE_C_COMPILER_VERSION:INTERNAL=(.+)$", cache, re.M)
-          if not match: raise SystemExit("CMake did not record the selected MSVC compiler version")
+          def compiler_identity(metadata):
+              def value(name):
+                  match = re.search(rf'^set\({name} "([^"]+)"\)', metadata, re.M)
+                  return match.group(1) if match else None
+              return value("CMAKE_C_COMPILER_ID"), value("CMAKE_C_COMPILER_VERSION")
+          sample = 'set(CMAKE_C_COMPILER_ID "MSVC")\nset(CMAKE_C_COMPILER_VERSION "19.44.35229.0")\n'
+          if compiler_identity(sample) != ("MSVC", "19.44.35229.0"):
+              raise SystemExit("CMake compiler metadata parser self-test failed")
+          metadata_files = sorted(pathlib.Path("build/release-core/CMakeFiles").glob("*/CMakeCCompiler.cmake"))
+          if not metadata_files:
+              raise SystemExit("CMake generated no C compiler-identification metadata")
+          identities = {compiler_identity(path.read_text()) for path in metadata_files}
+          if len(identities) != 1:
+              raise SystemExit("CMake generated conflicting C compiler identities")
+          compiler_id, compiler_version = identities.pop()
+          if compiler_id != "MSVC" or not compiler_version or not re.fullmatch(r"[0-9]+(?:\.[0-9]+){1,3}", compiler_version):
+              raise SystemExit("CMake compiler metadata does not identify a versioned MSVC compiler")
           cmake = subprocess.run(["cmake", "--version"], check=True, text=True, capture_output=True).stdout.splitlines()[0]
           pathlib.Path("build/gabbaboy-build-receipt-windows-x64.json").write_text(json.dumps({
               "schema_version": 1, "platform": "windows-x64", "runner": "windows-2022",
               "os": platform.platform(), "architecture": platform.machine(),
-              "compiler": "MSVC " + match.group(1) + " via Visual Studio 17 2022 x64",
+              "compiler": compiler_id + " " + compiler_version + " via Visual Studio 17 2022 x64",
+              "c_compiler_id": compiler_id, "c_compiler_version": compiler_version,
               "cmake": cmake, "configuration": "Release", "source_sha": os.environ["SOURCE_SHA"]
           }, indent=2) + "\n")
           PY
