@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1](https://github.com/szTheory/gabbaboy/compare/v0.1.0...v0.1.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **release:** upload Linux archive from build output ([7f782a2](https://github.com/szTheory/gabbaboy/commit/7f782a2f4b6d94a6e0a414f14a604225cc2e433f))
+* **release:** upload Linux archive from build output ([cea0ce3](https://github.com/szTheory/gabbaboy/commit/cea0ce36f11790822aa5ebe70e005dc391b3d4f0))
+
 ## [0.1.0](https://github.com/szTheory/gabbaboy/compare/v0.1.0...v0.1.0) (2026-10-09)
 
 
