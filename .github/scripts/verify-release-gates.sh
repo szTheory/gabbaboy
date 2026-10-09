@@ -38,10 +38,19 @@ def validate_performance_receipt_path(text):
                r"cmp -s build/release-measure/release-performance-receipt\.json build/release-performance-receipt\.json")
     if not re.search(pattern, text):
         raise ValueError("generated performance receipt must be validated and copied byte-identically to its canonical build path")
+def validate_downloaded_sidecars(text):
+    required = (
+        'bash "$RUNNER_TEMP/verify-release-gates.sh" --check-digest-sidecar \\\n            build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz.sha256 \\\n            build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz',
+        'bash build/verify-release-gates.sh --check-digest-sidecar \\\n            build/downloaded/gabbaboy-core-windows-x64.tar.gz.sha256 \\\n            build/downloaded/gabbaboy-core-windows-x64.tar.gz',
+        'bash build/verify-release-gates.sh --check-digest-sidecar \\\n            build/downloaded/gabbaboy-core-macos-arm64.tar.gz.sha256 \\\n            build/downloaded/gabbaboy-core-macos-arm64.tar.gz',
+    )
+    if "sha256sum --check" in text or any(call not in text for call in required):
+        raise ValueError("every downloaded Mac/Windows digest-only sidecar must use the strict byte-check helper")
 try:
     validate_verifier_invocations(workflow)
     validate_extractor_destinations(workflow)
     validate_performance_receipt_path(workflow)
+    validate_downloaded_sidecars(workflow)
 except ValueError as error:
     raise SystemExit(str(error))
 mutated_workflow = workflow.replace("bash tests/scripts/verify-release-candidate.sh", "python tests/scripts/verify-release-candidate.sh", 1)
@@ -65,6 +74,12 @@ except ValueError:
     pass
 else:
     raise SystemExit("release workflow self-test accepted a missing performance receipt path mapping")
+try:
+    validate_downloaded_sidecars(workflow.replace("bash build/verify-release-gates.sh --check-digest-sidecar", "(cd build/downloaded && sha256sum --check", 1))
+except ValueError:
+    pass
+else:
+    raise SystemExit("release workflow self-test accepted sha256sum --check for a digest-only sidecar")
 for output in ("release_created", "tag_name", "sha"):
     if f"${{{{ steps.release.outputs.{output} }}}}" not in workflow:
         raise SystemExit(f"same-workflow output is missing: {output}")

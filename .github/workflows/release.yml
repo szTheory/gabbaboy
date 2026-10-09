@@ -621,9 +621,10 @@ jobs:
           GBB_VERIFIED_OUTPUT_DIR=build/release-player-downloaded bash tests/scripts/verify-phase3-player.sh --verify-package build/downloaded-player
           mkdir -p build/downloaded-core build/consumer-work
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-macos-arm64.tar.gz --pattern gabbaboy-core-macos-arm64.tar.gz.sha256 --dir build/downloaded-core
-          expected=$(cut -d ' ' -f1 build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz.sha256)
-          actual=$(shasum -a 256 build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz | cut -d ' ' -f1)
-          [[ "$expected" == "$actual" ]] || { echo "Downloaded macOS core archive digest mismatch." >&2; exit 1; }
+          git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > "$RUNNER_TEMP/verify-release-gates.sh"
+          bash "$RUNNER_TEMP/verify-release-gates.sh" --check-digest-sidecar \
+            build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz.sha256 \
+            build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz
           bash tests/scripts/verify-release-candidate.sh --extract build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz build/extracted-core
           prefix="$PWD/build/extracted-core"
           cmake -DGBB_INSTALL_PREFIX="$prefix" -DGBB_EXECUTABLE_SUFFIX= -DGBB_RUNNER_WORKDIR="$PWD/build/consumer-work/runner" "-DGBB_FORBIDDEN_PATHS=$GITHUB_WORKSPACE;$GITHUB_WORKSPACE/build" -P cmake/VerifyInstalledPackage.cmake
@@ -901,9 +902,13 @@ jobs:
           PY
           mkdir -p build/downloaded
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern 'gabbaboy-core-*' --pattern 'gabbaboy-preview-*' --pattern 'gabbaboy-build-receipt-*' --pattern candidate-receipt.json --pattern gabbaboy-notices.txt --pattern source-receipt.json --pattern build-receipt.json --pattern support-ledger-v0.1.0.json --pattern release-performance-receipt.json --dir build/downloaded
-          for platform in macos-arm64 windows-x64; do
-            (cd build/downloaded && sha256sum --check "gabbaboy-core-$platform.tar.gz.sha256")
-          done
+          git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > build/verify-release-gates.sh
+          bash build/verify-release-gates.sh --check-digest-sidecar \
+            build/downloaded/gabbaboy-core-macos-arm64.tar.gz.sha256 \
+            build/downloaded/gabbaboy-core-macos-arm64.tar.gz
+          bash build/verify-release-gates.sh --check-digest-sidecar \
+            build/downloaded/gabbaboy-core-windows-x64.tar.gz.sha256 \
+            build/downloaded/gabbaboy-core-windows-x64.tar.gz
           python3 - "$SOURCE_SHA" <<'PY'
           import hashlib, json, pathlib, sys
           source_sha = sys.argv[1]
