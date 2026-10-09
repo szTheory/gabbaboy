@@ -136,6 +136,12 @@ for output in ("release_created", "tag_name", "sha"):
         raise SystemExit(f"same-workflow output is missing: {output}")
 if "uses: ./.github/workflows/release.yml" not in entrypoint or "workflow_call:" not in workflow:
     raise SystemExit("release-please outputs are not routed through the same workflow run")
+if 'git show "${GITHUB_SHA}:.github/scripts/verify-release-source-proof.py"' not in workflow:
+    raise SystemExit("final lane does not load the trusted source-proof verifier from its workflow revision")
+if not re.search(r'--check-merged-source "\$SOURCE_SHA" "\$RELEASE_TAG" "\$RELEASE_ID" \\\s+build/release-final/source-receipt\.json "\$RUNNER_TEMP/verify-release-source-proof\.py"', workflow):
+    raise SystemExit("final lane does not validate its downloaded source receipt against live PR/check evidence")
+if 'branches/main/protection' in workflow[workflow.find('publish-qualified-release:'):]:
+    raise SystemExit("final lane must not require admin-only branch protection API access")
 if not re.search(r"googleapis/release-please-action@[0-9a-f]{40}", workflow):
     raise SystemExit("release-please action is not pinned to a full commit SHA")
 if "pull_request_target:" in workflow:
@@ -325,6 +331,7 @@ case "$mode" in
   --self-test)
     [[ $# -eq 1 ]] || fail 'usage: verify-release-gates.sh --self-test'
     check_config
+    python3 "$ROOT/.github/scripts/verify-release-source-proof.py" --self-test
     temp=$(mktemp -d "${TMPDIR:-/tmp}/gb-release-gates.XXXXXX")
     trap 'rm -rf "$temp"' EXIT HUP INT TERM
     python3 - "$temp" <<'PY'
@@ -495,22 +502,17 @@ PY
     printf 'PASS: draft bytes and IDs match the frozen tag/source; no publication performed\n'
     ;;
   --check-merged-source)
-    [[ $# -eq 2 ]] || fail 'usage: verify-release-gates.sh --check-merged-source MERGE_COMMIT_SHA'
+    [[ $# -eq 6 ]] || fail 'usage: verify-release-gates.sh --check-merged-source SOURCE_SHA TAG RELEASE_ID SOURCE_RECEIPT PROOF_VERIFIER'
     command -v gh >/dev/null || fail 'GitHub CLI is required'
     repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
-    prs=$(gh api "repos/$repo/commits/$2/pulls")
-    matched=$(jq --arg sha "$2" '[.[] | select(.merged_at != null and .base.ref == "main" and .merge_commit_sha == $sha)]' <<<"$prs")
-    [[ $(jq length <<<"$matched") == 1 ]] || fail 'release source does not map to exactly one merged main PR'
-    pr_number=$(jq -r '.[0].number' <<<"$matched")
-    pr_head=$(jq -r '.[0].head.sha' <<<"$matched")
-    rules=$(gh api "repos/$repo/branches/main/protection")
-    checks=$(gh api "repos/$repo/commits/$pr_head/check-runs?per_page=100")
-    tmp=$(mktemp -d "${TMPDIR:-/tmp}/gb-merged-checks.XXXXXX")
-    trap 'rm -rf "$tmp"' EXIT HUP INT TERM
-    printf '%s\n' "$rules" > "$tmp/rules.json"
-    printf '%s\n' "$checks" > "$tmp/checks.json"
-    check_required_checks "$tmp/rules.json" "$tmp/checks.json" "$pr_head"
-    printf 'PASS: merged PR #%s is backed by exact-head checks on %s\n' "$pr_number" "$pr_head"
+    source_sha=$2 tag=$3 release_id=$4 receipt=$5 proof_verifier=$6
+    proof=$(jq -er '.prior_pr_proof | select(.pr_number > 0 and (.head_sha | test("^[0-9a-f]{40}$")))' "$receipt")
+    pr_number=$(jq -r .pr_number <<<"$proof")
+    pr_head=$(jq -r .head_sha <<<"$proof")
+    gh api "repos/$repo/pulls/$pr_number" > "${receipt}.pull-request.json"
+    gh api "repos/$repo/commits/$pr_head/check-runs?per_page=100" > "${receipt}.check-runs.json"
+    python3 "$proof_verifier" --receipt "$receipt" --pull-request "${receipt}.pull-request.json" \
+      --check-runs "${receipt}.check-runs.json" --tag "$tag" --source-sha "$source_sha" --release-id "$release_id"
     ;;
   --check-draft-final)
     [[ $# -eq 4 ]] || fail 'usage: verify-release-gates.sh --check-draft-final RELEASE_ID TAG SOURCE_SHA'
@@ -539,5 +541,5 @@ PY
     check_digest_sidecar "$2" "$3"
     printf 'PASS: downloaded archive matches its one-line digest sidecar\n'
     ;;
-  *) fail 'usage: verify-release-gates.sh --self-test | --check-pr PR_NUMBER EXPECTED_HEAD_SHA | --check-merged-source MERGE_SHA | --check-draft RELEASE_ID TAG SOURCE_SHA | --check-draft-final RELEASE_ID TAG SOURCE_SHA | --check-runner-evidence CANDIDATE_RECEIPT BUILD_RECEIPT TAG SOURCE_SHA SMOKE_RUNNER | --check-digest-sidecar SIDECAR ARCHIVE' ;;
+  *) fail 'usage: verify-release-gates.sh --self-test | --check-pr PR_NUMBER EXPECTED_HEAD_SHA | --check-merged-source SOURCE_SHA TAG RELEASE_ID SOURCE_RECEIPT PROOF_VERIFIER | --check-draft RELEASE_ID TAG SOURCE_SHA | --check-draft-final RELEASE_ID TAG SOURCE_SHA | --check-runner-evidence CANDIDATE_RECEIPT BUILD_RECEIPT TAG SOURCE_SHA SMOKE_RUNNER | --check-digest-sidecar SIDECAR ARCHIVE' ;;
 esac
