@@ -28,8 +28,12 @@ entrypoint = (root / ".github/workflows/release-please.yml").read_text()
 def validate_verifier_invocations(text):
     if re.search(r"(?m)^\s*(?!bash\s)(?:python\S*\s+)?tests/scripts/verify-release-candidate\.sh\b", text):
         raise ValueError("release-candidate Bash verifier must be invoked explicitly with bash")
+def validate_extractor_destinations(text):
+    if re.search(r"(?m)^\s*mkdir(?:\s+-p)?\s+[^\n]*\bbuild/extracted(?:-core)?(?:\s|$)", text):
+        raise ValueError("safe release extractor destination must not be pre-created")
 try:
     validate_verifier_invocations(workflow)
+    validate_extractor_destinations(workflow)
 except ValueError as error:
     raise SystemExit(str(error))
 mutated_workflow = workflow.replace("bash tests/scripts/verify-release-candidate.sh", "python tests/scripts/verify-release-candidate.sh", 1)
@@ -41,6 +45,12 @@ except ValueError:
     pass
 else:
     raise SystemExit("release workflow self-test accepted a Python invocation of a Bash verifier")
+try:
+    validate_extractor_destinations(workflow + "\n          mkdir -p build/extracted\n")
+except ValueError:
+    pass
+else:
+    raise SystemExit("release workflow self-test accepted a pre-created safe-extractor destination")
 for output in ("release_created", "tag_name", "sha"):
     if f"${{{{ steps.release.outputs.{output} }}}}" not in workflow:
         raise SystemExit(f"same-workflow output is missing: {output}")
