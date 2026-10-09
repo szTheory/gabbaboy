@@ -62,13 +62,26 @@ def validate_downloaded_sidecars(text):
     if "sha256sum --check" in text or any(call not in text for call in required):
         raise ValueError("every downloaded Mac/Windows digest-only sidecar must use the strict byte-check helper")
 def validate_isolated_release_readbacks(text):
+    validation_match = re.search(r'existing_performance_dir="([^"]+)"', text)
+    if not validation_match:
+        raise ValueError("existing performance receipt must use its dedicated validation download directory")
+    validation_path = validation_match.group(1)
     section_start = text.find('for name in support-ledger-v0.1.0.json release-performance-receipt.json; do')
     section_end = text.find('      - name: Validate the exact candidate asset set after platform smoke', section_start)
     if section_start < 0 or section_end < 0:
         raise ValueError("release evidence attachment/readback section is missing")
     section = text[section_start:section_end]
+    readback_match = re.search(r'existing_dir="([^"]+)"', section)
+    if not readback_match:
+        raise ValueError("existing release evidence comparison has no per-asset readback directory")
+    readback_path = readback_match.group(1)
+    if "$name" not in readback_path:
+        raise ValueError("later release evidence readbacks must isolate each asset by name")
+    performance_asset_readback = readback_path.replace("$name", "release-performance-receipt.json")
+    if validation_path == performance_asset_readback:
+        raise ValueError("performance validation and later asset comparison must use different download directories")
     required = (
-        'existing_dir="build/existing/$name"',
+        'existing_dir="build/existing/asset-readback/$name"',
         'mkdir -p "$existing_dir"',
         '--pattern "$name" --dir "$existing_dir"',
         'cmp -s "build/$name" "$existing_dir/$name"',
@@ -113,7 +126,7 @@ except ValueError:
 else:
     raise SystemExit("release workflow self-test accepted sha256sum --check for a digest-only sidecar")
 try:
-    validate_isolated_release_readbacks(workflow.replace('existing_dir="build/existing/$name"', 'existing_dir="build/existing"', 1))
+    validate_isolated_release_readbacks(workflow.replace('existing_performance_dir="build/existing/performance-validation"', 'existing_performance_dir="build/existing/asset-readback/release-performance-receipt.json"', 1))
 except ValueError:
     pass
 else:
