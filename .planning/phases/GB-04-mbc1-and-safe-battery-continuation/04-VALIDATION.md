@@ -180,3 +180,37 @@ exact-head hosted checks, and downloaded package receipts are validated.
 | Gaps found | 0 |
 | Resolved | 0 |
 | Escalated | 0 |
+
+## Canonical Refresh Local Evidence 2026-10-09
+
+The current working tree is based on source revision
+`4d52df7aa0594bad2a3b0f0dc91e92e5612a2f4c` and contains a local player
+hardening change plus its regression assertion. This is local evidence for the
+working tree, not an exact hosted PR-head result:
+
+- Core CTest: **179/179** passed with no skips.
+- The macOS player and extracted-package verifier passed **50/50** player
+  tests, including a FIFO ROM replacement case that now verifies prompt
+  rejection and preservation of the active ROM/session. The package also
+  passed dummy-audio, extracted-byte, and fresh-process MBC1 continuation
+  checks. Candidate package SHA-256:
+  `12cbb579ccd5a2c0f05fd33b7b534f81ff15bac788ef7605136d145d56368232`.
+- The local package receipt identifies source revision
+  `4d52df7aa0594bad2a3b0f0dc91e92e5612a2f4c` and `source_tree_state: dirty`;
+  this is local evidence and is kept separate from the hosted result below.
+- Code review identified that opening a user-selected FIFO could block before
+  the regular-file check. `read_rom_file()` now uses `O_NONBLOCK` with
+  `O_NOFOLLOW`, then retains its existing descriptor-based regular-file and
+  size checks. The regression checks rejection, the FIFO's unchanged type, and
+  that the active path and guest RAM remain unchanged.
+
+The historical exact-hosted results above remain scoped to PR #8's tested
+source revision. The local FIFO patch then passed PR #43's exact code head
+`9b9d58a009b175256b09fe074e3f44e1aa0320e7` on 2026-10-09. CI run
+37964888409 passed required-native, native Linux/macOS/Windows, Linux
+ASan/UBSan, CMake 3.25.3 floor, and the macOS player package. Fixture run
+37964888352 passed fixture-repro plus original and candidate Mooneye
+reproduction. Preview package run 37964888373 passed Linux/macOS installed
+consumer and macOS player-package smoke. All three runs were pull-request runs
+for that exact code head; the separate push-event run with a skipped player job
+was not used. No hardware or power-loss result is implied.
