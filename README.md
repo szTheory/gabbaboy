@@ -244,6 +244,13 @@ and its [preview workflow run](https://github.com/szTheory/gabbaboy/actions/runs
 | `preview-linux-x64` | `sha256:b2e3d57aa5cc8527bd05c2ee11d8e006495dd30193b38a08e828e11e60bd092b` | `045c5c063c48f5e125452f7053f670a75474059fa2e26e84dd365f88994a2726` | `2026-10-03T17:51:15Z` | `2026-10-17T17:51:14Z` |
 | `preview-macos-arm64` | `sha256:d95990eab682cae084a5992777167a5fc6c71011eafa2326d8b74a5311499097` | `62462139dc88d4228b29cf2ea47d26176f3047dfc968a11f870d1a1f1143aef3` | `2026-10-03T17:51:19Z` | `2026-10-17T17:51:18Z` |
 
+The Phase 1 test-inventory and security refresh was verified on [PR #35](https://github.com/szTheory/gabbaboy/pull/35), exact head `d1e5fdb3b23256f06694cd8d91613638612bccb8`. Its [native CI](https://github.com/szTheory/gabbaboy/actions/runs/37928170860), [fixture reproduction](https://github.com/szTheory/gabbaboy/actions/runs/37928170722), and [preview package smoke](https://github.com/szTheory/gabbaboy/actions/runs/37928170973) runs passed. Both preview artifact sidecars and actual API expiry were checked against that SHA; the run-scoped package bytes are temporary and are not release archives.
+
+| Refreshed artifact | GitHub artifact digest | Package SHA-256 | API expires at |
+|--------------------|------------------------|-----------------|----------------|
+| `preview-linux-x64` | `sha256:3bd03898f2914ed8e63c984a6f51aed3e16eee3ceba298499ecf5f01bec38a1e` | `954c54826088b230ca3d8c359b47f843eb229e64ca2d74b3ce2be6897a94b533` | `2026-10-23T12:10:41Z` |
+| `preview-macos-arm64` | `sha256:1a6e7de83eeeb3198adf47fe370fb80e7186ff15c9e97df38f2c369803280546` | `05c92c7e2ff33672222a87c04099321ec1745803ca4fd2b5fcead7586c1f6d3c` | `2026-10-23T12:10:35Z` |
+
 To reproduce the ROM locally, prepare RGBDS v1.0.1 explicitly and run the
 three commands recorded in the manifest. Ordinary builds and `fixture_digest`
 do not install or invoke RGBDS. Runner labels describe CI images; they do not

@@ -1,19 +1,21 @@
 ---
 gsd_state_version: "1.0"
 milestone: v0.1
-current_phase: 06
-current_phase_name: Qualified DMG Release and Consumer Handoff
-status: complete
-stopped_at: Phase GB-06 verification passed; phase closeout recorded
-last_updated: "2026-10-09T02:26:26Z"
+current_phase: 02
+current_phase_name: DMG CPU, Bus, and Time
+status: executing
+stopped_at: Phase GB-01 verification refresh complete; stop at phase boundary
+last_updated: "2026-10-09T12:20:14Z"
 last_activity: 2026-10-09
-last_activity_desc: Phase GB-06 completed all seven plans and passed goal-backward verification 5/5
-state_head: df1def9aa956b4ff8e9ea13b591225ff8b4c5336
+last_activity_desc: Phase GB-01 canonical verification refreshed; Phase 2 refresh is next
+state_head: d1e5fdb3b23256f06694cd8d91613638612bccb8
 progress:
   total_phases: 6
   completed_phases: 6
   total_plans: 56
   completed_plans: 56
+  percent: 100
+  verified_phases: 3
 milestone_name: limited DMG preview
 ---
 
@@ -24,23 +26,23 @@ milestone_name: limited DMG preview
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase GB-06 is verified complete; the v0.1 milestone awaits its audit.
+**Current focus:** Phase GB-02 — DMG CPU, Bus, and Time (canonical verification refresh)
 
 ## Current Position
 
-Phase: GB-06 (Qualified DMG Release and Consumer Handoff) — COMPLETE
-Plans: 7 of 7 across six dependency-ordered waves
-Status: Goal-backward verification passed 5/5 truths; SHIP-01 through SHIP-08 are complete.
-Last activity: 2026-10-09 — Phase GB-06 release, verification, review, security, and handoff records reconciled.
+Phase: GB-02 (DMG CPU, Bus, and Time) — verification refresh next
+Plans: 17 runnable plans already have summaries; no plan execution remains
+Status: Phase 1 verification refresh passed; stopped at the required phase boundary
+Last activity: 2026-10-09 — Phase 1 canonical verification refreshed
 
-Progress: ██████████ [██████████] 100% of v0.1 milestone phases complete. Published release `v0.1.0` (release ID `407367131`) targets source `e30d168f7fc61de8db0a3801e7b1736362912cb7`; all 18 downloaded assets matched live API IDs, sizes, and SHA-256 digests. The current local CTest inventory passed 176/176. Code review has zero open findings and the Phase 6 security report has zero high/blocking open threats. Current GitHub triage found no open PRs or issues. See Phase 6 verification, validation, review, disposition, and security artifacts.
+All six phases have completed plan execution (56/56 plans). Canonical verification now passes for Phases 1, 5, and 6; Phases 2–4 remain stale after covered files changed. Phase 1 passed all five roadmap truths, BASE-01 through BASE-08, the focused 26/26 test selection, and the previously recorded full 179/179 CTest inventory. PR #35's exact required contexts passed at head `d1e5fdb3b23256f06694cd8d91613638612bccb8` and merged as `96f76dec9a675ede45da8d75bd72a5141c7419e4`. See the [Phase 1 verification](phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md) and [v0.1 milestone audit](v0.1-MILESTONE-AUDIT.md).
 
-Phase 6 claims remain scoped: software-scripted package/player checks do not establish physical hardware or perceptual behavior. Signing/notarization and live Playstead GB integration are not claimed. The v0.1 milestone is ready for audit; no next phase number or title has been assigned. The next milestone direction is GB/GBC breadth, with `$gsd-audit-milestone` as the exact next command.
+Phase 6 claims remain scoped: software-scripted package/player checks do not establish physical hardware or perceptual behavior. Signing/notarization and live Playstead GB integration are not claimed. The v0.1 milestone is not ready to archive until Phases 2–4 have fresh canonical verification. Exact next command: `$gsd-execute-phase 2`.
 
 ## Performance Metrics
 
 - Completed unique plans: 56; recorded execution total: 1002 min. Phase 6 completed all seven reviewed plans in six dependency-ordered waves and passed all five goal truths.
-- Per-phase metrics / recent trend: Phases 1–5 are verified complete. Phase 3 has 13/13 plan summaries, 5/5 goal truths, 33/33 UAT checks, a user-confirmed packaged Z press/release, and 141/141 local CTest. PR #4's required exact-head checks passed before merge. Phase 5's current local exact-head evidence is in `GB-05-dmg-audio-and-stable-playback/05-VERIFICATION.md` and `05-VALIDATION.md`; confirm exact-head remote PR checks before any merge rather than inferring them from local results. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B measurement is claimed. Plan 02-15 is superseded/non-runnable and remains historical.
+- Per-phase metrics / recent trend: Current canonical reports pass for Phases 1, 5, and 6; Phases 2–4 remain stale. Phase 3's historical report records 13/13 plan summaries, 5/5 goal truths, 33/33 UAT checks, the user-confirmed packaged Z press/release, and 141/141 local CTest. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B measurement is claimed. Plan 02-15 is superseded/non-runnable and remains historical. The audit found CPU-02 and CPU-05 missing from Phase 2 summary `requirements_completed` metadata.
 - Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. At implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`, the local offline inventory passed 104/104 with no skips, the relocated installed C/C++ inventory passed 109/109, the runner passed its fixed one-CPU/two-timer derived corpus, hosted CI run 37620710587 passed, and fixture reproduction run 37620710600 passed. Independent verification passed all five CPU requirements. Original upstream PPU-dependent reporting paths remain excluded; no physical DMG hardware test occurred.
 
 **Per-Plan Metrics:**
@@ -187,7 +189,11 @@ None outside the roadmap.
 
 ### Blockers/Concerns
 
-- Phase 2 has no open verification or security blocker. All five requirements are complete at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`; see [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), [validation](phases/GB-02-dmg-cpu-bus-and-time/02-VALIDATION.md), and [security](phases/GB-02-dmg-cpu-bus-and-time/02-SECURITY.md).
+- The v0.1 audit found canonical verification stale for Phases 1–4. The audit integration checker found 6/6 cross-phase flows wired with no broken connection; this is an evidence-freshness gap, not a finding that those implementations regressed.
+- Main branch protection now enforces the three strict required CI contexts for administrators. Follow-up readback showed no required approving-review gate. PR #34 predates admin enforcement and had no recorded approval; its exact required CI contexts were green when merged.
+- Phase 1's refreshed validation report is `validated` and Nyquist-compliant, with 179/179 local CTest. Phase 3 validation is still `executing`, not `validated`, despite compliant/wave-complete flags.
+
+- Phase 2's historical verifier passed all five requirements at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`, but current canonical verification is stale. CPU-02 and CPU-05 also lack summary frontmatter completion entries. Refresh through `$gsd-execute-phase 2` after the Phase 1 stop; see the [milestone audit](v0.1-MILESTONE-AUDIT.md).
 - The admitted corpus is three derived headless reporting closures (one CPU, two timer). Original Mooneye reporting paths depend on PPU/LY behavior outside scope and remain excluded. No physical DMG-CPU-B observation occurred; no hardware qualification is claimed.
 - Phase 1 PR #1 and Phase 2 PR #2 were merged on 2026-10-07 after their required exact-head checks passed. Current GitHub triage found no open PRs or issues. Phase 2 verification is limited to its documented DMG-CPU-B CPU/timer scope; no physical DMG observation or PPU qualification is claimed.
 - Phase 6 has no open goal, requirement, review, or high/blocking security finding. The release workflow's original post-publication readback failure was repaired before closeout; the live release API and a fresh download reconcile the published 18-asset inventory.
@@ -205,10 +211,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-09T02:26:26Z
-Stopped at: Phase GB-06 execution, verification, and closeout complete
+Last session: 2026-10-09T12:20:14Z
+Stopped at: Phase GB-01 verification refresh complete; Phase 2 refresh is next
 Resume file: .planning/.continue-here.md
-Next command in fresh context: $gsd-audit-milestone
+Next command in fresh context: $gsd-execute-phase 2
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: Phase GB-06 execution and goal-backward verification; all seven plans are complete, all five roadmap truths passed, and SHIP-01 through SHIP-08 are complete. The published release and current evidence are reconciled; the v0.1 milestone itself is not yet audited or archived.
-Next phase: No phase number or title has been assigned pending the v0.1 milestone audit. The next milestone direction is GB/GBC breadth. Exact next command: `$gsd-audit-milestone`; stop after Phase 6 and wait for the owner before beginning another milestone.
+Completed workflow stage: Phase 1 — Portable Foundation and Original ROM Tracer canonical verification refresh. Verification passed 5/5 roadmap truths; BASE-01 through BASE-08 are current. The v0.1 milestone remains unarchived; Phases 2–4 need fresh canonical verification.
+Next phase: Phase 2 — DMG CPU, Bus, and Time (canonical verification refresh). Exact next command: `$gsd-execute-phase 2`. Stop at that phase boundary.

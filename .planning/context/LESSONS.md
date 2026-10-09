@@ -254,3 +254,21 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** `cmake --preset phase1 -DGABBABOY_BUILD_PLAYER=OFF && cmake --build --preset phase1 --parallel 2 && ctest --preset phase1 --output-on-failure --no-tests=error` passed 176/176. The verifier report and `.planning/.continue-here.md` record the configured-command limitation and test result.
 - **Source:** `.planning/phases/GB-06-qualified-dmg-release-and-consumer-handoff/06-VERIFICATION.md`, `.planning/STATE.md`, and `.planning/.continue-here.md`.
 - **Status:** Phase 6 validation is evidenced; configure the GSD test command as follow-up workflow maintenance, without editing preserved owner scratch during this closeout.
+
+### GB-GSD-007 / 2026-10-09 / Check canonical freshness and solo-maintainer merge policy at milestone handoff
+
+- **Cause and evidence:** The v0.1 audit found that historical passing reports for Phases 1–4 no longer pass OpenGSD's current `verification.status` gate because covered files changed after their digests were recorded. The audit snapshot also showed a one-approval rule with admin enforcement disabled; PR #34 had no recorded approval, though required exact-head CI passed. Follow-up readback showed the approval rule absent.
+- **Remedy:** At milestone audit, query canonical verification status for every phase instead of trusting report frontmatter alone. For a solo-maintainer repository, keep the human approval count at zero and enforce strict required CI contexts for admins; preserve the project's AI/code-review and test evidence in the normal workflow. Reassess approval requirements if independent maintainers join.
+- **Applies when:** OpenGSD verification uses covered-file digests, or a single maintainer uses GitHub branch protection without a second human reviewer.
+- **Verification:** OpenGSD 1.16.0 reports Phases 1–4 stale and Phases 5–6 passed. Follow-up GitHub readback reports `required_pull_request_reviews: null`, `enforce_admins: true`, and the unchanged strict contexts `required-native`, `fixture-repro`, and `preview-package-smoke`.
+- **Source:** `.planning/v0.1-MILESTONE-AUDIT.md`, phase `VERIFICATION.md` reports, and PR #34 branch-protection/check evidence.
+- **Status:** Adopted; branch-rule update verified. Fresh Phase 1–4 verification remains pending.
+
+### GB-TEST-002 / 2026-10-09 / Make concurrent-instance tests distinguish state and bound hangs
+
+- **Cause and evidence:** The supplemental Phase 1 review found that identical concurrent guest workloads could mask shared-state interference, a later reset could erase an unasserted run result, and the concurrency test had unbounded readiness/start waits without a process timeout.
+- **Remedy:** Use distinct guest-visible values per instance, assert each run's stop reason, budget, trace bounds, and RAM effect before resetting again, and apply a CTest wall-clock timeout to threaded runner tests.
+- **Applies when:** Tests exercise independent emulator instances concurrently or use host synchronization that could stall independently of guest instruction budgets.
+- **Verification:** The reviewed tests passed in the full local CTest suite, 179/179; the final source recheck reported clean with all reset, concurrency, timeout, Windows cleanup, and help-output findings resolved. PR #35 head `d1e5fdb3b23256f06694cd8d91613638612bccb8` was merged as `96f76dec9a675ede45da8d75bd72a5141c7419e4`; all required exact-head contexts passed: `required-native` run `37928170860`, `fixture-repro` run `37928170722`, and `preview-package-smoke` run `37928170973`. The two preview artifacts were independently checked for sidecar provenance, retention, digest, and safe extraction.
+- **Source:** `tests/test_api.c`, `tests/test_instance_concurrency.c`, `tests/CMakeLists.txt`, and Phase 1 `01-REVIEW.md` / `01-VALIDATION.md`.
+- **Status:** Corrected locally; exact-revision hosted validation is pending.
