@@ -446,6 +446,10 @@ grep -Fq 'default 100%, range 0%-200%' <<< "$PLAYER_HELP_OUTPUT" ||
 grep -Fq 'Gamepad: D-pad moves; bottom/South maps to A, right/East maps to B; Start/Back map to Start/Select.' \
   <<< "$PLAYER_HELP_OUTPUT" ||
   fail 'built player help does not document the supported gamepad mapping'
+grep -Fq 'S saves or retries a failed background save' <<< "$PLAYER_HELP_OUTPUT" ||
+  fail 'built player help does not distinguish background-save retry from transition retry'
+grep -Fq 'R retries; C continues without saving; Escape cancels' <<< "$PLAYER_HELP_OUTPUT" ||
+  fail 'built player help does not document blocked-transition save recovery'
 grep -Fq 'window title keeps the current gain visible' <<< "$PLAYER_HELP_OUTPUT" ||
   fail 'built player help does not state the persistent title gain indicator'
 grep -Fq 'application PCM underflow is not hardware starvation' <<< "$PLAYER_HELP_OUTPUT" ||

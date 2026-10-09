@@ -369,7 +369,8 @@ static void print_player_help(void) {
     fputs(
         "GabbaBoy is a bootless DMG-CPU-B software preview.\n\n"
         "Controls: Command-O opens a ROM; Command-Q quits; arrows move; Z/X are A/B; "
-        "Return/Right Shift are Start/Select; Space pauses; R resets; S saves; F1 opens help.\n"
+        "Return/Right Shift are Start/Select; Space pauses; R resets; "
+        "S saves or retries a failed background save; F1 opens help.\n"
         "Gamepad: D-pad moves; bottom/South maps to A, right/East maps to B; "
         "Start/Back map to Start/Select.\n"
         "Volume: [ and ] change host gain in 10% steps; default 100%, range 0%-200%.\n\n"
@@ -378,6 +379,8 @@ static void print_player_help(void) {
         "uses a bounded queue. If no device opens, PCM is discarded and counted while the "
         "guest keeps its host-paced timeline. Pause/focus cleanup and device recovery clear "
         "host backlog; reset and successful ROM replacement clear it after save transitions.\n\n"
+        "If reset, ROM replacement, or quit is blocked by a failed save, R retries; "
+        "C continues without saving; Escape cancels.\n\n"
         "Evidence: the APU is a deterministic DMG-CPU-B digital software model. CGB/VIN, "
         "physical or revision-specific hardware behavior, and listening quality are not "
         "qualified. SDL queued-input bytes are not latency; application PCM underflow is "
@@ -708,7 +711,9 @@ static void show_help(player *app) {
         "Gamepad: D-pad moves; bottom/South maps to A, right/East maps to B; "
         "Start/Back map to Start/Select.\n"
         "Pause / resume: Space\nVolume down / up: [ / ]\n"
-        "Reset current ROM: R\nSave now / retry: S\n\n"
+        "Reset current ROM: R\nSave battery RAM now / retry a failed background save: S\n"
+        "If reset, ROM replacement, or quit is blocked by a failed save: "
+        "R retries; C continues without saving; Escape cancels.\n\n"
         "Audio: 48 kHz signed 16-bit interleaved stereo; current host gain is %u%% "
         "(default 100%%, range 0-200%%). The window title keeps the current gain visible. "
         "If no device opens, PCM is discarded and counted.\n"
@@ -717,7 +722,6 @@ static void show_help(player *app) {
         "The APU is a DMG-CPU-B digital model. CGB/VIN, physical/revision-specific behavior, "
         "and listening quality are not qualified. SDL queued-input bytes are not latency; "
         "application PCM underflow is not hardware starvation.\n\n"
-        "A blocked final save offers R to retry, C to continue without saving, or Escape to cancel.\n"
         "Status: %.160s\n"
         "%s",
         rom_basename(app->current_rom_path),

@@ -1,9 +1,10 @@
 ---
 phase: GB-05-dmg-audio-and-stable-playback
-verified: 2026-10-08T18:11:00Z
+verified: 2026-10-09T19:26:49Z
 status: passed
-score: 22/22 truths verified
+score: 17/17 truths verified
 covered_files:
+  - .github/workflows/preview.yml
   - .planning/phases/GB-05-dmg-audio-and-stable-playback/05-01-PLAN.md
   - .planning/phases/GB-05-dmg-audio-and-stable-playback/05-01-SUMMARY.md
   - .planning/phases/GB-05-dmg-audio-and-stable-playback/05-02-PLAN.md
@@ -18,18 +19,37 @@ covered_files:
   - .planning/phases/GB-05-dmg-audio-and-stable-playback/05-06-SUMMARY.md
   - .planning/phases/GB-05-dmg-audio-and-stable-playback/05-07-PLAN.md
   - .planning/phases/GB-05-dmg-audio-and-stable-playback/05-07-SUMMARY.md
+  - CMakeLists.txt
+  - README.md
+  - docs/audio-and-playback.md
+  - docs/preview.md
+  - include/gabbaboy/gabbaboy.h
+  - src/core/gabbaboy.c
+  - src/player/audio.c
+  - src/player/audio.h
+  - src/player/input.c
+  - src/player/input.h
+  - src/player/limitations.h
+  - src/player/main.c
+  - tests/CMakeLists.txt
+  - tests/expected-tests.txt
   - tests/player/CMakeLists.txt
   - tests/player/expected-tests.txt
+  - tests/player/test_audio.c
+  - tests/player/test_input.c
+  - tests/player/test_limitations.c
   - tests/player/test_reset_transition.c
-covered_digest: "v3:sha256:e644b9df9381473b755ef02f63767b05a753b65d73b7f987bb728b26121a707b"
+  - tests/scripts/measure-audio-playback.sh
+  - tests/scripts/verify-phase3-player.sh
+  - tests/test_apu.c
+  - tests/test_audio.c
+covered_digest: "v3:sha256:1f0ea1e926506fbb3ef86ac6091ba3a05eaf47b3f4039066f746640cb817570d"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
-  previous_status: human_needed
-  previous_score: 21/22
-  gaps_closed:
-    - "The normal R-reset event now has app-level behavioral coverage for save-before-reset, failed-save preservation, cancel, retry, input/audio cleanup, and persisted battery recovery."
-    - "The normal Space pause/resume path now proves host PCM is flushed while guest APU history is preserved against uninterrupted execution."
+  previous_status: passed
+  previous_score: 22/22 (prior report table contained 17 distinct truths)
+  gaps_closed: []
   gaps_remaining: []
   regressions: []
 ---
@@ -37,9 +57,9 @@ re_verification:
 # Phase 5: DMG Audio and Stable Playback Verification Report
 
 **Phase Goal:** As a player, I want to play DMG games with paced sound, so that controls remain responsive through device changes.  
-**Verified:** 2026-10-08T18:11:00Z
+**Verified:** 2026-10-09T19:26:49Z
 **Status:** passed  
-**Re-verification:** Yes — after adding app-level pause/resume and R-reset behavioral evidence
+**Re-verification:** No — the prior report had no `gaps` section, so this follows the workflow's initial-mode truth derivation while refreshing stale evidence.
 
 ## User Flow Coverage
 
@@ -77,7 +97,17 @@ User story: “As a player, I want to play DMG games with paced sound, so that c
 | 16 | Sustained authored playback records revision, PCM digest/count, ring limits/high-water, software underflow/backpressure/discard, and SDL queued input bytes. | ✓ VERIFIED | Current-revision measurement script and machine-readable receipt; exact sample count and digest agree across frame and 792-half-dot partitions. |
 | 17 | Consumer docs and player help/status describe format, gain, recovery, and evidence boundaries without hardware/listening overclaims. | ✓ VERIFIED | docs/audio-and-playback.md, docs/preview.md, README.md; package help/status assertions; review and security reports. |
 
-**Score:** 22/22 truths verified; 0 present, behavior-unverified.
+**Score:** 17/17 distinct plan truths verified; all five roadmap success criteria map to these truths; 0 behavior-unverified.
+
+### Roadmap Contract Coverage
+
+| Roadmap success criterion | Plan truths verified |
+|---------------------------|----------------------|
+| Four scoped DMG channels, registers, and divider sequencer produce expected digital results with limits stated. | 1, 7, 8 |
+| Deterministic bounded PCM has documented format/resampling/lifetime/backpressure; stepping allocates nothing and loses no required output. | 2, 9, 10 |
+| The macOS player provides gain and paced sound without guest-clock changes; sustained play records queue and underflow/overrun behavior. | 3, 6, 11, 12, 16 |
+| Keyboard/controller input recovers from focus loss and disconnect/reconnect without stuck guest buttons. | 4, 13 |
+| Pause/resume, reset, ROM replacement, and audio-device transitions avoid stale cross-session state and follow flush/recovery rules. | 5, 14, 15 |
 
 ### Deferred Items
 
@@ -128,14 +158,14 @@ There is no dynamic web/database-rendered value in this phase; a UI data-flow tr
 
 | Behavior | Command / evidence | Result | Status |
 |----------|--------------------|--------|--------|
-| Core APU/PCM and full core regression inventory | cmake --preset phase1 -DGABBABOY_BUILD_PLAYER=OFF && cmake --build --preset phase1 --parallel 2 && ctest --preset phase1 --output-on-failure --no-tests=error | 174/174 passed at HEAD 206e107210e750ff0fe647a19b82600b17e98ee3. | ✓ PASS |
-| Player package and software SDL smoke | env HOME=/private/tmp/gabbaboy-validation-home CFFIXED_USER_HOME=/private/tmp/gabbaboy-validation-home SDL_AUDIO_DRIVER=dummy bash tests/scripts/verify-phase3-player.sh | 50/50 passed, including pause/resume and R-reset in `player_reset_transition`; dummy open/stream/close/recovery passed. Candidate package SHA-256 `a2a67310ff987199524d9c537ae0b671198eb2a05ae999f1f1d8e0ea0ac17826`. | ✓ PASS |
-| Normal app-level pause/resume and R-reset transitions | `ctest --test-dir build/phase3-player/gabbaboy --output-on-failure -R '^player_reset_transition$'` | Included in the 50/50 player verifier at HEAD 206e107210e750ff0fe647a19b82600b17e98ee3. | ✓ PASS |
+| Core APU/PCM and full core regression inventory | `cmake --preset phase1 -DGABBABOY_BUILD_PLAYER=OFF && cmake --build --preset phase1 --parallel 2 && ctest --preset phase1 --output-on-failure --no-tests=error` | **179/179 passed** in the dirty integrated worktree at HEAD `4d52df7aa0594bad2a3b0f0dc91e92e5612a2f4c`. | ✓ PASS |
+| Player package and software SDL smoke | `env HOME=/private/tmp/gabbaboy-validation-home CFFIXED_USER_HOME=/private/tmp/gabbaboy-validation-home SDL_AUDIO_DRIVER=dummy bash tests/scripts/verify-phase3-player.sh` | **50/50 passed**, including `player_reset_transition`, new CLI help assertions for S versus R/C/Escape recovery, package smoke, and SDL dummy open/stream/close/recovery. Candidate package SHA-256 `adb4ba71d023ba20a06b6a2160e39ec07095588d8d176965e325e09caede11c8`. | ✓ PASS |
+| Normal app-level pause/resume and R-reset transitions | Included as `player_reset_transition` in the 50/50 player verifier at the integrated worktree HEAD above. | The test drives actual Space and R SDL events through the app loop and asserts PCM flush/continuity, save failure/cancel/retry, and battery recovery. | ✓ PASS |
 | Sustained 300-frame workload | env HOME=/private/tmp/gabbaboy-validation-home CFFIXED_USER_HOME=/private/tmp/gabbaboy-validation-home bash tests/scripts/measure-audio-playback.sh | Passed at current HEAD. Two partitions each produced 241,094 exact in-window s16le stereo frames and matching digest 8667279ae7d3bf3cdd76a278b13d2cdfe9992d64325c15e4eef9449778eaeec4. | ✓ PASS |
 | Named core audio/APU behavioral cases | audio_capacity, audio_partition, audio_no_alloc, apu_sequencer, apu_timeline, apu_wave, apu_noise, apu_power | All passed. | ✓ PASS |
 | Named player input/audio transition cases | player_input_sources, player_input_reconnect, player_input_focus_audio, player_audio_lifecycle, player_audio_device, player_audio_replacement, player_reset_transition | All passed; `player_reset_transition` tests both Space pause/resume APU continuity and the normal R-reset route. | ✓ PASS |
 
-Current receipt: build/phase3-player/audio-measurement/206e107210e7-so9lvm0q/receipt.json. It records 48,000 Hz signed 16-bit little-endian interleaved stereo, model DMG-CPU-B, authored workload authored-pulse-control-loop-v1, 300 target video frames, 42,134,400 target half-dots, and 42,134,424 elapsed half-dots (bounded instruction tail excluded from exact PCM). Both partitions produced 241,094 exact in-window frames and PCM SHA-256 `8667279ae7d3bf3cdd76a278b13d2cdfe9992d64325c15e4eef9449778eaeec4`. The receipt reports 1,024 application PCM underflow frames, 2,502 intentionally discarded host frames, and 3,772/3,793 producer backpressure events across partitions; these counters vary with scheduling and are not hardware starvation or latency measurements. The default physical audio device was unavailable; the dummy backend passed.
+Current receipt: `build/phase3-player/audio-measurement/4d52df7aa059-w8jl5pmr/receipt.json`. It records Release/macOS arm64, 48,000 Hz signed 16-bit little-endian interleaved stereo, scoped DMG-CPU-B software model, authored MIT workload, 300 target video frames, and 42,134,424 elapsed half-dots versus 42,134,400 requested. Both partitions produced 241,094 frames with PCM SHA-256 `8667279ae7d3bf3cdd76a278b13d2cdfe9992d64325c15e4eef9449778eaeec4`. Ring target/ceiling/high-water were 1,606/3,214/3,214 frames; each partition recorded 1,024 application underflow frames, 2,502 intentionally discarded host frames, zero stream-write failures, zero queued-input bytes, and 3,203/3,211 producer backpressure events. Dummy SDL passed; no default physical audio device was available. The receipt is bound to HEAD `4d52df7aa0594bad2a3b0f0dc91e92e5612a2f4c` but records `source_tree_state: dirty`; it is not clean-checkout or hosted CI evidence.
 
 ### Probe Execution
 
@@ -184,9 +214,9 @@ N/A for additional manual UAT. All scoped software behaviors, including app-leve
 
 ### Gaps Summary
 
-All 22 observable truths and all five requirements are verified. The app-level transition test now exercises Space pause/resume, proves the exact host PCM flush and resumed output equivalence with an uninterrupted guest, and covers R-reset save failure/cancel/retry and battery recovery. Core, player/package and sustained measurement evidence are bound to the exact current revision. Physical hardware, perceptual quality, physical controller enumeration, and real-device hotplug remain explicitly unclaimed; they are outside the phase acceptance contract.
+All 17 distinct plan truths and all five roadmap success criteria/requirements are verified. The app-level transition test exercises Space pause/resume, proves the exact host PCM flush and resumed output equivalence with an uninterrupted guest, and covers R-reset save failure/cancel/retry and battery recovery. Core, player/package and sustained measurement checks pass locally in a dirty integrated worktree; they do not establish clean-checkout or hosted-CI status. Physical hardware, perceptual quality, physical controller enumeration, and real-device hotplug remain explicitly unclaimed and outside this phase's software acceptance boundary.
 
 ---
 
-_Verified: 2026-10-08T18:11:00Z_
+_Verified: 2026-10-09T19:26:49Z_
 _Verifier: the agent (gsd-verifier)_

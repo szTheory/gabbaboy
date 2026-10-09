@@ -33,7 +33,7 @@ Every requirement below must map to exactly one phase. Completion needs implemen
 - [x] **VIDEO-02**: OAM DMA, VRAM/OAM access restrictions, and CPU/PPU/DMA contention produce expected model-specific observable results under the D-025 confidence-qualified software model; exact CPU-B lane/timing and universal revision parity remain unmeasured.
 - [x] **VIDEO-03**: Timestamped joypad transitions affect the guest deterministically, including the documented selected falling-edge IF.4 software contract; exact CPU-B pulse qualification/sample phase remain unmeasured.
 - [x] **VIDEO-04**: A macOS user can launch the optional player, open a supported ROM-only image, play an original or explicitly permissioned interactive GB fixture, resize with correct aspect/integer scaling, pause, reset, and quit with actionable errors.
-- [x] **VIDEO-05**: Automated checks distinguish image composition, raster timing, and scripted gameplay outcomes, and the visible preview clearly identifies still-incomplete audio/persistence support.
+- [x] **VIDEO-05**: Automated checks distinguish image composition, raster timing, and scripted gameplay outcomes, and the visible preview accurately describes its supported audio/persistence scope and remaining limitations.
 
 ### Cartridge banking and battery continuation
 
@@ -135,9 +135,9 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | STATE-01 | Next milestone | Deferred |
 | INT-01 | Next milestone | Deferred |
 
-**Active coverage:** 35/35 requirements are mapped exactly once and have current canonical passing evidence, including SAVE-01 through SAVE-04. Phases 1–6 have fresh canonical reports. There are 0 unmapped requirements, 0 duplicates, and 0 active requirements left open. Next-milestone requirements and later candidates are excluded from active coverage. Rerun [the v0.1 milestone audit](v0.1-MILESTONE-AUDIT.md) now that Phase 4 verification and exact-head hosted evidence are current.
+**Active coverage:** All 35 active requirements are mapped exactly once and appear in their phase verification reports. The strict three-source matrix score of 15/35 is historical and predates the Phase 3 and Phase 5 refreshes. Current OpenGSD freshness status accepts Phases 1, 2, 4, and 5; Phases 3 and 6 are stale, and Phase 2 SUMMARY metadata omits CPU-02 and CPU-05. The traceability checkboxes retain prior implementation completion; refresh Phase 3 and Phase 6, reconcile Phase 2 summary metadata, then recompute the matrix and rerun the milestone audit. No active requirement is orphaned; next-milestone items remain excluded.
 
 **Next-milestone traceability:** 7/7 GB/GBC breadth commitments are mapped to the next milestone and remain outside the active v0.1 count.
 
 ---
-Last updated: 2026-10-09 after Phase 4 exact-head CI; all 35 active requirements have current passing evidence, and 7 next-milestone commitments remain deferred.
+Last updated: 2026-10-09 after the Phase 5 canonical verification refresh. The 15/35 strict three-source score is historical; refresh Phase 3 and Phase 6, reconcile Phase 2 SUMMARY metadata, then recompute.
