@@ -63,7 +63,7 @@ created: "2026-10-08"
 
 **Complete.** Existing CTest and player infrastructure cover the phase's software requirements. The seven plans add named cases and fixed-inventory entries; the final core inventory and player verifier both pass at the current source revision. No dependency installation was needed.
 
-## Executed Evidence at Current HEAD
+## Historical Executed Evidence at Implementation HEAD
 
 Source revision under test: `206e107210e750ff0fe647a19b82600b17e98ee3`. The measurement receipt identified the relevant source tree as clean at that revision. Unrelated pre-existing planning scratch remains outside the Phase 5 commit scope.
 
@@ -98,7 +98,21 @@ These are deliberately excluded from the software Nyquist gate; they are not unm
 - [x] Focused core feedback stays under 60 seconds; player integration duration is recorded separately
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Validation result:** the software requirements listed in this phase's task map are covered by named automated cases and passed the current full core/player/measurement commands above. This validates the test map; it does **not** mark Phase 5 execution complete or replace `$gsd-verify-work 5`. Physical hardware, perceptual quality and real-device latency remain explicitly unclaimed.
+**Historical validation result:** the software requirements listed in this phase's task map were covered by named automated cases at implementation HEAD `206e107210e750ff0fe647a19b82600b17e98ee3`. This is historical evidence; the refreshed evidence below is the current local result. Physical hardware, perceptual quality and real-device latency remain explicitly unclaimed.
+
+## Refreshed Executed Evidence at Integrated HEAD (2026-10-09)
+
+Source revision: `4d52df7aa0594bad2a3b0f0dc91e92e5612a2f4c`. The source tree was dirty during these runs; the sustained receipt records `source_tree_state: dirty`. These are current local results for the integrated worktree, not clean-checkout or hosted CI evidence.
+
+| Evidence | Command / observation | Result |
+|---|---|---|
+| Complete core inventory | `cmake --preset phase1 -DGABBABOY_BUILD_PLAYER=OFF && cmake --build --preset phase1 --parallel 2 && ctest --preset phase1 --output-on-failure --no-tests=error` | **179/179 passed.** |
+| Complete player/package verifier | `env HOME=/private/tmp/gabbaboy-validation-home CFFIXED_USER_HOME=/private/tmp/gabbaboy-validation-home SDL_AUDIO_DRIVER=dummy bash tests/scripts/verify-phase3-player.sh` | **50/50 passed**, including the new built-help assertions that distinguish S background-save retry from R/C/Escape blocked-transition recovery. The packaged smoke also checks SDL Z press/hold/release rendering, dummy audio lifecycle/recovery, reset transition behavior, and MBC1 continuation. Candidate package SHA-256: `adb4ba71d023ba20a06b6a2160e39ec07095588d8d176965e325e09caede11c8`. |
+| Sustained playback receipt | `env HOME=/private/tmp/gabbaboy-validation-home CFFIXED_USER_HOME=/private/tmp/gabbaboy-validation-home bash tests/scripts/measure-audio-playback.sh` | **Passed** for frame-sized and 792-half-dot partitions. Each produced 241,094 stereo frames with matching PCM SHA-256 `8667279ae7d3bf3cdd76a278b13d2cdfe9992d64325c15e4eef9449778eaeec4`; each recorded 42,134,424 elapsed half-dots against 42,134,400 requested. Receipt: `build/phase3-player/audio-measurement/4d52df7aa059-w8jl5pmr/receipt.json`. |
+
+The receipt identifies Release mode, macOS arm64, the scoped DMG-CPU-B software model, the authored MIT-licensed visible-demo workload, SDL dummy backend, and no available default audio device. Both partitions reported 1,024 application underflow frames, 2,502 intentionally discarded host frames, zero stream-write failures, and zero SDL queued-input bytes; producer backpressure was 3,203/3,211 events. These are software measurements, not physical starvation, latency, hotplug, or perceptual claims. The source tree was dirty, so these results do not establish an exact clean revision or remote CI status.
+
+The focused incremental code review covered `src/player/main.c`, `docs/preview.md`, and `tests/scripts/verify-phase3-player.sh`; it reported zero findings. It confirmed that S handles manual/background-save retry while R/C/Escape handle a blocked final transition.
 
 ## Spec-less Edge Assumptions (11 reviewed)
 
@@ -151,3 +165,11 @@ Verified by the fixed fixture manifest/digest tests and package assertions: only
 | CONTEXT | D-12 exact sustained metrics and limits | 05, 07 | COVERED |
 
 Deferred CGB audio, VIN, board calibration, external DSP libraries, device-selection UI and physical/perceptual qualification are exclusions under 05-CONTEXT.md, not coverage gaps. The three research questions are covered by the executed signal/partition tests, player verifier and sustained measurement receipt. No physical hotplug, audible quality or hardware result is marked passing.
+
+## Validation Audit 2026-10-09
+
+| Metric | Count |
+|---|---|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
