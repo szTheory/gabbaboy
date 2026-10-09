@@ -1010,17 +1010,24 @@ jobs:
         with:
           ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 0
-      - name: Revalidate merged PR and exact-head required contexts
-        run: bash .github/scripts/verify-release-gates.sh --check-merged-source "$SOURCE_SHA"
+      - name: Load trusted release evidence verifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > "$RUNNER_TEMP/verify-release-gates.sh"
+          git show "${GITHUB_SHA}:.github/scripts/verify-release-source-proof.py" > "$RUNNER_TEMP/verify-release-source-proof.py"
+          chmod +x "$RUNNER_TEMP/verify-release-gates.sh"
       - name: Validate draft candidate and all downloaded platform bytes
         shell: bash
         run: |
           set -euo pipefail
-          bash .github/scripts/verify-release-gates.sh --check-draft "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"
+          bash "$RUNNER_TEMP/verify-release-gates.sh" --check-draft "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"
           mkdir -p build/release-final
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" --dir build/release-final
           api_assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
           printf '%s\n' "$api_assets" > build/release-final/api-assets.json
+          bash "$RUNNER_TEMP/verify-release-gates.sh" --check-merged-source "$SOURCE_SHA" "$RELEASE_TAG" "$RELEASE_ID" \
+            build/release-final/source-receipt.json "$RUNNER_TEMP/verify-release-source-proof.py"
           # shellcheck disable=SC2016
           python3 - "$api_assets" build/release-final "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" <<'PY'
           import hashlib, json, pathlib, sys
