@@ -25,6 +25,22 @@ if excluded_path("src/gabbaboy.c") or excluded_path("CMakeLists.txt"):
     raise SystemExit("release-please exclusion incorrectly hides product source/version paths")
 workflow = (root / ".github/workflows/release.yml").read_text()
 entrypoint = (root / ".github/workflows/release-please.yml").read_text()
+def validate_verifier_invocations(text):
+    if re.search(r"(?m)^\s*(?!bash\s)(?:python\S*\s+)?tests/scripts/verify-release-candidate\.sh\b", text):
+        raise ValueError("release-candidate Bash verifier must be invoked explicitly with bash")
+try:
+    validate_verifier_invocations(workflow)
+except ValueError as error:
+    raise SystemExit(str(error))
+mutated_workflow = workflow.replace("bash tests/scripts/verify-release-candidate.sh", "python tests/scripts/verify-release-candidate.sh", 1)
+if mutated_workflow == workflow:
+    raise SystemExit("release workflow self-test could not find a Bash verifier invocation")
+try:
+    validate_verifier_invocations(mutated_workflow)
+except ValueError:
+    pass
+else:
+    raise SystemExit("release workflow self-test accepted a Python invocation of a Bash verifier")
 for output in ("release_created", "tag_name", "sha"):
     if f"${{{{ steps.release.outputs.{output} }}}}" not in workflow:
         raise SystemExit(f"same-workflow output is missing: {output}")
