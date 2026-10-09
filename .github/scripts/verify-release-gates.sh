@@ -25,6 +25,21 @@ if excluded_path("src/gabbaboy.c") or excluded_path("CMakeLists.txt"):
     raise SystemExit("release-please exclusion incorrectly hides product source/version paths")
 workflow = (root / ".github/workflows/release.yml").read_text()
 entrypoint = (root / ".github/workflows/release-please.yml").read_text()
+gate_source = (root / ".github/scripts/verify-release-gates.sh").read_text()
+aggregate_sidecar_route = '  check_required_asset_sidecars "$downloaded_dir"'
+def validate_aggregate_sidecar_route(text):
+    if aggregate_sidecar_route not in text:
+        raise ValueError("aggregate draft/final inventory must use the strict platform sidecar helper")
+try:
+    validate_aggregate_sidecar_route(gate_source)
+except ValueError as error:
+    raise SystemExit(str(error))
+try:
+    validate_aggregate_sidecar_route(gate_source.replace(aggregate_sidecar_route, ""))
+except ValueError:
+    pass
+else:
+    raise SystemExit("release gate self-test accepted an aggregate inventory without strict sidecar validation")
 def validate_verifier_invocations(text):
     if re.search(r"(?m)^\s*(?!bash\s)(?:python\S*\s+)?tests/scripts/verify-release-candidate\.sh\b", text):
         raise ValueError("release-candidate Bash verifier must be invoked explicitly with bash")
@@ -165,12 +180,6 @@ for asset in assets:
         raise SystemExit(f"GitHub API digest differs from downloaded bytes: {asset['name']}")
     if not isinstance(asset.get("id"), int):
         raise SystemExit(f"GitHub API asset ID is missing: {asset['name']}")
-    if asset["name"].endswith(".tar.gz.sha256"):
-        archive = asset["name"][:-7]
-        expected = path.read_text().split()[0]
-        actual = hashlib.sha256((root / archive).read_bytes()).hexdigest()
-        if expected != actual:
-            raise SystemExit(f"archive checksum file mismatch: {archive}")
 for name in ("source-receipt.json", "candidate-receipt.json"):
     receipt = json.loads((root / name).read_text())
     for field, value in (("tag_name", tag), ("source_sha", source_sha), ("release_id", release_id), ("draft", True)):
@@ -189,6 +198,7 @@ for name in required - {"candidate-platform-manifest.json"}:
     if name not in listed or listed[name] != hashlib.sha256((root / name).read_bytes()).hexdigest():
         raise SystemExit(f"platform manifest does not bind downloaded bytes: {name}")
 PY
+  check_required_asset_sidecars "$downloaded_dir"
 }
 
 check_final_receipt() {
@@ -264,6 +274,15 @@ actual = hashlib.sha256(archive_path.read_bytes()).hexdigest().lower()
 if expected != actual:
     raise SystemExit("digest sidecar does not match downloaded archive bytes")
 PY
+}
+
+check_required_asset_sidecars() {
+  local directory=$1 platform
+  for platform in macos-arm64 windows-x64; do
+    check_digest_sidecar \
+      "$directory/gabbaboy-core-$platform.tar.gz.sha256" \
+      "$directory/gabbaboy-core-$platform.tar.gz" || return $?
+  done
 }
 
 case "$mode" in
@@ -384,6 +403,23 @@ PY
       fi
       printf 'rejected: %s digest-only sidecar\n' "$malformed"
     done
+    mkdir -p "$temp/aggregate"
+    for platform in macos-arm64 windows-x64; do
+      printf '%s archive bytes\n' "$platform" > "$temp/aggregate/gabbaboy-core-$platform.tar.gz"
+      python3 - "$temp/aggregate" "$platform" <<'PY'
+import hashlib, pathlib, sys
+root, platform = pathlib.Path(sys.argv[1]), sys.argv[2]
+archive = root / f"gabbaboy-core-{platform}.tar.gz"
+(root / (archive.name + ".sha256")).write_text(hashlib.sha256(archive.read_bytes()).hexdigest() + "\n")
+PY
+    done
+    check_required_asset_sidecars "$temp/aggregate"
+    printf 'PASS: aggregate gate accepts Mac and Windows digest-only sidecars\n'
+    printf '%064d\n' 0 > "$temp/aggregate/gabbaboy-core-macos-arm64.tar.gz.sha256"
+    if check_required_asset_sidecars "$temp/aggregate" >/dev/null 2>&1; then
+      fail 'aggregate release gate accepted a mismatched Mac digest sidecar'
+    fi
+    printf 'rejected: aggregate gate detects mismatched platform sidecar\n'
     printf 'PASS: one-line downloaded archive digest sidecar verification\n'
     printf 'PASS: release configuration and exact-head required-check gate\n'
     ;;
