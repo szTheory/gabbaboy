@@ -61,17 +61,19 @@ if not {"required-native", "fixture-repro", "preview-package-smoke"}.issubset(re
     raise SystemExit("repository branch rules omit one of the three recorded required contexts")
 observed = {}
 for run in runs.get("check_runs", []):
-    if run.get("head_sha") == expected and run.get("status") == "completed":
+    if run.get("name") in required:
         observed.setdefault(run.get("name"), []).append(run)
 for context, app_id in required.items():
     matches = observed.get(context, [])
-    if len(matches) != 1:
-        raise SystemExit(f"required context {context!r} has {len(matches)} exact-head completed check runs")
-    run = matches[0]
-    if run.get("conclusion") != "success":
-        raise SystemExit(f"required context {context!r} concluded {run.get('conclusion')!r}")
-    if app_id is not None and run.get("app", {}).get("id") != app_id:
-        raise SystemExit(f"required context {context!r} came from the wrong GitHub App")
+    if not matches:
+        raise SystemExit(f"required context {context!r} has no check-run evidence")
+    for run in matches:
+        if run.get("head_sha") != expected:
+            raise SystemExit(f"required context {context!r} has stale check evidence")
+        if run.get("status") != "completed" or run.get("conclusion") != "success":
+            raise SystemExit(f"required context {context!r} is incomplete or concluded {run.get('conclusion')!r}")
+        if app_id is not None and run.get("app", {}).get("id") != app_id:
+            raise SystemExit(f"required context {context!r} came from the wrong GitHub App")
 PY
 }
 
@@ -215,6 +217,27 @@ runs = {"check_runs": [{"name": name, "head_sha": head, "status": "completed", "
 (root / "runs.json").write_text(json.dumps(runs))
 PY
     check_required_checks "$temp/rules.json" "$temp/runs.json" "$(printf 'a%.0s' {1..40})"
+    cp "$temp/runs.json" "$temp/duplicate-success.json"
+    python3 - "$temp/duplicate-success.json" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+data = json.loads(path.read_text())
+data["check_runs"].append(dict(data["check_runs"][0]))
+path.write_text(json.dumps(data))
+PY
+    check_required_checks "$temp/rules.json" "$temp/duplicate-success.json" "$(printf 'a%.0s' {1..40})"
+    cp "$temp/duplicate-success.json" "$temp/mixed-duplicate.json"
+    python3 - "$temp/mixed-duplicate.json" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+data = json.loads(path.read_text())
+data["check_runs"][-1]["conclusion"] = "failure"
+path.write_text(json.dumps(data))
+PY
+    if check_required_checks "$temp/rules.json" "$temp/mixed-duplicate.json" "$(printf 'a%.0s' {1..40})" >/dev/null 2>&1; then
+      fail 'exact-head gate accepted mixed successful and failing duplicate check evidence'
+    fi
+    printf 'rejected: mixed duplicate required-check evidence\n'
     for mutation in stale failed omitted wrong-app; do
       cp "$temp/runs.json" "$temp/$mutation.json"
       python3 - "$temp/$mutation.json" "$mutation" <<'PY'
