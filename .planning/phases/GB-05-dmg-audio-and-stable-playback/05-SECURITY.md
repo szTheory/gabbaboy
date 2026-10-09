@@ -63,3 +63,11 @@ updated: "2026-10-08"
 - [x] `status: verified` set in frontmatter
 
 **Approval:** verified 2026-10-08. Physical device hotplug, analog DMG output, and perceptual audio remain outside this software security verification.
+
+## Security Audit 2026-10-09
+
+| Metric | Count |
+|---|---|
+| Threats found | 14 |
+| Closed | 14 |
+| Open | 0 |

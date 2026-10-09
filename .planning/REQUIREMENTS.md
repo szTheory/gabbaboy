@@ -33,14 +33,14 @@ Every requirement below must map to exactly one phase. Completion needs implemen
 - [x] **VIDEO-02**: OAM DMA, VRAM/OAM access restrictions, and CPU/PPU/DMA contention produce expected model-specific observable results under the D-025 confidence-qualified software model; exact CPU-B lane/timing and universal revision parity remain unmeasured.
 - [x] **VIDEO-03**: Timestamped joypad transitions affect the guest deterministically, including the documented selected falling-edge IF.4 software contract; exact CPU-B pulse qualification/sample phase remain unmeasured.
 - [x] **VIDEO-04**: A macOS user can launch the optional player, open a supported ROM-only image, play an original or explicitly permissioned interactive GB fixture, resize with correct aspect/integer scaling, pause, reset, and quit with actionable errors.
-- [x] **VIDEO-05**: Automated checks distinguish image composition, raster timing, and scripted gameplay outcomes, and the visible preview clearly identifies still-incomplete audio/persistence support.
+- [x] **VIDEO-05**: Automated checks distinguish image composition, raster timing, and scripted gameplay outcomes, and the visible preview accurately describes its supported audio/persistence scope and remaining limitations.
 
 ### Cartridge banking and battery continuation
 
-- [ ] **SAVE-01**: The core supports a declared set of standard MBC1 ROM/RAM/battery configurations with tested banking and enable rules, while excluded variants and other mappers produce explicit errors.
-- [ ] **SAVE-02**: A frontend can import/export bounded battery data with documented cartridge identity/size rules; malformed imports leave the live state unchanged.
-- [ ] **SAVE-03**: The player persists battery data with a documented atomic replacement, recovery, and concurrent-writer policy; failed writes preserve the last good save and report failure visibly.
-- [ ] **SAVE-04**: An original GB fixture saves progress, exits, reopens in a fresh instance/process, and resumes behavior that depends on the previous bytes; empty/wrong-save controls prove the continuation oracle is meaningful.
+- [x] **SAVE-01**: The core supports a declared set of standard MBC1 ROM/RAM/battery configurations with tested banking and enable rules, while excluded variants and other mappers produce explicit errors.
+- [x] **SAVE-02**: A frontend can import/export bounded battery data with documented cartridge identity/size rules; malformed imports leave the live state unchanged.
+- [x] **SAVE-03**: The player persists battery data with a documented atomic replacement, recovery, and concurrent-writer policy; failed writes preserve the last good save and report failure visibly.
+- [x] **SAVE-04**: An original GB fixture saves progress, exits, reopens in a fresh instance/process, and resumes behavior that depends on the previous bytes; empty/wrong-save controls prove the continuation oracle is meaningful.
 
 ### Sound and stable playback
 
@@ -110,10 +110,10 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | VIDEO-03 | Phase 3 | Complete under the selected falling-edge software contract — exact CPU-B pulse/sample timing remains unmeasured; see [verification](phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md) |
 | VIDEO-04 | Phase 3 | Complete — package smoke and current packaged-window Z press/release UAT passed; see [verification](phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md) and [UAT](phases/GB-03-visible-interactive-dmg/03-UAT.md) |
 | VIDEO-05 | Phase 3 | Complete — evidence classes and preview limitations are covered; see [verification](phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md) |
-| SAVE-01 | Phase 4 | Pending re-verification — historical report passed; current canonical report stale |
-| SAVE-02 | Phase 4 | Pending re-verification — historical report passed; current canonical report stale |
-| SAVE-03 | Phase 4 | Pending re-verification — historical report passed; current canonical report stale |
-| SAVE-04 | Phase 4 | Pending re-verification — historical report passed; current canonical report stale |
+| SAVE-01 | Phase 4 | Complete — canonical verification passed 7/7 truths; FIFO hardening passed exact-head hosted CI; see [verification](phases/GB-04-mbc1-and-safe-battery-continuation/04-VERIFICATION.md) and [validation](phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md) |
+| SAVE-02 | Phase 4 | Complete — bounded transfer and non-mutation behavior verified; see [verification](phases/GB-04-mbc1-and-safe-battery-continuation/04-VERIFICATION.md) |
+| SAVE-03 | Phase 4 | Complete — atomic persistence, recovery, locks, transitions, and FIFO replacement failure verified locally and on exact-head hosted CI; see [verification](phases/GB-04-mbc1-and-safe-battery-continuation/04-VERIFICATION.md) and [validation](phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md) |
+| SAVE-04 | Phase 4 | Complete — fresh-process continuation and negative controls verified; see [verification](phases/GB-04-mbc1-and-safe-battery-continuation/04-VERIFICATION.md) |
 | AUDIO-01 | Phase 5 | Complete |
 | AUDIO-02 | Phase 5 | Complete |
 | AUDIO-03 | Phase 5 | Complete |
@@ -135,9 +135,9 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | STATE-01 | Next milestone | Deferred |
 | INT-01 | Next milestone | Deferred |
 
-**Active coverage:** 35/35 requirements are mapped exactly once; 31 have current passing evidence and four remain open (SAVE-01 through SAVE-04 await Phase 4 verification). Phases 1–3, 5, and 6 have fresh canonical reports; Phase 4's report is stale and must be refreshed. There are 0 unmapped requirements and 0 duplicates. Next-milestone requirements and later candidates are excluded from active coverage. See [the v0.1 milestone audit](v0.1-MILESTONE-AUDIT.md).
+**Active coverage:** All 35 active requirements are mapped exactly once and appear in their phase verification reports. The strict three-source matrix score of 15/35 is historical and predates the Phase 3 and Phase 5 refreshes. Current OpenGSD freshness status accepts Phases 1, 2, 4, and 5; Phases 3 and 6 are stale, and Phase 2 SUMMARY metadata omits CPU-02 and CPU-05. The traceability checkboxes retain prior implementation completion; refresh Phase 3 and Phase 6, reconcile Phase 2 summary metadata, then recompute the matrix and rerun the milestone audit. No active requirement is orphaned; next-milestone items remain excluded.
 
 **Next-milestone traceability:** 7/7 GB/GBC breadth commitments are mapped to the next milestone and remain outside the active v0.1 count.
 
 ---
-Last updated: 2026-10-09 after Phase 3 verification refresh; 30 active requirements have current passing evidence, one Phase 3 acceptance needs human verification, four Phase 4 requirements await refresh, and 7 next-milestone commitments remain deferred.
+Last updated: 2026-10-09 after the Phase 5 canonical verification refresh. The 15/35 strict three-source score is historical; refresh Phase 3 and Phase 6, reconcile Phase 2 SUMMARY metadata, then recompute.
