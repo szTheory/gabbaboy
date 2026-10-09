@@ -123,16 +123,15 @@ try:
     validate_publication_contract(workflow)
 except ValueError as error:
     raise SystemExit(str(error))
-mutated_publication = workflow.replace(
-    'bash .github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"',
-    "echo removed-final-gate", 1,
-)
+gate_call = 'bash .github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"'
+publish_call = 'gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag'
+mutated_publication = workflow.replace(gate_call, "", 1).replace(publish_call, publish_call + "\n          " + gate_call, 1)
 try:
     validate_publication_contract(mutated_publication)
 except ValueError:
     pass
 else:
-    raise SystemExit("release workflow self-test accepted publication without the final downloaded-byte gate")
+    raise SystemExit("release workflow self-test accepted publication before the final downloaded-byte gate")
 if "workflow_call:" not in workflow or "uses: ./.github/workflows/release.yml" not in entrypoint:
     raise SystemExit("release-please outputs and candidate jobs are not connected in one workflow run")
 PY
