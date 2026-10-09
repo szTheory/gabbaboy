@@ -195,6 +195,22 @@ if receipt.get("smoke", {}).get("runner") != expected_smoke_runner or not expect
 PY
 }
 
+check_digest_sidecar() {
+  local sidecar=$1 archive=$2
+  python3 - "$sidecar" "$archive" <<'PY'
+import hashlib, pathlib, re, sys
+sidecar_path, archive_path = map(pathlib.Path, sys.argv[1:])
+contents = sidecar_path.read_bytes()
+match = re.fullmatch(rb"([0-9a-fA-F]{64})\r?\n?", contents)
+if not match:
+    raise SystemExit("digest sidecar must contain exactly one 64-hex digest line")
+expected = match.group(1).decode("ascii").lower()
+actual = hashlib.sha256(archive_path.read_bytes()).hexdigest().lower()
+if expected != actual:
+    raise SystemExit("digest sidecar does not match downloaded archive bytes")
+PY
+}
+
 case "$mode" in
   --self-test)
     [[ $# -eq 1 ]] || fail 'usage: verify-release-gates.sh --self-test'
@@ -288,6 +304,32 @@ PY
       printf 'rejected: runner evidence %s mismatch\n' "$mutation"
     done
     printf 'PASS: distinct build/smoke runner identities and bound release evidence\n'
+    printf 'release archive bytes\n' > "$temp/archive.tar.gz"
+    python3 - "$temp" <<'PY'
+import hashlib, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+digest = hashlib.sha256((root / "archive.tar.gz").read_bytes()).hexdigest()
+(root / "digest.sha256").write_text(digest + "\n")
+PY
+    check_digest_sidecar "$temp/digest.sha256" "$temp/archive.tar.gz"
+    cp "$temp/digest.sha256" "$temp/digest-mismatch.sha256"
+    printf '%064d\n' 0 > "$temp/digest-mismatch.sha256"
+    if check_digest_sidecar "$temp/digest-mismatch.sha256" "$temp/archive.tar.gz" >/dev/null 2>&1; then
+      fail 'digest sidecar gate accepted a mismatched archive digest'
+    fi
+    printf 'rejected: mismatched digest-only sidecar\n'
+    for malformed in multiline malformed; do
+      if [[ "$malformed" == multiline ]]; then
+        printf '%s\n%s\n' "$(cat "$temp/digest.sha256")" "$(cat "$temp/digest.sha256")" > "$temp/$malformed.sha256"
+      else
+        printf '%064d\n' 0 > "$temp/$malformed.sha256"
+      fi
+      if check_digest_sidecar "$temp/$malformed.sha256" "$temp/archive.tar.gz" >/dev/null 2>&1; then
+        fail "digest sidecar gate accepted $malformed sidecar"
+      fi
+      printf 'rejected: %s digest-only sidecar\n' "$malformed"
+    done
+    printf 'PASS: one-line downloaded archive digest sidecar verification\n'
     printf 'PASS: release configuration and exact-head required-check gate\n'
     ;;
   --check-pr)
@@ -365,5 +407,10 @@ PY
     check_runner_evidence "$2" "$3" "$4" "$5" "$6"
     printf 'PASS: build and download-smoke runner evidence is independently bound\n'
     ;;
-  *) fail 'usage: verify-release-gates.sh --self-test | --check-pr PR_NUMBER EXPECTED_HEAD_SHA | --check-merged-source MERGE_SHA | --check-draft RELEASE_ID TAG SOURCE_SHA | --check-draft-final RELEASE_ID TAG SOURCE_SHA | --check-runner-evidence CANDIDATE_RECEIPT BUILD_RECEIPT TAG SOURCE_SHA SMOKE_RUNNER' ;;
+  --check-digest-sidecar)
+    [[ $# -eq 3 ]] || fail 'usage: verify-release-gates.sh --check-digest-sidecar SIDECAR ARCHIVE'
+    check_digest_sidecar "$2" "$3"
+    printf 'PASS: downloaded archive matches its one-line digest sidecar\n'
+    ;;
+  *) fail 'usage: verify-release-gates.sh --self-test | --check-pr PR_NUMBER EXPECTED_HEAD_SHA | --check-merged-source MERGE_SHA | --check-draft RELEASE_ID TAG SOURCE_SHA | --check-draft-final RELEASE_ID TAG SOURCE_SHA | --check-runner-evidence CANDIDATE_RECEIPT BUILD_RECEIPT TAG SOURCE_SHA SMOKE_RUNNER | --check-digest-sidecar SIDECAR ARCHIVE' ;;
 esac
