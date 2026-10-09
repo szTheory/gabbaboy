@@ -180,3 +180,31 @@ exact-head hosted checks, and downloaded package receipts are validated.
 | Gaps found | 0 |
 | Resolved | 0 |
 | Escalated | 0 |
+
+## Canonical Refresh Local Evidence 2026-10-09
+
+The current working tree is based on source revision
+`4d52df7aa0594bad2a3b0f0dc91e92e5612a2f4c` and contains a local player
+hardening change plus its regression assertion. This is local evidence for the
+working tree, not an exact hosted PR-head result:
+
+- Core CTest: **179/179** passed with no skips.
+- The macOS player and extracted-package verifier passed **50/50** player
+  tests, including a FIFO ROM replacement case that now verifies prompt
+  rejection and preservation of the active ROM/session. The package also
+  passed dummy-audio, extracted-byte, and fresh-process MBC1 continuation
+  checks. Candidate package SHA-256:
+  `12cbb579ccd5a2c0f05fd33b7b534f81ff15bac788ef7605136d145d56368232`.
+- The local package receipt identifies source revision
+  `4d52df7aa0594bad2a3b0f0dc91e92e5612a2f4c` and `source_tree_state: dirty`;
+  no current hosted CI result is claimed for the local patch.
+- Code review identified that opening a user-selected FIFO could block before
+  the regular-file check. `read_rom_file()` now uses `O_NONBLOCK` with
+  `O_NOFOLLOW`, then retains its existing descriptor-based regular-file and
+  size checks. The regression checks rejection, the FIFO's unchanged type, and
+  that the active path and guest RAM remain unchanged.
+
+The historical exact-hosted results above remain scoped to PR #8's tested
+source revision. Linux ASan/UBSan, Windows, relocated consumers, and exact
+hosted CI still require a current reviewed PR head before this local patch can
+be described as hosted-green.

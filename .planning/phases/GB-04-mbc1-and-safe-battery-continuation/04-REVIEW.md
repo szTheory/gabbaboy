@@ -1,6 +1,6 @@
 ---
 phase: GB-04-mbc1-and-safe-battery-continuation
-reviewed: 2026-10-08T04:34:30Z
+reviewed: 2026-10-09T17:01:28Z
 depth: standard
 files_reviewed: 26
 files_reviewed_list:
@@ -40,25 +40,29 @@ status: clean
 
 # Phase 4: Code Review Report
 
-**Reviewed:** 2026-10-08T04:34:30Z
+**Reviewed:** 2026-10-09T17:01:28Z
 **Depth:** standard
 **Files Reviewed:** 26
 **Status:** clean
 
 ## Summary
 
-Reviewed the Phase 4 cartridge mapper and battery API, player save lifecycle and filesystem boundaries, fixture reproduction/package workflows, and the changed core, installed-consumer, and player tests. Re-reviewed the final PR head `95c076df9676309e0d14482d8588363fc2da4e13`, including the Windows checkout fix and its installed-package digest check. The `.gitattributes` rules force LF checkouts for the assembly, manifest, and license, and disable text conversion for the binary ROM; a fresh Git checkout with `core.autocrlf=true` retained the manifest's expected assembly and ROM SHA-256 digests. The package diagnostic reports each expected and observed digest while preserving the existing fail-closed comparison. I found no demonstrated correctness, security, or maintainability defects.
-
-The earlier Phase 4 review also found that the save loader bounds and validates files before import, rejects symlinks and non-regular targets, preserves rejected regular saves without overwriting an existing recovery file, and uses a temporary file plus synchronization and atomic replacement for writes. The MBC1 implementation and public battery operations preserve the documented size, ownership, and failed-operation behavior.
-
-All reviewed files meet quality standards. No issues found.
+The initial 26-file Phase 4 review found one warning: a user-selected FIFO
+could block ROM loading before the regular-file check. The focused follow-up
+re-reviewed `src/player/session.c` and `tests/player/test_session.c`. ROM input
+now opens with `O_NONBLOCK` and retains the `fstat` regular-file check. The
+replacement-failure regression creates a FIFO, confirms replacement is rejected,
+and verifies that the prior ROM path and guest RAM remain unchanged. The warning
+is closed; no findings remain. The orchestrator reports the current player
+verifier passed all 50 cases.
 
 ## Narrative Findings (AI reviewer)
 
-No findings.
+No unresolved findings. WR-01 from the prior review is closed by the source
+hardening and regression described above.
 
 ---
 
-_Reviewed: 2026-10-08T04:34:30Z_
+_Reviewed: 2026-10-09T17:01:28Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_

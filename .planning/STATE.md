@@ -2,19 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v0.1
 current_phase: 04
+current_phase_name: MBC1 and Safe Battery Continuation
 status: executing
-stopped_at: Phase GB-03 complete; stop before Phase GB-04 canonical verification refresh
-last_updated: "2026-10-09T14:31:03.004Z"
+stopped_at: Phase GB-04 verification passed; stop before v0.1 milestone audit
+last_updated: "2026-10-09T17:10:35Z"
 last_activity: 2026-10-09
-last_activity_desc: Phase GB-03 verification passed 5/5 with UAT 34/34; Phase GB-04 verification is next
-state_head: 04877a39307dd20ac01e687470da4ea2d0b62e25
+last_activity_desc: Phase GB-04 verification passed 7/7 truths; exact hosted checks for the FIFO hardening patch remain to be completed
+state_head: 60f2adffee34f64b0c197e99bf4f8a9ab1278283
 progress:
   total_phases: 6
   completed_phases: 6
   total_plans: 56
   completed_plans: 56
   percent: 100
-  verified_phases: 5
+  verified_phases: 6
 milestone_name: limited DMG preview
 ---
 
@@ -25,23 +26,23 @@ milestone_name: limited DMG preview
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase GB-04 — MBC1 and Safe Battery Continuation (canonical verification refresh)
+**Current focus:** Phase GB-04 — MBC1 and Safe Battery Continuation (verified; current FIFO patch awaits exact hosted PR checks)
 
 ## Current Position
 
-Phase: GB-04 — MBC1 and Safe Battery Continuation
+Phase: GB-04 — MBC1 and Safe Battery Continuation (complete)
 Plans: 7 plans already have summaries; no plan execution remains
-Status: Phase 4 canonical verification refresh is next; its report is stale
-Last activity: 2026-10-09 — Phase GB-03 verification passed 5/5; UAT passed 34/34
+Status: canonical verification passed 7/7 truths and SAVE-01 through SAVE-04; the local FIFO hardening patch still needs exact hosted PR checks before merge
+Last activity: 2026-10-09 — Phase GB-04 canonical verification passed 7/7 truths
 
-All six phases have completed plan execution (56/56 runnable plans). Canonical verification passes for Phases 1, 2, 3, 5, and 6; Phase 4 is stale and is the next refresh. Thirty-one active requirements have current passing evidence; SAVE-01 through SAVE-04 remain open pending Phase 4 verification. Phase 3 passed 5/5 truths and UAT 34/34. Its latest local core CTest run passed 179/179; the pinned SDL player suite passed 50/50 and exact-head macOS package/downloaded-consumer checks passed on PR #40. The current packaged demo and Z press/release response are confirmed in UAT test 34. See the [Phase 3 verification](phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md), [Phase 3 UAT](phases/GB-03-visible-interactive-dmg/03-UAT.md), [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), and [v0.1 milestone audit](v0.1-MILESTONE-AUDIT.md).
+All six phases have completed plan execution (56/56 runnable plans) and now have fresh canonical verification. All 35 active requirements pass, including the Phase 4 MBC1 and battery requirements. The current local core CTest passed 179/179; the pinned macOS player/package verifier passed 50/50 with the FIFO ROM-path regression and fresh-process continuation. Those results cover a local FIFO patch; its exact hosted PR-head checks must pass before the code is merged or described as hosted-green. The earlier Phase 4 exact hosted evidence remains scoped to source `79f83f627ffb3631811b2f39b23081117ebaab8f`. Phase 3's packaged demo and Z press/release response are confirmed in UAT test 34. See the [Phase 4 verification](phases/GB-04-mbc1-and-safe-battery-continuation/04-VERIFICATION.md), [Phase 4 validation](phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md), [Phase 3 UAT](phases/GB-03-visible-interactive-dmg/03-UAT.md), [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), and [v0.1 milestone audit](v0.1-MILESTONE-AUDIT.md).
 
 Phase 2 remains scoped to the three source-qualified derived CPU/timer reporting closures; no physical DMG-CPU-B observation or broad compatibility claim is made. Phase 3's UAT observation confirms this packaged player's visible demo and Z response, not physical hardware behavior. Phase 6 software package/player checks do not establish physical hardware or perceptual behavior. Signing/notarization and live Playstead GB integration are not claimed. The v0.1 milestone is not ready to archive until Phase 4 has fresh canonical verification. Exact next command: `$gsd-execute-phase GB-04-mbc1-and-safe-battery-continuation`.
 
 ## Performance Metrics
 
 - Completed unique plans: 56; recorded execution total: 1002 min. Phase 6 completed all seven reviewed plans in six dependency-ordered waves and passed all five goal truths.
-- Per-phase metrics / recent trend: Current canonical reports pass for Phases 1, 2, 3, 5, and 6; Phase 4 remains stale. Phase 3 has 13/13 plan summaries, 5/5 goal truths, 34/34 UAT checks, 179/179 local core CTest, 50/50 pinned player tests, and passing exact-head package/consumer CI. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B measurement is claimed. Plan 02-15 is superseded/non-runnable and remains historical.
+- Per-phase metrics / recent trend: Current canonical reports pass for Phases 1–6. Phase 4 has 7/7 plan summaries and 7/7 verified truths; the current local core inventory is 179/179 and player/package suite 50/50. The FIFO ROM-open hardening still needs exact hosted PR checks. Phase 3 has 13/13 plan summaries, 5/5 goal truths, 34/34 UAT checks, and exact-head package/consumer evidence. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B measurement is claimed. Plan 02-15 is superseded/non-runnable and remains historical.
 - Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. The current Phase 2 refresh passed 179/179 local CTest, 88/88 focused Phase 2 cases, three eligible runner receipts, and the protocol probe with zero PPU accesses. Historical exact evidence at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989` includes the 104/104 offline core inventory, 109/109 relocated installed C/C++ inventory, hosted CI run 37620710587, and fixture reproduction run 37620710600. Original upstream PPU-dependent reporting paths remain excluded; no physical DMG hardware test occurred.
 
 **Per-Plan Metrics:**
@@ -189,7 +190,7 @@ None outside the roadmap.
 
 ### Blockers/Concerns
 
-- The v0.1 audit found canonical verification stale for Phases 1–4. Phases 1, 2, and 3 now have fresh passing reports; Phase 4 remains stale. The audit integration checker found 6/6 cross-phase flows wired with no broken connection; this is an evidence-freshness gap, not a finding that those implementations regressed.
+- The previous v0.1 audit found stale canonical verification for Phases 1–4. All six phases now have fresh passing reports, and the prior integration checker found 6/6 flows wired. Rerun the milestone audit after exact hosted checks for the current FIFO hardening PR pass and merge.
 - Main branch protection now enforces the three strict required CI contexts for administrators. Follow-up readback showed no required approving-review gate. PR #34 predates admin enforcement and had no recorded approval; its exact required CI contexts were green when merged.
 - Phase 1's refreshed validation report is `validated` and Nyquist-compliant, with 179/179 local CTest. Phase 3 Nyquist validation is `validated`, and its UAT is complete at 34/34.
 
@@ -211,10 +212,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-09T14:31:03Z
-Stopped at: Phase GB-03 complete; Phase GB-04 canonical verification refresh is next
+Last session: 2026-10-09T17:10:35Z
+Stopped at: Phase GB-04 verification passed; current FIFO hardening awaits exact hosted PR checks before milestone audit
 Resume file: .planning/.continue-here.md
-Next command in fresh context: $gsd-execute-phase GB-04-mbc1-and-safe-battery-continuation
+Next command in fresh context: $gsd-audit-milestone v0.1
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: Phase 3 — Visible Interactive DMG canonical verification. The refreshed report passed 5/5 roadmap truths; UAT passed 34/34; the latest local core CTest passed 179/179; the pinned player suite passed 50/50; and exact-head package/consumer CI passed. The current packaged demo and Z press/release response were confirmed once by the user and are now covered by the rendered-input smoke for future PRs. CPU-B timing/lane behavior and PPU revision parity remain unqualified; the v0.1 milestone remains unarchived.
-Next phase: Phase 4 — MBC1 and Safe Battery Continuation. Its 7/7 plans have summaries, but canonical verification is stale. Exact next command: `$gsd-execute-phase GB-04-mbc1-and-safe-battery-continuation`. This resumes Phase 4 at verification; stop at that phase boundary and do not auto-advance.
+Completed workflow stage: Phase 4 — MBC1 and Safe Battery Continuation canonical verification, Phase 4 of 6. All 7 plans have summaries; the refreshed report passed 7/7 truths and SAVE-01 through SAVE-04. Local tests passed 179/179 core and 50/50 player/package, including nonblocking FIFO ROM-path rejection and fresh-process MBC1 continuation. The code review is clean, the security audit closed 22/22 threats, and the UI audit's 13/24 status-visibility recommendations remain advisory. Historical hosted Phase 4 CI is tied to `79f83f627ffb3631811b2f39b23081117ebaab8f`; the new FIFO patch requires its own exact PR-head checks before merge. Physical hardware and storage power-loss behavior remain unqualified.
+Next sequential phase: Phase 5 — DMG Audio and Stable Playback (already complete); Phase 6 — Qualified DMG Release and Consumer Handoff is also complete. After the Phase 4 patch's exact hosted checks pass and it is merged, the next GSD stage is the v0.1 milestone audit. Exact command: `$gsd-audit-milestone v0.1`. Stop after Phase 4 and do not auto-advance into the audit. Keep both auto-advance flags false.

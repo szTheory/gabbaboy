@@ -119,6 +119,16 @@ static int replacement_failure(const char *demo_path, const char *missing_path) 
                                         &identity, error, sizeof(error)));
     REQUIRE(strstr(error, "cartridge type") != NULL);
     REQUIRE(require_unchanged(machine, current_path, original_path, error) == 0);
+
+    remove(missing_path);
+    REQUIRE(mkfifo(missing_path, 0600) == 0);
+    REQUIRE(!player_session_replace_rom(machine, &current_path, missing_path,
+                                        &identity, error, sizeof(error)));
+    REQUIRE(strstr(error, "bounded regular file") != NULL);
+    REQUIRE(require_unchanged(machine, current_path, original_path, error) == 0);
+    struct stat fifo_info;
+    REQUIRE(lstat(missing_path, &fifo_info) == 0 && S_ISFIFO(fifo_info.st_mode));
+
     free(current_path);
     gbb_destroy(machine);
     remove(missing_path);

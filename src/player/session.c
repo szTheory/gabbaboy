@@ -101,7 +101,7 @@ static bool copy_rom_path(const char *path, char **out_copy,
 
 static bool read_rom_file(const char *path, uint8_t **out_rom, size_t *out_size,
                           char *out_error, size_t error_capacity) {
-    const int fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    const int fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
     if (fd < 0) {
         set_error(out_error, error_capacity, "Could not open the selected ROM file.");
         return false;
