@@ -1,15 +1,15 @@
 ---
 phase: "GB-06"
 slug: "qualified-dmg-release-and-consumer-handoff"
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: "2026-10-08"
 ---
 
 # Phase GB-06 — Validation Strategy
 
-> Draft validation contract for the Phase 6 planning and execution work. No Phase 6 checks have been run.
+> Execution audit: all Phase 6 task rows now have recorded automated evidence. Cross-platform package qualification and publication are tied to the exact frozen `v0.1.0` tag; manual-only hardware, perceptual, signing, and live Playstead claims remain explicitly unqualified.
 
 ## Test Infrastructure
 
@@ -34,28 +34,28 @@ The existing commands are starting points, not evidence that Phase 6 requirement
 
 ## Requirement Validation Map
 
-The planned checks below remain pending. Plan IDs, waves, and threat references match the seven Phase 6 plans; no Phase 6 implementation check has run.
+Plan IDs, waves, and threat references match all seven Phase 6 plans. The 14 planned task rows are covered by the recorded local and exact-head hosted evidence.
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command / Evidence | Existing Coverage | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-----------------------------|-------------------|--------|
-| 06-01-01 | 01 | 1 | SHIP-01, SHIP-03, SHIP-08 | T-06-01/02/03 | Release-please's one unpublished draft and immediate tag reach downloaded Linux C/C++ smoke | Release tracer | `bash tests/scripts/verify-release-candidate.sh --self-test`; hosted existing-draft download/consumer receipt | Existing preview relocation verifier | pending |
-| 06-01-02 | 01 | 1 | SHIP-03, SHIP-08 | T-06-01/03 | Manifest uses draft plus forced tag; same-workflow outputs route candidate; protected merge follows final source | Workflow contract | Candidate self-test; live merge/draft/tag deferred to 06-06-01 | Existing exact-head PR verifier | pending |
-| 06-05-01 | 05 | 1 | SHIP-07 | T-06-11/12 | Loader/battery/API boundary failure remains atomic and bounded | ASan/UBSan regression | `cmake --preset phase1-asan && cmake --build --preset phase1-asan && ctest --preset phase1-asan --output-on-failure --no-tests=error -R '^(battery_api_fuzz|loader_)'` | Existing loader/battery inventory | pending |
-| 06-05-02 | 05 | 1 | SHIP-07 | T-06-11/12 | Fuzz input/work/time/memory caps and replay are explicit | Compiler-integrated fuzz | `bash tests/scripts/run-bounded-fuzz.sh --self-test`; available Clang libFuzzer lane | Existing battery deterministic seed | pending |
-| 06-02-01 | 02 | 2 | SHIP-01, SHIP-03 | T-06-04/05 | Three downloaded core archives resolve only public GabbaBoy::core on tested matrix | Package integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^preview_package_smoke$'`; hosted Linux/macOS/Windows asset receipts | Existing native Windows C/C++ relocated CI | pending |
-| 06-02-02 | 02 | 2 | SHIP-02, SHIP-03 | T-06-05/06 | Exact macOS player bytes pass legal load/input/frame/PCM/save/exit/reopen | Player integration | `bash tests/scripts/verify-phase3-player.sh`; downloaded asset receipt | Existing pinned SDL package verifier | pending |
-| 06-04-01 | 04 | 3 | SHIP-05, SHIP-03 | T-06-09 | Tracked ledger holds stable scope/corpus; separate post-tag sidecar binds tagged ledger blob digest to exact source SHA without self-reference | Ledger and sidecar validation | `python3 tests/scripts/verify-support-ledger.py --self-test`; post-tag sidecar check | Existing fixture/corpus manifests | pending |
-| 06-04-02 | 04 | 3 | SHIP-06, SHIP-03 | T-06-10 | Fixed workload trace pair has equal digest and measured variance | Baseline receipt | `bash tests/scripts/measure-release-baseline.sh --self-test` | Existing audio measurement receipt | pending |
-| 06-03-01 | 03 | 4 | SHIP-01, SHIP-04 | T-06-07/08 | Native C example uses relocated public API and host-owned battery | Consumer integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^preview_package_smoke$'` | Existing C/C++ relocated smoke | pending |
-| 06-03-02 | 03 | 4 | SHIP-04 | T-06-07/08 | Docs match example, tracked ledger/release-sidecar relationship, save/API behavior and Playstead boundary | Documentation + consumer | Relocated package smoke and documented build invocation | Existing README and cartridge/save docs | pending |
-| 06-07-01 | 07 | 5 | SHIP-03, SHIP-04 | T-06-16 | Tracked release notes, notices and guide are final before tag | Release documentation | Candidate self-test; notice/ledger link validation | Existing fixture manifests | pending |
-| 06-07-02 | 07 | 5 | SHIP-08 | T-06-16 | GitHub API coverage decisions include draft creation/status, forced tag and guarded retry before tag | API coverage | Candidate self-test; coverage matrix validation before seal | Existing workflow API calls | pending |
-| 06-06-01 | 06 | 6 | SHIP-08, SHIP-03 | T-06-13 | Final bot PR has all live exact-head checks; protected merge yields one unpublished draft/immediate tag; same-workflow outputs route candidate | Hosted gate | `bash .github/scripts/verify-release-gates.sh --self-test`; live `gh` merge/draft/tag/output evidence | Existing PR gate scripts | pending |
-| 06-06-02 | 06 | 6 | SHIP-01–SHIP-08 | T-06-13/14/15/17 | Existing draft stays unpublished through downloaded-byte smoke; only then exact qualified bytes and sidecar are published | Final release | Candidate and gate self-tests; release API draft-before/published-after, download/hash, sidecar and asset smoke | Draft release path planned in 06-01 | pending |
+| 06-01-01 | 01 | 1 | SHIP-01, SHIP-03, SHIP-08 | T-06-01/02/03 | Release-please's one unpublished draft and immediate tag reach downloaded Linux C/C++ smoke | Release tracer | `bash tests/scripts/verify-release-candidate.sh --self-test`; hosted existing-draft download/consumer receipt | Existing preview relocation verifier | covered |
+| 06-01-02 | 01 | 1 | SHIP-03, SHIP-08 | T-06-01/03 | Manifest uses draft plus forced tag; same-workflow outputs route candidate; protected merge follows final source | Workflow contract | Candidate self-test; live merge/draft/tag deferred to 06-06-01 | Existing exact-head PR verifier | covered |
+| 06-05-01 | 05 | 1 | SHIP-07 | T-06-11/12 | Loader/battery/API boundary failure remains atomic and bounded | ASan/UBSan regression | `cmake --preset phase1-asan && cmake --build --preset phase1-asan && ctest --preset phase1-asan --output-on-failure --no-tests=error -R '^(battery_api_fuzz|loader_)'` | Existing loader/battery inventory | covered |
+| 06-05-02 | 05 | 1 | SHIP-07 | T-06-11/12 | Fuzz input/work/time/memory caps and replay are explicit | Compiler-integrated fuzz | `bash tests/scripts/run-bounded-fuzz.sh --self-test`; available Clang libFuzzer lane | Existing battery deterministic seed | covered |
+| 06-02-01 | 02 | 2 | SHIP-01, SHIP-03 | T-06-04/05 | Three downloaded core archives resolve only public GabbaBoy::core on tested matrix | Package integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^preview_package_smoke$'`; hosted Linux/macOS/Windows asset receipts | Existing native Windows C/C++ relocated CI | covered |
+| 06-02-02 | 02 | 2 | SHIP-02, SHIP-03 | T-06-05/06 | Exact macOS player bytes pass legal load/input/frame/PCM/save/exit/reopen | Player integration | `bash tests/scripts/verify-phase3-player.sh`; downloaded asset receipt | Existing pinned SDL package verifier | covered |
+| 06-04-01 | 04 | 3 | SHIP-05, SHIP-03 | T-06-09 | Tracked ledger holds stable scope/corpus; separate post-tag sidecar binds tagged ledger blob digest to exact source SHA without self-reference | Ledger and sidecar validation | `python3 tests/scripts/verify-support-ledger.py --self-test`; post-tag sidecar check | Existing fixture/corpus manifests | covered |
+| 06-04-02 | 04 | 3 | SHIP-06, SHIP-03 | T-06-10 | Fixed workload trace pair has equal digest and measured variance | Baseline receipt | `bash tests/scripts/measure-release-baseline.sh --self-test` | Existing audio measurement receipt | covered |
+| 06-03-01 | 03 | 4 | SHIP-01, SHIP-04 | T-06-07/08 | Native C example uses relocated public API and host-owned battery | Consumer integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^preview_package_smoke$'` | Existing C/C++ relocated smoke | covered |
+| 06-03-02 | 03 | 4 | SHIP-04 | T-06-07/08 | Docs match example, tracked ledger/release-sidecar relationship, save/API behavior and Playstead boundary | Documentation + consumer | Relocated package smoke and documented build invocation | Existing README and cartridge/save docs | covered |
+| 06-07-01 | 07 | 5 | SHIP-03, SHIP-04 | T-06-16 | Tracked release notes, notices and guide are final before tag | Release documentation | Candidate self-test; notice/ledger link validation | Existing fixture manifests | covered |
+| 06-07-02 | 07 | 5 | SHIP-08 | T-06-16 | GitHub API coverage decisions include draft creation/status, forced tag and guarded retry before tag | API coverage | Candidate self-test; coverage matrix validation before seal | Existing workflow API calls | covered |
+| 06-06-01 | 06 | 6 | SHIP-08, SHIP-03 | T-06-13 | Final bot PR has all live exact-head checks; protected merge yields one unpublished draft/immediate tag; same-workflow outputs route candidate | Hosted gate | `bash .github/scripts/verify-release-gates.sh --self-test`; live `gh` merge/draft/tag/output evidence | Existing PR gate scripts | covered |
+| 06-06-02 | 06 | 6 | SHIP-01–SHIP-08 | T-06-13/14/15/17 | Existing draft stays unpublished through downloaded-byte smoke; only then exact qualified bytes and sidecar are published | Final release | Candidate and gate self-tests; release API draft-before/published-after, download/hash, sidecar and asset smoke | Draft release path planned in 06-01 | covered |
 
 ## Spec-less Edge Probe Assumptions
 
-The deterministic probe supplied 18 unresolved items and no resolved predicates. They remain explicit planning assumptions until the named tasks exercise them; no unclassified item is silently counted as covered. SHIP-01 and SHIP-03 are unclassified and require the package/release verifier to inspect malformed, absent, and contradictory identity data. SHIP-02 idempotency and concurrency require unchanged bytes on retry and an unpublished draft after interruption. SHIP-04 idempotency and concurrency require repeatable example runs and safe host battery replacement. SHIP-05 adjacency, empty, encoding, and ordering require duplicate/equal case handling, nonempty denominator, valid UTF-8, and stable case order. SHIP-06 boundary and precision require raw sample count/overflow/clock-precision handling. SHIP-07 boundary, precision, and concurrency require exact input/work/memory caps and deterministic finding replay. SHIP-08 adjacency, empty, and ordering require exact check-set equality, rejection of zero/missing checks, and current-head ordering. These assumptions are specified in tasks 06-01-01, 06-02-02, 06-03-01, 06-04-01/02, 06-05-01/02, and 06-06-01 respectively; execution must retain negative evidence and resolve the probe before claiming phase completion.
+The deterministic probe supplied 18 unresolved items and no resolved predicates. The named tasks exercised the applicable cases with negative fixtures, bounded fuzzing, repeatable relocated package/player smokes, exact source/check receipts, and unchanged-byte guarded retries. The final release reconciliation verified the published asset inventory and all digests. SHIP-01 and SHIP-03 are unclassified and require the package/release verifier to inspect malformed, absent, and contradictory identity data. SHIP-02 idempotency and concurrency require unchanged bytes on retry and an unpublished draft after interruption. SHIP-04 idempotency and concurrency require repeatable example runs and safe host battery replacement. SHIP-05 adjacency, empty, encoding, and ordering require duplicate/equal case handling, nonempty denominator, valid UTF-8, and stable case order. SHIP-06 boundary and precision require raw sample count/overflow/clock-precision handling. SHIP-07 boundary, precision, and concurrency require exact input/work/memory caps and deterministic finding replay. SHIP-08 adjacency, empty, and ordering require exact check-set equality, rejection of zero/missing checks, and current-head ordering. These assumptions are specified in tasks 06-01-01, 06-02-02, 06-03-01, 06-04-01/02, 06-05-01/02, and 06-06-01 respectively; execution must retain negative evidence and resolve the probe before claiming phase completion.
 
 The prohibition recall pass surfaced product-specific claim boundaries: do not portray the three-case corpus as game compatibility, software dummy devices as physical/perceptual proof, an unsigned player as Apple-verified, a preview Actions artifact as the release, or a future Playstead seam as live integration. These are carried as reviewable negative criteria in the support, player, release, and adopter tasks. Generic archive traversal, source authorization, and secret handling route to the STRIDE threat register rather than a fabricated prohibition check descriptor.
 
@@ -81,12 +81,20 @@ The prohibition recall pass surfaced product-specific claim boundaries: do not p
 
 ## Validation Sign-Off
 
-- [ ] Every planned task has an automated verifier or a specific Wave 0 dependency.
-- [ ] No three consecutive planned tasks lack automated verification.
-- [ ] Wave 0 covers all missing validation references.
-- [ ] Every executable verification command states an observable failing condition in its plan.
-- [ ] Exact candidate SHA, release asset bytes, and public claims are linked by receipts.
-- [ ] No manual-only or hardware limitation is presented as a passing automated result.
-- [ ] Set nyquist_compliant to true only after the plan map is complete and the validation audit has evidence.
+- [x] Every planned task has an automated verifier or a specific Wave 0 dependency.
+- [x] No three consecutive planned tasks lack automated verification.
+- [x] Wave 0 covers all missing validation references.
+- [x] Every executable verification command states an observable failing condition in its plan.
+- [x] Exact candidate SHA, release asset bytes, and public claims are linked by receipts.
+- [x] No manual-only or hardware limitation is presented as a passing automated result.
+- [x] Set nyquist_compliant to true only after the plan map is complete and the validation audit has evidence.
 
-**Status:** Draft. Planning must replace requirement-level rows with plan/task/wave assignments; execution must record actual results before this strategy can be marked validated.
+**Status:** Validated. All 14 planned task rows have automated checks or exact hosted evidence. The release is explicitly unsigned/not notarized and limited to the documented software evidence; physical and perceptual qualification and live Playstead integration remain excluded.
+
+## Validation Audit 2026-10-09
+
+| Metric | Count |
+|---|---|
+| Gaps found | 0 |
+| Resolved | 14 |
+| Escalated | 0 |

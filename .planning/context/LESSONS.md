@@ -236,3 +236,21 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** `tests/player/test_reset_transition.c` exercises Space pause/resume with exact PCM flush accounting and resumed PCM equality against an uninterrupted guest, plus R-reset save failure, cancel, retry, and persisted battery recovery. Final player/package CTest passed 50/50, and Phase 5 goal verification passed 22/22 at `d4d847abc9fd75229312c7530f2d69a7b2e08d94`.
 - **Source:** `tests/player/test_reset_transition.c`, Phase 5 verification and validation reports.
 - **Status:** Adopted for app-level lifecycle transition coverage; no hardware or perceptual claim follows from this software test.
+
+### GB-RELEASE-001 / 2026-10-09 / Review first-release changelog comparison links
+
+- **Cause and evidence:** The initial Release Please changelog rendered the `v0.1.0` entry as a comparison from `v0.1.0` to itself, which has an empty range and hides the release contents. The standard-depth Phase 6 review identified it at `CHANGELOG.md:3`.
+- **Remedy:** For a first release with no prior version tag, link the changelog entry directly to the published release page. Keep comparison links only when there is a real previous tag.
+- **Applies when:** Bootstrapping a repository's first generated changelog entry or another release stream whose previous comparison endpoint does not exist.
+- **Verification:** `CHANGELOG.md:3` now links to the `v0.1.0` release page; `06-REVIEW-DISPOSITION.md` records WR-01 fixed and zero open findings; `git diff --check` passed.
+- **Source:** `CHANGELOG.md`, `06-REVIEW.md`, and `06-REVIEW-DISPOSITION.md`.
+- **Status:** Fixed and verified for the initial v0.1.0 release.
+
+### GB-GSD-006 / 2026-10-09 / Make the project test gate explicit to GSD
+
+- **Cause and evidence:** The repository is CMake/CTest-based, but no `workflow.test_command` was configured. The GSD regression gate therefore resolved to a no-op `true`, which is not evidence that tests ran. The closeout caught this before accepting phase completion.
+- **Remedy:** Configure a project-specific test command for future phases, or make the workflow's documented fallback recognize CMake/CTest. Until corrected, invoke the repository's documented configure/build/CTest command directly and record the actual test denominator and result; do not count a no-op gate as validation. The owner-owned `.planning/config.json` scratch was preserved, not modified.
+- **Applies when:** A project uses a non-default build/test system and workflow automation derives its test command from configuration.
+- **Verification:** `cmake --preset phase1 -DGABBABOY_BUILD_PLAYER=OFF && cmake --build --preset phase1 --parallel 2 && ctest --preset phase1 --output-on-failure --no-tests=error` passed 176/176. The verifier report and `.planning/.continue-here.md` record the configured-command limitation and test result.
+- **Source:** `.planning/phases/GB-06-qualified-dmg-release-and-consumer-handoff/06-VERIFICATION.md`, `.planning/STATE.md`, and `.planning/.continue-here.md`.
+- **Status:** Phase 6 validation is evidenced; configure the GSD test command as follow-up workflow maintenance, without editing preserved owner scratch during this closeout.

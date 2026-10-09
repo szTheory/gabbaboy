@@ -52,14 +52,14 @@ Every requirement below must map to exactly one phase. Completion needs implemen
 
 ### Qualified release and adoption
 
-- [ ] **SHIP-01**: Clean, relocated release packages build and run external C/C++ consumers on the claimed host/compiler matrix, with no accidental private or SDL dependency in the core export.
-- [ ] **SHIP-02**: A packaged macOS player passes an automated load/input/video/audio/save/exit/reopen smoke using legal fixtures, and any remaining perceptual or device limitations are documented separately.
-- [ ] **SHIP-03**: The release workflow qualifies the exact downloaded artifact bytes against source revision/version/digests and ships notices and release notes; signing/notarization is claimed only when actually configured and verified.
-- [ ] **SHIP-04**: An adopter can follow current build, API ownership/time/input/output, integration, save recovery, support, upgrade, and troubleshooting documentation, including a reproducible Playstead-oriented native consumer example and an honest live-integration status.
-- [ ] **SHIP-05**: The release support ledger names the DMG revision, boot profile, mapper scope, corpus revision, executed eligible denominator, failures/exclusions, and known issues; CPU/image pass rates are not presented as all-game compatibility.
-- [ ] **SHIP-06**: Reproducible fixed-workload runs establish initial speed, memory/allocation, trace overhead, build, and CI baselines with output digests, samples, environment, and uncertainty; performance budgets follow measured variance and never trade correctness for score.
+- [x] **SHIP-01**: Clean, relocated release packages build and run external C/C++ consumers on the claimed host/compiler matrix, with no accidental private or SDL dependency in the core export.
+- [x] **SHIP-02**: A packaged macOS player passes an automated load/input/video/audio/save/exit/reopen smoke using legal fixtures, and any remaining perceptual or device limitations are documented separately.
+- [x] **SHIP-03**: The release workflow qualifies the exact downloaded artifact bytes against source revision/version/digests and ships notices and release notes; signing/notarization is claimed only when actually configured and verified.
+- [x] **SHIP-04**: An adopter can follow current build, API ownership/time/input/output, integration, save recovery, support, upgrade, and troubleshooting documentation, including a reproducible Playstead-oriented native consumer example and an honest live-integration status.
+- [x] **SHIP-05**: The release support ledger names the DMG revision, boot profile, mapper scope, corpus revision, executed eligible denominator, failures/exclusions, and known issues; CPU/image pass rates are not presented as all-game compatibility.
+- [x] **SHIP-06**: Reproducible fixed-workload runs establish initial speed, memory/allocation, trace overhead, build, and CI baselines with output digests, samples, environment, and uncertainty; performance budgets follow measured variance and never trade correctness for score.
 - [x] **SHIP-07**: Meaningful loader/battery/API fuzz targets and boundary regressions run under applicable sanitizers with bounded resources; minimized findings join fast regression coverage while longer exploration runs separately.
-- [ ] **SHIP-08**: Required PR checks, bot-triggered CI, merge eligibility, release triggering, cache behavior, and failure propagation are exercised on the target repository; no stale revision, skipped required lane, or untrusted privileged execution can authorize publication.
+- [x] **SHIP-08**: Required PR checks, bot-triggered CI, merge eligibility, release triggering, cache behavior, and failure propagation are exercised on the target repository; no stale revision, skipped required lane, or untrusted privileged execution can authorize publication.
 
 ## Next milestone requirements — GB/GBC breadth
 
@@ -119,14 +119,14 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | AUDIO-03 | Phase 5 | Complete |
 | HOST-01 | Phase 5 | Complete |
 | HOST-02 | Phase 5 | Complete |
-| SHIP-01 | Phase 6 | Pending |
-| SHIP-02 | Phase 6 | Pending |
-| SHIP-03 | Phase 6 | Pending |
-| SHIP-04 | Phase 6 | Pending |
-| SHIP-05 | Phase 6 | Pending |
-| SHIP-06 | Phase 6 | Pending |
+| SHIP-01 | Phase 6 | Complete — relocated C/C++ consumers passed on the claimed package matrix; see [verification](phases/GB-06-qualified-dmg-release-and-consumer-handoff/06-VERIFICATION.md) |
+| SHIP-02 | Phase 6 | Complete — packaged macOS scripted player smoke passed; physical/perceptual behavior remains unqualified |
+| SHIP-03 | Phase 6 | Complete — published v0.1.0 inventory reconciled 18/18 assets to source and digests |
+| SHIP-04 | Phase 6 | Complete — adopter docs and relocated Playstead-oriented example verified; no live GB adapter is claimed |
+| SHIP-05 | Phase 6 | Complete — versioned support ledger and source-bound sidecar verified |
+| SHIP-06 | Phase 6 | Complete — measured performance receipt verified; budgets remain advisory |
 | SHIP-07 | Phase 6 | Complete |
-| SHIP-08 | Phase 6 | Pending |
+| SHIP-08 | Phase 6 | Complete — exact-head/release gates and publication-order negatives verified |
 | CGB-01 | Next milestone | Deferred |
 | CGB-02 | Next milestone | Deferred |
 | CGB-03 | Next milestone | Deferred |
@@ -135,9 +135,9 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | STATE-01 | Next milestone | Deferred |
 | INT-01 | Next milestone | Deferred |
 
-**Active coverage:** 35/35 requirements mapped exactly once; 0 unmapped, 0 duplicates. Twenty-two are complete (BASE-01–08, CPU-01–05, VIDEO-01–05, and SAVE-01–04) and 13 remain pending (AUDIO/HOST and SHIP). Next-milestone requirements and later candidates are excluded from active coverage. Phase 4 completion evidence is recorded in [verification](phases/GB-04-mbc1-and-safe-battery-continuation/04-VERIFICATION.md), [validation](phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md), and [security](phases/GB-04-mbc1-and-safe-battery-continuation/04-SECURITY.md).
+**Active coverage:** 35/35 requirements mapped exactly once; all 35 are complete, with 0 unmapped, 0 duplicates, and 0 pending. Next-milestone requirements and later candidates are excluded from active coverage. Phase 6 goal-backward evidence is recorded in [verification](phases/GB-06-qualified-dmg-release-and-consumer-handoff/06-VERIFICATION.md), with review and security dispositions in the same phase directory.
 
 **Next-milestone traceability:** 7/7 GB/GBC breadth commitments are mapped to the next milestone and remain outside the active v0.1 count.
 
 ---
-Last updated: 2026-10-08 after Phase 4 goal verification; 22 active requirements are complete, 13 remain pending, and 7 next-milestone commitments are explicitly deferred.
+Last updated: 2026-10-09 after Phase 6 goal verification; all 35 active requirements are complete, and 7 next-milestone commitments are explicitly deferred.

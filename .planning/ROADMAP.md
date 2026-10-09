@@ -18,7 +18,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 - [x] **Phase 3: Visible Interactive DMG** - Play an original or permissioned ROM-only fixture in a macOS preview. (completed 2026-10-07)
 - [x] **Phase 4: MBC1 and Safe Battery Continuation** - Retain meaningful guest progress across fresh processes without corrupting good saves. (completed 2026-10-08)
 - [x] **Phase 5: DMG Audio and Stable Playback** - Hear paced sound and recover cleanly from host input/device transitions. (completed 2026-10-08)
-- [ ] **Phase 6: Qualified DMG Release and Consumer Handoff** - Download evidenced packages and reproduce native adoption with honest support claims.
+- [x] **Phase 6: Qualified DMG Release and Consumer Handoff** - Download evidenced packages and reproduce native adoption with honest support claims. (completed 2026-10-09)
 
 ## Phase Details
 
@@ -241,7 +241,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 
 ### Phase 6: Qualified DMG Release and Consumer Handoff
 
-**Goal**: Adopters can download a qualified limited-DMG release, reproduce native integration, and assess its actual compatibility, safety, and performance evidence.
+**Goal**: As a project adopter, I want to download a qualified limited-DMG release, reproduce native integration, and assess its actual compatibility, safety, and performance evidence, so that I can judge whether it fits my project and what its limits are.
 **Mode:** mvp
 **Depends on**: Phase 5
 **Requirements**: SHIP-01, SHIP-02, SHIP-03, SHIP-04, SHIP-05, SHIP-06, SHIP-07, SHIP-08
@@ -253,7 +253,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 4. An adopter can inspect a support ledger naming DMG revision, boot profile, mapper scope, corpus revision, executed eligible denominator, failures/exclusions, and known issues, alongside reproducible fixed-workload speed, memory/allocation, trace, build, and CI baselines with output digests, samples, environment, and uncertainty. Budgets follow measured variance; subset pass rates are not all-game compatibility. (SHIP-05, SHIP-06)
 5. Maintainers can reproduce bounded loader/battery/API fuzz and boundary-regression results under applicable sanitizers; minimized findings enter fast regression coverage while longer exploration remains separately runnable. (SHIP-07)
 
-**Plans**: 6/7 plans executed in 6 dependency-ordered waves
+**Plans**: 7/7 plans executed in 6 dependency-ordered waves; goal-backward verification passed 5/5 truths, all SHIP-01 through SHIP-08 are complete, the published v0.1.0 release has 18/18 assets reconciled, the current local CTest inventory passed 176/176, code review has zero open findings, and security review has zero high/blocking open threats. See [verification](phases/GB-06-qualified-dmg-release-and-consumer-handoff/06-VERIFICATION.md), [validation](phases/GB-06-qualified-dmg-release-and-consumer-handoff/06-VALIDATION.md), [review](phases/GB-06-qualified-dmg-release-and-consumer-handoff/06-REVIEW.md), and [security](phases/GB-06-qualified-dmg-release-and-consumer-handoff/06-SECURITY.md). Signing/notarization, physical hardware, perceptual playback, and live Playstead GB integration are not claimed.
 **Wave 1**
 - [x] 06-01-PLAN.md — Release-please draft and trusted Linux core candidate
 - [x] 06-05-PLAN.md — Loader/battery boundary regression and bounded fuzz
@@ -271,7 +271,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 - [x] 06-07-PLAN.md — Pre-tag release notes, legal notices, and API coverage
 
 **Wave 6** *(blocked on Wave 5 completion)*
-- [ ] 06-06-PLAN.md — Final protected tag, exact-byte release, and handoff
+- [x] 06-06-PLAN.md — Final protected tag, exact-byte release, and handoff
 
 **UI hint**: yes
 
@@ -284,7 +284,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 | 3. Visible Interactive DMG | 13/13 | Complete    | 2026-10-07 |
 | 4. MBC1 and Safe Battery Continuation | 7/7 | Complete    | 2026-10-08 |
 | 5. DMG Audio and Stable Playback | 7/7 | Complete    | 2026-10-08 |
-| 6. Qualified DMG Release and Consumer Handoff | 6/7 | In Progress | - |
+| 6. Qualified DMG Release and Consumer Handoff | 7/7 | Complete | 2026-10-09 |
 
 ## Execution Contract
 
@@ -292,4 +292,4 @@ All **35/35 active requirements** map to exactly one phase in [REQUIREMENTS.md](
 
 Automate authorized work within each phase, then inspect current verification/release/consumer evidence, update traceability and [lessons](context/LESSONS.md), triage issues/PRs, report limitations and the exact next command, and **stop**. Never auto-advance phases or milestones; keep both auto-advance flags false. Credential, hardware, or perceptual gaps must be recorded honestly with the smallest necessary human action, never converted into passing evidence. Remote/CI setup begins in Phase 1; absent access remains an explicit completion limitation.
 
-Phases 1–5 are independently verified complete; Phase 2 Plan 02-15 remains superseded/non-runnable. Phase 4's seven plans have execution summaries and its final 4/4 goal verification, core/player/installed package tests, exact hosted PR checks, and downloaded package evidence are recorded in its phase artifacts. Phase 5 passed 22/22 goal truths and its final local core/player/measurement gates; the phase reports preserve the hardware and perceptual evidence limits. Phase 6 — Qualified DMG Release and Consumer Handoff — has seven reviewed plans in six dependency-ordered waves; Plans 06-01 through 06-05 and 06-07 are complete, with Wave 6 Plan 06-06 remaining for the protected release gate. Resume with `$gsd-execute-phase 6`, then stop at the Phase 6 boundary.
+Phases 1–6 are independently verified complete; Phase 2 Plan 02-15 remains superseded/non-runnable. Phase 6 passed all five goal truths, completed all seven plans, reconciled 18/18 published release assets, passed the current 176/176 local CTest inventory, and closed code review and security review with no open findings or high/blocking threats. Physical hardware, perceptual output, signing/notarization, and live Playstead GB integration remain unqualified. The v0.1 milestone is ready for audit. No next phase number/title has been assigned; the next milestone direction is GB/GBC breadth. Continue with `$gsd-audit-milestone`, then stop for the owner.
