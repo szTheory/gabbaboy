@@ -5,9 +5,9 @@ current_phase: 03
 current_phase_name: Visible Interactive DMG
 status: executing
 stopped_at: Phase GB-03 canonical verification refresh; VIDEO-04 needs a current packaged-window observation
-last_updated: "2026-10-09T13:20:39Z"
+last_updated: "2026-10-09T13:32:11Z"
 last_activity: 2026-10-09
-last_activity_desc: Phase GB-03 fresh verification is human_needed at 4/5 truths; one current package check remains
+last_activity_desc: Phase GB-03 fresh verification is human_needed at 4/5 truths; exact GSD verification route persisted
 state_head: fdb11360a8e6baaf1930dae1d9131e8b6c188458
 progress:
   total_phases: 6
@@ -30,14 +30,14 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 
 ## Current Position
 
-Phase: GB-03 (Visible Interactive DMG) — canonical verification refresh next
+Phase: GB-03 (Visible Interactive DMG) — current packaged-player UAT pending
 Plans: 13 plans already have summaries; no plan execution remains
 Status: Phase 3 verification refresh is human_needed at 4/5 roadmap truths; stopped at the required phase boundary
 Last activity: 2026-10-09 — Phase GB-03 canonical verification refreshed
 
 All six phases have completed plan execution (56/56 runnable plans). Canonical verification passes for Phases 1, 2, 5, and 6; Phase 3 is `human_needed` at 4/5 truths and Phase 4 awaits refresh. Thirty active requirements have current passing evidence; VIDEO-04 and SAVE-01 through SAVE-04 remain open. Phase 3's current full local CTest passed 179/179, but the current packaged window and live Z response need a Mac observation because Phase 5 changed player input/event handling. See the [Phase 3 verification](phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md), [Phase 3 UAT](phases/GB-03-visible-interactive-dmg/03-UAT.md), [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md), and [v0.1 milestone audit](v0.1-MILESTONE-AUDIT.md).
 
-Phase 2 remains scoped to the three source-qualified derived CPU/timer reporting closures; no physical DMG-CPU-B observation or broad compatibility claim is made. Phase 6 software package/player checks do not establish physical hardware or perceptual behavior. Signing/notarization and live Playstead GB integration are not claimed. The v0.1 milestone is not ready to archive until Phases 3–4 have fresh canonical verification. Exact next command: `$gsd-execute-phase 3`.
+Phase 2 remains scoped to the three source-qualified derived CPU/timer reporting closures; no physical DMG-CPU-B observation or broad compatibility claim is made. Phase 6 software package/player checks do not establish physical hardware or perceptual behavior. Signing/notarization and live Playstead GB integration are not claimed. The v0.1 milestone is not ready to archive until Phases 3–4 have fresh canonical verification. Exact next command: `$gsd-verify-work GB-03-visible-interactive-dmg`.
 
 ## Performance Metrics
 
@@ -211,10 +211,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-09T13:20:39Z
+Last session: 2026-10-09T13:32:11Z
 Stopped at: Phase GB-03 canonical verification refresh; current packaged-player observation is pending
 Resume file: .planning/.continue-here.md
-Next command in fresh context: $gsd-verify-work
+Next command in fresh context: $gsd-verify-work GB-03-visible-interactive-dmg
 Continuation note: [.continue-here.md](.continue-here.md)
 Completed workflow stage: Phase 3 — Visible Interactive DMG canonical verification refresh. Current verification passed 4/5 roadmap truths; the full CTest suite passed 179/179, and source/security reviews are recorded. VIDEO-04 remains `human_needed`: on a display-equipped Mac, launch the current packaged player with its bundled demo, confirm the demo is visible, then hold and release Z to confirm the target tile darkens and restores. The prior 2026-10-08 user observation remains evidence for the earlier package only. The v0.1 milestone remains unarchived.
-Next phase: Phase 4 — MBC1 and Safe Battery Continuation, only after Phase 3 verification closes. Exact next command: `$gsd-verify-work`. Stop at the Phase 3 boundary; do not auto-advance.
+Next phase: Phase 4 — MBC1 and Safe Battery Continuation, only after Phase 3 verification closes. Exact next command: `$gsd-verify-work GB-03-visible-interactive-dmg`. After Phase 3 passes, current runtime reports Phase 4 verification stale and routes to `$gsd-execute-phase GB-04-mbc1-and-safe-battery-continuation`; refresh progress before running that later command. Stop at the Phase 3 boundary; do not auto-advance.
