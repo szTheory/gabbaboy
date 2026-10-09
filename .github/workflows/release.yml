@@ -831,9 +831,10 @@ jobs:
             [[ "$count" -le 1 ]] || { echo "Duplicate release evidence asset: $name" >&2; exit 1; }
           done
           if [[ $(jq '[.[] | select(.name == "release-performance-receipt.json")] | length' <<<"$assets") == 1 ]]; then
-            mkdir -p build/existing
-            gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern release-performance-receipt.json --dir build/existing
-            RELEASE_CHECK_HEAD_SHA="$pr_head_sha" python3 - "$SOURCE_SHA" "$RELEASE_TAG" build/existing/release-performance-receipt.json <<'PY'
+            existing_performance_dir="build/existing/release-performance-receipt.json"
+            mkdir -p "$existing_performance_dir"
+            gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern release-performance-receipt.json --dir "$existing_performance_dir"
+            RELEASE_CHECK_HEAD_SHA="$pr_head_sha" python3 - "$SOURCE_SHA" "$RELEASE_TAG" "$existing_performance_dir/release-performance-receipt.json" <<'PY'
           import json, pathlib, sys
           import os
           source, tag, path = sys.argv[1:]
@@ -841,7 +842,7 @@ jobs:
           if data.get("source_sha") != source or data.get("release_tag") != tag or data.get("trace_pair_digest_equal") is not True or data.get("hosted_check_head_sha") != os.environ["RELEASE_CHECK_HEAD_SHA"]:
               raise SystemExit("Existing performance receipt is stale or invalid")
           PY
-            cp build/existing/release-performance-receipt.json build/
+            cp "$existing_performance_dir/release-performance-receipt.json" build/
           else
             SOURCE_SHA="$SOURCE_SHA" RELEASE_TAG="$RELEASE_TAG" EXPECTED_CHECK_HEAD_SHA="$pr_head_sha" HOSTED_CHECKS_JSON=build/hosted-check-runs.json \
               bash tests/scripts/measure-release-baseline.sh --self-test
@@ -863,9 +864,10 @@ jobs:
             # shellcheck disable=SC2016
             count=$(gh api "repos/$GH_REPO/releases/$release_id/assets?per_page=100" | jq --arg name "$name" '[.[] | select(.name == $name)] | length')
             if [[ "$count" == 1 ]]; then
-              mkdir -p build/existing
-              gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern "$name" --dir build/existing
-              cmp -s "build/$name" "build/existing/$name" || { echo "Existing release evidence differs: $name" >&2; exit 1; }
+              existing_dir="build/existing/$name"
+              mkdir -p "$existing_dir"
+              gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern "$name" --dir "$existing_dir"
+              cmp -s "build/$name" "$existing_dir/$name" || { echo "Existing release evidence differs: $name" >&2; exit 1; }
             else
               gh release upload "$RELEASE_TAG" "build/$name" --repo "$GH_REPO"
             fi
