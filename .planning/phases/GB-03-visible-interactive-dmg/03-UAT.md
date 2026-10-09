@@ -1,14 +1,14 @@
 ---
-status: testing
+status: complete
 phase: GB-03-visible-interactive-dmg
 source: [03-01-SUMMARY.md, 03-02-SUMMARY.md, 03-03-SUMMARY.md, 03-04-SUMMARY.md, 03-05-SUMMARY.md, 03-06-SUMMARY.md, 03-07-SUMMARY.md, 03-08-SUMMARY.md, 03-09-SUMMARY.md, 03-10-SUMMARY.md, 03-11-SUMMARY.md, 03-12-SUMMARY.md, 03-13-SUMMARY.md]
 started: 2026-10-08T00:52:50Z
-updated: 2026-10-09T13:20:39Z
+updated: 2026-10-09T14:19:23.730Z
 ---
 
 ## Current Test
 
-[testing: current packaged-window check remains]
+[testing complete]
 
 ## Tests
 
