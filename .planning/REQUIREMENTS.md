@@ -21,11 +21,11 @@ Every requirement below must map to exactly one phase. Completion needs implemen
 
 ### DMG CPU, bus, and time
 
-- [ ] **CPU-01**: The declared DMG profile executes the documented base and CB SM83 instruction sets with correct tested flag, arithmetic, address, and bus-access timing behavior; illegal opcode behavior is explicit.
-- [ ] **CPU-02**: The core produces the expected interrupt entry, EI delay, HALT/HALT-bug, STOP, reset, and deterministic post-boot behavior under model-applicable tests.
-- [ ] **CPU-03**: Memory mapping, divider/timer edges and reload races, and disconnected serial behavior match declared DMG evidence at observable access boundaries.
-- [ ] **CPU-04**: Equal timestamped inputs and emulated time produce equal supported state/output when execution is partitioned differently; LCD-off, HALT/STOP, lockup, and exhausted output capacity return within the caller's bounded contract.
-- [ ] **CPU-05**: A headless run reports pass/fail/timeout/unsupported for an explicitly pinned eligible CPU/timer corpus with expected protocol and model/boot configuration, retaining enough trace evidence to reproduce failures.
+- [x] **CPU-01**: The declared DMG profile executes the documented base and CB SM83 instruction sets with correct tested flag, arithmetic, address, and bus-access timing behavior; illegal opcode behavior is explicit.
+- [x] **CPU-02**: The core produces the expected interrupt entry, EI delay, HALT/HALT-bug, STOP, reset, and deterministic post-boot behavior under model-applicable tests.
+- [x] **CPU-03**: Memory mapping, divider/timer edges and reload races, and disconnected serial behavior match declared DMG evidence at observable access boundaries.
+- [x] **CPU-04**: Equal timestamped inputs and emulated time produce equal supported state/output when execution is partitioned differently; LCD-off, HALT/STOP, lockup, and exhausted output capacity return within the caller's bounded contract.
+- [x] **CPU-05**: A headless run reports pass/fail/timeout/unsupported for an explicitly pinned eligible CPU/timer corpus with expected protocol and model/boot configuration, retaining enough trace evidence to reproduce failures.
 
 ### Visible interactive DMG
 
@@ -100,11 +100,11 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | BASE-06 | Phase 1 | Complete — canonical verification passed 5/5; see [verification](phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md) |
 | BASE-07 | Phase 1 | Complete — canonical verification passed 5/5; see [verification](phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md) |
 | BASE-08 | Phase 1 | Complete — exact PR #35 required checks and package evidence verified; see [verification](phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md) |
-| CPU-01 | Phase 2 | Pending re-verification — historical report passed; current canonical report stale |
-| CPU-02 | Phase 2 | Pending re-verification — historical report passed; current canonical report stale |
-| CPU-03 | Phase 2 | Pending re-verification — historical report passed; current canonical report stale |
-| CPU-04 | Phase 2 | Pending re-verification — historical report passed; current canonical report stale |
-| CPU-05 | Phase 2 | Pending re-verification — historical report passed; current canonical report stale |
+| CPU-01 | Phase 2 | Complete — canonical verification passed 5/5; see [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md) |
+| CPU-02 | Phase 2 | Complete — canonical verification passed 5/5; see [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md) |
+| CPU-03 | Phase 2 | Complete — canonical verification passed 5/5; see [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md) |
+| CPU-04 | Phase 2 | Complete — canonical verification passed 5/5; see [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md) |
+| CPU-05 | Phase 2 | Complete — canonical verification passed 5/5; see [verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md) |
 | VIDEO-01 | Phase 3 | Pending re-verification — historical report passed; current canonical report stale |
 | VIDEO-02 | Phase 3 | Pending re-verification — historical report passed; current canonical report stale |
 | VIDEO-03 | Phase 3 | Pending re-verification — historical report passed; current canonical report stale |
