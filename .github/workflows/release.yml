@@ -831,7 +831,7 @@ jobs:
             [[ "$count" -le 1 ]] || { echo "Duplicate release evidence asset: $name" >&2; exit 1; }
           done
           if [[ $(jq '[.[] | select(.name == "release-performance-receipt.json")] | length' <<<"$assets") == 1 ]]; then
-            existing_performance_dir="build/existing/release-performance-receipt.json"
+            existing_performance_dir="build/existing/performance-validation"
             mkdir -p "$existing_performance_dir"
             gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern release-performance-receipt.json --dir "$existing_performance_dir"
             RELEASE_CHECK_HEAD_SHA="$pr_head_sha" python3 - "$SOURCE_SHA" "$RELEASE_TAG" "$existing_performance_dir/release-performance-receipt.json" <<'PY'
@@ -864,7 +864,7 @@ jobs:
             # shellcheck disable=SC2016
             count=$(gh api "repos/$GH_REPO/releases/$release_id/assets?per_page=100" | jq --arg name "$name" '[.[] | select(.name == $name)] | length')
             if [[ "$count" == 1 ]]; then
-              existing_dir="build/existing/$name"
+              existing_dir="build/existing/asset-readback/$name"
               mkdir -p "$existing_dir"
               gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern "$name" --dir "$existing_dir"
               cmp -s "build/$name" "$existing_dir/$name" || { echo "Existing release evidence differs: $name" >&2; exit 1; }
