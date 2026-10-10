@@ -132,6 +132,31 @@ except ValueError:
     pass
 else:
     raise SystemExit("release workflow self-test accepted publication before the final downloaded-byte gate")
+def validate_verified_output_contract(text):
+    # The player verifier helper rejects the checkout and its descendants, so a
+    # checkout-relative output only fails after the draft and tag already exist.
+    name = "GBB_VERIFIED_OUTPUT_DIR"
+    assignments = re.findall(name + r"""\s*[:=]\s*(?:"([^"\n]*)"|'([^'\n]*)'|([^\s"']*))""", text)
+    if text.count(name) != len(assignments):
+        raise ValueError(f"{name} is used in a form the release contract cannot check; assign it explicitly under $RUNNER_TEMP")
+    for quoted_double, quoted_single, bare in assignments:
+        value = quoted_double or quoted_single or bare
+        if ".." in value.split("/") or not re.match(r"(\$RUNNER_TEMP|\$\{RUNNER_TEMP\}|\$\{\{\s*runner\.temp\s*\}\})(/|$)", value):
+            raise ValueError(f"{name} must be rooted at a runner temp location, not the checkout: {value!r}")
+try:
+    validate_verified_output_contract(workflow)
+except ValueError as error:
+    raise SystemExit(str(error))
+# Rewrite every existing assignment, or add one when the workflow relies on the verifier default.
+mutated_output = re.sub(r"(GBB_VERIFIED_OUTPUT_DIR\s*[:=]\s*)(?:\"[^\"\n]*\"|'[^'\n]*'|[^\s\"']*)", lambda m: m.group(1) + "build/release-player-downloaded", workflow)
+if mutated_output == workflow:
+    mutated_output = workflow + "\nGBB_VERIFIED_OUTPUT_DIR=build/release-player-downloaded\n"
+try:
+    validate_verified_output_contract(mutated_output)
+except ValueError:
+    pass
+else:
+    raise SystemExit("release workflow self-test accepted a verified output directory inside the checkout")
 if "workflow_call:" not in workflow or "uses: ./.github/workflows/release.yml" not in entrypoint:
     raise SystemExit("release-please outputs and candidate jobs are not connected in one workflow run")
 PY
