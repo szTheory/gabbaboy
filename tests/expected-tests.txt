@@ -182,3 +182,14 @@ mooneye_required_suite
 mooneye_case_daa
 mooneye_case_tim00
 mooneye_case_tim00-div-trigger
+libbet_admission_pass
+libbet_admission_self_test
+libbet_admission_empty_assets
+libbet_admission_missing_record
+libbet_admission_unknown_licence
+libbet_admission_bad_digest
+libbet_admission_bad_header
+libbet_notice
+libbet_install_tree
+libbet_not_installed
+libbet_not_installed_selftest
