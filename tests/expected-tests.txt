@@ -223,3 +223,4 @@ acceptance_unexpected_pass
 acceptance_unknown_model
 acceptance_observe_only_flag
 acceptance_suite_invalid_expect_excluded
+acceptance_ldbb_observe_daa

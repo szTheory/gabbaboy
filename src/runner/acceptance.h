@@ -10,6 +10,8 @@
  * to the process working directory; the repository CTests set that directory
  * to the repository root. */
 
+#include "gabbaboy/gabbaboy.h"
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -95,6 +97,29 @@ int gbb_case_model_known(const char *model);
  * model_pass (the parser forbids a model in both). A NULL revision means the model token. */
 gbb_case_applicability_kind gbb_case_applicability(const gbb_case *c, const char *model,
                                                    const char *revision);
+
+/* ---- LD B,B frame capture (EVID-01, D-24) ----
+ * One helper serves the frame-digest@ldbb case-file oracle and Mooneye --observe, so both paths
+ * produce the same canonical digest. The frame is the latest one completed at or before the first
+ * executed LD B,B (opcode 0x40); a frame that completes after it is never used. */
+#define GBB_LDBB_FRAME_BYTES 23040u /* 160 x 144 shade bytes */
+
+typedef struct {
+    int reached;                    /* an LD B,B executed within the budget */
+    uint64_t ldbb_half_dots;        /* time of that instruction */
+    uint16_t pc;
+    uint8_t b, c, d, e, h, l;       /* registers at the LD B,B */
+    int frame_ready;                /* a completed frame existed (GBB_FRAME_NOT_READY otherwise) */
+    uint64_t completion_half_dots;
+    uint64_t generation;
+    char digest[65];                /* canonical D-24 digest, valid when frame_ready */
+    uint8_t pixels[GBB_LDBB_FRAME_BYTES];
+} gbb_ldbb_capture;
+
+/* Runs `instance` (already loaded, freshly created) for at most budget_half_dots. Returns 0 when
+ * the capture was filled (check out->reached and out->frame_ready), 1 when allocation fails, 2 when
+ * the frame holds an invalid shade. */
+int gbb_runner_capture_ldbb(gbb_instance *instance, uint64_t budget_half_dots, gbb_ldbb_capture *out);
 
 typedef struct {
     int receipt;                  /* print a provenance line after the status line */

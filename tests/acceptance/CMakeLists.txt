@@ -156,3 +156,36 @@ gbb_add_acceptance_exit(acceptance_observe_only_flag 2
 gbb_add_acceptance_exit(acceptance_suite_invalid_expect_excluded 2
   "reason=invalid-expect-excluded" 30
   "--acceptance;${GBB_CASES};--suite;--expect-excluded;x1")
+
+# LD B,B frame capture controls (EVID-01, D-24, D-26). ldbb-controls.txt may only carry the stdlib
+# uniform-3 digest as a reference, so a digest captured from this emulator cannot be committed there
+# as an oracle. The check runs at configure time and fails the configure, not a test.
+execute_process(
+  COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/rgb-digest-vector.py --uniform 3
+  OUTPUT_VARIABLE gbb_uniform3_digest RESULT_VARIABLE gbb_uniform3_rc OUTPUT_STRIP_TRAILING_WHITESPACE)
+if(NOT gbb_uniform3_rc EQUAL 0 OR NOT gbb_uniform3_digest MATCHES "^[0-9a-f]+$")
+  message(FATAL_ERROR "rgb-digest-vector.py --uniform 3 failed (rc=${gbb_uniform3_rc})")
+endif()
+set(GBB_LDBB_CONTROLS tests/acceptance/ldbb-controls.txt)
+set(GBB_LDBB_CONTROLS_FILE ${PROJECT_SOURCE_DIR}/${GBB_LDBB_CONTROLS})
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GBB_LDBB_CONTROLS_FILE})
+file(STRINGS ${GBB_LDBB_CONTROLS_FILE} gbb_ldbb_lines REGEX "reference_digest=")
+set(gbb_ldbb_refs 0)
+foreach(gbb_line IN LISTS gbb_ldbb_lines)
+  if(gbb_line MATCHES "^#")
+    continue()
+  endif()
+  string(REGEX MATCH "reference_digest=([^ ]*)" gbb_unused "${gbb_line}")
+  if(NOT "${CMAKE_MATCH_1}" STREQUAL "${gbb_uniform3_digest}")
+    message(FATAL_ERROR "${GBB_LDBB_CONTROLS_FILE}: reference_digest ${CMAKE_MATCH_1} is not the stdlib "
+      "rgb-digest-vector.py --uniform 3 digest ${gbb_uniform3_digest} (D-26: no self-captured references)")
+  endif()
+  math(EXPR gbb_ldbb_refs "${gbb_ldbb_refs} + 1")
+endforeach()
+if(gbb_ldbb_refs EQUAL 0)
+  message(FATAL_ERROR "${GBB_LDBB_CONTROLS_FILE}: no reference_digest found")
+endif()
+
+gbb_add_acceptance_exit(acceptance_ldbb_observe_daa 0
+  "acceptance[.]daa-ldbb[.]checkpoint[.]ldbb[.]frame\t${gbb_hex64_re}\nacceptance[.]daa-ldbb[.]class\tregression" 30
+  "--acceptance;${GBB_LDBB_CONTROLS};--case;daa-ldbb;--observe")

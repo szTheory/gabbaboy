@@ -320,6 +320,235 @@ static int fail_run(const gbb_case *c, const gbb_acceptance_options *options, co
     return EXIT_FAIL;
 }
 
+/* ---- LD B,B and timed frame capture (EVID-01, D-24) ---- */
+
+#define CAPTURE_CHUNK UINT64_C(2048)
+#define CAPTURE_TRACE 128u
+
+_Static_assert(GBB_LDBB_FRAME_BYTES == GBB_ACCEPT_FRAME_SHADE_BYTES, "frame buffer size");
+
+typedef struct {
+    uint8_t pixels[GBB_LDBB_FRAME_BYTES];
+    gbb_frame_info info;
+} scratch_frame;
+
+/* A chunk is at most 2048 half-dots and a frame lasts 140448, so at most one frame completes per
+ * chunk and "latest frame at or before time T" needs only the frame held before the chunk and the
+ * one seen after it. */
+static int copy_latest(gbb_instance *instance, scratch_frame *frame) {
+    return gbb_copy_frame(instance, frame->pixels, sizeof(frame->pixels), FRAME_PITCH, &frame->info) == GBB_OK;
+}
+
+static int finish_capture(gbb_ldbb_capture *out) {
+    if (!out->frame_ready) return 0;
+    return gbb_accept_rgb_digest(out->pixels, FRAME_PITCH, out->digest) == 0 ? 0 : 2;
+}
+
+int gbb_runner_capture_ldbb(gbb_instance *instance, uint64_t budget_half_dots, gbb_ldbb_capture *out) {
+    memset(out, 0, sizeof(*out));
+    scratch_frame *next = malloc(sizeof(*next));
+    gbb_trace_record *trace = malloc(CAPTURE_TRACE * sizeof(*trace));
+    if (next == NULL || trace == NULL) {
+        free(next);
+        free(trace);
+        return 1;
+    }
+    uint64_t elapsed = 0, held_generation = 0;
+    while (elapsed < budget_half_dots) {
+        uint64_t slice = budget_half_dots - elapsed < CAPTURE_CHUNK ? budget_half_dots - elapsed : CAPTURE_CHUNK;
+        gbb_run_result r = gbb_run(instance, slice, trace, CAPTURE_TRACE);
+        elapsed += r.consumed_half_dots;
+        const gbb_trace_record *hit = NULL;
+        for (size_t i = 0; i < r.trace_count && hit == NULL; ++i) {
+            if (trace[i].opcode[0] == 0x40u) hit = &trace[i];
+        }
+        bool fresh = copy_latest(instance, next) && (!out->frame_ready || next->info.generation != held_generation);
+        if (hit != NULL) {
+            if (fresh && next->info.completion_half_dots <= hit->time_half_dots) {
+                memcpy(out->pixels, next->pixels, sizeof(out->pixels));
+                out->frame_ready = 1;
+                out->completion_half_dots = next->info.completion_half_dots;
+                out->generation = next->info.generation;
+            }
+            out->reached = 1;
+            out->ldbb_half_dots = hit->time_half_dots;
+            out->pc = hit->pc;
+            out->b = hit->b; out->c = hit->c; out->d = hit->d;
+            out->e = hit->e; out->h = hit->h; out->l = hit->l;
+            break;
+        }
+        if (fresh) {
+            memcpy(out->pixels, next->pixels, sizeof(out->pixels));
+            out->frame_ready = 1;
+            out->completion_half_dots = next->info.completion_half_dots;
+            out->generation = held_generation = next->info.generation;
+        }
+        if (r.consumed_half_dots == 0) break;
+        if (r.reason != GBB_STOP_BUDGET && r.reason != GBB_STOP_TRACE_FULL && r.reason != GBB_STOP_HALTED_IDLE) break;
+    }
+    free(next);
+    free(trace);
+    return finish_capture(out);
+}
+
+/* frame-digest@t=<n>: the first frame whose completion is at or after n. */
+static int capture_frame_at(gbb_instance *instance, uint64_t at_half_dots, uint64_t budget_half_dots,
+                            gbb_ldbb_capture *out) {
+    memset(out, 0, sizeof(*out));
+    scratch_frame *next = malloc(sizeof(*next));
+    if (next == NULL) return 1;
+    uint64_t elapsed = 0, seen_generation = 0;
+    bool seen = false;
+    while (elapsed < budget_half_dots && !out->frame_ready) {
+        uint64_t slice = budget_half_dots - elapsed < CAPTURE_CHUNK ? budget_half_dots - elapsed : CAPTURE_CHUNK;
+        gbb_run_result r = gbb_run(instance, slice, NULL, 0);
+        elapsed += r.consumed_half_dots;
+        if (copy_latest(instance, next) && (!seen || next->info.generation != seen_generation)) {
+            seen = true;
+            seen_generation = next->info.generation;
+            if (next->info.completion_half_dots >= at_half_dots) {
+                memcpy(out->pixels, next->pixels, sizeof(out->pixels));
+                out->frame_ready = 1;
+                out->completion_half_dots = next->info.completion_half_dots;
+                out->generation = next->info.generation;
+            }
+        }
+        if (r.consumed_half_dots == 0) break;
+        if (r.reason != GBB_STOP_BUDGET && r.reason != GBB_STOP_HALTED_IDLE) break;
+    }
+    free(next);
+    return finish_capture(out);
+}
+
+/* Frame-digest verdicts (D-26): every one is class=regression, because no frame-digest case has an
+ * independent oracle this phase. An expected failure (model_fail) counts only for its declared reason. */
+static int frame_fail(const gbb_case *c, const gbb_acceptance_options *options, const char *reason,
+                      const char *observed, uint64_t end_half_dots, const uint8_t *pixels) {
+    if (options != NULL && options->expect_fail && options->expect_fail_reason != NULL &&
+        strcmp(options->expect_fail_reason, reason) == 0) {
+        printf("acceptance id=%s status=xfail model=dmg-cpu-b reason=%s class=regression end_half_dots=%llu\n", c->id,
+               reason, (unsigned long long)end_half_dots);
+        if (options->xfailed != NULL) *options->xfailed = 1;
+        return EXIT_PASS;
+    }
+    char observed_note[96], ppm_note[MAX_DIR_BYTES + 160u];
+    observed_note[0] = ppm_note[0] = '\0';
+    if (observed != NULL) snprintf(observed_note, sizeof(observed_note), " observed=%s", observed);
+    if (options != NULL && options->failure_dir != NULL && pixels != NULL) {
+        char name[96], path[MAX_DIR_BYTES + 128u];
+        snprintf(name, sizeof(name), "%s.ppm", c->id);
+        if (join_path(path, sizeof(path), options->failure_dir, name) &&
+            gbb_accept_write_ppm(path, pixels, FRAME_PITCH) == 0) {
+            snprintf(ppm_note, sizeof(ppm_note), " ppm=%s", path);
+        } else {
+            snprintf(ppm_note, sizeof(ppm_note), " ppm=write-failed");
+        }
+    }
+    printf("acceptance id=%s status=fail model=dmg-cpu-b reason=%s class=regression%s end_half_dots=%llu%s\n", c->id,
+           reason, observed_note, (unsigned long long)end_half_dots, ppm_note);
+    return EXIT_FAIL;
+}
+
+static int run_frame_case(const gbb_case *c, const gbb_acceptance_options *options) {
+    const bool observe = options != NULL && options->observe;
+    uint8_t *rom = NULL;
+    size_t rom_length = 0;
+    gbb_instance *instance = NULL;
+    gbb_ldbb_capture *capture = NULL;
+    char digest[65];
+    int code = EXIT_INVALID;
+
+    if (options != NULL && (options->observe_input_script != NULL || options->has_frame_digest_at || options->pcm_only)) {
+        return input_error(c, "observe-flag-not-applicable");
+    }
+    int rc = gbb_runner_read_file(c->rom, GBB_CASES_MAX_ROM_BYTES, &rom, &rom_length);
+    if (rc != 0) { code = input_error(c, rc == 1 ? "rom-missing" : "rom-unreadable"); goto done; }
+    if (rom_length != c->rom_size) { code = input_error(c, "rom-size-mismatch"); goto done; }
+    gbb_accept_sha256_hex(rom, rom_length, digest);
+    if (strcmp(digest, c->rom_sha256) != 0) { code = input_error(c, "rom-digest-mismatch"); goto done; }
+    if (options != NULL && options->failure_dir != NULL && !probe_directory(options->failure_dir)) {
+        code = input_error(c, "failure-dir-unwritable");
+        goto done;
+    }
+    const char *dump_dir = observe ? options->dump_dir : NULL;
+    if (dump_dir != NULL && !probe_directory(dump_dir)) { code = input_error(c, "dump-dir-unwritable"); goto done; }
+
+    capture = malloc(sizeof(*capture));
+    if (capture == NULL || gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) != GBB_OK) {
+        fprintf(stderr, "runner-error: instance allocation failed\n");
+        goto done;
+    }
+    if (gbb_load_rom(instance, rom, rom_length) != GBB_OK) { code = input_error(c, "rom-rejected"); goto done; }
+
+    const bool at_ldbb = c->oracle == GBB_ORACLE_FRAME_DIGEST_LDBB;
+    rc = at_ldbb ? gbb_runner_capture_ldbb(instance, c->budget_half_dots, capture)
+                 : capture_frame_at(instance, c->oracle_half_dots, c->budget_half_dots, capture);
+    if (rc != 0) {
+        printf("acceptance id=%s status=unsupported model=dmg-cpu-b reason=%s\n", c->id,
+               rc == 1 ? "capture-allocation" : "frame-invalid");
+        code = EXIT_UNSUPPORTED;
+        goto done;
+    }
+    char label[48];
+    if (at_ldbb) snprintf(label, sizeof(label), "ldbb");
+    else snprintf(label, sizeof(label), "t%llu", (unsigned long long)c->oracle_half_dots);
+
+    if (observe) {
+        if (dump_dir != NULL && capture->frame_ready) {
+            char name[128], path[MAX_DIR_BYTES + 128u];
+            snprintf(name, sizeof(name), "%s.%s.ppm", c->id, label);
+            if (!join_path(path, sizeof(path), dump_dir, name) ||
+                gbb_accept_write_ppm(path, capture->pixels, FRAME_PITCH) != 0) {
+                fprintf(stderr, "acceptance id=%s status=invalid reason=dump-write-failed\n", c->id);
+                goto done;
+            }
+        }
+        observe_lines *out = malloc(sizeof(*out));
+        if (out == NULL) {
+            fprintf(stderr, "runner-error: observation allocation failed\n");
+            goto done;
+        }
+        out->count = 0;
+        char key[96];
+        emit_line(out, c->id, "class", "regression");
+        if (at_ldbb) {
+            if (capture->reached) emit_line(out, c->id, "ldbb_half_dots", "%llu", (unsigned long long)capture->ldbb_half_dots);
+            else emit_line(out, c->id, "ldbb_half_dots", "none");
+        }
+        snprintf(key, sizeof(key), "checkpoint.%s.completion_half_dots", label);
+        if (capture->frame_ready) emit_line(out, c->id, key, "%llu", (unsigned long long)capture->completion_half_dots);
+        else emit_line(out, c->id, key, "none");
+        snprintf(key, sizeof(key), "checkpoint.%s.frame", label);
+        emit_line(out, c->id, key, "%s", capture->frame_ready ? capture->digest : "none");
+        qsort(out->lines, out->count, OBSERVE_LINE_BYTES, compare_lines);
+        for (size_t i = 0; i < out->count; ++i) printf("%s\n", out->lines[i]);
+        free(out);
+        code = EXIT_PASS;
+        goto done;
+    }
+
+    if (at_ldbb && !capture->reached) {
+        code = frame_fail(c, options, "ldbb-not-reached", NULL, c->budget_half_dots, NULL);
+    } else if (!capture->frame_ready) {
+        code = frame_fail(c, options, "frame-not-ready", NULL, at_ldbb ? capture->ldbb_half_dots : c->budget_half_dots, NULL);
+    } else if (strcmp(capture->digest, c->reference_digest) != 0) {
+        code = frame_fail(c, options, "frame-mismatch", capture->digest, capture->completion_half_dots, capture->pixels);
+    } else if (options != NULL && options->expect_fail) {
+        printf("acceptance id=%s status=unexpected-pass model=dmg-cpu-b class=regression\n", c->id);
+        code = EXIT_FAIL;
+    } else {
+        printf("acceptance id=%s status=pass model=dmg-cpu-b class=regression end_half_dots=%llu\n", c->id,
+               (unsigned long long)capture->completion_half_dots);
+        code = EXIT_PASS;
+    }
+
+done:
+    gbb_destroy(instance);
+    free(capture);
+    free(rom);
+    return code;
+}
+
 int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *options) {
     uint8_t *script_bytes = NULL, *rom = NULL;
     size_t script_length = 0, rom_length = 0;
@@ -332,11 +561,7 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
     const bool observe = options != NULL && options->observe;
     memset(&script, 0, sizeof(script));
 
-    if (c->oracle != GBB_ORACLE_PROGRESS_PREDICATE) {
-        /* Frame-digest oracles are wired by a later plan; refuse rather than guess. */
-        fprintf(stderr, "acceptance id=%s status=unsupported reason=unsupported-oracle\n", c->id);
-        return EXIT_UNSUPPORTED;
-    }
+    if (c->oracle != GBB_ORACLE_PROGRESS_PREDICATE) return run_frame_case(c, options);
 
     /* Input script: digest over the raw bytes first, then syntax. Under --observe only, an explicit
      * script replaces the case script and is not digest-pinned (it can never produce a pass). */
