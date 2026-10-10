@@ -2,9 +2,9 @@
 gsd_state_version: "1.0"
 milestone: v0.1
 status: executing
-stopped_at: Phase 06.1 inserted after Phase 6 (v0.1 audit tech-debt cleanup) — not planned yet
-last_updated: "2026-10-10T13:12:55.312Z"
-state_head: 06c723b5574941ecff7ebefc4b40a9714b7aa495
+stopped_at: Phase 06.1 context gathered
+last_updated: "2026-10-10T14:06:17.746Z"
+state_head: a9dc378dc8b7defb891353612e316503479a6729
 progress:
   total_phases: 7
   completed_phases: 6
@@ -13,8 +13,8 @@ progress:
   verified_phases: 6
 milestone_name: limited DMG preview
 last_activity: 2026-10-10
-current_phase: 06.1
-current_phase_name: Address v0.1 tech debt: CI workflow info items and audio consumer coverage
+current_phase: "06.1"
+current_phase_name: "Address v0.1 tech debt: CI workflow info items and audio consumer coverage"
 last_activity_desc: Inserted Phase 06.1 to close v0.1 audit tech debt before milestone completion
 ---
 
@@ -25,7 +25,7 @@ last_activity_desc: Inserted Phase 06.1 to close v0.1 audit tech debt before mil
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage (inserted, not planned)
+**Current focus:** Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage (context gathered, not planned)
 
 ## Current Position
 
@@ -232,13 +232,13 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-10T14:30:00Z
-Stopped at: Phase 06.1 inserted (v0.1 audit tech-debt cleanup) — not planned yet
-Resume file: .planning/.continue-here.md
+Last session: 2026-10-10T14:06:17.542Z
+Stopped at: Phase 06.1 context gathered
+Resume file: .planning/phases/GB-06.1-address-v0-1-tech-debt-ci-workflow-info-items-and-audio-cons/06.1-CONTEXT.md
 Next command in fresh context: `$gsd-plan-phase 06.1` (Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage)
 Continuation note: [.continue-here.md](.continue-here.md)
 Completed workflow stage: **Phase 2 — DMG CPU, Bus and Time verification freshness refresh** (2026-10-10). Canonical verification passed 5/5 truths and CPU-01–05 at `a9050df` on `gsd/phase-02-verification-refresh-2`. Gates: Nyquist 0 gaps, security 45/45 closed, code review 1 info deferred with 0 open dispositions, regression 179/179 core. No hosted-CI, physical-hardware or perceptual result is claimed.
 
 Completed workflow stage: **v0.1 milestone audit** (2026-10-10) — `tech_debt`, 35/35 requirements, 0 blockers.
 
-Completed workflow stage: **Phase 06.1 insertion** (2026-10-10) after the audit PR #53 merged as `06c723b`. Next: **`$gsd-plan-phase 06.1`**; after Phase 06.1 verifies, re-run `$gsd-audit-milestone v0.1` and then `$gsd-complete-milestone v0.1`.
+Completed workflow stage: **Phase 06.1 context gathering** (2026-10-10) on branch `gsd/phase-06.1-address-v0-1-tech-debt-ci-workflow-info-items-and-audio-cons` (11 locked decisions in `06.1-CONTEXT.md`: fix all 7 info items, C/C++ installed-consumer audio smoke on Windows/Linux/macOS, newest-run exact-head gate script, code PR then docs-only refresh PR). Next: **`$gsd-plan-phase 06.1`** (research first); after Phase 06.1 verifies, re-run `$gsd-audit-milestone v0.1` and then `$gsd-complete-milestone v0.1`.
