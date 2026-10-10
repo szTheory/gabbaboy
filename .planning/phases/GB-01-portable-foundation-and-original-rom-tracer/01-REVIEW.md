@@ -1,39 +1,47 @@
 ---
 phase: GB-01-portable-foundation-and-original-rom-tracer
-reviewed: 2026-10-09T12:07:32Z
+reviewed: 2026-10-10T12:29:54Z
 depth: standard
-files_reviewed: 6
+files_reviewed: 4
 files_reviewed_list:
-  - src/runner/main.c
-  - tests/CMakeLists.txt
-  - tests/expected-tests.txt
-  - tests/test_api.c
-  - tests/test_instance_concurrency.c
-  - tests/verify_runner_help.cmake
+  - .github/workflows/ci.yml
+  - .github/workflows/preview.yml
+  - .gitignore
+  - README.md
 findings:
   critical: 0
   warning: 0
-  info: 0
-  total: 0
-status: clean
+  info: 2
+  total: 2
+status: issues_found
 ---
 
 # Phase 1: Code Review Report
 
-**Reviewed:** 2026-10-09T12:07:32Z
+**Reviewed:** 2026-10-10T12:29:54Z
 **Depth:** standard
-**Files Reviewed:** 6 (recheck of the incremental Phase 1 runner and test changes)
-**Status:** clean
+**Files Reviewed:** 4 (verification-freshness re-review of changes since 96f76de)
+**Status:** issues_found
 
 ## Summary
 
-This recheck covers the six listed source and test files and does not replace the earlier full Phase 1 review. The two newest findings are resolved: the Windows partial thread-creation path releases and joins the worker before destroying its instances, and `runner_help` checks the ROM, manifest-case, and manifest-suite invocation forms. The reset test asserts each post-reset run's outcome, budget, trace bound, and RAM write; the concurrency test exercises distinct ROM immediates and expected RAM values; and the CTest watchdog includes the concurrent test with a 30-second timeout. No current findings remain. This was a source review; no tests were run as part of this recheck. Earlier review records are preserved below.
+Incremental re-review of `ci.yml`, `preview.yml`, `.gitignore`, and `README.md` against the diff since 96f76de. The removal of the `labeled` trigger and `run-macos-player` gate is internally consistent. In `ci.yml`, `macos-player-package` runs only on `pull_request`; `required-native` sets `PLAYER_REQUESTED` under the same condition, so PRs require `success`, while pushes accept `skipped` (the else-branch stays correct). `preview.yml` triggers only on `pull_request` to `main`, so the player job is unconditional, and its exact-head lookup (full-SHA check, `head_sha` and event filters, requiring both `macos-player-package` and `required-native` success) matches the CI job and aggregate names. Artifact name `phase3-player-candidate-<run>-<attempt>` matches between upload and download. `.gitignore` `__pycache__/` is benign. README additions do not contradict the workflows (remaining "optional" wording refers to the SDL3 player component, not the CI gate); the PR #35 head SHA is a plausible commit-hash form, but the cited run IDs and digests were not re-fetched. No tests or remote runs were executed. No critical or warning findings. Two info items follow, then the preserved earlier history.
 
 ## Narrative Findings (AI reviewer)
 
-No current findings.
+### IN-01: Unreachable "optional player" branch left in the preview aggregate
 
-## Recheck Outcome
+**File:** `.github/workflows/preview.yml:242,255-258`
+**Issue:** The workflow only triggers on `pull_request`, so `PLAYER_REQUESTED` (`github.event_name == 'pull_request'`) is always `true`. The `!= true` branch and its "Unexpected optional macOS player verification result" message are dead and retain the obsolete "optional" wording.
+**Fix:** Drop `PLAYER_REQUESTED` and the dead branch, and require `PLAYER_RESULT == success` unconditionally.
+
+### IN-02: Exact-head lookup can fail on a stale failed run when a newer same-SHA run is still in progress
+
+**File:** `.github/workflows/preview.yml:165-192`
+**Issue:** Runs are iterated newest first, and in-progress runs are skipped (`continue`). A completed older same-SHA run whose player job or `required-native` failed (for example before a `reopened` event creates a fresh run for the same head) causes an immediate `exit 1`, even though a newer run may still succeed. Re-runs of the same run keep the run ID, so only the reopened or duplicate-run case is affected. The behavior predates this diff but now matters more, because the player job is required for every PR.
+**Fix:** Evaluate only the newest same-SHA run (`.[0]`). Alternatively, fail on a bad conclusion only after no in-progress run remains, and keep polling while one exists.
+
+## Recheck Outcome (2026-10-09 rechecks)
 
 - **Latest WR-01 — Resolved.** `tests/test_instance_concurrency.c:91-98` releases the start gate, waits for `threads[0]`, closes its handle, and only then destroys either instance when creation of the second Windows thread fails. The first-thread creation failure has no worker to join.
 - **Latest WR-02 — Resolved.** `tests/verify_runner_help.cmake:14-24` checks `Usage:`, the ROM invocation, the manifest `--case` invocation, and the manifest `--suite` invocation. `tests/CMakeLists.txt:248-251` registers this check as `runner_help`, and `tests/expected-tests.txt:170` includes it in the expected inventory.

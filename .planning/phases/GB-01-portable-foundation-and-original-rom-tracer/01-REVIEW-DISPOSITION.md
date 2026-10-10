@@ -15,9 +15,17 @@ findings:
     severity: warning
     disposition: fixed
     title: "RGBDS release archive is version-named but not digest-pinned"
+  - id: IN-01
+    severity: info
+    disposition: deferred
+    title: "Unreachable optional-player branch left in the preview aggregate"
+  - id: IN-02
+    severity: info
+    disposition: deferred
+    title: "Exact-head lookup can fail on a stale failed run while a newer same-SHA run is in progress"
 open: 0
-total: 3
-recorded: 2026-10-03T17:31:34.594Z
+total: 5
+recorded: 2026-10-10T12:31:00Z
 ---
 
 # Phase 01: Code Review Disposition
@@ -27,6 +35,8 @@ recorded: 2026-10-03T17:31:34.594Z
 | CR-01 | critical | fixed | 01-REVIEW-FIX.md (not in the current review) |
 | CR-02 | critical | fixed | 01-REVIEW-FIX.md (not in the current review) |
 | WR-01 | warning | fixed | 01-REVIEW-FIX.md (not in the current review) |
+| IN-01 | info | deferred | 2026-10-10 freshness review. Dead `PLAYER_REQUESTED != true` branch in `preview.yml`; the gate is already strict (the workflow only triggers on `pull_request`, so player `success` is always required). Deferred to the next CI-workflow change because editing `preview.yml` would re-stale the GB-03 and GB-05 verification reports that cover it. |
+| IN-02 | info | deferred | 2026-10-10 freshness review. Fails closed (blocks, never passes a wrong revision); only reachable when a second same-SHA CI run exists. Deferred with IN-01 for the same covered-file reason; rerunning the failed check is the current recovery. |
 
 Dispositions: `open` (recorded, not yet triaged), `fixed`, `skipped`, `deferred`.
 Set `deferred` by hand and put the reason in the Source cell; both are preserved. A `|` in the reason is kept as prose and escaped on the next run.

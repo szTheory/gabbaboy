@@ -1,6 +1,6 @@
 ---
 phase: GB-01-portable-foundation-and-original-rom-tracer
-verified: 2026-10-09T17:48:35Z
+verified: 2026-10-10T12:32:19Z
 status: passed
 score: 21/21 must-haves verified
 covered_files:
@@ -20,12 +20,6 @@ covered_files:
   - .planning/phases/GB-01-portable-foundation-and-original-rom-tracer/01-04-SUMMARY.md
   - .planning/phases/GB-01-portable-foundation-and-original-rom-tracer/01-05-PLAN.md
   - .planning/phases/GB-01-portable-foundation-and-original-rom-tracer/01-05-SUMMARY.md
-  - .planning/phases/GB-01-portable-foundation-and-original-rom-tracer/01-REVIEW-DISPOSITION.md
-  - .planning/phases/GB-01-portable-foundation-and-original-rom-tracer/01-REVIEW-FIX.md
-  - .planning/phases/GB-01-portable-foundation-and-original-rom-tracer/01-REVIEW.md
-  - .planning/phases/GB-01-portable-foundation-and-original-rom-tracer/01-SECURITY.md
-  - .planning/phases/GB-01-portable-foundation-and-original-rom-tracer/01-UI-REVIEW.md
-  - .planning/phases/GB-01-portable-foundation-and-original-rom-tracer/01-VALIDATION.md
   - .planning/phases/GB-01-portable-foundation-and-original-rom-tracer/GB-01-01-SUMMARY.md
   - .planning/phases/GB-01-portable-foundation-and-original-rom-tracer/GB-01-02-SUMMARY.md
   - CMakeLists.txt
@@ -56,17 +50,23 @@ covered_files:
   - tests/test_loader.c
   - tests/test_tracer.c
   - tests/verify_runner_help.cmake
-covered_digest: "v3:sha256:41ef08134f51b1214992ee27c5bd18d2561c6b53d6b6d445c21f5c7f7415dc81"
+covered_digest: "v3:sha256:e4a348907f6e91c59e122390e30e7b02097a97cc70c986ec629b1847cce8da9d"
 behavior_unverified: 0
 overrides_applied: 0
+re_verification:
+  previous_status: passed
+  previous_score: 21/21
+  gaps_closed: []
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 1: Portable Foundation and Original ROM Tracer Verification Report
 
 **Phase Goal:** As a developer, I want to run an original ROM with an installable GB core via a bounded API, so that I can embed it.
-**Verified:** 2026-10-09T17:48:35Z
+**Verified:** 2026-10-10T12:32:19Z
 **Status:** passed
-**Re-verification:** Yes — refreshed the stale report against the current integrated worktree; no previous `gaps:` section existed.
+**Re-verification:** Yes — verification-freshness refresh of a `passed` 21/21 report (2026-10-09T17:48:35Z) that went stale after covered files changed; no previous `gaps:` section existed. Worktree: branch `gsd/phase-01-verification-refresh` at 9287994 on origin/main 93b53d5.
 
 ## User Flow Coverage
 
@@ -75,10 +75,10 @@ The roadmap phase is in MVP mode and its user story passed `user-story.validate`
 | Step | Expected | Evidence | Status |
 |---|---|---|---|
 | Configure and build | Developer builds the C17 core and runner with documented CMake/Ninja/CTest commands after dependency preparation, without SDL or network access in the normal build path. | `CMakePresets.json`, `CMakeLists.txt`, `README.md`; recorded exact-revision CMake-floor and native CI evidence in `01-VALIDATION.md`. | ✓ VERIFIED |
-| Install and embed | Installed package exposes public headers and `GabbaBoy::core` to external C and C++ consumers. | Current `preview_package_smoke` passed as part of the 29-test run; it archives, relocates, and exercises the installed package and external consumers. | ✓ VERIFIED |
-| Run original ROM | Authored tracer ROM executes guest instructions and yields guest-derived pass and bounded trace. | Current runner invocation returned `outcome=pass`, `half_dots=199984`, `trace_records=8335`, starting at PC `0100`; `tracer_success`, `tracer_trace`, and `tracer_smoke` passed. | ✓ VERIFIED |
+| Install and embed | Installed package exposes public headers and `GabbaBoy::core` to external C and C++ consumers. | Current `preview_package_smoke` passed (test 179/179 in this refresh's full run); it archives, relocates, and exercises the installed package and external consumers. | ✓ VERIFIED |
+| Run original ROM | Authored tracer ROM executes guest instructions and yields guest-derived pass and bounded trace. | Current runner invocation (`build/gabbaboy-runner fixtures/tracer/tracer.gb`) returned `outcome=pass`, `half_dots=199984`, `trace_records=8335`, starting at PC `0100`; `tracer_success`, `tracer_trace`, and `tracer_smoke` passed. | ✓ VERIFIED |
 | Handle bounded errors | Bad ROM input and unsupported guest behavior return explicit bounded outcomes while preserving a valid instance. | Current named loader boundary/non-destructive tests and tracer failure/unsupported/timeout/capacity cases passed. | ✓ VERIFIED |
-| Obtain qualified preview | Contributor can use configured PR checks and download only a revision-linked smoke-tested preview with explicit limits. | `01-VALIDATION.md` records exact PR #35 head, required contexts, artifact digests/sidecars/expiry, and extracted Linux/macOS package smoke. This prior hosted evidence was reused, not rerun. | ✓ VERIFIED |
+| Obtain qualified preview | Contributor can use configured PR checks and download only a revision-linked smoke-tested preview with explicit limits. | `01-VALIDATION.md` records exact PR #35 head, required contexts, artifact digests/sidecars/expiry, and extracted Linux/macOS package smoke. This prior hosted evidence is historical (tied to the old PR #35 head) and was not rerun; exact-head CI for this refresh is pending the PR, which is not yet opened. | ✓ VERIFIED |
 
 ## Goal Achievement
 
@@ -101,7 +101,7 @@ The roadmap phase is in MVP mode and its user story passed `user-story.validate`
 | 01-01 | Bounded half-dot progress, structured stop, and retained trace are returned. | ✓ VERIFIED | Current output reports bounded budget and trace; run-bounds/trace-capacity tests pass. |
 | 01-01 | Profile, fixture, opcode inventory, and limits are precise. | ✓ VERIFIED | Header, manifest, README, and fixture evidence specify bootless DMG-CPU-B scope and exclusions. |
 | 01-02 | Opaque instance lifecycle and contract are documented and usable independently. | ✓ VERIFIED | Header/core inspected; lifecycle, reset, independence, and concurrency cases pass. |
-| 01-02 | Invalid/truncated/oversized/unsupported ROMs fail without replacing valid state. | ✓ VERIFIED | Current 15 loader cases include `loader_non_destructive`; all pass. |
+| 01-02 | Invalid/truncated/oversized/unsupported ROMs fail without replacing valid state. | ✓ VERIFIED | Current loader cases include `loader_non_destructive`; all pass. |
 | 01-02 | Underflow, unsupported opcode, trace exhaustion, guest failure, and timeout remain distinct bounded results. | ✓ VERIFIED | Current bounded API and tracer outcome cases pass. |
 | 01-03 | Documented offline core/runner configure/build/test/install path works. | ✓ VERIFIED | Current package smoke passes; exact floor and native hosted runs are recorded. |
 | 01-03 | Relocated external C/C++ consumers use only installed public package and run tracer. | ✓ VERIFIED | Current `preview_package_smoke` passed; hosted consumer evidence is recorded. |
@@ -123,7 +123,7 @@ All plan-declared artifacts passed `query verify.artifacts`: 01-01 5/5, 01-02 3/
 |---|---|---|
 | Build and public API: `CMakePresets.json`, `include/gabbaboy/gabbaboy.h`, `src/core/gabbaboy.c`, `src/runner/main.c`, `CMakeLists.txt` | ✓ VERIFIED | Substantive C17 API/core/runner and build/install targets; direct ROM run and focused tests pass. |
 | Fixture: `fixtures/tracer/{manifest.json,tracer.asm,tracer.gb,LICENSE.txt}` | ✓ VERIFIED | Original source/notice, digest, pinned recipe, boot/model applicability, protocol, and timeout; digest and hosted reproduction evidence pass. |
-| Tests: `tests/test_api.c`, `tests/test_instance_concurrency.c`, `tests/test_loader.c`, `tests/test_tracer.c`, consumer sources/CMake, inventory and test CMake | ✓ VERIFIED | 29 current focused checks pass, including C/C++ relocation package smoke. |
+| Tests: `tests/test_api.c`, `tests/test_instance_concurrency.c`, `tests/test_loader.c`, `tests/test_tracer.c`, consumer sources/CMake, inventory and test CMake | ✓ VERIFIED | 179 current checks pass (including the focused Phase 1 cases), including C/C++ relocation package smoke. |
 | Package: `cmake/GabbaBoyConfig.cmake.in`, `cmake/VerifyInstalledPackage.cmake`, `cmake/PreviewPackageSmoke.cmake`, `cmake/RunInstalledConsumer.cmake`, `cmake/VerifyArtifactSidecar.cmake`, `cmake/VerifyFixture.cmake`, `cmake/ExpectedTests.cmake` | ✓ VERIFIED | CMake target/export and relocated package flow traced; current package smoke passes. |
 | CI and preview: `.github/workflows/{ci,fixture-repro,preview}.yml`, `.github/scripts/{verify-cmake-floor.sh,verify-pr-evidence.sh,verify-test-inventory.sh,safe_extract_package.py}` | ✓ VERIFIED | Fail-closed workflow and package evidence wiring inspected; prior exact-revision hosted evidence is recorded. |
 | Contributor/evidence: `README.md`, `01-VALIDATION.md`, `01-SECURITY.md`, `01-REVIEW.md`, `01-REVIEW-FIX.md`, `01-REVIEW-DISPOSITION.md`, `01-UI-REVIEW.md` | ✓ VERIFIED | Current scope and evidence inspected; security records zero open threats and review disposition is clean. |
@@ -160,9 +160,10 @@ The generic key-link query reported lexical false negatives for most C/CMake/CI 
 
 | Behavior | Command | Result | Status |
 |---|---|---|---|
-| Phase 1 focused suite, including loader, tracer, lifecycle, concurrency, fixture, and installed package | `ctest --test-dir build --output-on-failure --no-tests=error -R '^(instance_lifecycle|independent_instances|reset_idempotency|run_bounds|trace_capacity|concurrent_independent_instances|loader_.*|tracer_.*|tracer_smoke|fixture_digest|runner_help|preview_package_smoke)$'` | 29/29 passed in 7.28 seconds. | ✓ PASS |
+| Full local inventory (loader, tracer, lifecycle, concurrency, fixture, runner, installed package) | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error` (re-run by verifier; orchestrator also ran it) | 179/179 passed, 2.23 s ctest time; includes `preview_package_smoke` (1.38 s). | ✓ PASS |
 | Original guest execution | `./build/gabbaboy-runner fixtures/tracer/tracer.gb` | `outcome=pass`, `half_dots=199984`, `trace_records=8335`; trace begins at PC `0100`. | ✓ PASS |
-| Full local inventory | Recorded in `01-VALIDATION.md` | 179/179 passed in existing phase validation; not rerun in this refresh. | ✓ PASS (recorded evidence) |
+| Fixture digest | `shasum -a 256 fixtures/tracer/tracer.gb` vs `fixtures/tracer/manifest.json` | `ded6a499...ec8d` matches manifest `sha256`. | ✓ PASS |
+| Required-CI gate logic | Inspect `.github/workflows/ci.yml` `required-native` aggregate | `PLAYER_REQUESTED` is true on `pull_request`; a non-success player result fails the gate; pushes accept skipped. `macos-player-package` is in `needs`. Consistent with removal of the label gate. | ✓ PASS (static inspection) |
 
 ### Probe Execution
 
@@ -214,9 +215,9 @@ None. This foundation phase has no user-facing UI or physical-device requirement
 
 ### Gaps Summary
 
-No phase-goal or requirement gaps were found. The stale status was an evidence-fingerprint freshness issue; this report is refreshed against the integrated worktree and its current implementation inputs. The 29 named Phase 1 checks passed, and the direct original-ROM execution passed. Exact hosted CI, fixture reproduction, and preview artifact evidence is reused from the phase validation ledger and remains tied to its recorded tested PR head; it was not rerun during this refresh. No physical Game Boy hardware qualification is claimed.
+No phase-goal or requirement gaps were found. The stale status was an evidence-fingerprint freshness issue caused by: `.github/workflows/ci.yml` and `preview.yml` (GB-03 PR #40 removed the `labeled` trigger and `run-macos-player` gate, so the macOS player lane is now required on every pull request; the aggregate gate, exact-head lookup, and job names were inspected and are consistent), `.gitignore` (`__pycache__/`), `README.md` (PR #35 evidence paragraph), and refreshed phase docs. None alter the Phase 1 core, API, fixture, or tests. This refresh re-ran the full local suite (179/179) and the direct original-ROM execution. The fresh code review recorded 0 critical / 0 warning / 2 info findings, both deferred in `01-REVIEW-DISPOSITION.md` with rationale. Prior exact-head hosted CI, fixture reproduction, and preview artifact evidence (PR #35) is historical, reused from the validation ledger, and not rerun; **exact-head hosted CI for this refresh revision is pending the PR, which has not been opened, and no remote result is claimed for it.** No physical Game Boy hardware qualification is claimed.
 
 ---
 
-_Verified: 2026-10-09T17:48:35Z_
+_Verified: 2026-10-10T12:32:19Z_
 _Verifier: the agent (gsd-verifier)_
