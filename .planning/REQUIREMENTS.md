@@ -76,16 +76,44 @@ Deferred to v0.3 States & Integration (provisional) or later:
 
 ## Traceability
 
-Filled during roadmap creation.
+Every v0.2 requirement maps to exactly one phase in [ROADMAP.md](ROADMAP.md).
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| GAME-01 | Phase 7 | Pending |
+| GAME-02 | Phase 7 | Pending |
+| GAME-03 | Phase 7 | Pending |
+| EVID-01 | Phase 7 | Pending |
+| EVID-02 | Phase 7 | Pending |
+| CART-01 | Phase 8 | Pending |
+| CART-02 | Phase 8 | Pending |
+| CART-03 | Phase 8 | Pending |
+| CART-04 | Phase 9 | Pending |
+| CART-05 | Phase 9 | Pending |
+| CART-06 | Phase 9 | Pending |
+| RTC-01 | Phase 9 | Pending |
+| RTC-02 | Phase 9 | Pending |
+| RTC-03 | Phase 9 | Pending |
+| CGB-01 | Phase 10 | Pending |
+| CGB-02 | Phase 10 | Pending |
+| CGB-03 | Phase 10 | Pending |
+| CGB-04 | Phase 11 | Pending |
+| CGB-05 | Phase 11 | Pending |
+| CGB-06 | Phase 12 | Pending |
+| CGB-07 | Phase 13 | Pending |
+| CGB-08 | Phase 14 | Pending |
+| CGB-09 | Phase 11 | Pending |
+| CGB-10 | Phase 14 | Pending |
+| CGB-11 | Phase 15 | Pending |
+| SHIP-09 | Phase 15 | Pending |
+| SHIP-10 | Phase 15 | Pending |
+| SHIP-11 | Phase 15 | Pending |
 
 **Coverage:**
 - v0.2 requirements: 28 total
-- Mapped to phases: 0
-- Unmapped: 28 ⚠️
+- Mapped to phases: 28
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-10-10*
-*Last updated: 2026-10-10 after v0.2 research*
+*Last updated: 2026-10-10 after v0.2 roadmap creation (Phases 7–15)*
