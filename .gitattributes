@@ -6,3 +6,13 @@ fixtures/mbc1-continuation/continuation.asm text eol=lf
 fixtures/mbc1-continuation/manifest.json text eol=lf
 fixtures/mbc1-continuation/LICENSE.txt text eol=lf
 fixtures/mbc1-continuation/continuation.gb -text
+
+# Libbet is a third-party fixture; its ROM bytes and digested text must survive Windows checkouts.
+fixtures/libbet/libbet.gb -text
+fixtures/libbet/manifest.json text eol=lf
+fixtures/libbet/LICENSE.txt text eol=lf
+fixtures/libbet/SOURCES.md text eol=lf
+
+# Acceptance cases, input scripts, negative files and the DMG baseline ledger are digested text.
+tests/acceptance/** text eol=lf
+tests/baseline/** text eol=lf
