@@ -66,8 +66,11 @@ These five low-severity dispositions were marked `accept` in the phase plans. Th
 |------------|---------------|--------|------|--------|
 | 2026-10-09 | 21 | 21 | 0 | gsd-security-auditor; orchestrator |
 | 2026-10-10 (freshness) | 21 | 21 | 0 | orchestrator (ASVS L1 short-circuit) |
+| 2026-10-10 (after 06.1) | 21 | 21 | 0 | orchestrator (ASVS L1 short-circuit) |
 
 The 2026-10-10 freshness check re-read the workflow mitigations after GB-03 (#40) removed the `labeled` trigger and the `run-macos-player` label gate from `ci.yml` and `preview.yml`. Both workflows still trigger only on `pull_request`/`push` (no `pull_request_target`), keep read-only token permissions (`contents: read`, plus `actions: read` in preview), and pin every action to a full commit SHA, so the workflow-privilege threats remain closed. The change narrows the trigger surface and makes the player lane required rather than optional.
+
+The post-06.1 freshness check re-read the workflow mitigations at the PR #54 merge `ab76d09c2ee27ba09fc5f3c2510af016aebfdecb`. `ci.yml` still triggers on `pull_request` (opened, synchronize, reopened) and `push` with `contents: read`; `preview.yml` still triggers only on `pull_request` to `main` with `actions: read` and `contents: read`. No `pull_request_target` appears and every `uses:` line is pinned to a 40-hex commit SHA. The new `.github/scripts/wait-exact-head-ci.py` issues only GET requests through `gh api` with an argv list (no shell), and `.github/scripts/check-player-result.sh` fails closed on a failed or empty gate result. Both strengthen the exact-revision gating of 05 / T-GB01-01 rather than widening any privilege, so all 21 threats stay closed.
 
 ## Sign-Off
 
