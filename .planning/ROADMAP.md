@@ -19,6 +19,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 - [x] **Phase 4: MBC1 and Safe Battery Continuation** - Retain meaningful guest progress across fresh processes without corrupting good saves. (implementation completed 2026-10-08; canonical verification refreshed 2026-10-09)
 - [x] **Phase 5: DMG Audio and Stable Playback** - Hear paced sound and recover cleanly from host input/device transitions. (implementation completed 2026-10-08; refreshed verification passed 17/17 truths on 2026-10-10 after the shared helper and FIFO-open changes)
 - [x] **Phase 6: Qualified DMG Release and Consumer Handoff** - Download evidenced packages and reproduce native adoption with honest support claims. (implementation completed 2026-10-09; refreshed verification passed 5/5 again on 2026-10-10 after the release output-path and withdrawal-reporting fixes)
+- [x] **Phase 06.1: Address v0.1 tech debt: CI workflow info items and audio consumer coverage (INSERTED)** - Close the audit debt without widening any v0.1 claim. (completed 2026-10-10; verification passed 4/4; every audit tech_debt line fixed or re-deferred with a reason and trigger)
 
 ## Phase Details
 
@@ -286,6 +287,7 @@ Research basis: [2026-10-02 synthesis](research/SUMMARY.md), [hardware and valid
 | 4. MBC1 and Safe Battery Continuation | 7/7 | Complete    | 2026-10-08 |
 | 5. DMG Audio and Stable Playback | 7/7 | Complete    | 2026-10-09 |
 | 6. Qualified DMG Release and Consumer Handoff | 7/7 | Complete    | 2026-10-09 |
+| 06.1. Address v0.1 tech debt (INSERTED) | 8/8 | Complete    | 2026-10-10 |
 
 ## Execution Contract
 
@@ -293,7 +295,7 @@ All **35 active requirements** map exactly once to Phases 1–6 in [REQUIREMENTS
 
 Automate authorized work within each phase, then inspect current verification/release/consumer evidence, update traceability and [lessons](context/LESSONS.md), triage issues/PRs, report limitations and the exact next command, and **stop**. Never auto-advance phases or milestones; keep both auto-advance flags false. Credential, hardware, or perceptual gaps must be recorded honestly with the smallest necessary human action, never converted into passing evidence. Remote/CI setup begins in Phase 1; absent access remains an explicit completion limitation.
 
-All six phases have completed plan execution (56/56 runnable plans); Phase 2 Plan 02-15 remains superseded/non-runnable. The current canonical gate accepts all six phases. The 2026-10-10 strict three-source milestone audit at `f03e9b1` reports `tech_debt`: 35/35 requirements satisfied, 12/12 integration groups and 5/5 E2E flows wired, no blockers ([audit](v0.1-MILESTONE-AUDIT.md)). Earlier Phase 2–6 test, package, release, and exact-head evidence remains in individual validation reports. The admitted corpus remains three source-qualified derived headless reporting closures. No physical hardware, broad compatibility, perceptual output, signing/notarization, or live Playstead GB integration is claimed. Completed workflow stage: **Phase 1 — Portable Foundation and Original ROM Tracer verification freshness refresh** (2026-10-10) passed 21/21 truths and BASE-01 through BASE-08 at `ebce345`; local evidence 179/179 CTest, tracer runner pass, fixture digest match. No hosted CI is claimed for this revision. PR #41 (release 0.1.1) remains open; GitHub reports no checks, so it is not green. Quick task 261010-bz3 then credited CPU-02 (02-16) and CPU-05 (02-16, 02-17). Completed workflow stage: **Phase 2 — DMG CPU, Bus and Time verification freshness refresh** (2026-10-10) passed 5/5 truths and CPU-01–05 at `a9050df`; all six phase reports are fresh. Completed workflow stage: **v0.1 milestone audit** (tech_debt, no blockers). The owner chose to close the audit debt first: Phase 06.1 was inserted (2026-10-10). Next command: `$gsd-plan-phase 06.1`. Stop after each stage; keep the milestone executing until the owner completes it. Do not auto-advance.
+All six phases have completed plan execution (56/56 runnable plans); Phase 2 Plan 02-15 remains superseded/non-runnable. The current canonical gate accepts all six phases. The 2026-10-10 strict three-source milestone audit at `f03e9b1` reports `tech_debt`: 35/35 requirements satisfied, 12/12 integration groups and 5/5 E2E flows wired, no blockers ([audit](v0.1-MILESTONE-AUDIT.md)). Earlier Phase 2–6 test, package, release, and exact-head evidence remains in individual validation reports. The admitted corpus remains three source-qualified derived headless reporting closures. No physical hardware, broad compatibility, perceptual output, signing/notarization, or live Playstead GB integration is claimed. Completed workflow stage: **Phase 1 — Portable Foundation and Original ROM Tracer verification freshness refresh** (2026-10-10) passed 21/21 truths and BASE-01 through BASE-08 at `ebce345`; local evidence 179/179 CTest, tracer runner pass, fixture digest match. No hosted CI is claimed for this revision. PR #41 (release 0.1.1) remains open; GitHub reports no checks, so it is not green. Quick task 261010-bz3 then credited CPU-02 (02-16) and CPU-05 (02-16, 02-17). Completed workflow stage: **Phase 2 — DMG CPU, Bus and Time verification freshness refresh** (2026-10-10) passed 5/5 truths and CPU-01–05 at `a9050df`; all six phase reports are fresh. Completed workflow stage: **v0.1 milestone audit** (tech_debt, no blockers). The owner chose to close the audit debt first: Phase 06.1 was inserted (2026-10-10). Completed workflow stage: **Phase 06.1 execution and verification** (2026-10-10): code PR #54 and docs-only refresh PR #55 merged at exact green heads, all six earlier phases fresh, Phase 06.1 verification passed 4/4. Next command: `$gsd-audit-milestone v0.1` (owner re-runs the milestone audit). Stop after each stage; keep the milestone executing until the owner completes it. Do not auto-advance.
 
 ### Phase 06.1: Address v0.1 tech debt: CI workflow info items and audio consumer coverage (INSERTED)
 
@@ -306,7 +308,7 @@ All six phases have completed plan execution (56/56 runnable plans); Phase 2 Pla
 3. Workflow edits land in a single batched change; every phase whose verification it makes stale (1, 2, 3, 6 as applicable) is re-verified fresh before the phase closes.
 4. Required checks pass on the exact merged head; no hardware or perceptual claim is added.
 
-**Plans:** 7/8 plans executed in 6 waves
+**Plans:** 8/8 plans complete in 6 waves
 
 Plans:
 **Wave 1**
@@ -327,7 +329,7 @@ Plans:
 - [x] 06.1-07-PLAN.md — refresh Phases 5–6 (wave 5)
 
 **Wave 6** *(blocked on Wave 5 completion)*
-- [ ] 06.1-08-PLAN.md — complete debt disposition and STATE route, docs-only PR 2 exact-head merge, freshness on main (wave 6)
+- [x] 06.1-08-PLAN.md — complete debt disposition and STATE route, docs-only PR 2 exact-head merge, freshness on main (wave 6)
 
 **Cross-cutting constraints:**
 - wait-exact-head-ci.py --self-test proves: newest same-SHA ci.yml pull_request run by run_number decides; an in-progress newest run or attempt waits; an older success never satisfies a newer failure or pending run; a truncated list (total_count > listed), persistent list/detail attempt mismatch, or deadline fails closed; a terminal failure needs two consecutive polls on the same (id, attempt).

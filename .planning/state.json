@@ -35,9 +35,9 @@
     }
   ],
   "next": {
-    "command": "/gsd:progress --next",
-    "label": "Advance to the next step",
-    "reason": "Phase 06.1 of 7 · executing"
+    "command": "$gsd-audit-milestone v0.1",
+    "label": "Re-run the v0.1 milestone audit",
+    "reason": "Phase 06.1 verified (passed 4/4); all 7 phases complete; owner re-audits before completing the milestone"
   },
-  "updated_at": "2026-10-10T15:26:58.459Z"
+  "updated_at": "2026-10-10T16:37:18.704Z"
 }
