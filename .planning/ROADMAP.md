@@ -306,7 +306,7 @@ All six phases have completed plan execution (56/56 runnable plans); Phase 2 Pla
 3. Workflow edits land in a single batched change; every phase whose verification it makes stale (1, 2, 3, 6 as applicable) is re-verified fresh before the phase closes.
 4. Required checks pass on the exact merged head; no hardware or perceptual claim is added.
 
-**Plans:** 6/8 plans executed in 6 waves
+**Plans:** 7/8 plans executed in 6 waves
 
 Plans:
 **Wave 1**
@@ -324,7 +324,7 @@ Plans:
 - [x] 06.1-06-PLAN.md — refresh Phases 3–4 (wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 06.1-07-PLAN.md — refresh Phases 5–6 (wave 5)
+- [x] 06.1-07-PLAN.md — refresh Phases 5–6 (wave 5)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 - [ ] 06.1-08-PLAN.md — complete debt disposition and STATE route, docs-only PR 2 exact-head merge, freshness on main (wave 6)
