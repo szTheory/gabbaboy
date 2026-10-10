@@ -301,6 +301,16 @@ class VerifiedPlayerOutputDirTests(unittest.TestCase):
             sorted(entry.name for entry in self.output.iterdir()), [OUTPUT_NAMES[0]]
         )
 
+    def test_broken_stderr_does_not_replace_original_publication_error(self) -> None:
+        def fail_withdrawal(descriptor, name, published_info):
+            raise OSError("simulated withdrawal failure")
+
+        stderr = io.StringIO()
+        stderr.close()
+        with patch.object(output_dir_module, "_withdraw_artifact", side_effect=fail_withdrawal):
+            with contextlib.redirect_stderr(stderr):
+                self._publish_with_failing_receipt_link()
+
     def test_mismatched_published_name_is_not_removed(self) -> None:
         original_link = os.link
 
@@ -489,7 +499,7 @@ class WorkflowOutputDirectoryTests(unittest.TestCase):
             r"GBB_VERIFIED_OUTPUT_DIR\s*[:=]\s*(\$\{\{[^}]*\}\}\S*|\S+)"
         )
         values = []
-        for workflow in sorted(workflows.glob("*.yml")):
+        for workflow in sorted([*workflows.glob("*.yml"), *workflows.glob("*.yaml")]):
             for line in workflow.read_text(encoding="utf-8").splitlines():
                 match = assignment.search(line)
                 if match:
@@ -498,8 +508,9 @@ class WorkflowOutputDirectoryTests(unittest.TestCase):
         for workflow_name, value in values:
             with self.subTest(workflow=workflow_name, value=value):
                 self.assertTrue(
-                    value.startswith(("${{ runner.temp }}", "$RUNNER_TEMP", "${RUNNER_TEMP}")),
-                    f"{workflow_name} sets GBB_VERIFIED_OUTPUT_DIR inside the checkout: {value}",
+                    value.startswith(("${{ runner.temp }}/", "$RUNNER_TEMP/", "${RUNNER_TEMP}/"))
+                    and ".." not in value.split("/"),
+                    f"{workflow_name} sets GBB_VERIFIED_OUTPUT_DIR outside runner temp: {value}",
                 )
 
 

@@ -193,11 +193,15 @@ def _report_withdrawal_failure(name: str, error: OSError) -> None:
     The caller re-raises the original failure, so this must not replace it;
     it only tells the operator that the output set may be incomplete.
     """
-    print(
-        f"warning: could not withdraw published {name}: {error}; "
-        "the output directory may hold an incomplete artifact set",
-        file=sys.stderr,
-    )
+    try:
+        print(
+            f"warning: could not withdraw published {name}: {error}; "
+            "the output directory may hold an incomplete artifact set",
+            file=sys.stderr,
+        )
+    except (OSError, ValueError):
+        # A closed or broken stderr must not replace the publication error.
+        pass
 
 
 def _withdraw_artifact(descriptor: int, name: str, published_info) -> None:
