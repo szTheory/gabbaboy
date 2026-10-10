@@ -129,8 +129,27 @@ gbb_add_acceptance_exit(acceptance_libbet-cgb-only_excluded_dmg-cpu-b 4
   "status=excluded reason=unsupported-model" 30
   "--acceptance;${GBB_SUITE_EXCLUSION};--case;libbet-cgb-only")
 gbb_add_acceptance_exit(acceptance_suite 0
-  "suite eligible=1 executed=1 excluded=0 xfail=0 status=pass" 300
+  "suite eligible=3 executed=3 excluded=0 xfail=2 status=pass" 300
   "--acceptance;${GBB_CASES};--suite;--expect-excluded;0;--receipt")
+
+# Discrimination controls (GAME-02, D-14). Two separate assertions per control, neither replacing the
+# other: the raw verdict (--raw-verdict) must exit 1 with reason=predicate-not-reached, and the D-22
+# strict-xfail layer must map exactly that outcome to status=xfail exit 0. Any other reason, or a
+# pass (unexpected-pass), would fail the xfail test. The receipt's final_* fields show what state the
+# guest reached; SELECT reaches attract mode ($C580=$04) but never the cleared tutorial.
+gbb_add_acceptance_exit(acceptance_libbet-no-input_raw 1
+  "status=fail model=dmg-cpu-b reason=predicate-not-reached" 300
+  "--acceptance;${GBB_CASES};--case;libbet-no-input;--raw-verdict;--receipt")
+gbb_add_acceptance_exit(acceptance_libbet-select_raw 1
+  "status=fail model=dmg-cpu-b reason=predicate-not-reached.*final_attract=04" 300
+  "--acceptance;${GBB_CASES};--case;libbet-select;--raw-verdict;--receipt")
+gbb_add_acceptance_exit(acceptance_libbet-no-input 0
+  "status=xfail model=dmg-cpu-b reason=predicate-not-reached" 300
+  "--acceptance;${GBB_CASES};--case;libbet-no-input;--receipt")
+gbb_add_acceptance_exit(acceptance_libbet-select 0
+  "status=xfail model=dmg-cpu-b reason=predicate-not-reached.*final_attract=04" 300
+  "--acceptance;${GBB_CASES};--case;libbet-select;--receipt")
+
 gbb_add_acceptance_exit(acceptance_suite_declared_exclusion 0
   "suite eligible=1 executed=1 excluded=1 xfail=0 status=pass" 300
   "--acceptance;${GBB_SUITE_EXCLUSION};--suite;--expect-excluded;1")

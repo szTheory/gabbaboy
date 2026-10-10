@@ -268,8 +268,9 @@ static void print_usage(FILE *stream, const char *program) {
       "  %s --manifest <manifest.json> --case <id> [--receipt] [--observe]\n"
       "  %s --manifest <manifest.json> --suite [--receipt] [--observe]\n"
       "  %s --acceptance <cases.txt> (--case <id> | --suite --expect-excluded <n>) [--model <id>] [--revision <r>] [--failure-dir <dir>] [--receipt]\n"
-      "  %s --acceptance <cases.txt> --case <id> --observe [--input-script <file>] [--frame-digest-at <half-dots>] [--pcm-digest] [--dump-checkpoints <dir>]\n",
-      program, program, program, program, program);
+      "  %s --acceptance <cases.txt> --case <id> --observe [--input-script <file>] [--frame-digest-at <half-dots>] [--pcm-digest] [--dump-checkpoints <dir>]\n"
+      "  %s --acceptance <cases.txt> --case <id> --raw-verdict [--receipt]\n",
+      program, program, program, program, program, program);
 }
 
 /* Strict decimal parse for --frame-digest-at: digits only, at most the 600 s script bound. */
@@ -294,6 +295,7 @@ int main(int argc,char **argv) {
         else if(strcmp(argv[i],"--receipt")==0)receipt=1;
         else if(strcmp(argv[i],"--failure-dir")==0&&i+1<argc)options.failure_dir=argv[++i];
         else if(strcmp(argv[i],"--observe")==0)options.observe=1;
+        else if(strcmp(argv[i],"--raw-verdict")==0)options.raw_verdict=1;
         else if(strcmp(argv[i],"--model")==0&&i+1<argc)options.model=argv[++i];
         else if(strcmp(argv[i],"--revision")==0&&i+1<argc)options.revision=argv[++i];
         else if(strcmp(argv[i],"--expect-excluded")==0&&i+1<argc){
@@ -313,13 +315,14 @@ int main(int argc,char **argv) {
     if(acceptance){
         if(observe_only_flag&&!options.observe){fprintf(stderr,"invalid-arguments: reason=observe-only-flag\n");return 2;}
         if(options.model!=NULL&&!gbb_case_model_known(options.model)){fprintf(stderr,"invalid-arguments: reason=unknown-model\n");return 2;}
+        if(options.raw_verdict&&(suite||options.observe||!selected)){fprintf(stderr,"invalid-arguments: reason=raw-verdict-requires-case\n");return 2;}
         if(suite&&!options.has_expect_excluded){fprintf(stderr,"invalid-arguments: reason=expect-excluded-required\n");return 2;}
         if(manifest||(suite&&(selected||options.observe))||(!suite&&(!selected||options.has_expect_excluded))){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
         options.suite=suite;
         options.receipt=receipt;options.core_revision=GBB_BUILD_REVISION;options.build_qualified=GBB_BUILD_QUALIFIED;
         return gbb_acceptance_run_file(acceptance,selected,&options);
     }
-    if(options.failure_dir||observe_only_flag||options.model||options.revision||options.has_expect_excluded){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
+    if(options.failure_dir||observe_only_flag||options.model||options.revision||options.has_expect_excluded||options.raw_verdict){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
     if(!manifest||(!suite&&!selected)||(suite&&selected)){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
     size_t manifest_length=0;
     uint8_t *manifest_bytes=malloc(MAX_MANIFEST+1);

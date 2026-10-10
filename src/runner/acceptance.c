@@ -101,6 +101,7 @@ typedef struct {
     bool window_active;
     const char *error;               /* frame-skipped or frame-invalid: exit 3 */
     bool dump_failed;
+    char final_state[96];            /* final predicate variables, printed on every non-pass line */
 } run_state;
 
 static const frame_record *newest_frame(const run_state *st) {
@@ -292,10 +293,19 @@ static void print_observation(const gbb_case *c, const run_state *st, bool hit, 
     free(out);
 }
 
+/* Receipt tokens that mark a control run (D-14): the raw verdict and any event mutation. */
+static void run_note(const gbb_acceptance_options *options, char out[64]) {
+    out[0] = '\0';
+    if (options != NULL && options->raw_verdict) strcpy(out, " raw_verdict=1");
+}
+
 static int fail_run(const gbb_case *c, const gbb_acceptance_options *options, const run_state *st,
                     const char *reason, uint64_t end_half_dots) {
-    char ppm_note[MAX_DIR_BYTES + 160u];
+    char ppm_note[MAX_DIR_BYTES + 160u], note[64], final_note[112];
     ppm_note[0] = '\0';
+    run_note(options, note);
+    final_note[0] = '\0';
+    if (st->final_state[0] != '\0') snprintf(final_note, sizeof(final_note), " %s", st->final_state);
     const frame_record *frame = newest_frame(st);
     if (options != NULL && options->failure_dir != NULL && frame != NULL) {
         char name[96], path[MAX_DIR_BYTES + 128u];
@@ -310,13 +320,13 @@ static int fail_run(const gbb_case *c, const gbb_acceptance_options *options, co
     if (options != NULL && options->expect_fail && options->expect_fail_reason != NULL &&
         options->expect_fail_reason[0] != '\0' && strcmp(options->expect_fail_reason, reason) == 0) {
         /* Strict expected failure (D-22): only the declared reason counts, and it counts as xfail. */
-        printf("acceptance id=%s status=xfail model=dmg-cpu-b reason=%s end_half_dots=%llu\n", c->id, reason,
-               (unsigned long long)end_half_dots);
+        printf("acceptance id=%s status=xfail model=dmg-cpu-b reason=%s end_half_dots=%llu%s%s\n", c->id, reason,
+               (unsigned long long)end_half_dots, final_note, note);
         if (options->xfailed != NULL) *options->xfailed = 1;
         return EXIT_PASS;
     }
-    printf("acceptance id=%s status=fail model=dmg-cpu-b reason=%s end_half_dots=%llu%s\n", c->id, reason,
-           (unsigned long long)end_half_dots, ppm_note);
+    printf("acceptance id=%s status=fail model=dmg-cpu-b reason=%s end_half_dots=%llu%s%s%s\n", c->id, reason,
+           (unsigned long long)end_half_dots, final_note, note, ppm_note);
     return EXIT_FAIL;
 }
 
@@ -667,6 +677,17 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
     gbb_accept_drive_result result;
     gbb_accept_drive(&config, &result);
 
+    /* Final predicate variables (D-14): what the guest actually reached, so a control's failure is
+     * explained by state rather than by absence. Two-digit hex per byte. */
+#define FINAL(role) gbb_peek_ram(instance, predicate->rows[role].address)
+    snprintf(st->final_state, sizeof(st->final_state),
+             "final_hw=%02x final_attract=%02x final_floor=%02x final_score=%02x/%02x final_size=%02xx%02x",
+             FINAL(GBB_ACCEPT_ROLE_HW_CAPABILITY), FINAL(GBB_ACCEPT_ROLE_ATTRACT_MODE),
+             FINAL(GBB_ACCEPT_ROLE_CUR_FLOOR), FINAL(GBB_ACCEPT_ROLE_CUR_SCORE),
+             FINAL(GBB_ACCEPT_ROLE_MAX_SCORE), FINAL(GBB_ACCEPT_ROLE_FLOOR_WIDTH),
+             FINAL(GBB_ACCEPT_ROLE_FLOOR_HEIGHT));
+#undef FINAL
+
     char pcm_hex[65], rolling_hex[65];
     gbb_accept_pcm_digest_final(&st->pcm, pcm_hex);
     gbb_accept_sha256_final(&st->rolling, rolling_hex);
@@ -711,15 +732,17 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
             code = fail_run(c, options, st, reason, result.end_half_dots);
             break;
         }
+        char note[64];
+        run_note(options, note);
         if (options != NULL && options->expect_fail) {
             /* model_fail is strict: a case that was expected to fail and passed is a failure. */
-            printf("acceptance id=%s status=unexpected-pass model=dmg-cpu-b t_hit_half_dots=%llu\n", c->id,
-                   (unsigned long long)result.t_hit_half_dots);
+            printf("acceptance id=%s status=unexpected-pass model=dmg-cpu-b t_hit_half_dots=%llu%s\n", c->id,
+                   (unsigned long long)result.t_hit_half_dots, note);
             code = EXIT_FAIL;
             break;
         }
-        printf("acceptance id=%s status=pass model=dmg-cpu-b t_hit_half_dots=%llu\n", c->id,
-               (unsigned long long)result.t_hit_half_dots);
+        printf("acceptance id=%s status=pass model=dmg-cpu-b t_hit_half_dots=%llu%s\n", c->id,
+               (unsigned long long)result.t_hit_half_dots, note);
         if (options != NULL && options->receipt) {
             printf("receipt id=%s rom_sha256=%s rom_size=%u input_sha256=%s predicate=%s "
                    "budget_half_dots=%llu end_half_dots=%llu core_revision=%s build_qualified=%s",
@@ -791,7 +814,7 @@ static int run_applicable(const gbb_case *c, const gbb_acceptance_options *optio
         return EXIT_UNSUPPORTED;
     }
     gbb_acceptance_options run = *options;
-    run.expect_fail = kind == GBB_CASE_EXPECT_FAIL;
+    run.expect_fail = kind == GBB_CASE_EXPECT_FAIL && !options->raw_verdict;
     run.expect_fail_reason = c->expect_fail_reason;
     run.xfailed = xfailed;
     return gbb_acceptance_run_case(c, &run);

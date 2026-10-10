@@ -143,6 +143,9 @@ typedef struct {
     int expect_fail;
     const char *expect_fail_reason;
     int *xfailed;                 /* receives 1 when the declared failure occurred */
+    /* D-14 controls. raw_verdict skips the D-22 applicability mapping so a model_fail case that
+     * misses its predicate exits 1 instead of xfail; --case only. */
+    int raw_verdict;
 } gbb_acceptance_options;
 
 /* Runs one parsed case on DMG-CPU-B. Exit codes: 0 pass, 1 fail, 2 invalid
