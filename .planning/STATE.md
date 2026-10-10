@@ -2,14 +2,14 @@
 gsd_state_version: "1.0"
 milestone: v0.1
 status: executing
-stopped_at: Completed 06.1-03-PLAN.md
-last_updated: "2026-10-10T15:35:38.714Z"
-state_head: 3bfc8b581b9101c511810b0c3d4c632f5b238ca3
+stopped_at: Completed 06.1-04-PLAN.md (PR 54 merged ab76d09; on branch gsd/phase-06.1-verification-refresh)
+last_updated: "2026-10-10T15:45:30.676Z"
+state_head: 9f8ed7c9325aabdb1f3f9c7c1b97d88715e31d14
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 64
-  completed_plans: 59
+  completed_plans: 60
   verified_phases: 6
 milestone_name: limited DMG preview
 last_activity: 2026-10-10
@@ -116,6 +116,7 @@ Branch rule: never reuse or push to the stale same-named `gsd/phase-NN-<slug>` b
 | Phase 06.1 P01 | 3 min | 2 tasks | 2 files |
 | Phase 06.1 P02 | 12 min | 3 tasks | 4 files |
 | Phase GB-06.1 P03 | 15 min | 2 tasks | 1 files |
+| Phase GB-06.1 P04 | 30 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -204,6 +205,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 06.1]: Installed-consumer audio smoke is structural only (formula frame count, bounds, poison, twin/reset hash equality); no digest literal pinned
 - [Phase 06.1]: 06.1-02: O_NOCTTY added to read_rom_file only; read_save_file intentionally unchanged (D-05 scope)
 - [Phase GB-06.1]: 06.1-03: exact-head gate orders by run_number only; player run_attempt output taken from macos-player-package job object; terminal failures debounced over 2 polls on same (id, attempt)
+- [Phase GB-06.1]: player-gate job is the single definition of player_required in ci.yml; check-player-result.sh fails closed on non-success gate
 
 ### Pending Todos
 
@@ -238,8 +240,8 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-10T15:35:38.625Z
-Stopped at: Completed 06.1-03-PLAN.md
+Last session: 2026-10-10T15:45:30.583Z
+Stopped at: Completed 06.1-04-PLAN.md (PR 54 merged ab76d09; on branch gsd/phase-06.1-verification-refresh)
 Resume file: None
 Next command in fresh context: `$gsd-execute-phase 06.1` (Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage)
 Continuation note: [.continue-here.md](.continue-here.md)
