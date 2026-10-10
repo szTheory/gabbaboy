@@ -1,13 +1,15 @@
 ---
 phase: GB-01-portable-foundation-and-original-rom-tracer
-reviewed: 2026-10-10T12:29:54Z
+reviewed: 2026-10-10T15:51:44Z
 depth: standard
-files_reviewed: 4
+files_reviewed: 6
 files_reviewed_list:
   - .github/workflows/ci.yml
   - .github/workflows/preview.yml
-  - .gitignore
-  - README.md
+  - .github/scripts/wait-exact-head-ci.py
+  - .github/scripts/check-player-result.sh
+  - tests/consumers/c/main.c
+  - tests/consumers/cpp/main.cpp
 findings:
   critical: 0
   warning: 0
@@ -18,28 +20,46 @@ status: issues_found
 
 # Phase 1: Code Review Report
 
-**Reviewed:** 2026-10-10T12:29:54Z
+**Reviewed:** 2026-10-10T15:51:44Z
 **Depth:** standard
-**Files Reviewed:** 4 (verification-freshness re-review of changes since 96f76de)
+**Files Reviewed:** 6 (verification-freshness re-review of changes since c005795, Phase 06.1 PR #54)
 **Status:** issues_found
 
 ## Summary
 
-Incremental re-review of `ci.yml`, `preview.yml`, `.gitignore`, and `README.md` against the diff since 96f76de. The removal of the `labeled` trigger and `run-macos-player` gate is internally consistent. In `ci.yml`, `macos-player-package` runs only on `pull_request`; `required-native` sets `PLAYER_REQUESTED` under the same condition, so PRs require `success`, while pushes accept `skipped` (the else-branch stays correct). `preview.yml` triggers only on `pull_request` to `main`, so the player job is unconditional, and its exact-head lookup (full-SHA check, `head_sha` and event filters, requiring both `macos-player-package` and `required-native` success) matches the CI job and aggregate names. Artifact name `phase3-player-candidate-<run>-<attempt>` matches between upload and download. `.gitignore` `__pycache__/` is benign. README additions do not contradict the workflows (remaining "optional" wording refers to the SDL3 player component, not the CI gate); the PR #35 head SHA is a plausible commit-hash form, but the cited run IDs and digests were not re-fetched. No tests or remote runs were executed. No critical or warning findings. Two info items follow, then the preserved earlier history.
+Re-review of the exact-head CI gate script, the player result gate, `ci.yml`, `preview.yml`, and the C and C++ installed consumers after Phase 06.1 PR #54. No remote CI was run. The two local self-tests pass (`python3 .github/scripts/wait-exact-head-ci.py --self-test`: 26 cases; `bash .github/scripts/check-player-result.sh --self-test`: 14 cases).
+
+- **Gate logic.** `wait-exact-head-ci.py` filters runs by SHA, event, and workflow path, and orders them by `run_number`. It cross-checks list against detail, asks for `filter=latest` jobs, fails closed on truncated lists and at the deadline, and debounces terminal non-success conclusions. Inputs are validated (40-hex SHA, `owner/name` repo) before any request, and `gh` is invoked with an argv list only, so there is no shell or jq injection surface.
+- **Player gate.** `ci.yml` has a single `player-gate` job. `macos-player-package` and `required-native` both consume its output. `required-native` requires `player-gate` to succeed, then calls `check-player-result.sh`. That script accepts `true:success`, `false:success`, and `false:skipped`, and fails closed on every other combination (including an empty `REQUIRED`). The needs lists and job names match the names `preview.yml` requires.
+- **Consumers.** The new `audio_api_smoke()` in the C and C++ consumers matches the documented contract of `gbb_run_audio` (`include/gabbaboy/gabbaboy.h:213-223`, `src/core/gabbaboy.c:2265-2297`). A NULL frame buffer with zero capacity is valid. A NULL frame buffer with nonzero capacity, a NULL count pointer, and a NULL instance each give `GBB_STOP_INVALID_STATE`. The count is zeroed before validation. The arrays are fixed size (no VLA), and the C++ `goto done` jumps cross no later initializations. The two copies are equivalent.
+
+No critical or warning findings. Two minor robustness items follow.
+
+## Prior findings recheck
+
+- **IN-01 (unreachable optional-player branch in the preview aggregate) is resolved.**
+  - `.github/workflows/preview.yml:179-182` requires `PLAYER_RESULT == success` unconditionally.
+  - The `PLAYER_REQUESTED` variable and the "Unexpected optional macOS player verification result" branch are gone from the aggregate env block (`preview.yml:168-171`).
+  - The file has no remaining `optional` wording for the CI gate.
+- **IN-02 (exact-head lookup fails on a stale failed run while a newer same-SHA run is in progress) is resolved.**
+  - `.github/scripts/wait-exact-head-ci.py:76` selects the single run with the highest `run_number`.
+  - `:82-83` returns WAIT while that run is not completed, so an older failed or successful run is never consulted. Self-test cases at `:226-231` cover "older failed + newest in progress -> WAIT" and "older success + newest in progress -> WAIT, never PASS".
+  - A terminal failure of the newest run is believed only after `DEBOUNCE_POLLS` consecutive polls of the same (run id, attempt) (`:107-117`).
+  - All three preview poll loops now call this script (`preview.yml:29-32`, `:76-79`, `:125-130`).
 
 ## Narrative Findings (AI reviewer)
 
-### IN-01: Unreachable "optional player" branch left in the preview aggregate
+### IN-03: PASS path writes `run_attempt=None` when the job object lacks `run_attempt`
 
-**File:** `.github/workflows/preview.yml:242,255-258`
-**Issue:** The workflow only triggers on `pull_request`, so `PLAYER_REQUESTED` (`github.event_name == 'pull_request'`) is always `true`. The `!= true` branch and its "Unexpected optional macOS player verification result" message are dead and retain the obsolete "optional" wording.
-**Fix:** Drop `PLAYER_REQUESTED` and the dead branch, and require `PLAYER_RESULT == success` unconditionally.
+**File:** `.github/scripts/wait-exact-head-ci.py:103,141-147`
+**Issue:** `job_attempts[name] = job.get("run_attempt")` is not validated. If the jobs API omitted or nulled the field, `--attempt-job` mode would print PASS and write `run_attempt=None` to `GITHUB_OUTPUT`. The download step would then fail on the artifact name `phase3-player-candidate-<run>-None`, with a confusing message. The gate is therefore still fail-closed, but it fails after the PASS line instead of with a clear reason. The self-test fixtures always supply the field, so this is untested.
+**Fix:** In the required-job loop, treat a non-int `run_attempt` as "any doubt waits": `if not isinstance(job.get("run_attempt"), int): return _wait(state, "job {} has no run_attempt".format(name))`.
 
-### IN-02: Exact-head lookup can fail on a stale failed run when a newer same-SHA run is still in progress
+### IN-04: `gh api` subprocess has no timeout, so the poll deadline cannot interrupt a hung call
 
-**File:** `.github/workflows/preview.yml:165-192`
-**Issue:** Runs are iterated newest first, and in-progress runs are skipped (`continue`). A completed older same-SHA run whose player job or `required-native` failed (for example before a `reopened` event creates a fresh run for the same head) causes an immediate `exit 1`, even though a newer run may still succeed. Re-runs of the same run keep the run ID, so only the reopened or duplicate-run case is affected. The behavior predates this diff but now matters more, because the player job is required for every PR.
-**Fix:** Evaluate only the newest same-SHA run (`.[0]`). Alternatively, fail on a bad conclusion only after no in-progress run remains, and keep polling while one exists.
+**File:** `.github/scripts/wait-exact-head-ci.py:48`
+**Issue:** `subprocess.run(cmd, ...)` has no `timeout`. The module docstring promises that the deadline fails closed, but the deadline is checked only between polls (`:154`). A stalled `gh` connection would block past `--deadline-seconds` until the job-level `timeout-minutes` (30 or 35 in `preview.yml`) cancels the job. The result still fails closed, but through a cancellation rather than the script's own diagnostic.
+**Fix:** Pass `timeout=60` to `subprocess.run` and convert `subprocess.TimeoutExpired` into `TransientError`, so the poll loop treats a hung call as a WAIT and still honors the deadline.
 
 ## Recheck Outcome (2026-10-09 rechecks)
 
