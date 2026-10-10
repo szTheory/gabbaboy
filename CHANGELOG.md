@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/szTheory/gabbaboy/compare/v0.1.1...v0.1.2) (2026-10-10)
+
+
+### Bug Fixes
+
+* **release:** bind the newest applicable support ledger for patch releases ([#59](https://github.com/szTheory/gabbaboy/issues/59)) ([c9d8026](https://github.com/szTheory/gabbaboy/commit/c9d802629583e9b01d0da95024c5dae2fea6c023))
+
 ## [0.1.1](https://github.com/szTheory/gabbaboy/compare/v0.1.0...v0.1.1) (2026-10-10)
 
 
