@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(GabbaBoy VERSION 0.1.0 LANGUAGES C) # x-release-please-version
+project(GabbaBoy VERSION 0.1.1 LANGUAGES C) # x-release-please-version
 
 option(GABBABOY_ENABLE_SANITIZERS
   "Enable AddressSanitizer and UndefinedBehaviorSanitizer on Linux" OFF)

@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.1](https://github.com/szTheory/gabbaboy/compare/v0.1.0...v0.1.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **GB-03:** assert rendered player input in smoke ([de96686](https://github.com/szTheory/gabbaboy/commit/de966868057c1fb5b3bca5b4cdac50cadf3bae57))
+* **GB-03:** automate visible player input smoke ([#40](https://github.com/szTheory/gabbaboy/issues/40)) ([8c80d59](https://github.com/szTheory/gabbaboy/commit/8c80d5988da8ad2a5417ffd8b42c2e694ad903a6))
+* **GB-03:** keep release verified output outside the checkout ([91d11d4](https://github.com/szTheory/gabbaboy/commit/91d11d4ea8a60fbaf3af274faee469cbb3a240b8))
+* **GB-03:** never let withdrawal reporting mask publication errors ([8151a75](https://github.com/szTheory/gabbaboy/commit/8151a752df27a30a9121767c9271d31360ab1879))
+* **GB-03:** preserve verified output directory contents ([e4edf31](https://github.com/szTheory/gabbaboy/commit/e4edf315909cb4d1068defe24e832b9f669d4be3))
+* **GB-04:** reject blocking ROM special files ([#43](https://github.com/szTheory/gabbaboy/issues/43)) ([bce8564](https://github.com/szTheory/gabbaboy/commit/bce85641fe4ee7a7657bcf35aeedf8883c9af09b))
+* **GB-05:** clarify save recovery keys and refresh verification ([bb8fd65](https://github.com/szTheory/gabbaboy/commit/bb8fd654d03969e3d207fcdc92c345cc60be3298))
+* **GB-05:** clarify save recovery keys and refresh verification ([#45](https://github.com/szTheory/gabbaboy/issues/45)) ([2463a38](https://github.com/szTheory/gabbaboy/commit/2463a382be687cecaf5bf233645b1d0d4d5130b2))
+* **GB-06:** accept unquoted runner.temp YAML values in the output contract ([320fcc5](https://github.com/szTheory/gabbaboy/commit/320fcc5c87359890ed429160e95994073ab2c719))
+* **GB-06:** publish verified player artifacts as one set ([eb96902](https://github.com/szTheory/gabbaboy/commit/eb96902fd531b7a001e4fd7d429e5dc56f8cb2ee))
+
 ## [0.1.0](https://github.com/szTheory/gabbaboy/releases/tag/v0.1.0) (2026-10-09)
 
 
