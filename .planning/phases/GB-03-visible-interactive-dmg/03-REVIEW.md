@@ -1,6 +1,6 @@
 ---
 phase: GB-03-visible-interactive-dmg
-reviewed: 2026-10-10T02:20:00Z
+reviewed: 2026-10-10T01:52:47Z
 depth: standard
 files_reviewed: 8
 files_reviewed_list:
@@ -14,13 +14,13 @@ files_reviewed_list:
   - tests/player/test_session.c
 findings:
   critical: 0
-  warning: 1
-  info: 4
-  total: 5
+  warning: 0
+  info: 3
+  total: 3
 status: issues_found
 ---
 
-# Phase 3: Code Review Report (re-review after 91d11d4)
+# Phase 3: Code Review Report (re-review after 91d11d4 and 8151a75)
 
 **Reviewed:** 2026-10-10
 **Depth:** standard
@@ -29,7 +29,7 @@ status: issues_found
 
 ## Summary
 
-Fix commit 91d11d4 resolves CR-01 and WR-01. The 19 tests in `tests/scripts/test_verified_player_output_dir.py` pass when run from `tests/scripts`. The fix introduces one low-likelihood robustness defect (WR-01 below). WR-02 is accepted as an intentional design choice. Open items are one warning and four info items.
+Fix commits 91d11d4 and 8151a75 resolve CR-01, WR-01, the follow-on WR-01 (reporting can mask errors), and IN-04. The 20 tests in `tests/scripts/test_verified_player_output_dir.py` pass when run from `tests/scripts`. No critical or warning findings remain. WR-02 is accepted as an intentional design choice. Three info items remain open (IN-01, IN-02, IN-03). Status stays `issues_found` only because those info items are open.
 
 ## Resolved in this re-review
 
@@ -53,25 +53,25 @@ Evidence:
 - The outer loop continues to the remaining withdrawals.
 - `test_failed_withdrawal_is_reported_without_masking_original_error` covers the outer site. It asserts the stderr text, that the original `OSError` is raised, and that the unwithdrawn archive remains.
 
+### WR-01 (follow-on, introduced by 91d11d4): reporting could mask the original error. Fixed in 8151a75.
+
+Evidence:
+- `_report_withdrawal_failure` now wraps the `print` in `try/except (OSError, ValueError)`. `print` to a closed file raises `ValueError`, and a broken pipe raises `OSError`, so both are covered.
+- A new regression test, `test_broken_stderr_does_not_replace_original_publication_error`, redirects a closed `StringIO` to stderr. The shared helper asserts that the original "simulated receipt publication failure" `OSError` still propagates.
+- All 20 tests pass.
+
+### IN-04 (was Info): shallow workflow guard. Fixed in 8151a75.
+
+Evidence:
+- The guard now globs `*.yml` and `*.yaml`.
+- It requires a `${{ runner.temp }}/`, `$RUNNER_TEMP/` or `${RUNNER_TEMP}/` prefix, so `$RUNNER_TEMPX` is rejected.
+- It rejects any `..` path segment.
+- The current values (`${{ runner.temp }}/verified-player-artifact` and `"$RUNNER_TEMP/release-player-downloaded"`) still pass.
+- Still not covered: composite actions under `.github/actions` and multi-line YAML scalars. Neither is used today.
+
 ### WR-02 (was Warning): `prepare` clears the previous verified set. Intentional, no longer tracked as a finding.
 
 I agree with the decision. A stale verified pair must not survive a failed verification run, because it could be mistaken for current evidence. That requirement outweighs preserving the last good set. Fresh CI output directories make the destructive case rare.
-
-## Warnings
-
-### WR-01: `_report_withdrawal_failure` can raise and mask the original error (introduced by 91d11d4)
-
-**File:** `tests/scripts/verified_player_output_dir.py:190-200` (call sites `:181-182`, `:327-328`)
-
-**Issue:** `print(..., file=sys.stderr)` runs inside an `except OSError` handler. If stderr is closed or broken, for example `2>&-` or a broken pipe to a log collector, `print` raises `OSError`, `BrokenPipeError`, or `ValueError` ("I/O operation on closed file"). That exception replaces the original publication error. Python chains it, but the caller then sees the wrong failure. In the outer loop it also aborts the remaining withdrawals. The docstring claims the helper "must not replace" the original failure, but nothing enforces that.
-
-**Fix:** Make reporting infallible:
-```python
-try:
-    print(..., file=sys.stderr)
-except (OSError, ValueError):
-    pass
-```
 
 ## Info
 
@@ -98,19 +98,6 @@ except (OSError, ValueError):
 **Issue:** The receipt link fails before any receipt inode is published, so only the outer-loop site at `verified_player_output_dir.py:327` is exercised. The inner site at `:181` (a post-link failure such as a directory `fsync` error, followed by a failed withdrawal) has no report assertion.
 
 **Fix:** Extend the test with a case that fails the directory `fsync` after link and also fails the withdrawal. Assert the stderr text and that the original error is raised.
-
-### IN-04: Workflow guard test is shallow
-
-**File:** `tests/scripts/test_verified_player_output_dir.py:489-504`
-
-**Issue:** The test has three gaps:
-- It globs only `*.yml`, so a `.yaml` workflow or a composite action under `.github/actions` is not scanned.
-- `startswith("$RUNNER_TEMP")` also accepts `$RUNNER_TEMPX/..` and `$RUNNER_TEMP/../repo`.
-- It inspects single lines only, so a multi-line YAML scalar assignment is invisible.
-
-None of these is exploitable today. The test is a reasonable tripwire.
-
-**Fix:** Glob both `*.yml` and `*.yaml`, and tighten the match to `$RUNNER_TEMP/` plus a path segment. Reject `..` segments.
 
 ---
 
