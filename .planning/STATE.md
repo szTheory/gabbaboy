@@ -2,14 +2,14 @@
 gsd_state_version: "1.0"
 milestone: v0.1
 status: executing
-stopped_at: Completed 06.1-01-PLAN.md
-last_updated: "2026-10-10T15:29:41.901Z"
-state_head: 1b6aa19f158725e83e165fa3d782612aa1e11c8b
+stopped_at: Completed 06.1-02-PLAN.md
+last_updated: "2026-10-10T15:32:25.053Z"
+state_head: 1d2d754b8fe61f981df0ea8eb181bcccff9badcd
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 64
-  completed_plans: 57
+  completed_plans: 58
   verified_phases: 6
 milestone_name: limited DMG preview
 last_activity: 2026-10-10
@@ -114,6 +114,7 @@ Branch rule: never reuse or push to the stale same-named `gsd/phase-NN-<slug>` b
 | Phase GB-06 P07 | 7min | 2 tasks | 4 files |
 | Phase GB-06 P06 | 95 min | 2 tasks | release workflow, evidence, and handoff |
 | Phase 06.1 P01 | 3 min | 2 tasks | 2 files |
+| Phase 06.1 P02 | 12 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -200,6 +201,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-06]: Install the visible-demo ROM with its manifest and license so the relocated native example needs no source-tree path.
 - [Phase GB-06]: Keep raw battery persistence host-owned and replace only after an exclusive temporary file is flushed.
 - [Phase 06.1]: Installed-consumer audio smoke is structural only (formula frame count, bounds, poison, twin/reset hash equality); no digest literal pinned
+- [Phase 06.1]: 06.1-02: O_NOCTTY added to read_rom_file only; read_save_file intentionally unchanged (D-05 scope)
 
 ### Pending Todos
 
@@ -234,8 +236,8 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-10T15:29:41.803Z
-Stopped at: Completed 06.1-01-PLAN.md
+Last session: 2026-10-10T15:32:24.971Z
+Stopped at: Completed 06.1-02-PLAN.md
 Resume file: None
 Next command in fresh context: `$gsd-execute-phase 06.1` (Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage)
 Continuation note: [.continue-here.md](.continue-here.md)
