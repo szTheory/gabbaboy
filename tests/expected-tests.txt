@@ -201,6 +201,7 @@ acceptance_predicate_anchors
 acceptance_libbet
 acceptance_libbet_observe
 acceptance_failure_dir_unwritable
+acceptance_digest_vectors
 acceptance_negative_flipped_digest
 acceptance_negative_bad_script
 acceptance_negative_duplicate_id

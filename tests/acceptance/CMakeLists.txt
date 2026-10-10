@@ -95,3 +95,14 @@ foreach(case acceptance_parse_cases_bounds acceptance_parse_cases_errors accepta
   add_test(NAME ${case} COMMAND test_acceptance_cases ${case})
   set_tests_properties(${case} PROPERTIES TIMEOUT 30)
 endforeach()
+
+# Independent stdlib confirmation of the D-24 frame digest, the PPM bytes and the D-16 PCM digest.
+add_executable(test_acceptance_digest ${CMAKE_CURRENT_LIST_DIR}/../test_acceptance_digest.c)
+target_link_libraries(test_acceptance_digest PRIVATE gabbaboy_accept)
+target_compile_features(test_acceptance_digest PRIVATE c_std_17)
+set_target_properties(test_acceptance_digest PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME acceptance_digest_vectors
+  COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/rgb-digest-vector.py
+          --check $<TARGET_FILE:test_acceptance_digest>
+          --ppm ${CMAKE_CURRENT_BINARY_DIR}/digest-vector.ppm)
+set_tests_properties(acceptance_digest_vectors PROPERTIES TIMEOUT 30)
