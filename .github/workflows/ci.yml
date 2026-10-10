@@ -16,6 +16,10 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Self-test the exact-head CI gate
+        run: python3 .github/scripts/wait-exact-head-ci.py --self-test
+      - name: Self-test the player result gate
+        run: bash .github/scripts/check-player-result.sh --self-test
       - name: Configure
         run: |
           mkdir -p build/package-prefix
@@ -118,9 +122,23 @@ jobs:
       - name: Verify CMake 3.25.3 configure/build/test/install and relocation
         run: bash .github/scripts/verify-cmake-floor.sh
 
+  player-gate:
+    name: player-gate
+    runs-on: ubuntu-22.04
+    timeout-minutes: 2
+    outputs:
+      player_required: ${{ steps.decide.outputs.player_required }}
+    steps:
+      # The only place ci.yml decides whether macOS player package evidence is required
+      # (pull_request only); macos-player-package and required-native both consume this output.
+      - id: decide
+        name: Decide whether player package evidence is required
+        run: echo "player_required=${{ github.event_name == 'pull_request' }}" >> "$GITHUB_OUTPUT"
+
   macos-player-package:
     name: macos-player-package
-    if: github.event_name == 'pull_request'
+    needs: player-gate
+    if: needs.player-gate.outputs.player_required == 'true'
     runs-on: macos-14
     timeout-minutes: 45
     steps:
@@ -153,10 +171,13 @@ jobs:
       - native-windows
       - linux-sanitizers
       - cmake-floor-3-25-3
+      - player-gate
       - macos-player-package
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Reject missing, skipped, failed, or timed-out required jobs
         env:
           NATIVE_LINUX: ${{ needs.native-linux.result }}
@@ -164,21 +185,15 @@ jobs:
           NATIVE_WINDOWS: ${{ needs.native-windows.result }}
           LINUX_SANITIZERS: ${{ needs.linux-sanitizers.result }}
           CMAKE_FLOOR: ${{ needs.cmake-floor-3-25-3.result }}
-          PLAYER_REQUESTED: ${{ github.event_name == 'pull_request' }}
+          PLAYER_GATE: ${{ needs.player-gate.result }}
+          PLAYER_REQUIRED: ${{ needs.player-gate.outputs.player_required }}
           PLAYER_RESULT: ${{ needs.macos-player-package.result }}
         run: |
-          for result in "$NATIVE_LINUX" "$NATIVE_MACOS" "$NATIVE_WINDOWS" "$LINUX_SANITIZERS" "$CMAKE_FLOOR"; do
+          for result in "$NATIVE_LINUX" "$NATIVE_MACOS" "$NATIVE_WINDOWS" "$LINUX_SANITIZERS" "$CMAKE_FLOOR" "$PLAYER_GATE"; do
             if [[ "$result" != success ]]; then
               echo "Required evidence job did not succeed: $result" >&2
               exit 1
             fi
           done
-          if [[ "$PLAYER_REQUESTED" == true && "$PLAYER_RESULT" != success ]]; then
-            echo "Required macOS player package evidence did not succeed: $PLAYER_RESULT" >&2
-            exit 1
-          fi
-          if [[ "$PLAYER_REQUESTED" != true && "$PLAYER_RESULT" != skipped && "$PLAYER_RESULT" != success ]]; then
-            echo "Unexpected macOS player job result: $PLAYER_RESULT" >&2
-            exit 1
-          fi
+          bash .github/scripts/check-player-result.sh "$PLAYER_GATE" "$PLAYER_REQUIRED" "$PLAYER_RESULT"
           echo "All required native, sanitizer, and CMake floor jobs succeeded."
