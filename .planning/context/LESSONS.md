@@ -326,3 +326,11 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Applies when:** Several verification refreshes run across sessions with preserved dirty worktrees, or a phase branch merges the default branch.
 - **Verification:** The marker was found and replaced in commit `56c4915`. A detached worktree at `c8b8426` confirmed Phase 1 was stale. The stash contents were reconciled file by file before restoration.
 - **Status:** Adopted.
+
+### GB-GSD-012 / 2026-10-10 / A debt-closure phase must dispose of every audit line, not just the review findings
+
+- **Cause and evidence:** ROADMAP criterion 1 for Phase 06.1 says "each audit tech-debt item is fixed or re-deferred with a recorded reason". `06.1-CONTEXT.md` and `06.1-DEBT-DISPOSITION.md` covered only the review info items and the audio gap. The first verifier pass returned `human_needed` because six of the twelve `tech_debt` lines in `v0.1-MILESTONE-AUDIT.md` had no row. These were scope limits and informational notes: Phase 1 `wave_0_complete`, thin CPU-03 credit, physical CPU-B timing, PR #41, PR-only player lanes, and no hardware qualification. Separately, `phase.complete` on the last phase set STATE `status: completed` and set the `state.json` next command to `/gsd:new-milestone`. That contradicted the recorded owner route of re-auditing first.
+- **Remedy:** When planning a debt-closure phase, copy the audit's whole `tech_debt` list into the disposition table. Give each line fixed, re-deferred or accepted, with a reason and a revisit trigger, including lines that are already scope limits. After `phase.complete`, review the STATE frontmatter status and the `state.json` next command against the persisted route before committing.
+- **Applies when:** A phase exists to close milestone-audit debt, or `phase.complete` runs on the last roadmap phase before the milestone is re-audited.
+- **Verification:** Commit `05d4913` added the six rows. The re-run verifier compared all 12 audit lines with the disposition table and returned `passed` 4/4. STATE was kept `executing`, and the next command is `$gsd-audit-milestone v0.1`.
+- **Status:** Adopted.

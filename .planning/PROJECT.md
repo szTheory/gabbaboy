@@ -81,4 +81,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-10-07 after Phase 3 verification and closeout.
+Last updated: 2026-10-10 after Phase 06.1 verification and closeout (no requirement added, invalidated or validated; all 35 remain mapped to Phases 1–6).
