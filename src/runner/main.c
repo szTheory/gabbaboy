@@ -185,7 +185,30 @@ static const char *run_guest(const fixture_case *fc,const uint8_t *rom,size_t ro
     gbb_destroy(m);
     return status;
 }
-static int run_one(const fixture_case *fc,const char *manifest,int receipt,size_t eligible,size_t *executed) {
+/* --observe lines for one Mooneye case. They come from the same gbb_runner_capture_ldbb helper as the
+ * frame-digest@ldbb case-file oracle, so both paths yield the same canonical digest. A breakpoint
+ * reached before the first completed frame is the token not-ready, an observation and not an error. */
+static void observe_case(const fixture_case *fc,const uint8_t *rom,size_t rom_size) {
+    gbb_instance *m=NULL;gbb_ldbb_capture *capture=malloc(sizeof(*capture));
+    if(capture==NULL||gbb_create(GBB_PROFILE_DMG_CPU_B,&m)!=GBB_OK||gbb_load_rom(m,rom,rom_size)!=GBB_OK){
+        fprintf(stderr,"runner-error: observation setup failed\n");gbb_destroy(m);free(capture);return;}
+    int rc=gbb_runner_capture_ldbb(m,fc->budget,capture);
+    gbb_destroy(m);
+    const char *alias=fc->alias;
+    if(rc!=0){fprintf(stderr,"runner-error: frame capture failed for %s\n",alias);free(capture);return;}
+    printf("mooneye.%s.frame\t%s\n",alias,capture->frame_ready?capture->digest:"not-ready");
+    if(capture->frame_ready)printf("mooneye.%s.frame_generation\t%llu\n",alias,(unsigned long long)capture->generation);
+    else printf("mooneye.%s.frame_generation\tnone\n",alias);
+    if(capture->reached){
+        printf("mooneye.%s.ldbb_half_dots\t%llu\n",alias,(unsigned long long)capture->ldbb_half_dots);
+        printf("mooneye.%s.registers\t%02x%02x%02x%02x%02x%02x\n",alias,capture->b,capture->c,capture->d,capture->e,capture->h,capture->l);
+        printf("mooneye.%s.result_pc\t%04x\n",alias,capture->pc);
+    } else {
+        printf("mooneye.%s.ldbb_half_dots\tnone\nmooneye.%s.registers\tnone\nmooneye.%s.result_pc\tnone\n",alias,alias,alias);
+    }
+    free(capture);
+}
+static int run_one(const fixture_case *fc,const char *manifest,int receipt,int observe,size_t eligible,size_t *executed) {
     size_t rom_size=0;
     uint8_t *rom=malloc(MAX_ROM+1);
     if(rom==NULL){fprintf(stderr,"runner-error: ROM buffer allocation failed\n");return 2;}
@@ -198,6 +221,7 @@ static int run_one(const fixture_case *fc,const char *manifest,int receipt,size_
     protocol_evidence evidence;uint64_t ticks=0;size_t recent_count=0;const char *stop=NULL;
     gbb_diagnostic_record recent[RECENT_CAPACITY];
     const char *status=run_guest(fc,rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
+    if(observe)observe_case(fc,rom,rom_size);
     free(rom);
     ++*executed;
     int code=strcmp(status,"pass")==0?0:strcmp(status,"fail")==0?1:3;
@@ -241,8 +265,8 @@ static void print_usage(FILE *stream, const char *program) {
     fprintf(stream,
       "Usage:\n"
       "  %s <rom.gb>\n"
-      "  %s --manifest <manifest.json> --case <id> [--receipt]\n"
-      "  %s --manifest <manifest.json> --suite [--receipt]\n"
+      "  %s --manifest <manifest.json> --case <id> [--receipt] [--observe]\n"
+      "  %s --manifest <manifest.json> --suite [--receipt] [--observe]\n"
       "  %s --acceptance <cases.txt> (--case <id> | --suite --expect-excluded <n>) [--model <id>] [--revision <r>] [--failure-dir <dir>] [--receipt]\n"
       "  %s --acceptance <cases.txt> --case <id> --observe [--input-script <file>] [--frame-digest-at <half-dots>] [--pcm-digest] [--dump-checkpoints <dir>]\n",
       program, program, program, program, program);
@@ -295,7 +319,7 @@ int main(int argc,char **argv) {
         options.receipt=receipt;options.core_revision=GBB_BUILD_REVISION;options.build_qualified=GBB_BUILD_QUALIFIED;
         return gbb_acceptance_run_file(acceptance,selected,&options);
     }
-    if(options.failure_dir||options.observe||observe_only_flag||options.model||options.revision||options.has_expect_excluded){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
+    if(options.failure_dir||observe_only_flag||options.model||options.revision||options.has_expect_excluded){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
     if(!manifest||(!suite&&!selected)||(suite&&selected)){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
     size_t manifest_length=0;
     uint8_t *manifest_bytes=malloc(MAX_MANIFEST+1);
@@ -305,10 +329,10 @@ int main(int argc,char **argv) {
     if(!manifest_ok){fprintf(stderr,"invalid-manifest\n");return 2;}
     size_t eligible=suite?sizeof(cases)/sizeof(cases[0]):1,executed=0;int suite_code=0;
     if(suite){
-        for(size_t i=0;i<eligible;i++){int code=run_one(&cases[i],manifest,receipt,eligible,&executed);if(code!=0&&suite_code==0)suite_code=code;}
+        for(size_t i=0;i<eligible;i++){int code=run_one(&cases[i],manifest,receipt,options.observe,eligible,&executed);if(code!=0&&suite_code==0)suite_code=code;}
         if(receipt)printf("suite eligible=%zu executed=%zu status=%s\n",eligible,executed,suite_counts_valid(eligible,executed)&&suite_code==0?"pass":"fail");
         return suite_counts_valid(eligible,executed)?suite_code:2;
     }
     const fixture_case *fc=select_case(selected);if(!fc){fprintf(stderr,"unknown-case: use --help for invocation forms\n");return 2;}
-    return run_one(fc,manifest,receipt,eligible,&executed);
+    return run_one(fc,manifest,receipt,options.observe,eligible,&executed);
 }

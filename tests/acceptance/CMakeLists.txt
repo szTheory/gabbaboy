@@ -213,5 +213,5 @@ gbb_add_acceptance_exit(acceptance_ldbb_not_ready 1
 # Mooneye --observe shares gbb_runner_capture_ldbb; a breakpoint reached before the first completed
 # frame is the explicit token not-ready, an observation rather than an error (Open Question 1).
 gbb_add_acceptance_exit(acceptance_ldbb_mooneye_observe 0
-  "mooneye[.]daa[.]frame\t${gbb_hex64_re}.*mooneye[.]tim00-div-trigger[.]frame\tnot-ready.*mooneye[.]tim00[.]frame\tnot-ready" 60
+  "mooneye[.]daa[.]frame\t${gbb_hex64_re}.*mooneye[.]tim00[.]frame\tnot-ready.*mooneye[.]tim00-div-trigger[.]frame\tnot-ready" 60
   "--manifest;fixtures/mooneye/manifest.json;--suite;--observe")
