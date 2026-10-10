@@ -106,6 +106,10 @@ The 2026-10-09 Nyquist audit resolved the phase-level probe set. `concurrent_ind
 
 All phase task behaviors map to automated checks. BASE-07 and BASE-08 now have exact tested-PR-SHA hosted evidence; neither depends on manual UAT.
 
+### Validation refresh 2026-10-10
+
+Covered-input drift since the PR #36 report is limited to `.github/workflows/ci.yml` and `preview.yml` (GB-03 #40 made the macOS player lane required on every pull request instead of label-gated), a `__pycache__/` ignore rule, and the previous audit row. The `required-native` aggregate still requires the same five native results and `preview-package-smoke` still requires both installed-package smokes, so the BASE-07/BASE-08 gates are unchanged except for being stricter. The phase-1 preset suite passed 179/179 locally on `origin/main` `93b53d5`, including `reset_idempotency`, `concurrent_independent_instances`, `runner_help`, `fixture_digest`, and `preview_package_smoke`. No new gaps.
+
 ---
 
 ## Manual-Only Verifications
