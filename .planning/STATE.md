@@ -2,8 +2,8 @@
 gsd_state_version: "1.0"
 milestone: v0.1
 status: executing
-stopped_at: "Phase 06.1 executed and verified (passed 4/4); docs-only closeout PR on gsd/phase-06.1-closeout"
-last_updated: "2026-10-10T16:37:18.694Z"
+stopped_at: "v0.1 milestone re-audit passed (35/35, 7/7 phases, 0 gaps); owner completes the milestone next"
+last_updated: "2026-10-10T16:48:58Z"
 state_head: 09d2c4da67a0f14ba0cba641321fbf107a5edec1
 progress:
   total_phases: 7
@@ -16,7 +16,7 @@ milestone_name: limited DMG preview
 last_activity: 2026-10-10
 current_phase: "06.1"
 current_phase_name: "Address v0.1 tech debt: CI workflow info items and audio consumer coverage (INSERTED)"
-last_activity_desc: Phase 06.1 verified (passed 4/4) and closed; owner re-runs the v0.1 milestone audit next
+last_activity_desc: v0.1 milestone re-audit passed; owner runs $gsd-complete-milestone v0.1 next
 ---
 
 # Project State
@@ -26,14 +26,14 @@ last_activity_desc: Phase 06.1 verified (passed 4/4) and closed; owner re-runs t
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** v0.1 milestone re-audit after Phase 06.1 (owner-run)
+**Current focus:** v0.1 milestone completion (owner-run) after the passed re-audit
 
 ## Current Position
 
-Stage: Phase 06.1 execution and verification complete; stopped at the phase boundary
+Stage: v0.1 milestone re-audit complete (`passed`); stopped before milestone completion
 Last completed phase: Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage (INSERTED) (8/8 plans; verification passed 4/4)
 Plans: 64/64 plans complete across all seven phases
-Status: All phases complete; milestone v0.1 stays `executing` until the owner re-audits and completes it
+Status: All phases complete; milestone v0.1 stays `executing` until the owner completes it
 
 Phase 06.1 closed the v0.1 audit debt without widening any claim. Code PR #54 merged as `ab76d09` and docs-only verification-refresh PR #55 merged as `8a5266d`, both at exact green heads. Phases 1 to 6 read `passed` on committed main. The closeout ran on branch `gsd/phase-06.1-closeout`, cut from `8a5266d`; historical `gsd/phase-*` branches were not reused (GB-GSD-009).
 
@@ -54,7 +54,9 @@ PR #41 (release 0.1.1) remains OPEN and untouched at `93565ae`. No release or ta
 
 Branch rule: never reuse or push to the stale same-named `gsd/phase-NN-<slug>` branches on `origin` (GB-GSD-009).
 
-**Next command:** `$gsd-audit-milestone v0.1` (the owner re-runs the milestone audit after the Phase 06.1 docs-only closeout PR merges). Keep the milestone `executing` and both auto-advance flags false; nothing advances automatically.
+v0.1 milestone re-audit (2026-10-10, at `f6ae449`): `passed`. Requirements 35/35, phases 7/7, integration 12/12, flows 5/5, Nyquist 7/7. The accepted backlog is info-level or scope limits, each with a recorded disposition; see [v0.1-MILESTONE-AUDIT.md](v0.1-MILESTONE-AUDIT.md). The audit corrected `06.1-VALIDATION.md` `nyquist_compliant` to `true` to match its sign-off.
+
+**Next command:** `$gsd-complete-milestone v0.1` (the owner completes the milestone). Keep the milestone `executing` and both auto-advance flags false; nothing advances automatically.
 
 ## Performance Metrics
 
@@ -249,11 +251,13 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-10T16:38:00Z
-Stopped at: Phase 06.1 executed and verified (passed 4/4); docs-only closeout PR on `gsd/phase-06.1-closeout`
+Last session: 2026-10-10T16:48:58Z
+Stopped at: v0.1 milestone re-audit passed; docs-only audit PR on `gsd/v0.1-milestone-reaudit`
 Resume file: None
-Next command in fresh context: `$gsd-audit-milestone v0.1`
+Next command in fresh context: `$gsd-complete-milestone v0.1`
 Continuation note: [.continue-here.md](.continue-here.md)
+Completed workflow stage: **v0.1 milestone re-audit** (2026-10-10) — `passed`, 35/35 requirements, 7/7 phases, 12/12 integration, 5/5 flows, 0 blockers. Next step: the owner completes the milestone with `$gsd-complete-milestone v0.1`. No auto-advance.
+
 Completed workflow stage: **Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage, execution and verification** (2026-10-10). Verification passed 4/4; Nyquist, security (32/32 closed), UI (not applicable), code review (3 info deferred), regression (184/184) gates run; all seven phases read passed. Next step: the owner re-runs the milestone audit with `$gsd-audit-milestone v0.1`. No auto-advance.
 
 Completed workflow stage: **Phase 2 — DMG CPU, Bus and Time verification freshness refresh** (2026-10-10). Canonical verification passed 5/5 truths and CPU-01–05 at `a9050df` on `gsd/phase-02-verification-refresh-2`. Gates: Nyquist 0 gaps, security 45/45 closed, code review 1 info deferred with 0 open dispositions, regression 179/179 core. No hosted-CI, physical-hardware or perceptual result is claimed.
