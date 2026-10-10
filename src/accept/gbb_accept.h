@@ -123,6 +123,10 @@ typedef struct {
     const char *name;
     const char *rom_sha256;
     gbb_accept_predicate_row rows[GBB_ACCEPT_ROLE_COUNT];
+    /* D-17: when nonzero, the runner replays this many frames on a fresh instance with bus
+     * diagnostics and requires an FF00 reset pulse and the expected hw_capability at that frame.
+     * Zero means the predicate has no SGB probe. */
+    uint32_t sgb_probe_frames;
 } gbb_accept_predicate;
 
 /* NULL for an unknown name or a ROM digest other than the pinned one. */

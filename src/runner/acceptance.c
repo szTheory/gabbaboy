@@ -336,6 +336,155 @@ static int fail_run(const gbb_case *c, const gbb_acceptance_options *options, co
     return EXIT_FAIL;
 }
 
+/* ---- Bounded diagnostics replay (D-17, D-18) ----
+ * A second, deterministic pass on a fresh instance. The main run never traces: it stays on the
+ * gbb_run_audio path, and this pass runs the same ROM and the same (possibly mutated) script
+ * events with gbb_run_ex, so it cannot disturb the main instance or its PCM stream. Windows end on
+ * frame boundaries like the shared drive, events are queued up to 64 at a time before the window
+ * that contains them, and the 4096-record buffers are refilled on GBB_STOP_OUTPUT_FULL. */
+
+#define DIAG_RECORDS 4096u
+#define DIAG_BATCH 64u
+#define MAX_INSTRUCTION_HALF_DOTS UINT64_C(48)
+
+typedef void (*replay_visit_fn)(void *context, const gbb_trace_record *trace, size_t trace_count,
+                                const gbb_diagnostic_record *diag, size_t diag_count);
+
+typedef struct {
+    const uint8_t *rom;
+    size_t rom_length;
+    const gbb_accept_script *script;
+    uint64_t end_half_dots;
+    uint64_t observe_from;   /* records are produced once the logical time reaches this */
+    bool want_trace;
+    replay_visit_fn visit;
+    void *context;
+} replay_request;
+
+/* Returns 0 on success, 1 when the instance or buffers cannot be built, 2 when the guest stopped
+ * or the iteration guard tripped. *out_instance is returned (for the caller to peek and destroy)
+ * whenever creation succeeded; *observe_start is the instance time when records began. */
+static int replay_diag(const replay_request *rq, gbb_instance **out_instance, uint64_t *observe_start) {
+    *out_instance = NULL;
+    *observe_start = 0;
+    gbb_instance *instance = NULL;
+    gbb_trace_record *trace = malloc(DIAG_RECORDS * sizeof(*trace));
+    gbb_diagnostic_record *diag = malloc(DIAG_RECORDS * sizeof(*diag));
+    int status = 1;
+    if (trace == NULL || diag == NULL || gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) != GBB_OK) goto done;
+    *out_instance = instance;
+    if (gbb_load_rom(instance, rq->rom, rq->rom_length) != GBB_OK) goto done;
+
+    const gbb_accept_script *script = rq->script;
+    uint64_t actual = 0, logical = 0;
+    size_t next_event = 0;
+    bool observing = false;
+    status = 0;
+    while (logical < rq->end_half_dots && status == 0) {
+        if (!observing && logical >= rq->observe_from) {
+            observing = true;
+            *observe_start = actual;
+        }
+        uint64_t deadline = (logical / GBB_ACCEPT_HALF_DOTS_PER_FRAME + 1u) * GBB_ACCEPT_HALF_DOTS_PER_FRAME;
+        if (deadline > rq->end_half_dots) deadline = rq->end_half_dots;
+        if (!observing && rq->observe_from < deadline) deadline = rq->observe_from;
+
+        size_t batch_end = next_event;
+        while (batch_end < script->event_count && script->events[batch_end].at_half_dots <= deadline &&
+               batch_end - next_event < DIAG_BATCH) {
+            batch_end++;
+        }
+        if (batch_end < script->event_count && batch_end - next_event == DIAG_BATCH &&
+            script->events[batch_end].at_half_dots <= deadline) {
+            deadline = script->events[batch_end - 1u].at_half_dots;
+        }
+        if (batch_end > next_event) {
+            if (gbb_queue_events(instance, script->events + next_event, batch_end - next_event) != GBB_OK) {
+                status = 2;
+                break;
+            }
+            next_event = batch_end;
+        }
+
+        uint64_t guard = (deadline - logical) / 4u + 1024u;
+        while (actual < deadline) {
+            if (guard-- == 0) {
+                status = 2;
+                break;
+            }
+            uint64_t budget = deadline - actual;
+            gbb_run_result r;
+            if (observing) {
+                r = gbb_run_ex(instance, budget, rq->want_trace ? trace : NULL,
+                               rq->want_trace ? DIAG_RECORDS : 0u, diag, DIAG_RECORDS);
+                if (rq->visit != NULL && (r.trace_count != 0 || r.diagnostic_count != 0)) {
+                    rq->visit(rq->context, trace, r.trace_count, diag, r.diagnostic_count);
+                }
+            } else {
+                r = gbb_run_ex(instance, budget, NULL, 0, NULL, 0);
+            }
+            actual += r.consumed_half_dots;
+            if (r.reason == GBB_STOP_BUDGET) {
+                if (r.consumed_half_dots == 0 && budget <= MAX_INSTRUCTION_HALF_DOTS) break; /* carried */
+                continue;
+            }
+            if (r.reason == GBB_STOP_OUTPUT_FULL || r.reason == GBB_STOP_HALTED_IDLE) continue;
+            status = 2;
+            break;
+        }
+        if (status == 0) logical = deadline;
+    }
+done:
+    free(trace);
+    free(diag);
+    return status;
+}
+
+/* D-17: count FF00 reset pulses. One pulse is a write with select bits 00 that is later followed by a
+ * write with select bits 11 (the pair MLT_REQ and the SGB packet framing use). */
+typedef struct {
+    bool seen_low;
+    unsigned pulses;
+} pulse_state;
+
+static void visit_pulses(void *context, const gbb_trace_record *trace, size_t trace_count,
+                         const gbb_diagnostic_record *diag, size_t diag_count) {
+    (void)trace;
+    (void)trace_count;
+    pulse_state *ps = context;
+    for (size_t i = 0; i < diag_count; ++i) {
+        if (diag[i].kind != GBB_DIAGNOSTIC_BUS_WRITE || diag[i].address != 0xFF00u) continue;
+        unsigned select = diag[i].value & 0x30u;
+        if (select == 0x00u) {
+            ps->seen_low = true;
+        } else if (select == 0x30u && ps->seen_low) {
+            ps->seen_low = false;
+            if (ps->pulses < UINT32_MAX) ps->pulses++;
+        }
+    }
+}
+
+/* Returns 0 when the probe ran. hw is the hw_capability byte at the probe frame. */
+static int sgb_probe(const gbb_accept_predicate *predicate, const uint8_t *rom, size_t rom_length,
+                     const gbb_accept_script *script, uint8_t *hw, unsigned *pulses) {
+    pulse_state ps = {false, 0};
+    replay_request rq;
+    memset(&rq, 0, sizeof(rq));
+    rq.rom = rom;
+    rq.rom_length = rom_length;
+    rq.script = script;
+    rq.end_half_dots = (uint64_t)predicate->sgb_probe_frames * GBB_ACCEPT_HALF_DOTS_PER_FRAME;
+    rq.visit = visit_pulses;
+    rq.context = &ps;
+    gbb_instance *instance = NULL;
+    uint64_t start = 0;
+    int rc = replay_diag(&rq, &instance, &start);
+    *hw = rc == 0 ? gbb_peek_ram(instance, predicate->rows[GBB_ACCEPT_ROLE_HW_CAPABILITY].address) : 0xFFu;
+    *pulses = ps.pulses;
+    gbb_destroy(instance);
+    return rc;
+}
+
 /* ---- LD B,B and timed frame capture (EVID-01, D-24) ---- */
 
 #define CAPTURE_CHUNK UINT64_C(2048)
@@ -751,6 +900,18 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
             code = fail_run(c, options, st, reason, result.end_half_dots);
             break;
         }
+        /* D-17: SGB detection must have run and been tolerated. The probe replays the first frames on
+         * a fresh instance, so it never touches the main instance or its PCM stream. */
+        uint8_t hw_probe = 0;
+        unsigned sgb_pulses = 0;
+        const bool probe = predicate->sgb_probe_frames != 0;
+        if (probe) {
+            int probe_rc = sgb_probe(predicate, rom, rom_length, &script, &hw_probe, &sgb_pulses);
+            if (probe_rc != 0 || sgb_pulses < 1u || hw_probe != c->expect_hw_capability) {
+                code = fail_run(c, options, st, "sgb-probe", result.end_half_dots);
+                break;
+            }
+        }
         char note[64];
         run_note(options, note);
         if (options != NULL && options->expect_fail) {
@@ -774,12 +935,14 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
                 printf(" frame_%s=%s", st->checkpoints[i].label, st->checkpoints[i].digest);
             }
             printf(" frame_rolling=%s pcm_sha256=%s pcm_left_peak_to_peak=%d pcm_left_changes=%llu "
-                   "pcm_right_peak_to_peak=%d pcm_right_changes=%llu\n",
+                   "pcm_right_peak_to_peak=%d pcm_right_changes=%llu",
                    rolling_hex, pcm_hex,
                    (int)gbb_accept_pcm_peak_to_peak(&st->window.left, st->window.samples),
                    (unsigned long long)st->window.left.changes,
                    (int)gbb_accept_pcm_peak_to_peak(&st->window.right, st->window.samples),
                    (unsigned long long)st->window.right.changes);
+            if (probe) printf(" hw_f90=%02x sgb_reset_pulses=%u", (unsigned)hw_probe, sgb_pulses);
+            printf("\n");
         }
         code = EXIT_PASS;
         break;

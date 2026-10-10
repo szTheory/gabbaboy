@@ -52,7 +52,10 @@ static const gbb_accept_predicate libbet_tutorial_cleared = {
             "cursor_y", 0xC4EBu,
             "src/floormodel.z80 section floor_map variable order, after cursor_x.",
             0x1680u, 5, {0xFA, 0xEB, 0xC4, 0x3C, 0x20}},
-    }
+    },
+    /* detect_sgb runs from the first boot frames (MLT_REQ over FF00, then a JOYP read); 90 frames
+     * is generous for it and still well before the title screen accepts START. */
+    90u
 };
 
 const gbb_accept_predicate *gbb_accept_predicate_find(const char *name, const char *rom_sha256) {
