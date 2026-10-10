@@ -87,7 +87,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Applies when:** CTest reports are used to enforce a cross-platform, conditionally registered test inventory.
 - **Does not establish:** Hosted GitHub check state, branch protection, Windows results, or an OS support floor.
 - **Suggested check:** Verify every expected testcase name appears exactly once, reject `<skipped>` entries, and require nonempty test execution before accepting the report.
-- **Source:** `.github/scripts/verify-test-inventory.sh`, `.github/workflows/ci.yml`, `.planning/phases/GB-01-portable-foundation-and-original-rom-tracer/01-04-SUMMARY.md`.
+- **Source:** `.github/scripts/verify-test-inventory.sh`, `.github/workflows/ci.yml`, `.planning/milestones/v0.1-phases/GB-01-portable-foundation-and-original-rom-tracer/01-04-SUMMARY.md`.
 - **Status:** Reproduced and adopted.
 
 ### GB-GSD-001 / 2026-10-03 / Phase 1 closeout
@@ -98,7 +98,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Applies when:** A phase retains legacy summary-name symlinks after a milestone/plan naming migration.
 - **Does not establish:** A fix to OpenGSD's alias-counting behavior; the runtime may still display an inflated raw summary-path count.
 - **Suggested check:** Compare unique plan IDs and resolved summary targets, not only the number of `*-SUMMARY.md` paths.
-- **Source:** `.planning/phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md`, `.planning/ROADMAP.md`, `.planning/STATE.md`.
+- **Source:** `.planning/milestones/v0.1-phases/GB-01-portable-foundation-and-original-rom-tracer/01-VERIFICATION.md`, `.planning/ROADMAP.md`, `.planning/STATE.md`.
 - **Status:** Observed and reconciled locally.
 
 ### GB-CORE-001 / 2026-10-03 / Phase 1 code review
@@ -172,7 +172,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Remedy:** Parse every `LC_RPATH` entry and require the packaged executable to have exactly `@executable_path/../lib`; launch the binary after safe extraction to prove the bundled dylib and package-relative demo work together.
 - **Applies when:** A native application is copied from one build machine to a separate artifact consumer or end-user installation.
 - **Verification:** The extracted package passed locally; exact-head CI run 37686137977 built the clean arm64 candidate and preview run 37686137834 downloaded and smoke-tested its bytes. Both required aggregates passed.
-- **Source:** `tests/scripts/verify-phase3-player.sh`, `.github/workflows/ci.yml`, `.github/workflows/preview.yml`, and `.planning/phases/GB-03-visible-interactive-dmg/03-09-SUMMARY.md`.
+- **Source:** `tests/scripts/verify-phase3-player.sh`, `.github/workflows/ci.yml`, `.github/workflows/preview.yml`, and `.planning/milestones/v0.1-phases/GB-03-visible-interactive-dmg/03-09-SUMMARY.md`.
 - **Status:** Fixed and verified for the SDL3 preview package; it does not establish general macOS signing or distribution behavior.
 
 ### GB-GSD-002 / 2026-10-07 / Phase 3 gap-plan test selection
@@ -181,7 +181,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Remedy:** Require new DMA cases to use the `dma_*` family and new JOYP cases to use `joypad_*`; use family-wide CTest filters in each relevant task and checkpoint.
 - **Applies when:** A plan adds registered tests to an existing CTest suite and its verification command selects cases by regex.
 - **Verification:** The independent re-review passed all 11 plan structures, 14 tracked decisions, and seven probe-edge dispositions. The failure-direction probe found 23 commands with explicit failure statements and zero findings. This validates the plan filters and naming contract; implementation-level selection remains pending execution.
-- **Source:** `.planning/phases/GB-03-visible-interactive-dmg/03-10-PLAN.md` and `03-PLAN-CHECK.md`.
+- **Source:** `.planning/milestones/v0.1-phases/GB-03-visible-interactive-dmg/03-10-PLAN.md` and `03-PLAN-CHECK.md`.
 - **Status:** Corrected in the executable gap plan; implementation evidence is pending.
 
 ### GB-EVIDENCE-001 / 2026-10-07 / Plan GB-03-10 source trace
@@ -190,7 +190,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Remedy:** Visually inspect scanned notation when typography changes a technical value, independently resolve immutable source revisions, and fetch the cited files before pinning a source claim. Keep derived-circuit connectivity separate from a validated timing trace.
 - **Applies when:** Evidence is transcribed from scanned PDFs or OCR, or technical claims depend on external immutable revision links and reverse-engineered diagrams.
 - **Verification:** The printed manual page was checked visually; all three schematic files were fetched from the verified commit. The JOYP/event CTest filter passed 8/8; exact CPU-B JOYP sample timing remains open.
-- **Source:** `.planning/phases/GB-03-visible-interactive-dmg/03-RESEARCH.md`, `docs/dmg-video-evidence.md`, and the linked Nintendo manual and pinned schematic source.
+- **Source:** `.planning/milestones/v0.1-phases/GB-03-visible-interactive-dmg/03-RESEARCH.md`, `docs/dmg-video-evidence.md`, and the linked Nintendo manual and pinned schematic source.
 - **Status:** Transcription and source pin corrected; no unsupported interrupt behavior was promoted.
 
 ### GB-GSD-003 / 2026-10-07 / Phase 3 gap loop
@@ -199,7 +199,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Remedy:** Keep the phase goal in the required user-story format, run goal verification once after a meaningful implementation change, and write the exact missing evidence in plain English. Do not plan or execute another gap wave until a qualifying source, identified-hardware test record, or display-based observation changes the evidence. Keep automatic phase advancement off.
 - **Applies when:** Plans are complete but acceptance still depends on hardware, a live display, credentials, or another external observation unavailable in the current environment.
 - **Verification:** OpenGSD 1.16.0 accepted the normalized story; current Phase 3 verification reports `gaps_found` at 2/5; fresh `phase1` CTest passed 134/134; SDL could not create a window because this environment has no display. The reviewed CPU-B circuit model did not establish the missing collision or joypad-interrupt result.
-- **Source:** `.planning/phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md`, `.planning/phases/GB-03-visible-interactive-dmg/03-RESEARCH.md`, and `.planning/ROADMAP.md`.
+- **Source:** `.planning/milestones/v0.1-phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md`, `.planning/milestones/v0.1-phases/GB-03-visible-interactive-dmg/03-RESEARCH.md`, and `.planning/ROADMAP.md`.
 - **Status:** Superseded by GB-GSD-004: its rule to wait for new CPU-B evidence was too strict for documented, reverse-engineered behavior where a deterministic software model was explicitly authorized.
 
 ### GB-GSD-004 / 2026-10-07 / Use confidence-qualified software models to close documented behavior gaps
@@ -208,7 +208,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Remedy:** For behavior supported at a useful level by primary docs or reverse-engineering sources, select the narrowest deterministic software model, cross-check it against established implementations, explain policy choices in code/evidence, and add original guest controls. Keep chip-specific phases and unavailable physical observations open. After meaningful code and current tests change, run a fresh goal-backward audit before changing requirement status or planning another gap wave; stop at the phase boundary.
 - **Applies when:** Published Game Boy documentation and pinned emulator/reverse-engineering sources support broad behavior but do not settle exact silicon revision, phase, lane, or collision outcomes.
 - **Verification:** Plan 03-13 adds the selected JOYP IF.4 edge matrix, all active-DMA VRAM/OAM CPU access cells in PPU modes 0–3, mode-2 scan overlap controls, before/after DMA word-boundary pixels, the same-half-dot DMA/PPU/CPU guest collision, and partition-equivalence checks. Follow-up review fixed entry-39 scanning and reset-cursor handling, with guest regressions for both. Focused JOYP/DMA/PPU review checks passed 17/17; the full SDL-free `phase1` suite passed 141/141. Final UAT passed 33/33 after the user confirmed the packaged Z press/release behavior; goal-backward verification passed 5/5. A historic CPU-B-only UAT checkpoint was reconciled to D-025's adopted software-model acceptance rather than misrepresented as a hardware measurement. Exact CPU-B electrical timing, byte lane, low-pulse qualification, and PPU-revision parity remain unmeasured.
-- **Source:** D-025 in `.planning/context/DECISIONS.md`, the 2026-10-07 addendum in `.planning/phases/GB-03-visible-interactive-dmg/03-RESEARCH.md`, `.planning/phases/GB-03-visible-interactive-dmg/03-13-SUMMARY.md`, and `docs/dmg-video-evidence.md`.
+- **Source:** D-025 in `.planning/context/DECISIONS.md`, the 2026-10-07 addendum in `.planning/milestones/v0.1-phases/GB-03-visible-interactive-dmg/03-RESEARCH.md`, `.planning/milestones/v0.1-phases/GB-03-visible-interactive-dmg/03-13-SUMMARY.md`, and `docs/dmg-video-evidence.md`.
 - **Status:** Applied to VIDEO-02/03 in Phase 3 under confidence-qualified software behavior; VIDEO-04 passed the user's live packaged-preview check. The full project still makes no exact CPU-B timing or silicon-parity claim.
 
 ### GB-FIXTURE-001 / 2026-10-08 / Preserve fixture bytes across Windows checkout
@@ -253,7 +253,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Remedy:** Configure a project-specific test command for future phases, or make the workflow's documented fallback recognize CMake/CTest. Until corrected, invoke the repository's documented configure/build/CTest command directly and record the actual test denominator and result; do not count a no-op gate as validation. The owner-owned `.planning/config.json` scratch was preserved, not modified.
 - **Applies when:** A project uses a non-default build/test system and workflow automation derives its test command from configuration.
 - **Verification:** `cmake --preset phase1 -DGABBABOY_BUILD_PLAYER=OFF && cmake --build --preset phase1 --parallel 2 && ctest --preset phase1 --output-on-failure --no-tests=error` passed 176/176. The verifier report and `.planning/.continue-here.md` record the configured-command limitation and test result.
-- **Source:** `.planning/phases/GB-06-qualified-dmg-release-and-consumer-handoff/06-VERIFICATION.md`, `.planning/STATE.md`, and `.planning/.continue-here.md`.
+- **Source:** `.planning/milestones/v0.1-phases/GB-06-qualified-dmg-release-and-consumer-handoff/06-VERIFICATION.md`, `.planning/STATE.md`, and `.planning/.continue-here.md`.
 - **Status:** Phase 6 validation is evidenced; configure the GSD test command as follow-up workflow maintenance, without editing preserved owner scratch during this closeout.
 
 ### GB-GSD-007 / 2026-10-09 / Check canonical freshness and solo-maintainer merge policy at milestone handoff
@@ -262,7 +262,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Remedy:** At milestone audit, query canonical verification status for every phase instead of trusting report frontmatter alone. For a solo-maintainer repository, keep the human approval count at zero and enforce strict required CI contexts for admins; preserve the project's AI/code-review and test evidence in the normal workflow. Reassess approval requirements if independent maintainers join.
 - **Applies when:** OpenGSD verification uses covered-file digests, or a single maintainer uses GitHub branch protection without a second human reviewer.
 - **Verification:** OpenGSD 1.16.0 reports Phases 1–4 stale and Phases 5–6 passed. Follow-up GitHub readback reports `required_pull_request_reviews: null`, `enforce_admins: true`, and the unchanged strict contexts `required-native`, `fixture-repro`, and `preview-package-smoke`.
-- **Source:** `.planning/v0.1-MILESTONE-AUDIT.md`, phase `VERIFICATION.md` reports, and PR #34 branch-protection/check evidence.
+- **Source:** `.planning/milestones/v0.1-MILESTONE-AUDIT.md`, phase `VERIFICATION.md` reports, and PR #34 branch-protection/check evidence.
 - **Status:** Superseded for freshness counts by GB-GSD-008; the branch-rule update remains verified, while the later 2026-10-09 audit found current Phase 1/3/5/6 gates stale and Phase 2/4 passing.
 
 ### GB-TEST-002 / 2026-10-09 / Make concurrent-instance tests distinguish state and bound hangs
@@ -289,7 +289,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Remedy:** At milestone audit, query `verification.status` for every phase, run `summary-extract` for every summary, and compute requirement status from the live gate plus valid summary metadata plus traceability. Treat `state.json`/ROADMAP disagreement as a signal to reconcile, not permission to overwrite owner scratch. Repair summary metadata only with a corresponding verification refresh when covered-file digests change.
 - **Applies when:** OpenGSD uses covered-file verification fingerprints and plan-summary metadata for milestone aggregation, especially in a checkout with preserved local planning edits.
 - **Verification:** The v0.1 audit recorded the exact six phase gates, all 35 requirement IDs, both summary parser errors, 6/6 wired flows, and the conflicting init/ROADMAP phase counts. The follow-up route refreshed Phase 1; the remaining route is `$gsd-execute-phase 3`, then Phases 5 and 6 one at a time, then re-audit.
-- **Source:** `.planning/v0.1-MILESTONE-AUDIT.md`, `.planning/REQUIREMENTS.md`, phase VERIFICATION.md and SUMMARY.md files, and OpenGSD 1.16.0 query results.
+- **Source:** `.planning/milestones/v0.1-MILESTONE-AUDIT.md`, `.planning/milestones/v0.1-REQUIREMENTS.md`, phase VERIFICATION.md and SUMMARY.md files, and OpenGSD 1.16.0 query results.
 - **Status:** Adopted as the milestone-audit procedure; Phases 3, 5, 6 and CPU-02/CPU-05 metadata reconciliation remain pending.
 
 ### GB-GSD-009 / 2026-10-09 / Verify on the integrated tree, not a historical phase branch
@@ -308,7 +308,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Applies when:** A milestone expands cartridge or model support and intends to claim that users can play a supported game end to end.
 - **Does not establish:** That GabbaBoy currently boots a complete game, that the tile demo is gameplay evidence, or that any DMG timing/model assumption applies to Neo Geo.
 - **Suggested check:** Plan one lawful game-level acceptance target before broadening CGB/mapper claims; require its explicit guest progress signal and player-visible input/output, while preserving private content and evidence.
-- **Source:** Glueyneo: `.planning/workstreams/first-playable-game/phases/05-selected-mvs-boot/05-03-SUMMARY.md` and `.planning/preparation/2026-10-04-gsd-verification-loop.md`; GabbaBoy: `.planning/phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md`, `.planning/phases/GB-03-visible-interactive-dmg/03-UAT.md`, `.planning/context/FUTURE-MILESTONES.md`, and `AGENTS.md`.
+- **Source:** Glueyneo: `.planning/workstreams/first-playable-game/phases/05-selected-mvs-boot/05-03-SUMMARY.md` and `.planning/preparation/2026-10-04-gsd-verification-loop.md`; GabbaBoy: `.planning/milestones/v0.1-phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md`, `.planning/milestones/v0.1-phases/GB-03-visible-interactive-dmg/03-UAT.md`, `.planning/context/FUTURE-MILESTONES.md`, and `AGENTS.md`.
 - **Status:** Sanity-checked and adopted as a future milestone planning gate; no active phase or release claim changed.
 
 ### GB-GSD-010 / 2026-10-10 / Tightening a shared helper's input contract requires a caller sweep
@@ -325,4 +325,21 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Remedy:** After any merge, run `git grep -nE '^(<<<<<<<|>>>>>>>) '` before committing. Before routing or claiming freshness, query `verification.status` on committed content, not a dirty overlay. Commit or explicitly stash refreshed reports at the end of each refresh so the next session's starting point is reproducible.
 - **Applies when:** Several verification refreshes run across sessions with preserved dirty worktrees, or a phase branch merges the default branch.
 - **Verification:** The marker was found and replaced in commit `56c4915`. A detached worktree at `c8b8426` confirmed Phase 1 was stale. The stash contents were reconciled file by file before restoration.
+- **Status:** Adopted.
+
+### GB-GSD-012 / 2026-10-10 / A debt-closure phase must dispose of every audit line, not just the review findings
+
+- **Cause and evidence:** ROADMAP criterion 1 for Phase 06.1 says "each audit tech-debt item is fixed or re-deferred with a recorded reason". `06.1-CONTEXT.md` and `06.1-DEBT-DISPOSITION.md` covered only the review info items and the audio gap. The first verifier pass returned `human_needed` because six of the twelve `tech_debt` lines in `v0.1-MILESTONE-AUDIT.md` had no row. These were scope limits and informational notes: Phase 1 `wave_0_complete`, thin CPU-03 credit, physical CPU-B timing, PR #41, PR-only player lanes, and no hardware qualification. Separately, `phase.complete` on the last phase set STATE `status: completed` and set the `state.json` next command to `/gsd:new-milestone`. That contradicted the recorded owner route of re-auditing first.
+- **Remedy:** When planning a debt-closure phase, copy the audit's whole `tech_debt` list into the disposition table. Give each line fixed, re-deferred or accepted, with a reason and a revisit trigger, including lines that are already scope limits. After `phase.complete`, review the STATE frontmatter status and the `state.json` next command against the persisted route before committing.
+- **Applies when:** A phase exists to close milestone-audit debt, or `phase.complete` runs on the last roadmap phase before the milestone is re-audited.
+- **Verification:** Commit `05d4913` added the six rows. The re-run verifier compared all 12 audit lines with the disposition table and returned `passed` 4/4. STATE was kept `executing`, and the next command is `$gsd-audit-milestone v0.1`.
+- **Status:** Adopted.
+
+### GB-GSD-013 / 2026-10-10 / Give each milestone a versioned ROADMAP heading before close
+
+- **Cause and evidence:** At v0.1 close, `milestone.complete v0.1 --dry-run` failed with `no phases found for milestone v0.1 in ROADMAP.md`. ROADMAP.md named the milestone only in a bullet under `## Milestones`, so OpenGSD 1.16.0's `sliceMilestoneWindow` found no `v0.1` heading and refused to archive. The same run showed that moving phase directories to `milestones/v0.1-phases/` breaks every relative link into `phases/GB-*` in `docs/`, `DECISIONS.md`, `LESSONS.md`, `research/INDEX.md` and `STATE.md`.
+- **Remedy:** Add a `## v0.1 Limited DMG Preview` heading above `## Phases`, re-run `--dry-run`, then archive. After archiving, run `git grep "phases/GB-"` outside `milestones/`, repoint each hit to `milestones/vX.Y-phases/`, and check that every rewritten link resolves.
+- **Applies when:** Closing any milestone with OpenGSD's `milestone.complete`; new roadmaps should carry a `## vX.Y <Name>` heading from the start.
+- **Verification:** After the heading was added, the dry run reported 7 phases, 64 plans and 104 tasks, and the confirmed run archived the roadmap, requirements, audit, phases and quick tasks. A link-existence check over the five rewritten files found no broken targets.
+- **Source:** `.planning/milestones/v0.1-ROADMAP.md`, OpenGSD 1.16.0 `bin/lib/roadmap-parser.cjs` (`getMilestonePhaseFilter`), `docs/mbc1-evidence.md`.
 - **Status:** Adopted.

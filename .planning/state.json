@@ -1,7 +1,7 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v0.1",
+  "milestone": "v0.1 — Limited DMG Preview",
   "phases": [
     {
       "number": "1",
@@ -32,12 +32,17 @@
       "number": "6",
       "name": "Qualified DMG Release and Consumer Handoff",
       "status": "complete"
+    },
+    {
+      "number": "06.1",
+      "name": "Address v0.1 tech debt (INSERTED)",
+      "status": "complete"
     }
   ],
   "next": {
-    "command": "$gsd-execute-phase 5",
-    "label": "Refresh Phase 5 \u2014 DMG Audio and Stable Playback verification",
-    "reason": "All plans complete; Phase 3 refreshed 2026-10-10. Phase 5 verification is stale after the shared verified-output helper changes; then refresh Phases 6 and 1, reconcile Phase 2 CPU-02/CPU-05 summary metadata, and run $gsd-audit-milestone v0.1"
+    "command": "/gsd-new-milestone",
+    "label": "Start the next milestone (GB/GBC breadth direction)",
+    "reason": "v0.1 completed and archived (verified_closeout, 35/35); no phase is active"
   },
-  "updated_at": "2026-10-09T23:13:48.832Z"
+  "updated_at": "2026-10-10T17:15:20.737Z"
 }

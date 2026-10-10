@@ -1,62 +1,44 @@
 ---
 gsd_state_version: "1.0"
 milestone: v0.1
-status: executing
-stopped_at: Phase GB-06 verification refresh passed 5/5 — Phase GB-01 refresh is next
-last_updated: "2026-10-10T14:30:00Z"
-state_head: f0acb86
-progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 56
-  completed_plans: 56
-  percent: 100
-  verified_phases: 5
-milestone_name: limited DMG preview
+milestone_name: Limited DMG Preview
+status: Awaiting next milestone
+stopped_at: v0.1 milestone completed and archived (verified_closeout); next is /gsd-new-milestone
+last_updated: "2026-10-10T17:15:20.726Z"
 last_activity: 2026-10-10
-current_phase: 06
-current_phase_name: Qualified DMG Release and Consumer Handoff
-last_activity_desc: Phase 6 refreshed verification passed 5/5 after the release output-path guard and withdrawal-reporting changes
+last_activity_desc: Milestone v0.1 completed and archived
+state_head: c21631a791fa839b3b517b59aa99e364531d8428
+progress:
+  total_phases: 7
+  completed_phases: 7
+  total_plans: 64
+  completed_plans: 64
+  percent: 100
+  verified_phases: 7
+current_phase: null
+current_phase_name: null
 ---
 
 # Project State
 
 ## Project Reference
 
-See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
+See: [PROJECT.md](PROJECT.md) (updated 2026-10-10)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Refresh Phase 1, the last stale report; then reconcile Phase 2 CPU-02/CPU-05 SUMMARY metadata before rerunning the strict milestone audit
+**Current focus:** Planning the next milestone (committed direction: GB/GBC breadth)
 
 ## Current Position
 
-Stage: Phase 6 canonical verification freshness refresh complete; stopped at the phase boundary
-Last implementation phase: Phase 6 — Qualified DMG Release and Consumer Handoff (all plans complete; refreshed report passes 5/5)
-Plans: 56/56 runnable plans complete across all six phases
-Status: All phase plans complete; v0.1 closeout audit still pending
-
-Phase 6's refresh ran on branch `gsd/phase-06-verification-refresh`, cut from `origin/main` at `e328b7b` after PR #48 (the Phase 5 refresh) merged with green exact-head checks. All seven plans were already complete, so the run resumed at the verification gates. The report was stale because `release.yml` moved the downloaded-player verified output to `$RUNNER_TEMP` (`91d11d4`) and the shared helper now reports withdrawal failures without masking the publication error (`8151a75`).
-
-The gates ran in order:
-- **Nyquist:** found one gap and filled it. Nothing statically stopped `release.yml` from pointing `GBB_VERIFIED_OUTPUT_DIR` into the checkout, which would fail only mid-release. `verify-release-candidate.sh --self-test` now enforces a runner-temp root, with mutation and positive self-checks (`551758d`, `c55e65e`).
-- **Security:** closed 18/18 threats (`164b037`).
-- **UI review:** reused, since no UI changed.
-- **Code review:** found one warning, a false reject of the unquoted `${{ runner.temp }}` YAML form. It was fixed in `320fcc5`, the re-review was clean, and the disposition ledger has 0 open (`daaaa18`, `70a44c4`).
-- **Regression gate:** core 179/179, helper 20/20, player/package verifier 51/51; the candidate self-test passed.
-- **Verifier:** passed 5/5 truths and SHIP-01–08 at `f0acb86`.
-
-No hosted CI has run for this revision. The published v0.1.0 asset reconciliation and the hosted exact-tag platform receipts are historical. No signing, physical-device, perceptual or live Playstead claim is made.
-
-The current freshness gate reports Phases 2–6 as passed and Phase 1 as stale. Phase 1's restored stash refresh is the prose baseline. PR #41 (release 0.1.1) remains open with no reported checks. D-025 software-model limits remain explicit; exact CPU-B timing/lane and PPU-revision behavior remain unmeasured.
-
-Branch rule: after this phase's PR merges, cut the Phase 1 refresh branch from `origin/main` as `gsd/phase-01-verification-refresh`. Same-named stale `gsd/phase-NN-<slug>` branches still exist on `origin` (and as local `archive/…` branches), so never reuse or push to those names (GB-GSD-009).
-
-**Next command:** `$gsd-execute-phase 1` refreshes Phase 1 — Portable Foundation and Original ROM Tracer (plans complete; resumes at the verification gates). Before cutting its branch, merge this phase's PR once its exact-head required checks are green. Then reconcile Phase 2 CPU-02/CPU-05 SUMMARY metadata and run `$gsd-audit-milestone v0.1`. Stop after each phase. Keep the milestone `executing` and both auto-advance flags false.
+Phase: Milestone v0.1 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-10-10 — Milestone v0.1 completed and archived
 
 ## Performance Metrics
 
 - Completed unique plans: 56; recorded execution total: 1002 min. Phase 6 completed all seven reviewed plans in six dependency-ordered waves; its refreshed report passes 5/5 at `f0acb86`.
-- Per-phase metrics / recent trend: All six phase implementations and 56/56 runnable plans are complete; the current OpenGSD freshness gate accepts Phases 2–6, while Phase 1 is stale. Phase 1 refreshed at 21/21 truths and 29/29 focused CTest cases. Phase 2 passed all five truths; CPU-02/CPU-05 SUMMARY metadata still needs reconciliation for the strict milestone audit. Phase 3's refreshed verification passes 5/5; current core CTest passed 179/179, optional player tests passed 51/51, and focused output-directory safety regressions passed 8/8. Phase 5's 2026-10-10 refreshed verification passes 17/17 at `f39faac`; its clean-tree PCM receipt is recorded in its verification report. Phase 6's 2026-10-10 refreshed verification passes 5/5 at `f0acb86`; its historical asset and hosted-receipt evidence stays in its validation report. Phase 4 has 7/7 verified truths and a clean source review. FIFO ROM-open hardening passed exact-head PR #43 checks and is merged. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B measurement is claimed. Plan 02-15 is superseded/non-runnable and remains historical.
+- Per-phase metrics / recent trend: All six phase implementations and 56/56 runnable plans are complete; the current OpenGSD freshness gate accepts all six phases. Phase 1's 2026-10-10 refreshed verification passes 21/21 at `ebce345` with 179/179 local CTest. Phase 2's 2026-10-10 refreshed verification passes 5/5 and CPU-01–05 at `a9050df` after quick task 261010-bz3 reconciled its CPU-02/CPU-05 SUMMARY metadata. Phase 3's refreshed verification passes 5/5; current core CTest passed 179/179, optional player tests passed 51/51, and focused output-directory safety regressions passed 8/8. Phase 5's 2026-10-10 refreshed verification passes 17/17 at `f39faac`; its clean-tree PCM receipt is recorded in its verification report. Phase 6's 2026-10-10 refreshed verification passes 5/5 at `f0acb86`; its historical asset and hosted-receipt evidence stays in its validation report. Phase 4 has 7/7 verified truths and a clean source review. FIFO ROM-open hardening passed exact-head PR #43 checks and is merged. D-025 bounds VIDEO-02/03 to the confidence-qualified software model; no physical CPU-B measurement is claimed. Plan 02-15 is superseded/non-runnable and remains historical.
 - Emulator correctness, speed, memory, and CI baselines: No general hardware/gameplay baseline. The current Phase 2 refresh passed 179/179 local CTest, 88/88 focused Phase 2 cases, three eligible runner receipts, and the protocol probe with zero PPU accesses. Historical exact evidence at implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989` includes the 104/104 offline core inventory, 109/109 relocated installed C/C++ inventory, hosted CI run 37620710587, and fixture reproduction run 37620710600. Original upstream PPU-dependent reporting paths remain excluded; no physical DMG hardware test occurred.
 
 **Per-Plan Metrics:**
@@ -112,6 +94,14 @@ Branch rule: after this phase's PR merges, cut the Phase 1 refresh branch from `
 | Phase GB-06 P03 | 6 min | 2 tasks | 8 files |
 | Phase GB-06 P07 | 7min | 2 tasks | 4 files |
 | Phase GB-06 P06 | 95 min | 2 tasks | release workflow, evidence, and handoff |
+| Phase 06.1 P01 | 3 min | 2 tasks | 2 files |
+| Phase 06.1 P02 | 12 min | 3 tasks | 4 files |
+| Phase GB-06.1 P03 | 15 min | 2 tasks | 1 files |
+| Phase GB-06.1 P04 | 30 min | 3 tasks | 4 files |
+| Phase GB-06.1 P05 | 20 min | 2 tasks | 11 files |
+| Phase GB-06.1 P06 | 10 min | 2 tasks | 10 files |
+| Phase GB-06.1 P07 | 13 min | 2 tasks | 11 files |
+| Phase 06.1 P08 | 10 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -197,6 +187,13 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-06]: Use the installed visible-demo fixture for successful frame output and sequentially load the MBC1 continuation fixture into the same opaque instance for save transfer.
 - [Phase GB-06]: Install the visible-demo ROM with its manifest and license so the relocated native example needs no source-tree path.
 - [Phase GB-06]: Keep raw battery persistence host-owned and replace only after an exclusive temporary file is flushed.
+- [Phase 06.1]: Installed-consumer audio smoke is structural only (formula frame count, bounds, poison, twin/reset hash equality); no digest literal pinned
+- [Phase 06.1]: 06.1-02: O_NOCTTY added to read_rom_file only; read_save_file intentionally unchanged (D-05 scope)
+- [Phase GB-06.1]: 06.1-03: exact-head gate orders by run_number only; player run_attempt output taken from macos-player-package job object; terminal failures debounced over 2 polls on same (id, attempt)
+- [Phase GB-06.1]: player-gate job is the single definition of player_required in ci.yml; check-player-result.sh fails closed on non-success gate
+- [Phase GB-06.1]: 06.1-05: Phases 1 and 2 re-verified passed after PR 54 on the docs-only refresh branch; P1 covered_files gains wait-exact-head-ci.py and check-player-result.sh; P1 IN-01/IN-02 and P2 IN-01 fixed; new P1 IN-03/IN-04 deferred until the next wait-exact-head-ci.py change — D-10 refresh in order through execute-phase verification gates; D-09 forbids code fixes on the refresh branch
+- [Phase GB-06.1]: 06.1-06: Phases 3 and 4 re-verified passed after PR 54 on the docs-only refresh branch; P3 covered_files gains wait-exact-head-ci.py and check-player-result.sh; P3 IN-01/IN-02/IN-03 fixed (IN-01 close-failure branch inspection-only); P4 stale only through session.c and test_session.c, covered set unchanged — D-10 refresh in order through execute-phase verification gates; D-09 forbids code fixes on the refresh branch
+- [Phase GB-06.1]: 06.1-07: Phases 5 and 6 refreshed passed; Phase 6 covered_files gains tests/consumers/c/main.c and tests/consumers/cpp/main.cpp; P5 IN-01 fixed (documented); audit audio-consumer gap fixed; 06.1 did not change release.yml (pre-existing drift from v0.1.0 recorded)
 
 ### Pending Todos
 
@@ -208,7 +205,7 @@ None outside the roadmap.
 - Main branch protection now enforces the three strict required CI contexts for administrators. Follow-up readback showed no required approving-review gate. PR #34 predates admin enforcement and had no recorded approval; its exact required CI contexts were green when merged.
 - Phase 1's refreshed validation report is `validated` and Nyquist-compliant, with 179/179 local CTest. Phase 3 Nyquist validation is `validated`, and its UAT is complete at 34/34.
 
-- Phase 2's refreshed canonical verifier passed all five requirements and roadmap truths. The current full local CTest run passed 179/179, the focused Phase 2 selection passed 88/88, all three admitted headless runner cases passed, and the protocol probe recorded zero PPU accesses. No physical DMG-CPU-B observation or broad compatibility claim is made. See [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md).
+- Phase 2's refreshed canonical verifier passed all five requirements and roadmap truths. The current full local CTest run passed 179/179, the focused Phase 2 selection passed 88/88, all three admitted headless runner cases passed, and the protocol probe recorded zero PPU accesses. No physical DMG-CPU-B observation or broad compatibility claim is made. See [Phase 2 verification](milestones/v0.1-phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md).
 - The admitted corpus is three derived headless reporting closures (one CPU, two timer). Original Mooneye reporting paths depend on PPU/LY behavior outside scope and remain excluded. No physical DMG-CPU-B observation occurred; no hardware qualification is claimed.
 - Phase 1 PR #1 and Phase 2 PR #2 were merged on 2026-10-07 after their required exact-head checks passed. The 2026-10-07 triage found no open PRs or issues at that time. Phase 2 verification is limited to its documented DMG-CPU-B CPU/timer scope; no physical DMG observation or PPU qualification is claimed.
 - Phase 6 has no open goal, requirement, review, or high/blocking security finding. The release workflow's original post-publication readback failure was repaired before closeout; the live release API and a fresh download reconcile the published 18-asset inventory.
@@ -218,19 +215,36 @@ None outside the roadmap.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
-| 261006-r6w | Fix the bus_unsupported_stack fixture so RET NC tests its intended condition under checksum-selected DMG startup flags; validate the offline test inventory. | 2026-10-06 | 3231d21 | [261006-r6w-fix-the-bus-unsupported-stack-fixture-so](./quick/261006-r6w-fix-the-bus-unsupported-stack-fixture-so/) |
+
+### Roadmap Evolution
+
+- Phase 06.1 inserted after Phase 6: Address v0.1 tech debt: CI workflow info items and audio consumer coverage (URGENT)
 
 ## Deferred Items
 
-Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIREMENTS.md#next-milestone-requirements--gbgbc-breadth) and [FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md); none are counted in active coverage.
+Future requirements and acceptance direction remain in the [archived v0.1 requirements](milestones/v0.1-REQUIREMENTS.md#next-milestone-requirements--gbgbc-breadth) and [FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md); none are counted in active coverage.
 
 ## Session Continuity
 
-Last session: 2026-10-10T14:30:00Z
-Stopped at: Phase GB-06 verification freshness refresh complete — Phase GB-01 verification freshness refresh next
-Resume file: .planning/.continue-here.md
-Next command in fresh context: `$gsd-execute-phase 1` (Phase 1 — Portable Foundation and Original ROM Tracer verification freshness refresh)
+Last session: 2026-10-10T16:48:58Z
+Stopped at: v0.1 milestone completed and archived on `chore/v0.1-complete-milestone`
+Resume file: None
+Next command in fresh context: `/gsd-new-milestone`
 Continuation note: [.continue-here.md](.continue-here.md)
-Completed workflow stage: **Phase 6 — Qualified DMG Release and Consumer Handoff verification freshness refresh** (2026-10-10). Canonical verification passed 5/5 truths and SHIP-01–08 at `f0acb86` on `gsd/phase-06-verification-refresh`. Gates: Nyquist filled 1 gap (release output-path contract), security 18/18 closed, code review 1 warning fixed with 0 open dispositions, regression 179/179 core, 20/20 helper, 51/51 player/package. No hosted-CI, physical-hardware or perceptual result is claimed.
+Completed workflow stage: **v0.1 milestone completion** (2026-10-10) — `verified_closeout`: 7/7 phases passed, 35/35 requirements, audit `passed`, 0 open artifacts (the Phase 5 `-Wunsequenced` item was confirmed fixed and marked resolved). ROADMAP, REQUIREMENTS, audit, phase directories and quick tasks are archived under [milestones/](milestones/); `REQUIREMENTS.md` was removed for the next milestone; tag `v0.1` marks the close. Next stage: **new milestone definition** (GB/GBC breadth direction) via `/gsd-new-milestone`. No phase is active; nothing advances automatically.
 
-Next closeout actions: merge this phase's PR after exact-head required checks pass, then `$gsd-execute-phase 1`. Then reconcile Phase 2 CPU-02/CPU-05 SUMMARY metadata and run **`$gsd-audit-milestone v0.1`**. Do not run `$gsd-complete-milestone v0.1` until the audit is reviewed and reports no gaps.
+Completed workflow stage: **v0.1 milestone re-audit** (2026-10-10) — `passed`, 35/35 requirements, 7/7 phases, 12/12 integration, 5/5 flows, 0 blockers. Next step: the owner completes the milestone with `$gsd-complete-milestone v0.1`. No auto-advance.
+
+Completed workflow stage: **Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage, execution and verification** (2026-10-10). Verification passed 4/4; Nyquist, security (32/32 closed), UI (not applicable), code review (3 info deferred), regression (184/184) gates run; all seven phases read passed. Next step: the owner re-runs the milestone audit with `$gsd-audit-milestone v0.1`. No auto-advance.
+
+Completed workflow stage: **Phase 2 — DMG CPU, Bus and Time verification freshness refresh** (2026-10-10). Canonical verification passed 5/5 truths and CPU-01–05 at `a9050df` on `gsd/phase-02-verification-refresh-2`. Gates: Nyquist 0 gaps, security 45/45 closed, code review 1 info deferred with 0 open dispositions, regression 179/179 core. No hosted-CI, physical-hardware or perceptual result is claimed.
+
+Completed workflow stage: **v0.1 milestone audit** (2026-10-10) — `tech_debt`, 35/35 requirements, 0 blockers.
+
+Completed workflow stage: **Phase 06.1 context gathering** (2026-10-10) on branch `gsd/phase-06.1-address-v0-1-tech-debt-ci-workflow-info-items-and-audio-cons` (11 locked decisions in `06.1-CONTEXT.md`: fix all 7 info items, C/C++ installed-consumer audio smoke on Windows/Linux/macOS, newest-run exact-head gate script, code PR then docs-only refresh PR). Next: **`$gsd-plan-phase 06.1`** (research first); after Phase 06.1 verifies, re-run `$gsd-audit-milestone v0.1` and then `$gsd-complete-milestone v0.1`.
+
+Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/phase-06.1-address-v0-1-tech-debt-ci-workflow-info-items-and-audio-cons`. Research, pattern map, validation strategy and 8 plans in 6 waves (wave 1: plans 01–03 in parallel; then 04 PR 1 batched workflow commit + exact-head merge; 05–07 verification refreshes of Phases 1–6; 08 disposition, docs-only PR 2, freshness confirmation). Plan checker: 3 iterations plus one narrow guidance pass, 0 blockers remaining; decision coverage 11/11. Research corrections: Windows lane is MinGW-w64 (no MSVC claim); P2 IN-01 gets a single `player-gate` definition with a `check-player-result.sh` self-test. Next: **Phase 06.1 execution** — `$gsd-execute-phase 06.1`. Phase 06.1 is not executed; nothing advances automatically.
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

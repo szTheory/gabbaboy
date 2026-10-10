@@ -101,7 +101,10 @@ static bool copy_rom_path(const char *path, char **out_copy,
 
 static bool read_rom_file(const char *path, uint8_t **out_rom, size_t *out_size,
                           char *out_error, size_t error_capacity) {
-    const int fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
+    /* O_NONBLOCK keeps opening a FIFO or device from blocking; O_NOCTTY keeps a
+     * terminal path from becoming the controlling terminal. Different problems,
+     * so both flags stay. */
+    const int fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK | O_NOCTTY);
     if (fd < 0) {
         set_error(out_error, error_capacity, "Could not open the selected ROM file.");
         return false;
@@ -137,9 +140,14 @@ static bool read_rom_file(const char *path, uint8_t **out_rom, size_t *out_size,
         break;
     }
     const int close_result = close(fd);
-    if (close_result != 0 || total > PLAYER_SESSION_MAX_ROM_SIZE) {
+    if (total > PLAYER_SESSION_MAX_ROM_SIZE) {
         free(bytes);
         set_error(out_error, error_capacity, "The selected ROM exceeds the 2 MiB read bound.");
+        return false;
+    }
+    if (close_result != 0) {
+        free(bytes);
+        set_error(out_error, error_capacity, "Could not finish reading the selected ROM.");
         return false;
     }
     *out_rom = bytes;

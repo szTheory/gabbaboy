@@ -1,0 +1,53 @@
+---
+phase: 02
+review: 02-REVIEW.md
+titles: json
+findings:
+  - id: IN-01
+    severity: info
+    disposition: fixed
+    title: "Player-gating condition duplicated in two places"
+  - id: CR-01
+    severity: critical
+    disposition: fixed
+    title: "BLOCKER — Promotion trusts mutable candidate digests as hosted evidence"
+  - id: WR-01
+    severity: warning
+    disposition: fixed
+    title: "Protocol probe accepts callback records after the result breakpoint"
+  - id: CR-02
+    severity: critical
+    disposition: fixed
+    title: "BLOCKER — Unconditional RET and RETI read the stack one machine cycle late"
+  - id: CR-03
+    severity: critical
+    disposition: fixed
+    title: "BLOCKER — Repeated EI postpones IME for an extra instruction"
+  - id: CR-04
+    severity: critical
+    disposition: fixed
+    title: "BLOCKER — Interrupt diagnostics can violate chronological order"
+  - id: CR-05
+    severity: critical
+    disposition: fixed
+    title: "BLOCKER — The required Mooneye corpus cannot reach its declared result protocol"
+open: 0
+total: 7
+recorded: 2026-10-10T15:55:45Z
+---
+
+# Phase 02: Code Review Disposition
+
+| Finding | Severity | Disposition | Source |
+|---------|----------|-------------|--------|
+| IN-01 | info | fixed | Fixed by Phase 06.1 PR #54, squash merge `ab76d09c2ee27ba09fc5f3c2510af016aebfdecb`. The `player-gate` job's `player_required` output is the single definition: at the merge SHA, `ci.yml` contains `event_name == 'pull_request'` exactly once (grep count 1, `ci.yml:136`), and `macos-player-package` (`ci.yml:141`) and `required-native` (`ci.yml:189`) consume `needs.player-gate.outputs.player_required`. `required-native` decides through `.github/scripts/check-player-result.sh`, whose `--self-test` (14 cases) runs in `native-linux-x64`. PR-head ci run 38064419789: `player-gate`, `macos-player-package` and `required-native` all succeeded. Main-push ci run 38064726000 on the merge SHA: `macos-player-package` skipped and `required-native` succeeded. Rechecked clean in the 2026-10-10 post-06.1 review. |
+| CR-01 | critical | fixed | `verify-mooneye-unadmitted.sh:54-118` binds committed Git lock, retained hosted lock/report, local ROMs, exact run ID and all three hosted ROM bytes; its self-test rejects mutable-lock and local-byte tampering. (not in the current review) |
+| WR-01 | warning | fixed | `probe-mooneye-candidate.sh:25-76` stops trace processing at the result breakpoint and rejects callback-after-result; `--self-test-order` proves both orders. (not in the current review) |
+| CR-02 | critical | fixed | Retained `cpu_return_phases` regression; full Phase 1 CTest suite passed 100/100. (not in the current review) |
+| CR-03 | critical | fixed | Retained `interrupt_ei_chain` regression; full Phase 1 CTest suite passed 100/100. (not in the current review) |
+| CR-04 | critical | fixed | Retained `interrupt_diagnostic_order` regression; full Phase 1 CTest suite passed 100/100. (not in the current review) |
+| CR-05 | critical | fixed | Exact hosted candidate run 37561292904 plus full Phase 2 runner suite; all 100 Phase 1 CTest cases passed. (not in the current review) |
+
+Dispositions: `open` (recorded, not yet triaged), `fixed`, `skipped`, `deferred`.
+Set `deferred` by hand and put the reason in the Source cell; both are preserved. A `|` in the reason is kept as prose and escaped on the next run.
+Re-running the gate keeps every row it can. A row the current review no longer reports is kept and its Source cell flagged, so a finding does not leave this record silently. ONE exception: when a finding id is REUSED by a different finding, the earlier decision cannot keep a row — the id is taken — and it is dropped. A RECORDED decision (anything but `open`) is named on the console when that happens; a row still at `open` is replaced silently, because `open` records no decision to lose.
