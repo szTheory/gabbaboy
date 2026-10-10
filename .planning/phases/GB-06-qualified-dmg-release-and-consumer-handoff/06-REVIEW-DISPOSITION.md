@@ -27,14 +27,18 @@ findings:
     severity: warning
     disposition: fixed
     title: "Verified-output contract falsely rejects the unquoted YAML expression form"
+  - id: AUDIT-AUDIO-CONSUMER (v0.1 milestone audit)
+    severity: info
+    disposition: fixed
+    title: "Installed C++ consumer and Windows installed-consumer lane did not call the PCM API (AUDIO-02, SHIP-01 non-blocking tech debt)"
 open: 0
-total: 6
-recorded: "2026-10-10T14:00:00Z"
+total: 7
+recorded: "2026-10-10T16:19:47Z"
 ---
 
 # Phase 06: Code Review Disposition
 
-The current `06-REVIEW.md` (2026-10-10T14:00:00Z, standard, four files) is clean after its one finding was fixed.
+The current `06-REVIEW.md` (2026-10-10T16:19:02Z, standard, five files, re-review after Phase 06.1) is clean with no findings. The earlier 14:00Z review was clean after its one finding was fixed.
 The rows below record what happened to every finding raised across this
 review loop. Earlier reviews reused IDs, so later rows carry their review time.
 
@@ -46,6 +50,7 @@ review loop. Earlier reviews reused IDs, so later rows carry their review time.
 | WR-02 (interim) | warning | fixed | Temporary-file cleanup tolerates any `OSError`, so the original failure propagates; withdrawal is per item, so one failed withdrawal does not skip the other. Rollback does not swallow `KeyboardInterrupt`; the re-review accepted that as equivalent to an external kill. |
 | IN-01 (interim) | info | fixed | The identity-mismatch branch no longer removes the name. The `_withdraw_artifact` docstring states the inherent POSIX stat-then-unlink window. |
 | WR-01 (freshness) | warning | fixed in `320fcc5` | The candidate verifier's output-path contract now matches whole `${{ ... }}` expressions in bare YAML values, so the unquoted `${{ runner.temp }}/…` form is accepted. A positive self-check covers it, and the old pattern fails that check. Non-temp, `..` and checkout-relative values are still rejected. The re-review was clean. |
+| AUDIT-AUDIO-CONSUMER (milestone audit) | info | fixed | Closed by Phase 06.1 (PR 54, merge `ab76d09c2ee27ba09fc5f3c2510af016aebfdecb`): `audio_api_smoke()` in the installed C++ (`da42206`) and C (`4ef77c4`) consumers calls `gbb_run_audio` with structural assertions only (D-03). Hosted: ci run 38064419789 `native-windows-x64` (MinGW-w64 GCC 14.2.0) passed `installed_consumer_c`, `installed_consumer_cpp` and the phase-2 variants; Linux x64 and macOS arm64 lanes and preview run 38064419803 also passed. See `.planning/phases/GB-06.1-address-v0-1-tech-debt-ci-workflow-info-items-and-audio-cons/06.1-DEBT-DISPOSITION.md`. No MSVC, DLL, Windows archive-level, hardware or perceptual claim; Windows archive-level package smoke is re-deferred there. The 06.1 re-review (`06-REVIEW.md`, 2026-10-10T16:19:02Z) is clean. |
 
 Evidence: the focused helper suite passes 17/17. Mutants without each rollback
 fail the new tests. The full core CTest passes 179/179, and the macOS SDL 3.4.18
