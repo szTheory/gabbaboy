@@ -242,7 +242,7 @@ foreach(case zero exact short null canary)
 endforeach()
 
 add_executable(test_runner test_runner.c)
-target_link_libraries(test_runner PRIVATE gabbaboy_accept)
+target_link_libraries(test_runner PRIVATE gabbaboy_runner_support)
 target_compile_features(test_runner PRIVATE c_std_17)
 set_target_properties(test_runner PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME runner_help

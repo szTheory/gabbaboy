@@ -1,5 +1,6 @@
 #include "gabbaboy/gabbaboy.h"
 #include "gbb_accept.h"
+#include "acceptance.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -235,20 +236,27 @@ static void print_usage(FILE *stream, const char *program) {
       "Usage:\n"
       "  %s <rom.gb>\n"
       "  %s --manifest <manifest.json> --case <id> [--receipt]\n"
-      "  %s --manifest <manifest.json> --suite [--receipt]\n",
-      program, program, program);
+      "  %s --manifest <manifest.json> --suite [--receipt]\n"
+      "  %s --acceptance <cases.txt> --case <id> [--receipt]\n",
+      program, program, program, program);
 }
 
 int main(int argc,char **argv) {
     if(argc==2&&strncmp(argv[1],"--",2)!=0)return run_original_tracer(argv[1]);
-    const char *manifest=NULL,*selected=NULL;int receipt=0,suite=0;
+    const char *manifest=NULL,*selected=NULL,*acceptance=NULL;int receipt=0,suite=0;
     for(int i=1;i<argc;i++){
         if(strcmp(argv[i],"--help")==0){print_usage(stdout,argv[0]);return 0;}
         else if(strcmp(argv[i],"--manifest")==0&&i+1<argc)manifest=argv[++i];
+        else if(strcmp(argv[i],"--acceptance")==0&&i+1<argc)acceptance=argv[++i];
         else if(strcmp(argv[i],"--case")==0&&i+1<argc)selected=argv[++i];
         else if(strcmp(argv[i],"--suite")==0)suite=1;
         else if(strcmp(argv[i],"--receipt")==0)receipt=1;
         else {fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
+    }
+    if(acceptance){
+        if(manifest||suite||!selected){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
+        gbb_acceptance_options options={receipt,GBB_BUILD_REVISION,GBB_BUILD_QUALIFIED};
+        return gbb_acceptance_run_file(acceptance,selected,&options);
     }
     if(!manifest||(!suite&&!selected)||(suite&&selected)){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
     uint8_t manifest_bytes[MAX_MANIFEST+1];size_t manifest_length=0;

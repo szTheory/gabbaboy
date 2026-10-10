@@ -198,3 +198,4 @@ acceptance_parse_script_bounds
 acceptance_parse_script_errors
 acceptance_predicate_truth_table
 acceptance_predicate_anchors
+acceptance_libbet

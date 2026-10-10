@@ -22,3 +22,14 @@ add_test(NAME acceptance_predicate_truth_table COMMAND test_acceptance_lib accep
 add_test(NAME acceptance_predicate_anchors
   COMMAND test_acceptance_lib acceptance_predicate_anchors ${GBB_ACCEPT_LIBBET_ROM})
 set_tests_properties(acceptance_predicate_truth_table acceptance_predicate_anchors PROPERTIES TIMEOUT 30)
+
+# Runner acceptance case (D-23, D-28): paths in cases.txt resolve against the working directory,
+# so every acceptance CTest runs from the repository root.
+add_test(NAME acceptance_libbet
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:gabbaboy-runner>;--acceptance;tests/acceptance/cases.txt;--case;libbet;--receipt"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=acceptance id=libbet status=pass"
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(acceptance_libbet PROPERTIES TIMEOUT 300 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
