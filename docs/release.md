@@ -14,11 +14,14 @@ Download the asset for your runner and its matching `.sha256` file where
 provided. Check it before extraction (for example,
 `sha256sum --check gabbaboy-core-macos-arm64.tar.gz.sha256`; use the platform's
 SHA-256 utility on macOS/Windows). The release's candidate/platform manifest,
-build receipts, and `support-ledger-v0.1.0.json` provide additional provenance;
+build receipts, and `support-ledger.json` (named `support-ledger-v0.1.0.json` on v0.1.0) provide additional provenance;
 compare each asset name and digest with the downloaded bytes. The support
 sidecar is generated after the tag. It records the exact source SHA and the
-Git blob digest of the tagged
-[`docs/support/v0.1.0.md`](support/v0.1.0.md), plus fixture and corpus identity.
+Git blob digest of the applicable tagged ledger, plus fixture and corpus
+identity. A release binds the newest `docs/support/vX.Y.Z.md` at or below its
+own version: ledgers are added when the support scope changes, so a fixes-only
+patch release (for example v0.1.1 or v0.1.2) binds the unchanged
+[`docs/support/v0.1.0.md`](support/v0.1.0.md) and records both versions.
 The source ledger intentionally does not contain its future commit SHA, so its
 own source can be reviewed before tagging without a self-reference.
 

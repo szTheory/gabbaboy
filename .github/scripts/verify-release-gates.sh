@@ -66,7 +66,7 @@ def validate_isolated_release_readbacks(text):
     if not validation_match:
         raise ValueError("existing performance receipt must use its dedicated validation download directory")
     validation_path = validation_match.group(1)
-    section_start = text.find('for name in support-ledger-v0.1.0.json release-performance-receipt.json; do')
+    section_start = text.find('for name in support-ledger.json release-performance-receipt.json; do')
     section_end = text.find('      - name: Validate the exact candidate asset set after platform smoke', section_start)
     if section_start < 0 or section_end < 0:
         raise ValueError("release evidence attachment/readback section is missing")
@@ -229,7 +229,7 @@ required = {
     "gabbaboy-core-macos-arm64.tar.gz.sha256", "gabbaboy-build-receipt-macos-arm64.json",
     "gabbaboy-preview-macos-arm64.tar.gz", "gabbaboy-preview-macos-arm64-build-receipt.json",
     "gabbaboy-core-windows-x64.tar.gz", "gabbaboy-core-windows-x64.tar.gz.sha256",
-    "gabbaboy-build-receipt-windows-x64.json", "support-ledger-v0.1.0.json",
+    "gabbaboy-build-receipt-windows-x64.json", "support-ledger.json",
     "release-performance-receipt.json",
 }
 names = [asset.get("name") for asset in assets]
@@ -253,7 +253,7 @@ for name in ("source-receipt.json", "candidate-receipt.json"):
     for field, value in (("tag_name", tag), ("source_sha", source_sha), ("release_id", release_id), ("draft", True)):
         if receipt.get(field) != value:
             raise SystemExit(f"{name} has mismatched {field}")
-sidecar = json.loads((root / "support-ledger-v0.1.0.json").read_text())
+sidecar = json.loads((root / "support-ledger.json").read_text())
 if sidecar.get("tag") != tag or sidecar.get("source_sha") != source_sha:
     raise SystemExit("support sidecar is not bound to the exact tag/source")
 if not re.fullmatch(r"[0-9a-f]{40}", sidecar.get("ledger", {}).get("git_blob_oid", "")):

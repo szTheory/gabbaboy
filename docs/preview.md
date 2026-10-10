@@ -9,7 +9,7 @@ input, caller-owned video/audio, and host battery import/export, see the
 [native integration guide](native-integration.md). Its Playstead section
 describes a possible future adapter seam; no live Game Boy integration exists.
 The tracked [v0.1.0 support ledger](support/v0.1.0.md) states the model and
-corpus limits. The release's separate `support-ledger-v<version>.json`
+corpus limits. The release's separate `support-ledger.json`
 attachment binds that ledger to the exact tagged source revision.
 
 The portable core and its normal tests do not need SDL. To build and verify the optional player with the official, digest-checked SDL3 3.4.18 source on macOS, run:

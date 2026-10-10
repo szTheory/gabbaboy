@@ -818,13 +818,13 @@ jobs:
             echo "Source receipt does not bind an exact PR head to this release merge commit." >&2; exit 1;
           }
           mkdir -p build
-          python3 tests/scripts/verify-support-ledger.py --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --output build/support-ledger-v0.1.0.json
+          python3 tests/scripts/verify-support-ledger.py --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --output build/support-ledger.json
           gh api "repos/$GH_REPO/commits/$pr_head_sha/check-runs?per_page=100" > build/all-head-check-runs.json
           jq --arg expected_head "$pr_head_sha" \
             '[.check_runs[] | select(.head_sha == $expected_head and .status == "completed" and .conclusion == "success") | {id, name, started_at, completed_at, conclusion, head_sha}]' \
             build/all-head-check-runs.json > build/hosted-check-runs.json
           assets=$(gh api "repos/$GH_REPO/releases/$release_id/assets?per_page=100")
-          for name in support-ledger-v0.1.0.json release-performance-receipt.json; do
+          for name in support-ledger.json release-performance-receipt.json; do
             # shellcheck disable=SC2016
             count=$(jq --arg name "$name" '[.[] | select(.name == $name)] | length' <<<"$assets")
             [[ "$count" -le 1 ]] || { echo "Duplicate release evidence asset: $name" >&2; exit 1; }
@@ -850,7 +850,7 @@ jobs:
             cmp -s build/release-measure/release-performance-receipt.json build/release-performance-receipt.json
           fi
           python3 tests/scripts/verify-support-ledger.py --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" \
-            --verify-sidecar build/support-ledger-v0.1.0.json
+            --verify-sidecar build/support-ledger.json
           RELEASE_CHECK_HEAD_SHA="$pr_head_sha" python3 - "$SOURCE_SHA" "$RELEASE_TAG" build/release-performance-receipt.json <<'PY'
           import json, pathlib, sys
           import os
@@ -859,7 +859,7 @@ jobs:
           if data.get("source_sha") != source or data.get("release_tag") != tag or data.get("trace_pair_digest_equal") is not True or data.get("hosted_check_head_sha") != os.environ["RELEASE_CHECK_HEAD_SHA"] or not data.get("hosted_exact_source_check_durations"):
               raise SystemExit("Performance receipt is missing exact source, tag, paired digest, or hosted CI duration evidence")
           PY
-          for name in support-ledger-v0.1.0.json release-performance-receipt.json; do
+          for name in support-ledger.json release-performance-receipt.json; do
             # shellcheck disable=SC2016
             count=$(gh api "repos/$GH_REPO/releases/$release_id/assets?per_page=100" | jq --arg name "$name" '[.[] | select(.name == $name)] | length')
             if [[ "$count" == 1 ]]; then
@@ -892,7 +892,7 @@ jobs:
               "gabbaboy-core-macos-arm64.tar.gz.sha256", "gabbaboy-build-receipt-macos-arm64.json",
               "gabbaboy-preview-macos-arm64.tar.gz", "gabbaboy-preview-macos-arm64-build-receipt.json",
               "gabbaboy-core-windows-x64.tar.gz", "gabbaboy-core-windows-x64.tar.gz.sha256",
-              "gabbaboy-build-receipt-windows-x64.json", "support-ledger-v0.1.0.json",
+              "gabbaboy-build-receipt-windows-x64.json", "support-ledger.json",
               "release-performance-receipt.json",
           }
           if len(names) != len(set(names)):
@@ -902,7 +902,7 @@ jobs:
               raise SystemExit(f"candidate asset set mismatch; missing={sorted(expected-actual)} unknown={sorted(actual-expected)}")
           PY
           mkdir -p build/downloaded
-          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern 'gabbaboy-core-*' --pattern 'gabbaboy-preview-*' --pattern 'gabbaboy-build-receipt-*' --pattern candidate-receipt.json --pattern gabbaboy-notices.txt --pattern source-receipt.json --pattern build-receipt.json --pattern support-ledger-v0.1.0.json --pattern release-performance-receipt.json --dir build/downloaded
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern 'gabbaboy-core-*' --pattern 'gabbaboy-preview-*' --pattern 'gabbaboy-build-receipt-*' --pattern candidate-receipt.json --pattern gabbaboy-notices.txt --pattern source-receipt.json --pattern build-receipt.json --pattern support-ledger.json --pattern release-performance-receipt.json --dir build/downloaded
           git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > build/verify-release-gates.sh
           bash build/verify-release-gates.sh --check-digest-sidecar \
             build/downloaded/gabbaboy-core-macos-arm64.tar.gz.sha256 \
@@ -923,11 +923,11 @@ jobs:
                       "gabbaboy-core-macos-arm64.tar.gz.sha256", "gabbaboy-build-receipt-macos-arm64.json",
                       "gabbaboy-preview-macos-arm64.tar.gz", "gabbaboy-preview-macos-arm64-build-receipt.json",
                       "gabbaboy-core-windows-x64.tar.gz", "gabbaboy-core-windows-x64.tar.gz.sha256",
-                      "gabbaboy-build-receipt-windows-x64.json", "support-ledger-v0.1.0.json",
+                      "gabbaboy-build-receipt-windows-x64.json", "support-ledger.json",
                       "release-performance-receipt.json"}
           if {item["name"] for item in assets} != required:
               raise SystemExit("downloaded release asset set differs from the qualified exact set")
-          for evidence_name in ("support-ledger-v0.1.0.json", "release-performance-receipt.json"):
+          for evidence_name in ("support-ledger.json", "release-performance-receipt.json"):
               if not any(item["name"] == evidence_name for item in assets):
                   raise SystemExit(f"generated source evidence missing from manifest: {evidence_name}")
           evidence = {}
@@ -944,7 +944,7 @@ jobs:
           if preview.get("source_revision") != source_sha or preview.get("result") != "passed":
               raise SystemExit("player build receipt identity or result mismatch")
           data = {"schema_version": 1, "source_sha": source_sha, "assets": assets, "builds": evidence,
-                  "support_sidecar": "support-ledger-v0.1.0.json",
+                  "support_sidecar": "support-ledger.json",
                   "performance_receipt": "release-performance-receipt.json",
                   "player_build_receipt": "gabbaboy-preview-macos-arm64-build-receipt.json",
                   "downloaded_smoke": "Linux/macOS/Windows core consumers and macOS player passed",
@@ -1058,8 +1058,8 @@ jobs:
               "downloaded_smoke": "Linux, macOS, and Windows core consumers plus macOS player passed on exact draft bytes",
               "assets": [{"name": row["name"], "id": row["id"], "sha256": hashlib.sha256((root / row["name"]).read_bytes()).hexdigest()}
                          for row in rows],
-              "support_sidecar": "support-ledger-v0.1.0.json",
-              "support_sidecar_sha256": hashlib.sha256((root / "support-ledger-v0.1.0.json").read_bytes()).hexdigest(),
+              "support_sidecar": "support-ledger.json",
+              "support_sidecar_sha256": hashlib.sha256((root / "support-ledger.json").read_bytes()).hexdigest(),
               "candidate_manifest_sha256": hashlib.sha256((root / "candidate-platform-manifest.json").read_bytes()).hexdigest(),
               "builds": manifest.get("builds", {}),
               "limits": ["DMG-CPU-B deterministic software profile only", "no physical DMG observation", "no Developer ID signature or notarization"],
