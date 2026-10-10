@@ -343,3 +343,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** After the heading was added, the dry run reported 7 phases, 64 plans and 104 tasks, and the confirmed run archived the roadmap, requirements, audit, phases and quick tasks. A link-existence check over the five rewritten files found no broken targets.
 - **Source:** `.planning/milestones/v0.1-ROADMAP.md`, OpenGSD 1.16.0 `bin/lib/roadmap-parser.cjs` (`getMilestonePhaseFilter`), `docs/mbc1-evidence.md`.
 - **Status:** Adopted.
+
+### GB-AUDIO-001 / 2026-10-10 / Check mixer full scale against the documented DAC and NR50 model before freezing PCM
+
+- **Cause and evidence:** The core mixed `volume * 2048 - 16384` per channel (one unit = 16384 counts) times the NR50 `(volume + 1)` multiplier with no headroom divisor. Pan Docs defines each DAC as -1..1, a four-channel side as -4..4 and NR50 as a (volume+1)/8 scale, so s16 full scale must hold four units at volume 7. A scratch probe over `libbet.gb` (Start tap at f500, 1500 frames) measured a pre-saturation peak of 229376 counts, 73284 of 2410954 resampled samples (3.04%) clipped at s16 and output reaching -32768. The existing `audio_saturation` test only drove the post-mix kernel with INT32 extremes, so it could not see the scale error, and earlier audio digests had frozen it.
+- **Remedy:** Divide each channel term by 16 (exact: terms are multiples of 2048) in `audio_current_mix`; after the fix the same run peaks at 14336 with 0 clipped samples and output -9277..10115. `audio_saturation` now runs two full-volume guest pulses at NR50 `$77` and requires a peak between 8192 and 32766. The guest partition digest moved from `b5bb127cdda6a035` to `c89a0db6f083c345`.
+- **Applies when:** Any change to APU channel levels, NR50/NR51 scaling or the PCM digests; and before blessing PCM or game-acceptance audio evidence. Probe with a real ROM rather than only synthetic kernel inputs, and count clipped samples before the high-pass stage (after it, clipping can hide as only a couple of rail-valued samples).
+- **Verification:** Full CTest suite (200 tests) passes after the change; the scratch probe reports 0 saturated mixer samples on Libbet. The probe is not committed.
+- **Source:** [audio-and-playback](../../docs/audio-and-playback.md), D-027 in DECISIONS.md, Pan Docs Audio details (Mixer), mGBA `src/gb/audio.c` (read only).
+- **Status:** Adopted.

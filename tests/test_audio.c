@@ -348,6 +348,35 @@ static int audio_saturation(const char *case_name) {
             negative_output[0].right == INT16_MIN);
     gbb_destroy(positive);
     gbb_destroy(negative);
+
+    /* D-19(i): the documented mixer sums four DAC outputs of +/-1 unit and
+     * NR50 scales by (volume+1)/8, so full scale is 4 units at NR50=$77 and
+     * two full-volume pulses must stay inside s16. Before the headroom divide
+     * they reached 7x full scale and 3% of Libbet's samples clipped. */
+    static const uint8_t two_pulses[] = {
+        0x3Eu, 0x77u, 0xEAu, 0x24u, 0xFFu,
+        0x3Eu, 0xF0u, 0xEAu, 0x12u, 0xFFu, 0xEAu, 0x17u, 0xFFu,
+        0x3Eu, 0x80u, 0xEAu, 0x11u, 0xFFu, 0xEAu, 0x16u, 0xFFu,
+        0x3Eu, 0xF0u, 0xEAu, 0x13u, 0xFFu, 0xEAu, 0x18u, 0xFFu,
+        0x3Eu, 0x87u, 0xEAu, 0x14u, 0xFFu, 0xEAu, 0x19u, 0xFFu, 0x18u, 0xFEu
+    };
+    gbb_instance *loud = load_program(two_pulses, sizeof(two_pulses));
+    REQUIRE(loud != NULL);
+    static gbb_audio_frame loud_frames[1024];
+    size_t loud_count = 0u;
+    const gbb_run_result loud_run = gbb_run_audio(loud, 140448u, loud_frames, 1024u, &loud_count);
+    /* A whole instruction must fit the budget, so the run may stop a few ticks short. */
+    REQUIRE(loud_run.consumed_half_dots > 140000u && loud_count > 700u);
+    int32_t loud_peak = 0;
+    for (size_t i = 0u; i < loud_count; ++i) {
+        const int32_t l = loud_frames[i].left < 0 ? -(int32_t)loud_frames[i].left : loud_frames[i].left;
+        const int32_t r = loud_frames[i].right < 0 ? -(int32_t)loud_frames[i].right : loud_frames[i].right;
+        if (l > loud_peak) loud_peak = l;
+        if (r > loud_peak) loud_peak = r;
+    }
+    printf("# two full-volume pulses at NR50=$77, peak |sample|: %d\n", (int)loud_peak);
+    REQUIRE(loud_peak >= 8192 && loud_peak < INT16_MAX);
+    gbb_destroy(loud);
     PASS();
 }
 
