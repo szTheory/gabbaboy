@@ -321,3 +321,31 @@ const gbb_case *gbb_cases_find(const gbb_case_list *list, const char *id) {
     }
     return NULL;
 }
+
+int gbb_case_model_known(const char *model) {
+    return model != NULL && (strcmp(model, "dmg-cpu-b") == 0 || strcmp(model, "cgb-cpu-e") == 0);
+}
+
+static int has_model(const char list[][GBB_CASES_MODEL_LEN + 1u], size_t count, const char *model) {
+    for (size_t i = 0; i < count; i++) {
+        if (strcmp(list[i], model) == 0) return 1;
+    }
+    return 0;
+}
+
+gbb_case_applicability_kind gbb_case_applicability(const gbb_case *c, const char *model,
+                                                   const char *revision) {
+    if (revision == NULL) revision = model;
+    gbb_case_applicability_kind kind;
+    if (has_model(c->model_fail, c->model_fail_count, model)) {
+        kind = GBB_CASE_EXPECT_FAIL;
+    } else if (has_model(c->model_pass, c->model_pass_count, model)) {
+        kind = GBB_CASE_EXPECT_PASS;
+    } else {
+        return GBB_CASE_EXCLUDED_MODEL;
+    }
+    if (c->target_revision[0] != '\0' && strcmp(c->target_revision, revision) != 0) {
+        return GBB_CASE_EXCLUDED_REVISION;
+    }
+    return kind;
+}

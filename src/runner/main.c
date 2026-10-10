@@ -243,9 +243,8 @@ static void print_usage(FILE *stream, const char *program) {
       "  %s <rom.gb>\n"
       "  %s --manifest <manifest.json> --case <id> [--receipt]\n"
       "  %s --manifest <manifest.json> --suite [--receipt]\n"
-      "  %s --acceptance <cases.txt> --case <id> [--receipt] [--failure-dir <dir>]\n"
-      "  %s --acceptance <cases.txt> --case <id> --observe [--input-script <file>]\n"
-      "      [--frame-digest-at <half-dots>] [--pcm-digest] [--dump-checkpoints <dir>]\n",
+      "  %s --acceptance <cases.txt> (--case <id> | --suite --expect-excluded <n>) [--model <id>] [--revision <r>] [--failure-dir <dir>] [--receipt]\n"
+      "  %s --acceptance <cases.txt> --case <id> --observe [--input-script <file>] [--frame-digest-at <half-dots>] [--pcm-digest] [--dump-checkpoints <dir>]\n",
       program, program, program, program, program);
 }
 
@@ -271,6 +270,14 @@ int main(int argc,char **argv) {
         else if(strcmp(argv[i],"--receipt")==0)receipt=1;
         else if(strcmp(argv[i],"--failure-dir")==0&&i+1<argc)options.failure_dir=argv[++i];
         else if(strcmp(argv[i],"--observe")==0)options.observe=1;
+        else if(strcmp(argv[i],"--model")==0&&i+1<argc)options.model=argv[++i];
+        else if(strcmp(argv[i],"--revision")==0&&i+1<argc)options.revision=argv[++i];
+        else if(strcmp(argv[i],"--expect-excluded")==0&&i+1<argc){
+            const char *text=argv[++i];size_t n=strlen(text);unsigned value=0;int valid=n>0&&n<=3;
+            for(size_t k=0;valid&&k<n;k++){if(text[k]<'0'||text[k]>'9')valid=0;else value=value*10u+(unsigned)(text[k]-'0');}
+            if(valid&&value>GBB_CASES_MAX_CASES)valid=0;
+            if(!valid){fprintf(stderr,"invalid-arguments: reason=invalid-expect-excluded\n");return 2;}
+            options.expect_excluded=value;options.has_expect_excluded=1;}
         else if(strcmp(argv[i],"--input-script")==0&&i+1<argc){options.observe_input_script=argv[++i];observe_only_flag=1;}
         else if(strcmp(argv[i],"--frame-digest-at")==0&&i+1<argc){
             if(!parse_half_dots(argv[++i],&options.frame_digest_at)){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
@@ -280,11 +287,15 @@ int main(int argc,char **argv) {
         else {fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
     }
     if(acceptance){
-        if(manifest||suite||!selected||(observe_only_flag&&!options.observe)){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
+        if(observe_only_flag&&!options.observe){fprintf(stderr,"invalid-arguments: reason=observe-only-flag\n");return 2;}
+        if(options.model!=NULL&&!gbb_case_model_known(options.model)){fprintf(stderr,"invalid-arguments: reason=unknown-model\n");return 2;}
+        if(suite&&!options.has_expect_excluded){fprintf(stderr,"invalid-arguments: reason=expect-excluded-required\n");return 2;}
+        if(manifest||(suite&&(selected||options.observe))||(!suite&&(!selected||options.has_expect_excluded))){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
+        options.suite=suite;
         options.receipt=receipt;options.core_revision=GBB_BUILD_REVISION;options.build_qualified=GBB_BUILD_QUALIFIED;
         return gbb_acceptance_run_file(acceptance,selected,&options);
     }
-    if(options.failure_dir||options.observe||observe_only_flag){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
+    if(options.failure_dir||options.observe||observe_only_flag||options.model||options.revision||options.has_expect_excluded){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
     if(!manifest||(!suite&&!selected)||(suite&&selected)){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
     size_t manifest_length=0;
     uint8_t *manifest_bytes=malloc(MAX_MANIFEST+1);

@@ -81,6 +81,21 @@ int gbb_cases_path_valid(const char *path);
  * without truncation. */
 int gbb_runner_read_file(const char *path, size_t capacity, uint8_t **out, size_t *length);
 
+/* ---- Model applicability (D-22) ---- */
+typedef enum {
+    GBB_CASE_EXPECT_PASS = 0,      /* model is in model_pass */
+    GBB_CASE_EXPECT_FAIL,          /* model is in model_fail: strict expected failure */
+    GBB_CASE_EXCLUDED_MODEL,       /* model is in neither list */
+    GBB_CASE_EXCLUDED_REVISION     /* target_revision differs from the effective revision */
+} gbb_case_applicability_kind;
+
+/* Recognised --model tokens: dmg-cpu-b and cgb-cpu-e. Returns 1 when known. */
+int gbb_case_model_known(const char *model);
+/* Decides what a run of this case on `model` at `revision` must show. model_fail wins over
+ * model_pass (the parser forbids a model in both). A NULL revision means the model token. */
+gbb_case_applicability_kind gbb_case_applicability(const gbb_case *c, const char *model,
+                                                   const char *revision);
+
 typedef struct {
     int receipt;                  /* print a provenance line after the status line */
     const char *core_revision;    /* optional, for the receipt */
@@ -93,11 +108,24 @@ typedef struct {
     uint64_t frame_digest_at;     /* extra checkpoint labelled t<half-dots> */
     int pcm_only;                 /* limit output to the PCM lines */
     const char *dump_dir;         /* write <id>.<label>.ppm per checkpoint */
+    /* Applicability (D-22). Only dmg-cpu-b can execute in this phase. */
+    const char *model;            /* NULL means dmg-cpu-b */
+    const char *revision;         /* NULL means the model token */
+    int suite;                    /* run every case in file order */
+    int has_expect_excluded;
+    unsigned expect_excluded;     /* declared exclusion count, required with suite */
+    /* Set by the runner for one expected-failure case (model_fail): */
+    int expect_fail;
+    const char *expect_fail_reason;
+    int *xfailed;                 /* receives 1 when the declared failure occurred */
 } gbb_acceptance_options;
 
 /* Runs one parsed case on DMG-CPU-B. Exit codes: 0 pass, 1 fail, 2 invalid
  * input (every input check completes before an instance is created), 3
- * unsupported or stopped. Status goes to stdout, input errors to stderr. */
+ * unsupported or stopped, 4 excluded by model or target revision (file entry
+ * points only). With expect_fail set, the declared failure reason prints
+ * status=xfail and returns 0 with *xfailed = 1, and a pass prints
+ * status=unexpected-pass and returns 1. Status goes to stdout, input errors to stderr. */
 int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *options);
 /* Reads and fully validates cases_path, then runs the selected case. */
 int gbb_acceptance_run_file(const char *cases_path, const char *case_id,

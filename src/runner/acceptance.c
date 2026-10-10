@@ -17,6 +17,7 @@
 #define EXIT_FAIL 1
 #define EXIT_INVALID 2
 #define EXIT_UNSUPPORTED 3
+#define EXIT_EXCLUDED 4
 #define DRIVE_MAX_BATCH 64u
 
 int gbb_runner_read_file(const char *path, size_t capacity, uint8_t **out, size_t *length) {
@@ -306,6 +307,14 @@ static int fail_run(const gbb_case *c, const gbb_acceptance_options *options, co
             snprintf(ppm_note, sizeof(ppm_note), " ppm=write-failed");
         }
     }
+    if (options != NULL && options->expect_fail && options->expect_fail_reason != NULL &&
+        options->expect_fail_reason[0] != '\0' && strcmp(options->expect_fail_reason, reason) == 0) {
+        /* Strict expected failure (D-22): only the declared reason counts, and it counts as xfail. */
+        printf("acceptance id=%s status=xfail model=dmg-cpu-b reason=%s end_half_dots=%llu\n", c->id, reason,
+               (unsigned long long)end_half_dots);
+        if (options->xfailed != NULL) *options->xfailed = 1;
+        return EXIT_PASS;
+    }
     printf("acceptance id=%s status=fail model=dmg-cpu-b reason=%s end_half_dots=%llu%s\n", c->id, reason,
            (unsigned long long)end_half_dots, ppm_note);
     return EXIT_FAIL;
@@ -477,6 +486,13 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
             code = fail_run(c, options, st, reason, result.end_half_dots);
             break;
         }
+        if (options != NULL && options->expect_fail) {
+            /* model_fail is strict: a case that was expected to fail and passed is a failure. */
+            printf("acceptance id=%s status=unexpected-pass model=dmg-cpu-b t_hit_half_dots=%llu\n", c->id,
+                   (unsigned long long)result.t_hit_half_dots);
+            code = EXIT_FAIL;
+            break;
+        }
         printf("acceptance id=%s status=pass model=dmg-cpu-b t_hit_half_dots=%llu\n", c->id,
                (unsigned long long)result.t_hit_half_dots);
         if (options != NULL && options->receipt) {
@@ -531,6 +547,69 @@ done:
     return code;
 }
 
+/* Applies D-22 applicability, then runs the case with the expected-failure fields filled in. An
+ * excluded case exits 4 without creating an instance; only dmg-cpu-b can execute in this phase. */
+static int run_applicable(const gbb_case *c, const gbb_acceptance_options *options, int *excluded,
+                          int *xfailed) {
+    const char *model = options->model != NULL ? options->model : "dmg-cpu-b";
+    *excluded = 0;
+    *xfailed = 0;
+    gbb_case_applicability_kind kind = gbb_case_applicability(c, model, options->revision);
+    if (kind == GBB_CASE_EXCLUDED_MODEL || kind == GBB_CASE_EXCLUDED_REVISION) {
+        printf("acceptance id=%s status=excluded reason=%s model=%s\n", c->id,
+               kind == GBB_CASE_EXCLUDED_MODEL ? "unsupported-model" : "target-revision", model);
+        *excluded = 1;
+        return EXIT_EXCLUDED;
+    }
+    if (strcmp(model, "dmg-cpu-b") != 0) {
+        printf("acceptance id=%s status=unsupported reason=unsupported-profile model=%s\n", c->id, model);
+        return EXIT_UNSUPPORTED;
+    }
+    gbb_acceptance_options run = *options;
+    run.expect_fail = kind == GBB_CASE_EXPECT_FAIL;
+    run.expect_fail_reason = c->expect_fail_reason;
+    run.xfailed = xfailed;
+    return gbb_acceptance_run_case(c, &run);
+}
+
+/* Runs every case in file order. The suite passes only when something was eligible, every eligible
+ * case ran and passed or failed as declared, and the excluded count equals the declared count, so
+ * moving a case to excluded cannot shrink the denominator silently. */
+static int run_suite(const gbb_case_list *list, const gbb_acceptance_options *options) {
+    size_t eligible = 0, executed = 0, excluded = 0, xfail = 0;
+    int first_code = 0;
+    for (size_t i = 0; i < list->count; ++i) {
+        int was_excluded = 0, xfailed = 0;
+        int code = run_applicable(&list->cases[i], options, &was_excluded, &xfailed);
+        if (was_excluded) {
+            excluded++;
+            continue;
+        }
+        eligible++;
+        if (code == EXIT_PASS || code == EXIT_FAIL) executed++;
+        if (xfailed) xfail++;
+        if (code != EXIT_PASS && first_code == 0) first_code = code;
+    }
+    const char *reason = NULL;
+    char detail[96];
+    detail[0] = '\0';
+    int code = EXIT_PASS;
+    if (eligible == 0) {
+        reason = "no-eligible-cases";
+        code = EXIT_FAIL;
+    } else if (excluded != options->expect_excluded) {
+        reason = "excluded-count-mismatch";
+        snprintf(detail, sizeof(detail), " expected=%u observed=%zu", options->expect_excluded, excluded);
+        code = EXIT_FAIL;
+    } else if (executed != eligible || first_code != 0) {
+        code = first_code != 0 ? first_code : EXIT_FAIL;
+    }
+    printf("suite eligible=%zu executed=%zu excluded=%zu xfail=%zu status=%s%s%s%s\n", eligible, executed,
+           excluded, xfail, code == EXIT_PASS ? "pass" : "fail", reason != NULL ? " reason=" : "",
+           reason != NULL ? reason : "", detail);
+    return code;
+}
+
 int gbb_acceptance_run_file(const char *cases_path, const char *case_id,
                             const gbb_acceptance_options *options) {
     uint8_t *bytes = NULL;
@@ -552,13 +631,19 @@ int gbb_acceptance_run_file(const char *cases_path, const char *case_id,
         fprintf(stderr, "%s\n", rc == 1 ? err : "invalid-cases: allocation-failed line=0");
         return EXIT_INVALID;
     }
-    const gbb_case *c = gbb_cases_find(&list, case_id);
     int code;
+    if (options->suite) {
+        code = run_suite(&list, options);
+        gbb_cases_free(&list);
+        return code;
+    }
+    const gbb_case *c = gbb_cases_find(&list, case_id);
     if (c == NULL) {
         fprintf(stderr, "unknown-case: %s\n", case_id);
         code = EXIT_INVALID;
     } else {
-        code = gbb_acceptance_run_case(c, options);
+        int excluded = 0, xfailed = 0;
+        code = run_applicable(c, options, &excluded, &xfailed);
     }
     gbb_cases_free(&list);
     return code;
