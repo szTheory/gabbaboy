@@ -1,22 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: v0.1
-milestone_name: Limited DMG Preview
-status: Awaiting next milestone
-stopped_at: v0.1 milestone completed and archived (verified_closeout); next is /gsd-new-milestone
-last_updated: "2026-10-10T17:15:20.726Z"
+milestone: v0.2
+milestone_name: Color & Cartridge Breadth
+status: planning
+last_updated: "2026-10-10T18:30:38.449Z"
 last_activity: 2026-10-10
-last_activity_desc: Milestone v0.1 completed and archived
-state_head: c21631a791fa839b3b517b59aa99e364531d8428
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 64
-  completed_plans: 64
-  percent: 100
-  verified_phases: 7
-current_phase: null
-current_phase_name: null
+  total_phases: 9
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -26,14 +20,16 @@ current_phase_name: null
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-10)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Planning the next milestone (committed direction: GB/GBC breadth)
+**Current focus:** v0.2 Color & Cartridge Breadth — Phase 7: DMG Game Acceptance and Regression Baseline (not started)
 
 ## Current Position
 
-Phase: Milestone v0.1 complete
-Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-10-10 — Milestone v0.1 completed and archived
+Phase: 7 of 15 (v0.2 spans Phases 7–15) — DMG Game Acceptance and Regression Baseline
+Plan: — (not planned)
+Status: Ready to discuss Phase 7
+Last activity: 2026-10-10 — v0.2 roadmap created (9 phases, 28/28 requirements mapped)
+
+Progress (v0.2): [░░░░░░░░░░] 0% (0/9 phases)
 
 ## Performance Metrics
 
@@ -219,18 +215,21 @@ None outside the roadmap.
 ### Roadmap Evolution
 
 - Phase 06.1 inserted after Phase 6: Address v0.1 tech debt: CI workflow info items and audio consumer coverage (URGENT)
+- 2026-10-10: v0.2 roadmap created — Phases 7–15 continue v0.1 numbering. Order follows research/v0.2/SUMMARY.md: acceptance + DMG baseline (7); seam merged with MBC5 and MBC2 (8, MBC5/MBC2 plans parallel after the seam plan); MBC3 + RTC + loader matrix + new-mapper continuation (9); CGB profile/banking (10); colour PPU + player colour (11); double speed (12) and HDMA (13) kept separate and sequential; CGB-E qualification + corpus (14); CGB acceptance, ledger and release (15). Deep phase research flagged for 9, 11, 12, 13, 14. Rights gates: G5/G2 on 7; G1 on 9, 11, 14; G3 on 9; G4 on 11.
 
 ## Deferred Items
 
-Future requirements and acceptance direction remain in the [archived v0.1 requirements](milestones/v0.1-REQUIREMENTS.md#next-milestone-requirements--gbgbc-breadth) and [FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md); none are counted in active coverage.
+Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped); deferred v0.3 items (STATE-01, INT-01) and later direction are in its Future section and [FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md), not counted in active coverage.
 
 ## Session Continuity
 
-Last session: 2026-10-10T16:48:58Z
-Stopped at: v0.1 milestone completed and archived on `chore/v0.1-complete-milestone`
+Last session: 2026-10-10
+Stopped at: v0.2 milestone definition complete (requirements + roadmap) on `gsd/v0.2-milestone-definition`; Phase 7 not started
 Resume file: None
-Next command in fresh context: `/gsd-new-milestone`
+Next command in fresh context: `/gsd-discuss-phase 7`
 Continuation note: [.continue-here.md](.continue-here.md)
+Completed workflow stage: **v0.2 milestone definition — roadmap creation** (2026-10-10). This is initialization, not Phase 7. ROADMAP.md adds the `## v0.2 Color & Cartridge Breadth` section with Phases 7–15; REQUIREMENTS.md traceability maps 28/28 requirements. Next phase: **Phase 7 — DMG Game Acceptance and Regression Baseline**, via **`/gsd-discuss-phase 7`**. Both `workflow.auto_advance` and `workflow._auto_chain_active` stay false; stop after every phase and wait for the owner. No phase is active; nothing advances automatically.
+
 Completed workflow stage: **v0.1 milestone completion** (2026-10-10) — `verified_closeout`: 7/7 phases passed, 35/35 requirements, audit `passed`, 0 open artifacts (the Phase 5 `-Wunsequenced` item was confirmed fixed and marked resolved). ROADMAP, REQUIREMENTS, audit, phase directories and quick tasks are archived under [milestones/](milestones/); `REQUIREMENTS.md` was removed for the next milestone; tag `v0.1` marks the close. Next stage: **new milestone definition** (GB/GBC breadth direction) via `/gsd-new-milestone`. No phase is active; nothing advances automatically.
 
 Completed workflow stage: **v0.1 milestone re-audit** (2026-10-10) — `passed`, 35/35 requirements, 7/7 phases, 12/12 integration, 5/5 flows, 0 blockers. Next step: the owner completes the milestone with `$gsd-complete-milestone v0.1`. No auto-advance.
@@ -247,4 +246,5 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Discuss Phase 7 (DMG Game Acceptance and Regression Baseline): `/gsd-discuss-phase 7`
+- Phase-stop rule: stop after each phase and yield; never auto-advance into the next phase or milestone.

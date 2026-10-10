@@ -9,11 +9,19 @@ GabbaBoy is a portable C17 emulator core for Nintendo Game Boy (DMG) and Game Bo
 - **Shipped:** v0.1 Limited DMG Preview (milestone closed 2026-10-10; release [`v0.1.0`](https://github.com/szTheory/gabbaboy/releases/tag/v0.1.0) published 2026-10-09). 7 phases, 64 plans, 35/35 requirements, audit `passed`.
 - **Code:** ~18k lines of C/C++ (about 7k in `src/` + `include/`); CMake/Ninja/CTest; 184 local CTest cases at the 06.1 regression run; required CI on Linux, macOS and Windows (MinGW-w64).
 - **Evidence scope:** admitted corpus is three source-qualified derived Mooneye CPU/timer closures plus original project ROMs. No physical hardware, perceptual output, signing/notarization, or live Playstead integration is claimed.
-- **Open:** Release-Please PR #41 (0.1.1) awaits maintainer approval; accepted info-level debt is listed in the [v0.1 audit](milestones/v0.1-MILESTONE-AUDIT.md).
+- **Open:** No open issues or PRs at the v0.2 start (2026-10-10); releases `v0.1.0` and `v0.1.2` published. Accepted info-level debt is listed in the [v0.1 audit](milestones/v0.1-MILESTONE-AUDIT.md).
 
-## Next Milestone Goals
+## Current Milestone: v0.2 Color & Cartridge Breadth
 
-Committed direction is **GB/GBC breadth** ([FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md)), to be scoped by `/gsd-new-milestone`: a CGB profile with color/compatibility modes, speed switching, banking, palettes and HDMA (CGB-01..03); MBC2/3/5 (CART-01); deterministic MBC3 RTC (RTC-01); transactional versioned save states (STATE-01); and a qualified Playstead adapter (INT-01). Before broadening the claims, add one rights-clear game-level acceptance in the existing player. Split this into smaller releases if needed, but keep CGB ahead of optional enhancements.
+**Goal:** Play supported CGB software and the common MBC2/MBC3/MBC5 cartridge set (with deterministic RTC) through the same bounded core and player, after first proving one rights-clear game end to end on the existing DMG player.
+
+**Target features:**
+- One rights-clear game-level acceptance in the existing DMG player (guest-observable start/progress, meaningful input, visible/audio response) before any broadened claim.
+- MBC5, MBC3 with deterministic host-independent RTC (and its battery persistence), and MBC2 with built-in RAM.
+- A CGB silicon profile: CGB mode and DMG-compatibility mode, double-speed switching, VRAM/WRAM banking, BG/OBJ color palettes and attributes, general/HBlank HDMA, and model-specific CPU/PPU/APU differences under explicit model qualification.
+- Updated support ledger, docs, release notes, and a qualified v0.2 release scoped to the tested corpus.
+
+Deferred to v0.3 (States & Integration): transactional versioned save states (STATE-01) and a qualified Playstead adapter (INT-01), so serialization is designed once over the complete DMG+CGB machine state.
 
 ## Core Value
 
@@ -35,13 +43,13 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 
 ### Active
 
-Next-milestone candidates (to be confirmed by `/gsd-new-milestone`):
+v0.2 Color & Cartridge Breadth (scoped in [REQUIREMENTS.md](REQUIREMENTS.md)):
 
-- [ ] CGB silicon profile, color and DMG-compatibility modes, speed switching, banking, palettes, and HDMA with model-qualified tests (CGB-01..03).
+- [ ] Rights-clear game-level acceptance in the DMG player before broadened claims.
 - [ ] MBC2/MBC3/MBC5 cartridges and deterministic MBC3 RTC (CART-01, RTC-01).
-- [ ] Transactional, versioned native save states with exact continuation equivalence (STATE-01).
-- [ ] A qualified Playstead adapter; libretro only if its value is demonstrated (INT-01).
-- [ ] One rights-clear game-level acceptance in the player before broadening compatibility claims.
+- [ ] CGB silicon profile, color and DMG-compatibility modes, speed switching, banking, palettes, and HDMA with model-qualified tests (CGB-01..03).
+
+Next (v0.3, provisional): transactional versioned native save states (STATE-01) and a qualified Playstead adapter (INT-01).
 
 Ongoing project principles: dependency-light C API with explicit contracts; headless core independent of the player; reproducible tests, sanitizers, fuzzing, and baselines; tested artifacts through PR and release automation; source-linked decisions, current docs, and transferable lessons.
 
@@ -101,4 +109,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-10-10 after the v0.1 milestone (35/35 requirements validated; next milestone not yet defined).
+Last updated: 2026-10-10 at the start of milestone v0.2 Color & Cartridge Breadth.

@@ -1,48 +1,58 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v0.1 — Limited DMG Preview",
+  "milestone": "v0.2 \u2014 Color & Cartridge Breadth",
   "phases": [
     {
-      "number": "1",
-      "name": "Portable Foundation and Original ROM Tracer",
-      "status": "complete"
+      "number": "7",
+      "name": "DMG Game Acceptance and Regression Baseline",
+      "status": "not_started"
     },
     {
-      "number": "2",
-      "name": "DMG CPU, Bus, and Time",
-      "status": "complete"
+      "number": "8",
+      "name": "Cartridge Seam, MBC5 and MBC2",
+      "status": "not_started"
     },
     {
-      "number": "3",
-      "name": "Visible Interactive DMG",
-      "status": "complete"
+      "number": "9",
+      "name": "MBC3, Deterministic RTC and Cartridge Persistence",
+      "status": "not_started"
     },
     {
-      "number": "4",
-      "name": "MBC1 and Safe Battery Continuation",
-      "status": "complete"
+      "number": "10",
+      "name": "CGB Profile, Banking and Register Visibility",
+      "status": "not_started"
     },
     {
-      "number": "5",
-      "name": "DMG Audio and Stable Playback",
-      "status": "complete"
+      "number": "11",
+      "name": "CGB Colour Rendering and Player Colour",
+      "status": "not_started"
     },
     {
-      "number": "6",
-      "name": "Qualified DMG Release and Consumer Handoff",
-      "status": "complete"
+      "number": "12",
+      "name": "CGB Double Speed",
+      "status": "not_started"
     },
     {
-      "number": "06.1",
-      "name": "Address v0.1 tech debt (INSERTED)",
-      "status": "complete"
+      "number": "13",
+      "name": "CGB HDMA",
+      "status": "not_started"
+    },
+    {
+      "number": "14",
+      "name": "CGB-E Model Qualification and Corpus",
+      "status": "not_started"
+    },
+    {
+      "number": "15",
+      "name": "CGB Acceptance, Support Ledger and v0.2.0 Release",
+      "status": "not_started"
     }
   ],
   "next": {
-    "command": "/gsd-new-milestone",
-    "label": "Start the next milestone (GB/GBC breadth direction)",
-    "reason": "v0.1 completed and archived (verified_closeout, 35/35); no phase is active"
+    "command": "/gsd-discuss-phase 7",
+    "label": "Discuss Phase 7: DMG Game Acceptance and Regression Baseline",
+    "reason": "v0.2 initialized (research, 28 requirements, 9-phase roadmap); Phase 7 not started"
   },
-  "updated_at": "2026-10-10T17:15:20.737Z"
+  "updated_at": "2026-10-10T18:30:38.451Z"
 }
