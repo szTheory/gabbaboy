@@ -491,7 +491,6 @@ jobs:
       RELEASE_ID: ${{ inputs.retry && inputs.release_id || '' }}
       GBB_EXPECTED_SOURCE_REVISION: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
       SOURCE_REVISION: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
-      GBB_VERIFIED_OUTPUT_DIR: build/release-player-verified
     steps:
       - name: Require trusted candidate identity and unpublished matching draft
         shell: bash
@@ -618,7 +617,7 @@ jobs:
           mkdir -p build/downloaded-player
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-preview-macos-arm64.tar.gz --pattern gabbaboy-preview-macos-arm64-build-receipt.json --dir build/downloaded-player
           cp build/downloaded-player/gabbaboy-preview-macos-arm64-build-receipt.json build/downloaded-player/build-receipt.json
-          GBB_VERIFIED_OUTPUT_DIR=build/release-player-downloaded bash tests/scripts/verify-phase3-player.sh --verify-package build/downloaded-player
+          GBB_VERIFIED_OUTPUT_DIR="$RUNNER_TEMP/release-player-downloaded" bash tests/scripts/verify-phase3-player.sh --verify-package build/downloaded-player
           mkdir -p build/downloaded-core build/consumer-work
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-macos-arm64.tar.gz --pattern gabbaboy-core-macos-arm64.tar.gz.sha256 --dir build/downloaded-core
           git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > "$RUNNER_TEMP/verify-release-gates.sh"

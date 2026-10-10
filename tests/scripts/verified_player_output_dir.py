@@ -178,13 +178,26 @@ def _publish_new_artifact(descriptor: int, name: str, write_content):
         if published_info is not None:
             try:
                 _withdraw_artifact(descriptor, name, published_info)
-            except OSError:
-                pass
+            except OSError as error:
+                _report_withdrawal_failure(name, error)
         try:
             os.unlink(temporary_name, dir_fd=descriptor)
         except OSError:
             pass
         raise
+
+
+def _report_withdrawal_failure(name: str, error: OSError) -> None:
+    """Name an artifact that may remain published after a failed publication.
+
+    The caller re-raises the original failure, so this must not replace it;
+    it only tells the operator that the output set may be incomplete.
+    """
+    print(
+        f"warning: could not withdraw published {name}: {error}; "
+        "the output directory may hold an incomplete artifact set",
+        file=sys.stderr,
+    )
 
 
 def _withdraw_artifact(descriptor: int, name: str, published_info) -> None:
@@ -311,8 +324,8 @@ def publish_verified_artifacts(
         for name, info in reversed(published):
             try:
                 _withdraw_artifact(output_descriptor, name, info)
-            except OSError:
-                pass
+            except OSError as error:
+                _report_withdrawal_failure(name, error)
         raise
     finally:
         os.close(candidate_descriptor)

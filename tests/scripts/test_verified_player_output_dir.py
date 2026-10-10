@@ -2,9 +2,12 @@
 """Regression tests for safe verified-player output directory preparation."""
 
 from pathlib import Path
+import contextlib
 import hashlib
+import io
 import json
 import os
+import re
 import stat
 import subprocess
 import sys
@@ -283,6 +286,21 @@ class VerifiedPlayerOutputDirTests(unittest.TestCase):
 
                 self.assertEqual(sorted(entry.name for entry in self.output.iterdir()), [])
 
+    def test_failed_withdrawal_is_reported_without_masking_original_error(self) -> None:
+        def fail_withdrawal(descriptor, name, published_info):
+            raise OSError("simulated withdrawal failure")
+
+        stderr = io.StringIO()
+        with patch.object(output_dir_module, "_withdraw_artifact", side_effect=fail_withdrawal):
+            with contextlib.redirect_stderr(stderr):
+                self._publish_with_failing_receipt_link()
+
+        self.assertIn(f"could not withdraw published {OUTPUT_NAMES[0]}", stderr.getvalue())
+        self.assertIn("simulated withdrawal failure", stderr.getvalue())
+        self.assertEqual(
+            sorted(entry.name for entry in self.output.iterdir()), [OUTPUT_NAMES[0]]
+        )
+
     def test_mismatched_published_name_is_not_removed(self) -> None:
         original_link = os.link
 
@@ -455,6 +473,34 @@ class VerifiedPlayerOutputDirTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "separate from the candidate directory"):
             prepare_output_dir(str(self.repository), str(nested_candidate), str(broad_output))
+
+
+class WorkflowOutputDirectoryTests(unittest.TestCase):
+    """CI must hand the helper an output directory it accepts.
+
+    The helper rejects every repository descendant, so a workspace-relative
+    GBB_VERIFIED_OUTPUT_DIR would fail the downloaded-package smoke at publish
+    time, after the expensive package checks have already passed.
+    """
+
+    def test_workflows_place_verified_output_outside_the_checkout(self) -> None:
+        workflows = Path(__file__).resolve().parents[2] / ".github" / "workflows"
+        assignment = re.compile(
+            r"GBB_VERIFIED_OUTPUT_DIR\s*[:=]\s*(\$\{\{[^}]*\}\}\S*|\S+)"
+        )
+        values = []
+        for workflow in sorted(workflows.glob("*.yml")):
+            for line in workflow.read_text(encoding="utf-8").splitlines():
+                match = assignment.search(line)
+                if match:
+                    values.append((workflow.name, match.group(1).strip("'\"")))
+        self.assertTrue(values, "no workflow sets GBB_VERIFIED_OUTPUT_DIR")
+        for workflow_name, value in values:
+            with self.subTest(workflow=workflow_name, value=value):
+                self.assertTrue(
+                    value.startswith(("${{ runner.temp }}", "$RUNNER_TEMP", "${RUNNER_TEMP}")),
+                    f"{workflow_name} sets GBB_VERIFIED_OUTPUT_DIR inside the checkout: {value}",
+                )
 
 
 if __name__ == "__main__":
