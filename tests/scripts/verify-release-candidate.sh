@@ -132,11 +132,14 @@ except ValueError:
     pass
 else:
     raise SystemExit("release workflow self-test accepted publication before the final downloaded-byte gate")
+# A bare value may contain whole `${{ ... }}` expressions, whose spaces are part
+# of the value in an unquoted YAML env entry such as preview.yml's.
+VERIFIED_OUTPUT_VALUE = r"""(?:"([^"\n]*)"|'([^'\n]*)'|((?:\$\{\{[^}\n]*\}\}|[^\s"'])*))"""
 def validate_verified_output_contract(text):
     # The player verifier helper rejects the checkout and its descendants, so a
     # checkout-relative output only fails after the draft and tag already exist.
     name = "GBB_VERIFIED_OUTPUT_DIR"
-    assignments = re.findall(name + r"""\s*[:=]\s*(?:"([^"\n]*)"|'([^'\n]*)'|([^\s"']*))""", text)
+    assignments = re.findall(name + r"\s*[:=]\s*" + VERIFIED_OUTPUT_VALUE, text)
     if text.count(name) != len(assignments):
         raise ValueError(f"{name} is used in a form the release contract cannot check; assign it explicitly under $RUNNER_TEMP")
     for quoted_double, quoted_single, bare in assignments:
@@ -148,7 +151,7 @@ try:
 except ValueError as error:
     raise SystemExit(str(error))
 # Rewrite every existing assignment, or add one when the workflow relies on the verifier default.
-mutated_output = re.sub(r"(GBB_VERIFIED_OUTPUT_DIR\s*[:=]\s*)(?:\"[^\"\n]*\"|'[^'\n]*'|[^\s\"']*)", lambda m: m.group(1) + "build/release-player-downloaded", workflow)
+mutated_output = re.sub(r"(GBB_VERIFIED_OUTPUT_DIR\s*[:=]\s*)" + VERIFIED_OUTPUT_VALUE, lambda m: m.group(1) + "build/release-player-downloaded", workflow)
 if mutated_output == workflow:
     mutated_output = workflow + "\nGBB_VERIFIED_OUTPUT_DIR=build/release-player-downloaded\n"
 try:
@@ -157,6 +160,10 @@ except ValueError:
     pass
 else:
     raise SystemExit("release workflow self-test accepted a verified output directory inside the checkout")
+try:
+    validate_verified_output_contract("    env:\n      GBB_VERIFIED_OUTPUT_DIR: ${{ runner.temp }}/verified-player-artifact\n")
+except ValueError as error:
+    raise SystemExit(f"release workflow self-test rejected an unquoted runner.temp YAML value: {error}")
 if "workflow_call:" not in workflow or "uses: ./.github/workflows/release.yml" not in entrypoint:
     raise SystemExit("release-please outputs and candidate jobs are not connected in one workflow run")
 PY
