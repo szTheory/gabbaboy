@@ -85,12 +85,35 @@ Verification-freshness refresh against the tree at `f1995ad` (code-identical to 
 | `python3 tests/scripts/test_verified_player_output_dir.py` | 20 tests, OK |
 | Reused from the Nyquist refresh at `cb4a96c` (`f1995ad`) | core CTest 179/179; player verifier 51/51 |
 
+## Evidence Refresh after Phase 06.1 (2026-10-10, source revision ac3cb6e)
+
+Verification-freshness refresh after PR 54 (merge `ab76d09c2ee27ba09fc5f3c2510af016aebfdecb`). The tree at `ac3cb6e` differs from `ab76d09` only under `.planning/`. Since `f1995ad`, the in-scope source changes are `src/player/session.c`, `tests/player/test_session.c`, `tests/scripts/test_verified_player_output_dir.py` and `tests/scripts/verify-phase3-player.sh` (a comment only). `src/core/gabbaboy.c`, `include/gabbaboy/gabbaboy.h`, `src/player/audio.c`, `src/player/input.c`, `src/player/main.c`, `tests/scripts/verified_player_output_dir.py` and `tests/scripts/measure-audio-playback.sh` are unchanged, so the T-05-01 to T-05-12 references above still hold. Current line references for the shifted files:
+
+| Threat ID | Current evidence at `ac3cb6e` |
+|-----------|-------------------------------|
+| T-05-10 / T-05-11 | `src/player/session.c:107` opens the replacement ROM with `O_RDONLY \| O_CLOEXEC \| O_NOFOLLOW \| O_NONBLOCK \| O_NOCTTY`; `:113-117` rejects non-regular or oversized files; `:142-151` now reports the 2 MiB read bound and a close failure as separate errors, freeing the buffer on both. `tests/player/test_session.c:133-137` asserts the 2097153-byte case reports "2 MiB read bound" and leaves the session unchanged; `:151-157` keeps the FIFO regression. The close-failure branch is verified by inspection only. |
+| T-05-13 | `tests/scripts/verify-phase3-player.sh:232-239` checks the package's audio metadata claims; `:301-308` publishes through `verified_player_output_dir.py`. The new comment at `:15-19` documents that the `GBB_VERIFIED_OUTPUT_DIR` fallback matters only for local `--verify-package` runs (P5 IN-01, `ecb0db7`). |
+| T-05-SC | No dependency change since `f1995ad`. |
+
+The PR 54 changes add no new threat in this phase's scope. `O_NOCTTY` only narrows `open()` behaviour on terminal paths, and splitting the error branches does not change which inputs are rejected.
+
+### Commands run (2026-10-10, tree at ac3cb6e, macOS arm64)
+
+| Command | Result |
+|---------|--------|
+| `ctest --preset phase1 --output-on-failure --no-tests=error` | 184/184 passed |
+| `SDL_AUDIO_DRIVER=dummy bash tests/scripts/verify-phase3-player.sh` (isolated `HOME`) | 51/51 passed, exit 0 |
+| `ctest --test-dir build/phase3-player/gabbaboy -R "session\|audio\|input"` | 45/45 passed |
+| `ctest --test-dir build/phase3-player/gabbaboy -R session_replace` | 2/2 passed (FIFO and size-bound regressions) |
+| `python3 tests/scripts/test_verified_player_output_dir.py` | 21 tests, OK |
+
 ## Security Audit Trail
 
 | Audit Date | Threats Total | Closed | Open | Run By |
 |------------|---------------|--------|------|--------|
 | 2026-10-08 | 14 unique IDs (20 plan-register rows) | 14 | 0 at/above high threshold | gsd-security-auditor and orchestrator |
 | 2026-10-10 | 14 unique IDs (freshness refresh at f1995ad) | 14 | 0 | orchestrator (L1 evidence refresh; short-circuit, ASVS 1) |
+| 2026-10-10 | 14 unique IDs (freshness refresh after 06.1 at ac3cb6e) | 14 | 0 | orchestrator (L1 evidence refresh; short-circuit, ASVS 1) |
 
 ## Sign-Off
 
@@ -99,7 +122,7 @@ Verification-freshness refresh against the tree at `f1995ad` (code-identical to 
 - [x] `threats_open: 0` confirmed
 - [x] `status: verified` set in frontmatter
 
-**Approval:** verified 2026-10-08; evidence refreshed 2026-10-10 at `f1995ad`. Physical device hotplug, analog DMG output, and perceptual audio remain outside this software security verification.
+**Approval:** verified 2026-10-08; evidence refreshed 2026-10-10 at `f1995ad` and again after Phase 06.1 at `ac3cb6e`. Physical device hotplug, analog DMG output, and perceptual audio remain outside this software security verification.
 
 ## Security Audit 2026-10-09
 
