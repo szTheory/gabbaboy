@@ -306,13 +306,13 @@ All six phases have completed plan execution (56/56 runnable plans); Phase 2 Pla
 3. Workflow edits land in a single batched change; every phase whose verification it makes stale (1, 2, 3, 6 as applicable) is re-verified fresh before the phase closes.
 4. Required checks pass on the exact merged head; no hardware or perceptual claim is added.
 
-**Plans:** 2/8 plans executed in 6 waves
+**Plans:** 3/8 plans executed in 6 waves
 
 Plans:
 **Wave 1**
 - [x] 06.1-01-PLAN.md — C and C++ installed-consumer `audio_api_smoke()` (wave 1)
 - [x] 06.1-02-PLAN.md — P3 IN-01..03 and P5 IN-01: player ROM read split plus `O_NOCTTY`, test helper and inner-withdrawal test, verified-output comment (wave 1)
-- [ ] 06.1-03-PLAN.md — `.github/scripts/wait-exact-head-ci.py` exact-head gate with `--self-test` (wave 1)
+- [x] 06.1-03-PLAN.md — `.github/scripts/wait-exact-head-ci.py` exact-head gate with `--self-test` (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 06.1-04-PLAN.md — single batched ci.yml + preview.yml commit, PR 1 exact-head merge, hosted readback, debt disposition (wave 2)
