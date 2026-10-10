@@ -5,17 +5,17 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 07
 current_phase_name: DMG Game Acceptance and Regression Baseline
 status: executing
-stopped_at: Completed 07-01-PLAN.md
-last_updated: "2026-10-10T22:46:08.924Z"
+stopped_at: Completed 07-02-PLAN.md
+last_updated: "2026-10-10T22:54:23.872Z"
 last_activity: 2026-10-10
 last_activity_desc: Phase GB-07 execution started
-state_head: 8805bafbf82113741ed8d2191240906243d83e4e
+state_head: d876f30f88f7f3ecdbdef31d31d812a95dcdf402
 progress:
   total_phases: 9
   completed_phases: 1
   total_plans: 17
-  completed_plans: 1
-  percent: 6
+  completed_plans: 2
+  percent: 11
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-10)
 ## Current Position
 
 Phase: GB-07 (DMG Game Acceptance and Regression Baseline) — EXECUTING
-Plan: 2 of 17
+Plan: 3 of 17
 Status: Executing Phase GB-07
 Last activity: 2026-10-10 — Phase GB-07 execution started
 
@@ -104,6 +104,7 @@ Progress (v0.2): [░░░░░░░░░░] 0% (0/9 phases)
 | Phase GB-06.1 P07 | 13 min | 2 tasks | 11 files |
 | Phase 06.1 P08 | 10 min | 2 tasks | 2 files |
 | Phase 07 P01 | 18min | 3 tasks | 11 files |
+| Phase 07 P02 | 40 min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -198,6 +199,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-06.1]: 06.1-07: Phases 5 and 6 refreshed passed; Phase 6 covered_files gains tests/consumers/c/main.c and tests/consumers/cpp/main.cpp; P5 IN-01 fixed (documented); audit audio-consumer gap fixed; 06.1 did not change release.yml (pre-existing drift from v0.1.0 recorded)
 - [Phase 07]: 07-01: the Libbet notice row pins the manifest, ROM and LICENSE.txt digests and libbet_notice checks all three; the verifier enforces the eight predicate addresses and five ROM anchors as constants
 - [Phase 07]: 07-01: closure completeness is checked by EXPECTED_CLOSURE_SHA256 in required CI and by --derive-closure on the pinned source (45 files, conservative over-approximation); hosted reproduction stays unclaimed until a real run URL exists
+- [Phase 07]: 07-02: gbb_accept_drive end_half_dots is the last logical deadline; predicate anchors_ok checks the SHA-256 before any anchor; drive callbacks share one context and max_batch is 1..64 (replay uses 32)
 
 ### Pending Todos
 
@@ -231,8 +233,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-10T22:46:08.899Z
-Stopped at: Completed 07-01-PLAN.md
+Last session: 2026-10-10T22:54:23.844Z
+Stopped at: Completed 07-02-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 7`
 Continuation note: [.continue-here.md](.continue-here.md)
