@@ -1,5 +1,6 @@
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/expected-tests.txt"
   GABBABOY_PLAYER_EXPECTED_TESTS)
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
 target_compile_definitions(gabbaboy-player-adapter PRIVATE
   GBB_PLAYER_AUDIO_TESTING)
 if(NOT GABBABOY_PLAYER_EXPECTED_TESTS)
@@ -125,6 +126,10 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       set_target_properties(test_player_limitations PROPERTIES C_EXTENSIONS OFF)
     endif()
     add_test(NAME player_limitations COMMAND test_player_limitations)
+  elseif(test_name STREQUAL "player_verified_output_directory")
+    add_test(NAME player_verified_output_directory
+      COMMAND "${Python3_EXECUTABLE}"
+        "${PROJECT_SOURCE_DIR}/tests/scripts/test_verified_player_output_dir.py")
   else()
     message(FATAL_ERROR "Unknown optional player test in inventory: ${test_name}")
   endif()

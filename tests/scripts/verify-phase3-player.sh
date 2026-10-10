@@ -12,7 +12,8 @@ SDL_BUILD="${BUILD_ROOT}/SDL3-build"
 SDL_PREFIX="${BUILD_ROOT}/prefix"
 APP_BUILD="${BUILD_ROOT}/gabbaboy"
 ARTIFACT_DIR="${BUILD_ROOT}/preview-candidate"
-FINAL_ARTIFACT_DIR="${GBB_VERIFIED_OUTPUT_DIR:-${BUILD_ROOT}/preview-verified-artifact}"
+FINAL_ARTIFACT_TEMP_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+FINAL_ARTIFACT_DIR="${GBB_VERIFIED_OUTPUT_DIR:-${FINAL_ARTIFACT_TEMP_ROOT}/gabbaboy-preview-verified-artifact}"
 EXTRACT_DIR="${BUILD_ROOT}/downloaded-package"
 EXPECTED_SOURCE_REVISION="${GBB_EXPECTED_SOURCE_REVISION:-}"
 PLAYER_SMOKE_HOME=""
@@ -256,7 +257,7 @@ PY
   cat "$smoke_output"
 
   if [[ "$write_final_receipt" == true ]]; then
-    local build_run_id build_run_attempt consumer_run_id consumer_run_attempt
+    local candidate_package_sha build_run_id build_run_attempt consumer_run_id consumer_run_attempt
     local package_sdl_version package_sdl_archive_sha package_sdl_license_sha package_demo_rom_sha
     local package_battery_fixture_sha package_battery_source_sha source_tree_state
     local -a package_claims=()
@@ -265,22 +266,23 @@ PY
     done < <(python3 - "$build_receipt" <<'PY'
 import json, pathlib, sys
 receipt = json.loads(pathlib.Path(sys.argv[1]).read_text())
-for key in ('github_run_id', 'github_run_attempt', 'sdl_version',
+for key in ('package_sha256', 'github_run_id', 'github_run_attempt', 'sdl_version',
             'sdl_archive_sha256', 'sdl_license_sha256', 'demo_rom_sha256',
             'battery_fixture_sha256', 'battery_fixture_source_sha256',
             'source_tree_state'):
     print(receipt[key])
 PY
 )
-    build_run_id=${package_claims[0]}
-    build_run_attempt=${package_claims[1]}
-    package_sdl_version=${package_claims[2]}
-    package_sdl_archive_sha=${package_claims[3]}
-    package_sdl_license_sha=${package_claims[4]}
-    package_demo_rom_sha=${package_claims[5]}
-    package_battery_fixture_sha=${package_claims[6]}
-    package_battery_source_sha=${package_claims[7]}
-    source_tree_state=${package_claims[8]}
+    candidate_package_sha=${package_claims[0]}
+    build_run_id=${package_claims[1]}
+    build_run_attempt=${package_claims[2]}
+    package_sdl_version=${package_claims[3]}
+    package_sdl_archive_sha=${package_claims[4]}
+    package_sdl_license_sha=${package_claims[5]}
+    package_demo_rom_sha=${package_claims[6]}
+    package_battery_fixture_sha=${package_claims[7]}
+    package_battery_source_sha=${package_claims[8]}
+    source_tree_state=${package_claims[9]}
     consumer_run_id=${GITHUB_RUN_ID:-local}
     consumer_run_attempt=${GITHUB_RUN_ATTEMPT:-local}
     if [[ -n "${GBB_EXPECTED_BUILD_RUN_ID:-}" &&
@@ -291,55 +293,14 @@ PY
           "$build_run_attempt" != "$GBB_EXPECTED_BUILD_RUN_ATTEMPT" ]]; then
       fail 'candidate package build attempt differs from the selected CI run attempt'
     fi
-    rm -rf -- "$FINAL_ARTIFACT_DIR"
-    mkdir -p "$FINAL_ARTIFACT_DIR"
-    cp "$archive" "$FINAL_ARTIFACT_DIR/gabbaboy-preview-macos-arm64.tar.gz"
-    python3 - "$FINAL_ARTIFACT_DIR/verified-receipt.json" "$archive" \
-      "$expected_sha" "$build_run_id" "$build_run_attempt" \
-      "$consumer_run_id" "$consumer_run_attempt" \
-      "$package_sdl_version" "$package_sdl_archive_sha" \
-      "$package_sdl_license_sha" "$package_demo_rom_sha" \
-      "$package_battery_fixture_sha" "$package_battery_source_sha" \
-      "$source_tree_state" <<'PY'
-import hashlib
-import json
-import os
-import pathlib
-import sys
-import tempfile
-
-target, archive, source_sha, build_run_id, build_attempt, consumer_run_id, consumer_attempt, sdl_version, sdl_archive_sha, sdl_license_sha, demo_rom_sha, battery_fixture_sha, battery_source_sha, source_tree_state = sys.argv[1:]
-archive_path = pathlib.Path(archive)
-receipt = {
-    'schema_version': 1,
-    'result': 'passed',
-    'source_revision': source_sha,
-    'build_run_id': build_run_id,
-    'build_run_attempt': build_attempt,
-    'consumer_run_id': consumer_run_id,
-    'consumer_run_attempt': consumer_attempt,
-    'build_source_tree_state': source_tree_state,
-    'package': 'gabbaboy-preview-macos-arm64.tar.gz',
-    'package_sha256': hashlib.sha256(archive_path.read_bytes()).hexdigest(),
-    'sdl_version': sdl_version,
-    'sdl_archive_sha256': sdl_archive_sha,
-    'sdl_license_sha256': sdl_license_sha,
-    'demo_rom_sha256': demo_rom_sha,
-    'battery_fixture_sha256': battery_fixture_sha,
-    'battery_fixture_source_sha256': battery_source_sha,
-    'smoke': 'SDL keyboard events reached the demo guest, extracted package produced a completed frame, and packaged MBC1 battery progress resumed in a fresh process',
-    'signed': False,
-    'notarized': False,
-    'hardware_qualified': False,
-}
-destination = pathlib.Path(target)
-with tempfile.NamedTemporaryFile('w', encoding='utf-8', dir=destination.parent,
-                                 prefix=f'.{destination.name}.', delete=False) as stream:
-    temporary = pathlib.Path(stream.name)
-    json.dump(receipt, stream, indent=2, sort_keys=True)
-    stream.write('\n')
-temporary.replace(destination)
-PY
+    FINAL_ARTIFACT_DIR=$(python3 "$ROOT_DIR/tests/scripts/verified_player_output_dir.py" \
+      --publish "$ROOT_DIR" "$candidate_dir" "$FINAL_ARTIFACT_DIR" "$archive" \
+      "$candidate_package_sha" "$expected_sha" "$build_run_id" "$build_run_attempt" \
+      "$consumer_run_id" "$consumer_run_attempt" "$package_sdl_version" \
+      "$package_sdl_archive_sha" "$package_sdl_license_sha" \
+      "$package_demo_rom_sha" "$package_battery_fixture_sha" \
+      "$package_battery_source_sha" "$source_tree_state") ||
+      fail 'could not safely publish the verified package and receipt'
     printf 'Downloaded package smoke passed for source %s; final artifact is ready.\n' "$expected_sha"
   fi
 }

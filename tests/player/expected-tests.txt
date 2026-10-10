@@ -48,3 +48,4 @@ player_audio_replacement
 player_audio_unavailable
 player_smoke
 player_reset_transition
+player_verified_output_directory
