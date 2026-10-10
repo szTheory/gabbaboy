@@ -249,6 +249,24 @@ gbb_add_acceptance_exit(acceptance_sgb_tolerance 0
   "hw_f90=00 sgb_reset_pulses=[1-9]" 300
   "--acceptance;${GBB_CASES};--case;libbet;--receipt")
 
+# Bounded stall report (D-18): a failing run with --failure-dir replays to its final frame window and writes
+# <id>.stall.txt (last 4096 trace records, last 64 writes to FF00/FF0F/FFFF/FF40/FF41, an 8-entry PC
+# histogram), capped at 65536 bytes. The D-24 failure PPM is written next to it by the same failing run
+# (owner amendment of D-18: the cap applies to the text report, plus one 69,135-byte final-frame image).
+set(GBB_STALL_FAIL_DIR ${PROJECT_BINARY_DIR}/acceptance-failures/acceptance_stall_diagnosis)
+file(MAKE_DIRECTORY ${GBB_STALL_FAIL_DIR})
+add_test(NAME acceptance_stall_diagnosis
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:gabbaboy-runner>;--acceptance;${GBB_CASES};--case;libbet;--mutate;drop:START;--failure-dir;${GBB_STALL_FAIL_DIR}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=reason=predicate-not-reached"
+    -DGBB_EXPECT_FILE=${GBB_STALL_FAIL_DIR}/libbet.stall.txt
+    -DGBB_EXPECT_FILE_MAX_SIZE=65536
+    -DGBB_EXPECT_FILE_FRESH=1
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(acceptance_stall_diagnosis PROPERTIES TIMEOUT 300 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
 # Core mutant (D-14): a copy of the core whose JOYP direction/button select test is inverted, built into a
 # test-only static library and runner. The source line is the single anchor guaranteed by Plans 07-03 and
 # 07-17; if it moves or repeats, configure fails rather than silently building an unmutated "mutant".

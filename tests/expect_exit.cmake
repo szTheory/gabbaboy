@@ -8,6 +8,7 @@
 #   GBB_FORBID_REGEX  optional regular expression the combined output must NOT match
 #   GBB_EXPECT_FILE        optional path that must exist after the run
 #   GBB_EXPECT_FILE_SIZE   optional exact byte size of GBB_EXPECT_FILE
+#   GBB_EXPECT_FILE_MAX_SIZE optional inclusive upper bound on the byte size of GBB_EXPECT_FILE
 #   GBB_EXPECT_FILE_FRESH  when set, GBB_EXPECT_FILE is removed before the run so a stale file cannot pass
 #
 # A different non-zero code is a failure, so a crash or a changed failure class is never mistaken
@@ -58,6 +59,12 @@ if(DEFINED GBB_EXPECT_FILE AND NOT "${GBB_EXPECT_FILE}" STREQUAL "")
     file(SIZE "${GBB_EXPECT_FILE}" gbb_file_size)
     if(NOT gbb_file_size EQUAL GBB_EXPECT_FILE_SIZE)
       message(FATAL_ERROR "${GBB_EXPECT_FILE} is ${gbb_file_size} bytes, expected ${GBB_EXPECT_FILE_SIZE}")
+    endif()
+  endif()
+  if(DEFINED GBB_EXPECT_FILE_MAX_SIZE AND NOT "${GBB_EXPECT_FILE_MAX_SIZE}" STREQUAL "")
+    file(SIZE "${GBB_EXPECT_FILE}" gbb_file_size)
+    if(gbb_file_size GREATER GBB_EXPECT_FILE_MAX_SIZE)
+      message(FATAL_ERROR "${GBB_EXPECT_FILE} is ${gbb_file_size} bytes, more than the ${GBB_EXPECT_FILE_MAX_SIZE} byte cap")
     endif()
   endif()
 endif()
