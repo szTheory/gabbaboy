@@ -106,3 +106,37 @@ add_test(NAME acceptance_digest_vectors
           --check $<TARGET_FILE:test_acceptance_digest>
           --ppm ${CMAKE_CURRENT_BINARY_DIR}/digest-vector.ppm)
 set_tests_properties(acceptance_digest_vectors PROPERTIES TIMEOUT 30)
+
+# Model applicability and declared-exclusion suite semantics (D-22). Exclusions exit 4 with their own
+# reason; CTest SKIP_RETURN_CODE is never used, so an excluded case can never read as a skipped pass.
+function(gbb_add_acceptance_exit name code regex timeout)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:gabbaboy-runner>;${ARGN}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT ${timeout} WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+endfunction()
+
+set(GBB_CASES tests/acceptance/cases.txt)
+set(GBB_SUITE_EXCLUSION tests/acceptance/negative/suite-exclusion.txt)
+gbb_add_acceptance_exit(acceptance_libbet_excluded_cgb-cpu-e 4
+  "status=excluded reason=unsupported-model" 30
+  "--acceptance;${GBB_CASES};--case;libbet;--model;cgb-cpu-e")
+gbb_add_acceptance_exit(acceptance_libbet-cgb-only_excluded_dmg-cpu-b 4
+  "status=excluded reason=unsupported-model" 30
+  "--acceptance;${GBB_SUITE_EXCLUSION};--case;libbet-cgb-only")
+gbb_add_acceptance_exit(acceptance_suite 0
+  "suite eligible=1 executed=1 excluded=0 xfail=0 status=pass" 300
+  "--acceptance;${GBB_CASES};--suite;--expect-excluded;0;--receipt")
+gbb_add_acceptance_exit(acceptance_suite_declared_exclusion 0
+  "suite eligible=1 executed=1 excluded=1 xfail=0 status=pass" 300
+  "--acceptance;${GBB_SUITE_EXCLUSION};--suite;--expect-excluded;1")
+gbb_add_acceptance_exit(acceptance_suite_undeclared_exclusion 1
+  "reason=excluded-count-mismatch expected=0 observed=1" 300
+  "--acceptance;${GBB_SUITE_EXCLUSION};--suite;--expect-excluded;0")
+gbb_add_acceptance_exit(acceptance_suite_missing_expect_excluded 2
+  "reason=expect-excluded-required" 30
+  "--acceptance;${GBB_CASES};--suite")
