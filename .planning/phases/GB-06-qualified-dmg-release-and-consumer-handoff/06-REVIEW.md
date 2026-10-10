@@ -1,6 +1,6 @@
 ---
 phase: GB-06-qualified-dmg-release-and-consumer-handoff
-reviewed: 2026-10-10T00:00:00Z
+reviewed: 2026-10-10T14:00:00Z
 depth: standard
 files_reviewed: 4
 files_reviewed_list:
@@ -10,10 +10,10 @@ files_reviewed_list:
   - tests/scripts/verify-release-candidate.sh
 findings:
   critical: 0
-  warning: 1
+  warning: 0
   info: 0
-  total: 1
-status: issues_found
+  total: 0
+status: clean
 ---
 
 # Phase GB-06: Code Review Report
@@ -21,7 +21,7 @@ status: issues_found
 **Reviewed:** 2026-10-10
 **Depth:** standard
 **Files Reviewed:** 4
-**Status:** issues_found
+**Status:** clean
 
 ## Summary
 
@@ -34,11 +34,15 @@ Reviewed the diffs since fd562c0 and their interaction with the surrounding file
   - A second, comment-only mention of the variable fails closed through the `count != len(assignments)` check.
   - The `$RUNNER_TEMP/..x/../..` case is rejected.
 
-  It does have one false reject, described below.
+  It had one false reject (WR-01). The fix in 320fcc5 resolved it, as recorded below.
 
-## Warnings
+## Resolved Findings
 
-### WR-01: Verified-output contract falsely rejects the unquoted YAML expression form
+### WR-01 (RESOLVED in 320fcc5): Verified-output contract falsely rejects the unquoted YAML expression form
+
+**Resolution:** Commit 320fcc5 introduces a shared `VERIFIED_OUTPUT_VALUE` pattern whose bare alternative matches whole `${{ ... }}` expressions, used by both the validator and the mutation, plus a positive self-check. Re-review: unquoted runner.temp is accepted. `${{ runner.temp }}x`, `github.workspace`, `..` segments, build/ paths and an unterminated expression are rejected. A trailing comment or a second expression after the runner.temp root is accepted, which stays under runner temp and is harmless. `--self-test` rc=0. No regressions found.
+
+**Original finding:**
 
 **File:** `tests/scripts/verify-release-candidate.sh:140-146`
 **Issue:** The regex's bare alternative is `([^\s"']*)`, which stops at whitespace. For the idiomatic YAML env form `GBB_VERIFIED_OUTPUT_DIR: ${{ runner.temp }}/x`, which `.github/workflows/preview.yml:216` already uses, the captured value is just `${{`. That value fails the `\$\{\{\s*runner\.temp\s*\}\}` branch. The contract therefore raises a "not rooted at runner temp" error for a compliant assignment, even though the pattern list explicitly intends to allow the `runner.temp` form. It fails closed, so the release gate is not weakened. But anyone who adds the natural YAML env form to release.yml gets a misleading failure. The mutation self-check does not exercise this form, so the bug is untested.
