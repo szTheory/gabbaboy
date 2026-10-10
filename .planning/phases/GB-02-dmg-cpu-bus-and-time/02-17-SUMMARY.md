@@ -50,7 +50,7 @@ patterns-established:
   - "Bind hosted artifact evidence to the exact pushed source SHA, workflow path, run, and candidate digest lock."
   - "Build and validate a complete candidate fixture set in isolation before atomically promoting it."
 
-requirements-completed: []
+requirements-completed: [CPU-05]
 
 plan_head_before: bdf214bc978548baa3b501c90b2efc5c654c5279
 plan_head_after: b088b3e145d61a72697fbdd04aaf8952058bdd6d

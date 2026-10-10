@@ -43,7 +43,7 @@ patterns-established:
   - "Require nonempty passing Phase 2 contexts and completed pull_request workflow runs tied to the exact open-PR head SHA."
   - "Keep bounded diagnostics in receipts while emitting only the most recent eight records."
 
-requirements-completed: []
+requirements-completed: [CPU-02, CPU-05]
 
 plan_head_before: 5097703f46ce0caac75a6488657342977c52911c
 plan_head_after: 8481d603b780af7889832ea3a8d3ad84d2439ba5
