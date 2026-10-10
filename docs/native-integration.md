@@ -87,7 +87,7 @@ The tracked [v0.1.0 support ledger](support/v0.1.0.md) describes the exact
 bootless DMG-CPU-B model, ROM-only and standard MBC1 subset, three eligible
 derived CPU/timer corpus cases, fixture identities, failures, exclusions, and
 evidence classes. The tagged release publishes a separate
-`support-ledger-v<version>.json` attachment binding the exact source SHA to the
+`support-ledger.json` attachment binding the exact source SHA to the
 tagged ledger blob digest and fixture/corpus identities. The three-case corpus
 is not a game compatibility percentage. No physical DMG observation, CGB,
 MBC1M, RTC, broad game-library, or perceptual claim is made.

@@ -14,7 +14,12 @@ import sys
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-LEDGER = pathlib.Path("docs/support/v0.1.0.md")
+# Ledgers are versioned when the support scope changes, not on every release.
+# A release binds the newest ledger at or below its own version, read from the
+# tagged tree, so a fixes-only patch release reuses the unchanged ledger.
+LEDGER_DIR = "docs/support"
+LEDGER_NAME = re.compile(r"v(\d+)\.(\d+)\.(\d+)\.md")
+TAG = re.compile(r"v(\d+)\.(\d+)\.(\d+)")
 BEGIN = "<!-- support-ledger-data-begin -->"
 END = "<!-- support-ledger-data-end -->"
 CASE_IDS = [
@@ -28,7 +33,37 @@ def fail(message: str) -> None:
     raise ValueError(message)
 
 
-def parse_ledger(raw: bytes) -> dict:
+def version_key(match: re.Match) -> tuple[int, int, int]:
+    return tuple(int(part) for part in match.groups())
+
+
+def select_ledger(names: list[str], tag: str) -> str:
+    """Return the ledger path for the newest ledger version not above the tag."""
+    tag_match = TAG.fullmatch(tag)
+    if not tag_match:
+        fail("tag must be a vX.Y.Z release tag")
+    release = version_key(tag_match)
+    candidates = []
+    for name in names:
+        match = LEDGER_NAME.fullmatch(name)
+        if match and version_key(match) <= release:
+            candidates.append((version_key(match), name))
+    if not candidates:
+        fail("no support ledger exists at or below this release version")
+    return f"{LEDGER_DIR}/{max(candidates)[1]}"
+
+
+def ledger_version(path: str) -> str:
+    return ".".join(LEDGER_NAME.fullmatch(pathlib.PurePosixPath(path).name).groups())
+
+
+def working_tree_ledger() -> str:
+    names = [path.name for path in (ROOT / LEDGER_DIR).iterdir()]
+    newest = max((version_key(m), m.group(0)) for m in map(LEDGER_NAME.fullmatch, names) if m)
+    return f"{LEDGER_DIR}/{newest[1]}"
+
+
+def parse_ledger(raw: bytes, expected_version: str) -> dict:
     try:
         source = raw.decode("utf-8", errors="strict")
     except UnicodeDecodeError as error:
@@ -47,7 +82,7 @@ def parse_ledger(raw: bytes) -> dict:
         data = json.loads(match.group(1), object_pairs_hook=unique_pairs)
     except (json.JSONDecodeError, ValueError) as error:
         fail(f"invalid or duplicate-key ledger JSON: {error}")
-    validate_data(data)
+    validate_data(data, expected_version)
     return data
 
 
@@ -60,10 +95,10 @@ def unique_pairs(pairs):
     return result
 
 
-def validate_data(data: dict) -> None:
+def validate_data(data: dict, expected_version: str) -> None:
     if not isinstance(data, dict) or data.get("schema_version") != 1:
         fail("unsupported ledger schema")
-    if data.get("version") != "0.1.0" or data.get("boot") != "skipped":
+    if data.get("version") != expected_version or data.get("boot") != "skipped":
         fail("ledger version/profile identity is missing or unstable")
     if data.get("model") != "bootless DMG-CPU-B deterministic software profile":
         fail("ledger must name the scoped bootless DMG-CPU-B model")
@@ -145,24 +180,25 @@ def git(*args: str, cwd: pathlib.Path = ROOT) -> bytes:
 
 
 def build_sidecar(tag: str, source_sha: str, repo_root: pathlib.Path = ROOT) -> dict:
-    if not re.fullmatch(r"v0\.1\.0", tag):
-        fail("tag must match this versioned ledger")
     if not re.fullmatch(r"[0-9a-f]{40}", source_sha):
         fail("source SHA must be a full lowercase Git commit SHA")
     actual_sha = git("rev-parse", f"{tag}^{{commit}}", cwd=repo_root).decode().strip()
     if actual_sha != source_sha:
         fail("supplied source SHA does not resolve from the requested tag")
-    ledger_raw = git("show", f"{tag}:{LEDGER.as_posix()}", cwd=repo_root)
-    data = parse_ledger(ledger_raw)
+    names = git("ls-tree", "--name-only", f"{tag}:{LEDGER_DIR}", cwd=repo_root).decode().split()
+    ledger = select_ledger(names, tag)
+    ledger_raw = git("show", f"{tag}:{ledger}", cwd=repo_root)
+    data = parse_ledger(ledger_raw, ledger_version(ledger))
     manifests = {path: git("show", f"{tag}:{path}", cwd=repo_root) for path in data["manifest_paths"]}
     identities = validate_manifest_set(data, manifests)
-    blob_oid = git("rev-parse", f"{tag}:{LEDGER.as_posix()}", cwd=repo_root).decode().strip()
+    blob_oid = git("rev-parse", f"{tag}:{ledger}", cwd=repo_root).decode().strip()
     return {
         "schema_version": 1,
-        "version": data["version"],
+        "version": tag[1:],
+        "ledger_version": data["version"],
         "tag": tag,
         "source_sha": source_sha,
-        "ledger": {"path": LEDGER.as_posix(), "git_blob_oid": blob_oid,
+        "ledger": {"path": ledger, "git_blob_oid": blob_oid,
                    "sha256": hashlib.sha256(ledger_raw).hexdigest()},
         "fixture_manifest_identities": identities,
         "corpus_revision": data["corpus_revision"],
@@ -185,13 +221,16 @@ def verify_sidecar_data(observed: dict, expected: dict) -> None:
 
 
 def self_test() -> None:
-    raw = (ROOT / LEDGER).read_bytes()
-    data = parse_ledger(raw)
+    ledger = working_tree_ledger()
+    current = ledger_version(ledger)
+    raw = (ROOT / ledger).read_bytes()
+    data = parse_ledger(raw, current)
     manifests = {path: (ROOT / path).read_bytes() for path in data["manifest_paths"]}
     validate_manifest_set(data, manifests)
     mutations = [
         raw + b"\nsource_sha: 0123456789012345678901234567890123456789\n",
         raw.replace(b'"executed_denominator": 3', b'"executed_denominator": 2'),
+        raw.replace(f'"version": "{current}"'.encode(), b'"version": "9.9.9"'),
         raw.replace(b'"broad_game_claim": false', b'"broad_game_claim": true'),
         raw.replace(b'"status": "pass"', b'"status": "pass", "status": "fail"', 1),
         raw.replace(b'mooneye-acceptance-timer-tim00-div-trigger', b'mooneye-acceptance-timer-tim00'),
@@ -202,7 +241,7 @@ def self_test() -> None:
     ]
     for changed in mutations:
         try:
-            altered = parse_ledger(changed)
+            altered = parse_ledger(changed, current)
             validate_manifest_set(altered, manifests)
         except (ValueError, KeyError):
             continue
@@ -215,6 +254,17 @@ def self_test() -> None:
         pass
     else:
         fail("self-test accepted altered tagged manifest bytes")
+    names = ["v0.1.0.md", "v0.2.0.md", "README.md"]
+    for tag, expected in (("v0.1.0", "v0.1.0.md"), ("v0.1.1", "v0.1.0.md"), ("v0.1.10", "v0.1.0.md"),
+                          ("v0.2.0", "v0.2.0.md"), ("v1.0.0", "v0.2.0.md")):
+        if select_ledger(names, tag) != f"{LEDGER_DIR}/{expected}":
+            fail(f"self-test selected the wrong ledger for {tag}")
+    for tag in ("v0.0.9", "v0.1", "0.1.1", "v0.1.1-rc1"):
+        try:
+            select_ledger(names, tag)
+        except ValueError:
+            continue
+        fail(f"self-test accepted tag without an applicable ledger: {tag}")
     fixture_sidecar = {"tag": "v0.1.0", "source_sha": "a" * 40,
                        "ledger_sha256": hashlib.sha256(raw).hexdigest(),
                        "manifest_sha256": data["manifest_sha256"]}
@@ -229,7 +279,7 @@ def self_test() -> None:
         fail("self-test accepted altered sidecar identity")
     with tempfile.TemporaryDirectory(prefix="gabbaboy-support-ledger-") as temporary:
         repository = pathlib.Path(temporary)
-        for relative in [LEDGER.as_posix(), *data["manifest_paths"]]:
+        for relative in [ledger, *data["manifest_paths"]]:
             destination = repository / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / relative, destination)
@@ -237,15 +287,21 @@ def self_test() -> None:
         environment.update({"GIT_AUTHOR_NAME": "GabbaBoy Test", "GIT_AUTHOR_EMAIL": "test@example.invalid",
                             "GIT_COMMITTER_NAME": "GabbaBoy Test", "GIT_COMMITTER_EMAIL": "test@example.invalid"})
         subprocess.run(["git", "init", "-q"], cwd=repository, env=environment, check=True)
-        subprocess.run(["git", "add", LEDGER.as_posix(), *data["manifest_paths"]],
+        subprocess.run(["git", "add", ledger, *data["manifest_paths"]],
                        cwd=repository, env=environment, check=True)
         subprocess.run(["git", "commit", "-q", "-m", "fixture"], cwd=repository,
                        env=environment, check=True)
         fake_sha = git("rev-parse", "HEAD", cwd=repository).decode().strip()
-        subprocess.run(["git", "tag", "v0.1.0", fake_sha], cwd=repository, env=environment, check=True)
-        generated = build_sidecar("v0.1.0", fake_sha, repository)
+        patch_tag = "v{}.{}.{}".format(*(int(part) + (index == 2) for index, part in enumerate(current.split("."))))
+        for tag in (f"v{current}", patch_tag):
+            subprocess.run(["git", "tag", tag, fake_sha], cwd=repository, env=environment, check=True)
+        generated = build_sidecar(f"v{current}", fake_sha, repository)
         if generated["source_sha"] != fake_sha or generated["ledger"]["sha256"] != hashlib.sha256(raw).hexdigest():
             fail("self-test generated sidecar does not bind exact source and ledger bytes")
+        patch = build_sidecar(patch_tag, fake_sha, repository)
+        if (patch["tag"], patch["version"], patch["ledger_version"]) != (patch_tag, patch_tag[1:], current) \
+                or patch["ledger"] != generated["ledger"]:
+            fail("self-test patch release did not bind the unchanged lower ledger")
         for key in ("source_sha", "ledger", "fixture_manifest_identities"):
             altered = dict(generated)
             altered[key] = None
@@ -254,7 +310,7 @@ def self_test() -> None:
             except ValueError:
                 continue
             fail(f"self-test accepted altered sidecar {key}")
-    print("support ledger self-test passed: tagged sidecar binding, scope, corpus order, digests, malformed UTF-8, duplicate keys, denominator and claim controls")
+    print("support ledger self-test passed: tagged sidecar binding, newest-applicable ledger selection, scope, corpus order, digests, malformed UTF-8, duplicate keys, denominator and claim controls")
 
 
 def main() -> int:

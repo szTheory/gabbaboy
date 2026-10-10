@@ -20,6 +20,10 @@ jobs:
         run: python3 .github/scripts/wait-exact-head-ci.py --self-test
       - name: Self-test the player result gate
         run: bash .github/scripts/check-player-result.sh --self-test
+      - name: Self-test the release support-ledger binding
+        run: python3 tests/scripts/verify-support-ledger.py --self-test
+      - name: Self-test the release gates
+        run: bash .github/scripts/verify-release-gates.sh --self-test
       - name: Configure
         run: |
           mkdir -p build/package-prefix

@@ -27,7 +27,7 @@ relocated C example, bounded stepping, timestamped input, caller-owned frame
 and audio buffers, and host-owned battery persistence. The
 [versioned support ledger](docs/support/v0.1.0.md) defines the exact DMG-CPU-B,
 cartridge, and eligible corpus scope; a release attaches a separate
-`support-ledger-v<version>.json` bound to the tagged source and ledger blob.
+`support-ledger.json` bound to the tagged source and ledger blob.
 Playstead remains a future integration: its inspected adapter is currently
 GBA/mGBA through an external process.
 
