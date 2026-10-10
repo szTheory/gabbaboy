@@ -153,3 +153,30 @@ rollback fail them. The focused suite passes 17/17. It runs as the
 which passed 51/51. Core CTest passed 179/179. These are dirty-tree local receipts.
 Local verifier mode does not call `--publish`, so publication is covered by the unit
 suite only. The 14 planned task rows are unchanged.
+
+## Release Output Path Refresh 2026-10-10
+
+Since the previous report, `release.yml` moved the downloaded-player verified
+output from the checkout-relative `build/release-player-downloaded` to
+`$RUNNER_TEMP` (`91d11d4`), and the shared helper now reports, without
+masking the original error, any artifact it could not withdraw (`8151a75`). The audit found one gap
+in task 06-06-02. The helper rejects checkout destinations at run time, but
+nothing checked the workflow statically, so a regression would only fail during a live release
+after the draft and tag already existed. `551758d` adds a fail-closed contract to the
+candidate verifier's static block: every `GBB_VERIFIED_OUTPUT_DIR` assignment
+in `release.yml` must be rooted at `$RUNNER_TEMP`, `${RUNNER_TEMP}` or
+`${{ runner.temp }}`, with no `..` segment, and unparseable uses are rejected.
+A built-in mutation rewrites the value to `build/release-player-downloaded`
+and requires the check to reject it. `bash tests/scripts/verify-release-candidate.sh --self-test`
+passed (rc=0) at `551758d`. The helper suite `python3 -B -m unittest
+test_verified_player_output_dir` (from `tests/scripts/`) passed 20/20,
+including the new withdrawal-reporting regressions. These are local
+receipts; no hosted CI has run for this revision yet. The 14 planned task rows are unchanged.
+
+## Validation Audit 2026-10-10
+
+| Metric | Count |
+|---|---|
+| Gaps found | 1 |
+| Resolved | 1 |
+| Escalated | 0 |
