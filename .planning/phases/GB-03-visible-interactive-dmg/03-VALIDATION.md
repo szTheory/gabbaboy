@@ -124,3 +124,13 @@ The failing regression exposed a real destructive edge case and was retained as 
 - `bash -n tests/scripts/verify-phase3-player.sh` and `git diff --check` passed. The existing build scratch was left intact.
 
 OpenGSD initially resolved this CMake-only repository's generic regression command to `true`. Set `workflow.test_command` to the full `phase1` CMake/CTest command above, then reran the canonical timed regression gate; it passed 179/179. Future phase regression gates now execute the actual core suite.
+
+## Validation Refresh After Publication-Rollback Fix — 2026-10-10
+
+The shared verified-player output helper now publishes the archive and receipt as one all-or-nothing set (`eb96902`). After a failure, it withdraws only the inodes it published and keeps concurrent replacements. Phase 3's mapped coverage is unchanged and remains green. It was run on committed branch `gsd/phase-03-verification-refresh` at `0403b71`: `eb96902` merged with `origin/main`, which includes the `#43` FIFO ROM-open hardening.
+
+- `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error`: 179/179 passed.
+- `PYTHONDONTWRITEBYTECODE=1 python3 tests/scripts/test_verified_player_output_dir.py`: 17/17 passed. The suite covers the original preservation and rejection cases plus the publication-rollback regressions.
+- `bash tests/scripts/verify-phase3-player.sh --build-package`: the optional player CTest passed 51/51, including `player_verified_output_directory`. SDL 3.4.18 package build and extracted-byte smoke passed (package SHA-256 `91ab1129eaadc37f9340a686c77584fffe7457cd26c04172e12d32ba0bb3eb18`, `source_revision=0403b7121e552f4be0cdddb638ca631acd07def3`). Dummy-audio recovery passed, as did guest audio (803 frames, 802 nonzero), fresh-process MBC1 continuation, and the rendered Z-down/Z-up shade transition. Local mode does not call `--publish`, so the publication path is covered by the unit suite only.
+
+No new gaps were found. No manual UAT was added. Physical CPU-B timing and PPU-revision qualification remain unclaimed.
