@@ -5,7 +5,7 @@ titles: json
 findings:
   - id: IN-01
     severity: info
-    disposition: open
+    disposition: deferred
     title: "Player-gating condition duplicated in two places"
   - id: CR-01
     severity: critical
@@ -31,7 +31,7 @@ findings:
     severity: critical
     disposition: fixed
     title: "BLOCKER — The required Mooneye corpus cannot reach its declared result protocol"
-open: 1
+open: 0
 total: 7
 recorded: 2026-10-10T12:51:28.698Z
 ---
@@ -40,7 +40,7 @@ recorded: 2026-10-10T12:51:28.698Z
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| IN-01 | info | open | - |
+| IN-01 | info | deferred | Info-only maintainability note; both `pull_request` conditions agree today and drift would fail closed or be caught by required checks. Deferred because `ci.yml` is a covered input of the Phase 1, 2, 3 and 6 VERIFICATION reports — editing it in a docs-only freshness refresh would re-stale four reports. Revisit with the next intentional CI change. |
 | CR-01 | critical | fixed | `verify-mooneye-unadmitted.sh:54-118` binds committed Git lock, retained hosted lock/report, local ROMs, exact run ID and all three hosted ROM bytes; its self-test rejects mutable-lock and local-byte tampering. (not in the current review) |
 | WR-01 | warning | fixed | `probe-mooneye-candidate.sh:25-76` stops trace processing at the result breakpoint and rejects callback-after-result; `--self-test-order` proves both orders. (not in the current review) |
 | CR-02 | critical | fixed | Retained `cpu_return_phases` regression; full Phase 1 CTest suite passed 100/100. (not in the current review) |
