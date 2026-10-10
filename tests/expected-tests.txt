@@ -193,3 +193,4 @@ libbet_notice
 libbet_install_tree
 libbet_not_installed
 libbet_not_installed_selftest
+acceptance_lib_libbet_replay

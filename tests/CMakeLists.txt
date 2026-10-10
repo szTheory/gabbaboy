@@ -242,7 +242,7 @@ foreach(case zero exact short null canary)
 endforeach()
 
 add_executable(test_runner test_runner.c)
-target_link_libraries(test_runner PRIVATE GabbaBoy::core)
+target_link_libraries(test_runner PRIVATE gabbaboy_accept)
 target_compile_features(test_runner PRIVATE c_std_17)
 set_target_properties(test_runner PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME runner_help
@@ -439,5 +439,8 @@ gbb_add_expect_exit_test(libbet_not_installed 0 "libbet absent from scanned tree
 set_tests_properties(libbet_not_installed PROPERTIES FIXTURES_REQUIRED libbet_install)
 gbb_add_expect_exit_test(libbet_not_installed_selftest 1 "libbet-installed: share/payload.bin"
   --scan-dir "${GBB_LIBBET_SCAN_SELFTEST}")
+
+# include(), not add_subdirectory(): ExpectedTests.cmake reads this directory's TESTS property only.
+include(${CMAKE_CURRENT_LIST_DIR}/acceptance/CMakeLists.txt)
 
 gabbaboy_verify_registered_tests()
