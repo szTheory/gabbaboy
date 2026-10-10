@@ -3,8 +3,8 @@ gsd_state_version: "1.0"
 milestone: v0.1
 status: executing
 stopped_at: Phase 06.1 planned
-last_updated: "2026-10-10T15:23:00.429Z"
-state_head: ae9c156a2d4e503ed0405ffa14dc25e91de1c55a
+last_updated: "2026-10-10T15:26:58.439Z"
+state_head: ae0cb7e12dfdbea1b68b2cec8bf8f8293696a2d3
 progress:
   total_phases: 7
   completed_phases: 6
@@ -13,7 +13,7 @@ progress:
   verified_phases: 6
 milestone_name: limited DMG preview
 last_activity: 2026-10-10
-current_phase_name: "Address v0.1 tech debt: CI workflow info items and audio consumer coverage"
+current_phase_name: "Address v0.1 tech debt: CI workflow info items and audio consumer coverage (INSERTED)"
 current_phase: "06.1"
 last_activity_desc: Inserted Phase 06.1 to close v0.1 audit tech debt before milestone completion
 ---
@@ -25,14 +25,14 @@ last_activity_desc: Inserted Phase 06.1 to close v0.1 audit tech debt before mil
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage (context gathered, not planned)
+**Current focus:** Phase GB-06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage (INSERTED)
 
 ## Current Position
 
 Stage: Phase 2 canonical verification freshness refresh complete; stopped at the phase boundary
 Last refreshed phase: Phase 2 — DMG CPU, Bus and Time (all 17 runnable plans complete; refreshed report passes 5/5 and CPU-01–05)
 Plans: 56/56 runnable plans complete across all six phases
-Status: All phase plans complete; Phases 1–6 verification fresh; v0.1 closeout audit pending
+Status: Executing Phase GB-06.1
 
 Phase 2's refresh ran on branch `gsd/phase-02-verification-refresh-2`, cut from `origin/main` at `a2411da` after PR #50 (Phase 1 refresh) and PR #51 (quick task 261010-bz3) were squash-merged green. The existing `gsd/phase-02-dmg-cpu-bus-and-time` and `gsd/phase-02-verification-refresh` branches are historical and were not reused (GB-GSD-009). All plans were already complete, so the run resumed at the verification gates. The report was stale because quick task 261010-bz3 changed covered SUMMARY metadata (CPU-02 in 02-16; CPU-05 in 02-16/02-17) and later phases changed Phase 2-owned `ci.yml` (macOS player lane required on every PR, `labeled` trigger removed) and `.gitignore` (`__pycache__/`).
 
