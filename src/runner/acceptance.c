@@ -296,7 +296,13 @@ static void print_observation(const gbb_case *c, const run_state *st, bool hit, 
 /* Receipt tokens that mark a control run (D-14): the raw verdict and any event mutation. */
 static void run_note(const gbb_acceptance_options *options, char out[64]) {
     out[0] = '\0';
-    if (options != NULL && options->raw_verdict) strcpy(out, " raw_verdict=1");
+    size_t used = 0;
+    if (options == NULL) return;
+    if (options->has_drop_button && options->mutate_label != NULL) {
+        int n = snprintf(out, 64, " mutate=%s", options->mutate_label);
+        used = n > 0 && n < 64 ? (size_t)n : 0;
+    }
+    if (options->raw_verdict) snprintf(out + used, 64 - used, " raw_verdict=1");
 }
 
 static int fail_run(const gbb_case *c, const gbb_acceptance_options *options, const run_state *st,
@@ -587,6 +593,19 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
     if (rc != 0) {
         fprintf(stderr, "acceptance id=%s status=invalid reason=invalid-script detail=\"%s\"\n", c->id, rc == 1 ? err : "allocation");
         goto done;
+    }
+
+    /* D-14 mutation: remove one button's events after the script is validated, so a bad script is
+     * still rejected first. Order is preserved, so the stream stays nondecreasing. */
+    if (options != NULL && options->has_drop_button) {
+        size_t kept = 0;
+        for (size_t i = 0; i < script.event_count; ++i) {
+            const gbb_input_event *event = &script.events[i];
+            bool button_event = event->kind == GBB_INPUT_BUTTON_PRESS || event->kind == GBB_INPUT_BUTTON_RELEASE;
+            if (button_event && event->value == options->drop_button) continue;
+            script.events[kept++] = *event;
+        }
+        script.event_count = kept;
     }
 
     /* ROM: bounded heap load, exact size and digest before gbb_load_rom (D-27). */

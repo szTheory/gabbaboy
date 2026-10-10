@@ -234,3 +234,61 @@ gbb_add_acceptance_exit(acceptance_ldbb_not_ready 1
 gbb_add_acceptance_exit(acceptance_ldbb_mooneye_observe 0
   "mooneye[.]daa[.]frame\t${gbb_hex64_re}.*mooneye[.]tim00[.]frame\tnot-ready.*mooneye[.]tim00-div-trigger[.]frame\tnot-ready" 60
   "--manifest;fixtures/mooneye/manifest.json;--suite;--observe")
+
+# Dropped-START control (D-14, N3): every START event is removed before the run, so the tutorial can
+# never leave the title and the gate must exit 1 with the predicate unreached.
+gbb_add_acceptance_exit(acceptance_libbet_drop_start 1
+  "reason=predicate-not-reached.*mutate=drop:START" 300
+  "--acceptance;${GBB_CASES};--case;libbet;--mutate;drop:START;--receipt")
+
+# Core mutant (D-14): a copy of the core whose JOYP direction/button select test is inverted, built into a
+# test-only static library and runner. The source line is the single anchor guaranteed by Plans 07-03 and
+# 07-17; if it moves or repeats, configure fails rather than silently building an unmutated "mutant".
+# Nothing here is installed, exported or linked into GabbaBoy::core.
+set(GBB_MUTANT_SOURCE ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c)
+set(GBB_MUTANT_PATTERN "if ((m->joypad_select & 0x20u) == 0)")
+set(GBB_MUTANT_REPLACEMENT "if ((m->joypad_select & 0x20u) != 0)")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GBB_MUTANT_SOURCE})
+file(READ ${GBB_MUTANT_SOURCE} gbb_core_text)
+string(FIND "${gbb_core_text}" "${GBB_MUTANT_PATTERN}" gbb_mutant_first)
+string(FIND "${gbb_core_text}" "${GBB_MUTANT_PATTERN}" gbb_mutant_last REVERSE)
+if(gbb_mutant_first EQUAL -1 OR NOT gbb_mutant_first EQUAL gbb_mutant_last)
+  message(FATAL_ERROR "core-mutant pattern '${GBB_MUTANT_PATTERN}' must occur exactly once in "
+    "${GBB_MUTANT_SOURCE} (first=${gbb_mutant_first} last=${gbb_mutant_last})")
+endif()
+# The core text carries semicolons, so it stays quoted and never enters a list operation.
+string(REPLACE "${GBB_MUTANT_PATTERN}" "${GBB_MUTANT_REPLACEMENT}" gbb_mutant_text "${gbb_core_text}")
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_joyp_mutant.c "${gbb_mutant_text}")
+
+add_library(gabbaboy_core_joyp_mutant STATIC ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_joyp_mutant.c)
+target_include_directories(gabbaboy_core_joyp_mutant PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_compile_features(gabbaboy_core_joyp_mutant PUBLIC c_std_17)
+set_target_properties(gabbaboy_core_joyp_mutant PROPERTIES C_EXTENSIONS OFF)
+target_compile_definitions(gabbaboy_core_joyp_mutant PRIVATE
+  GBB_BUILD_REVISION="joyp-mutant" GBB_BUILD_QUALIFIED=0)
+
+add_executable(gabbaboy-runner-joyp-mutant
+  ${PROJECT_SOURCE_DIR}/src/runner/main.c
+  ${PROJECT_SOURCE_DIR}/src/runner/cases.c
+  ${PROJECT_SOURCE_DIR}/src/runner/acceptance.c
+  ${PROJECT_SOURCE_DIR}/src/accept/sha256.c
+  ${PROJECT_SOURCE_DIR}/src/accept/input_script.c
+  ${PROJECT_SOURCE_DIR}/src/accept/stepper.c
+  ${PROJECT_SOURCE_DIR}/src/accept/predicate.c
+  ${PROJECT_SOURCE_DIR}/src/accept/digest.c)
+target_include_directories(gabbaboy-runner-joyp-mutant PRIVATE
+  ${PROJECT_SOURCE_DIR}/src/runner ${PROJECT_SOURCE_DIR}/src/accept)
+target_link_libraries(gabbaboy-runner-joyp-mutant PRIVATE gabbaboy_core_joyp_mutant)
+target_compile_features(gabbaboy-runner-joyp-mutant PRIVATE c_std_17)
+set_target_properties(gabbaboy-runner-joyp-mutant PROPERTIES C_EXTENSIONS OFF)
+target_compile_definitions(gabbaboy-runner-joyp-mutant PRIVATE
+  GBB_BUILD_REVISION="joyp-mutant" GBB_BUILD_QUALIFIED=0)
+
+add_test(NAME acceptance_core_mutant
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:gabbaboy-runner-joyp-mutant>;--acceptance;${GBB_CASES};--case;libbet;--receipt"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=reason=predicate-not-reached"
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(acceptance_core_mutant PROPERTIES TIMEOUT 300 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})

@@ -146,6 +146,11 @@ typedef struct {
     /* D-14 controls. raw_verdict skips the D-22 applicability mapping so a model_fail case that
      * misses its predicate exits 1 instead of xfail; --case only. */
     int raw_verdict;
+    /* --mutate drop:<BUTTON>: every press and release of one button is removed from the script
+     * events before replay. A control only: never valid with --observe. */
+    int has_drop_button;
+    uint8_t drop_button;          /* a gbb_button value */
+    const char *mutate_label;     /* "drop:START", echoed on status lines */
 } gbb_acceptance_options;
 
 /* Runs one parsed case on DMG-CPU-B. Exit codes: 0 pass, 1 fail, 2 invalid
