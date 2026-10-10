@@ -5,7 +5,7 @@ status: verified
 threats_open: 0
 asvs_level: 1
 created: "2026-10-08"
-updated: "2026-10-08"
+updated: "2026-10-10"
 ---
 
 # Phase 6 — Security
@@ -60,8 +60,11 @@ updated: "2026-10-08"
 | Audit Date | Threats Total | Closed | Open | Run By |
 |---|---:|---:|---:|---|
 | 2026-10-08 | 18 unique IDs across seven plan threat registers | 18 | 0 at/above high threshold | Phase executor, ASVS L1 plan and result-artifact classification |
+| 2026-10-09 | 18 unique IDs across seven plan threat registers | 18 | 0 at/above high threshold | Phase 6 security re-audit, ASVS L1 code and release-evidence check |
+| 2026-10-10 | 18 unique IDs across seven plan threat registers | 18 | 0 at/above high threshold | Rechecked the output cleanup boundary after CR-01; repository descendants are rejected before cleanup and the `.git` preservation regression passes in the 9-test focused suite. |
+| 2026-10-10 (publication) | 18 unique IDs across seven plan threat registers | 18 | 0 at/above high threshold | Publication is now all-or-nothing: on failure the helper withdraws only inodes it published and keeps concurrent replacements. Deep re-review clean; focused suite 17/17. |
 
-The 17 planned mitigations and the repeated low-severity package-manager entry have complete plan-time threat-register coverage. The ASVS level is 1, so the workflow permits this classification path without a separate auditor when no blocking threat remains. Phase summaries provide the exact-head, downloaded-byte, bounded-input, and release evidence. This report does not claim physical-device, perceptual, signing, or notarization verification.
+The 17 planned mitigations and the repeated low-severity package-manager entry have complete plan-time threat-register coverage. The ASVS level is 1, so the workflow permits this classification path without a separate auditor when no blocking threat remains. Phase summaries provide the exact-head, downloaded-byte, bounded-input, and release evidence. The 2026-10-09 re-audit confirmed code presence for declared mitigations and found no new unmapped threat flag in the Phase 6 summaries. The 2026-10-10 CR-01 follow-up verifies that `tests/scripts/verified_player_output_dir.py` rejects every repository descendant before cleanup; the regression preserves both expected artifact files under `.git`, and the focused suite passes 9/9. PR #46 passed exact-head required checks before merge. Future v0.1.1 Release Please PR #41 remains open with merge state `BLOCKED` and no checks reported; it is not green. This operational residual applies to the future version PR. The already published v0.1.0 remains source-bound to `e30d168`, and its 18 live release assets matched API digests on fresh download. No merge or release action is authorized by this report. This report does not claim physical-device, perceptual, signing, or notarization verification.
 
 ## Sign-Off
 

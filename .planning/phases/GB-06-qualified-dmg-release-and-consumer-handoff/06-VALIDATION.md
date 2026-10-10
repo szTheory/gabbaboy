@@ -98,3 +98,58 @@ The prohibition recall pass surfaced product-specific claim boundaries: do not p
 | Gaps found | 0 |
 | Resolved | 14 |
 | Escalated | 0 |
+
+## Validation Evidence Refresh 2026-10-09
+
+Re-audited the 14 task rows against the plans, summaries, current integrated
+test evidence, and release evidence supplied for this refresh. No task-level
+coverage gap remains. The map's original checks stay applicable; the evidence
+below refreshes their current status without treating a clean-tree guard or a
+fallback path as a successful test.
+
+| Task ID(s) | Requirement coverage | Current evidence | Status |
+|---|---|---|---|
+| 06-01-01, 06-01-02 | Exact candidate identity, draft/tag routing, release workflow and retry negatives | Candidate verifier self-test passed from a clean clone at current main `e4edf315`; C and C++ relocation and negative controls passed. A separate run in the dirty orchestrator tree stopped at its clean-tree precondition and is not counted as test evidence. | covered |
+| 06-02-01, 06-02-02 | Downloaded core archives and macOS player lifecycle smoke | Published `v0.1.0` currently exposes 18 assets; a fresh read-only download/hash reconciliation matched all 18 sizes and SHA-256 values. Existing exact-tag platform and player receipts remain the evidence for package/player behavior. | covered |
+| 06-03-01, 06-03-02 | Relocated C example, public API and adopter documentation | Clean-clone candidate verifier passed relocated C/C++ consumer checks; release evidence and current published asset reconciliation remain consistent with the documented integration boundary. | covered |
+| 06-04-01, 06-04-02 | Support ledger/sidecar and fixed-workload measurement | Support-ledger and performance self-tests passed; existing source-bound ledger and measurement receipts cover the mapped behaviors. | covered |
+| 06-05-01, 06-05-02 | Bounded boundary regressions and fuzz limits/replay | Integrated full CTest passed 179/179, including the new Phase 3 package-output safety regression. Bounded-fuzz self-test passed. The optional compiler-runtime fallback is not counted as a pass. | covered |
+| 06-06-01, 06-06-02 | Exact-head release gate, protected merge, downloaded-byte qualification and publication | Release-gate and published-asset verifier self-tests passed. PR #46's exact-head required checks passed and it was merged. Current published-asset readback independently matched all 18 downloaded assets by size and SHA-256. | covered |
+| 06-07-01, 06-07-02 | Release docs/notices and GitHub API coverage decisions | Candidate verifier and release-gate checks pass; support-ledger validation and published release evidence retain the required docs/notices and API decision coverage. | covered |
+
+The 179/179 CTest result, candidate clean-clone run, release-gate, published
+asset, support-ledger, performance, and bounded-fuzz self-tests are distinct
+evidence items. No claim of physical/perceptual qualification, signing, or live
+Playstead integration is added by this refresh. **Resolved: 14/14; escalated: 0.**
+
+## Review-Driven Regression Refresh 2026-10-10
+
+The re-review found that the player verifier's artifact output helper rejected the
+repository root but still admitted descendants such as `.git`. The helper now
+rejects repository descendants before creating or removing files, and the
+default verifier output is placed under the runner temporary directory. The
+focused regression suite passed 9/9, including a case that creates both expected
+artifact names beneath `.git` and verifies their contents remain unchanged after
+the helper rejects the destination. That same behavior test also requests a
+nonexistent repository descendant and verifies rejection leaves it uncreated,
+covering the pre-creation and pre-deletion boundary. Its rerun command is
+`python3 -m unittest -v test_verified_player_output_dir.py` from `tests/scripts/`.
+`bash -n tests/scripts/verify-phase3-player.sh` and `git diff --check` also
+passed. The full configured CMake/CTest regression gate passed 179/179. These
+are supplementary cross-phase regression receipts; they do not change the 14
+planned Phase 6 task rows or imply hosted-CI evidence.
+
+## Publication Rollback Refresh 2026-10-10
+
+The re-review of the shared verified-player output helper found that publication
+could leave an archive without its receipt, or a receipt without its archive, when
+a step failed after a name was linked. The helper now withdraws every artifact the
+call published when any later step fails, keeps a file that concurrently replaced
+ours, and no longer lets cleanup errors mask the original failure. New regressions
+cover receipt-link failure, directory-fsync failure on each publication, a
+concurrently replaced archive, and a mismatched published name. Mutants without the
+rollback fail them. The focused suite passes 17/17. It runs as the
+`player_verified_output_directory` case in the macOS SDL 3.4.18 player verifier,
+which passed 51/51. Core CTest passed 179/179. These are dirty-tree local receipts.
+Local verifier mode does not call `--publish`, so publication is covered by the unit
+suite only. The 14 planned task rows are unchanged.
