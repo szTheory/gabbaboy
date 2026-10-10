@@ -173,10 +173,40 @@ test_verified_player_output_dir` (from `tests/scripts/`) passed 20/20,
 including the new withdrawal-reporting regressions. These are local
 receipts; no hosted CI has run for this revision yet. The 14 planned task rows are unchanged.
 
+## Phase 06.1 Refresh 2026-10-10
+
+Source revision `f4a6368` on `gsd/phase-06.1-verification-refresh`, which descends from the PR 54 merge `ab76d09c2ee27ba09fc5f3c2510af016aebfdecb` with only `.planning/` changes after it. Covered inputs that PR 54 changed: `.github/workflows/ci.yml` (single `player-gate` job feeding `macos-player-package` and `required-native`), `tests/scripts/test_verified_player_output_dir.py` (shared `_receipt_fields()` helper and an inner-withdrawal-site test, now 21 tests) and `tests/scripts/verify-phase3-player.sh` (comment only). PR 54 also added `audio_api_smoke()` to the installed C and C++ consumers (`tests/consumers/c/main.c`, `tests/consumers/cpp/main.cpp`; commits `4ef77c4`, `da42206`). That closes the milestone audit's SHIP-01 audio-consumer coverage gap. The assertions are structural only (D-03): result codes, frame counts and twin-instance determinism, not perceptual or hardware audio.
+
+`.github/workflows/release.yml` is byte-identical to the pre-phase base `06c723b` (`git diff --exit-code 06c723b5574941ecff7ebefc4b40a9714b7aa495 HEAD -- .github/workflows/release.yml` exits 0). It already differed from the `v0.1.0` tag before Phase 06.1 through earlier post-release fixes (`git diff --stat v0.1.0 06c723b -- .github/workflows/release.yml`: 1 file changed, 93 insertions, 47 deletions). Nothing here changes the frozen v0.1.0 evidence rows.
+
+| Evidence | Command / observation | Result |
+|---|---|---|
+| Full core inventory | `ctest --preset phase1 --output-on-failure --no-tests=error` | 184/184 passed |
+| Installed consumers and package smoke | `ctest --preset phase1 --output-on-failure --no-tests=error -R 'preview_package_smoke\|installed_consumer'` | 5/5 passed (`preview_package_smoke`, `installed_consumer_c`, `installed_consumer_phase2_c`, `installed_consumer_cpp`, `installed_consumer_phase2_cpp`) |
+| Candidate verifier contract | `bash tests/scripts/verify-release-candidate.sh --self-test` | rc=0 |
+| Release gates | `bash .github/scripts/verify-release-gates.sh --self-test` | rc=0 |
+| Support ledger | `python3 tests/scripts/verify-support-ledger.py --self-test` | rc=0 |
+| Baseline and fuzz harness | `bash tests/scripts/measure-release-baseline.sh --self-test`; `bash tests/scripts/run-bounded-fuzz.sh --self-test` | rc=0 each |
+| Verified-output helper | `python3 tests/scripts/test_verified_player_output_dir.py` | 21 tests OK |
+| Player/package verifier | `bash tests/scripts/verify-phase3-player.sh` with isolated `HOME` and `SDL_AUDIO_DRIVER=dummy` (Phase 5 refresh, same source content) | 51/51, exit 0 |
+| Hosted, PR head `2a8fd1c` | ci run 38064419789 | success; jobs `native-linux-x64`, `native-macos-arm64`, `native-windows-x64` (MinGW-w64 GCC 14.2.0, `installed_consumer_c`/`_cpp` and phase-2 variants passed, 184 executed, none skipped), `player-gate`, `macos-player-package`, `required-native` all success |
+| Hosted, PR head `2a8fd1c` | preview run 38064419803 | success (`preview_package_smoke` runs the consumers on Linux x64 and macOS arm64) |
+| Hosted, merge SHA `ab76d09` | ci run 38064726000 | success |
+
+SHIP-01 audio coverage now runs on the installed-consumer lanes for Linux x64, macOS arm64 and Windows x64 (MinGW-w64 GCC, static core). ROADMAP criterion 2's "Windows preview lane" is met by the ci.yml `native-windows-x64` installed-consumer lane per D-02. No MSVC, DLL, Windows archive-level, hardware or perceptual claim is made; Windows archive-level `preview_package_smoke` parity is re-deferred (06.1-DEBT-DISPOSITION.md). Gaps found 0; no tests added in this refresh.
+
 ## Validation Audit 2026-10-10
 
 | Metric | Count |
 |---|---|
 | Gaps found | 1 |
 | Resolved | 1 |
+| Escalated | 0 |
+
+## Validation Audit 2026-10-10
+
+| Metric | Count |
+|---|---|
+| Gaps found | 0 |
+| Resolved | 0 |
 | Escalated | 0 |
