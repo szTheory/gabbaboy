@@ -1,47 +1,55 @@
 ---
 phase: GB-06-qualified-dmg-release-and-consumer-handoff
-reviewed: 2026-10-10T02:30:00Z
-depth: deep
-files_reviewed: 3
+reviewed: 2026-10-10T00:00:00Z
+depth: standard
+files_reviewed: 4
 files_reviewed_list:
-  - tests/scripts/verify-phase3-player.sh
+  - .github/workflows/release.yml
   - tests/scripts/verified_player_output_dir.py
   - tests/scripts/test_verified_player_output_dir.py
+  - tests/scripts/verify-release-candidate.sh
 findings:
   critical: 0
-  warning: 0
+  warning: 1
   info: 0
-  total: 0
-status: clean
+  total: 1
+status: issues_found
 ---
 
 # Phase GB-06: Code Review Report
 
-**Reviewed:** 2026-10-10T02:30:00Z
-**Depth:** deep
-**Files Reviewed:** 3
-**Status:** clean
+**Reviewed:** 2026-10-10
+**Depth:** standard
+**Files Reviewed:** 4
+**Status:** issues_found
 
 ## Summary
 
-The previous WR-01 and WR-02 and the info item are resolved. I traced these paths and found no defect:
+Reviewed the diffs since fd562c0 and their interaction with the surrounding files.
 
-- `_publish_new_artifact` records `published_info` only after the `samestat` check. Any later failure (temp unlink, directory fsync, interrupt) withdraws its own name, and the temp-file cleanup ignores any `OSError`, so the original exception propagates.
-- The mismatch branch raises without unlinking a name that is not ours.
-- A failed receipt publish withdraws the receipt itself, and the caller's reverse-order loop then withdraws the archive. The final directory re-check failure withdraws both.
-- Every descriptor path closes exactly once with no leaks or double closes: the candidate and output descriptors in both `try` blocks, `source_descriptor`, `temporary_fd` via `fdopen`, and the dup'd copy descriptor.
-- The earlier fixes still hold: descriptor-pinned cleanup and publication, descriptor-relative candidate reads with a digest check, and the shell caller's `--publish` argument order and failure handling.
-- The focused suite passes 17/17.
+- **release.yml.** The job that lost its job-level `GBB_VERIFIED_OUTPUT_DIR` now relies on the default in `tests/scripts/verify-phase3-player.sh:16`, which is `${RUNNER_TEMP:-${TMPDIR:-/tmp}}/gabbaboy-preview-verified-artifact`. That is outside the checkout, so the change is safe. The `--build-package` step (line 589) and the downloaded-package step (line 620) now write to distinct directories, so they cannot collide. Nothing else in the repository references the removed `build/release-player-verified` path.
+- **verified_player_output_dir.py.** `_report_withdrawal_failure` runs inside the `except` handler and is itself guarded against a broken stderr. The original publication exception is still re-raised, so it is not masked. I found no defect. The test suite (20 tests) passes.
+- **verify-release-candidate.sh.** The static contract has no false accepts on the forms I probed:
+  - `..` segments, `/etc`, an empty value, and checkout-relative paths are all rejected.
+  - A second, comment-only mention of the variable fails closed through the `count != len(assignments)` check.
+  - The `$RUNNER_TEMP/..x/../..` case is rejected.
 
-Two residual items are not reported as defects:
+  It does have one false reject, described below.
 
-- The stat-then-unlink window in `_withdraw_artifact` is inherent to POSIX, since there is no unlink-by-inode. The docstring now states it accurately.
-- The rollback loop catches only `OSError`, so a `KeyboardInterrupt` during rollback can leave an artifact behind. I do not consider this a defect. It is the same outcome as a kill signal at that moment, which no in-process code can prevent. The failure case that matters, an I/O error during withdrawal, is handled per item without skipping the other artifact. Swallowing `KeyboardInterrupt` would be worse behavior.
+## Warnings
 
-All reviewed files meet quality standards. No issues found.
+### WR-01: Verified-output contract falsely rejects the unquoted YAML expression form
+
+**File:** `tests/scripts/verify-release-candidate.sh:140-146`
+**Issue:** The regex's bare alternative is `([^\s"']*)`, which stops at whitespace. For the idiomatic YAML env form `GBB_VERIFIED_OUTPUT_DIR: ${{ runner.temp }}/x`, which `.github/workflows/preview.yml:216` already uses, the captured value is just `${{`. That value fails the `\$\{\{\s*runner\.temp\s*\}\}` branch. The contract therefore raises a "not rooted at runner temp" error for a compliant assignment, even though the pattern list explicitly intends to allow the `runner.temp` form. It fails closed, so the release gate is not weakened. But anyone who adds the natural YAML env form to release.yml gets a misleading failure. The mutation self-check does not exercise this form, so the bug is untested.
+**Fix:** Let the bare alternative match a whole `${{ ... }}` expression, for example:
+```python
+r"""\s*[:=]\s*(?:"([^"\n]*)"|'([^'\n]*)'|((?:\$\{\{.*?\}\}|[^\s"'])*))"""
+```
+Also add a positive self-check that the unquoted `: ${{ runner.temp }}/x` form is accepted.
 
 ---
 
-_Reviewed: 2026-10-10T02:30:00Z_
+_Reviewed: 2026-10-10_
 _Reviewer: Claude (gsd-code-reviewer)_
-_Depth: deep_
+_Depth: standard_
