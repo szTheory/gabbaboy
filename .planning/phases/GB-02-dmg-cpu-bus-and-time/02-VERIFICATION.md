@@ -1,9 +1,11 @@
 ---
 phase: GB-02-dmg-cpu-bus-and-time
-verified: 2026-10-09T12:43:21Z
+verified: 2026-10-10T12:53:55Z
 status: passed
 score: 5/5 roadmap truths verified
 covered_files:
+  - .github/workflows/ci.yml
+  - .gitignore
   - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-01-PLAN.md
   - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-01-SUMMARY.md
   - .planning/phases/GB-02-dmg-cpu-bus-and-time/02-02-PLAN.md
@@ -64,7 +66,7 @@ covered_files:
   - tests/test_runner.c
   - tests/test_serial.c
   - tests/test_timer.c
-covered_digest: "v3:sha256:a4d559a66924b04d4b5bf1ad5bff1fdbaae3cbd0b97095535364cfbb8144277a"
+covered_digest: "v3:sha256:0d86347cf460d35f4492a5d24ea3c0d7209e2ea9d887bcce315c901a2450327f"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
@@ -78,19 +80,19 @@ re_verification:
 # Phase 2: DMG CPU, Bus, and Time Verification Report
 
 **Phase Goal:** As a core integrator, I want to run the declared DMG instruction and timing behavior deterministically, so that I can reproduce diagnostic failures.
-**Verified:** 2026-10-09T12:43:21Z
+**Verified:** 2026-10-10T12:53:55Z
 **Status:** passed
-**Re-verification:** Yes — fresh verification of the previously passing phase report against the current checkout.
+**Re-verification:** Yes. Freshness regeneration of a previously passing report. It was stale because (a) quick task 261010-bz3 (a2411da) reconciled SUMMARY `requirements-completed` metadata, and (b) later-phase commits changed `.github/workflows/ci.yml` and `.gitignore`. Verified at HEAD `a9050df07f72678055bdbdab097d5300297ebfd6` on `gsd/phase-02-verification-refresh-2` (clean tree).
 
 ## User Flow Coverage
 
-User story: «As a core integrator, I want to run the declared DMG instruction and timing behavior deterministically, so that I can reproduce diagnostic failures.»
+User story: "As a core integrator, I want to run the declared DMG instruction and timing behavior deterministically, so that I can reproduce diagnostic failures."
 
 | Step | Expected | Evidence | Status |
 |------|----------|----------|--------|
-| Run diagnostics | The headless runner accepts the pinned manifest and executes the eligible CPU/timer cases under the declared bootless model. | `build/gabbaboy-runner --manifest fixtures/mooneye/manifest.json --suite --receipt` ran the guest bytes; all three returned `status=pass`, `profile=DMG-CPU-B`, `boot=skipped`. | ✓ VERIFIED |
-| Reproduce a result | Each receipt identifies the fixture/source/digest, callback and `LD B,B` result PC, bounded budget, stop reason, and recent trace events. | The three live receipts report `protocol_stage=callback-then-ld-b-b`, `protocol_reason=none`, finite budgets, `recent=128`, and ordered diagnostic records. | ✓ VERIFIED |
-| Outcome | The integrator can reproduce failures within this declared diagnostic scope. | `tests/test_runner.c` and the runner distinguish pass, guest fail, timeout, unsupported, malformed/missing fixture, and wrong breakpoint; the 88-test focused Phase 2 selection passed, including negative controls. | ✓ VERIFIED |
+| Run diagnostics | The headless runner accepts the pinned manifest and executes the eligible CPU/timer cases under the declared bootless model. | `build/gabbaboy-runner --manifest fixtures/mooneye/manifest.json --suite --receipt` re-run this session: all three cases `status=pass`, `profile=DMG-CPU-B`, `boot=skipped`, final line `suite eligible=3 executed=3 status=pass`. | ✓ VERIFIED |
+| Reproduce a result | Each receipt identifies fixture/source/digest, callback and `LD B,B` result PC, bounded budget, stop reason and recent trace. | Receipts carry `manifest_sha256`, `source_revision`, `report_patch_sha256`, `builder_revision`, `fixture_sha256`, `core_revision=a9050df`, `protocol_stage=callback-then-ld-b-b`, `protocol_reason=none`, finite `budget`, `stop=protocol-result`, `recent=128`. | ✓ VERIFIED |
+| Outcome | Failures are reproducible within the declared scope. | `tests/test_runner.c` and `tests/test_diagnostics.c` cover pass, guest fail, timeout, unsupported, malformed/missing fixture and wrong breakpoint; the 88-case focused selection passed. | ✓ VERIFIED |
 
 ## Goal Achievement
 
@@ -98,11 +100,11 @@ User story: «As a core integrator, I want to run the declared DMG instruction a
 
 | # | Truth | Status | Evidence |
 |---|---|---|---|
-| 1 | The declared DMG profile produces expected base/CB instruction, flag, arithmetic, address and bus-timing results, with explicit illegal-opcode behavior (CPU-01). | ✓ VERIFIED | `tests/test_cpu.c` contains independent full architectural post-state checks for every legal unprefixed encoding, branch outcomes, arithmetic boundaries, memory effects and timed observer assertions; all 11 unused opcodes remain lockup cases. Focused CTest cases `cpu_base_matrix`, `cpu_base_conditional_paths`, `cpu_base_arithmetic_edges`, `cpu_base_address_effects`, `cpu_cb_matrix`, and `cpu_illegal_lockup` passed. |
-| 2 | Model-applicable cases observe expected interrupt entry, EI delay, HALT/HALT-bug, STOP, reset and deterministic post-boot results (CPU-02). | ✓ VERIFIED | `tests/test_control.c` exercises interrupt priority/entry, EI delay and chaining, HALT idle/timer/bug, STOP wake, reset profile/header flags and persistent lockup reset; corresponding current CTest cases passed. `tests/test_bus.c` verifies HALT-bug fetch behavior. |
-| 3 | Guests observe declared mapping, divider/timer edges and reload races, and disconnected serial at timed boundaries (CPU-03). | ✓ VERIFIED | `tests/test_bus.c`, `tests/test_timer.c` and `tests/test_serial.c` assert guest-visible reads/writes and timed bus/edge results. Current bus, timer and serial focused cases passed. Strict manifest validation confirms the fixed one-CPU/two-timer set. |
-| 4 | Equal timestamped inputs/time yield equal supported state/output across partitions; LCD-off, HALT/STOP, lockup and full output capacity remain bounded (CPU-04). | ✓ VERIFIED | `tests/test_events.c` and `tests/test_control.c` compare whole/partitioned runs, event order and STOP wake; deadline, overflow and output-capacity cases assert bounded return and preserved canaries. All selected event/control/bounds tests passed. |
-| 5 | Headless runs report pass/fail/timeout/unsupported for a pinned eligible CPU/timer corpus with model/protocol identity and replay evidence (CPU-05). | ✓ VERIFIED | The live runner receipt command executed all three admitted cases with `eligible=3 executed=3 status=pass`; receipts identify source, patch, builder and fixture digests, model, callback/result protocol and bounded recent diagnostics. `probe-mooneye-candidate.sh` passed positive and induced-negative callbacks with zero PPU accesses; all runner and corpus CTests passed. |
+| 1 | The declared DMG profile produces expected base/CB instruction, flag, arithmetic, address and bus-timing results, with explicit illegal-opcode behavior (CPU-01). | ✓ VERIFIED | `tests/test_cpu.c` asserts independent post-state for the legal base and CB encodings, branch outcomes, arithmetic edges, memory effects and timed observer events; the 11 unused opcodes are lockup cases. `cpu_*` cases passed in the 88/88 focused run and the 179/179 full run. |
+| 2 | Model-applicable cases observe expected interrupt entry, EI delay, HALT/HALT-bug, STOP, reset and deterministic post-boot results (CPU-02). | ✓ VERIFIED | `tests/test_control.c` and `tests/test_bus.c` cover interrupt priority/entry, EI delay and chaining, HALT idle/timer/bug fetch, STOP wake, reset and persistent-lockup reset. The `interrupt_`, `halt_`, `stop_`, `reset_` and `bus_` cases passed. |
+| 3 | Guests observe declared mapping, divider/timer edges and reload races, and disconnected serial at timed boundaries (CPU-03). | ✓ VERIFIED | `tests/test_bus.c`, `tests/test_timer.c`, `tests/test_serial.c` assert guest-visible reads/writes and timed edges; the `bus_`, `timer_` and `serial_` cases passed. The manifest holds exactly one CPU and two timer entries. |
+| 4 | Equal timestamped inputs/time yield equal supported state/output across partitions; LCD-off, HALT/STOP, lockup and full output capacity stay bounded (CPU-04). | ✓ VERIFIED | `tests/test_events.c` and `tests/test_control.c` compare whole and partitioned runs, event order and STOP wake; deadline, overflow and output-capacity cases assert bounded return and canaries. `event_*` and related cases passed. |
+| 5 | Headless runs report pass/fail/timeout/unsupported for a pinned eligible CPU/timer corpus with model/protocol identity and replay evidence (CPU-05). | ✓ VERIFIED | Live suite: `eligible=3 executed=3 status=pass`. `probe-mooneye-candidate.sh` re-run: `probe=pass ... ppu_access=0` and induced `probe=fail ... callback=1 breakpoint=1 ppu_access=0`, exit 0. Runner and mooneye CTests passed. |
 
 **Score:** 5/5 roadmap truths verified; behavior-unverified: 0.
 
@@ -110,87 +112,101 @@ User story: «As a core integrator, I want to run the declared DMG instruction a
 
 | Artifact | Expected | Status | Details |
 |---|---|---|---|
-| `src/core/gabbaboy.c`, `include/gabbaboy/gabbaboy.h` | Substantive CPU, bus, timer, serial, interrupt, time and bounded public API | ✓ VERIFIED | Public `gbb_run` path reaches opcode execution, timed bus/device helpers and explicit stop reasons; direct guest-facing regressions exercise the path. |
-| `tests/test_cpu.c`, `tests/test_control.c`, `tests/test_bus.c`, `tests/test_timer.c`, `tests/test_serial.c`, `tests/test_events.c` | Value-level and timed behavior regressions | ✓ VERIFIED | Registered named CTest programs dispatch to substantive tests; the current 88-case phase-focused selection passed. |
-| `src/runner/main.c`, `tests/test_runner.c`, `tests/test_diagnostics.c` | Bounded diagnostic classification and replay receipts | ✓ VERIFIED | The runner loads digest-pinned files, checks callback then exact result PC, records bounded diagnostics and returns distinct statuses; current live suite and negative-control tests passed. |
-| `fixtures/mooneye/manifest.json`, source/eligibility records, candidate patch and reproduction scripts | Fixed eligible set with rights, derivation, exact build and protocol provenance | ✓ VERIFIED | Manifest has exactly 3 eligible entries (one CPU, two timer); source records preserve original assertion paths and describe the derived headless reporting closure and its boundary. |
-| `tests/CMakeLists.txt`, `tests/expected-tests.txt`, `.github/workflows/ci.yml`, installed consumers | Required inventory and wired public consumption | ✓ VERIFIED | Relevant cases are registered and included in the expected inventory; CI invokes CTest and verifies inventory; the relocated C/C++ consumer helper and prior exact hosted evidence remain available. |
-| `tests/scripts/verify-phase2-open-gate.sh` | Conditional helper for the corpus-unqualified branch of Plan 02-16 | N/A (conditional path) | This file is absent. The current manifest and Plan 02-17 record the candidates as admitted/qualified, so Plan 02-16's open-gate branch is not active; the admitted runner/hosted path is present and passes. |
+| `src/core/gabbaboy.c`, `include/gabbaboy/gabbaboy.h` | CPU, bus, timer, serial, interrupt, time and bounded public API | ✓ VERIFIED | Public `gbb_run` path is exercised by guest-program tests; the full tree builds and passes. |
+| `tests/test_cpu.c`, `test_control.c`, `test_bus.c`, `test_timer.c`, `test_serial.c`, `test_events.c` | Value-level and timed regressions | ✓ VERIFIED | Registered CTest programs; focused selection 88/88. |
+| `src/runner/main.c`, `tests/test_runner.c`, `tests/test_diagnostics.c` | Bounded classification and replay receipts | ✓ VERIFIED | Live receipts produced; negative-control tests pass. |
+| `fixtures/mooneye/manifest.json`, `SOURCES.md`, `ELIGIBILITY.md`, `headless-report.patch`, reproduction scripts | Fixed eligible set with rights, derivation, build and protocol provenance | ✓ VERIFIED | Exactly 3 eligible entries; receipts echo manifest, patch, builder and fixture digests. |
+| `tests/CMakeLists.txt`, `tests/expected-tests.txt`, `.github/workflows/ci.yml` | Required inventory enforced in CI | ✓ VERIFIED | `ci.yml` runs `ctest --no-tests=error` followed by `.github/scripts/verify-test-inventory.sh ... tests/expected-tests.txt` in native, ASan/UBSan and installed jobs (lines 29-30, 47-50, 78-82, 102-105). The later macOS player job (`macos-player-package`) is additive and does not change the Phase 2 inventory path. |
+| `tests/scripts/verify-phase2-open-gate.sh` | Conditional open-gate helper for Plan 02-16 | N/A (conditional path) | Absent by design: Plan 02-17 admitted the candidates, so the open-gate branch is inactive. |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |---|---|---|---|---|
-| `gbb_run` | CPU/bus/device execution | Timed phases and common execution path | ✓ WIRED | Direct public-API tests execute actual guest programs and observe bus/timer/trace results. |
-| Base and CB opcode vectors | Core execution | `gbb_load_rom` and `gbb_run` | ✓ WIRED | Test-owned ROM bytes run through the public API; expected states are separately authored and asserted after execution. |
-| Timestamped event queue | STOP wake and run partitioning | Instance queue plus emulated timeline | ✓ WIRED | `event_stop_wake`, `event_partition`, queue order/atomicity and deadline cases pass. |
-| Manifest and fixture bytes | Strict runner receipt | Digest validation, callback, exact `LD B,B` result breakpoint | ✓ WIRED | Current live suite emits three passing receipts with matching eligible/executed totals and bounded traces. |
-| CTest inventory | CI enforcement | Registered test names and `verify-test-inventory.sh` | ✓ WIRED | The workflow runs CTest and the required inventory validator; the orchestrator's current full local inventory passed 179/179. |
-| Installed target | External C/C++ consumers | Relocated install, configure, link and execute | ✓ WIRED | The Phase 2 install verifier and C/C++ consumer tests are present; prior exact-revision installed inventory recorded 109/109. |
+| `gbb_run` | CPU/bus/device execution | Timed phases, common execution path | ✓ WIRED | Public-API tests run guest programs and observe bus, timer and trace results. |
+| Base and CB opcode vectors | Core execution | `gbb_load_rom` and `gbb_run` | ✓ WIRED | Test-owned ROM bytes run through the public API; expected states are authored separately. |
+| Timestamped event queue | STOP wake and partitioning | Instance queue and emulated timeline | ✓ WIRED | `event_stop_wake`, `event_partition` and ordering cases pass. |
+| Manifest and fixture bytes | Strict runner receipt | Digest validation, callback, exact `LD B,B` result breakpoint | ✓ WIRED | Live suite emits three passing receipts with matching eligible/executed totals. |
+| CTest inventory | CI enforcement | Registered names and `verify-test-inventory.sh` | ✓ WIRED | Workflow lines above; local inventory 179 tests. |
 
-Plan 02-18's `verify.key-links` query does not accept its legacy prose in `from` as a file path, so it returned malformed-link diagnostics. The links above were traced manually through source, registration, dispatch and executed tests. Earlier plans also use legacy scalar `key_links` rather than the current structured `from`/`to`/`via` schema; those links were manually checked against the implementation and tests.
+Plan 02-18 and earlier plans use legacy or prose `key_links` that `verify.key-links` cannot parse; links were traced manually as above.
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data | Source | Produces real data | Status |
 |---|---|---|---|---|
-| Test vectors → core | Opcode, operands and initial state | Fixed test-owned ROM/program bytes | Yes; loaded into an instance and executed | ✓ FLOWING |
-| Core → assertions | Registers, flags, PC/SP, bus events and timing | Public trace records and timed observer | Yes; compared to independently authored expected values | ✓ FLOWING |
-| Fixture bytes → runner | CPU/timer guest behavior | Checked-in digest-verified derived ROMs from manifest | Yes; actual core execution | ✓ FLOWING |
-| Runner → receipt | Status, callback/result PC, elapsed half-dots and recent trace | Guest execution plus bounded caller-owned diagnostics | Yes; live suite produced three receipts | ✓ FLOWING |
+| Test vectors to core | Opcode, operands, initial state | Test-owned ROM bytes | Yes | ✓ FLOWING |
+| Core to assertions | Registers, flags, PC/SP, bus events, timing | Public trace and timed observer | Yes | ✓ FLOWING |
+| Fixture bytes to runner | CPU/timer guest behavior | Digest-checked derived ROMs | Yes | ✓ FLOWING |
+| Runner to receipt | Status, callback/result PC, ticks, recent trace | Guest execution | Yes (three live receipts) | ✓ FLOWING |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |---|---|---|---|
-| Phase 2 CPU, control, bus, timer, serial, event, diagnostic and runner cases | `ctest --test-dir build --output-on-failure --no-tests=error -R '^(cpu_|interrupt_|halt_|stop_|reset_|event_|joypad_|bus_|timer_|serial_|diagnostics_|runner_|mooneye_)'` | 88/88 passed in 0.43 s | ✓ PASS |
-| Diagnostic reproduction receipt | `build/gabbaboy-runner --manifest fixtures/mooneye/manifest.json --suite --receipt` | Three cases passed; final receipt `eligible=3 executed=3 status=pass`; bounded trace receipts emitted | ✓ PASS |
-| Candidate result-protocol probe | `bash tests/scripts/probe-mooneye-candidate.sh` | Three positive callbacks and one induced failure reached callback and result breakpoint; zero PPU access | ✓ PASS |
-| Current full local suite | Orchestrator command: `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error` | 179/179 passed (provided current-session evidence) | ✓ PASS |
+| Full local suite | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error` | 179/179 passed (re-run by this verifier; `ctest -N` lists 179) | ✓ PASS |
+| Phase 2 focused selection | `ctest --test-dir build --no-tests=error -R '^(cpu_\|interrupt_\|halt_\|stop_\|reset_\|event_\|joypad_\|bus_\|timer_\|serial_\|diagnostics_\|runner_\|mooneye_)'` | 88/88 passed | ✓ PASS |
+| Diagnostic reproduction | `build/gabbaboy-runner --manifest fixtures/mooneye/manifest.json --suite --receipt` | `suite eligible=3 executed=3 status=pass` | ✓ PASS |
 
 ### Probe Execution
 
 | Probe | Command | Result | Status |
 |---|---|---|---|
-| Candidate callback/result protocol and PPU independence | `bash tests/scripts/probe-mooneye-candidate.sh` | Positive cases and induced failing assertion reached expected callback then exact breakpoint; zero PPU accesses | PASS |
+| Candidate callback/result protocol and PPU independence | `bash tests/scripts/probe-mooneye-candidate.sh` | exit 0; positive `ppu_access=0`; induced failure reached callback and breakpoint with `ppu_access=0` | PASS |
 
-### Test Quality Audit
+### Historical Hosted Evidence
 
-| Test area | Requirement | Active | Assertion/oracle review | Verdict |
-|---|---|---:|---|---|
-| Base and CB opcode tests | CPU-01 | Yes | Expected values are authored from setup and instruction behavior, not copied from core output; legal states, flags and costs plus illegal lockup are asserted. | Adequate |
-| Control, timer, bus, serial and event tests | CPU-02/03/04 | Yes | Tests assert concrete guest-visible states, timed events, partition equality, bounded outcomes and reset/wake transitions. No disabled-test markers were found in linked files. | Adequate |
-| Runner and diagnostic tests | CPU-05 | Yes | Tests exercise pass/fail/timeout/unsupported, invalid fixtures, protocol sequencing and bounded diagnostic capacity. Live receipts flow from actual checked-in fixture bytes. | Adequate |
+Exact hosted CI run 37620710587 and fixture reproduction run 37620710600 qualified implementation SHA `cf28e90270be24d9528bfa8a1e4055a2b8485989`. This is historical source-revision evidence retained from the prior report; it does not refer to the current refresh branch, and no hosted run is claimed for HEAD `a9050df`. The same-revision local evidence above is what supports this refresh.
 
-No linked requirement tests were disabled. The tested paths do not generate their own expected values from the system under test. The three admitted fixtures retain their source/rights record and unchanged upstream assertions, but they are **derived headless reporting closures**, not the original PPU-dependent Mooneye reporting paths.
+### Summary-Metadata Credit Reconciliation (quick task 261010-bz3)
+
+Summaries now credit: CPU-01 to 02-02 and 02-18; CPU-02 to 02-16; CPU-03 to 02-01; CPU-04 to 02-01 and 02-02; CPU-05 to 02-16 and 02-17. 02-10 lists `[]` with a contributory-evidence comment. Checked against the evidence:
+
+- CPU-01: `02-02-SUMMARY` `[CPU-01, CPU-04]` and `02-18-SUMMARY` `[CPU-01]` match the base-instruction and independent post-state tests (truth 1).
+- CPU-02: `02-16-SUMMARY` `[CPU-02, CPU-05]` matches the final control/reset semantic closure; truth 2 evidence is in `test_control.c` and `test_bus.c`, which Plan 02-16 covers.
+- CPU-03: `02-01-SUMMARY` `[CPU-03, CPU-04]` covers the bus mapping tracer; timer and serial evidence (truth 3) is contributed by 02-05, 02-06 and 02-11, whose summaries intentionally list `[]`. Credit is attributed to the earliest plan owning the requirement, and every CPU-03 test is current and passing.
+- CPU-04: 02-01 and 02-02 credits are consistent with partition/bounds tests (truth 4).
+- CPU-05: `02-16-SUMMARY` and `02-17-SUMMARY` match the admitted corpus and runner closure (truth 5).
+
+Every requirement ID has at least one crediting summary and passing current tests; none is orphaned. The credit is sparse for CPU-03, with timer/serial evidence only contributory in the other summaries, but it does not contradict the evidence. This is an informational observation, not a gap.
 
 ### Requirements Coverage
 
+Plan frontmatter declares `requirements:` drawn only from CPU-01 through CPU-05, and REQUIREMENTS.md maps exactly those five to Phase 2 (lines 24-28 and 103-107). Plan 02-15 is superseded and non-runnable.
+
 | Requirement | Source plans | Description | Status | Evidence |
 |---|---|---|---|---|
-| CPU-01 | 02-02, 02-03, 02-07, 02-09, 02-10, 02-14, 02-16, 02-17, 02-18 | Base/CB semantics, flags, addresses, timing and explicit illegal behavior | SATISFIED | Independent semantic tests and current focused CTest cases pass. |
-| CPU-02 | 02-04, 02-06, 02-09, 02-10, 02-11, 02-16 | Interrupts, EI delay, HALT/STOP, reset and bootless profile | SATISFIED | Named current control and bus regressions pass. |
-| CPU-03 | 02-01, 02-05, 02-06, 02-07, 02-09, 02-11, 02-14, 02-16 | Mapping, timer races and disconnected serial | SATISFIED | Bus, timer, serial and eligible diagnostic tests pass with guest-visible assertions. |
-| CPU-04 | 02-01, 02-02, 02-04, 02-06, 02-08, 02-09, 02-10, 02-11, 02-16 | Partition equivalence and bounded outcomes | SATISFIED | Event/control partition and output/deadline bounds pass. |
-| CPU-05 | 02-07, 02-08, 02-09, 02-14, 02-16, 02-17 | Fixed eligible corpus, honest statuses and replay evidence | SATISFIED | Live runner outputs three receipts against the fixed one-CPU/two-timer denominator; protocol probe and fixture identity checks pass. |
+| CPU-01 | 02-02, 02-03, 02-07, 02-09, 02-10, 02-14, 02-16, 02-17, 02-18 | Base/CB semantics, flags, addresses, timing, illegal behavior | SATISFIED | Truth 1; summary credit 02-02/02-18. |
+| CPU-02 | 02-04, 02-06, 02-09, 02-10, 02-11, 02-16 | Interrupts, EI delay, HALT/STOP, reset, bootless profile | SATISFIED | Truth 2; summary credit 02-16. |
+| CPU-03 | 02-01, 02-05, 02-06, 02-07, 02-09, 02-11, 02-14, 02-16 | Mapping, timer races, disconnected serial | SATISFIED | Truth 3; summary credit 02-01. |
+| CPU-04 | 02-01, 02-02, 02-04, 02-06, 02-08, 02-09, 02-10, 02-11, 02-16 | Partition equivalence and bounded outcomes | SATISFIED | Truth 4; summary credit 02-01/02-02. |
+| CPU-05 | 02-07, 02-08, 02-09, 02-14, 02-16, 02-17 | Fixed eligible corpus, honest statuses, replay evidence | SATISFIED | Truth 5; summary credit 02-16/02-17. |
 
-No orphaned Phase 2 requirements were found: ROADMAP.md maps CPU-01 through CPU-05, and all five are declared in phase plans and covered above. Plan 02-15 is explicitly superseded/non-runnable; it remains historical evidence and is not treated as an active plan requirement.
+No orphaned requirements.
+
+### Supporting Audits
+
+| Audit | Result |
+|---|---|
+| `02-VALIDATION.md` | `nyquist_compliant: true`; 8 gaps found, 8 resolved, 0 current. |
+| `02-SECURITY.md` | `threats_open: 0`; all registered threats closed. |
+| `02-REVIEW.md` / `02-REVIEW-DISPOSITION.md` | Review of `ci.yml` and `.gitignore`; no critical or warning findings; IN-01 info finding deferred with rationale and no open findings. |
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |---|---:|---|---|---|
-| None | — | No unreferenced debt markers, placeholder behavior, empty core implementation or disabled linked tests found. The phrase `not available` in the hosted-evidence formatter is an explicit missing-link display value, not a stub. | — | No anti-pattern gap. |
+| None | n/a | No unreferenced debt markers in core, include, test sources or fixture records. The `XXXXXX` strings in `src/player/` are `mkstemp` templates in later-phase code, not debt markers. | n/a | None |
 
 ### Human Verification Required
 
-None. This is a core/diagnostic foundation phase, and its behavior is exercised through deterministic tests and the headless runner. There was no physical DMG-CPU-B observation. That limitation is recorded and is not asserted as phase evidence or as a compatibility claim.
+None. This is a core/diagnostic phase exercised through deterministic tests and the headless runner. No physical DMG-CPU-B observation was made, and none is claimed.
 
 ### Gaps Summary
 
-No remaining gaps. Current implementation and focused tests establish the five roadmap truths, and the current-session full local suite passed 179/179. The corpus is exactly three source-qualified derived headless reporting closures (one CPU, two timer); the upstream original Mooneye result paths remain PPU/LY-dependent and excluded. No physical DMG-CPU-B observation or broad compatibility claim is made.
+No gaps. The three admitted fixtures are source-qualified derived headless reporting closures (one CPU, two timer), not the original PPU-dependent Mooneye reporting paths, which remain excluded. No physical hardware or broad compatibility claim is made.
 
 ---
 
-_Verified: 2026-10-09T12:43:21Z_
+_Verified: 2026-10-10T12:53:55Z_
 _Verifier: the agent (gsd-verifier)_
