@@ -189,6 +189,66 @@ typedef struct {
 
 void gbb_accept_drive(const gbb_accept_drive_config *config, gbb_accept_drive_result *result);
 
+/* ---- Canonical frame and PCM digests (D-16, D-24, D-33) ----
+ * The frame digest is SHA-256 over the ASCII header below followed by
+ * 160x144x3 row-major R,G,B bytes. Shade map: 0->255, 1->170, 2->85, 3->0 on
+ * all three channels. The version tag in the header is the migration path for
+ * any later container change. Only explicitly serialized byte buffers are
+ * hashed, never struct or int16 array memory. */
+#define GBB_ACCEPT_RGB_HEADER "GBB-RGB888-v1 160x144\n"
+#define GBB_ACCEPT_FRAME_WIDTH 160u
+#define GBB_ACCEPT_FRAME_HEIGHT 144u
+#define GBB_ACCEPT_FRAME_SHADE_BYTES (GBB_ACCEPT_FRAME_WIDTH * GBB_ACCEPT_FRAME_HEIGHT)
+
+/* shades holds 144 rows of 160 shade bytes spaced pitch bytes apart
+ * (pitch >= 160; the caller guarantees (144-1)*pitch+160 readable bytes).
+ * Return 0 on success, nonzero when a shade is above 3 (out is then not
+ * written). */
+int gbb_accept_rgb_digest(const uint8_t *shades, size_t pitch, char out_hex[65]);
+int gbb_accept_rgb_digest_bin(const uint8_t *shades, size_t pitch, uint8_t out[32]);
+/* Writes a binary P6 PPM of the same pixels with fopen "wb". Returns 0 on
+ * success, nonzero when a shade is above 3 (nothing is created) or any open,
+ * write or close fails. */
+int gbb_accept_write_ppm(const char *path, const uint8_t *shades, size_t pitch);
+/* Number of distinct shades (0..4) present in the frame, or 0 for an invalid shade. */
+unsigned gbb_accept_frame_distinct_shades(const uint8_t *shades, size_t pitch);
+
+/* Whole-stream PCM digest over little-endian int16 L,R bytes. */
+typedef struct {
+    gbb_accept_sha256_ctx sha;
+} gbb_accept_pcm_digest_ctx;
+
+void gbb_accept_pcm_digest_init(gbb_accept_pcm_digest_ctx *ctx);
+void gbb_accept_pcm_digest_feed(gbb_accept_pcm_digest_ctx *ctx, const gbb_audio_frame *frames,
+                                size_t count);
+void gbb_accept_pcm_digest_final(gbb_accept_pcm_digest_ctx *ctx, char out_hex[65]);
+
+/* Per-channel window statistics (D-16). A change is a sample that differs from
+ * the previous sample of the same channel within the window. */
+#define GBB_ACCEPT_PCM_MIN_PEAK_TO_PEAK 2048
+#define GBB_ACCEPT_PCM_MIN_CHANGES 4800u
+
+typedef struct {
+    int16_t min;
+    int16_t max;
+    int16_t last;
+    uint64_t changes;
+} gbb_accept_pcm_channel_stats;
+
+typedef struct {
+    uint64_t samples;
+    gbb_accept_pcm_channel_stats left;
+    gbb_accept_pcm_channel_stats right;
+} gbb_accept_pcm_stats;
+
+void gbb_accept_pcm_stats_init(gbb_accept_pcm_stats *stats);
+void gbb_accept_pcm_stats_feed(gbb_accept_pcm_stats *stats, const gbb_audio_frame *frames,
+                               size_t count);
+/* max - min for a channel, 0 when no samples were fed. */
+int32_t gbb_accept_pcm_peak_to_peak(const gbb_accept_pcm_channel_stats *channel, uint64_t samples);
+/* Both channels meet the D-16 thresholds. */
+bool gbb_accept_pcm_audible(const gbb_accept_pcm_stats *stats);
+
 #ifdef __cplusplus
 }
 #endif

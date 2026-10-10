@@ -34,7 +34,8 @@ add_library(gabbaboy_accept STATIC
   src/accept/sha256.c
   src/accept/input_script.c
   src/accept/stepper.c
-  src/accept/predicate.c)
+  src/accept/predicate.c
+  src/accept/digest.c)
 target_include_directories(gabbaboy_accept PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/accept")
 target_link_libraries(gabbaboy_accept PUBLIC GabbaBoy::core)
 target_compile_features(gabbaboy_accept PUBLIC c_std_17)
@@ -67,7 +68,7 @@ if(NOT GABBABOY_GIT_RESULT EQUAL 0 OR
 else()
   execute_process(COMMAND git diff --quiet HEAD -- CMakeLists.txt include/gabbaboy/gabbaboy.h src/core/gabbaboy.c src/runner/main.c
     src/runner/acceptance.h src/runner/cases.c src/runner/acceptance.c
-    src/accept/gbb_accept.h src/accept/sha256.c src/accept/input_script.c src/accept/stepper.c src/accept/predicate.c
+    src/accept/gbb_accept.h src/accept/sha256.c src/accept/input_script.c src/accept/stepper.c src/accept/predicate.c src/accept/digest.c
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" RESULT_VARIABLE GABBABOY_SOURCE_DIRTY ERROR_QUIET)
   if(GABBABOY_SOURCE_DIRTY EQUAL 0)
     set(GABBABOY_BUILD_QUALIFIED 1)

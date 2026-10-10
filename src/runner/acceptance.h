@@ -85,6 +85,14 @@ typedef struct {
     int receipt;                  /* print a provenance line after the status line */
     const char *core_revision;    /* optional, for the receipt */
     int build_qualified;
+    const char *failure_dir;      /* probe-checked directory for <id>.ppm on an exit-1 outcome */
+    int observe;                  /* print key<TAB>value observations instead of pass/fail (D-23) */
+    /* Observe-only (the runner rejects them without observe): */
+    const char *observe_input_script;  /* replaces the case script, no digest pin */
+    int has_frame_digest_at;
+    uint64_t frame_digest_at;     /* extra checkpoint labelled t<half-dots> */
+    int pcm_only;                 /* limit output to the PCM lines */
+    const char *dump_dir;         /* write <id>.<label>.ppm per checkpoint */
 } gbb_acceptance_options;
 
 /* Runs one parsed case on DMG-CPU-B. Exit codes: 0 pass, 1 fail, 2 invalid

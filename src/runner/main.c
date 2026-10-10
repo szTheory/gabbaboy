@@ -243,13 +243,25 @@ static void print_usage(FILE *stream, const char *program) {
       "  %s <rom.gb>\n"
       "  %s --manifest <manifest.json> --case <id> [--receipt]\n"
       "  %s --manifest <manifest.json> --suite [--receipt]\n"
-      "  %s --acceptance <cases.txt> --case <id> [--receipt]\n",
-      program, program, program, program);
+      "  %s --acceptance <cases.txt> --case <id> [--receipt] [--failure-dir <dir>]\n"
+      "  %s --acceptance <cases.txt> --case <id> --observe [--input-script <file>]\n"
+      "      [--frame-digest-at <half-dots>] [--pcm-digest] [--dump-checkpoints <dir>]\n",
+      program, program, program, program, program);
+}
+
+/* Strict decimal parse for --frame-digest-at: digits only, at most the 600 s script bound. */
+static int parse_half_dots(const char *text,uint64_t *out) {
+    size_t n=strlen(text);if(n==0||n>10)return 0;
+    uint64_t value=0;for(size_t i=0;i<n;i++){if(text[i]<'0'||text[i]>'9')return 0;value=value*10u+(uint64_t)(text[i]-'0');}
+    if(value>GBB_ACCEPT_MAX_SCRIPT_HALF_DOTS)return 0;
+    *out=value;return 1;
 }
 
 int main(int argc,char **argv) {
     if(argc==2&&strncmp(argv[1],"--",2)!=0)return run_original_tracer(argv[1]);
     const char *manifest=NULL,*selected=NULL,*acceptance=NULL;int receipt=0,suite=0;
+    gbb_acceptance_options options;memset(&options,0,sizeof(options));
+    int observe_only_flag=0;
     for(int i=1;i<argc;i++){
         if(strcmp(argv[i],"--help")==0){print_usage(stdout,argv[0]);return 0;}
         else if(strcmp(argv[i],"--manifest")==0&&i+1<argc)manifest=argv[++i];
@@ -257,13 +269,22 @@ int main(int argc,char **argv) {
         else if(strcmp(argv[i],"--case")==0&&i+1<argc)selected=argv[++i];
         else if(strcmp(argv[i],"--suite")==0)suite=1;
         else if(strcmp(argv[i],"--receipt")==0)receipt=1;
+        else if(strcmp(argv[i],"--failure-dir")==0&&i+1<argc)options.failure_dir=argv[++i];
+        else if(strcmp(argv[i],"--observe")==0)options.observe=1;
+        else if(strcmp(argv[i],"--input-script")==0&&i+1<argc){options.observe_input_script=argv[++i];observe_only_flag=1;}
+        else if(strcmp(argv[i],"--frame-digest-at")==0&&i+1<argc){
+            if(!parse_half_dots(argv[++i],&options.frame_digest_at)){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
+            options.has_frame_digest_at=1;observe_only_flag=1;}
+        else if(strcmp(argv[i],"--pcm-digest")==0){options.pcm_only=1;observe_only_flag=1;}
+        else if(strcmp(argv[i],"--dump-checkpoints")==0&&i+1<argc){options.dump_dir=argv[++i];observe_only_flag=1;}
         else {fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
     }
     if(acceptance){
-        if(manifest||suite||!selected){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
-        gbb_acceptance_options options={receipt,GBB_BUILD_REVISION,GBB_BUILD_QUALIFIED};
+        if(manifest||suite||!selected||(observe_only_flag&&!options.observe)){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
+        options.receipt=receipt;options.core_revision=GBB_BUILD_REVISION;options.build_qualified=GBB_BUILD_QUALIFIED;
         return gbb_acceptance_run_file(acceptance,selected,&options);
     }
+    if(options.failure_dir||options.observe||observe_only_flag){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
     if(!manifest||(!suite&&!selected)||(suite&&selected)){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
     size_t manifest_length=0;
     uint8_t *manifest_bytes=malloc(MAX_MANIFEST+1);

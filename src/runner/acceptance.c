@@ -3,6 +3,7 @@
 
 #include "gabbaboy/gabbaboy.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,14 +46,281 @@ static int input_error(const gbb_case *c, const char *reason) {
     return EXIT_INVALID;
 }
 
+/* ---- Checkpoint, rolling-digest and PCM capture (D-16, D-24, D-25) ----
+ * Everything below hangs off the two gbb_accept_drive callbacks, so frames are
+ * observed exactly once per completed frame and per-process state lives in one
+ * heap-allocated run_state (no globals: parallel CTests never share anything). */
+
+#define MAX_CHECKPOINTS 8u
+#define FRAME_RING 3u
+#define FRAME_PITCH GBB_ACCEPT_FRAME_WIDTH
+#define MAX_OBSERVE_LINES 64u
+#define OBSERVE_LINE_BYTES 192u
+#define MAX_DIR_BYTES 3800u
+/* D-25 asks for "not uniform, at least 3 distinct shades". The pinned Libbet title screen is
+ * 1-bit text (shades 0 and 255 only, observed in Plan 07-07) and play_start is a 2-shade
+ * transition frame, so 3 shades is only demanded of the gameplay checkpoints (mid, hit); every
+ * other checkpoint must still be non-uniform (at least 2). */
+#define MIN_CHECKPOINT_SHADES_GAMEPLAY 3u
+#define MIN_CHECKPOINT_SHADES_SCREEN 2u
+
+typedef struct {
+    char label[GBB_ACCEPT_SCRIPT_MAX_LABEL + 1u];
+    uint64_t requested_half_dots;
+    bool armed;      /* requested time is known */
+    bool resolved;   /* a completed frame at or after the requested time was captured */
+    uint64_t completion_half_dots;
+    char digest[65];
+    unsigned distinct_shades;
+} checkpoint;
+
+typedef struct {
+    uint64_t completion_half_dots;
+    char digest[65];
+    unsigned distinct_shades;
+    uint8_t pixels[GBB_ACCEPT_FRAME_SHADE_BYTES];
+} frame_record;
+
+typedef struct {
+    const char *id;
+    const char *dump_dir;
+    checkpoint checkpoints[MAX_CHECKPOINTS];
+    size_t checkpoint_count;
+    size_t hit_index;
+    frame_record ring[FRAME_RING];   /* the newest frames, oldest overwritten */
+    uint64_t frames_seen;
+    uint64_t last_generation;
+    uint8_t scratch[GBB_ACCEPT_FRAME_SHADE_BYTES];
+    gbb_accept_sha256_ctx rolling;
+    gbb_accept_track track;
+    gbb_accept_pcm_digest_ctx pcm;
+    gbb_accept_pcm_stats window;
+    bool has_play_start;
+    uint64_t play_start_half_dots;
+    bool window_active;
+    const char *error;               /* frame-skipped or frame-invalid: exit 3 */
+    bool dump_failed;
+} run_state;
+
+static const frame_record *newest_frame(const run_state *st) {
+    return st->frames_seen == 0 ? NULL : &st->ring[(st->frames_seen - 1u) % FRAME_RING];
+}
+
+static void bin_to_hex(const uint8_t bin[32], char out[65]) {
+    static const char digits[] = "0123456789abcdef";
+    for (size_t i = 0; i < 32u; ++i) {
+        out[i * 2u] = digits[bin[i] >> 4];
+        out[i * 2u + 1u] = digits[bin[i] & 0x0Fu];
+    }
+    out[64] = '\0';
+}
+
+static int join_path(char *out, size_t capacity, const char *dir, const char *name) {
+    int n = snprintf(out, capacity, "%s/%s", dir, name);
+    return n > 0 && (size_t)n < capacity;
+}
+
+static void resolve_checkpoint(run_state *st, checkpoint *cp, const frame_record *frame) {
+    cp->resolved = true;
+    cp->completion_half_dots = frame->completion_half_dots;
+    memcpy(cp->digest, frame->digest, sizeof(cp->digest));
+    cp->distinct_shades = frame->distinct_shades;
+    if (st->dump_dir != NULL) {
+        char name[128], path[MAX_DIR_BYTES + 128u];
+        snprintf(name, sizeof(name), "%s.%s.ppm", st->id, cp->label);
+        if (!join_path(path, sizeof(path), st->dump_dir, name) ||
+            gbb_accept_write_ppm(path, frame->pixels, FRAME_PITCH) != 0) {
+            st->dump_failed = true;
+        }
+    }
+}
+
+static void on_pcm(void *context, const gbb_audio_frame *frames, size_t count) {
+    run_state *st = context;
+    gbb_accept_pcm_digest_feed(&st->pcm, frames, count);
+    if (st->window_active) gbb_accept_pcm_stats_feed(&st->window, frames, count);
+}
+
+static void on_after_step(void *context, gbb_instance *instance, uint64_t actual_half_dots) {
+    run_state *st = context;
+    /* The PCM window holds the stepping calls that start at or after play_start. */
+    st->window_active = st->has_play_start && actual_half_dots >= st->play_start_half_dots;
+    if (st->error != NULL) return;
+    gbb_frame_info info;
+    if (gbb_copy_frame(instance, st->scratch, sizeof(st->scratch), FRAME_PITCH, &info) != GBB_OK) {
+        return; /* no completed frame yet (or since reset) */
+    }
+    if (info.generation == st->last_generation) return;
+    if (info.generation != st->last_generation + 1u) {
+        st->error = "frame-skipped"; /* more than one frame completed between observations */
+        return;
+    }
+    uint8_t bin[32];
+    if (gbb_accept_rgb_digest_bin(st->scratch, FRAME_PITCH, bin) != 0) {
+        st->error = "frame-invalid";
+        return;
+    }
+    st->last_generation = info.generation;
+    frame_record *slot = &st->ring[st->frames_seen % FRAME_RING];
+    memcpy(slot->pixels, st->scratch, sizeof(slot->pixels));
+    slot->completion_half_dots = info.completion_half_dots;
+    bin_to_hex(bin, slot->digest);
+    slot->distinct_shades = gbb_accept_frame_distinct_shades(slot->pixels, FRAME_PITCH);
+    gbb_accept_sha256_update(&st->rolling, bin, sizeof(bin));
+    st->frames_seen++;
+    for (size_t i = 0; i < st->checkpoint_count; ++i) {
+        checkpoint *cp = &st->checkpoints[i];
+        if (cp->armed && !cp->resolved && cp->requested_half_dots <= slot->completion_half_dots) {
+            resolve_checkpoint(st, cp, slot);
+        }
+    }
+}
+
+static void on_boundary(void *context, gbb_instance *instance, uint64_t boundary_half_dots,
+                        bool predicate_value) {
+    (void)instance;
+    run_state *st = context;
+    if (st->error != NULL) return;
+    bool was_hit = st->track.hit;
+    gbb_accept_predicate_track(&st->track, boundary_half_dots, predicate_value);
+    if (was_hit || !st->track.hit) return;
+    /* T_hit is only known one boundary late, so the hit frame is the earliest recent frame that
+     * completed at or after T_hit; later frames resolve it in on_after_step if none has yet. */
+    checkpoint *cp = &st->checkpoints[st->hit_index];
+    cp->requested_half_dots = st->track.t_hit;
+    cp->armed = true;
+    uint64_t held = st->frames_seen < FRAME_RING ? st->frames_seen : FRAME_RING;
+    for (uint64_t k = held; k > 0; --k) {
+        const frame_record *frame = &st->ring[(st->frames_seen - k) % FRAME_RING];
+        if (frame->completion_half_dots >= cp->requested_half_dots) {
+            resolve_checkpoint(st, cp, frame);
+            break;
+        }
+    }
+}
+
+static void add_checkpoint(run_state *st, const char *label, uint64_t requested, bool armed) {
+    checkpoint *cp = &st->checkpoints[st->checkpoint_count++];
+    memset(cp, 0, sizeof(*cp));
+    strcpy(cp->label, label);
+    cp->requested_half_dots = requested;
+    cp->armed = armed;
+}
+
+static const gbb_accept_mark *find_mark(const gbb_accept_script *script, const char *label) {
+    for (size_t i = 0; i < script->mark_count; ++i) {
+        if (strcmp(script->marks[i].label, label) == 0) return &script->marks[i];
+    }
+    return NULL;
+}
+
+/* Writes and removes a probe file so an unwritable directory is found before any guest work. */
+static int probe_directory(const char *dir) {
+    char path[MAX_DIR_BYTES + 32u];
+    if (strlen(dir) > MAX_DIR_BYTES || !join_path(path, sizeof(path), dir, ".gbb-write-probe")) return 0;
+    FILE *file = fopen(path, "wb");
+    if (file == NULL) return 0;
+    int ok = fclose(file) == 0;
+    remove(path);
+    return ok;
+}
+
+static unsigned min_shades_for(const char *label) {
+    return strcmp(label, "mid") == 0 || strcmp(label, "hit") == 0 ? MIN_CHECKPOINT_SHADES_GAMEPLAY
+                                                                  : MIN_CHECKPOINT_SHADES_SCREEN;
+}
+
+static int pcm_has_samples(const run_state *st) {
+    return st->window.samples != 0;
+}
+
+typedef struct {
+    char lines[MAX_OBSERVE_LINES][OBSERVE_LINE_BYTES];
+    size_t count;
+} observe_lines;
+
+static void emit_line(observe_lines *out, const char *id, const char *suffix, const char *fmt, ...) {
+    if (out->count >= MAX_OBSERVE_LINES) return;
+    char value[96];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(value, sizeof(value), fmt, args);
+    va_end(args);
+    snprintf(out->lines[out->count++], OBSERVE_LINE_BYTES, "acceptance.%s.%s\t%s", id, suffix, value);
+}
+
+static int compare_lines(const void *a, const void *b) {
+    return strcmp((const char *)a, (const char *)b);
+}
+
+static void print_observation(const gbb_case *c, const run_state *st, bool hit, uint64_t t_hit,
+                              bool pcm_only, const char pcm_hex[65], const char rolling_hex[65]) {
+    observe_lines *out = malloc(sizeof(*out));
+    if (out == NULL) {
+        fprintf(stderr, "runner-error: observation allocation failed\n");
+        return;
+    }
+    out->count = 0;
+    char key[96];
+    if (!pcm_only) {
+        emit_line(out, c->id, "class", "regression");
+        if (hit) emit_line(out, c->id, "t_hit_half_dots", "%llu", (unsigned long long)t_hit);
+        else emit_line(out, c->id, "t_hit_half_dots", "none");
+        for (size_t i = 0; i < st->checkpoint_count; ++i) {
+            const checkpoint *cp = &st->checkpoints[i];
+            snprintf(key, sizeof(key), "checkpoint.%s.requested_half_dots", cp->label);
+            if (cp->armed) emit_line(out, c->id, key, "%llu", (unsigned long long)cp->requested_half_dots);
+            else emit_line(out, c->id, key, "none");
+            snprintf(key, sizeof(key), "checkpoint.%s.completion_half_dots", cp->label);
+            if (cp->resolved) emit_line(out, c->id, key, "%llu", (unsigned long long)cp->completion_half_dots);
+            else emit_line(out, c->id, key, "none");
+            snprintf(key, sizeof(key), "checkpoint.%s.frame", cp->label);
+            emit_line(out, c->id, key, "%s", cp->resolved ? cp->digest : "none");
+        }
+        emit_line(out, c->id, "frame.rolling", "%s", rolling_hex);
+    }
+    emit_line(out, c->id, "pcm_sha256", "%s", pcm_hex);
+    emit_line(out, c->id, "pcm.window.left.peak_to_peak", "%d",
+              (int)gbb_accept_pcm_peak_to_peak(&st->window.left, st->window.samples));
+    emit_line(out, c->id, "pcm.window.left.changes", "%llu", (unsigned long long)st->window.left.changes);
+    emit_line(out, c->id, "pcm.window.right.peak_to_peak", "%d",
+              (int)gbb_accept_pcm_peak_to_peak(&st->window.right, st->window.samples));
+    emit_line(out, c->id, "pcm.window.right.changes", "%llu", (unsigned long long)st->window.right.changes);
+    qsort(out->lines, out->count, OBSERVE_LINE_BYTES, compare_lines);
+    for (size_t i = 0; i < out->count; ++i) printf("%s\n", out->lines[i]);
+    free(out);
+}
+
+static int fail_run(const gbb_case *c, const gbb_acceptance_options *options, const run_state *st,
+                    const char *reason, uint64_t end_half_dots) {
+    char ppm_note[MAX_DIR_BYTES + 160u];
+    ppm_note[0] = '\0';
+    const frame_record *frame = newest_frame(st);
+    if (options != NULL && options->failure_dir != NULL && frame != NULL) {
+        char name[96], path[MAX_DIR_BYTES + 128u];
+        snprintf(name, sizeof(name), "%s.ppm", c->id);
+        if (join_path(path, sizeof(path), options->failure_dir, name) &&
+            gbb_accept_write_ppm(path, frame->pixels, FRAME_PITCH) == 0) {
+            snprintf(ppm_note, sizeof(ppm_note), " ppm=%s", path);
+        } else {
+            snprintf(ppm_note, sizeof(ppm_note), " ppm=write-failed");
+        }
+    }
+    printf("acceptance id=%s status=fail model=dmg-cpu-b reason=%s end_half_dots=%llu%s\n", c->id, reason,
+           (unsigned long long)end_half_dots, ppm_note);
+    return EXIT_FAIL;
+}
+
 int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *options) {
     uint8_t *script_bytes = NULL, *rom = NULL;
     size_t script_length = 0, rom_length = 0;
     gbb_accept_script script;
     gbb_accept_stepper *stepper = NULL;
     gbb_instance *instance = NULL;
+    run_state *st = NULL;
     char digest[65], err[160];
     int code = EXIT_INVALID;
+    const bool observe = options != NULL && options->observe;
     memset(&script, 0, sizeof(script));
 
     if (c->oracle != GBB_ORACLE_PROGRESS_PREDICATE) {
@@ -61,11 +329,16 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
         return EXIT_UNSUPPORTED;
     }
 
-    /* Input script: digest over the raw bytes first, then syntax. */
-    int rc = gbb_runner_read_file(c->input_script, GBB_ACCEPT_SCRIPT_MAX_BYTES, &script_bytes, &script_length);
+    /* Input script: digest over the raw bytes first, then syntax. Under --observe only, an explicit
+     * script replaces the case script and is not digest-pinned (it can never produce a pass). */
+    const bool replaced = observe && options->observe_input_script != NULL;
+    int rc = gbb_runner_read_file(replaced ? options->observe_input_script : c->input_script,
+                                  GBB_ACCEPT_SCRIPT_MAX_BYTES, &script_bytes, &script_length);
     if (rc != 0) { code = input_error(c, rc == 1 ? "input-missing" : "input-unreadable"); goto done; }
-    gbb_accept_sha256_hex(script_bytes, script_length, digest);
-    if (strcmp(digest, c->input_sha256) != 0) { code = input_error(c, "input-digest-mismatch"); goto done; }
+    if (!replaced) {
+        gbb_accept_sha256_hex(script_bytes, script_length, digest);
+        if (strcmp(digest, c->input_sha256) != 0) { code = input_error(c, "input-digest-mismatch"); goto done; }
+    }
     rc = gbb_accept_script_parse(script_bytes, script_length, &script, err, sizeof(err));
     if (rc != 0) {
         fprintf(stderr, "acceptance id=%s status=invalid reason=invalid-script detail=\"%s\"\n", c->id, rc == 1 ? err : "allocation");
@@ -87,6 +360,52 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
         goto done;
     }
 
+    /* Checkpoint plan (D-25): the script marks title, play_start and mid, then the hit frame. A
+     * run that is gated needs all three marks; --observe records whichever exist. */
+    static const char *const mark_labels[] = {"title", "play_start", "mid"};
+    st = calloc(1, sizeof(*st));
+    if (st == NULL) {
+        fprintf(stderr, "runner-error: run state allocation failed\n");
+        goto done;
+    }
+    st->id = c->id;
+    st->dump_dir = observe ? options->dump_dir : NULL;
+    for (size_t i = 0; i < sizeof(mark_labels) / sizeof(mark_labels[0]); ++i) {
+        const gbb_accept_mark *mark = find_mark(&script, mark_labels[i]);
+        if (mark == NULL) {
+            if (observe) continue;
+            code = input_error(c, "checkpoint-mark-missing");
+            goto done;
+        }
+        add_checkpoint(st, mark_labels[i], mark->at_half_dots, true);
+        if (strcmp(mark_labels[i], "play_start") == 0) {
+            st->has_play_start = true;
+            st->play_start_half_dots = mark->at_half_dots;
+        }
+    }
+    if (observe && options->has_frame_digest_at) {
+        char label[GBB_ACCEPT_SCRIPT_MAX_LABEL + 1u];
+        snprintf(label, sizeof(label), "t%llu", (unsigned long long)options->frame_digest_at);
+        if (find_mark(&script, label) != NULL) { code = input_error(c, "checkpoint-label-duplicate"); goto done; }
+        add_checkpoint(st, label, options->frame_digest_at, true);
+    }
+    add_checkpoint(st, "hit", 0, false);
+    st->hit_index = st->checkpoint_count - 1u;
+    gbb_accept_sha256_init(&st->rolling);
+    gbb_accept_pcm_digest_init(&st->pcm);
+    gbb_accept_pcm_stats_init(&st->window);
+    gbb_accept_track_init(&st->track);
+
+    /* Output directories are probed before any guest work (T-07-16). */
+    if (options != NULL && options->failure_dir != NULL && !probe_directory(options->failure_dir)) {
+        code = input_error(c, "failure-dir-unwritable");
+        goto done;
+    }
+    if (st->dump_dir != NULL && !probe_directory(st->dump_dir)) {
+        code = input_error(c, "dump-dir-unwritable");
+        goto done;
+    }
+
     if (gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) != GBB_OK) {
         fprintf(stderr, "runner-error: instance allocation failed\n");
         goto done;
@@ -97,7 +416,7 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
         fprintf(stderr, "runner-error: stepper allocation failed\n");
         goto done;
     }
-    gbb_accept_stepper_init(stepper, instance, NULL, NULL);
+    gbb_accept_stepper_init(stepper, instance, on_pcm, st);
 
     gbb_accept_drive_config config;
     memset(&config, 0, sizeof(config));
@@ -106,30 +425,84 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
     config.predicate = predicate;
     config.expect_hw = c->expect_hw_capability;
     config.budget_half_dots = c->budget_half_dots;
-    config.tail_half_dots = 0; /* the verdict is T_hit; no post-hit run is needed here */
+    config.tail_half_dots = GBB_ACCEPT_TAIL_HALF_DOTS; /* the D-16 PCM window ends 1 s after T_hit */
     config.max_batch = DRIVE_MAX_BATCH;
+    config.after_step = on_after_step;
+    config.at_boundary = on_boundary;
+    config.context = st;
     gbb_accept_drive_result result;
     gbb_accept_drive(&config, &result);
 
+    char pcm_hex[65], rolling_hex[65];
+    gbb_accept_pcm_digest_final(&st->pcm, pcm_hex);
+    gbb_accept_sha256_final(&st->rolling, rolling_hex);
+
+    if (st->error != NULL) {
+        printf("acceptance id=%s status=unsupported model=dmg-cpu-b reason=%s end_half_dots=%llu\n", c->id,
+               st->error, (unsigned long long)result.end_half_dots);
+        code = EXIT_UNSUPPORTED;
+        goto done;
+    }
+    if (st->dump_failed) {
+        fprintf(stderr, "acceptance id=%s status=invalid reason=dump-write-failed\n", c->id);
+        code = EXIT_INVALID;
+        goto done;
+    }
+
+    if (observe && (result.status == GBB_ACCEPT_DRIVE_HIT || result.status == GBB_ACCEPT_DRIVE_NOT_REACHED)) {
+        print_observation(c, st, result.status == GBB_ACCEPT_DRIVE_HIT, result.t_hit_half_dots,
+                          options->pcm_only, pcm_hex, rolling_hex);
+        code = EXIT_PASS;
+        goto done;
+    }
+
     switch (result.status) {
-    case GBB_ACCEPT_DRIVE_HIT:
+    case GBB_ACCEPT_DRIVE_HIT: {
+        /* Evidence gates (D-16, D-25): every checkpoint frame exists and is structured, the hit
+         * differs from the title, and both channels are audible in the play window. */
+        const char *reason = NULL;
+        for (size_t i = 0; i < st->checkpoint_count && reason == NULL; ++i) {
+            if (!st->checkpoints[i].resolved) reason = "checkpoint-not-ready";
+        }
+        for (size_t i = 0; i < st->checkpoint_count && reason == NULL; ++i) {
+            if (st->checkpoints[i].distinct_shades < min_shades_for(st->checkpoints[i].label)) {
+                reason = "checkpoint-structure";
+            }
+        }
+        if (reason == NULL && strcmp(st->checkpoints[0].digest, st->checkpoints[st->hit_index].digest) == 0) {
+            reason = "checkpoint-structure";
+        }
+        if (reason == NULL && (!pcm_has_samples(st) || !gbb_accept_pcm_audible(&st->window))) reason = "pcm-silent";
+        if (reason != NULL) {
+            code = fail_run(c, options, st, reason, result.end_half_dots);
+            break;
+        }
         printf("acceptance id=%s status=pass model=dmg-cpu-b t_hit_half_dots=%llu\n", c->id,
                (unsigned long long)result.t_hit_half_dots);
         if (options != NULL && options->receipt) {
             printf("receipt id=%s rom_sha256=%s rom_size=%u input_sha256=%s predicate=%s "
-                   "budget_half_dots=%llu end_half_dots=%llu core_revision=%s build_qualified=%s\n",
+                   "budget_half_dots=%llu end_half_dots=%llu core_revision=%s build_qualified=%s",
                    c->id, c->rom_sha256, (unsigned)c->rom_size, c->input_sha256, c->predicate,
                    (unsigned long long)c->budget_half_dots,
                    (unsigned long long)result.end_half_dots,
                    options->core_revision != NULL ? options->core_revision : "unknown",
                    options->build_qualified ? "true" : "false");
+            for (size_t i = 0; i < st->checkpoint_count; ++i) {
+                printf(" frame_%s=%s", st->checkpoints[i].label, st->checkpoints[i].digest);
+            }
+            printf(" frame_rolling=%s pcm_sha256=%s pcm_left_peak_to_peak=%d pcm_left_changes=%llu "
+                   "pcm_right_peak_to_peak=%d pcm_right_changes=%llu\n",
+                   rolling_hex, pcm_hex,
+                   (int)gbb_accept_pcm_peak_to_peak(&st->window.left, st->window.samples),
+                   (unsigned long long)st->window.left.changes,
+                   (int)gbb_accept_pcm_peak_to_peak(&st->window.right, st->window.samples),
+                   (unsigned long long)st->window.right.changes);
         }
         code = EXIT_PASS;
         break;
+    }
     case GBB_ACCEPT_DRIVE_NOT_REACHED:
-        printf("acceptance id=%s status=fail model=dmg-cpu-b reason=predicate-not-reached end_half_dots=%llu\n",
-               c->id, (unsigned long long)result.end_half_dots);
-        code = EXIT_FAIL;
+        code = fail_run(c, options, st, "predicate-not-reached", result.end_half_dots);
         break;
     case GBB_ACCEPT_DRIVE_STOPPED:
         printf("acceptance id=%s status=unsupported model=dmg-cpu-b reason=guest-stopped stop=%d end_half_dots=%llu\n",
@@ -152,6 +525,7 @@ done:
     free(stepper);
     gbb_destroy(instance);
     gbb_accept_script_free(&script);
+    free(st);
     free(rom);
     free(script_bytes);
     return code;
