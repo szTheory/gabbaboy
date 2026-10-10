@@ -130,6 +130,7 @@ Then freeze a DMG-CPU-B regression baseline that every later v0.2 phase must mat
   - N3: a runner `--mutate drop:START` control.
   - A predicate truth-table unit test on synthetic RAM snapshots: title garbage, attract, play not yet scored, play hit.
   - A **core-mutant control.** CMake generates a copy of `gabbaboy.c` with one JOYP-row line inverted via `string(REPLACE)`, and configure fails if the pattern is missing. It is built as a separate test-only library, and CTest asserts the mutant fails the gate.
+  - **Owner clarification (2026-10-10, planning):** D-14 and D-22 both hold. Every control's raw run must exit 1 with `reason=predicate-not-reached`, and its CTest asserts that raw non-zero outcome. For N1 and N2, a separate CTest assertion checks that the D-22 strict expected-failure layer maps exactly that outcome to `status=xfail`. Neither assertion replaces the other.
 - **D-15:** **Deadline stepping helper** `advance_to(deadline)`.
   - Loop `gbb_run_audio(budget = deadline - now)` and accept `HALTED_IDLE`.
   - If a call consumes 0 half-dots and the remaining time is below the maximum instruction cost (≤48 half-dots), treat the deadline as reached and carry the remainder into the next deadline.
@@ -148,6 +149,7 @@ Then freeze a DMG-CPU-B regression baseline that every later v0.2 phase must mat
   - Pass 1 runs without tracing.
   - If the gate is not reached or the run stops abnormally, pass 2 replays to `T_end − window` and records only the final window.
   - The output is bounded: last 4096 trace records, last 64 writes to FF00/IF/IE/LCDC/STAT, an 8-entry PC histogram and the final frame as a PPM, at most 64 KiB in total.
+  - **Owner amendment (2026-10-10, planning):** a 160x144 P6 PPM alone is 69,135 bytes, so the 64 KiB cap applies to the text report. At most one 69,135-byte final-frame PPM is written per failing case, on top of the text report.
 - **D-19:** **Pre-freeze investigations inside this phase.** Defects the game exposes are in scope (FEATURES §game acceptance). Before freezing the baseline (D-31), run two bounded investigations:
   - (i) Gameplay samples reach ±32768 with peak-to-peak 65535. Determine whether the mixer saturates or clips incorrectly against the documented APU output model. Fix it if it is a defect; otherwise record it as expected.
   - (ii) Early repeated Start taps start the game by f270 while single taps at f290–f440 do nothing. Explain this from the Libbet source; fix it only if it shows an emulator defect.

@@ -4,16 +4,16 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: 7
 current_phase_name: DMG Game Acceptance and Regression Baseline
-status: planning
-stopped_at: Phase 7 context gathered
-last_updated: "2026-10-10T19:46:52.750Z"
+status: ready-to-execute
+stopped_at: Phase 7 planned
+last_updated: "2026-10-10T21:42:12.138Z"
 last_activity: 2026-10-10
-last_activity_desc: Phase 7 context gathered (38 locked decisions)
-state_head: f1548f2b7405b266d50ba0fa7a90680352ac3c64
+last_activity_desc: Phase 7 planned (17 plans, 13 waves)
+state_head: a2bb63a558be65a8011cfcf25810455bcf87f204
 progress:
   total_phases: 9
   completed_phases: 0
-  total_plans: 0
+  total_plans: 17
   completed_plans: 0
   percent: 0
 ---
@@ -29,10 +29,10 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-10)
 
 ## Current Position
 
-Phase: 7 of 15 (v0.2 spans Phases 7–15) — DMG Game Acceptance and Regression Baseline
-Plan: — (not planned)
-Status: Phase 7 context gathered; ready to plan
-Last activity: 2026-10-10 — v0.2 roadmap created (9 phases, 28/28 requirements mapped)
+Phase: 7 (DMG Game Acceptance and Regression Baseline) — READY TO EXECUTE
+Plan: 0 of 17 executed (13 waves)
+Status: Phase 7 planned; ready to execute
+Last activity: 2026-10-10 — Phase 7 planned (17 plans; plan checker 0 blockers; requirements 5/5, decisions 38/38)
 
 Progress (v0.2): [░░░░░░░░░░] 0% (0/9 phases)
 
@@ -229,10 +229,11 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 ## Session Continuity
 
 Last session: 2026-10-10T19:46:52.736Z
-Stopped at: Phase 7 context gathered
-Resume file: .planning/phases/GB-07-dmg-game-acceptance-and-regression-baseline/07-CONTEXT.md
-Next command in fresh context: `/gsd-plan-phase 7`
+Stopped at: Phase 7 planned
+Resume file: .planning/phases/GB-07-dmg-game-acceptance-and-regression-baseline/07-01-PLAN.md
+Next command in fresh context: `/gsd-execute-phase 7`
 Continuation note: [.continue-here.md](.continue-here.md)
+Completed workflow stage: **Phase 7 planning** (2026-10-10) on branch `gsd/phase-07-dmg-game-acceptance-and-regression-baseline`. Research, pattern map, validation strategy and 17 plans in 13 waves (07-01 Libbet admission; 07-02/03/04 shared acceptance library, mixer investigation, opt-in repro in parallel; 07-17 early-Start-tap investigation; runner, digests, applicability, LD B,B, controls, calibration; 07-12/13 player smoke and baseline comparator in parallel; 07-15 baseline freeze; 07-16 docs, PR ready and handoff). Plan checker: 6 passes; 0 blockers remaining; requirements 5/5, decisions 38/38. Owner decisions recorded in `07-CONTEXT.md`: D-14 clarification (controls assert the raw exit 1 and, for N1/N2, the separate strict-xfail mapping) and D-18 amendment (64 KiB caps the text report; one 69,135-byte PPM per failing case). Phase 7 is not executed. Next phase step: **Phase 7 execution** via **`/gsd-execute-phase 7`**. Both auto-advance settings stay false; nothing advances automatically.
 Completed workflow stage: **Phase 7 context gathering** (2026-10-10). `07-CONTEXT.md` locks 38 decisions (D-01..D-38) from four parallel multi-lens/adversarial advisor researches: vendored digest-pinned Libbet v0.08 (commit 46a765a) with an opt-in RGBDS 0.7.0 rebuild workflow that must match the vendored bytes; G5 fail-closed manifest checklist; guest-state predicate (tutorial floor fully scored, not attract mode) with no-input, wrong-input, drop-START and mutant-core controls; `gbinput 1` master-timeline script; hybrid runner (`tests/acceptance/cases.txt`, compiled Mooneye table unchanged); canonical `GBB-RGB888-v1` digest; text baseline ledger `tests/baseline/dmg-cpu-b-v1.txt` with monotonic inventory and an approved-change log; macOS packaged-player `--input-script` smoke. Phase 7 is not planned or executed. Next phase step: **Phase 7 planning** via **`/gsd-plan-phase 7`**. Both auto-advance settings stay false; nothing advances automatically.
 
 Completed workflow stage: **v0.2 milestone definition — roadmap creation** (2026-10-10). This is initialization, not Phase 7. ROADMAP.md adds the `## v0.2 Color & Cartridge Breadth` section with Phases 7–15; REQUIREMENTS.md traceability maps 28/28 requirements. Next phase: **Phase 7 — DMG Game Acceptance and Regression Baseline**, via **`/gsd-discuss-phase 7`**. Both `workflow.auto_advance` and `workflow._auto_chain_active` stay false; stop after every phase and wait for the owner. No phase is active; nothing advances automatically.
@@ -253,5 +254,5 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Plan Phase 7 (DMG Game Acceptance and Regression Baseline): `/gsd-plan-phase 7`
+- Execute Phase 7 (DMG Game Acceptance and Regression Baseline): `/gsd-execute-phase 7`
 - Phase-stop rule: stop after each phase and yield; never auto-advance into the next phase or milestone.

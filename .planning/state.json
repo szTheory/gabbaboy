@@ -1,58 +1,63 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v0.2 \u2014 Color & Cartridge Breadth",
+  "milestone": "v0.2 — Color & Cartridge Breadth",
   "phases": [
+    {
+      "number": "1",
+      "name": "6, 06.1",
+      "status": "complete"
+    },
     {
       "number": "7",
       "name": "DMG Game Acceptance and Regression Baseline",
-      "status": "not_started"
+      "status": "pending"
     },
     {
       "number": "8",
       "name": "Cartridge Seam, MBC5 and MBC2",
-      "status": "not_started"
+      "status": "pending"
     },
     {
       "number": "9",
       "name": "MBC3, Deterministic RTC and Cartridge Persistence",
-      "status": "not_started"
+      "status": "pending"
     },
     {
       "number": "10",
       "name": "CGB Profile, Banking and Register Visibility",
-      "status": "not_started"
+      "status": "pending"
     },
     {
       "number": "11",
       "name": "CGB Colour Rendering and Player Colour",
-      "status": "not_started"
+      "status": "pending"
     },
     {
       "number": "12",
       "name": "CGB Double Speed",
-      "status": "not_started"
+      "status": "pending"
     },
     {
       "number": "13",
       "name": "CGB HDMA",
-      "status": "not_started"
+      "status": "pending"
     },
     {
       "number": "14",
       "name": "CGB-E Model Qualification and Corpus",
-      "status": "not_started"
+      "status": "pending"
     },
     {
       "number": "15",
       "name": "CGB Acceptance, Support Ledger and v0.2.0 Release",
-      "status": "not_started"
+      "status": "pending"
     }
   ],
   "next": {
-    "command": "/gsd-discuss-phase 7",
-    "label": "Discuss Phase 7: DMG Game Acceptance and Regression Baseline",
-    "reason": "v0.2 initialized (research, 28 requirements, 9-phase roadmap); Phase 7 not started"
+    "command": "/gsd:progress --next",
+    "label": "Advance to the next step (plan phase 7)",
+    "reason": "Phase 7 of 9 — needs a plan"
   },
-  "updated_at": "2026-10-10T18:30:38.451Z"
+  "updated_at": "2026-10-10T21:42:12.149Z"
 }

@@ -43,19 +43,19 @@ Requirement-level map; task IDs are bound by the plans' `<verify>` blocks.
 
 | Requirement | Behavior | Test Type | Automated Command | File Exists | Status |
 |-------------|----------|-----------|-------------------|-------------|--------|
-| GAME-01 | Admission passes; each mutated manifest fails with a distinct message | python + CTest | `ctest --test-dir build -R libbet_admission` | ❌ W0 | ⬜ pending |
-| GAME-01 | Licence text and notices row present | CTest | `ctest --test-dir build -R libbet_notice` | ❌ W0 | ⬜ pending |
-| GAME-02 | Scripted input reaches predicate with frame + PCM digests | CTest runner | `ctest --test-dir build -R acceptance_libbet` | ❌ W0 | ⬜ pending |
-| GAME-02 | N1/N2/N3 controls and core mutant fail the gate | CTest + exit wrapper | `ctest --test-dir build -R 'acceptance_.*(control\|mutant)'` | ❌ W0 | ⬜ pending |
-| GAME-02 | Predicate truth table and ROM anchor bytes | C unit | `ctest --test-dir build -R acceptance_predicate` | ❌ W0 | ⬜ pending |
-| EVID-01 | Case/script parser boundaries and negative files | C unit | `ctest --test-dir build -R acceptance_parse` | ❌ W0 | ⬜ pending |
-| EVID-01 | Applicability: unsupported-model exit 4, target-revision exclusion | CTest + exit wrapper | `ctest --test-dir build -R 'acceptance_.*_excluded_'` | ❌ W0 | ⬜ pending |
-| EVID-01 | RGB digest equals independent Python vector; PPM only on failure | C unit + python | `ctest --test-dir build -R acceptance_rgb_digest` | ❌ W0 | ⬜ pending |
-| EVID-01 | `LD B,B` frame capture / `not-ready` reporting | CTest | `ctest --test-dir build -R acceptance_ldbb` | ❌ W0 | ⬜ pending |
-| GAME-03 | Packaged player scripted smoke; PCM digest equals headless | package script (macOS) | `bash tests/scripts/verify-phase3-player.sh --build-package` | extend | ⬜ pending |
-| GAME-03 | Session-level negative controls | player CTest | `ctest --test-dir build -R player_session_script` | ❌ W0 | ⬜ pending |
-| EVID-02 | Ledger byte-identity on Linux/macOS/Windows; frozen inventory superset | cmake script | `ctest --test-dir build -R dmg_baseline` | ❌ W0 | ⬜ pending |
-| EVID-02 | Checker self-tests (modified/missing/extra/removed) fail | cmake script | `ctest --test-dir build -R 'dmg_baseline_(modified\|missing\|extra\|inventory)'` | ❌ W0 | ⬜ pending |
+| GAME-01 | Admission passes; each mutated manifest fails with a distinct message | python + CTest | `ctest --test-dir build -R 'libbet_(admission\|not_installed\|install_tree)'` (07-01) | ❌ W0 | ⬜ pending |
+| GAME-01 | Licence text and notices row present | CTest | `ctest --test-dir build -R libbet_notice` (07-01) | ❌ W0 | ⬜ pending |
+| GAME-02 | Scripted input reaches predicate with frame + PCM digests | CTest runner | `ctest --test-dir build -R 'acceptance_(lib_)?libbet'` (07-02, 07-05, 07-07) | ❌ W0 | ⬜ pending |
+| GAME-02 | N1/N2/N3 controls and core mutant fail the gate | CTest + exit wrapper | `ctest --test-dir build -R 'acceptance_(core_mutant\|libbet_drop_start\|suite)'` (07-10) | ❌ W0 | ⬜ pending |
+| GAME-02 | Predicate truth table and ROM anchor bytes | C unit | `ctest --test-dir build -R acceptance_predicate_` (07-02) | ❌ W0 | ⬜ pending |
+| EVID-01 | Case/script parser boundaries and negative files | C unit | `ctest --test-dir build -R 'acceptance_(parse_\|negative_)'` (07-02, 07-06) | ❌ W0 | ⬜ pending |
+| EVID-01 | Applicability: unsupported-model exit 4, target-revision exclusion | CTest + exit wrapper | `ctest --test-dir build -R 'acceptance_(suite_\|target_revision\|unknown_model\|unexpected_pass\|libbet_excluded)'` (07-08) | ❌ W0 | ⬜ pending |
+| EVID-01 | RGB digest equals independent Python vector; PPM only on failure | C unit + python | `ctest --test-dir build -R 'acceptance_(digest_vectors\|failure_dir)'` (07-07) | ❌ W0 | ⬜ pending |
+| EVID-01 | `LD B,B` frame capture / `not-ready` reporting | CTest | `ctest --test-dir build -R acceptance_ldbb_` (07-09) | ❌ W0 | ⬜ pending |
+| GAME-03 | Packaged player scripted smoke; PCM digest equals headless | package script (macOS) | `bash tests/scripts/verify-phase3-player.sh --build-package` (07-12, 07-14) | extend | ⬜ pending |
+| GAME-03 | Session-level negative controls | player CTest | `ctest --test-dir build -R 'player_(session_script\|script_smoke_surface)'` (07-14) | ❌ W0 | ⬜ pending |
+| EVID-02 | Ledger byte-identity on Linux/macOS/Windows; frozen inventory superset | cmake script | `ctest --test-dir build -R dmg_baseline` (07-13, 07-15) | ❌ W0 | ⬜ pending |
+| EVID-02 | Checker self-tests (modified/missing/extra/removed) fail | cmake script | `ctest --test-dir build -R 'dmg_baseline_(modified\|missing\|extra\|inventory\|changes\|empty\|header\|junit)'` (07-13) | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 

@@ -314,7 +314,14 @@ Serialize each `gbb_audio_frame` as 4 bytes: `left & 0xFF, (left >> 8) & 0xFF, r
 | A5 | RGBDS 0.7.0/Pillow 12.3.0 legitimacy for the opt-in job (values taken from CONTEXT.md; the legitimacy seam was not run) | Standard Stack | Opt-in job only; planner should gate with a human-verify task if desired |
 | A6 | Linux/Windows runtimes for Libbet cases are within the same order of magnitude as the macOS measurements | Pitfall 2 | Timeouts need adjustment after the first CI run |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All four questions were resolved during planning (2026-10-10); each answer is recorded below and as a DECISIONS.md row by Plan 07-16.
+
+- Q1 RESOLVED: Plan 07-07 keeps the D-24 error rule for acceptance checkpoints (reason checkpoint-not-ready) and Plan 07-09 applies it to frame-digest oracle cases (reason frame-not-ready), while Mooneye `--observe` records `mooneye.<id>.frame` as a digest or the explicit observation token `not-ready`.
+- Q2 RESOLVED: Plan 07-10 makes N1 (`libbet-no-input`) and N2 (`libbet-select`) `model_fail=dmg-cpu-b expect_fail_reason=predicate-not-reached` case lines reporting `status=xfail`; the exit-1 assertions come from N3 (`--mutate drop:START`) and the core mutant; Plan 07-08 makes unexpected passes fail.
+- Q3 RESOLVED: option (b). Plan 07-12 reads the Libbet ROM and script from the checkout; the package does not ship the ROM, and its extracted package is scanned for the ROM digest on every package build.
+- Q4 RESOLVED: Plan 07-05 keeps the `expect_hw_capability` key and accepts only the value `0` in this phase.
 
 1. **Mooneye frame digests for tim00 / tim00_div_trigger (D-24 vs D-30).**
    - Known: only `daa` completes a frame before `LD B,B` (uniform shade 0, so a weak regression signal); the two timer ROMs never complete a frame by the result breakpoint.
