@@ -306,7 +306,7 @@ All six phases have completed plan execution (56/56 runnable plans); Phase 2 Pla
 3. Workflow edits land in a single batched change; every phase whose verification it makes stale (1, 2, 3, 6 as applicable) is re-verified fresh before the phase closes.
 4. Required checks pass on the exact merged head; no hardware or perceptual claim is added.
 
-**Plans:** 4/8 plans executed in 6 waves
+**Plans:** 5/8 plans executed in 6 waves
 
 Plans:
 **Wave 1**
@@ -318,7 +318,7 @@ Plans:
 - [x] 06.1-04-PLAN.md — single batched ci.yml + preview.yml commit, PR 1 exact-head merge, hosted readback, debt disposition (wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 06.1-05-PLAN.md — measure staleness; refresh Phases 1–2 (wave 3)
+- [x] 06.1-05-PLAN.md — measure staleness; refresh Phases 1–2 (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 06.1-06-PLAN.md — refresh Phases 3–4 (wave 4)
