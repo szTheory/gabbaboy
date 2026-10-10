@@ -35,9 +35,9 @@
     }
   ],
   "next": {
-    "command": "$gsd-execute-phase 5",
-    "label": "Refresh Phase 5 \u2014 DMG Audio and Stable Playback verification",
-    "reason": "All plans complete; Phase 3 refreshed 2026-10-10. Phase 5 verification is stale after the shared verified-output helper changes; then refresh Phases 6 and 1, reconcile Phase 2 CPU-02/CPU-05 summary metadata, and run $gsd-audit-milestone v0.1"
+    "command": "/gsd:progress --next",
+    "label": "Advance to the next step",
+    "reason": "Phase 06.1 of 7 · executing"
   },
-  "updated_at": "2026-10-09T23:13:48.832Z"
+  "updated_at": "2026-10-10T15:26:58.459Z"
 }

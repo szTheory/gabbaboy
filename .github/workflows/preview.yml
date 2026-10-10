@@ -18,36 +18,18 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
-      - name: Verify matching successful required CI run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          deadline=$((SECONDS + 1500))
-          ci_run_id=
-          while (( SECONDS < deadline )); do
-            ci_run_id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${EXPECTED_SHA}&event=pull_request&per_page=20" \
-              --jq ".workflow_runs | map(select(.head_sha == \"${EXPECTED_SHA}\" and .event == \"pull_request\")) | sort_by(.run_number) | last | .id // empty")
-            if [[ -n "$ci_run_id" && "$ci_run_id" != null ]]; then
-              status=$(gh run view "$ci_run_id" --json status --jq '.status')
-              if [[ "$status" == completed ]]; then
-                passed=$(gh run view "$ci_run_id" --json conclusion,headSha,event,jobs --jq ".conclusion == \"success\" and .headSha == \"${EXPECTED_SHA}\" and .event == \"pull_request\" and any(.jobs[]; .name == \"required-native\" and .conclusion == \"success\")")
-                [[ "$passed" == true ]] || {
-                  echo "The exact pull-request CI run did not pass required-native for $EXPECTED_SHA." >&2
-                  exit 1
-                }
-                exit 0
-              fi
-            fi
-            sleep 10
-          done
-          echo "No completed successful pull-request CI run for $EXPECTED_SHA appeared within 25 minutes." >&2
-          exit 1
       - name: Check out tested source revision
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+      - name: Verify matching successful required CI run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: >-
+          python3 .github/scripts/wait-exact-head-ci.py
+          --sha "$EXPECTED_SHA" --repo "$GITHUB_REPOSITORY"
+          --require required-native --deadline-seconds 1500
       - name: Configure, build, and install
         run: |
           cmake --preset phase1
@@ -83,36 +65,18 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 30
     steps:
-      - name: Verify matching successful required CI run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          deadline=$((SECONDS + 1500))
-          ci_run_id=
-          while (( SECONDS < deadline )); do
-            ci_run_id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${EXPECTED_SHA}&event=pull_request&per_page=20" \
-              --jq ".workflow_runs | map(select(.head_sha == \"${EXPECTED_SHA}\" and .event == \"pull_request\")) | sort_by(.run_number) | last | .id // empty")
-            if [[ -n "$ci_run_id" && "$ci_run_id" != null ]]; then
-              status=$(gh run view "$ci_run_id" --json status --jq '.status')
-              if [[ "$status" == completed ]]; then
-                passed=$(gh run view "$ci_run_id" --json conclusion,headSha,event,jobs --jq ".conclusion == \"success\" and .headSha == \"${EXPECTED_SHA}\" and .event == \"pull_request\" and any(.jobs[]; .name == \"required-native\" and .conclusion == \"success\")")
-                [[ "$passed" == true ]] || {
-                  echo "The exact pull-request CI run did not pass required-native for $EXPECTED_SHA." >&2
-                  exit 1
-                }
-                exit 0
-              fi
-            fi
-            sleep 10
-          done
-          echo "No completed successful pull-request CI run for $EXPECTED_SHA appeared within 25 minutes." >&2
-          exit 1
       - name: Check out tested source revision
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+      - name: Verify matching successful required CI run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: >-
+          python3 .github/scripts/wait-exact-head-ci.py
+          --sha "$EXPECTED_SHA" --repo "$GITHUB_REPOSITORY"
+          --require required-native --deadline-seconds 1500
       - name: Configure, build, and install
         run: |
           cmake --preset phase1
@@ -148,57 +112,22 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 35
     steps:
-      - name: Find the exact successful player build run
-        id: candidate
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
-        shell: bash
-        run: |
-          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || {
-            echo "Expected PR head is not a full Git SHA." >&2
-            exit 1
-          }
-          deadline=$((SECONDS + 1800))
-          while (( SECONDS < deadline )); do
-            runs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${EXPECTED_SHA}&event=pull_request&per_page=20" \
-              --jq ".workflow_runs | map(select(.head_sha == \"${EXPECTED_SHA}\" and .event == \"pull_request\")) | sort_by(.run_number) | reverse | .[].id")
-            while IFS= read -r run_id; do
-              [[ -n "$run_id" ]] || continue
-              run=$(gh run view "$run_id" --json status,conclusion,headSha,event,attempt,jobs)
-              status=$(jq -r '.status' <<<"$run")
-              [[ "$status" == completed ]] || continue
-              player_result=$(jq -r '[.jobs[] | select(.name == "macos-player-package")][0].conclusion // "missing"' <<<"$run")
-              required_result=$(jq -r '[.jobs[] | select(.name == "required-native")][0].conclusion // "missing"' <<<"$run")
-              if [[ "$player_result" == success && "$required_result" == success ]]; then
-                source_sha=$(jq -r '.headSha' <<<"$run")
-                event=$(jq -r '.event' <<<"$run")
-                [[ "$source_sha" == "$EXPECTED_SHA" && "$event" == pull_request ]] || {
-                  echo "Selected CI run is not for the exact pull-request head." >&2
-                  exit 1
-                }
-                printf 'run_id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
-                printf 'run_attempt=%s\n' "$(jq -r '.attempt' <<<"$run")" >> "$GITHUB_OUTPUT"
-                exit 0
-              fi
-              if [[ "$player_result" == failure || "$player_result" == cancelled || "$player_result" == timed_out || "$player_result" == action_required ]]; then
-                echo "Required player package job failed in exact-head CI run $run_id ($player_result)." >&2
-                exit 1
-              fi
-              if [[ "$required_result" == failure || "$required_result" == cancelled || "$required_result" == timed_out || "$required_result" == action_required ]]; then
-                echo "Required CI aggregate failed in exact-head run $run_id ($required_result)." >&2
-                exit 1
-              fi
-            done <<<"$runs"
-            sleep 10
-          done
-          echo "No exact-head pull-request CI run completed the player package and required-native checks within 30 minutes." >&2
-          exit 1
       - name: Check out exact pull request head
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+      - name: Find the exact successful player build run
+        id: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: >-
+          python3 .github/scripts/wait-exact-head-ci.py
+          --sha "$EXPECTED_SHA" --repo "$GITHUB_REPOSITORY"
+          --require required-native --require macos-player-package
+          --deadline-seconds 1800 --github-output "$GITHUB_OUTPUT"
+          --attempt-job macos-player-package
       - name: Download run-scoped candidate package
         env:
           GH_TOKEN: ${{ github.token }}
@@ -239,7 +168,6 @@ jobs:
         env:
           LINUX_X64: ${{ needs.installed-package-smoke-linux-x64.result }}
           MACOS_ARM64: ${{ needs.installed-package-smoke-macos-arm64.result }}
-          PLAYER_REQUESTED: ${{ github.event_name == 'pull_request' }}
           PLAYER_RESULT: ${{ needs.player-package-smoke-macos.result }}
         run: |
           for result in "$LINUX_X64" "$MACOS_ARM64"; do
@@ -248,12 +176,8 @@ jobs:
               exit 1
             fi
           done
-          if [[ "$PLAYER_REQUESTED" == true && "$PLAYER_RESULT" != success ]]; then
+          if [[ "$PLAYER_RESULT" != success ]]; then
             echo "Required downloaded macOS player package verification did not succeed: $PLAYER_RESULT" >&2
-            exit 1
-          fi
-          if [[ "$PLAYER_REQUESTED" != true && "$PLAYER_RESULT" != skipped && "$PLAYER_RESULT" != success ]]; then
-            echo "Unexpected optional macOS player verification result: $PLAYER_RESULT" >&2
             exit 1
           fi
           echo "Required exact-revision installed package smokes succeeded."

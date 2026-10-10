@@ -43,6 +43,20 @@ static bool write_oversized_file(const char *path) {
     return fclose(file) == 0 && ok;
 }
 
+static bool write_sized_file(const char *path, size_t size) {
+    uint8_t *bytes = calloc(size, 1u);
+    if (bytes == NULL) return false;
+    FILE *file = fopen(path, "wb");
+    if (file == NULL) {
+        free(bytes);
+        return false;
+    }
+    const bool ok = fwrite(bytes, 1, size, file) == size;
+    const bool closed = fclose(file) == 0;
+    free(bytes);
+    return closed && ok;
+}
+
 static bool write_truncated_file(const char *path) {
     uint8_t bytes[128] = {0};
     FILE *file = fopen(path, "wb");
@@ -112,6 +126,19 @@ static int replacement_failure(const char *demo_path, const char *missing_path) 
     REQUIRE(!player_session_replace_rom(machine, &current_path, missing_path,
                                         &identity, error, sizeof(error)));
     REQUIRE(error[0] != '\0');
+    REQUIRE(require_unchanged(machine, current_path, original_path, error) == 0);
+
+    /* One byte past the 2 MiB bound passes fstat and must hit the read-bound
+     * message; two bytes past it is rejected earlier as not bounded. */
+    REQUIRE(write_sized_file(missing_path, (size_t)2u * 1024u * 1024u + 1u));
+    REQUIRE(!player_session_replace_rom(machine, &current_path, missing_path,
+                                        &identity, error, sizeof(error)));
+    REQUIRE(strstr(error, "2 MiB read bound") != NULL);
+    REQUIRE(require_unchanged(machine, current_path, original_path, error) == 0);
+    REQUIRE(write_sized_file(missing_path, (size_t)2u * 1024u * 1024u + 2u));
+    REQUIRE(!player_session_replace_rom(machine, &current_path, missing_path,
+                                        &identity, error, sizeof(error)));
+    REQUIRE(strstr(error, "bounded regular file") != NULL);
     REQUIRE(require_unchanged(machine, current_path, original_path, error) == 0);
 
     REQUIRE(write_unsupported_cartridge(missing_path, demo_path));

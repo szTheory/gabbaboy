@@ -293,4 +293,41 @@ All **35 active requirements** map exactly once to Phases 1–6 in [REQUIREMENTS
 
 Automate authorized work within each phase, then inspect current verification/release/consumer evidence, update traceability and [lessons](context/LESSONS.md), triage issues/PRs, report limitations and the exact next command, and **stop**. Never auto-advance phases or milestones; keep both auto-advance flags false. Credential, hardware, or perceptual gaps must be recorded honestly with the smallest necessary human action, never converted into passing evidence. Remote/CI setup begins in Phase 1; absent access remains an explicit completion limitation.
 
-All six phases have completed plan execution (56/56 runnable plans); Phase 2 Plan 02-15 remains superseded/non-runnable. The current canonical gate accepts all six phases. The 2026-10-10 strict three-source milestone audit at `f03e9b1` reports `tech_debt`: 35/35 requirements satisfied, 12/12 integration groups and 5/5 E2E flows wired, no blockers ([audit](v0.1-MILESTONE-AUDIT.md)). Earlier Phase 2–6 test, package, release, and exact-head evidence remains in individual validation reports. The admitted corpus remains three source-qualified derived headless reporting closures. No physical hardware, broad compatibility, perceptual output, signing/notarization, or live Playstead GB integration is claimed. Completed workflow stage: **Phase 1 — Portable Foundation and Original ROM Tracer verification freshness refresh** (2026-10-10) passed 21/21 truths and BASE-01 through BASE-08 at `ebce345`; local evidence 179/179 CTest, tracer runner pass, fixture digest match. No hosted CI is claimed for this revision. PR #41 (release 0.1.1) remains open; GitHub reports no checks, so it is not green. Quick task 261010-bz3 then credited CPU-02 (02-16) and CPU-05 (02-16, 02-17). Completed workflow stage: **Phase 2 — DMG CPU, Bus and Time verification freshness refresh** (2026-10-10) passed 5/5 truths and CPU-01–05 at `a9050df`; all six phase reports are fresh. Completed workflow stage: **v0.1 milestone audit** (tech_debt, no blockers). Next command: `$gsd-complete-milestone v0.1`. Stop after each stage; keep the milestone executing until the owner runs it. Do not auto-advance.
+All six phases have completed plan execution (56/56 runnable plans); Phase 2 Plan 02-15 remains superseded/non-runnable. The current canonical gate accepts all six phases. The 2026-10-10 strict three-source milestone audit at `f03e9b1` reports `tech_debt`: 35/35 requirements satisfied, 12/12 integration groups and 5/5 E2E flows wired, no blockers ([audit](v0.1-MILESTONE-AUDIT.md)). Earlier Phase 2–6 test, package, release, and exact-head evidence remains in individual validation reports. The admitted corpus remains three source-qualified derived headless reporting closures. No physical hardware, broad compatibility, perceptual output, signing/notarization, or live Playstead GB integration is claimed. Completed workflow stage: **Phase 1 — Portable Foundation and Original ROM Tracer verification freshness refresh** (2026-10-10) passed 21/21 truths and BASE-01 through BASE-08 at `ebce345`; local evidence 179/179 CTest, tracer runner pass, fixture digest match. No hosted CI is claimed for this revision. PR #41 (release 0.1.1) remains open; GitHub reports no checks, so it is not green. Quick task 261010-bz3 then credited CPU-02 (02-16) and CPU-05 (02-16, 02-17). Completed workflow stage: **Phase 2 — DMG CPU, Bus and Time verification freshness refresh** (2026-10-10) passed 5/5 truths and CPU-01–05 at `a9050df`; all six phase reports are fresh. Completed workflow stage: **v0.1 milestone audit** (tech_debt, no blockers). The owner chose to close the audit debt first: Phase 06.1 was inserted (2026-10-10). Next command: `$gsd-plan-phase 06.1`. Stop after each stage; keep the milestone executing until the owner completes it. Do not auto-advance.
+
+### Phase 06.1: Address v0.1 tech debt: CI workflow info items and audio consumer coverage (INSERTED)
+
+**Goal:** Close the non-blocking debt that the [v0.1 milestone audit](v0.1-MILESTONE-AUDIT.md) recorded, without widening any v0.1 claim: resolve or explicitly re-defer the deferred info review items in the CI workflows (Phase 1 `preview.yml` IN-01/IN-02, Phase 2 `ci.yml` IN-01) as one batched workflow change, and extend installed-package audio PCM consumer coverage beyond the relocated C example (C++ consumer and the Windows preview lane). Phase 3 IN-01..03 and Phase 5 IN-01 are triaged as fix-or-re-defer within the same scope.
+**Requirements**: none new (hardens AUDIO-02, SHIP-01, BASE-07, BASE-08 CI evidence, plus VIDEO-04, SAVE-03, SHIP-02 player ROM-open and verified-output hardening; all 35 remain mapped to Phases 1–6)
+**Depends on:** Phase 6
+**Success criteria:**
+1. Each audit tech-debt item is fixed with test evidence or re-deferred with a recorded reason in the phase report.
+2. An installed-package consumer other than the relocated C example calls the audio PCM API, and that lane runs on Windows as well as Linux/macOS.
+3. Workflow edits land in a single batched change; every phase whose verification it makes stale (1, 2, 3, 6 as applicable) is re-verified fresh before the phase closes.
+4. Required checks pass on the exact merged head; no hardware or perceptual claim is added.
+
+**Plans:** 3/8 plans executed in 6 waves
+
+Plans:
+**Wave 1**
+- [x] 06.1-01-PLAN.md — C and C++ installed-consumer `audio_api_smoke()` (wave 1)
+- [x] 06.1-02-PLAN.md — P3 IN-01..03 and P5 IN-01: player ROM read split plus `O_NOCTTY`, test helper and inner-withdrawal test, verified-output comment (wave 1)
+- [x] 06.1-03-PLAN.md — `.github/scripts/wait-exact-head-ci.py` exact-head gate with `--self-test` (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 06.1-04-PLAN.md — single batched ci.yml + preview.yml commit, PR 1 exact-head merge, hosted readback, debt disposition (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 06.1-05-PLAN.md — measure staleness; refresh Phases 1–2 (wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 06.1-06-PLAN.md — refresh Phases 3–4 (wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 06.1-07-PLAN.md — refresh Phases 5–6 (wave 5)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 06.1-08-PLAN.md — complete debt disposition and STATE route, docs-only PR 2 exact-head merge, freshness on main (wave 6)
+
+**Cross-cutting constraints:**
+- wait-exact-head-ci.py --self-test proves: newest same-SHA ci.yml pull_request run by run_number decides; an in-progress newest run or attempt waits; an older success never satisfies a newer failure or pending run; a truncated list (total_count > listed), persistent list/detail attempt mismatch, or deadline fails closed; a terminal failure needs two consecutive polls on the same (id, attempt).
