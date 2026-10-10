@@ -1,106 +1,95 @@
 ---
 phase: GB-03-visible-interactive-dmg
-reviewed: 2026-10-10T01:52:47Z
+reviewed: 2026-10-10T16:02:18Z
 depth: standard
-files_reviewed: 8
+files_reviewed: 6
 files_reviewed_list:
-  - tests/scripts/verified_player_output_dir.py
-  - tests/scripts/test_verified_player_output_dir.py
-  - .github/workflows/release.yml
-  - tests/scripts/verify-phase3-player.sh
-  - tests/player/CMakeLists.txt
-  - tests/player/expected-tests.txt
   - src/player/session.c
   - tests/player/test_session.c
+  - tests/scripts/test_verified_player_output_dir.py
+  - tests/scripts/verify-phase3-player.sh
+  - .github/workflows/ci.yml
+  - .github/workflows/preview.yml
 findings:
   critical: 0
   warning: 0
-  info: 3
-  total: 3
-status: issues_found
+  info: 0
+  total: 0
+status: clean
 ---
 
-# Phase 3: Code Review Report (re-review after 91d11d4 and 8151a75)
+# Phase 3: Code Review Report (re-review after Phase 06.1, PR #54)
 
-**Reviewed:** 2026-10-10
+**Reviewed:** 2026-10-10T16:02:18Z
 **Depth:** standard
-**Files Reviewed:** 8
-**Status:** issues_found
+**Files Reviewed:** 6
+**Status:** clean
 
 ## Summary
 
-Fix commits 91d11d4 and 8151a75 resolve CR-01, WR-01, the follow-on WR-01 (reporting can mask errors), and IN-04. The 20 tests in `tests/scripts/test_verified_player_output_dir.py` pass when run from `tests/scripts`. No critical or warning findings remain. WR-02 is accepted as an intentional design choice. Three info items remain open (IN-01, IN-02, IN-03). Status stays `issues_found` only because those info items are open.
+This re-review covers the code that changed between `9832ba4` and `HEAD` (Phase 06.1 PR #54, merge `ab76d09`) in the six scoped files. The three previously deferred info findings (IN-01, IN-02, IN-03) are now resolved in the code. The drifted code has no new bugs, security issues or quality defects. `python3 -m unittest test_verified_player_output_dir`, run from `tests/scripts`, passes 21 tests, one more than before because of the new IN-03 test. The C tests, the shell script and the workflows were reviewed by reading only. I did not build or run them.
 
-## Resolved in this re-review
+Two scope notes:
+- The refactored workflows call `.github/scripts/wait-exact-head-ci.py` and `.github/scripts/check-player-result.sh`. Neither file is in the review scope. I read only `check-player-result.sh` (the `decide` truth table) and did not review the 453-line `wait-exact-head-ci.py`. The workflow call sites are consistent with the arguments they pass.
+- Coverage gap that remains: the `close()`-failure branch of `read_rom_file` (`src/player/session.c:149-153`) has no fault-injection test. Only the size-bound message is guarded, by the 2097153-byte case in `player_session_replacement_failure` (`tests/player/test_session.c:131-136`). The close-failure branch is not test-covered. A `close()` failure on a read-only descriptor is rare, and the branch is a simple free-and-fail path. I do not raise this as a finding.
 
-### CR-01 (was Critical): release workflow in-repo output directory. Fixed in 91d11d4.
+## Resolved / prior findings
 
-Evidence:
-- `grep` over `.github` and the script finds only two assignments of `GBB_VERIFIED_OUTPUT_DIR`: `preview.yml:216` (`${{ runner.temp }}/...`) and `release.yml:620` (`"$RUNNER_TEMP/release-player-downloaded"`). The job-level `build/release-player-verified` value is gone.
-- Removing the job-level env is safe. `FINAL_ARTIFACT_DIR` is read only at `verify-phase3-player.sh:16` and consumed only at `:296-297`, inside the publish branch of `verify_package ... true`. That branch is reached only via `--verify-package` (`:337-338`).
-- `--build-package` calls `verify_package "$ARTIFACT_DIR" false` (`:573`), which skips publication. The `--build-package` calls in `release.yml:589` and `ci.yml:135` therefore never touch the variable.
-- The guard test regex `GBB_VERIFIED_OUTPUT_DIR\s*[:=]\s*(\$\{\{[^}]*\}\}\S*|\S+)` matches both forms:
-  - `${{ runner.temp }}/x` matches the first alternative.
-  - `"$RUNNER_TEMP/x"` matches `\S+`, and the surrounding quotes are stripped by `.strip("'\"")`.
-  - The `startswith` allowlist covers `${{ runner.temp }}`, `$RUNNER_TEMP` and `${RUNNER_TEMP}`.
-- The test asserts at least one match, so it cannot pass vacuously.
+Historical items use h4 headings so that parsers reading `### CR-/WR-/IN-` headings see only current open findings. There are none.
 
-### WR-01 (was Warning): swallowed withdrawal failures. Fixed in 91d11d4.
+#### IN-01 (Info): close() failure message and missing O_NOCTTY in read_rom_file. RESOLVED in Phase 06.1.
 
-Evidence:
-- Both `except OSError` sites (`verified_player_output_dir.py:181-182`, the inner publish cleanup, and `:327-328`, the outer loop) now call `_report_withdrawal_failure`, which writes to stderr.
-- The original exception still propagates through the bare `raise` after the handler.
-- The outer loop continues to the remaining withdrawals.
-- `test_failed_withdrawal_is_reported_without_masking_original_error` covers the outer site. It asserts the stderr text, that the original `OSError` is raised, and that the unwithdrawn archive remains.
+- `src/player/session.c:104-107`: `O_NOCTTY` is added to the open flags. A comment explains why both `O_NONBLOCK` and `O_NOCTTY` stay.
+- `src/player/session.c:143-153`: the branches are split.
+  - An oversized read (`total > PLAYER_SESSION_MAX_ROM_SIZE`) reports "exceeds the 2 MiB read bound".
+  - A `close()` failure reports "Could not finish reading the selected ROM." Both paths free the buffer.
+- Test coverage covers only the size-bound message: the 2097153-byte case at `tests/player/test_session.c:131-136` asserts "2 MiB read bound". The 2097154-byte case at `:137-141` asserts "bounded regular file", the earlier `fstat` rejection. The close-failure branch has no fault-injection test.
 
-### WR-01 (follow-on, introduced by 91d11d4): reporting could mask the original error. Fixed in 8151a75.
+#### IN-02 (Info): duplicated receipt-field fixture in tests. RESOLVED in Phase 06.1.
 
-Evidence:
-- `_report_withdrawal_failure` now wraps the `print` in `try/except (OSError, ValueError)`. `print` to a closed file raises `ValueError`, and a broken pipe raises `OSError`, so both are covered.
-- A new regression test, `test_broken_stderr_does_not_replace_original_publication_error`, redirects a closed `StringIO` to stderr. The shared helper asserts that the original "simulated receipt publication failure" `OSError` still propagates.
-- All 20 tests pass.
+- `tests/scripts/test_verified_player_output_dir.py:27-42` defines a single `_receipt_fields()` helper. It returns a fresh dict on every call, so tests cannot share mutated state.
+- The three former copies now call it, at `:169`, `:193` and `:230` (inside `_publish_sample`). No inline 12-key dict remains.
 
-### IN-04 (was Info): shallow workflow guard. Fixed in 8151a75.
+#### IN-03 (Info): withdrawal-report test covered only the outer call site. RESOLVED in Phase 06.1.
 
-Evidence:
-- The guard now globs `*.yml` and `*.yaml`.
-- It requires a `${{ runner.temp }}/`, `$RUNNER_TEMP/` or `${RUNNER_TEMP}/` prefix, so `$RUNNER_TEMPX` is rejected.
-- It rejects any `..` path segment.
-- The current values (`${{ runner.temp }}/verified-player-artifact` and `"$RUNNER_TEMP/release-player-downloaded"`) still pass.
-- Still not covered: composite actions under `.github/actions` and multi-line YAML scalars. Neither is used today.
+- `tests/scripts/test_verified_player_output_dir.py:284-312`, `test_failed_withdrawal_after_link_is_reported_without_masking_sync_error`:
+  - It fails the first directory `fsync` after the archive link, then fails `_withdraw_artifact`. This reaches the inner site at `tests/scripts/verified_player_output_dir.py:180-182`.
+  - It asserts that the stderr report is emitted and that the original sync `OSError` still propagates.
+  - It asserts that the leftover state is exactly the one published archive with no `.tmp` files.
+- The outer site at `:330-332` stays covered by the existing test at `:269`.
 
-### WR-02 (was Warning): `prepare` clears the previous verified set. Intentional, no longer tracked as a finding.
+#### CR-01 (Critical): release workflow in-repo output directory. Fixed in 91d11d4. Prior history unchanged.
 
-I agree with the decision. A stale verified pair must not survive a failed verification run, because it could be mistaken for current evidence. That requirement outweighs preserving the last good set. Fresh CI output directories make the destructive case rare.
+`GBB_VERIFIED_OUTPUT_DIR` is set only under the runner temp directory, and the workflow guard test enforces this. `tests/scripts/verify-phase3-player.sh` still treats `FINAL_ARTIFACT_DIR` as consumed only in the publish branch. The only change there is a new comment block at lines 15-19. The comment is accurate: `--build-package` never publishes, and the `/tmp` fallback applies only to local `--verify-package` runs.
 
-## Info
+#### WR-01 (Warning): swallowed withdrawal failures. Fixed in 91d11d4, with a follow-on fix in 8151a75. Prior history unchanged.
 
-### IN-01: Misleading error message when `close()` fails in `read_rom_file`
+#### IN-04 (Info): shallow workflow output-directory guard. Fixed in 8151a75. Prior history unchanged.
 
-**File:** `src/player/session.c:152-156`
+#### WR-02 (Warning): `prepare` clears the previous verified set. Accepted as intentional, not tracked as a finding.
 
-**Issue:** A failed `close()` and an oversized ROM share one branch, so both report "exceeds the 2 MiB read bound". `open` also lacks `O_NOCTTY`. Both are minor and predate the `O_NONBLOCK` change.
+A stale verified archive and receipt pair must not survive a failed verification run.
 
-**Fix:** Split the branches and use a "could not read completely" message for the close failure. Add `O_NOCTTY` to the open flags.
+## Drift review notes (no findings)
 
-### IN-02: Duplicated receipt-field fixture in tests
-
-**File:** `tests/scripts/test_verified_player_output_dir.py:112-125,154-167,215-228`
-
-**Issue:** The 12-key `receipt_fields` dict is copy-pasted in three places, and `_publish_sample` builds the same data. The copies will drift when the receipt schema changes.
-
-**Fix:** Hoist it to a module-level constant or a helper.
-
-### IN-03: New withdrawal-report test covers only the outer call site
-
-**File:** `tests/scripts/test_verified_player_output_dir.py:289-302`
-
-**Issue:** The receipt link fails before any receipt inode is published, so only the outer-loop site at `verified_player_output_dir.py:327` is exercised. The inner site at `:181` (a post-link failure such as a directory `fsync` error, followed by a failed withdrawal) has no report assertion.
-
-**Fix:** Extend the test with a case that fails the directory `fsync` after link and also fails the withdrawal. Assert the stderr text and that the original error is raised.
+- **`.github/workflows/ci.yml`**
+  - The new `player-gate` job is the single place that decides whether player evidence is required.
+  - `macos-player-package` is skipped on push events when the gate output is `'false'`.
+  - `required-native` now checks out the source, which the self-tests and `check-player-result.sh` need.
+  - It requires `player-gate` to be `success` and delegates the decision to `check-player-result.sh`. That script fails closed for a failed, cancelled or skipped gate and for an empty `required` value.
+  - The `echo "player_required=${{ github.event_name == 'pull_request' }}"` line interpolates only a boolean expression, so there is no injection surface.
+- **`.github/workflows/preview.yml`**
+  - The inline polling loops are replaced by `wait-exact-head-ci.py`.
+  - The checkout now happens before the wait step, so the script exists in the job. The `ref` is the PR head SHA, which is the version the script runs from.
+  - Untrusted-looking values (`EXPECTED_SHA`, `GITHUB_REPOSITORY`) are passed through `env` and quoted.
+  - The aggregate gate now requires `player-package-smoke-macos` to be `success` unconditionally. This is consistent because the workflow triggers only on `pull_request`.
+- **`tests/player/test_session.c`**
+  - `write_sized_file` frees its buffer on every path.
+  - The boundary comment is accurate: `st_size` is checked against the 2 MiB bound plus 1.
+  - The 2097153-byte case passes `fstat` and reaches the read-bound message. The 2097154-byte case is rejected earlier as "not a bounded regular file".
 
 ---
 
-_Reviewed: 2026-10-10_
+_Reviewed: 2026-10-10T16:02:18Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
