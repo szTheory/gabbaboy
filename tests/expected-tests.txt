@@ -194,3 +194,5 @@ libbet_install_tree
 libbet_not_installed
 libbet_not_installed_selftest
 acceptance_lib_libbet_replay
+acceptance_parse_script_bounds
+acceptance_parse_script_errors

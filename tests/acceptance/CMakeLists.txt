@@ -12,3 +12,8 @@ add_test(NAME acceptance_lib_libbet_replay
   COMMAND test_acceptance_lib acceptance_lib_libbet_replay
           ${GBB_ACCEPT_LIBBET_ROM} ${GBB_ACCEPT_LIBBET_SCRIPT})
 set_tests_properties(acceptance_lib_libbet_replay PROPERTIES TIMEOUT 300)
+
+foreach(case acceptance_parse_script_bounds acceptance_parse_script_errors)
+  add_test(NAME ${case} COMMAND test_acceptance_lib ${case})
+  set_tests_properties(${case} PROPERTIES TIMEOUT 30)
+endforeach()

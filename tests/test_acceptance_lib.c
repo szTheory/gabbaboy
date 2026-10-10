@@ -75,12 +75,217 @@ done:
     return rc;
 }
 
+/* ---- gbinput 1 parser cases (no file I/O, no core instance) ---- */
+
+static int parse_text(const char *text, size_t length, gbb_accept_script *out, char *err, size_t cap) {
+    return gbb_accept_script_parse((const uint8_t *)text, length, out, err, cap);
+}
+
+static int script_is_empty(const gbb_accept_script *s) {
+    return s->events == NULL && s->event_count == 0 && s->marks == NULL && s->mark_count == 0 &&
+           s->end_half_dots == 0;
+}
+
+/* Rejection must name the right line, carry the reason and leave *out empty. */
+static int expect_reject(const char *what, const uint8_t *bytes, size_t length, size_t line,
+                         const char *reason) {
+    gbb_accept_script s;
+    char err[200], want[64];
+    memset(&s, 0x5a, sizeof(s)); /* stale contents must be cleared by the parser */
+    int rc = gbb_accept_script_parse(bytes, length, &s, err, sizeof(err));
+    snprintf(want, sizeof(want), "invalid-script: line %zu: ", line);
+    if (rc != 1 || strncmp(err, want, strlen(want)) != 0 || strstr(err, reason) == NULL ||
+        !script_is_empty(&s)) {
+        fprintf(stderr, "%s: rc=%d err='%s' wanted line %zu reason '%s'\n", what, rc, err, line, reason);
+        gbb_accept_script_free(&s);
+        return 1;
+    }
+    return 0;
+}
+
+static int expect_accept(const char *what, const uint8_t *bytes, size_t length, size_t events) {
+    gbb_accept_script s;
+    char err[200];
+    int rc = gbb_accept_script_parse(bytes, length, &s, err, sizeof(err));
+    if (rc != 0 || s.event_count != events) {
+        fprintf(stderr, "%s: rc=%d err='%s' events=%zu wanted %zu\n", what, rc, err, s.event_count, events);
+        gbb_accept_script_free(&s);
+        return 1;
+    }
+    gbb_accept_script_free(&s);
+    return 0;
+}
+
+#define EXPECT_REJECT_TEXT(text, line, reason) \
+    REQUIRE(expect_reject(#text, (const uint8_t *)(text), sizeof(text) - 1u, (line), (reason)) == 0)
+#define EXPECT_ACCEPT_TEXT(text, events) \
+    REQUIRE(expect_accept(#text, (const uint8_t *)(text), sizeof(text) - 1u, (events)) == 0)
+
+/* Builds `lines` lines: "gbinput 1" padded with spaces to `width` bytes
+ * (at least 10) including its LF, then `lines - 1` comment lines of `width`
+ * bytes each (width 2 is "#\n"). */
+static uint8_t *build_lines(size_t lines, size_t width, size_t *length) {
+    size_t first = width < 10u ? 10u : width;
+    size_t total = first + (lines - 1u) * width;
+    uint8_t *b = malloc(total + 1u);
+    if (b == NULL) return NULL;
+    memset(b, ' ', first - 1u);
+    memcpy(b, "gbinput 1", 9);
+    b[first - 1u] = '\n';
+    for (size_t i = 1; i < lines; i++) {
+        uint8_t *line = b + first + (i - 1u) * width;
+        memset(line, '#', width - 1u);
+        line[width - 1u] = '\n';
+    }
+    *length = total;
+    return b;
+}
+
+static int case_parse_bounds(void) {
+    size_t n;
+    uint8_t *b;
+
+    /* 64 KiB: 512 lines of 128 bytes is exactly 65536; one byte more is rejected. */
+    b = build_lines(512, 128, &n);
+    REQUIRE(b != NULL && n == 65536u);
+    REQUIRE(expect_accept("65536 bytes", b, n, 0) == 0);
+    free(b);
+    b = build_lines(512, 128, &n);
+    REQUIRE(b != NULL);
+    uint8_t *big = malloc(n + 1u);
+    REQUIRE(big != NULL);
+    memcpy(big, b, n);
+    big[n] = '\n'; /* 65537 bytes; the extra line is not what is being measured */
+    REQUIRE(expect_reject("65537 bytes", big, n + 1u, 0, "exceeds 65536") == 0);
+    free(big);
+    free(b);
+
+    /* 4096 lines accepted, 4097 rejected on the 4097th. */
+    b = build_lines(4096, 2, &n);
+    REQUIRE(b != NULL);
+    REQUIRE(expect_accept("4096 lines", b, n, 0) == 0);
+    free(b);
+    b = build_lines(4097, 2, &n);
+    REQUIRE(b != NULL);
+    REQUIRE(expect_reject("4097 lines", b, n, 4097, "too many lines") == 0);
+    free(b);
+
+    /* 128 bytes per line (content, LF/CR excluded) accepted, 129 rejected. */
+    uint8_t line128[10 + 128 + 1], line129[10 + 129 + 1];
+    memcpy(line128, "gbinput 1\n", 10);
+    memset(line128 + 10, '#', 128);
+    line128[138] = '\n';
+    REQUIRE(expect_accept("128-byte line", line128, 139, 0) == 0);
+    memcpy(line129, "gbinput 1\n", 10);
+    memset(line129 + 10, '#', 129);
+    line129[139] = '\n';
+    REQUIRE(expect_reject("129-byte line", line129, 140, 2, "exceeds 128") == 0);
+    uint8_t crlf128[10 + 128 + 2];
+    memcpy(crlf128, "gbinput 1\n", 10);
+    memset(crlf128 + 10, '#', 128);
+    crlf128[138] = '\r';
+    crlf128[139] = '\n';
+    REQUIRE(expect_accept("128-byte CRLF line", crlf128, 140, 0) == 0);
+
+    /* Event cap: every line yields at most two events (tap), so with the
+     * 4096-line cap the 16384-event limit is a defensive bound that no valid
+     * line count can reach. The densest script is pinned instead. */
+    {
+        size_t lines = 4096, w = sizeof("tap A 1hd\n") - 1u;
+        uint8_t *s = malloc(10 + (lines - 1u) * w);
+        REQUIRE(s != NULL);
+        memcpy(s, "gbinput 1\n", 10);
+        for (size_t i = 1; i < lines; i++) memcpy(s + 10 + (i - 1u) * w, "tap A 1hd\n", w);
+        REQUIRE(expect_accept("4095 taps", s, 10 + (lines - 1u) * w, 2u * (lines - 1u)) == 0);
+        free(s);
+    }
+
+    /* 600 s ceiling with checked arithmetic. */
+    EXPECT_ACCEPT_TEXT("gbinput 1\nwait 600s\n", 0);
+    EXPECT_ACCEPT_TEXT("gbinput 1\nwait 5033164800hd\n", 0);
+    EXPECT_REJECT_TEXT("gbinput 1\nwait 5033164801hd\n", 2, "600 s");
+    EXPECT_REJECT_TEXT("gbinput 1\nwait 600s\nwait 1hd\n", 3, "600 s");
+    EXPECT_REJECT_TEXT("gbinput 1\nwait 600s\ntap A 1hd\n", 3, "600 s");
+    EXPECT_REJECT_TEXT("gbinput 1\nwait 601s\n", 2, "600 s");
+    EXPECT_REJECT_TEXT("gbinput 1\nwait 18446744073709551616hd\n", 2, "overflow");
+    EXPECT_REJECT_TEXT("gbinput 1\nwait 18446744073709551615hd\n", 2, "600 s");
+    EXPECT_REJECT_TEXT("gbinput 1\nwait 2199023255552s\n", 2, "overflow"); /* 2^41 s * 2^23 = 2^64 */
+    EXPECT_REJECT_TEXT("gbinput 1\nwait 131072000000f\n", 2, "600 s");
+    EXPECT_REJECT_TEXT("gbinput 1\nwait 99999999999999999999999f\n", 2, "overflow");
+    PASS("acceptance_parse_script_bounds");
+}
+
+static int case_parse_errors(void) {
+    EXPECT_REJECT_TEXT("gbinput 1\nwa\0it 1f\n", 2, "NUL");
+    EXPECT_REJECT_TEXT("gbinput 1\n# caf\x80\nwait 1f\n", 2, "non-ASCII");
+    EXPECT_REJECT_TEXT("gbinput 1\nwait 1f\x7f\n", 2, "non-ASCII");
+    EXPECT_REJECT_TEXT("wait 1f\n", 1, "version");
+    EXPECT_REJECT_TEXT("", 1, "version");
+    EXPECT_REJECT_TEXT("# only a comment\n\n", 2, "version");
+    EXPECT_REJECT_TEXT("# c\n\nwait 1f\n", 3, "version");
+    EXPECT_REJECT_TEXT("gbinput 2\n", 1, "version");
+    EXPECT_REJECT_TEXT("gbinput 1\nfoo 1f\n", 2, "unknown verb");
+    EXPECT_REJECT_TEXT("gbinput 1\nwait 1f\ntap a 1f\n", 3, "unknown button");
+    EXPECT_REJECT_TEXT("gbinput 1\npress Start\n", 2, "unknown button");
+    EXPECT_REJECT_TEXT("gbinput 1\nwait 1x\n", 2, "suffix");
+    EXPECT_REJECT_TEXT("gbinput 1\nwait 1\n", 2, "suffix");
+    EXPECT_REJECT_TEXT("gbinput 1\nwait f\n", 2, "malformed");
+    EXPECT_REJECT_TEXT("gbinput 1\nwait 1.5f\n", 2, "suffix");
+    EXPECT_REJECT_TEXT("gbinput 1\nwait -1f\n", 2, "malformed");
+    EXPECT_REJECT_TEXT("gbinput 1\nwait\n", 2, "wait takes");
+    EXPECT_REJECT_TEXT("gbinput 1\nwait 1f 2f\n", 2, "wait takes");
+    EXPECT_REJECT_TEXT("gbinput 1\ntap A 1f 2f\n", 2, "too many");
+    EXPECT_REJECT_TEXT("gbinput 1\nmark one\nmark one\n", 3, "duplicate");
+    EXPECT_REJECT_TEXT("gbinput 1\nmark Upper\n", 2, "label");
+    EXPECT_REJECT_TEXT("gbinput 1\nmark\n", 2, "mark takes");
+    EXPECT_REJECT_TEXT("gbinput 1\nmark aaaaaaaaaabbbbbbbbbbccccccccccddd\n", 2, "label");
+    EXPECT_REJECT_TEXT("gbinput 1\npress A\npress A\nrelease A\n", 3, "already pressed");
+    EXPECT_REJECT_TEXT("gbinput 1\npress A\ntap A 1f\nrelease A\n", 3, "already pressed");
+    EXPECT_REJECT_TEXT("gbinput 1\nrelease A\n", 2, "release without press");
+    EXPECT_REJECT_TEXT("gbinput 1\npress A\nrelease A\nrelease A\n", 4, "release without press");
+    EXPECT_REJECT_TEXT("gbinput 1\nwait 1f\npress B\nwait 2f\n", 3, "still held");
+    EXPECT_REJECT_TEXT("gbinput 1\npress UP\npress DOWN\nrelease UP\n", 3, "still held");
+
+    /* Valid forms: comments, blank lines, tabs, trailing comments, no final LF. */
+    EXPECT_ACCEPT_TEXT("# header\n\ngbinput 1  # version\n\n  wait\t1f # idle\ntap A 3f\n", 2);
+    EXPECT_ACCEPT_TEXT("gbinput 1\npress A\nrelease A", 2);
+
+    /* CRLF yields exactly the LF events and marks. */
+    {
+        const char lf[] = "gbinput 1\nwait 2f\nmark a\ntap START 3f\nwait 1hd\npress A\nrelease A\nmark b\n";
+        const char crlf[] = "gbinput 1\r\nwait 2f\r\nmark a\r\ntap START 3f\r\nwait 1hd\r\npress A\r\nrelease A\r\nmark b\r\n";
+        gbb_accept_script a, b;
+        char err[160];
+        REQUIRE(parse_text(lf, sizeof(lf) - 1u, &a, err, sizeof(err)) == 0);
+        REQUIRE(parse_text(crlf, sizeof(crlf) - 1u, &b, err, sizeof(err)) == 0);
+        REQUIRE(a.event_count == 4 && b.event_count == 4);
+        REQUIRE(memcmp(a.events, b.events, 4 * sizeof(a.events[0])) == 0);
+        REQUIRE(a.end_half_dots == b.end_half_dots && a.mark_count == 2 && b.mark_count == 2);
+        REQUIRE(a.marks[1].at_half_dots == 5u * GBB_ACCEPT_HALF_DOTS_PER_FRAME + 1u);
+        REQUIRE(a.events[0].at_half_dots == 2u * GBB_ACCEPT_HALF_DOTS_PER_FRAME);
+        REQUIRE(a.events[0].kind == GBB_INPUT_BUTTON_PRESS && a.events[0].value == GBB_BUTTON_START);
+        REQUIRE(a.events[1].kind == GBB_INPUT_BUTTON_RELEASE &&
+                a.events[1].at_half_dots == 5u * GBB_ACCEPT_HALF_DOTS_PER_FRAME);
+        gbb_accept_script_free(&a);
+        gbb_accept_script_free(&b);
+    }
+    /* A NULL error buffer is allowed with zero capacity. */
+    {
+        gbb_accept_script s;
+        REQUIRE(gbb_accept_script_parse((const uint8_t *)"x\n", 2, &s, NULL, 0) == 1);
+        REQUIRE(script_is_empty(&s));
+    }
+    PASS("acceptance_parse_script_errors");
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) { fprintf(stderr, "usage: test_acceptance_lib <case> [args]\n"); return 2; }
     if (strcmp(argv[1], "acceptance_lib_libbet_replay") == 0) {
         REQUIRE(argc == 4);
         return case_libbet_replay(argv[2], argv[3]);
     }
+    if (strcmp(argv[1], "acceptance_parse_script_bounds") == 0) return case_parse_bounds();
+    if (strcmp(argv[1], "acceptance_parse_script_errors") == 0) return case_parse_errors();
     fprintf(stderr, "unknown case %s\n", argv[1]);
     return 2;
 }
