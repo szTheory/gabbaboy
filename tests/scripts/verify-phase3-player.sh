@@ -12,6 +12,11 @@ SDL_BUILD="${BUILD_ROOT}/SDL3-build"
 SDL_PREFIX="${BUILD_ROOT}/prefix"
 APP_BUILD="${BUILD_ROOT}/gabbaboy"
 ARTIFACT_DIR="${BUILD_ROOT}/preview-candidate"
+# CI sets GBB_VERIFIED_OUTPUT_DIR under the runner temp directory for every
+# --verify-package call; --build-package never publishes to this directory.
+# The fallback below only matters for local --verify-package runs. With TMPDIR
+# unset it lands in the shared /tmp, so set GBB_VERIFIED_OUTPUT_DIR to a private
+# directory. The helper's no-follow open and fixed-name unlink contain the risk.
 FINAL_ARTIFACT_TEMP_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 FINAL_ARTIFACT_DIR="${GBB_VERIFIED_OUTPUT_DIR:-${FINAL_ARTIFACT_TEMP_ROOT}/gabbaboy-preview-verified-artifact}"
 EXTRACT_DIR="${BUILD_ROOT}/downloaded-package"
