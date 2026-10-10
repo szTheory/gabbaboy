@@ -32,7 +32,7 @@ key-files:
 key-decisions:
   - "DMG-CPU-B starts with F=0x80 for header checksum zero and F=0xB0 for nonzero checksum; reset reuses the loaded ROM profile."
   - "RET and RETI read stack bytes at offsets 8 and 16; taken conditional RET retains offsets 16 and 24; untaken conditional RET performs no stack read."
-requirements-completed: [] # CPU-01, CPU-02, and CPU-04 remain pending independent phase re-verification.
+requirements-completed: [] # Contributory evidence only; per passed 02-VERIFICATION.md, CPU-01 is credited in 02-02/02-18, CPU-02 in 02-16, CPU-04 in 02-01/02-02.
 coverage:
   - id: D1
     description: "ROM checksum selects post-boot F at load and reset, with branch behavior and failed-load atomicity asserted."
