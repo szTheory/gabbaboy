@@ -67,7 +67,7 @@ Milestone-wide rules:
 
 **Rights gates**: G5 (Libbet asset-licence completeness and release recipe checklist) blocks admission; G2 (GBDK 2.96a runtime terms) blocks the Tobu Tobu Girl fallback.
 **Research**: Light.
-**Plans**: 5/17 plans executed
+**Plans**: 6/17 plans executed
 
 Plans:
 **Wave 1**
@@ -80,7 +80,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [x] 07-05-PLAN.md — Runner tracer: case-file parser, --acceptance CLI, heap ROM loader, acceptance_libbet; Mooneye heap buffers
-- [ ] 07-17-PLAN.md — D-19(ii) pre-freeze investigation: early Start taps explained from the pinned source (fix only a demonstrated defect; core-mutant anchor unchanged)
+- [x] 07-17-PLAN.md — D-19(ii) pre-freeze investigation: early Start taps explained from the pinned source (fix only a demonstrated defect; core-mutant anchor unchanged)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 07-06-PLAN.md — Case-file hardening: runner-level negative files and the case/path boundary matrix
@@ -232,7 +232,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1–6, 06.1 | v0.1 | 64/64 | Complete | 2026-10-10 |
-| 7. DMG Game Acceptance and Regression Baseline | v0.2 | 5/17 | In Progress | - |
+| 7. DMG Game Acceptance and Regression Baseline | v0.2 | 6/17 | In Progress | - |
 | 8. Cartridge Seam, MBC5 and MBC2 | v0.2 | 0/TBD | Not started | - |
 | 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 0/TBD | Not started | - |
 | 10. CGB Profile, Banking and Register Visibility | v0.2 | 0/TBD | Not started | - |

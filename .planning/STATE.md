@@ -5,16 +5,16 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 07
 current_phase_name: DMG Game Acceptance and Regression Baseline
 status: executing
-stopped_at: Completed 07-05-PLAN.md
-last_updated: "2026-10-10T23:06:38.953Z"
+stopped_at: Completed 07-17-PLAN.md
+last_updated: "2026-10-10T23:10:39.647Z"
 last_activity: 2026-10-10
 last_activity_desc: Phase GB-07 execution started
-state_head: 7110c1063fd3f4131c271aafae0637324c3bce29
+state_head: 85726128dd3dcf09a6c7a7ed6569a55a4f53c5ec
 progress:
   total_phases: 9
   completed_phases: 1
   total_plans: 17
-  completed_plans: 5
+  completed_plans: 6
   percent: 11
 ---
 
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-10)
 ## Current Position
 
 Phase: GB-07 (DMG Game Acceptance and Regression Baseline) — EXECUTING
-Plan: 6 of 17
+Plan: 7 of 17
 Status: Executing Phase GB-07
 Last activity: 2026-10-10 — Phase GB-07 execution started
 
@@ -108,6 +108,7 @@ Progress (v0.2): [░░░░░░░░░░] 0% (0/9 phases)
 | Phase 07 P03 | 30 min | 2 tasks | 5 files |
 | Phase 07 P04 | 20 min | 2 tasks | 4 files |
 | Phase 07 P05 | 6 min | 2 tasks | 10 files |
+| Phase 07 P17 | 25 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -206,6 +207,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 07]: D-027: mixer headroom divide-by-16 fixes Libbet clipping (D-19(i))
 - [Phase 07]: 07-04: Libbet reproduction pins Pillow wheels for cp310-cp314 (linux x86_64, macOS arm64) and relies on the D-02 archive SHA-256 because GitHub reports no asset digest; hosted run stays null
 - [Phase 07]: 07-05: Frame-digest oracles parse but the runner refuses them with exit 3 unsupported-oracle until the digest plan; runner uses tail_half_dots=0 since the verdict is T_hit
+- [Phase 07]: D-028: D-19(ii) early Start taps are expected Libbet intro behaviour; joypad path unchanged
 
 ### Pending Todos
 
@@ -239,8 +241,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-10T23:06:38.934Z
-Stopped at: Completed 07-05-PLAN.md
+Last session: 2026-10-10T23:10:39.619Z
+Stopped at: Completed 07-17-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 7`
 Continuation note: [.continue-here.md](.continue-here.md)
