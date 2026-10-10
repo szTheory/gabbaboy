@@ -67,6 +67,7 @@ hardware or power-loss qualification is claimed.
 |---|---:|---:|---:|---|
 | 2026-10-08 | 22 | 22 | 0 | Phase executor, L1 artifact and source review |
 | 2026-10-08 | 22 | 22 | 0 | Phase executor, final Windows fixture and exact-head evidence cross-check |
+| 2026-10-10 (freshness after Phase 06.1) | 22 | 22 | 0 | Orchestrator ASVS L1 short-circuit (plan-time register, no open threats) |
 
 ## Sign-Off
 
@@ -78,6 +79,23 @@ hardware or power-loss qualification is claimed.
 **Approval:** verified 2026-10-08; final exact-head CI, fixture reproduction, and downloaded package receipts passed as recorded in phase validation.
 
 ## Security Audit 2026-10-09
+
+| Metric | Count |
+|---|---|
+| Threats found | 22 |
+| Closed | 22 |
+| Open | 0 |
+
+## Security Audit 2026-10-10 (freshness after Phase 06.1)
+
+Rechecked the register after Phase 06.1 PR #54 (merge `ab76d09c2ee27ba09fc5f3c2510af016aebfdecb`). The register still holds 22 threat IDs, all closed, so `threats_open: 0` is unchanged; under ASVS level 1 with a plan-time register the workflow short-circuits without an auditor pass. The only covered changes are in the player ROM read path:
+
+- `src/player/session.c` `read_rom_file` (ROM side of T-04-01): adds `O_NOCTTY` to the open flags and splits the size-bound and `close()` failure branches. Both branches still free the buffer and fail before any replacement, and the `O_NONBLOCK`/`O_NOFOLLOW` open plus descriptor-based regular-file and size checks are unchanged, so the FIFO hardening holds. `read_save_file` and the save write path (T-04-06, T-04-07) and the session lock (T-04-08) are unchanged.
+- `tests/player/test_session.c`: adds 2097153-byte and 2097154-byte replacement-failure assertions; the existing `mkfifo` assertion is unchanged. The optional player suite passed 51/51 on the refresh branch.
+
+No new threat was introduced.
+
+## Security Audit 2026-10-10
 
 | Metric | Count |
 |---|---|

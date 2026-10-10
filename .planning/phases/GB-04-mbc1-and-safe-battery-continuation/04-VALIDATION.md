@@ -214,3 +214,18 @@ reproduction. Preview package run 37964888373 passed Linux/macOS installed
 consumer and macOS player-package smoke. All three runs were pull-request runs
 for that exact code head; the separate push-event run with a skipped player job
 was not used. No hardware or power-loss result is implied.
+
+## Validation Refresh After Phase 06.1 — 2026-10-10
+
+Covered-input drift since the 2026-10-09 report is limited to `src/player/session.c` and `tests/player/test_session.c`, both changed by Phase 06.1 PR #54 (squash `ab76d09c2ee27ba09fc5f3c2510af016aebfdecb`, exact tested head `2a8fd1c357262d4b69707b553c603fd441a0f3fa`):
+
+- `read_rom_file` now also opens with `O_NOCTTY` and reports a size overrun and a `close()` failure in separate branches. `O_NONBLOCK`, `O_NOFOLLOW` and the descriptor-based regular-file and size checks that carry the SAVE-03 FIFO hardening are unchanged. `read_save_file` is unchanged.
+- `player_session_replacement_failure` gains 2097153-byte and 2097154-byte replacement-failure assertions, each followed by the unchanged-session check. The existing `mkfifo` ROM-replacement assertion is unchanged.
+
+Evidence on the refresh branch (descends from the merge SHA; no source change since):
+
+- `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error`: 184/184 passed.
+- `bash tests/scripts/verify-phase3-player.sh --build-package` at `4bcd27e`: exit 0; the optional player CTest passed 51/51, including `player_session_replacement_failure` (FIFO rejection and preserved session) and the continuation tests, and the extracted-package fresh-process MBC1 continuation smoke passed (SDL 3.4.18).
+- Hosted: PR-head ci run [38064419789](https://github.com/szTheory/gabbaboy/actions/runs/38064419789) succeeded on every job, including `macos-player-package`.
+
+SAVE-01..SAVE-04 coverage is unchanged and green. No new gaps were found, no test files were added, and no manual UAT was added. No hardware or power-loss result is implied.

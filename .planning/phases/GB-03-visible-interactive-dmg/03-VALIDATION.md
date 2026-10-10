@@ -134,3 +134,22 @@ The shared verified-player output helper now publishes the archive and receipt a
 - `bash tests/scripts/verify-phase3-player.sh --build-package`: the optional player CTest passed 51/51, including `player_verified_output_directory`. SDL 3.4.18 package build and extracted-byte smoke passed (package SHA-256 `91ab1129eaadc37f9340a686c77584fffe7457cd26c04172e12d32ba0bb3eb18`, `source_revision=0403b7121e552f4be0cdddb638ca631acd07def3`). Dummy-audio recovery passed, as did guest audio (803 frames, 802 nonzero), fresh-process MBC1 continuation, and the rendered Z-down/Z-up shade transition. Local mode does not call `--publish`, so the publication path is covered by the unit suite only.
 
 No new gaps were found. No manual UAT was added. Physical CPU-B timing and PPU-revision qualification remain unclaimed.
+
+## Validation Refresh After Phase 06.1 — 2026-10-10
+
+Covered-input drift since the 2026-10-10 report comes from Phase 06.1 PR #54 (squash `ab76d09c2ee27ba09fc5f3c2510af016aebfdecb`, exact tested head `2a8fd1c357262d4b69707b553c603fd441a0f3fa`):
+
+- `src/player/session.c`: `read_rom_file` reports a size overrun and a `close()` failure in separate branches and opens with `O_NOCTTY` (`read_save_file` is unchanged).
+- `tests/player/test_session.c`: `player_session_replacement_failure` now asserts the "2 MiB read bound" message for a 2097153-byte ROM and the earlier "bounded regular file" rejection for a 2097154-byte ROM, with the session unchanged after each. The `close()` failure branch has no fault-injection stage; its evidence is inspection only.
+- `tests/scripts/test_verified_player_output_dir.py`: shared `_receipt_fields()` helper and a test for the inner withdrawal site after a directory-sync failure (21 tests).
+- `tests/scripts/verify-phase3-player.sh`: comment-only note documenting the `GBB_VERIFIED_OUTPUT_DIR` default; behaviour unchanged.
+- `.github/workflows/ci.yml` and `.github/workflows/preview.yml`: single `player-gate` job feeding `macos-player-package` and `required-native`; the preview player package smoke waits on the exact-head ci run through `.github/scripts/wait-exact-head-ci.py`.
+
+Evidence on the refresh branch at `4bcd27e` (descends from the merge SHA; no source change since):
+
+- `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error`: 184/184 passed.
+- `PYTHONDONTWRITEBYTECODE=1 python3 tests/scripts/test_verified_player_output_dir.py`: 21 tests OK.
+- `bash tests/scripts/verify-phase3-player.sh --build-package`: exit 0. The optional player CTest passed 51/51, including `player_session_replacement_failure` and `player_verified_output_directory`. The SDL 3.4.18 package build and extracted-byte smoke passed (package SHA-256 `1a10a0210be6cb34a7189d3b8a747c7363b03251db7fc20d0ec027146fef2e9d`, `source_revision=4bcd27eaac8cd8942650c842360dd2849a8a7249`).
+- Hosted: PR-head ci run [38064419789](https://github.com/szTheory/gabbaboy/actions/runs/38064419789) succeeded on every job, including `macos-player-package`; preview run [38064419803](https://github.com/szTheory/gabbaboy/actions/runs/38064419803) succeeded, including `player-package-smoke-macos`.
+
+Phase 3's requirement map (VIDEO-01..VIDEO-05) is unchanged and green. No new gaps were found, no test files were added, and no manual UAT was added. Physical CPU-B timing and PPU-revision qualification remain unclaimed.

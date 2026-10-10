@@ -1,6 +1,6 @@
 ---
 phase: GB-05-dmg-audio-and-stable-playback
-verified: 2026-10-10T11:59:27Z
+verified: 2026-10-10T16:16:01Z
 status: passed
 score: 17/17 truths verified
 covered_files:
@@ -51,7 +51,7 @@ covered_files:
   - tests/test_apu.c
   - tests/test_audio.c
   - tests/test_audio_no_alloc.c
-covered_digest: "v3:sha256:fbbddd9c4247441842f75b4ed70b649caa0b682e226b4b8d10162e48756af99f"
+covered_digest: "v3:sha256:8704d27ffa4cf131fa4036b943d2cd5fe68f92148c4fd10b9e320a8041247a93"
 behavior_unverified: 0
 overrides_applied: 0
 ---
@@ -59,9 +59,9 @@ overrides_applied: 0
 # Phase 5: DMG Audio and Stable Playback Verification Report
 
 **Phase Goal:** As a player, I want to play DMG games with paced sound, so that controls remain responsive through device changes.  
-**Verified:** 2026-10-10T11:59:27Z
+**Verified:** 2026-10-10T16:16:01Z
 **Status:** passed
-**Re-verification:** Freshness refresh at HEAD `1468f3b` — the prior report (written at `7b1c491`) had no `gaps:` section, so all truths were re-derived and re-checked; covered files `src/player/session.c`, `tests/scripts/verified_player_output_dir.py`, `tests/scripts/verify-phase3-player.sh` changed afterward and `tests/scripts/test_verified_player_output_dir.py` was added.
+**Re-verification:** Freshness refresh after Phase 06.1 (PR 54, squash-merged at `ab76d09`; PR head `2a8fd1c`). Checked at HEAD `dff321a`, which differs from `ab76d09` only under `.planning/`. The prior report had no `gaps:` section, so all truths were re-derived. Covered files changed in PR 54: `.github/workflows/preview.yml`, `src/player/session.c`, `tests/player/test_session.c`, `tests/scripts/test_verified_player_output_dir.py`, `tests/scripts/verify-phase3-player.sh`. All were already in the covered set; the covered set is unchanged.
 
 ## User Flow Coverage
 
@@ -89,13 +89,13 @@ User story: “As a player, I want to play DMG games with paced sound, so that c
 | 7 | Focus loss and gamepad removal release only their owned button contributions; reconnect begins neutral. | ✓ VERIFIED | Current `player_input_focus`, `player_input_focus_audio`, `player_input_reconnect`, and `player_input_sources` pass; SDL events in `main.c` route into source-owned input state. |
 | 8 | Pause flushes host PCM while preserving guest APU history; reset/replacement ordering respects battery transitions. | ✓ VERIFIED | Current `player_reset_transition` behaviorally drives Space pause/resume and R reset, checks flush and resumed PCM continuity, and exercises save failure/cancel/retry and battery recovery. |
 | 9 | Failed ROM replacement preserves the active session; device removal/reopen clears stale host PCM without advancing or resetting guest time. | ✓ VERIFIED | Current `player_audio_replacement`, `player_audio_device`, session replacement tests, and player smoke pass; event dispatch connects device changes to adapter recovery. |
-| 10 | The sustained authored playback workload records bounded, revision-linked PCM evidence for both supported partitions. | ✓ VERIFIED | Fresh `bash tests/scripts/measure-audio-playback.sh` passed (rc 0) at source revision `1468f3b34c6f42aea8f305fe9fc719bd03538cc0`, `source_tree_state: clean`, SDL dummy driver; both partitions produced 241,094 frames with SHA-256 `8667279ae7d3bf3cdd76a278b13d2cdfe9992d64325c15e4eef9449778eaeec4`. |
+| 10 | The sustained authored playback workload records bounded, revision-linked PCM evidence for both supported partitions. | ✓ VERIFIED | Fresh `bash tests/scripts/measure-audio-playback.sh` passed (rc 0) at source revision `dff321a66299359f46ef0f7a3d4b218fc05510af`, `source_tree_state: clean`, SDL dummy driver; both partitions produced 241,094 frames with SHA-256 `8667279ae7d3bf3cdd76a278b13d2cdfe9992d64325c15e4eef9449778eaeec4`. |
 | 11 | Consumer docs, player help and capability metadata state the format, gain, recovery, and model/evidence limits. | ✓ VERIFIED | `docs/audio-and-playback.md`, `docs/preview.md`, `README.md`, player status/help and package assertions describe 48 kHz s16 stereo and the scoped DMG-CPU-B model. |
 | 12 | Source-owned input recovery and audio clearing are wired through the live SDL app event loop. | ✓ VERIFIED | `src/player/main.c` dispatches focus/controller/audio events to `input.c` and `audio.c`; current 51-test packaged-player verifier passes. |
 | 13 | Core-generated PCM is real guest-derived data, not a static fallback or test-only waveform. | ✓ VERIFIED | Bus APU register writes update per-instance channel state; divider/device advancement clocks it; `gbb_run_audio` emits filtered samples; main loop submits those samples to the ring consumed by SDL. |
 | 14 | Core run rejects overflow/undersized output without overrun, silent short output, or partial next-instruction mutation. | ✓ VERIFIED | Core capacity tests assert count, guards, and retryable state; the current 179-test run passes. |
-| 15 | The player has bounded recovery behavior when the default audio sink is unavailable. | ✓ VERIFIED | Fresh dummy SDL player smoke passes; measurement explicitly reports `default_audio_device_availability: unavailable` and labels dummy/software evidence. `player_audio_unavailable` passes. |
-| 16 | Current cross-phase core regressions and player/package integration path remain green after shared verifier changes. | ✓ VERIFIED | `ctest --test-dir build/phase3-player/gabbaboy --no-tests=error -E '^player_'`: 179/179 passed (re-run this verification). `python3 -I -m unittest discover -s tests/scripts -p test_verified_player_output_dir.py`: 20/20 OK. `bash tests/scripts/verify-phase3-player.sh`: 51/51 passed, including fresh-process MBC1 continuation and dummy SDL recovery. |
+| 15 | The player has bounded recovery behavior when the default audio sink is unavailable. | ✓ VERIFIED | `player_audio_unavailable` passes (injected unavailable-sink path). The fresh dummy SDL player smoke passes, including dummy open/stream/close/recovery. This run's measurement receipt reports `default_audio_device_availability: available` but still used the dummy driver, so it labels dummy/software evidence only; no physical device result is claimed. (Earlier receipts on this host reported `unavailable`.) |
+| 16 | Current cross-phase core regressions and player/package integration path remain green after shared verifier changes. | ✓ VERIFIED | `ctest --test-dir build/phase3-player/gabbaboy --no-tests=error -E '^player_'`: 179/179 passed (re-run this verification; the 184-test `phase1` preset run also passed). `python3 tests/scripts/test_verified_player_output_dir.py`: 21/21 OK. `bash tests/scripts/verify-phase3-player.sh`: 51/51 passed, including fresh-process MBC1 continuation and dummy SDL recovery. |
 | 17 | The report makes no unsupported physical-device or perceptual-audio claim. | ✓ VERIFIED | Current measurement receipt labels the tree clean and evidence as dummy/software only. Docs state physical hotplug, hardware output, revision equivalence, and listening quality are unqualified. |
 
 **Score:** 17/17 truths verified (0 present, behavior-unverified).
@@ -120,7 +120,7 @@ User story: “As a player, I want to play DMG games with paced sound, so that c
 | `tests/test_audio.c`, `tests/test_apu.c`, `tests/test_audio_no_alloc.c` | Core audio/APU behavioral regressions | ✓ VERIFIED | Registered in current CTest inventory and included in passing 179-test run. |
 | `tests/player/test_audio.c`, `tests/player/test_audio_counters.c`, `tests/player/test_input.c`, `tests/player/test_reset_transition.c` | Player behavior, counters, and transition tests | ✓ VERIFIED | Registered and exercised by current 51-test verifier. |
 | `tests/scripts/measure-audio-playback.sh`, `docs/audio-and-playback.md`, `docs/preview.md`, `README.md` | Repeatable evidence and consumer contract | ✓ VERIFIED | Receipt regenerated successfully at the clean tree; documentation matches model/measurement boundary. |
-| `src/player/session.c`, output-directory test/helper scripts | Shared Phase 3 safety fix and regression verification | ✓ VERIFIED | Committed changes reject FIFO ROM replacement via nonblocking open and protect artifact directory from path overlap; current player verifier includes the 8 relevant regression cases. |
+| `src/player/session.c`, output-directory test/helper scripts | Shared Phase 3 safety fix and regression verification | ✓ VERIFIED | `read_rom_file` opens with `O_NONBLOCK` and `O_NOCTTY` (PR 54 added `O_NOCTTY` and split the close-failure check; the 2 MiB read-bound error and a separate "Could not finish reading the selected ROM." close-failure error are now distinct). `player_session_replacement_failure` asserts the 2097153-byte file yields the "2 MiB read bound" message and the 2097154-byte file the earlier "bounded regular file" fstat rejection, with the active session unchanged; the ROM close-failure branch is inspection-only (no fault-injection test). |
 
 `verify.artifacts`/`verify.key-links` were invoked for all seven plans, but this runtime returned zero parsed entries for their compact inline `artifacts: [...]` / prose `key_links:` forms. Therefore those query results are not treated as evidence; the artifact and wiring checks above were performed directly against the source, test registration, and executed tests.
 
@@ -148,6 +148,7 @@ User story: “As a player, I want to play DMG games with paced sound, so that c
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
+| Phase1-preset full core CTest | `ctest --preset phase1 --output-on-failure --no-tests=error` (after `cmake --preset phase1 -DGABBABOY_BUILD_PLAYER=OFF` and build) | 184/184 passed | ✓ PASS |
 | Full core and cross-phase regression inventory | `ctest --test-dir build/phase3-player/gabbaboy --output-on-failure --no-tests=error -E '^player_'` | 179/179 passed; 2.14 s | ✓ PASS |
 | Player, SDL dummy backend, lifecycle, input, packaging and continuation | `bash tests/scripts/verify-phase3-player.sh` | 51/51 passed; dummy open/stream/close/recovery; fresh-process MBC1 continuation passed | ✓ PASS |
 | Sustained playback partition equivalence | `bash tests/scripts/measure-audio-playback.sh` | 241,094 frames in each partition; identical digest `8667279ae7d3bf3cdd76a278b13d2cdfe9992d64325c15e4eef9449778eaeec4`; result passed | ✓ PASS |
@@ -192,7 +193,7 @@ All trackable Phase 5 CONTEXT decisions are honored: 12/12. This gate is warning
 |------|------|---------|----------|--------|
 | — | — | None found in reviewed implementation, tests, scripts, and docs. | — | No unreferenced TODO/FIXME/XXX/HACK/placeholder debt markers, empty implementation stubs, disabled requirement tests, or static audio fallbacks found. |
 
-The shared Phase 3 output-directory safety changes (`src/player/session.c`, `tests/scripts/verified_player_output_dir.py` and its 20-case test, `tests/scripts/verify-phase3-player.sh`) are committed and covered by the fingerprint because the Phase 5 player verifier consumes them; the helper tests and the 51-test player verifier pass. The measurement receipt is bound to revision `1468f3b34c6f42aea8f305fe9fc719bd03538cc0` with `source_tree_state: clean`.
+The shared Phase 3 output-directory safety changes (`src/player/session.c`, `tests/scripts/verified_player_output_dir.py` and its 21-case test, `tests/scripts/verify-phase3-player.sh`) are committed and covered by the fingerprint because the Phase 5 player verifier consumes them; the helper tests and the 51-test player verifier pass. The measurement receipt is bound to revision `dff321a66299359f46ef0f7a3d4b218fc05510af` with `source_tree_state: clean`.
 
 ### Human Verification Required
 
@@ -200,9 +201,9 @@ None for this phase's success criteria. Project instructions require automated c
 
 ### Gaps Summary
 
-All 17 plan-derived truths and all five roadmap success criteria are verified against current implementation, test wiring and fresh execution evidence. The current 179-test core suite and 51-test player verifier pass. The regenerated 300-frame receipt is clean-tree, dummy-backend, software-counter evidence only; both partitions produce identical 241,094-frame PCM and digest. No hosted-CI (none yet for this branch), physical-device, hotplug, or perceptual-audio claim is made.
+All 17 plan-derived truths and all five roadmap success criteria are verified against current implementation, test wiring and fresh execution evidence. The current 179-test core suite and 51-test player verifier pass. The regenerated 300-frame receipt is clean-tree, dummy-backend, software-counter evidence only; both partitions produce identical 241,094-frame PCM and digest. Hosted evidence for this source content (checked with `gh run view`): PR-head `ci` run 38064419789 and `preview-package-smoke` run 38064419803 concluded success at head `2a8fd1c`; main-push `ci` run 38064726000 concluded success on merge SHA `ab76d09`. No physical-device, hotplug, or perceptual-audio claim is made.
 
 ---
 
-_Verified: 2026-10-10T11:59:27Z_
+_Verified: 2026-10-10T16:16:01Z_
 _Verifier: the agent (gsd-verifier)_

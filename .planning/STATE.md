@@ -2,14 +2,14 @@
 gsd_state_version: "1.0"
 milestone: v0.1
 status: executing
-stopped_at: Completed 06.1-03-PLAN.md
-last_updated: "2026-10-10T15:35:38.714Z"
-state_head: 3bfc8b581b9101c511810b0c3d4c632f5b238ca3
+stopped_at: Completed 06.1-07-PLAN.md (Phases 5-6 refreshed passed; all six phases passed; on branch gsd/phase-06.1-verification-refresh)
+last_updated: "2026-10-10T16:23:10.973Z"
+state_head: e43553024fdacb7e1cb1a838fc4a61f43e5231a1
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 64
-  completed_plans: 59
+  completed_plans: 63
   verified_phases: 6
 milestone_name: limited DMG preview
 last_activity: 2026-10-10
@@ -52,7 +52,7 @@ Branch rule: never reuse or push to the stale same-named `gsd/phase-NN-<slug>` b
 
 **Milestone audit (2026-10-10T13:03:27Z, at `f03e9b1`):** `tech_debt` — 35/35 requirements satisfied by three-source cross-reference, 6/6 phases passed and fresh, 12/12 integration groups and 5/5 E2E flows wired, Nyquist 6/6 compliant, 0 open threats, 0 open review dispositions. Live `main` branch protection was observed (required `required-native`, `fixture-repro`, `preview-package-smoke`; strict; admins enforced). Non-blocking debt: deferred info review items in Phases 1/2/3/5, no C++/Windows audio-PCM consumer coverage, and PR #41 bot-run approval. See [v0.1-MILESTONE-AUDIT.md](v0.1-MILESTONE-AUDIT.md).
 
-**Next command:** `$gsd-execute-phase 06.1` (execute Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage; 8 plans in 6 waves). The owner chose cleanup before `$gsd-complete-milestone v0.1`; keep the milestone `executing` and both auto-advance flags false.
+**Next command:** `$gsd-audit-milestone v0.1` (owner runs this after Phase 06.1 verification and the docs-only closeout PR, which the phase-close/verify step owns). Keep the milestone `executing` and both auto-advance flags false; nothing advances automatically.
 
 ## Performance Metrics
 
@@ -116,6 +116,10 @@ Branch rule: never reuse or push to the stale same-named `gsd/phase-NN-<slug>` b
 | Phase 06.1 P01 | 3 min | 2 tasks | 2 files |
 | Phase 06.1 P02 | 12 min | 3 tasks | 4 files |
 | Phase GB-06.1 P03 | 15 min | 2 tasks | 1 files |
+| Phase GB-06.1 P04 | 30 min | 3 tasks | 4 files |
+| Phase GB-06.1 P05 | 20 min | 2 tasks | 11 files |
+| Phase GB-06.1 P06 | 10 min | 2 tasks | 10 files |
+| Phase GB-06.1 P07 | 13 min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -204,6 +208,10 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 06.1]: Installed-consumer audio smoke is structural only (formula frame count, bounds, poison, twin/reset hash equality); no digest literal pinned
 - [Phase 06.1]: 06.1-02: O_NOCTTY added to read_rom_file only; read_save_file intentionally unchanged (D-05 scope)
 - [Phase GB-06.1]: 06.1-03: exact-head gate orders by run_number only; player run_attempt output taken from macos-player-package job object; terminal failures debounced over 2 polls on same (id, attempt)
+- [Phase GB-06.1]: player-gate job is the single definition of player_required in ci.yml; check-player-result.sh fails closed on non-success gate
+- [Phase GB-06.1]: 06.1-05: Phases 1 and 2 re-verified passed after PR 54 on the docs-only refresh branch; P1 covered_files gains wait-exact-head-ci.py and check-player-result.sh; P1 IN-01/IN-02 and P2 IN-01 fixed; new P1 IN-03/IN-04 deferred until the next wait-exact-head-ci.py change — D-10 refresh in order through execute-phase verification gates; D-09 forbids code fixes on the refresh branch
+- [Phase GB-06.1]: 06.1-06: Phases 3 and 4 re-verified passed after PR 54 on the docs-only refresh branch; P3 covered_files gains wait-exact-head-ci.py and check-player-result.sh; P3 IN-01/IN-02/IN-03 fixed (IN-01 close-failure branch inspection-only); P4 stale only through session.c and test_session.c, covered set unchanged — D-10 refresh in order through execute-phase verification gates; D-09 forbids code fixes on the refresh branch
+- [Phase GB-06.1]: 06.1-07: Phases 5 and 6 refreshed passed; Phase 6 covered_files gains tests/consumers/c/main.c and tests/consumers/cpp/main.cpp; P5 IN-01 fixed (documented); audit audio-consumer gap fixed; 06.1 did not change release.yml (pre-existing drift from v0.1.0 recorded)
 
 ### Pending Todos
 
@@ -238,11 +246,13 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-10T15:35:38.625Z
-Stopped at: Completed 06.1-03-PLAN.md
+Last session: 2026-10-10T16:23:10.768Z
+Stopped at: Completed 06.1-07-PLAN.md (Phases 5-6 refreshed passed; all six phases passed; on branch gsd/phase-06.1-verification-refresh)
 Resume file: None
-Next command in fresh context: `$gsd-execute-phase 06.1` (Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage)
+Next command in fresh context: `$gsd-audit-milestone v0.1` (after Phase 06.1 verification and its docs-only closeout PR)
 Continuation note: [.continue-here.md](.continue-here.md)
+Completed workflow stage: **Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage, execution (plans 01-08)** (2026-10-10). Code PR #54 and docs-only refresh PR 2 merged at exact green heads; all six phases read passed on main. Next step: **Phase 06.1 verification and docs-only closeout PR** (owned by the phase-close/verify step), then the owner re-runs the milestone audit with `$gsd-audit-milestone v0.1`. No auto-advance.
+
 Completed workflow stage: **Phase 2 — DMG CPU, Bus and Time verification freshness refresh** (2026-10-10). Canonical verification passed 5/5 truths and CPU-01–05 at `a9050df` on `gsd/phase-02-verification-refresh-2`. Gates: Nyquist 0 gaps, security 45/45 closed, code review 1 info deferred with 0 open dispositions, regression 179/179 core. No hosted-CI, physical-hardware or perceptual result is claimed.
 
 Completed workflow stage: **v0.1 milestone audit** (2026-10-10) — `tech_debt`, 35/35 requirements, 0 blockers.

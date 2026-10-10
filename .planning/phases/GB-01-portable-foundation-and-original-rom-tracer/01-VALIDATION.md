@@ -110,6 +110,16 @@ All phase task behaviors map to automated checks. BASE-07 and BASE-08 now have e
 
 Covered-input drift since the PR #36 report is limited to `.github/workflows/ci.yml` and `preview.yml` (GB-03 #40 made the macOS player lane required on every pull request instead of label-gated), a `__pycache__/` ignore rule, and the previous audit row. The `required-native` aggregate still requires the same five native results and `preview-package-smoke` still requires both installed-package smokes, so the BASE-07/BASE-08 gates are unchanged except for being stricter. The phase-1 preset suite passed 179/179 locally on `origin/main` `93b53d5`, including `reset_idempotency`, `concurrent_independent_instances`, `runner_help`, `fixture_digest`, and `preview_package_smoke`. No new gaps.
 
+### Validation refresh after Phase 06.1 (2026-10-10)
+
+Covered-input drift since the 2026-10-10 report comes from PR #54 (squash `ab76d09c2ee27ba09fc5f3c2510af016aebfdecb`, exact tested head `2a8fd1c357262d4b69707b553c603fd441a0f3fa`):
+
+- `preview.yml`: the three installed/player smoke jobs now call `.github/scripts/wait-exact-head-ci.py` instead of inline poll loops, and the aggregate requires player `success` unconditionally (Phase 1 review IN-01 and IN-02). BASE-08's exact-head gate is now one script with a 26-case `--self-test`.
+- `ci.yml`: a single `player-gate` job defines `player_required`; `required-native` checks it through `check-player-result.sh` (14-case `--self-test`). The five native results BASE-07 requires are unchanged.
+- `tests/consumers/c/main.c` and `tests/consumers/cpp/main.cpp`: an added `audio_api_smoke()` call extends the BASE-06 installed consumers; the public-header-only contract is unchanged.
+
+Evidence on refresh HEAD `4a5bbbf` (descends from the merge SHA, no source change since): the phase-1 preset suite passed 184/184 locally; `wait-exact-head-ci.py --self-test` printed `PASS: exact-head gate self-test (26 cases)`; `check-player-result.sh --self-test` printed `PASS: player result self-test (14 cases)`. Hosted exact-head evidence for PR #54: ci run [38064419789](https://github.com/szTheory/gabbaboy/actions/runs/38064419789), fixture-repro run 38064419841 and preview run [38064419803](https://github.com/szTheory/gabbaboy/actions/runs/38064419803) all succeeded, and the preview run logged three `exact-head-ci: PASS run_id=38064419789` lines. No new gaps; no test files were added.
+
 ---
 
 ## Manual-Only Verifications

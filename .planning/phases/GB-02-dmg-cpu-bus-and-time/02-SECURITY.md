@@ -77,6 +77,7 @@ The twelve low-severity package-install entries were accepted explicitly in thei
 | 2026-10-06 | 29 | 27 | 2 | Typed L1 auditor, corrective regressions, source-audited reporting path, local execution and failing hosted evidence |
 | 2026-10-07 (Plan 02-18 intake; superseded) | 45 | 42 | 3 | Initial intake recorded three new threats before execution; the final audit below closes them. T-02-SC (02-18) was accepted in its plan |
 | 2026-10-07 (final Phase 2 audit) | 45 | 45 | 0 | Typed L1 auditor closed the five scoped entries T-02-14, T-02-15, T-02-31, T-02-32, and T-02-33; the previous 42 entries remain closed |
+| 2026-10-10 (freshness after Phase 06.1) | 45 | 45 | 0 | Orchestrator ASVS L1 short-circuit (register authored at plan time, no open threats). The only covered change is PR #54's `ci.yml` (merge `ab76d09c2ee27ba09fc5f3c2510af016aebfdecb`). Player gating moved into one `player-gate` job checked by `check-player-result.sh`, which fails closed. Triggers (`pull_request`, `push`), `contents: read` permissions, SHA-pinned actions, the `ctest --no-tests=error` runs, and the `verify-test-inventory.sh` calls behind T-02-20 are unchanged. |
 
 ## Remaining Gate
 

@@ -5,7 +5,7 @@ titles: json
 findings:
   - id: IN-01
     severity: info
-    disposition: deferred
+    disposition: fixed
     title: "Player-gating condition duplicated in two places"
   - id: CR-01
     severity: critical
@@ -33,14 +33,14 @@ findings:
     title: "BLOCKER — The required Mooneye corpus cannot reach its declared result protocol"
 open: 0
 total: 7
-recorded: 2026-10-10T12:51:28.698Z
+recorded: 2026-10-10T15:55:45Z
 ---
 
 # Phase 02: Code Review Disposition
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| IN-01 | info | deferred | Info-only maintainability note; both `pull_request` conditions agree today and drift would fail closed or be caught by required checks. Deferred because `ci.yml` is a covered input of the Phase 1, 2, 3 and 6 VERIFICATION reports — editing it in a docs-only freshness refresh would re-stale four reports. Revisit with the next intentional CI change. |
+| IN-01 | info | fixed | Fixed by Phase 06.1 PR #54, squash merge `ab76d09c2ee27ba09fc5f3c2510af016aebfdecb`. The `player-gate` job's `player_required` output is the single definition: at the merge SHA, `ci.yml` contains `event_name == 'pull_request'` exactly once (grep count 1, `ci.yml:136`), and `macos-player-package` (`ci.yml:141`) and `required-native` (`ci.yml:189`) consume `needs.player-gate.outputs.player_required`. `required-native` decides through `.github/scripts/check-player-result.sh`, whose `--self-test` (14 cases) runs in `native-linux-x64`. PR-head ci run 38064419789: `player-gate`, `macos-player-package` and `required-native` all succeeded. Main-push ci run 38064726000 on the merge SHA: `macos-player-package` skipped and `required-native` succeeded. Rechecked clean in the 2026-10-10 post-06.1 review. |
 | CR-01 | critical | fixed | `verify-mooneye-unadmitted.sh:54-118` binds committed Git lock, retained hosted lock/report, local ROMs, exact run ID and all three hosted ROM bytes; its self-test rejects mutable-lock and local-byte tampering. (not in the current review) |
 | WR-01 | warning | fixed | `probe-mooneye-candidate.sh:25-76` stops trace processing at the result breakpoint and rejects callback-after-result; `--self-test-order` proves both orders. (not in the current review) |
 | CR-02 | critical | fixed | Retained `cpu_return_phases` regression; full Phase 1 CTest suite passed 100/100. (not in the current review) |

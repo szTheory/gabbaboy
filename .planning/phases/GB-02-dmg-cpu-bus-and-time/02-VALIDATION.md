@@ -150,6 +150,12 @@ Current run evidence: focused base semantic selection passed 5/5; a fresh local 
 
 No additional test file was needed: the only gap identified in this audit, CPU-01/D-01, is covered by the registered 02-18 tests. No implementation bug is escalated. Physical DMG-CPU-B observation remains unavailable and is recorded as a hardware evidence limitation, not an automated coverage gap or manual UAT requirement. The original upstream Mooneye ROMs remain PPU/LY-limited; the passing fixed corpus uses source-qualified derived reporting closures and does not claim original-ROM PPU behavior or hardware qualification.
 
+## Validation refresh after Phase 06.1 — 2026-10-10
+
+Covered-input drift since the 2026-10-10 report is limited to `.github/workflows/ci.yml`, changed by Phase 06.1 PR #54 (squash `ab76d09c2ee27ba09fc5f3c2510af016aebfdecb`, exact tested head `2a8fd1c357262d4b69707b553c603fd441a0f3fa`). The `pull_request` player-gating condition now lives in one `player-gate` job, and `required-native` checks its `player_required` output through `.github/scripts/check-player-result.sh` (14-case `--self-test`, run in `native-linux-x64`). The Phase 2 test-inventory jobs (`native-linux`, `native-macos`, `native-windows`, `linux-sanitizers`) still run `ctest --no-tests=error` and `verify-test-inventory.sh` against `tests/expected-tests.txt`, so CPU-01..CPU-05 coverage is unchanged.
+
+Evidence on the refresh branch (descends from the merge SHA, no source change since): the phase-1 preset suite, which includes every Phase 2 CPU/timer case, passed 184/184 locally; `check-player-result.sh --self-test` printed `PASS: player result self-test (14 cases)`. Hosted: PR-head ci run [38064419789](https://github.com/szTheory/gabbaboy/actions/runs/38064419789) succeeded on all jobs, and main-push ci run [38064726000](https://github.com/szTheory/gabbaboy/actions/runs/38064726000) on the merge SHA succeeded (`macos-player-package` skipped, as designed for push). No new gaps; no test files were added.
+
 ## Validation Audit 2026-10-09
 
 | Metric | Count |
