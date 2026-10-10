@@ -1,6 +1,6 @@
 ---
 phase: GB-01-portable-foundation-and-original-rom-tracer
-verified: 2026-10-10T00:00:00Z
+verified: 2026-10-10T12:32:19Z
 status: passed
 score: 21/21 must-haves verified
 covered_files:
@@ -64,7 +64,7 @@ re_verification:
 # Phase 1: Portable Foundation and Original ROM Tracer Verification Report
 
 **Phase Goal:** As a developer, I want to run an original ROM with an installable GB core via a bounded API, so that I can embed it.
-**Verified:** 2026-10-10T00:00:00Z
+**Verified:** 2026-10-10T12:32:19Z
 **Status:** passed
 **Re-verification:** Yes — verification-freshness refresh of a `passed` 21/21 report (2026-10-09T17:48:35Z) that went stale after covered files changed; no previous `gaps:` section existed. Worktree: branch `gsd/phase-01-verification-refresh` at 9287994 on origin/main 93b53d5.
 
@@ -219,5 +219,5 @@ No phase-goal or requirement gaps were found. The stale status was an evidence-f
 
 ---
 
-_Verified: 2026-10-10T00:00:00Z_
+_Verified: 2026-10-10T12:32:19Z_
 _Verifier: the agent (gsd-verifier)_
