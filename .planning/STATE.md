@@ -1,10 +1,13 @@
 ---
 gsd_state_version: "1.0"
 milestone: v0.1
-status: executing
-stopped_at: "v0.1 milestone re-audit passed (35/35, 7/7 phases, 0 gaps); owner completes the milestone next"
-last_updated: "2026-10-10T16:48:58Z"
-state_head: 09d2c4da67a0f14ba0cba641321fbf107a5edec1
+milestone_name: Limited DMG Preview
+status: Awaiting next milestone
+stopped_at: v0.1 milestone completed and archived (verified_closeout); next is /gsd-new-milestone
+last_updated: "2026-10-10T17:15:20.726Z"
+last_activity: 2026-10-10
+last_activity_desc: Milestone v0.1 completed and archived
+state_head: c21631a791fa839b3b517b59aa99e364531d8428
 progress:
   total_phases: 7
   completed_phases: 7
@@ -12,51 +15,25 @@ progress:
   completed_plans: 64
   percent: 100
   verified_phases: 7
-milestone_name: limited DMG preview
-last_activity: 2026-10-10
-current_phase: "06.1"
-current_phase_name: "Address v0.1 tech debt: CI workflow info items and audio consumer coverage (INSERTED)"
-last_activity_desc: v0.1 milestone re-audit passed; owner runs $gsd-complete-milestone v0.1 next
+current_phase: null
+current_phase_name: null
 ---
 
 # Project State
 
 ## Project Reference
 
-See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
+See: [PROJECT.md](PROJECT.md) (updated 2026-10-10)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** v0.1 milestone completion (owner-run) after the passed re-audit
+**Current focus:** Planning the next milestone (committed direction: GB/GBC breadth)
 
 ## Current Position
 
-Stage: v0.1 milestone re-audit complete (`passed`); stopped before milestone completion
-Last completed phase: Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage (INSERTED) (8/8 plans; verification passed 4/4)
-Plans: 64/64 plans complete across all seven phases
-Status: All phases complete; milestone v0.1 stays `executing` until the owner completes it
-
-Phase 06.1 closed the v0.1 audit debt without widening any claim. Code PR #54 merged as `ab76d09` and docs-only verification-refresh PR #55 merged as `8a5266d`, both at exact green heads. Phases 1 to 6 read `passed` on committed main. The closeout ran on branch `gsd/phase-06.1-closeout`, cut from `8a5266d`; historical `gsd/phase-*` branches were not reused (GB-GSD-009).
-
-The gates ran in order:
-- **Nyquist:** 0 gaps; `06.1-VALIDATION.md` is `validated` and `nyquist_compliant: true`. Local results: 184/184 CTest with the installed inventory verified. The NR14 `0x87`→`0x07` mutation turns the C consumers red. Both self-tests pass: exact-head gate, 26 cases; player result, 14 cases. The 21 unittest cases pass and actionlint is clean.
-- **Security:** 32/32 threats closed (ASVS L1, register authored at plan time); `threats_open: 0`.
-- **UI review:** not applicable (no presentation or interaction change).
-- **Code review:** 0 critical, 0 warning, 3 info, all deferred with a reason and a revisit trigger. 06.1 IN-02 duplicates Phase 1 IN-03.
-- **Regression gate:** the configured phase1 test command passed 184/184.
-- **Verifier:** passed 4/4 ROADMAP criteria. Every v0.1 audit `tech_debt` line is now fixed, or re-deferred with a reason and a revisit trigger (`06.1-DEBT-DISPOSITION.md`).
-
-Recorded limitations:
-- The ROM `close()` failure branch is evidenced by inspection only.
-- Player CTest authority is the hosted `macos-player-package` job, because the local SDL3 differs.
-- The Windows lane is the `native-windows-x64` installed-consumer lane: MinGW-w64 GCC, static core. Archive-level Windows smoke is re-deferred (D-02). No MSVC, DLL, hardware or perceptual claim is made.
-
-PR #41 (release 0.1.1) remains OPEN and untouched at `93565ae`. No release or tag was made.
-
-Branch rule: never reuse or push to the stale same-named `gsd/phase-NN-<slug>` branches on `origin` (GB-GSD-009).
-
-v0.1 milestone re-audit (2026-10-10, at `f6ae449`): `passed`. Requirements 35/35, phases 7/7, integration 12/12, flows 5/5, Nyquist 7/7. The accepted backlog is info-level or scope limits, each with a recorded disposition; see [v0.1-MILESTONE-AUDIT.md](v0.1-MILESTONE-AUDIT.md). The audit corrected `06.1-VALIDATION.md` `nyquist_compliant` to `true` to match its sign-off.
-
-**Next command:** `$gsd-complete-milestone v0.1` (the owner completes the milestone). Keep the milestone `executing` and both auto-advance flags false; nothing advances automatically.
+Phase: Milestone v0.1 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-10-10 — Milestone v0.1 completed and archived
 
 ## Performance Metrics
 
@@ -228,7 +205,7 @@ None outside the roadmap.
 - Main branch protection now enforces the three strict required CI contexts for administrators. Follow-up readback showed no required approving-review gate. PR #34 predates admin enforcement and had no recorded approval; its exact required CI contexts were green when merged.
 - Phase 1's refreshed validation report is `validated` and Nyquist-compliant, with 179/179 local CTest. Phase 3 Nyquist validation is `validated`, and its UAT is complete at 34/34.
 
-- Phase 2's refreshed canonical verifier passed all five requirements and roadmap truths. The current full local CTest run passed 179/179, the focused Phase 2 selection passed 88/88, all three admitted headless runner cases passed, and the protocol probe recorded zero PPU accesses. No physical DMG-CPU-B observation or broad compatibility claim is made. See [Phase 2 verification](phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md).
+- Phase 2's refreshed canonical verifier passed all five requirements and roadmap truths. The current full local CTest run passed 179/179, the focused Phase 2 selection passed 88/88, all three admitted headless runner cases passed, and the protocol probe recorded zero PPU accesses. No physical DMG-CPU-B observation or broad compatibility claim is made. See [Phase 2 verification](milestones/v0.1-phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md).
 - The admitted corpus is three derived headless reporting closures (one CPU, two timer). Original Mooneye reporting paths depend on PPU/LY behavior outside scope and remain excluded. No physical DMG-CPU-B observation occurred; no hardware qualification is claimed.
 - Phase 1 PR #1 and Phase 2 PR #2 were merged on 2026-10-07 after their required exact-head checks passed. The 2026-10-07 triage found no open PRs or issues at that time. Phase 2 verification is limited to its documented DMG-CPU-B CPU/timer scope; no physical DMG observation or PPU qualification is claimed.
 - Phase 6 has no open goal, requirement, review, or high/blocking security finding. The release workflow's original post-publication readback failure was repaired before closeout; the live release API and a fresh download reconcile the published 18-asset inventory.
@@ -238,8 +215,6 @@ None outside the roadmap.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
-| 261006-r6w | Fix the bus_unsupported_stack fixture so RET NC tests its intended condition under checksum-selected DMG startup flags; validate the offline test inventory. | 2026-10-06 | 3231d21 | [261006-r6w-fix-the-bus-unsupported-stack-fixture-so](./quick/261006-r6w-fix-the-bus-unsupported-stack-fixture-so/) |
-| 261010-bz3 | Reconcile Phase 2 SUMMARY requirements-completed metadata for CPU-02 and CPU-05 against 02-VERIFICATION.md | 2026-10-10 | 4b13d6a | [261010-bz3-reconcile-phase-2-summary-requirements-c](./quick/261010-bz3-reconcile-phase-2-summary-requirements-c/) |
 
 ### Roadmap Evolution
 
@@ -247,15 +222,17 @@ None outside the roadmap.
 
 ## Deferred Items
 
-Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIREMENTS.md#next-milestone-requirements--gbgbc-breadth) and [FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md); none are counted in active coverage.
+Future requirements and acceptance direction remain in the [archived v0.1 requirements](milestones/v0.1-REQUIREMENTS.md#next-milestone-requirements--gbgbc-breadth) and [FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md); none are counted in active coverage.
 
 ## Session Continuity
 
 Last session: 2026-10-10T16:48:58Z
-Stopped at: v0.1 milestone re-audit passed; docs-only audit PR on `gsd/v0.1-milestone-reaudit`
+Stopped at: v0.1 milestone completed and archived on `chore/v0.1-complete-milestone`
 Resume file: None
-Next command in fresh context: `$gsd-complete-milestone v0.1`
+Next command in fresh context: `/gsd-new-milestone`
 Continuation note: [.continue-here.md](.continue-here.md)
+Completed workflow stage: **v0.1 milestone completion** (2026-10-10) — `verified_closeout`: 7/7 phases passed, 35/35 requirements, audit `passed`, 0 open artifacts (the Phase 5 `-Wunsequenced` item was confirmed fixed and marked resolved). ROADMAP, REQUIREMENTS, audit, phase directories and quick tasks are archived under [milestones/](milestones/); `REQUIREMENTS.md` was removed for the next milestone; tag `v0.1` marks the close. Next stage: **new milestone definition** (GB/GBC breadth direction) via `/gsd-new-milestone`. No phase is active; nothing advances automatically.
+
 Completed workflow stage: **v0.1 milestone re-audit** (2026-10-10) — `passed`, 35/35 requirements, 7/7 phases, 12/12 integration, 5/5 flows, 0 blockers. Next step: the owner completes the milestone with `$gsd-complete-milestone v0.1`. No auto-advance.
 
 Completed workflow stage: **Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage, execution and verification** (2026-10-10). Verification passed 4/4; Nyquist, security (32/32 closed), UI (not applicable), code review (3 info deferred), regression (184/184) gates run; all seven phases read passed. Next step: the owner re-runs the milestone audit with `$gsd-audit-milestone v0.1`. No auto-advance.
@@ -267,3 +244,7 @@ Completed workflow stage: **v0.1 milestone audit** (2026-10-10) — `tech_debt`,
 Completed workflow stage: **Phase 06.1 context gathering** (2026-10-10) on branch `gsd/phase-06.1-address-v0-1-tech-debt-ci-workflow-info-items-and-audio-cons` (11 locked decisions in `06.1-CONTEXT.md`: fix all 7 info items, C/C++ installed-consumer audio smoke on Windows/Linux/macOS, newest-run exact-head gate script, code PR then docs-only refresh PR). Next: **`$gsd-plan-phase 06.1`** (research first); after Phase 06.1 verifies, re-run `$gsd-audit-milestone v0.1` and then `$gsd-complete-milestone v0.1`.
 
 Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/phase-06.1-address-v0-1-tech-debt-ci-workflow-info-items-and-audio-cons`. Research, pattern map, validation strategy and 8 plans in 6 waves (wave 1: plans 01–03 in parallel; then 04 PR 1 batched workflow commit + exact-head merge; 05–07 verification refreshes of Phases 1–6; 08 disposition, docs-only PR 2, freshness confirmation). Plan checker: 3 iterations plus one narrow guidance pass, 0 blockers remaining; decision coverage 11/11. Research corrections: Windows lane is MinGW-w64 (no MSVC claim); P2 IN-01 gets a single `player-gate` definition with a `check-player-result.sh` self-test. Next: **Phase 06.1 execution** — `$gsd-execute-phase 06.1`. Phase 06.1 is not executed; nothing advances automatically.
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
