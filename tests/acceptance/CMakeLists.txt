@@ -17,3 +17,8 @@ foreach(case acceptance_parse_script_bounds acceptance_parse_script_errors)
   add_test(NAME ${case} COMMAND test_acceptance_lib ${case})
   set_tests_properties(${case} PROPERTIES TIMEOUT 30)
 endforeach()
+
+add_test(NAME acceptance_predicate_truth_table COMMAND test_acceptance_lib acceptance_predicate_truth_table)
+add_test(NAME acceptance_predicate_anchors
+  COMMAND test_acceptance_lib acceptance_predicate_anchors ${GBB_ACCEPT_LIBBET_ROM})
+set_tests_properties(acceptance_predicate_truth_table acceptance_predicate_anchors PROPERTIES TIMEOUT 30)

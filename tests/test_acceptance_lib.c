@@ -278,6 +278,145 @@ static int case_parse_errors(void) {
     PASS("acceptance_parse_script_errors");
 }
 
+/* ---- Predicate cases ---- */
+
+static uint8_t synthetic_peek(void *context, uint16_t address) {
+    return ((const uint8_t *)context)[address];
+}
+
+/* Addresses are written literally (D-08), not read from the table under test. */
+static void set_play_hit(uint8_t *ram) {
+    memset(ram, 0, 0x10000u);
+    ram[0xC5A3] = 0x00; /* hw_capability: DMG */
+    ram[0xC580] = 0x00; /* attract_mode */
+    ram[0xC57F] = 0x00; /* cur_floor */
+    ram[0xC4E8] = 2;    /* floor_width */
+    ram[0xC4E9] = 2;    /* floor_height */
+    ram[0xC4EC] = 4;    /* max_score */
+    ram[0xC4ED] = 4;    /* cur_score */
+}
+
+static const gbb_accept_predicate *libbet_predicate(void) {
+    return gbb_accept_predicate_find("libbet-tutorial-cleared",
+                                     "3607412031c8287cf878299ce96e581e85b852dde703806343b95576fa3ff1a9");
+}
+
+static int case_predicate_truth_table(void) {
+    const gbb_accept_predicate *p = libbet_predicate();
+    REQUIRE(p != NULL);
+    uint8_t *ram = malloc(0x10000u);
+    REQUIRE(ram != NULL);
+
+    set_play_hit(ram);
+    REQUIRE(gbb_accept_predicate_eval(p, synthetic_peek, ram, 0)); /* play hit */
+
+    /* Title garbage: pseudo-random WRAM must not satisfy the predicate. */
+    uint32_t x = 12345u;
+    for (unsigned round = 0; round < 64; round++) {
+        for (unsigned a = 0xC000u; a < 0xE000u; a++) {
+            x = x * 1664525u + 1013904223u;
+            ram[a] = (uint8_t)(x >> 24);
+        }
+        ram[0xC4E8] = 3; /* keep garbage from landing on the 2x2 floor by chance */
+        REQUIRE(!gbb_accept_predicate_eval(p, synthetic_peek, ram, 0));
+    }
+
+    set_play_hit(ram);
+    ram[0xC580] = 0x04; ram[0xC4EC] = 4; ram[0xC4ED] = 4; /* attract mode, demo scored 4/4 */
+    REQUIRE(!gbb_accept_predicate_eval(p, synthetic_peek, ram, 0));
+
+    set_play_hit(ram);
+    ram[0xC4ED] = 1; /* play not yet scored: 1/4 */
+    REQUIRE(!gbb_accept_predicate_eval(p, synthetic_peek, ram, 0));
+
+    set_play_hit(ram);
+    ram[0xC5A3] = 0x80; /* hardware says CGB-capable but the case expects DMG */
+    REQUIRE(!gbb_accept_predicate_eval(p, synthetic_peek, ram, 0));
+    REQUIRE(gbb_accept_predicate_eval(p, synthetic_peek, ram, 0x80)); /* per-profile expectation */
+
+    set_play_hit(ram);
+    ram[0xC4EC] = 1; ram[0xC4ED] = 1; /* max_score below 2 */
+    REQUIRE(!gbb_accept_predicate_eval(p, synthetic_peek, ram, 0));
+
+    set_play_hit(ram);
+    ram[0xC57F] = 1; /* cur_floor != 0 */
+    REQUIRE(!gbb_accept_predicate_eval(p, synthetic_peek, ram, 0));
+    set_play_hit(ram);
+    ram[0xC4E8] = 3;
+    REQUIRE(!gbb_accept_predicate_eval(p, synthetic_peek, ram, 0));
+    set_play_hit(ram);
+    ram[0xC4E9] = 1;
+    REQUIRE(!gbb_accept_predicate_eval(p, synthetic_peek, ram, 0));
+    set_play_hit(ram);
+    ram[0xC4ED] = 5; /* cur_score above max_score */
+    REQUIRE(!gbb_accept_predicate_eval(p, synthetic_peek, ram, 0));
+    free(ram);
+
+    /* Consecutive rule through the same tracker the driver uses. */
+    gbb_accept_track tr;
+    gbb_accept_track_init(&tr);
+    REQUIRE(!gbb_accept_predicate_track(&tr, 100, true));
+    REQUIRE(!gbb_accept_predicate_track(&tr, 200, false)); /* single true then false */
+    REQUIRE(!tr.hit);
+    REQUIRE(!gbb_accept_predicate_track(&tr, 300, true));
+    REQUIRE(gbb_accept_predicate_track(&tr, 400, true));   /* two consecutive */
+    REQUIRE(tr.hit && tr.t_hit == 300);                    /* first of the two */
+    REQUIRE(gbb_accept_predicate_track(&tr, 500, false));  /* sticky */
+    REQUIRE(tr.t_hit == 300);
+
+    /* find() is bound to the name and the pinned digest. */
+    REQUIRE(gbb_accept_predicate_find("no-such-predicate",
+                "3607412031c8287cf878299ce96e581e85b852dde703806343b95576fa3ff1a9") == NULL);
+    REQUIRE(gbb_accept_predicate_find("libbet-tutorial-cleared",
+                "3607412031c8287cf878299ce96e581e85b852dde703806343b95576fa3ff1a8") == NULL);
+    REQUIRE(gbb_accept_predicate_find("libbet-tutorial-cleared", "") == NULL);
+    REQUIRE(gbb_accept_predicate_find(NULL, NULL) == NULL);
+    PASS("acceptance_predicate_truth_table");
+}
+
+static int case_predicate_anchors(const char *rom_path) {
+    size_t length = 0;
+    uint8_t *rom = read_file(rom_path, 32768u, &length);
+    REQUIRE(rom != NULL && length == 32768u);
+    char digest[65];
+    gbb_accept_sha256_hex(rom, length, digest);
+    REQUIRE(strcmp(digest, "3607412031c8287cf878299ce96e581e85b852dde703806343b95576fa3ff1a9") == 0);
+    const gbb_accept_predicate *p = gbb_accept_predicate_find("libbet-tutorial-cleared", digest);
+    REQUIRE(p != NULL);
+    REQUIRE(gbb_accept_predicate_anchors_ok(p, rom, length)); /* digest, then all five anchors */
+
+    unsigned anchored = 0;
+    for (size_t i = 0; i < GBB_ACCEPT_ROLE_COUNT; i++) anchored += p->rows[i].anchor_length != 0;
+    REQUIRE(anchored == 5);
+
+    /* Flipping any anchor byte: rejected by the anchor check itself, and by
+     * the digest-first entry point. */
+    for (size_t i = 0; i < GBB_ACCEPT_ROLE_COUNT; i++) {
+        const gbb_accept_predicate_row *row = &p->rows[i];
+        if (row->anchor_length == 0) continue;
+        size_t at = row->anchor_offset + row->anchor_length / 2u;
+        rom[at] ^= 1u;
+        REQUIRE(!gbb_accept_predicate_anchors_match(p, rom, length));
+        REQUIRE(!gbb_accept_predicate_anchors_ok(p, rom, length));
+        rom[at] ^= 1u;
+        REQUIRE(gbb_accept_predicate_anchors_match(p, rom, length));
+    }
+
+    /* A changed digest is rejected before any anchor is read: with every
+     * anchor intact, a change elsewhere still fails the digest-first check. */
+    rom[0x7000] ^= 1u;
+    REQUIRE(gbb_accept_predicate_anchors_match(p, rom, length));
+    REQUIRE(!gbb_accept_predicate_anchors_ok(p, rom, length));
+    rom[0x7000] ^= 1u;
+    REQUIRE(gbb_accept_predicate_anchors_ok(p, rom, length));
+
+    /* A truncated image cannot reach an anchor out of bounds. */
+    REQUIRE(!gbb_accept_predicate_anchors_match(p, rom, 0x15A6u + 16u));
+    REQUIRE(!gbb_accept_predicate_anchors_match(p, NULL, 0));
+    free(rom);
+    PASS("acceptance_predicate_anchors");
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) { fprintf(stderr, "usage: test_acceptance_lib <case> [args]\n"); return 2; }
     if (strcmp(argv[1], "acceptance_lib_libbet_replay") == 0) {
@@ -286,6 +425,11 @@ int main(int argc, char **argv) {
     }
     if (strcmp(argv[1], "acceptance_parse_script_bounds") == 0) return case_parse_bounds();
     if (strcmp(argv[1], "acceptance_parse_script_errors") == 0) return case_parse_errors();
+    if (strcmp(argv[1], "acceptance_predicate_truth_table") == 0) return case_predicate_truth_table();
+    if (strcmp(argv[1], "acceptance_predicate_anchors") == 0) {
+        REQUIRE(argc == 3);
+        return case_predicate_anchors(argv[2]);
+    }
     fprintf(stderr, "unknown case %s\n", argv[1]);
     return 2;
 }
