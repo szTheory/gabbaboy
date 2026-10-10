@@ -224,3 +224,6 @@ acceptance_unknown_model
 acceptance_observe_only_flag
 acceptance_suite_invalid_expect_excluded
 acceptance_ldbb_observe_daa
+acceptance_ldbb_mismatch_ppm
+acceptance_ldbb_not_ready
+acceptance_ldbb_mooneye_observe

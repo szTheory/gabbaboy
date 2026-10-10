@@ -189,3 +189,29 @@ endif()
 gbb_add_acceptance_exit(acceptance_ldbb_observe_daa 0
   "acceptance[.]daa-ldbb[.]checkpoint[.]ldbb[.]frame\t${gbb_hex64_re}\nacceptance[.]daa-ldbb[.]class\tregression" 30
   "--acceptance;${GBB_LDBB_CONTROLS};--case;daa-ldbb;--observe")
+
+# Image on failure only (EVID-01): a mismatching LD B,B frame writes <failure-dir>/<id>.ppm, a 15-byte
+# P6 header plus 160*144*3 pixel bytes. Each failure-writing test owns its directory.
+set(GBB_LDBB_FAIL_DIR ${PROJECT_BINARY_DIR}/acceptance-failures/acceptance_ldbb_mismatch_ppm)
+file(MAKE_DIRECTORY ${GBB_LDBB_FAIL_DIR})
+add_test(NAME acceptance_ldbb_mismatch_ppm
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:gabbaboy-runner>;--acceptance;${GBB_LDBB_CONTROLS};--case;daa-ldbb;--failure-dir;${GBB_LDBB_FAIL_DIR}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=reason=frame-mismatch class=regression observed=${gbb_hex64_re}"
+    -DGBB_EXPECT_FILE=${GBB_LDBB_FAIL_DIR}/daa-ldbb.ppm
+    -DGBB_EXPECT_FILE_SIZE=69135
+    -DGBB_EXPECT_FILE_FRESH=1
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(acceptance_ldbb_mismatch_ppm PROPERTIES TIMEOUT 30 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
+gbb_add_acceptance_exit(acceptance_ldbb_not_ready 1
+  "reason=frame-not-ready" 30
+  "--acceptance;${GBB_LDBB_CONTROLS};--case;tim00-ldbb")
+
+# Mooneye --observe shares gbb_runner_capture_ldbb; a breakpoint reached before the first completed
+# frame is the explicit token not-ready, an observation rather than an error (Open Question 1).
+gbb_add_acceptance_exit(acceptance_ldbb_mooneye_observe 0
+  "mooneye[.]daa[.]frame\t${gbb_hex64_re}.*mooneye[.]tim00-div-trigger[.]frame\tnot-ready.*mooneye[.]tim00[.]frame\tnot-ready" 60
+  "--manifest;fixtures/mooneye/manifest.json;--suite;--observe")

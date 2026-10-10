@@ -6,6 +6,9 @@
 #   GBB_EXPECT_REGEX  regular expression the combined stdout+stderr must match
 #   GBB_WORKDIR       optional working directory
 #   GBB_FORBID_REGEX  optional regular expression the combined output must NOT match
+#   GBB_EXPECT_FILE        optional path that must exist after the run
+#   GBB_EXPECT_FILE_SIZE   optional exact byte size of GBB_EXPECT_FILE
+#   GBB_EXPECT_FILE_FRESH  when set, GBB_EXPECT_FILE is removed before the run so a stale file cannot pass
 #
 # A different non-zero code is a failure, so a crash or a changed failure class is never mistaken
 # for the expected rejection. A result that is not a number (a signal or "Child aborted") never
@@ -22,6 +25,9 @@ endif()
 set(gbb_workdir_args "")
 if(DEFINED GBB_WORKDIR AND NOT "${GBB_WORKDIR}" STREQUAL "")
   set(gbb_workdir_args WORKING_DIRECTORY "${GBB_WORKDIR}")
+endif()
+if(DEFINED GBB_EXPECT_FILE AND NOT "${GBB_EXPECT_FILE}" STREQUAL "" AND GBB_EXPECT_FILE_FRESH)
+  file(REMOVE "${GBB_EXPECT_FILE}")
 endif()
 execute_process(COMMAND ${GBB_CMD} ${gbb_workdir_args}
   RESULT_VARIABLE gbb_result OUTPUT_VARIABLE gbb_output ERROR_VARIABLE gbb_error)
@@ -42,5 +48,16 @@ if(DEFINED GBB_FORBID_REGEX AND NOT "${GBB_FORBID_REGEX}" STREQUAL "")
     message(FATAL_ERROR
       "output matched the forbidden pattern '${GBB_FORBID_REGEX}'\n"
       "command: ${GBB_CMD}\noutput: ${gbb_combined}")
+  endif()
+endif()
+if(DEFINED GBB_EXPECT_FILE AND NOT "${GBB_EXPECT_FILE}" STREQUAL "")
+  if(NOT EXISTS "${GBB_EXPECT_FILE}")
+    message(FATAL_ERROR "expected file ${GBB_EXPECT_FILE} was not written\ncommand: ${GBB_CMD}\noutput: ${gbb_combined}")
+  endif()
+  if(DEFINED GBB_EXPECT_FILE_SIZE AND NOT "${GBB_EXPECT_FILE_SIZE}" STREQUAL "")
+    file(SIZE "${GBB_EXPECT_FILE}" gbb_file_size)
+    if(NOT gbb_file_size EQUAL GBB_EXPECT_FILE_SIZE)
+      message(FATAL_ERROR "${GBB_EXPECT_FILE} is ${gbb_file_size} bytes, expected ${GBB_EXPECT_FILE_SIZE}")
+    endif()
   endif()
 endif()
