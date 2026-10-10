@@ -1,6 +1,6 @@
 ---
 phase: GB-06-qualified-dmg-release-and-consumer-handoff
-verified: 2026-10-10T03:00:00Z
+verified: 2026-10-10T12:00:00Z
 status: passed
 score: 5/5 must-haves verified
 covered_files:
@@ -55,7 +55,7 @@ covered_files:
   - tests/test_battery_fuzz.c
   - tests/test_fuzz_core.c
   - tests/test_loader_fuzz.c
-covered_digest: "v3:sha256:9a859a2f4d7d37bd0390664afa6c09fed7a10ece743f94c5faba2f5f7fdf46c7"
+covered_digest: "v3:sha256:ec31ebd166721863008100737e1fabda2fd2aaee8afb8e944f844ab9fe014abf"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
@@ -69,33 +69,31 @@ re_verification:
 # Phase 6: Qualified DMG Release and Consumer Handoff Verification Report
 
 **Phase Goal:** As a project adopter, I want to download a qualified limited-DMG release, reproduce native integration, and assess its actual compatibility, safety, and performance evidence, so that I can judge whether it fits my project and what its limits are.
-**Verified:** 2026-10-10T03:00:00Z
+**Verified:** 2026-10-10T12:00:00Z
 **Status:** passed
-**Re-verification:** Yes — freshness refresh (no prior gaps). The prior report went stale because the shared verified-player output helper, its tests, `verify-phase3-player.sh`, and `tests/player/{CMakeLists.txt,expected-tests.txt}` changed in eb96902.
-
+**Re-verification:** Yes — freshness refresh at HEAD `70a44c4` (clean tree, branch `gsd/phase-06-verification-refresh`); no prior gaps. Covered inputs changed since the previous report: `.github/workflows/release.yml` (downloaded-player `GBB_VERIFIED_OUTPUT_DIR` now `$RUNNER_TEMP/release-player-downloaded`; job-level build/release-player-verified env dropped), `tests/scripts/verified_player_output_dir.py` and its tests (withdrawal failures reported without masking the publication error; 20 tests), and `tests/scripts/verify-release-candidate.sh` (static contract that every `GBB_VERIFIED_OUTPUT_DIR` in `release.yml` is rooted at runner temp, with mutation and positive self-checks).
 
 ## Refresh Evidence (this session vs historical)
 
-Current-session (orchestrator-run on a dirty working tree, macOS arm64; NOT clean-checkout or hosted-CI proof):
+Current-session, re-run by the verifier on the clean tree at `70a44c4` (macOS arm64). This is local evidence only; no hosted CI has run for this revision.
 
 | Check | Result |
 |---|---|
-| Full phase1 preset configure/build/ctest | 179/179 passed (orchestrator-reported) |
-| `bash tests/scripts/verify-phase3-player.sh` (SDL 3.4.18) | 51/51 player tests incl. `player_verified_output_directory`; extracted-byte smoke passed (orchestrator-reported). Local mode does not invoke `--publish`; publication is covered by the unit suite only, not the end-to-end smoke. |
-| `python3 -B -m unittest test_verified_player_output_dir` | 17/17 OK (re-run by verifier) |
-| `verify-release-gates.sh --self-test` | exit 0 (re-run by verifier) |
-| `verify-support-ledger.py --self-test` | exit 0 (re-run by verifier) |
-| `run-bounded-fuzz.sh --self-test` | exit 0; libfuzzer runtime unsupported here, deterministic regressions required (fallback not counted as a fuzz pass) (re-run by verifier) |
-| `measure-release-baseline.sh --self-test` | exit 0 (re-run by verifier; wrote ignored `build/release-measure/` output) |
-| `git diff --check` | exit 0 |
-| Wiring | `player_verified_output_directory` is registered in `tests/player/CMakeLists.txt` and listed in `tests/player/expected-tests.txt` (inventory 51) |
-| Review / security | `06-REVIEW.md` clean (deep, 3 files, 0 findings); `06-REVIEW-DISPOSITION.md` 0 open; `06-SECURITY.md` `threats_open: 0` |
+| `ctest --preset phase1` | 179/179 passed |
+| `bash tests/scripts/verify-phase3-player.sh` (SDL 3.4.18) | 51 player tests listed and run, extracted-byte smoke passed (package SHA-256 `2c9c2d96...be4fb`). Local mode does not invoke `--publish`; publication is covered by the unit suite only. |
+| `python3 -B -m unittest test_verified_player_output_dir` (from `tests/scripts`) | 20/20 OK |
+| `bash tests/scripts/verify-release-candidate.sh --self-test` | rc=0; PASS: built archive, relocated external C/C++ consumers, receipt identity, digest tamper, draft/proof negatives, runner-temp output-dir contract |
+| `verify-release-gates.sh --self-test`; `verify-support-ledger.py --self-test`; `run-bounded-fuzz.sh --self-test` | all exit 0 (fuzz libfuzzer fallback is not counted as a fuzz pass) |
+| `git diff --check`; `git status` | clean |
+| `release.yml` static check | Every `GBB_VERIFIED_OUTPUT_DIR` assignment (line 620) is `"$RUNNER_TEMP/release-player-downloaded"`; no checkout-relative `build/release-player-verified` remains |
+| Live release | `gh release view v0.1.0`: `isDraft=false`, 18 assets, target `e30d168f7fc61de8db0a3801e7b1736362912cb7` (matches `git rev-parse v0.1.0^{commit}`) |
+| Phase gates | `06-VALIDATION.md` refreshed (c55e65e); `06-SECURITY.md` 18/18 threats closed (164b037); code review clean with WR-01 fixed (daaaa18, 320fcc5, 70a44c4) |
 
-Historical (carried forward, NOT re-run this session): 18/18 published v0.1.0 asset reconciliation, clean-clone candidate verifier at e4edf315 including relocated C/C++ consumers, hosted exact-tag receipts, and the earlier recorded release-gate/support/performance/fuzz runs in `06-VALIDATION.md`. These concern the frozen v0.1.0 tag and unchanged release machinery; the refresh touched only the verification helper/tooling and player tests, so they remain valid, but they are not fresh evidence.
+Historical, carried forward and NOT re-run this session: per-asset ID/size/SHA-256 reconciliation of the 18 published assets, hosted exact-tag Linux x64/macOS arm64/Windows x64 receipts, and the recorded performance/support runs. They concern the frozen v0.1.0 tag and unchanged release machinery. This session only re-confirmed the count, draft state, and tag target.
 
-Out-of-scope dirty files: `src/player/session.c` (adds `O_NONBLOCK` to ROM open) and `tests/player/test_session.c` are uncommitted working-tree changes outside this phase's covered inputs; they are not credited or assessed here.
+Open items: PR #41 (release 0.1.1) remains open with no checks reported; it is future-version work and does not affect the v0.1.0 evidence. The previous report's mention of uncommitted `src/player/session.c` changes is obsolete: that change merged via PR #43 and belongs to Phases 4/5, outside this phase's covered inputs. The working tree is clean.
 
-Frozen-tag note: v0.1.0 is immutable and retains the disclosed historical `rm -rf "$FINAL_ARTIFACT_DIR"` path in its verification script. Current source replaces it with the helper (root rejection, unlink of only expected artifact names, rollback of partial publication). This is a tooling/source limitation of the frozen tag, not a gap in current source, and published player bytes are unchanged. Not hardware, perceptual, signed, or notarized evidence.
+Frozen-tag note: v0.1.0 is immutable and predates later script fixes. Its tag retains the disclosed `rm -rf "$FINAL_ARTIFACT_DIR"` path in `verify-phase3-player.sh`, a checkout-relative verified-output directory in `release.yml`, and the pre-withdrawal-reporting helper. Current source uses the helper (root rejection, unlink of only expected artifact names, rollback of partial publication, non-masking withdrawal errors) and runner-temp output. This is a tooling limitation of the frozen tag, not a gap in current source, and published player bytes are unchanged. Not hardware, perceptual, signed, or notarized evidence; no live Playstead Game Boy adapter is claimed.
 
 ## User Flow Coverage
 
@@ -103,7 +101,7 @@ User story validation: `valid=true` under the canonical user-story validator.
 
 | Step | Adopter action | Expected outcome | Evidence | Status |
 |---|---|---|---|---|
-| 1 | Download the published v0.1.0 package and evidence. | Published packages, notes, notices, and evidence match the qualified release identity. | Live release is `draft=false`, tag target `e30d168f7fc61de8db0a3801e7b1736362912cb7`. Fresh read-only download/hash reconciliation matched all 18 assets to current API asset IDs, sizes, and SHA-256 metadata. Release notes and notices are present. | ✓ VERIFIED |
+| 1 | Download the published v0.1.0 package and evidence. | Published packages, notes, notices, and evidence match the qualified release identity. | Live release is `draft=false`, tag target `e30d168f7fc61de8db0a3801e7b1736362912cb7`. Earlier read-only download/hash reconciliation (historical, not re-run this session) matched all 18 assets to current API asset IDs, sizes, and SHA-256 metadata. Release notes and notices are present. | ✓ VERIFIED |
 | 2 | Build and run the native consumer example. | C and C++ adopters can use the relocated installed package without private build-tree or SDL dependencies. | Clean-clone `bash tests/scripts/verify-release-candidate.sh --self-test` passed on current main `e4edf315909cb4d1068defe24e832b9f669d4be3`, including relocated C/C++ consumers and negative controls. Hosted exact-tag receipts cover Linux x64, macOS arm64, and Windows x64. | ✓ VERIFIED |
 | 3 | Inspect compatibility, safety, and performance evidence. | Scope, corpus, workload, uncertainty, and boundaries are clear enough to judge fit. | Versioned ledger and source-bound sidecar identify bootless DMG-CPU-B, ROM-only/standard MBC1, 3/3 eligible derived cases, exclusions, and no physical observation. Performance receipt records fixed workload, build/environment, ten samples per mode, warmups, trace-pair digest, memory/RSS, and uncertainty. Bounded fuzz and boundary regressions are in the fixed inventory. | ✓ VERIFIED |
 | 4 | Check player and trust limitations. | Scripted software behavior is not presented as perceptual, physical, signed, or notarized qualification. | Exact-tag macOS player smoke covers fixture load, input, frame/audio output, save, exit, and fresh-process reopen with scripted SDL backends. Published receipt says unsigned, not notarized, and not hardware-qualified; docs also state no live Playstead Game Boy adapter. | ✓ VERIFIED |
@@ -116,7 +114,7 @@ The five roadmap success criteria are the contract. Plan-level truths were merge
 |---|---|---|---|
 | 1 | Clean relocated packages build/run external C/C++ consumers across the claimed host/compiler matrix without private or SDL dependencies; adopters can follow current integration, ownership, time/input/output, save recovery, support, upgrade, troubleshooting, and Playstead-oriented example guidance. | ✓ VERIFIED | The current-main clean-clone candidate self-test built and ran relocated C and C++ consumers; exact-tag receipts and hosted package smokes cover all three named platform combinations. `examples/relocated-c/` and native-integration/release/save docs describe bounded half-dot work, timestamped input, caller-owned outputs, host battery ownership/recovery, and the GBA/mGBA-only Playstead boundary. No OS-floor or live GB integration claim is made. |
 | 2 | The packaged macOS player passes automated legal-fixture load/input/video/audio/save/exit/reopen smoke, with device/perceptual limits separately recorded. | ✓ VERIFIED | Exact-tag macOS downloaded-candidate receipt and scripted SDL smoke cover the lifecycle. The release guide and support ledger explicitly limit evidence to software behavior; no physical device or perceptual claim is made. |
-| 3 | Published bytes match source/version/digests, include notices and notes, make only verified trust claims, and use fail-closed release gates for current exact-head evidence and publication ordering. | ✓ VERIFIED | Current release API reports `draft=false` and tag source `e30d168f7fc61de8db0a3801e7b1736362912cb7`; a fresh read-only reconciliation matched all 18 downloaded assets to API IDs, sizes, and SHA-256. The source receipt, sidecar, manifest, notes, and notices are present. Stored exact-head evidence covers the release PR; PR #46's relevant current-main checks passed at its exact head and it was merged. Release-gate self-test passed. GitHub branch-rule access returned 403, so this report makes no new live branch-protection assertion. |
+| 3 | Published bytes match source/version/digests, include notices and notes, make only verified trust claims, and use fail-closed release gates for current exact-head evidence and publication ordering. | ✓ VERIFIED | Current release API reports `draft=false` and tag source `e30d168f7fc61de8db0a3801e7b1736362912cb7`; an earlier read-only reconciliation (historical) matched all 18 downloaded assets; this session re-confirmed 18 assets, not draft, and the tag target to API IDs, sizes, and SHA-256. The source receipt, sidecar, manifest, notes, and notices are present. Stored exact-head evidence covers the release PR; PR #46's relevant current-main checks passed at its exact head and it was merged. Release-gate self-test passed. GitHub branch-rule access returned 403, so this report makes no new live branch-protection assertion. |
 | 4 | Adopters can inspect a scoped support ledger plus reproducible speed, memory, trace, build, CI, and uncertainty evidence without mistaking subset results for broad compatibility. | ✓ VERIFIED | `docs/support/v0.1.0.md`, its source-bound sidecar, and the performance receipt disclose model, mapper/corpus scope, eligible denominator/exclusions, fixed workload, ten raw samples per mode, warmups, matching trace-pair digest, environment, memory/RSS, CI/build measurements, and uncertainty. No all-game compatibility claim or premature budget is made. |
 | 5 | Maintainers can reproduce bounded loader/battery/API fuzz and boundary regression results under applicable sanitizers, with minimized findings in fast coverage and longer exploration separately capped. | ✓ VERIFIED | Integrated CTest passed 179/179, including the four player output-directory safety regressions (4/4). Bounded-fuzz self-test passed; plans, CMake inventory, runner, and CI wire deterministic loader/battery/API cases and applicable sanitizer coverage. Runtime-unavailable fuzz fallback is explicitly not counted as a fuzz pass. |
 
@@ -141,7 +139,7 @@ PLAN `must_haves.artifacts` use inline path lists, so the installed artifact-que
 |---|---|---|---|---|
 | Relocated C/C++ example | Installed `GabbaBoy::core` | CMake prefix/public headers | ✓ WIRED | Candidate self-test and hosted package smokes configure/build/run external consumers after relocation. |
 | Release-Please outputs | Exact-tag candidate jobs | Same-workflow `release_created`, `tag_name`, `sha` | ✓ WIRED | Workflow inspection and exact-source candidate receipts connect tag/source identity to package jobs; self-test rejects incorrect identity and negative controls. |
-| Qualified draft assets | Published release | Downloaded-byte gate then one publish transition and readback | ✓ WIRED | Gate self-test passed; published API state is public and all 18 fresh downloads match the API inventory. |
+| Qualified draft assets | Published release | Downloaded-byte gate then one publish transition and readback | ✓ WIRED | Gate self-test passed; published API state is public and all 18 downloads matched the API inventory in the earlier reconciliation; count and state re-confirmed this session. |
 | Tagged ledger/manifests | Support sidecar | Tag blob/source SHA verifier | ✓ WIRED | Published sidecar binds source and ledger digest; ledger self-test passed. |
 | Measurement workload | Performance receipt | Trace-on/off digest comparison and release identity | ✓ WIRED | Source-bound receipt includes equal output digest and samples; performance self-test passed. |
 | Public loader/battery/API | Deterministic tests and fuzz harnesses | CTest inventory, ASan/UBSan CI, bounded fuzz runner | ✓ WIRED | Fixed inventory passed 179/179; fuzz self-test passed; sanitizer and caps are present in CI/runner. |
@@ -160,10 +158,10 @@ PLAN `must_haves.artifacts` use inline path lists, so the installed artifact-que
 
 | Behavior | Command/evidence | Result | Status |
 |---|---|---|---|
-| Integrated CTest and boundary regressions | `ctest --preset phase1` (orchestrator) | 179/179 pass; helper unittest suite now 17/17 (re-run) | ✓ PASS |
-| Clean-clone candidate, relocated consumers, and negative controls | `bash tests/scripts/verify-release-candidate.sh --self-test` | Passed at clean clone current main `e4edf315909cb4d1068defe24e832b9f669d4be3`, including C/C++ relocation. Dirty-worktree run was refused by the clean-tree precondition and is not counted. | ✓ PASS |
-| Release gate, support ledger, performance receipt, bounded-fuzz self-tests | `verify-release-gates.sh --self-test`; `verify-support-ledger.py --self-test`; `measure-release-baseline.sh --self-test`; `run-bounded-fuzz.sh --self-test` | All passed per refreshed validation evidence | ✓ PASS |
-| Published bytes | Fresh read-only download plus current release API inventory comparison | 18/18 assets match IDs, sizes, and SHA-256 | ✓ PASS |
+| Integrated CTest and boundary regressions | `ctest --preset phase1` (orchestrator) | 179/179 pass; helper unittest suite 20/20 (both re-run this session) | ✓ PASS |
+| Clean-clone candidate, relocated consumers, and negative controls | `bash tests/scripts/verify-release-candidate.sh --self-test` | rc=0 on the clean tree at `70a44c4` this session (relocated C/C++ consumers, negative controls, runner-temp output contract); earlier clean-clone pass at main `e4edf315` is historical. | ✓ PASS |
+| Release gate, support ledger, performance receipt, bounded-fuzz self-tests | `verify-release-gates.sh --self-test`; `verify-support-ledger.py --self-test`; `measure-release-baseline.sh --self-test`; `run-bounded-fuzz.sh --self-test` | All exit 0, re-run this session (measurement self-test not re-run; carried from validation) | ✓ PASS |
+| Published bytes | `gh release view v0.1.0` inventory (count, draft, target); per-asset hashes from earlier reconciliation | 18 assets, not draft, target e30d168; byte reconciliation historical | ✓ PASS |
 | Diff whitespace check | `git diff --check` | Passed | ✓ PASS |
 
 ## Probe Execution
@@ -205,6 +203,6 @@ No must-have gaps remain. The published limited-DMG package and its evidence are
 
 ---
 
-_Verified: 2026-10-10T03:00:00Z_
+_Verified: 2026-10-10T12:00:00Z_
 
 _Verifier: the agent (gsd-verifier)_
