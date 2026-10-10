@@ -5,6 +5,7 @@
 #   GBB_EXPECT_CODE   decimal exit code the program must return
 #   GBB_EXPECT_REGEX  regular expression the combined stdout+stderr must match
 #   GBB_WORKDIR       optional working directory
+#   GBB_FORBID_REGEX  optional regular expression the combined output must NOT match
 #
 # A different non-zero code is a failure, so a crash or a changed failure class is never mistaken
 # for the expected rejection. A result that is not a number (a signal or "Child aborted") never
@@ -35,4 +36,11 @@ if(NOT gbb_combined MATCHES "${GBB_EXPECT_REGEX}")
   message(FATAL_ERROR
     "exit code ${GBB_EXPECT_CODE} was right but the output did not match '${GBB_EXPECT_REGEX}'\n"
     "command: ${GBB_CMD}\noutput: ${gbb_combined}")
+endif()
+if(DEFINED GBB_FORBID_REGEX AND NOT "${GBB_FORBID_REGEX}" STREQUAL "")
+  if(gbb_combined MATCHES "${GBB_FORBID_REGEX}")
+    message(FATAL_ERROR
+      "output matched the forbidden pattern '${GBB_FORBID_REGEX}'\n"
+      "command: ${GBB_CMD}\noutput: ${gbb_combined}")
+  endif()
 endif()
