@@ -1,69 +1,47 @@
 ---
 phase: GB-06-qualified-dmg-release-and-consumer-handoff
-reviewed: 2026-10-09T02:17:29Z
-depth: standard
-files_reviewed: 30
+reviewed: 2026-10-10T02:30:00Z
+depth: deep
+files_reviewed: 3
 files_reviewed_list:
-  - .github/workflows/ci.yml
-  - .github/workflows/release-please.yml
-  - .github/workflows/release.yml
-  - .release-please-manifest.json
-  - CHANGELOG.md
-  - CMakeLists.txt
-  - README.md
-  - THIRD_PARTY_NOTICES.md
-  - cmake/PreviewPackageSmoke.cmake
-  - cmake/VerifyReleaseReceipt.cmake
-  - docs/cartridge-and-saves.md
-  - docs/native-integration.md
-  - docs/preview.md
-  - docs/release.md
-  - docs/support/v0.1.0.md
-  - examples/relocated-c/CMakeLists.txt
-  - examples/relocated-c/main.c
-  - release-please-config.json
-  - tests/CMakeLists.txt
-  - tests/expected-tests.txt
-  - tests/fuzz_core.c
-  - tests/measure_core.c
-  - tests/scripts/measure-release-baseline.sh
-  - tests/scripts/run-bounded-fuzz.sh
   - tests/scripts/verify-phase3-player.sh
-  - tests/scripts/verify-release-candidate.sh
-  - tests/scripts/verify-support-ledger.py
-  - tests/test_battery_fuzz.c
-  - tests/test_fuzz_core.c
-  - tests/test_loader_fuzz.c
+  - tests/scripts/verified_player_output_dir.py
+  - tests/scripts/test_verified_player_output_dir.py
 findings:
   critical: 0
-  warning: 1
+  warning: 0
   info: 0
-  total: 1
-status: issues_found
+  total: 0
+status: clean
 ---
 
 # Phase GB-06: Code Review Report
 
-**Reviewed:** 2026-10-09T02:17:29Z
-**Depth:** standard
-**Files Reviewed:** 30
-**Status:** issues_found
+**Reviewed:** 2026-10-10T02:30:00Z
+**Depth:** deep
+**Files Reviewed:** 3
+**Status:** clean
 
 ## Summary
 
-Reviewed the exact Phase 6 file list at standard depth, including release automation, package and receipt validation, native consumer code, fuzz and measurement harnesses, and user facing release documentation. One release-note defect was found: the published changelog's comparison URL compares the release tag to itself, so it cannot show the changes in this release.
+The previous WR-01 and WR-02 and the info item are resolved. I traced these paths and found no defect:
 
-## Narrative Findings (AI reviewer)
+- `_publish_new_artifact` records `published_info` only after the `samestat` check. Any later failure (temp unlink, directory fsync, interrupt) withdraws its own name, and the temp-file cleanup ignores any `OSError`, so the original exception propagates.
+- The mismatch branch raises without unlinking a name that is not ours.
+- A failed receipt publish withdraws the receipt itself, and the caller's reverse-order loop then withdraws the archive. The final directory re-check failure withdraws both.
+- Every descriptor path closes exactly once with no leaks or double closes: the candidate and output descriptors in both `try` blocks, `source_descriptor`, `temporary_fd` via `fdopen`, and the dup'd copy descriptor.
+- The earlier fixes still hold: descriptor-pinned cleanup and publication, descriptor-relative candidate reads with a digest check, and the shell caller's `--publish` argument order and failure handling.
+- The focused suite passes 17/17.
 
-### WR-01: Changelog comparison link has an empty range
+Two residual items are not reported as defects:
 
-**Classification:** WARNING
-**File:** `CHANGELOG.md:3`
-**Issue:** The release heading links to `compare/v0.1.0...v0.1.0`. Both ends resolve to the same tag, so GitHub's comparison contains no changes and does not let consumers inspect the release's commit range. This is the initial release, so the generated link needs an actual earlier base (or a commit-history link that does not compare the tag to itself).
-**Fix:** Configure the initial release notes to use the repository's actual pre-release base revision/tag, or replace this URL with a link to the tagged commit/history. Ensure the generated changelog heading uses a non-empty range.
+- The stat-then-unlink window in `_withdraw_artifact` is inherent to POSIX, since there is no unlink-by-inode. The docstring now states it accurately.
+- The rollback loop catches only `OSError`, so a `KeyboardInterrupt` during rollback can leave an artifact behind. I do not consider this a defect. It is the same outcome as a kill signal at that moment, which no in-process code can prevent. The failure case that matters, an I/O error during withdrawal, is handled per item without skipping the other artifact. Swallowing `KeyboardInterrupt` would be worse behavior.
+
+All reviewed files meet quality standards. No issues found.
 
 ---
 
-_Reviewed: 2026-10-09T02:17:29Z_
-_Reviewer: the agent (gsd-code-reviewer)_
-_Depth: standard_
+_Reviewed: 2026-10-10T02:30:00Z_
+_Reviewer: Claude (gsd-code-reviewer)_
+_Depth: deep_

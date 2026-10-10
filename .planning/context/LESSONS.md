@@ -33,6 +33,7 @@ Status: observed / reproduced / adopted / superseded
 | XFER-003 | Green orchestration is weaker than evidence tied to a source revision and packaged bytes | Assert mandatory gate execution, tested revision, install/consumer smoke, and artifact digest | Imported; implementation pending |
 | XFER-004 | Timing and save correctness require hidden in-flight state, not only visible registers | Exercise split-run equivalence and save/load continuation at intermediate device events | Proposed adaptation; implementation pending |
 | XFER-005 | Upstream automation behavior changes; copied CI folklore can be stale | Recheck official GitHub token/event rules during workflow implementation and verify target-repo behavior | Source-checked recommendation; repository verification pending |
+| XFER-006 | Subsystem suites and a synthetic display demo do not establish a supported game's end-to-end progress | Before future cartridge/CGB breadth claims, require one rights-clear ROM-only/MBC1 game to reach a defined playable state in the existing player; diagnose stalls with bounded traces and keep private inputs/traces local | Sanity-checked; adopted as a future planning gate, not a v0.1 completion claim |
 
 The implementation and planning lessons follow; retain their distinct evidence classes.
 
@@ -262,7 +263,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Applies when:** OpenGSD verification uses covered-file digests, or a single maintainer uses GitHub branch protection without a second human reviewer.
 - **Verification:** OpenGSD 1.16.0 reports Phases 1–4 stale and Phases 5–6 passed. Follow-up GitHub readback reports `required_pull_request_reviews: null`, `enforce_admins: true`, and the unchanged strict contexts `required-native`, `fixture-repro`, and `preview-package-smoke`.
 - **Source:** `.planning/v0.1-MILESTONE-AUDIT.md`, phase `VERIFICATION.md` reports, and PR #34 branch-protection/check evidence.
-- **Status:** Adopted; branch-rule update verified. Fresh Phase 1–4 verification remains pending.
+- **Status:** Superseded for freshness counts by GB-GSD-008; the branch-rule update remains verified, while the later 2026-10-09 audit found current Phase 1/3/5/6 gates stale and Phase 2/4 passing.
 
 ### GB-TEST-002 / 2026-10-09 / Make concurrent-instance tests distinguish state and bound hangs
 
@@ -281,3 +282,47 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** `player_smoke` passed under its CTest environment; all 50 player tests passed; the pinned SDL 3.4.18 package build and extracted-byte smoke passed with MBC1 continuation; the combined suite passed 229/229. Exact PR head `de966868057c1fb5b3bca5b4cdac50cadf3bae57` passed required-native, fixture-repro, and preview-package-smoke in runs 37942469774, 37942469816, and 37942469925.
 - **Source:** `tests/player/CMakeLists.txt`, `tests/scripts/verify-phase3-player.sh`, `src/player/main.c`, and existing lesson GB-TEST-001.
 - **Status:** Adopted and exact-revision hosted validation passed.
+
+### GB-GSD-008 / 2026-10-09 / Audit runtime freshness, summary parseability, and state source
+
+- **Cause and evidence:** Saved VERIFICATION.md frontmatter can continue to say `passed` after its covered-file digest changes. On the v0.1 audit, OpenGSD 1.16.0 accepted only Phases 2 and 4 and returned stale for Phases 1, 3, 5, and 6. The same audit found CPU-02/CPU-05 absent from all parseable `requirements-completed` summaries and `summary-extract` errors for `03-12-SUMMARY.md` and `04-02-SUMMARY.md`. `init.milestone-op` reported two completed phases although ROADMAP.md records six; `.planning/state.json` was modified owner scratch and intentionally preserved.
+- **Remedy:** At milestone audit, query `verification.status` for every phase, run `summary-extract` for every summary, and compute requirement status from the live gate plus valid summary metadata plus traceability. Treat `state.json`/ROADMAP disagreement as a signal to reconcile, not permission to overwrite owner scratch. Repair summary metadata only with a corresponding verification refresh when covered-file digests change.
+- **Applies when:** OpenGSD uses covered-file verification fingerprints and plan-summary metadata for milestone aggregation, especially in a checkout with preserved local planning edits.
+- **Verification:** The v0.1 audit recorded the exact six phase gates, all 35 requirement IDs, both summary parser errors, 6/6 wired flows, and the conflicting init/ROADMAP phase counts. The follow-up route refreshed Phase 1; the remaining route is `$gsd-execute-phase 3`, then Phases 5 and 6 one at a time, then re-audit.
+- **Source:** `.planning/v0.1-MILESTONE-AUDIT.md`, `.planning/REQUIREMENTS.md`, phase VERIFICATION.md and SUMMARY.md files, and OpenGSD 1.16.0 query results.
+- **Status:** Adopted as the milestone-audit procedure; Phases 3, 5, 6 and CPU-02/CPU-05 metadata reconciliation remain pending.
+
+### GB-GSD-009 / 2026-10-09 / Verify on the integrated tree, not a historical phase branch
+
+- **Cause and evidence:** OpenGSD's computed Phase 1 and Phase 3 branches already existed but were historical checkpoints: Phase 1's branch had no Phase 2 verification artifact and its core was 164 lines versus 2,305 lines in the current tree; Phase 3's branch had no Phase 4 verification artifact. Switching would verify older source and risk losing the current dirty Phase 4 work.
+- **Remedy:** Before reusing an existing phase branch for a freshness-only verification, confirm it contains the integrated source revision being audited. If it is historical, preserve the active worktree and run the read-only verifier there; do not force a checkout or carry unrelated dirty files onto the old branch.
+- **Applies when:** Re-running verification for a previously completed phase after later phases changed shared source files and local worktree edits must be preserved.
+- **Verification:** The Phase 1 verifier ran on the current integrated worktree, passed 21/21 truths and 29/29 focused CTest cases, and regenerated the canonical fingerprint. Both historical branches were left untouched; Phase 3 is the next refresh and carries the same branch guard.
+- **Source:** OpenGSD 1.16.0 `init.execute-phase`, `git cat-file`, current phase VERIFICATION.md files, and source tree comparisons.
+- **Status:** Adopted for Phase 1; apply the same revision check to the remaining stale phases.
+
+### GB-GAME-001 / 2026-10-10 / Require game-level progress before breadth claims
+
+- **Cause and evidence:** Glueyneo's selected guest ran through its bounded 256-chunk/32-million-instruction attempt without a guest-written attract/start predicate; subsystem tests and visible device activity did not prove game progress. GabbaBoy's original visible-demo fixture and Z-down/Z-up shade test prove the player input/render path, not compatibility with a representative supported game. These examples support an end-to-end acceptance gate, not any shared console behavior.
+- **Remedy:** Before the future GB/GBC breadth milestone claims broader playable support, select one rights-clear ROM-only or standard-MBC1 game and define a guest-observable start/progress condition plus meaningful input and visible/audio response in the existing player. Keep commercial/private ROMs and derived traces out of the repository unless redistribution rights are documented. If it stalls, use a bounded PC/opcode/bus/interrupt trace to identify the first unsupported or incorrect operation, add a small rights-clear regression for that behavior, and rerun the bounded game check; more runtime or peripheral activity is not a pass signal.
+- **Applies when:** A milestone expands cartridge or model support and intends to claim that users can play a supported game end to end.
+- **Does not establish:** That GabbaBoy currently boots a complete game, that the tile demo is gameplay evidence, or that any DMG timing/model assumption applies to Neo Geo.
+- **Suggested check:** Plan one lawful game-level acceptance target before broadening CGB/mapper claims; require its explicit guest progress signal and player-visible input/output, while preserving private content and evidence.
+- **Source:** Glueyneo: `.planning/workstreams/first-playable-game/phases/05-selected-mvs-boot/05-03-SUMMARY.md` and `.planning/preparation/2026-10-04-gsd-verification-loop.md`; GabbaBoy: `.planning/phases/GB-03-visible-interactive-dmg/03-VERIFICATION.md`, `.planning/phases/GB-03-visible-interactive-dmg/03-UAT.md`, `.planning/context/FUTURE-MILESTONES.md`, and `AGENTS.md`.
+- **Status:** Sanity-checked and adopted as a future milestone planning gate; no active phase or release claim changed.
+
+### GB-GSD-010 / 2026-10-10 / Tightening a shared helper's input contract requires a caller sweep
+
+- **Cause and evidence:** The verified-output helper changed from rejecting only the repository root to rejecting every repository descendant. `release.yml` still passed `build/release-player-downloaded`, so the next release's downloaded-player smoke would have failed at publication, after the expensive package checks. Neither the Phase 6 deep review of the helper nor local verification caught it, because local verifier mode never calls `--publish`. The Phase 3 refresh review found it by reading the workflow callers.
+- **Remedy:** When a helper's accepted inputs narrow, grep every caller (workflows, scripts, docs) for the affected parameter before review sign-off. Add a regression test that asserts each workflow assignment satisfies the contract (here, a runner-temp child path), so the mismatch fails locally rather than during a release.
+- **Applies when:** A safety check is tightened in a script that CI workflows invoke with caller-chosen paths or values.
+- **Verification:** `test_workflows_place_verified_output_outside_the_checkout` failed on the two `release.yml` values and passed after commit `91d11d4`. The helper suite passed 20/20, both release self-tests passed, and PR #47 hosted checks passed 23/23 at `56c4915`.
+- **Status:** Adopted.
+
+### GB-GSD-011 / 2026-10-10 / Verify merge results for conflict markers and stash-only evidence
+
+- **Cause and evidence:** Merging `origin/main` into the Phase 3 refresh branch left conflict markers in `.planning/.continue-here.md`, and no conflict was reported for that file. Separately, STATE.md said Phases 1 and 2–6 were fresh based on reports that existed only in an uncommitted worktree. The committed Phase 1 report was already stale at `c8b8426`.
+- **Remedy:** After any merge, run `git grep -nE '^(<<<<<<<|>>>>>>>) '` before committing. Before routing or claiming freshness, query `verification.status` on committed content, not a dirty overlay. Commit or explicitly stash refreshed reports at the end of each refresh so the next session's starting point is reproducible.
+- **Applies when:** Several verification refreshes run across sessions with preserved dirty worktrees, or a phase branch merges the default branch.
+- **Verification:** The marker was found and replaced in commit `56c4915`. A detached worktree at `c8b8426` confirmed Phase 1 was stale. The stash contents were reconciled file by file before restoration.
+- **Status:** Adopted.

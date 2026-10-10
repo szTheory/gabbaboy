@@ -100,3 +100,37 @@ Plan 03-09's two automated package tasks passed. Plan 03-13 adopts confidence-qu
 | Gaps found | 0 |
 | Resolved | 0 |
 | Escalated | 0 |
+
+## Verification Freshness Follow-up 2026-10-09
+
+- Hardened `verify-phase3-player.sh` so caller-selected verified-output directories are never recursively deleted. The stdlib helper rejects filesystem roots and every repository descendant, rejects candidate overlap and artifact-path directory collisions, removes only the two expected output files, and preserves unrelated files and symlink targets. Its default verified-output directory is under the runner/system temporary root rather than inside the checkout.
+- Added four focused regressions for unrelated-file preservation, safe artifact-symlink removal, unsafe root rejection, and directory-collision rejection. The test is registered as `player_verified_output_directory` in the optional player CTest inventory.
+- The refreshed optional player CTest suite passed 51/51. `bash -n tests/scripts/verify-phase3-player.sh`, the direct Python regression suite (4/4), `git diff --check`, and the full core CTest suite (179/179) passed. A package-verification run using a caller-selected output directory also preserved an unrelated sentinel file while producing the expected archive and receipt.
+- Package smoke still asserts rendered Z-down/Z-up shade changes and MBC1 continuation. It reuses the existing owner-observed packaged-window result in `03-UAT.md`; no additional manual UAT was performed. Physical CPU-B timing and PPU revision qualification remain unclaimed.
+
+## Nyquist Refresh 2026-10-09
+
+| Gap | Requirement behavior | Test | Result |
+|---|---|---|---|
+| GB03-OUTPUT-DIR-OVERLAP | Verified artifact output must not delete caller/candidate data when the selected output path overlaps the candidate directory. | `PYTHONDONTWRITEBYTECODE=1 python3 tests/scripts/test_verified_player_output_dir.py -v` | **RESOLVED.** The first audit reproduced deletion of a candidate-owned archive. `prepare_output_dir` now rejects resolved equality and either ancestor/descendant overlap before creating or cleaning paths, then rechecks after directory creation. The preservation regression passes; the focused helper suite passes 8/8. |
+
+The failing regression exposed a real destructive edge case and was retained as a passing preservation test after the implementation fix. Direct and symlink-resolved aliases, both nested-path directions, unrelated output files, expected-file symlinks, roots, and artifact-name directory collisions are covered. The full core CTest suite passes 179/179; the isolated macOS player/package lane passes 51/51 plus extracted-package input/render, audio recovery, and fresh-process MBC1 continuation checks. These results describe the dirty worktree contents copied into a disposable clone; they are not a clean-checkout or hosted-CI claim.
+
+## Validation Refresh After Overlap Fix — 2026-10-09
+
+- `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error`: 179/179 passed in the project worktree.
+- `PYTHONDONTWRITEBYTECODE=1 python3 tests/scripts/test_verified_player_output_dir.py -v`: 9/9 passed, including rejection of a repository `.git` descendant with both artifact-name sentinels preserved.
+- `bash tests/scripts/verify-phase3-player.sh --build-package`, run in a disposable clone with current worktree files copied over shared `HEAD` `bb8fd654d03969e3d207fcdc92c345cc60be3298`: optional player CTest passed 51/51; SDL 3.4.18 package and extracted-byte smoke passed; package SHA-256 `0016796835439b1fdba8fe15365137e85e8b6973cd28795966afa655a7f62fcc`; dummy-audio recovery, guest audio, MBC1 continuation, and rendered Z-down/Z-up shade transition passed. The clone used a dirty source overlay and is not represented as a clean checkout or hosted result.
+- `bash -n tests/scripts/verify-phase3-player.sh` and `git diff --check` passed. The existing build scratch was left intact.
+
+OpenGSD initially resolved this CMake-only repository's generic regression command to `true`. Set `workflow.test_command` to the full `phase1` CMake/CTest command above, then reran the canonical timed regression gate; it passed 179/179. Future phase regression gates now execute the actual core suite.
+
+## Validation Refresh After Publication-Rollback Fix — 2026-10-10
+
+The shared verified-player output helper now publishes the archive and receipt as one all-or-nothing set (`eb96902`). After a failure, it withdraws only the inodes it published and keeps concurrent replacements. Phase 3's mapped coverage is unchanged and remains green. It was run on committed branch `gsd/phase-03-verification-refresh` at `0403b71`: `eb96902` merged with `origin/main`, which includes the `#43` FIFO ROM-open hardening.
+
+- `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error`: 179/179 passed.
+- `PYTHONDONTWRITEBYTECODE=1 python3 tests/scripts/test_verified_player_output_dir.py`: 17/17 passed. The suite covers the original preservation and rejection cases plus the publication-rollback regressions.
+- `bash tests/scripts/verify-phase3-player.sh --build-package`: the optional player CTest passed 51/51, including `player_verified_output_directory`. SDL 3.4.18 package build and extracted-byte smoke passed (package SHA-256 `91ab1129eaadc37f9340a686c77584fffe7457cd26c04172e12d32ba0bb3eb18`, `source_revision=0403b7121e552f4be0cdddb638ca631acd07def3`). Dummy-audio recovery passed, as did guest audio (803 frames, 802 nonzero), fresh-process MBC1 continuation, and the rendered Z-down/Z-up shade transition. Local mode does not call `--publish`, so the publication path is covered by the unit suite only.
+
+No new gaps were found. No manual UAT was added. Physical CPU-B timing and PPU-revision qualification remain unclaimed.

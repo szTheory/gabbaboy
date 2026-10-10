@@ -11,33 +11,33 @@
     {
       "number": "2",
       "name": "DMG CPU, Bus, and Time",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "3",
       "name": "Visible Interactive DMG",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "4",
       "name": "MBC1 and Safe Battery Continuation",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "5",
       "name": "DMG Audio and Stable Playback",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "6",
       "name": "Qualified DMG Release and Consumer Handoff",
-      "status": "pending"
+      "status": "complete"
     }
   ],
   "next": {
-    "command": "$gsd-execute-phase 2",
-    "label": "Execute Phase 2 — DMG CPU, Bus, and Time",
-    "reason": "Planning complete: 9 plans in 9 waves; implementation not started"
+    "command": "$gsd-execute-phase 5",
+    "label": "Refresh Phase 5 \u2014 DMG Audio and Stable Playback verification",
+    "reason": "All plans complete; Phase 3 refreshed 2026-10-10. Phase 5 verification is stale after the shared verified-output helper changes; then refresh Phases 6 and 1, reconcile Phase 2 CPU-02/CPU-05 summary metadata, and run $gsd-audit-milestone v0.1"
   },
-  "updated_at": "2026-10-06T17:23:02.268Z"
+  "updated_at": "2026-10-09T23:13:48.832Z"
 }
