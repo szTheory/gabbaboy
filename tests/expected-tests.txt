@@ -206,3 +206,6 @@ acceptance_negative_unknown_key
 acceptance_negative_path_traversal
 acceptance_negative_altered_input
 acceptance_negative_oversize
+acceptance_parse_cases_bounds
+acceptance_parse_cases_errors
+acceptance_parse_paths

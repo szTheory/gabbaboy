@@ -61,3 +61,13 @@ gbb_add_negative(unknown_key tests/acceptance/negative/unknown-key.txt "invalid-
 gbb_add_negative(path_traversal tests/acceptance/negative/path-traversal.txt "invalid-cases: bad-path")
 gbb_add_negative(altered_input tests/acceptance/negative/altered-input.txt "reason=input-digest-mismatch")
 gbb_add_negative(oversize ${CMAKE_CURRENT_BINARY_DIR}/oversize-cases.txt "invalid-cases: file-too-large")
+
+# Case-file parser and path validator boundary matrix (D-21, D-28).
+add_executable(test_acceptance_cases ${CMAKE_CURRENT_LIST_DIR}/../test_acceptance_cases.c)
+target_link_libraries(test_acceptance_cases PRIVATE gabbaboy_runner_support)
+target_compile_features(test_acceptance_cases PRIVATE c_std_17)
+set_target_properties(test_acceptance_cases PROPERTIES C_EXTENSIONS OFF)
+foreach(case acceptance_parse_cases_bounds acceptance_parse_cases_errors acceptance_parse_paths)
+  add_test(NAME ${case} COMMAND test_acceptance_cases ${case})
+  set_tests_properties(${case} PROPERTIES TIMEOUT 30)
+endforeach()
