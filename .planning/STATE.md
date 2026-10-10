@@ -52,7 +52,7 @@ Branch rule: never reuse or push to the stale same-named `gsd/phase-NN-<slug>` b
 
 **Milestone audit (2026-10-10T13:03:27Z, at `f03e9b1`):** `tech_debt` — 35/35 requirements satisfied by three-source cross-reference, 6/6 phases passed and fresh, 12/12 integration groups and 5/5 E2E flows wired, Nyquist 6/6 compliant, 0 open threats, 0 open review dispositions. Live `main` branch protection was observed (required `required-native`, `fixture-repro`, `preview-package-smoke`; strict; admins enforced). Non-blocking debt: deferred info review items in Phases 1/2/3/5, no C++/Windows audio-PCM consumer coverage, and PR #41 bot-run approval. See [v0.1-MILESTONE-AUDIT.md](v0.1-MILESTONE-AUDIT.md).
 
-**Next command:** `$gsd-execute-phase 06.1` (execute Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage; 8 plans in 6 waves). The owner chose cleanup before `$gsd-complete-milestone v0.1`; keep the milestone `executing` and both auto-advance flags false.
+**Next command:** `$gsd-audit-milestone v0.1` (owner runs this after Phase 06.1 verification and the docs-only closeout PR, which the phase-close/verify step owns). Keep the milestone `executing` and both auto-advance flags false; nothing advances automatically.
 
 ## Performance Metrics
 
@@ -249,8 +249,10 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 Last session: 2026-10-10T16:23:10.768Z
 Stopped at: Completed 06.1-07-PLAN.md (Phases 5-6 refreshed passed; all six phases passed; on branch gsd/phase-06.1-verification-refresh)
 Resume file: None
-Next command in fresh context: `$gsd-execute-phase 06.1` (Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage)
+Next command in fresh context: `$gsd-audit-milestone v0.1` (after Phase 06.1 verification and its docs-only closeout PR)
 Continuation note: [.continue-here.md](.continue-here.md)
+Completed workflow stage: **Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage, execution (plans 01-08)** (2026-10-10). Code PR #54 and docs-only refresh PR 2 merged at exact green heads; all six phases read passed on main. Next step: **Phase 06.1 verification and docs-only closeout PR** (owned by the phase-close/verify step), then the owner re-runs the milestone audit with `$gsd-audit-milestone v0.1`. No auto-advance.
+
 Completed workflow stage: **Phase 2 — DMG CPU, Bus and Time verification freshness refresh** (2026-10-10). Canonical verification passed 5/5 truths and CPU-01–05 at `a9050df` on `gsd/phase-02-verification-refresh-2`. Gates: Nyquist 0 gaps, security 45/45 closed, code review 1 info deferred with 0 open dispositions, regression 179/179 core. No hosted-CI, physical-hardware or perceptual result is claimed.
 
 Completed workflow stage: **v0.1 milestone audit** (2026-10-10) — `tech_debt`, 35/35 requirements, 0 blockers.
