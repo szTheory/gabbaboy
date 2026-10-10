@@ -352,3 +352,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** Full CTest suite (200 tests) passes after the change; the scratch probe reports 0 saturated mixer samples on Libbet. The probe is not committed.
 - **Source:** [audio-and-playback](../../docs/audio-and-playback.md), D-027 in DECISIONS.md, Pan Docs Audio details (Mixer), mGBA `src/gb/audio.c` (read only).
 - **Status:** Adopted.
+
+### GB-GAME-002 / 2026-10-10 / Explain a game's input-timing oddity from its source before suspecting the joypad model
+
+- **Cause and evidence:** An earlier exploratory run reported that repeated Start taps started Libbet by f270 while single taps at f290-f440 did nothing, which looked like a JOYP defect. The pinned source (`pinobatch/libbet` commit `46a765a2c01701bffb8c0b7dd6e4be3a6b193090`) explains it: `intro.z80` ignores input for the 64-frame roll and a further 120 unskippable frames, then accepts Start/A during a 180-frame skippable window; `pads.z80` `read_pad` derives `new_keys` from successive polls; the title needs its own Start. A scratch probe over `libbet.gb` logged every write of a non-zero `new_keys` and the LCD/state frames: taps f100-f230 ignored, tap f240 skips the intro (title f277), tap f280 starts the game (f287); isolated single taps at f290/f350/f440 reached or sat at the title (f327/f387/f447), and f470 started the game (f478). Each tap produced exactly one `new_keys=$08` edge in the press frame, so the core's JOYP reporting matched what the guest code implies.
+- **Remedy:** No core change. Record the intro/title input windows in D-028 and keep D-13's Start at f500 (after the title is ready at about f447). Separate "the game ignored input" from "the emulator dropped input" by logging guest-side `new_keys` edges against frame numbers before touching the joypad path.
+- **Applies when:** An acceptance or replay script gives different outcomes for similar taps at different frames, or an early input appears to be ignored; also whenever a game reads input only inside timed windows.
+- **Verification:** Scratch probe (not committed) reproduced all three schedules deterministically; `cmake --build --preset phase1` plus the full CTest suite pass; `git diff --quiet src/core/gabbaboy.c`; the select-line anchor occurs once and matches main.
+- **Source:** D-028 in DECISIONS.md; Libbet `src/intro.z80`, `src/pads.z80`, `src/instructions.z80` at the pinned commit (read only).
+- **Status:** Adopted.
