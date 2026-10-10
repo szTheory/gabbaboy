@@ -25,14 +25,38 @@ set_tests_properties(acceptance_predicate_truth_table acceptance_predicate_ancho
 
 # Runner acceptance case (D-23, D-28): paths in cases.txt resolve against the working directory,
 # so every acceptance CTest runs from the repository root.
+string(REPEAT "[0-9a-f]" 64 gbb_hex64_re)
 add_test(NAME acceptance_libbet
   COMMAND ${CMAKE_COMMAND}
     "-DGBB_CMD=$<TARGET_FILE:gabbaboy-runner>;--acceptance;tests/acceptance/cases.txt;--case;libbet;--receipt"
     -DGBB_EXPECT_CODE=0
-    "-DGBB_EXPECT_REGEX=acceptance id=libbet status=pass"
+    "-DGBB_EXPECT_REGEX=acceptance id=libbet status=pass.*frame_hit=${gbb_hex64_re}.*pcm_sha256=${gbb_hex64_re}"
     -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(acceptance_libbet PROPERTIES TIMEOUT 300 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
+# --observe prints sorted key<TAB>value lines instead of pass/fail (D-23). CMake regexes have no
+# counted repetition, so the 64-digit digest pattern is built by repetition.
+add_test(NAME acceptance_libbet_observe
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:gabbaboy-runner>;--acceptance;tests/acceptance/cases.txt;--case;libbet;--observe"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=acceptance[.]libbet[.]pcm_sha256\t${gbb_hex64_re}"
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(acceptance_libbet_observe PROPERTIES TIMEOUT 300 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
+# A failure directory that is a regular file cannot be probe-written: exit 2 before any guest work.
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/failure-dir-is-a-file "not a directory\n")
+add_test(NAME acceptance_failure_dir_unwritable
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:gabbaboy-runner>;--acceptance;tests/acceptance/cases.txt;--case;libbet;--failure-dir;${CMAKE_CURRENT_BINARY_DIR}/failure-dir-is-a-file"
+    -DGBB_EXPECT_CODE=2
+    "-DGBB_EXPECT_REGEX=reason=failure-dir-unwritable"
+    "-DGBB_FORBID_REGEX=status=(pass|fail|unsupported)"
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(acceptance_failure_dir_unwritable PROPERTIES TIMEOUT 30 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 # Runner-level negative case files (D-28, T-07-34): each is rejected with exact exit 2 and its own
 # reason, and the output must carry no pass/fail/unsupported status line, which proves the case was
