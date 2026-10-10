@@ -65,6 +65,9 @@ These five low-severity dispositions were marked `accept` in the phase plans. Th
 | Audit Date | Threats Total | Closed | Open | Run By |
 |------------|---------------|--------|------|--------|
 | 2026-10-09 | 21 | 21 | 0 | gsd-security-auditor; orchestrator |
+| 2026-10-10 (freshness) | 21 | 21 | 0 | orchestrator (ASVS L1 short-circuit) |
+
+The 2026-10-10 freshness check re-read the workflow mitigations after GB-03 (#40) removed the `labeled` trigger and the `run-macos-player` label gate from `ci.yml` and `preview.yml`. Both workflows still trigger only on `pull_request`/`push` (no `pull_request_target`), keep read-only token permissions (`contents: read`, plus `actions: read` in preview), and pin every action to a full commit SHA, so the workflow-privilege threats remain closed. The change narrows the trigger surface and makes the player lane required rather than optional.
 
 ## Sign-Off
 
