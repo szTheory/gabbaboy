@@ -2,7 +2,18 @@
 
 ## What This Is
 
-GabbaBoy is a portable C17 emulator core for Nintendo Game Boy (DMG) and Game Boy Color (CGB), with an integration path for Playstead and other frontends. It now includes an optional SDL3 macOS preview that runs a project-authored interactive ROM-only demo through the bounded public API. The preview demonstrates a limited bootless DMG profile; broad game compatibility, full hardware qualification, CGB execution, audio, and battery continuation remain future work.
+GabbaBoy is a portable C17 emulator core for Nintendo Game Boy (DMG) and Game Boy Color (CGB), with an integration path for Playstead and other frontends. The shipped v0.1 preview runs a bootless DMG-CPU-B profile with declared ROM-only/MBC1 cartridges, timed video and input, scoped four-channel audio, and safe battery continuation, through the same bounded public API that external consumers use. An optional SDL3 macOS player ships with it. Broad game compatibility, physical hardware qualification, CGB execution, further mappers, RTC, and save states remain future work.
+
+## Current State
+
+- **Shipped:** v0.1 Limited DMG Preview (milestone closed 2026-10-10; release [`v0.1.0`](https://github.com/szTheory/gabbaboy/releases/tag/v0.1.0) published 2026-10-09). 7 phases, 64 plans, 35/35 requirements, audit `passed`.
+- **Code:** ~18k lines of C/C++ (about 7k in `src/` + `include/`); CMake/Ninja/CTest; 184 local CTest cases at the 06.1 regression run; required CI on Linux, macOS and Windows (MinGW-w64).
+- **Evidence scope:** admitted corpus is three source-qualified derived Mooneye CPU/timer closures plus original project ROMs. No physical hardware, perceptual output, signing/notarization, or live Playstead integration is claimed.
+- **Open:** Release-Please PR #41 (0.1.1) awaits maintainer approval; accepted info-level debt is listed in the [v0.1 audit](milestones/v0.1-MILESTONE-AUDIT.md).
+
+## Next Milestone Goals
+
+Committed direction is **GB/GBC breadth** ([FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md)), to be scoped by `/gsd-new-milestone`: a CGB profile with color/compatibility modes, speed switching, banking, palettes and HDMA (CGB-01..03); MBC2/3/5 (CART-01); deterministic MBC3 RTC (RTC-01); transactional versioned save states (STATE-01); and a qualified Playstead adapter (INT-01). Before broadening the claims, add one rights-clear game-level acceptance in the existing player. Split this into smaller releases if needed, but keep CGB ahead of optional enhancements.
 
 ## Core Value
 
@@ -16,16 +27,23 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 - ✓ Bounded opaque-instance API and original-ROM tracer with explicit fixture provenance and limited DMG-CPU-B claims — Phase 1.
 - ✓ Relocated C and C++ consumers, required CI inventory, and revision-qualified Linux/macOS preview packages — Phase 1.
 - ✓ Interactive optional SDL3 macOS DMG preview, original ROM-only demo, timed input/frame output, and explicit audio/persistence limits — Phase 3.
+- ✓ Timed SM83 CPU, interrupts, HALT/STOP, timer and serial on a deterministic event timeline, qualified against a pinned CPU/timer corpus (CPU-01..05) — v0.1.
+- ✓ Timed PPU, OAM DMA, VRAM/OAM restrictions and JOYP under the D-025 confidence-qualified model (VIDEO-01..05) — v0.1.
+- ✓ MBC1 banking, bounded battery import/export, atomic player saves, and fresh-process continuation (SAVE-01..04) — v0.1.
+- ✓ Scoped four-channel DMG APU, bounded 48 kHz PCM, paced SDL playback, and clean host input/device transitions (AUDIO-01..03, HOST-01..02) — v0.1.
+- ✓ Qualified exact-tag release, support ledger, performance baselines, fuzzing, adopter docs, and exercised CI/release automation (SHIP-01..08) — v0.1.
 
 ### Active
 
-- [ ] Deliver progressively useful DMG and CGB releases with clearly bounded hardware and cartridge support.
-- [ ] Provide a dependency-light C API with explicit memory ownership, timing, video, audio, input, persistence, errors, and lifecycle contracts.
-- [ ] Provide a thin macOS player early; keep the headless core usable independently.
-- [ ] Establish reproducible hardware tests, integration fixtures, sanitizer/fuzz checks, and performance baselines.
-- [ ] Make save and state handling safe, deterministic, bounded, and versioned.
-- [ ] Ship tested artifacts through efficient PR and release automation, with installation and consumer smoke checks.
-- [ ] Maintain source-linked design decisions, current documentation, a rolling roadmap, and transferable lessons.
+Next-milestone candidates (to be confirmed by `/gsd-new-milestone`):
+
+- [ ] CGB silicon profile, color and DMG-compatibility modes, speed switching, banking, palettes, and HDMA with model-qualified tests (CGB-01..03).
+- [ ] MBC2/MBC3/MBC5 cartridges and deterministic MBC3 RTC (CART-01, RTC-01).
+- [ ] Transactional, versioned native save states with exact continuation equivalence (STATE-01).
+- [ ] A qualified Playstead adapter; libretro only if its value is demonstrated (INT-01).
+- [ ] One rights-clear game-level acceptance in the player before broadening compatibility claims.
+
+Ongoing project principles: dependency-light C API with explicit contracts; headless core independent of the player; reproducible tests, sanitizers, fuzzing, and baselines; tested artifacts through PR and release automation; source-linked decisions, current docs, and transferable lessons.
 
 ### Out of Scope
 
@@ -62,17 +80,19 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 | Decision | Rationale | Outcome |
 |---|---|---|
 | GB/DMG + GBC/CGB target | Explicit current request supersedes copied console names | Adopted scope |
-| Original core in portable C17 | Embedding, educational readability, host coverage | Initial recommendation; recheck at Phase 1 |
-| Thin optional SDL3 player | Early macOS gameplay while exercising public API | Initial recommendation |
-| Native C API first, libretro later | Precise ownership and deterministic semantics without frontend coupling | Initial recommendation |
+| Original core in portable C17 | Embedding, educational readability, host coverage | ✓ Good — v0.1 shipped on Linux/macOS/Windows consumers |
+| Thin optional SDL3 player | Early macOS gameplay while exercising public API | ✓ Good — player stayed optional; core export has no SDL dependency |
+| Native C API first, libretro later | Precise ownership and deterministic semantics without frontend coupling | ✓ Good for v0.1; libretro still pending demonstrated value |
 | Explicit profiles for hardware revisions | Avoid accidental DMG/CGB hybrid behavior | Adopted principle; choose exact baseline revisions in phase planning |
-| MIT for original contributions | Simple permissive reuse | Initial recommendation; per-asset license review required |
+| MIT for original contributions | Simple permissive reuse | ✓ Adopted; per-asset rights recorded for every fixture |
 | Automated work inside phases, explicit phase stops | High velocity and owner review/model choice coexist | Required |
 | Inherit the session model | User can change model between phases without stale hardcoded model IDs | Adopted configuration |
 | PR-based phase branches | Keep main releasable and retain review/verification evidence | Adopted configuration |
 | Corpus-qualified claims and measurements | A passing subset is not universal hardware/game compatibility | Required |
 | Bootless DMG-CPU-B tracer as the first delivered slice | A real guest path validates the portable API and install flow while keeping hardware, gameplay, and CGB claims bounded | Verified in Phase 1; memory-map conformance continues in Phase 2 |
-| Confidence-qualified software models for documented but revision-sensitive behavior | Select a deterministic model from primary documentation and reverse-engineering sources, cross-check implementations, and state the remaining silicon uncertainty | Adopted in Phase 3 for JOYP and DMA/PPU behavior under D-025 |
+| Confidence-qualified software models for documented but revision-sensitive behavior | Select a deterministic model from primary documentation and reverse-engineering sources, cross-check implementations, and state the remaining silicon uncertainty | ✓ Good — D-025 unblocked VIDEO-02/03; ⚠️ Revisit if hardware measurements become available |
+| Exact-head required CI gate before merge | Local passes and stale runs had masked remote state | ✓ Good — enforced through 06.1; info-level script items deferred |
+| Insert a debt-closure phase before closing a milestone | The first audit returned `tech_debt`; closing it first gave a clean `passed` re-audit | ✓ Good — Phase 06.1 |
 
 ## Evolution
 
@@ -81,4 +101,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-10-10 after Phase 06.1 verification and closeout (no requirement added, invalidated or validated; all 35 remain mapped to Phases 1–6).
+Last updated: 2026-10-10 after the v0.1 milestone (35/35 requirements validated; next milestone not yet defined).

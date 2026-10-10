@@ -61,12 +61,12 @@ its final closeout revision must pass the exact-head checks before merge.
 
 Earlier plan summaries record the focused matrix and API selections, recovery
 and atomic-write fault cases, lock/cadence behavior, and initial separate-
-process controls: [`04-01-SUMMARY.md`](../.planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-01-SUMMARY.md),
-[`04-02-SUMMARY.md`](../.planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-02-SUMMARY.md),
-[`04-03-SUMMARY.md`](../.planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-03-SUMMARY.md),
-[`04-04-SUMMARY.md`](../.planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-04-SUMMARY.md),
-[`04-05-SUMMARY.md`](../.planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-05-SUMMARY.md),
-and [`04-06-SUMMARY.md`](../.planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-06-SUMMARY.md).
+process controls: [`04-01-SUMMARY.md`](../.planning/milestones/v0.1-phases/GB-04-mbc1-and-safe-battery-continuation/04-01-SUMMARY.md),
+[`04-02-SUMMARY.md`](../.planning/milestones/v0.1-phases/GB-04-mbc1-and-safe-battery-continuation/04-02-SUMMARY.md),
+[`04-03-SUMMARY.md`](../.planning/milestones/v0.1-phases/GB-04-mbc1-and-safe-battery-continuation/04-03-SUMMARY.md),
+[`04-04-SUMMARY.md`](../.planning/milestones/v0.1-phases/GB-04-mbc1-and-safe-battery-continuation/04-04-SUMMARY.md),
+[`04-05-SUMMARY.md`](../.planning/milestones/v0.1-phases/GB-04-mbc1-and-safe-battery-continuation/04-05-SUMMARY.md),
+and [`04-06-SUMMARY.md`](../.planning/milestones/v0.1-phases/GB-04-mbc1-and-safe-battery-continuation/04-06-SUMMARY.md).
 
 ## Evidence classification
 
@@ -90,7 +90,7 @@ On 2026-10-08, PR #8's exact source-and-fixture head was
 `79f83f627ffb3631811b2f39b23081117ebaab8f`. All three pull-request workflow
 runs below passed on that SHA. The detailed job IDs, downloaded receipt
 contents, and package re-hash results are recorded in the
-[Phase 4 validation record](../.planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md).
+[Phase 4 validation record](../.planning/milestones/v0.1-phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md).
 
 - CI run **37728192665** passed `required-native`, `native-linux-x64`,
   `native-macos-arm64`, `native-windows-x64`, `linux-asan-ubsan`,
