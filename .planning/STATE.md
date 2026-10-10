@@ -5,16 +5,16 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 07
 current_phase_name: DMG Game Acceptance and Regression Baseline
 status: executing
-stopped_at: Completed 07-04-PLAN.md
-last_updated: "2026-10-10T23:01:47.258Z"
+stopped_at: Completed 07-05-PLAN.md
+last_updated: "2026-10-10T23:06:38.953Z"
 last_activity: 2026-10-10
 last_activity_desc: Phase GB-07 execution started
-state_head: 52b3d855b7749e6211fd095ec175d62f0110b088
+state_head: 7110c1063fd3f4131c271aafae0637324c3bce29
 progress:
   total_phases: 9
   completed_phases: 1
   total_plans: 17
-  completed_plans: 4
+  completed_plans: 5
   percent: 11
 ---
 
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-10)
 ## Current Position
 
 Phase: GB-07 (DMG Game Acceptance and Regression Baseline) — EXECUTING
-Plan: 5 of 17
+Plan: 6 of 17
 Status: Executing Phase GB-07
 Last activity: 2026-10-10 — Phase GB-07 execution started
 
@@ -107,6 +107,7 @@ Progress (v0.2): [░░░░░░░░░░] 0% (0/9 phases)
 | Phase 07 P02 | 40 min | 3 tasks | 12 files |
 | Phase 07 P03 | 30 min | 2 tasks | 5 files |
 | Phase 07 P04 | 20 min | 2 tasks | 4 files |
+| Phase 07 P05 | 6 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -204,6 +205,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 07]: 07-02: gbb_accept_drive end_half_dots is the last logical deadline; predicate anchors_ok checks the SHA-256 before any anchor; drive callbacks share one context and max_batch is 1..64 (replay uses 32)
 - [Phase 07]: D-027: mixer headroom divide-by-16 fixes Libbet clipping (D-19(i))
 - [Phase 07]: 07-04: Libbet reproduction pins Pillow wheels for cp310-cp314 (linux x86_64, macOS arm64) and relies on the D-02 archive SHA-256 because GitHub reports no asset digest; hosted run stays null
+- [Phase 07]: 07-05: Frame-digest oracles parse but the runner refuses them with exit 3 unsupported-oracle until the digest plan; runner uses tail_half_dots=0 since the verdict is T_hit
 
 ### Pending Todos
 
@@ -237,8 +239,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-10T23:01:47.237Z
-Stopped at: Completed 07-04-PLAN.md
+Last session: 2026-10-10T23:06:38.934Z
+Stopped at: Completed 07-05-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 7`
 Continuation note: [.continue-here.md](.continue-here.md)
