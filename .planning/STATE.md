@@ -41,6 +41,8 @@ The Phase 3 gates ran in order. Nyquist validation found no gaps. Security close
 
 The current freshness gate reports Phases 2, 3 and 4 as passed, and Phases 1, 5 and 6 as stale. Phase 5 covers the shared helper. Phase 6 now also covers the `release.yml` fix. Phase 1's report was already stale at `c8b8426`; its restored stash refresh is also stale against current sources. PR #41 remains open and merge-blocked with no reported checks. D-025 software-model limits remain explicit; exact CPU-B timing/lane and PPU-revision behavior remain unmeasured.
 
+Branch rule for the remaining refreshes: after PR #47 merges, cut each refresh branch from `origin/main` as `gsd/phase-NN-verification-refresh` (the Phase 3 precedent). The historical local branches `gsd/phase-05-…`, `gsd/phase-06-…` and `gsd/phase-01-…` were renamed to `archive/…`; each keeps its commits, and two hold one unpushed commit each. Same-named stale branches still exist on `origin`, so never reuse or push to those names (GB-GSD-009).
+
 **Next command:** `$gsd-execute-phase 5` refreshes Phase 5 — DMG Audio and Stable Playback, which is stale after the shared helper changes. Then run `$gsd-execute-phase 6` for Phase 6 — Qualified DMG Release and Consumer Handoff (stale after the `release.yml` fix). Then run `$gsd-execute-phase 1` for Phase 1 — Portable Foundation and Original ROM Tracer. Then reconcile Phase 2 CPU-02/CPU-05 SUMMARY metadata and run `$gsd-audit-milestone v0.1`. Stop after each phase. Keep the milestone `executing` and both auto-advance flags false.
 
 ## Performance Metrics
