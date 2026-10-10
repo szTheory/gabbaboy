@@ -58,6 +58,7 @@ static int input_error(const gbb_case *c, const char *reason) {
 #define MAX_OBSERVE_LINES 64u
 #define OBSERVE_LINE_BYTES 192u
 #define MAX_DIR_BYTES 3800u
+#define PPM_NOTE_BYTES (MAX_DIR_BYTES + 160u)
 /* D-25 asks for "not uniform, at least 3 distinct shades". The pinned Libbet title screen is
  * 1-bit text (shades 0 and 255 only, observed in Plan 07-07) and play_start is a 2-shade
  * transition frame, so 3 shades is only demanded of the gameplay checkpoints (mid, hit); every
@@ -305,24 +306,30 @@ static void run_note(const gbb_acceptance_options *options, char out[64]) {
     if (options->raw_verdict) snprintf(out + used, 64 - used, " raw_verdict=1");
 }
 
+/* D-24: the newest completed frame of a failing run, written as <failure-dir>/<id>.ppm. This is the
+ * only image written per failing case. note receives " ppm=<path>" or " ppm=write-failed". */
+static void write_failure_ppm(const gbb_case *c, const gbb_acceptance_options *options, const run_state *st,
+                              char note[PPM_NOTE_BYTES]) {
+    note[0] = '\0';
+    const frame_record *frame = newest_frame(st);
+    if (options == NULL || options->failure_dir == NULL || frame == NULL) return;
+    char name[96], path[MAX_DIR_BYTES + 128u];
+    snprintf(name, sizeof(name), "%s.ppm", c->id);
+    if (join_path(path, sizeof(path), options->failure_dir, name) &&
+        gbb_accept_write_ppm(path, frame->pixels, FRAME_PITCH) == 0) {
+        snprintf(note, PPM_NOTE_BYTES, " ppm=%s", path);
+    } else {
+        snprintf(note, PPM_NOTE_BYTES, " ppm=write-failed");
+    }
+}
+
 static int fail_run(const gbb_case *c, const gbb_acceptance_options *options, const run_state *st,
                     const char *reason, uint64_t end_half_dots) {
-    char ppm_note[MAX_DIR_BYTES + 160u], note[64], final_note[112];
-    ppm_note[0] = '\0';
+    char ppm_note[PPM_NOTE_BYTES], note[64], final_note[112];
     run_note(options, note);
     final_note[0] = '\0';
     if (st->final_state[0] != '\0') snprintf(final_note, sizeof(final_note), " %s", st->final_state);
-    const frame_record *frame = newest_frame(st);
-    if (options != NULL && options->failure_dir != NULL && frame != NULL) {
-        char name[96], path[MAX_DIR_BYTES + 128u];
-        snprintf(name, sizeof(name), "%s.ppm", c->id);
-        if (join_path(path, sizeof(path), options->failure_dir, name) &&
-            gbb_accept_write_ppm(path, frame->pixels, FRAME_PITCH) == 0) {
-            snprintf(ppm_note, sizeof(ppm_note), " ppm=%s", path);
-        } else {
-            snprintf(ppm_note, sizeof(ppm_note), " ppm=write-failed");
-        }
-    }
+    write_failure_ppm(c, options, st, ppm_note);
     if (options != NULL && options->expect_fail && options->expect_fail_reason != NULL &&
         options->expect_fail_reason[0] != '\0' && strcmp(options->expect_fail_reason, reason) == 0) {
         /* Strict expected failure (D-22): only the declared reason counts, and it counts as xfail. */
@@ -483,6 +490,181 @@ static int sgb_probe(const gbb_accept_predicate *predicate, const uint8_t *rom, 
     *pulses = ps.pulses;
     gbb_destroy(instance);
     return rc;
+}
+
+/* ---- Stall report (D-18) ---- */
+
+#define STALL_MAX_BYTES 65536u
+#define STALL_TRACE_LINE 15u
+#define STALL_IO_WRITES 64u
+#define STALL_HISTOGRAM 8u
+
+typedef struct {
+    gbb_trace_record ring[DIAG_RECORDS];
+    size_t ring_next;
+    uint64_t ring_total;
+    gbb_diagnostic_record writes[STALL_IO_WRITES];
+    size_t writes_next;
+    uint64_t writes_total;
+    uint32_t pc_counts[65536];
+} stall_state;
+
+static bool stall_io_address(uint16_t address) {
+    return address == 0xFF00u || address == 0xFF0Fu || address == 0xFFFFu || address == 0xFF40u ||
+           address == 0xFF41u;
+}
+
+static void visit_stall(void *context, const gbb_trace_record *trace, size_t trace_count,
+                        const gbb_diagnostic_record *diag, size_t diag_count) {
+    stall_state *ss = context;
+    for (size_t i = 0; i < trace_count; ++i) {
+        ss->ring[ss->ring_next] = trace[i];
+        ss->ring_next = (ss->ring_next + 1u) % DIAG_RECORDS;
+        ss->ring_total++;
+        if (ss->pc_counts[trace[i].pc] < UINT32_MAX) ss->pc_counts[trace[i].pc]++;
+    }
+    for (size_t i = 0; i < diag_count; ++i) {
+        if (diag[i].kind != GBB_DIAGNOSTIC_BUS_WRITE || !stall_io_address(diag[i].address)) continue;
+        ss->writes[ss->writes_next] = diag[i];
+        ss->writes_next = (ss->writes_next + 1u) % STALL_IO_WRITES;
+        ss->writes_total++;
+    }
+}
+
+/* Writes <dir>/<id>.stall.txt. The io_writes and pc_histogram sections are formatted first and their
+ * size reserved, so a full trace ring can only shorten the trace (the oldest lines are dropped and
+ * trace_truncated=1 says so) and the file never exceeds STALL_MAX_BYTES. Returns 0 on success. */
+static int write_stall_file(const char *path, const char *id, const char *reason, uint64_t window_start,
+                            uint64_t t_end, const stall_state *ss) {
+    char tail[4096];
+    size_t tail_len = 0;
+    size_t held_writes = ss->writes_total < STALL_IO_WRITES ? (size_t)ss->writes_total : STALL_IO_WRITES;
+    int n = snprintf(tail, sizeof(tail), "io_writes records=%zu\n", held_writes);
+    tail_len = (size_t)n;
+    size_t first_write = ss->writes_total < STALL_IO_WRITES ? 0u : ss->writes_next;
+    for (size_t i = 0; i < held_writes; ++i) {
+        const gbb_diagnostic_record *w = &ss->writes[(first_write + i) % STALL_IO_WRITES];
+        n = snprintf(tail + tail_len, sizeof(tail) - tail_len, "%06llx %04x %04x %02x\n",
+                     (unsigned long long)((w->time_half_dots - window_start) & 0xFFFFFFu), (unsigned)w->pc,
+                     (unsigned)w->address, (unsigned)w->value);
+        if (n <= 0 || (size_t)n >= sizeof(tail) - tail_len) return 1;
+        tail_len += (size_t)n;
+    }
+    /* Top eight program counters by count, ties to the lower address. */
+    uint32_t used_pc[STALL_HISTOGRAM];
+    uint32_t top_pc[STALL_HISTOGRAM], top_count[STALL_HISTOGRAM];
+    size_t entries = 0;
+    for (; entries < STALL_HISTOGRAM; ++entries) {
+        uint32_t best = 0, best_pc = 0;
+        for (uint32_t pc = 0; pc < 65536u; ++pc) {
+            bool taken = false;
+            for (size_t k = 0; k < entries; ++k) taken = taken || used_pc[k] == pc;
+            if (!taken && ss->pc_counts[pc] > best) {
+                best = ss->pc_counts[pc];
+                best_pc = pc;
+            }
+        }
+        if (best == 0) break;
+        used_pc[entries] = top_pc[entries] = best_pc;
+        top_count[entries] = best;
+    }
+    n = snprintf(tail + tail_len, sizeof(tail) - tail_len, "pc_histogram entries=%zu\n", entries);
+    if (n <= 0 || (size_t)n >= sizeof(tail) - tail_len) return 1;
+    tail_len += (size_t)n;
+    for (size_t i = 0; i < entries; ++i) {
+        n = snprintf(tail + tail_len, sizeof(tail) - tail_len, "%04x %u\n", (unsigned)top_pc[i],
+                     (unsigned)top_count[i]);
+        if (n <= 0 || (size_t)n >= sizeof(tail) - tail_len) return 1;
+        tail_len += (size_t)n;
+    }
+
+    size_t held = ss->ring_total < DIAG_RECORDS ? (size_t)ss->ring_total : DIAG_RECORDS;
+    char header[256];
+    int header_len = snprintf(header, sizeof(header),
+                              "stall id=%s reason=%s window_start=%llu t_end=%llu trace_truncated=0\n", id, reason,
+                              (unsigned long long)window_start, (unsigned long long)t_end);
+    if (header_len <= 0 || (size_t)header_len >= sizeof(header)) return 1;
+    const size_t trace_header_reserve = 32u; /* "trace records=4096\n" with slack */
+    size_t overhead = (size_t)header_len + tail_len + trace_header_reserve;
+    size_t fit = overhead >= STALL_MAX_BYTES ? 0u : (STALL_MAX_BYTES - overhead) / STALL_TRACE_LINE;
+    size_t written = held < fit ? held : fit;
+    if (written < held) {
+        header[header_len - 2] = '1'; /* trace_truncated=0 -> 1; same length */
+    }
+
+    FILE *file = fopen(path, "wb");
+    if (file == NULL) return 1;
+    int ok = fwrite(header, 1, (size_t)header_len, file) == (size_t)header_len;
+    char line[32];
+    n = snprintf(line, sizeof(line), "trace records=%zu\n", written);
+    ok = ok && fwrite(line, 1, (size_t)n, file) == (size_t)n;
+    size_t first = ss->ring_total < DIAG_RECORDS ? 0u : ss->ring_next;
+    for (size_t i = held - written; ok && i < held; ++i) {
+        const gbb_trace_record *t = &ss->ring[(first + i) % DIAG_RECORDS];
+        n = snprintf(line, sizeof(line), "%06llx %04x %02x\n",
+                     (unsigned long long)((t->time_half_dots - window_start) & 0xFFFFFFu), (unsigned)t->pc,
+                     (unsigned)t->opcode[0]);
+        ok = n == (int)STALL_TRACE_LINE && fwrite(line, 1, STALL_TRACE_LINE, file) == STALL_TRACE_LINE;
+    }
+    ok = ok && fwrite(tail, 1, tail_len, file) == tail_len;
+    if (fclose(file) != 0) ok = 0;
+    return ok ? 0 : 1;
+}
+
+/* Replays to the last frame window of a failed run and writes the stall report. Returns 0 on success
+ * and prints the report path; any failure prints stall=write-failed and never changes the exit code. */
+static void write_stall_report(const gbb_case *c, const gbb_acceptance_options *options, const uint8_t *rom,
+                               size_t rom_length, const gbb_accept_script *script, const char *reason,
+                               uint64_t t_end) {
+    char name[96], path[MAX_DIR_BYTES + 128u];
+    snprintf(name, sizeof(name), "%s.stall.txt", c->id);
+    stall_state *ss = calloc(1, sizeof(*ss));
+    if (ss == NULL || !join_path(path, sizeof(path), options->failure_dir, name)) {
+        free(ss);
+        printf("acceptance id=%s stall=write-failed\n", c->id);
+        return;
+    }
+    replay_request rq;
+    memset(&rq, 0, sizeof(rq));
+    rq.rom = rom;
+    rq.rom_length = rom_length;
+    rq.script = script;
+    rq.end_half_dots = t_end;
+    rq.observe_from = t_end > GBB_ACCEPT_HALF_DOTS_PER_FRAME ? t_end - GBB_ACCEPT_HALF_DOTS_PER_FRAME : 0u;
+    rq.want_trace = true;
+    rq.visit = visit_stall;
+    rq.context = ss;
+    gbb_instance *instance = NULL;
+    uint64_t window_start = 0;
+    int rc = replay_diag(&rq, &instance, &window_start);
+    gbb_destroy(instance);
+    /* A stopped guest (rc 2) still leaves the records collected up to the stop, which is the report. */
+    if (rc == 1 || write_stall_file(path, c->id, reason, window_start, t_end, ss) != 0) {
+        printf("acceptance id=%s stall=write-failed\n", c->id);
+    } else {
+        printf("acceptance id=%s stall=%s\n", c->id, path);
+    }
+    free(ss);
+}
+
+/* D-18 applies to exit 1 and exit 3 alike, and only when --failure-dir was given. */
+static void stall_if_requested(const gbb_case *c, const gbb_acceptance_options *options, const uint8_t *rom,
+                               size_t rom_length, const gbb_accept_script *script, const char *reason,
+                               uint64_t t_end) {
+    if (options == NULL || options->failure_dir == NULL) return;
+    write_stall_report(c, options, rom, rom_length, script, reason, t_end);
+}
+
+/* An unsupported (exit 3) outcome gets the same stall report plus the failure image fail_run writes for
+ * exit 1, so the two failing classes are diagnosed identically. */
+static void unsupported_diagnostics(const gbb_case *c, const gbb_acceptance_options *options, const run_state *st,
+                                    const uint8_t *rom, size_t rom_length, const gbb_accept_script *script,
+                                    const char *reason, uint64_t t_end) {
+    if (options == NULL || options->failure_dir == NULL) return;
+    char ppm_note[PPM_NOTE_BYTES];
+    write_failure_ppm(c, options, st, ppm_note);
+    if (ppm_note[0] != '\0') printf("acceptance id=%s%s\n", c->id, ppm_note);
+    write_stall_report(c, options, rom, rom_length, script, reason, t_end);
 }
 
 /* ---- LD B,B and timed frame capture (EVID-01, D-24) ---- */
@@ -863,6 +1045,7 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
     if (st->error != NULL) {
         printf("acceptance id=%s status=unsupported model=dmg-cpu-b reason=%s end_half_dots=%llu\n", c->id,
                st->error, (unsigned long long)result.end_half_dots);
+        unsupported_diagnostics(c, options, st, rom, rom_length, &script, st->error, result.end_half_dots);
         code = EXIT_UNSUPPORTED;
         goto done;
     }
@@ -898,6 +1081,7 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
         if (reason == NULL && (!pcm_has_samples(st) || !gbb_accept_pcm_audible(&st->window))) reason = "pcm-silent";
         if (reason != NULL) {
             code = fail_run(c, options, st, reason, result.end_half_dots);
+            if (code == EXIT_FAIL) stall_if_requested(c, options, rom, rom_length, &script, reason, result.end_half_dots);
             break;
         }
         /* D-17: SGB detection must have run and been tolerated. The probe replays the first frames on
@@ -909,6 +1093,9 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
             int probe_rc = sgb_probe(predicate, rom, rom_length, &script, &hw_probe, &sgb_pulses);
             if (probe_rc != 0 || sgb_pulses < 1u || hw_probe != c->expect_hw_capability) {
                 code = fail_run(c, options, st, "sgb-probe", result.end_half_dots);
+                if (code == EXIT_FAIL) {
+                    stall_if_requested(c, options, rom, rom_length, &script, "sgb-probe", result.end_half_dots);
+                }
                 break;
             }
         }
@@ -949,15 +1136,20 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
     }
     case GBB_ACCEPT_DRIVE_NOT_REACHED:
         code = fail_run(c, options, st, "predicate-not-reached", result.end_half_dots);
+        if (code == EXIT_FAIL) {
+            stall_if_requested(c, options, rom, rom_length, &script, "predicate-not-reached", result.end_half_dots);
+        }
         break;
     case GBB_ACCEPT_DRIVE_STOPPED:
         printf("acceptance id=%s status=unsupported model=dmg-cpu-b reason=guest-stopped stop=%d end_half_dots=%llu\n",
                c->id, (int)result.stop_reason, (unsigned long long)result.end_half_dots);
+        unsupported_diagnostics(c, options, st, rom, rom_length, &script, "guest-stopped", result.end_half_dots);
         code = EXIT_UNSUPPORTED;
         break;
     case GBB_ACCEPT_DRIVE_GUARD:
         printf("acceptance id=%s status=unsupported model=dmg-cpu-b reason=step-guard end_half_dots=%llu\n",
                c->id, (unsigned long long)result.end_half_dots);
+        unsupported_diagnostics(c, options, st, rom, rom_length, &script, "step-guard", result.end_half_dots);
         code = EXIT_UNSUPPORTED;
         break;
     default:
