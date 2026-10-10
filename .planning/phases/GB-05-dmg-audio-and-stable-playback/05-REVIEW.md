@@ -1,12 +1,12 @@
 ---
 phase: GB-05-dmg-audio-and-stable-playback
-reviewed: 2026-10-09T19:23:02Z
-depth: standard
+reviewed: 2026-10-09T21:54:14Z
+depth: deep
 files_reviewed: 3
 files_reviewed_list:
-  - docs/preview.md
-  - src/player/main.c
   - tests/scripts/verify-phase3-player.sh
+  - tests/scripts/verified_player_output_dir.py
+  - tests/scripts/test_verified_player_output_dir.py
 findings:
   critical: 0
   warning: 0
@@ -15,22 +15,16 @@ findings:
 status: clean
 ---
 
-# Phase GB-05: Incremental Code Review Report
+# Phase GB-05: Code Review Report
 
-**Reviewed:** 2026-10-09T19:23:02Z
-**Depth:** standard
-**Files Reviewed:** 3 (incremental scope only)
+**Reviewed:** 2026-10-09T21:54:14Z
+**Depth:** deep
+**Files Reviewed:** 3
 **Status:** clean
 
 ## Summary
 
-This is an incremental review of only `src/player/main.c`, `docs/preview.md`, and `tests/scripts/verify-phase3-player.sh`, focused on separating S background-save retry from R transition-save retry and checking C/Escape recovery guidance. No findings were identified in this scope. The prior full Phase GB-05 review remains the historical result below: it reviewed 29 files on 2026-10-08 and reported clean; those 29 files were not freshly re-reviewed here.
-
-### Historical full review (2026-10-08)
-
-The original Phase GB-05 review covered the then-current 29-file scope and was recorded as clean. It examined the audio callback backpressure accounting, lock-free saturating counter, deterministic measurement sample window and receipts, pause/reset behavior, and reset-transition failure/cancel/retry behavior. That result is retained here as a historical record; this incremental update narrows the current frontmatter scope to the three files listed above.
-
-The handler confirms the documented distinction: when `pending_transition` is set, R retries the save, C continues without saving, and Escape cancels; with no pending transition, R requests the normal reset and S invokes the save path. Both CLI help and the F1 help text state the recovery mapping and distinguish S's background-save retry behavior. The verification script's new assertions match the CLI `--help` strings. No correctness, security, or quality defects were found in these three files.
+Reviewed the current player package verifier, its verified output directory helper, and the helper tests, including both package modes and the preview and release workflow invocations. The prior CR-01 overlap risk is resolved: the verifier now passes the candidate directory to the helper, which resolves both paths and rejects equality before removing output files. New tests cover direct overlap and a symlink alias and assert that the candidate archive remains intact. Root rejection, directory collision handling, and named output cleanup remain bounded. No current findings in this three-file incremental scope; earlier Phase 5 reviews remain historical. The regression tests were inspected but not run in this review.
 
 ## Narrative Findings (AI reviewer)
 
@@ -38,6 +32,6 @@ No findings.
 
 ---
 
-_Reviewed: 2026-10-09T19:23:02Z_
+_Reviewed: 2026-10-09T21:54:14Z_
 _Reviewer: the agent (gsd-code-reviewer)_
-_Depth: standard_
+_Depth: deep_
