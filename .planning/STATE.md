@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v0.1
 status: executing
-stopped_at: Phase 06.1 planned
-last_updated: "2026-10-10T15:26:58.439Z"
-state_head: ae0cb7e12dfdbea1b68b2cec8bf8f8293696a2d3
+stopped_at: Completed 06.1-01-PLAN.md
+last_updated: "2026-10-10T15:29:41.901Z"
+state_head: 1b6aa19f158725e83e165fa3d782612aa1e11c8b
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 64
-  completed_plans: 56
+  completed_plans: 57
   verified_phases: 6
 milestone_name: limited DMG preview
 last_activity: 2026-10-10
-current_phase_name: "Address v0.1 tech debt: CI workflow info items and audio consumer coverage (INSERTED)"
 current_phase: "06.1"
+current_phase_name: "Address v0.1 tech debt: CI workflow info items and audio consumer coverage (INSERTED)"
 last_activity_desc: Inserted Phase 06.1 to close v0.1 audit tech debt before milestone completion
 ---
 
@@ -113,6 +113,7 @@ Branch rule: never reuse or push to the stale same-named `gsd/phase-NN-<slug>` b
 | Phase GB-06 P03 | 6 min | 2 tasks | 8 files |
 | Phase GB-06 P07 | 7min | 2 tasks | 4 files |
 | Phase GB-06 P06 | 95 min | 2 tasks | release workflow, evidence, and handoff |
+| Phase 06.1 P01 | 3 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -198,6 +199,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-06]: Use the installed visible-demo fixture for successful frame output and sequentially load the MBC1 continuation fixture into the same opaque instance for save transfer.
 - [Phase GB-06]: Install the visible-demo ROM with its manifest and license so the relocated native example needs no source-tree path.
 - [Phase GB-06]: Keep raw battery persistence host-owned and replace only after an exclusive temporary file is flushed.
+- [Phase 06.1]: Installed-consumer audio smoke is structural only (formula frame count, bounds, poison, twin/reset hash equality); no digest literal pinned
 
 ### Pending Todos
 
@@ -232,9 +234,9 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 
 ## Session Continuity
 
-Last session: 2026-10-10T14:06:17.542Z
-Stopped at: Phase 06.1 planned
-Resume file: .planning/phases/GB-06.1-address-v0-1-tech-debt-ci-workflow-info-items-and-audio-cons/06.1-01-PLAN.md
+Last session: 2026-10-10T15:29:41.803Z
+Stopped at: Completed 06.1-01-PLAN.md
+Resume file: None
 Next command in fresh context: `$gsd-execute-phase 06.1` (Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage)
 Continuation note: [.continue-here.md](.continue-here.md)
 Completed workflow stage: **Phase 2 — DMG CPU, Bus and Time verification freshness refresh** (2026-10-10). Canonical verification passed 5/5 truths and CPU-01–05 at `a9050df` on `gsd/phase-02-verification-refresh-2`. Gates: Nyquist 0 gaps, security 45/45 closed, code review 1 info deferred with 0 open dispositions, regression 179/179 core. No hosted-CI, physical-hardware or perceptual result is claimed.
