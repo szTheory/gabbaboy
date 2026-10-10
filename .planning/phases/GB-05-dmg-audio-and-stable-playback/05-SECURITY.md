@@ -5,7 +5,7 @@ status: verified
 threats_open: 0
 asvs_level: 1
 created: "2026-10-08"
-updated: "2026-10-08"
+updated: "2026-10-10"
 ---
 
 # Phase 5 — Security
@@ -49,11 +49,48 @@ updated: "2026-10-08"
 |---------|------------|-----------|-------------|------|
 | GB-05-AR-01 | T-05-SC | This phase adds no package dependency. The SDL3 adapter uses the project's existing pinned SDL3 package; DSP and transport logic are implemented directly in the project. | Phase 5 plan | 2026-10-08 |
 
+## Evidence Refresh 2026-10-10 (source revision f1995ad)
+
+Verification-freshness refresh against the tree at `f1995ad` (code-identical to `cb4a96c`; the only later change is `05-VALIDATION.md`). The previous phase verification ran at `7b1c491`. Between `7b1c491` and `f1995ad` the only source changes in or near phase scope are `src/player/session.c` (one line), `tests/player/test_session.c`, `tests/scripts/verified_player_output_dir.py` (new), its test `tests/scripts/test_verified_player_output_dir.py`, and `tests/scripts/verify-phase3-player.sh`. `src/core/gabbaboy.c`, `include/gabbaboy/gabbaboy.h`, `src/player/audio.c`, `src/player/input.c`, `src/player/main.c`, and `tests/scripts/measure-audio-playback.sh` are unchanged, so the earlier closures still hold. The line references below are current.
+
+| Threat ID | Current evidence |
+|-----------|------------------|
+| T-05-01 | `src/core/gabbaboy.c:1602-1607` `audio_preflight` checks remaining capacity before each step; callers return `GBB_STOP_OUTPUT_FULL` before mutation at `:2140`, `:2162`, `:2194`, `:2203`. |
+| T-05-02 | `src/player/audio.c:51-54`, `:82-96`, `:223`, `:269`: ring indices use acquire loads and release stores; the core instance is never touched from the SDL callback (`player_audio_transfer`, `:65`). |
+| T-05-03 | `src/core/gabbaboy.c:2114` and `:2141` refuse to advance past `UINT64_MAX` emulated half-dots (`GBB_STOP_INVALID_STATE`). |
+| T-05-04 | `src/core/gabbaboy.c:1505` wraps the wave position `& 31u`; `:213` indexes the 16-byte wave RAM with `position >> 1`; `:563-564` reads the noise divisor from a fixed 8-entry table using `polynomial & 7u`. |
+| T-05-05 | `src/core/gabbaboy.c:2265-2297` `gbb_run_audio` rejects capacity multiplication overflow, address-range overflow, and overlap between frames and `out_frame_count` before any state is touched; it zeroes the count first and clears the run binding on exit. |
+| T-05-06 | `src/core/gabbaboy.c:146-147` `audio_saturate_s16`, applied at `:182-189` to the rounded Q15 output and the high-pass state. |
+| T-05-07 | `src/player/audio.c:65-100`: bounded `PLAYER_AUDIO_CALLBACK_CHUNK` stack block, unsigned byte count, `memset` zero-fill on shortage; no allocation, lock, logging, or guest work on the callback path. |
+| T-05-08 | `src/player/audio.c:150-159` requires lock-free atomics; `:234-269` `player_audio_clear` pauses and locks the stream before resetting indices; `:325-330` keeps userdata alive when quiescence cannot be established. |
+| T-05-09 | `src/player/input.c:291-341` `player_input_retry_focus_releases` retries failed releases for the owning source only. |
+| T-05-10 | `src/player/main.c:1066-1071` saves battery RAM before a transition completes; `:894-935` `replace_session_rom` stages the candidate machine, ROM, and lock, swaps state only after success, then clears audio (`:935`). The ROM read the candidate depends on is hardened further (see below). |
+| T-05-11 | `src/player/audio.c:286-320` bounded reopen; `:343` a missing sink is a supported state; `:206` counts dropped frames in `unavailable_frames`. |
+| T-05-12 | `tests/scripts/measure-audio-playback.sh:60-76` binds a full 40-hex revision, the pinned Release build, and the fixture digest and license; `:106-172` requires model `DMG-CPU-B`, workload, labeled application counters, and `pcm_sha256`. |
+| T-05-13 | `tests/scripts/measure-audio-playback.sh:76` requires the manifest's `sha256` and `license` for the authored demo fixture; `tests/scripts/verify-phase3-player.sh:227-234` checks the package's audio metadata claims. |
+| T-05-SC | No dependency change since `7b1c491`; the new helper uses only the Python standard library. |
+
+### Changed-file threat assessment
+
+- **`src/player/session.c:104` (PR #43): closes a residual DoS on T-05-10 / T-05-11.** `read_rom_file` now opens with `O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK`. Before this, choosing a FIFO with no writer as the replacement ROM blocked `open()` on the player's main loop indefinitely, before the existing `fstat`/`S_ISREG` bound (`:109-115`) could reject it. That would have stalled the guest and audio producer during a session transition. Now `open()` returns at once, the regular-file check rejects the path with "not a bounded regular file", and the current session stays unchanged. Regression: `tests/player/test_session.c:121-130` (`player_session_replacement_failure`) creates a FIFO, asserts the rejection and the unchanged session, and confirms the FIFO itself is left in place. `O_NONBLOCK` has no effect on regular-file reads, so the bounded read loop (`:123-137`) is unchanged.
+- **`tests/scripts/verified_player_output_dir.py` (new) with `verify-phase3-player.sh:296-303`: strengthens publication integrity (related to T-05-12 / T-05-13).** This replaces the earlier `rm -rf -- "$FINAL_ARTIFACT_DIR"` of a caller-supplied path. The helper rejects output directories that overlap the candidate directory, the filesystem root, or the repository (`:70-80`). It walks directories with `O_DIRECTORY|O_NOFOLLOW` descriptor-relative opens (`:31-56`), unlinks only the two named outputs, publishes through `O_EXCL|O_NOFOLLOW` temp files linked into place (`:127-187`), and withdraws partial output by inode-checked unlink (`:207-221`). The receipt now also binds the candidate `package_sha256` from the build receipt. This adds no new threat to this phase; the default output location moved outside the repository build tree to `${RUNNER_TEMP:-${TMPDIR:-/tmp}}`.
+
+### Commands run (2026-10-10, tree at f1995ad, macOS arm64)
+
+| Command | Result |
+|---------|--------|
+| `cmake --build build/phase3-player/gabbaboy` | up to date (`ninja: no work to do`), so the build matches current sources |
+| `ctest --test-dir build/phase3-player/gabbaboy -R "session\|audio\|input"` | 45/45 passed |
+| `ctest --test-dir build/phase3-player/gabbaboy -R session_replace` | 2/2 passed (includes the FIFO regression) |
+| `python3 tests/scripts/test_verified_player_output_dir.py` | 20 tests, OK |
+| Reused from the Nyquist refresh at `cb4a96c` (`f1995ad`) | core CTest 179/179; player verifier 51/51 |
+
 ## Security Audit Trail
 
 | Audit Date | Threats Total | Closed | Open | Run By |
 |------------|---------------|--------|------|--------|
 | 2026-10-08 | 14 unique IDs (20 plan-register rows) | 14 | 0 at/above high threshold | gsd-security-auditor and orchestrator |
+| 2026-10-10 | 14 unique IDs (freshness refresh at f1995ad) | 14 | 0 | orchestrator (L1 evidence refresh; short-circuit, ASVS 1) |
 
 ## Sign-Off
 
@@ -62,7 +99,7 @@ updated: "2026-10-08"
 - [x] `threats_open: 0` confirmed
 - [x] `status: verified` set in frontmatter
 
-**Approval:** verified 2026-10-08. Physical device hotplug, analog DMG output, and perceptual audio remain outside this software security verification.
+**Approval:** verified 2026-10-08; evidence refreshed 2026-10-10 at `f1995ad`. Physical device hotplug, analog DMG output, and perceptual audio remain outside this software security verification.
 
 ## Security Audit 2026-10-09
 
