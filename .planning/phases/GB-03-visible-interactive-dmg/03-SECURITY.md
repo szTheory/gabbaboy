@@ -52,8 +52,8 @@ created: "2026-10-07"
 | T-03-31 | Tampering | Installed package API | medium | mitigate | Relocated C/C++ consumers run against installed headers/library (`tests/scripts/verify-phase2-installed.sh:24-39`, `tests/consumers/c/main.c:16-52`, `tests/consumers/cpp/main.cpp:16-52`). | closed |
 | T-03-32 | Tampering | RGBDS release archive | high | mitigate | Official archive digest and version checked before extraction/use (`.github/workflows/fixture-repro.yml:19-73`, `tests/scripts/reproduce-visible-demo.sh:66-75`). | closed |
 | T-03-33 | Repudiation | Fixture identity receipt | medium | mitigate | Run-scoped receipt binds checkout, tool, and ROM digests (`tests/scripts/reproduce-visible-demo.sh:123-171`); workflow provides exact revision and run identities (`.github/workflows/fixture-repro.yml:74-90`). | closed |
-| T-03-34 | Tampering | SDL release archive | high | mitigate | Pinned SDL digest is checked before extraction (`tests/scripts/verify-phase3-player.sh:301-314`). | closed |
-| T-03-35 | Tampering | Downloaded preview package | high | mitigate | Receipt/source/package checks precede safe extraction; metadata, licenses, fixtures, and extracted executable are checked (`tests/scripts/verify-phase3-player.sh:54-184,397-419`, `.github/scripts/safe_extract_package.py:15-27,95-220`, `.github/workflows/preview.yml:146-226`). | closed |
+| T-03-34 | Tampering | SDL release archive | high | mitigate | Pinned SDL digest is checked before extraction (`tests/scripts/verify-phase3-player.sh:350-359`). | closed |
+| T-03-35 | Tampering | Downloaded preview package | high | mitigate | Receipt/source/package checks precede safe extraction; metadata, licenses, fixtures, and extracted executable are checked (`tests/scripts/verify-phase3-player.sh:54-184,397-419`, `.github/scripts/safe_extract_package.py:15-27,95-220`, `.github/workflows/preview.yml:146-226`). The verified archive and receipt are published as one all-or-nothing set through the boundary helper; a failure withdraws only the inodes it published (`tests/scripts/verified_player_output_dir.py:127-320`, `tests/scripts/test_verified_player_output_dir.py:180-360`, `tests/scripts/verify-phase3-player.sh:296-303`). | closed |
 | T-03-36 | Elevation of privilege | GitHub Actions | high | mitigate | Read-only permissions and immutable actions; PR code runs in unprivileged `pull_request` workflows (`.github/workflows/ci.yml:3-10,117-141`, `.github/workflows/preview.yml:3-10,146-220`). | closed |
 
 | T-03-37 | Tampering | Evidence ledger and test expectations | medium | mitigate | The ledger records source applicability and evidence classes; focused test inventory is fail-closed (`docs/dmg-video-evidence.md:1-7,39-49`, `03-VERIFICATION.md:72-76`). | closed |
@@ -90,6 +90,18 @@ The audit found no unregistered threat flags. The summaries contain no `## Threa
 ## Security Audit 2026-10-09 (refreshed)
 
 Rechecked all 40 threat IDs from plans 03-01 through 03-13. T-03-27's later implementation and T-03-39 close the limitation assertion gap. The downloaded-package verifier now prepares its output directory through a dedicated boundary helper: it rejects overlap with the untrusted candidate, filesystem/repository roots, and directory collisions, and removes only the two expected artifact paths. Regressions cover preserving unrelated output files, symlink targets, root/candidate aliases and directory collisions (`tests/scripts/verified_player_output_dir.py:14-47`, `tests/scripts/test_verified_player_output_dir.py:23-120`, `tests/scripts/verify-phase3-player.sh:294-297`).
+
+| Metric | Count |
+|---|---|
+| Threats found | 40 |
+| Closed | 40 |
+| Open | 0 |
+
+## Security Audit 2026-10-10 (publication-rollback refresh)
+
+Rechecked the register after the shared verified-output helper moved to all-or-nothing publication (`eb96902`). The register still holds 40 threat IDs, all closed, so `threats_open: 0` is unchanged. Under ASVS level 1 with a plan-time register, the workflow short-circuits without an auditor pass. The helper keeps every earlier output-directory rejection: filesystem and repository roots, repository descendants, candidate overlap and aliases, and directory collisions. It publishes the archive and the receipt bound to it through directory-descriptor-relative operations. On any failure after a name is linked, it withdraws only the inodes it published, so concurrent replacements survive and the original error is not masked. The focused helper suite passed 17/17 and the optional player suite passed 51/51 at `0403b71`. Stale line references for T-03-34 and T-03-35 were updated. No new threat was introduced. The frozen v0.1.0 tag keeps its disclosed historical deletion path; its published bytes are unchanged.
+
+## Security Audit 2026-10-10
 
 | Metric | Count |
 |---|---|
