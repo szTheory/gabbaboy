@@ -9,7 +9,7 @@ created: "2026-10-07"
 
 # Phase 3 — Security
 
-> Phase threat audit against the nine executed plan registers. The configured blocking threshold is high; one medium threat remains open below that threshold.
+> Phase threat audit against all executed Phase 3 plan registers. The configured blocking threshold is high; all 40 declared threat IDs are now closed.
 
 ## Trust Boundaries
 
@@ -45,7 +45,7 @@ created: "2026-10-07"
 | T-03-24 | Repudiation | Host input claims | medium | mitigate | SDL events are pushed and checked through guest outcomes (`src/player/main.c:629-639,780-799`); core input tests are separate (`tests/test_joypad.c:74-227`). | closed |
 | T-03-25 | Tampering | ROM replacement | high | mitigate | Bounded path/file reads and validation before replacement (`src/player/session.c:38-119`, `src/core/gabbaboy.c:997-1045`); failed replacement preserves session (`tests/player/test_session.c:68-130`). | closed |
 | T-03-26 | Denial of service | Presentation arithmetic | medium | mitigate | Integer-scale geometry and checked dimensions (`src/player/presentation.c:5-23`); extreme and undersized cases (`tests/player/test_presentation.c:38-55`). | closed |
-| T-03-27 | Repudiation | Preview limitations | medium | mitigate | Audio/persistence limits appear in player help and preview documentation (`src/player/main.c:247-284`, `docs/preview.md:30-36`), but automated checks do not assert the limitation text or corresponding package metadata fields. | open — below high threshold (non-blocking) |
+| T-03-27 | Repudiation | Preview limitations | medium | mitigate | Player limitation text and package metadata are asserted in the player test inventory and downloaded-package consumer (`tests/player/test_limitations.c`, `tests/scripts/verify-phase3-player.sh:64-91`; 03-11 SUMMARY verification). | closed |
 | T-03-28 | Tampering | Frame output buffer | high | mitigate | Checked extent, pointer overflow, and overlap rejection (`src/core/gabbaboy.c:962-980`); canary, overlap, padding, and reset cases (`tests/test_ppu.c:657-772`). | closed |
 | T-03-29 | Tampering | Event batches | high | mitigate | Entire batch validates before final copy (`src/core/gabbaboy.c:934-959`); unchanged-state rejection tests (`tests/test_events.c:118-180`). | closed |
 | T-03-30 | Denial of service | Core output/queue | medium | mitigate | Fixed frame/FIFO/DMA/queue storage, bounded runs, and allocation limited to create/load (`src/core/gabbaboy.c:6-90,1016,1037,1378-1384`). | closed |
@@ -56,9 +56,19 @@ created: "2026-10-07"
 | T-03-35 | Tampering | Downloaded preview package | high | mitigate | Receipt/source/package checks precede safe extraction; metadata, licenses, fixtures, and extracted executable are checked (`tests/scripts/verify-phase3-player.sh:54-184,397-419`, `.github/scripts/safe_extract_package.py:15-27,95-220`, `.github/workflows/preview.yml:146-226`). | closed |
 | T-03-36 | Elevation of privilege | GitHub Actions | high | mitigate | Read-only permissions and immutable actions; PR code runs in unprivileged `pull_request` workflows (`.github/workflows/ci.yml:3-10,117-141`, `.github/workflows/preview.yml:3-10,146-220`). | closed |
 
+| T-03-37 | Tampering | Evidence ledger and test expectations | medium | mitigate | The ledger records source applicability and evidence classes; focused test inventory is fail-closed (`docs/dmg-video-evidence.md:1-7,39-49`, `03-VERIFICATION.md:72-76`). | closed |
+| T-03-38 | Repudiation | Hardware observation claims | medium | mitigate | Ledger and verification distinguish source/software evidence from hardware; VIDEO-04 remains explicitly open pending live observation (`docs/dmg-video-evidence.md:1-7`, `03-VERIFICATION.md:74,94-104`). | closed |
+| T-03-39 | Repudiation | Player limitation text and package metadata | medium | mitigate | Registered limitation assertion and extracted-package checks require both unsupported-feature fields to be literal false (`tests/player/test_limitations.c`, `tests/player/expected-tests.txt:1-70`, `tests/scripts/verify-phase3-player.sh:64-91`; 03-11 SUMMARY negative controls). | closed |
+| T-03-41 | Tampering | Active-DMA FF46 write gate | high | mitigate | Bus write path admits the FF46 exception while DMA blocks other non-HRAM CPU accesses; guest regression coverage is recorded in 03-12 SUMMARY (`src/core/gabbaboy.c:335-377,422-430`, `tests/test_dma.c:529-574`). | closed |
+| T-03-42 | Repudiation | DMA applicability/evidence claims | medium | mitigate | Immutable source assertions, evidence classes, and hardware/per-unit limitations are recorded (`docs/dmg-video-evidence.md:1-7,13-20,41-49`, `03-VERIFICATION.md:74,94-104`). | closed |
+| T-03-43 | Tampering | JOYP IF state | medium | mitigate | Ordered selected-pin transitions OR only IF.4; tests cover sticky IF, IE independence and transition behavior (`src/core/gabbaboy.c:430,552-569`, `tests/test_joypad.c:118-227`). | closed |
+| T-03-44 | Tampering | DMA/PPU scan, fetch, and CPU access | medium | mitigate | Bounded 40-entry/10-object scan, aligned OAM word fetch and DMA arbitration are exercised by overlap, mode-matrix, boundary and collision controls (`src/core/gabbaboy.c:581-629,863-893`, `tests/test_dma.c:839-1005,1086-1150`). | closed |
+| T-03-45 | Repudiation | VIDEO-02/03 evidence claims | medium | mitigate | Ledger retains pinned sources, commands, confidence class and unmeasured CPU-B limitations (`docs/dmg-video-evidence.md:1-7,41-49`; 03-13 SUMMARY). | closed |
+| T-03-SC | Tampering | Package installation | high | mitigate | Ordinary core remains SDL-free and the repository has no npm/pip/cargo dependency installation path; phase summaries preserve the offline-core/package legitimacy gate (`CMakeLists.txt:17,63-83`, 03-02/03-10/03-11/03-12/03-13 SUMMARY). | closed |
+
 ## Accepted Risks Log
 
-No accepted risks. T-03-27 is an open, medium-severity finding below the configured blocking threshold, not an accepted risk.
+No accepted risks. All declared threats use the mitigate disposition.
 
 ## Security Audit Trail
 
@@ -75,12 +85,14 @@ The audit found no unregistered threat flags. The summaries contain no `## Threa
 - [x] `threats_open: 0` confirmed at the configured high-severity threshold.
 - [x] `status: verified` set in frontmatter.
 
-**Approval:** verified 2026-10-07
+**Approval:** verified 2026-10-09
 
-## Security Audit 2026-10-09
+## Security Audit 2026-10-09 (refreshed)
+
+Rechecked all 40 threat IDs from plans 03-01 through 03-13. T-03-27's later implementation and T-03-39 close the limitation assertion gap. The downloaded-package verifier now prepares its output directory through a dedicated boundary helper: it rejects overlap with the untrusted candidate, filesystem/repository roots, and directory collisions, and removes only the two expected artifact paths. Regressions cover preserving unrelated output files, symlink targets, root/candidate aliases and directory collisions (`tests/scripts/verified_player_output_dir.py:14-47`, `tests/scripts/test_verified_player_output_dir.py:23-120`, `tests/scripts/verify-phase3-player.sh:294-297`).
 
 | Metric | Count |
 |---|---|
-| Threats found | 31 |
-| Closed | 30 |
-| Open | 1 |
+| Threats found | 40 |
+| Closed | 40 |
+| Open | 0 |

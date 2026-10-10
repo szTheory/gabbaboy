@@ -1,11 +1,12 @@
 ---
 phase: GB-03-visible-interactive-dmg
-verified: "2026-10-09T14:28:01Z"
+verified: "2026-10-09T22:37:25Z"
 status: passed
 score: 5/5 roadmap truths verified
 covered_files:
   - .github/workflows/ci.yml
   - .github/workflows/preview.yml
+  - .planning/config.json
   - .planning/phases/GB-03-visible-interactive-dmg/03-01-PLAN.md
   - .planning/phases/GB-03-visible-interactive-dmg/03-01-SUMMARY.md
   - .planning/phases/GB-03-visible-interactive-dmg/03-02-PLAN.md
@@ -32,10 +33,6 @@ covered_files:
   - .planning/phases/GB-03-visible-interactive-dmg/03-12-SUMMARY.md
   - .planning/phases/GB-03-visible-interactive-dmg/03-13-PLAN.md
   - .planning/phases/GB-03-visible-interactive-dmg/03-13-SUMMARY.md
-  - .planning/phases/GB-03-visible-interactive-dmg/03-REVIEW.md
-  - .planning/phases/GB-03-visible-interactive-dmg/03-SECURITY.md
-  - .planning/phases/GB-03-visible-interactive-dmg/03-UAT.md
-  - .planning/phases/GB-03-visible-interactive-dmg/03-VALIDATION.md
   - docs/dmg-video-evidence.md
   - docs/preview.md
   - fixtures/visible-demo/demo.asm
@@ -47,30 +44,28 @@ covered_files:
   - src/player/audio.h
   - src/player/input.c
   - src/player/input.h
+  - src/player/limitations.h
   - src/player/main.c
   - src/player/session.c
   - src/player/session.h
   - tests/CMakeLists.txt
   - tests/expected-tests.txt
   - tests/player/CMakeLists.txt
+  - tests/player/expected-tests.txt
   - tests/player/test_input.c
+  - tests/player/test_limitations.c
   - tests/player/test_presentation.c
   - tests/player/test_session.c
+  - tests/scripts/test_verified_player_output_dir.py
   - tests/scripts/verify-phase3-player.sh
+  - tests/scripts/verified_player_output_dir.py
   - tests/test_dma.c
   - tests/test_joypad.c
   - tests/test_ppu.c
   - tests/test_tracer.c
-covered_digest: "v3:sha256:31033fdba6a3a3051ddbdd16f62280b8aefe944f060b1e5d0aa7dc2eeda814b4"
+covered_digest: "v3:sha256:832ac6e22c4915733ffa76be28f581abf9bd751ba56a4c396e630bf8826aeee1"
 behavior_unverified: 0
 overrides_applied: 0
-re_verification:
-  previous_status: human_needed
-  previous_score: 4/5 roadmap truths verified
-  gaps_closed:
-    - "Current packaged preview visibility and live Z press/release response, recorded in completed UAT test 34."
-  gaps_remaining: []
-  regressions: []
 decision_coverage:
   honored: 14
   total: 14
@@ -80,145 +75,131 @@ decision_coverage:
 # Phase GB-03: Visible Interactive DMG Verification Report
 
 **Phase Goal:** As a Mac user, I want to play a legal GB ROM with timed input and video evidence, so that I can verify the DMG preview.
-**Verified:** 2026-10-09T14:28:01Z
+**Verified:** 2026-10-09T22:37:25Z against worktree HEAD `bb8fd654d03969e3d207fcdc92c345cc60be3298` plus its current dirty overlay.
 **Status:** passed
-**Re-verification:** Yes — current packaged-player UAT test 34 closes the prior report's sole human item.
+**Verification mode:** Initial goal-backward pass. The previous report had no top-level `gaps:` section. This refresh checks the complete roadmap contract and fingerprints the current implementation inputs, including `.planning/config.json`, which selects the CMake regression command.
 
 ## User Flow Coverage
 
-User story: “As a Mac user, I want to play a legal GB ROM with timed input and video evidence, so that I can verify the DMG preview.” The canonical user-story validator accepts this roadmap goal.
+User story: “As a Mac user, I want to play a legal GB ROM with timed input and video evidence, so that I can verify the DMG preview.” The runtime user-story validator returned `true`.
 
-| Step | Expected | Evidence | Status |
+| Step | Expected | Evidence in codebase | Status |
 |---|---|---|---|
-| Open and play the fixture | The legal, original GB demo loads and produces a visible frame. | `fixtures/visible-demo/manifest.json` binds source, rights, profile, protocol, and ROM digest; session and rendering paths are tested. UAT test 34 records the user's 2026-10-09 confirmation that the current packaged Mac player displays the demo. | VERIFIED |
-| Press and release a control | Timed Z events reach the guest and change the target tile. | `tests/player/test_input.c`, guest JOYP assertions, and current-package UAT test 34: user confirmed the tile darkens while Z is held and restores on release. | VERIFIED |
-| Verify video evidence | Composition, timing, contention, and gameplay have distinct evidence. | Registered independent `frame_composition_*`, `ppu_timing_*`, DMA/JOYP guests, and `docs/dmg-video-evidence.md` provenance/applicability matrix. | VERIFIED within declared software model |
-| See preview limitations | The preview identifies missing audio and battery persistence. | `src/player/main.c`, `src/player/limitations.h`, `tests/player/test_limitations.c`, `docs/preview.md`, and downloaded-package metadata assertions. | VERIFIED |
-
-**User-story outcome:** The current packaged app displays the owned demo and visibly responds to Z press/release, as recorded in completed UAT test 34. The report does not treat that observation as hardware qualification.
+| Launch a legal fixture | A Mac user can open the original interactive ROM-only demo and see its frame. | `fixtures/visible-demo/manifest.json` identifies original project-authored assembly, MIT license, 32 KiB ROM digest, bootless DMG profile, and limitations. Current packaged-window observation is recorded in UAT test 34 (2026-10-09). | VERIFIED |
+| Press and release a mapped key | Timestamped input reaches the guest and changes the rendered tile. | Public event queue → SDL scancode mapping → core joypad state → guest polling → copied frame → SDL render path is covered by player smoke. UAT test 34 records the owner's direct confirmation that holding Z darkened the tile and release restored it. | VERIFIED |
+| Inspect video evidence | Composition, raster timing, DMA/input behavior, and gameplay have distinct evidence. | Separate registered `frame_composition_*`, `ppu_timing_*`, DMA/JOYP guest cases and `docs/dmg-video-evidence.md`; no screenshot substitutes for guest timing assertions. | VERIFIED within the declared software model |
+| Use basic player controls | Resize, pause, reset, open, and quit are connected to the optional SDL player. | Player event/session/presentation tests and current extracted-package SDL smoke; bounded failed replacement preserves the active guest. | VERIFIED |
+| Understand support limits | Help/package/documentation describe the current supported audio/save subsets and remaining limits accurately. | `src/player/limitations.h`, `docs/preview.md`, and package metadata identify scoped DMG-CPU-B software audio, standard MBC1 battery-save scope, and missing physical/revision/CGB/perceptual qualification. Phase 4/5 have since implemented some capabilities that Phase 3 originally planned to label absent. | VERIFIED |
 
 ## Goal Achievement
 
 | # | Roadmap truth | Status | Evidence |
 |---|---|---|---|
-| 1 | VIDEO-01: Background/window/sprite composition and dot-sensitive LCD/STAT/fetch behavior are separately demonstrated. | ✓ VERIFIED | Production `src/core/gabbaboy.c` feeds independent authored expected images and guest timestamp assertions in `tests/test_ppu.c`; cases are registered in CMake and `tests/expected-tests.txt`. Validation reports the refreshed combined CTest inventory passed 229/229. |
-| 2 | VIDEO-02: Guests observe model-specific OAM DMA, VRAM/OAM restrictions, and CPU/PPU/DMA contention results. | ✓ VERIFIED (D-025 software model) | `tests/test_dma.c` contains active-DMA mode matrix, overlap controls, word-boundary, and same-half-dot guest cases with separate byte/pixel/CPU assertions. `docs/dmg-video-evidence.md` distinguishes documented behavior from repository policy. Exact CPU-B lane/timing and PPU-revision parity remain unmeasured and are not claimed. |
-| 3 | VIDEO-03: Timestamped joypad transitions produce deterministic selection/interrupt behavior through the public API and SDL keyboard path. | ✓ VERIFIED (selected falling-edge software contract) | Public event API and SDL mapping paths are wired; `joypad_interrupt` exercises selected/unselected edges, sticky IF, ordering, and partition equivalence. Exact CPU-B pulse/sample phase remains unmeasured. |
-| 4 | VIDEO-04: A Mac user can open/play a permissioned fixture, resize with aspect/integer scaling, pause, reset, quit, and receive actionable errors. | ✓ VERIFIED | Fixture and session loading, controls, error paths, and integer presentation are covered by player tests. Exact-head macOS package and downloaded-artifact consumer passed. UAT test 34 supplies current-package visible-window and live-Z confirmation; it does not claim a full physical-hardware test. |
-| 5 | VIDEO-05: Automated evidence distinguishes composition, timing, and gameplay; preview labels incomplete audio and persistence. | ✓ VERIFIED | Evidence ledger maintains distinct classes; player limitation text and package metadata have focused assertions; current package consumer checks the downloaded artifact. |
+| 1 | VIDEO-01: Background/window/sprite composition and dot-sensitive LCD/STAT/fetch behavior are separately demonstrated. | ✓ VERIFIED | Production PPU and public frame path are exercised by registered guest tests. `tests/test_ppu.c` has independent expected shade images and separate timestamped mode/STAT/fetch cases; all `frame_composition_*` and `ppu_timing_*` inventory entries passed in the current 179-test CTest run. |
+| 2 | VIDEO-02: Guests observe model-specific OAM DMA, VRAM/OAM restrictions, and CPU/PPU/DMA contention results. | ✓ VERIFIED (D-025 software-model scope) | `tests/test_dma.c` and CTest inventory assert DMA startup/restart/readback, bounded source/destination behavior, access restrictions, mode-2 scan/fetch overlap, word boundaries, and same-half-dot outcomes. Evidence ledger scopes collision/tie order to the deterministic D-025 software model. It does not claim exact CPU-B lane/timing or PPU-revision parity. |
+| 3 | VIDEO-03: Timestamped joypad transitions produce deterministic selection/interrupt behavior through the public API and SDL keyboard path. | ✓ VERIFIED (selected falling-edge software contract) | `joypad_interrupt` and related guest cases assert active-low selection, selected pin falling edges, negative controls, sticky IF, IE independence, equal-time ordering, and partition equivalence. SDL Z-down/up maps to the public event API and is observed in the packaged player. Exact CPU-B pulse qualification and sample phase remain unmeasured. |
+| 4 | VIDEO-04: A Mac user can open/play a permissioned fixture, resize with aspect/integer scaling, pause, reset, quit, and receive actionable errors. | ✓ VERIFIED | Original fixture manifest establishes rights and exact image identity. Player/session/presentation tests cover bounded replacement, errors, and geometry; the current package script's extracted-byte SDL smoke passed. UAT test 34 contains current Mac user's visible-window and Z response confirmation. |
+| 5 | VIDEO-05: Automated evidence distinguishes composition, timing, and gameplay; preview accurately states supported audio/persistence scope and remaining limits. | ✓ VERIFIED | Separate evidence suites are registered and pass. Audio and battery saves have since been implemented within declared subsets; current help/docs/package metadata state the supported formats, mapper/save scope, and remaining hardware/revision limits. The old Phase 3 exact phrase “not implemented” and old Plan 03-11 metadata predicate are superseded by Phases 4/5; current assertions correctly require the implemented paths. |
 
 **Score:** 5/5 roadmap truths verified (0 present-but-behavior-unverified).
 
-### Plan Must-Have Audit
+### Plan Coverage
 
-All thirteen phase plans were checked. Their artifact declarations resolve to existing substantive implementation/tests; plan 12/13 use shorthand artifact paths that the structured artifact query does not parse, so those were checked directly against the named source, guest tests, inventory, evidence ledger, and traceability. Key links were checked in code and test paths; a query parser miss on older links without explicit patterns was not treated as proof of a broken link.
+All 13 plans and all 13 summaries exist. The structured artifact query passed every artifact it could parse. Plans 03-12/03-13 use shorthand artifact declarations that the query does not parse; their implementation, tests, inventory registration, and evidence documents were checked directly. Several older key-link queries returned `Target not referenced` for cross-file behavior or non-file endpoints; these were manually traced below rather than treating parser output as a wiring failure. The Plan 03-11 literal check for “Audio and battery-save persistence are not implemented” is superseded by implemented Phase 4/5 support and a current exact limitation assertion.
 
-| Plan | Must-have coverage | Status | Evidence |
-|---|---|---|---|
-| 03-01 | Original ROM → production core → bounded frame and timestamped input | VERIFIED | `tests/test_tracer.c`, fixture manifest/digest, public header and core path. |
-| 03-02 | Independent BG/window/object images and guest-observed LCD/STAT/fetch timing | VERIFIED | `tests/test_ppu.c`; source and applicability records in evidence ledger. |
-| 03-03 | Timed DMA progress, source mapping, HRAM and access/contention outcomes | VERIFIED | Registered guest cases in `tests/test_dma.c`; evidence boundaries documented. |
-| 03-04 | Active-low JOYP selection, queue rules, only qualified interrupt behavior | VERIFIED | Public API, guest tests, and unresolved CPU-B limits documented. |
-| 03-05 | Optional SDL player, timestamped key path, and frame presentation | VERIFIED | `src/player/main.c`, `input.c`, and player input/presentation tests. |
-| 03-06 | Safe ROM replacement, session controls, actionable errors, integer-scaled presentation | VERIFIED | Session/presentation implementation and tests cover success/failure and bounds. |
-| 03-07 | Bounded frame/event failure behavior and installed C/C++ consumers | VERIFIED | Core API tests and registered consumer paths. |
-| 03-08 | Reproducible original fixture and exact-revision hosted receipt | VERIFIED | Fixture reproducer and fixture CI exact-head receipt (validation evidence). |
-| 03-09 | Exact-head macOS package and extracted-byte consumer | VERIFIED | Final PR head `1a2a02434eb348cd9e107072760fbd49867f8e28`: CI run 37942861727 and preview run 37942861800 passed; summary records package/runtime/fixture identity checks. |
-| 03-10 | Source-applicability constraints and explicit uncertainty for DMA/JOYP claims | VERIFIED as evidence-boundary truths | Source-to-case ledger retains unsupported CPU-B outcomes as unresolved; no hardware result is inferred from emulator or SDL behavior. |
-| 03-11 | Audio/persistence limitations in help and downloaded metadata | VERIFIED | Focused limitation test and package metadata checks. |
-| 03-12 | Source-supported FF46 startup/restart/readback while retaining open arbitration boundaries | VERIFIED | Registered DMA guest cases and model-limit documentation. |
-| 03-13 | JOYP edge matrix, DMA/PPU overlap/access/collision model, and explicit applicability limits | VERIFIED | Guest assertions and registered inventory cover IF.4 state, PPU/DMA matrix, same-half-dot outcomes, and partition behavior. VIDEO-04's formerly open package check is now completed in UAT test 34. |
-
-The two `verification: backstop` truths in Plan 03-10 are evidence-boundary claims, not requests to infer physical CPU-B behavior: the ledger maps each asserted outcome to its source/applicability class and explicitly leaves unsupported cases unqualified. They do not establish hardware accuracy. D-025 defines the accepted software-model scope.
+| Plan | Requirement(s) | Coverage result |
+|---|---|---|
+| 03-01 | VIDEO-01/03/05 | Original ROM enters production core; bounded copied frame and timestamped guest input are tested. |
+| 03-02 | VIDEO-01/05 | Independent BG/window/object images and guest-visible LCD/STAT/fetch timing are registered and passed. |
+| 03-03 | VIDEO-02/05 | DMA progress, source mapping, HRAM/access restrictions and contention guests are registered and passed. |
+| 03-04 | VIDEO-03 | Public event queue and active-low JOYP matrix/guest behavior are wired; hardware IF sampling remains outside the claim. |
+| 03-05 | VIDEO-03/04/05 | Optional SDL keyboard mapping and frame presentation use the public API; current rendered Z behavior is tested and recorded in UAT. |
+| 03-06 | VIDEO-04/05 | Transactional ROM replacement, actionable errors, pause/reset, integer scaling, and current limitation copy have focused tests. |
+| 03-07 | VIDEO-01/03 | Bounded output/event contracts and installed consumers are present; public-only consumers exercise timestamped input/frame copy. |
+| 03-08 | VIDEO-05 | Original fixture source, rights, digest, reproduction command, and exact-revision workflow are connected. Historical hosted receipt is not represented as a current-HEAD hosted run. |
+| 03-09 | VIDEO-04/05 | Exact-revision package workflow and extracted-byte consumer are wired; current local package smoke is separately recorded below. |
+| 03-10 | VIDEO-02/03 | Evidence ledger distinguishes source, software model, and physical observation; unsupported CPU-B behavior remains explicitly unqualified. Prohibitions on unlicensed fixtures, emulator-derived hardware claims, and host services in the portable core were checked against manifest, evidence labels, imports, and core/API. |
+| 03-11 | VIDEO-05 | Current limitation text is exactly asserted and metadata identifies implemented audio/save scope. The plan's obsolete “both absent” predicate was intentionally superseded by Phases 4/5. |
+| 03-12 | VIDEO-02 | FF46 startup/restart/readback guest cases and source boundaries are registered and passed. |
+| 03-13 | VIDEO-02/03 | JOYP edge matrix and D-025 DMA/PPU scan/fetch/access/collision cases are registered and passed; test 34 closes the then-open visible-package check. |
 
 ## Required Artifacts
 
 | Artifact group | Expected | Status | Details |
 |---|---|---|---|
-| Core/API and player | Timed DMG core, bounded frame/event API, optional SDL adapter | ✓ EXISTS + SUBSTANTIVE + WIRED | Core is consumed by the player and guest tests; SDL remains optional and outside the portable core dependency graph. |
-| PPU/DMA/JOYP/tracer tests | Independent image/timing/contention/input/gameplay cases | ✓ EXISTS + SUBSTANTIVE + WIRED | CMake and fail-closed expected-test inventory register the cases; authored expected values and guest-observed state exercise the production core. |
-| Original demo fixture | Legal reproducible interactive ROM | ✓ EXISTS + SUBSTANTIVE + WIRED | Source, license, manifest, digest, binary and reproducer connect fixture to tests and player default. |
-| Evidence and preview docs | Provenance, model boundaries, and limitations | ✓ EXISTS + SUBSTANTIVE + WIRED | Evidence matrix distinguishes hardware observations, documentation, software model, and repository policy. Audio and battery persistence limitations are explicit. |
-| Exact-head package workflows | Build and inspect actual downloaded package bytes | ✓ EXISTS + SUBSTANTIVE + WIRED | Required PR macOS package and downloaded consumer paths verify source/artifact/runtime/fixture identities and run player smoke against extracted bytes. |
+| Core/API and optional player | Timed PPU, DMA, JOYP, bounded frame/event API, and SDL adapter | ✓ VERIFIED | Core paths are consumed by public API tests, original guest tests, and optional player; SDL remains outside the portable core. |
+| PPU/DMA/JOYP/tracer tests | Independent composition, timing, contention, input, and gameplay cases | ✓ VERIFIED | CMake and fail-closed expected-test inventory register cases; current core suite passed 179/179. |
+| Original interactive fixture | Legal reproducible ROM-only GB image | ✓ VERIFIED | Source, license, manifest, size/digest, reproduction path, guest tests, and default package path are connected. |
+| Evidence/support documentation | Provenance, applicability, limitations | ✓ VERIFIED | Evidence ledger separates documentation, software policy, and physical observation. CPU-B and revision limits are explicit; preview docs/help describe current audio/save scope. |
+| Package and consumer workflow | Exact-head macOS package plus downloaded-byte smoke | ✓ VERIFIED as wired | PR workflow invokes the pinned build and downloaded consumer and gates its aggregate. Older hosted receipts are historical and are not claimed for current dirty HEAD. Current local extracted-byte package smoke passed. |
 
 ## Key Link Verification
 
 | From | To | Via | Status | Details |
 |---|---|---|---|---|
-| Core PPU | Public frame API and authored image guests | Dot progression, completed-frame copy | ✓ WIRED | Tests assert independent pixels and bounded frame behavior from production code. |
-| Core DMA/PPU | DMA guest cases | FF46, access gating, scan/fetch timeline | ✓ WIRED | Separate guest assertions cover DMA bytes, pixels, CPU bus reads, and partitioning. |
-| Public input API | JOYP guest cases | Timestamped queue → selected pin state → IF.4 software contract | ✓ WIRED | Guest reads FF00/IF and asserts edge/no-edge, stickiness, ordering, and partitions. |
-| SDL keyboard event | Player input → core API | Scancode mapping and timestamped event queue | ✓ WIRED | Automated input tests and UAT test 34 confirm mapped Z reaches visible demo behavior. |
-| Core frame | SDL window | Frame copy → texture update → render/present | ✓ WIRED | Package smoke checks rendered shade; user UAT confirms the current window visibly presents it. |
-| Fixture package | Extracted executable | Receipt-verified package-relative demo and SDL runtime | ✓ WIRED | Exact-head downloaded-package consumer passed and UAT exercised the current package. |
-| Limitation source | Help and package metadata | Shared text plus metadata validation | ✓ WIRED | Focused player assertion and downloaded-package consumer reject false audio/persistence support claims. |
+| PPU/core run | Public frame API and authored PPU guests | Dot progress → completed frame copy → independent pixel and timestamp assertions | ✓ WIRED | Core PPU state drives public copied pixels and guest-visible register timing. |
+| DMA/PPU scheduling | DMA guest suite | FF46 state, DMA deadlines, access gating, per-object scan/fetch | ✓ WIRED | DMA bytes, PPU output, CPU bus result and partitions are asserted separately. |
+| Public event API | JOYP guests | Timestamped queue → per-instance button/select state → FF00/IF.4 reads | ✓ WIRED | Selected falling-edge software contract has positive and negative guest assertions. |
+| SDL keyboard | Public event API | Scancode mapping and timestamped SDL events | ✓ WIRED | Player input tests plus current package Z-down/up smoke cover the same path. |
+| Core frame and demo fixture | SDL renderer/window | Copied shade frame → texture → renderer; manifest-bound ROM loads into session | ✓ WIRED | Extracted-byte smoke asserts rendered shades; UAT 34 supplies current visible-window confirmation. |
+| Package workflow | Extracted consumer | Receipt/digest verification → extraction → SDL guest/frame smoke | ✓ WIRED | Workflow dependencies and local script paths verified. Current local package SHA differs from older hosted receipt and is recorded below. |
+| Limitation source | Help, docs, and metadata | Shared capability statement and package fields | ✓ WIRED | Current limitation test asserts supported audio/save scopes; package smoke rejects false hardware claims. |
 
 ## Data-Flow Trace (Level 4)
 
-| Artifact | Data variable | Source | Produces real data | Status |
+| Artifact | Data | Source | Produces real data | Status |
 |---|---|---|---|---|
-| Player screen | shade frame / texture pixels | Production core completed frame → player buffer → SDL texture/window | Yes | ✓ FLOWING; current visible output confirmed by UAT 34. |
-| Guest joypad | FF00 and IF.4 | Timestamped public/SDL events → per-instance button/select state | Yes | ✓ FLOWING under selected falling-edge software contract. |
-| ROM fixture | Guest program bytes | Checked-in original ROM tied to manifest source and digest | Yes | ✓ FLOWING into guest tests and package-relative player load. |
+| SDL display | Frame pixels | Guest ROM → PPU → completed core frame → player copy → SDL texture | Yes | ✓ FLOWING; current packaged window confirmed in UAT 34. |
+| Guest joypad | FF00 / IF.4 and ROM-visible tile | SDL/public timestamped input → instance JOYP state → guest polling/interrupt model → PPU frame | Yes | ✓ FLOWING under the selected falling-edge software contract. |
+| Fixture | Guest program bytes | Checked-in original assembly/build manifest and digest → ROM-only loader | Yes | ✓ FLOWING into guest tests and packaged demo. |
 
 ## Behavioral Spot-Checks
 
-| Behavior | Evidence | Result | Status |
+| Behavior | Command/evidence | Result | Status |
 |---|---|---|---|
-| Core/test inventory | Validation receipt: combined CTest 229/229; closeout rerun of `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error` passed 179/179 core tests on local commit `04877a3` | Passed | ✓ PASS |
-| Optional player tests | Current validation receipt: pinned SDL 3.4.18 player suite 50/50 | Passed | ✓ PASS |
-| macOS package build | Exact-head CI run 37942861727 for `1a2a02434eb348cd9e107072760fbd49867f8e28`; `macos-player-package` and `required-native` passed | Passed | ✓ PASS |
-| Extracted package consumer | Preview run 37942861800 at the same exact head; `player-package-smoke-macos` and `preview-package-smoke` passed | Passed | ✓ PASS |
-| Fixture reproduction | Exact-head fixture run 37942861652 at the same exact head | Passed | ✓ PASS |
-| Current packaged live preview | Completed UAT test 34, 2026-10-09; user reported visible demo and shade darken/restore on Z press/release | Pass | ✓ PASS |
+| Core and registered test inventory | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error` | 179/179 passed; includes current fixture digest and preview package smoke | ✓ PASS |
+| Current optional player/package gate (dirty overlay on `bb8fd654d03969e3d207fcdc92c345cc60be3298`) | `bash tests/scripts/verify-phase3-player.sh --build-package` in the isolated macOS package run | 51/51 player CTests passed; extracted-package Z-down/Z-up rendered-shade checks, dummy-audio recovery, guest audio, and fresh-process MBC1 continuation passed; package SHA-256 `0016796835439b1fdba8fe15365137e85e8b6973cd28795966afa655a7f62fcc` | ✓ PASS |
+| Caller-selected output-directory safety | `PYTHONDONTWRITEBYTECODE=1 python3 tests/scripts/test_verified_player_output_dir.py -v`; package verification with a caller-selected output directory | 8/8 direct helper regressions passed; package consumer preserved unrelated output while producing the expected archive and receipt. Resolved equal/ancestor/descendant paths, symlinks, roots, and artifact-name collisions are covered. | ✓ PASS |
+| Current packaged live preview | Existing UAT test 34 (2026-10-09) | Owner reported demo visible; holding Z darkened the square and release restored lighter green | ✓ PASS |
 
-The package and fixture receipts are recorded in `03-VALIDATION.md` and `03-09-SUMMARY.md`; the latest local core CTest rerun passed 179/179 on the closeout tree. UAT test 34 is the single current packaged-window observation, and the future check is automated in the required PR package smoke.
+Additional checks: `bash -n tests/scripts/verify-phase3-player.sh` and `git diff --check` passed. The added output-directory helper is registered in optional player CTest and `tests/player/expected-tests.txt`, so omission fails the package lane's expected-test inventory.
+
+The full core CTest run was performed in the project worktree. The optional player/package result above came from a disposable macOS clone with current dirty worktree files copied over shared HEAD `bb8fd654d03969e3d207fcdc92c345cc60be3298`; it is not a clean-checkout or hosted-CI claim. The packaged-window observation is reused from the existing accepted UAT test 34; no repeat manual test is requested or implied. Previous exact-head hosted package/fixture receipts support workflow wiring only and do not prove hosted checks for this current dirty worktree.
 
 ## Probe Execution
 
-No Phase 3 plan declares a probe and the phase success criteria do not require one. The Phase 2 Mooneye candidate probe is out of scope.
+No Phase 3 plan declares a probe and no roadmap criterion requires one. The discovered `tests/scripts/probe-mooneye-candidate.sh` is a Phase 2 probe and is outside this phase.
 
 ## Requirements Coverage
 
 | Requirement | Source plans | Status | Evidence |
 |---|---|---|---|
-| VIDEO-01 | 03-01, 03-02, 03-07 | SATISFIED | Authored composition and raster-timing guest cases are distinct and registered. |
-| VIDEO-02 | 03-03, 03-10, 03-12, 03-13 | SATISFIED within D-025 software model | DMA/access/PPU guest checks and source applicability ledger; exact CPU-B lane/timing and PPU-revision parity remain unmeasured. |
-| VIDEO-03 | 03-01, 03-04, 03-05, 03-10, 03-13 | SATISFIED within selected falling-edge software contract | Public timestamped events and SDL path are tested; exact CPU-B pulse/sample phase remains unmeasured. |
-| VIDEO-04 | 03-05–03-09 | SATISFIED | Controls, safe replacement, errors, geometry, package and current user-confirmed live preview evidence. |
-| VIDEO-05 | 03-01, 03-02, 03-05, 03-06, 03-08, 03-09, 03-11 | SATISFIED | Separate evidence classes, original fixture provenance, and explicit audio/persistence limitations. |
+| VIDEO-01 | 01, 02, 07 | ✓ SATISFIED | Separate registered composition and PPU timing guest cases passed. |
+| VIDEO-02 | 03, 10, 12, 13 | ✓ SATISFIED within declared software model | DMA/PPU observable cases passed under D-025; exact CPU-B lane/timing and PPU revision parity remain unclaimed. |
+| VIDEO-03 | 01, 04, 05, 07, 10, 13 | ✓ SATISFIED under selected software contract | Public and SDL input paths plus guest JOYP/IF checks passed; exact CPU-B sample/pulse phase remains unmeasured. |
+| VIDEO-04 | 05, 06, 09, 13 | ✓ SATISFIED | Local extracted-byte smoke and existing current-package UAT test 34. |
+| VIDEO-05 | 01, 02, 03, 05, 06, 07, 08, 09, 11 | ✓ SATISFIED with current capability scope | Separate evidence suites pass; current help/docs/package accurately describe implemented scoped audio/save support and residual limits. |
 
-All five plan requirement IDs are accounted for; no additional Phase 3 requirement mapping is orphaned. All 14 trackable phase decisions are honored. Physical DMG-CPU-B measurements are outside the stated acceptance evidence and are not represented as requirement failures.
+All five Phase 3 requirements map to a plan and the roadmap; no orphaned Phase 3 requirement was found. VIDEO-05 describes accurate reporting of current supported audio/persistence scope and remaining limitations, consistent with the capabilities added in Phases 4 and 5.
 
-## Test Quality Audit
+## Review, Security, and Test Quality
 
-| Test File | Linked requirement | Active/registered | Circular expected-value generation | Assertion strength | Verdict |
-|---|---|---|---|---|---|
-| `tests/test_ppu.c` | VIDEO-01/05 | Yes | None identified; expected images are authored independently | Value and guest-timestamp assertions | PASS |
-| `tests/test_dma.c` | VIDEO-02/05 | Yes | None identified; byte/pixel/bus outcomes are asserted independently | Value and behavioral guest assertions | PASS within declared model |
-| `tests/test_joypad.c` | VIDEO-03 | Yes | None identified; guest reads FF00/IF | Value and multi-step state assertions | PASS within declared contract |
-| `tests/test_tracer.c` | VIDEO-01/03/05 | Yes | None identified; fixture and expected behavior are separately specified | Frame/gameplay assertions | PASS |
-| `tests/player/test_input.c`, `test_presentation.c`, `test_session.c`, `test_limitations.c` | VIDEO-03/04/05 | Yes | No circular expected-value generation identified | Value, failure-boundary, and workflow assertions | PASS |
-
-Disabled requirement tests: none found in the reviewed registered inventory. Circular expected-value patterns: none identified. Exact hardware behavior beyond the declared model is not tested or claimed.
-
-## Anti-Patterns Found
-
-| File | Line | Pattern | Severity | Impact |
-|---|---|---|---|---|
-| None | — | No blocking debt markers or placeholder implementation identified in the phase implementation/review scope. | — | Returns and initial empty state inspected are normal error/state defaults, not user-visible stubs. |
-
-`03-REVIEW.md` reports zero findings. `03-SECURITY.md` reports no high-threshold open threat; T-03-27 is a medium historical limitation-text/metadata coverage item that Plan 03-11 closes with focused assertions. The review and security documents predate parts of the current evidence refresh; exact-head CI and current UAT are independently recorded above.
+- Focused Phase 3 review is `clean` (0 critical, 0 warning, 0 info) and examined current player rendering/input smoke and both workflows.
+- Security report closes all 40/40 declared threat IDs (`threats_open: 0`); fixture, input, frame bounds, DMA, and package boundaries have identified mitigations. The evidence ledger prevents software-model outcomes from being represented as physical CPU-B observations.
+- Nyquist validation marks `GB03-OUTPUT-DIR-OVERLAP` resolved with 8/8 focused helper regressions. The focused review is clean (0 critical, 0 warning, 0 info). The configured core regression command ran the full SDL-free CTest inventory (179/179).
+- Requirement-linked tests have no disabled/skipped tests. Expected images and guest observations are independently authored; no test derives its expected result by running the implementation under test.
+- Anti-pattern scan found no debt markers, placeholder implementation, empty user-visible result, or console-only path in covered implementation/tests. `.XXXXXX` matches are mktemp template strings, not `XXX` debt comments.
+- Decision-coverage gate: 14/14 trackable CONTEXT decisions honored (non-blocking gate).
 
 ## Human Verification Required
 
-None. The user-facing current packaged preview and Z response are recorded as completed UAT test 34. No second observation is required. Physical CPU-B timing and lane behavior remain unmeasured hardware limitations, not unresolved software acceptance steps.
+None. The current packaged-window interaction is already documented as owner-observed in UAT test 34. No physical hardware measurement is needed for the declared software-model acceptance, and no physical CPU-B/PPU-revision claim is made.
 
 ## Gaps Summary
 
-**No phase-goal gaps found.** All roadmap truths and mapped requirements are satisfied within their declared software evidence scopes. The current packaged player’s visible demo and mapped Z response were directly confirmed on 2026-10-09; exact-head package CI and extracted-byte smoke passed. The report makes no physical CPU-B or universal PPU-revision claim: JOYP pulse/sample phase, DMA lane/word-tie timing, and revision parity remain unmeasured and are explicitly recorded in the evidence ledger.
+No must-have gap remains for the Phase 3 goal. The implementation delivers legal-fixture gameplay, timed input, separate video evidence, and the optional Mac player. The accepted scope is the declared DMG software model: exact CPU-B DMA lane/timing, JOYP pulse/sample phase, and PPU revision parity remain unmeasured. Scoped audio and standard-MBC1 battery persistence now exist from later phases; current limitations identify where support and physical qualification remain incomplete.
 
 ---
 
-_Verified: 2026-10-09T14:28:01Z_
+_Verified: 2026-10-09T22:37:25Z_
 _Verifier: the agent (gsd-verifier)_
