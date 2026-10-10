@@ -108,7 +108,7 @@ add_test(NAME acceptance_digest_vectors
 set_tests_properties(acceptance_digest_vectors PROPERTIES TIMEOUT 30)
 
 # Model applicability and declared-exclusion suite semantics (D-22). Exclusions exit 4 with their own
-# reason; CTest SKIP_RETURN_CODE is never used, so an excluded case can never read as a skipped pass.
+# reason; the CTest skip-return-code mechanism is never used, so an excluded case can never read as a skip.
 function(gbb_add_acceptance_exit name code regex timeout)
   add_test(NAME ${name}
     COMMAND ${CMAKE_COMMAND}
@@ -140,3 +140,19 @@ gbb_add_acceptance_exit(acceptance_suite_undeclared_exclusion 1
 gbb_add_acceptance_exit(acceptance_suite_missing_expect_excluded 2
   "reason=expect-excluded-required" 30
   "--acceptance;${GBB_CASES};--suite")
+set(GBB_APPLICABILITY tests/acceptance/negative/applicability.txt)
+gbb_add_acceptance_exit(acceptance_target_revision_excluded 4
+  "status=excluded reason=target-revision" 30
+  "--acceptance;${GBB_APPLICABILITY};--case;libbet-rev-x")
+gbb_add_acceptance_exit(acceptance_unexpected_pass 1
+  "status=unexpected-pass" 300
+  "--acceptance;${GBB_APPLICABILITY};--case;libbet-unexpected-pass")
+gbb_add_acceptance_exit(acceptance_unknown_model 2
+  "reason=unknown-model" 30
+  "--acceptance;${GBB_CASES};--case;libbet;--model;z80")
+gbb_add_acceptance_exit(acceptance_observe_only_flag 2
+  "reason=observe-only-flag" 30
+  "--acceptance;${GBB_CASES};--case;libbet;--pcm-digest")
+gbb_add_acceptance_exit(acceptance_suite_invalid_expect_excluded 2
+  "reason=invalid-expect-excluded" 30
+  "--acceptance;${GBB_CASES};--suite;--expect-excluded;x1")
