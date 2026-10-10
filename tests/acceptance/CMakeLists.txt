@@ -241,6 +241,14 @@ gbb_add_acceptance_exit(acceptance_libbet_drop_start 1
   "reason=predicate-not-reached.*mutate=drop:START" 300
   "--acceptance;${GBB_CASES};--case;libbet;--mutate;drop:START;--receipt")
 
+# SGB tolerance (D-17): Libbet runs detect_sgb on every DMG boot. The receipt of the passing run carries
+# the hw_capability value at frame 90 and the number of FF00 reset pulses (a select-bits 00 write
+# later followed by a select-bits 11 write) seen by a deterministic diagnostics replay of those 90
+# frames, so a detection path that ran and was tolerated is observable rather than assumed.
+gbb_add_acceptance_exit(acceptance_sgb_tolerance 0
+  "hw_f90=00 sgb_reset_pulses=[1-9]" 300
+  "--acceptance;${GBB_CASES};--case;libbet;--receipt")
+
 # Core mutant (D-14): a copy of the core whose JOYP direction/button select test is inverted, built into a
 # test-only static library and runner. The source line is the single anchor guaranteed by Plans 07-03 and
 # 07-17; if it moves or repeats, configure fails rather than silently building an unmutated "mutant".

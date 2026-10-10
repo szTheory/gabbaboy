@@ -220,6 +220,7 @@ acceptance_libbet-select
 acceptance_libbet-no-input_raw
 acceptance_libbet-select_raw
 acceptance_libbet_drop_start
+acceptance_sgb_tolerance
 acceptance_core_mutant
 acceptance_suite_declared_exclusion
 acceptance_suite_undeclared_exclusion
