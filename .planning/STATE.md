@@ -2,8 +2,8 @@
 gsd_state_version: "1.0"
 milestone: v0.1
 status: executing
-stopped_at: Phase 2 verification freshness refresh complete (5/5 at a9050df); all six phase reports fresh — v0.1 milestone audit is next
-last_updated: "2026-10-10T12:40:45.059Z"
+stopped_at: v0.1 milestone audit complete (tech_debt — 35/35 requirements, 6/6 phases, 12/12 integration, 5/5 flows, 0 blockers) — owner chooses milestone completion or a cleanup phase
+last_updated: "2026-10-10T13:03:27.000Z"
 state_head: 4b13d6aaf32849c574ac317ffd9420c3e060ffa8
 progress:
   total_phases: 6
@@ -16,7 +16,7 @@ milestone_name: limited DMG preview
 last_activity: 2026-10-10
 current_phase: 02
 current_phase_name: DMG CPU, Bus and Time
-last_activity_desc: Phase 2 verification freshness refresh passed 5/5 and CPU-01–05; all six phase reports fresh
+last_activity_desc: v0.1 milestone audit tech_debt — 35/35 requirements satisfied, no blockers
 ---
 
 # Project State
@@ -26,7 +26,7 @@ last_activity_desc: Phase 2 verification freshness refresh passed 5/5 and CPU-01
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-07)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Rerun the strict v0.1 milestone audit now that all six phase reports are fresh
+**Current focus:** Owner review of the v0.1 milestone audit (tech_debt, no blockers) before milestone completion
 
 ## Current Position
 
@@ -51,7 +51,9 @@ The freshness gate reports Phases 1–6 as passed. PR #41 (release 0.1.1) remain
 
 Branch rule: never reuse or push to the stale same-named `gsd/phase-NN-<slug>` branches on `origin` (GB-GSD-009).
 
-**Next command:** `$gsd-audit-milestone v0.1` (v0.1 limited DMG preview — strict three-source milestone audit over all six fresh phase reports). Merge this Phase 2 refresh PR first, after its exact-head required checks pass. Do not run `$gsd-complete-milestone v0.1` until that audit is reviewed and reports no gaps. Keep the milestone `executing` and both auto-advance flags false.
+**Milestone audit (2026-10-10T13:03:27Z, at `f03e9b1`):** `tech_debt` — 35/35 requirements satisfied by three-source cross-reference, 6/6 phases passed and fresh, 12/12 integration groups and 5/5 E2E flows wired, Nyquist 6/6 compliant, 0 open threats, 0 open review dispositions. Live `main` branch protection was observed (required `required-native`, `fixture-repro`, `preview-package-smoke`; strict; admins enforced). Non-blocking debt: deferred info review items in Phases 1/2/3/5, no C++/Windows audio-PCM consumer coverage, and PR #41 bot-run approval. See [v0.1-MILESTONE-AUDIT.md](v0.1-MILESTONE-AUDIT.md).
+
+**Next command:** `$gsd-complete-milestone v0.1` (recommended: accept the non-blocking tech debt and archive v0.1 limited DMG preview). Alternative: `$gsd-phase --insert 7 "Address v0.1 tech debt: CI workflow info items and audio consumer coverage"`. The owner chooses; keep the milestone `executing` and both auto-advance flags false until then.
 
 ## Performance Metrics
 
@@ -228,10 +230,12 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 ## Session Continuity
 
 Last session: 2026-10-10T14:30:00Z
-Stopped at: Phase GB-02 verification freshness refresh complete — v0.1 milestone audit next
+Stopped at: v0.1 milestone audit complete (tech_debt, no blockers) — owner decides milestone completion
 Resume file: .planning/.continue-here.md
-Next command in fresh context: `$gsd-audit-milestone v0.1` (v0.1 limited DMG preview milestone audit)
+Next command in fresh context: `$gsd-complete-milestone v0.1` (v0.1 limited DMG preview — accept non-blocking tech debt and archive)
 Continuation note: [.continue-here.md](.continue-here.md)
 Completed workflow stage: **Phase 2 — DMG CPU, Bus and Time verification freshness refresh** (2026-10-10). Canonical verification passed 5/5 truths and CPU-01–05 at `a9050df` on `gsd/phase-02-verification-refresh-2`. Gates: Nyquist 0 gaps, security 45/45 closed, code review 1 info deferred with 0 open dispositions, regression 179/179 core. No hosted-CI, physical-hardware or perceptual result is claimed.
 
-Next closeout actions: merge the Phase 2 refresh PR after exact-head required checks pass. Then run **`$gsd-audit-milestone v0.1`**. Do not run `$gsd-complete-milestone v0.1` until the audit is reviewed and reports no gaps.
+Completed workflow stage: **v0.1 milestone audit** (2026-10-10) — `tech_debt`, 35/35 requirements, 0 blockers.
+
+Next closeout actions: merge the audit PR after exact-head required checks pass. Then the owner runs **`$gsd-complete-milestone v0.1`** (or inserts a tech-debt cleanup phase first).
