@@ -5,16 +5,16 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 07
 current_phase_name: DMG Game Acceptance and Regression Baseline
 status: executing
-stopped_at: Completed 07-08-PLAN.md
-last_updated: "2026-10-10T23:26:55.934Z"
+stopped_at: Completed 07-09-PLAN.md
+last_updated: "2026-10-10T23:32:28.189Z"
 last_activity: 2026-10-10
 last_activity_desc: Phase GB-07 execution started
-state_head: 2ef95fcc6758b277f1ae75aed2f2bf4241b4f3ba
+state_head: 928de0dcb675757aac5555d1c6e80f51ca8ae797
 progress:
   total_phases: 9
   completed_phases: 1
   total_plans: 17
-  completed_plans: 9
+  completed_plans: 10
   percent: 11
 ---
 
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-10)
 ## Current Position
 
 Phase: GB-07 (DMG Game Acceptance and Regression Baseline) — EXECUTING
-Plan: 10 of 17
+Plan: 11 of 17
 Status: Executing Phase GB-07
 Last activity: 2026-10-10 — Phase GB-07 execution started
 
@@ -112,6 +112,7 @@ Progress (v0.2): [░░░░░░░░░░] 0% (0/9 phases)
 | Phase 07 P06 | 25 min | 2 tasks | 11 files |
 | Phase 07 P07 | 75 min | 2 tasks | 11 files |
 | Phase 07 P08 | 25 min | 2 tasks | 9 files |
+| Phase 07 P09 | 20 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -215,6 +216,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 07]: D-029: Libbet checkpoint structure gate is >=2 distinct shades for title/play_start and >=3 for mid/hit (pinned title screen is 1-bit text); refines D-25
 - [Phase 07]: PCM window is stepping calls starting at or after play_start; run continues 1 s past T_hit so the window ends at T_hit+1 s (07-07)
 - [Phase 07]: 07-08: gbb_case_applicability decides model before revision; model_fail strict (xfail only for declared reason); suite requires --expect-excluded and fails on excluded-count-mismatch; only dmg-cpu-b executes
+- [Phase 07]: 07-09: daa LD B,B digest is a regression-class observation (mooneye.daa.frame), never a case-file reference; ldbb-controls.txt references are configure-enforced to the stdlib uniform-3 digest (D-26)
 
 ### Pending Todos
 
@@ -248,8 +250,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-10T23:26:55.913Z
-Stopped at: Completed 07-08-PLAN.md
+Last session: 2026-10-10T23:32:28.163Z
+Stopped at: Completed 07-09-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 7`
 Continuation note: [.continue-here.md](.continue-here.md)
