@@ -301,6 +301,36 @@ class VerifiedPlayerOutputDirTests(unittest.TestCase):
             sorted(entry.name for entry in self.output.iterdir()), [OUTPUT_NAMES[0]]
         )
 
+    def test_failed_withdrawal_after_link_is_reported_without_masking_sync_error(self) -> None:
+        # Exercises the inner withdrawal site in _publish_new_artifact: the first
+        # directory fsync fails after the archive was linked, and withdrawing it fails too.
+        original_fsync = os.fsync
+        directory_sync_failed = False
+
+        def fail_first_directory_sync(descriptor):
+            nonlocal directory_sync_failed
+            if not directory_sync_failed and stat.S_ISDIR(os.fstat(descriptor).st_mode):
+                directory_sync_failed = True
+                raise OSError("simulated directory sync failure")
+            return original_fsync(descriptor)
+
+        def fail_withdrawal(descriptor, name, published_info):
+            raise OSError("simulated withdrawal failure")
+
+        stderr = io.StringIO()
+        with patch.object(output_dir_module.os, "fsync", side_effect=fail_first_directory_sync):
+            with patch.object(output_dir_module, "_withdraw_artifact", side_effect=fail_withdrawal):
+                with contextlib.redirect_stderr(stderr):
+                    with self.assertRaisesRegex(OSError, "simulated directory sync failure"):
+                        self._publish_sample()
+
+        self.assertTrue(directory_sync_failed)
+        self.assertIn(f"could not withdraw published {OUTPUT_NAMES[0]}", stderr.getvalue())
+        self.assertIn("simulated withdrawal failure", stderr.getvalue())
+        names = sorted(entry.name for entry in self.output.iterdir())
+        self.assertEqual(names, [OUTPUT_NAMES[0]])
+        self.assertFalse([name for name in names if name.endswith(".tmp")])
+
     def test_broken_stderr_does_not_replace_original_publication_error(self) -> None:
         def fail_withdrawal(descriptor, name, published_info):
             raise OSError("simulated withdrawal failure")
