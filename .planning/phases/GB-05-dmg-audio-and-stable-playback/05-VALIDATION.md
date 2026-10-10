@@ -53,7 +53,7 @@ created: "2026-10-08"
 | 05-06-03 | 06 | 6 | HOST-02 | T-05-10/11 | Commit before host clear and callback quiescence | injected events + pinned-SDL3 dummy smoke | `bash tests/scripts/verify-phase3-player.sh` | `player_audio_lifecycle`, `player_audio_device`, `player_audio_replacement`; dummy open/stream/close/recovery | ✅ green |
 | VERIFY-05-HOST-02-RESET | Execution follow-up | Final | HOST-02 | T-05-10 | Save before reset; preserve active session on failed save/cancel | Deterministic app event-loop test | `bash tests/scripts/verify-phase3-player.sh` | `tests/player/test_reset_transition.c`; `player_reset_transition` drives Space pause/resume and R reset through the SDL event loop, verifies APU continuation/host PCM clearing, save failure/cancel/retry, input/audio reset, and persisted battery recovery | ✅ green |
 | 05-07-01 | 07 | 7 | AUDIO-03 | T-05-12/13 | Bounded receipt and fixture rights | sustained dummy-driver measurement | `bash tests/scripts/verify-phase3-player.sh && bash tests/scripts/measure-audio-playback.sh` | `tests/scripts/measure-audio-playback.sh`; MIT fixture digest/manifest; revision-linked JSON receipt | ✅ green |
-| 05-07-02 | 07 | 7 | AUDIO-01/02/03, HOST-01/02 | T-05-12/13 | Consumer truthfulness | full inventory + package/script | Full CTest, player verifier, sustained measurement | `docs/audio-and-playback.md`, `docs/preview.md`, README/help assertions, package metadata assertions | ✅ green |
+| 05-07-02 | 07 | 7 | AUDIO-01/02/03, HOST-01/02 | T-05-12/13 | Consumer truthfulness | full inventory + package/script | Full CTest, player verifier, sustained measurement | `docs/audio-and-playback.md`, `docs/preview.md`, README/help assertions, package metadata assertions; since PR #43/GB-06 the verified package and receipt are published by `tests/scripts/verified_player_output_dir.py`, checked by `player_verified_output_directory` | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -113,6 +113,28 @@ Source revision: `4d52df7aa0594bad2a3b0f0dc91e92e5612a2f4c`. The source tree was
 The receipt identifies Release mode, macOS arm64, the scoped DMG-CPU-B software model, the authored MIT-licensed visible-demo workload, SDL dummy backend, and no available default audio device. Both partitions reported 1,024 application underflow frames, 2,502 intentionally discarded host frames, zero stream-write failures, and zero SDL queued-input bytes; producer backpressure was 3,203/3,211 events. These are software measurements, not physical starvation, latency, hotplug, or perceptual claims. The source tree was dirty, so these results do not establish an exact clean revision or remote CI status.
 
 The focused incremental code review covered `src/player/main.c`, `docs/preview.md`, and `tests/scripts/verify-phase3-player.sh`; it reported zero findings. It confirmed that S handles manual/background-save retry while R/C/Escape handle a blocked final transition.
+
+## Refreshed Executed Evidence at Clean HEAD (2026-10-10)
+
+Source revision: `cb4a96ce3f5bd3f8fe66211e62b650a822e2423a` on `gsd/phase-05-verification-refresh`; the sustained receipt records `source_tree_state: clean` (only planning state files were modified, outside the measured source tree). These are local results, not hosted CI evidence.
+
+**Changed covered files since the 05-VERIFICATION.md baseline (`7b1c491`) and their disposition:**
+
+| File | Change | Phase 5 requirement impact | Automated coverage |
+|---|---|---|---|
+| `src/player/session.c` | ROM open adds `O_NONBLOCK` so a FIFO/special file cannot block before the `fstat` regular-file guard | HOST-02 session-transition safety: rejected replacement must leave the active session unchanged. No audio, input or device-transition path changed; `O_NONBLOCK` has no effect on regular-file reads. | `player_session` now creates a FIFO at the replacement path, requires the "bounded regular file" error, verifies the machine/session is unchanged and the FIFO is untouched. `player_reset_transition`, `player_audio_lifecycle/device/replacement` still pass. |
+| `tests/scripts/verified_player_output_dir.py` (new) | Shared helper that publishes the verified package and receipt as one set outside the checkout | Consumer/package evidence for 05-07-02 only; no runtime behavior | `player_verified_output_directory` (runs `tests/scripts/test_verified_player_output_dir.py`) plus the end-to-end verifier publish step. |
+| `tests/scripts/verify-phase3-player.sh` | Uses the helper; also binds the candidate `package_sha256` from the build receipt | Verifier still builds every Phase 5 player case from the fixed inventory and runs the dummy audio smoke | 51-entry fixed inventory (50 prior + `player_verified_output_directory`), all passing. |
+
+| Evidence | Command / observation | Result |
+|---|---|---|
+| Complete core inventory | `cmake --preset phase1 -DGABBABOY_BUILD_PLAYER=OFF && cmake --build --preset phase1 --parallel 2 && ctest --preset phase1 --output-on-failure --no-tests=error` | **179/179 passed** (2.27 s), including every `apu_*` and `audio_*` case named in the task map. |
+| Complete player/package verifier | `env HOME=/private/tmp/gabbaboy-validation-home CFFIXED_USER_HOME=/private/tmp/gabbaboy-validation-home SDL_AUDIO_DRIVER=dummy bash tests/scripts/verify-phase3-player.sh` | **51/51 passed**, exit 0. Includes all `player_audio_*`, `player_input_*`, `player_reset_transition`, `player_session`, `player_smoke` and `player_verified_output_directory`. Candidate package SHA-256: `08562bfa223ec3786784c0cd434f6ff872d16d3f34e6436ebdf5331087b5ca77` (pinned SDL 3.4.18). |
+| Sustained playback receipt | `env HOME=/private/tmp/gabbaboy-validation-home CFFIXED_USER_HOME=/private/tmp/gabbaboy-validation-home bash tests/scripts/measure-audio-playback.sh` | **Passed** for frame-sized and 792-half-dot partitions: 241,094 stereo frames each, identical PCM SHA-256 `8667279ae7d3bf3cdd76a278b13d2cdfe9992d64325c15e4eef9449778eaeec4` (unchanged from both prior runs), 42,134,424 elapsed half-dots against 42,134,400 requested. Receipt: `build/phase3-player/audio-measurement/cb4a96ce3f5b-3wh_0kwx/receipt.json`. |
+
+The receipt reports Release mode, macOS arm64, DMG-CPU-B scoped software model, MIT authored workload (fixture SHA-256 `38afb54b40f4b6612906c7a68e367199d8bff135508a39d7acdc996bf3d86530`), SDL dummy driver, dummy open/stream/close/recovery passed, 1,024 application underflow frames and 2,502 intentionally discarded host frames per partition, zero stream-write failures, zero SDL queued-input bytes, producer backpressure 3,822/3,807 (host-scheduling dependent). This host now reported a default audio device as available, but the measurement still used the dummy driver; no physical playout, latency or perceptual claim is made.
+
+**Gap result:** AUDIO-01, AUDIO-02, AUDIO-03, HOST-01 and HOST-02 remain COVERED by passing named automated cases. Gaps found 0; no tests added in this refresh.
 
 ## Spec-less Edge Assumptions (11 reviewed)
 
