@@ -298,14 +298,36 @@ All six phases have completed plan execution (56/56 runnable plans); Phase 2 Pla
 ### Phase 06.1: Address v0.1 tech debt: CI workflow info items and audio consumer coverage (INSERTED)
 
 **Goal:** Close the non-blocking debt that the [v0.1 milestone audit](v0.1-MILESTONE-AUDIT.md) recorded, without widening any v0.1 claim: resolve or explicitly re-defer the deferred info review items in the CI workflows (Phase 1 `preview.yml` IN-01/IN-02, Phase 2 `ci.yml` IN-01) as one batched workflow change, and extend installed-package audio PCM consumer coverage beyond the relocated C example (C++ consumer and the Windows preview lane). Phase 3 IN-01..03 and Phase 5 IN-01 are triaged as fix-or-re-defer within the same scope.
-**Requirements**: none new (hardens AUDIO-02, SHIP-01, BASE CI evidence; all 35 remain mapped to Phases 1–6)
+**Requirements**: none new (hardens AUDIO-02, SHIP-01, BASE-07, BASE-08 CI evidence, plus VIDEO-04, SAVE-03, SHIP-02 player ROM-open and verified-output hardening; all 35 remain mapped to Phases 1–6)
 **Depends on:** Phase 6
 **Success criteria:**
 1. Each audit tech-debt item is fixed with test evidence or re-deferred with a recorded reason in the phase report.
 2. An installed-package consumer other than the relocated C example calls the audio PCM API, and that lane runs on Windows as well as Linux/macOS.
 3. Workflow edits land in a single batched change; every phase whose verification it makes stale (1, 2, 3, 6 as applicable) is re-verified fresh before the phase closes.
 4. Required checks pass on the exact merged head; no hardware or perceptual claim is added.
-**Plans:** 0 plans
+
+**Plans:** 8 plans in 6 waves
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 06.1 to break down)
+**Wave 1**
+- [ ] 06.1-01-PLAN.md — C and C++ installed-consumer `audio_api_smoke()` (wave 1)
+- [ ] 06.1-02-PLAN.md — P3 IN-01..03 and P5 IN-01: player ROM read split plus `O_NOCTTY`, test helper and inner-withdrawal test, verified-output comment (wave 1)
+- [ ] 06.1-03-PLAN.md — `.github/scripts/wait-exact-head-ci.py` exact-head gate with `--self-test` (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 06.1-04-PLAN.md — single batched ci.yml + preview.yml commit, PR 1 exact-head merge, hosted readback, debt disposition (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 06.1-05-PLAN.md — measure staleness; refresh Phases 1–2 (wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 06.1-06-PLAN.md — refresh Phases 3–4 (wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 06.1-07-PLAN.md — refresh Phases 5–6 (wave 5)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 06.1-08-PLAN.md — complete debt disposition and STATE route, docs-only PR 2 exact-head merge, freshness on main (wave 6)
+
+**Cross-cutting constraints:**
+- wait-exact-head-ci.py --self-test proves: newest same-SHA ci.yml pull_request run by run_number decides; an in-progress newest run or attempt waits; an older success never satisfies a newer failure or pending run; a truncated list (total_count > listed), persistent list/detail attempt mismatch, or deadline fails closed; a terminal failure needs two consecutive polls on the same (id, attempt).

@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v0.1
 status: executing
-stopped_at: Phase 06.1 context gathered
-last_updated: "2026-10-10T14:06:17.746Z"
-state_head: a9dc378dc8b7defb891353612e316503479a6729
+stopped_at: Phase 06.1 planned
+last_updated: "2026-10-10T15:23:00.429Z"
+state_head: ae9c156a2d4e503ed0405ffa14dc25e91de1c55a
 progress:
   total_phases: 7
   completed_phases: 6
-  total_plans: 56
+  total_plans: 64
   completed_plans: 56
   verified_phases: 6
 milestone_name: limited DMG preview
 last_activity: 2026-10-10
-current_phase: "06.1"
 current_phase_name: "Address v0.1 tech debt: CI workflow info items and audio consumer coverage"
+current_phase: "06.1"
 last_activity_desc: Inserted Phase 06.1 to close v0.1 audit tech debt before milestone completion
 ---
 
@@ -52,7 +52,7 @@ Branch rule: never reuse or push to the stale same-named `gsd/phase-NN-<slug>` b
 
 **Milestone audit (2026-10-10T13:03:27Z, at `f03e9b1`):** `tech_debt` — 35/35 requirements satisfied by three-source cross-reference, 6/6 phases passed and fresh, 12/12 integration groups and 5/5 E2E flows wired, Nyquist 6/6 compliant, 0 open threats, 0 open review dispositions. Live `main` branch protection was observed (required `required-native`, `fixture-repro`, `preview-package-smoke`; strict; admins enforced). Non-blocking debt: deferred info review items in Phases 1/2/3/5, no C++/Windows audio-PCM consumer coverage, and PR #41 bot-run approval. See [v0.1-MILESTONE-AUDIT.md](v0.1-MILESTONE-AUDIT.md).
 
-**Next command:** `$gsd-plan-phase 06.1` (plan Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage). The owner chose cleanup before `$gsd-complete-milestone v0.1`; keep the milestone `executing` and both auto-advance flags false.
+**Next command:** `$gsd-execute-phase 06.1` (execute Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage; 8 plans in 6 waves). The owner chose cleanup before `$gsd-complete-milestone v0.1`; keep the milestone `executing` and both auto-advance flags false.
 
 ## Performance Metrics
 
@@ -233,12 +233,14 @@ Future requirements and acceptance direction remain in [REQUIREMENTS.md](REQUIRE
 ## Session Continuity
 
 Last session: 2026-10-10T14:06:17.542Z
-Stopped at: Phase 06.1 context gathered
-Resume file: .planning/phases/GB-06.1-address-v0-1-tech-debt-ci-workflow-info-items-and-audio-cons/06.1-CONTEXT.md
-Next command in fresh context: `$gsd-plan-phase 06.1` (Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage)
+Stopped at: Phase 06.1 planned
+Resume file: .planning/phases/GB-06.1-address-v0-1-tech-debt-ci-workflow-info-items-and-audio-cons/06.1-01-PLAN.md
+Next command in fresh context: `$gsd-execute-phase 06.1` (Phase 06.1 — Address v0.1 tech debt: CI workflow info items and audio consumer coverage)
 Continuation note: [.continue-here.md](.continue-here.md)
 Completed workflow stage: **Phase 2 — DMG CPU, Bus and Time verification freshness refresh** (2026-10-10). Canonical verification passed 5/5 truths and CPU-01–05 at `a9050df` on `gsd/phase-02-verification-refresh-2`. Gates: Nyquist 0 gaps, security 45/45 closed, code review 1 info deferred with 0 open dispositions, regression 179/179 core. No hosted-CI, physical-hardware or perceptual result is claimed.
 
 Completed workflow stage: **v0.1 milestone audit** (2026-10-10) — `tech_debt`, 35/35 requirements, 0 blockers.
 
 Completed workflow stage: **Phase 06.1 context gathering** (2026-10-10) on branch `gsd/phase-06.1-address-v0-1-tech-debt-ci-workflow-info-items-and-audio-cons` (11 locked decisions in `06.1-CONTEXT.md`: fix all 7 info items, C/C++ installed-consumer audio smoke on Windows/Linux/macOS, newest-run exact-head gate script, code PR then docs-only refresh PR). Next: **`$gsd-plan-phase 06.1`** (research first); after Phase 06.1 verifies, re-run `$gsd-audit-milestone v0.1` and then `$gsd-complete-milestone v0.1`.
+
+Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/phase-06.1-address-v0-1-tech-debt-ci-workflow-info-items-and-audio-cons`. Research, pattern map, validation strategy and 8 plans in 6 waves (wave 1: plans 01–03 in parallel; then 04 PR 1 batched workflow commit + exact-head merge; 05–07 verification refreshes of Phases 1–6; 08 disposition, docs-only PR 2, freshness confirmation). Plan checker: 3 iterations plus one narrow guidance pass, 0 blockers remaining; decision coverage 11/11. Research corrections: Windows lane is MinGW-w64 (no MSVC claim); P2 IN-01 gets a single `player-gate` definition with a `check-player-result.sh` self-test. Next: **Phase 06.1 execution** — `$gsd-execute-phase 06.1`. Phase 06.1 is not executed; nothing advances automatically.

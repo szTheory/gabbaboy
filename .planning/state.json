@@ -35,9 +35,9 @@
     }
   ],
   "next": {
-    "command": "$gsd-plan-phase 06.1",
-    "label": "Plan Phase 06.1 \u2014 Address v0.1 tech debt: CI workflow info items and audio consumer coverage",
-    "reason": "v0.1 audit tech_debt (35/35, no blockers); owner chose cleanup before milestone completion"
+    "command": "/gsd:progress --next",
+    "label": "Advance to the next step",
+    "reason": "Phase 06.1 of 7 · executing"
   },
-  "updated_at": "2026-10-10T13:12:40.930Z"
+  "updated_at": "2026-10-10T15:23:00.443Z"
 }
