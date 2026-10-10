@@ -71,7 +71,8 @@ static int manifest_bytes_valid(const uint8_t *bytes,size_t length) {
     static const char expected[]=MOONEYE_MANIFEST_SHA256;
     return hash_matches(bytes,length,expected);
 }
-static int manifest_valid(const char *path, uint8_t bytes[MAX_MANIFEST+1], size_t *length) {
+/* bytes must hold MAX_MANIFEST+1 so an oversize file is detected, not truncated. */
+static int manifest_valid(const char *path, uint8_t *bytes, size_t *length) {
     return read_bounded(path,bytes,MAX_MANIFEST,length)&&manifest_bytes_valid(bytes,*length);
 }
 static const fixture_case *select_case(const char *name) {
@@ -85,7 +86,8 @@ static int locate_rom(const char *manifest,const char *rom,char path[4096]) {
     size_t dir=slash?(size_t)(slash-manifest+1):0; if(dir+strlen(rom)>=4095)return 0;
     memcpy(path,manifest,dir);strcpy(path+dir,rom);return 1;
 }
-static const char *load_case_rom(const fixture_case *fc,const char *manifest,uint8_t rom[MAX_ROM+1],size_t *length) {
+/* rom must hold MAX_ROM+1 bytes; the caller owns the heap buffer (D-27). */
+static const char *load_case_rom(const fixture_case *fc,const char *manifest,uint8_t *rom,size_t *length) {
     char path[4096];
     if(!locate_rom(manifest,fc->rom,path))return "invalid-fixture-path";
     FILE *file=fopen(path,"rb");
@@ -184,15 +186,19 @@ static const char *run_guest(const fixture_case *fc,const uint8_t *rom,size_t ro
     return status;
 }
 static int run_one(const fixture_case *fc,const char *manifest,int receipt,size_t eligible,size_t *executed) {
-    uint8_t rom[MAX_ROM+1];size_t rom_size=0;
+    size_t rom_size=0;
+    uint8_t *rom=malloc(MAX_ROM+1);
+    if(rom==NULL){fprintf(stderr,"runner-error: ROM buffer allocation failed\n");return 2;}
     const char *fixture_error=load_case_rom(fc,manifest,rom,&rom_size);
     if(fixture_error!=NULL){
         if(receipt)printf("case=%s category=%s status=unsupported reason=%s manifest_sha256=%s source_revision=%s source_tree=%s source_path=%s report_patch_sha256=%s original_rom_sha256=%s fixture_sha256=%s fixture_origin=derived-headless-report-closure profile=DMG-CPU-B boot=skipped protocol=mooneye-ld-b-b protocol_stage=not-reached eligible=%zu executed=%zu\n",fc->id,fc->category,fixture_error,MOONEYE_MANIFEST_SHA256,MOONEYE_SOURCE_REVISION,MOONEYE_SOURCE_TREE,fc->source_path,MOONEYE_PATCH_SHA256,fc->original_sha256,fc->sha256,eligible,*executed);
+        free(rom);
         return 3;
     }
     protocol_evidence evidence;uint64_t ticks=0;size_t recent_count=0;const char *stop=NULL;
     gbb_diagnostic_record recent[RECENT_CAPACITY];
     const char *status=run_guest(fc,rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
+    free(rom);
     ++*executed;
     int code=strcmp(status,"pass")==0?0:strcmp(status,"fail")==0?1:3;
     if(receipt){
@@ -259,8 +265,12 @@ int main(int argc,char **argv) {
         return gbb_acceptance_run_file(acceptance,selected,&options);
     }
     if(!manifest||(!suite&&!selected)||(suite&&selected)){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
-    uint8_t manifest_bytes[MAX_MANIFEST+1];size_t manifest_length=0;
-    if(!manifest_valid(manifest,manifest_bytes,&manifest_length)){fprintf(stderr,"invalid-manifest\n");return 2;}
+    size_t manifest_length=0;
+    uint8_t *manifest_bytes=malloc(MAX_MANIFEST+1);
+    if(manifest_bytes==NULL){fprintf(stderr,"runner-error: manifest buffer allocation failed\n");return 2;}
+    int manifest_ok=manifest_valid(manifest,manifest_bytes,&manifest_length);
+    free(manifest_bytes); /* only the digest check needed the bytes */
+    if(!manifest_ok){fprintf(stderr,"invalid-manifest\n");return 2;}
     size_t eligible=suite?sizeof(cases)/sizeof(cases[0]):1,executed=0;int suite_code=0;
     if(suite){
         for(size_t i=0;i<eligible;i++){int code=run_one(&cases[i],manifest,receipt,eligible,&executed);if(code!=0&&suite_code==0)suite_code=code;}
