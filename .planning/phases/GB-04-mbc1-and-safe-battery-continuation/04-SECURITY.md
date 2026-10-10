@@ -76,3 +76,11 @@ hardware or power-loss qualification is claimed.
 - [x] `status: verified` set in frontmatter
 
 **Approval:** verified 2026-10-08; final exact-head CI, fixture reproduction, and downloaded package receipts passed as recorded in phase validation.
+
+## Security Audit 2026-10-09
+
+| Metric | Count |
+|---|---|
+| Threats found | 22 |
+| Closed | 22 |
+| Open | 0 |

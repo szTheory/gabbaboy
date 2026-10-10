@@ -1,12 +1,9 @@
 ---
 phase: GB-04-mbc1-and-safe-battery-continuation
-verified: 2026-10-08T04:53:26Z
+verified: 2026-10-09T17:10:35Z
 status: passed
-score: 7/7 truths verified
+score: 7/7 must-haves verified
 covered_files:
-  - .gitattributes
-  - .github/workflows/fixture-repro.yml
-  - .github/workflows/preview.yml
   - .planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-01-PLAN.md
   - .planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-01-SUMMARY.md
   - .planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-02-PLAN.md
@@ -21,44 +18,9 @@ covered_files:
   - .planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-06-SUMMARY.md
   - .planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-07-PLAN.md
   - .planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-07-SUMMARY.md
-  - .planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-REVIEW.md
-  - .planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-SECURITY.md
-  - .planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-UI-REVIEW.md
-  - .planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md
-  - CMakeLists.txt
-  - README.md
-  - cmake/PreviewPackageSmoke.cmake
-  - cmake/VerifyInstalledPackage.cmake
-  - docs/cartridge-and-saves.md
-  - docs/mbc1-evidence.md
-  - docs/preview.md
-  - fixtures/mbc1-continuation/LICENSE.txt
-  - fixtures/mbc1-continuation/continuation.asm
-  - fixtures/mbc1-continuation/continuation.gb
-  - fixtures/mbc1-continuation/manifest.json
-  - include/gabbaboy/gabbaboy.h
-  - src/core/gabbaboy.c
-  - src/player/limitations.h
-  - src/player/main.c
   - src/player/session.c
-  - src/player/session.h
-  - tests/CMakeLists.txt
-  - tests/consumers/c/main.c
-  - tests/consumers/cpp/main.cpp
-  - tests/expected-tests.txt
-  - tests/player/CMakeLists.txt
-  - tests/player/expected-tests.txt
-  - tests/player/test_continuation.c
-  - tests/player/test_limitations.c
   - tests/player/test_session.c
-  - tests/scripts/reproduce-mbc1-continuation.sh
-  - tests/scripts/verify-phase2-installed.sh
-  - tests/scripts/verify-phase3-player.sh
-  - tests/test_battery.c
-  - tests/test_battery_fuzz.c
-  - tests/test_cartridge.c
-  - tests/test_loader.c
-covered_digest: "v3:sha256:304bee7d050ee8a1a17d44801e9a2c9007fa2c6b094196abf9a17d49ef6a2411"
+covered_digest: "v3:sha256:b5c1fa9344fd979e4b1f7b94e999aae83fd5e7ad7b801449ef21b910dcfc33c2"
 behavior_unverified: 0
 overrides_applied: 0
 decision_coverage:
@@ -66,10 +28,9 @@ decision_coverage:
   total: 16
   not_honored: []
 re_verification:
-  previous_status: gaps_found
-  previous_score: 6/7 truths verified
-  gaps_closed:
-    - The public evidence ledger now identifies the exact tested source head, passing CI/fixture/package run IDs, receipt hashes, and links to the validation record.
+  previous_status: passed
+  previous_score: "7/7 truths verified"
+  gaps_closed: []
   gaps_remaining: []
   regressions: []
 ---
@@ -77,20 +38,21 @@ re_verification:
 # Phase 4: MBC1 and Safe Battery Continuation Verification
 
 **Phase Goal:** As a player, I want to resume supported MBC1 games from battery saves, so that failures preserve my last good progress.
-**Verified:** 2026-10-08T04:53:26Z
+**Verified:** 2026-10-09T17:10:35Z
 **Status:** passed
-**Re-verification:** Yes — after the evidence-ledger gap was closed.
+**Canonical refresh:** The previous report passed and had no unresolved gaps. This refresh covers the later player-ROM FIFO hardening; its source coverage had made the old fingerprint stale.
 
 ## User Flow Coverage
 
 | Step | Expected | Evidence in codebase | Status |
 |---|---|---|---|
-| Load a declared MBC1 cartridge | Supported type/ROM/RAM combinations load and bank correctly; excluded headers fail explicitly without replacing active state. | `src/core/gabbaboy.c` validates the MBC1 matrix before replacing the active machine and maps ROM/RAM registers on bus access. `loader_mbc1_matrix`, `loader_mbc1m_variant`, `loader_non_destructive`, `cartridge_bank_matrix`, and `cartridge_ram_banks` pass. | VERIFIED |
-| Save and restore bounded battery bytes | Callers can export/import exact supported RAM sizes; invalid buffers and malformed save envelopes do not mutate live state. | Public contract in `include/gabbaboy/gabbaboy.h`; core battery tests cover 8/32 KiB, canaries, errors, no-battery cartridges, lifecycle, instance isolation, and bounded fuzz. Player envelope validation checks identity, type, length, and CRC before import. | VERIFIED |
-| Preserve the last good save across failure | Writes use a same-directory temporary, synchronization, and atomic replacement; failures are surfaced and transition choices remain explicit. | `src/player/session.c` atomic-save/recovery/lock paths and `src/player/main.c` status/transition paths; fault, interruption, lock, cadence, and transition-choice tests pass. Directory-sync failure after rename is reported as durability uncertainty. | VERIFIED |
-| Reopen meaningful progress in a fresh process | The original guest resumes from saved bytes and reaches a progress-dependent marker; missing, wrong-identity, and altered-save controls remain distinct. | `tests/player/test_continuation.c` launches a child process, reopens the save in a fresh instance, and checks guest markers. Fixture digest test and pinned RGBDS reproduction pass; exact-head player-package smoke also resumes in a fresh process. | VERIFIED |
+| Open a supported MBC1 game | The declared standard MBC1 type/ROM/RAM combinations load and select the expected ROM and RAM banks; excluded variants return explicit errors. | src/core/gabbaboy.c validates the descriptor before replacing the active cartridge and derives bank selection on bus accesses. Named cartridge/loader matrix tests cover both banking modes and rejection cases. | VERIFIED |
+| Make progress and save it | Guest RAM writes update instance-owned battery data; the player persists bounded data with identity and integrity checks. | Public battery API in include/gabbaboy/gabbaboy.h; mapper, battery, envelope, cadence, and atomic-write tests. | VERIFIED |
+| Reopen the same game | A fresh process imports the matching save before guest execution and reaches a continuation path that depends on earlier bytes. | tests/player/test_continuation.c and src/player/main.c child-process smoke; original fixture has positive, missing-save, wrong-ROM, and altered-payload cases. | VERIFIED |
+| Recover safely from failures | A failed write keeps the last complete save, reports the failure, and blocks quit/reset/replacement until retry, continue-without-saving, or cancel is chosen. | src/player/session.c writes a synced same-directory temporary before rename; fault and transition tests verify old-target preservation and choices. The player routes status to its title/help surfaces. | VERIFIED |
+| See the story outcome | Relaunching a supported game preserves progress from the previous process, while empty/wrong-save controls prove the continuation oracle is meaningful. | The authored 32 KiB MBC1 fixture writes a distinctive tuple; fresh-process guest assertions distinguish saved progress from the empty path. The fixture manifest and pinned reproduction lane bind source and bytes by digest. | VERIFIED |
 
-The centralized MVP guard returned valid=true for the normalized user story and confirmed mode=mvp. These are automated software acceptance results. No physical MBC1/DMG observation or power-loss qualification is claimed. The ledger now distinguishes the tested source-and-fixture SHA from the separate closeout-document revision, which still requires exact-head checks before merge.
+The roadmap user story passes GSD’s user-story.validate guard (valid: true, role player, capability “resume supported MBC1 games from battery saves,” outcome “failures preserve my last good progress”).
 
 ## Goal Achievement
 
@@ -98,99 +60,112 @@ The centralized MVP guard returned valid=true for the normalized user story and 
 
 | # | Truth | Status | Evidence |
 |---:|---|---|---|
-| 1 | Declared standard MBC1 ROM/RAM/battery configurations exhibit expected banking and enable behavior; excluded variants and other mappers return explicit errors. | VERIFIED | Core descriptor/header validation, mapper access paths, and named loader/cartridge matrix tests passed; the selected local run passed all 15 focused mapper, loader, and battery tests. |
-| 2 | A frontend can import/export bounded battery data under documented identity/size rules, and malformed imports leave live state unchanged. | VERIFIED | Public header contract, core error/canary tests, seeded fuzz case, installed C/C++ consumers, and player reject matrix. Exact hosted native and installed inventories passed. |
-| 3 | The player follows documented atomic replacement, recovery, and concurrent-writer rules; failed writes preserve the last good save and visibly report failure. | VERIFIED | Session implementation is wired to player transitions. Fault injection covers write/sync/rename and interruption boundaries; transition tests cover retry/continue/cancel and persistent failure status. Hosted macOS player/package job passed. No storage power-loss inference is made. |
-| 4 | An original GB fixture saves, exits, reopens in a fresh instance/process, and resumes behavior dependent on prior bytes; empty/wrong-save controls demonstrate a meaningful continuation oracle. | VERIFIED | Authored fixture source/ROM and manifest are digest-pinned; fixture reproduction and fresh-process positive plus missing-save, wrong-ROM, and altered-payload controls pass. Exact-head fixture and player package runs passed. |
-| 5 | The integrator guide explains MBC1 support, API ownership, save identity/format/recovery/concurrency, and evidence limits. | VERIFIED | `docs/cartridge-and-saves.md` is substantive and matches implementation; evidence classes and explicit exclusions are also present in the MBC1 ledger. |
-| 6 | Phase closeout cites current executed cases, package/consumer results, and exact hosted revision without a physical-hardware claim. | VERIFIED | `04-VALIDATION.md` records source SHA, current PR head, all three exact pull-request run IDs, job conclusions, package hashes/receipts, and the hardware/power-loss limits. Live GitHub run metadata was checked against the same head. |
-| 7 | The public evidence ledger presents the current exact-head hosted evidence consistently with the validated closeout. | VERIFIED | `docs/mbc1-evidence.md` now names exact source SHA `79f83f627ffb3631811b2f39b23081117ebaab8f`, successful runs `37728192665`, `37728192634`, and `37728192674`, package receipt hashes, and links to `04-VALIDATION.md`. It explicitly says its separate final closeout revision still requires exact-head checks before merge. Live PR and run metadata were rechecked. |
+| 1 | Declared standard MBC1 ROM/RAM/battery configurations exhibit expected banking and enable behavior; excluded variants and other mappers return explicit errors. | VERIFIED | Exact descriptor/header matrix, access-time banking, disabled-RAM behavior, and MBC1M/other-mapper rejection are implemented in src/core/gabbaboy.c; independent cartridge and loader cases pass in the local 179-test core run. |
+| 2 | A frontend can import/export bounded battery data under documented identity/size rules, and malformed imports leave live state unchanged. | VERIFIED | The public API uses caller-owned exact-size buffers; error/canary and bounded fuzz cases cover non-mutation. Relocated C/C++ consumer evidence is recorded for the historical hosted head. |
+| 3 | The player follows documented atomic replacement, recovery, and concurrent-writer rules; failed writes preserve the last good save and visibly report failure. | VERIFIED | src/player/session.c validates save envelopes before import, bounds regular-file reads, uses a same-directory synced temporary and rename, and holds an advisory lock. Fault, recovery, lock, cadence, and transition-choice cases pass. Current local hardening opens selected ROMs nonblocking and rejects FIFOs before mutating the active session; player_session_replacement_failure verifies path and guest RAM preservation. |
+| 4 | An original GB fixture saves, exits, reopens in a fresh instance/process, and resumes behavior dependent on prior bytes; empty/wrong-save controls demonstrate a meaningful continuation oracle. | VERIFIED | tests/player/test_continuation.c runs the guest across a process boundary and asserts distinct continuation, missing-save, wrong-ROM, and altered-payload outcomes. Fixture source/ROM digests and the RGBDS recipe are pinned. |
+| 5 | ROM-only behavior and failed ROM replacement remain intact. | VERIFIED | ROM-only core tests remain in the required inventory. The replacement-failure case covers unsupported headers, absent paths, and a FIFO; failures preserve the selected path and machine RAM. |
+| 6 | Relocated C and C++ consumers compile and run the public battery API, and required test inventories fail closed. | VERIFIED | tests/consumers/c/main.c, tests/consumers/cpp/main.cpp, explicit CTest inventories, and the Phase 4 validation record cover installed consumers, fixture reproduction, and CI gates. The exact historical hosted results are stated separately below. |
+| 7 | Integrators can determine the support boundary, ownership, save identity/format/recovery/concurrency rules, and evidence limits. | VERIFIED | docs/cartridge-and-saves.md documents the accepted cartridge matrix, caller ownership, envelope, recovery, cadence, and lock policy; docs/mbc1-evidence.md classifies test, fixture, hosted, and hardware evidence. |
 
-**Score:** 7/7 truths verified; the four roadmap success criteria are 4/4 verified.
+**Score:** 7/7 truths verified; all four roadmap success criteria are verified.
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |---|---|---|---|
-| `src/core/gabbaboy.c` | Validated MBC1 matrix, bus banking, bounded non-destructive load/import | VERIFIED | Substantive implementation; loader and bus paths are used by production API and tested. |
-| `include/gabbaboy/gabbaboy.h` | Public battery ownership, bounds, and error contract | VERIFIED | Documents caller-owned buffers, exact sizes, and failure behavior consumed by installed C/C++ tests. |
-| `src/player/session.c`, `src/player/main.c` | Safe save lifecycle, recovery, visible error, and final-transition decisions | VERIFIED | Session status and persistence paths are connected to player actions; fault and transition tests exercise them. |
-| `tests/player/test_continuation.c`, fixture files and manifest | Independent fresh-process continuation oracle with negative controls and reproducible bytes | VERIFIED | Tests consume the authored fixture; pinned reproduction rebuilds and compares checked-in bytes. |
-| `docs/cartridge-and-saves.md` | Public contract aligned with implemented support | VERIFIED | Present, substantive, and source-reviewed. |
-| `docs/mbc1-evidence.md` | Current SAVE traceability, exact revision, and honest evidence limits | VERIFIED | Now records the exact tested source head, all three successful run IDs, package hashes, a link to validation, and the separate pending gate for the final documentation revision. |
-| `.planning/phases/GB-04-mbc1-and-safe-battery-continuation/04-VALIDATION.md` | Executed local and exact hosted evidence, receipts, and limits | VERIFIED | Exact final head and results are recorded; package digests and qualifications are explicit. |
+| include/gabbaboy/gabbaboy.h, src/core/gabbaboy.c | Public bounded battery API and standard MBC1 implementation | VERIFIED | Substantive API and descriptor/banking paths; consumed by the player and named core tests. |
+| src/player/session.c, src/player/main.c | Bounded load, safe save lifecycle, process lock, error status, transition handling | VERIFIED | Session operations are called by player startup, autosave, final flush, and ROM replacement paths. |
+| tests/test_cartridge.c, tests/test_loader.c, tests/test_battery.c | Independent mapper, rejection, and transfer regressions | VERIFIED | Registered in tests/expected-tests.txt; the full core inventory passed locally. |
+| tests/player/test_session.c, tests/player/test_continuation.c | Save-failure, FIFO, state-preservation, and fresh-process behavior | VERIFIED | Registered in tests/player/expected-tests.txt; the local player/package lane passed 50/50. |
+| fixtures/mbc1-continuation/* | Original project-authored continuation ROM and reproducible manifest | VERIFIED | Manifest binds source and ROM digests, rights, profile, mapper, and bounded guest protocol. |
+| docs/cartridge-and-saves.md, docs/mbc1-evidence.md | Integrator contract and evidence qualifications | VERIFIED | Documents align with implementation; explicit exclusions include MBC1M, physical hardware, and power-loss qualification. |
 
-The OpenGSD `verify.artifacts` and `verify.key-links` queries returned total=0 for each plan because their frontmatter uses plain scalar lists where the query expects structured artifact/link mappings. I therefore checked artifact existence, substance, and wiring manually; the ledger content issue remains a real failure rather than being hidden by the empty query result.
+The plan frontmatter uses scalar artifact/link lists that are not interpreted by the current structured artifact query. I therefore verified existence, substance, and wiring directly against the implementation, call paths, inventories, and behavioral tests; no empty query result was treated as proof.
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |---|---|---|---|---|
-| ROM header | MBC1 descriptor and bank state | Validation before machine replacement; mapper registers consumed by bus reads/writes | WIRED | Core loader and bus paths implement matrix validation, bank selection, and RAM gating; focused tests pass. |
-| Guest RAM writes | Battery export/import API | Instance RAM buffer and generation tracking | WIRED | Guest writes update RAM; public battery operations copy bounded bytes and preserve state on errors. |
-| Save file | Active cartridge RAM | Bounded envelope parse, identity/CRC validation, then core import | WIRED | Session rejects invalid envelopes before import; tests verify rejected files and live RAM preservation. |
-| Dirty battery state | Durable save target | Temp file, full write, sync, close, validation, atomic rename | WIRED | Player persistence is invoked on cadence and final transitions; injected failure cases assert old-or-complete-new outcomes. |
-| Fresh process | Continuation guest assertion | Reopen exact fixture identity and bytes before guest execution | WIRED | Child-process positive and negative controls assert distinct guest markers. |
-| Phase evidence | Public MBC1 ledger | Current run/revision record | WIRED | The ledger links to validation and identifies the exact tested SHA, run IDs, and package hashes while qualifying the unchecked final documentation head. |
+| ROM header | Active cartridge descriptor and bank state | Validate candidate before machine replacement; mapper registers drive ROM/RAM reads and writes | WIRED | Loader, bus paths, and named bank/matrix tests agree. |
+| Guest cartridge RAM | Public battery transfer | Per-instance RAM and generation counter feed exact-size export/import calls | WIRED | Core battery API has no filesystem dependency; tests cover bounds, errors, canaries, and instance isolation. |
+| Battery API | Player save envelope | Core export feeds bounded versioned envelope with ROM identity and CRC | WIRED | Envelope is validated before import; malformed data is rejected without mutating live RAM. |
+| Save state | Durable target | Unique same-directory temp, complete write, file sync, rename, directory sync where supported | WIRED | Injected write/sync/rename/recovery cases test old-or-complete-new outcomes. |
+| Player session | Writer coordination | Nonblocking advisory lock held for the battery-backed session | WIRED | Process-level lock lifecycle test covers conflict and release; guarantee is for cooperating processes. |
+| Fixture process A | Fixture process B | Persisted bytes reopened before guest execution | WIRED | Fresh-process positive and negative controls assert guest-visible markers. |
+| Save outcome | User-visible status and transition | Save result updates player status and gates reset, quit, or replacement | WIRED | Player smoke asserts retry/cancel/continue outcomes and status strings; UI review notes presentation limitations below. |
 
-### Data-Flow Trace
+### Data-Flow Trace (Level 4)
 
 | Artifact | Data | Source | Produces real data | Status |
 |---|---|---|---|---|
-| MBC1 core | Selected ROM/RAM bank bytes | Loaded cartridge bytes and guest mapper-register writes | Yes | FLOWING |
-| Battery export/import | Battery RAM payload | Live per-instance cartridge RAM and caller/file bytes | Yes | FLOWING |
-| Save envelope | Persisted battery bytes | Core export, identity metadata, bounded checksum envelope | Yes | FLOWING |
-| Player status | Save success/failure and dirty state | Session result and save-generation state | Yes | FLOWING; surfaced through window title/help/error choices, with visibility concerns noted in advisory UI review |
+| MBC1 mapper | Selected ROM/RAM bytes | Loaded ROM bytes plus guest mapper-register writes | Yes | FLOWING |
+| Core battery API | Battery payload | Live per-instance cartridge RAM | Yes | FLOWING |
+| Save envelope | Persisted payload | Core export plus ROM/type/size identity and CRC | Yes | FLOWING |
+| Resume path | Guest continuation state | Validated save bytes imported before the fresh process runs the original fixture | Yes | FLOWING |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command/evidence | Result | Status |
 |---|---|---|---|
-| Focused MBC1, loader, and battery behavior | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(cartridge_tracer|cartridge_bank_matrix|cartridge_ram_banks|cartridge_no_ram_reads|loader_mbc1_matrix|loader_mbc1m_variant|loader_non_destructive|battery_roundtrip8|battery_roundtrip32|battery_errors|battery_no_battery|battery_lifecycle|battery_instances|battery_api_fuzz|mbc1_continuation_fixture_digest)$'` | Re-run during re-verification: 15/15 passed, 0.11 seconds | PASS |
-| Final exact-head required and native CI | PR pull-request run 37728192665 at 79f83f627ffb3631811b2f39b23081117ebaab8f | Rechecked live: all seven required/native/sanitizer/player jobs passed, no job skipped | PASS |
-| Fixture reproducibility | PR pull-request run 37728192634 at the same SHA | Rechecked live: fixture reproduction and original/candidate Mooneye reproduction jobs passed, including byte-identical MBC1 fixture reproduction with pinned RGBDS 1.0.1 | PASS |
-| Downloaded installed/player consumers | PR pull-request run 37728192674 at the same SHA | Rechecked live: aggregate, Linux installed consumer, macOS installed consumer, and downloaded macOS player consumer passed; receipts name the same source SHA | PASS |
+| Core mapper/API regressions | cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error | 179/179 passed, no skips. Current-turn run was on the root checkout at source revision 4d52df7aa0594bad2a3b0f0dc91e92e5612a2f4c with a dirty source/test tree. | PASS |
+| Player persistence, FIFO replacement, and packaged consumer | bash tests/scripts/verify-phase3-player.sh | 50/50 player tests passed, including FIFO replacement rejection/state preservation, dummy-audio smoke, extracted-package checks, and fresh-process MBC1 continuation. This local run used the same FIFO source/test patch at the root checkout revision above; it is not an exact-revision hosted result. | PASS |
+| Package bytes | Candidate macOS package | SHA-256 12cbb579ccd5a2c0f05fd33b7b534f81ff15bac788ef7605136d145d56368232; receipt reports source tree dirty. | PASS (local artifact only) |
+| Fixture reproduction | Pinned RGBDS 1.0.1 reproduction and hosted fixture lane | The Phase 4 record reports byte-identical reproduction; historical hosted fixture run 37728192634 passed at source 79f83f627ffb3631811b2f39b23081117ebaab8f. | PASS (historical exact head) |
 
-The exact GitHub run metadata was checked independently and agrees with the validation record. Local validation also records 155/155 core, 160/160 relocated installed, 155/155 installed core-only, and 37/37 macOS player/package cases. No CI log download is claimed. The final source tree is unchanged from the clean review target: `git diff 95c076d 79f83f627ffb3631811b2f39b23081117ebaab8f` is empty.
+The current checkout contains the targeted O_NONBLOCK ROM-open change and FIFO regression inspected above. The local suite/package evidence is explicitly scoped to the recorded root-checkout revision and dirty tree. The same source/test patch was subsequently hosted and passed the exact PR #43 code head `9b9d58a009b175256b09fe074e3f44e1aa0320e7`; run details are below.
 
 ### Probe Execution
 
-Not applicable: this is a cartridge/player feature phase, not a migration or tooling phase, and its plans do not declare probe scripts or probe-based success criteria.
+Not applicable: Phase 4 is a cartridge/player feature phase, not a migration or tooling phase, and its plans do not declare probe-based criteria.
 
 ### Requirements Coverage
 
-| Requirement | Source plans | Description | Status | Evidence |
+| Requirement | Source Plans | Description | Status | Evidence |
 |---|---|---|---|---|
-| SAVE-01 | 04-01, 04-02, 04-07 | Supported MBC1 matrix and explicit excluded-cartridge errors | SATISFIED | Loader/cartridge implementation, synthetic matrix tests, exact hosted required CI. |
-| SAVE-02 | 04-01, 04-02, 04-06, 04-07 | Bounded battery API and non-mutating malformed operations | SATISFIED | Core API/error/fuzz tests and relocated C/C++ consumer inventories. |
-| SAVE-03 | 04-01, 04-03, 04-04, 04-05, 04-06, 04-07 | Safe player save identity, atomic replacement, recovery, writer coordination, and failure reporting | SATISFIED | Session/fault/lock/cadence/transition tests, exact macOS package smoke, security review. |
-| SAVE-04 | 04-05, 04-06, 04-07 | Original fixture with fresh-process continuation and meaningful controls | SATISFIED | Fixture digest/reproduction, continuation tests, exact hosted fixture and package runs. |
+| SAVE-01 | 04-01, 04-02, 04-07 | Standard MBC1 banking/enable matrix; explicit rejection of excluded variants and other mappers | SATISFIED | cartridge_*, loader_mbc1_matrix, loader_mbc1m_variant, and unsupported-cartridge cases. |
+| SAVE-02 | 04-01, 04-02, 04-06, 04-07 | Bounded public battery import/export, documented identity/size, malformed-input non-mutation | SATISFIED | Battery error/canary/fuzz coverage and relocated C/C++ consumer records. |
+| SAVE-03 | 04-01, 04-03, 04-04, 04-05, 04-06, 04-07 | Atomic persistence, recovery, concurrent-writer policy, failed-save preservation and visible reporting | SATISFIED | Session fault/lock/cadence/transition tests plus the FIFO replacement regression and explicit UI status wiring. |
+| SAVE-04 | 04-05, 04-06, 04-07 | Original fixture resumes across a fresh process; negative controls prove the continuation oracle | SATISFIED | Fresh-process player tests, distinct missing/wrong/altered controls, fixture digest and reproduction evidence. |
 
-All four requirements are assigned by plans and mapped in REQUIREMENTS.md. There are no orphaned Phase 4 requirements. The ledger discrepancy found in the first verification was a closeout-document gap and did not negate the current implementation or named execution evidence; the ledger is now corrected.
+All four requirement IDs appear in plan requirements fields and in the Phase 4 roadmap mapping. No Phase 4 requirement is orphaned.
+
+### Test Quality Audit
+
+| Test File | Linked Req | Active | Skipped | Circular | Assertion Level | Verdict |
+|---|---|---:|---:|---:|---|---|
+| tests/test_cartridge.c, tests/test_loader.c | SAVE-01 | yes | 0 found | 0 found | Value and behavioral; bank-pattern outputs and rejected-load preservation | PASS |
+| tests/test_battery.c, tests/test_battery_fuzz.c, installed C/C++ consumers | SAVE-02 | yes | 0 found | 0 found | Value and boundary; exact bytes, error codes, canaries, unchanged live RAM | PASS |
+| tests/player/test_session.c | SAVE-03 | yes | 0 found | 0 found | Multi-step behavior; injected I/O failures, lock conflict, cadence, transitions, FIFO replacement | PASS |
+| tests/player/test_continuation.c and fixture digest/reproduction | SAVE-04 | yes | 0 found | 0 found | Cross-process guest marker assertions and byte equality | PASS |
+
+**Disabled tests on requirements:** 0. **Circular expected-value patterns:** 0. **Insufficient assertions:** 0 observed in the mapped requirement cases.
 
 ### Decision Coverage
 
-OpenGSD context decision coverage reports 16/16 honored, with no unhonored decisions. The implementation/docs preserve the declared mapper boundary, ownership, identity, recovery, concurrency, fixture, and evidence-class decisions.
-
-### Advisory (New Scope, Unevidenced)
-
-None. Re-verification found no new-scope concerns lacking deterministic evidence.
+OpenGSD context decision coverage reports **16/16 honored**, with no unhonored decisions.
 
 ### Anti-Patterns Found
 
-None. The prior stale hosted-evidence instructions were removed and replaced with exact run/receipt records and an explicit final-documentation-head check. The original source review remains clean.
+None. The code review of 26 Phase 4 implementation/test files reports 0 critical, warning, or informational findings after the FIFO-open fix. The anti-pattern scan found no unresolved TODO/FIXME/XXX/HACK markers or placeholder implementations in the reviewed code paths. Temporary-name templates containing XXXXXX are deliberate mkstemp patterns, not debt markers.
 
-The source review at the final source tree reported 0 critical, warning, and informational findings across 26 files. No actionable TODO/FIXME/TBD/XXX/placeholder markers or stub implementations were found in the reviewed implementation and test files. The security review reports 22/22 threats closed and none open. The code-only UI review is advisory (13/24); it notes transient/title-only save status and keyboard-only final-save choices. It did not test a visual screenshot, and no perceptual or hardware claim is inferred from it.
+### UI Review Notes
+
+The code-only native SDL audit scored 13/24 and recorded three non-blocking presentation recommendations: show a focused visible prompt for failed final-save choices, keep dirty/saved status visible independently of transient title text, and constrain status copy to a predictable layout. The save failure/status and transition paths are automated and wired; the audit captured no screenshot, so this report makes no claim about visual polish.
 
 ### Human Verification Required
 
-None for the automated software acceptance scope. Physical MBC1/DMG behavior and storage power-loss durability remain expressly unqualified; they are not represented as passed evidence or added as invented manual UAT. The existing UI audit remains advisory.
+None for the scoped software acceptance criteria; automated tests cover the required user flow. Physical MBC1/DMG behavior, storage power-loss durability, and visual presentation remain unqualified and are not described as passing evidence or as reasons to repeat manual UAT.
+
+### Hosted and Hardware Evidence Boundaries
+
+Historical hosted CI, fixture reproduction, and package-consumer results passed at exact source revision `79f83f627ffb3631811b2f39b23081117ebaab8f` (CI run 37728192665, fixture run 37728192634, package smoke run 37728192674). Those results remain scoped to that earlier revision. The FIFO patch was hosted on PR #43 at exact code head `9b9d58a009b175256b09fe074e3f44e1aa0320e7`: CI run 37964888409 passed `required-native`, Linux/macOS/Windows native jobs, Linux ASan/UBSan, CMake 3.25.3 floor, and the macOS player package; fixture run 37964888352 passed original and candidate fixture reproduction; package smoke run 37964888373 passed Linux and macOS installed consumers plus the macOS player package. No skipped job was counted as passing. No physical MBC1/DMG observation or storage power-loss qualification is claimed.
 
 ### Gaps Summary
 
-The player and core satisfy all four roadmap success criteria, and SAVE-01 through SAVE-04 have implementation and execution evidence. The prior ledger gap is resolved: the public ledger now identifies the exact tested source head, all three passing workflow runs and package hashes, and links to detailed validation. Directly rechecked GitHub metadata confirms those runs remain successful on the exact PR source head; the focused MBC1/loader/battery selection passed 15/15. The ledger clearly states that a separate final documentation revision still requires its own exact-head checks before merge, so no unchecked documentation revision is claimed green. No verification gaps remain.
+No software acceptance gaps remain. All four roadmap truths and SAVE-01 through SAVE-04 are supported by implementation, wired tests, and the recorded local run evidence. Hosted green status for the later FIFO patch, physical hardware behavior, filesystem power-loss durability, and visual polish remain outside the evidence claimed here.
 
 ---
 
-_Verified: 2026-10-08T04:53:26Z_
+_Verified: 2026-10-09T17:10:35Z_
 _Verifier: the agent (gsd-verifier)_
