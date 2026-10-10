@@ -135,7 +135,7 @@ BESS/save interchange, link cable and deterministic linked execution, SGB/SGB2, 
 | STATE-01 | Next milestone | Deferred |
 | INT-01 | Next milestone | Deferred |
 
-**Active coverage:** All 35 active requirements are mapped exactly once and appear in their phase verification reports. The strict three-source matrix score of 15/35 is historical and predates the Phase 3 and Phase 5 refreshes. Current OpenGSD freshness status accepts Phases 1, 2, 4, and 5; Phases 3 and 6 are stale, and Phase 2 SUMMARY metadata omits CPU-02 and CPU-05. The traceability checkboxes retain prior implementation completion; refresh Phase 3 and Phase 6, reconcile Phase 2 summary metadata, then recompute the matrix and rerun the milestone audit. No active requirement is orphaned; next-milestone items remain excluded.
+**Active coverage:** All 35 active requirements are mapped exactly once and appear in their phase verification reports. The strict three-source matrix score of 15/35 is historical and predates the Phase 3 and Phase 5 refreshes. Current OpenGSD freshness status accepts all six phases (refreshed 2026-10-10), and Phase 2 SUMMARY metadata credits every CPU-01–05 requirement (quick task 261010-bz3). The traceability checkboxes retain prior implementation completion; the milestone audit must recompute the matrix. No active requirement is orphaned; next-milestone items remain excluded.
 
 **Next-milestone traceability:** 7/7 GB/GBC breadth commitments are mapped to the next milestone and remain outside the active v0.1 count.
 
