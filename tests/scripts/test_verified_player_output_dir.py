@@ -2,6 +2,7 @@
 """Regression tests for safe verified-player output directory preparation."""
 
 from pathlib import Path
+from typing import Dict
 import contextlib
 import hashlib
 import io
@@ -21,6 +22,24 @@ from verified_player_output_dir import (
     prepare_output_dir,
     publish_verified_artifacts,
 )
+
+
+def _receipt_fields() -> Dict[str, str]:
+    """Return a fresh copy of the receipt fields every publication test supplies."""
+    return {
+        "source_revision": "a" * 40,
+        "build_run_id": "build-run",
+        "build_run_attempt": "1",
+        "consumer_run_id": "consumer-run",
+        "consumer_run_attempt": "1",
+        "sdl_version": "3.4.18",
+        "sdl_archive_sha256": "b" * 64,
+        "sdl_license_sha256": "c" * 64,
+        "demo_rom_sha256": "d" * 64,
+        "battery_fixture_sha256": "e" * 64,
+        "battery_fixture_source_sha256": "f" * 64,
+        "source_tree_state": "clean",
+    }
 
 
 class VerifiedPlayerOutputDirTests(unittest.TestCase):
@@ -147,20 +166,7 @@ class VerifiedPlayerOutputDirTests(unittest.TestCase):
                 follow_symlinks=follow_symlinks,
             )
 
-        receipt_fields = {
-            "source_revision": "a" * 40,
-            "build_run_id": "build-run",
-            "build_run_attempt": "1",
-            "consumer_run_id": "consumer-run",
-            "consumer_run_attempt": "1",
-            "sdl_version": "3.4.18",
-            "sdl_archive_sha256": "b" * 64,
-            "sdl_license_sha256": "c" * 64,
-            "demo_rom_sha256": "d" * 64,
-            "battery_fixture_sha256": "e" * 64,
-            "battery_fixture_source_sha256": "f" * 64,
-            "source_tree_state": "clean",
-        }
+        receipt_fields = _receipt_fields()
         with patch.object(output_dir_module.os, "link", side_effect=replace_path_before_relative_link):
             with self.assertRaisesRegex(ValueError, "output directory changed during artifact publication"):
                 publish_verified_artifacts(
@@ -184,20 +190,7 @@ class VerifiedPlayerOutputDirTests(unittest.TestCase):
         archive_bytes = b"verified candidate package\n"
         archive = self.candidate / "candidate.tar.gz"
         archive.write_bytes(archive_bytes)
-        receipt_fields = {
-            "source_revision": "a" * 40,
-            "build_run_id": "build-run",
-            "build_run_attempt": "1",
-            "consumer_run_id": "consumer-run",
-            "consumer_run_attempt": "1",
-            "sdl_version": "3.4.18",
-            "sdl_archive_sha256": "b" * 64,
-            "sdl_license_sha256": "c" * 64,
-            "demo_rom_sha256": "d" * 64,
-            "battery_fixture_sha256": "e" * 64,
-            "battery_fixture_source_sha256": "f" * 64,
-            "source_tree_state": "clean",
-        }
+        receipt_fields = _receipt_fields()
 
         prepared = publish_verified_artifacts(
             str(self.repository),
@@ -234,20 +227,7 @@ class VerifiedPlayerOutputDirTests(unittest.TestCase):
         archive_bytes = b"verified candidate package\n"
         archive = self.candidate / "candidate.tar.gz"
         archive.write_bytes(archive_bytes)
-        receipt_fields = {
-            "source_revision": "a" * 40,
-            "build_run_id": "build-run",
-            "build_run_attempt": "1",
-            "consumer_run_id": "consumer-run",
-            "consumer_run_attempt": "1",
-            "sdl_version": "3.4.18",
-            "sdl_archive_sha256": "b" * 64,
-            "sdl_license_sha256": "c" * 64,
-            "demo_rom_sha256": "d" * 64,
-            "battery_fixture_sha256": "e" * 64,
-            "battery_fixture_source_sha256": "f" * 64,
-            "source_tree_state": "clean",
-        }
+        receipt_fields = _receipt_fields()
         publish_verified_artifacts(
             str(self.repository),
             str(self.candidate),
