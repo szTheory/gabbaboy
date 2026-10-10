@@ -136,6 +136,31 @@ The receipt reports Release mode, macOS arm64, DMG-CPU-B scoped software model, 
 
 **Gap result:** AUDIO-01, AUDIO-02, AUDIO-03, HOST-01 and HOST-02 remain COVERED by passing named automated cases. Gaps found 0; no tests added in this refresh.
 
+## Refreshed Executed Evidence after Phase 06.1 (2026-10-10)
+
+Source revision: `ac3cb6e1d2505508e289decfed9d293a163a56ba` on `gsd/phase-06.1-verification-refresh`, which descends from the PR 54 merge `ab76d09c2ee27ba09fc5f3c2510af016aebfdecb` with only `.planning/` changes after it. The sustained receipt records `source_tree_state: clean`. These are local results; hosted evidence for the same source content is ci run 38064419789 and preview run 38064419803 (PR head) and ci run 38064726000 (merge SHA).
+
+**Changed covered files since the 05-VERIFICATION.md baseline (`f39faac`), all from PR 54:**
+
+| File | Change | Phase 5 requirement impact | Automated coverage |
+|---|---|---|---|
+| `src/player/session.c` | `read_rom_file` adds `O_NOCTTY`; the 2 MiB size-bound error and the close-failure error become separate branches | HOST-02 session-transition safety only. No audio, input or device-transition path changed. | `player_session` (`player_session_replacement_failure` asserts the 2097153-byte size-bound message and the unchanged session). The close-failure branch is inspection-only: no fault-injection stage exists for ROM close. |
+| `tests/player/test_session.c` | Adds the size-bound message assertion | Test-only | Part of the 51/51 player inventory below. |
+| `tests/scripts/test_verified_player_output_dir.py` | Shared `_receipt_fields()` helper and an inner-withdrawal-site test | Test-only, package publication evidence for 05-07-02 | 21 tests OK; also `player_verified_output_directory`. |
+| `tests/scripts/verify-phase3-player.sh` | Comment documenting the local-only `GBB_VERIFIED_OUTPUT_DIR` default (P5 IN-01, `ecb0db7`) | None; behaviour unchanged | Verifier exit 0 below. |
+| `.github/workflows/preview.yml` | Exact-head CI lookup through `wait-exact-head-ci.py`; aggregate requires player success unconditionally | CI wiring only; the preview lanes still run the player verifier and package smoke | preview run 38064419803 success. |
+
+| Evidence | Command / observation | Result |
+|---|---|---|
+| Complete core inventory | `cmake --preset phase1 -DGABBABOY_BUILD_PLAYER=OFF && cmake --build --preset phase1 --parallel 4 && ctest --preset phase1 --output-on-failure --no-tests=error` | **184/184 passed** (3.78 s), including every `apu_*` and `audio_*` case named in the task map. |
+| Complete player/package verifier | `env HOME=/private/tmp/gabbaboy-validation-home CFFIXED_USER_HOME=/private/tmp/gabbaboy-validation-home SDL_AUDIO_DRIVER=dummy bash tests/scripts/verify-phase3-player.sh` | **51/51 passed**, exit 0, `source_revision=ac3cb6e1...`. Candidate package SHA-256 `7899404c9be81ad2ff5618e8c4ceda984bb5e29c88c28160eea619e076fb6134`; pinned SDL license SHA-256 `1c040b8271b37e5076359f8fd54240e371114112924d2df81ef87c7d6a1dfdfd`. |
+| Verified-output helper | `python3 tests/scripts/test_verified_player_output_dir.py` | **21 tests OK.** |
+| Sustained playback receipt | `env HOME=/private/tmp/gabbaboy-validation-home CFFIXED_USER_HOME=/private/tmp/gabbaboy-validation-home bash tests/scripts/measure-audio-playback.sh` | **Passed** for frame-sized and 792-half-dot partitions: `sample_count` 241,094 each, identical PCM SHA-256 `8667279ae7d3bf3cdd76a278b13d2cdfe9992d64325c15e4eef9449778eaeec4` (unchanged from every prior run), 42,134,424 elapsed half-dots against 42,134,400 requested. Release, macos-arm64, dummy driver, open/stream/close/recovery passed; 1,024 underflow frames and 2,502 discarded host frames per partition, zero stream-write failures, zero queued input bytes, backpressure 3,701/3,742. |
+
+The host reported a default audio device as available, but the measurement used the dummy driver; no physical playout, latency or perceptual claim is made.
+
+**Gap result:** AUDIO-01, AUDIO-02, AUDIO-03, HOST-01 and HOST-02 remain COVERED. Gaps found 0; no tests added in this refresh.
+
 ## Spec-less Edge Assumptions (11 reviewed)
 
 The phase has no standalone SPEC. Each fallback probe below was reconciled against source and an automated behavioral test or explicitly bounded as a caller/hardware contract. Count: applicable 11, ten behavioral probes have named automated cases, one probe records the single-caller-per-core API contract, unresolved software gaps 0. The two originally unclassified probes are resolved by the automated receipt/evidence-boundary and input-source matrix checks.
