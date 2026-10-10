@@ -17,15 +17,23 @@ findings:
     title: "RGBDS release archive is version-named but not digest-pinned"
   - id: IN-01
     severity: info
-    disposition: deferred
+    disposition: fixed
     title: "Unreachable optional-player branch left in the preview aggregate"
   - id: IN-02
     severity: info
-    disposition: deferred
+    disposition: fixed
     title: "Exact-head lookup can fail on a stale failed run while a newer same-SHA run is in progress"
+  - id: IN-03
+    severity: info
+    disposition: deferred
+    title: "PASS path writes `run_attempt=None` when the job object lacks `run_attempt`"
+  - id: IN-04
+    severity: info
+    disposition: deferred
+    title: "`gh api` subprocess has no timeout, so the poll deadline cannot interrupt a hung call"
 open: 0
-total: 5
-recorded: 2026-10-10T12:31:00Z
+total: 7
+recorded: 2026-10-10T15:52:00Z
 ---
 
 # Phase 01: Code Review Disposition
@@ -35,8 +43,10 @@ recorded: 2026-10-10T12:31:00Z
 | CR-01 | critical | fixed | 01-REVIEW-FIX.md (not in the current review) |
 | CR-02 | critical | fixed | 01-REVIEW-FIX.md (not in the current review) |
 | WR-01 | warning | fixed | 01-REVIEW-FIX.md (not in the current review) |
-| IN-01 | info | deferred | 2026-10-10 freshness review. Dead `PLAYER_REQUESTED != true` branch in `preview.yml`; the gate is already strict (the workflow only triggers on `pull_request`, so player `success` is always required). Deferred to the next CI-workflow change because editing `preview.yml` would re-stale the GB-03 and GB-05 verification reports that cover it. |
-| IN-02 | info | deferred | 2026-10-10 freshness review. Fails closed (blocks, never passes a wrong revision); only reachable when a second same-SHA CI run exists. Deferred with IN-01 for the same covered-file reason; rerunning the failed check is the current recovery. |
+| IN-01 | info | fixed | Fixed by Phase 06.1 PR #54, squash merge `ab76d09c2ee27ba09fc5f3c2510af016aebfdecb` (exact tested head `2a8fd1c`). `preview.yml` no longer has `PLAYER_REQUESTED` or the "optional" branch; the aggregate requires player `success` unconditionally (rechecked in the 2026-10-10 post-06.1 review, `preview.yml:179-182`). Hosted proof: preview run 38064419803 `preview-package-smoke` success. `.github/scripts/wait-exact-head-ci.py --self-test` (26 cases) passes. |
+| IN-02 | info | fixed | Fixed by Phase 06.1 PR #54, squash merge `ab76d09c2ee27ba09fc5f3c2510af016aebfdecb`. `.github/scripts/wait-exact-head-ci.py` evaluates only the newest same-SHA run and waits while it is in progress; `--self-test` (26 cases) covers the stale-failed-run case. All three preview jobs call it. Hosted proof: preview run 38064419803 logged three `exact-head-ci: PASS run_id=38064419789 run_attempt=1` lines. |
+| IN-03 | info | deferred | 2026-10-10 post-06.1 review. The PASS path does not type-check the job's `run_attempt` (`wait-exact-head-ci.py:103,141-147`). It still fails closed, because the artifact download by the `None` name fails, but only after the PASS line prints. Not fixed here because the 06.1 verification-refresh branch is docs-only (D-09). Revisit trigger: the next change to `.github/scripts/wait-exact-head-ci.py` or the next CI-workflow phase. Fix: return WAIT when `run_attempt` is not an int, plus a self-test row. |
+| IN-04 | info | deferred | 2026-10-10 post-06.1 review. `gh_get` calls `subprocess.run` with no timeout (`wait-exact-head-ci.py:48`), so a hung `gh` call can outlive `--deadline-seconds`. The job-level `timeout-minutes` still bounds it, so it fails closed. Deferred for the same docs-only reason as IN-03 (D-09). Revisit trigger: same as IN-03. Fix: `timeout=60`, with `TimeoutExpired` mapped to `TransientError`. |
 
 Dispositions: `open` (recorded, not yet triaged), `fixed`, `skipped`, `deferred`.
 Set `deferred` by hand and put the reason in the Source cell; both are preserved. A `|` in the reason is kept as prose and escaped on the next run.
@@ -44,7 +54,7 @@ Re-running the gate keeps every row it can. A row the current review no longer r
 
 ## Supplemental re-review history
 
-The current review is clean. The following warnings were found and resolved during the 2026-10-09 incremental review cycle; the reviewer reused `WR-01` and `WR-02` for the final recheck, so titles and review narrative are the disambiguators rather than IDs alone.
+The following warnings were found and resolved during the 2026-10-09 incremental review cycle; the reviewer reused `WR-01` and `WR-02` for the final recheck, so titles and review narrative are the disambiguators rather than IDs alone.
 
 | Review finding | Disposition | Resolution evidence |
 |----------------|-------------|---------------------|
