@@ -6,6 +6,10 @@ Updated: 2026-10-08. Target: original C Game Boy / Game Boy Color core. These do
 
 Read [SUMMARY.md](SUMMARY.md) for the integrated recommendation, six-phase initial DMG proposal, reconciled conflicts and open evidence gaps. [PROJECT.md](../PROJECT.md) defines product intent; [BRIEF.md](../context/BRIEF.md) preserves owner priorities; [WORKFLOW.md](../context/WORKFLOW.md) defines authorization and mandatory phase pauses. [DECISIONS.md](../context/DECISIONS.md) distinguishes adopted constraints from recommendations. [ROADMAP.md](../ROADMAP.md) is active milestone scope and [FUTURE-MILESTONES.md](../context/FUTURE-MILESTONES.md) is revisable direction; research proposals do not automatically add work.
 
+## v0.2 Color & Cartridge Breadth research (2026-10-10)
+
+Milestone delta research lives in [v0.2/](v0.2/): start with [v0.2/SUMMARY.md](v0.2/SUMMARY.md) (reconciled phase order, fixture catalogue, rights gates G1–G7, conflicts and recommendations), then [STACK](v0.2/STACK.md) (fixtures, toolchain pins, rights-clear games), [FEATURES](v0.2/FEATURES.md) (MBC2/3/5, RTC, CGB-E behavior and API/player changes), [ARCHITECTURE](v0.2/ARCHITECTURE.md) (integration points in `src/core`, build order) and [PITFALLS](v0.2/PITFALLS.md) (V2-xx failure modes and gates). The founding documents below remain the base evidence; v0.2 files extend rather than replace them.
+
 ## Route a question
 
 | Question | Evidence document | Start with these primary sources |
