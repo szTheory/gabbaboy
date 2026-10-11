@@ -5,16 +5,16 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 8
 current_phase_name: Cartridge Seam, MBC5 and MBC2
 status: executing
-stopped_at: Completed 08-08-PLAN.md; next 08-09 (docs and decisions)
-last_updated: "2026-10-11T16:25:24.804Z"
+stopped_at: Completed 08-09-PLAN.md; next 08-10 (exact-head CI, verification and PR readiness)
+last_updated: "2026-10-11T16:30:30.792Z"
 last_activity: 2026-10-11
 last_activity_desc: Phase 8 execution started
-state_head: ac80c48c7e18e99c7690507c379375a613051988
+state_head: d0c3cafc65c5874c1073805ec1d3413e1f5e0dde
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 27
-  completed_plans: 25
+  completed_plans: 26
   percent: 22
 ---
 
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 ## Current Position
 
 Phase: 8 (Cartridge Seam, MBC5 and MBC2) — EXECUTING
-Plan: 9 of 10
+Plan: 10 of 10
 Status: Ready to execute
 Last activity: 2026-10-11 — Phase 8 execution started
 
@@ -128,6 +128,7 @@ Progress (v0.2): [█░░░░░░░░░] 11% (1/9 phases)
 | Phase 08 P06 | 30 min | 3 tasks | 7 files |
 | Phase 08 P07 | 150 min | 2 tasks | 7 files |
 | Phase 08 P08-08 | 25 min | 4 tasks | 11 files |
+| Phase 08 P09 | 40 min | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -242,6 +243,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 08]: 08-05: mbc2/mbc5 Mooneye derivatives admitted by manifest digest; budgets = ceil(2*ticks/100000)*100000; no D-27 patch needed (15/15 pass)
 - [Phase 08]: 08-06: Mooneye mbc builder pin is read from the digest-checked parent manifest (sibling carries no builder object); type-mutation control requires an unmutated pass first
 - [Phase 08]: 08-08: ninth bank bit proved by mbc5_bank_1ff plus test-only ninth-bit mutant (fails at C005, control passes); rom_64Mb is the 8 MiB loader/install-policy case only
+- [Phase 08]: 08-09: D-049..D-062 recorded (Open Questions 1-7, D-08/D-10/D-32 refinements, D-29 amendment: ninth bit proved by mbc5_bank_1ff, not rom_64Mb)
 
 ### Pending Todos
 
@@ -276,8 +278,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-11T16:25:24.749Z
-Stopped at: Completed 08-08-PLAN.md; next 08-09 (docs and decisions)
+Last session: 2026-10-11T16:30:30.751Z
+Stopped at: Completed 08-09-PLAN.md; next 08-10 (exact-head CI, verification and PR readiness)
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 8`
 
