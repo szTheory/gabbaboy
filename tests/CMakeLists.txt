@@ -386,7 +386,8 @@ set_tests_properties(mooneye_case_tim00-div-trigger PROPERTIES PASS_REGULAR_EXPR
 set(GBB_MBC_MANIFEST ${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/manifest.json)
 add_test(NAME mooneye_mbc_required_suite
   COMMAND gabbaboy-runner --manifest ${GBB_MBC_MANIFEST} --suite --receipt)
-set_tests_properties(mooneye_mbc_required_suite PROPERTIES TIMEOUT 30 PASS_REGULAR_EXPRESSION
+# The ASan/UBSan leg runs the 15 cases back to back in about 35 s (hosted Linux), so the suite bound is 120 s.
+set_tests_properties(mooneye_mbc_required_suite PROPERTIES TIMEOUT 120 PASS_REGULAR_EXPRESSION
   "suite eligible=15 executed=15 status=pass.*suite categories mbc2=7/7 mbc5=8/8")
 set(GBB_MBC_CASES
   mbc2_bits_ramg:01d7:407e mbc2_bits_romb:01c0:407e mbc2_bits_unused:018d:407e mbc2_ram:029c:4071
@@ -400,8 +401,9 @@ foreach(entry IN LISTS GBB_MBC_CASES)
   list(GET parts 2 result_pc)
   add_test(NAME mooneye_mbc_case_${alias}
     COMMAND gabbaboy-runner --manifest ${GBB_MBC_MANIFEST} --case ${alias} --receipt)
-  # Measured wall time is at most 1.9 s per case (Plan 08-05), so the 30 s bound holds for all 15.
-  set_tests_properties(mooneye_mbc_case_${alias} PROPERTIES TIMEOUT 30 PASS_REGULAR_EXPRESSION
+  # Unsanitized wall time is at most 1.9 s per case (Plan 08-05); the hosted ASan/UBSan leg measured 15.4 s
+  # for mbc2_bits_ramg under parallel load, so the bound is 60 s.
+  set_tests_properties(mooneye_mbc_case_${alias} PROPERTIES TIMEOUT 60 PASS_REGULAR_EXPRESSION
     "status=pass.*source_revision=31510e12eea6286d36eea060a6adde755e1067aa.*fixture_origin=derived-headless-report-closure upstream_assertions=unchanged.*protocol_stage=callback-then-ld-b-b callback_result=pass callback_pc=${callback_pc} result_pc=${result_pc}")
 endforeach()
 set(GBB_TEST_SANITIZER_LINK_OPTIONS "")

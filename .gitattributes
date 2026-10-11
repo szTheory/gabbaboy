@@ -24,3 +24,7 @@ fixtures/mooneye-mbc/LICENSE.txt text eol=lf
 fixtures/mooneye-mbc/FONT-LICENSE.txt text eol=lf
 fixtures/mooneye-mbc/SOURCES.md text eol=lf
 fixtures/mooneye-mbc/ELIGIBILITY.md text eol=lf
+
+# Parent references digested by the sibling Mooneye manifest must survive Windows checkouts byte for byte.
+fixtures/mooneye/headless-report.patch text eol=lf
+fixtures/mooneye/font-source.c text eol=lf
