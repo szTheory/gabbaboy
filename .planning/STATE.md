@@ -5,16 +5,16 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 07
 current_phase_name: DMG Game Acceptance and Regression Baseline
 status: executing
-stopped_at: Completed GB-07-14-PLAN.md (exact-head run 38100653716 green at 238ff53)
-last_updated: "2026-10-11T01:26:59.888Z"
+stopped_at: Completed GB-07-15-PLAN.md (exact-head run 38104647567 green at 6b4ff7c)
+last_updated: "2026-10-11T02:39:28.018Z"
 last_activity: 2026-10-10
 last_activity_desc: Phase GB-07 execution started
-state_head: 1f897a4be7d30a59f838b8492bc07f63c7805332
+state_head: b56cd41a21669350a1a2dd07808eb5e720e6bdb4
 progress:
   total_phases: 9
   completed_phases: 1
   total_plans: 17
-  completed_plans: 15
+  completed_plans: 16
   percent: 11
 ---
 
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-10)
 ## Current Position
 
 Phase: GB-07 (DMG Game Acceptance and Regression Baseline) — EXECUTING
-Plan: 15 of 17 (07-13 complete; 07-14 is next)
+Plan: 16 of 17 (07-15 complete; 07-16 is next)
 Status: Executing Phase GB-07
 Last activity: 2026-10-10 — Phase GB-07 execution started
 
@@ -118,6 +118,7 @@ Progress (v0.2): [░░░░░░░░░░] 0% (0/9 phases)
 | Phase 07 P12 | 40 min | 2 tasks | 6 files |
 | Phase 07 P13 | 75 min | 3 tasks | 8 files |
 | Phase GB-07 P14 | 55 min | 3 tasks | 5 files |
+| Phase GB-07 P07-15 | 70 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -226,6 +227,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 07]: 07-11: D-16 PCM thresholds unchanged (peak_to_peak 2048, changes 4800); O=20290/164822, N=0/0 at exact head b6f982b, identical on Linux, macOS and Windows
 - [Phase 07]: 07-11: stall report (D-18) also covers exit 3 and writes the failure PPM there; acceptance_parse_script_errors compares events field-wise (MSVC padding)
 - [Phase GB-07]: 07-14: surface check forbids a superset of tokens (freopen, O_* flags, non-literal fopen mode, session persistence names); test_player_session compiles audio/input/script_smoke sources directly
+- [Phase GB-07]: 07-15: DMG-CPU-B v1 ledger frozen at 5a55f19 in baseline commit 42faf9b; one ledger for all OS, changes only via CHANGES.md rows (D-30..D-35)
 
 ### Pending Todos
 
@@ -259,8 +261,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-11T01:26:59.868Z
-Stopped at: Completed GB-07-14-PLAN.md (exact-head run 38100653716 green at 238ff53)
+Last session: 2026-10-11T02:39:27.975Z
+Stopped at: Completed GB-07-15-PLAN.md (exact-head run 38104647567 green at 6b4ff7c)
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 7`
 Continuation note: [.continue-here.md](.continue-here.md)
