@@ -125,26 +125,34 @@ Plans:
   4. Original fixtures for MBC5 bank `$1FF`, bank 0 in the upper window and rumble masking pass, and the 8 MiB `rom_64Mb` derivative is kept out of install and package artifacts.
 
 **Research**: Standard (confirm the 8 MiB loader bound and repository size policy for `rom_64Mb`).
-**Plans**: 10 plans (seam plan first; MBC2 then MBC5 run in sequence because they share the core, header and test-inventory files)
+**Plans**: 1/10 plans executed (seam plan first; MBC2 then MBC5 run in sequence because they share the core, header and test-inventory files)
 
 Plans:
 **Wave 1**
-- [ ] 08-01-PLAN.md — Cartridge mapper seam in gabbaboy.c with old-versus-new differential, frozen digest and draft PR
+- [x] 08-01-PLAN.md — Cartridge mapper seam in gabbaboy.c with old-versus-new differential, frozen digest and draft PR
+
 **Wave 2**
 - [ ] 08-02-PLAN.md — MBC2: bit-8 decode, 512 canonical nibbles, normalising battery import
+
 **Wave 3**
 - [ ] 08-03-PLAN.md — MBC5: 9-bit banking, 8 MiB type-aware ceiling, rumble API, cross-mapper control
+
 **Wave 4** *(parallel)*
 - [ ] 08-04-PLAN.md — Player runs MBC2/MBC5 battery carts without persistence and says so
 - [ ] 08-05-PLAN.md — Mooneye mbc2/mbc5 derivatives admitted and executed: pinned rebuild, sibling manifest, multi-suite runner, 7/7 and 8/8
+
 **Wave 5**
 - [ ] 08-06-PLAN.md — Sibling verifier, 22 mooneye_mbc CTests, PC agreement and fail-closed controls, SOURCES/ELIGIBILITY and notices
+
 **Wave 6**
 - [ ] 08-07-PLAN.md — Install/package scans, ninth-bit mutant, hosted Linux rebuild leg, exact-head CI
+
 **Wave 7**
 - [ ] 08-08-PLAN.md — Original MBC5 banking fixture: bank $1FF, bank 0 upper window, rumble masking
+
 **Wave 8**
 - [ ] 08-09-PLAN.md — Docs, evidence ledger, support entry, decisions, lessons, future direction
+
 **Wave 9**
 - [ ] 08-10-PLAN.md — Phase gates, exact-head evidence, PR ready (left open), handoff to /gsd-verify-work 8
 
@@ -254,7 +262,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 1–6, 06.1 | v0.1 | 64/64 | Complete | 2026-10-10 |
 | 7. DMG Game Acceptance and Regression Baseline | v0.2 | 17/17 | Complete    | 2026-10-11 |
-| 8. Cartridge Seam, MBC5 and MBC2 | v0.2 | 0/TBD | Not started | - |
+| 8. Cartridge Seam, MBC5 and MBC2 | v0.2 | 1/10 | In Progress | - |
 | 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 0/TBD | Not started | - |
 | 10. CGB Profile, Banking and Register Visibility | v0.2 | 0/TBD | Not started | - |
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 0/TBD | Not started | - |
