@@ -5,16 +5,16 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 8
 current_phase_name: Cartridge Seam, MBC5 and MBC2
 status: executing
-stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-10-11T14:38:50.848Z"
+stopped_at: Completed GB-08-02-PLAN.md
+last_updated: "2026-10-11T14:50:12.831Z"
 last_activity: 2026-10-11
 last_activity_desc: Phase 8 execution started
-state_head: 489995de257cbf6bd5df18ddc7cb5ad3233a4015
+state_head: 4c630f2845176b8bbdeb45f1339f959df1f5cf35
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 27
-  completed_plans: 18
+  completed_plans: 19
   percent: 22
 ---
 
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 ## Current Position
 
 Phase: 8 (Cartridge Seam, MBC5 and MBC2) — EXECUTING
-Plan: 2 of 10
+Plan: 3 of 10
 Status: Ready to execute
 Last activity: 2026-10-11 — Phase 8 execution started
 
@@ -121,6 +121,7 @@ Progress (v0.2): [█░░░░░░░░░] 11% (1/9 phases)
 | Phase GB-07 P07-15 | 70 min | 2 tasks | 7 files |
 | Phase 7 P16 | 100 min | 3 tasks | 7 files |
 | Phase 08 P01 | 70 min | 3 tasks | 3 files |
+| Phase GB-08 P08-02 | 40 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -231,6 +232,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-07]: 07-14: surface check forbids a superset of tokens (freopen, O_* flags, non-literal fopen mode, session persistence names); test_player_session compiles audio/input/script_smoke sources directly
 - [Phase GB-07]: 07-15: DMG-CPU-B v1 ledger frozen at 5a55f19 in baseline commit 42faf9b; one ledger for all OS, changes only via CHANGES.md rows (D-30..D-35)
 - [Phase 08]: 08-01: cartridge mapper section placed before gbb_instance; helpers take cart_state plus sizes
+- [Phase GB-08]: MBC2 RAM stored canonical 0xF0|nibble; battery export is the stored image and import normalises before compare (08-02)
 
 ### Pending Todos
 
@@ -264,11 +266,12 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-11T14:38:50.802Z
-Stopped at: Completed 08-01-PLAN.md
+Last session: 2026-10-11T14:50:12.780Z
+Stopped at: Completed GB-08-02-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 8`
 
+Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, plan 08-02 (MBC2) executed** (2026-10-11) on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. 11 mbc2_ CTests added, full local ctest 272/272, differential `--exclude-types 05,06` `differences=0`, baseline pass. Phase 8 is not complete: plans 08-03..08-10 remain. Next plan: **08-03 (MBC5)** via **`/gsd-execute-phase 8`**. Both auto-advance flags stay false.
 Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, plan 08-01 (cartridge seam) executed** (2026-10-11) on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. Differential `cells=86016 differences=0`, digest `4c7a57ff3d50d228` held, exact-head CI green on all eight required jobs at 25e5d6e (run 38146578485), draft PR #64 open and not merged. Phase 8 is not complete: plans 08-02..08-10 remain. Next plan: **08-02 (MBC2)** via **`/gsd-execute-phase 8`** (resumes at the first plan without a SUMMARY). Both auto-advance flags stay false.
 
 Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, planning** (2026-10-11) on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. Research, pattern map, validation strategy and 10 plans in 9 waves: 08-01 seam (`gabbaboy.c` only, old-versus-new differential, draft PR); 08-02 MBC2; 08-03 MBC5 + 8 MiB bound + `gbb_rumble_state`; 08-04 player non-persistence and 08-05 Mooneye-mbc admission + runner in parallel; 08-06 sibling verifier and controls; 08-07 install/package scans, ninth-bit mutant, hosted leg; 08-08 original MBC5 banking fixture; 08-09 docs and decisions; 08-10 gates, PR ready and left open. Plan checker: 5 passes, final pass clean; requirements 3/3, decisions 34/34. D-08 amended at planning (sequencing only: MBC2 plan before MBC5 because both edit the same core, header and test inventory files). Phase 8 is not executed. Next phase step: **Phase 8 execution** via **`/gsd-execute-phase 8`**. Both auto-advance flags stay false; nothing advances automatically.
