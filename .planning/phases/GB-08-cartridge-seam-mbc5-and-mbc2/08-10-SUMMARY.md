@@ -145,4 +145,6 @@ None. Planning records only; T-08-36 only exact-head results counted, T-08-37 pr
 
 ## Handoff heads
 
-Recorded in the addendum commit that follows the handoff push.
+- **Handoff head** `cea55b28e32f320b14e47d921545e410ab4c5711` (STATE.md, .continue-here.md, ROADMAP.md, REQUIREMENTS.md, state.json and the first version of this SUMMARY; planning files only), ci run 38157465103 (https://github.com/szTheory/gabbaboy/actions/runs/38157465103), pull_request, attempt 1, `wait-exact-head-ci.py` with all eight `--require` options printed `PASS`. Jobs: native-linux-x64 success, native-macos-arm64 success, native-windows-x64 success, linux-asan-ubsan success, cmake-floor-3.25.3 success, player-gate success, macos-player-package success, required-native success. fixture-repro run 38157465090 success.
+- `gh pr view 64` read back `state=OPEN isDraft=false headRefOid=cea55b28...` at that head. Not merged.
+- This addendum is a further docs-only commit (this SUMMARY only); its own exact-head result is reported in the completion message.
