@@ -44,9 +44,18 @@ target_link_libraries(test_mbc5 PRIVATE GabbaBoy::core)
 target_compile_features(test_mbc5 PRIVATE c_std_17)
 set_target_properties(test_mbc5 PROPERTIES C_EXTENSIONS OFF)
 foreach(case tracer header_matrix rom_banking ram_enable ram_banking no_ram_window
-  battery rom_bound cgb_flag_ignored cross_mapper_control)
+  battery rom_bound cgb_flag_ignored cross_mapper_control
+  rumble_state rumble_errors rumble_reset_load reset_preserves_ram)
   add_test(NAME mbc5_${case} COMMAND test_mbc5 mbc5_${case})
 endforeach()
+
+# White-box: the test includes src/core/gabbaboy.c itself, so it must not link
+# the core library (duplicate definitions).
+add_executable(test_mbc5_internal test_mbc5_internal.c)
+target_include_directories(test_mbc5_internal PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_mbc5_internal PRIVATE c_std_17)
+set_target_properties(test_mbc5_internal PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME mbc5_rumble_saturation COMMAND test_mbc5_internal mbc5_rumble_saturation)
 
 add_executable(test_battery test_battery.c)
 target_link_libraries(test_battery PRIVATE GabbaBoy::core)

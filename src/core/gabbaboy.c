@@ -890,8 +890,20 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
                 m->cart.rom_bank_lo = value;
             else if (address < 0x4000u)
                 m->cart.rom_bank_hi = value & 0x01u;
-            else if (address < 0x6000u)
-                m->cart.ram_bank = value & 0x0Fu;
+            else if (address < 0x6000u) {
+                /* Rumble carts give bit 3 to the motor line, leaving 3 RAM bank
+                 * bits; the line is host-observable but never reaches the RAM index. */
+                if (m->cart.has_rumble) {
+                    const uint8_t line = (uint8_t)((value >> 3) & 1u);
+                    m->cart.ram_bank = value & 0x07u;
+                    if (line != m->cart.rumble_on) {
+                        m->cart.rumble_on = line;
+                        if (m->cart.rumble_changes != UINT64_MAX) ++m->cart.rumble_changes;
+                    }
+                } else {
+                    m->cart.ram_bank = value & 0x0Fu;
+                }
+            }
             break;
         case CART_ROM_ONLY:
         default:
@@ -1896,6 +1908,12 @@ void gbb_destroy(gbb_instance *instance) {
 
 gbb_error gbb_reset(gbb_instance *instance) {
     if (instance == NULL) return GBB_INVALID_ARGUMENT;
+    /* Reset drops the motor line; only a line that was on is a transition.
+     * Loads and gbb_create never reach this, so they never count a change. */
+    if (instance->cart.rumble_on) {
+        instance->cart.rumble_on = 0u;
+        if (instance->cart.rumble_changes != UINT64_MAX) ++instance->cart.rumble_changes;
+    }
     reset_state(instance);
     return GBB_OK;
 }
@@ -1990,6 +2008,16 @@ gbb_error gbb_battery_generation(const gbb_instance *instance,
     if (instance == NULL || out_generation == NULL) return GBB_INVALID_ARGUMENT;
     if (!has_battery_ram(instance)) return GBB_NO_BATTERY;
     *out_generation = instance->battery_generation;
+    return GBB_OK;
+}
+
+gbb_error gbb_rumble_state(const gbb_instance *instance, uint8_t *out_on,
+                           uint64_t *out_changes) {
+    if (instance == NULL || out_on == NULL || out_changes == NULL)
+        return GBB_INVALID_ARGUMENT;
+    if (!instance->loaded || !instance->cart.has_rumble) return GBB_NO_RUMBLE;
+    *out_on = instance->cart.rumble_on;
+    *out_changes = instance->cart.rumble_changes;
     return GBB_OK;
 }
 

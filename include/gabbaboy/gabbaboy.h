@@ -33,7 +33,8 @@ typedef enum {
     GBB_OUT_OF_MEMORY,        /* allocation failed; live instance is unchanged */
     GBB_EVENT_QUEUE_FULL,
     GBB_INVALID_EVENT,
-    GBB_FRAME_NOT_READY
+    GBB_FRAME_NOT_READY,
+    GBB_NO_RUMBLE             /* loaded cartridge has no rumble line (or no ROM) */
 } gbb_error;
 
 typedef enum {
@@ -168,6 +169,18 @@ gbb_error gbb_import_battery(gbb_instance *instance, const uint8_t *bytes,
                              size_t size_bytes);
 gbb_error gbb_battery_generation(const gbb_instance *instance,
                                  uint64_t *out_generation);
+/* Reports the rumble motor line of MBC5 rumble cartridges ($1C-$1E). A NULL
+ * argument returns GBB_INVALID_ARGUMENT; no loaded ROM or a cartridge without a
+ * rumble line returns GBB_NO_RUMBLE. Outputs are left unchanged on any error.
+ * out_on is bit 3 of the last write to $4000-$5FFF, independent of whether
+ * cartridge RAM is enabled (that bit never selects a RAM bank on these types).
+ * out_changes counts line transitions and saturates at UINT64_MAX. gbb_reset
+ * turns the line off and counts one change only if it was on; a successful
+ * gbb_load_rom zeroes both, a failed one leaves them unchanged. Hosts sample
+ * once per frame and may read the counter as duty cycle. The core drives no
+ * haptics and this is not evidence of physical rumble-motor behaviour. */
+gbb_error gbb_rumble_state(const gbb_instance *instance, uint8_t *out_on,
+                           uint64_t *out_changes);
 /* Copies events into a fixed 64-event per-instance queue. Timestamps are
  * absolute half-dot ticks and must be nondecreasing within the batch and no
  * earlier than the instance's current time. Equal timestamps keep caller

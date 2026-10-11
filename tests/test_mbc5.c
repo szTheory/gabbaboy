@@ -609,6 +609,202 @@ static int mbc5_cross_mapper_control(void) {
     return 0;
 }
 
+/* Run a fresh $1E (128 KiB RAM) machine through a program, return its state. */
+static gbb_instance *run_rumble_program(uint8_t type, uint8_t ram_code, const program *p) {
+    gbb_instance *machine = load_program(1u, type, ram_code, p);
+    if (machine == NULL || !run_to_halt(machine)) {
+        gbb_destroy(machine);
+        return NULL;
+    }
+    return machine;
+}
+
+static int mbc5_rumble_state(void) {
+    static const uint8_t writes[4] = {0x08u, 0x0Fu, 0x07u, 0x08u};
+    static const uint8_t expect_on[4] = {1u, 1u, 0u, 1u};
+    static const uint64_t expect_changes[4] = {1u, 1u, 2u, 3u};
+    for (size_t n = 1u; n <= 4u; ++n) {
+        program p = {{0}, 0u};
+        for (size_t i = 0u; i < n; ++i) emit_write(&p, 0x4000u, writes[i]);
+        emit_halt(&p);
+        gbb_instance *machine = run_rumble_program(0x1Eu, 0x04u, &p); /* RAM never enabled */
+        REQUIRE(machine != NULL);
+        uint8_t on = 0xEEu;
+        uint64_t changes = 0xEEu;
+        REQUIRE(gbb_rumble_state(machine, &on, &changes) == GBB_OK);
+        REQUIRE(on == expect_on[n - 1u]);
+        REQUIRE(changes == expect_changes[n - 1u]);
+        gbb_destroy(machine);
+    }
+
+    /* Bit 3 is the motor line, not a RAM bank bit: $0F selects bank 7. */
+    program q = {{0}, 0u};
+    emit_write(&q, 0x0000u, 0x0Au);
+    emit_write(&q, 0x4000u, 0x00u);
+    emit_write(&q, 0xA000u, 0x10u);
+    emit_write(&q, 0x4000u, 0x07u);
+    emit_write(&q, 0xA000u, 0x77u);
+    emit_write(&q, 0x4000u, 0x08u);
+    emit_read_to(&q, 0xA000u, 0xC000u);
+    emit_write(&q, 0x4000u, 0x0Fu);
+    emit_read_to(&q, 0xA000u, 0xC001u);
+    emit_halt(&q);
+    gbb_instance *machine = run_rumble_program(0x1Eu, 0x04u, &q);
+    REQUIRE(machine != NULL);
+    REQUIRE(gbb_peek_ram(machine, 0xC000u) == 0x10u);
+    REQUIRE(gbb_peek_ram(machine, 0xC001u) == 0x77u);
+    uint8_t on = 0u;
+    uint64_t changes = 0u;
+    REQUIRE(gbb_rumble_state(machine, &on, &changes) == GBB_OK);
+    REQUIRE(on == 1u && changes == 1u);
+    gbb_destroy(machine);
+
+    /* The non-rumble battery type keeps all four bank bits. */
+    program r = {{0}, 0u};
+    emit_write(&r, 0x0000u, 0x0Au);
+    emit_write(&r, 0x4000u, 0x00u);
+    emit_write(&r, 0xA000u, 0x10u);
+    emit_write(&r, 0x4000u, 0x08u);
+    emit_write(&r, 0xA000u, 0x88u);
+    emit_write(&r, 0x4000u, 0x00u);
+    emit_read_to(&r, 0xA000u, 0xC000u);
+    emit_halt(&r);
+    machine = run_rumble_program(0x1Bu, 0x04u, &r);
+    REQUIRE(machine != NULL);
+    REQUIRE(gbb_peek_ram(machine, 0xC000u) == 0x10u);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int mbc5_rumble_errors(void) {
+    REQUIRE(GBB_NO_RUMBLE == 18);
+    uint8_t on = 0xA5u;
+    uint64_t changes = UINT64_C(0x0123456789ABCDEF);
+    gbb_instance *machine = new_machine();
+    REQUIRE(machine != NULL);
+    REQUIRE(gbb_rumble_state(NULL, &on, &changes) == GBB_INVALID_ARGUMENT);
+    REQUIRE(gbb_rumble_state(machine, NULL, &changes) == GBB_INVALID_ARGUMENT);
+    REQUIRE(gbb_rumble_state(machine, &on, NULL) == GBB_INVALID_ARGUMENT);
+    REQUIRE(gbb_rumble_state(machine, &on, &changes) == GBB_NO_RUMBLE); /* no ROM */
+    REQUIRE(on == 0xA5u && changes == UINT64_C(0x0123456789ABCDEF));
+
+    program p = {{0}, 0u};
+    emit_halt(&p);
+    static const struct { uint8_t type, ram_code; } rows[4] = {
+        {0x19u, 0x00u}, {0x1Bu, 0x02u}, {0x01u, 0x00u}, {0x05u, 0x00u}};
+    for (size_t i = 0u; i < 4u; ++i) {
+        size_t size = 0u;
+        uint8_t *rom = make_rom(1u, rows[i].type, rows[i].ram_code, &size);
+        REQUIRE(rom != NULL);
+        install(rom, &p);
+        REQUIRE(gbb_load_rom(machine, rom, size) == GBB_OK);
+        free(rom);
+        REQUIRE(gbb_rumble_state(machine, &on, &changes) == GBB_NO_RUMBLE);
+        REQUIRE(on == 0xA5u && changes == UINT64_C(0x0123456789ABCDEF));
+    }
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int mbc5_rumble_reset_load(void) {
+    program p = {{0}, 0u};
+    emit_write(&p, 0x4000u, 0x08u);
+    emit_halt(&p);
+    size_t size = 0u;
+    uint8_t *rom = make_rom(1u, 0x1Cu, 0u, &size);
+    REQUIRE(rom != NULL);
+    install(rom, &p);
+    gbb_instance *machine = new_machine();
+    REQUIRE(machine != NULL);
+    REQUIRE(gbb_load_rom(machine, rom, size) == GBB_OK);
+    uint8_t on = 1u;
+    uint64_t changes = 9u;
+    REQUIRE(gbb_rumble_state(machine, &on, &changes) == GBB_OK);
+    REQUIRE(on == 0u && changes == 0u); /* a load never counts */
+
+    REQUIRE(run_to_halt(machine));
+    REQUIRE(gbb_rumble_state(machine, &on, &changes) == GBB_OK);
+    REQUIRE(on == 1u && changes == 1u);
+    REQUIRE(gbb_reset(machine) == GBB_OK);
+    REQUIRE(gbb_rumble_state(machine, &on, &changes) == GBB_OK);
+    REQUIRE(on == 0u && changes == 2u);
+    REQUIRE(gbb_reset(machine) == GBB_OK); /* line already off: no change */
+    REQUIRE(gbb_rumble_state(machine, &on, &changes) == GBB_OK);
+    REQUIRE(on == 0u && changes == 2u);
+
+    REQUIRE(run_to_halt(machine));
+    REQUIRE(gbb_rumble_state(machine, &on, &changes) == GBB_OK);
+    REQUIRE(on == 1u && changes == 3u);
+    REQUIRE(gbb_load_rom(machine, rom, size - 1u) == GBB_ROM_TRUNCATED); /* failed */
+    REQUIRE(gbb_rumble_state(machine, &on, &changes) == GBB_OK);
+    REQUIRE(on == 1u && changes == 3u);
+    REQUIRE(gbb_load_rom(machine, rom, size) == GBB_OK); /* successful */
+    REQUIRE(gbb_rumble_state(machine, &on, &changes) == GBB_OK);
+    REQUIRE(on == 0u && changes == 0u);
+    gbb_destroy(machine);
+    free(rom);
+    return 0;
+}
+
+/* D-07: reset keeps cartridge RAM and generation but restores mapper registers. */
+static int reset_preserves_ram_case(uint8_t type) {
+    program tail = {{0}, 0u};
+    emit_write(&tail, 0xA000u, 0x11u);                       /* RAM bank 0 */
+    emit_write(&tail, 0x4000u, type == 0x1Eu ? 0x0Bu : 0x03u); /* bank 3 (+ line) */
+    emit_write(&tail, 0xA000u, 0x33u);
+    emit_write(&tail, 0x2000u, 0x05u);                       /* ROM bank 5 */
+    program p = {{0}, 0u};
+    emit_read_to(&p, 0x5000u, 0xC010u);
+    emit_read_to(&p, 0xA000u, 0xC011u);
+    emit_write(&p, 0x0000u, 0x0Au);
+    emit_read_to(&p, 0xA000u, 0xC012u);
+    const uint8_t gate[] = {0xFAu, 0x12u, 0xC0u, 0xFEu, 0x11u, 0x28u, (uint8_t)tail.used};
+    emit_raw(&p, gate, sizeof(gate));
+    emit_raw(&p, tail.bytes, tail.used);
+    emit_halt(&p);
+
+    gbb_instance *machine = load_program(1u, type, 0x04u, &p);
+    REQUIRE(machine != NULL);
+    REQUIRE(run_to_halt(machine));
+    static uint8_t before[131072];
+    static uint8_t after[131072];
+    REQUIRE(gbb_copy_battery(machine, before, sizeof(before)) == GBB_OK);
+    uint64_t generation = 0u;
+    REQUIRE(gbb_battery_generation(machine, &generation) == GBB_OK);
+    REQUIRE(generation == 2u);
+    REQUIRE(before[0] == 0x11u && before[3u * 0x2000u] == 0x33u);
+
+    REQUIRE(gbb_reset(machine) == GBB_OK);
+    REQUIRE(gbb_copy_battery(machine, after, sizeof(after)) == GBB_OK);
+    REQUIRE(memcmp(before, after, sizeof(before)) == 0);
+    uint64_t generation_after = 0u;
+    REQUIRE(gbb_battery_generation(machine, &generation_after) == GBB_OK);
+    REQUIRE(generation_after == generation);
+    if (type == 0x1Eu) {
+        uint8_t on = 1u;
+        uint64_t changes = 0u;
+        REQUIRE(gbb_rumble_state(machine, &on, &changes) == GBB_OK);
+        REQUIRE(on == 0u);
+    }
+
+    REQUIRE(run_to_halt(machine));
+    REQUIRE(gbb_peek_ram(machine, 0xC010u) == 0x41u); /* ROM bank 1 */
+    REQUIRE(gbb_peek_ram(machine, 0xC011u) == 0xFFu); /* RAM disabled */
+    REQUIRE(gbb_peek_ram(machine, 0xC012u) == 0x11u); /* RAM bank 0 */
+    REQUIRE(gbb_copy_battery(machine, after, sizeof(after)) == GBB_OK);
+    REQUIRE(memcmp(before, after, sizeof(before)) == 0);
+    REQUIRE(gbb_battery_generation(machine, &generation_after) == GBB_OK);
+    REQUIRE(generation_after == generation);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int mbc5_reset_preserves_ram(void) {
+    REQUIRE(reset_preserves_ram_case(0x1Bu) == 0);
+    REQUIRE(reset_preserves_ram_case(0x1Eu) == 0);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
     if (strcmp(argv[1], "mbc5_tracer") == 0) return mbc5_tracer();
@@ -621,5 +817,9 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "mbc5_rom_bound") == 0) return mbc5_rom_bound();
     if (strcmp(argv[1], "mbc5_cgb_flag_ignored") == 0) return mbc5_cgb_flag_ignored();
     if (strcmp(argv[1], "mbc5_cross_mapper_control") == 0) return mbc5_cross_mapper_control();
+    if (strcmp(argv[1], "mbc5_rumble_state") == 0) return mbc5_rumble_state();
+    if (strcmp(argv[1], "mbc5_rumble_errors") == 0) return mbc5_rumble_errors();
+    if (strcmp(argv[1], "mbc5_rumble_reset_load") == 0) return mbc5_rumble_reset_load();
+    if (strcmp(argv[1], "mbc5_reset_preserves_ram") == 0) return mbc5_reset_preserves_ram();
     return 2;
 }

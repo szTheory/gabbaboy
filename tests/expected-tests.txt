@@ -34,6 +34,11 @@ mbc5_battery
 mbc5_rom_bound
 mbc5_cgb_flag_ignored
 mbc5_cross_mapper_control
+mbc5_rumble_state
+mbc5_rumble_errors
+mbc5_rumble_reset_load
+mbc5_reset_preserves_ram
+mbc5_rumble_saturation
 run_bounds
 trace_capacity
 illegal_lockup_api
