@@ -169,6 +169,7 @@ if(GBB_MODE STREQUAL "pc-table")
     gbb_fixture_field(rom ${index} rom)
     gbb_fixture_field(sha256 ${index} sha256)
     gbb_fixture_field(size_bytes ${index} size_bytes)
+    gbb_fixture_field(source_path ${index} source_path)
     gbb_fixture_field(result_pc ${index} result_pc)
     gbb_fixture_field(pass_pc ${index} pass_callback_pc)
     gbb_fixture_field(budget ${index} budget_half_dots)
@@ -200,9 +201,9 @@ if(GBB_MODE STREQUAL "pc-table")
     # Each field is pinned with its neighbours so a value cannot match inside another column.
     set(checks
       "alias|{\"${id}\", \"${alias}\", \"${category}\", \"${rom}\", \"${sha256}\","
-      "pass_callback_pc|, ${pass_pc}, ${first_fail}, ${result_pc}, {3, 5, 8, 13, 21, 34}"
+      "pass_callback_pc|\"${source_path}\", ${pass_pc}, ${first_fail}, 0x"
       "result_pc|, ${result_pc}, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}"
-      "budget|UINT64_C(${budget}), ${size_bytes}u,"
+      "budget|{0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(${budget}), "
       "size_bytes|, ${size_bytes}u, {"
       "fail_callback_pcs|{${fail_joined}}, ${fail_count}}")
     foreach(check IN LISTS checks)

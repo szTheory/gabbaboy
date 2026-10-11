@@ -266,6 +266,39 @@ add_test(NAME mooneye_mbc_fixture_digest
     -DGBB_MODE=digest
     -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeMbc.cmake)
+add_test(NAME mooneye_mbc_eligible_inventory
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_MODE=inventory
+    -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeMbc.cmake)
+add_test(NAME mooneye_mbc_pc_table
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_MODE=pc-table
+    -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc
+    -DGBB_RUNNER_SOURCE=${PROJECT_SOURCE_DIR}/src/runner/main.c
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeMbc.cmake)
+# Negative control: a manifest whose first result_pc was changed must fail the pc-table check with exit code 1.
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-mbc-tamper")
+file(READ "${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/manifest.json" GBB_MBC_MANIFEST_JSON)
+string(JSON GBB_MBC_TAMPERED_JSON SET "${GBB_MBC_MANIFEST_JSON}" fixtures 0 result_pc "\"0x407f\"")
+file(WRITE "${PROJECT_BINARY_DIR}/mooneye-mbc-tamper/manifest.json" "${GBB_MBC_TAMPERED_JSON}")
+add_test(NAME mooneye_mbc_pc_table_tamper
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_MODE=pc-table;-DGBB_MANIFEST=${PROJECT_BINARY_DIR}/mooneye-mbc-tamper/manifest.json;-DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc;-DGBB_RUNNER_SOURCE=${PROJECT_SOURCE_DIR}/src/runner/main.c;-P;${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeMbc.cmake"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=pc-table-mismatch
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# Negative control (D-28): an edited sibling manifest is refused with invalid-manifest and exactly exit code 2.
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-mbc-unknown")
+configure_file("${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/manifest.json"
+  "${PROJECT_BINARY_DIR}/mooneye-mbc-unknown/manifest.json" COPYONLY)
+file(APPEND "${PROJECT_BINARY_DIR}/mooneye-mbc-unknown/manifest.json" " ")
+add_test(NAME mooneye_mbc_unknown_manifest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:gabbaboy-runner>;--manifest;${PROJECT_BINARY_DIR}/mooneye-mbc-unknown/manifest.json;--suite"
+    -DGBB_EXPECT_CODE=2
+    -DGBB_EXPECT_REGEX=invalid-manifest
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
 add_executable(test_diagnostics test_diagnostics.c)
 target_link_libraries(test_diagnostics PRIVATE GabbaBoy::core)
@@ -345,6 +378,28 @@ set_tests_properties(mooneye_case_tim00 PROPERTIES PASS_REGULAR_EXPRESSION
   "status=pass.*source_revision=31510e12eea6286d36eea060a6adde755e1067aa.*report_patch_sha256=c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d.*fixture_origin=derived-headless-report-closure upstream_assertions=unchanged.*protocol_stage=callback-then-ld-b-b callback_result=pass callback_pc=4000 result_pc=4327")
 set_tests_properties(mooneye_case_tim00-div-trigger PROPERTIES PASS_REGULAR_EXPRESSION
   "status=pass.*source_revision=31510e12eea6286d36eea060a6adde755e1067aa.*report_patch_sha256=c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d.*fixture_origin=derived-headless-report-closure upstream_assertions=unchanged.*protocol_stage=callback-then-ld-b-b callback_result=pass callback_pc=4000 result_pc=4327")
+# Phase 8 sibling suite: the manifest's 15 derivatives, one CTest per alias (callback_pc and result_pc per Pitfall P13).
+set(GBB_MBC_MANIFEST ${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/manifest.json)
+add_test(NAME mooneye_mbc_required_suite
+  COMMAND gabbaboy-runner --manifest ${GBB_MBC_MANIFEST} --suite --receipt)
+set_tests_properties(mooneye_mbc_required_suite PROPERTIES TIMEOUT 30 PASS_REGULAR_EXPRESSION
+  "suite eligible=15 executed=15 status=pass.*suite categories mbc2=7/7 mbc5=8/8")
+set(GBB_MBC_CASES
+  mbc2_bits_ramg:01d7:407e mbc2_bits_romb:01c0:407e mbc2_bits_unused:018d:407e mbc2_ram:029c:4071
+  mbc2_rom_512kb:0207:4071 mbc2_rom_1Mb:0207:4071 mbc2_rom_2Mb:0207:4071
+  mbc5_rom_512kb:0216:4072 mbc5_rom_1Mb:0216:4072 mbc5_rom_2Mb:0216:4072 mbc5_rom_4Mb:0216:4072
+  mbc5_rom_8Mb:0216:4072 mbc5_rom_16Mb:0216:4072 mbc5_rom_32Mb:0216:4072 mbc5_rom_64Mb:0216:4072)
+foreach(entry IN LISTS GBB_MBC_CASES)
+  string(REPLACE ":" ";" parts "${entry}")
+  list(GET parts 0 alias)
+  list(GET parts 1 callback_pc)
+  list(GET parts 2 result_pc)
+  add_test(NAME mooneye_mbc_case_${alias}
+    COMMAND gabbaboy-runner --manifest ${GBB_MBC_MANIFEST} --case ${alias} --receipt)
+  # Measured wall time is at most 1.9 s per case (Plan 08-05), so the 30 s bound holds for all 15.
+  set_tests_properties(mooneye_mbc_case_${alias} PROPERTIES TIMEOUT 30 PASS_REGULAR_EXPRESSION
+    "status=pass.*source_revision=31510e12eea6286d36eea060a6adde755e1067aa.*fixture_origin=derived-headless-report-closure upstream_assertions=unchanged.*protocol_stage=callback-then-ld-b-b callback_result=pass callback_pc=${callback_pc} result_pc=${result_pc}")
+endforeach()
 set(GBB_TEST_SANITIZER_LINK_OPTIONS "")
 if(GABBABOY_ENABLE_SANITIZERS)
   set(GBB_TEST_SANITIZER_LINK_OPTIONS "-fsanitize=address,undefined")
