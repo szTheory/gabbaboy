@@ -323,6 +323,18 @@ add_test(NAME mbc5_banking_fixture_digest
     -DROM=${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb
     -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/manifest.json
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
+# MagenTests mbc_oob_sram screen oracle (D-05). Public API only; repository fixtures, never installed.
+set(GBB_MAGENTESTS_DIR "${PROJECT_SOURCE_DIR}/fixtures/magentests")
+add_executable(test_magentests test_magentests.c)
+target_link_libraries(test_magentests PRIVATE GabbaBoy::core)
+target_compile_features(test_magentests PRIVATE c_std_17)
+set_target_properties(test_magentests PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME magentests_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DMANIFEST=${GBB_MAGENTESTS_DIR}/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixtureManifest.cmake)
+add_test(NAME magentests_oob_sram_mbc3
+  COMMAND test_magentests magentests_oob_sram_mbc3 ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc3.gbc)
 add_test(NAME mooneye_fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye
