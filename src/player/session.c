@@ -16,12 +16,19 @@
 #include <signal.h>
 #endif
 
-#define PLAYER_SESSION_MAX_ROM_SIZE (2u * 1024u * 1024u)
-#define PLAYER_SESSION_MAX_RAM_SIZE 32768u
+/* The largest ROM any supported mapper accepts is 8 MiB (MBC5); the core applies
+ * the tighter type-aware ceiling after this host read bound. */
+#define PLAYER_SESSION_MAX_ROM_SIZE (8u * 1024u * 1024u)
+#define PLAYER_SESSION_MAX_RAM_SIZE 131072u
 #define PLAYER_SAVE_HEADER_SIZE 51u
-#define PLAYER_SAVE_MAX_SIZE (PLAYER_SAVE_HEADER_SIZE + PLAYER_SESSION_MAX_RAM_SIZE)
 #define PLAYER_SAVE_MAGIC "GBBBSAVE"
 #define PLAYER_SAVE_VERSION 1u
+#define PLAYER_SAVE_V2_HEADER_SIZE 64u
+#define PLAYER_SAVE_V2_VERSION 2u
+#define PLAYER_SAVE_V2_MAX_SIZE \
+    (PLAYER_SAVE_V2_HEADER_SIZE + PLAYER_SESSION_MAX_RAM_SIZE + GBB_RTC_BLOCK_SIZE)
+#define PLAYER_SAVE_V2_FLAG_RTC 0x01u
+#define PLAYER_SAVE_V2_FLAG_SAVED_AT 0x02u
 
 #ifdef GBB_PLAYER_SESSION_TESTING
 static player_session_test_fault_stage test_fault_stage;
@@ -57,7 +64,7 @@ static const char *rom_error(gbb_error error) {
     case GBB_ROM_TRUNCATED:
         return "The selected file is truncated; choose a complete supported Game Boy ROM.";
     case GBB_ROM_TOO_LARGE:
-        return "The selected file exceeds the supported 2 MiB ROM size.";
+        return "The selected file exceeds the largest ROM size supported for its cartridge type.";
     case GBB_ROM_SIZE_MISMATCH:
         return "The selected ROM length does not match its declared size.";
     case GBB_UNSUPPORTED_CARTRIDGE:
@@ -142,7 +149,7 @@ static bool read_rom_file(const char *path, uint8_t **out_rom, size_t *out_size,
     const int close_result = close(fd);
     if (total > PLAYER_SESSION_MAX_ROM_SIZE) {
         free(bytes);
-        set_error(out_error, error_capacity, "The selected ROM exceeds the 2 MiB read bound.");
+        set_error(out_error, error_capacity, "The selected ROM exceeds the 8 MiB read bound.");
         return false;
     }
     if (close_result != 0) {
@@ -158,20 +165,52 @@ static bool read_rom_file(const char *path, uint8_t **out_rom, size_t *out_size,
 bool player_session_identify_rom(const uint8_t *rom, size_t rom_size,
                                  player_save_identity *out_identity) {
     if (rom == NULL || out_identity == NULL || rom_size < 0x150u ||
-        rom_size > PLAYER_SESSION_MAX_ROM_SIZE ||
-        CC_SHA256(rom, (CC_LONG)rom_size, out_identity->rom_sha256) == NULL)
+        rom_size > PLAYER_SESSION_MAX_ROM_SIZE)
         return false;
-    out_identity->cartridge_type = rom[0x147u];
-    out_identity->ram_size = rom[0x149u] == 0x02u ? 8192u :
-                             rom[0x149u] == 0x03u ? 32768u : 0u;
-    out_identity->battery_backed = rom[0x147u] == 0x03u &&
-                                   out_identity->ram_size != 0u;
-    out_identity->battery_unsupported = rom[0x147u] == 0x06u ||
-                                        rom[0x147u] == 0x1Bu ||
-                                        rom[0x147u] == 0x1Eu;
-    out_identity->saved_generation = 0u;
-    out_identity->persistence_enabled = out_identity->battery_backed;
+    player_save_identity identity;
+    memset(&identity, 0, sizeof(identity));
+    if (CC_SHA256(rom, (CC_LONG)rom_size, identity.rom_sha256) == NULL)
+        return false;
+    /* The header byte only names the file and binds the envelope; whether the
+     * cartridge has a battery, how much RAM and a clock come from the core. */
+    identity.cartridge_type = rom[0x147u];
+    *out_identity = identity;
     return true;
+}
+
+bool player_session_classify_cartridge(gbb_instance *machine,
+                                       player_save_identity *identity) {
+    if (machine == NULL || identity == NULL) return false;
+    size_t image = 0u;
+    const gbb_error size_result = gbb_battery_size(machine, &image);
+    identity->battery_backed = false;
+    identity->rtc_present = false;
+    identity->ram_size = 0u;
+    identity->persistence_enabled = false;
+    identity->saved_generation = 0u;
+    identity->envelope_version = 0u;
+    if (size_result == GBB_NO_BATTERY) return true;
+    if (size_result != GBB_OK || image == 0u) return false;
+    /* A zero-second catch-up is a documented no-op that reports whether the
+     * cartridge carries a timer, so the player never guesses from the header. */
+    const gbb_error rtc_result = gbb_rtc_catch_up(machine, 0);
+    if (rtc_result != GBB_OK && rtc_result != GBB_NO_RTC) return false;
+    const bool rtc = rtc_result == GBB_OK;
+    if (rtc && image < GBB_RTC_BLOCK_SIZE) return false;
+    const size_t ram = image - (rtc ? (size_t)GBB_RTC_BLOCK_SIZE : 0u);
+    if (ram > PLAYER_SESSION_MAX_RAM_SIZE) return false;
+    identity->rtc_present = rtc;
+    identity->ram_size = (uint32_t)ram;
+    identity->battery_backed = true;
+    identity->persistence_enabled = true;
+    return true;
+}
+
+void player_session_set_clock(player_save_identity *identity, int64_t now_unix,
+                              bool now_valid) {
+    if (identity == NULL) return;
+    identity->clock_now_unix = now_valid ? now_unix : 0;
+    identity->clock_valid = now_valid;
 }
 
 bool player_session_replace_rom(gbb_instance *machine, char **in_out_path,
@@ -212,20 +251,31 @@ bool player_session_replace_rom(gbb_instance *machine, char **in_out_path,
         free(new_path);
         return false;
     }
+    if (!player_session_classify_cartridge(machine, &identity)) {
+        set_error(out_error, error_capacity, "Could not classify the cartridge battery safely.");
+        free(new_path);
+        return false;
+    }
     free(*in_out_path);
     *in_out_path = new_path;
     *out_identity = identity;
     return true;
 }
 
-static uint32_t crc32_bytes(const uint8_t *bytes, size_t size) {
-    uint32_t crc = UINT32_C(0xFFFFFFFF);
+/* Continues a finished CRC-32 over more bytes: update(crc32(a), b) equals
+ * crc32(a followed by b), so the v2 checksum can cover header then payload. */
+static uint32_t crc32_update(uint32_t finished, const uint8_t *bytes, size_t size) {
+    uint32_t crc = finished ^ UINT32_C(0xFFFFFFFF);
     for (size_t i = 0u; i < size; ++i) {
         crc ^= bytes[i];
         for (unsigned bit = 0u; bit < 8u; ++bit)
             crc = (crc >> 1) ^ ((crc & 1u) != 0u ? UINT32_C(0xEDB88320) : 0u);
     }
     return crc ^ UINT32_C(0xFFFFFFFF);
+}
+
+static uint32_t crc32_bytes(const uint8_t *bytes, size_t size) {
+    return crc32_update(0u, bytes, size);
 }
 
 static void put_u16_le(uint8_t *out, uint16_t value) {
@@ -244,6 +294,34 @@ static void put_u32_le(uint8_t *out, uint32_t value) {
 static uint32_t get_u32_le(const uint8_t *bytes) {
     return (uint32_t)bytes[0] | ((uint32_t)bytes[1] << 8) |
            ((uint32_t)bytes[2] << 16) | ((uint32_t)bytes[3] << 24);
+}
+
+static void put_i64_le(uint8_t *out, int64_t value) {
+    const uint64_t bits = (uint64_t)value;
+    for (unsigned i = 0u; i < 8u; ++i) out[i] = (uint8_t)(bits >> (i * 8u));
+}
+
+static int64_t get_i64_le(const uint8_t *bytes) {
+    uint64_t bits = 0u;
+    for (unsigned i = 0u; i < 8u; ++i) bits |= (uint64_t)bytes[i] << (i * 8u);
+    /* Two's complement reinterpretation; the value range is every int64_t. */
+    return (int64_t)bits;
+}
+
+static bool ram_length_allowed(uint32_t length) {
+    return length == 0u || length == 512u || length == 8192u ||
+           length == 32768u || length == 65536u || length == 131072u;
+}
+
+/* MBC1 type $03 with 8 or 32 KiB RAM is the only cartridge v0.1 could save. */
+static bool v1_eligible(const player_save_identity *identity) {
+    return identity->cartridge_type == 0x03u && !identity->rtc_present &&
+           (identity->ram_size == 8192u || identity->ram_size == 32768u);
+}
+
+static size_t image_size_of(const player_save_identity *identity) {
+    return (size_t)identity->ram_size +
+           (identity->rtc_present ? (size_t)GBB_RTC_BLOCK_SIZE : 0u);
 }
 
 static char *battery_file_path(const player_save_identity *identity) {
@@ -284,7 +362,9 @@ static char *battery_file_path(const player_save_identity *identity) {
     digest[64] = '\0';
     char suffix[32];
     const int suffix_length = snprintf(suffix, sizeof(suffix),
-                                       "-mbc1-%02x-%08x.gbb",
+                                       identity->cartridge_type == 0x03u
+                                           ? "-mbc1-%02x-%08x.gbb"
+                                           : "-cart-%02x-%08x.gbb",
                                        identity->cartridge_type,
                                        identity->ram_size);
     if (suffix_length < 0 || (size_t)suffix_length >= sizeof(suffix) ||
@@ -420,10 +500,12 @@ static bool preserve_rejected_save(const char *path,
     return false;
 }
 
-static bool decode_save(const uint8_t *bytes, size_t size,
-                        const player_save_identity *identity,
-                        uint8_t *out_ram) {
-    if (size != PLAYER_SAVE_HEADER_SIZE + identity->ram_size ||
+/* v1 (MBC1 $03 only): validates size, identity and checksum, then copies RAM. */
+static bool decode_save_v1(const uint8_t *bytes, size_t size,
+                           const player_save_identity *identity,
+                           uint8_t *out_image) {
+    if (!v1_eligible(identity) ||
+        size != (size_t)PLAYER_SAVE_HEADER_SIZE + identity->ram_size ||
         memcmp(bytes, PLAYER_SAVE_MAGIC, 8u) != 0 ||
         get_u16_le(bytes + 8u) != PLAYER_SAVE_VERSION ||
         memcmp(bytes + 10u, identity->rom_sha256, 32u) != 0 ||
@@ -432,8 +514,65 @@ static bool decode_save(const uint8_t *bytes, size_t size,
         get_u32_le(bytes + 47u) != crc32_bytes(bytes + PLAYER_SAVE_HEADER_SIZE,
                                                 identity->ram_size))
         return false;
-    memcpy(out_ram, bytes + PLAYER_SAVE_HEADER_SIZE, identity->ram_size);
+    memcpy(out_image, bytes + PLAYER_SAVE_HEADER_SIZE, identity->ram_size);
     return true;
+}
+
+/* v2 header, little-endian, written and read field by field:
+ *   0-7 magic, 8-9 version 2, 10-41 ROM SHA-256, 42 type, 43 flags (bit0 RTC
+ *   block present, bit1 saved_at valid and only with bit0), 44-47 ram_len,
+ *   48-51 rtc_len, 52-59 saved_at (i64, zero unless bit1), 60-63 CRC-32 over
+ *   bytes 0-59 then the payload. Payload is RAM followed by the RTC block.
+ * Every length is checked against its allow-list before any addition, the
+ * total is formed in uint64_t, and nothing is copied until every check passed. */
+static bool decode_save_v2(const uint8_t *bytes, size_t size,
+                           const player_save_identity *identity,
+                           uint8_t *out_image, int64_t *out_saved_at,
+                           bool *out_saved_valid) {
+    if (size < PLAYER_SAVE_V2_HEADER_SIZE ||
+        memcmp(bytes, PLAYER_SAVE_MAGIC, 8u) != 0 ||
+        get_u16_le(bytes + 8u) != PLAYER_SAVE_V2_VERSION ||
+        memcmp(bytes + 10u, identity->rom_sha256, 32u) != 0 ||
+        bytes[42u] != identity->cartridge_type)
+        return false;
+    const uint8_t flags = bytes[43u];
+    const uint32_t ram_len = get_u32_le(bytes + 44u);
+    const uint32_t rtc_len = get_u32_le(bytes + 48u);
+    const int64_t saved_at = get_i64_le(bytes + 52u);
+    const bool has_rtc = (flags & PLAYER_SAVE_V2_FLAG_RTC) != 0u;
+    const bool has_saved_at = (flags & PLAYER_SAVE_V2_FLAG_SAVED_AT) != 0u;
+    if ((flags & ~(PLAYER_SAVE_V2_FLAG_RTC | PLAYER_SAVE_V2_FLAG_SAVED_AT)) != 0u ||
+        (has_saved_at && !has_rtc) ||
+        !ram_length_allowed(ram_len) ||
+        (rtc_len != 0u && rtc_len != GBB_RTC_BLOCK_SIZE) ||
+        has_rtc != (rtc_len == GBB_RTC_BLOCK_SIZE) ||
+        ram_len != identity->ram_size ||
+        (rtc_len != 0u) != identity->rtc_present ||
+        (!has_saved_at && saved_at != 0))
+        return false;
+    const uint64_t total = (uint64_t)PLAYER_SAVE_V2_HEADER_SIZE +
+                           (uint64_t)ram_len + (uint64_t)rtc_len;
+    if (total != (uint64_t)size) return false;
+    const uint32_t crc = crc32_update(crc32_bytes(bytes, 60u),
+                                      bytes + PLAYER_SAVE_V2_HEADER_SIZE,
+                                      (size_t)ram_len + rtc_len);
+    if (get_u32_le(bytes + 60u) != crc) return false;
+    memcpy(out_image, bytes + PLAYER_SAVE_V2_HEADER_SIZE,
+           (size_t)ram_len + rtc_len);
+    *out_saved_at = has_saved_at ? saved_at : 0;
+    *out_saved_valid = has_saved_at;
+    return true;
+}
+
+static bool load_failure(player_save_identity *identity, char *path,
+                         uint8_t *bytes, uint8_t *image, char *out_error,
+                         size_t error_capacity, const char *message) {
+    free(path);
+    free(bytes);
+    free(image);
+    identity->persistence_enabled = false;
+    set_error(out_error, error_capacity, message);
+    return false;
 }
 
 bool player_session_load_battery(gbb_instance *machine,
@@ -445,12 +584,12 @@ bool player_session_load_battery(gbb_instance *machine,
         return false;
     }
     if (!identity->battery_backed) return true;
-    size_t ram_size = 0u;
-    if (gbb_battery_size(machine, &ram_size) != GBB_OK ||
-        ram_size != identity->ram_size ||
-        (ram_size != 8192u && ram_size != 32768u) ||
-        ram_size > PLAYER_SESSION_MAX_RAM_SIZE ||
-        identity->cartridge_type != 0x03u) {
+    size_t core_image = 0u;
+    const size_t image_size = image_size_of(identity);
+    if (gbb_battery_size(machine, &core_image) != GBB_OK ||
+        core_image != image_size ||
+        !ram_length_allowed(identity->ram_size) ||
+        identity->ram_size > PLAYER_SESSION_MAX_RAM_SIZE) {
         identity->persistence_enabled = false;
         set_error(out_error, error_capacity, "Battery RAM does not match the loaded cartridge.");
         return false;
@@ -461,67 +600,85 @@ bool player_session_load_battery(gbb_instance *machine,
         set_error(out_error, error_capacity, "The per-user save directory is unavailable.");
         return false;
     }
-    uint8_t bytes[PLAYER_SAVE_MAX_SIZE + 1u];
+    const size_t capacity = (size_t)PLAYER_SAVE_V2_MAX_SIZE + 1u;
+    uint8_t *bytes = malloc(capacity);
+    uint8_t *image = malloc(image_size);
+    if (bytes == NULL || image == NULL)
+        return load_failure(identity, path, bytes, image, out_error,
+                            error_capacity, "There is not enough memory to read the save.");
     size_t file_size = 0u;
     bool missing = false;
     bool recoverable = false;
     struct stat file_info;
-    const bool read_ok = read_save_file(path, bytes, sizeof(bytes), &file_size,
+    const bool read_ok = read_save_file(path, bytes, capacity, &file_size,
                                         &missing, &recoverable, &file_info);
-    if (!read_ok && !recoverable) {
-        free(path);
-        identity->persistence_enabled = false;
-        set_error(out_error, error_capacity, "The existing save could not be read safely; persistence is disabled.");
-        return false;
-    }
+    if (!read_ok && !recoverable)
+        return load_failure(identity, path, bytes, image, out_error, error_capacity,
+                            "The existing save could not be read safely; persistence is disabled.");
     if (missing) {
         free(path);
+        free(bytes);
+        free(image);
         identity->saved_generation = 0u;
+        identity->envelope_version = 0u;
         identity->persistence_enabled = true;
         return true;
     }
-    uint8_t ram[PLAYER_SESSION_MAX_RAM_SIZE];
-    const bool valid_envelope = read_ok &&
-                                decode_save(bytes, file_size, identity, ram);
-    if (valid_envelope &&
-        gbb_import_battery(machine, ram, ram_size) != GBB_OK) {
-        free(path);
-        identity->persistence_enabled = false;
-        set_error(out_error, error_capacity, "The valid save could not be imported; the original file was left untouched.");
-        return false;
+    uint8_t version = 0u;
+    int64_t saved_at = 0;
+    bool saved_valid = false;
+    if (read_ok) {
+        if (decode_save_v1(bytes, file_size, identity, image)) version = 1u;
+        else if (decode_save_v2(bytes, file_size, identity, image, &saved_at,
+                                &saved_valid)) version = 2u;
     }
-    if (!valid_envelope) {
-        const bool preserved = recoverable &&
-                               preserve_rejected_save(path, &file_info);
+    (void)saved_at;
+    (void)saved_valid;
+    if (version != 0u) {
+        if (gbb_import_battery(machine, image, image_size) != GBB_OK)
+            return load_failure(identity, path, bytes, image, out_error, error_capacity,
+                                "The valid save could not be imported; the original file was left untouched.");
         free(path);
-        if (!preserved) {
-            identity->persistence_enabled = false;
-            set_error(out_error, error_capacity, "The existing save could not be preserved; battery saving is disabled.");
-            return false;
-        }
-        memset(ram, 0xFF, ram_size);
-        if (gbb_import_battery(machine, ram, ram_size) != GBB_OK) {
-            identity->persistence_enabled = false;
-            set_error(out_error, error_capacity, "The rejected save was preserved, but fresh battery RAM could not be initialized.");
-            return false;
-        }
+        free(bytes);
+        free(image);
         if (gbb_battery_generation(machine, &identity->saved_generation) != GBB_OK) {
             identity->persistence_enabled = false;
-            set_error(out_error, error_capacity, "The rejected save was preserved, but battery state could not be recorded.");
+            set_error(out_error, error_capacity, "Could not record the loaded battery generation.");
             return false;
         }
+        identity->envelope_version = version;
         identity->persistence_enabled = true;
-        set_error(out_error, error_capacity, "The existing save was rejected and preserved; fresh RAM is active.");
+        return true;
+    }
+    const bool preserved = recoverable && preserve_rejected_save(path, &file_info);
+    free(path);
+    free(bytes);
+    if (!preserved) {
+        free(image);
+        identity->persistence_enabled = false;
+        set_error(out_error, error_capacity, "The existing save could not be preserved; battery saving is disabled.");
         return false;
     }
-    free(path);
+    /* Fresh RAM is all $FF; a timer keeps the clock the core already holds. */
+    const bool have_image = gbb_copy_battery(machine, image, image_size) == GBB_OK;
+    if (have_image) memset(image, 0xFF, identity->ram_size);
+    const bool fresh = have_image &&
+                       gbb_import_battery(machine, image, image_size) == GBB_OK;
+    free(image);
+    if (!fresh) {
+        identity->persistence_enabled = false;
+        set_error(out_error, error_capacity, "The rejected save was preserved, but fresh battery RAM could not be initialized.");
+        return false;
+    }
     if (gbb_battery_generation(machine, &identity->saved_generation) != GBB_OK) {
         identity->persistence_enabled = false;
-        set_error(out_error, error_capacity, "Could not record the loaded battery generation.");
+        set_error(out_error, error_capacity, "The rejected save was preserved, but battery state could not be recorded.");
         return false;
     }
+    identity->envelope_version = 0u;
     identity->persistence_enabled = true;
-    return true;
+    set_error(out_error, error_capacity, "The existing save was rejected and preserved; fresh RAM is active.");
+    return false;
 }
 
 static bool write_all(int fd, const uint8_t *bytes, size_t size) {
@@ -669,39 +826,71 @@ bool player_session_save_battery(gbb_instance *machine,
         set_error(out_error, error_capacity, "Battery saving is disabled because the existing save was not accepted.");
         return false;
     }
-    size_t ram_size = 0u;
+    size_t core_image = 0u;
+    const size_t image_size = image_size_of(identity);
     uint64_t generation = 0u;
-    if (gbb_battery_size(machine, &ram_size) != GBB_OK ||
+    if (gbb_battery_size(machine, &core_image) != GBB_OK ||
         gbb_battery_generation(machine, &generation) != GBB_OK ||
-        ram_size != identity->ram_size || ram_size > PLAYER_SESSION_MAX_RAM_SIZE) {
+        core_image != image_size ||
+        !ram_length_allowed(identity->ram_size) ||
+        identity->ram_size > PLAYER_SESSION_MAX_RAM_SIZE) {
         set_error(out_error, error_capacity, "Battery RAM does not match the active cartridge.");
         return false;
     }
     if (generation == identity->saved_generation) return true;
-    uint8_t bytes[PLAYER_SAVE_HEADER_SIZE + PLAYER_SESSION_MAX_RAM_SIZE];
+    /* The version is a function of the cartridge type and of the version of the
+     * file that was loaded: v1 stays v1 for MBC1 $03, and a $03 save that was
+     * read from v2 is never written back as v1. */
+    const bool write_v1 = v1_eligible(identity) && identity->envelope_version != 2u;
+    const size_t header = write_v1 ? PLAYER_SAVE_HEADER_SIZE
+                                   : PLAYER_SAVE_V2_HEADER_SIZE;
+    uint8_t *bytes = malloc(header + image_size);
+    if (bytes == NULL) {
+        set_error(out_error, error_capacity, "There is not enough memory to save battery RAM.");
+        return false;
+    }
+    memset(bytes, 0, header);
     memcpy(bytes, PLAYER_SAVE_MAGIC, 8u);
-    put_u16_le(bytes + 8u, PLAYER_SAVE_VERSION);
     memcpy(bytes + 10u, identity->rom_sha256, 32u);
     bytes[42u] = identity->cartridge_type;
-    put_u32_le(bytes + 43u, (uint32_t)ram_size);
-    if (gbb_copy_battery(machine, bytes + PLAYER_SAVE_HEADER_SIZE, ram_size) != GBB_OK) {
+    if (gbb_copy_battery(machine, bytes + header, image_size) != GBB_OK) {
+        free(bytes);
         set_error(out_error, error_capacity, "Could not copy battery RAM safely.");
         return false;
     }
-    put_u32_le(bytes + 47u,
-               crc32_bytes(bytes + PLAYER_SAVE_HEADER_SIZE, ram_size));
+    if (write_v1) {
+        put_u16_le(bytes + 8u, PLAYER_SAVE_VERSION);
+        put_u32_le(bytes + 43u, (uint32_t)identity->ram_size);
+        put_u32_le(bytes + 47u,
+                   crc32_bytes(bytes + PLAYER_SAVE_HEADER_SIZE, identity->ram_size));
+    } else {
+        /* The RTC block was exported just now, so saved_at stamps the same instant. */
+        const bool stamp = identity->rtc_present && identity->clock_valid;
+        put_u16_le(bytes + 8u, PLAYER_SAVE_V2_VERSION);
+        bytes[43u] = (uint8_t)((identity->rtc_present ? PLAYER_SAVE_V2_FLAG_RTC : 0u) |
+                               (stamp ? PLAYER_SAVE_V2_FLAG_SAVED_AT : 0u));
+        put_u32_le(bytes + 44u, identity->ram_size);
+        put_u32_le(bytes + 48u, identity->rtc_present ? GBB_RTC_BLOCK_SIZE : 0u);
+        put_i64_le(bytes + 52u, stamp ? identity->clock_now_unix : 0);
+        put_u32_le(bytes + 60u,
+                   crc32_update(crc32_bytes(bytes, 60u),
+                                bytes + PLAYER_SAVE_V2_HEADER_SIZE, image_size));
+    }
     char *path = battery_file_path(identity);
     if (path == NULL) {
+        free(bytes);
         set_error(out_error, error_capacity, "The per-user save directory is unavailable.");
         return false;
     }
-    const bool saved = atomic_save(path, bytes, PLAYER_SAVE_HEADER_SIZE + ram_size);
+    const bool saved = atomic_save(path, bytes, header + image_size);
     free(path);
+    free(bytes);
     if (!saved) {
         set_error(out_error, error_capacity, "Could not atomically save battery RAM; progress remains in memory.");
         return false;
     }
     identity->saved_generation = generation;
+    identity->envelope_version = write_v1 ? 1u : 2u;
     return true;
 }
 

@@ -514,10 +514,6 @@ static bool create_machine(player *app, const char *demo_rom_path) {
         fprintf(stderr, "Battery save warning: %s\n", error);
     } else if (app->save_identity.battery_backed) {
         set_status(app, "Battery RAM loaded; changes are in memory until saved");
-    } else if (app->save_identity.battery_unsupported) {
-        /* D-22: MBC2/MBC5 battery cartridges run, but progress is not kept. */
-        set_status(app, "Battery saving is not supported for this cartridge type yet; progress is not kept");
-        fputs("gabbaboy-player: warning: Battery saving is not supported for this cartridge type yet; progress is not kept\n", stderr);
     } else {
         set_status(app, "Ready");
     }
@@ -962,11 +958,7 @@ static bool replace_session_rom(player *app, const char *path) {
         set_status(app, error);
     else if (app->save_identity.battery_backed)
         set_status(app, "Battery RAM loaded; changes are in memory until saved");
-    else if (app->save_identity.battery_unsupported) {
-        /* D-22: MBC2/MBC5 battery cartridges run, but progress is not kept. */
-        set_status(app, "Battery saving is not supported for this cartridge type yet; progress is not kept");
-        fputs("gabbaboy-player: warning: Battery saving is not supported for this cartridge type yet; progress is not kept\n", stderr);
-    } else
+    else
         set_status(app, "ROM loaded; input and display state reset");
     return true;
 }
@@ -983,9 +975,25 @@ static void refresh_save_failure_status(player *app) {
     update_window_title(app);
 }
 
+/* The only reader of the host wall clock: the value is stamped into timer
+ * saves (D-21). The core and the session never read the clock themselves. */
+static bool player_clock_now(int64_t *out_now) {
+    const time_t now = time(NULL);
+    if (now == (time_t)-1) return false;
+    *out_now = (int64_t)now;
+    return true;
+}
+
+static void stamp_save_clock(player *app) {
+    int64_t now = 0;
+    const bool valid = player_clock_now(&now);
+    player_session_set_clock(&app->save_identity, now, valid);
+}
+
 static bool attempt_battery_save(player *app, bool show_saved_status) {
     if (!app->save_identity.battery_backed) return true;
     char error[192];
+    stamp_save_clock(app);
     if (!player_session_save_battery(app->machine, &app->save_identity,
                                      error, sizeof(error))) {
         (void)snprintf(app->save_error, sizeof(app->save_error), "%s", error);
@@ -1658,6 +1666,19 @@ static bool verify_software_layouts(void) {
     return true;
 }
 
+/* The identity needs the core's battery classification, so the synthetic ROM is
+ * loaded into a scratch instance first. */
+static bool identify_rom_with_core(const uint8_t *rom, size_t size,
+                                   player_save_identity *out_identity) {
+    gbb_instance *scratch = NULL;
+    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &scratch) != GBB_OK) return false;
+    const bool ok = gbb_load_rom(scratch, rom, size) == GBB_OK &&
+                    player_session_identify_rom(rom, size, out_identity) &&
+                    player_session_classify_cartridge(scratch, out_identity);
+    gbb_destroy(scratch);
+    return ok;
+}
+
 static bool write_smoke_rom(char *out_path, size_t path_capacity,
                             player_save_identity *out_identity) {
     static const uint8_t program[] = {
@@ -1683,7 +1704,7 @@ static bool write_smoke_rom(char *out_path, size_t path_capacity,
     for (size_t i = 0x134u; i <= 0x14Cu; ++i)
         checksum = (uint8_t)(checksum - rom[i] - 1u);
     rom[0x14Du] = checksum;
-    if (!player_session_identify_rom(rom, sizeof(rom), out_identity)) return false;
+    if (!identify_rom_with_core(rom, sizeof(rom), out_identity)) return false;
 
     char template_path[] = "/tmp/gabbaboy-battery-smoke-XXXXXX";
     const int fd = mkstemp(template_path);
@@ -1830,6 +1851,7 @@ static bool run_battery_smoke_guest(player *app, bool resume) {
             return false;
         }
         char error[192];
+        stamp_save_clock(app);
         if (!player_session_save_battery(app->machine, &app->save_identity,
                                          error, sizeof(error))) {
             fprintf(stderr, "Battery smoke save failed: %s\n", error);

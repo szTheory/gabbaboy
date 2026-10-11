@@ -2,6 +2,7 @@
 #include "script_smoke.h"
 #include "session.h"
 
+#include <CommonCrypto/CommonDigest.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -130,14 +131,14 @@ static int replacement_failure(const char *demo_path, const char *missing_path) 
     REQUIRE(error[0] != '\0');
     REQUIRE(require_unchanged(machine, current_path, original_path, error) == 0);
 
-    /* One byte past the 2 MiB bound passes fstat and must hit the read-bound
+    /* One byte past the 8 MiB bound passes fstat and must hit the read-bound
      * message; two bytes past it is rejected earlier as not bounded. */
-    REQUIRE(write_sized_file(missing_path, (size_t)2u * 1024u * 1024u + 1u));
+    REQUIRE(write_sized_file(missing_path, (size_t)8u * 1024u * 1024u + 1u));
     REQUIRE(!player_session_replace_rom(machine, &current_path, missing_path,
                                         &identity, error, sizeof(error)));
-    REQUIRE(strstr(error, "2 MiB read bound") != NULL);
+    REQUIRE(strstr(error, "8 MiB read bound") != NULL);
     REQUIRE(require_unchanged(machine, current_path, original_path, error) == 0);
-    REQUIRE(write_sized_file(missing_path, (size_t)2u * 1024u * 1024u + 2u));
+    REQUIRE(write_sized_file(missing_path, (size_t)8u * 1024u * 1024u + 2u));
     REQUIRE(!player_session_replace_rom(machine, &current_path, missing_path,
                                         &identity, error, sizeof(error)));
     REQUIRE(strstr(error, "bounded regular file") != NULL);
@@ -187,6 +188,7 @@ static int replacement_success(const char *demo_path) {
 #define TEST_LARGE_BATTERY_SIZE 32768u
 #define TEST_SAVE_HEADER 51u
 #define TEST_SAVE_MAX_READ 32820u
+#define PLAYER_SESSION_MAX_IMAGE (131072u + 21u)
 
 static bool path_join(char *out, size_t capacity, const char *left,
                       const char *right) {
@@ -295,9 +297,22 @@ static gbb_instance *new_test_machine(const uint8_t rom[TEST_ROM_SIZE]) {
     return machine;
 }
 
+/* Digest and type come from the ROM bytes; battery status, RAM size and clock
+ * presence come from the core, exactly as player_session_replace_rom derives them. */
+static bool identify_rom_bytes(const uint8_t *rom, size_t size,
+                               player_save_identity *identity) {
+    gbb_instance *scratch = create_machine();
+    if (scratch == NULL) return false;
+    const bool ok = gbb_load_rom(scratch, rom, size) == GBB_OK &&
+                    player_session_identify_rom(rom, size, identity) &&
+                    player_session_classify_cartridge(scratch, identity);
+    gbb_destroy(scratch);
+    return ok;
+}
+
 static bool identify_test_rom(const uint8_t rom[TEST_ROM_SIZE],
                               player_save_identity *identity) {
-    return player_session_identify_rom(rom, TEST_ROM_SIZE, identity);
+    return identify_rom_bytes(rom, TEST_ROM_SIZE, identity);
 }
 
 static char *test_save_path(const player_save_identity *identity) {
@@ -450,7 +465,7 @@ static int session_max_size(const char *root) {
     rom[0x149u] = 0x03u;
     fix_test_rom_checksum(rom);
     player_save_identity identity = {0};
-    REQUIRE(player_session_identify_rom(rom, rom_size, &identity));
+    REQUIRE(identify_rom_bytes(rom, rom_size, &identity));
     gbb_instance *machine = create_machine();
     REQUIRE(machine != NULL);
     REQUIRE(gbb_load_rom(machine, rom, rom_size) == GBB_OK);
@@ -473,7 +488,7 @@ static int session_max_size(const char *root) {
     REQUIRE(restored != NULL);
     REQUIRE(gbb_load_rom(restored, rom, rom_size) == GBB_OK);
     player_save_identity restored_identity = {0};
-    REQUIRE(player_session_identify_rom(rom, rom_size, &restored_identity));
+    REQUIRE(identify_rom_bytes(rom, rom_size, &restored_identity));
     REQUIRE(player_session_load_battery(restored, &restored_identity,
                                         error, sizeof(error)));
     uint8_t *restored_ram = malloc(TEST_LARGE_BATTERY_SIZE);
@@ -490,7 +505,7 @@ static int session_max_size(const char *root) {
     REQUIRE(fresh != NULL);
     REQUIRE(gbb_load_rom(fresh, rom, rom_size) == GBB_OK);
     player_save_identity fresh_identity = {0};
-    REQUIRE(player_session_identify_rom(rom, rom_size, &fresh_identity));
+    REQUIRE(identify_rom_bytes(rom, rom_size, &fresh_identity));
     REQUIRE(!player_session_load_battery(fresh, &fresh_identity,
                                          error, sizeof(error)));
     REQUIRE(fresh_identity.persistence_enabled);
@@ -1123,66 +1138,671 @@ static int script_invalid(const char *libbet_rom, const char *good_script,
     return 0;
 }
 
-static bool directory_is_empty(const char *path) {
-    DIR *directory = opendir(path);
-    if (directory == NULL) return false;
-    bool empty = true;
-    struct dirent *entry;
-    while ((entry = readdir(directory)) != NULL) {
-        if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0)
-            empty = false;
+/* ---- Envelope v2, v0.1 corpus, classification and ROM cap (Phase 9, D-19..D-26) ---- */
+
+#define V2_HEADER 64u
+#define V2_RTC 21u
+
+static uint32_t test_crc32_update(uint32_t finished, const uint8_t *bytes,
+                                  size_t size) {
+    uint32_t crc = finished ^ UINT32_C(0xFFFFFFFF);
+    for (size_t i = 0u; i < size; ++i) {
+        crc ^= bytes[i];
+        for (unsigned bit = 0u; bit < 8u; ++bit)
+            crc = (crc >> 1) ^ ((crc & 1u) != 0u ? UINT32_C(0xEDB88320) : 0u);
     }
-    (void)closedir(directory);
-    return empty;
+    return crc ^ UINT32_C(0xFFFFFFFF);
 }
 
-/* D-22: MBC2 $06 and MBC5 $1B/$1E battery cartridges run without any
- * persistence: no flag claims a save, and the save directory stays empty. */
-static int session_battery_unsupported(const char *root) {
-    static const uint8_t types[] = {0x06u, 0x1Bu, 0x1Eu};
-    char rom_path[4096];
-    char saves[4096];
-    REQUIRE(path_join(rom_path, sizeof(rom_path), root, "unsupported.gb"));
-    REQUIRE(path_join(saves, sizeof(saves), root, "saves"));
-    REQUIRE(mkdir(saves, 0700) == 0);
-    player_session_test_set_pref_path(saves);
-    for (size_t i = 0u; i < sizeof(types); ++i) {
-        uint8_t rom[TEST_ROM_SIZE];
-        make_test_rom(rom, 0u);
-        rom[0x147u] = types[i];
-        rom[0x149u] = types[i] == 0x06u ? 0x00u : 0x02u;
-        fix_test_rom_checksum(rom);
-        REQUIRE(write_test_file(rom_path, rom, sizeof(rom)));
-        gbb_instance *machine = create_machine();
-        REQUIRE(machine != NULL);
-        char *current_path = NULL;
-        player_save_identity identity = {0};
-        char error[256];
-        REQUIRE(player_session_replace_rom(machine, &current_path, rom_path,
-                                           &identity, error, sizeof(error)));
-        REQUIRE(!identity.battery_backed && !identity.persistence_enabled);
-        REQUIRE(identity.battery_unsupported);
-        REQUIRE(player_session_load_battery(machine, &identity, error,
-                                            sizeof(error)));
-        REQUIRE(player_session_save_battery(machine, &identity, error,
-                                            sizeof(error)));
-        int lock_fd = -1;
-        REQUIRE(player_session_lock_battery(&identity, &lock_fd, error,
-                                            sizeof(error)) ==
-                PLAYER_SESSION_LOCK_ACQUIRED);
-        player_session_unlock_battery(&lock_fd);
-        REQUIRE(directory_is_empty(saves));
-        free(current_path);
+static void test_put_u32(uint8_t *out, uint32_t value) {
+    for (unsigned i = 0u; i < 4u; ++i) out[i] = (uint8_t)(value >> (i * 8u));
+}
+
+static uint32_t test_get_u32(const uint8_t *in) {
+    return (uint32_t)in[0] | ((uint32_t)in[1] << 8) | ((uint32_t)in[2] << 16) |
+           ((uint32_t)in[3] << 24);
+}
+
+static int64_t test_get_i64(const uint8_t *in) {
+    uint64_t bits = 0u;
+    for (unsigned i = 0u; i < 8u; ++i) bits |= (uint64_t)in[i] << (i * 8u);
+    return (int64_t)bits;
+}
+
+/* Recomputes the v2 checksum so a structural mutation is rejected by its own
+ * field check and not merely by the checksum. */
+static void v2_fix_crc(uint8_t *file, size_t size) {
+    if (size < V2_HEADER) return;
+    test_put_u32(file + 60u, test_crc32_update(test_crc32_update(0u, file, 60u),
+                                               file + V2_HEADER, size - V2_HEADER));
+}
+
+/* Builds a synthetic cartridge of `rom_code` banks and `ram_code`. */
+static uint8_t *build_cart_rom(uint8_t type, uint8_t rom_code, uint8_t ram_code,
+                               uint8_t variant, size_t *out_size) {
+    const size_t size = (size_t)32768u << rom_code;
+    uint8_t *rom = calloc(size, 1u);
+    if (rom == NULL) return NULL;
+    rom[0x147u] = type;
+    rom[0x148u] = rom_code;
+    rom[0x149u] = ram_code;
+    rom[0x200u] = variant;
+    fix_test_rom_checksum(rom);
+    *out_size = size;
+    return rom;
+}
+
+typedef struct {
+    uint8_t *rom;
+    size_t rom_size;
+    gbb_instance *machine;
+    player_save_identity identity;
+    uint8_t image[PLAYER_SESSION_MAX_IMAGE];
+    size_t image_size;
+} cart_case;
+
+static void cart_case_free(cart_case *cart) {
+    if (cart->machine != NULL) gbb_destroy(cart->machine);
+    free(cart->rom);
+    memset(cart, 0, sizeof(*cart));
+}
+
+static bool cart_case_open(cart_case *cart, uint8_t type, uint8_t rom_code,
+                           uint8_t ram_code, uint8_t variant) {
+    memset(cart, 0, sizeof(*cart));
+    cart->rom = build_cart_rom(type, rom_code, ram_code, variant, &cart->rom_size);
+    cart->machine = create_machine();
+    if (cart->rom == NULL || cart->machine == NULL ||
+        gbb_load_rom(cart->machine, cart->rom, cart->rom_size) != GBB_OK ||
+        !player_session_identify_rom(cart->rom, cart->rom_size, &cart->identity) ||
+        !player_session_classify_cartridge(cart->machine, &cart->identity) ||
+        !cart->identity.battery_backed ||
+        gbb_battery_size(cart->machine, &cart->image_size) != GBB_OK ||
+        cart->image_size > sizeof(cart->image) ||
+        gbb_copy_battery(cart->machine, cart->image, cart->image_size) != GBB_OK) {
+        cart_case_free(cart);
+        return false;
+    }
+    return true;
+}
+
+/* Fills the RAM part with a pattern and, for a timer cartridge, gives the
+ * block distinct live seconds and minutes so the clock really round-trips. */
+static bool cart_case_fill(cart_case *cart, uint8_t seed) {
+    const size_t ram = cart->identity.ram_size;
+    for (size_t i = 0u; i < ram; ++i) cart->image[i] = (uint8_t)(i * 29u + seed);
+    if (cart->identity.rtc_present) {
+        cart->image[ram + 9u] = 7u;
+        cart->image[ram + 10u] = 3u;
+    }
+    return gbb_import_battery(cart->machine, cart->image, cart->image_size) == GBB_OK;
+}
+
+static bool open_fresh_loaded(const cart_case *source, gbb_instance **out_machine,
+                              player_save_identity *out_identity, bool *out_loaded,
+                              char *error, size_t error_capacity) {
+    *out_machine = create_machine();
+    if (*out_machine == NULL ||
+        gbb_load_rom(*out_machine, source->rom, source->rom_size) != GBB_OK ||
+        !player_session_identify_rom(source->rom, source->rom_size, out_identity) ||
+        !player_session_classify_cartridge(*out_machine, out_identity))
+        return false;
+    *out_loaded = player_session_load_battery(*out_machine, out_identity,
+                                              error, error_capacity);
+    return true;
+}
+
+static bool images_equal(gbb_instance *left, gbb_instance *right, size_t size) {
+    uint8_t a[PLAYER_SESSION_MAX_IMAGE], b[PLAYER_SESSION_MAX_IMAGE];
+    return size <= sizeof(a) && gbb_copy_battery(left, a, size) == GBB_OK &&
+           gbb_copy_battery(right, b, size) == GBB_OK && memcmp(a, b, size) == 0;
+}
+
+static int session_v2_max_size(const char *root) {
+    cart_case big;
+    REQUIRE(cart_case_open(&big, 0x1Bu, 0x00u, 0x04u, 0x11u));
+    REQUIRE(big.identity.ram_size == 131072u && !big.identity.rtc_present);
+    char *path = test_save_path(&big.identity);
+    REQUIRE(path != NULL && strstr(path, "-cart-1b-00020000.gbb") != NULL);
+    REQUIRE(cart_case_fill(&big, 0x39u));
+    player_session_set_clock(&big.identity, INT64_C(1700000000), true);
+    char error[256];
+    REQUIRE(player_session_save_battery(big.machine, &big.identity, error, sizeof(error)));
+    REQUIRE(big.identity.envelope_version == 2u);
+    uint8_t *file = malloc(V2_HEADER + 131072u + 2u);
+    REQUIRE(file != NULL);
+    size_t size = 0u;
+    REQUIRE(read_test_file(path, file, V2_HEADER + 131072u + 2u, &size));
+    REQUIRE(size == V2_HEADER + 131072u);
+    REQUIRE(memcmp(file, "GBBBSAVE", 8u) == 0 && file[8] == 2u && file[9] == 0u);
+    REQUIRE(file[42] == 0x1Bu && file[43] == 0u);
+    REQUIRE(test_get_u32(file + 44u) == 131072u && test_get_u32(file + 48u) == 0u);
+    REQUIRE(test_get_i64(file + 52u) == 0);
+    REQUIRE(memcmp(file + V2_HEADER, big.image, 131072u) == 0);
+
+    /* The identical bytes load back into a fresh instance. */
+    gbb_instance *fresh = NULL;
+    player_save_identity fresh_identity;
+    bool loaded = false;
+    REQUIRE(open_fresh_loaded(&big, &fresh, &fresh_identity, &loaded, error, sizeof(error)));
+    REQUIRE(loaded && fresh_identity.envelope_version == 2u);
+    REQUIRE(images_equal(big.machine, fresh, big.image_size));
+    gbb_destroy(fresh);
+
+    /* One byte short and one byte long are rejected, preserved, fresh RAM. */
+    for (unsigned variant = 0u; variant < 2u; ++variant) {
+        uint8_t *damaged = malloc(size + 1u);
+        REQUIRE(damaged != NULL);
+        memcpy(damaged, file, size);
+        damaged[size] = 0xE7u;
+        const size_t damaged_size = variant == 0u ? size - 1u : size + 1u;
+        REQUIRE(write_test_file(path, damaged, damaged_size));
+        REQUIRE(open_fresh_loaded(&big, &fresh, &fresh_identity, &loaded, error, sizeof(error)));
+        REQUIRE(!loaded && strstr(error, "preserved") != NULL);
+        REQUIRE(fresh_identity.persistence_enabled && fresh_identity.envelope_version == 0u);
+        uint8_t *ram = malloc(131072u);
+        REQUIRE(ram != NULL);
+        REQUIRE(gbb_copy_battery(fresh, ram, 131072u) == GBB_OK);
+        for (size_t i = 0u; i < 131072u; ++i) REQUIRE(ram[i] == 0xFFu);
+        free(ram);
+        uint8_t *recovery = malloc(V2_HEADER + 131072u + 2u);
+        char recovery_path[4096];
+        size_t recovery_size = 0u;
+        REQUIRE(recovery != NULL);
+        REQUIRE(get_recovery_file(root, variant, recovery_path, sizeof(recovery_path),
+                                  recovery, V2_HEADER + 131072u + 2u, &recovery_size));
+        REQUIRE(recovery_size == damaged_size);
+        REQUIRE(memcmp(recovery, damaged, damaged_size) == 0);
+        free(recovery);
+        free(damaged);
+        gbb_destroy(fresh);
+    }
+    free(file);
+    free(path);
+    cart_case_free(&big);
+
+    /* A timer cartridge with 8 KiB RAM: 64 + 8192 + 21 bytes, flags 0x03. */
+    cart_case timer;
+    REQUIRE(cart_case_open(&timer, 0x10u, 0x00u, 0x02u, 0x22u));
+    REQUIRE(timer.identity.ram_size == 8192u && timer.identity.rtc_present);
+    path = test_save_path(&timer.identity);
+    REQUIRE(path != NULL);
+    REQUIRE(cart_case_fill(&timer, 0x5Cu));
+    player_session_set_clock(&timer.identity, INT64_C(1700000123), true);
+    REQUIRE(player_session_save_battery(timer.machine, &timer.identity, error, sizeof(error)));
+    uint8_t timer_file[V2_HEADER + 8192u + V2_RTC + 1u];
+    REQUIRE(read_test_file(path, timer_file, sizeof(timer_file), &size));
+    REQUIRE(size == V2_HEADER + 8192u + V2_RTC);
+    REQUIRE(timer_file[43] == 0x03u);
+    REQUIRE(test_get_u32(timer_file + 44u) == 8192u && test_get_u32(timer_file + 48u) == V2_RTC);
+    REQUIRE(test_get_i64(timer_file + 52u) == INT64_C(1700000123));
+    REQUIRE(memcmp(timer_file + V2_HEADER, timer.image, 8192u + V2_RTC) == 0);
+    /* Clock unavailable: no stamp and bit 1 clear. */
+    player_session_set_clock(&timer.identity, 0, false);
+    timer.image[0] ^= 0x01u;
+    REQUIRE(gbb_import_battery(timer.machine, timer.image, timer.image_size) == GBB_OK);
+    REQUIRE(player_session_save_battery(timer.machine, &timer.identity, error, sizeof(error)));
+    REQUIRE(read_test_file(path, timer_file, sizeof(timer_file), &size));
+    REQUIRE(timer_file[43] == 0x01u && test_get_i64(timer_file + 52u) == 0);
+    free(path);
+    cart_case_free(&timer);
+    remove_tree(root);
+    return 0;
+}
+
+typedef struct {
+    const char *name;
+} v2_mutation;
+
+static int session_v2_reject_matrix(const char *root) {
+    cart_case cart;
+    REQUIRE(cart_case_open(&cart, 0x10u, 0x00u, 0x02u, 0x33u));
+    char *path = test_save_path(&cart.identity);
+    REQUIRE(path != NULL);
+    REQUIRE(cart_case_fill(&cart, 0x71u));
+    player_session_set_clock(&cart.identity, INT64_C(1700000000), true);
+    char error[256];
+    REQUIRE(player_session_save_battery(cart.machine, &cart.identity, error, sizeof(error)));
+    uint8_t valid[V2_HEADER + 8192u + V2_RTC + 2u];
+    size_t valid_size = 0u;
+    REQUIRE(read_test_file(path, valid, sizeof(valid), &valid_size));
+    REQUIRE(valid_size == V2_HEADER + 8192u + V2_RTC);
+
+    gbb_instance *baseline = create_machine();
+    REQUIRE(baseline != NULL);
+    REQUIRE(gbb_load_rom(baseline, cart.rom, cart.rom_size) == GBB_OK);
+
+    static const char *const names[] = {
+        "size-1", "size+1", "version1", "version3", "flags04", "flags07",
+        "flags02", "flags00-rtc21", "saved_at-without-bit1", "ram_len100",
+        "ram_len4096", "rtc_len0", "rtc_len22", "sha", "type13",
+        "crc-payload", "crc-saved_at"
+    };
+    unsigned expected_recoveries = 0u;
+    for (size_t i = 0u; i < sizeof(names) / sizeof(names[0]); ++i) {
+        uint8_t damaged[sizeof(valid)];
+        size_t size = valid_size;
+        memcpy(damaged, valid, valid_size);
+        bool fix = true;
+        const char *name = names[i];
+        if (strcmp(name, "size-1") == 0) { --size; fix = false; }
+        else if (strcmp(name, "size+1") == 0) { damaged[size++] = 0xA7u; fix = false; }
+        else if (strcmp(name, "version1") == 0) damaged[8] = 1u;
+        else if (strcmp(name, "version3") == 0) damaged[8] = 3u;
+        else if (strcmp(name, "flags04") == 0) damaged[43] = 0x04u;
+        else if (strcmp(name, "flags07") == 0) damaged[43] = 0x07u;
+        else if (strcmp(name, "flags02") == 0) damaged[43] = 0x02u;
+        else if (strcmp(name, "flags00-rtc21") == 0) damaged[43] = 0x00u;
+        else if (strcmp(name, "saved_at-without-bit1") == 0) {
+            damaged[43] = 0x01u;
+            damaged[52] = 5u;
+        } else if (strcmp(name, "ram_len100") == 0) test_put_u32(damaged + 44u, 100u);
+        else if (strcmp(name, "ram_len4096") == 0) test_put_u32(damaged + 44u, 4096u);
+        else if (strcmp(name, "rtc_len0") == 0) test_put_u32(damaged + 48u, 0u);
+        else if (strcmp(name, "rtc_len22") == 0) test_put_u32(damaged + 48u, 22u);
+        else if (strcmp(name, "sha") == 0) damaged[10] ^= 1u;
+        else if (strcmp(name, "type13") == 0) damaged[42] = 0x13u;
+        else if (strcmp(name, "crc-payload") == 0) { damaged[V2_HEADER + 5u] ^= 1u; fix = false; }
+        else if (strcmp(name, "crc-saved_at") == 0) { damaged[53] ^= 1u; fix = false; }
+        if (fix) v2_fix_crc(damaged, size);
+        REQUIRE(write_test_file(path, damaged, size));
+
+        gbb_instance *machine = NULL;
+        player_save_identity identity;
+        bool loaded = true;
+        REQUIRE(open_fresh_loaded(&cart, &machine, &identity, &loaded, error, sizeof(error)));
+        if (loaded || strstr(error, "preserved") == NULL) {
+            fprintf(stderr, "v2 mutation %s was not rejected and preserved\n", name);
+            return 1;
+        }
+        REQUIRE(identity.persistence_enabled && identity.envelope_version == 0u);
+        struct stat info;
+        REQUIRE(lstat(path, &info) != 0 && errno == ENOENT);
+        REQUIRE(images_equal(machine, baseline, cart.image_size));
+        uint64_t generation = 1u;
+        REQUIRE(gbb_battery_generation(machine, &generation) == GBB_OK && generation == 0u);
+        REQUIRE(identity.saved_generation == 0u);
+        ++expected_recoveries;
+        bool found = false;
+        const unsigned count = count_recovery_files(root);
+        for (unsigned index = 0u; index < count && !found; ++index) {
+            char recovery_path[4096];
+            uint8_t recovered[sizeof(valid)];
+            size_t recovered_size = 0u;
+            found = get_recovery_file(root, index, recovery_path, sizeof(recovery_path),
+                                      recovered, sizeof(recovered), &recovered_size) &&
+                    recovered_size == size && memcmp(recovered, damaged, size) == 0;
+        }
+        if (!found) {
+            fprintf(stderr, "v2 mutation %s: preserved copy missing\n", name);
+            return 1;
+        }
         gbb_destroy(machine);
     }
-    /* Type $03 with 8 KiB RAM keeps persistence and is not unsupported. */
-    uint8_t rom[TEST_ROM_SIZE];
-    make_test_rom(rom, 0u);
-    player_save_identity identity = {0};
-    REQUIRE(player_session_identify_rom(rom, sizeof(rom), &identity));
-    REQUIRE(identity.battery_backed && !identity.battery_unsupported);
+    REQUIRE(count_recovery_files(root) == expected_recoveries);
+    gbb_destroy(baseline);
+    free(path);
+    cart_case_free(&cart);
+    remove_tree(root);
+    return 0;
+}
+
+static bool file_sha256(const char *path, uint8_t out[32]) {
+    static uint8_t bytes[V2_HEADER + 131072u + V2_RTC + 1u];
+    size_t size = 0u;
+    return read_test_file(path, bytes, sizeof(bytes), &size) &&
+           CC_SHA256(bytes, (CC_LONG)size, out) != NULL;
+}
+
+static bool loads_with_image(const cart_case *source, const uint8_t *expected,
+                             size_t size, uint8_t expected_version) {
+    gbb_instance *machine = NULL;
+    player_save_identity identity;
+    bool loaded = false;
+    char error[256];
+    if (!open_fresh_loaded(source, &machine, &identity, &loaded, error, sizeof(error)))
+        return false;
+    const bool ok = loaded && identity.envelope_version == expected_version &&
+                    battery_matches(machine, expected, size);
+    gbb_destroy(machine);
+    return ok;
+}
+
+static int session_v2_fault(const char *root, player_session_test_fault_stage stage,
+                            bool new_file_expected, uint8_t type) {
+    cart_case cart;
+    const uint8_t ram_code = type == 0x1Bu ? 0x03u : 0x02u;
+    REQUIRE(cart_case_open(&cart, type, 0x00u, ram_code, (uint8_t)(0x40u + (unsigned)stage)));
+    char *path = test_save_path(&cart.identity);
+    REQUIRE(path != NULL);
+    REQUIRE(cart_case_fill(&cart, 0x11u));
+    player_session_set_clock(&cart.identity, INT64_C(1700000000), true);
+    char error[256];
+    REQUIRE(player_session_save_battery(cart.machine, &cart.identity, error, sizeof(error)));
+    uint8_t old_digest[32];
+    REQUIRE(file_sha256(path, old_digest));
+    const size_t image_size = cart.image_size;
+    uint8_t old_image[PLAYER_SESSION_MAX_IMAGE];
+    memcpy(old_image, cart.image, image_size);
+    REQUIRE(loads_with_image(&cart, old_image, image_size, 2u));
+
+    REQUIRE(cart_case_fill(&cart, 0xB4u));
+    uint8_t new_image[PLAYER_SESSION_MAX_IMAGE];
+    REQUIRE(gbb_copy_battery(cart.machine, new_image, image_size) == GBB_OK);
+    player_session_set_clock(&cart.identity, INT64_C(1700000999), true);
+    const uint64_t saved_before = cart.identity.saved_generation;
+
+    if (stage == PLAYER_SESSION_TEST_INTERRUPT_BEFORE_RENAME ||
+        stage == PLAYER_SESSION_TEST_INTERRUPT_AFTER_RENAME) {
+        const pid_t child = fork();
+        REQUIRE(child >= 0);
+        if (child == 0) {
+            player_session_test_set_fault(stage);
+            char child_error[256];
+            _exit(player_session_save_battery(cart.machine, &cart.identity,
+                                              child_error, sizeof(child_error)) ? 0 : 2);
+        }
+        int status = 0;
+        REQUIRE(waitpid(child, &status, WUNTRACED) == child);
+        if (!WIFSTOPPED(status)) {
+            (void)kill(child, SIGKILL);
+            (void)waitpid(child, NULL, 0);
+            REQUIRE(false);
+        }
+        REQUIRE(kill(child, SIGKILL) == 0);
+        REQUIRE(waitpid(child, &status, 0) == child && WIFSIGNALED(status));
+        REQUIRE(count_temporary_files(root) == (new_file_expected ? 0u : 1u));
+    } else {
+        player_session_test_set_fault(stage);
+        REQUIRE(!player_session_save_battery(cart.machine, &cart.identity,
+                                             error, sizeof(error)));
+        REQUIRE(error[0] != '\0');
+        REQUIRE(cart.identity.saved_generation == saved_before);
+        REQUIRE(count_temporary_files(root) == 0u);
+    }
+    uint8_t current_digest[32];
+    REQUIRE(file_sha256(path, current_digest));
+    if (new_file_expected) {
+        /* The rename happened: the new file is complete and loads. */
+        REQUIRE(memcmp(current_digest, old_digest, 32u) != 0);
+        REQUIRE(loads_with_image(&cart, new_image, image_size, 2u));
+    } else {
+        REQUIRE(memcmp(current_digest, old_digest, 32u) == 0);
+        REQUIRE(loads_with_image(&cart, old_image, image_size, 2u));
+    }
+    remove_temporary_files(root);
+    free(path);
+    cart_case_free(&cart);
+    remove_tree(root);
+    return 0;
+}
+
+/* ---- v0.1 corpus (D-25) ---- */
+
+typedef struct {
+    const char *file;
+    const char *title;
+    uint8_t ram_code;
+    size_t ram_size;
+} corpus_recipe;
+
+static const corpus_recipe corpus_recipes[] = {
+    {"mbc1-8k.gbb", "GBBV1CORPUS8K", 0x02u, 8192u},
+    {"mbc1-32k.gbb", "GBBV1CORPUS32K", 0x03u, 32768u}
+};
+
+static void corpus_rom(const corpus_recipe *recipe, uint8_t rom[TEST_ROM_SIZE]) {
+    memset(rom, 0, TEST_ROM_SIZE);
+    memcpy(rom + 0x134u, recipe->title, strlen(recipe->title));
+    rom[0x147u] = 0x03u;
+    rom[0x148u] = 0x00u;
+    rom[0x149u] = recipe->ram_code;
+    fix_test_rom_checksum(rom);
+}
+
+static void corpus_pattern(uint8_t *out, size_t size) {
+    for (size_t i = 0u; i < size; ++i) out[i] = (uint8_t)(i * 37u + 0x31u);
+}
+
+/* Loads one corpus envelope in the current player; returns the machine. */
+static int corpus_open(const char *fixtures, const corpus_recipe *recipe,
+                       const char *rom_path, uint8_t rom[TEST_ROM_SIZE],
+                       uint8_t *envelope, size_t *envelope_size,
+                       gbb_instance **out_machine, player_save_identity *identity,
+                       char **out_path) {
+    char corpus_path[4096];
+    REQUIRE(path_join(corpus_path, sizeof(corpus_path), fixtures, recipe->file));
+    REQUIRE(read_test_file(corpus_path, envelope, 51u + 32768u + 1u, envelope_size));
+    REQUIRE(*envelope_size == 51u + recipe->ram_size);
+    corpus_rom(recipe, rom);
+    uint8_t digest[32];
+    REQUIRE(CC_SHA256(rom, TEST_ROM_SIZE, digest) != NULL);
+    REQUIRE(memcmp(envelope + 10u, digest, 32u) == 0);
+    REQUIRE(write_test_file(rom_path, rom, TEST_ROM_SIZE));
+    *out_machine = create_machine();
+    REQUIRE(*out_machine != NULL);
+    char *owned = NULL;
+    char error[256];
+    REQUIRE(player_session_replace_rom(*out_machine, &owned, rom_path, identity,
+                                       error, sizeof(error)));
+    free(owned);
+    REQUIRE(identity->ram_size == recipe->ram_size && !identity->rtc_present);
+    *out_path = test_save_path(identity);
+    REQUIRE(*out_path != NULL && strstr(*out_path, "-mbc1-03-") != NULL);
+    REQUIRE(write_test_file(*out_path, envelope, *envelope_size));
+    return 0;
+}
+
+static int session_v1_corpus_load(const char *root, const char *rom_path,
+                                  const char *fixtures) {
+    for (size_t i = 0u; i < sizeof(corpus_recipes) / sizeof(corpus_recipes[0]); ++i) {
+        uint8_t rom[TEST_ROM_SIZE], envelope[51u + 32768u + 1u];
+        size_t envelope_size = 0u;
+        gbb_instance *machine = NULL;
+        player_save_identity identity;
+        char *path = NULL;
+        REQUIRE(corpus_open(fixtures, &corpus_recipes[i], rom_path, rom, envelope,
+                            &envelope_size, &machine, &identity, &path) == 0);
+        char error[256];
+        REQUIRE(player_session_load_battery(machine, &identity, error, sizeof(error)));
+        REQUIRE(identity.envelope_version == 1u);
+        uint8_t expected[32768];
+        corpus_pattern(expected, corpus_recipes[i].ram_size);
+        REQUIRE(battery_matches(machine, expected, corpus_recipes[i].ram_size));
+        /* The corpus file is read, never rewritten, by a load. */
+        uint8_t after[51u + 32768u + 1u];
+        size_t after_size = 0u;
+        REQUIRE(read_test_file(path, after, sizeof(after), &after_size));
+        REQUIRE(after_size == envelope_size && memcmp(after, envelope, after_size) == 0);
+        free(path);
+        gbb_destroy(machine);
+        (void)unlink(rom_path);
+        remove_tree(root);
+        REQUIRE(mkdir(root, 0700) == 0);
+    }
     (void)unlink(rom_path);
-    remove_tree(saves);
+    remove_tree(root);
+    return 0;
+}
+
+static int session_v1_mbc1_write_identical(const char *root, const char *rom_path,
+                                           const char *fixtures) {
+    for (size_t i = 0u; i < sizeof(corpus_recipes) / sizeof(corpus_recipes[0]); ++i) {
+        uint8_t rom[TEST_ROM_SIZE], envelope[51u + 32768u + 1u];
+        size_t envelope_size = 0u;
+        gbb_instance *machine = NULL;
+        player_save_identity identity;
+        char *path = NULL;
+        REQUIRE(corpus_open(fixtures, &corpus_recipes[i], rom_path, rom, envelope,
+                            &envelope_size, &machine, &identity, &path) == 0);
+        char error[256];
+        REQUIRE(player_session_load_battery(machine, &identity, error, sizeof(error)));
+        /* Change one byte and change it back: the generation now differs from
+         * the saved one while the RAM is the corpus pattern again. */
+        uint8_t pattern[32768], changed[32768];
+        const size_t ram = corpus_recipes[i].ram_size;
+        corpus_pattern(pattern, ram);
+        memcpy(changed, pattern, ram);
+        changed[0] ^= 0xFFu;
+        REQUIRE(gbb_import_battery(machine, changed, ram) == GBB_OK);
+        REQUIRE(gbb_import_battery(machine, pattern, ram) == GBB_OK);
+        REQUIRE(unlink(path) == 0);
+        player_session_set_clock(&identity, INT64_C(1700000000), true);
+        REQUIRE(player_session_save_battery(machine, &identity, error, sizeof(error)));
+        uint8_t written[51u + 32768u + 1u];
+        size_t written_size = 0u;
+        REQUIRE(read_test_file(path, written, sizeof(written), &written_size));
+        REQUIRE(written_size == envelope_size);
+        REQUIRE(memcmp(written, envelope, envelope_size) == 0);
+        free(path);
+        gbb_destroy(machine);
+        (void)unlink(rom_path);
+        remove_tree(root);
+        REQUIRE(mkdir(root, 0700) == 0);
+    }
+    (void)unlink(rom_path);
+    remove_tree(root);
+    return 0;
+}
+
+/* A $03 save that was read from v2 is written back as v2, never as v1. */
+static int session_v1_v2_stickiness(const char *root) {
+    cart_case cart;
+    REQUIRE(cart_case_open(&cart, 0x03u, 0x00u, 0x02u, 0x61u));
+    char *path = test_save_path(&cart.identity);
+    REQUIRE(path != NULL && strstr(path, "-mbc1-03-00002000.gbb") != NULL);
+    REQUIRE(cart_case_fill(&cart, 0x2Au));
+    char error[256];
+    REQUIRE(player_session_save_battery(cart.machine, &cart.identity, error, sizeof(error)));
+    uint8_t file[V2_HEADER + 8192u + 1u];
+    size_t size = 0u;
+    REQUIRE(read_test_file(path, file, sizeof(file), &size));
+    REQUIRE(size == 51u + 8192u && file[8] == 1u);
+    /* Hand-build the v2 form of the same save. */
+    uint8_t v2[V2_HEADER + 8192u];
+    memset(v2, 0, V2_HEADER);
+    memcpy(v2, "GBBBSAVE", 8u);
+    v2[8] = 2u;
+    memcpy(v2 + 10u, cart.identity.rom_sha256, 32u);
+    v2[42] = 0x03u;
+    test_put_u32(v2 + 44u, 8192u);
+    memcpy(v2 + V2_HEADER, cart.image, 8192u);
+    v2_fix_crc(v2, sizeof(v2));
+    REQUIRE(write_test_file(path, v2, sizeof(v2)));
+    gbb_instance *machine = NULL;
+    player_save_identity identity;
+    bool loaded = false;
+    REQUIRE(open_fresh_loaded(&cart, &machine, &identity, &loaded, error, sizeof(error)));
+    REQUIRE(loaded && identity.envelope_version == 2u);
+    REQUIRE(battery_matches(machine, cart.image, 8192u));
+    cart.image[1] ^= 0x10u;
+    REQUIRE(gbb_import_battery(machine, cart.image, 8192u) == GBB_OK);
+    REQUIRE(player_session_save_battery(machine, &identity, error, sizeof(error)));
+    REQUIRE(read_test_file(path, file, sizeof(file), &size));
+    REQUIRE(size == V2_HEADER + 8192u && file[8] == 2u);
+    /* Saving again without a change writes nothing (idempotent). */
+    uint8_t digest_a[32], digest_b[32];
+    REQUIRE(file_sha256(path, digest_a));
+    REQUIRE(unlink(path) == 0);
+    REQUIRE(player_session_save_battery(machine, &identity, error, sizeof(error)));
+    struct stat info;
+    REQUIRE(lstat(path, &info) != 0 && errno == ENOENT);
+    (void)digest_b;
+    gbb_destroy(machine);
+    free(path);
+    cart_case_free(&cart);
+    remove_tree(root);
+    return 0;
+}
+
+/* ---- classification drift (D-23) and the 8 MiB cap ---- */
+
+static int session_classification_drift(const char *rom_path) {
+    unsigned battery_cases = 0u, timer_cases = 0u, loaded_cases = 0u;
+    for (unsigned type = 0u; type < 256u; ++type) {
+        for (unsigned ram_code = 0u; ram_code <= 5u; ++ram_code) {
+            uint8_t rom[TEST_ROM_SIZE];
+            memset(rom, 0, sizeof(rom));
+            rom[0x147u] = (uint8_t)type;
+            rom[0x148u] = 0x00u;
+            rom[0x149u] = (uint8_t)ram_code;
+            fix_test_rom_checksum(rom);
+            gbb_instance *core = create_machine();
+            gbb_instance *player = create_machine();
+            REQUIRE(core != NULL && player != NULL);
+            const gbb_error core_result = gbb_load_rom(core, rom, sizeof(rom));
+            REQUIRE(write_test_file(rom_path, rom, sizeof(rom)));
+            char *owned = NULL;
+            player_save_identity identity;
+            memset(&identity, 0, sizeof(identity));
+            char error[256];
+            const bool player_ok = player_session_replace_rom(
+                player, &owned, rom_path, &identity, error, sizeof(error));
+            if (player_ok != (core_result == GBB_OK)) {
+                fprintf(stderr, "classification drift: type %02x ram %u load disagreement\n",
+                        type, ram_code);
+                return 1;
+            }
+            if (player_ok) {
+                ++loaded_cases;
+                size_t image = 0u;
+                const gbb_error size_result = gbb_battery_size(core, &image);
+                const gbb_error rtc_result = gbb_rtc_catch_up(core, 0);
+                const bool backed = size_result == GBB_OK;
+                const bool rtc = rtc_result == GBB_OK;
+                const size_t ram = backed ? image - (rtc ? GBB_RTC_BLOCK_SIZE : 0u) : 0u;
+                if (identity.battery_backed != backed || identity.rtc_present != rtc ||
+                    identity.ram_size != ram ||
+                    identity.cartridge_type != (uint8_t)type) {
+                    fprintf(stderr, "classification drift: type %02x ram %u\n", type, ram_code);
+                    return 1;
+                }
+                if (backed) ++battery_cases;
+                if (rtc) ++timer_cases;
+            }
+            free(owned);
+            gbb_destroy(core);
+            gbb_destroy(player);
+        }
+    }
+    REQUIRE(loaded_cases > 0u && battery_cases > 0u && timer_cases > 0u);
+    (void)unlink(rom_path);
+    return 0;
+}
+
+static int session_rom_cap_8mib(const char *rom_path) {
+    const size_t cap = (size_t)8u * 1024u * 1024u;
+    size_t size = 0u;
+    uint8_t *rom = build_cart_rom(0x19u, 0x08u, 0x00u, 0x77u, &size);
+    REQUIRE(rom != NULL && size == cap);
+    REQUIRE(write_test_file(rom_path, rom, size));
+    gbb_instance *machine = create_machine();
+    REQUIRE(machine != NULL);
+    char *owned = NULL;
+    player_save_identity identity = {0};
+    char error[256];
+    REQUIRE(player_session_replace_rom(machine, &owned, rom_path, &identity,
+                                       error, sizeof(error)));
+    REQUIRE(!identity.battery_backed);
+    uint8_t *longer = malloc(cap + 1u);
+    REQUIRE(longer != NULL);
+    memcpy(longer, rom, cap);
+    longer[cap] = 0u;
+    /* The core's own bound agrees: one byte past 8 MiB is too large. */
+    gbb_instance *core = create_machine();
+    REQUIRE(core != NULL);
+    REQUIRE(gbb_load_rom(core, longer, cap + 1u) == GBB_ROM_TOO_LARGE);
+    REQUIRE(write_test_file(rom_path, longer, cap + 1u));
+    char *before = owned;
+    REQUIRE(!player_session_replace_rom(machine, &owned, rom_path, &identity,
+                                        error, sizeof(error)));
+    REQUIRE(owned == before && strstr(error, "8 MiB read bound") != NULL);
+    free(owned);
+    gbb_destroy(core);
+    gbb_destroy(machine);
+    free(longer);
+    free(rom);
+    (void)unlink(rom_path);
     return 0;
 }
 
@@ -1201,8 +1821,34 @@ int main(int argc, char **argv) {
         result = session_save_cadence();
     else if (strcmp(argv[1], "player_session_transition_choices") == 0)
         result = session_transition_choices();
-    else if (strcmp(argv[1], "player_session_battery_unsupported") == 0)
-        result = session_battery_unsupported(argv[4]);
+    else if (strcmp(argv[1], "player_session_v2_max_size") == 0)
+        result = session_v2_max_size(argv[4]);
+    else if (strcmp(argv[1], "player_session_v2_reject_matrix") == 0)
+        result = session_v2_reject_matrix(argv[4]);
+    else if (strcmp(argv[1], "player_session_v2_temp_create_failure") == 0)
+        result = session_v2_fault(argv[4], PLAYER_SESSION_TEST_FAULT_TEMP_CREATE, false, 0x10u);
+    else if (strcmp(argv[1], "player_session_v2_short_write_failure") == 0)
+        result = session_v2_fault(argv[4], PLAYER_SESSION_TEST_FAULT_SHORT_WRITE, false, 0x10u);
+    else if (strcmp(argv[1], "player_session_v2_file_sync_failure") == 0)
+        result = session_v2_fault(argv[4], PLAYER_SESSION_TEST_FAULT_FILE_SYNC, false, 0x10u);
+    else if (strcmp(argv[1], "player_session_v2_rename_failure") == 0)
+        result = session_v2_fault(argv[4], PLAYER_SESSION_TEST_FAULT_RENAME, false, 0x1Bu);
+    else if (strcmp(argv[1], "player_session_v2_directory_sync_failure") == 0)
+        result = session_v2_fault(argv[4], PLAYER_SESSION_TEST_FAULT_DIRECTORY_SYNC, true, 0x10u);
+    else if (strcmp(argv[1], "player_session_v2_interrupt_before_rename") == 0)
+        result = session_v2_fault(argv[4], PLAYER_SESSION_TEST_INTERRUPT_BEFORE_RENAME, false, 0x10u);
+    else if (strcmp(argv[1], "player_session_v2_interrupt_after_rename") == 0)
+        result = session_v2_fault(argv[4], PLAYER_SESSION_TEST_INTERRUPT_AFTER_RENAME, true, 0x10u);
+    else if (strcmp(argv[1], "player_session_v1_corpus_load") == 0)
+        result = argc == 6 ? session_v1_corpus_load(argv[4], argv[3], argv[5]) : 2;
+    else if (strcmp(argv[1], "player_session_v1_mbc1_write_identical") == 0)
+        result = argc == 6 ? session_v1_mbc1_write_identical(argv[4], argv[3], argv[5]) : 2;
+    else if (strcmp(argv[1], "player_session_v1_v2_stickiness") == 0)
+        result = session_v1_v2_stickiness(argv[4]);
+    else if (strcmp(argv[1], "player_session_classification_drift") == 0)
+        result = session_classification_drift(argv[3]);
+    else if (strcmp(argv[1], "player_session_rom_cap_8mib") == 0)
+        result = session_rom_cap_8mib(argv[3]);
     else if (strcmp(argv[1], "player_session_max_size") == 0)
         result = session_max_size(argv[4]);
     else if (strcmp(argv[1], "player_session_reject_matrix") == 0)

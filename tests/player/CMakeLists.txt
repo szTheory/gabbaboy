@@ -85,6 +85,10 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
         ${PROJECT_SOURCE_DIR}/fixtures/libbet/libbet.gb
         ${PROJECT_SOURCE_DIR}/tests/acceptance/inputs/libbet-no-input.input)
     endif()
+    if(test_name MATCHES "^player_session_v1_(corpus_load|mbc1_write_identical)$")
+      # D-25: the two real v0.1.2 envelopes recorded in the corpus manifest.
+      set(player_session_extra ${PROJECT_SOURCE_DIR}/fixtures/save-envelope-v1)
+    endif()
     add_test(NAME ${test_name} COMMAND test_player_session ${test_name}
       ${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb
       ${CMAKE_CURRENT_BINARY_DIR}/${test_name}-temp.gb
