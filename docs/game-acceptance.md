@@ -61,6 +61,7 @@ The packaged player runs the same script and predicate with dummy SDL drivers an
 
 - Packaged-player game smoke is macOS only; there is no Linux or Windows player packaging. Headless acceptance runs on Linux, macOS and Windows. See [unreleased support-ledger entries](support/unreleased.md).
 - `libbet-repro` is `workflow_dispatch` only and the workflow file is not on the default branch, so no hosted reproduction run URL exists yet. The reproduction script was verified byte-identical on macOS arm64 only; the Linux path and the dispatch workflow are unverified.
+- Input scripts denser than the core's 64-event queue can drain are not supported. The parser accepts them, but the driver has no back-pressure, so a run fails with `reason=event-delivery-failed` (covered by `acceptance_dense_script_delivery_failed`). Real scripts are far below this: the Libbet scripts use a few dozen events over minutes of play.
 - Physical hardware, perceptual audio quality and other games are unqualified. The frame inspection behind the baseline freeze was an agent inspection of coarse content only.
 
 ## Using the baseline in later phases
