@@ -260,6 +260,12 @@ add_test(NAME mooneye_eligible_inventory
   COMMAND ${CMAKE_COMMAND}
     -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneye.cmake)
+# Phase 8 sibling set: mbc2/mbc5 derivatives (D-23, D-24, D-26). Digest, inventory and pc-table modes.
+add_test(NAME mooneye_mbc_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_MODE=digest
+    -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeMbc.cmake)
 
 add_executable(test_diagnostics test_diagnostics.c)
 target_link_libraries(test_diagnostics PRIVATE GabbaBoy::core)
