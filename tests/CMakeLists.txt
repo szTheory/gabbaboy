@@ -160,6 +160,16 @@ add_test(NAME mbc5_ninth_bit_mutant_control_below_100
     "-DGBB_EXPECT_REGEX=.*"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
+# Loader contradiction matrix (CART-05, D-27): independent expected-result oracle, guard instance
+# and untouched twin checked after every rejection.
+add_executable(test_loader_matrix test_loader_matrix.c)
+target_link_libraries(test_loader_matrix PRIVATE GabbaBoy::core)
+target_compile_features(test_loader_matrix PRIVATE c_std_17)
+set_target_properties(test_loader_matrix PROPERTIES C_EXTENSIONS OFF)
+foreach(case contradiction_mbc3)
+  add_test(NAME loader_${case} COMMAND test_loader_matrix loader_${case})
+endforeach()
+
 add_executable(test_battery test_battery.c)
 target_link_libraries(test_battery PRIVATE GabbaBoy::core)
 target_compile_features(test_battery PRIVATE c_std_17)

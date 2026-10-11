@@ -383,3 +383,4 @@ magentests_not_installed_selftest
 no_host_clock
 no_host_clock_selftest
 no_host_clock_symbol_selftest
+loader_contradiction_mbc3
