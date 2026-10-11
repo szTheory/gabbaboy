@@ -170,7 +170,42 @@ Plans:
 
 **Rights gates**: G1 (mgblib font) gates Mealybug `mbc3_rtc` as required evidence; G3 (gbclock plugin licences) keeps gbclock out — rtc3test and original fixtures are primary.
 **Research**: DEEP (write-while-running, rollover, sub-second prescaler reset on seconds write, day carry, halt).
-**Plans**: TBD
+**Plans**: 18 plans
+
+Plans:
+**Wave 1**
+- [ ] 09-01-PLAN.md — Tracer: MBC3 mapper rows, decode and MBC30 variant with the synthetic-image mbc3_* matrix
+- [ ] 09-02-PLAN.md — MagenTests admission (rights, digests, provenance, RGBDS 0.6.1 CI pin) and the shared manifest digest check
+- [ ] 09-03-PLAN.md — Fuzz synthesised-length mode on the 8 MiB bound with ten pinned length-class seeds
+- [ ] 09-04-PLAN.md — v0.1 save corpus generated once by the v0.1.2 writer, with an offline check
+- [ ] 09-05-PLAN.md — Original MBC3+RTC continuation guest with a byte-identical rebuild
+- [ ] 09-06-PLAN.md — Original MBC2 continuation guest with a byte-identical rebuild
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 09-07-PLAN.md — MagenTests screen oracle for MBC1/MBC3/MBC5 with negative control and install exclusion
+- [ ] 09-08-PLAN.md — rtc3test admission and legacy-RGBDS reproduction legs for rtc3test and MagenTests
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 09-09-PLAN.md — Lazy emulated-time RTC, original differential/metamorphic/edge tests, no-host-clock CI proof, draft PR and exact-head CI read
+- [ ] 09-10-PLAN.md — Original MBC5 continuation guest and fixture-repro pin checks and rebuilds for all three guests
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 09-11-PLAN.md — Battery image with the 21-byte RTC block, gbb_rtc_catch_up and GBB_NO_RTC, pure host catch-up policy table
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 09-12-PLAN.md — rtc3test headless oracle with exact transcripts checked against rtc3test's stated values; cross-OS core continuation of the original guests
+- [ ] 09-13-PLAN.md — Player envelope v2, core-derived classification (WR-02), clock adapter, v0.1 corpus tests
+- [ ] 09-14-PLAN.md — Installed C and C++ consumers exercise the RTC API; integration-guide RTC section
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 09-15-PLAN.md — Loader contradiction matrix with independent oracle; five RTC mutation controls
+- [ ] 09-16-PLAN.md — Catch-up on reopen, --clock-unix scope, fresh-process MBC2/MBC3+RTC/MBC5 continuation
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 09-17-PLAN.md — MBC3/RTC evidence ledger, cartridge-and-saves contract, capability text
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [ ] 09-18-PLAN.md — Phase gates, evidence head, PR ready (left open), decisions/lessons, research index and handoff to /gsd-verify-work 9
 
 ### Phase 10: CGB Profile, Banking and Register Visibility
 

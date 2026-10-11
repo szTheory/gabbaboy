@@ -4,16 +4,16 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: 9
 current_phase_name: MBC3, Deterministic RTC and Cartridge Persistence
-status: planning
-stopped_at: Phase 9 context gathered
-last_updated: "2026-10-11T19:36:11.725Z"
+status: executing
+stopped_at: Phase 9 planned
+last_updated: "2026-10-11T20:47:56.775Z"
 last_activity: 2026-10-11
-last_activity_desc: Phase GB-08 complete, transitioned to Phase 9
-state_head: 7db08b8a76db75fdaee495c1f5ff25b9b4cea0c9
+last_activity_desc: Phase 9 planned (18 plans, 8 waves)
+state_head: 703627e7d1edd1688f8d27ce3e54dcea42db19eb
 progress:
   total_phases: 9
   completed_phases: 3
-  total_plans: 27
+  total_plans: 45
   completed_plans: 27
   percent: 33
 ---
@@ -29,10 +29,10 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Phase: 9 — MBC3, Deterministic RTC and Cartridge Persistence
+Phase: 9 — MBC3, Deterministic RTC and Cartridge Persistence — READY TO EXECUTE
 Plan: Not started
-Status: Ready to plan
-Last activity: 2026-10-11 — Phase 9 context gathered (09-CONTEXT.md)
+Status: Ready to execute
+Last activity: 2026-10-11 — Phase 9 planned (18 plans in 8 waves)
 
 Progress (v0.2): [██░░░░░░░░] 22% (2/9 phases)
 
@@ -281,9 +281,20 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 ## Session Continuity
 
 Last session: 2026-10-11T19:36:11.670Z
-Stopped at: Phase 9 context gathered
-Resume file: .planning/phases/GB-09-mbc3-deterministic-rtc-and-cartridge-persistence/09-CONTEXT.md
-Next command in fresh context: `/gsd-plan-phase 9`
+Stopped at: Phase 9 planned
+Resume file: .planning/phases/GB-09-mbc3-deterministic-rtc-and-cartridge-persistence/09-01-PLAN.md
+Next command in fresh context: `/gsd-execute-phase 9`
+
+Completed workflow stage: **Phase 9 - MBC3, Deterministic RTC and Cartridge Persistence, planning** (2026-10-11) on branch `gsd/phase-09-discuss`. Research, pattern map, validation strategy and 18 plans in 8 waves:
+- wave 1: 09-01 MBC3 mapper tracer and MBC30 rejection; 09-02 MagenTests admission; 09-03 fuzz 8 MiB mode; 09-04 v0.1 save corpus from tag v0.1.2; 09-05/09-06 MBC3+RTC and MBC2 continuation guests;
+- wave 2: 09-07 MagenTests oracle and install exclusion; 09-08 rtc3test admission (ROM plus digest-pinned upstream tests.md);
+- wave 3: 09-09 lazy RTC, original RTC tests, no-host-clock check, phase branch and draft PR; 09-10 MBC5 guest and fixture-repro;
+- wave 4: 09-11 battery image with RTC block, `gbb_rtc_catch_up`, `GBB_NO_RTC`, `catch_up_policy_table`;
+- wave 5: 09-12 rtc3test oracle checked against tests.md; 09-13 player envelope v2 and WR-02; 09-14 installed consumers;
+- wave 6: 09-15 loader matrix and RTC mutation controls; 09-16 catch-up on reopen and fresh-process continuation;
+- wave 7: 09-17 evidence ledger and docs; wave 8: 09-18 gates, PR ready (not merged), handoff.
+
+Plan checker: 3 passes (2 blockers and 3 warnings, then 1 warning, then INFO only); requirements 6/6, decisions 28/28, post-planning gap analysis 34/34. Planning deviation: the cross-OS policy test is registered as core `catch_up_policy_table`, not in the player inventory (D-26 placement). The phase branch is created from the HEAD of `gsd/phase-09-discuss`. The owner may still veto the signed catch-up prototype and the unified battery image (D-14, D-15, D-17) before the PR merges. Phase 9 is not executed. Next phase step: **Phase 9 execution** via **`/gsd-execute-phase 9`**. Both auto-advance flags stay false; nothing advances automatically.
 
 Completed workflow stage: **Phase 9 - MBC3, Deterministic RTC and Cartridge Persistence, discussion** (2026-10-11) on branch `gsd/phase-09-discuss`. [09-CONTEXT.md](phases/GB-09-mbc3-deterministic-rtc-and-cartridge-persistence/09-CONTEXT.md) locks D-01..D-28 from four parallel advisor researches with adversarial passes, auto-followed per the owner's standing instruction. The RTC model was prototyped in scratch and passed rtc3test v004 23/23. Key choices:
 - lazy RTC anchored on `time_half_dots`, with the latch not bumping the battery generation;
