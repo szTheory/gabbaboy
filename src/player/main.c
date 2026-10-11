@@ -2121,6 +2121,10 @@ static int run_script_smoke(player *app, const char *rom_path, const char *scrip
         return 2;
     }
     int code = 2;
+    /* No save files, no persistence: the diagnostic never writes player state. Set before any
+     * fallible step so every early exit, including an identity mismatch after the ROM load has
+     * filled save_identity, skips the final battery save. */
+    app->skip_final_save = true;
     if (gbb_create(GBB_PROFILE_DMG_CPU_B, &app->machine) != GBB_OK) {
         fputs("Could not create the DMG-CPU-B machine\n", stderr);
         goto done;
@@ -2140,8 +2144,6 @@ static int run_script_smoke(player *app, const char *rom_path, const char *scrip
         fputs("The ROM changed between validation and load\n", stderr);
         goto done;
     }
-    /* No save files, no persistence: the diagnostic never writes player state. */
-    app->skip_final_save = true;
     app->dialog_event_type = SDL_RegisterEvents(1);
     player_input_reset(&app->input, SDL_GetTicksNS());
 
