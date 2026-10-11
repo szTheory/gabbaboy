@@ -53,3 +53,4 @@ player_reset_transition
 player_verified_output_directory
 player_script_smoke_surface
 player_script_smoke_surface_selftest
+player_script_smoke_surface_main_selftest

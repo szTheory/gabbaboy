@@ -50,4 +50,36 @@ if(main_content MATCHES "(SDL_)?[Gg]et[Ee]nv(ironmentVariable)?[ \t]*\\([^)]*SCR
   message(FATAL_ERROR "script-smoke-surface: environment read naming SCRIPT in main.c")
 endif()
 
+# The player-side half of the diagnostic (script_scancode, script_deliver, script_progress and
+# run_script_smoke) lives in main.c. Scan that bounded slice with the same forbidden tokens.
+# run_script_smoke legitimately loads the ROM through player_session_replace_rom, so that one name
+# is allowed there; it must still disable the final battery save before the load can fill the
+# save identity.
+set(slice_begin "static bool script_scancode(")
+set(slice_end "static void destroy_player(player *app) {")
+string(FIND "${main_content}" "${slice_begin}" slice_start)
+string(FIND "${main_content}" "${slice_end}" slice_stop)
+if(slice_start EQUAL -1 OR slice_stop EQUAL -1 OR NOT slice_start LESS slice_stop)
+  message(FATAL_ERROR "script-smoke-surface: script section markers not found in main.c")
+endif()
+math(EXPR slice_length "${slice_stop} - ${slice_start}")
+string(SUBSTRING "${main_content}" ${slice_start} ${slice_length} slice)
+set(main_tokens ${forbidden_tokens})
+list(REMOVE_ITEM main_tokens player_session_replace_rom)
+foreach(token IN LISTS main_tokens)
+  string(FIND "${slice}" "${token}" position)
+  if(NOT position EQUAL -1)
+    message(FATAL_ERROR "script-smoke-surface: ${token} in main.c script section")
+  endif()
+endforeach()
+if(slice MATCHES "fopen[ \t]*\\(")
+  message(FATAL_ERROR "script-smoke-surface: fopen in main.c script section")
+endif()
+string(FIND "${slice}" "app->skip_final_save = true;" skip_position)
+string(FIND "${slice}" "player_session_replace_rom(" load_position)
+if(skip_position EQUAL -1 OR load_position EQUAL -1 OR NOT skip_position LESS load_position)
+  message(FATAL_ERROR
+    "script-smoke-surface: skip_final_save must be set before the ROM load in main.c script section")
+endif()
+
 message(STATUS "script-smoke-surface ok")
