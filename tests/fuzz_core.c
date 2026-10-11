@@ -106,6 +106,69 @@ static void fuzz_stateful_api(gbb_instance *machine, const uint8_t *data,
     }
 }
 
+/* D-28: synthesised-length mode. Only the 0x150-byte header is written; the
+ * rest of the one static buffer stays zero, so an 8 MiB + 1 byte load costs no
+ * per-input copy. Selector bytes: type, ROM code, RAM code, length class. */
+#define FUZZ_MIB (1024u * 1024u)
+#define FUZZ_SYNTH_MAX ((size_t)8u * FUZZ_MIB)
+
+static void fuzz_synth_length(gbb_instance *machine, const uint8_t *data,
+                              size_t size) {
+    static uint8_t image[8u * 1024u * 1024u + 1u];
+    uint8_t before[FUZZ_BATTERY_BYTES];
+    uint8_t after[FUZZ_BATTERY_BYTES];
+    size_t before_size = 0u;
+    size_t after_size = 0u;
+
+    if (size < 5u) return;
+    const uint8_t code = data[2];
+    const size_t declared = code <= 8u ? (size_t)32768u << code : (size_t)32768u;
+    size_t length = 0u;
+    switch (data[4] % 10u) {
+    case 0u: length = declared; break;
+    case 1u: length = declared - 1u; break;
+    case 2u: length = declared + 1u; break;
+    case 3u: length = (size_t)2u * FUZZ_MIB; break;
+    case 4u: length = (size_t)2u * FUZZ_MIB + 1u; break;
+    case 5u: length = (size_t)4u * FUZZ_MIB; break;
+    case 6u: length = (size_t)4u * FUZZ_MIB + 1u; break;
+    case 7u: length = FUZZ_SYNTH_MAX; break;
+    case 8u: length = FUZZ_SYNTH_MAX + 1u; break;
+    default: length = SIZE_MAX; break;
+    }
+
+    memset(image, 0, 0x150u);
+    image[0x147u] = data[1];
+    image[0x148u] = code;
+    image[0x149u] = data[3];
+    fix_checksum(image);
+    if (size > 5u && (data[5] & 1u) != 0u) image[0x14Du] ^= 0xFFu;
+
+    require_contract(gbb_battery_size(machine, &before_size) == GBB_OK &&
+                     before_size == FUZZ_BATTERY_BYTES);
+    require_contract(gbb_copy_battery(machine, before, sizeof(before)) == GBB_OK);
+
+    const gbb_error result = gbb_load_rom(machine, image, length);
+    require_contract(result == GBB_OK || result == GBB_ROM_TOO_LARGE ||
+                     result == GBB_UNSUPPORTED_CARTRIDGE ||
+                     result == GBB_UNSUPPORTED_ROM_SIZE ||
+                     result == GBB_UNSUPPORTED_RAM_SIZE ||
+                     result == GBB_ROM_TRUNCATED ||
+                     result == GBB_ROM_SIZE_MISMATCH ||
+                     result == GBB_INVALID_ROM ||
+                     result == GBB_UNSUPPORTED_CARTRIDGE_VARIANT);
+    if (length > FUZZ_SYNTH_MAX) require_contract(result == GBB_ROM_TOO_LARGE);
+    if (result != GBB_OK) {
+        require_contract(gbb_battery_size(machine, &after_size) == GBB_OK &&
+                         after_size == before_size);
+        require_contract(gbb_copy_battery(machine, after, sizeof(after)) == GBB_OK);
+        require_contract(memcmp(before, after, sizeof(before)) == 0);
+    } else {
+        const gbb_run_result run = gbb_run(machine, FUZZ_RUN_LIMIT, NULL, 0u);
+        require_contract(run.consumed_half_dots <= FUZZ_RUN_LIMIT);
+    }
+}
+
 int gbb_fuzz_core_one_input(const uint8_t *data, size_t size) {
     if (data == NULL || size == 0u || size > FUZZ_INPUT_LIMIT) return 0;
 
@@ -115,7 +178,9 @@ int gbb_fuzz_core_one_input(const uint8_t *data, size_t size) {
     make_battery_rom(base_rom);
     require_contract(gbb_load_rom(machine, base_rom, sizeof(base_rom)) == GBB_OK);
 
-    if ((data[0] & 1u) == 0u)
+    if ((data[0] & 3u) == 2u)
+        fuzz_synth_length(machine, data, size);
+    else if ((data[0] & 3u) == 0u)
         fuzz_loader(machine, data, size);
     else
         fuzz_stateful_api(machine, data, size);
