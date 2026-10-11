@@ -43,7 +43,8 @@ add_executable(test_mbc3 test_mbc3.c)
 target_link_libraries(test_mbc3 PRIVATE GabbaBoy::core)
 target_compile_features(test_mbc3 PRIVATE c_std_17)
 set_target_properties(test_mbc3 PROPERTIES C_EXTENSIONS OFF)
-foreach(case tracer)
+foreach(case tracer header_matrix rom_banking ram_banking ram_gate unmapped_select
+  absent_ram reset battery_generation)
   add_test(NAME mbc3_${case} COMMAND test_mbc3 mbc3_${case})
 endforeach()
 

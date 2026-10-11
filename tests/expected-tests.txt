@@ -25,6 +25,14 @@ mbc2_battery_errors
 mbc2_battery_no_battery
 mbc2_two_instance_roundtrip
 mbc3_tracer
+mbc3_header_matrix
+mbc3_rom_banking
+mbc3_ram_banking
+mbc3_ram_gate
+mbc3_unmapped_select
+mbc3_absent_ram
+mbc3_reset
+mbc3_battery_generation
 mbc5_tracer
 mbc5_header_matrix
 mbc5_rom_banking
