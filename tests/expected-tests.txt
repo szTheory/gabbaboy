@@ -65,6 +65,7 @@ rtc_block_corruption_matrix
 rtc_block_reset_roundtrip
 rtc_block_generation
 rtc_battery_size_types
+catch_up_policy_table
 mbc5_tracer
 mbc5_header_matrix
 mbc5_rom_banking

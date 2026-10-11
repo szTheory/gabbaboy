@@ -77,6 +77,14 @@ foreach(case block_roundtrip catch_up_basic catch_up_zero catch_up_negative catc
   add_test(NAME rtc_${case} COMMAND test_rtc_battery rtc_${case})
 endforeach()
 
+# Pure host policy compiled directly; no player library, SDL or clock (D-21).
+add_executable(test_catch_up_policy test_catch_up_policy.c
+  "${PROJECT_SOURCE_DIR}/src/player/catch_up_policy.c")
+target_include_directories(test_catch_up_policy PRIVATE "${PROJECT_SOURCE_DIR}/src/player")
+target_compile_features(test_catch_up_policy PRIVATE c_std_17)
+set_target_properties(test_catch_up_policy PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME catch_up_policy_table COMMAND test_catch_up_policy catch_up_policy_table)
+
 add_executable(test_mbc5 test_mbc5.c)
 target_link_libraries(test_mbc5 PRIVATE GabbaBoy::core)
 target_compile_features(test_mbc5 PRIVATE c_std_17)
