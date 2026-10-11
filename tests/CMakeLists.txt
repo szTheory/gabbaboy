@@ -381,6 +381,24 @@ add_test(NAME magentests_oob_sram_negative_control
     ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc
     ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc3.gbc
     ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc5.gbc)
+# rtc3test v004 screen oracle (D-11). White-box single TU: it includes the core and the acceptance
+# sources it needs, so it must not link GabbaBoy::core or gabbaboy_accept (duplicate definitions).
+set(GBB_RTC3TEST_DIR "${PROJECT_SOURCE_DIR}/fixtures/rtc3test")
+set(GBB_RTC3TEST_CASES "${PROJECT_SOURCE_DIR}/tests/rtc3test")
+add_executable(test_rtc3test test_rtc3test.c)
+target_include_directories(test_rtc3test PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_rtc3test PRIVATE c_std_17)
+set_target_properties(test_rtc3test PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME rtc3test_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DMANIFEST=${GBB_RTC3TEST_DIR}/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixtureManifest.cmake)
+foreach(suite basic)
+  add_test(NAME rtc3test_${suite}
+    COMMAND test_rtc3test rtc3test_${suite} ${GBB_RTC3TEST_DIR}/rtc3test.gb
+      ${GBB_RTC3TEST_CASES}/${suite}.input ${GBB_RTC3TEST_CASES}/expected-${suite}.txt)
+  set_tests_properties(rtc3test_${suite} PROPERTIES TIMEOUT 300)
+endforeach()
 add_test(NAME mooneye_fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye

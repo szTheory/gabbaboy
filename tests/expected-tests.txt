@@ -37,6 +37,8 @@ rtc_tracer
 rtc_gate_and_select
 rtc_load_fresh
 rtc_closed_form_differential
+rtc3test_basic
+rtc3test_fixture_digest
 rtc_add_composes
 rtc_rate_exact
 rtc_prescaler_rules
