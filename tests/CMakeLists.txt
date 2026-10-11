@@ -393,12 +393,17 @@ add_test(NAME rtc3test_fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DMANIFEST=${GBB_RTC3TEST_DIR}/manifest.json
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixtureManifest.cmake)
-foreach(suite basic)
+foreach(suite basic range subsecond)
   add_test(NAME rtc3test_${suite}
     COMMAND test_rtc3test rtc3test_${suite} ${GBB_RTC3TEST_DIR}/rtc3test.gb
       ${GBB_RTC3TEST_CASES}/${suite}.input ${GBB_RTC3TEST_CASES}/expected-${suite}.txt)
   set_tests_properties(rtc3test_${suite} PROPERTIES TIMEOUT 300)
 endforeach()
+# Negative control: the Basic script with its tap removed must never show the end marker in 60 s.
+add_test(NAME rtc3test_negative_control
+  COMMAND test_rtc3test rtc3test_negative_control ${GBB_RTC3TEST_DIR}/rtc3test.gb
+    ${GBB_RTC3TEST_CASES}/basic.input)
+set_tests_properties(rtc3test_negative_control PROPERTIES TIMEOUT 300)
 add_test(NAME mooneye_fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye

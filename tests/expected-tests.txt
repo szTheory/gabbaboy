@@ -39,6 +39,9 @@ rtc_load_fresh
 rtc_closed_form_differential
 rtc3test_basic
 rtc3test_fixture_digest
+rtc3test_negative_control
+rtc3test_range
+rtc3test_subsecond
 rtc_add_composes
 rtc_rate_exact
 rtc_prescaler_rules

@@ -336,9 +336,14 @@ static int negative_control(const char *rom_path, const char *script_path) {
         else if (r == 2) rc = 1;
         if (m != NULL) {
             /* Control sanity: the menu itself must be on screen, not a blank map. */
-            if (rc == 0 && *map_cell(m, 0u, 0u) == 0x3Fu && *map_cell(m, 1u, 0u) == 0x3Fu &&
-                *map_cell(m, 2u, 0u) == 0x3Fu) {
-                fprintf(stderr, "negative control: top of the map is blank, the ROM did not run\n");
+            unsigned drawn = 0u;
+            for (unsigned row = 0u; row < MAP_ROWS; ++row)
+                for (unsigned col = 0u; col < MAP_COLS; ++col) {
+                    const uint8_t tile = *map_cell(m, row, col);
+                    if (tile != 0x3Fu && tile != 0xFFu) ++drawn;
+                }
+            if (rc == 0 && drawn < 20u) {
+                fprintf(stderr, "negative control: only %u drawn cells, the ROM did not reach its menu\n", drawn);
                 rc = 1;
             }
             gbb_destroy(m);

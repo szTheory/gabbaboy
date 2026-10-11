@@ -1,0 +1,18 @@
+  Sub-second writes
+
+RTCS/500    [+1000.0ms]
+RTCS/900    [+1000.0ms]
+RTCM/50       [+50.0ms]
+RTCM/600     [+600.0ms]
+RTCH/200     [+200.0ms]
+RTCDL/800    [+800.0ms]
+RTCDH/300    [+300.0ms]
+RTC off/400  [+400.0ms]
+
+
+
+
+
+
+
+      * Return

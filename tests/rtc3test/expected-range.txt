@@ -1,0 +1,18 @@
+     Range tests
+
+All bits clear  [+PASS]
+All bits set    [+PASS]
+Valid bits      [+PASS]
+Invalid value tick:
+                [+PASS]
+Invalid rollovers:
+                [+PASS]
+High minutes    [+PASS]
+High hours      [+PASS]
+
+
+
+
+
+
+      * Return
