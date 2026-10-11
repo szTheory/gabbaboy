@@ -1,0 +1,15 @@
+# LD B,B capture controls. These are not oracles and make no acceptance or hardware claim (D-26).
+#
+# The only reference_digest value in this file is the output of
+#   python3 -I tests/scripts/rgb-digest-vector.py --uniform 3
+# (stdlib hashlib over an all-shade-3 frame per D-24, independent of emulator output). It is enforced
+# at configure time by tests/acceptance/CMakeLists.txt, so a digest captured from this emulator cannot
+# be committed here as a reference. No Mooneye ROM draws an all-shade-3 frame, which is the point:
+# daa-ldbb is a registered mismatch control (exit 1, reason=frame-mismatch, PPM written) and
+# tim00-ldbb is a registered not-ready control (exit 1, reason=frame-not-ready).
+#
+# The daa LD B,B digest itself is a regression-class observation, frozen and compared only in the DMG
+# baseline ledger as mooneye.daa.frame (Plans 07-13/07-15). Its image is obtained with
+#   gabbaboy-runner --acceptance tests/acceptance/ldbb-controls.txt --case daa-ldbb --observe --dump-checkpoints <dir>
+id=daa-ldbb rom=fixtures/mooneye/daa.gb rom_sha256=3a39eda77a09b817e4e38004a3d117990565fb797e8a4f470920f1b7608f0a08 rom_size=32768 oracle=frame-digest@ldbb reference_digest=9a44a945971c798302b143c94eb80f8a31cd2d820483bb9bc3fcd3d1380f38db model_pass=dmg-cpu-b budget_half_dots=2000000
+id=tim00-ldbb rom=fixtures/mooneye/tim00.gb rom_sha256=476b2332de3f2d6604f8e1478daa8cbc7c59c89c50837fd47cc95e96e784d4f7 rom_size=32768 oracle=frame-digest@ldbb reference_digest=9a44a945971c798302b143c94eb80f8a31cd2d820483bb9bc3fcd3d1380f38db model_pass=dmg-cpu-b budget_half_dots=200000

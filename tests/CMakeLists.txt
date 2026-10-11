@@ -242,7 +242,7 @@ foreach(case zero exact short null canary)
 endforeach()
 
 add_executable(test_runner test_runner.c)
-target_link_libraries(test_runner PRIVATE GabbaBoy::core)
+target_link_libraries(test_runner PRIVATE gabbaboy_runner_support)
 target_compile_features(test_runner PRIVATE c_std_17)
 set_target_properties(test_runner PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME runner_help
@@ -360,5 +360,87 @@ if(GBB_TEST_INSTALL_PREFIX AND EXISTS "${GBB_TEST_INSTALL_PREFIX}")
         -P ${PROJECT_SOURCE_DIR}/cmake/RunInstalledConsumer.cmake)
   endforeach()
 endif()
+
+# Libbet admission (GAME-01, gate G5). The verifier is stdlib-only Python run with -I; every
+# negative control goes through expect_exit.cmake so it must exit with exactly the expected code
+# and reason, never merely "non-zero".
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(GBB_LIBBET_VERIFIER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-libbet-admission.py")
+set(GBB_LIBBET_MANIFEST "${PROJECT_SOURCE_DIR}/fixtures/libbet/manifest.json")
+set(GBB_LIBBET_DIR "${PROJECT_BINARY_DIR}/libbet-admission")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${GBB_LIBBET_MANIFEST}" "${PROJECT_SOURCE_DIR}/fixtures/libbet/libbet.gb")
+
+# add_test with a verifier command line: GBB_CMD travels as a list, so semicolons are spelled
+# with $<SEMICOLON> to survive the add_test argument split.
+function(gbb_add_expect_exit_test name code regex)
+  set(command "${Python3_EXECUTABLE}" -I "${GBB_LIBBET_VERIFIER}" ${ARGN})
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 30)
+endfunction()
+
+# Five mutated manifest copies of the committed manifest. Each differs by one fact; the ROM stays
+# the committed one because the verifier resolves rom.path against the repository root.
+file(MAKE_DIRECTORY "${GBB_LIBBET_DIR}")
+file(READ "${GBB_LIBBET_MANIFEST}" GBB_LIBBET_JSON)
+string(JSON GBB_LIBBET_ASSETS_EMPTY SET "${GBB_LIBBET_JSON}" rights embedded_assets "[]")
+string(JSON GBB_LIBBET_ASSETS_MISSING REMOVE "${GBB_LIBBET_JSON}" rights embedded_assets 0)
+string(JSON GBB_LIBBET_LICENCE_UNKNOWN SET "${GBB_LIBBET_JSON}" rights embedded_assets 0 licence "\"unknown\"")
+string(JSON GBB_LIBBET_ROM_DIGEST GET "${GBB_LIBBET_JSON}" rom sha256)
+string(SUBSTRING "${GBB_LIBBET_ROM_DIGEST}" 0 1 GBB_LIBBET_FIRST_DIGIT)
+string(SUBSTRING "${GBB_LIBBET_ROM_DIGEST}" 1 -1 GBB_LIBBET_DIGEST_REST)
+if(GBB_LIBBET_FIRST_DIGIT STREQUAL "0")
+  set(GBB_LIBBET_FIRST_DIGIT "1")
+else()
+  set(GBB_LIBBET_FIRST_DIGIT "0")
+endif()
+string(JSON GBB_LIBBET_BAD_DIGEST SET "${GBB_LIBBET_JSON}" rom sha256
+  "\"${GBB_LIBBET_FIRST_DIGIT}${GBB_LIBBET_DIGEST_REST}\"")
+string(JSON GBB_LIBBET_BAD_HEADER SET "${GBB_LIBBET_JSON}" rom header cartridge_type 1)
+foreach(mutation IN ITEMS ASSETS_EMPTY ASSETS_MISSING LICENCE_UNKNOWN BAD_DIGEST BAD_HEADER)
+  string(TOLOWER "${mutation}" mutation_file)
+  file(WRITE "${GBB_LIBBET_DIR}/${mutation_file}.json" "${GBB_LIBBET_${mutation}}\n")
+endforeach()
+
+gbb_add_expect_exit_test(libbet_admission_pass 0 "libbet admission verified" --manifest "${GBB_LIBBET_MANIFEST}")
+gbb_add_expect_exit_test(libbet_admission_empty_assets 1 "embedded-assets-empty"
+  --manifest "${GBB_LIBBET_DIR}/assets_empty.json")
+gbb_add_expect_exit_test(libbet_admission_missing_record 1 "embedded-asset-missing"
+  --manifest "${GBB_LIBBET_DIR}/assets_missing.json")
+gbb_add_expect_exit_test(libbet_admission_unknown_licence 1 "embedded-asset-field-invalid"
+  --manifest "${GBB_LIBBET_DIR}/licence_unknown.json")
+gbb_add_expect_exit_test(libbet_admission_bad_digest 1 "rom-digest-mismatch"
+  --manifest "${GBB_LIBBET_DIR}/bad_digest.json")
+gbb_add_expect_exit_test(libbet_admission_bad_header 1 "rom-header-mismatch"
+  --manifest "${GBB_LIBBET_DIR}/bad_header.json")
+gbb_add_expect_exit_test(libbet_admission_self_test 0 "libbet admission self-test passed" --self-test)
+gbb_add_expect_exit_test(libbet_notice 0 "libbet notices and attributes verified"
+  --manifest "${GBB_LIBBET_MANIFEST}" --check-notices)
+
+# Redistribution guard: the third-party ROM is a repository test fixture only. Install the build
+# into a scratch prefix (distinct from GBB_TEST_INSTALL_PREFIX) and scan it by digest and name.
+# The negative control hides the ROM under a neutral name, proving the digest scan itself.
+set(GBB_LIBBET_INSTALL_CHECK "${PROJECT_BINARY_DIR}/libbet-install-check")
+set(GBB_LIBBET_SCAN_SELFTEST "${PROJECT_BINARY_DIR}/libbet-scan-selftest")
+file(MAKE_DIRECTORY "${GBB_LIBBET_SCAN_SELFTEST}/share")
+file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/libbet/libbet.gb"
+  "${GBB_LIBBET_SCAN_SELFTEST}/share/payload.bin")
+add_test(NAME libbet_install_tree
+  COMMAND ${CMAKE_COMMAND} --install ${PROJECT_BINARY_DIR} --prefix ${GBB_LIBBET_INSTALL_CHECK})
+set_tests_properties(libbet_install_tree PROPERTIES FIXTURES_SETUP libbet_install TIMEOUT 120)
+gbb_add_expect_exit_test(libbet_not_installed 0 "libbet absent from scanned tree files=[1-9]"
+  --scan-dir "${GBB_LIBBET_INSTALL_CHECK}")
+set_tests_properties(libbet_not_installed PROPERTIES FIXTURES_REQUIRED libbet_install)
+gbb_add_expect_exit_test(libbet_not_installed_selftest 1 "libbet-installed: share/payload.bin"
+  --scan-dir "${GBB_LIBBET_SCAN_SELFTEST}")
+
+# include(), not add_subdirectory(): ExpectedTests.cmake reads this directory's TESTS property only.
+include(${CMAKE_CURRENT_LIST_DIR}/acceptance/CMakeLists.txt)
 
 gabbaboy_verify_registered_tests()

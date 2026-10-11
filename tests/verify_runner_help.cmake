@@ -16,7 +16,9 @@ foreach(expected
     "Usage:"
     "<rom.gb>"
     "--manifest <manifest.json> --case <id> [--receipt]"
-    "--manifest <manifest.json> --suite [--receipt]")
+    "--manifest <manifest.json> --suite [--receipt]"
+    "--acceptance <cases.txt> (--case <id> | --suite --expect-excluded <n>)"
+    "--acceptance <cases.txt> --case <id> --observe")
   string(FIND "${help_text}" "${expected}" found)
   if(found EQUAL -1)
     message(FATAL_ERROR "runner --help is missing '${expected}': ${help_text}")

@@ -29,8 +29,29 @@ target_compile_features(gabbaboy_core PUBLIC c_std_17)
 set_target_properties(gabbaboy_core PROPERTIES C_EXTENSIONS OFF)
 set_target_properties(gabbaboy_core PROPERTIES EXPORT_NAME core)
 
+# Shared acceptance library (runner and player smoke). Internal: never installed or exported.
+add_library(gabbaboy_accept STATIC
+  src/accept/sha256.c
+  src/accept/input_script.c
+  src/accept/stepper.c
+  src/accept/predicate.c
+  src/accept/digest.c)
+target_include_directories(gabbaboy_accept PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/accept")
+target_link_libraries(gabbaboy_accept PUBLIC GabbaBoy::core)
+target_compile_features(gabbaboy_accept PUBLIC c_std_17)
+set_target_properties(gabbaboy_accept PROPERTIES C_EXTENSIONS OFF)
+
+# Case-file parser and acceptance orchestration for the runner. Internal: never installed or exported.
+add_library(gabbaboy_runner_support STATIC
+  src/runner/cases.c
+  src/runner/acceptance.c)
+target_include_directories(gabbaboy_runner_support PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/runner")
+target_link_libraries(gabbaboy_runner_support PUBLIC gabbaboy_accept)
+target_compile_features(gabbaboy_runner_support PUBLIC c_std_17)
+set_target_properties(gabbaboy_runner_support PROPERTIES C_EXTENSIONS OFF)
+
 add_executable(gabbaboy-runner src/runner/main.c)
-target_link_libraries(gabbaboy-runner PRIVATE GabbaBoy::core)
+target_link_libraries(gabbaboy-runner PRIVATE gabbaboy_runner_support)
 target_compile_features(gabbaboy-runner PRIVATE c_std_17)
 set_target_properties(gabbaboy-runner PROPERTIES C_EXTENSIONS OFF)
 
@@ -46,6 +67,8 @@ if(NOT GABBABOY_GIT_RESULT EQUAL 0 OR
   set(GABBABOY_BUILD_QUALIFIED 0)
 else()
   execute_process(COMMAND git diff --quiet HEAD -- CMakeLists.txt include/gabbaboy/gabbaboy.h src/core/gabbaboy.c src/runner/main.c
+    src/runner/acceptance.h src/runner/cases.c src/runner/acceptance.c
+    src/accept/gbb_accept.h src/accept/sha256.c src/accept/input_script.c src/accept/stepper.c src/accept/predicate.c src/accept/digest.c
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" RESULT_VARIABLE GABBABOY_SOURCE_DIRTY ERROR_QUIET)
   if(GABBABOY_SOURCE_DIRTY EQUAL 0)
     set(GABBABOY_BUILD_QUALIFIED 1)

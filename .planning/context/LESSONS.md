@@ -343,3 +343,30 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** After the heading was added, the dry run reported 7 phases, 64 plans and 104 tasks, and the confirmed run archived the roadmap, requirements, audit, phases and quick tasks. A link-existence check over the five rewritten files found no broken targets.
 - **Source:** `.planning/milestones/v0.1-ROADMAP.md`, OpenGSD 1.16.0 `bin/lib/roadmap-parser.cjs` (`getMilestonePhaseFilter`), `docs/mbc1-evidence.md`.
 - **Status:** Adopted.
+
+### GB-AUDIO-001 / 2026-10-10 / Check mixer full scale against the documented DAC and NR50 model before freezing PCM
+
+- **Cause and evidence:** The core mixed `volume * 2048 - 16384` per channel (one unit = 16384 counts) times the NR50 `(volume + 1)` multiplier with no headroom divisor. Pan Docs defines each DAC as -1..1, a four-channel side as -4..4 and NR50 as a (volume+1)/8 scale, so s16 full scale must hold four units at volume 7. A scratch probe over `libbet.gb` (Start tap at f500, 1500 frames) measured a pre-saturation peak of 229376 counts, 73284 of 2410954 resampled samples (3.04%) clipped at s16 and output reaching -32768. The existing `audio_saturation` test only drove the post-mix kernel with INT32 extremes, so it could not see the scale error, and earlier audio digests had frozen it.
+- **Remedy:** Divide each channel term by 16 (exact: terms are multiples of 2048) in `audio_current_mix`; after the fix the same run peaks at 14336 with 0 clipped samples and output -9277..10115. `audio_saturation` now runs two full-volume guest pulses at NR50 `$77` and requires a peak between 8192 and 32766. The guest partition digest moved from `b5bb127cdda6a035` to `c89a0db6f083c345`.
+- **Applies when:** Any change to APU channel levels, NR50/NR51 scaling or the PCM digests; and before blessing PCM or game-acceptance audio evidence. Probe with a real ROM rather than only synthetic kernel inputs, and count clipped samples before the high-pass stage (after it, clipping can hide as only a couple of rail-valued samples).
+- **Verification:** Full CTest suite (200 tests) passes after the change; the scratch probe reports 0 saturated mixer samples on Libbet. The probe is not committed.
+- **Source:** [audio-and-playback](../../docs/audio-and-playback.md), D-027 in DECISIONS.md, Pan Docs Audio details (Mixer), mGBA `src/gb/audio.c` (read only).
+- **Status:** Adopted.
+
+### GB-GAME-002 / 2026-10-10 / Explain a game's input-timing oddity from its source before suspecting the joypad model
+
+- **Cause and evidence:** An earlier exploratory run reported that repeated Start taps started Libbet by f270 while single taps at f290-f440 did nothing, which looked like a JOYP defect. The pinned source (`pinobatch/libbet` commit `46a765a2c01701bffb8c0b7dd6e4be3a6b193090`) explains it: `intro.z80` ignores input for the 64-frame roll and a further 120 unskippable frames, then accepts Start/A during a 180-frame skippable window; `pads.z80` `read_pad` derives `new_keys` from successive polls; the title needs its own Start. A scratch probe over `libbet.gb` logged every write of a non-zero `new_keys` and the LCD/state frames: taps f100-f230 ignored, tap f240 skips the intro (title f277), tap f280 starts the game (f287); isolated single taps at f290/f350/f440 reached or sat at the title (f327/f387/f447), and f470 started the game (f478). Each tap produced exactly one `new_keys=$08` edge in the press frame, so the core's JOYP reporting matched what the guest code implies.
+- **Remedy:** No core change. Record the intro/title input windows in D-028 and keep D-13's Start at f500 (after the title is ready at about f447). Separate "the game ignored input" from "the emulator dropped input" by logging guest-side `new_keys` edges against frame numbers before touching the joypad path.
+- **Applies when:** An acceptance or replay script gives different outcomes for similar taps at different frames, or an early input appears to be ignored; also whenever a game reads input only inside timed windows.
+- **Verification:** Scratch probe (not committed) reproduced all three schedules deterministically; `cmake --build --preset phase1` plus the full CTest suite pass; `git diff --quiet src/core/gabbaboy.c`; the select-line anchor occurs once and matches main.
+- **Source:** D-028 in DECISIONS.md; Libbet `src/intro.z80`, `src/pads.z80`, `src/instructions.z80` at the pinned commit (read only).
+- **Status:** Adopted.
+
+### GB-GAME-003 / 2026-10-11 / Compare structs with padding field by field, never with memcmp
+
+- **Cause and evidence:** `acceptance_parse_script_errors` passed on Linux and macOS but failed on `native-windows-x64` at `tests/test_acceptance_lib.c:262` (`memcmp(a.events, b.events, ...)`, CI run 38096251361, head da2a028). `gbb_input_event` has padding after `kind` and `value`; the parser fills fields, not padding, so the padding bytes of two parses can differ (here on MSVC) even though every field is equal. The same test had passed at the previous head by chance.
+- **Remedy:** Compare `at_half_dots`, `kind` and `value` individually (commit "fix(07-11): compare parsed script events field-wise"). This also follows the project rule against raw structure dumps for comparison and serialization.
+- **Applies when:** Any test, digest or equality check reads a C structure's object bytes (`memcmp`, hashing, `fwrite`), especially structures with mixed-width members or enums.
+- **Verification:** `ctest -R acceptance_parse_script` passes locally; exact head b6f982b run 38097373433 passed `native-windows-x64`, `native-linux-x64` and `native-macos-arm64`.
+- **Source:** CI run 38096251361 log for job native-windows-x64; AGENTS.md engineering rules (explicit portable serialization).
+- **Status:** Adopted.

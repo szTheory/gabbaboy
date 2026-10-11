@@ -1,4 +1,6 @@
 #include "gabbaboy/gabbaboy.h"
+#include "gbb_accept.h"
+#include "acceptance.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -59,42 +61,18 @@ static const fixture_case cases[] = {
      {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(200000)}
 };
 
-/* Small standalone SHA-256 implementation keeps fixture verification offline. */
-typedef struct { uint32_t h[8]; uint64_t bits; uint8_t block[64]; size_t used; } sha256_ctx;
-static const uint32_t sha_k[64] = {
-  0x428a2f98u,0x71374491u,0xb5c0fbcfu,0xe9b5dba5u,0x3956c25bu,0x59f111f1u,0x923f82a4u,0xab1c5ed5u,
-  0xd807aa98u,0x12835b01u,0x243185beu,0x550c7dc3u,0x72be5d74u,0x80deb1feu,0x9bdc06a7u,0xc19bf174u,
-  0xe49b69c1u,0xefbe4786u,0x0fc19dc6u,0x240ca1ccu,0x2de92c6fu,0x4a7484aau,0x5cb0a9dcu,0x76f988dau,
-  0x983e5152u,0xa831c66du,0xb00327c8u,0xbf597fc7u,0xc6e00bf3u,0xd5a79147u,0x06ca6351u,0x14292967u,
-  0x27b70a85u,0x2e1b2138u,0x4d2c6dfcu,0x53380d13u,0x650a7354u,0x766a0abbu,0x81c2c92eu,0x92722c85u,
-  0xa2bfe8a1u,0xa81a664bu,0xc24b8b70u,0xc76c51a3u,0xd192e819u,0xd6990624u,0xf40e3585u,0x106aa070u,
-  0x19a4c116u,0x1e376c08u,0x2748774cu,0x34b0bcb5u,0x391c0cb3u,0x4ed8aa4au,0x5b9cca4fu,0x682e6ff3u,
-  0x748f82eeu,0x78a5636fu,0x84c87814u,0x8cc70208u,0x90befffau,0xa4506cebu,0xbef9a3f7u,0xc67178f2u
-};
-static uint32_t rotr(uint32_t x, unsigned n) { return (x >> n) | (x << (32u - n)); }
-static void sha_transform(sha256_ctx *c, const uint8_t *p) {
-    uint32_t w[64];
-    for (unsigned i=0;i<16;i++) w[i]=((uint32_t)p[i*4]<<24)|((uint32_t)p[i*4+1]<<16)|((uint32_t)p[i*4+2]<<8)|p[i*4+3];
-    for (unsigned i=16;i<64;i++) { uint32_t a=rotr(w[i-15],7)^rotr(w[i-15],18)^(w[i-15]>>3); uint32_t b=rotr(w[i-2],17)^rotr(w[i-2],19)^(w[i-2]>>10); w[i]=w[i-16]+a+w[i-7]+b; }
-    uint32_t a=c->h[0],b=c->h[1],d=c->h[3],e=c->h[4],f=c->h[5],g=c->h[6],h=c->h[7],cc=c->h[2];
-    for (unsigned i=0;i<64;i++) { uint32_t s1=rotr(e,6)^rotr(e,11)^rotr(e,25), ch=(e&f)^(~e&g); uint32_t t1=h+s1+ch+sha_k[i]+w[i]; uint32_t s0=rotr(a,2)^rotr(a,13)^rotr(a,22), maj=(a&b)^(a&cc)^(b&cc); uint32_t t2=s0+maj; h=g;g=f;f=e;e=d+t1;d=cc;cc=b;b=a;a=t1+t2; }
-    c->h[0]+=a;c->h[1]+=b;c->h[2]+=cc;c->h[3]+=d;c->h[4]+=e;c->h[5]+=f;c->h[6]+=g;c->h[7]+=h;
-}
-static void sha_init(sha256_ctx *c) { static const uint32_t iv[8]={0x6a09e667u,0xbb67ae85u,0x3c6ef372u,0xa54ff53au,0x510e527fu,0x9b05688cu,0x1f83d9abu,0x5be0cd19u}; memcpy(c->h,iv,sizeof(iv));c->bits=0;c->used=0; }
-static void sha_update(sha256_ctx *c,const uint8_t *p,size_t n) { c->bits+=(uint64_t)n*8u; while(n){size_t k=64-c->used;if(k>n)k=n;memcpy(c->block+c->used,p,k);c->used+=k;p+=k;n-=k;if(c->used==64){sha_transform(c,c->block);c->used=0;}} }
-static void sha_final(sha256_ctx *c,char out[65]) { c->block[c->used++]=0x80;if(c->used>56){while(c->used<64)c->block[c->used++]=0;sha_transform(c,c->block);c->used=0;}while(c->used<56)c->block[c->used++]=0;for(unsigned i=0;i<8;i++)c->block[63-i]=(uint8_t)(c->bits>>(i*8));sha_transform(c,c->block);for(unsigned i=0;i<8;i++)snprintf(out+i*8,9,"%08x",c->h[i]);out[64]='\0'; }
-
 static int read_bounded(const char *path, uint8_t *buffer, size_t capacity, size_t *length) {
     FILE *f=fopen(path,"rb"); if(!f)return 0;
     size_t n=fread(buffer,1,capacity+1,f); int failed=ferror(f); fclose(f);
     if(failed||n>capacity)return 0; *length=n; return 1;
 }
-static int hash_matches(const uint8_t *bytes,size_t length,const char *expected) { sha256_ctx c;char hash[65];sha_init(&c);sha_update(&c,bytes,length);sha_final(&c,hash);return strcmp(hash,expected)==0; }
+static int hash_matches(const uint8_t *bytes,size_t length,const char *expected) { char hash[65];gbb_accept_sha256_hex(bytes,length,hash);return strcmp(hash,expected)==0; }
 static int manifest_bytes_valid(const uint8_t *bytes,size_t length) {
     static const char expected[]=MOONEYE_MANIFEST_SHA256;
     return hash_matches(bytes,length,expected);
 }
-static int manifest_valid(const char *path, uint8_t bytes[MAX_MANIFEST+1], size_t *length) {
+/* bytes must hold MAX_MANIFEST+1 so an oversize file is detected, not truncated. */
+static int manifest_valid(const char *path, uint8_t *bytes, size_t *length) {
     return read_bounded(path,bytes,MAX_MANIFEST,length)&&manifest_bytes_valid(bytes,*length);
 }
 static const fixture_case *select_case(const char *name) {
@@ -108,7 +86,8 @@ static int locate_rom(const char *manifest,const char *rom,char path[4096]) {
     size_t dir=slash?(size_t)(slash-manifest+1):0; if(dir+strlen(rom)>=4095)return 0;
     memcpy(path,manifest,dir);strcpy(path+dir,rom);return 1;
 }
-static const char *load_case_rom(const fixture_case *fc,const char *manifest,uint8_t rom[MAX_ROM+1],size_t *length) {
+/* rom must hold MAX_ROM+1 bytes; the caller owns the heap buffer (D-27). */
+static const char *load_case_rom(const fixture_case *fc,const char *manifest,uint8_t *rom,size_t *length) {
     char path[4096];
     if(!locate_rom(manifest,fc->rom,path))return "invalid-fixture-path";
     FILE *file=fopen(path,"rb");
@@ -206,16 +185,44 @@ static const char *run_guest(const fixture_case *fc,const uint8_t *rom,size_t ro
     gbb_destroy(m);
     return status;
 }
-static int run_one(const fixture_case *fc,const char *manifest,int receipt,size_t eligible,size_t *executed) {
-    uint8_t rom[MAX_ROM+1];size_t rom_size=0;
+/* --observe lines for one Mooneye case. They come from the same gbb_runner_capture_ldbb helper as the
+ * frame-digest@ldbb case-file oracle, so both paths yield the same canonical digest. A breakpoint
+ * reached before the first completed frame is the token not-ready, an observation and not an error. */
+static void observe_case(const fixture_case *fc,const uint8_t *rom,size_t rom_size) {
+    gbb_instance *m=NULL;gbb_ldbb_capture *capture=malloc(sizeof(*capture));
+    if(capture==NULL||gbb_create(GBB_PROFILE_DMG_CPU_B,&m)!=GBB_OK||gbb_load_rom(m,rom,rom_size)!=GBB_OK){
+        fprintf(stderr,"runner-error: observation setup failed\n");gbb_destroy(m);free(capture);return;}
+    int rc=gbb_runner_capture_ldbb(m,fc->budget,capture);
+    gbb_destroy(m);
+    const char *alias=fc->alias;
+    if(rc!=0){fprintf(stderr,"runner-error: frame capture failed for %s\n",alias);free(capture);return;}
+    printf("mooneye.%s.frame\t%s\n",alias,capture->frame_ready?capture->digest:"not-ready");
+    if(capture->frame_ready)printf("mooneye.%s.frame_generation\t%llu\n",alias,(unsigned long long)capture->generation);
+    else printf("mooneye.%s.frame_generation\tnone\n",alias);
+    if(capture->reached){
+        printf("mooneye.%s.ldbb_half_dots\t%llu\n",alias,(unsigned long long)capture->ldbb_half_dots);
+        printf("mooneye.%s.registers\t%02x%02x%02x%02x%02x%02x\n",alias,capture->b,capture->c,capture->d,capture->e,capture->h,capture->l);
+        printf("mooneye.%s.result_pc\t%04x\n",alias,capture->pc);
+    } else {
+        printf("mooneye.%s.ldbb_half_dots\tnone\nmooneye.%s.registers\tnone\nmooneye.%s.result_pc\tnone\n",alias,alias,alias);
+    }
+    free(capture);
+}
+static int run_one(const fixture_case *fc,const char *manifest,int receipt,int observe,size_t eligible,size_t *executed) {
+    size_t rom_size=0;
+    uint8_t *rom=malloc(MAX_ROM+1);
+    if(rom==NULL){fprintf(stderr,"runner-error: ROM buffer allocation failed\n");return 2;}
     const char *fixture_error=load_case_rom(fc,manifest,rom,&rom_size);
     if(fixture_error!=NULL){
         if(receipt)printf("case=%s category=%s status=unsupported reason=%s manifest_sha256=%s source_revision=%s source_tree=%s source_path=%s report_patch_sha256=%s original_rom_sha256=%s fixture_sha256=%s fixture_origin=derived-headless-report-closure profile=DMG-CPU-B boot=skipped protocol=mooneye-ld-b-b protocol_stage=not-reached eligible=%zu executed=%zu\n",fc->id,fc->category,fixture_error,MOONEYE_MANIFEST_SHA256,MOONEYE_SOURCE_REVISION,MOONEYE_SOURCE_TREE,fc->source_path,MOONEYE_PATCH_SHA256,fc->original_sha256,fc->sha256,eligible,*executed);
+        free(rom);
         return 3;
     }
     protocol_evidence evidence;uint64_t ticks=0;size_t recent_count=0;const char *stop=NULL;
     gbb_diagnostic_record recent[RECENT_CAPACITY];
     const char *status=run_guest(fc,rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
+    if(observe)observe_case(fc,rom,rom_size);
+    free(rom);
     ++*executed;
     int code=strcmp(status,"pass")==0?0:strcmp(status,"fail")==0?1:3;
     if(receipt){
@@ -258,31 +265,85 @@ static void print_usage(FILE *stream, const char *program) {
     fprintf(stream,
       "Usage:\n"
       "  %s <rom.gb>\n"
-      "  %s --manifest <manifest.json> --case <id> [--receipt]\n"
-      "  %s --manifest <manifest.json> --suite [--receipt]\n",
-      program, program, program);
+      "  %s --manifest <manifest.json> --case <id> [--receipt] [--observe]\n"
+      "  %s --manifest <manifest.json> --suite [--receipt] [--observe]\n"
+      "  %s --acceptance <cases.txt> (--case <id> | --suite --expect-excluded <n>) [--model <id>] [--revision <r>] [--failure-dir <dir>] [--receipt]\n"
+      "  %s --acceptance <cases.txt> --case <id> --observe [--input-script <file>] [--frame-digest-at <half-dots>] [--pcm-digest] [--dump-checkpoints <dir>]\n"
+      "  %s --acceptance <cases.txt> --case <id> --raw-verdict [--receipt]\n"
+      "  %s --acceptance <cases.txt> (--case <id> | --suite --expect-excluded <n>) --mutate drop:<BUTTON> [--receipt]\n",
+      program, program, program, program, program, program, program);
+}
+
+/* Strict decimal parse for --frame-digest-at: digits only, at most the 600 s script bound. */
+static int parse_half_dots(const char *text,uint64_t *out) {
+    size_t n=strlen(text);if(n==0||n>10)return 0;
+    uint64_t value=0;for(size_t i=0;i<n;i++){if(text[i]<'0'||text[i]>'9')return 0;value=value*10u+(uint64_t)(text[i]-'0');}
+    if(value>GBB_ACCEPT_MAX_SCRIPT_HALF_DOTS)return 0;
+    *out=value;return 1;
 }
 
 int main(int argc,char **argv) {
     if(argc==2&&strncmp(argv[1],"--",2)!=0)return run_original_tracer(argv[1]);
-    const char *manifest=NULL,*selected=NULL;int receipt=0,suite=0;
+    const char *manifest=NULL,*selected=NULL,*acceptance=NULL;int receipt=0,suite=0;
+    gbb_acceptance_options options;memset(&options,0,sizeof(options));
+    int observe_only_flag=0;
     for(int i=1;i<argc;i++){
         if(strcmp(argv[i],"--help")==0){print_usage(stdout,argv[0]);return 0;}
         else if(strcmp(argv[i],"--manifest")==0&&i+1<argc)manifest=argv[++i];
+        else if(strcmp(argv[i],"--acceptance")==0&&i+1<argc)acceptance=argv[++i];
         else if(strcmp(argv[i],"--case")==0&&i+1<argc)selected=argv[++i];
         else if(strcmp(argv[i],"--suite")==0)suite=1;
         else if(strcmp(argv[i],"--receipt")==0)receipt=1;
+        else if(strcmp(argv[i],"--failure-dir")==0&&i+1<argc)options.failure_dir=argv[++i];
+        else if(strcmp(argv[i],"--observe")==0)options.observe=1;
+        else if(strcmp(argv[i],"--raw-verdict")==0)options.raw_verdict=1;
+        else if(strcmp(argv[i],"--mutate")==0&&i+1<argc){
+            const char *spec=argv[++i];static const char *const names[8]={"RIGHT","LEFT","UP","DOWN","A","B","SELECT","START"};
+            int found=0;
+            if(strncmp(spec,"drop:",5)==0)for(unsigned b=0;b<8;b++)if(strcmp(spec+5,names[b])==0){options.drop_button=(uint8_t)b;found=1;}
+            if(!found||options.has_drop_button){fprintf(stderr,"invalid-arguments: reason=invalid-mutate\n");return 2;}
+            options.has_drop_button=1;options.mutate_label=spec;}
+        else if(strcmp(argv[i],"--model")==0&&i+1<argc)options.model=argv[++i];
+        else if(strcmp(argv[i],"--revision")==0&&i+1<argc)options.revision=argv[++i];
+        else if(strcmp(argv[i],"--expect-excluded")==0&&i+1<argc){
+            const char *text=argv[++i];size_t n=strlen(text);unsigned value=0;int valid=n>0&&n<=3;
+            for(size_t k=0;valid&&k<n;k++){if(text[k]<'0'||text[k]>'9')valid=0;else value=value*10u+(unsigned)(text[k]-'0');}
+            if(valid&&value>GBB_CASES_MAX_CASES)valid=0;
+            if(!valid){fprintf(stderr,"invalid-arguments: reason=invalid-expect-excluded\n");return 2;}
+            options.expect_excluded=value;options.has_expect_excluded=1;}
+        else if(strcmp(argv[i],"--input-script")==0&&i+1<argc){options.observe_input_script=argv[++i];observe_only_flag=1;}
+        else if(strcmp(argv[i],"--frame-digest-at")==0&&i+1<argc){
+            if(!parse_half_dots(argv[++i],&options.frame_digest_at)){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
+            options.has_frame_digest_at=1;observe_only_flag=1;}
+        else if(strcmp(argv[i],"--pcm-digest")==0){options.pcm_only=1;observe_only_flag=1;}
+        else if(strcmp(argv[i],"--dump-checkpoints")==0&&i+1<argc){options.dump_dir=argv[++i];observe_only_flag=1;}
         else {fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
     }
+    if(acceptance){
+        if(observe_only_flag&&!options.observe){fprintf(stderr,"invalid-arguments: reason=observe-only-flag\n");return 2;}
+        if(options.model!=NULL&&!gbb_case_model_known(options.model)){fprintf(stderr,"invalid-arguments: reason=unknown-model\n");return 2;}
+        if(options.has_drop_button&&options.observe){fprintf(stderr,"invalid-arguments: reason=invalid-mutate\n");return 2;}
+        if(options.raw_verdict&&(suite||options.observe||!selected)){fprintf(stderr,"invalid-arguments: reason=raw-verdict-requires-case\n");return 2;}
+        if(suite&&!options.has_expect_excluded){fprintf(stderr,"invalid-arguments: reason=expect-excluded-required\n");return 2;}
+        if(manifest||(suite&&(selected||options.observe))||(!suite&&(!selected||options.has_expect_excluded))){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
+        options.suite=suite;
+        options.receipt=receipt;options.core_revision=GBB_BUILD_REVISION;options.build_qualified=GBB_BUILD_QUALIFIED;
+        return gbb_acceptance_run_file(acceptance,selected,&options);
+    }
+    if(options.failure_dir||observe_only_flag||options.model||options.revision||options.has_expect_excluded||options.raw_verdict||options.has_drop_button){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
     if(!manifest||(!suite&&!selected)||(suite&&selected)){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
-    uint8_t manifest_bytes[MAX_MANIFEST+1];size_t manifest_length=0;
-    if(!manifest_valid(manifest,manifest_bytes,&manifest_length)){fprintf(stderr,"invalid-manifest\n");return 2;}
+    size_t manifest_length=0;
+    uint8_t *manifest_bytes=malloc(MAX_MANIFEST+1);
+    if(manifest_bytes==NULL){fprintf(stderr,"runner-error: manifest buffer allocation failed\n");return 2;}
+    int manifest_ok=manifest_valid(manifest,manifest_bytes,&manifest_length);
+    free(manifest_bytes); /* only the digest check needed the bytes */
+    if(!manifest_ok){fprintf(stderr,"invalid-manifest\n");return 2;}
     size_t eligible=suite?sizeof(cases)/sizeof(cases[0]):1,executed=0;int suite_code=0;
     if(suite){
-        for(size_t i=0;i<eligible;i++){int code=run_one(&cases[i],manifest,receipt,eligible,&executed);if(code!=0&&suite_code==0)suite_code=code;}
+        for(size_t i=0;i<eligible;i++){int code=run_one(&cases[i],manifest,receipt,options.observe,eligible,&executed);if(code!=0&&suite_code==0)suite_code=code;}
         if(receipt)printf("suite eligible=%zu executed=%zu status=%s\n",eligible,executed,suite_counts_valid(eligible,executed)&&suite_code==0?"pass":"fail");
         return suite_counts_valid(eligible,executed)?suite_code:2;
     }
     const fixture_case *fc=select_case(selected);if(!fc){fprintf(stderr,"unknown-case: use --help for invocation forms\n");return 2;}
-    return run_one(fc,manifest,receipt,eligible,&executed);
+    return run_one(fc,manifest,receipt,options.observe,eligible,&executed);
 }

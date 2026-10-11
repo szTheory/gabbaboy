@@ -19,11 +19,8 @@ static void set_protocol_record(gbb_trace_record *record,uint16_t callback_pc,
     record->e=registers[3];record->h=registers[4];record->l=registers[5];
 }
 
-static int run_induced_guest_failure(const char *path) {
-    uint8_t rom[MAX_ROM+1];size_t rom_size=0;
-    REQUIRE(read_bounded(path,rom,MAX_ROM,&rom_size));
-    REQUIRE(rom_size==MAX_ROM);
-    REQUIRE(hash_matches(rom,rom_size,cases[0].sha256));
+/* The mutation and the REQUIREs live here so the caller frees the heap ROM on every path. */
+static int induced_guest_failure_on(uint8_t *rom,size_t rom_size) {
     static const uint8_t expected_table_start[]={0x00,0x00,0x00,0x08};
     /* The exact admitted DAA image has its testcases1 table at ROM offset 0x0266. */
     REQUIRE(memcmp(rom+0x0266,expected_table_start,sizeof(expected_table_start))==0);
@@ -44,6 +41,20 @@ static int run_induced_guest_failure(const char *path) {
            MOONEYE_SOURCE_REVISION,cases[0].source_path,MOONEYE_PATCH_SHA256,cases[0].sha256,
            status,evidence.callback_pc,evidence.result_pc,(unsigned long long)ticks,recent_count);
     return 0;
+}
+
+static int run_induced_guest_failure(const char *path) {
+    size_t rom_size=0;
+    uint8_t *rom=malloc(MAX_ROM+1);
+    REQUIRE(rom!=NULL);
+    int code=1;
+    if(read_bounded(path,rom,MAX_ROM,&rom_size)&&rom_size==MAX_ROM&&hash_matches(rom,rom_size,cases[0].sha256)){
+        code=induced_guest_failure_on(rom,rom_size);
+    }else{
+        fprintf(stderr,"%s:%d: admitted DAA fixture did not load\n",__FILE__,__LINE__);
+    }
+    free(rom);
+    return code;
 }
 
 int main(int argc, char **argv) {

@@ -17,6 +17,12 @@
 #define GBB_AUDIO_EVENT_PHASES 8u
 #define GBB_AUDIO_EVENT_TAPS 16u
 #define GBB_AUDIO_HPF_Q15 32648
+/* Pan Docs maps each DAC to -1..1 (unit = 16384 here) and sums four channels,
+ * so a side spans +/-4 units; NR50 then scales it by (volume+1)/8. One s16
+ * full scale (32768) must therefore hold 4 units * 8/8, i.e. the product of
+ * unit samples and the (volume+1) multiplier (1..8) is divided by 16.
+ * Without this headroom one full-volume channel at NR50=$77 was 3.5x s16. */
+#define GBB_AUDIO_MIX_HEADROOM_DIV 16
 typedef struct {
     uint8_t sweep, duty_length, envelope, frequency_low, control;
     uint16_t length, frequency, timer, sweep_shadow;
@@ -204,9 +210,9 @@ static void audio_current_mix(const gbb_instance *m, int32_t *left, int32_t *rig
             ((duty_pattern[duty] >> pulse->phase) & 1u) != 0u)
             sample = (int32_t)pulse->volume * 2048 - 16384;
         if ((m->apu_nr51 & (1u << i)) != 0u)
-            *right += sample * (int32_t)((m->apu_nr50 & 7u) + 1u);
+            *right += sample * (int32_t)((m->apu_nr50 & 7u) + 1u) / GBB_AUDIO_MIX_HEADROOM_DIV;
         if ((m->apu_nr51 & (1u << (i + 4u))) != 0u)
-            *left += sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u);
+            *left += sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u) / GBB_AUDIO_MIX_HEADROOM_DIV;
     }
     int32_t wave_sample = 0;
     if (m->apu_wave.enabled && m->apu_wave.level != 0u) {
@@ -217,17 +223,17 @@ static void audio_current_mix(const gbb_instance *m, int32_t *left, int32_t *rig
         wave_sample = (int32_t)(digital >> shift) * 2048 - 16384;
     }
     if ((m->apu_nr51 & 0x04u) != 0u)
-        *right += wave_sample * (int32_t)((m->apu_nr50 & 7u) + 1u);
+        *right += wave_sample * (int32_t)((m->apu_nr50 & 7u) + 1u) / GBB_AUDIO_MIX_HEADROOM_DIV;
     if ((m->apu_nr51 & 0x40u) != 0u)
-        *left += wave_sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u);
+        *left += wave_sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u) / GBB_AUDIO_MIX_HEADROOM_DIV;
     int32_t noise_sample = 0;
     if (m->apu_noise.enabled && m->apu_noise.volume != 0u &&
         (m->apu_noise.lfsr & 1u) == 0u)
         noise_sample = (int32_t)m->apu_noise.volume * 2048 - 16384;
     if ((m->apu_nr51 & 0x08u) != 0u)
-        *right += noise_sample * (int32_t)((m->apu_nr50 & 7u) + 1u);
+        *right += noise_sample * (int32_t)((m->apu_nr50 & 7u) + 1u) / GBB_AUDIO_MIX_HEADROOM_DIV;
     if ((m->apu_nr51 & 0x80u) != 0u)
-        *left += noise_sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u);
+        *left += noise_sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u) / GBB_AUDIO_MIX_HEADROOM_DIV;
 }
 
 void gbb_test_audio_kernel(gbb_instance *m, const int32_t *left,
