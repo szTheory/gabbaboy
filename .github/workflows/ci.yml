@@ -47,6 +47,9 @@ jobs:
         run: |
           ctest --test-dir build --output-on-failure --no-tests=error --output-junit ctest.xml
           bash .github/scripts/verify-test-inventory.sh build/ctest.xml tests/expected-tests.txt --installed
+      - name: Print DMG baseline check result
+        shell: bash
+        run: bash tests/scripts/verify-dmg-baseline.sh
       - name: Verify DMG baseline JUnit inventory
         shell: bash
         run: bash tests/scripts/verify-dmg-baseline.sh --junit build/ctest.xml --inventory core
@@ -81,6 +84,9 @@ jobs:
         run: |
           ctest --test-dir build --output-on-failure --no-tests=error --output-junit ctest.xml
           bash .github/scripts/verify-test-inventory.sh build/ctest.xml tests/expected-tests.txt --installed
+      - name: Print DMG baseline check result
+        shell: bash
+        run: bash tests/scripts/verify-dmg-baseline.sh
       - name: Verify DMG baseline JUnit inventory
         shell: bash
         run: bash tests/scripts/verify-dmg-baseline.sh --junit build/ctest.xml --inventory core
@@ -127,6 +133,9 @@ jobs:
         run: |
           ctest --test-dir build --output-on-failure --no-tests=error --output-junit ctest.xml
           bash .github/scripts/verify-test-inventory.sh build/ctest.xml tests/expected-tests.txt --installed
+      - name: Print DMG baseline check result
+        shell: bash
+        run: bash tests/scripts/verify-dmg-baseline.sh
       - name: Verify DMG baseline JUnit inventory
         shell: bash
         run: bash tests/scripts/verify-dmg-baseline.sh --junit build/ctest.xml --inventory core
