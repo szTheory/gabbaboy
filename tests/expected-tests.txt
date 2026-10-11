@@ -235,3 +235,4 @@ acceptance_ldbb_observe_daa
 acceptance_ldbb_mismatch_ppm
 acceptance_ldbb_not_ready
 acceptance_ldbb_mooneye_observe
+dmg_baseline_selftest_pass

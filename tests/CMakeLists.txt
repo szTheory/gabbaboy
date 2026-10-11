@@ -440,6 +440,42 @@ set_tests_properties(libbet_not_installed PROPERTIES FIXTURES_REQUIRED libbet_in
 gbb_add_expect_exit_test(libbet_not_installed_selftest 1 "libbet-installed: share/payload.bin"
   --scan-dir "${GBB_LIBBET_SCAN_SELFTEST}")
 
+# EVID-02 baseline comparator self-tests (D-30, D-31, D-34). Each test runs cmake/VerifyDmgBaseline.cmake
+# on committed synthetic fixtures (or a generated variant of them) and asserts the exact exit code
+# and failure token through expect_exit.cmake; nothing here touches the real ledger.
+set(GBB_BASELINE_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/VerifyDmgBaseline.cmake")
+set(GBB_BASELINE_SELFTEST "${PROJECT_SOURCE_DIR}/tests/baseline/selftest")
+set(GBB_BASELINE_DIR "${PROJECT_BINARY_DIR}/baseline-selftest")
+file(MAKE_DIRECTORY "${GBB_BASELINE_DIR}")
+
+function(gbb_add_baseline_test name code regex)
+  set(command "${CMAKE_COMMAND}" "-DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR}" ${ARGN} -P "${GBB_BASELINE_SCRIPT}")
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 30)
+endfunction()
+
+file(READ "${GBB_BASELINE_SELFTEST}/observed.txt" GBB_BASELINE_OBSERVED)
+file(READ "${GBB_BASELINE_SELFTEST}/ledger.txt" GBB_BASELINE_LEDGER)
+file(READ "${GBB_BASELINE_SELFTEST}/CHANGES.md" GBB_BASELINE_CHANGES_ROW)
+# The committed CHANGES fixture carries one row for the recorded-change variant; every other test
+# compares against the same table with that row removed.
+string(ASCII 10 GBB_NL)
+string(REGEX REPLACE "${GBB_NL}[|] acceptance[^${GBB_NL}]*${GBB_NL}?" "${GBB_NL}"
+  GBB_BASELINE_CHANGES_EMPTY "${GBB_BASELINE_CHANGES_ROW}")
+file(WRITE "${GBB_BASELINE_DIR}/changes_empty.md" "${GBB_BASELINE_CHANGES_EMPTY}")
+
+gbb_add_baseline_test(dmg_baseline_selftest_pass 0 "baseline status=pass"
+  -DGBB_MODE=check
+  "-DGBB_OBSERVED=${GBB_BASELINE_SELFTEST}/observed.txt"
+  "-DGBB_LEDGER=${GBB_BASELINE_SELFTEST}/ledger.txt"
+  "-DGBB_CHANGES=${GBB_BASELINE_DIR}/changes_empty.md")
+
 # include(), not add_subdirectory(): ExpectedTests.cmake reads this directory's TESTS property only.
 include(${CMAKE_CURRENT_LIST_DIR}/acceptance/CMakeLists.txt)
 
