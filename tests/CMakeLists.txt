@@ -476,6 +476,85 @@ gbb_add_baseline_test(dmg_baseline_selftest_pass 0 "baseline status=pass"
   "-DGBB_LEDGER=${GBB_BASELINE_SELFTEST}/ledger.txt"
   "-DGBB_CHANGES=${GBB_BASELINE_DIR}/changes_empty.md")
 
+# One generated variant per failure category. Each differs from the committed synthetic fixtures by
+# exactly one fact, so the category it names is the only thing that can make the comparator fail.
+string(ASCII 9 GBB_TAB)
+set(GBB_PCM_OLD "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+set(GBB_PCM_NEW "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+set(GBB_BASELINE_ROW_TAIL "| synthetic reason | regression fixture (self-test only) | self-test |\n")
+
+function(gbb_baseline_variant name ledger observed changes)
+  file(WRITE "${GBB_BASELINE_DIR}/${name}.ledger.txt" "${ledger}")
+  file(WRITE "${GBB_BASELINE_DIR}/${name}.observed.txt" "${observed}")
+  file(WRITE "${GBB_BASELINE_DIR}/${name}.changes.md" "${changes}")
+endfunction()
+
+function(gbb_add_baseline_variant_test name code regex)
+  gbb_add_baseline_test(dmg_baseline_${name} ${code} "${regex}"
+    -DGBB_MODE=check
+    "-DGBB_OBSERVED=${GBB_BASELINE_DIR}/${name}.observed.txt"
+    "-DGBB_LEDGER=${GBB_BASELINE_DIR}/${name}.ledger.txt"
+    "-DGBB_CHANGES=${GBB_BASELINE_DIR}/${name}.changes.md")
+endfunction()
+
+set(GBB_OBS "${GBB_BASELINE_OBSERVED}")
+set(GBB_LED "${GBB_BASELINE_LEDGER}")
+set(GBB_CHG "${GBB_BASELINE_CHANGES_EMPTY}")
+string(REPLACE "${GBB_PCM_OLD}" "${GBB_PCM_NEW}" GBB_OBS_CHANGED "${GBB_OBS}")
+string(REPLACE "${GBB_PCM_OLD}" "${GBB_PCM_NEW}" GBB_LED_CHANGED "${GBB_LED}")
+
+# Observation drift: a digest changed, a ledger key vanished, an unknown key appeared, an inventory name left.
+gbb_baseline_variant(modified "${GBB_LED}" "${GBB_OBS_CHANGED}" "${GBB_CHG}")
+string(REPLACE "mooneye.daa.frame_generation${GBB_TAB}12\n" "" GBB_OBS_MISSING "${GBB_OBS}")
+gbb_baseline_variant(missing "${GBB_LED}" "${GBB_OBS_MISSING}" "${GBB_CHG}")
+gbb_baseline_variant(extra "${GBB_LED}" "${GBB_OBS}acceptance.libbet.unexpected${GBB_TAB}1\n" "${GBB_CHG}")
+string(REPLACE "inventory.core.beta_test${GBB_TAB}frozen\n" "" GBB_OBS_REMOVED "${GBB_OBS}")
+gbb_baseline_variant(inventory_removed "${GBB_LED}" "${GBB_OBS_REMOVED}" "${GBB_CHG}")
+
+# Approved-change protocol: the same ledger edit fails without a CHANGES row and passes with it.
+gbb_baseline_variant(changes_unrecorded "${GBB_LED_CHANGED}" "${GBB_OBS_CHANGED}" "${GBB_CHG}")
+gbb_baseline_variant(changes_recorded "${GBB_LED_CHANGED}" "${GBB_OBS_CHANGED}" "${GBB_BASELINE_CHANGES_ROW}")
+gbb_baseline_variant(changes_noop "${GBB_LED}" "${GBB_OBS}"
+  "${GBB_CHG}| acceptance.libbet.pcm_sha256 | ${GBB_PCM_OLD} | ${GBB_PCM_OLD} ${GBB_BASELINE_ROW_TAIL}")
+gbb_baseline_variant(changes_inconsistent "${GBB_LED}" "${GBB_OBS}"
+  "${GBB_CHG}| acceptance.libbet.pcm_sha256 | ${GBB_PCM_NEW} | ${GBB_PCM_NEW} ${GBB_BASELINE_ROW_TAIL}")
+
+# Ledger shape: ordering, duplicate key, empty ledger, empty section, empty observations, bad line, bad header.
+string(REPLACE
+  "inventory.core.alpha_test${GBB_TAB}frozen\ninventory.core.beta_test${GBB_TAB}frozen\n"
+  "inventory.core.beta_test${GBB_TAB}frozen\ninventory.core.alpha_test${GBB_TAB}frozen\n"
+  GBB_LED_UNSORTED "${GBB_LED}")
+gbb_baseline_variant(unsorted "${GBB_LED_UNSORTED}" "${GBB_OBS}" "${GBB_CHG}")
+string(REPLACE "bench.tracer.workload${GBB_TAB}original-wram-tracer-1m-half-dots-v1\n"
+  "bench.tracer.workload${GBB_TAB}original-wram-tracer-1m-half-dots-v1\nbench.tracer.workload${GBB_TAB}original-wram-tracer-1m-half-dots-v1\n"
+  GBB_LED_DUPLICATE "${GBB_LED}")
+gbb_baseline_variant(duplicate_key "${GBB_LED_DUPLICATE}" "${GBB_OBS}" "${GBB_CHG}")
+gbb_baseline_variant(empty "" "${GBB_OBS}" "${GBB_CHG}")
+string(REGEX REPLACE "mooneye[.][^${GBB_NL}]*${GBB_NL}" "" GBB_LED_NO_MOONEYE "${GBB_LED}")
+gbb_baseline_variant(empty_section "${GBB_LED_NO_MOONEYE}" "${GBB_OBS}" "${GBB_CHG}")
+gbb_baseline_variant(empty_observations "${GBB_LED}" "" "${GBB_CHG}")
+string(REPLACE "bench.tracer.workload${GBB_TAB}" "bench.tracer${GBB_TAB}workload${GBB_TAB}" GBB_LED_MALFORMED "${GBB_LED}")
+gbb_baseline_variant(malformed_line "${GBB_LED_MALFORMED}" "${GBB_OBS}" "${GBB_CHG}")
+string(REPLACE "0123456789abcdef0123456789abcdef01234567" "0123456789abcdef0123456789abcdef0123456"
+  GBB_LED_HEADER "${GBB_LED}")
+gbb_baseline_variant(header_invalid "${GBB_LED_HEADER}" "${GBB_OBS}" "${GBB_CHG}")
+
+gbb_add_baseline_variant_test(changes_recorded 0 "baseline status=pass")
+gbb_add_baseline_variant_test(modified 1 "acceptance=fail.*modified")
+gbb_add_baseline_variant_test(missing 1 "mooneye=fail.*missing")
+gbb_add_baseline_variant_test(extra 1 "acceptance=fail.*extra")
+gbb_add_baseline_variant_test(inventory_removed 1 "inventory=fail.*removed")
+gbb_add_baseline_variant_test(changes_unrecorded 1 "unrecorded-change")
+gbb_add_baseline_variant_test(unsorted 1 "unsorted-ledger")
+gbb_add_baseline_variant_test(duplicate_key 1 "duplicate-key")
+gbb_add_baseline_variant_test(empty 1 "empty-ledger")
+gbb_add_baseline_variant_test(changes_noop 1 "changes-noop")
+gbb_add_baseline_variant_test(changes_inconsistent 1 "changes-inconsistent")
+gbb_add_baseline_variant_test(empty_section 1 "empty-section")
+gbb_add_baseline_variant_test(empty_observations 1 "empty-observations")
+gbb_add_baseline_variant_test(malformed_line 1 "malformed-line")
+gbb_add_baseline_variant_test(header_invalid 1 "header-invalid")
+
 # include(), not add_subdirectory(): ExpectedTests.cmake reads this directory's TESTS property only.
 include(${CMAKE_CURRENT_LIST_DIR}/acceptance/CMakeLists.txt)
 
