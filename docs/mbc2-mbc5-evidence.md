@@ -18,8 +18,9 @@ battery-continuation ledger is [mbc1-evidence.md](mbc1-evidence.md).
 | CART-03 — MBC2 | `mbc2_tracer`, `mbc2_header_matrix`, `mbc2_register_decode`, `mbc2_ram_echo`, `mbc2_reset`, `mbc2_battery_image`, `mbc2_battery_import`, `mbc2_battery_idempotent`, `mbc2_battery_errors`, `mbc2_battery_no_battery`, `mbc2_two_instance_roundtrip`; Mooneye `mooneye_mbc_case_mbc2_bits_ramg`, `_bits_romb`, `_bits_unused`, `_ram`, `_rom_512kb`, `_rom_1Mb`, `_rom_2Mb` (7 of 7). | Synthetic ROMs plus author-attested upstream results; see the MBC2A caveat below. |
 
 The full inventory is [`tests/expected-tests.txt`](../tests/expected-tests.txt)
-(319 names at this revision, additions only for Phase 8). The player check for
-the unsupported-save status is `player_session_battery_unsupported` in
+(319 names at this revision, additions only for Phase 8). MBC2 and MBC5 battery
+saves are covered by the Phase 9 player envelope v2 tests (`player_session_v2_*`
+and `player_session_classification_drift`) in
 [`tests/player/expected-tests.txt`](../tests/player/expected-tests.txt).
 
 ## Mooneye emulator-only mbc2 and mbc5 derivatives
