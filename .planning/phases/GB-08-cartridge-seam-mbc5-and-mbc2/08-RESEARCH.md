@@ -755,24 +755,33 @@ Consequences:
 | A8 | `rgbfix` 1.0.1 accepts `-m 0x1E -r 4` identically to 1.0.4 | Pitfall P18 | Build the fixture with 1.0.1 and read back header bytes before committing |
 | A9 | The SDL3 player build is available locally | Environment | Player test runs on the macOS hosted lane only |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All seven were resolved at planning with the recommended option; each item names the plan that records the decision.
 
 1. **Fail-callback multiplicity in the runner oracle**
    - Known: D-26 keeps the oracle (pass needs the pass callback PC seen first; fail is six `$42` plus "the fail callback PC"). The table above shows 1 fail site for 11 ROMs, 2 for `mbc2_bits_romb`, 4 for `mbc2_bits_ramg`, 6 for `mbc2_ram`.
    - Unclear: whether the compiled row holds one fail PC (other fail sites report `unsupported`, exit 3, still not a pass) or a short bounded list.
    - Recommendation: a bounded array of up to 6 fail PCs per row (a few lines in `protocol_status`), so a real failure reports `status=fail` with the exact callback; keep `fail_callback_pc` as the field `test_runner.c` reads for the three parent rows.
+   - RESOLVED: bounded `fail_callback_pcs` array of up to 6 with a count; scalar kept for the parent rows (Plan 08-05).
 
 2. **Per-ROM budgets** are measured at admission after MBC5/MBC2 exist (D-26); record method, host and multiplier in `ELIGIBILITY.md`.
+   - RESOLVED: measured half-dots at LD B,B times 2, rounded up to the next 100000, recorded in ELIGIBILITY.md (Plans 08-05, 08-06).
 
 3. **GitHub auto-generated source archives** will include the sibling directory (about 17 MiB raw, about 33 KiB compressed). `export-ignore` in `.gitattributes` could exclude it but may interact with `.github/scripts/verify-release-source-proof.py` (no `export-ignore` is used anywhere today). Recommendation: do not add it in Phase 8; record the fact in `docs/` and revisit at the release boundary.
+   - RESOLVED: no `export-ignore` in Phase 8; the fact is documented (Plan 08-09).
 
 4. **Scan implementation language:** Python `-I` (copy of the libbet scan; needs `GBB_PYTHON` plumbing into `PreviewPackageSmoke.cmake`) versus CMake script (works unchanged inside `cmake -P`). Recommendation: CMake script, because both call sites are CMake and CMake 3.25 has every needed primitive. This is Claude's Discretion per CONTEXT.
+   - RESOLVED: CMake script hooked into `PreviewPackageSmoke.cmake` (Plan 08-07).
 
 5. **Sibling VerifyMooneye variant:** `cmake/VerifyMooneye.cmake` hard-codes categories `cpu`/`timer`, pins suite and builder revisions and requires `required_roms == eligible ROMs`. D-23 forbids changing it, so create `cmake/VerifyMooneyeMbc.cmake` as an adapted copy (categories `mbc2` count 7, `mbc5` count 8, parent-reference SHA checks for the patch, `font-source.c` and builder pin).
+   - RESOLVED: adapted copy `cmake/VerifyMooneyeMbc.cmake` (Plan 08-06).
 
 6. **Manifest-versus-compiled PC agreement test (D-26):** `test_runner.c` already includes `main.c`, so a C test can read `mbc_cases[]`; it then needs a tiny purpose-built extractor for `"result_pc"` strings in the sibling manifest (safe because the manifest is SHA-pinned). The alternative is a CMake regex over the `main.c` table text. Either satisfies D-26; pick one and keep the table one-row-per-line.
+   - RESOLVED: CMake regex in `VerifyMooneyeMbc.cmake` pc-table mode with a tamper control (Plan 08-06).
 
 7. **Whether `fixtures/mbc5-banking` is installed:** default not installed (D-33), leaving the D-32 allowed-directory list at `tracer`, `visible-demo`, `mbc1-continuation`.
+   - RESOLVED: not installed; allowed directories stay `tracer`, `visible-demo`, `mbc1-continuation` (Plans 08-07, 08-08).
 
 ## Validation Architecture
 

@@ -75,7 +75,7 @@ Delivered evidence:
 - **D-07:** Reset resets mapper registers only (ROM bank, RAM bank, enable, rumble line). It never touches cartridge RAM or `battery_generation`, matching the `gbb_reset` contract.
 
 ### B. Proof of no observable DMG change (CART-01)
-- **D-08:** The seam lands **first, as its own plan**. MBC5 and MBC2 plans then run in parallel. Their shared edits are type-table rows and enum values, and whichever merges second rebases.
+- **D-08:** The seam lands **first, as its own plan**. MBC5 and MBC2 plans then run in parallel. Their shared edits are type-table rows and enum values, and whichever merges second rebases. Amended at planning (2026-10-11): the MBC2 plan (08-02) and the MBC5 plan (08-03) run in sequence, MBC2 first, because both edit `src/core/gabbaboy.c`, `include/gabbaboy/gabbaboy.h`, `tests/CMakeLists.txt` and `tests/expected-tests.txt`, and the D-13 cross-mapper control needs a real MBC2; the seam-first rule is unchanged.
   - MBC5 owns the 8 MiB bound.
   - MBC2 owns the 512-byte built-in-RAM row.
 - **D-09:** The seam plan changes **only** `src/core/gabbaboy.c` (plus `.planning/`). `git diff --name-only main...HEAD -- tests fixtures cmake .github CMakeLists.txt` is empty for that plan. These must pass with identical output and no expectation edits:

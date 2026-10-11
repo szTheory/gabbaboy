@@ -4,16 +4,16 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: 8
 current_phase_name: Cartridge Seam, MBC5 and MBC2
-status: planning
+status: executing
 stopped_at: Phase 8 context gathered
-last_updated: "2026-10-11T12:26:19.921Z"
+last_updated: "2026-10-11T13:44:50.934Z"
 last_activity: 2026-10-11
 last_activity_desc: Phase GB-07 complete, transitioned to Phase 8
-state_head: 4953727439b924d340d70615a91083f830934070
+state_head: 3ab4031a6719bfeebdf3bae43bcccec68deddd09
 progress:
   total_phases: 9
   completed_phases: 2
-  total_plans: 17
+  total_plans: 27
   completed_plans: 17
   percent: 22
 ---
@@ -29,9 +29,9 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Phase: 8 — Cartridge Seam, MBC5 and MBC2
+Phase: 8 (Cartridge Seam, MBC5 and MBC2) — READY TO EXECUTE
 Plan: Not started
-Status: Ready to plan
+Status: Ready to execute
 Last activity: 2026-10-11 — Phase GB-07 complete, transitioned to Phase 8
 
 Progress (v0.2): [█░░░░░░░░░] 11% (1/9 phases)
@@ -263,9 +263,11 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 ## Session Continuity
 
 Last session: 2026-10-11T12:26:19.863Z
-Stopped at: Phase 8 context gathered
-Resume file: .planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-CONTEXT.md
-Next command in fresh context: `/gsd-plan-phase 8`
+Stopped at: Phase 8 planned
+Resume file: .planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-01-PLAN.md
+Next command in fresh context: `/gsd-execute-phase 8`
+
+Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, planning** (2026-10-11) on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. Research, pattern map, validation strategy and 10 plans in 9 waves: 08-01 seam (`gabbaboy.c` only, old-versus-new differential, draft PR); 08-02 MBC2; 08-03 MBC5 + 8 MiB bound + `gbb_rumble_state`; 08-04 player non-persistence and 08-05 Mooneye-mbc admission + runner in parallel; 08-06 sibling verifier and controls; 08-07 install/package scans, ninth-bit mutant, hosted leg; 08-08 original MBC5 banking fixture; 08-09 docs and decisions; 08-10 gates, PR ready and left open. Plan checker: 5 passes, final pass clean; requirements 3/3, decisions 34/34. D-08 amended at planning (sequencing only: MBC2 plan before MBC5 because both edit the same core, header and test inventory files). Phase 8 is not executed. Next phase step: **Phase 8 execution** via **`/gsd-execute-phase 8`**. Both auto-advance flags stay false; nothing advances automatically.
 
 Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, discussion** (2026-10-11) on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. [08-CONTEXT.md](phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-CONTEXT.md) locks D-01..D-34 from four parallel advisor researches with adversarial passes, auto-followed per the owner's standing instruction; no owner-only questions arose. Key choices: in-file cartridge seam landing first as a pure `gabbaboy.c` plan with a recorded old-versus-new differential; 8 MiB ceiling for MBC5 only, preserving every other loader return code; `gbb_rumble_state` + `GBB_NO_RUMBLE`; canonical MBC2 nibble image; player runs MBC2/MBC5 battery carts without persistence and says so (CART-06 stays Phase 9); Mooneye mbc2/mbc5 derivatives in sibling `fixtures/mooneye-mbc/` with proven install exclusion. Next step: **Phase 8 research and planning** via **`/gsd-plan-phase 8`**. Both auto-advance flags stay false; nothing advances automatically.
 Continuation note: [.continue-here.md](.continue-here.md)
@@ -292,5 +294,5 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Plan Phase 8 (Cartridge Seam, MBC5 and MBC2): `/gsd-plan-phase 8`
+- Execute Phase 8 (Cartridge Seam, MBC5 and MBC2): `/gsd-execute-phase 8`
 - Phase-stop rule: stop after each phase and yield; never auto-advance into the next phase or milestone.
