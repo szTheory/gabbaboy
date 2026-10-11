@@ -1,0 +1,47 @@
+{
+  "id": "original-mbc5-banking",
+  "source": "banking.asm",
+  "source_identity": "Original GabbaBoy project-authored assembly",
+  "source_sha256": "16bd7c162e5a2e24a8d615ecb684f22a3f3f98d1839bb8b4ccc03a68e2c9bbb6",
+  "license": "MIT; see LICENSE.txt and repository LICENSE",
+  "build": {
+    "assembler": "RGBDS",
+    "version": "1.0.1",
+    "archive": "rgbds-macos.zip",
+    "archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
+    "ci_archive": "rgbds-linux-x86_64.tar.xz",
+    "ci_archive_sha256": "80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9",
+    "recipe": "rgbasm -o <work>/banking.o fixtures/mbc5-banking/banking.asm && rgblink -o <work>/banking.gb <work>/banking.o && rgbfix -f hg -p 0 -m 0x1E -r 4 <work>/banking.gb"
+  },
+  "rom": "banking.gb",
+  "size_bytes": 65536,
+  "sha256": "0b852837522f45fc3486d69d6b406f956d7dcc0f08a0f0ee6e2a2c288cddffef",
+  "cartridge": {
+    "mapper": "MBC5",
+    "type": "0x1E (MBC5 + RAM + battery + rumble)",
+    "rom_size_code": "0x01 (64 KiB)",
+    "ram_size_code": "0x04 (128 KiB)"
+  },
+  "profile": {
+    "name": "DMG-CPU-B",
+    "boot": "Skipped; starts at cartridge entry 0x0100.",
+    "applicability": "Original software banking fixture for the deterministic bootless DMG-CPU-B profile; not physical hardware evidence."
+  },
+  "protocol": {
+    "markers": "WRAM C000=0xA5 is pass, C001=0xEE is fail; the guest then halts with interrupts disabled.",
+    "result_bytes": "C002 bank 0 in the upper window, C003 low-byte/high-bit write orders, C004 RAM banking, C005 bank 0x1FF. Each is 0x01 pass, 0xFF fail, 0x00 not run.",
+    "rumble_expectation": "On the committed 0x1E image the guest's only writes to 0x4000-0x5FFF are 0x00..0x07, 0x0F and 0x08. 0x0F reaches RAM bank 7 (bit 3 masked from banking) and turns the line on once; the test expects gbb_rumble_state on=1 with exactly 1 transition.",
+    "variant_1b": "The test patches header byte 0x147 to 0x1B in memory (checksum fixed): the same guest reaches RAM bank 15 of 128 KiB and gbb_rumble_state reports GBB_NO_RUMBLE.",
+    "variant_1ff": "The test inflates the image in memory to exactly 8 MiB, patches 0x148 to 0x08, stamps the harness-supplied marker 0x5A at 0x1FF * 0x4000 + 0x1000 (and the low byte 0x01..0x03 at banks 0x101..0x103 so the nine-bit write-order checks stay valid), and fixes the header checksum. Bank 0xFF stays zero. The marker is harness-supplied and not part of the committed ROM.",
+    "timeout_half_dots": 2000000
+  },
+  "evidence_class": "original software fixture plus synthetic oracle, not hardware evidence",
+  "scope_limits": [
+    "No boot-ROM execution",
+    "No physical DMG-CPU-B or MBC5 hardware observation",
+    "No physical rumble motor observation; the rumble line is observed only through gbb_rumble_state",
+    "No CGB behavior claim",
+    "The bank 0x1FF marker is harness-supplied; no committed original ROM exceeds 64 KiB",
+    "Not installed and not part of the install allowlist"
+  ]
+}

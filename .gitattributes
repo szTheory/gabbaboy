@@ -28,3 +28,9 @@ fixtures/mooneye-mbc/ELIGIBILITY.md text eol=lf
 # Parent references digested by the sibling Mooneye manifest must survive Windows checkouts byte for byte.
 fixtures/mooneye/headless-report.patch text eol=lf
 fixtures/mooneye/font-source.c text eol=lf
+
+# MBC5 banking guest: digested source and manifest keep LF; the ROM is binary.
+fixtures/mbc5-banking/banking.asm text eol=lf
+fixtures/mbc5-banking/manifest.json text eol=lf
+fixtures/mbc5-banking/LICENSE.txt text eol=lf
+fixtures/mbc5-banking/banking.gb -text

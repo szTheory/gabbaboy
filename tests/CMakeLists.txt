@@ -57,6 +57,10 @@ target_compile_features(test_mbc5_internal PRIVATE c_std_17)
 set_target_properties(test_mbc5_internal PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME mbc5_rumble_saturation COMMAND test_mbc5_internal mbc5_rumble_saturation)
 
+# Original banking guest (D-33): the committed 64 KiB ROM is run through the real CPU and bus.
+add_test(NAME mbc5_banking_guest
+  COMMAND test_mbc5 mbc5_banking_guest ${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb)
+
 add_executable(test_battery test_battery.c)
 target_link_libraries(test_battery PRIVATE GabbaBoy::core)
 target_compile_features(test_battery PRIVATE c_std_17)
@@ -251,6 +255,11 @@ add_test(NAME mbc1_continuation_fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DROM=${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/continuation.gb
     -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
+add_test(NAME mbc5_banking_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DROM=${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb
+    -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/manifest.json
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
 add_test(NAME mooneye_fixture_digest
   COMMAND ${CMAKE_COMMAND}

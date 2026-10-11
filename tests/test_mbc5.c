@@ -805,8 +805,144 @@ static int mbc5_reset_preserves_ram(void) {
     return 0;
 }
 
+/* ---- Original banking guest (fixtures/mbc5-banking), run through the real CPU and bus. ---- */
+
+#define BANKING_MAX_BYTES 65536u
+
+static uint8_t *read_banking_rom(const char *path, size_t *size) {
+    FILE *f = fopen(path, "rb");
+    if (f == NULL) return NULL;
+    uint8_t *rom = malloc(BANKING_MAX_BYTES + 1u);
+    if (rom == NULL) {
+        fclose(f);
+        return NULL;
+    }
+    *size = fread(rom, 1u, BANKING_MAX_BYTES + 1u, f);
+    fclose(f);
+    if (*size != BANKING_MAX_BYTES) { /* the committed guest is exactly 64 KiB */
+        free(rom);
+        return NULL;
+    }
+    return rom;
+}
+
+/* Run to the guest's final HALT, bounded by the manifest timeout (half dots). */
+static int run_banking_to_halt(gbb_instance *machine) {
+    const gbb_run_result run = gbb_run(machine, 2000000u, NULL, 0u);
+    return run.reason == GBB_STOP_HALTED_IDLE;
+}
+
+static int mbc5_banking_guest(const char *path) {
+    REQUIRE(path != NULL);
+    size_t size = 0u;
+    uint8_t *rom = read_banking_rom(path, &size);
+    REQUIRE(rom != NULL);
+    REQUIRE(rom[0x147u] == 0x1Eu && rom[0x148u] == 0x01u && rom[0x149u] == 0x04u);
+    gbb_instance *machine = new_machine();
+    REQUIRE(machine != NULL);
+    REQUIRE(gbb_load_rom(machine, rom, size) == GBB_OK);
+    REQUIRE(run_banking_to_halt(machine));
+    REQUIRE(gbb_peek_ram(machine, 0xC002u) == 0x01u); /* bank 0 in the upper window */
+    REQUIRE(gbb_peek_ram(machine, 0xC003u) == 0x01u); /* write orders */
+    REQUIRE(gbb_peek_ram(machine, 0xC004u) == 0x01u); /* RAM banking, bit 3 masked */
+    REQUIRE(gbb_peek_ram(machine, 0xC005u) == 0x00u); /* $1FF not run on 64 KiB */
+    REQUIRE(gbb_peek_ram(machine, 0xC001u) != 0xEEu);
+    REQUIRE(gbb_peek_ram(machine, 0xC000u) == 0xA5u);
+    /* The guest's only $4000-$5FFF writes are $00..$07 (line stays off), then $0F
+     * (bit 3 set: off to on, one transition), then $08 (still on, no change). */
+    uint8_t on = 0u;
+    uint64_t changes = 0u;
+    REQUIRE(gbb_rumble_state(machine, &on, &changes) == GBB_OK);
+    REQUIRE(on == 1u);
+    REQUIRE(changes == 1u);
+    gbb_destroy(machine);
+    free(rom);
+    return 0;
+}
+
+/* Same guest as a non-rumble $1B cartridge: all four RAM bank bits count, so
+ * $0F reaches RAM bank 15 of 128 KiB. Patched in memory only. */
+static int mbc5_banking_guest_1b(const char *path) {
+    REQUIRE(path != NULL);
+    size_t size = 0u;
+    uint8_t *rom = read_banking_rom(path, &size);
+    REQUIRE(rom != NULL);
+    rom[0x147u] = 0x1Bu;
+    fix_checksum(rom);
+    gbb_instance *machine = new_machine();
+    REQUIRE(machine != NULL);
+    REQUIRE(gbb_load_rom(machine, rom, size) == GBB_OK);
+    REQUIRE(run_banking_to_halt(machine));
+    REQUIRE(gbb_peek_ram(machine, 0xC004u) == 0x01u); /* bank 15 reached */
+    REQUIRE(gbb_peek_ram(machine, 0xC000u) == 0xA5u);
+    uint8_t on = 1u;
+    uint64_t changes = 7u;
+    REQUIRE(gbb_rumble_state(machine, &on, &changes) == GBB_NO_RUMBLE);
+    REQUIRE(on == 1u && changes == 7u); /* outputs untouched on error */
+    gbb_destroy(machine);
+    free(rom);
+    return 0;
+}
+
+#define BANK_1FF_BYTES ((size_t)8u * 1024u * 1024u)
+#define BANK_1FF_OFFSET ((size_t)0x1FFu * 0x4000u + 0x1000u)
+
+/* Inflate the guest to exactly 8 MiB in memory and run it. The marker at bank
+ * $1FF is harness-supplied (evidence class: synthetic oracle, not hardware).
+ * Banks $101..$103 carry their low byte so the nine-bit write-order checks of
+ * the guest stay valid on the larger image; bank $FF stays zero. */
+static int run_bank_1ff(const char *path, uint8_t marker, uint8_t *c000, uint8_t *c001,
+                        uint8_t results[4]) {
+    size_t size = 0u;
+    uint8_t *guest = read_banking_rom(path, &size);
+    if (guest == NULL) return 0;
+    uint8_t *rom = calloc(BANK_1FF_BYTES, 1u);
+    if (rom == NULL) {
+        free(guest);
+        return 0;
+    }
+    memcpy(rom, guest, size);
+    free(guest);
+    rom[0x148u] = 0x08u;
+    for (size_t bank = 0x101u; bank <= 0x103u; ++bank)
+        rom[bank * 0x4000u + 0x1000u] = (uint8_t)bank;
+    rom[BANK_1FF_OFFSET] = marker;
+    fix_checksum(rom);
+
+    int ok = 0;
+    gbb_instance *machine = new_machine();
+    if (machine != NULL && gbb_load_rom(machine, rom, BANK_1FF_BYTES) == GBB_OK
+        && run_banking_to_halt(machine)) {
+        *c000 = gbb_peek_ram(machine, 0xC000u);
+        *c001 = gbb_peek_ram(machine, 0xC001u);
+        for (uint16_t i = 0u; i < 4u; ++i) results[i] = gbb_peek_ram(machine, (uint16_t)(0xC002u + i));
+        ok = 1;
+    }
+    if (machine != NULL) gbb_destroy(machine);
+    free(rom);
+    return ok;
+}
+
+static int mbc5_bank_1ff(const char *path) {
+    REQUIRE(path != NULL);
+    uint8_t c000 = 0u, c001 = 0u, r[4] = {0};
+    REQUIRE(run_bank_1ff(path, 0x5Au, &c000, &c001, r));
+    /* Order matters: under a core that drops the ninth bank bit only C005 may fail. */
+    REQUIRE(r[0] == 0x01u && r[1] == 0x01u && r[2] == 0x01u); /* C002..C004 */
+    REQUIRE(r[3] == 0x01u);                                   /* C005: bank $1FF in both orders */
+    REQUIRE(c001 != 0xEEu);
+    REQUIRE(c000 == 0xA5u);
+    /* Negative control: a different marker must make the guest report failure. */
+    REQUIRE(run_bank_1ff(path, 0x00u, &c000, &c001, r));
+    REQUIRE(r[3] == 0xFFu);
+    REQUIRE(c001 == 0xEEu);
+    REQUIRE(c000 != 0xA5u);
+    return 0;
+}
+
 int main(int argc, char **argv) {
-    if (argc != 2) return 2;
+    if (argc < 2 || argc > 3) return 2;
+    const char *path = argc == 3 ? argv[2] : NULL;
     if (strcmp(argv[1], "mbc5_tracer") == 0) return mbc5_tracer();
     if (strcmp(argv[1], "mbc5_header_matrix") == 0) return mbc5_header_matrix();
     if (strcmp(argv[1], "mbc5_rom_banking") == 0) return mbc5_rom_banking();
@@ -821,5 +957,8 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "mbc5_rumble_errors") == 0) return mbc5_rumble_errors();
     if (strcmp(argv[1], "mbc5_rumble_reset_load") == 0) return mbc5_rumble_reset_load();
     if (strcmp(argv[1], "mbc5_reset_preserves_ram") == 0) return mbc5_reset_preserves_ram();
+    if (strcmp(argv[1], "mbc5_banking_guest") == 0) return mbc5_banking_guest(path);
+    if (strcmp(argv[1], "mbc5_banking_guest_1b") == 0) return mbc5_banking_guest_1b(path);
+    if (strcmp(argv[1], "mbc5_bank_1ff") == 0) return mbc5_bank_1ff(path);
     return 2;
 }
