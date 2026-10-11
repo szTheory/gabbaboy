@@ -33,7 +33,7 @@ add_executable(test_mbc2 test_mbc2.c)
 target_link_libraries(test_mbc2 PRIVATE GabbaBoy::core)
 target_compile_features(test_mbc2 PRIVATE c_std_17)
 set_target_properties(test_mbc2 PROPERTIES C_EXTENSIONS OFF)
-foreach(case tracer)
+foreach(case tracer header_matrix register_decode ram_echo reset)
   add_test(NAME mbc2_${case} COMMAND test_mbc2 mbc2_${case})
 endforeach()
 

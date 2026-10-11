@@ -14,6 +14,10 @@ battery_lifecycle
 battery_instances
 battery_api_fuzz
 mbc2_tracer
+mbc2_header_matrix
+mbc2_register_decode
+mbc2_ram_echo
+mbc2_reset
 run_bounds
 trace_capacity
 illegal_lockup_api
