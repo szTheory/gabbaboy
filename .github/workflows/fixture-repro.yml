@@ -211,3 +211,77 @@ jobs:
             ${{ runner.temp }}/mooneye-mbc-evidence
           if-no-files-found: warn
           retention-days: 30
+
+  magentests-repro:
+    name: magentests-repro
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Download pinned RGBDS v0.6.1 release
+        shell: bash
+        run: |
+          archive=rgbds-0.6.1-linux-x86_64.tar.xz
+          digest=$(sed -nE "s/^$archive sha256 ([0-9a-f]{64})\$/\1/p" fixtures/magentests/SOURCES.md)
+          [[ -n "$digest" ]]
+          release_dir="$RUNNER_TEMP/rgbds-0.6.1"
+          mkdir -p "$release_dir"
+          curl --fail --location --silent --show-error \
+            "https://github.com/gbdev/rgbds/releases/download/v0.6.1/$archive" \
+            -o "$release_dir/$archive"
+          printf '%s  %s\n' "$digest" "$release_dir/$archive" | sha256sum --check --status
+          tar -xJf "$release_dir/$archive" -C "$release_dir"
+          echo "$release_dir" >> "$GITHUB_PATH"
+      - name: Rebuild the MagenTests ROMs and compare them with the committed bytes
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/magentests-evidence"
+          bash tests/scripts/reproduce-magentests.sh --compare | tee "$RUNNER_TEMP/magentests-evidence/result.txt"
+      - name: Retain MagenTests rebuild result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: magentests-repro-result
+          path: ${{ runner.temp }}/magentests-evidence/result.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+  rtc3test-repro:
+    name: rtc3test-repro
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install RGBDS build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bison flex libpng-dev pkg-config
+      - name: Build pinned RGBDS v0.4.2 from source
+        shell: bash
+        run: |
+          rgbds_commit=ede982b50a68a6253ffbab17dc4184710b08032f
+          src="$RUNNER_TEMP/rgbds-src"
+          bin_dir="$RUNNER_TEMP/rgbds-0.4.2-bin"
+          git init -q "$src"
+          git -C "$src" fetch -q --depth 1 https://github.com/gbdev/rgbds.git "$rgbds_commit"
+          git -C "$src" checkout -q FETCH_HEAD
+          [[ "$(git -C "$src" rev-parse HEAD)" == "$rgbds_commit" ]]
+          make -C "$src" -j"$(nproc)"
+          mkdir -p "$bin_dir"
+          cp "$src/rgbasm" "$src/rgblink" "$src/rgbfix" "$bin_dir/"
+          echo "$bin_dir" >> "$GITHUB_PATH"
+      - name: Rebuild rtc3test and compare it with the committed ROM
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/rtc3test-evidence"
+          bash tests/scripts/reproduce-rtc3test.sh --compare | tee "$RUNNER_TEMP/rtc3test-evidence/result.txt"
+      - name: Retain rtc3test rebuild result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rtc3test-repro-result
+          path: ${{ runner.temp }}/rtc3test-evidence/result.txt
+          if-no-files-found: warn
+          retention-days: 30
