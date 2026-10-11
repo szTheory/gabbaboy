@@ -30,7 +30,7 @@ total: 5
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| WR-01 | warning | fixed | 1620c99, 47a1d4c and a57879c (Windows link resolution): file links are followed and their targets scanned; new `mooneye_mbc_not_installed_link_selftest` fails on the old script's bypass; player package scan still clean (files=14) |
+| WR-01 | warning | fixed | 1620c99, 47a1d4c, a57879c and e85c1b3 (Windows link resolution): file links are followed and their targets scanned; new `mooneye_mbc_not_installed_link_selftest` fails on the old script's bypass; player package scan still clean (files=14) |
 | WR-02 | warning | deferred | Phase 9 (CART-06) replaces the $06/$1B/$1E unsupported list when MBC2/MBC5 persistence lands; add the every-type-byte classification test there. Today's list matches every battery type the core admits |
 | IN-01 | info | fixed | 1620c99: manifest digests lowercased before comparison |
 | IN-02 | info | skipped | Readability only; no behaviour change, and the core table columns are frozen by the Phase 8 seam decisions |
