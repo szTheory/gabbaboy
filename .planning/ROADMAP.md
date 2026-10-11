@@ -170,13 +170,13 @@ Plans:
 
 **Rights gates**: G1 (mgblib font) gates Mealybug `mbc3_rtc` as required evidence; G3 (gbclock plugin licences) keeps gbclock out — rtc3test and original fixtures are primary.
 **Research**: DEEP (write-while-running, rollover, sub-second prescaler reset on seconds write, day carry, halt).
-**Plans**: 2/18 plans executed
+**Plans**: 3/18 plans executed
 
 Plans:
 **Wave 1**
 - [x] 09-01-PLAN.md — Tracer: MBC3 mapper rows, decode and MBC30 variant with the synthetic-image mbc3_* matrix
 - [x] 09-02-PLAN.md — MagenTests admission (rights, digests, provenance, RGBDS 0.6.1 CI pin) and the shared manifest digest check
-- [ ] 09-03-PLAN.md — Fuzz synthesised-length mode on the 8 MiB bound with ten pinned length-class seeds
+- [x] 09-03-PLAN.md — Fuzz synthesised-length mode on the 8 MiB bound with ten pinned length-class seeds
 - [ ] 09-04-PLAN.md — v0.1 save corpus generated once by the v0.1.2 writer, with an offline check
 - [ ] 09-05-PLAN.md — Original MBC3+RTC continuation guest with a byte-identical rebuild
 - [ ] 09-06-PLAN.md — Original MBC2 continuation guest with a byte-identical rebuild
@@ -298,7 +298,7 @@ Plans:
 | 1–6, 06.1 | v0.1 | 64/64 | Complete | 2026-10-10 |
 | 7. DMG Game Acceptance and Regression Baseline | v0.2 | 17/17 | Complete    | 2026-10-11 |
 | 8. Cartridge Seam, MBC5 and MBC2 | v0.2 | 10/10 | Complete    | 2026-10-11 |
-| 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 2/18 | In Progress | - |
+| 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 3/18 | In Progress | - |
 | 10. CGB Profile, Banking and Register Visibility | v0.2 | 0/TBD | Not started | - |
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 0/TBD | Not started | - |
 | 12. CGB Double Speed | v0.2 | 0/TBD | Not started | - |
