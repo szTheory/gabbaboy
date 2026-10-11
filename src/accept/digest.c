@@ -68,6 +68,7 @@ int gbb_accept_write_ppm(const char *path, const uint8_t *shades, size_t pitch) 
         failed = fwrite(rgb, 1, sizeof(rgb), file) != sizeof(rgb);
     }
     if (fclose(file) != 0) failed = 1;
+    if (failed) remove(path); /* never leave a short image behind */
     return failed ? 3 : 0;
 }
 

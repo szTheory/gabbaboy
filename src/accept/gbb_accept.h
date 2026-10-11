@@ -212,7 +212,7 @@ int gbb_accept_rgb_digest(const uint8_t *shades, size_t pitch, char out_hex[65])
 int gbb_accept_rgb_digest_bin(const uint8_t *shades, size_t pitch, uint8_t out[32]);
 /* Writes a binary P6 PPM of the same pixels with fopen "wb". Returns 0 on
  * success, nonzero when a shade is above 3 (nothing is created) or any open,
- * write or close fails. */
+ * write or close fails; a failed write or close removes the partial file. */
 int gbb_accept_write_ppm(const char *path, const uint8_t *shades, size_t pitch);
 /* Number of distinct shades (0..4) present in the frame, or 0 for an invalid shade. */
 unsigned gbb_accept_frame_distinct_shades(const uint8_t *shades, size_t pitch);
