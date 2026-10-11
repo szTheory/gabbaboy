@@ -134,6 +134,34 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       COMMAND test_player_reset_transition)
     set_tests_properties(player_reset_transition PROPERTIES
       ENVIRONMENT "SDL_AUDIO_DRIVER=dummy")
+  elseif(test_name MATCHES "^player_script_smoke_surface(_selftest)?$")
+    # D-38: the scripted-smoke diagnostic stays free of environment, network, save writes
+    # and persistence. The selftest runs the same check on a copy with an injected getenv
+    # call and must fail, so the guard is proven able to catch the thing it forbids.
+    set(smoke_surface_script
+      "${PROJECT_SOURCE_DIR}/tests/player/verify_script_smoke_surface.cmake")
+    set(smoke_surface_args
+      -DGBB_SMOKE_H=${PROJECT_SOURCE_DIR}/src/player/script_smoke.h
+      -DGBB_PLAYER_MAIN=${PROJECT_SOURCE_DIR}/src/player/main.c)
+    if(test_name STREQUAL "player_script_smoke_surface")
+      add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+        -DGBB_SMOKE_C=${PROJECT_SOURCE_DIR}/src/player/script_smoke.c
+        ${smoke_surface_args} -P "${smoke_surface_script}")
+    else()
+      set(injected_smoke_c
+        "${CMAKE_CURRENT_BINARY_DIR}/script_smoke_injected_getenv.c")
+      file(READ "${PROJECT_SOURCE_DIR}/src/player/script_smoke.c" real_smoke_c)
+      file(WRITE "${injected_smoke_c}"
+        "${real_smoke_c}\nstatic const char *gbb_selftest_injected(void) { return getenv(\"GBB_SCRIPT_SELFTEST\"); }\n")
+      set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+        "${PROJECT_SOURCE_DIR}/src/player/script_smoke.c")
+      add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+        -DGBB_CMD=${CMAKE_COMMAND}$<SEMICOLON>-DGBB_SMOKE_C=${injected_smoke_c}$<SEMICOLON>-DGBB_SMOKE_H=${PROJECT_SOURCE_DIR}/src/player/script_smoke.h$<SEMICOLON>-DGBB_PLAYER_MAIN=${PROJECT_SOURCE_DIR}/src/player/main.c$<SEMICOLON>-P$<SEMICOLON>${smoke_surface_script}
+        -DGBB_EXPECT_CODE=1
+        "-DGBB_EXPECT_REGEX=script-smoke-surface: getenv"
+        -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+    endif()
+    set_tests_properties(${test_name} PROPERTIES TIMEOUT 30)
   elseif(test_name STREQUAL "player_limitations")
     if(NOT TARGET test_player_limitations)
       add_executable(test_player_limitations test_limitations.c)

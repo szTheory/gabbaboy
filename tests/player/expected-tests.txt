@@ -51,3 +51,5 @@ player_audio_unavailable
 player_smoke
 player_reset_transition
 player_verified_output_directory
+player_script_smoke_surface
+player_script_smoke_surface_selftest
