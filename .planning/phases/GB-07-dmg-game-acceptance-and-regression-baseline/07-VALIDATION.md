@@ -2,10 +2,10 @@
 phase: "7"
 slug: "dmg-game-acceptance-and-regression-baseline"
 # status lifecycle: draft (seeded by plan-phase) → validated (set by validate-phase §6)
-# audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: false) (#2117)
-status: draft
+# audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: true) (#2117)
+status: validated
 nyquist_compliant: false
-wave_0_complete: false
+wave_0_complete: true
 created: "2026-10-10"
 ---
 
@@ -43,19 +43,19 @@ Requirement-level map; task IDs are bound by the plans' `<verify>` blocks.
 
 | Requirement | Behavior | Test Type | Automated Command | File Exists | Status |
 |-------------|----------|-----------|-------------------|-------------|--------|
-| GAME-01 | Admission passes; each mutated manifest fails with a distinct message | python + CTest | `ctest --test-dir build -R 'libbet_(admission\|not_installed\|install_tree)'` (07-01) | ❌ W0 | ⬜ pending |
-| GAME-01 | Licence text and notices row present | CTest | `ctest --test-dir build -R libbet_notice` (07-01) | ❌ W0 | ⬜ pending |
-| GAME-02 | Scripted input reaches predicate with frame + PCM digests | CTest runner | `ctest --test-dir build -R 'acceptance_(lib_)?libbet'` (07-02, 07-05, 07-07) | ❌ W0 | ⬜ pending |
-| GAME-02 | N1/N2/N3 controls and core mutant fail the gate | CTest + exit wrapper | `ctest --test-dir build -R 'acceptance_(core_mutant\|libbet_drop_start\|suite)'` (07-10) | ❌ W0 | ⬜ pending |
-| GAME-02 | Predicate truth table and ROM anchor bytes | C unit | `ctest --test-dir build -R acceptance_predicate_` (07-02) | ❌ W0 | ⬜ pending |
-| EVID-01 | Case/script parser boundaries and negative files | C unit | `ctest --test-dir build -R 'acceptance_(parse_\|negative_)'` (07-02, 07-06) | ❌ W0 | ⬜ pending |
-| EVID-01 | Applicability: unsupported-model exit 4, target-revision exclusion | CTest + exit wrapper | `ctest --test-dir build -R 'acceptance_(suite_\|target_revision\|unknown_model\|unexpected_pass\|libbet_excluded)'` (07-08) | ❌ W0 | ⬜ pending |
-| EVID-01 | RGB digest equals independent Python vector; PPM only on failure | C unit + python | `ctest --test-dir build -R 'acceptance_(digest_vectors\|failure_dir)'` (07-07) | ❌ W0 | ⬜ pending |
-| EVID-01 | `LD B,B` frame capture / `not-ready` reporting | CTest | `ctest --test-dir build -R acceptance_ldbb_` (07-09) | ❌ W0 | ⬜ pending |
-| GAME-03 | Packaged player scripted smoke; PCM digest equals headless | package script (macOS) | `bash tests/scripts/verify-phase3-player.sh --build-package` (07-12, 07-14) | extend | ⬜ pending |
-| GAME-03 | Session-level negative controls | player CTest | `ctest --test-dir build -R 'player_(session_script\|script_smoke_surface)'` (07-14) | ❌ W0 | ⬜ pending |
-| EVID-02 | Ledger byte-identity on Linux/macOS/Windows; frozen inventory superset | cmake script | `ctest --test-dir build -R dmg_baseline` (07-13, 07-15) | ❌ W0 | ⬜ pending |
-| EVID-02 | Checker self-tests (modified/missing/extra/removed) fail | cmake script | `ctest --test-dir build -R 'dmg_baseline_(modified\|missing\|extra\|inventory\|changes\|empty\|header\|junit)'` (07-13) | ❌ W0 | ⬜ pending |
+| GAME-01 | Admission passes; each mutated manifest fails with a distinct message | python + CTest | `ctest --test-dir build -R 'libbet_(admission\|not_installed\|install_tree)'` (07-01) | ✅ | ✅ green |
+| GAME-01 | Licence text and notices row present | CTest | `ctest --test-dir build -R libbet_notice` (07-01) | ✅ | ✅ green |
+| GAME-02 | Scripted input reaches predicate with frame + PCM digests | CTest runner | `ctest --test-dir build -R 'acceptance_(lib_)?libbet'` (07-02, 07-05, 07-07) | ✅ | ✅ green |
+| GAME-02 | N1/N2/N3 controls and core mutant fail the gate | CTest + exit wrapper | `ctest --test-dir build -R 'acceptance_(core_mutant\|libbet_drop_start\|suite)'` (07-10) | ✅ | ✅ green |
+| GAME-02 | Predicate truth table and ROM anchor bytes | C unit | `ctest --test-dir build -R acceptance_predicate_` (07-02) | ✅ | ✅ green |
+| EVID-01 | Case/script parser boundaries and negative files | C unit | `ctest --test-dir build -R 'acceptance_(parse_\|negative_)'` (07-02, 07-06) | ✅ | ✅ green |
+| EVID-01 | Applicability: unsupported-model exit 4, target-revision exclusion | CTest + exit wrapper | `ctest --test-dir build -R 'acceptance_(suite_\|target_revision\|unknown_model\|unexpected_pass\|libbet_excluded)'` (07-08) | ✅ | ✅ green |
+| EVID-01 | RGB digest equals independent Python vector; PPM only on failure | C unit + python | `ctest --test-dir build -R 'acceptance_(digest_vectors\|failure_dir)'` (07-07) | ✅ | ✅ green |
+| EVID-01 | `LD B,B` frame capture / `not-ready` reporting | CTest | `ctest --test-dir build -R acceptance_ldbb_` (07-09) | ✅ | ✅ green |
+| GAME-03 | Packaged player scripted smoke; PCM digest equals headless | package script (macOS) | `bash tests/scripts/verify-phase3-player.sh --build-package` (07-12, 07-14) | ✅ | ✅ green |
+| GAME-03 | Session-level negative controls | player CTest | `ctest --test-dir build -R 'player_(session_script\|script_smoke_surface)'` (07-14) | ✅ | ✅ green |
+| EVID-02 | Ledger byte-identity on Linux/macOS/Windows; frozen inventory superset | cmake script | `ctest --test-dir build -R dmg_baseline` (07-13, 07-15) | ✅ | ✅ green |
+| EVID-02 | Checker self-tests (modified/missing/extra/removed) fail | cmake script | `ctest --test-dir build -R 'dmg_baseline_(modified\|missing\|extra\|inventory\|changes\|empty\|header\|junit)'` (07-13) | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -63,11 +63,11 @@ Requirement-level map; task IDs are bound by the plans' `<verify>` blocks.
 
 ## Wave 0 Requirements
 
-- [ ] `tests/acceptance/CMakeLists.txt` and the new test executables/scripts above
-- [ ] `tests/expect_exit.cmake` — exact exit-code wrapper
-- [ ] Windows CI spike: `find_package(Python3)` and `cmake -P` comparison on `windows-2022`
-- [ ] Independent Python hashlib RGB-digest vector for a synthetic frame (D-26)
-- [ ] PCM threshold calibration record from the first CI run
+- [x] `tests/acceptance/CMakeLists.txt` and the new test executables/scripts above
+- [x] `tests/expect_exit.cmake` — exact exit-code wrapper
+- [x] Windows CI spike: `find_package(Python3)` and `cmake -P` comparison on `windows-2022`
+- [x] Independent Python hashlib RGB-digest vector for a synthetic frame (D-26)
+- [x] PCM threshold calibration record from the first CI run
 
 ---
 
@@ -79,11 +79,19 @@ All phase behaviors have automated verification. One-time recorded inspection of
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 30s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-10-10 — every requirement row maps to registered tests that pass locally (258/258 core CTest at 30a539b) and in exact-head CI run 38108289289 (all eight jobs, including player tests on macos-player-package). Player rows run in the player build, not the core preset.
+
+## Validation Audit 2026-10-11
+
+| Metric | Count |
+|---|---|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
