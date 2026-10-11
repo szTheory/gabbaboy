@@ -255,3 +255,4 @@ dmg_baseline_junit_pass
 dmg_baseline_junit_missing
 dmg_baseline_junit_skipped
 dmg_baseline_junit_failed
+dmg_baseline

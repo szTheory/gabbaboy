@@ -582,6 +582,19 @@ gbb_add_baseline_junit_test(junit_missing 1 "junit-missing" "${GBB_BASELINE_DIR}
 gbb_add_baseline_junit_test(junit_skipped 1 "junit-skipped" "${GBB_BASELINE_DIR}/junit_skipped.xml")
 gbb_add_baseline_junit_test(junit_failed 1 "junit-failed" "${GBB_BASELINE_DIR}/junit_failed.xml")
 
+# The live EVID-02 check (D-31, D-33): recomputes every observation from this build and compares it
+# with the frozen tests/baseline/dmg-cpu-b-v1.txt. One ledger serves every OS, so the same test and
+# the same expected line run on Linux, macOS and Windows.
+add_test(NAME dmg_baseline
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_MODE=check
+    -DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR}
+    -DGBB_RUNNER=$<TARGET_FILE:gabbaboy-runner>
+    -DGBB_MEASURE=$<TARGET_FILE:measure_core>
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyDmgBaseline.cmake)
+set_tests_properties(dmg_baseline PROPERTIES TIMEOUT 300
+  PASS_REGULAR_EXPRESSION "baseline status=pass")
+
 # include(), not add_subdirectory(): ExpectedTests.cmake reads this directory's TESTS property only.
 include(${CMAKE_CURRENT_LIST_DIR}/acceptance/CMakeLists.txt)
 
