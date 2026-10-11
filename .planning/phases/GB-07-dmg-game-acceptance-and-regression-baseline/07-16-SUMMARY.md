@@ -113,7 +113,7 @@ completed: 2026-10-11
 2. **Task 2: decision and lesson records** - `23c0ffd` (docs)
 3. **Task 3: privacy check, CI read, triage, handoff** - no tracked code change; handoff files are in the plan metadata commits below.
 
-**Plan metadata:** see the handoff section.
+**Plan metadata:** `4d7c06a` (summary), `baa0958` (handoff: STATE, ROADMAP, REQUIREMENTS, .continue-here).
 
 ## Privacy check
 
@@ -157,7 +157,9 @@ None. No new network, auth, file-access or schema surface; documentation and pla
 
 ## Handoff heads
 
-<!-- gsd:handoff-heads -->
+- **Handoff head** `baa09585275a665f90d27346b8acc7279cb7283f` (STATE.md, .continue-here.md, ROADMAP.md, REQUIREMENTS.md, state.json and this SUMMARY; planning files only), run 38107525049 (https://github.com/szTheory/gabbaboy/actions/runs/38107525049), attempt 1, `wait-exact-head-ci.py` PASS. Per-job conclusions: native-linux-x64 success, native-macos-arm64 success, native-windows-x64 success, linux-asan-ubsan success, cmake-floor-3.25.3 success, player-gate success, macos-player-package success, required-native success.
+- The commit that adds this addendum is a further docs-only head; its run is reported in the completion message and the PR body, not here, to avoid another head.
+- Requirements GAME-01..03 and EVID-01..02 were marked complete in REQUIREMENTS.md by the close-out command; Phase 7 verification (`/gsd-verify-work 7`) has not run and remains the gate.
 
 ## Self-Check: PASSED
 
