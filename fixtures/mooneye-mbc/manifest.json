@@ -113,7 +113,7 @@
         "0x02c1"
       ],
       "evidence_class": "Author-attested hardware results upstream (flash cartridge with a genuine MBC5 or MBC2A chip) executed here on the bootless DMG-CPU-B profile; no model-specific claim, no CGB claim, never game compatibility.",
-      "budget_half_dots": 4000000000,
+      "budget_half_dots": 97200000,
       "build_recipe": [
         "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
         "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
@@ -180,7 +180,7 @@
         "0x01f8"
       ],
       "evidence_class": "Author-attested hardware results upstream (flash cartridge with a genuine MBC5 or MBC2A chip) executed here on the bootless DMG-CPU-B profile; no model-specific claim, no CGB claim, never game compatibility.",
-      "budget_half_dots": 4000000000,
+      "budget_half_dots": 49600000,
       "build_recipe": [
         "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
         "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
@@ -246,7 +246,7 @@
         "0x01cc"
       ],
       "evidence_class": "Author-attested hardware results upstream (flash cartridge with a genuine MBC5 or MBC2A chip) executed here on the bootless DMG-CPU-B profile; no model-specific claim, no CGB claim, never game compatibility.",
-      "budget_half_dots": 4000000000,
+      "budget_half_dots": 46200000,
       "build_recipe": [
         "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
         "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
@@ -317,7 +317,7 @@
         "0x079d"
       ],
       "evidence_class": "Author-attested hardware results upstream (flash cartridge with a genuine MBC5 or MBC2A chip) executed here on the bootless DMG-CPU-B profile; no model-specific claim, no CGB claim, never game compatibility.",
-      "budget_half_dots": 4000000000,
+      "budget_half_dots": 5300000,
       "build_recipe": [
         "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
         "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
@@ -384,7 +384,7 @@
         "0x0175"
       ],
       "evidence_class": "Author-attested hardware results upstream (flash cartridge with a genuine MBC5 or MBC2A chip) executed here on the bootless DMG-CPU-B profile; no model-specific claim, no CGB claim, never game compatibility.",
-      "budget_half_dots": 4000000000,
+      "budget_half_dots": 100000,
       "build_recipe": [
         "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
         "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
@@ -451,7 +451,7 @@
         "0x0175"
       ],
       "evidence_class": "Author-attested hardware results upstream (flash cartridge with a genuine MBC5 or MBC2A chip) executed here on the bootless DMG-CPU-B profile; no model-specific claim, no CGB claim, never game compatibility.",
-      "budget_half_dots": 4000000000,
+      "budget_half_dots": 100000,
       "build_recipe": [
         "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
         "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
@@ -518,7 +518,7 @@
         "0x0175"
       ],
       "evidence_class": "Author-attested hardware results upstream (flash cartridge with a genuine MBC5 or MBC2A chip) executed here on the bootless DMG-CPU-B profile; no model-specific claim, no CGB claim, never game compatibility.",
-      "budget_half_dots": 4000000000,
+      "budget_half_dots": 100000,
       "build_recipe": [
         "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
         "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
@@ -585,7 +585,7 @@
         "0x0175"
       ],
       "evidence_class": "Author-attested hardware results upstream (flash cartridge with a genuine MBC5 or MBC2A chip) executed here on the bootless DMG-CPU-B profile; no model-specific claim, no CGB claim, never game compatibility.",
-      "budget_half_dots": 4000000000,
+      "budget_half_dots": 900000,
       "build_recipe": [
         "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
         "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
@@ -652,7 +652,7 @@
         "0x0175"
       ],
       "evidence_class": "Author-attested hardware results upstream (flash cartridge with a genuine MBC5 or MBC2A chip) executed here on the bootless DMG-CPU-B profile; no model-specific claim, no CGB claim, never game compatibility.",
-      "budget_half_dots": 4000000000,
+      "budget_half_dots": 900000,
       "build_recipe": [
         "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
         "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
@@ -719,7 +719,7 @@
         "0x0175"
       ],
       "evidence_class": "Author-attested hardware results upstream (flash cartridge with a genuine MBC5 or MBC2A chip) executed here on the bootless DMG-CPU-B profile; no model-specific claim, no CGB claim, never game compatibility.",
-      "budget_half_dots": 4000000000,
+      "budget_half_dots": 900000,
       "build_recipe": [
         "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
         "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
@@ -786,7 +786,7 @@
         "0x0175"
       ],
       "evidence_class": "Author-attested hardware results upstream (flash cartridge with a genuine MBC5 or MBC2A chip) executed here on the bootless DMG-CPU-B profile; no model-specific claim, no CGB claim, never game compatibility.",
-      "budget_half_dots": 4000000000,
+      "budget_half_dots": 900000,
       "build_recipe": [
         "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
         "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
@@ -853,7 +853,7 @@
         "0x0175"
       ],
       "evidence_class": "Author-attested hardware results upstream (flash cartridge with a genuine MBC5 or MBC2A chip) executed here on the bootless DMG-CPU-B profile; no model-specific claim, no CGB claim, never game compatibility.",
-      "budget_half_dots": 4000000000,
+      "budget_half_dots": 900000,
       "build_recipe": [
         "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
         "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
@@ -920,7 +920,7 @@
         "0x0175"
       ],
       "evidence_class": "Author-attested hardware results upstream (flash cartridge with a genuine MBC5 or MBC2A chip) executed here on the bootless DMG-CPU-B profile; no model-specific claim, no CGB claim, never game compatibility.",
-      "budget_half_dots": 4000000000,
+      "budget_half_dots": 900000,
       "build_recipe": [
         "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
         "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
@@ -987,7 +987,7 @@
         "0x0175"
       ],
       "evidence_class": "Author-attested hardware results upstream (flash cartridge with a genuine MBC5 or MBC2A chip) executed here on the bootless DMG-CPU-B profile; no model-specific claim, no CGB claim, never game compatibility.",
-      "budget_half_dots": 4000000000,
+      "budget_half_dots": 900000,
       "build_recipe": [
         "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
         "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
@@ -1054,7 +1054,7 @@
         "0x0175"
       ],
       "evidence_class": "Author-attested hardware results upstream (flash cartridge with a genuine MBC5 or MBC2A chip) executed here on the bootless DMG-CPU-B profile; no model-specific claim, no CGB claim, never game compatibility.",
-      "budget_half_dots": 4000000000,
+      "budget_half_dots": 900000,
       "build_recipe": [
         "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
         "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
