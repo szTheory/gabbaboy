@@ -45,7 +45,7 @@ int player_script_smoke_prepare(player_script_smoke *smoke, const char *rom_path
     char detail[160];
     if (read_bounded(script_path, GBB_ACCEPT_SCRIPT_MAX_BYTES, &script_bytes, &script_length,
                      detail, sizeof(detail)) != 0) {
-        snprintf(err, err_capacity, "input script: %s", detail);
+        if (err != NULL && err_capacity > 0u) snprintf(err, err_capacity, "input script: %s", detail);
         return 1;
     }
     const int parsed = gbb_accept_script_parse(script_bytes, script_length, &smoke->script,
@@ -57,7 +57,7 @@ int player_script_smoke_prepare(player_script_smoke *smoke, const char *rom_path
     }
     if (read_bounded(rom_path, PLAYER_SCRIPT_SMOKE_ROM_LIMIT, &smoke->rom, &smoke->rom_length,
                      detail, sizeof(detail)) != 0) {
-        snprintf(err, err_capacity, "rom: %s", detail);
+        if (err != NULL && err_capacity > 0u) snprintf(err, err_capacity, "rom: %s", detail);
         player_script_smoke_release(smoke);
         return 1;
     }
