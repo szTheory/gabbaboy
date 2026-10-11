@@ -5,16 +5,16 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 8
 current_phase_name: Cartridge Seam, MBC5 and MBC2
 status: executing
-stopped_at: "Completed 08-07-PLAN.md (partial: ninth-bit mutant blocked); next 08-08"
-last_updated: "2026-10-11T16:16:22.749Z"
+stopped_at: Completed 08-08-PLAN.md; next 08-09 (docs and decisions)
+last_updated: "2026-10-11T16:25:24.804Z"
 last_activity: 2026-10-11
 last_activity_desc: Phase 8 execution started
-state_head: 8f4cfff5f89402c9b0beb03ff90af9cffabc70d5
+state_head: ac80c48c7e18e99c7690507c379375a613051988
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 27
-  completed_plans: 24
+  completed_plans: 25
   percent: 22
 ---
 
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 ## Current Position
 
 Phase: 8 (Cartridge Seam, MBC5 and MBC2) — EXECUTING
-Plan: 8 of 10
+Plan: 9 of 10
 Status: Ready to execute
 Last activity: 2026-10-11 — Phase 8 execution started
 
@@ -127,6 +127,7 @@ Progress (v0.2): [█░░░░░░░░░] 11% (1/9 phases)
 | Phase 08 P05 | 40 min | 2 tasks | 24 files |
 | Phase 08 P06 | 30 min | 3 tasks | 7 files |
 | Phase 08 P07 | 150 min | 2 tasks | 7 files |
+| Phase 08 P08-08 | 25 min | 4 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -240,6 +241,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-08]: MBC2 RAM stored canonical 0xF0|nibble; battery export is the stored image and import normalises before compare (08-02)
 - [Phase 08]: 08-05: mbc2/mbc5 Mooneye derivatives admitted by manifest digest; budgets = ceil(2*ticks/100000)*100000; no D-27 patch needed (15/15 pass)
 - [Phase 08]: 08-06: Mooneye mbc builder pin is read from the digest-checked parent manifest (sibling carries no builder object); type-mutation control requires an unmutated pass first
+- [Phase 08]: 08-08: ninth bank bit proved by mbc5_bank_1ff plus test-only ninth-bit mutant (fails at C005, control passes); rom_64Mb is the 8 MiB loader/install-policy case only
 
 ### Pending Todos
 
@@ -274,12 +276,12 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-11T16:16:22.699Z
-Stopped at: Completed 08-07-PLAN.md (partial: ninth-bit mutant blocked); next 08-08
+Last session: 2026-10-11T16:25:24.749Z
+Stopped at: Completed 08-08-PLAN.md; next 08-09 (docs and decisions)
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 8`
 
-Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, plan 08-06 (Mooneye-mbc verifier and CTests) executed** (2026-10-11) on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. 22 mooneye_mbc_ CTests added (suite 15/15, per-case receipts, pc-table, tamper, unknown-manifest and type-mutation controls each observed to fail closed), full local ctest 309/309, baseline pass. ROM digests remain a Darwin local rebuild until the hosted Linux leg. Phase 8 is not complete: plans 08-07..08-10 remain. Next plan: **08-07 (install/package scans, ninth-bit mutant, hosted Linux rebuild leg, exact-head CI)** via **`/gsd-execute-phase 8`**. Both auto-advance flags stay false.
+Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, plan 08-08 (original MBC5 banking fixture and D-29 ninth-bit mutant) executed** (2026-10-11) on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. fixtures/mbc5-banking (RGBDS 1.0.1, sha256 0b852837...ddffef, 64 KiB, type $1E) passes mbc5_banking_guest (rumble on=1, 1 transition), mbc5_banking_guest_1b and mbc5_bank_1ff (in-memory 8 MiB); the ninth-bit mutant fails mbc5_bank_1ff at C005 and its control passes. Full local ctest 319/319, inventory matches. Hosted fixture-repro step and exact-head CI are not yet read (08-09/08-10). Phase 8 is not complete: plans 08-09 and 08-10 remain. Next plan: **08-09 (docs and decisions)** via **`/gsd-execute-phase 8`**. Both auto-advance flags stay false.
 Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, plan 08-02 (MBC2) executed** (2026-10-11) on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. 11 mbc2_ CTests added, full local ctest 272/272, differential `--exclude-types 05,06` `differences=0`, baseline pass. Phase 8 is not complete: plans 08-03..08-10 remain. Next plan: **08-03 (MBC5)** via **`/gsd-execute-phase 8`**. Both auto-advance flags stay false.
 Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, plan 08-01 (cartridge seam) executed** (2026-10-11) on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. Differential `cells=86016 differences=0`, digest `4c7a57ff3d50d228` held, exact-head CI green on all eight required jobs at 25e5d6e (run 38146578485), draft PR #64 open and not merged. Phase 8 is not complete: plans 08-02..08-10 remain. Next plan: **08-02 (MBC2)** via **`/gsd-execute-phase 8`** (resumes at the first plan without a SUMMARY). Both auto-advance flags stay false.
 
