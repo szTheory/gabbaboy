@@ -12,6 +12,8 @@ The tracked [v0.1.0 support ledger](support/v0.1.0.md) states the model and
 corpus limits. The release's separate `support-ledger.json`
 attachment binds that ledger to the exact tagged source revision.
 
+For the one-game Libbet acceptance evidence, its controls, the DMG regression baseline and their limits, see [Game acceptance](game-acceptance.md).
+
 The portable core and its normal tests do not need SDL. To build and verify the optional player with the official, digest-checked SDL3 3.4.18 source on macOS, run:
 
 ```sh
