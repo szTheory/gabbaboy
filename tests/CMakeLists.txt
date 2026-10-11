@@ -674,6 +674,32 @@ gbb_add_mbc_scan_test(mooneye_mbc_not_installed_empty 1 "scan-dir-empty"
 gbb_add_mbc_scan_test(mooneye_mbc_fixture_dirs_selftest 1 "fixture-dirs-mismatch"
   "${GBB_MBC_DIRS_SELFTEST}" "-DGBB_EXPECT_FIXTURE_DIRS=${GBB_MBC_SCAN_DIRS}")
 
+# MagenTests redistribution guard (D-06): same scan, label magentests, digest list from its manifest.
+# The renamed-copy self-test proves the scan matches by size and digest, not by file name.
+set(GBB_MAGENTESTS_SCAN_SELFTEST "${PROJECT_BINARY_DIR}/magentests-scan-selftest")
+file(MAKE_DIRECTORY "${GBB_MAGENTESTS_SCAN_SELFTEST}/share")
+file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/magentests/mbc_oob_sram_mbc3.gbc"
+  "${GBB_MAGENTESTS_SCAN_SELFTEST}/share/payload.bin")
+set(GBB_MAGENTESTS_SCAN_ARGS "-DGBB_FORBIDDEN_MANIFEST=${GBB_MAGENTESTS_DIR}/manifest.json"
+  -DGBB_FORBIDDEN_LABEL=magentests)
+function(gbb_add_magentests_scan_test name code regex scan_dir)
+  set(command "${CMAKE_COMMAND}" "-DGBB_SCAN_DIR=${scan_dir}" ${GBB_MAGENTESTS_SCAN_ARGS}
+    -P "${GBB_MBC_SCAN_SCRIPT}")
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60)
+endfunction()
+gbb_add_magentests_scan_test(magentests_not_installed 0 "magentests absent from scanned tree files=[1-9]"
+  "${GBB_LIBBET_INSTALL_CHECK}")
+set_tests_properties(magentests_not_installed PROPERTIES FIXTURES_REQUIRED libbet_install)
+gbb_add_magentests_scan_test(magentests_not_installed_selftest 1 "magentests-installed: share/payload.bin"
+  "${GBB_MAGENTESTS_SCAN_SELFTEST}")
+
 # EVID-02 baseline comparator self-tests (D-30, D-31, D-34). Each test runs cmake/VerifyDmgBaseline.cmake
 # on committed synthetic fixtures (or a generated variant of them) and asserts the exact exit code
 # and failure token through expect_exit.cmake; nothing here touches the real ledger.

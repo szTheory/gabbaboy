@@ -12,9 +12,18 @@
 #   GBB_EXPECT_FIXTURE_DIRS   optional list of the exact children share/gabbaboy/fixtures must have;
 #                             '|' is accepted as the separator because callers pass this inside
 #                             another ';'-separated command list
+#   GBB_FORBIDDEN_LABEL       optional suite label (default "mooneye"); sets the forbidden path
+#                             component, the "<label>-installed:" failure token and the success
+#                             line. The default success line stays "mooneye-mbc absent ...";
+#                             any other label prints "<label> absent from scanned tree files=N".
 #
-# Failure tokens: scan-dir-empty, mooneye-installed: <relative path>, fixture-dirs-mismatch.
+# Failure tokens: scan-dir-empty, <label>-installed: <relative path>, fixture-dirs-mismatch.
 cmake_minimum_required(VERSION 3.25)
+
+if(NOT DEFINED GBB_FORBIDDEN_LABEL OR "${GBB_FORBIDDEN_LABEL}" STREQUAL "")
+  set(GBB_FORBIDDEN_LABEL "mooneye")
+endif()
+string(TOLOWER "${GBB_FORBIDDEN_LABEL}" forbidden_label)
 
 foreach(required GBB_SCAN_DIR GBB_FORBIDDEN_MANIFEST)
   if(NOT DEFINED ${required} OR "${${required}}" STREQUAL "")
@@ -56,8 +65,8 @@ endif()
 
 foreach(relative IN LISTS scanned_files)
   string(TOLOWER "${relative}" lowered)
-  if(lowered MATCHES "mooneye")
-    message(FATAL_ERROR "mooneye-installed: ${relative}")
+  if(lowered MATCHES "${forbidden_label}")
+    message(FATAL_ERROR "${GBB_FORBIDDEN_LABEL}-installed: ${relative}")
   endif()
   set(candidate "${GBB_SCAN_DIR}/${relative}")
   if(IS_SYMLINK "${candidate}")
@@ -105,7 +114,7 @@ foreach(relative IN LISTS scanned_files)
   file(SHA256 "${candidate}" candidate_digest)
   list(FIND forbidden_digests "${candidate_digest}" digest_hit)
   if(NOT digest_hit EQUAL -1)
-    message(FATAL_ERROR "mooneye-installed: ${relative}")
+    message(FATAL_ERROR "${GBB_FORBIDDEN_LABEL}-installed: ${relative}")
   endif()
 endforeach()
 
@@ -128,4 +137,8 @@ if(DEFINED GBB_EXPECT_FIXTURE_DIRS AND NOT "${GBB_EXPECT_FIXTURE_DIRS}" STREQUAL
   endif()
 endif()
 
-message(STATUS "mooneye-mbc absent from scanned tree files=${scanned_count}")
+if(forbidden_label STREQUAL "mooneye")
+  message(STATUS "mooneye-mbc absent from scanned tree files=${scanned_count}")
+else()
+  message(STATUS "${GBB_FORBIDDEN_LABEL} absent from scanned tree files=${scanned_count}")
+endif()
