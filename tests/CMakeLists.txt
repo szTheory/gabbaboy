@@ -70,7 +70,10 @@ add_executable(test_rtc_battery test_rtc_battery.c)
 target_link_libraries(test_rtc_battery PRIVATE GabbaBoy::core)
 target_compile_features(test_rtc_battery PRIVATE c_std_17)
 set_target_properties(test_rtc_battery PROPERTIES C_EXTENSIONS OFF)
-foreach(case block_roundtrip)
+foreach(case block_roundtrip catch_up_basic catch_up_zero catch_up_negative catch_up_int64_max
+  catch_up_halted catch_up_carry_sticky catch_up_composes catch_up_preserves catch_up_errors
+  import_never_advances block_corruption_matrix block_reset_roundtrip block_generation
+  battery_size_types)
   add_test(NAME rtc_${case} COMMAND test_rtc_battery rtc_${case})
 endforeach()
 
