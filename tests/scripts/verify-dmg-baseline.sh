@@ -38,13 +38,19 @@ find_tool() {
   return 1
 }
 
-args=("-DGBB_MODE=$mode" "-DGBB_SOURCE_DIR=$root")
+# Git Bash on Windows hands native cmake MSYS-style paths (/d/a/...) that cmake's EXISTS cannot see,
+# so convert every path cmake receives to the mixed C:/... form there. Elsewhere this is a no-op.
+native_path() {
+  if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi
+}
+
+args=("-DGBB_MODE=$mode" "-DGBB_SOURCE_DIR=$(native_path "$root")")
 if [[ "$mode" != junit ]]; then
   runner=$(find_tool gabbaboy-runner) || { echo "gabbaboy-runner not found in $build_dir; build first" >&2; exit 2; }
   measure=$(find_tool measure_core) || { echo "measure_core not found in $build_dir; build first" >&2; exit 2; }
-  args+=("-DGBB_RUNNER=$runner" "-DGBB_MEASURE=$measure")
+  args+=("-DGBB_RUNNER=$(native_path "$runner")" "-DGBB_MEASURE=$(native_path "$measure")")
 else
-  args+=("-DGBB_JUNIT=$junit" "-DGBB_INVENTORY=$inventory")
+  args+=("-DGBB_JUNIT=$(native_path "$junit")" "-DGBB_INVENTORY=$inventory")
 fi
 
-exec "${CMAKE:-cmake}" "${args[@]}" -P "$root/cmake/VerifyDmgBaseline.cmake"
+exec "${CMAKE:-cmake}" "${args[@]}" -P "$(native_path "$root")/cmake/VerifyDmgBaseline.cmake"
