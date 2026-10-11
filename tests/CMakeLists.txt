@@ -533,6 +533,44 @@ set_tests_properties(libbet_not_installed PROPERTIES FIXTURES_REQUIRED libbet_in
 gbb_add_expect_exit_test(libbet_not_installed_selftest 1 "libbet-installed: share/payload.bin"
   --scan-dir "${GBB_LIBBET_SCAN_SELFTEST}")
 
+# Sibling Mooneye MBC ROM redistribution guard (D-31, D-32). The 15 derivatives, including the
+# 4 MiB and 8 MiB ROMs, are repository fixtures only. cmake/ScanForbiddenFixtures.cmake scans the
+# same install tree by name and digest and asserts the exact installed fixture directories. The
+# three self-tests prove the scan can fail: a renamed ROM, an empty tree and an extra directory.
+set(GBB_MBC_SCAN_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/ScanForbiddenFixtures.cmake")
+set(GBB_MBC_SCAN_MANIFEST "${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/manifest.json")
+set(GBB_MBC_SCAN_DIRS "tracer|visible-demo|mbc1-continuation")
+set(GBB_MBC_SCAN_SELFTEST "${PROJECT_BINARY_DIR}/mooneye-mbc-scan-selftest")
+set(GBB_MBC_SCAN_EMPTY "${PROJECT_BINARY_DIR}/mooneye-mbc-scan-empty")
+set(GBB_MBC_DIRS_SELFTEST "${PROJECT_BINARY_DIR}/mooneye-mbc-dirs-selftest")
+file(MAKE_DIRECTORY "${GBB_MBC_SCAN_SELFTEST}/share" "${GBB_MBC_SCAN_EMPTY}")
+file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/mbc5_rom_512kb.gb"
+  "${GBB_MBC_SCAN_SELFTEST}/share/payload.bin")
+foreach(dir IN ITEMS tracer visible-demo mbc1-continuation extra)
+  file(WRITE "${GBB_MBC_DIRS_SELFTEST}/share/gabbaboy/fixtures/${dir}/marker.txt" "marker\n")
+endforeach()
+function(gbb_add_mbc_scan_test name code regex scan_dir)
+  set(command "${CMAKE_COMMAND}" "-DGBB_SCAN_DIR=${scan_dir}"
+    "-DGBB_FORBIDDEN_MANIFEST=${GBB_MBC_SCAN_MANIFEST}" ${ARGN} -P "${GBB_MBC_SCAN_SCRIPT}")
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60)
+endfunction()
+gbb_add_mbc_scan_test(mooneye_mbc_not_installed 0 "mooneye-mbc absent from scanned tree files=[1-9]"
+  "${GBB_LIBBET_INSTALL_CHECK}" "-DGBB_EXPECT_FIXTURE_DIRS=${GBB_MBC_SCAN_DIRS}")
+set_tests_properties(mooneye_mbc_not_installed PROPERTIES FIXTURES_REQUIRED libbet_install)
+gbb_add_mbc_scan_test(mooneye_mbc_not_installed_selftest 1 "mooneye-installed: share/payload.bin"
+  "${GBB_MBC_SCAN_SELFTEST}")
+gbb_add_mbc_scan_test(mooneye_mbc_not_installed_empty 1 "scan-dir-empty"
+  "${GBB_MBC_SCAN_EMPTY}")
+gbb_add_mbc_scan_test(mooneye_mbc_fixture_dirs_selftest 1 "fixture-dirs-mismatch"
+  "${GBB_MBC_DIRS_SELFTEST}" "-DGBB_EXPECT_FIXTURE_DIRS=${GBB_MBC_SCAN_DIRS}")
+
 # EVID-02 baseline comparator self-tests (D-30, D-31, D-34). Each test runs cmake/VerifyDmgBaseline.cmake
 # on committed synthetic fixtures (or a generated variant of them) and asserts the exact exit code
 # and failure token through expect_exit.cmake; nothing here touches the real ledger.
