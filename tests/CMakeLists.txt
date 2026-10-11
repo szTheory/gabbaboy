@@ -321,6 +321,10 @@ foreach(case pass fail wrong_breakpoint timeout unsupported zero_eligible)
 endforeach()
 add_test(NAME runner_guest_failure
   COMMAND test_runner runner_guest_failure ${PROJECT_SOURCE_DIR}/fixtures/mooneye/daa.gb)
+# D-29: a wrong mapper type byte must turn the admitted MBC5 derivative from pass into something else.
+add_test(NAME mooneye_mbc_type_mutation
+  COMMAND test_runner mooneye_mbc_type_mutation ${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/mbc5_rom_512kb.gb)
+set_tests_properties(mooneye_mbc_type_mutation PROPERTIES TIMEOUT 30)
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/runner-missing-fixture")
 configure_file("${PROJECT_SOURCE_DIR}/fixtures/mooneye/manifest.json"
   "${PROJECT_BINARY_DIR}/runner-missing-fixture/manifest.json" COPYONLY)

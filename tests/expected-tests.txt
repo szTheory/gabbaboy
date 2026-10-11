@@ -306,3 +306,4 @@ mooneye_mbc_case_mbc5_rom_8Mb
 mooneye_mbc_case_mbc5_rom_16Mb
 mooneye_mbc_case_mbc5_rom_32Mb
 mooneye_mbc_case_mbc5_rom_64Mb
+mooneye_mbc_type_mutation
