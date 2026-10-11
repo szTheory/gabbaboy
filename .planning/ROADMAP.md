@@ -170,7 +170,7 @@ Plans:
 
 **Rights gates**: G1 (mgblib font) gates Mealybug `mbc3_rtc` as required evidence; G3 (gbclock plugin licences) keeps gbclock out — rtc3test and original fixtures are primary.
 **Research**: DEEP (write-while-running, rollover, sub-second prescaler reset on seconds write, day carry, halt).
-**Plans**: 9/18 plans executed
+**Plans**: 10/18 plans executed
 
 Plans:
 **Wave 1**
@@ -187,7 +187,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [x] 09-09-PLAN.md — Lazy emulated-time RTC, original differential/metamorphic/edge tests, no-host-clock CI proof, draft PR and exact-head CI read
-- [ ] 09-10-PLAN.md — Original MBC5 continuation guest and fixture-repro pin checks and rebuilds for all three guests
+- [x] 09-10-PLAN.md — Original MBC5 continuation guest and fixture-repro pin checks and rebuilds for all three guests
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 09-11-PLAN.md — Battery image with the 21-byte RTC block, gbb_rtc_catch_up and GBB_NO_RTC, pure host catch-up policy table
@@ -298,7 +298,7 @@ Plans:
 | 1–6, 06.1 | v0.1 | 64/64 | Complete | 2026-10-10 |
 | 7. DMG Game Acceptance and Regression Baseline | v0.2 | 17/17 | Complete    | 2026-10-11 |
 | 8. Cartridge Seam, MBC5 and MBC2 | v0.2 | 10/10 | Complete    | 2026-10-11 |
-| 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 9/18 | In Progress | - |
+| 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 10/18 | In Progress | - |
 | 10. CGB Profile, Banking and Register Visibility | v0.2 | 0/TBD | Not started | - |
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 0/TBD | Not started | - |
 | 12. CGB Double Speed | v0.2 | 0/TBD | Not started | - |

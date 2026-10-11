@@ -5,16 +5,16 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 9
 current_phase_name: MBC3, Deterministic RTC and Cartridge Persistence
 status: executing
-stopped_at: Completed 09-09-PLAN.md
-last_updated: "2026-10-11T22:38:10.657Z"
+stopped_at: Completed 09-10-PLAN.md
+last_updated: "2026-10-11T22:42:46.297Z"
 last_activity: 2026-10-11
 last_activity_desc: Phase 9 execution started
-state_head: bcb5500b33da4c71409ec937f82a5db60f00797a
+state_head: 3bb8f9a479039a0727effffaea854fb94eb2d861
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 45
-  completed_plans: 36
+  completed_plans: 37
   percent: 33
 ---
 
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 ## Current Position
 
 Phase: 9 (MBC3, Deterministic RTC and Cartridge Persistence) — EXECUTING
-Plan: 10 of 18
+Plan: 11 of 18
 Status: Ready to execute
 Last activity: 2026-10-11 — Phase 9 execution started
 
@@ -139,6 +139,7 @@ Progress (v0.2): [██░░░░░░░░] 22% (2/9 phases)
 | Phase 09 P07 | 20 min | 3 tasks | 4 files |
 | Phase 9 P08 | 25 min | 3 tasks | 11 files |
 | Phase 9 P09-09 | 85 min | 3 tasks | 9 files |
+| Phase 09 P10 | 25 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -264,6 +265,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 9]: 09-08: rtc3test rebuild equality not claimed until hosted exact-head result=byte-identical (local Docker run was identical)
 - [Phase 9]: 09-09: RTC latch on exactly 00 then 01 and unmapped selections 04-07 are project decisions, not hardware-confirmed
 - [Phase 9]: 09-09: CI prints no_host_clock result per build leg; native-windows-x64 is MinGW GCC 14.2.0 and uses nm (research A2 resolved)
+- [Phase 09]: 09-10: MBC5 continuation guest uses bank 0 and bank 15 GB5 markers; fixture-repro pin-checks and rebuilds all three continuation guests; mbc2/mbc3-rtc/mbc5 continuation ROMs are now tracked via .gitignore exceptions
 
 ### Pending Todos
 
@@ -299,8 +301,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-11T22:38:10.609Z
-Stopped at: Completed 09-09-PLAN.md
+Last session: 2026-10-11T22:42:46.241Z
+Stopped at: Completed 09-10-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 9`
 
