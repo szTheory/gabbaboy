@@ -29,6 +29,9 @@ CMakeUserPresets.json
 !/fixtures/mooneye/tim00.gb
 !/fixtures/mooneye/tim00_div_trigger.gb
 !/fixtures/mbc1-continuation/continuation.gb
+!/fixtures/mbc2-continuation/continuation.gb
+!/fixtures/mbc3-rtc-continuation/continuation.gb
+!/fixtures/mbc5-continuation/continuation.gb
 !/fixtures/mbc5-banking/banking.gb
 !/fixtures/libbet/libbet.gb
 !/fixtures/mooneye-mbc/mbc2_bits_ramg.gb

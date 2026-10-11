@@ -1,0 +1,45 @@
+{
+  "id": "original-mbc5-battery-continuation",
+  "source": "continuation.asm",
+  "source_identity": "Original GabbaBoy project-authored assembly",
+  "source_sha256": "b56718d60e3b0d0b73fa53581a54cb7541d1c2e37b9c651b3c018c409d92892d",
+  "license": "MIT; see LICENSE.txt and repository LICENSE",
+  "build": {
+    "assembler": "RGBDS",
+    "version": "1.0.1",
+    "archive": "rgbds-macos.zip",
+    "archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
+    "ci_archive": "rgbds-linux-x86_64.tar.xz",
+    "ci_archive_sha256": "80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9",
+    "recipe": "rgbasm -o <work>/continuation.o fixtures/mbc5-continuation/continuation.asm && rgblink -o <work>/continuation.gb <work>/continuation.o && rgbfix -f hg -p 0 -m 0x1b -r 4 <work>/continuation.gb"
+  },
+  "rom": "continuation.gb",
+  "size_bytes": 32768,
+  "sha256": "34e80d0c4a0c1edb6d8b2a2cda31e9f0cdcc672aa9579f86a9ec5a328aaca667",
+  "cartridge": {
+    "mapper": "MBC5",
+    "type": "0x1B (MBC5 + RAM + battery)",
+    "rom_size_code": "0x00 (32 KiB)",
+    "ram_size_code": "0x04 (128 KiB)"
+  },
+  "profile": {
+    "name": "DMG-CPU-B",
+    "boot": "Skipped; starts at cartridge entry 0x0100.",
+    "applicability": "Original software continuation fixture for the deterministic bootless DMG-CPU-B profile; not physical hardware evidence."
+  },
+  "protocol": {
+    "store_branch": "When bank 0 0xA000-0xA002 is not 0x47 0x42 0x35 ('GB5') with 0xA003 = 0x00, or bank 15 0xA000-0xA003 is not 'GB5' 0x0F, the guest enables RAM (0x0A to 0x0000), writes 'G','B','5',0x00 at bank 0 0xA000 and 'G','B','5',0x0F at bank 15 0xA000 (bank selected through 0x4000), and publishes WRAM C000=0x01.",
+    "resume_branch": "When both four-byte markers are intact, the guest sets WRAM C001=0xA5 and publishes C000=0x02.",
+    "missing_save": "fresh RAM reads 0xFF, so the store branch runs and C000=0x01; a missing or rejected save is observable as C000=0x01, never as a resume",
+    "ram_size_note": "128 KiB cartridge RAM (16 banks) exercises the maximum save envelope v2 payload size.",
+    "timeout_half_dots": 200000,
+    "evidence": "Distinct fresh instances or processes observe the stored markers in two widely separated RAM banks; this is software continuation evidence only."
+  },
+  "scope_limits": [
+    "No boot-ROM execution",
+    "No physical hardware MBC5 observation",
+    "No rumble or MBC5 ROM-bank behavior claim",
+    "No BGB footer or other emulator save-format claim",
+    "The guest protocol tests file-backed continuation separately from mapper/API correctness"
+  ]
+}
