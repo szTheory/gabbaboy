@@ -50,12 +50,17 @@ typedef struct {
 #define GBB_MAX_ROM_SIZE ((size_t)2u * 1024u * 1024u)
 
 /* ROM_ONLY must stay 0 so a calloc-zeroed instance is a ROM-only cartridge. */
-typedef enum { CART_ROM_ONLY = 0, CART_MBC1 = 1 } cart_kind;
+typedef enum { CART_ROM_ONLY = 0, CART_MBC1 = 1, CART_MBC2 = 2 } cart_kind;
 
 typedef enum {
     CART_RAM_NONE = 0,     /* RAM code must be $00 */
-    CART_RAM_8K_OR_32K = 1 /* code $02 = 8 KiB; $03 = 32 KiB on small ROMs */
+    CART_RAM_8K_OR_32K = 1, /* code $02 = 8 KiB; $03 = 32 KiB on small ROMs */
+    CART_RAM_MBC2 = 2       /* built-in 512 nibbles; header RAM code must be $00 */
 } cart_ram_rule;
+
+/* MBC2 has 512 x 4-bit cells inside the mapper chip. We store each as a byte
+ * in canonical form 0xF0 | nibble, because the upper data lines float high. */
+#define MBC2_RAM_BYTES 512u
 
 typedef struct {
     uint8_t kind;
@@ -90,6 +95,8 @@ static const cart_type_row cart_type_table[] = {
     { 0x01u, CART_MBC1,     1u, 0u, 0u, 0u, 0x06u, CART_RAM_NONE,      0u,    GBB_MAX_ROM_SIZE },
     { 0x02u, CART_MBC1,     1u, 0u, 0u, 0u, 0x06u, CART_RAM_8K_OR_32K, 0x04u, GBB_MAX_ROM_SIZE },
     { 0x03u, CART_MBC1,     1u, 1u, 0u, 0u, 0x06u, CART_RAM_8K_OR_32K, 0x04u, GBB_MAX_ROM_SIZE },
+    { 0x05u, CART_MBC2,     1u, 0u, 0u, 0u, 0x03u, CART_RAM_MBC2,      0u,    GBB_MAX_ROM_SIZE },
+    { 0x06u, CART_MBC2,     1u, 1u, 0u, 0u, 0x03u, CART_RAM_MBC2,      0u,    GBB_MAX_ROM_SIZE },
 };
 
 static const cart_type_row *cart_row_for_type(uint8_t type) {
@@ -743,6 +750,12 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
             const size_t offset = bank * 0x4000u + (size_t)(address & 0x3FFFu);
             return offset < m->rom_size ? m->rom[offset] : 0xFFu;
         }
+        case CART_MBC2: {
+            /* The stored bank is already translated and masked at write time. */
+            const size_t bank = address < 0x4000u ? 0u : (size_t)m->cart.rom_bank_lo;
+            const size_t offset = bank * 0x4000u + (size_t)(address & 0x3FFFu);
+            return offset < m->rom_size ? m->rom[offset] : 0xFFu;
+        }
         case CART_ROM_ONLY:
         default:
             return m->rom[address];
@@ -754,6 +767,12 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
             if (m->cart.ram_enabled && m->cartridge_ram != NULL &&
                 m->cartridge_ram_size != 0u)
                 return m->cartridge_ram[mbc1_ram_offset(&m->cart, m->cartridge_ram_size, address)];
+            return 0xFFu;
+        case CART_MBC2:
+            /* All 8192 addresses echo the 512 cells; upper nibble reads as 1s. */
+            if (m->cart.ram_enabled && m->cartridge_ram != NULL &&
+                m->cartridge_ram_size == MBC2_RAM_BYTES)
+                return m->cartridge_ram[address & 0x1FFu];
             return 0xFFu;
         case CART_ROM_ONLY:
         default:
@@ -820,6 +839,19 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
             else
                 m->cart.mbc1_mode = value & 0x01u;
             break;
+        case CART_MBC2:
+            /* Address bit 8 chooses the register; $4000-$7FFF is unmapped. */
+            if (address < 0x4000u) {
+                if ((address & 0x0100u) == 0u) {
+                    m->cart.ram_enabled = (value & 0x0Fu) == 0x0Au;
+                } else {
+                    /* Translate zero before masking, as MBC1 does. */
+                    size_t bank = value & 0x0Fu;
+                    if (bank == 0u) bank = 1u;
+                    m->cart.rom_bank_lo = (uint8_t)(bank & (m->rom_size / 0x4000u - 1u));
+                }
+            }
+            break;
         case CART_ROM_ONLY:
         default:
             break;
@@ -841,6 +873,19 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
                 const uint8_t previous = m->cartridge_ram[offset];
                 if (previous != value) {
                     m->cartridge_ram[offset] = value;
+                    if (m->cart.has_battery &&
+                        m->battery_generation != UINT64_MAX)
+                        ++m->battery_generation;
+                }
+            }
+            break;
+        case CART_MBC2:
+            if (m->cart.ram_enabled && m->cartridge_ram != NULL &&
+                m->cartridge_ram_size == MBC2_RAM_BYTES) {
+                const size_t offset = address & 0x1FFu;
+                const uint8_t canonical = (uint8_t)(0xF0u | (value & 0x0Fu));
+                if (m->cartridge_ram[offset] != canonical) {
+                    m->cartridge_ram[offset] = canonical;
                     if (m->cart.has_battery &&
                         m->battery_generation != UINT64_MAX)
                         ++m->battery_generation;
@@ -1734,6 +1779,10 @@ static gbb_error validate_header(const uint8_t *rom, size_t size,
     size_t ram_size = 0u;
     if (row->ram_rule == CART_RAM_NONE) {
         if (ram_size_code != 0u) return GBB_UNSUPPORTED_RAM_SIZE;
+    } else if (row->ram_rule == CART_RAM_MBC2) {
+        /* The 512 bytes come from the type row; $149 must not claim more. */
+        if (ram_size_code != 0u) return GBB_UNSUPPORTED_RAM_SIZE;
+        ram_size = MBC2_RAM_BYTES;
     } else if (ram_size_code == 0x02u) {
         ram_size = 8192u;
     } else if (ram_size_code == 0x03u && rom_size_code <= row->ram32_max_rom_code) {
@@ -1849,6 +1898,21 @@ gbb_error gbb_import_battery(gbb_instance *instance, const uint8_t *bytes,
     if (instance == NULL || bytes == NULL) return GBB_INVALID_ARGUMENT;
     if (!has_battery_ram(instance)) return GBB_NO_BATTERY;
     if (size_bytes != instance->cartridge_ram_size) return GBB_BATTERY_SIZE_MISMATCH;
+    if (instance->cart.kind == CART_MBC2) {
+        /* Normalise to the canonical 0xF0 | nibble image and compare first, so
+         * an unchanged image is a no-op and the input is never written. */
+        int differs = 0;
+        for (size_t i = 0u; i < size_bytes; ++i)
+            if (instance->cartridge_ram[i] != (uint8_t)(0xF0u | (bytes[i] & 0x0Fu)))
+                differs = 1;
+        if (differs) {
+            for (size_t i = 0u; i < size_bytes; ++i)
+                instance->cartridge_ram[i] = (uint8_t)(0xF0u | (bytes[i] & 0x0Fu));
+            if (instance->battery_generation != UINT64_MAX)
+                ++instance->battery_generation;
+        }
+        return GBB_OK;
+    }
     if (memcmp(instance->cartridge_ram, bytes, size_bytes) != 0) {
         memcpy(instance->cartridge_ram, bytes, size_bytes);
         if (instance->battery_generation != UINT64_MAX)

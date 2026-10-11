@@ -29,6 +29,14 @@ add_test(NAME cartridge_bank_matrix COMMAND test_cartridge cartridge_bank_matrix
 add_test(NAME cartridge_ram_banks COMMAND test_cartridge cartridge_ram_banks)
 add_test(NAME cartridge_no_ram_reads COMMAND test_cartridge cartridge_no_ram_reads)
 
+add_executable(test_mbc2 test_mbc2.c)
+target_link_libraries(test_mbc2 PRIVATE GabbaBoy::core)
+target_compile_features(test_mbc2 PRIVATE c_std_17)
+set_target_properties(test_mbc2 PROPERTIES C_EXTENSIONS OFF)
+foreach(case tracer)
+  add_test(NAME mbc2_${case} COMMAND test_mbc2 mbc2_${case})
+endforeach()
+
 add_executable(test_battery test_battery.c)
 target_link_libraries(test_battery PRIVATE GabbaBoy::core)
 target_compile_features(test_battery PRIVATE c_std_17)
