@@ -5,16 +5,16 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 8
 current_phase_name: Cartridge Seam, MBC5 and MBC2
 status: executing
-stopped_at: Completed 08-04-PLAN.md
-last_updated: "2026-10-11T15:05:34.983Z"
+stopped_at: Completed 08-05-PLAN.md
+last_updated: "2026-10-11T15:12:50.033Z"
 last_activity: 2026-10-11
 last_activity_desc: Phase 8 execution started
-state_head: 8c39e0c067b1b9056e8f99444d4774e5bedf673a
+state_head: 831f0b9ced5995dc198c3b5f2b266ed0a56a7cc0
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 27
-  completed_plans: 21
+  completed_plans: 22
   percent: 22
 ---
 
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 ## Current Position
 
 Phase: 8 (Cartridge Seam, MBC5 and MBC2) — EXECUTING
-Plan: 5 of 10
+Plan: 6 of 10
 Status: Ready to execute
 Last activity: 2026-10-11 — Phase 8 execution started
 
@@ -124,6 +124,7 @@ Progress (v0.2): [█░░░░░░░░░] 11% (1/9 phases)
 | Phase GB-08 P08-02 | 40 min | 3 tasks | 5 files |
 | Phase 08 P03 | 55 min | 3 tasks | 8 files |
 | Phase 08 P04 | 20 min | 2 tasks | 7 files |
+| Phase 08 P05 | 40 min | 2 tasks | 24 files |
 
 ## Accumulated Context
 
@@ -235,6 +236,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-07]: 07-15: DMG-CPU-B v1 ledger frozen at 5a55f19 in baseline commit 42faf9b; one ledger for all OS, changes only via CHANGES.md rows (D-30..D-35)
 - [Phase 08]: 08-01: cartridge mapper section placed before gbb_instance; helpers take cart_state plus sizes
 - [Phase GB-08]: MBC2 RAM stored canonical 0xF0|nibble; battery export is the stored image and import normalises before compare (08-02)
+- [Phase 08]: 08-05: mbc2/mbc5 Mooneye derivatives admitted by manifest digest; budgets = ceil(2*ticks/100000)*100000; no D-27 patch needed (15/15 pass)
 
 ### Pending Todos
 
@@ -268,8 +270,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-11T15:05:34.939Z
-Stopped at: Completed 08-04-PLAN.md
+Last session: 2026-10-11T15:12:49.996Z
+Stopped at: Completed 08-05-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 8`
 
