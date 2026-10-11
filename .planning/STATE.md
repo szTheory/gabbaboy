@@ -5,16 +5,16 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 9
 current_phase_name: MBC3, Deterministic RTC and Cartridge Persistence
 status: executing
-stopped_at: Completed 09-08-PLAN.md
-last_updated: "2026-10-11T21:43:42.293Z"
+stopped_at: Completed 09-09-PLAN.md
+last_updated: "2026-10-11T22:38:10.657Z"
 last_activity: 2026-10-11
 last_activity_desc: Phase 9 execution started
-state_head: 3eb11030b5dda027bd1be8f5c1c2ea2a59a56d93
+state_head: bcb5500b33da4c71409ec937f82a5db60f00797a
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 45
-  completed_plans: 35
+  completed_plans: 36
   percent: 33
 ---
 
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 ## Current Position
 
 Phase: 9 (MBC3, Deterministic RTC and Cartridge Persistence) — EXECUTING
-Plan: 9 of 18
+Plan: 10 of 18
 Status: Ready to execute
 Last activity: 2026-10-11 — Phase 9 execution started
 
@@ -138,6 +138,7 @@ Progress (v0.2): [██░░░░░░░░] 22% (2/9 phases)
 | Phase 09 P06 | 12 min | 2 tasks | 5 files |
 | Phase 09 P07 | 20 min | 3 tasks | 4 files |
 | Phase 9 P08 | 25 min | 3 tasks | 11 files |
+| Phase 9 P09-09 | 85 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -261,6 +262,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 09]: 09-06: MBC2 guest selects store vs resume by cells 0-2 reading F3 FA F1; fresh RAM takes store branch
 - [Phase 09]: 09-07: MagenTests oracle uses 16 frames plus a 0x149=0x03 negative control requiring shade 3; scan label GBB_FORBIDDEN_LABEL defaults to mooneye
 - [Phase 9]: 09-08: rtc3test rebuild equality not claimed until hosted exact-head result=byte-identical (local Docker run was identical)
+- [Phase 9]: 09-09: RTC latch on exactly 00 then 01 and unmapped selections 04-07 are project decisions, not hardware-confirmed
+- [Phase 9]: 09-09: CI prints no_host_clock result per build leg; native-windows-x64 is MinGW GCC 14.2.0 and uses nm (research A2 resolved)
 
 ### Pending Todos
 
@@ -296,8 +299,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-11T21:43:42.249Z
-Stopped at: Completed 09-08-PLAN.md
+Last session: 2026-10-11T22:38:10.609Z
+Stopped at: Completed 09-09-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 9`
 
