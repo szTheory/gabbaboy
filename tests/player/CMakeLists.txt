@@ -103,9 +103,10 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       test_reset_transition.c
       "${PROJECT_SOURCE_DIR}/src/player/audio.c"
       "${PROJECT_SOURCE_DIR}/src/player/input.c"
-      "${PROJECT_SOURCE_DIR}/src/player/presentation.c")
+      "${PROJECT_SOURCE_DIR}/src/player/presentation.c"
+      "${PROJECT_SOURCE_DIR}/src/player/script_smoke.c")
     target_link_libraries(test_player_reset_transition PRIVATE
-      gabbaboy-player-session-test)
+      gabbaboy-player-session-test gabbaboy_accept)
     target_compile_features(test_player_reset_transition PRIVATE c_std_17)
     target_compile_definitions(test_player_reset_transition PRIVATE
       GBB_PLAYER_AUDIO_TESTING GBB_PLAYER_SESSION_TESTING

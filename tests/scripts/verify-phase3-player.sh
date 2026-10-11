@@ -261,6 +261,47 @@ PY
   }
   cat "$smoke_output"
 
+  # D-36: replay the Libbet script through the packaged player's keyboard input path. The ROM and
+  # script are read from the checkout (the package does not ship the third-party ROM); the PCM
+  # digest must equal the headless runner's for the same script.
+  local headless_runner="$APP_BUILD/gabbaboy-runner"
+  if [[ ! -x "$headless_runner" ]]; then
+    # --verify-package may run where only the downloaded package exists: build the runner alone,
+    # which needs no SDL.
+    local runner_build="$BUILD_ROOT/runner-only"
+    cmake --log-level=WARNING -S "$ROOT_DIR" -B "$runner_build" -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release -DGABBABOY_BUILD_PLAYER=OFF -DBUILD_TESTING=OFF >/dev/null
+    cmake --build "$runner_build" --target gabbaboy-runner --parallel >/dev/null
+    headless_runner="$runner_build/gabbaboy-runner"
+  fi
+  [[ -x "$headless_runner" ]] || fail 'headless runner is unavailable for the PCM comparison'
+  local headless_output expected_pcm
+  headless_output=$(cd "$ROOT_DIR" && "$headless_runner" --acceptance tests/acceptance/cases.txt \
+      --case libbet --observe 2>&1) || {
+    printf '%s\n' "$headless_output" >&2
+    fail 'headless Libbet acceptance observation failed'
+  }
+  expected_pcm=$(awk -F '\t' '$1 == "acceptance.libbet.pcm_sha256" { print $2 }' <<< "$headless_output")
+  [[ "$expected_pcm" =~ ^[0-9a-f]{64}$ ]] ||
+    fail 'headless observation did not report acceptance.libbet.pcm_sha256'
+  local script_output="$BUILD_ROOT/downloaded-package-script-smoke.txt"
+  "$player_bin" --smoke-package "$demo_license" \
+      --input-script "$ROOT_DIR/tests/acceptance/inputs/libbet-tutorial.input" \
+      "$ROOT_DIR/fixtures/libbet/libbet.gb" >"$script_output" 2>&1 || {
+    cat "$script_output" >&2
+    fail 'packaged player scripted Libbet smoke failed'
+  }
+  grep -Fq 'smoke_report rom_sha256=3607412031c8287cf878299ce96e581e85b852dde703806343b95576fa3ff1a9 ' \
+      "$script_output" || {
+    cat "$script_output" >&2
+    fail 'packaged player scripted smoke did not report the pinned Libbet ROM digest'
+  }
+  grep -Fq "predicate=pass pcm_nonsilent=1 pcm_sha256=$expected_pcm" "$script_output" || {
+    cat "$script_output" >&2
+    fail "packaged player scripted smoke did not pass with the headless PCM digest $expected_pcm"
+  }
+  cat "$script_output"
+
   if [[ "$write_final_receipt" == true ]]; then
     local candidate_package_sha build_run_id build_run_attempt consumer_run_id consumer_run_attempt
     local package_sdl_version package_sdl_archive_sha package_sdl_license_sha package_demo_rom_sha

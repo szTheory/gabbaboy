@@ -90,10 +90,11 @@ if(GABBABOY_BUILD_PLAYER)
     src/player/audio.c
     src/player/input.c
     src/player/presentation.c
+    src/player/script_smoke.c
     src/player/session.c)
   target_include_directories(gabbaboy-player-adapter PUBLIC
     "${PROJECT_SOURCE_DIR}/src/player")
-  target_link_libraries(gabbaboy-player-adapter PUBLIC GabbaBoy::core SDL3::SDL3)
+  target_link_libraries(gabbaboy-player-adapter PUBLIC GabbaBoy::core gabbaboy_accept SDL3::SDL3)
   target_compile_features(gabbaboy-player-adapter PUBLIC c_std_17)
   set_target_properties(gabbaboy-player-adapter PROPERTIES C_EXTENSIONS OFF)
 
