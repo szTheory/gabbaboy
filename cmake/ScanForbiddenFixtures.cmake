@@ -2,9 +2,9 @@
 #
 # The third-party derivatives under fixtures/mooneye-mbc are repository test fixtures. They must
 # never reach an install tree, the extracted preview package or the staged player package. This
-# script walks a tree without following symlinks and fails closed on either a path component that
-# contains "mooneye" (case-insensitive) or a regular file whose size and SHA-256 equal a manifest
-# ROM, so renaming a ROM does not hide it. It uses only primitives available in CMake 3.25.
+# script walks a tree, following file links to their bytes, and fails closed on either a path
+# component that contains "mooneye" (case-insensitive) or a file whose size and SHA-256 equal a
+# manifest ROM, so renaming a ROM or hiding it behind a link does not hide it. It uses only primitives available in CMake 3.25.
 #
 # Inputs (all passed with -D):
 #   GBB_SCAN_DIR              tree to scan (required)
@@ -63,8 +63,9 @@ foreach(relative IN LISTS scanned_files)
   if(IS_SYMLINK "${candidate}")
     # Follow file links so a sibling ROM cannot pass under an innocuous link name; directory
     # links (framework bundles) and dangling links carry no bytes of their own. Windows does not
-    # always resolve a link through one route, so try the link path, its stored target (minus
-    # any \\?\ or \??\ prefix, relative targets taken from the link's directory) and REALPATH.
+    # always resolve a link through one route, and file(SIZE) there can measure the link entry
+    # itself, so prefer a route that is not a link: the stored target (minus any \\?\ or \??\
+    # prefix, relative targets taken from the link's directory), then REALPATH, then the link.
     set(link_path "${candidate}")
     file(READ_SYMLINK "${link_path}" link_raw)
     file(TO_CMAKE_PATH "${link_raw}" link_target)
@@ -75,16 +76,26 @@ foreach(relative IN LISTS scanned_files)
     endif()
     get_filename_component(link_real "${link_path}" REALPATH)
     set(candidate "")
-    foreach(route IN ITEMS "${link_path}" "${link_target}" "${link_real}")
+    set(link_fallback "")
+    foreach(route IN ITEMS "${link_target}" "${link_real}" "${link_path}")
       if(EXISTS "${route}" AND NOT IS_DIRECTORY "${route}")
-        set(candidate "${route}")
-        break()
+        if(NOT IS_SYMLINK "${route}")
+          set(candidate "${route}")
+          break()
+        elseif(link_fallback STREQUAL "")
+          set(link_fallback "${route}")
+        endif()
       endif()
     endforeach()
+    if(candidate STREQUAL "")
+      set(candidate "${link_fallback}")
+    endif()
     if(candidate STREQUAL "")
       message(STATUS "skipped link without file bytes: ${relative} -> ${link_raw}")
       continue()
     endif()
+    file(SIZE "${candidate}" link_size)
+    message(STATUS "followed link: ${relative} -> ${candidate} size=${link_size}")
   endif()
   file(SIZE "${candidate}" candidate_size)
   list(FIND forbidden_sizes "${candidate_size}" size_hit)
