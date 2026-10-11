@@ -74,7 +74,7 @@ static bool write_unsupported_cartridge(const char *path, const char *demo_path)
     const size_t count = fread(rom, 1, sizeof(rom), source);
     const bool source_ok = fclose(source) == 0 && count == sizeof(rom);
     if (!source_ok) return false;
-    rom[0x147] = 0x13; /* MBC3 remains outside the current support envelope. */
+    rom[0x147] = 0x20; /* MBC6 stays unsupported; MBC3 ($13) is supported since Phase 9. */
     uint8_t checksum = 0u;
     for (size_t i = 0x134u; i <= 0x14Cu; ++i)
         checksum = (uint8_t)(checksum - rom[i] - 1u);
