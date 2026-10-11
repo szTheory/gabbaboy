@@ -1,0 +1,46 @@
+{
+  "id": "original-mbc3-rtc-battery-continuation",
+  "source": "continuation.asm",
+  "source_identity": "Original GabbaBoy project-authored assembly",
+  "source_sha256": "88097fe7d933d429e59bc1dcf873ea30d556670cc4c7a560330ee9807c16eb20",
+  "license": "MIT; see LICENSE.txt and repository LICENSE",
+  "build": {
+    "assembler": "RGBDS",
+    "version": "1.0.1",
+    "archive": "rgbds-macos.zip",
+    "archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
+    "ci_archive": "rgbds-linux-x86_64.tar.xz",
+    "ci_archive_sha256": "80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9",
+    "recipe": "rgbasm -o <work>/continuation.o fixtures/mbc3-rtc-continuation/continuation.asm && rgblink -o <work>/continuation.gb <work>/continuation.o && rgbfix -f hg -p 0 -m 0x10 -r 2 <work>/continuation.gb"
+  },
+  "rom": "continuation.gb",
+  "size_bytes": 32768,
+  "sha256": "2a6e1922440d6af43a21e65bce579f1d0962f891f308afbe2268395fdbd644a9",
+  "cartridge": {
+    "mapper": "MBC3 + timer",
+    "type": "0x10 (MBC3 + timer + RAM + battery)",
+    "rom_size_code": "0x00 (32 KiB)",
+    "ram_size_code": "0x02 (8 KiB)"
+  },
+  "profile": {
+    "name": "DMG-CPU-B",
+    "boot": "Skipped; starts at cartridge entry 0x0100.",
+    "applicability": "Original software continuation fixture for the deterministic bootless DMG-CPU-B profile; not physical hardware evidence."
+  },
+  "protocol": {
+    "store_branch": "When SRAM 0xA000-0xA002 is not 0x52 0x54 0x43 ('RTC'), the guest sets the clock chosen by the mode byte, writes the marker, and publishes WRAM C000=0x01.",
+    "mode_byte": "SRAM 0xA010: 0xFF or 0x00 = normal 00:00:00 day 0 running; 0x01 = halted at 12:34:56 day 0 (DH=0x40 written last); 0x02 = 23:59:50 day 511 running (DL=0xFF, DH=0x01).",
+    "resume_branch": "When the marker is present, the guest writes 0x00 then 0x01 to 0x6000 to latch, reads RTC registers 0x08-0x0C into WRAM C001..C005 (S, M, H, DL, DH), sets C006=0xA5 if the marker is intact, then publishes C000=0x02.",
+    "missing_save": "fresh RAM reads 0xFF, so the store branch runs and C000=0x01",
+    "host_delta_rule": "result(N) - result(0) == N modulo 512 days; the emulated portion cancels",
+    "timeout_half_dots": 200000,
+    "evidence": "Distinct fresh instances or processes observe the stored clock and marker; this is software continuation evidence only."
+  },
+  "scope_limits": [
+    "No boot-ROM execution",
+    "No physical hardware RTC observation",
+    "No CGB double-speed RTC behavior claim",
+    "No BGB footer or other emulator save-format claim",
+    "The guest protocol tests file-backed continuation separately from mapper/API correctness"
+  ]
+}
