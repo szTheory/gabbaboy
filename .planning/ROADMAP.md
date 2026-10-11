@@ -125,7 +125,7 @@ Plans:
   4. Original fixtures for MBC5 bank `$1FF`, bank 0 in the upper window and rumble masking pass, and the 8 MiB `rom_64Mb` derivative is kept out of install and package artifacts.
 
 **Research**: Standard (confirm the 8 MiB loader bound and repository size policy for `rom_64Mb`).
-**Plans**: 6/10 plans executed (seam plan first; MBC2 then MBC5 run in sequence because they share the core, header and test-inventory files)
+**Plans**: 7/10 plans executed (seam plan first; MBC2 then MBC5 run in sequence because they share the core, header and test-inventory files)
 
 Plans:
 **Wave 1**
@@ -145,7 +145,7 @@ Plans:
 - [x] 08-06-PLAN.md — Sibling verifier, 22 mooneye_mbc CTests, PC agreement and fail-closed controls, SOURCES/ELIGIBILITY and notices
 
 **Wave 6**
-- [ ] 08-07-PLAN.md — Install/package scans, ninth-bit mutant, hosted Linux rebuild leg, exact-head CI
+- [x] 08-07-PLAN.md — Install/package scans, ninth-bit mutant, hosted Linux rebuild leg, exact-head CI
 
 **Wave 7**
 - [ ] 08-08-PLAN.md — Original MBC5 banking fixture: bank $1FF, bank 0 upper window, rumble masking
@@ -262,7 +262,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 1–6, 06.1 | v0.1 | 64/64 | Complete | 2026-10-10 |
 | 7. DMG Game Acceptance and Regression Baseline | v0.2 | 17/17 | Complete    | 2026-10-11 |
-| 8. Cartridge Seam, MBC5 and MBC2 | v0.2 | 6/10 | In Progress | - |
+| 8. Cartridge Seam, MBC5 and MBC2 | v0.2 | 7/10 | In Progress | - |
 | 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 0/TBD | Not started | - |
 | 10. CGB Profile, Banking and Register Visibility | v0.2 | 0/TBD | Not started | - |
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 0/TBD | Not started | - |

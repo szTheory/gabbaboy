@@ -5,16 +5,16 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 8
 current_phase_name: Cartridge Seam, MBC5 and MBC2
 status: executing
-stopped_at: Completed 08-06-PLAN.md
-last_updated: "2026-10-11T15:20:16.032Z"
+stopped_at: "Completed 08-07-PLAN.md (partial: ninth-bit mutant blocked); next 08-08"
+last_updated: "2026-10-11T16:16:22.749Z"
 last_activity: 2026-10-11
 last_activity_desc: Phase 8 execution started
-state_head: 1b50ceec3c8d48ffa0f3129cf8d76003c2257abf
+state_head: 8f4cfff5f89402c9b0beb03ff90af9cffabc70d5
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 27
-  completed_plans: 23
+  completed_plans: 24
   percent: 22
 ---
 
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 ## Current Position
 
 Phase: 8 (Cartridge Seam, MBC5 and MBC2) — EXECUTING
-Plan: 7 of 10
+Plan: 8 of 10
 Status: Ready to execute
 Last activity: 2026-10-11 — Phase 8 execution started
 
@@ -126,6 +126,7 @@ Progress (v0.2): [█░░░░░░░░░] 11% (1/9 phases)
 | Phase 08 P04 | 20 min | 2 tasks | 7 files |
 | Phase 08 P05 | 40 min | 2 tasks | 24 files |
 | Phase 08 P06 | 30 min | 3 tasks | 7 files |
+| Phase 08 P07 | 150 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -255,6 +256,7 @@ None outside the roadmap.
 - Phase 1 PR #1 and Phase 2 PR #2 were merged on 2026-10-07 after their required exact-head checks passed. The 2026-10-07 triage found no open PRs or issues at that time. Phase 2 verification is limited to its documented DMG-CPU-B CPU/timer scope; no physical DMG observation or PPU qualification is claimed.
 - Phase 6 has no open goal, requirement, review, or high/blocking security finding. The release workflow's original post-publication readback failure was repaired before closeout; the live release API and a fresh download reconcile the published 18-asset inventory.
 - Exact CPU-B behavior, physical DMG/MBC1 qualification, physical audio/hotplug, perceptual output, Developer ID signing/notarization, and live Playstead GB integration remain unqualified and are stated as limits, not passing claims.
+- 08-07: D-29 ninth-bit mutant not landed - rom_64Mb guest only selects banks 0-255 (measured), so it cannot discriminate the ninth bit; needs planner decision (re-point to 08-08 fixture or unit tests). CART-02/CART-03 not marked complete.
 
 ### Quick Tasks Completed
 
@@ -272,8 +274,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-11T15:20:15.995Z
-Stopped at: Completed 08-06-PLAN.md
+Last session: 2026-10-11T16:16:22.699Z
+Stopped at: Completed 08-07-PLAN.md (partial: ninth-bit mutant blocked); next 08-08
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 8`
 
