@@ -876,4 +876,38 @@ set_tests_properties(dmg_baseline PROPERTIES TIMEOUT 300
 # include(), not add_subdirectory(): ExpectedTests.cmake reads this directory's TESTS property only.
 include(${CMAKE_CURRENT_LIST_DIR}/acceptance/CMakeLists.txt)
 
+# No host clock in the portable core (D-13). The RTC advances only from emulated time, so the
+# source layer rejects host time headers and calls in src/core and the public header, and the
+# object layer rejects linked clock, sleep and environment symbols in the compiled core library.
+# Two negative controls prove the checks can fail: a scratch source with the forbidden header and
+# call, and an injected symbol list. Both exit through expect_exit.cmake with the exact code 1.
+set(GBB_NO_HOST_CLOCK_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/CheckCoreNoHostClock.cmake")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GBB_NO_HOST_CLOCK_SCRIPT})
+add_test(NAME no_host_clock
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_SOURCE_DIRS=${PROJECT_SOURCE_DIR}/src/core$<SEMICOLON>${PROJECT_SOURCE_DIR}/include/gabbaboy"
+    "-DGBB_CORE_LIBRARY=$<TARGET_FILE:gabbaboy_core>"
+    "-DGBB_NM=${CMAKE_NM}"
+    "-DGBB_LINKER=${CMAKE_LINKER}"
+    "-DGBB_C_COMPILER=${CMAKE_C_COMPILER}"
+    -P ${GBB_NO_HOST_CLOCK_SCRIPT})
+
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/no-host-clock-selftest")
+file(WRITE "${PROJECT_BINARY_DIR}/no-host-clock-selftest/bad.c"
+  "#include <time.h>\nint host_seconds(void) { return (int)time(NULL); }\n")
+add_test(NAME no_host_clock_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_SOURCE_DIRS=${PROJECT_BINARY_DIR}/no-host-clock-selftest;-DGBB_SYMBOLS_FILE=;-P;${GBB_NO_HOST_CLOCK_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=no-host-clock-include
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+file(WRITE "${PROJECT_BINARY_DIR}/no-host-clock-selftest/symbols.txt" "_time\n_malloc\n")
+add_test(NAME no_host_clock_symbol_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_SYMBOLS_FILE=${PROJECT_BINARY_DIR}/no-host-clock-selftest/symbols.txt;-P;${GBB_NO_HOST_CLOCK_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=no-host-clock-symbol: time"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
 gabbaboy_verify_registered_tests()

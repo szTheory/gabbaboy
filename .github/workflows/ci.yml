@@ -47,6 +47,9 @@ jobs:
         run: |
           ctest --test-dir build --output-on-failure --no-tests=error --output-junit ctest.xml
           bash .github/scripts/verify-test-inventory.sh build/ctest.xml tests/expected-tests.txt --installed
+      - name: Print no-host-clock proof
+        shell: bash
+        run: ctest --test-dir build -R '^no_host_clock$' --no-tests=error -V
       - name: Print DMG baseline check result
         shell: bash
         run: bash tests/scripts/verify-dmg-baseline.sh
@@ -84,6 +87,9 @@ jobs:
         run: |
           ctest --test-dir build --output-on-failure --no-tests=error --output-junit ctest.xml
           bash .github/scripts/verify-test-inventory.sh build/ctest.xml tests/expected-tests.txt --installed
+      - name: Print no-host-clock proof
+        shell: bash
+        run: ctest --test-dir build -R '^no_host_clock$' --no-tests=error -V
       - name: Print DMG baseline check result
         shell: bash
         run: bash tests/scripts/verify-dmg-baseline.sh
@@ -133,6 +139,9 @@ jobs:
         run: |
           ctest --test-dir build --output-on-failure --no-tests=error --output-junit ctest.xml
           bash .github/scripts/verify-test-inventory.sh build/ctest.xml tests/expected-tests.txt --installed
+      - name: Print no-host-clock proof
+        shell: bash
+        run: ctest --test-dir build -R '^no_host_clock$' --no-tests=error -V
       - name: Print DMG baseline check result
         shell: bash
         run: bash tests/scripts/verify-dmg-baseline.sh
@@ -162,6 +171,9 @@ jobs:
         run: |
           ctest --preset phase1-asan --output-on-failure --no-tests=error --output-junit ctest.xml
           bash .github/scripts/verify-test-inventory.sh build-asan/ctest.xml tests/expected-tests.txt
+      - name: Print no-host-clock proof
+        shell: bash
+        run: ctest --preset phase1-asan -R '^no_host_clock$' --no-tests=error -V
       - name: Verify bounded fuzz harness and deterministic reproducers
         run: |
           bash tests/scripts/run-bounded-fuzz.sh --self-test

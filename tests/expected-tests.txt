@@ -351,3 +351,6 @@ magentests_oob_sram_mbc5
 magentests_oob_sram_negative_control
 magentests_not_installed
 magentests_not_installed_selftest
+no_host_clock
+no_host_clock_selftest
+no_host_clock_symbol_selftest
