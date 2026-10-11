@@ -1,0 +1,31 @@
+{
+  "id": "save-envelope-v1",
+  "tag": "v0.1.2",
+  "tag_commit": "3fa00be9d8ad8ca12a9bc4672d4851db1eabfa8e",
+  "writer": "src/player/session.c player_session_save_battery at v0.1.2",
+  "sdl": {
+    "version": "3.4.18",
+    "archive_sha256": "9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3"
+  },
+  "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+  "platform": "Darwin arm64",
+  "license": "MIT; see LICENSE.txt and repository LICENSE",
+  "envelopes": [
+    {
+      "file": "mbc1-8k.gbb",
+      "rom_recipe": {
+        "title": "GBBV1CORPUS8K",
+        "type": "0x03",
+        "rom_code": 0,
+        "ram_code": 2,
+        "size_bytes": 32768,
+        "ram_pattern": "byte i = (uint8_t)(i * 37 + 0x31)",
+        "layout": "zero-filled; title at 0x134; 0x147/0x148/0x149 as given; header checksum at 0x14D over 0x134..0x14C"
+      },
+      "rom_sha256": "c93c98e64831d46ba16d8077b268fc989edd64b85440f2bd5c6292df3e5b51ac",
+      "generation": 1,
+      "size_bytes": 8243,
+      "sha256": "6db970e93d91d9b66ac36d4c0538223dcd3f028544bb5459fef36f72c9fd9286"
+    }
+  ]
+}

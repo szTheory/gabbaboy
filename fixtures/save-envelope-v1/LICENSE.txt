@@ -1,0 +1,5 @@
+Copyright 2026 GabbaBoy contributors
+
+These original fixtures are authored for the GabbaBoy project and are not derived
+from a commercial game or third-party ROM. They are licensed under the MIT License;
+see the repository LICENSE file for the full terms.
