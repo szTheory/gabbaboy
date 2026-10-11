@@ -315,3 +315,5 @@ mbc5_banking_fixture_digest
 mbc5_banking_guest
 mbc5_banking_guest_1b
 mbc5_bank_1ff
+mbc5_ninth_bit_mutant_bank_1ff
+mbc5_ninth_bit_mutant_control_below_100

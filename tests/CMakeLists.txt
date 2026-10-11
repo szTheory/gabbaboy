@@ -66,6 +66,54 @@ add_test(NAME mbc5_banking_guest_1b
 add_test(NAME mbc5_bank_1ff
   COMMAND test_mbc5 mbc5_bank_1ff ${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb)
 
+# Ninth-bit core mutant (D-29, amended): a copy of the core whose MBC5 ROM bank composition keeps
+# `& 0u` of the high bank register instead of `& 1u`, so banks $100 and above alias $00-$FF. The
+# Mooneye mbc5 harness stops at bank $FF and cannot see this, so the discriminator is the original
+# mbc5_bank_1ff case. Same configure-time, exactly-once anchor discipline as the JOYP mutant in
+# tests/acceptance; the library and executable are test-only and never installed or exported.
+set(GBB_NINTH_SOURCE ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c)
+set(GBB_NINTH_PATTERN "& 1u) << 8")
+set(GBB_NINTH_REPLACEMENT "& 0u) << 8")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GBB_NINTH_SOURCE})
+file(READ ${GBB_NINTH_SOURCE} gbb_ninth_core_text)
+string(FIND "${gbb_ninth_core_text}" "${GBB_NINTH_PATTERN}" gbb_ninth_first)
+string(FIND "${gbb_ninth_core_text}" "${GBB_NINTH_PATTERN}" gbb_ninth_last REVERSE)
+if(gbb_ninth_first EQUAL -1 OR NOT gbb_ninth_first EQUAL gbb_ninth_last)
+  message(FATAL_ERROR "ninth-bit mutant pattern '${GBB_NINTH_PATTERN}' must occur exactly once in "
+    "${GBB_NINTH_SOURCE} (first=${gbb_ninth_first} last=${gbb_ninth_last})")
+endif()
+# The core text carries semicolons, so it stays quoted and never enters a list operation.
+string(REPLACE "${GBB_NINTH_PATTERN}" "${GBB_NINTH_REPLACEMENT}" gbb_ninth_text "${gbb_ninth_core_text}")
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_ninth_bit_mutant.c "${gbb_ninth_text}")
+
+add_library(gabbaboy_core_ninth_bit_mutant STATIC ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_ninth_bit_mutant.c)
+target_include_directories(gabbaboy_core_ninth_bit_mutant PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_compile_features(gabbaboy_core_ninth_bit_mutant PUBLIC c_std_17)
+set_target_properties(gabbaboy_core_ninth_bit_mutant PROPERTIES C_EXTENSIONS OFF)
+target_compile_definitions(gabbaboy_core_ninth_bit_mutant PRIVATE
+  GBB_BUILD_REVISION="ninth-bit-mutant" GBB_BUILD_QUALIFIED=0)
+
+add_executable(test_mbc5_ninth_bit_mutant test_mbc5.c)
+target_link_libraries(test_mbc5_ninth_bit_mutant PRIVATE gabbaboy_core_ninth_bit_mutant)
+target_compile_features(test_mbc5_ninth_bit_mutant PRIVATE c_std_17)
+set_target_properties(test_mbc5_ninth_bit_mutant PROPERTIES C_EXTENSIONS OFF)
+
+# The mutant must be caught at the C005 bank $1FF assertion specifically (exit 1, the REQUIRE text).
+add_test(NAME mbc5_ninth_bit_mutant_bank_1ff
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_mbc5_ninth_bit_mutant>;mbc5_bank_1ff;${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=r.3. == 0x01u"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# In-mutant control: the same guest on its committed 64 KiB image never selects a bank at or above
+# $100, so the mutant core still passes it (exit 0), which shows the mutant is not simply broken.
+add_test(NAME mbc5_ninth_bit_mutant_control_below_100
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_mbc5_ninth_bit_mutant>;mbc5_banking_guest;${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=.*"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
 add_executable(test_battery test_battery.c)
 target_link_libraries(test_battery PRIVATE GabbaBoy::core)
 target_compile_features(test_battery PRIVATE c_std_17)
