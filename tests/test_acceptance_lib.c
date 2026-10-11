@@ -315,14 +315,30 @@ static int case_predicate_truth_table(void) {
     set_play_hit(ram);
     REQUIRE(gbb_accept_predicate_eval(p, synthetic_peek, ram, 0)); /* play hit */
 
-    /* Title garbage: pseudo-random WRAM must not satisfy the predicate. */
+    /* Title garbage: pseudo-random WRAM must not satisfy the predicate. Rounds 0..6 of every
+     * eight start from random WRAM with the seven predicate bytes forced to their play-hit
+     * values and then break exactly one clause, so deleting any clause fails some round. Round 7
+     * is fully random (the fixed seed makes it deterministic). */
     uint32_t x = 12345u;
     for (unsigned round = 0; round < 64; round++) {
         for (unsigned a = 0xC000u; a < 0xE000u; a++) {
             x = x * 1664525u + 1013904223u;
             ram[a] = (uint8_t)(x >> 24);
         }
-        ram[0xC4E8] = 3; /* keep garbage from landing on the 2x2 floor by chance */
+        const unsigned clause = round % 8u;
+        if (clause != 7u) {
+            ram[0xC5A3] = 0x00; ram[0xC580] = 0x00; ram[0xC57F] = 0x00;
+            ram[0xC4E8] = 2; ram[0xC4E9] = 2; ram[0xC4EC] = 4; ram[0xC4ED] = 4;
+            switch (clause) {
+            case 0: ram[0xC5A3] = 0x80; break;               /* hw_capability */
+            case 1: ram[0xC580] = 0x04; break;               /* attract_mode */
+            case 2: ram[0xC57F] = 0x01; break;               /* cur_floor */
+            case 3: ram[0xC4E8] = 3; break;                  /* floor_width */
+            case 4: ram[0xC4E9] = 1; break;                  /* floor_height */
+            case 5: ram[0xC4EC] = 1; ram[0xC4ED] = 1; break; /* max_score below 2 */
+            default: ram[0xC4ED] = 3; break;                 /* cur_score != max_score */
+            }
+        }
         REQUIRE(!gbb_accept_predicate_eval(p, synthetic_peek, ram, 0));
     }
 
