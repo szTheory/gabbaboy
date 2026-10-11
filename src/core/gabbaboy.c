@@ -50,12 +50,13 @@ typedef struct {
 #define GBB_MAX_ROM_SIZE ((size_t)2u * 1024u * 1024u)
 
 /* ROM_ONLY must stay 0 so a calloc-zeroed instance is a ROM-only cartridge. */
-typedef enum { CART_ROM_ONLY = 0, CART_MBC1 = 1, CART_MBC2 = 2 } cart_kind;
+typedef enum { CART_ROM_ONLY = 0, CART_MBC1 = 1, CART_MBC2 = 2, CART_MBC5 = 3 } cart_kind;
 
 typedef enum {
     CART_RAM_NONE = 0,     /* RAM code must be $00 */
     CART_RAM_8K_OR_32K = 1, /* code $02 = 8 KiB; $03 = 32 KiB on small ROMs */
-    CART_RAM_MBC2 = 2       /* built-in 512 nibbles; header RAM code must be $00 */
+    CART_RAM_MBC2 = 2,      /* built-in 512 nibbles; header RAM code must be $00 */
+    CART_RAM_MBC5 = 3       /* codes $02/$03/$05/$04 = 8/32/64/128 KiB */
 } cart_ram_rule;
 
 /* MBC2 has 512 x 4-bit cells inside the mapper chip. We store each as a byte
@@ -97,6 +98,12 @@ static const cart_type_row cart_type_table[] = {
     { 0x03u, CART_MBC1,     1u, 1u, 0u, 0u, 0x06u, CART_RAM_8K_OR_32K, 0x04u, GBB_MAX_ROM_SIZE },
     { 0x05u, CART_MBC2,     1u, 0u, 0u, 0u, 0x03u, CART_RAM_MBC2,      0u,    GBB_MAX_ROM_SIZE },
     { 0x06u, CART_MBC2,     1u, 1u, 0u, 0u, 0x03u, CART_RAM_MBC2,      0u,    GBB_MAX_ROM_SIZE },
+    { 0x19u, CART_MBC5,     1u, 0u, 0u, 0u, 0x08u, CART_RAM_NONE,      0u,    GBB_MAX_ROM_SIZE },
+    { 0x1Au, CART_MBC5,     1u, 0u, 0u, 0u, 0x08u, CART_RAM_MBC5,      0u,    GBB_MAX_ROM_SIZE },
+    { 0x1Bu, CART_MBC5,     1u, 1u, 0u, 0u, 0x08u, CART_RAM_MBC5,      0u,    GBB_MAX_ROM_SIZE },
+    { 0x1Cu, CART_MBC5,     1u, 0u, 0u, 1u, 0x08u, CART_RAM_NONE,      0u,    GBB_MAX_ROM_SIZE },
+    { 0x1Du, CART_MBC5,     1u, 0u, 0u, 1u, 0x08u, CART_RAM_MBC5,      0u,    GBB_MAX_ROM_SIZE },
+    { 0x1Eu, CART_MBC5,     1u, 1u, 0u, 1u, 0x08u, CART_RAM_MBC5,      0u,    GBB_MAX_ROM_SIZE },
 };
 
 static const cart_type_row *cart_row_for_type(uint8_t type) {
@@ -123,6 +130,13 @@ static size_t mbc1_rom_bank(const cart_state *c, size_t rom_size, uint16_t addre
     /* Translate zero before masking: a small ROM can disconnect upper lines. */
     const size_t low = c->rom_bank_lo == 0u ? 1u : c->rom_bank_lo;
     return (((size_t)c->rom_bank_hi << 5) | low) & mask;
+}
+
+/* MBC5 has two independent ROM bank registers: $2000-$2FFF holds the low eight
+ * bits and $3000-$3FFF bit 8. Bank 0 is a legal selection for $4000-$7FFF (no
+ * 0-to-1 remap), and a bank beyond the image wraps by masking. */
+static size_t mbc5_rom_bank(const cart_state *c, size_t rom_banks) {
+    return ((((size_t)(c->rom_bank_hi & 1u) << 8) | c->rom_bank_lo) & (rom_banks - 1u));
 }
 
 static size_t mbc1_ram_offset(const cart_state *c, size_t ram_size, uint16_t address) {
@@ -756,6 +770,12 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
             const size_t offset = bank * 0x4000u + (size_t)(address & 0x3FFFu);
             return offset < m->rom_size ? m->rom[offset] : 0xFFu;
         }
+        case CART_MBC5: {
+            const size_t bank = address < 0x4000u ? 0u
+                : mbc5_rom_bank(&m->cart, m->rom_size / 0x4000u);
+            const size_t offset = bank * 0x4000u + (size_t)(address & 0x3FFFu);
+            return offset < m->rom_size ? m->rom[offset] : 0xFFu;
+        }
         case CART_ROM_ONLY:
         default:
             return m->rom[address];
@@ -773,6 +793,14 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
             if (m->cart.ram_enabled && m->cartridge_ram != NULL &&
                 m->cartridge_ram_size == MBC2_RAM_BYTES)
                 return m->cartridge_ram[address & 0x1FFu];
+            return 0xFFu;
+        case CART_MBC5:
+            if (m->cart.ram_enabled && m->cartridge_ram != NULL &&
+                m->cartridge_ram_size != 0u) {
+                const size_t banks = m->cartridge_ram_size / 0x2000u;
+                const size_t bank = (size_t)m->cart.ram_bank & (banks - 1u);
+                return m->cartridge_ram[bank * 0x2000u + (size_t)(address & 0x1FFFu)];
+            }
             return 0xFFu;
         case CART_ROM_ONLY:
         default:
@@ -852,6 +880,16 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
                 }
             }
             break;
+        case CART_MBC5:
+            if (address < 0x2000u)
+                m->cart.ram_enabled = (value & 0x0Fu) == 0x0Au;
+            else if (address < 0x3000u)
+                m->cart.rom_bank_lo = value;
+            else if (address < 0x4000u)
+                m->cart.rom_bank_hi = value & 0x01u;
+            else if (address < 0x6000u)
+                m->cart.ram_bank = value & 0x0Fu;
+            break;
         case CART_ROM_ONLY:
         default:
             break;
@@ -886,6 +924,20 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
                 const uint8_t canonical = (uint8_t)(0xF0u | (value & 0x0Fu));
                 if (m->cartridge_ram[offset] != canonical) {
                     m->cartridge_ram[offset] = canonical;
+                    if (m->cart.has_battery &&
+                        m->battery_generation != UINT64_MAX)
+                        ++m->battery_generation;
+                }
+            }
+            break;
+        case CART_MBC5:
+            if (m->cart.ram_enabled && m->cartridge_ram != NULL &&
+                m->cartridge_ram_size != 0u) {
+                const size_t banks = m->cartridge_ram_size / 0x2000u;
+                const size_t offset = ((size_t)m->cart.ram_bank & (banks - 1u)) * 0x2000u +
+                                      (size_t)(address & 0x1FFFu);
+                if (m->cartridge_ram[offset] != value) {
+                    m->cartridge_ram[offset] = value;
                     if (m->cart.has_battery &&
                         m->battery_generation != UINT64_MAX)
                         ++m->battery_generation;
@@ -1783,6 +1835,14 @@ static gbb_error validate_header(const uint8_t *rom, size_t size,
         /* The 512 bytes come from the type row; $149 must not claim more. */
         if (ram_size_code != 0u) return GBB_UNSUPPORTED_RAM_SIZE;
         ram_size = MBC2_RAM_BYTES;
+    } else if (row->ram_rule == CART_RAM_MBC5) {
+        switch (ram_size_code) {
+        case 0x02u: ram_size = 8192u; break;
+        case 0x03u: ram_size = 32768u; break;
+        case 0x05u: ram_size = 65536u; break;
+        case 0x04u: ram_size = 131072u; break;
+        default: return GBB_UNSUPPORTED_RAM_SIZE;
+        }
     } else if (ram_size_code == 0x02u) {
         ram_size = 8192u;
     } else if (ram_size_code == 0x03u && rom_size_code <= row->ram32_max_rom_code) {
