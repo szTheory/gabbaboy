@@ -556,6 +556,32 @@ gbb_add_baseline_variant_test(empty_observations 1 "empty-observations")
 gbb_add_baseline_variant_test(malformed_line 1 "malformed-line")
 gbb_add_baseline_variant_test(header_invalid 1 "header-invalid")
 
+# JUnit inventory checks run on a synthetic report: every frozen core name must appear as a testcase
+# with no skipped, failure or error child. Plan 07-15 applies the same mode to the real CI reports.
+file(READ "${GBB_BASELINE_SELFTEST}/junit.xml" GBB_JUNIT)
+set(GBB_BETA_CASE "<testcase name=\"beta_test\" classname=\"beta_test\" time=\"0.01\" status=\"run\"/>")
+string(REPLACE "  ${GBB_BETA_CASE}\n" "" GBB_JUNIT_MISSING "${GBB_JUNIT}")
+string(REPLACE "${GBB_BETA_CASE}"
+  "<testcase name=\"beta_test\" classname=\"beta_test\" time=\"0.01\" status=\"notrun\"><skipped/></testcase>"
+  GBB_JUNIT_SKIPPED "${GBB_JUNIT}")
+string(REPLACE "${GBB_BETA_CASE}"
+  "<testcase name=\"beta_test\" classname=\"beta_test\" time=\"0.01\" status=\"fail\"><failure message=\"x\"/></testcase>"
+  GBB_JUNIT_FAILED "${GBB_JUNIT}")
+file(WRITE "${GBB_BASELINE_DIR}/junit_missing.xml" "${GBB_JUNIT_MISSING}")
+file(WRITE "${GBB_BASELINE_DIR}/junit_skipped.xml" "${GBB_JUNIT_SKIPPED}")
+file(WRITE "${GBB_BASELINE_DIR}/junit_failed.xml" "${GBB_JUNIT_FAILED}")
+
+function(gbb_add_baseline_junit_test name code regex report)
+  gbb_add_baseline_test(dmg_baseline_${name} ${code} "${regex}"
+    -DGBB_MODE=junit -DGBB_INVENTORY=core
+    "-DGBB_LEDGER=${GBB_BASELINE_SELFTEST}/ledger.txt"
+    "-DGBB_JUNIT=${report}")
+endfunction()
+gbb_add_baseline_junit_test(junit_pass 0 "baseline junit=ok" "${GBB_BASELINE_SELFTEST}/junit.xml")
+gbb_add_baseline_junit_test(junit_missing 1 "junit-missing" "${GBB_BASELINE_DIR}/junit_missing.xml")
+gbb_add_baseline_junit_test(junit_skipped 1 "junit-skipped" "${GBB_BASELINE_DIR}/junit_skipped.xml")
+gbb_add_baseline_junit_test(junit_failed 1 "junit-failed" "${GBB_BASELINE_DIR}/junit_failed.xml")
+
 # include(), not add_subdirectory(): ExpectedTests.cmake reads this directory's TESTS property only.
 include(${CMAKE_CURRENT_LIST_DIR}/acceptance/CMakeLists.txt)
 

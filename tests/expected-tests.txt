@@ -251,3 +251,7 @@ dmg_baseline_empty_section
 dmg_baseline_empty_observations
 dmg_baseline_malformed_line
 dmg_baseline_header_invalid
+dmg_baseline_junit_pass
+dmg_baseline_junit_missing
+dmg_baseline_junit_skipped
+dmg_baseline_junit_failed
