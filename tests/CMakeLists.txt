@@ -60,6 +60,11 @@ add_test(NAME mbc5_rumble_saturation COMMAND test_mbc5_internal mbc5_rumble_satu
 # Original banking guest (D-33): the committed 64 KiB ROM is run through the real CPU and bus.
 add_test(NAME mbc5_banking_guest
   COMMAND test_mbc5 mbc5_banking_guest ${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb)
+# In-memory variants (never written to disk): $1B non-rumble type, and the 8 MiB bank $1FF inflation.
+add_test(NAME mbc5_banking_guest_1b
+  COMMAND test_mbc5 mbc5_banking_guest_1b ${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb)
+add_test(NAME mbc5_bank_1ff
+  COMMAND test_mbc5 mbc5_bank_1ff ${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb)
 
 add_executable(test_battery test_battery.c)
 target_link_libraries(test_battery PRIVATE GabbaBoy::core)
