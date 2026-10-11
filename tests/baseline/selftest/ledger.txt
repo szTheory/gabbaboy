@@ -4,7 +4,7 @@ acceptance.libbet.pcm_sha256	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 bench.tracer.correctness_digest_fnv1a64	4c7a57ff3d50d228
 bench.tracer.workload	original-wram-tracer-1m-half-dots-v1
 coverage	synthetic self-test ledger, not a real baseline
-frozen_body_sha256	ac9ee6fa60aac87b3ac2e0df5b0ac913de778e400c779a194eaeab7d6bc417fb
+frozen_body_sha256	02b87043097b42c8b1278ca97905258c038817f38b135a85f192ceabd4b0819f
 frozen_date	2000-01-01T00:00:00Z
 frozen_revision	0123456789abcdef0123456789abcdef01234567
 inventory.core.alpha_test	frozen

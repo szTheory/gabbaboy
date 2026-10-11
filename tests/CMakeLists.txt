@@ -481,6 +481,7 @@ gbb_add_baseline_test(dmg_baseline_selftest_pass 0 "baseline status=pass"
 string(ASCII 9 GBB_TAB)
 set(GBB_PCM_OLD "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 set(GBB_PCM_NEW "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+set(GBB_PCM_OTHER "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
 set(GBB_BASELINE_ROW_TAIL "| synthetic reason | regression fixture (self-test only) | self-test |\n")
 
 function(gbb_baseline_variant name ledger observed changes)
@@ -517,7 +518,7 @@ gbb_baseline_variant(changes_recorded "${GBB_LED_CHANGED}" "${GBB_OBS_CHANGED}" 
 gbb_baseline_variant(changes_noop "${GBB_LED}" "${GBB_OBS}"
   "${GBB_CHG}| acceptance.libbet.pcm_sha256 | ${GBB_PCM_OLD} | ${GBB_PCM_OLD} ${GBB_BASELINE_ROW_TAIL}")
 gbb_baseline_variant(changes_inconsistent "${GBB_LED}" "${GBB_OBS}"
-  "${GBB_CHG}| acceptance.libbet.pcm_sha256 | ${GBB_PCM_NEW} | ${GBB_PCM_NEW} ${GBB_BASELINE_ROW_TAIL}")
+  "${GBB_CHG}| acceptance.libbet.pcm_sha256 | ${GBB_PCM_OTHER} | ${GBB_PCM_NEW} ${GBB_BASELINE_ROW_TAIL}")
 
 # Ledger shape: ordering, duplicate key, empty ledger, empty section, empty observations, bad line, bad header.
 string(REPLACE
