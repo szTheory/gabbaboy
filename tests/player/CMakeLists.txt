@@ -67,17 +67,33 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       set_target_properties(gabbaboy-player-session-test PROPERTIES
         C_EXTENSIONS OFF)
       add_executable(test_player_session test_session.c)
+      target_sources(test_player_session PRIVATE
+        "${PROJECT_SOURCE_DIR}/src/player/audio.c"
+        "${PROJECT_SOURCE_DIR}/src/player/input.c"
+        "${PROJECT_SOURCE_DIR}/src/player/script_smoke.c")
       target_link_libraries(test_player_session PRIVATE
-        gabbaboy-player-session-test)
+        gabbaboy-player-session-test gabbaboy_accept)
       target_compile_features(test_player_session PRIVATE c_std_17)
       target_compile_definitions(test_player_session PRIVATE
-        GBB_PLAYER_SESSION_TESTING)
+        GBB_PLAYER_SESSION_TESTING GBB_PLAYER_AUDIO_TESTING)
       set_target_properties(test_player_session PROPERTIES C_EXTENSIONS OFF)
+    endif()
+    set(player_session_extra "")
+    if(test_name MATCHES "^player_session_script_(no_input|invalid)$")
+      # The pinned Libbet ROM and the no-input script feed both script controls.
+      set(player_session_extra
+        ${PROJECT_SOURCE_DIR}/fixtures/libbet/libbet.gb
+        ${PROJECT_SOURCE_DIR}/tests/acceptance/inputs/libbet-no-input.input)
     endif()
     add_test(NAME ${test_name} COMMAND test_player_session ${test_name}
       ${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb
       ${CMAKE_CURRENT_BINARY_DIR}/${test_name}-temp.gb
-      ${CMAKE_CURRENT_BINARY_DIR}/${test_name}-data)
+      ${CMAKE_CURRENT_BINARY_DIR}/${test_name}-data
+      ${player_session_extra})
+    if(test_name STREQUAL "player_session_script_no_input")
+      set_tests_properties(${test_name} PROPERTIES TIMEOUT 300
+        ENVIRONMENT "SDL_AUDIO_DRIVER=dummy")
+    endif()
   elseif(test_name MATCHES "^player_continuation_(resume|missing_save|wrong_rom|mutated_payload)$")
     if(NOT TARGET test_player_continuation)
       add_executable(test_player_continuation test_continuation.c)

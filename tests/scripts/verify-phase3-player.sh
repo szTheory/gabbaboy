@@ -313,6 +313,24 @@ PY
   }
   cat "$script_output"
 
+  # D-36 negative control: the same timeline with no button events must exit non-zero and report
+  # predicate=fail, so the scripted smoke above is proven able to fail through the package.
+  local control_output="$BUILD_ROOT/downloaded-package-script-no-input.txt"
+  local control_status=0
+  "$player_bin" --smoke-package "$demo_license" \
+      --input-script "$ROOT_DIR/tests/acceptance/inputs/libbet-no-input.input" \
+      "$ROOT_DIR/fixtures/libbet/libbet.gb" >"$control_output" 2>&1 || control_status=$?
+  if [[ "$control_status" -eq 0 ]]; then
+    cat "$control_output" >&2
+    fail 'packaged no-input control exited zero; the scripted smoke cannot fail'
+  fi
+  grep -Fq 'predicate=fail' "$control_output" || {
+    cat "$control_output" >&2
+    fail 'packaged no-input control did not report predicate=fail'
+  }
+  printf 'packaged no-input control failed as expected (exit %s)\n' "$control_status"
+  cat "$control_output"
+
   if [[ "$write_final_receipt" == true ]]; then
     local candidate_package_sha build_run_id build_run_attempt consumer_run_id consumer_run_attempt
     local package_sdl_version package_sdl_archive_sha package_sdl_license_sha package_demo_rom_sha

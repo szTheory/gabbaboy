@@ -1,3 +1,5 @@
+#include "input.h"
+#include "script_smoke.h"
 #include "session.h"
 
 #include <dirent.h>
@@ -1026,8 +1028,101 @@ static int session_interrupt(const char *root,
     return 0;
 }
 
+/* D-36/D-38 session-level script controls. */
+typedef struct {
+    player_input_state input;
+    gbb_instance *machine;
+    unsigned calls;
+} script_deliver_context;
+
+static bool script_test_deliver(void *context, const gbb_input_event *events, size_t count) {
+    script_deliver_context *ctx = context;
+    for (size_t i = 0u; i < count; ++i) {
+        ctx->calls++;
+        const bool pressed = events[i].kind == GBB_INPUT_BUTTON_PRESS;
+        const SDL_Scancode scancode = events[i].value == GBB_BUTTON_START
+            ? SDL_SCANCODE_RETURN : SDL_SCANCODE_Z;
+        if (player_input_key(&ctx->input, ctx->machine, SDL_GetTicksNS(), scancode,
+                             pressed, false) != GBB_OK) return false;
+    }
+    return true;
+}
+
+static void script_test_progress(void *context, uint64_t actual_half_dots) {
+    script_deliver_context *ctx = context;
+    player_input_reconcile(&ctx->input, actual_half_dots);
+}
+
+/* The no-input control: the same timeline with no button events must never reach the
+ * predicate, so a smoke that cannot fail is caught here without the packaged player. */
+static int script_no_input(const char *rom_path, const char *script_path) {
+    player_script_smoke smoke;
+    char err[192];
+    REQUIRE(player_script_smoke_prepare(&smoke, rom_path, script_path, err, sizeof(err)) == 0);
+    REQUIRE(smoke.script.event_count == 0u);
+    script_deliver_context ctx = {0};
+    ctx.machine = create_machine();
+    REQUIRE(ctx.machine != NULL);
+    REQUIRE(gbb_load_rom(ctx.machine, smoke.rom, smoke.rom_length) == GBB_OK);
+    player_input_reset(&ctx.input, SDL_GetTicksNS());
+    player_script_smoke_result result;
+    REQUIRE(player_script_smoke_run(&smoke, ctx.machine, NULL, script_test_deliver,
+                                    script_test_progress, &ctx, &result));
+    REQUIRE(result.status != GBB_ACCEPT_DRIVE_HIT);
+    REQUIRE(result.status == GBB_ACCEPT_DRIVE_NOT_REACHED);
+    REQUIRE(ctx.calls == 0u);
+    gbb_destroy(ctx.machine);
+    player_script_smoke_release(&smoke);
+    return 0;
+}
+
+static bool write_filled_file(const char *path, size_t size, uint8_t fill) {
+    uint8_t *bytes = malloc(size);
+    if (bytes == NULL) return false;
+    memset(bytes, fill, size);
+    FILE *file = fopen(path, "wb");
+    if (file == NULL) {
+        free(bytes);
+        return false;
+    }
+    const bool ok = fwrite(bytes, 1, size, file) == size;
+    const bool closed = fclose(file) == 0;
+    free(bytes);
+    return ok && closed;
+}
+
+static int require_rejected_untouched(const char *rom_path, const char *script_path) {
+    player_script_smoke smoke;
+    char err[192] = {0};
+    REQUIRE(player_script_smoke_prepare(&smoke, rom_path, script_path, err, sizeof(err)) != 0);
+    REQUIRE(err[0] != '\0');
+    /* A rejected prepare leaves nothing behind: no script, no ROM bytes, no predicate. */
+    REQUIRE(smoke.rom == NULL && smoke.rom_length == 0u && smoke.predicate == NULL);
+    REQUIRE(smoke.script.events == NULL && smoke.script.event_count == 0u);
+    REQUIRE(smoke.script.marks == NULL && smoke.script.mark_count == 0u);
+    return 0;
+}
+
+static int script_invalid(const char *libbet_rom, const char *good_script,
+                          const char *demo_rom, const char *root) {
+    char path[1024];
+    /* A NUL byte in an otherwise valid script. */
+    snprintf(path, sizeof(path), "%s/nul.input", root);
+    FILE *file = fopen(path, "wb");
+    REQUIRE(file != NULL);
+    REQUIRE(fwrite("gbinput 1\nwait 1f\0\n", 1, 20, file) == 20u && fclose(file) == 0);
+    REQUIRE(require_rejected_untouched(libbet_rom, path) == 0);
+    /* One byte over the 65536-byte script limit. */
+    snprintf(path, sizeof(path), "%s/oversize.input", root);
+    REQUIRE(write_filled_file(path, GBB_ACCEPT_SCRIPT_MAX_BYTES + 1u, '\n'));
+    REQUIRE(require_rejected_untouched(libbet_rom, path) == 0);
+    /* A valid script with a ROM whose digest has no pinned predicate. */
+    REQUIRE(require_rejected_untouched(demo_rom, good_script) == 0);
+    return 0;
+}
+
 int main(int argc, char **argv) {
-    if (argc != 5 || !start_test_root(argv[4])) return 2;
+    if (argc < 5 || !start_test_root(argv[4])) return 2;
     int result = 2;
     if (strcmp(argv[1], "player_session_replacement_failure") == 0)
         result = replacement_failure(argv[2], argv[3]);
@@ -1076,6 +1171,10 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "player_session_interrupt_after_rename") == 0)
         result = session_interrupt(argv[4],
             PLAYER_SESSION_TEST_INTERRUPT_AFTER_RENAME, true);
+    else if (strcmp(argv[1], "player_session_script_no_input") == 0)
+        result = argc == 7 ? script_no_input(argv[5], argv[6]) : 2;
+    else if (strcmp(argv[1], "player_session_script_invalid") == 0)
+        result = argc == 7 ? script_invalid(argv[5], argv[6], argv[2], argv[4]) : 2;
     remove_tree(argv[4]);
     return result;
 }
