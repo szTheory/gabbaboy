@@ -133,6 +133,17 @@ PY
      -s "$project_license" && -s "$sdl_license" ]] ||
     fail 'extracted package is missing a license notice'
   [[ -s "$package_metadata" ]] || fail 'extracted package is missing source and SDL metadata'
+  # Redistribution guard (T-07-43): the third-party Libbet ROM is read from the checkout by the
+  # scripted smoke below and must never be carried inside the player package.
+  local scan_output
+  scan_output=$(python3 -I "$ROOT_DIR/tests/scripts/verify-libbet-admission.py" \
+      --scan-dir "$EXTRACT_DIR" 2>&1) || {
+    printf '%s\n' "$scan_output" >&2
+    fail 'extracted package contains the third-party Libbet ROM'
+  }
+  grep -Fq 'libbet absent from scanned tree' <<< "$scan_output" ||
+    fail 'extracted package ROM-absence scan did not report a clean tree'
+  printf '%s\n' "$scan_output"
   local package_help="$BUILD_ROOT/downloaded-package-help.txt"
   "$player_bin" --help >"$package_help" 2>&1 || {
     cat "$package_help" >&2
