@@ -108,8 +108,9 @@ are repository test fixtures only; each has a documented license and digest.
 They are not installed and not packaged.
 
 - `mooneye_mbc_not_installed` scans the real install tree by file name and by
-  size plus SHA-256 against all 15 ROMs, with a planted-copy control, an
-  empty-tree control and an exact fixture-directory list
+  size plus SHA-256 against all 15 ROMs. File symbolic links are followed and
+  their targets scanned. Controls: a planted copy, a ROM behind an innocuously
+  named link, an empty tree and an exact fixture-directory list
   (`tracer`, `visible-demo`, `mbc1-continuation`).
 - The extracted preview package and the staged macOS player package are scanned
   the same way (`preview_package_smoke`, `verify-phase3-player.sh
