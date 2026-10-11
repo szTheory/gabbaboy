@@ -1110,7 +1110,9 @@ static int script_invalid(const char *libbet_rom, const char *good_script,
     snprintf(path, sizeof(path), "%s/nul.input", root);
     FILE *file = fopen(path, "wb");
     REQUIRE(file != NULL);
-    REQUIRE(fwrite("gbinput 1\nwait 1f\0\n", 1, 20, file) == 20u && fclose(file) == 0);
+    static const char nul_script[] = "gbinput 1\nwait 1f\0\n";
+    const size_t nul_length = sizeof(nul_script) - 1u; /* drop the literal's own terminator */
+    REQUIRE(fwrite(nul_script, 1, nul_length, file) == nul_length && fclose(file) == 0);
     REQUIRE(require_rejected_untouched(libbet_rom, path) == 0);
     /* One byte over the 65536-byte script limit. */
     snprintf(path, sizeof(path), "%s/oversize.input", root);
