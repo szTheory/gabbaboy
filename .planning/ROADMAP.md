@@ -170,7 +170,7 @@ Plans:
 
 **Rights gates**: G1 (mgblib font) gates Mealybug `mbc3_rtc` as required evidence; G3 (gbclock plugin licences) keeps gbclock out — rtc3test and original fixtures are primary.
 **Research**: DEEP (write-while-running, rollover, sub-second prescaler reset on seconds write, day carry, halt).
-**Plans**: 7/18 plans executed
+**Plans**: 8/18 plans executed
 
 Plans:
 **Wave 1**
@@ -183,7 +183,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [x] 09-07-PLAN.md — MagenTests screen oracle for MBC1/MBC3/MBC5 with negative control and install exclusion
-- [ ] 09-08-PLAN.md — rtc3test admission and legacy-RGBDS reproduction legs for rtc3test and MagenTests
+- [x] 09-08-PLAN.md — rtc3test admission and legacy-RGBDS reproduction legs for rtc3test and MagenTests
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 09-09-PLAN.md — Lazy emulated-time RTC, original differential/metamorphic/edge tests, no-host-clock CI proof, draft PR and exact-head CI read
@@ -298,7 +298,7 @@ Plans:
 | 1–6, 06.1 | v0.1 | 64/64 | Complete | 2026-10-10 |
 | 7. DMG Game Acceptance and Regression Baseline | v0.2 | 17/17 | Complete    | 2026-10-11 |
 | 8. Cartridge Seam, MBC5 and MBC2 | v0.2 | 10/10 | Complete    | 2026-10-11 |
-| 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 7/18 | In Progress | - |
+| 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 8/18 | In Progress | - |
 | 10. CGB Profile, Banking and Register Visibility | v0.2 | 0/TBD | Not started | - |
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 0/TBD | Not started | - |
 | 12. CGB Double Speed | v0.2 | 0/TBD | Not started | - |
