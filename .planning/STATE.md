@@ -5,16 +5,16 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 07
 current_phase_name: DMG Game Acceptance and Regression Baseline
 status: executing
-stopped_at: Completed 07-13-PLAN.md
-last_updated: "2026-10-11T01:01:55.140Z"
+stopped_at: Completed GB-07-14-PLAN.md (exact-head run 38100653716 green at 238ff53)
+last_updated: "2026-10-11T01:26:59.888Z"
 last_activity: 2026-10-10
 last_activity_desc: Phase GB-07 execution started
-state_head: ba08af2bc9d477bedbf9d0f309b4b0e100132b08
+state_head: 1f897a4be7d30a59f838b8492bc07f63c7805332
 progress:
   total_phases: 9
   completed_phases: 1
   total_plans: 17
-  completed_plans: 14
+  completed_plans: 15
   percent: 11
 ---
 
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-10)
 ## Current Position
 
 Phase: GB-07 (DMG Game Acceptance and Regression Baseline) — EXECUTING
-Plan: 14 of 17 (07-13 complete; 07-14 is next)
+Plan: 15 of 17 (07-13 complete; 07-14 is next)
 Status: Executing Phase GB-07
 Last activity: 2026-10-10 — Phase GB-07 execution started
 
@@ -117,6 +117,7 @@ Progress (v0.2): [░░░░░░░░░░] 0% (0/9 phases)
 | Phase 07 P11 | 130 min | 3 tasks | 9 files |
 | Phase 07 P12 | 40 min | 2 tasks | 6 files |
 | Phase 07 P13 | 75 min | 3 tasks | 8 files |
+| Phase GB-07 P14 | 55 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -224,6 +225,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 07]: 07-10: control regexes match the full status line (status=fail model=dmg-cpu-b reason=...); final_* fields print on every non-pass predicate line
 - [Phase 07]: 07-11: D-16 PCM thresholds unchanged (peak_to_peak 2048, changes 4800); O=20290/164822, N=0/0 at exact head b6f982b, identical on Linux, macOS and Windows
 - [Phase 07]: 07-11: stall report (D-18) also covers exit 3 and writes the failure PPM there; acceptance_parse_script_errors compares events field-wise (MSVC padding)
+- [Phase GB-07]: 07-14: surface check forbids a superset of tokens (freopen, O_* flags, non-literal fopen mode, session persistence names); test_player_session compiles audio/input/script_smoke sources directly
 
 ### Pending Todos
 
@@ -257,8 +259,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-11T01:01:55.118Z
-Stopped at: Completed 07-13-PLAN.md
+Last session: 2026-10-11T01:26:59.868Z
+Stopped at: Completed GB-07-14-PLAN.md (exact-head run 38100653716 green at 238ff53)
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 7`
 Continuation note: [.continue-here.md](.continue-here.md)
