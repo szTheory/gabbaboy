@@ -62,18 +62,27 @@ foreach(relative IN LISTS scanned_files)
   set(candidate "${GBB_SCAN_DIR}/${relative}")
   if(IS_SYMLINK "${candidate}")
     # Follow file links so a sibling ROM cannot pass under an innocuous link name; directory
-    # links (framework bundles) and dangling links carry no bytes of their own.
-    # Read the stored target instead of trusting OS resolution, which fails on Windows for a
-    # target written with '/' separators.
-    file(READ_SYMLINK "${candidate}" link_target)
-    file(TO_CMAKE_PATH "${link_target}" link_target)
+    # links (framework bundles) and dangling links carry no bytes of their own. Windows does not
+    # always resolve a link through one route, so try the link path, its stored target (minus
+    # any \\?\ or \??\ prefix, relative targets taken from the link's directory) and REALPATH.
+    set(link_path "${candidate}")
+    file(READ_SYMLINK "${link_path}" link_raw)
+    file(TO_CMAKE_PATH "${link_raw}" link_target)
+    string(REGEX REPLACE "^//[?]/|^/[?][?]/" "" link_target "${link_target}")
     if(NOT IS_ABSOLUTE "${link_target}")
-      get_filename_component(link_dir "${candidate}" DIRECTORY)
+      get_filename_component(link_dir "${link_path}" DIRECTORY)
       set(link_target "${link_dir}/${link_target}")
     endif()
-    get_filename_component(candidate "${link_target}" REALPATH)
-    if(NOT EXISTS "${candidate}" OR IS_DIRECTORY "${candidate}")
-      message(STATUS "skipped link without file bytes: ${relative}")
+    get_filename_component(link_real "${link_path}" REALPATH)
+    set(candidate "")
+    foreach(route IN ITEMS "${link_path}" "${link_target}" "${link_real}")
+      if(EXISTS "${route}" AND NOT IS_DIRECTORY "${route}")
+        set(candidate "${route}")
+        break()
+      endif()
+    endforeach()
+    if(candidate STREQUAL "")
+      message(STATUS "skipped link without file bytes: ${relative} -> ${link_raw}")
       continue()
     endif()
   endif()
