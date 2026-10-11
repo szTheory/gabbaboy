@@ -5,17 +5,17 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 8
 current_phase_name: Cartridge Seam, MBC5 and MBC2
 status: planning
-stopped_at: Phase GB-07 complete, ready to plan Phase 8
-last_updated: "2026-10-11T11:29:29.013Z"
+stopped_at: Phase 8 context gathered
+last_updated: "2026-10-11T12:26:19.921Z"
 last_activity: 2026-10-11
 last_activity_desc: Phase GB-07 complete, transitioned to Phase 8
-state_head: 175c9fce4a5c2cdfd62811462a2e8d9e3e2ac441
+state_head: 4953727439b924d340d70615a91083f830934070
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 17
   completed_plans: 17
-  percent: 20
+  percent: 22
 ---
 
 # Project State
@@ -262,10 +262,12 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-11T02:39:27.975Z
-Stopped at: Phase GB-07 complete, ready to plan Phase 8
-Resume file: None
-Next command in fresh context: `/gsd-discuss-phase 8`
+Last session: 2026-10-11T12:26:19.863Z
+Stopped at: Phase 8 context gathered
+Resume file: .planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-CONTEXT.md
+Next command in fresh context: `/gsd-plan-phase 8`
+
+Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, discussion** (2026-10-11) on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. [08-CONTEXT.md](phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-CONTEXT.md) locks D-01..D-34 from four parallel advisor researches with adversarial passes, auto-followed per the owner's standing instruction; no owner-only questions arose. Key choices: in-file cartridge seam landing first as a pure `gabbaboy.c` plan with a recorded old-versus-new differential; 8 MiB ceiling for MBC5 only, preserving every other loader return code; `gbb_rumble_state` + `GBB_NO_RUMBLE`; canonical MBC2 nibble image; player runs MBC2/MBC5 battery carts without persistence and says so (CART-06 stays Phase 9); Mooneye mbc2/mbc5 derivatives in sibling `fixtures/mooneye-mbc/` with proven install exclusion. Next step: **Phase 8 research and planning** via **`/gsd-plan-phase 8`**. Both auto-advance flags stay false; nothing advances automatically.
 Continuation note: [.continue-here.md](.continue-here.md)
 Completed workflow stage: **Phase 7 - DMG Game Acceptance and Regression Baseline, execution and verification** (2026-10-11). Verification passed 5/5 (GAME-01..03, EVID-01..02) in [07-VERIFICATION.md](phases/GB-07-dmg-game-acceptance-and-regression-baseline/07-VERIFICATION.md); gates: Nyquist validated, security 49/49 closed, code review 10 findings (8 fixed, WR-01 deferred as a documented limitation, 2 info skipped, 0 open), local regression 261/261. Owner ratified D-029 on 2026-10-11. PR #63 is squash-merged to main after exact-head required checks pass. Limitations: one game on one software model, packaged-player smoke macOS only, no hardware evidence, `libbet-repro` not yet run hosted (Linux path unverified), no CTest for `frame-digest@t`. Next phase: **Phase 8 - Cartridge Seam, MBC5 and MBC2** (no CONTEXT.md yet) via **`/gsd-discuss-phase 8`**. Both auto-advance flags (`workflow.auto_advance`, `workflow._auto_chain_active`) stay false; nothing advances automatically.
 Completed workflow stage: **Phase 7 - DMG Game Acceptance and Regression Baseline, execution** (2026-10-11), plans 07-01..07-17 on branch `gsd/phase-07-dmg-game-acceptance-and-regression-baseline`. Evidence head 23c0ffd7c1ab3149be1b96c8ba384acf5c655c48, run 38106136572 (https://github.com/szTheory/gabbaboy/actions/runs/38106136572): all eight required jobs success. The handoff commits that follow the evidence head change only planning files and are checked as separate heads (see the 07-16 SUMMARY), so the evidence head is not the final branch head. PR #63 is marked ready for review and is not merged. Open owner item: D-029 (shade-count relaxation of locked D-25) is pending owner confirmation. Next step: **Phase 7 verification**. Next command in fresh context: `/gsd-verify-work 7`. Following phase: **Phase 8 - Cartridge Seam, MBC5 and MBC2** (named, not started; only after verification passes and the owner chooses to continue). Both auto-advance flags (`workflow.auto_advance`, `workflow._auto_chain_active`) stay false; nothing advances automatically.
@@ -290,5 +292,5 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Discuss Phase 8 (Cartridge Seam, MBC5 and MBC2): `/gsd-discuss-phase 8`
+- Plan Phase 8 (Cartridge Seam, MBC5 and MBC2): `/gsd-plan-phase 8`
 - Phase-stop rule: stop after each phase and yield; never auto-advance into the next phase or milestone.
