@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_phase: 8
-current_phase_name: Cartridge Seam, MBC5 and MBC2
-status: verifying
-stopped_at: Completed 08-10-PLAN.md; Phase 8 execution complete, next /gsd-verify-work 8
-last_updated: "2026-10-11T16:54:49.389Z"
+current_phase: 9
+current_phase_name: MBC3, Deterministic RTC and Cartridge Persistence
+status: planning
+stopped_at: Phase GB-08 complete, ready to plan Phase 9
+last_updated: "2026-10-11T17:50:24.187Z"
 last_activity: 2026-10-11
-last_activity_desc: Phase 8 execution complete; next /gsd-verify-work 8
-state_head: 7e17d3dc41159f2b3ee69e48b162cbdd979eb16b
+last_activity_desc: Phase GB-08 complete, transitioned to Phase 9
+state_head: 33a5fde402b8666fee7f2da800e8211f84eaa267
 progress:
   total_phases: 9
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 27
   completed_plans: 27
-  percent: 22
+  percent: 30
 ---
 
 # Project State
@@ -25,16 +25,16 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 8 — Cartridge Seam, MBC5 and MBC2
+**Current focus:** Phase 9 — MBC3, Deterministic RTC and Cartridge Persistence
 
 ## Current Position
 
-Phase: 8 (Cartridge Seam, MBC5 and MBC2) — EXECUTION COMPLETE, awaiting verification
-Plan: 10 of 10 (all plans have SUMMARYs)
-Status: Ready for verification (`/gsd-verify-work 8`); PR #64 ready and open, not merged
-Last activity: 2026-10-11 — Phase 8 execution complete
+Phase: 9 — MBC3, Deterministic RTC and Cartridge Persistence
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-10-11 — Phase GB-08 complete, transitioned to Phase 9
 
-Progress (v0.2): [█░░░░░░░░░] 11% (1/9 phases)
+Progress (v0.2): [██░░░░░░░░] 22% (2/9 phases)
 
 ## Performance Metrics
 
@@ -261,7 +261,8 @@ None outside the roadmap.
 - Phase 1 PR #1 and Phase 2 PR #2 were merged on 2026-10-07 after their required exact-head checks passed. The 2026-10-07 triage found no open PRs or issues at that time. Phase 2 verification is limited to its documented DMG-CPU-B CPU/timer scope; no physical DMG observation or PPU qualification is claimed.
 - Phase 6 has no open goal, requirement, review, or high/blocking security finding. The release workflow's original post-publication readback failure was repaired before closeout; the live release API and a fresh download reconcile the published 18-asset inventory.
 - Exact CPU-B behavior, physical DMG/MBC1 qualification, physical audio/hotplug, perceptual output, Developer ID signing/notarization, and live Playstead GB integration remain unqualified and are stated as limits, not passing claims.
-- 08-07: D-29 ninth-bit mutant not landed - rom_64Mb guest only selects banks 0-255 (measured), so it cannot discriminate the ninth bit; needs planner decision (re-point to 08-08 fixture or unit tests). CART-02/CART-03 not marked complete.
+- [Phase 8] Resolved: the D-29 ninth-bit mutant now targets `mbc5_bank_1ff` (D-062); upstream `rom_64Mb` never selects banks >= 256.
+- [Phase 9] Code review WR-02 (deferred): `src/player/session.c` hard-codes the unsupported battery types $06/$1B/$1E. When CART-06 adds MBC2/MBC3/MBC5 persistence, replace the list and add a test that classifies every core type byte as either `battery_backed` or `battery_unsupported`.
 
 ### Quick Tasks Completed
 
@@ -279,11 +280,12 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-11T16:54:49.344Z
-Stopped at: Completed 08-10-PLAN.md; Phase 8 execution complete, next /gsd-verify-work 8
+Last session: 2026-10-11
+Stopped at: Phase 8 complete (execution and verification), ready to discuss Phase 9
 Resume file: .planning/.continue-here.md
-Next command in fresh context: `/gsd-verify-work 8`
+Next command in fresh context: `/gsd-discuss-phase 9`
 
+Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, execution and verification** (2026-10-11). Verification passed 4/4 (CART-01..03) in [08-VERIFICATION.md](phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-VERIFICATION.md); gates: Nyquist validated (V-01..V-27 green, differential rerun 0 differences), security 41/41 closed, code review 5 findings (WR-01 and IN-01 fixed in 1620c99, WR-02 deferred to Phase 9, 2 info skipped, 0 open), regression core 320/320 and player 371/371. PR #64 is squash-merged to main after exact-head required checks pass. Limitations: `rom_64Mb` does not exercise banks >= 256 (ninth bit proven by `mbc5_bank_1ff` and the mutant pair, D-062); the player status line has no automated UI test; player persistence is MBC1 only; rumble is a query without haptics; no CGB and no hardware MBC observation. Next phase: **Phase 9 - MBC3, Deterministic RTC and Cartridge Persistence** (no CONTEXT.md yet) via **`/gsd-discuss-phase 9`**. Both auto-advance flags (`workflow.auto_advance`, `workflow._auto_chain_active`) stay false; nothing advances automatically.
 Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, execution** (2026-10-11), plans 08-01..08-10 on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. Evidence head `a3f27f71c10838e372f27d8c2fcf0070123b0919`, run 38155767928 (https://github.com/szTheory/gabbaboy/actions/runs/38155767928): all eight required jobs success; fixture-repro run 38155768038 (https://github.com/szTheory/gabbaboy/actions/runs/38155768038): fixture-repro, mooneye-original-repro, mooneye-candidate-repro and mooneye-mbc-repro success. Local ctest 319/319, `baseline status=pass`, privacy check clean. The docs-only handoff commit is checked as a separate head (see 08-10-SUMMARY). PR #64 is ready for review and left OPEN and unmerged: the pre-authorized squash merge happens only after Phase 8 verification passes, at an exact-head green head. Honest limits: rom_64Mb does not exercise banks >= 256 (the ninth bit is covered by mbc5_bank_1ff and the two mutant CTests, D-29 amended, DECISIONS D-062); the 08-04 player status line has no automated UI test; phase1-asan cannot configure on macOS, so sanitizer evidence is hosted linux-asan-ubsan plus manual local builds; no hardware MBC observation, no CGB, player persistence MBC1 only, rumble is a query without haptics. Next step: **Phase 8 verification**, `/gsd-verify-work 8`. If verification finds gaps, gap closure continues on this branch and PR. Following phase: **Phase 9 - MBC3, Deterministic RTC and Cartridge Persistence** (named, not started; only after verification passes and the owner chooses to continue). Both `workflow.auto_advance` and `workflow._auto_chain_active` stay false.
 
 Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, plan 08-08 (original MBC5 banking fixture and D-29 ninth-bit mutant) executed** (2026-10-11) on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. fixtures/mbc5-banking (RGBDS 1.0.1, sha256 0b852837...ddffef, 64 KiB, type $1E) passes mbc5_banking_guest (rumble on=1, 1 transition), mbc5_banking_guest_1b and mbc5_bank_1ff (in-memory 8 MiB); the ninth-bit mutant fails mbc5_bank_1ff at C005 and its control passes. Full local ctest 319/319, inventory matches. Hosted fixture-repro step and exact-head CI are not yet read (08-09/08-10). Phase 8 is not complete: plans 08-09 and 08-10 remain. Next plan: **08-09 (docs and decisions)** via **`/gsd-execute-phase 8`**. Both auto-advance flags stay false.
@@ -317,5 +319,5 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Verify Phase 8 (Cartridge Seam, MBC5 and MBC2) in a fresh context: `/gsd-verify-work 8`. After it passes, the pre-authorized squash merge of PR #64 follows at an exact-head green head. Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) is not started.
+- Phase 8 (Cartridge Seam, MBC5 and MBC2) is complete and verified; PR #64 is squash-merged after exact-head required checks pass. Start Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) in a fresh context: `/gsd-discuss-phase 9`.
 - Phase-stop rule: stop after each phase and yield; never auto-advance into the next phase or milestone.

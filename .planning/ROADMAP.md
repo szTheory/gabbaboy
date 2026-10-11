@@ -42,7 +42,7 @@ Milestone-wide rules:
 - **Ordering constraints.** Double speed (Phase 12) and HDMA (Phase 13) both change the run loop and must not run in parallel. Within Phase 8, the seam plan lands first, then the MBC2 plan and then the MBC5 plan run in sequence (they share the core, public header and test-inventory files, and the MBC5 cross-mapper control needs a real MBC2; 08-CONTEXT D-08 as amended at planning).
 
 - [x] **Phase 7: DMG Game Acceptance and Regression Baseline** - Admit one rights-clear DMG game, prove it end to end headless and in the player, and freeze the DMG baseline (completed 2026-10-11)
-- [ ] **Phase 8: Cartridge Seam, MBC5 and MBC2** - Move MBC1 behind a type-table mapper seam with no observable change, then add MBC5 and MBC2
+- [x] **Phase 8: Cartridge Seam, MBC5 and MBC2** - Move MBC1 behind a type-table mapper seam with no observable change, then add MBC5 and MBC2 (completed 2026-10-11)
 - [ ] **Phase 9: MBC3, Deterministic RTC and Cartridge Persistence** - Add MBC3 with an emulated-time RTC, explicit host catch-up, versioned battery block, loader-matrix hardening and new-mapper continuation
 - [ ] **Phase 10: CGB Profile, Banking and Register Visibility** - Select CGB-CPU-E, detect execution mode, bank VRAM/WRAM, and gate every model-specific behavior
 - [ ] **Phase 11: CGB Colour Rendering and Player Colour** - Render CGB attributes and palettes through an RGB555 frame call, a DMG-compatibility palette, and `--model` in the player
@@ -125,7 +125,7 @@ Plans:
   4. Original fixtures for MBC5 bank `$1FF`, bank 0 in the upper window and rumble masking pass, and the 8 MiB `rom_64Mb` derivative is kept out of install and package artifacts.
 
 **Research**: Standard (confirm the 8 MiB loader bound and repository size policy for `rom_64Mb`).
-**Plans**: 10/10 plans executed (seam plan first; MBC2 then MBC5 run in sequence because they share the core, header and test-inventory files)
+**Plans**: 10/10 plans complete (seam plan first; MBC2 then MBC5 run in sequence because they share the core, header and test-inventory files)
 
 Plans:
 **Wave 1**
@@ -262,7 +262,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 1–6, 06.1 | v0.1 | 64/64 | Complete | 2026-10-10 |
 | 7. DMG Game Acceptance and Regression Baseline | v0.2 | 17/17 | Complete    | 2026-10-11 |
-| 8. Cartridge Seam, MBC5 and MBC2 | v0.2 | 10/10 | In Progress | - |
+| 8. Cartridge Seam, MBC5 and MBC2 | v0.2 | 10/10 | Complete    | 2026-10-11 |
 | 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 0/TBD | Not started | - |
 | 10. CGB Profile, Banking and Register Visibility | v0.2 | 0/TBD | Not started | - |
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 0/TBD | Not started | - |

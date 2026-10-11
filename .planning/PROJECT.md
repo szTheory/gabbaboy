@@ -8,6 +8,7 @@ GabbaBoy is a portable C17 emulator core for Nintendo Game Boy (DMG) and Game Bo
 
 - **Shipped:** v0.1 Limited DMG Preview (milestone closed 2026-10-10; release [`v0.1.0`](https://github.com/szTheory/gabbaboy/releases/tag/v0.1.0) published 2026-10-09). 7 phases, 64 plans, 35/35 requirements, audit `passed`.
 - **Phase 7 (2026-10-11):** Libbet and the Magic Floor v0.08 passes headless acceptance on three OSes and in the macOS packaged player; the DMG baseline is frozen. One game on one software model; no hardware evidence.
+- **Phase 8 (2026-10-11):** Cartridge behavior sits behind one type-table mapper seam with zero observed DMG change (old-versus-new differential, frozen baseline); MBC5 (9-bit banking, 8 MiB, rumble query) and MBC2 (built-in nibble RAM, 512-byte battery image) run in the core. Mooneye mbc2 7/7 and mbc5 8/8 pass. Player persistence is still MBC1 only; no hardware MBC observation.
 - **Code:** ~18k lines of C/C++ (about 7k in `src/` + `include/`); CMake/Ninja/CTest; 184 local CTest cases at the 06.1 regression run; required CI on Linux, macOS and Windows (MinGW-w64).
 - **Evidence scope:** admitted corpus is three source-qualified derived Mooneye CPU/timer closures plus original project ROMs. No physical hardware, perceptual output, signing/notarization, or live Playstead integration is claimed.
 - **Open:** No open issues or PRs at the v0.2 start (2026-10-10); releases `v0.1.0` and `v0.1.2` published. Accepted info-level debt is listed in the [v0.1 audit](milestones/v0.1-MILESTONE-AUDIT.md).
@@ -42,12 +43,13 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 - ✓ Scoped four-channel DMG APU, bounded 48 kHz PCM, paced SDL playback, and clean host input/device transitions (AUDIO-01..03, HOST-01..02) — v0.1.
 - ✓ Qualified exact-tag release, support ledger, performance baselines, fuzzing, adopter docs, and exercised CI/release automation (SHIP-01..08) — v0.1.
 - ✓ Rights-clear DMG game acceptance (Libbet v0.08, bootless DMG-CPU-B): headless run on Linux/macOS/Windows with guest-memory predicate, frame and PCM digests and failing controls; macOS packaged-player smoke; LD B,B frame digests, input replay and model applicability; frozen DMG baseline `tests/baseline/dmg-cpu-b-v1.txt` (GAME-01..03, EVID-01..02) — Phase 7.
+- ✓ Cartridge mapper seam with no observable DMG change, MBC5 (incl. bank `$1FF`, rumble state query) and MBC2 (bit-8 register decode, canonical nibble RAM and battery image), Mooneye mbc2/mbc5 derivatives kept out of install and package artifacts (CART-01..03) — Phase 8.
 
 ### Active
 
 v0.2 Color & Cartridge Breadth (scoped in [REQUIREMENTS.md](REQUIREMENTS.md)):
 
-- [ ] MBC2/MBC3/MBC5 cartridges and deterministic MBC3 RTC (CART-01, RTC-01).
+- [ ] MBC3, deterministic MBC3 RTC, cartridge persistence for MBC2/MBC3/MBC5, and loader-matrix hardening (CART-04..06, RTC-01); MBC2 and MBC5 core support shipped in Phase 8.
 - [ ] CGB silicon profile, color and DMG-compatibility modes, speed switching, banking, palettes, and HDMA with model-qualified tests (CGB-01..03).
 
 Next (v0.3, provisional): transactional versioned native save states (STATE-01) and a qualified Playstead adapter (INT-01).
@@ -103,6 +105,7 @@ Ongoing project principles: dependency-light C API with explicit contracts; head
 | Exact-head required CI gate before merge | Local passes and stale runs had masked remote state | ✓ Good — enforced through 06.1; info-level script items deferred |
 | Freeze a DMG baseline before any v0.2 core change | Later mapper and CGB phases must prove DMG-CPU-B output unchanged, or record an approved change | Adopted in Phase 7 — one ledger, no update mode, reverse-apply change log |
 | Game acceptance gate is guest memory, digests are regression-only | Emulator-captured frame/audio digests are not hardware evidence; a guest-state predicate with failing controls is the claim | ✓ Good — Phase 7 (D-26, D-029 ratified 2026-10-11) |
+| In-file type-table mapper seam before new mappers | One `switch` on a stored cartridge kind keeps the hot path direct; landing it alone with an old-versus-new differential proves no DMG change before MBC5/MBC2 | ✓ Good — Phase 8 (differential 0 differences; D-062 moved the ninth-bit proof to bank `$1FF`) |
 | Insert a debt-closure phase before closing a milestone | The first audit returned `tech_debt`; closing it first gave a clean `passed` re-audit | ✓ Good — Phase 06.1 |
 
 ## Evolution
@@ -112,4 +115,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-10-11 after Phase 7.
+Last updated: 2026-10-11 after Phase 8.
