@@ -67,7 +67,7 @@ Milestone-wide rules:
 
 **Rights gates**: G5 (Libbet asset-licence completeness and release recipe checklist) blocks admission; G2 (GBDK 2.96a runtime terms) blocks the Tobu Tobu Girl fallback.
 **Research**: Light.
-**Plans**: 11/17 plans executed
+**Plans**: 12/17 plans executed
 
 Plans:
 **Wave 1**
@@ -98,7 +98,7 @@ Plans:
 - [x] 07-10-PLAN.md — Controls: no input, SELECT, drop START and JOYP core mutant
 
 **Wave 9** *(blocked on Wave 8 completion)*
-- [ ] 07-11-PLAN.md — SGB tolerance, bounded stall diagnosis, first exact-head CI cross-OS identity and PCM calibration
+- [x] 07-11-PLAN.md — SGB tolerance, bounded stall diagnosis, first exact-head CI cross-OS identity and PCM calibration
 
 **Wave 10** *(blocked on Wave 9 completion)*
 - [ ] 07-12-PLAN.md — Packaged SDL3 player --input-script smoke with headless PCM equality and package ROM scan
@@ -232,7 +232,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1–6, 06.1 | v0.1 | 64/64 | Complete | 2026-10-10 |
-| 7. DMG Game Acceptance and Regression Baseline | v0.2 | 11/17 | In Progress | - |
+| 7. DMG Game Acceptance and Regression Baseline | v0.2 | 12/17 | In Progress | - |
 | 8. Cartridge Seam, MBC5 and MBC2 | v0.2 | 0/TBD | Not started | - |
 | 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 0/TBD | Not started | - |
 | 10. CGB Profile, Banking and Register Visibility | v0.2 | 0/TBD | Not started | - |
