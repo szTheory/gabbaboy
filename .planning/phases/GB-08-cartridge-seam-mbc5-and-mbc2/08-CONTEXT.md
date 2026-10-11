@@ -233,6 +233,7 @@ Delivered evidence:
 - **D-29:** Negative controls:
   - A mutated copy of one mbc5 ROM (type byte changed to MBC1, checksum fixed) must not report pass.
   - If the seam exposes the ROM-bank write cleanly, add a test-only core mutant (same configure-time, never-installed pattern as D-046) that drops the ninth bank bit. It must fail `rom_64Mb` while `rom_32Mb` passes, which proves `rom_64Mb` is the discriminator. The anchor must occur exactly once.
+  - **Amended 2026-10-11 during execution (Plan 08-07 finding):** the premise is false for this derivative. The shared upstream harness `common/harness/mbc5_rom.s` loops `bc` from `$0000` and stops at `$0100`, so every mbc5 ROM, `rom_64Mb` included, selects only banks 0..255. Measured: the ninth-bit mutant passes `rom_64Mb`, while a `return 1u` control mutant fails it. The ninth-bit mutant is therefore pointed at the original fixture case `mbc5_bank_1ff` (Plan 08-08), which reads a marker in bank `$1FF` through the real CPU and bus. The mutant build of that test must fail, and the unmutated build must pass. The anchor `& 1u) << 8` and the never-installed pattern are unchanged.
 - **D-30:** Evidence class: author-attested hardware results (flash cart with a genuine MBC5 or MBC2A chip), executed on the bootless DMG-CPU-B profile.
   - There is no model-specific claim and no CGB claim, and the results are never presented as game compatibility.
   - The MBC2A variant caveat is recorded.
@@ -352,7 +353,7 @@ Delivered evidence:
 ## Specific Ideas
 
 - The "no observable change" claim is backed by a recorded old-versus-new loader and MBC1 differential (D-10), not only by tests passing.
-- `rom_64Mb` is the only proof of the ninth bank bit. It is admitted and never dropped.
+- ~~`rom_64Mb` is the only proof of the ninth bank bit.~~ Corrected 2026-10-11: `rom_64Mb` never selects banks 256 and above (see the D-29 amendment). The ninth bank bit is proved by the MBC5 unit tests and the original `mbc5_bank_1ff` fixture with its ninth-bit mutant. `rom_64Mb` stays admitted as the 8 MiB loader and install-policy case.
 - Indicative digests are not claims until recaptured at admission and matched on hosted Linux.
 
 </specifics>
