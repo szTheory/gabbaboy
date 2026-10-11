@@ -600,16 +600,22 @@ gbb_add_expect_exit_test(libbet_not_installed_selftest 1 "libbet-installed: shar
 # Sibling Mooneye MBC ROM redistribution guard (D-31, D-32). The 15 derivatives, including the
 # 4 MiB and 8 MiB ROMs, are repository fixtures only. cmake/ScanForbiddenFixtures.cmake scans the
 # same install tree by name and digest and asserts the exact installed fixture directories. The
-# three self-tests prove the scan can fail: a renamed ROM, an empty tree and an extra directory.
+# four self-tests prove the scan can fail: a renamed ROM, a ROM behind an innocuously named
+# symbolic link (a copy where the platform cannot create one), an empty tree and an extra directory.
 set(GBB_MBC_SCAN_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/ScanForbiddenFixtures.cmake")
 set(GBB_MBC_SCAN_MANIFEST "${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/manifest.json")
 set(GBB_MBC_SCAN_DIRS "tracer|visible-demo|mbc1-continuation")
 set(GBB_MBC_SCAN_SELFTEST "${PROJECT_BINARY_DIR}/mooneye-mbc-scan-selftest")
 set(GBB_MBC_SCAN_EMPTY "${PROJECT_BINARY_DIR}/mooneye-mbc-scan-empty")
 set(GBB_MBC_DIRS_SELFTEST "${PROJECT_BINARY_DIR}/mooneye-mbc-dirs-selftest")
+set(GBB_MBC_SCAN_LINK "${PROJECT_BINARY_DIR}/mooneye-mbc-scan-link")
 file(MAKE_DIRECTORY "${GBB_MBC_SCAN_SELFTEST}/share" "${GBB_MBC_SCAN_EMPTY}")
 file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/mbc5_rom_512kb.gb"
   "${GBB_MBC_SCAN_SELFTEST}/share/payload.bin")
+file(MAKE_DIRECTORY "${GBB_MBC_SCAN_LINK}/share")
+file(REMOVE "${GBB_MBC_SCAN_LINK}/share/innocuous.bin")
+file(CREATE_LINK "${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/mbc2_rom_512kb.gb"
+  "${GBB_MBC_SCAN_LINK}/share/innocuous.bin" SYMBOLIC COPY_ON_ERROR)
 foreach(dir IN ITEMS tracer visible-demo mbc1-continuation extra)
   file(WRITE "${GBB_MBC_DIRS_SELFTEST}/share/gabbaboy/fixtures/${dir}/marker.txt" "marker\n")
 endforeach()
@@ -630,6 +636,8 @@ gbb_add_mbc_scan_test(mooneye_mbc_not_installed 0 "mooneye-mbc absent from scann
 set_tests_properties(mooneye_mbc_not_installed PROPERTIES FIXTURES_REQUIRED libbet_install)
 gbb_add_mbc_scan_test(mooneye_mbc_not_installed_selftest 1 "mooneye-installed: share/payload.bin"
   "${GBB_MBC_SCAN_SELFTEST}")
+gbb_add_mbc_scan_test(mooneye_mbc_not_installed_link_selftest 1 "mooneye-installed: share/innocuous.bin"
+  "${GBB_MBC_SCAN_LINK}")
 gbb_add_mbc_scan_test(mooneye_mbc_not_installed_empty 1 "scan-dir-empty"
   "${GBB_MBC_SCAN_EMPTY}")
 gbb_add_mbc_scan_test(mooneye_mbc_fixture_dirs_selftest 1 "fixture-dirs-mismatch"
