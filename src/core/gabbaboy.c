@@ -193,9 +193,10 @@ static uint64_t rtc_step_field(uint8_t *field, uint64_t n, uint32_t limit, uint3
         n -= to_wrap;
         f = 0u;
     }
-    const uint64_t carries = (f + n) / limit;
-    *field = (uint8_t)((f + n) % limit);
-    return carries;
+    /* Split n first so f + n can never wrap even for a 64-bit second count. */
+    const uint64_t low = f + n % limit;
+    *field = (uint8_t)(low % limit);
+    return n / limit + low / limit;
 }
 
 static void rtc_add_seconds(cart_state *c, uint64_t secs) {

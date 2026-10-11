@@ -56,6 +56,16 @@ foreach(case tracer gate_and_select load_fresh)
   add_test(NAME rtc_${case} COMMAND test_mbc3_rtc rtc_${case})
 endforeach()
 
+# White-box: includes src/core/gabbaboy.c (or a mutant copy named by GBB_CORE_SOURCE_PATH),
+# so it must not link the core library (duplicate definitions).
+add_executable(test_mbc3_rtc_internal test_mbc3_rtc_internal.c)
+target_include_directories(test_mbc3_rtc_internal PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_mbc3_rtc_internal PRIVATE c_std_17)
+set_target_properties(test_mbc3_rtc_internal PROPERTIES C_EXTENSIONS OFF)
+foreach(case closed_form_differential add_composes rate_exact prescaler_rules write_masks out_of_range_rollover day_carry_sticky halt_freezes latch_edges generation_rules time_near_max reset_rebase slice_invariance cpu_independence)
+  add_test(NAME rtc_${case} COMMAND test_mbc3_rtc_internal rtc_${case})
+endforeach()
+
 add_executable(test_mbc5 test_mbc5.c)
 target_link_libraries(test_mbc5 PRIVATE GabbaBoy::core)
 target_compile_features(test_mbc5 PRIVATE c_std_17)
