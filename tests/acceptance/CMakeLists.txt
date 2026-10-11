@@ -214,6 +214,14 @@ gbb_add_acceptance_exit(acceptance_ldbb_observe_daa 0
   "acceptance[.]daa-ldbb[.]checkpoint[.]ldbb[.]frame\t${gbb_hex64_re}\nacceptance[.]daa-ldbb[.]class\tregression" 30
   "--acceptance;${GBB_LDBB_CONTROLS};--case;daa-ldbb;--observe")
 
+# Control flags do not apply to frame-digest cases and are refused, never silently ignored (WR-04).
+gbb_add_acceptance_exit(acceptance_ldbb_mutate_rejected 2
+  "reason=mutate-not-applicable" 30
+  "--acceptance;${GBB_LDBB_CONTROLS};--case;daa-ldbb;--mutate;drop:START")
+gbb_add_acceptance_exit(acceptance_ldbb_raw_verdict_rejected 2
+  "reason=mutate-not-applicable" 30
+  "--acceptance;${GBB_LDBB_CONTROLS};--case;daa-ldbb;--raw-verdict")
+
 # Image on failure only (EVID-01): a mismatching LD B,B frame writes <failure-dir>/<id>.ppm, a 15-byte
 # P6 header plus 160*144*3 pixel bytes. Each failure-writing test owns its directory.
 set(GBB_LDBB_FAIL_DIR ${PROJECT_BINARY_DIR}/acceptance-failures/acceptance_ldbb_mismatch_ppm)

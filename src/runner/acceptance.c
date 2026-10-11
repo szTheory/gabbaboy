@@ -808,6 +808,11 @@ static int run_frame_case(const gbb_case *c, const gbb_acceptance_options *optio
     if (options != NULL && (options->observe_input_script != NULL || options->has_frame_digest_at || options->pcm_only)) {
         return input_error(c, "observe-flag-not-applicable");
     }
+    /* A control flag that does nothing would let a frame-digest case pass as an unmutated run
+     * that looks like a control, so refuse it. */
+    if (options != NULL && (options->has_drop_button || options->raw_verdict)) {
+        return input_error(c, "mutate-not-applicable");
+    }
     int rc = gbb_runner_read_file(c->rom, GBB_CASES_MAX_ROM_BYTES, &rom, &rom_length);
     if (rc != 0) { code = input_error(c, rc == 1 ? "rom-missing" : "rom-unreadable"); goto done; }
     if (rom_length != c->rom_size) { code = input_error(c, "rom-size-mismatch"); goto done; }
