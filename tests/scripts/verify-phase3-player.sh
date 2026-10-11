@@ -456,7 +456,10 @@ cmake --log-level=WARNING -S "$ROOT_DIR" -B "$APP_BUILD" -G Ninja \
   -DGABBABOY_BUILD_PLAYER=ON \
   -DBUILD_TESTING=ON
 cmake --build "$APP_BUILD" --parallel
-ctest --test-dir "$APP_BUILD" --output-on-failure --no-tests=error -R '^player_'
+ctest --test-dir "$APP_BUILD" --output-on-failure --no-tests=error -R '^player_' \
+  --output-junit "$APP_BUILD/ctest-player.xml"
+bash "$ROOT_DIR/tests/scripts/verify-dmg-baseline.sh" --build-dir "$APP_BUILD" \
+  --junit "$APP_BUILD/ctest-player.xml" --inventory player
 
 SDL_LICENSE_SHA256=$(sha256_file "$SDL_SOURCE/LICENSE.txt")
 PLAYER_BIN="$APP_BUILD/gabbaboy-player"
