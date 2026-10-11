@@ -351,6 +351,225 @@ static int mbc2_reset(void) {
     return 0;
 }
 
+static void fill_pattern(uint8_t *bytes, size_t size, uint8_t seed) {
+    for (size_t i = 0u; i < size; ++i)
+        bytes[i] = (uint8_t)((i * 37u + seed) & 0xFFu);
+}
+
+static gbb_instance *load_plain(uint8_t type, const program *p) {
+    gbb_instance *machine = NULL;
+    if (load_program_machine(&machine, 0u, type, p) != 0) return NULL;
+    return machine;
+}
+
+static int mbc2_battery_image(void) {
+    program p = {{0}, 0u};
+    emit_write(&p, 0x0000u, 0x0Au);
+    emit_write(&p, 0xA000u, 0x12u);
+    emit_write(&p, 0xA001u, 0x34u);
+    emit_write(&p, 0xA002u, 0xFFu);
+    emit_write(&p, 0xA003u, 0x00u);
+    emit_write(&p, 0xBFFFu, 0x09u); /* echo address: lands on cell 0x1FF */
+    emit_halt(&p);
+    gbb_instance *machine = load_plain(0x06u, &p);
+    REQUIRE(machine != NULL);
+
+    size_t size = 0u;
+    REQUIRE(gbb_battery_size(machine, &size) == GBB_OK);
+    REQUIRE(size == 512u);
+    uint8_t image[512];
+    REQUIRE(gbb_copy_battery(machine, image, sizeof(image)) == GBB_OK);
+    for (size_t i = 0u; i < sizeof(image); ++i) REQUIRE(image[i] == 0xFFu);
+
+    REQUIRE(run_to_halt(machine));
+    uint8_t padded[516];
+    memset(padded, 0xC7, sizeof(padded));
+    REQUIRE(gbb_copy_battery(machine, padded, sizeof(padded)) == GBB_OK);
+    for (size_t i = 0u; i < 512u; ++i) REQUIRE((padded[i] & 0xF0u) == 0xF0u);
+    for (size_t i = 512u; i < sizeof(padded); ++i) REQUIRE(padded[i] == 0xC7u);
+    REQUIRE(padded[0] == 0xF2u && padded[1] == 0xF4u);
+    REQUIRE(padded[2] == 0xFFu && padded[3] == 0xF0u && padded[0x1FFu] == 0xF9u);
+
+    uint8_t small[511];
+    memset(small, 0xC7, sizeof(small));
+    REQUIRE(gbb_copy_battery(machine, small, sizeof(small)) == GBB_BUFFER_TOO_SMALL);
+    for (size_t i = 0u; i < sizeof(small); ++i) REQUIRE(small[i] == 0xC7u);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static gbb_instance *halt_only_machine(uint8_t type) {
+    program p = {{0}, 0u};
+    emit_halt(&p);
+    return load_plain(type, &p);
+}
+
+static int mbc2_battery_import(void) {
+    gbb_instance *machine = halt_only_machine(0x06u);
+    REQUIRE(machine != NULL);
+    uint8_t input[512], untouched[512], output[512];
+    fill_pattern(input, sizeof(input), 0u);
+    memcpy(untouched, input, sizeof(input));
+    REQUIRE(gbb_import_battery(machine, input, sizeof(input)) == GBB_OK);
+    REQUIRE(memcmp(input, untouched, sizeof(input)) == 0);
+    REQUIRE(gbb_copy_battery(machine, output, sizeof(output)) == GBB_OK);
+    for (size_t i = 0u; i < sizeof(output); ++i)
+        REQUIRE(output[i] == (uint8_t)(0xF0u | (input[i] & 0x0Fu)));
+    uint64_t generation = UINT64_MAX;
+    REQUIRE(gbb_battery_generation(machine, &generation) == GBB_OK);
+    REQUIRE(generation == 1u);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int mbc2_battery_idempotent(void) {
+    gbb_instance *machine = halt_only_machine(0x06u);
+    REQUIRE(machine != NULL);
+    uint8_t input[512], canonical[512];
+    fill_pattern(input, sizeof(input), 5u);
+    uint64_t generation = UINT64_MAX;
+    REQUIRE(gbb_import_battery(machine, input, sizeof(input)) == GBB_OK);
+    REQUIRE(gbb_import_battery(machine, input, sizeof(input)) == GBB_OK);
+    REQUIRE(gbb_battery_generation(machine, &generation) == GBB_OK);
+    REQUIRE(generation == 1u);
+    REQUIRE(gbb_copy_battery(machine, canonical, sizeof(canonical)) == GBB_OK);
+    REQUIRE(gbb_import_battery(machine, canonical, sizeof(canonical)) == GBB_OK);
+    REQUIRE(gbb_battery_generation(machine, &generation) == GBB_OK);
+    REQUIRE(generation == 1u);
+    gbb_destroy(machine);
+
+    /* Guest writes: only a changed canonical byte advances the generation. */
+    program p = {{0}, 0u};
+    emit_write(&p, 0x0000u, 0x0Au);
+    emit_write(&p, 0xA000u, 0xA5u); /* cell already $F5: no change */
+    emit_write(&p, 0xA000u, 0xA6u); /* $F5 -> $F6: one advance */
+    emit_write(&p, 0xA000u, 0xA6u); /* no change */
+    emit_halt(&p);
+    machine = load_plain(0x06u, &p);
+    REQUIRE(machine != NULL);
+    memset(input, 0xFF, sizeof(input));
+    input[0] = 0xA5u; /* normalises to $F5 */
+    REQUIRE(gbb_import_battery(machine, input, sizeof(input)) == GBB_OK);
+    REQUIRE(gbb_battery_generation(machine, &generation) == GBB_OK);
+    REQUIRE(generation == 1u);
+    REQUIRE(run_to_halt(machine));
+    REQUIRE(gbb_battery_generation(machine, &generation) == GBB_OK);
+    REQUIRE(generation == 2u);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int mbc2_battery_errors(void) {
+    gbb_instance *machine = halt_only_machine(0x06u);
+    REQUIRE(machine != NULL);
+    uint8_t base[512], live[512], now[512], big[513];
+    fill_pattern(base, sizeof(base), 9u);
+    REQUIRE(gbb_import_battery(machine, base, sizeof(base)) == GBB_OK);
+    REQUIRE(gbb_copy_battery(machine, live, sizeof(live)) == GBB_OK);
+    fill_pattern(big, sizeof(big), 77u);
+
+    REQUIRE(gbb_import_battery(machine, big, 0u) == GBB_BATTERY_SIZE_MISMATCH);
+    REQUIRE(gbb_import_battery(machine, big, 511u) == GBB_BATTERY_SIZE_MISMATCH);
+    REQUIRE(gbb_import_battery(machine, big, 513u) == GBB_BATTERY_SIZE_MISMATCH);
+    REQUIRE(gbb_import_battery(NULL, big, 512u) == GBB_INVALID_ARGUMENT);
+    REQUIRE(gbb_import_battery(machine, NULL, 512u) == GBB_INVALID_ARGUMENT);
+    REQUIRE(gbb_copy_battery(NULL, now, sizeof(now)) == GBB_INVALID_ARGUMENT);
+    REQUIRE(gbb_copy_battery(machine, NULL, 512u) == GBB_INVALID_ARGUMENT);
+    size_t size = 0x1234u;
+    uint64_t generation = 0x5678u;
+    REQUIRE(gbb_battery_size(NULL, &size) == GBB_INVALID_ARGUMENT);
+    REQUIRE(gbb_battery_size(machine, NULL) == GBB_INVALID_ARGUMENT);
+    REQUIRE(gbb_battery_generation(NULL, &generation) == GBB_INVALID_ARGUMENT);
+    REQUIRE(gbb_battery_generation(machine, NULL) == GBB_INVALID_ARGUMENT);
+    REQUIRE(size == 0x1234u && generation == 0x5678u);
+
+    /* Every rejected call left all 512 bytes and the generation as they were. */
+    REQUIRE(gbb_copy_battery(machine, now, sizeof(now)) == GBB_OK);
+    REQUIRE(memcmp(now, live, sizeof(now)) == 0);
+    REQUIRE(gbb_battery_generation(machine, &generation) == GBB_OK);
+    REQUIRE(generation == 1u);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int mbc2_battery_no_battery(void) {
+    program p = {{0}, 0u};
+    emit_write(&p, 0x0000u, 0x0Au);
+    emit_write(&p, 0xA010u, 0x07u);
+    emit_read_to(&p, 0xA010u, 0xC000u);
+    emit_halt(&p);
+    gbb_instance *machine = load_plain(0x05u, &p);
+    REQUIRE(machine != NULL);
+    REQUIRE(run_to_halt(machine));
+    REQUIRE(gbb_peek_ram(machine, 0xC000u) == 0xF7u); /* RAM is live but volatile */
+
+    size_t size = 0x1234u;
+    uint64_t generation = 0x5678u;
+    uint8_t out[512], bytes[512];
+    memset(out, 0xC7, sizeof(out));
+    memset(bytes, 0x00, sizeof(bytes));
+    REQUIRE(gbb_battery_size(machine, &size) == GBB_NO_BATTERY);
+    REQUIRE(gbb_copy_battery(machine, out, sizeof(out)) == GBB_NO_BATTERY);
+    REQUIRE(gbb_import_battery(machine, bytes, sizeof(bytes)) == GBB_NO_BATTERY);
+    REQUIRE(gbb_battery_generation(machine, &generation) == GBB_NO_BATTERY);
+    REQUIRE(size == 0x1234u && generation == 0x5678u);
+    for (size_t i = 0u; i < sizeof(out); ++i) REQUIRE(out[i] == 0xC7u);
+    gbb_destroy(machine);
+    return 0;
+}
+
+/* One ROM serves both instances. It enables RAM, fills the cells only when cell 1 still
+ * reads $FF (flagging that in $C002), then dumps the 512 cells to $C100. */
+static int mbc2_two_instance_roundtrip(void) {
+    program p = {{0}, 0u};
+    emit_write(&p, 0xC002u, 0x00u);
+    emit_write(&p, 0x0000u, 0x0Au);
+    emit_read_to(&p, 0xA001u, 0xC000u);
+    static const uint8_t gate[] = {0xFAu, 0x00u, 0xC0u, 0xFEu, 0xFFu, 0x20u, 0x13u};
+    emit_raw(&p, gate, sizeof(gate));
+    static const uint8_t fill[] = {0x21u, 0x00u, 0xA0u, 0x7Du, 0xACu, 0xE6u, 0x0Fu,
+        0x77u, 0x23u, 0x7Cu, 0xFEu, 0xA2u, 0x20u, 0xF5u};
+    emit_raw(&p, fill, sizeof(fill));
+    emit_write(&p, 0xC002u, 0x01u);
+    static const uint8_t dump[] = {0x21u, 0x00u, 0xA0u, 0x11u, 0x00u, 0xC1u,
+        0x2Au, 0x12u, 0x13u, 0x7Cu, 0xFEu, 0xA2u, 0x20u, 0xF8u};
+    emit_raw(&p, dump, sizeof(dump));
+    emit_halt(&p);
+
+    gbb_instance *a = load_plain(0x06u, &p);
+    gbb_instance *b = load_plain(0x06u, &p);
+    REQUIRE(a != NULL && b != NULL);
+    REQUIRE(run_to_halt(a));
+    REQUIRE(gbb_peek_ram(a, 0xC002u) == 1u); /* A filled its own empty cells */
+
+    uint8_t image[512];
+    REQUIRE(gbb_copy_battery(a, image, sizeof(image)) == GBB_OK);
+    for (size_t i = 0u; i < 512u; ++i) {
+        const uint8_t model = (uint8_t)(0xF0u | ((i & 0x0Fu) ^ (i >> 8)));
+        REQUIRE(image[i] == model);
+        REQUIRE(gbb_peek_ram(a, (uint16_t)(0xC100u + i)) == model);
+    }
+
+    uint8_t before_b[512];
+    REQUIRE(gbb_copy_battery(b, before_b, sizeof(before_b)) == GBB_OK);
+    for (size_t i = 0u; i < 512u; ++i) REQUIRE(before_b[i] == 0xFFu); /* independent */
+    REQUIRE(gbb_import_battery(b, image, sizeof(image)) == GBB_OK);
+    REQUIRE(run_to_halt(b));
+    REQUIRE(gbb_peek_ram(b, 0xC002u) == 0u); /* B saw A's data and did not refill */
+    for (size_t i = 0u; i < 512u; ++i)
+        REQUIRE(gbb_peek_ram(b, (uint16_t)(0xC100u + i)) == image[i]);
+
+    uint8_t after_a[512];
+    uint64_t generation = 0u;
+    REQUIRE(gbb_copy_battery(a, after_a, sizeof(after_a)) == GBB_OK);
+    REQUIRE(memcmp(after_a, image, sizeof(image)) == 0);
+    REQUIRE(gbb_battery_generation(b, &generation) == GBB_OK);
+    REQUIRE(generation == 1u);
+    gbb_destroy(b);
+    gbb_destroy(a);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
     if (strcmp(argv[1], "mbc2_tracer") == 0) return mbc2_tracer();
@@ -358,5 +577,11 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "mbc2_register_decode") == 0) return mbc2_register_decode();
     if (strcmp(argv[1], "mbc2_ram_echo") == 0) return mbc2_ram_echo();
     if (strcmp(argv[1], "mbc2_reset") == 0) return mbc2_reset();
+    if (strcmp(argv[1], "mbc2_battery_image") == 0) return mbc2_battery_image();
+    if (strcmp(argv[1], "mbc2_battery_import") == 0) return mbc2_battery_import();
+    if (strcmp(argv[1], "mbc2_battery_idempotent") == 0) return mbc2_battery_idempotent();
+    if (strcmp(argv[1], "mbc2_battery_errors") == 0) return mbc2_battery_errors();
+    if (strcmp(argv[1], "mbc2_battery_no_battery") == 0) return mbc2_battery_no_battery();
+    if (strcmp(argv[1], "mbc2_two_instance_roundtrip") == 0) return mbc2_two_instance_roundtrip();
     return 2;
 }

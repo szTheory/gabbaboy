@@ -18,6 +18,12 @@ mbc2_header_matrix
 mbc2_register_decode
 mbc2_ram_echo
 mbc2_reset
+mbc2_battery_image
+mbc2_battery_import
+mbc2_battery_idempotent
+mbc2_battery_errors
+mbc2_battery_no_battery
+mbc2_two_instance_roundtrip
 run_bounds
 trace_capacity
 illegal_lockup_api

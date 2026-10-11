@@ -135,8 +135,10 @@ gbb_error gbb_reset(gbb_instance *instance);
  * RAM is accepted only through 512 KiB ROM; larger MBC1 images may declare
  * only 8-KiB RAM. The conservative, recognized MBC1M logo/header candidate
  * returns GBB_UNSUPPORTED_CARTRIDGE_VARIANT; this does not identify every
- * special-wiring image. New cartridge RAM starts at $FF as deterministic
- * software policy, not a hardware power-on claim. */
+ * special-wiring image. MBC2 types $05/$06 are also supported with ROM-size
+ * codes $00-$03 (32-256 KiB); the header RAM code must be $00 because the
+ * 512 four-bit cells are built into the mapper. New cartridge RAM starts at
+ * $FF as deterministic software policy, not a hardware power-on claim. */
 gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_size);
 /* Battery RAM is available only for supported battery-backed cartridges.
  * Query the exact size, then copy/import through caller-owned buffers. No core
@@ -146,7 +148,11 @@ gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_si
  * writes advance the generation once per changed byte; unchanged writes do
  * not. Reset preserves RAM and generation, while successful ROM replacement
  * starts a fresh $FF image with generation zero. On errors, output values and
- * live RAM remain unchanged. */
+ * live RAM remain unchanged. MBC2 type $06 battery images are exactly 512
+ * bytes in the canonical 0xF0 | nibble form (the unwired upper nibble reads
+ * as ones); exports are always canonical, imports are normalised to that form
+ * before comparison, and packed 256-byte images are unsupported. MBC2 type $05
+ * has working but volatile RAM and no battery. */
 gbb_error gbb_battery_size(const gbb_instance *instance, size_t *out_size);
 gbb_error gbb_copy_battery(const gbb_instance *instance, uint8_t *out_bytes,
                            size_t capacity_bytes);
