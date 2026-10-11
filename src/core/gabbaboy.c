@@ -84,6 +84,15 @@ typedef struct {
     uint8_t mbc1_mode;
     uint8_t rumble_on;
     uint64_t rumble_changes;
+    /* MBC3 RTC (D-07): lazy, anchored on emulated time_half_dots. The live
+     * registers hold the clock as of rtc_synced_at; rtc_l holds the bytes the
+     * guest reads (S, M, H, DL, DH) until the next latch. rtc_sub counts
+     * half-dots inside the current second (< 2^23). */
+    uint8_t rtc_s, rtc_m, rtc_h, rtc_dl, rtc_dh;
+    uint8_t rtc_l[5];
+    uint8_t rtc_latch_prev;
+    uint32_t rtc_sub;
+    uint64_t rtc_synced_at;
 } cart_state;
 
 typedef struct {
@@ -134,6 +143,7 @@ static void cart_reset_registers(cart_state *c) {
     c->ram_bank = 0u;
     c->ram_enabled = 0u;
     c->mbc1_mode = 0u;
+    c->rtc_latch_prev = 0xFFu; /* a single $01 after load or reset never latches */
 }
 
 static size_t mbc1_rom_bank(const cart_state *c, size_t rom_size, uint16_t address) {
@@ -160,6 +170,95 @@ static size_t mbc1_ram_offset(const cart_state *c, size_t ram_size, uint16_t add
         ? ((size_t)c->rom_bank_hi & (bank_count - 1u)) : 0u;
     return bank * bank_size + (size_t)(address - 0xA000u);
 }
+
+/* ---- MBC3 RTC (D-07..D-09) --------------------------------------------------
+ * The clock never reads the host: it is advanced only from the emulated
+ * half-dot counter, lazily, when the guest touches a clock register. 2^23
+ * half-dots are exactly one second (4194304 Hz * 2 half-dots per T-cycle). */
+#define RTC_HALF_DOTS_PER_SECOND_SHIFT 23u
+#define RTC_SUB_MASK 0x7FFFFFu
+
+/* Add n ticks to a field that carries at `limit` and stores `mask` bits. A value
+ * at or above the limit (only reachable by a guest write) is not a legal count:
+ * it steps to (v + 1) & mask without carrying until it wraps to 0, and only then
+ * counts normally. Returns the number of carries into the next field. */
+static uint64_t rtc_step_field(uint8_t *field, uint64_t n, uint32_t limit, uint32_t mask) {
+    uint64_t f = *field;
+    if (f >= limit) {
+        const uint64_t to_wrap = (uint64_t)mask + 1u - f;
+        if (n < to_wrap) {
+            *field = (uint8_t)(f + n);
+            return 0u;
+        }
+        n -= to_wrap;
+        f = 0u;
+    }
+    const uint64_t carries = (f + n) / limit;
+    *field = (uint8_t)((f + n) % limit);
+    return carries;
+}
+
+static void rtc_add_seconds(cart_state *c, uint64_t secs) {
+    if (secs == 0u) return;
+    const uint64_t minutes = rtc_step_field(&c->rtc_s, secs, 60u, 0x3Fu);
+    const uint64_t hours = rtc_step_field(&c->rtc_m, minutes, 60u, 0x3Fu);
+    const uint64_t days = rtc_step_field(&c->rtc_h, hours, 24u, 0x1Fu);
+    const uint64_t total = (uint64_t)c->rtc_dl + ((uint64_t)(c->rtc_dh & 0x01u) * 256u) + days;
+    if (total >= 512u) c->rtc_dh |= 0x80u; /* sticky until a guest DH write clears it */
+    c->rtc_dl = (uint8_t)(total & 0xFFu);
+    c->rtc_dh = (uint8_t)((c->rtc_dh & 0xC0u) | (uint8_t)((total >> 8) & 1u));
+}
+
+/* Credit the half-dots since the last sync. A halted clock gets no time, but
+ * the anchor still advances so un-halting never credits the halted period. */
+static void rtc_sync(cart_state *c, uint64_t now) {
+    const uint64_t el = now >= c->rtc_synced_at ? now - c->rtc_synced_at : 0u;
+    c->rtc_synced_at = now;
+    if (c->rtc_dh & 0x40u) return;
+    const uint64_t low = (el & RTC_SUB_MASK) + c->rtc_sub;
+    const uint64_t secs = (el >> RTC_HALF_DOTS_PER_SECOND_SHIFT) +
+                          (low >> RTC_HALF_DOTS_PER_SECOND_SHIFT);
+    c->rtc_sub = (uint32_t)(low & RTC_SUB_MASK);
+    rtc_add_seconds(c, secs);
+}
+
+static uint8_t rtc_read_mask(unsigned reg, uint8_t value) {
+    static const uint8_t masks[5] = {0x3Fu, 0x3Fu, 0x1Fu, 0xFFu, 0xC1u};
+    return (uint8_t)(value & masks[reg]);
+}
+
+/* Returns 1 when the observable clock state changed (for the D-10 generation). */
+static int rtc_write_register(cart_state *c, uint64_t now, unsigned reg, uint8_t value) {
+    rtc_sync(c, now);
+    const uint8_t b_s = c->rtc_s, b_m = c->rtc_m, b_h = c->rtc_h;
+    const uint8_t b_dl = c->rtc_dl, b_dh = c->rtc_dh;
+    const uint32_t sub_before = c->rtc_sub;
+    switch (reg) {
+    case 0u:
+        c->rtc_s = (uint8_t)(value & 0x3Fu); /* rtc: out-of-range fields are stored as written */
+        c->rtc_sub = 0u; /* rtc: a seconds write restarts the sub-second prescaler */
+        break;
+    case 1u: c->rtc_m = (uint8_t)(value & 0x3Fu); break;
+    case 2u: c->rtc_h = (uint8_t)(value & 0x1Fu); break;
+    case 3u: c->rtc_dl = value; break;
+    default: c->rtc_dh = (uint8_t)(value & 0xC1u); break;
+    }
+    if (reg >= 1u && reg <= 3u) c->rtc_sub = sub_before; /* rtc: other register writes keep the prescaler */
+    if (reg == 4u) c->rtc_sub = sub_before; /* rtc: a halt toggle keeps the prescaler */
+    return b_s != c->rtc_s || b_m != c->rtc_m || b_h != c->rtc_h ||
+           b_dl != c->rtc_dl || b_dh != c->rtc_dh || sub_before != c->rtc_sub;
+}
+
+static void rtc_latch_write(cart_state *c, uint64_t now, uint8_t value) {
+    const int latch_now = c->rtc_latch_prev == 0x00u && value == 0x01u; /* rtc: latch only on 00 then 01 */
+    if (latch_now) {
+        rtc_sync(c, now);
+        c->rtc_l[0] = c->rtc_s; c->rtc_l[1] = c->rtc_m; c->rtc_l[2] = c->rtc_h;
+        c->rtc_l[3] = c->rtc_dl; c->rtc_l[4] = c->rtc_dh;
+    }
+    c->rtc_latch_prev = value;
+}
+/* ---- end MBC3 RTC ---------------------------------------------------------- */
 /* ===================== end Cartridge mapper ================================ */
 
 typedef struct {
@@ -816,8 +915,12 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
                 return m->cartridge_ram[address & 0x1FFu];
             return 0xFFu;
         case CART_MBC3:
-            /* Selections $00-$03 reach RAM; every other value maps nothing until the
-             * RTC registers ($08-$0C) are modelled. */
+            /* Selections $00-$03 reach RAM, $08-$0C the latched RTC bytes on timer
+             * types; every other value maps nothing. */
+            if (m->cart.ram_enabled && m->cart.has_timer &&
+                m->cart.ram_bank >= 0x08u && m->cart.ram_bank <= 0x0Cu)
+                return rtc_read_mask(m->cart.ram_bank - 0x08u,
+                                     m->cart.rtc_l[m->cart.ram_bank - 0x08u]);
             if (m->cart.ram_enabled && m->cartridge_ram != NULL &&
                 m->cartridge_ram_size != 0u && m->cart.ram_bank <= 0x03u) {
                 const size_t banks = m->cartridge_ram_size / 0x2000u;
@@ -925,8 +1028,11 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
                  * decodes the low nibble). Stored whole so the RTC plan can map
                  * $08-$0C. */
                 m->cart.ram_bank = value;
+            } else if (address < 0x8000u && m->cart.has_timer) {
+                /* Latching on exactly $00 then $01 is a project decision (the
+                 * common emulator behaviour), not a hardware-confirmed rule. */
+                rtc_latch_write(&m->cart, m->time_half_dots, value);
             }
-            /* $6000-$7FFF (latch) is ignored until the RTC plan. */
             break;
         case CART_MBC5:
             if (address < 0x2000u)
@@ -991,7 +1097,15 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
             }
             break;
         case CART_MBC3:
-            if (m->cart.ram_enabled && m->cartridge_ram != NULL &&
+            if (m->cart.ram_enabled && m->cart.has_timer &&
+                m->cart.ram_bank >= 0x08u && m->cart.ram_bank <= 0x0Cu) {
+                /* bus_write advanced the devices first, so time_half_dots is the
+                 * write timestamp. */
+                if (rtc_write_register(&m->cart, m->time_half_dots,
+                                       (unsigned)m->cart.ram_bank - 0x08u, value) &&
+                    m->cart.has_battery && m->battery_generation != UINT64_MAX)
+                    ++m->battery_generation;
+            } else if (m->cart.ram_enabled && m->cartridge_ram != NULL &&
                 m->cartridge_ram_size != 0u && m->cart.ram_bank <= 0x03u) {
                 const size_t banks = m->cartridge_ram_size / 0x2000u;
                 const size_t offset = ((size_t)m->cart.ram_bank & (banks - 1u)) * 0x2000u +
@@ -1987,7 +2101,11 @@ gbb_error gbb_reset(gbb_instance *instance) {
         instance->cart.rumble_on = 0u;
         if (instance->cart.rumble_changes != UINT64_MAX) ++instance->cart.rumble_changes;
     }
+    /* D-09: the clock keeps running across a reset. Bank the elapsed time, let
+     * reset_state zero time_half_dots, then rebase the anchor to match. */
+    if (instance->cart.has_timer) rtc_sync(&instance->cart, instance->time_half_dots);
     reset_state(instance);
+    if (instance->cart.has_timer) instance->cart.rtc_synced_at = 0u;
     return GBB_OK;
 }
 

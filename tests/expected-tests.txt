@@ -33,6 +33,9 @@ mbc3_unmapped_select
 mbc3_absent_ram
 mbc3_reset
 mbc3_battery_generation
+rtc_tracer
+rtc_gate_and_select
+rtc_load_fresh
 mbc5_tracer
 mbc5_header_matrix
 mbc5_rom_banking
