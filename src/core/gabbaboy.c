@@ -2145,62 +2145,158 @@ gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_si
     return GBB_OK;
 }
 
-static int has_battery_ram(const gbb_instance *instance) {
-    return instance != NULL && instance->loaded &&
-           instance->cart.has_battery &&
-           instance->cartridge_ram != NULL &&
-           instance->cartridge_ram_size != 0u;
+/* A timer cartridge is battery-backed even when it has no RAM ($0F): its image
+ * is the RTC block alone. */
+static int has_battery_image(const gbb_instance *instance) {
+    return instance != NULL && instance->loaded && instance->cart.has_battery &&
+           (instance->cartridge_ram_size != 0u || instance->cart.has_timer);
+}
+
+static size_t battery_image_size(const gbb_instance *instance) {
+    return instance->cartridge_ram_size +
+           (instance->cart.has_timer ? (size_t)GBB_RTC_BLOCK_SIZE : 0u);
+}
+
+/* RTC block v1 (D-16), written field by field so no struct layout leaks:
+ *   0-3 "GBRT", 4 version, 5-8 sub (u32 LE), 9-13 live S M H DL DH,
+ *   14-18 latched S M H DL DH, 19 latch_prev, 20 reserved zero. */
+static void rtc_block_write(const cart_state *c, uint8_t out[GBB_RTC_BLOCK_SIZE]) {
+    out[0] = 'G'; out[1] = 'B'; out[2] = 'R'; out[3] = 'T';
+    out[4] = 1u;
+    out[5] = (uint8_t)(c->rtc_sub & 0xFFu);
+    out[6] = (uint8_t)((c->rtc_sub >> 8) & 0xFFu);
+    out[7] = (uint8_t)((c->rtc_sub >> 16) & 0xFFu);
+    out[8] = (uint8_t)((c->rtc_sub >> 24) & 0xFFu);
+    out[9] = c->rtc_s; out[10] = c->rtc_m; out[11] = c->rtc_h;
+    out[12] = c->rtc_dl; out[13] = c->rtc_dh;
+    for (unsigned i = 0u; i < 5u; ++i) out[14u + i] = c->rtc_l[i];
+    out[19] = c->rtc_latch_prev;
+    out[20] = 0u;
+}
+
+/* Validates every field before storing any of them; out is written only on
+ * success. Out-of-range-but-legal values (S = 63, H = 31) are accepted because
+ * a guest can store them. */
+static gbb_error rtc_block_parse(const uint8_t in[GBB_RTC_BLOCK_SIZE], cart_state *out) {
+    if (in[0] != 'G' || in[1] != 'B' || in[2] != 'R' || in[3] != 'T') return GBB_INVALID_ARGUMENT;
+    if (in[4] != 1u) return GBB_INVALID_ARGUMENT;
+    const uint32_t sub = (uint32_t)in[5] | ((uint32_t)in[6] << 8) |
+                         ((uint32_t)in[7] << 16) | ((uint32_t)in[8] << 24);
+    if (sub > RTC_SUB_MASK) return GBB_INVALID_ARGUMENT;
+    for (unsigned copy = 0u; copy < 2u; ++copy) {
+        const uint8_t *r = in + 9u + copy * 5u;
+        if (r[0] > 0x3Fu || r[1] > 0x3Fu || r[2] > 0x1Fu) return GBB_INVALID_ARGUMENT;
+        if ((r[4] & 0x3Eu) != 0u) return GBB_INVALID_ARGUMENT;
+    }
+    if (in[20] != 0u) return GBB_INVALID_ARGUMENT;
+    out->rtc_sub = sub;
+    out->rtc_s = in[9]; out->rtc_m = in[10]; out->rtc_h = in[11];
+    out->rtc_dl = in[12]; out->rtc_dh = in[13];
+    for (unsigned i = 0u; i < 5u; ++i) out->rtc_l[i] = in[14u + i];
+    out->rtc_latch_prev = in[19];
+    return GBB_OK;
+}
+
+static int rtc_fields_equal(const cart_state *a, const cart_state *b) {
+    return a->rtc_sub == b->rtc_sub && a->rtc_s == b->rtc_s && a->rtc_m == b->rtc_m &&
+           a->rtc_h == b->rtc_h && a->rtc_dl == b->rtc_dl && a->rtc_dh == b->rtc_dh &&
+           memcmp(a->rtc_l, b->rtc_l, 5u) == 0 && a->rtc_latch_prev == b->rtc_latch_prev;
 }
 
 gbb_error gbb_battery_size(const gbb_instance *instance, size_t *out_size) {
     if (instance == NULL || out_size == NULL) return GBB_INVALID_ARGUMENT;
-    if (!has_battery_ram(instance)) return GBB_NO_BATTERY;
-    *out_size = instance->cartridge_ram_size;
+    if (!has_battery_image(instance)) return GBB_NO_BATTERY;
+    *out_size = battery_image_size(instance);
     return GBB_OK;
 }
 
 gbb_error gbb_copy_battery(const gbb_instance *instance, uint8_t *out_bytes,
                            size_t capacity_bytes) {
     if (instance == NULL || out_bytes == NULL) return GBB_INVALID_ARGUMENT;
-    if (!has_battery_ram(instance)) return GBB_NO_BATTERY;
-    if (capacity_bytes < instance->cartridge_ram_size) return GBB_BUFFER_TOO_SMALL;
-    memcpy(out_bytes, instance->cartridge_ram, instance->cartridge_ram_size);
+    if (!has_battery_image(instance)) return GBB_NO_BATTERY;
+    if (capacity_bytes < battery_image_size(instance)) return GBB_BUFFER_TOO_SMALL;
+    if (instance->cartridge_ram_size != 0u)
+        memcpy(out_bytes, instance->cartridge_ram, instance->cartridge_ram_size);
+    if (instance->cart.has_timer) {
+        /* Project the clock to now on a local copy; the instance stays const. */
+        cart_state projected = instance->cart;
+        rtc_sync(&projected, instance->time_half_dots);
+        rtc_block_write(&projected, out_bytes + instance->cartridge_ram_size);
+    }
     return GBB_OK;
 }
 
 gbb_error gbb_import_battery(gbb_instance *instance, const uint8_t *bytes,
                              size_t size_bytes) {
     if (instance == NULL || bytes == NULL) return GBB_INVALID_ARGUMENT;
-    if (!has_battery_ram(instance)) return GBB_NO_BATTERY;
-    if (size_bytes != instance->cartridge_ram_size) return GBB_BATTERY_SIZE_MISMATCH;
-    if (instance->cart.kind == CART_MBC2) {
-        /* Normalise to the canonical 0xF0 | nibble image and compare first, so
-         * an unchanged image is a no-op and the input is never written. */
-        int differs = 0;
-        for (size_t i = 0u; i < size_bytes; ++i)
-            if (instance->cartridge_ram[i] != (uint8_t)(0xF0u | (bytes[i] & 0x0Fu)))
-                differs = 1;
-        if (differs) {
-            for (size_t i = 0u; i < size_bytes; ++i)
-                instance->cartridge_ram[i] = (uint8_t)(0xF0u | (bytes[i] & 0x0Fu));
-            if (instance->battery_generation != UINT64_MAX)
-                ++instance->battery_generation;
+    if (!has_battery_image(instance)) return GBB_NO_BATTERY;
+    if (size_bytes != battery_image_size(instance)) return GBB_BATTERY_SIZE_MISMATCH;
+    const size_t ram_size = instance->cartridge_ram_size;
+    /* Parse the clock into a local first so a bad block changes nothing. */
+    cart_state parsed = instance->cart;
+    if (instance->cart.has_timer) {
+        const gbb_error block = rtc_block_parse(bytes + ram_size, &parsed);
+        if (block != GBB_OK) return block;
+    }
+    int changed = 0;
+    if (ram_size != 0u) {
+        if (instance->cart.kind == CART_MBC2) {
+            /* Normalise to the canonical 0xF0 | nibble image and compare first, so
+             * an unchanged image is a no-op and the input is never written. */
+            for (size_t i = 0u; i < ram_size; ++i)
+                if (instance->cartridge_ram[i] != (uint8_t)(0xF0u | (bytes[i] & 0x0Fu)))
+                    changed = 1;
+            if (changed)
+                for (size_t i = 0u; i < ram_size; ++i)
+                    instance->cartridge_ram[i] = (uint8_t)(0xF0u | (bytes[i] & 0x0Fu));
+        } else if (memcmp(instance->cartridge_ram, bytes, ram_size) != 0) {
+            memcpy(instance->cartridge_ram, bytes, ram_size);
+            changed = 1;
         }
-        return GBB_OK;
     }
-    if (memcmp(instance->cartridge_ram, bytes, size_bytes) != 0) {
-        memcpy(instance->cartridge_ram, bytes, size_bytes);
-        if (instance->battery_generation != UINT64_MAX)
-            ++instance->battery_generation;
+    if (instance->cart.has_timer) {
+        /* Compare against the live clock projected to now, so re-importing an
+         * image just exported at this emulated time is not a change. The import
+         * itself never advances the clock: the anchor becomes now. */
+        cart_state live = instance->cart;
+        rtc_sync(&live, instance->time_half_dots);
+        if (!rtc_fields_equal(&live, &parsed)) changed = 1;
+        instance->cart.rtc_sub = parsed.rtc_sub;
+        instance->cart.rtc_s = parsed.rtc_s;
+        instance->cart.rtc_m = parsed.rtc_m;
+        instance->cart.rtc_h = parsed.rtc_h;
+        instance->cart.rtc_dl = parsed.rtc_dl;
+        instance->cart.rtc_dh = parsed.rtc_dh;
+        memcpy(instance->cart.rtc_l, parsed.rtc_l, 5u);
+        instance->cart.rtc_latch_prev = parsed.rtc_latch_prev;
+        instance->cart.rtc_synced_at = instance->time_half_dots;
     }
+    if (changed && instance->battery_generation != UINT64_MAX)
+        ++instance->battery_generation;
     return GBB_OK;
 }
 
 gbb_error gbb_battery_generation(const gbb_instance *instance,
                                  uint64_t *out_generation) {
     if (instance == NULL || out_generation == NULL) return GBB_INVALID_ARGUMENT;
-    if (!has_battery_ram(instance)) return GBB_NO_BATTERY;
+    if (!has_battery_image(instance)) return GBB_NO_BATTERY;
     *out_generation = instance->battery_generation;
+    return GBB_OK;
+}
+
+gbb_error gbb_rtc_catch_up(gbb_instance *instance, int64_t elapsed_seconds) {
+    if (instance == NULL) return GBB_INVALID_ARGUMENT;
+    if (!instance->loaded || !instance->cart.has_timer) return GBB_NO_RTC;
+    if (elapsed_seconds < 0) return GBB_INVALID_ARGUMENT;
+    if (elapsed_seconds == 0) return GBB_OK;
+    cart_state *c = &instance->cart;
+    rtc_sync(c, instance->time_half_dots);
+    if (c->rtc_dh & 0x40u) return GBB_OK; /* halted: the delta is ignored */
+    const cart_state before = *c;
+    rtc_add_seconds(c, (uint64_t)elapsed_seconds);
+    if (!rtc_fields_equal(&before, c) && c->has_battery &&
+        instance->battery_generation != UINT64_MAX)
+        ++instance->battery_generation;
     return GBB_OK;
 }
 

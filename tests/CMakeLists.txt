@@ -66,6 +66,14 @@ foreach(case closed_form_differential add_composes rate_exact prescaler_rules wr
   add_test(NAME rtc_${case} COMMAND test_mbc3_rtc_internal rtc_${case})
 endforeach()
 
+add_executable(test_rtc_battery test_rtc_battery.c)
+target_link_libraries(test_rtc_battery PRIVATE GabbaBoy::core)
+target_compile_features(test_rtc_battery PRIVATE c_std_17)
+set_target_properties(test_rtc_battery PROPERTIES C_EXTENSIONS OFF)
+foreach(case block_roundtrip)
+  add_test(NAME rtc_${case} COMMAND test_rtc_battery rtc_${case})
+endforeach()
+
 add_executable(test_mbc5 test_mbc5.c)
 target_link_libraries(test_mbc5 PRIVATE GabbaBoy::core)
 target_compile_features(test_mbc5 PRIVATE c_std_17)

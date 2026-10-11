@@ -50,6 +50,7 @@ rtc_time_near_max
 rtc_reset_rebase
 rtc_slice_invariance
 rtc_cpu_independence
+rtc_block_roundtrip
 mbc5_tracer
 mbc5_header_matrix
 mbc5_rom_banking

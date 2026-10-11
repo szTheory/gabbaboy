@@ -35,7 +35,8 @@ typedef enum {
     GBB_EVENT_QUEUE_FULL,
     GBB_INVALID_EVENT,
     GBB_FRAME_NOT_READY,
-    GBB_NO_RUMBLE             /* loaded cartridge has no rumble line (or no ROM) */
+    GBB_NO_RUMBLE,            /* loaded cartridge has no rumble line (or no ROM) */
+    GBB_NO_RTC                /* loaded cartridge has no MBC3 timer (or no ROM) */
 } gbb_error;
 
 typedef enum {
@@ -168,8 +169,21 @@ gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_si
  * as ones); exports are always canonical, imports are normalised to that form
  * before comparison, and packed 256-byte images are unsupported. MBC2 type $05
  * has working but volatile RAM and no battery. MBC3 types $10 and $13 carry
- * battery RAM (type $12 has volatile RAM only); the timer-cartridge image text
- * is defined separately from this RAM-only description. */
+ * battery RAM (type $12 has volatile RAM only).
+ * Timer cartridges ($0F, $10) export cartridge RAM followed by a
+ * GBB_RTC_BLOCK_SIZE-byte clock block; $0F has no RAM, so its image is the
+ * block alone. Every other battery type is exactly RAM-sized as before. The
+ * block is little-endian: "GBRT", version 1, a 32-bit sub-second count below
+ * 2^23, the live and latched S M H DL DH registers, the latch edge state and a
+ * zero reserved byte. Export projects the clock to the current emulated time
+ * without changing the instance, so two exports at the same time are
+ * byte-identical. Import validates RAM and block together before changing
+ * anything: a wrong total length returns GBB_BATTERY_SIZE_MISMATCH, and a bad
+ * magic, unknown version, out-of-range field, masked bit or non-zero reserved
+ * byte returns GBB_INVALID_ARGUMENT, in every case leaving RAM, clock and
+ * generation unchanged. Import never advances the clock; wall-clock catch-up
+ * happens only through gbb_rtc_catch_up. */
+#define GBB_RTC_BLOCK_SIZE 21u
 gbb_error gbb_battery_size(const gbb_instance *instance, size_t *out_size);
 gbb_error gbb_copy_battery(const gbb_instance *instance, uint8_t *out_bytes,
                            size_t capacity_bytes);
@@ -189,6 +203,19 @@ gbb_error gbb_battery_generation(const gbb_instance *instance,
  * haptics and this is not evidence of physical rumble-motor behaviour. */
 gbb_error gbb_rumble_state(const gbb_instance *instance, uint8_t *out_on,
                            uint64_t *out_changes);
+/* Adds elapsed_seconds of host wall-clock time to an MBC3 timer cartridge's
+ * clock. A NULL instance returns GBB_INVALID_ARGUMENT; no ROM or no timer
+ * returns GBB_NO_RTC; a negative value returns GBB_INVALID_ARGUMENT without
+ * changing anything (the host decides what a clock rollback means). Zero is a
+ * no-op. A halted clock ignores the delta and returns GBB_OK. Otherwise the
+ * addition is exact and modular in O(1): the 9-bit day counter wraps at 512 and
+ * sets the sticky carry, with no saturation. Latched registers, the sub-second
+ * remainder and emulated time are unchanged; the battery generation advances
+ * once when the live clock changed. Call it between gbb_run* calls on one
+ * instance (the core takes no locks) and record it as an input event in replay
+ * logs. Importing a battery image never calls it, so hosts apply it once per
+ * open; two calls add twice. */
+gbb_error gbb_rtc_catch_up(gbb_instance *instance, int64_t elapsed_seconds);
 /* Copies events into a fixed 64-event per-instance queue. Timestamps are
  * absolute half-dot ticks and must be nondecreasing within the batch and no
  * earlier than the instance's current time. Equal timestamps keep caller

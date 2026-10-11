@@ -432,7 +432,13 @@ static int mbc3_absent_ram(void) {
         REQUIRE(gbb_peek_ram(machine, 0xC000u) == 0xFFu);
         REQUIRE(gbb_peek_ram(machine, 0xC001u) == 0xFFu);
         size_t battery = 0u;
-        REQUIRE(gbb_battery_size(machine, &battery) == GBB_NO_BATTERY);
+        if (types[t] == 0x0Fu) {
+            /* No RAM, but a timer and battery: the image is the 21-byte clock block. */
+            REQUIRE(gbb_battery_size(machine, &battery) == GBB_OK);
+            REQUIRE(battery == GBB_RTC_BLOCK_SIZE);
+        } else {
+            REQUIRE(gbb_battery_size(machine, &battery) == GBB_NO_BATTERY);
+        }
         gbb_destroy(machine);
     }
     return 0;
