@@ -514,6 +514,10 @@ static bool create_machine(player *app, const char *demo_rom_path) {
         fprintf(stderr, "Battery save warning: %s\n", error);
     } else if (app->save_identity.battery_backed) {
         set_status(app, "Battery RAM loaded; changes are in memory until saved");
+    } else if (app->save_identity.battery_unsupported) {
+        /* D-22: MBC2/MBC5 battery cartridges run, but progress is not kept. */
+        set_status(app, "Battery saving is not supported for this cartridge type yet; progress is not kept");
+        fputs("gabbaboy-player: warning: Battery saving is not supported for this cartridge type yet; progress is not kept\n", stderr);
     } else {
         set_status(app, "Ready");
     }
@@ -958,7 +962,11 @@ static bool replace_session_rom(player *app, const char *path) {
         set_status(app, error);
     else if (app->save_identity.battery_backed)
         set_status(app, "Battery RAM loaded; changes are in memory until saved");
-    else
+    else if (app->save_identity.battery_unsupported) {
+        /* D-22: MBC2/MBC5 battery cartridges run, but progress is not kept. */
+        set_status(app, "Battery saving is not supported for this cartridge type yet; progress is not kept");
+        fputs("gabbaboy-player: warning: Battery saving is not supported for this cartridge type yet; progress is not kept\n", stderr);
+    } else
         set_status(app, "ROM loaded; input and display state reset");
     return true;
 }
