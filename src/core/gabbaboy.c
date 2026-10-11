@@ -47,7 +47,10 @@ typedef struct {
  * carries only the plain-integer cart_state, and read8/write8 dispatch with
  * switch (kind). No function pointers: the hot path stays a stored-byte test.
  * ===========================================================================*/
-#define GBB_MAX_ROM_SIZE ((size_t)2u * 1024u * 1024u)
+/* MBC5 carts reach 8 MiB (512 banks); every other accepted or unknown type
+ * keeps the original 2 MiB early ceiling so its loader result never changes. */
+#define GBB_MAX_ROM_SIZE ((size_t)8u * 1024u * 1024u)
+#define GBB_LEGACY_MAX_ROM_SIZE ((size_t)2u * 1024u * 1024u)
 
 /* ROM_ONLY must stay 0 so a calloc-zeroed instance is a ROM-only cartridge. */
 typedef enum { CART_ROM_ONLY = 0, CART_MBC1 = 1, CART_MBC2 = 2, CART_MBC5 = 3 } cart_kind;
@@ -92,12 +95,12 @@ typedef struct {
 
 static const cart_type_row cart_type_table[] = {
     /* type kind          window batt timer rumble maxrom ram rule           ram32 ceiling */
-    { 0x00u, CART_ROM_ONLY, 0u, 0u, 0u, 0u, 0x00u, CART_RAM_NONE,      0u,    GBB_MAX_ROM_SIZE },
-    { 0x01u, CART_MBC1,     1u, 0u, 0u, 0u, 0x06u, CART_RAM_NONE,      0u,    GBB_MAX_ROM_SIZE },
-    { 0x02u, CART_MBC1,     1u, 0u, 0u, 0u, 0x06u, CART_RAM_8K_OR_32K, 0x04u, GBB_MAX_ROM_SIZE },
-    { 0x03u, CART_MBC1,     1u, 1u, 0u, 0u, 0x06u, CART_RAM_8K_OR_32K, 0x04u, GBB_MAX_ROM_SIZE },
-    { 0x05u, CART_MBC2,     1u, 0u, 0u, 0u, 0x03u, CART_RAM_MBC2,      0u,    GBB_MAX_ROM_SIZE },
-    { 0x06u, CART_MBC2,     1u, 1u, 0u, 0u, 0x03u, CART_RAM_MBC2,      0u,    GBB_MAX_ROM_SIZE },
+    { 0x00u, CART_ROM_ONLY, 0u, 0u, 0u, 0u, 0x00u, CART_RAM_NONE,      0u,    GBB_LEGACY_MAX_ROM_SIZE },
+    { 0x01u, CART_MBC1,     1u, 0u, 0u, 0u, 0x06u, CART_RAM_NONE,      0u,    GBB_LEGACY_MAX_ROM_SIZE },
+    { 0x02u, CART_MBC1,     1u, 0u, 0u, 0u, 0x06u, CART_RAM_8K_OR_32K, 0x04u, GBB_LEGACY_MAX_ROM_SIZE },
+    { 0x03u, CART_MBC1,     1u, 1u, 0u, 0u, 0x06u, CART_RAM_8K_OR_32K, 0x04u, GBB_LEGACY_MAX_ROM_SIZE },
+    { 0x05u, CART_MBC2,     1u, 0u, 0u, 0u, 0x03u, CART_RAM_MBC2,      0u,    GBB_LEGACY_MAX_ROM_SIZE },
+    { 0x06u, CART_MBC2,     1u, 1u, 0u, 0u, 0x03u, CART_RAM_MBC2,      0u,    GBB_LEGACY_MAX_ROM_SIZE },
     { 0x19u, CART_MBC5,     1u, 0u, 0u, 0u, 0x08u, CART_RAM_NONE,      0u,    GBB_MAX_ROM_SIZE },
     { 0x1Au, CART_MBC5,     1u, 0u, 0u, 0u, 0x08u, CART_RAM_MBC5,      0u,    GBB_MAX_ROM_SIZE },
     { 0x1Bu, CART_MBC5,     1u, 1u, 0u, 0u, 0x08u, CART_RAM_MBC5,      0u,    GBB_MAX_ROM_SIZE },
@@ -1822,7 +1825,8 @@ static gbb_error validate_header(const uint8_t *rom, size_t size,
     const uint8_t rom_size_code = rom[0x148];
     const uint8_t ram_size_code = rom[0x149];
     const cart_type_row *row = cart_row_for_type(type);
-    const size_t ceiling = row != NULL ? row->early_ceiling_bytes : GBB_MAX_ROM_SIZE;
+    const size_t ceiling =
+        row != NULL ? row->early_ceiling_bytes : GBB_LEGACY_MAX_ROM_SIZE;
     if (size > ceiling) return GBB_ROM_TOO_LARGE;
     if (row == NULL) return GBB_UNSUPPORTED_CARTRIDGE;
     /* Reject the code before the shift below: it must never exceed the row. */

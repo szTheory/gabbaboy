@@ -20,7 +20,8 @@ typedef enum {
     GBB_UNSUPPORTED_PROFILE,
     GBB_INVALID_ROM,          /* malformed header or header checksum */
     GBB_ROM_TRUNCATED,        /* image ends before header or declared ROM size */
-    GBB_ROM_TOO_LARGE,        /* actual image exceeds the 2 MiB hard limit */
+    GBB_ROM_TOO_LARGE,        /* image exceeds the type-aware limit: 8 MiB for MBC5 types
+                                 $19-$1E, 2 MiB for every other type */
     GBB_ROM_SIZE_MISMATCH,    /* actual image is longer than its declared ROM size */
     GBB_UNSUPPORTED_CARTRIDGE,/* cartridge type is outside the supported matrix */
     GBB_UNSUPPORTED_CARTRIDGE_VARIANT, /* recognized MBC1M wiring is unsupported */
@@ -137,8 +138,15 @@ gbb_error gbb_reset(gbb_instance *instance);
  * returns GBB_UNSUPPORTED_CARTRIDGE_VARIANT; this does not identify every
  * special-wiring image. MBC2 types $05/$06 are also supported with ROM-size
  * codes $00-$03 (32-256 KiB); the header RAM code must be $00 because the
- * 512 four-bit cells are built into the mapper. New cartridge RAM starts at
- * $FF as deterministic software policy, not a hardware power-on claim. */
+ * 512 four-bit cells are built into the mapper. MBC5 types $19-$1E are
+ * supported with ROM-size codes $00-$08 (32 KiB-8 MiB) and RAM-size codes
+ * $00 (types $19/$1C only), $02 (8 KiB), $03 (32 KiB), $05 (64 KiB) and $04
+ * (128 KiB); the CGB flag at $143 is ignored on the DMG-CPU-B profile. The
+ * image size ceiling is checked before any other header work: 8 MiB for MBC5
+ * types and 2 MiB for every other type byte (GBB_ROM_TOO_LARGE), so a
+ * validated load allocates at most 8 MiB of ROM plus 128 KiB of cartridge RAM.
+ * New cartridge RAM starts at $FF as deterministic software policy, not a
+ * hardware power-on claim. */
 gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_size);
 /* Battery RAM is available only for supported battery-backed cartridges.
  * Query the exact size, then copy/import through caller-owned buffers. No core

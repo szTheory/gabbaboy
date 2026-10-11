@@ -25,6 +25,15 @@ mbc2_battery_errors
 mbc2_battery_no_battery
 mbc2_two_instance_roundtrip
 mbc5_tracer
+mbc5_header_matrix
+mbc5_rom_banking
+mbc5_ram_enable
+mbc5_ram_banking
+mbc5_no_ram_window
+mbc5_battery
+mbc5_rom_bound
+mbc5_cgb_flag_ignored
+mbc5_cross_mapper_control
 run_bounds
 trace_capacity
 illegal_lockup_api

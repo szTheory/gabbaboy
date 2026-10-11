@@ -43,7 +43,8 @@ add_executable(test_mbc5 test_mbc5.c)
 target_link_libraries(test_mbc5 PRIVATE GabbaBoy::core)
 target_compile_features(test_mbc5 PRIVATE c_std_17)
 set_target_properties(test_mbc5 PROPERTIES C_EXTENSIONS OFF)
-foreach(case tracer)
+foreach(case tracer header_matrix rom_banking ram_enable ram_banking no_ram_window
+  battery rom_bound cgb_flag_ignored cross_mapper_control)
   add_test(NAME mbc5_${case} COMMAND test_mbc5 mbc5_${case})
 endforeach()
 
