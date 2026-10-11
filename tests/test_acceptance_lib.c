@@ -259,7 +259,12 @@ static int case_parse_errors(void) {
         REQUIRE(parse_text(lf, sizeof(lf) - 1u, &a, err, sizeof(err)) == 0);
         REQUIRE(parse_text(crlf, sizeof(crlf) - 1u, &b, err, sizeof(err)) == 0);
         REQUIRE(a.event_count == 4 && b.event_count == 4);
-        REQUIRE(memcmp(a.events, b.events, 4 * sizeof(a.events[0])) == 0);
+        /* Field-wise: gbb_input_event has padding after kind/value whose bytes are unspecified. */
+        for (size_t i = 0; i < 4u; ++i) {
+            REQUIRE(a.events[i].at_half_dots == b.events[i].at_half_dots);
+            REQUIRE(a.events[i].kind == b.events[i].kind);
+            REQUIRE(a.events[i].value == b.events[i].value);
+        }
         REQUIRE(a.end_half_dots == b.end_half_dots && a.mark_count == 2 && b.mark_count == 2);
         REQUIRE(a.marks[1].at_half_dots == 5u * GBB_ACCEPT_HALF_DOTS_PER_FRAME + 1u);
         REQUIRE(a.events[0].at_half_dots == 2u * GBB_ACCEPT_HALF_DOTS_PER_FRAME);
