@@ -144,6 +144,18 @@ PY
   grep -Fq 'libbet absent from scanned tree' <<< "$scan_output" ||
     fail 'extracted package ROM-absence scan did not report a clean tree'
   printf '%s\n' "$scan_output"
+  # Repository-only policy (D-32): the sibling Mooneye MBC ROMs, including the 4 MiB and 8 MiB
+  # derivatives, must not reach the player package either.
+  local mbc_scan_output
+  mbc_scan_output=$(cmake -DGBB_SCAN_DIR="$EXTRACT_DIR" \
+      -DGBB_FORBIDDEN_MANIFEST="$ROOT_DIR/fixtures/mooneye-mbc/manifest.json" \
+      -P "$ROOT_DIR/cmake/ScanForbiddenFixtures.cmake" 2>&1) || {
+    printf '%s\n' "$mbc_scan_output" >&2
+    fail 'extracted package contains a sibling Mooneye MBC ROM'
+  }
+  grep -Fq 'mooneye-mbc absent from scanned tree' <<< "$mbc_scan_output" ||
+    fail 'extracted package Mooneye MBC absence scan did not report a clean tree'
+  printf '%s\n' "$mbc_scan_output"
   local package_help="$BUILD_ROOT/downloaded-package-help.txt"
   "$player_bin" --help >"$package_help" 2>&1 || {
     cat "$package_help" >&2
