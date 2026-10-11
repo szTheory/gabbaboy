@@ -166,6 +166,9 @@ bool player_session_identify_rom(const uint8_t *rom, size_t rom_size,
                              rom[0x149u] == 0x03u ? 32768u : 0u;
     out_identity->battery_backed = rom[0x147u] == 0x03u &&
                                    out_identity->ram_size != 0u;
+    out_identity->battery_unsupported = rom[0x147u] == 0x06u ||
+                                        rom[0x147u] == 0x1Bu ||
+                                        rom[0x147u] == 0x1Eu;
     out_identity->saved_generation = 0u;
     out_identity->persistence_enabled = out_identity->battery_backed;
     return true;
