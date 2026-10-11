@@ -10,11 +10,11 @@ Every requirement maps to exactly one phase. Completion needs implementation and
 
 ### Game-level acceptance and evidence tooling
 
-- [ ] **GAME-01**: A maintainer can admit one rights-clear DMG game (Libbet and the Magic Floor primary; Tobu Tobu Girl only if GBDK runtime terms clear) whose manifest records source commit, licence text, per-asset provenance, release digest and reproducibility statement; admission fails if any embedded-asset right is unrecorded.
-- [ ] **GAME-02**: A headless acceptance run of that game, driven by scripted input timed in emulated device time, reaches a guest-memory progress predicate with recorded frame digests and a non-silent PCM digest, while the same run without input does not reach it, on Linux, macOS and Windows CI.
-- [ ] **GAME-03**: The packaged SDL3 player launches the admitted game and passes an automated input/progress/audio smoke.
-- [ ] **EVID-01**: The runner can capture a frame at the `LD B,B` breakpoint as a canonical RGB digest (image written only on failure), replay a scripted joypad input file with emulated-time waits, and honour per-fixture model applicability (`model_pass`, `model_fail`, `target_revision`, `unsupported-model`) without any new dependency.
-- [ ] **EVID-02**: A frozen DMG regression baseline (executed CTest inventory, Mooneye closures, acceptance frame/audio digests, benchmark baseline) is recorded, and every later v0.2 phase proves DMG-CPU-B output byte-identical to it or documents an approved, evidence-backed change.
+- [x] **GAME-01**: A maintainer can admit one rights-clear DMG game (Libbet and the Magic Floor primary; Tobu Tobu Girl only if GBDK runtime terms clear) whose manifest records source commit, licence text, per-asset provenance, release digest and reproducibility statement; admission fails if any embedded-asset right is unrecorded.
+- [x] **GAME-02**: A headless acceptance run of that game, driven by scripted input timed in emulated device time, reaches a guest-memory progress predicate with recorded frame digests and a non-silent PCM digest, while the same run without input does not reach it, on Linux, macOS and Windows CI.
+- [x] **GAME-03**: The packaged SDL3 player launches the admitted game and passes an automated input/progress/audio smoke.
+- [x] **EVID-01**: The runner can capture a frame at the `LD B,B` breakpoint as a canonical RGB digest (image written only on failure), replay a scripted joypad input file with emulated-time waits, and honour per-fixture model applicability (`model_pass`, `model_fail`, `target_revision`, `unsupported-model`) without any new dependency.
+- [x] **EVID-02**: A frozen DMG regression baseline (executed CTest inventory, Mooneye closures, acceptance frame/audio digests, benchmark baseline) is recorded, and every later v0.2 phase proves DMG-CPU-B output byte-identical to it or documents an approved, evidence-backed change.
 
 ### Cartridges
 
@@ -80,11 +80,11 @@ Every v0.2 requirement maps to exactly one phase in [ROADMAP.md](ROADMAP.md).
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GAME-01 | Phase 7 | Pending |
-| GAME-02 | Phase 7 | Pending |
-| GAME-03 | Phase 7 | Pending |
-| EVID-01 | Phase 7 | Pending |
-| EVID-02 | Phase 7 | Pending |
+| GAME-01 | Phase 7 | Complete |
+| GAME-02 | Phase 7 | Complete |
+| GAME-03 | Phase 7 | Complete |
+| EVID-01 | Phase 7 | Complete |
+| EVID-02 | Phase 7 | Complete |
 | CART-01 | Phase 8 | Pending |
 | CART-02 | Phase 8 | Pending |
 | CART-03 | Phase 8 | Pending |
