@@ -1,0 +1,21 @@
+name: libbet-repro
+
+# Opt-in, non-required reproduction of the vendored Libbet ROM (Phase 7, D-02).
+# Manual dispatch only; it never writes back and is not part of required checks.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  libbet-repro:
+    name: libbet-repro
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Rebuild pinned Libbet and compare with the vendored ROM
+        shell: bash
+        run: bash tests/scripts/reproduce-libbet.sh --compare

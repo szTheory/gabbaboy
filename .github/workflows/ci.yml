@@ -30,12 +30,29 @@ jobs:
           cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$GITHUB_WORKSPACE/build/package-prefix"
       - name: Build
         run: cmake --build --preset phase1 --verbose
+      - name: Record acceptance and Mooneye observations
+        shell: bash
+        run: |
+          # D-33: the same observation lines must come out on every native OS at the same head.
+          runner=build/gabbaboy-runner
+          echo "== acceptance libbet =="
+          "$runner" --acceptance tests/acceptance/cases.txt --case libbet --observe
+          echo "== acceptance libbet-no-input =="
+          "$runner" --acceptance tests/acceptance/cases.txt --case libbet-no-input --observe
+          echo "== mooneye suite =="
+          "$runner" --manifest fixtures/mooneye/manifest.json --suite --observe
       - name: Install package
         run: cmake --install build --prefix build/package-prefix
       - name: Run and verify required test inventory
         run: |
           ctest --test-dir build --output-on-failure --no-tests=error --output-junit ctest.xml
           bash .github/scripts/verify-test-inventory.sh build/ctest.xml tests/expected-tests.txt --installed
+      - name: Print DMG baseline check result
+        shell: bash
+        run: bash tests/scripts/verify-dmg-baseline.sh
+      - name: Verify DMG baseline JUnit inventory
+        shell: bash
+        run: bash tests/scripts/verify-dmg-baseline.sh --junit build/ctest.xml --inventory core
 
   native-macos:
     name: native-macos-arm64
@@ -50,12 +67,29 @@ jobs:
           cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$GITHUB_WORKSPACE/build/package-prefix"
       - name: Build
         run: cmake --build --preset phase1 --verbose
+      - name: Record acceptance and Mooneye observations
+        shell: bash
+        run: |
+          # D-33: the same observation lines must come out on every native OS at the same head.
+          runner=build/gabbaboy-runner
+          echo "== acceptance libbet =="
+          "$runner" --acceptance tests/acceptance/cases.txt --case libbet --observe
+          echo "== acceptance libbet-no-input =="
+          "$runner" --acceptance tests/acceptance/cases.txt --case libbet-no-input --observe
+          echo "== mooneye suite =="
+          "$runner" --manifest fixtures/mooneye/manifest.json --suite --observe
       - name: Install package
         run: cmake --install build --prefix build/package-prefix
       - name: Run and verify required test inventory
         run: |
           ctest --test-dir build --output-on-failure --no-tests=error --output-junit ctest.xml
           bash .github/scripts/verify-test-inventory.sh build/ctest.xml tests/expected-tests.txt --installed
+      - name: Print DMG baseline check result
+        shell: bash
+        run: bash tests/scripts/verify-dmg-baseline.sh
+      - name: Verify DMG baseline JUnit inventory
+        shell: bash
+        run: bash tests/scripts/verify-dmg-baseline.sh --junit build/ctest.xml --inventory core
 
   native-windows:
     name: native-windows-x64
@@ -70,6 +104,17 @@ jobs:
           cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$env:GITHUB_WORKSPACE/build/package-prefix"
       - name: Build
         run: cmake --build --preset phase1 --verbose
+      - name: Record acceptance and Mooneye observations
+        shell: bash
+        run: |
+          # D-33: the same observation lines must come out on every native OS at the same head.
+          runner=build/gabbaboy-runner
+          echo "== acceptance libbet =="
+          "$runner" --acceptance tests/acceptance/cases.txt --case libbet --observe
+          echo "== acceptance libbet-no-input =="
+          "$runner" --acceptance tests/acceptance/cases.txt --case libbet-no-input --observe
+          echo "== mooneye suite =="
+          "$runner" --manifest fixtures/mooneye/manifest.json --suite --observe
       - name: Install package
         run: cmake --install build --prefix build/package-prefix
       - name: Capture exact Windows manifest bytes
@@ -88,6 +133,12 @@ jobs:
         run: |
           ctest --test-dir build --output-on-failure --no-tests=error --output-junit ctest.xml
           bash .github/scripts/verify-test-inventory.sh build/ctest.xml tests/expected-tests.txt --installed
+      - name: Print DMG baseline check result
+        shell: bash
+        run: bash tests/scripts/verify-dmg-baseline.sh
+      - name: Verify DMG baseline JUnit inventory
+        shell: bash
+        run: bash tests/scripts/verify-dmg-baseline.sh --junit build/ctest.xml --inventory core
 
   linux-sanitizers:
     name: linux-asan-ubsan

@@ -30,6 +30,8 @@ player_session_save_cadence
 player_session_transition_choices
 player_session_short_write_failure
 player_session_special
+player_session_script_no_input
+player_session_script_invalid
 player_session_symlink
 player_session_target_type_rejection
 player_session_temp_create_failure
@@ -49,3 +51,6 @@ player_audio_unavailable
 player_smoke
 player_reset_transition
 player_verified_output_directory
+player_script_smoke_surface
+player_script_smoke_surface_selftest
+player_script_smoke_surface_main_selftest

@@ -2,34 +2,39 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
+current_phase: 8
+current_phase_name: Cartridge Seam, MBC5 and MBC2
 status: planning
-last_updated: "2026-10-10T18:30:38.449Z"
-last_activity: 2026-10-10
+stopped_at: Phase GB-07 complete, ready to plan Phase 8
+last_updated: "2026-10-11T11:29:29.013Z"
+last_activity: 2026-10-11
+last_activity_desc: Phase GB-07 complete, transitioned to Phase 8
+state_head: 175c9fce4a5c2cdfd62811462a2e8d9e3e2ac441
 progress:
   total_phases: 9
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 2
+  total_plans: 17
+  completed_plans: 17
+  percent: 20
 ---
 
 # Project State
 
 ## Project Reference
 
-See: [PROJECT.md](PROJECT.md) (updated 2026-10-10)
+See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** v0.2 Color & Cartridge Breadth — Phase 7: DMG Game Acceptance and Regression Baseline (not started)
+**Current focus:** Phase 8 — Cartridge Seam, MBC5 and MBC2
 
 ## Current Position
 
-Phase: 7 of 15 (v0.2 spans Phases 7–15) — DMG Game Acceptance and Regression Baseline
-Plan: — (not planned)
-Status: Ready to discuss Phase 7
-Last activity: 2026-10-10 — v0.2 roadmap created (9 phases, 28/28 requirements mapped)
+Phase: 8 — Cartridge Seam, MBC5 and MBC2
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-10-11 — Phase GB-07 complete, transitioned to Phase 8
 
-Progress (v0.2): [░░░░░░░░░░] 0% (0/9 phases)
+Progress (v0.2): [█░░░░░░░░░] 11% (1/9 phases)
 
 ## Performance Metrics
 
@@ -98,6 +103,23 @@ Progress (v0.2): [░░░░░░░░░░] 0% (0/9 phases)
 | Phase GB-06.1 P06 | 10 min | 2 tasks | 10 files |
 | Phase GB-06.1 P07 | 13 min | 2 tasks | 11 files |
 | Phase 06.1 P08 | 10 min | 2 tasks | 2 files |
+| Phase 07 P01 | 18min | 3 tasks | 11 files |
+| Phase 07 P02 | 40 min | 3 tasks | 12 files |
+| Phase 07 P03 | 30 min | 2 tasks | 5 files |
+| Phase 07 P04 | 20 min | 2 tasks | 4 files |
+| Phase 07 P05 | 6 min | 2 tasks | 10 files |
+| Phase 07 P17 | 25 min | 2 tasks | 2 files |
+| Phase 07 P06 | 25 min | 2 tasks | 11 files |
+| Phase 07 P07 | 75 min | 2 tasks | 11 files |
+| Phase 07 P08 | 25 min | 2 tasks | 9 files |
+| Phase 07 P09 | 20 min | 2 tasks | 7 files |
+| Phase 07 P10 | 35 min | 2 tasks | 8 files |
+| Phase 07 P11 | 130 min | 3 tasks | 9 files |
+| Phase 07 P12 | 40 min | 2 tasks | 6 files |
+| Phase 07 P13 | 75 min | 3 tasks | 8 files |
+| Phase GB-07 P14 | 55 min | 3 tasks | 5 files |
+| Phase GB-07 P07-15 | 70 min | 2 tasks | 7 files |
+| Phase 7 P16 | 100 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -190,6 +212,23 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-06.1]: 06.1-05: Phases 1 and 2 re-verified passed after PR 54 on the docs-only refresh branch; P1 covered_files gains wait-exact-head-ci.py and check-player-result.sh; P1 IN-01/IN-02 and P2 IN-01 fixed; new P1 IN-03/IN-04 deferred until the next wait-exact-head-ci.py change — D-10 refresh in order through execute-phase verification gates; D-09 forbids code fixes on the refresh branch
 - [Phase GB-06.1]: 06.1-06: Phases 3 and 4 re-verified passed after PR 54 on the docs-only refresh branch; P3 covered_files gains wait-exact-head-ci.py and check-player-result.sh; P3 IN-01/IN-02/IN-03 fixed (IN-01 close-failure branch inspection-only); P4 stale only through session.c and test_session.c, covered set unchanged — D-10 refresh in order through execute-phase verification gates; D-09 forbids code fixes on the refresh branch
 - [Phase GB-06.1]: 06.1-07: Phases 5 and 6 refreshed passed; Phase 6 covered_files gains tests/consumers/c/main.c and tests/consumers/cpp/main.cpp; P5 IN-01 fixed (documented); audit audio-consumer gap fixed; 06.1 did not change release.yml (pre-existing drift from v0.1.0 recorded)
+- [Phase 07]: 07-01: the Libbet notice row pins the manifest, ROM and LICENSE.txt digests and libbet_notice checks all three; the verifier enforces the eight predicate addresses and five ROM anchors as constants
+- [Phase 07]: 07-01: closure completeness is checked by EXPECTED_CLOSURE_SHA256 in required CI and by --derive-closure on the pinned source (45 files, conservative over-approximation); hosted reproduction stays unclaimed until a real run URL exists
+- [Phase 07]: 07-02: gbb_accept_drive end_half_dots is the last logical deadline; predicate anchors_ok checks the SHA-256 before any anchor; drive callbacks share one context and max_batch is 1..64 (replay uses 32)
+- [Phase 07]: D-027: mixer headroom divide-by-16 fixes Libbet clipping (D-19(i))
+- [Phase 07]: 07-04: Libbet reproduction pins Pillow wheels for cp310-cp314 (linux x86_64, macOS arm64) and relies on the D-02 archive SHA-256 because GitHub reports no asset digest; hosted run stays null
+- [Phase 07]: 07-05: Frame-digest oracles parse but the runner refuses them with exit 3 unsupported-oracle until the digest plan; runner uses tail_half_dots=0 since the verdict is T_hit
+- [Phase 07]: D-028: D-19(ii) early Start taps are expected Libbet intro behaviour; joypad path unchanged
+- [Phase 07]: 07-06: acceptance_negative_* forbid only status=(pass|fail|unsupported); invalid-input diagnostics print status=invalid by design
+- [Phase 07]: D-029: Libbet checkpoint structure gate is >=2 distinct shades for title/play_start and >=3 for mid/hit (pinned title screen is 1-bit text); refines D-25; ratified by the owner 2026-10-11
+- [Phase 07]: PCM window is stepping calls starting at or after play_start; run continues 1 s past T_hit so the window ends at T_hit+1 s (07-07)
+- [Phase 07]: 07-08: gbb_case_applicability decides model before revision; model_fail strict (xfail only for declared reason); suite requires --expect-excluded and fails on excluded-count-mismatch; only dmg-cpu-b executes
+- [Phase 07]: 07-09: daa LD B,B digest is a regression-class observation (mooneye.daa.frame), never a case-file reference; ldbb-controls.txt references are configure-enforced to the stdlib uniform-3 digest (D-26)
+- [Phase 07]: 07-10: control regexes match the full status line (status=fail model=dmg-cpu-b reason=...); final_* fields print on every non-pass predicate line
+- [Phase 07]: 07-11: D-16 PCM thresholds unchanged (peak_to_peak 2048, changes 4800); O=20290/164822, N=0/0 at exact head b6f982b, identical on Linux, macOS and Windows
+- [Phase 07]: 07-11: stall report (D-18) also covers exit 3 and writes the failure PPM there; acceptance_parse_script_errors compares events field-wise (MSVC padding)
+- [Phase GB-07]: 07-14: surface check forbids a superset of tokens (freopen, O_* flags, non-literal fopen mode, session persistence names); test_player_session compiles audio/input/script_smoke sources directly
+- [Phase GB-07]: 07-15: DMG-CPU-B v1 ledger frozen at 5a55f19 in baseline commit 42faf9b; one ledger for all OS, changes only via CHANGES.md rows (D-30..D-35)
 
 ### Pending Todos
 
@@ -223,11 +262,16 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-10
-Stopped at: v0.2 milestone definition complete (requirements + roadmap) on `gsd/v0.2-milestone-definition`; Phase 7 not started
+Last session: 2026-10-11T02:39:27.975Z
+Stopped at: Phase GB-07 complete, ready to plan Phase 8
 Resume file: None
-Next command in fresh context: `/gsd-discuss-phase 7`
+Next command in fresh context: `/gsd-discuss-phase 8`
 Continuation note: [.continue-here.md](.continue-here.md)
+Completed workflow stage: **Phase 7 - DMG Game Acceptance and Regression Baseline, execution and verification** (2026-10-11). Verification passed 5/5 (GAME-01..03, EVID-01..02) in [07-VERIFICATION.md](phases/GB-07-dmg-game-acceptance-and-regression-baseline/07-VERIFICATION.md); gates: Nyquist validated, security 49/49 closed, code review 10 findings (8 fixed, WR-01 deferred as a documented limitation, 2 info skipped, 0 open), local regression 261/261. Owner ratified D-029 on 2026-10-11. PR #63 is squash-merged to main after exact-head required checks pass. Limitations: one game on one software model, packaged-player smoke macOS only, no hardware evidence, `libbet-repro` not yet run hosted (Linux path unverified), no CTest for `frame-digest@t`. Next phase: **Phase 8 - Cartridge Seam, MBC5 and MBC2** (no CONTEXT.md yet) via **`/gsd-discuss-phase 8`**. Both auto-advance flags (`workflow.auto_advance`, `workflow._auto_chain_active`) stay false; nothing advances automatically.
+Completed workflow stage: **Phase 7 - DMG Game Acceptance and Regression Baseline, execution** (2026-10-11), plans 07-01..07-17 on branch `gsd/phase-07-dmg-game-acceptance-and-regression-baseline`. Evidence head 23c0ffd7c1ab3149be1b96c8ba384acf5c655c48, run 38106136572 (https://github.com/szTheory/gabbaboy/actions/runs/38106136572): all eight required jobs success. The handoff commits that follow the evidence head change only planning files and are checked as separate heads (see the 07-16 SUMMARY), so the evidence head is not the final branch head. PR #63 is marked ready for review and is not merged. Open owner item: D-029 (shade-count relaxation of locked D-25) is pending owner confirmation. Next step: **Phase 7 verification**. Next command in fresh context: `/gsd-verify-work 7`. Following phase: **Phase 8 - Cartridge Seam, MBC5 and MBC2** (named, not started; only after verification passes and the owner chooses to continue). Both auto-advance flags (`workflow.auto_advance`, `workflow._auto_chain_active`) stay false; nothing advances automatically.
+Completed workflow stage: **Phase 7 planning** (2026-10-10) on branch `gsd/phase-07-dmg-game-acceptance-and-regression-baseline`. Research, pattern map, validation strategy and 17 plans in 13 waves (07-01 Libbet admission; 07-02/03/04 shared acceptance library, mixer investigation, opt-in repro in parallel; 07-17 early-Start-tap investigation; runner, digests, applicability, LD B,B, controls, calibration; 07-12/13 player smoke and baseline comparator in parallel; 07-15 baseline freeze; 07-16 docs, PR ready and handoff). Plan checker: 6 passes; 0 blockers remaining; requirements 5/5, decisions 38/38. Owner decisions recorded in `07-CONTEXT.md`: D-14 clarification (controls assert the raw exit 1 and, for N1/N2, the separate strict-xfail mapping) and D-18 amendment (64 KiB caps the text report; one 69,135-byte PPM per failing case). Phase 7 is not executed. Next phase step: **Phase 7 execution** via **`/gsd-execute-phase 7`**. Both auto-advance settings stay false; nothing advances automatically.
+Completed workflow stage: **Phase 7 context gathering** (2026-10-10). `07-CONTEXT.md` locks 38 decisions (D-01..D-38) from four parallel multi-lens/adversarial advisor researches: vendored digest-pinned Libbet v0.08 (commit 46a765a) with an opt-in RGBDS 0.7.0 rebuild workflow that must match the vendored bytes; G5 fail-closed manifest checklist; guest-state predicate (tutorial floor fully scored, not attract mode) with no-input, wrong-input, drop-START and mutant-core controls; `gbinput 1` master-timeline script; hybrid runner (`tests/acceptance/cases.txt`, compiled Mooneye table unchanged); canonical `GBB-RGB888-v1` digest; text baseline ledger `tests/baseline/dmg-cpu-b-v1.txt` with monotonic inventory and an approved-change log; macOS packaged-player `--input-script` smoke. Phase 7 is not planned or executed. Next phase step: **Phase 7 planning** via **`/gsd-plan-phase 7`**. Both auto-advance settings stay false; nothing advances automatically.
+
 Completed workflow stage: **v0.2 milestone definition — roadmap creation** (2026-10-10). This is initialization, not Phase 7. ROADMAP.md adds the `## v0.2 Color & Cartridge Breadth` section with Phases 7–15; REQUIREMENTS.md traceability maps 28/28 requirements. Next phase: **Phase 7 — DMG Game Acceptance and Regression Baseline**, via **`/gsd-discuss-phase 7`**. Both `workflow.auto_advance` and `workflow._auto_chain_active` stay false; stop after every phase and wait for the owner. No phase is active; nothing advances automatically.
 
 Completed workflow stage: **v0.1 milestone completion** (2026-10-10) — `verified_closeout`: 7/7 phases passed, 35/35 requirements, audit `passed`, 0 open artifacts (the Phase 5 `-Wunsequenced` item was confirmed fixed and marked resolved). ROADMAP, REQUIREMENTS, audit, phase directories and quick tasks are archived under [milestones/](milestones/); `REQUIREMENTS.md` was removed for the next milestone; tag `v0.1` marks the close. Next stage: **new milestone definition** (GB/GBC breadth direction) via `/gsd-new-milestone`. No phase is active; nothing advances automatically.
@@ -246,5 +290,5 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Discuss Phase 7 (DMG Game Acceptance and Regression Baseline): `/gsd-discuss-phase 7`
+- Discuss Phase 8 (Cartridge Seam, MBC5 and MBC2): `/gsd-discuss-phase 8`
 - Phase-stop rule: stop after each phase and yield; never auto-advance into the next phase or milestone.

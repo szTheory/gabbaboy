@@ -38,6 +38,21 @@ completed output frame consumes one event-ring slot. The static response table
 uses signed 64-bit accumulation, saturating s16 conversion, and no runtime
 table generation, allocation, or external DSP package.
 
+Mixer scale: each DAC maps its 4-bit output to one unit of 16384 counts
+(`volume * 2048 - 16384`), the enabled channels of a side are summed, and NR50
+multiplies that side by `(volume + 1)`. Pan Docs gives each DAC an analog range
+of -1 to 1 and a four-channel side a range of -4 to 4 before the NR50 scaling,
+so full scale (four unit channels at NR50 volume 7) must fit one s16 range. The
+mixer therefore divides every channel term by 16 (an exact division, because
+terms are multiples of 2048). A single full-volume channel at NR50 `$77`
+peaks near 7168 and two reach about 14336. An earlier revision omitted that
+divide: Libbet's two full-volume channels reached 229376 counts before the
+saturating conversion and about 3% of its pre-filter samples clipped. This
+changed the authored guest partition digest; the signal-vector digest drives
+the resampler directly and did not change. Only the mix path changed; the host
+gain range and default are unchanged. See decision D-027 in the project
+decision register.
+
 After the mix, a DMG-style high-pass approximation uses Q15 coefficient 32648,
 nearest rounding with ties away from zero, and s16 saturation. The coefficient
 is scaled from Pan Docs' documented approximation to 48 kHz as
@@ -51,7 +66,7 @@ fractional-edge vectors have explicit peak, settling, and phase expectations.
 They cover those listed inputs only; they do not claim general passband ripple,
 alias rejection at every frequency, or perceived quality. The signal-vector
 digest is FNV-1a 64 `202a3e9f96f3cead`; the authored guest partition digest is
-`b5bb127cdda6a035`.
+`c89a0db6f083c345` (it was `b5bb127cdda6a035` before the mixer headroom divide).
 
 ## SDL player behavior
 

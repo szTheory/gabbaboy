@@ -1,0 +1,1 @@
+No external API integration: Phase 7 adds a test fixture, runner/player diagnostics and a regression ledger; the only "API" mention is maintainers reading their own CI results with the existing gh CLI and wait-exact-head-ci.py, which is process evidence, not a product integration.

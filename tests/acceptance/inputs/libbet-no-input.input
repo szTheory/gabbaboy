@@ -1,0 +1,10 @@
+gbinput 1
+# Libbet control N1 (D-14): same timeline as libbet-tutorial.input with no button events at all.
+# Marks match the tutorial so the checkpoint plan is identical; the predicate must never be reached.
+wait 470f
+mark title
+wait 30f
+mark play_start
+wait 200f
+mark mid
+wait 500f

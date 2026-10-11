@@ -1,0 +1,596 @@
+{
+  "schema": 1,
+  "id": "libbet",
+  "title": "Libbet and the Magic Floor v0.08 (third-party test fixture)",
+  "source": {
+    "repository": "https://github.com/pinobatch/libbet",
+    "commit": "46a765a2c01701bffb8c0b7dd6e4be3a6b193090",
+    "tree_sha1": "b3e4c329ae2d7b50e3a497f2fa432db5c4095b5d",
+    "tag_note": "The tag v0.08 is a lightweight, mutable tag and is not pinned; the commit above is the immutable source identity. Never pin the tag or master."
+  },
+  "license": {
+    "spdx": "Zlib",
+    "file": "LICENSE.txt",
+    "license_sha256": "e4fb3c0ef61a0258517e2df3dea5cd7df9d2a2f2c51c9b5082de922b35eea65c",
+    "upstream_license_sha256": "7bd353e765c8d32a7a048929d008e9bb17fa28d7ee4b619f80b67538e9bb82ff",
+    "upstream_license_path": "LICENSE"
+  },
+  "credits": {
+    "readme_excerpt": "Copyright 2002, 2012 Martin Korth\nCopyright 2018, 2024 Damian Yerrick\n\nThis program is free software.  Permission is granted to use it\nsubject to the terms of the zlib License.  See the file `LICENSE`.",
+    "license_line": "Copyright (c) 2018 Damian Yerrick",
+    "discrepancy": "The upstream LICENSE names only Damian Yerrick 2018; the README and ROM text add Martin Korth 2002, 2012 and Damian Yerrick 2018, 2024. Both credits are preserved and the discrepancy is not resolved here.",
+    "korth_permission": {
+      "quote": "Would be fine.",
+      "source": "05-burndown/note_from_nocash.md",
+      "date": "2018-10-03",
+      "classification": "limitation",
+      "note": "A permission to port the game, not a licence grant."
+    }
+  },
+  "rom": {
+    "path": "fixtures/libbet/libbet.gb",
+    "size_bytes": 32768,
+    "sha256": "3607412031c8287cf878299ce96e581e85b852dde703806343b95576fa3ff1a9",
+    "header": {
+      "title": "LIBBET",
+      "cartridge_type": 0,
+      "cgb_flag": 128,
+      "sgb_flag": 3
+    }
+  },
+  "release_provenance": {
+    "note": "Provenance only; the pinned commit and the ROM digest are the identity.",
+    "asset_url": "https://github.com/pinobatch/libbet/releases/download/v0.08/libbet.gb",
+    "size_bytes": 32768,
+    "published_at": "2024-01-02T03:33:10Z",
+    "asset_created_at": "2024-01-02T03:31:31Z",
+    "asset_updated_at": "2024-01-02T03:31:32Z"
+  },
+  "rights": {
+    "no_music": true,
+    "outside_closure": [
+      "07-biggar/",
+      "hopesup/"
+    ],
+    "closure_derivation": "The frozen build closure is the makefile plus every tracked file under the build-input directories src/, tilesets/ and tools/, minus closure_exclusions. An exclusion is valid only if no build-relevant token references it: (1) makefile tokens after dropping # comments and joining continuations, matched word-bounded by path, basename or module stem, with $(wildcard ...) arguments treated as fnmatch globs and a bare % prerequisite expanded with the target pattern suffix; (2) import and from-import module names in non-excluded tools/*.py; (3) include and incbin directive targets in src/*.z80 and src/*.inc. Free text in comments, strings and docstrings is never matched. Every src include/incbin target must be a closure path under src/ or a generated obj/gb/ path, and every prerequisite of a rule for $(title).gb or obj/gb/ must be a make variable, an obj/gb/ path, a path under src/, tilesets/ or tools/, or a closure path. verify-libbet-admission.py --derive-closure SRC_DIR re-derives this from a source tree; required CI, which has no source tree, detects a dropped closure entry through the EXPECTED_CLOSURE_SHA256 constant.",
+    "closure_files": [
+      "makefile",
+      "src/achievements.z80",
+      "src/audio.z80",
+      "src/bcd.z80",
+      "src/debrief.z80",
+      "src/fade.z80",
+      "src/floormodel.z80",
+      "src/floorvram.z80",
+      "src/global.inc",
+      "src/hardware.inc",
+      "src/header.z80",
+      "src/init.z80",
+      "src/instructions.z80",
+      "src/intro.z80",
+      "src/main.z80",
+      "src/metasprite.z80",
+      "src/pads.z80",
+      "src/popslide.z80",
+      "src/ppuclear.z80",
+      "src/prevcombo.z80",
+      "src/rand.z80",
+      "src/rolling.z80",
+      "src/sgb.z80",
+      "src/statusbar.z80",
+      "src/unpb16.z80",
+      "src/vwfdraw.z80",
+      "tilesets/Libbet.ec",
+      "tilesets/Libbet.png",
+      "tilesets/Libbet_title.png",
+      "tilesets/bigdigits.png",
+      "tilesets/floorborder-sgb.png",
+      "tilesets/floorborder.png",
+      "tilesets/floorpieces.png",
+      "tilesets/roll32.png",
+      "tilesets/sgbborder.png",
+      "tilesets/vwf7_cp144p.png",
+      "tools/extractcels.py",
+      "tools/makeborder.py",
+      "tools/pb16.py",
+      "tools/pilbmp2nes.py",
+      "tools/pitchtable.py",
+      "tools/savescan.py",
+      "tools/uniq.py",
+      "tools/vwfbuild.py",
+      "tools/zipup.py"
+    ],
+    "closure_exclusions": [
+      {
+        "path": "tools/bgrdedent.py",
+        "reason": "No makefile token, glob or pattern-rule expansion names it, no closure tool imports it and no src include or incbin target names it."
+      },
+      {
+        "path": "tools/unused.py",
+        "reason": "No makefile token, glob or pattern-rule expansion names it, no closure tool imports it and no src include or incbin target names it; the word unused appears only in src comments."
+      }
+    ],
+    "embedded_assets": [
+      {
+        "path": "makefile",
+        "kind": "build-script",
+        "author": "Damian Yerrick",
+        "licence": "FSFAP-style all-permissive notice in file header",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/makefile",
+        "sha256": "ef20ded02de9ffffa0f42cdbd7c84e7eaeabf59b31230009fbdaf9d7536b3283"
+      },
+      {
+        "path": "src/achievements.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/achievements.z80",
+        "sha256": "afa945af2576c482e60994218112b60d93ff6e0e91c296d84c746082342967a7"
+      },
+      {
+        "path": "src/audio.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "note": "Synthesized-SFX audio driver; the ROM carries no music.",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/audio.z80",
+        "sha256": "26829dd3e9b0e72bf46df2a9dde3c7944540a317f6f640987e2f80f04e84e316"
+      },
+      {
+        "path": "src/bcd.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/bcd.z80",
+        "sha256": "51cadce993cef623114cd424e5cac2c60c00e359a6f23acb4a96417b2cea65ae"
+      },
+      {
+        "path": "src/debrief.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick (program); Martin Korth (concept)",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/debrief.z80",
+        "sha256": "0c136ac3076dc9483405bab5c3fe871bce43b95b5e4f86798bd51e0e9adc30b9"
+      },
+      {
+        "path": "src/fade.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/fade.z80",
+        "sha256": "68cae5dba230cad44c2331edbcb8c22b4394fc819f9abbba8abd51be65f1c4f1"
+      },
+      {
+        "path": "src/floormodel.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick (program); Martin Korth (concept)",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/floormodel.z80",
+        "sha256": "8ef11ec001a8dd4da9a45741028559a3fb22b20b3222c3c4164fe96fd27c461d"
+      },
+      {
+        "path": "src/floorvram.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick (program); Martin Korth (concept)",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/floorvram.z80",
+        "sha256": "de2fa92847fb3741702773e2063c4e3a431db864e4199c5ec2bae1dac999703b"
+      },
+      {
+        "path": "src/global.inc",
+        "kind": "rom-include",
+        "author": "Damian Yerrick; Eldred Habert (one constants commit, 690a0c6)",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/global.inc",
+        "sha256": "48b3cf11d797aabac98016e2ca50e283327ce22738f9649832e840b4e22832a7"
+      },
+      {
+        "path": "src/hardware.inc",
+        "kind": "rom-include",
+        "author": "gbdev hardware.inc authors (Jones, Carsten Sorensen and contributors); repository copy edited by Damian Yerrick and Eldred Habert",
+        "licence": "CC0-1.0",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/hardware.inc",
+        "sha256": "d45f77d8561f5c758861bc40cd9c8aa2bb4b42ca672a4db6a4bf700eddb6cc91"
+      },
+      {
+        "path": "src/header.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick",
+        "licence": "No rights reserved (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/header.z80",
+        "sha256": "830c67282aef9a2f64d4ff4e60da4a3e7fce65191e3b11a8d0e790d3f6c88368"
+      },
+      {
+        "path": "src/init.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/init.z80",
+        "sha256": "0ebe1d99213bb5fe7e06756857198071b5166154a4e96af767a89049bacab29a"
+      },
+      {
+        "path": "src/instructions.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick (program); Martin Korth (concept)",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/instructions.z80",
+        "sha256": "e167707f54c60909c50d11fa3172e20f31161b272ad802404077f402481faef1"
+      },
+      {
+        "path": "src/intro.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (repo-wide LICENSE; no per-file notice)",
+        "basis": "repo-wide-licence-inference",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/intro.z80",
+        "sha256": "48f53cbc91c681554c8ae8c46389508c71f6518857f564ee34cf4e8e03e1e237"
+      },
+      {
+        "path": "src/main.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick (program); Martin Korth (concept)",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/main.z80",
+        "sha256": "3dd367dad57654fba6683532de88d143ebcb5b9a025779a2c30a0a43137b4da9"
+      },
+      {
+        "path": "src/metasprite.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/metasprite.z80",
+        "sha256": "dc7b7c95f150cad4d8ec42565f54cf4894ceae1e94e6cdd1909e05356844087d"
+      },
+      {
+        "path": "src/pads.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick; Eldred Habert (one constants commit, 690a0c6)",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/pads.z80",
+        "sha256": "8b76d771e6aa4d7c82c8ad7a4346f426eb4ef5bc671d6590b9150951b1b04bc3"
+      },
+      {
+        "path": "src/popslide.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/popslide.z80",
+        "sha256": "ba3a9ff45a93b25a7ce27ef49b50067a4708c9c1a34d8181df7cfe49fa13790e"
+      },
+      {
+        "path": "src/ppuclear.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/ppuclear.z80",
+        "sha256": "f88addd93ac9da01045f865bb5f7a1c9aacfe478e08696d9f4b6b5b2f23ef47d"
+      },
+      {
+        "path": "src/prevcombo.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/prevcombo.z80",
+        "sha256": "734b58df8b7e921253cd7643d7ab66c8dc8305c2b51135db313c71eb0d288d44"
+      },
+      {
+        "path": "src/rand.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/rand.z80",
+        "sha256": "58024022dd0676a50d9c505f36630f5c15197f81632a57a026bad302155076ea"
+      },
+      {
+        "path": "src/rolling.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick (program); Martin Korth (concept)",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/rolling.z80",
+        "sha256": "096848eda24d6a189531dd1fb4ae3c4e1301195ab0ff78e53c5c8e75cac4a4b7"
+      },
+      {
+        "path": "src/sgb.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/sgb.z80",
+        "sha256": "c09d554ed4c8aca05fae3e371544fc2cc983dd494d0a4c748b30a7cb511e99a7"
+      },
+      {
+        "path": "src/statusbar.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick (program); Martin Korth (concept)",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/statusbar.z80",
+        "sha256": "a3b55d0375d71331fe4314a4022c2fa61b2271ded0fa85c40f4f253a56e42474"
+      },
+      {
+        "path": "src/unpb16.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/unpb16.z80",
+        "sha256": "2430894206217f1262dc6917bdb740cf1d0f568e1e21d77dce0707bac4aeabd5"
+      },
+      {
+        "path": "src/vwfdraw.z80",
+        "kind": "rom-text-and-code",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/src/vwfdraw.z80",
+        "sha256": "1384c376c6d6de8058b180f2d4b2faa5e19f410481b5a855dbc6007613b135f0"
+      },
+      {
+        "path": "tilesets/Libbet.ec",
+        "kind": "graphics-metadata",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (repo-wide LICENSE; no per-file notice)",
+        "basis": "repo-wide-licence-inference",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/tilesets/Libbet.ec",
+        "sha256": "d54f0c0dda8108336ab3579fbf63f4a9678ec7a092cc6fe873ffe8088d1fadff"
+      },
+      {
+        "path": "tilesets/Libbet.png",
+        "kind": "graphics",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (repo-wide LICENSE; no per-file notice)",
+        "basis": "repo-wide-licence-inference",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/tilesets/Libbet.png",
+        "sha256": "de4a8014c3378a18611987363ab222d5bdc57564723a88fa5f18a421ea223b66"
+      },
+      {
+        "path": "tilesets/Libbet_title.png",
+        "kind": "graphics",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (repo-wide LICENSE; no per-file notice)",
+        "basis": "repo-wide-licence-inference",
+        "note": "Named by D-04c; referenced by no ROM rule in the pinned makefile.",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/tilesets/Libbet_title.png",
+        "sha256": "d201c9d3ff79f3c8519af7610e3b0a25ee4cc9d2620f37f8344120a62922f463"
+      },
+      {
+        "path": "tilesets/bigdigits.png",
+        "kind": "graphics",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (repo-wide LICENSE; no per-file notice)",
+        "basis": "repo-wide-licence-inference",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/tilesets/bigdigits.png",
+        "sha256": "ee0472c9af3d443be5aa1ed86e2d1939a9855b69ab6b81f88b7581a56a14e6a3"
+      },
+      {
+        "path": "tilesets/floorborder-sgb.png",
+        "kind": "graphics",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (repo-wide LICENSE; no per-file notice)",
+        "basis": "repo-wide-licence-inference",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/tilesets/floorborder-sgb.png",
+        "sha256": "559c027b5e5073bc765ae12c0b7c74fb16653c7810fc7fa4abeb91470ba6e996"
+      },
+      {
+        "path": "tilesets/floorborder.png",
+        "kind": "graphics",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (repo-wide LICENSE; no per-file notice)",
+        "basis": "repo-wide-licence-inference",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/tilesets/floorborder.png",
+        "sha256": "54c22cb5f9d0d354ba08f17f184ab4fda334d2cba7d31754c874b3e37997ad11"
+      },
+      {
+        "path": "tilesets/floorpieces.png",
+        "kind": "graphics",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (repo-wide LICENSE; no per-file notice)",
+        "basis": "repo-wide-licence-inference",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/tilesets/floorpieces.png",
+        "sha256": "62c6d6f20f000881295e43c54de8e336f3a179cf1fb6c19bc2f26a7b9a7d7317"
+      },
+      {
+        "path": "tilesets/roll32.png",
+        "kind": "graphics",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (repo-wide LICENSE; no per-file notice)",
+        "basis": "repo-wide-licence-inference",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/tilesets/roll32.png",
+        "sha256": "2b0eae4284a025a7bf5119f68c3ee4e7402c6d79cade050b36822a888e617a69"
+      },
+      {
+        "path": "tilesets/sgbborder.png",
+        "kind": "graphics",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (repo-wide LICENSE; no per-file notice)",
+        "basis": "repo-wide-licence-inference",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/tilesets/sgbborder.png",
+        "sha256": "633acd927c31517b0ba40e2e51fc0bc9dd47dfe84dd44d547fa4c714991dd3cf"
+      },
+      {
+        "path": "tilesets/vwf7_cp144p.png",
+        "kind": "font-graphics",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (repo-wide LICENSE; no per-file notice)",
+        "basis": "repo-wide-licence-inference",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/tilesets/vwf7_cp144p.png",
+        "sha256": "279355cce6d01b4114c69049543a332041f043b693521a4a76d7ef170533b5f8"
+      },
+      {
+        "path": "tools/extractcels.py",
+        "kind": "build-tool",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/tools/extractcels.py",
+        "sha256": "1c6e7c05a51e24739f0130e78f2f2ed96432db5f2694947ba42437eef4d37672"
+      },
+      {
+        "path": "tools/makeborder.py",
+        "kind": "build-tool",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (repo-wide LICENSE; no per-file notice)",
+        "basis": "repo-wide-licence-inference",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/tools/makeborder.py",
+        "sha256": "db6e26302ad9d2130950957207f717712aac0ab51a8ea452810d44f3dafb514f"
+      },
+      {
+        "path": "tools/pb16.py",
+        "kind": "build-tool",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (file header License: zlib)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/tools/pb16.py",
+        "sha256": "273721e277195c39f81c51c7424cc94cd276b83b663bbcadea6d302e75cf290b"
+      },
+      {
+        "path": "tools/pilbmp2nes.py",
+        "kind": "build-tool",
+        "author": "Damian Yerrick",
+        "licence": "FSFAP-style all-permissive notice in file header",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/tools/pilbmp2nes.py",
+        "sha256": "8d0ad7fc41da8ba48511dcb17f338023d0fa0d1ec5dce4d0baf763e53419700f"
+      },
+      {
+        "path": "tools/pitchtable.py",
+        "kind": "build-tool",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (repo-wide LICENSE; no per-file notice)",
+        "basis": "repo-wide-licence-inference",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/tools/pitchtable.py",
+        "sha256": "f5633afcfeb36d533699e328ee81480ae4bf32b2800086a13e8b0d8ac2a0feee"
+      },
+      {
+        "path": "tools/savescan.py",
+        "kind": "build-tool",
+        "author": "Damian Yerrick",
+        "licence": "MIT (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/tools/savescan.py",
+        "sha256": "02d7ab2e18631c7d59c6019b2488f7b6bf566e36118356eae9e6b248aeb4932f"
+      },
+      {
+        "path": "tools/uniq.py",
+        "kind": "build-tool",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "note": "Imported only in a disabled branch of tools/makeborder.py.",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/tools/uniq.py",
+        "sha256": "79e3aa36d4dfab166eedae76d75552b6b0957e30caa76afadb52b98029234c72"
+      },
+      {
+        "path": "tools/vwfbuild.py",
+        "kind": "build-tool",
+        "author": "Damian Yerrick",
+        "licence": "Zlib (file header notice)",
+        "basis": "file-header-notice",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/tools/vwfbuild.py",
+        "sha256": "0b830153f859428f5811341483460433152e849c82aaf78046aefea7035310ab"
+      },
+      {
+        "path": "tools/zipup.py",
+        "kind": "build-tool",
+        "author": "Damian Yerrick",
+        "licence": "FSFAP-style all-permissive notice in file header",
+        "basis": "file-header-notice",
+        "note": "Used only by the zip packaging recipe; its bytes do not reach the ROM.",
+        "evidence": "https://github.com/pinobatch/libbet/blob/46a765a2c01701bffb8c0b7dd6e4be3a6b193090/tools/zipup.py",
+        "sha256": "c4d0cef16b5732b825baceb516fec9f4998c352d8a5bd78318e57d162e8f9cf0"
+      }
+    ]
+  },
+  "reproducibility": {
+    "statement": "A byte-identical local rebuild on macOS (RGBDS 0.7.0 under Rosetta, Pillow 12.3.0, Python 3.14) was observed during Phase 7 research. No hosted reproduction run URL exists yet, so no hosted reproduction is claimed. The required CI path never rebuilds or fetches upstream.",
+    "recipe": "Check out the pinned commit; install RGBDS 0.7.0 from the archive pinned by SHA-256 (Linux f67bc8fdd2b1521f0bed5a3750a09b206de760064fb95bb52790d375c3297210, macOS f2aee8235db2e9f020708bcb3c74112366ca50f7eb880d7717d95e385a583a16) and Pillow 12.3.0 for Python 3; run make libbet.gb with RGBDS pointing at the 0.7.0 tools; compare the result with fixtures/libbet/libbet.gb; never write back.",
+    "rgbds_1_0_1": "RGBDS 1.0.1 fails to build this tag because it rejects rgbasm -h.",
+    "local_observation": {
+      "rgbds": "0.7.0 (x86_64 binary under Rosetta)",
+      "pillow": "12.3.0",
+      "python": "3.14",
+      "result": "byte-identical to the vendored ROM"
+    },
+    "hosted_run_url": null
+  },
+  "scope_note": "Asset rights rest on single-author history (285 of 286 commits by Damian Yerrick and one constants commit by Eldred Habert) plus the repository-wide zlib LICENSE. That is an inference, not an upstream per-asset licence grant. The evidence is one game; it is not game compatibility and not hardware qualification.",
+  "predicate_addresses": {
+    "model": "DMG; every address is in WRAM, readable through gbb_peek_ram",
+    "cur_floor": {
+      "address": "0xC57F",
+      "derivation": "src/main.z80 section mainvars (WRAM0), first variable; written by ld [cur_floor],a at src/main.z80 line 127.",
+      "rom_anchor": {
+        "offset": "0x155C",
+        "bytes": "AF EA 7F C5 E0 43 E0 42"
+      }
+    },
+    "attract_mode": {
+      "address": "0xC580",
+      "derivation": "src/main.z80 section mainvars (WRAM0), second variable after cur_floor.",
+      "rom_anchor": {
+        "offset": "0x153A",
+        "bytes": "E6 04 EA 80 C5"
+      }
+    },
+    "hw_capability": {
+      "address": "0xC5A3",
+      "derivation": "src/pads.z80 section ram_pads (WRAM0), hw_capability.",
+      "rom_anchor": {
+        "offset": "0x14FB",
+        "bytes": "FA A3 C5 1F 30"
+      }
+    },
+    "cur_score": {
+      "address": "0xC4ED",
+      "derivation": "src/floormodel.z80 section floor_map variable order (cur_score follows max_score); the anchored ROM sequence zero-stores last_tried_move 0xC592, cur_score 0xC4ED, move_flags 0xC58D, tracks_since_pause 0xC58E and airrot_amt 0xC590 (addresses from the rebuilt symbol map during research).",
+      "rom_anchor": {
+        "offset": "0x15A6",
+        "bytes": "AF EA 92 C5 EA ED C4 EA 8D C5 EA 8E C5 EA 90 C5 3D"
+      }
+    },
+    "cursor_y": {
+      "address": "0xC4EB",
+      "derivation": "src/floormodel.z80 section floor_map variable order, after cursor_x.",
+      "rom_anchor": {
+        "offset": "0x1680",
+        "bytes": "FA EB C4 3C 20"
+      }
+    },
+    "floor_width": {
+      "address": "0xC4E8",
+      "derivation": "src/floormodel.z80 section floor_map ALIGN[3]: floor_map ds MAX_WIDTH*MAX_HEIGHT (8x8=64) at 0xC4A8, then floor_width; anchored by cur_score and cursor_y.",
+      "rom_anchor": null
+    },
+    "floor_height": {
+      "address": "0xC4E9",
+      "derivation": "src/floormodel.z80 variable order: floor_width, floor_height; anchored by cur_score and cursor_y.",
+      "rom_anchor": null
+    },
+    "max_score": {
+      "address": "0xC4EC",
+      "derivation": "src/floormodel.z80 variable order: floor_width, floor_height, cursor_x, cursor_y, max_score, cur_score; anchored by cur_score and cursor_y.",
+      "rom_anchor": null
+    }
+  }
+}

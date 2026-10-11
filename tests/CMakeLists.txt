@@ -242,7 +242,7 @@ foreach(case zero exact short null canary)
 endforeach()
 
 add_executable(test_runner test_runner.c)
-target_link_libraries(test_runner PRIVATE GabbaBoy::core)
+target_link_libraries(test_runner PRIVATE gabbaboy_runner_support)
 target_compile_features(test_runner PRIVATE c_std_17)
 set_target_properties(test_runner PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME runner_help
@@ -360,5 +360,242 @@ if(GBB_TEST_INSTALL_PREFIX AND EXISTS "${GBB_TEST_INSTALL_PREFIX}")
         -P ${PROJECT_SOURCE_DIR}/cmake/RunInstalledConsumer.cmake)
   endforeach()
 endif()
+
+# Libbet admission (GAME-01, gate G5). The verifier is stdlib-only Python run with -I; every
+# negative control goes through expect_exit.cmake so it must exit with exactly the expected code
+# and reason, never merely "non-zero".
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(GBB_LIBBET_VERIFIER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-libbet-admission.py")
+set(GBB_LIBBET_MANIFEST "${PROJECT_SOURCE_DIR}/fixtures/libbet/manifest.json")
+set(GBB_LIBBET_DIR "${PROJECT_BINARY_DIR}/libbet-admission")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${GBB_LIBBET_MANIFEST}" "${PROJECT_SOURCE_DIR}/fixtures/libbet/libbet.gb")
+
+# add_test with a verifier command line: GBB_CMD travels as a list, so semicolons are spelled
+# with $<SEMICOLON> to survive the add_test argument split.
+function(gbb_add_expect_exit_test name code regex)
+  set(command "${Python3_EXECUTABLE}" -I "${GBB_LIBBET_VERIFIER}" ${ARGN})
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 30)
+endfunction()
+
+# Five mutated manifest copies of the committed manifest. Each differs by one fact; the ROM stays
+# the committed one because the verifier resolves rom.path against the repository root.
+file(MAKE_DIRECTORY "${GBB_LIBBET_DIR}")
+file(READ "${GBB_LIBBET_MANIFEST}" GBB_LIBBET_JSON)
+string(JSON GBB_LIBBET_ASSETS_EMPTY SET "${GBB_LIBBET_JSON}" rights embedded_assets "[]")
+string(JSON GBB_LIBBET_ASSETS_MISSING REMOVE "${GBB_LIBBET_JSON}" rights embedded_assets 0)
+string(JSON GBB_LIBBET_LICENCE_UNKNOWN SET "${GBB_LIBBET_JSON}" rights embedded_assets 0 licence "\"unknown\"")
+string(JSON GBB_LIBBET_ROM_DIGEST GET "${GBB_LIBBET_JSON}" rom sha256)
+string(SUBSTRING "${GBB_LIBBET_ROM_DIGEST}" 0 1 GBB_LIBBET_FIRST_DIGIT)
+string(SUBSTRING "${GBB_LIBBET_ROM_DIGEST}" 1 -1 GBB_LIBBET_DIGEST_REST)
+if(GBB_LIBBET_FIRST_DIGIT STREQUAL "0")
+  set(GBB_LIBBET_FIRST_DIGIT "1")
+else()
+  set(GBB_LIBBET_FIRST_DIGIT "0")
+endif()
+string(JSON GBB_LIBBET_BAD_DIGEST SET "${GBB_LIBBET_JSON}" rom sha256
+  "\"${GBB_LIBBET_FIRST_DIGIT}${GBB_LIBBET_DIGEST_REST}\"")
+string(JSON GBB_LIBBET_BAD_HEADER SET "${GBB_LIBBET_JSON}" rom header cartridge_type 1)
+foreach(mutation IN ITEMS ASSETS_EMPTY ASSETS_MISSING LICENCE_UNKNOWN BAD_DIGEST BAD_HEADER)
+  string(TOLOWER "${mutation}" mutation_file)
+  file(WRITE "${GBB_LIBBET_DIR}/${mutation_file}.json" "${GBB_LIBBET_${mutation}}\n")
+endforeach()
+
+gbb_add_expect_exit_test(libbet_admission_pass 0 "libbet admission verified" --manifest "${GBB_LIBBET_MANIFEST}")
+gbb_add_expect_exit_test(libbet_admission_empty_assets 1 "embedded-assets-empty"
+  --manifest "${GBB_LIBBET_DIR}/assets_empty.json")
+gbb_add_expect_exit_test(libbet_admission_missing_record 1 "embedded-asset-missing"
+  --manifest "${GBB_LIBBET_DIR}/assets_missing.json")
+gbb_add_expect_exit_test(libbet_admission_unknown_licence 1 "embedded-asset-field-invalid"
+  --manifest "${GBB_LIBBET_DIR}/licence_unknown.json")
+gbb_add_expect_exit_test(libbet_admission_bad_digest 1 "rom-digest-mismatch"
+  --manifest "${GBB_LIBBET_DIR}/bad_digest.json")
+gbb_add_expect_exit_test(libbet_admission_bad_header 1 "rom-header-mismatch"
+  --manifest "${GBB_LIBBET_DIR}/bad_header.json")
+gbb_add_expect_exit_test(libbet_admission_self_test 0 "libbet admission self-test passed" --self-test)
+gbb_add_expect_exit_test(libbet_notice 0 "libbet notices and attributes verified"
+  --manifest "${GBB_LIBBET_MANIFEST}" --check-notices)
+
+# Redistribution guard: the third-party ROM is a repository test fixture only. Install the build
+# into a scratch prefix (distinct from GBB_TEST_INSTALL_PREFIX) and scan it by digest and name.
+# The negative control hides the ROM under a neutral name, proving the digest scan itself.
+set(GBB_LIBBET_INSTALL_CHECK "${PROJECT_BINARY_DIR}/libbet-install-check")
+set(GBB_LIBBET_SCAN_SELFTEST "${PROJECT_BINARY_DIR}/libbet-scan-selftest")
+file(MAKE_DIRECTORY "${GBB_LIBBET_SCAN_SELFTEST}/share")
+file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/libbet/libbet.gb"
+  "${GBB_LIBBET_SCAN_SELFTEST}/share/payload.bin")
+add_test(NAME libbet_install_tree
+  COMMAND ${CMAKE_COMMAND} --install ${PROJECT_BINARY_DIR} --prefix ${GBB_LIBBET_INSTALL_CHECK})
+set_tests_properties(libbet_install_tree PROPERTIES FIXTURES_SETUP libbet_install TIMEOUT 120)
+gbb_add_expect_exit_test(libbet_not_installed 0 "libbet absent from scanned tree files=[1-9]"
+  --scan-dir "${GBB_LIBBET_INSTALL_CHECK}")
+set_tests_properties(libbet_not_installed PROPERTIES FIXTURES_REQUIRED libbet_install)
+gbb_add_expect_exit_test(libbet_not_installed_selftest 1 "libbet-installed: share/payload.bin"
+  --scan-dir "${GBB_LIBBET_SCAN_SELFTEST}")
+
+# EVID-02 baseline comparator self-tests (D-30, D-31, D-34). Each test runs cmake/VerifyDmgBaseline.cmake
+# on committed synthetic fixtures (or a generated variant of them) and asserts the exact exit code
+# and failure token through expect_exit.cmake; nothing here touches the real ledger.
+set(GBB_BASELINE_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/VerifyDmgBaseline.cmake")
+set(GBB_BASELINE_SELFTEST "${PROJECT_SOURCE_DIR}/tests/baseline/selftest")
+set(GBB_BASELINE_DIR "${PROJECT_BINARY_DIR}/baseline-selftest")
+file(MAKE_DIRECTORY "${GBB_BASELINE_DIR}")
+
+function(gbb_add_baseline_test name code regex)
+  set(command "${CMAKE_COMMAND}" "-DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR}" ${ARGN} -P "${GBB_BASELINE_SCRIPT}")
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 30)
+endfunction()
+
+file(READ "${GBB_BASELINE_SELFTEST}/observed.txt" GBB_BASELINE_OBSERVED)
+file(READ "${GBB_BASELINE_SELFTEST}/ledger.txt" GBB_BASELINE_LEDGER)
+file(READ "${GBB_BASELINE_SELFTEST}/CHANGES.md" GBB_BASELINE_CHANGES_ROW)
+# The committed CHANGES fixture carries one row for the recorded-change variant; every other test
+# compares against the same table with that row removed.
+string(ASCII 10 GBB_NL)
+string(REGEX REPLACE "${GBB_NL}[|] acceptance[^${GBB_NL}]*${GBB_NL}?" "${GBB_NL}"
+  GBB_BASELINE_CHANGES_EMPTY "${GBB_BASELINE_CHANGES_ROW}")
+file(WRITE "${GBB_BASELINE_DIR}/changes_empty.md" "${GBB_BASELINE_CHANGES_EMPTY}")
+
+gbb_add_baseline_test(dmg_baseline_selftest_pass 0 "baseline status=pass"
+  -DGBB_MODE=check
+  "-DGBB_OBSERVED=${GBB_BASELINE_SELFTEST}/observed.txt"
+  "-DGBB_LEDGER=${GBB_BASELINE_SELFTEST}/ledger.txt"
+  "-DGBB_CHANGES=${GBB_BASELINE_DIR}/changes_empty.md")
+
+# One generated variant per failure category. Each differs from the committed synthetic fixtures by
+# exactly one fact, so the category it names is the only thing that can make the comparator fail.
+string(ASCII 9 GBB_TAB)
+set(GBB_PCM_OLD "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+set(GBB_PCM_NEW "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+set(GBB_PCM_OTHER "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+set(GBB_BASELINE_ROW_TAIL "| synthetic reason | regression fixture (self-test only) | self-test |\n")
+
+function(gbb_baseline_variant name ledger observed changes)
+  file(WRITE "${GBB_BASELINE_DIR}/${name}.ledger.txt" "${ledger}")
+  file(WRITE "${GBB_BASELINE_DIR}/${name}.observed.txt" "${observed}")
+  file(WRITE "${GBB_BASELINE_DIR}/${name}.changes.md" "${changes}")
+endfunction()
+
+function(gbb_add_baseline_variant_test name code regex)
+  gbb_add_baseline_test(dmg_baseline_${name} ${code} "${regex}"
+    -DGBB_MODE=check
+    "-DGBB_OBSERVED=${GBB_BASELINE_DIR}/${name}.observed.txt"
+    "-DGBB_LEDGER=${GBB_BASELINE_DIR}/${name}.ledger.txt"
+    "-DGBB_CHANGES=${GBB_BASELINE_DIR}/${name}.changes.md")
+endfunction()
+
+set(GBB_OBS "${GBB_BASELINE_OBSERVED}")
+set(GBB_LED "${GBB_BASELINE_LEDGER}")
+set(GBB_CHG "${GBB_BASELINE_CHANGES_EMPTY}")
+string(REPLACE "${GBB_PCM_OLD}" "${GBB_PCM_NEW}" GBB_OBS_CHANGED "${GBB_OBS}")
+string(REPLACE "${GBB_PCM_OLD}" "${GBB_PCM_NEW}" GBB_LED_CHANGED "${GBB_LED}")
+
+# Observation drift: a digest changed, a ledger key vanished, an unknown key appeared, an inventory name left.
+gbb_baseline_variant(modified "${GBB_LED}" "${GBB_OBS_CHANGED}" "${GBB_CHG}")
+string(REPLACE "mooneye.daa.frame_generation${GBB_TAB}12\n" "" GBB_OBS_MISSING "${GBB_OBS}")
+gbb_baseline_variant(missing "${GBB_LED}" "${GBB_OBS_MISSING}" "${GBB_CHG}")
+gbb_baseline_variant(extra "${GBB_LED}" "${GBB_OBS}acceptance.libbet.unexpected${GBB_TAB}1\n" "${GBB_CHG}")
+string(REPLACE "inventory.core.beta_test${GBB_TAB}frozen\n" "" GBB_OBS_REMOVED "${GBB_OBS}")
+gbb_baseline_variant(inventory_removed "${GBB_LED}" "${GBB_OBS_REMOVED}" "${GBB_CHG}")
+
+# Approved-change protocol: the same ledger edit fails without a CHANGES row and passes with it.
+gbb_baseline_variant(changes_unrecorded "${GBB_LED_CHANGED}" "${GBB_OBS_CHANGED}" "${GBB_CHG}")
+gbb_baseline_variant(changes_recorded "${GBB_LED_CHANGED}" "${GBB_OBS_CHANGED}" "${GBB_BASELINE_CHANGES_ROW}")
+gbb_baseline_variant(changes_noop "${GBB_LED}" "${GBB_OBS}"
+  "${GBB_CHG}| acceptance.libbet.pcm_sha256 | ${GBB_PCM_OLD} | ${GBB_PCM_OLD} ${GBB_BASELINE_ROW_TAIL}")
+gbb_baseline_variant(changes_inconsistent "${GBB_LED}" "${GBB_OBS}"
+  "${GBB_CHG}| acceptance.libbet.pcm_sha256 | ${GBB_PCM_OTHER} | ${GBB_PCM_NEW} ${GBB_BASELINE_ROW_TAIL}")
+
+# Ledger shape: ordering, duplicate key, empty ledger, empty section, empty observations, bad line, bad header.
+string(REPLACE
+  "inventory.core.alpha_test${GBB_TAB}frozen\ninventory.core.beta_test${GBB_TAB}frozen\n"
+  "inventory.core.beta_test${GBB_TAB}frozen\ninventory.core.alpha_test${GBB_TAB}frozen\n"
+  GBB_LED_UNSORTED "${GBB_LED}")
+gbb_baseline_variant(unsorted "${GBB_LED_UNSORTED}" "${GBB_OBS}" "${GBB_CHG}")
+string(REPLACE "bench.tracer.workload${GBB_TAB}original-wram-tracer-1m-half-dots-v1\n"
+  "bench.tracer.workload${GBB_TAB}original-wram-tracer-1m-half-dots-v1\nbench.tracer.workload${GBB_TAB}original-wram-tracer-1m-half-dots-v1\n"
+  GBB_LED_DUPLICATE "${GBB_LED}")
+gbb_baseline_variant(duplicate_key "${GBB_LED_DUPLICATE}" "${GBB_OBS}" "${GBB_CHG}")
+gbb_baseline_variant(empty "" "${GBB_OBS}" "${GBB_CHG}")
+string(REGEX REPLACE "mooneye[.][^${GBB_NL}]*${GBB_NL}" "" GBB_LED_NO_MOONEYE "${GBB_LED}")
+gbb_baseline_variant(empty_section "${GBB_LED_NO_MOONEYE}" "${GBB_OBS}" "${GBB_CHG}")
+gbb_baseline_variant(empty_observations "${GBB_LED}" "" "${GBB_CHG}")
+string(REPLACE "bench.tracer.workload${GBB_TAB}" "bench.tracer${GBB_TAB}workload${GBB_TAB}" GBB_LED_MALFORMED "${GBB_LED}")
+gbb_baseline_variant(malformed_line "${GBB_LED_MALFORMED}" "${GBB_OBS}" "${GBB_CHG}")
+string(REPLACE "0123456789abcdef0123456789abcdef01234567" "0123456789abcdef0123456789abcdef0123456"
+  GBB_LED_HEADER "${GBB_LED}")
+gbb_baseline_variant(header_invalid "${GBB_LED_HEADER}" "${GBB_OBS}" "${GBB_CHG}")
+
+gbb_add_baseline_variant_test(changes_recorded 0 "baseline status=pass")
+gbb_add_baseline_variant_test(modified 1 "acceptance=fail.*modified")
+gbb_add_baseline_variant_test(missing 1 "mooneye=fail.*missing")
+gbb_add_baseline_variant_test(extra 1 "acceptance=fail.*extra")
+gbb_add_baseline_variant_test(inventory_removed 1 "inventory=fail.*removed")
+gbb_add_baseline_variant_test(changes_unrecorded 1 "unrecorded-change")
+gbb_add_baseline_variant_test(unsorted 1 "unsorted-ledger")
+gbb_add_baseline_variant_test(duplicate_key 1 "duplicate-key")
+gbb_add_baseline_variant_test(empty 1 "empty-ledger")
+gbb_add_baseline_variant_test(changes_noop 1 "changes-noop")
+gbb_add_baseline_variant_test(changes_inconsistent 1 "changes-inconsistent")
+gbb_add_baseline_variant_test(empty_section 1 "empty-section")
+gbb_add_baseline_variant_test(empty_observations 1 "empty-observations")
+gbb_add_baseline_variant_test(malformed_line 1 "malformed-line")
+gbb_add_baseline_variant_test(header_invalid 1 "header-invalid")
+
+# JUnit inventory checks run on a synthetic report: every frozen core name must appear as a testcase
+# with no skipped, failure or error child. Plan 07-15 applies the same mode to the real CI reports.
+file(READ "${GBB_BASELINE_SELFTEST}/junit.xml" GBB_JUNIT)
+set(GBB_BETA_CASE "<testcase name=\"beta_test\" classname=\"beta_test\" time=\"0.01\" status=\"run\"/>")
+string(REPLACE "  ${GBB_BETA_CASE}\n" "" GBB_JUNIT_MISSING "${GBB_JUNIT}")
+string(REPLACE "${GBB_BETA_CASE}"
+  "<testcase name=\"beta_test\" classname=\"beta_test\" time=\"0.01\" status=\"notrun\"><skipped/></testcase>"
+  GBB_JUNIT_SKIPPED "${GBB_JUNIT}")
+string(REPLACE "${GBB_BETA_CASE}"
+  "<testcase name=\"beta_test\" classname=\"beta_test\" time=\"0.01\" status=\"fail\"><failure message=\"x\"/></testcase>"
+  GBB_JUNIT_FAILED "${GBB_JUNIT}")
+file(WRITE "${GBB_BASELINE_DIR}/junit_missing.xml" "${GBB_JUNIT_MISSING}")
+file(WRITE "${GBB_BASELINE_DIR}/junit_skipped.xml" "${GBB_JUNIT_SKIPPED}")
+file(WRITE "${GBB_BASELINE_DIR}/junit_failed.xml" "${GBB_JUNIT_FAILED}")
+
+function(gbb_add_baseline_junit_test name code regex report)
+  gbb_add_baseline_test(dmg_baseline_${name} ${code} "${regex}"
+    -DGBB_MODE=junit -DGBB_INVENTORY=core
+    "-DGBB_LEDGER=${GBB_BASELINE_SELFTEST}/ledger.txt"
+    "-DGBB_JUNIT=${report}")
+endfunction()
+gbb_add_baseline_junit_test(junit_pass 0 "baseline junit=ok" "${GBB_BASELINE_SELFTEST}/junit.xml")
+gbb_add_baseline_junit_test(junit_missing 1 "junit-missing" "${GBB_BASELINE_DIR}/junit_missing.xml")
+gbb_add_baseline_junit_test(junit_skipped 1 "junit-skipped" "${GBB_BASELINE_DIR}/junit_skipped.xml")
+gbb_add_baseline_junit_test(junit_failed 1 "junit-failed" "${GBB_BASELINE_DIR}/junit_failed.xml")
+
+# The live EVID-02 check (D-31, D-33): recomputes every observation from this build and compares it
+# with the frozen tests/baseline/dmg-cpu-b-v1.txt. One ledger serves every OS, so the same test and
+# the same expected line run on Linux, macOS and Windows.
+add_test(NAME dmg_baseline
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_MODE=check
+    -DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR}
+    -DGBB_RUNNER=$<TARGET_FILE:gabbaboy-runner>
+    -DGBB_MEASURE=$<TARGET_FILE:measure_core>
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyDmgBaseline.cmake)
+set_tests_properties(dmg_baseline PROPERTIES TIMEOUT 300
+  PASS_REGULAR_EXPRESSION "baseline status=pass")
+
+# include(), not add_subdirectory(): ExpectedTests.cmake reads this directory's TESTS property only.
+include(${CMAKE_CURRENT_LIST_DIR}/acceptance/CMakeLists.txt)
 
 gabbaboy_verify_registered_tests()

@@ -1,0 +1,18 @@
+acceptance.libbet.class	regression
+acceptance.libbet.frame.rolling	cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+acceptance.libbet.pcm_sha256	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+bench.tracer.correctness_digest_fnv1a64	4c7a57ff3d50d228
+bench.tracer.workload	original-wram-tracer-1m-half-dots-v1
+coverage	synthetic self-test ledger, not a real baseline
+frozen_body_sha256	02b87043097b42c8b1278ca97905258c038817f38b135a85f192ceabd4b0819f
+frozen_date	2000-01-01T00:00:00Z
+frozen_revision	0123456789abcdef0123456789abcdef01234567
+inventory.core.alpha_test	frozen
+inventory.core.beta_test	frozen
+inventory.player.gamma_test	frozen
+inventory.sha256	5298d1c09362c9a5d3894bfd347e8769bbe14d82a2da22aa6f30d9e2debe5e5c
+model	dmg-cpu-b
+mooneye.daa.frame	dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+mooneye.daa.frame_generation	12
+mooneye.tim00-div-trigger.frame	eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+schema	gabbaboy-dmg-baseline-v1

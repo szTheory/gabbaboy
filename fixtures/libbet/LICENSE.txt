@@ -1,0 +1,51 @@
+The zlib License
+================
+
+Copyright (c) 2018 Damian Yerrick
+
+This software is provided 'as-is', without any express or implied warranty. In
+no event will the authors be held liable for any damages arising from the use of
+this software.
+
+Permission is granted to anyone to use this software for any purpose, including
+commercial applications, and to alter it and redistribute it freely, subject to
+the following restrictions:
+
+1.  The origin of this software must not be misrepresented; you must not claim
+    that you wrote the original software. If you use this software in a product,
+    an acknowledgment in the product documentation would be appreciated but is
+    not required.
+
+2.  Altered source versions must be plainly marked as such, and must not be
+    misrepresented as being the original software.
+
+3.  This notice may not be removed or altered from any source distribution.
+
+----------------------------------------------------------------------
+GabbaBoy project note (not part of the upstream LICENSE text above)
+
+The text above is the verbatim LICENSE file of
+https://github.com/pinobatch/libbet at commit
+46a765a2c01701bffb8c0b7dd6e4be3a6b193090.
+
+Credit discrepancy recorded as found. The LICENSE line reads:
+
+    Copyright (c) 2018 Damian Yerrick
+
+The README "Legal" section at the same commit reads:
+
+    Copyright 2002, 2012 Martin Korth
+    Copyright 2018, 2024 Damian Yerrick
+
+    This program is free software.  Permission is granted to use it
+    subject to the terms of the zlib License.  See the file `LICENSE`.
+
+The ROM text and several source headers likewise credit Martin Korth
+2002, 2012 for the game concept and Damian Yerrick 2018-2024 for the
+program. The LICENSE file does not name Martin Korth. This project
+preserves both credits and does not resolve the discrepancy.
+
+Martin Korth's permission to port the game (a private message dated
+2018-10-03, quoted in 05-burndown/note_from_nocash.md) reads
+"Would be fine." It is a permission to port, not a licence grant,
+and is recorded as a limitation.

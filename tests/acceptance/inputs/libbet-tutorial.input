@@ -1,0 +1,92 @@
+gbinput 1
+# Libbet tutorial acceptance script (D-13). Master-timeline units: f = 140448 half-dots.
+# Idle past the title (ready near f444; Start taps before f449 are inconsistent).
+wait 470f
+mark title
+wait 30f
+tap START 3f
+mark play_start
+wait 200f
+# D-pad sweep: 4f holds, 8f gaps, written out expanded (no loops in gbinput 1).
+tap RIGHT 4f
+wait 8f
+tap UP 4f
+wait 8f
+tap LEFT 4f
+wait 8f
+tap DOWN 4f
+wait 8f
+tap RIGHT 4f
+wait 8f
+tap UP 4f
+wait 8f
+tap LEFT 4f
+wait 8f
+tap DOWN 4f
+wait 8f
+mark mid
+tap RIGHT 4f
+wait 8f
+tap UP 4f
+wait 8f
+tap LEFT 4f
+wait 8f
+tap DOWN 4f
+wait 8f
+tap RIGHT 4f
+wait 8f
+tap UP 4f
+wait 8f
+tap LEFT 4f
+wait 8f
+tap DOWN 4f
+wait 8f
+tap RIGHT 4f
+wait 8f
+tap UP 4f
+wait 8f
+tap LEFT 4f
+wait 8f
+tap DOWN 4f
+wait 8f
+tap RIGHT 4f
+wait 8f
+tap UP 4f
+wait 8f
+tap LEFT 4f
+wait 8f
+tap DOWN 4f
+wait 8f
+tap RIGHT 4f
+wait 8f
+tap UP 4f
+wait 8f
+tap LEFT 4f
+wait 8f
+tap DOWN 4f
+wait 8f
+tap RIGHT 4f
+wait 8f
+tap UP 4f
+wait 8f
+tap LEFT 4f
+wait 8f
+tap DOWN 4f
+wait 8f
+tap RIGHT 4f
+wait 8f
+tap UP 4f
+wait 8f
+tap LEFT 4f
+wait 8f
+tap DOWN 4f
+wait 8f
+tap RIGHT 4f
+wait 8f
+tap UP 4f
+wait 8f
+tap LEFT 4f
+wait 8f
+tap DOWN 4f
+wait 8f
+wait 60f

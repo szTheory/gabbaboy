@@ -3,6 +3,7 @@
 #include "presentation.h"
 #include "session.h"
 #include "audio.h"
+#include "script_smoke.h"
 
 #include <stdatomic.h>
 #include <errno.h>
@@ -387,7 +388,9 @@ static void print_player_help(void) {
         "not hardware starvation.\n\n"
         "Developer diagnostics: --audio-dummy-smoke checks SDL dummy open/stream/close/recovery; "
         "--audio-measure frame|792 demo-rom emits bounded PCM for the scripted receipt; "
-        "--audio-device-status reports default-device availability without playing a workload.\n",
+        "--audio-device-status reports default-device availability without playing a workload; "
+        "--smoke-package invalid-rom --input-script script rom replays a gbinput 1 script through "
+        "the keyboard input path and prints one smoke_report line (exit 0 only on a pass).\n",
         stdout);
 }
 
@@ -2056,6 +2059,110 @@ static bool run_smoke(player *app, const char *demo_rom_path,
     return true;
 }
 
+static bool script_scancode(uint8_t button, SDL_Scancode *scancode) {
+    switch ((gbb_button)button) {
+    case GBB_BUTTON_RIGHT: *scancode = SDL_SCANCODE_RIGHT; return true;
+    case GBB_BUTTON_LEFT: *scancode = SDL_SCANCODE_LEFT; return true;
+    case GBB_BUTTON_UP: *scancode = SDL_SCANCODE_UP; return true;
+    case GBB_BUTTON_DOWN: *scancode = SDL_SCANCODE_DOWN; return true;
+    case GBB_BUTTON_A: *scancode = SDL_SCANCODE_Z; return true;
+    case GBB_BUTTON_B: *scancode = SDL_SCANCODE_X; return true;
+    case GBB_BUTTON_START: *scancode = SDL_SCANCODE_RETURN; return true;
+    case GBB_BUTTON_SELECT: *scancode = SDL_SCANCODE_RSHIFT; return true;
+    default: return false;
+    }
+}
+
+/* Scripted events enter as SDL key events whose timestamps map back to the exact script half-dot
+ * (no skew), so player_input_key schedules them where the headless runner queues them. */
+static bool script_deliver(void *context, const gbb_input_event *events, size_t count) {
+    player *app = context;
+    for (size_t i = 0u; i < count; ++i) {
+        SDL_Scancode scancode;
+        if ((events[i].kind != GBB_INPUT_BUTTON_PRESS &&
+             events[i].kind != GBB_INPUT_BUTTON_RELEASE) ||
+            !script_scancode(events[i].value, &scancode) ||
+            events[i].at_half_dots < app->input.guest_anchor_half_dots) {
+            fputs("Script event cannot be expressed as a keyboard event\n", stderr);
+            return false;
+        }
+        uint64_t elapsed_ns = 0u;
+        if (!player_input_half_dots_to_nanoseconds(
+                events[i].at_half_dots - app->input.guest_anchor_half_dots, &elapsed_ns) ||
+            app->input.host_anchor_ns > UINT64_MAX - elapsed_ns) {
+            fputs("Script event time cannot be converted to a bounded SDL timestamp\n", stderr);
+            return false;
+        }
+        const Uint32 type = events[i].kind == GBB_INPUT_BUTTON_PRESS
+            ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
+        if (!push_key(app, type, scancode, app->input.host_anchor_ns + elapsed_ns)) {
+            fprintf(stderr, "Could not push a scripted SDL key event: %s\n", SDL_GetError());
+            return false;
+        }
+    }
+    if (!pump_events(app) || app->user_paused) {
+        fputs("Scripted key events were not accepted by the keyboard input path\n", stderr);
+        return false;
+    }
+    return true;
+}
+
+static void script_progress(void *context, uint64_t actual_half_dots) {
+    player *app = context;
+    player_input_reconcile(&app->input, actual_half_dots);
+}
+
+/* Exit code: 0 pass, 1 predicate or audio miss, 2 bad input or setup. */
+static int run_script_smoke(player *app, const char *rom_path, const char *script_path) {
+    player_script_smoke smoke;
+    char error[192];
+    if (player_script_smoke_prepare(&smoke, rom_path, script_path, error, sizeof(error)) != 0) {
+        fprintf(stderr, "%s\n", error);
+        return 2;
+    }
+    int code = 2;
+    /* No save files, no persistence: the diagnostic never writes player state. Set before any
+     * fallible step so every early exit, including an identity mismatch after the ROM load has
+     * filled save_identity, skips the final battery save. */
+    app->skip_final_save = true;
+    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &app->machine) != GBB_OK) {
+        fputs("Could not create the DMG-CPU-B machine\n", stderr);
+        goto done;
+    }
+    if (!player_session_replace_rom(app->machine, &app->current_rom_path, rom_path,
+                                    &app->save_identity, error, sizeof(error))) {
+        fprintf(stderr, "Could not load the ROM: %s\n", error);
+        goto done;
+    }
+    uint8_t expected_identity[32];
+    for (size_t i = 0u; i < sizeof(expected_identity); ++i) {
+        unsigned byte;
+        if (sscanf(smoke.rom_sha256 + i * 2u, "%2x", &byte) != 1) goto done;
+        expected_identity[i] = (uint8_t)byte;
+    }
+    if (memcmp(expected_identity, app->save_identity.rom_sha256, sizeof(expected_identity)) != 0) {
+        fputs("The ROM changed between validation and load\n", stderr);
+        goto done;
+    }
+    app->dialog_event_type = SDL_RegisterEvents(1);
+    player_input_reset(&app->input, SDL_GetTicksNS());
+
+    player_script_smoke_result result;
+    if (!player_script_smoke_run(&smoke, app->machine, app->audio, script_deliver,
+                                 script_progress, app, &result)) {
+        fputs("Could not allocate the smoke stepper\n", stderr);
+        goto done;
+    }
+    const bool hit = result.status == GBB_ACCEPT_DRIVE_HIT;
+    printf("smoke_report rom_sha256=%s half_dots=%llu predicate=%s pcm_nonsilent=%d pcm_sha256=%s\n",
+           smoke.rom_sha256, (unsigned long long)(hit ? result.t_hit_half_dots : 0u),
+           hit ? "pass" : "fail", result.pcm_nonsilent ? 1 : 0, result.pcm_sha256);
+    code = hit && result.pcm_nonsilent ? 0 : 1;
+done:
+    player_script_smoke_release(&smoke);
+    return code;
+}
+
 static void destroy_player(player *app) {
     for (unsigned i = 0; i < PLAYER_INPUT_GAMEPAD_CAPACITY; ++i) {
         if (app->gamepads[i].handle != NULL)
@@ -2099,6 +2206,9 @@ int main(int argc, char **argv) {
         strcmp(argv[1], "--audio-device-status") == 0;
     const bool package_smoke = argc == 3 &&
                                strcmp(argv[1], "--smoke-package") == 0;
+    const bool script_smoke = argc == 6 &&
+                              strcmp(argv[1], "--smoke-package") == 0 &&
+                              strcmp(argv[3], "--input-script") == 0;
     const bool battery_store = argc == 3 &&
                                strcmp(argv[1], "--battery-smoke-store") == 0;
     const bool battery_resume = argc == 3 &&
@@ -2109,8 +2219,8 @@ int main(int argc, char **argv) {
         (package_smoke && argc != 3) ||
         (battery_smoke && argc != 3) ||
         (!help_requested && !smoke && !audio_dummy_smoke && !audio_measure && !audio_device_status &&
-         !package_smoke && !battery_smoke && argc > 1)) {
-        fprintf(stderr, "usage: %s [--help | --smoke [demo-rom invalid-rom] | --smoke-package invalid-rom | --audio-dummy-smoke | --audio-measure frame|792 demo-rom | --audio-device-status]\n",
+         !package_smoke && !battery_smoke && !script_smoke && argc > 1)) {
+        fprintf(stderr, "usage: %s [--help | --smoke [demo-rom invalid-rom] | --smoke-package invalid-rom [--input-script script rom] | --audio-dummy-smoke | --audio-measure frame|792 demo-rom | --audio-device-status]\n",
                 argv[0]);
         return 2;
     }
@@ -2133,7 +2243,7 @@ int main(int argc, char **argv) {
     atomic_init(&app.dialog_delivery_failed, false);
     Uint32 init_flags = SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD;
     if (smoke || audio_dummy_smoke || package_smoke || battery_smoke ||
-        audio_measure)
+        audio_measure || script_smoke)
         init_flags = SDL_INIT_EVENTS | SDL_INIT_AUDIO;
     else if (audio_device_status)
         init_flags = SDL_INIT_AUDIO;
@@ -2162,6 +2272,12 @@ int main(int argc, char **argv) {
             "Audio unavailable; PCM is discarded and counted without a queue");
         fputs("Audio unavailable; PCM is discarded and counted without a queue\n",
               stderr);
+    }
+    if (script_smoke) {
+        const int code = run_script_smoke(&app, argv[5], argv[4]);
+        destroy_player(&app);
+        SDL_Quit();
+        return code;
     }
     char *demo_rom_path = resolve_demo_rom_path(requested_demo_rom,
                                                  package_smoke);

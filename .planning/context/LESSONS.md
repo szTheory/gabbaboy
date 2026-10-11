@@ -343,3 +343,84 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** After the heading was added, the dry run reported 7 phases, 64 plans and 104 tasks, and the confirmed run archived the roadmap, requirements, audit, phases and quick tasks. A link-existence check over the five rewritten files found no broken targets.
 - **Source:** `.planning/milestones/v0.1-ROADMAP.md`, OpenGSD 1.16.0 `bin/lib/roadmap-parser.cjs` (`getMilestonePhaseFilter`), `docs/mbc1-evidence.md`.
 - **Status:** Adopted.
+
+### GB-AUDIO-001 / 2026-10-10 / Check mixer full scale against the documented DAC and NR50 model before freezing PCM
+
+- **Cause and evidence:** The core mixed `volume * 2048 - 16384` per channel (one unit = 16384 counts) times the NR50 `(volume + 1)` multiplier with no headroom divisor. Pan Docs defines each DAC as -1..1, a four-channel side as -4..4 and NR50 as a (volume+1)/8 scale, so s16 full scale must hold four units at volume 7. A scratch probe over `libbet.gb` (Start tap at f500, 1500 frames) measured a pre-saturation peak of 229376 counts, 73284 of 2410954 resampled samples (3.04%) clipped at s16 and output reaching -32768. The existing `audio_saturation` test only drove the post-mix kernel with INT32 extremes, so it could not see the scale error, and earlier audio digests had frozen it.
+- **Remedy:** Divide each channel term by 16 (exact: terms are multiples of 2048) in `audio_current_mix`; after the fix the same run peaks at 14336 with 0 clipped samples and output -9277..10115. `audio_saturation` now runs two full-volume guest pulses at NR50 `$77` and requires a peak between 8192 and 32766. The guest partition digest moved from `b5bb127cdda6a035` to `c89a0db6f083c345`.
+- **Applies when:** Any change to APU channel levels, NR50/NR51 scaling or the PCM digests; and before blessing PCM or game-acceptance audio evidence. Probe with a real ROM rather than only synthetic kernel inputs, and count clipped samples before the high-pass stage (after it, clipping can hide as only a couple of rail-valued samples).
+- **Verification:** Full CTest suite (200 tests) passes after the change; the scratch probe reports 0 saturated mixer samples on Libbet. The probe is not committed.
+- **Source:** [audio-and-playback](../../docs/audio-and-playback.md), D-027 in DECISIONS.md, Pan Docs Audio details (Mixer), mGBA `src/gb/audio.c` (read only).
+- **Status:** Adopted.
+
+### GB-GAME-002 / 2026-10-10 / Explain a game's input-timing oddity from its source before suspecting the joypad model
+
+- **Cause and evidence:** An earlier exploratory run reported that repeated Start taps started Libbet by f270 while single taps at f290-f440 did nothing, which looked like a JOYP defect. The pinned source (`pinobatch/libbet` commit `46a765a2c01701bffb8c0b7dd6e4be3a6b193090`) explains it: `intro.z80` ignores input for the 64-frame roll and a further 120 unskippable frames, then accepts Start/A during a 180-frame skippable window; `pads.z80` `read_pad` derives `new_keys` from successive polls; the title needs its own Start. A scratch probe over `libbet.gb` logged every write of a non-zero `new_keys` and the LCD/state frames: taps f100-f230 ignored, tap f240 skips the intro (title f277), tap f280 starts the game (f287); isolated single taps at f290/f350/f440 reached or sat at the title (f327/f387/f447), and f470 started the game (f478). Each tap produced exactly one `new_keys=$08` edge in the press frame, so the core's JOYP reporting matched what the guest code implies.
+- **Remedy:** No core change. Record the intro/title input windows in D-028 and keep D-13's Start at f500 (after the title is ready at about f447). Separate "the game ignored input" from "the emulator dropped input" by logging guest-side `new_keys` edges against frame numbers before touching the joypad path.
+- **Applies when:** An acceptance or replay script gives different outcomes for similar taps at different frames, or an early input appears to be ignored; also whenever a game reads input only inside timed windows.
+- **Verification:** Scratch probe (not committed) reproduced all three schedules deterministically; `cmake --build --preset phase1` plus the full CTest suite pass; `git diff --quiet src/core/gabbaboy.c`; the select-line anchor occurs once and matches main.
+- **Source:** D-028 in DECISIONS.md; Libbet `src/intro.z80`, `src/pads.z80`, `src/instructions.z80` at the pinned commit (read only).
+- **Status:** Adopted.
+
+### GB-GAME-003 / 2026-10-11 / Compare structs with padding field by field, never with memcmp
+
+- **Cause and evidence:** `acceptance_parse_script_errors` passed on Linux and macOS but failed on `native-windows-x64` at `tests/test_acceptance_lib.c:262` (`memcmp(a.events, b.events, ...)`, CI run 38096251361, head da2a028). `gbb_input_event` has padding after `kind` and `value`; the parser fills fields, not padding, so the padding bytes of two parses can differ (here on MSVC) even though every field is equal. The same test had passed at the previous head by chance.
+- **Remedy:** Compare `at_half_dots`, `kind` and `value` individually (commit "fix(07-11): compare parsed script events field-wise"). This also follows the project rule against raw structure dumps for comparison and serialization.
+- **Applies when:** Any test, digest or equality check reads a C structure's object bytes (`memcmp`, hashing, `fwrite`), especially structures with mixed-width members or enums.
+- **Verification:** `ctest -R acceptance_parse_script` passes locally; exact head b6f982b run 38097373433 passed `native-windows-x64`, `native-linux-x64` and `native-macos-arm64`.
+- **Source:** CI run 38096251361 log for job native-windows-x64; AGENTS.md engineering rules (explicit portable serialization).
+- **Status:** Adopted.
+
+### GB-GAME-004 / 2026-10-10 / The exact test inventory sees only the tests directory's own TESTS property
+
+- **Cause and evidence:** `ExpectedTests.cmake` reads the `TESTS` property of the `tests` directory only. Tests registered through `add_subdirectory` live in another directory scope and would be absent from the inventory check, so a deleted or renamed test could pass unnoticed. Plan 07-02 therefore pulls `tests/acceptance/CMakeLists.txt` in with `include()`.
+- **Remedy:** Use `include()` for CMake sub-lists that register CTests, and keep every registered name in `tests/expected-tests.txt`. Recorded as D-037.
+- **Applies when:** Any new test list is split into its own CMake file, or an inventory check reads directory properties.
+- **Verification:** `ctest --test-dir build -N` lists the acceptance tests (258 names at the baseline freeze) and the inventory check passes; the JUnit inventory check in CI (`baseline junit=ok inventory=core names=258`) finds every frozen name.
+- **Source:** Plan 07-02 summary, `tests/CMakeLists.txt`, `cmake/ExpectedTests.cmake`.
+- **Status:** Adopted.
+
+### GB-GAME-005 / 2026-10-10 / Deadline steppers must treat idle and output-full stops as continuable
+
+- **Cause and evidence:** `gbb_run_audio` returns `GBB_STOP_HALTED_IDLE` while a halted CPU waits for an eligible tick and `GBB_STOP_OUTPUT_FULL` (the same value family as a full trace buffer) when the caller's PCM buffer fills. Neither means the guest stopped. A stepper that treated them as terminal would end an acceptance run early with a misleading reason.
+- **Remedy:** `src/accept/stepper.c` accepts both as continuable, drains the sunk frames and keeps stepping to the deadline. Recorded in D-045.
+- **Applies when:** Any new driver loop around `gbb_run`, `gbb_run_audio` or `gbb_run_ex`, including the player adapter and benchmarks.
+- **Verification:** `acceptance_lib_libbet_replay` and `acceptance_libbet` pass; the packaged player's PCM digest equals the headless digest.
+- **Source:** `src/accept/stepper.c`, Plans 07-02 and 07-12.
+- **Status:** Adopted.
+
+### GB-GAME-006 / 2026-10-10 / Take frame-boundary time from the master timeline, not from completed frames
+
+- **Cause and evidence:** A completed-frame count stops advancing while the LCD is off, so a script timed in frames would drift. Frame boundaries in the stepper are multiples of 140448 half-dots on the master timeline, and checkpoints use the first frame completed at or after the requested time (the Libbet `play_start` checkpoint completed at 71336360 for a request at 70645344 and is a legitimate mid-load frame).
+- **Remedy:** Script times, `T_hit` and checkpoints are all in master-timeline half-dots; the baseline records both the requested and the completion half-dot.
+- **Applies when:** Any replay, input script or frame-digest oracle for a game that turns the LCD off.
+- **Verification:** The baseline lines `acceptance.libbet.checkpoint.<label>.requested_half_dots` and `.completion_half_dots` are byte-identical on Linux, macOS and Windows at the exact head.
+- **Source:** 07-RESEARCH time-base decision, `src/accept/stepper.c`, Plan 07-15 summary.
+- **Status:** Adopted.
+
+### GB-GAME-007 / 2026-10-10 / A 160x144 P6 image alone exceeds a 64 KiB cap
+
+- **Cause and evidence:** A P6 PPM of 160 by 144 pixels is 69,135 bytes, more than 65,536. The original D-18 wording capped the whole stall diagnosis, image included, at 64 KiB, which could never hold. The owner amended it so the cap applies to the text report and one image is written on top.
+- **Remedy:** Size every bounded output from its fixed parts first, state which artefacts the cap covers, and test the real size (the stall report was 1984 bytes for the dropped-START case).
+- **Applies when:** Any size budget over diagnostics that include a frame image.
+- **Verification:** `acceptance_stall_diagnosis` asserts a maximum report size and byte-identical output across two runs; the PPM is 69,135 bytes.
+- **Source:** 07-CONTEXT D-18 owner amendment, D-032, Plan 07-11.
+- **Status:** Adopted.
+
+### GB-GAME-008 / 2026-10-10 / A suite denominator needs a declared exclusion count
+
+- **Cause and evidence:** A suite that silently drops cases because of model or revision applicability can shrink its denominator and still print pass. The runner's `--suite` mode now requires `--expect-excluded <n>`, reports `eligible`, `executed`, `excluded` and `xfail`, and fails on an undeclared count; exclusion has its own exit code (4) instead of a CTest skip.
+- **Remedy:** Declare the exclusion count at registration time and compare it to the observed count. Recorded in D-041.
+- **Applies when:** Any aggregate that counts cases across models or revisions, including the Phase 8 and later suites.
+- **Verification:** `acceptance_suite_declared_exclusion`, `acceptance_suite_undeclared_exclusion` and `acceptance_suite_missing_expect_excluded`; `acceptance_suite` expects `eligible=3 executed=3 excluded=0 xfail=2`.
+- **Source:** Plan 07-08 summary, `tests/acceptance/negative/suite-exclusion.txt`.
+- **Status:** Adopted.
+
+### GB-GAME-009 / 2026-10-10 / Say which evidence was not shown to fail, and which locked rules were relaxed
+
+- **Cause and evidence:** Four phase-close claims need explicit limits. (1) The 07-03 `audio_saturation` assertion was written after the fix and was not shown to fail against the pre-fix core; the evidence for the defect is the scratch probe. (2) D-029 relaxed locked D-25's shade-count rule for the title and play_start checkpoints and is pending owner confirmation. (3) The Mooneye `daa` LD B,B frame is all shade 0, so its digest guards "still blank" only. (4) The Libbet reproduction script is byte-identical on macOS arm64 only; the Linux path and the dispatch-only workflow are unverified, and `frame-digest@t` has no CTest.
+- **Remedy:** State these limits in `docs/game-acceptance.md` and the decision rows rather than in a summary alone, and treat a pending owner confirmation as open until recorded.
+- **Applies when:** Closing a phase whose evidence includes regression-class digests, post-fix assertions or unexercised paths.
+- **Verification:** `grep -c 'pending' docs/game-acceptance.md` and the D-029 row; Plan 07-16 summary.
+- **Source:** Plans 07-03, 07-04, 07-07, 07-09, 07-15.
+- **Status:** Adopted.
