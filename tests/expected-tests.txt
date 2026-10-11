@@ -24,6 +24,7 @@ mbc2_battery_idempotent
 mbc2_battery_errors
 mbc2_battery_no_battery
 mbc2_two_instance_roundtrip
+mbc3_tracer
 mbc5_tracer
 mbc5_header_matrix
 mbc5_rom_banking

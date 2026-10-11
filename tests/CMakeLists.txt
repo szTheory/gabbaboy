@@ -39,6 +39,14 @@ foreach(case tracer header_matrix register_decode ram_echo reset
   add_test(NAME mbc2_${case} COMMAND test_mbc2 mbc2_${case})
 endforeach()
 
+add_executable(test_mbc3 test_mbc3.c)
+target_link_libraries(test_mbc3 PRIVATE GabbaBoy::core)
+target_compile_features(test_mbc3 PRIVATE c_std_17)
+set_target_properties(test_mbc3 PROPERTIES C_EXTENSIONS OFF)
+foreach(case tracer)
+  add_test(NAME mbc3_${case} COMMAND test_mbc3 mbc3_${case})
+endforeach()
+
 add_executable(test_mbc5 test_mbc5.c)
 target_link_libraries(test_mbc5 PRIVATE GabbaBoy::core)
 target_compile_features(test_mbc5 PRIVATE c_std_17)
