@@ -5,16 +5,16 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 9
 current_phase_name: MBC3, Deterministic RTC and Cartridge Persistence
 status: executing
-stopped_at: Completed 09-11-PLAN.md
-last_updated: "2026-10-11T22:52:46.825Z"
+stopped_at: Completed 09-12-PLAN.md
+last_updated: "2026-10-11T23:14:19.394Z"
 last_activity: 2026-10-11
 last_activity_desc: Phase 9 execution started
-state_head: 2724443dbf009984ed5ba7dbae2141b8586bb056
+state_head: eb72a46c206549cc36b982a6d2a150ec0adc5d45
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 45
-  completed_plans: 38
+  completed_plans: 39
   percent: 33
 ---
 
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 ## Current Position
 
 Phase: 9 (MBC3, Deterministic RTC and Cartridge Persistence) — EXECUTING
-Plan: 12 of 18
+Plan: 13 of 18
 Status: Ready to execute
 Last activity: 2026-10-11 — Phase 9 execution started
 
@@ -141,6 +141,7 @@ Progress (v0.2): [██░░░░░░░░] 22% (2/9 phases)
 | Phase 9 P09-09 | 85 min | 3 tasks | 9 files |
 | Phase 09 P10 | 25 min | 2 tasks | 8 files |
 | Phase 9 P11 | 40 min | 3 tasks | 9 files |
+| Phase 9 P12 | 55 min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -268,6 +269,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 9]: 09-09: CI prints no_host_clock result per build leg; native-windows-x64 is MinGW GCC 14.2.0 and uses nm (research A2 resolved)
 - [Phase 09]: 09-10: MBC5 continuation guest uses bank 0 and bank 15 GB5 markers; fixture-repro pin-checks and rebuilds all three continuation guests; mbc2/mbc3-rtc/mbc5 continuation ROMs are now tracked via .gitignore exceptions
 - [Phase 9]: 09-11: import compares against the live clock projected to now so an identical re-import never bumps the generation; catch_up_policy_table is registered in the core inventory
+- [Phase 9]: 09-12: rtc3test transcript groups coloured cells as [+...]/[!...] runs so millisecond numerics stay contiguous; expectations parsed from digest-pinned tests.md
 
 ### Pending Todos
 
@@ -303,8 +305,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-11T22:52:46.786Z
-Stopped at: Completed 09-11-PLAN.md
+Last session: 2026-10-11T23:14:19.355Z
+Stopped at: Completed 09-12-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 9`
 
