@@ -29,6 +29,91 @@ add_test(NAME cartridge_bank_matrix COMMAND test_cartridge cartridge_bank_matrix
 add_test(NAME cartridge_ram_banks COMMAND test_cartridge cartridge_ram_banks)
 add_test(NAME cartridge_no_ram_reads COMMAND test_cartridge cartridge_no_ram_reads)
 
+add_executable(test_mbc2 test_mbc2.c)
+target_link_libraries(test_mbc2 PRIVATE GabbaBoy::core)
+target_compile_features(test_mbc2 PRIVATE c_std_17)
+set_target_properties(test_mbc2 PROPERTIES C_EXTENSIONS OFF)
+foreach(case tracer header_matrix register_decode ram_echo reset
+  battery_image battery_import battery_idempotent battery_errors battery_no_battery
+  two_instance_roundtrip)
+  add_test(NAME mbc2_${case} COMMAND test_mbc2 mbc2_${case})
+endforeach()
+
+add_executable(test_mbc5 test_mbc5.c)
+target_link_libraries(test_mbc5 PRIVATE GabbaBoy::core)
+target_compile_features(test_mbc5 PRIVATE c_std_17)
+set_target_properties(test_mbc5 PROPERTIES C_EXTENSIONS OFF)
+foreach(case tracer header_matrix rom_banking ram_enable ram_banking no_ram_window
+  battery rom_bound cgb_flag_ignored cross_mapper_control
+  rumble_state rumble_errors rumble_reset_load reset_preserves_ram)
+  add_test(NAME mbc5_${case} COMMAND test_mbc5 mbc5_${case})
+endforeach()
+
+# White-box: the test includes src/core/gabbaboy.c itself, so it must not link
+# the core library (duplicate definitions).
+add_executable(test_mbc5_internal test_mbc5_internal.c)
+target_include_directories(test_mbc5_internal PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_mbc5_internal PRIVATE c_std_17)
+set_target_properties(test_mbc5_internal PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME mbc5_rumble_saturation COMMAND test_mbc5_internal mbc5_rumble_saturation)
+
+# Original banking guest (D-33): the committed 64 KiB ROM is run through the real CPU and bus.
+add_test(NAME mbc5_banking_guest
+  COMMAND test_mbc5 mbc5_banking_guest ${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb)
+# In-memory variants (never written to disk): $1B non-rumble type, and the 8 MiB bank $1FF inflation.
+add_test(NAME mbc5_banking_guest_1b
+  COMMAND test_mbc5 mbc5_banking_guest_1b ${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb)
+add_test(NAME mbc5_bank_1ff
+  COMMAND test_mbc5 mbc5_bank_1ff ${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb)
+
+# Ninth-bit core mutant (D-29, amended): a copy of the core whose MBC5 ROM bank composition keeps
+# `& 0u` of the high bank register instead of `& 1u`, so banks $100 and above alias $00-$FF. The
+# Mooneye mbc5 harness stops at bank $FF and cannot see this, so the discriminator is the original
+# mbc5_bank_1ff case. Same configure-time, exactly-once anchor discipline as the JOYP mutant in
+# tests/acceptance; the library and executable are test-only and never installed or exported.
+set(GBB_NINTH_SOURCE ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c)
+set(GBB_NINTH_PATTERN "& 1u) << 8")
+set(GBB_NINTH_REPLACEMENT "& 0u) << 8")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GBB_NINTH_SOURCE})
+file(READ ${GBB_NINTH_SOURCE} gbb_ninth_core_text)
+string(FIND "${gbb_ninth_core_text}" "${GBB_NINTH_PATTERN}" gbb_ninth_first)
+string(FIND "${gbb_ninth_core_text}" "${GBB_NINTH_PATTERN}" gbb_ninth_last REVERSE)
+if(gbb_ninth_first EQUAL -1 OR NOT gbb_ninth_first EQUAL gbb_ninth_last)
+  message(FATAL_ERROR "ninth-bit mutant pattern '${GBB_NINTH_PATTERN}' must occur exactly once in "
+    "${GBB_NINTH_SOURCE} (first=${gbb_ninth_first} last=${gbb_ninth_last})")
+endif()
+# The core text carries semicolons, so it stays quoted and never enters a list operation.
+string(REPLACE "${GBB_NINTH_PATTERN}" "${GBB_NINTH_REPLACEMENT}" gbb_ninth_text "${gbb_ninth_core_text}")
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_ninth_bit_mutant.c "${gbb_ninth_text}")
+
+add_library(gabbaboy_core_ninth_bit_mutant STATIC ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_ninth_bit_mutant.c)
+target_include_directories(gabbaboy_core_ninth_bit_mutant PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_compile_features(gabbaboy_core_ninth_bit_mutant PUBLIC c_std_17)
+set_target_properties(gabbaboy_core_ninth_bit_mutant PROPERTIES C_EXTENSIONS OFF)
+target_compile_definitions(gabbaboy_core_ninth_bit_mutant PRIVATE
+  GBB_BUILD_REVISION="ninth-bit-mutant" GBB_BUILD_QUALIFIED=0)
+
+add_executable(test_mbc5_ninth_bit_mutant test_mbc5.c)
+target_link_libraries(test_mbc5_ninth_bit_mutant PRIVATE gabbaboy_core_ninth_bit_mutant)
+target_compile_features(test_mbc5_ninth_bit_mutant PRIVATE c_std_17)
+set_target_properties(test_mbc5_ninth_bit_mutant PROPERTIES C_EXTENSIONS OFF)
+
+# The mutant must be caught at the C005 bank $1FF assertion specifically (exit 1, the REQUIRE text).
+add_test(NAME mbc5_ninth_bit_mutant_bank_1ff
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_mbc5_ninth_bit_mutant>;mbc5_bank_1ff;${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=r.3. == 0x01u"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# In-mutant control: the same guest on its committed 64 KiB image never selects a bank at or above
+# $100, so the mutant core still passes it (exit 0), which shows the mutant is not simply broken.
+add_test(NAME mbc5_ninth_bit_mutant_control_below_100
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_mbc5_ninth_bit_mutant>;mbc5_banking_guest;${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=.*"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
 add_executable(test_battery test_battery.c)
 target_link_libraries(test_battery PRIVATE GabbaBoy::core)
 target_compile_features(test_battery PRIVATE c_std_17)
@@ -224,6 +309,11 @@ add_test(NAME mbc1_continuation_fixture_digest
     -DROM=${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/continuation.gb
     -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/manifest.json
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
+add_test(NAME mbc5_banking_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DROM=${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb
+    -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
 add_test(NAME mooneye_fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye
@@ -232,6 +322,45 @@ add_test(NAME mooneye_eligible_inventory
   COMMAND ${CMAKE_COMMAND}
     -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneye.cmake)
+# Phase 8 sibling set: mbc2/mbc5 derivatives (D-23, D-24, D-26). Digest, inventory and pc-table modes.
+add_test(NAME mooneye_mbc_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_MODE=digest
+    -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeMbc.cmake)
+add_test(NAME mooneye_mbc_eligible_inventory
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_MODE=inventory
+    -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeMbc.cmake)
+add_test(NAME mooneye_mbc_pc_table
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_MODE=pc-table
+    -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc
+    -DGBB_RUNNER_SOURCE=${PROJECT_SOURCE_DIR}/src/runner/main.c
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeMbc.cmake)
+# Negative control: a manifest whose first result_pc was changed must fail the pc-table check with exit code 1.
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-mbc-tamper")
+file(READ "${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/manifest.json" GBB_MBC_MANIFEST_JSON)
+string(JSON GBB_MBC_TAMPERED_JSON SET "${GBB_MBC_MANIFEST_JSON}" fixtures 0 result_pc "\"0x407f\"")
+file(WRITE "${PROJECT_BINARY_DIR}/mooneye-mbc-tamper/manifest.json" "${GBB_MBC_TAMPERED_JSON}")
+add_test(NAME mooneye_mbc_pc_table_tamper
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_MODE=pc-table;-DGBB_MANIFEST=${PROJECT_BINARY_DIR}/mooneye-mbc-tamper/manifest.json;-DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc;-DGBB_RUNNER_SOURCE=${PROJECT_SOURCE_DIR}/src/runner/main.c;-P;${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeMbc.cmake"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=pc-table-mismatch
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# Negative control (D-28): an edited sibling manifest is refused with invalid-manifest and exactly exit code 2.
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-mbc-unknown")
+configure_file("${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/manifest.json"
+  "${PROJECT_BINARY_DIR}/mooneye-mbc-unknown/manifest.json" COPYONLY)
+file(APPEND "${PROJECT_BINARY_DIR}/mooneye-mbc-unknown/manifest.json" " ")
+add_test(NAME mooneye_mbc_unknown_manifest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:gabbaboy-runner>;--manifest;${PROJECT_BINARY_DIR}/mooneye-mbc-unknown/manifest.json;--suite"
+    -DGBB_EXPECT_CODE=2
+    -DGBB_EXPECT_REGEX=invalid-manifest
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
 add_executable(test_diagnostics test_diagnostics.c)
 target_link_libraries(test_diagnostics PRIVATE GabbaBoy::core)
@@ -254,6 +383,10 @@ foreach(case pass fail wrong_breakpoint timeout unsupported zero_eligible)
 endforeach()
 add_test(NAME runner_guest_failure
   COMMAND test_runner runner_guest_failure ${PROJECT_SOURCE_DIR}/fixtures/mooneye/daa.gb)
+# D-29: a wrong mapper type byte must turn the admitted MBC5 derivative from pass into something else.
+add_test(NAME mooneye_mbc_type_mutation
+  COMMAND test_runner mooneye_mbc_type_mutation ${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/mbc5_rom_512kb.gb)
+set_tests_properties(mooneye_mbc_type_mutation PROPERTIES TIMEOUT 30)
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/runner-missing-fixture")
 configure_file("${PROJECT_SOURCE_DIR}/fixtures/mooneye/manifest.json"
   "${PROJECT_BINARY_DIR}/runner-missing-fixture/manifest.json" COPYONLY)
@@ -311,6 +444,30 @@ set_tests_properties(mooneye_case_tim00 PROPERTIES PASS_REGULAR_EXPRESSION
   "status=pass.*source_revision=31510e12eea6286d36eea060a6adde755e1067aa.*report_patch_sha256=c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d.*fixture_origin=derived-headless-report-closure upstream_assertions=unchanged.*protocol_stage=callback-then-ld-b-b callback_result=pass callback_pc=4000 result_pc=4327")
 set_tests_properties(mooneye_case_tim00-div-trigger PROPERTIES PASS_REGULAR_EXPRESSION
   "status=pass.*source_revision=31510e12eea6286d36eea060a6adde755e1067aa.*report_patch_sha256=c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d.*fixture_origin=derived-headless-report-closure upstream_assertions=unchanged.*protocol_stage=callback-then-ld-b-b callback_result=pass callback_pc=4000 result_pc=4327")
+# Phase 8 sibling suite: the manifest's 15 derivatives, one CTest per alias (callback_pc and result_pc per Pitfall P13).
+set(GBB_MBC_MANIFEST ${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/manifest.json)
+add_test(NAME mooneye_mbc_required_suite
+  COMMAND gabbaboy-runner --manifest ${GBB_MBC_MANIFEST} --suite --receipt)
+# The ASan/UBSan leg runs the 15 cases back to back in about 35 s (hosted Linux), so the suite bound is 120 s.
+set_tests_properties(mooneye_mbc_required_suite PROPERTIES TIMEOUT 120 PASS_REGULAR_EXPRESSION
+  "suite eligible=15 executed=15 status=pass.*suite categories mbc2=7/7 mbc5=8/8")
+set(GBB_MBC_CASES
+  mbc2_bits_ramg:01d7:407e mbc2_bits_romb:01c0:407e mbc2_bits_unused:018d:407e mbc2_ram:029c:4071
+  mbc2_rom_512kb:0207:4071 mbc2_rom_1Mb:0207:4071 mbc2_rom_2Mb:0207:4071
+  mbc5_rom_512kb:0216:4072 mbc5_rom_1Mb:0216:4072 mbc5_rom_2Mb:0216:4072 mbc5_rom_4Mb:0216:4072
+  mbc5_rom_8Mb:0216:4072 mbc5_rom_16Mb:0216:4072 mbc5_rom_32Mb:0216:4072 mbc5_rom_64Mb:0216:4072)
+foreach(entry IN LISTS GBB_MBC_CASES)
+  string(REPLACE ":" ";" parts "${entry}")
+  list(GET parts 0 alias)
+  list(GET parts 1 callback_pc)
+  list(GET parts 2 result_pc)
+  add_test(NAME mooneye_mbc_case_${alias}
+    COMMAND gabbaboy-runner --manifest ${GBB_MBC_MANIFEST} --case ${alias} --receipt)
+  # Unsanitized wall time is at most 1.9 s per case (Plan 08-05); the hosted ASan/UBSan leg measured 15.4 s
+  # for mbc2_bits_ramg under parallel load, so the bound is 60 s.
+  set_tests_properties(mooneye_mbc_case_${alias} PROPERTIES TIMEOUT 60 PASS_REGULAR_EXPRESSION
+    "status=pass.*source_revision=31510e12eea6286d36eea060a6adde755e1067aa.*fixture_origin=derived-headless-report-closure upstream_assertions=unchanged.*protocol_stage=callback-then-ld-b-b callback_result=pass callback_pc=${callback_pc} result_pc=${result_pc}")
+endforeach()
 set(GBB_TEST_SANITIZER_LINK_OPTIONS "")
 if(GABBABOY_ENABLE_SANITIZERS)
   set(GBB_TEST_SANITIZER_LINK_OPTIONS "-fsanitize=address,undefined")
@@ -439,6 +596,53 @@ gbb_add_expect_exit_test(libbet_not_installed 0 "libbet absent from scanned tree
 set_tests_properties(libbet_not_installed PROPERTIES FIXTURES_REQUIRED libbet_install)
 gbb_add_expect_exit_test(libbet_not_installed_selftest 1 "libbet-installed: share/payload.bin"
   --scan-dir "${GBB_LIBBET_SCAN_SELFTEST}")
+
+# Sibling Mooneye MBC ROM redistribution guard (D-31, D-32). The 15 derivatives, including the
+# 4 MiB and 8 MiB ROMs, are repository fixtures only. cmake/ScanForbiddenFixtures.cmake scans the
+# same install tree by name and digest and asserts the exact installed fixture directories. The
+# four self-tests prove the scan can fail: a renamed ROM, a ROM behind an innocuously named
+# symbolic link (a copy where the platform cannot create one), an empty tree and an extra directory.
+set(GBB_MBC_SCAN_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/ScanForbiddenFixtures.cmake")
+set(GBB_MBC_SCAN_MANIFEST "${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/manifest.json")
+set(GBB_MBC_SCAN_DIRS "tracer|visible-demo|mbc1-continuation")
+set(GBB_MBC_SCAN_SELFTEST "${PROJECT_BINARY_DIR}/mooneye-mbc-scan-selftest")
+set(GBB_MBC_SCAN_EMPTY "${PROJECT_BINARY_DIR}/mooneye-mbc-scan-empty")
+set(GBB_MBC_DIRS_SELFTEST "${PROJECT_BINARY_DIR}/mooneye-mbc-dirs-selftest")
+set(GBB_MBC_SCAN_LINK "${PROJECT_BINARY_DIR}/mooneye-mbc-scan-link")
+file(MAKE_DIRECTORY "${GBB_MBC_SCAN_SELFTEST}/share" "${GBB_MBC_SCAN_EMPTY}")
+file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/mbc5_rom_512kb.gb"
+  "${GBB_MBC_SCAN_SELFTEST}/share/payload.bin")
+file(MAKE_DIRECTORY "${GBB_MBC_SCAN_LINK}/share")
+file(REMOVE "${GBB_MBC_SCAN_LINK}/share/innocuous.bin")
+# Native separators: a Windows symbolic link whose target uses '/' does not resolve.
+file(TO_NATIVE_PATH "${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/mbc2_rom_512kb.gb" GBB_MBC_LINK_TARGET)
+file(CREATE_LINK "${GBB_MBC_LINK_TARGET}" "${GBB_MBC_SCAN_LINK}/share/innocuous.bin" SYMBOLIC COPY_ON_ERROR)
+foreach(dir IN ITEMS tracer visible-demo mbc1-continuation extra)
+  file(WRITE "${GBB_MBC_DIRS_SELFTEST}/share/gabbaboy/fixtures/${dir}/marker.txt" "marker\n")
+endforeach()
+function(gbb_add_mbc_scan_test name code regex scan_dir)
+  set(command "${CMAKE_COMMAND}" "-DGBB_SCAN_DIR=${scan_dir}"
+    "-DGBB_FORBIDDEN_MANIFEST=${GBB_MBC_SCAN_MANIFEST}" ${ARGN} -P "${GBB_MBC_SCAN_SCRIPT}")
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60)
+endfunction()
+gbb_add_mbc_scan_test(mooneye_mbc_not_installed 0 "mooneye-mbc absent from scanned tree files=[1-9]"
+  "${GBB_LIBBET_INSTALL_CHECK}" "-DGBB_EXPECT_FIXTURE_DIRS=${GBB_MBC_SCAN_DIRS}")
+set_tests_properties(mooneye_mbc_not_installed PROPERTIES FIXTURES_REQUIRED libbet_install)
+gbb_add_mbc_scan_test(mooneye_mbc_not_installed_selftest 1 "mooneye-installed: share/payload.bin"
+  "${GBB_MBC_SCAN_SELFTEST}")
+gbb_add_mbc_scan_test(mooneye_mbc_not_installed_link_selftest 1 "mooneye-installed: share/innocuous.bin"
+  "${GBB_MBC_SCAN_LINK}")
+gbb_add_mbc_scan_test(mooneye_mbc_not_installed_empty 1 "scan-dir-empty"
+  "${GBB_MBC_SCAN_EMPTY}")
+gbb_add_mbc_scan_test(mooneye_mbc_fixture_dirs_selftest 1 "fixture-dirs-mismatch"
+  "${GBB_MBC_DIRS_SELFTEST}" "-DGBB_EXPECT_FIXTURE_DIRS=${GBB_MBC_SCAN_DIRS}")
 
 # EVID-02 baseline comparator self-tests (D-30, D-31, D-34). Each test runs cmake/VerifyDmgBaseline.cmake
 # on committed synthetic fixtures (or a generated variant of them) and asserts the exact exit code

@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_phase: 8
-current_phase_name: Cartridge Seam, MBC5 and MBC2
+current_phase: 9
+current_phase_name: MBC3, Deterministic RTC and Cartridge Persistence
 status: planning
-stopped_at: Phase GB-07 complete, ready to plan Phase 8
-last_updated: "2026-10-11T11:29:29.013Z"
+stopped_at: Phase GB-08 complete, ready to plan Phase 9
+last_updated: "2026-10-11T17:50:24.187Z"
 last_activity: 2026-10-11
-last_activity_desc: Phase GB-07 complete, transitioned to Phase 8
-state_head: 175c9fce4a5c2cdfd62811462a2e8d9e3e2ac441
+last_activity_desc: Phase GB-08 complete, transitioned to Phase 9
+state_head: 33a5fde402b8666fee7f2da800e8211f84eaa267
 progress:
   total_phases: 9
-  completed_phases: 2
-  total_plans: 17
-  completed_plans: 17
-  percent: 20
+  completed_phases: 3
+  total_plans: 27
+  completed_plans: 27
+  percent: 30
 ---
 
 # Project State
@@ -25,16 +25,16 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 8 — Cartridge Seam, MBC5 and MBC2
+**Current focus:** Phase 9 — MBC3, Deterministic RTC and Cartridge Persistence
 
 ## Current Position
 
-Phase: 8 — Cartridge Seam, MBC5 and MBC2
+Phase: 9 — MBC3, Deterministic RTC and Cartridge Persistence
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-10-11 — Phase GB-07 complete, transitioned to Phase 8
+Last activity: 2026-10-11 — Phase GB-08 complete, transitioned to Phase 9
 
-Progress (v0.2): [█░░░░░░░░░] 11% (1/9 phases)
+Progress (v0.2): [██░░░░░░░░] 22% (2/9 phases)
 
 ## Performance Metrics
 
@@ -120,6 +120,16 @@ Progress (v0.2): [█░░░░░░░░░] 11% (1/9 phases)
 | Phase GB-07 P14 | 55 min | 3 tasks | 5 files |
 | Phase GB-07 P07-15 | 70 min | 2 tasks | 7 files |
 | Phase 7 P16 | 100 min | 3 tasks | 7 files |
+| Phase 08 P01 | 70 min | 3 tasks | 3 files |
+| Phase GB-08 P08-02 | 40 min | 3 tasks | 5 files |
+| Phase 08 P03 | 55 min | 3 tasks | 8 files |
+| Phase 08 P04 | 20 min | 2 tasks | 7 files |
+| Phase 08 P05 | 40 min | 2 tasks | 24 files |
+| Phase 08 P06 | 30 min | 3 tasks | 7 files |
+| Phase 08 P07 | 150 min | 2 tasks | 7 files |
+| Phase 08 P08-08 | 25 min | 4 tasks | 11 files |
+| Phase 08 P09 | 40 min | 2 tasks | 14 files |
+| Phase 08 P10 | 45 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -229,6 +239,12 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 07]: 07-11: stall report (D-18) also covers exit 3 and writes the failure PPM there; acceptance_parse_script_errors compares events field-wise (MSVC padding)
 - [Phase GB-07]: 07-14: surface check forbids a superset of tokens (freopen, O_* flags, non-literal fopen mode, session persistence names); test_player_session compiles audio/input/script_smoke sources directly
 - [Phase GB-07]: 07-15: DMG-CPU-B v1 ledger frozen at 5a55f19 in baseline commit 42faf9b; one ledger for all OS, changes only via CHANGES.md rows (D-30..D-35)
+- [Phase 08]: 08-01: cartridge mapper section placed before gbb_instance; helpers take cart_state plus sizes
+- [Phase GB-08]: MBC2 RAM stored canonical 0xF0|nibble; battery export is the stored image and import normalises before compare (08-02)
+- [Phase 08]: 08-05: mbc2/mbc5 Mooneye derivatives admitted by manifest digest; budgets = ceil(2*ticks/100000)*100000; no D-27 patch needed (15/15 pass)
+- [Phase 08]: 08-06: Mooneye mbc builder pin is read from the digest-checked parent manifest (sibling carries no builder object); type-mutation control requires an unmutated pass first
+- [Phase 08]: 08-08: ninth bank bit proved by mbc5_bank_1ff plus test-only ninth-bit mutant (fails at C005, control passes); rom_64Mb is the 8 MiB loader/install-policy case only
+- [Phase 08]: 08-09: D-049..D-062 recorded (Open Questions 1-7, D-08/D-10/D-32 refinements, D-29 amendment: ninth bit proved by mbc5_bank_1ff, not rom_64Mb)
 
 ### Pending Todos
 
@@ -245,6 +261,8 @@ None outside the roadmap.
 - Phase 1 PR #1 and Phase 2 PR #2 were merged on 2026-10-07 after their required exact-head checks passed. The 2026-10-07 triage found no open PRs or issues at that time. Phase 2 verification is limited to its documented DMG-CPU-B CPU/timer scope; no physical DMG observation or PPU qualification is claimed.
 - Phase 6 has no open goal, requirement, review, or high/blocking security finding. The release workflow's original post-publication readback failure was repaired before closeout; the live release API and a fresh download reconcile the published 18-asset inventory.
 - Exact CPU-B behavior, physical DMG/MBC1 qualification, physical audio/hotplug, perceptual output, Developer ID signing/notarization, and live Playstead GB integration remain unqualified and are stated as limits, not passing claims.
+- [Phase 8] Resolved: the D-29 ninth-bit mutant now targets `mbc5_bank_1ff` (D-062); upstream `rom_64Mb` never selects banks >= 256.
+- [Phase 9] Code review WR-02 (deferred): `src/player/session.c` hard-codes the unsupported battery types $06/$1B/$1E. When CART-06 adds MBC2/MBC3/MBC5 persistence, replace the list and add a test that classifies every core type byte as either `battery_backed` or `battery_unsupported`.
 
 ### Quick Tasks Completed
 
@@ -262,10 +280,21 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-11T02:39:27.975Z
-Stopped at: Phase GB-07 complete, ready to plan Phase 8
-Resume file: None
-Next command in fresh context: `/gsd-discuss-phase 8`
+Last session: 2026-10-11
+Stopped at: Phase 8 complete (execution and verification), ready to discuss Phase 9
+Resume file: .planning/.continue-here.md
+Next command in fresh context: `/gsd-discuss-phase 9`
+
+Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, execution and verification** (2026-10-11). Verification passed 4/4 (CART-01..03) in [08-VERIFICATION.md](phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-VERIFICATION.md); gates: Nyquist validated (V-01..V-27 green, differential rerun 0 differences), security 41/41 closed, code review 5 findings (WR-01 and IN-01 fixed in 1620c99, 47a1d4c, a57879c and e85c1b3, WR-02 deferred to Phase 9, 2 info skipped, 0 open), regression core 320/320 and player 371/371. PR #64 is squash-merged to main after exact-head required checks pass. Limitations: `rom_64Mb` does not exercise banks >= 256 (ninth bit proven by `mbc5_bank_1ff` and the mutant pair, D-062); the player status line has no automated UI test; player persistence is MBC1 only; rumble is a query without haptics; no CGB and no hardware MBC observation. Next phase: **Phase 9 - MBC3, Deterministic RTC and Cartridge Persistence** (no CONTEXT.md yet) via **`/gsd-discuss-phase 9`**. Both auto-advance flags (`workflow.auto_advance`, `workflow._auto_chain_active`) stay false; nothing advances automatically.
+Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, execution** (2026-10-11), plans 08-01..08-10 on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. Evidence head `a3f27f71c10838e372f27d8c2fcf0070123b0919`, run 38155767928 (https://github.com/szTheory/gabbaboy/actions/runs/38155767928): all eight required jobs success; fixture-repro run 38155768038 (https://github.com/szTheory/gabbaboy/actions/runs/38155768038): fixture-repro, mooneye-original-repro, mooneye-candidate-repro and mooneye-mbc-repro success. Local ctest 319/319, `baseline status=pass`, privacy check clean. The docs-only handoff commit is checked as a separate head (see 08-10-SUMMARY). PR #64 is ready for review and left OPEN and unmerged: the pre-authorized squash merge happens only after Phase 8 verification passes, at an exact-head green head. Honest limits: rom_64Mb does not exercise banks >= 256 (the ninth bit is covered by mbc5_bank_1ff and the two mutant CTests, D-29 amended, DECISIONS D-062); the 08-04 player status line has no automated UI test; phase1-asan cannot configure on macOS, so sanitizer evidence is hosted linux-asan-ubsan plus manual local builds; no hardware MBC observation, no CGB, player persistence MBC1 only, rumble is a query without haptics. Next step: **Phase 8 verification**, `/gsd-verify-work 8`. If verification finds gaps, gap closure continues on this branch and PR. Following phase: **Phase 9 - MBC3, Deterministic RTC and Cartridge Persistence** (named, not started; only after verification passes and the owner chooses to continue). Both `workflow.auto_advance` and `workflow._auto_chain_active` stay false.
+
+Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, plan 08-08 (original MBC5 banking fixture and D-29 ninth-bit mutant) executed** (2026-10-11) on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. fixtures/mbc5-banking (RGBDS 1.0.1, sha256 0b852837...ddffef, 64 KiB, type $1E) passes mbc5_banking_guest (rumble on=1, 1 transition), mbc5_banking_guest_1b and mbc5_bank_1ff (in-memory 8 MiB); the ninth-bit mutant fails mbc5_bank_1ff at C005 and its control passes. Full local ctest 319/319, inventory matches. Hosted fixture-repro step and exact-head CI are not yet read (08-09/08-10). Phase 8 is not complete: plans 08-09 and 08-10 remain. Next plan: **08-09 (docs and decisions)** via **`/gsd-execute-phase 8`**. Both auto-advance flags stay false.
+Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, plan 08-02 (MBC2) executed** (2026-10-11) on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. 11 mbc2_ CTests added, full local ctest 272/272, differential `--exclude-types 05,06` `differences=0`, baseline pass. Phase 8 is not complete: plans 08-03..08-10 remain. Next plan: **08-03 (MBC5)** via **`/gsd-execute-phase 8`**. Both auto-advance flags stay false.
+Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, plan 08-01 (cartridge seam) executed** (2026-10-11) on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. Differential `cells=86016 differences=0`, digest `4c7a57ff3d50d228` held, exact-head CI green on all eight required jobs at 25e5d6e (run 38146578485), draft PR #64 open and not merged. Phase 8 is not complete: plans 08-02..08-10 remain. Next plan: **08-02 (MBC2)** via **`/gsd-execute-phase 8`** (resumes at the first plan without a SUMMARY). Both auto-advance flags stay false.
+
+Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, planning** (2026-10-11) on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. Research, pattern map, validation strategy and 10 plans in 9 waves: 08-01 seam (`gabbaboy.c` only, old-versus-new differential, draft PR); 08-02 MBC2; 08-03 MBC5 + 8 MiB bound + `gbb_rumble_state`; 08-04 player non-persistence and 08-05 Mooneye-mbc admission + runner in parallel; 08-06 sibling verifier and controls; 08-07 install/package scans, ninth-bit mutant, hosted leg; 08-08 original MBC5 banking fixture; 08-09 docs and decisions; 08-10 gates, PR ready and left open. Plan checker: 5 passes, final pass clean; requirements 3/3, decisions 34/34. D-08 amended at planning (sequencing only: MBC2 plan before MBC5 because both edit the same core, header and test inventory files). Phase 8 is not executed. Next phase step: **Phase 8 execution** via **`/gsd-execute-phase 8`**. Both auto-advance flags stay false; nothing advances automatically.
+
+Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, discussion** (2026-10-11) on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. [08-CONTEXT.md](phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-CONTEXT.md) locks D-01..D-34 from four parallel advisor researches with adversarial passes, auto-followed per the owner's standing instruction; no owner-only questions arose. Key choices: in-file cartridge seam landing first as a pure `gabbaboy.c` plan with a recorded old-versus-new differential; 8 MiB ceiling for MBC5 only, preserving every other loader return code; `gbb_rumble_state` + `GBB_NO_RUMBLE`; canonical MBC2 nibble image; player runs MBC2/MBC5 battery carts without persistence and says so (CART-06 stays Phase 9); Mooneye mbc2/mbc5 derivatives in sibling `fixtures/mooneye-mbc/` with proven install exclusion. Next step: **Phase 8 research and planning** via **`/gsd-plan-phase 8`**. Both auto-advance flags stay false; nothing advances automatically.
 Continuation note: [.continue-here.md](.continue-here.md)
 Completed workflow stage: **Phase 7 - DMG Game Acceptance and Regression Baseline, execution and verification** (2026-10-11). Verification passed 5/5 (GAME-01..03, EVID-01..02) in [07-VERIFICATION.md](phases/GB-07-dmg-game-acceptance-and-regression-baseline/07-VERIFICATION.md); gates: Nyquist validated, security 49/49 closed, code review 10 findings (8 fixed, WR-01 deferred as a documented limitation, 2 info skipped, 0 open), local regression 261/261. Owner ratified D-029 on 2026-10-11. PR #63 is squash-merged to main after exact-head required checks pass. Limitations: one game on one software model, packaged-player smoke macOS only, no hardware evidence, `libbet-repro` not yet run hosted (Linux path unverified), no CTest for `frame-digest@t`. Next phase: **Phase 8 - Cartridge Seam, MBC5 and MBC2** (no CONTEXT.md yet) via **`/gsd-discuss-phase 8`**. Both auto-advance flags (`workflow.auto_advance`, `workflow._auto_chain_active`) stay false; nothing advances automatically.
 Completed workflow stage: **Phase 7 - DMG Game Acceptance and Regression Baseline, execution** (2026-10-11), plans 07-01..07-17 on branch `gsd/phase-07-dmg-game-acceptance-and-regression-baseline`. Evidence head 23c0ffd7c1ab3149be1b96c8ba384acf5c655c48, run 38106136572 (https://github.com/szTheory/gabbaboy/actions/runs/38106136572): all eight required jobs success. The handoff commits that follow the evidence head change only planning files and are checked as separate heads (see the 07-16 SUMMARY), so the evidence head is not the final branch head. PR #63 is marked ready for review and is not merged. Open owner item: D-029 (shade-count relaxation of locked D-25) is pending owner confirmation. Next step: **Phase 7 verification**. Next command in fresh context: `/gsd-verify-work 7`. Following phase: **Phase 8 - Cartridge Seam, MBC5 and MBC2** (named, not started; only after verification passes and the owner chooses to continue). Both auto-advance flags (`workflow.auto_advance`, `workflow._auto_chain_active`) stay false; nothing advances automatically.
@@ -290,5 +319,5 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Discuss Phase 8 (Cartridge Seam, MBC5 and MBC2): `/gsd-discuss-phase 8`
+- Phase 8 (Cartridge Seam, MBC5 and MBC2) is complete and verified; PR #64 is squash-merged after exact-head required checks pass. Start Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) in a fresh context: `/gsd-discuss-phase 9`.
 - Phase-stop rule: stop after each phase and yield; never auto-advance into the next phase or milestone.

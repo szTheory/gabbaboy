@@ -1123,6 +1123,69 @@ static int script_invalid(const char *libbet_rom, const char *good_script,
     return 0;
 }
 
+static bool directory_is_empty(const char *path) {
+    DIR *directory = opendir(path);
+    if (directory == NULL) return false;
+    bool empty = true;
+    struct dirent *entry;
+    while ((entry = readdir(directory)) != NULL) {
+        if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0)
+            empty = false;
+    }
+    (void)closedir(directory);
+    return empty;
+}
+
+/* D-22: MBC2 $06 and MBC5 $1B/$1E battery cartridges run without any
+ * persistence: no flag claims a save, and the save directory stays empty. */
+static int session_battery_unsupported(const char *root) {
+    static const uint8_t types[] = {0x06u, 0x1Bu, 0x1Eu};
+    char rom_path[4096];
+    char saves[4096];
+    REQUIRE(path_join(rom_path, sizeof(rom_path), root, "unsupported.gb"));
+    REQUIRE(path_join(saves, sizeof(saves), root, "saves"));
+    REQUIRE(mkdir(saves, 0700) == 0);
+    player_session_test_set_pref_path(saves);
+    for (size_t i = 0u; i < sizeof(types); ++i) {
+        uint8_t rom[TEST_ROM_SIZE];
+        make_test_rom(rom, 0u);
+        rom[0x147u] = types[i];
+        rom[0x149u] = types[i] == 0x06u ? 0x00u : 0x02u;
+        fix_test_rom_checksum(rom);
+        REQUIRE(write_test_file(rom_path, rom, sizeof(rom)));
+        gbb_instance *machine = create_machine();
+        REQUIRE(machine != NULL);
+        char *current_path = NULL;
+        player_save_identity identity = {0};
+        char error[256];
+        REQUIRE(player_session_replace_rom(machine, &current_path, rom_path,
+                                           &identity, error, sizeof(error)));
+        REQUIRE(!identity.battery_backed && !identity.persistence_enabled);
+        REQUIRE(identity.battery_unsupported);
+        REQUIRE(player_session_load_battery(machine, &identity, error,
+                                            sizeof(error)));
+        REQUIRE(player_session_save_battery(machine, &identity, error,
+                                            sizeof(error)));
+        int lock_fd = -1;
+        REQUIRE(player_session_lock_battery(&identity, &lock_fd, error,
+                                            sizeof(error)) ==
+                PLAYER_SESSION_LOCK_ACQUIRED);
+        player_session_unlock_battery(&lock_fd);
+        REQUIRE(directory_is_empty(saves));
+        free(current_path);
+        gbb_destroy(machine);
+    }
+    /* Type $03 with 8 KiB RAM keeps persistence and is not unsupported. */
+    uint8_t rom[TEST_ROM_SIZE];
+    make_test_rom(rom, 0u);
+    player_save_identity identity = {0};
+    REQUIRE(player_session_identify_rom(rom, sizeof(rom), &identity));
+    REQUIRE(identity.battery_backed && !identity.battery_unsupported);
+    (void)unlink(rom_path);
+    remove_tree(saves);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc < 5 || !start_test_root(argv[4])) return 2;
     int result = 2;
@@ -1138,6 +1201,8 @@ int main(int argc, char **argv) {
         result = session_save_cadence();
     else if (strcmp(argv[1], "player_session_transition_choices") == 0)
         result = session_transition_choices();
+    else if (strcmp(argv[1], "player_session_battery_unsupported") == 0)
+        result = session_battery_unsupported(argv[4]);
     else if (strcmp(argv[1], "player_session_max_size") == 0)
         result = session_max_size(argv[4]);
     else if (strcmp(argv[1], "player_session_reject_matrix") == 0)

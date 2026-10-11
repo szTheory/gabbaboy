@@ -20,7 +20,8 @@ typedef enum {
     GBB_UNSUPPORTED_PROFILE,
     GBB_INVALID_ROM,          /* malformed header or header checksum */
     GBB_ROM_TRUNCATED,        /* image ends before header or declared ROM size */
-    GBB_ROM_TOO_LARGE,        /* actual image exceeds the 2 MiB hard limit */
+    GBB_ROM_TOO_LARGE,        /* image exceeds the type-aware limit: 8 MiB for MBC5 types
+                                 $19-$1E, 2 MiB for every other type */
     GBB_ROM_SIZE_MISMATCH,    /* actual image is longer than its declared ROM size */
     GBB_UNSUPPORTED_CARTRIDGE,/* cartridge type is outside the supported matrix */
     GBB_UNSUPPORTED_CARTRIDGE_VARIANT, /* recognized MBC1M wiring is unsupported */
@@ -32,7 +33,8 @@ typedef enum {
     GBB_OUT_OF_MEMORY,        /* allocation failed; live instance is unchanged */
     GBB_EVENT_QUEUE_FULL,
     GBB_INVALID_EVENT,
-    GBB_FRAME_NOT_READY
+    GBB_FRAME_NOT_READY,
+    GBB_NO_RUMBLE             /* loaded cartridge has no rumble line (or no ROM) */
 } gbb_error;
 
 typedef enum {
@@ -135,8 +137,17 @@ gbb_error gbb_reset(gbb_instance *instance);
  * RAM is accepted only through 512 KiB ROM; larger MBC1 images may declare
  * only 8-KiB RAM. The conservative, recognized MBC1M logo/header candidate
  * returns GBB_UNSUPPORTED_CARTRIDGE_VARIANT; this does not identify every
- * special-wiring image. New cartridge RAM starts at $FF as deterministic
- * software policy, not a hardware power-on claim. */
+ * special-wiring image. MBC2 types $05/$06 are also supported with ROM-size
+ * codes $00-$03 (32-256 KiB); the header RAM code must be $00 because the
+ * 512 four-bit cells are built into the mapper. MBC5 types $19-$1E are
+ * supported with ROM-size codes $00-$08 (32 KiB-8 MiB) and RAM-size codes
+ * $00 (types $19/$1C only), $02 (8 KiB), $03 (32 KiB), $05 (64 KiB) and $04
+ * (128 KiB); the CGB flag at $143 is ignored on the DMG-CPU-B profile. The
+ * image size ceiling is checked before any other header work: 8 MiB for MBC5
+ * types and 2 MiB for every other type byte (GBB_ROM_TOO_LARGE), so a
+ * validated load allocates at most 8 MiB of ROM plus 128 KiB of cartridge RAM.
+ * New cartridge RAM starts at $FF as deterministic software policy, not a
+ * hardware power-on claim. */
 gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_size);
 /* Battery RAM is available only for supported battery-backed cartridges.
  * Query the exact size, then copy/import through caller-owned buffers. No core
@@ -146,7 +157,11 @@ gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_si
  * writes advance the generation once per changed byte; unchanged writes do
  * not. Reset preserves RAM and generation, while successful ROM replacement
  * starts a fresh $FF image with generation zero. On errors, output values and
- * live RAM remain unchanged. */
+ * live RAM remain unchanged. MBC2 type $06 battery images are exactly 512
+ * bytes in the canonical 0xF0 | nibble form (the unwired upper nibble reads
+ * as ones); exports are always canonical, imports are normalised to that form
+ * before comparison, and packed 256-byte images are unsupported. MBC2 type $05
+ * has working but volatile RAM and no battery. */
 gbb_error gbb_battery_size(const gbb_instance *instance, size_t *out_size);
 gbb_error gbb_copy_battery(const gbb_instance *instance, uint8_t *out_bytes,
                            size_t capacity_bytes);
@@ -154,6 +169,18 @@ gbb_error gbb_import_battery(gbb_instance *instance, const uint8_t *bytes,
                              size_t size_bytes);
 gbb_error gbb_battery_generation(const gbb_instance *instance,
                                  uint64_t *out_generation);
+/* Reports the rumble motor line of MBC5 rumble cartridges ($1C-$1E). A NULL
+ * argument returns GBB_INVALID_ARGUMENT; no loaded ROM or a cartridge without a
+ * rumble line returns GBB_NO_RUMBLE. Outputs are left unchanged on any error.
+ * out_on is bit 3 of the last write to $4000-$5FFF, independent of whether
+ * cartridge RAM is enabled (that bit never selects a RAM bank on these types).
+ * out_changes counts line transitions and saturates at UINT64_MAX. gbb_reset
+ * turns the line off and counts one change only if it was on; a successful
+ * gbb_load_rom zeroes both, a failed one leaves them unchanged. Hosts sample
+ * once per frame and may read the counter as duty cycle. The core drives no
+ * haptics and this is not evidence of physical rumble-motor behaviour. */
+gbb_error gbb_rumble_state(const gbb_instance *instance, uint8_t *out_on,
+                           uint64_t *out_changes);
 /* Copies events into a fixed 64-event per-instance queue. Timestamps are
  * absolute half-dot ticks and must be nondecreasing within the batch and no
  * earlier than the instance's current time. Equal timestamps keep caller

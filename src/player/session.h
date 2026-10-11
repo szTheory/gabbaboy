@@ -16,6 +16,9 @@ typedef struct {
     uint64_t saved_generation;
     bool battery_backed;
     bool persistence_enabled;
+    /* Battery cartridge types whose saves are not implemented yet (MBC2 $06,
+     * MBC5 $1B/$1E): they run, but no save file is ever touched (D-22). */
+    bool battery_unsupported;
 } player_save_identity;
 
 typedef enum {

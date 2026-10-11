@@ -57,10 +57,57 @@ static int run_induced_guest_failure(const char *path) {
     return code;
 }
 
+
+/* D-29 first control: the admitted MBC5 image run with a wrong mapper type must not pass.
+ * Only header byte $147 (MBC5 -> MBC1) changes, and the header checksum is recomputed so a header
+ * validity check cannot be the reason the status differs. The unmutated image must pass first. */
+static const fixture_case *mbc_case_by_alias(const char *alias) {
+    for(size_t i=0;i<sizeof(mbc_cases)/sizeof(mbc_cases[0]);i++)
+        if(strcmp(mbc_cases[i].alias,alias)==0)return &mbc_cases[i];
+    return NULL;
+}
+
+static int type_mutation_on(const fixture_case *fc,uint8_t *rom,size_t rom_size) {
+    protocol_evidence evidence;uint64_t ticks=0;size_t recent_count=0;const char *stop=NULL;
+    gbb_diagnostic_record recent[RECENT_CAPACITY];
+    const char *baseline=run_guest(fc,rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
+    REQUIRE(baseline!=NULL && strcmp(baseline,"pass")==0);
+
+    REQUIRE(rom_size>0x14d && rom[0x147]>=0x19 && rom[0x147]<=0x1e); /* an MBC5 cartridge type */
+    rom[0x147]=0x01;
+    uint8_t checksum=0;
+    for(size_t i=0x134;i<=0x14c;i++)checksum=(uint8_t)(checksum-rom[i]-1u);
+    rom[0x14d]=checksum;
+
+    const char *status=run_guest(fc,rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
+    REQUIRE(status!=NULL && strcmp(status,"pass")!=0);
+    printf("control=mbc5-type-byte-mutation alias=%s header147=01 header_checksum=%02x status=%s stop=%s ticks=%llu\n",
+           fc->alias,checksum,status,stop!=NULL?stop:"none",(unsigned long long)ticks);
+    return 0;
+}
+
+static int run_type_mutation(const char *path) {
+    const fixture_case *fc=mbc_case_by_alias("mbc5_rom_512kb");
+    REQUIRE(fc!=NULL);
+    size_t rom_size=0;
+    uint8_t *rom=malloc(fc->size_bytes+1);
+    REQUIRE(rom!=NULL);
+    int code=1;
+    if(read_bounded(path,rom,fc->size_bytes,&rom_size)&&rom_size==fc->size_bytes&&hash_matches(rom,rom_size,fc->sha256)){
+        code=type_mutation_on(fc,rom,rom_size);
+    }else{
+        fprintf(stderr,"%s:%d: admitted MBC5 fixture did not load\n",__FILE__,__LINE__);
+    }
+    free(rom);
+    return code;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) return 2;
     if (strcmp(argv[1],"runner_guest_failure")==0)
         return argc==3?run_induced_guest_failure(argv[2]):2;
+    if (strcmp(argv[1],"mooneye_mbc_type_mutation")==0)
+        return argc==3?run_type_mutation(argv[2]):2;
     if (argc != 2) return 2;
     gbb_trace_record records[2]={{0}};
     protocol_progress progress={0};protocol_evidence evidence={0};

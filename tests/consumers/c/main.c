@@ -47,6 +47,15 @@ static int battery_api_smoke(void) {
         output[0] != 0x5Cu || output[sizeof(output) - 1u] != 0x5Cu ||
         gbb_battery_generation(machine, &generation) != GBB_OK || generation != 1u)
         goto done;
+    /* The installed header and library export gbb_rumble_state; a non-rumble
+     * cartridge reports GBB_NO_RUMBLE and leaves the outputs alone. */
+    {
+        uint8_t rumble_on = 0xA5u;
+        uint64_t rumble_changes = UINT64_C(0x1122334455667788);
+        if (gbb_rumble_state(machine, &rumble_on, &rumble_changes) != GBB_NO_RUMBLE ||
+            rumble_on != 0xA5u || rumble_changes != UINT64_C(0x1122334455667788))
+            goto done;
+    }
     passed = 1;
 
 done:

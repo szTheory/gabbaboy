@@ -64,6 +64,18 @@ if(NOT extract_result EQUAL 0)
 endif()
 
 set(extracted_prefix "${extract_root}/installed-prefix")
+# D-32: the sibling Mooneye MBC ROMs are repository fixtures only; prove they are absent from the
+# extracted package by name and digest, and that the installed fixture set is exactly as expected.
+execute_process(
+  COMMAND "${GBB_CMAKE_COMMAND}"
+    "-DGBB_SCAN_DIR=${extracted_prefix}"
+    "-DGBB_FORBIDDEN_MANIFEST=${source_dir}/fixtures/mooneye-mbc/manifest.json"
+    "-DGBB_EXPECT_FIXTURE_DIRS=tracer|visible-demo|mbc1-continuation"
+    -P "${source_dir}/cmake/ScanForbiddenFixtures.cmake"
+  RESULT_VARIABLE scan_result OUTPUT_VARIABLE scan_output ERROR_VARIABLE scan_error)
+if(NOT scan_result EQUAL 0 OR NOT "${scan_output}${scan_error}" MATCHES "files=")
+  message(FATAL_ERROR "Extracted package forbidden-fixture scan failed (${scan_result}): ${scan_output}${scan_error}")
+endif()
 execute_process(
   COMMAND "${GBB_CMAKE_COMMAND}"
     "-DGBB_INSTALL_PREFIX=${extracted_prefix}"
