@@ -19,3 +19,12 @@ Ship clearly named preview artifacts as capabilities arrive: installed core and 
 At phase completion, record what evidence changed the next step, the weakest useful quality dimension, open regressions, and any real integration constraint. Fix consequential gaps before expanding scope. Retain a next-step command and stop.
 
 At milestone completion, audit traceability and packaged user outcomes, summarize corpus-qualified compatibility and measured performance, export transferable lessons when requested, and revise this table. Do not prewrite speculative implementation plans for all future milestones. No calendar estimates or universal compatibility promises are attached to these horizons.
+
+## Deferred from Phase 8 (revisable direction, not authorization)
+
+- **Mooneye emulator-only/mbc1 backfill:** 13 further ROMs in a sibling-manifest category `mbc1`; `multicart_rom_8Mb` is an excluded candidate (MBC1M wiring is unsupported). Reuse the Phase 8 sibling-set recipe, verifier and runner `suite_def` table.
+- **`src/core/cartridge.c` split:** worthwhile only with a named reason. Six build sites must change together: `CMakeLists.txt` core source list and dirty list, the allocation probe, `fuzz_core`, `probe-mooneye-candidate.sh`, the JOYP and ninth-bit mutants (their anchors move files), and the `test_runner.c` include.
+- **`read8` region-decode refactor:** only with A/B evidence (identical output digests plus a controlled timing comparison); not justified by the Phase 8 advisory timing.
+- **Generalised suite verifier:** when a third Mooneye-style suite arrives, replace the adapted copy `VerifyMooneyeMbc.cmake` with one parameterised verifier.
+- **Host haptics for MBC5 rumble:** map `gbb_rumble_state` samples to a host haptic API in the player; needs a real device, an intensity policy and a tested opt-out.
+- **Packed 256-byte MBC2 save interop:** import/export of two-nibbles-per-byte saves from other emulators, with named fixtures and format limits.

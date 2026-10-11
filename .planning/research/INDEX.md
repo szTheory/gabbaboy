@@ -1,6 +1,6 @@
 # GabbaBoy research index
 
-Updated: 2026-10-08. Target: original C Game Boy / Game Boy Color core. These documents establish research and recommendations; they do not establish an implemented emulator.
+Updated: 2026-10-11. Target: original C Game Boy / Game Boy Color core. These documents establish research and recommendations; they do not establish an implemented emulator.
 
 ## Start here
 
@@ -30,6 +30,7 @@ Milestone delta research lives in [v0.2/](v0.2/): start with [v0.2/SUMMARY.md](v
 - Phase 2's selected Mooneye common font has separate author licensing; a root MIT notice does not establish rights for font-derived fixture bytes. The research records that closure and independently sourced timer expectations; [reviewed plans](../milestones/v0.1-phases/GB-02-dmg-cpu-bus-and-time/02-PLAN-CHECK.md) assign admission and verification before any qualification claim.
 - [Phase 3 planning research](../milestones/v0.1-phases/GB-03-visible-interactive-dmg/03-RESEARCH.md) records the model-applicability boundary for PPU/DMA and JOYP behavior. Plan 03-09 adds exact-head macOS arm64 package and downloaded-byte evidence; see its [summary](../milestones/v0.1-phases/GB-03-visible-interactive-dmg/03-09-SUMMARY.md) and [validation contract](../milestones/v0.1-phases/GB-03-visible-interactive-dmg/03-VALIDATION.md). VIDEO-02 and VIDEO-03 remain open despite the package pass.
 - [Phase 5 discussion context](../milestones/v0.1-phases/GB-05-dmg-audio-and-stable-playback/05-CONTEXT.md) and [audio output research](AUDIO-OUTPUT.md) record the selected scoped DMG APU model, 48 kHz PCM contract, resampler/dependency decision, SDL callback/ring boundary, honest queue metrics, and hardware/perceptual evidence limits. These are planning decisions, not implemented playback or a physical DMG qualification.
+- [Phase 8 planning research](../phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-RESEARCH.md) and the [Phase 8 evidence ledger](../../docs/mbc2-mbc5-evidence.md) cover MBC2/MBC5 mapper behavior, the Mooneye emulator-only mbc2/mbc5 suites and the original mbc5-banking fixture with their evidence classes; they are not game-compatibility evidence.
 
 ## Evidence freshness and confidence
 

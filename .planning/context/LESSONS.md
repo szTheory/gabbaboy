@@ -424,3 +424,57 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** `grep -c 'pending' docs/game-acceptance.md` and the D-029 row; Plan 07-16 summary.
 - **Source:** Plans 07-03, 07-04, 07-07, 07-09, 07-15.
 - **Status:** Adopted.
+
+### GB-CART-001 / 2026-10-11 / Choose a single-line mutant anchor when the code is written
+
+- **Cause and evidence:** A configure-time core mutant needs a text anchor that occurs exactly once. The MBC5 ninth-bit anchor `& 1u) << 8` exists only because Plan 08-03 put the bank composition in one helper on one line; Plan 08-08 then replaced it with `& 0u) << 8` and the configure step fails unless the count is exactly one.
+- **Remedy:** Decide the anchor while writing the code under test, keep it on one line, and make the build fail when the occurrence count changes.
+- **Applies when:** Any test-only mutant generated from production source text.
+- **Verification:** `grep -c '& 1u) << 8' src/core/gabbaboy.c` is 1; `mbc5_ninth_bit_mutant_bank_1ff` fails the `$1FF` check and `mbc5_ninth_bit_mutant_control_below_100` passes.
+- **Source:** Plans 08-03, 08-07, 08-08; D-061.
+- **Status:** Adopted.
+
+### GB-CART-002 / 2026-10-11 / Check an upstream test's loop bounds before planning a mutant on it
+
+- **Cause and evidence:** The research premise was that Mooneye `mbc5_rom_64Mb` is the only proof of the ninth bank bit. Plan 08-07 measured that the shared harness loop selects banks 0..255 and stops at bc=`$0100`, every `$3000` write is `$FE`, so no bank at or above 256 is ever read: the ninth-bit mutant passed `rom_64Mb` while a `return 1u` control mutant failed it.
+- **Remedy:** Before building a negative control on an upstream test, read its loop bounds or instrument it to record which inputs it actually reaches; keep a control mutant that proves the test is sensitive at all. The discriminator moved to the original `mbc5_bank_1ff` case (D-062).
+- **Applies when:** Any plan that relies on a third-party test exercising a specific code path.
+- **Verification:** The 08-07 measurement (257 bank selections) and the 08-08 mutant outcomes: bank_1ff fails, control passes.
+- **Source:** Plans 08-07, 08-08; 08-CONTEXT D-29 amendment; D-062.
+- **Status:** Adopted.
+
+### GB-CART-003 / 2026-10-11 / Serialize plans that share an exact test inventory
+
+- **Cause and evidence:** Plans 08-02 (MBC2) and 08-03 (MBC5) both edit `gabbaboy.c`, `gabbaboy.h`, `tests/CMakeLists.txt` and `tests/expected-tests.txt`. The inventory check requires the executed set to equal the file exactly, and additions are line-ordered, so parallel edits collide in a single file that cannot be merged mechanically.
+- **Remedy:** Run such plans in sequence and append only `+` lines to the inventory; recorded in D-056.
+- **Applies when:** Parallel plans touch the same exact-list file or the same source section.
+- **Verification:** Each plan's full ctest equalled `tests/expected-tests.txt` (272, then 287, ... 319) with additions only.
+- **Source:** Plans 08-02, 08-03; D-056.
+- **Status:** Adopted.
+
+### GB-CART-004 / 2026-10-11 / Select a suite by manifest digest so legacy receipts stay byte-identical
+
+- **Cause and evidence:** Generalising the headless runner to a second suite risked changing the parent suite's output. Plan 08-05 selects the compiled case table by the SHA-256 of the raw manifest bytes through a `suite_def` table; an unknown digest prints `invalid-manifest` and exits 2, and the three parent cases print the same receipt as before.
+- **Remedy:** Key suite selection on a pinned digest, fail closed on anything else, and add a category line only for the new suite.
+- **Applies when:** One runner serves several digest-pinned fixture sets.
+- **Verification:** `mooneye_mbc_unknown_manifest` (exit exactly 2) and the unchanged parent `mooneye_case_*` and `mooneye_required_suite` tests.
+- **Source:** Plans 08-05, 08-06; D-028.
+- **Status:** Adopted.
+
+### GB-CART-005 / 2026-10-11 / A rebuilt-fixture digest from one host is indicative until a second host matches
+
+- **Cause and evidence:** The 15 Mooneye derivative digests were first captured from a Darwin/arm64 rebuild, and the pinned linker's tied-section ordering is libc-dependent in its default mode. Plan 08-05 and 08-06 therefore stated no cross-host claim; the hosted ubuntu-22.04 leg (run 38151282870, `wla-gb` 10.7, `wlalink` 5.22) later printed 15 of 15 `match` lines against the same digests.
+- **Remedy:** Record the host of each digest capture, add a hosted rebuild leg that compares against the pinned values, and only then remove the caveat from the source notes.
+- **Applies when:** Any fixture reproduced from a toolchain whose output could depend on host libraries.
+- **Verification:** The `mooneye-mbc-repro` job output and `fixtures/mooneye-mbc/SOURCES.md`.
+- **Source:** Plans 08-05, 08-06, 08-07; D-024, D-025.
+- **Status:** Adopted.
+
+### GB-CART-006 / 2026-10-11 / Sticky flags, not 8-bit counters, for guest-side sweeps
+
+- **Cause and evidence:** Plan 08-02's first echo test counted mismatches in an 8-bit WRAM byte. Exactly 8192 or 4096 mismatches wrap to zero, so a wrong echo mask passed; the mutation check exposed it.
+- **Remedy:** Record failure as a sticky flag in guest code and run the mutation check on every new sweep.
+- **Applies when:** Guest programs that compare a large range in 8-bit arithmetic.
+- **Verification:** Changing the MBC2 read mask `0x1FF` to `0x0FF` fails `mbc2_ram_echo`.
+- **Source:** Plan 08-02 summary.
+- **Status:** Adopted.
