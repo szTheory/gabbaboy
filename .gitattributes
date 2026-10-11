@@ -16,3 +16,11 @@ fixtures/libbet/SOURCES.md text eol=lf
 # Acceptance cases, input scripts, negative files and the DMG baseline ledger are digested text.
 tests/acceptance/** text eol=lf
 tests/baseline/** text eol=lf
+
+# Mooneye mbc2/mbc5 derivatives: ROM bytes are binary; the manifest is admitted by the SHA-256 of its raw bytes.
+fixtures/mooneye-mbc/*.gb binary
+fixtures/mooneye-mbc/manifest.json -text
+fixtures/mooneye-mbc/LICENSE.txt text eol=lf
+fixtures/mooneye-mbc/FONT-LICENSE.txt text eol=lf
+fixtures/mooneye-mbc/SOURCES.md text eol=lf
+fixtures/mooneye-mbc/ELIGIBILITY.md text eol=lf
