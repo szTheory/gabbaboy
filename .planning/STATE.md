@@ -5,17 +5,17 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 9
 current_phase_name: MBC3, Deterministic RTC and Cartridge Persistence
 status: planning
-stopped_at: Phase GB-08 complete, ready to plan Phase 9
-last_updated: "2026-10-11T17:50:24.187Z"
+stopped_at: Phase 9 context gathered
+last_updated: "2026-10-11T19:36:11.725Z"
 last_activity: 2026-10-11
 last_activity_desc: Phase GB-08 complete, transitioned to Phase 9
-state_head: 33a5fde402b8666fee7f2da800e8211f84eaa267
+state_head: 7db08b8a76db75fdaee495c1f5ff25b9b4cea0c9
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 27
   completed_plans: 27
-  percent: 30
+  percent: 33
 ---
 
 # Project State
@@ -32,7 +32,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 Phase: 9 — MBC3, Deterministic RTC and Cartridge Persistence
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-10-11 — Phase GB-08 complete, transitioned to Phase 9
+Last activity: 2026-10-11 — Phase 9 context gathered (09-CONTEXT.md)
 
 Progress (v0.2): [██░░░░░░░░] 22% (2/9 phases)
 
@@ -280,11 +280,22 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-11
-Stopped at: Phase 8 complete (execution and verification), ready to discuss Phase 9
-Resume file: .planning/.continue-here.md
-Next command in fresh context: `/gsd-discuss-phase 9`
+Last session: 2026-10-11T19:36:11.670Z
+Stopped at: Phase 9 context gathered
+Resume file: .planning/phases/GB-09-mbc3-deterministic-rtc-and-cartridge-persistence/09-CONTEXT.md
+Next command in fresh context: `/gsd-plan-phase 9`
 
+Completed workflow stage: **Phase 9 - MBC3, Deterministic RTC and Cartridge Persistence, discussion** (2026-10-11) on branch `gsd/phase-09-discuss`. [09-CONTEXT.md](phases/GB-09-mbc3-deterministic-rtc-and-cartridge-persistence/09-CONTEXT.md) locks D-01..D-28 from four parallel advisor researches with adversarial passes, auto-followed per the owner's standing instruction. The RTC model was prototyped in scratch and passed rtc3test v004 23/23. Key choices:
+- lazy RTC anchored on `time_half_dots`, with the latch not bumping the battery generation;
+- `gbb_rtc_catch_up(instance, int64_t)`: negative values rejected, O(1) modular add, new `GBB_NO_RTC`;
+- unified battery image of RAM plus a 21-byte versioned LE RTC block; import never advances the RTC;
+- MBC30 rejected with `UNSUPPORTED_CARTRIDGE_VARIANT`;
+- player envelope v1 kept byte-identical for MBC1 and v2 for every other battery type, with `saved_at` and no advance on clock rollback;
+- WR-02 closed by deriving player classification from the core;
+- MagenTests and rtc3test admitted with negative controls;
+- two-layer no-host-clock CTest.
+
+The signed catch-up prototype (D-14, D-17) is the one public-API choice the owner may veto before the phase PR merges. Next step: **Phase 9 research and planning** via **`/gsd-plan-phase 9`**. Both auto-advance flags stay false; nothing advances automatically.
 Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, execution and verification** (2026-10-11). Verification passed 4/4 (CART-01..03) in [08-VERIFICATION.md](phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-VERIFICATION.md); gates: Nyquist validated (V-01..V-27 green, differential rerun 0 differences), security 41/41 closed, code review 5 findings (WR-01 and IN-01 fixed in 1620c99, 47a1d4c, a57879c and e85c1b3, WR-02 deferred to Phase 9, 2 info skipped, 0 open), regression core 320/320 and player 371/371. PR #64 is squash-merged to main after exact-head required checks pass. Limitations: `rom_64Mb` does not exercise banks >= 256 (ninth bit proven by `mbc5_bank_1ff` and the mutant pair, D-062); the player status line has no automated UI test; player persistence is MBC1 only; rumble is a query without haptics; no CGB and no hardware MBC observation. Next phase: **Phase 9 - MBC3, Deterministic RTC and Cartridge Persistence** (no CONTEXT.md yet) via **`/gsd-discuss-phase 9`**. Both auto-advance flags (`workflow.auto_advance`, `workflow._auto_chain_active`) stay false; nothing advances automatically.
 Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, execution** (2026-10-11), plans 08-01..08-10 on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. Evidence head `a3f27f71c10838e372f27d8c2fcf0070123b0919`, run 38155767928 (https://github.com/szTheory/gabbaboy/actions/runs/38155767928): all eight required jobs success; fixture-repro run 38155768038 (https://github.com/szTheory/gabbaboy/actions/runs/38155768038): fixture-repro, mooneye-original-repro, mooneye-candidate-repro and mooneye-mbc-repro success. Local ctest 319/319, `baseline status=pass`, privacy check clean. The docs-only handoff commit is checked as a separate head (see 08-10-SUMMARY). PR #64 is ready for review and left OPEN and unmerged: the pre-authorized squash merge happens only after Phase 8 verification passes, at an exact-head green head. Honest limits: rom_64Mb does not exercise banks >= 256 (the ninth bit is covered by mbc5_bank_1ff and the two mutant CTests, D-29 amended, DECISIONS D-062); the 08-04 player status line has no automated UI test; phase1-asan cannot configure on macOS, so sanitizer evidence is hosted linux-asan-ubsan plus manual local builds; no hardware MBC observation, no CGB, player persistence MBC1 only, rumble is a query without haptics. Next step: **Phase 8 verification**, `/gsd-verify-work 8`. If verification finds gaps, gap closure continues on this branch and PR. Following phase: **Phase 9 - MBC3, Deterministic RTC and Cartridge Persistence** (named, not started; only after verification passes and the owner chooses to continue). Both `workflow.auto_advance` and `workflow._auto_chain_active` stay false.
 
