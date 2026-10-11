@@ -41,7 +41,7 @@ Milestone-wide rules:
 - **Claims.** Support statements name the model (DMG-CPU-B or CGB-CPU-E), corpus revision and executed denominator; test-ROM pass rates are never presented as game compatibility.
 - **Ordering constraints.** Double speed (Phase 12) and HDMA (Phase 13) both change the run loop and must not run in parallel. Within Phase 8, MBC5 and MBC2 plans may run in parallel after the seam plan lands.
 
-- [ ] **Phase 7: DMG Game Acceptance and Regression Baseline** - Admit one rights-clear DMG game, prove it end to end headless and in the player, and freeze the DMG baseline
+- [x] **Phase 7: DMG Game Acceptance and Regression Baseline** - Admit one rights-clear DMG game, prove it end to end headless and in the player, and freeze the DMG baseline (completed 2026-10-11)
 - [ ] **Phase 8: Cartridge Seam, MBC5 and MBC2** - Move MBC1 behind a type-table mapper seam with no observable change, then add MBC5 and MBC2
 - [ ] **Phase 9: MBC3, Deterministic RTC and Cartridge Persistence** - Add MBC3 with an emulated-time RTC, explicit host catch-up, versioned battery block, loader-matrix hardening and new-mapper continuation
 - [ ] **Phase 10: CGB Profile, Banking and Register Visibility** - Select CGB-CPU-E, detect execution mode, bank VRAM/WRAM, and gate every model-specific behavior
@@ -67,7 +67,7 @@ Milestone-wide rules:
 
 **Rights gates**: G5 (Libbet asset-licence completeness and release recipe checklist) blocks admission; G2 (GBDK 2.96a runtime terms) blocks the Tobu Tobu Girl fallback.
 **Research**: Light.
-**Plans**: 17/17 plans executed
+**Plans**: 17/17 plans complete
 
 Plans:
 **Wave 1**
@@ -232,7 +232,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1–6, 06.1 | v0.1 | 64/64 | Complete | 2026-10-10 |
-| 7. DMG Game Acceptance and Regression Baseline | v0.2 | 17/17 | In Progress | - |
+| 7. DMG Game Acceptance and Regression Baseline | v0.2 | 17/17 | Complete    | 2026-10-11 |
 | 8. Cartridge Seam, MBC5 and MBC2 | v0.2 | 0/TBD | Not started | - |
 | 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 0/TBD | Not started | - |
 | 10. CGB Profile, Banking and Register Visibility | v0.2 | 0/TBD | Not started | - |
