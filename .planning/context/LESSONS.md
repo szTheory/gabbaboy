@@ -361,3 +361,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** Scratch probe (not committed) reproduced all three schedules deterministically; `cmake --build --preset phase1` plus the full CTest suite pass; `git diff --quiet src/core/gabbaboy.c`; the select-line anchor occurs once and matches main.
 - **Source:** D-028 in DECISIONS.md; Libbet `src/intro.z80`, `src/pads.z80`, `src/instructions.z80` at the pinned commit (read only).
 - **Status:** Adopted.
+
+### GB-GAME-003 / 2026-10-11 / Compare structs with padding field by field, never with memcmp
+
+- **Cause and evidence:** `acceptance_parse_script_errors` passed on Linux and macOS but failed on `native-windows-x64` at `tests/test_acceptance_lib.c:262` (`memcmp(a.events, b.events, ...)`, CI run 38096251361, head da2a028). `gbb_input_event` has padding after `kind` and `value`; the parser fills fields, not padding, so the padding bytes of two parses can differ (here on MSVC) even though every field is equal. The same test had passed at the previous head by chance.
+- **Remedy:** Compare `at_half_dots`, `kind` and `value` individually (commit "fix(07-11): compare parsed script events field-wise"). This also follows the project rule against raw structure dumps for comparison and serialization.
+- **Applies when:** Any test, digest or equality check reads a C structure's object bytes (`memcmp`, hashing, `fwrite`), especially structures with mixed-width members or enums.
+- **Verification:** `ctest -R acceptance_parse_script` passes locally; exact head b6f982b run 38097373433 passed `native-windows-x64`, `native-linux-x64` and `native-macos-arm64`.
+- **Source:** CI run 38096251361 log for job native-windows-x64; AGENTS.md engineering rules (explicit portable serialization).
+- **Status:** Adopted.

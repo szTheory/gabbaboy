@@ -229,6 +229,10 @@ void gbb_accept_pcm_digest_final(gbb_accept_pcm_digest_ctx *ctx, char out_hex[65
 
 /* Per-channel window statistics (D-16). A change is a sample that differs from
  * the previous sample of the same channel within the window. */
+/* D-16 calibration record (Plan 07-11, exact head b6f982b, identical on Linux, macOS and Windows):
+ * libbet gameplay window O = 20290 peak_to_peak and 164822 changes (both channels); libbet-no-input
+ * window N = 0 and 0. O >= T for both statistics, so the calibration rule leaves them unchanged:
+ * peak_to_peak T 2048 -> 2048, changes T 4800 -> 4800. Do not lower these without re-running the rule. */
 #define GBB_ACCEPT_PCM_MIN_PEAK_TO_PEAK 2048
 #define GBB_ACCEPT_PCM_MIN_CHANGES 4800u
 
