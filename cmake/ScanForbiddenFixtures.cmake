@@ -63,8 +63,17 @@ foreach(relative IN LISTS scanned_files)
   if(IS_SYMLINK "${candidate}")
     # Follow file links so a sibling ROM cannot pass under an innocuous link name; directory
     # links (framework bundles) and dangling links carry no bytes of their own.
-    get_filename_component(candidate "${candidate}" REALPATH)
+    # Read the stored target instead of trusting OS resolution, which fails on Windows for a
+    # target written with '/' separators.
+    file(READ_SYMLINK "${candidate}" link_target)
+    file(TO_CMAKE_PATH "${link_target}" link_target)
+    if(NOT IS_ABSOLUTE "${link_target}")
+      get_filename_component(link_dir "${candidate}" DIRECTORY)
+      set(link_target "${link_dir}/${link_target}")
+    endif()
+    get_filename_component(candidate "${link_target}" REALPATH)
     if(NOT EXISTS "${candidate}" OR IS_DIRECTORY "${candidate}")
+      message(STATUS "skipped link without file bytes: ${relative}")
       continue()
     endif()
   endif()

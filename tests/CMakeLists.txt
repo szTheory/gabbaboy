@@ -614,8 +614,9 @@ file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/mbc5_rom_512kb.gb"
   "${GBB_MBC_SCAN_SELFTEST}/share/payload.bin")
 file(MAKE_DIRECTORY "${GBB_MBC_SCAN_LINK}/share")
 file(REMOVE "${GBB_MBC_SCAN_LINK}/share/innocuous.bin")
-file(CREATE_LINK "${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/mbc2_rom_512kb.gb"
-  "${GBB_MBC_SCAN_LINK}/share/innocuous.bin" SYMBOLIC COPY_ON_ERROR)
+# Native separators: a Windows symbolic link whose target uses '/' does not resolve.
+file(TO_NATIVE_PATH "${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/mbc2_rom_512kb.gb" GBB_MBC_LINK_TARGET)
+file(CREATE_LINK "${GBB_MBC_LINK_TARGET}" "${GBB_MBC_SCAN_LINK}/share/innocuous.bin" SYMBOLIC COPY_ON_ERROR)
 foreach(dir IN ITEMS tracer visible-demo mbc1-continuation extra)
   file(WRITE "${GBB_MBC_DIRS_SELFTEST}/share/gabbaboy/fixtures/${dir}/marker.txt" "marker\n")
 endforeach()
