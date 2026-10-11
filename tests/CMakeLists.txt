@@ -166,7 +166,7 @@ add_executable(test_loader_matrix test_loader_matrix.c)
 target_link_libraries(test_loader_matrix PRIVATE GabbaBoy::core)
 target_compile_features(test_loader_matrix PRIVATE c_std_17)
 set_target_properties(test_loader_matrix PROPERTIES C_EXTENSIONS OFF)
-foreach(case contradiction_mbc3)
+foreach(case contradiction_mbc2 contradiction_mbc3 contradiction_mbc5 mbc30_variant type_byte_sweep bad_checksum)
   add_test(NAME loader_${case} COMMAND test_loader_matrix loader_${case})
 endforeach()
 
