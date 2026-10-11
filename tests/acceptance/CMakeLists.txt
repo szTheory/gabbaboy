@@ -172,6 +172,11 @@ gbb_add_acceptance_exit(acceptance_unknown_model 2
 gbb_add_acceptance_exit(acceptance_observe_only_flag 2
   "reason=observe-only-flag" 30
   "--acceptance;${GBB_CASES};--case;libbet;--pcm-digest")
+# A parser-valid script denser than the core's 64-event queue can drain (80 one-half-dot taps) is
+# reported with a named delivery reason, not an anonymous drive-error (review WR-01).
+gbb_add_acceptance_exit(acceptance_dense_script_delivery_failed 3
+  "reason=event-delivery-failed detail=core-queue-full-or-invalid" 60
+  "--acceptance;${GBB_CASES};--case;libbet;--observe;--input-script;tests/acceptance/inputs/dense-taps.input")
 gbb_add_acceptance_exit(acceptance_suite_invalid_expect_excluded 2
   "reason=invalid-expect-excluded" 30
   "--acceptance;${GBB_CASES};--suite;--expect-excluded;x1")

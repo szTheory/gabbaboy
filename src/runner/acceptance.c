@@ -1152,6 +1152,11 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
         unsupported_diagnostics(c, options, st, rom, rom_length, &script, "step-guard", result.end_half_dots);
         code = EXIT_UNSUPPORTED;
         break;
+    case GBB_ACCEPT_DRIVE_DELIVER_FAILED:
+        printf("acceptance id=%s status=unsupported model=dmg-cpu-b reason=event-delivery-failed detail=core-queue-full-or-invalid end_half_dots=%llu\n",
+               c->id, (unsigned long long)result.end_half_dots);
+        code = EXIT_UNSUPPORTED;
+        break;
     default:
         printf("acceptance id=%s status=unsupported model=dmg-cpu-b reason=drive-error status_code=%d\n",
                c->id, (int)result.status);
