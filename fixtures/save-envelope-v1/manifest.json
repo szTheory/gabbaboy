@@ -26,6 +26,22 @@
       "generation": 1,
       "size_bytes": 8243,
       "sha256": "6db970e93d91d9b66ac36d4c0538223dcd3f028544bb5459fef36f72c9fd9286"
+    },
+    {
+      "file": "mbc1-32k.gbb",
+      "rom_recipe": {
+        "title": "GBBV1CORPUS32K",
+        "type": "0x03",
+        "rom_code": 0,
+        "ram_code": 3,
+        "size_bytes": 32768,
+        "ram_pattern": "byte i = (uint8_t)(i * 37 + 0x31)",
+        "layout": "zero-filled; title at 0x134; 0x147/0x148/0x149 as given; header checksum at 0x14D over 0x134..0x14C"
+      },
+      "rom_sha256": "4b578ed8c12f7450e0f6e7ee72ebc1a20c71ee3351fd733d854b986b3ed9c7d2",
+      "generation": 1,
+      "size_bytes": 32819,
+      "sha256": "fd85db988f153cec283c8712311b6e00754d54d5c1c8f1653e794e9e54392220"
     }
   ]
 }
