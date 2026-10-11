@@ -47,7 +47,7 @@ Each size equals `32768 << $148` for the ROM's header. The runner admits this su
 
 ## Provenance status of the digests (D-25)
 
-These digests are a **local rebuild** (Darwin/arm64, pinned WLA-DX 91c52b1f). The hosted Linux/x86_64 leg that must reproduce the same bytes is Plan 08-07; until it matches, the digests carry no cross-host reproduction claim. The pinned linker's tied-section ordering is libc-dependent in its default mode (see `../mooneye/SOURCES.md`); the `-nS` recipe is what is expected to make the hosted bytes agree, and that is exactly what 08-07 must show rather than assume.
+These digests were first captured from a **local rebuild** (Darwin/arm64, pinned WLA-DX 91c52b1f). The hosted Linux/x86_64 `mooneye-mbc-repro` leg (run 38151282870 in the fixture-repro workflow, ubuntu-22.04, `wla-gb` 10.7, `wlalink` 5.22) rebuilt all 15 ROMs and printed 15 of 15 `match` lines against these digests, so they hold on both hosts. The pinned linker's tied-section ordering is libc-dependent in its default mode (see `../mooneye/SOURCES.md`); the `-nS` recipe is what makes the bytes agree.
 
 ## Reproduction
 
@@ -59,4 +59,4 @@ The command is explicitly networked (it fetches the pinned sources), refuses to 
 
 ## Redistribution scope
 
-The ROMs, `LICENSE.txt` and `FONT-LICENSE.txt` are repository test fixtures only. They are not installed, not packaged and not part of any release artifact; the installed-prefix and package inventories that prove this are Plan 08-07's.
+The ROMs, `LICENSE.txt` and `FONT-LICENSE.txt` are repository test fixtures only. They are not installed, not packaged and not part of any release artifact; the install-tree, extracted-package and player-package scans (`mooneye_mbc_not_installed`, `preview_package_smoke`, `verify-phase3-player.sh --build-package`) prove this.

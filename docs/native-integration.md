@@ -42,7 +42,10 @@ exports 8 KiB of raw battery RAM; its next run imports that exact-size file and
 checks the fixture's resume marker. The package smoke repeats the same
 sequence from an unrelated working directory.
 
-The core battery API transfers bounded raw RAM bytes only. Your host must
+The core battery API transfers bounded cartridge RAM bytes only (for MBC2 type
+`$06`, a canonical 512-byte image whose upper nibbles are `$F`; import
+normalises each byte to `$F0 | (b & $0F)` and packed 256-byte saves are not
+supported). Your host must
 choose the save location, validate its exact expected length, retain any
 recovery copy, and use a safe replacement method. The example writes a sibling
 temporary file, flushes it, then atomically replaces the prior save; a failed
@@ -56,8 +59,14 @@ not authenticate data or detect same-size corruption. See the
 - `gbb_create` selects the explicit bootless `GBB_PROFILE_DMG_CPU_B` profile;
   `gbb_destroy` releases the opaque instance.
 - `gbb_load_rom` copies input bytes on success. The loader accepts exact
-  supported lengths up to 2 MiB; failed replacement leaves active guest state
-  unchanged. Read the full file under a host-selected bound before loading.
+  supported lengths up to 8 MiB for MBC5 types (`$19`-`$1E`) and up to 2 MiB for
+  every other type; an oversized length returns `GBB_ROM_TOO_LARGE`, and a
+  loaded cartridge needs at most 8 MiB of ROM plus 128 KiB of RAM. Failed
+  replacement leaves active guest state unchanged. Read the full file under a
+  host-selected bound before loading.
+- `gbb_rumble_state` reports the MBC5 rumble line (`$1C`-`$1E`) as an on/off
+  value plus a saturating transition count; sample it once per frame.
+  Other cartridges return `GBB_NO_RUMBLE`. The core drives no haptics.
 - `gbb_queue_events` copies up to 64 absolute, nondecreasing half-dot events.
   Timestamps cannot be earlier than current emulated time. This is guest time,
   not host wall-clock scheduling.

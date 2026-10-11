@@ -20,7 +20,7 @@ The upstream pass results are author-attested hardware results: the Mooneye auth
 - the MBC2A variant caveat: the upstream MBC2 results come from an MBC2A part. Other MBC2 revisions may differ in behavior these tests do not exercise, and nothing here speaks for them;
 - none of the 15 exercises MBC5 RAM or rumble. Those behaviors rest on `tests/test_mbc5.c` and `fixtures/mbc5-banking`, not on this suite.
 
-The derivatives are not untouched upstream ROMs: the parent headless-report patch removes PPU-only harness sections so the verdict does not depend on PPU behavior; assertions are unchanged. The ROM digests are a local rebuild until the hosted Linux leg in Plan 08-07 matches.
+The derivatives are not untouched upstream ROMs: the parent headless-report patch removes PPU-only harness sections so the verdict does not depend on PPU behavior; assertions are unchanged. The ROM digests were captured from a local rebuild and then matched 15 of 15 by the hosted Linux `mooneye-mbc-repro` leg (run 38151282870).
 
 ## Per-ROM program-counter table
 
