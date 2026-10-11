@@ -329,3 +329,6 @@ mbc5_ninth_bit_mutant_bank_1ff
 mbc5_ninth_bit_mutant_control_below_100
 magentests_fixture_digest
 magentests_oob_sram_mbc3
+magentests_oob_sram_mbc1
+magentests_oob_sram_mbc5
+magentests_oob_sram_negative_control

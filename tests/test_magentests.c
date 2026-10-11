@@ -78,6 +78,29 @@ static int oob_sram(const char *label, const char *path) {
     return rc;
 }
 
+/* Negative control: every ROM with its header RAM code forced to 0x03 (32 KiB, which
+ * the guest does not expect) must paint shade 3, so a blank, early or constant
+ * frame cannot satisfy both the pass cases and this control. */
+static int negative_control(int count, char **paths) {
+    for (int i = 0; i < count; ++i) {
+        size_t size = 0u;
+        uint8_t *rom = read_file(paths[i], &size);
+        if (rom == NULL || size < 0x150u) {
+            fprintf(stderr, "negative control: cannot read %s\n", paths[i]);
+            free(rom);
+            return 1;
+        }
+        rom[0x149u] = 0x03u;
+        uint8_t checksum = 0u;
+        for (size_t j = 0x134u; j <= 0x14Cu; ++j) checksum = (uint8_t)(checksum - rom[j] - 1u);
+        rom[0x14Du] = checksum;
+        const int rc = expect_screen(paths[i], rom, size, 3u);
+        free(rom);
+        if (rc != 0) return rc;
+    }
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc < 3) {
         fprintf(stderr, "usage: test_magentests <case> <rom>...\n");
@@ -87,6 +110,8 @@ int main(int argc, char **argv) {
         strcmp(argv[1], "magentests_oob_sram_mbc3") == 0 ||
         strcmp(argv[1], "magentests_oob_sram_mbc5") == 0)
         return oob_sram(argv[1], argv[2]);
+    if (strcmp(argv[1], "magentests_oob_sram_negative_control") == 0)
+        return negative_control(argc - 2, argv + 2);
     fprintf(stderr, "unknown case %s\n", argv[1]);
     return 2;
 }

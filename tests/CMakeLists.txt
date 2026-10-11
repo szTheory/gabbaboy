@@ -335,6 +335,15 @@ add_test(NAME magentests_fixture_digest
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixtureManifest.cmake)
 add_test(NAME magentests_oob_sram_mbc3
   COMMAND test_magentests magentests_oob_sram_mbc3 ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc3.gbc)
+add_test(NAME magentests_oob_sram_mbc1
+  COMMAND test_magentests magentests_oob_sram_mbc1 ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc)
+add_test(NAME magentests_oob_sram_mbc5
+  COMMAND test_magentests magentests_oob_sram_mbc5 ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc5.gbc)
+add_test(NAME magentests_oob_sram_negative_control
+  COMMAND test_magentests magentests_oob_sram_negative_control
+    ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc
+    ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc3.gbc
+    ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc5.gbc)
 add_test(NAME mooneye_fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye
