@@ -49,6 +49,7 @@ CMakeUserPresets.json
 !/fixtures/magentests/mbc_oob_sram_mbc1.gbc
 !/fixtures/magentests/mbc_oob_sram_mbc3.gbc
 !/fixtures/magentests/mbc_oob_sram_mbc5.gbc
+!/fixtures/rtc3test/rtc3test.gb
 
 # Temporary OpenGSD runtime state (retain planning documents)
 .planning/.tmp/
