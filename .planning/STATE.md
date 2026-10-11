@@ -5,16 +5,16 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 9
 current_phase_name: MBC3, Deterministic RTC and Cartridge Persistence
 status: executing
-stopped_at: Phase 9 planned
-last_updated: "2026-10-11T20:47:56.775Z"
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-10-11T21:00:11.353Z"
 last_activity: 2026-10-11
-last_activity_desc: Phase 9 planned (18 plans, 8 waves)
-state_head: 703627e7d1edd1688f8d27ce3e54dcea42db19eb
+last_activity_desc: Phase 9 execution started
+state_head: 01e4c360c25ff35057440a3b1734b414cc3ac601
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 45
-  completed_plans: 27
+  completed_plans: 28
   percent: 33
 ---
 
@@ -29,10 +29,10 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Phase: 9 — MBC3, Deterministic RTC and Cartridge Persistence — READY TO EXECUTE
-Plan: Not started
+Phase: 9 (MBC3, Deterministic RTC and Cartridge Persistence) — EXECUTING
+Plan: 2 of 18
 Status: Ready to execute
-Last activity: 2026-10-11 — Phase 9 planned (18 plans in 8 waves)
+Last activity: 2026-10-11 — Phase 9 execution started
 
 Progress (v0.2): [██░░░░░░░░] 22% (2/9 phases)
 
@@ -130,6 +130,7 @@ Progress (v0.2): [██░░░░░░░░] 22% (2/9 phases)
 | Phase 08 P08-08 | 25 min | 4 tasks | 11 files |
 | Phase 08 P09 | 40 min | 2 tasks | 14 files |
 | Phase 08 P10 | 45 min | 2 tasks | 2 files |
+| Phase 09 P01 | 25 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -245,6 +246,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 08]: 08-06: Mooneye mbc builder pin is read from the digest-checked parent manifest (sibling carries no builder object); type-mutation control requires an unmutated pass first
 - [Phase 08]: 08-08: ninth bank bit proved by mbc5_bank_1ff plus test-only ninth-bit mutant (fails at C005, control passes); rom_64Mb is the 8 MiB loader/install-policy case only
 - [Phase 08]: 08-09: D-049..D-062 recorded (Open Questions 1-7, D-08/D-10/D-32 refinements, D-29 amendment: ninth bit proved by mbc5_bank_1ff, not rom_64Mb)
+- [Phase 09]: MBC3 selections 04-07 and 0D-FF map nothing (software-model decision, not hardware-qualified)
+- [Phase 09]: MBC3 RAM code 05 is accepted only as an MBC30 marker and answered as UNSUPPORTED_CARTRIDGE_VARIANT after checksum
 
 ### Pending Todos
 
@@ -280,9 +283,9 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-11T19:36:11.670Z
-Stopped at: Phase 9 planned
-Resume file: .planning/phases/GB-09-mbc3-deterministic-rtc-and-cartridge-persistence/09-01-PLAN.md
+Last session: 2026-10-11T21:00:11.310Z
+Stopped at: Completed 09-01-PLAN.md
+Resume file: None
 Next command in fresh context: `/gsd-execute-phase 9`
 
 Completed workflow stage: **Phase 9 - MBC3, Deterministic RTC and Cartridge Persistence, planning** (2026-10-11) on branch `gsd/phase-09-discuss`. Research, pattern map, validation strategy and 18 plans in 8 waves:
