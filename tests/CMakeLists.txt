@@ -355,6 +355,34 @@ add_test(NAME mbc1_continuation_fixture_digest
     -DROM=${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/continuation.gb
     -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/manifest.json
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
+add_test(NAME mbc3_rtc_continuation_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DROM=${PROJECT_SOURCE_DIR}/fixtures/mbc3-rtc-continuation/continuation.gb
+    -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/mbc3-rtc-continuation/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
+add_test(NAME mbc2_continuation_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DROM=${PROJECT_SOURCE_DIR}/fixtures/mbc2-continuation/continuation.gb
+    -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/mbc2-continuation/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
+add_test(NAME mbc5_continuation_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DROM=${PROJECT_SOURCE_DIR}/fixtures/mbc5-continuation/continuation.gb
+    -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/mbc5-continuation/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
+# Core-level continuation of the original timer/MBC2/MBC5 guests across fresh instances (D-24).
+add_executable(test_continuation_guests test_continuation_guests.c)
+target_link_libraries(test_continuation_guests PRIVATE GabbaBoy::core)
+target_compile_features(test_continuation_guests PRIVATE c_std_17)
+set_target_properties(test_continuation_guests PROPERTIES C_EXTENSIONS OFF)
+foreach(guest mbc3_rtc:mbc3-rtc mbc3_rtc_halted:mbc3-rtc mbc3_rtc_carry:mbc3-rtc mbc2:mbc2 mbc5:mbc5)
+  string(REPLACE ":" ";" guest_parts "${guest}")
+  list(GET guest_parts 0 guest_case)
+  list(GET guest_parts 1 guest_dir)
+  add_test(NAME continuation_guest_${guest_case}
+    COMMAND test_continuation_guests continuation_guest_${guest_case}
+      ${PROJECT_SOURCE_DIR}/fixtures/${guest_dir}-continuation/continuation.gb)
+endforeach()
 add_test(NAME mbc5_banking_fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DROM=${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb

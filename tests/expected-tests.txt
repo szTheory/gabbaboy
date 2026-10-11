@@ -14,6 +14,7 @@ battery_lifecycle
 battery_instances
 battery_api_fuzz
 mbc2_tracer
+mbc2_continuation_fixture_digest
 mbc2_header_matrix
 mbc2_register_decode
 mbc2_ram_echo
@@ -24,6 +25,7 @@ mbc2_battery_idempotent
 mbc2_battery_errors
 mbc2_battery_no_battery
 mbc2_two_instance_roundtrip
+mbc3_rtc_continuation_fixture_digest
 mbc3_tracer
 mbc3_header_matrix
 mbc3_rom_banking
@@ -80,6 +82,7 @@ mbc5_no_ram_window
 mbc5_battery
 mbc5_rom_bound
 mbc5_cgb_flag_ignored
+mbc5_continuation_fixture_digest
 mbc5_cross_mapper_control
 mbc5_rumble_state
 mbc5_rumble_errors
@@ -108,6 +111,11 @@ cpu_base_address_effects
 cpu_illegal_lockup
 cpu_flags_edges
 cpu_timed_access
+continuation_guest_mbc2
+continuation_guest_mbc3_rtc
+continuation_guest_mbc3_rtc_carry
+continuation_guest_mbc3_rtc_halted
+continuation_guest_mbc5
 cpu_address_wrap
 cpu_stack_wrap
 cpu_cb_wram
