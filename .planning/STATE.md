@@ -4,17 +4,17 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: 8
 current_phase_name: Cartridge Seam, MBC5 and MBC2
-status: executing
-stopped_at: Completed 08-09-PLAN.md; next 08-10 (exact-head CI, verification and PR readiness)
-last_updated: "2026-10-11T16:30:30.792Z"
+status: verifying
+stopped_at: Completed 08-10-PLAN.md; Phase 8 execution complete, next /gsd-verify-work 8
+last_updated: "2026-10-11T16:54:49.389Z"
 last_activity: 2026-10-11
-last_activity_desc: Phase 8 execution started
-state_head: d0c3cafc65c5874c1073805ec1d3413e1f5e0dde
+last_activity_desc: Phase 8 execution complete; next /gsd-verify-work 8
+state_head: 7e17d3dc41159f2b3ee69e48b162cbdd979eb16b
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 27
-  completed_plans: 26
+  completed_plans: 27
   percent: 22
 ---
 
@@ -29,10 +29,10 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Phase: 8 (Cartridge Seam, MBC5 and MBC2) — EXECUTING
-Plan: 10 of 10
-Status: Ready to execute
-Last activity: 2026-10-11 — Phase 8 execution started
+Phase: 8 (Cartridge Seam, MBC5 and MBC2) — EXECUTION COMPLETE, awaiting verification
+Plan: 10 of 10 (all plans have SUMMARYs)
+Status: Ready for verification (`/gsd-verify-work 8`); PR #64 ready and open, not merged
+Last activity: 2026-10-11 — Phase 8 execution complete
 
 Progress (v0.2): [█░░░░░░░░░] 11% (1/9 phases)
 
@@ -129,6 +129,7 @@ Progress (v0.2): [█░░░░░░░░░] 11% (1/9 phases)
 | Phase 08 P07 | 150 min | 2 tasks | 7 files |
 | Phase 08 P08-08 | 25 min | 4 tasks | 11 files |
 | Phase 08 P09 | 40 min | 2 tasks | 14 files |
+| Phase 08 P10 | 45 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -278,10 +279,12 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-11T16:30:30.751Z
-Stopped at: Completed 08-09-PLAN.md; next 08-10 (exact-head CI, verification and PR readiness)
-Resume file: None
-Next command in fresh context: `/gsd-execute-phase 8`
+Last session: 2026-10-11T16:54:49.344Z
+Stopped at: Completed 08-10-PLAN.md; Phase 8 execution complete, next /gsd-verify-work 8
+Resume file: .planning/.continue-here.md
+Next command in fresh context: `/gsd-verify-work 8`
+
+Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, execution** (2026-10-11), plans 08-01..08-10 on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. Evidence head `a3f27f71c10838e372f27d8c2fcf0070123b0919`, run 38155767928 (https://github.com/szTheory/gabbaboy/actions/runs/38155767928): all eight required jobs success; fixture-repro run 38155768038 (https://github.com/szTheory/gabbaboy/actions/runs/38155768038): fixture-repro, mooneye-original-repro, mooneye-candidate-repro and mooneye-mbc-repro success. Local ctest 319/319, `baseline status=pass`, privacy check clean. The docs-only handoff commit is checked as a separate head (see 08-10-SUMMARY). PR #64 is ready for review and left OPEN and unmerged: the pre-authorized squash merge happens only after Phase 8 verification passes, at an exact-head green head. Honest limits: rom_64Mb does not exercise banks >= 256 (the ninth bit is covered by mbc5_bank_1ff and the two mutant CTests, D-29 amended, DECISIONS D-062); the 08-04 player status line has no automated UI test; phase1-asan cannot configure on macOS, so sanitizer evidence is hosted linux-asan-ubsan plus manual local builds; no hardware MBC observation, no CGB, player persistence MBC1 only, rumble is a query without haptics. Next step: **Phase 8 verification**, `/gsd-verify-work 8`. If verification finds gaps, gap closure continues on this branch and PR. Following phase: **Phase 9 - MBC3, Deterministic RTC and Cartridge Persistence** (named, not started; only after verification passes and the owner chooses to continue). Both `workflow.auto_advance` and `workflow._auto_chain_active` stay false.
 
 Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, plan 08-08 (original MBC5 banking fixture and D-29 ninth-bit mutant) executed** (2026-10-11) on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. fixtures/mbc5-banking (RGBDS 1.0.1, sha256 0b852837...ddffef, 64 KiB, type $1E) passes mbc5_banking_guest (rumble on=1, 1 transition), mbc5_banking_guest_1b and mbc5_bank_1ff (in-memory 8 MiB); the ninth-bit mutant fails mbc5_bank_1ff at C005 and its control passes. Full local ctest 319/319, inventory matches. Hosted fixture-repro step and exact-head CI are not yet read (08-09/08-10). Phase 8 is not complete: plans 08-09 and 08-10 remain. Next plan: **08-09 (docs and decisions)** via **`/gsd-execute-phase 8`**. Both auto-advance flags stay false.
 Completed workflow stage: **Phase 8 - Cartridge Seam, MBC5 and MBC2, plan 08-02 (MBC2) executed** (2026-10-11) on branch `gsd/phase-08-cartridge-seam-mbc5-and-mbc2`. 11 mbc2_ CTests added, full local ctest 272/272, differential `--exclude-types 05,06` `differences=0`, baseline pass. Phase 8 is not complete: plans 08-03..08-10 remain. Next plan: **08-03 (MBC5)** via **`/gsd-execute-phase 8`**. Both auto-advance flags stay false.
@@ -314,5 +317,5 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Execute Phase 8 (Cartridge Seam, MBC5 and MBC2): `/gsd-execute-phase 8`
+- Verify Phase 8 (Cartridge Seam, MBC5 and MBC2) in a fresh context: `/gsd-verify-work 8`. After it passes, the pre-authorized squash merge of PR #64 follows at an exact-head green head. Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) is not started.
 - Phase-stop rule: stop after each phase and yield; never auto-advance into the next phase or milestone.
