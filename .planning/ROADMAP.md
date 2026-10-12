@@ -44,7 +44,7 @@ Milestone-wide rules:
 - [x] **Phase 7: DMG Game Acceptance and Regression Baseline** - Admit one rights-clear DMG game, prove it end to end headless and in the player, and freeze the DMG baseline (completed 2026-10-11)
 - [x] **Phase 8: Cartridge Seam, MBC5 and MBC2** - Move MBC1 behind a type-table mapper seam with no observable change, then add MBC5 and MBC2 (completed 2026-10-11)
 - [x] **Phase 9: MBC3, Deterministic RTC and Cartridge Persistence** - Add MBC3 with an emulated-time RTC, explicit host catch-up, versioned battery block, loader-matrix hardening and new-mapper continuation (completed 2026-10-11)
-- [ ] **Phase 10: CGB Profile, Banking and Register Visibility** - Select CGB-CPU-E, detect execution mode, bank VRAM/WRAM, and gate every model-specific behavior
+- [x] **Phase 10: CGB Profile, Banking and Register Visibility** - Select CGB-CPU-E, detect execution mode, bank VRAM/WRAM, and gate every model-specific behavior (completed 2026-10-12)
 - [ ] **Phase 11: CGB Colour Rendering and Player Colour** - Render CGB attributes and palettes through an RGB555 frame call, a DMG-compatibility palette, and `--model` in the player
 - [ ] **Phase 12: CGB Double Speed** - KEY1/STOP speed switching with a modelled pause and a CPU-stall run-loop branch
 - [ ] **Phase 13: CGB HDMA** - General-purpose and HBlank VRAM DMA with stall, cancel, readback and HALT interaction
@@ -219,7 +219,7 @@ Plans:
   4. The half-dot timeline-unit decision for double speed is recorded in DECISIONS.md, and a banking-indirection benchmark shows the DMG cost against the Phase 7 baseline.
 
 **Research**: Moderate (CGB-E post-boot DIV/LY/STAT; compat-mode register readability per Mooneye `unused_hwio-C` and AGE).
-**Plans**: 20/20 plans executed
+**Plans**: 20/20 plans complete
 
 Plans (serial waves: every plan edits `tests/expected-tests.txt` and `tests/CMakeLists.txt`, most also `src/core/gabbaboy.c`):
 - [x] 10-01-PLAN.md — Wave 1: model-gate scanner (R1-R5, --release, self-test mutants) and docs/model-gates.md skeleton
@@ -321,7 +321,7 @@ Plans (serial waves: every plan edits `tests/expected-tests.txt` and `tests/CMak
 | 7. DMG Game Acceptance and Regression Baseline | v0.2 | 17/17 | Complete    | 2026-10-11 |
 | 8. Cartridge Seam, MBC5 and MBC2 | v0.2 | 10/10 | Complete    | 2026-10-11 |
 | 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 18/18 | Complete    | 2026-10-11 |
-| 10. CGB Profile, Banking and Register Visibility | v0.2 | 20/20 | In Progress | - |
+| 10. CGB Profile, Banking and Register Visibility | v0.2 | 20/20 | Complete    | 2026-10-12 |
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 0/TBD | Not started | - |
 | 12. CGB Double Speed | v0.2 | 0/TBD | Not started | - |
 | 13. CGB HDMA | v0.2 | 0/TBD | Not started | - |
