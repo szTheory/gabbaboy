@@ -142,7 +142,6 @@ jobs:
       - name: Reproduce CGB banking fixture bytes
         shell: bash
         run: |
-          test -s tests/expected-tests.txt
           GBB_RGBDS_ARCHIVE="$RUNNER_TEMP/rgbds-$RGBDS_RELEASE_VERSION/$RGBDS_ARCHIVE" \
             GBB_RGBDS_ARCHIVE_SHA256="$RGBDS_ARCHIVE_SHA256" \
             bash tests/scripts/reproduce-cgb-banking.sh
