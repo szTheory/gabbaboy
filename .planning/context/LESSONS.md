@@ -478,3 +478,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** Changing the MBC2 read mask `0x1FF` to `0x0FF` fails `mbc2_ram_echo`.
 - **Source:** Plan 08-02 summary.
 - **Status:** Adopted.
+
+### GB-CART-007 / 2026-10-11 / A new fixture ROM needs its own `.gitignore` exception or it is never committed
+
+- **Cause and evidence:** `.gitignore` ignores `*.gb` and `*.gbc` so that no commercial image is committed by accident. Plans 09-05 and 09-06 built the MBC3+RTC and MBC2 continuation guests and committed their sources, manifests and reproduction scripts, but `git add` silently skipped the ROMs. The local suite stayed green because the files existed on disk. Plan 09-10 noticed that the ROMs were untracked and committed them with per-file exceptions in commit 5f9f866.
+- **Remedy:** Whenever a plan adds a redistributable ROM, add a `!/fixtures/<dir>/<file>.gb` exception in the same commit. Then confirm that `git check-ignore` prints nothing for that file, and that `git ls-files` lists it before the plan is called complete.
+- **Applies when:** Any plan that adds or regenerates a fixture ROM under `fixtures/`.
+- **Verification:** `git check-ignore fixtures/*/*.gb` prints nothing, and `git ls-files fixtures | grep -c '\.gb$'` equals the number of `.gb` files on disk (27 of 27 at plan 09-15). A clean CI checkout passing the fixture tests confirms it remotely.
+- **Source:** Plans 09-05, 09-06, 09-10.
+- **Status:** Adopted.
