@@ -481,9 +481,83 @@ static int case_bus_conflict_cgb_pin(void) {
     return 0;
 }
 
+/* ---- Original fixture guests (fixtures/cgb-banking, Plan 10-13; D-18) ---------------------------
+ * The committed ROMs are original project work built from one source (see the fixture manifest).
+ * The guest chooses its expectations from its own $0143 byte and the entry A register, and leaves
+ * C000 = $A5 pass / $EE fail, C001 = run kind and one result byte per cell from C002
+ * ($01 pass, $FF fail, $00 not run). Every expectation below is written from the protocol, never
+ * read back from the core. */
+#define GUEST_MAX_BYTES 32768u
+#define GUEST_BUDGET 2000000u   /* the manifest protocol timeout, in half dots */
+#define GUEST_CELLS 9u          /* C002..C00A */
+
+typedef struct { uint8_t verdict, kind, cell[GUEST_CELLS]; } guest_result;
+
+static uint8_t *read_guest_rom(const char *dir, const char *name, size_t *size) {
+    char path[1024];
+    if (snprintf(path, sizeof(path), "%s/%s", dir, name) >= (int)sizeof(path)) return NULL;
+    FILE *f = fopen(path, "rb");
+    if (f == NULL) return NULL;
+    uint8_t *rom = malloc(GUEST_MAX_BYTES + 1u);
+    if (rom == NULL) { fclose(f); return NULL; }
+    *size = fread(rom, 1u, GUEST_MAX_BYTES + 1u, f);
+    fclose(f);
+    if (*size != GUEST_MAX_BYTES) { free(rom); return NULL; } /* the committed guests are exactly 32 KiB */
+    return rom;
+}
+
+/* Run the image to its final HALT on `profile` and collect the result bytes. */
+static int run_guest(uint8_t *rom, size_t size, gbb_profile profile, guest_result *out) {
+    gbb_instance *m = NULL;
+    fix_checksum(rom);
+    if (gbb_create(profile, &m) != GBB_OK) return 0;
+    if (gbb_load_rom(m, rom, size) != GBB_OK) { gbb_destroy(m); return 0; }
+    const gbb_run_result r = gbb_run(m, GUEST_BUDGET, NULL, 0);
+    int ok = r.reason == GBB_STOP_HALTED_IDLE;
+    out->verdict = gbb_peek_ram(m, 0xC000u);
+    out->kind = gbb_peek_ram(m, 0xC001u);
+    for (unsigned i = 0; i < GUEST_CELLS; ++i) out->cell[i] = gbb_peek_ram(m, (uint16_t)(0xC002u + i));
+    gbb_destroy(m);
+    return ok;
+}
+
+/* Cell result bytes, in C002 order. */
+enum { CELL_VBK = 0, CELL_SVBK, CELL_ECHO_BANK, CELL_ECHO_MIRROR, CELL_DMA_WRAM, CELL_DMA_VRAM,
+       CELL_DMA_HIGH, CELL_DMA_ROM, CELL_FROZEN };
+
+static int guest_dir_case(const char *dir, const char *name, gbb_profile profile,
+                          uint8_t cgb_flag, guest_result *r) {
+    size_t size = 0;
+    uint8_t *rom = read_guest_rom(dir, name, &size);
+    if (rom == NULL) return 0;
+    const int header_ok = rom[0x143] == cgb_flag && rom[0x147] == 0x00 && rom[0x148] == 0x00;
+    const int ran = header_ok && run_guest(rom, size, profile, r);
+    free(rom);
+    return ran;
+}
+
+static int case_cgb_banking_guest_cgb(const char *dir) {
+    guest_result r;
+    REQUIRE(guest_dir_case(dir, "banking-cgb.gb", GBB_PROFILE_CGB_CPU_E, 0x80, &r));
+    REQUIRE(r.kind == 1);
+    REQUIRE(r.cell[CELL_SVBK] == 0x01);
+    REQUIRE(r.verdict == 0xA5);
+    PASS("cgb_banking_guest_cgb");
+    return 0;
+}
+
 int main(int argc, char **argv) {
+    if (argc == 3) { /* fixture guest cases: <case> <fixture directory> */
+        static const struct { const char *name; int (*fn)(const char *); } guests[] = {
+            { "cgb_banking_guest_cgb", case_cgb_banking_guest_cgb },
+        };
+        for (size_t i = 0; i < sizeof(guests) / sizeof(guests[0]); ++i)
+            if (strcmp(argv[1], guests[i].name) == 0) return guests[i].fn(argv[2]);
+        fprintf(stderr, "unknown case %s\n", argv[1]);
+        return 2;
+    }
     if (argc != 2) {
-        fprintf(stderr, "usage: test_banking <case>\n");
+        fprintf(stderr, "usage: test_banking <case> [fixture-dir]\n");
         return 2;
     }
     static const struct { const char *name; int (*fn)(void); } cases[] = {

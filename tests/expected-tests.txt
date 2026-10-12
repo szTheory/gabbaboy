@@ -103,6 +103,8 @@ banking_dma_high_pages
 banking_dma_cart_ram
 banking_dmg_banks_frozen
 banking_bus_conflict_cgb_pin
+cgb_banking_fixture_digest
+cgb_banking_guest_cgb
 banking_mutant_echo_ignores_bank
 banking_mutant_echo_control
 banking_mutant_dma_wrong_bank

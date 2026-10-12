@@ -215,6 +215,16 @@ foreach(case dma_wram_bank vbk_independence svbk_readback echo_follows_bank dma_
   add_test(NAME banking_${case} COMMAND test_banking ${case})
 endforeach()
 
+# Original CGB banking fixture (Plan 10-13; D-18). The guests are checked-in, digest-verified ROMs.
+set(GBB_CGB_BANKING_DIR "${PROJECT_SOURCE_DIR}/fixtures/cgb-banking")
+add_test(NAME cgb_banking_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DMANIFEST=${GBB_CGB_BANKING_DIR}/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixtureManifest.cmake)
+foreach(case cgb_banking_guest_cgb)
+  add_test(NAME ${case} COMMAND test_banking ${case} ${GBB_CGB_BANKING_DIR})
+endforeach()
+
 # Core mutants for the banking cases (D-19). Each is a configure-time copy of the core with one
 # exactly-once source anchor rewritten, built as a test-only STATIC library (never installed or
 # exported) and linked to its own copy of test_banking. The failing case must exit 1 at its named

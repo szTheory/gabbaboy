@@ -43,3 +43,10 @@ fixtures/rtc3test/LICENSE.txt text eol=lf
 fixtures/rtc3test/SOURCES.md text eol=lf
 fixtures/rtc3test/ELIGIBILITY.md text eol=lf
 tests/rtc3test/** text eol=lf
+
+# CGB banking guest: digested source and manifest keep LF; both ROMs are binary.
+fixtures/cgb-banking/banking.asm text eol=lf
+fixtures/cgb-banking/manifest.json text eol=lf
+fixtures/cgb-banking/LICENSE.txt text eol=lf
+fixtures/cgb-banking/banking-cgb.gb -text
+fixtures/cgb-banking/banking-dmg.gb -text
