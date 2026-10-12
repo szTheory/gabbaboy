@@ -1066,6 +1066,33 @@ gbb_add_mbc_scan_test(mooneye_mbc_not_installed_empty 1 "scan-dir-empty"
 gbb_add_mbc_scan_test(mooneye_mbc_fixture_dirs_selftest 1 "fixture-dirs-mismatch"
   "${GBB_MBC_DIRS_SELFTEST}" "-DGBB_EXPECT_FIXTURE_DIRS=${GBB_MBC_SCAN_DIRS}")
 
+# Mooneye CGB ROM redistribution guard (D-26, T-10-22). The four third-party CGB derivatives are
+# repository fixtures only; the same scan runs over the install tree with the CGB manifest's size and
+# digest list. The self-test plants one CGB ROM under an innocuous name, so a pass cannot come
+# from a scan that never matches by bytes.
+set(GBB_CGB_MOONEYE_SCAN_SELFTEST "${PROJECT_BINARY_DIR}/mooneye-cgb-scan-selftest")
+file(MAKE_DIRECTORY "${GBB_CGB_MOONEYE_SCAN_SELFTEST}/share")
+file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/boot_regs-cgb.gb"
+  "${GBB_CGB_MOONEYE_SCAN_SELFTEST}/share/payload.bin")
+function(gbb_add_cgb_mooneye_scan_test name code regex scan_dir)
+  set(command "${CMAKE_COMMAND}" "-DGBB_SCAN_DIR=${scan_dir}"
+    "-DGBB_FORBIDDEN_MANIFEST=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json"
+    -P "${PROJECT_SOURCE_DIR}/cmake/ScanForbiddenFixtures.cmake")
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60)
+endfunction()
+gbb_add_cgb_mooneye_scan_test(cgb_mooneye_not_installed 0 "mooneye-mbc absent from scanned tree files=[1-9]"
+  "${GBB_LIBBET_INSTALL_CHECK}")
+set_tests_properties(cgb_mooneye_not_installed PROPERTIES FIXTURES_REQUIRED libbet_install)
+gbb_add_cgb_mooneye_scan_test(cgb_mooneye_not_installed_selftest 1 "mooneye-installed: share/payload.bin"
+  "${GBB_CGB_MOONEYE_SCAN_SELFTEST}")
+
 # MagenTests redistribution guard (D-06): same scan, label magentests, digest list from its manifest.
 # The renamed-copy self-test proves the scan matches by size and digest, not by file name.
 set(GBB_MAGENTESTS_SCAN_SELFTEST "${PROJECT_BINARY_DIR}/magentests-scan-selftest")

@@ -508,3 +508,5 @@ cgb_mooneye_fixture_digest
 cgb_mooneye_inventory
 cgb_mooneye_digest_tamper
 cgb_mooneye_inventory_tamper
+cgb_mooneye_not_installed
+cgb_mooneye_not_installed_selftest
