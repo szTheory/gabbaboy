@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_phase: 9
-current_phase_name: MBC3, Deterministic RTC and Cartridge Persistence
-status: verifying
-stopped_at: Completed 09-18-PLAN.md
-last_updated: "2026-10-12T01:48:26.999Z"
+current_phase: 10
+current_phase_name: CGB Profile, Banking and Register Visibility
+status: planning
+stopped_at: Phase 9 execution and automated verification complete; next /gsd-verify-work 9
+last_updated: "2026-10-12T02:47:00.380Z"
 last_activity: 2026-10-12
-last_activity_desc: Phase 9 execution complete; awaiting verification
-state_head: 04c77596c375a8b186da54c2f7b253c3ef2fcdab
+last_activity_desc: Phase 9 execute-phase tail complete (review, validation, security, verification passed)
+state_head: 46ece1a5575178859058cb84edeb4f53157eca58
 progress:
   total_phases: 9
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 45
-  completed_plans: 44
-  percent: 33
+  completed_plans: 45
+  percent: 40
 ---
 
 # Project State
@@ -25,16 +25,16 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 9 — MBC3, Deterministic RTC and Cartridge Persistence
+**Current focus:** Phase 9 owner verification (`/gsd-verify-work 9`); then Phase 10 — CGB Profile, Banking and Register Visibility
 
 ## Current Position
 
-Phase: 9 (MBC3, Deterministic RTC and Cartridge Persistence) — EXECUTION COMPLETE, awaiting verification
-Plan: 18 of 18 executed
-Status: Ready for Phase 9 verification (`/gsd-verify-work 9`)
-Last activity: 2026-10-12 — Phase 9 execution complete (PR #65 ready, not merged)
+Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
+Next step: Phase 9 owner verification — `/gsd-verify-work 9`; PR #65 squash-merges only after that passes at an exact-head green head
+Following phase (named, not started): Phase 10 — CGB Profile, Banking and Register Visibility
+Last activity: 2026-10-12 — Phase 9 marked complete in ROADMAP.md; PR #65 open, ready, not merged
 
-Progress (v0.2): [██░░░░░░░░] 22% (2/9 phases)
+Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 
 ## Performance Metrics
 
@@ -297,7 +297,7 @@ None outside the roadmap.
 - Phase 6 has no open goal, requirement, review, or high/blocking security finding. The release workflow's original post-publication readback failure was repaired before closeout; the live release API and a fresh download reconcile the published 18-asset inventory.
 - Exact CPU-B behavior, physical DMG/MBC1 qualification, physical audio/hotplug, perceptual output, Developer ID signing/notarization, and live Playstead GB integration remain unqualified and are stated as limits, not passing claims.
 - [Phase 8] Resolved: the D-29 ninth-bit mutant now targets `mbc5_bank_1ff` (D-062); upstream `rom_64Mb` never selects banks >= 256.
-- [Phase 9] Code review WR-02 (deferred): `src/player/session.c` hard-codes the unsupported battery types $06/$1B/$1E. When CART-06 adds MBC2/MBC3/MBC5 persistence, replace the list and add a test that classifies every core type byte as either `battery_backed` or `battery_unsupported`.
+- [Phase 9] Resolved: Phase 8 WR-02 (player hard-coded unsupported battery types) — classification now comes only from the core, guarded by `player_session_classification_drift`. Former note: `src/player/session.c` hard-codes the unsupported battery types $06/$1B/$1E. When CART-06 adds MBC2/MBC3/MBC5 persistence, replace the list and add a test that classifies every core type byte as either `battery_backed` or `battery_unsupported`.
 
 ### Quick Tasks Completed
 
@@ -316,9 +316,11 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 ## Session Continuity
 
 Last session: 2026-10-12T00:27:04.785Z
-Stopped at: Completed 09-18-PLAN.md
+Stopped at: Phase 9 execute-phase complete; awaiting `/gsd-verify-work 9`
 Resume file: None
 Next command in fresh context: `/gsd-verify-work 9`
+
+Execute-phase tail (2026-10-12): code review 09-REVIEW.md (WR-01/WR-02/IN-01/IN-02 fixed in 8896725, fc85d8c, 19deb6b, 2863aae; IN-03 skipped), Nyquist validation `validated`/compliant, security 09-SECURITY.md `threats_open: 0` (T-09-34 closed by the `mbc3_rtc_evidence_ledger_names` check, 9bc23db), regression gate 404/404 CTest with installed inventory plus the player gate, and gsd-verifier `passed` (09-VERIFICATION.md, 5/5 criteria, 6/6 requirements). Phase 9 is marked complete in ROADMAP.md. PR #65 remains open, ready and unmerged; the squash merge waits for `/gsd-verify-work 9` and exact-head green CI on the final branch head.
 
 Completed workflow stage: **Phase 9 - MBC3, Deterministic RTC and Cartridge Persistence, execution** (2026-10-12), plans 09-01..09-18 on branch `gsd/phase-09-mbc3-deterministic-rtc-and-cartridge-persistence`. Evidence head `04c77596c375a8b186da54c2f7b253c3ef2fcdab`, run 38191589574 (https://github.com/szTheory/gabbaboy/actions/runs/38191589574): all eight required jobs success; fixture-repro run 38191589599 (https://github.com/szTheory/gabbaboy/actions/runs/38191589599): fixture-repro, mooneye-original-repro, mooneye-candidate-repro, mooneye-mbc-repro, magentests-repro and rtc3test-repro success, with `result=byte-identical` for MagenTests and rtc3test. Local ctest 401/401, `baseline status=pass`, digest `4c7a57ff3d50d228` held, privacy check clean. The docs-only handoff commit is checked as a separate head (see 09-18-SUMMARY). PR #65 is ready for review and is not merged; the pre-authorized squash merge happens only after Phase 9 verification passes at an exact-head green head. The owner may still veto the signed `gbb_rtc_catch_up` prototype (D-14) and the 21-byte RTC block in the battery image (D-15, D-17) before merge. Limitations: no physical MBC3/RTC observation, no CGB, no BGB/VBA-M footer interop, paused time not recovered. Next step: **Phase 9 verification**. Next command in fresh context: **`/gsd-verify-work 9`**. Following phase (named, not started; only after verification passes and the owner chooses to continue): **Phase 10 - CGB Profile, Banking and Register Visibility**. Gap closure, if needed, continues on this branch and PR. Both `workflow.auto_advance` and `workflow._auto_chain_active` stay false; nothing advances automatically.
 
