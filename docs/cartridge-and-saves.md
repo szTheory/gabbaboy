@@ -2,8 +2,8 @@
 
 GabbaBoy's cartridge and save behavior is scoped to its bootless DMG-CPU-B
 software profile. The rules here describe the implementation and its tests;
-they do not qualify a physical Game Boy, every MBC1/MBC2/MBC5 board revision,
-or every ROM that declares one of the supported types.
+they do not qualify a physical Game Boy, every MBC1/MBC2/MBC3/MBC5 board
+revision, or every ROM that declares one of the supported types.
 
 ## Supported cartridge matrix
 
@@ -18,6 +18,11 @@ replacing an instance's active cartridge. It supports:
 | `$03` | Standard MBC1 with battery-backed RAM | `$00`–`$06` | `$02` (8 KiB), or `$03` (32 KiB) only through 512 KiB ROM |
 | `$05` | MBC2 with 512 built-in 4-bit cells, volatile | `$00`–`$03` (32–256 KiB) | `$00` only; the 512 cells come from the type, not the header |
 | `$06` | MBC2 with 512 built-in cells, battery-backed | `$00`–`$03` | `$00` only |
+| `$0F` | MBC3 with timer and battery, no RAM | `$00`–`$06` (32 KiB–2 MiB) | `$00` (none) |
+| `$10` | MBC3 with timer, RAM and battery | `$00`–`$06` | `$02` (8 KiB) or `$03` (32 KiB) |
+| `$11` | MBC3, no RAM, no timer | `$00`–`$06` | `$00` (none) |
+| `$12` | MBC3 with volatile RAM, no timer | `$00`–`$06` | `$02` or `$03` |
+| `$13` | MBC3 with battery-backed RAM, no timer | `$00`–`$06` | `$02` or `$03` |
 | `$19` | MBC5, no RAM | `$00`–`$08` (32 KiB–8 MiB) | `$00` (none) |
 | `$1A` | MBC5 with volatile RAM | `$00`–`$08` | `$02` (8 KiB), `$03` (32 KiB), `$05` (64 KiB) or `$04` (128 KiB) |
 | `$1B` | MBC5 with battery-backed RAM | `$00`–`$08` | as `$1A` |
@@ -33,11 +38,22 @@ differs from the declared ROM size. Recognized MBC1M candidates return
 logo/header check does not identify every special-wiring image. MBC1M is
 outside the support claim.
 
+MBC3 types `$0F`–`$13` have a 4 MiB length ceiling, and ROM size codes `$07`
+and above are not MBC3 sizes the core supports. The larger MBC30 variant
+is **not supported**: after the length, size-code and header-checksum checks, a
+header is a MBC30 candidate if its ROM code is `$07` (4 MiB, at exactly 4 MiB)
+or its RAM code is `$05` (64 KiB) on a RAM-bearing type (`$10`, `$12`, `$13`),
+and the loader returns `GBB_UNSUPPORTED_CARTRIDGE_VARIANT`, the same result as
+a recognized MBC1M candidate. Other MBC3 size mistakes keep their size-class
+error: RAM `$01`/`$04` on any MBC3 type, RAM `$05` on `$0F`/`$11` and RAM `$00`
+on a RAM-bearing type are `GBB_UNSUPPORTED_RAM_SIZE`, ROM code `$08` and above is
+`GBB_UNSUPPORTED_ROM_SIZE`, and a length above 4 MiB is `GBB_ROM_TOO_LARGE`.
+
 The ROM length ceiling is type-aware. Images of MBC5 types `$19`–`$1E` may be up
-to 8 MiB (`GBB_MAX_ROM_SIZE`); every other type, including a type byte the
-loader does not recognize, keeps the earlier 2 MiB ceiling
-(`GBB_LEGACY_MAX_ROM_SIZE`) and the same `GBB_ROM_TOO_LARGE` result as before
-this change. A length above 8 MiB is always `GBB_ROM_TOO_LARGE`, and size codes
+to 8 MiB (`GBB_MAX_ROM_SIZE`); MBC3 images are bounded by the 4 MiB ceiling
+above; every other type, including a type byte the loader does not recognize,
+keeps the earlier 2 MiB ceiling (`GBB_LEGACY_MAX_ROM_SIZE`) and the same
+`GBB_ROM_TOO_LARGE` result as before this change. A length above 8 MiB is always `GBB_ROM_TOO_LARGE`, and size codes
 above a type's maximum return `GBB_UNSUPPORTED_ROM_SIZE`. After validation the
 core allocates at most 8 MiB of ROM plus 128 KiB of cartridge RAM. The header's
 CGB flag at `$143` is ignored; an MBC5 image with `$143 = $C0` loads on the
@@ -54,6 +70,19 @@ bank with four bits on `$19`–`$1B` and three bits on rumble types `$1C`–`$1E
 masked by the loaded bank count; writes to `$6000`–`$7FFF` are ignored. Every
 MBC5 type maps `$A000`–`$BFFF`, so disabled or absent RAM reads `$FF` and
 writes are ignored.
+
+MBC3 decodes writes as follows. A write to `$0000`–`$1FFF` opens the RAM and
+clock gate when the low nibble is `$A` (so `$AA` opens it), and any other value
+closes it; while closed, reads return `$FF` and writes are ignored, clock
+registers included. Writes to `$2000`–`$3FFF` select the ROM bank from the low
+seven bits, a zero selection becomes bank one, and the result is masked by the
+ROM's bank count. Writes to `$4000`–`$5FFF` select by the whole byte: `$00`–`$03`
+selects a RAM bank (an 8 KiB cart aliases banks 1–3 onto bank 0), `$08`–`$0C`
+selects a clock register (S, M, H, DL, DH) on timer types `$0F` and `$10`, and
+every other value (`$04`–`$07`, `$0D`–`$FF`, and `$08`–`$0C` on types without a
+timer) maps nothing: reads return `$FF` and writes are ignored. That choice of
+unmapped selections is a software-model decision, not a hardware finding. A
+reset sets ROM bank 1, RAM bank 0 and a closed gate and leaves RAM alone.
 
 MBC2 decodes writes to `$0000`–`$3FFF` by address bit 8. With bit 8 clear the
 write is the RAM gate (low nibble `$A` opens it); with bit 8 set the low four
@@ -74,6 +103,44 @@ control range is `$A`; disabled or absent RAM reads return `$FF` and writes
 are ignored as deterministic software policy where hardware references leave
 the value undefined.
 
+## MBC3 real-time clock
+
+Timer types `$0F` and `$10` carry a clock with seconds, minutes, hours and a
+nine-bit day counter. It advances only from emulated time, at exactly 2^23
+half-dots per second; the core never reads the host clock, and a CI check
+(`no_host_clock`) scans the core sources and object file for host-clock calls.
+Wall-clock time reaches the clock only through `gbb_rtc_catch_up`.
+
+- **Registers.** Reads and writes go through `$A000`–`$BFFF` after selecting
+  `$08`–`$0C` (S, M, H, DL, DH) with the gate open. S and M keep 6 bits, H 5
+  bits, DL 8 bits, and DH only bit 0 (day bit 8), bit 6 (halt) and bit 7
+  (carry); unused bits read 0. Out-of-range values (seconds or minutes 60–63,
+  hours 24–31) are stored as written. A field carries only when it steps from
+  exactly 59, 59 or 23; otherwise it wraps within its mask with no carry.
+- **Prescaler.** A seconds write restarts the sub-second count. Writes to M, H,
+  DL, DH and halt toggles keep it.
+- **Day counter.** It wraps from 511 to 0 and sets the carry, which stays set
+  until a guest writes DH with bit 7 clear.
+- **Halt.** A halted clock credits no time.
+- **Latch.** Writes to `$6000`–`$7FFF` copy the live registers into the
+  readable latched copy only when the previous write was exactly `$00` and this
+  one is exactly `$01`. Reads of the clock registers return the latched copy.
+  The `$00`-then-`$01` sequence follows the cartridge documentation; the edge
+  cases around it (any other value, repeated writes, a fresh load or reset
+  starting unprimed) are project decisions, because emulators disagree.
+- **Battery generation.** A guest write that changes stored clock state
+  (including a same-value seconds write when the sub-second count is non-zero)
+  advances the generation; elapsed time, a carry set by ticking and the latch do
+  not.
+- **Reset and load.** A successful `gbb_load_rom` starts a fresh clock
+  (00:00:00, day 0, running). `gbb_reset` keeps the live and latched clock,
+  halt, carry and sub-second count, as it keeps RAM, and re-anchors them to the
+  restarted emulated time.
+
+RTC-capable cartridges are evidence-limited: the model is checked against the
+author-attested rtc3test v004 and MagenTests ROMs plus original tests; see
+[mbc3-rtc-evidence.md](mbc3-rtc-evidence.md). No physical clock is claimed.
+
 New cartridge RAM starts filled with `$FF` as emulator policy, not a hardware
 power-on claim. Volatile type `$02` RAM lasts for the loaded session and is
 not battery-exportable. Type `$03` RAM is eligible for the battery API. A
@@ -90,7 +157,8 @@ returns no mutable pointer into its state, and each instance may be called by
 one thread at a time.
 
 Battery APIs work only for a loaded battery-backed cartridge: MBC1 type `$03`,
-MBC2 type `$06`, or MBC5 types `$1B` and `$1E`. They return
+MBC2 type `$06`, MBC3 types `$0F`, `$10` and `$13`, or MBC5 types `$1B` and
+`$1E`. They return
 `GBB_INVALID_ARGUMENT` for invalid pointers, `GBB_NO_BATTERY` when the loaded
 cartridge has no battery-backed RAM, `GBB_BUFFER_TOO_SMALL` when the copy
 destination cannot hold all RAM, and `GBB_BATTERY_SIZE_MISMATCH` unless an
@@ -102,7 +170,8 @@ saturates at `UINT64_MAX`. Successful ROM replacement resets it to zero, and
 reset preserves it. The caller owns each buffer; serialize calls to an
 individual instance. Different instances share no mutable state.
 
-For MBC1 and MBC5 the API transfers the cartridge RAM bytes unchanged. For
+For MBC1, MBC3 type `$13` and MBC5 the API transfers the cartridge RAM bytes
+unchanged. For
 MBC2 the image is exactly 512 bytes in the core's canonical form, every byte
 `$F0 | nibble`; export is a plain copy of the live cells. Import requires
 exactly 512 bytes (otherwise `GBB_BATTERY_SIZE_MISMATCH`) and then normalises
@@ -113,6 +182,69 @@ it differs, and a rejected import changes nothing. Packed 256-byte MBC2 saves
 (two nibbles per byte) are not supported. A guest write advances the generation
 only when the canonical byte changes, so writing `$A5` over a `$F5` cell does
 not.
+
+### Timer cartridge battery image and the clock block
+
+For the timer types `$0F` and `$10` the battery image is the cartridge RAM
+followed by a clock block of `GBB_RTC_BLOCK_SIZE` (21) bytes. Type `$0F` has no
+RAM, so its image is the block alone (`gbb_battery_size` returns 21); type `$10`
+is 8 KiB or 32 KiB of RAM plus 21 bytes. Every other battery type keeps the
+RAM-sized image described above, so MBC1 images are unchanged. The block is
+written field by field, little-endian:
+
+| Offset | Size | Field | Valid on import |
+|---|---|---|---|
+| 0 | 4 | magic `GBRT` | exact |
+| 4 | 1 | version | `1` |
+| 5 | 4 | sub-second count (half-dots) | below 2^23 |
+| 9–13 | 5 | live S, M, H, DL, DH | S, M ≤ `$3F`; H ≤ `$1F`; DL any; `(DH & $3E) == 0` |
+| 14–18 | 5 | latched S, M, H, DL, DH | same masks |
+| 19 | 1 | last write to `$6000`–`$7FFF` (latch edge state) | any |
+| 20 | 1 | reserved | `0` |
+
+Export projects the clock to the instance's current emulated time on a local
+copy, so the instance is not changed and two exports at the same emulated time
+are byte-identical. Import checks the whole image (length, then magic, version,
+every range and the reserved byte) before changing anything and then commits RAM
+and clock together:
+
+| Condition | Result |
+|---|---|
+| Image length is not exactly RAM size plus 21 | `GBB_BATTERY_SIZE_MISMATCH` |
+| Bad magic, unknown version, sub-second count at or above 2^23, a field above its mask, DH bits `$3E` set, or a non-zero reserved byte | `GBB_INVALID_ARGUMENT` |
+| Loaded cartridge has no battery image | `GBB_NO_BATTERY` |
+
+A rejected import leaves RAM, the clock and the generation unchanged. Out-of-range
+values that guests can produce (seconds 63, hours 31) are accepted. A version
+change implies a size change, so an older core fails on size.
+
+**Import never catches up.** Importing restores the saved clock exactly as of
+the instant of the import and never advances it, so a host that wants the
+wall-clock time since the save to count must apply it deliberately:
+
+```c
+gbb_error gbb_rtc_catch_up(gbb_instance *instance, int64_t elapsed_seconds);
+```
+
+`gbb_rtc_catch_up` adds whole seconds to the live clock. A NULL instance or a
+negative value returns `GBB_INVALID_ARGUMENT` and changes nothing (the host
+decides what a clock rollback means); no ROM or a cartridge without a timer
+returns `GBB_NO_RTC`; zero is a no-op; a halted clock returns `GBB_OK` and does
+not change. Otherwise the addition is exact, modular and O(1) with no
+saturation: the day counter wraps at 512 and sets the sticky carry, and
+`catch_up(a)` then `catch_up(b)` equals `catch_up(a + b)`. The latched
+registers, the sub-second count and emulated time are unchanged, and the battery
+generation advances once if the live clock changed. Call it between `gbb_run*`
+calls, once per open (two calls add twice), and record the value as an input
+event if you keep replay logs. The signed prototype is new in Phase 9 and
+reviewable before the phase pull request merges.
+
+**BGB and VBA-M footers.** Those emulators append a 44- or 48-byte clock footer
+to a save. The core neither reads nor writes it, but the block carries every
+footer field, so a host adapter can convert in both directions; when building a
+block from a footer, set the sub-second count to 0, the latch edge state to
+`$FF` (unprimed) and the reserved byte to 0. No such adapter exists in this
+repository and no interchange with those emulators is tested.
 
 The API does not define an on-disk format and does not import arbitrary emulator
 `.sav` files beyond the MBC2 normalisation above.
@@ -141,13 +273,18 @@ any haptics, and the query is not evidence of physical rumble-motor behavior.
 The macOS player stores saves under the per-user application directory returned
 by `SDL_GetPrefPath("GabbaBoy", "GabbaBoy")`, not beside the ROM. Its filename
 contains the lowercase SHA-256 of the exact ROM bytes plus the cartridge type
-and RAM size. Identical ROM bytes therefore use the same save identity when
+and RAM size: MBC1 type `$03` saves end in `-mbc1-<type>-<ram size>.gbb`, and every
+other battery type uses `-cart-<type>-<ram size>.gbb`, so a v1 file and a v2 file
+never share a name. Identical ROM bytes therefore use the same save identity when
 moved or renamed; a byte-different ROM gets a different identity even if its
 filename and cartridge header match. SHA-256 here is an identity key, not an
 authentication mechanism.
 
 The player-managed file is a field-by-field, little-endian version 1 envelope.
-It has a 51-byte header followed by exactly 8 KiB or 32 KiB of raw battery RAM:
+It has a 51-byte header followed by exactly 8 KiB or 32 KiB of raw battery RAM.
+Only MBC1 type `$03` writes this version, and the bytes are exactly what the
+v0.1 player wrote (a v0.1.2-written corpus is tested to load and to re-encode
+byte-identically), so an older player still reads them:
 
 | Byte offsets | Field | Encoding |
 |---|---|---|
@@ -167,19 +304,78 @@ bad CRC reject the envelope. The player does not auto-detect raw `.sav` files.
 Any future envelope change must migrate existing progress or retain access to
 the older file.
 
-## Player support for MBC2 and MBC5 battery cartridges
+## Player battery persistence and the version 2 envelope
 
-Player battery persistence applies only to MBC1 type `$03`. The player runs MBC2
-`$06` and MBC5 `$1B`/`$1E` battery cartridges, but it does not save their
-progress: it reads, creates and writes no save, lock, recovery or temporary
-file for them. At startup and on ROM replacement it shows "Battery saving is not
-supported for this cartridge type yet; progress is not kept" in its status and
-writes a warning to stderr. The version 1 envelope is unchanged and accepts only
-type `$03`. Player support for these save types is future work (CART-06,
-Phase 9). The player's own read bound stays 2 MiB, so 4 MiB and 8 MiB MBC5
-images load through the core API but not through the player. A source-level
-check and the pinned limitations text cover the status line; no automated UI
-test asserts that it appears on screen.
+The player saves MBC1 `$03`, MBC2 `$06`, MBC3 `$0F`, `$10` and `$13` and MBC5
+`$1B` and `$1E` battery cartridges. It reads battery status, RAM length and
+whether a clock is present from the core after `gbb_load_rom`, not from the
+header byte; the header type only names the file and its identity. The player
+reads ROM files up to 8 MiB (the core's bound) and handles up to 131072 bytes of
+RAM; larger inputs are refused. MBC1 `$03` with 8 or 32 KiB RAM keeps writing
+version 1. Every other battery type writes version 2, and a version 2 file is
+never rewritten as version 1. Readers accept version 1 only for `$03` and
+version 2 for every supported battery type.
+
+The version 2 envelope is a 64-byte little-endian header followed by the
+battery RAM and then the clock block (the payload is exactly the core's battery
+image):
+
+| Byte offsets | Field | Encoding |
+|---|---|---|
+| `0..7` | Magic | ASCII `GBBBSAVE` |
+| `8..9` | Version | Unsigned 16-bit, `2` |
+| `10..41` | ROM identity | SHA-256 of the exact ROM bytes |
+| `42` | Cartridge type | One byte |
+| `43` | Flags | Bit 0: clock block present. Bit 1: `saved_at` valid (only with bit 0). Other bits 0 |
+| `44..47` | RAM length | `0`, `512`, `8192`, `32768`, `65536` or `131072`, equal to the RAM part of the core's image |
+| `48..51` | Clock length | `0` or exactly 21 |
+| `52..59` | `saved_at` | Signed 64-bit Unix UTC seconds; 0 unless bit 1 is set |
+| `60..63` | Checksum | IEEE CRC-32 of header bytes 0–59 followed by the payload |
+| `64..end` | Payload | RAM, then the clock block |
+
+The file must be exactly 64 + RAM length + clock length bytes (at most 131,157).
+Unlike version 1, the CRC covers the header, so a flipped `saved_at` cannot
+inject a catch-up; it still detects accidents only, **is not authentication**,
+and does not stop deliberate modification. Truncation, trailing bytes, an
+unknown version, reserved flag bits, a non-canonical zero field, a different ROM
+digest or type, lengths that differ from what the core reports for the loaded
+cartridge, or a bad CRC reject the envelope through the recovery path described
+below, with no change to the running game. Every timer cartridge save records
+the time of the save in `saved_at` together with a clock block taken at the same
+instant; cartridges without a clock record no time. If the system clock is
+unavailable when a timer cartridge is saved, the save carries no stamp.
+
+### Reopen policy for timer cartridges
+
+After the battery image is loaded and before the first guest instruction, the
+player applies the clock catch-up at most once per open, and reports the result
+in the status line (no dialog). The decision is the pure function tested by
+`catch_up_policy_table`:
+
+| Condition | Action | Status line |
+|---|---|---|
+| No clock, no save file, or a rejected save | none | none, or the existing rejected-save warning |
+| The save has no time stamp | none | "Game clock not advanced: the save has no time stamp." |
+| The system clock is unavailable | none | "Game clock not advanced: the system clock is unavailable." |
+| The system clock is earlier than `saved_at` | none; the next save stamps the current time | "Game clock not advanced: the system clock is earlier than the save." |
+| The system clock equals `saved_at` | none | none |
+| The system clock is later | `gbb_rtc_catch_up(min(difference, INT64_MAX))` | "Game clock advanced by 1d 2h 3m 4s", plus " (day counter overflowed)" if the carry became set |
+| The game clock is halted | the core ignores the delta | "Game clock is halted; not advanced." |
+
+After a catch-up changes the clock, the generation change marks the save dirty,
+so the next save stamps it afresh. A clock moved backwards never rewinds the
+game clock (this matches BGB and VBA-M; other emulators reset or rewind it).
+
+**Limitation: time spent paused while the player stays open is not recovered.**
+Only the time between a save and its reopen is added; a paused session, a
+sleeping laptop with the player left open, or a changed system clock during a
+session is not caught up.
+
+The player's `--clock-unix <seconds>` option exists only for the
+`--battery-smoke-store` and `--battery-smoke-resume` test modes, to inject a
+clock into fresh-process tests. Any other use is refused with a usage error.
+The player's own on-screen status line has no pixel-level UI test; the status
+text is checked through the continuation tests.
 
 ## Save timing, replacement, and failure behavior
 
@@ -238,11 +434,15 @@ hardware results, executed here on the bootless profile). The original fixture i
 its source and 32 KiB ROM digests are recorded in
 [`fixtures/mbc1-continuation/manifest.json`](../fixtures/mbc1-continuation/manifest.json).
 These results establish software behavior under the named bootless profile.
-No physical DMG-CPU-B/MBC1/MBC2/MBC5 observation, boot-ROM execution, CGB, RTC,
-MBC1M, other mapper, physical rumble, general game-compatibility, or arbitrary
-save-interchange claim is made. Process-interruption tests exercise old-or-new complete file outcomes;
+No physical DMG-CPU-B/MBC1/MBC2/MBC3/MBC5 or real-time-clock observation,
+boot-ROM execution, CGB, CGB double-speed clock behavior, MBC30, MBC1M, other
+mapper, physical rumble, general game-compatibility, or arbitrary
+save-interchange claim is made. The MBC3 clock is evidenced by author-attested
+test-ROM results, original tests and project decisions; see
+[`docs/mbc3-rtc-evidence.md`](mbc3-rtc-evidence.md). Process-interruption tests exercise old-or-new complete file outcomes;
 they do not simulate power loss.
 
 Further evidence and named test coverage are in
 [`docs/mbc1-evidence.md`](mbc1-evidence.md) and
-[`docs/mbc2-mbc5-evidence.md`](mbc2-mbc5-evidence.md).
+[`docs/mbc2-mbc5-evidence.md`](mbc2-mbc5-evidence.md) and
+[`docs/mbc3-rtc-evidence.md`](mbc3-rtc-evidence.md).

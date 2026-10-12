@@ -1,0 +1,44 @@
+{
+  "id": "original-mbc2-battery-continuation",
+  "source": "continuation.asm",
+  "source_identity": "Original GabbaBoy project-authored assembly",
+  "source_sha256": "2ad5e7051b7fa42d9f83dbd5a34f76d6918a6a3f98c6c162c25fa4e515741a05",
+  "license": "MIT; see LICENSE.txt and repository LICENSE",
+  "build": {
+    "assembler": "RGBDS",
+    "version": "1.0.1",
+    "archive": "rgbds-macos.zip",
+    "archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
+    "ci_archive": "rgbds-linux-x86_64.tar.xz",
+    "ci_archive_sha256": "80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9",
+    "recipe": "rgbasm -o <work>/continuation.o fixtures/mbc2-continuation/continuation.asm && rgblink -o <work>/continuation.gb <work>/continuation.o && rgbfix -f hg -p 0 -m 0x06 -r 0 <work>/continuation.gb"
+  },
+  "rom": "continuation.gb",
+  "size_bytes": 32768,
+  "sha256": "314e05b419c07f1823983932d4e70ce57f0c366f44ec9ee86baf322f8dad50aa",
+  "cartridge": {
+    "mapper": "MBC2",
+    "type": "0x06 (MBC2 + battery)",
+    "rom_size_code": "0x00 (32 KiB)",
+    "ram_size_code": "0x00 (built-in 512 x 4 bits)"
+  },
+  "profile": {
+    "name": "DMG-CPU-B",
+    "boot": "Skipped; starts at cartridge entry 0x0100.",
+    "applicability": "Original software continuation fixture for the deterministic bootless DMG-CPU-B profile; not physical hardware evidence."
+  },
+  "protocol": {
+    "store_branch": "When cells 0xA000-0xA002 do not read 0xF3 0xFA 0xF1, the guest enables RAM (0x0A to 0x0000, address bit 8 clear), writes (i * 7 + 3) & 0x0F to 0xA000 + i for i = 0..511, and publishes WRAM C000=0x01.",
+    "resume_branch": "When cells 0-2 hold the pattern, the guest compares every one of the 512 cells with 0xF0 | ((i * 7 + 3) & 0x0F) (the upper nibble reads as 0xF), sets WRAM C001=0xA5 only if all 512 match, then publishes C000=0x02.",
+    "missing_save": "fresh RAM fails the pattern check, so the store branch runs and C000=0x01",
+    "timeout_half_dots": 200000,
+    "evidence": "Distinct fresh instances or processes observe the stored nibbles; this is software continuation evidence only."
+  },
+  "scope_limits": [
+    "No boot-ROM execution",
+    "No physical hardware MBC2 observation",
+    "No MBC2A or other mapper behavior claim",
+    "No BGB footer or other emulator save-format claim",
+    "The guest protocol tests file-backed continuation separately from mapper/API correctness"
+  ]
+}

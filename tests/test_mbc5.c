@@ -549,7 +549,7 @@ static int mbc5_rom_bound(void) {
     REQUIRE(gbb_load_rom(previous, over, eight_mib) == GBB_ROM_SIZE_MISMATCH);
 
     /* Every non-MBC5 type keeps the 2 MiB ceiling at the same slot. */
-    static const uint8_t legacy[] = {0x00u, 0x01u, 0x03u, 0x05u, 0x06u, 0x0Fu, 0x18u, 0x20u, 0xFFu};
+    static const uint8_t legacy[] = {0x00u, 0x01u, 0x03u, 0x05u, 0x06u, 0x18u, 0x20u, 0xFFu};
     for (size_t i = 0u; i < sizeof(legacy); ++i) {
         over[0x147u] = legacy[i];
         over[0x148u] = 6u;

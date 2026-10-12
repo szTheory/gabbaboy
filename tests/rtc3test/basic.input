@@ -1,0 +1,4 @@
+gbinput 1
+# rtc3test Basic suite: the menu opens on Basic; A starts it.
+wait 60f
+tap A 4f

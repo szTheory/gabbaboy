@@ -47,6 +47,9 @@ relocated="$repo_root/build-cmake-3.25.3/package-prefix-relocated"
   --output-on-failure --no-tests=error --output-junit "$temp_root/floor-tests.xml"
 bash "$repo_root/.github/scripts/verify-test-inventory.sh" \
   "$temp_root/floor-tests.xml" "$repo_root/tests/expected-tests.txt"
+# Print the no-host-clock result so the job log records which symbol tool this leg used.
+"$ctest_bin" --test-dir "$repo_root/build-cmake-3.25.3" \
+  -R '^no_host_clock$' --no-tests=error -V
 "$cmake_bin" --install "$repo_root/build-cmake-3.25.3" --prefix "$stage"
 
 rm -rf "$relocated"

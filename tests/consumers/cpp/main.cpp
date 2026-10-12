@@ -80,6 +80,69 @@ static uint64_t fnv1a_frames(const gbb_audio_frame *frames, size_t count) {
     return hash;
 }
 
+/* Installed-package RTC smoke: MBC3+TIMER+RAM+BATTERY ($10) synthetic ROM,
+ * explicit host catch-up, block layout and a byte-identical import round trip. */
+static void rtc_fill_rom(uint8_t *rom, size_t size, uint8_t cart_type) {
+    std::memset(rom, 0, size);
+    rom[0x100u] = 0xC3u; /* JP $0150 */
+    rom[0x101u] = 0x50u;
+    rom[0x102u] = 0x01u;
+    rom[0x150u] = 0x76u; /* HALT */
+    rom[0x151u] = 0x18u; /* JR -3 */
+    rom[0x152u] = 0xFDu;
+    rom[0x147u] = cart_type;
+    rom[0x148u] = 0x00u;
+    rom[0x149u] = 0x02u;
+    uint8_t checksum = 0u;
+    for (std::size_t i = 0x134u; i <= 0x14Cu; ++i)
+        checksum = static_cast<uint8_t>(checksum - rom[i] - 1u);
+    rom[0x14Du] = checksum;
+}
+
+static int rtc_api_smoke() {
+    enum { ROM_BYTES = 32768, RAM_BYTES = 8192, IMAGE_BYTES = RAM_BYTES + static_cast<int>(GBB_RTC_BLOCK_SIZE) };
+    static uint8_t rom[ROM_BYTES];
+    uint8_t first[IMAGE_BYTES];
+    uint8_t second[IMAGE_BYTES];
+    gbb_instance *machine = nullptr;
+    gbb_instance *twin = nullptr;
+    gbb_instance *plain = nullptr;
+    std::size_t size = 0u;
+    int passed = 0;
+
+    rtc_fill_rom(rom, sizeof(rom), 0x10u);
+    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &machine) != GBB_OK ||
+        gbb_create(GBB_PROFILE_DMG_CPU_B, &twin) != GBB_OK ||
+        gbb_load_rom(machine, rom, sizeof(rom)) != GBB_OK ||
+        gbb_load_rom(twin, rom, sizeof(rom)) != GBB_OK) goto done;
+    if (gbb_battery_size(machine, &size) != GBB_OK || size != IMAGE_BYTES) goto done;
+    if (gbb_rtc_catch_up(machine, 3661) != GBB_OK) goto done;
+    if (gbb_copy_battery(machine, first, sizeof(first)) != GBB_OK) goto done;
+    if (first[RAM_BYTES] != 0x47u || first[RAM_BYTES + 1u] != 0x42u || /* "GB" */
+        first[RAM_BYTES + 2u] != 0x52u || first[RAM_BYTES + 3u] != 0x54u) /* "RT" */
+        goto done;
+    if (first[RAM_BYTES + 9u] != 1u || first[RAM_BYTES + 10u] != 1u ||
+        first[RAM_BYTES + 11u] != 1u) goto done;
+    /* Import never catches up: the twin exports exactly the imported bytes. */
+    if (gbb_import_battery(twin, first, sizeof(first)) != GBB_OK ||
+        gbb_copy_battery(twin, second, sizeof(second)) != GBB_OK ||
+        std::memcmp(first, second, sizeof(first)) != 0) goto done;
+    if (gbb_rtc_catch_up(machine, -1) != GBB_INVALID_ARGUMENT) goto done;
+    if (gbb_rtc_catch_up(nullptr, 1) != GBB_INVALID_ARGUMENT) goto done;
+
+    rtc_fill_rom(rom, sizeof(rom), 0x03u); /* MBC1+RAM+BATTERY: no timer */
+    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &plain) != GBB_OK ||
+        gbb_load_rom(plain, rom, sizeof(rom)) != GBB_OK ||
+        gbb_rtc_catch_up(plain, 1) != GBB_NO_RTC) goto done;
+    passed = 1;
+
+done:
+    gbb_destroy(plain);
+    gbb_destroy(twin);
+    gbb_destroy(machine);
+    return passed ? 0 : 1;
+}
+
 // Structural PCM smoke through the installed public header and library only.
 // Every assertion is a bound, a formula from header constants, or a comparison
 // within this process; no emulator-derived digest or count is pinned.
@@ -237,6 +300,10 @@ int main(int argc, char **argv) {
     if (!passed) std::fprintf(stderr, "C++ consumer API smoke failed (error=%d, stop=%d, frame=%d)\n", error, result.reason, frame_error);
     if (!passed || battery_api_smoke() != 0) {
         std::fprintf(stderr, "C++ consumer public battery API smoke failed\n");
+        return 1;
+    }
+    if (rtc_api_smoke() != 0) {
+        std::fprintf(stderr, "C++ consumer public RTC API smoke failed\n");
         return 1;
     }
     if (audio_api_smoke() != 0) {

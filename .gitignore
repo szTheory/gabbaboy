@@ -29,6 +29,9 @@ CMakeUserPresets.json
 !/fixtures/mooneye/tim00.gb
 !/fixtures/mooneye/tim00_div_trigger.gb
 !/fixtures/mbc1-continuation/continuation.gb
+!/fixtures/mbc2-continuation/continuation.gb
+!/fixtures/mbc3-rtc-continuation/continuation.gb
+!/fixtures/mbc5-continuation/continuation.gb
 !/fixtures/mbc5-banking/banking.gb
 !/fixtures/libbet/libbet.gb
 !/fixtures/mooneye-mbc/mbc2_bits_ramg.gb
@@ -46,6 +49,10 @@ CMakeUserPresets.json
 !/fixtures/mooneye-mbc/mbc5_rom_16Mb.gb
 !/fixtures/mooneye-mbc/mbc5_rom_32Mb.gb
 !/fixtures/mooneye-mbc/mbc5_rom_64Mb.gb
+!/fixtures/magentests/mbc_oob_sram_mbc1.gbc
+!/fixtures/magentests/mbc_oob_sram_mbc3.gbc
+!/fixtures/magentests/mbc_oob_sram_mbc5.gbc
+!/fixtures/rtc3test/rtc3test.gb
 
 # Temporary OpenGSD runtime state (retain planning documents)
 .planning/.tmp/

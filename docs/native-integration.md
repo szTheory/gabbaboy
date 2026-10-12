@@ -59,8 +59,10 @@ not authenticate data or detect same-size corruption. See the
 - `gbb_create` selects the explicit bootless `GBB_PROFILE_DMG_CPU_B` profile;
   `gbb_destroy` releases the opaque instance.
 - `gbb_load_rom` copies input bytes on success. The loader accepts exact
-  supported lengths up to 8 MiB for MBC5 types (`$19`-`$1E`) and up to 2 MiB for
-  every other type; an oversized length returns `GBB_ROM_TOO_LARGE`, and a
+  supported lengths up to 8 MiB for MBC5 types (`$19`-`$1E`), up to 4 MiB for
+  MBC3 types (`$0F`-`$13`; the MBC30 variant is rejected with
+  `GBB_UNSUPPORTED_CARTRIDGE_VARIANT`) and up to 2 MiB for every other type; an
+  oversized length returns `GBB_ROM_TOO_LARGE`, and a
   loaded cartridge needs at most 8 MiB of ROM plus 128 KiB of RAM. Failed
   replacement leaves active guest state unchanged. Read the full file under a
   host-selected bound before loading.
@@ -83,6 +85,19 @@ not authenticate data or detect same-size corruption. See the
 - `gbb_battery_size`, `gbb_copy_battery`, and `gbb_import_battery` transfer
   exact-size bytes for supported battery-backed cartridges. They do not do
   file I/O or define a raw-save file format.
+- `gbb_rtc_catch_up` applies host wall-clock time to MBC3 timer cartridges
+  (`$0F`, `$10`). Compute a non-negative whole-second elapsed value from your
+  own clock between runs and call it once per open, on the instance, between
+  `gbb_run*` calls; two calls add twice. Record the value as an input event so
+  replays reproduce it. A negative value returns `GBB_INVALID_ARGUMENT` and
+  changes nothing, so you decide what a clock rollback means; a cartridge
+  without a timer (or no ROM) returns `GBB_NO_RTC`. Importing a battery image
+  never catches up: import restores the saved clock exactly and never advances
+  it, so call `gbb_rtc_catch_up` yourself afterwards if time passed. Persist
+  the whole battery image through `gbb_battery_size`, `gbb_copy_battery` and
+  `gbb_import_battery`: timer cartridges export RAM followed by a
+  `GBB_RTC_BLOCK_SIZE`-byte clock block (the block alone for `$0F`). The core
+  never reads the host clock.
 
 On a load error, keep the current session and report the returned `gbb_error`;
 do not replace the active cartridge with partial input. Reject truncated,

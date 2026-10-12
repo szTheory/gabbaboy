@@ -478,3 +478,48 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** Changing the MBC2 read mask `0x1FF` to `0x0FF` fails `mbc2_ram_echo`.
 - **Source:** Plan 08-02 summary.
 - **Status:** Adopted.
+
+### GB-CART-007 / 2026-10-11 / A new fixture ROM needs its own `.gitignore` exception or it is never committed
+
+- **Cause and evidence:** `.gitignore` ignores `*.gb` and `*.gbc` so that no commercial image is committed by accident. Plans 09-05 and 09-06 built the MBC3+RTC and MBC2 continuation guests and committed their sources, manifests and reproduction scripts, but `git add` silently skipped the ROMs. The local suite stayed green because the files existed on disk. Plan 09-10 noticed that the ROMs were untracked and committed them with per-file exceptions in commit 5f9f866.
+- **Remedy:** Whenever a plan adds a redistributable ROM, add a `!/fixtures/<dir>/<file>.gb` exception in the same commit. Then confirm that `git check-ignore` prints nothing for that file, and that `git ls-files` lists it before the plan is called complete.
+- **Applies when:** Any plan that adds or regenerates a fixture ROM under `fixtures/`.
+- **Verification:** `git check-ignore fixtures/*/*.gb` prints nothing, and `git ls-files fixtures | grep -c '\.gb$'` equals the number of `.gb` files on disk (27 of 27 at plan 09-15). A clean CI checkout passing the fixture tests confirms it remotely.
+- **Source:** Plans 09-05, 09-06, 09-10.
+- **Status:** Adopted.
+
+### GB-CART-008 / 2026-10-12 / A source-anchored mutant makes an unrelated edit a configure failure
+
+- **Cause and evidence:** The MBC5 ninth-bit mutant requires the text `& 1u) << 8` to occur exactly once in the core. Plan 09-09's first day-counter expression for the RTC matched it and failed configure.
+- **Remedy:** Write the new expression differently (`(c->rtc_dh & 0x01u) * 256u`, commit 14caf9d) rather than loosen the anchor; the exactly-once check is the safeguard.
+- **Applies when:** Adding code to a file that carries mutation-test anchors.
+- **Verification:** Configure succeeds and the MBC5 mutant tests still fail the mutated build.
+- **Source:** Plan 09-09; D-061.
+- **Status:** Adopted.
+
+### GB-CART-009 / 2026-10-12 / Order of `readdir` is not creation order in tests
+
+- **Cause and evidence:** `player_session_v2_max_size` picked the preserved recovery file by directory-enumeration order and failed about half of the runs in Plan 09-16.
+- **Remedy:** Select the file by an attribute the test controls (size of the damaged variant); 20 consecutive runs passed after the fix (commit 5477099).
+- **Applies when:** A test must find one of several files created in a directory.
+- **Verification:** Repeated runs of the test.
+- **Source:** Plan 09-16.
+- **Status:** Adopted.
+
+### GB-CART-010 / 2026-10-12 / A hosted reproduction claim is made from the result line at the evidence head only
+
+- **Cause and evidence:** Plan 09-17 wrote the MagenTests and rtc3test "release bytes equal the rebuild" claim as pending, because the earlier green job was at a different head. Plan 09-18 records it only from the `result=` line at the evidence head.
+- **Remedy:** Keep the ledger entry pending until the exact-head job prints `result=byte-identical`; if it prints `result=differs`, do not change committed bytes and leave the claim unmade.
+- **Applies when:** Third-party fixtures rebuilt in CI.
+- **Verification:** The job log at the evidence head SHA; see `docs/mbc3-rtc-evidence.md`.
+- **Source:** Plans 09-17, 09-18.
+- **Status:** Adopted.
+
+### GB-GSD-014 / 2026-10-12 / Turn every "human reading" UAT item into a contract check before verify-work
+
+- **Cause and evidence:** Plan 09-14 marked the integration guide's RTC catch-up wording `human_judgment: true`, so `/gsd-verify-work 9` presented it to the owner as UAT test 14 after 13 automated passes. The judgment was structural: does the guide name only declared symbols and state every behavior the header promises. `cmake/VerifyDocContract.cmake` now decides it; mutants that drop "two calls add twice" or rename `gbb_rtc_catch_up` both fail.
+- **Remedy:** When planning, give every deliverable an automated check and a negative control. For prose that restates an API, use `VerifyDocContract.cmake` (declared-name check plus required behavior phrases). At verify-work, run the cited checks at the exact head and record them as `source: automated`; if an item still looks human, write the check first, then rerun. Present a human checkpoint only for perceptual, hardware, credential or owner-decision items, and say why no check can decide it. Write SUMMARY `coverage:` entries with `id`, `description` and a `kind` from unit, integration, e2e, automated_ui or other; the classifier rejected the `deliverable:`/`ctest` shape used in 09-04, 09-11, 09-13 and 09-16, which turned automated items into manual mapping work.
+- **Applies when:** Planning any phase, writing SUMMARY `coverage:` blocks, and running `/gsd-verify-work`.
+- **Verification:** `native_guide_rtc_contract` and its six `doc_contract_*_selftest` controls (each fails on a weaker script); a verify-work session with zero human checkpoints unless one of the four exceptions applies. See DECISIONS D-069.
+- **Source:** Phase 9 verify-work, owner directive.
+- **Status:** Adopted.

@@ -1,0 +1,6 @@
+gbinput 1
+# rtc3test Range suite: DOWN moves the cursor to Range; A starts it.
+wait 60f
+tap DOWN 4f
+wait 8f
+tap A 4f

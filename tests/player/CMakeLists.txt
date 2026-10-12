@@ -53,10 +53,22 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       set_target_properties(test_player_presentation PROPERTIES C_EXTENSIONS OFF)
     endif()
     add_test(NAME ${test_name} COMMAND test_player_presentation ${test_name})
+  elseif(test_name STREQUAL "player_session_clock_flag_scope")
+    # Matched before the generic player_session_ branch: this one drives the real
+    # player binary (D-21), not test_player_session.
+    add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+      -DGBB_PLAYER=$<TARGET_FILE:gabbaboy-player>
+      -DGBB_DEMO=${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb
+      -DGBB_INVALID=${PROJECT_SOURCE_DIR}/fixtures/visible-demo/LICENSE.txt
+      -DGBB_MBC1=${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/continuation.gb
+      -DGBB_HOME=${CMAKE_CURRENT_BINARY_DIR}/clock-flag-scope-home
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/clock_flag_scope.cmake)
+    set_tests_properties(${test_name} PROPERTIES TIMEOUT 60)
   elseif(test_name MATCHES "^player_session_[a-z0-9_]+$")
     if(NOT TARGET test_player_session)
       add_library(gabbaboy-player-session-test STATIC
-        "${PROJECT_SOURCE_DIR}/src/player/session.c")
+        "${PROJECT_SOURCE_DIR}/src/player/session.c"
+        "${PROJECT_SOURCE_DIR}/src/player/catch_up_policy.c")
       target_include_directories(gabbaboy-player-session-test PUBLIC
         "${PROJECT_SOURCE_DIR}/src/player")
       target_link_libraries(gabbaboy-player-session-test PUBLIC
@@ -85,6 +97,10 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
         ${PROJECT_SOURCE_DIR}/fixtures/libbet/libbet.gb
         ${PROJECT_SOURCE_DIR}/tests/acceptance/inputs/libbet-no-input.input)
     endif()
+    if(test_name MATCHES "^player_session_v1_(corpus_load|mbc1_write_identical)$")
+      # D-25: the two real v0.1.2 envelopes recorded in the corpus manifest.
+      set(player_session_extra ${PROJECT_SOURCE_DIR}/fixtures/save-envelope-v1)
+    endif()
     add_test(NAME ${test_name} COMMAND test_player_session ${test_name}
       ${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb
       ${CMAKE_CURRENT_BINARY_DIR}/${test_name}-temp.gb
@@ -94,7 +110,7 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       set_tests_properties(${test_name} PROPERTIES TIMEOUT 300
         ENVIRONMENT "SDL_AUDIO_DRIVER=dummy")
     endif()
-  elseif(test_name MATCHES "^player_continuation_(resume|missing_save|wrong_rom|mutated_payload)$")
+  elseif(test_name MATCHES "^player_continuation_(resume|missing_save|wrong_rom|mutated_payload|mbc3_rtc_(resume|delta|rollback|halted|no_clock)|mbc3_wrong_rom|mbc2_resume|mbc5_resume)$")
     if(NOT TARGET test_player_continuation)
       add_executable(test_player_continuation test_continuation.c)
       target_link_libraries(test_player_continuation PRIVATE
@@ -105,8 +121,22 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       set_target_properties(test_player_continuation PROPERTIES
         C_EXTENSIONS OFF)
     endif()
+    # Each scenario names the original fixture whose protocol it drives.
+    if(test_name MATCHES "^player_continuation_mbc3_")
+      set(player_continuation_rom
+        ${PROJECT_SOURCE_DIR}/fixtures/mbc3-rtc-continuation/continuation.gb)
+    elseif(test_name STREQUAL "player_continuation_mbc2_resume")
+      set(player_continuation_rom
+        ${PROJECT_SOURCE_DIR}/fixtures/mbc2-continuation/continuation.gb)
+    elseif(test_name STREQUAL "player_continuation_mbc5_resume")
+      set(player_continuation_rom
+        ${PROJECT_SOURCE_DIR}/fixtures/mbc5-continuation/continuation.gb)
+    else()
+      set(player_continuation_rom
+        ${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/continuation.gb)
+    endif()
     add_test(NAME ${test_name} COMMAND test_player_continuation ${test_name}
-      ${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/continuation.gb
+      ${player_continuation_rom}
       ${CMAKE_CURRENT_BINARY_DIR}/${test_name}-data)
   elseif(test_name STREQUAL "player_smoke")
     add_test(NAME player_smoke COMMAND gabbaboy-player --smoke)

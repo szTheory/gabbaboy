@@ -1,0 +1,24 @@
+{
+  "suite": {
+    "name": "rtc3test",
+    "release": "v004",
+    "revision": "80ae792bf1b3c3387929b912e6df001af3511e24",
+    "license": "Unlicense; see LICENSE.txt",
+    "upstream": "https://github.com/aaaaaa123456789/rtc3test"
+  },
+  "fixtures": [
+    {
+      "alias": "rtc3test",
+      "file": "rtc3test.gb",
+      "size_bytes": 32768,
+      "sha256": "a271013fb37ea1d927b854798401320b220d57abb3ca77f3d318ceb8a9def30d",
+      "cartridge_type": "0x0F"
+    },
+    {
+      "alias": "rtc3test-tests-md",
+      "file": "tests.md",
+      "size_bytes": 6877,
+      "sha256": "1937b614b49cff4e2e9b3e36aaa888e754ece6eb141ce46406a28f8f005d4172"
+    }
+  ]
+}

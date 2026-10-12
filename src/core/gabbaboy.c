@@ -51,15 +51,20 @@ typedef struct {
  * keeps the original 2 MiB early ceiling so its loader result never changes. */
 #define GBB_MAX_ROM_SIZE ((size_t)8u * 1024u * 1024u)
 #define GBB_LEGACY_MAX_ROM_SIZE ((size_t)2u * 1024u * 1024u)
+/* MBC3 ($0F-$13) decodes seven ROM bank bits; ROM code $07 (4 MiB) is the MBC30
+ * variant and is rejected after the checksum, so 4 MiB is only the early ceiling. */
+#define GBB_MBC3_MAX_ROM_SIZE ((size_t)4u * 1024u * 1024u)
 
 /* ROM_ONLY must stay 0 so a calloc-zeroed instance is a ROM-only cartridge. */
-typedef enum { CART_ROM_ONLY = 0, CART_MBC1 = 1, CART_MBC2 = 2, CART_MBC5 = 3 } cart_kind;
+typedef enum { CART_ROM_ONLY = 0, CART_MBC1 = 1, CART_MBC2 = 2, CART_MBC5 = 3,
+       CART_MBC3 = 4 } cart_kind;
 
 typedef enum {
     CART_RAM_NONE = 0,     /* RAM code must be $00 */
     CART_RAM_8K_OR_32K = 1, /* code $02 = 8 KiB; $03 = 32 KiB on small ROMs */
     CART_RAM_MBC2 = 2,      /* built-in 512 nibbles; header RAM code must be $00 */
-    CART_RAM_MBC5 = 3       /* codes $02/$03/$05/$04 = 8/32/64/128 KiB */
+    CART_RAM_MBC5 = 3,      /* codes $02/$03/$05/$04 = 8/32/64/128 KiB */
+    CART_RAM_MBC3 = 4       /* codes $02/$03 = 8/32 KiB; $05 is the MBC30 marker only */
 } cart_ram_rule;
 
 /* MBC2 has 512 x 4-bit cells inside the mapper chip. We store each as a byte
@@ -70,6 +75,7 @@ typedef struct {
     uint8_t kind;
     uint8_t ram_window_mapped;
     uint8_t has_battery;
+    uint8_t has_timer;
     uint8_t has_rumble;
     uint8_t rom_bank_lo;
     uint8_t rom_bank_hi;
@@ -78,6 +84,15 @@ typedef struct {
     uint8_t mbc1_mode;
     uint8_t rumble_on;
     uint64_t rumble_changes;
+    /* MBC3 RTC (D-07): lazy, anchored on emulated time_half_dots. The live
+     * registers hold the clock as of rtc_synced_at; rtc_l holds the bytes the
+     * guest reads (S, M, H, DL, DH) until the next latch. rtc_sub counts
+     * half-dots inside the current second (< 2^23). */
+    uint8_t rtc_s, rtc_m, rtc_h, rtc_dl, rtc_dh;
+    uint8_t rtc_l[5];
+    uint8_t rtc_latch_prev;
+    uint32_t rtc_sub;
+    uint64_t rtc_synced_at;
 } cart_state;
 
 typedef struct {
@@ -101,6 +116,11 @@ static const cart_type_row cart_type_table[] = {
     { 0x03u, CART_MBC1,     1u, 1u, 0u, 0u, 0x06u, CART_RAM_8K_OR_32K, 0x04u, GBB_LEGACY_MAX_ROM_SIZE },
     { 0x05u, CART_MBC2,     1u, 0u, 0u, 0u, 0x03u, CART_RAM_MBC2,      0u,    GBB_LEGACY_MAX_ROM_SIZE },
     { 0x06u, CART_MBC2,     1u, 1u, 0u, 0u, 0x03u, CART_RAM_MBC2,      0u,    GBB_LEGACY_MAX_ROM_SIZE },
+    { 0x0Fu, CART_MBC3,     1u, 1u, 1u, 0u, 0x07u, CART_RAM_NONE,      0u,    GBB_MBC3_MAX_ROM_SIZE },
+    { 0x10u, CART_MBC3,     1u, 1u, 1u, 0u, 0x07u, CART_RAM_MBC3,      0u,    GBB_MBC3_MAX_ROM_SIZE },
+    { 0x11u, CART_MBC3,     1u, 0u, 0u, 0u, 0x07u, CART_RAM_NONE,      0u,    GBB_MBC3_MAX_ROM_SIZE },
+    { 0x12u, CART_MBC3,     1u, 0u, 0u, 0u, 0x07u, CART_RAM_MBC3,      0u,    GBB_MBC3_MAX_ROM_SIZE },
+    { 0x13u, CART_MBC3,     1u, 1u, 0u, 0u, 0x07u, CART_RAM_MBC3,      0u,    GBB_MBC3_MAX_ROM_SIZE },
     { 0x19u, CART_MBC5,     1u, 0u, 0u, 0u, 0x08u, CART_RAM_NONE,      0u,    GBB_MAX_ROM_SIZE },
     { 0x1Au, CART_MBC5,     1u, 0u, 0u, 0u, 0x08u, CART_RAM_MBC5,      0u,    GBB_MAX_ROM_SIZE },
     { 0x1Bu, CART_MBC5,     1u, 1u, 0u, 0u, 0x08u, CART_RAM_MBC5,      0u,    GBB_MAX_ROM_SIZE },
@@ -123,6 +143,7 @@ static void cart_reset_registers(cart_state *c) {
     c->ram_bank = 0u;
     c->ram_enabled = 0u;
     c->mbc1_mode = 0u;
+    c->rtc_latch_prev = 0xFFu; /* a single $01 after load or reset never latches */
 }
 
 static size_t mbc1_rom_bank(const cart_state *c, size_t rom_size, uint16_t address) {
@@ -149,6 +170,96 @@ static size_t mbc1_ram_offset(const cart_state *c, size_t ram_size, uint16_t add
         ? ((size_t)c->rom_bank_hi & (bank_count - 1u)) : 0u;
     return bank * bank_size + (size_t)(address - 0xA000u);
 }
+
+/* ---- MBC3 RTC (D-07..D-09) --------------------------------------------------
+ * The clock never reads the host: it is advanced only from the emulated
+ * half-dot counter, lazily, when the guest touches a clock register. 2^23
+ * half-dots are exactly one second (4194304 Hz * 2 half-dots per T-cycle). */
+#define RTC_HALF_DOTS_PER_SECOND_SHIFT 23u
+#define RTC_SUB_MASK 0x7FFFFFu
+
+/* Add n ticks to a field that carries at `limit` and stores `mask` bits. A value
+ * at or above the limit (only reachable by a guest write) is not a legal count:
+ * it steps to (v + 1) & mask without carrying until it wraps to 0, and only then
+ * counts normally. Returns the number of carries into the next field. */
+static uint64_t rtc_step_field(uint8_t *field, uint64_t n, uint32_t limit, uint32_t mask) {
+    uint64_t f = *field;
+    if (f >= limit) {
+        const uint64_t to_wrap = (uint64_t)mask + 1u - f;
+        if (n < to_wrap) {
+            *field = (uint8_t)(f + n);
+            return 0u;
+        }
+        n -= to_wrap;
+        f = 0u;
+    }
+    /* Split n first so f + n can never wrap even for a 64-bit second count. */
+    const uint64_t low = f + n % limit;
+    *field = (uint8_t)(low % limit);
+    return n / limit + low / limit;
+}
+
+static void rtc_add_seconds(cart_state *c, uint64_t secs) {
+    if (secs == 0u) return;
+    const uint64_t minutes = rtc_step_field(&c->rtc_s, secs, 60u, 0x3Fu);
+    const uint64_t hours = rtc_step_field(&c->rtc_m, minutes, 60u, 0x3Fu);
+    const uint64_t days = rtc_step_field(&c->rtc_h, hours, 24u, 0x1Fu);
+    const uint64_t total = (uint64_t)c->rtc_dl + ((uint64_t)(c->rtc_dh & 0x01u) * 256u) + days;
+    if (total >= 512u) c->rtc_dh |= 0x80u; /* sticky until a guest DH write clears it */
+    c->rtc_dl = (uint8_t)(total & 0xFFu);
+    c->rtc_dh = (uint8_t)((c->rtc_dh & 0xC0u) | (uint8_t)((total >> 8) & 1u));
+}
+
+/* Credit the half-dots since the last sync. A halted clock gets no time, but
+ * the anchor still advances so un-halting never credits the halted period. */
+static void rtc_sync(cart_state *c, uint64_t now) {
+    const uint64_t el = now >= c->rtc_synced_at ? now - c->rtc_synced_at : 0u;
+    c->rtc_synced_at = now;
+    if (c->rtc_dh & 0x40u) return;
+    const uint64_t low = (el & RTC_SUB_MASK) + c->rtc_sub;
+    const uint64_t secs = (el >> RTC_HALF_DOTS_PER_SECOND_SHIFT) +
+                          (low >> RTC_HALF_DOTS_PER_SECOND_SHIFT);
+    c->rtc_sub = (uint32_t)(low & RTC_SUB_MASK);
+    rtc_add_seconds(c, secs);
+}
+
+static uint8_t rtc_read_mask(unsigned reg, uint8_t value) {
+    static const uint8_t masks[5] = {0x3Fu, 0x3Fu, 0x1Fu, 0xFFu, 0xC1u};
+    return (uint8_t)(value & masks[reg]);
+}
+
+/* Returns 1 when the observable clock state changed (for the D-10 generation). */
+static int rtc_write_register(cart_state *c, uint64_t now, unsigned reg, uint8_t value) {
+    rtc_sync(c, now);
+    const uint8_t b_s = c->rtc_s, b_m = c->rtc_m, b_h = c->rtc_h;
+    const uint8_t b_dl = c->rtc_dl, b_dh = c->rtc_dh;
+    const uint32_t sub_before = c->rtc_sub;
+    switch (reg) {
+    case 0u:
+        c->rtc_s = (uint8_t)(value & 0x3Fu); /* rtc: out-of-range fields are stored as written */
+        c->rtc_sub = 0u; /* rtc: a seconds write restarts the sub-second prescaler */
+        break;
+    case 1u: c->rtc_m = (uint8_t)(value & 0x3Fu); break;
+    case 2u: c->rtc_h = (uint8_t)(value & 0x1Fu); break;
+    case 3u: c->rtc_dl = value; break;
+    default: c->rtc_dh = (uint8_t)(value & 0xC1u); break;
+    }
+    if (reg >= 1u && reg <= 3u) c->rtc_sub = sub_before; /* rtc: other register writes keep the prescaler */
+    if (reg == 4u) c->rtc_sub = sub_before; /* rtc: a halt toggle keeps the prescaler */
+    return b_s != c->rtc_s || b_m != c->rtc_m || b_h != c->rtc_h ||
+           b_dl != c->rtc_dl || b_dh != c->rtc_dh || sub_before != c->rtc_sub;
+}
+
+static void rtc_latch_write(cart_state *c, uint64_t now, uint8_t value) {
+    const int latch_now = c->rtc_latch_prev == 0x00u && value == 0x01u; /* rtc: latch only on 00 then 01 */
+    if (latch_now) {
+        rtc_sync(c, now);
+        c->rtc_l[0] = c->rtc_s; c->rtc_l[1] = c->rtc_m; c->rtc_l[2] = c->rtc_h;
+        c->rtc_l[3] = c->rtc_dl; c->rtc_l[4] = c->rtc_dh;
+    }
+    c->rtc_latch_prev = value;
+}
+/* ---- end MBC3 RTC ---------------------------------------------------------- */
 /* ===================== end Cartridge mapper ================================ */
 
 typedef struct {
@@ -156,6 +267,7 @@ typedef struct {
     uint8_t kind;
     uint8_t ram_window_mapped;
     uint8_t has_battery;
+    uint8_t has_timer;
     uint8_t has_rumble;
     size_t ram_size;
 } cartridge_info;
@@ -773,6 +885,12 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
             const size_t offset = bank * 0x4000u + (size_t)(address & 0x3FFFu);
             return offset < m->rom_size ? m->rom[offset] : 0xFFu;
         }
+        case CART_MBC3: {
+            /* The stored bank is already translated and masked at write time. */
+            const size_t bank = address < 0x4000u ? 0u : (size_t)m->cart.rom_bank_lo;
+            const size_t offset = bank * 0x4000u + (size_t)(address & 0x3FFFu);
+            return offset < m->rom_size ? m->rom[offset] : 0xFFu;
+        }
         case CART_MBC5: {
             const size_t bank = address < 0x4000u ? 0u
                 : mbc5_rom_bank(&m->cart, m->rom_size / 0x4000u);
@@ -796,6 +914,20 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
             if (m->cart.ram_enabled && m->cartridge_ram != NULL &&
                 m->cartridge_ram_size == MBC2_RAM_BYTES)
                 return m->cartridge_ram[address & 0x1FFu];
+            return 0xFFu;
+        case CART_MBC3:
+            /* Selections $00-$03 reach RAM, $08-$0C the latched RTC bytes on timer
+             * types; every other value maps nothing. */
+            if (m->cart.ram_enabled && m->cart.has_timer &&
+                m->cart.ram_bank >= 0x08u && m->cart.ram_bank <= 0x0Cu)
+                return rtc_read_mask(m->cart.ram_bank - 0x08u,
+                                     m->cart.rtc_l[m->cart.ram_bank - 0x08u]);
+            if (m->cart.ram_enabled && m->cartridge_ram != NULL &&
+                m->cartridge_ram_size != 0u && m->cart.ram_bank <= 0x03u) {
+                const size_t banks = m->cartridge_ram_size / 0x2000u;
+                const size_t bank = (size_t)m->cart.ram_bank & (banks - 1u);
+                return m->cartridge_ram[bank * 0x2000u + (size_t)(address & 0x1FFFu)];
+            }
             return 0xFFu;
         case CART_MBC5:
             if (m->cart.ram_enabled && m->cartridge_ram != NULL &&
@@ -883,6 +1015,26 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
                 }
             }
             break;
+        case CART_MBC3:
+            if (address < 0x2000u) {
+                m->cart.ram_enabled = (value & 0x0Fu) == 0x0Au;
+            } else if (address < 0x4000u) {
+                /* Seven bits, zero becomes one, then wrap to the image. */
+                size_t bank = value & 0x7Fu;
+                if (bank == 0u) bank = 1u;
+                m->cart.rom_bank_lo = (uint8_t)(bank & (m->rom_size / 0x4000u - 1u));
+            } else if (address < 0x6000u) {
+                /* This is a software-model decision, not hardware-qualified: values
+                 * $04-$07 and $0D-$FF map nothing (SameBoy aliases with & 3, mGBA
+                 * decodes the low nibble). Stored whole so the RTC plan can map
+                 * $08-$0C. */
+                m->cart.ram_bank = value;
+            } else if (address < 0x8000u && m->cart.has_timer) {
+                /* Latching on exactly $00 then $01 is a project decision (the
+                 * common emulator behaviour), not a hardware-confirmed rule. */
+                rtc_latch_write(&m->cart, m->time_half_dots, value);
+            }
+            break;
         case CART_MBC5:
             if (address < 0x2000u)
                 m->cart.ram_enabled = (value & 0x0Fu) == 0x0Au;
@@ -939,6 +1091,28 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
                 const uint8_t canonical = (uint8_t)(0xF0u | (value & 0x0Fu));
                 if (m->cartridge_ram[offset] != canonical) {
                     m->cartridge_ram[offset] = canonical;
+                    if (m->cart.has_battery &&
+                        m->battery_generation != UINT64_MAX)
+                        ++m->battery_generation;
+                }
+            }
+            break;
+        case CART_MBC3:
+            if (m->cart.ram_enabled && m->cart.has_timer &&
+                m->cart.ram_bank >= 0x08u && m->cart.ram_bank <= 0x0Cu) {
+                /* bus_write advanced the devices first, so time_half_dots is the
+                 * write timestamp. */
+                if (rtc_write_register(&m->cart, m->time_half_dots,
+                                       (unsigned)m->cart.ram_bank - 0x08u, value) &&
+                    m->cart.has_battery && m->battery_generation != UINT64_MAX)
+                    ++m->battery_generation;
+            } else if (m->cart.ram_enabled && m->cartridge_ram != NULL &&
+                m->cartridge_ram_size != 0u && m->cart.ram_bank <= 0x03u) {
+                const size_t banks = m->cartridge_ram_size / 0x2000u;
+                const size_t offset = ((size_t)m->cart.ram_bank & (banks - 1u)) * 0x2000u +
+                                      (size_t)(address & 0x1FFFu);
+                if (m->cartridge_ram[offset] != value) {
+                    m->cartridge_ram[offset] = value;
                     if (m->cart.has_battery &&
                         m->battery_generation != UINT64_MAX)
                         ++m->battery_generation;
@@ -1845,12 +2019,22 @@ static gbb_error validate_header(const uint8_t *rom, size_t size,
     if (rom_size_code > row->max_rom_code) return GBB_UNSUPPORTED_ROM_SIZE;
 
     size_t ram_size = 0u;
+    int mbc30_ram_marker = 0;
     if (row->ram_rule == CART_RAM_NONE) {
         if (ram_size_code != 0u) return GBB_UNSUPPORTED_RAM_SIZE;
     } else if (row->ram_rule == CART_RAM_MBC2) {
         /* The 512 bytes come from the type row; $149 must not claim more. */
         if (ram_size_code != 0u) return GBB_UNSUPPORTED_RAM_SIZE;
         ram_size = MBC2_RAM_BYTES;
+    } else if (row->ram_rule == CART_RAM_MBC3) {
+        /* $05 (64 KiB, MBC30) is never loadable: it is remembered and answered as
+         * a variant only after the length and checksum checks pass (Phase 9 D-02). */
+        switch (ram_size_code) {
+        case 0x02u: ram_size = 8192u; break;
+        case 0x03u: ram_size = 32768u; break;
+        case 0x05u: mbc30_ram_marker = 1; break;
+        default: return GBB_UNSUPPORTED_RAM_SIZE;
+        }
     } else if (row->ram_rule == CART_RAM_MBC5) {
         switch (ram_size_code) {
         case 0x02u: ram_size = 8192u; break;
@@ -1876,11 +2060,15 @@ static gbb_error validate_header(const uint8_t *rom, size_t size,
     if (row->kind == CART_MBC1 && declared >= 512u * 1024u &&
         recognized_mbc1m_candidate(rom, size))
         return GBB_UNSUPPORTED_CARTRIDGE_VARIANT;
+    /* MBC30 (ROM code $07 or 64 KiB RAM) has an undocumented register layout here. */
+    if (row->kind == CART_MBC3 && (rom_size_code == 0x07u || mbc30_ram_marker))
+        return GBB_UNSUPPORTED_CARTRIDGE_VARIANT;
     if (out_info != NULL) {
         out_info->type = type;
         out_info->kind = row->kind;
         out_info->ram_window_mapped = row->ram_window_mapped;
         out_info->has_battery = row->has_battery;
+        out_info->has_timer = row->has_timer;
         out_info->has_rumble = row->has_rumble;
         out_info->ram_size = ram_size;
     }
@@ -1914,7 +2102,11 @@ gbb_error gbb_reset(gbb_instance *instance) {
         instance->cart.rumble_on = 0u;
         if (instance->cart.rumble_changes != UINT64_MAX) ++instance->cart.rumble_changes;
     }
+    /* D-09: the clock keeps running across a reset. Bank the elapsed time, let
+     * reset_state zero time_half_dots, then rebase the anchor to match. */
+    if (instance->cart.has_timer) rtc_sync(&instance->cart, instance->time_half_dots);
     reset_state(instance);
+    if (instance->cart.has_timer) instance->cart.rtc_synced_at = 0u;
     return GBB_OK;
 }
 
@@ -1946,68 +2138,165 @@ gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_si
     instance->cart.kind = info.kind;
     instance->cart.ram_window_mapped = info.ram_window_mapped;
     instance->cart.has_battery = info.has_battery;
+    instance->cart.has_timer = info.has_timer;
     instance->cart.has_rumble = info.has_rumble;
     reset_state(instance);
     instance->loaded = 1;
     return GBB_OK;
 }
 
-static int has_battery_ram(const gbb_instance *instance) {
-    return instance != NULL && instance->loaded &&
-           instance->cart.has_battery &&
-           instance->cartridge_ram != NULL &&
-           instance->cartridge_ram_size != 0u;
+/* A timer cartridge is battery-backed even when it has no RAM ($0F): its image
+ * is the RTC block alone. */
+static int has_battery_image(const gbb_instance *instance) {
+    return instance != NULL && instance->loaded && instance->cart.has_battery &&
+           (instance->cartridge_ram_size != 0u || instance->cart.has_timer);
+}
+
+static size_t battery_image_size(const gbb_instance *instance) {
+    return instance->cartridge_ram_size +
+           (instance->cart.has_timer ? (size_t)GBB_RTC_BLOCK_SIZE : 0u);
+}
+
+/* RTC block v1 (D-16), written field by field so no struct layout leaks:
+ *   0-3 "GBRT", 4 version, 5-8 sub (u32 LE), 9-13 live S M H DL DH,
+ *   14-18 latched S M H DL DH, 19 latch_prev, 20 reserved zero. */
+static void rtc_block_write(const cart_state *c, uint8_t out[GBB_RTC_BLOCK_SIZE]) {
+    out[0] = 'G'; out[1] = 'B'; out[2] = 'R'; out[3] = 'T';
+    out[4] = 1u;
+    out[5] = (uint8_t)(c->rtc_sub & 0xFFu);
+    out[6] = (uint8_t)((c->rtc_sub >> 8) & 0xFFu);
+    out[7] = (uint8_t)((c->rtc_sub >> 16) & 0xFFu);
+    out[8] = (uint8_t)((c->rtc_sub >> 24) & 0xFFu);
+    out[9] = c->rtc_s; out[10] = c->rtc_m; out[11] = c->rtc_h;
+    out[12] = c->rtc_dl; out[13] = c->rtc_dh;
+    for (unsigned i = 0u; i < 5u; ++i) out[14u + i] = c->rtc_l[i];
+    out[19] = c->rtc_latch_prev;
+    out[20] = 0u;
+}
+
+/* Validates every field before storing any of them; out is written only on
+ * success. Out-of-range-but-legal values (S = 63, H = 31) are accepted because
+ * a guest can store them. */
+static gbb_error rtc_block_parse(const uint8_t in[GBB_RTC_BLOCK_SIZE], cart_state *out) {
+    if (in[0] != 'G' || in[1] != 'B' || in[2] != 'R' || in[3] != 'T') return GBB_INVALID_ARGUMENT;
+    if (in[4] != 1u) return GBB_INVALID_ARGUMENT;
+    const uint32_t sub = (uint32_t)in[5] | ((uint32_t)in[6] << 8) |
+                         ((uint32_t)in[7] << 16) | ((uint32_t)in[8] << 24);
+    if (sub > RTC_SUB_MASK) return GBB_INVALID_ARGUMENT;
+    for (unsigned copy = 0u; copy < 2u; ++copy) {
+        const uint8_t *r = in + 9u + copy * 5u;
+        if (r[0] > 0x3Fu || r[1] > 0x3Fu || r[2] > 0x1Fu) return GBB_INVALID_ARGUMENT;
+        if ((r[4] & 0x3Eu) != 0u) return GBB_INVALID_ARGUMENT;
+    }
+    if (in[20] != 0u) return GBB_INVALID_ARGUMENT;
+    out->rtc_sub = sub;
+    out->rtc_s = in[9]; out->rtc_m = in[10]; out->rtc_h = in[11];
+    out->rtc_dl = in[12]; out->rtc_dh = in[13];
+    for (unsigned i = 0u; i < 5u; ++i) out->rtc_l[i] = in[14u + i];
+    out->rtc_latch_prev = in[19];
+    return GBB_OK;
+}
+
+static int rtc_fields_equal(const cart_state *a, const cart_state *b) {
+    return a->rtc_sub == b->rtc_sub && a->rtc_s == b->rtc_s && a->rtc_m == b->rtc_m &&
+           a->rtc_h == b->rtc_h && a->rtc_dl == b->rtc_dl && a->rtc_dh == b->rtc_dh &&
+           memcmp(a->rtc_l, b->rtc_l, 5u) == 0 && a->rtc_latch_prev == b->rtc_latch_prev;
 }
 
 gbb_error gbb_battery_size(const gbb_instance *instance, size_t *out_size) {
     if (instance == NULL || out_size == NULL) return GBB_INVALID_ARGUMENT;
-    if (!has_battery_ram(instance)) return GBB_NO_BATTERY;
-    *out_size = instance->cartridge_ram_size;
+    if (!has_battery_image(instance)) return GBB_NO_BATTERY;
+    *out_size = battery_image_size(instance);
     return GBB_OK;
 }
 
 gbb_error gbb_copy_battery(const gbb_instance *instance, uint8_t *out_bytes,
                            size_t capacity_bytes) {
     if (instance == NULL || out_bytes == NULL) return GBB_INVALID_ARGUMENT;
-    if (!has_battery_ram(instance)) return GBB_NO_BATTERY;
-    if (capacity_bytes < instance->cartridge_ram_size) return GBB_BUFFER_TOO_SMALL;
-    memcpy(out_bytes, instance->cartridge_ram, instance->cartridge_ram_size);
+    if (!has_battery_image(instance)) return GBB_NO_BATTERY;
+    if (capacity_bytes < battery_image_size(instance)) return GBB_BUFFER_TOO_SMALL;
+    if (instance->cartridge_ram_size != 0u)
+        memcpy(out_bytes, instance->cartridge_ram, instance->cartridge_ram_size);
+    if (instance->cart.has_timer) {
+        /* Project the clock to now on a local copy; the instance stays const. */
+        cart_state projected = instance->cart;
+        rtc_sync(&projected, instance->time_half_dots);
+        rtc_block_write(&projected, out_bytes + instance->cartridge_ram_size);
+    }
     return GBB_OK;
 }
 
 gbb_error gbb_import_battery(gbb_instance *instance, const uint8_t *bytes,
                              size_t size_bytes) {
     if (instance == NULL || bytes == NULL) return GBB_INVALID_ARGUMENT;
-    if (!has_battery_ram(instance)) return GBB_NO_BATTERY;
-    if (size_bytes != instance->cartridge_ram_size) return GBB_BATTERY_SIZE_MISMATCH;
-    if (instance->cart.kind == CART_MBC2) {
-        /* Normalise to the canonical 0xF0 | nibble image and compare first, so
-         * an unchanged image is a no-op and the input is never written. */
-        int differs = 0;
-        for (size_t i = 0u; i < size_bytes; ++i)
-            if (instance->cartridge_ram[i] != (uint8_t)(0xF0u | (bytes[i] & 0x0Fu)))
-                differs = 1;
-        if (differs) {
-            for (size_t i = 0u; i < size_bytes; ++i)
-                instance->cartridge_ram[i] = (uint8_t)(0xF0u | (bytes[i] & 0x0Fu));
-            if (instance->battery_generation != UINT64_MAX)
-                ++instance->battery_generation;
+    if (!has_battery_image(instance)) return GBB_NO_BATTERY;
+    if (size_bytes != battery_image_size(instance)) return GBB_BATTERY_SIZE_MISMATCH;
+    const size_t ram_size = instance->cartridge_ram_size;
+    /* Parse the clock into a local first so a bad block changes nothing. */
+    cart_state parsed = instance->cart;
+    if (instance->cart.has_timer) {
+        const gbb_error block = rtc_block_parse(bytes + ram_size, &parsed);
+        if (block != GBB_OK) return block;
+    }
+    int changed = 0;
+    if (ram_size != 0u) {
+        if (instance->cart.kind == CART_MBC2) {
+            /* Normalise to the canonical 0xF0 | nibble image and compare first, so
+             * an unchanged image is a no-op and the input is never written. */
+            for (size_t i = 0u; i < ram_size; ++i)
+                if (instance->cartridge_ram[i] != (uint8_t)(0xF0u | (bytes[i] & 0x0Fu)))
+                    changed = 1;
+            if (changed)
+                for (size_t i = 0u; i < ram_size; ++i)
+                    instance->cartridge_ram[i] = (uint8_t)(0xF0u | (bytes[i] & 0x0Fu));
+        } else if (memcmp(instance->cartridge_ram, bytes, ram_size) != 0) {
+            memcpy(instance->cartridge_ram, bytes, ram_size);
+            changed = 1;
         }
-        return GBB_OK;
     }
-    if (memcmp(instance->cartridge_ram, bytes, size_bytes) != 0) {
-        memcpy(instance->cartridge_ram, bytes, size_bytes);
-        if (instance->battery_generation != UINT64_MAX)
-            ++instance->battery_generation;
+    if (instance->cart.has_timer) {
+        /* Compare against the live clock projected to now, so re-importing an
+         * image just exported at this emulated time is not a change. The import
+         * itself never advances the clock: the anchor becomes now. */
+        cart_state live = instance->cart;
+        rtc_sync(&live, instance->time_half_dots);
+        if (!rtc_fields_equal(&live, &parsed)) changed = 1;
+        instance->cart.rtc_sub = parsed.rtc_sub;
+        instance->cart.rtc_s = parsed.rtc_s;
+        instance->cart.rtc_m = parsed.rtc_m;
+        instance->cart.rtc_h = parsed.rtc_h;
+        instance->cart.rtc_dl = parsed.rtc_dl;
+        instance->cart.rtc_dh = parsed.rtc_dh;
+        memcpy(instance->cart.rtc_l, parsed.rtc_l, 5u);
+        instance->cart.rtc_latch_prev = parsed.rtc_latch_prev;
+        instance->cart.rtc_synced_at = instance->time_half_dots;
     }
+    if (changed && instance->battery_generation != UINT64_MAX)
+        ++instance->battery_generation;
     return GBB_OK;
 }
 
 gbb_error gbb_battery_generation(const gbb_instance *instance,
                                  uint64_t *out_generation) {
     if (instance == NULL || out_generation == NULL) return GBB_INVALID_ARGUMENT;
-    if (!has_battery_ram(instance)) return GBB_NO_BATTERY;
+    if (!has_battery_image(instance)) return GBB_NO_BATTERY;
     *out_generation = instance->battery_generation;
+    return GBB_OK;
+}
+
+gbb_error gbb_rtc_catch_up(gbb_instance *instance, int64_t elapsed_seconds) {
+    if (instance == NULL) return GBB_INVALID_ARGUMENT;
+    if (!instance->loaded || !instance->cart.has_timer) return GBB_NO_RTC;
+    if (elapsed_seconds < 0) return GBB_INVALID_ARGUMENT;
+    if (elapsed_seconds == 0) return GBB_OK;
+    cart_state *c = &instance->cart;
+    rtc_sync(c, instance->time_half_dots);
+    if (c->rtc_dh & 0x40u) return GBB_OK; /* halted: the delta is ignored */
+    const cart_state before = *c;
+    rtc_add_seconds(c, (uint64_t)elapsed_seconds);
+    if (!rtc_fields_equal(&before, c) && c->has_battery &&
+        instance->battery_generation != UINT64_MAX)
+        ++instance->battery_generation;
     return GBB_OK;
 }
 

@@ -88,6 +88,7 @@ if(GABBABOY_BUILD_PLAYER)
 
   add_library(gabbaboy-player-adapter STATIC
     src/player/audio.c
+    src/player/catch_up_policy.c
     src/player/input.c
     src/player/presentation.c
     src/player/script_smoke.c

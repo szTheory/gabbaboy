@@ -1,0 +1,18 @@
+     Basic tests
+
+RTC on          [+PASS]
+Tick        [+1000.0ms]
+RTC off         [+PASS]
+Register writes:
+                [+PASS]
+Seconds increment:
+                [+PASS]
+Rollovers       [+PASS]
+Overflow        [+PASS]
+Overflow stickiness:
+                [+PASS]
+
+
+
+
+      * Return

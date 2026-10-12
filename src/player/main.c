@@ -96,12 +96,18 @@ typedef struct {
     bool save_retry_required;
     bool skip_final_save;
     bool transition_was_paused;
+    /* D-21: only the battery smoke modes can pin the clock, through argv. */
+    bool clock_override;
+    int64_t clock_override_unix;
     player_transition pending_transition;
 } player;
 
 extern char **environ;
 
 static void set_status(player *app, const char *status);
+static void catch_up_on_open(const player *app, gbb_instance *machine,
+                             player_save_identity *identity, bool battery_loaded,
+                             char *in_out_status, size_t status_capacity);
 static bool attempt_battery_save(player *app, bool show_saved_status);
 static void request_quit(player *app);
 static void begin_transition(player *app, player_transition transition,
@@ -508,18 +514,24 @@ static bool create_machine(player *app, const char *demo_rom_path) {
         fprintf(stderr, "Could not open the selected battery session: %s\n", error);
         return false;
     }
-    if (!player_session_load_battery(app->machine, &app->save_identity,
-                                     error, sizeof(error))) {
+    const bool battery_loaded = player_session_load_battery(
+        app->machine, &app->save_identity, error, sizeof(error));
+    if (!battery_loaded) {
         set_status(app, error);
         fprintf(stderr, "Battery save warning: %s\n", error);
     } else if (app->save_identity.battery_backed) {
         set_status(app, "Battery RAM loaded; changes are in memory until saved");
-    } else if (app->save_identity.battery_unsupported) {
-        /* D-22: MBC2/MBC5 battery cartridges run, but progress is not kept. */
-        set_status(app, "Battery saving is not supported for this cartridge type yet; progress is not kept");
-        fputs("gabbaboy-player: warning: Battery saving is not supported for this cartridge type yet; progress is not kept\n", stderr);
     } else {
         set_status(app, "Ready");
+    }
+    /* D-22: before the first guest instruction; a rejected-save warning keeps
+     * precedence over the clock line. */
+    char catch_up[192];
+    catch_up_on_open(app, app->machine, &app->save_identity, battery_loaded,
+                     catch_up, sizeof(catch_up));
+    if (catch_up[0] != '\0') {
+        set_status(app, catch_up);
+        fprintf(stderr, "%s\n", catch_up);
     }
     uint64_t generation = 0u;
     if (app->save_identity.battery_backed &&
@@ -929,6 +941,9 @@ static bool replace_session_rom(player *app, const char *path) {
     }
     const bool battery_loaded = player_session_load_battery(
         candidate_machine, &candidate_identity, error, sizeof(error));
+    char catch_up[192];
+    catch_up_on_open(app, candidate_machine, &candidate_identity, battery_loaded,
+                     catch_up, sizeof(catch_up));
     gbb_instance *old_machine = app->machine;
     char *old_path = app->current_rom_path;
     const int old_lock_fd = app->save_lock_fd;
@@ -960,13 +975,11 @@ static bool replace_session_rom(player *app, const char *path) {
         set_status(app, "ROM loaded; audio backlog cleanup failed");
     else if (!battery_loaded)
         set_status(app, error);
+    else if (catch_up[0] != '\0')
+        set_status(app, catch_up);
     else if (app->save_identity.battery_backed)
         set_status(app, "Battery RAM loaded; changes are in memory until saved");
-    else if (app->save_identity.battery_unsupported) {
-        /* D-22: MBC2/MBC5 battery cartridges run, but progress is not kept. */
-        set_status(app, "Battery saving is not supported for this cartridge type yet; progress is not kept");
-        fputs("gabbaboy-player: warning: Battery saving is not supported for this cartridge type yet; progress is not kept\n", stderr);
-    } else
+    else
         set_status(app, "ROM loaded; input and display state reset");
     return true;
 }
@@ -983,9 +996,48 @@ static void refresh_save_failure_status(player *app) {
     update_window_title(app);
 }
 
+/* The only reader of the host wall clock: the value is stamped into timer
+ * saves and used to catch the clock up on open (D-21, D-22). The core and the
+ * session never read the clock themselves. The battery smoke modes may pin it
+ * with --clock-unix so tests are exact; nothing else can. */
+static bool player_clock_now(const player *app, int64_t *out_now) {
+    if (app->clock_override) {
+        *out_now = app->clock_override_unix;
+        return true;
+    }
+    const time_t now = time(NULL);
+    if (now == (time_t)-1) return false;
+    *out_now = (int64_t)now;
+    return true;
+}
+
+static void stamp_save_clock(player *app) {
+    int64_t now = 0;
+    const bool valid = player_clock_now(app, &now);
+    player_session_set_clock(&app->save_identity, now, valid);
+}
+
+/* Runs the once-per-open catch-up on a freshly loaded identity. The status is
+ * empty when there is nothing to report or when the save was rejected (the
+ * rejection warning is more important and the clock is the core's fresh one). */
+static void catch_up_on_open(const player *app, gbb_instance *machine,
+                             player_save_identity *identity, bool battery_loaded,
+                             char *in_out_status, size_t status_capacity) {
+    in_out_status[0] = '\0';
+    if (!battery_loaded || !identity->battery_backed) return;
+    int64_t now = 0;
+    const bool valid = player_clock_now(app, &now);
+    player_session_set_clock(identity, now, valid);
+    if (!player_session_apply_catch_up(machine, identity, in_out_status,
+                                       status_capacity))
+        (void)snprintf(in_out_status, status_capacity,
+                       "Game clock could not be advanced from the save time");
+}
+
 static bool attempt_battery_save(player *app, bool show_saved_status) {
     if (!app->save_identity.battery_backed) return true;
     char error[192];
+    stamp_save_clock(app);
     if (!player_session_save_battery(app->machine, &app->save_identity,
                                      error, sizeof(error))) {
         (void)snprintf(app->save_error, sizeof(app->save_error), "%s", error);
@@ -1658,6 +1710,19 @@ static bool verify_software_layouts(void) {
     return true;
 }
 
+/* The identity needs the core's battery classification, so the synthetic ROM is
+ * loaded into a scratch instance first. */
+static bool identify_rom_with_core(const uint8_t *rom, size_t size,
+                                   player_save_identity *out_identity) {
+    gbb_instance *scratch = NULL;
+    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &scratch) != GBB_OK) return false;
+    const bool ok = gbb_load_rom(scratch, rom, size) == GBB_OK &&
+                    player_session_identify_rom(rom, size, out_identity) &&
+                    player_session_classify_cartridge(scratch, out_identity);
+    gbb_destroy(scratch);
+    return ok;
+}
+
 static bool write_smoke_rom(char *out_path, size_t path_capacity,
                             player_save_identity *out_identity) {
     static const uint8_t program[] = {
@@ -1683,7 +1748,7 @@ static bool write_smoke_rom(char *out_path, size_t path_capacity,
     for (size_t i = 0x134u; i <= 0x14Cu; ++i)
         checksum = (uint8_t)(checksum - rom[i] - 1u);
     rom[0x14Du] = checksum;
-    if (!player_session_identify_rom(rom, sizeof(rom), out_identity)) return false;
+    if (!identify_rom_with_core(rom, sizeof(rom), out_identity)) return false;
 
     char template_path[] = "/tmp/gabbaboy-battery-smoke-XXXXXX";
     const int fd = mkstemp(template_path);
@@ -1830,6 +1895,7 @@ static bool run_battery_smoke_guest(player *app, bool resume) {
             return false;
         }
         char error[192];
+        stamp_save_clock(app);
         if (!player_session_save_battery(app->machine, &app->save_identity,
                                          error, sizeof(error))) {
             fprintf(stderr, "Battery smoke save failed: %s\n", error);
@@ -2217,18 +2283,41 @@ int main(int argc, char **argv) {
     const bool script_smoke = argc == 6 &&
                               strcmp(argv[1], "--smoke-package") == 0 &&
                               strcmp(argv[3], "--input-script") == 0;
-    const bool battery_store = argc == 3 &&
+    const bool battery_store = (argc == 3 || argc == 5) &&
                                strcmp(argv[1], "--battery-smoke-store") == 0;
-    const bool battery_resume = argc == 3 &&
+    const bool battery_resume = (argc == 3 || argc == 5) &&
                                 strcmp(argv[1], "--battery-smoke-resume") == 0;
     const bool battery_smoke = battery_store || battery_resume;
+    /* D-21: --clock-unix <i64> is accepted only after the ROM of a battery
+     * smoke mode; any other appearance, or a value that is not a complete
+     * base-10 int64, is a usage error. */
+    bool clock_flag_seen = false;
+    for (int i = 1; i < argc; ++i)
+        if (strcmp(argv[i], "--clock-unix") == 0) clock_flag_seen = true;
+    bool clock_override = false;
+    int64_t clock_override_unix = 0;
+    bool clock_flag_ok = !clock_flag_seen;
+    if (battery_smoke && argc == 5 && strcmp(argv[3], "--clock-unix") == 0) {
+        /* strtoll also skips leading whitespace and takes '+'; the flag accepts only an optional
+           '-' followed by decimal digits, so check the first digit before parsing. */
+        const char *digits = argv[4][0] == '-' ? argv[4] + 1 : argv[4];
+        char *end = NULL;
+        errno = 0;
+        const long long parsed = strtoll(argv[4], &end, 10);
+        if (digits[0] >= '0' && digits[0] <= '9' && end != NULL && *end == '\0' && errno == 0) {
+            clock_override = true;
+            clock_override_unix = (int64_t)parsed;
+            clock_flag_ok = true;
+        }
+    }
     if ((smoke && argc != 2 && argc != 4) ||
         (audio_measure && argc != 4) ||
         (package_smoke && argc != 3) ||
-        (battery_smoke && argc != 3) ||
+        (battery_smoke && argc != 3 && !clock_override) ||
+        !clock_flag_ok ||
         (!help_requested && !smoke && !audio_dummy_smoke && !audio_measure && !audio_device_status &&
          !package_smoke && !battery_smoke && !script_smoke && argc > 1)) {
-        fprintf(stderr, "usage: %s [--help | --smoke [demo-rom invalid-rom] | --smoke-package invalid-rom [--input-script script rom] | --audio-dummy-smoke | --audio-measure frame|792 demo-rom | --audio-device-status]\n",
+        fprintf(stderr, "usage: %s [--help | --smoke [demo-rom invalid-rom] | --smoke-package invalid-rom [--input-script script rom] | --audio-dummy-smoke | --audio-measure frame|792 demo-rom | --audio-device-status | --battery-smoke-store|--battery-smoke-resume rom [--clock-unix seconds]]\n",
                 argv[0]);
         return 2;
     }
@@ -2244,6 +2333,8 @@ int main(int argc, char **argv) {
     player app;
     memset(&app, 0, sizeof(app));
     app.save_lock_fd = -1;
+    app.clock_override = clock_override;
+    app.clock_override_unix = clock_override_unix;
     app.running = true;
     app.needs_redraw = true;
     app.window_focused = true;

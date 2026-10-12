@@ -48,7 +48,7 @@ jobs:
             "source_sha": "${{ github.event.pull_request.head.sha }}",
             "package_sha256": "$digest",
             "smoke_result": "passed",
-            "capability_limits": "Bootless DMG-CPU-B core with standard MBC1, MBC2 and MBC5 (player battery persistence: MBC1 type \$03 only), bounded battery API, and 48 kHz signed 16-bit stereo audio API; this Linux package has no SDL player or device playback and does not qualify CGB or physical hardware",
+            "capability_limits": "Bootless DMG-CPU-B core with standard MBC1, MBC2, MBC3 (types 0F-13, deterministic emulated-time RTC with explicit host catch-up; MBC30 rejected) and MBC5 (the macOS player persists battery saves for MBC1, MBC2, MBC3 and MBC5), bounded battery API, and 48 kHz signed 16-bit stereo audio API; this Linux package has no SDL player or device playback and does not qualify CGB or physical hardware",
             "retention_days": $PREVIEW_RETENTION_DAYS
           }
           EOF
@@ -95,7 +95,7 @@ jobs:
             "source_sha": "${{ github.event.pull_request.head.sha }}",
             "package_sha256": "$digest",
             "smoke_result": "passed",
-            "capability_limits": "Bootless DMG-CPU-B core and SDL3 player with scoped 48 kHz signed 16-bit stereo DMG audio, standard MBC1, MBC2 and MBC5 (player battery persistence: MBC1 type \$03 only), and bounded battery API; no boot ROM, CGB, physical/revision audio qualification, or listening-quality claim",
+            "capability_limits": "Bootless DMG-CPU-B core and SDL3 player with scoped 48 kHz signed 16-bit stereo DMG audio, standard MBC1, MBC2, MBC3 (types 0F-13, deterministic emulated-time RTC with explicit host catch-up; MBC30 rejected) and MBC5, player battery persistence for MBC1, MBC2, MBC3 and MBC5 (clock catches up from the save time), and bounded battery API; no boot ROM, CGB, physical/revision audio qualification, or listening-quality claim",
             "retention_days": $PREVIEW_RETENTION_DAYS
           }
           EOF

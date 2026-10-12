@@ -39,6 +39,140 @@ foreach(case tracer header_matrix register_decode ram_echo reset
   add_test(NAME mbc2_${case} COMMAND test_mbc2 mbc2_${case})
 endforeach()
 
+add_executable(test_mbc3 test_mbc3.c)
+target_link_libraries(test_mbc3 PRIVATE GabbaBoy::core)
+target_compile_features(test_mbc3 PRIVATE c_std_17)
+set_target_properties(test_mbc3 PROPERTIES C_EXTENSIONS OFF)
+foreach(case tracer header_matrix rom_banking ram_banking ram_gate unmapped_select
+  absent_ram reset battery_generation)
+  add_test(NAME mbc3_${case} COMMAND test_mbc3 mbc3_${case})
+endforeach()
+
+add_executable(test_mbc3_rtc test_mbc3_rtc.c)
+target_link_libraries(test_mbc3_rtc PRIVATE GabbaBoy::core)
+target_compile_features(test_mbc3_rtc PRIVATE c_std_17)
+set_target_properties(test_mbc3_rtc PROPERTIES C_EXTENSIONS OFF)
+foreach(case tracer gate_and_select load_fresh)
+  add_test(NAME rtc_${case} COMMAND test_mbc3_rtc rtc_${case})
+endforeach()
+
+# White-box: includes src/core/gabbaboy.c (or a mutant copy named by GBB_CORE_SOURCE_PATH),
+# so it must not link the core library (duplicate definitions).
+add_executable(test_mbc3_rtc_internal test_mbc3_rtc_internal.c)
+target_include_directories(test_mbc3_rtc_internal PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_mbc3_rtc_internal PRIVATE c_std_17)
+set_target_properties(test_mbc3_rtc_internal PROPERTIES C_EXTENSIONS OFF)
+foreach(case closed_form_differential add_composes rate_exact prescaler_rules write_masks out_of_range_rollover day_carry_sticky halt_freezes latch_edges generation_rules time_near_max reset_rebase slice_invariance cpu_independence)
+  add_test(NAME rtc_${case} COMMAND test_mbc3_rtc_internal rtc_${case})
+endforeach()
+
+# RTC mutation controls (D-12). Each mutant is a copy of src/core/gabbaboy.c written into the build
+# tree with one plausible RTC mistake, built into the white-box test through GBB_CORE_SOURCE_PATH.
+# Every anchor is the full tagged statement line from Plan 09-09 and must occur exactly once; the
+# mutant must then fail its named original case (exit 1, REQUIRE text) while an unrelated case
+# still passes inside the same mutant (exit 0), so a mutant that is merely broken cannot pass.
+# GBB_CORE_SOURCE_PATH is the only channel: test_mbc3_rtc_internal.c includes whatever file it names,
+# so each mutant executable differs from the real white-box test by that one definition.
+# Test-only: nothing here is installed or exported.
+set(GBB_RTC_CORE_SOURCE ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GBB_RTC_CORE_SOURCE})
+file(READ ${GBB_RTC_CORE_SOURCE} gbb_rtc_core_text)
+
+set(GBB_ANCHOR_SEC_WRITE
+  "c->rtc_sub = 0u; /* rtc: a seconds write restarts the sub-second prescaler */")
+set(GBB_ANCHOR_OTHER_WRITES
+  "if (reg >= 1u && reg <= 3u) c->rtc_sub = sub_before; /* rtc: other register writes keep the prescaler */")
+set(GBB_ANCHOR_HALT_TOGGLE
+  "if (reg == 4u) c->rtc_sub = sub_before; /* rtc: a halt toggle keeps the prescaler */")
+set(GBB_ANCHOR_STORE_S
+  "c->rtc_s = (uint8_t)(value & 0x3Fu); /* rtc: out-of-range fields are stored as written */")
+set(GBB_ANCHOR_STORE_M "case 1u: c->rtc_m = (uint8_t)(value & 0x3Fu); break;")
+set(GBB_ANCHOR_STORE_H "case 2u: c->rtc_h = (uint8_t)(value & 0x1Fu); break;")
+set(GBB_ANCHOR_LATCH
+  "const int latch_now = c->rtc_latch_prev == 0x00u && value == 0x01u; /* rtc: latch only on 00 then 01 */")
+
+# gbb_rtc_mutant(<name> <failing-case> <regex> <control-case> <anchor1> <replacement1> [<anchor2> <replacement2> ...])
+# Arguments are read through ARGV so the semicolons in the C text never become list separators.
+function(gbb_rtc_mutant name failing_case failing_regex control_case)
+  set(text "${gbb_rtc_core_text}")
+  math(EXPR last "${ARGC} - 1")
+  foreach(i RANGE 4 ${last} 2)
+    math(EXPR j "${i} + 1")
+    set(anchor "${ARGV${i}}")
+    set(replacement "${ARGV${j}}")
+    string(FIND "${text}" "${anchor}" first)
+    string(FIND "${text}" "${anchor}" final REVERSE)
+    if(first EQUAL -1 OR NOT first EQUAL final)
+      message(FATAL_ERROR "RTC mutant ${name}: anchor '${anchor}' must occur exactly once in "
+        "${GBB_RTC_CORE_SOURCE} (first=${first} last=${final})")
+    endif()
+    string(REPLACE "${anchor}" "${replacement}" text "${text}")
+  endforeach()
+  set(source ${CMAKE_CURRENT_BINARY_DIR}/rtc_mutant_${name}.c)
+  file(WRITE ${source} "${text}")
+  set(target test_rtc_mutant_${name})
+  add_executable(${target} test_mbc3_rtc_internal.c)
+  target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}/include")
+  target_compile_features(${target} PRIVATE c_std_17)
+  set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
+  # The absolute build-tree path of this mutant's source, quoted for the preprocessor.
+  # (GBB_CORE_SOURCE_PATH)
+  target_compile_definitions(${target} PRIVATE GBB_CORE_SOURCE_PATH="${source}")
+  add_test(NAME rtc_mutant_${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:${target}>;${failing_case}"
+      -DGBB_EXPECT_CODE=1
+      "-DGBB_EXPECT_REGEX=${failing_regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  add_test(NAME rtc_mutant_${name}_control
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:${target}>;${control_case}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=.*"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+endfunction()
+
+gbb_rtc_mutant(prescaler_kept rtc_prescaler_rules "rreg.m, 0u. == 0u" rtc_write_masks
+  "${GBB_ANCHOR_SEC_WRITE}"
+  "c->rtc_sub = sub_before; /* mutant: a seconds write keeps the prescaler */")
+gbb_rtc_mutant(prescaler_reset_every_write rtc_prescaler_rules "rreg.m, 0u. == 1u" rtc_write_masks
+  "${GBB_ANCHOR_OTHER_WRITES}"
+  "if (reg >= 1u && reg <= 3u) c->rtc_sub = 0u; /* mutant: M, H and DL writes restart the prescaler */"
+  "${GBB_ANCHOR_HALT_TOGGLE}"
+  "if (reg == 4u) c->rtc_sub = 0u; /* mutant: a halt toggle restarts the prescaler */")
+gbb_rtc_mutant(prescaler_reset_on_halt rtc_prescaler_rules "rreg.m, 0u. == 1u" rtc_write_masks
+  "${GBB_ANCHOR_HALT_TOGGLE}"
+  "if (reg == 4u) c->rtc_sub = 0u; /* mutant: a halt toggle restarts the prescaler */")
+gbb_rtc_mutant(out_of_range_clamped rtc_out_of_range_rollover ".out.[[]1[]] == .5u." rtc_rate_exact
+  "${GBB_ANCHOR_STORE_S}"
+  "c->rtc_s = (uint8_t)((value & 0x3Fu) > 59u ? 59u : (value & 0x3Fu)); /* mutant: clamp */"
+  "${GBB_ANCHOR_STORE_M}"
+  "case 1u: c->rtc_m = (uint8_t)((value & 0x3Fu) > 59u ? 59u : (value & 0x3Fu)); break;"
+  "${GBB_ANCHOR_STORE_H}"
+  "case 2u: c->rtc_h = (uint8_t)((value & 0x1Fu) > 23u ? 23u : (value & 0x1Fu)); break;")
+gbb_rtc_mutant(latch_any_write rtc_latch_edges "rreg.m, 0u. == cases.i..expect" rtc_write_masks
+  "${GBB_ANCHOR_LATCH}"
+  "const int latch_now = 1; /* mutant: latch on any write */")
+
+add_executable(test_rtc_battery test_rtc_battery.c)
+target_link_libraries(test_rtc_battery PRIVATE GabbaBoy::core)
+target_compile_features(test_rtc_battery PRIVATE c_std_17)
+set_target_properties(test_rtc_battery PROPERTIES C_EXTENSIONS OFF)
+foreach(case block_roundtrip catch_up_basic catch_up_zero catch_up_negative catch_up_int64_max
+  catch_up_halted catch_up_carry_sticky catch_up_composes catch_up_preserves catch_up_errors
+  import_never_advances block_corruption_matrix block_reset_roundtrip block_generation
+  battery_size_types)
+  add_test(NAME rtc_${case} COMMAND test_rtc_battery rtc_${case})
+endforeach()
+
+# Pure host policy compiled directly; no player library, SDL or clock (D-21).
+add_executable(test_catch_up_policy test_catch_up_policy.c
+  "${PROJECT_SOURCE_DIR}/src/player/catch_up_policy.c")
+target_include_directories(test_catch_up_policy PRIVATE "${PROJECT_SOURCE_DIR}/src/player")
+target_compile_features(test_catch_up_policy PRIVATE c_std_17)
+set_target_properties(test_catch_up_policy PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME catch_up_policy_table COMMAND test_catch_up_policy catch_up_policy_table)
+
 add_executable(test_mbc5 test_mbc5.c)
 target_link_libraries(test_mbc5 PRIVATE GabbaBoy::core)
 target_compile_features(test_mbc5 PRIVATE c_std_17)
@@ -113,6 +247,16 @@ add_test(NAME mbc5_ninth_bit_mutant_control_below_100
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=.*"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+# Loader contradiction matrix (CART-05, D-27): independent expected-result oracle, guard instance
+# and untouched twin checked after every rejection.
+add_executable(test_loader_matrix test_loader_matrix.c)
+target_link_libraries(test_loader_matrix PRIVATE GabbaBoy::core)
+target_compile_features(test_loader_matrix PRIVATE c_std_17)
+set_target_properties(test_loader_matrix PROPERTIES C_EXTENSIONS OFF)
+foreach(case contradiction_mbc2 contradiction_mbc3 contradiction_mbc5 mbc30_variant type_byte_sweep bad_checksum)
+  add_test(NAME loader_${case} COMMAND test_loader_matrix loader_${case})
+endforeach()
 
 add_executable(test_battery test_battery.c)
 target_link_libraries(test_battery PRIVATE GabbaBoy::core)
@@ -309,11 +453,83 @@ add_test(NAME mbc1_continuation_fixture_digest
     -DROM=${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/continuation.gb
     -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/manifest.json
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
+add_test(NAME mbc3_rtc_continuation_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DROM=${PROJECT_SOURCE_DIR}/fixtures/mbc3-rtc-continuation/continuation.gb
+    -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/mbc3-rtc-continuation/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
+add_test(NAME mbc2_continuation_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DROM=${PROJECT_SOURCE_DIR}/fixtures/mbc2-continuation/continuation.gb
+    -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/mbc2-continuation/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
+add_test(NAME mbc5_continuation_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DROM=${PROJECT_SOURCE_DIR}/fixtures/mbc5-continuation/continuation.gb
+    -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/mbc5-continuation/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
+# Core-level continuation of the original timer/MBC2/MBC5 guests across fresh instances (D-24).
+add_executable(test_continuation_guests test_continuation_guests.c)
+target_link_libraries(test_continuation_guests PRIVATE GabbaBoy::core)
+target_compile_features(test_continuation_guests PRIVATE c_std_17)
+set_target_properties(test_continuation_guests PROPERTIES C_EXTENSIONS OFF)
+foreach(guest mbc3_rtc:mbc3-rtc mbc3_rtc_halted:mbc3-rtc mbc3_rtc_carry:mbc3-rtc mbc2:mbc2 mbc5:mbc5)
+  string(REPLACE ":" ";" guest_parts "${guest}")
+  list(GET guest_parts 0 guest_case)
+  list(GET guest_parts 1 guest_dir)
+  add_test(NAME continuation_guest_${guest_case}
+    COMMAND test_continuation_guests continuation_guest_${guest_case}
+      ${PROJECT_SOURCE_DIR}/fixtures/${guest_dir}-continuation/continuation.gb)
+endforeach()
 add_test(NAME mbc5_banking_fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DROM=${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb
     -DMANIFEST=${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/manifest.json
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixture.cmake)
+# MagenTests mbc_oob_sram screen oracle (D-05). Public API only; repository fixtures, never installed.
+set(GBB_MAGENTESTS_DIR "${PROJECT_SOURCE_DIR}/fixtures/magentests")
+add_executable(test_magentests test_magentests.c)
+target_link_libraries(test_magentests PRIVATE GabbaBoy::core)
+target_compile_features(test_magentests PRIVATE c_std_17)
+set_target_properties(test_magentests PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME magentests_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DMANIFEST=${GBB_MAGENTESTS_DIR}/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixtureManifest.cmake)
+add_test(NAME magentests_oob_sram_mbc3
+  COMMAND test_magentests magentests_oob_sram_mbc3 ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc3.gbc)
+add_test(NAME magentests_oob_sram_mbc1
+  COMMAND test_magentests magentests_oob_sram_mbc1 ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc)
+add_test(NAME magentests_oob_sram_mbc5
+  COMMAND test_magentests magentests_oob_sram_mbc5 ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc5.gbc)
+add_test(NAME magentests_oob_sram_negative_control
+  COMMAND test_magentests magentests_oob_sram_negative_control
+    ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc
+    ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc3.gbc
+    ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc5.gbc)
+# rtc3test v004 screen oracle (D-11). White-box single TU: it includes the core and the acceptance
+# sources it needs, so it must not link GabbaBoy::core or gabbaboy_accept (duplicate definitions).
+set(GBB_RTC3TEST_DIR "${PROJECT_SOURCE_DIR}/fixtures/rtc3test")
+set(GBB_RTC3TEST_CASES "${PROJECT_SOURCE_DIR}/tests/rtc3test")
+add_executable(test_rtc3test test_rtc3test.c)
+target_include_directories(test_rtc3test PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_rtc3test PRIVATE c_std_17)
+set_target_properties(test_rtc3test PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME rtc3test_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DMANIFEST=${GBB_RTC3TEST_DIR}/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixtureManifest.cmake)
+foreach(suite basic range subsecond)
+  add_test(NAME rtc3test_${suite}
+    COMMAND test_rtc3test rtc3test_${suite} ${GBB_RTC3TEST_DIR}/rtc3test.gb
+      ${GBB_RTC3TEST_CASES}/${suite}.input ${GBB_RTC3TEST_CASES}/expected-${suite}.txt)
+  set_tests_properties(rtc3test_${suite} PROPERTIES TIMEOUT 300)
+endforeach()
+# Negative control: the Basic script with its tap removed must never show the end marker in 60 s.
+add_test(NAME rtc3test_negative_control
+  COMMAND test_rtc3test rtc3test_negative_control ${GBB_RTC3TEST_DIR}/rtc3test.gb
+    ${GBB_RTC3TEST_CASES}/basic.input)
+set_tests_properties(rtc3test_negative_control PROPERTIES TIMEOUT 300)
 add_test(NAME mooneye_fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye
@@ -644,6 +860,32 @@ gbb_add_mbc_scan_test(mooneye_mbc_not_installed_empty 1 "scan-dir-empty"
 gbb_add_mbc_scan_test(mooneye_mbc_fixture_dirs_selftest 1 "fixture-dirs-mismatch"
   "${GBB_MBC_DIRS_SELFTEST}" "-DGBB_EXPECT_FIXTURE_DIRS=${GBB_MBC_SCAN_DIRS}")
 
+# MagenTests redistribution guard (D-06): same scan, label magentests, digest list from its manifest.
+# The renamed-copy self-test proves the scan matches by size and digest, not by file name.
+set(GBB_MAGENTESTS_SCAN_SELFTEST "${PROJECT_BINARY_DIR}/magentests-scan-selftest")
+file(MAKE_DIRECTORY "${GBB_MAGENTESTS_SCAN_SELFTEST}/share")
+file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/magentests/mbc_oob_sram_mbc3.gbc"
+  "${GBB_MAGENTESTS_SCAN_SELFTEST}/share/payload.bin")
+set(GBB_MAGENTESTS_SCAN_ARGS "-DGBB_FORBIDDEN_MANIFEST=${GBB_MAGENTESTS_DIR}/manifest.json"
+  -DGBB_FORBIDDEN_LABEL=magentests)
+function(gbb_add_magentests_scan_test name code regex scan_dir)
+  set(command "${CMAKE_COMMAND}" "-DGBB_SCAN_DIR=${scan_dir}" ${GBB_MAGENTESTS_SCAN_ARGS}
+    -P "${GBB_MBC_SCAN_SCRIPT}")
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60)
+endfunction()
+gbb_add_magentests_scan_test(magentests_not_installed 0 "magentests absent from scanned tree files=[1-9]"
+  "${GBB_LIBBET_INSTALL_CHECK}")
+set_tests_properties(magentests_not_installed PROPERTIES FIXTURES_REQUIRED libbet_install)
+gbb_add_magentests_scan_test(magentests_not_installed_selftest 1 "magentests-installed: share/payload.bin"
+  "${GBB_MAGENTESTS_SCAN_SELFTEST}")
+
 # EVID-02 baseline comparator self-tests (D-30, D-31, D-34). Each test runs cmake/VerifyDmgBaseline.cmake
 # on committed synthetic fixtures (or a generated variant of them) and asserts the exact exit code
 # and failure token through expect_exit.cmake; nothing here touches the real ledger.
@@ -801,5 +1043,152 @@ set_tests_properties(dmg_baseline PROPERTIES TIMEOUT 300
 
 # include(), not add_subdirectory(): ExpectedTests.cmake reads this directory's TESTS property only.
 include(${CMAKE_CURRENT_LIST_DIR}/acceptance/CMakeLists.txt)
+
+# No host clock in the portable core (D-13). The RTC advances only from emulated time, so the
+# source layer rejects host time headers and calls in src/core and the public header, and the
+# object layer rejects linked clock, sleep and environment symbols in the compiled core library.
+# Two negative controls prove the checks can fail: a scratch source with the forbidden header and
+# call, and an injected symbol list. Both exit through expect_exit.cmake with the exact code 1.
+set(GBB_NO_HOST_CLOCK_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/CheckCoreNoHostClock.cmake")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GBB_NO_HOST_CLOCK_SCRIPT})
+add_test(NAME no_host_clock
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_SOURCE_DIRS=${PROJECT_SOURCE_DIR}/src/core$<SEMICOLON>${PROJECT_SOURCE_DIR}/include/gabbaboy"
+    "-DGBB_CORE_LIBRARY=$<TARGET_FILE:gabbaboy_core>"
+    "-DGBB_NM=${CMAKE_NM}"
+    "-DGBB_LINKER=${CMAKE_LINKER}"
+    "-DGBB_C_COMPILER=${CMAKE_C_COMPILER}"
+    -P ${GBB_NO_HOST_CLOCK_SCRIPT})
+
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/no-host-clock-selftest")
+file(WRITE "${PROJECT_BINARY_DIR}/no-host-clock-selftest/bad.c"
+  "#include <time.h>\nint host_seconds(void) { return (int)time(NULL); }\n")
+add_test(NAME no_host_clock_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_SOURCE_DIRS=${PROJECT_BINARY_DIR}/no-host-clock-selftest;-DGBB_SYMBOLS_FILE=;-P;${GBB_NO_HOST_CLOCK_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=no-host-clock-include
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+file(WRITE "${PROJECT_BINARY_DIR}/no-host-clock-selftest/symbols.txt" "_time\n_malloc\n")
+add_test(NAME no_host_clock_symbol_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_SYMBOLS_FILE=${PROJECT_BINARY_DIR}/no-host-clock-selftest/symbols.txt;-P;${GBB_NO_HOST_CLOCK_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=no-host-clock-symbol: time"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+# A "/*" inside a // comment must not hide the code after it from the source layer.
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/no-host-clock-comment-selftest")
+file(WRITE "${PROJECT_BINARY_DIR}/no-host-clock-comment-selftest/bad.c"
+  "// a line comment that mentions /* must not open a block comment\n"
+  "long host_ticks(void) { return (long)clock(); }\n"
+  "/* a later block comment */\n")
+add_test(NAME no_host_clock_comment_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_SOURCE_DIRS=${PROJECT_BINARY_DIR}/no-host-clock-comment-selftest;-DGBB_SYMBOLS_FILE=;-P;${GBB_NO_HOST_CLOCK_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=no-host-clock-call: [^\n]*bad[.]c [(]clock[)]"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+# The Phase 9 evidence ledger cites registered test names in its claim tables (T-09-34). A rename
+# or removal must fail here rather than leave the ledger claiming evidence that no longer runs.
+set(GBB_EVIDENCE_LEDGER_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/VerifyEvidenceLedger.cmake")
+set(GBB_EVIDENCE_INVENTORIES
+  "${PROJECT_SOURCE_DIR}/tests/expected-tests.txt$<SEMICOLON>${PROJECT_SOURCE_DIR}/tests/player/expected-tests.txt")
+add_test(NAME mbc3_rtc_evidence_ledger_names
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_LEDGER=${PROJECT_SOURCE_DIR}/docs/mbc3-rtc-evidence.md
+    "-DGBB_INVENTORIES=${GBB_EVIDENCE_INVENTORIES}"
+    -P ${GBB_EVIDENCE_LEDGER_SCRIPT})
+set_tests_properties(mbc3_rtc_evidence_ledger_names PROPERTIES
+  PASS_REGULAR_EXPRESSION "evidence-ledger pass names=[1-9]")
+
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/evidence-ledger-selftest")
+file(WRITE "${PROJECT_BINARY_DIR}/evidence-ledger-selftest/ledger.md"
+  "## Claim table\n\n| Claim | Tests |\n|---|---|\n| renamed test | `rtc_latch_edges`, `rtc_no_such_test` |\n")
+add_test(NAME mbc3_rtc_evidence_ledger_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_LEDGER=${PROJECT_BINARY_DIR}/evidence-ledger-selftest/ledger.md;-DGBB_INVENTORIES=${PROJECT_SOURCE_DIR}/tests/expected-tests.txt;-P;${GBB_EVIDENCE_LEDGER_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=evidence-ledger-unregistered: rtc_no_such_test"
+    "-DGBB_FORBID_REGEX=unregistered: rtc_latch_edges"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+# The host guide must name only declared symbols and example variables and keep every RTC behavior the header promises
+# (catch-up rules, error codes, battery image layout), so its adequacy is a CI result.
+set(GBB_DOC_CONTRACT_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/VerifyDocContract.cmake")
+set(GBB_NATIVE_GUIDE_RTC_PHRASES
+  "`gbb_rtc_catch_up` applies host wall-clock time"
+  "(`$0F`, `$10`)"
+  "non-negative whole-second elapsed value"
+  "once per open"
+  "two calls add twice"
+  "as an input event"
+  "A negative value returns `GBB_INVALID_ARGUMENT` and changes nothing"
+  "returns `GBB_NO_RTC`"
+  "never advances it"
+  "`GBB_RTC_BLOCK_SIZE`-byte clock block"
+  "(the block alone for `$0F`)"
+  "never reads the host clock")
+add_test(NAME native_guide_rtc_contract
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_DOC=${PROJECT_SOURCE_DIR}/docs/native-integration.md
+    "-DGBB_DECLARATIONS=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;${PROJECT_SOURCE_DIR}/examples/relocated-c/CMakeLists.txt"
+    "-DGBB_REQUIRED=${GBB_NATIVE_GUIDE_RTC_PHRASES}"
+    "-DGBB_SCOPE_START=`gbb_rtc_catch_up` applies host wall-clock time"
+    -P ${GBB_DOC_CONTRACT_SCRIPT})
+set_tests_properties(native_guide_rtc_contract PROPERTIES
+  PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=12[^0-9]")
+
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/doc-contract-selftest")
+file(WRITE "${PROJECT_BINARY_DIR}/doc-contract-selftest/guide.md"
+  "Call `gbb_rtc_catch_up`, then\n  `gbb_no_such_call` once per\n  open.\n")
+add_test(NAME doc_contract_undeclared_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${PROJECT_BINARY_DIR}/doc-contract-selftest/guide.md;-DGBB_DECLARATIONS=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;-DGBB_REQUIRED=once per open;-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=doc-contract-undeclared: gbb_no_such_call"
+    "-DGBB_FORBID_REGEX=undeclared: gbb_rtc_catch_up|doc-contract-missing"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME doc_contract_missing_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${PROJECT_BINARY_DIR}/doc-contract-selftest/guide.md;-DGBB_DECLARATIONS=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;-DGBB_REQUIRED=two calls add twice;-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=doc-contract-missing: two calls add twice"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+# Each rule that could pass vacuously has its own failing control.
+set(GBB_DOC_SELFTEST "${PROJECT_BINARY_DIR}/doc-contract-selftest")
+file(WRITE "${GBB_DOC_SELFTEST}/ghost.h" "/* gbb_ghost_call was renamed */\n// gbb_line_ghost /* still a comment\nint gbb_real_call(void);\n")
+file(WRITE "${GBB_DOC_SELFTEST}/comment.md" "Call `gbb_real_call`, not `gbb_line_ghost`.\n")
+add_test(NAME doc_contract_comment_only_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${GBB_DOC_SELFTEST}/comment.md;-DGBB_DECLARATIONS=${GBB_DOC_SELFTEST}/ghost.h;-DGBB_REQUIRED=Call;-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=doc-contract-undeclared: gbb_line_ghost"
+    "-DGBB_FORBID_REGEX=undeclared: gbb_real_call"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+file(WRITE "${GBB_DOC_SELFTEST}/prefix.md" "Call `gbb_rtc` and `libgbb_ghost_tail`.\n")
+add_test(NAME doc_contract_word_boundary_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${GBB_DOC_SELFTEST}/prefix.md;-DGBB_DECLARATIONS=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;-DGBB_REQUIRED=Call;-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=doc-contract-undeclared: gbb_rtc[^_]"
+    "-DGBB_FORBID_REGEX=gbb_ghost_tail"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME doc_contract_empty_phrase_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${GBB_DOC_SELFTEST}/guide.md;-DGBB_DECLARATIONS=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;-DGBB_REQUIRED=  ;-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=doc-contract-empty-phrase"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+file(WRITE "${GBB_DOC_SELFTEST}/scope.md" "Call it once per open.\n\nThe `gbb_rtc_catch_up` rule:\n<!-- once per open -->\nsee above.\n")
+add_test(NAME doc_contract_scope_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${GBB_DOC_SELFTEST}/scope.md;-DGBB_DECLARATIONS=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;-DGBB_REQUIRED=once per open;-DGBB_SCOPE_START=The `gbb_rtc_catch_up` rule;-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=doc-contract-missing: once per open"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
 gabbaboy_verify_registered_tests()

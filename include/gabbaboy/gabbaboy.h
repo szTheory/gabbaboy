@@ -21,10 +21,11 @@ typedef enum {
     GBB_INVALID_ROM,          /* malformed header or header checksum */
     GBB_ROM_TRUNCATED,        /* image ends before header or declared ROM size */
     GBB_ROM_TOO_LARGE,        /* image exceeds the type-aware limit: 8 MiB for MBC5 types
-                                 $19-$1E, 2 MiB for every other type */
+                                 $19-$1E, 4 MiB for MBC3 types $0F-$13, 2 MiB for
+                                 every other type */
     GBB_ROM_SIZE_MISMATCH,    /* actual image is longer than its declared ROM size */
     GBB_UNSUPPORTED_CARTRIDGE,/* cartridge type is outside the supported matrix */
-    GBB_UNSUPPORTED_CARTRIDGE_VARIANT, /* recognized MBC1M wiring is unsupported */
+    GBB_UNSUPPORTED_CARTRIDGE_VARIANT, /* recognized MBC1M or MBC30 wiring is unsupported */
     GBB_UNSUPPORTED_ROM_SIZE, /* header declares an unsupported ROM size code */
     GBB_UNSUPPORTED_RAM_SIZE, /* cartridge header declares external RAM */
     GBB_NO_BATTERY,           /* loaded cartridge has no battery-backed RAM */
@@ -34,7 +35,8 @@ typedef enum {
     GBB_EVENT_QUEUE_FULL,
     GBB_INVALID_EVENT,
     GBB_FRAME_NOT_READY,
-    GBB_NO_RUMBLE             /* loaded cartridge has no rumble line (or no ROM) */
+    GBB_NO_RUMBLE,            /* loaded cartridge has no rumble line (or no ROM) */
+    GBB_NO_RTC                /* loaded cartridge has no MBC3 timer (or no ROM) */
 } gbb_error;
 
 typedef enum {
@@ -142,10 +144,15 @@ gbb_error gbb_reset(gbb_instance *instance);
  * 512 four-bit cells are built into the mapper. MBC5 types $19-$1E are
  * supported with ROM-size codes $00-$08 (32 KiB-8 MiB) and RAM-size codes
  * $00 (types $19/$1C only), $02 (8 KiB), $03 (32 KiB), $05 (64 KiB) and $04
- * (128 KiB); the CGB flag at $143 is ignored on the DMG-CPU-B profile. The
+ * (128 KiB); the CGB flag at $143 is ignored on the DMG-CPU-B profile. MBC3
+ * types $0F-$13 are supported with ROM-size codes $00-$06 (32 KiB-2 MiB) and
+ * RAM-size codes $02 (8 KiB) and $03 (32 KiB) on RAM types ($10/$12/$13); the
+ * MBC30 markers (ROM-size code $07 or RAM-size code $05) return
+ * GBB_UNSUPPORTED_CARTRIDGE_VARIANT after the length and checksum checks. The
  * image size ceiling is checked before any other header work: 8 MiB for MBC5
- * types and 2 MiB for every other type byte (GBB_ROM_TOO_LARGE), so a
- * validated load allocates at most 8 MiB of ROM plus 128 KiB of cartridge RAM.
+ * types, 4 MiB for MBC3 types and 2 MiB for every other type byte
+ * (GBB_ROM_TOO_LARGE), so a validated load allocates at most 8 MiB of ROM plus
+ * 128 KiB of cartridge RAM.
  * New cartridge RAM starts at $FF as deterministic software policy, not a
  * hardware power-on claim. */
 gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_size);
@@ -161,7 +168,23 @@ gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_si
  * bytes in the canonical 0xF0 | nibble form (the unwired upper nibble reads
  * as ones); exports are always canonical, imports are normalised to that form
  * before comparison, and packed 256-byte images are unsupported. MBC2 type $05
- * has working but volatile RAM and no battery. */
+ * has working but volatile RAM and no battery. MBC3 types $10 and $13 carry
+ * battery RAM (type $12 has volatile RAM only).
+ * Timer cartridges ($0F, $10) export cartridge RAM followed by a
+ * GBB_RTC_BLOCK_SIZE-byte clock block; $0F has no RAM, so its image is the
+ * block alone. Every other battery type is exactly RAM-sized as before. The
+ * block is little-endian: "GBRT", version 1, a 32-bit sub-second count below
+ * 2^23, the live and latched S M H DL DH registers, the latch edge state (the
+ * last byte written to the latch register, so any value is valid) and a zero
+ * reserved byte. Export projects the clock to the current emulated time
+ * without changing the instance, so two exports at the same time are
+ * byte-identical. Import validates RAM and block together before changing
+ * anything: a wrong total length returns GBB_BATTERY_SIZE_MISMATCH, and a bad
+ * magic, unknown version, out-of-range field, masked bit or non-zero reserved
+ * byte returns GBB_INVALID_ARGUMENT, in every case leaving RAM, clock and
+ * generation unchanged. Import never advances the clock; wall-clock catch-up
+ * happens only through gbb_rtc_catch_up. */
+#define GBB_RTC_BLOCK_SIZE 21u
 gbb_error gbb_battery_size(const gbb_instance *instance, size_t *out_size);
 gbb_error gbb_copy_battery(const gbb_instance *instance, uint8_t *out_bytes,
                            size_t capacity_bytes);
@@ -181,6 +204,19 @@ gbb_error gbb_battery_generation(const gbb_instance *instance,
  * haptics and this is not evidence of physical rumble-motor behaviour. */
 gbb_error gbb_rumble_state(const gbb_instance *instance, uint8_t *out_on,
                            uint64_t *out_changes);
+/* Adds elapsed_seconds of host wall-clock time to an MBC3 timer cartridge's
+ * clock. A NULL instance returns GBB_INVALID_ARGUMENT; no ROM or no timer
+ * returns GBB_NO_RTC; a negative value returns GBB_INVALID_ARGUMENT without
+ * changing anything (the host decides what a clock rollback means). Zero is a
+ * no-op. A halted clock ignores the delta and returns GBB_OK. Otherwise the
+ * addition is exact and modular in O(1): the 9-bit day counter wraps at 512 and
+ * sets the sticky carry, with no saturation. Latched registers, the sub-second
+ * remainder and emulated time are unchanged; the battery generation advances
+ * once when the live clock changed. Call it between gbb_run* calls on one
+ * instance (the core takes no locks) and record it as an input event in replay
+ * logs. Importing a battery image never calls it, so hosts apply it once per
+ * open; two calls add twice. */
+gbb_error gbb_rtc_catch_up(gbb_instance *instance, int64_t elapsed_seconds);
 /* Copies events into a fixed 64-event per-instance queue. Timestamps are
  * absolute half-dot ticks and must be nondecreasing within the batch and no
  * earlier than the instance's current time. Equal timestamps keep caller
