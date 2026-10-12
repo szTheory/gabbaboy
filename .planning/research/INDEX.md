@@ -1,6 +1,6 @@
 # GabbaBoy research index
 
-Updated: 2026-10-11. Target: original C Game Boy / Game Boy Color core. These documents establish research and recommendations; they do not establish an implemented emulator.
+Updated: 2026-10-12. Target: original C Game Boy / Game Boy Color core. These documents establish research and recommendations; they do not establish an implemented emulator.
 
 ## Start here
 
@@ -31,6 +31,7 @@ Milestone delta research lives in [v0.2/](v0.2/): start with [v0.2/SUMMARY.md](v
 - [Phase 3 planning research](../milestones/v0.1-phases/GB-03-visible-interactive-dmg/03-RESEARCH.md) records the model-applicability boundary for PPU/DMA and JOYP behavior. Plan 03-09 adds exact-head macOS arm64 package and downloaded-byte evidence; see its [summary](../milestones/v0.1-phases/GB-03-visible-interactive-dmg/03-09-SUMMARY.md) and [validation contract](../milestones/v0.1-phases/GB-03-visible-interactive-dmg/03-VALIDATION.md). VIDEO-02 and VIDEO-03 remain open despite the package pass.
 - [Phase 5 discussion context](../milestones/v0.1-phases/GB-05-dmg-audio-and-stable-playback/05-CONTEXT.md) and [audio output research](AUDIO-OUTPUT.md) record the selected scoped DMG APU model, 48 kHz PCM contract, resampler/dependency decision, SDL callback/ring boundary, honest queue metrics, and hardware/perceptual evidence limits. These are planning decisions, not implemented playback or a physical DMG qualification.
 - [Phase 8 planning research](../phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-RESEARCH.md) and the [Phase 8 evidence ledger](../../docs/mbc2-mbc5-evidence.md) cover MBC2/MBC5 mapper behavior, the Mooneye emulator-only mbc2/mbc5 suites and the original mbc5-banking fixture with their evidence classes; they are not game-compatibility evidence.
+- [Phase 9 planning research](../phases/GB-09-mbc3-deterministic-rtc-and-cartridge-persistence/09-RESEARCH.md) and the [Phase 9 evidence ledger](../../docs/mbc3-rtc-evidence.md) cover MBC3, the deterministic RTC and cartridge persistence. The rtc3test ([eligibility](../../fixtures/rtc3test/ELIGIBILITY.md)) and MagenTests ([eligibility](../../fixtures/magentests/ELIGIBILITY.md)) results are hardware-derived, author-attested evidence; the original RTC, loader and continuation tests are regression or metamorphic evidence. None is physical-RTC or game-compatibility evidence.
 
 ## Evidence freshness and confidence
 

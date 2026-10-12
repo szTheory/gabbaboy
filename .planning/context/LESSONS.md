@@ -487,3 +487,30 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** `git check-ignore fixtures/*/*.gb` prints nothing, and `git ls-files fixtures | grep -c '\.gb$'` equals the number of `.gb` files on disk (27 of 27 at plan 09-15). A clean CI checkout passing the fixture tests confirms it remotely.
 - **Source:** Plans 09-05, 09-06, 09-10.
 - **Status:** Adopted.
+
+### GB-CART-008 / 2026-10-12 / A source-anchored mutant makes an unrelated edit a configure failure
+
+- **Cause and evidence:** The MBC5 ninth-bit mutant requires the text `& 1u) << 8` to occur exactly once in the core. Plan 09-09's first day-counter expression for the RTC matched it and failed configure.
+- **Remedy:** Write the new expression differently (`(c->rtc_dh & 0x01u) * 256u`, commit 14caf9d) rather than loosen the anchor; the exactly-once check is the safeguard.
+- **Applies when:** Adding code to a file that carries mutation-test anchors.
+- **Verification:** Configure succeeds and the MBC5 mutant tests still fail the mutated build.
+- **Source:** Plan 09-09; D-061.
+- **Status:** Adopted.
+
+### GB-CART-009 / 2026-10-12 / Order of `readdir` is not creation order in tests
+
+- **Cause and evidence:** `player_session_v2_max_size` picked the preserved recovery file by directory-enumeration order and failed about half of the runs in Plan 09-16.
+- **Remedy:** Select the file by an attribute the test controls (size of the damaged variant); 20 consecutive runs passed after the fix (commit 5477099).
+- **Applies when:** A test must find one of several files created in a directory.
+- **Verification:** Repeated runs of the test.
+- **Source:** Plan 09-16.
+- **Status:** Adopted.
+
+### GB-CART-010 / 2026-10-12 / A hosted reproduction claim is made from the result line at the evidence head only
+
+- **Cause and evidence:** Plan 09-17 wrote the MagenTests and rtc3test "release bytes equal the rebuild" claim as pending, because the earlier green job was at a different head. Plan 09-18 records it only from the `result=` line at the evidence head.
+- **Remedy:** Keep the ledger entry pending until the exact-head job prints `result=byte-identical`; if it prints `result=differs`, do not change committed bytes and leave the claim unmade.
+- **Applies when:** Third-party fixtures rebuilt in CI.
+- **Verification:** The job log at the evidence head SHA; see `docs/mbc3-rtc-evidence.md`.
+- **Source:** Plans 09-17, 09-18.
+- **Status:** Adopted.

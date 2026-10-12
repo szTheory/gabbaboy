@@ -28,3 +28,12 @@ At milestone completion, audit traceability and packaged user outcomes, summariz
 - **Generalised suite verifier:** when a third Mooneye-style suite arrives, replace the adapted copy `VerifyMooneyeMbc.cmake` with one parameterised verifier.
 - **Host haptics for MBC5 rumble:** map `gbb_rumble_state` samples to a host haptic API in the player; needs a real device, an intensity policy and a tested opt-out.
 - **Packed 256-byte MBC2 save interop:** import/export of two-nibbles-per-byte saves from other emulators, with named fixtures and format limits.
+
+## Deferred from Phase 9 (revisable direction, not authorization)
+
+- **BGB/VBA-M RTC footer adapter:** import and export of the emulator-specific save footer, with named fixtures; Phase 9 defines only the GabbaBoy block.
+- **Mealybug `mbc3_rtc`:** after rights gate G1 clears for that suite.
+- **gbclock:** after rights gate G3.
+- **CGB double-speed RTC assertion:** Phase 11, when the CGB speed switch exists.
+- **Paused-time recovery:** time passing while the player is paused but open is not recovered; revisit with an explicit host policy.
+- **`gbb_probe_rom` `has_rtc`:** a probe field for timer cartridges, if a consumer needs it.
