@@ -27,7 +27,7 @@ Every requirement maps to exactly one phase. Completion needs implementation and
 
 ### Deterministic RTC
 
-- [ ] **RTC-01**: The MBC3 RTC advances only from emulated time (2^23 half-dots per second, independent of CPU speed) with correct latch (`00` then `01`), halt, sticky day carry and 9-bit day counter; rtc3test passes; CI proves `src/core` uses no host clock.
+- [x] **RTC-01**: The MBC3 RTC advances only from emulated time (2^23 half-dots per second, independent of CPU speed) with correct latch (`00` then `01`), halt, sticky day carry and 9-bit day counter; rtc3test passes; CI proves `src/core` uses no host clock.
 - [ ] **RTC-02**: A host can apply elapsed wall-clock seconds between runs through an explicit catch-up call with defined negative, overflow and rollback policy; catch-up is never a side effect of battery import.
 - [ ] **RTC-03**: RTC state persists in a versioned little-endian core battery block, and the player's save envelope records the save time and applies the catch-up policy on reopen; an original RTC continuation fixture passes across fresh processes.
 
@@ -91,7 +91,7 @@ Every v0.2 requirement maps to exactly one phase in [ROADMAP.md](ROADMAP.md).
 | CART-04 | Phase 9 | Pending |
 | CART-05 | Phase 9 | Pending |
 | CART-06 | Phase 9 | Pending |
-| RTC-01 | Phase 9 | Pending |
+| RTC-01 | Phase 9 | Complete |
 | RTC-02 | Phase 9 | Pending |
 | RTC-03 | Phase 9 | Pending |
 | CGB-01 | Phase 10 | Pending |
