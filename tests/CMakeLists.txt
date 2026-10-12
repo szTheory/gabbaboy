@@ -1115,4 +1115,46 @@ add_test(NAME mbc3_rtc_evidence_ledger_selftest
     "-DGBB_FORBID_REGEX=unregistered: rtc_latch_edges"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
+# The host guide must name only declared symbols and example variables and keep every RTC behavior the header promises
+# (catch-up rules, error codes, battery image layout), so its adequacy is a CI result.
+set(GBB_DOC_CONTRACT_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/VerifyDocContract.cmake")
+set(GBB_NATIVE_GUIDE_RTC_PHRASES
+  "`gbb_rtc_catch_up` applies host wall-clock time"
+  "(`$0F`, `$10`)"
+  "non-negative whole-second elapsed value"
+  "once per open"
+  "two calls add twice"
+  "as an input event"
+  "A negative value returns `GBB_INVALID_ARGUMENT` and changes nothing"
+  "returns `GBB_NO_RTC`"
+  "never advances it"
+  "`GBB_RTC_BLOCK_SIZE`-byte clock block"
+  "(the block alone for `$0F`)"
+  "never reads the host clock")
+add_test(NAME native_guide_rtc_contract
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_DOC=${PROJECT_SOURCE_DIR}/docs/native-integration.md
+    "-DGBB_DECLARATIONS=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;${PROJECT_SOURCE_DIR}/examples/relocated-c/CMakeLists.txt"
+    "-DGBB_REQUIRED=${GBB_NATIVE_GUIDE_RTC_PHRASES}"
+    -P ${GBB_DOC_CONTRACT_SCRIPT})
+set_tests_properties(native_guide_rtc_contract PROPERTIES
+  PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=12")
+
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/doc-contract-selftest")
+file(WRITE "${PROJECT_BINARY_DIR}/doc-contract-selftest/guide.md"
+  "Call `gbb_rtc_catch_up`, then\n  `gbb_no_such_call` once per\n  open.\n")
+add_test(NAME doc_contract_undeclared_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${PROJECT_BINARY_DIR}/doc-contract-selftest/guide.md;-DGBB_DECLARATIONS=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;-DGBB_REQUIRED=once per open;-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=doc-contract-undeclared: gbb_no_such_call"
+    "-DGBB_FORBID_REGEX=undeclared: gbb_rtc_catch_up|doc-contract-missing"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME doc_contract_missing_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${PROJECT_BINARY_DIR}/doc-contract-selftest/guide.md;-DGBB_DECLARATIONS=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;-DGBB_REQUIRED=two calls add twice;-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=doc-contract-missing: two calls add twice"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
 gabbaboy_verify_registered_tests()
