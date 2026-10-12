@@ -219,7 +219,7 @@ Plans:
   4. The half-dot timeline-unit decision for double speed is recorded in DECISIONS.md, and a banking-indirection benchmark shows the DMG cost against the Phase 7 baseline.
 
 **Research**: Moderate (CGB-E post-boot DIV/LY/STAT; compat-mode register readability per Mooneye `unused_hwio-C` and AGE).
-**Plans**: 17/20 plans executed
+**Plans**: 18/20 plans executed
 
 Plans (serial waves: every plan edits `tests/expected-tests.txt` and `tests/CMakeLists.txt`, most also `src/core/gabbaboy.c`):
 - [x] 10-01-PLAN.md — Wave 1: model-gate scanner (R1-R5, --release, self-test mutants) and docs/model-gates.md skeleton
@@ -239,7 +239,7 @@ Plans (serial waves: every plan edits `tests/expected-tests.txt` and `tests/CMak
 - [x] 10-15-PLAN.md — Wave 15: VerifyMooneyeCgb digest/inventory verifier with tamper controls, install scan and CI repro job
 - [x] 10-16-PLAN.md — Wave 16: Mooneye CGB runner suite with expected-unsupported rows and the real-ROM DIV sweep
 - [x] 10-17-PLAN.md — Wave 17: banking-indirection A/B benchmark, CTest receipt checks and evidence report
-- [ ] 10-18-PLAN.md — Wave 18: fuzz, loader and consumer coverage on both profiles, instance isolation, ASan
+- [x] 10-18-PLAN.md — Wave 18: fuzz, loader and consumer coverage on both profiles, instance isolation, ASan
 - [ ] 10-19-PLAN.md — Wave 19: D-070 half-dot ADR with static asserts and contract, guide, support ledger, D-071+
 - [ ] 10-20-PLAN.md — Wave 20: phase gates, evidence head, PR with six owner veto items (left open), handoff to /gsd-verify-work 10
 
@@ -321,7 +321,7 @@ Plans (serial waves: every plan edits `tests/expected-tests.txt` and `tests/CMak
 | 7. DMG Game Acceptance and Regression Baseline | v0.2 | 17/17 | Complete    | 2026-10-11 |
 | 8. Cartridge Seam, MBC5 and MBC2 | v0.2 | 10/10 | Complete    | 2026-10-11 |
 | 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 18/18 | Complete    | 2026-10-11 |
-| 10. CGB Profile, Banking and Register Visibility | v0.2 | 17/20 | In Progress | - |
+| 10. CGB Profile, Banking and Register Visibility | v0.2 | 18/20 | In Progress | - |
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 0/TBD | Not started | - |
 | 12. CGB Double Speed | v0.2 | 0/TBD | Not started | - |
 | 13. CGB HDMA | v0.2 | 0/TBD | Not started | - |
