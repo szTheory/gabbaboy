@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 17
+current_plan: 18
 status: planning
-stopped_at: Completed 10-16-PLAN.md
-last_updated: "2026-10-12T18:39:32.331Z"
+stopped_at: Completed 10-17-PLAN.md
+last_updated: "2026-10-12T19:00:23.633Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 10 execution started
-state_head: 8fdb91c0e93aa15d9fb2b43bf843a7db0519b9a3
+state_head: 43a4bcdf59b1e687989f5f5869016376af6e945f
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 65
-  completed_plans: 61
+  completed_plans: 62
   percent: 44
 current_phase: 10
 current_phase_name: CGB Profile, Banking and Register Visibility
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 17
+Current Plan: 18
 Total Plans in Phase: 20
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -168,6 +168,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 10 P14 | 25 min | 2 tasks | 12 files |
 | Phase 10 P15 | 15 min | 3 tasks | 4 files |
 | Phase 10 P16 | 40 min | 3 tasks | 9 files |
+| Phase 10 P17 | 35 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -316,6 +317,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 10]: 10-13: cgb-banking guest selects CGB expectations from header OR profile; only a DMG header on the DMG profile expects frozen DMG behaviour (so the CGB build on the DMG profile fails exactly the CGB-only cells); nine result cells C002..C00A
 - [Phase 10]: 10-14: Mooneye CGB fixtures record original_sha256 (unpatched rebuild recomputed by the script); boot_div claims CGB-A..E only; boot_hwio-C and unused_hwio-C admitted as expected-unsupported at FF76
 - [Phase 10]: 10-16: expected-unsupported refused address read via gbb_test_last_unsupported_address; real boot_div ROM confirms compat DIV window 0x2678..0x267B
+- [Phase 10]: 10-17: D-22 review trigger fired (Phase 10 DMG at 105.6-107.3% of Phase 7 baseline time, advisory, loaded host); owner decides under D-016, no optimisation
 
 ### Pending Todos
 
@@ -351,8 +353,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-12T18:39:32.266Z
-Stopped at: Completed 10-16-PLAN.md
+Last session: 2026-10-12T19:00:23.563Z
+Stopped at: Completed 10-17-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 10`
 
