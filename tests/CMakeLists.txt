@@ -304,6 +304,14 @@ add_test(NAME cgb_postboot_dmg_pin_flipped_io
 foreach(case cgb_cpu_tracer compat_cpu compat_no_rom compat_title_sum compat_io cgb_io ch1_silent)
   add_test(NAME cgb_postboot_${case} COMMAND test_cgb_postboot ${case})
 endforeach()
+# White-box: includes src/core/gabbaboy.c itself, so it must not link GabbaBoy::core.
+add_executable(test_cgb_postboot_internal test_cgb_postboot_internal.c)
+target_include_directories(test_cgb_postboot_internal PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_cgb_postboot_internal PRIVATE c_std_17)
+set_target_properties(test_cgb_postboot_internal PROPERTIES C_EXTENSIONS OFF)
+foreach(case div_phase_sweep div_compat_default)
+  add_test(NAME cgb_postboot_${case} COMMAND test_cgb_postboot_internal ${case})
+endforeach()
 # Negative controls: a flipped NR52 expectation (index 8) must fail naming the field.
 foreach(case compat_io cgb_io)
   add_test(NAME cgb_postboot_${case}_flipped

@@ -224,6 +224,8 @@ cgb_postboot_cgb_io
 cgb_postboot_ch1_silent
 cgb_postboot_compat_io_flipped
 cgb_postboot_cgb_io_flipped
+cgb_postboot_div_phase_sweep
+cgb_postboot_div_compat_default
 cgb_probe_tracer
 cgb_info_no_rom
 cgb_info_after_load
