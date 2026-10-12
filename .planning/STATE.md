@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 19
+current_plan: 20
 status: planning
-stopped_at: Completed 10-18-PLAN.md
-last_updated: "2026-10-12T19:11:13.660Z"
+stopped_at: Completed 10-19-PLAN.md
+last_updated: "2026-10-12T19:16:03.407Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 10 execution started
-state_head: eef7e41492af0f47c62bed2af20e3514eb1e67f7
+state_head: fd0226191cdbf6a2439aca26b71bbd18c224e097
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 65
-  completed_plans: 63
+  completed_plans: 64
   percent: 44
 current_phase: 10
 current_phase_name: CGB Profile, Banking and Register Visibility
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 19
+Current Plan: 20
 Total Plans in Phase: 20
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -170,6 +170,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 10 P16 | 40 min | 3 tasks | 9 files |
 | Phase 10 P17 | 35 min | 2 tasks | 6 files |
 | Phase 10 P18 | 45 min | 3 tasks | 9 files |
+| Phase 10 P19 | 25 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -320,6 +321,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 10]: 10-16: expected-unsupported refused address read via gbb_test_last_unsupported_address; real boot_div ROM confirms compat DIV window 0x2678..0x267B
 - [Phase 10]: 10-17: D-22 review trigger fired (Phase 10 DMG at 105.6-107.3% of Phase 7 baseline time, advisory, loaded host); owner decides under D-016, no optimisation
 - [Phase 10]: 10-18: fuzz profile selected by data[0] bit 7; original 0xFF reproducer now runs on CGB with a 0x7F DMG twin
+- [Phase 10]: D-070 half-dot master timeline ADR adopted; D-071..D-075 record IE, ch1 policy, deferred-register asymmetry, GATE-00, FEA0-FEFF/cgb-separate-buses
 
 ### Pending Todos
 
@@ -355,8 +357,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-12T19:11:13.595Z
-Stopped at: Completed 10-18-PLAN.md
+Last session: 2026-10-12T19:16:03.353Z
+Stopped at: Completed 10-19-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 10`
 
