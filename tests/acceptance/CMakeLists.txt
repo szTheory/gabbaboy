@@ -331,3 +331,49 @@ add_test(NAME acceptance_core_mutant
     -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(acceptance_core_mutant PROPERTIES TIMEOUT 300 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
+# Runner model<->profile mapping (D-25, Plan 10-03). One mapping drives the create call and the printed
+# label, so a CGB request is excluded or reported under a CGB label and never runs as, or reads as, DMG.
+set(GBB_MOONEYE_MANIFEST fixtures/mooneye/manifest.json)
+gbb_add_acceptance_exit(cgb_runner_profile_manifest_cgb_excluded 4
+  "mooneye.daa status=excluded reason=unsupported-model profile=CGB-CPU-E" 30
+  "--manifest;${GBB_MOONEYE_MANIFEST};--case;daa;--receipt;--profile;cgb")
+set_tests_properties(cgb_runner_profile_manifest_cgb_excluded PROPERTIES
+  FAIL_REGULAR_EXPRESSION "DMG-CPU-B|dmg-cpu-b")
+gbb_add_acceptance_exit(cgb_runner_profile_unknown 2 "reason=unknown-profile" 30
+  "--manifest;${GBB_MOONEYE_MANIFEST};--case;daa;--profile;gbc")
+gbb_add_acceptance_exit(cgb_runner_profile_model_conflict 2 "reason=profile-model-conflict" 30
+  "--acceptance;${GBB_CASES};--case;libbet;--profile;dmg;--model;cgb-cpu-e")
+gbb_add_acceptance_exit(cgb_runner_profile_acceptance_cgb_excluded 4
+  "status=excluded reason=unsupported-model model=cgb-cpu-e" 30
+  "--acceptance;${GBB_CASES};--case;libbet;--profile;cgb")
+set_tests_properties(cgb_runner_profile_acceptance_cgb_excluded PROPERTIES
+  FAIL_REGULAR_EXPRESSION "dmg-cpu-b|DMG-CPU-B")
+
+# DMG output with an explicit --profile dmg is byte-identical to output without it.
+add_test(NAME cgb_runner_profile_dmg_identity_mooneye
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_RUNNER=$<TARGET_FILE:gabbaboy-runner>
+    "-DGBB_ARGS=--manifest;${GBB_MOONEYE_MANIFEST};--suite;--receipt"
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/runner_profile_identity.cmake)
+add_test(NAME cgb_runner_profile_dmg_identity_acceptance
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_RUNNER=$<TARGET_FILE:gabbaboy-runner>
+    "-DGBB_ARGS=--acceptance;${GBB_CASES};--case;libbet;--receipt"
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/runner_profile_identity.cmake)
+set_tests_properties(cgb_runner_profile_dmg_identity_mooneye PROPERTIES TIMEOUT 120
+  PASS_REGULAR_EXPRESSION "profile-identity pass bytes=[1-9]" WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+set_tests_properties(cgb_runner_profile_dmg_identity_acceptance PROPERTIES TIMEOUT 300
+  PASS_REGULAR_EXPRESSION "profile-identity pass bytes=[1-9]" WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+# Negative control: the comparison must reject a run pair that is not a clean DMG baseline (the baseline
+# run is a CGB-excluded case, exit 4), so the identity script cannot pass vacuously.
+add_test(NAME cgb_runner_profile_dmg_identity_negative
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_RUNNER=$<TARGET_FILE:gabbaboy-runner>
+    "-DGBB_ARGS=--acceptance;${GBB_CASES};--case;libbet;--model;cgb-cpu-e"
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/runner_profile_identity.cmake)
+set_tests_properties(cgb_runner_profile_dmg_identity_negative PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "profile-identity-baseline-failed|profile-identity-mismatch" WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
