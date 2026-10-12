@@ -1078,4 +1078,17 @@ add_test(NAME no_host_clock_symbol_selftest
     "-DGBB_EXPECT_REGEX=no-host-clock-symbol: time"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
+# A "/*" inside a // comment must not hide the code after it from the source layer.
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/no-host-clock-comment-selftest")
+file(WRITE "${PROJECT_BINARY_DIR}/no-host-clock-comment-selftest/bad.c"
+  "// a line comment that mentions /* must not open a block comment\n"
+  "long host_ticks(void) { return (long)clock(); }\n"
+  "/* a later block comment */\n")
+add_test(NAME no_host_clock_comment_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_SOURCE_DIRS=${PROJECT_BINARY_DIR}/no-host-clock-comment-selftest;-DGBB_SYMBOLS_FILE=;-P;${GBB_NO_HOST_CLOCK_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=no-host-clock-call: [^\n]*bad[.]c [(]clock[)]"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
 gabbaboy_verify_registered_tests()

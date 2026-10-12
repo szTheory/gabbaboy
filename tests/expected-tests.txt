@@ -383,6 +383,7 @@ magentests_not_installed_selftest
 no_host_clock
 no_host_clock_selftest
 no_host_clock_symbol_selftest
+no_host_clock_comment_selftest
 loader_contradiction_mbc3
 loader_contradiction_mbc2
 loader_contradiction_mbc5

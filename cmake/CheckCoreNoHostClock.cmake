@@ -23,7 +23,7 @@
 #                       the source layer is skipped and the object layer reads this file
 #
 # Failure tokens: no-host-clock-include: <file>, no-host-clock-call: <file>,
-# no-host-clock-symbol: <name>, no-host-clock-tool-missing.
+# no-host-clock-symbol: <name>, no-host-clock-tool-missing, no-host-clock-symbols-empty.
 # Success line: "no-host-clock pass files=<n> symbols=<n> tool=<name>".
 cmake_minimum_required(VERSION 3.25)
 
@@ -49,18 +49,32 @@ set(gbb_denied_symbols
 
 # Remove /* */ and // comments and string/char literals. Includes are read after the comments are
 # removed but before literals are, because "gabbaboy/gabbaboy.h" is itself a string literal.
+# Whichever comment opener comes first wins, as in the C lexer: a "/*" inside a // comment must
+# not swallow the code that follows it, and a "//" inside a block comment is part of that comment.
 function(gbb_strip_comments text out)
   set(result "")
   set(rest "${text}")
   while(TRUE)
-    string(FIND "${rest}" "/*" open)
-    if(open EQUAL -1)
+    string(FIND "${rest}" "/*" block_open)
+    string(FIND "${rest}" "//" line_open)
+    if(block_open EQUAL -1 AND line_open EQUAL -1)
       string(APPEND result "${rest}")
       break()
     endif()
-    string(SUBSTRING "${rest}" 0 ${open} head)
+    if(NOT line_open EQUAL -1 AND (block_open EQUAL -1 OR line_open LESS block_open))
+      string(SUBSTRING "${rest}" 0 ${line_open} head)
+      string(APPEND result "${head}")
+      string(SUBSTRING "${rest}" ${line_open} -1 after_open)
+      string(FIND "${after_open}" "\n" newline)
+      if(newline EQUAL -1)
+        break()
+      endif()
+      string(SUBSTRING "${after_open}" ${newline} -1 rest)
+      continue()
+    endif()
+    string(SUBSTRING "${rest}" 0 ${block_open} head)
     string(APPEND result "${head}")
-    math(EXPR body_start "${open} + 2")
+    math(EXPR body_start "${block_open} + 2")
     string(SUBSTRING "${rest}" ${body_start} -1 after_open)
     string(FIND "${after_open}" "*/" close)
     if(close EQUAL -1)
@@ -70,7 +84,6 @@ function(gbb_strip_comments text out)
     string(SUBSTRING "${after_open}" ${tail_start} -1 rest)
     string(APPEND result " ")
   endwhile()
-  string(REGEX REPLACE "//[^\n]*" "" result "${result}")
   set(${out} "${result}" PARENT_SCOPE)
 endfunction()
 
@@ -227,6 +240,11 @@ foreach(symbol IN LISTS gbb_symbols)
 endforeach()
 if(gbb_symbol_failed)
   message(FATAL_ERROR "no-host-clock object layer failed")
+endif()
+# Any real core library imports at least memcpy or malloc, so an empty listing means the tool or
+# the parser read nothing; that must fail rather than pass the object layer vacuously.
+if(gbb_symbol_count EQUAL 0)
+  message(FATAL_ERROR "no-host-clock-symbols-empty: ${gbb_tool}")
 endif()
 
 message(STATUS "no-host-clock pass files=${gbb_file_count} symbols=${gbb_symbol_count} tool=${gbb_tool}")
