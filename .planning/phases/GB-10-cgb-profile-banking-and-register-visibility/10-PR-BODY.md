@@ -29,6 +29,10 @@ Execute-phase tail (after the first evidence head): Nyquist validation `validate
 
 Exact-head required checks (all success at the evidence head): native-linux-x64, native-macos-arm64, native-windows-x64, linux-asan-ubsan, cmake-floor-3.25.3, player-gate, macos-player-package, required-native. Fixture reproduction (all success): fixture-repro (CGB banking `result=byte-identical roms=2`), mooneye-original-repro, mooneye-candidate-repro, mooneye-mbc-repro, magentests-repro, rtc3test-repro, mooneye-cgb-repro (`result=byte-identical roms=4`). Local: 541/541 CTest, inventory verified, macOS player package gate passed. The `phase1-asan` preset cannot be configured on the macOS author host (Linux-only); sanitizer evidence is the hosted `linux-asan-ubsan` job.
 
+### Verification
+
+`/gsd-verify-work 10` passed: 12/12 UAT items automated, no human checkpoint (`10-UAT.md`); local 541/541 CTest with the installed inventory, `baseline status=pass`, model gates pass; verification `passed` 4/4, `threats_open: 0`.
+
 ### Deferred and limitations
 
 Deferred (see `.planning/context/FUTURE-MILESTONES.md`): DMG FF4C-FF7F `$FF` and `unused_hwio-GS`; a CGB CPU/DMA separate-bus model; DMG OAM DMA sources E0-FF and ROM sources; RP/IR and FF76/FF77; AGE `ly-cgbE` and `lcd-align-ly-cgbE`; an instruction-count benchmark proxy; flipping `boot_hwio-C` and `unused_hwio-C` (both expected-unsupported, stop at FF76) to pass; release-mode model gates.
