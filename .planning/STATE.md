@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 16
+current_plan: 17
 status: planning
-stopped_at: Completed 10-15-PLAN.md
-last_updated: "2026-10-12T18:26:06.243Z"
+stopped_at: Completed 10-16-PLAN.md
+last_updated: "2026-10-12T18:39:32.331Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 10 execution started
-state_head: c631f77dfabff88b8ed26781bfa10a79c1ced9e6
+state_head: 8fdb91c0e93aa15d9fb2b43bf843a7db0519b9a3
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 65
-  completed_plans: 60
+  completed_plans: 61
   percent: 44
 current_phase: 10
 current_phase_name: CGB Profile, Banking and Register Visibility
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 16
+Current Plan: 17
 Total Plans in Phase: 20
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -167,6 +167,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 10 P13 | 45 min | 3 tasks | 11 files |
 | Phase 10 P14 | 25 min | 2 tasks | 12 files |
 | Phase 10 P15 | 15 min | 3 tasks | 4 files |
+| Phase 10 P16 | 40 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -314,6 +315,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 10]: 10-12: CGB OAM DMA reads ROM/cart RAM via shared cart_read, banked VRAM/WRAM, E0-FF=$FF; DMG map frozen; cart and E0-FF cells are PANDOCS/ORACLE [VERIFY], not hardware; DMG bus-conflict rule kept on CGB (cgb-separate-buses) and pinned
 - [Phase 10]: 10-13: cgb-banking guest selects CGB expectations from header OR profile; only a DMG header on the DMG profile expects frozen DMG behaviour (so the CGB build on the DMG profile fails exactly the CGB-only cells); nine result cells C002..C00A
 - [Phase 10]: 10-14: Mooneye CGB fixtures record original_sha256 (unpatched rebuild recomputed by the script); boot_div claims CGB-A..E only; boot_hwio-C and unused_hwio-C admitted as expected-unsupported at FF76
+- [Phase 10]: 10-16: expected-unsupported refused address read via gbb_test_last_unsupported_address; real boot_div ROM confirms compat DIV window 0x2678..0x267B
 
 ### Pending Todos
 
@@ -349,8 +351,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-12T18:26:06.191Z
-Stopped at: Completed 10-15-PLAN.md
+Last session: 2026-10-12T18:39:32.266Z
+Stopped at: Completed 10-16-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 10`
 
