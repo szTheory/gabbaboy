@@ -1525,6 +1525,31 @@ add_test(NAME doc_contract_scope_selftest
     "-DGBB_EXPECT_REGEX=doc-contract-missing: once per open"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
+# Half-dot timeline ADR (D-070, D-20, D-21): the doc section may name only macros declared in the core,
+# and must keep each rule the ADR states. The static asserts in src/core/gabbaboy.c make the numbers
+# compile-time facts; a mutant TU (below) proves they can fail.
+set(GBB_ADR_DOC "${PROJECT_SOURCE_DIR}/docs/cgb-profile.md")
+set(GBB_ADR_SCOPE_START "The `uint64_t` half-dot master timeline")
+set(GBB_ADR_HALF_DOT_PHRASES
+  "single clock for normal and double speed"
+  "`GBB_MASTER_HALF_DOTS_PER_SECOND` is 2^23"
+  "`GBB_HALF_DOTS_PER_T_NORMAL` (2)"
+  "`GBB_HALF_DOTS_PER_T_DOUBLE` (1)"
+  "`GBB_T_PER_M` (4)"
+  "`GBB_HALF_DOTS_PER_DOT` (2)"
+  "140448 half-dots"
+  "never reads `double_speed`")
+list(LENGTH GBB_ADR_HALF_DOT_PHRASES GBB_ADR_HALF_DOT_PHRASE_COUNT)
+add_test(NAME cgb_adr_half_dot_contract
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_DOC=${GBB_ADR_DOC}
+    "-DGBB_DECLARATIONS=${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c;${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h"
+    "-DGBB_REQUIRED=${GBB_ADR_HALF_DOT_PHRASES}"
+    "-DGBB_SCOPE_START=${GBB_ADR_SCOPE_START}"
+    -P ${GBB_DOC_CONTRACT_SCRIPT})
+set_tests_properties(cgb_adr_half_dot_contract PROPERTIES
+  PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=${GBB_ADR_HALF_DOT_PHRASE_COUNT}[^0-9]")
+
 # Model-gate scanner (CGB-02, decision D-08). Stdlib-only Python run with -I; every negative
 # control goes through expect_exit.cmake so it must fail with exactly the expected reason.
 set(GBB_MODEL_GATE_SCANNER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-model-gates.py")

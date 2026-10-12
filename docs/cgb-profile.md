@@ -499,6 +499,13 @@ CGB-E, and no document, test or release note may describe them as such. `banking
   pins the current behaviour so a later change is deliberate. The gate rows are GATE-16 (read) and
   GATE-25 (write) in `docs/model-gates.md`.
 
+## Half-dot timeline (D-070)
+
+The `uint64_t` half-dot master timeline is the single clock for normal and double speed, and
+`GBB_MASTER_HALF_DOTS_PER_SECOND` is 2^23. A CPU T-cycle is `GBB_HALF_DOTS_PER_T_NORMAL` (2) half-dots at normal speed and `GBB_HALF_DOTS_PER_T_DOUBLE` (1) at double speed, and an M-cycle is `GBB_T_PER_M` (4) T-cycles, so 8 or 4 half-dots. A PPU dot is always `GBB_HALF_DOTS_PER_DOT` (2) half-dots, and a frame is `GBB_DOTS_PER_LINE` times `GBB_LINES_PER_FRAME` dots, 140448 half-dots. The APU, HDMA and RTC are constant in master time; the RTC stays at 2^23 half-dots per second and never reads `double_speed`. Only CPU-side devices (timer and DIV, serial, the OAM DMA byte period `GBB_DMA_BYTE_PERIOD_HALF_DOTS`, TIMA reload) scale with the speed bit, through one shift of the T-cycle count. Each device keeps its remainder and phase across a speed switch, including the divider phase, and the switch stall is a named constant in master half-dots.
+
+Rejected alternatives: a quarter-dot unit, and a speed multiplier on the master clock (V2-03). Open for Phase 12 `[VERIFY]`: the DIV and APU phase at the switch, and whether the stall is counted before or after the switch. SameBoy uses the same 8 MHz-unit model (differential oracle, not hardware). Double speed itself is not implemented in Phase 10; the core compiles the constants and checks them as `_Static_assert` facts so a later change must be deliberate.
+
 ## Sources
 
 The numbers are the `src` ids in the table and in `post_boot_source` in the code.

@@ -13,6 +13,15 @@
 #define GBB_VRAM_BANK_SIZE 8192u
 #define GBB_WRAM_BANKS 8u
 #define GBB_WRAM_BANK_SIZE 4096u
+/* Half-dot timeline (D-070): one uint64_t half-dot counter is the single clock for normal and
+ * double speed. A CPU T-cycle is 2 half-dots normal, 1 double; a PPU dot is always 2. */
+#define GBB_MASTER_HALF_DOTS_PER_SECOND UINT64_C(8388608)
+#define GBB_HALF_DOTS_PER_T_NORMAL 2u
+#define GBB_HALF_DOTS_PER_T_DOUBLE 1u
+#define GBB_T_PER_M 4u
+#define GBB_HALF_DOTS_PER_DOT 2u
+#define GBB_DOTS_PER_LINE 456u
+#define GBB_LINES_PER_FRAME 154u
 #define GBB_DMA_BYTE_PERIOD_HALF_DOTS 8u
 #define GBB_LINE_OBJECT_LIMIT 10u
 #define GBB_PPU_FIFO_CAPACITY 16u
@@ -185,6 +194,22 @@ static size_t mbc1_ram_offset(const cart_state *c, size_t ram_size, uint16_t add
  * half-dot counter, lazily, when the guest touches a clock register. 2^23
  * half-dots are exactly one second (4194304 Hz * 2 half-dots per T-cycle). */
 #define RTC_HALF_DOTS_PER_SECOND_SHIFT 23u
+
+_Static_assert(GBB_MASTER_HALF_DOTS_PER_SECOND == (UINT64_C(1) << 23) &&
+               GBB_MASTER_HALF_DOTS_PER_SECOND == GBB_AUDIO_CLOCK_HALF_DOTS,
+               "half-dot timeline: master rate must be 2^23 half-dots per second");
+_Static_assert(GBB_HALF_DOTS_PER_T_NORMAL == 2u,
+               "half-dot timeline: a normal-speed T-cycle is 2 half-dots");
+_Static_assert(GBB_HALF_DOTS_PER_T_DOUBLE == 1u,
+               "half-dot timeline: a double-speed T-cycle is 1 half-dot");
+_Static_assert(GBB_T_PER_M == 4u, "half-dot timeline: an M-cycle is 4 T-cycles");
+_Static_assert(GBB_HALF_DOTS_PER_DOT == 2u, "half-dot timeline: a PPU dot is 2 half-dots");
+_Static_assert(RTC_HALF_DOTS_PER_SECOND_SHIFT == 23u,
+               "half-dot timeline: the RTC counts 2^23 half-dots per second");
+_Static_assert(GBB_DOTS_PER_LINE * GBB_LINES_PER_FRAME * GBB_HALF_DOTS_PER_DOT == 140448u,
+               "half-dot timeline: a frame is 140448 half-dots");
+_Static_assert(GBB_DMA_BYTE_PERIOD_HALF_DOTS == GBB_T_PER_M * GBB_HALF_DOTS_PER_T_NORMAL,
+               "half-dot timeline: an OAM DMA byte takes one normal-speed M-cycle");
 #define RTC_SUB_MASK 0x7FFFFFu
 
 /* Add n ticks to a field that carries at `limit` and stores `mask` bits. A value
@@ -2383,7 +2408,7 @@ static void ppu_transfer_dot(gbb_instance *m) {
 static void ppu_advance_dot(gbb_instance *m) {
     if ((m->lcdc & 0x80u) == 0) return;
     /* MODEL: UNKNOWN GATE-50 research:11 -- line length and LY timing */
-    if (m->ppu_dot < 455u) {
+    if (m->ppu_dot < GBB_DOTS_PER_LINE - 1u) {
         ++m->ppu_dot;
     } else {
         if (m->ly < GBB_FRAME_HEIGHT && m->ppu_window_line_drawn &&
@@ -2391,7 +2416,7 @@ static void ppu_advance_dot(gbb_instance *m) {
             ++m->ppu_window_line;
         m->ppu_dot = 0;
         ++m->ly;
-        if (m->ly == 154u) {
+        if (m->ly == GBB_LINES_PER_FRAME) {
             m->ly = 0;
             m->ppu_window_line = 0;
         }

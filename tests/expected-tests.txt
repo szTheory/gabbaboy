@@ -529,3 +529,4 @@ cgb_postboot_div_real_rom_sweep_shifted
 cgb_bench_ab_selftest
 cgb_bench_ab_wrong_digest
 cgb_bench_ab_missing_field
+cgb_adr_half_dot_contract
