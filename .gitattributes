@@ -34,3 +34,12 @@ fixtures/mbc5-banking/banking.asm text eol=lf
 fixtures/mbc5-banking/manifest.json text eol=lf
 fixtures/mbc5-banking/LICENSE.txt text eol=lf
 fixtures/mbc5-banking/banking.gb -text
+
+# rtc3test: the digested upstream tests.md, the input scripts and expected transcripts must survive Windows checkouts byte for byte.
+fixtures/rtc3test/rtc3test.gb -text
+fixtures/rtc3test/tests.md text eol=lf
+fixtures/rtc3test/manifest.json text eol=lf
+fixtures/rtc3test/LICENSE.txt text eol=lf
+fixtures/rtc3test/SOURCES.md text eol=lf
+fixtures/rtc3test/ELIGIBILITY.md text eol=lf
+tests/rtc3test/** text eol=lf
