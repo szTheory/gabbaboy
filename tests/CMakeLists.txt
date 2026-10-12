@@ -1525,6 +1525,45 @@ add_test(NAME doc_contract_scope_selftest
     "-DGBB_EXPECT_REGEX=doc-contract-missing: once per open"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
+# CGB host-guide contract (D-28): the CGB section of the integration guide names only declared symbols
+# and keeps each promise the header makes about the info API, PGB rejection, frame copy, banking and
+# deferred registers. The missing-phrase selftest proves the check can fail.
+set(GBB_NATIVE_GUIDE_CGB_PHRASES
+  "sets it to 28"
+  "outputs unchanged on error"
+  "returns `GBB_UNSUPPORTED_EXECUTION_MODE`"
+  "returns `GBB_UNSUPPORTED_PROFILE` on the CGB profile"
+  "follows the selected WRAM bank"
+  "stop with `GBB_STOP_UNSUPPORTED_BUS`")
+list(LENGTH GBB_NATIVE_GUIDE_CGB_PHRASES GBB_NATIVE_GUIDE_CGB_PHRASE_COUNT)
+set(GBB_NATIVE_GUIDE_CGB_SCOPE "The CGB-CPU-E profile is selected with")
+set(GBB_NATIVE_GUIDE_CGB_DECLS
+  "${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;${PROJECT_SOURCE_DIR}/examples/relocated-c/CMakeLists.txt")
+add_test(NAME cgb_native_guide_contract
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_DOC=${PROJECT_SOURCE_DIR}/docs/native-integration.md
+    "-DGBB_DECLARATIONS=${GBB_NATIVE_GUIDE_CGB_DECLS}"
+    "-DGBB_REQUIRED=${GBB_NATIVE_GUIDE_CGB_PHRASES}"
+    "-DGBB_SCOPE_START=${GBB_NATIVE_GUIDE_CGB_SCOPE}"
+    -P ${GBB_DOC_CONTRACT_SCRIPT})
+set_tests_properties(cgb_native_guide_contract PROPERTIES
+  PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=${GBB_NATIVE_GUIDE_CGB_PHRASE_COUNT}[^0-9]")
+file(READ "${PROJECT_SOURCE_DIR}/docs/native-integration.md" gbb_cgb_guide_text)
+set(gbb_cgb_guide_anchor "outputs unchanged on error")
+string(FIND "${gbb_cgb_guide_text}" "${gbb_cgb_guide_anchor}" gbb_cgb_first)
+string(FIND "${gbb_cgb_guide_text}" "${gbb_cgb_guide_anchor}" gbb_cgb_last REVERSE)
+if(gbb_cgb_first EQUAL -1 OR NOT gbb_cgb_first EQUAL gbb_cgb_last)
+  message(FATAL_ERROR "CGB guide selftest anchor '${gbb_cgb_guide_anchor}' must occur exactly once")
+endif()
+string(REPLACE "${gbb_cgb_guide_anchor}" "outputs kept" gbb_cgb_guide_missing_text "${gbb_cgb_guide_text}")
+file(WRITE "${PROJECT_BINARY_DIR}/cgb-guide-selftest/missing.md" "${gbb_cgb_guide_missing_text}")
+add_test(NAME cgb_native_guide_contract_missing_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${PROJECT_BINARY_DIR}/cgb-guide-selftest/missing.md;-DGBB_DECLARATIONS=${GBB_NATIVE_GUIDE_CGB_DECLS};-DGBB_REQUIRED=outputs unchanged on error;-DGBB_SCOPE_START=${GBB_NATIVE_GUIDE_CGB_SCOPE};-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=doc-contract-missing: outputs unchanged on error"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
 # Half-dot timeline ADR (D-070, D-20, D-21): the doc section may name only macros declared in the core,
 # and must keep each rule the ADR states. The static asserts in src/core/gabbaboy.c make the numbers
 # compile-time facts; a mutant TU (below) proves they can fail.

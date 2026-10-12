@@ -105,6 +105,43 @@ oversized, malformed, unsupported, or wrong-size data before modifying
 application state. The public header documents the full per-call behavior and
 buffer contracts.
 
+## CGB-CPU-E profile
+
+- The CGB-CPU-E profile is selected with `GBB_PROFILE_CGB_CPU_E` passed to
+  `gbb_create`; destroy the instance and create a new one to change profile.
+  It starts in the bootless CGB-CPU-E post-boot state (see the
+  [CGB profile](cgb-profile.md)) and runs original and admitted test ROMs. It
+  has no colour output and is not a game-compatibility claim.
+- Classify a ROM before loading with `gbb_probe_rom`, which needs no instance,
+  or ask a loaded instance with `gbb_get_info`. Both fill a `gbb_info`. Set
+  `struct_size` to `sizeof(gbb_info)` before the call: the core writes only
+  within that size, sets it to 28 (`GBB_INFO_SIZE_V1`) on success, and leaves
+  any extra bytes of a larger caller struct untouched. A size below 28 is
+  `GBB_INVALID_ARGUMENT`, with outputs unchanged on error.
+- `mode` is `GBB_MODE_NONE` (no ROM loaded), `GBB_MODE_DMG`, `GBB_MODE_CGB` or
+  `GBB_MODE_CGB_DMG_COMPAT`. It comes from the profile and header byte `$143`,
+  never from a host toggle. `cgb_support` is `GBB_CGB_SUPPORT_NONE`,
+  `GBB_CGB_SUPPORT_ENHANCED` (`$80`), `GBB_CGB_SUPPORT_ONLY` (`$C0`),
+  `GBB_CGB_SUPPORT_OTHER` or `GBB_CGB_SUPPORT_PGB`. `flags` combines
+  `GBB_INFO_HAS_ROM`, `GBB_INFO_CGB_ONLY_ON_DMG`, `GBB_INFO_HAS_BATTERY`,
+  `GBB_INFO_HAS_RTC` and `GBB_INFO_HAS_RUMBLE`; `GBB_INFO_CGB_ONLY_ON_DMG` is
+  informational and the load still succeeds.
+- A PGB-flagged `$143` (bit 7 set with bit 2 or bit 3 set) returns
+  `GBB_UNSUPPORTED_EXECUTION_MODE` from `gbb_load_rom` and `gbb_probe_rom` on the
+  CGB profile; the DMG profile probes it as `GBB_CGB_SUPPORT_PGB` with `GBB_OK`.
+- `gbb_copy_frame` returns `GBB_UNSUPPORTED_PROFILE` on the CGB profile until
+  colour output exists; invalid arguments still return `GBB_INVALID_ARGUMENT`.
+- CGB mode has two VRAM banks and eight WRAM banks, selected by the guest
+  through VBK and SVBK. `gbb_peek_ram` follows the selected WRAM bank for
+  `$D000`-`$DFFF` and its echo, so read it after the guest has set SVBK.
+- Limitations: no colour output, no double speed, no HDMA. Registers whose
+  behaviour is owned by a later phase stop with `GBB_STOP_UNSUPPORTED_BUS`
+  rather than invent a value. DMG addresses `$FF4C`-`$FF7F` stay fail-closed.
+  IE bits 5-7 are stored on the CGB profile only. The DMG rule that OAM DMA
+  blocks the CPU outside HRAM is kept on the CGB profile although real CGB
+  hardware has separate buses. See [CGB profile](cgb-profile.md) and
+  [model gates](model-gates.md).
+
 ## Support and upgrade
 
 The tracked [v0.1.0 support ledger](support/v0.1.0.md) describes the exact

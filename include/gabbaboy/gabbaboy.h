@@ -12,7 +12,7 @@ typedef struct gbb_instance gbb_instance;
 
 typedef enum {
     GBB_PROFILE_DMG_CPU_B = 1,
-    GBB_PROFILE_CGB_CPU_E = 2  /* selectable by gbb_probe_rom; gbb_create does not accept it yet */
+    GBB_PROFILE_CGB_CPU_E = 2  /* creatable and probeable; no colour output yet */
 } gbb_profile;
 
 typedef enum {
@@ -297,8 +297,9 @@ gbb_run_result gbb_run_audio(gbb_instance *instance, uint64_t budget_half_dots,
                              gbb_audio_frame *frames, size_t frame_capacity,
                              size_t *out_frame_count);
 /* Side-effect-free debug read of WRAM (C000-DFFF and its E000-FDFF echo) or
- * HRAM (FF80-FFFE). Other addresses and a null instance return 0xFF. No
- * pointer into instance storage is exposed. */
+ * HRAM (FF80-FFFE). D000-DFFF (and its echo) follows the selected WRAM bank,
+ * the same bank a guest access sees. Other addresses and a null instance
+ * return 0xFF. No pointer into instance storage is exposed. */
 uint8_t gbb_peek_ram(const gbb_instance *instance, uint16_t address);
 
 /* Execution mode of a ROM on a profile: the profile plus $143, never a host toggle. */
