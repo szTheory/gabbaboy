@@ -501,7 +501,9 @@ int main(int argc,char **argv) {
             if(code!=0&&suite_code==0)suite_code=code;
             for(size_t k=0;k<selected_suite->category_count;k++)if(strcmp(fc->category,selected_suite->categories[k])==0){category_total[k]++;if(code==0){if(fc->expect_stop)category_xu[k]++;else category_pass[k]++;}}
         }
-        if(receipt)printf("suite eligible=%zu executed=%zu status=%s\n",eligible,executed,suite_counts_valid(eligible,executed)&&suite_code==0?"pass":"fail");
+        /* A suite that passes only because rows met a declared unsupported-bus stop says so in the headline. */
+        if(receipt){const int ok=suite_counts_valid(eligible,executed)&&suite_code==0;
+            printf("suite eligible=%zu executed=%zu status=%s\n",eligible,executed,!ok?"fail":tally.expected_met!=0?"pass-with-expected-unsupported":"pass");}
         if(receipt&&selected_suite->category_count!=0){
             printf("suite categories");
             /* name=P/T counts plain passes only. A row that met its declared unsupported-bus stop never reached its

@@ -968,7 +968,7 @@ endforeach()
 add_test(NAME cgb_mooneye_required_suite
   COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --suite --receipt)
 set_tests_properties(cgb_mooneye_required_suite PROPERTIES TIMEOUT 30
-  PASS_REGULAR_EXPRESSION "suite eligible=4 executed=4 status=pass.*suite categories post-boot-registers=1/1 post-boot-div=1/1 post-boot-hwio=0/1 post-boot-hwio.expected-unsupported=1 unused-hwio=0/1 unused-hwio.expected-unsupported=1.*expected-unsupported=2/2"
+  PASS_REGULAR_EXPRESSION "suite eligible=4 executed=4 status=pass-with-expected-unsupported.*suite categories post-boot-registers=1/1 post-boot-div=1/1 post-boot-hwio=0/1 post-boot-hwio.expected-unsupported=1 unused-hwio=0/1 unused-hwio.expected-unsupported=1.*expected-unsupported=2/2"
   FAIL_REGULAR_EXPRESSION "DMG-CPU-B|post-boot-hwio=1/1|unused-hwio=1/1")
 # D-25 / D-05: --observe prints the not-applicable token for a CGB row and no DMG-labelled line.
 add_test(NAME cgb_mooneye_observe_not_applicable
