@@ -211,6 +211,10 @@ installed_consumer_cpp
 installed_consumer_phase2_c
 installed_consumer_phase2_cpp
 preview_package_smoke
+cgb_postboot_dmg_pin
+cgb_postboot_dmg_pin_checksum_zero
+cgb_postboot_dmg_pin_flipped
+cgb_postboot_dmg_pin_flipped_io
 timer_guest_overflow
 timer_mid_instruction
 timer_selectors

@@ -280,6 +280,27 @@ foreach(case wram_guest echo_hram absent_cart preflight unsupported_reads unsupp
   add_test(NAME bus_${case} COMMAND test_bus ${case})
 endforeach()
 
+add_executable(test_cgb_postboot test_cgb_postboot.c)
+target_link_libraries(test_cgb_postboot PRIVATE GabbaBoy::core)
+target_compile_features(test_cgb_postboot PRIVATE c_std_17)
+set_target_properties(test_cgb_postboot PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_postboot_dmg_pin COMMAND test_cgb_postboot dmg_pin)
+add_test(NAME cgb_postboot_dmg_pin_checksum_zero COMMAND test_cgb_postboot dmg_pin_checksum_zero)
+# Negative controls: one flipped CPU field (F, index 1) and one flipped I/O field
+# (NR12, index 10 + 12); each must fail with exit 1 naming the field.
+add_test(NAME cgb_postboot_dmg_pin_flipped
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_postboot>;dmg_pin;--flip;1"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=post-boot mismatch: F "
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_postboot_dmg_pin_flipped_io
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_postboot>;dmg_pin;--flip;22"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=post-boot mismatch: NR12 "
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
 add_executable(test_timer test_timer.c)
 target_link_libraries(test_timer PRIVATE GabbaBoy::core)
 target_compile_features(test_timer PRIVATE c_std_17)
