@@ -2,7 +2,7 @@
 
 Adds the `GBB_PROFILE_CGB_CPU_E` profile with CGB and DMG-compatibility execution modes, VRAM (2x8 KiB) and WRAM (8x4 KiB) banking, a per-cell register visibility matrix for DMG, CGB and CGB-in-compat, a model-gate audit of the core (`docs/model-gates.md`, scanner `tests/scripts/verify-model-gates.py`), original banking fixtures, four CGB Mooneye derivatives and a half-dot timeline ADR for the later double-speed work. There is no CGB colour, no double speed and no HDMA yet; none of this is game-compatibility evidence.
 
-The DMG profile stays byte-identical to the v0.1 baseline: `tests/baseline` is unchanged, the frozen tracer digest `correctness_digest_fnv1a64=4c7a57ff3d50d228` still holds, and no line was removed from `tests/expected-tests.txt` (537 executed cases locally, none skipped).
+The DMG profile stays byte-identical to the v0.1 baseline: `tests/baseline` is unchanged, the frozen tracer digest `correctness_digest_fnv1a64=4c7a57ff3d50d228` still holds, and no line was removed from `tests/expected-tests.txt` (541 executed cases locally, none skipped).
 
 ### Owner veto items (veto window: before this PR merges)
 
@@ -17,7 +17,9 @@ The DMG profile stays byte-identical to the v0.1 baseline: `tests/baseline` is u
 
 ### Requirement to evidence
 
-Evidence head: `2fe078e8f08ed98ba0ac0e244971e7c0ead16b1e` (pull_request-event runs: [ci 38299323863](https://github.com/szTheory/gabbaboy/actions/runs/38299323863), [fixture-repro 38299323969](https://github.com/szTheory/gabbaboy/actions/runs/38299323969)).
+Evidence head: `d260a7dec5af333d79ff1b698382a9399ee8f11b` (pull_request-event runs: [ci 38315850467](https://github.com/szTheory/gabbaboy/actions/runs/38315850467), [fixture-repro 38315850478](https://github.com/szTheory/gabbaboy/actions/runs/38315850478), [preview-package-smoke 38315850473](https://github.com/szTheory/gabbaboy/actions/runs/38315850473), success on attempt 2 after its 1500 s wait for `ci` expired). Earlier evidence head `2fe078e8f08ed98ba0ac0e244971e7c0ead16b1e` ([ci 38299323863](https://github.com/szTheory/gabbaboy/actions/runs/38299323863)) predates the review fixes.
+
+Execute-phase tail (after the first evidence head): Nyquist validation `validated`/`nyquist_compliant: true` (4 gaps filled, new `cgb_fuzz_profile_select`); security 33/33 threats closed, `threats_open: 0` (10-SECURITY.md); code review 0 critical / 4 warning / 5 info, 8 fixed and 1 no-change (10-REVIEW-DISPOSITION.md); regression gate 541/541 CTest with installed inventory, `baseline status=pass`, model gates pass, macOS player package gate passed; gsd-verifier `passed` 4/4 (10-VERIFICATION.md). One more CI defect was fixed: the Windows inventory script now also skips the bash-only `cgb_mooneye_repro_requires_manifest`.
 
 | Requirement | Evidence | Class |
 |---|---|---|
@@ -25,7 +27,7 @@ Evidence head: `2fe078e8f08ed98ba0ac0e244971e7c0ead16b1e` (pull_request-event ru
 | CGB-02 model-gate audit, visibility matrix, KEY0 lock | `verify-model-gates.py` (147 functions, 76 gates, 40 unknown; no `research:10` tag line left), `cgb_visibility_matrix_{dmg,cgb,compat}` plus sweep/flip/deferred controls, `cgb_key0_lock_*` | Static audit plus per-cell tests with negative controls |
 | CGB-03 VRAM/WRAM banking, echo RAM, OAM DMA sources | `banking_*` (metamorphic flat-reference, echo and DMA mutants with controls), `cgb_banking_guest_{cgb,compat,dmg}`, `cgb_banking_fixture_digest`, `banking_bus_conflict_cgb_pin` | Original-fixture regression plus metamorphic; no hardware oracle for the CGB DMA bus (expected failure `cgb-separate-buses`) |
 
-Exact-head required checks (all success at the evidence head): native-linux-x64, native-macos-arm64, native-windows-x64, linux-asan-ubsan, cmake-floor-3.25.3, player-gate, macos-player-package, required-native. Fixture reproduction (all success): fixture-repro (CGB banking `result=byte-identical roms=2`), mooneye-original-repro, mooneye-candidate-repro, mooneye-mbc-repro, magentests-repro, rtc3test-repro, mooneye-cgb-repro (`result=byte-identical roms=4`). Local: 537/537 CTest, inventory verified, macOS player package gate passed. The `phase1-asan` preset cannot be configured on the macOS author host (Linux-only); sanitizer evidence is the hosted `linux-asan-ubsan` job.
+Exact-head required checks (all success at the evidence head): native-linux-x64, native-macos-arm64, native-windows-x64, linux-asan-ubsan, cmake-floor-3.25.3, player-gate, macos-player-package, required-native. Fixture reproduction (all success): fixture-repro (CGB banking `result=byte-identical roms=2`), mooneye-original-repro, mooneye-candidate-repro, mooneye-mbc-repro, magentests-repro, rtc3test-repro, mooneye-cgb-repro (`result=byte-identical roms=4`). Local: 541/541 CTest, inventory verified, macOS player package gate passed. The `phase1-asan` preset cannot be configured on the macOS author host (Linux-only); sanitizer evidence is the hosted `linux-asan-ubsan` job.
 
 ### Deferred and limitations
 
