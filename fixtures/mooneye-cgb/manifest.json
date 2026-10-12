@@ -1,0 +1,69 @@
+{
+  "suite": {
+    "name": "Mooneye Test Suite",
+    "revision": "31510e12eea6286d36eea060a6adde755e1067aa",
+    "tree_sha1": "2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
+    "license": "MIT; see LICENSE.txt",
+    "upstream": "https://github.com/Gekkio/mooneye-test-suite/tree/31510e12eea6286d36eea060a6adde755e1067aa"
+  },
+  "parent_references": [
+    {
+      "path": "../mooneye/headless-report.patch",
+      "sha256": "c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d",
+      "role": "headless-report-patch"
+    },
+    {
+      "path": "../mooneye/font-source.c",
+      "sha256": "5e5b21a1ff66f226e0e3d3ea1630ad4e2d16edbc9fcbb76b70a26b44c2271f52",
+      "role": "zero-font-source"
+    },
+    {
+      "path": "../mooneye/manifest.json",
+      "sha256": "98a1799b8be9c022ac13467a552890fb12bdd706017e42e12c944ec618d60527",
+      "role": "builder-pin"
+    }
+  ],
+  "replacement_asset": {
+    "path": "font.bin",
+    "source": "Original fixed-size zero-filled replacement emitted by font-source.c; no Darkrose font glyphs are included.",
+    "size_bytes": 2032,
+    "sha256": "23ba65cb93433b65e7ddcae5f8a7dd2ca232491793848644e625875c6dd6ae43",
+    "notice": "See FONT-LICENSE.txt"
+  },
+  "inventory_status": "partial",
+  "required_roms": [
+    "boot_regs-cgb.gb"
+  ],
+  "evidence_class": "Author-attested Mooneye hardware results as stated in each source header, executed here on the CGB-CPU-E profile in compat mode (header $143 bit 7 clear). boot_div-cgbABCDE claims CGB A-E only. No CGB-E-alone claim, no AGB claim, never game compatibility. Two rows are expected-unsupported until Phase 14.",
+  "fixtures": [
+    {
+      "id": "mooneye-misc-boot-regs-cgb",
+      "alias": "boot_regs-cgb",
+      "category": "post-boot-registers",
+      "eligible": true,
+      "source_path": "misc/boot_regs-cgb.s",
+      "rom": "boot_regs-cgb.gb",
+      "size_bytes": 32768,
+      "sha256": "77eb76b5448ff9e6bb885e789b0ce0a9113146bc3f0949f3655587968dae5c77",
+      "original_sha256": "86c4ab93428b849864409cd10bcfdb231d2dd066c200c2791af1faa6eeb23dd1",
+      "license": "MIT; see LICENSE.txt",
+      "asset_notice": "FONT-LICENSE.txt",
+      "model_pass": [
+        "cgb-cpu-e"
+      ],
+      "target_revision": "CGB",
+      "cart_header_143": "0x00",
+      "mode": "compat (header $143 bit 7 clear)",
+      "expect": "pass",
+      "note": "Mooneye source header: pass on CGB. Compares the compat-mode post-boot register row.",
+      "build_recipe": [
+        "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
+        "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
+        "apply the parent headless report patch ../mooneye/headless-report.patch (SHA-256 c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d) with patch --batch --fuzz=0 -p1",
+        "assemble misc/boot_regs-cgb.s with wla-gb -I common using the WLA-DX revision pinned by ../mooneye/manifest.json",
+        "link with wlalink -nS -d -S; -nS preserves source section order",
+        "reproduce with tests/scripts/reproduce-mooneye-cgb.sh --compare fixtures/mooneye-cgb"
+      ]
+    }
+  ]
+}
