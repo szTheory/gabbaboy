@@ -1,6 +1,7 @@
 #include "gabbaboy/gabbaboy.h"
 #include "gbb_accept.h"
 #include "acceptance.h"
+#include "../core/gabbaboy_test.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -234,8 +235,8 @@ static void retain_recent(gbb_diagnostic_record recent[RECENT_CAPACITY],size_t *
 }
 /* The address the core refused. The public run result carries only the stop reason, and a refused
  * pre-flight read stops before its instruction is traced, so the address comes from the core's private
- * test seam (read-only; declared in gabbaboy.c, not public ABI). The runner is an in-tree test host. */
-uint16_t gbb_test_last_unsupported_address(const gbb_instance *m);
+ * test seam (read-only; declared in the internal gabbaboy_test.h, not public ABI). The runner is an
+ * in-tree test host. */
 /* What a run that ended on GBB_STOP_UNSUPPORTED_BUS refused (D-26 expected-unsupported rows). */
 typedef struct {
     int unsupported_bus;

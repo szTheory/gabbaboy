@@ -66,7 +66,7 @@ if(NOT GABBABOY_GIT_RESULT EQUAL 0 OR
   set(GABBABOY_BUILD_REVISION "unknown")
   set(GABBABOY_BUILD_QUALIFIED 0)
 else()
-  execute_process(COMMAND git diff --quiet HEAD -- CMakeLists.txt include/gabbaboy/gabbaboy.h src/core/gabbaboy.c src/runner/main.c
+  execute_process(COMMAND git diff --quiet HEAD -- CMakeLists.txt include/gabbaboy/gabbaboy.h src/core/gabbaboy.c src/core/gabbaboy_test.h src/runner/main.c
     src/runner/acceptance.h src/runner/cases.c src/runner/acceptance.c
     src/accept/gbb_accept.h src/accept/sha256.c src/accept/input_script.c src/accept/stepper.c src/accept/predicate.c src/accept/digest.c
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" RESULT_VARIABLE GABBABOY_SOURCE_DIRTY ERROR_QUIET)

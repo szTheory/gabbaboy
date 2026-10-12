@@ -1,4 +1,5 @@
 #include "gabbaboy/gabbaboy.h"
+#include "gabbaboy_test.h"
 
 #include <stdlib.h>
 #include <string.h>

@@ -1,5 +1,8 @@
 set(GBB_TEST_INSTALL_PREFIX "" CACHE PATH "Relocated install prefix used by installed-package smoke tests")
 include(${PROJECT_SOURCE_DIR}/cmake/ExpectedTests.cmake)
+# Internal core test-seam header (src/core/gabbaboy_test.h). Directory-scoped so the mutant copies of
+# gabbaboy.c, which are compiled from the build tree, resolve the same include as the real core.
+include_directories("${PROJECT_SOURCE_DIR}/src/core")
 
 add_executable(test_api test_api.c)
 target_link_libraries(test_api PRIVATE GabbaBoy::core)

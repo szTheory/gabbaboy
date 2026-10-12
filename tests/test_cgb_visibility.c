@@ -8,6 +8,7 @@
  *
  * Usage: test_cgb_visibility <case> */
 #include "gabbaboy/gabbaboy.h"
+#include "gabbaboy_test.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,7 +27,6 @@ extern void gbb_test_observer_set(gbb_instance *, gbb_test_bus_event *, size_t);
 extern size_t gbb_test_observer_count(const gbb_instance *);
 extern void gbb_test_cpu_snapshot(const gbb_instance *, gbb_trace_record *);
 extern void gbb_test_bank_state(const gbb_instance *, uint8_t *, uint8_t *);
-extern uint16_t gbb_test_last_unsupported_address(const gbb_instance *);
 
 /* The three views of one guest. */
 typedef enum { V_DMG = 0, V_CGB, V_COMPAT, V_COUNT } view;
