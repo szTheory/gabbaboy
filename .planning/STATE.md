@@ -4,12 +4,12 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: 9
 current_phase_name: MBC3, Deterministic RTC and Cartridge Persistence
-status: executing
-stopped_at: Completed 09-17-PLAN.md
-last_updated: "2026-10-12T00:27:04.822Z"
-last_activity: 2026-10-11
-last_activity_desc: Phase 9 execution started
-state_head: b339a72a63c5d035737ea0687ea7f9c331d63de5
+status: verifying
+stopped_at: Completed 09-18-PLAN.md
+last_updated: "2026-10-12T01:48:26.999Z"
+last_activity: 2026-10-12
+last_activity_desc: Phase 9 execution complete; awaiting verification
+state_head: 04c77596c375a8b186da54c2f7b253c3ef2fcdab
 progress:
   total_phases: 9
   completed_phases: 3
@@ -29,10 +29,10 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Phase: 9 (MBC3, Deterministic RTC and Cartridge Persistence) — EXECUTING
-Plan: 18 of 18
-Status: Ready to execute
-Last activity: 2026-10-11 — Phase 9 execution started
+Phase: 9 (MBC3, Deterministic RTC and Cartridge Persistence) — EXECUTION COMPLETE, awaiting verification
+Plan: 18 of 18 executed
+Status: Ready for Phase 9 verification (`/gsd-verify-work 9`)
+Last activity: 2026-10-12 — Phase 9 execution complete (PR #65 ready, not merged)
 
 Progress (v0.2): [██░░░░░░░░] 22% (2/9 phases)
 
@@ -147,6 +147,7 @@ Progress (v0.2): [██░░░░░░░░] 22% (2/9 phases)
 | Phase 09 P15 | 45 min | 3 tasks | 3 files |
 | Phase 09 P16 | 70 min | 3 tasks | 11 files |
 | Phase 9 P17 | 60 min | 2 tasks | 9 files |
+| Phase 9 P18 | 150 min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -315,9 +316,11 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 ## Session Continuity
 
 Last session: 2026-10-12T00:27:04.785Z
-Stopped at: Completed 09-17-PLAN.md
+Stopped at: Completed 09-18-PLAN.md
 Resume file: None
-Next command in fresh context: `/gsd-execute-phase 9`
+Next command in fresh context: `/gsd-verify-work 9`
+
+Completed workflow stage: **Phase 9 - MBC3, Deterministic RTC and Cartridge Persistence, execution** (2026-10-12), plans 09-01..09-18 on branch `gsd/phase-09-mbc3-deterministic-rtc-and-cartridge-persistence`. Evidence head `04c77596c375a8b186da54c2f7b253c3ef2fcdab`, run 38191589574 (https://github.com/szTheory/gabbaboy/actions/runs/38191589574): all eight required jobs success; fixture-repro run 38191589599 (https://github.com/szTheory/gabbaboy/actions/runs/38191589599): fixture-repro, mooneye-original-repro, mooneye-candidate-repro, mooneye-mbc-repro, magentests-repro and rtc3test-repro success, with `result=byte-identical` for MagenTests and rtc3test. Local ctest 401/401, `baseline status=pass`, digest `4c7a57ff3d50d228` held, privacy check clean. The docs-only handoff commit is checked as a separate head (see 09-18-SUMMARY). PR #65 is ready for review and is not merged; the pre-authorized squash merge happens only after Phase 9 verification passes at an exact-head green head. The owner may still veto the signed `gbb_rtc_catch_up` prototype (D-14) and the 21-byte RTC block in the battery image (D-15, D-17) before merge. Limitations: no physical MBC3/RTC observation, no CGB, no BGB/VBA-M footer interop, paused time not recovered. Next step: **Phase 9 verification**. Next command in fresh context: **`/gsd-verify-work 9`**. Following phase (named, not started; only after verification passes and the owner chooses to continue): **Phase 10 - CGB Profile, Banking and Register Visibility**. Gap closure, if needed, continues on this branch and PR. Both `workflow.auto_advance` and `workflow._auto_chain_active` stay false; nothing advances automatically.
 
 Completed workflow stage: **Phase 9 - MBC3, Deterministic RTC and Cartridge Persistence, planning** (2026-10-11) on branch `gsd/phase-09-discuss`. Research, pattern map, validation strategy and 18 plans in 8 waves:
 - wave 1: 09-01 MBC3 mapper tracer and MBC30 rejection; 09-02 MagenTests admission; 09-03 fuzz 8 MiB mode; 09-04 v0.1 save corpus from tag v0.1.2; 09-05/09-06 MBC3+RTC and MBC2 continuation guests;
@@ -375,5 +378,6 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Phase 8 (Cartridge Seam, MBC5 and MBC2) is complete and verified; PR #64 is squash-merged after exact-head required checks pass. Start Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) in a fresh context: `/gsd-discuss-phase 9`.
+- Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) execution is complete (plans 09-01..09-18); evidence head `04c77596c375a8b186da54c2f7b253c3ef2fcdab`, run https://github.com/szTheory/gabbaboy/actions/runs/38191589574. PR #65 is ready and open, not merged. Verify Phase 9 in a fresh context: `/gsd-verify-work 9`.
+- After verification passes, the owner chooses whether to continue to Phase 10 - CGB Profile, Banking and Register Visibility (not started).
 - Phase-stop rule: stop after each phase and yield; never auto-advance into the next phase or milestone.
