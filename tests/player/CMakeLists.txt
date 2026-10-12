@@ -53,6 +53,17 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       set_target_properties(test_player_presentation PROPERTIES C_EXTENSIONS OFF)
     endif()
     add_test(NAME ${test_name} COMMAND test_player_presentation ${test_name})
+  elseif(test_name STREQUAL "player_session_clock_flag_scope")
+    # Matched before the generic player_session_ branch: this one drives the real
+    # player binary (D-21), not test_player_session.
+    add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+      -DGBB_PLAYER=$<TARGET_FILE:gabbaboy-player>
+      -DGBB_DEMO=${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb
+      -DGBB_INVALID=${PROJECT_SOURCE_DIR}/fixtures/visible-demo/LICENSE.txt
+      -DGBB_MBC1=${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/continuation.gb
+      -DGBB_HOME=${CMAKE_CURRENT_BINARY_DIR}/clock-flag-scope-home
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/clock_flag_scope.cmake)
+    set_tests_properties(${test_name} PROPERTIES TIMEOUT 60)
   elseif(test_name MATCHES "^player_session_[a-z0-9_]+$")
     if(NOT TARGET test_player_session)
       add_library(gabbaboy-player-session-test STATIC

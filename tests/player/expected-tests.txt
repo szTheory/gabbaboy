@@ -76,3 +76,4 @@ player_session_v1_mbc1_write_identical
 player_session_v1_v2_stickiness
 player_session_classification_drift
 player_session_rom_cap_8mib
+player_session_clock_flag_scope

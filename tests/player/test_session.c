@@ -1309,9 +1309,17 @@ static int session_v2_max_size(const char *root) {
         char recovery_path[4096];
         size_t recovery_size = 0u;
         REQUIRE(recovery != NULL);
-        REQUIRE(get_recovery_file(root, variant, recovery_path, sizeof(recovery_path),
-                                  recovery, V2_HEADER + 131072u + 2u, &recovery_size));
-        REQUIRE(recovery_size == damaged_size);
+        /* readdir order is not creation order, so pick the preserved file by
+         * its size (the two variants differ by two bytes). */
+        bool recovery_found = false;
+        for (unsigned index = 0u; index <= variant && !recovery_found; ++index) {
+            recovery_found = get_recovery_file(root, index, recovery_path,
+                                               sizeof(recovery_path), recovery,
+                                               V2_HEADER + 131072u + 2u,
+                                               &recovery_size) &&
+                             recovery_size == damaged_size;
+        }
+        REQUIRE(recovery_found);
         REQUIRE(memcmp(recovery, damaged, damaged_size) == 0);
         free(recovery);
         free(damaged);
