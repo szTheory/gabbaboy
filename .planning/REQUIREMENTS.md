@@ -21,7 +21,7 @@ Every requirement maps to exactly one phase. Completion needs implementation and
 - [x] **CART-01**: Cartridge behavior sits behind a type-table-driven mapper seam (kind, RAM, battery, RTC, rumble) with no observable change: the MBC1 suite, battery continuation fixture and DMG baseline remain byte-identical.
 - [x] **CART-02**: A caller can run MBC5 cartridges (`$19-$1E`) with 9-bit ROM banking including bank 0 in the switchable window, ROM up to 8 MiB and RAM up to 128 KiB; the rumble bit is masked from RAM banking and exposed as host-readable state; the pinned Mooneye `mbc5` derivatives pass 8/8.
 - [x] **CART-03**: A caller can run MBC2 cartridges (`$05/$06`) with address-bit-8 register decode, 512x4-bit built-in RAM echoed through `A000-BFFF` with upper nibbles reading as 1s, and a 512-byte battery image; the pinned Mooneye `mbc2` derivatives pass 7/7.
-- [ ] **CART-04**: A caller can run MBC3 cartridges (`$0F-$13`) with 7-bit ROM banking and RAM banks `00-03`; MBC30 and other unsupported variants are rejected with an explicit error; MagenTests out-of-bounds SRAM cases pass for MBC1/MBC3/MBC5.
+- [x] **CART-04**: A caller can run MBC3 cartridges (`$0F-$13`) with 7-bit ROM banking and RAM banks `00-03`; MBC30 and other unsupported variants are rejected with an explicit error; MagenTests out-of-bounds SRAM cases pass for MBC1/MBC3/MBC5.
 - [x] **CART-05**: The loader rejects every contradictory type/ROM-size/RAM-size/file-length combination for the new mappers (exact, one-under, one-over) with no partial mutation, and fuzz targets cover the raised 8 MiB bound.
 - [x] **CART-06**: Battery data for MBC2, MBC3 and MBC5 survives a fresh-process continuation in the player without corrupting a good save, and every v0.1 save file still loads unchanged.
 
@@ -88,7 +88,7 @@ Every v0.2 requirement maps to exactly one phase in [ROADMAP.md](ROADMAP.md).
 | CART-01 | Phase 8 | Complete |
 | CART-02 | Phase 8 | Complete |
 | CART-03 | Phase 8 | Complete |
-| CART-04 | Phase 9 | Pending |
+| CART-04 | Phase 9 | Complete |
 | CART-05 | Phase 9 | Complete |
 | CART-06 | Phase 9 | Complete |
 | RTC-01 | Phase 9 | Complete |
