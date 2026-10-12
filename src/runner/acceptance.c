@@ -26,9 +26,11 @@
 static const char *run_model(const gbb_acceptance_options *options) {
     return options != NULL && options->model != NULL ? options->model : "dmg-cpu-b";
 }
+/* Only valid after gbb_acceptance_run_case has refused an unknown model; the DMG value is never the
+ * profile of an unrecognised token, because that run is rejected before any instance exists. */
 static gbb_profile run_profile(const gbb_acceptance_options *options) {
     gbb_profile profile = GBB_RUNNER_PROFILE_DMG;
-    if (!gbb_runner_profile_for_model(run_model(options), &profile)) profile = GBB_RUNNER_PROFILE_DMG;
+    (void)gbb_runner_profile_for_model(run_model(options), &profile);
     return profile;
 }
 
@@ -950,6 +952,13 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
     int code = EXIT_INVALID;
     const bool observe = options != NULL && options->observe;
     memset(&script, 0, sizeof(script));
+
+    /* D-25: an unrecognised model is refused, never run on DMG under its own label. */
+    gbb_profile known_profile;
+    if (!gbb_runner_profile_for_model(run_model(options), &known_profile)) {
+        printf("acceptance id=%s status=unsupported reason=unknown-model model=%s\n", c->id, run_model(options));
+        return EXIT_UNSUPPORTED;
+    }
 
     if (c->oracle != GBB_ORACLE_PROGRESS_PREDICATE) return run_frame_case(c, options);
 
