@@ -20,6 +20,9 @@ typedef struct {
     uint8_t envelope_version;   /* version of the accepted file; 0 when none */
     bool clock_valid;           /* host wall-clock reading handed in by the adapter */
     int64_t clock_now_unix;
+    int64_t loaded_saved_at;    /* saved_at of the accepted v2 file; 0 when none */
+    bool loaded_saved_valid;    /* the accepted file carried a time stamp */
+    bool catch_up_done;         /* the once-per-open catch-up already ran */
 } player_save_identity;
 
 typedef enum {
@@ -84,6 +87,16 @@ bool player_session_load_battery(gbb_instance *machine,
  * clock was unavailable and the file records no save time. */
 void player_session_set_clock(player_save_identity *identity, int64_t now_unix,
                               bool now_valid);
+/* D-22: advances a timer cartridge's clock once per open, after the battery
+ * import and before the first guest instruction. It feeds the loaded file's
+ * saved_at and the clock handed to player_session_set_clock to
+ * player_catch_up_policy and calls gbb_rtc_catch_up only for APPLY. out_status
+ * receives the one-line status (empty when there is nothing to say, such as no
+ * timer, no accepted save file, a repeat call, or an unchanged time). Returns
+ * false only when the core reports an error. The clock never moves backwards. */
+bool player_session_apply_catch_up(gbb_instance *machine,
+                                   player_save_identity *identity,
+                                   char *out_status, size_t status_capacity);
 /* Saves only changed battery RAM through a same-directory atomic replacement. */
 bool player_session_save_battery(gbb_instance *machine,
                                  player_save_identity *identity,

@@ -1,5 +1,7 @@
 #include "session.h"
 
+#include "catch_up_policy.h"
+
 #include <CommonCrypto/CommonDigest.h>
 #include <SDL3/SDL.h>
 
@@ -189,6 +191,9 @@ bool player_session_classify_cartridge(gbb_instance *machine,
     identity->persistence_enabled = false;
     identity->saved_generation = 0u;
     identity->envelope_version = 0u;
+    identity->loaded_saved_at = 0;
+    identity->loaded_saved_valid = false;
+    identity->catch_up_done = false;
     if (size_result == GBB_NO_BATTERY) return true;
     if (size_result != GBB_OK || image == 0u) return false;
     /* A zero-second catch-up is a documented no-op that reports whether the
@@ -632,8 +637,6 @@ bool player_session_load_battery(gbb_instance *machine,
         else if (decode_save_v2(bytes, file_size, identity, image, &saved_at,
                                 &saved_valid)) version = 2u;
     }
-    (void)saved_at;
-    (void)saved_valid;
     if (version != 0u) {
         if (gbb_import_battery(machine, image, image_size) != GBB_OK)
             return load_failure(identity, path, bytes, image, out_error, error_capacity,
@@ -647,6 +650,8 @@ bool player_session_load_battery(gbb_instance *machine,
             return false;
         }
         identity->envelope_version = version;
+        identity->loaded_saved_at = version == 2u && saved_valid ? saved_at : 0;
+        identity->loaded_saved_valid = version == 2u && saved_valid;
         identity->persistence_enabled = true;
         return true;
     }
@@ -679,6 +684,49 @@ bool player_session_load_battery(gbb_instance *machine,
     identity->persistence_enabled = true;
     set_error(out_error, error_capacity, "The existing save was rejected and preserved; fresh RAM is active.");
     return false;
+}
+
+bool player_session_apply_catch_up(gbb_instance *machine,
+                                   player_save_identity *identity,
+                                   char *out_status, size_t status_capacity) {
+    if (out_status != NULL && status_capacity > 0u) out_status[0] = '\0';
+    if (machine == NULL || identity == NULL) return false;
+    /* Only a timer cartridge whose save file was accepted has a time to catch
+     * up from; a fresh or rejected save starts the clock the core holds. */
+    if (!identity->rtc_present || identity->envelope_version == 0u ||
+        identity->catch_up_done) return true;
+    identity->catch_up_done = true;
+    const struct player_catch_up_decision decision = player_catch_up_policy(
+        identity->loaded_saved_at, identity->loaded_saved_valid,
+        identity->clock_now_unix, identity->clock_valid);
+    enum player_catch_up_status status = decision.status;
+    bool carry_became_set = false;
+    bool halted = false;
+    if (decision.action == PLAYER_CATCH_UP_APPLY) {
+        const size_t image_size = (size_t)identity->ram_size + GBB_RTC_BLOCK_SIZE;
+        uint8_t *image = malloc(image_size);
+        if (image == NULL) return false;
+        /* The live DH register sits at byte 13 of the clock block: bit 6 is
+         * the halt flag and bit 7 the day-counter carry. */
+        const size_t dh = (size_t)identity->ram_size + 13u;
+        if (gbb_copy_battery(machine, image, image_size) != GBB_OK) {
+            free(image);
+            return false;
+        }
+        const uint8_t before = image[dh];
+        halted = (before & 0x40u) != 0u;
+        if (gbb_rtc_catch_up(machine, decision.delta) != GBB_OK ||
+            gbb_copy_battery(machine, image, image_size) != GBB_OK) {
+            free(image);
+            return false;
+        }
+        carry_became_set = (before & 0x80u) == 0u && (image[dh] & 0x80u) != 0u;
+        free(image);
+        if (halted) status = PLAYER_CATCH_UP_STATUS_HALTED;
+    }
+    player_catch_up_format_status(status, decision.delta, carry_became_set, halted,
+                                  out_status, status_capacity);
+    return true;
 }
 
 static bool write_all(int fd, const uint8_t *bytes, size_t size) {
