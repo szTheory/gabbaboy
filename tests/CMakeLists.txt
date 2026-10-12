@@ -205,6 +205,73 @@ add_test(NAME banking_tracer_digest_unchanged
 set_tests_properties(banking_tracer_digest_unchanged PROPERTIES
   PASS_REGULAR_EXPRESSION "correctness_digest_fnv1a64=4c7a57ff3d50d228")
 
+# Public-API banking, echo and OAM DMA source cases (Plan 10-12; D-15, D-16, D-17).
+add_executable(test_banking test_banking.c)
+target_link_libraries(test_banking PRIVATE GabbaBoy::core)
+target_compile_features(test_banking PRIVATE c_std_17)
+set_target_properties(test_banking PROPERTIES C_EXTENSIONS OFF)
+foreach(case dma_wram_bank vbk_independence svbk_readback echo_follows_bank dma_vram_bank
+  dma_rom_page dma_high_pages dma_cart_ram dmg_banks_frozen bus_conflict_cgb_pin)
+  add_test(NAME banking_${case} COMMAND test_banking ${case})
+endforeach()
+
+# Core mutants for the banking cases (D-19). Each is a configure-time copy of the core with one
+# exactly-once source anchor rewritten, built as a test-only STATIC library (never installed or
+# exported) and linked to its own copy of test_banking. The failing case must exit 1 at its named
+# REQUIRE, and an unrelated case must still exit 0 in the same mutant so the mutant is shown to be
+# otherwise functional. The anchor is checked forward and in reverse so a drifted core fails the
+# configure step instead of silently disabling the control.
+set(GBB_BANKING_CORE_SOURCE ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GBB_BANKING_CORE_SOURCE})
+file(READ ${GBB_BANKING_CORE_SOURCE} gbb_banking_core_text)
+function(gbb_banking_mutant name fail_test control_test anchor replacement failing_case failing_regex control_case)
+  string(FIND "${gbb_banking_core_text}" "${anchor}" first)
+  string(FIND "${gbb_banking_core_text}" "${anchor}" final REVERSE)
+  if(first EQUAL -1 OR NOT first EQUAL final)
+    message(FATAL_ERROR "banking mutant ${name}: anchor '${anchor}' must occur exactly once in "
+      "${GBB_BANKING_CORE_SOURCE} (first=${first} last=${final})")
+  endif()
+  # The core text carries semicolons, so it stays quoted and never enters a list operation.
+  string(REPLACE "${anchor}" "${replacement}" text "${gbb_banking_core_text}")
+  set(source ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_banking_mutant_${name}.c)
+  file(WRITE ${source} "${text}")
+  set(library gabbaboy_core_banking_mutant_${name})
+  add_library(${library} STATIC ${source})
+  target_include_directories(${library} PUBLIC ${PROJECT_SOURCE_DIR}/include)
+  target_compile_features(${library} PUBLIC c_std_17)
+  set_target_properties(${library} PROPERTIES C_EXTENSIONS OFF)
+  target_compile_definitions(${library} PRIVATE
+    GBB_BUILD_REVISION="banking-mutant-${name}" GBB_BUILD_QUALIFIED=0)
+  set(target test_banking_mutant_${name})
+  add_executable(${target} test_banking.c)
+  target_link_libraries(${target} PRIVATE ${library})
+  target_compile_features(${target} PRIVATE c_std_17)
+  set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
+  add_test(NAME ${fail_test}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:${target}>;${failing_case}"
+      -DGBB_EXPECT_CODE=1
+      "-DGBB_EXPECT_REGEX=${failing_regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  add_test(NAME ${control_test}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:${target}>;${control_case}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=.*"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+endfunction()
+
+# Echo mutant: F000-FDFF ignores SVBK and always lands in bank 1, while D000-DFFF stays banked.
+gbb_banking_mutant(echo banking_mutant_echo_ignores_bank banking_mutant_echo_control
+  "unsigned bank = offset < GBB_WRAM_BANK_SIZE ? 0u : m->wram_bank;"
+  "unsigned bank = offset < GBB_WRAM_BANK_SIZE ? 0u : (address >= 0xF000u ? 1u : m->wram_bank);"
+  echo_follows_bank "echo_reads_match" vbk_independence)
+# DMA mutant: the CGB OAM DMA D0-DF page reads bank 1 whatever SVBK says; the CPU path is untouched.
+gbb_banking_mutant(dma banking_mutant_dma_wrong_bank banking_mutant_dma_control
+  "return *wram_byte(m, address);\n        return 0xFFu;"
+  "return m->wram[address < 0xD000u ? 0u : 1u][address & (GBB_WRAM_BANK_SIZE - 1u)];\n        return 0xFFu;"
+  dma_wram_bank "oam_is_pattern.m, 0x20." svbk_readback)
+
 # Original banking guest (D-33): the committed 64 KiB ROM is run through the real CPU and bus.
 add_test(NAME mbc5_banking_guest
   COMMAND test_mbc5 mbc5_banking_guest ${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb)

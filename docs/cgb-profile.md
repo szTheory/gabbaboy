@@ -465,6 +465,40 @@ bits never vector.
   but changing the DMG profile would move the v0.1 byte-identical baseline, so the hardware-correct
   read is deferred to a later DMG-change decision. The `unused_hwio-GS` ROM is not admitted.
 
+## Banked memory and OAM DMA sources
+
+The CGB profile in CGB mode has two VRAM banks (VBK, FF4F) and eight 4 KiB work RAM banks (SVBK,
+FF70). C000-CFFF and its echo E000-EFFF are always bank 0; D000-DFFF and its echo F000-FDFF are
+the bank SVBK selects, and SVBK 0 selects bank 1. In compatibility mode and on the DMG profile
+the banks never move. `banking_*` cases prove this through guest code, with a core mutant for the
+echo range (`banking_mutant_echo_ignores_bank`).
+
+### OAM DMA sources
+
+The DMG column is frozen at the v0.1 envelope (DECISIONS D-024) and the CGB column applies to both
+CGB modes (D-16). Page numbers are the high byte written to FF46.
+
+| Pages | DMG | CGB | CGB provenance |
+|-------|-----|-----|----------------|
+| 00-7F | `$FF` | ROM through the mapper (`cart_read`) | PANDOCS [VERIFY], not hardware |
+| 80-9F | VRAM | VRAM bank `VBK` | PANDOCS |
+| A0-BF | `$FF` | cartridge RAM or RTC through the mapper (`cart_read`; `$FF` when disabled) | PANDOCS [VERIFY], not hardware |
+| C0-CF | WRAM | WRAM bank 0 | PANDOCS |
+| D0-DF | WRAM | WRAM bank `SVBK` (0 reads as 1) | PANDOCS |
+| E0-FF | `$FF` | `$FF` | ORACLE_SAMEBOY [VERIFY], not hardware |
+
+The cartridge and E0-FF cells are documentation or oracle claims. They are not hardware-verified for
+CGB-E, and no document, test or release note may describe them as such. `banking_dma_rom_page`,
+`banking_dma_cart_ram` and `banking_dma_high_pages` pin the implemented values.
+
+### Limitations
+
+- **expected-failure:cgb-separate-buses (D-17).** Real CGB hardware has separate buses, so the DMG
+  rule that a CPU access outside HRAM sees `$FF` (reads) or is dropped (writes) during OAM DMA does
+  not hold there. This core keeps the DMG rule on the CGB profile. `banking_bus_conflict_cgb_pin`
+  pins the current behaviour so a later change is deliberate. The gate rows are GATE-16 (read) and
+  GATE-25 (write) in `docs/model-gates.md`.
+
 ## Sources
 
 The numbers are the `src` ids in the table and in `post_boot_source` in the code.
