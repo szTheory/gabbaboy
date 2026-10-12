@@ -827,6 +827,15 @@ add_test(NAME runner_guest_failure
 add_test(NAME mooneye_mbc_type_mutation
   COMMAND test_runner mooneye_mbc_type_mutation ${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/mbc5_rom_512kb.gb)
 set_tests_properties(mooneye_mbc_type_mutation PROPERTIES TIMEOUT 30)
+# D-26: an expected-unsupported row is met only by a stop at the declared address; a tampered "pass" expectation,
+# a wrong address and a passing ROM are all failing statuses (the configure-time copy is made below).
+add_test(NAME cgb_mooneye_expected_unsupported_tamper
+  COMMAND test_runner cgb_mooneye_expected_unsupported_tamper
+    ${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/expect/manifest.json
+    ${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json
+    ${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb)
+set_tests_properties(cgb_mooneye_expected_unsupported_tamper PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "control=expected-unsupported-tampered-to-pass.*control=expected-unsupported-wrong-address.*control=expected-unsupported-pass-is-failure")
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/runner-missing-fixture")
 configure_file("${PROJECT_SOURCE_DIR}/fixtures/mooneye/manifest.json"
   "${PROJECT_BINARY_DIR}/runner-missing-fixture/manifest.json" COPYONLY)
@@ -916,6 +925,47 @@ add_test(NAME cgb_mooneye_case_boot_regs-cgb
 set_tests_properties(cgb_mooneye_case_boot_regs-cgb PROPERTIES TIMEOUT 30
   PASS_REGULAR_EXPRESSION "status=pass.*profile=CGB-CPU-E.*callback_result=pass callback_pc=4000 result_pc=4327"
   FAIL_REGULAR_EXPRESSION "DMG-CPU-B")
+add_test(NAME cgb_mooneye_case_boot_div-cgbABCDE
+  COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --case boot_div-cgbABCDE --receipt)
+set_tests_properties(cgb_mooneye_case_boot_div-cgbABCDE PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "status=pass.*profile=CGB-CPU-E.*callback_result=pass callback_pc=4000 result_pc=4327"
+  FAIL_REGULAR_EXPRESSION "DMG-CPU-B")
+# The two staged ROMs stop on the unbuilt FF76 register: the status is expected-unsupported (never pass),
+# the stop reason and address are named, and the run exits 0 only on that exact stop.
+foreach(alias boot_hwio-C unused_hwio-C)
+  add_test(NAME cgb_mooneye_case_${alias}
+    COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --case ${alias} --receipt)
+  set_tests_properties(cgb_mooneye_case_${alias} PROPERTIES TIMEOUT 30
+    PASS_REGULAR_EXPRESSION "status=expected-unsupported stop=unsupported-bus address=ff76.*profile=CGB-CPU-E"
+    FAIL_REGULAR_EXPRESSION "DMG-CPU-B|status=pass|status=unexpected-pass|status=fail")
+endforeach()
+add_test(NAME cgb_mooneye_required_suite
+  COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --suite --receipt)
+set_tests_properties(cgb_mooneye_required_suite PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "suite eligible=4 executed=4 status=pass.*expected-unsupported=2/2"
+  FAIL_REGULAR_EXPRESSION "DMG-CPU-B")
+# D-25 / D-05: --observe prints the not-applicable token for a CGB row and no DMG-labelled line.
+add_test(NAME cgb_mooneye_observe_not_applicable
+  COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --case boot_regs-cgb --observe)
+set_tests_properties(cgb_mooneye_observe_not_applicable PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "mooneye[.]boot_regs-cgb[.]frame\tnot-applicable"
+  FAIL_REGULAR_EXPRESSION "frame_generation|ldbb_half_dots|not-ready")
+# Negative control (D-28): a one-byte-longer manifest is refused with invalid-manifest and exactly exit code 2.
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-cgb-unknown")
+configure_file("${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json"
+  "${PROJECT_BINARY_DIR}/mooneye-cgb-unknown/manifest.json" COPYONLY)
+file(APPEND "${PROJECT_BINARY_DIR}/mooneye-cgb-unknown/manifest.json" " ")
+add_test(NAME cgb_mooneye_unknown_manifest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:gabbaboy-runner>;--manifest;${PROJECT_BINARY_DIR}/mooneye-cgb-unknown/manifest.json;--suite"
+    -DGBB_EXPECT_CODE=2
+    -DGBB_EXPECT_REGEX=invalid-manifest
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# Negative control: a configure-time copy of the manifest whose boot_hwio-C row says "pass". The raw-SHA gate
+# would reject it on the command line, so test_runner reads the row expectation from the copy itself.
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/expect")
+string(JSON GBB_CGB_EXPECT_TAMPERED SET "${GBB_CGB_MANIFEST_JSON}" fixtures 2 expect "\"pass\"")
+file(WRITE "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/expect/manifest.json" "${GBB_CGB_EXPECT_TAMPERED}")
 set(GBB_TEST_SANITIZER_LINK_OPTIONS "")
 if(GABBABOY_ENABLE_SANITIZERS)
   set(GBB_TEST_SANITIZER_LINK_OPTIONS "-fsanitize=address,undefined")
