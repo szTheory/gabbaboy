@@ -1690,6 +1690,23 @@ if(NOT WIN32)
   set_tests_properties(cgb_bench_ab_selftest PROPERTIES TIMEOUT 120
     ENVIRONMENT "GBB_RELEASE_MEASURE_SAMPLES=3;GBB_RELEASE_MEASURE_WARMUPS=1;GBB_AB_RECEIPT=${GBB_AB_DIR}/selftest-receipt.json"
     PASS_REGULAR_EXPRESSION "ab pass samples=3")
+
+  # Negative controls: a wrong expected digest and a receipt missing one field must each fail
+  # with exactly exit code 1 and their named reason.
+  function(gbb_add_bench_ab_control name drop_field digest regex)
+    add_test(NAME ${name}
+      COMMAND ${CMAKE_COMMAND}
+        "-DGBB_CMD=${GBB_BASH}$<SEMICOLON>${GBB_AB_SCRIPT}$<SEMICOLON>--ab$<SEMICOLON>$<TARGET_FILE:measure_core>$<SEMICOLON>$<TARGET_FILE:measure_core>"
+        -DGBB_EXPECT_CODE=1
+        "-DGBB_EXPECT_REGEX=${regex}"
+        "-DGBB_WORKDIR=${PROJECT_SOURCE_DIR}"
+        -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+    set_tests_properties(${name} PROPERTIES TIMEOUT 120
+      ENVIRONMENT "GBB_RELEASE_MEASURE_SAMPLES=3;GBB_RELEASE_MEASURE_WARMUPS=1;GBB_AB_RECEIPT=${GBB_AB_DIR}/${name}.json;GBB_AB_DROP_FIELD=${drop_field};GBB_AB_EXPECT_DIGEST=${digest}")
+  endfunction()
+  gbb_add_bench_ab_control(cgb_bench_ab_wrong_digest "" 0000000000000000 "ab-digest-mismatch")
+  gbb_add_bench_ab_control(cgb_bench_ab_missing_field uncertainty 4c7a57ff3d50d228
+    "ab-receipt-missing: uncertainty")
 endif()
 
 gabbaboy_verify_registered_tests()
