@@ -1136,9 +1136,10 @@ add_test(NAME native_guide_rtc_contract
     -DGBB_DOC=${PROJECT_SOURCE_DIR}/docs/native-integration.md
     "-DGBB_DECLARATIONS=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;${PROJECT_SOURCE_DIR}/examples/relocated-c/CMakeLists.txt"
     "-DGBB_REQUIRED=${GBB_NATIVE_GUIDE_RTC_PHRASES}"
+    "-DGBB_SCOPE_START=`gbb_rtc_catch_up` applies host wall-clock time"
     -P ${GBB_DOC_CONTRACT_SCRIPT})
 set_tests_properties(native_guide_rtc_contract PROPERTIES
-  PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=12")
+  PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=12[^0-9]")
 
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/doc-contract-selftest")
 file(WRITE "${PROJECT_BINARY_DIR}/doc-contract-selftest/guide.md"
@@ -1155,6 +1156,39 @@ add_test(NAME doc_contract_missing_selftest
     "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${PROJECT_BINARY_DIR}/doc-contract-selftest/guide.md;-DGBB_DECLARATIONS=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;-DGBB_REQUIRED=two calls add twice;-P;${GBB_DOC_CONTRACT_SCRIPT}"
     -DGBB_EXPECT_CODE=1
     "-DGBB_EXPECT_REGEX=doc-contract-missing: two calls add twice"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+# Each rule that could pass vacuously has its own failing control.
+set(GBB_DOC_SELFTEST "${PROJECT_BINARY_DIR}/doc-contract-selftest")
+file(WRITE "${GBB_DOC_SELFTEST}/ghost.h" "/* gbb_ghost_call was renamed */\n// gbb_line_ghost /* still a comment\nint gbb_real_call(void);\n")
+file(WRITE "${GBB_DOC_SELFTEST}/comment.md" "Call `gbb_real_call`, not `gbb_line_ghost`.\n")
+add_test(NAME doc_contract_comment_only_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${GBB_DOC_SELFTEST}/comment.md;-DGBB_DECLARATIONS=${GBB_DOC_SELFTEST}/ghost.h;-DGBB_REQUIRED=Call;-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=doc-contract-undeclared: gbb_line_ghost"
+    "-DGBB_FORBID_REGEX=undeclared: gbb_real_call"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+file(WRITE "${GBB_DOC_SELFTEST}/prefix.md" "Call `gbb_rtc` and `libgbb_ghost_tail`.\n")
+add_test(NAME doc_contract_word_boundary_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${GBB_DOC_SELFTEST}/prefix.md;-DGBB_DECLARATIONS=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;-DGBB_REQUIRED=Call;-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=doc-contract-undeclared: gbb_rtc[^_]"
+    "-DGBB_FORBID_REGEX=gbb_ghost_tail"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME doc_contract_empty_phrase_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${GBB_DOC_SELFTEST}/guide.md;-DGBB_DECLARATIONS=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;-DGBB_REQUIRED=  ;-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=doc-contract-empty-phrase"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+file(WRITE "${GBB_DOC_SELFTEST}/scope.md" "Call it once per open.\n\nThe `gbb_rtc_catch_up` rule:\n<!-- once per open -->\nsee above.\n")
+add_test(NAME doc_contract_scope_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${GBB_DOC_SELFTEST}/scope.md;-DGBB_DECLARATIONS=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;-DGBB_REQUIRED=once per open;-DGBB_SCOPE_START=The `gbb_rtc_catch_up` rule;-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=doc-contract-missing: once per open"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
 gabbaboy_verify_registered_tests()
