@@ -3,11 +3,11 @@ gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_plan: Not started
-status: executed_awaiting_verification
-stopped_at: Phase 10 execute-phase complete, awaiting /gsd-verify-work 10
-last_updated: "2026-10-12T21:54:24.294Z"
+status: planning
+stopped_at: Phase 10 verify-work passed (12/12 automated UAT); next /gsd-discuss-phase 11
+last_updated: "2026-10-12T23:36:39.000Z"
 last_activity: 2026-10-12
-last_activity_desc: Phase 10 complete, transitioned to Phase 11
+last_activity_desc: Phase 10 verify-work passed; PR #66 squash-merges at its exact-head green head
 state_head: 798433cbc5080c35d9256592fb5547c20bcbd451
 progress:
   total_phases: 9
@@ -26,7 +26,7 @@ current_phase_name: CGB Colour Rendering and Player Colour
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 10 — CGB Profile, Banking and Register Visibility
+**Current focus:** Phase 11 — CGB Colour Rendering and Player Colour (not started)
 
 ## Current Position
 
@@ -36,7 +36,8 @@ Total Plans in Phase: 20
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
 Verified: Phase 9 `/gsd-verify-work 9` passed 2026-10-12 — 14/14 UAT items automated (09-UAT.md), the guide-wording item replaced by the `native_guide_rtc_contract` check; re-verification `passed` (09-VERIFICATION.md); PR #65 squash-merges at the exact-head green branch head (pre-authorized)
 Completed: Phase 10 - CGB Profile, Banking and Register Visibility, execution (plans 10-01..10-20), evidence head `2fe078e8f08ed98ba0ac0e244971e7c0ead16b1e` run https://github.com/szTheory/gabbaboy/actions/runs/38299323863; PR #66 ready and not merged
-Next step: Phase 10 verification via `/gsd-verify-work 10` (owner chooses when). Following phase (named, not started): Phase 11 - CGB Colour Rendering and Player Colour
+Verified: Phase 10 `/gsd-verify-work 10` passed 2026-10-12 — 12/12 UAT items automated (10-UAT.md), local 541/541 with installed inventory at 3c0d6bc; verification `passed` (10-VERIFICATION.md); PR #66 squash-merges at the exact-head green branch head (pre-authorized)
+Next step: Phase 11 - CGB Colour Rendering and Player Colour (no CONTEXT.md yet) via `/gsd-discuss-phase 11`; the owner chooses when
 Last activity: 2026-10-12 — Phase 10 execute-phase tail: Nyquist validated (4 gaps filled), security 33/33 closed, code review 8 fixed + 1 no-change, regression gate 541/541 with installed inventory, gsd-verifier `passed` (10-VERIFICATION.md)
 
 Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
@@ -362,9 +363,11 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 ## Session Continuity
 
 Last session: 2026-10-12T19:16:03.353Z
-Stopped at: Phase 10 execute-phase complete (tail gates passed); next `/gsd-verify-work 10`
+Stopped at: Phase 10 verify-work passed; Phase 11 not started
 Resume file: None
-Next command in fresh context: `/gsd-verify-work 10`
+Next command in fresh context: `/gsd-discuss-phase 11`
+
+Completed workflow stage: **Phase 10 - CGB Profile, Banking and Register Visibility, verification** (2026-10-12). `/gsd-verify-work 10` passed: 12/12 UAT items automated with no human checkpoint (10-UAT.md, DECISIONS D-069), mapped by hand from the 118 test names the SUMMARY coverage blocks cite (all registered CTests); all 20 SUMMARY commit claims reconcile. Local macOS arm64 at code head `3c0d6bc`: 541/541 CTest, inventory `--installed` 541 executed none skipped, `baseline status=pass`, `verify-model-gates.py` pass. Hosted at `3c0d6bc`: ci run 38318873877 (eight required jobs), fixture-repro 38318873887, preview-package-smoke success on attempt 2. The verify:pre api-coverage gate blocked on an over-long COVERAGE.md opt-out reason; shortened to the Phase 9 form. Completion predicate `phase uat-passed 10 --require-verification` passed; `threats_open: 0`. PR #66 squash-merges at its exact-head green branch head (pre-authorized); the six owner veto items stay recorded in the PR body. Next phase: **Phase 11 - CGB Colour Rendering and Player Colour** (no CONTEXT.md yet) via **`/gsd-discuss-phase 11`**. Both auto-advance flags stay false; nothing advances automatically.
 
 Completed workflow stage: **Phase 10 - CGB Profile, Banking and Register Visibility, execute-phase** (2026-10-12): plans 10-01..10-20 plus the tail. Execute-phase tail (after the first evidence head): Nyquist validation `validated`/`nyquist_compliant: true` (4 gaps filled, new `cgb_fuzz_profile_select`); security 33/33 threats closed, `threats_open: 0` (10-SECURITY.md); code review 0 critical / 4 warning / 5 info, 8 fixed and 1 no-change (10-REVIEW-DISPOSITION.md); regression gate 541/541 CTest with installed inventory, `baseline status=pass`, model gates pass, macOS player package gate passed; gsd-verifier `passed` 4/4 (10-VERIFICATION.md). One more CI defect was fixed: the Windows inventory script now also skips the bash-only `cgb_mooneye_repro_requires_manifest`. Evidence head `d260a7dec5af333d79ff1b698382a9399ee8f11b`: ci run 38315850467 (https://github.com/szTheory/gabbaboy/actions/runs/38315850467) all eight required jobs success; fixture-repro run 38315850478 (https://github.com/szTheory/gabbaboy/actions/runs/38315850478) all seven jobs success (CGB banking and Mooneye CGB byte-identical); preview-package-smoke run 38315850473 success on attempt 2. PR #66 is ready and stays unmerged; the pre-authorized squash merge happens only after `/gsd-verify-work 10` passes at an exact-head green head. Owner veto items unchanged (see below). **Next step: Phase 10 verification. Next command in fresh context: `/gsd-verify-work 10`.** Following phase (named, not started): Phase 11 - CGB Colour Rendering and Player Colour. Both auto-advance flags stay false.
 
@@ -434,7 +437,6 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Phase 10 (CGB Profile, Banking and Register Visibility) is executed (plans 10-01..10-20). PR #66 is ready, exact-head green at evidence head `d260a7dec5af333d79ff1b698382a9399ee8f11b` (after the execute-phase tail gates and review fixes), and NOT merged; the squash merge is pre-authorized only after verification passes at an exact-head green head.
-- Next command in fresh context: `/gsd-verify-work 10`.
-- Phase 11 - CGB Colour Rendering and Player Colour is named, not started; the owner chooses when to continue after verification passes.
+- Phase 10 (CGB Profile, Banking and Register Visibility) is executed and verified (`/gsd-verify-work 10` passed, 12/12 automated). PR #66 squash-merges at its exact-head green head.
+- The owner chooses when to start Phase 11 - CGB Colour Rendering and Player Colour: `/gsd-discuss-phase 11`.
 - Phase-stop rule: stop after each phase and yield; never auto-advance into the next phase or milestone.
