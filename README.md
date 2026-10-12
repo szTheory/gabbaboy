@@ -3,11 +3,12 @@
 GabbaBoy is an original portable C17 Game Boy / Game Boy Color project. Its
 headless core implements a declared, bootless DMG-CPU-B software profile with
 CPU, bus, timer, serial, joypad, video, and scoped cartridge behavior. The
-core supports ROM-only, MBC1, MBC2 and MBC5 cartridges; the optional macOS
-player persists battery-backed RAM for MBC1 type $03 with managed save
-continuation (MBC2 and MBC5 battery cartridges run there without saving
-progress) and plays back the core's scoped DMG-CPU-B digital APU model through
-SDL3. The project does not execute a Nintendo boot ROM or support CGB/VIN, and it makes no general
+core supports ROM-only, MBC1, MBC2, MBC3 ($0F-$13, with an emulated-time
+real-time clock and explicit host catch-up; MBC30 is rejected) and MBC5
+cartridges; the optional macOS player keeps battery saves (with the game clock)
+for MBC1, MBC2, MBC3 and MBC5 battery cartridges across restarts, with v0.1
+MBC1 saves unchanged, and plays back the core's scoped DMG-CPU-B digital APU
+model through SDL3. The project does not execute a Nintendo boot ROM or support CGB/VIN, and it makes no general
 game compatibility or physical-hardware accuracy claim.
 
 ## Audio and playback evidence

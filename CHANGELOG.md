@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+* **MBC3 and RTC (Phase 9):** the core loads MBC3 types `$0F`-`$13` with a deterministic real-time clock driven only by emulated time; MBC30 is rejected with `GBB_UNSUPPORTED_CARTRIDGE_VARIANT`.
+* **API (append-only):** `gbb_rtc_catch_up(gbb_instance *, int64_t)` applies host wall-clock seconds to a timer cartridge, `GBB_NO_RTC` is appended after `GBB_NO_RUMBLE`, and `GBB_RTC_BLOCK_SIZE` (21) sizes the clock block. The signed catch-up signature is reviewable before the phase pull request merges (D-17); after a release it would break installed consumers.
+* **Battery image:** timer cartridges (`$0F`, `$10`) export cartridge RAM followed by a versioned 21-byte clock block, and importing an image never advances the clock; other battery types and MBC1 images are unchanged.
+* **Player persistence:** the macOS player saves MBC1, MBC2, MBC3 (with the game clock) and MBC5 battery cartridges, reads ROMs up to 8 MiB, and catches a timer cartridge's clock up from the save time on reopen. Save envelope version 2 is used for every battery type except MBC1 `$03`, whose v0.1 file is unchanged. Time spent paused while the player stays open is not recovered.
+
 ## [0.1.2](https://github.com/szTheory/gabbaboy/compare/v0.1.0...v0.1.2) (2026-10-10)
 
 
