@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 9
+current_plan: 10
 status: planning
-stopped_at: Completed 10-08-PLAN.md
-last_updated: "2026-10-12T17:30:18.041Z"
+stopped_at: Completed 10-09-PLAN.md
+last_updated: "2026-10-12T17:41:09.351Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 10 execution started
-state_head: 910d7f71127edcace4110b1746d02d5a5f15ea1e
+state_head: 47b4c2757f9f5eb7055b7f3e227d9c0bec2454d8
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 65
-  completed_plans: 53
+  completed_plans: 54
   percent: 44
 current_phase: 10
 current_phase_name: CGB Profile, Banking and Register Visibility
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 9
+Current Plan: 10
 Total Plans in Phase: 20
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -160,6 +160,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 10 P06 | 55 min | 3 tasks | 8 files |
 | Phase 10 P07 | 12 min | 2 tasks | 4 files |
 | Phase 10 P08 | 15 min | 2 tasks | 5 files |
+| Phase 10 P09 | 40 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -300,6 +301,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 10]: 10-06: only compat cells pinned by a named Mooneye test carry HW_TEST; CGB-mode cells are PANDOCS/POLICY/ORACLE_SAMEBOY
 - [Phase 10]: 10-06: GATE-68 CGB_ONLY covers compat title-sum B/HL; GATE-03 and GATE-57 are DMG_ONLY model_is_dmg; GATE-04..08 BOTH per-profile column
 - [Phase 10]: 10-07: post-boot doc mirror is machine-checked by test_cgb_tables; header-derived cells show base value with rule in reason
+- [Phase 10]: IE bits 5-7 stored on CGB profile only; DMG keeps & 0x1F (OQ2, owner veto item 6)
+- [Phase 10]: Deferred register accesses latch bus_unsupported with address; latch also reported after interrupt entry
 
 ### Pending Todos
 
@@ -335,8 +338,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-12T17:30:17.984Z
-Stopped at: Completed 10-08-PLAN.md
+Last session: 2026-10-12T17:41:09.301Z
+Stopped at: Completed 10-09-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 10`
 
