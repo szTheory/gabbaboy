@@ -504,3 +504,4 @@ cgb_key0_lock_cgb
 cgb_key0_lock_compat
 cgb_key0_lock_cross_column
 cgb_key0_lock_reset_idempotent
+cgb_mooneye_fixture_digest

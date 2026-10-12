@@ -726,6 +726,15 @@ add_test(NAME mooneye_mbc_pc_table_tamper
     -DGBB_EXPECT_CODE=1
     -DGBB_EXPECT_REGEX=pc-table-mismatch
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# Phase 10 Mooneye CGB derivatives (D-26, names per D-27): digest and inventory modes of the
+# fail-closed verifier. The pc-table mode arrives with the runner table in Plan 10-16.
+add_test(NAME cgb_mooneye_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_MODE=digest
+    -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake)
+set_tests_properties(cgb_mooneye_fixture_digest PROPERTIES
+  PASS_REGULAR_EXPRESSION "Verified 4 eligible Mooneye-cgb ROM\\(s\\)")
 # Negative control (D-28): an edited sibling manifest is refused with invalid-manifest and exactly exit code 2.
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-mbc-unknown")
 configure_file("${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/manifest.json"
