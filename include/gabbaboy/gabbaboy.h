@@ -174,8 +174,9 @@ gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_si
  * GBB_RTC_BLOCK_SIZE-byte clock block; $0F has no RAM, so its image is the
  * block alone. Every other battery type is exactly RAM-sized as before. The
  * block is little-endian: "GBRT", version 1, a 32-bit sub-second count below
- * 2^23, the live and latched S M H DL DH registers, the latch edge state and a
- * zero reserved byte. Export projects the clock to the current emulated time
+ * 2^23, the live and latched S M H DL DH registers, the latch edge state (the
+ * last byte written to the latch register, so any value is valid) and a zero
+ * reserved byte. Export projects the clock to the current emulated time
  * without changing the instance, so two exports at the same time are
  * byte-identical. Import validates RAM and block together before changing
  * anything: a wrong total length returns GBB_BATTERY_SIZE_MISMATCH, and a bad
