@@ -1240,6 +1240,8 @@ gbb_add_model_gate_test(model_gates_tracer_pass 0 "model-gates pass functions=2"
   --source "${GBB_MODEL_GATE_DIR}/tracer.c" --doc "${GBB_MODEL_GATE_DIR}/tracer.md")
 gbb_add_model_gate_test(model_gates_tracer_doc_mismatch 1 "gate-doc-mismatch"
   --source "${GBB_MODEL_GATE_DIR}/tracer.c" --doc "${GBB_MODEL_GATE_DIR}/tracer-bad.md")
+# The real core and the real gate table (Plan 10-02): every function and model-differing branch is tagged.
+gbb_add_model_gate_test(model_gates 0 "model-gates pass functions=1[2-9][0-9] gates=")
 gbb_add_model_gate_test(model_gates_selftest 0
   "model-gates self-test pass mutants=[1-9][0-9]* functions=1[2-9][0-9]" --self-test)
 

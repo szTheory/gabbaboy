@@ -412,3 +412,4 @@ rtc_mutant_latch_any_write_control
 model_gates_tracer_pass
 model_gates_tracer_doc_mismatch
 model_gates_selftest
+model_gates
