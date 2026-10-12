@@ -535,6 +535,198 @@ static int case_deferred_latch_interrupt(void) {
     return 0;
 }
 
+/* ---- Per-cell matrix (Plan 10-10, D-11) -------------------------------------------------------
+ *
+ * The table below is written from the D-10 decision table, not from io_visibility[] in the core, so
+ * it is an independent oracle. One cell is one (column, address) pair:
+ *   read0, then write w1, read1, write w2, read2
+ * through the public API. A read expectation is a byte or STOP (the read stops atomically). The kind
+ * says what a write does: IMPL writes are accepted or silently ignored; DEF_RW and DEF_W writes are
+ * dropped and reported as a stop once the instruction retires (OQ5), tagged with the owning phase.
+ * Each cell is run as up to three guest programs, one per read, so a read that stops does not hide
+ * the reads after it. Earlier reads that stop are skipped in later programs. */
+typedef enum { K_IMPL = 0, K_DEF_RW, K_DEF_W } ckind;
+
+typedef struct {
+    view col;
+    uint16_t addr;
+    int r0;
+    uint8_t w1;
+    int r1;
+    uint8_t w2;
+    int r2;
+    ckind kind;
+    uint8_t phase;      /* owning phase of a DEFERRED cell, 0 for IMPL */
+    const char *src;    /* evidence behind the expected bytes */
+} cell;
+
+#define MAX_CELLS 256
+static int g_quiet;
+
+static void cell_fail(const cell *c, const char *what, int a, int b) {
+    if (g_quiet) return;
+    fprintf(stderr, "cell %s $%04X: %s (got %d, expected %d)\n", view_names[c->col], c->addr, what, a, b);
+}
+
+/* Returns 0 when every read, stop and bank expectation of the cell holds in c->col. */
+static int run_cell(const cell *c) {
+    const int reads[3] = { c->r0, c->r1, c->r2 };
+    const uint8_t writes[2] = { c->w1, c->w2 };
+    const uint8_t lo = (uint8_t)c->addr;
+    for (int target = 0; target < 3; ++target) {
+        enum { WRITE_STOP = 1, READ_STOP = 2 };
+        int expected[8], nexp = 0;
+        prog p = { {0}, 0 };
+        for (int step = 0; step <= target; ++step) {
+            if (step > 0) {
+                write_io(&p, lo, writes[step - 1]);
+                if (c->kind != K_IMPL) expected[nexp++] = WRITE_STOP;
+            }
+            if (reads[step] != STOP) keep_io(&p, lo, (uint8_t)step);
+            else if (step == target) { ldh_ld(&p, lo); expected[nexp++] = READ_STOP; }
+        }
+        halt(&p);
+        gbb_instance *m = load_view(c->col, p.b, p.n, NULL, 0);
+        if (m == NULL) { cell_fail(c, "load failed", 0, 0); return 1; }
+        int idx = 0, read_stopped = 0, bad = 0;
+        for (;;) {
+            gbb_run_result r = gbb_run(m, RUN_BUDGET, NULL, 0);
+            if (r.reason != GBB_STOP_UNSUPPORTED_BUS) break;
+            if (idx >= nexp) { cell_fail(c, "unexpected stop", 1, 0); bad = 1; break; }
+            if (gbb_test_last_unsupported_address(m) != c->addr) {
+                cell_fail(c, "stop address", gbb_test_last_unsupported_address(m), c->addr); bad = 1; break;
+            }
+            if (expected[idx] == READ_STOP) {
+                if (reject_atomically(m) != 0) { cell_fail(c, "read stop not atomic", 0, 1); bad = 1; }
+                read_stopped = 1;
+                ++idx;
+                break;
+            }
+            ++idx;
+        }
+        if (!bad && idx != nexp) { cell_fail(c, "stops seen", idx, nexp); bad = 1; }
+        for (int step = 0; !bad && step <= target; ++step) {
+            if (reads[step] == STOP) continue;
+            if (step == target && read_stopped) continue;
+            if (hram(m, (unsigned)step) != (unsigned)reads[step]) {
+                cell_fail(c, step == 0 ? "read0" : step == 1 ? "read1" : "read2", hram(m, (unsigned)step), reads[step]);
+                bad = 1;
+            }
+        }
+        if (!bad && c->col != V_CGB) {
+            /* Outside CGB mode no write may move either bank (D-15). */
+            uint8_t vb = 9, wb = 9;
+            gbb_test_bank_state(m, &vb, &wb);
+            if (vb != 0 || wb != 1) { cell_fail(c, "bank moved", vb, 0); bad = 1; }
+        }
+        gbb_destroy(m);
+        if (bad) return 1;
+    }
+    return 0;
+}
+
+static cell g_cells[MAX_CELLS];
+static size_t g_ncells;
+
+static void add_cell(view col, uint16_t addr, int r0, uint8_t w1, int r1, uint8_t w2, int r2,
+                     ckind kind, uint8_t phase, const char *src) {
+    cell c = { col, addr, r0, w1, r1, w2, r2, kind, phase, src };
+    if (g_ncells < MAX_CELLS) g_cells[g_ncells++] = c;
+}
+
+/* Addresses that no register owns on the CGB profile (D-10 "other unused IO in FF00-FF7F"). */
+static size_t unused_addresses(uint16_t *out) {
+    size_t n = 0;
+    out[n++] = 0xFF03;
+    for (uint16_t a = 0xFF08; a <= 0xFF0E; ++a) out[n++] = a;
+    out[n++] = 0xFF15;
+    out[n++] = 0xFF1F;
+    for (uint16_t a = 0xFF27; a <= 0xFF2F; ++a) out[n++] = a;
+    out[n++] = 0xFF4E;
+    out[n++] = 0xFF50;
+    for (uint16_t a = 0xFF57; a <= 0xFF67; ++a) out[n++] = a;
+    for (uint16_t a = 0xFF6D; a <= 0xFF6F; ++a) out[n++] = a;
+    out[n++] = 0xFF71;
+    for (uint16_t a = 0xFF78; a <= 0xFF7F; ++a) out[n++] = a;
+    return n;
+}
+
+static void const_ff(view col, uint16_t a, uint8_t w1, uint8_t w2, const char *src) {
+    add_cell(col, a, 0xFF, w1, 0xFF, w2, 0xFF, K_IMPL, 0, src);
+}
+
+/* Compatibility-mode column ($143 = $00 on the CGB profile). */
+static void fill_compat(void) {
+    uint16_t un[64];
+    const size_t nun = unused_addresses(un);
+    for (size_t i = 0; i < nun; ++i) const_ff(V_COMPAT, un[i], 0x5A, 0xA5, "unused_hwio-C");
+    const_ff(V_COMPAT, 0xFF4C, 0x04, 0xC0, "D-10 KEY0 locked");
+    const_ff(V_COMPAT, 0xFF4D, 0x01, 0xFE, "D-10 KEY1");
+    add_cell(V_COMPAT, 0xFF4F, 0xFE, 0x01, 0xFE, 0xFE, 0xFE, K_IMPL, 0, "boot_hwio-C");
+    for (uint16_t a = 0xFF51; a <= 0xFF54; ++a) const_ff(V_COMPAT, a, 0x5A, 0xA5, "D-10 HDMA1-4");
+    const_ff(V_COMPAT, 0xFF55, 0x01, 0x80, "D-10 HDMA5");
+    const_ff(V_COMPAT, 0xFF56, 0x01, 0xC1, "D-10 RP");
+    add_cell(V_COMPAT, 0xFF68, 0xC8, 0x3A, 0x7A, 0x80, 0xC0, K_IMPL, 0, "boot_hwio-C");
+    const_ff(V_COMPAT, 0xFF69, 0x5A, 0xA5, "D-10 BCPD");
+    add_cell(V_COMPAT, 0xFF6A, 0xD0, 0x3A, 0x7A, 0x80, 0xC0, K_IMPL, 0, "boot_hwio-C");
+    const_ff(V_COMPAT, 0xFF6B, 0x5A, 0xA5, "D-10 OCPD");
+    const_ff(V_COMPAT, 0xFF6C, 0x01, 0xFE, "D-10 OPRI");
+    const_ff(V_COMPAT, 0xFF70, 0x05, 0x08, "D-10 SVBK");
+    add_cell(V_COMPAT, 0xFF72, 0x00, 0xA5, 0xA5, 0x5A, 0x5A, K_IMPL, 0, "D-10 FF72");
+    add_cell(V_COMPAT, 0xFF73, 0x00, 0xA5, 0xA5, 0x5A, 0x5A, K_IMPL, 0, "D-10 FF73");
+    const_ff(V_COMPAT, 0xFF74, 0xA5, 0x5A, "D-10 FF74");
+    add_cell(V_COMPAT, 0xFF75, 0x8F, 0xA5, 0xAF, 0x5A, 0xDF, K_IMPL, 0, "D-10 FF75");
+    add_cell(V_COMPAT, 0xFF76, STOP, 0x5A, STOP, 0xA5, STOP, K_DEF_RW, 14, "D-10 PCM12");
+    add_cell(V_COMPAT, 0xFF77, STOP, 0x5A, STOP, 0xA5, STOP, K_DEF_RW, 14, "D-10 PCM34");
+}
+
+static void build_table(void) {
+    g_ncells = 0;
+    fill_compat();
+}
+
+static int run_view_cells(view col, const char *name) {
+    build_table();
+    size_t n = 0;
+    for (size_t i = 0; i < g_ncells; ++i) {
+        if (g_cells[i].col != col) continue;
+        ++n;
+        if (run_cell(&g_cells[i]) != 0) return 1;
+    }
+    REQUIRE(n > 0);
+    printf("ok 1 - %s cells=%zu\n", name, n);
+    return 0;
+}
+
+static int case_matrix_compat(void) { return run_view_cells(V_COMPAT, "cgb_visibility_matrix_compat"); }
+
+/* Negative control: a copy of one compat row with a single expected byte flipped must be reported
+ * as a failure, so a passing matrix is not vacuous. */
+static int case_flip_control(void) {
+    build_table();
+    size_t picked = 0;
+    for (size_t i = 0; i < g_ncells; ++i)
+        if (g_cells[i].col == V_COMPAT && g_cells[i].addr == 0xFF4F) picked = i;
+    cell good = g_cells[picked];
+    REQUIRE(good.addr == 0xFF4F && run_cell(&good) == 0);
+    g_quiet = 1;
+    cell bad = good;
+    bad.r1 ^= 0x01;                 /* the read after the first write */
+    const int flipped_read = run_cell(&bad);
+    bad = good;
+    bad.r0 = STOP;                  /* a read expected to stop that does not */
+    const int flipped_stop = run_cell(&bad);
+    bad = good;
+    bad.kind = K_DEF_W;             /* a write expected to stop that does not */
+    const int flipped_kind = run_cell(&bad);
+    g_quiet = 0;
+    REQUIRE(flipped_read != 0);
+    REQUIRE(flipped_stop != 0);
+    REQUIRE(flipped_kind != 0);
+    PASS("cgb_visibility_flip_control");
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) {
         fprintf(stderr, "usage: test_cgb_visibility <case>\n");
@@ -547,6 +739,8 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "deferred_stop") == 0) return case_deferred_stop();
     if (strcmp(argv[1], "ie_gate") == 0) return case_ie_gate();
     if (strcmp(argv[1], "deferred_latch_interrupt") == 0) return case_deferred_latch_interrupt();
+    if (strcmp(argv[1], "matrix_compat") == 0) return case_matrix_compat();
+    if (strcmp(argv[1], "flip_control") == 0) return case_flip_control();
     fprintf(stderr, "unknown case %s\n", argv[1]);
     return 2;
 }
