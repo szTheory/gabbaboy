@@ -45,15 +45,15 @@ occurs exactly once in code and once in the table.
 | GATE-00 | BOTH | - | basis="model-neutral function; see its branch gates" | any function | shared id for model-neutral function tags |
 | GATE-01 | UNKNOWN | - | research:14 | audio_process_sample | high-pass filter constant differs by model |
 | GATE-02 | UNKNOWN | - | research:11 | ppu_update_stat_line | STAT interrupt line edge timing is unresearched for CGB |
-| GATE-03 | UNKNOWN | - | research:10 | reset_state | post-boot F depends on the header checksum and CGB compatibility mode |
-| GATE-04 | UNKNOWN | - | research:10 | reset_state | post-boot DIV differs by model; the table lands in Plan 10-06 |
-| GATE-05 | UNKNOWN | - | research:10 | reset_state | post-boot SC differs by model |
-| GATE-06 | UNKNOWN | - | research:10 | reset_state | post-boot IF differs by model |
-| GATE-07 | UNKNOWN | - | research:10 | reset_state | post-boot APU register literals differ by model |
-| GATE-08 | UNKNOWN | - | research:10 | reset_state | post-boot DMA register differs by model |
-| GATE-09 | BOTH | - | basis=D-025 | reset_state | RAM fill is emulator policy; hardware power-on RAM is unspecified |
-| GATE-10 | UNKNOWN | - | research:11 | reset_state | post-boot PPU mode, LY and STAT literals differ by model |
-| GATE-11 | BOTH | - | basis=PANDOCS | reset_state | LCDC, BGP and OBP post-boot values are common to both models |
+| GATE-03 | UNKNOWN | - | research:10 | post_boot_apply | post-boot F depends on the header checksum and CGB compatibility mode |
+| GATE-04 | UNKNOWN | - | research:10 | post_boot_apply | post-boot DIV differs by model; the table lands in Plan 10-06 |
+| GATE-05 | UNKNOWN | - | research:10 | post_boot_apply | post-boot SC differs by model |
+| GATE-06 | UNKNOWN | - | research:10 | post_boot_apply | post-boot IF differs by model |
+| GATE-07 | UNKNOWN | - | research:10 | post_boot_apply | post-boot APU register literals differ by model |
+| GATE-08 | UNKNOWN | - | research:10 | post_boot_apply | post-boot DMA register differs by model |
+| GATE-09 | BOTH | - | basis=D-025 | post_boot_apply | RAM fill is emulator policy; hardware power-on RAM is unspecified |
+| GATE-10 | UNKNOWN | - | research:11 | post_boot_apply | post-boot PPU mode, LY and STAT literals differ by model |
+| GATE-11 | BOTH | - | basis=PANDOCS | post_boot_apply | LCDC, BGP and OBP post-boot values are common to both models |
 | GATE-12 | BOTH | - | basis=pandocs-joyp | joypad_value | P1 button and direction select lines are the same on both models |
 | GATE-13 | UNKNOWN | - | research:11 | cpu_vram_access_allowed | VRAM CPU lock window during mode 3 |
 | GATE-14 | UNKNOWN | - | research:11 | cpu_oam_access_allowed | OAM CPU lock window during modes 2 and 3 |

@@ -664,32 +664,193 @@ static void observe_bus(gbb_instance *m, uint64_t offset, uint16_t address, uint
     }
 }
 
+/* Post-boot provenance table (D-06). Every value the DMG-CPU-B profile starts with lives in
+ * one row, with where the number came from. The DMG column records the value this core
+ * implements, not necessarily Pan Docs: a cell that differs from Pan Docs says so in its reason
+ * (diverges-from-pandocs) instead of being quietly "corrected", because the v0.1 DMG baseline
+ * is byte-pinned (tests/test_cgb_postboot.c, tests/scripts/verify-dmg-baseline.sh). */
+typedef enum {
+    PROV_HW_TEST = 1,
+    PROV_PANDOCS,
+    PROV_ORACLE_SAMEBOY,
+    PROV_POLICY,
+    PROV_HEADER_DERIVED
+} post_boot_prov;
+
+/* Numbered source list; the same numbers head the source list in docs/cgb-profile.md. */
+typedef enum {
+    SRC_NONE = 0,
+    SRC_PANDOCS_POWER_UP = 1,   /* Pan Docs, Power Up Sequence */
+    SRC_V01_POLICY_D025 = 2,    /* v0.1 DMG-CPU-B policy, DECISIONS D-025 */
+    SRC_CART_HEADER = 3         /* cartridge header byte $14D */
+} post_boot_source;
+
+typedef enum {
+    PB_A, PB_F, PB_B, PB_C, PB_D, PB_E, PB_H, PB_L, PB_SP, PB_PC,
+    PB_DIV, PB_DIVIDER_COUNTER, PB_DIVIDER_PHASE,
+    PB_TIMA, PB_TMA, PB_TAC,
+    PB_SERIAL_DATA, PB_SERIAL_CONTROL,
+    PB_IE, PB_IF, PB_IME,
+    PB_NR50, PB_NR51, PB_APU_POWER,
+    PB_DMA_REGISTER,
+    PB_LCDC, PB_STAT, PB_LY, PB_LYC, PB_SCX, PB_SCY, PB_WX, PB_WY,
+    PB_BGP, PB_OBP0, PB_OBP1, PB_PPU_MODE,
+    PB_JOYPAD_SELECT, PB_JOYPAD_BUTTONS,
+    PB_RAM_FILL,
+    PB_FIELD_COUNT
+} post_boot_field;
+
+typedef struct {
+    uint16_t value;
+    uint8_t prov;
+    uint8_t src_id;
+    const char *reason;
+} post_boot_cell;
+
+typedef struct {
+    uint8_t field;
+    post_boot_cell dmg;
+} post_boot_row;
+
+#define PB_PD(v) { (v), PROV_PANDOCS, SRC_PANDOCS_POWER_UP, "Pan Docs Power Up Sequence, DMG" }
+#define PB_DIVERGES(v, why) { (v), PROV_POLICY, SRC_V01_POLICY_D025, why }
+#define PB_POLICY(v, why) { (v), PROV_POLICY, SRC_V01_POLICY_D025, why }
+
+static const post_boot_row post_boot[PB_FIELD_COUNT] = {
+    { PB_A,  PB_PD(0x01u) },
+    /* F is $B0 (H and C set) when header byte $14D is non-zero, else $80; the cell holds the $80 base. */
+    { PB_F,  { 0x80u, PROV_HEADER_DERIVED, SRC_CART_HEADER, "$B0 when header byte $14D is non-zero, else $80" } },
+    { PB_B,  PB_PD(0x00u) },
+    { PB_C,  PB_PD(0x13u) },
+    { PB_D,  PB_PD(0x00u) },
+    { PB_E,  PB_PD(0xD8u) },
+    { PB_H,  PB_PD(0x01u) },
+    { PB_L,  PB_PD(0x4Du) },
+    { PB_SP, PB_PD(0xFFFEu) },
+    { PB_PC, PB_PD(0x0100u) },
+    { PB_DIV, PB_PD(0xABu) },
+    { PB_DIVIDER_COUNTER, PB_POLICY(0xAB00u, "internal 16-bit counter whose high byte is DIV") },
+    { PB_DIVIDER_PHASE, PB_POLICY(0u, "sub-tick phase of the divider counter starts aligned") },
+    { PB_TIMA, PB_PD(0x00u) },
+    { PB_TMA, PB_PD(0x00u) },
+    { PB_TAC, PB_PD(0x00u) },
+    { PB_SERIAL_DATA, PB_PD(0x00u) },
+    { PB_SERIAL_CONTROL, PB_PD(0x7Eu) },
+    { PB_IE, PB_PD(0x00u) },
+    { PB_IF, PB_DIVERGES(0x00u, "diverges-from-pandocs: IF reads $E0 here; Pan Docs lists $E1") },
+    { PB_IME, PB_PD(0x00u) },
+    { PB_NR50, PB_DIVERGES(0x00u, "diverges-from-pandocs: NR50 is 0 here; Pan Docs lists $77") },
+    { PB_NR51, PB_DIVERGES(0xFFu, "diverges-from-pandocs: NR51 is $FF here; Pan Docs lists $F3") },
+    { PB_APU_POWER, PB_DIVERGES(1u, "diverges-from-pandocs: NR52 reads $F0 here; Pan Docs lists $F1 (channel 1 on)") },
+    { PB_DMA_REGISTER, PB_PD(0xFFu) },
+    { PB_LCDC, PB_PD(0x91u) },
+    { PB_STAT, PB_DIVERGES(0x00u, "diverges-from-pandocs: stored STAT bits are 0 and the mode/LY below make STAT read $86; Pan Docs lists $85") },
+    { PB_LY, PB_PD(0x00u) },
+    { PB_LYC, PB_PD(0x00u) },
+    { PB_SCX, PB_PD(0x00u) },
+    { PB_SCY, PB_PD(0x00u) },
+    { PB_WX, PB_PD(0x00u) },
+    { PB_WY, PB_PD(0x00u) },
+    { PB_BGP, PB_PD(0xFCu) },
+    { PB_OBP0, PB_DIVERGES(0xFFu, "diverges-from-pandocs: OBP0 is $FF here; Pan Docs does not give a fixed value") },
+    { PB_OBP1, PB_DIVERGES(0xFFu, "diverges-from-pandocs: OBP1 is $FF here; Pan Docs does not give a fixed value") },
+    { PB_PPU_MODE, PB_DIVERGES(2u, "diverges-from-pandocs: starts in mode 2 at line 0; Pan Docs STAT $85 implies vblank") },
+    /* P1 reads $FF (select lines $30, no buttons) where Pan Docs lists $CF. */
+    { PB_JOYPAD_SELECT, PB_DIVERGES(0x30u, "diverges-from-pandocs: P1 reads $FF here; Pan Docs lists $CF") },
+    { PB_JOYPAD_BUTTONS, PB_POLICY(0u, "no button held at power-on") },
+    { PB_RAM_FILL, PB_POLICY(0u, "D-025 deterministic fill") },
+};
+
+_Static_assert(sizeof(post_boot) / sizeof(post_boot[0]) == PB_FIELD_COUNT,
+               "post_boot[] must have one row per post_boot_field");
+
+/* Assign every table-backed field. Rows are indexed by field, so each field is set exactly once;
+ * the switch has no default so the compiler flags a field added to the enum but not handled. */
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static void post_boot_apply(gbb_instance *m) {
+    for (unsigned i = 0; i < PB_FIELD_COUNT; ++i) {
+        const post_boot_cell *c = &post_boot[i].dmg;
+        const uint8_t v = (uint8_t)c->value;
+        switch ((post_boot_field)post_boot[i].field) {
+        case PB_A: m->a = v; break;
+        case PB_F: {
+            /* MODEL: UNKNOWN GATE-03 research:10 -- post-boot F depends on the header checksum and CGB compatibility mode */
+            const int checksum_nonzero = m->rom != NULL && m->rom_size > 0x14Du && m->rom[0x14Du] != 0;
+            m->f = checksum_nonzero ? (uint8_t)(v | 0x30u) : v;
+            break;
+        }
+        case PB_B: m->b = v; break;
+        case PB_C: m->c = v; break;
+        case PB_D: m->d = v; break;
+        case PB_E: m->e = v; break;
+        case PB_H: m->h = v; break;
+        case PB_L: m->l = v; break;
+        case PB_SP: m->sp = c->value; break;
+        case PB_PC: m->pc = c->value; break;
+        case PB_DIV:
+            /* MODEL: UNKNOWN GATE-04 research:10 -- post-boot DIV differs by model; the table lands in Plan 10-06 */
+            m->div = v; break;
+        case PB_DIVIDER_COUNTER: m->divider_counter = c->value; break;
+        case PB_DIVIDER_PHASE: m->divider_phase = v; break;
+        case PB_TIMA: m->tima = v; break;
+        case PB_TMA: m->tma = v; break;
+        case PB_TAC: m->tac = v; break;
+        case PB_SERIAL_DATA: m->serial_data = v; break;
+        case PB_SERIAL_CONTROL:
+            /* MODEL: UNKNOWN GATE-05 research:10 -- post-boot SC differs by model */
+            m->serial_control = v; break;
+        case PB_IE: m->ie = v; break;
+        case PB_IF:
+            /* MODEL: UNKNOWN GATE-06 research:10 -- post-boot IF differs by model */
+            m->interrupt_flags = v; break;
+        case PB_IME: m->ime = v; break;
+        case PB_NR50:
+            /* MODEL: UNKNOWN GATE-07 research:10 -- post-boot APU register literals differ by model */
+            m->apu_nr50 = v; break;
+        case PB_NR51: m->apu_nr51 = v; break;
+        case PB_APU_POWER: m->apu_power = v; break;
+        case PB_DMA_REGISTER:
+            /* MODEL: UNKNOWN GATE-08 research:10 -- post-boot DMA register differs by model */
+            m->dma_register = v; break;
+        case PB_LCDC:
+            /* MODEL: BOTH GATE-11 basis=PANDOCS -- LCDC, BGP and OBP post-boot values are common to both models */
+            m->lcdc = v; break;
+        case PB_STAT: m->stat = v; break;
+        case PB_LY: m->ly = v; break;
+        case PB_LYC: m->lyc = v; break;
+        case PB_SCX: m->scx = v; break;
+        case PB_SCY: m->scy = v; break;
+        case PB_WX: m->wx = v; break;
+        case PB_WY: m->wy = v; break;
+        case PB_BGP: m->bgp = v; break;
+        case PB_OBP0: m->obp0 = v; break;
+        case PB_OBP1: m->obp1 = v; break;
+        case PB_PPU_MODE:
+            /* MODEL: UNKNOWN GATE-10 research:11 -- post-boot PPU mode, LY and STAT literals differ by model */
+            m->ppu_mode = v; break;
+        case PB_JOYPAD_SELECT: m->joypad_select = v; break;
+        case PB_JOYPAD_BUTTONS: m->joypad_buttons = v; break;
+        case PB_RAM_FILL:
+            /* MODEL: BOTH GATE-09 basis=D-025 -- RAM fill is emulator policy; hardware power-on RAM is unspecified */
+            memset(m->wram, v, sizeof(m->wram));
+            memset(m->hram, v, sizeof(m->hram));
+            memset(m->vram, v, sizeof(m->vram));
+            memset(m->oam, v, sizeof(m->oam));
+            break;
+        case PB_FIELD_COUNT: break;
+        }
+    }
+}
+
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void reset_state(gbb_instance *m) {
     cart_reset_registers(&m->cart);
-    m->a = 0x01;
-    /* MODEL: UNKNOWN GATE-03 research:10 -- post-boot F depends on the header checksum and CGB compatibility mode */
-    m->f = m->rom != NULL && m->rom_size > 0x14Du && m->rom[0x14Du] != 0 ? 0xB0u : 0x80u;
-    m->b = 0x00; m->c = 0x13;
-    m->d = 0x00; m->e = 0xD8; m->h = 0x01; m->l = 0x4D;
-    m->pc = 0x0100; m->sp = 0xFFFE;
-    /* MODEL: UNKNOWN GATE-04 research:10 -- post-boot DIV differs by model; the table lands in Plan 10-06 */
-    m->div = 0xAB; m->stat = 0;
-    m->tima = 0; m->tma = 0; m->tac = 0;
-    /* MODEL: UNKNOWN GATE-05 research:10 -- post-boot SC differs by model */
-    m->serial_data = 0; m->serial_control = 0x7Eu; m->serial_bits = 0;
-    m->ie = 0;
-    /* MODEL: UNKNOWN GATE-06 research:10 -- post-boot IF differs by model */
-    m->interrupt_flags = 0;
+    post_boot_apply(m);
     m->ime_delay = 0;
-    m->ime = 0;
-    m->divider_phase = 0;
-    m->divider_counter = 0xAB00u;
     memset(m->apu_pulse, 0, sizeof(m->apu_pulse));
     memset(&m->apu_wave, 0, sizeof(m->apu_wave));
     memset(&m->apu_noise, 0, sizeof(m->apu_noise));
-    /* MODEL: UNKNOWN GATE-07 research:10 -- post-boot APU register literals differ by model */
-    m->apu_nr50 = 0u; m->apu_nr51 = 0xFFu; m->apu_power = 1u;
+    m->serial_bits = 0;
     m->apu_sequencer_step = 0u;
     m->apu_sample_phase = 0u;
     memset(m->audio_event_ring, 0, sizeof(m->audio_event_ring));
@@ -705,8 +866,6 @@ static void reset_state(gbb_instance *m) {
     m->serial_edge_remaining = 0;
     m->serial_active = 0;
     m->serial_unsupported = 0;
-    /* MODEL: UNKNOWN GATE-08 research:10 -- post-boot DMA register differs by model */
-    m->dma_register = 0xFFu;
     m->dma_page = 0;
     m->dma_pending_page = 0;
     m->dma_index = 0;
@@ -717,19 +876,12 @@ static void reset_state(gbb_instance *m) {
     m->halted = 0;
     m->stopped = 0;
     m->halt_bug = 0;
-    /* MODEL: BOTH GATE-09 basis=D-025 -- RAM fill is emulator policy; hardware power-on RAM is unspecified */
-    memset(m->wram, 0, sizeof(m->wram));
-    memset(m->hram, 0, sizeof(m->hram));
-    memset(m->vram, 0, sizeof(m->vram));
-    memset(m->oam, 0, sizeof(m->oam));
     memset(m->frame_working, 0, sizeof(m->frame_working));
     memset(m->frame_completed, 0, sizeof(m->frame_completed));
     m->frame_generation = 0;
     m->frame_completion_half_dots = 0;
     m->ppu_dot = 0;
     m->ppu_half_phase = 0;
-    /* MODEL: UNKNOWN GATE-10 research:11 -- post-boot PPU mode, LY and STAT literals differ by model */
-    m->ppu_mode = 2;
     m->ppu_stat_line = 0;
     m->ppu_scan_index = 0;
     memset(m->ppu_fifo, 0, sizeof(m->ppu_fifo));
@@ -751,19 +903,6 @@ static void reset_state(gbb_instance *m) {
     m->ppu_selected_object_count = 0;
     m->ppu_window_line = 0;
     m->ppu_window_line_drawn = 0;
-    /* MODEL: BOTH GATE-11 basis=PANDOCS -- LCDC, BGP and OBP post-boot values are common to both models */
-    m->lcdc = 0x91;
-    m->scy = 0;
-    m->scx = 0;
-    m->ly = 0;
-    m->lyc = 0;
-    m->bgp = 0xFC;
-    m->obp0 = 0xFF;
-    m->obp1 = 0xFF;
-    m->wy = 0;
-    m->wx = 0;
-    m->joypad_select = 0x30;
-    m->joypad_buttons = 0;
     m->time_half_dots = 0;
     m->input_event_count = 0;
     m->lockup_pc = 0;
