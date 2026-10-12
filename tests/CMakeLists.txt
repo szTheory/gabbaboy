@@ -301,6 +301,18 @@ add_test(NAME cgb_postboot_dmg_pin_flipped_io
     "-DGBB_EXPECT_REGEX=post-boot mismatch: NR12 "
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
+# CGB profile API (CGB-01): probe/info contract, the $143 x profile matrix, the PGB rejection and
+# probe/load parity with a skewed-validator negative control.
+add_executable(test_cgb_profile test_cgb_profile.c)
+target_link_libraries(test_cgb_profile PRIVATE GabbaBoy::core)
+target_compile_features(test_cgb_profile PRIVATE c_std_17)
+set_target_properties(test_cgb_profile PROPERTIES C_EXTENSIONS OFF)
+foreach(case probe_tracer info_no_rom info_after_load info_reset_constant info_failed_load_unchanged
+             info_struct_size cgb_only_on_dmg probe_matrix probe_pgb probe_parity profile_unknown
+             probe_args)
+  add_test(NAME cgb_${case} COMMAND test_cgb_profile ${case})
+endforeach()
+
 add_executable(test_timer test_timer.c)
 target_link_libraries(test_timer PRIVATE GabbaBoy::core)
 target_compile_features(test_timer PRIVATE c_std_17)

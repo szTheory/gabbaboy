@@ -280,8 +280,12 @@ typedef struct {
     uint8_t has_battery;
     uint8_t has_timer;
     uint8_t has_rumble;
+    uint8_t cgb_flag;       /* raw $143 */
+    uint8_t cgb_support;    /* a gbb_cgb_support value */
     size_t ram_size;
 } cartridge_info;
+
+_Static_assert(sizeof(gbb_info) == GBB_INFO_SIZE_V1, "gbb_info layout");
 
 typedef struct gbb_test_dma_event gbb_test_dma_event;
 
@@ -373,6 +377,11 @@ struct gbb_instance {
     size_t test_dma_event_capacity;
     size_t test_dma_event_count;
     int loaded;
+    uint8_t profile;        /* fixed at gbb_create */
+    uint8_t exec_mode;      /* a gbb_exec_mode value; committed with the ROM swap */
+    uint8_t cgb_flag;       /* raw $143 of the loaded ROM */
+    uint8_t cgb_support;
+    uint8_t cartridge_type; /* raw $147 of the loaded ROM */
     gbb_diagnostic_record *diagnostic_output;
     size_t diagnostic_output_capacity;
     size_t diagnostic_output_count;
@@ -2281,8 +2290,19 @@ static int recognized_mbc1m_candidate(const uint8_t *rom, size_t size) {
            rom[bank + 0x147u] >= 0x01u && rom[bank + 0x147u] <= 0x03u;
 }
 
+/* $143 classification (D-03). Hardware decodes CGB mode from bit 7 and PGB mode from bits 2-3;
+ * the $C0 convention is ignored by hardware but reported so callers can see it. */
+/* MODEL: BOTH GATE-00 basis=header-byte-143 */
+static uint8_t cgb_support_of(uint8_t flag) {
+    if ((flag & 0x80u) == 0u) return GBB_CGB_SUPPORT_NONE;
+    if ((flag & 0x0Cu) != 0u) return GBB_CGB_SUPPORT_PGB;
+    if (flag == 0x80u) return GBB_CGB_SUPPORT_ENHANCED;
+    if (flag == 0xC0u) return GBB_CGB_SUPPORT_ONLY;
+    return GBB_CGB_SUPPORT_OTHER;
+}
+
 /* MODEL: BOTH GATE-00 basis=D-24 */
-static gbb_error validate_header(const uint8_t *rom, size_t size,
+static gbb_error validate_header(gbb_profile profile, const uint8_t *rom, size_t size,
                                  cartridge_info *out_info) {
     if (rom == NULL || size == 0) return GBB_INVALID_ARGUMENT;
     if (size < 0x150) return GBB_ROM_TRUNCATED;
@@ -2343,7 +2363,14 @@ static gbb_error validate_header(const uint8_t *rom, size_t size,
     /* MBC30 (ROM code $07 or 64 KiB RAM) has an undocumented register layout here. */
     if (row->kind == CART_MBC3 && (rom_size_code == 0x07u || mbc30_ram_marker))
         return GBB_UNSUPPORTED_CARTRIDGE_VARIANT;
+    const uint8_t cgb_flag = rom[0x143];
+    const uint8_t cgb_support = cgb_support_of(cgb_flag);
+    /* MODEL: CGB_ONLY GATE-67 GUARD=GBB_PROFILE_CGB_CPU_E -- a PGB-flagged $143 is rejected on the CGB profile instead of running in a mode the hardware would not enter (D-03) */
+    if (profile == GBB_PROFILE_CGB_CPU_E && cgb_support == GBB_CGB_SUPPORT_PGB)
+        return GBB_UNSUPPORTED_EXECUTION_MODE;
     if (out_info != NULL) {
+        out_info->cgb_flag = cgb_flag;
+        out_info->cgb_support = cgb_support;
         out_info->type = type;
         out_info->kind = row->kind;
         out_info->ram_window_mapped = row->ram_window_mapped;
@@ -2355,6 +2382,22 @@ static gbb_error validate_header(const uint8_t *rom, size_t size,
     return GBB_OK;
 }
 
+/* Model predicates are profile tests. They are the only way later code asks which console is
+ * running, so a model difference is always visible as a guarded branch. */
+/* MODEL: BOTH GATE-00 basis=profile-test */
+static int model_is_dmg(const gbb_instance *m) { return m->profile == GBB_PROFILE_DMG_CPU_B; }
+
+/* MODEL: BOTH GATE-00 basis=profile-test */
+static int model_is_cgb(const gbb_instance *m) { return m->profile == GBB_PROFILE_CGB_CPU_E; }
+
+/* Execution mode is a property of profile plus $143 (D-03): the DMG profile ignores $143, the
+ * CGB profile runs CGB mode when bit 7 is set and DMG compatibility mode otherwise. */
+/* MODEL: BOTH GATE-00 basis=header-byte-143 */
+static uint8_t exec_mode_for(int cgb_profile, uint8_t cgb_flag) {
+    if (!cgb_profile) return GBB_MODE_DMG;
+    return (cgb_flag & 0x80u) != 0u ? GBB_MODE_CGB : GBB_MODE_CGB_DMG_COMPAT;
+}
+
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
 gbb_error gbb_create(gbb_profile profile, gbb_instance **out_instance) {
     if (out_instance == NULL) return GBB_INVALID_ARGUMENT;
@@ -2363,6 +2406,8 @@ gbb_error gbb_create(gbb_profile profile, gbb_instance **out_instance) {
     if (profile != GBB_PROFILE_DMG_CPU_B) return GBB_UNSUPPORTED_PROFILE;
     gbb_instance *m = calloc(1, sizeof(*m));
     if (m == NULL) return GBB_OUT_OF_MEMORY;
+    m->profile = (uint8_t)profile;
+    m->exec_mode = GBB_MODE_NONE;
     reset_state(m); /* RAM fill is emulator policy; hardware power-on RAM is unspecified. */
     *out_instance = m;
     return GBB_OK;
@@ -2398,7 +2443,7 @@ gbb_error gbb_reset(gbb_instance *instance) {
 gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_size) {
     if (instance == NULL) return GBB_INVALID_ARGUMENT;
     cartridge_info info = {0};
-    gbb_error validation = validate_header(rom, rom_size, &info);
+    gbb_error validation = validate_header((gbb_profile)instance->profile, rom, rom_size, &info);
     if (validation != GBB_OK) return validation;
     uint8_t *copy = malloc(rom_size);
     if (copy == NULL) return GBB_OUT_OF_MEMORY;
@@ -2425,8 +2470,86 @@ gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_si
     instance->cart.has_battery = info.has_battery;
     instance->cart.has_timer = info.has_timer;
     instance->cart.has_rumble = info.has_rumble;
+    /* The mode commits here, after both allocations, so a failed load leaves it unchanged. */
+    instance->exec_mode = exec_mode_for(model_is_cgb(instance), info.cgb_flag);
+    instance->cgb_flag = info.cgb_flag;
+    instance->cgb_support = info.cgb_support;
+    instance->cartridge_type = info.type;
     reset_state(instance);
     instance->loaded = 1;
+    return GBB_OK;
+}
+
+/* MODEL: BOTH GATE-00 basis=host-api */
+static void info_store(gbb_info *out, const gbb_info *src) {
+    /* Field by field, never a struct copy: the caller's struct may be larger than V1 and its
+     * extra bytes stay untouched. The V1 floor was checked, so every field below fits. */
+    out->profile = src->profile;
+    out->mode = src->mode;
+    out->flags = src->flags;
+    out->cgb_flag = src->cgb_flag;
+    out->cgb_support = src->cgb_support;
+    out->cartridge_type = src->cartridge_type;
+    out->reserved0 = 0u;
+    out->rom_size_bytes = src->rom_size_bytes;
+    out->ram_size_bytes = src->ram_size_bytes;
+    out->struct_size = GBB_INFO_SIZE_V1;
+}
+
+/* MODEL: BOTH GATE-00 basis=host-api */
+static uint32_t info_flags(int profile_is_dmg, uint8_t cgb_support, int battery, int timer,
+                           int rumble) {
+    uint32_t flags = GBB_INFO_HAS_ROM;
+    if (profile_is_dmg && cgb_support == GBB_CGB_SUPPORT_ONLY) flags |= GBB_INFO_CGB_ONLY_ON_DMG;
+    if (battery) flags |= GBB_INFO_HAS_BATTERY;
+    if (timer) flags |= GBB_INFO_HAS_RTC;
+    if (rumble) flags |= GBB_INFO_HAS_RUMBLE;
+    return flags;
+}
+
+/* MODEL: BOTH GATE-00 basis=host-api */
+gbb_error gbb_probe_rom(gbb_profile profile, const uint8_t *rom, size_t rom_size,
+                        gbb_info *out_info) {
+    if (profile != GBB_PROFILE_DMG_CPU_B && profile != GBB_PROFILE_CGB_CPU_E)
+        return GBB_UNSUPPORTED_PROFILE;
+    if (out_info == NULL || (rom == NULL && rom_size != 0u) ||
+        out_info->struct_size < GBB_INFO_SIZE_V1)
+        return GBB_INVALID_ARGUMENT;
+    cartridge_info cart = {0};
+    gbb_error validation = validate_header(profile, rom, rom_size, &cart);
+    if (validation != GBB_OK) return validation;
+    gbb_info info = {0};
+    info.profile = (uint32_t)profile;
+    info.mode = exec_mode_for(profile == GBB_PROFILE_CGB_CPU_E, cart.cgb_flag);
+    info.flags = info_flags(profile == GBB_PROFILE_DMG_CPU_B, cart.cgb_support,
+                            cart.has_battery, cart.has_timer, cart.has_rumble);
+    info.cgb_flag = cart.cgb_flag;
+    info.cgb_support = cart.cgb_support;
+    info.cartridge_type = cart.type;
+    info.rom_size_bytes = (uint32_t)rom_size; /* validated <= 8 MiB */
+    info.ram_size_bytes = (uint32_t)cart.ram_size;
+    info_store(out_info, &info);
+    return GBB_OK;
+}
+
+/* MODEL: BOTH GATE-00 basis=host-api */
+gbb_error gbb_get_info(const gbb_instance *instance, gbb_info *out_info) {
+    if (instance == NULL || out_info == NULL || out_info->struct_size < GBB_INFO_SIZE_V1)
+        return GBB_INVALID_ARGUMENT;
+    gbb_info info = {0};
+    info.profile = instance->profile;
+    if (instance->loaded) {
+        info.mode = instance->exec_mode;
+        info.flags = info_flags(model_is_dmg(instance), instance->cgb_support,
+                                instance->cart.has_battery, instance->cart.has_timer,
+                                instance->cart.has_rumble);
+        info.cgb_flag = instance->cgb_flag;
+        info.cgb_support = instance->cgb_support;
+        info.cartridge_type = instance->cartridge_type;
+        info.rom_size_bytes = (uint32_t)instance->rom_size;
+        info.ram_size_bytes = (uint32_t)instance->cartridge_ram_size;
+    }
+    info_store(out_info, &info);
     return GBB_OK;
 }
 

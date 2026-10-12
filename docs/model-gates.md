@@ -109,6 +109,7 @@ occurs exactly once in code and once in the table.
 | GATE-64 | BOTH | - | basis="no SM83 opcode difference" | gbb_run_internal | illegal-opcode lockup is a CPU trait |
 | GATE-65 | UNKNOWN | - | research:12 | gbb_run_internal | DIV reset on STOP |
 | GATE-66 | BOTH | - | basis=wram-echo-map | gbb_peek_ram | debug peek of work RAM |
+| GATE-67 | CGB_ONLY | GBB_PROFILE_CGB_CPU_E | - | validate_header | a PGB-flagged $143 is rejected on the CGB profile instead of running in a mode the hardware would not enter (D-03) |
 <!-- model-gates-end -->
 
 ## Release status

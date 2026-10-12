@@ -95,7 +95,7 @@ typedef enum {
  * header until Plan 10-05 (D-01), so the runner carries its value locally; the core's gbb_create
  * still rejects it with GBB_UNSUPPORTED_PROFILE, which the runner reports instead of falling back. */
 #define GBB_RUNNER_PROFILE_DMG GBB_PROFILE_DMG_CPU_B
-#define GBB_RUNNER_PROFILE_CGB ((gbb_profile)2)
+#define GBB_RUNNER_PROFILE_CGB GBB_PROFILE_CGB_CPU_E
 /* Maps dmg-cpu-b / cgb-cpu-e to a profile. Returns 1 when known, 0 otherwise (*out untouched). */
 int gbb_runner_profile_for_model(const char *model, gbb_profile *out);
 /* "DMG-CPU-B" or "CGB-CPU-E" for the receipt profile= field. */

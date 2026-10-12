@@ -11,7 +11,8 @@ extern "C" {
 typedef struct gbb_instance gbb_instance;
 
 typedef enum {
-    GBB_PROFILE_DMG_CPU_B = 1
+    GBB_PROFILE_DMG_CPU_B = 1,
+    GBB_PROFILE_CGB_CPU_E = 2  /* selectable by gbb_probe_rom; gbb_create does not accept it yet */
 } gbb_profile;
 
 typedef enum {
@@ -36,7 +37,8 @@ typedef enum {
     GBB_INVALID_EVENT,
     GBB_FRAME_NOT_READY,
     GBB_NO_RUMBLE,            /* loaded cartridge has no rumble line (or no ROM) */
-    GBB_NO_RTC                /* loaded cartridge has no MBC3 timer (or no ROM) */
+    GBB_NO_RTC,               /* loaded cartridge has no MBC3 timer (or no ROM) */
+    GBB_UNSUPPORTED_EXECUTION_MODE /* PGB-flagged $143 on the CGB profile (D-03) */
 } gbb_error;
 
 typedef enum {
@@ -126,7 +128,9 @@ typedef struct {
 /* The opaque instance owns its mutable state and a private copy of a loaded ROM.
  * Create/load may allocate; run/reset/peek do not. Each instance may be called
  * by one thread at a time. Separate instances have no shared mutable state.
- * The only implemented model is bootless DMG-CPU-B deterministic post-boot. */
+ * The only creatable model is bootless DMG-CPU-B deterministic post-boot;
+ * GBB_PROFILE_CGB_CPU_E is rejected with GBB_UNSUPPORTED_PROFILE until the CGB
+ * profile is complete. */
 gbb_error gbb_create(gbb_profile profile, gbb_instance **out_instance);
 void gbb_destroy(gbb_instance *instance);
 /* Reset restores the documented post-boot CPU/profile state, clears work RAM
@@ -144,7 +148,9 @@ gbb_error gbb_reset(gbb_instance *instance);
  * 512 four-bit cells are built into the mapper. MBC5 types $19-$1E are
  * supported with ROM-size codes $00-$08 (32 KiB-8 MiB) and RAM-size codes
  * $00 (types $19/$1C only), $02 (8 KiB), $03 (32 KiB), $05 (64 KiB) and $04
- * (128 KiB); the CGB flag at $143 is ignored on the DMG-CPU-B profile. MBC3
+ * (128 KiB); the CGB flag at $143 is ignored on the DMG-CPU-B profile. On the
+ * CGB-CPU-E profile $143 selects CGB or DMG-compatibility mode, and PGB values
+ * (bit 7 set with bit 2 or bit 3 set) return GBB_UNSUPPORTED_EXECUTION_MODE. MBC3
  * types $0F-$13 are supported with ROM-size codes $00-$06 (32 KiB-2 MiB) and
  * RAM-size codes $02 (8 KiB) and $03 (32 KiB) on RAM types ($10/$12/$13); the
  * MBC30 markers (ROM-size code $07 or RAM-size code $05) return
@@ -288,6 +294,60 @@ gbb_run_result gbb_run_audio(gbb_instance *instance, uint64_t budget_half_dots,
  * HRAM (FF80-FFFE). Other addresses and a null instance return 0xFF. No
  * pointer into instance storage is exposed. */
 uint8_t gbb_peek_ram(const gbb_instance *instance, uint16_t address);
+
+/* Execution mode of a ROM on a profile: the profile plus $143, never a host toggle. */
+typedef enum {
+    GBB_MODE_NONE = 0,
+    GBB_MODE_DMG = 1,
+    GBB_MODE_CGB = 2,
+    GBB_MODE_CGB_DMG_COMPAT = 3
+} gbb_exec_mode;
+/* Classification of the cartridge header byte $143. */
+typedef enum {
+    GBB_CGB_SUPPORT_NONE = 0,     /* bit 7 clear */
+    GBB_CGB_SUPPORT_ENHANCED = 1, /* $80 */
+    GBB_CGB_SUPPORT_ONLY = 2,     /* $C0 */
+    GBB_CGB_SUPPORT_OTHER = 3,    /* bit 7 set, bits 2-3 clear, not $80/$C0 */
+    GBB_CGB_SUPPORT_PGB = 4       /* bit 7 set and bit 2 or bit 3 set */
+} gbb_cgb_support;
+#define GBB_INFO_HAS_ROM          0x01u
+#define GBB_INFO_CGB_ONLY_ON_DMG  0x02u /* $C0 ROM on the DMG profile: informational, the load succeeded */
+#define GBB_INFO_HAS_BATTERY      0x04u
+#define GBB_INFO_HAS_RTC          0x08u
+#define GBB_INFO_HAS_RUMBLE       0x10u
+typedef struct {
+    uint32_t struct_size;    /* IN: the caller sets sizeof(gbb_info); OUT: the bytes written */
+    uint32_t profile;        /* a gbb_profile value */
+    uint32_t mode;           /* a gbb_exec_mode value */
+    uint32_t flags;          /* GBB_INFO_* */
+    uint8_t  cgb_flag;       /* raw $143 */
+    uint8_t  cgb_support;    /* a gbb_cgb_support value */
+    uint8_t  cartridge_type; /* raw $147 */
+    uint8_t  reserved0;      /* always 0 */
+    uint32_t rom_size_bytes;
+    uint32_t ram_size_bytes; /* cartridge RAM only (MBC2 = 512); excludes the RTC block */
+} gbb_info;
+#define GBB_INFO_SIZE_V1 28u   /* the core static-asserts this equals sizeof(gbb_info) */
+/* Classifies a ROM for a profile without an instance: it runs the same header
+ * validation, in the same order, as gbb_load_rom on that profile, allocates
+ * nothing and mutates nothing. An unknown profile returns
+ * GBB_UNSUPPORTED_PROFILE (checked first); a NULL out_info, a NULL rom with a
+ * non-zero size or out_info->struct_size < GBB_INFO_SIZE_V1 returns
+ * GBB_INVALID_ARGUMENT; every ROM-level error equals the load error on the same
+ * profile, including GBB_UNSUPPORTED_EXECUTION_MODE for a PGB-flagged $143 on
+ * the CGB profile (the DMG profile reports cgb_support PGB with GBB_OK). The
+ * core writes field by field only within the caller's struct_size and then sets
+ * struct_size to the bytes written; a larger caller struct keeps its extra
+ * bytes. Outputs are left unchanged on any error. */
+gbb_error gbb_probe_rom(gbb_profile profile, const uint8_t *rom, size_t rom_size,
+                        gbb_info *out_info);
+/* Reports an instance's profile and the loaded ROM's mode and header facts with
+ * the same struct_size handshake as gbb_probe_rom. With no ROM loaded the mode is
+ * GBB_MODE_NONE, flags are 0 and every other field except profile is 0. The
+ * mode is constant across gbb_reset and changes only when a load succeeds. A
+ * NULL instance, NULL out_info or struct_size < GBB_INFO_SIZE_V1 returns
+ * GBB_INVALID_ARGUMENT. Outputs are left unchanged on any error. */
+gbb_error gbb_get_info(const gbb_instance *instance, gbb_info *out_info);
 
 #ifdef __cplusplus
 }
