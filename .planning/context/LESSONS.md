@@ -514,3 +514,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** The job log at the evidence head SHA; see `docs/mbc3-rtc-evidence.md`.
 - **Source:** Plans 09-17, 09-18.
 - **Status:** Adopted.
+
+### GB-GSD-014 / 2026-10-12 / Turn every "human reading" UAT item into a contract check before verify-work
+
+- **Cause and evidence:** Plan 09-14 marked the integration guide's RTC catch-up wording `human_judgment: true`, so `/gsd-verify-work 9` presented it to the owner as UAT test 14 after 13 automated passes. The judgment was structural: does the guide name only declared symbols and state every behavior the header promises. `cmake/VerifyDocContract.cmake` now decides it; mutants that drop "two calls add twice" or rename `gbb_rtc_catch_up` both fail.
+- **Remedy:** When planning, give every deliverable an automated check and a negative control. For prose that restates an API, use `VerifyDocContract.cmake` (declared-name check plus required behavior phrases). At verify-work, run the cited checks at the exact head and record them as `source: automated`; if an item still looks human, write the check first, then rerun. Present a human checkpoint only for perceptual, hardware, credential or owner-decision items, and say why no check can decide it. Write SUMMARY `coverage:` entries with `id`, `description` and a `kind` from unit, integration, e2e, automated_ui or other; the classifier rejected the `deliverable:`/`ctest` shape used in 09-04, 09-11, 09-13 and 09-16, which turned automated items into manual mapping work.
+- **Applies when:** Planning any phase, writing SUMMARY `coverage:` blocks, and running `/gsd-verify-work`.
+- **Verification:** `native_guide_rtc_contract`, `doc_contract_undeclared_selftest`, `doc_contract_missing_selftest`; a verify-work session with zero human checkpoints unless one of the four exceptions applies. See DECISIONS D-069.
+- **Source:** Phase 9 verify-work, owner directive.
+- **Status:** Adopted.
