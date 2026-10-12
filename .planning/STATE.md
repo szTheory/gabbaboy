@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 4
+current_plan: 5
 status: planning
-stopped_at: Completed 10-03-PLAN.md
-last_updated: "2026-10-12T16:52:25.710Z"
+stopped_at: Completed 10-04-PLAN.md
+last_updated: "2026-10-12T17:01:24.682Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 10 execution started
-state_head: 45ec857c2d79cceee2de0997f7e14dc9447580f2
+state_head: bae094a6ea33231fa960589b75f00ca1b0c4ccc0
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 65
-  completed_plans: 48
+  completed_plans: 49
   percent: 44
 current_phase: 10
 current_phase_name: CGB Profile, Banking and Register Visibility
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 4
+Current Plan: 5
 Total Plans in Phase: 20
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -155,6 +155,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 10 P01 | 25 min | 2 tasks | 4 files |
 | Phase 10 P02 | 40 min | 2 tasks | 4 files |
 | Phase 10 P03 | 35 min | 2 tasks | 8 files |
+| Phase 10 P04 | 40 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -290,6 +291,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 10]: 10-01: GATE-00 code tags compare class and basis only; doc row is the single shared GATE-00 entry
 - [Phase 10]: 10-02: OAM-DMA CPU bus-conflict branches tagged UNKNOWN expected-failure:cgb-separate-buses (D-17)
 - [Phase 10]: Runner carries GBB_RUNNER_PROFILE_CGB=(gbb_profile)2 until Plan 10-05 adds the public enum; CGB runs report create-failed or excluded, never fall back to DMG (D-25)
+- [Phase 10]: 10-04: DMG post-boot cells record implemented values; Pan Docs divergences (IF, STAT, NR50, NR51, NR52, OBP0/1, PPU mode, P1) are POLICY with diverges-from-pandocs
 
 ### Pending Todos
 
@@ -325,8 +327,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-12T16:52:25.640Z
-Stopped at: Completed 10-03-PLAN.md
+Last session: 2026-10-12T17:01:24.558Z
+Stopped at: Completed 10-04-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 10`
 
