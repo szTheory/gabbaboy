@@ -3,12 +3,12 @@ gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_plan: 20
-status: planning
-stopped_at: Completed 10-19-PLAN.md
-last_updated: "2026-10-12T19:16:03.407Z"
+status: executed_awaiting_verification
+stopped_at: Completed 10-20-PLAN.md
+last_updated: "2026-10-12T20:11:15.713Z"
 last_activity: 2026-10-12
-last_activity_desc: Phase 10 execution started
-state_head: fd0226191cdbf6a2439aca26b71bbd18c224e097
+last_activity_desc: Phase 10 execution complete, awaiting verification
+state_head: 2fe078e8f08ed98ba0ac0e244971e7c0ead16b1e
 progress:
   total_phases: 9
   completed_phases: 4
@@ -35,8 +35,9 @@ Total Plans in Phase: 20
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
 Verified: Phase 9 `/gsd-verify-work 9` passed 2026-10-12 — 14/14 UAT items automated (09-UAT.md), the guide-wording item replaced by the `native_guide_rtc_contract` check; re-verification `passed` (09-VERIFICATION.md); PR #65 squash-merges at the exact-head green branch head (pre-authorized)
-Next step: Phase 10 — CGB Profile, Banking and Register Visibility — execution via `/gsd-execute-phase 10` (planned 2026-10-12; owner chooses when)
-Last activity: 2026-10-12 — Phase 10 execution started
+Completed: Phase 10 - CGB Profile, Banking and Register Visibility, execution (plans 10-01..10-20), evidence head `2fe078e8f08ed98ba0ac0e244971e7c0ead16b1e` run https://github.com/szTheory/gabbaboy/actions/runs/38299323863; PR #66 ready and not merged
+Next step: Phase 10 verification via `/gsd-verify-work 10` (owner chooses when). Following phase (named, not started): Phase 11 - CGB Colour Rendering and Player Colour
+Last activity: 2026-10-12 — Phase 10 execution complete, awaiting verification
 
 Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 
@@ -171,6 +172,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 10 P17 | 35 min | 2 tasks | 6 files |
 | Phase 10 P18 | 45 min | 3 tasks | 9 files |
 | Phase 10 P19 | 25 min | 3 tasks | 8 files |
+| Phase 10 P20 | 95 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -322,6 +324,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 10]: 10-17: D-22 review trigger fired (Phase 10 DMG at 105.6-107.3% of Phase 7 baseline time, advisory, loaded host); owner decides under D-016, no optimisation
 - [Phase 10]: 10-18: fuzz profile selected by data[0] bit 7; original 0xFF reproducer now runs on CGB with a 0x7F DMG twin
 - [Phase 10]: D-070 half-dot master timeline ADR adopted; D-071..D-075 record IE, ch1 policy, deferred-register asymmetry, GATE-00, FEA0-FEFF/cgb-separate-buses
+- [Phase 10]: Phase 10 evidence head 2fe078e8f08ed98ba0ac0e244971e7c0ead16b1e is exact-head green (8 required checks, 7 fixture-repro jobs); PR #66 is ready and left open until /gsd-verify-work 10 passes
+- [Phase 10]: The +5% banking benchmark review trigger fired (about +6 to 7 percent vs the Phase 7 baseline, advisory on a loaded host); no optimisation in Phase 10, owner decides per D-016
 
 ### Pending Todos
 
@@ -360,7 +364,9 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 Last session: 2026-10-12T19:16:03.353Z
 Stopped at: Completed 10-19-PLAN.md
 Resume file: None
-Next command in fresh context: `/gsd-execute-phase 10`
+Next command in fresh context: `/gsd-verify-work 10`
+
+Completed workflow stage: **Phase 10 - CGB Profile, Banking and Register Visibility, execution** (2026-10-12), plans 10-01..10-20 on branch `gsd/phase-10-cgb-profile-banking-and-register-visibility`, PR #66. Evidence head `2fe078e8f08ed98ba0ac0e244971e7c0ead16b1e`, run 38299323863 (https://github.com/szTheory/gabbaboy/actions/runs/38299323863): native-linux-x64, native-macos-arm64, native-windows-x64, linux-asan-ubsan, cmake-floor-3.25.3, player-gate, macos-player-package and required-native all success; fixture-repro run 38299323969 (https://github.com/szTheory/gabbaboy/actions/runs/38299323969): fixture-repro (CGB banking `byte-identical roms=2`), mooneye-original-repro, mooneye-candidate-repro, mooneye-mbc-repro, magentests-repro, rtc3test-repro and mooneye-cgb-repro (`byte-identical roms=4`) success. The docs-only handoff commit is checked as a separate head; its SHA and run are in `phases/GB-10-cgb-profile-banking-and-register-visibility/10-20-SUMMARY.md`. Local: 537/537 CTest with the installed inventory verified, player package gate passed, `baseline status=pass`, digest `4c7a57ff3d50d228`. PR #66 is ready and stays unmerged: the pre-authorized squash merge happens only after Phase 10 verification passes at an exact-head green head. Owner veto items (before merge): `gbb_info` ABI, PGB rejection, `gbb_copy_frame` error on CGB, DMG FF4C-FF7F fail-closed, the +5% benchmark trigger (fired, about +6 to 7 percent, advisory), CGB IE bits 5-7. **Next step: Phase 10 verification. Next command in fresh context: `/gsd-verify-work 10`.** Following phase (named, not started): Phase 11 - CGB Colour Rendering and Player Colour; continue only after verification passes and the owner chooses to. Both `workflow.auto_advance` and `workflow._auto_chain_active` stay false.
 
 Completed workflow stage: **Phase 10 - CGB Profile, Banking and Register Visibility, planning** (2026-10-12) on branch `gsd/phase-10-cgb-profile-banking-and-register-visibility`. 10-RESEARCH.md (corrections C1-C13 to CONTEXT), 10-PATTERNS.md, 10-VALIDATION.md and plans 10-01..10-20 (one plan per wave, serial because every plan edits `tests/expected-tests.txt` and `tests/CMakeLists.txt`). Plan checker passed on iteration 2 (iteration 1: split the 15-file Mooneye CGB plan and the over-budget visibility plan, D-27 test prefixes, PATTERNS analog references). Coverage gates: CGB-01..03 covered, decisions 29/29. Research open questions auto-resolved per the owner's standing instruction: `gbb_create` accepts CGB in 10-06; IE bits 5-7 stored on CGB only (new owner veto item 6); CGB post-boot IF/audio cells for `boot_hwio-C`; shared GATE-00 tag; deferred writes stop through a latch. Owner veto window (before the phase PR merges): `gbb_info` ABI, PGB rejection, `gbb_copy_frame` error on CGB, DMG FF4C-FF7F unchanged, +5% bench review trigger, CGB IE bits 5-7. Execution preconditions: network for the pinned RGBDS 1.0.1 archive (10-13) and Mooneye/WLA-DX sources (10-14), gh access and exact-head CI (10-20). Next step: **Phase 10 execution** via **`/gsd-execute-phase 10`**. Both auto-advance flags stay false; nothing advances automatically.
 
@@ -426,6 +432,7 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) is executed and verified (`/gsd-verify-work 9` passed, 14/14 automated). PR #65 squash-merges at its exact-head green head.
-- The owner chooses when to start Phase 10 - CGB Profile, Banking and Register Visibility: `/gsd-discuss-phase 10`.
+- Phase 10 (CGB Profile, Banking and Register Visibility) is executed (plans 10-01..10-20). PR #66 is ready, exact-head green at evidence head `2fe078e8f08ed98ba0ac0e244971e7c0ead16b1e`, and NOT merged; the squash merge is pre-authorized only after verification passes at an exact-head green head.
+- Next command in fresh context: `/gsd-verify-work 10`.
+- Phase 11 - CGB Colour Rendering and Player Colour is named, not started; the owner chooses when to continue after verification passes.
 - Phase-stop rule: stop after each phase and yield; never auto-advance into the next phase or milestone.
