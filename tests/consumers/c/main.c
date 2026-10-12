@@ -63,6 +63,74 @@ done:
     return passed ? 0 : 1;
 }
 
+/* Installed-package CGB profile smoke: create, probe, info and the PGB/frame refusals. */
+static int cgb_api_smoke(void) {
+    enum { ROM_BYTES = 32768 };
+    uint8_t rom[ROM_BYTES] = {0};
+    rom[0x143u] = 0xC0u;
+    rom[0x147u] = 0x00u;
+    {
+        uint8_t checksum = 0u;
+        for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+            checksum = (uint8_t)(checksum - rom[i] - 1u);
+        rom[0x14Du] = checksum;
+    }
+
+    gbb_instance *machine = NULL;
+    gbb_info info;
+    int passed = 0;
+    /* $C0 on the DMG profile: informational flag, DMG mode. */
+    memset(&info, 0xA7, sizeof(info));
+    info.struct_size = sizeof(gbb_info);
+    if (gbb_probe_rom(GBB_PROFILE_DMG_CPU_B, rom, sizeof(rom), &info) != GBB_OK ||
+        info.mode != GBB_MODE_DMG || (info.flags & GBB_INFO_CGB_ONLY_ON_DMG) == 0u ||
+        info.struct_size != GBB_INFO_SIZE_V1) goto done;
+    /* The CGB profile creates, loads and reports CGB mode. */
+    if (gbb_create(GBB_PROFILE_CGB_CPU_E, &machine) != GBB_OK ||
+        gbb_load_rom(machine, rom, sizeof(rom)) != GBB_OK) goto done;
+    memset(&info, 0xA7, sizeof(info));
+    info.struct_size = sizeof(gbb_info);
+    if (gbb_get_info(machine, &info) != GBB_OK || info.mode != GBB_MODE_CGB ||
+        info.profile != 2u || info.struct_size != GBB_INFO_SIZE_V1 ||
+        info.cgb_support != GBB_CGB_SUPPORT_ONLY) goto done;
+    /* A zero struct_size is rejected and leaves every other byte alone. */
+    {
+        gbb_info zero;
+        uint8_t raw[sizeof(gbb_info)];
+        memset(&zero, 0xA7, sizeof(zero));
+        zero.struct_size = 0u;
+        memcpy(raw, &zero, sizeof(raw));
+        if (gbb_probe_rom(GBB_PROFILE_CGB_CPU_E, rom, sizeof(rom), &zero) != GBB_INVALID_ARGUMENT ||
+            memcmp(raw, &zero, sizeof(raw)) != 0)
+            goto done;
+    }
+    /* A PGB-flagged image is refused by the CGB profile on both probe and load. */
+    rom[0x143u] = 0x84u;
+    {
+        uint8_t checksum = 0u;
+        for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+            checksum = (uint8_t)(checksum - rom[i] - 1u);
+        rom[0x14Du] = checksum;
+    }
+    memset(&info, 0xA7, sizeof(info));
+    info.struct_size = sizeof(gbb_info);
+    if (gbb_probe_rom(GBB_PROFILE_CGB_CPU_E, rom, sizeof(rom), &info) !=
+            GBB_UNSUPPORTED_EXECUTION_MODE ||
+        gbb_load_rom(machine, rom, sizeof(rom)) != GBB_UNSUPPORTED_EXECUTION_MODE) goto done;
+    /* There is no colour output yet: a valid frame request is refused on the CGB profile. */
+    {
+        uint8_t pixels[160 * 144];
+        gbb_frame_info frame;
+        if (gbb_copy_frame(machine, pixels, sizeof(pixels), 160u, &frame) !=
+            GBB_UNSUPPORTED_PROFILE) goto done;
+    }
+    passed = 1;
+
+done:
+    gbb_destroy(machine);
+    return passed ? 0 : 1;
+}
+
 /* Installed-package RTC smoke: MBC3+TIMER+RAM+BATTERY ($10) synthetic ROM,
  * explicit host catch-up, block layout and a byte-identical import round trip. */
 static void rtc_fill_rom(uint8_t *rom, size_t size, uint8_t cart_type) {
@@ -298,6 +366,10 @@ int main(int argc, char **argv) {
     if (!passed) fprintf(stderr, "C consumer API smoke failed (error=%d, stop=%d, frame=%d)\n", error, result.reason, frame_error);
     if (!passed || battery_api_smoke() != 0) {
         fprintf(stderr, "C consumer public battery API smoke failed\n");
+        return 1;
+    }
+    if (cgb_api_smoke() != 0) {
+        fprintf(stderr, "C consumer public CGB API smoke failed\n");
         return 1;
     }
     if (rtc_api_smoke() != 0) {
