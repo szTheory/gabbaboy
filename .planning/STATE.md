@@ -5,10 +5,10 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 10
 current_phase_name: CGB Profile, Banking and Register Visibility
 status: planning
-stopped_at: Phase 9 execution and automated verification complete; next /gsd-verify-work 9
-last_updated: "2026-10-12T02:47:00.380Z"
+stopped_at: Phase 9 verify-work passed (14/14 automated UAT); next /gsd-discuss-phase 10
+last_updated: "2026-10-12T13:08:42.000Z"
 last_activity: 2026-10-12
-last_activity_desc: Phase 9 execute-phase tail complete (review, validation, security, verification passed)
+last_activity_desc: Phase 9 verify-work passed; zero-human-UAT policy D-069 adopted
 state_head: 46ece1a5575178859058cb84edeb4f53157eca58
 progress:
   total_phases: 9
@@ -25,14 +25,14 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 9 owner verification (`/gsd-verify-work 9`); then Phase 10 — CGB Profile, Banking and Register Visibility
+**Current focus:** Phase 10 — CGB Profile, Banking and Register Visibility (not started; `/gsd-discuss-phase 10`)
 
 ## Current Position
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
-Next step: Phase 9 owner verification — `/gsd-verify-work 9`; PR #65 squash-merges only after that passes at an exact-head green head
-Following phase (named, not started): Phase 10 — CGB Profile, Banking and Register Visibility
-Last activity: 2026-10-12 — Phase 9 marked complete in ROADMAP.md; PR #65 open, ready, not merged
+Verified: Phase 9 `/gsd-verify-work 9` passed 2026-10-12 — 14/14 UAT items automated (09-UAT.md), the guide-wording item replaced by the `native_guide_rtc_contract` check; re-verification `passed` (09-VERIFICATION.md); PR #65 squash-merges at the exact-head green branch head (pre-authorized)
+Next step: Phase 10 — CGB Profile, Banking and Register Visibility — `/gsd-discuss-phase 10` (not started; owner chooses when)
+Last activity: 2026-10-12 — Phase 9 verified; verification policy D-069 (zero human UAT by default) adopted
 
 Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 
@@ -316,9 +316,9 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 ## Session Continuity
 
 Last session: 2026-10-12T00:27:04.785Z
-Stopped at: Phase 9 execute-phase complete; awaiting `/gsd-verify-work 9`
+Stopped at: Phase 9 verify-work passed; Phase 10 not started
 Resume file: None
-Next command in fresh context: `/gsd-verify-work 9`
+Next command in fresh context: `/gsd-discuss-phase 10`
 
 Execute-phase tail (2026-10-12): code review 09-REVIEW.md (WR-01/WR-02/IN-01/IN-02 fixed in 8896725, fc85d8c, 19deb6b, 2863aae; IN-03 skipped), Nyquist validation `validated`/compliant, security 09-SECURITY.md `threats_open: 0` (T-09-34 closed by the `mbc3_rtc_evidence_ledger_names` check, 9bc23db), regression gate 404/404 CTest with installed inventory plus the player gate, and gsd-verifier `passed` (09-VERIFICATION.md, 5/5 criteria, 6/6 requirements). Phase 9 is marked complete in ROADMAP.md. PR #65 remains open, ready and unmerged; the squash merge waits for `/gsd-verify-work 9` and exact-head green CI on the final branch head.
 
@@ -380,6 +380,6 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) execution is complete (plans 09-01..09-18); evidence head `04c77596c375a8b186da54c2f7b253c3ef2fcdab`, run https://github.com/szTheory/gabbaboy/actions/runs/38191589574. PR #65 is ready and open, not merged. Verify Phase 9 in a fresh context: `/gsd-verify-work 9`.
-- After verification passes, the owner chooses whether to continue to Phase 10 - CGB Profile, Banking and Register Visibility (not started).
+- Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) is executed and verified (`/gsd-verify-work 9` passed, 14/14 automated). PR #65 squash-merges at its exact-head green head.
+- The owner chooses when to start Phase 10 - CGB Profile, Banking and Register Visibility: `/gsd-discuss-phase 10`.
 - Phase-stop rule: stop after each phase and yield; never auto-advance into the next phase or milestone.
