@@ -1349,4 +1349,36 @@ gbb_add_model_gate_test(model_gates_real_doc_mismatch 1 "gate-doc-mismatch"
 gbb_add_model_gate_test(model_gates_release_blocked 1 "gate-unresolved-unknown"
   --release --source "${GBB_MODEL_GATE_REAL_SOURCE}" --doc "${GBB_MODEL_GATE_REAL_DOC}")
 
+# Post-boot table mirror (D-06): docs/cgb-profile.md must equal post_boot[] and obey the provenance
+# rules. White-box like test_mbc5_internal, so it includes the core and must not link it.
+add_executable(test_cgb_tables test_cgb_tables.c)
+target_include_directories(test_cgb_tables PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_cgb_tables PRIVATE c_std_17)
+set_target_properties(test_cgb_tables PROPERTIES C_EXTENSIONS OFF)
+set(GBB_CGB_PROFILE_DOC "${PROJECT_SOURCE_DIR}/docs/cgb-profile.md")
+add_test(NAME cgb_tables_postboot COMMAND test_cgb_tables postboot "${GBB_CGB_PROFILE_DOC}")
+set_tests_properties(cgb_tables_postboot PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-tables postboot pass rows=[1-9]")
+add_test(NAME cgb_tables_postboot_selftest COMMAND test_cgb_tables postboot_selftest "${GBB_CGB_PROFILE_DOC}")
+set_tests_properties(cgb_tables_postboot_selftest PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-tables self-test pass mutants=3")
+
+# Negative control: the real doc with the compat A value changed from $11 to $12 must be rejected.
+file(READ "${GBB_CGB_PROFILE_DOC}" gbb_cgb_doc)
+set(GBB_CGB_ROW_ANCHOR "| a | COMPAT | $11 |")
+string(FIND "${gbb_cgb_doc}" "${GBB_CGB_ROW_ANCHOR}" gbb_cgb_anchor_at)
+string(FIND "${gbb_cgb_doc}" "${GBB_CGB_ROW_ANCHOR}" gbb_cgb_anchor_last REVERSE)
+if(gbb_cgb_anchor_at EQUAL -1 OR NOT gbb_cgb_anchor_at EQUAL gbb_cgb_anchor_last)
+  message(FATAL_ERROR "cgb-tables mutation anchor '${GBB_CGB_ROW_ANCHOR}' must occur exactly once in docs/cgb-profile.md")
+endif()
+string(REPLACE "${GBB_CGB_ROW_ANCHOR}" "| a | COMPAT | $12 |" gbb_cgb_doc_bad "${gbb_cgb_doc}")
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/cgb-tables")
+file(WRITE "${PROJECT_BINARY_DIR}/cgb-tables/mutated-postboot.md" "${gbb_cgb_doc_bad}")
+add_test(NAME cgb_tables_postboot_mutated_doc
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_tables>;postboot;${PROJECT_BINARY_DIR}/cgb-tables/mutated-postboot.md"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=cgb-tables mismatch"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
 gabbaboy_verify_registered_tests()

@@ -453,3 +453,6 @@ model_gates_real_deleted_tag
 model_gates_real_untagged_function
 model_gates_real_doc_mismatch
 model_gates_release_blocked
+cgb_tables_postboot
+cgb_tables_postboot_mutated_doc
+cgb_tables_postboot_selftest
