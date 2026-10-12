@@ -1431,77 +1431,11 @@ static int cpu_hram_address(uint16_t address) {
 
 static void ppu_begin_object_scan(gbb_instance *m);
 
-/* MODEL: BOTH GATE-00 basis=see-branch-gates */
-static uint8_t read8(const gbb_instance *m, uint16_t address) {
-    /* MODEL: UNKNOWN GATE-16 expected-failure:cgb-separate-buses -- OAM-DMA CPU bus conflict: CGB uses separate buses (D-17) */
-    if (m->dma_active && m->dma_cpu_blocked &&
-        !cpu_hram_address(address) && address != 0xFF46u) return 0xFFu;
-    if (address == 0xFF00) return joypad_value(m);
-    if (address == 0xFF04) return m->div;
-    if (address == 0xFF05) return m->tima;
-    if (address == 0xFF06) return m->tma;
-    if (address == 0xFF07) return (uint8_t)(0xF8u | m->tac);
-    if (address == 0xFF01) return m->serial_data;
-    /* MODEL: UNKNOWN GATE-17 research:14 -- SC unused bits read differently on CGB (fast clock bit) */
-    if (address == 0xFF02) return (uint8_t)(0x7Eu | m->serial_control);
-    /* MODEL: UNKNOWN GATE-18 research:14 -- APU read masks, including NR52 length bits */
-    if (address == 0xFF10) return (uint8_t)(0x80u | m->apu_pulse[0].sweep);
-    if (address == 0xFF11) return (uint8_t)(0x3Fu | (m->apu_pulse[0].duty_length & 0xC0u));
-    if (address == 0xFF12) return m->apu_pulse[0].envelope;
-    if (address == 0xFF13) return 0xFFu;
-    if (address == 0xFF14) return (uint8_t)(0xBFu | (m->apu_pulse[0].control & 0x40u));
-    if (address == 0xFF16) return (uint8_t)(0x3Fu | (m->apu_pulse[1].duty_length & 0xC0u));
-    if (address == 0xFF17) return m->apu_pulse[1].envelope;
-    if (address == 0xFF18) return 0xFFu;
-    if (address == 0xFF19) return (uint8_t)(0xBFu | (m->apu_pulse[1].control & 0x40u));
-    if (address == 0xFF1A) return (uint8_t)(0x7Fu | (m->apu_wave.dac & 0x80u));
-    if (address == 0xFF1B) return 0xFFu;
-    if (address == 0xFF1C) return (uint8_t)(0x9Fu | (m->apu_wave.level & 0x60u));
-    if (address == 0xFF1D) return 0xFFu;
-    if (address == 0xFF1E) return (uint8_t)(0xBFu | (m->apu_wave.control & 0x40u));
-    if (address == 0xFF20) return 0xFFu;
-    if (address == 0xFF21) return m->apu_noise.envelope;
-    if (address == 0xFF22) return m->apu_noise.polynomial;
-    if (address == 0xFF23) return (uint8_t)(0xBFu | (m->apu_noise.control & 0x40u));
-    /* MODEL: UNKNOWN GATE-19 research:14 -- wave RAM access aliasing while the channel is enabled */
-    if (address >= 0xFF30u && address <= 0xFF3Fu) {
-        unsigned index = address - 0xFF30u;
-        /* Active access aliases the current byte in this revision-scoped software model. */
-        if (m->apu_wave.enabled) index = m->apu_wave.position >> 1;
-        return m->apu_wave.ram[index];
-    }
-    if (address == 0xFF24) return m->apu_nr50;
-    if (address == 0xFF25) return m->apu_nr51;
-    if (address == 0xFF26)
-        return (uint8_t)(0x70u | (m->apu_power ? 0x80u : 0u) |
-                         (m->apu_pulse[0].enabled ? 1u : 0u) |
-                         (m->apu_pulse[1].enabled ? 2u : 0u) |
-                         (m->apu_wave.enabled ? 4u : 0u) |
-                         (m->apu_noise.enabled ? 8u : 0u));
-    if (address == 0xFF40) return m->lcdc;
-    /* MODEL: UNKNOWN GATE-20 research:11 -- STAT mode and coincidence bits at LCD transitions */
-    if (address == 0xFF41)
-        return (uint8_t)(0x80u | (m->stat & 0x78u) |
-                         (m->ly == m->lyc ? 0x04u : 0u) | m->ppu_mode);
-    if (address == 0xFF42) return m->scy;
-    if (address == 0xFF43) return m->scx;
-    if (address == 0xFF44) return m->ly;
-    if (address == 0xFF45) return m->lyc;
-    if (address == 0xFF46) return m->dma_register;
-    if (address == 0xFF47) return m->bgp;
-    if (address == 0xFF48) return m->obp0;
-    if (address == 0xFF49) return m->obp1;
-    if (address == 0xFF4A) return m->wy;
-    if (address == 0xFF4B) return m->wx;
-    /* MODEL: CGB_ONLY GATE-72 GUARD=model_is_cgb -- FF4C-FF7F decode through io_visibility[]; the DMG profile falls through unchanged (D-09) */
-    if (address >= 0xFF4Cu && address <= 0xFF7Fu && model_is_cgb(m)) return io_read_cgb(m, address);
-    if (address == 0xFF0F) return (uint8_t)(0xE0u | m->interrupt_flags);
-    /* MODEL: CGB_ONLY GATE-21 GUARD=model_is_cgb -- IE bits 5-7 are stored on the CGB profile (unused_hwio-C/-GS); DMG reads them as 1 (OQ2) */
-    if (address == 0xFFFF) return model_is_cgb(m) ? m->ie : (uint8_t)(0xE0u | m->ie);
-    if (address >= 0x8000 && address <= 0x9FFF)
-        return cpu_vram_access_allowed(m) ? m->vram[m->vram_bank][address - 0x8000] : 0xFF;
-    if (address >= 0xFE00 && address <= 0xFE9F)
-        return cpu_oam_access_allowed(m) ? m->oam[address - 0xFE00] : 0xFF;
+/* Cartridge-side read: ROM at 0000-7FFF and cartridge RAM or RTC at A000-BFFF, decided by the mapper and
+ * not by the console. Shared by the CPU bus (read8) and the CGB OAM DMA source map (D-16), so the two
+ * can never disagree about what the cartridge returns. Any other address reads $FF. */
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
+static uint8_t cart_read(const gbb_instance *m, uint16_t address) {
     /* MODEL: BOTH GATE-22 basis=cartridge-side -- ROM reads are decided by the mapper, not the console */
     if (address < 0x8000u) {
         if (m->rom == NULL || address >= m->rom_size) return 0xFFu;
@@ -1574,6 +1508,81 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
             return 0xFFu;
         }
     }
+    return 0xFFu;
+}
+
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static uint8_t read8(const gbb_instance *m, uint16_t address) {
+    /* MODEL: UNKNOWN GATE-16 expected-failure:cgb-separate-buses -- OAM-DMA CPU bus conflict: CGB uses separate buses (D-17) */
+    if (m->dma_active && m->dma_cpu_blocked &&
+        !cpu_hram_address(address) && address != 0xFF46u) return 0xFFu;
+    if (address == 0xFF00) return joypad_value(m);
+    if (address == 0xFF04) return m->div;
+    if (address == 0xFF05) return m->tima;
+    if (address == 0xFF06) return m->tma;
+    if (address == 0xFF07) return (uint8_t)(0xF8u | m->tac);
+    if (address == 0xFF01) return m->serial_data;
+    /* MODEL: UNKNOWN GATE-17 research:14 -- SC unused bits read differently on CGB (fast clock bit) */
+    if (address == 0xFF02) return (uint8_t)(0x7Eu | m->serial_control);
+    /* MODEL: UNKNOWN GATE-18 research:14 -- APU read masks, including NR52 length bits */
+    if (address == 0xFF10) return (uint8_t)(0x80u | m->apu_pulse[0].sweep);
+    if (address == 0xFF11) return (uint8_t)(0x3Fu | (m->apu_pulse[0].duty_length & 0xC0u));
+    if (address == 0xFF12) return m->apu_pulse[0].envelope;
+    if (address == 0xFF13) return 0xFFu;
+    if (address == 0xFF14) return (uint8_t)(0xBFu | (m->apu_pulse[0].control & 0x40u));
+    if (address == 0xFF16) return (uint8_t)(0x3Fu | (m->apu_pulse[1].duty_length & 0xC0u));
+    if (address == 0xFF17) return m->apu_pulse[1].envelope;
+    if (address == 0xFF18) return 0xFFu;
+    if (address == 0xFF19) return (uint8_t)(0xBFu | (m->apu_pulse[1].control & 0x40u));
+    if (address == 0xFF1A) return (uint8_t)(0x7Fu | (m->apu_wave.dac & 0x80u));
+    if (address == 0xFF1B) return 0xFFu;
+    if (address == 0xFF1C) return (uint8_t)(0x9Fu | (m->apu_wave.level & 0x60u));
+    if (address == 0xFF1D) return 0xFFu;
+    if (address == 0xFF1E) return (uint8_t)(0xBFu | (m->apu_wave.control & 0x40u));
+    if (address == 0xFF20) return 0xFFu;
+    if (address == 0xFF21) return m->apu_noise.envelope;
+    if (address == 0xFF22) return m->apu_noise.polynomial;
+    if (address == 0xFF23) return (uint8_t)(0xBFu | (m->apu_noise.control & 0x40u));
+    /* MODEL: UNKNOWN GATE-19 research:14 -- wave RAM access aliasing while the channel is enabled */
+    if (address >= 0xFF30u && address <= 0xFF3Fu) {
+        unsigned index = address - 0xFF30u;
+        /* Active access aliases the current byte in this revision-scoped software model. */
+        if (m->apu_wave.enabled) index = m->apu_wave.position >> 1;
+        return m->apu_wave.ram[index];
+    }
+    if (address == 0xFF24) return m->apu_nr50;
+    if (address == 0xFF25) return m->apu_nr51;
+    if (address == 0xFF26)
+        return (uint8_t)(0x70u | (m->apu_power ? 0x80u : 0u) |
+                         (m->apu_pulse[0].enabled ? 1u : 0u) |
+                         (m->apu_pulse[1].enabled ? 2u : 0u) |
+                         (m->apu_wave.enabled ? 4u : 0u) |
+                         (m->apu_noise.enabled ? 8u : 0u));
+    if (address == 0xFF40) return m->lcdc;
+    /* MODEL: UNKNOWN GATE-20 research:11 -- STAT mode and coincidence bits at LCD transitions */
+    if (address == 0xFF41)
+        return (uint8_t)(0x80u | (m->stat & 0x78u) |
+                         (m->ly == m->lyc ? 0x04u : 0u) | m->ppu_mode);
+    if (address == 0xFF42) return m->scy;
+    if (address == 0xFF43) return m->scx;
+    if (address == 0xFF44) return m->ly;
+    if (address == 0xFF45) return m->lyc;
+    if (address == 0xFF46) return m->dma_register;
+    if (address == 0xFF47) return m->bgp;
+    if (address == 0xFF48) return m->obp0;
+    if (address == 0xFF49) return m->obp1;
+    if (address == 0xFF4A) return m->wy;
+    if (address == 0xFF4B) return m->wx;
+    /* MODEL: CGB_ONLY GATE-72 GUARD=model_is_cgb -- FF4C-FF7F decode through io_visibility[]; the DMG profile falls through unchanged (D-09) */
+    if (address >= 0xFF4Cu && address <= 0xFF7Fu && model_is_cgb(m)) return io_read_cgb(m, address);
+    if (address == 0xFF0F) return (uint8_t)(0xE0u | m->interrupt_flags);
+    /* MODEL: CGB_ONLY GATE-21 GUARD=model_is_cgb -- IE bits 5-7 are stored on the CGB profile (unused_hwio-C/-GS); DMG reads them as 1 (OQ2) */
+    if (address == 0xFFFF) return model_is_cgb(m) ? m->ie : (uint8_t)(0xE0u | m->ie);
+    if (address >= 0x8000 && address <= 0x9FFF)
+        return cpu_vram_access_allowed(m) ? m->vram[m->vram_bank][address - 0x8000] : 0xFF;
+    if (address >= 0xFE00 && address <= 0xFE9F)
+        return cpu_oam_access_allowed(m) ? m->oam[address - 0xFE00] : 0xFF;
+    if (address < 0x8000u || (address >= 0xA000u && address <= 0xBFFFu)) return cart_read(m, address);
     /* MODEL: BOTH GATE-23 basis=wram-echo-map -- work RAM and echo mapping; CGB WRAM banking is added by a later plan */
     if (address >= 0xC000 && address <= 0xFDFF) return *wram_byte(m, address);
     if (address >= 0xFF80 && address <= 0xFFFE) return m->hram[address - 0xFF80];
@@ -2420,15 +2429,30 @@ static void ppu_advance_dot(gbb_instance *m) {
     }
 }
 
+/* OAM DMA source map (D-16). The DMG envelope is frozen (D-024): VRAM and WRAM are read and every other
+ * page, including ROM, cartridge RAM and E0-FF, reads $FF. The CGB profile (both modes) reads ROM and
+ * cartridge RAM through cart_read, VRAM from the selected bank, WRAM through the banked helper, and
+ * E0-FF as $FF. The cartridge and E0-FF cells are PANDOCS or ORACLE_SAMEBOY claims and are not
+ * hardware-verified for CGB-E (see docs/cgb-profile.md). */
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static uint8_t dma_source_read(const gbb_instance *m, uint16_t address) {
-    /* MODEL: UNKNOWN GATE-51 research:10 -- DMA source map; banked VRAM and WRAM change it */
-    if (address >= 0x8000u && address <= 0x9FFFu)
-        return m->vram[m->vram_bank][address - 0x8000u];
-    if (address >= 0xC000u && address <= 0xDFFFu)
-        return *wram_byte(m, address);
-    /* The ROM-only profile has no external cartridge RAM. Other source pages
-     * are outside the DMG manual's 8000-DFFF DMA range. */
+    /* MODEL: CGB_ONLY GATE-51 GUARD=model_is_cgb -- OAM DMA reads the cartridge and the banked VRAM and WRAM on the CGB profile */
+    if (model_is_cgb(m)) {
+        if (address < 0x8000u || (address >= 0xA000u && address <= 0xBFFFu))
+            return cart_read(m, address);
+        if (address >= 0x8000u && address <= 0x9FFFu)
+            return m->vram[m->vram_bank][address - 0x8000u];
+        if (address >= 0xC000u && address <= 0xDFFFu)
+            return *wram_byte(m, address);
+        return 0xFFu;
+    }
+    /* MODEL: DMG_ONLY GATE-75 GUARD=model_is_dmg -- the DMG source map is VRAM and WRAM only; everything else reads $FF (D-024) */
+    if (model_is_dmg(m)) {
+        if (address >= 0x8000u && address <= 0x9FFFu)
+            return m->vram[m->vram_bank][address - 0x8000u];
+        if (address >= 0xC000u && address <= 0xDFFFu)
+            return *wram_byte(m, address);
+    }
     return 0xFFu;
 }
 

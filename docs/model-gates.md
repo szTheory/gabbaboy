@@ -64,7 +64,7 @@ occurs exactly once in code and once in the table.
 | GATE-19 | UNKNOWN | - | research:14 | read8 | wave RAM access aliasing while the channel is enabled |
 | GATE-20 | UNKNOWN | - | research:11 | read8 | STAT mode and coincidence bits at LCD transitions |
 | GATE-21 | CGB_ONLY | model_is_cgb | - | read8 | IE bits 5-7 are stored on the CGB profile (Mooneye unused_hwio-C and unused_hwio-GS); DMG reads them as 1 (OQ2, owner veto item 6) |
-| GATE-22 | BOTH | - | basis=cartridge-side | read8 | ROM reads are decided by the mapper, not the console |
+| GATE-22 | BOTH | - | basis=cartridge-side | cart_read | ROM reads are decided by the mapper, not the console |
 | GATE-23 | BOTH | - | basis=wram-echo-map | read8 | work RAM and echo mapping; CGB WRAM banking is added by a later plan |
 | GATE-24 | UNKNOWN | - | research:14 | timer_increment | TIMA overflow and reload timing |
 | GATE-25 | UNKNOWN | - | expected-failure:cgb-separate-buses | write8 | OAM-DMA CPU bus conflict: CGB uses separate buses (D-17) |
@@ -93,7 +93,7 @@ occurs exactly once in code and once in the table.
 | GATE-48 | UNKNOWN | - | research:11 | ppu_object_should_stall | object fetch during DMA and its transfer timing |
 | GATE-49 | UNKNOWN | - | research:11 | ppu_transfer_dot | mode 3 start-up and window stall timing |
 | GATE-50 | UNKNOWN | - | research:11 | ppu_advance_dot | line length and LY timing |
-| GATE-51 | UNKNOWN | - | research:10 | dma_source_read | DMA source map; banked VRAM and WRAM change it |
+| GATE-51 | CGB_ONLY | model_is_cgb | - | dma_source_read | OAM DMA reads the cartridge and the banked VRAM and WRAM on the CGB profile (D-16); cartridge and E0-FF cells are PANDOCS or ORACLE_SAMEBOY, not hardware |
 | GATE-52 | UNKNOWN | - | research:12 | dma_start | DMA restart behaviour |
 | GATE-53 | UNKNOWN | - | research:12 | dma_advance_half_dot | DMA byte period |
 | GATE-54 | UNKNOWN | - | research:14 | advance_devices_to | timer reload and IF delay |
@@ -117,6 +117,7 @@ occurs exactly once in code and once in the table.
 | GATE-72 | CGB_ONLY | model_is_cgb | - | read8 | FF4C-FF7F decode goes through io_visibility[]; the DMG profile falls through unchanged (D-09) |
 | GATE-73 | CGB_ONLY | model_is_cgb | - | write8 | FF4C-FF7F decode goes through io_visibility[]; a no-op on the DMG profile (C4) |
 | GATE-74 | CGB_ONLY | model_is_cgb | - | execute | STOP with KEY1 armed latches bus_unsupported at FF4D instead of sleeping; the speed switch is DEFERRED(12) (D-23) |
+| GATE-75 | DMG_ONLY | model_is_dmg | - | dma_source_read | the DMG OAM DMA source map is VRAM and WRAM only; ROM, cartridge RAM and E0-FF read $FF (D-024) |
 <!-- model-gates-end -->
 
 ## Release status
