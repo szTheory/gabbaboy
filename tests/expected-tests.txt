@@ -175,6 +175,9 @@ loader_truncated
 loader_boundary_fuzz
 fuzz_core_regressions
 cgb_fuzz_io_regressions
+cgb_loader_matrix
+cgb_loader_fuzz_parity
+cgb_instance_isolation
 loader_oversized
 loader_invalid_header
 loader_unsupported_cartridge

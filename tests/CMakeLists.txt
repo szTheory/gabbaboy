@@ -19,6 +19,8 @@ target_compile_features(test_instance_concurrency PRIVATE c_std_17)
 set_target_properties(test_instance_concurrency PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME concurrent_independent_instances COMMAND test_instance_concurrency
   ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
+add_test(NAME cgb_instance_isolation COMMAND test_instance_concurrency
+  ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb cgb_instance_isolation)
 
 add_executable(test_cartridge test_cartridge.c)
 target_link_libraries(test_cartridge PRIVATE GabbaBoy::core)
@@ -349,6 +351,7 @@ set_target_properties(test_loader_matrix PROPERTIES C_EXTENSIONS OFF)
 foreach(case contradiction_mbc2 contradiction_mbc3 contradiction_mbc5 mbc30_variant type_byte_sweep bad_checksum)
   add_test(NAME loader_${case} COMMAND test_loader_matrix loader_${case})
 endforeach()
+add_test(NAME cgb_loader_matrix COMMAND test_loader_matrix cgb_loader_matrix)
 
 add_executable(test_battery test_battery.c)
 target_link_libraries(test_battery PRIVATE GabbaBoy::core)
@@ -555,6 +558,8 @@ target_compile_features(test_loader_fuzz PRIVATE c_std_17)
 set_target_properties(test_loader_fuzz PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME loader_boundary_fuzz
   COMMAND test_loader_fuzz ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
+add_test(NAME cgb_loader_fuzz_parity
+  COMMAND test_loader_fuzz ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb cgb_loader_fuzz_parity)
 
 add_executable(test_fuzz_core test_fuzz_core.c fuzz_core.c)
 target_link_libraries(test_fuzz_core PRIVATE GabbaBoy::core)
@@ -904,7 +909,7 @@ set_tests_properties(
   runner_pass runner_help runner_fail runner_wrong_breakpoint runner_timeout runner_unsupported
   runner_zero_eligible runner_guest_failure runner_missing_fixture runner_bad_digest
   runner_bad_manifest runner_bad_metadata
-  concurrent_independent_instances
+  concurrent_independent_instances cgb_instance_isolation
   mooneye_required_suite mooneye_case_daa mooneye_case_tim00 mooneye_case_tim00-div-trigger
   PROPERTIES TIMEOUT 30)
 set_tests_properties(mooneye_case_daa PROPERTIES PASS_REGULAR_EXPRESSION

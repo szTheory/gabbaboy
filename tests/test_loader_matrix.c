@@ -355,6 +355,112 @@ static int loader_bad_checksum(void) {
     return 0;
 }
 
+/* ---- cgb_loader_matrix (Plan 10-18, D-27) ---------------------------------
+ * The matrix crossed with $143 in {00, 80, C0, 81, 84, 88, FF} on both profiles. gbb_load_rom and
+ * gbb_probe_rom must both equal an oracle that is expected_result() plus the D-03 PGB term, which
+ * applies on the CGB profile only and ranks after every other header check. On acceptance the
+ * reported mode and CGB-only flag are also compared with literals. skew != 0 applies the PGB term
+ * on the DMG profile too: the deliberately wrong oracle the sweep must be able to catch. */
+
+static int is_pgb_flag(uint8_t flag) { return (flag & 0x80u) != 0u && (flag & 0x0Cu) != 0u; }
+
+static gbb_error cgb_expected(gbb_profile profile, uint8_t type, uint8_t rom_code,
+                              uint8_t ram_code, size_t length, int checksum_ok, uint8_t flag,
+                              int skew) {
+    const gbb_error base = expected_result(type, rom_code, ram_code, length, checksum_ok);
+    if (base != GBB_OK) return base;
+    if (is_pgb_flag(flag) && (profile == GBB_PROFILE_CGB_CPU_E || skew))
+        return GBB_UNSUPPORTED_EXECUTION_MODE;
+    return GBB_OK;
+}
+
+static gbb_exec_mode cgb_expected_mode(gbb_profile profile, uint8_t flag) {
+    if (profile == GBB_PROFILE_DMG_CPU_B) return GBB_MODE_DMG;
+    return (flag & 0x80u) != 0u ? GBB_MODE_CGB : GBB_MODE_CGB_DMG_COMPAT;
+}
+
+static unsigned long cgb_sweep(int skew, gbb_instance *scratch_dmg, gbb_instance *scratch_cgb) {
+    static const uint8_t flags[] = {0x00u, 0x80u, 0xC0u, 0x81u, 0x84u, 0x88u, 0xFFu};
+    static const uint8_t types[] = {0x00u, 0x01u, 0x03u, 0x06u, 0x13u, 0x1Bu, 0x20u};
+    static const uint8_t codes[] = {0u, 1u, 6u, 7u, 8u, 0x09u};
+    static const uint8_t rams[] = {0u, 2u, 3u, 5u, 0xFFu};
+    unsigned long mismatches = 0u;
+    for (int p = 0; p < 2; ++p) {
+        const gbb_profile profile = p == 0 ? GBB_PROFILE_DMG_CPU_B : GBB_PROFILE_CGB_CPU_E;
+        gbb_instance *target = p == 0 ? scratch_dmg : scratch_cgb;
+        for (size_t f = 0u; f < sizeof(flags); ++f)
+            for (size_t t = 0u; t < sizeof(types); ++t)
+                for (size_t r = 0u; r < sizeof(codes); ++r)
+                    for (size_t m = 0u; m < sizeof(rams); ++m) {
+                        const size_t base = declared_length(codes[r]);
+                        const size_t lengths[3] = {base, base - 1u, base + 1u};
+                        for (int l = 0; l < 3; ++l)
+                            for (int ck = 0; ck < 2; ++ck) {
+                                set_header(types[t], codes[r], rams[m], ck);
+                                image[0x143u] = flags[f];
+                                {   /* $143 is inside the header checksum range */
+                                    uint8_t sum = 0u;
+                                    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+                                        sum = (uint8_t)(sum - image[i] - 1u);
+                                    image[0x14Du] = ck ? sum : (uint8_t)(sum ^ 0x5Au);
+                                }
+                                const gbb_error want = cgb_expected(profile, types[t], codes[r],
+                                    rams[m], lengths[l], ck, flags[f], skew);
+                                gbb_info info;
+                                memset(&info, 0xA7, sizeof(info));
+                                info.struct_size = GBB_INFO_SIZE_V1;
+                                const gbb_error probed =
+                                    gbb_probe_rom(profile, image, lengths[l], &info);
+                                const gbb_error loaded = gbb_load_rom(target, image, lengths[l]);
+                                ++cases_run;
+                                int bad = probed != want || loaded != want;
+                                if (!bad && want == GBB_OK) {
+                                    gbb_info got;
+                                    memset(&got, 0, sizeof(got));
+                                    got.struct_size = GBB_INFO_SIZE_V1;
+                                    const uint32_t only_on_dmg =
+                                        profile == GBB_PROFILE_DMG_CPU_B && flags[f] == 0xC0u ?
+                                        GBB_INFO_CGB_ONLY_ON_DMG : 0u;
+                                    bad = gbb_get_info(target, &got) != GBB_OK ||
+                                          got.mode != (uint32_t)cgb_expected_mode(profile, flags[f]) ||
+                                          info.mode != got.mode ||
+                                          got.cgb_flag != flags[f] ||
+                                          (got.flags & GBB_INFO_CGB_ONLY_ON_DMG) != only_on_dmg ||
+                                          (info.flags & GBB_INFO_CGB_ONLY_ON_DMG) != only_on_dmg;
+                                }
+                                if (bad) {
+                                    ++mismatches;
+                                    if (!skew)
+                                        fprintf(stderr, "cgb matrix: profile=%d flag=%02X "
+                                                "type=%02X rom=%02X ram=%02X len=%zu ck=%d "
+                                                "oracle=%d probe=%d load=%d\n", (int)profile,
+                                                flags[f], types[t], codes[r], rams[m],
+                                                lengths[l], ck, (int)want, (int)probed,
+                                                (int)loaded);
+                                }
+                            }
+                    }
+    }
+    return mismatches;
+}
+
+static int cgb_loader_matrix(void) {
+    gbb_instance *dmg = NULL;
+    gbb_instance *cgb = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &dmg) == GBB_OK);
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &cgb) == GBB_OK);
+    const unsigned long before = cases_run;
+    REQUIRE(cgb_sweep(0, dmg, cgb) == 0u);
+    REQUIRE(cases_run - before > 10000u);
+    /* Negative control: the PGB term applied on the DMG profile too must be detected. */
+    const unsigned long skewed = cgb_sweep(1, dmg, cgb);
+    if (skewed == 0u) fprintf(stderr, "skewed oracle produced zero mismatches\n");
+    REQUIRE(skewed >= 1u);
+    gbb_destroy(dmg);
+    gbb_destroy(cgb);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         fprintf(stderr, "usage: test_loader_matrix <case>\n");
@@ -380,6 +486,7 @@ int main(int argc, char **argv) {
     else if (strcmp(name, "loader_mbc30_variant") == 0) rc = loader_mbc30_variant();
     else if (strcmp(name, "loader_type_byte_sweep") == 0) rc = loader_type_byte_sweep();
     else if (strcmp(name, "loader_bad_checksum") == 0) rc = loader_bad_checksum();
+    else if (strcmp(name, "cgb_loader_matrix") == 0) rc = cgb_loader_matrix();
     else fprintf(stderr, "unknown case %s\n", name);
 
     if (rc == 0) {
