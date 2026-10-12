@@ -1,0 +1,552 @@
+/* CGB register visibility behaviour cases (Plan 10-09; D-06, D-09, D-10, OQ2, OQ5).
+ *
+ * Each case builds a tiny original guest program, runs it through the public run API on the DMG
+ * profile, the CGB profile in CGB mode ($143 = $80) and the CGB profile in compatibility mode
+ * ($143 = $00), and reads results back from HRAM or through the stop reason. The exhaustive per-cell
+ * matrix and its controls are Plan 10-10; these cases pin the decode, the deferred-access latch, the
+ * IE gate, bank selection and the boundaries between mapped and unmapped neighbours.
+ *
+ * Usage: test_cgb_visibility <case> */
+#include "gabbaboy/gabbaboy.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define REQUIRE(x) do { if (!(x)) { printf("not ok 1 - %s\n", #x); fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #x); return 1; } } while (0)
+#define PASS(name) do { printf("ok 1 - %s\n", name); } while (0)
+
+typedef struct {
+    uint64_t time_half_dots;
+    uint16_t address;
+    uint8_t access;
+    uint8_t value;
+} gbb_test_bus_event;
+extern void gbb_test_observer_set(gbb_instance *, gbb_test_bus_event *, size_t);
+extern size_t gbb_test_observer_count(const gbb_instance *);
+extern void gbb_test_cpu_snapshot(const gbb_instance *, gbb_trace_record *);
+extern void gbb_test_bank_state(const gbb_instance *, uint8_t *, uint8_t *);
+extern uint16_t gbb_test_last_unsupported_address(const gbb_instance *);
+
+/* The three views of one guest. */
+typedef enum { V_DMG = 0, V_CGB, V_COMPAT, V_COUNT } view;
+static const char *const view_names[V_COUNT] = { "DMG", "CGB", "COMPAT" };
+
+static void fix_checksum(uint8_t *rom) {
+    uint8_t sum = 0;
+    for (size_t i = 0x134; i <= 0x14C; ++i) sum = (uint8_t)(sum - rom[i] - 1u);
+    rom[0x14D] = sum;
+}
+
+/* The program sits at $150 behind a jump so it may exceed the header gap. vec40, when non-NULL,
+ * is placed at the VBlank vector. */
+static gbb_instance *load_view(view v, const uint8_t *program, size_t length,
+                               const uint8_t *vec40, size_t vec40_length) {
+    uint8_t *rom = calloc(1, 32768);
+    gbb_instance *machine = NULL;
+    if (rom == NULL) return NULL;
+    rom[0x100] = 0xC3; rom[0x101] = 0x50; rom[0x102] = 0x01;
+    memcpy(rom + 0x150, program, length);
+    if (vec40 != NULL) memcpy(rom + 0x40, vec40, vec40_length);
+    rom[0x143] = v == V_CGB ? 0x80 : 0x00;
+    fix_checksum(rom);
+    if (gbb_create(v == V_DMG ? GBB_PROFILE_DMG_CPU_B : GBB_PROFILE_CGB_CPU_E, &machine) != GBB_OK ||
+        gbb_load_rom(machine, rom, 32768) != GBB_OK) {
+        gbb_destroy(machine);
+        machine = NULL;
+    }
+    free(rom);
+    return machine;
+}
+
+/* Same atomic-rejection check as tests/test_bus.c: a refused pre-flight changes no guest-visible
+ * state, emits no trace, diagnostic or bus event, and consumes no time. */
+static int reject_atomically(gbb_instance *m) {
+    gbb_trace_record before, after, trace[2], untouched_trace[2];
+    gbb_diagnostic_record diagnostics[32], untouched_diagnostics[32];
+    uint8_t ram[8192], hram[127];
+    gbb_test_bus_event events[8];
+    memset(trace, 0xa5, sizeof(trace));
+    memcpy(untouched_trace, trace, sizeof(trace));
+    memset(diagnostics, 0x5a, sizeof(diagnostics));
+    memcpy(untouched_diagnostics, diagnostics, sizeof(diagnostics));
+    for (unsigned i = 0; i < sizeof(ram); ++i) ram[i] = gbb_peek_ram(m, (uint16_t)(0xc000u + i));
+    for (unsigned i = 0; i < sizeof(hram); ++i) hram[i] = gbb_peek_ram(m, (uint16_t)(0xff80u + i));
+    gbb_test_observer_set(m, events, 8);
+    gbb_test_cpu_snapshot(m, &before);
+    for (unsigned attempt = 0; attempt < 2; ++attempt) {
+        gbb_run_result r = gbb_run_ex(m, 64, trace, 2, diagnostics, 32);
+        REQUIRE(r.reason == GBB_STOP_UNSUPPORTED_BUS);
+        REQUIRE(r.consumed_half_dots == 0 && r.trace_count == 0 && r.diagnostic_count == 0);
+        REQUIRE(gbb_test_observer_count(m) == 0);
+        REQUIRE(memcmp(trace, untouched_trace, sizeof(trace)) == 0);
+        REQUIRE(memcmp(diagnostics, untouched_diagnostics, sizeof(diagnostics)) == 0);
+        gbb_test_cpu_snapshot(m, &after);
+        REQUIRE(memcmp(&before, &after, sizeof(before)) == 0);
+        for (unsigned i = 0; i < sizeof(ram); ++i) REQUIRE(ram[i] == gbb_peek_ram(m, (uint16_t)(0xc000u + i)));
+        for (unsigned i = 0; i < sizeof(hram); ++i) REQUIRE(hram[i] == gbb_peek_ram(m, (uint16_t)(0xff80u + i)));
+    }
+    return 0;
+}
+
+/* Tiny assembler. */
+typedef struct { uint8_t b[600]; size_t n; } prog;
+static void emit(prog *p, uint8_t x) { p->b[p->n++] = x; }
+static void ld_a(prog *p, uint8_t v) { emit(p, 0x3E); emit(p, v); }
+static void ldh_st(prog *p, uint8_t lo) { emit(p, 0xE0); emit(p, lo); }
+static void ldh_ld(prog *p, uint8_t lo) { emit(p, 0xF0); emit(p, lo); }
+static void st_abs(prog *p, uint16_t a) { emit(p, 0xEA); emit(p, (uint8_t)a); emit(p, (uint8_t)(a >> 8)); }
+static void ld_abs(prog *p, uint16_t a) { emit(p, 0xFA); emit(p, (uint8_t)a); emit(p, (uint8_t)(a >> 8)); }
+static void halt(prog *p) { emit(p, 0x76); }
+static void write_io(prog *p, uint8_t lo, uint8_t v) { ld_a(p, v); ldh_st(p, lo); }
+/* Read an FF00-page register and keep it in HRAM slot `slot` (FF80 + slot). */
+static void keep_io(prog *p, uint8_t lo, uint8_t slot) { ldh_ld(p, lo); ldh_st(p, (uint8_t)(0x80u + slot)); }
+
+static uint8_t hram(const gbb_instance *m, unsigned slot) { return gbb_peek_ram(m, (uint16_t)(0xFF80u + slot)); }
+
+#define RUN_BUDGET 40000u
+
+/* A one-read probe. Returns the byte read (0..255) or -1 when the read stops atomically with the
+ * seam reporting `addr`; a harness fault is -2. */
+static int probe(view v, const uint8_t *setup, size_t setup_len, uint16_t addr) {
+    prog p = { {0}, 0 };
+    if (setup_len != 0) memcpy(p.b, setup, setup_len);
+    p.n = setup_len;
+    if (addr == 0xFFFFu) ld_abs(&p, addr); else ldh_ld(&p, (uint8_t)addr);
+    ldh_st(&p, 0xF0);
+    halt(&p);
+    gbb_instance *m = load_view(v, p.b, p.n, NULL, 0);
+    if (m == NULL) return -2;
+    gbb_run_result r = gbb_run(m, RUN_BUDGET, NULL, 0);
+    int result;
+    if (r.reason == GBB_STOP_UNSUPPORTED_BUS) {
+        result = reject_atomically(m) == 0 && gbb_test_last_unsupported_address(m) == addr ? -1 : -2;
+    } else {
+        result = gbb_peek_ram(m, 0xFFF0u);
+    }
+    gbb_destroy(m);
+    return result;
+}
+
+#define STOP (-1)
+static int expect_probe(view v, const uint8_t *setup, size_t n, uint16_t addr, int expected) {
+    const int got = probe(v, setup, n, addr);
+    if (got != expected) {
+        fprintf(stderr, "probe %s $%04X: got %d, expected %d\n", view_names[v], addr, got, expected);
+        return 1;
+    }
+    return 0;
+}
+
+/* Tracer: one visibility row (VBK) drives decode and pre-flight end to end. */
+static int case_vbk_tracer(void) {
+    prog p = { {0}, 0 };
+    write_io(&p, 0x40, 0x00);          /* LCD off: VRAM is always reachable */
+    write_io(&p, 0x4F, 0x01);
+    keep_io(&p, 0x4F, 0);              /* FF4F reads $FE | 1 */
+    ld_a(&p, 0xAA); st_abs(&p, 0x8000); /* lands in bank 1 */
+    write_io(&p, 0x4F, 0x00);
+    ld_abs(&p, 0x8000); ldh_st(&p, 0x81); /* bank 0 is still clear */
+    keep_io(&p, 0x4F, 2);              /* $FE */
+    write_io(&p, 0x4F, 0x01);
+    ld_abs(&p, 0x8000); ldh_st(&p, 0x83); /* bank 1 kept $AA */
+    halt(&p);
+
+    gbb_instance *m = load_view(V_CGB, p.b, p.n, NULL, 0);
+    REQUIRE(m != NULL);
+    REQUIRE(gbb_run(m, RUN_BUDGET, NULL, 0).reason != GBB_STOP_UNSUPPORTED_BUS);
+    REQUIRE(hram(m, 0) == 0xFF);
+    REQUIRE(hram(m, 1) == 0x00);
+    REQUIRE(hram(m, 2) == 0xFE);
+    REQUIRE(hram(m, 3) == 0xAA);
+    uint8_t vb = 9, wb = 9;
+    gbb_test_bank_state(m, &vb, &wb);
+    REQUIRE(vb == 1 && wb == 1);
+    gbb_destroy(m);
+
+    /* Compatibility mode: the register reads $FE | bank and the bank never leaves 0, so a DMG ROM
+     * cannot reach bank 1. */
+    prog c = { {0}, 0 };
+    write_io(&c, 0x40, 0x00);
+    write_io(&c, 0x4F, 0x01);
+    keep_io(&c, 0x4F, 0);
+    halt(&c);
+    m = load_view(V_COMPAT, c.b, c.n, NULL, 0);
+    REQUIRE(m != NULL);
+    REQUIRE(gbb_run(m, RUN_BUDGET, NULL, 0).reason != GBB_STOP_UNSUPPORTED_BUS);
+    REQUIRE(hram(m, 0) == 0xFE);
+    gbb_test_bank_state(m, &vb, &wb);
+    REQUIRE(vb == 0);
+    gbb_destroy(m);
+
+    /* DMG: a read still stops atomically, a write is a silent no-op (C4). */
+    prog d = { {0}, 0 };
+    keep_io(&d, 0x4F, 0);
+    m = load_view(V_DMG, d.b, d.n, NULL, 0);
+    REQUIRE(m != NULL);
+    REQUIRE(gbb_run(m, RUN_BUDGET, NULL, 0).reason == GBB_STOP_UNSUPPORTED_BUS);
+    REQUIRE(reject_atomically(m) == 0);
+    REQUIRE(gbb_test_last_unsupported_address(m) == 0xFF4F);
+    gbb_destroy(m);
+
+    prog w = { {0}, 0 };
+    write_io(&w, 0x4F, 0x01);
+    write_io(&w, 0x80, 0x07);          /* proves execution continued past the write */
+    halt(&w);
+    m = load_view(V_DMG, w.b, w.n, NULL, 0);
+    REQUIRE(m != NULL);
+    REQUIRE(gbb_run(m, RUN_BUDGET, NULL, 0).reason != GBB_STOP_UNSUPPORTED_BUS);
+    REQUIRE(hram(m, 0) == 0x07);
+    gbb_test_bank_state(m, &vb, &wb);
+    REQUIRE(vb == 0 && wb == 1);
+    gbb_destroy(m);
+    PASS("cgb_visibility_vbk_tracer");
+    return 0;
+}
+
+static int case_svbk_select(void) {
+    prog p = { {0}, 0 };
+    write_io(&p, 0x70, 0x00);
+    keep_io(&p, 0x70, 0);                       /* $F8: raw 0 */
+    ld_a(&p, 0x11); st_abs(&p, 0xD000);         /* bank 1 */
+    write_io(&p, 0x70, 0x05);
+    keep_io(&p, 0x70, 1);                       /* $FD */
+    ld_a(&p, 0x55); st_abs(&p, 0xD000);         /* bank 5 */
+    write_io(&p, 0x70, 0x08);                   /* only 3 bits are kept: raw 0 -> bank 1 */
+    keep_io(&p, 0x70, 2);                       /* $F8 */
+    ld_abs(&p, 0xD000); ldh_st(&p, 0x83);       /* $11 from bank 1 */
+    write_io(&p, 0x70, 0x0D);                   /* raw 5 again */
+    keep_io(&p, 0x70, 4);                       /* $FD */
+    halt(&p);
+
+    gbb_instance *m = load_view(V_CGB, p.b, p.n, NULL, 0);
+    REQUIRE(m != NULL);
+    REQUIRE(gbb_run(m, RUN_BUDGET, NULL, 0).reason != GBB_STOP_UNSUPPORTED_BUS);
+    REQUIRE(hram(m, 0) == 0xF8);
+    REQUIRE(hram(m, 1) == 0xFD);
+    REQUIRE(hram(m, 2) == 0xF8);
+    REQUIRE(hram(m, 3) == 0x11);
+    REQUIRE(hram(m, 4) == 0xFD);
+    uint8_t vb, wb;
+    gbb_test_bank_state(m, &vb, &wb);
+    REQUIRE(wb == 5);
+    REQUIRE(gbb_peek_ram(m, 0xD000) == 0x55);   /* bank 5 holds the second store */
+    REQUIRE(gbb_peek_ram(m, 0xF000) == 0x55);   /* echo follows the bank */
+    REQUIRE(gbb_peek_ram(m, 0xC000) == 0x00);   /* C000 is never banked */
+    gbb_destroy(m);
+
+    /* Compatibility mode: FF70 reads $FF, the write is ignored and WRAM stays on bank 1. */
+    prog c = { {0}, 0 };
+    write_io(&c, 0x70, 0x05);
+    keep_io(&c, 0x70, 0);
+    ld_a(&c, 0x66); st_abs(&c, 0xD000);
+    halt(&c);
+    m = load_view(V_COMPAT, c.b, c.n, NULL, 0);
+    REQUIRE(m != NULL);
+    REQUIRE(gbb_run(m, RUN_BUDGET, NULL, 0).reason != GBB_STOP_UNSUPPORTED_BUS);
+    REQUIRE(hram(m, 0) == 0xFF);
+    gbb_test_bank_state(m, &vb, &wb);
+    REQUIRE(wb == 1);
+    REQUIRE(gbb_peek_ram(m, 0xD000) == 0x66);
+    gbb_destroy(m);
+
+    /* DMG: read stops; write is a no-op and WRAM stays on bank 1. */
+    const uint8_t none[1] = {0};
+    REQUIRE(expect_probe(V_DMG, none, 0, 0xFF70, STOP) == 0);
+    prog d = { {0}, 0 };
+    write_io(&d, 0x70, 0x05);
+    write_io(&d, 0x80, 0x01);
+    halt(&d);
+    m = load_view(V_DMG, d.b, d.n, NULL, 0);
+    REQUIRE(m != NULL);
+    REQUIRE(gbb_run(m, RUN_BUDGET, NULL, 0).reason != GBB_STOP_UNSUPPORTED_BUS);
+    REQUIRE(hram(m, 0) == 0x01);
+    gbb_test_bank_state(m, &vb, &wb);
+    REQUIRE(wb == 1);
+    gbb_destroy(m);
+    PASS("cgb_visibility_svbk_select");
+    return 0;
+}
+
+/* Addresses that no register owns on the CGB profile: a write is ignored and a read returns $FF in
+ * both CGB columns, while the DMG profile keeps stopping on the ones it always stopped on. */
+static int case_unmapped_cgb(void) {
+    uint16_t addrs[64];
+    size_t n = 0;
+    addrs[n++] = 0xFF03;
+    for (uint16_t a = 0xFF08; a <= 0xFF0E; ++a) addrs[n++] = a;
+    addrs[n++] = 0xFF15;
+    addrs[n++] = 0xFF1F;
+    for (uint16_t a = 0xFF27; a <= 0xFF2F; ++a) addrs[n++] = a;
+    addrs[n++] = 0xFF4E;
+    addrs[n++] = 0xFF50;
+    for (uint16_t a = 0xFF57; a <= 0xFF67; ++a) addrs[n++] = a;
+    for (uint16_t a = 0xFF6D; a <= 0xFF6F; ++a) addrs[n++] = a;
+    addrs[n++] = 0xFF71;
+    for (uint16_t a = 0xFF78; a <= 0xFF7F; ++a) addrs[n++] = a;
+    REQUIRE(n == 50); /* 1+7+1+1+9+1+1+17+3+1+8 */
+    for (size_t i = 0; i < n; ++i) {
+        const uint8_t setup[] = { 0x3E, 0x5A, 0xE0, (uint8_t)addrs[i] };
+        REQUIRE(expect_probe(V_CGB, setup, sizeof(setup), addrs[i], 0xFF) == 0);
+        REQUIRE(expect_probe(V_COMPAT, setup, sizeof(setup), addrs[i], 0xFF) == 0);
+    }
+    /* Control: the DMG profile still stops on a sample of them, so the probe distinguishes the
+     * profiles rather than always seeing $FF. */
+    const uint16_t dmg_stops[] = { 0xFF03, 0xFF0E, 0xFF15, 0xFF2F, 0xFF4E, 0xFF50, 0xFF67, 0xFF78, 0xFF7F };
+    for (size_t i = 0; i < sizeof(dmg_stops) / sizeof(dmg_stops[0]); ++i)
+        REQUIRE(expect_probe(V_DMG, NULL, 0, dmg_stops[i], STOP) == 0);
+    PASS("cgb_visibility_unmapped_cgb");
+    return 0;
+}
+
+typedef struct {
+    const char *name;
+    uint8_t setup[4];
+    uint8_t setup_len;
+    uint16_t address;
+    int dmg, cgb, compat;
+} boundary_cell;
+
+static int case_boundaries(void) {
+    static const boundary_cell cells[] = {
+        /* FF4B / FF4C */
+        { "FF4B WX",     {0x3E, 0x5A, 0xE0, 0x4B}, 4, 0xFF4B, 0x5A, 0x5A, 0x5A },
+        { "FF4C KEY0",   {0}, 0, 0xFF4C, STOP, 0xFF, 0xFF },
+        /* FF4F / FF50 */
+        { "FF4F VBK",    {0}, 0, 0xFF4F, STOP, 0xFE, 0xFE },
+        { "FF50",        {0}, 0, 0xFF50, STOP, 0xFF, 0xFF },
+        /* FF74 and FF75 / FF76 */
+        { "FF74 init",   {0}, 0, 0xFF74, STOP, 0x00, 0xFF },
+        { "FF74 stored", {0x3E, 0x33, 0xE0, 0x74}, 4, 0xFF74, STOP, 0x33, 0xFF },
+        { "FF75 init",   {0}, 0, 0xFF75, STOP, 0x8F, 0x8F },
+        { "FF75 stored", {0x3E, 0xA5, 0xE0, 0x75}, 4, 0xFF75, STOP, 0xAF, 0xAF },
+        { "FF76",        {0}, 0, 0xFF76, STOP, STOP, STOP },
+        /* FF77 / FF78 */
+        { "FF77",        {0}, 0, 0xFF77, STOP, STOP, STOP },
+        { "FF78",        {0}, 0, 0xFF78, STOP, 0xFF, 0xFF },
+        /* FF7F / FF80 */
+        { "FF7F",        {0}, 0, 0xFF7F, STOP, 0xFF, 0xFF },
+        { "FF80 HRAM",   {0x3E, 0x42, 0xE0, 0x80}, 4, 0xFF80, 0x42, 0x42, 0x42 },
+    };
+    for (size_t i = 0; i < sizeof(cells) / sizeof(cells[0]); ++i) {
+        const boundary_cell *c = &cells[i];
+        const int want[V_COUNT] = { c->dmg, c->cgb, c->compat };
+        for (int v = 0; v < V_COUNT; ++v) {
+            if (expect_probe((view)v, c->setup, c->setup_len, c->address, want[v]) != 0) {
+                fprintf(stderr, "boundary cell %s\n", c->name);
+                return 1;
+            }
+        }
+    }
+    PASS("cgb_visibility_boundaries");
+    return 0;
+}
+
+/* Deferred accesses stop visibly. A read stops before it happens; a write is dropped and the stop
+ * follows the retire of the instruction that issued it. */
+static int case_deferred_stop(void) {
+    /* Reads: CGB mode FF69 is DEFERRED(11); the stop is atomic and the seam names the address. */
+    const uint16_t deferred_reads[] = { 0xFF56, 0xFF69, 0xFF6B, 0xFF6C, 0xFF76, 0xFF77 };
+    for (size_t i = 0; i < sizeof(deferred_reads) / sizeof(deferred_reads[0]); ++i)
+        REQUIRE(expect_probe(V_CGB, NULL, 0, deferred_reads[i], STOP) == 0);
+    /* Control: FF55 reads $FF in CGB mode (only its write is deferred) and compat reads ignore the
+     * deferred rows, so a probe that always stopped would fail here. */
+    REQUIRE(expect_probe(V_CGB, NULL, 0, 0xFF55, 0xFF) == 0);
+    for (size_t i = 0; i < 4; ++i) REQUIRE(expect_probe(V_COMPAT, NULL, 0, deferred_reads[i], 0xFF) == 0);
+    REQUIRE(expect_probe(V_COMPAT, NULL, 0, 0xFF76, STOP) == 0);
+    REQUIRE(expect_probe(V_COMPAT, NULL, 0, 0xFF77, STOP) == 0);
+
+    /* Writes: LD A,1; LDH (55),A; LD A,7; LDH (80),A. */
+    prog p = { {0}, 0 };
+    ld_a(&p, 0x01);
+    ldh_st(&p, 0x55);
+    write_io(&p, 0x80, 0x07);
+    keep_io(&p, 0x55, 1);
+    halt(&p);
+    gbb_instance *m = load_view(V_CGB, p.b, p.n, NULL, 0);
+    REQUIRE(m != NULL);
+    gbb_trace_record snap;
+    gbb_run_result r = gbb_run(m, RUN_BUDGET, NULL, 0);
+    REQUIRE(r.reason == GBB_STOP_UNSUPPORTED_BUS);
+    REQUIRE(gbb_test_last_unsupported_address(m) == 0xFF55);
+    /* The instruction retired: JP (32) + LD A,n (16) + LDH (n),A (24) half dots, PC advanced past it. */
+    REQUIRE(r.consumed_half_dots == 72);
+    gbb_test_cpu_snapshot(m, &snap);
+    REQUIRE(snap.pc == 0x0154);
+    REQUIRE(hram(m, 0) == 0x00);
+    /* The latch is cleared by the report: execution resumes, the write stayed dropped. */
+    r = gbb_run(m, RUN_BUDGET, NULL, 0);
+    REQUIRE(r.reason != GBB_STOP_UNSUPPORTED_BUS);
+    REQUIRE(hram(m, 0) == 0x07);
+    REQUIRE(hram(m, 1) == 0xFF);
+    gbb_destroy(m);
+
+    /* Every deferred write cell stops in CGB mode with its own address. */
+    const uint16_t deferred_writes[] = { 0xFF55, 0xFF56, 0xFF69, 0xFF6B, 0xFF6C, 0xFF76, 0xFF77 };
+    for (size_t i = 0; i < sizeof(deferred_writes) / sizeof(deferred_writes[0]); ++i) {
+        prog w = { {0}, 0 };
+        write_io(&w, (uint8_t)deferred_writes[i], 0x01);
+        halt(&w);
+        m = load_view(V_CGB, w.b, w.n, NULL, 0);
+        REQUIRE(m != NULL);
+        REQUIRE(gbb_run(m, RUN_BUDGET, NULL, 0).reason == GBB_STOP_UNSUPPORTED_BUS);
+        REQUIRE(gbb_test_last_unsupported_address(m) == deferred_writes[i]);
+        gbb_destroy(m);
+    }
+
+    /* Compat mode ignores FF55/FF56/FF69/FF6B/FF6C writes (no stop) but FF76/FF77 stay deferred;
+     * the DMG profile never stops on any of them (C4). */
+    for (size_t i = 0; i < sizeof(deferred_writes) / sizeof(deferred_writes[0]); ++i) {
+        const int compat_stops = deferred_writes[i] >= 0xFF76;
+        for (int v = V_DMG; v <= V_COMPAT; v += 2) {
+            prog w = { {0}, 0 };
+            write_io(&w, (uint8_t)deferred_writes[i], 0x01);
+            write_io(&w, 0x80, 0x09);
+            halt(&w);
+            m = load_view((view)v, w.b, w.n, NULL, 0);
+            REQUIRE(m != NULL);
+            r = gbb_run(m, RUN_BUDGET, NULL, 0);
+            if (v == V_COMPAT && compat_stops) {
+                REQUIRE(r.reason == GBB_STOP_UNSUPPORTED_BUS);
+            } else {
+                REQUIRE(r.reason != GBB_STOP_UNSUPPORTED_BUS);
+                REQUIRE(hram(m, 0) == 0x09);
+            }
+            gbb_destroy(m);
+        }
+    }
+    PASS("cgb_visibility_deferred_stop");
+    return 0;
+}
+
+static int case_ie_gate(void) {
+    /* Read-back of the stored byte. */
+    prog p = { {0}, 0 };
+    ld_a(&p, 0x00); st_abs(&p, 0xFFFF); ld_abs(&p, 0xFFFF); ldh_st(&p, 0x80);
+    ld_a(&p, 0xE0); st_abs(&p, 0xFFFF); ld_abs(&p, 0xFFFF); ldh_st(&p, 0x81);
+    ld_a(&p, 0xFF); st_abs(&p, 0xFFFF); ld_abs(&p, 0xFFFF); ldh_st(&p, 0x82);
+    halt(&p);
+    const int expect[V_COUNT][3] = { { 0xE0, 0xE0, 0xFF }, { 0x00, 0xE0, 0xFF }, { 0x00, 0xE0, 0xFF } };
+    for (int v = 0; v < V_COUNT; ++v) {
+        gbb_instance *m = load_view((view)v, p.b, p.n, NULL, 0);
+        REQUIRE(m != NULL);
+        REQUIRE(gbb_run(m, RUN_BUDGET, NULL, 0).reason != GBB_STOP_UNSUPPORTED_BUS);
+        for (int k = 0; k < 3; ++k) {
+            if (hram(m, (unsigned)k) != expect[v][k])
+                fprintf(stderr, "ie_gate %s step %d: got %02X want %02X\n", view_names[v], k, hram(m, (unsigned)k), expect[v][k]);
+            REQUIRE(hram(m, (unsigned)k) == expect[v][k]);
+        }
+        gbb_destroy(m);
+    }
+
+    /* Dispatch still masks with $1F: IE=$E1 with IF bit 0 vectors to $40 ... */
+    const uint8_t vec[] = { 0x3E, 0x99, 0xE0, 0x90, 0x76 };   /* LD A,$99; LDH ($90),A; HALT */
+    prog d = { {0}, 0 };
+    ld_a(&d, 0xE1); st_abs(&d, 0xFFFF);
+    write_io(&d, 0x0F, 0x01);
+    emit(&d, 0xFB);                                           /* EI */
+    emit(&d, 0x00); emit(&d, 0x00);
+    halt(&d);
+    for (int v = 0; v < V_COUNT; ++v) {
+        gbb_instance *m = load_view((view)v, d.b, d.n, vec, sizeof(vec));
+        REQUIRE(m != NULL);
+        gbb_run(m, RUN_BUDGET, NULL, 0);
+        REQUIRE(gbb_peek_ram(m, 0xFF90) == 0x99);
+        gbb_destroy(m);
+    }
+    /* ... and control: IE=$E0 has no dispatchable bit, so with every IF bit set nothing vectors.
+     * On the CGB profile bits 5-7 are stored, so a dispatch here would prove the mask is missing. */
+    prog n = { {0}, 0 };
+    ld_a(&n, 0xE0); st_abs(&n, 0xFFFF);
+    write_io(&n, 0x0F, 0x1F);
+    emit(&n, 0xFB);
+    emit(&n, 0x00); emit(&n, 0x00);
+    halt(&n);
+    for (int v = 0; v < V_COUNT; ++v) {
+        gbb_instance *m = load_view((view)v, n.b, n.n, vec, sizeof(vec));
+        REQUIRE(m != NULL);
+        gbb_run(m, RUN_BUDGET, NULL, 0);
+        REQUIRE(gbb_peek_ram(m, 0xFF90) == 0x00);
+        gbb_destroy(m);
+    }
+    PASS("cgb_visibility_ie_gate");
+    return 0;
+}
+
+static int case_deferred_latch_interrupt(void) {
+    /* A deferred write is the instruction right after EI, with an interrupt pending: the stop is
+     * reported before the interrupt is taken, and the interrupt is taken on the next run. */
+    const uint8_t vec[] = { 0x3E, 0x99, 0xE0, 0x90, 0x76 };
+    prog p = { {0}, 0 };
+    write_io(&p, 0xFF, 0x01);                  /* IE = $01 */
+    write_io(&p, 0x0F, 0x01);                  /* IF = $01; A stays $01 */
+    emit(&p, 0xFB);                            /* EI: IME rises after the next instruction */
+    ldh_st(&p, 0x55);                          /* that next instruction is the deferred write */
+    emit(&p, 0x00);
+    halt(&p);
+    gbb_instance *m = load_view(V_CGB, p.b, p.n, vec, sizeof(vec));
+    REQUIRE(m != NULL);
+    gbb_run_result r = gbb_run(m, RUN_BUDGET, NULL, 0);
+    REQUIRE(r.reason == GBB_STOP_UNSUPPORTED_BUS);
+    REQUIRE(gbb_test_last_unsupported_address(m) == 0xFF55);
+    REQUIRE(gbb_peek_ram(m, 0xFF90) == 0x00);   /* not yet vectored */
+    r = gbb_run(m, RUN_BUDGET, NULL, 0);
+    REQUIRE(r.reason != GBB_STOP_UNSUPPORTED_BUS);
+    REQUIRE(gbb_peek_ram(m, 0xFF90) == 0x99);   /* the pending interrupt is taken afterwards */
+    gbb_destroy(m);
+
+    /* The interrupt-entry push itself hits deferred registers: SP = $FF57 makes the push write
+     * FF56 then FF55. The stop is reported at the entry boundary with the last refused address. */
+    prog q = { {0}, 0 };
+    emit(&q, 0x31); emit(&q, 0x57); emit(&q, 0xFF);    /* LD SP,$FF57 */
+    write_io(&q, 0xFF, 0x01);
+    write_io(&q, 0x0F, 0x01);
+    emit(&q, 0xFB);
+    emit(&q, 0x00); emit(&q, 0x00);
+    halt(&q);
+    m = load_view(V_CGB, q.b, q.n, vec, sizeof(vec));
+    REQUIRE(m != NULL);
+    r = gbb_run(m, RUN_BUDGET, NULL, 0);
+    REQUIRE(r.reason == GBB_STOP_UNSUPPORTED_BUS);
+    REQUIRE(gbb_test_last_unsupported_address(m) == 0xFF55);
+    gbb_trace_record snap;
+    gbb_test_cpu_snapshot(m, &snap);
+    REQUIRE(snap.pc == 0x0040);                 /* the entry completed; the vector has not run */
+    REQUIRE(gbb_peek_ram(m, 0xFF90) == 0x00);
+    r = gbb_run(m, RUN_BUDGET, NULL, 0);
+    REQUIRE(r.reason != GBB_STOP_UNSUPPORTED_BUS);
+    REQUIRE(gbb_peek_ram(m, 0xFF90) == 0x99);
+    gbb_destroy(m);
+
+    /* Control: the same interrupt with an ordinary stack does not stop. */
+    prog c = { {0}, 0 };
+    write_io(&c, 0xFF, 0x01);
+    write_io(&c, 0x0F, 0x01);
+    emit(&c, 0xFB);
+    emit(&c, 0x00); emit(&c, 0x00);
+    halt(&c);
+    m = load_view(V_CGB, c.b, c.n, vec, sizeof(vec));
+    REQUIRE(m != NULL);
+    r = gbb_run(m, RUN_BUDGET, NULL, 0);
+    REQUIRE(r.reason != GBB_STOP_UNSUPPORTED_BUS);
+    REQUIRE(gbb_peek_ram(m, 0xFF90) == 0x99);
+    gbb_destroy(m);
+    PASS("cgb_visibility_deferred_latch_interrupt");
+    return 0;
+}
+
+int main(int argc, char **argv) {
+    if (argc != 2) {
+        fprintf(stderr, "usage: test_cgb_visibility <case>\n");
+        return 2;
+    }
+    if (strcmp(argv[1], "vbk_tracer") == 0) return case_vbk_tracer();
+    if (strcmp(argv[1], "svbk_select") == 0) return case_svbk_select();
+    if (strcmp(argv[1], "unmapped_cgb") == 0) return case_unmapped_cgb();
+    if (strcmp(argv[1], "boundaries") == 0) return case_boundaries();
+    if (strcmp(argv[1], "deferred_stop") == 0) return case_deferred_stop();
+    if (strcmp(argv[1], "ie_gate") == 0) return case_ie_gate();
+    if (strcmp(argv[1], "deferred_latch_interrupt") == 0) return case_deferred_latch_interrupt();
+    fprintf(stderr, "unknown case %s\n", argv[1]);
+    return 2;
+}

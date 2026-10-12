@@ -308,6 +308,10 @@ struct gbb_instance {
     uint8_t vram_bank;
     uint8_t wram_bank;
     uint8_t svbk;
+    /* CGB-profile I/O register state (Plan 10-09). key1_armed is KEY1 bit 0 (the speed switch is
+     * not built; STOP ignores it). bcps/ocps are the palette index registers, ff72-ff75 the
+     * undocumented CGB scratch registers. DMG never reads or writes any of these. */
+    uint8_t key1_armed, bcps, ocps, ff72, ff73, ff74, ff75;
     uint8_t oam[GBB_OAM_BYTES];
     uint8_t frame_working[GBB_FRAME_PIXELS];
     uint8_t frame_completed[GBB_FRAME_PIXELS];
@@ -367,7 +371,13 @@ struct gbb_instance {
     uint64_t timer_reloaded_at;
     uint64_t instruction_start_half_dots;
     uint16_t serial_edge_remaining;
-    int serial_active, serial_unsupported;
+    int serial_active;
+    /* Deferred-access latch (OQ5): set by a write the core refuses to model (serial while a
+     * transfer is active, or a DEFERRED CGB register); reported as GBB_STOP_UNSUPPORTED_BUS after
+     * the instruction retires. bus_unsupported_address is the refused address (a failed read
+     * pre-flight records its address here too, with no other state change). */
+    int bus_unsupported;
+    uint16_t bus_unsupported_address;
     int halted, stopped, halt_bug;
     uint16_t pc, sp;
     uint64_t time_half_dots;
@@ -732,6 +742,8 @@ typedef enum {
     PB_LCDC, PB_STAT, PB_LY, PB_LYC, PB_SCX, PB_SCY, PB_WX, PB_WY,
     PB_BGP, PB_OBP0, PB_OBP1, PB_PPU_MODE,
     PB_JOYPAD_SELECT, PB_JOYPAD_BUTTONS,
+    PB_KEY1, PB_VRAM_BANK, PB_SVBK, PB_WRAM_BANK, PB_BCPS, PB_OCPS,
+    PB_FF72, PB_FF73, PB_FF74, PB_FF75,
     PB_RAM_FILL,
     PB_FIELD_COUNT
 } post_boot_field;
@@ -760,6 +772,12 @@ typedef struct {
 #define PBK_REGS(v) { (v), PROV_HW_TEST, SRC_MOONEYE_BOOT_REGS, "Mooneye boot_regs-cgb, compat mode" }
 #define PBK_HWIO(v) { (v), PROV_HW_TEST, SRC_MOONEYE_BOOT_HWIO, "Mooneye boot_hwio-C, compat mode" }
 #define PBK_PD(v) { (v), PROV_PANDOCS, SRC_PANDOCS_POWER_UP, "Pan Docs Power Up Sequence, CGB in compatibility mode" }
+
+/* DMG-column cells of CGB-only registers: the profile does not decode them (D-09), so the value is
+ * inert. The reason says so rather than inventing a hardware claim. */
+#define PB_NA(v) { (v), PROV_POLICY, SRC_V01_POLICY_D025, "not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored)" }
+#define PB_INIT0 "initial $00 per D-10; no hardware oracle for this CGB register"
+#define PB_IDX_VERIFY "[VERIFY] no hardware oracle for CGB-mode index"
 
 #define PB_VARIES "no hardware oracle for CGB mode; real hardware varies with the header and held buttons"
 #define PB_SAME_AS_DMG "same value as the DMG cell; Pan Docs gives no CGB-specific value"
@@ -834,6 +852,19 @@ static const post_boot_row post_boot[PB_FIELD_COUNT] = {
                         PBK_HWIO(0x30u) },
     { PB_JOYPAD_BUTTONS, PB_POLICY(0u, "no button held at power-on"),
                          PBC_POLICY(0u, "no button held at power-on"), PBC_POLICY(0u, "no button held at power-on") },
+    /* KEY1 bit 0 is the armed flag; no speed switch is built, so it stays 0 until written. */
+    { PB_KEY1, PB_NA(0u), PBC_PD(0u), PBK_PD(0u) },
+    { PB_VRAM_BANK, PB_POLICY(0u, "the DMG profile pins the VRAM bank at 0"), PBC_PD(0u), PBK_PD(0u) },
+    { PB_SVBK, PB_NA(0u), PBC_PD(0u), PBK_PD(0u) },
+    { PB_WRAM_BANK, PB_POLICY(1u, "the DMG profile pins the switchable WRAM bank at 1"), PBC_PD(1u), PBK_PD(1u) },
+    /* BCPS and OCPS: unused bit 6 reads 1. Compat-mode values are pinned by Mooneye boot_hwio-C;
+     * the CGB-mode index has no oracle. */
+    { PB_BCPS, PB_NA(0u), PBC_POLICY(0xC0u, PB_IDX_VERIFY), PBK_HWIO(0xC8u) },
+    { PB_OCPS, PB_NA(0u), PBC_POLICY(0xC0u, PB_IDX_VERIFY), PBK_HWIO(0xD0u) },
+    { PB_FF72, PB_NA(0u), PBC_POLICY(0u, PB_INIT0), PBC_POLICY(0u, PB_INIT0) },
+    { PB_FF73, PB_NA(0u), PBC_POLICY(0u, PB_INIT0), PBC_POLICY(0u, PB_INIT0) },
+    { PB_FF74, PB_NA(0u), PBC_POLICY(0u, PB_INIT0), PBC_POLICY(0u, "compat mode does not decode FF74: reads $FF, writes ignored; stored value stays 0") },
+    { PB_FF75, PB_NA(0u), PBC_POLICY(0u, "bits 4-6 stored; reads $8F with them clear"), PBC_POLICY(0u, "bits 4-6 stored; reads $8F with them clear") },
     { PB_RAM_FILL, PB_POLICY(0u, "D-025 deterministic fill"),
                    PBC_POLICY(0u, "D-025 deterministic fill"), PBC_POLICY(0u, "D-025 deterministic fill") },
 };
@@ -954,6 +985,16 @@ static void post_boot_apply(gbb_instance *m) {
             m->ppu_mode = v; break;
         case PB_JOYPAD_SELECT: m->joypad_select = v; break;
         case PB_JOYPAD_BUTTONS: m->joypad_buttons = v; break;
+        case PB_KEY1: m->key1_armed = v; break;
+        case PB_VRAM_BANK: m->vram_bank = v; break;
+        case PB_SVBK: m->svbk = v; break;
+        case PB_WRAM_BANK: m->wram_bank = v; break;
+        case PB_BCPS: m->bcps = v; break;
+        case PB_OCPS: m->ocps = v; break;
+        case PB_FF72: m->ff72 = v; break;
+        case PB_FF73: m->ff73 = v; break;
+        case PB_FF74: m->ff74 = v; break;
+        case PB_FF75: m->ff75 = v; break;
         case PB_RAM_FILL:
             /* MODEL: BOTH GATE-09 basis=D-025 -- RAM fill is emulator policy; hardware power-on RAM is unspecified */
             memset(m->wram, v, sizeof(m->wram));
@@ -982,6 +1023,247 @@ static uint8_t *wram_byte_mut(gbb_instance *m, uint16_t address) {
     return (uint8_t *)wram_byte(m, address);
 }
 
+/* Register visibility (D-06, D-09, D-10). One row per address FF00-FF7F with a DMG, CGB-mode and
+ * CGB-compat column. Rows for addresses the pre-CGB code in read8/write8 already handles are
+ * EXISTING and are not decoded here. The DMG column of FF4C-FF7F is DMG_STOP: the DMG profile never
+ * enters io_read_cgb/io_write_cgb, so reads there still stop and writes stay silent no-ops (C4).
+ * A DEFERRED cell belongs to a later phase: its reads stop through read_supported before anything
+ * changes, and its writes latch bus_unsupported and are dropped, so a guest never sees an invented
+ * value (OQ5). Sources: IOS_PANDOCS (Pan Docs), IOS_HW_TEST (Mooneye boot_hwio-C / unused_hwio-C),
+ * IOS_SAMEBOY (SameBoy oracle), IOS_POLICY (project choice). */
+typedef enum {
+    IO_UNSET = 0,     /* zero-initialised hole: a row missing from the table */
+    IO_EXISTING,      /* handled by the pre-CGB read8/write8 chain */
+    IO_DMG_STOP,      /* DMG only: reads stop UNSUPPORTED_BUS, writes are ignored */
+    IO_CONST_FF,      /* reads $FF, writes ignored */
+    IO_KEY1,
+    IO_VBK,
+    IO_SVBK,
+    IO_STORE,         /* stored byte: reads (stored | read_or), writes keep (value & write_mask) */
+    IO_DEFERRED_RW,   /* read stops, write latches and is dropped */
+    IO_DEFERRED_W     /* reads $FF, write latches and is dropped */
+} io_kind;
+
+typedef enum { IOS_NONE = 0, IOS_PANDOCS, IOS_HW_TEST, IOS_SAMEBOY, IOS_POLICY, IOS_EXISTING } io_source;
+
+typedef struct {
+    uint8_t kind;
+    uint8_t phase;       /* owning phase of a DEFERRED cell */
+    uint8_t read_or;     /* STORE: bits that always read 1 */
+    uint8_t write_mask;  /* STORE: bits that are stored */
+} io_cell;
+
+typedef struct {
+    io_cell dmg, cgb, compat;
+    uint8_t src;
+} io_row;
+
+#define IOC(k) { IO_##k, 0, 0, 0 }
+#define IOC_DEF(k, ph) { IO_##k, (ph), 0, 0 }
+#define IOC_ST(or_bits, wmask) { IO_STORE, 0, (or_bits), (wmask) }
+#define IO_EXISTING_ROW { IOC(EXISTING), IOC(EXISTING), IOC(EXISTING), IOS_EXISTING }
+#define IO_UNUSED_ROW { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_HW_TEST }
+
+#define IO_VISIBILITY_ROWS 0x80u
+static const io_row io_visibility[IO_VISIBILITY_ROWS] = {
+    [0x00] = IO_EXISTING_ROW,
+    [0x01] = IO_EXISTING_ROW,
+    [0x02] = IO_EXISTING_ROW,
+    [0x03] = IO_UNUSED_ROW,
+    [0x04] = IO_EXISTING_ROW,
+    [0x05] = IO_EXISTING_ROW,
+    [0x06] = IO_EXISTING_ROW,
+    [0x07] = IO_EXISTING_ROW,
+    [0x08] = IO_UNUSED_ROW,
+    [0x09] = IO_UNUSED_ROW,
+    [0x0A] = IO_UNUSED_ROW,
+    [0x0B] = IO_UNUSED_ROW,
+    [0x0C] = IO_UNUSED_ROW,
+    [0x0D] = IO_UNUSED_ROW,
+    [0x0E] = IO_UNUSED_ROW,
+    [0x0F] = IO_EXISTING_ROW,
+    [0x10] = IO_EXISTING_ROW,
+    [0x11] = IO_EXISTING_ROW,
+    [0x12] = IO_EXISTING_ROW,
+    [0x13] = IO_EXISTING_ROW,
+    [0x14] = IO_EXISTING_ROW,
+    [0x15] = IO_UNUSED_ROW,
+    [0x16] = IO_EXISTING_ROW,
+    [0x17] = IO_EXISTING_ROW,
+    [0x18] = IO_EXISTING_ROW,
+    [0x19] = IO_EXISTING_ROW,
+    [0x1A] = IO_EXISTING_ROW,
+    [0x1B] = IO_EXISTING_ROW,
+    [0x1C] = IO_EXISTING_ROW,
+    [0x1D] = IO_EXISTING_ROW,
+    [0x1E] = IO_EXISTING_ROW,
+    [0x1F] = IO_UNUSED_ROW,
+    [0x20] = IO_EXISTING_ROW,
+    [0x21] = IO_EXISTING_ROW,
+    [0x22] = IO_EXISTING_ROW,
+    [0x23] = IO_EXISTING_ROW,
+    [0x24] = IO_EXISTING_ROW,
+    [0x25] = IO_EXISTING_ROW,
+    [0x26] = IO_EXISTING_ROW,
+    [0x27] = IO_UNUSED_ROW,
+    [0x28] = IO_UNUSED_ROW,
+    [0x29] = IO_UNUSED_ROW,
+    [0x2A] = IO_UNUSED_ROW,
+    [0x2B] = IO_UNUSED_ROW,
+    [0x2C] = IO_UNUSED_ROW,
+    [0x2D] = IO_UNUSED_ROW,
+    [0x2E] = IO_UNUSED_ROW,
+    [0x2F] = IO_UNUSED_ROW,
+    [0x30] = IO_EXISTING_ROW,
+    [0x31] = IO_EXISTING_ROW,
+    [0x32] = IO_EXISTING_ROW,
+    [0x33] = IO_EXISTING_ROW,
+    [0x34] = IO_EXISTING_ROW,
+    [0x35] = IO_EXISTING_ROW,
+    [0x36] = IO_EXISTING_ROW,
+    [0x37] = IO_EXISTING_ROW,
+    [0x38] = IO_EXISTING_ROW,
+    [0x39] = IO_EXISTING_ROW,
+    [0x3A] = IO_EXISTING_ROW,
+    [0x3B] = IO_EXISTING_ROW,
+    [0x3C] = IO_EXISTING_ROW,
+    [0x3D] = IO_EXISTING_ROW,
+    [0x3E] = IO_EXISTING_ROW,
+    [0x3F] = IO_EXISTING_ROW,
+    [0x40] = IO_EXISTING_ROW,
+    [0x41] = IO_EXISTING_ROW,
+    [0x42] = IO_EXISTING_ROW,
+    [0x43] = IO_EXISTING_ROW,
+    [0x44] = IO_EXISTING_ROW,
+    [0x45] = IO_EXISTING_ROW,
+    [0x46] = IO_EXISTING_ROW,
+    [0x47] = IO_EXISTING_ROW,
+    [0x48] = IO_EXISTING_ROW,
+    [0x49] = IO_EXISTING_ROW,
+    [0x4A] = IO_EXISTING_ROW,
+    [0x4B] = IO_EXISTING_ROW,
+    [0x4C] = { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_PANDOCS }, /* KEY0: CPU mode register, locked after boot; reads $FF, writes ignored */
+    [0x4D] = { IOC(DMG_STOP), IOC(KEY1), IOC(CONST_FF), IOS_PANDOCS }, /* KEY1: speed switch; only the armed bit is kept, no double speed is built */
+    [0x4E] = IO_UNUSED_ROW,
+    [0x4F] = { IOC(DMG_STOP), IOC(VBK), IOC(VBK), IOS_PANDOCS }, /* VBK: VRAM bank; bit 0 selects the bank in CGB mode only */
+    [0x50] = IO_UNUSED_ROW,
+    [0x51] = { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA source/destination: accepted without state until the HDMA phase */
+    [0x52] = { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA source/destination: accepted without state until the HDMA phase */
+    [0x53] = { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA source/destination: accepted without state until the HDMA phase */
+    [0x54] = { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA source/destination: accepted without state until the HDMA phase */
+    [0x55] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_W, 13), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA control: a write is deferred to phase 13 and stops visibly */
+    [0x56] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 14), IOC(CONST_FF), IOS_PANDOCS }, /* RP infrared port: deferred to phase 14 */
+    [0x57] = IO_UNUSED_ROW,
+    [0x58] = IO_UNUSED_ROW,
+    [0x59] = IO_UNUSED_ROW,
+    [0x5A] = IO_UNUSED_ROW,
+    [0x5B] = IO_UNUSED_ROW,
+    [0x5C] = IO_UNUSED_ROW,
+    [0x5D] = IO_UNUSED_ROW,
+    [0x5E] = IO_UNUSED_ROW,
+    [0x5F] = IO_UNUSED_ROW,
+    [0x60] = IO_UNUSED_ROW,
+    [0x61] = IO_UNUSED_ROW,
+    [0x62] = IO_UNUSED_ROW,
+    [0x63] = IO_UNUSED_ROW,
+    [0x64] = IO_UNUSED_ROW,
+    [0x65] = IO_UNUSED_ROW,
+    [0x66] = IO_UNUSED_ROW,
+    [0x67] = IO_UNUSED_ROW,
+    [0x68] = { IOC(DMG_STOP), IOC_ST(0x40, 0xBF), IOC_ST(0x40, 0xBF), IOS_HW_TEST }, /* BCPS: background palette index; unused bit 6 reads 1 */
+    [0x69] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 11), IOC(CONST_FF), IOS_PANDOCS }, /* BCPD: palette data port deferred to phase 11; compat mode ignores it without increment */
+    [0x6A] = { IOC(DMG_STOP), IOC_ST(0x40, 0xBF), IOC_ST(0x40, 0xBF), IOS_HW_TEST }, /* OCPS: object palette index; unused bit 6 reads 1 */
+    [0x6B] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 11), IOC(CONST_FF), IOS_PANDOCS }, /* OCPD: palette data port deferred to phase 11 */
+    [0x6C] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 11), IOC(CONST_FF), IOS_PANDOCS }, /* OPRI: object priority mode deferred to phase 11 */
+    [0x6D] = IO_UNUSED_ROW,
+    [0x6E] = IO_UNUSED_ROW,
+    [0x6F] = IO_UNUSED_ROW,
+    [0x70] = { IOC(DMG_STOP), IOC(SVBK), IOC(CONST_FF), IOS_PANDOCS }, /* SVBK: WRAM bank; raw 3 bits read back, 0 selects bank 1 */
+    [0x71] = IO_UNUSED_ROW,
+    [0x72] = { IOC(DMG_STOP), IOC_ST(0x00, 0xFF), IOC_ST(0x00, 0xFF), IOS_SAMEBOY }, /* FF72: undocumented CGB register, fully read/write */
+    [0x73] = { IOC(DMG_STOP), IOC_ST(0x00, 0xFF), IOC_ST(0x00, 0xFF), IOS_SAMEBOY }, /* FF73: undocumented CGB register, fully read/write */
+    [0x74] = { IOC(DMG_STOP), IOC_ST(0x00, 0xFF), IOC(CONST_FF), IOS_SAMEBOY }, /* FF74: undocumented CGB register; compat mode locks it */
+    [0x75] = { IOC(DMG_STOP), IOC_ST(0x8F, 0x70), IOC_ST(0x8F, 0x70), IOS_PANDOCS }, /* FF75: only bits 4-6 are stored; the rest read 1 */
+    [0x76] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 14), IOC_DEF(DEFERRED_RW, 14), IOS_PANDOCS }, /* PCM12: audio channel output readback deferred to phase 14 */
+    [0x77] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 14), IOC_DEF(DEFERRED_RW, 14), IOS_PANDOCS }, /* PCM34: audio channel output readback deferred to phase 14 */
+    [0x78] = IO_UNUSED_ROW,
+    [0x79] = IO_UNUSED_ROW,
+    [0x7A] = IO_UNUSED_ROW,
+    [0x7B] = IO_UNUSED_ROW,
+    [0x7C] = IO_UNUSED_ROW,
+    [0x7D] = IO_UNUSED_ROW,
+    [0x7E] = IO_UNUSED_ROW,
+    [0x7F] = IO_UNUSED_ROW,
+};
+
+/* The cell the profile and execution mode select. Callers pass FF00-FF7F on the CGB profile. */
+/* MODEL: CGB_ONLY GATE-69 GUARD=model_is_cgb -- the CGB register decode is never reached on the DMG profile */
+static const io_cell *io_cgb_cell(const gbb_instance *m, uint16_t address) {
+    const io_row *row = &io_visibility[address - 0xFF00u];
+    if (!model_is_cgb(m)) return &row->dmg;
+    return m->exec_mode == GBB_MODE_CGB ? &row->cgb : &row->compat;
+}
+
+/* Storage behind a STORE cell. */
+/* MODEL: BOTH GATE-00 basis="CGB-only storage selected by address" */
+static const uint8_t *io_store_ptr(const gbb_instance *m, uint16_t address) {
+    switch (address) {
+    case 0xFF68: return &m->bcps;
+    case 0xFF6A: return &m->ocps;
+    case 0xFF72: return &m->ff72;
+    case 0xFF73: return &m->ff73;
+    case 0xFF74: return &m->ff74;
+    case 0xFF75: return &m->ff75;
+    default: return NULL;
+    }
+}
+
+/* Read FF4C-FF7F on the CGB profile. */
+/* MODEL: CGB_ONLY GATE-70 GUARD=model_is_cgb -- CGB register reads */
+static uint8_t io_read_cgb(const gbb_instance *m, uint16_t address) {
+    if (!model_is_cgb(m)) return 0xFFu;
+    const io_cell *c = io_cgb_cell(m, address);
+    switch (c->kind) {
+    case IO_KEY1: return (uint8_t)(0x7Eu | (m->key1_armed & 1u));
+    case IO_VBK: return (uint8_t)(0xFEu | (m->vram_bank & 1u));
+    case IO_SVBK: return (uint8_t)(0xF8u | (m->svbk & 7u));
+    case IO_STORE: {
+        const uint8_t *p = io_store_ptr(m, address);
+        return p == NULL ? 0xFFu : (uint8_t)(*p | c->read_or);
+    }
+    default: return 0xFFu; /* CONST_FF, DEFERRED_W; DEFERRED_RW is refused before the read */
+    }
+}
+
+/* Write FF4C-FF7F on the CGB profile. */
+/* MODEL: CGB_ONLY GATE-71 GUARD=model_is_cgb -- CGB register writes */
+static void io_write_cgb(gbb_instance *m, uint16_t address, uint8_t value) {
+    if (!model_is_cgb(m)) return;
+    const io_cell *c = io_cgb_cell(m, address);
+    switch (c->kind) {
+    case IO_KEY1: m->key1_armed = (uint8_t)(value & 1u); break;
+    case IO_VBK:
+        /* Compatibility mode keeps the bank at 0: a DMG ROM cannot reach VRAM bank 1. */
+        if (m->exec_mode == GBB_MODE_CGB) m->vram_bank = (uint8_t)(value & 1u);
+        break;
+    case IO_SVBK:
+        m->svbk = (uint8_t)(value & 7u);
+        m->wram_bank = m->svbk != 0u ? m->svbk : 1u;
+        break;
+    case IO_STORE: {
+        uint8_t *p = (uint8_t *)io_store_ptr(m, address); /* m is mutable here */
+        if (p != NULL) *p = (uint8_t)(value & c->write_mask);
+        break;
+    }
+    case IO_DEFERRED_RW:
+    case IO_DEFERRED_W:
+        m->bus_unsupported = 1;
+        m->bus_unsupported_address = address;
+        break;
+    default: break;
+    }
+}
+
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void reset_state(gbb_instance *m) {
     cart_reset_registers(&m->cart);
@@ -991,9 +1273,6 @@ static void reset_state(gbb_instance *m) {
     memset(&m->apu_wave, 0, sizeof(m->apu_wave));
     memset(&m->apu_noise, 0, sizeof(m->apu_noise));
     post_boot_apply(m);
-    m->vram_bank = 0u;
-    m->wram_bank = 1u;
-    m->svbk = 0u;
     m->ime_delay = 0;
     m->serial_bits = 0;
     m->apu_sequencer_step = 0u;
@@ -1010,7 +1289,8 @@ static void reset_state(gbb_instance *m) {
     m->instruction_start_half_dots = 0;
     m->serial_edge_remaining = 0;
     m->serial_active = 0;
-    m->serial_unsupported = 0;
+    m->bus_unsupported = 0;
+    m->bus_unsupported_address = 0u;
     m->dma_page = 0;
     m->dma_pending_page = 0;
     m->dma_index = 0;
@@ -1213,9 +1493,11 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
     if (address == 0xFF49) return m->obp1;
     if (address == 0xFF4A) return m->wy;
     if (address == 0xFF4B) return m->wx;
-    /* MODEL: UNKNOWN GATE-21 research:10 -- IF and IE unused-bit masks; the IE gate lands in Plan 10-09 */
+    /* MODEL: CGB_ONLY GATE-72 GUARD=model_is_cgb -- FF4C-FF7F decode through io_visibility[]; the DMG profile falls through unchanged (D-09) */
+    if (address >= 0xFF4Cu && address <= 0xFF7Fu && model_is_cgb(m)) return io_read_cgb(m, address);
     if (address == 0xFF0F) return (uint8_t)(0xE0u | m->interrupt_flags);
-    if (address == 0xFFFF) return (uint8_t)(0xE0u | m->ie);
+    /* MODEL: CGB_ONLY GATE-21 GUARD=model_is_cgb -- IE bits 5-7 are stored on the CGB profile (unused_hwio-C/-GS); DMG reads them as 1 (OQ2) */
+    if (address == 0xFFFF) return model_is_cgb(m) ? m->ie : (uint8_t)(0xE0u | m->ie);
     if (address >= 0x8000 && address <= 0x9FFF)
         return cpu_vram_access_allowed(m) ? m->vram[m->vram_bank][address - 0x8000] : 0xFF;
     if (address >= 0xFE00 && address <= 0xFE9F)
@@ -1575,12 +1857,13 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     }
     /* MODEL: UNKNOWN GATE-33 research:14 -- serial data and control write behaviour */
     else if (address == 0xFF01) {
-        if (m->serial_active) m->serial_unsupported = 1;
+        if (m->serial_active) { m->bus_unsupported = 1; m->bus_unsupported_address = address; }
         else m->serial_data = value;
     }
     else if (address == 0xFF02) {
         if (m->serial_active) {
-            m->serial_unsupported = 1;
+            m->bus_unsupported = 1;
+            m->bus_unsupported_address = address;
         } else {
             m->serial_control = (uint8_t)(value & 0x81u);
             if (value & 0x80u) {
@@ -1679,9 +1962,11 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     }
     else if (m->apu_power && address == 0xFF24) m->apu_nr50 = value;
     else if (m->apu_power && address == 0xFF25) m->apu_nr51 = value;
-    /* MODEL: UNKNOWN GATE-37 research:10 -- IF and IE write masks; the IE gate lands in Plan 10-09 */
+    /* MODEL: CGB_ONLY GATE-73 GUARD=model_is_cgb -- FF4C-FF7F decode through io_visibility[]; a no-op on the DMG profile (C4) */
+    else if (address >= 0xFF4Cu && address <= 0xFF7Fu) { if (model_is_cgb(m)) io_write_cgb(m, address, value); }
     else if (address == 0xFF0F) m->interrupt_flags = (uint8_t)(value & 0x1Fu);
-    else if (address == 0xFFFF) m->ie = (uint8_t)(value & 0x1Fu);
+    /* MODEL: CGB_ONLY GATE-37 GUARD=model_is_cgb -- IE bits 5-7 are stored on the CGB profile; DMG keeps IE & $1F (OQ2) */
+    else if (address == 0xFFFF) m->ie = (uint8_t)(value & (model_is_cgb(m) ? 0xFFu : 0x1Fu));
     /* MODEL: BOTH GATE-38 basis=wram-echo-map -- work RAM and echo mapping; CGB WRAM banking is added by a later plan */
     else if (address >= 0xC000 && address <= 0xFDFF) *wram_byte_mut(m, address) = value;
     else if (address >= 0xFF80 && address <= 0xFFFE) m->hram[address - 0xFF80] = value;
@@ -1700,8 +1985,10 @@ static void bus_write(gbb_instance *m, uint16_t address, uint8_t value, uint64_t
 }
 
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
-static int read_supported(const gbb_instance *m, uint16_t address) {
-    /* MODEL: UNKNOWN GATE-39 research:10 -- the read allow-list is the DMG register set */
+static int read_supported_map(const gbb_instance *m, uint16_t address) {
+    /* MODEL: CGB_ONLY GATE-39 GUARD=model_is_cgb -- on the CGB profile FF00-FF7F readability comes from io_visibility[]; the DMG chain below is unchanged */
+    if (m != NULL && model_is_cgb(m) && address >= 0xFF00u && address <= 0xFF7Fu)
+        return io_cgb_cell(m, address)->kind != IO_DEFERRED_RW;
     /* MODEL: UNKNOWN GATE-40 research:14 -- FEA0-FEFF stays fail-closed on both profiles this phase (A6) */
     return address < 0xA000 || (address >= 0xFE00 && address <= 0xFE9F) ||
            (address >= 0xA000 && address <= 0xBFFF && m != NULL &&
@@ -1720,6 +2007,15 @@ static int read_supported(const gbb_instance *m, uint16_t address) {
            (address >= 0xC000 && address <= 0xDFFF) ||
            (address >= 0xE000 && address <= 0xFDFF) ||
            (address >= 0xFF80 && address <= 0xFFFE);
+}
+
+/* The pre-flight check also records the refused address for the test seam; it changes nothing the
+ * guest can observe. */
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static int read_supported(gbb_instance *m, uint16_t address) {
+    const int ok = read_supported_map(m, address);
+    if (!ok && m != NULL) m->bus_unsupported_address = address;
+    return ok;
 }
 
 /* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
@@ -2941,7 +3237,7 @@ static uint16_t pair_value(const gbb_instance *m, unsigned pair) {
 }
 
 /* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
-static int instruction_reads_supported(const gbb_instance *m, decoded d, uint8_t op) {
+static int instruction_reads_supported(gbb_instance *m, decoded d, uint8_t op) {
     /* Address checks have no bus phases or side effects. Every byte is checked
      * before an instruction can change registers, RAM, devices or outputs. */
     for (unsigned i = 0; i < d.size; ++i)
@@ -3211,6 +3507,13 @@ void gbb_test_cpu_snapshot(const gbb_instance *m, gbb_trace_record *record) {
     if (m != NULL && record != NULL) save_trace(m, (decoded){0, 0, 1}, record);
 }
 
+/* Private test seam: the address of the last refused read pre-flight or deferred/serial write.
+ * Not public ABI; read only by tests. */
+/* MODEL: BOTH GATE-00 basis="debug seam" */
+uint16_t gbb_test_last_unsupported_address(const gbb_instance *m) {
+    return m == NULL ? 0u : m->bus_unsupported_address;
+}
+
 /* Private test seam, like gbb_test_cpu_snapshot: reports the effective banks, never public ABI. */
 /* MODEL: BOTH GATE-00 basis="DMG pins wram_bank=1 and vram_bank=0" */
 void gbb_test_bank_state(const gbb_instance *m, uint8_t *out_vram_bank, uint8_t *out_wram_bank) {
@@ -3276,6 +3579,12 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             advance_devices_to(instance, instance->instruction_start_half_dots + 40u);
             diagnostic_commit(instance);
             result.consumed_half_dots += 40;
+            /* The entry push can itself hit a deferred register; report it at this boundary. */
+            if (instance->bus_unsupported) {
+                instance->bus_unsupported = 0;
+                result.reason = GBB_STOP_UNSUPPORTED_BUS;
+                return result;
+            }
             continue;
         }
         if (instance->halted) {
@@ -3353,8 +3662,8 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             result.reason=GBB_STOP_STOPPED;
             return result;
         }
-        if (instance->serial_unsupported) {
-            instance->serial_unsupported = 0;
+        if (instance->bus_unsupported) {
+            instance->bus_unsupported = 0;
             result.reason = GBB_STOP_UNSUPPORTED_BUS;
             return result;
         }

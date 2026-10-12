@@ -29,6 +29,8 @@ static const char *const field_names[PB_FIELD_COUNT] = {
     "lcdc", "stat", "ly", "lyc", "scx", "scy", "wx", "wy",
     "bgp", "obp0", "obp1", "ppu_mode",
     "joypad_select", "joypad_buttons",
+    "key1", "vram_bank", "svbk", "wram_bank", "bcps", "ocps",
+    "ff72", "ff73", "ff74", "ff75",
     "ram_fill",
 };
 

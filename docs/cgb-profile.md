@@ -157,10 +157,53 @@ base value and the rule in its reason.
 | joypad_buttons | DMG | $00 | POLICY | 2 | no button held at power-on |
 | joypad_buttons | CGB | $00 | POLICY | 8 | no button held at power-on |
 | joypad_buttons | COMPAT | $00 | POLICY | 8 | no button held at power-on |
+| key1 | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
+| key1 | CGB | $00 | PANDOCS | 1 | Pan Docs Power Up Sequence, CGB |
+| key1 | COMPAT | $00 | PANDOCS | 1 | Pan Docs Power Up Sequence, CGB in compatibility mode |
+| vram_bank | DMG | $00 | POLICY | 2 | the DMG profile pins the VRAM bank at 0 |
+| vram_bank | CGB | $00 | PANDOCS | 1 | Pan Docs Power Up Sequence, CGB |
+| vram_bank | COMPAT | $00 | PANDOCS | 1 | Pan Docs Power Up Sequence, CGB in compatibility mode |
+| svbk | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
+| svbk | CGB | $00 | PANDOCS | 1 | Pan Docs Power Up Sequence, CGB |
+| svbk | COMPAT | $00 | PANDOCS | 1 | Pan Docs Power Up Sequence, CGB in compatibility mode |
+| wram_bank | DMG | $01 | POLICY | 2 | the DMG profile pins the switchable WRAM bank at 1 |
+| wram_bank | CGB | $01 | PANDOCS | 1 | Pan Docs Power Up Sequence, CGB |
+| wram_bank | COMPAT | $01 | PANDOCS | 1 | Pan Docs Power Up Sequence, CGB in compatibility mode |
+| bcps | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
+| bcps | CGB | $C0 | POLICY | 8 | [VERIFY] no hardware oracle for CGB-mode index |
+| bcps | COMPAT | $C8 | HW_TEST | 5 | Mooneye boot_hwio-C, compat mode |
+| ocps | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
+| ocps | CGB | $C0 | POLICY | 8 | [VERIFY] no hardware oracle for CGB-mode index |
+| ocps | COMPAT | $D0 | HW_TEST | 5 | Mooneye boot_hwio-C, compat mode |
+| ff72 | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
+| ff72 | CGB | $00 | POLICY | 8 | initial $00 per D-10; no hardware oracle for this CGB register |
+| ff72 | COMPAT | $00 | POLICY | 8 | initial $00 per D-10; no hardware oracle for this CGB register |
+| ff73 | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
+| ff73 | CGB | $00 | POLICY | 8 | initial $00 per D-10; no hardware oracle for this CGB register |
+| ff73 | COMPAT | $00 | POLICY | 8 | initial $00 per D-10; no hardware oracle for this CGB register |
+| ff74 | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
+| ff74 | CGB | $00 | POLICY | 8 | initial $00 per D-10; no hardware oracle for this CGB register |
+| ff74 | COMPAT | $00 | POLICY | 8 | compat mode does not decode FF74: reads $FF, writes ignored; stored value stays 0 |
+| ff75 | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
+| ff75 | CGB | $00 | POLICY | 8 | bits 4-6 stored; reads $8F with them clear |
+| ff75 | COMPAT | $00 | POLICY | 8 | bits 4-6 stored; reads $8F with them clear |
 | ram_fill | DMG | $00 | POLICY | 2 | D-025 deterministic fill |
 | ram_fill | CGB | $00 | POLICY | 8 | D-025 deterministic fill |
 | ram_fill | COMPAT | $00 | POLICY | 8 | D-025 deterministic fill |
 <!-- cgb-post-boot-end -->
+
+## Register visibility (FF00-FF7F)
+
+`io_visibility[]` in `src/core/gabbaboy.c` holds one row per address with DMG, CGB and COMPAT
+cells. On the CGB profile FF4C-FF7F is decoded from it: KEY0 reads `$FF`; KEY1 reads `$7E` or the
+armed bit in CGB mode; VBK reads `$FE` or the bank in both modes and selects VRAM only in CGB mode;
+SVBK (CGB mode) reads `$F8` or the raw 3 bits and selects WRAM bank 1-7 (0 selects 1); BCPS and OCPS
+store a byte and read it with bit 6 set; FF72-FF75 are plain registers (FF75 stores bits 4-6 only).
+Unused addresses read `$FF` and ignore writes. Registers owned by a later phase (FF55 write, FF56,
+FF69, FF6B, FF6C, FF76, FF77) are deferred: a read stops with `GBB_STOP_UNSUPPORTED_BUS` before
+anything changes and a write is dropped and reported as the same stop once the instruction retires.
+The DMG profile never enters this decode: its FF4C-FF7F reads still stop and its writes are silent
+no-ops. IE bits 5-7 are stored and read back on the CGB profile only (owner veto item 6).
 
 ## Sources
 

@@ -348,6 +348,7 @@ Requirements: CGB-01, CGB-02, CGB-03.
 3. `gbb_copy_frame` on the CGB profile returns `GBB_UNSUPPORTED_PROFILE` until Phase 11 (D-05).
 4. DMG FF4C-FF7F stays fail-closed rather than becoming hardware-correct `$FF` (D-09). This keeps DMG byte-identical, and the hardware fix is deferred.
 5. Benchmark review trigger at +5% median DMG no-trace (D-22).
+6. IE bits 5-7 are stored and read back on the CGB profile (both modes) while the DMG profile keeps `ie & $1F` with bits 5-7 reading 1 (OQ2, Plan 10-09). Interrupt dispatch still masks with `$1F`.
 
 </owner_veto_window>
 

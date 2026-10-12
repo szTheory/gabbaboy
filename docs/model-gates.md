@@ -63,7 +63,7 @@ occurs exactly once in code and once in the table.
 | GATE-18 | UNKNOWN | - | research:14 | read8 | APU read masks, including NR52 length bits |
 | GATE-19 | UNKNOWN | - | research:14 | read8 | wave RAM access aliasing while the channel is enabled |
 | GATE-20 | UNKNOWN | - | research:11 | read8 | STAT mode and coincidence bits at LCD transitions |
-| GATE-21 | UNKNOWN | - | research:10 | read8 | IF and IE unused-bit masks; the IE gate lands in Plan 10-09 |
+| GATE-21 | CGB_ONLY | model_is_cgb | - | read8 | IE bits 5-7 are stored on the CGB profile (Mooneye unused_hwio-C and unused_hwio-GS); DMG reads them as 1 (OQ2, owner veto item 6) |
 | GATE-22 | BOTH | - | basis=cartridge-side | read8 | ROM reads are decided by the mapper, not the console |
 | GATE-23 | BOTH | - | basis=wram-echo-map | read8 | work RAM and echo mapping; CGB WRAM banking is added by a later plan |
 | GATE-24 | UNKNOWN | - | research:14 | timer_increment | TIMA overflow and reload timing |
@@ -79,9 +79,9 @@ occurs exactly once in code and once in the table.
 | GATE-34 | UNKNOWN | - | research:14 | write8 | NR52 power-off and power-on behaviour |
 | GATE-35 | UNKNOWN | - | research:14 | write8 | wave RAM write aliasing while the channel is enabled |
 | GATE-36 | UNKNOWN | - | research:14 | write8 | APU register writes while powered on |
-| GATE-37 | UNKNOWN | - | research:10 | write8 | IF and IE write masks; the IE gate lands in Plan 10-09 |
+| GATE-37 | CGB_ONLY | model_is_cgb | - | write8 | IE bits 5-7 are stored on the CGB profile; DMG keeps IE & $1F (OQ2); interrupt dispatch still masks with $1F |
 | GATE-38 | BOTH | - | basis=wram-echo-map | write8 | work RAM and echo mapping; CGB WRAM banking is added by a later plan |
-| GATE-39 | UNKNOWN | - | research:10 | read_supported | the read allow-list is the DMG register set |
+| GATE-39 | CGB_ONLY | model_is_cgb | - | read_supported_map | on the CGB profile FF00-FF7F readability comes from io_visibility[]; only DEFERRED read cells stop; the DMG chain is unchanged |
 | GATE-40 | UNKNOWN | - | research:14 | read_supported | FEA0-FEFF stays fail-closed on both profiles this phase (A6) |
 | GATE-41 | UNKNOWN | - | research:12 | apply_input_events_now | STOP wake conditions |
 | GATE-42 | BOTH | - | basis="no SM83 opcode difference" | instruction_address | HALT bug PC repeat is an SM83 trait |
@@ -111,6 +111,11 @@ occurs exactly once in code and once in the table.
 | GATE-66 | BOTH | - | basis=wram-echo-map | gbb_peek_ram | debug peek of work RAM |
 | GATE-67 | CGB_ONLY | GBB_PROFILE_CGB_CPU_E | - | validate_header | a PGB-flagged $143 is rejected on the CGB profile instead of running in a mode the hardware would not enter (D-03) |
 | GATE-68 | CGB_ONLY | model_is_cgb | - | compat_title_registers | compat-mode B and HL are derived from the licensee title sum |
+| GATE-69 | CGB_ONLY | model_is_cgb | - | io_cgb_cell | the io_visibility[] column is chosen by profile and execution mode |
+| GATE-70 | CGB_ONLY | model_is_cgb | - | io_read_cgb | FF4C-FF7F reads on the CGB profile |
+| GATE-71 | CGB_ONLY | model_is_cgb | - | io_write_cgb | FF4C-FF7F writes on the CGB profile; DEFERRED cells latch bus_unsupported |
+| GATE-72 | CGB_ONLY | model_is_cgb | - | read8 | FF4C-FF7F decode goes through io_visibility[]; the DMG profile falls through unchanged (D-09) |
+| GATE-73 | CGB_ONLY | model_is_cgb | - | write8 | FF4C-FF7F decode goes through io_visibility[]; a no-op on the DMG profile (C4) |
 <!-- model-gates-end -->
 
 ## Release status
