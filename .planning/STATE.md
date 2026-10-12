@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 10
+current_plan: 11
 status: planning
-stopped_at: Completed 10-09-PLAN.md
-last_updated: "2026-10-12T17:41:09.351Z"
+stopped_at: Completed 10-10-PLAN.md
+last_updated: "2026-10-12T17:47:59.448Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 10 execution started
-state_head: 47b4c2757f9f5eb7055b7f3e227d9c0bec2454d8
+state_head: 48dc25ea4c4d34344d297965dec12a8329b1e92f
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 65
-  completed_plans: 54
+  completed_plans: 55
   percent: 44
 current_phase: 10
 current_phase_name: CGB Profile, Banking and Register Visibility
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 10
+Current Plan: 11
 Total Plans in Phase: 20
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -161,6 +161,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 10 P07 | 12 min | 2 tasks | 4 files |
 | Phase 10 P08 | 15 min | 2 tasks | 5 files |
 | Phase 10 P09 | 40 min | 3 tasks | 8 files |
+| Phase 10 P10 | 35min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -303,6 +304,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 10]: 10-07: post-boot doc mirror is machine-checked by test_cgb_tables; header-derived cells show base value with rule in reason
 - [Phase 10]: IE bits 5-7 stored on CGB profile only; DMG keeps & 0x1F (OQ2, owner veto item 6)
 - [Phase 10]: Deferred register accesses latch bus_unsupported with address; latch also reported after interrupt entry
+- [Phase 10]: 10-10: visibility matrix doc block lists only non-pre-CGB addresses (213 rows); EXISTING addresses must have no doc row
 
 ### Pending Todos
 
@@ -338,8 +340,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-12T17:41:09.301Z
-Stopped at: Completed 10-09-PLAN.md
+Last session: 2026-10-12T17:47:59.398Z
+Stopped at: Completed 10-10-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 10`
 
