@@ -1191,4 +1191,56 @@ add_test(NAME doc_contract_scope_selftest
     "-DGBB_EXPECT_REGEX=doc-contract-missing: once per open"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
+# Model-gate scanner (CGB-02, decision D-08). Stdlib-only Python run with -I; every negative
+# control goes through expect_exit.cmake so it must fail with exactly the expected reason.
+set(GBB_MODEL_GATE_SCANNER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-model-gates.py")
+set(GBB_MODEL_GATE_DIR "${PROJECT_BINARY_DIR}/model-gates")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_MODEL_GATE_SCANNER}")
+
+function(gbb_add_model_gate_test name code regex)
+  set(command "${Python3_EXECUTABLE}" -I "${GBB_MODEL_GATE_SCANNER}" ${ARGN})
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60)
+endfunction()
+
+# Tracer corpus: two tagged functions, a matching doc, and a copy whose GATE-01 class is wrong.
+file(MAKE_DIRECTORY "${GBB_MODEL_GATE_DIR}")
+set(GBB_MODEL_GATE_TRACER_SOURCE [=[
+/* MODEL: BOTH GATE-00 basis="model-neutral function" */
+static int neutral(int x) { return x + 1; }
+
+/* MODEL: DMG_ONLY GATE-01 GUARD=model_is_dmg */
+static int dmg_only(int model) {
+    if (model_is_dmg(model)) return 1;
+    return 0;
+}
+]=])
+set(GBB_MODEL_GATE_TRACER_DOC [=[
+# Tracer corpus
+<!-- model-gates-begin -->
+| Gate | Class | Guard | Resolution | Site | Note |
+| --- | --- | --- | --- | --- | --- |
+| GATE-00 | BOTH | - | basis="model-neutral function" | any | shared |
+| GATE-01 | DMG_ONLY | model_is_dmg | - | dmg_only | tracer |
+<!-- model-gates-end -->
+]=])
+string(REPLACE "| GATE-01 | DMG_ONLY |" "| GATE-01 | BOTH |"
+  GBB_MODEL_GATE_TRACER_DOC_BAD "${GBB_MODEL_GATE_TRACER_DOC}")
+file(WRITE "${GBB_MODEL_GATE_DIR}/tracer.c" "${GBB_MODEL_GATE_TRACER_SOURCE}")
+file(WRITE "${GBB_MODEL_GATE_DIR}/tracer.md" "${GBB_MODEL_GATE_TRACER_DOC}")
+file(WRITE "${GBB_MODEL_GATE_DIR}/tracer-bad.md" "${GBB_MODEL_GATE_TRACER_DOC_BAD}")
+
+gbb_add_model_gate_test(model_gates_tracer_pass 0 "model-gates pass functions=2"
+  --source "${GBB_MODEL_GATE_DIR}/tracer.c" --doc "${GBB_MODEL_GATE_DIR}/tracer.md")
+gbb_add_model_gate_test(model_gates_tracer_doc_mismatch 1 "gate-doc-mismatch"
+  --source "${GBB_MODEL_GATE_DIR}/tracer.c" --doc "${GBB_MODEL_GATE_DIR}/tracer-bad.md")
+gbb_add_model_gate_test(model_gates_selftest 0
+  "model-gates self-test pass mutants=[1-9][0-9]* functions=1[2-9][0-9]" --self-test)
+
 gabbaboy_verify_registered_tests()

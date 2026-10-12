@@ -409,3 +409,6 @@ rtc_mutant_out_of_range_clamped
 rtc_mutant_out_of_range_clamped_control
 rtc_mutant_latch_any_write
 rtc_mutant_latch_any_write_control
+model_gates_tracer_pass
+model_gates_tracer_doc_mismatch
+model_gates_selftest
