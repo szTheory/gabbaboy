@@ -1091,4 +1091,28 @@ add_test(NAME no_host_clock_comment_selftest
     "-DGBB_EXPECT_REGEX=no-host-clock-call: [^\n]*bad[.]c [(]clock[)]"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
+# The Phase 9 evidence ledger cites registered test names in its claim tables (T-09-34). A rename
+# or removal must fail here rather than leave the ledger claiming evidence that no longer runs.
+set(GBB_EVIDENCE_LEDGER_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/VerifyEvidenceLedger.cmake")
+set(GBB_EVIDENCE_INVENTORIES
+  "${PROJECT_SOURCE_DIR}/tests/expected-tests.txt$<SEMICOLON>${PROJECT_SOURCE_DIR}/tests/player/expected-tests.txt")
+add_test(NAME mbc3_rtc_evidence_ledger_names
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_LEDGER=${PROJECT_SOURCE_DIR}/docs/mbc3-rtc-evidence.md
+    "-DGBB_INVENTORIES=${GBB_EVIDENCE_INVENTORIES}"
+    -P ${GBB_EVIDENCE_LEDGER_SCRIPT})
+set_tests_properties(mbc3_rtc_evidence_ledger_names PROPERTIES
+  PASS_REGULAR_EXPRESSION "evidence-ledger pass names=[1-9]")
+
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/evidence-ledger-selftest")
+file(WRITE "${PROJECT_BINARY_DIR}/evidence-ledger-selftest/ledger.md"
+  "## Claim table\n\n| Claim | Tests |\n|---|---|\n| renamed test | `rtc_latch_edges`, `rtc_no_such_test` |\n")
+add_test(NAME mbc3_rtc_evidence_ledger_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_LEDGER=${PROJECT_BINARY_DIR}/evidence-ledger-selftest/ledger.md;-DGBB_INVENTORIES=${PROJECT_SOURCE_DIR}/tests/expected-tests.txt;-P;${GBB_EVIDENCE_LEDGER_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=evidence-ledger-unregistered: rtc_no_such_test"
+    "-DGBB_FORBID_REGEX=unregistered: rtc_latch_edges"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
 gabbaboy_verify_registered_tests()

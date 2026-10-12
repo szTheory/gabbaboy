@@ -45,7 +45,9 @@ are in [native-integration.md](native-integration.md); the earlier ledgers are
 
 ## Claim table
 
-Every cited name is a registered CTest in
+Every name cited in the last column of these tables is a registered CTest
+(checked by `mbc3_rtc_evidence_ledger_names`, with
+`mbc3_rtc_evidence_ledger_selftest` as its negative control) in
 [`tests/expected-tests.txt`](../tests/expected-tests.txt) or
 [`tests/player/expected-tests.txt`](../tests/player/expected-tests.txt).
 The decision labels (D-NN) are those in the phase context.
@@ -147,10 +149,11 @@ Evidence class: original mutation control.
 ### No host clock (RTC-01; D-13)
 
 `no_host_clock` scans the core sources (include allow-list, denied call
-patterns) and the core object's undefined symbols. `no_host_clock_selftest`
-and `no_host_clock_symbol_selftest` are the negative controls (a scratch
-source with `#include <time.h>` and `time(NULL)`, and a denied symbol, must
-fail). A missing symbol tool fails the leg. Observed in the job logs of the
+patterns) and the core object's undefined symbols. `no_host_clock_selftest`,
+`no_host_clock_symbol_selftest` and `no_host_clock_comment_selftest` are the
+negative controls (a scratch source with `#include <time.h>` and `time(NULL)`,
+a denied symbol, and a `clock()` call after a `//` comment that mentions `/*`,
+must fail). A missing symbol tool or an empty symbol listing fails the leg. Observed in the job logs of the
 exact-head `ci` run 38180044966 (head `2b4c22004e801272ebc1cff12b85312debb444b9`):
 
 | Leg | Line |
