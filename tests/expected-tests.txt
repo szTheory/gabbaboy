@@ -469,3 +469,7 @@ cgb_visibility_ie_gate
 cgb_visibility_deferred_latch_interrupt
 cgb_visibility_matrix_compat
 cgb_visibility_flip_control
+cgb_visibility_matrix_cgb
+cgb_visibility_matrix_dmg
+cgb_visibility_cross_column_control
+cgb_visibility_sweep_control

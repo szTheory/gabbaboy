@@ -602,6 +602,9 @@ static int run_cell(const cell *c) {
                 ++idx;
                 break;
             }
+            /* A write stop follows a retired instruction, so the run consumed time. A refused read
+             * consumes none; without this a read stuck on the same stop would pass for a write. */
+            if (r.consumed_half_dots == 0) { cell_fail(c, "write stop consumed no time", 0, 1); bad = 1; break; }
             ++idx;
         }
         if (!bad && idx != nexp) { cell_fail(c, "stops seen", idx, nexp); bad = 1; }
@@ -680,9 +683,50 @@ static void fill_compat(void) {
     add_cell(V_COMPAT, 0xFF77, STOP, 0x5A, STOP, 0xA5, STOP, K_DEF_RW, 14, "D-10 PCM34");
 }
 
+/* CGB-mode column ($143 = $80). */
+static void fill_cgb(void) {
+    uint16_t un[64];
+    const size_t nun = unused_addresses(un);
+    for (size_t i = 0; i < nun; ++i) const_ff(V_CGB, un[i], 0x5A, 0xA5, "unused_hwio-C");
+    const_ff(V_CGB, 0xFF4C, 0x04, 0xC0, "D-12 KEY0 locked");
+    add_cell(V_CGB, 0xFF4D, 0x7E, 0x01, 0x7F, 0xFE, 0x7E, K_IMPL, 0, "D-10 KEY1 armed bit");
+    add_cell(V_CGB, 0xFF4F, 0xFE, 0x01, 0xFF, 0xFE, 0xFE, K_IMPL, 0, "D-10 VBK");
+    for (uint16_t a = 0xFF51; a <= 0xFF54; ++a) const_ff(V_CGB, a, 0x5A, 0xA5, "D-10 HDMA1-4");
+    add_cell(V_CGB, 0xFF55, 0xFF, 0x01, 0xFF, 0x80, 0xFF, K_DEF_W, 13, "D-10 HDMA5");
+    add_cell(V_CGB, 0xFF56, STOP, 0x01, STOP, 0xC1, STOP, K_DEF_RW, 14, "D-10 RP");
+    add_cell(V_CGB, 0xFF68, 0xC0, 0x3A, 0x7A, 0x80, 0xC0, K_IMPL, 0, "D-10 BCPS");
+    add_cell(V_CGB, 0xFF69, STOP, 0x5A, STOP, 0xA5, STOP, K_DEF_RW, 11, "D-10 BCPD");
+    add_cell(V_CGB, 0xFF6A, 0xC0, 0x3A, 0x7A, 0x80, 0xC0, K_IMPL, 0, "D-10 OCPS");
+    add_cell(V_CGB, 0xFF6B, STOP, 0x5A, STOP, 0xA5, STOP, K_DEF_RW, 11, "D-10 OCPD");
+    add_cell(V_CGB, 0xFF6C, STOP, 0x01, STOP, 0xFE, STOP, K_DEF_RW, 11, "D-10 OPRI");
+    add_cell(V_CGB, 0xFF70, 0xF8, 0x05, 0xFD, 0x08, 0xF8, K_IMPL, 0, "D-10 SVBK");
+    add_cell(V_CGB, 0xFF72, 0x00, 0xA5, 0xA5, 0x5A, 0x5A, K_IMPL, 0, "D-10 FF72");
+    add_cell(V_CGB, 0xFF73, 0x00, 0xA5, 0xA5, 0x5A, 0x5A, K_IMPL, 0, "D-10 FF73");
+    add_cell(V_CGB, 0xFF74, 0x00, 0xA5, 0xA5, 0x5A, 0x5A, K_IMPL, 0, "D-10 FF74");
+    add_cell(V_CGB, 0xFF75, 0x8F, 0xA5, 0xAF, 0x5A, 0xDF, K_IMPL, 0, "D-10 FF75");
+    add_cell(V_CGB, 0xFF76, STOP, 0x5A, STOP, 0xA5, STOP, K_DEF_RW, 14, "D-10 PCM12");
+    add_cell(V_CGB, 0xFF77, STOP, 0x5A, STOP, 0xA5, STOP, K_DEF_RW, 14, "D-10 PCM34");
+}
+
+/* DMG column (D-09): every address that is not a pre-CGB register stops on read, atomically, and a
+ * write is a silent no-op. The write values reuse the CGB ones so the same stores are attempted. */
+static void fill_dmg(void) {
+    uint16_t un[64];
+    const size_t nun = unused_addresses(un);
+    for (size_t i = 0; i < nun; ++i) add_cell(V_DMG, un[i], STOP, 0x5A, STOP, 0xA5, STOP, K_IMPL, 0, "unused_hwio-GS (fail-closed, D-09)");
+    static const uint16_t regs[] = {
+        0xFF4C, 0xFF4D, 0xFF4F, 0xFF51, 0xFF52, 0xFF53, 0xFF54, 0xFF55, 0xFF56,
+        0xFF68, 0xFF69, 0xFF6A, 0xFF6B, 0xFF6C, 0xFF70, 0xFF72, 0xFF73, 0xFF74, 0xFF75, 0xFF76, 0xFF77
+    };
+    for (size_t i = 0; i < sizeof(regs) / sizeof(regs[0]); ++i)
+        add_cell(V_DMG, regs[i], STOP, 0x05, STOP, 0xFE, STOP, K_IMPL, 0, "D-09 DMG FF4C-FF7F fail-closed");
+}
+
 static void build_table(void) {
     g_ncells = 0;
     fill_compat();
+    fill_cgb();
+    fill_dmg();
 }
 
 static int run_view_cells(view col, const char *name) {
@@ -699,6 +743,109 @@ static int run_view_cells(view col, const char *name) {
 }
 
 static int case_matrix_compat(void) { return run_view_cells(V_COMPAT, "cgb_visibility_matrix_compat"); }
+static int case_matrix_cgb(void) { return run_view_cells(V_CGB, "cgb_visibility_matrix_cgb"); }
+static int case_matrix_dmg(void) { return run_view_cells(V_DMG, "cgb_visibility_matrix_dmg"); }
+
+static int same_expectation(const cell *a, const cell *b) {
+    return a->r0 == b->r0 && a->r1 == b->r1 && a->r2 == b->r2 && a->kind == b->kind;
+}
+
+/* Negative control: every cell whose expectation differs between two columns must fail when its
+ * expectation is run in the other column. A differing cell that passes anywhere would mean the
+ * columns are not actually distinguished by the probe. Identical cells are counted, not run. */
+static int case_cross_column_control(void) {
+    build_table();
+    size_t checked[V_COUNT][V_COUNT] = {{0}}, same = 0;
+    g_quiet = 1;
+    int status = 0;
+    for (size_t i = 0; i < g_ncells && !status; ++i) {
+        for (size_t j = 0; j < g_ncells; ++j) {
+            if (g_cells[j].addr != g_cells[i].addr || g_cells[j].col == g_cells[i].col) continue;
+            if (same_expectation(&g_cells[i], &g_cells[j])) { ++same; continue; }
+            cell moved = g_cells[i];
+            moved.col = g_cells[j].col;
+            if (run_cell(&moved) == 0) {
+                g_quiet = 0;
+                fprintf(stderr, "cross-column: %s expectation for $%04X also passes in %s\n",
+                        view_names[g_cells[i].col], g_cells[i].addr, view_names[moved.col]);
+                status = 1;
+                break;
+            }
+            ++checked[g_cells[i].col][moved.col];
+        }
+    }
+    g_quiet = 0;
+    REQUIRE(status == 0);
+    for (int a = 0; a < V_COUNT; ++a)
+        for (int b = 0; b < V_COUNT; ++b)
+            if (a != b) {
+                if (checked[a][b] == 0) fprintf(stderr, "cross-column: no differing cell %s -> %s\n", view_names[a], view_names[b]);
+                REQUIRE(checked[a][b] > 0);
+            }
+    printf("ok 1 - cgb_visibility_cross_column_control differing=%zu identical=%zu\n",
+           checked[V_CGB][V_COMPAT] + checked[V_COMPAT][V_CGB] + checked[V_DMG][V_CGB] + checked[V_DMG][V_COMPAT] +
+           checked[V_CGB][V_DMG] + checked[V_COMPAT][V_DMG], same);
+    return 0;
+}
+
+/* Addresses whose behaviour is identical on every profile because the pre-CGB code owns them; the
+ * existing bus_, timer_, serial_, apu_ and ppu_ tests cover them. Every other FF00-FF7F address
+ * needs a row in each column. */
+typedef struct { uint16_t lo, hi; } addr_range;
+static const addr_range existing_ranges[] = {
+    { 0xFF00, 0xFF02 }, { 0xFF04, 0xFF07 }, { 0xFF0F, 0xFF14 }, { 0xFF16, 0xFF1E },
+    { 0xFF20, 0xFF26 }, { 0xFF30, 0xFF4B },
+};
+#define N_EXISTING (sizeof(existing_ranges) / sizeof(existing_ranges[0]))
+
+/* Returns 0 when every FF00-FF7F address is exactly one of: in an existing range (and then has no
+ * row), or has exactly one row per column. `skip_range` hides one range to model a gap. */
+static int sweep_complete(const cell *t, size_t n, int skip_range, uint16_t *where) {
+    for (uint32_t a = 0xFF00; a <= 0xFF7F; ++a) {
+        int existing = 0;
+        for (size_t r = 0; r < N_EXISTING; ++r)
+            if ((int)r != skip_range && a >= existing_ranges[r].lo && a <= existing_ranges[r].hi) existing = 1;
+        unsigned count[V_COUNT] = {0};
+        for (size_t i = 0; i < n; ++i)
+            if (t[i].addr == a) ++count[t[i].col];
+        for (int v = 0; v < V_COUNT; ++v) {
+            if (count[v] != (existing ? 0u : 1u)) { *where = (uint16_t)a; return 1; }
+        }
+    }
+    return 0;
+}
+
+static int case_sweep_control(void) {
+    build_table();
+    uint16_t where = 0;
+    REQUIRE(sweep_complete(g_cells, g_ncells, -1, &where) == 0);
+    static cell local[MAX_CELLS];
+    /* Deleting any one row makes the sweep report that address. */
+    for (size_t drop = 0; drop < g_ncells; ++drop) {
+        size_t m = 0;
+        for (size_t i = 0; i < g_ncells; ++i)
+            if (i != drop) local[m++] = g_cells[i];
+        REQUIRE(sweep_complete(local, m, -1, &where) != 0);
+        REQUIRE(where == g_cells[drop].addr);
+    }
+    /* Duplicating a row is also reported. */
+    memcpy(local, g_cells, g_ncells * sizeof(cell));
+    local[g_ncells] = g_cells[0];
+    REQUIRE(sweep_complete(local, g_ncells + 1, -1, &where) != 0);
+    /* Removing an existing range exposes its addresses as rowless. */
+    for (size_t r = 0; r < N_EXISTING; ++r) {
+        REQUIRE(sweep_complete(g_cells, g_ncells, (int)r, &where) != 0);
+        REQUIRE(where == existing_ranges[r].lo);
+    }
+    /* Every FF4C-FF7F address has all three columns (D-11). */
+    for (uint32_t a = 0xFF4C; a <= 0xFF7F; ++a) {
+        unsigned count = 0;
+        for (size_t i = 0; i < g_ncells; ++i) count += g_cells[i].addr == a;
+        REQUIRE(count == 3);
+    }
+    printf("ok 1 - cgb_visibility_sweep_control rows=%zu\n", g_ncells);
+    return 0;
+}
 
 /* Negative control: a copy of one compat row with a single expected byte flipped must be reported
  * as a failure, so a passing matrix is not vacuous. */
@@ -741,6 +888,10 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "deferred_latch_interrupt") == 0) return case_deferred_latch_interrupt();
     if (strcmp(argv[1], "matrix_compat") == 0) return case_matrix_compat();
     if (strcmp(argv[1], "flip_control") == 0) return case_flip_control();
+    if (strcmp(argv[1], "matrix_cgb") == 0) return case_matrix_cgb();
+    if (strcmp(argv[1], "matrix_dmg") == 0) return case_matrix_dmg();
+    if (strcmp(argv[1], "cross_column_control") == 0) return case_cross_column_control();
+    if (strcmp(argv[1], "sweep_control") == 0) return case_sweep_control();
     fprintf(stderr, "unknown case %s\n", argv[1]);
     return 2;
 }
