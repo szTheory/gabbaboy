@@ -66,6 +66,94 @@ foreach(case closed_form_differential add_composes rate_exact prescaler_rules wr
   add_test(NAME rtc_${case} COMMAND test_mbc3_rtc_internal rtc_${case})
 endforeach()
 
+# RTC mutation controls (D-12). Each mutant is a copy of src/core/gabbaboy.c written into the build
+# tree with one plausible RTC mistake, built into the white-box test through GBB_CORE_SOURCE_PATH.
+# Every anchor is the full tagged statement line from Plan 09-09 and must occur exactly once; the
+# mutant must then fail its named original case (exit 1, REQUIRE text) while an unrelated case
+# still passes inside the same mutant (exit 0), so a mutant that is merely broken cannot pass.
+# GBB_CORE_SOURCE_PATH is the only channel: test_mbc3_rtc_internal.c includes whatever file it names,
+# so each mutant executable differs from the real white-box test by that one definition.
+# Test-only: nothing here is installed or exported.
+set(GBB_RTC_CORE_SOURCE ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GBB_RTC_CORE_SOURCE})
+file(READ ${GBB_RTC_CORE_SOURCE} gbb_rtc_core_text)
+
+set(GBB_ANCHOR_SEC_WRITE
+  "c->rtc_sub = 0u; /* rtc: a seconds write restarts the sub-second prescaler */")
+set(GBB_ANCHOR_OTHER_WRITES
+  "if (reg >= 1u && reg <= 3u) c->rtc_sub = sub_before; /* rtc: other register writes keep the prescaler */")
+set(GBB_ANCHOR_HALT_TOGGLE
+  "if (reg == 4u) c->rtc_sub = sub_before; /* rtc: a halt toggle keeps the prescaler */")
+set(GBB_ANCHOR_STORE_S
+  "c->rtc_s = (uint8_t)(value & 0x3Fu); /* rtc: out-of-range fields are stored as written */")
+set(GBB_ANCHOR_STORE_M "case 1u: c->rtc_m = (uint8_t)(value & 0x3Fu); break;")
+set(GBB_ANCHOR_STORE_H "case 2u: c->rtc_h = (uint8_t)(value & 0x1Fu); break;")
+set(GBB_ANCHOR_LATCH
+  "const int latch_now = c->rtc_latch_prev == 0x00u && value == 0x01u; /* rtc: latch only on 00 then 01 */")
+
+# gbb_rtc_mutant(<name> <failing-case> <regex> <control-case> <anchor1> <replacement1> [<anchor2> <replacement2> ...])
+# Arguments are read through ARGV so the semicolons in the C text never become list separators.
+function(gbb_rtc_mutant name failing_case failing_regex control_case)
+  set(text "${gbb_rtc_core_text}")
+  math(EXPR last "${ARGC} - 1")
+  foreach(i RANGE 4 ${last} 2)
+    math(EXPR j "${i} + 1")
+    set(anchor "${ARGV${i}}")
+    set(replacement "${ARGV${j}}")
+    string(FIND "${text}" "${anchor}" first)
+    string(FIND "${text}" "${anchor}" final REVERSE)
+    if(first EQUAL -1 OR NOT first EQUAL final)
+      message(FATAL_ERROR "RTC mutant ${name}: anchor '${anchor}' must occur exactly once in "
+        "${GBB_RTC_CORE_SOURCE} (first=${first} last=${final})")
+    endif()
+    string(REPLACE "${anchor}" "${replacement}" text "${text}")
+  endforeach()
+  set(source ${CMAKE_CURRENT_BINARY_DIR}/rtc_mutant_${name}.c)
+  file(WRITE ${source} "${text}")
+  set(target test_rtc_mutant_${name})
+  add_executable(${target} test_mbc3_rtc_internal.c)
+  target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}/include")
+  target_compile_features(${target} PRIVATE c_std_17)
+  set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
+  # The absolute build-tree path of this mutant's source, quoted for the preprocessor.
+  # (GBB_CORE_SOURCE_PATH)
+  target_compile_definitions(${target} PRIVATE GBB_CORE_SOURCE_PATH="${source}")
+  add_test(NAME rtc_mutant_${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:${target}>;${failing_case}"
+      -DGBB_EXPECT_CODE=1
+      "-DGBB_EXPECT_REGEX=${failing_regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  add_test(NAME rtc_mutant_${name}_control
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:${target}>;${control_case}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=.*"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+endfunction()
+
+gbb_rtc_mutant(prescaler_kept rtc_prescaler_rules "rreg.m, 0u. == 0u" rtc_write_masks
+  "${GBB_ANCHOR_SEC_WRITE}"
+  "c->rtc_sub = sub_before; /* mutant: a seconds write keeps the prescaler */")
+gbb_rtc_mutant(prescaler_reset_every_write rtc_prescaler_rules "rreg.m, 0u. == 1u" rtc_write_masks
+  "${GBB_ANCHOR_OTHER_WRITES}"
+  "if (reg >= 1u && reg <= 3u) c->rtc_sub = 0u; /* mutant: M, H and DL writes restart the prescaler */"
+  "${GBB_ANCHOR_HALT_TOGGLE}"
+  "if (reg == 4u) c->rtc_sub = 0u; /* mutant: a halt toggle restarts the prescaler */")
+gbb_rtc_mutant(prescaler_reset_on_halt rtc_prescaler_rules "rreg.m, 0u. == 1u" rtc_write_masks
+  "${GBB_ANCHOR_HALT_TOGGLE}"
+  "if (reg == 4u) c->rtc_sub = 0u; /* mutant: a halt toggle restarts the prescaler */")
+gbb_rtc_mutant(out_of_range_clamped rtc_out_of_range_rollover ".out.[[]1[]] == .5u." rtc_rate_exact
+  "${GBB_ANCHOR_STORE_S}"
+  "c->rtc_s = (uint8_t)((value & 0x3Fu) > 59u ? 59u : (value & 0x3Fu)); /* mutant: clamp */"
+  "${GBB_ANCHOR_STORE_M}"
+  "case 1u: c->rtc_m = (uint8_t)((value & 0x3Fu) > 59u ? 59u : (value & 0x3Fu)); break;"
+  "${GBB_ANCHOR_STORE_H}"
+  "case 2u: c->rtc_h = (uint8_t)((value & 0x1Fu) > 23u ? 23u : (value & 0x1Fu)); break;")
+gbb_rtc_mutant(latch_any_write rtc_latch_edges "rreg.m, 0u. == cases.i..expect" rtc_write_masks
+  "${GBB_ANCHOR_LATCH}"
+  "const int latch_now = 1; /* mutant: latch on any write */")
+
 add_executable(test_rtc_battery test_rtc_battery.c)
 target_link_libraries(test_rtc_battery PRIVATE GabbaBoy::core)
 target_compile_features(test_rtc_battery PRIVATE c_std_17)
