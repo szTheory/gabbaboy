@@ -413,3 +413,7 @@ model_gates_tracer_pass
 model_gates_tracer_doc_mismatch
 model_gates_selftest
 model_gates
+model_gates_real_deleted_tag
+model_gates_real_untagged_function
+model_gates_real_doc_mismatch
+model_gates_release_blocked

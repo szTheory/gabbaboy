@@ -1245,4 +1245,54 @@ gbb_add_model_gate_test(model_gates 0 "model-gates pass functions=1[2-9][0-9] ga
 gbb_add_model_gate_test(model_gates_selftest 0
   "model-gates self-test pass mutants=[1-9][0-9]* functions=1[2-9][0-9]" --self-test)
 
+# Real-file negative controls (Plan 10-02). Each mutant is a configure-time copy of the real source or
+# doc under build/model-gates/real, with its anchor asserted to occur exactly once (forward and
+# REVERSE) so a drifted anchor fails the configure instead of building an unmutated "mutant".
+set(GBB_MODEL_GATE_REAL_DIR "${GBB_MODEL_GATE_DIR}/real")
+set(GBB_MODEL_GATE_REAL_SOURCE "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c")
+set(GBB_MODEL_GATE_REAL_DOC "${PROJECT_SOURCE_DIR}/docs/model-gates.md")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${GBB_MODEL_GATE_REAL_SOURCE}" "${GBB_MODEL_GATE_REAL_DOC}")
+file(MAKE_DIRECTORY "${GBB_MODEL_GATE_REAL_DIR}")
+file(READ "${GBB_MODEL_GATE_REAL_SOURCE}" gbb_mg_source)
+file(READ "${GBB_MODEL_GATE_REAL_DOC}" gbb_mg_doc)
+
+# (a) The STOP gate tag deleted. The gate number is not part of the anchor so later plans may renumber.
+set(GBB_MG_STOP_TAG_REGEX
+  "[ ]*/\\* MODEL: UNKNOWN GATE-[0-9][0-9] research:12 -- STOP, including CGB speed switch \\*/\n")
+string(REGEX MATCHALL "${GBB_MG_STOP_TAG_REGEX}" gbb_mg_stop_matches "${gbb_mg_source}")
+list(LENGTH gbb_mg_stop_matches gbb_mg_stop_count)
+if(NOT gbb_mg_stop_count EQUAL 1)
+  message(FATAL_ERROR "model-gate mutant: the STOP gate tag must occur exactly once in "
+    "${GBB_MODEL_GATE_REAL_SOURCE} (found ${gbb_mg_stop_count})")
+endif()
+string(REGEX REPLACE "${GBB_MG_STOP_TAG_REGEX}" "" gbb_mg_deleted "${gbb_mg_source}")
+file(WRITE "${GBB_MODEL_GATE_REAL_DIR}/deleted-tag.c" "${gbb_mg_deleted}")
+
+# (b) One untagged definition appended to the real source.
+file(WRITE "${GBB_MODEL_GATE_REAL_DIR}/untagged-function.c"
+  "${gbb_mg_source}\nstatic int gbb_model_gate_probe(void) { return 0; }\n")
+
+# (c) The read8 bus-conflict row claims research:14 instead of the declared expected failure.
+set(GBB_MG_ROW_ANCHOR "expected-failure:cgb-separate-buses | read8 |")
+string(FIND "${gbb_mg_doc}" "${GBB_MG_ROW_ANCHOR}" gbb_mg_row_first)
+string(FIND "${gbb_mg_doc}" "${GBB_MG_ROW_ANCHOR}" gbb_mg_row_last REVERSE)
+if(gbb_mg_row_first EQUAL -1 OR NOT gbb_mg_row_first EQUAL gbb_mg_row_last)
+  message(FATAL_ERROR "model-gate mutant: '${GBB_MG_ROW_ANCHOR}' must occur exactly once in "
+    "${GBB_MODEL_GATE_REAL_DOC} (first=${gbb_mg_row_first} last=${gbb_mg_row_last})")
+endif()
+string(REPLACE "${GBB_MG_ROW_ANCHOR}" "research:14 | read8 |" gbb_mg_doc_bad "${gbb_mg_doc}")
+file(WRITE "${GBB_MODEL_GATE_REAL_DIR}/doc-mismatch.md" "${gbb_mg_doc_bad}")
+
+# A deleted branch tag leaves its doc row without a code tag, so R2 (gate-doc-mismatch) fires first.
+gbb_add_model_gate_test(model_gates_real_deleted_tag 1 "gate-doc-mismatch: doc GATE-[0-9][0-9] has no code tag"
+  --source "${GBB_MODEL_GATE_REAL_DIR}/deleted-tag.c" --doc "${GBB_MODEL_GATE_REAL_DOC}")
+gbb_add_model_gate_test(model_gates_real_untagged_function 1 "gate-untagged-function: gbb_model_gate_probe"
+  --source "${GBB_MODEL_GATE_REAL_DIR}/untagged-function.c" --doc "${GBB_MODEL_GATE_REAL_DOC}")
+gbb_add_model_gate_test(model_gates_real_doc_mismatch 1 "gate-doc-mismatch"
+  --source "${GBB_MODEL_GATE_REAL_SOURCE}" --doc "${GBB_MODEL_GATE_REAL_DIR}/doc-mismatch.md")
+# Release mode records that research: items stay open until Phase 14; it becomes a pass gate in Phase 15.
+gbb_add_model_gate_test(model_gates_release_blocked 1 "gate-unresolved-unknown"
+  --release --source "${GBB_MODEL_GATE_REAL_SOURCE}" --doc "${GBB_MODEL_GATE_REAL_DOC}")
+
 gabbaboy_verify_registered_tests()

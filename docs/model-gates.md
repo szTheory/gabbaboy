@@ -110,3 +110,15 @@ occurs exactly once in code and once in the table.
 | GATE-65 | UNKNOWN | - | research:12 | gbb_run_internal | DIV reset on STOP |
 | GATE-66 | BOTH | - | basis=wram-echo-map | gbb_peek_ram | debug peek of work RAM |
 <!-- model-gates-end -->
+
+## Release status
+
+`python3 -I tests/scripts/verify-model-gates.py --release` currently fails by design
+(`gate-unresolved-unknown`, test `model_gates_release_blocked`): every `research:` row still names a
+phase that has not resolved it. Phase 10 resolves the `research:10` and `research:11` rows by
+turning them into `DMG_ONLY`/`CGB_ONLY`/`BOTH` classes with guards (Plans 10-04, 10-06, 10-09 and
+10-20 assert that none remain). Phase 11 owns the remaining PPU rows noted `research:11`, Phase 12
+owns `research:12` (STOP, DMA and double-speed timing) and Phase 14 owns `research:14` (APU, timer,
+serial, STAT and JOYP quirks). `expected-failure:cgb-separate-buses` is a declared, reasoned
+expected failure (D-17) and does not block release. The release-mode test becomes a pass gate in
+Phase 15.
