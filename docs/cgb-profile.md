@@ -205,6 +205,258 @@ anything changes and a write is dropped and reported as the same stop once the i
 The DMG profile never enters this decode: its FF4C-FF7F reads still stop and its writes are silent
 no-ops. IE bits 5-7 are stored and read back on the CGB profile only (owner veto item 6).
 
+### Published matrix
+
+The block below is the machine-checked mirror of `io_visibility[]`. `test_cgb_tables io` fails on
+any difference in either direction, and a mutated copy of this file is kept as a negative control.
+`tests/test_cgb_visibility.c` runs the same cells through the public API from an independent
+table written from the D-10 decision, so this block, the code and the behaviour test must all agree.
+Addresses handled by the pre-CGB code (FF00-FF02, FF04-FF07, FF0F-FF14, FF16-FF1E, FF20-FF26 and
+FF30-FF4B) behave the same on every profile and are not listed. Columns: read and write describe the
+cell; `IMPL` means implemented, `DEFERRED(n)` means owned by phase n and failing closed; the last
+column is the evidence class (Pan Docs, Mooneye hardware test, SameBoy, or project policy).
+
+<!-- cgb-io-visibility-begin -->
+| address | column | read | write | status | src |
+|---------|--------|------|-------|--------|-----|
+| $FF03 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF03 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF03 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF08 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF08 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF08 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF09 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF09 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF09 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF0A | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF0A | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF0A | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF0B | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF0B | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF0B | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF0C | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF0C | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF0C | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF0D | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF0D | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF0D | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF0E | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF0E | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF0E | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF15 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF15 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF15 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF1F | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF1F | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF1F | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF27 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF27 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF27 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF28 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF28 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF28 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF29 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF29 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF29 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF2A | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF2A | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF2A | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF2B | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF2B | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF2B | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF2C | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF2C | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF2C | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF2D | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF2D | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF2D | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF2E | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF2E | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF2E | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF2F | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF2F | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF2F | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF4C | DMG | stop | ignored | IMPL | PANDOCS |
+| $FF4C | CGB | $FF | ignored | IMPL | PANDOCS |
+| $FF4C | COMPAT | $FF | ignored | IMPL | PANDOCS |
+| $FF4D | DMG | stop | ignored | IMPL | PANDOCS |
+| $FF4D | CGB | $7E or armed bit | bit 0 arms the switch | IMPL | PANDOCS |
+| $FF4D | COMPAT | $FF | ignored | IMPL | PANDOCS |
+| $FF4E | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF4E | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF4E | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF4F | DMG | stop | ignored | IMPL | PANDOCS |
+| $FF4F | CGB | $FE or bank | bit 0 selects the bank | IMPL | PANDOCS |
+| $FF4F | COMPAT | $FE or bank | ignored, bank stays 0 | IMPL | PANDOCS |
+| $FF50 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF50 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF50 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF51 | DMG | stop | ignored | IMPL | PANDOCS |
+| $FF51 | CGB | $FF | ignored | IMPL | PANDOCS |
+| $FF51 | COMPAT | $FF | ignored | IMPL | PANDOCS |
+| $FF52 | DMG | stop | ignored | IMPL | PANDOCS |
+| $FF52 | CGB | $FF | ignored | IMPL | PANDOCS |
+| $FF52 | COMPAT | $FF | ignored | IMPL | PANDOCS |
+| $FF53 | DMG | stop | ignored | IMPL | PANDOCS |
+| $FF53 | CGB | $FF | ignored | IMPL | PANDOCS |
+| $FF53 | COMPAT | $FF | ignored | IMPL | PANDOCS |
+| $FF54 | DMG | stop | ignored | IMPL | PANDOCS |
+| $FF54 | CGB | $FF | ignored | IMPL | PANDOCS |
+| $FF54 | COMPAT | $FF | ignored | IMPL | PANDOCS |
+| $FF55 | DMG | stop | ignored | IMPL | PANDOCS |
+| $FF55 | CGB | $FF | dropped, stop after retire | DEFERRED(13) | PANDOCS |
+| $FF55 | COMPAT | $FF | ignored | IMPL | PANDOCS |
+| $FF56 | DMG | stop | ignored | IMPL | PANDOCS |
+| $FF56 | CGB | stop | dropped, stop after retire | DEFERRED(14) | PANDOCS |
+| $FF56 | COMPAT | $FF | ignored | IMPL | PANDOCS |
+| $FF57 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF57 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF57 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF58 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF58 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF58 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF59 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF59 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF59 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF5A | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF5A | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF5A | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF5B | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF5B | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF5B | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF5C | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF5C | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF5C | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF5D | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF5D | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF5D | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF5E | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF5E | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF5E | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF5F | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF5F | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF5F | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF60 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF60 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF60 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF61 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF61 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF61 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF62 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF62 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF62 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF63 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF63 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF63 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF64 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF64 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF64 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF65 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF65 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF65 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF66 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF66 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF66 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF67 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF67 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF67 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF68 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF68 | CGB | stored or $40 | stored and $BF | IMPL | HW_TEST |
+| $FF68 | COMPAT | stored or $40 | stored and $BF | IMPL | HW_TEST |
+| $FF69 | DMG | stop | ignored | IMPL | PANDOCS |
+| $FF69 | CGB | stop | dropped, stop after retire | DEFERRED(11) | PANDOCS |
+| $FF69 | COMPAT | $FF | ignored | IMPL | PANDOCS |
+| $FF6A | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF6A | CGB | stored or $40 | stored and $BF | IMPL | HW_TEST |
+| $FF6A | COMPAT | stored or $40 | stored and $BF | IMPL | HW_TEST |
+| $FF6B | DMG | stop | ignored | IMPL | PANDOCS |
+| $FF6B | CGB | stop | dropped, stop after retire | DEFERRED(11) | PANDOCS |
+| $FF6B | COMPAT | $FF | ignored | IMPL | PANDOCS |
+| $FF6C | DMG | stop | ignored | IMPL | PANDOCS |
+| $FF6C | CGB | stop | dropped, stop after retire | DEFERRED(11) | PANDOCS |
+| $FF6C | COMPAT | $FF | ignored | IMPL | PANDOCS |
+| $FF6D | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF6D | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF6D | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF6E | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF6E | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF6E | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF6F | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF6F | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF6F | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF70 | DMG | stop | ignored | IMPL | PANDOCS |
+| $FF70 | CGB | $F8 or raw bank bits | raw 3 bits stored, 0 selects bank 1 | IMPL | PANDOCS |
+| $FF70 | COMPAT | $FF | ignored | IMPL | PANDOCS |
+| $FF71 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF71 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF71 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF72 | DMG | stop | ignored | IMPL | SAMEBOY |
+| $FF72 | CGB | stored or $00 | stored and $FF | IMPL | SAMEBOY |
+| $FF72 | COMPAT | stored or $00 | stored and $FF | IMPL | SAMEBOY |
+| $FF73 | DMG | stop | ignored | IMPL | SAMEBOY |
+| $FF73 | CGB | stored or $00 | stored and $FF | IMPL | SAMEBOY |
+| $FF73 | COMPAT | stored or $00 | stored and $FF | IMPL | SAMEBOY |
+| $FF74 | DMG | stop | ignored | IMPL | SAMEBOY |
+| $FF74 | CGB | stored or $00 | stored and $FF | IMPL | SAMEBOY |
+| $FF74 | COMPAT | $FF | ignored | IMPL | SAMEBOY |
+| $FF75 | DMG | stop | ignored | IMPL | PANDOCS |
+| $FF75 | CGB | stored or $8F | stored and $70 | IMPL | PANDOCS |
+| $FF75 | COMPAT | stored or $8F | stored and $70 | IMPL | PANDOCS |
+| $FF76 | DMG | stop | ignored | IMPL | PANDOCS |
+| $FF76 | CGB | stop | dropped, stop after retire | DEFERRED(14) | PANDOCS |
+| $FF76 | COMPAT | stop | dropped, stop after retire | DEFERRED(14) | PANDOCS |
+| $FF77 | DMG | stop | ignored | IMPL | PANDOCS |
+| $FF77 | CGB | stop | dropped, stop after retire | DEFERRED(14) | PANDOCS |
+| $FF77 | COMPAT | stop | dropped, stop after retire | DEFERRED(14) | PANDOCS |
+| $FF78 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF78 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF78 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF79 | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF79 | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF79 | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF7A | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF7A | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF7A | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF7B | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF7B | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF7B | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF7C | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF7C | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF7C | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF7D | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF7D | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF7D | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF7E | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF7E | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF7E | COMPAT | $FF | ignored | IMPL | HW_TEST |
+| $FF7F | DMG | stop | ignored | IMPL | HW_TEST |
+| $FF7F | CGB | $FF | ignored | IMPL | HW_TEST |
+| $FF7F | COMPAT | $FF | ignored | IMPL | HW_TEST |
+<!-- cgb-io-visibility-end -->
+
+### Deferred accesses stop asymmetrically
+
+A `DEFERRED` read stops before the instruction executes: nothing changes, no time is consumed, and
+the stop reports `GBB_STOP_UNSUPPORTED_BUS`. A `DEFERRED` write cannot be refused before it happens,
+because the bus write is part of an instruction that has already started; the instruction retires,
+the written value is dropped, and the stop is reported afterwards with the register address. The
+write stop is also reported after an interrupt-entry push that hits a deferred register. A host that
+resumes with another run call continues after the dropped write.
+
+### IE bits 5-7
+
+On the CGB profile (both modes) IE stores and reads back all 8 bits. On the DMG profile IE keeps
+`& $1F` and bits 5-7 read as 1. Interrupt dispatch masks with `$1F` on both profiles, so the extra
+bits never vector.
+
+### Regions that stay fail-closed
+
+- **FEA0-FEFF stays fail-closed on both profiles this phase.** Prohibited-area behaviour differs by
+  revision and is not modelled; an access stops visibly rather than inventing a value.
+- **DMG FF4C-FF7F stays fail-closed (D-09).** Hardware reads `$FF` there (Mooneye `unused_hwio-GS`),
+  but changing the DMG profile would move the v0.1 byte-identical baseline, so the hardware-correct
+  read is deferred to a later DMG-change decision. The `unused_hwio-GS` ROM is not admitted.
+
 ## Sources
 
 The numbers are the `src` ids in the table and in `post_boot_source` in the code.

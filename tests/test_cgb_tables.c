@@ -9,8 +9,13 @@
  *     and the DMG column records the implemented value, not a hardware measurement.
  * It must not link GabbaBoy::core (the core is included here).
  *
- * Usage: test_cgb_tables postboot|postboot_selftest <doc.md>
- *        test_cgb_tables emit            (prints the table rows for the doc maintainer) */
+ * The register visibility matrix is checked the same way (Plan 10-10): io_visibility[] against the
+ * rows between the cgb-io-visibility markers. Every address FF00-FF7F must be classified in every
+ * column (a zero-initialised hole is a failure); EXISTING rows are not published and must have no
+ * doc row; every other cell has exactly one doc row that equals its rendering.
+ *
+ * Usage: test_cgb_tables postboot|postboot_selftest|io <doc.md>
+ *        test_cgb_tables emit|emit_io    (prints the table rows for the doc maintainer) */
 #include "../src/core/gabbaboy.c"
 
 #include <stdio.h>
@@ -188,6 +193,8 @@ static int case_postboot(const char *path) {
     return 0;
 }
 
+static int io_selftest(const char *path);
+
 static post_boot_row g_copy[PB_FIELD_COUNT];
 
 static int case_selftest(const char *path) {
@@ -217,7 +224,13 @@ static int case_selftest(const char *path) {
     g_copy[PB_A].cgb.prov = PROV_HW_TEST;
     if (check_all(g_copy, g_doc, n) != CHECK_HW_OUTSIDE_COMPAT) goto accepted;
 
-    printf("cgb-tables self-test pass mutants=3\n");
+    const int io_rejected = io_selftest(path);
+    if (io_rejected != 3) {
+        printf("cgb-tables self-test: io mutation accepted (rejected %d of 3)\n", io_rejected);
+        return 1;
+    }
+
+    printf("cgb-tables self-test pass mutants=6\n");
     return 0;
 accepted:
     printf("cgb-tables self-test: mutation accepted\n");
@@ -237,10 +250,210 @@ static int case_emit(void) {
     return 0;
 }
 
+
+/* ---- Register visibility (io_visibility[]) ------------------------------------------------- */
+
+#define IO_MARK_BEGIN "<!-- cgb-io-visibility-begin -->"
+#define IO_MARK_END "<!-- cgb-io-visibility-end -->"
+#define MAX_IO_DOC_ROWS 512
+
+typedef struct {
+    char addr[12];
+    char column[16];
+    char read[64];
+    char write[80];
+    char status[24];
+    char src[24];
+} io_doc_row;
+
+static const char *const io_src_names[] = { "?", "PANDOCS", "HW_TEST", "SAMEBOY", "POLICY", "EXISTING" };
+
+static const io_cell *io_cell_of(const io_row *row, int col) {
+    return col == 0 ? &row->dmg : col == 1 ? &row->cgb : &row->compat;
+}
+
+/* Canonical text of one cell. Returns 0 for a cell the doc does not publish (EXISTING), 1 for a
+ * published cell and -1 for a hole (IO_UNSET or an unknown kind). */
+static int render_io(const io_cell *c, int col, char *rd, size_t rd_n, char *wr, size_t wr_n,
+                     char *st, size_t st_n) {
+    snprintf(st, st_n, "IMPL");
+    switch (c->kind) {
+    case IO_EXISTING: return 0;
+    case IO_DMG_STOP: snprintf(rd, rd_n, "stop"); snprintf(wr, wr_n, "ignored"); return 1;
+    case IO_CONST_FF: snprintf(rd, rd_n, "$FF"); snprintf(wr, wr_n, "ignored"); return 1;
+    case IO_KEY1: snprintf(rd, rd_n, "$7E or armed bit"); snprintf(wr, wr_n, "bit 0 arms the switch"); return 1;
+    case IO_VBK:
+        snprintf(rd, rd_n, "$FE or bank");
+        snprintf(wr, wr_n, col == 1 ? "bit 0 selects the bank" : "ignored, bank stays 0");
+        return 1;
+    case IO_SVBK:
+        snprintf(rd, rd_n, "$F8 or raw bank bits");
+        snprintf(wr, wr_n, "raw 3 bits stored, 0 selects bank 1");
+        return 1;
+    case IO_STORE:
+        snprintf(rd, rd_n, "stored or $%02X", (unsigned)c->read_or);
+        snprintf(wr, wr_n, "stored and $%02X", (unsigned)c->write_mask);
+        return 1;
+    case IO_DEFERRED_RW:
+        snprintf(rd, rd_n, "stop");
+        snprintf(wr, wr_n, "dropped, stop after retire");
+        snprintf(st, st_n, "DEFERRED(%u)", (unsigned)c->phase);
+        return 1;
+    case IO_DEFERRED_W:
+        snprintf(rd, rd_n, "$FF");
+        snprintf(wr, wr_n, "dropped, stop after retire");
+        snprintf(st, st_n, "DEFERRED(%u)", (unsigned)c->phase);
+        return 1;
+    default: return -1;
+    }
+}
+
+static int parse_io_doc(const char *path, io_doc_row *rows, int max_rows) {
+    FILE *f = fopen(path, "rb");
+    if (f == NULL) {
+        fprintf(stderr, "cgb-tables cannot open %s\n", path);
+        return -1;
+    }
+    char line[1024];
+    int inside = 0, begun = 0, ended = 0, n = 0;
+    while (fgets(line, sizeof(line), f) != NULL) {
+        if (strstr(line, IO_MARK_BEGIN) != NULL) { inside = 1; ++begun; continue; }
+        if (strstr(line, IO_MARK_END) != NULL) { inside = 0; ++ended; continue; }
+        if (!inside || line[0] != '|') continue;
+        char *cells[6];
+        char *p = line + 1;
+        int k = 0;
+        for (; k < 6; ++k) {
+            char *bar = strchr(p, '|');
+            if (bar == NULL) break;
+            *bar = '\0';
+            cells[k] = trim(p);
+            p = bar + 1;
+        }
+        if (k != 6) { fprintf(stderr, "cgb-tables malformed row: %s", line); fclose(f); return -1; }
+        if (strcmp(cells[0], "address") == 0 || cells[0][0] == '-') continue;
+        if (n >= max_rows || cells[0][0] != '$' || strlen(cells[0]) >= sizeof(rows->addr) ||
+            strlen(cells[1]) >= sizeof(rows->column) || strlen(cells[2]) >= sizeof(rows->read) ||
+            strlen(cells[3]) >= sizeof(rows->write) || strlen(cells[4]) >= sizeof(rows->status) ||
+            strlen(cells[5]) >= sizeof(rows->src)) {
+            fprintf(stderr, "cgb-tables malformed row: %s\n", cells[0]);
+            fclose(f);
+            return -1;
+        }
+        io_doc_row *r = &rows[n++];
+        snprintf(r->addr, sizeof(r->addr), "%s", cells[0]);
+        snprintf(r->column, sizeof(r->column), "%s", cells[1]);
+        snprintf(r->read, sizeof(r->read), "%s", cells[2]);
+        snprintf(r->write, sizeof(r->write), "%s", cells[3]);
+        snprintf(r->status, sizeof(r->status), "%s", cells[4]);
+        snprintf(r->src, sizeof(r->src), "%s", cells[5]);
+    }
+    fclose(f);
+    if (begun != 1 || ended != 1) {
+        fprintf(stderr, "cgb-tables markers: io begin=%d end=%d (each must appear once)\n", begun, ended);
+        return -1;
+    }
+    return n;
+}
+
+static void io_addr_text(unsigned index, char *out, size_t n) { snprintf(out, n, "$FF%02X", index); }
+
+static int io_mismatch(const char *addr, const char *column) {
+    printf("cgb-tables mismatch: %s %s\n", addr, column);
+    return 1;
+}
+
+/* Two-way diff of a row array against the parsed doc. Returns 0 on equality. */
+static int compare_io(const io_row *code, const io_doc_row *doc, int ndoc) {
+    for (unsigned i = 0; i < IO_VISIBILITY_ROWS; ++i) {
+        char addr[12];
+        io_addr_text(i, addr, sizeof(addr));
+        for (int col = 0; col < 3; ++col) {
+            char rd[64], wr[80], st[24];
+            const int published = render_io(io_cell_of(&code[i], col), col, rd, sizeof(rd), wr, sizeof(wr), st, sizeof(st));
+            if (published < 0) return io_mismatch(addr, column_names[col]);
+            int found = 0;
+            for (int j = 0; j < ndoc; ++j) {
+                if (strcmp(doc[j].addr, addr) != 0 || strcmp(doc[j].column, column_names[col]) != 0) continue;
+                ++found;
+                if (published == 0 || strcmp(doc[j].read, rd) != 0 || strcmp(doc[j].write, wr) != 0 ||
+                    strcmp(doc[j].status, st) != 0 || strcmp(doc[j].src, io_src_names[code[i].src]) != 0)
+                    return io_mismatch(addr, column_names[col]);
+            }
+            if (found != (published ? 1 : 0)) return io_mismatch(addr, column_names[col]);
+        }
+    }
+    for (int j = 0; j < ndoc; ++j) {
+        int known = 0;
+        for (unsigned i = 0; i < IO_VISIBILITY_ROWS && !known; ++i) {
+            char addr[12];
+            io_addr_text(i, addr, sizeof(addr));
+            for (int col = 0; col < 3; ++col)
+                if (strcmp(doc[j].addr, addr) == 0 && strcmp(doc[j].column, column_names[col]) == 0) { known = 1; break; }
+        }
+        if (!known) return io_mismatch(doc[j].addr, doc[j].column);
+    }
+    return 0;
+}
+
+static io_doc_row g_io_doc[MAX_IO_DOC_ROWS];
+static io_row g_io_copy[IO_VISIBILITY_ROWS];
+
+static int case_io(const char *path) {
+    const int n = parse_io_doc(path, g_io_doc, MAX_IO_DOC_ROWS);
+    if (n < 0) return 1;
+    if (compare_io(io_visibility, g_io_doc, n) != 0) return 1;
+    printf("cgb-tables io pass rows=%d\n", n);
+    return 0;
+}
+
+/* Mutants of the io check, run from the postboot self-test. Returns the number of mutants rejected,
+ * or -1 when the unmutated tables are not accepted (the mutants would prove nothing). */
+static int io_selftest(const char *path) {
+    const int n = parse_io_doc(path, g_io_doc, MAX_IO_DOC_ROWS);
+    if (n < 0) return -1;
+    memcpy(g_io_copy, io_visibility, sizeof(g_io_copy));
+    if (compare_io(g_io_copy, g_io_doc, n) != 0) return -1;
+    int rejected = 0;
+
+    /* (d) an io row removed from the code copy (reclassified as handled elsewhere). */
+    g_io_copy[0x4C].cgb.kind = IO_EXISTING;
+    if (compare_io(g_io_copy, g_io_doc, n) != 0) ++rejected;
+
+    /* (e) a hole: a zero-initialised row. */
+    memcpy(g_io_copy, io_visibility, sizeof(g_io_copy));
+    memset(&g_io_copy[0x55], 0, sizeof(g_io_copy[0x55]));
+    if (compare_io(g_io_copy, g_io_doc, n) != 0) ++rejected;
+
+    /* (f) a doc row removed. */
+    memcpy(g_io_copy, io_visibility, sizeof(g_io_copy));
+    {
+        static io_doc_row shortened[MAX_IO_DOC_ROWS];
+        memcpy(shortened, g_io_doc, sizeof(io_doc_row) * (size_t)n);
+        memmove(&shortened[10], &shortened[11], sizeof(io_doc_row) * (size_t)(n - 11));
+        if (compare_io(io_visibility, shortened, n - 1) != 0) ++rejected;
+    }
+    return rejected;
+}
+
+static int case_emit_io(void) {
+    for (unsigned i = 0; i < IO_VISIBILITY_ROWS; ++i)
+        for (int col = 0; col < 3; ++col) {
+            char addr[12], rd[64], wr[80], st[24];
+            if (render_io(io_cell_of(&io_visibility[i], col), col, rd, sizeof(rd), wr, sizeof(wr), st, sizeof(st)) != 1)
+                continue;
+            io_addr_text(i, addr, sizeof(addr));
+            printf("| %s | %s | %s | %s | %s | %s |\n", addr, column_names[col], rd, wr, st,
+                   io_src_names[io_visibility[i].src]);
+        }
+    return 0;
+}
+
 int main(int argc, char **argv) {
     _Static_assert(sizeof(field_names) / sizeof(field_names[0]) == PB_FIELD_COUNT,
                    "field_names must cover every post_boot_field");
     if (argc >= 2 && strcmp(argv[1], "emit") == 0) return case_emit();
+    if (argc >= 2 && strcmp(argv[1], "emit_io") == 0) return case_emit_io();
     if (argc < 3) {
         fprintf(stderr, "usage: test_cgb_tables postboot|postboot_selftest <doc.md>\n");
         return 2;
@@ -252,6 +465,7 @@ int main(int argc, char **argv) {
         }
     if (strcmp(argv[1], "postboot") == 0) return case_postboot(argv[2]);
     if (strcmp(argv[1], "postboot_selftest") == 0) return case_selftest(argv[2]);
+    if (strcmp(argv[1], "io") == 0) return case_io(argv[2]);
     fprintf(stderr, "unknown case %s\n", argv[1]);
     return 2;
 }

@@ -1384,7 +1384,7 @@ set_tests_properties(cgb_tables_postboot PROPERTIES
   PASS_REGULAR_EXPRESSION "cgb-tables postboot pass rows=[1-9]")
 add_test(NAME cgb_tables_postboot_selftest COMMAND test_cgb_tables postboot_selftest "${GBB_CGB_PROFILE_DOC}")
 set_tests_properties(cgb_tables_postboot_selftest PROPERTIES
-  PASS_REGULAR_EXPRESSION "cgb-tables self-test pass mutants=3")
+  PASS_REGULAR_EXPRESSION "cgb-tables self-test pass mutants=6")
 
 # Negative control: the real doc with the compat A value changed from $11 to $12 must be rejected.
 file(READ "${GBB_CGB_PROFILE_DOC}" gbb_cgb_doc)
@@ -1400,6 +1400,28 @@ file(WRITE "${PROJECT_BINARY_DIR}/cgb-tables/mutated-postboot.md" "${gbb_cgb_doc
 add_test(NAME cgb_tables_postboot_mutated_doc
   COMMAND ${CMAKE_COMMAND}
     "-DGBB_CMD=$<TARGET_FILE:test_cgb_tables>;postboot;${PROJECT_BINARY_DIR}/cgb-tables/mutated-postboot.md"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=cgb-tables mismatch"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+# Register visibility mirror (Plan 10-10, D-06): io_visibility[] against the cgb-io-visibility block.
+add_test(NAME cgb_tables_io COMMAND test_cgb_tables io "${GBB_CGB_PROFILE_DOC}")
+set_tests_properties(cgb_tables_io PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-tables io pass rows=[1-9]"
+  FAIL_REGULAR_EXPRESSION "cgb-tables mismatch")
+
+# Negative control: the compat FF4F read value changed to $FF in the doc must be rejected.
+set(GBB_CGB_IO_ANCHOR "| $FF4F | COMPAT | $FE or bank |")
+string(FIND "${gbb_cgb_doc}" "${GBB_CGB_IO_ANCHOR}" gbb_cgb_io_at)
+string(FIND "${gbb_cgb_doc}" "${GBB_CGB_IO_ANCHOR}" gbb_cgb_io_last REVERSE)
+if(gbb_cgb_io_at EQUAL -1 OR NOT gbb_cgb_io_at EQUAL gbb_cgb_io_last)
+  message(FATAL_ERROR "cgb-tables io mutation anchor '${GBB_CGB_IO_ANCHOR}' must occur exactly once in docs/cgb-profile.md")
+endif()
+string(REPLACE "${GBB_CGB_IO_ANCHOR}" "| $FF4F | COMPAT | $FF |" gbb_cgb_io_doc_bad "${gbb_cgb_doc}")
+file(WRITE "${PROJECT_BINARY_DIR}/cgb-tables/mutated-io.md" "${gbb_cgb_io_doc_bad}")
+add_test(NAME cgb_tables_io_mutated_doc
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_tables>;io;${PROJECT_BINARY_DIR}/cgb-tables/mutated-io.md"
     -DGBB_EXPECT_CODE=1
     "-DGBB_EXPECT_REGEX=cgb-tables mismatch"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
