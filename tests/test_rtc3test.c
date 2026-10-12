@@ -106,7 +106,7 @@ static int digest_is(const uint8_t *bytes, size_t size, const char *expect, cons
 }
 
 static const uint8_t *map_cell(const gbb_instance *m, unsigned row, unsigned col) {
-    return &m->vram[MAP_BASE + row * 32u + col];
+    return &m->vram[0][MAP_BASE + row * 32u + col];
 }
 
 static int marker_present(const gbb_instance *m) {

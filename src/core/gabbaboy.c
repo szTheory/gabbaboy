@@ -9,6 +9,10 @@
 #define GBB_FRAME_HEIGHT 144u
 #define GBB_FRAME_PIXELS (GBB_FRAME_WIDTH * GBB_FRAME_HEIGHT)
 #define GBB_OAM_BYTES 160u
+#define GBB_VRAM_BANKS 2u
+#define GBB_VRAM_BANK_SIZE 8192u
+#define GBB_WRAM_BANKS 8u
+#define GBB_WRAM_BANK_SIZE 4096u
 #define GBB_DMA_BYTE_PERIOD_HALF_DOTS 8u
 #define GBB_LINE_OBJECT_LIMIT 10u
 #define GBB_PPU_FIFO_CAPACITY 16u
@@ -296,9 +300,14 @@ struct gbb_instance {
     size_t cartridge_ram_size;
     uint64_t battery_generation;
     cart_state cart;
-    uint8_t wram[8192];
+    uint8_t wram[GBB_WRAM_BANKS][GBB_WRAM_BANK_SIZE];
     uint8_t hram[127];
-    uint8_t vram[8192];
+    uint8_t vram[GBB_VRAM_BANKS][GBB_VRAM_BANK_SIZE];
+    /* Effective banks. vram_bank is 0 or 1; wram_bank is 1..7 (SVBK 0 selects 1). svbk is the raw
+     * 3-bit register. DMG pins 0 and 1 and never changes them. */
+    uint8_t vram_bank;
+    uint8_t wram_bank;
+    uint8_t svbk;
     uint8_t oam[GBB_OAM_BYTES];
     uint8_t frame_working[GBB_FRAME_PIXELS];
     uint8_t frame_completed[GBB_FRAME_PIXELS];
@@ -957,6 +966,22 @@ static void post_boot_apply(gbb_instance *m) {
     }
 }
 
+/* Work RAM is two fixed 4 KiB halves: C000-CFFF (and its echo E000-EFFF) is always bank 0, and
+ * D000-DFFF (echo F000-FDFF) is wram[wram_bank]. Masking to 13 bits folds the echo onto the main
+ * range. DMG pins wram_bank to 1, so the two halves are contiguous there and no profile branch is
+ * needed on the access path. Callers pass only C000-FDFF. */
+/* MODEL: BOTH GATE-00 basis="DMG pins wram_bank=1 and vram_bank=0" */
+static const uint8_t *wram_byte(const gbb_instance *m, uint16_t address) {
+    unsigned offset = (unsigned)address & 0x1FFFu;
+    unsigned bank = offset < GBB_WRAM_BANK_SIZE ? 0u : m->wram_bank;
+    return &m->wram[bank][offset & (GBB_WRAM_BANK_SIZE - 1u)];
+}
+
+/* MODEL: BOTH GATE-00 basis="DMG pins wram_bank=1 and vram_bank=0" */
+static uint8_t *wram_byte_mut(gbb_instance *m, uint16_t address) {
+    return (uint8_t *)wram_byte(m, address);
+}
+
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void reset_state(gbb_instance *m) {
     cart_reset_registers(&m->cart);
@@ -966,6 +991,9 @@ static void reset_state(gbb_instance *m) {
     memset(&m->apu_wave, 0, sizeof(m->apu_wave));
     memset(&m->apu_noise, 0, sizeof(m->apu_noise));
     post_boot_apply(m);
+    m->vram_bank = 0u;
+    m->wram_bank = 1u;
+    m->svbk = 0u;
     m->ime_delay = 0;
     m->serial_bits = 0;
     m->apu_sequencer_step = 0u;
@@ -1189,7 +1217,7 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
     if (address == 0xFF0F) return (uint8_t)(0xE0u | m->interrupt_flags);
     if (address == 0xFFFF) return (uint8_t)(0xE0u | m->ie);
     if (address >= 0x8000 && address <= 0x9FFF)
-        return cpu_vram_access_allowed(m) ? m->vram[address - 0x8000] : 0xFF;
+        return cpu_vram_access_allowed(m) ? m->vram[m->vram_bank][address - 0x8000] : 0xFF;
     if (address >= 0xFE00 && address <= 0xFE9F)
         return cpu_oam_access_allowed(m) ? m->oam[address - 0xFE00] : 0xFF;
     /* MODEL: BOTH GATE-22 basis=cartridge-side -- ROM reads are decided by the mapper, not the console */
@@ -1265,8 +1293,7 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
         }
     }
     /* MODEL: BOTH GATE-23 basis=wram-echo-map -- work RAM and echo mapping; CGB WRAM banking is added by a later plan */
-    if (address >= 0xC000 && address <= 0xDFFF) return m->wram[address - 0xC000];
-    if (address >= 0xE000 && address <= 0xFDFF) return m->wram[address - 0xE000];
+    if (address >= 0xC000 && address <= 0xFDFF) return *wram_byte(m, address);
     if (address >= 0xFF80 && address <= 0xFFFE) return m->hram[address - 0xFF80];
     return 0xFF;
 }
@@ -1395,7 +1422,7 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
         }
     }
     else if (address >= 0x8000 && address <= 0x9FFF) {
-        if (cpu_vram_access_allowed(m)) m->vram[address - 0x8000] = value;
+        if (cpu_vram_access_allowed(m)) m->vram[m->vram_bank][address - 0x8000] = value;
     }
     else if (address >= 0xFE00 && address <= 0xFE9F) {
         if (cpu_oam_access_allowed(m)) m->oam[address - 0xFE00] = value;
@@ -1656,8 +1683,7 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     else if (address == 0xFF0F) m->interrupt_flags = (uint8_t)(value & 0x1Fu);
     else if (address == 0xFFFF) m->ie = (uint8_t)(value & 0x1Fu);
     /* MODEL: BOTH GATE-38 basis=wram-echo-map -- work RAM and echo mapping; CGB WRAM banking is added by a later plan */
-    else if (address >= 0xC000 && address <= 0xDFFF) m->wram[address - 0xC000] = value;
-    else if (address >= 0xE000 && address <= 0xFDFF) m->wram[address - 0xE000] = value;
+    else if (address >= 0xC000 && address <= 0xFDFF) *wram_byte_mut(m, address) = value;
     else if (address >= 0xFF80 && address <= 0xFFFE) m->hram[address - 0xFF80] = value;
 }
 
@@ -1762,8 +1788,8 @@ static uint8_t ppu_tile_color(const gbb_instance *m, uint8_t tile,
         return 0;
     unsigned address = (unsigned)tile_base + row * 2u;
     uint8_t bit = (uint8_t)(7u - column);
-    uint8_t low = m->vram[address];
-    uint8_t high = m->vram[address + 1u];
+    uint8_t low = m->vram[0][address];
+    uint8_t high = m->vram[0][address + 1u];
     return (uint8_t)(((low >> bit) & 1u) | (((high >> bit) & 1u) << 1));
 }
 
@@ -1793,8 +1819,8 @@ static uint8_t ppu_background_color(const gbb_instance *m, unsigned x) {
     }
     uint16_t map_index = (uint16_t)(((source_y >> 3) * 32u) + ((source_x & 0xFFu) >> 3));
     uint16_t map_address = (uint16_t)(map_base + map_index);
-    if (map_address >= sizeof(m->vram)) return 0;
-    uint8_t tile = m->vram[map_address];
+    if (map_address >= GBB_VRAM_BANK_SIZE) return 0;
+    uint8_t tile = m->vram[0][map_address];
     return ppu_tile_color(m, tile, source_y & 7u, source_x & 7u, 0);
 }
 
@@ -2102,9 +2128,9 @@ static void ppu_advance_dot(gbb_instance *m) {
 static uint8_t dma_source_read(const gbb_instance *m, uint16_t address) {
     /* MODEL: UNKNOWN GATE-51 research:10 -- DMA source map; banked VRAM and WRAM change it */
     if (address >= 0x8000u && address <= 0x9FFFu)
-        return m->vram[address - 0x8000u];
+        return m->vram[m->vram_bank][address - 0x8000u];
     if (address >= 0xC000u && address <= 0xDFFFu)
-        return m->wram[address - 0xC000u];
+        return *wram_byte(m, address);
     /* The ROM-only profile has no external cartridge RAM. Other source pages
      * are outside the DMG manual's 8000-DFFF DMA range. */
     return 0xFFu;
@@ -3185,6 +3211,14 @@ void gbb_test_cpu_snapshot(const gbb_instance *m, gbb_trace_record *record) {
     if (m != NULL && record != NULL) save_trace(m, (decoded){0, 0, 1}, record);
 }
 
+/* Private test seam, like gbb_test_cpu_snapshot: reports the effective banks, never public ABI. */
+/* MODEL: BOTH GATE-00 basis="DMG pins wram_bank=1 and vram_bank=0" */
+void gbb_test_bank_state(const gbb_instance *m, uint8_t *out_vram_bank, uint8_t *out_wram_bank) {
+    if (m == NULL) return;
+    if (out_vram_bank != NULL) *out_vram_bank = m->vram_bank;
+    if (out_wram_bank != NULL) *out_wram_bank = m->wram_bank;
+}
+
 /* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static int halt_bug_keeps_control_target(const gbb_instance *m, uint8_t op) {
     if (op == 0xC3 || op == 0xC9 || op == 0xCD || op == 0xD9 || op == 0xE9 || (op & 0xC7u) == 0xC7u) return 1;
@@ -3397,8 +3431,7 @@ gbb_run_result gbb_run_audio(gbb_instance *instance, uint64_t budget_half_dots,
 uint8_t gbb_peek_ram(const gbb_instance *instance, uint16_t address) {
     if (instance == NULL) return 0xFF;
     /* MODEL: BOTH GATE-66 basis=wram-echo-map -- debug peek of work RAM */
-    if (address >= 0xC000 && address <= 0xDFFF) return instance->wram[address - 0xC000];
-    if (address >= 0xE000 && address <= 0xFDFF) return instance->wram[address - 0xE000];
+    if (address >= 0xC000 && address <= 0xFDFF) return *wram_byte(instance, address);
     if (address >= 0xFF80 && address <= 0xFFFE) return instance->hram[address - 0xFF80];
     return 0xFF;
 }

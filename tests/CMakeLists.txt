@@ -191,6 +191,20 @@ target_compile_features(test_mbc5_internal PRIVATE c_std_17)
 set_target_properties(test_mbc5_internal PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME mbc5_rumble_saturation COMMAND test_mbc5_internal mbc5_rumble_saturation)
 
+# White-box banking checks (D-19): single TU including the core source, so no GabbaBoy::core link.
+add_executable(test_banking_internal test_banking_internal.c)
+target_include_directories(test_banking_internal PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_banking_internal PRIVATE c_std_17)
+set_target_properties(test_banking_internal PROPERTIES C_EXTENSIONS OFF)
+foreach(case dmg_flat_reference cgb_diverges_from_flat dmg_bank_pins_after_reset)
+  add_test(NAME banking_${case} COMMAND test_banking_internal banking_${case})
+endforeach()
+# The reshape must not move the DMG correctness digest of the tracer fixture.
+add_test(NAME banking_tracer_digest_unchanged
+  COMMAND measure_core --no-trace ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
+set_tests_properties(banking_tracer_digest_unchanged PROPERTIES
+  PASS_REGULAR_EXPRESSION "correctness_digest_fnv1a64=4c7a57ff3d50d228")
+
 # Original banking guest (D-33): the committed 64 KiB ROM is run through the real CPU and bus.
 add_test(NAME mbc5_banking_guest
   COMMAND test_mbc5 mbc5_banking_guest ${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb)

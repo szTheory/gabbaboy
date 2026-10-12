@@ -89,6 +89,10 @@ mbc5_rumble_errors
 mbc5_rumble_reset_load
 mbc5_reset_preserves_ram
 mbc5_rumble_saturation
+banking_dmg_flat_reference
+banking_cgb_diverges_from_flat
+banking_dmg_bank_pins_after_reset
+banking_tracer_digest_unchanged
 run_bounds
 trace_capacity
 illegal_lockup_api
