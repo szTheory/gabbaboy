@@ -37,3 +37,14 @@ At milestone completion, audit traceability and packaged user outcomes, summariz
 - **CGB double-speed RTC assertion:** Phase 11, when the CGB speed switch exists.
 - **Paused-time recovery:** time passing while the player is paused but open is not recovered; revisit with an explicit host policy.
 - **`gbb_probe_rom` `has_rtc`:** a probe field for timer cartridges, if a consumer needs it.
+
+## Deferred from Phase 10 (revisable direction, not authorization)
+
+- **DMG FF4C-FF7F and `unused_hwio-GS`:** the DMG profile keeps these addresses fail-closed. Reading them as `$FF` (needed for the DMG variant of `unused_hwio`) is an owner decision that needs a hardware-backed oracle for the DMG revision.
+- **CGB CPU/DMA separate-bus model:** CGB OAM DMA keeps the DMG rule (CPU sees only HRAM); recorded as `expected-failure:cgb-separate-buses`. A real model needs its own oracle.
+- **DMG OAM DMA sources E0-FF and ROM sources:** unmodelled; revisit with a DMG-specific oracle.
+- **RP/IR port and FF76/FF77:** the infrared port and the CGB PCM readback registers stay deferred and fail closed.
+- **AGE `ly-cgbE` and `lcd-align-ly-cgbE`:** PPU-timing ROMs; revisit when CGB PPU timing exists and the fixtures' eligibility is recorded.
+- **Instruction-count benchmark proxy:** a deterministic cost proxy to complement the advisory wall-clock banking benchmark, which fired its review trigger on a loaded host.
+- **Flipping `boot_hwio-C` and `unused_hwio-C` to pass:** both are expected-unsupported in `fixtures/mooneye-cgb/ELIGIBILITY.md`; they stop on the unbuilt FF76/FF77 registers and are planned to flip in Phase 14.
+- **Release-mode model gates:** `verify-model-gates.py --release` still fails on the open `research:11` rows by design; they resolve in the CGB rendering phase.

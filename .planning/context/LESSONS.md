@@ -523,3 +523,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** `native_guide_rtc_contract` and its six `doc_contract_*_selftest` controls (each fails on a weaker script); a verify-work session with zero human checkpoints unless one of the four exceptions applies. See DECISIONS D-069.
 - **Source:** Phase 9 verify-work, owner directive.
 - **Status:** Adopted.
+
+### GB-CGB-001 / 2026-10-12 / The runner labelled every run `model=dmg-cpu-b`; one model-to-profile mapping removes the duplicate literals
+
+- **Cause and evidence:** Before Phase 10 the model string literal `dmg-cpu-b` appeared 17 times in `src/runner/acceptance.c` and the profile constant `GBB_PROFILE_DMG_CPU_B` three times in `src/runner/main.c`, so a CGB run would still have printed `model=dmg-cpu-b` and been filed as DMG evidence. After the change the literal occurs 5 times in `acceptance.c`, the constant once, and an unsupported profile is rejected by the acceptance runner instead of silently downgraded.
+- **Remedy:** One model-to-profile mapping consulted by the runner entry point, the manifest loader and the acceptance runner; CTests assert both the accepted DMG identity and the rejection of unknown, conflicting and CGB-excluded inputs, each with a `FAIL_REGULAR_EXPRESSION` negative control.
+- **Applies when:** Any adapter or runner that labels evidence by hardware model or profile.
+- **Verification:** `cgb_runner_profile_unknown`, `cgb_runner_profile_model_conflict`, `cgb_runner_profile_manifest_cgb_excluded`, `cgb_runner_profile_acceptance_cgb_excluded` and the three `cgb_runner_profile_dmg_identity_*` tests in `tests/expected-tests.txt`.
+- **Source:** Phase 10, plans 10-03 and 10-05 (D-28).
+- **Status:** Adopted.
