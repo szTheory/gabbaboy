@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 5
+current_plan: 6
 status: planning
-stopped_at: Completed 10-04-PLAN.md
-last_updated: "2026-10-12T17:01:24.682Z"
+stopped_at: Completed 10-05-PLAN.md
+last_updated: "2026-10-12T17:09:41.931Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 10 execution started
-state_head: bae094a6ea33231fa960589b75f00ca1b0c4ccc0
+state_head: c60a6111e9f5e36c513140e5d78477a14d3c1702
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 65
-  completed_plans: 49
+  completed_plans: 50
   percent: 44
 current_phase: 10
 current_phase_name: CGB Profile, Banking and Register Visibility
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 5
+Current Plan: 6
 Total Plans in Phase: 20
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -156,6 +156,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 10 P02 | 40 min | 2 tasks | 4 files |
 | Phase 10 P03 | 35 min | 2 tasks | 8 files |
 | Phase 10 P04 | 40 min | 2 tasks | 5 files |
+| Phase 10 P05 | 35 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -292,6 +293,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 10]: 10-02: OAM-DMA CPU bus-conflict branches tagged UNKNOWN expected-failure:cgb-separate-buses (D-17)
 - [Phase 10]: Runner carries GBB_RUNNER_PROFILE_CGB=(gbb_profile)2 until Plan 10-05 adds the public enum; CGB runs report create-failed or excluded, never fall back to DMG (D-25)
 - [Phase 10]: 10-04: DMG post-boot cells record implemented values; Pan Docs divergences (IF, STAT, NR50, NR51, NR52, OBP0/1, PPU mode, P1) are POLICY with diverges-from-pandocs
+- [Phase 10]: 10-05: gbb_create still rejects the CGB profile; probe/get_info append the D-02 API; PGB $143 rejected last on the CGB profile (GATE-67)
 
 ### Pending Todos
 
@@ -327,8 +329,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-12T17:01:24.558Z
-Stopped at: Completed 10-04-PLAN.md
+Last session: 2026-10-12T17:09:41.879Z
+Stopped at: Completed 10-05-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 10`
 
