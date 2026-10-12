@@ -53,7 +53,7 @@ Filled from the PLAN files once they exist. Requirement-level map:
 | RTC-01 | Rate, latch, halt, carry, 9-bit day | hardware-derived (rtc3test) + metamorphic | `ctest --preset phase1 -R '^(rtc3test_\|rtc_)'` | ✅ 47 tests | ✅ green |
 | RTC-01 | No host clock in `src/core` | static scan + negative control | `ctest --preset phase1 -R '^no_host_clock'` | ✅ 4 tests (3 negative controls) | ✅ green |
 | RTC-02 | Catch-up: zero, negative, INT64_MAX, halted, carry; import never advances | unit | `ctest --preset phase1 -R '^rtc_(catch_up_\|import_)'` | ✅ 10 tests | ✅ green |
-| RTC-02 | Host guide names only declared symbols and states every promised catch-up behavior | doc contract + 2 negative controls | `ctest --preset phase1 -R '^(native_guide_rtc_contract\|doc_contract_)'` | ✅ 3 tests | ✅ green |
+| RTC-02 | Host guide names only declared symbols and states every promised catch-up behavior | doc contract + 6 negative controls | `ctest --preset phase1 -R '^(native_guide_rtc_contract\|doc_contract_)'` | ✅ 7 tests | ✅ green |
 | RTC-03 | RTC block round-trip and corruption matrix | unit | `ctest --preset phase1 -R '^rtc_block_'` | ✅ 4 tests | ✅ green |
 | RTC-03 | Player `saved_at`, catch-up on reopen, rollback | player integration + cross-OS policy table | `ctest --preset phase1 -R '^catch_up_policy_table$'` and the player gate | ✅ 1 test + `player_continuation_mbc3_rtc_*` | ✅ green |
 

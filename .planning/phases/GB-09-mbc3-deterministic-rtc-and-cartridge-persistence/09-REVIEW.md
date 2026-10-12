@@ -1,108 +1,136 @@
 ---
 phase: GB-09-mbc3-deterministic-rtc-and-cartridge-persistence
-reviewed: 2026-10-11T00:00:00Z
+reviewed: 2026-10-12T13:02:54Z
 depth: standard
-files_reviewed: 59
+files_reviewed: 2
 files_reviewed_list:
-  - .gitattributes
-  - .github/scripts/verify-cmake-floor.sh
-  - .github/workflows/ci.yml
-  - .github/workflows/fixture-repro.yml
-  - .github/workflows/preview.yml
-  - CMakeLists.txt
-  - cmake/CheckCoreNoHostClock.cmake
-  - cmake/ScanForbiddenFixtures.cmake
-  - cmake/VerifyFixtureManifest.cmake
-  - include/gabbaboy/gabbaboy.h
-  - src/core/gabbaboy.c
-  - src/player/catch_up_policy.c
-  - src/player/catch_up_policy.h
-  - src/player/limitations.h
-  - src/player/main.c
-  - src/player/session.c
-  - src/player/session.h
-  - tests/player/clock_flag_scope.cmake
-  - tests/scripts/reproduce-mbc3-rtc-continuation.sh
-  - tests/scripts/reproduce-rtc3test.sh
+  - cmake/VerifyDocContract.cmake
+  - tests/CMakeLists.txt
 findings:
   critical: 0
-  warning: 2
+  warning: 5
   info: 3
-  total: 5
+  total: 8
 status: issues_found
 ---
 
-# Phase 9: Code Review Report
+# Phase 9: Code Review Report (scoped re-review: host-guide contract check)
 
-**Reviewed:** 2026-10-11
+**Reviewed:** 2026-10-12T13:02:54Z
 **Depth:** standard
-**Files Reviewed:** 59 in scope; the core, player, no-host-clock cmake, CI workflows and reproduction scripts were read in full or by Phase 9 diff. Fixture manifests, expected-output files and the C test sources were only spot-checked.
+**Files Reviewed:** 2
+**Status:** issues_found
+
+> **Scope note.** This is a scoped re-review. It covers only the host-guide contract check added after Phase 9's main review: `cmake/VerifyDocContract.cmake` (whole file) and the lines of `tests/CMakeLists.txt` changed since `a3dae02`, which are the `native_guide_rtc_contract`, `doc_contract_undeclared_selftest` and `doc_contract_missing_selftest` registrations. The earlier full-phase review is preserved at commit `486c7bd`, and its findings and dispositions are in `09-REVIEW-DISPOSITION.md`. This file replaces that review and does not reopen it.
 
 ## Summary
 
-I traced the MBC3 core against the locked decisions and found no correctness or security defects there. The checks covered:
+The check does what it says on the current inputs. `ctest --test-dir build -R 'native_guide_rtc_contract|doc_contract_'` passes 3/3, and the positive test prints `doc-contract pass identifiers=23 phrases=12`. Every one of the 23 `gbb_*`/`GBB_*` identifiers in `docs/native-integration.md` is declared in real code, not just in comments: I checked this with comments stripped from `gabbaboy.h`, plus `examples/relocated-c/CMakeLists.txt`. Each of the 12 phrases appears exactly once in the whitespace-collapsed guide.
 
-- **RTC arithmetic.** `rtc_step_field`, `rtc_add_seconds` and `rtc_sync` cannot overflow, even for a 2^64 second count. The 9-bit day wrap and sticky carry are right, and halted clocks re-anchor without crediting the halted time.
-- **Catch-up.** `gbb_rtc_catch_up` handles zero (no-op), negative (`GBB_INVALID_ARGUMENT`), `INT64_MAX` and halted (ignored, `GBB_OK`).
-- **Battery import.** The RTC block is parsed into a local copy and validated before any RAM or clock mutation. Size is checked first, and the bad-block cases return before anything is written. The generation bump is computed against the clock projected to now.
-- **Register select and banking.** Selections `$04-$07` and `$0D-$FF` map nothing. The ROM bank is masked at write time, and zero becomes one before the mask.
-- **Loader.** MBC30 markers are rejected only after the length and checksum checks. The 4 MiB MBC3 ceiling is an early bound only.
-- **`gbb_reset`.** It banks elapsed time, then re-anchors the clock to the zeroed `time_half_dots`.
-- **Player side.** Envelope v2 decode validates each length against an allow-list before any addition, forms the total in `uint64_t`, checks the CRC and copies nothing until all checks pass. `player_catch_up_policy` is correct at the boundaries, including `now - saved_at > INT64_MAX`, which clamps. `--clock-unix` is scoped to the battery smoke modes. Repeated, misplaced and malformed uses all fall to the usage exit.
+Things that hold up:
+- Identifiers are captured by `[A-Za-z0-9_]+`, so they cannot carry regex metacharacters into the whole-word `MATCHES`.
+- `$0F`/`$10` in the phrases survive CMake and CTestTestfile escaping (the phrase count of 12 proves the list arrived intact).
+- The semicolon-joined `GBB_DECLARATIONS` and `GBB_REQUIRED` `-D` arguments split correctly.
+- `PASS_REGULAR_EXPRESSION` cannot hide a failure, because the pass line is only printed after the last `FATAL_ERROR` gate.
+- Whole-word matching works: a probe guide naming the prefix `gbb_rtc` was rejected.
+- Every construct used exists in CMake 3.25. The only local CMake is 4.4.3, so I could not run the check on 3.25 itself.
 
-The findings below are robustness and user-facing correctness issues. There are no blockers.
+The defects are ways the check can **pass without checking**. A name that survives only in a header comment counts as "declared". Empty phrase elements count as satisfied phrases. Phrases hidden in HTML comments or in unrelated sections satisfy the contract. Non-prefixed API names the guide relies on (struct fields) are never checked. The self-tests lock in none of the subtle invariants. Each of these was reproduced with `cmake -P` probes (commands summarised under each finding).
 
 ## Warnings
 
-### WR-01: MBC30 rejection reports the "MBC1 multicart" message
+### WR-01: A name that survives only in a comment counts as "declared", so the rename drift the check targets can pass
 
-**File:** `src/player/session.c:78-79`
-**Issue:** Phase 9 broadened `GBB_UNSUPPORTED_CARTRIDGE_VARIANT` to mean "MBC1M or MBC30" (see `include/gabbaboy/gabbaboy.h`). `rom_error()` still maps it to "This MBC1 multicart wiring is not supported by the current preview." A user loading an MBC30 ROM (ROM code `$07` or RAM code `$05` on types `$0F-$13`) is told it is an MBC1 multicart. The player is the only consumer that turns this status into text, so the wrong cause reaches the screen and the status line.
-**Fix:** Use a neutral message, because the status code cannot tell the two variants apart:
-```c
-case GBB_UNSUPPORTED_CARTRIDGE_VARIANT:
-    return "This cartridge uses an unsupported mapper variant (MBC1 multicart or MBC30).";
-```
-Alternatively, have the player look at the header type byte, but keep it in the adapter.
-
-### WR-02: The no-host-clock proof can pass vacuously or be defeated by comment text
-
-**File:** `cmake/CheckCoreNoHostClock.cmake:84-100, 197-216`
-**Issue:** There are two weaknesses in a test whose purpose is to be fail-closed.
-
-1. The object layer takes `rc EQUAL 0` from the first `nm` that runs. It never asserts that it parsed any undefined symbols. If an `nm` variant exits 0 on a library it cannot read, or prints nothing, `gbb_symbol_count` is 0 and the test prints a success line. A real C core always imports at least `memcpy`, `malloc` and `free`, so zero symbols means the tool did not do its job.
-2. `gbb_strip_comments` finds `/*` before it removes `//` comments. A line comment containing `/*` (for example `// see /* ...`) opens a block comment that swallows code up to the next `*/`. That can hide a denied call from the source layer. A `//` inside a string literal such as `"http://"` also truncates the rest of the line. Both are unlikely today, but the scan is meant to be a guard against accidental reintroduction.
-
-**Fix:** Fail when the symbol list is empty, so the symbol layer cannot pass without reading a symbol:
+**File:** `cmake/VerifyDocContract.cmake:33-37,48`
+**Issue:** `declared` is the raw text of each declaring file, comments included. The header's prose restates API names in comments, for example `gabbaboy.h:186`, "wall-clock catch-up happens only through gbb_rtc_catch_up". Suppose `gbb_rtc_catch_up` is renamed in the prototype at line 219 and the line-186 comment is missed. The guide's stale `gbb_rtc_catch_up` still matches the comment, and the check passes. That is exactly the "renamed or removed name" drift the file header (lines 3-6) says it catches.
+Reproduced: a declaring file containing only `/* gbb_removed_fn is gone */` and a guide using `` `gbb_removed_fn` `` gives `doc-contract pass identifiers=1 phrases=1`, rc=0. The same hole applies to `#` comments in the example `CMakeLists.txt`.
+**Fix:** Strip comments before building `declared`. Choose the syntax from the file extension:
 ```cmake
-if(gbb_symbol_count EQUAL 0)
-  message(FATAL_ERROR "no-host-clock-no-symbols: ${gbb_tool} listed no undefined symbols")
-endif()
+foreach(declaring_file IN LISTS GBB_DECLARATIONS)
+  file(READ "${declaring_file}" contents)
+  if(declaring_file MATCHES "\\.(h|c)$")
+    string(REGEX REPLACE "/\\*([^*]|\\*+[^*/])*\\*+/" " " contents "${contents}")
+    string(REGEX REPLACE "//[^\n]*" " " contents "${contents}")
+  else()
+    string(REGEX REPLACE "#[^\n]*" " " contents "${contents}")
+  endif()
+  string(APPEND declared " ${contents} ")
+endforeach()
 ```
-For comment stripping, scan once character by character. Alternatively, remove `//[^\n]*` first only when no `/*` precedes it on the same line, or document that the scan is best-effort and add the empty-symbol assertion.
+Then add a self-test where the only occurrence of a name is inside a comment, and expect `doc-contract-undeclared`.
+
+### WR-02: Empty phrase elements are counted and pass, which defeats the "nonempty" requirement
+
+**File:** `cmake/VerifyDocContract.cmake:23-27,55-62`
+**Issue:** The input guard only rejects an empty *string*. `-DGBB_REQUIRED=;` passes the guard, and `foreach(... IN LISTS ...)` then iterates two empty elements. `string(FIND doc "" at)` returns 0, so each empty element counts as a found phrase.
+Reproduced: `cmake -DGBB_DOC=a.md -DGBB_DECLARATIONS=gabbaboy.h "-DGBB_REQUIRED=;" -P VerifyDocContract.cmake` prints `doc-contract pass identifiers=1 phrases=2`, rc=0.
+The registered test pins `phrases=12`, so an accidental `""` *replacing* a phrase is caught there. But adding a 13th phrase as an empty element would bump the count. Either way, the script's own contract ("required, nonempty") is false, and any future caller without a count pin can be satisfied vacuously.
+**Fix:**
+```cmake
+foreach(phrase IN LISTS GBB_REQUIRED)
+  if(phrase STREQUAL "")
+    message(FATAL_ERROR "doc-contract-empty-phrase: GBB_REQUIRED has an empty element")
+  endif()
+  ...
+```
+
+### WR-03: Phrases match anywhere, including inside HTML comments and unrelated sections
+
+**File:** `cmake/VerifyDocContract.cmake:29-31,57`
+**Issue:** The guide text is only whitespace-collapsed before `string(FIND)`. If a required behaviour is moved into an `<!-- ... -->` block, it no longer renders, yet it still satisfies the contract.
+Reproduced: a guide whose only "once per open" sits in `<!-- once per open -->` passes, rc=0.
+Several phrases are also generic enough to be satisfied by an unrelated sentence elsewhere in the guide: "once per open", "never advances it", "as an input event". Today each occurs once, in the RTC bullet (lines 88-100). But nothing ties a phrase to the `gbb_rtc_catch_up` paragraph, so deleting that paragraph's sentence while another section says "...once per open..." still passes.
+**Fix:** Strip HTML comments before matching:
+```cmake
+string(REGEX REPLACE "<!--([^-]|-[^-]|--+[^->])*--+>" " " doc "${doc}")
+```
+Then do one of the following:
+- anchor generic phrases with neighbouring text, e.g. `"the host clock once per open"`; or
+- make the script take an optional `GBB_SECTION_START` literal and restrict `doc` to the text after it (up to the next `\n- \`` bullet or heading) before checking the phrases.
+
+### WR-04: The identifier check covers only `gbb_`/`GBB_` names, so struct fields the guide tells hosts to read are never checked
+
+**File:** `cmake/VerifyDocContract.cmake:39`; `docs/native-integration.md:76`
+**Issue:** The guide tells hosts to "Check both `reason` and `consumed_half_dots`". These are fields of the run-result struct. Renaming either field in `gabbaboy.h` leaves the guide stale and the check green, because line 39 only extracts `(gbb|GBB)_...` tokens. The file header (lines 3-4) claims the check catches "a renamed or removed name (API symbol ...)", but non-prefixed API names are not covered.
+**Fix:** Also extract back-ticked C identifiers (`` `([A-Za-z_][A-Za-z0-9_]*)` ``) and require them to be declared too. Use a short explicit allowlist (e.g. `GBB_IGNORED_NAMES`) for non-API tokens such as `find_package` and `CMAKE_PREFIX_PATH`. Alternatively, add `"\`reason\` and \`consumed_half_dots\`"` to a phrase list and check the field names with the identifier pass.
+
+### WR-05: The self-tests do not lock in the check's subtle invariants
+
+**File:** `tests/CMakeLists.txt` (the `doc_contract_undeclared_selftest` / `doc_contract_missing_selftest` block)
+**Issue:** The two self-tests prove that an unknown name and an absent phrase fail. They also prove, via `FORBID doc-contract-missing`, that a phrase wrapped across lines still matches. Nothing in CI locks in:
+- (a) **Whole-word matching.** A guide naming a declared prefix such as `gbb_rtc` must fail. If the `[^A-Za-z0-9_]` guards on line 48 were dropped, every prefix of a real symbol would pass, and no test would notice.
+- (b) **`doc-contract-empty`.** A guide with no identifiers must fail.
+- (c) **Multiple declaring files.** The `;`-joined `GBB_DECLARATIONS` list is only exercised by the positive test, which would also pass if just the header were read and the guide stopped using `GBB_ROM_PATH`.
+- (d) **Comment-only and empty-phrase rejection,** once WR-01 and WR-02 are fixed.
+
+Each of these is a vacuous-pass regression that would pass silently.
+**Fix:** Add `expect_exit.cmake` cases with `GBB_EXPECT_CODE=1`, using the same pattern as the existing self-tests:
+- a guide naming `` `gbb_rtc` ``, expecting `doc-contract-undeclared: gbb_rtc`;
+- a guide with no identifiers, expecting `doc-contract-empty`;
+- a two-file declarations case where the second file supplies the only declaration, run as a positive test with `GBB_EXPECT_CODE=0` and `GBB_EXPECT_REGEX=doc-contract pass identifiers=2`.
 
 ## Info
 
-### IN-01: `--clock-unix` accepts leading whitespace and a `+` sign
+### IN-01: Phrases are not normalised the same way as the guide; Unicode spaces are not collapsed
 
-**File:** `src/player/main.c` (the `strtoll` parse in `main`, around the `clock_flag_ok` block)
-**Issue:** The comment and `tests/player/clock_flag_scope.cmake` describe "a complete base-10 int64". `strtoll` also accepts leading whitespace, `+5`, `-0` and `0x...` is rejected only because base is 10. The test does not exercise these. This is harmless for a test-only flag, but the contract wording is slightly broader than the code.
-**Fix:** Reject `argv[4][0]` that is not a digit or `-`, or tighten the comment to "as parsed by `strtoll`, base 10".
+**File:** `cmake/VerifyDocContract.cmake:31,57`
+**Issue:** Only the guide is collapsed. A phrase containing a double space or a newline can never match (probe: `"Call  \`gbb"` gives `doc-contract-missing`). Also, `[ \t\r\n]` does not cover NBSP (U+00A0) or form feed, so an editor-inserted NBSP inside a phrase fails it (probe reproduced). Both fail closed, so neither is a vacuous pass, but each produces a confusing false failure.
+**Fix:** Apply the same `string(REGEX REPLACE "[ \t\r\n]+" " " phrase "${phrase}")` to each phrase, and say in the header that the guide must use ASCII spaces.
 
-### IN-02: Battery block accepts any latch-edge byte
+### IN-02: Identifier extraction has no left word boundary
 
-**File:** `src/core/gabbaboy.c` (`rtc_block_parse`, the `latch_prev` copy, around line 2196)
-**Issue:** Byte 19 is copied without range checking. Only values the core can produce are meaningful (`$FF` after reset, otherwise the last written byte, which may be any value), so rejecting nothing is correct. However, the header text says "out-of-range field" is rejected, and this field is the one unchecked field. This is a documentation nit only.
-**Fix:** State in the header comment that the latch-edge byte is stored as any value.
+**File:** `cmake/VerifyDocContract.cmake:39`
+**Issue:** `MATCHALL "(gbb|GBB)_..."` pulls `gbb_rtc_catch_up` out of `libgbb_rtc_catch_up` (probe: passes against the header). The token the guide actually shows the reader (`libgbb_...`) is never checked. The guide has no such token today, so this has no current effect.
+**Fix:** Pad the guide and match `"[^A-Za-z0-9_](gbb|GBB)_[A-Za-z0-9_]+"`, then strip the leading character from each match. Alternatively, match `(^|[^A-Za-z0-9_])` and take `CMAKE_MATCH_*` in a loop.
 
-### IN-03: `catch_up_on_open` ignores the machine's own `ram_size` in image-size math
+### IN-03: `PASS_REGULAR_EXPRESSION` is unanchored on the phrase count
 
-**File:** `src/player/session.c:706-711`
-**Issue:** `player_session_apply_catch_up` hard-codes the live DH register at `ram_size + 13`, the block layout offset, instead of sharing a named constant with `rtc_block_write`. If the block layout version changes, the halted and carry reporting would silently read the wrong byte. Nothing fails today, because the core and player are in the same repo and the layout is pinned by the v1 block format.
-**Fix:** Add a named constant for the offset in the public header, next to `GBB_RTC_BLOCK_SIZE`, for example `#define GBB_RTC_BLOCK_LIVE_DH_OFFSET 13u`, and use it in both places.
+**File:** `tests/CMakeLists.txt` (`set_tests_properties(native_guide_rtc_contract ...)`)
+**Issue:** `phrases=12` also matches `phrases=120`, and so on. This is harmless while the list is 12 long, but the pin is the main defence against the list-splitting and empty-element miscounts described in WR-02.
+**Fix:** `PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=12\n"`. CTest regexes see the raw output, and `message(STATUS)` ends the line with a newline.
 
 ---
 
-_Reviewed: 2026-10-11_
+_Reviewed: 2026-10-12T13:02:54Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
