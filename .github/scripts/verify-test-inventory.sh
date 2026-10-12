@@ -34,6 +34,14 @@ elif [[ "$inventory" != "--installed" ]]; then
   exit 2
 fi
 
+# The A/B benchmark harness is bash-only, so cmake/ExpectedTests.cmake does not register it on Windows.
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    sed -i.bak '/^cgb_bench_ab_/d' "$expected"
+    rm -f "$expected.bak"
+    ;;
+esac
+
 sed -nE 's/.*<testcase[^>]*name="([^"]+)".*/\1/p' "$report" | LC_ALL=C sort > "$actual"
 LC_ALL=C sort -o "$expected" "$expected"
 if ! diff -u "$expected" "$actual"; then
