@@ -522,3 +522,4 @@ cgb_mooneye_expected_unsupported_tamper
 cgb_mooneye_observe_not_applicable
 cgb_postboot_div_real_rom_sweep
 cgb_postboot_div_real_rom_sweep_shifted
+cgb_bench_ab_selftest

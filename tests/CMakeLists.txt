@@ -1677,4 +1677,19 @@ add_test(NAME cgb_tables_io_mutated_doc
     "-DGBB_EXPECT_REGEX=cgb-tables mismatch"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
+# D-22 advisory A/B benchmark harness (Plan 10-17). Only the digest check and the receipt shape are
+# asserted; timing is never a CTest result. bash-only, so absent on Windows.
+if(NOT WIN32)
+  find_program(GBB_BASH bash REQUIRED)
+  set(GBB_AB_SCRIPT "${PROJECT_SOURCE_DIR}/tests/scripts/measure-release-baseline.sh")
+  set(GBB_AB_DIR "${PROJECT_BINARY_DIR}/bench-ab")
+  file(MAKE_DIRECTORY "${GBB_AB_DIR}")
+  add_test(NAME cgb_bench_ab_selftest
+    COMMAND "${GBB_BASH}" "${GBB_AB_SCRIPT}" --ab $<TARGET_FILE:measure_core> $<TARGET_FILE:measure_core>
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+  set_tests_properties(cgb_bench_ab_selftest PROPERTIES TIMEOUT 120
+    ENVIRONMENT "GBB_RELEASE_MEASURE_SAMPLES=3;GBB_RELEASE_MEASURE_WARMUPS=1;GBB_AB_RECEIPT=${GBB_AB_DIR}/selftest-receipt.json"
+    PASS_REGULAR_EXPRESSION "ab pass samples=3")
+endif()
+
 gabbaboy_verify_registered_tests()
