@@ -1836,11 +1836,22 @@ if(NOT WIN32)
         "-DGBB_WORKDIR=${PROJECT_SOURCE_DIR}"
         -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
     set_tests_properties(${name} PROPERTIES TIMEOUT 120
-      ENVIRONMENT "GBB_RELEASE_MEASURE_SAMPLES=3;GBB_RELEASE_MEASURE_WARMUPS=1;GBB_AB_RECEIPT=${GBB_AB_DIR}/${name}.json;GBB_AB_DROP_FIELD=${drop_field};GBB_AB_EXPECT_DIGEST=${digest}")
+      ENVIRONMENT "GBB_RELEASE_MEASURE_SAMPLES=3;GBB_RELEASE_MEASURE_WARMUPS=1;GBB_AB_TEST_HOOKS=1;GBB_AB_RECEIPT=${GBB_AB_DIR}/${name}.json;GBB_AB_DROP_FIELD=${drop_field};GBB_AB_EXPECT_DIGEST=${digest}")
   endfunction()
   gbb_add_bench_ab_control(cgb_bench_ab_wrong_digest "" 0000000000000000 "ab-digest-mismatch")
   gbb_add_bench_ab_control(cgb_bench_ab_missing_field uncertainty 4c7a57ff3d50d228
     "ab-receipt-missing: uncertainty")
+  # IN-03: a measure binary whose mode= line has no elapsed_ns is a named error, not a KeyError traceback.
+  add_test(NAME cgb_bench_ab_missing_elapsed
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${GBB_BASH}$<SEMICOLON>${GBB_AB_SCRIPT}$<SEMICOLON>--ab$<SEMICOLON>${PROJECT_SOURCE_DIR}/tests/scripts/ab-stub-no-elapsed.sh$<SEMICOLON>${PROJECT_SOURCE_DIR}/tests/scripts/ab-stub-no-elapsed.sh"
+      -DGBB_EXPECT_CODE=1
+      "-DGBB_EXPECT_REGEX=ab-field-missing: base elapsed_ns=absent"
+      "-DGBB_FORBID_REGEX=Traceback|KeyError"
+      "-DGBB_WORKDIR=${PROJECT_SOURCE_DIR}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(cgb_bench_ab_missing_elapsed PROPERTIES TIMEOUT 120
+    ENVIRONMENT "GBB_RELEASE_MEASURE_SAMPLES=3;GBB_RELEASE_MEASURE_WARMUPS=1;GBB_AB_RECEIPT=${GBB_AB_DIR}/missing-elapsed.json")
 endif()
 
 gabbaboy_verify_registered_tests()

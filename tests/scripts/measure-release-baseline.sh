@@ -43,12 +43,17 @@ import statistics
 import subprocess
 import sys
 
-root, rom, base_bin, head_bin, samples_text, warmups_text, timeout_text = sys.argv[1:]
+_root, rom, base_bin, head_bin, samples_text, warmups_text, timeout_text = sys.argv[1:]
 samples, warmups, timeout_s = int(samples_text), int(warmups_text), int(timeout_text)
 WORKLOAD = "original-wram-tracer-1m-half-dots-v1"
-expected_digest = os.environ.get("GBB_AB_EXPECT_DIGEST", "4c7a57ff3d50d228")
+expected_digest = "4c7a57ff3d50d228"
 receipt_path = pathlib.Path(os.environ.get("GBB_AB_RECEIPT", "ab-receipt.json"))
-drop_field = os.environ.get("GBB_AB_DROP_FIELD", "")
+drop_field = ""
+# The digest and drop-field overrides exist only for the negative controls; a stray exported variable
+# must not weaken the digest guard, so they are honoured only when GBB_AB_TEST_HOOKS=1 is also set.
+if os.environ.get("GBB_AB_TEST_HOOKS") == "1":
+    expected_digest = os.environ.get("GBB_AB_EXPECT_DIGEST", expected_digest)
+    drop_field = os.environ.get("GBB_AB_DROP_FIELD", "")
 FIELDS = ("revision", "build", "hardware", "workload", "model", "output_digest", "warmups",
           "samples", "uncertainty", "ratio", "noise_label", "review_trigger")
 
@@ -63,7 +68,10 @@ def run_once(label, binary):
         raise SystemExit(f"ab-workload-mismatch: {label}")
     if fields.get("correctness_digest_fnv1a64") != expected_digest:
         raise SystemExit(f"ab-digest-mismatch: {label} printed {fields.get('correctness_digest_fnv1a64')}")
-    return int(fields["elapsed_ns"])
+    elapsed = fields.get("elapsed_ns", "")
+    if not re.fullmatch(r"[0-9]+", elapsed):
+        raise SystemExit(f"ab-field-missing: {label} elapsed_ns={elapsed or 'absent'}")
+    return int(elapsed)
 
 def validate_receipt(receipt):
     for field in FIELDS:
