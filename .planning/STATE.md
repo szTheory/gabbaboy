@@ -4,18 +4,18 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 status: planning
 stopped_at: Phase 10 context gathered
-last_updated: "2026-10-12T15:10:01.569Z"
+last_updated: "2026-10-12T16:22:34.623Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 9 verify-work passed; zero-human-UAT policy D-069 adopted
-state_head: d1d40231a45c766d0ce902adf9f2c0f4c5d94343
+state_head: 5b021721ba24218ffef2837c389fcface271c7d4
 progress:
   total_phases: 9
   completed_phases: 4
-  total_plans: 45
+  total_plans: 65
   completed_plans: 45
   percent: 44
-current_phase: 10
 current_phase_name: CGB Profile, Banking and Register Visibility
+current_phase: 10
 ---
 
 # Project State
@@ -25,14 +25,14 @@ current_phase_name: CGB Profile, Banking and Register Visibility
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 10 — CGB Profile, Banking and Register Visibility (context gathered; next `/gsd-plan-phase 10`)
+**Current focus:** Phase 10 — CGB Profile, Banking and Register Visibility (planned: 20 plans in 20 serial waves; next `/gsd-execute-phase 10`)
 
 ## Current Position
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
 Verified: Phase 9 `/gsd-verify-work 9` passed 2026-10-12 — 14/14 UAT items automated (09-UAT.md), the guide-wording item replaced by the `native_guide_rtc_contract` check; re-verification `passed` (09-VERIFICATION.md); PR #65 squash-merges at the exact-head green branch head (pre-authorized)
-Next step: Phase 10 — CGB Profile, Banking and Register Visibility — research and planning via `/gsd-plan-phase 10` (context gathered 2026-10-12; owner chooses when)
-Last activity: 2026-10-12 — Phase 9 verified; verification policy D-069 (zero human UAT by default) adopted
+Next step: Phase 10 — CGB Profile, Banking and Register Visibility — execution via `/gsd-execute-phase 10` (planned 2026-10-12; owner chooses when)
+Last activity: 2026-10-12 — Phase 10 planned (research, pattern map, 20 plans, plan checker passed on iteration 2)
 
 Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 
@@ -316,9 +316,11 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 ## Session Continuity
 
 Last session: 2026-10-12T15:10:01.451Z
-Stopped at: Phase 10 context gathered
-Resume file: .planning/phases/GB-10-cgb-profile-banking-and-register-visibility/10-CONTEXT.md
-Next command in fresh context: `/gsd-plan-phase 10`
+Stopped at: Phase 10 planned
+Resume file: .planning/phases/GB-10-cgb-profile-banking-and-register-visibility/10-01-PLAN.md
+Next command in fresh context: `/gsd-execute-phase 10`
+
+Completed workflow stage: **Phase 10 - CGB Profile, Banking and Register Visibility, planning** (2026-10-12) on branch `gsd/phase-10-cgb-profile-banking-and-register-visibility`. 10-RESEARCH.md (corrections C1-C13 to CONTEXT), 10-PATTERNS.md, 10-VALIDATION.md and plans 10-01..10-20 (one plan per wave, serial because every plan edits `tests/expected-tests.txt` and `tests/CMakeLists.txt`). Plan checker passed on iteration 2 (iteration 1: split the 15-file Mooneye CGB plan and the over-budget visibility plan, D-27 test prefixes, PATTERNS analog references). Coverage gates: CGB-01..03 covered, decisions 29/29. Research open questions auto-resolved per the owner's standing instruction: `gbb_create` accepts CGB in 10-06; IE bits 5-7 stored on CGB only (new owner veto item 6); CGB post-boot IF/audio cells for `boot_hwio-C`; shared GATE-00 tag; deferred writes stop through a latch. Owner veto window (before the phase PR merges): `gbb_info` ABI, PGB rejection, `gbb_copy_frame` error on CGB, DMG FF4C-FF7F unchanged, +5% bench review trigger, CGB IE bits 5-7. Execution preconditions: network for the pinned RGBDS 1.0.1 archive (10-13) and Mooneye/WLA-DX sources (10-14), gh access and exact-head CI (10-20). Next step: **Phase 10 execution** via **`/gsd-execute-phase 10`**. Both auto-advance flags stay false; nothing advances automatically.
 
 Completed workflow stage: **Phase 10 - CGB Profile, Banking and Register Visibility, discussion** (2026-10-12) on branch `gsd/phase-10-cgb-profile-banking-and-register-visibility`. [10-CONTEXT.md](phases/GB-10-cgb-profile-banking-and-register-visibility/10-CONTEXT.md) locks D-01..D-29 from five parallel advisor researches (profile API, post-boot/visibility/model-gate audit, banking/DMA, half-dot ADR/benchmark, gap sweep) with adversarial passes, auto-followed per the owner's standing instruction. Key choices: sized `gbb_info` + `gbb_probe_rom`/`gbb_get_info`; PGB headers rejected on CGB with appended `GBB_UNSUPPORTED_EXECUTION_MODE`; C post-boot and visibility tables with per-cell provenance mirrored in docs and diff-tested; CI-enforced model-gate scanner; DMG FF4C-FF7F stays fail-closed (byte-identical); unbuilt CGB registers fail closed as `DEFERRED(n)`; `vram[2][8192]`/`wram[8][4096]` with DMG pinned to bank 1; ADR D-070 (half-dot single clock) with static asserts; advisory interleaved A/B benchmark. Owner veto window (before the phase PR merges): `gbb_info` ABI, PGB rejection, `gbb_copy_frame` error on CGB, DMG FF4C-FF7F unchanged, +5% bench review trigger. Next step: **Phase 10 research and planning** via **`/gsd-plan-phase 10`**. Both auto-advance flags stay false; nothing advances automatically.
 

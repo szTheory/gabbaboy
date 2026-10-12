@@ -219,7 +219,29 @@ Plans:
   4. The half-dot timeline-unit decision for double speed is recorded in DECISIONS.md, and a banking-indirection benchmark shows the DMG cost against the Phase 7 baseline.
 
 **Research**: Moderate (CGB-E post-boot DIV/LY/STAT; compat-mode register readability per Mooneye `unused_hwio-C` and AGE).
-**Plans**: TBD
+**Plans**: 20 plans
+
+Plans (serial waves: every plan edits `tests/expected-tests.txt` and `tests/CMakeLists.txt`, most also `src/core/gabbaboy.c`):
+- [ ] 10-01-PLAN.md — Wave 1: model-gate scanner (R1-R5, --release, self-test mutants) and docs/model-gates.md skeleton
+- [ ] 10-02-PLAN.md — Wave 2: tag every core function and model-differing branch (comment-only), gate table, real-file controls
+- [ ] 10-03-PLAN.md — Wave 3: runner model<->profile mapping, --profile, removed unsupported-profile rejection, DMG byte-identity controls
+- [ ] 10-04-PLAN.md — Wave 4: DMG post-boot pin test, then the post_boot[] provenance table refactor (own commit)
+- [ ] 10-05-PLAN.md — Wave 5: appended profile/info API, gbb_probe_rom, gbb_get_info, PGB rejection, parity tests
+- [ ] 10-06-PLAN.md — Wave 6: CGB and compat post-boot columns, create flip, copy_frame gate, DIV sweep, channel-1 silence
+- [ ] 10-07-PLAN.md — Wave 7: docs/cgb-profile.md post-boot mirror and test_cgb_tables provenance checks
+- [ ] 10-08-PLAN.md — Wave 8: banked VRAM/WRAM arrays and helpers with the DMG flat-reference metamorphic test
+- [ ] 10-09-PLAN.md — Wave 9: io_visibility table and CGB decode, deferred-access latch, IE gate, VBK/SVBK selection, behaviour cases
+- [ ] 10-10-PLAN.md — Wave 10: per-cell visibility matrix (DMG/CGB/compat) with flip, cross-column and sweep controls; io doc mirror and table check
+- [ ] 10-11-PLAN.md — Wave 11: KEY0 lock behavioural probe and STOP with KEY1 armed fail-closed
+- [ ] 10-12-PLAN.md — Wave 12: CGB OAM DMA source map, echo/bank public tests, D-17 pin, core-mutant controls
+- [ ] 10-13-PLAN.md — Wave 13: original fixtures/cgb-banking (two builds, three controls, byte-identical repro)
+- [ ] 10-14-PLAN.md — Wave 14: fixtures/mooneye-cgb derivation, manifest, rights files and eligibility (byte-identical repro)
+- [ ] 10-15-PLAN.md — Wave 15: VerifyMooneyeCgb digest/inventory verifier with tamper controls, install scan and CI repro job
+- [ ] 10-16-PLAN.md — Wave 16: Mooneye CGB runner suite with expected-unsupported rows and the real-ROM DIV sweep
+- [ ] 10-17-PLAN.md — Wave 17: banking-indirection A/B benchmark, CTest receipt checks and evidence report
+- [ ] 10-18-PLAN.md — Wave 18: fuzz, loader and consumer coverage on both profiles, instance isolation, ASan
+- [ ] 10-19-PLAN.md — Wave 19: D-070 half-dot ADR with static asserts and contract, guide, support ledger, D-071+
+- [ ] 10-20-PLAN.md — Wave 20: phase gates, evidence head, PR with six owner veto items (left open), handoff to /gsd-verify-work 10
 
 ### Phase 11: CGB Colour Rendering and Player Colour
 

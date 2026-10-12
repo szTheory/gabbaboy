@@ -20,7 +20,7 @@ created: "2026-10-12"
 |----------|-------|
 | **Framework** | CTest over C executables (`REQUIRE` macros); CMake `-P` verifiers; stdlib Python verifiers run as `python3 -I` with `--self-test` |
 | **Config file** | `CMakePresets.json` (presets `phase1`, `phase1-asan`, `cmake-3.25.3`) |
-| **Quick run command** | `ctest --preset phase1 -R '^(cgb_\|banking_\|model_gates\|mooneye_cgb_\|bench_ab\|adr_half_dot\|runner_)' --output-on-failure --no-tests=error` |
+| **Quick run command** | `ctest --preset phase1 -R '^(cgb_\|banking_\|model_gates)' --output-on-failure --no-tests=error` |
 | **Full suite command** | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error && bash tests/scripts/verify-dmg-baseline.sh` |
 | **Estimated runtime** | ~120 seconds (full suite, local) |
 
@@ -52,12 +52,12 @@ created: "2026-10-12"
 | CGB-02 / D-23 | STOP with KEY1 armed unsupported on CGB | unit | `ctest -R '^cgb_stop_'` | DMG stops with STOPPED | ⬜ pending |
 | CGB-03 / D-13..D-15 | DMG flat reference; CGB banking diverges | white-box | `ctest -R '^banking_'` | echo-ignores-bank / DMA wrong-bank mutants | ⬜ pending |
 | CGB-03 / D-18 | original banking fixture | fixture | `ctest -R '^cgb_banking_'` | patched expected -> `$EE` | ⬜ pending |
-| D-20/D-21 | ADR static asserts + doc tie | compile + CMake | `ctest -R '^adr_half_dot'` | doc missing symbol | ⬜ pending |
-| D-22 | A/B bench receipt + digest | script | `ctest -R '^bench_ab'` | wrong digest, missing field | ⬜ pending |
+| D-20/D-21 | ADR static asserts + doc tie | compile + CMake | `ctest -R '^cgb_adr_half_dot'` | doc missing symbol | ⬜ pending |
+| D-22 | A/B bench receipt + digest | script | `ctest -R '^cgb_bench_ab'` | wrong digest, missing field | ⬜ pending |
 | D-25 | runner `--profile`, DMG output unchanged | runner | `ctest -R '^runner_(profile\|model)'` + baseline | CGB grep for `dmg-cpu-b` empty | ⬜ pending |
-| D-26 | Mooneye CGB admissions | runner/verifier | `ctest -R '^mooneye_cgb_'` | tampered digest; expected-unsupported that passes | ⬜ pending |
+| D-26 | Mooneye CGB admissions | runner/verifier | `ctest -R '^cgb_mooneye_'` | tampered digest; expected-unsupported that passes | ⬜ pending |
 | D-27 | fuzz/consumers both profiles | fuzz/unit | `ctest -R '^(loader_\|battery_api_fuzz\|fuzz_core_regressions\|installed_consumer)'` + ASan | skewed probe | ⬜ pending |
-| D-28 | docs contract | CMake | `ctest -R '^native_guide_cgb_contract'` | missing phrase selftest | ⬜ pending |
+| D-28 | docs contract | CMake | `ctest -R '^cgb_native_guide_contract'` | missing phrase selftest | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
