@@ -1550,6 +1550,57 @@ add_test(NAME cgb_adr_half_dot_contract
 set_tests_properties(cgb_adr_half_dot_contract PROPERTIES
   PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=${GBB_ADR_HALF_DOT_PHRASE_COUNT}[^0-9]")
 
+# Negative controls for the ADR contract: each doc copy breaks exactly one rule, so a pass cannot come
+# from a check that never fails.
+file(READ "${GBB_ADR_DOC}" gbb_adr_doc_text)
+set(GBB_ADR_SELFTEST_DIR "${PROJECT_BINARY_DIR}/cgb-adr-selftest")
+foreach(anchor IN ITEMS "`GBB_T_PER_M` (4)" "single clock for normal and double speed")
+  string(FIND "${gbb_adr_doc_text}" "${anchor}" gbb_adr_first)
+  string(FIND "${gbb_adr_doc_text}" "${anchor}" gbb_adr_last REVERSE)
+  if(gbb_adr_first EQUAL -1 OR NOT gbb_adr_first EQUAL gbb_adr_last)
+    message(FATAL_ERROR "ADR selftest anchor '${anchor}' must occur exactly once in ${GBB_ADR_DOC}")
+  endif()
+endforeach()
+string(REPLACE "`GBB_T_PER_M` (4)" "`GBB_NO_SUCH_TIMELINE_MACRO` (4)" gbb_adr_undeclared_text "${gbb_adr_doc_text}")
+string(REPLACE "single clock for normal and double speed" "clock" gbb_adr_missing_text "${gbb_adr_doc_text}")
+file(WRITE "${GBB_ADR_SELFTEST_DIR}/undeclared.md" "${gbb_adr_undeclared_text}")
+file(WRITE "${GBB_ADR_SELFTEST_DIR}/missing.md" "${gbb_adr_missing_text}")
+foreach(kind IN ITEMS undeclared missing)
+  if(kind STREQUAL "undeclared")
+    set(gbb_adr_regex "doc-contract-undeclared: GBB_NO_SUCH_TIMELINE_MACRO")
+  else()
+    set(gbb_adr_regex "doc-contract-missing: single clock for normal and double speed")
+  endif()
+  add_test(NAME cgb_adr_half_dot_contract_${kind}_selftest
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${GBB_ADR_SELFTEST_DIR}/${kind}.md;-DGBB_DECLARATIONS=${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c;-DGBB_REQUIRED=single clock for normal and double speed;-DGBB_SCOPE_START=${GBB_ADR_SCOPE_START};-P;${GBB_DOC_CONTRACT_SCRIPT}"
+      -DGBB_EXPECT_CODE=1
+      "-DGBB_EXPECT_REGEX=${gbb_adr_regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+endforeach()
+
+# Static-assert mutant: the core with the double-speed T-cycle changed from 1 to 2 half-dots must fail to
+# compile on a "half-dot timeline:" assert. The library is EXCLUDE_FROM_ALL and never installed.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c)
+file(READ ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c gbb_adr_core_text)
+set(gbb_adr_anchor "#define GBB_HALF_DOTS_PER_T_DOUBLE 1u")
+string(FIND "${gbb_adr_core_text}" "${gbb_adr_anchor}" gbb_adr_first)
+string(FIND "${gbb_adr_core_text}" "${gbb_adr_anchor}" gbb_adr_last REVERSE)
+if(gbb_adr_first EQUAL -1 OR NOT gbb_adr_first EQUAL gbb_adr_last)
+  message(FATAL_ERROR "ADR mutant anchor '${gbb_adr_anchor}' must occur exactly once in src/core/gabbaboy.c")
+endif()
+string(REPLACE "${gbb_adr_anchor}" "#define GBB_HALF_DOTS_PER_T_DOUBLE 2u" gbb_adr_mutant_text "${gbb_adr_core_text}")
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_adr_mutant.c "${gbb_adr_mutant_text}")
+add_library(gabbaboy_core_adr_mutant STATIC EXCLUDE_FROM_ALL ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_adr_mutant.c)
+target_include_directories(gabbaboy_core_adr_mutant PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_compile_features(gabbaboy_core_adr_mutant PUBLIC c_std_17)
+set_target_properties(gabbaboy_core_adr_mutant PROPERTIES C_EXTENSIONS OFF)
+target_compile_definitions(gabbaboy_core_adr_mutant PRIVATE GBB_BUILD_REVISION="adr-mutant" GBB_BUILD_QUALIFIED=0)
+add_test(NAME cgb_adr_half_dot_static_assert_mutant
+  COMMAND ${CMAKE_COMMAND} --build ${PROJECT_BINARY_DIR} --target gabbaboy_core_adr_mutant)
+set_tests_properties(cgb_adr_half_dot_static_assert_mutant PROPERTIES
+  PASS_REGULAR_EXPRESSION "half-dot timeline:" TIMEOUT 180)
+
 # Model-gate scanner (CGB-02, decision D-08). Stdlib-only Python run with -I; every negative
 # control goes through expect_exit.cmake so it must fail with exactly the expected reason.
 set(GBB_MODEL_GATE_SCANNER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-model-gates.py")
