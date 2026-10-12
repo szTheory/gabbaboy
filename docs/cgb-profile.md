@@ -443,6 +443,14 @@ the written value is dropped, and the stop is reported afterwards with the regis
 write stop is also reported after an interrupt-entry push that hits a deferred register. A host that
 resumes with another run call continues after the dropped write.
 
+### STOP with KEY1 armed
+
+STOP with KEY1 bit 0 armed: DEFERRED(12). On the CGB profile in CGB mode the speed switch is not
+modelled, so the instruction retires and the run reports `GBB_STOP_UNSUPPORTED_BUS` with the KEY1
+address ($FF4D); the machine never enters the DMG STOP sleep and no speed change is faked. STOP
+without arming, STOP in compatibility mode (which ignores KEY1 writes) and STOP on the DMG profile
+use the shared path and report `GBB_STOP_STOPPED`.
+
 ### IE bits 5-7
 
 On the CGB profile (both modes) IE stores and reads back all 8 bits. On the DMG profile IE keeps

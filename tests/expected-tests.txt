@@ -475,3 +475,11 @@ cgb_visibility_matrix_cgb
 cgb_visibility_matrix_dmg
 cgb_visibility_cross_column_control
 cgb_visibility_sweep_control
+cgb_stop_armed_cgb
+cgb_stop_unarmed_cgb
+cgb_stop_compat_ignores_key1
+cgb_stop_dmg_control
+cgb_key0_lock_cgb
+cgb_key0_lock_compat
+cgb_key0_lock_cross_column
+cgb_key0_lock_reset_idempotent

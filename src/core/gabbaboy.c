@@ -3440,7 +3440,15 @@ static void execute(gbb_instance *m, uint8_t cost) {
             case 0x3A: m->a=bus_read(m,hl(m),8); set_hl(m,(uint16_t)(hl(m)-1)); m->pc++; break;
             case 0x08: { uint16_t addr=(uint16_t)(instruction_byte(m,pc,1)|((uint16_t)instruction_byte(m,pc,2)<<8)); bus_write(m,addr,(uint8_t)m->sp,24); bus_write(m,(uint16_t)(addr+1),(uint8_t)(m->sp>>8),32); m->pc+=3; break; }
             /* MODEL: UNKNOWN GATE-62 research:12 -- STOP, including CGB speed switch */
-            case 0x10: m->pc=(uint16_t)(pc+2); m->stopped=1; break;
+            case 0x10:
+                /* MODEL: CGB_ONLY GATE-74 GUARD=model_is_cgb -- STOP with KEY1 armed is the CGB speed switch; Phase 12 owns it, so it stops visibly instead of sleeping (D-23) */
+                if (model_is_cgb(m) && m->exec_mode == GBB_MODE_CGB && (m->key1_armed & 1u) != 0u) {
+                    m->pc=(uint16_t)(pc+2);
+                    m->bus_unsupported=1;
+                    m->bus_unsupported_address=0xFF4Du;
+                    break;
+                }
+                m->pc=(uint16_t)(pc+2); m->stopped=1; break;
             case 0x07: { uint8_t c=(uint8_t)(m->a>>7); m->a=(uint8_t)((m->a<<1)|c); m->f=c?0x10:0; m->pc++; break; }
             case 0x0F: { uint8_t c=(uint8_t)(m->a&1); m->a=(uint8_t)((m->a>>1)|(c<<7)); m->f=c?0x10:0; m->pc++; break; }
             case 0x17: { uint8_t c=(uint8_t)(m->a>>7), old=(uint8_t)((m->f>>4)&1); m->a=(uint8_t)((m->a<<1)|old); m->f=c?0x10:0; m->pc++; break; }

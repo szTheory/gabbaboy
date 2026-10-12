@@ -116,6 +116,7 @@ occurs exactly once in code and once in the table.
 | GATE-71 | CGB_ONLY | model_is_cgb | - | io_write_cgb | FF4C-FF7F writes on the CGB profile; DEFERRED cells latch bus_unsupported |
 | GATE-72 | CGB_ONLY | model_is_cgb | - | read8 | FF4C-FF7F decode goes through io_visibility[]; the DMG profile falls through unchanged (D-09) |
 | GATE-73 | CGB_ONLY | model_is_cgb | - | write8 | FF4C-FF7F decode goes through io_visibility[]; a no-op on the DMG profile (C4) |
+| GATE-74 | CGB_ONLY | model_is_cgb | - | execute | STOP with KEY1 armed latches bus_unsupported at FF4D instead of sleeping; the speed switch is DEFERRED(12) (D-23) |
 <!-- model-gates-end -->
 
 ## Release status

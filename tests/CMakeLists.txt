@@ -302,6 +302,11 @@ foreach(case vbk_tracer svbk_select unmapped_cgb boundaries deferred_stop ie_gat
      matrix_compat flip_control matrix_cgb matrix_dmg cross_column_control sweep_control)
   add_test(NAME cgb_visibility_${case} COMMAND test_cgb_visibility ${case})
 endforeach()
+# Plan 10-11: STOP/KEY1 fail-closed and the KEY0 lock keep their plan-named CTests.
+foreach(case stop_armed_cgb stop_unarmed_cgb stop_compat_ignores_key1 stop_dmg_control
+     key0_lock_cgb key0_lock_compat key0_lock_cross_column key0_lock_reset_idempotent)
+  add_test(NAME cgb_${case} COMMAND test_cgb_visibility ${case})
+endforeach()
 
 add_executable(test_cgb_postboot test_cgb_postboot.c)
 target_link_libraries(test_cgb_postboot PRIVATE GabbaBoy::core)

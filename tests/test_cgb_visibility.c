@@ -874,6 +874,213 @@ static int case_flip_control(void) {
     return 0;
 }
 
+/* ---- STOP with KEY1 armed (Plan 10-11; D-23) ---------------------------------------------------
+ * Phase 12 owns the speed switch. Until then an armed STOP on the CGB profile in CGB mode must stop
+ * visibly with the KEY1 address; it must never fall into the DMG STOP sleep. */
+static void stop_op(prog *p) { emit(p, 0x10); emit(p, 0x00); }
+
+/* Runs [arm KEY1 if requested] STOP, then a marker store and HALT. Returns the first run reason. */
+static int run_stop(view v, int arm, gbb_run_result *first, uint16_t *seam, int *second_reason, int *marker) {
+    prog p = { {0}, 0 };
+    if (arm) write_io(&p, 0x4D, 0x01);
+    stop_op(&p);
+    write_io(&p, 0x80, 0x5A);
+    halt(&p);
+    gbb_instance *m = load_view(v, p.b, p.n, NULL, 0);
+    if (m == NULL) return 1;
+    *first = gbb_run(m, RUN_BUDGET, NULL, 0);
+    *seam = gbb_test_last_unsupported_address(m);
+    *second_reason = (int)gbb_run(m, RUN_BUDGET, NULL, 0).reason;
+    *marker = hram(m, 0);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int case_stop_armed_cgb(void) {
+    gbb_run_result r; uint16_t seam; int second, marker;
+    REQUIRE(run_stop(V_CGB, 1, &r, &seam, &second, &marker) == 0);
+    REQUIRE(r.reason == GBB_STOP_UNSUPPORTED_BUS);
+    REQUIRE(seam == 0xFF4D);
+    /* Never the DMG STOP sleep: the next run does not report STOPPED and the guest continues. */
+    REQUIRE(second != (int)GBB_STOP_STOPPED);
+    REQUIRE(marker == 0x5A);
+    /* Control: without the arming write the same program does sleep, so the stop above is caused by
+     * KEY1 and not by STOP itself. */
+    gbb_run_result u; int s2, m2;
+    REQUIRE(run_stop(V_CGB, 0, &u, &seam, &s2, &m2) == 0);
+    REQUIRE(u.reason == GBB_STOP_STOPPED);
+    PASS("cgb_stop_armed_cgb");
+    return 0;
+}
+
+static int case_stop_unarmed_cgb(void) {
+    gbb_run_result r; uint16_t seam; int second, marker;
+    REQUIRE(run_stop(V_CGB, 0, &r, &seam, &second, &marker) == 0);
+    REQUIRE(r.reason == GBB_STOP_STOPPED);
+    /* Arming then disarming returns to the shared path. */
+    prog p = { {0}, 0 };
+    write_io(&p, 0x4D, 0x01);
+    write_io(&p, 0x4D, 0x00);
+    stop_op(&p);
+    halt(&p);
+    gbb_instance *m = load_view(V_CGB, p.b, p.n, NULL, 0);
+    REQUIRE(m != NULL);
+    REQUIRE(gbb_run(m, RUN_BUDGET, NULL, 0).reason == GBB_STOP_STOPPED);
+    gbb_destroy(m);
+    PASS("cgb_stop_unarmed_cgb");
+    return 0;
+}
+
+static int case_stop_compat_ignores_key1(void) {
+    gbb_run_result r; uint16_t seam; int second, marker;
+    REQUIRE(run_stop(V_COMPAT, 1, &r, &seam, &second, &marker) == 0);
+    REQUIRE(r.reason == GBB_STOP_STOPPED);
+    PASS("cgb_stop_compat_ignores_key1");
+    return 0;
+}
+
+static int case_stop_dmg_control(void) {
+    gbb_run_result r; uint16_t seam; int second, marker;
+    REQUIRE(run_stop(V_DMG, 1, &r, &seam, &second, &marker) == 0);
+    REQUIRE(r.reason == GBB_STOP_STOPPED);
+    PASS("cgb_stop_dmg_control");
+    return 0;
+}
+
+/* ---- KEY0 lock (Plan 10-11; D-12) ------------------------------------------------------------- */
+typedef struct {
+    uint8_t key0[4];   /* read-back after writing $00, $04, $80, $C0 */
+    uint8_t seq2[4];   /* the same sequence repeated */
+    uint8_t vbk_after_write1;
+    uint8_t vbk_after_write0;
+    uint8_t vram8000;
+    int mode_before, mode_after;
+    int mode_after_reset;
+    int rc;
+} key0_result;
+
+static void key0_sequence(prog *p, unsigned first_slot) {
+    static const uint8_t values[4] = { 0x00, 0x04, 0x80, 0xC0 };
+    for (unsigned i = 0; i < 4; ++i) {
+        write_io(p, 0x4C, values[i]);
+        keep_io(p, 0x4C, (uint8_t)(first_slot + i));
+    }
+}
+
+static key0_result run_key0(view v, int repeat_sequence, int resets) {
+    key0_result out;
+    memset(&out, 0, sizeof(out));
+    out.rc = 1;
+    prog p = { {0}, 0 };
+    write_io(&p, 0x40, 0x00);                 /* LCD off: VRAM always reachable */
+    key0_sequence(&p, 0);
+    if (repeat_sequence) key0_sequence(&p, 4);
+    write_io(&p, 0x4F, 0x01);
+    keep_io(&p, 0x4F, 8);
+    ld_a(&p, 0x5A); st_abs(&p, 0x8000);
+    write_io(&p, 0x4F, 0x00);
+    keep_io(&p, 0x4F, 9);
+    ld_abs(&p, 0x8000); ldh_st(&p, 0x8A);
+    halt(&p);
+    gbb_instance *m = load_view(v, p.b, p.n, NULL, 0);
+    if (m == NULL) return out;
+    gbb_info info;
+    memset(&info, 0, sizeof(info));
+    info.struct_size = sizeof(info);
+    if (gbb_get_info(m, &info) != GBB_OK) { gbb_destroy(m); return out; }
+    out.mode_before = (int)info.mode;
+    if (gbb_run(m, RUN_BUDGET, NULL, 0).reason == GBB_STOP_UNSUPPORTED_BUS) { gbb_destroy(m); return out; }
+    if (gbb_get_info(m, &info) != GBB_OK) { gbb_destroy(m); return out; }
+    out.mode_after = (int)info.mode;
+    for (unsigned i = 0; i < 4; ++i) { out.key0[i] = hram(m, i); out.seq2[i] = hram(m, 4 + i); }
+    out.vbk_after_write1 = hram(m, 8);
+    out.vbk_after_write0 = hram(m, 9);
+    out.vram8000 = hram(m, 10);
+    out.mode_after_reset = out.mode_after;
+    for (int i = 0; i < resets; ++i) {
+        if (gbb_reset(m) != GBB_OK || gbb_get_info(m, &info) != GBB_OK) { gbb_destroy(m); return out; }
+        out.mode_after_reset = (int)info.mode;
+    }
+    gbb_destroy(m);
+    out.rc = 0;
+    return out;
+}
+
+/* Expectations for each column, written from the hardware description (KEY0 reads $FF; VBK is
+ * live in CGB mode only), not from the code's output. */
+static int key0_matches_cgb(const key0_result *r) {
+    for (unsigned i = 0; i < 4; ++i) if (r->key0[i] != 0xFF) return 0;
+    return r->vbk_after_write1 == 0xFF && r->vbk_after_write0 == 0xFE && r->vram8000 == 0x00 &&
+           r->mode_before == GBB_MODE_CGB && r->mode_after == GBB_MODE_CGB;
+}
+static int key0_matches_compat(const key0_result *r) {
+    for (unsigned i = 0; i < 4; ++i) if (r->key0[i] != 0xFF) return 0;
+    return r->vbk_after_write1 == 0xFE && r->vbk_after_write0 == 0xFE && r->vram8000 == 0x5A &&
+           r->mode_before == GBB_MODE_CGB_DMG_COMPAT && r->mode_after == GBB_MODE_CGB_DMG_COMPAT;
+}
+
+static int case_key0_lock_cgb(void) {
+    key0_result r = run_key0(V_CGB, 0, 0);
+    REQUIRE(r.rc == 0);
+    REQUIRE(key0_matches_cgb(&r));
+    PASS("cgb_key0_lock_cgb");
+    return 0;
+}
+
+static int case_key0_lock_compat(void) {
+    key0_result r = run_key0(V_COMPAT, 0, 0);
+    REQUIRE(r.rc == 0);
+    REQUIRE(key0_matches_compat(&r));
+    PASS("cgb_key0_lock_compat");
+    return 0;
+}
+
+static int case_key0_lock_cross_column(void) {
+    key0_result cgb = run_key0(V_CGB, 0, 0), compat = run_key0(V_COMPAT, 0, 0);
+    REQUIRE(cgb.rc == 0 && compat.rc == 0);
+    /* Each column's expectation must reject the other column's run, otherwise the probe cannot
+     * tell the two apart and the lock test could not fail. */
+    if (key0_matches_compat(&cgb) || key0_matches_cgb(&compat)) {
+        printf("not ok 1 - key0 control: columns indistinguishable\n");
+        return 1;
+    }
+    REQUIRE(key0_matches_cgb(&cgb) && key0_matches_compat(&compat));
+    /* A KEY0 that unlocked would change a read-back: a mutated copy must be rejected. */
+    key0_result mutated = cgb;
+    mutated.key0[2] = 0x80;
+    REQUIRE(!key0_matches_cgb(&mutated));
+    PASS("cgb_key0_lock_cross_column");
+    return 0;
+}
+
+static int case_key0_lock_reset_idempotent(void) {
+    for (int v = V_CGB; v <= V_COMPAT; ++v) {
+        key0_result once = run_key0((view)v, 1, 0), twice = run_key0((view)v, 1, 2);
+        REQUIRE(once.rc == 0 && twice.rc == 0);
+        REQUIRE(memcmp(once.key0, once.seq2, 4) == 0);          /* repeating the writes changes nothing */
+        REQUIRE(memcmp(once.key0, twice.key0, 4) == 0 && memcmp(once.seq2, twice.seq2, 4) == 0);
+        REQUIRE(once.mode_before == once.mode_after && twice.mode_after_reset == twice.mode_before);
+        REQUIRE(once.vram8000 == twice.vram8000 && once.vbk_after_write1 == twice.vbk_after_write1);
+    }
+    /* Reset is idempotent on the info block: two resets give byte-identical gbb_get_info output. */
+    prog p = { {0}, 0 };
+    key0_sequence(&p, 0);
+    halt(&p);
+    gbb_instance *m = load_view(V_CGB, p.b, p.n, NULL, 0);
+    REQUIRE(m != NULL);
+    REQUIRE(gbb_run(m, RUN_BUDGET, NULL, 0).reason != GBB_STOP_UNSUPPORTED_BUS);
+    gbb_info a, b;
+    memset(&a, 0, sizeof(a)); memset(&b, 0, sizeof(b));
+    a.struct_size = b.struct_size = sizeof(a);
+    REQUIRE(gbb_reset(m) == GBB_OK && gbb_get_info(m, &a) == GBB_OK);
+    REQUIRE(gbb_reset(m) == GBB_OK && gbb_get_info(m, &b) == GBB_OK);
+    REQUIRE(a.mode == b.mode && a.mode == GBB_MODE_CGB);
+    REQUIRE(memcmp(&a, &b, sizeof(a)) == 0);
+    gbb_destroy(m);
+    PASS("cgb_key0_lock_reset_idempotent");
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) {
         fprintf(stderr, "usage: test_cgb_visibility <case>\n");
@@ -892,6 +1099,14 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "matrix_dmg") == 0) return case_matrix_dmg();
     if (strcmp(argv[1], "cross_column_control") == 0) return case_cross_column_control();
     if (strcmp(argv[1], "sweep_control") == 0) return case_sweep_control();
+    if (strcmp(argv[1], "stop_armed_cgb") == 0) return case_stop_armed_cgb();
+    if (strcmp(argv[1], "stop_unarmed_cgb") == 0) return case_stop_unarmed_cgb();
+    if (strcmp(argv[1], "stop_compat_ignores_key1") == 0) return case_stop_compat_ignores_key1();
+    if (strcmp(argv[1], "stop_dmg_control") == 0) return case_stop_dmg_control();
+    if (strcmp(argv[1], "key0_lock_cgb") == 0) return case_key0_lock_cgb();
+    if (strcmp(argv[1], "key0_lock_compat") == 0) return case_key0_lock_compat();
+    if (strcmp(argv[1], "key0_lock_cross_column") == 0) return case_key0_lock_cross_column();
+    if (strcmp(argv[1], "key0_lock_reset_idempotent") == 0) return case_key0_lock_reset_idempotent();
     fprintf(stderr, "unknown case %s\n", argv[1]);
     return 2;
 }
