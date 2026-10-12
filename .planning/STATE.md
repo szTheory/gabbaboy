@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 2
+current_plan: 3
 status: planning
-stopped_at: Completed 10-01-PLAN.md
-last_updated: "2026-10-12T16:35:01.146Z"
+stopped_at: Completed 10-02-PLAN.md
+last_updated: "2026-10-12T16:44:47.854Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 10 execution started
-state_head: bdc623ee31131665375a74fdf9885be7a6d6df0f
+state_head: 13afbdc2364ca91fd01159ac2ea5b5273da2730b
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 65
-  completed_plans: 46
+  completed_plans: 47
   percent: 44
 current_phase: 10
 current_phase_name: CGB Profile, Banking and Register Visibility
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 20
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -153,6 +153,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 9 P17 | 60 min | 2 tasks | 9 files |
 | Phase 9 P18 | 150 min | 2 tasks | 12 files |
 | Phase 10 P01 | 25 min | 2 tasks | 4 files |
+| Phase 10 P02 | 40 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -286,6 +287,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 09]: 09-15: loader matrix oracle typed from D-27 tables, never from the core validator; RTC mutants use exactly-once tagged anchors with paired controls
 - [Phase 09]: 09-16: catch-up applies once per open only for a timer cartridge with an accepted save; --clock-unix is confined to battery smoke argv
 - [Phase 10]: 10-01: GATE-00 code tags compare class and basis only; doc row is the single shared GATE-00 entry
+- [Phase 10]: 10-02: OAM-DMA CPU bus-conflict branches tagged UNKNOWN expected-failure:cgb-separate-buses (D-17)
 
 ### Pending Todos
 
@@ -321,8 +323,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-12T16:34:53.011Z
-Stopped at: Completed 10-01-PLAN.md
+Last session: 2026-10-12T16:44:47.779Z
+Stopped at: Completed 10-02-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 10`
 

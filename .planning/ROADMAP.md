@@ -219,11 +219,11 @@ Plans:
   4. The half-dot timeline-unit decision for double speed is recorded in DECISIONS.md, and a banking-indirection benchmark shows the DMG cost against the Phase 7 baseline.
 
 **Research**: Moderate (CGB-E post-boot DIV/LY/STAT; compat-mode register readability per Mooneye `unused_hwio-C` and AGE).
-**Plans**: 1/20 plans executed
+**Plans**: 2/20 plans executed
 
 Plans (serial waves: every plan edits `tests/expected-tests.txt` and `tests/CMakeLists.txt`, most also `src/core/gabbaboy.c`):
 - [x] 10-01-PLAN.md — Wave 1: model-gate scanner (R1-R5, --release, self-test mutants) and docs/model-gates.md skeleton
-- [ ] 10-02-PLAN.md — Wave 2: tag every core function and model-differing branch (comment-only), gate table, real-file controls
+- [x] 10-02-PLAN.md — Wave 2: tag every core function and model-differing branch (comment-only), gate table, real-file controls
 - [ ] 10-03-PLAN.md — Wave 3: runner model<->profile mapping, --profile, removed unsupported-profile rejection, DMG byte-identity controls
 - [ ] 10-04-PLAN.md — Wave 4: DMG post-boot pin test, then the post_boot[] provenance table refactor (own commit)
 - [ ] 10-05-PLAN.md — Wave 5: appended profile/info API, gbb_probe_rom, gbb_get_info, PGB rejection, parity tests
@@ -321,7 +321,7 @@ Plans (serial waves: every plan edits `tests/expected-tests.txt` and `tests/CMak
 | 7. DMG Game Acceptance and Regression Baseline | v0.2 | 17/17 | Complete    | 2026-10-11 |
 | 8. Cartridge Seam, MBC5 and MBC2 | v0.2 | 10/10 | Complete    | 2026-10-11 |
 | 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 18/18 | Complete    | 2026-10-11 |
-| 10. CGB Profile, Banking and Register Visibility | v0.2 | 1/20 | In Progress | - |
+| 10. CGB Profile, Banking and Register Visibility | v0.2 | 2/20 | In Progress | - |
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 0/TBD | Not started | - |
 | 12. CGB Double Speed | v0.2 | 0/TBD | Not started | - |
 | 13. CGB HDMA | v0.2 | 0/TBD | Not started | - |
