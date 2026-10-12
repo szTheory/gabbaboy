@@ -418,6 +418,25 @@ set_target_properties(test_cgb_postboot_internal PROPERTIES C_EXTENSIONS OFF)
 foreach(case div_phase_sweep div_compat_default)
   add_test(NAME cgb_postboot_${case} COMMAND test_cgb_postboot_internal ${case})
 endforeach()
+# A1: the same DIV-phase sweep on the real derived boot_div-cgbABCDE ROM (callback and result PCs from the
+# manifest). White-box like the sweep above, so it must not link GabbaBoy::core either.
+add_executable(test_mooneye_cgb_div_sweep test_mooneye_cgb_div_sweep.c)
+target_include_directories(test_mooneye_cgb_div_sweep PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_mooneye_cgb_div_sweep PRIVATE c_std_17)
+set_target_properties(test_mooneye_cgb_div_sweep PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_postboot_div_real_rom_sweep
+  COMMAND test_mooneye_cgb_div_sweep ${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/boot_div-cgbABCDE.gb 4000 4327)
+set_tests_properties(cgb_postboot_div_real_rom_sweep PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "ok 2 - passing set is exactly 0x2678..0x267B for both divider phases")
+# Negative control: asserting the window one counter later must fail naming the observed set, so a drifted
+# table cell cannot pass silently.
+add_test(NAME cgb_postboot_div_real_rom_sweep_shifted
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_mooneye_cgb_div_sweep>;${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/boot_div-cgbABCDE.gb;4000;4327;--expect-first;2679"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=passing set mismatch: phase 0 observed mask 0xF00"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(cgb_postboot_div_real_rom_sweep_shifted PROPERTIES TIMEOUT 60)
 # Negative controls: a flipped NR52 expectation (index 8) must fail naming the field.
 foreach(case compat_io cgb_io)
   add_test(NAME cgb_postboot_${case}_flipped
