@@ -1,1 +1,1 @@
-No external API integration: Phase 10 adds the CGB-CPU-E profile, VRAM/WRAM banking and register visibility to GabbaBoy's own C core; "API" means GabbaBoy's own public C header (`gbb_probe_rom`, `gbb_get_info`), not a third-party service.
+No external API integration: Phase 10 adds the CGB-CPU-E profile, VRAM/WRAM banking and register visibility; "API" means GabbaBoy's own public C header, not a third-party service.
