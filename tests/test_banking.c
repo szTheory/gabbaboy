@@ -536,13 +536,111 @@ static int guest_dir_case(const char *dir, const char *name, gbb_profile profile
     return ran;
 }
 
+/* Expected cell bytes per run, written from the protocol: $01 pass, $00 not run, $FF fail. */
+static const uint8_t EXPECT_CGB_MODE[GUEST_CELLS] = { 1, 1, 1, 1, 1, 1, 1, 1, 0 };
+static const uint8_t EXPECT_FROZEN_RUN[GUEST_CELLS] = { 0, 0, 0, 1, 0, 0, 1, 1, 1 };
+
+static int cells_equal(const guest_result *r, const uint8_t *expect) {
+    return memcmp(r->cell, expect, GUEST_CELLS) == 0;
+}
+
 static int case_cgb_banking_guest_cgb(const char *dir) {
     guest_result r;
     REQUIRE(guest_dir_case(dir, "banking-cgb.gb", GBB_PROFILE_CGB_CPU_E, 0x80, &r));
     REQUIRE(r.kind == 1);
-    REQUIRE(r.cell[CELL_SVBK] == 0x01);
+    REQUIRE(cells_equal(&r, EXPECT_CGB_MODE));
     REQUIRE(r.verdict == 0xA5);
     PASS("cgb_banking_guest_cgb");
+    return 0;
+}
+
+/* The same source assembled with a plain header ($0143 = $00) on the CGB profile: compatibility
+ * mode. Bank writes are ignored, so only the shared and frozen cells run. */
+static int case_cgb_banking_guest_compat(const char *dir) {
+    guest_result r;
+    REQUIRE(guest_dir_case(dir, "banking-dmg.gb", GBB_PROFILE_CGB_CPU_E, 0x00, &r));
+    REQUIRE(r.kind == 2);
+    REQUIRE(cells_equal(&r, EXPECT_FROZEN_RUN));
+    REQUIRE(r.verdict == 0xA5);
+    PASS("cgb_banking_guest_compat");
+    return 0;
+}
+
+/* And on the DMG profile, where FF4F/FF70 are unreachable: the guest checks the flat memory only,
+ * and OAM DMA from page 00 is $FF (D-024). */
+static int case_cgb_banking_guest_dmg(const char *dir) {
+    guest_result r;
+    REQUIRE(guest_dir_case(dir, "banking-dmg.gb", GBB_PROFILE_DMG_CPU_B, 0x00, &r));
+    REQUIRE(r.kind == 3);
+    REQUIRE(cells_equal(&r, EXPECT_FROZEN_RUN));
+    REQUIRE(r.verdict == 0xA5);
+    PASS("cgb_banking_guest_dmg");
+    return 0;
+}
+
+/* Patch offsets are recorded in the manifest protocol and re-derived from the linker symbol file by
+ * tests/scripts/reproduce-cgb-banking.sh. The bytes are asserted before patching so a layout change
+ * fails loudly instead of testing nothing. */
+#define PATCH_EXPECT_VBK0 0x01F0u   /* CP $10: the byte cell (a) expects at 8000 under VBK 0 */
+#define PATCH_SVBK_WRITE 0x023Au    /* LDH ($70),A: the SVBK write of cell (b)'s marker loop */
+
+/* Control (i): one expected value changed in memory must turn the verdict into $EE and mark that
+ * one cell, while every other cell still passes. */
+static int case_cgb_banking_patched_expected(const char *dir) {
+    size_t size = 0;
+    uint8_t *rom = read_guest_rom(dir, "banking-cgb.gb", &size);
+    guest_result r;
+    REQUIRE(rom != NULL);
+    REQUIRE(rom[PATCH_EXPECT_VBK0] == 0xFE && rom[PATCH_EXPECT_VBK0 + 1] == 0x10);
+    rom[PATCH_EXPECT_VBK0 + 1] = 0x11;
+    REQUIRE(run_guest(rom, size, GBB_PROFILE_CGB_CPU_E, &r));
+    free(rom);
+    uint8_t expect[GUEST_CELLS];
+    memcpy(expect, EXPECT_CGB_MODE, sizeof(expect));
+    expect[CELL_VBK] = 0xFF;
+    REQUIRE(cells_equal(&r, expect));
+    REQUIRE(r.verdict == 0xEE);
+    PASS("cgb_banking_patched_expected");
+    return 0;
+}
+
+/* Control (ii): the CGB build on the DMG profile cannot switch banks. The cells whose expectation
+ * needs a bank, or CGB DMA sources, fail; the cells that hold in both models still pass. */
+static int case_cgb_banking_cgb_on_dmg(const char *dir) {
+    static const uint8_t expect[GUEST_CELLS] = {
+        0xFF, 0xFF, 0xFF,   /* VBK, SVBK, per-bank echo */
+        0x01,               /* E000 mirrors C000: same in both models */
+        0xFF, 0xFF,         /* DMA from D0 and from 80 under banks */
+        0x01,               /* DMA from E0/FE reads $FF in both models */
+        0xFF,               /* DMA from page 00: ROM on CGB, $FF on DMG */
+        0x00 };             /* the frozen cell belongs to the DMG header */
+    guest_result r;
+    REQUIRE(guest_dir_case(dir, "banking-cgb.gb", GBB_PROFILE_DMG_CPU_B, 0x80, &r));
+    REQUIRE(r.kind == 3);
+    REQUIRE(cells_equal(&r, expect));
+    REQUIRE(r.verdict == 0xEE);
+    PASS("cgb_banking_cgb_on_dmg");
+    return 0;
+}
+
+/* Control (iii): a variant that skips the SVBK write of cell (b) lands every marker in bank 1, so
+ * the read phase must find the banks 2..7 markers missing and fail exactly that cell. */
+static int case_cgb_banking_skip_svbk(const char *dir) {
+    size_t size = 0;
+    uint8_t *rom = read_guest_rom(dir, "banking-cgb.gb", &size);
+    guest_result r;
+    REQUIRE(rom != NULL);
+    REQUIRE(rom[PATCH_SVBK_WRITE] == 0xE0 && rom[PATCH_SVBK_WRITE + 1] == 0x70);
+    rom[PATCH_SVBK_WRITE] = 0x00;
+    rom[PATCH_SVBK_WRITE + 1] = 0x00;
+    REQUIRE(run_guest(rom, size, GBB_PROFILE_CGB_CPU_E, &r));
+    free(rom);
+    uint8_t expect[GUEST_CELLS];
+    memcpy(expect, EXPECT_CGB_MODE, sizeof(expect));
+    expect[CELL_SVBK] = 0xFF;
+    REQUIRE(cells_equal(&r, expect));
+    REQUIRE(r.verdict == 0xEE);
+    PASS("cgb_banking_skip_svbk");
     return 0;
 }
 
@@ -550,6 +648,11 @@ int main(int argc, char **argv) {
     if (argc == 3) { /* fixture guest cases: <case> <fixture directory> */
         static const struct { const char *name; int (*fn)(const char *); } guests[] = {
             { "cgb_banking_guest_cgb", case_cgb_banking_guest_cgb },
+            { "cgb_banking_guest_compat", case_cgb_banking_guest_compat },
+            { "cgb_banking_guest_dmg", case_cgb_banking_guest_dmg },
+            { "cgb_banking_patched_expected", case_cgb_banking_patched_expected },
+            { "cgb_banking_cgb_on_dmg", case_cgb_banking_cgb_on_dmg },
+            { "cgb_banking_skip_svbk", case_cgb_banking_skip_svbk },
         };
         for (size_t i = 0; i < sizeof(guests) / sizeof(guests[0]); ++i)
             if (strcmp(argv[1], guests[i].name) == 0) return guests[i].fn(argv[2]);

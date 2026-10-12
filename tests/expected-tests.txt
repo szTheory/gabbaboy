@@ -105,6 +105,11 @@ banking_dmg_banks_frozen
 banking_bus_conflict_cgb_pin
 cgb_banking_fixture_digest
 cgb_banking_guest_cgb
+cgb_banking_guest_compat
+cgb_banking_guest_dmg
+cgb_banking_patched_expected
+cgb_banking_cgb_on_dmg
+cgb_banking_skip_svbk
 banking_mutant_echo_ignores_bank
 banking_mutant_echo_control
 banking_mutant_dma_wrong_bank

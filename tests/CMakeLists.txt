@@ -221,7 +221,8 @@ add_test(NAME cgb_banking_fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DMANIFEST=${GBB_CGB_BANKING_DIR}/manifest.json
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixtureManifest.cmake)
-foreach(case cgb_banking_guest_cgb)
+foreach(case cgb_banking_guest_cgb cgb_banking_guest_compat cgb_banking_guest_dmg
+  cgb_banking_patched_expected cgb_banking_cgb_on_dmg cgb_banking_skip_svbk)
   add_test(NAME ${case} COMMAND test_banking ${case} ${GBB_CGB_BANKING_DIR})
 endforeach()
 
