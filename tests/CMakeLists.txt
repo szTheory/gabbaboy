@@ -1757,6 +1757,28 @@ gbb_add_model_gate_test(model_gates_real_doc_mismatch 1 "gate-doc-mismatch"
 gbb_add_model_gate_test(model_gates_release_blocked 1 "gate-unresolved-unknown"
   --release --source "${GBB_MODEL_GATE_REAL_SOURCE}" --doc "${GBB_MODEL_GATE_REAL_DOC}")
 
+# Plan SUMMARY coverage blocks (DECISIONS D-069, LESSONS GB-GSD-015): from Phase 11 on, every
+# entry must be in the GSD classifier's block schema and auto-passable, so /gsd-verify-work never
+# hands an automated deliverable to the owner. Phases 9-10 used a rejected shape; Phase 10 is the
+# negative control.
+set(GBB_SUMMARY_COVERAGE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-summary-coverage.py")
+function(gbb_add_summary_coverage_test name code regex)
+  set(command "${Python3_EXECUTABLE}" -I "${GBB_SUMMARY_COVERAGE_CHECKER}"
+    --phases-dir "${PROJECT_SOURCE_DIR}/.planning/phases" ${ARGN})
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60)
+endfunction()
+gbb_add_summary_coverage_test(summary_coverage_selftest 0 "summary-coverage self-test pass mutants=1[2-9]" --self-test)
+gbb_add_summary_coverage_test(summary_coverage 0 "summary-coverage pass files=[0-9]+" --since 11)
+gbb_add_summary_coverage_test(summary_coverage_phase10_rejected 1
+  "summary-coverage-invalid: 10-01-SUMMARY.md: flow-style-not-supported" --since 10)
+
 # Post-boot table mirror (D-06): docs/cgb-profile.md must equal post_boot[] and obey the provenance
 # rules. White-box like test_mbc5_internal, so it includes the core and must not link it.
 add_executable(test_cgb_tables test_cgb_tables.c)
