@@ -562,6 +562,7 @@ target_compile_features(test_fuzz_core PRIVATE c_std_17)
 target_compile_definitions(test_fuzz_core PRIVATE GBB_FUZZ_STANDALONE_TEST=1)
 set_target_properties(test_fuzz_core PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME fuzz_core_regressions COMMAND test_fuzz_core)
+add_test(NAME cgb_fuzz_io_regressions COMMAND test_fuzz_core cgb)
 
 if(CMAKE_C_COMPILER_ID MATCHES "Clang")
   include(CheckCSourceCompiles)
