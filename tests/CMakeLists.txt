@@ -735,6 +735,43 @@ add_test(NAME cgb_mooneye_fixture_digest
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake)
 set_tests_properties(cgb_mooneye_fixture_digest PROPERTIES
   PASS_REGULAR_EXPRESSION "Verified 4 eligible Mooneye-cgb ROM\\(s\\)")
+add_test(NAME cgb_mooneye_inventory
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_MODE=inventory
+    -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake)
+set_tests_properties(cgb_mooneye_inventory PROPERTIES
+  PASS_REGULAR_EXPRESSION "Verified Mooneye-cgb inventory: 4 fixtures")
+# Configure-time mutants (exact exit code 1 plus a named token): a flipped ROM digest and a
+# duplicated fixture id. Each differs from the committed manifest by exactly one fact.
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/digest" "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/dup-id")
+file(READ "${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json" GBB_CGB_MANIFEST_JSON)
+string(JSON GBB_CGB_FIRST_DIGEST GET "${GBB_CGB_MANIFEST_JSON}" fixtures 0 sha256)
+string(JSON GBB_CGB_FIRST_ID GET "${GBB_CGB_MANIFEST_JSON}" fixtures 0 id)
+string(SUBSTRING "${GBB_CGB_FIRST_DIGEST}" 0 1 GBB_CGB_FIRST_NIBBLE)
+if(GBB_CGB_FIRST_NIBBLE STREQUAL "0")
+  set(GBB_CGB_FLIPPED_NIBBLE "1")
+else()
+  set(GBB_CGB_FLIPPED_NIBBLE "0")
+endif()
+string(SUBSTRING "${GBB_CGB_FIRST_DIGEST}" 1 -1 GBB_CGB_DIGEST_TAIL)
+string(JSON GBB_CGB_DIGEST_TAMPERED SET "${GBB_CGB_MANIFEST_JSON}" fixtures 0 sha256
+  "\"${GBB_CGB_FLIPPED_NIBBLE}${GBB_CGB_DIGEST_TAIL}\"")
+file(WRITE "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/digest/manifest.json" "${GBB_CGB_DIGEST_TAMPERED}")
+string(JSON GBB_CGB_DUP_TAMPERED SET "${GBB_CGB_MANIFEST_JSON}" fixtures 1 id "\"${GBB_CGB_FIRST_ID}\"")
+file(WRITE "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/dup-id/manifest.json" "${GBB_CGB_DUP_TAMPERED}")
+function(gbb_add_cgb_mooneye_tamper_test name mode manifest regex)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_MODE=${mode};-DGBB_MANIFEST=${manifest};-DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb;-P;${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake"
+      -DGBB_EXPECT_CODE=1
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+endfunction()
+gbb_add_cgb_mooneye_tamper_test(cgb_mooneye_digest_tamper digest
+  "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/digest/manifest.json" "Fixture mooneye-misc-boot-regs-cgb mismatch")
+gbb_add_cgb_mooneye_tamper_test(cgb_mooneye_inventory_tamper inventory
+  "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/dup-id/manifest.json" "Duplicate fixture id: mooneye-misc-boot-regs-cgb")
 # Negative control (D-28): an edited sibling manifest is refused with invalid-manifest and exactly exit code 2.
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-mbc-unknown")
 configure_file("${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/manifest.json"
