@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 12
+current_plan: 13
 status: planning
-stopped_at: Completed 10-11-PLAN.md
-last_updated: "2026-10-12T17:53:34.985Z"
+stopped_at: Completed 10-12-PLAN.md
+last_updated: "2026-10-12T18:03:17.308Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 10 execution started
-state_head: 30bb2e27b720e23ee72652183de530c6acb6fc31
+state_head: 8b419a0f51b4274685732bbf5286a86aeefbfb7c
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 65
-  completed_plans: 56
+  completed_plans: 57
   percent: 44
 current_phase: 10
 current_phase_name: CGB Profile, Banking and Register Visibility
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 12
+Current Plan: 13
 Total Plans in Phase: 20
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -163,6 +163,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 10 P09 | 40 min | 3 tasks | 8 files |
 | Phase 10 P10 | 35min | 3 tasks | 5 files |
 | Phase 10 P11 | 25 min | 2 tasks | 6 files |
+| Phase 10 P12 | 40 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -307,6 +308,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 10]: Deferred register accesses latch bus_unsupported with address; latch also reported after interrupt entry
 - [Phase 10]: 10-10: visibility matrix doc block lists only non-pre-CGB addresses (213 rows); EXISTING addresses must have no doc row
 - [Phase 10]: 10-11: armed STOP on CGB mode latches UNSUPPORTED_BUS at FF4D (GATE-74, DEFERRED(12)); KEY0 lock proven behaviourally
+- [Phase 10]: 10-12: CGB OAM DMA reads ROM/cart RAM via shared cart_read, banked VRAM/WRAM, E0-FF=$FF; DMG map frozen; cart and E0-FF cells are PANDOCS/ORACLE [VERIFY], not hardware; DMG bus-conflict rule kept on CGB (cgb-separate-buses) and pinned
 
 ### Pending Todos
 
@@ -342,8 +344,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-12T17:53:34.929Z
-Stopped at: Completed 10-11-PLAN.md
+Last session: 2026-10-12T18:03:17.250Z
+Stopped at: Completed 10-12-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 10`
 
