@@ -204,14 +204,14 @@ static const char *protocol_status(const fixture_case *fc,const gbb_trace_record
 static void retain_recent(gbb_diagnostic_record recent[RECENT_CAPACITY],size_t *used,const gbb_diagnostic_record *add,size_t count) {
     for(size_t i=0;i<count;i++){if(*used<RECENT_CAPACITY)recent[(*used)++]=add[i];else{memmove(recent,recent+1,(RECENT_CAPACITY-1)*sizeof(*recent));recent[RECENT_CAPACITY-1]=add[i];}}
 }
-static const char *run_guest(const fixture_case *fc,const uint8_t *rom,size_t rom_size,
+static const char *run_guest(gbb_profile profile,const fixture_case *fc,const uint8_t *rom,size_t rom_size,
                              protocol_evidence *evidence,uint64_t *ticks_out,
                              const char **stop_out,
                              gbb_diagnostic_record recent[RECENT_CAPACITY],
                              size_t *recent_count_out) {
     memset(evidence,0,sizeof(*evidence));
     *ticks_out=0;*stop_out="core-load";*recent_count_out=0;
-    gbb_instance *m=NULL;if(gbb_create(GBB_PROFILE_DMG_CPU_B,&m)!=GBB_OK||gbb_load_rom(m,rom,rom_size)!=GBB_OK){gbb_destroy(m);return "unsupported";}
+    gbb_instance *m=NULL;if(gbb_create(profile,&m)!=GBB_OK||gbb_load_rom(m,rom,rom_size)!=GBB_OK){gbb_destroy(m);return "unsupported";}
     gbb_trace_record trace[TRACE_CAPACITY];gbb_diagnostic_record diagnostics[DIAGNOSTIC_CAPACITY];size_t recent_count=0;
     protocol_progress progress={0};
     uint64_t ticks=0;const char *status=NULL;const char *stop="budget";
@@ -236,9 +236,9 @@ static const char *run_guest(const fixture_case *fc,const uint8_t *rom,size_t ro
 /* --observe lines for one Mooneye case. They come from the same gbb_runner_capture_ldbb helper as the
  * frame-digest@ldbb case-file oracle, so both paths yield the same canonical digest. A breakpoint
  * reached before the first completed frame is the token not-ready, an observation and not an error. */
-static void observe_case(const fixture_case *fc,const uint8_t *rom,size_t rom_size) {
+static void observe_case(gbb_profile profile,const fixture_case *fc,const uint8_t *rom,size_t rom_size) {
     gbb_instance *m=NULL;gbb_ldbb_capture *capture=malloc(sizeof(*capture));
-    if(capture==NULL||gbb_create(GBB_PROFILE_DMG_CPU_B,&m)!=GBB_OK||gbb_load_rom(m,rom,rom_size)!=GBB_OK){
+    if(capture==NULL||gbb_create(profile,&m)!=GBB_OK||gbb_load_rom(m,rom,rom_size)!=GBB_OK){
         fprintf(stderr,"runner-error: observation setup failed\n");gbb_destroy(m);free(capture);return;}
     int rc=gbb_runner_capture_ldbb(m,fc->budget,capture);
     gbb_destroy(m);
@@ -256,29 +256,29 @@ static void observe_case(const fixture_case *fc,const uint8_t *rom,size_t rom_si
     }
     free(capture);
 }
-static int run_one(const suite_def *suite,const fixture_case *fc,const char *manifest,int receipt,int observe,size_t eligible,size_t *executed) {
+static int run_one(gbb_profile profile,const suite_def *suite,const fixture_case *fc,const char *manifest,int receipt,int observe,size_t eligible,size_t *executed) {
     size_t rom_size=0;
     if(fc->size_bytes==0||fc->size_bytes>GBB_CASES_MAX_ROM_BYTES){fprintf(stderr,"runner-error: ROM size out of bounds\n");return 2;}
     uint8_t *rom=malloc(fc->size_bytes+1);
     if(rom==NULL){fprintf(stderr,"runner-error: ROM buffer allocation failed\n");return 2;}
     const char *fixture_error=load_case_rom(fc,manifest,rom,&rom_size);
     if(fixture_error!=NULL){
-        if(receipt)printf("case=%s category=%s status=unsupported reason=%s manifest_sha256=%s source_revision=%s source_tree=%s source_path=%s report_patch_sha256=%s original_rom_sha256=%s fixture_sha256=%s fixture_origin=derived-headless-report-closure profile=DMG-CPU-B boot=skipped protocol=mooneye-ld-b-b protocol_stage=not-reached eligible=%zu executed=%zu\n",fc->id,fc->category,fixture_error,suite->manifest_sha256,MOONEYE_SOURCE_REVISION,MOONEYE_SOURCE_TREE,fc->source_path,suite->patch_sha256,fc->original_sha256,fc->sha256,eligible,*executed);
+        if(receipt)printf("case=%s category=%s status=unsupported reason=%s manifest_sha256=%s source_revision=%s source_tree=%s source_path=%s report_patch_sha256=%s original_rom_sha256=%s fixture_sha256=%s fixture_origin=derived-headless-report-closure profile=%s boot=skipped protocol=mooneye-ld-b-b protocol_stage=not-reached eligible=%zu executed=%zu\n",fc->id,fc->category,fixture_error,suite->manifest_sha256,MOONEYE_SOURCE_REVISION,MOONEYE_SOURCE_TREE,fc->source_path,suite->patch_sha256,fc->original_sha256,fc->sha256,gbb_runner_profile_label(profile),eligible,*executed);
         free(rom);
         return 3;
     }
     protocol_evidence evidence;uint64_t ticks=0;size_t recent_count=0;const char *stop=NULL;
     gbb_diagnostic_record recent[RECENT_CAPACITY];
-    const char *status=run_guest(fc,rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
-    if(observe)observe_case(fc,rom,rom_size);
+    const char *status=run_guest(profile,fc,rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
+    if(observe)observe_case(profile,fc,rom,rom_size);
     free(rom);
     ++*executed;
     int code=strcmp(status,"pass")==0?0:strcmp(status,"fail")==0?1:3;
     if(receipt){
         const char *stage=evidence.callback_result?"callback-then-ld-b-b":
             evidence.reached_result?"ld-b-b-without-expected-callback":"not-reached";
-        printf("case=%s category=%s status=%s manifest_sha256=%s source_revision=%s source_tree=%s source_path=%s report_patch_sha256=%s builder_revision=%s builder_archive_sha256=%s original_rom_sha256=%s fixture_sha256=%s fixture_origin=derived-headless-report-closure upstream_assertions=unchanged core_revision=%s runner_revision=%s build_qualified=%s profile=DMG-CPU-B boot=skipped protocol=mooneye-ld-b-b protocol_stage=%s callback_result=%s callback_pc=%04x result_pc=%04x protocol_reason=%s ticks=%llu budget=%llu eligible=%zu executed=%zu stop=%s recent=%zu\n",
-          fc->id,fc->category,status,suite->manifest_sha256,MOONEYE_SOURCE_REVISION,MOONEYE_SOURCE_TREE,fc->source_path,suite->patch_sha256,MOONEYE_BUILDER_REVISION,MOONEYE_BUILDER_ARCHIVE_SHA256,fc->original_sha256,fc->sha256,GBB_BUILD_REVISION,GBB_BUILD_REVISION,GBB_BUILD_QUALIFIED?"true":"false",stage,evidence.callback_result?evidence.callback_result:"none",evidence.callback_pc,evidence.result_pc,evidence.reason?evidence.reason:"none",(unsigned long long)ticks,(unsigned long long)fc->budget,eligible,*executed,stop,recent_count);
+        printf("case=%s category=%s status=%s manifest_sha256=%s source_revision=%s source_tree=%s source_path=%s report_patch_sha256=%s builder_revision=%s builder_archive_sha256=%s original_rom_sha256=%s fixture_sha256=%s fixture_origin=derived-headless-report-closure upstream_assertions=unchanged core_revision=%s runner_revision=%s build_qualified=%s profile=%s boot=skipped protocol=mooneye-ld-b-b protocol_stage=%s callback_result=%s callback_pc=%04x result_pc=%04x protocol_reason=%s ticks=%llu budget=%llu eligible=%zu executed=%zu stop=%s recent=%zu\n",
+          fc->id,fc->category,status,suite->manifest_sha256,MOONEYE_SOURCE_REVISION,MOONEYE_SOURCE_TREE,fc->source_path,suite->patch_sha256,MOONEYE_BUILDER_REVISION,MOONEYE_BUILDER_ARCHIVE_SHA256,fc->original_sha256,fc->sha256,GBB_BUILD_REVISION,GBB_BUILD_REVISION,GBB_BUILD_QUALIFIED?"true":"false",gbb_runner_profile_label(profile),stage,evidence.callback_result?evidence.callback_result:"none",evidence.callback_pc,evidence.result_pc,evidence.reason?evidence.reason:"none",(unsigned long long)ticks,(unsigned long long)fc->budget,eligible,*executed,stop,recent_count);
         size_t start=recent_count>8?recent_count-8:0;
         for(size_t i=start;i<recent_count;i++)printf("diag time=%llu kind=%u pc=%04x opcode=%02x address=%04x value=%02x timer=%02x\n",(unsigned long long)recent[i].time_half_dots,(unsigned)recent[i].kind,recent[i].pc,recent[i].opcode,recent[i].address,recent[i].value,recent[i].timer_state);
     }
@@ -291,8 +291,8 @@ static int run_original_tracer(const char *path) {
     if(length<0||length>8*1024*1024||fseek(file,0,SEEK_SET)!=0){fclose(file);fprintf(stderr,"invalid-fixture: size out of bounds\n");return 2;}
     size_t size=(size_t)length;uint8_t *rom=malloc(size);
     if(!rom||fread(rom,1,size,file)!=size){free(rom);fclose(file);return 2;}fclose(file);
-    gbb_instance *machine=NULL;
-    if(gbb_create(GBB_PROFILE_DMG_CPU_B,&machine)!=GBB_OK||gbb_load_rom(machine,rom,size)!=GBB_OK){free(rom);gbb_destroy(machine);fprintf(stderr,"invalid-fixture: unsupported or malformed ROM\n");return 2;}
+    gbb_instance *machine=NULL;gbb_profile profile=GBB_RUNNER_PROFILE_DMG;
+    if(gbb_create(profile,&machine)!=GBB_OK||gbb_load_rom(machine,rom,size)!=GBB_OK){free(rom);gbb_destroy(machine);fprintf(stderr,"invalid-fixture: unsupported or malformed ROM\n");return 2;}
     free(rom);gbb_trace_record *trace=calloc(16384,sizeof(*trace));
     if(!trace){gbb_destroy(machine);fprintf(stderr,"runner-error: trace allocation failed\n");return 2;}
     gbb_run_result result=gbb_run(machine,UINT64_C(200000),trace,16384);uint8_t value=gbb_peek_ram(machine,0xC001);
@@ -300,7 +300,7 @@ static int run_original_tracer(const char *path) {
       result.reason==GBB_STOP_UNSUPPORTED_BUS?"unsupported-bus":result.reason==GBB_STOP_TRACE_FULL?"trace-exhausted":
       result.reason==GBB_STOP_HALTED_IDLE?"halted-idle":result.reason==GBB_STOP_STOPPED?"stopped":
       value==0xEE?"guest-failure":result.reason==GBB_STOP_BUDGET&&value==0xA5?"pass":"timeout";
-    printf("fixture=original-wram-tracer profile=DMG-CPU-B outcome=%s stop=%s half_dots=%llu trace_records=%zu\n",outcome,
+    printf("fixture=original-wram-tracer profile=%s outcome=%s stop=%s half_dots=%llu trace_records=%zu\n",gbb_runner_profile_label(profile),outcome,
       result.reason==GBB_STOP_BUDGET?"budget":result.reason==GBB_STOP_TRACE_FULL?"trace-full":result.reason==GBB_STOP_UNSUPPORTED_BUS?"unsupported-bus":
       result.reason==GBB_STOP_LOCKUP?"lockup":result.reason==GBB_STOP_HALTED_IDLE?"halted-idle":result.reason==GBB_STOP_STOPPED?"stopped":"unsupported-opcode",
       (unsigned long long)result.consumed_half_dots,result.trace_count);
@@ -314,9 +314,9 @@ static void print_usage(FILE *stream, const char *program) {
     fprintf(stream,
       "Usage:\n"
       "  %s <rom.gb>\n"
-      "  %s --manifest <manifest.json> --case <id> [--receipt] [--observe]\n"
-      "  %s --manifest <manifest.json> --suite [--receipt] [--observe]\n"
-      "  %s --acceptance <cases.txt> (--case <id> | --suite --expect-excluded <n>) [--model <id>] [--revision <r>] [--failure-dir <dir>] [--receipt]\n"
+      "  %s --manifest <manifest.json> --case <id> [--profile dmg|cgb] [--receipt] [--observe]\n"
+      "  %s --manifest <manifest.json> --suite [--profile dmg|cgb] [--receipt] [--observe]\n"
+      "  %s --acceptance <cases.txt> (--case <id> | --suite --expect-excluded <n>) [--model <id> | --profile dmg|cgb] [--revision <r>] [--failure-dir <dir>] [--receipt]\n"
       "  %s --acceptance <cases.txt> --case <id> --observe [--input-script <file>] [--frame-digest-at <half-dots>] [--pcm-digest] [--dump-checkpoints <dir>]\n"
       "  %s --acceptance <cases.txt> --case <id> --raw-verdict [--receipt]\n"
       "  %s --acceptance <cases.txt> (--case <id> | --suite --expect-excluded <n>) --mutate drop:<BUTTON> [--receipt]\n",
@@ -335,7 +335,7 @@ int main(int argc,char **argv) {
     if(argc==2&&strncmp(argv[1],"--",2)!=0)return run_original_tracer(argv[1]);
     const char *manifest=NULL,*selected=NULL,*acceptance=NULL;int receipt=0,suite=0;
     gbb_acceptance_options options;memset(&options,0,sizeof(options));
-    int observe_only_flag=0;
+    int observe_only_flag=0;const char *profile_option=NULL;
     for(int i=1;i<argc;i++){
         if(strcmp(argv[i],"--help")==0){print_usage(stdout,argv[0]);return 0;}
         else if(strcmp(argv[i],"--manifest")==0&&i+1<argc)manifest=argv[++i];
@@ -353,6 +353,7 @@ int main(int argc,char **argv) {
             if(!found||options.has_drop_button){fprintf(stderr,"invalid-arguments: reason=invalid-mutate\n");return 2;}
             options.has_drop_button=1;options.mutate_label=spec;}
         else if(strcmp(argv[i],"--model")==0&&i+1<argc)options.model=argv[++i];
+        else if(strcmp(argv[i],"--profile")==0&&i+1<argc)profile_option=argv[++i];
         else if(strcmp(argv[i],"--revision")==0&&i+1<argc)options.revision=argv[++i];
         else if(strcmp(argv[i],"--expect-excluded")==0&&i+1<argc){
             const char *text=argv[++i];size_t n=strlen(text);unsigned value=0;int valid=n>0&&n<=3;
@@ -368,6 +369,15 @@ int main(int argc,char **argv) {
         else if(strcmp(argv[i],"--dump-checkpoints")==0&&i+1<argc){options.dump_dir=argv[++i];observe_only_flag=1;}
         else {fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
     }
+    /* D-25: one model<->profile mapping. --profile selects the model token; --model must agree. */
+    gbb_profile profile=GBB_RUNNER_PROFILE_DMG;
+    if(profile_option!=NULL){
+        const char *mapped=gbb_runner_model_for_option(profile_option);
+        if(mapped==NULL){fprintf(stderr,"invalid-arguments: reason=unknown-profile\n");return 2;}
+        if(options.model!=NULL&&strcmp(options.model,mapped)!=0){fprintf(stderr,"invalid-arguments: reason=profile-model-conflict\n");return 2;}
+        options.model=mapped;
+    }
+    if(options.model!=NULL&&gbb_case_model_known(options.model))gbb_runner_profile_for_model(options.model,&profile);
     if(acceptance){
         if(observe_only_flag&&!options.observe){fprintf(stderr,"invalid-arguments: reason=observe-only-flag\n");return 2;}
         if(options.model!=NULL&&!gbb_case_model_known(options.model)){fprintf(stderr,"invalid-arguments: reason=unknown-model\n");return 2;}
@@ -379,7 +389,7 @@ int main(int argc,char **argv) {
         options.receipt=receipt;options.core_revision=GBB_BUILD_REVISION;options.build_qualified=GBB_BUILD_QUALIFIED;
         return gbb_acceptance_run_file(acceptance,selected,&options);
     }
-    if(options.failure_dir||observe_only_flag||options.model||options.revision||options.has_expect_excluded||options.raw_verdict||options.has_drop_button){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
+    if(options.failure_dir||observe_only_flag||(options.model&&!profile_option)||options.revision||options.has_expect_excluded||options.raw_verdict||options.has_drop_button){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
     if(!manifest||(!suite&&!selected)||(suite&&selected)){fprintf(stderr,"invalid-arguments: use --help for usage\n");return 2;}
     size_t manifest_length=0;
     uint8_t *manifest_bytes=malloc(MAX_MANIFEST+1);
@@ -388,12 +398,20 @@ int main(int argc,char **argv) {
     free(manifest_bytes); /* only the digest check needed the bytes */
     if(selected_suite==NULL){fprintf(stderr,"invalid-manifest\n");return 2;}
     size_t eligible=suite?selected_suite->count:1,executed=0;int suite_code=0;
+    if(profile!=GBB_RUNNER_PROFILE_DMG){
+        /* Every Mooneye manifest case is a DMG case: report exclusion under the requested label and
+         * never run it on another profile (D-25). */
+        if(suite){for(size_t i=0;i<eligible;i++)printf("mooneye.%s status=excluded reason=unsupported-model profile=%s\n",selected_suite->cases[i].alias,gbb_runner_profile_label(profile));}
+        else{const fixture_case *xc=select_case(selected_suite,selected);if(!xc){fprintf(stderr,"unknown-case: use --help for invocation forms\n");return 2;}
+            printf("mooneye.%s status=excluded reason=unsupported-model profile=%s\n",xc->alias,gbb_runner_profile_label(profile));}
+        return 4;
+    }
     if(suite){
         size_t category_pass[2]={0,0},category_total[2]={0,0};
         static const char *const category_names[2]={"mbc2","mbc5"};
         for(size_t i=0;i<eligible;i++){
             const fixture_case *fc=&selected_suite->cases[i];
-            int code=run_one(selected_suite,fc,manifest,receipt,options.observe,eligible,&executed);
+            int code=run_one(profile,selected_suite,fc,manifest,receipt,options.observe,eligible,&executed);
             if(code!=0&&suite_code==0)suite_code=code;
             for(size_t k=0;k<2;k++)if(strcmp(fc->category,category_names[k])==0){category_total[k]++;if(code==0)category_pass[k]++;}
         }
@@ -402,5 +420,5 @@ int main(int argc,char **argv) {
         return suite_counts_valid(eligible,executed)?suite_code:2;
     }
     const fixture_case *fc=select_case(selected_suite,selected);if(!fc){fprintf(stderr,"unknown-case: use --help for invocation forms\n");return 2;}
-    return run_one(selected_suite,fc,manifest,receipt,options.observe,eligible,&executed);
+    return run_one(profile,selected_suite,fc,manifest,receipt,options.observe,eligible,&executed);
 }

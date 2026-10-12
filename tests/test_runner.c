@@ -28,7 +28,7 @@ static int induced_guest_failure_on(uint8_t *rom,size_t rom_size) {
 
     protocol_evidence evidence;uint64_t ticks=0;size_t recent_count=0;const char *stop=NULL;
     gbb_diagnostic_record recent[RECENT_CAPACITY];
-    const char *status=run_guest(&cases[0],rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
+    const char *status=run_guest(GBB_RUNNER_PROFILE_DMG,&cases[0],rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
     REQUIRE(strcmp(status,"fail")==0);
     REQUIRE(evidence.reached_result);
     REQUIRE(evidence.result_pc==cases[0].result_pc);
@@ -70,7 +70,7 @@ static const fixture_case *mbc_case_by_alias(const char *alias) {
 static int type_mutation_on(const fixture_case *fc,uint8_t *rom,size_t rom_size) {
     protocol_evidence evidence;uint64_t ticks=0;size_t recent_count=0;const char *stop=NULL;
     gbb_diagnostic_record recent[RECENT_CAPACITY];
-    const char *baseline=run_guest(fc,rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
+    const char *baseline=run_guest(GBB_RUNNER_PROFILE_DMG,fc,rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
     REQUIRE(baseline!=NULL && strcmp(baseline,"pass")==0);
 
     REQUIRE(rom_size>0x14d && rom[0x147]>=0x19 && rom[0x147]<=0x1e); /* an MBC5 cartridge type */
@@ -79,7 +79,7 @@ static int type_mutation_on(const fixture_case *fc,uint8_t *rom,size_t rom_size)
     for(size_t i=0x134;i<=0x14c;i++)checksum=(uint8_t)(checksum-rom[i]-1u);
     rom[0x14d]=checksum;
 
-    const char *status=run_guest(fc,rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
+    const char *status=run_guest(GBB_RUNNER_PROFILE_DMG,fc,rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
     REQUIRE(status!=NULL && strcmp(status,"pass")!=0);
     printf("control=mbc5-type-byte-mutation alias=%s header147=01 header_checksum=%02x status=%s stop=%s ticks=%llu\n",
            fc->alias,checksum,status,stop!=NULL?stop:"none",(unsigned long long)ticks);

@@ -15,8 +15,9 @@ set(help_text "${output}${error}")
 foreach(expected
     "Usage:"
     "<rom.gb>"
-    "--manifest <manifest.json> --case <id> [--receipt]"
-    "--manifest <manifest.json> --suite [--receipt]"
+    "--manifest <manifest.json> --case <id> [--profile dmg|cgb] [--receipt]"
+    "--manifest <manifest.json> --suite [--profile dmg|cgb] [--receipt]"
+    "--profile dmg|cgb"
     "--acceptance <cases.txt> (--case <id> | --suite --expect-excluded <n>)"
     "--acceptance <cases.txt> --case <id> --observe")
   string(FIND "${help_text}" "${expected}" found)
