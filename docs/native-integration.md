@@ -59,8 +59,10 @@ not authenticate data or detect same-size corruption. See the
 - `gbb_create` selects the explicit bootless `GBB_PROFILE_DMG_CPU_B` profile;
   `gbb_destroy` releases the opaque instance.
 - `gbb_load_rom` copies input bytes on success. The loader accepts exact
-  supported lengths up to 8 MiB for MBC5 types (`$19`-`$1E`) and up to 2 MiB for
-  every other type; an oversized length returns `GBB_ROM_TOO_LARGE`, and a
+  supported lengths up to 8 MiB for MBC5 types (`$19`-`$1E`), up to 4 MiB for
+  MBC3 types (`$0F`-`$13`; the MBC30 variant is rejected with
+  `GBB_UNSUPPORTED_CARTRIDGE_VARIANT`) and up to 2 MiB for every other type; an
+  oversized length returns `GBB_ROM_TOO_LARGE`, and a
   loaded cartridge needs at most 8 MiB of ROM plus 128 KiB of RAM. Failed
   replacement leaves active guest state unchanged. Read the full file under a
   host-selected bound before loading.

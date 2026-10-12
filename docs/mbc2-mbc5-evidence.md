@@ -123,8 +123,10 @@ They are not installed and not packaged.
 
 ## Known limits
 
-- No physical MBC2/MBC5 observation, CGB behavior, RTC, MBC3, MBC6/7, camera
-  or other mapper claim.
+- No physical MBC2/MBC5 observation, CGB behavior, MBC6/7, camera or other
+  mapper claim. MBC3 and its real-time clock were added in Phase 9 and have
+  their own ledger and limits in [mbc3-rtc-evidence.md](mbc3-rtc-evidence.md);
+  nothing in this file is evidence for them.
 - The rumble line is a software query; no physical motor behavior and no host
   haptics are claimed or implemented.
 - Test-ROM pass counts are not a statement about any game's behavior.
