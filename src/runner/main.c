@@ -492,19 +492,24 @@ int main(int argc,char **argv) {
         return 4;
     }
     if(suite){
-        size_t category_pass[MAX_SUITE_CATEGORIES]={0},category_total[MAX_SUITE_CATEGORIES]={0};
+        size_t category_pass[MAX_SUITE_CATEGORIES]={0},category_total[MAX_SUITE_CATEGORIES]={0},category_xu[MAX_SUITE_CATEGORIES]={0};
         suite_tally tally={0,0};
         if(selected_suite->category_count>MAX_SUITE_CATEGORIES){fprintf(stderr,"runner-error: too many suite categories\n");return 2;}
         for(size_t i=0;i<eligible;i++){
             const fixture_case *fc=&selected_suite->cases[i];
             int code=run_one(selected_suite,fc,manifest,receipt,options.observe,eligible,&executed,&tally);
             if(code!=0&&suite_code==0)suite_code=code;
-            for(size_t k=0;k<selected_suite->category_count;k++)if(strcmp(fc->category,selected_suite->categories[k])==0){category_total[k]++;if(code==0)category_pass[k]++;}
+            for(size_t k=0;k<selected_suite->category_count;k++)if(strcmp(fc->category,selected_suite->categories[k])==0){category_total[k]++;if(code==0){if(fc->expect_stop)category_xu[k]++;else category_pass[k]++;}}
         }
         if(receipt)printf("suite eligible=%zu executed=%zu status=%s\n",eligible,executed,suite_counts_valid(eligible,executed)&&suite_code==0?"pass":"fail");
         if(receipt&&selected_suite->category_count!=0){
             printf("suite categories");
-            for(size_t k=0;k<selected_suite->category_count;k++)printf(" %s=%zu/%zu",selected_suite->categories[k],category_pass[k],category_total[k]);
+            /* name=P/T counts plain passes only. A row that met its declared unsupported-bus stop never reached its
+             * verdict, so it is reported as name.expected-unsupported=N and not as a pass (D-26). */
+            for(size_t k=0;k<selected_suite->category_count;k++){
+                printf(" %s=%zu/%zu",selected_suite->categories[k],category_pass[k],category_total[k]);
+                if(category_xu[k]!=0)printf(" %s.expected-unsupported=%zu",selected_suite->categories[k],category_xu[k]);
+            }
             printf("\n");
         }
         /* Rows that met their declared unsupported-bus stop count as passing for the suite status; this line
