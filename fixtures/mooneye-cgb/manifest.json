@@ -57,6 +57,13 @@
       "target_revision": "CGB",
       "cart_header_143": "0x00",
       "mode": "compat (header $143 bit 7 clear)",
+      "result_pc": "0x4327",
+      "pass_callback_pc": "0x4000",
+      "fail_callback_pcs": [
+        "0x4000",
+        "0x01da"
+      ],
+      "budget_half_dots": 500000,
       "expect": "pass",
       "note": "Mooneye source header: pass on CGB. Compares the compat-mode post-boot register row.",
       "build_recipe": [
@@ -86,6 +93,12 @@
       "target_revision": "CGB-A..E",
       "cart_header_143": "0x00",
       "mode": "compat (header $143 bit 7 clear)",
+      "result_pc": "0x4327",
+      "pass_callback_pc": "0x4000",
+      "fail_callback_pcs": [
+        "0x4000"
+      ],
+      "budget_half_dots": 500000,
       "expect": "pass",
       "note": "Mooneye source header: pass on CGB A, B, C, D and E; fail on CGB 0. Never a CGB-E-alone claim.",
       "build_recipe": [
@@ -115,6 +128,12 @@
       "target_revision": "CGB",
       "cart_header_143": "0x00",
       "mode": "compat (header $143 bit 7 clear)",
+      "result_pc": "0x4067",
+      "pass_callback_pc": "0x01ce",
+      "fail_callback_pcs": [
+        "0x01f5"
+      ],
+      "budget_half_dots": 2000000,
       "expect": "expected-unsupported",
       "expect_stop": "unsupported-bus",
       "expect_stop_address": "0xFF76",
@@ -146,6 +165,12 @@
       "target_revision": "CGB",
       "cart_header_143": "0x00",
       "mode": "compat (header $143 bit 7 clear)",
+      "result_pc": "0x4070",
+      "pass_callback_pc": "0x1a02",
+      "fail_callback_pcs": [
+        "0x1a31"
+      ],
+      "budget_half_dots": 2000000,
       "expect": "expected-unsupported",
       "expect_stop": "unsupported-bus",
       "expect_stop_address": "0xFF76",

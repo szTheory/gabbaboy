@@ -59,9 +59,13 @@ for alias in sys.argv[2:]:
     # Assert-style ROMs (boot_regs-cgb, boot_div-cgbABCDE) end in one shared quit_check_asserts callback,
     # so pass and fail share a program counter; quit_ok / quit_inline sites are listed when present.
     sites = {name: pcs[0] for name, pcs in sorted(labels.items()) if '@quit_inline_' in name}
+    # callback_pc: the shared assert callback of an assert-style ROM (pass_cb == fail_cb, as for tim00);
+    # none for ROMs that quit through inline sites (the lowest-numbered inline site is the pass site).
+    callback = labels.get('check_asserts_cb', [])
     print(f'{alias} size={len(rom)} header143={rom[0x143]:02x} header147={rom[0x147]:02x} '
           f'header148={rom[0x148]:02x} result_pc={",".join(f"{x:04x}" for x in result)} '
           f'rom_ldbb_ok={all(rom[x] == 0x40 for x in result if x < len(rom)) if result else False} '
+          f'callback_pc={",".join(f"{x:04x}" for x in callback) if callback else "none"} '
           f'quit_sites={";".join(f"{n}={pc:04x}" for n, pc in sites.items())}')
 PY
   exit 0

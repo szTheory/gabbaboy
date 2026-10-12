@@ -42,11 +42,11 @@ The derivatives are not untouched upstream ROMs: the parent headless-report patc
 
 ## Per-ROM program-counter table
 
-Filled by Plan 10-16 from `tests/scripts/reproduce-mooneye-cgb.sh --facts` when the ROMs are wired into the runner. Assert-style ROMs (`boot_regs-cgb`, `boot_div-cgbABCDE`) end in one shared `quit_check_asserts` callback, so their pass and fail callback program counters are the same.
+From `tests/scripts/reproduce-mooneye-cgb.sh --facts` on the byte-identical rebuild (the four built ROMs equal the committed ROMs). Assert-style ROMs (`boot_regs-cgb`, `boot_div-cgbABCDE`) end in one shared `check_asserts_cb` callback at `0x4000`, so their pass and fail callback program counters are the same and the `LD B,B` registers decide, as for `tim00`. `boot_regs-cgb` also lists the `invalid_sp` inline quit site `0x01da` as a fail callback. The two hwio ROMs quit through inline sites: the first is the pass site and the second the mismatch (fail) site. The manifest and the runner's `cgb_cases[]` carry the same values; `cgb_mooneye_pc_table` fails if those two disagree. Budgets are generous multiples of the measured cost (about 34.7k half-dots for the two assert ROMs, a stop at 16.6k and 15.9k half-dots for the two staged ROMs).
 
 | ROM alias | result_pc | pass callback | fail callbacks | budget (half-dots) |
 |---|---|---|---|---:|
-| `boot_regs-cgb` | pending Plan 10-16 | pending | pending | pending |
-| `boot_div-cgbABCDE` | pending Plan 10-16 | pending | pending | pending |
-| `boot_hwio-C` | pending Plan 10-16 | pending | pending | pending |
-| `unused_hwio-C` | pending Plan 10-16 | pending | pending | pending |
+| `boot_regs-cgb` | `0x4327` | `0x4000` | `0x4000`, `0x01da` | 500000 |
+| `boot_div-cgbABCDE` | `0x4327` | `0x4000` | `0x4000` | 500000 |
+| `boot_hwio-C` | `0x4067` | `0x01ce` | `0x01f5` | 2000000 |
+| `unused_hwio-C` | `0x4070` | `0x1a02` | `0x1a31` | 2000000 |

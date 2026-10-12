@@ -727,7 +727,7 @@ add_test(NAME mooneye_mbc_pc_table_tamper
     -DGBB_EXPECT_REGEX=pc-table-mismatch
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # Phase 10 Mooneye CGB derivatives (D-26, names per D-27): digest and inventory modes of the
-# fail-closed verifier. The pc-table mode arrives with the runner table in Plan 10-16.
+# fail-closed verifier, plus the pc-table mode that ties the runner's cgb_cases[] to the manifest (Plan 10-16).
 add_test(NAME cgb_mooneye_fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DGBB_MODE=digest
@@ -772,6 +772,24 @@ gbb_add_cgb_mooneye_tamper_test(cgb_mooneye_digest_tamper digest
   "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/digest/manifest.json" "Fixture mooneye-misc-boot-regs-cgb mismatch")
 gbb_add_cgb_mooneye_tamper_test(cgb_mooneye_inventory_tamper inventory
   "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/dup-id/manifest.json" "Duplicate fixture id: mooneye-misc-boot-regs-cgb")
+add_test(NAME cgb_mooneye_pc_table
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_MODE=pc-table
+    -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb
+    -DGBB_RUNNER_SOURCE=${PROJECT_SOURCE_DIR}/src/runner/main.c
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake)
+set_tests_properties(cgb_mooneye_pc_table PROPERTIES
+  PASS_REGULAR_EXPRESSION "Verified pc-table: 4 manifest rows agree with the compiled cgb_cases")
+# Negative control: a manifest whose first result_pc was changed must fail the pc-table check, naming the field.
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/pc")
+string(JSON GBB_CGB_PC_TAMPERED SET "${GBB_CGB_MANIFEST_JSON}" fixtures 0 result_pc "\"0x4328\"")
+file(WRITE "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/pc/manifest.json" "${GBB_CGB_PC_TAMPERED}")
+add_test(NAME cgb_mooneye_pc_table_tamper
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_MODE=pc-table;-DGBB_MANIFEST=${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/pc/manifest.json;-DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb;-DGBB_RUNNER_SOURCE=${PROJECT_SOURCE_DIR}/src/runner/main.c;-P;${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=pc-table-mismatch: mooneye-misc-boot-regs-cgb result_pc"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # Negative control (D-28): an edited sibling manifest is refused with invalid-manifest and exactly exit code 2.
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-mbc-unknown")
 configure_file("${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/manifest.json"
@@ -890,6 +908,14 @@ foreach(entry IN LISTS GBB_MBC_CASES)
   set_tests_properties(mooneye_mbc_case_${alias} PROPERTIES TIMEOUT 60 PASS_REGULAR_EXPRESSION
     "status=pass.*source_revision=31510e12eea6286d36eea060a6adde755e1067aa.*fixture_origin=derived-headless-report-closure upstream_assertions=unchanged.*protocol_stage=callback-then-ld-b-b callback_result=pass callback_pc=${callback_pc} result_pc=${result_pc}")
 endforeach()
+# Phase 10 CGB-profile Mooneye derivatives (D-26): the runner's third suite. Each row runs on the CGB-CPU-E
+# profile in compat mode and prints its own label; the DMG label must never appear.
+set(GBB_CGB_MOONEYE_MANIFEST ${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json)
+add_test(NAME cgb_mooneye_case_boot_regs-cgb
+  COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --case boot_regs-cgb --receipt)
+set_tests_properties(cgb_mooneye_case_boot_regs-cgb PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "status=pass.*profile=CGB-CPU-E.*callback_result=pass callback_pc=4000 result_pc=4327"
+  FAIL_REGULAR_EXPRESSION "DMG-CPU-B")
 set(GBB_TEST_SANITIZER_LINK_OPTIONS "")
 if(GABBABOY_ENABLE_SANITIZERS)
   set(GBB_TEST_SANITIZER_LINK_OPTIONS "-fsanitize=address,undefined")

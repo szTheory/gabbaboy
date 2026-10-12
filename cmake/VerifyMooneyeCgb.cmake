@@ -1,23 +1,24 @@
 cmake_minimum_required(VERSION 3.25)
 
 # Fail-closed verification of the Phase 10 Mooneye CGB derivative set (D-26; adapted from
-# VerifyMooneyeMbc.cmake). The pc-table mode is added by Plan 10-16 once the runner table exists;
-# the gbb:cgb-rows-begin / gbb:cgb-rows-end marker names are reserved for it.
+# VerifyMooneyeMbc.cmake).
 #
 #   GBB_MOONEYE_DIR      fixtures/mooneye-cgb (required)
 #   GBB_MANIFEST         optional manifest path; defaults to <dir>/manifest.json (tamper controls point elsewhere)
-#   GBB_MODE             digest | inventory
+#   GBB_MODE             digest | inventory | pc-table
+#   GBB_RUNNER_SOURCE    src/runner/main.c (pc-table only)
 #
-# Failure tokens: Duplicate fixture id, Duplicate ROM path, Fixture ... mismatch (digest), inventory: ...
+# Failure tokens: Duplicate fixture id, Duplicate ROM path, Fixture ... mismatch (digest), inventory: ...,
+# pc-table-mismatch: ...
 # Only portable CMake commands are used (file(SIZE), file(SHA256), string(JSON), cmake_path).
 
 if(NOT DEFINED GBB_MOONEYE_DIR)
   message(FATAL_ERROR "GBB_MOONEYE_DIR is required")
 endif()
 if(NOT DEFINED GBB_MODE)
-  message(FATAL_ERROR "GBB_MODE is required (digest | inventory)")
+  message(FATAL_ERROR "GBB_MODE is required (digest | inventory | pc-table)")
 endif()
-if(NOT GBB_MODE STREQUAL "digest" AND NOT GBB_MODE STREQUAL "inventory")
+if(NOT GBB_MODE STREQUAL "digest" AND NOT GBB_MODE STREQUAL "inventory" AND NOT GBB_MODE STREQUAL "pc-table")
   message(FATAL_ERROR "Unknown GBB_MODE: ${GBB_MODE}")
 endif()
 
@@ -108,6 +109,113 @@ if(GBB_MODE STREQUAL "inventory")
     endif()
   endforeach()
   message(STATUS "Verified Mooneye-cgb inventory: 4 fixtures (2 pass, 2 expected-unsupported at 0xFF76), 4 required ROM(s)")
+  return()
+endif()
+
+if(GBB_MODE STREQUAL "pc-table")
+  if(NOT DEFINED GBB_RUNNER_SOURCE OR NOT EXISTS "${GBB_RUNNER_SOURCE}")
+    message(FATAL_ERROR "pc-table mode needs an existing GBB_RUNNER_SOURCE")
+  endif()
+  file(READ "${GBB_RUNNER_SOURCE}" runner_source)
+  string(FIND "${runner_source}" "gbb:cgb-rows-begin" rows_begin)
+  string(FIND "${runner_source}" "gbb:cgb-rows-end" rows_end)
+  if(rows_begin LESS 0 OR rows_end LESS rows_begin)
+    message(FATAL_ERROR "pc-table-mismatch: runner source has no cgb row markers")
+  endif()
+  math(EXPR rows_length "${rows_end} - ${rows_begin}")
+  string(SUBSTRING "${runner_source}" ${rows_begin} ${rows_length} rows_region)
+  # Rows contain no semicolons or brackets, so a newline-to-semicolon swap yields a clean list.
+  string(REPLACE "\n" ";" row_lines "${rows_region}")
+  set(rows "")
+  foreach(line IN LISTS row_lines)
+    string(STRIP "${line}" line)
+    if(line MATCHES "^\\{\"")
+      list(APPEND rows "${line}")
+    endif()
+  endforeach()
+  list(LENGTH rows row_count)
+  if(NOT row_count EQUAL 4)
+    message(FATAL_ERROR "pc-table-mismatch: runner source has ${row_count} cgb rows, expected 4")
+  endif()
+
+  foreach(index RANGE 0 3)
+    gbb_fixture_field(id ${index} id)
+    gbb_fixture_field(alias ${index} alias)
+    gbb_fixture_field(category ${index} category)
+    gbb_fixture_field(rom ${index} rom)
+    gbb_fixture_field(sha256 ${index} sha256)
+    gbb_fixture_field(original_sha256 ${index} original_sha256)
+    gbb_fixture_field(size_bytes ${index} size_bytes)
+    gbb_fixture_field(source_path ${index} source_path)
+    gbb_fixture_field(result_pc ${index} result_pc)
+    gbb_fixture_field(pass_pc ${index} pass_callback_pc)
+    gbb_fixture_field(budget ${index} budget_half_dots)
+    gbb_fixture_field(expect ${index} expect)
+    string(JSON fail_count ERROR_VARIABLE json_error LENGTH "${manifest_json}" fixtures ${index} fail_callback_pcs)
+    if(NOT json_error STREQUAL "NOTFOUND" OR fail_count LESS 1 OR fail_count GREATER 6)
+      message(FATAL_ERROR "pc-table-mismatch: ${id} needs 1 to 6 fail_callback_pcs (${fail_count})")
+    endif()
+    set(fail_list "")
+    foreach(fail_index RANGE 0 5)
+      if(fail_index EQUAL fail_count)
+        break()
+      endif()
+      string(JSON fail_pc GET "${manifest_json}" fixtures ${index} fail_callback_pcs ${fail_index})
+      list(APPEND fail_list "${fail_pc}")
+    endforeach()
+    list(JOIN fail_list ", " fail_joined)
+    list(GET fail_list 0 first_fail)
+    # expect pass -> expect_stop 0 / address 0x0000; expected-unsupported -> 1 / the declared address.
+    if(expect STREQUAL "expected-unsupported")
+      gbb_fixture_field(stop_address ${index} expect_stop_address)
+      set(want_stop 1)
+    else()
+      set(stop_address "0x0000")
+      set(want_stop 0)
+    endif()
+
+    set(match_row "")
+    set(match_count 0)
+    foreach(row IN LISTS rows)
+      string(FIND "${row}" "{\"${id}\"," at)
+      if(at EQUAL 0)
+        set(match_row "${row}")
+        math(EXPR match_count "${match_count} + 1")
+      endif()
+    endforeach()
+    if(NOT match_count EQUAL 1)
+      message(FATAL_ERROR "pc-table-mismatch: ${id} row (${match_count} rows found)")
+    endif()
+
+    # Each field is pinned with its neighbours so a value cannot match inside another column.
+    set(checks
+      "alias|{\"${id}\", \"${alias}\", \"${category}\", \"${rom}\", \"${sha256}\", \"${original_sha256}\","
+      "pass_callback_pc|\"${source_path}\", ${pass_pc}, ${first_fail}, 0x"
+      "result_pc|, ${result_pc}, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}"
+      "budget|{0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(${budget}), "
+      "size_bytes|, ${size_bytes}u, {"
+      "fail_callback_pcs|{${fail_joined}}, ${fail_count}, "
+      "profile_and_expectation|, GBB_PROFILE_CGB_CPU_E, ${want_stop}, ${stop_address}}")
+    foreach(check IN LISTS checks)
+      string(FIND "${check}" "|" bar)
+      string(SUBSTRING "${check}" 0 ${bar} field)
+      math(EXPR needle_start "${bar} + 1")
+      string(SUBSTRING "${check}" ${needle_start} -1 needle)
+      string(FIND "${match_row}" "${needle}" found)
+      if(found LESS 0)
+        message(FATAL_ERROR "pc-table-mismatch: ${id} ${field}")
+      endif()
+    endforeach()
+  endforeach()
+
+  # The raw-manifest gate constant must be the digest of the manifest these rows were checked against;
+  # tested last so a changed row is named before the digest mismatch hides it.
+  file(SHA256 "${manifest_path}" manifest_digest)
+  string(FIND "${runner_source}" "#define MOONEYE_CGB_MANIFEST_SHA256 \"${manifest_digest}\"" digest_found)
+  if(digest_found LESS 0)
+    message(FATAL_ERROR "pc-table-mismatch: MOONEYE_CGB_MANIFEST_SHA256 is not the digest ${manifest_digest}")
+  endif()
+  message(STATUS "Verified pc-table: 4 manifest rows agree with the compiled cgb_cases[]")
   return()
 endif()
 
