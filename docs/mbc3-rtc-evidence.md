@@ -244,10 +244,12 @@ run was about 19.7 MB.
   overwriting the committed file. A local ubuntu:22.04 container printed
   `result=byte-identical` for each; that is **not** the hosted claim.
 - The hosted `fixture-repro` jobs `magentests-repro` and `rtc3test-repro`
-  reported success on the pull-request head `2b4c22004e801272ebc1cff12b85312debb444b9`.
-  "Release bytes equal the rebuild" is therefore **pending**: each fixture's
-  `SOURCES.md` says it is not yet claimed, and it is recorded only from a
-  hosted `result=byte-identical` line read at the final evidence head.
+  each printed `result=byte-identical` in pull-request run 38189871131 at head
+  `fb8972d9e30e6bdf5ff2038e4508ecd3ebfb8522`. The release bytes of the
+  MagenTests ROMs and of rtc3test therefore equal the rebuild from the pinned
+  sources and legacy toolchain at that head. This is a reproducibility claim,
+  not a hardware or compatibility claim. The Phase 9 evidence head repeats the
+  jobs; a later `result=differs` would withdraw the claim.
 - The three original continuation guests are rebuilt byte-identically by their
   reproduce scripts (pinned RGBDS 1.0.1 archives) and by the hosted
   `fixture-repro` steps.

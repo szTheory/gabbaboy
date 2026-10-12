@@ -28,9 +28,7 @@ the same digests and is checked by `cmake/VerifyFixtureManifest.cmake`.
 
 ## Rebuild status
 
-Release bytes equal the rebuild: not yet claimed. A legacy-toolchain
-reproduction leg is added by a later plan (09-08) and read at the evidence head
-by Plan 09-18.
+Release bytes equal the rebuild: claimed. The hosted `magentests-repro` job in `.github/workflows/fixture-repro.yml` printed `result=byte-identical` in pull-request run 38189871131 at head `fb8972d9e30e6bdf5ff2038e4508ecd3ebfb8522` (read in Plan 09-18). A mismatch is reported, never replaced by rebuilt bytes.
 
 ## CI toolchain archive pin
 
