@@ -976,6 +976,15 @@ add_test(NAME cgb_mooneye_observe_not_applicable
 set_tests_properties(cgb_mooneye_observe_not_applicable PROPERTIES TIMEOUT 30
   PASS_REGULAR_EXPRESSION "mooneye[.]boot_regs-cgb[.]frame\tnot-applicable"
   FAIL_REGULAR_EXPRESSION "frame_generation|ldbb_half_dots|not-ready")
+# WR-03: reproduce-mooneye-cgb.sh --compare refuses a fixture directory without its manifest before any
+# network work (offline; bash-only).
+if(NOT WIN32)
+  find_program(GBB_BASH_REPRO bash REQUIRED)
+  add_test(NAME cgb_mooneye_repro_requires_manifest
+    COMMAND "${GBB_BASH_REPRO}" ${PROJECT_SOURCE_DIR}/tests/scripts/test-reproduce-mooneye-cgb-guard.sh ${PROJECT_SOURCE_DIR})
+  set_tests_properties(cgb_mooneye_repro_requires_manifest PROPERTIES TIMEOUT 60
+    PASS_REGULAR_EXPRESSION "reproduce-mooneye-cgb guard ok")
+endif()
 # Negative control (D-28): a one-byte-longer manifest is refused with invalid-manifest and exactly exit code 2.
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-cgb-unknown")
 configure_file("${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json"

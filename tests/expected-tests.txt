@@ -523,6 +523,7 @@ cgb_mooneye_required_suite
 cgb_mooneye_case_boot_div-cgbABCDE
 cgb_mooneye_case_boot_hwio-C
 cgb_mooneye_case_unused_hwio-C
+cgb_mooneye_repro_requires_manifest
 cgb_mooneye_unknown_manifest
 cgb_mooneye_expected_unsupported_tamper
 cgb_mooneye_observe_not_applicable

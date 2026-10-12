@@ -98,7 +98,11 @@ if [[ "$mode" == --build ]]; then
 else
   fixture_dir=$(cd "$2" && pwd -P)
   [[ "$fixture_dir" == "$repo_root/fixtures/mooneye-cgb" ]] || { echo 'unexpected fixture directory' >&2; exit 2; }
+  # The manifest binds each ROM to its original_sha256; without it the comparison would be weaker than
+  # it claims, so refuse before any temp directory or network fetch.
+  [[ -f "$fixture_dir/manifest.json" ]] || { echo "missing fixture manifest: $fixture_dir/manifest.json" >&2; exit 1; }
   build_dir=$(mktemp -d "${TMPDIR:-/tmp}/gabbaboy-mooneye-cgb-roms.XXXXXXXX")
+  trap 'rm -rf -- "$build_dir"' EXIT
   build_dir=$(cd "$build_dir" && pwd -P)
 fi
 outside_repo "$build_dir"
@@ -189,12 +193,10 @@ committed_count=$(find "$fixture_dir" -maxdepth 1 -name '*.gb' | wc -l | tr -d '
 [[ "$committed_count" == "${#roms[@]}" ]] || { echo "committed ROM count $committed_count differs from ${#roms[@]}" >&2; failed=1; }
 manifest_file="$fixture_dir/manifest.json"
 for alias in "${roms[@]}"; do
-  if [[ -f "$manifest_file" ]]; then
-    expected_original=$(jq -r --arg rom "$alias.gb" '.fixtures[] | select(.rom == $rom) | .original_sha256' "$manifest_file")
-    actual_original=$(sha256_file "$work_dir/$alias.original.gb")
-    [[ "$expected_original" == "$actual_original" ]] || {
-      printf 'DIFFERENT-ORIGINAL %s manifest=%s fresh=%s\n' "$alias" "$expected_original" "$actual_original" >&2; failed=1; }
-  fi
+  expected_original=$(jq -r --arg rom "$alias.gb" '.fixtures[] | select(.rom == $rom) | .original_sha256' "$manifest_file")
+  actual_original=$(sha256_file "$work_dir/$alias.original.gb")
+  [[ "$expected_original" == "$actual_original" ]] || {
+    printf 'DIFFERENT-ORIGINAL %s manifest=%s fresh=%s\n' "$alias" "$expected_original" "$actual_original" >&2; failed=1; }
   if [[ ! -f "$fixture_dir/$alias.gb" ]]; then echo "missing committed ROM: $alias.gb" >&2; failed=1; continue; fi
   fresh=$(sha256_file "$build_dir/$alias.gb")
   committed=$(sha256_file "$fixture_dir/$alias.gb")
@@ -206,7 +208,7 @@ for alias in "${roms[@]}"; do
     failed=1
   fi
 done
-rm -rf "$build_dir"
+rm -rf "$build_dir" # also removed by the EXIT trap on any earlier abort
 if [[ "$failed" == 0 && "$matched" == "${#roms[@]}" ]]; then
   echo "result=byte-identical roms=$matched"
 else
