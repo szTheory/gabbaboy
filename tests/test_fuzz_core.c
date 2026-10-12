@@ -71,7 +71,45 @@ static int run_cgb_seeds(void) {
     return 0;
 }
 
+int gbb_fuzz_core_last_profile_cgb(void);
+
+/* cgb_fuzz_profile_select (D-27): bit 7 of data[0] must choose the profile the harness creates.
+ * Negative control: the CGB seeds and their DMG twins differ only in bit 7, so if selection were
+ * fixed to one profile the two observed values would coincide and the equality check fails. */
+static int run_profile_select(void) {
+    static const uint8_t cgb_loader[] = {0x80u, 0x00u, 0x01u};
+    static const uint8_t dmg_loader[] = {0x00u, 0x00u, 0x01u};
+    static const uint8_t cgb_io[] = {0xC0u, 0x01u, 0x00u, 0x00u, 0xFFu, 0x44u};
+    static const uint8_t dmg_io[] = {0x40u, 0x01u, 0x00u, 0x00u, 0xFFu, 0x44u};
+    struct { const uint8_t *data; size_t size; int expect_cgb; const char *name; } cases[] = {
+        {cgb_loader, sizeof(cgb_loader), 1, "cgb loader"},
+        {dmg_loader, sizeof(dmg_loader), 0, "dmg loader twin"},
+        {cgb_io, sizeof(cgb_io), 1, "cgb guest I/O"},
+        {dmg_io, sizeof(dmg_io), 0, "dmg twin of guest I/O"},
+    };
+    int observed[4];
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        if (gbb_fuzz_core_one_input(cases[i].data, cases[i].size) != 0) {
+            fprintf(stderr, "%s: harness rejected input\n", cases[i].name);
+            return 1;
+        }
+        observed[i] = gbb_fuzz_core_last_profile_cgb();
+        if (observed[i] != cases[i].expect_cgb) {
+            fprintf(stderr, "%s: selected profile cgb=%d, expected %d\n", cases[i].name,
+                    observed[i], cases[i].expect_cgb);
+            return 1;
+        }
+    }
+    if (observed[0] == observed[1]) {
+        fprintf(stderr, "bit 7 did not change the selected profile\n");
+        return 1;
+    }
+    printf("ok 1 - cgb_fuzz_profile_select\n");
+    return 0;
+}
+
 int main(int argc, char **argv) {
+    if (argc > 1 && strcmp(argv[1], "cgb_profile_select") == 0) return run_profile_select();
     if (argc > 1 && strcmp(argv[1], "cgb") == 0) return run_cgb_seeds();
     static const uint8_t dmg_twin_of_minimized[] = {
         0x7Fu, 0x00u, 0x00u, 0x08u, 0x00u,

@@ -232,12 +232,20 @@ static void fuzz_cgb_io(gbb_instance *machine, const uint8_t *data, size_t size)
     require_banks(machine, 1);
 }
 
+/* Test-only observer (standalone test build): the profile the most recent input selected, -1 before
+ * any input. Lets cgb_fuzz_profile_select prove that bit 7 really reaches gbb_create. */
+static int last_profile_cgb = -1;
+#ifdef GBB_FUZZ_STANDALONE_TEST
+int gbb_fuzz_core_last_profile_cgb(void) { return last_profile_cgb; }
+#endif
+
 int gbb_fuzz_core_one_input(const uint8_t *data, size_t size) {
     if (data == NULL || size == 0u || size > FUZZ_INPUT_LIMIT) return 0;
 
     /* data[0] bit 7 selects the profile (clear = DMG-CPU-B, set = CGB-CPU-E); with bit 6 also set
      * on the CGB profile the input drives the guest I/O path. Bits 0-1 keep the mode selector. */
     const int cgb = (data[0] & 0x80u) != 0u;
+    last_profile_cgb = cgb;
     gbb_instance *machine = NULL;
     require_contract(gbb_create(cgb ? GBB_PROFILE_CGB_CPU_E : GBB_PROFILE_DMG_CPU_B,
                                 &machine) == GBB_OK);
