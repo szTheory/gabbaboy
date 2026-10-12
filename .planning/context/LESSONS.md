@@ -524,6 +524,15 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Source:** Phase 9 verify-work, owner directive.
 - **Status:** Adopted.
 
+### GB-GSD-015 / 2026-10-12 / A recorded lesson that agents do not read is not a control; enforce it with a test
+
+- **Cause and evidence:** GB-GSD-014 already said to write SUMMARY `coverage:` entries in the classifier schema, but all 20 Phase 10 SUMMARYs used `deliverable:` keys, `kind: ctest` and flow-style `{...}` items. `uat.classify-coverage` rejected every entry, so `/gsd-verify-work 10` again mapped 118 cited tests to UAT rows by hand. Executors read AGENTS.md and the plan, not LESSONS.md. The classifier also keeps a trailing `# comment` as part of a value, so `status: pass  # latest run` is invalid even though the GSD template shows inline comments. In the same session `preview-package-smoke` timed out at two heads: its jobs waited 1500 s for `required-native`, but `linux-asan-ubsan` takes about 29 minutes, so each head needed a manual rerun. The verify:pre api-coverage gate also blocked once, because the COVERAGE.md opt-out reason was over 200 characters.
+- **Remedy:** `tests/scripts/verify-summary-coverage.py` copies the classifier rules and adds the D-069 rule (`human_judgment: false` needs at least one verification, all `pass`). CTests: `summary_coverage` checks every SUMMARY from Phase 11 on, `summary_coverage_selftest` rejects 12 mutants, and `summary_coverage_phase10_rejected` is the negative control on the real Phase 10 files. Executors run the full suite before finishing a plan, so a bad block fails there, not at verify-work. AGENTS.md states the schema in one line. The preview wait is now 2700 s with a 55-minute job timeout. Keep COVERAGE.md opt-out reasons under 200 characters.
+- **Applies when:** A recurring mistake survives a written lesson: add a check that fails, not more prose. Also applies to writing SUMMARY coverage blocks and to CI jobs that wait on slower jobs.
+- **Verification:** The good self-test sample auto-passes D1 in `uat.classify-coverage`, and every mutant the script rejects is also not auto-passed there (checked locally against @opengsd/gsd-core 1.16.0). The Phase 10 negative control fails with `flow-style-not-supported`.
+- **Source:** Phase 10 verify-work, owner directive.
+- **Status:** Adopted.
+
 ### GB-CGB-001 / 2026-10-12 / The runner labelled every run `model=dmg-cpu-b`; one model-to-profile mapping removes the duplicate literals
 
 - **Cause and evidence:** Before Phase 10 the model string literal `dmg-cpu-b` appeared 17 times in `src/runner/acceptance.c` and the profile constant `GBB_PROFILE_DMG_CPU_B` three times in `src/runner/main.c`, so a CGB run would still have printed `model=dmg-cpu-b` and been filed as DMG evidence. After the change the literal occurs 5 times in `acceptance.c`, the constant once, and an unsupported profile is rejected by the acceptance runner instead of silently downgraded.
