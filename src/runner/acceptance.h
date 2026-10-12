@@ -91,9 +91,9 @@ typedef enum {
     GBB_CASE_EXCLUDED_REVISION     /* target_revision differs from the effective revision */
 } gbb_case_applicability_kind;
 
-/* The one runner model<->profile mapping (D-25). GBB_PROFILE_CGB_CPU_E does not exist in the public
- * header until Plan 10-05 (D-01), so the runner carries its value locally; the core's gbb_create
- * still rejects it with GBB_UNSUPPORTED_PROFILE, which the runner reports instead of falling back. */
+/* The one runner model<->profile mapping (D-25). The runner aliases the public profile values below
+ * so every create call and printed label goes through one mapping, and an unknown model is refused
+ * instead of falling back to DMG. */
 #define GBB_RUNNER_PROFILE_DMG GBB_PROFILE_DMG_CPU_B
 #define GBB_RUNNER_PROFILE_CGB GBB_PROFILE_CGB_CPU_E
 /* Maps dmg-cpu-b / cgb-cpu-e to a profile. Returns 1 when known, 0 otherwise (*out untouched). */

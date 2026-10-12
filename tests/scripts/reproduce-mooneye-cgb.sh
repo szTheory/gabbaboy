@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Explicit, networked rebuild of the Mooneye CGB-profile derivatives (Phase 10, D-26): boot_regs-cgb,
 # boot_div-cgbABCDE, boot_hwio-C and bits/unused_hwio-C. Ordinary CTest uses the checked-in ROMs.
-# Adapted from reproduce-mooneye-cgb.sh: same Mooneye and WLA-DX pins, same headless-report patch and
+# Adapted from reproduce-mooneye-mbc.sh: same Mooneye and WLA-DX pins, same headless-report patch and
 # zero font, read from the frozen parent fixtures by digest. None of the four defines CART_CGB, so each
 # ROM's $143 header byte is a non-CGB value (compat mode on the CGB profile); the build asserts that.
 #

@@ -1609,7 +1609,7 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
     if (address >= 0xFE00 && address <= 0xFE9F)
         return cpu_oam_access_allowed(m) ? m->oam[address - 0xFE00] : 0xFF;
     if (address < 0x8000u || (address >= 0xA000u && address <= 0xBFFFu)) return cart_read(m, address);
-    /* MODEL: BOTH GATE-23 basis=wram-echo-map -- work RAM and echo mapping; CGB WRAM banking is added by a later plan */
+    /* MODEL: BOTH GATE-23 basis=wram-echo-map -- work RAM and echo mapping; CGB WRAM banking is selected in wram_byte */
     if (address >= 0xC000 && address <= 0xFDFF) return *wram_byte(m, address);
     if (address >= 0xFF80 && address <= 0xFFFE) return m->hram[address - 0xFF80];
     return 0xFF;
@@ -2002,7 +2002,7 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     else if (address == 0xFF0F) m->interrupt_flags = (uint8_t)(value & 0x1Fu);
     /* MODEL: CGB_ONLY GATE-37 GUARD=model_is_cgb -- IE bits 5-7 are stored on the CGB profile; DMG keeps IE & $1F (OQ2) */
     else if (address == 0xFFFF) m->ie = (uint8_t)(value & (model_is_cgb(m) ? 0xFFu : 0x1Fu));
-    /* MODEL: BOTH GATE-38 basis=wram-echo-map -- work RAM and echo mapping; CGB WRAM banking is added by a later plan */
+    /* MODEL: BOTH GATE-38 basis=wram-echo-map -- work RAM and echo mapping; CGB WRAM banking is selected in wram_byte */
     else if (address >= 0xC000 && address <= 0xFDFF) *wram_byte_mut(m, address) = value;
     else if (address >= 0xFF80 && address <= 0xFFFE) m->hram[address - 0xFF80] = value;
 }

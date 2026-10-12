@@ -65,7 +65,7 @@ occurs exactly once in code and once in the table.
 | GATE-20 | UNKNOWN | - | research:11 | read8 | STAT mode and coincidence bits at LCD transitions |
 | GATE-21 | CGB_ONLY | model_is_cgb | - | read8 | IE bits 5-7 are stored on the CGB profile (Mooneye unused_hwio-C and unused_hwio-GS); DMG reads them as 1 (OQ2, owner veto item 6) |
 | GATE-22 | BOTH | - | basis=cartridge-side | cart_read | ROM reads are decided by the mapper, not the console |
-| GATE-23 | BOTH | - | basis=wram-echo-map | read8 | work RAM and echo mapping; CGB WRAM banking is added by a later plan |
+| GATE-23 | BOTH | - | basis=wram-echo-map | read8 | work RAM and echo mapping; CGB WRAM banking is selected in wram_byte |
 | GATE-24 | UNKNOWN | - | research:14 | timer_increment | TIMA overflow and reload timing |
 | GATE-25 | UNKNOWN | - | expected-failure:cgb-separate-buses | write8 | OAM-DMA CPU bus conflict: CGB uses separate buses (D-17) |
 | GATE-26 | BOTH | - | basis=cartridge-side | write8 | mapper register writes are decided by the cartridge |
@@ -80,7 +80,7 @@ occurs exactly once in code and once in the table.
 | GATE-35 | UNKNOWN | - | research:14 | write8 | wave RAM write aliasing while the channel is enabled |
 | GATE-36 | UNKNOWN | - | research:14 | write8 | APU register writes while powered on |
 | GATE-37 | CGB_ONLY | model_is_cgb | - | write8 | IE bits 5-7 are stored on the CGB profile; DMG keeps IE & $1F (OQ2); interrupt dispatch still masks with $1F |
-| GATE-38 | BOTH | - | basis=wram-echo-map | write8 | work RAM and echo mapping; CGB WRAM banking is added by a later plan |
+| GATE-38 | BOTH | - | basis=wram-echo-map | write8 | work RAM and echo mapping; CGB WRAM banking is selected in wram_byte |
 | GATE-39 | CGB_ONLY | model_is_cgb | - | read_supported_map | on the CGB profile FF00-FF7F readability comes from io_visibility[]; only DEFERRED read cells stop; the DMG chain is unchanged |
 | GATE-40 | UNKNOWN | - | research:14 | read_supported | FEA0-FEFF stays fail-closed on both profiles this phase (A6) |
 | GATE-41 | UNKNOWN | - | research:12 | apply_input_events_now | STOP wake conditions |
