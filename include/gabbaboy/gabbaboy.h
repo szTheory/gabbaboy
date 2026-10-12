@@ -128,9 +128,12 @@ typedef struct {
 /* The opaque instance owns its mutable state and a private copy of a loaded ROM.
  * Create/load may allocate; run/reset/peek do not. Each instance may be called
  * by one thread at a time. Separate instances have no shared mutable state.
- * The only creatable model is bootless DMG-CPU-B deterministic post-boot;
- * GBB_PROFILE_CGB_CPU_E is rejected with GBB_UNSUPPORTED_PROFILE until the CGB
- * profile is complete. */
+ * Two profiles are creatable. GBB_PROFILE_DMG_CPU_B starts in the bootless
+ * DMG-CPU-B deterministic post-boot state. GBB_PROFILE_CGB_CPU_E starts in the
+ * bootless CGB-CPU-E post-boot state, in CGB mode or DMG compatibility mode
+ * according to the loaded ROM's $143 (with no ROM it is the compatibility
+ * state); colour output is not yet available on it. Any other profile value
+ * returns GBB_UNSUPPORTED_PROFILE. */
 gbb_error gbb_create(gbb_profile profile, gbb_instance **out_instance);
 void gbb_destroy(gbb_instance *instance);
 /* Reset restores the documented post-boot CPU/profile state, clears work RAM
@@ -240,7 +243,10 @@ gbb_error gbb_rtc_catch_up(gbb_instance *instance, int64_t elapsed_seconds);
  * batches append nothing. Consumed events free queue capacity. */
 gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events, size_t count);
 /* Copies the latest completed 160x144 frame as one byte per pixel. Each byte
- * is a DMG shade index in [0,3]. pitch_bytes is the destination row stride;
+ * is a DMG shade index in [0,3]. The CGB-CPU-E profile has no colour output
+ * yet, so on it a call with valid arguments returns GBB_UNSUPPORTED_PROFILE;
+ * invalid arguments still return GBB_INVALID_ARGUMENT on both profiles.
+ * pitch_bytes is the destination row stride;
  * capacity_bytes must cover (height-1)*pitch_bytes + width bytes. The entire
  * capacity_bytes range must not overlap out_info. Output remains caller-owned,
  * the core allocates nothing, and no pointer into instance storage is exposed.

@@ -215,6 +215,15 @@ cgb_postboot_dmg_pin
 cgb_postboot_dmg_pin_checksum_zero
 cgb_postboot_dmg_pin_flipped
 cgb_postboot_dmg_pin_flipped_io
+cgb_postboot_cgb_cpu_tracer
+cgb_postboot_compat_cpu
+cgb_postboot_compat_no_rom
+cgb_postboot_compat_title_sum
+cgb_postboot_compat_io
+cgb_postboot_cgb_io
+cgb_postboot_ch1_silent
+cgb_postboot_compat_io_flipped
+cgb_postboot_cgb_io_flipped
 cgb_probe_tracer
 cgb_info_no_rom
 cgb_info_after_load
@@ -227,6 +236,8 @@ cgb_probe_pgb
 cgb_probe_parity
 cgb_profile_unknown
 cgb_probe_args
+cgb_profile_create
+cgb_copy_frame_cgb
 timer_guest_overflow
 timer_mid_instruction
 timer_selectors

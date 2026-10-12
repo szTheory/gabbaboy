@@ -301,6 +301,19 @@ add_test(NAME cgb_postboot_dmg_pin_flipped_io
     "-DGBB_EXPECT_REGEX=post-boot mismatch: NR12 "
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
+foreach(case cgb_cpu_tracer compat_cpu compat_no_rom compat_title_sum compat_io cgb_io ch1_silent)
+  add_test(NAME cgb_postboot_${case} COMMAND test_cgb_postboot ${case})
+endforeach()
+# Negative controls: a flipped NR52 expectation (index 8) must fail naming the field.
+foreach(case compat_io cgb_io)
+  add_test(NAME cgb_postboot_${case}_flipped
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:test_cgb_postboot>;${case};--flip;8"
+      -DGBB_EXPECT_CODE=1
+      "-DGBB_EXPECT_REGEX=post-boot mismatch: NR52 "
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+endforeach()
+
 # CGB profile API (CGB-01): probe/info contract, the $143 x profile matrix, the PGB rejection and
 # probe/load parity with a skewed-validator negative control.
 add_executable(test_cgb_profile test_cgb_profile.c)
@@ -309,7 +322,7 @@ target_compile_features(test_cgb_profile PRIVATE c_std_17)
 set_target_properties(test_cgb_profile PROPERTIES C_EXTENSIONS OFF)
 foreach(case probe_tracer info_no_rom info_after_load info_reset_constant info_failed_load_unchanged
              info_struct_size cgb_only_on_dmg probe_matrix probe_pgb probe_parity profile_unknown
-             probe_args)
+             probe_args profile_create copy_frame_cgb)
   add_test(NAME cgb_${case} COMMAND test_cgb_profile ${case})
 endforeach()
 

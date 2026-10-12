@@ -12,8 +12,8 @@
  * with the core, the core is fixed (or the disagreement is reported); the oracle is never bent
  * to match. The $143 support table below is written out as literals for the same reason.
  *
- * gbb_create does not accept the CGB profile yet (Plan 10-06 flips it), so the CGB side of the
- * parity loop compares probe to the oracle and only the DMG side compares probe to load. */
+ * gbb_create accepts both profiles (Plan 10-06), so the parity loop compares probe to a real
+ * gbb_load_rom on each profile, and also checks the oracle against that load on the CGB side. */
 
 #define KIB ((size_t)1024u)
 #define MIB (KIB * KIB)
@@ -145,6 +145,11 @@ static int info_untouched(const gbb_info *info, uint32_t size) {
 static gbb_instance *new_instance(void) {
     gbb_instance *m = NULL;
     return gbb_create(GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK ? m : NULL;
+}
+
+static gbb_instance *new_cgb_instance(void) {
+    gbb_instance *m = NULL;
+    return gbb_create(GBB_PROFILE_CGB_CPU_E, &m) == GBB_OK ? m : NULL;
 }
 
 /* ---- cases --------------------------------------------------------------- */
@@ -418,7 +423,8 @@ static const uint8_t parity_types[] = {0x00u, 0x01u, 0x02u, 0x03u, 0x04u, 0x05u,
 /* One sweep of the matrix against one probe. use_skew substitutes the skewed validator for the
  * real gbb_probe_rom. The reference is the real loader on the DMG profile and the oracle on the
  * CGB profile. Returns the number of disagreements; *runs counts cases. */
-static unsigned long parity_sweep(int use_skew, gbb_instance *scratch, unsigned long *runs) {
+static unsigned long parity_sweep(int use_skew, gbb_instance *scratch_dmg,
+                                  gbb_instance *scratch_cgb, unsigned long *runs) {
     unsigned long mismatches = 0u;
     for (int p = 0; p < 2; ++p) {
         const gbb_profile profile = p == 0 ? GBB_PROFILE_DMG_CPU_B : GBB_PROFILE_CGB_CPU_E;
@@ -438,10 +444,19 @@ static unsigned long parity_sweep(int use_skew, gbb_instance *scratch, unsigned 
                                     ? expected_result(profile, parity_types[t], rom_codes[r],
                                                       ram_codes[m], lengths[l], ck, flag, 1)
                                     : gbb_probe_rom(profile, image, lengths[l], &info);
-                                const gbb_error ref = profile == GBB_PROFILE_DMG_CPU_B
-                                    ? gbb_load_rom(scratch, image, lengths[l])
-                                    : expected_result(profile, parity_types[t], rom_codes[r],
-                                                      ram_codes[m], lengths[l], ck, flag, 0);
+                                const gbb_error ref = gbb_load_rom(
+                                    profile == GBB_PROFILE_DMG_CPU_B ? scratch_dmg : scratch_cgb,
+                                    image, lengths[l]);
+                                if (profile == GBB_PROFILE_CGB_CPU_E &&
+                                    ref != expected_result(profile, parity_types[t], rom_codes[r],
+                                                           ram_codes[m], lengths[l], ck, flag, 0)) {
+                                    ++mismatches;
+                                    if (!use_skew)
+                                        fprintf(stderr, "oracle: type=%02X rom=%02X ram=%02X "
+                                                "len=%zu ck=%d flag=%02X load=%d\n",
+                                                parity_types[t], rom_codes[r], ram_codes[m],
+                                                lengths[l], ck, flag, (int)ref);
+                                }
                                 ++*runs;
                                 if (probe != ref) {
                                     ++mismatches;
@@ -464,16 +479,18 @@ static unsigned long parity_sweep(int use_skew, gbb_instance *scratch, unsigned 
 
 static int probe_parity(void) {
     gbb_instance *scratch = new_instance();
-    REQUIRE(scratch != NULL);
+    gbb_instance *scratch_cgb = new_cgb_instance();
+    REQUIRE(scratch != NULL && scratch_cgb != NULL);
     unsigned long runs = 0u;
-    REQUIRE(parity_sweep(0, scratch, &runs) == 0u);
+    REQUIRE(parity_sweep(0, scratch, scratch_cgb, &runs) == 0u);
     REQUIRE(runs > 100000u);
     /* Negative control: the same loop must notice a probe that checks PGB before the checksum. */
     unsigned long skew_runs = 0u;
-    const unsigned long skewed = parity_sweep(1, scratch, &skew_runs);
+    const unsigned long skewed = parity_sweep(1, scratch, scratch_cgb, &skew_runs);
     if (skewed == 0u) fprintf(stderr, "skewed validator produced zero mismatches\n");
     REQUIRE(skewed >= 1u);
     gbb_destroy(scratch);
+    gbb_destroy(scratch_cgb);
     return 0;
 }
 
@@ -494,10 +511,58 @@ static int profile_unknown(void) {
         REQUIRE(gbb_create((gbb_profile)bad[i], &m) == GBB_UNSUPPORTED_PROFILE);
         REQUIRE(m == NULL);
     }
-    /* Plan 10-06 flips this; until then the CGB profile is selectable only for probe. */
+    return 0;
+}
+
+/* D-01: the create switch accepts exactly the two implemented profiles. */
+static int profile_create(void) {
     gbb_instance *m = NULL;
-    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &m) == GBB_UNSUPPORTED_PROFILE);
-    REQUIRE(m == NULL);
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &m) == GBB_OK);
+    REQUIRE(m != NULL);
+    gbb_info info;
+    fill_info(&info, GBB_INFO_SIZE_V1);
+    REQUIRE(gbb_get_info(m, &info) == GBB_OK);
+    REQUIRE(info.profile == GBB_PROFILE_CGB_CPU_E && info.mode == GBB_MODE_NONE);
+    gbb_destroy(m);
+    static const uint32_t bad[] = {0u, 3u, 255u};
+    for (size_t i = 0u; i < sizeof(bad) / sizeof(bad[0]); ++i) {
+        m = NULL;
+        REQUIRE(gbb_create((gbb_profile)bad[i], &m) == GBB_UNSUPPORTED_PROFILE);
+        REQUIRE(m == NULL);
+    }
+    return 0;
+}
+
+/* D-05: no colour output yet, so a valid copy on the CGB profile is unsupported while argument
+ * errors keep their code and the DMG profile is unchanged. */
+static int copy_frame_cgb(void) {
+    const size_t len = small_rom(0x00u, 0u, 0x80u);
+    static uint8_t pixels[160u * 144u];
+    gbb_frame_info finfo;
+    for (int p = 0; p < 2; ++p) {
+        gbb_instance *m = p == 0 ? new_instance() : new_cgb_instance();
+        REQUIRE(m != NULL);
+        REQUIRE(gbb_load_rom(m, image, len) == GBB_OK);
+        memset(pixels, SENTINEL, sizeof(pixels));
+        memset(&finfo, SENTINEL, sizeof(finfo));
+        REQUIRE(gbb_copy_frame(m, NULL, sizeof(pixels), 160u, &finfo) == GBB_INVALID_ARGUMENT);
+        REQUIRE(gbb_copy_frame(m, pixels, sizeof(pixels), 160u, NULL) == GBB_INVALID_ARGUMENT);
+        REQUIRE(gbb_copy_frame(m, pixels, sizeof(pixels), 159u, &finfo) == GBB_INVALID_ARGUMENT);
+        REQUIRE(gbb_copy_frame(m, pixels, 100u, 160u, &finfo) == GBB_INVALID_ARGUMENT);
+        const gbb_error before = gbb_copy_frame(m, pixels, sizeof(pixels), 160u, &finfo);
+        if (p == 0) {
+            /* DMG: a fresh frame is not ready, exactly as before this plan. */
+            REQUIRE(before == GBB_FRAME_NOT_READY);
+        } else {
+            REQUIRE(before == GBB_UNSUPPORTED_PROFILE);
+        }
+        for (size_t i = 0u; i < sizeof(pixels); ++i) REQUIRE(pixels[i] == SENTINEL);
+        (void)gbb_run(m, 4u * 70224u * 2u, NULL, 0u);
+        const gbb_error after = gbb_copy_frame(m, pixels, sizeof(pixels), 160u, &finfo);
+        if (p == 0) REQUIRE(after == GBB_OK && finfo.width == 160u && finfo.height == 144u);
+        else REQUIRE(after == GBB_UNSUPPORTED_PROFILE);
+        gbb_destroy(m);
+    }
     return 0;
 }
 
@@ -544,6 +609,8 @@ static const test_case cases[] = {
     {"probe_pgb", probe_pgb},
     {"probe_parity", probe_parity},
     {"profile_unknown", profile_unknown},
+    {"profile_create", profile_create},
+    {"copy_frame_cgb", copy_frame_cgb},
     {"probe_args", probe_args},
 };
 

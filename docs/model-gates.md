@@ -45,12 +45,12 @@ occurs exactly once in code and once in the table.
 | GATE-00 | BOTH | - | basis="model-neutral function; see its branch gates" | any function | shared id for model-neutral function tags |
 | GATE-01 | UNKNOWN | - | research:14 | audio_process_sample | high-pass filter constant differs by model |
 | GATE-02 | UNKNOWN | - | research:11 | ppu_update_stat_line | STAT interrupt line edge timing is unresearched for CGB |
-| GATE-03 | UNKNOWN | - | research:10 | post_boot_apply | post-boot F depends on the header checksum and CGB compatibility mode |
-| GATE-04 | UNKNOWN | - | research:10 | post_boot_apply | post-boot DIV differs by model; the table lands in Plan 10-06 |
-| GATE-05 | UNKNOWN | - | research:10 | post_boot_apply | post-boot SC differs by model |
-| GATE-06 | UNKNOWN | - | research:10 | post_boot_apply | post-boot IF differs by model |
-| GATE-07 | UNKNOWN | - | research:10 | post_boot_apply | post-boot APU register literals differ by model |
-| GATE-08 | UNKNOWN | - | research:10 | post_boot_apply | post-boot DMA register differs by model |
+| GATE-03 | DMG_ONLY | model_is_dmg | - | post_boot_apply | the header-checksum F branch exists on the DMG profile only; CGB F is $80 |
+| GATE-04 | BOTH | - | basis="post_boot[] column per profile (D-06)" | post_boot_apply | post-boot DIV differs by model |
+| GATE-05 | BOTH | - | basis="post_boot[] column per profile (D-06)" | post_boot_apply | post-boot SC differs by model |
+| GATE-06 | BOTH | - | basis="post_boot[] column per profile (D-06)" | post_boot_apply | post-boot IF differs by model |
+| GATE-07 | BOTH | - | basis="post_boot[] column per profile (D-06)" | post_boot_apply | post-boot APU register literals differ by model |
+| GATE-08 | BOTH | - | basis="post_boot[] column per profile (D-06)" | post_boot_apply | post-boot DMA register differs by model |
 | GATE-09 | BOTH | - | basis=D-025 | post_boot_apply | RAM fill is emulator policy; hardware power-on RAM is unspecified |
 | GATE-10 | UNKNOWN | - | research:11 | post_boot_apply | post-boot PPU mode, LY and STAT literals differ by model |
 | GATE-11 | BOTH | - | basis=PANDOCS | post_boot_apply | LCDC, BGP and OBP post-boot values are common to both models |
@@ -99,9 +99,9 @@ occurs exactly once in code and once in the table.
 | GATE-54 | UNKNOWN | - | research:14 | advance_devices_to | timer reload and IF delay |
 | GATE-55 | UNKNOWN | - | research:14 | advance_devices_to | serial internal clock rate |
 | GATE-56 | UNKNOWN | - | research:12 | advance_devices_to | frame sequencer taps a DIV bit that moves in double speed |
-| GATE-57 | UNKNOWN | - | research:10 | gbb_copy_frame | frame output is DMG shades only |
+| GATE-57 | DMG_ONLY | model_is_dmg | - | gbb_copy_frame | frame output is DMG shades only; the CGB profile returns GBB_UNSUPPORTED_PROFILE (D-05) |
 | GATE-58 | BOTH | - | basis=D-24 | validate_header | header and checksum validation is profile-independent |
-| GATE-59 | BOTH | - | basis=profile-argument-validated | gbb_create | profile selection is validated by the caller contract |
+| GATE-59 | BOTH | - | basis=profile-argument-validated | gbb_create | the switch accepts exactly the two implemented profiles (D-01) |
 | GATE-60 | BOTH | - | basis="no SM83 opcode difference" | decode | illegal-opcode decode is identical on DMG and CGB |
 | GATE-61 | BOTH | - | basis="no SM83 opcode difference" | execute | HALT and the halt bug |
 | GATE-62 | UNKNOWN | - | research:12 | execute | STOP, including CGB speed switch |
@@ -110,6 +110,7 @@ occurs exactly once in code and once in the table.
 | GATE-65 | UNKNOWN | - | research:12 | gbb_run_internal | DIV reset on STOP |
 | GATE-66 | BOTH | - | basis=wram-echo-map | gbb_peek_ram | debug peek of work RAM |
 | GATE-67 | CGB_ONLY | GBB_PROFILE_CGB_CPU_E | - | validate_header | a PGB-flagged $143 is rejected on the CGB profile instead of running in a mode the hardware would not enter (D-03) |
+| GATE-68 | CGB_ONLY | model_is_cgb | - | compat_title_registers | compat-mode B and HL are derived from the licensee title sum |
 <!-- model-gates-end -->
 
 ## Release status
