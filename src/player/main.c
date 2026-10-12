@@ -2298,10 +2298,13 @@ int main(int argc, char **argv) {
     int64_t clock_override_unix = 0;
     bool clock_flag_ok = !clock_flag_seen;
     if (battery_smoke && argc == 5 && strcmp(argv[3], "--clock-unix") == 0) {
+        /* strtoll also skips leading whitespace and takes '+'; the flag accepts only an optional
+           '-' followed by decimal digits, so check the first digit before parsing. */
+        const char *digits = argv[4][0] == '-' ? argv[4] + 1 : argv[4];
         char *end = NULL;
         errno = 0;
         const long long parsed = strtoll(argv[4], &end, 10);
-        if (argv[4][0] != '\0' && end != NULL && *end == '\0' && errno == 0) {
+        if (digits[0] >= '0' && digits[0] <= '9' && end != NULL && *end == '\0' && errno == 0) {
             clock_override = true;
             clock_override_unix = (int64_t)parsed;
             clock_flag_ok = true;
