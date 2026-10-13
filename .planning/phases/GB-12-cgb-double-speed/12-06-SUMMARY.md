@@ -18,12 +18,13 @@ actuals:
 commits: 3
 plan_head_before: fed97e8dbf73b20b1193c3cc9bf9005bc817282d
 plan_head_after: cd7cc41dd3cd9ca8f5aa68ed02105d5e924b7922
+repair_commit: 0f93724
 tech-stack:
   added: []
   patterns: [STOP case decision table shared by decode and execute, paired mutant and mask-zero controls]
 key-files:
   created: []
-  modified: [src/core/gabbaboy.c, tests/test_cgb_speed_internal.c, cmake/P12Mutants.cmake, tests/CMakeLists.txt, tests/expected-tests.txt]
+  modified: [src/core/gabbaboy.c, tests/test_cgb_speed_internal.c, tests/test_cgb_visibility.c, cmake/P12Mutants.cmake, tests/CMakeLists.txt, tests/expected-tests.txt]
 key-decisions:
   - "Keep armed CGB-mode STOP cases 1-4 distinct; case 3 switches without a stall while case 4 loads the stall."
   - "Keep existing DMG, compatibility and unarmed STOP behavior, including held-button STOP, unchanged."
@@ -32,12 +33,21 @@ patterns-established:
 requirements-completed: [CGB-06]
 coverage:
   - id: GB-12-06-STOP
-    description: "Armed STOP decision cases, lengths, immediate pending-IRQ switch and held-button wake behavior"
+    description: "Armed STOP decision cases, exact byte lengths and effects, public-input held-button wake, and a guest-generated timer IRQ with natural IME dispatch"
     requirement: CGB-06
     human_judgment: false
     verification:
       - kind: unit
         ref: "cgb_speed_stop_cases"
+        status: pass
+      - kind: integration
+        ref: "cgb_speed_stop_guest_timer_irq"
+        status: pass
+      - kind: integration
+        ref: "cgb_speed_mutant_m20_guest_timer_pending_ignored and cgb_speed_mutant_m20_guest_timer_pending_ignored_control"
+        status: pass
+      - kind: unit
+        ref: "cgb_speed_mutant_m34_stop_falls_into_rlca and cgb_speed_mutant_m34_stop_falls_into_rlca_control"
         status: pass
       - kind: unit
         ref: "cgb_speed_mutant_m20_pending_ignored and cgb_speed_mutant_m20_pending_ignored_control"
@@ -98,28 +108,31 @@ status: complete
 
 - Added the held/no-pending, held/pending, not-held/pending, and neither-pending armed CGB STOP paths; fetch sizing and switch cost follow the selected case.
 - Added contract tests for KEY1 readback, ignored KEY0 writes, FF04 instruction fetch, operand independence, and DMG/unarmed identity.
-- Added mutants M8, M10, M19, M20, M27, M29, M30, M32 and M33 with mask-zero controls, plus the FF04 wrong-byte negative.
+- Added mutants M8, M10, M19, M20, M27, M29, M30, M32 and M33 with mask-zero controls, plus the FF04 wrong-byte negative. The 12-06 repair added M34 and its mask-zero control for the STOP/RLCA fallthrough.
 
 ## Task Commits
 
 1. **Task 1: pending-IRQ STOP switch case** - `17ebb29` (feat)
 2. **Task 2 RED: STOP contract evidence and test registrations** - `5e0fdfa` (test)
 3. **Task 2 GREEN: STOP and KEY1 contracts** - `cd7cc41` (feat)
+4. **Gap repair: STOP dispatch boundary and real timer guest** - `0f93724` (fix)
 
 Plan commit count and head range are measured in frontmatter from the persisted plan ledger. The execution metadata commit is separate.
 
-## Deviations from Plan
+## Gap Closure
 
-The pending-IRQ tracer seeds IE/IF directly in the white-box fixture and invokes the interrupt-dispatch helpers for its IME-enabled variant. It does not yet have the plan's guest program configure TAC/TIMA, wait for IF bit 2, and naturally dispatch through the run loop. An attempted timer-driven guest edit destabilized the existing tracer oracle and was discarded; the committed tests and production changes remain green. This narrower tracer evidence is an outstanding plan gap for follow-up, not evidence of an end-to-end timer guest.
+The initial 12-06 execution left the pending-IRQ tracer seeded by the host and called `enter_interrupt`/`execute` directly. The repair replaces that helper-only outcome with `cgb_speed_stop_guest_timer_irq`: an inline guest writes IE/IF, TIMA/TMA/TAC, waits for timer IF bit 2, disables the timer, arms KEY1, and executes STOP. With IME off, the next byte executes as `INC B`; with `EI` immediately before STOP, the run loop enters the timer handler naturally and then returns to `INC B`. Neither variant receives a host-injected IRQ or direct interrupt-helper call.
 
-**Total deviations:** 1 documented limitation.
-**Impact on plan:** STOP state-table behavior and both pending-IRQ outcomes are checked, while guest-generated timer sequencing and run-loop interrupt dispatch remain unproven by this plan's tracer.
+The repair also found a missing `break` after the nested STOP case switch. Case 3 advanced PC a second time and rotated A as RLCA; the prior `PC >= $0102` assertion accepted this. Exact PC/A/flags assertions failed before the core fix and pass afterward; M34 removes the break and fails those assertions, while its mask-zero control passes. Held cases now queue public button events and check exact PC/A/flags and DIV effects. The older `cgb_stop_armed_cgb` expectation that its marker was absent encoded the same fallthrough bug; it now requires the marker that the test comment and case-4 contract describe.
+
+**Remaining 12-06 tracer gap:** none.
 
 ## TDD Evidence
 
 - **RED:** `ctest --test-dir build -R ^cgb_speed_stop_cases$ --output-on-failure --output-junit build/tdd-red-12-06-task2.xml` failed at the intended case-1 held STOP assertion; the named test executed and reported the behavioral mismatch. The persisted record is `build/tdd-red-12-06-task2.json`; `gsd check tdd-red-evidence` returned `RED_EVIDENCE_OK`, and the semantic assessment is recorded there.
 - **GREEN:** the committed implementation and expanded cases passed the focused suite, including each mutation and its mask-zero control.
 - **REFACTOR:** no separate cleanup commit was needed.
+- **Repair RED/GREEN:** after strengthening `cgb_speed_stop_cases` to require PC `$0101` and unchanged A/flags at case-3 retirement, the unmodified core failed at that assertion. Adding the outer `break` made it pass; automated M34 and its control retain the negative and positive outcomes.
 
 ## Verification
 
@@ -127,10 +140,12 @@ The pending-IRQ tracer seeds IE/IF directly in the white-box fixture and invokes
 - Focused CTest regression: **52/52 passed**, including the nine named mutants, paired controls, STOP/DMG identity checks and integration regressions.
 - `bash tests/scripts/verify-dmg-baseline.sh` passed: inventory 313 keys, Mooneye 15, acceptance 20, bench 2, changes 0.
 - The required summary coverage gate is recorded below after execution.
+- **12-06 repair:** rebuilt the core and white-box test; focused STOP, CGB speed, identity, model-gate, baseline and summary-coverage selection passed **103/103**. The DMG frozen baseline again passed with 313 inventory keys and zero changed rows. This includes guest-driven pending timer IRQ, M19/M20/M27/M34 mutant and mask-zero controls, `cgb_stop_armed_cgb`, the visibility tracer, and unchanged pre-phase CGB identity pins.
+- After the guest-specific M20 negative and mask-zero control were registered, the rebuilt complete CTest inventory passed **772/772** with eight workers.
 
 ## Issues Encountered
 
-The timer-driven guest experiment failed its marker state assertion; its uncommitted edit was removed and the pre-existing white-box tracer restored. No experimental code remains.
+The original timer-driven guest experiment failed its marker assertion and was removed during initial execution. The repaired guest now passes with timer-generated IF and ordinary run-loop dispatch, and is registered as an independent CTest.
 
 ## Self-Check: PASSED
 
@@ -139,7 +154,7 @@ The timer-driven guest experiment failed its marker state assertion; its uncommi
 
 ## Next Plan Readiness
 
-Plan 12-07 remains next and can use the established case-3/case-4 switch state. The direct timer-wait/dispatch guest trace described above remains unverified. Stop after Phase GB-12; do not advance automatically.
+Plan 12-07 remains next and can use the established case-3/case-4 switch state. Stop after Phase GB-12; do not advance automatically.
 
 ---
 *Phase: 12-cgb-double-speed*
