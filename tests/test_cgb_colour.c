@@ -1,7 +1,8 @@
 /* Public-API colour cases (Phase 11). Links GabbaBoy::core only; no core internals.
  *
- * Usage: test_cgb_colour <case> */
+ * Usage: test_cgb_colour <case> [fixture-dir] */
 #include "gabbaboy/gabbaboy.h"
+#include "gbb_accept.h"
 
 #include <stdalign.h>
 #include <stdint.h>
@@ -398,6 +399,72 @@ static int palette_compat_effect_next_frame(void) {
     return 0;
 }
 
+/* ---- Original fixture: colour-hblank.gb (D-23 item 4, D-01) ---- */
+static const char *fixture_dir;
+
+static size_t read_fixture(const char *name, uint8_t *buf, size_t capacity) {
+    char path[1024];
+    if (fixture_dir == NULL || snprintf(path, sizeof(path), "%s/%s", fixture_dir, name) >= (int)sizeof(path))
+        return 0;
+    FILE *f = fopen(path, "rb");
+    if (f == NULL) return 0;
+    size_t n = fread(buf, 1, capacity, f);
+    int extra = fgetc(f);
+    fclose(f);
+    return extra == EOF ? n : 0;   /* a ROM larger than the buffer is rejected, not truncated */
+}
+
+/* The guest writes BG colour 0 = (y * 229 + 1) & 0x7FFF for row y (manifest protocol). */
+static uint16_t hblank_value(size_t y) { return (uint16_t)((y * 229u + 1u) & 0x7FFFu); }
+
+/* Structural predicate first (D-23): every row is uniform and equals its own table value. */
+static int hblank_row_matches(const uint16_t *frame, size_t y) {
+    const uint16_t *row = frame + y * FRAME_W;
+    for (size_t x = 0; x < FRAME_W; ++x) if (row[x] != hblank_value(y)) return 0;
+    return 1;
+}
+
+#define HBLANK_FRAME_DIGEST "abb528b8ffd636f85dcd62b1f13e60ea2f1ef7ac368c84b4767e5b967d2e9546"
+
+static int cgb_colour_hblank_rows(void) {
+    static uint8_t rom[ROM_SIZE];
+    static uint16_t frame[FRAME_W * FRAME_H];
+    gbb_frame_info info;
+    gbb_instance *m = NULL;
+    REQUIRE(read_fixture("colour-hblank.gb", rom, sizeof(rom)) == ROM_SIZE);
+    REQUIRE(rom[0x143u] == 0x80u);
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
+    /* Pitfall 7: the reset fill (zero) never leaks into a completed frame. No table value is 0. */
+    gbb_run(m, FRAME_HALF_DOTS, NULL, 0);
+    gbb_error first = gbb_copy_frame_rgb555(m, frame, sizeof(frame), 320u, &info);
+    if (first == GBB_OK) {
+        for (size_t i = 0; i < (size_t)FRAME_W * FRAME_H; ++i) REQUIRE(frame[i] != 0x0000u);
+    }
+    for (int i = 0; i < 10; ++i) {
+        gbb_run_result r = gbb_run(m, FRAME_HALF_DOTS, NULL, 0);
+        REQUIRE(r.reason != GBB_STOP_INVALID_STATE);
+    }
+    memset(frame, 0xFF, sizeof(frame));
+    REQUIRE(gbb_copy_frame_rgb555(m, frame, sizeof(frame), 320u, &info) == GBB_OK);
+    for (size_t y = 0; y < FRAME_H; ++y) {
+        if (!hblank_row_matches(frame, y)) {
+            printf("not ok 1 - row %zu is not uniform %04X (first pixel %04X)\n", y,
+                   (unsigned)hblank_value(y), (unsigned)frame[y * FRAME_W]);
+            REQUIRE(hblank_row_matches(frame, y));
+        }
+    }
+    REQUIRE(gbb_accept_rgb555_distinct(frame, 320u) == FRAME_H);
+    char hex[65];
+    REQUIRE(gbb_accept_rgb555_digest(frame, 320u, hex) == 0);
+    if (strcmp(hex, HBLANK_FRAME_DIGEST) != 0) {
+        printf("observed digest %s\n", hex);
+        REQUIRE(strcmp(hex, HBLANK_FRAME_DIGEST) == 0);
+    }
+    gbb_destroy(m);
+    return 0;
+}
+
 typedef int (*case_fn)(void);
 static const struct { const char *name; case_fn fn; } cases[] = {
     {"cgb_colour_copy_frame_unsupported", cgb_colour_copy_frame_unsupported},
@@ -413,10 +480,12 @@ static const struct { const char *name; case_fn fn; } cases[] = {
     {"palette_compat_api_larger", palette_compat_api_larger},
     {"palette_compat_api_survives", palette_compat_api_survives},
     {"palette_compat_effect_next_frame", palette_compat_effect_next_frame},
+    {"cgb_colour_hblank_rows", cgb_colour_hblank_rows},
 };
 
 int main(int argc, char **argv) {
-    if (argc != 2) return 2;
+    if (argc != 2 && argc != 3) return 2;
+    fixture_dir = argc == 3 ? argv[2] : NULL;
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
         if (strcmp(argv[1], cases[i].name) != 0) continue;
         int rc = cases[i].fn();

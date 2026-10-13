@@ -1892,7 +1892,7 @@ set_tests_properties(cgb_dmg_identity_shade_pin PROPERTIES
   PASS_REGULAR_EXPRESSION "cgb-colour-internal cgb_dmg_identity_shade_pin pass")
 
 add_executable(test_cgb_colour test_cgb_colour.c)
-target_link_libraries(test_cgb_colour PRIVATE GabbaBoy::core)
+target_link_libraries(test_cgb_colour PRIVATE gabbaboy_accept)
 target_compile_features(test_cgb_colour PRIVATE c_std_17)
 set_target_properties(test_cgb_colour PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME cgb_colour_copy_frame_unsupported COMMAND test_cgb_colour cgb_colour_copy_frame_unsupported)
@@ -1931,7 +1931,8 @@ function(gbb_colour_mutant name test_source fail_test control_test anchor replac
     target_compile_definitions(${library} PRIVATE
       GBB_BUILD_REVISION="colour-mutant-${name}" GBB_BUILD_QUALIFIED=0)
     add_executable(${target} ${test_source})
-    target_link_libraries(${target} PRIVATE ${library})
+    # The acceptance helpers come after the mutant so every core symbol resolves to the mutated copy.
+    target_link_libraries(${target} PRIVATE ${library} gabbaboy_accept)
   endif()
   target_compile_features(${target} PRIVATE c_std_17)
   set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
@@ -2221,5 +2222,26 @@ add_test(NAME cgb_consumer_symbol_coverage_selftest
     "-DGBB_EXPECT_REGEX=consumer-symbol-missing gbb_get_compat_palette"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # --- Phase 11 plan 11-06 end ---
+
+# --- Phase 11 plan 11-07 begin ---
+# Original per-line colour fixture (D-23 item 4): a guest rewrites BG colour 0 in each HBlank, so
+# every row of the public RGB555 frame must carry its own colour. The pinned rebuild is
+# tests/scripts/reproduce-cgb-colour.sh, run by the fixture-repro workflow.
+set(GBB_CGB_COLOUR_DIR "${PROJECT_SOURCE_DIR}/fixtures/cgb-colour")
+add_test(NAME cgb_colour_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DMANIFEST=${GBB_CGB_COLOUR_DIR}/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixtureManifest.cmake)
+add_test(NAME cgb_colour_hblank_rows COMMAND test_cgb_colour cgb_colour_hblank_rows ${GBB_CGB_COLOUR_DIR})
+set_tests_properties(cgb_colour_hblank_rows PROPERTIES PASS_REGULAR_EXPRESSION "ok 1 - cgb_colour_hblank_rows")
+# Resolve-time control: serving the whole frame from one CRAM snapshot (taken at the first pixel of
+# line 0, as a copy-time resolve would) must fail the per-row predicate.
+gbb_colour_mutant(frame_resolve test_cgb_colour.c
+  cgb_colour_mutant_frame_resolve cgb_colour_mutant_frame_resolve_control
+  "    return cram_colour(m->bg_cram, bg_attr & 7u, bg_index);\n"
+  "    static uint8_t gbb_frame_cram_snapshot[64];\n    if (m->ly == 0 && x == 0u) memcpy(gbb_frame_cram_snapshot, m->bg_cram, sizeof(gbb_frame_cram_snapshot));\n    return cram_colour(gbb_frame_cram_snapshot, bg_attr & 7u, bg_index);\n"
+  "cgb_colour_hblank_rows;${GBB_CGB_COLOUR_DIR}" "row"
+  cgb_rgb555_both_modes)
+# --- Phase 11 plan 11-07 end ---
 
 gabbaboy_verify_registered_tests()

@@ -1,0 +1,71 @@
+{
+  "id": "cgb-colour",
+  "source": [
+    "common.inc",
+    "hblank.asm"
+  ],
+  "source_identity": "Original GabbaBoy project-authored assembly",
+  "source_sha256": {
+    "common.inc": "60638035901961861da904428ddeb3df57d5304a5d358334b98dabe4436e677c",
+    "hblank.asm": "4084cb89963c069abbd91715d99a2244c6c90bc6425bfc1002a90535a296f351"
+  },
+  "license": "MIT; see LICENSE.txt and repository LICENSE",
+  "build": {
+    "assembler": "RGBDS",
+    "version": "1.0.1",
+    "archive": "rgbds-macos.zip",
+    "archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
+    "ci_archive": "rgbds-linux-x86_64.tar.xz",
+    "ci_archive_sha256": "80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9",
+    "recipe": "Per ROM, from fixtures[].recipe: rgbasm -I fixtures/cgb-colour/ [-D name]... -o <work>/<rom>.o fixtures/cgb-colour/<source> && rgblink -o <work>/<rom> <work>/<rom>.o && rgbfix <rgbfix_flags> <work>/<rom>; tests/scripts/reproduce-cgb-colour.sh runs every row verbatim and compares the bytes",
+    "committed_bytes_toolchain": "RGBDS v1.0.1 macOS release archive (digest above); the reproduction script rebuilds every ROM with the pinned tools and compares byte for byte"
+  },
+  "fixtures": [
+    {
+      "file": "colour-hblank.gb",
+      "size_bytes": 32768,
+      "sha256": "3ec191ebae9405f5be4248794b7652a39bd1d4a8aabb3a32393ccfb79ddfbef8",
+      "recipe": {
+        "source": "hblank.asm",
+        "defines": [],
+        "rgbfix_flags": [
+          "-c",
+          "-v",
+          "-p",
+          "0"
+        ]
+      }
+    }
+  ],
+  "cartridge": {
+    "mapper": "none (ROM only)",
+    "type": "0x00",
+    "rom_size_code": "0x00 (32 KiB)",
+    "ram_size_code": "0x00 (none)",
+    "cgb_flag": "0x80 (rgbfix -c)"
+  },
+  "profile": {
+    "name": "CGB-CPU-E",
+    "boot": "Skipped; starts at cartridge entry 0x0100.",
+    "applicability": "Original software fixture for the deterministic bootless CGB-CPU-E profile in CGB mode; not physical hardware evidence."
+  },
+  "protocol": {
+    "colour-hblank.gb": {
+      "summary": "BG tile 0 (all colour index 0) fills the screen with attribute 0; the guest rewrites BG palette 0 colour 0 once per line.",
+      "line_0": "written during VBlank before the STAT mode-0 interrupt is armed",
+      "line_y_plus_1": "written by the STAT mode-0 (HBlank) interrupt handler during the HBlank of line y; the handler writes line (y + 1) mod 144",
+      "hblank_value": "(y * 229 + 1) & 0x7FFF for row y",
+      "regions": "rows 0-143 of the 160x144 RGB555 frame, columns 0-159",
+      "expected": "every row is uniform and equals hblank_value(row); the 144 row values are distinct and non-zero",
+      "structural_predicate": "checked by cgb_colour_hblank_rows before the frame digest pin is compared"
+    },
+    "run": "load on the CGB-CPU-E profile, run 10 frames, copy with gbb_copy_frame_rgb555"
+  },
+  "evidence_class": "original software fixture plus synthetic oracle, not hardware evidence",
+  "scope_limits": [
+    "No boot-ROM execution and no CGB boot palette table",
+    "CGB mode-3 timing is not claimed (D-09): the per-line write lands inside HBlank on this core's DMG mode-3 model, which is the only timing the fixture relies on",
+    "No physical CGB observation; the expectation is the guest's own value table",
+    "Not installed and not part of the install allowlist"
+  ]
+}

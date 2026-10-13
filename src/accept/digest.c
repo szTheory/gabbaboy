@@ -86,6 +86,95 @@ unsigned gbb_accept_frame_distinct_shades(const uint8_t *shades, size_t pitch) {
     return count;
 }
 
+/* ---- RGB555 helpers (Phase 11). Pixels are read through the uint16_t pointer and serialised byte
+ * by byte, so the digest and PPM do not depend on host endianness or struct layout. ---- */
+static const uint16_t *rgb555_row(const uint16_t *pixels, size_t pitch_bytes, size_t y) {
+    return (const uint16_t *)((const uint8_t *)pixels + y * pitch_bytes);
+}
+
+static int rgb555_valid(const uint16_t *pixels, size_t pitch_bytes) {
+    if (pixels == NULL || pitch_bytes < GBB_ACCEPT_FRAME_WIDTH * 2u || (pitch_bytes & 1u) != 0u) return 0;
+    for (size_t y = 0; y < GBB_ACCEPT_FRAME_HEIGHT; ++y) {
+        const uint16_t *row = rgb555_row(pixels, pitch_bytes, y);
+        for (size_t x = 0; x < GBB_ACCEPT_FRAME_WIDTH; ++x) {
+            if (row[x] > 0x7FFFu) return 0;
+        }
+    }
+    return 1;
+}
+
+uint8_t gbb_accept_expand5(unsigned c) {
+    c &= 31u;
+    return (uint8_t)((c << 3) | (c >> 2));
+}
+
+int gbb_accept_rgb555_digest(const uint16_t *pixels, size_t pitch_bytes, char out_hex[65]) {
+    if (!rgb555_valid(pixels, pitch_bytes)) return 1;
+    gbb_accept_sha256_ctx ctx;
+    uint8_t bytes[GBB_ACCEPT_FRAME_WIDTH * 2u];
+    gbb_accept_sha256_init(&ctx);
+    gbb_accept_sha256_update(&ctx, (const uint8_t *)GBB_ACCEPT_RGB555_HEADER,
+                             sizeof(GBB_ACCEPT_RGB555_HEADER) - 1u);
+    for (size_t y = 0; y < GBB_ACCEPT_FRAME_HEIGHT; ++y) {
+        const uint16_t *row = rgb555_row(pixels, pitch_bytes, y);
+        for (size_t x = 0; x < GBB_ACCEPT_FRAME_WIDTH; ++x) {
+            bytes[x * 2u] = (uint8_t)(row[x] & 0xFFu);
+            bytes[x * 2u + 1u] = (uint8_t)(row[x] >> 8);
+        }
+        gbb_accept_sha256_update(&ctx, bytes, sizeof(bytes));
+    }
+    gbb_accept_sha256_final(&ctx, out_hex);
+    return 0;
+}
+
+int gbb_accept_rgb555_digest_bin(const uint16_t *pixels, size_t pitch_bytes, uint8_t out[32]) {
+    char hex[65];
+    if (gbb_accept_rgb555_digest(pixels, pitch_bytes, hex) != 0) return 1;
+    for (size_t i = 0; i < 32u; ++i) {
+        out[i] = (uint8_t)((hex_nibble(hex[i * 2u]) << 4) | hex_nibble(hex[i * 2u + 1u]));
+    }
+    return 0;
+}
+
+int gbb_accept_write_ppm_rgb555(const char *path, const uint16_t *pixels, size_t pitch_bytes) {
+    static const char header[] = "P6\n160 144\n255\n";
+    if (!rgb555_valid(pixels, pitch_bytes)) return 1;
+    FILE *file = fopen(path, "wb");
+    if (file == NULL) return 2;
+    int failed = fwrite(header, 1, sizeof(header) - 1u, file) != sizeof(header) - 1u;
+    uint8_t rgb[GBB_ACCEPT_FRAME_WIDTH * 3u];
+    for (size_t y = 0; y < GBB_ACCEPT_FRAME_HEIGHT && !failed; ++y) {
+        const uint16_t *row = rgb555_row(pixels, pitch_bytes, y);
+        for (size_t x = 0; x < GBB_ACCEPT_FRAME_WIDTH; ++x) {
+            rgb[x * 3u] = gbb_accept_expand5(row[x]);
+            rgb[x * 3u + 1u] = gbb_accept_expand5(row[x] >> 5);
+            rgb[x * 3u + 2u] = gbb_accept_expand5(row[x] >> 10);
+        }
+        failed = fwrite(rgb, 1, sizeof(rgb), file) != sizeof(rgb);
+    }
+    if (fclose(file) != 0) failed = 1;
+    if (failed) remove(path); /* never leave a short image behind */
+    return failed ? 3 : 0;
+}
+
+unsigned gbb_accept_rgb555_distinct(const uint16_t *pixels, size_t pitch_bytes) {
+    if (!rgb555_valid(pixels, pitch_bytes)) return 0;
+    uint8_t seen[0x8000u / 8u]; /* 4 KiB bitmap on the stack: no hidden global */
+    memset(seen, 0, sizeof(seen));
+    unsigned count = 0;
+    for (size_t y = 0; y < GBB_ACCEPT_FRAME_HEIGHT; ++y) {
+        const uint16_t *row = rgb555_row(pixels, pitch_bytes, y);
+        for (size_t x = 0; x < GBB_ACCEPT_FRAME_WIDTH; ++x) {
+            uint8_t bit = (uint8_t)(1u << (row[x] & 7u));
+            if ((seen[row[x] >> 3] & bit) == 0u) {
+                seen[row[x] >> 3] |= bit;
+                ++count;
+            }
+        }
+    }
+    return count;
+}
+
 void gbb_accept_pcm_digest_init(gbb_accept_pcm_digest_ctx *ctx) {
     gbb_accept_sha256_init(&ctx->sha);
 }
