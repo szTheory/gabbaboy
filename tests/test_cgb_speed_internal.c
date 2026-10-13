@@ -9,6 +9,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef GBB_P12_MUTANT_BUILD
+#include <errno.h>
+extern uint64_t gbb_p12_mutants;
+#endif
 
 #define REQUIRE(x) do { if (!(x)) { \
     fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #x); return 1; \
@@ -203,6 +207,7 @@ static int run_tracer_guest(int with_trace) {
     size_t capacity = with_trace ? 16u : 0u;
     const uint64_t want_to_double = GBB_SPEED_SWITCH_STALL_T * GBB_HALF_DOTS_PER_T_DOUBLE;
     gbb_run_result result = gbb_run(machine, 112u, trace, capacity);
+    REQUIRE(!machine->stopped);
     REQUIRE(result.reason == GBB_STOP_BUDGET && result.consumed_half_dots == 112u);
     traced += result.trace_count;
     REQUIRE(gbb_peek_ram(machine, 0xC000u) == 0x7Fu);
@@ -230,6 +235,7 @@ static int run_tracer_guest(int with_trace) {
     REQUIRE(result.trace_count == 0u);
     traced += result.trace_count;
     REQUIRE(machine->time_half_dots == 112u + want_to_double);
+    REQUIRE(machine->divider_counter != 0u);
     gbb_test_speed_state(machine, &speed, &kind, &remaining, &armed);
     REQUIRE(speed == 1u && kind == GBB_STALL_NONE && remaining == 0u && armed == 0u);
 
@@ -256,6 +262,19 @@ static int cgb_speed_tracer_switch(void) {
 
 int main(int argc, char **argv) {
     if (argc < 2) return 2;
+#ifdef GBB_P12_MUTANT_BUILD
+    if (argc >= 4 && strcmp(argv[argc - 2], "--mutants") == 0) {
+        char *end = NULL;
+        errno = 0;
+        unsigned long long mask = strtoull(argv[argc - 1], &end, 0);
+        if (errno != 0 || end == argv[argc - 1] || *end != '\0') return 2;
+        gbb_p12_mutants = (uint64_t)mask;
+        argc -= 2;
+    }
+#else
+    for (int i = 2; i < argc; ++i)
+        if (strcmp(argv[i], "--mutants") == 0) return 2;
+#endif
     if (strcmp(argv[1], "cgb_speed_internal_harness_alive") == 0) {
         int rc = cgb_speed_internal_harness_alive();
         if (rc == 0) puts("cgb-speed-internal cgb_speed_internal_harness_alive pass");

@@ -2520,4 +2520,67 @@ add_test(NAME cgb_speed_tracer_switch
 set_tests_properties(cgb_speed_tracer_switch PROPERTIES TIMEOUT 60)
 # --- Phase 12 plan 12-01 end ---
 
+# --- Phase 12 plan 12-03 begin ---
+include(${PROJECT_SOURCE_DIR}/cmake/P12Mutants.cmake)
+set(GBB_P12_MUTANT_CORE ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_p12_mutants.c)
+gbb_p12_make_mutant_core(${GBB_P12_MUTANT_CORE} 0)
+add_executable(test_cgb_speed_internal_p12 test_cgb_speed_internal.c)
+target_include_directories(test_cgb_speed_internal_p12 PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_cgb_speed_internal_p12 PRIVATE c_std_17)
+target_compile_definitions(test_cgb_speed_internal_p12 PRIVATE
+  "GBB_P12_CORE_SOURCE=\"${GBB_P12_MUTANT_CORE}\""
+  GBB_P12_MUTANT_BUILD=1 GBB_BUILD_REVISION="p12-mutant" GBB_BUILD_QUALIFIED=0)
+set_target_properties(test_cgb_speed_internal_p12 PROPERTIES C_EXTENSIONS OFF)
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 5 stall_sets_stopped
+  cgb_speed_tracer_switch "stopped|GBB_STOP_STOPPED")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 7 devices_frozen
+  cgb_speed_tracer_switch "divider_counter != 0u")
+
+# Mutant core build 1 of the D-25 ceiling of 6. Duplicate one anchor in a build-tree copy;
+# script-mode generation must reject it rather than silently producing a partial mutant.
+set(GBB_P12_ANCHOR_GUARD_CORE "${CMAKE_CURRENT_BINARY_DIR}/p12-anchor-guard-core.c")
+file(READ "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c" gbb_p12_anchor_guard_text)
+set(gbb_p12_anchor_guard_line "instance->cpu_stall_kind = GBB_STALL_SPEED_SWITCH; /* P12-M5 */")
+string(FIND "${gbb_p12_anchor_guard_text}" "${gbb_p12_anchor_guard_line}" gbb_p12_anchor_guard_pos)
+if(gbb_p12_anchor_guard_pos EQUAL -1)
+  message(FATAL_ERROR "missing P12-M5 anchor for negative control")
+endif()
+string(REPLACE "${gbb_p12_anchor_guard_line}"
+  "${gbb_p12_anchor_guard_line}\n            ${gbb_p12_anchor_guard_line}"
+  gbb_p12_anchor_guard_text "${gbb_p12_anchor_guard_text}")
+file(WRITE "${GBB_P12_ANCHOR_GUARD_CORE}" "${gbb_p12_anchor_guard_text}")
+add_test(NAME cgb_speed_mutant_anchor_guard
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_P12_SCRIPT_CORE=${GBB_P12_ANCHOR_GUARD_CORE};-DGBB_P12_SCRIPT_OUT=${CMAKE_CURRENT_BINARY_DIR}/anchor-guard.c;-P;${PROJECT_SOURCE_DIR}/cmake/P12Mutants.cmake"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=must occur exactly once"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(cgb_speed_mutant_anchor_guard PROPERTIES TIMEOUT 30)
+
+# Static assert mutant is mutant core build 2 of at most 6. The offset is additive so it
+# remains invalid when the M-aligned plan 12-09 stall constant is re-pinned.
+set(GBB_P12_STALL_ASSERT_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_p12_stall_assert.c")
+file(READ "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c" gbb_p12_stall_assert_text)
+set(gbb_p12_stall_assert_anchor "#define GBB_SPEED_SWITCH_STALL_T ")
+string(FIND "${gbb_p12_stall_assert_text}" "${gbb_p12_stall_assert_anchor}" gbb_p12_stall_assert_first)
+string(FIND "${gbb_p12_stall_assert_text}" "${gbb_p12_stall_assert_anchor}" gbb_p12_stall_assert_last REVERSE)
+if(gbb_p12_stall_assert_first EQUAL -1 OR NOT gbb_p12_stall_assert_first EQUAL gbb_p12_stall_assert_last)
+  message(FATAL_ERROR "P12 stall static assert anchor must occur exactly once")
+endif()
+string(REPLACE "${gbb_p12_stall_assert_anchor}" "#define GBB_SPEED_SWITCH_STALL_T 2u + "
+  gbb_p12_stall_assert_text "${gbb_p12_stall_assert_text}")
+file(WRITE "${GBB_P12_STALL_ASSERT_SOURCE}" "${gbb_p12_stall_assert_text}")
+add_library(gabbaboy_core_p12_stall_assert_mutant STATIC EXCLUDE_FROM_ALL
+  "${GBB_P12_STALL_ASSERT_SOURCE}")
+target_include_directories(gabbaboy_core_p12_stall_assert_mutant PUBLIC "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(gabbaboy_core_p12_stall_assert_mutant PUBLIC c_std_17)
+set_target_properties(gabbaboy_core_p12_stall_assert_mutant PROPERTIES C_EXTENSIONS OFF)
+target_compile_definitions(gabbaboy_core_p12_stall_assert_mutant PRIVATE
+  GBB_BUILD_REVISION="p12-stall-assert-mutant" GBB_BUILD_QUALIFIED=0)
+add_test(NAME cgb_speed_stall_static_assert_mutant
+  COMMAND ${CMAKE_COMMAND} --build ${PROJECT_BINARY_DIR} --target gabbaboy_core_p12_stall_assert_mutant)
+set_tests_properties(cgb_speed_stall_static_assert_mutant PROPERTIES
+  PASS_REGULAR_EXPRESSION "half-dot timeline:" TIMEOUT 180)
+# --- Phase 12 plan 12-03 end ---
+
 gabbaboy_verify_registered_tests()
