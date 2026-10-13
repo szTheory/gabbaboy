@@ -3,8 +3,8 @@ gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_plan: Not started
-status: planning
-stopped_at: Phase 11 complete, ready to plan Phase 12
+status: executed_awaiting_verification
+stopped_at: Phase 11 execute-phase complete, awaiting /gsd-verify-work 11
 last_updated: "2026-10-13T04:59:03.868Z"
 last_activity: 2026-10-13
 last_activity_desc: Phase 11 complete, transitioned to Phase 12
@@ -38,8 +38,9 @@ Verified: Phase 9 `/gsd-verify-work 9` passed 2026-10-12 — 14/14 UAT items aut
 Completed: Phase 10 - CGB Profile, Banking and Register Visibility, execution (plans 10-01..10-20), evidence head `2fe078e8f08ed98ba0ac0e244971e7c0ead16b1e` run https://github.com/szTheory/gabbaboy/actions/runs/38299323863; PR #66 ready and not merged
 Verified: Phase 10 `/gsd-verify-work 10` passed 2026-10-12 — 12/12 UAT items automated (10-UAT.md), local 541/541 with installed inventory at 3c0d6bc; verification `passed` (10-VERIFICATION.md); PR #66 squash-merges at the exact-head green branch head (pre-authorized)
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, planning (11-RESEARCH, 11-PATTERNS, 11-VALIDATION, plans 11-01..11-15) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`
-Next step: Phase 11 execution via `/gsd-execute-phase 11`; the owner chooses when
-Last activity: 2026-10-13 — Phase 11 complete, transitioned to Phase 12
+Completed: Phase 11 - CGB Colour Rendering and Player Colour, execution (plans 11-01..11-15) plus the execute-phase tail; gsd-verifier `passed` 3/3 (11-VERIFICATION.md); PR open, not merged
+Next step: Phase 11 verification via `/gsd-verify-work 11`; the owner chooses when
+Last activity: 2026-10-13 — Phase 11 execute-phase complete; awaiting `/gsd-verify-work 11`
 
 Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 
