@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 5
+current_plan: 6
 status: planning
-stopped_at: Completed 11-04-PLAN.md
-last_updated: "2026-10-13T02:41:00.798Z"
+stopped_at: Completed 11-05-PLAN.md
+last_updated: "2026-10-13T02:48:16.952Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 11 execution started
-state_head: a537528f70f252823081583c98e5add05fb26faf
+state_head: a64f6870bb2d4a38bf40ca6e574882cae01a1783
 progress:
   total_phases: 9
   completed_phases: 5
   total_plans: 80
-  completed_plans: 69
+  completed_plans: 70
   percent: 56
 current_phase: 11
 current_phase_name: CGB Colour Rendering and Player Colour
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 5
+Current Plan: 6
 Total Plans in Phase: 15
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -179,6 +179,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 11 P02 | 45 min | 3 tasks | 8 files |
 | Phase 11 P03 | 40 min | 2 tasks | 5 files |
 | Phase 11 P04 | 25 min | 2 tasks | 5 files |
+| Phase 11 P05 | 30 min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -335,6 +336,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 11]: libbet shade pin runs 900 frames (blank earlier); pins are regression, not hardware evidence
 - [Phase 11]: 11-02: palette RAM lock is a plain mode-3 predicate (GATE-76) and OPRI is stored without priority effect (GATE-77); both UNKNOWN research:14
 - [Phase 11]: 11-02: post-boot BCPS is C0 so bit 7 auto-increment is on; visibility port cells park the index at 0 and turn the LCD off
+- [Phase 11]: 11-05: truth table drives the real pixel functions; implementation matched the oracle with no core change; 12 per-input mutants each fail
 
 ### Pending Todos
 
@@ -370,8 +372,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-13T02:41:00.685Z
-Stopped at: Completed 11-04-PLAN.md
+Last session: 2026-10-13T02:48:16.886Z
+Stopped at: Completed 11-05-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 11`
 
