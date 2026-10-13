@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 6
+current_plan: 7
 status: planning
-stopped_at: Completed 11-05-PLAN.md
-last_updated: "2026-10-13T02:48:16.952Z"
+stopped_at: Completed 11-06-PLAN.md
+last_updated: "2026-10-13T02:59:51.389Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 11 execution started
-state_head: a64f6870bb2d4a38bf40ca6e574882cae01a1783
+state_head: a6300a1f25deae6437be60b91cc0352f8a546fb8
 progress:
   total_phases: 9
   completed_phases: 5
   total_plans: 80
-  completed_plans: 70
+  completed_plans: 71
   percent: 56
 current_phase: 11
 current_phase_name: CGB Colour Rendering and Player Colour
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 6
+Current Plan: 7
 Total Plans in Phase: 15
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -180,6 +180,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 11 P03 | 40 min | 2 tasks | 5 files |
 | Phase 11 P04 | 25 min | 2 tasks | 5 files |
 | Phase 11 P05 | 30 min | 3 tasks | 3 files |
+| Phase 11 P06 | 55 min | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -337,6 +338,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 11]: 11-02: palette RAM lock is a plain mode-3 predicate (GATE-76) and OPRI is stored without priority effect (GATE-77); both UNKNOWN research:14
 - [Phase 11]: 11-02: post-boot BCPS is C0 so bit 7 auto-increment is on; visibility port cells park the index at 0 and turn the LCD off
 - [Phase 11]: 11-05: truth table drives the real pixel functions; implementation matched the oracle with no core change; 12 per-input mutants each fail
+- [Phase 11]: 11-06: RGB555 frame call and compat palette API are public; skewed-validator and bit-15 mutants guard them (GATE-83)
 
 ### Pending Todos
 
@@ -372,8 +374,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-13T02:48:16.886Z
-Stopped at: Completed 11-05-PLAN.md
+Last session: 2026-10-13T02:59:51.327Z
+Stopped at: Completed 11-06-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 11`
 
