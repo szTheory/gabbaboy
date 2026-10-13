@@ -35,6 +35,25 @@
         "2021-10-21 pass: CPU CGB B - CPU-CGB-02",
         "2021-10-21 fail: DMG-CPU C (blob) - DMG-CPU-08"
       ]
+    },
+    {
+      "file": "spsw-tima-cgbE.gb",
+      "size_bytes": 32768,
+      "sha256": "3cb0918fb194d2704bb57f2afd5af3be21b5e97e269fde5224c34914d5f5936e",
+      "source_path": "src/speed-switch/spsw-tima-cgbE.asm",
+      "header_143": "C0",
+      "test_results_address": "$C000",
+      "expected_address": "$144A",
+      "rows": 8,
+      "pass_pc": "$13CD",
+      "fail_pc": "$13D9",
+      "expected_role": "pass-target",
+      "verified": [
+        "2022-02-14 pass: CPU CGB E - CPU-CGB-06",
+        "2022-03-16 fail: CPU CGB C - CPU-CGB-04",
+        "2022-02-14 fail: CPU CGB B - CPU-CGB-02",
+        "2022-02-14 fail: DMG-CPU C (blob) - DMG-CPU-08"
+      ]
     }
   ]
 }

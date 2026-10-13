@@ -26,6 +26,7 @@ directory without network access or RGBDS.
 | File | Size | SHA-256 | Source path | Header `$143` |
 |---|---:|---|---|---|
 | `spsw-div-cgbBCE.gb` | 32768 | `2c836288b58651f72a335417f11ba346863145dd9996048979ad8e5b9cd0aa7b` | `src/speed-switch/spsw-div-cgbBCE.asm` | `C0` |
+| `spsw-tima-cgbE.gb` | 32768 | `3cb0918fb194d2704bb57f2afd5af3be21b5e97e269fde5224c34914d5f5936e` | `src/speed-switch/spsw-tima-cgbE.asm` | `C0` |
 
 The source's `Verified:` lines are author-attested hardware observations, not a
 reproducible receipt. Emulator results are numeric; no screenshot comparison is
