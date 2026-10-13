@@ -2309,4 +2309,34 @@ gbb_colour_mutant(magentests_lcdc0_inverted test_magentests.c
   "magentests_oob_sram_mbc1;${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc")
 # --- Phase 11 plan 11-10 end ---
 
+# --- Phase 11 plan 11-11 begin ---
+# External CGB PPU suites recorded but not run (D-09, D-20): an offline verifier of the disposition
+# record, its docs mirror and the tracked file list. No ROM bytes, no network.
+set(GBB_EXT_DISPOSITIONS_RECORD "${PROJECT_SOURCE_DIR}/tests/external/cgb-ppu-dispositions.json")
+set(GBB_EXT_DISPOSITIONS_VERIFIER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-external-dispositions.py")
+add_test(NAME cgb_external_dispositions
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_EXT_DISPOSITIONS_VERIFIER}"
+    --record "${GBB_EXT_DISPOSITIONS_RECORD}" --doc "${GBB_CGB_PROFILE_DOC}" --repo-root "${PROJECT_SOURCE_DIR}")
+set_tests_properties(cgb_external_dispositions PROPERTIES
+  PASS_REGULAR_EXPRESSION "external-dispositions pass age=6" TIMEOUT 30)
+# Negative control: one AGE reason changed in a configure-time copy must be rejected.
+file(READ "${GBB_EXT_DISPOSITIONS_RECORD}" gbb_ext_record)
+set(GBB_EXT_REASON_ANCHOR "\"src/m3-bg-lcdc/m3-bg-lcdc-cgbBCE.png\",\n          \"disposition\": \"expected-unsupported\",\n          \"reason\": \"mode-3-pixel-timing\"")
+string(FIND "${gbb_ext_record}" "${GBB_EXT_REASON_ANCHOR}" gbb_ext_at)
+string(FIND "${gbb_ext_record}" "${GBB_EXT_REASON_ANCHOR}" gbb_ext_last REVERSE)
+if(gbb_ext_at EQUAL -1 OR NOT gbb_ext_at EQUAL gbb_ext_last)
+  message(FATAL_ERROR "external disposition mutation anchor must occur exactly once in cgb-ppu-dispositions.json")
+endif()
+string(REPLACE "${GBB_EXT_REASON_ANCHOR}"
+  "\"src/m3-bg-lcdc/m3-bg-lcdc-cgbBCE.png\",\n          \"disposition\": \"expected-unsupported\",\n          \"reason\": \"timing-not-needed\""
+  gbb_ext_record_bad "${gbb_ext_record}")
+file(WRITE "${PROJECT_BINARY_DIR}/external-dispositions/mutated.json" "${gbb_ext_record_bad}")
+add_test(NAME cgb_external_dispositions_mutated
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_EXT_DISPOSITIONS_VERIFIER};--record;${PROJECT_BINARY_DIR}/external-dispositions/mutated.json;--doc;${GBB_CGB_PROFILE_DOC};--repo-root;${PROJECT_SOURCE_DIR}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=disposition-mismatch"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# --- Phase 11 plan 11-11 end ---
+
 gabbaboy_verify_registered_tests()

@@ -539,6 +539,66 @@ These values were authored for GabbaBoy from the rule above without reference to
 title-hash, peer-emulator or other third-party palette table (rights gate G4). The look is an owner
 veto item (D-18). `cgb_tables_compat_palette` compares this block with the code and with the rule.
 
+## External CGB PPU suites not run in Phase 11
+
+Phase 11 records, but does not run, two external CGB PPU suites. Neither contributes evidence to
+the colour claim, and no file from either is stored in the repository (rights gate G1 is open for
+the Mealybug sources; D-09, D-20).
+
+- **AGE `m3-bg-lcdc` and `m3-bg-scx`** at `c-sp/age-test-roms` commit `1f5bc10e` are mode-3
+  pixel-timing tests, each in the `cgbBCE`, `ds-cgbBCE` and `nocgb-ncmBCE` variants. This core
+  does not model mid-scanline pixel timing yet, so the six cases are `expected-unsupported` with
+  reason `mode-3-pixel-timing`, owned by Phase 14. AGE has no CGB colour, attribute or priority ROM
+  at this pin, so none of these is Phase 11 evidence (D-20).
+- **Mealybug Tearoom Tests `ppu/m3_*`** at `mattcurrie/mealybug-tearoom-tests` commit `70e88fb9`
+  are `unsupported-model`: the upstream expected images were captured on CGB-C and CGB-D
+  steppings only, and the project profile is CGB-CPU-E, for which upstream has no expectation.
+
+`tests/external/cgb-ppu-dispositions.json` is the record; `cgb_external_dispositions` compares it
+with the table below and with the tracked file list, and `cgb_external_dispositions_mutated`
+proves that a changed reason is caught.
+
+<!-- cgb-external-dispositions-begin -->
+| suite | case | disposition | reason |
+| --- | --- | --- | --- |
+| age | m3-bg-lcdc-cgbBCE | expected-unsupported | mode-3-pixel-timing |
+| age | m3-bg-lcdc-ds-cgbBCE | expected-unsupported | mode-3-pixel-timing |
+| age | m3-bg-lcdc-nocgb-ncmBCE | expected-unsupported | mode-3-pixel-timing |
+| age | m3-bg-scx-cgbBCE | expected-unsupported | mode-3-pixel-timing |
+| age | m3-bg-scx-ds-cgbBCE | expected-unsupported | mode-3-pixel-timing |
+| age | m3-bg-scx-nocgb-ncmBCE | expected-unsupported | mode-3-pixel-timing |
+| mealybug | m3_bgp_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_bgp_change_sprites | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_bg_en_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_bg_en_change2 | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_bg_map_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_bg_map_change2 | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_obj_en_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_obj_en_change_variant | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_obj_size_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_obj_size_change_scx | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_tile_sel_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_tile_sel_change2 | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_tile_sel_win_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_tile_sel_win_change2 | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_win_en_change_multiple | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_win_en_change_multiple_wx | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_win_map_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_win_map_change2 | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_obp0_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_scx_high_5_bits | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_scx_high_5_bits_change2 | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_scx_low_3_bits | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_scy_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_scy_change2 | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_window_timing | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_window_timing_wx_0 | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_wx_4_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_wx_4_change_sprites | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_wx_5_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_wx_6_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+<!-- cgb-external-dispositions-end -->
+
 ## Half-dot timeline (D-070)
 
 The `uint64_t` half-dot master timeline is the single clock for normal and double speed, and
