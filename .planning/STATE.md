@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 7
+current_plan: 8
 status: planning
-stopped_at: Completed 11-06-PLAN.md
-last_updated: "2026-10-13T02:59:51.389Z"
+stopped_at: Completed 11-07-PLAN.md
+last_updated: "2026-10-13T03:11:40.860Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 11 execution started
-state_head: a6300a1f25deae6437be60b91cc0352f8a546fb8
+state_head: 9459f4d281d4f15843916d6124d8ace405ce7c0e
 progress:
   total_phases: 9
   completed_phases: 5
   total_plans: 80
-  completed_plans: 71
+  completed_plans: 72
   percent: 56
 current_phase: 11
 current_phase_name: CGB Colour Rendering and Player Colour
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 7
+Current Plan: 8
 Total Plans in Phase: 15
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -181,6 +181,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 11 P04 | 25 min | 2 tasks | 5 files |
 | Phase 11 P05 | 30 min | 3 tasks | 3 files |
 | Phase 11 P06 | 55 min | 3 tasks | 17 files |
+| Phase 11 P07 | 50 min | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -339,6 +340,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 11]: 11-02: post-boot BCPS is C0 so bit 7 auto-increment is on; visibility port cells park the index at 0 and turn the LCD off
 - [Phase 11]: 11-05: truth table drives the real pixel functions; implementation matched the oracle with no core change; 12 per-input mutants each fail
 - [Phase 11]: 11-06: RGB555 frame call and compat palette API are public; skewed-validator and bit-15 mutants guard them (GATE-83)
+- [Phase 11]: 11-07: colour-hblank guest uses a jr spin, not HALT, because gbb_run returns at each HALT with budget left
+- [Phase 11]: 11-07: fixtures/cgb-colour ROMs are admitted by a wildcard .gitignore exception and added as manifest rows with per-row recipes
 
 ### Pending Todos
 
@@ -374,8 +377,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-13T02:59:51.327Z
-Stopped at: Completed 11-06-PLAN.md
+Last session: 2026-10-13T03:11:40.806Z
+Stopped at: Completed 11-07-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 11`
 
