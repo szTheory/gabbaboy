@@ -539,11 +539,12 @@ static bool create_machine(player *app, const char *demo_rom_path) {
         fprintf(stderr, "Battery save warning: %s\n", error);
     } else if (app->save_identity.battery_backed) {
         set_status(app, "Battery RAM loaded; changes are in memory until saved");
+    } else if ((info_flags & GBB_INFO_CGB_ONLY_ON_DMG) != 0u) {
+        /* Same precedence as replace_session_rom: the note never hides a battery or error line. */
+        set_status(app, cgb_only_note);
     } else {
         set_status(app, "Ready");
     }
-    if (battery_loaded && (info_flags & GBB_INFO_CGB_ONLY_ON_DMG) != 0u)
-        set_status(app, cgb_only_note);
     /* D-22: before the first guest instruction; a rejected-save warning keeps
      * precedence over the clock line. */
     char catch_up[192];
