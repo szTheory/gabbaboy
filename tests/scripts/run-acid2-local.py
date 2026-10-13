@@ -11,7 +11,6 @@ import argparse
 import hashlib
 import json
 import pathlib
-import shutil
 import struct
 import subprocess
 import sys
@@ -30,21 +29,28 @@ class Refused(Exception):
     pass
 
 
-def sha256_file(path: pathlib.Path, limit: int = 1 << 20) -> str:
-    size = path.stat().st_size
-    if size > limit:
-        raise Refused("file too large")
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def check_pins(kind: dict, rom: pathlib.Path, reference: pathlib.Path | None) -> None:
+def read_pinned(path: pathlib.Path, pin: str, what: str, limit: int = 1 << 20) -> bytes:
+    """Read the file once, hash those bytes, and return them: the bytes that were checked are the
+    bytes that get used, so a file swapped after the check cannot bypass the pin."""
     try:
-        if sha256_file(rom) != kind["rom_sha256"]:
-            raise Refused("rom sha256 not pinned")
-        if reference is not None and sha256_file(reference) != kind["reference_sha256"]:
-            raise Refused("reference sha256 not pinned")
+        with path.open("rb") as handle:
+            data = handle.read(limit + 1)
     except OSError as exc:
         raise Refused(f"unreadable input ({exc.__class__.__name__})")
+    if len(data) > limit:
+        raise Refused("file too large")
+    if hashlib.sha256(data).hexdigest() != pin:
+        raise Refused(f"{what} sha256 not pinned")
+    return data
+
+
+def check_pins(kind: dict, rom: pathlib.Path,
+               reference: pathlib.Path | None) -> tuple[bytes, bytes | None]:
+    rom_bytes = read_pinned(rom, kind["rom_sha256"], "rom")
+    ref_bytes = None
+    if reference is not None:
+        ref_bytes = read_pinned(reference, kind["reference_sha256"], "reference")
+    return rom_bytes, ref_bytes
 
 
 # ---- minimal PNG codec: 160x144, non-interlaced, bit depth 8 (RGB, RGBA, grey+alpha, palette)
@@ -166,11 +172,11 @@ def compare(frame, reference) -> tuple[int, str]:
     return 1, f"acid2 result=differs pixels={differing}"
 
 
-def run_core(runner: pathlib.Path, kind: dict, rom: pathlib.Path, budget: int) -> bytes:
+def run_core(runner: pathlib.Path, kind: dict, rom: bytes, budget: int) -> bytes:
     """Run the pinned ROM to its ld b,b and return the newest frame PPM from the failure dir."""
     with tempfile.TemporaryDirectory(prefix="gbb-acid2-") as tmp:
         work = pathlib.Path(tmp)
-        shutil.copyfile(rom, work / "acid2.rom")
+        (work / "acid2.rom").write_bytes(rom)
         (work / "out").mkdir()
         line = (f"id=acid2 rom=acid2.rom rom_sha256={kind['rom_sha256']} rom_size={kind['rom_size']} "
                 f"oracle=frame-digest@ldbb reference_digest={'0' * 64} "
@@ -219,6 +225,14 @@ def self_test() -> int:
             print("acid2-local self-test fail: fake rom accepted")
             return 1
     checks += 1
+    with tempfile.TemporaryDirectory(prefix="gbb-acid2-st-") as tmp:
+        good = pathlib.Path(tmp) / "good.bin"
+        good.write_bytes(b"pinned")
+        got = read_pinned(good, hashlib.sha256(b"pinned").hexdigest(), "rom")
+        if got != b"pinned":
+            print("acid2-local self-test fail: pinned bytes not returned")
+            return 1
+    checks += 1
     print(f"acid2-local self-test pass checks={checks}")
     return 0
 
@@ -236,16 +250,24 @@ def main() -> int:
         return self_test()
     if not (args.rom and args.reference and args.runner and args.rom_kind):
         ap.error("--rom, --reference, --runner and --rom-kind are required")
-    manifest = json.loads(args.manifest.read_text())
-    kind = manifest["kinds"][args.rom_kind]
+    # Exit codes: 0 match, 1 frames differ, 2 refused (unpinned input), 3 harness error
+    # (manifest, runner, decode). Nothing else may reach exit 1.
     try:
-        check_pins(kind, args.rom, args.reference)
+        manifest = json.loads(args.manifest.read_text())
+        kind = manifest["kinds"][args.rom_kind]
+        budget = manifest["ldbb_budget_half_dots"]
+        kind["rom_sha256"], kind["reference_sha256"], kind["runner_model"], kind["rom_size"]
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(f"acid2 error: manifest unusable ({exc.__class__.__name__})")
+        return 3
+    try:
+        rom_bytes, ref_bytes = check_pins(kind, args.rom, args.reference)
     except Refused as exc:
         print(f"acid2 refused: {exc}")
         return 2
     try:
-        reference = decode_png(args.reference.read_bytes())
-        frame = read_ppm(run_core(args.runner, kind, args.rom, manifest["ldbb_budget_half_dots"]))
+        reference = decode_png(ref_bytes)
+        frame = read_ppm(run_core(args.runner, kind, rom_bytes, budget))
     except (ValueError, RuntimeError, OSError, subprocess.SubprocessError, zlib.error) as exc:
         print(f"acid2 error: {exc}")
         return 3
