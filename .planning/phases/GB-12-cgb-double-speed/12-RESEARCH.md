@@ -618,17 +618,23 @@ endfunction()
 | A6 | A "+1 half-dot to double" stall mutant is undetectable by AGE (window is 4 T wide) | E1 | If a future ROM discriminates it, add it to D-21 |
 | A7 | Edits to `README.md`/`preview.yml`/`limitations.h` need owner awareness because they are public claims | E2 | Low: the change removes a now-false claim |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **STOP cost on the switch path (1 M per D-02 or 2 M per E1b)?**
    - Known: window for the stall is identical; B/C `tima` rows prefer 2 M; E rows prefer 1 M by accident of the quirk.
    - Unclear: owner preference given D-02's literal text.
    - Recommendation: 2 M for cases 3/4 only, recorded as a DECISIONS row; tests parameterised by a named constant `GBB_STOP_SWITCH_COST_HALF_DOTS`.
+   - RESOLVED: CONTEXT D-38 (2 M at the speed in effect when STOP executes); implemented in plan 12-01 and tested in plan 12-06 (`cgb_speed_stop_cost`, M29).
 2. **Where the D-15 audio digest lives** (E2b). Recommendation: core-level `cgb_speed_fixture_audio_digest`; player pins RGBA only.
+   - RESOLVED: CONTEXT D-41; audio digest in plan 12-10, player RGBA-only smoke in plan 12-12.
 3. **Realign kind and the case-3-into-normal tail** (Pitfall 8): confirm `SWITCH_REALIGN` as a third `cpu_stall_kind` value.
+   - RESOLVED: CONTEXT D-09 (every entry into normal speed, case 3 included); `GBB_STALL_SWITCH_REALIGN` in plan 12-07 (`cgb_speed_realign`, M23).
 4. **Fuzz selector bit**: `(data[0] & 0x70u) == 0x10u` proposed; check no existing seed uses `0x9x`.
+   - RESOLVED: plan 12-15 Task 1 adopts the selector and records the no-collision check in a comment.
 5. **Hosted ASan total**: the closing plan must measure and record added wall time (D-29); no number exists yet.
+   - RESOLVED: plan 12-19 Task 2 measures it at the exact evidence head and records it in `12-BENCH.md` against GB-CI-004.
 6. **Does the owner want the E2 claims edit inside Phase 12** (recommended) or deferred to Phase 15? A stale "double speed not implemented" claim shipped in a preview package is the risk of deferring.
+   - RESOLVED: CONTEXT D-41 (inside Phase 12, owner veto item 11); plan 12-12 Task 2.
 
 ## Environment Availability
 

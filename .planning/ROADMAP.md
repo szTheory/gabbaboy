@@ -314,46 +314,59 @@ Plans:
   3. Partitioned runs (run N, stop, run M) equal one run of N+M across a speed switch and stall, and unresearched pause behaviors are recorded as named expected failures.
 
 **Research**: DEEP (interrupts, DIV and PPU during the pause; applicable test list).
-**Plans**: 14 plans
+**Plans**: 19 plans
 
 Plans:
 **Wave 1**
-- [ ] 12-01-PLAN.md — tracer: pre-change identity pin, KEY1 arm + STOP switch with persisted stall, cpu_ticks sites, runtime-mask mutant harness
-- [ ] 12-02-PLAN.md — AGE vendoring: 13 ROMs with rights, manifest, byte-exact rebuild script and fixture-repro step
+- [ ] 12-01-PLAN.md — tracer: pre-change identity pin, KEY1 arm + STOP switch with persisted stall, cpu_ticks sites, D-13 trace rule
+- [ ] 12-02-PLAN.md — AGE vendoring part 1: rights/provenance, manifest-driven rebuild script with offline negative controls, spsw-div ROM, fixture-repro step
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 12-03-PLAN.md — device scaling: tick-unit timer/serial/DMA, divider and APU tap, PPU/APU/RTC unscaled scan
+- [ ] 12-03-PLAN.md — runtime-mask mutant harness (multi-site anchors, guard control), cpu_ticks contract (M18), per-field reset clears
+- [ ] 12-04-PLAN.md — AGE vendoring part 2: the remaining 12 ROMs and manifest rows
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 12-04-PLAN.md — STOP decision table cases 1-4, switch cost, KEY1/KEY0 contract, DMG identity, reset clears
+- [ ] 12-05-PLAN.md — device scaling: tick-unit timer/serial/DMA, divider and APU tap, PPU/APU/RTC unscaled scan
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 12-05-PLAN.md — stall wake, realignment, exact length, budget semantics, headroom pre-check
+- [ ] 12-06-PLAN.md — STOP decision table cases 1-4, switch cost, KEY1/KEY0 contract, DMG identity, operand/FF04/KEY0 negatives
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 12-06-PLAN.md — research:12 gate dispositions, GATE-84.. rows, cgb-profile stall derivation and STOP docs
+- [ ] 12-07-PLAN.md — stall wake, realignment, exact length (macro-derived), budget semantics, headroom pre-check, EI;STOP mutant
 
 **Wave 6** *(blocked on Wave 5 completion)*
-- [ ] 12-07-PLAN.md — original cgb-speed fixture, first-principles expectations, hostile variants, audio/frame digests
+- [ ] 12-08-PLAN.md — research:12 gate dispositions, GATE-84.. rows, cgb-profile stall derivation and STOP docs
 
 **Wave 7** *(blocked on Wave 6 completion)*
-- [ ] 12-08-PLAN.md — partition equivalence sweeps across switch and stall
-- [ ] 12-09-PLAN.md — player speed smoke, claims edit, installed consumer speed guests
+- [ ] 12-09-PLAN.md — AGE driver, spsw-div pass, public mutant library, D-37 window re-measure and re-pin rule before any constant-derived pin
 
 **Wave 8** *(blocked on Wave 7 completion)*
-- [ ] 12-10-PLAN.md — cgb_speed fuzz mode, seeds, oracle control and dictionary
+- [ ] 12-10-PLAN.md — original cgb-speed probe ROM, first-principles expectations and controls, audio/frame digests
 
 **Wave 9** *(blocked on Wave 8 completion)*
-- [ ] 12-11-PLAN.md — AGE verdict driver, per-ROM pinned dispositions, vendored-byte guards
+- [ ] 12-11-PLAN.md — hostile pre-switch entry points (selector byte) with rule-derived outcomes
+- [ ] 12-12-PLAN.md — player speed smoke, claims edit, installed consumer speed guests with an unarmed-twin negative
 
 **Wave 10** *(blocked on Wave 9 completion)*
-- [ ] 12-12-PLAN.md — dispositions for every named expected failure, stall window re-measure, sensitivity sweep
+- [ ] 12-13-PLAN.md — cgb-speed byte-exact rebuild script, repro controls and fixture-repro step
 
 **Wave 11** *(blocked on Wave 10 completion)*
-- [ ] 12-13-PLAN.md — host docs, header comments and stale-claim scanner
+- [ ] 12-14-PLAN.md — partition equivalence sweeps, real-constant stall-end windows in both directions via snapshot
 
 **Wave 12** *(blocked on Wave 11 completion)*
-- [ ] 12-14-PLAN.md — DECISIONS/LESSONS/INDEX, 12-BENCH.md with hosted ASan cost, COVERAGE.md, Phase 13 handoff
+- [ ] 12-15-PLAN.md — cgb_speed fuzz mode, seeds, oracle control and dictionary
+
+**Wave 13** *(blocked on Wave 12 completion)*
+- [ ] 12-16-PLAN.md — AGE per-ROM dispositions decided by measurement, generated age_ tests, vendored-byte guards
+
+**Wave 14** *(blocked on Wave 13 completion)*
+- [ ] 12-17-PLAN.md — pinned_by for every named expected failure (four new pin tests), verifier and docs mirror, sensitivity sweep
+
+**Wave 15** *(blocked on Wave 14 completion)*
+- [ ] 12-18-PLAN.md — host docs, header comments and stale-claim scanner
+
+**Wave 16** *(blocked on Wave 15 completion)*
+- [ ] 12-19-PLAN.md — DECISIONS/LESSONS/INDEX, 12-BENCH.md with hosted ASan cost, COVERAGE.md, Phase 13 handoff
 
 ### Phase 13: CGB HDMA
 
