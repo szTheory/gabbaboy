@@ -187,10 +187,23 @@ base value and the rule in its reason.
 | ff75 | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
 | ff75 | CGB | $00 | POLICY | 8 | bits 4-6 stored; reads $8F with them clear |
 | ff75 | COMPAT | $00 | POLICY | 8 | bits 4-6 stored; reads $8F with them clear |
+| bg_cram_fill | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
+| bg_cram_fill | CGB | $7FFF | PANDOCS | 1 | Pan Docs Power Up Sequence, CGB |
+| bg_cram_fill | COMPAT | $7FFF | POLICY | 8 | the compat renderer never reads CRAM and the data ports read $FF in compat mode; deterministic fill only |
+| obj_cram_fill | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
+| obj_cram_fill | CGB | $7FFF | POLICY | 8 | Pan Docs calls OBJ CRAM uninitialised; white by policy (D-14) |
+| obj_cram_fill | COMPAT | $7FFF | POLICY | 8 | the compat renderer never reads CRAM and the data ports read $FF in compat mode; deterministic fill only |
+| opri | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
+| opri | CGB | $00 | POLICY | 8 | boot ROM leaves priority by OAM index; no hardware oracle (D-08) |
+| opri | COMPAT | $00 | POLICY | 8 | compat mode reads OPRI as $FF; stored value inert |
 | ram_fill | DMG | $00 | POLICY | 2 | D-025 deterministic fill |
 | ram_fill | CGB | $00 | POLICY | 8 | D-025 deterministic fill |
 | ram_fill | COMPAT | $00 | POLICY | 8 | D-025 deterministic fill |
 <!-- cgb-post-boot-end -->
+
+Palette RAM is filled with white (`$7FFF` words, low byte first) on every reset and ROM load (D-14).
+VRAM bank 1 is zero after every reset and ROM load (POLICY, D-40); attribute tests rely on this, and
+no uninitialised CRAM or VRAM value is asserted against another emulator.
 
 ## Register visibility (FF00-FF7F)
 
@@ -198,12 +211,15 @@ base value and the rule in its reason.
 cells. On the CGB profile FF4C-FF7F is decoded from it: KEY0 reads `$FF`; KEY1 reads `$7E` or the
 armed bit in CGB mode; VBK reads `$FE` or the bank in both modes and selects VRAM only in CGB mode;
 SVBK (CGB mode) reads `$F8` or the raw 3 bits and selects WRAM bank 1-7 (0 selects 1); BCPS and OCPS
-store a byte and read it with bit 6 set; BCPD (FF69) in CGB mode stores a write at index `BCPS & $3F`
-and reads that byte back, and when BCPS bit 7 is set every write advances the index (wrapping 63 to 0,
-bit 7 kept) even when the mode-3 lock blocked the write; a blocked read returns `$FF` and a read never
-advances the index; FF72-FF75 are plain registers (FF75 stores bits 4-6 only).
+store a byte and read it with bit 6 set; BCPD (FF69) and OCPD (FF6B) in CGB mode store a write at
+index `BCPS & $3F` (`OCPS & $3F`) and read that byte back, and when the index register's bit 7 is set
+every write advances the index (wrapping 63 to 0, bit 7 kept) even when the mode-3 lock blocked the
+write; a blocked read returns `$FF` and a read never advances the index; all 8 bits of each byte are
+stored. OPRI (FF6C) stores bit 0 and reads `$FE` or that bit; it has no effect on object priority
+after boot (the execution mode latch decides that, D-08). In compat mode FF69, FF6B and FF6C read `$FF`
+and ignore writes with no index increment. FF72-FF75 are plain registers (FF75 stores bits 4-6 only).
 Unused addresses read `$FF` and ignore writes. Registers owned by a later phase (FF55 write, FF56,
-FF6B, FF6C, FF76, FF77) are deferred: a read stops with `GBB_STOP_UNSUPPORTED_BUS` before
+FF76, FF77) are deferred: a read stops with `GBB_STOP_UNSUPPORTED_BUS` before
 anything changes and a write is dropped and reported as the same stop once the instruction retires.
 The DMG profile never enters this decode: its FF4C-FF7F reads still stop and its writes are silent
 no-ops. IE bits 5-7 are stored and read back on the CGB profile only (owner veto item 6).
@@ -373,11 +389,11 @@ column is the evidence class (Pan Docs, Mooneye hardware test, SameBoy, or proje
 | $FF6A | CGB | stored or $40 | stored and $BF | IMPL | HW_TEST |
 | $FF6A | COMPAT | stored or $40 | stored and $BF | IMPL | HW_TEST |
 | $FF6B | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF6B | CGB | stop | dropped, stop after retire | DEFERRED(11) | PANDOCS |
+| $FF6B | CGB | palette byte at index, $FF while mode 3 | stores at index, auto-increments even when blocked | IMPL | PANDOCS |
 | $FF6B | COMPAT | $FF | ignored | IMPL | PANDOCS |
-| $FF6C | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF6C | CGB | stop | dropped, stop after retire | DEFERRED(11) | PANDOCS |
-| $FF6C | COMPAT | $FF | ignored | IMPL | PANDOCS |
+| $FF6C | DMG | stop | ignored | IMPL | SAMEBOY |
+| $FF6C | CGB | $FE or bit 0 | bit 0 stored, no priority effect after boot | IMPL | SAMEBOY |
+| $FF6C | COMPAT | $FF | ignored | IMPL | SAMEBOY |
 | $FF6D | DMG | stop | ignored | IMPL | HW_TEST |
 | $FF6D | CGB | $FF | ignored | IMPL | HW_TEST |
 | $FF6D | COMPAT | $FF | ignored | IMPL | HW_TEST |

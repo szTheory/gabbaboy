@@ -345,14 +345,14 @@ static int case_boundaries(void) {
 /* Deferred accesses stop visibly. A read stops before it happens; a write is dropped and the stop
  * follows the retire of the instruction that issued it. */
 static int case_deferred_stop(void) {
-    /* Reads: CGB mode FF6B and FF6C are still DEFERRED(11) in this commit; the stop is atomic and the seam names the address. */
-    const uint16_t deferred_reads[] = { 0xFF56, 0xFF6B, 0xFF6C, 0xFF76, 0xFF77 };
+    /* Reads: the DEFERRED CGB-mode cells (RP, PCM12, PCM34); the stop is atomic and the seam names the address. */
+    const uint16_t deferred_reads[] = { 0xFF56, 0xFF76, 0xFF77 };
     for (size_t i = 0; i < sizeof(deferred_reads) / sizeof(deferred_reads[0]); ++i)
         REQUIRE(expect_probe(V_CGB, NULL, 0, deferred_reads[i], STOP) == 0);
     /* Control: FF55 reads $FF in CGB mode (only its write is deferred) and compat reads ignore the
      * deferred rows, so a probe that always stopped would fail here. */
     REQUIRE(expect_probe(V_CGB, NULL, 0, 0xFF55, 0xFF) == 0);
-    for (size_t i = 0; i < 3; ++i) REQUIRE(expect_probe(V_COMPAT, NULL, 0, deferred_reads[i], 0xFF) == 0);
+    REQUIRE(expect_probe(V_COMPAT, NULL, 0, 0xFF56, 0xFF) == 0);
     REQUIRE(expect_probe(V_COMPAT, NULL, 0, 0xFF76, STOP) == 0);
     REQUIRE(expect_probe(V_COMPAT, NULL, 0, 0xFF77, STOP) == 0);
 
@@ -382,7 +382,7 @@ static int case_deferred_stop(void) {
     gbb_destroy(m);
 
     /* Every deferred write cell stops in CGB mode with its own address. */
-    const uint16_t deferred_writes[] = { 0xFF55, 0xFF56, 0xFF6B, 0xFF6C, 0xFF76, 0xFF77 };
+    const uint16_t deferred_writes[] = { 0xFF55, 0xFF56, 0xFF76, 0xFF77 };
     for (size_t i = 0; i < sizeof(deferred_writes) / sizeof(deferred_writes[0]); ++i) {
         prog w = { {0}, 0 };
         write_io(&w, (uint8_t)deferred_writes[i], 0x01);
@@ -394,7 +394,7 @@ static int case_deferred_stop(void) {
         gbb_destroy(m);
     }
 
-    /* Compat mode ignores FF55/FF56/FF6B/FF6C writes (no stop) but FF76/FF77 stay deferred;
+    /* Compat mode ignores FF55/FF56 writes (no stop) but FF76/FF77 stay deferred;
      * the DMG profile never stops on any of them (C4). */
     for (size_t i = 0; i < sizeof(deferred_writes) / sizeof(deferred_writes[0]); ++i) {
         const int compat_stops = deferred_writes[i] >= 0xFF76;
@@ -702,12 +702,13 @@ static void fill_cgb(void) {
     add_cell(V_CGB, 0xFF55, 0xFF, 0x01, 0xFF, 0x80, 0xFF, K_DEF_W, 13, "D-10 HDMA5");
     add_cell(V_CGB, 0xFF56, STOP, 0x01, STOP, 0xC1, STOP, K_DEF_RW, 14, "D-10 RP");
     add_cell(V_CGB, 0xFF68, 0xC0, 0x3A, 0x7A, 0x80, 0xC0, K_IMPL, 0, "D-10 BCPS");
-    /* D-11: with the index parked at 0 both writes land there and read back whole. The post-boot
-     * white fill (D-14) arrives with the next task; until then CRAM starts at 0. */
-    add_cell(V_CGB, 0xFF69, 0x00, 0x5A, 0x5A, 0xA5, 0xA5, K_PORT, 0, "D-10/D-11 BCPD");
+    /* D-11: with the index parked at 0 both writes land there and read back whole. CRAM starts
+     * white (D-14), so the first read is the low byte of $7FFF. */
+    add_cell(V_CGB, 0xFF69, 0xFF, 0x5A, 0x5A, 0xA5, 0xA5, K_PORT, 0, "D-10/D-11 BCPD");
     add_cell(V_CGB, 0xFF6A, 0xC0, 0x3A, 0x7A, 0x80, 0xC0, K_IMPL, 0, "D-10 OCPS");
-    add_cell(V_CGB, 0xFF6B, STOP, 0x5A, STOP, 0xA5, STOP, K_DEF_RW, 11, "D-10 OCPD");
-    add_cell(V_CGB, 0xFF6C, STOP, 0x01, STOP, 0xFE, STOP, K_DEF_RW, 11, "D-10 OPRI");
+    add_cell(V_CGB, 0xFF6B, 0xFF, 0x5A, 0x5A, 0xA5, 0xA5, K_PORT, 0, "D-10/D-11 OCPD");
+    /* D-08: OPRI starts 0 and keeps only bit 0: $FE | 0, write 1 -> $FF, write $FE -> $FE. */
+    add_cell(V_CGB, 0xFF6C, 0xFE, 0x01, 0xFF, 0xFE, 0xFE, K_IMPL, 0, "D-08 OPRI");
     add_cell(V_CGB, 0xFF70, 0xF8, 0x05, 0xFD, 0x08, 0xF8, K_IMPL, 0, "D-10 SVBK");
     add_cell(V_CGB, 0xFF72, 0x00, 0xA5, 0xA5, 0x5A, 0x5A, K_IMPL, 0, "D-10 FF72");
     add_cell(V_CGB, 0xFF73, 0x00, 0xA5, 0xA5, 0x5A, 0x5A, K_IMPL, 0, "D-10 FF73");

@@ -292,6 +292,138 @@ static int palette_cram_lockout_lcd_off(void) {
     return 0;
 }
 
+
+static int palette_cram_obj_autoinc(void) {
+    gbb_instance *m = make_machine(1);
+    REQUIRE(m != NULL);
+    write8(m, OCPS, 0x80u);
+    uint8_t seq[64];
+    for (unsigned i = 0; i < 64u; ++i) {
+        seq[i] = (uint8_t)(i * 7u + 0x91u);
+        write8(m, OCPD, seq[i]);
+    }
+    for (unsigned i = 0; i < 64u; ++i) REQUIRE(m->obj_cram[i] == seq[i]);
+    REQUIRE(read8(m, OCPS) == 0xC0u);
+    /* The object side is independent of the background side. */
+    write8(m, BCPS, 0x00u);
+    write8(m, BCPD, 0x21u);
+    REQUIRE(m->obj_cram[0] == seq[0]);
+    REQUIRE(m->bg_cram[0] == 0x21u);
+    /* Readback without increment, and a blocked write still advances the object index. */
+    write8(m, OCPS, 0x84u);
+    REQUIRE(read8(m, OCPD) == seq[4]);
+    REQUIRE(read8(m, OCPS) == 0xC4u);
+    m->ppu_mode = 3u;
+    write8(m, OCPD, 0x00u);
+    REQUIRE(m->obj_cram[4] == seq[4]);
+    REQUIRE(read8(m, OCPS) == 0xC5u);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int palette_cram_compat_ports(void) {
+    gbb_instance *m = make_machine(0);
+    REQUIRE(m != NULL);
+    REQUIRE(m->exec_mode == GBB_MODE_CGB_DMG_COMPAT);
+    write8(m, BCPS, 0x80u);
+    write8(m, OCPS, 0x85u);
+    uint8_t bg[64], obj[64];
+    memcpy(bg, m->bg_cram, sizeof(bg));
+    memcpy(obj, m->obj_cram, sizeof(obj));
+    const uint8_t bcps = m->bcps, ocps = m->ocps;
+    REQUIRE(read8(m, BCPD) == 0xFFu);
+    REQUIRE(read8(m, OCPD) == 0xFFu);
+    write8(m, BCPD, 0x12u);
+    write8(m, OCPD, 0x34u);
+    REQUIRE(memcmp(bg, m->bg_cram, sizeof(bg)) == 0);
+    REQUIRE(memcmp(obj, m->obj_cram, sizeof(obj)) == 0);
+    REQUIRE(m->bcps == bcps && m->ocps == ocps); /* no increment either */
+    gbb_destroy(m);
+    return 0;
+}
+
+static int palette_opri_cgb(void) {
+    gbb_instance *m = make_machine(1);
+    REQUIRE(m != NULL);
+    REQUIRE(read8(m, OPRI_PORT) == 0xFEu);
+    write8(m, OPRI_PORT, 0x01u);
+    REQUIRE(read8(m, OPRI_PORT) == 0xFFu);
+    write8(m, OPRI_PORT, 0x00u);
+    REQUIRE(read8(m, OPRI_PORT) == 0xFEu);
+    write8(m, OPRI_PORT, 0xFEu); /* only bit 0 is kept */
+    REQUIRE(read8(m, OPRI_PORT) == 0xFEu);
+    /* A write changes no other instance state: a whole-instance copy differs only in opri. */
+    gbb_instance *before = malloc(sizeof(*before));
+    REQUIRE(before != NULL);
+    memcpy(before, m, sizeof(*before));
+    write8(m, OPRI_PORT, 0x01u);
+    REQUIRE(m->opri == 1u);
+    before->opri = m->opri;
+    REQUIRE(memcmp(before, m, sizeof(*before)) == 0);
+    free(before);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int palette_opri_compat(void) {
+    gbb_instance *m = make_machine(0);
+    REQUIRE(m != NULL);
+    REQUIRE(read8(m, OPRI_PORT) == 0xFFu);
+    write8(m, OPRI_PORT, 0x01u);
+    REQUIRE(m->opri == 0u); /* the write was ignored, not stored */
+    REQUIRE(read8(m, OPRI_PORT) == 0xFFu);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cram_is_white(const gbb_instance *m) {
+    for (unsigned i = 0; i < sizeof(m->bg_cram); ++i) {
+        const uint8_t want = (i & 1u) == 0u ? 0xFFu : 0x7Fu;
+        if (m->bg_cram[i] != want || m->obj_cram[i] != want) return 0;
+    }
+    return 1;
+}
+
+static int cgb_postboot_cram_white(void) {
+    for (int cgb_mode = 0; cgb_mode < 2; ++cgb_mode) {
+        gbb_instance *m = make_machine(cgb_mode);
+        REQUIRE(m != NULL);
+        REQUIRE(cram_is_white(m));
+        memset(m->bg_cram, 0, sizeof(m->bg_cram)); /* dirty, so reset has something to undo */
+        memset(m->obj_cram, 0, sizeof(m->obj_cram));
+        REQUIRE(!cram_is_white(m));
+        REQUIRE(gbb_reset(m) == GBB_OK);
+        REQUIRE(cram_is_white(m));
+        gbb_destroy(m);
+    }
+    return 0;
+}
+
+static int vram1_is_zero(const gbb_instance *m) {
+    for (unsigned i = 0; i < GBB_VRAM_BANK_SIZE; ++i)
+        if (m->vram[1][i] != 0u) return 0;
+    return 1;
+}
+
+/* D-40: attribute tests rely on VRAM bank 1 being zero after every load and reset. */
+static int cgb_postboot_vram1_zero(void) {
+    for (int cgb_mode = 0; cgb_mode < 2; ++cgb_mode) {
+        gbb_instance *m = make_machine(cgb_mode);
+        REQUIRE(m != NULL);
+        REQUIRE(vram1_is_zero(m));
+        memset(m->vram[1], 0xAA, GBB_VRAM_BANK_SIZE);
+        REQUIRE(!vram1_is_zero(m));
+        REQUIRE(gbb_reset(m) == GBB_OK);
+        REQUIRE(vram1_is_zero(m));
+        memset(m->vram[1], 0x55, GBB_VRAM_BANK_SIZE);
+        gbb_instance *fresh = make_machine(cgb_mode); /* a new load into a new instance */
+        REQUIRE(fresh != NULL && vram1_is_zero(fresh));
+        gbb_destroy(fresh);
+        gbb_destroy(m);
+    }
+    return 0;
+}
+
 typedef struct {
     const char *name;
     int (*run)(void);
@@ -303,6 +435,12 @@ static const plain_case PLAIN_CASES[] = {
     {"palette_cram_bg_blocked_write", palette_cram_bg_blocked_write},
     {"palette_cram_bg_blocked_read", palette_cram_bg_blocked_read},
     {"palette_cram_lockout_lcd_off", palette_cram_lockout_lcd_off},
+    {"palette_cram_obj_autoinc", palette_cram_obj_autoinc},
+    {"palette_cram_compat_ports", palette_cram_compat_ports},
+    {"palette_opri_cgb", palette_opri_cgb},
+    {"palette_opri_compat", palette_opri_compat},
+    {"cgb_postboot_cram_white", cgb_postboot_cram_white},
+    {"cgb_postboot_vram1_zero", cgb_postboot_vram1_zero},
 };
 
 int main(int argc, char **argv) {

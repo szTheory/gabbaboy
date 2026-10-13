@@ -1993,7 +1993,9 @@ set_tests_properties(cgb_priority_table_shape PROPERTIES
 # Palette RAM and OPRI ports (D-08, D-10 to D-14). White-box cases drive read8/write8 directly.
 foreach(gbb_palette_case
     palette_cram_bg_autoinc palette_cram_bg_readback palette_cram_bg_blocked_write
-    palette_cram_bg_blocked_read palette_cram_lockout_lcd_off)
+    palette_cram_bg_blocked_read palette_cram_lockout_lcd_off palette_cram_obj_autoinc
+    palette_cram_compat_ports palette_opri_cgb palette_opri_compat cgb_postboot_cram_white
+    cgb_postboot_vram1_zero)
   add_test(NAME ${gbb_palette_case} COMMAND test_cgb_colour_internal ${gbb_palette_case})
   set_tests_properties(${gbb_palette_case} PROPERTIES
     PASS_REGULAR_EXPRESSION "cgb-colour-internal ${gbb_palette_case} pass")

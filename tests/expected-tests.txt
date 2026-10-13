@@ -555,3 +555,9 @@ palette_cram_bg_readback
 palette_cram_bg_blocked_write
 palette_cram_bg_blocked_read
 palette_cram_lockout_lcd_off
+palette_cram_obj_autoinc
+palette_cram_compat_ports
+palette_opri_cgb
+palette_opri_compat
+cgb_postboot_cram_white
+cgb_postboot_vram1_zero

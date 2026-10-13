@@ -119,6 +119,7 @@ occurs exactly once in code and once in the table.
 | GATE-74 | CGB_ONLY | model_is_cgb | - | execute | STOP with KEY1 armed latches bus_unsupported at FF4D instead of sleeping; the speed switch is DEFERRED(12) (D-23) |
 | GATE-75 | DMG_ONLY | model_is_dmg | - | dma_source_read | the DMG OAM DMA source map is VRAM and WRAM only; ROM, cartridge RAM and E0-FF read $FF (D-024) |
 | GATE-76 | UNKNOWN | - | research:14 | cpu_cram_access_allowed | CRAM CPU lock is a plain mode-3 predicate; edge offsets unresearched (D-12) |
+| GATE-77 | UNKNOWN | - | research:14 | io_write_cgb | OPRI is stored without priority effect after boot (D-08) |
 <!-- model-gates-end -->
 
 ## Release status

@@ -36,6 +36,7 @@ static const char *const field_names[PB_FIELD_COUNT] = {
     "joypad_select", "joypad_buttons",
     "key1", "vram_bank", "svbk", "wram_bank", "bcps", "ocps",
     "ff72", "ff73", "ff74", "ff75",
+    "bg_cram_fill", "obj_cram_fill", "opri",
     "ram_fill",
 };
 
@@ -297,6 +298,14 @@ static int render_io(const io_cell *c, int col, char *rd, size_t rd_n, char *wr,
     case IO_BCPD:
         snprintf(rd, rd_n, "palette byte at index, $FF while mode 3");
         snprintf(wr, wr_n, "stores at index, auto-increments even when blocked");
+        return 1;
+    case IO_OCPD:
+        snprintf(rd, rd_n, "palette byte at index, $FF while mode 3");
+        snprintf(wr, wr_n, "stores at index, auto-increments even when blocked");
+        return 1;
+    case IO_OPRI:
+        snprintf(rd, rd_n, "$FE or bit 0");
+        snprintf(wr, wr_n, "bit 0 stored, no priority effect after boot");
         return 1;
     case IO_DEFERRED_RW:
         snprintf(rd, rd_n, "stop");

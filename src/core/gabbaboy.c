@@ -774,6 +774,7 @@ typedef enum {
     PB_JOYPAD_SELECT, PB_JOYPAD_BUTTONS,
     PB_KEY1, PB_VRAM_BANK, PB_SVBK, PB_WRAM_BANK, PB_BCPS, PB_OCPS,
     PB_FF72, PB_FF73, PB_FF74, PB_FF75,
+    PB_BG_CRAM_FILL, PB_OBJ_CRAM_FILL, PB_OPRI,
     PB_RAM_FILL,
     PB_FIELD_COUNT
 } post_boot_field;
@@ -810,6 +811,7 @@ typedef struct {
 #define PB_IDX_VERIFY "[VERIFY] no hardware oracle for CGB-mode index"
 
 #define PB_VARIES "no hardware oracle for CGB mode; real hardware varies with the header and held buttons"
+#define PB_CRAM_COMPAT "the compat renderer never reads CRAM and the data ports read $FF in compat mode; deterministic fill only"
 #define PB_SAME_AS_DMG "same value as the DMG cell; Pan Docs gives no CGB-specific value"
 #define PB_CH1_SILENT "channel 1 enabled-but-silent: current volume 0, no boot chime is synthesised (A2)"
 
@@ -895,6 +897,14 @@ static const post_boot_row post_boot[PB_FIELD_COUNT] = {
     { PB_FF73, PB_NA(0u), PBC_POLICY(0u, PB_INIT0), PBC_POLICY(0u, PB_INIT0) },
     { PB_FF74, PB_NA(0u), PBC_POLICY(0u, PB_INIT0), PBC_POLICY(0u, "compat mode does not decode FF74: reads $FF, writes ignored; stored value stays 0") },
     { PB_FF75, PB_NA(0u), PBC_POLICY(0u, "bits 4-6 stored; reads $8F with them clear"), PBC_POLICY(0u, "bits 4-6 stored; reads $8F with them clear") },
+    /* Palette RAM fill word (D-14): every colour of the side is this RGB555 value, low byte first.
+     * The compat renderer never reads CRAM and its data ports read $FF, so that column is a
+     * deterministic fill only. OPRI is stored but has no priority effect after boot (D-08). */
+    { PB_BG_CRAM_FILL, PB_NA(0u), PBC_PD(0x7FFFu), PBC_POLICY(0x7FFFu, PB_CRAM_COMPAT) },
+    { PB_OBJ_CRAM_FILL, PB_NA(0u), PBC_POLICY(0x7FFFu, "Pan Docs calls OBJ CRAM uninitialised; white by policy (D-14)"),
+                        PBC_POLICY(0x7FFFu, PB_CRAM_COMPAT) },
+    { PB_OPRI, PB_NA(0u), PBC_POLICY(0u, "boot ROM leaves priority by OAM index; no hardware oracle (D-08)"),
+               PBC_POLICY(0u, "compat mode reads OPRI as $FF; stored value inert") },
     { PB_RAM_FILL, PB_POLICY(0u, "D-025 deterministic fill"),
                    PBC_POLICY(0u, "D-025 deterministic fill"), PBC_POLICY(0u, "D-025 deterministic fill") },
 };
@@ -1025,6 +1035,17 @@ static void post_boot_apply(gbb_instance *m) {
         case PB_FF73: m->ff73 = v; break;
         case PB_FF74: m->ff74 = v; break;
         case PB_FF75: m->ff75 = v; break;
+        case PB_BG_CRAM_FILL:
+        case PB_OBJ_CRAM_FILL: {
+            /* MODEL: BOTH GATE-00 basis="post_boot[] column per profile (D-06)" -- palette RAM fill; the DMG column is inert and never read */
+            uint8_t *cram = post_boot[i].field == PB_BG_CRAM_FILL ? m->bg_cram : m->obj_cram;
+            for (unsigned word = 0; word < sizeof(m->bg_cram) / 2u; ++word) {
+                cram[word * 2u] = (uint8_t)c->value;
+                cram[word * 2u + 1u] = (uint8_t)(c->value >> 8);
+            }
+            break;
+        }
+        case PB_OPRI: m->opri = (uint8_t)(v & 1u); break;
         case PB_RAM_FILL:
             /* MODEL: BOTH GATE-09 basis=D-025 -- RAM fill is emulator policy; hardware power-on RAM is unspecified */
             memset(m->wram, v, sizeof(m->wram));
@@ -1206,8 +1227,8 @@ static const io_row io_visibility[IO_VISIBILITY_ROWS] = {
     [0x68] = { IOC(DMG_STOP), IOC_ST(0x40, 0xBF), IOC_ST(0x40, 0xBF), IOS_HW_TEST }, /* BCPS: background palette index; unused bit 6 reads 1 */
     [0x69] = { IOC(DMG_STOP), IOC(BCPD), IOC(CONST_FF), IOS_PANDOCS }, /* BCPD: background palette data; auto-increment on write even when blocked, reads never increment; compat mode ignores it without increment */
     [0x6A] = { IOC(DMG_STOP), IOC_ST(0x40, 0xBF), IOC_ST(0x40, 0xBF), IOS_HW_TEST }, /* OCPS: object palette index; unused bit 6 reads 1 */
-    [0x6B] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 11), IOC(CONST_FF), IOS_PANDOCS }, /* OCPD: palette data port deferred to phase 11 */
-    [0x6C] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 11), IOC(CONST_FF), IOS_PANDOCS }, /* OPRI: object priority mode deferred to phase 11 */
+    [0x6B] = { IOC(DMG_STOP), IOC(OCPD), IOC(CONST_FF), IOS_PANDOCS }, /* OCPD: object palette data; same port rules as BCPD; compat mode ignores it without increment */
+    [0x6C] = { IOC(DMG_STOP), IOC(OPRI), IOC(CONST_FF), IOS_SAMEBOY }, /* OPRI: bit 0 stored and read back as $FE|bit0 in CGB mode; no effect on priority after boot (SameBoy memory.c; Pan Docs 'no effect ... after the boot ROM has been unmapped', TO BE VERIFIED); UNKNOWN */
     [0x6D] = IO_UNUSED_ROW,
     [0x6E] = IO_UNUSED_ROW,
     [0x6F] = IO_UNUSED_ROW,
@@ -1303,6 +1324,8 @@ static uint8_t io_read_cgb(const gbb_instance *m, uint16_t address) {
         return p == NULL ? 0xFFu : (uint8_t)(*p | c->read_or);
     }
     case IO_BCPD: return cram_data_read(m->bcps, m->bg_cram, cpu_cram_access_allowed(m));
+    case IO_OCPD: return cram_data_read(m->ocps, m->obj_cram, cpu_cram_access_allowed(m));
+    case IO_OPRI: return (uint8_t)(0xFEu | (m->opri & 1u));
     default: return 0xFFu; /* CONST_FF, DEFERRED_W; DEFERRED_RW is refused before the read */
     }
 }
@@ -1328,6 +1351,11 @@ static void io_write_cgb(gbb_instance *m, uint16_t address, uint8_t value) {
         break;
     }
     case IO_BCPD: cram_data_write(&m->bcps, m->bg_cram, value, cpu_cram_access_allowed(m)); break;
+    case IO_OCPD: cram_data_write(&m->ocps, m->obj_cram, value, cpu_cram_access_allowed(m)); break;
+    case IO_OPRI:
+        /* MODEL: UNKNOWN GATE-77 research:14 -- OPRI is stored without priority effect after boot (D-08) */
+        m->opri = (uint8_t)(value & 1u);
+        break;
     case IO_DEFERRED_RW:
     case IO_DEFERRED_W:
         m->bus_unsupported = 1;
