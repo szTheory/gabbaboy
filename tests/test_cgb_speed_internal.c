@@ -260,6 +260,127 @@ static int cgb_speed_tracer_switch(void) {
     return 0;
 }
 
+static int make_internal_rom(uint8_t rom[32768], const uint8_t *program, size_t program_size) {
+    memset(rom, 0, 32768u);
+    rom[0x143] = 0xC0u;
+    rom[0x147] = 0u;
+    rom[0x148] = 0u;
+    rom[0x149] = 0u;
+    if (program != NULL) memcpy(rom + 0x100u, program, program_size);
+    uint8_t checksum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14Du] = checksum;
+    return 0;
+}
+
+static int create_internal_machine(const uint8_t rom[32768], gbb_instance **out) {
+    *out = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, out) == GBB_OK);
+    if (gbb_load_rom(*out, rom, 32768u) != GBB_OK) {
+        gbb_destroy(*out);
+        *out = NULL;
+        return 1;
+    }
+    return 0;
+}
+
+static int cgb_speed_cpu_ticks(void) {
+    uint8_t rom[32768];
+    make_internal_rom(rom, NULL, 0u);
+    gbb_instance *machine = NULL;
+    REQUIRE(create_internal_machine(rom, &machine) == 0);
+    machine->pc = 0x100u;
+    for (unsigned op = 0u; op < 256u; ++op) {
+        machine->rom[0x100u] = (uint8_t)op;
+        machine->rom[0x101u] = 0xC0u;
+        decoded d = decode(machine);
+        REQUIRE(d.ticks % 8u == 0u);
+        machine->double_speed = 0u;
+        REQUIRE(instruction_cost(machine, d) == d.ticks);
+        machine->double_speed = 1u;
+        REQUIRE(instruction_cost(machine, d) == (uint8_t)(d.ticks / 2u));
+    }
+    machine->rom[0x100u] = 0xCBu;
+    for (unsigned op = 0u; op < 256u; ++op) {
+        machine->rom[0x101u] = (uint8_t)op;
+        decoded d = decode(machine);
+        REQUIRE(d.ticks % 8u == 0u);
+        machine->double_speed = 0u;
+        REQUIRE(instruction_cost(machine, d) == d.ticks);
+        machine->double_speed = 1u;
+        REQUIRE(instruction_cost(machine, d) == (uint8_t)(d.ticks / 2u));
+    }
+
+    const uint64_t offsets[] = {8u, 16u, 24u, 32u, 40u};
+    for (unsigned speed = 0u; speed <= 1u; ++speed) {
+        machine->double_speed = (uint8_t)speed;
+        for (size_t i = 0u; i < sizeof(offsets) / sizeof(offsets[0]); ++i) {
+            const uint64_t offset = offsets[i];
+            REQUIRE(offset % 8u == 0u);
+            uint64_t start = machine->time_half_dots;
+            machine->instruction_start_half_dots = start;
+            (void)bus_read(machine, 0xFF80u, offset);
+            REQUIRE(machine->time_half_dots - start == (offset >> speed));
+            start = machine->time_half_dots;
+            machine->instruction_start_half_dots = start;
+            bus_write(machine, 0xFF80u, 0u, offset);
+            REQUIRE(machine->time_half_dots - start == (offset >> speed));
+        }
+    }
+    gbb_destroy(machine);
+
+    make_internal_rom(rom, NULL, 0u);
+    memset(rom + 0x200u, 0u, 1000u);
+    REQUIRE(create_internal_machine(rom, &machine) == 0);
+    machine->pc = 0x200u;
+    gbb_run_result run;
+    for (unsigned i = 0u; i < 1000u; ++i) {
+        run = gbb_run(machine, 8u, NULL, 0u);
+        REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 8u);
+    }
+    REQUIRE(machine->pc == 0x200u + 1000u);
+    gbb_destroy(machine);
+
+    const uint8_t switch_program[] = {0x3Eu, 0x01u, 0xE0u, 0x4Du, 0x10u, 0x00u};
+    make_internal_rom(rom, switch_program, sizeof(switch_program));
+    memset(rom + 0x300u, 0u, 1000u);
+    REQUIRE(create_internal_machine(rom, &machine) == 0);
+    run = gbb_run(machine, 1024u, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET);
+    uint8_t speed = 0u, kind = 0u, armed = 0u;
+    uint32_t remaining = 0u;
+    gbb_test_speed_state(machine, &speed, &kind, &remaining, &armed);
+    REQUIRE(speed == 1u && kind == GBB_STALL_SPEED_SWITCH && armed == 0u && remaining > 0u);
+    while (remaining != 0u) {
+        run = gbb_run(machine, remaining, NULL, 0u);
+        REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots > 0u);
+        gbb_test_speed_state(machine, &speed, &kind, &remaining, &armed);
+    }
+    machine->pc = 0x300u;
+    for (unsigned i = 0u; i < 1000u; ++i) {
+        run = gbb_run(machine, 4u, NULL, 0u);
+        REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 4u);
+    }
+    REQUIRE(machine->pc == 0x300u + 1000u);
+    gbb_destroy(machine);
+
+    for (unsigned speed_mode = 0u; speed_mode <= 1u; ++speed_mode) {
+        make_internal_rom(rom, NULL, 0u);
+        REQUIRE(create_internal_machine(rom, &machine) == 0);
+        machine->double_speed = (uint8_t)speed_mode;
+        machine->ime = 1u;
+        machine->ie = 1u;
+        machine->interrupt_flags = 1u;
+        const uint64_t expected = speed_mode ? 20u : 40u;
+        run = gbb_run(machine, expected, NULL, 0u);
+        REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == expected);
+        REQUIRE(machine->pc == 0x40u);
+        gbb_destroy(machine);
+    }
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) return 2;
 #ifdef GBB_P12_MUTANT_BUILD
@@ -291,6 +412,11 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "cgb_speed_tracer_switch") == 0) {
         int rc = cgb_speed_tracer_switch();
         if (rc == 0) puts("cgb-speed-internal cgb_speed_tracer_switch pass");
+        return rc;
+    }
+    if (strcmp(argv[1], "cgb_speed_cpu_ticks") == 0) {
+        int rc = cgb_speed_cpu_ticks();
+        if (rc == 0) puts("cgb-speed-internal cgb_speed_cpu_ticks pass");
         return rc;
     }
     return 2;
