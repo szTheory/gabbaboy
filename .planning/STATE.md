@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 4
+current_plan: 5
 status: executing
-stopped_at: Completed GB-12 plan 12-03 execution
-last_updated: "2026-10-13T17:25:56.638Z"
+stopped_at: Completed GB-12-12-04-PLAN.md
+last_updated: "2026-10-13T17:31:21.022Z"
 last_activity: 2026-10-13
 last_activity_desc: Phase GB-12 execution started
-state_head: ba04065bb622e88bbef348af6f5ed3a8f0a08c62
+state_head: ec5dc8a28daf54a722f4da9b036c5fa48690bc6e
 progress:
   total_phases: 9
   completed_phases: 6
   total_plans: 99
-  completed_plans: 83
+  completed_plans: 84
   percent: 67
 current_phase: 12
 current_phase_name: CGB Double Speed
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 4
+Current Plan: 5
 Total Plans in Phase: 19
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -40,10 +40,10 @@ Verified: Phase 10 `/gsd-verify-work 10` passed 2026-10-12 — 12/12 UAT items a
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, planning (11-RESEARCH, 11-PATTERNS, 11-VALIDATION, plans 11-01..11-15) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, execution (plans 11-01..11-15) plus the execute-phase tail; gsd-verifier `passed` 3/3 (11-VERIFICATION.md); evidence head `fb7d14c` exact-head green; PR #67 open, not merged
 Verified: Phase 11 `/gsd-verify-work 11` passed 2026-10-13 — 11/11 UAT rows automated covering all 91 SUMMARY coverage entries (11-UAT.md); verification `passed` (11-VERIFICATION.md); hosted ASan timeout fixed in the PR (LESSONS GB-CI-004); PR #67 squash-merges at the exact-head green branch head (pre-authorized)
-Completed workflow stage: **Phase GB-12 plan 12-03 execution** (2026-10-13), summary [12-03-SUMMARY.md](phases/GB-12-cgb-double-speed/12-03-SUMMARY.md). The full local suite passed 713/713 and the DMG baseline verifier passed. Phase 12 remains in progress.
-Next plan: **GB-12 plan 12-04 — remaining AGE speed-switch fixture corpus**. Its plan is `.planning/phases/GB-12-cgb-double-speed/12-04-PLAN.md`.
-Next command: **`/gsd-execute-phase 12`** (resumes from the first incomplete plan, 12-04). Stop after Phase 12 and wait for the owner.
-Last activity: 2026-10-13 — Phase GB-12 plan 12-03 execution completed
+Completed workflow stage: **Phase GB-12 plan 12-04 execution** (2026-10-13), summary [12-04-SUMMARY.md](phases/GB-12-cgb-double-speed/12-04-SUMMARY.md). All 13 admitted AGE ROMs rebuilt byte-identically with digest-pinned RGBDS 1.0.1; local manifest and tamper controls passed. Hosted Linux confirmation remains pending. Phase 12 remains in progress.
+Next plan: **GB-12 plan 12-05 — device scaling**. Its plan is `.planning/phases/GB-12-cgb-double-speed/12-05-PLAN.md`.
+Next command: **`/gsd-execute-phase 12`** (resumes from the first incomplete plan, 12-05). Stop after Phase 12 and wait for the owner.
+Last activity: 2026-10-13 — Phase GB-12 plan 12-04 execution completed
 
 Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 
@@ -197,6 +197,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 12 P01 | 10 min | 2 tasks | 8 files |
 | Phase 12 P02 | 7 min | 2 tasks | 10 files |
 | Phase 12 P03 | 19 min | 3 tasks | 5 files |
+| Phase GB-12 P04 | 14 min | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -371,6 +372,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 12]: The byte-difference negative control mutates rebuilt bytes so it reaches the comparator after committed-fixture integrity validation.
 - [Phase 12]: Runtime-mask mutant cores remain build-tree-only and use forward/reverse exactly-once anchor checks.
 - [Phase 12]: Reset mutants target the explicit reset boundary because post-boot initialization also clears some speed fields.
+- [Phase GB-12]: Upstream AGE Verified lines remain source attestations, while manifest expected_role records D-19 expectations.
 
 ### Pending Todos
 
@@ -406,8 +408,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-13T17:25:56.563Z
-Stopped at: Completed GB-12 plan 12-03 execution
+Last session: 2026-10-13T17:31:20.948Z
+Stopped at: Completed GB-12-12-04-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 12`
 
@@ -497,7 +499,7 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Completed workflow stage: **Phase GB-12 plan 12-03 execution**; Phase 12 remains in progress.
+- Completed workflow stage: **Phase GB-12 plan 12-04 execution**; Phase 12 remains in progress.
 - OpenGSD development uses the project's Codex `adaptive` model profile.
-- Next plan: **GB-12 plan 12-04 — remaining AGE speed-switch fixture corpus**, via **`/gsd-execute-phase 12`** (resumes at 12-04).
+- Next plan: **GB-12 plan 12-05 — device scaling**, via **`/gsd-execute-phase 12`** (resumes at 12-05).
 - Phase-stop rule: stop after Phase 12 and yield; never auto-advance into the next phase or milestone.
