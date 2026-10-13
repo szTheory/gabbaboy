@@ -107,6 +107,12 @@ add_test(NAME acceptance_digest_vectors
           --check $<TARGET_FILE:test_acceptance_digest>
           --ppm ${CMAKE_CURRENT_BINARY_DIR}/digest-vector.ppm)
 set_tests_properties(acceptance_digest_vectors PROPERTIES TIMEOUT 30)
+# D-15 / D-43: the GBB-RGB555LE-v1 digest, padding, 0x8000 rejection and channel expansion against Python.
+add_test(NAME acceptance_digest_rgb555_vectors
+  COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/rgb-digest-vector.py
+          --rgb555 --check $<TARGET_FILE:test_acceptance_digest>
+          --ppm ${CMAKE_CURRENT_BINARY_DIR}/digest-vector-rgb555.ppm)
+set_tests_properties(acceptance_digest_rgb555_vectors PROPERTIES TIMEOUT 30)
 
 # Model applicability and declared-exclusion suite semantics (D-22). Exclusions exit 4 with their own
 # reason; the CTest skip-return-code mechanism is never used, so an excluded case can never read as a skip.

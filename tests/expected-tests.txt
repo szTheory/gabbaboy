@@ -660,3 +660,4 @@ acceptance_cgb_colour_hblank_profile_flag
 acceptance_cgb_colour_excluded_dmg
 acceptance_cgb_colour_flipped_ppm
 acceptance_cgb_colour_progress_refused
+acceptance_digest_rgb555_vectors

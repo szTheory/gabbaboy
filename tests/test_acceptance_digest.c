@@ -45,7 +45,56 @@ static int helper(const char *ppm_path) {
     return 0;
 }
 
+/* RGB555 helper (rgb-digest-vector.py --rgb555 --check). The synthetic frame is (x * 37 + y * 101) & 0x7FFF.
+ * A second copy with a 400-byte pitch and 0xFFFF garbage past the 320-byte row proves padding is never read. */
+#define PITCH555_BYTES 400u
+
+static int helper555(const char *ppm_path) {
+    static uint16_t frame[GBB_ACCEPT_FRAME_WIDTH * GBB_ACCEPT_FRAME_HEIGHT];
+    static uint16_t padded[(PITCH555_BYTES / 2u) * GBB_ACCEPT_FRAME_HEIGHT];
+    const size_t padded_stride = PITCH555_BYTES / 2u;
+    memset(padded, 0xFF, sizeof(padded));
+    for (size_t y = 0; y < GBB_ACCEPT_FRAME_HEIGHT; ++y) {
+        for (size_t x = 0; x < GBB_ACCEPT_FRAME_WIDTH; ++x) {
+            uint16_t v = (uint16_t)((x * 37u + y * 101u) & 0x7FFFu);
+            frame[y * GBB_ACCEPT_FRAME_WIDTH + x] = v;
+            padded[y * padded_stride + x] = v;
+        }
+    }
+    char hex[65], hex_padded[65];
+    if (gbb_accept_rgb555_digest(frame, GBB_ACCEPT_FRAME_WIDTH * 2u, hex) != 0) return 1;
+    if (gbb_accept_rgb555_digest(padded, PITCH555_BYTES, hex_padded) != 0) return 1;
+    printf("rgb555_sha256=%s\npadded_pitch_sha256=%s\n", hex, hex_padded);
+
+    printf("expand5=");
+    for (unsigned c = 0; c < 32u; ++c) {
+        if (gbb_accept_expand5(c) != (uint8_t)((c << 3) | (c >> 2))) return 1;
+        printf("%02x", gbb_accept_expand5(c));
+    }
+    printf("\n");
+
+    int wrote = gbb_accept_write_ppm_rgb555(ppm_path, frame, GBB_ACCEPT_FRAME_WIDTH * 2u) == 0;
+    printf("ppm=%s\n", wrote ? "written" : "failed");
+
+    /* 0x8000 is invalid: no digest text, no file. */
+    frame[5u * GBB_ACCEPT_FRAME_WIDTH + 7u] = 0x8000u;
+    char bad[65] = "unchanged";
+    char bad_path[1024];
+    snprintf(bad_path, sizeof(bad_path), "%s.invalid", ppm_path);
+    int rejected = gbb_accept_rgb555_digest(frame, GBB_ACCEPT_FRAME_WIDTH * 2u, bad) != 0 &&
+                   strcmp(bad, "unchanged") == 0 &&
+                   gbb_accept_write_ppm_rgb555(bad_path, frame, GBB_ACCEPT_FRAME_WIDTH * 2u) != 0;
+    FILE *leftover = fopen(bad_path, "rb");
+    if (leftover != NULL) {
+        fclose(leftover);
+        rejected = 0;
+    }
+    printf("invalid_value=%s\n", rejected ? "rejected" : "accepted");
+    return 0;
+}
+
 int main(int argc, char **argv) {
+    if (argc == 3 && strcmp(argv[1], "acceptance_digest_rgb555_helper") == 0) return helper555(argv[2]);
     if (argc == 3 && strcmp(argv[1], "acceptance_digest_vectors_helper") == 0) return helper(argv[2]);
     fprintf(stderr, "usage: test_acceptance_digest acceptance_digest_vectors_helper <ppm-path>\n");
     return 2;
