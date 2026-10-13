@@ -1948,6 +1948,11 @@ function(gbb_colour_mutant name test_source fail_test control_test anchor replac
       -DGBB_EXPECT_CODE=0
       "-DGBB_EXPECT_REGEX=.*"
       -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  # The mutant is meant to trip a REQUIRE, and REQUIRE returns early without destroying the
+  # instance. Under phase1-asan, LeakSanitizer would then replace the expected exit 1 with its own
+  # code, so leak detection is off for this deliberately failing run only. Controls and every other
+  # test keep leak checking.
+  set_tests_properties(${fail_test} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 endfunction()
 
 # Harness proof: flipping the low bit of the DMG BG shade must trip the shade-identity pin.
