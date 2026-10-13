@@ -5,11 +5,17 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef GBB_P12_PUBLIC_MUTANT
+extern void gbb_p12_set_mutants(uint64_t mask);
+#endif
+
 #define FRAME_HALF_DOTS UINT64_C(140448)
 #define MAX_EXPECTATIONS 64u
 #define SAMPLE_BASE 0xC100u
 #define SAMPLE_STRIDE 32u
 #define DONE_ADDRESS 0xC0FEu
+#define DIGEST_FRAMES 60u
+#define PCM_CAPACITY 1024u
 #define REQUIRE(condition) do { \
     if (!(condition)) { \
         fprintf(stderr, "cgb-speed-fixture assertion failed: %s:%d: %s\n", \
@@ -17,6 +23,9 @@
         return 1; \
     } \
 } while (0)
+
+#define AUDIO_DIGEST_PIN "0000000000000000000000000000000000000000000000000000000000000000"
+#define FRAME_DIGEST_PIN "0000000000000000000000000000000000000000000000000000000000000000"
 
 static const char *const METRICS[] = {
     "tima", "div", "serial-lines", "serial-sc", "serial-if", "nr52-start",
@@ -181,9 +190,120 @@ static int probes(const char *rom_path, const char *table_path) {
     return 0;
 }
 
+static int run_digest_frames(gbb_instance *machine, gbb_accept_pcm_digest_ctx *pcm_digest,
+                             uint16_t *last_frame) {
+    gbb_audio_frame audio[PCM_CAPACITY];
+    uint64_t pending_half_dots = 0u;
+    for (unsigned frame = 0u; frame < DIGEST_FRAMES; ++frame) {
+        pending_half_dots += FRAME_HALF_DOTS;
+        while (pending_half_dots != 0u) {
+            size_t count = 0u;
+            const gbb_run_result result = gbb_run_audio(machine, pending_half_dots,
+                audio, PCM_CAPACITY, &count);
+            if (result.consumed_half_dots > pending_half_dots) {
+                fprintf(stderr, "cgb-speed-fixture digest-run over-consumed frame=%u\n", frame);
+                return 1;
+            }
+            if (pcm_digest != NULL) gbb_accept_pcm_digest_feed(pcm_digest, audio, count);
+            pending_half_dots -= result.consumed_half_dots;
+            if (pending_half_dots == 0u) break;
+            if (result.reason == GBB_STOP_OUTPUT_FULL && result.consumed_half_dots != 0u) continue;
+            if (result.reason == GBB_STOP_BUDGET || result.reason == GBB_STOP_HALTED_IDLE ||
+                result.reason == GBB_STOP_NO_PROGRESS) break;
+            fprintf(stderr, "cgb-speed-fixture digest-run reason=%d frame=%u\n",
+                    (int)result.reason, frame);
+            return 1;
+        }
+    }
+    if (last_frame != NULL) {
+        gbb_frame_info info;
+        const gbb_error result = gbb_copy_frame_rgb555(machine, last_frame,
+            sizeof(uint16_t) * GBB_ACCEPT_FRAME_WIDTH * GBB_ACCEPT_FRAME_HEIGHT,
+            GBB_ACCEPT_FRAME_WIDTH * sizeof(uint16_t), &info);
+        if (result != GBB_OK) {
+            fprintf(stderr, "cgb-speed-fixture frame-copy error=%d\n", (int)result);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int digest_case(const char *kind, const char *rom_path) {
+    uint8_t *rom = NULL;
+    size_t rom_size = 0u;
+    REQUIRE(load_rom(rom_path, &rom, &rom_size) == 0);
+    gbb_instance *machine = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &machine) == GBB_OK);
+    REQUIRE(gbb_load_rom(machine, rom, rom_size) == GBB_OK);
+    free(rom);
+
+    char observed[65];
+    if (strcmp(kind, "audio") == 0) {
+        gbb_accept_pcm_digest_ctx digest;
+        gbb_accept_pcm_digest_init(&digest);
+        REQUIRE(run_digest_frames(machine, &digest, NULL) == 0);
+        gbb_accept_pcm_digest_final(&digest, observed);
+        if (strcmp(observed, AUDIO_DIGEST_PIN) != 0) {
+            fprintf(stderr, "cgb-speed-fixture audio-digest mismatch observed audio %s expected=%s\n",
+                    observed, AUDIO_DIGEST_PIN);
+            gbb_destroy(machine);
+            return 1;
+        }
+        printf("cgb-speed-fixture audio-digest pass frames=%u sha256=%s\n",
+                DIGEST_FRAMES, observed);
+    } else if (strcmp(kind, "frame") == 0) {
+        uint16_t pixels[GBB_ACCEPT_FRAME_WIDTH * GBB_ACCEPT_FRAME_HEIGHT];
+        REQUIRE(run_digest_frames(machine, NULL, pixels) == 0);
+        if (gbb_accept_rgb555_digest(pixels,
+                GBB_ACCEPT_FRAME_WIDTH * sizeof(uint16_t), observed) != 0) {
+            gbb_destroy(machine);
+            return 1;
+        }
+        if (strcmp(observed, FRAME_DIGEST_PIN) != 0) {
+            fprintf(stderr, "cgb-speed-fixture frame-digest mismatch observed frame %s expected=%s\n",
+                    observed, FRAME_DIGEST_PIN);
+            gbb_destroy(machine);
+            return 1;
+        }
+        printf("cgb-speed-fixture frame-digest pass frames=%u sha256=%s\n",
+                DIGEST_FRAMES, observed);
+    } else {
+        gbb_destroy(machine);
+        return 2;
+    }
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int parse_mutant_mask(int argc, char **argv, uint64_t *mask) {
+    *mask = 0u;
+    if (argc == 3) return 0;
+#ifdef GBB_P12_PUBLIC_MUTANT
+    if (argc == 5 && strcmp(argv[3], "--mutants") == 0) {
+        char *end = NULL;
+        const unsigned long long parsed = strtoull(argv[4], &end, 0);
+        if (argv[4][0] == '\0' || end == argv[4] || *end != '\0') return 1;
+        *mask = (uint64_t)parsed;
+        return 0;
+    }
+#endif
+    return 1;
+}
+
 int main(int argc, char **argv) {
     if (argc == 4 && strcmp(argv[1], "probes") == 0)
         return probes(argv[2], argv[3]);
-    fprintf(stderr, "usage: %s probes <rom> <expectations>\n", argv[0]);
+#ifdef GBB_P12_PUBLIC_MUTANT
+    if (argc >= 4 && (strcmp(argv[1], "audio") == 0 || strcmp(argv[1], "frame") == 0)) {
+        uint64_t mask = 0u;
+        if (parse_mutant_mask(argc, argv, &mask) != 0) return 2;
+        gbb_p12_set_mutants(mask);
+        return digest_case(argv[1], argv[2]);
+    }
+#else
+    if (argc == 3 && (strcmp(argv[1], "audio") == 0 || strcmp(argv[1], "frame") == 0))
+        return digest_case(argv[1], argv[2]);
+#endif
+    fprintf(stderr, "usage: %s probes <rom> <expectations> | audio|frame <rom> [--mutants mask]\n", argv[0]);
     return 2;
 }

@@ -2971,6 +2971,46 @@ add_test(NAME cgb_speed_expectations_factor3
     -P "${GBB_CGB_SPEED_FACTOR3_SCRIPT}")
 set_tests_properties(cgb_speed_expectations_factor3 PROPERTIES
   PASS_REGULAR_EXPRESSION "cgb-speed-expectations factor3 reject pass" TIMEOUT 60)
+
+# Core-level fixture identities use only the public API; mutant code is generated in the build tree.
+add_executable(test_cgb_speed_fixture_p12 test_cgb_speed_fixture.c)
+target_include_directories(test_cgb_speed_fixture_p12 PRIVATE
+  "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/src/accept")
+target_compile_features(test_cgb_speed_fixture_p12 PRIVATE c_std_17)
+target_compile_definitions(test_cgb_speed_fixture_p12 PRIVATE GBB_P12_PUBLIC_MUTANT=1)
+target_link_libraries(test_cgb_speed_fixture_p12 PRIVATE
+  gabbaboy_core_p12_mutants gabbaboy_accept)
+set_target_properties(test_cgb_speed_fixture_p12 PROPERTIES C_EXTENSIONS OFF)
+
+add_test(NAME cgb_speed_fixture_audio_digest
+  COMMAND test_cgb_speed_fixture audio "${GBB_CGB_SPEED_DIR}/speed.gb")
+add_test(NAME cgb_speed_fixture_frame_digest
+  COMMAND test_cgb_speed_fixture frame "${GBB_CGB_SPEED_DIR}/speed.gb")
+set_tests_properties(cgb_speed_fixture_audio_digest cgb_speed_fixture_frame_digest
+  PROPERTIES TIMEOUT 60)
+
+add_test(NAME cgb_speed_fixture_audio_digest_mutant_m17
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_speed_fixture_p12>;audio;${GBB_CGB_SPEED_DIR}/speed.gb;--mutants;131072"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=cgb-speed-fixture audio-digest mismatch observed audio"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_speed_fixture_audio_digest_mutant_m17_control
+  COMMAND test_cgb_speed_fixture_p12 audio "${GBB_CGB_SPEED_DIR}/speed.gb" --mutants 0)
+add_test(NAME cgb_speed_fixture_frame_digest_mutant_m1
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_speed_fixture_p12>;frame;${GBB_CGB_SPEED_DIR}/speed.gb;--mutants;2"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=cgb-speed-fixture frame-digest mismatch observed frame"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_speed_fixture_frame_digest_mutant_m1_control
+  COMMAND test_cgb_speed_fixture_p12 frame "${GBB_CGB_SPEED_DIR}/speed.gb" --mutants 0)
+set_tests_properties(
+  cgb_speed_fixture_audio_digest_mutant_m17
+  cgb_speed_fixture_audio_digest_mutant_m17_control
+  cgb_speed_fixture_frame_digest_mutant_m1
+  cgb_speed_fixture_frame_digest_mutant_m1_control
+  PROPERTIES TIMEOUT 60)
 # --- Phase 12 plan 12-10 end ---
 
 gabbaboy_verify_registered_tests()
