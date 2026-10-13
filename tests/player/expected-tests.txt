@@ -89,3 +89,5 @@ player_cgb_model_mutant_ignores_flag
 player_session_model_select
 player_session_model_pgb
 player_session_model_missing_file
+player_claims_agree
+player_claims_agree_mutated

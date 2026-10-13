@@ -372,6 +372,30 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
         -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
     endif()
     set_tests_properties(${test_name} PROPERTIES TIMEOUT 30)
+  elseif(test_name MATCHES "^player_claims_agree(_mutated)?$")
+    # D-44: one phrase list must read the same on every player-facing claim surface.
+    set(claims_phrases "no colour correction")
+    set(claims_linux_phrases "no colour correction")
+    set(claims_readme "${PROJECT_SOURCE_DIR}/README.md")
+    set(claims_common
+      "-DPHRASES=${claims_phrases}" "-DLINUX_PHRASES=${claims_linux_phrases}"
+      "-DLIMITATIONS=${PROJECT_SOURCE_DIR}/src/player/limitations.h"
+      "-DPREVIEW_YML=${PROJECT_SOURCE_DIR}/.github/workflows/preview.yml")
+    if(test_name STREQUAL "player_claims_agree")
+      add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND} ${claims_common}
+        "-DREADME=${claims_readme}" -P "${CMAKE_CURRENT_SOURCE_DIR}/claims_agree.cmake")
+    else()
+      # Negative control: a README copy that drops the first phrase must be caught.
+      set(mutated_readme "${CMAKE_CURRENT_BINARY_DIR}/README_claims_mutated.md")
+      list(GET claims_phrases 0 mutated_phrase)
+      gbb_player_mutate_source("${claims_readme}" "${mutated_readme}"
+        "${mutated_phrase}" "DROPPED")
+      add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+        "-DGBB_CMD=${CMAKE_COMMAND}$<SEMICOLON>-DPHRASES=${claims_phrases}$<SEMICOLON>-DLINUX_PHRASES=${claims_linux_phrases}$<SEMICOLON>-DLIMITATIONS=${PROJECT_SOURCE_DIR}/src/player/limitations.h$<SEMICOLON>-DPREVIEW_YML=${PROJECT_SOURCE_DIR}/.github/workflows/preview.yml$<SEMICOLON>-DREADME=${mutated_readme}$<SEMICOLON>-P$<SEMICOLON>${CMAKE_CURRENT_SOURCE_DIR}/claims_agree.cmake"
+        -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=claims-disagree no colour correction "
+        -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+    endif()
+    set_tests_properties(${test_name} PROPERTIES TIMEOUT 30)
   elseif(test_name STREQUAL "player_limitations")
     if(NOT TARGET test_player_limitations)
       add_executable(test_player_limitations test_limitations.c)
