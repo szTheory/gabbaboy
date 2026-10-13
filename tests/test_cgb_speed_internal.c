@@ -627,6 +627,208 @@ static int make_stop_test_machine(const uint8_t *program, size_t size, gbb_insta
     return 0;
 }
 
+typedef struct {
+    gbb_trace_record cpu;
+    uint64_t time_half_dots;
+    uint32_t cpu_stall_half_dots;
+    uint16_t divider_counter;
+    uint8_t divider_phase, div, double_speed, cpu_stall_kind, stop_switch_pending;
+    uint8_t key1_armed, ime, ime_delay, halted, stopped, halt_bug;
+} cgb_speed_state_digest;
+
+static void capture_cgb_speed_state(const gbb_instance *machine,
+                                    cgb_speed_state_digest *digest) {
+    memset(digest, 0, sizeof(*digest));
+    gbb_test_cpu_snapshot(machine, &digest->cpu);
+    digest->time_half_dots = machine->time_half_dots;
+    digest->cpu_stall_half_dots = machine->cpu_stall_half_dots;
+    digest->divider_counter = machine->divider_counter;
+    digest->divider_phase = machine->divider_phase;
+    digest->div = machine->div;
+    digest->double_speed = machine->double_speed;
+    digest->cpu_stall_kind = machine->cpu_stall_kind;
+    digest->stop_switch_pending = machine->stop_switch_pending;
+    digest->key1_armed = machine->key1_armed;
+    digest->ime = (uint8_t)(machine->ime != 0);
+    digest->ime_delay = machine->ime_delay;
+    digest->halted = (uint8_t)(machine->halted != 0);
+    digest->stopped = (uint8_t)(machine->stopped != 0);
+    digest->halt_bug = (uint8_t)(machine->halt_bug != 0);
+}
+
+static int run_stall_length_case(uint8_t initial_speed, uint64_t initial_time,
+                                 uint32_t half_dots_per_t) {
+    gbb_instance *machine = NULL;
+    REQUIRE(make_switch_test_machine(initial_speed, initial_time, 0u, 0u, 0,
+                                     &machine) == 0);
+    REQUIRE(retire_internal_instruction(machine) == 0);
+    REQUIRE(machine->cpu_stall_kind == GBB_STALL_SPEED_SWITCH);
+    const uint64_t stall_start = machine->time_half_dots;
+    const uint64_t expected_stall = (uint64_t)GBB_SPEED_SWITCH_STALL_T *
+                                    (uint64_t)half_dots_per_t;
+    const uint64_t m_cycle = (uint64_t)GBB_T_PER_M * (uint64_t)half_dots_per_t;
+    REQUIRE(expected_stall % m_cycle == 0u);
+    decoded next_instruction = decode(machine);
+    const uint8_t next_cost = instruction_cost(machine, next_instruction);
+    REQUIRE(next_cost != 0u);
+    gbb_trace_record trace[1] = {{0}};
+    gbb_run_result run = gbb_run(machine, expected_stall + next_cost, trace, 1u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET &&
+            run.consumed_half_dots == expected_stall + next_cost &&
+            run.trace_count == 1u);
+    REQUIRE(trace[0].pc == 0x102u &&
+            trace[0].time_half_dots == stall_start + expected_stall);
+    REQUIRE(machine->b == 1u && machine->cpu_stall_kind == GBB_STALL_NONE &&
+            machine->cpu_stall_half_dots == 0u);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int cgb_speed_stall_length(void) {
+    REQUIRE(run_stall_length_case(0u, 0u, GBB_HALF_DOTS_PER_T_DOUBLE) == 0);
+    REQUIRE(run_stall_length_case(1u, 0u, GBB_HALF_DOTS_PER_T_NORMAL) == 0);
+    return 0;
+}
+
+static int check_stall_budget(gbb_instance *machine, uint64_t budget,
+                              uint64_t expected_consumed) {
+    const uint32_t remaining = machine->cpu_stall_half_dots;
+    gbb_run_result run = gbb_run(machine, budget, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET &&
+            run.consumed_half_dots == expected_consumed &&
+            run.consumed_half_dots <= budget);
+    REQUIRE(machine->cpu_stall_kind == GBB_STALL_SPEED_SWITCH &&
+            machine->cpu_stall_half_dots == remaining - (uint32_t)expected_consumed &&
+            !machine->stopped && !machine->halted);
+    return 0;
+}
+
+static int cgb_speed_budget_semantics(void) {
+    gbb_instance *machine = NULL;
+    REQUIRE(make_switch_test_machine(0u, 0u, 0u, 0u, 0, &machine) == 0);
+    REQUIRE(retire_internal_instruction(machine) == 0);
+    REQUIRE(check_stall_budget(machine, 0u, 0u) == 0);
+    REQUIRE(check_stall_budget(machine, 1u, 0u) == 0);
+    REQUIRE(check_stall_budget(machine, 3u, 0u) == 0);
+    REQUIRE(check_stall_budget(machine, 1001u, 1000u) == 0);
+    gbb_destroy(machine);
+
+    REQUIRE(make_switch_test_machine(1u, 4u, 0u, 0u, 0, &machine) == 0);
+    REQUIRE(retire_internal_instruction(machine) == 0);
+    for (uint64_t budget = 0u; budget < GBB_T_PER_M *
+             GBB_HALF_DOTS_PER_T_NORMAL; ++budget)
+        REQUIRE(check_stall_budget(machine, budget, 0u) == 0);
+    REQUIRE(check_stall_budget(machine, 1001u, 1000u) == 0);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int cgb_speed_never_stopped(void) {
+    const uint8_t program[] = {
+        0x10u,0x00u, 0x3Eu,0x01u, 0xE0u,0x4Du, 0x10u,0x00u, 0x76u
+    };
+    const uint64_t budgets[] = {1u,64u,4096u,140448u};
+    gbb_instance *machine = NULL;
+    REQUIRE(make_stop_test_machine(program, sizeof(program), &machine) == 0);
+    machine->key1_armed = 1u;
+    machine->joypad_select = 0x30u;
+    REQUIRE(retire_internal_instruction(machine) == 0);
+    REQUIRE(machine->cpu_stall_kind == GBB_STALL_SPEED_SWITCH);
+    for (size_t call = 0u; call < 256u; ++call) {
+        const int was_stalled = machine->cpu_stall_kind != GBB_STALL_NONE;
+        const uint16_t divider_before = machine->divider_counter;
+        const uint64_t budget = budgets[call % (sizeof(budgets) / sizeof(budgets[0]))];
+        gbb_run_result run = gbb_run(machine, budget, NULL, 0u);
+        REQUIRE(run.reason != GBB_STOP_STOPPED && run.reason != GBB_STOP_NO_PROGRESS);
+        if (was_stalled && run.consumed_half_dots != 0u)
+            REQUIRE(machine->divider_counter != divider_before);
+        if (run.reason == GBB_STOP_HALTED_IDLE) {
+            REQUIRE(machine->halted && !machine->stopped && machine->double_speed == 0u &&
+                    machine->cpu_stall_kind == GBB_STALL_NONE);
+            REQUIRE(machine->pc == 0x109u);
+            gbb_destroy(machine);
+            return 0;
+        }
+        REQUIRE(run.reason == GBB_STOP_BUDGET && !machine->stopped && !machine->halted);
+        if (machine->cpu_stall_kind != GBB_STALL_NONE)
+            REQUIRE(machine->cpu_stall_kind == GBB_STALL_SPEED_SWITCH ||
+                    machine->cpu_stall_kind == GBB_STALL_SWITCH_REALIGN);
+    }
+    gbb_destroy(machine);
+    REQUIRE(0 && "guest did not reach its terminal HALT within the bounded host-call loop");
+    return 1;
+}
+
+static int cgb_speed_stall_devices_advance(void) {
+    gbb_instance *machine = NULL;
+    REQUIRE(make_switch_test_machine(0u, 0u, 0u, 0u, 0, &machine) == 0);
+    for (size_t i = 0u; i < GBB_OAM_BYTES; ++i)
+        machine->wram[0][i] = (uint8_t)(i + 1u);
+    machine->dma_pending_page = 0xC0u;
+    machine->dma_start_pending = 1;
+    REQUIRE(retire_internal_instruction(machine) == 0);
+    REQUIRE(machine->cpu_stall_kind == GBB_STALL_SPEED_SWITCH && machine->dma_active);
+
+    machine->divider_counter = 0u;
+    machine->divider_phase = 0u;
+    machine->div = 0u;
+    machine->tac = 0x04u;
+    machine->tima = 0x20u;
+    machine->tma = 0u;
+    machine->timer_signal = timer_input(machine);
+    machine->serial_active = 1;
+    machine->serial_control = 1u;
+    machine->serial_bits = 0u;
+    machine->serial_edge_remaining = 512u;
+    const uint8_t initial_tima = machine->tima;
+    const uint8_t initial_ly = machine->ly;
+    const uint16_t initial_divider = machine->divider_counter;
+    const uint64_t stall_length = (uint64_t)GBB_SPEED_SWITCH_STALL_T *
+                                  GBB_HALF_DOTS_PER_T_DOUBLE;
+    gbb_audio_frame frames[2048];
+    size_t frame_count = 0u;
+    gbb_run_result run = gbb_run_audio(machine, stall_length, frames,
+        sizeof(frames) / sizeof(frames[0]), &frame_count);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == stall_length);
+    REQUIRE(machine->ly >= 143u && machine->ly != initial_ly);
+    REQUIRE((uint16_t)(machine->divider_counter - initial_divider) ==
+            (uint16_t)stall_length);
+    REQUIRE(machine->tima != initial_tima);
+    REQUIRE(!machine->serial_active && machine->serial_bits == 8u);
+    REQUIRE(!machine->dma_active && machine->oam[0] == 1u &&
+            machine->oam[GBB_OAM_BYTES - 1u] == (uint8_t)GBB_OAM_BYTES);
+    REQUIRE(frame_count != 0u);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int cgb_speed_headroom(void) {
+    gbb_instance *machine = NULL;
+    REQUIRE(make_switch_test_machine(0u, 0u, 0u, 0u, 0, &machine) == 0);
+    const uint8_t cost = instruction_cost(machine, decode(machine));
+    const uint64_t required = (uint64_t)cost +
+        2u * (uint64_t)GBB_SPEED_SWITCH_STALL_T + 4u;
+    const uint64_t short_headroom_time = UINT64_MAX - required + 1u;
+    machine->time_half_dots = short_headroom_time;
+    cgb_speed_state_digest before, after;
+    capture_cgb_speed_state(machine, &before);
+    gbb_run_result run = gbb_run(machine, cost, NULL, 0u);
+    capture_cgb_speed_state(machine, &after);
+    REQUIRE(run.reason == GBB_STOP_INVALID_STATE && run.consumed_half_dots == 0u);
+    REQUIRE(memcmp(&before, &after, sizeof(before)) == 0);
+    gbb_destroy(machine);
+
+    REQUIRE(make_switch_test_machine(0u, 0u, 0u, 0u, 0, &machine) == 0);
+    machine->time_half_dots = short_headroom_time - 1u;
+    run = gbb_run(machine, cost, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == cost);
+    REQUIRE(machine->double_speed == 1u &&
+            machine->cpu_stall_kind == GBB_STALL_SPEED_SWITCH &&
+            machine->key1_armed == 0u);
+    gbb_destroy(machine);
+    return 0;
+}
+
 static int cgb_speed_stop_operand(void) {
     const uint8_t p0[] = {0x10u, 0x00u, 0x76u};
     const uint8_t p1[] = {0x10u, 0xFFu, 0x76u};
@@ -1208,6 +1410,11 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "cgb_speed_ei_stop") == 0) return cgb_speed_ei_stop();
     if (strcmp(argv[1], "cgb_speed_wake_m_boundary") == 0) return cgb_speed_wake_m_boundary();
     if (strcmp(argv[1], "cgb_speed_realign") == 0) return cgb_speed_realign();
+    if (strcmp(argv[1], "cgb_speed_stall_length") == 0) return cgb_speed_stall_length();
+    if (strcmp(argv[1], "cgb_speed_budget_semantics") == 0) return cgb_speed_budget_semantics();
+    if (strcmp(argv[1], "cgb_speed_never_stopped") == 0) return cgb_speed_never_stopped();
+    if (strcmp(argv[1], "cgb_speed_stall_devices_advance") == 0) return cgb_speed_stall_devices_advance();
+    if (strcmp(argv[1], "cgb_speed_headroom") == 0) return cgb_speed_headroom();
     if (strcmp(argv[1], "cgb_speed_stop_operand") == 0) return cgb_speed_stop_operand();
     if (strcmp(argv[1], "cgb_speed_stop_prefetch_ff04") == 0) {
         return cgb_speed_stop_prefetch_ff04(argc > 2 && strcmp(argv[2], "--ff04-wrong-byte") == 0);

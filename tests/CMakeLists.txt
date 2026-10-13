@@ -2701,6 +2701,11 @@ foreach(wake_case IN ITEMS cgb_speed_wake_ime_off cgb_speed_ei_stop
   add_test(NAME ${wake_case} COMMAND test_cgb_speed_internal_p12 ${wake_case})
   set_tests_properties(${wake_case} PROPERTIES TIMEOUT 60)
 endforeach()
+foreach(stall_case IN ITEMS cgb_speed_stall_length cgb_speed_budget_semantics
+    cgb_speed_never_stopped cgb_speed_stall_devices_advance cgb_speed_headroom)
+  add_test(NAME ${stall_case} COMMAND test_cgb_speed_internal_p12 ${stall_case})
+  set_tests_properties(${stall_case} PROPERTIES TIMEOUT 60)
+endforeach()
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 13 wake_ime_on_ignored
   cgb_speed_wake_ime_on "run.reason == GBB_STOP_TRACE_FULL|run.trace_count == 1u|stall_end >= machine->timer_reloaded_at")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 16 wake_ime_on_per_call
