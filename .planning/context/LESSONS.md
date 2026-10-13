@@ -541,3 +541,48 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** `cgb_runner_profile_unknown`, `cgb_runner_profile_model_conflict`, `cgb_runner_profile_manifest_cgb_excluded`, `cgb_runner_profile_acceptance_cgb_excluded` and the three `cgb_runner_profile_dmg_identity_*` tests in `tests/expected-tests.txt`.
 - **Source:** Phase 10, plans 10-03 and 10-05 (D-28).
 - **Status:** Adopted.
+
+### GB-CGB-002 / 2026-10-13 / A deliberately failing C negative control leaks under LeakSanitizer and the expected exit code is lost
+
+- **Cause and evidence:** Phase 11 mutant tests exit 1 through an early `REQUIRE` return that never destroys the instance. Under `phase1-asan` LeakSanitizer reports the leak and replaces exit 1 with its own code, so the expect-exit control failed at three successive CI heads (two or three mutants each). macOS cannot run `phase1-asan`, so local runs passed.
+- **Remedy:** Set `ASAN_OPTIONS=detect_leaks=0` on the failing mutant run only (commit 361256d); the paired control keeps leak checking. Simulate or run the sanitizer leg early when adding any expect-exit harness.
+- **Applies when:** Any C test that must exit with a specific non-zero code and is built under LSan.
+- **Verification:** Mutant CTests such as `cgb_priority_mutant_opri_live` and `magentests_cgb_mutant_lcdc0_inverted` pass on `phase1-asan` in CI, and their controls still run with leak detection.
+- **Source:** Phase 11 CI at three heads.
+- **Status:** Adopted.
+
+### GB-CGB-003 / 2026-10-13 / A guest that HALTs in its main loop never completes a frame
+
+- **Cause and evidence:** `gbb_run` returns at every HALT, so a fixture guest that halts between frames stalls frame-based assertions (plans 11-07 and 11-08).
+- **Remedy:** Original CGB fixture guests end in a `jr` spin loop instead of HALT.
+- **Applies when:** Writing guest fixtures whose checks depend on frame completion or `gbb_copy_frame_rgb555`.
+- **Verification:** `cgb_colour_attr`, `cgb_colour_hblank_rows` and `cgb_colour_fixture_digest` complete frames and pass.
+- **Source:** Phase 11 plans 11-07 and 11-08.
+- **Status:** Adopted.
+
+### GB-CGB-004 / 2026-10-13 / The host package-manager assembler differed from the pinned toolchain; the pinned archive rebuilt byte-identically
+
+- **Cause and evidence:** Homebrew RGBDS was 1.0.4 while the fixture pin is 1.0.1. Fetching the pinned release archive and checking its SHA-256 gave byte-identical rebuilds.
+- **Remedy:** The reproduce script refuses any version other than the pin and builds from the digest-checked archive.
+- **Applies when:** Fixture reproduction scripts and CI jobs that depend on an external assembler.
+- **Verification:** `fixture-repro` reports `byte-identical` for the colour fixtures; the script exits non-zero on a wrong version.
+- **Source:** Phase 11 plan 11-07.
+- **Status:** Adopted.
+
+### GB-CGB-005 / 2026-10-13 / A negative control must assert the specific failure reason, not only failure
+
+- **Cause and evidence:** In plan 11-13 a CMake list split on `;` silently corrupted a mutated claims control, so it failed for the wrong reason and still read as a pass.
+- **Remedy:** Pair each mutant with a `FAIL_REGULAR_EXPRESSION` (or exit-code check) naming the intended failure, and avoid passing `;`-joined text through CMake lists.
+- **Applies when:** Any CTest negative control, especially ones driven through CMake script arguments.
+- **Verification:** `player_claims_agree_mutated` matches its specific reason string.
+- **Source:** Phase 11 plan 11-13.
+- **Status:** Adopted.
+
+### GB-CGB-006 / 2026-10-13 / Per-line resolve timing, overlap and table-first mirrors need their own fixtures and controls
+
+- **Cause and evidence:** Resolving colour per dot is only proved by a fixture that changes the colour on every line (`cgb_colour_hblank_rows`) with a seam mutant that resolves at frame completion; an X-order control cannot be proved on a ROM whose objects never overlap; mirroring docs from the code table (table-first) kept the DEFERRED cell flips consistent; manifest-driven rebuild scripts let fixture plans split without editing the script.
+- **Remedy:** Add a per-line fixture and a seam mutant for any copy-time versus resolve-time claim, give every ordering control an overlapping-object case, generate or diff doc tables against code tables, and drive fixture rebuilds from the manifest.
+- **Applies when:** Renderer features with timing-dependent state and fixture suites spanning several plans.
+- **Verification:** `cgb_colour_mutant_frame_resolve` with its control, `cgb_priority_mutant_compat_bg_set_for_objects`, `cgb_tables_compat_palette_mutated_doc`.
+- **Source:** Phase 11 plans 11-05 to 11-12.
+- **Status:** Adopted.
