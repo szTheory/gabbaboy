@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 9
+Current Plan: 10
 Total Plans in Phase: 19
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -40,10 +40,10 @@ Verified: Phase 10 `/gsd-verify-work 10` passed 2026-10-12 — 12/12 UAT items a
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, planning (11-RESEARCH, 11-PATTERNS, 11-VALIDATION, plans 11-01..11-15) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, execution (plans 11-01..11-15) plus the execute-phase tail; gsd-verifier `passed` 3/3 (11-VERIFICATION.md); evidence head `fb7d14c` exact-head green; PR #67 open, not merged
 Verified: Phase 11 `/gsd-verify-work 11` passed 2026-10-13 — 11/11 UAT rows automated covering all 91 SUMMARY coverage entries (11-UAT.md); verification `passed` (11-VERIFICATION.md); hosted ASan timeout fixed in the PR (LESSONS GB-CI-004); PR #67 squash-merges at the exact-head green branch head (pre-authorized)
-Completed workflow stage: **Phase GB-12 plan 12-08 execution** (2026-10-13), summary [12-08-SUMMARY.md](phases/GB-12-cgb-double-speed/12-08-SUMMARY.md). The D-12 scanner reports 169 functions and 91 gates; the selected model/documentation checks passed 24/24 and `summary_coverage` passed 1/1. Phase 12 remains in progress; no AGE run or committed-core stall window was produced.
-Next plan: **GB-12 plan 12-09 — AGE driver, dispositions, sensitivity sweep**. It owns the committed-core `spsw-div` window re-measurement before any constant-derived expectation is pinned.
-Next command: **`/gsd-execute-phase 12`** (resumes at 12-09). Auto-advance remains disabled; stop after Phase 12 and wait for the owner.
-Last activity: 2026-10-13 — Phase GB-12 plan 12-08 execution completed
+Completed workflow stage: **Phase GB-12 plan 12-09 execution** (2026-10-13), summary [12-09-SUMMARY.md](phases/GB-12-cgb-double-speed/12-09-SUMMARY.md). The committed-core AGE window is `[0x20004, 0x20007]` T with `GBB_SPEED_SWITCH_STALL_T` held at `0x20004`; the AGE verdict budget is 46,000,000 half-dots. Focused gates passed and the complete CTest inventory passed 820/820. This is pinned software-corpus evidence, not a physical-hardware measurement. Phase 12 remains in progress.
+Next plan: **GB-12 plan 12-10 — original CGB speed probe fixture and independently derived expectations**. The next phase after the remaining Phase 12 plans is **Phase 13 — CGB HDMA**; it has not started.
+Next command: **`/gsd-execute-phase 12`** (resumes at plan 12-10). Auto-advance remains disabled; stop after Phase 12 and wait for the owner.
+Last activity: 2026-10-13 — Phase GB-12 plan 12-09 execution completed
 
 Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 
@@ -202,6 +202,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase GB-12 P06 | 41m28s | 2 tasks | 5 files |
 | Phase GB-12 P07 | 112m | 3 tasks | 5 files |
 | Phase GB-12 P08 | 9m 25s | 3 tasks | 6 files |
+| Phase GB-12 P09 | Not captured (task commits span 4m 08s) | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -514,7 +515,8 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Completed workflow stage: **Phase GB-12 plan 12-08 execution**; Phase 12 remains in progress.
+- Completed workflow stage: **Phase GB-12 plan 12-09 execution**; Phase 12 remains in progress.
 - OpenGSD development uses the project's Codex `adaptive` model profile.
-- Next plan: **GB-12 plan 12-09 — AGE driver, dispositions, sensitivity sweep**, via **`/gsd-execute-phase 12`** (resumes at 12-09).
+- Next plan: **GB-12 plan 12-10 — original CGB speed probe fixture and independently derived expectations**, via **`/gsd-execute-phase 12`** (resumes at 12-10).
+- Next phase after Phase 12: **Phase 13 — CGB HDMA** (not started).
 - Phase-stop rule: stop after Phase 12 and yield; never auto-advance into the next phase or milestone.

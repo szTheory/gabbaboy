@@ -314,7 +314,7 @@ Plans:
   3. Partitioned runs (run N, stop, run M) equal one run of N+M across a speed switch and stall, and unresearched pause behaviors are recorded as named expected failures.
 
 **Research**: DEEP (interrupts, DIV and PPU during the pause; applicable test list).
-**Plans**: 8/19 plans executed
+**Plans**: 9/19 plans executed
 
 Plans:
 **Wave 1**
@@ -338,7 +338,7 @@ Plans:
 - [x] 12-08-PLAN.md — research:12 gate dispositions, GATE-84.. rows, cgb-profile stall derivation and STOP docs
 
 **Wave 7** *(blocked on Wave 6 completion)*
-- [ ] 12-09-PLAN.md — AGE driver, spsw-div pass, public mutant library, D-37 window re-measure and re-pin rule before any constant-derived pin
+- [x] 12-09-PLAN.md — AGE driver, spsw-div pass, public mutant library, D-37 window re-measure and re-pin rule before any constant-derived pin
 
 **Wave 8** *(blocked on Wave 7 completion)*
 - [ ] 12-10-PLAN.md — original cgb-speed probe ROM, first-principles expectations and controls, audio/frame digests
@@ -420,7 +420,7 @@ Plans:
 | 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 18/18 | Complete    | 2026-10-11 |
 | 10. CGB Profile, Banking and Register Visibility | v0.2 | 20/20 | Complete    | 2026-10-12 |
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 15/15 | Complete    | 2026-10-13 |
-| 12. CGB Double Speed | v0.2 | 8/19 | In Progress | - |
+| 12. CGB Double Speed | v0.2 | 9/19 | In Progress | - |
 | 13. CGB HDMA | v0.2 | 0/TBD | Not started | - |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 0/TBD | Not started | - |
 | 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 0/TBD | Not started | - |
