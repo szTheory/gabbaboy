@@ -14,6 +14,8 @@ DIV_PERIOD_T = 256
 SERIAL_BIT_T = 512
 STALL_T = 0x20004  # Measured committed-core pass window in 12-09-SUMMARY.md; constant stayed pinned.
 STOP_M_CYCLES = 2
+LY_POLL_LOOP_M_CYCLES = 7
+M_CYCLE_T = 4
 PHASE_SPEEDS = (1, 2, 1, 2)
 
 
@@ -21,21 +23,44 @@ def rows(speed_factor):
     result = []
     phase_speeds = (1, speed_factor, 1, speed_factor)
     for phase, source_speed in enumerate(phase_speeds):
-        tima = Fraction(DOTS_PER_LINE * source_speed, TAC_PERIOD_T[1])
-        result.append(("tima", phase, math.floor(tima), math.ceil(tima)))
+        line_seconds = Fraction(DOTS_PER_LINE, CPU_HZ)
+        tima_hz = Fraction(CPU_HZ, TAC_PERIOD_T[1])
+        tima = tima_hz * line_seconds * source_speed
+        poll_jitter_t = LY_POLL_LOOP_M_CYCLES * M_CYCLE_T
+        tima_jitter = Fraction(poll_jitter_t, TAC_PERIOD_T[1])
+        result.append(("tima", phase, math.floor(tima - tima_jitter),
+                       math.ceil(tima + tima_jitter)))
+        div_hz = Fraction(CPU_HZ, DIV_PERIOD_T)
+        div = div_hz * line_seconds * source_speed
+        div_jitter = Fraction(poll_jitter_t, DIV_PERIOD_T)
+        result.append(("div", phase, math.floor(div - div_jitter),
+                       math.ceil(div + div_jitter)))
+        serial_seconds = Fraction(8 * SERIAL_BIT_T, CPU_HZ)
+        serial_lines = serial_seconds / line_seconds / source_speed
+        result.append(("serial-lines", phase, math.floor(serial_lines), math.ceil(serial_lines) + 1))
+        # CGB SC forces bits 1-6 high; the internal-clock select remains in bit 0 after completion.
+        result.append(("serial-sc", phase, 0x7F, 0x7F))
+        result.append(("serial-if", phase, 1, 1))
+        result.append(("nr52-start", phase, 1, 1))
+        length_clock_max_lines = Fraction(2 * CPU_HZ, 512) / DOTS_PER_LINE
+        result.append(("nr52-lines", phase, 1, math.ceil(length_clock_max_lines) + 2))
+        result.append(("nr52-end", phase, 0, 0))
+        result.append(("dma-159", phase, 0xFF, 0xFF))
+        result.append(("dma-161", phase, 0xA5, 0xA5))
         key1 = 0x7E | (0x80 if source_speed == 2 else 0)
+        if source_speed != 1:
+            key1 = 0xFE
         result.append(("key1", phase, key1, key1))
         if phase < 3:
             result.append(("key1-armed", phase, key1 | 1, key1 | 1))
             destination = phase_speeds[phase + 1]
-            stall_half_dots = Fraction(STALL_T * (2 if destination == 1 else 2),
-                                       1 if destination == 1 else speed_factor)
+            stall_half_dots = Fraction(STALL_T * 2, destination)
             stop_half_dots = Fraction(STOP_M_CYCLES * 4 * 2, source_speed)
             line_center = ((stall_half_dots + stop_half_dots) / (2 * DOTS_PER_LINE)) % 154
             line_min = math.floor(line_center) - 2
             line_max = math.ceil(line_center) + 2
             result.append(("stop-lines", phase, line_min, line_max))
-            next_key1 = 0x7E | (0x80 if destination == 2 else 0)
+            next_key1 = 0xFE if destination != 1 else 0x7E
             result.append(("key1-after", phase, next_key1, next_key1))
     return result
 

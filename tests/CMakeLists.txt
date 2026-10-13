@@ -2925,6 +2925,52 @@ add_test(NAME cgb_speed_fixture_probes
     ${PROJECT_SOURCE_DIR}/tests/data/cgb-speed-expectations.txt)
 set_tests_properties(cgb_speed_fixture_probes PROPERTIES
   PASS_REGULAR_EXPRESSION "cgb-speed-fixture probes pass checks=" TIMEOUT 60)
+
+# A configure-time out-of-range edit must be caught by the independent host verdict.
+set(GBB_CGB_SPEED_TAMPERED_TABLE "${PROJECT_BINARY_DIR}/cgb-speed/tampered-expectations.txt")
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/cgb-speed")
+file(READ "${PROJECT_SOURCE_DIR}/tests/data/cgb-speed-expectations.txt" gbb_cgb_speed_expectations)
+string(FIND "${gbb_cgb_speed_expectations}" "tima 0 26 31" gbb_cgb_speed_tima_anchor)
+if(gbb_cgb_speed_tima_anchor EQUAL -1)
+  message(FATAL_ERROR "cgb-speed expectation tamper anchor is missing")
+endif()
+string(REPLACE "tima 0 26 31" "tima 0 200 201" gbb_cgb_speed_expectations_bad
+  "${gbb_cgb_speed_expectations}")
+file(WRITE "${GBB_CGB_SPEED_TAMPERED_TABLE}" "${gbb_cgb_speed_expectations_bad}")
+add_test(NAME cgb_speed_expectations_tampered
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_speed_fixture>;probes;${GBB_CGB_SPEED_DIR}/speed.gb;${GBB_CGB_SPEED_TAMPERED_TABLE}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=cgb-speed-fixture verdict-fail tima 0"
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(cgb_speed_expectations_tampered PROPERTIES TIMEOUT 60)
+
+# The wrong speed ratio is derived afresh at test time, then must disagree with the clean ROM.
+set(GBB_CGB_SPEED_FACTOR3_SCRIPT "${PROJECT_BINARY_DIR}/cgb-speed/factor3.cmake")
+file(WRITE "${GBB_CGB_SPEED_FACTOR3_SCRIPT}" [=[
+execute_process(COMMAND "${PYTHON}" -I "${DERIVER}" --write "${OUTPUT}" --speed-factor 3
+  RESULT_VARIABLE derive_result OUTPUT_VARIABLE derive_out ERROR_VARIABLE derive_err)
+if(NOT derive_result EQUAL 0)
+  message(FATAL_ERROR "factor-3 derivation failed: ${derive_out}${derive_err}")
+endif()
+execute_process(COMMAND "${TEST_EXE}" probes "${ROM}" "${OUTPUT}"
+  RESULT_VARIABLE test_result OUTPUT_VARIABLE test_out ERROR_VARIABLE test_err)
+if(test_result EQUAL 0 OR NOT "${test_out}${test_err}" MATCHES "cgb-speed-fixture verdict-fail")
+  message(FATAL_ERROR "factor-3 negative control did not reject the clean core: ${test_out}${test_err}")
+endif()
+message("cgb-speed-expectations factor3 reject pass")
+]=])
+add_test(NAME cgb_speed_expectations_factor3
+  COMMAND ${CMAKE_COMMAND}
+    "-DPYTHON=${Python3_EXECUTABLE}"
+    "-DDERIVER=${PROJECT_SOURCE_DIR}/tests/scripts/derive-cgb-speed-expectations.py"
+    "-DOUTPUT=${PROJECT_BINARY_DIR}/cgb-speed/factor3-expectations.txt"
+    "-DTEST_EXE=$<TARGET_FILE:test_cgb_speed_fixture>"
+    "-DROM=${GBB_CGB_SPEED_DIR}/speed.gb"
+    -P "${GBB_CGB_SPEED_FACTOR3_SCRIPT}")
+set_tests_properties(cgb_speed_expectations_factor3 PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-speed-expectations factor3 reject pass" TIMEOUT 60)
 # --- Phase 12 plan 12-10 end ---
 
 gabbaboy_verify_registered_tests()

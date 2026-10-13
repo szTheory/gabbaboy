@@ -65,3 +65,25 @@ MACRO WaitVBlank
     cp 144
     jr c, .wait\@
 ENDM
+
+MACRO WaitVBlankStart
+.wait_143\@:
+    ldh a, [rLY]
+    cp 143
+    jr nz, .wait_143\@
+.wait_144\@:
+    ldh a, [rLY]
+    cp 144
+    jr nz, .wait_144\@
+ENDM
+
+MACRO CopyBytes
+.copy\@:
+    ld a, [hl+]
+    ld [de], a
+    inc de
+    dec bc
+    ld a, b
+    or c
+    jr nz, .copy\@
+ENDM

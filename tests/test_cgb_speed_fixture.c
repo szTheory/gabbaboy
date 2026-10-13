@@ -18,6 +18,12 @@
     } \
 } while (0)
 
+static const char *const METRICS[] = {
+    "tima", "div", "serial-lines", "serial-sc", "serial-if", "nr52-start",
+    "nr52-lines", "nr52-end", "dma-159", "dma-161", "key1", "key1-armed",
+    "stop-lines", "key1-after"
+};
+
 typedef struct {
     char name[24];
     unsigned phase;
@@ -68,6 +74,7 @@ static int read_expectations(const char *path, expectation rows[MAX_EXPECTATIONS
     FILE *file = fopen(path, "r");
     if (file == NULL) return 1;
     *count = 0u;
+    unsigned seen[sizeof(METRICS) / sizeof(METRICS[0])][4] = {{0u}};
     for (;;) {
         expectation row;
         int read = fscanf(file, "%23s %u %u %u", row.name, &row.phase, &row.low, &row.high);
@@ -76,10 +83,25 @@ static int read_expectations(const char *path, expectation rows[MAX_EXPECTATIONS
             fclose(file);
             return 1;
         }
+        size_t metric = 0u;
+        while (metric < sizeof(METRICS) / sizeof(METRICS[0]) &&
+               strcmp(row.name, METRICS[metric]) != 0) ++metric;
+        if (metric == sizeof(METRICS) / sizeof(METRICS[0]) || seen[metric][row.phase] != 0u ||
+            ((metric >= 11u) && row.phase == 3u)) {
+            fclose(file);
+            return 1;
+        }
+        seen[metric][row.phase] = 1u;
         rows[(*count)++] = row;
     }
     fclose(file);
-    return *count == 0u ? 1 : 0;
+    if (*count != 53u) return 1;
+    for (size_t metric = 0u; metric < sizeof(METRICS) / sizeof(METRICS[0]); ++metric) {
+        const unsigned phases = metric >= 11u ? 3u : 4u;
+        for (unsigned phase = 0u; phase < phases; ++phase)
+            if (seen[metric][phase] != 1u) return 1;
+    }
+    return 0;
 }
 
 static unsigned sample(const gbb_instance *machine, unsigned phase, unsigned offset) {
@@ -90,6 +112,24 @@ static int actual_value(const gbb_instance *machine, const expectation *row, uns
     unsigned base = row->phase * SAMPLE_STRIDE;
     if (strcmp(row->name, "tima") == 0) {
         *value = sample(machine, row->phase, 3u);
+    } else if (strcmp(row->name, "div") == 0) {
+        *value = sample(machine, row->phase, 4u);
+    } else if (strcmp(row->name, "serial-lines") == 0) {
+        *value = sample(machine, row->phase, 5u);
+    } else if (strcmp(row->name, "serial-sc") == 0) {
+        *value = sample(machine, row->phase, 6u);
+    } else if (strcmp(row->name, "serial-if") == 0) {
+        *value = sample(machine, row->phase, 7u);
+    } else if (strcmp(row->name, "nr52-start") == 0) {
+        *value = sample(machine, row->phase, 8u);
+    } else if (strcmp(row->name, "nr52-lines") == 0) {
+        *value = sample(machine, row->phase, 9u);
+    } else if (strcmp(row->name, "nr52-end") == 0) {
+        *value = sample(machine, row->phase, 10u);
+    } else if (strcmp(row->name, "dma-159") == 0) {
+        *value = sample(machine, row->phase, 11u);
+    } else if (strcmp(row->name, "dma-161") == 0) {
+        *value = sample(machine, row->phase, 12u);
     } else if (strcmp(row->name, "key1") == 0) {
         *value = sample(machine, row->phase, 0u);
     } else if (strcmp(row->name, "key1-armed") == 0) {
