@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 12
+current_plan: 13
 status: planning
-stopped_at: Completed 11-11-PLAN.md
-last_updated: "2026-10-13T03:52:30.804Z"
+stopped_at: Completed 11-12-PLAN.md
+last_updated: "2026-10-13T04:03:31.646Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 11 execution started
-state_head: 15c2248be890636a3844b4aa78f8acf8b0be1d41
+state_head: 92660facdd857aa4c611c87aeb4090cbb90a4931
 progress:
   total_phases: 9
   completed_phases: 5
   total_plans: 80
-  completed_plans: 76
+  completed_plans: 77
   percent: 56
 current_phase: 11
 current_phase_name: CGB Colour Rendering and Player Colour
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 12
+Current Plan: 13
 Total Plans in Phase: 15
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -186,6 +186,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 11 P09 | 25 min | 3 tasks | 7 files |
 | Phase 11 P10 | 30 min | 3 tasks | 12 files |
 | Phase 11 P11 | 25min | 2 tasks | 8 files |
+| Phase 11 P12 | 50min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -350,6 +351,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 11]: 11-09: CGB runner frame cases print GBB-RGB555LE-v1 digests under frame555/observed555; store chosen from instance profile; CGB progress-predicate observation refused with frame-unsupported-profile
 - [Phase 11]: 11-10: bg_oam_priority passed its predicate unmodified; no expected-unsupported record; AGE deviation (D-20) stated in ELIGIBILITY.md
 - [Phase 11]: 11-11: acid2 local runner uses frame-digest@ldbb and a PNG decoder covering palette and greyscale (pinned references are not 8-bit RGB)
+- [Phase 11]: 11-12: select_profile seam player_session_probe_profile serves the three session sites; CGB smoke pins the uploaded RGBA digest plus 40 independently computed spot pixels
 
 ### Pending Todos
 
@@ -385,8 +387,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-13T03:52:30.750Z
-Stopped at: Completed 11-11-PLAN.md
+Last session: 2026-10-13T04:03:31.591Z
+Stopped at: Completed 11-12-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 11`
 
