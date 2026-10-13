@@ -724,12 +724,19 @@ typedef struct {
 
 #define FRAME_PITCH555 (GBB_ACCEPT_FRAME_WIDTH * 2u)
 
-/* D-43: the store is decided by the instance profile. */
+_Static_assert(sizeof(((scratch_frame *)0)->pixels555) ==
+                   (size_t)GBB_ACCEPT_FRAME_WIDTH * GBB_ACCEPT_FRAME_HEIGHT * 2u,
+               "RGB555 scratch size");
+
+/* D-43: the store is decided by the instance profile. 2 means the profile could not be read; the
+ * callers report that as frame-invalid instead of silently using the DMG store on a CGB instance. */
+#define CAPTURE_FORMAT_UNKNOWN 2u
 static uint8_t capture_format(const gbb_instance *instance) {
     gbb_info info;
     memset(&info, 0, sizeof(info));
     info.struct_size = GBB_INFO_SIZE_V1;
-    return gbb_get_info(instance, &info) == GBB_OK && info.profile == (uint32_t)GBB_PROFILE_CGB_CPU_E ? 1u : 0u;
+    if (gbb_get_info(instance, &info) != GBB_OK) return CAPTURE_FORMAT_UNKNOWN;
+    return info.profile == (uint32_t)GBB_PROFILE_CGB_CPU_E ? 1u : 0u;
 }
 
 static void store_frame(gbb_ldbb_capture *out, const scratch_frame *next) {
@@ -757,6 +764,7 @@ static int finish_capture(gbb_ldbb_capture *out) {
 int gbb_runner_capture_ldbb(gbb_instance *instance, uint64_t budget_half_dots, gbb_ldbb_capture *out) {
     memset(out, 0, sizeof(*out));
     out->format = capture_format(instance);
+    if (out->format == CAPTURE_FORMAT_UNKNOWN) return 2;
     scratch_frame *next = malloc(sizeof(*next));
     gbb_trace_record *trace = malloc(CAPTURE_TRACE * sizeof(*trace));
     if (next == NULL || trace == NULL) {
@@ -807,6 +815,7 @@ static int capture_frame_at(gbb_instance *instance, uint64_t at_half_dots, uint6
                             gbb_ldbb_capture *out) {
     memset(out, 0, sizeof(*out));
     out->format = capture_format(instance);
+    if (out->format == CAPTURE_FORMAT_UNKNOWN) return 2;
     scratch_frame *next = malloc(sizeof(*next));
     if (next == NULL) return 1;
     uint64_t elapsed = 0, seen_generation = 0;
