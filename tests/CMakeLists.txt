@@ -2535,6 +2535,19 @@ gbb_p12_mutant_test(test_cgb_speed_internal_p12 5 stall_sets_stopped
   cgb_speed_tracer_switch "stopped|GBB_STOP_STOPPED")
 add_test(NAME cgb_speed_stop_cases COMMAND test_cgb_speed_internal_p12 cgb_speed_stop_cases)
 set_tests_properties(cgb_speed_stop_cases PROPERTIES TIMEOUT 60)
+foreach(stop_case IN ITEMS cgb_speed_stop_operand cgb_speed_stop_prefetch_ff04
+    cgb_speed_stop_cost cgb_speed_dmg_unarmed_unchanged cgb_speed_key1_readback
+    cgb_speed_key0_no_switch)
+  add_test(NAME ${stop_case} COMMAND test_cgb_speed_internal_p12 ${stop_case})
+  set_tests_properties(${stop_case} PROPERTIES TIMEOUT 60)
+endforeach()
+add_test(NAME cgb_speed_stop_prefetch_ff04_negative
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_speed_internal_p12>;cgb_speed_stop_prefetch_ff04;--ff04-wrong-byte"
+    -DGBB_EXPECT_CODE=1 -DGBB_EXPECT_REGEX=double_speed
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(cgb_speed_stop_prefetch_ff04_negative PROPERTIES TIMEOUT 60)
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 20 pending_ignored
   cgb_speed_stop_cases "cpu_stall_kind == GBB_STALL_NONE|machine->double_speed == 1u")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 27 divider_reset_omitted

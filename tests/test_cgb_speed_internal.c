@@ -264,6 +264,7 @@ static int cgb_speed_tracer_switch(void) {
 
 static int make_internal_rom(uint8_t rom[32768], const uint8_t *program, size_t program_size);
 static int create_internal_machine(const uint8_t rom[32768], gbb_instance **out);
+static int make_stop_test_machine(const uint8_t *program, size_t size, gbb_instance **out);
 
 static int cgb_speed_stop_cases(void) {
     const uint8_t program[] = {0x10u, 0x3Cu, 0x00u};
@@ -302,6 +303,139 @@ static int cgb_speed_stop_cases(void) {
     REQUIRE(result.reason == GBB_STOP_HALTED_IDLE);
     REQUIRE(machine->double_speed == 1u && machine->pc == 0x103u && machine->b == 0x42u);
     gbb_destroy(machine);
+
+    const uint8_t held_program[] = {0x10u, 0x3Cu, 0x00u};
+    REQUIRE(make_stop_test_machine(held_program, sizeof(held_program), &machine) == 0);
+    machine->key1_armed = 1u; machine->joypad_select = 0x20u; machine->joypad_buttons = 0x10u;
+    machine->divider_counter = 0x1234u;
+    result = gbb_run(machine, 8u, NULL, 0u);
+    REQUIRE(result.reason == GBB_STOP_HALTED_IDLE && machine->pc == 0x102u);
+    REQUIRE(!machine->double_speed && machine->key1_armed == 1u && machine->divider_counter == 0x1234u);
+    machine->interrupt_flags = 1u;
+    gbb_run(machine, 8u, NULL, 0u);
+    REQUIRE(!machine->halted);
+    gbb_destroy(machine);
+
+    REQUIRE(make_stop_test_machine(held_program, sizeof(held_program), &machine) == 0);
+    machine->key1_armed = 1u; machine->joypad_select = 0x20u; machine->joypad_buttons = 0x10u;
+    machine->ie = 1u; machine->interrupt_flags = 1u;
+    REQUIRE(stop_case(machine) == 2 && decode(machine).size == 1u);
+    result = gbb_run(machine, 16u, NULL, 0u);
+    REQUIRE(!machine->halted && !machine->double_speed && machine->key1_armed == 1u);
+    REQUIRE(machine->a != 0u || machine->pc > 0x101u);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int make_stop_test_machine(const uint8_t *program, size_t size, gbb_instance **out) {
+    uint8_t rom[32768];
+    make_internal_rom(rom, program, size);
+    if (create_internal_machine(rom, out) != 0) return 1;
+    (*out)->pc = 0x100u;
+    return 0;
+}
+
+static int cgb_speed_stop_operand(void) {
+    const uint8_t p0[] = {0x10u, 0x00u, 0x76u};
+    const uint8_t p1[] = {0x10u, 0xFFu, 0x76u};
+    gbb_instance *a = NULL, *b = NULL;
+    REQUIRE(make_stop_test_machine(p0, sizeof(p0), &a) == 0);
+    REQUIRE(make_stop_test_machine(p1, sizeof(p1), &b) == 0);
+    a->key1_armed = b->key1_armed = 1u;
+    a->ie = b->ie = 4u;
+    a->interrupt_flags = b->interrupt_flags = 4u;
+    a->joypad_select = b->joypad_select = 0x30u;
+    gbb_run(a, 16u, NULL, 0u);
+    gbb_run(b, 16u, NULL, 0u);
+    REQUIRE(a->double_speed == b->double_speed && a->pc == b->pc &&
+            a->time_half_dots == b->time_half_dots && a->key1_armed == b->key1_armed);
+    REQUIRE(a->a == b->a && a->b == b->b && a->c == b->c && a->d == b->d &&
+            a->e == b->e && a->h == b->h && a->l == b->l && a->sp == b->sp);
+    gbb_destroy(a); gbb_destroy(b);
+    return 0;
+}
+
+static int cgb_speed_stop_prefetch_ff04(int wrong_byte) {
+    const uint8_t p[] = {0xC3u, 0x04u, 0xFFu};
+    gbb_instance *m = NULL;
+    REQUIRE(make_stop_test_machine(p, sizeof(p), &m) == 0);
+    m->key1_armed = 1u;
+    m->joypad_select = 0x30u;
+    m->div = wrong_byte ? 0x11u : 0x10u;
+    gbb_run_result run = gbb_run(m, 48u, NULL, 0u);
+    REQUIRE(m->double_speed == 1u);
+    REQUIRE(run.reason != GBB_STOP_UNSUPPORTED_BUS);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cgb_speed_stop_cost(void) {
+    uint8_t rom[32768];
+    const uint8_t p[] = {0x10u, 0x00u};
+    make_internal_rom(rom, p, sizeof(p));
+    gbb_instance *m = NULL;
+    REQUIRE(create_internal_machine(rom, &m) == 0);
+    m->pc = 0x100u; m->key1_armed = 1u; m->joypad_select = 0x30u;
+    REQUIRE(decode(m).ticks == GBB_STOP_SWITCH_COST_HALF_DOTS);
+    m->double_speed = 1u;
+    REQUIRE(instruction_cost(m, decode(m)) == 8u);
+    m->double_speed = 0u; m->ie = 4u; m->interrupt_flags = 4u;
+    REQUIRE(decode(m).ticks == GBB_STOP_SWITCH_COST_HALF_DOTS);
+    m->key1_armed = 0u;
+    REQUIRE(decode(m).ticks == 8u);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cgb_speed_dmg_unarmed_unchanged(void) {
+    const uint8_t p[] = {0x10u, 0x00u};
+    uint8_t rom[32768]; make_internal_rom(rom, p, sizeof(p));
+    gbb_instance *m = NULL;
+    REQUIRE(create_internal_machine(rom, &m) == 0);
+    m->pc = 0x100u; m->joypad_select = 0x30u;
+    m->divider_counter = 0u;
+    const uint8_t apu_before = m->apu_sequencer_step;
+    gbb_run_result run = gbb_run(m, 16u, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_STOPPED && m->double_speed == 0u);
+    REQUIRE(m->divider_counter == 0u && m->apu_sequencer_step == apu_before);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cgb_speed_key1_readback(void) {
+    const uint8_t p[] = {0x10u, 0x00u};
+    uint8_t rom[32768]; make_internal_rom(rom, p, sizeof(p));
+    gbb_instance *m = NULL;
+    REQUIRE(create_internal_machine(rom, &m) == 0);
+    m->joypad_select = 0x30u;
+    REQUIRE(bus_read(m, 0xFF4Du, 0u) == 0x7Eu);
+    bus_write(m, 0xFF4Du, 1u, 0u);
+    REQUIRE(bus_read(m, 0xFF4Du, 0u) == 0x7Fu);
+    m->pc = 0x100u;
+    gbb_run_result run = gbb_run(m, 32u, NULL, 0u);
+    REQUIRE(run.reason != GBB_STOP_UNSUPPORTED_BUS && m->double_speed == 1u);
+    REQUIRE(bus_read(m, 0xFF4Du, m->time_half_dots) == 0xFEu);
+    bus_write(m, 0xFF4Du, 1u, m->time_half_dots);
+    REQUIRE(bus_read(m, 0xFF4Du, m->time_half_dots) == 0xFFu);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cgb_speed_key0_no_switch(void) {
+    const uint8_t p[] = {0x10u, 0x00u};
+    uint8_t rom[32768]; make_internal_rom(rom, p, sizeof(p));
+    gbb_instance *m = NULL;
+    REQUIRE(create_internal_machine(rom, &m) == 0);
+    for (unsigned value = 0; value < 256u; ++value) {
+        bus_write(m, 0xFF4Cu, (uint8_t)value, m->time_half_dots);
+        REQUIRE(m->double_speed == 0u && m->exec_mode == GBB_MODE_CGB);
+    }
+    m->key1_armed = 1u;
+    for (unsigned value = 0; value < 256u; ++value) {
+        bus_write(m, 0xFF4Cu, (uint8_t)value, m->time_half_dots);
+        REQUIRE(m->double_speed == 0u && m->exec_mode == GBB_MODE_CGB);
+    }
+    gbb_destroy(m);
     return 0;
 }
 
@@ -749,6 +883,14 @@ int main(int argc, char **argv) {
         if (rc == 0) puts("cgb-speed-internal cgb_speed_stop_cases pass");
         return rc;
     }
+    if (strcmp(argv[1], "cgb_speed_stop_operand") == 0) return cgb_speed_stop_operand();
+    if (strcmp(argv[1], "cgb_speed_stop_prefetch_ff04") == 0) {
+        return cgb_speed_stop_prefetch_ff04(argc > 2 && strcmp(argv[2], "--ff04-wrong-byte") == 0);
+    }
+    if (strcmp(argv[1], "cgb_speed_stop_cost") == 0) return cgb_speed_stop_cost();
+    if (strcmp(argv[1], "cgb_speed_dmg_unarmed_unchanged") == 0) return cgb_speed_dmg_unarmed_unchanged();
+    if (strcmp(argv[1], "cgb_speed_key1_readback") == 0) return cgb_speed_key1_readback();
+    if (strcmp(argv[1], "cgb_speed_key0_no_switch") == 0) return cgb_speed_key0_no_switch();
     if (strcmp(argv[1], "cgb_speed_cpu_ticks") == 0) {
         int rc = cgb_speed_cpu_ticks();
         if (rc == 0) puts("cgb-speed-internal cgb_speed_cpu_ticks pass");
