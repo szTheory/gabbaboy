@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 10
+open_count: 11
 waived_count: 0
 fixed_count: 0
-total_count: 10
-last_updated: 2026-10-08T16:24:49.415Z
+total_count: 11
+last_updated: 2026-10-13T17:06:18.785Z
 ---
 
 # Broken Windows Ledger
@@ -25,6 +25,7 @@ last_updated: 2026-10-08T16:24:49.415Z
 | 8 | 05 | deviation | tests/player/test_input.c |  | The reconnect queue-full fixture now loads the demo ROM so its retry case has a live guest timeline. | open |  | 2026-10-08T15:55:37.132Z |  |
 | 9 | 05 | deviation | src/player/audio.h |  | Added the existing internal adapter header to the task scope so new audio transition functions have declarations shared by main and tests. | open |  | 2026-10-08T16:00:39.497Z |  |
 | 10 | 05 | deviation | .github/workflows/preview.yml |  | Corrected stale preview capability claims and package metadata to describe the implemented scoped DMG audio contract. | open |  | 2026-10-08T16:24:49.415Z |  |
+| 11 | 12 | deviation | tests/scripts/test-reproduce-age.sh |  | The byte-difference negative control mutates the scratch rebuilt ROM because mutating the committed fixture is rejected first by self-check. | open |  | 2026-10-13T17:06:18.785Z |  |
 
 ````json
 [
@@ -157,6 +158,19 @@ last_updated: 2026-10-08T16:24:49.415Z
     "recorded_at": "2026-10-08T16:24:49.415Z",
     "resolved_at": null,
     "milestone": "v0.1"
+  },
+  {
+    "id": 11,
+    "kind": "deviation",
+    "phase": "12",
+    "file": "tests/scripts/test-reproduce-age.sh",
+    "line": null,
+    "description": "The byte-difference negative control mutates the scratch rebuilt ROM because mutating the committed fixture is rejected first by self-check.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-13T17:06:18.785Z",
+    "resolved_at": null,
+    "milestone": "v0.2"
   }
 ]
 ````

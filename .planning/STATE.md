@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Completed 12-01-PLAN.md
-last_updated: "2026-10-13T16:58:44.566Z"
+stopped_at: Completed 12-02-PLAN.md
+last_updated: "2026-10-13T17:06:58.244Z"
 last_activity: 2026-10-13
 last_activity_desc: Phase GB-12 execution started
-state_head: 43114cb3f7987d4da95369843cfbcab67658e210
+state_head: 2e9782126e102399f00e000aa3c771347041b656
 progress:
   total_phases: 9
   completed_phases: 6
   total_plans: 99
-  completed_plans: 81
+  completed_plans: 82
   percent: 67
 current_phase: 12
 current_phase_name: CGB Double Speed
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 19
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -40,7 +40,7 @@ Verified: Phase 10 `/gsd-verify-work 10` passed 2026-10-12 — 12/12 UAT items a
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, planning (11-RESEARCH, 11-PATTERNS, 11-VALIDATION, plans 11-01..11-15) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, execution (plans 11-01..11-15) plus the execute-phase tail; gsd-verifier `passed` 3/3 (11-VERIFICATION.md); evidence head `fb7d14c` exact-head green; PR #67 open, not merged
 Verified: Phase 11 `/gsd-verify-work 11` passed 2026-10-13 — 11/11 UAT rows automated covering all 91 SUMMARY coverage entries (11-UAT.md); verification `passed` (11-VERIFICATION.md); hosted ASan timeout fixed in the PR (LESSONS GB-CI-004); PR #67 squash-merges at the exact-head green branch head (pre-authorized)
-Next step: Continue Phase 12 - CGB Double Speed execution at plan 12-02 via `/gsd-execute-phase 12`; stop after the phase and wait for the owner
+Next step: Continue Phase 12 - CGB Double Speed execution at plan 12-03 via /gsd-execute-phase 12; stop after Phase 12 and wait for the owner.
 Last activity: 2026-10-13 — Phase GB-12 execution started
 
 Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
@@ -193,6 +193,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 11 P14 | 40 min | 3 tasks | 11 files |
 | Phase 11 P15 | 25 min | 2 tasks | 6 files |
 | Phase 12 P01 | 10 min | 2 tasks | 8 files |
+| Phase 12 P02 | 7 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -363,6 +364,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 12]: Recorded eight pre-change CGB single-speed identity digests at fb45111; regression pins are not hardware evidence.
 - [Phase 12]: Keep speed state private to the core test seam; no public header or API symbol changes.
 - [Phase 12]: Model STOP's 2 M cost in normal-speed half-dots and apply the speed shift once in instruction_cost.
+- [Phase 12]: AGE fixture bytes are tied to pinned source commit/tree and RGBDS 1.0.1 archive digests.
+- [Phase 12]: The byte-difference negative control mutates rebuilt bytes so it reaches the comparator after committed-fixture integrity validation.
 
 ### Pending Todos
 
@@ -398,9 +401,9 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-13T16:58:44.486Z
-Stopped at: Completed 12-01-PLAN.md
-Resume file: None
+Last session: 2026-10-13T17:06:43.232Z
+Stopped at: Completed 12-02-PLAN.md
+Resume file: .planning/.continue-here.md
 Next command in fresh context: `/gsd-execute-phase 12`
 
 OpenGSD settings (2026-10-13): switched the project runtime from `claude` to `codex` for current development. Profile `adaptive`; heavy (`opus`) uses `gpt-6-sol`, medium (`sonnet`) and light (`haiku`) use `gpt-6-luna`; reasoning effort is `medium` for all three. Project pins take precedence over machine-wide defaults. Completed workflow stage: **Phase GB-12 plan 12-01 execution** (2026-10-13), with task commits `9dfc604` and `43114cb`; the phase remains in progress. Next: **Phase 12 - CGB Double Speed execution, plan 12-02 onward**, via **`/gsd-execute-phase 12`**. Both auto-advance flags stay false; stop after Phase 12 and wait for the owner.
