@@ -45,7 +45,7 @@ Milestone-wide rules:
 - [x] **Phase 8: Cartridge Seam, MBC5 and MBC2** - Move MBC1 behind a type-table mapper seam with no observable change, then add MBC5 and MBC2 (completed 2026-10-11)
 - [x] **Phase 9: MBC3, Deterministic RTC and Cartridge Persistence** - Add MBC3 with an emulated-time RTC, explicit host catch-up, versioned battery block, loader-matrix hardening and new-mapper continuation (completed 2026-10-11)
 - [x] **Phase 10: CGB Profile, Banking and Register Visibility** - Select CGB-CPU-E, detect execution mode, bank VRAM/WRAM, and gate every model-specific behavior (completed 2026-10-12)
-- [ ] **Phase 11: CGB Colour Rendering and Player Colour** - Render CGB attributes and palettes through an RGB555 frame call, a DMG-compatibility palette, and `--model` in the player
+- [x] **Phase 11: CGB Colour Rendering and Player Colour** - Render CGB attributes and palettes through an RGB555 frame call, a DMG-compatibility palette, and `--model` in the player (completed 2026-10-13)
 - [ ] **Phase 12: CGB Double Speed** - KEY1/STOP speed switching with a modelled pause and a CPU-stall run-loop branch
 - [ ] **Phase 13: CGB HDMA** - General-purpose and HBlank VRAM DMA with stall, cancel, readback and HALT interaction
 - [ ] **Phase 14: CGB-E Model Qualification and Corpus** - CGB-E APU/I/O deltas and a headless CGB-E corpus with per-suite denominators
@@ -255,7 +255,7 @@ Plans (serial waves: every plan edits `tests/expected-tests.txt` and `tests/CMak
 
 **Rights gates**: G1 (mgblib font) gates vendoring cgb-acid2/dmg-acid2 into required CI (digest-pinned optional local runs otherwise); G4 excludes title-hash compatibility palettes.
 **Research**: DEEP (LCDC bit 0 in CGB mode, OPRI timing, CGB mode-3 length, blocked-write palette auto-increment).
-**Plans**: 15/15 plans executed
+**Plans**: 15/15 plans complete
 
 Plans:
 **Wave 1**
@@ -367,7 +367,7 @@ Plans:
 | 8. Cartridge Seam, MBC5 and MBC2 | v0.2 | 10/10 | Complete    | 2026-10-11 |
 | 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 18/18 | Complete    | 2026-10-11 |
 | 10. CGB Profile, Banking and Register Visibility | v0.2 | 20/20 | Complete    | 2026-10-12 |
-| 11. CGB Colour Rendering and Player Colour | v0.2 | 15/15 | In Progress | - |
+| 11. CGB Colour Rendering and Player Colour | v0.2 | 15/15 | Complete    | 2026-10-13 |
 | 12. CGB Double Speed | v0.2 | 0/TBD | Not started | - |
 | 13. CGB HDMA | v0.2 | 0/TBD | Not started | - |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 0/TBD | Not started | - |
