@@ -1758,7 +1758,7 @@ file(READ "${GBB_MODEL_GATE_REAL_DOC}" gbb_mg_doc)
 
 # (a) The STOP gate tag deleted. The gate number is not part of the anchor so later plans may renumber.
 set(GBB_MG_STOP_TAG_REGEX
-  "[ ]*/\\* MODEL: UNKNOWN GATE-[0-9][0-9] research:12 -- STOP, including CGB speed switch \\*/\n")
+  "[ ]*/\\* MODEL: UNKNOWN GATE-62 research:14 -- STOP on the DMG, compat and unarmed paths \\*/\n")
 string(REGEX MATCHALL "${GBB_MG_STOP_TAG_REGEX}" gbb_mg_stop_matches "${gbb_mg_source}")
 list(LENGTH gbb_mg_stop_matches gbb_mg_stop_count)
 if(NOT gbb_mg_stop_count EQUAL 1)
@@ -2479,6 +2479,31 @@ add_test(NAME cgb_measure_core_unknown_profile
     "-DGBB_EXPECT_REGEX=usage: measure_core"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # --- Phase 11 plan 11-14 end ---
+
+# --- Phase 12 plan 12-08 begin ---
+# No current double-speed gate may remain owned by research:12.
+add_test(NAME model_gates_no_phase12_rows
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_FILES=${PROJECT_SOURCE_DIR}/docs/model-gates.md;${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c"
+    -P ${PROJECT_SOURCE_DIR}/tests/check_no_phase12_rows.cmake)
+set_tests_properties(model_gates_no_phase12_rows PROPERTIES
+  PASS_REGULAR_EXPRESSION "no-phase12-rows pass" TIMEOUT 30)
+file(READ "${PROJECT_SOURCE_DIR}/docs/model-gates.md" gbb_p12_doc)
+set(GBB_P12_ROW_ANCHOR "| GATE-54 | UNKNOWN | - | research:14 |")
+string(FIND "${gbb_p12_doc}" "${GBB_P12_ROW_ANCHOR}" gbb_p12_first)
+string(FIND "${gbb_p12_doc}" "${GBB_P12_ROW_ANCHOR}" gbb_p12_last REVERSE)
+if(gbb_p12_first EQUAL -1 OR NOT gbb_p12_first EQUAL gbb_p12_last)
+  message(FATAL_ERROR "phase-12 row mutant: '${GBB_P12_ROW_ANCHOR}' must occur exactly once in docs/model-gates.md")
+endif()
+string(REPLACE "${GBB_P12_ROW_ANCHOR}" "| GATE-54 | UNKNOWN | - | research:12 |" gbb_p12_doc_bad "${gbb_p12_doc}")
+file(WRITE "${GBB_MODEL_GATE_DIR}/phase12-row-mutated.md" "${gbb_p12_doc_bad}")
+add_test(NAME model_gates_no_phase12_rows_mutated_doc
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_FILES=${GBB_MODEL_GATE_DIR}/phase12-row-mutated.md;-P;${PROJECT_SOURCE_DIR}/tests/check_no_phase12_rows.cmake"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=phase-12-row-open"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# --- Phase 12 plan 12-08 end ---
 
 # Per-test TIMEOUTs are sized for normal builds. Debug ASan/UBSan runs the same work several times
 # slower, and the whole-run acceptance and RTC cases reached their 300 s limits on a slow hosted

@@ -1972,7 +1972,7 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
         m->lyc = value;
         ppu_update_stat_line(m);
     }
-    /* MODEL: UNKNOWN GATE-30 research:12 -- DMA restart and period */
+    /* MODEL: BOTH GATE-30 basis="OAM DMA start requests and byte period are shared; its CPU-rate conversion is declared by GATE-90" -- FF46 start request */
     else if (address == 0xFF46) {
         m->dma_register = value;
         m->dma_pending_page = value;
@@ -1983,7 +1983,7 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     else if (address == 0xFF49) m->obp1 = value;
     else if (address == 0xFF4A) m->wy = value;
     else if (address == 0xFF4B) m->wx = value;
-    /* MODEL: UNKNOWN GATE-31 research:12 -- DIV write resets the counter and clocks the frame sequencer */
+    /* MODEL: BOTH GATE-31 basis="DIV reset and frame-sequencer edge use the same selected-speed tap on both models, D-11" -- DIV write */
     else if (address == 0xFF04) {
         divider_reset(m, 1);
     }
@@ -2187,7 +2187,7 @@ static void apply_input_events_now(gbb_instance *m) {
         if (m->input_event_count != 0)
             memmove(m->input_events, m->input_events + 1,
                     m->input_event_count * sizeof(m->input_events[0]));
-        /* MODEL: UNKNOWN GATE-41 research:12 -- STOP wake conditions */
+        /* MODEL: UNKNOWN GATE-41 research:14 -- STOP wake conditions */
         if (event.kind == GBB_INPUT_STOP_WAKE) {
             if (m->stopped && event.value == 1u) m->stopped = 0;
         } else if (event.kind == GBB_INPUT_SERIAL_EDGE) {
@@ -2765,7 +2765,7 @@ static uint8_t dma_source_read(const gbb_instance *m, uint16_t address) {
 
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void dma_start(gbb_instance *m) {
-    /* MODEL: UNKNOWN GATE-52 research:12 -- DMA restart behaviour */
+    /* MODEL: UNKNOWN GATE-52 expected-failure:cgb-dma-restart-oracle-only -- DMA restart timing has no CGB oracle */
     m->dma_page = m->dma_pending_page;
     m->dma_index = 0;
     m->dma_phase = 0;
@@ -2778,7 +2778,7 @@ static void dma_start(gbb_instance *m) {
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void dma_advance_half_dot(gbb_instance *m) {
     if (!m->dma_active) return;
-    /* MODEL: UNKNOWN GATE-53 research:12 -- DMA byte period */
+    /* MODEL: BOTH GATE-53 basis="OAM DMA byte period is measured in CPU ticks and remains common across profiles, D-10" -- DMA byte period */
     if (++m->dma_phase < GBB_T_PER_M) return;
     m->dma_phase = 0;
     m->dma_cpu_blocked = 1;
@@ -2866,6 +2866,7 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
     while (m->time_half_dots < target) {
         ++m->time_half_dots;
         apply_input_events_now(m);
+        /* MODEL: CGB_ONLY GATE-90 GUARD=double_speed -- CPU-side timers, serial and OAM DMA use cpu_ticks scaling */
         if (!m->double_speed) m->divider_phase ^= 1u;
         const int cpu_tick = m->double_speed || m->divider_phase == 0u; /* P12-M3 */
         /* MODEL: UNKNOWN GATE-54 research:14 -- timer reload and IF delay */
@@ -2892,7 +2893,7 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
             }
         }
         if (cpu_tick) {
-            /* MODEL: UNKNOWN GATE-56 research:12 -- frame sequencer taps a DIV bit that moves in double speed */
+            /* MODEL: CGB_ONLY GATE-56 GUARD=double_speed -- CGB APU frame sequencer follows the selected DIV tap, D-11 */
             const uint16_t tap = m->double_speed ? 0x2000u : 0x1000u; /* P12-M4 */
             const int apu_signal_before = (m->divider_counter & tap) != 0u;
             ++m->divider_counter;
@@ -3584,9 +3585,12 @@ static int condition_true(const gbb_instance *m, unsigned condition) {
 
 /* MODEL: BOTH GATE-00 basis="CGB speed selection is gated at execution" */
 static int stop_case(const gbb_instance *m) {
+    /* MODEL: CGB_ONLY GATE-84 GUARD=key1_armed -- armed CGB STOP selects the switch decision table */
     if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB || !(m->key1_armed & 1u)) /* P12-M8 */
         return 0;
+    /* MODEL: UNKNOWN GATE-85 expected-failure:speed-switch-held-button-oracle-only -- armed held-button STOP follows the SameBoy decision */
     const int held = (joypad_value(m) & 0x0Fu) != 0x0Fu; /* P12-M19 */
+    /* MODEL: UNKNOWN GATE-86 expected-failure:speed-switch-pending-irq-oracle-only -- pending-IRQ switch and STOP length interpretation is not independently pinned */
     const int pending = (m->ie & m->interrupt_flags & 0x1Fu) != 0; /* P12-M20 */
     return held ? (pending ? 2 : 1) : (pending ? 3 : 4);
 }
@@ -3862,9 +3866,9 @@ static void execute(gbb_instance *m, uint8_t cost) {
             case 0x32: bus_write(m,hl(m),m->a,8); set_hl(m,(uint16_t)(hl(m)-1)); m->pc++; break;
             case 0x3A: m->a=bus_read(m,hl(m),8); set_hl(m,(uint16_t)(hl(m)-1)); m->pc++; break;
             case 0x08: { uint16_t addr=(uint16_t)(instruction_byte(m,pc,1)|((uint16_t)instruction_byte(m,pc,2)<<8)); bus_write(m,addr,(uint8_t)m->sp,24); bus_write(m,(uint16_t)(addr+1),(uint8_t)(m->sp>>8),32); m->pc+=3; break; }
-            /* MODEL: UNKNOWN GATE-62 research:12 -- STOP, including CGB speed switch */
+            /* MODEL: UNKNOWN GATE-62 research:14 -- STOP on the DMG, compat and unarmed paths */
             case 0x10:
-                /* MODEL: CGB_ONLY GATE-74 GUARD=model_is_cgb -- CGB mode STOP with KEY1 armed requests the speed switch (D-23) */
+                /* MODEL: CGB_ONLY GATE-74 GUARD=model_is_cgb -- CGB mode STOP with KEY1 armed takes the implemented speed-switch path (D-01/D-23) */
                 if (!model_is_cgb(m)) { m->pc=(uint16_t)(pc+2u); m->stopped=1u; break; }
                 switch (stop_case(m)) { /* P12-M33 */
                 case 1: m->pc = (uint16_t)(pc + 2u); m->halted = 1u; break;
@@ -3985,6 +3989,7 @@ static int cpu_stalled(const gbb_instance *m) {
 
 /* MODEL: BOTH GATE-00 basis="normal-speed phase alignment is guarded and a no-op outside CGB mode" */
 static void speed_switch_apply_realign(gbb_instance *m) {
+    /* MODEL: UNKNOWN GATE-89 expected-failure:speed-switch-odd-mode-alignment -- entry into normal speed may land in an unsupported odd PPU mode phase */
     if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB ||
         m->double_speed != 0u || (m->time_half_dots & 7u) != 4u) return; /* P12-M23 */
     m->cpu_stall_kind = GBB_STALL_SWITCH_REALIGN;
@@ -4024,7 +4029,9 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             }
             continue;
         }
+        /* MODEL: CGB_ONLY GATE-87 GUARD=cpu_stalled -- CGB switch pause uses its bounded run-loop stall branch */
         if (cpu_stalled(instance)) {
+            /* MODEL: UNKNOWN GATE-88 expected-failure:speed-switch-wake-oracle-only -- only the IME-on wake has an AGE hardware row */
             const int wake_pending =
                 (instance->ie & instance->interrupt_flags & 0x1Fu) != 0; /* P12-M16 */
             if (instance->cpu_stall_kind == GBB_STALL_SPEED_SWITCH && wake_pending) { /* P12-M13 */
