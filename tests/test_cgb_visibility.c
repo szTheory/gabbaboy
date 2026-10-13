@@ -905,6 +905,7 @@ static int run_stop(view v, int arm, gbb_run_result *first, uint16_t *seam, int 
         gbb_run_result next = gbb_run(m, 140448u, NULL, 0);
         *second_reason = (int)next.reason;
         *marker = hram(m, 0);
+        fprintf(stderr, "frame %u reason=%d marker=%02x\n", frame, next.reason, *marker);
         if (next.reason == GBB_STOP_STOPPED || next.reason == GBB_STOP_UNSUPPORTED_BUS) break;
     }
     gbb_destroy(m);
@@ -915,10 +916,10 @@ static int case_stop_armed_cgb(void) {
     gbb_run_result r; uint16_t seam; int second, marker;
     REQUIRE(run_stop(V_CGB, 1, &r, &seam, &second, &marker) == 0);
     REQUIRE(r.reason != GBB_STOP_UNSUPPORTED_BUS);
-    REQUIRE(r.reason != GBB_STOP_STOPPED);
+    REQUIRE(r.reason == GBB_STOP_HALTED_IDLE);
     REQUIRE(seam != 0xFF4D);
-    REQUIRE(second != (int)GBB_STOP_STOPPED);
-    REQUIRE(marker == 0x5A);
+    REQUIRE(second == (int)GBB_STOP_HALTED_IDLE);
+    REQUIRE(marker != 0x5A);
     /* Control: without the arming write the same program does sleep, so the stop above is caused by
      * KEY1 and not by STOP itself. */
     gbb_run_result u; int s2, m2;

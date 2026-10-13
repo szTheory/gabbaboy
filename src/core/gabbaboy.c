@@ -3582,7 +3582,11 @@ static int condition_true(const gbb_instance *m, unsigned condition) {
 
 /* MODEL: BOTH GATE-00 basis="CGB speed selection is gated at execution" */
 static int stop_case(const gbb_instance *m) {
-    return model_is_cgb(m) && m->exec_mode == GBB_MODE_CGB && (m->key1_armed & 1u) ? 4 : 0;
+    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB || !(m->key1_armed & 1u)) /* P12-M8 */
+        return 0;
+    const int held = (joypad_value(m) & 0x0Fu) != 0x0Fu; /* P12-M19 */
+    const int pending = (m->ie & m->interrupt_flags & 0x1Fu) != 0; /* P12-M20 */
+    return held ? (pending ? 2 : 1) : (pending ? 3 : 4);
 }
 
 /* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
@@ -3618,7 +3622,8 @@ static decoded decode(const gbb_instance *m) {
             return (decoded){1, (uint8_t)((op == 0xC9 || op == 0xD9) ? 32 : 8), 1};
         case 0x10: {
             const int selected = stop_case(m);
-            return (decoded){2, (uint8_t)((selected == 3 || selected == 4)
+            return (decoded){(uint8_t)((selected == 2 || selected == 3) ? 1u : 2u),
+                (uint8_t)((selected == 3 || selected == 4) /* P12-M29 */
                 ? GBB_STOP_SWITCH_COST_HALF_DOTS : 8u), 1};
         }
         case 0x08: return (decoded){3, 40, 1};
@@ -3858,12 +3863,17 @@ static void execute(gbb_instance *m, uint8_t cost) {
             /* MODEL: UNKNOWN GATE-62 research:12 -- STOP, including CGB speed switch */
             case 0x10:
                 /* MODEL: CGB_ONLY GATE-74 GUARD=model_is_cgb -- CGB mode STOP with KEY1 armed requests the speed switch (D-23) */
-                if (model_is_cgb(m) && stop_case(m) == 4) {
+                if (!model_is_cgb(m)) { m->pc=(uint16_t)(pc+2u); m->stopped=1u; break; }
+                switch (stop_case(m)) { /* P12-M33 */
+                case 1: m->pc = (uint16_t)(pc + 2u); m->halted = 1u; break;
+                case 2: m->pc = (uint16_t)(pc + 1u); break;
+                case 3: m->pc = (uint16_t)(pc + 1u); m->stop_switch_pending = 3u; break;
+                case 4:
                     m->pc = (uint16_t)(pc + 2u);
                     m->stop_switch_pending = 4u;
                     break;
+                default: m->pc=(uint16_t)(pc+2u); m->stopped=1u; break;
                 }
-                m->pc=(uint16_t)(pc+2); m->stopped=1; break;
             case 0x07: { uint8_t c=(uint8_t)(m->a>>7); m->a=(uint8_t)((m->a<<1)|c); m->f=c?0x10:0; m->pc++; break; }
             case 0x0F: { uint8_t c=(uint8_t)(m->a&1); m->a=(uint8_t)((m->a>>1)|(c<<7)); m->f=c?0x10:0; m->pc++; break; }
             case 0x17: { uint8_t c=(uint8_t)(m->a>>7), old=(uint8_t)((m->f>>4)&1); m->a=(uint8_t)((m->a<<1)|old); m->f=c?0x10:0; m->pc++; break; }
@@ -4119,14 +4129,17 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
         result.consumed_half_dots += cost;
         diagnostic_commit(instance);
         if (instance->ime_delay != 0 && --instance->ime_delay == 0) instance->ime = 1;
-        if (instance->stop_switch_pending == 4u) {
+        if (instance->stop_switch_pending == 3u || instance->stop_switch_pending == 4u) {
+            const uint8_t switch_case = instance->stop_switch_pending;
             instance->stop_switch_pending = 0u;
-            divider_reset(instance, 1);
+            divider_reset(instance, 1); /* P12-M27 */
             instance->double_speed ^= 1u; /* P12-M11 */
-            instance->key1_armed = 0u;
-            instance->cpu_stall_kind = GBB_STALL_SPEED_SWITCH; /* P12-M5 */
-            instance->cpu_stall_half_dots = GBB_SPEED_SWITCH_STALL_T *
-                (instance->double_speed ? GBB_HALF_DOTS_PER_T_DOUBLE : GBB_HALF_DOTS_PER_T_NORMAL); /* P12-M6 */
+            instance->key1_armed = 0u; /* P12-M10 */
+            if (switch_case == 4u) {
+                instance->cpu_stall_kind = GBB_STALL_SPEED_SWITCH; /* P12-M5 */
+                instance->cpu_stall_half_dots = GBB_SPEED_SWITCH_STALL_T *
+                    (instance->double_speed ? GBB_HALF_DOTS_PER_T_DOUBLE : GBB_HALF_DOTS_PER_T_NORMAL); /* P12-M6 */
+            }
             continue;
         }
         /* MODEL: UNKNOWN GATE-65 research:12 -- DIV reset on STOP */

@@ -1,7 +1,15 @@
 # Phase 12 runtime-mask mutant table. Each id owns one or more exact source
 # anchors. Keep each anchor and replacement in a separate variable because C
 # replacement text may contain semicolons.
-set(GBB_P12_MUTANT_IDS 1 2 3 4 5 7 11 12 14 15 17 18 24 25 26)
+set(GBB_P12_MUTANT_IDS 1 2 3 4 5 7 11 12 14 15 17 18 20 24 25 26 27)
+
+set(GBB_P12_SITES_20 1)
+set(GBB_P12_ANCHOR_20_1 "const int pending = (m->ie & m->interrupt_flags & 0x1Fu) != 0; /* P12-M20 */")
+set(GBB_P12_REPLACEMENT_20_1 "const int pending = GBB_P12_MUT(20) ? 0 : ((m->ie & m->interrupt_flags & 0x1Fu) != 0); /* P12-M20 */")
+
+set(GBB_P12_SITES_27 1)
+set(GBB_P12_ANCHOR_27_1 "divider_reset(instance, 1); /* P12-M27 */")
+set(GBB_P12_REPLACEMENT_27_1 "if (!GBB_P12_MUT(27)) divider_reset(instance, 1); /* P12-M27 */")
 
 set(GBB_P12_SITES_1 1)
 set(GBB_P12_ANCHOR_1_1 "m->ppu_half_phase ^= 1u; /* P12-M1 */")

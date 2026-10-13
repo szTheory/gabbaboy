@@ -2533,6 +2533,12 @@ target_compile_definitions(test_cgb_speed_internal_p12 PRIVATE
 set_target_properties(test_cgb_speed_internal_p12 PROPERTIES C_EXTENSIONS OFF)
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 5 stall_sets_stopped
   cgb_speed_tracer_switch "stopped|GBB_STOP_STOPPED")
+add_test(NAME cgb_speed_stop_cases COMMAND test_cgb_speed_internal_p12 cgb_speed_stop_cases)
+set_tests_properties(cgb_speed_stop_cases PROPERTIES TIMEOUT 60)
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 20 pending_ignored
+  cgb_speed_stop_cases "cpu_stall_kind == GBB_STALL_NONE|machine->double_speed == 1u")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 27 divider_reset_omitted
+  cgb_speed_stop_cases "divider_counter == 0u")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 7 devices_frozen
   cgb_speed_tracer_switch "divider_counter != 0u")
 add_test(NAME cgb_speed_cpu_ticks COMMAND test_cgb_speed_internal_p12 cgb_speed_cpu_ticks)

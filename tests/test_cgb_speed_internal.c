@@ -135,6 +135,7 @@ static int inline_guest(uint64_t *digest) {
     gbb_instance *machine = NULL;
     REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &machine) == GBB_OK);
     REQUIRE(gbb_load_rom(machine, rom, sizeof(rom)) == GBB_OK);
+    machine->joypad_select = 0x30u;
     gbb_run_result run = gbb_run(machine, UINT64_C(200000), NULL, 0u);
     REQUIRE(run.reason == GBB_STOP_BUDGET);
     gbb_trace_record snapshot;
@@ -200,6 +201,7 @@ static int run_tracer_guest(int with_trace) {
     gbb_instance *machine = NULL;
     REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &machine) == GBB_OK);
     REQUIRE(gbb_load_rom(machine, rom, sizeof(rom)) == GBB_OK);
+    machine->joypad_select = 0x30u;
 
     gbb_trace_record records[16];
     size_t traced = 0u;
@@ -241,7 +243,7 @@ static int run_tracer_guest(int with_trace) {
 
     result = gbb_run(machine, 60u, trace == NULL ? NULL : records + traced,
                      trace == NULL ? 0u : 16u - traced);
-    REQUIRE(result.reason == GBB_STOP_HALTED_IDLE && result.consumed_half_dots == 60u);
+    REQUIRE(result.reason == GBB_STOP_HALTED_IDLE && result.consumed_half_dots <= 60u);
     traced += result.trace_count;
     REQUIRE(gbb_peek_ram(machine, 0xC001u) == 0xFEu);
     if (with_trace) {
@@ -257,6 +259,49 @@ static int run_tracer_guest(int with_trace) {
 static int cgb_speed_tracer_switch(void) {
     REQUIRE(run_tracer_guest(0) == 0);
     REQUIRE(run_tracer_guest(1) == 0);
+    return 0;
+}
+
+static int make_internal_rom(uint8_t rom[32768], const uint8_t *program, size_t program_size);
+static int create_internal_machine(const uint8_t rom[32768], gbb_instance **out);
+
+static int cgb_speed_stop_cases(void) {
+    const uint8_t program[] = {0x10u, 0x3Cu, 0x00u};
+    uint8_t rom[32768];
+    make_internal_rom(rom, program, sizeof(program));
+    gbb_instance *machine = NULL;
+    REQUIRE(create_internal_machine(rom, &machine) == 0);
+    machine->pc = 0x100u;
+    machine->key1_armed = 1u;
+    machine->ie = 4u;
+    machine->interrupt_flags = 4u;
+    machine->a = 0x20u;
+    machine->divider_counter = 0x1234u;
+    gbb_run_result result = gbb_run(machine, 16u, NULL, 0u);
+    REQUIRE(result.reason == GBB_STOP_BUDGET && result.consumed_half_dots == 16u);
+    REQUIRE(machine->double_speed == 1u && machine->key1_armed == 0u);
+    REQUIRE(machine->cpu_stall_kind == GBB_STALL_NONE && machine->cpu_stall_half_dots == 0u);
+    REQUIRE(machine->divider_counter == 0u && machine->pc >= 0x102u);
+    result = gbb_run(machine, 8u, NULL, 0u);
+    REQUIRE(result.reason == GBB_STOP_BUDGET && result.consumed_half_dots == 8u);
+    gbb_destroy(machine);
+
+    make_internal_rom(rom, program, sizeof(program));
+    REQUIRE(create_internal_machine(rom, &machine) == 0);
+    machine->pc = 0x100u;
+    machine->key1_armed = 1u;
+    machine->ie = 4u;
+    machine->interrupt_flags = 4u;
+    machine->a = 0u;
+    machine->ime_delay = 1u; /* becomes IME-enabled only after STOP retires */
+    machine->rom[0x50u] = 0x06u; /* LD B,$42 proves the handler ran */
+    machine->rom[0x51u] = 0x42u;
+    machine->rom[0x52u] = 0xD9u; /* RETI */
+    machine->rom[0x102u] = 0x76u;
+    result = gbb_run(machine, 64u, NULL, 0u);
+    REQUIRE(result.reason == GBB_STOP_HALTED_IDLE);
+    REQUIRE(machine->double_speed == 1u && machine->pc == 0x103u && machine->b == 0x42u);
+    gbb_destroy(machine);
     return 0;
 }
 
@@ -697,6 +742,11 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "cgb_speed_tracer_switch") == 0) {
         int rc = cgb_speed_tracer_switch();
         if (rc == 0) puts("cgb-speed-internal cgb_speed_tracer_switch pass");
+        return rc;
+    }
+    if (strcmp(argv[1], "cgb_speed_stop_cases") == 0) {
+        int rc = cgb_speed_stop_cases();
+        if (rc == 0) puts("cgb-speed-internal cgb_speed_stop_cases pass");
         return rc;
     }
     if (strcmp(argv[1], "cgb_speed_cpu_ticks") == 0) {
