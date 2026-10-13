@@ -4,16 +4,16 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_plan: 15
 status: planning
-stopped_at: Completed 11-14-PLAN.md
-last_updated: "2026-10-13T04:21:15.835Z"
+stopped_at: Completed 11-15-PLAN.md
+last_updated: "2026-10-13T04:29:43.341Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 11 execution started
-state_head: 624ef7bb7aaab099b8dcb16a75f9d418aaa46848
+state_head: f224ae17449f1d869e02847829f935ede49719d3
 progress:
   total_phases: 9
   completed_phases: 5
   total_plans: 80
-  completed_plans: 79
+  completed_plans: 80
   percent: 56
 current_phase: 11
 current_phase_name: CGB Colour Rendering and Player Colour
@@ -189,6 +189,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 11 P12 | 50min | 2 tasks | 11 files |
 | Phase 11 P13 | 25min | 2 tasks | 9 files |
 | Phase 11 P14 | 40 min | 3 tasks | 11 files |
+| Phase 11 P15 | 25 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -391,9 +392,9 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-13T04:21:15.777Z
-Stopped at: Completed 11-14-PLAN.md
-Resume file: None
+Last session: 2026-10-13T04:29:43.285Z
+Stopped at: Completed 11-15-PLAN.md
+Resume file: .planning/.continue-here.md
 Next command in fresh context: `/gsd-verify-work 11`
 
 Completed workflow stage: **Phase 11 - CGB Colour Rendering and Player Colour, execution** (2026-10-13), plans 11-01..11-15 on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`. Last code head `2c4ac09`; local `phase1` suite 684 of 684 passed (macOS arm64) and `baseline status=pass`. Hosted CI and fixture-repro run IDs, the PR and the execute-phase tail (code review, validation, verifier) belong to the orchestrator and are not recorded here; `phase1-asan` cannot run on macOS, so the sanitizer leg is hosted only (see LESSONS GB-CGB-002). Durable memory: DECISIONS D-076..D-083 (Phase 11 D-15, D-17a, D-08, D-26, D-18, D-21, D-24, D-09), the INDEX Phase 11 bullet, LESSONS GB-CGB-002..006 and the phase COVERAGE.md no-external-API declaration (api-coverage verify:pre passes). Deviation for VERIFICATION (D-20): AGE has no CGB colour, attribute or priority ROM, so criterion 1 rests on the generated truth table, three MagenTests ROMs and original fixtures; AGE mode-3 cases are expected-unsupported (D-09, Phase 14). Owner veto items: D-15, D-17a, D-18, D-26, D-08, D-21, D-24. Phase 11 is not verified and not merged. **Next step: Phase 11 verification. Next command in fresh context: `/gsd-verify-work 11`.** Following phase (named, not started): **Phase 12: CGB Double Speed**, entered with `/gsd-discuss-phase 12` (no Phase 12 CONTEXT.md exists) only after verification passes and the owner chooses to continue. Both `workflow.auto_advance` and `workflow._auto_chain_active` stay false; nothing advances automatically.
