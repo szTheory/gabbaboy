@@ -314,11 +314,11 @@ Plans:
   3. Partitioned runs (run N, stop, run M) equal one run of N+M across a speed switch and stall, and unresearched pause behaviors are recorded as named expected failures.
 
 **Research**: DEEP (interrupts, DIV and PPU during the pause; applicable test list).
-**Plans**: 19 plans
+**Plans**: 1/19 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 12-01-PLAN.md — tracer: pre-change identity pin, KEY1 arm + STOP switch with persisted stall, cpu_ticks sites, D-13 trace rule
+- [x] 12-01-PLAN.md — tracer: pre-change identity pin, KEY1 arm + STOP switch with persisted stall, cpu_ticks sites, D-13 trace rule
 - [ ] 12-02-PLAN.md — AGE vendoring part 1: rights/provenance, manifest-driven rebuild script with offline negative controls, spsw-div ROM, fixture-repro step
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -420,7 +420,7 @@ Plans:
 | 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 18/18 | Complete    | 2026-10-11 |
 | 10. CGB Profile, Banking and Register Visibility | v0.2 | 20/20 | Complete    | 2026-10-12 |
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 15/15 | Complete    | 2026-10-13 |
-| 12. CGB Double Speed | v0.2 | 0/TBD | Not started | - |
+| 12. CGB Double Speed | v0.2 | 1/19 | In Progress | - |
 | 13. CGB HDMA | v0.2 | 0/TBD | Not started | - |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 0/TBD | Not started | - |
 | 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 0/TBD | Not started | - |

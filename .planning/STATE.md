@@ -2,21 +2,21 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: Not started
-status: planning
-stopped_at: Phase 12 planned (19 plans, 16 waves); next /gsd-execute-phase 12
-last_updated: "2026-10-13T16:39:26.660Z"
+current_plan: 2
+status: executing
+stopped_at: Completed 12-01-PLAN.md
+last_updated: "2026-10-13T16:58:44.566Z"
 last_activity: 2026-10-13
-last_activity_desc: Phase 12 planning complete; research, validation, 19 plans, checker passed on iteration 2
-state_head: 0ac4528282a81ec4e70d52ec81a77148eb797582
+last_activity_desc: Phase GB-12 execution started
+state_head: 43114cb3f7987d4da95369843cfbcab67658e210
 progress:
   total_phases: 9
   completed_phases: 6
   total_plans: 99
-  completed_plans: 80
+  completed_plans: 81
   percent: 67
-current_phase_name: CGB Double Speed
 current_phase: 12
+current_phase_name: CGB Double Speed
 ---
 
 # Project State
@@ -26,11 +26,11 @@ current_phase: 12
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 12 — CGB Double Speed
+**Current focus:** Phase GB-12 — CGB Double Speed
 
 ## Current Position
 
-Current Plan: Not started
+Current Plan: 2
 Total Plans in Phase: 19
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -40,8 +40,8 @@ Verified: Phase 10 `/gsd-verify-work 10` passed 2026-10-12 — 12/12 UAT items a
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, planning (11-RESEARCH, 11-PATTERNS, 11-VALIDATION, plans 11-01..11-15) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, execution (plans 11-01..11-15) plus the execute-phase tail; gsd-verifier `passed` 3/3 (11-VERIFICATION.md); evidence head `fb7d14c` exact-head green; PR #67 open, not merged
 Verified: Phase 11 `/gsd-verify-work 11` passed 2026-10-13 — 11/11 UAT rows automated covering all 91 SUMMARY coverage entries (11-UAT.md); verification `passed` (11-VERIFICATION.md); hosted ASan timeout fixed in the PR (LESSONS GB-CI-004); PR #67 squash-merges at the exact-head green branch head (pre-authorized)
-Next step: Phase 12 - CGB Double Speed execution via `/gsd-execute-phase 12`; the owner chooses when
-Last activity: 2026-10-13 — Phase 11 verify-work passed; exact-head CI green at 4811033
+Next step: Continue Phase 12 - CGB Double Speed execution at plan 12-02 via `/gsd-execute-phase 12`; stop after the phase and wait for the owner
+Last activity: 2026-10-13 — Phase GB-12 execution started
 
 Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 
@@ -192,6 +192,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 11 P13 | 25min | 2 tasks | 9 files |
 | Phase 11 P14 | 40 min | 3 tasks | 11 files |
 | Phase 11 P15 | 25 min | 2 tasks | 6 files |
+| Phase 12 P01 | 10 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -359,6 +360,9 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 11]: 11-12: select_profile seam player_session_probe_profile serves the three session sites; CGB smoke pins the uploaded RGBA digest plus 40 independently computed spot pixels
 - [Phase 11]: D-04: no per-dot model hoist; the D-22 trigger did not fire (DMG median 98.5 to 100.2 percent of the Phase 10 head, margins 1.5 to 1.9)
 - [Phase 11]: D-32: ten PPU timing gates re-assigned research:14; model_gates_no_phase11_rows guards against a returning Phase 11 owner tag
+- [Phase 12]: Recorded eight pre-change CGB single-speed identity digests at fb45111; regression pins are not hardware evidence.
+- [Phase 12]: Keep speed state private to the core test seam; no public header or API symbol changes.
+- [Phase 12]: Model STOP's 2 M cost in normal-speed half-dots and apply the speed shift once in instruction_cost.
 
 ### Pending Todos
 
@@ -394,10 +398,12 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-13T04:29:43.285Z
-Stopped at: Phase 12 context gathered, ready to plan Phase 12
-Resume file: .planning/.continue-here.md
+Last session: 2026-10-13T16:58:44.486Z
+Stopped at: Completed 12-01-PLAN.md
+Resume file: None
 Next command in fresh context: `/gsd-execute-phase 12`
+
+OpenGSD settings (2026-10-13): switched the project runtime from `claude` to `codex` for current development. Profile `adaptive`; heavy (`opus`) uses `gpt-6-sol`, medium (`sonnet`) and light (`haiku`) use `gpt-6-luna`; reasoning effort is `medium` for all three. Project pins take precedence over machine-wide defaults. Completed workflow stage: **Phase GB-12 plan 12-01 execution** (2026-10-13), with task commits `9dfc604` and `43114cb`; the phase remains in progress. Next: **Phase 12 - CGB Double Speed execution, plan 12-02 onward**, via **`/gsd-execute-phase 12`**. Both auto-advance flags stay false; stop after Phase 12 and wait for the owner.
 
 Completed workflow stage: **Phase 12 - CGB Double Speed, planning** (2026-10-13) on branch `gsd/phase-12-cgb-double-speed`. 12-RESEARCH.md (code map, test infrastructure map, AGE measurements on a scratch prototype, validation architecture), 12-PATTERNS.md, 12-VALIDATION.md and plans 12-01..12-19 in 16 waves (mostly serial because plans share `src/core/gabbaboy.c`, `tests/CMakeLists.txt` and `tests/expected-tests.txt`; AGE vendoring 12-02/12-04 runs beside the core track). Research evidence amended CONTEXT with D-37..D-45, auto-followed: stall constant `GBB_SPEED_SWITCH_STALL_T` = 0x20004 (the literal 0x20008 fails AGE `spsw-div`; measured pass window [0x20004,0x20007]); this value is provisional until plan 12-09 re-measures the window on the committed core, before any constant-derived pin, and stops for the owner if no M-aligned value fits. Also: a switching STOP costs 2 M; `divider_reset(m, clock_apu_edge)` keeps DMG STOP byte-identical; the headroom pre-check runs before mutation; the player claim text drops "double speed" (runtime logic unchanged); installed consumers use inline guests; a fuzz dictionary; only `spsw-div`/`spsw-stop-prefetch` are expected to pass, the rest are pinned dispositions; identity pins are recorded before any core edit. Plan checker iteration 1: 4 blockers (D-37 ordering, D-26 real-stall end window, D-24 pins tied to tests, unresolved research questions) and 8 warnings, all fixed in 0ac4528. Iteration 2: 0 blockers; the one warning (12-04 file count, 12 vendored binary ROMs) was accepted with a recorded rationale. Coverage: CGB-06 in 19/19 plans, decisions 45/45, every plan within the token budget. Owner veto window: D-05/D-37 stall constant, D-02/D-08 SameBoy hostile cases, D-19 AGE vendoring, D-14 no getter, D-09 realignment, D-02 case 1 held-button HALT, D-12 Phase 14 deferrals, D-26 sweep, D-38 2 M switch cost, D-41 public claim edit. Execution preconditions: network for the pinned RGBDS 1.0.1 archive and the AGE commit `1f5bc10e`, gh access and exact-head CI. **Next step: Phase 12 execution. Next command in fresh context: `/gsd-execute-phase 12`.** Both auto-advance flags stay false; nothing advances automatically.
 
@@ -483,6 +489,7 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Phase 10 (CGB Profile, Banking and Register Visibility) is executed and verified (`/gsd-verify-work 10` passed, 12/12 automated). PR #66 squash-merges at its exact-head green head.
-- The owner chooses when to start Phase 11 - CGB Colour Rendering and Player Colour: `/gsd-discuss-phase 11`.
+- Completed workflow stage: **Phase 12 - CGB Double Speed, planning** (19 plans in 16 waves).
+- OpenGSD development now uses the project's Codex `adaptive` model profile.
+- Next phase step: **Phase 12 - CGB Double Speed, execution** via **`/gsd-execute-phase 12`**, when the owner chooses to continue.
 - Phase-stop rule: stop after each phase and yield; never auto-advance into the next phase or milestone.
