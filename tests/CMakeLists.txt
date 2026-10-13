@@ -2827,12 +2827,20 @@ endif()
 string(REPLACE "$" "0x" GBB_AGE_SPSW_RESULTS_HEX "${GBB_AGE_SPSW_RESULTS}")
 string(REPLACE "$" "0x" GBB_AGE_SPSW_EXPECTED_HEX "${GBB_AGE_SPSW_EXPECTED}")
 set(GBB_AGE_SPSW_ROM "${PROJECT_SOURCE_DIR}/fixtures/age/spsw-div-cgbBCE.gb")
+set(GBB_AGE_SPSW_TIMEOUT 120)
+set(GBB_AGE_TIMEOUT_CONTROL_TIMEOUT 30)
+set(GBB_AGE_STALL_WINDOW_TIMEOUT 240)
+if(GABBABOY_ENABLE_SANITIZERS)
+  math(EXPR GBB_AGE_SPSW_TIMEOUT "${GBB_AGE_SPSW_TIMEOUT} * 3")
+  math(EXPR GBB_AGE_TIMEOUT_CONTROL_TIMEOUT "${GBB_AGE_TIMEOUT_CONTROL_TIMEOUT} * 3")
+  math(EXPR GBB_AGE_STALL_WINDOW_TIMEOUT "${GBB_AGE_STALL_WINDOW_TIMEOUT} * 3")
+endif()
 add_test(NAME age_spsw_div_cgbBCE
   COMMAND test_age "${GBB_AGE_SPSW_ROM}" "${GBB_AGE_SPSW_RESULTS_HEX}"
     "${GBB_AGE_SPSW_EXPECTED_HEX}" "${GBB_AGE_SPSW_ROWS}"
     "${GBB_AGE_SPSW_BUDGET}" --check-disposition pass)
 set_tests_properties(age_spsw_div_cgbBCE PROPERTIES
-  PASS_REGULAR_EXPRESSION "age verdict=pass rows_ok=5/5" TIMEOUT 120)
+  PASS_REGULAR_EXPRESSION "age verdict=pass rows_ok=5/5" TIMEOUT ${GBB_AGE_SPSW_TIMEOUT})
 
 # Negative control: one half-dot cannot reach an executed verdict and must report timeout distinctly.
 add_test(NAME age_spsw_div_cgbBCE_timeout
@@ -2841,7 +2849,51 @@ add_test(NAME age_spsw_div_cgbBCE_timeout
     -DGBB_EXPECT_CODE=3
     "-DGBB_EXPECT_REGEX=age-timeout half_dots="
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
-set_tests_properties(age_spsw_div_cgbBCE_timeout PROPERTIES TIMEOUT 30)
+set_tests_properties(age_spsw_div_cgbBCE_timeout PROPERTIES TIMEOUT ${GBB_AGE_TIMEOUT_CONTROL_TIMEOUT})
+
+# Mutant core build 3 of at most 6; the later AGE disposition and sensitivity plans reuse this library.
+set(GBB_P12_PUBLIC_MUTANT_CORE "${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_p12_public_mutants.c")
+gbb_p12_make_mutant_core("${GBB_P12_PUBLIC_MUTANT_CORE}" 0)
+add_library(gabbaboy_core_p12_mutants STATIC "${GBB_P12_PUBLIC_MUTANT_CORE}")
+target_include_directories(gabbaboy_core_p12_mutants
+  PUBLIC "${PROJECT_SOURCE_DIR}/include"
+  PRIVATE "${PROJECT_SOURCE_DIR}/src/core")
+target_compile_features(gabbaboy_core_p12_mutants PUBLIC c_std_17)
+set_target_properties(gabbaboy_core_p12_mutants PROPERTIES C_EXTENSIONS OFF)
+target_compile_definitions(gabbaboy_core_p12_mutants PRIVATE
+  GBB_BUILD_REVISION="p12-public-mutant-3" GBB_BUILD_QUALIFIED=0)
+
+add_executable(test_age_p12 test_age.c)
+target_include_directories(test_age_p12 PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_age_p12 PRIVATE c_std_17)
+target_compile_definitions(test_age_p12 PRIVATE GBB_AGE_P12=1)
+target_link_libraries(test_age_p12 PRIVATE gabbaboy_core_p12_mutants gabbaboy_accept)
+set_target_properties(test_age_p12 PROPERTIES C_EXTENSIONS OFF)
+
+file(STRINGS "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c" GBB_P12_STALL_DEFINE
+  REGEX "^#define GBB_SPEED_SWITCH_STALL_T 0x[0-9A-Fa-f]+u$")
+list(LENGTH GBB_P12_STALL_DEFINE GBB_P12_STALL_DEFINE_COUNT)
+if(NOT GBB_P12_STALL_DEFINE_COUNT EQUAL 1)
+  message(FATAL_ERROR "GBB_SPEED_SWITCH_STALL_T must have exactly one hexadecimal definition")
+endif()
+list(GET GBB_P12_STALL_DEFINE 0 GBB_P12_STALL_DEFINE_LINE)
+string(REGEX MATCH "0x[0-9A-Fa-f]+" GBB_P12_STALL_T_HEX "${GBB_P12_STALL_DEFINE_LINE}")
+if(NOT GBB_P12_STALL_T_HEX)
+  message(FATAL_ERROR "GBB_SPEED_SWITCH_STALL_T could not be parsed from its source definition")
+endif()
+
+# The current bounds are provisional research values; Task 2's committed-core run confirms or re-pins them.
+set(GBB_P12_AGE_STALL_WINDOW "0x20004;0x20007")
+list(GET GBB_P12_AGE_STALL_WINDOW 0 GBB_P12_AGE_STALL_WINDOW_LO)
+list(GET GBB_P12_AGE_STALL_WINDOW 1 GBB_P12_AGE_STALL_WINDOW_HI)
+add_test(NAME age_stall_window
+  COMMAND test_age_p12 "${GBB_AGE_SPSW_ROM}" "${GBB_AGE_SPSW_RESULTS_HEX}"
+    "${GBB_AGE_SPSW_EXPECTED_HEX}" "${GBB_AGE_SPSW_ROWS}"
+    "${GBB_AGE_SPSW_BUDGET}" --stall-window "${GBB_P12_STALL_T_HEX}"
+    "${GBB_P12_AGE_STALL_WINDOW_LO}" "${GBB_P12_AGE_STALL_WINDOW_HI}")
+set_tests_properties(age_stall_window PROPERTIES
+  PASS_REGULAR_EXPRESSION "age-stall-window pass window=\\[${GBB_P12_AGE_STALL_WINDOW_LO},${GBB_P12_AGE_STALL_WINDOW_HI}\\] constant=${GBB_P12_STALL_T_HEX}"
+  TIMEOUT ${GBB_AGE_STALL_WINDOW_TIMEOUT})
 # --- Phase 12 plan 12-09 end ---
 
 gabbaboy_verify_registered_tests()

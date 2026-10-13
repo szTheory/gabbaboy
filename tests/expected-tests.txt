@@ -817,3 +817,4 @@ cgb_speed_profile_contract
 cgb_speed_profile_contract_missing_selftest
 age_spsw_div_cgbBCE
 age_spsw_div_cgbBCE_timeout
+age_stall_window

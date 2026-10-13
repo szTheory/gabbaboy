@@ -399,7 +399,7 @@ int main(int argc, char **argv) {
                    observed_pass[2] ? "pass" : "fail", observed_pass[3] ? "pass" : "fail");
             return 1;
         }
-        printf("age-stall-window pass window=[%" PRIx64 ",%" PRIx64 "] constant=%" PRIx64 "\n",
+        printf("age-stall-window pass window=[0x%" PRIx64 ",0x%" PRIx64 "] constant=0x%" PRIx64 "\n",
                (uint64_t)window_lo, (uint64_t)window_hi, (uint64_t)window_constant);
         return 0;
 #endif
