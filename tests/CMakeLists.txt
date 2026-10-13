@@ -3049,4 +3049,17 @@ add_test(NAME cgb_speed_expectations_hostile_tampered
 set_tests_properties(cgb_speed_expectations_hostile_tampered PROPERTIES TIMEOUT 60)
 # --- Phase 12 plan 12-11 end ---
 
+# --- Phase 12 plan 12-13 begin ---
+# Offline controls prove manifest-driven fixture rebuild errors stay distinct from byte differences.
+if(NOT WIN32)
+  find_program(GBB_BASH_CGB_REPRO bash REQUIRED)
+  foreach(gbb_repro_case tool_failure missing_pin)
+    string(REPLACE "_" "-" gbb_repro_arg "${gbb_repro_case}")
+    add_test(NAME cgb_speed_repro_${gbb_repro_case}
+      COMMAND ${GBB_BASH_CGB_REPRO} ${PROJECT_SOURCE_DIR}/tests/scripts/test-reproduce-cgb-speed.sh ${gbb_repro_arg})
+    set_tests_properties(cgb_speed_repro_${gbb_repro_case} PROPERTIES TIMEOUT 60)
+  endforeach()
+endif()
+# --- Phase 12 plan 12-13 end ---
+
 gabbaboy_verify_registered_tests()

@@ -17,7 +17,8 @@ function(gabbaboy_verify_registered_tests)
     # The A/B benchmark harness is a bash script (Plan 10-17).
     list(REMOVE_ITEM expected_tests cgb_bench_ab_selftest cgb_bench_ab_wrong_digest
       cgb_bench_ab_missing_field cgb_bench_ab_missing_elapsed cgb_mooneye_repro_requires_manifest
-      cgb_colour_repro_tool_failure cgb_colour_repro_missing_pin)
+      cgb_colour_repro_tool_failure cgb_colour_repro_missing_pin
+      cgb_speed_repro_tool_failure cgb_speed_repro_missing_pin)
   endif()
   list(SORT expected_tests)
   if(NOT registered_tests STREQUAL expected_tests)
