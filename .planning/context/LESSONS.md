@@ -586,3 +586,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** `cgb_colour_mutant_frame_resolve` with its control, `cgb_priority_mutant_compat_bg_set_for_objects`, `cgb_tables_compat_palette_mutated_doc`.
 - **Source:** Phase 11 plans 11-05 to 11-12.
 - **Status:** Adopted.
+
+### GB-CGB-007 / 2026-10-13 / A bash-only test must be excluded in two places, or the Windows inventory fails
+
+- **Cause and evidence:** `cmake/ExpectedTests.cmake` leaves bash-only tests unregistered on Windows, but `.github/scripts/verify-test-inventory.sh` keeps its own Windows exclusion list. Phase 10 (`cgb_mooneye_repro_requires_manifest`) and Phase 11 (`cgb_colour_repro_tool_failure`, `cgb_colour_repro_missing_pin`, added by a review fix) each failed native-windows-x64 at the exact PR head with an inventory diff. Every other leg was green, and the package smokes failed only because they wait on that CI run.
+- **Remedy:** When a test is registered only on non-Windows hosts, add it to both lists in the same commit. Grep `verify-test-inventory.sh` whenever `ExpectedTests.cmake` gains a Windows-only exclusion.
+- **Applies when:** Adding any bash-only or POSIX-only CTest, especially late in a phase (review fixes) after the last hosted run.
+- **Verification:** native-windows-x64 green at fb7d14c (ci run 38355327717).
+- **Source:** Phase 11 execute-phase tail, PR #67.
+- **Status:** Adopted.

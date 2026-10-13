@@ -53,6 +53,8 @@ Engineering close-out:
 
 ### Verification
 
+Evidence head: `fb7d14c` (pull_request-event runs: [ci 38355327717](https://github.com/szTheory/gabbaboy/actions/runs/38355327717), [fixture-repro 38355327835](https://github.com/szTheory/gabbaboy/actions/runs/38355327835), [preview-package-smoke 38355327755](https://github.com/szTheory/gabbaboy/actions/runs/38355327755)). Exact-head required checks all success: native-linux-x64, native-macos-arm64, native-windows-x64, linux-asan-ubsan, cmake-floor-3.25.3, player-gate, macos-player-package, required-native.
+
 The execute-phase tail ran these gates:
 - **Nyquist validation:** `validated`, `nyquist_compliant: true`; all 25 rows are automated.
 - **Security:** 43/43 threats closed, `threats_open: 0` (`11-SECURITY.md`).
@@ -60,9 +62,10 @@ The execute-phase tail ran these gates:
 - **Regression gate:** 689/689 CTest and `baseline status=pass`. The macOS player package gate passed (93/93 player tests).
 - **gsd-verifier:** `passed`, 3/3 (`11-VERIFICATION.md`).
 
-Two CI defects were found on the pushed branch and fixed in this PR:
+Three CI and tracking defects were found on the pushed branch and fixed in this PR:
 - **LeakSanitizer exit codes.** Deliberately failing mutant tests return early from a `REQUIRE`, and LeakSanitizer replaced their expected exit 1 with its own code. Leak detection is now off for the failing mutant run only; it stays on for the controls.
 - **CGB-04 marked complete too early.** A plan executor marked CGB-04 complete before the phase finished; this was reverted until phase completion.
+- **Windows test inventory.** Two bash-only repro guards added by a review fix were not excluded from the Windows inventory (fb7d14c).
 
 ### Deferred and limitations
 
