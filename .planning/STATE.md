@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 11
+current_plan: 12
 status: executing
-stopped_at: Completed GB-12-10-PLAN.md
-last_updated: "2026-10-13T22:35:01.348Z"
+stopped_at: Completed GB-12 plan 12-11; next plan is 12-12
+last_updated: "2026-10-13T23:24:03.323Z"
 last_activity: 2026-10-13
-last_activity_desc: Phase GB-12 plan 12-10 execution completed
-state_head: 6fcd930610049452fb83e5aa7981fc194fd340c6
+last_activity_desc: Phase GB-12 plan 12-11 execution completed
+state_head: dbc9bd5f14ab23c244f1b180f1a13e4983741d20
 progress:
   total_phases: 9
   completed_phases: 6
   total_plans: 99
-  completed_plans: 90
+  completed_plans: 91
   percent: 67
 current_phase: 12
 current_phase_name: CGB Double Speed
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 11
+Current Plan: 12
 Total Plans in Phase: 19
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -40,10 +40,10 @@ Verified: Phase 10 `/gsd-verify-work 10` passed 2026-10-12 — 12/12 UAT items a
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, planning (11-RESEARCH, 11-PATTERNS, 11-VALIDATION, plans 11-01..11-15) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, execution (plans 11-01..11-15) plus the execute-phase tail; gsd-verifier `passed` 3/3 (11-VERIFICATION.md); evidence head `fb7d14c` exact-head green; PR #67 open, not merged
 Verified: Phase 11 `/gsd-verify-work 11` passed 2026-10-13 — 11/11 UAT rows automated covering all 91 SUMMARY coverage entries (11-UAT.md); verification `passed` (11-VERIFICATION.md); hosted ASan timeout fixed in the PR (LESSONS GB-CI-004); PR #67 squash-merges at the exact-head green branch head (pre-authorized)
-Completed workflow stage: **Phase GB-12 plan 12-10 execution** (2026-10-13), summary phases/GB-12-cgb-double-speed/12-10-SUMMARY.md. The original speed fixture and independent expectation controls pass; public PCM/frame pins detect M17/M1. Full configured CTest inventory passed 831/831. This is pinned author-attested software evidence, not a physical-hardware result. Phase 12 remains in progress.
-Next plan: **GB-12 plan 12-11 — hostile pre-switch entry points (selector byte) with rule-derived outcomes**. The next phase after Phase 12 is **Phase 13 — CGB HDMA** (not started).
-Next command: **/gsd-execute-phase 12** (resumes at plan 12-11). Auto-advance remains disabled; stop after Phase 12 and wait for the owner.
-Last activity: 2026-10-13 — Phase GB-12 plan 12-10 execution completed
+Completed workflow stage: **Phase GB-12 plan 12-11 execution** (2026-10-13), summary [12-11-SUMMARY.md](phases/GB-12-cgb-double-speed/12-11-SUMMARY.md). The hostile selector suite and tampered-outcome control pass; the full configured CTest inventory passed 833/833. This is pinned author-attested software evidence, not a physical-hardware result. Phase 12 remains in progress.
+Next plan: **GB-12 plan 12-12 — player speed smoke, claims edit, installed consumer speed guests with an unarmed-twin negative**. The next phase after Phase 12 is **Phase 13 — CGB HDMA** (not started).
+Next command: **/gsd-execute-phase 12** (resumes at plan 12-12). Auto-advance remains disabled; stop after Phase 12 and wait for the owner.
+Last activity: 2026-10-13 — Phase GB-12 plan 12-11 execution completed
 
 Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 
@@ -204,6 +204,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase GB-12 P08 | 9m 25s | 3 tasks | 6 files |
 | Phase GB-12 P09 | Not captured (task commits span 4m 08s) | 3 tasks | 6 files |
 | Phase GB-12 P10 | 13m+ lower bound | 3 tasks | 11 files |
+| Phase GB-12 P11 | >=42min lower bound | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -391,6 +392,9 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-12]: Plan 12-10: derive timing bounds from clock units and measured guest-loop resolution, never from fitted emulator outputs.
 - [Phase GB-12]: Plan 12-10: start the OAM DMA straddle in VBlank and read at M+159/M+161 to isolate DMA from PPU OAM arbitration.
 - [Phase GB-12]: Plan 12-10: pin audio and frame digests through public APIs with M17/M1 mutant failures and mask-zero controls.
+- [Phase GB-12]: Use a separate selector guest for hostile STOP paths; keep speed.gb, its digest, and identity pins unchanged.
+- [Phase GB-12]: Derive hostile timing intervals from D-02/D-08, 912 master half-dots per line, D-09 realignment, and the locked 0x20004 T stall.
+- [Phase GB-12]: Capture pending IF before disarming IE/IF for the guest idle loop.
 
 ### Pending Todos
 
@@ -426,12 +430,12 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-13T22:34:14.052Z
-Stopped at: Completed GB-12-10-PLAN.md
-Resume file: None
-Completed workflow stage: **Phase GB-12 plan 12-09 execution** (2026-10-13), summary [12-09-SUMMARY.md](phases/GB-12-cgb-double-speed/12-09-SUMMARY.md), on branch `gsd/phase-12-cgb-double-speed`. The measured committed-core AGE window is `[0x20004, 0x20007]` T; `GBB_SPEED_SWITCH_STALL_T` remains `0x20004`, with a 46,000,000-half-dot budget. Focused gates and full local CTest passed (820/820). This is pinned software-corpus evidence; no physical-hardware claim is made. Phase 12 remains in progress.
-Next plan: **GB-12 plan 12-10 — original CGB speed probe fixture and independently derived expectations**, documented in `phases/GB-12-cgb-double-speed/12-10-PLAN.md`.
-Next command in fresh context: **`/gsd-execute-phase 12`** (resumes at 12-10). The next phase after the remaining Phase 12 plans is **Phase 13 — CGB HDMA**; it is not started. Stop after Phase 12 and wait for the owner; both auto-advance flags remain false.
+Last session: 2026-10-13T23:24:03.178Z
+Stopped at: Completed GB-12 plan 12-11; next plan is 12-12
+Resume file: .planning/phases/GB-12-cgb-double-speed/12-12-PLAN.md
+Completed workflow stage: **Phase GB-12 plan 12-11 execution** (2026-10-13), summary [12-11-SUMMARY.md](phases/GB-12-cgb-double-speed/12-11-SUMMARY.md), on branch `gsd/phase-12-cgb-double-speed`. The hostile fixture has eight rule-checked entries, selectors 0 and 9 marker checks, and a tampered-outcome negative control. Focused CTest passed 13/13 and full local CTest passed 833/833. This is pinned author-attested software evidence; no physical-hardware claim is made. Phase 12 remains in progress.
+Next plan: **GB-12 plan 12-12 — player speed smoke, claims edit, installed consumer speed guests with an unarmed-twin negative**, documented in `phases/GB-12-cgb-double-speed/12-12-PLAN.md`.
+Next command in fresh context: **`/gsd-execute-phase 12`** (resumes at 12-12). The next phase after the remaining Phase 12 plans is **Phase 13 — CGB HDMA**; it is not started. Stop after Phase 12 and wait for the owner; both auto-advance flags remain false.
 
 OpenGSD settings (2026-10-13): switched the project runtime from `claude` to `codex` for current development. Profile `adaptive`; heavy (`opus`) uses `gpt-6-sol`, medium (`sonnet`) and light (`haiku`) use `gpt-6-luna`; reasoning effort is `medium` for all three. Project pins take precedence over machine-wide defaults. Completed workflow stage: **Phase GB-12 plan 12-01 execution** (2026-10-13), with task commits `9dfc604` and `43114cb`; the phase remains in progress. Next: **Phase 12 - CGB Double Speed execution, plan 12-02 onward**, via **`/gsd-execute-phase 12`**. Both auto-advance flags stay false; stop after Phase 12 and wait for the owner.
 
@@ -519,8 +523,8 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Completed workflow stage: **Phase GB-12 plan 12-10 execution**; Phase 12 remains in progress.
+- Completed workflow stage: **Phase GB-12 plan 12-11 execution**; Phase 12 remains in progress.
 - OpenGSD development uses the project's Codex `adaptive` model profile.
-- Next plan: **GB-12 plan 12-11 — hostile pre-switch entry points (selector byte) with rule-derived outcomes**, via **`/gsd-execute-phase 12`** (resumes at 12-11).
+- Next plan: **GB-12 plan 12-12 — player speed smoke, claims edit, installed consumer speed guests with an unarmed-twin negative**, via **`/gsd-execute-phase 12`** (resumes at 12-12).
 - Next phase after Phase 12: **Phase 13 — CGB HDMA** (not started).
 - Phase-stop rule: stop after Phase 12 and yield; never auto-advance into the next phase or milestone.
