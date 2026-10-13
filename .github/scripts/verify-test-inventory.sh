@@ -34,11 +34,11 @@ elif [[ "$inventory" != "--installed" ]]; then
   exit 2
 fi
 
-# The A/B benchmark harness and the mooneye-cgb reproduce-script guard are bash-only, so
+# The A/B benchmark harness and the mooneye-cgb and cgb-colour reproduce-script guards are bash-only, so
 # cmake/ExpectedTests.cmake does not register them on Windows; keep this list in step with it.
 case "$(uname -s)" in
   MINGW*|MSYS*|CYGWIN*)
-    sed -i.bak -e '/^cgb_bench_ab_/d' -e '/^cgb_mooneye_repro_requires_manifest$/d' "$expected"
+    sed -i.bak -e '/^cgb_bench_ab_/d' -e '/^cgb_mooneye_repro_requires_manifest$/d' -e '/^cgb_colour_repro_tool_failure$/d' -e '/^cgb_colour_repro_missing_pin$/d' "$expected"
     rm -f "$expected.bak"
     ;;
 esac
