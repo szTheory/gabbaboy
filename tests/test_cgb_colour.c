@@ -202,6 +202,202 @@ static int cgb_rgb555_lcd_off(void) {
     return 0;
 }
 
+/* ---- compat palette API (D-17, D-17a) ---- */
+static const uint16_t default_ramp[4] = {0x639Fu, 0x4275u, 0x254Bu, 0x0421u};
+
+static int palette_is_default(const gbb_compat_palette *p) {
+    for (int i = 0; i < 4; ++i)
+        if (p->bg[i] != default_ramp[i] || p->obj0[i] != default_ramp[i] ||
+            p->obj1[i] != default_ramp[i]) return 0;
+    return p->struct_size == GBB_COMPAT_PALETTE_SIZE_V1;
+}
+
+static gbb_compat_palette distinct_palette(void) {
+    gbb_compat_palette p;
+    memset(&p, 0, sizeof(p));
+    p.struct_size = GBB_COMPAT_PALETTE_SIZE_V1;
+    for (uint16_t i = 0; i < 4u; ++i) {
+        p.bg[i] = (uint16_t)(0x0101u + i);
+        p.obj0[i] = (uint16_t)(0x1111u + i);
+        p.obj1[i] = (uint16_t)(0x7F00u + i);
+    }
+    return p;
+}
+
+static int palette_equal(const gbb_compat_palette *a, const gbb_compat_palette *b) {
+    return memcmp(a->bg, b->bg, sizeof(a->bg)) == 0 && memcmp(a->obj0, b->obj0, sizeof(a->obj0)) == 0 &&
+           memcmp(a->obj1, b->obj1, sizeof(a->obj1)) == 0;
+}
+
+static int palette_compat_api_default(void) {
+    const gbb_profile profiles[2] = {GBB_PROFILE_CGB_CPU_E, GBB_PROFILE_DMG_CPU_B};
+    for (int k = 0; k < 2; ++k) {
+        gbb_instance *m = NULL;
+        gbb_compat_palette got;
+        memset(&got, 0x5A, sizeof(got));
+        got.struct_size = GBB_COMPAT_PALETTE_SIZE_V1;
+        REQUIRE(gbb_create(profiles[k], &m) == GBB_OK);
+        REQUIRE(gbb_get_compat_palette(m, &got) == GBB_OK);
+        REQUIRE(palette_is_default(&got));
+        gbb_destroy(m);
+    }
+    return 0;
+}
+
+static int palette_compat_api_roundtrip(void) {
+    gbb_instance *m = NULL;
+    gbb_compat_palette want = distinct_palette(), got;
+    memset(&got, 0, sizeof(got));
+    got.struct_size = GBB_COMPAT_PALETTE_SIZE_V1;
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &m) == GBB_OK);
+    REQUIRE(gbb_set_compat_palette(m, &want) == GBB_OK);
+    REQUIRE(gbb_get_compat_palette(m, &got) == GBB_OK);
+    REQUIRE(palette_equal(&want, &got));
+    REQUIRE(gbb_set_compat_palette(m, NULL) == GBB_OK);
+    got.struct_size = GBB_COMPAT_PALETTE_SIZE_V1;
+    REQUIRE(gbb_get_compat_palette(m, &got) == GBB_OK);
+    REQUIRE(palette_is_default(&got));
+    gbb_destroy(m);
+    return 0;
+}
+
+static int palette_compat_api_get_reject(void) {
+    gbb_instance *m = NULL;
+    gbb_compat_palette small, before;
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &m) == GBB_OK);
+    memset(&small, 0x5A, sizeof(small));
+    small.struct_size = GBB_COMPAT_PALETTE_SIZE_V1 - 1u;
+    before = small;
+    REQUIRE(gbb_get_compat_palette(m, &small) == GBB_INVALID_ARGUMENT);
+    REQUIRE(memcmp(&small, &before, sizeof(small)) == 0);
+    REQUIRE(gbb_get_compat_palette(NULL, &small) == GBB_INVALID_ARGUMENT);
+    REQUIRE(memcmp(&small, &before, sizeof(small)) == 0);
+    REQUIRE(gbb_get_compat_palette(m, NULL) == GBB_INVALID_ARGUMENT);
+    small.struct_size = 0u;
+    before = small;
+    REQUIRE(gbb_get_compat_palette(m, &small) == GBB_INVALID_ARGUMENT);
+    REQUIRE(memcmp(&small, &before, sizeof(small)) == 0);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int palette_compat_api_reject(void) {
+    gbb_instance *m = NULL;
+    gbb_compat_palette keep = distinct_palette(), bad, got;
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &m) == GBB_OK);
+    REQUIRE(gbb_set_compat_palette(m, &keep) == GBB_OK);
+    REQUIRE(gbb_set_compat_palette(NULL, &keep) == GBB_INVALID_ARGUMENT);
+    bad = distinct_palette();
+    bad.bg[0] = 0x0001u;
+    bad.struct_size = GBB_COMPAT_PALETTE_SIZE_V1 - 1u;
+    REQUIRE(gbb_set_compat_palette(m, &bad) == GBB_INVALID_ARGUMENT);
+    for (int which = 0; which < 3; ++which) {
+        for (int i = 0; i < 4; ++i) {
+            bad = distinct_palette();
+            bad.bg[0] = 0x2222u;   /* a valid first entry that must not leak in */
+            uint16_t *arr = which == 0 ? bad.bg : which == 1 ? bad.obj0 : bad.obj1;
+            arr[i] = 0x8000u;
+            REQUIRE(gbb_set_compat_palette(m, &bad) == GBB_INVALID_ARGUMENT);
+        }
+    }
+    /* eleven valid entries, the last one invalid */
+    bad = distinct_palette();
+    bad.bg[0] = 0x3333u;
+    bad.obj1[3] = 0xFFFFu;
+    REQUIRE(gbb_set_compat_palette(m, &bad) == GBB_INVALID_ARGUMENT);
+    memset(&got, 0, sizeof(got));
+    got.struct_size = GBB_COMPAT_PALETTE_SIZE_V1;
+    REQUIRE(gbb_get_compat_palette(m, &got) == GBB_OK);
+    REQUIRE(palette_equal(&keep, &got));
+    gbb_destroy(m);
+    return 0;
+}
+
+static int palette_compat_api_larger(void) {
+    gbb_instance *m = NULL;
+    struct { gbb_compat_palette p; uint8_t extra[12]; } big;
+    gbb_compat_palette want = distinct_palette();
+    REQUIRE(sizeof(big) >= 40u);
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &m) == GBB_OK);
+    memset(&big, 0xEE, sizeof(big));
+    memcpy(&big.p, &want, sizeof(want));
+    big.p.struct_size = 40u;
+    REQUIRE(gbb_set_compat_palette(m, &big.p) == GBB_OK);   /* extra bytes are ignored */
+    memset(&big, 0x5A, sizeof(big));
+    big.p.struct_size = 40u;
+    REQUIRE(gbb_get_compat_palette(m, &big.p) == GBB_OK);
+    REQUIRE(big.p.struct_size == GBB_COMPAT_PALETTE_SIZE_V1);
+    REQUIRE(palette_equal(&want, &big.p));
+    for (size_t i = 0; i < sizeof(big.extra); ++i) REQUIRE(big.extra[i] == 0x5Au);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int palette_compat_api_survives(void) {
+    static uint8_t rom[ROM_SIZE];
+    gbb_instance *m = rgb_instance(GBB_PROFILE_CGB_CPU_E, 0x00u, 1);
+    gbb_compat_palette want = distinct_palette(), got;
+    REQUIRE(m != NULL);
+    REQUIRE(gbb_set_compat_palette(m, &want) == GBB_OK);
+    REQUIRE(gbb_reset(m) == GBB_OK);
+    make_rom(rom, 0x80u);
+    REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
+    memset(&got, 0, sizeof(got));
+    got.struct_size = GBB_COMPAT_PALETTE_SIZE_V1;
+    REQUIRE(gbb_get_compat_palette(m, &got) == GBB_OK);
+    REQUIRE(palette_equal(&want, &got));
+    gbb_destroy(m);
+    return 0;
+}
+
+static int all_pixels_equal(const uint16_t *px, uint16_t value) {
+    for (size_t i = 0; i < (size_t)FRAME_W * FRAME_H; ++i) if (px[i] != value) return 0;
+    return 1;
+}
+
+/* A guest that spins in place, so the screen stays the post-boot blank frame (a zero-filled ROM
+ * would slide through the address space and eventually rewrite BGP). */
+static gbb_instance *spin_instance(uint8_t cgb_flag, int frames) {
+    static uint8_t rom[ROM_SIZE];
+    gbb_instance *m = NULL;
+    make_rom(rom, cgb_flag);
+    rom[0x100u] = 0xC3u; rom[0x101u] = 0x50u; rom[0x102u] = 0x01u;  /* jp $0150 */
+    rom[0x150u] = 0x18u; rom[0x151u] = 0xFEu;                        /* jr -2 */
+    if (gbb_create(GBB_PROFILE_CGB_CPU_E, &m) != GBB_OK) return NULL;
+    if (gbb_load_rom(m, rom, sizeof(rom)) != GBB_OK) { gbb_destroy(m); return NULL; }
+    for (int i = 0; i < frames; ++i) gbb_run(m, FRAME_HALF_DOTS, NULL, 0);
+    return m;
+}
+
+static int palette_compat_effect_next_frame(void) {
+    static uint16_t a[FRAME_W * FRAME_H], b[FRAME_W * FRAME_H], c[FRAME_W * FRAME_H];
+    gbb_frame_info info;
+    gbb_compat_palette p = distinct_palette();
+    p.bg[0] = 0x1234u;
+    gbb_instance *m = spin_instance(0x00u, 2);
+    REQUIRE(m != NULL);
+    REQUIRE(gbb_copy_frame_rgb555(m, a, sizeof(a), 320u, &info) == GBB_OK);
+    REQUIRE(all_pixels_equal(a, 0x639Fu));
+    REQUIRE(gbb_set_compat_palette(m, &p) == GBB_OK);
+    REQUIRE(gbb_copy_frame_rgb555(m, b, sizeof(b), 320u, &info) == GBB_OK);
+    REQUIRE(memcmp(a, b, sizeof(a)) == 0);                  /* completed frame not recoloured */
+    for (int i = 0; i < 2; ++i) gbb_run(m, FRAME_HALF_DOTS, NULL, 0);
+    REQUIRE(gbb_copy_frame_rgb555(m, c, sizeof(c), 320u, &info) == GBB_OK);
+    REQUIRE(all_pixels_equal(c, 0x1234u));
+    gbb_destroy(m);
+
+    /* CGB mode colours come from CRAM, so the compat palette changes no pixel. */
+    m = spin_instance(0x80u, 2);
+    REQUIRE(m != NULL);
+    REQUIRE(gbb_copy_frame_rgb555(m, a, sizeof(a), 320u, &info) == GBB_OK);
+    REQUIRE(gbb_set_compat_palette(m, &p) == GBB_OK);
+    for (int i = 0; i < 2; ++i) gbb_run(m, FRAME_HALF_DOTS, NULL, 0);
+    REQUIRE(gbb_copy_frame_rgb555(m, b, sizeof(b), 320u, &info) == GBB_OK);
+    REQUIRE(memcmp(a, b, sizeof(a)) == 0);
+    gbb_destroy(m);
+    return 0;
+}
+
 typedef int (*case_fn)(void);
 static const struct { const char *name; case_fn fn; } cases[] = {
     {"cgb_colour_copy_frame_unsupported", cgb_colour_copy_frame_unsupported},
@@ -210,6 +406,13 @@ static const struct { const char *name; case_fn fn; } cases[] = {
     {"cgb_rgb555_not_ready", cgb_rgb555_not_ready},
     {"cgb_rgb555_both_modes", cgb_rgb555_both_modes},
     {"cgb_rgb555_lcd_off", cgb_rgb555_lcd_off},
+    {"palette_compat_api_default", palette_compat_api_default},
+    {"palette_compat_api_roundtrip", palette_compat_api_roundtrip},
+    {"palette_compat_api_reject", palette_compat_api_reject},
+    {"palette_compat_api_get_reject", palette_compat_api_get_reject},
+    {"palette_compat_api_larger", palette_compat_api_larger},
+    {"palette_compat_api_survives", palette_compat_api_survives},
+    {"palette_compat_effect_next_frame", palette_compat_effect_next_frame},
 };
 
 int main(int argc, char **argv) {

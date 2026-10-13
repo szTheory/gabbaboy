@@ -316,6 +316,7 @@ typedef struct {
 } cartridge_info;
 
 _Static_assert(sizeof(gbb_info) == GBB_INFO_SIZE_V1, "gbb_info layout");
+_Static_assert(sizeof(gbb_compat_palette) == GBB_COMPAT_PALETTE_SIZE_V1, "gbb_compat_palette layout");
 
 typedef struct gbb_test_dma_event gbb_test_dma_event;
 
@@ -3017,6 +3018,41 @@ gbb_error gbb_copy_frame_rgb555(const gbb_instance *instance, uint16_t *pixels,
                            instance->frame_generation,
                            instance->frame_completion_half_dots};
     *out_info = info;
+    return GBB_OK;
+}
+
+/* MODEL: BOTH GATE-00 basis=host-api */
+gbb_error gbb_set_compat_palette(gbb_instance *instance, const gbb_compat_palette *palette) {
+    if (instance == NULL) return GBB_INVALID_ARGUMENT;
+    if (palette == NULL) {
+        memcpy(instance->compat_rgb555, compat_default_rgb555, sizeof(instance->compat_rgb555));
+        return GBB_OK;
+    }
+    if (palette->struct_size < GBB_COMPAT_PALETTE_SIZE_V1) return GBB_INVALID_ARGUMENT;
+    /* Validate every entry before the first store so a rejected set mutates nothing (T-11-12). */
+    for (unsigned i = 0; i < 4u; ++i)
+        if (((palette->bg[i] | palette->obj0[i] | palette->obj1[i]) & 0x8000u) != 0u)
+            return GBB_INVALID_ARGUMENT;
+    for (unsigned i = 0; i < 4u; ++i) {
+        instance->compat_rgb555[0][i] = palette->bg[i];
+        instance->compat_rgb555[1][i] = palette->obj0[i];
+        instance->compat_rgb555[2][i] = palette->obj1[i];
+    }
+    return GBB_OK;
+}
+
+/* MODEL: BOTH GATE-00 basis=host-api */
+gbb_error gbb_get_compat_palette(const gbb_instance *instance, gbb_compat_palette *out_palette) {
+    if (instance == NULL || out_palette == NULL ||
+        out_palette->struct_size < GBB_COMPAT_PALETTE_SIZE_V1)
+        return GBB_INVALID_ARGUMENT;
+    /* Field by field: the caller's struct may be larger than V1 and keeps its extra bytes. */
+    for (unsigned i = 0; i < 4u; ++i) {
+        out_palette->bg[i] = instance->compat_rgb555[0][i];
+        out_palette->obj0[i] = instance->compat_rgb555[1][i];
+        out_palette->obj1[i] = instance->compat_rgb555[2][i];
+    }
+    out_palette->struct_size = GBB_COMPAT_PALETTE_SIZE_V1;
     return GBB_OK;
 }
 

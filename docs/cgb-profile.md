@@ -518,6 +518,27 @@ CGB-E, and no document, test or release note may describe them as such. `banking
   pins the current behaviour so a later change is deliberate. The gate rows are GATE-16 (read) and
   GATE-25 (write) in `docs/model-gates.md`.
 
+## Compatibility palette
+
+In compatibility mode a DMG game's shade indices are resolved per pixel through an instance palette
+instead of CRAM: three sets (background, OBJ0, OBJ1) of four RGB555 values. One rule generates the
+default: a brightness ramp Y = 31, 21, 11, 1 for shades 0 to 3, with R = Y, G = Y - (Y >> 3) and
+B = Y - (Y >> 2), packed `R | G << 5 | B << 10` with bit 15 clear. The same ramp seeds all three
+sets. A host can override the palette with `gbb_set_compat_palette`; the override survives reset and
+ROM load.
+
+<!-- cgb-compat-palette-begin -->
+| set | shade 0 | shade 1 | shade 2 | shade 3 |
+| --- | --- | --- | --- | --- |
+| BG | $639F | $4275 | $254B | $0421 |
+| OBJ0 | $639F | $4275 | $254B | $0421 |
+| OBJ1 | $639F | $4275 | $254B | $0421 |
+<!-- cgb-compat-palette-end -->
+
+These values were authored for GabbaBoy from the rule above without reference to any boot-ROM,
+title-hash, peer-emulator or other third-party palette table (rights gate G4). The look is an owner
+veto item (D-18). `cgb_tables_compat_palette` compares this block with the code and with the rule.
+
 ## Half-dot timeline (D-070)
 
 The `uint64_t` half-dot master timeline is the single clock for normal and double speed, and

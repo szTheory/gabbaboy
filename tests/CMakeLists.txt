@@ -2166,6 +2166,37 @@ gbb_colour_mutant(rgb555_skewed_validator test_cgb_colour.c
   "    const size_t row_bytes = (size_t)GBB_FRAME_WIDTH * 2u;\n    if (instance != NULL && !model_is_cgb(instance)) return GBB_UNSUPPORTED_PROFILE;\n"
   "cgb_rgb555_args" "not ok"
   cgb_rgb555_both_modes)
+foreach(gbb_palette_api_case palette_compat_api_default palette_compat_api_roundtrip
+    palette_compat_api_reject palette_compat_api_get_reject palette_compat_api_larger
+    palette_compat_api_survives palette_compat_effect_next_frame)
+  add_test(NAME ${gbb_palette_api_case} COMMAND test_cgb_colour ${gbb_palette_api_case})
+  set_tests_properties(${gbb_palette_api_case} PROPERTIES PASS_REGULAR_EXPRESSION "ok 1 - ${gbb_palette_api_case}")
+endforeach()
+# Masking bit 15 instead of rejecting it must fail the rejection case.
+gbb_colour_mutant(palette_mask_bit15 test_cgb_colour.c
+  palette_compat_mutant_mask_bit15 palette_compat_mutant_mask_bit15_control
+  "if (((palette->bg[i] | palette->obj0[i] | palette->obj1[i]) & 0x8000u) != 0u)\n            return GBB_INVALID_ARGUMENT;"
+  "(void)i;"
+  "palette_compat_api_reject" "not ok"
+  palette_compat_api_default)
+# The default palette block in the doc must equal the code table and the rule.
+add_test(NAME cgb_tables_compat_palette COMMAND test_cgb_tables compat_palette "${GBB_CGB_PROFILE_DOC}")
+set_tests_properties(cgb_tables_compat_palette PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-tables compat_palette pass rows=3")
+set(GBB_COMPAT_PALETTE_ANCHOR "| OBJ1 | $639F |")
+string(FIND "${gbb_cgb_doc}" "${GBB_COMPAT_PALETTE_ANCHOR}" gbb_cp_at)
+string(FIND "${gbb_cgb_doc}" "${GBB_COMPAT_PALETTE_ANCHOR}" gbb_cp_last REVERSE)
+if(gbb_cp_at EQUAL -1 OR NOT gbb_cp_at EQUAL gbb_cp_last)
+  message(FATAL_ERROR "compat palette mutation anchor '${GBB_COMPAT_PALETTE_ANCHOR}' must occur exactly once in docs/cgb-profile.md")
+endif()
+string(REPLACE "${GBB_COMPAT_PALETTE_ANCHOR}" "| OBJ1 | $639E |" gbb_cp_doc_bad "${gbb_cgb_doc}")
+file(WRITE "${PROJECT_BINARY_DIR}/cgb-tables/mutated-compat-palette.md" "${gbb_cp_doc_bad}")
+add_test(NAME cgb_tables_compat_palette_mutated_doc
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_tables>;compat_palette;${PROJECT_BINARY_DIR}/cgb-tables/mutated-compat-palette.md"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=cgb-tables mismatch"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # --- Phase 11 plan 11-06 end ---
 
 gabbaboy_verify_registered_tests()

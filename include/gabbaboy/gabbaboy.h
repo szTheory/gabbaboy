@@ -377,6 +377,37 @@ gbb_error gbb_copy_frame_rgb555(const gbb_instance *instance, uint16_t *pixels,
                                 size_t capacity_bytes, size_t pitch_bytes,
                                 gbb_frame_info *out_info);
 
+/* Compatibility-mode palette: the RGB555 value of each DMG shade index 0-3 for
+ * the background (bg), object palette 0 (obj0) and object palette 1 (obj1).
+ * Values are R | G << 5 | B << 10 with bit 15 clear. The core ships a default
+ * ramp (see docs/cgb-profile.md); this struct lets a host override it. */
+typedef struct gbb_compat_palette {
+    uint32_t struct_size;  /* IN: the caller sets GBB_COMPAT_PALETTE_SIZE_V1 or more; OUT of get: the bytes written */
+    uint16_t bg[4];
+    uint16_t obj0[4];
+    uint16_t obj1[4];
+} gbb_compat_palette;
+#define GBB_COMPAT_PALETTE_SIZE_V1 28u  /* the core static-asserts this equals sizeof(gbb_compat_palette) */
+/* Sets the compatibility palette of an instance. The whole struct is validated
+ * before anything is stored: a NULL instance, a struct_size below
+ * GBB_COMPAT_PALETTE_SIZE_V1 or any entry with bit 15 set returns
+ * GBB_INVALID_ARGUMENT and changes nothing (bit 15 is rejected, never masked).
+ * A larger struct_size is accepted and its extra bytes are ignored. A NULL
+ * palette restores the default. Both profiles accept the call, but only
+ * compatibility mode on the CGB-CPU-E profile shows an effect. The palette is
+ * instance configuration, not emulation state: it survives gbb_reset and
+ * gbb_load_rom. A set affects pixels resolved after the call and never
+ * recolours an already completed frame; compatibility-mode CRAM is never
+ * rewritten by the host. */
+gbb_error gbb_set_compat_palette(gbb_instance *instance, const gbb_compat_palette *palette);
+/* Reads the current compatibility palette. A NULL instance, a NULL out_palette
+ * or out_palette->struct_size below GBB_COMPAT_PALETTE_SIZE_V1 returns
+ * GBB_INVALID_ARGUMENT and writes nothing, struct_size included. On success the
+ * core writes field by field within the caller's struct_size and then sets
+ * struct_size to the 28 bytes written; a larger caller struct keeps its extra
+ * bytes. Accepted on both profiles. */
+gbb_error gbb_get_compat_palette(const gbb_instance *instance, gbb_compat_palette *out_palette);
+
 #ifdef __cplusplus
 }
 #endif
