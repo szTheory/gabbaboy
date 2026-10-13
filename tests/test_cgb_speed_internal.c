@@ -381,6 +381,25 @@ static int cgb_speed_cpu_ticks(void) {
     return 0;
 }
 
+static int cgb_speed_reset_clears(void) {
+    uint8_t rom[32768];
+    make_internal_rom(rom, NULL, 0u);
+    gbb_instance *machine = NULL;
+    REQUIRE(create_internal_machine(rom, &machine) == 0);
+    machine->double_speed = 1u;
+    machine->cpu_stall_kind = GBB_STALL_SPEED_SWITCH;
+    machine->cpu_stall_half_dots = 2048u;
+    machine->key1_armed = 1u;
+    REQUIRE(gbb_reset(machine) == GBB_OK);
+    REQUIRE(machine->double_speed == 0u);
+    REQUIRE(machine->cpu_stall_kind == GBB_STALL_NONE);
+    REQUIRE(machine->cpu_stall_half_dots == 0u);
+    REQUIRE(machine->key1_armed == 0u);
+    gbb_destroy(machine);
+    return 0;
+}
+
+
 int main(int argc, char **argv) {
     if (argc < 2) return 2;
 #ifdef GBB_P12_MUTANT_BUILD
@@ -417,6 +436,11 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "cgb_speed_cpu_ticks") == 0) {
         int rc = cgb_speed_cpu_ticks();
         if (rc == 0) puts("cgb-speed-internal cgb_speed_cpu_ticks pass");
+        return rc;
+    }
+    if (strcmp(argv[1], "cgb_speed_reset_clears") == 0) {
+        int rc = cgb_speed_reset_clears();
+        if (rc == 0) puts("cgb-speed-internal cgb_speed_reset_clears pass");
         return rc;
     }
     return 2;
