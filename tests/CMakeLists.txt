@@ -2247,11 +2247,24 @@ gbb_colour_mutant(frame_resolve test_cgb_colour.c
 # --- Phase 11 plan 11-08 begin ---
 # Remaining original colour fixtures (D-23): attribute bits and LCDC.0 priority first; each case
 # checks its literal structural predicate before the frame digest is compared.
-foreach(gbb_colour_fixture_case cgb_colour_attr cgb_colour_lcdc0)
+foreach(gbb_colour_fixture_case cgb_colour_attr cgb_colour_lcdc0 cgb_colour_guest_cram
+    palette_compat_mapping cgb_colour_lcd_off)
   add_test(NAME ${gbb_colour_fixture_case} COMMAND test_cgb_colour ${gbb_colour_fixture_case} ${GBB_CGB_COLOUR_DIR})
   set_tests_properties(${gbb_colour_fixture_case} PROPERTIES
     PASS_REGULAR_EXPRESSION "ok 1 - ${gbb_colour_fixture_case}")
 endforeach()
+add_test(NAME cgb_rgb_store_lcdoff_fixture
+  COMMAND test_cgb_colour_internal cgb_rgb_store_lcdoff_fixture ${PROJECT_SOURCE_DIR}/fixtures)
+set_tests_properties(cgb_rgb_store_lcdoff_fixture PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-colour-internal cgb_rgb_store_lcdoff_fixture pass")
+# Port-semantics control (D-11): a blocked palette write that stops advancing the index must make
+# the CRAM guest report a failed cell. The control runs a fixture that only writes with the LCD off.
+gbb_colour_mutant(guest_cram_blocked_no_increment test_cgb_colour.c
+  cgb_colour_guest_cram_mutant_blocked_no_increment cgb_colour_guest_cram_mutant_blocked_no_increment_control
+  "if ((*index_reg & 0x80u) != 0u) *index_reg ="
+  "if (allowed && (*index_reg & 0x80u) != 0u) *index_reg ="
+  "cgb_colour_guest_cram;${GBB_CGB_COLOUR_DIR}" "C00"
+  "cgb_colour_attr;${GBB_CGB_COLOUR_DIR}")
 # --- Phase 11 plan 11-08 end ---
 
 gabbaboy_verify_registered_tests()

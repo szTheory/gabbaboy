@@ -742,6 +742,32 @@ static int cgb_rgb_store_lcd_off(void) {
     return 0;
 }
 
+/* D-02 on the guest-built ROM: once colour-lcdoff.gb has switched the LCD off, the working RGB
+ * buffer is all white (0x7FFF) while the completed frame is retained. */
+static int cgb_rgb_store_lcdoff_fixture(void) {
+    char path[1024];
+    REQUIRE(g_fixtures_root != NULL);
+    snprintf(path, sizeof(path), "%s/cgb-colour/colour-lcdoff.gb", g_fixtures_root);
+    size_t size = 0;
+    uint8_t *rom = read_file(path, &size);
+    REQUIRE(rom != NULL);
+    gbb_instance *m = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, rom, size) == GBB_OK);
+    int marker = 0;
+    for (int i = 0; i < 30 && !marker; ++i) {
+        gbb_run(m, FRAME_HALF_DOTS, NULL, 0);
+        marker = gbb_peek_ram(m, 0xC000u) == 0xA5u;
+    }
+    REQUIRE(marker);
+    gbb_run(m, FRAME_HALF_DOTS, NULL, 0);
+    for (unsigned i = 0; i < GBB_FRAME_PIXELS; ++i) REQUIRE(m->rgb_working[i] == 0x7FFFu);
+    for (unsigned i = 0; i < GBB_FRAME_PIXELS; ++i) REQUIRE(m->rgb_completed[i] == 0x2A55u);
+    gbb_destroy(m);
+    free(rom);
+    return 0;
+}
+
 static int cgb_rgb_store_reset(void) {
     gbb_instance *m = make_render();
     REQUIRE(m != NULL);
@@ -1134,6 +1160,7 @@ static const plain_case PLAIN_CASES[] = {
     {"cgb_rgb_store_dmg_untouched", cgb_rgb_store_dmg_untouched},
     {"cgb_rgb_store_lcd_off", cgb_rgb_store_lcd_off},
     {"cgb_rgb_store_reset", cgb_rgb_store_reset},
+    {"cgb_rgb_store_lcdoff_fixture", cgb_rgb_store_lcdoff_fixture},
     {"cgb_rgb_store_bit15_masked", cgb_rgb_store_bit15_masked},
     {"cgb_attr_palette", cgb_attr_palette},
     {"cgb_attr_bank", cgb_attr_bank},

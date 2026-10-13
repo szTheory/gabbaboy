@@ -567,6 +567,116 @@ static int cgb_colour_lcdc0(void) {
     return 0;
 }
 
+/* ---- Original fixture: colour-cram.gb (D-23 item 3, D-11) ---- */
+/* The guest reports through WRAM, never through a register predicate: $C000 is the verdict
+ * ($A5 pass / $EE fail) and $C001..$C007 are one byte per cell ($01 pass). */
+static int cgb_colour_guest_cram(void) {
+    static uint8_t rom[ROM_SIZE];
+    gbb_instance *m = NULL;
+    REQUIRE(read_fixture("colour-cram.gb", rom, sizeof(rom)) == ROM_SIZE);
+    REQUIRE(rom[0x143u] == 0x80u);
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
+    for (int i = 0; i < 10; ++i) {
+        gbb_run_result r = gbb_run(m, FRAME_HALF_DOTS, NULL, 0);
+        REQUIRE(r.reason != GBB_STOP_INVALID_STATE);
+    }
+    for (uint16_t cell = 1u; cell <= 7u; ++cell) {
+        const uint8_t got = gbb_peek_ram(m, (uint16_t)(0xC000u + cell));
+        if (got != 0x01u) printf("not ok 1 - cell %u byte C%03X is %02X, expected 01\n", (unsigned)cell,
+                                 (unsigned)cell, (unsigned)got);
+        REQUIRE(got == 0x01u);
+    }
+    const uint8_t verdict = gbb_peek_ram(m, 0xC000u);
+    if (verdict != 0xA5u) printf("not ok 1 - verdict C000=%02X, expected A5\n", (unsigned)verdict);
+    REQUIRE(verdict == 0xA5u);
+    gbb_destroy(m);
+    return 0;
+}
+
+/* ---- Original fixture: colour-compat.gb (D-23 item 5, D-17, D-39) ---- */
+/* BGP = $E4, OBP0 = $E4, OBP1 = $1B. Bars x 0..63 show BG indices 0-3; objects at y 0..7: OBJ0
+ * indices 1-3 at x 80..103 (identity) and OBJ1 indices 1-3 at x 112..135 (reversed, so index n is
+ * shade 3 - n); every other pixel is BG index 0. */
+static uint16_t compat_expected(const gbb_compat_palette *p, size_t x, size_t y) {
+    if (x < 64u) return p->bg[x / 16u];
+    if (y < 8u && x >= 80u && x < 104u) return p->obj0[1u + (x - 80u) / 8u];
+    if (y < 8u && x >= 112u && x < 136u) return p->obj1[2u - (x - 112u) / 8u];
+    return p->bg[0];
+}
+
+static int compat_frame_matches(const uint16_t *frame, const gbb_compat_palette *p) {
+    for (size_t y = 0; y < FRAME_H; ++y) {
+        for (size_t x = 0; x < FRAME_W; ++x) {
+            const uint16_t want = compat_expected(p, x, y);
+            if (frame[y * FRAME_W + x] != want) {
+                printf("not ok 1 - pixel (%zu,%zu) is %04X, expected %04X\n", x, y,
+                       (unsigned)frame[y * FRAME_W + x], (unsigned)want);
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+#define COMPAT_DEFAULT_DIGEST "f08a99fe95516a498ec8028fe3a95b9afc916bab808fd13b9aae1b0b96aae7a5"
+#define COMPAT_OVERRIDE_DIGEST "ed14c6c4166cfc0475116d5bed7582745acea6d16512d727d6806ec467d3aa01"
+
+static int palette_compat_mapping(void) {
+    static uint16_t before[FRAME_W * FRAME_H], after[FRAME_W * FRAME_H];
+    gbb_compat_palette deflt, override = distinct_palette();
+    gbb_frame_info info;
+    gbb_instance *m = NULL;
+    for (int i = 0; i < 4; ++i) deflt.bg[i] = deflt.obj0[i] = deflt.obj1[i] = default_ramp[i];
+    deflt.struct_size = GBB_COMPAT_PALETTE_SIZE_V1;
+    if (run_fixture_frame("colour-compat.gb", GBB_PROFILE_CGB_CPU_E, before, &m) != 0) return 1;
+    /* D-17: the default palette, each region through its own BGP/OBP0/OBP1 mapping. */
+    REQUIRE(compat_frame_matches(before, &deflt) == 0);
+    REQUIRE(check_digest(before, COMPAT_DEFAULT_DIGEST) == 0);
+    /* D-39: the override applies to the next completed frame, per palette set. */
+    REQUIRE(gbb_set_compat_palette(m, &override) == GBB_OK);
+    for (int i = 0; i < 2; ++i) gbb_run(m, FRAME_HALF_DOTS, NULL, 0);
+    memset(after, 0xFF, sizeof(after));
+    REQUIRE(gbb_copy_frame_rgb555(m, after, sizeof(after), 320u, &info) == GBB_OK);
+    REQUIRE(compat_frame_matches(after, &override) == 0);
+    for (size_t y = 0; y < FRAME_H; ++y)         /* every region changed */
+        for (size_t x = 0; x < FRAME_W; ++x)
+            REQUIRE(after[y * FRAME_W + x] != before[y * FRAME_W + x]);
+    REQUIRE(check_digest(after, COMPAT_OVERRIDE_DIGEST) == 0);
+    gbb_destroy(m);
+    return 0;
+}
+
+/* ---- Original fixture: colour-lcdoff.gb (D-23 item 7, D-02) ---- */
+#define LCDOFF_COLOUR 0x2A55u
+#define LCDOFF_DIGEST "ad26a2e9df3b30fe1e6117cd6d920547ebe8d4ebb40f376562f55488d70b3e81"
+
+static int cgb_colour_lcd_off(void) {
+    static uint8_t rom[ROM_SIZE];
+    static uint16_t first[FRAME_W * FRAME_H], later[FRAME_W * FRAME_H];
+    gbb_frame_info a, b;
+    gbb_instance *m = NULL;
+    int marker = 0;
+    REQUIRE(read_fixture("colour-lcdoff.gb", rom, sizeof(rom)) == ROM_SIZE);
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
+    for (int i = 0; i < 30 && !marker; ++i) {
+        gbb_run(m, FRAME_HALF_DOTS, NULL, 0);
+        marker = gbb_peek_ram(m, 0xC000u) == 0xA5u;
+    }
+    REQUIRE(marker);
+    gbb_run(m, FRAME_HALF_DOTS, NULL, 0);
+    REQUIRE(gbb_copy_frame_rgb555(m, first, sizeof(first), 320u, &a) == GBB_OK);
+    for (size_t i = 0; i < (size_t)FRAME_W * FRAME_H; ++i) REQUIRE(first[i] == LCDOFF_COLOUR);
+    for (int i = 0; i < 5; ++i) gbb_run(m, FRAME_HALF_DOTS, NULL, 0);
+    REQUIRE(gbb_copy_frame_rgb555(m, later, sizeof(later), 320u, &b) == GBB_OK);
+    REQUIRE(a.generation >= 1u && b.generation == a.generation);
+    REQUIRE(memcmp(first, later, sizeof(first)) == 0);
+    REQUIRE(check_digest(later, LCDOFF_DIGEST) == 0);
+    gbb_destroy(m);
+    return 0;
+}
+
 typedef int (*case_fn)(void);
 static const struct { const char *name; case_fn fn; } cases[] = {
     {"cgb_colour_copy_frame_unsupported", cgb_colour_copy_frame_unsupported},
@@ -585,6 +695,9 @@ static const struct { const char *name; case_fn fn; } cases[] = {
     {"cgb_colour_hblank_rows", cgb_colour_hblank_rows},
     {"cgb_colour_attr", cgb_colour_attr},
     {"cgb_colour_lcdc0", cgb_colour_lcdc0},
+    {"cgb_colour_guest_cram", cgb_colour_guest_cram},
+    {"palette_compat_mapping", palette_compat_mapping},
+    {"cgb_colour_lcd_off", cgb_colour_lcd_off},
 };
 
 int main(int argc, char **argv) {
