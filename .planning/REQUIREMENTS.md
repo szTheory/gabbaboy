@@ -36,7 +36,7 @@ Every requirement maps to exactly one phase. Completion needs implementation and
 - [x] **CGB-01**: A caller can select the `GBB_PROFILE_CGB_CPU_E` profile, probe a ROM and query the instance for model and execution mode (CGB or DMG-compatibility, from header `$143` bit 7); CGB-only ROMs load on the DMG profile with an informational flag; post-boot state is mode-specific with recorded provenance.
 - [x] **CGB-02**: Every DMG-specific behavior is audited and tagged by model, and a register visibility matrix (DMG, CGB, CGB in DMG-compatibility mode) has a test per cell; KEY0 is locked after boot.
 - [x] **CGB-03**: CGB software can bank VRAM (2x8 KiB) and WRAM (8x4 KiB) with correct echo-RAM and OAM DMA source behavior.
-- [x] **CGB-04**: CGB software renders with tile attributes, BG/OBJ colour palette RAM (auto-increment, mode-3 lockout) and CGB priority rules, exposed through a new RGB555 frame call; the existing DMG frame call stays byte-identical for DMG.
+- [ ] **CGB-04**: CGB software renders with tile attributes, BG/OBJ colour palette RAM (auto-increment, mode-3 lockout) and CGB priority rules, exposed through a new RGB555 frame call; the existing DMG frame call stays byte-identical for DMG.
 - [ ] **CGB-05**: DMG software on the CGB profile renders through a fixed, original, documented compatibility palette that a host can override; no boot-ROM palette table is shipped.
 - [ ] **CGB-06**: CGB software can switch to double speed via KEY1 and STOP: CPU, timer, serial and OAM DMA run at twice the rate while PPU and APU timing are unchanged, the switch pause is modelled, and partitioned runs stay equivalent.
 - [ ] **CGB-07**: CGB software can use general-purpose and HBlank VRAM DMA with CPU stall, cancel, HDMA5 readback and HALT interaction, bounded per run.
@@ -97,7 +97,7 @@ Every v0.2 requirement maps to exactly one phase in [ROADMAP.md](ROADMAP.md).
 | CGB-01 | Phase 10 | Complete |
 | CGB-02 | Phase 10 | Complete |
 | CGB-03 | Phase 10 | Complete |
-| CGB-04 | Phase 11 | Complete |
+| CGB-04 | Phase 11 | Pending |
 | CGB-05 | Phase 11 | Pending |
 | CGB-06 | Phase 12 | Pending |
 | CGB-07 | Phase 13 | Pending |
