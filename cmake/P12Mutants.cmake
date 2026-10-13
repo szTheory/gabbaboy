@@ -23,7 +23,7 @@ set(GBB_P12_REPLACEMENT_11_1 "instance->double_speed ^= 1u; /* P12-M11 */\n     
 
 set(GBB_P12_SITES_12 1)
 set(GBB_P12_ANCHOR_12_1 "const uint64_t secs = (el >> RTC_HALF_DOTS_PER_SECOND_SHIFT) +")
-set(GBB_P12_REPLACEMENT_12_1 "const uint64_t secs = (GBB_P12_MUT(12) ? (el >> (RTC_HALF_DOTS_PER_SECOND_SHIFT + 1u)) : (el >> RTC_HALF_DOTS_PER_SECOND_SHIFT)) +")
+set(GBB_P12_REPLACEMENT_12_1 "const unsigned double_speed = GBB_P12_MUT(12);\n    const uint64_t secs = (el >> (RTC_HALF_DOTS_PER_SECOND_SHIFT + double_speed)) +")
 
 set(GBB_P12_SITES_14 2)
 set(GBB_P12_ANCHOR_14_1 "if (++m->dma_phase < GBB_T_PER_M) return;")
