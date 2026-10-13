@@ -125,6 +125,7 @@ occurs exactly once in code and once in the table.
 | GATE-80 | CGB_ONLY | model_is_cgb | - | ppu_transfer_dot | CGB mode resolves RGB555 per dot against live CRAM into rgb_working (D-01, D-02); compat mode routing is plan 11-04 |
 | GATE-81 | CGB_ONLY | model_is_cgb | - | ppu_window_should_start | CGB mode enables the window by LCDC bit 5 alone, shifting mode-3 window-start stall timing when LCDC bit 0 is clear; CGB mode-3 timing is not claimed (D-09) |
 | GATE-82 | CGB_ONLY | model_is_cgb | - | ppu_transfer_dot | compat mode resolves DMG shades through the instance compat palette into rgb_working and never writes the shade store (D-17, D-39) |
+| GATE-83 | CGB_ONLY | model_is_cgb | - | gbb_copy_frame_rgb555 | colour frames are CGB-profile only; the DMG profile returns GBB_UNSUPPORTED_PROFILE (D-15), symmetric with GATE-57 |
 <!-- model-gates-end -->
 
 ## Release status

@@ -2152,4 +2152,20 @@ gbb_colour_mutant(attr_obj_bank_ignored test_cgb_colour_internal.c
   cgb_colour_internal_harness_alive)
 # --- Phase 11 plan 11-05 end ---
 
+# --- Phase 11 plan 11-06 begin ---
+# Public colour ABI (D-15, D-17a, D-42): gbb_copy_frame_rgb555 and the compat palette.
+foreach(gbb_rgb555_case cgb_rgb555_args cgb_rgb555_dmg_profile cgb_rgb555_not_ready
+    cgb_rgb555_both_modes cgb_rgb555_lcd_off)
+  add_test(NAME ${gbb_rgb555_case} COMMAND test_cgb_colour ${gbb_rgb555_case})
+  set_tests_properties(${gbb_rgb555_case} PROPERTIES PASS_REGULAR_EXPRESSION "ok 1 - ${gbb_rgb555_case}")
+endforeach()
+# Skewed validator: the profile test moved ahead of the argument checks must fail the argument matrix.
+gbb_colour_mutant(rgb555_skewed_validator test_cgb_colour.c
+  cgb_rgb555_mutant_skewed_validator cgb_rgb555_mutant_skewed_validator_control
+  "    const size_t row_bytes = (size_t)GBB_FRAME_WIDTH * 2u;\n"
+  "    const size_t row_bytes = (size_t)GBB_FRAME_WIDTH * 2u;\n    if (instance != NULL && !model_is_cgb(instance)) return GBB_UNSUPPORTED_PROFILE;\n"
+  "cgb_rgb555_args" "not ok"
+  cgb_rgb555_both_modes)
+# --- Phase 11 plan 11-06 end ---
+
 gabbaboy_verify_registered_tests()

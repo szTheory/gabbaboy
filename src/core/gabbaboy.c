@@ -2983,6 +2983,43 @@ gbb_error gbb_copy_frame(const gbb_instance *instance, uint8_t *pixels,
     return GBB_OK;
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+gbb_error gbb_copy_frame_rgb555(const gbb_instance *instance, uint16_t *pixels,
+                                size_t capacity_bytes, size_t pitch_bytes,
+                                gbb_frame_info *out_info) {
+    const size_t row_bytes = (size_t)GBB_FRAME_WIDTH * 2u;
+    if (instance == NULL || pixels == NULL || out_info == NULL) return GBB_INVALID_ARGUMENT;
+    /* uint16_t stores need 2-byte alignment and a whole-pixel stride (T-11-14). */
+    if (((uintptr_t)(void *)pixels & 1u) != 0u || (pitch_bytes & 1u) != 0u)
+        return GBB_INVALID_ARGUMENT;
+    if (pitch_bytes < row_bytes ||
+        pitch_bytes > (SIZE_MAX - row_bytes) / (GBB_FRAME_HEIGHT - 1u))
+        return GBB_INVALID_ARGUMENT;
+    size_t required = (GBB_FRAME_HEIGHT - 1u) * pitch_bytes + row_bytes;
+    if (capacity_bytes < required) return GBB_INVALID_ARGUMENT;
+
+    uintptr_t pixels_begin = (uintptr_t)(void *)pixels;
+    uintptr_t info_begin = (uintptr_t)(void *)out_info;
+    if (capacity_bytes > UINTPTR_MAX - pixels_begin ||
+        sizeof(*out_info) > UINTPTR_MAX - info_begin)
+        return GBB_INVALID_ARGUMENT;
+    uintptr_t pixels_end = pixels_begin + capacity_bytes;
+    uintptr_t info_end = info_begin + sizeof(*out_info);
+    if (pixels_begin < info_end && info_begin < pixels_end)
+        return GBB_INVALID_ARGUMENT;
+    /* MODEL: CGB_ONLY GATE-83 GUARD=model_is_cgb -- colour frames are CGB-profile only; the DMG profile returns GBB_UNSUPPORTED_PROFILE (D-15), symmetric with GATE-57 */
+    if (!model_is_cgb(instance)) return GBB_UNSUPPORTED_PROFILE;
+    if (instance->frame_generation == 0) return GBB_FRAME_NOT_READY;
+    for (size_t y = 0; y < GBB_FRAME_HEIGHT; ++y)
+        memcpy((uint8_t *)pixels + y * pitch_bytes,
+               instance->rgb_completed + y * GBB_FRAME_WIDTH, row_bytes);
+    gbb_frame_info info = {GBB_FRAME_WIDTH, GBB_FRAME_HEIGHT,
+                           instance->frame_generation,
+                           instance->frame_completion_half_dots};
+    *out_info = info;
+    return GBB_OK;
+}
+
 /* MODEL: BOTH GATE-00 basis=host-side-mixing */
 static int audio_preflight(const gbb_instance *m, uint64_t half_dots) {
     if (!m->audio_run_active) return 1;
