@@ -111,7 +111,8 @@ buffer contracts.
   `gbb_create`; destroy the instance and create a new one to change profile.
   It starts in the bootless CGB-CPU-E post-boot state (see the
   [CGB profile](cgb-profile.md)) and runs original and admitted test ROMs. It
-  has no colour output and is not a game-compatibility claim.
+  renders colour frames, read with `gbb_copy_frame_rgb555` (below), and is not a
+  game-compatibility claim.
 - Classify a ROM before loading with `gbb_probe_rom`, which needs no instance,
   or ask a loaded instance with `gbb_get_info`. Both fill a `gbb_info`. Set
   `struct_size` to `sizeof(gbb_info)` before the call: the core writes only
@@ -129,18 +130,60 @@ buffer contracts.
 - A PGB-flagged `$143` (bit 7 set with bit 2 or bit 3 set) returns
   `GBB_UNSUPPORTED_EXECUTION_MODE` from `gbb_load_rom` and `gbb_probe_rom` on the
   CGB profile; the DMG profile probes it as `GBB_CGB_SUPPORT_PGB` with `GBB_OK`.
-- `gbb_copy_frame` returns `GBB_UNSUPPORTED_PROFILE` on the CGB profile until
-  colour output exists; invalid arguments still return `GBB_INVALID_ARGUMENT`.
+- `gbb_copy_frame` returns `GBB_UNSUPPORTED_PROFILE` on the CGB profile, because
+  one shade byte per pixel cannot express the background, OBJ0 and OBJ1
+  palettes; invalid arguments still return `GBB_INVALID_ARGUMENT`. Read colour
+  with `gbb_copy_frame_rgb555` instead.
+- Colour summary (details in the next section): the minimum pitch is 320 bytes
+  and sizes are in bytes; for `gbb_set_compat_palette`, bit 15 is rejected, not
+  masked, and a set never recolours a completed frame.
 - CGB mode has two VRAM banks and eight WRAM banks, selected by the guest
   through VBK and SVBK. `gbb_peek_ram` follows the selected WRAM bank for
   `$D000`-`$DFFF` and its echo, so read it after the guest has set SVBK.
-- Limitations: no colour output, no double speed, no HDMA. Registers whose
+- Limitations: no double speed, no HDMA, and CGB mode-3 timing is not claimed. Registers whose
   behaviour is owned by a later phase stop with `GBB_STOP_UNSUPPORTED_BUS`
   rather than invent a value. DMG addresses `$FF4C`-`$FF7F` stay fail-closed.
   IE bits 5-7 are stored on the CGB profile only. The DMG rule that OAM DMA
   blocks the CPU outside HRAM is kept on the CGB profile although real CGB
   hardware has separate buses. See [CGB profile](cgb-profile.md) and
   [model gates](model-gates.md).
+
+### Colour frames and the compatibility palette
+
+`gbb_copy_frame_rgb555` copies the latest completed 160x144 frame as
+native-endian `uint16_t` values `R | G << 5 | B << 10` with bit 15 always
+clear. It serves the CGB profile in CGB mode and in compatibility mode, and
+returns `GBB_UNSUPPORTED_PROFILE` on the DMG profile, where `gbb_copy_frame`
+is the call to use. Both sizes are in bytes: the minimum pitch is 320 bytes
+(an even number, one 160-pixel row), the capacity must cover
+`143 * pitch + 320` bytes, and the destination must be 2-byte aligned. Every
+check runs before any write: an invalid pointer, alignment, pitch, capacity or
+overlap with the `gbb_frame_info` output returns `GBB_INVALID_ARGUMENT`, then
+the profile check, then `GBB_FRAME_NOT_READY` before a frame completes or after
+`gbb_reset`. On any error nothing is written. The core never allocates, and
+`gbb_frame_info` is the same unchanged struct `gbb_copy_frame` fills. While the
+LCD is off the last completed frame stays readable and the generation does not
+advance.
+
+The core applies no colour correction. A host that wants 8-bit channels expands
+each 5-bit channel `c` with `(c << 3) | (c >> 2)` and applies any display
+correction itself. To digest a frame, write each value as an explicit
+little-endian byte pair rather than hashing host memory.
+
+In compatibility mode the shade indices of a DMG game resolve through a
+`gbb_compat_palette` (`GBB_COMPAT_PALETTE_SIZE_V1`, 28 bytes: `struct_size`
+then four RGB555 values each for `bg`, `obj0` and `obj1`). Set `struct_size`
+before `gbb_get_compat_palette`; it writes within that size and sets it to 28.
+A size below 28, a NULL instance or a NULL output returns `GBB_INVALID_ARGUMENT`
+with nothing written. `gbb_set_compat_palette` validates the whole struct
+before it stores anything: a `struct_size` below 28 or any entry with bit 15 set
+returns `GBB_INVALID_ARGUMENT` and leaves the palette unchanged, because
+bit 15 is rejected, not masked. A larger struct is accepted and its extra bytes are
+ignored. A NULL palette restores the default. Both profiles accept the calls,
+but only compatibility mode shows an effect; CGB mode colours come from the
+guest's CRAM. The palette is instance configuration that survives `gbb_reset`
+and `gbb_load_rom`. A set never recolours a completed frame: it applies to
+
 
 ## Support and upgrade
 

@@ -12,7 +12,7 @@ typedef struct gbb_instance gbb_instance;
 
 typedef enum {
     GBB_PROFILE_DMG_CPU_B = 1,
-    GBB_PROFILE_CGB_CPU_E = 2  /* creatable and probeable; no colour output yet */
+    GBB_PROFILE_CGB_CPU_E = 2  /* creatable and probeable; colour frames via gbb_copy_frame_rgb555 */
 } gbb_profile;
 
 typedef enum {
@@ -132,8 +132,8 @@ typedef struct {
  * DMG-CPU-B deterministic post-boot state. GBB_PROFILE_CGB_CPU_E starts in the
  * bootless CGB-CPU-E post-boot state, in CGB mode or DMG compatibility mode
  * according to the loaded ROM's $143 (with no ROM it is the compatibility
- * state); colour output is not yet available on it. Any other profile value
- * returns GBB_UNSUPPORTED_PROFILE. */
+ * state); its colour frames are read with gbb_copy_frame_rgb555. Any other
+ * profile value returns GBB_UNSUPPORTED_PROFILE. */
 gbb_error gbb_create(gbb_profile profile, gbb_instance **out_instance);
 void gbb_destroy(gbb_instance *instance);
 /* Reset restores the documented post-boot CPU/profile state, clears work RAM
@@ -243,8 +243,9 @@ gbb_error gbb_rtc_catch_up(gbb_instance *instance, int64_t elapsed_seconds);
  * batches append nothing. Consumed events free queue capacity. */
 gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events, size_t count);
 /* Copies the latest completed 160x144 frame as one byte per pixel. Each byte
- * is a DMG shade index in [0,3]. The CGB-CPU-E profile has no colour output
- * yet, so on it a call with valid arguments returns GBB_UNSUPPORTED_PROFILE;
+ * is a DMG shade index in [0,3]. Shades cannot express the BG/OBJ0/OBJ1
+ * palette split of the CGB-CPU-E profile, so on it a call with valid arguments
+ * returns GBB_UNSUPPORTED_PROFILE (use gbb_copy_frame_rgb555);
  * invalid arguments still return GBB_INVALID_ARGUMENT on both profiles.
  * pitch_bytes is the destination row stride;
  * capacity_bytes must cover (height-1)*pitch_bytes + width bytes. The entire
@@ -355,6 +356,57 @@ gbb_error gbb_probe_rom(gbb_profile profile, const uint8_t *rom, size_t rom_size
  * NULL instance, NULL out_info or struct_size < GBB_INFO_SIZE_V1 returns
  * GBB_INVALID_ARGUMENT. Outputs are left unchanged on any error. */
 gbb_error gbb_get_info(const gbb_instance *instance, gbb_info *out_info);
+
+/* Copies the latest completed 160x144 colour frame of the CGB-CPU-E profile, in
+ * CGB mode and in DMG compatibility mode. pitch_bytes and capacity_bytes are
+ * both in BYTES. Each pixel is a native-endian uint16_t R | G << 5 | B << 10
+ * with bit 15 always 0 (R, G and B in [0,31]); a digest of a frame must
+ * serialise each value as an explicit little-endian byte pair. The core applies
+ * no colour correction: a host expands each channel with (c << 3) | (c >> 2).
+ * Validation order, with nothing written on any error: GBB_INVALID_ARGUMENT for
+ * a NULL instance, pixels or out_info, a pixels pointer that is not 2-byte
+ * aligned, an odd pitch_bytes, a pitch_bytes below 320, a pitch whose
+ * 143 * pitch_bytes + 320 would overflow, a capacity_bytes below
+ * 143 * pitch_bytes + 320, or a capacity range overlapping out_info; then
+ * GBB_UNSUPPORTED_PROFILE on the DMG-CPU-B profile (use gbb_copy_frame there);
+ * then GBB_FRAME_NOT_READY when no frame has completed. Reset invalidates the
+ * completed frame; while the LCD is off the last completed frame is kept and
+ * the generation does not advance. gbb_frame_info is the same unchanged struct
+ * gbb_copy_frame fills. The core allocates nothing. */
+gbb_error gbb_copy_frame_rgb555(const gbb_instance *instance, uint16_t *pixels,
+                                size_t capacity_bytes, size_t pitch_bytes,
+                                gbb_frame_info *out_info);
+
+/* Compatibility-mode palette: the RGB555 value of each DMG shade index 0-3 for
+ * the background (bg), object palette 0 (obj0) and object palette 1 (obj1).
+ * Values are R | G << 5 | B << 10 with bit 15 clear. The core ships a default
+ * ramp (see docs/cgb-profile.md); this struct lets a host override it. */
+typedef struct gbb_compat_palette {
+    uint32_t struct_size;  /* IN: the caller sets GBB_COMPAT_PALETTE_SIZE_V1 or more; OUT of get: the bytes written */
+    uint16_t bg[4];
+    uint16_t obj0[4];
+    uint16_t obj1[4];
+} gbb_compat_palette;
+#define GBB_COMPAT_PALETTE_SIZE_V1 28u  /* the core static-asserts this equals sizeof(gbb_compat_palette) */
+/* Sets the compatibility palette of an instance. The whole struct is validated
+ * before anything is stored: a NULL instance, a struct_size below
+ * GBB_COMPAT_PALETTE_SIZE_V1 or any entry with bit 15 set returns
+ * GBB_INVALID_ARGUMENT and changes nothing (bit 15 is rejected, never masked).
+ * A larger struct_size is accepted and its extra bytes are ignored. A NULL
+ * palette restores the default. Both profiles accept the call, but only
+ * compatibility mode on the CGB-CPU-E profile shows an effect. The palette is
+ * instance configuration, not emulation state: it survives gbb_reset and
+ * gbb_load_rom. A set affects pixels resolved after the call and never
+ * recolours an already completed frame; compatibility-mode CRAM is never
+ * rewritten by the host. */
+gbb_error gbb_set_compat_palette(gbb_instance *instance, const gbb_compat_palette *palette);
+/* Reads the current compatibility palette. A NULL instance, a NULL out_palette
+ * or out_palette->struct_size below GBB_COMPAT_PALETTE_SIZE_V1 returns
+ * GBB_INVALID_ARGUMENT and writes nothing, struct_size included. On success the
+ * core writes field by field within the caller's struct_size and then sets
+ * struct_size to the 28 bytes written; a larger caller struct keeps its extra
+ * bytes. Accepted on both profiles. */
+gbb_error gbb_get_compat_palette(const gbb_instance *instance, gbb_compat_palette *out_palette);
 
 #ifdef __cplusplus
 }

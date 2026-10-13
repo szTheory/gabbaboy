@@ -1,0 +1,141 @@
+# D-30: automated colour check for gabbaboy-player (CGB colour presentation) with independent
+# expectations. Inputs (all passed with -D):
+#   GBB_CHECK            smoke (default) or cli
+#   GBB_PLAYER           the gabbaboy-player binary under test
+#   GBB_ROM              colour-attr.gb (original fixture; manifest.json documents each cell)
+#   GBB_DEMO             fixtures/visible-demo/demo.gb (a DMG-only cartridge)
+#   GBB_EXPECT_RGBA_SHA  pinned SHA-256 of the uploaded 160x144 RGBA buffer (smoke only)
+#
+# The spot expectations never ask the player. They come from the literal RGB555 values the fixture
+# source writes to colour RAM (attr.asm, BgPalettes and ObjPalettes, quoted in manifest.json) and
+# from the documented expansion (c << 3) | (c >> 2), computed below with CMake integer math.
+
+foreach(required GBB_PLAYER GBB_ROM)
+  if(NOT DEFINED ${required} OR "${${required}}" STREQUAL "")
+    message(FATAL_ERROR "cgb_smoke.cmake is missing ${required}")
+  endif()
+endforeach()
+if(NOT DEFINED GBB_CHECK)
+  set(GBB_CHECK smoke)
+endif()
+
+function(gbb_run_player out_code out_text)
+  execute_process(COMMAND "${GBB_PLAYER}" ${ARGN}
+    RESULT_VARIABLE code OUTPUT_VARIABLE out ERROR_VARIABLE err)
+  set(${out_code} "${code}" PARENT_SCOPE)
+  set(${out_text} "${out}${err}" PARENT_SCOPE)
+endfunction()
+
+# Two lowercase hex digits for the expanded 5-bit channel c.
+function(gbb_expand5_hex c out_var)
+  math(EXPR expanded "(${c} << 3) | (${c} >> 2)")
+  math(EXPR expanded "${expanded} & 255")
+  math(EXPR hi "${expanded} >> 4")
+  math(EXPR lo "${expanded} & 15")
+  string(SUBSTRING "0123456789abcdef" ${hi} 1 hi_char)
+  string(SUBSTRING "0123456789abcdef" ${lo} 1 lo_char)
+  set(${out_var} "${hi_char}${lo_char}" PARENT_SCOPE)
+endfunction()
+
+function(gbb_rgb555_to_hex value out_var)
+  math(EXPR r "${value} & 31")
+  math(EXPR g "(${value} >> 5) & 31")
+  math(EXPR b "(${value} >> 10) & 31")
+  gbb_expand5_hex(${r} rh)
+  gbb_expand5_hex(${g} gh)
+  gbb_expand5_hex(${b} bh)
+  set(${out_var} "${rh}${gh}${bh}" PARENT_SCOPE)
+endfunction()
+
+if(GBB_CHECK STREQUAL "smoke")
+  if(NOT DEFINED GBB_EXPECT_RGBA_SHA OR "${GBB_EXPECT_RGBA_SHA}" STREQUAL "")
+    message(FATAL_ERROR "cgb_smoke.cmake smoke is missing GBB_EXPECT_RGBA_SHA")
+  endif()
+  gbb_run_player(code text --model cgb --smoke-colour "${GBB_ROM}")
+  if(NOT code EQUAL 0)
+    message(FATAL_ERROR "cgb smoke: the player exited ${code}\n${text}")
+  endif()
+  if(NOT text MATCHES "smoke_colour rgba_sha256=([0-9a-f]+) distinct=([0-9]+) title_token=([^ \n]+) spot=([^\n]*)")
+    message(FATAL_ERROR "cgb smoke: no smoke_colour line in the output\n${text}")
+  endif()
+  set(actual_sha "${CMAKE_MATCH_1}")
+  set(distinct "${CMAKE_MATCH_2}")
+  set(token "${CMAKE_MATCH_3}")
+  set(spots ";${CMAKE_MATCH_4}")
+
+  if(NOT token STREQUAL "CGB")
+    message(FATAL_ERROR "cgb smoke: title token is '${token}', expected CGB")
+  endif()
+  # colour-attr.gb draws 14 distinct RGB555 values (manifest cells 0-9 plus the 0x1111 backdrop).
+  # An extra decoy value would raise the count, a lost palette or attribute would lower it.
+  if(distinct LESS 14)
+    message(FATAL_ERROR "cgb smoke: only ${distinct} distinct colours, expected at least 14")
+  endif()
+
+  # Quadrant order is top-left, top-right, bottom-left, bottom-right (manifest "quadrant_order").
+  set(cell_0 0x6666 0x7777 0x4321 0x5555)
+  set(cell_1 0x0444 0x1111 0x2222 0x3333)
+  set(cell_2 0x3333 0x2222 0x1111 0x0444)
+  set(cell_3 0x0444 0x1111 0x2222 0x3333)
+  set(cell_4 0x2222 0x3333 0x0444 0x1111)
+  set(cell_5 0x2222 0x2222 0x2222 0x2222)
+  set(cell_6 0x1BCD 0x1111 0x789A 0x0ABC)
+  set(cell_7 0x4567 0x5678 0x6789 0x1111)
+  set(cell_8 0x2222 0x3333 0x0444 0x1111)
+  set(cell_9 0x1111 0x1111 0x1111 0x1111)
+  set(checked 0)
+  foreach(cell RANGE 0 9)
+    set(quadrant 0)
+    foreach(value IN LISTS cell_${cell})
+      math(EXPR x "${cell} * 16 + 1 + (${quadrant} & 1) * 4")
+      math(EXPR y "1 + (${quadrant} >> 1) * 4")
+      gbb_rgb555_to_hex(${value} expected_hex)
+      if(NOT spots MATCHES ";${x},${y}:([0-9a-f]+);")
+        message(FATAL_ERROR "cgb smoke: no spot at ${x},${y}\n${text}")
+      endif()
+      if(NOT CMAKE_MATCH_1 STREQUAL expected_hex)
+        message(FATAL_ERROR
+          "cgb smoke: cell ${cell} quadrant ${quadrant} at ${x},${y} is ${CMAKE_MATCH_1}, expected ${expected_hex} (RGB555 ${value})")
+      endif()
+      math(EXPR quadrant "${quadrant} + 1")
+      math(EXPR checked "${checked} + 1")
+    endforeach()
+  endforeach()
+  if(NOT checked EQUAL 40)
+    message(FATAL_ERROR "cgb smoke: checked ${checked} spots, expected 40")
+  endif()
+  if(NOT actual_sha STREQUAL GBB_EXPECT_RGBA_SHA)
+    message(FATAL_ERROR "cgb smoke: RGBA buffer digest ${actual_sha} differs from the pinned ${GBB_EXPECT_RGBA_SHA}")
+  endif()
+  message(STATUS "cgb smoke passed: ${checked} spots, ${distinct} distinct colours, digest ${actual_sha}")
+
+elseif(GBB_CHECK STREQUAL "cli")
+  if(NOT DEFINED GBB_DEMO OR "${GBB_DEMO}" STREQUAL "")
+    message(FATAL_ERROR "cgb_smoke.cmake cli is missing GBB_DEMO")
+  endif()
+  function(gbb_expect label want_code want_regex)
+    gbb_run_player(code text ${ARGN})
+    if(NOT code EQUAL ${want_code})
+      message(FATAL_ERROR "cgb cli '${label}': exit ${code}, expected ${want_code}\n${text}")
+    endif()
+    if(NOT text MATCHES "${want_regex}")
+      message(FATAL_ERROR "cgb cli '${label}': output did not match '${want_regex}'\n${text}")
+    endif()
+  endfunction()
+  gbb_expect("unknown model" 2 "usage: .*\\[--model auto\\|dmg\\|cgb\\]" --model bogus)
+  gbb_expect("missing value" 2 "usage: .*\\[--model auto\\|dmg\\|cgb\\]" --model)
+  gbb_expect("model needs a closed token" 2 "usage: " --model CGB --smoke-colour "${GBB_ROM}")
+  gbb_expect("cgb on a DMG-only cartridge" 0 "title_token=CGB \\(DMG-compat\\) "
+    --model cgb --smoke-colour "${GBB_DEMO}")
+  gbb_expect("auto on a CGB cartridge" 0 "title_token=CGB spot="
+    --model auto --smoke-colour "${GBB_ROM}")
+  gbb_expect("dmg refuses the colour smoke" 2 "smoke-colour needs the CGB profile"
+    --model dmg --smoke-colour "${GBB_ROM}")
+  gbb_expect("auto on a DMG cartridge picks DMG" 2 "smoke-colour needs the CGB profile"
+    --model auto --smoke-colour "${GBB_DEMO}")
+  gbb_expect("the default model is dmg" 2 "smoke-colour needs the CGB profile"
+    --smoke-colour "${GBB_ROM}")
+  message(STATUS "cgb cli passed")
+else()
+  message(FATAL_ERROR "cgb_smoke.cmake: unknown GBB_CHECK '${GBB_CHECK}'")
+endif()

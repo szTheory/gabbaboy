@@ -1,0 +1,318 @@
+{
+  "schema": "gabbaboy-external-dispositions-v1",
+  "note_d20": "D-20: AGE has no CGB colour, attribute or priority ROM at this pin. The six m3-bg-* cases are mode-3 pixel-timing tests; they are expected-unsupported and are not Phase 11 evidence. Mealybug m3_* cases are unsupported-model and are not CGB-E evidence either. Nothing here is recorded as a pass.",
+  "suites": [
+    {
+      "suite": "age",
+      "repository": "https://github.com/c-sp/age-test-roms",
+      "commit": "1f5bc10e2cb60b86c19f8d0287ff78f410c4f639",
+      "licence": "MIT License",
+      "vendored": false,
+      "rights_gate": null,
+      "enumeration": "GET repos/c-sp/age-test-roms/git/trees/1f5bc10e2cb60b86c19f8d0287ff78f410c4f639?recursive=1; paths matching src/m3-bg-(lcdc|scx)/m3-bg-(lcdc|scx)-(cgbBCE|ds-cgbBCE|nocgb-ncmBCE).png",
+      "upstream_count": 6,
+      "rows": [
+        {
+          "case": "m3-bg-lcdc-cgbBCE",
+          "upstream_path": "src/m3-bg-lcdc/m3-bg-lcdc-cgbBCE.png",
+          "disposition": "expected-unsupported",
+          "reason": "mode-3-pixel-timing",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3-bg-lcdc-ds-cgbBCE",
+          "upstream_path": "src/m3-bg-lcdc/m3-bg-lcdc-ds-cgbBCE.png",
+          "disposition": "expected-unsupported",
+          "reason": "mode-3-pixel-timing",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3-bg-lcdc-nocgb-ncmBCE",
+          "upstream_path": "src/m3-bg-lcdc/m3-bg-lcdc-nocgb-ncmBCE.png",
+          "disposition": "expected-unsupported",
+          "reason": "mode-3-pixel-timing",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3-bg-scx-cgbBCE",
+          "upstream_path": "src/m3-bg-scx/m3-bg-scx-cgbBCE.png",
+          "disposition": "expected-unsupported",
+          "reason": "mode-3-pixel-timing",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3-bg-scx-ds-cgbBCE",
+          "upstream_path": "src/m3-bg-scx/m3-bg-scx-ds-cgbBCE.png",
+          "disposition": "expected-unsupported",
+          "reason": "mode-3-pixel-timing",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3-bg-scx-nocgb-ncmBCE",
+          "upstream_path": "src/m3-bg-scx/m3-bg-scx-nocgb-ncmBCE.png",
+          "disposition": "expected-unsupported",
+          "reason": "mode-3-pixel-timing",
+          "decision": "D-09",
+          "owner_phase": 14
+        }
+      ]
+    },
+    {
+      "suite": "mealybug",
+      "repository": "https://github.com/mattcurrie/mealybug-tearoom-tests",
+      "commit": "70e88fb90b59d19dfbb9c3ac36c64105202bb1f4",
+      "licence": "MIT License",
+      "vendored": false,
+      "rights_gate": "G1",
+      "enumeration": "GET repos/mattcurrie/mealybug-tearoom-tests/git/trees/70e88fb90b59d19dfbb9c3ac36c64105202bb1f4?recursive=1; paths matching src/ppu/m3_*.asm",
+      "upstream_count": 30,
+      "rows": [
+        {
+          "case": "m3_bgp_change",
+          "upstream_path": "src/ppu/m3_bgp_change.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_bgp_change_sprites",
+          "upstream_path": "src/ppu/m3_bgp_change_sprites.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_lcdc_bg_en_change",
+          "upstream_path": "src/ppu/m3_lcdc_bg_en_change.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_lcdc_bg_en_change2",
+          "upstream_path": "src/ppu/m3_lcdc_bg_en_change2.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_lcdc_bg_map_change",
+          "upstream_path": "src/ppu/m3_lcdc_bg_map_change.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_lcdc_bg_map_change2",
+          "upstream_path": "src/ppu/m3_lcdc_bg_map_change2.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_lcdc_obj_en_change",
+          "upstream_path": "src/ppu/m3_lcdc_obj_en_change.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_lcdc_obj_en_change_variant",
+          "upstream_path": "src/ppu/m3_lcdc_obj_en_change_variant.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_lcdc_obj_size_change",
+          "upstream_path": "src/ppu/m3_lcdc_obj_size_change.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_lcdc_obj_size_change_scx",
+          "upstream_path": "src/ppu/m3_lcdc_obj_size_change_scx.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_lcdc_tile_sel_change",
+          "upstream_path": "src/ppu/m3_lcdc_tile_sel_change.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_lcdc_tile_sel_change2",
+          "upstream_path": "src/ppu/m3_lcdc_tile_sel_change2.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_lcdc_tile_sel_win_change",
+          "upstream_path": "src/ppu/m3_lcdc_tile_sel_win_change.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_lcdc_tile_sel_win_change2",
+          "upstream_path": "src/ppu/m3_lcdc_tile_sel_win_change2.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_lcdc_win_en_change_multiple",
+          "upstream_path": "src/ppu/m3_lcdc_win_en_change_multiple.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_lcdc_win_en_change_multiple_wx",
+          "upstream_path": "src/ppu/m3_lcdc_win_en_change_multiple_wx.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_lcdc_win_map_change",
+          "upstream_path": "src/ppu/m3_lcdc_win_map_change.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_lcdc_win_map_change2",
+          "upstream_path": "src/ppu/m3_lcdc_win_map_change2.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_obp0_change",
+          "upstream_path": "src/ppu/m3_obp0_change.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_scx_high_5_bits",
+          "upstream_path": "src/ppu/m3_scx_high_5_bits.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_scx_high_5_bits_change2",
+          "upstream_path": "src/ppu/m3_scx_high_5_bits_change2.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_scx_low_3_bits",
+          "upstream_path": "src/ppu/m3_scx_low_3_bits.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_scy_change",
+          "upstream_path": "src/ppu/m3_scy_change.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_scy_change2",
+          "upstream_path": "src/ppu/m3_scy_change2.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_window_timing",
+          "upstream_path": "src/ppu/m3_window_timing.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_window_timing_wx_0",
+          "upstream_path": "src/ppu/m3_window_timing_wx_0.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_wx_4_change",
+          "upstream_path": "src/ppu/m3_wx_4_change.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_wx_4_change_sprites",
+          "upstream_path": "src/ppu/m3_wx_4_change_sprites.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_wx_5_change",
+          "upstream_path": "src/ppu/m3_wx_5_change.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        },
+        {
+          "case": "m3_wx_6_change",
+          "upstream_path": "src/ppu/m3_wx_6_change.asm",
+          "disposition": "unsupported-model",
+          "reason": "upstream expected images cover CGB-C/D steppings only; no CGB-E expectation",
+          "decision": "D-09",
+          "owner_phase": 14
+        }
+      ]
+    }
+  ]
+}

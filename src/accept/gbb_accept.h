@@ -217,6 +217,26 @@ int gbb_accept_write_ppm(const char *path, const uint8_t *shades, size_t pitch);
 /* Number of distinct shades (0..4) present in the frame, or 0 for an invalid shade. */
 unsigned gbb_accept_frame_distinct_shades(const uint8_t *shades, size_t pitch);
 
+/* ---- RGB555 frame evidence (Phase 11, D-15, D-43) ----
+ * The CGB colour frame digest is SHA-256 over the ASCII header below followed by 160x144 row-major
+ * pixels, each serialised as an explicit little-endian byte pair (low byte, then high byte) of the
+ * 15-bit RGB555 value, never as host uint16_t memory. The DMG header and digest above are unchanged.
+ * pixels holds 144 rows of 160 values spaced pitch_bytes apart (pitch_bytes >= 320 and even; the
+ * caller guarantees (144-1)*pitch_bytes+320 readable bytes). A value above 0x7FFF is rejected. */
+#define GBB_ACCEPT_RGB555_HEADER "GBB-RGB555LE-v1 160x144\n"
+
+/* Return 0 on success, nonzero when a value is above 0x7FFF or the pitch is invalid (out is then
+ * not written). */
+int gbb_accept_rgb555_digest_bin(const uint16_t *pixels, size_t pitch_bytes, uint8_t out[32]);
+int gbb_accept_rgb555_digest(const uint16_t *pixels, size_t pitch_bytes, char out_hex[65]);
+/* 5-bit channel to 8 bits by bit replication: (c << 3) | (c >> 2) of c & 31 (D-19). */
+uint8_t gbb_accept_expand5(unsigned c);
+/* Binary P6 PPM of the frame with each channel expanded by gbb_accept_expand5 (red is bits 0-4,
+ * green 5-9, blue 10-14). Same failure contract as gbb_accept_write_ppm. */
+int gbb_accept_write_ppm_rgb555(const char *path, const uint16_t *pixels, size_t pitch_bytes);
+/* Number of distinct pixel values in the frame, or 0 for an invalid value or pitch. */
+unsigned gbb_accept_rgb555_distinct(const uint16_t *pixels, size_t pitch_bytes);
+
 /* Whole-stream PCM digest over little-endian int16 L,R bytes. */
 typedef struct {
     gbb_accept_sha256_ctx sha;

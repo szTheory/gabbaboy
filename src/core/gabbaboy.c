@@ -316,6 +316,7 @@ typedef struct {
 } cartridge_info;
 
 _Static_assert(sizeof(gbb_info) == GBB_INFO_SIZE_V1, "gbb_info layout");
+_Static_assert(sizeof(gbb_compat_palette) == GBB_COMPAT_PALETTE_SIZE_V1, "gbb_compat_palette layout");
 
 typedef struct gbb_test_dma_event gbb_test_dma_event;
 
@@ -338,9 +339,21 @@ struct gbb_instance {
      * not built; STOP ignores it). bcps/ocps are the palette index registers, ff72-ff75 the
      * undocumented CGB scratch registers. DMG never reads or writes any of these. */
     uint8_t key1_armed, bcps, ocps, ff72, ff73, ff74, ff75;
+    /* CGB palette RAM (Phase 11): 8 palettes of 4 little-endian RGB555 colours per side, addressed
+     * through BCPS/OCPS bits 0-5. opri is the stored OPRI bit 0; it never changes object order after
+     * boot (D-08), which exec_mode decides. */
+    uint8_t bg_cram[64], obj_cram[64], opri;
     uint8_t oam[GBB_OAM_BYTES];
     uint8_t frame_working[GBB_FRAME_PIXELS];
     uint8_t frame_completed[GBB_FRAME_PIXELS];
+    /* CGB-mode RGB555 frames (Phase 11, D-02). In CGB mode only rgb_working is written per dot and
+     * the shade buffers stay zero; on the DMG profile only the shade buffers are written. Both
+     * pairs share frame_generation and frame_completion_half_dots. */
+    uint16_t rgb_working[GBB_FRAME_PIXELS];
+    uint16_t rgb_completed[GBB_FRAME_PIXELS];
+    /* Compat palette (D-17): sets BG, OBJ0, OBJ1 by shade. Instance configuration, set in
+     * gbb_create and never in reset_state, so it survives reset and ROM load. */
+    uint16_t compat_rgb555[3][4];
     uint64_t frame_generation;
     uint64_t frame_completion_half_dots;
     uint16_t ppu_dot;
@@ -696,7 +709,7 @@ static void ppu_update_stat_line(gbb_instance *m) {
                 ((m->ppu_mode == 2u) && ((m->stat & 0x20u) != 0)) ||
                 ((m->ly == m->lyc) && ((m->stat & 0x40u) != 0)));
     }
-    /* MODEL: UNKNOWN GATE-02 research:11 -- STAT interrupt line edge timing is unresearched for CGB */
+    /* MODEL: UNKNOWN GATE-02 research:14 -- STAT interrupt line edge timing on CGB is unresearched; deferred by D-09/D-12 */
     if (line && !m->ppu_stat_line) {
         m->interrupt_flags |= 0x02u;
         observe_ppu(m, 0xFF0F, 5, (uint8_t)(0xE0u | m->interrupt_flags));
@@ -770,6 +783,7 @@ typedef enum {
     PB_JOYPAD_SELECT, PB_JOYPAD_BUTTONS,
     PB_KEY1, PB_VRAM_BANK, PB_SVBK, PB_WRAM_BANK, PB_BCPS, PB_OCPS,
     PB_FF72, PB_FF73, PB_FF74, PB_FF75,
+    PB_BG_CRAM_FILL, PB_OBJ_CRAM_FILL, PB_OPRI,
     PB_RAM_FILL,
     PB_FIELD_COUNT
 } post_boot_field;
@@ -806,6 +820,7 @@ typedef struct {
 #define PB_IDX_VERIFY "[VERIFY] no hardware oracle for CGB-mode index"
 
 #define PB_VARIES "no hardware oracle for CGB mode; real hardware varies with the header and held buttons"
+#define PB_CRAM_COMPAT "the compat renderer never reads CRAM and the data ports read $FF in compat mode; deterministic fill only"
 #define PB_SAME_AS_DMG "same value as the DMG cell; Pan Docs gives no CGB-specific value"
 #define PB_CH1_SILENT "channel 1 enabled-but-silent: current volume 0, no boot chime is synthesised (A2)"
 
@@ -891,6 +906,14 @@ static const post_boot_row post_boot[PB_FIELD_COUNT] = {
     { PB_FF73, PB_NA(0u), PBC_POLICY(0u, PB_INIT0), PBC_POLICY(0u, PB_INIT0) },
     { PB_FF74, PB_NA(0u), PBC_POLICY(0u, PB_INIT0), PBC_POLICY(0u, "compat mode does not decode FF74: reads $FF, writes ignored; stored value stays 0") },
     { PB_FF75, PB_NA(0u), PBC_POLICY(0u, "bits 4-6 stored; reads $8F with them clear"), PBC_POLICY(0u, "bits 4-6 stored; reads $8F with them clear") },
+    /* Palette RAM fill word (D-14): every colour of the side is this RGB555 value, low byte first.
+     * The compat renderer never reads CRAM and its data ports read $FF, so that column is a
+     * deterministic fill only. OPRI is stored but has no priority effect after boot (D-08). */
+    { PB_BG_CRAM_FILL, PB_NA(0u), PBC_PD(0x7FFFu), PBC_POLICY(0x7FFFu, PB_CRAM_COMPAT) },
+    { PB_OBJ_CRAM_FILL, PB_NA(0u), PBC_POLICY(0x7FFFu, "Pan Docs calls OBJ CRAM uninitialised; white by policy (D-14)"),
+                        PBC_POLICY(0x7FFFu, PB_CRAM_COMPAT) },
+    { PB_OPRI, PB_NA(0u), PBC_POLICY(0u, "boot ROM leaves priority by OAM index; no hardware oracle (D-08)"),
+               PBC_POLICY(0u, "compat mode reads OPRI as $FF; stored value inert") },
     { PB_RAM_FILL, PB_POLICY(0u, "D-025 deterministic fill"),
                    PBC_POLICY(0u, "D-025 deterministic fill"), PBC_POLICY(0u, "D-025 deterministic fill") },
 };
@@ -1007,7 +1030,7 @@ static void post_boot_apply(gbb_instance *m) {
         case PB_OBP0: m->obp0 = v; break;
         case PB_OBP1: m->obp1 = v; break;
         case PB_PPU_MODE:
-            /* MODEL: UNKNOWN GATE-10 research:11 -- post-boot PPU mode, LY and STAT literals differ by model */
+            /* MODEL: UNKNOWN GATE-10 research:14 -- post-boot PPU mode, LY and STAT literals differ by model; the CGB mode-3 and line-0 timing question is deferred by D-09/D-12 */
             m->ppu_mode = v; break;
         case PB_JOYPAD_SELECT: m->joypad_select = v; break;
         case PB_JOYPAD_BUTTONS: m->joypad_buttons = v; break;
@@ -1021,6 +1044,17 @@ static void post_boot_apply(gbb_instance *m) {
         case PB_FF73: m->ff73 = v; break;
         case PB_FF74: m->ff74 = v; break;
         case PB_FF75: m->ff75 = v; break;
+        case PB_BG_CRAM_FILL:
+        case PB_OBJ_CRAM_FILL: {
+            /* MODEL: BOTH GATE-00 basis="post_boot[] column per profile (D-06)" -- palette RAM fill; the DMG column is inert and never read */
+            uint8_t *cram = post_boot[i].field == PB_BG_CRAM_FILL ? m->bg_cram : m->obj_cram;
+            for (unsigned word = 0; word < sizeof(m->bg_cram) / 2u; ++word) {
+                cram[word * 2u] = (uint8_t)c->value;
+                cram[word * 2u + 1u] = (uint8_t)(c->value >> 8);
+            }
+            break;
+        }
+        case PB_OPRI: m->opri = (uint8_t)(v & 1u); break;
         case PB_RAM_FILL:
             /* MODEL: BOTH GATE-09 basis=D-025 -- RAM fill is emulator policy; hardware power-on RAM is unspecified */
             memset(m->wram, v, sizeof(m->wram));
@@ -1067,7 +1101,10 @@ typedef enum {
     IO_SVBK,
     IO_STORE,         /* stored byte: reads (stored | read_or), writes keep (value & write_mask) */
     IO_DEFERRED_RW,   /* read stops, write latches and is dropped */
-    IO_DEFERRED_W     /* reads $FF, write latches and is dropped */
+    IO_DEFERRED_W,    /* reads $FF, write latches and is dropped */
+    IO_BCPD,          /* background palette data port (appended: IO_UNSET stays 0) */
+    IO_OCPD,          /* object palette data port */
+    IO_OPRI           /* object priority mode: bit 0 stored, no effect after boot */
 } io_kind;
 
 typedef enum { IOS_NONE = 0, IOS_PANDOCS, IOS_HW_TEST, IOS_SAMEBOY, IOS_POLICY, IOS_EXISTING } io_source;
@@ -1197,10 +1234,10 @@ static const io_row io_visibility[IO_VISIBILITY_ROWS] = {
     [0x66] = IO_UNUSED_ROW,
     [0x67] = IO_UNUSED_ROW,
     [0x68] = { IOC(DMG_STOP), IOC_ST(0x40, 0xBF), IOC_ST(0x40, 0xBF), IOS_HW_TEST }, /* BCPS: background palette index; unused bit 6 reads 1 */
-    [0x69] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 11), IOC(CONST_FF), IOS_PANDOCS }, /* BCPD: palette data port deferred to phase 11; compat mode ignores it without increment */
+    [0x69] = { IOC(DMG_STOP), IOC(BCPD), IOC(CONST_FF), IOS_PANDOCS }, /* BCPD: background palette data; auto-increment on write even when blocked, reads never increment; compat mode ignores it without increment */
     [0x6A] = { IOC(DMG_STOP), IOC_ST(0x40, 0xBF), IOC_ST(0x40, 0xBF), IOS_HW_TEST }, /* OCPS: object palette index; unused bit 6 reads 1 */
-    [0x6B] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 11), IOC(CONST_FF), IOS_PANDOCS }, /* OCPD: palette data port deferred to phase 11 */
-    [0x6C] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 11), IOC(CONST_FF), IOS_PANDOCS }, /* OPRI: object priority mode deferred to phase 11 */
+    [0x6B] = { IOC(DMG_STOP), IOC(OCPD), IOC(CONST_FF), IOS_PANDOCS }, /* OCPD: object palette data; same port rules as BCPD; compat mode ignores it without increment */
+    [0x6C] = { IOC(DMG_STOP), IOC(OPRI), IOC(CONST_FF), IOS_SAMEBOY }, /* OPRI: bit 0 stored and read back as $FE|bit0 in CGB mode; no effect on priority after boot (SameBoy memory.c; Pan Docs 'no effect ... after the boot ROM has been unmapped', TO BE VERIFIED); UNKNOWN */
     [0x6D] = IO_UNUSED_ROW,
     [0x6E] = IO_UNUSED_ROW,
     [0x6F] = IO_UNUSED_ROW,
@@ -1230,6 +1267,44 @@ static const io_cell *io_cgb_cell(const gbb_instance *m, uint16_t address) {
     return m->exec_mode == GBB_MODE_CGB ? &row->cgb : &row->compat;
 }
 
+/* CPU access locks for the PPU-owned memories. CRAM has its own predicate (D-12). */
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static int cpu_vram_access_allowed(const gbb_instance *m) {
+    /* MODEL: UNKNOWN GATE-13 research:14 -- VRAM CPU lock window during mode 3; CGB lock-edge offsets are unresearched and deferred by D-09/D-12 */
+    return (m->lcdc & 0x80u) == 0 || m->ppu_mode != 3u;
+}
+
+/* CRAM CPU lock. SameBoy's edge offsets and the black-pixel quirk are not modelled (D-12). */
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static int cpu_cram_access_allowed(const gbb_instance *m) {
+    /* MODEL: UNKNOWN GATE-76 research:14 -- CRAM CPU lock is a plain mode-3 predicate; edge offsets unresearched (D-12) */
+    return (m->lcdc & 0x80u) == 0 || m->ppu_mode != 3u;
+}
+
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static int cpu_oam_access_allowed(const gbb_instance *m) {
+    /* MODEL: UNKNOWN GATE-14 research:14 -- OAM CPU lock window during modes 2 and 3; CGB lock-edge offsets are unresearched and deferred by D-09/D-12 */
+    return (m->lcdc & 0x80u) == 0 || m->ppu_mode == 0u || m->ppu_mode == 1u;
+}
+
+/* Palette data port write (D-11). The index register keeps bit 7 (auto-increment) and bit 6 reads 1
+ * through the STORE mask on BCPS/OCPS; here only bits 0-5 address the 64-byte array. The index
+ * advances after every write while bit 7 is set, even a write the mode-3 lock blocked, and it wraps
+ * 63 to 0 inside bits 0-5 so no index bit leaks into bit 6. */
+/* MODEL: BOTH GATE-00 basis=cgb-only-callers */
+static void cram_data_write(uint8_t *index_reg, uint8_t cram[64], uint8_t value, int allowed) {
+    const unsigned idx = (unsigned)*index_reg & 0x3Fu;
+    if (allowed) cram[idx] = value;
+    if ((*index_reg & 0x80u) != 0u) *index_reg = (uint8_t)(0x80u | ((idx + 1u) & 0x3Fu));
+}
+
+/* Palette data port read (D-11): the stored byte, or $FF while the lock blocks it. Never touches
+ * the index register. */
+/* MODEL: BOTH GATE-00 basis=cgb-only-callers */
+static uint8_t cram_data_read(uint8_t index_reg, const uint8_t cram[64], int allowed) {
+    return allowed ? cram[(unsigned)index_reg & 0x3Fu] : 0xFFu;
+}
+
 /* Storage behind a STORE cell. */
 /* MODEL: BOTH GATE-00 basis="CGB-only storage selected by address" */
 static const uint8_t *io_store_ptr(const gbb_instance *m, uint16_t address) {
@@ -1257,6 +1332,9 @@ static uint8_t io_read_cgb(const gbb_instance *m, uint16_t address) {
         const uint8_t *p = io_store_ptr(m, address);
         return p == NULL ? 0xFFu : (uint8_t)(*p | c->read_or);
     }
+    case IO_BCPD: return cram_data_read(m->bcps, m->bg_cram, cpu_cram_access_allowed(m));
+    case IO_OCPD: return cram_data_read(m->ocps, m->obj_cram, cpu_cram_access_allowed(m));
+    case IO_OPRI: return (uint8_t)(0xFEu | (m->opri & 1u));
     default: return 0xFFu; /* CONST_FF, DEFERRED_W; DEFERRED_RW is refused before the read */
     }
 }
@@ -1281,6 +1359,12 @@ static void io_write_cgb(gbb_instance *m, uint16_t address, uint8_t value) {
         if (p != NULL) *p = (uint8_t)(value & c->write_mask);
         break;
     }
+    case IO_BCPD: cram_data_write(&m->bcps, m->bg_cram, value, cpu_cram_access_allowed(m)); break;
+    case IO_OCPD: cram_data_write(&m->ocps, m->obj_cram, value, cpu_cram_access_allowed(m)); break;
+    case IO_OPRI:
+        /* MODEL: UNKNOWN GATE-77 research:14 -- OPRI is stored without priority effect after boot (D-08) */
+        m->opri = (uint8_t)(value & 1u);
+        break;
     case IO_DEFERRED_RW:
     case IO_DEFERRED_W:
         m->bus_unsupported = 1;
@@ -1329,6 +1413,8 @@ static void reset_state(gbb_instance *m) {
     m->halt_bug = 0;
     memset(m->frame_working, 0, sizeof(m->frame_working));
     memset(m->frame_completed, 0, sizeof(m->frame_completed));
+    memset(m->rgb_working, 0, sizeof(m->rgb_working));
+    memset(m->rgb_completed, 0, sizeof(m->rgb_completed));
     m->frame_generation = 0;
     m->frame_completion_half_dots = 0;
     m->ppu_dot = 0;
@@ -1380,18 +1466,6 @@ static void joypad_request_falling_edge(gbb_instance *m, uint8_t previous) {
     uint8_t current = (uint8_t)(joypad_value(m) & 0x0Fu);
     if ((previous & (uint8_t)~current & 0x0Fu) != 0)
         m->interrupt_flags |= 0x10u;
-}
-
-/* MODEL: BOTH GATE-00 basis=see-branch-gates */
-static int cpu_vram_access_allowed(const gbb_instance *m) {
-    /* MODEL: UNKNOWN GATE-13 research:11 -- VRAM CPU lock window during mode 3 */
-    return (m->lcdc & 0x80u) == 0 || m->ppu_mode != 3u;
-}
-
-/* MODEL: BOTH GATE-00 basis=see-branch-gates */
-static int cpu_oam_access_allowed(const gbb_instance *m) {
-    /* MODEL: UNKNOWN GATE-14 research:11 -- OAM CPU lock window during modes 2 and 3 */
-    return (m->lcdc & 0x80u) == 0 || m->ppu_mode == 0u || m->ppu_mode == 1u;
 }
 
 /* MODEL: BOTH GATE-00 basis=model-neutral */
@@ -1585,7 +1659,7 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
                          (m->apu_wave.enabled ? 4u : 0u) |
                          (m->apu_noise.enabled ? 8u : 0u));
     if (address == 0xFF40) return m->lcdc;
-    /* MODEL: UNKNOWN GATE-20 research:11 -- STAT mode and coincidence bits at LCD transitions */
+    /* MODEL: UNKNOWN GATE-20 research:14 -- STAT mode and coincidence bits at LCD transitions; CGB transition timing is unresearched and deferred by D-09/D-12 */
     if (address == 0xFF41)
         return (uint8_t)(0x80u | (m->stat & 0x78u) |
                          (m->ly == m->lyc ? 0x04u : 0u) | m->ppu_mode);
@@ -1820,7 +1894,7 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
         m->joypad_select = (uint8_t)(value & 0x30u);
         joypad_request_falling_edge(m, previous);
     }
-    /* MODEL: UNKNOWN GATE-28 research:11 -- LCDC bit 0 meaning and LCD on and off timing */
+    /* MODEL: UNKNOWN GATE-28 research:14 -- LCD on and off timing */
     else if (address == 0xFF40) {
         uint8_t old = m->lcdc;
         m->lcdc = value;
@@ -1835,6 +1909,10 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
             m->ppu_transfer_complete = 0;
             m->ppu_fifo_count = 0;
             memset(m->frame_working, 0, sizeof(m->frame_working));
+            /* MODEL: CGB_ONLY GATE-78 GUARD=model_is_cgb -- LCD off blanks the RGB working frame to white; the completed RGB frame is kept (D-02) */
+            if (model_is_cgb(m)) {
+                for (unsigned i = 0; i < GBB_FRAME_PIXELS; ++i) m->rgb_working[i] = 0x7FFFu;
+            }
             ppu_update_stat_line(m);
         } else if ((old & 0x80u) == 0) {
             m->ppu_dot = 0;
@@ -2132,9 +2210,8 @@ static int ppu_window_visible_at(const gbb_instance *m, unsigned x) {
     return (int)x >= left;
 }
 
-/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+/* MODEL: BOTH GATE-43 basis="DMG semantics: LCDC bit 0 gates BG and window; runs for the DMG profile and compat mode, CGB mode uses ppu_cgb_background" */
 static uint8_t ppu_background_color(const gbb_instance *m, unsigned x) {
-    /* MODEL: UNKNOWN GATE-43 research:11 -- LCDC bit 0 gates the window on DMG and only priority on CGB; no BG attributes yet */
     int window = (m->lcdc & 0x01u) != 0 && ppu_window_visible_at(m, x);
     unsigned source_x;
     unsigned source_y;
@@ -2173,7 +2250,7 @@ static void ppu_scan_object(gbb_instance *m, unsigned index) {
     if (m->ly == 0u)
         observe_ppu(m, (uint16_t)(0xFE00u + index), 9,
                     (uint8_t)(m->dma_active ? 0u : 1u));
-    /* MODEL: UNKNOWN GATE-44 research:11 -- OAM scan against a DMA in flight */
+    /* MODEL: UNKNOWN GATE-44 research:14 -- OAM scan against a DMA in flight; the CGB scan timing question is deferred by D-09/D-12 */
     if (m->dma_active || m->ppu_selected_object_count >= GBB_LINE_OBJECT_LIMIT)
         return;
     unsigned height = (m->lcdc & 0x04u) != 0 ? 16u : 8u;
@@ -2189,10 +2266,9 @@ static void ppu_scan_object(gbb_instance *m, unsigned index) {
     m->ppu_selected_attributes[slot] = m->oam[offset + 3u];
 }
 
-/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+/* MODEL: BOTH GATE-45 basis="DMG semantics: object priority by X then OAM index; runs for the DMG profile and compat mode, CGB mode uses ppu_cgb_object" */
 static int ppu_object_color(const gbb_instance *m, unsigned x, uint8_t *color,
                             uint8_t *attributes) {
-    /* MODEL: UNKNOWN GATE-45 research:11 -- object priority is by X on DMG and by OAM index on CGB */
     if ((m->lcdc & 0x02u) == 0) return 0;
     int found = 0;
     int best_left = 0;
@@ -2238,9 +2314,8 @@ static uint8_t ppu_palette_shade(uint8_t palette, uint8_t color) {
     return (uint8_t)((palette >> (color * 2u)) & 3u);
 }
 
-/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+/* MODEL: BOTH GATE-46 basis="DMG semantics: DMG palette shade composition; runs for the DMG profile and compat mode, CGB mode uses ppu_pixel_cgb" */
 static uint8_t ppu_pixel_shade(gbb_instance *m, unsigned x) {
-    /* MODEL: UNKNOWN GATE-46 research:11 -- shade composition is the DMG palette path */
     uint8_t background = (m->lcdc & 0x01u) != 0 ? ppu_background_color(m, x) : 0;
     if ((m->lcdc & 0x01u) != 0 && ppu_window_visible_at(m, x))
         m->ppu_window_line_drawn = 1;
@@ -2251,6 +2326,165 @@ static uint8_t ppu_pixel_shade(gbb_instance *m, unsigned x) {
         return ppu_palette_shade(palette, object);
     }
     return ppu_palette_shade(m->bgp, background);
+}
+
+/* Compat palette default (D-18). One rule: a brightness ramp Y = 31, 21, 11, 1 per shade with
+ * R = Y, G = Y - (Y >> 3), B = Y - (Y >> 2), packed as RGB555 (bit 15 clear). The same ramp seeds
+ * BG, OBJ0 and OBJ1. These values were authored here without reference to any third-party,
+ * boot-ROM or title-hash table (G4); the look is an owner veto item. */
+static const uint16_t compat_default_rgb555[3][4] = {
+    {0x639Fu, 0x4275u, 0x254Bu, 0x0421u},
+    {0x639Fu, 0x4275u, 0x254Bu, 0x0421u},
+    {0x639Fu, 0x4275u, 0x254Bu, 0x0421u},
+};
+
+/* MODEL: BOTH GATE-00 basis="compat palette lookup; indices are masked so guest bytes cannot leave the table (T-11-34)" */
+static uint16_t ppu_compat_resolve(const gbb_instance *m, unsigned set, uint8_t shade) {
+    return m->compat_rgb555[set % 3u][shade & 3u];
+}
+
+/* MODEL: BOTH GATE-00 basis="compat mode pixel: DMG composition resolved through the compat palette (D-39); never reads vram[1]" */
+static uint16_t ppu_pixel_compat(gbb_instance *m, unsigned x) {
+    uint8_t background = (m->lcdc & 0x01u) != 0 ? ppu_background_color(m, x) : 0;
+    if ((m->lcdc & 0x01u) != 0 && ppu_window_visible_at(m, x))
+        m->ppu_window_line_drawn = 1;
+    uint8_t object = 0, attributes = 0;
+    if (ppu_object_color(m, x, &object, &attributes) &&
+        ((attributes & 0x80u) == 0 || background == 0)) {
+        const uint8_t palette = (attributes & 0x10u) != 0 ? m->obp1 : m->obp0;
+        return ppu_compat_resolve(m, 1u + ((attributes >> 4) & 1u), ppu_palette_shade(palette, object));
+    }
+    return ppu_compat_resolve(m, 0u, ppu_palette_shade(m->bgp, background));
+}
+
+/* ---- CGB-mode colour path (Phase 11, D-01 to D-09) -------------------------------------------------
+ * Siblings of the DMG functions above, selected by the single per-dot branch in ppu_transfer_dot.
+ * They read only PPU state (VRAM, OAM, CRAM, registers), never the CPU-visible VBK bank. */
+
+/* MODEL: BOTH GATE-00 basis="bank-explicit VRAM read; the renderer never uses vram_bank (D-05, D-36)" */
+static uint8_t ppu_vram_read(const gbb_instance *m, unsigned bank, uint16_t address) {
+    return address < GBB_VRAM_BANK_SIZE ? m->vram[bank & 1u][address] : 0u;
+}
+
+/* One RGB555 colour from a CRAM side. Bit 15 of the stored word is not part of the colour (RESEARCH
+ * Correction 10), so a guest word of $FFFF resolves to $7FFF. */
+/* MODEL: BOTH GATE-00 basis="pure palette RAM lookup" */
+static uint16_t cram_colour(const uint8_t cram[64], unsigned palette, unsigned index) {
+    unsigned at = (palette & 7u) * 8u + (index & 3u) * 2u;
+    return (uint16_t)((cram[at] | (cram[at + 1u] << 8)) & 0x7FFFu);
+}
+
+/* MODEL: BOTH GATE-00 basis="same tile addressing as ppu_tile_color, with an explicit VRAM bank" */
+static uint8_t ppu_cgb_tile_color(const gbb_instance *m, uint8_t tile, unsigned bank,
+                                  unsigned row, unsigned column, int object) {
+    int tile_base;
+    if (object || (m->lcdc & 0x10u) != 0) {
+        tile_base = (int)tile * 16;
+    } else {
+        tile_base = 0x1000 + (int)(int8_t)tile * 16;
+    }
+    if (tile_base < 0 || tile_base + 15 >= 0x1800 || row >= 8u || column >= 8u)
+        return 0;
+    unsigned address = (unsigned)tile_base + row * 2u;
+    uint8_t bit = (uint8_t)(7u - column);
+    uint8_t low = ppu_vram_read(m, bank, (uint16_t)address);
+    uint8_t high = ppu_vram_read(m, bank, (uint16_t)(address + 1u));
+    return (uint8_t)(((low >> bit) & 1u) | (((high >> bit) & 1u) << 1));
+}
+
+/* MODEL: BOTH GATE-00 basis="CGB mode gates the window on LCDC bit 5 alone; LCDC bit 0 is priority only (D-06)" */
+static int ppu_cgb_window_visible_at(const gbb_instance *m, unsigned x) {
+    if ((m->lcdc & 0x20u) == 0 || m->ly < m->wy || m->wx > 166u)
+        return 0;
+    int left = (int)m->wx - 7;
+    return (int)x >= left;
+}
+
+/* Background or window colour index and its map attribute. The tile index comes from bank 0 and the
+ * attribute from bank 1 at the same map address (D-05). Attribute bit 4 is ignored. */
+/* MODEL: BOTH GATE-00 basis="CGB mode BG and window fetch with attributes (D-05, D-09)" */
+static uint8_t ppu_cgb_background(const gbb_instance *m, unsigned x, uint8_t *attr) {
+    int window = ppu_cgb_window_visible_at(m, x);
+    unsigned source_x;
+    unsigned source_y;
+    uint16_t map_base;
+    *attr = 0;
+    if (window) {
+        source_x = (unsigned)((int)x - ((int)m->wx - 7));
+        source_y = m->ppu_window_line;
+        map_base = (m->lcdc & 0x40u) != 0 ? 0x1C00u : 0x1800u;
+    } else {
+        source_x = (uint8_t)(x + m->scx);
+        source_y = (uint8_t)(m->ly + m->scy);
+        map_base = (m->lcdc & 0x08u) != 0 ? 0x1C00u : 0x1800u;
+    }
+    uint16_t map_index = (uint16_t)(((source_y >> 3) * 32u) + ((source_x & 0xFFu) >> 3));
+    uint16_t map_address = (uint16_t)(map_base + map_index);
+    if (map_address >= GBB_VRAM_BANK_SIZE) return 0;
+    uint8_t tile = ppu_vram_read(m, 0u, map_address);
+    uint8_t attributes = ppu_vram_read(m, 1u, map_address);
+    unsigned row = source_y & 7u;
+    unsigned column = source_x & 7u;
+    if ((attributes & 0x40u) != 0) row = 7u - row;
+    if ((attributes & 0x20u) != 0) column = 7u - column;
+    *attr = attributes;
+    return ppu_cgb_tile_color(m, tile, (attributes >> 3) & 1u, row, column, 0);
+}
+
+/* First opaque object in ascending OAM index (ppu_scan_object stores them in that order); no X
+ * comparison in CGB mode (D-08). OPRI is never read here. */
+/* MODEL: BOTH GATE-00 basis="CGB mode object fetch: OAM bit 3 bank, OAM-index order (D-05, D-08)" */
+static int ppu_cgb_object(const gbb_instance *m, unsigned x, uint8_t *color, uint8_t *attributes) {
+    if ((m->lcdc & 0x02u) == 0) return 0;
+    unsigned height = (m->lcdc & 0x04u) != 0 ? 16u : 8u;
+    for (unsigned selected = 0; selected < m->ppu_selected_object_count; ++selected) {
+        int left = (int)m->ppu_selected_x[selected] - 8;
+        int local_x = (int)x - left;
+        if (local_x < 0 || local_x >= 8) continue;
+        int row = (int)m->ly - ((int)m->ppu_selected_y[selected] - 16);
+        if (row < 0 || row >= (int)height) continue;
+        uint8_t attrs = m->ppu_selected_attributes[selected];
+        if ((attrs & 0x40u) != 0) row = (int)height - 1 - row;
+        unsigned tile = m->ppu_selected_tile[selected];
+        if (height == 16u) {
+            tile &= ~1u;
+            tile += (unsigned)row >> 3;
+        }
+        unsigned source_x = (attrs & 0x20u) != 0 ? 7u - (unsigned)local_x : (unsigned)local_x;
+        uint8_t candidate = ppu_cgb_tile_color(m, (uint8_t)tile, (attrs >> 3) & 1u,
+                                               (unsigned)row & 7u, source_x, 1);
+        if (candidate == 0) continue; /* OBJ colour 0 is transparent before palette lookup. */
+        *color = candidate;
+        *attributes = attrs;
+        return 1;
+    }
+    return 0;
+}
+
+typedef enum { CGB_LAYER_BG, CGB_LAYER_OBJ } cgb_layer;
+
+/* D-07 priority: an opaque object wins unless LCDC.0 = 1, BG colour index is 1-3 and either the
+ * OAM priority bit or the BG attribute priority bit is set. */
+/* MODEL: BOTH GATE-00 basis="pure CGB mode priority composer (D-07)" */
+static cgb_layer ppu_compose_cgb(uint8_t lcdc, uint8_t bg_index, uint8_t bg_attr,
+                                 int obj_opaque, uint8_t obj_attr) {
+    if (!obj_opaque) return CGB_LAYER_BG;
+    if (bg_index == 0u) return CGB_LAYER_OBJ;
+    if ((lcdc & 0x01u) == 0) return CGB_LAYER_OBJ;
+    if (((obj_attr | bg_attr) & 0x80u) == 0) return CGB_LAYER_OBJ;
+    return CGB_LAYER_BG;
+}
+
+/* MODEL: BOTH GATE-00 basis="CGB mode pixel: palette RAM resolved per dot (D-01)" */
+static uint16_t ppu_pixel_cgb(gbb_instance *m, unsigned x) {
+    uint8_t bg_attr = 0;
+    uint8_t bg_index = ppu_cgb_background(m, x, &bg_attr);
+    if (ppu_cgb_window_visible_at(m, x)) m->ppu_window_line_drawn = 1;
+    uint8_t object = 0, object_attr = 0;
+    int opaque = ppu_cgb_object(m, x, &object, &object_attr);
+    if (ppu_compose_cgb(m->lcdc, bg_index, bg_attr, opaque, object_attr) == CGB_LAYER_OBJ)
+        return cram_colour(m->obj_cram, object_attr & 7u, object);
+    return cram_colour(m->bg_cram, bg_attr & 7u, bg_index);
 }
 
 /* MODEL: BOTH GATE-00 basis=model-neutral */
@@ -2275,7 +2509,7 @@ static void ppu_begin_transfer(gbb_instance *m) {
 static void ppu_fetcher_step(gbb_instance *m) {
     uint16_t needed = (uint16_t)(GBB_FRAME_WIDTH + m->ppu_fine_scroll);
     if (m->ppu_fetch_enqueued >= needed) return;
-    /* MODEL: UNKNOWN GATE-47 research:11 -- fetcher push timing */
+    /* MODEL: UNKNOWN GATE-47 research:14 -- fetcher push timing; CGB mode-3 fetcher timing is not claimed and is deferred by D-09/D-12 */
     if (m->ppu_fetch_stage == 3u && m->ppu_fetch_phase == 1u) {
         if (m->ppu_fifo_count > 8u) return;
         uint16_t remaining = (uint16_t)(needed - m->ppu_fetch_enqueued);
@@ -2300,9 +2534,11 @@ static void ppu_fetcher_step(gbb_instance *m) {
     }
 }
 
-/* MODEL: BOTH GATE-00 basis=model-neutral */
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static int ppu_window_should_start(const gbb_instance *m) {
-    if (m->ppu_window_started || (m->lcdc & 0x21u) != 0x21u ||
+    /* MODEL: CGB_ONLY GATE-81 GUARD=model_is_cgb -- CGB mode enables the window by LCDC bit 5 alone, so with LCDC bit 0 clear the window start stall now occurs; CGB mode-3 timing is not claimed (D-09) */
+    const unsigned enable_mask = (model_is_cgb(m) && m->exec_mode == GBB_MODE_CGB) ? 0x20u : 0x21u;
+    if (m->ppu_window_started || (m->lcdc & enable_mask) != enable_mask ||
         m->ly < m->wy || m->wx > 166u) return 0;
     unsigned start_x = m->wx < 7u ? 0u : (unsigned)m->wx - 7u;
     return m->ppu_output_x == start_x;
@@ -2321,7 +2557,7 @@ static int ppu_object_should_stall(gbb_instance *m, uint8_t *stall) {
         if (left < 0 || left >= (int)GBB_FRAME_WIDTH ||
             left != (int)m->ppu_output_x) continue;
         m->ppu_objects_stalled |= object_bit;
-        /* MODEL: UNKNOWN GATE-48 research:11 -- object fetch during DMA and its transfer timing */
+        /* MODEL: UNKNOWN GATE-48 research:14 -- object fetch during DMA and its transfer timing; CGB mode-3 stall timing is not claimed and is deferred by D-09/D-12 */
         if (m->dma_active) {
             /* advance_devices_to advances the DMA byte before this PPU event.
              * The aligned word read is the declared deterministic model; its
@@ -2363,7 +2599,7 @@ static void ppu_transfer_dot(gbb_instance *m) {
         return;
     }
     ppu_fetcher_step(m);
-    /* MODEL: UNKNOWN GATE-49 research:11 -- mode 3 start-up and window stall timing */
+    /* MODEL: UNKNOWN GATE-49 research:14 -- mode 3 start-up and window stall timing; CGB mode-3 length, WX and window-range differences are not claimed and are deferred by D-09/D-12 */
     if (m->ppu_transfer_age < 12u) {
         ++m->ppu_transfer_age;
         if (m->ppu_transfer_age < 12u) return;
@@ -2400,15 +2636,25 @@ static void ppu_transfer_dot(gbb_instance *m) {
 
     m->ppu_fifo_head = (uint8_t)((m->ppu_fifo_head + 1u) % GBB_PPU_FIFO_CAPACITY);
     --m->ppu_fifo_count;
-    m->frame_working[(unsigned)m->ly * GBB_FRAME_WIDTH + fetched_slot] =
-        ppu_pixel_shade(m, fetched_slot);
+    const unsigned pixel_at = (unsigned)m->ly * GBB_FRAME_WIDTH + fetched_slot;
+    if (model_is_dmg(m)) {
+        m->frame_working[pixel_at] = ppu_pixel_shade(m, fetched_slot);
+    }
+    /* MODEL: CGB_ONLY GATE-80 GUARD=model_is_cgb -- CGB mode resolves RGB555 per dot against live CRAM into rgb_working (D-01, D-02); compat mode is routed by plan 11-04 */
+    else if (model_is_cgb(m) && m->exec_mode == GBB_MODE_CGB) {
+        m->rgb_working[pixel_at] = ppu_pixel_cgb(m, fetched_slot);
+    }
+    /* MODEL: CGB_ONLY GATE-82 GUARD=model_is_cgb -- compat mode (DMG software on the CGB profile) resolves DMG shades through the instance compat palette into rgb_working (D-17, D-39) */
+    else if (model_is_cgb(m)) {
+        m->rgb_working[pixel_at] = ppu_pixel_compat(m, fetched_slot);
+    }
     if (++m->ppu_output_x == GBB_FRAME_WIDTH) m->ppu_transfer_complete = 1;
 }
 
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void ppu_advance_dot(gbb_instance *m) {
     if ((m->lcdc & 0x80u) == 0) return;
-    /* MODEL: UNKNOWN GATE-50 research:11 -- line length and LY timing */
+    /* MODEL: UNKNOWN GATE-50 research:14 -- line length and LY timing; CGB line-edge timing is unresearched and deferred by D-09/D-12 */
     if (m->ppu_dot < GBB_DOTS_PER_LINE - 1u) {
         ++m->ppu_dot;
     } else {
@@ -2427,6 +2673,9 @@ static void ppu_advance_dot(gbb_instance *m) {
         if (m->ly < GBB_FRAME_HEIGHT) ppu_begin_object_scan(m);
         if (m->ly == GBB_FRAME_HEIGHT) {
             memcpy(m->frame_completed, m->frame_working, sizeof(m->frame_completed));
+            /* MODEL: CGB_ONLY GATE-79 GUARD=model_is_cgb -- the RGB frame completes together with the shade frame (D-02) */
+            if (model_is_cgb(m))
+                memcpy(m->rgb_completed, m->rgb_working, sizeof(m->rgb_completed));
             if (m->frame_generation != UINT64_MAX) ++m->frame_generation;
             m->frame_completion_half_dots = m->time_half_dots;
             m->interrupt_flags |= 0x01u;
@@ -2735,6 +2984,78 @@ gbb_error gbb_copy_frame(const gbb_instance *instance, uint8_t *pixels,
     return GBB_OK;
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+gbb_error gbb_copy_frame_rgb555(const gbb_instance *instance, uint16_t *pixels,
+                                size_t capacity_bytes, size_t pitch_bytes,
+                                gbb_frame_info *out_info) {
+    const size_t row_bytes = (size_t)GBB_FRAME_WIDTH * 2u;
+    if (instance == NULL || pixels == NULL || out_info == NULL) return GBB_INVALID_ARGUMENT;
+    /* uint16_t stores need 2-byte alignment and a whole-pixel stride (T-11-14). */
+    if (((uintptr_t)(void *)pixels & 1u) != 0u || (pitch_bytes & 1u) != 0u)
+        return GBB_INVALID_ARGUMENT;
+    if (pitch_bytes < row_bytes ||
+        pitch_bytes > (SIZE_MAX - row_bytes) / (GBB_FRAME_HEIGHT - 1u))
+        return GBB_INVALID_ARGUMENT;
+    size_t required = (GBB_FRAME_HEIGHT - 1u) * pitch_bytes + row_bytes;
+    if (capacity_bytes < required) return GBB_INVALID_ARGUMENT;
+
+    uintptr_t pixels_begin = (uintptr_t)(void *)pixels;
+    uintptr_t info_begin = (uintptr_t)(void *)out_info;
+    if (capacity_bytes > UINTPTR_MAX - pixels_begin ||
+        sizeof(*out_info) > UINTPTR_MAX - info_begin)
+        return GBB_INVALID_ARGUMENT;
+    uintptr_t pixels_end = pixels_begin + capacity_bytes;
+    uintptr_t info_end = info_begin + sizeof(*out_info);
+    if (pixels_begin < info_end && info_begin < pixels_end)
+        return GBB_INVALID_ARGUMENT;
+    /* MODEL: CGB_ONLY GATE-83 GUARD=model_is_cgb -- colour frames are CGB-profile only; the DMG profile returns GBB_UNSUPPORTED_PROFILE (D-15), symmetric with GATE-57 */
+    if (!model_is_cgb(instance)) return GBB_UNSUPPORTED_PROFILE;
+    if (instance->frame_generation == 0) return GBB_FRAME_NOT_READY;
+    for (size_t y = 0; y < GBB_FRAME_HEIGHT; ++y)
+        memcpy((uint8_t *)pixels + y * pitch_bytes,
+               instance->rgb_completed + y * GBB_FRAME_WIDTH, row_bytes);
+    gbb_frame_info info = {GBB_FRAME_WIDTH, GBB_FRAME_HEIGHT,
+                           instance->frame_generation,
+                           instance->frame_completion_half_dots};
+    *out_info = info;
+    return GBB_OK;
+}
+
+/* MODEL: BOTH GATE-00 basis=host-api */
+gbb_error gbb_set_compat_palette(gbb_instance *instance, const gbb_compat_palette *palette) {
+    if (instance == NULL) return GBB_INVALID_ARGUMENT;
+    if (palette == NULL) {
+        memcpy(instance->compat_rgb555, compat_default_rgb555, sizeof(instance->compat_rgb555));
+        return GBB_OK;
+    }
+    if (palette->struct_size < GBB_COMPAT_PALETTE_SIZE_V1) return GBB_INVALID_ARGUMENT;
+    /* Validate every entry before the first store so a rejected set mutates nothing (T-11-12). */
+    for (unsigned i = 0; i < 4u; ++i)
+        if (((palette->bg[i] | palette->obj0[i] | palette->obj1[i]) & 0x8000u) != 0u)
+            return GBB_INVALID_ARGUMENT;
+    for (unsigned i = 0; i < 4u; ++i) {
+        instance->compat_rgb555[0][i] = palette->bg[i];
+        instance->compat_rgb555[1][i] = palette->obj0[i];
+        instance->compat_rgb555[2][i] = palette->obj1[i];
+    }
+    return GBB_OK;
+}
+
+/* MODEL: BOTH GATE-00 basis=host-api */
+gbb_error gbb_get_compat_palette(const gbb_instance *instance, gbb_compat_palette *out_palette) {
+    if (instance == NULL || out_palette == NULL ||
+        out_palette->struct_size < GBB_COMPAT_PALETTE_SIZE_V1)
+        return GBB_INVALID_ARGUMENT;
+    /* Field by field: the caller's struct may be larger than V1 and keeps its extra bytes. */
+    for (unsigned i = 0; i < 4u; ++i) {
+        out_palette->bg[i] = instance->compat_rgb555[0][i];
+        out_palette->obj0[i] = instance->compat_rgb555[1][i];
+        out_palette->obj1[i] = instance->compat_rgb555[2][i];
+    }
+    out_palette->struct_size = GBB_COMPAT_PALETTE_SIZE_V1;
+    return GBB_OK;
+}
+
 /* MODEL: BOTH GATE-00 basis=host-side-mixing */
 static int audio_preflight(const gbb_instance *m, uint64_t half_dots) {
     if (!m->audio_run_active) return 1;
@@ -2887,6 +3208,7 @@ gbb_error gbb_create(gbb_profile profile, gbb_instance **out_instance) {
     if (m == NULL) return GBB_OUT_OF_MEMORY;
     m->profile = (uint8_t)profile;
     m->exec_mode = GBB_MODE_NONE;
+    memcpy(m->compat_rgb555, compat_default_rgb555, sizeof(m->compat_rgb555));
     reset_state(m); /* RAM fill is emulator policy; hardware power-on RAM is unspecified. */
     *out_instance = m;
     return GBB_OK;

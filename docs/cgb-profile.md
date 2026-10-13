@@ -187,10 +187,23 @@ base value and the rule in its reason.
 | ff75 | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
 | ff75 | CGB | $00 | POLICY | 8 | bits 4-6 stored; reads $8F with them clear |
 | ff75 | COMPAT | $00 | POLICY | 8 | bits 4-6 stored; reads $8F with them clear |
+| bg_cram_fill | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
+| bg_cram_fill | CGB | $7FFF | PANDOCS | 1 | Pan Docs Power Up Sequence, CGB |
+| bg_cram_fill | COMPAT | $7FFF | POLICY | 8 | the compat renderer never reads CRAM and the data ports read $FF in compat mode; deterministic fill only |
+| obj_cram_fill | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
+| obj_cram_fill | CGB | $7FFF | POLICY | 8 | Pan Docs calls OBJ CRAM uninitialised; white by policy (D-14) |
+| obj_cram_fill | COMPAT | $7FFF | POLICY | 8 | the compat renderer never reads CRAM and the data ports read $FF in compat mode; deterministic fill only |
+| opri | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
+| opri | CGB | $00 | POLICY | 8 | boot ROM leaves priority by OAM index; no hardware oracle (D-08) |
+| opri | COMPAT | $00 | POLICY | 8 | compat mode reads OPRI as $FF; stored value inert |
 | ram_fill | DMG | $00 | POLICY | 2 | D-025 deterministic fill |
 | ram_fill | CGB | $00 | POLICY | 8 | D-025 deterministic fill |
 | ram_fill | COMPAT | $00 | POLICY | 8 | D-025 deterministic fill |
 <!-- cgb-post-boot-end -->
+
+Palette RAM is filled with white (`$7FFF` words, low byte first) on every reset and ROM load (D-14).
+VRAM bank 1 is zero after every reset and ROM load (POLICY, D-40); attribute tests rely on this, and
+no uninitialised CRAM or VRAM value is asserted against another emulator.
 
 ## Register visibility (FF00-FF7F)
 
@@ -198,9 +211,15 @@ base value and the rule in its reason.
 cells. On the CGB profile FF4C-FF7F is decoded from it: KEY0 reads `$FF`; KEY1 reads `$7E` or the
 armed bit in CGB mode; VBK reads `$FE` or the bank in both modes and selects VRAM only in CGB mode;
 SVBK (CGB mode) reads `$F8` or the raw 3 bits and selects WRAM bank 1-7 (0 selects 1); BCPS and OCPS
-store a byte and read it with bit 6 set; FF72-FF75 are plain registers (FF75 stores bits 4-6 only).
+store a byte and read it with bit 6 set; BCPD (FF69) and OCPD (FF6B) in CGB mode store a write at
+index `BCPS & $3F` (`OCPS & $3F`) and read that byte back, and when the index register's bit 7 is set
+every write advances the index (wrapping 63 to 0, bit 7 kept) even when the mode-3 lock blocked the
+write; a blocked read returns `$FF` and a read never advances the index; all 8 bits of each byte are
+stored. OPRI (FF6C) stores bit 0 and reads `$FE` or that bit; it has no effect on object priority
+after boot (the execution mode latch decides that, D-08). In compat mode FF69, FF6B and FF6C read `$FF`
+and ignore writes with no index increment. FF72-FF75 are plain registers (FF75 stores bits 4-6 only).
 Unused addresses read `$FF` and ignore writes. Registers owned by a later phase (FF55 write, FF56,
-FF69, FF6B, FF6C, FF76, FF77) are deferred: a read stops with `GBB_STOP_UNSUPPORTED_BUS` before
+FF76, FF77) are deferred: a read stops with `GBB_STOP_UNSUPPORTED_BUS` before
 anything changes and a write is dropped and reported as the same stop once the instruction retires.
 The DMG profile never enters this decode: its FF4C-FF7F reads still stop and its writes are silent
 no-ops. IE bits 5-7 are stored and read back on the CGB profile only (owner veto item 6).
@@ -364,17 +383,17 @@ column is the evidence class (Pan Docs, Mooneye hardware test, SameBoy, or proje
 | $FF68 | CGB | stored or $40 | stored and $BF | IMPL | HW_TEST |
 | $FF68 | COMPAT | stored or $40 | stored and $BF | IMPL | HW_TEST |
 | $FF69 | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF69 | CGB | stop | dropped, stop after retire | DEFERRED(11) | PANDOCS |
+| $FF69 | CGB | palette byte at index, $FF while mode 3 | stores at index, auto-increments even when blocked | IMPL | PANDOCS |
 | $FF69 | COMPAT | $FF | ignored | IMPL | PANDOCS |
 | $FF6A | DMG | stop | ignored | IMPL | HW_TEST |
 | $FF6A | CGB | stored or $40 | stored and $BF | IMPL | HW_TEST |
 | $FF6A | COMPAT | stored or $40 | stored and $BF | IMPL | HW_TEST |
 | $FF6B | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF6B | CGB | stop | dropped, stop after retire | DEFERRED(11) | PANDOCS |
+| $FF6B | CGB | palette byte at index, $FF while mode 3 | stores at index, auto-increments even when blocked | IMPL | PANDOCS |
 | $FF6B | COMPAT | $FF | ignored | IMPL | PANDOCS |
-| $FF6C | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF6C | CGB | stop | dropped, stop after retire | DEFERRED(11) | PANDOCS |
-| $FF6C | COMPAT | $FF | ignored | IMPL | PANDOCS |
+| $FF6C | DMG | stop | ignored | IMPL | SAMEBOY |
+| $FF6C | CGB | $FE or bit 0 | bit 0 stored, no priority effect after boot | IMPL | SAMEBOY |
+| $FF6C | COMPAT | $FF | ignored | IMPL | SAMEBOY |
 | $FF6D | DMG | stop | ignored | IMPL | HW_TEST |
 | $FF6D | CGB | $FF | ignored | IMPL | HW_TEST |
 | $FF6D | COMPAT | $FF | ignored | IMPL | HW_TEST |
@@ -498,6 +517,120 @@ CGB-E, and no document, test or release note may describe them as such. `banking
   not hold there. This core keeps the DMG rule on the CGB profile. `banking_bus_conflict_cgb_pin`
   pins the current behaviour so a later change is deliberate. The gate rows are GATE-16 (read) and
   GATE-25 (write) in `docs/model-gates.md`.
+
+## Compatibility palette
+
+In compatibility mode a DMG game's shade indices are resolved per pixel through an instance palette
+instead of CRAM: three sets (background, OBJ0, OBJ1) of four RGB555 values. One rule generates the
+default: a brightness ramp Y = 31, 21, 11, 1 for shades 0 to 3, with R = Y, G = Y - (Y >> 3) and
+B = Y - (Y >> 2), packed `R | G << 5 | B << 10` with bit 15 clear. The same ramp seeds all three
+sets. A host can override the palette with `gbb_set_compat_palette`; the override survives reset and
+ROM load.
+
+<!-- cgb-compat-palette-begin -->
+| set | shade 0 | shade 1 | shade 2 | shade 3 |
+| --- | --- | --- | --- | --- |
+| BG | $639F | $4275 | $254B | $0421 |
+| OBJ0 | $639F | $4275 | $254B | $0421 |
+| OBJ1 | $639F | $4275 | $254B | $0421 |
+<!-- cgb-compat-palette-end -->
+
+These values were authored for GabbaBoy from the rule above without reference to any boot-ROM,
+title-hash, peer-emulator or other third-party palette table (rights gate G4). The look is an owner
+veto item (D-18). `cgb_tables_compat_palette` compares this block with the code and with the rule.
+
+## Colour path scope
+
+CGB mode-3 length, WX and window-range timing differences are not claimed (D-09). The one
+timing-adjacent difference that is modelled is that CGB mode enables the window by LCDC bit 5 alone;
+when LCDC bit 0 is clear that changes the window-start stall, and it is recorded in the GATE-81 row of
+`docs/model-gates.md`. The colour path reads PPU dot time only (D-36): it resolves each pixel against
+the live palette RAM at the dot it is produced and never consults a wall clock or a host-side frame
+boundary. The renderer reads VRAM through an explicit bank argument rather than through the CPU
+`VBK` selection, so a CPU bank switch cannot change what the renderer draws. FF55 (HDMA control)
+stays DEFERRED(13). The AGE test suite has no CGB colour, attribute or priority ROM at its pinned
+commit, so it is not Phase 11 colour evidence (D-20); its mode-3 pixel-timing cases are recorded as
+`expected-unsupported` in the external-suite section below.
+
+## External CGB PPU suites not run in Phase 11
+
+Phase 11 records, but does not run, two external CGB PPU suites. Neither contributes evidence to
+the colour claim, and no file from either is stored in the repository (rights gate G1 is open for
+the Mealybug sources; D-09, D-20).
+
+- **AGE `m3-bg-lcdc` and `m3-bg-scx`** at `c-sp/age-test-roms` commit `1f5bc10e` are mode-3
+  pixel-timing tests, each in the `cgbBCE`, `ds-cgbBCE` and `nocgb-ncmBCE` variants. This core
+  does not model mid-scanline pixel timing yet, so the six cases are `expected-unsupported` with
+  reason `mode-3-pixel-timing`, owned by Phase 14. AGE has no CGB colour, attribute or priority ROM
+  at this pin, so none of these is Phase 11 evidence (D-20).
+- **Mealybug Tearoom Tests `ppu/m3_*`** at `mattcurrie/mealybug-tearoom-tests` commit `70e88fb9`
+  are `unsupported-model`: the upstream expected images were captured on CGB-C and CGB-D
+  steppings only, and the project profile is CGB-CPU-E, for which upstream has no expectation.
+
+`tests/external/cgb-ppu-dispositions.json` is the record; `cgb_external_dispositions` compares it
+with the table below and with the tracked file list, and `cgb_external_dispositions_mutated`
+proves that a changed reason is caught.
+
+<!-- cgb-external-dispositions-begin -->
+| suite | case | disposition | reason |
+| --- | --- | --- | --- |
+| age | m3-bg-lcdc-cgbBCE | expected-unsupported | mode-3-pixel-timing |
+| age | m3-bg-lcdc-ds-cgbBCE | expected-unsupported | mode-3-pixel-timing |
+| age | m3-bg-lcdc-nocgb-ncmBCE | expected-unsupported | mode-3-pixel-timing |
+| age | m3-bg-scx-cgbBCE | expected-unsupported | mode-3-pixel-timing |
+| age | m3-bg-scx-ds-cgbBCE | expected-unsupported | mode-3-pixel-timing |
+| age | m3-bg-scx-nocgb-ncmBCE | expected-unsupported | mode-3-pixel-timing |
+| mealybug | m3_bgp_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_bgp_change_sprites | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_bg_en_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_bg_en_change2 | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_bg_map_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_bg_map_change2 | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_obj_en_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_obj_en_change_variant | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_obj_size_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_obj_size_change_scx | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_tile_sel_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_tile_sel_change2 | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_tile_sel_win_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_tile_sel_win_change2 | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_win_en_change_multiple | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_win_en_change_multiple_wx | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_win_map_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_lcdc_win_map_change2 | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_obp0_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_scx_high_5_bits | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_scx_high_5_bits_change2 | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_scx_low_3_bits | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_scy_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_scy_change2 | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_window_timing | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_window_timing_wx_0 | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_wx_4_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_wx_4_change_sprites | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_wx_5_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+| mealybug | m3_wx_6_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
+<!-- cgb-external-dispositions-end -->
+
+## Optional acid2 local runs
+
+`cgb-acid2` v1.1 and `dmg-acid2` v1.0 (both MIT licensed, by Matt Currie) are not vendored and never
+run in required CI: rights gate G1 (the mgblib font in the images) is open (D-24). They can be run
+locally against the upstream release files, whose SHA-256 values are pinned in
+`tests/acid2/manifest.json` together with the profile and the comparison rule:
+
+```
+python3 -I tests/scripts/run-acid2-local.py --rom cgb-acid2.gbc --reference reference.png \
+  --runner build/gabbaboy-runner --rom-kind cgb-acid2
+```
+
+The script refuses (exit 2, `acid2 refused`) any ROM or reference PNG that is not the pinned file,
+runs the ROM on the manifest's model to its `ld b,b` through `gabbaboy-runner --failure-dir`, and
+compares the frame pixel by pixel (`acid2 result=match`, or `acid2 result=differs pixels=N` with exit
+1). `cgb-acid2` runs on the CGB profile with the `(c << 3) | (c >> 2)` expansion, `dmg-acid2` on
+DMG-CPU-B with the greyscale shade map. A local match is a differential check against the upstream
+reference image, not hardware evidence. Required CI runs `cgb_acid2_local_selftest` (synthetic PNG,
+PPM, one-pixel mismatch and fake ROM) and `cgb_acid2_local_refuses_unpinned` only.
 
 ## Half-dot timeline (D-070)
 

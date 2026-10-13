@@ -572,6 +572,7 @@ set_target_properties(test_fuzz_core PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME fuzz_core_regressions COMMAND test_fuzz_core)
 add_test(NAME cgb_fuzz_io_regressions COMMAND test_fuzz_core cgb)
 add_test(NAME cgb_fuzz_profile_select COMMAND test_fuzz_core cgb_profile_select)
+add_test(NAME cgb_fuzz_palette_regressions COMMAND test_fuzz_core cgb_palette)
 
 if(CMAKE_C_COMPILER_ID MATCHES "Clang")
   include(CheckCSourceCompiles)
@@ -678,7 +679,7 @@ add_test(NAME mbc5_banking_fixture_digest
 # MagenTests mbc_oob_sram screen oracle (D-05). Public API only; repository fixtures, never installed.
 set(GBB_MAGENTESTS_DIR "${PROJECT_SOURCE_DIR}/fixtures/magentests")
 add_executable(test_magentests test_magentests.c)
-target_link_libraries(test_magentests PRIVATE GabbaBoy::core)
+target_link_libraries(test_magentests PRIVATE gabbaboy_accept)
 target_compile_features(test_magentests PRIVATE c_std_17)
 set_target_properties(test_magentests PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME magentests_fixture_digest
@@ -691,6 +692,14 @@ add_test(NAME magentests_oob_sram_mbc1
   COMMAND test_magentests magentests_oob_sram_mbc1 ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc)
 add_test(NAME magentests_oob_sram_mbc5
   COMMAND test_magentests magentests_oob_sram_mbc5 ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc5.gbc)
+add_test(NAME magentests_cgb_ppu_disabled_state
+  COMMAND test_magentests magentests_cgb_ppu_disabled_state ${GBB_MAGENTESTS_DIR}/ppu_disabled_state.gbc)
+add_test(NAME magentests_cgb_ppu_disabled_state_compat
+  COMMAND test_magentests magentests_cgb_ppu_disabled_state_compat ${GBB_MAGENTESTS_DIR}/ppu_disabled_state.gbc)
+add_test(NAME magentests_cgb_oam_internal_priority
+  COMMAND test_magentests magentests_cgb_oam_internal_priority ${GBB_MAGENTESTS_DIR}/oam_internal_priority.gbc)
+add_test(NAME magentests_cgb_bg_oam_priority
+  COMMAND test_magentests magentests_cgb_bg_oam_priority ${GBB_MAGENTESTS_DIR}/bg_oam_priority.gbc)
 add_test(NAME magentests_oob_sram_negative_control
   COMMAND test_magentests magentests_oob_sram_negative_control
     ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc
@@ -1538,6 +1547,31 @@ add_test(NAME doc_contract_scope_selftest
     "-DGBB_EXPECT_REGEX=doc-contract-missing: once per open"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
+# Hosted ASan runs the whole suite under one 30-minute job timeout; serially it used about 20
+# minutes and timed out on a slow runner (LESSONS GB-CI-004). The contract keeps the ASan ctest
+# step parallel. The workflow declares its own identifiers, so only the scoped phrase is checked.
+set(GBB_CI_WORKFLOW "${PROJECT_SOURCE_DIR}/.github/workflows/ci.yml")
+set(GBB_CI_ASAN_PHRASE "ctest --preset phase1-asan --parallel 4")
+add_test(NAME ci_asan_parallel_contract
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_DOC=${GBB_CI_WORKFLOW}
+    -DGBB_DECLARATIONS=${GBB_CI_WORKFLOW}
+    "-DGBB_REQUIRED=${GBB_CI_ASAN_PHRASE}"
+    "-DGBB_SCOPE_START=name: linux-asan-ubsan"
+    -P ${GBB_DOC_CONTRACT_SCRIPT})
+set_tests_properties(ci_asan_parallel_contract PROPERTIES
+  PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[0-9]+ phrases=1[^0-9]")
+file(READ "${GBB_CI_WORKFLOW}" GBB_CI_WORKFLOW_TEXT)
+string(REPLACE "phase1-asan --parallel 4" "phase1-asan" GBB_CI_WORKFLOW_SERIAL "${GBB_CI_WORKFLOW_TEXT}")
+file(WRITE "${GBB_DOC_SELFTEST}/ci-serial.yml" "${GBB_CI_WORKFLOW_SERIAL}")
+add_test(NAME ci_asan_parallel_serial_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${GBB_DOC_SELFTEST}/ci-serial.yml;-DGBB_DECLARATIONS=${GBB_DOC_SELFTEST}/ci-serial.yml;-DGBB_REQUIRED=${GBB_CI_ASAN_PHRASE};-DGBB_SCOPE_START=name: linux-asan-ubsan;-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=doc-contract-missing: ctest --preset phase1-asan --parallel 4"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_CI_WORKFLOW}")
+
 # CGB host-guide contract (D-28): the CGB section of the integration guide names only declared symbols
 # and keeps each promise the header makes about the info API, PGB rejection, frame copy, banking and
 # deferred registers. The missing-phrase selftest proves the check can fail.
@@ -1547,7 +1581,10 @@ set(GBB_NATIVE_GUIDE_CGB_PHRASES
   "returns `GBB_UNSUPPORTED_EXECUTION_MODE`"
   "returns `GBB_UNSUPPORTED_PROFILE` on the CGB profile"
   "follows the selected WRAM bank"
-  "stop with `GBB_STOP_UNSUPPORTED_BUS`")
+  "stop with `GBB_STOP_UNSUPPORTED_BUS`"
+  "bit 15 is rejected, not masked"
+  "a set never recolours a completed frame"
+  "minimum pitch is 320 bytes")
 list(LENGTH GBB_NATIVE_GUIDE_CGB_PHRASES GBB_NATIVE_GUIDE_CGB_PHRASE_COUNT)
 set(GBB_NATIVE_GUIDE_CGB_SCOPE "The CGB-CPU-E profile is selected with")
 set(GBB_NATIVE_GUIDE_CGB_DECLS
@@ -1874,6 +1911,588 @@ if(NOT WIN32)
       -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
   set_tests_properties(cgb_bench_ab_missing_elapsed PROPERTIES TIMEOUT 120
     ENVIRONMENT "GBB_RELEASE_MEASURE_SAMPLES=3;GBB_RELEASE_MEASURE_WARMUPS=1;GBB_AB_RECEIPT=${GBB_AB_DIR}/missing-elapsed.json")
+endif()
+
+# --- Phase 11 plan 11-01 begin ---
+# Colour tests (D-25, D-35 stage 1). The white-box driver includes the core (or, in a mutant, a
+# build-tree copy named by GBB_COLOUR_CORE_SOURCE) and must not link GabbaBoy::core.
+add_executable(test_cgb_colour_internal test_cgb_colour_internal.c)
+target_include_directories(test_cgb_colour_internal PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_cgb_colour_internal PRIVATE c_std_17)
+set_target_properties(test_cgb_colour_internal PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_dmg_identity_shade_pin
+  COMMAND test_cgb_colour_internal cgb_dmg_identity_shade_pin ${PROJECT_SOURCE_DIR}/fixtures)
+set_tests_properties(cgb_dmg_identity_shade_pin PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-colour-internal cgb_dmg_identity_shade_pin pass")
+
+add_executable(test_cgb_colour test_cgb_colour.c)
+target_link_libraries(test_cgb_colour PRIVATE gabbaboy_accept)
+target_compile_features(test_cgb_colour PRIVATE c_std_17)
+set_target_properties(test_cgb_colour PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_colour_copy_frame_unsupported COMMAND test_cgb_colour cgb_colour_copy_frame_unsupported)
+
+# Generalised colour mutant harness. Like gbb_banking_mutant, but it reads the core text itself and
+# supports a white-box test source (compiled with the mutated copy as the included core through
+# GBB_COLOUR_CORE_SOURCE) or a public test source (linked to a STATIC mutant library). The anchor
+# must occur exactly once, checked forward and in reverse, so a drifted core stops configure.
+# failing_case and control_case are the full argument lists for the test executable.
+set(GBB_COLOUR_CORE_SOURCE_PATH ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GBB_COLOUR_CORE_SOURCE_PATH})
+file(READ ${GBB_COLOUR_CORE_SOURCE_PATH} gbb_colour_core_text)
+function(gbb_colour_mutant name test_source fail_test control_test anchor replacement failing_case failing_regex control_case)
+  string(FIND "${gbb_colour_core_text}" "${anchor}" first)
+  string(FIND "${gbb_colour_core_text}" "${anchor}" final REVERSE)
+  if(first EQUAL -1 OR NOT first EQUAL final)
+    message(FATAL_ERROR "colour mutant ${name}: anchor '${anchor}' must occur exactly once in "
+      "${GBB_COLOUR_CORE_SOURCE_PATH} (first=${first} last=${final})")
+  endif()
+  string(REPLACE "${anchor}" "${replacement}" text "${gbb_colour_core_text}")
+  set(source ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_colour_mutant_${name}.c)
+  file(WRITE ${source} "${text}")
+  set(target test_cgb_colour_mutant_${name})
+  if(test_source STREQUAL "test_cgb_colour_internal.c")
+    add_executable(${target} ${test_source})
+    target_include_directories(${target} PRIVATE ${PROJECT_SOURCE_DIR}/include)
+    target_compile_definitions(${target} PRIVATE
+      "GBB_COLOUR_CORE_SOURCE=\"${source}\""
+      GBB_BUILD_REVISION="colour-mutant-${name}" GBB_BUILD_QUALIFIED=0)
+  else()
+    set(library gabbaboy_core_colour_mutant_${name})
+    add_library(${library} STATIC ${source})
+    target_include_directories(${library} PUBLIC ${PROJECT_SOURCE_DIR}/include)
+    target_compile_features(${library} PUBLIC c_std_17)
+    set_target_properties(${library} PROPERTIES C_EXTENSIONS OFF)
+    target_compile_definitions(${library} PRIVATE
+      GBB_BUILD_REVISION="colour-mutant-${name}" GBB_BUILD_QUALIFIED=0)
+    add_executable(${target} ${test_source})
+    # The acceptance helpers come after the mutant so every core symbol resolves to the mutated copy.
+    target_link_libraries(${target} PRIVATE ${library} gabbaboy_accept)
+  endif()
+  target_compile_features(${target} PRIVATE c_std_17)
+  set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
+  add_test(NAME ${fail_test}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:${target}>;${failing_case}"
+      -DGBB_EXPECT_CODE=1
+      "-DGBB_EXPECT_REGEX=${failing_regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  add_test(NAME ${control_test}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:${target}>;${control_case}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=.*"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  # The mutant is meant to trip a REQUIRE, and REQUIRE returns early without destroying the
+  # instance. Under phase1-asan, LeakSanitizer would then replace the expected exit 1 with its own
+  # code, so leak detection is off for this deliberately failing run only. Controls and every other
+  # test keep leak checking.
+  set_tests_properties(${fail_test} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+endfunction()
+
+# Harness proof: flipping the low bit of the DMG BG shade must trip the shade-identity pin.
+gbb_colour_mutant(shade_flip test_cgb_colour_internal.c
+  cgb_dmg_identity_mutant_shade_flip cgb_dmg_identity_mutant_shade_flip_control
+  "return ppu_palette_shade(m->bgp, background);"
+  "return (uint8_t)(ppu_palette_shade(m->bgp, background) ^ 1u);"
+  "cgb_dmg_identity_shade_pin;${PROJECT_SOURCE_DIR}/fixtures" "observed"
+  cgb_colour_internal_harness_alive)
+# Priority truth table (D-22, GB-CPU-002): an independent stdlib oracle written from Pan Docs.
+set(GBB_PRIORITY_TRUTH_GEN "${PROJECT_SOURCE_DIR}/tests/scripts/gen-cgb-priority-truth.py")
+set(GBB_PRIORITY_TRUTH_INC "${PROJECT_SOURCE_DIR}/tests/data/cgb-priority-truth.inc")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${GBB_PRIORITY_TRUTH_GEN}" "${GBB_PRIORITY_TRUTH_INC}")
+target_sources(test_cgb_colour_internal PRIVATE "${GBB_PRIORITY_TRUTH_INC}")
+set_source_files_properties("${GBB_PRIORITY_TRUTH_INC}" PROPERTIES HEADER_FILE_ONLY TRUE)
+add_test(NAME cgb_priority_truth_regen
+  COMMAND ${Python3_EXECUTABLE} -I ${GBB_PRIORITY_TRUTH_GEN} --check ${GBB_PRIORITY_TRUTH_INC})
+set_tests_properties(cgb_priority_truth_regen PROPERTIES
+  PASS_REGULAR_EXPRESSION "check pass rows=6144")
+add_test(NAME cgb_priority_truth_selftest
+  COMMAND ${Python3_EXECUTABLE} -I ${GBB_PRIORITY_TRUTH_GEN} --self-test)
+set_tests_properties(cgb_priority_truth_selftest PROPERTIES
+  PASS_REGULAR_EXPRESSION "self-test pass inputs=9")
+# A configure-time copy with the first row's expect_layer altered must fail the regenerate check.
+file(READ "${GBB_PRIORITY_TRUTH_INC}" gbb_priority_truth_text)
+set(gbb_priority_first_row "{0,0,0,0,0,0,0,0,0,0,0},")
+string(REPLACE "${gbb_priority_first_row}" "{0,0,0,0,0,0,0,0,0,1,0}," gbb_priority_mutated
+  "${gbb_priority_truth_text}")
+if(gbb_priority_mutated STREQUAL gbb_priority_truth_text)
+  message(FATAL_ERROR "priority truth mutant: first row '${gbb_priority_first_row}' not found in "
+    "${GBB_PRIORITY_TRUTH_INC}")
+endif()
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/cgb-priority-truth-mutated.inc" "${gbb_priority_mutated}")
+add_test(NAME cgb_priority_truth_regen_mutated
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE}$<SEMICOLON>-I$<SEMICOLON>${GBB_PRIORITY_TRUTH_GEN}$<SEMICOLON>--check$<SEMICOLON>${CMAKE_CURRENT_BINARY_DIR}/cgb-priority-truth-mutated.inc"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=cgb-priority-truth mismatch"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_priority_table_shape COMMAND test_cgb_colour_internal cgb_priority_table_shape)
+set_tests_properties(cgb_priority_table_shape PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb_priority_table_shape pass")
+# --- Phase 11 plan 11-01 end ---
+
+# --- Phase 11 plan 11-02 begin ---
+# Palette RAM and OPRI ports (D-08, D-10 to D-14). White-box cases drive read8/write8 directly.
+foreach(gbb_palette_case
+    palette_cram_bg_autoinc palette_cram_bg_readback palette_cram_bg_blocked_write
+    palette_cram_bg_blocked_read palette_cram_lockout_lcd_off palette_cram_obj_autoinc
+    palette_cram_compat_ports palette_opri_cgb palette_opri_compat cgb_postboot_cram_white
+    cgb_postboot_vram1_zero)
+  add_test(NAME ${gbb_palette_case} COMMAND test_cgb_colour_internal ${gbb_palette_case})
+  set_tests_properties(${gbb_palette_case} PROPERTIES
+    PASS_REGULAR_EXPRESSION "cgb-colour-internal ${gbb_palette_case} pass")
+endforeach()
+# Negative controls for the palette ports (D-11, D-12). Each mutant rewrites one statement of the
+# core in a build-tree copy; the named case must exit 1 on the REQUIRE that guards that rule, and
+# a case the mutant does not touch must still exit 0.
+gbb_colour_mutant(palette_blocked_no_increment test_cgb_colour_internal.c
+  palette_mutant_blocked_no_increment palette_mutant_blocked_no_increment_control
+  "if ((*index_reg & 0x80u) != 0u) *index_reg ="
+  "if (allowed && (*index_reg & 0x80u) != 0u) *index_reg ="
+  "palette_cram_bg_blocked_write" "0xC6u"
+  palette_cram_bg_autoinc)
+gbb_colour_mutant(palette_read_increments test_cgb_colour_internal.c
+  palette_mutant_read_increments palette_mutant_read_increments_control
+  "case IO_BCPD: return cram_data_read(m->bcps, m->bg_cram, cpu_cram_access_allowed(m));"
+  "case IO_BCPD: { const uint8_t mutant_byte = cram_data_read(m->bcps, m->bg_cram, cpu_cram_access_allowed(m)); if ((m->bcps & 0x80u) != 0u) ((gbb_instance *)m)->bcps = (uint8_t)(0x80u | ((m->bcps + 1u) & 0x3Fu)); return mutant_byte; }"
+  "palette_cram_bg_readback" "read8.m, BCPD. == 0x6Bu"
+  palette_cram_obj_autoinc)
+gbb_colour_mutant(palette_lock_always_allowed test_cgb_colour_internal.c
+  palette_mutant_lock_always_allowed palette_mutant_lock_always_allowed_control
+  "edge offsets unresearched (D-12) */"
+  "edge offsets unresearched (D-12) */ return 1;"
+  "palette_cram_bg_blocked_write" "bg_cram.5. == 0x34u"
+  palette_cram_bg_autoinc)
+gbb_colour_mutant(palette_lock_ignores_lcd_off test_cgb_colour_internal.c
+  palette_mutant_lock_ignores_lcd_off palette_mutant_lock_ignores_lcd_off_control
+  "edge offsets unresearched (D-12) */"
+  "edge offsets unresearched (D-12) */ return m->ppu_mode != 3u;"
+  "palette_cram_lockout_lcd_off" "bg_cram.0. == 0x12u"
+  palette_cram_bg_autoinc)
+# --- Phase 11 plan 11-02 end ---
+
+# --- Phase 11 plan 11-03 begin ---
+# CGB-mode rendering (D-01 to D-09): white-box cases set VRAM, OAM and CRAM, run frames and read rgb_completed.
+foreach(gbb_rgb_case
+    cgb_rgb_store_bg_palette cgb_rgb_store_shade_untouched cgb_rgb_store_lcd_off
+    cgb_rgb_store_reset cgb_rgb_store_bit15_masked
+    cgb_attr_palette cgb_attr_bank cgb_attr_xflip cgb_attr_yflip cgb_attr_bit4_ignored
+    cgb_attr_bg_priority cgb_attr_lcdc0_bg_drawn cgb_attr_window_same_fetch
+    cgb_attr_window_lcdc0_clear cgb_attr_obj_bank_palette cgb_attr_obj_oam_order
+    cgb_attr_vbk_not_read)
+  add_test(NAME ${gbb_rgb_case} COMMAND test_cgb_colour_internal ${gbb_rgb_case})
+  set_tests_properties(${gbb_rgb_case} PROPERTIES
+    PASS_REGULAR_EXPRESSION "cgb-colour-internal ${gbb_rgb_case} pass")
+endforeach()
+add_test(NAME cgb_rgb_store_dmg_untouched
+  COMMAND test_cgb_colour_internal cgb_rgb_store_dmg_untouched ${PROJECT_SOURCE_DIR}/fixtures)
+set_tests_properties(cgb_rgb_store_dmg_untouched PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-colour-internal cgb_rgb_store_dmg_untouched pass")
+# A colour path that also writes the shade store must be caught (D-25).
+gbb_colour_mutant(colour_writes_shade test_cgb_colour_internal.c
+  cgb_dmg_identity_mutant_colour_writes_shade cgb_dmg_identity_mutant_colour_writes_shade_control
+  "m->rgb_working[pixel_at] = ppu_pixel_cgb(m, fetched_slot);"
+  "m->rgb_working[pixel_at] = ppu_pixel_cgb(m, fetched_slot); m->frame_working[pixel_at] = 1u;"
+  "cgb_rgb_store_shade_untouched" "frame_working"
+  cgb_rgb_store_bg_palette)
+# --- Phase 11 plan 11-03 end ---
+
+# --- Phase 11 plan 11-04 begin ---
+# Compat rendering (D-17, D-18, D-39): DMG software on the CGB profile through the instance compat palette.
+foreach(gbb_compat_case
+    cgb_compat_internal_default cgb_compat_internal_bg cgb_compat_internal_obj_sets
+    cgb_compat_internal_attr_ignored cgb_compat_internal_lcdc0 cgb_compat_internal_x_order
+    cgb_compat_internal_live_config)
+  add_test(NAME ${gbb_compat_case} COMMAND test_cgb_colour_internal ${gbb_compat_case})
+  set_tests_properties(${gbb_compat_case} PROPERTIES
+    PASS_REGULAR_EXPRESSION "cgb-colour-internal ${gbb_compat_case} pass")
+endforeach()
+# --- Phase 11 plan 11-04 end ---
+
+# --- Phase 11 plan 11-05 begin ---
+# Priority truth table and attribute mutants (D-22, D-06 to D-08, D-39). Tests only: no core edit.
+add_test(NAME cgb_priority_truth_table COMMAND test_cgb_colour_internal cgb_priority_truth_table)
+set_tests_properties(cgb_priority_truth_table PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-colour-internal cgb_priority_truth_table pass rows=6144")
+add_test(NAME cgb_priority_truth_frames COMMAND test_cgb_colour_internal cgb_priority_truth_frames)
+set_tests_properties(cgb_priority_truth_frames PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-colour-internal cgb_priority_truth_frames pass sampled=")
+add_test(NAME cgb_priority_opri_no_effect COMMAND test_cgb_colour_internal cgb_priority_opri_no_effect)
+set_tests_properties(cgb_priority_opri_no_effect PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-colour-internal cgb_priority_opri_no_effect pass rows=6144")
+gbb_colour_mutant(priority_ignore_bg_attr7 test_cgb_colour_internal.c
+  cgb_priority_mutant_ignore_bg_attr7 cgb_priority_mutant_ignore_bg_attr7_control
+  "((obj_attr | bg_attr) & 0x80u)"
+  "((obj_attr) & 0x80u)"
+  "cgb_priority_truth_table" "truth mismatch row="
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(priority_ignore_obj_attr7 test_cgb_colour_internal.c
+  cgb_priority_mutant_ignore_obj_attr7 cgb_priority_mutant_ignore_obj_attr7_control
+  "((obj_attr | bg_attr) & 0x80u)"
+  "((bg_attr) & 0x80u)"
+  "cgb_priority_truth_table" "truth mismatch row="
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(priority_lcdc0_inverted test_cgb_colour_internal.c
+  cgb_priority_mutant_lcdc0_inverted cgb_priority_mutant_lcdc0_inverted_control
+  "if ((lcdc & 0x01u) == 0) return CGB_LAYER_OBJ;"
+  "if ((lcdc & 0x01u) != 0) return CGB_LAYER_OBJ;"
+  "cgb_priority_truth_table" "truth mismatch row="
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(priority_no_index0_rule test_cgb_colour_internal.c
+  cgb_priority_mutant_no_index0_rule cgb_priority_mutant_no_index0_rule_control
+  "    if (bg_index == 0u) return CGB_LAYER_OBJ;\n"
+  ""
+  "cgb_priority_truth_table" "truth mismatch row="
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(priority_cgb_x_order test_cgb_colour_internal.c
+  cgb_priority_mutant_cgb_x_order cgb_priority_mutant_cgb_x_order_control
+  "int opaque = ppu_cgb_object(m, x, &object, &object_attr);"
+  "int opaque = ppu_object_color(m, x, &object, &object_attr);"
+  "cgb_priority_truth_table" "truth mismatch row="
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(priority_compat_lcdc0_ignored test_cgb_colour_internal.c
+  cgb_priority_mutant_compat_lcdc0_ignored cgb_priority_mutant_compat_lcdc0_ignored_control
+  "static uint16_t ppu_pixel_compat(gbb_instance *m, unsigned x) {\n    uint8_t background = (m->lcdc & 0x01u) != 0 ?"
+  "static uint16_t ppu_pixel_compat(gbb_instance *m, unsigned x) {\n    uint8_t background = 1 ?"
+  "cgb_priority_truth_table" "truth mismatch row="
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(priority_compat_bg_set_for_objects test_cgb_colour_internal.c
+  cgb_priority_mutant_compat_bg_set_for_objects cgb_priority_mutant_compat_bg_set_for_objects_control
+  "return ppu_compat_resolve(m, 1u + ((attributes >> 4) & 1u), ppu_palette_shade(palette, object));"
+  "return ppu_compat_resolve(m, 0u, ppu_palette_shade(palette, object));"
+  "cgb_priority_truth_table" "truth mismatch row="
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(priority_opri_live test_cgb_colour_internal.c
+  cgb_priority_mutant_opri_live cgb_priority_mutant_opri_live_control
+  "int opaque = ppu_cgb_object(m, x, &object, &object_attr);"
+  "int opaque = (m->opri & 1u) ? ppu_object_color(m, x, &object, &object_attr) : ppu_cgb_object(m, x, &object, &object_attr);"
+  "cgb_priority_opri_no_effect" "truth mismatch row="
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(attr_ignore_bank test_cgb_colour_internal.c
+  cgb_attr_mutant_ignore_bank cgb_attr_mutant_ignore_bank_control
+  "return ppu_cgb_tile_color(m, tile, (attributes >> 3) & 1u, row, column, 0);"
+  "return ppu_cgb_tile_color(m, tile, 0u, row, column, 0);"
+  "cgb_attr_bank" "px[(]m, 0, 0[)] == bgcol[(]0, 3[)]"
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(attr_swap_flips test_cgb_colour_internal.c
+  cgb_attr_mutant_swap_flips cgb_attr_mutant_swap_flips_control
+  "if ((attributes & 0x40u) != 0) row = 7u - row;\n    if ((attributes & 0x20u) != 0) column = 7u - column;"
+  "if ((attributes & 0x20u) != 0) row = 7u - row;\n    if ((attributes & 0x40u) != 0) column = 7u - column;"
+  "cgb_attr_xflip" "px[(]m, 8, 3[)] == bgcol[(]0, 0[)]"
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(attr_reads_vbk test_cgb_colour_internal.c
+  cgb_attr_mutant_reads_vbk cgb_attr_mutant_reads_vbk_control
+  "return ppu_cgb_tile_color(m, tile, (attributes >> 3) & 1u, row, column, 0);"
+  "return ppu_cgb_tile_color(m, tile, m->vram_bank & 1u, row, column, 0);"
+  "cgb_attr_vbk_not_read" "memcmp"
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(attr_obj_bank_ignored test_cgb_colour_internal.c
+  cgb_attr_mutant_obj_bank_ignored cgb_attr_mutant_obj_bank_ignored_control
+  "ppu_cgb_tile_color(m, (uint8_t)tile, (attrs >> 3) & 1u,"
+  "ppu_cgb_tile_color(m, (uint8_t)tile, 0u,"
+  "cgb_attr_obj_bank_palette" "seen[[]0[]] == objcol[(]3, 3[)]"
+  cgb_colour_internal_harness_alive)
+# --- Phase 11 plan 11-05 end ---
+
+# --- Phase 11 plan 11-06 begin ---
+# Public colour ABI (D-15, D-17a, D-42): gbb_copy_frame_rgb555 and the compat palette.
+foreach(gbb_rgb555_case cgb_rgb555_args cgb_rgb555_dmg_profile cgb_rgb555_not_ready
+    cgb_rgb555_both_modes cgb_rgb555_lcd_off)
+  add_test(NAME ${gbb_rgb555_case} COMMAND test_cgb_colour ${gbb_rgb555_case})
+  set_tests_properties(${gbb_rgb555_case} PROPERTIES PASS_REGULAR_EXPRESSION "ok 1 - ${gbb_rgb555_case}")
+endforeach()
+# Skewed validator: the profile test moved ahead of the argument checks must fail the argument matrix.
+gbb_colour_mutant(rgb555_skewed_validator test_cgb_colour.c
+  cgb_rgb555_mutant_skewed_validator cgb_rgb555_mutant_skewed_validator_control
+  "    const size_t row_bytes = (size_t)GBB_FRAME_WIDTH * 2u;\n"
+  "    const size_t row_bytes = (size_t)GBB_FRAME_WIDTH * 2u;\n    if (instance != NULL && !model_is_cgb(instance)) return GBB_UNSUPPORTED_PROFILE;\n"
+  "cgb_rgb555_args" "not ok"
+  cgb_rgb555_both_modes)
+foreach(gbb_palette_api_case palette_compat_api_default palette_compat_api_roundtrip
+    palette_compat_api_reject palette_compat_api_get_reject palette_compat_api_larger
+    palette_compat_api_survives palette_compat_effect_next_frame)
+  add_test(NAME ${gbb_palette_api_case} COMMAND test_cgb_colour ${gbb_palette_api_case})
+  set_tests_properties(${gbb_palette_api_case} PROPERTIES PASS_REGULAR_EXPRESSION "ok 1 - ${gbb_palette_api_case}")
+endforeach()
+# Masking bit 15 instead of rejecting it must fail the rejection case.
+gbb_colour_mutant(palette_mask_bit15 test_cgb_colour.c
+  palette_compat_mutant_mask_bit15 palette_compat_mutant_mask_bit15_control
+  "if (((palette->bg[i] | palette->obj0[i] | palette->obj1[i]) & 0x8000u) != 0u)\n            return GBB_INVALID_ARGUMENT;"
+  "(void)i;"
+  "palette_compat_api_reject" "not ok"
+  palette_compat_api_default)
+# The default palette block in the doc must equal the code table and the rule.
+add_test(NAME cgb_tables_compat_palette COMMAND test_cgb_tables compat_palette "${GBB_CGB_PROFILE_DOC}")
+set_tests_properties(cgb_tables_compat_palette PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-tables compat_palette pass rows=3")
+set(GBB_COMPAT_PALETTE_ANCHOR "| OBJ1 | $639F |")
+string(FIND "${gbb_cgb_doc}" "${GBB_COMPAT_PALETTE_ANCHOR}" gbb_cp_at)
+string(FIND "${gbb_cgb_doc}" "${GBB_COMPAT_PALETTE_ANCHOR}" gbb_cp_last REVERSE)
+if(gbb_cp_at EQUAL -1 OR NOT gbb_cp_at EQUAL gbb_cp_last)
+  message(FATAL_ERROR "compat palette mutation anchor '${GBB_COMPAT_PALETTE_ANCHOR}' must occur exactly once in docs/cgb-profile.md")
+endif()
+string(REPLACE "${GBB_COMPAT_PALETTE_ANCHOR}" "| OBJ1 | $639E |" gbb_cp_doc_bad "${gbb_cgb_doc}")
+file(WRITE "${PROJECT_BINARY_DIR}/cgb-tables/mutated-compat-palette.md" "${gbb_cp_doc_bad}")
+add_test(NAME cgb_tables_compat_palette_mutated_doc
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_tables>;compat_palette;${PROJECT_BINARY_DIR}/cgb-tables/mutated-compat-palette.md"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=cgb-tables mismatch"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# Every Phase 11 public symbol is called by both installed consumers (D-42).
+set(GBB_PHASE11_CONSUMER_SYMBOLS
+  "gbb_copy_frame_rgb555,gbb_set_compat_palette,gbb_get_compat_palette,GBB_COMPAT_PALETTE_SIZE_V1")
+add_test(NAME cgb_consumer_symbol_coverage
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CONSUMER_SOURCES=${PROJECT_SOURCE_DIR}/tests/consumers/c/main.c,${PROJECT_SOURCE_DIR}/tests/consumers/cpp/main.cpp"
+    "-DGBB_SYMBOLS=${GBB_PHASE11_CONSUMER_SYMBOLS}"
+    -P ${PROJECT_SOURCE_DIR}/tests/cgb_consumer_symbol_coverage.cmake)
+set_tests_properties(cgb_consumer_symbol_coverage PROPERTIES
+  PASS_REGULAR_EXPRESSION "consumer-symbol-coverage pass")
+file(READ "${PROJECT_SOURCE_DIR}/tests/consumers/c/main.c" gbb_consumer_c_text)
+string(REPLACE "gbb_get_compat_palette" "gbb_removed_symbol" gbb_consumer_c_missing "${gbb_consumer_c_text}")
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/consumer-symbol-selftest")
+file(WRITE "${PROJECT_BINARY_DIR}/consumer-symbol-selftest/main.c" "${gbb_consumer_c_missing}")
+add_test(NAME cgb_consumer_symbol_coverage_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_CONSUMER_SOURCES=${PROJECT_BINARY_DIR}/consumer-symbol-selftest/main.c;-DGBB_SYMBOLS=${GBB_PHASE11_CONSUMER_SYMBOLS};-P;${PROJECT_SOURCE_DIR}/tests/cgb_consumer_symbol_coverage.cmake"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=consumer-symbol-missing gbb_get_compat_palette"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# --- Phase 11 plan 11-06 end ---
+
+# --- Phase 11 plan 11-07 begin ---
+# Original per-line colour fixture (D-23 item 4): a guest rewrites BG colour 0 in each HBlank, so
+# every row of the public RGB555 frame must carry its own colour. The pinned rebuild is
+# tests/scripts/reproduce-cgb-colour.sh, run by the fixture-repro workflow.
+set(GBB_CGB_COLOUR_DIR "${PROJECT_SOURCE_DIR}/fixtures/cgb-colour")
+add_test(NAME cgb_colour_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DMANIFEST=${GBB_CGB_COLOUR_DIR}/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixtureManifest.cmake)
+add_test(NAME cgb_colour_hblank_rows COMMAND test_cgb_colour cgb_colour_hblank_rows ${GBB_CGB_COLOUR_DIR})
+set_tests_properties(cgb_colour_hblank_rows PROPERTIES PASS_REGULAR_EXPRESSION "ok 1 - cgb_colour_hblank_rows")
+# Resolve-time control: serving the whole frame from one CRAM snapshot (taken at the first pixel of
+# line 0, as a copy-time resolve would) must fail the per-row predicate.
+gbb_colour_mutant(frame_resolve test_cgb_colour.c
+  cgb_colour_mutant_frame_resolve cgb_colour_mutant_frame_resolve_control
+  "    return cram_colour(m->bg_cram, bg_attr & 7u, bg_index);\n"
+  "    static uint8_t gbb_frame_cram_snapshot[64];\n    if (m->ly == 0 && x == 0u) memcpy(gbb_frame_cram_snapshot, m->bg_cram, sizeof(gbb_frame_cram_snapshot));\n    return cram_colour(gbb_frame_cram_snapshot, bg_attr & 7u, bg_index);\n"
+  "cgb_colour_hblank_rows;${GBB_CGB_COLOUR_DIR}" "row [0-9]+ is not uniform"
+  cgb_rgb555_both_modes)
+# --- Phase 11 plan 11-07 end ---
+
+# --- Phase 11 plan 11-08 begin ---
+# Remaining original colour fixtures (D-23): attribute bits and LCDC.0 priority first; each case
+# checks its literal structural predicate before the frame digest is compared.
+foreach(gbb_colour_fixture_case cgb_colour_attr cgb_colour_lcdc0 cgb_colour_guest_cram
+    palette_compat_mapping cgb_colour_lcd_off)
+  add_test(NAME ${gbb_colour_fixture_case} COMMAND test_cgb_colour ${gbb_colour_fixture_case} ${GBB_CGB_COLOUR_DIR})
+  set_tests_properties(${gbb_colour_fixture_case} PROPERTIES
+    PASS_REGULAR_EXPRESSION "ok 1 - ${gbb_colour_fixture_case}")
+endforeach()
+add_test(NAME cgb_rgb_store_lcdoff_fixture
+  COMMAND test_cgb_colour_internal cgb_rgb_store_lcdoff_fixture ${PROJECT_SOURCE_DIR}/fixtures)
+set_tests_properties(cgb_rgb_store_lcdoff_fixture PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-colour-internal cgb_rgb_store_lcdoff_fixture pass")
+# Port-semantics control (D-11): a blocked palette write that stops advancing the index must make
+# the CRAM guest report a failed cell. The control runs a fixture that only writes with the LCD off.
+gbb_colour_mutant(guest_cram_blocked_no_increment test_cgb_colour.c
+  cgb_colour_guest_cram_mutant_blocked_no_increment cgb_colour_guest_cram_mutant_blocked_no_increment_control
+  "if ((*index_reg & 0x80u) != 0u) *index_reg ="
+  "if (allowed && (*index_reg & 0x80u) != 0u) *index_reg ="
+  "cgb_colour_guest_cram;${GBB_CGB_COLOUR_DIR}" "C00"
+  "cgb_colour_attr;${GBB_CGB_COLOUR_DIR}")
+# --- Phase 11 plan 11-08 end ---
+
+# --- Phase 11 plan 11-10 begin ---
+# MagenTests CGB PPU ROMs (D-21): colour mutants of the public test_magentests.c driver. The
+# failing run is a REQUIRE-style early return, handled by gbb_colour_mutant (leak detection off).
+# ppu_disabled_state needs STAT mode 0 with the LCD off; skipping the mode-0 transition leaves the
+# guest in mode 1 and it paints the failure red.
+gbb_colour_mutant(magentests_lcd_off_no_mode0 test_magentests.c
+  magentests_cgb_mutant_lcd_off_no_mode0 magentests_cgb_mutant_lcd_off_no_mode0_control
+  "            ppu_set_mode(m, 0);\n            m->ppu_selected_object_count = 0;"
+  "            m->ppu_selected_object_count = 0;"
+  "magentests_cgb_ppu_disabled_state;${GBB_MAGENTESTS_DIR}/ppu_disabled_state.gbc" "magentests_cgb_ppu_disabled_state: pixel 0,0 expected 0x03E0 got 0x001F"
+  "magentests_oob_sram_mbc1;${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc")
+# WR-01: the compat variant must also see the guest's STAT verdict (BGP 0x00 pass vs 0x0C fail maps
+# colour index 1 to shade 0 vs shade 3). Same mutant, compat case.
+gbb_colour_mutant(magentests_lcd_off_no_mode0_compat test_magentests.c
+  magentests_cgb_mutant_lcd_off_no_mode0_compat magentests_cgb_mutant_lcd_off_no_mode0_compat_control
+  "            ppu_set_mode(m, 0);\n            m->ppu_selected_object_count = 0;"
+  "            m->ppu_selected_object_count = 0;"
+  "magentests_cgb_ppu_disabled_state_compat;${GBB_MAGENTESTS_DIR}/ppu_disabled_state.gbc" "magentests_cgb_ppu_disabled_state_compat: pixel 0,0 expected"
+  "magentests_oob_sram_mbc1;${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc")
+# Object colours resolved from BG CRAM instead of object CRAM must turn the green and red
+# triangles of oam_internal_priority into the BG white (RESEARCH Correction 4: this ROM's objects
+# never share an opaque pixel, so X ordering is not its control; ordering stays in the truth table).
+gbb_colour_mutant(magentests_obj_from_bg_cram test_magentests.c
+  magentests_cgb_mutant_obj_from_bg_cram magentests_cgb_mutant_obj_from_bg_cram_control
+  "return cram_colour(m->obj_cram, object_attr & 7u, object);"
+  "return cram_colour(m->bg_cram, object_attr & 7u, object);"
+  "magentests_cgb_oam_internal_priority;${GBB_MAGENTESTS_DIR}/oam_internal_priority.gbc" "magentests_cgb_oam_internal_priority: pixel [0-9]+,[0-9]+ expected 0x"
+  "magentests_oob_sram_mbc1;${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc")
+# An inverted LCDC.0 test in the composer must break the per-band priority layout of bg_oam_priority.
+gbb_colour_mutant(magentests_lcdc0_inverted test_magentests.c
+  magentests_cgb_mutant_lcdc0_inverted magentests_cgb_mutant_lcdc0_inverted_control
+  "if ((lcdc & 0x01u) == 0) return CGB_LAYER_OBJ;"
+  "if ((lcdc & 0x01u) != 0) return CGB_LAYER_OBJ;"
+  "magentests_cgb_bg_oam_priority;${GBB_MAGENTESTS_DIR}/bg_oam_priority.gbc" "magentests_cgb_bg_oam_priority: pixel [0-9]+,[0-9]+ expected 0x"
+  "magentests_oob_sram_mbc1;${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc")
+# --- Phase 11 plan 11-10 end ---
+
+# --- Phase 11 plan 11-11 begin ---
+# External CGB PPU suites recorded but not run (D-09, D-20): an offline verifier of the disposition
+# record, its docs mirror and the tracked file list. No ROM bytes, no network.
+set(GBB_EXT_DISPOSITIONS_RECORD "${PROJECT_SOURCE_DIR}/tests/external/cgb-ppu-dispositions.json")
+set(GBB_EXT_DISPOSITIONS_VERIFIER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-external-dispositions.py")
+add_test(NAME cgb_external_dispositions
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_EXT_DISPOSITIONS_VERIFIER}"
+    --record "${GBB_EXT_DISPOSITIONS_RECORD}" --doc "${GBB_CGB_PROFILE_DOC}" --repo-root "${PROJECT_SOURCE_DIR}")
+set_tests_properties(cgb_external_dispositions PROPERTIES
+  PASS_REGULAR_EXPRESSION "external-dispositions pass age=6" TIMEOUT 30)
+# Negative control: one AGE reason changed in a configure-time copy must be rejected.
+file(READ "${GBB_EXT_DISPOSITIONS_RECORD}" gbb_ext_record)
+set(GBB_EXT_REASON_ANCHOR "\"src/m3-bg-lcdc/m3-bg-lcdc-cgbBCE.png\",\n          \"disposition\": \"expected-unsupported\",\n          \"reason\": \"mode-3-pixel-timing\"")
+string(FIND "${gbb_ext_record}" "${GBB_EXT_REASON_ANCHOR}" gbb_ext_at)
+string(FIND "${gbb_ext_record}" "${GBB_EXT_REASON_ANCHOR}" gbb_ext_last REVERSE)
+if(gbb_ext_at EQUAL -1 OR NOT gbb_ext_at EQUAL gbb_ext_last)
+  message(FATAL_ERROR "external disposition mutation anchor must occur exactly once in cgb-ppu-dispositions.json")
+endif()
+string(REPLACE "${GBB_EXT_REASON_ANCHOR}"
+  "\"src/m3-bg-lcdc/m3-bg-lcdc-cgbBCE.png\",\n          \"disposition\": \"expected-unsupported\",\n          \"reason\": \"timing-not-needed\""
+  gbb_ext_record_bad "${gbb_ext_record}")
+file(WRITE "${PROJECT_BINARY_DIR}/external-dispositions/mutated.json" "${gbb_ext_record_bad}")
+add_test(NAME cgb_external_dispositions_mutated
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_EXT_DISPOSITIONS_VERIFIER};--record;${PROJECT_BINARY_DIR}/external-dispositions/mutated.json;--doc;${GBB_CGB_PROFILE_DOC};--repo-root;${PROJECT_SOURCE_DIR}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=disposition-mismatch"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# Optional acid2 local runner (D-24): required CI runs synthetic self-tests only, never an acid2 file.
+set(GBB_ACID2_LOCAL "${PROJECT_SOURCE_DIR}/tests/scripts/run-acid2-local.py")
+add_test(NAME cgb_acid2_local_selftest COMMAND "${Python3_EXECUTABLE}" -I "${GBB_ACID2_LOCAL}" --self-test)
+set_tests_properties(cgb_acid2_local_selftest PROPERTIES
+  PASS_REGULAR_EXPRESSION "self-test pass checks=5" TIMEOUT 30)
+# The repository LICENSE is not a pinned ROM, so the runner must refuse it before running anything.
+add_test(NAME cgb_acid2_local_refuses_unpinned
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_ACID2_LOCAL};--rom;${PROJECT_SOURCE_DIR}/LICENSE;--reference;${PROJECT_SOURCE_DIR}/LICENSE;--runner;$<TARGET_FILE:gabbaboy-runner>;--rom-kind;cgb-acid2"
+    -DGBB_EXPECT_CODE=2
+    "-DGBB_EXPECT_REGEX=acid2 refused"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# WR-02: a manifest the harness cannot use is a harness error (exit 3), never "frames differ" (1).
+file(WRITE "${PROJECT_BINARY_DIR}/acid2-bad-manifest.json" "{\"kinds\": {}}")
+add_test(NAME cgb_acid2_local_bad_manifest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_ACID2_LOCAL};--rom;${PROJECT_SOURCE_DIR}/LICENSE;--reference;${PROJECT_SOURCE_DIR}/LICENSE;--runner;$<TARGET_FILE:gabbaboy-runner>;--rom-kind;cgb-acid2;--manifest;${PROJECT_BINARY_DIR}/acid2-bad-manifest.json"
+    -DGBB_EXPECT_CODE=3
+    "-DGBB_EXPECT_REGEX=acid2 error: manifest unusable"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# WR-03: the colour fixture reproduction script must report harness failures as result=error.
+if(NOT WIN32)
+  find_program(GBB_BASH_CGB_REPRO bash REQUIRED)
+  foreach(gbb_repro_case tool_failure missing_pin)
+    string(REPLACE "_" "-" gbb_repro_arg "${gbb_repro_case}")
+    add_test(NAME cgb_colour_repro_${gbb_repro_case}
+      COMMAND ${GBB_BASH_CGB_REPRO} ${PROJECT_SOURCE_DIR}/tests/scripts/test-reproduce-cgb-colour.sh ${gbb_repro_arg})
+    set_tests_properties(cgb_colour_repro_${gbb_repro_case} PROPERTIES TIMEOUT 60)
+  endforeach()
+endif()
+# --- Phase 11 plan 11-11 end ---
+
+# --- Phase 11 plan 11-14 begin ---
+# D-34: the bit-15 invariant must be able to fail. The mutant core drops the 0x7FFF resolve mask in
+# cram_colour, so a guest CRAM word of $FFFF reaches the frame with bit 15 set. The same executable
+# stays quiet on seeds that never write such a word, so the failure belongs to the removed mask.
+set(GBB_FUZZ_MASK_ANCHOR "return (uint16_t)((cram[at] | (cram[at + 1u] << 8)) & 0x7FFFu);")
+string(FIND "${gbb_colour_core_text}" "${GBB_FUZZ_MASK_ANCHOR}" gbb_fuzz_mask_first)
+string(FIND "${gbb_colour_core_text}" "${GBB_FUZZ_MASK_ANCHOR}" gbb_fuzz_mask_last REVERSE)
+if(gbb_fuzz_mask_first EQUAL -1 OR NOT gbb_fuzz_mask_first EQUAL gbb_fuzz_mask_last)
+  message(FATAL_ERROR "fuzz mask mutant: anchor must occur exactly once in src/core/gabbaboy.c")
+endif()
+string(REPLACE "${GBB_FUZZ_MASK_ANCHOR}" "return (uint16_t)(cram[at] | (cram[at + 1u] << 8));"
+  gbb_fuzz_mask_text "${gbb_colour_core_text}")
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_fuzz_mutant_no_mask.c "${gbb_fuzz_mask_text}")
+add_library(gabbaboy_core_fuzz_mutant_no_mask STATIC
+  ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_fuzz_mutant_no_mask.c)
+target_include_directories(gabbaboy_core_fuzz_mutant_no_mask PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_compile_features(gabbaboy_core_fuzz_mutant_no_mask PUBLIC c_std_17)
+set_target_properties(gabbaboy_core_fuzz_mutant_no_mask PROPERTIES C_EXTENSIONS OFF)
+target_compile_definitions(gabbaboy_core_fuzz_mutant_no_mask PRIVATE
+  GBB_BUILD_REVISION="fuzz-mutant-no-mask" GBB_BUILD_QUALIFIED=0)
+add_executable(test_fuzz_core_mutant_no_mask test_fuzz_core.c fuzz_core.c)
+target_link_libraries(test_fuzz_core_mutant_no_mask PRIVATE gabbaboy_core_fuzz_mutant_no_mask)
+target_compile_features(test_fuzz_core_mutant_no_mask PRIVATE c_std_17)
+target_compile_definitions(test_fuzz_core_mutant_no_mask PRIVATE GBB_FUZZ_STANDALONE_TEST=1)
+set_target_properties(test_fuzz_core_mutant_no_mask PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_fuzz_palette_mutant_no_mask
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_fuzz_core_mutant_no_mask>;cgb_palette"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=pixel above 0x7FFF"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_fuzz_palette_mutant_no_mask_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_fuzz_core_mutant_no_mask>;cgb_palette_plain"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=.*"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# The mutant is meant to trip an invariant and may leave the instance undestroyed on the failing
+# path; leak detection is off for this deliberately failing run only (precedent: commit 361256d).
+set_tests_properties(cgb_fuzz_palette_mutant_no_mask PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+# D-32: no Phase 11 owner tag may remain in the gate table or the core. The control reverts one row.
+add_test(NAME model_gates_no_phase11_rows
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_FILES=${PROJECT_SOURCE_DIR}/docs/model-gates.md;${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c"
+    -P ${PROJECT_SOURCE_DIR}/tests/check_no_phase11_rows.cmake)
+set_tests_properties(model_gates_no_phase11_rows PROPERTIES
+  PASS_REGULAR_EXPRESSION "no-phase11-rows pass" TIMEOUT 30)
+file(READ "${PROJECT_SOURCE_DIR}/docs/model-gates.md" gbb_p11_doc)
+set(GBB_P11_ROW_ANCHOR "| GATE-50 | UNKNOWN | - | research:14 |")
+string(FIND "${gbb_p11_doc}" "${GBB_P11_ROW_ANCHOR}" gbb_p11_first)
+string(FIND "${gbb_p11_doc}" "${GBB_P11_ROW_ANCHOR}" gbb_p11_last REVERSE)
+if(gbb_p11_first EQUAL -1 OR NOT gbb_p11_first EQUAL gbb_p11_last)
+  message(FATAL_ERROR "phase-11 row mutant: '${GBB_P11_ROW_ANCHOR}' must occur exactly once in docs/model-gates.md")
+endif()
+string(REPLACE "${GBB_P11_ROW_ANCHOR}" "| GATE-50 | UNKNOWN | - | research:11 |" gbb_p11_doc_bad "${gbb_p11_doc}")
+file(WRITE "${GBB_MODEL_GATE_DIR}/phase11-row-mutated.md" "${gbb_p11_doc_bad}")
+add_test(NAME model_gates_no_phase11_rows_mutated_doc
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_FILES=${GBB_MODEL_GATE_DIR}/phase11-row-mutated.md;-P;${PROJECT_SOURCE_DIR}/tests/check_no_phase11_rows.cmake"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=phase-11-row-open"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# The CGB colour workload form of measure_core (D-33): it must create the CGB profile and report it.
+add_test(NAME cgb_measure_core_cgb_profile
+  COMMAND measure_core --no-trace --profile cgb ${PROJECT_SOURCE_DIR}/fixtures/cgb-colour/colour-attr.gb)
+set_tests_properties(cgb_measure_core_cgb_profile PROPERTIES
+  PASS_REGULAR_EXPRESSION "correctness_digest_fnv1a64=[0-9a-f]+ profile=cgb-cpu-e")
+# Negative control: a genuinely unknown profile name is a usage error (exit 2), not a silent DMG run.
+# (dmg is a plausible valid name that measure_core merely does not accept; it is not the unknown case.)
+add_test(NAME cgb_measure_core_unknown_profile
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:measure_core>;--no-trace;--profile;bogus;${PROJECT_SOURCE_DIR}/fixtures/cgb-colour/colour-attr.gb"
+    -DGBB_EXPECT_CODE=2
+    "-DGBB_EXPECT_REGEX=usage: measure_core"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# --- Phase 11 plan 11-14 end ---
+
+# Per-test TIMEOUTs are sized for normal builds. Debug ASan/UBSan runs the same work several times
+# slower, and the whole-run acceptance and RTC cases reached their 300 s limits on a slow hosted
+# runner (LESSONS GB-CI-004). Sanitizer builds scale every explicit limit by three, so a limit
+# still catches a hang without turning a slow runner into a failure.
+if(GABBABOY_ENABLE_SANITIZERS)
+  get_property(gbb_all_tests DIRECTORY PROPERTY TESTS)
+  foreach(gbb_test IN LISTS gbb_all_tests)
+    get_test_property(${gbb_test} TIMEOUT gbb_timeout)
+    if(gbb_timeout)
+      math(EXPR gbb_timeout "${gbb_timeout} * 3")
+      set_tests_properties(${gbb_test} PROPERTIES TIMEOUT ${gbb_timeout})
+    endif()
+  endforeach()
 endif()
 
 gabbaboy_verify_registered_tests()

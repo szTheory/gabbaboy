@@ -108,9 +108,76 @@ static int run_profile_select(void) {
     return 0;
 }
 
-int main(int argc, char **argv) {
+int gbb_fuzz_core_contract_failures(void);
+
+/* cgb_fuzz_palette_regressions (D-34): palette RAM and compat-palette seeds on the CGB profile.
+ * data[0] = 0xA0 selects the palette path and data[1] bit 0 picks CGB mode ($80) or compat mode
+ * ($00); then three-byte operations (selector, a, b), see fuzz_core.c. Any violated invariant is
+ * counted by the harness, so this returns non-zero when the core breaks one. */
+static int run_palette_seeds(void) {
+    /* BCPS = $BF (auto-increment, index 63), three BCPD writes wrap the index, then read BCPS. */
+    static const uint8_t seed_wrap[] = {
+        0xA0u, 0x01u,
+        0x00u, 0xBFu, 0x00u,  0x01u, 0x12u, 0x00u,  0x01u, 0x34u, 0x00u,  0x01u, 0x56u, 0x00u,
+        0x05u, 0x00u, 0x00u,  0x05u, 0x00u, 0x01u,  0x07u, 0x00u, 0x10u
+    };
+    /* CRAM writes interleaved with short run slices so some land in mode 3, plus LCD off and on. */
+    static const uint8_t seed_mode3[] = {
+        0xA0u, 0x01u,
+        0x00u, 0x80u, 0x00u,  0x07u, 0x00u, 0x03u,  0x01u, 0xFFu, 0x00u,  0x07u, 0x00u, 0x01u,
+        0x01u, 0x7Fu, 0x00u,  0x07u, 0x00u, 0x02u,  0x02u, 0x80u, 0x00u,  0x03u, 0x1Fu, 0x00u,
+        0x06u, 0x00u, 0x00u,  0x01u, 0xFFu, 0x00u,  0x06u, 0x91u, 0x00u,  0x04u, 0x01u, 0x00u,
+        0x07u, 0x00u, 0x20u
+    };
+    /* Compat mode: the same palette register traffic plus reads, with DMG-style LCD toggling. */
+    static const uint8_t seed_compat[] = {
+        0xA0u, 0x00u,
+        0x00u, 0x80u, 0x00u,  0x01u, 0xFFu, 0x00u,  0x05u, 0x00u, 0x01u,  0x05u, 0x00u, 0x03u,
+        0x06u, 0x00u, 0x00u,  0x06u, 0x91u, 0x00u,  0x07u, 0x00u, 0x40u
+    };
+    /* Host API: struct_size 27 and 28 each with a bit 15 entry, a valid 29 and 64, NULL, then get. */
+    static const uint8_t seed_api[] = {
+        0xA0u, 0x01u,
+        0x07u, 0x05u, 0x01u,  0x07u, 0x05u, 0x02u,  0x07u, 0x01u, 0x03u,  0x07u, 0x01u, 0x04u,
+        0x07u, 0x02u, 0x00u,  0x07u, 0x03u, 0x01u,  0x07u, 0x05u, 0x00u,  0x07u, 0x00u, 0x20u
+    };
+    /* A seed with no $FFFF word: the mutant must stay quiet on it, so a failure is the mask's. */
+    static const uint8_t seed_plain[] = {
+        0xA0u, 0x01u,
+        0x06u, 0x00u, 0x00u,  0x00u, 0x80u, 0x00u,  0x01u, 0x1Fu, 0x00u,  0x01u, 0x00u, 0x00u,
+        0x06u, 0x91u, 0x00u
+    };
+    static const uint8_t seed_dmg[] = {0x20u, 0x00u, 0x01u, 0x02u};
+    static const uint8_t seed_dmg_loader[] = {0x00u, 0x00u, 0x01u};
+    gbb_fuzz_core_one_input(seed_wrap, sizeof(seed_wrap));
+    gbb_fuzz_core_one_input(seed_mode3, sizeof(seed_mode3));
+    gbb_fuzz_core_one_input(seed_compat, sizeof(seed_compat));
+    gbb_fuzz_core_one_input(seed_api, sizeof(seed_api));
+    gbb_fuzz_core_one_input(seed_plain, sizeof(seed_plain));
+    gbb_fuzz_core_one_input(seed_dmg, sizeof(seed_dmg));
+    gbb_fuzz_core_one_input(seed_dmg_loader, sizeof(seed_dmg_loader));
+    return 0;
+}
+
+/* A CRAM colour word of $FFFF in palette 0 colour 0 with the LCD off, then LCD on and two frames. */
+static int run_palette_white_word(void) {
+    static const uint8_t seed_white[] = {
+        0xA0u, 0x01u,
+        0x06u, 0x00u, 0x00u,  0x00u, 0x80u, 0x00u,  0x01u, 0xFFu, 0x00u,  0x01u, 0xFFu, 0x00u,
+        0x06u, 0x91u, 0x00u
+    };
+    gbb_fuzz_core_one_input(seed_white, sizeof(seed_white));
+    return 0;
+}
+
+static int run(int argc, char **argv) {
     if (argc > 1 && strcmp(argv[1], "cgb_profile_select") == 0) return run_profile_select();
     if (argc > 1 && strcmp(argv[1], "cgb") == 0) return run_cgb_seeds();
+    if (argc > 1 && strcmp(argv[1], "cgb_palette") == 0) {
+        const int rc = run_palette_seeds();
+        return rc != 0 ? rc : run_palette_white_word();
+    }
+    if (argc > 1 && strcmp(argv[1], "cgb_palette_plain") == 0) return run_palette_seeds();
     static const uint8_t dmg_twin_of_minimized[] = {
         0x7Fu, 0x00u, 0x00u, 0x08u, 0x00u,
         0x00u, 0x1Cu, 0x00u, 0x08u, 0x00u
@@ -163,4 +230,13 @@ int main(int argc, char **argv) {
         return 1;
     }
     return 0;
+}
+
+int main(int argc, char **argv) {
+    const int rc = run(argc, argv);
+    if (gbb_fuzz_core_contract_failures() != 0) {
+        fprintf(stderr, "fuzz contract failures: %d\n", gbb_fuzz_core_contract_failures());
+        return 1;
+    }
+    return rc;
 }

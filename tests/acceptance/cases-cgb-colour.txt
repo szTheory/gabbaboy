@@ -1,0 +1,8 @@
+# CGB colour frame-digest cases (Phase 11, D-43). reference_digest is the GBB-RGB555LE-v1 digest of the
+# colour-hblank.gb frame; it equals the digest pinned in tests/test_cgb_colour.c (HBLANK_FRAME_DIGEST), which
+# is recomputed independently in Python from the per-row table and checked row by row by cgb_colour_hblank_rows.
+id=cgb-colour-hblank rom=fixtures/cgb-colour/colour-hblank.gb rom_sha256=3ec191ebae9405f5be4248794b7652a39bd1d4a8aabb3a32393ccfb79ddfbef8 rom_size=32768 oracle=frame-digest@t=1535808 reference_digest=abb528b8ffd636f85dcd62b1f13e60ea2f1ef7ac368c84b4767e5b967d2e9546 model_pass=cgb-cpu-e budget_half_dots=1685376
+# Control: the first hex digit of the reference digest is changed, so the case must fail frame-mismatch.
+id=cgb-colour-hblank-flipped rom=fixtures/cgb-colour/colour-hblank.gb rom_sha256=3ec191ebae9405f5be4248794b7652a39bd1d4a8aabb3a32393ccfb79ddfbef8 rom_size=32768 oracle=frame-digest@t=1535808 reference_digest=bbb528b8ffd636f85dcd62b1f13e60ea2f1ef7ac368c84b4767e5b967d2e9546 model_pass=cgb-cpu-e budget_half_dots=1685376
+# Control: a progress-predicate case on the CGB profile is refused explicitly (frame-unsupported-profile).
+id=libbet-cgb-progress rom=fixtures/libbet/libbet.gb rom_sha256=3607412031c8287cf878299ce96e581e85b852dde703806343b95576fa3ff1a9 rom_size=32768 oracle=progress-predicate predicate=libbet-tutorial-cleared expect_hw_capability=0 input_script=tests/acceptance/inputs/libbet-no-input.input input_sha256=98051b783bec2c28a038469095d8fadcf6ffa70838aa2c8ebfab0b8997c3706c budget_half_dots=168537600 model_pass=cgb-cpu-e

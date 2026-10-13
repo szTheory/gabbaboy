@@ -7,6 +7,42 @@ if(NOT GABBABOY_PLAYER_EXPECTED_TESTS)
   message(FATAL_ERROR "The optional player CTest inventory must not be empty")
 endif()
 
+# Writes a mutated copy of a source file. The anchor must occur exactly once so a refactor cannot
+# silently turn a mutant into an unmodified copy that every test would then "detect" or miss.
+function(gbb_player_mutate_source input output anchor replacement)
+  file(READ "${input}" text)
+  string(FIND "${text}" "${anchor}" first)
+  string(FIND "${text}" "${anchor}" final REVERSE)
+  if(first EQUAL -1 OR NOT first EQUAL final)
+    message(FATAL_ERROR "player mutant ${output}: anchor '${anchor}' must occur exactly once in "
+      "${input} (first=${first} last=${final})")
+  endif()
+  string(REPLACE "${anchor}" "${replacement}" text "${text}")
+  file(WRITE "${output}" "${text}")
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${input}")
+endfunction()
+
+# A mutant gabbaboy-player built from main.c and colour.c, either of which may be a mutated copy.
+function(gbb_player_mutant_binary target main_source colour_source)
+  add_executable(${target} "${main_source}" "${colour_source}")
+  target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}/src/player")
+  target_link_libraries(${target} PRIVATE gabbaboy-player-adapter SDL3::SDL3)
+  target_compile_features(${target} PRIVATE c_std_17)
+  target_compile_definitions(${target} PRIVATE
+    GABBABOY_PLAYER_DEMO_ROM=\"${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb\"
+    GABBABOY_PLAYER_INVALID_ROM=\"${PROJECT_SOURCE_DIR}/fixtures/visible-demo/LICENSE.txt\")
+  set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
+endfunction()
+
+# D-30: the pinned SHA-256 of the 160x144 RGBA buffer the player uploads for colour-attr.gb after
+# 30 frames. The close-out plan re-runs the player suite at the merged head, so a later core
+# change cannot leave this pin stale unnoticed.
+set(GBB_PLAYER_CGB_RGBA_SHA "8633f67ec1a9009a3597ad0260c24c5a75940d5f76301427d92435c0d769a6c4")
+set(GBB_PLAYER_CGB_ROM "${PROJECT_SOURCE_DIR}/fixtures/cgb-colour/colour-attr.gb")
+set(GBB_PLAYER_CGB_SMOKE_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/cgb_smoke.cmake")
+set(GBB_PLAYER_CGB_HOME "${CMAKE_CURRENT_BINARY_DIR}/player-cgb-home")
+file(MAKE_DIRECTORY "${GBB_PLAYER_CGB_HOME}")
+
 foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
   if(test_name STREQUAL "player_audio_counter_saturation")
     add_executable(test_player_audio_counters test_audio_counters.c)
@@ -19,6 +55,131 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
     set_target_properties(test_player_audio_counters PROPERTIES
       C_EXTENSIONS OFF)
     add_test(NAME ${test_name} COMMAND test_player_audio_counters)
+  elseif(test_name MATCHES "^player_cgb_")
+    # D-30: CGB colour presentation. The smoke and CLI checks drive the real player with the dummy
+    # SDL audio driver and an isolated HOME; nothing is written outside the build tree.
+    set(cgb_env "SDL_AUDIO_DRIVER=dummy;HOME=${GBB_PLAYER_CGB_HOME};CFFIXED_USER_HOME=${GBB_PLAYER_CGB_HOME}")
+    set(cgb_smoke_args
+      -DGBB_ROM=${GBB_PLAYER_CGB_ROM}
+      -DGBB_DEMO=${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb
+      -DGBB_EXPECT_RGBA_SHA=${GBB_PLAYER_CGB_RGBA_SHA})
+    if(test_name STREQUAL "player_cgb_smoke")
+      add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+        -DGBB_CHECK=smoke -DGBB_PLAYER=$<TARGET_FILE:gabbaboy-player> ${cgb_smoke_args}
+        -P "${GBB_PLAYER_CGB_SMOKE_SCRIPT}")
+      set_tests_properties(${test_name} PROPERTIES TIMEOUT 120 ENVIRONMENT "${cgb_env}")
+    elseif(test_name STREQUAL "player_cgb_cli")
+      add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+        -DGBB_CHECK=cli -DGBB_PLAYER=$<TARGET_FILE:gabbaboy-player> ${cgb_smoke_args}
+        -P "${GBB_PLAYER_CGB_SMOKE_SCRIPT}")
+      set_tests_properties(${test_name} PROPERTIES TIMEOUT 240 ENVIRONMENT "${cgb_env}")
+    elseif(test_name STREQUAL "player_cgb_model_auto_smoke")
+      # --model auto with the demo and invalid ROMs must behave exactly like player_smoke: the
+      # invalid replacement fails its probe and the running session stays intact.
+      add_test(NAME ${test_name} COMMAND gabbaboy-player --model auto --smoke)
+      set_tests_properties(${test_name} PROPERTIES TIMEOUT 300 ENVIRONMENT "${cgb_env}")
+    elseif(test_name MATCHES "^player_cgb_(expand|title_token|expand_mutant_rb_swap)$")
+      set(colour_source "${PROJECT_SOURCE_DIR}/src/player/colour.c")
+      if(test_name STREQUAL "player_cgb_expand_mutant_rb_swap")
+        # Swap the red and blue extraction, through a marker so the two replacements cannot collide.
+        set(colour_source "${CMAKE_CURRENT_BINARY_DIR}/colour_mutant_rb_swap.c")
+        gbb_player_mutate_source("${PROJECT_SOURCE_DIR}/src/player/colour.c"
+          "${CMAKE_CURRENT_BINARY_DIR}/colour_mutant_rb_swap_step.c"
+          "out[0] = gbb_accept_expand5(value & 31u);"
+          "out[0] = gbb_accept_expand5(GBB_SWAP_BLUE);")
+        gbb_player_mutate_source("${CMAKE_CURRENT_BINARY_DIR}/colour_mutant_rb_swap_step.c"
+          "${CMAKE_CURRENT_BINARY_DIR}/colour_mutant_rb_swap_step2.c"
+          "out[2] = gbb_accept_expand5((value >> 10) & 31u);"
+          "out[2] = gbb_accept_expand5(value & 31u);")
+        gbb_player_mutate_source("${CMAKE_CURRENT_BINARY_DIR}/colour_mutant_rb_swap_step2.c"
+          "${colour_source}" "GBB_SWAP_BLUE" "(value >> 10) & 31u")
+      endif()
+      set(colour_target test_player_colour)
+      if(test_name STREQUAL "player_cgb_expand_mutant_rb_swap")
+        set(colour_target test_player_colour_mutant_rb_swap)
+      endif()
+      if(NOT TARGET ${colour_target})
+        add_executable(${colour_target} test_colour.c "${colour_source}")
+        target_include_directories(${colour_target} PRIVATE "${PROJECT_SOURCE_DIR}/src/player")
+        target_link_libraries(${colour_target} PRIVATE GabbaBoy::core gabbaboy_accept)
+        target_compile_features(${colour_target} PRIVATE c_std_17)
+        set_target_properties(${colour_target} PROPERTIES C_EXTENSIONS OFF)
+      endif()
+      if(test_name STREQUAL "player_cgb_expand_mutant_rb_swap")
+        add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+          "-DGBB_CMD=$<TARGET_FILE:${colour_target}>;${test_name}"
+          -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=test_colour[.]c:[0-9]+: "
+          -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+      else()
+        add_test(NAME ${test_name} COMMAND ${colour_target} ${test_name})
+      endif()
+    elseif(test_name STREQUAL "player_cgb_smoke_mutant_rb_swap" OR
+           test_name STREQUAL "player_cgb_smoke_mutant_dmg_path")
+      if(test_name STREQUAL "player_cgb_smoke_mutant_rb_swap")
+        set(mutant_main "${PROJECT_SOURCE_DIR}/src/player/main.c")
+        set(mutant_colour "${CMAKE_CURRENT_BINARY_DIR}/colour_smoke_mutant_rb_swap.c")
+        gbb_player_mutate_source("${PROJECT_SOURCE_DIR}/src/player/colour.c"
+          "${CMAKE_CURRENT_BINARY_DIR}/colour_smoke_mutant_rb_swap_step.c"
+          "out[0] = gbb_accept_expand5(value & 31u);"
+          "out[0] = gbb_accept_expand5(GBB_SWAP_BLUE);")
+        gbb_player_mutate_source("${CMAKE_CURRENT_BINARY_DIR}/colour_smoke_mutant_rb_swap_step.c"
+          "${CMAKE_CURRENT_BINARY_DIR}/colour_smoke_mutant_rb_swap_step2.c"
+          "out[2] = gbb_accept_expand5((value >> 10) & 31u);"
+          "out[2] = gbb_accept_expand5(value & 31u);")
+        gbb_player_mutate_source("${CMAKE_CURRENT_BINARY_DIR}/colour_smoke_mutant_rb_swap_step2.c"
+          "${mutant_colour}" "GBB_SWAP_BLUE" "(value >> 10) & 31u")
+        set(mutant_target gabbaboy-player-mutant-rb-swap)
+      else()
+        # update_frame forced onto the DMG path: the CGB profile then rejects gbb_copy_frame.
+        set(mutant_main "${CMAKE_CURRENT_BINARY_DIR}/main_mutant_dmg_path.c")
+        set(mutant_colour "${PROJECT_SOURCE_DIR}/src/player/colour.c")
+        gbb_player_mutate_source("${PROJECT_SOURCE_DIR}/src/player/main.c" "${mutant_main}"
+          "if (machine_info.profile == GBB_PROFILE_CGB_CPU_E)"
+          "if (machine_info.profile == GBB_PROFILE_CGB_CPU_E && 0)")
+        set(mutant_target gabbaboy-player-mutant-dmg-path)
+      endif()
+      gbb_player_mutant_binary(${mutant_target} "${mutant_main}" "${mutant_colour}")
+      add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+        "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_CHECK=smoke;-DGBB_PLAYER=$<TARGET_FILE:${mutant_target}>;-DGBB_ROM=${GBB_PLAYER_CGB_ROM};-DGBB_EXPECT_RGBA_SHA=${GBB_PLAYER_CGB_RGBA_SHA};-P;${GBB_PLAYER_CGB_SMOKE_SCRIPT}"
+        -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=cgb smoke: "
+        -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+      set_tests_properties(${test_name} PROPERTIES TIMEOUT 120 ENVIRONMENT "${cgb_env}")
+    elseif(test_name STREQUAL "player_cgb_model_mutant_ignores_flag")
+      # test_session built against a copy of session.c whose select_profile ignores the model:
+      # player_session_model_select must then fail.
+      set(mutant_session "${CMAKE_CURRENT_BINARY_DIR}/session_mutant_ignores_flag.c")
+      gbb_player_mutate_source("${PROJECT_SOURCE_DIR}/src/player/session.c" "${mutant_session}"
+        "const bool use_cgb = model_wants_cgb(model, cgb_info.cgb_flag);"
+        "const bool use_cgb = false;")
+      add_library(gabbaboy-player-session-mutant STATIC
+        "${mutant_session}" "${PROJECT_SOURCE_DIR}/src/player/catch_up_policy.c")
+      target_include_directories(gabbaboy-player-session-mutant PUBLIC
+        "${PROJECT_SOURCE_DIR}/src/player")
+      target_link_libraries(gabbaboy-player-session-mutant PUBLIC GabbaBoy::core SDL3::SDL3)
+      target_compile_features(gabbaboy-player-session-mutant PUBLIC c_std_17)
+      target_compile_definitions(gabbaboy-player-session-mutant PRIVATE GBB_PLAYER_SESSION_TESTING)
+      set_target_properties(gabbaboy-player-session-mutant PROPERTIES C_EXTENSIONS OFF)
+      add_executable(test_player_session_mutant_ignores_flag test_session.c
+        "${PROJECT_SOURCE_DIR}/src/player/audio.c"
+        "${PROJECT_SOURCE_DIR}/src/player/input.c"
+        "${PROJECT_SOURCE_DIR}/src/player/script_smoke.c")
+      target_link_libraries(test_player_session_mutant_ignores_flag PRIVATE
+        gabbaboy-player-session-mutant gabbaboy_accept)
+      target_compile_features(test_player_session_mutant_ignores_flag PRIVATE c_std_17)
+      target_compile_definitions(test_player_session_mutant_ignores_flag PRIVATE
+        GBB_PLAYER_SESSION_TESTING GBB_PLAYER_AUDIO_TESTING)
+      set_target_properties(test_player_session_mutant_ignores_flag PROPERTIES C_EXTENSIONS OFF)
+      add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+        "-DGBB_CMD=$<TARGET_FILE:test_player_session_mutant_ignores_flag>;player_session_model_select;${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb;${CMAKE_CURRENT_BINARY_DIR}/${test_name}-temp.gb;${CMAKE_CURRENT_BINARY_DIR}/${test_name}-data"
+        -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=test_session[.]c:[0-9]+: "
+        -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+      # The mutant trips a REQUIRE that returns early without destroying its temporary files or any
+      # instance; under phase1-asan LeakSanitizer would replace the expected exit 1 with its own
+      # code, so leak detection is off for this deliberately failing run only.
+      set_tests_properties(${test_name} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+    else()
+      message(FATAL_ERROR "Unknown player_cgb_ test in inventory: ${test_name}")
+    endif()
   elseif(test_name MATCHES "^player_audio_(ring|concurrent|pacing|gain|unavailable|lifecycle|device|replacement)$")
     if(NOT TARGET test_player_audio)
       add_executable(test_player_audio test_audio.c)
@@ -148,6 +309,7 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
     add_executable(test_player_reset_transition
       test_reset_transition.c
       "${PROJECT_SOURCE_DIR}/src/player/audio.c"
+      "${PROJECT_SOURCE_DIR}/src/player/colour.c"
       "${PROJECT_SOURCE_DIR}/src/player/input.c"
       "${PROJECT_SOURCE_DIR}/src/player/presentation.c"
       "${PROJECT_SOURCE_DIR}/src/player/script_smoke.c")
@@ -207,6 +369,36 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
         -DGBB_CMD=${CMAKE_COMMAND}$<SEMICOLON>-DGBB_SMOKE_C=${injected_smoke_c}$<SEMICOLON>-DGBB_SMOKE_H=${PROJECT_SOURCE_DIR}/src/player/script_smoke.h$<SEMICOLON>-DGBB_PLAYER_MAIN=${PROJECT_SOURCE_DIR}/src/player/main.c$<SEMICOLON>-P$<SEMICOLON>${smoke_surface_script}
         -DGBB_EXPECT_CODE=1
         "-DGBB_EXPECT_REGEX=script-smoke-surface: getenv"
+        -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+    endif()
+    set_tests_properties(${test_name} PROPERTIES TIMEOUT 30)
+  elseif(test_name MATCHES "^player_claims_agree(_mutated)?$")
+    # D-44: one phrase list must read the same on every player-facing claim surface.
+    # Phrase lists live in files (one phrase per line) so they survive the nested list that
+    # expect_exit.cmake passes to the mutated run; the phrases themselves contain '|'.
+    set(claims_phrases_file "${CMAKE_CURRENT_BINARY_DIR}/claims_phrases.txt")
+    set(claims_linux_phrases_file "${CMAKE_CURRENT_BINARY_DIR}/claims_linux_phrases.txt")
+    file(WRITE "${claims_phrases_file}"
+      "no colour correction\nDMG APU model\n--model auto|dmg|cgb\nno palette flag\nCGB mode-3 timing\n")
+    file(WRITE "${claims_linux_phrases_file}" "no colour correction\nCGB mode-3 timing\n")
+    set(claims_script "${CMAKE_CURRENT_SOURCE_DIR}/claims_agree.cmake")
+    set(claims_args
+      "-DPHRASES_FILE=${claims_phrases_file}" "-DLINUX_PHRASES_FILE=${claims_linux_phrases_file}"
+      "-DLIMITATIONS=${PROJECT_SOURCE_DIR}/src/player/limitations.h"
+      "-DPREVIEW_YML=${PROJECT_SOURCE_DIR}/.github/workflows/preview.yml")
+    if(test_name STREQUAL "player_claims_agree")
+      add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND} ${claims_args}
+        "-DREADME=${PROJECT_SOURCE_DIR}/README.md" -P "${claims_script}")
+    else()
+      # Negative control: a README copy that drops the first phrase must be caught.
+      set(mutated_readme "${CMAKE_CURRENT_BINARY_DIR}/README_claims_mutated.md")
+      gbb_player_mutate_source("${PROJECT_SOURCE_DIR}/README.md" "${mutated_readme}"
+        "no colour correction" "DROPPED")
+      set(claims_cmd ${CMAKE_COMMAND} ${claims_args} "-DREADME=${mutated_readme}" -P "${claims_script}")
+      string(REPLACE ";" "$<SEMICOLON>" claims_cmd_arg "${claims_cmd}")
+      add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+        "-DGBB_CMD=${claims_cmd_arg}"
+        -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=claims-disagree no colour correction "
         -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
     endif()
     set_tests_properties(${test_name} PROPERTIES TIMEOUT 30)

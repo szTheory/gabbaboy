@@ -126,6 +126,11 @@ typedef struct {
     uint64_t generation;
     char digest[65];                /* canonical D-24 digest, valid when frame_ready */
     uint8_t pixels[GBB_LDBB_FRAME_BYTES];
+    /* Appended in Phase 11 (D-43). format 0 = DMG shade bytes in pixels and the RGB888 digest;
+     * format 1 = CGB RGB555 values in pixels555 (pitch 320 bytes) and the GBB-RGB555LE-v1 digest.
+     * The store is chosen from the instance profile, never from a flag. */
+    uint16_t pixels555[GBB_LDBB_FRAME_BYTES];
+    uint8_t format;
 } gbb_ldbb_capture;
 
 /* Runs `instance` (already loaded, freshly created) for at most budget_half_dots. Returns 0 when

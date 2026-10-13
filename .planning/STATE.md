@@ -4,19 +4,19 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_plan: Not started
 status: planning
-stopped_at: Phase 10 verify-work passed (12/12 automated UAT); next /gsd-discuss-phase 11
-last_updated: "2026-10-12T23:36:39.000Z"
-last_activity: 2026-10-12
-last_activity_desc: Phase 10 verify-work passed; PR #66 squash-merges at its exact-head green head
-state_head: 798433cbc5080c35d9256592fb5547c20bcbd451
+stopped_at: Phase 11 verify-work passed (11/11 automated UAT); next /gsd-discuss-phase 12
+last_updated: "2026-10-13T13:10:00.000Z"
+last_activity: 2026-10-13
+last_activity_desc: Phase 11 verify-work passed; PR #67 squash-merges at its exact-head green head
+state_head: 4e61ab7a627fd8e8b4789a7db427c807853508ea
 progress:
   total_phases: 9
-  completed_phases: 5
-  total_plans: 65
-  completed_plans: 65
-  percent: 50
-current_phase: 11
-current_phase_name: CGB Colour Rendering and Player Colour
+  completed_phases: 6
+  total_plans: 80
+  completed_plans: 80
+  percent: 60
+current_phase: 12
+current_phase_name: CGB Double Speed
 ---
 
 # Project State
@@ -26,19 +26,22 @@ current_phase_name: CGB Colour Rendering and Player Colour
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 11 — CGB Colour Rendering and Player Colour (not started)
+**Current focus:** Phase 12 — CGB Double Speed
 
 ## Current Position
 
 Current Plan: Not started
-Total Plans in Phase: 20
+Total Plans in Phase: 15
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
 Verified: Phase 9 `/gsd-verify-work 9` passed 2026-10-12 — 14/14 UAT items automated (09-UAT.md), the guide-wording item replaced by the `native_guide_rtc_contract` check; re-verification `passed` (09-VERIFICATION.md); PR #65 squash-merges at the exact-head green branch head (pre-authorized)
 Completed: Phase 10 - CGB Profile, Banking and Register Visibility, execution (plans 10-01..10-20), evidence head `2fe078e8f08ed98ba0ac0e244971e7c0ead16b1e` run https://github.com/szTheory/gabbaboy/actions/runs/38299323863; PR #66 ready and not merged
 Verified: Phase 10 `/gsd-verify-work 10` passed 2026-10-12 — 12/12 UAT items automated (10-UAT.md), local 541/541 with installed inventory at 3c0d6bc; verification `passed` (10-VERIFICATION.md); PR #66 squash-merges at the exact-head green branch head (pre-authorized)
-Next step: Phase 11 - CGB Colour Rendering and Player Colour (no CONTEXT.md yet) via `/gsd-discuss-phase 11`; the owner chooses when
-Last activity: 2026-10-12 — Phase 10 execute-phase tail: Nyquist validated (4 gaps filled), security 33/33 closed, code review 8 fixed + 1 no-change, regression gate 541/541 with installed inventory, gsd-verifier `passed` (10-VERIFICATION.md)
+Completed: Phase 11 - CGB Colour Rendering and Player Colour, planning (11-RESEARCH, 11-PATTERNS, 11-VALIDATION, plans 11-01..11-15) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`
+Completed: Phase 11 - CGB Colour Rendering and Player Colour, execution (plans 11-01..11-15) plus the execute-phase tail; gsd-verifier `passed` 3/3 (11-VERIFICATION.md); evidence head `fb7d14c` exact-head green; PR #67 open, not merged
+Verified: Phase 11 `/gsd-verify-work 11` passed 2026-10-13 — 11/11 UAT rows automated covering all 91 SUMMARY coverage entries (11-UAT.md); verification `passed` (11-VERIFICATION.md); hosted ASan timeout fixed in the PR (LESSONS GB-CI-004); PR #67 squash-merges at the exact-head green branch head (pre-authorized)
+Next step: Phase 12 - CGB Double Speed (no CONTEXT.md yet) via `/gsd-discuss-phase 12`; the owner chooses when
+Last activity: 2026-10-13 — Phase 11 verify-work passed; exact-head CI green at 4811033
 
 Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 
@@ -174,6 +177,21 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 10 P18 | 45 min | 3 tasks | 9 files |
 | Phase 10 P19 | 25 min | 3 tasks | 8 files |
 | Phase 10 P20 | 95 min | 2 tasks | 8 files |
+| Phase 11 P01 | 25 min | 2 tasks | 6 files |
+| Phase 11 P02 | 45 min | 3 tasks | 8 files |
+| Phase 11 P03 | 40 min | 2 tasks | 5 files |
+| Phase 11 P04 | 25 min | 2 tasks | 5 files |
+| Phase 11 P05 | 30 min | 3 tasks | 3 files |
+| Phase 11 P06 | 55 min | 3 tasks | 17 files |
+| Phase 11 P07 | 50 min | 2 tasks | 14 files |
+| Phase 11 P08 | 45 min | 2 tasks | 22 files |
+| Phase 11 P09 | 25 min | 3 tasks | 7 files |
+| Phase 11 P10 | 30 min | 3 tasks | 12 files |
+| Phase 11 P11 | 25min | 2 tasks | 8 files |
+| Phase 11 P12 | 50min | 2 tasks | 11 files |
+| Phase 11 P13 | 25min | 2 tasks | 9 files |
+| Phase 11 P14 | 40 min | 3 tasks | 11 files |
+| Phase 11 P15 | 25 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -327,6 +345,20 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 10]: D-070 half-dot master timeline ADR adopted; D-071..D-075 record IE, ch1 policy, deferred-register asymmetry, GATE-00, FEA0-FEFF/cgb-separate-buses
 - [Phase 10]: Phase 10 evidence head 2fe078e8f08ed98ba0ac0e244971e7c0ead16b1e is exact-head green (8 required checks, 7 fixture-repro jobs); PR #66 is ready and left open until /gsd-verify-work 10 passes
 - [Phase 10]: The +5% banking benchmark review trigger fired (about +6 to 7 percent vs the Phase 7 baseline, advisory on a loaded host); no optimisation in Phase 10, owner decides per D-016
+- [Phase 11]: libbet shade pin runs 900 frames (blank earlier); pins are regression, not hardware evidence
+- [Phase 11]: 11-02: palette RAM lock is a plain mode-3 predicate (GATE-76) and OPRI is stored without priority effect (GATE-77); both UNKNOWN research:14
+- [Phase 11]: 11-02: post-boot BCPS is C0 so bit 7 auto-increment is on; visibility port cells park the index at 0 and turn the LCD off
+- [Phase 11]: 11-05: truth table drives the real pixel functions; implementation matched the oracle with no core change; 12 per-input mutants each fail
+- [Phase 11]: 11-06: RGB555 frame call and compat palette API are public; skewed-validator and bit-15 mutants guard them (GATE-83)
+- [Phase 11]: 11-07: colour-hblank guest uses a jr spin, not HALT, because gbb_run returns at each HALT with budget left
+- [Phase 11]: 11-07: fixtures/cgb-colour ROMs are admitted by a wildcard .gitignore exception and added as manifest rows with per-row recipes
+- [Phase 11]: 11-08: CRAM guest ends in a jr spin (not HALT) because gbb_run returns at every HALT; markers read with gbb_peek_ram after 10 frames
+- [Phase 11]: 11-09: CGB runner frame cases print GBB-RGB555LE-v1 digests under frame555/observed555; store chosen from instance profile; CGB progress-predicate observation refused with frame-unsupported-profile
+- [Phase 11]: 11-10: bg_oam_priority passed its predicate unmodified; no expected-unsupported record; AGE deviation (D-20) stated in ELIGIBILITY.md
+- [Phase 11]: 11-11: acid2 local runner uses frame-digest@ldbb and a PNG decoder covering palette and greyscale (pinned references are not 8-bit RGB)
+- [Phase 11]: 11-12: select_profile seam player_session_probe_profile serves the three session sites; CGB smoke pins the uploaded RGBA digest plus 40 independently computed spot pixels
+- [Phase 11]: D-04: no per-dot model hoist; the D-22 trigger did not fire (DMG median 98.5 to 100.2 percent of the Phase 10 head, margins 1.5 to 1.9)
+- [Phase 11]: D-32: ten PPU timing gates re-assigned research:14; model_gates_no_phase11_rows guards against a returning Phase 11 owner tag
 
 ### Pending Todos
 
@@ -362,10 +394,20 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-12T19:16:03.353Z
-Stopped at: Phase 10 verify-work passed; Phase 11 not started
-Resume file: None
-Next command in fresh context: `/gsd-discuss-phase 11`
+Last session: 2026-10-13T04:29:43.285Z
+Stopped at: Phase 11 complete, ready to plan Phase 12
+Resume file: .planning/.continue-here.md
+Next command in fresh context: `/gsd-verify-work 11`
+
+Completed workflow stage: **Phase 11 - CGB Colour Rendering and Player Colour, verify-work** (2026-10-13): `/gsd-verify-work 11` passed with zero human checkpoints (D-069): all 91 SUMMARY coverage entries classify as auto-passed and are grouped into 11 UAT rows (11-UAT.md); every named test a coverage ref cites is registered; `phase uat-passed --require-verification` passed; security `threats_open: 0`; ui-review not applicable (SDL player). Verification found one CI defect, fixed on the branch: hosted linux-asan-ubsan ran serially at 20 of 30 minutes and timed out on a slow pull_request runner at b314686. eb6f36e runs it with `--parallel 4` (pinned by `ci_asan_parallel_contract` and its negative control) and 4811033 scales explicit test TIMEOUTs by three in sanitizer builds (LESSONS GB-CI-004). Evidence head `4811033`: ci push 38398631736 and pull_request 38398639883 all jobs success (ASan 686/686, 16-18 min), fixture-repro 38398631778/38398639816 success, preview-package-smoke 38398639852 success; local 691/691. PR #67 (https://github.com/szTheory/gabbaboy/pull/67) squash-merges at its exact-head green head (pre-authorized). Owner veto items before merge: D-15, D-17a, D-18, D-26, D-08, D-21, D-24. **Next step: Phase 12 - CGB Double Speed. Next command in fresh context: `/gsd-discuss-phase 12`.** Continue only when the owner chooses to. Both auto-advance flags stay false.
+
+Completed workflow stage: **Phase 11 - CGB Colour Rendering and Player Colour, execute-phase** (2026-10-13): plans 11-01..11-15 plus the execute-phase tail. Tail: post-merge gate 684/684 + DMG baseline + player package (93/93); wave-post gates (schema drift, codebase drift, UI safety) pass; Nyquist validation `validated`/`nyquist_compliant: true` (25 rows, no gaps); security 43/43 threats closed, `threats_open: 0` (11-SECURITY.md); code review 0 critical / 3 warning / 5 info, 7 fixed and 1 no-change with an added control (11-REVIEW-DISPOSITION.md); regression gate 689/689, `baseline status=pass`; gsd-verifier `passed` 3/3 (11-VERIFICATION.md); `phase.complete` marked CGB-04/05/09 complete (its 11 summary-path warnings are commands parsed as paths, all files exist). ui-review was not run: the 6-pillar web audit does not apply to the SDL player and Phase 10 skipped it too. CI defects fixed in the PR: LeakSanitizer exit codes on deliberately failing mutants (361256d) and the Windows inventory missing two bash-only repro guards (fb7d14c, LESSONS GB-CGB-007). Evidence head `fb7d14c`: ci run 38355327717 (https://github.com/szTheory/gabbaboy/actions/runs/38355327717) all eight required jobs success; fixture-repro run 38355327835 all seven jobs success (CGB colour and MagenTests byte-identical); preview-package-smoke run 38355327755 success. PR #67 (https://github.com/szTheory/gabbaboy/pull/67) is open and stays unmerged; the pre-authorized squash merge happens only after `/gsd-verify-work 11` passes at an exact-head green head. Owner veto items: D-15, D-17a, D-18, D-26, D-08, D-21, D-24. **Next step: Phase 11 verification. Next command in fresh context: `/gsd-verify-work 11`.** Following phase (named, not started): **Phase 12: CGB Double Speed** via `/gsd-discuss-phase 12`, only after verification passes and the owner chooses to continue. Both auto-advance flags stay false.
+
+Completed workflow stage: **Phase 11 - CGB Colour Rendering and Player Colour, execution** (2026-10-13), plans 11-01..11-15 on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`. Last code head `2c4ac09`; local `phase1` suite 684 of 684 passed (macOS arm64) and `baseline status=pass`. Hosted CI and fixture-repro run IDs, the PR and the execute-phase tail (code review, validation, verifier) belong to the orchestrator and are not recorded here; `phase1-asan` cannot run on macOS, so the sanitizer leg is hosted only (see LESSONS GB-CGB-002). Durable memory: DECISIONS D-076..D-083 (Phase 11 D-15, D-17a, D-08, D-26, D-18, D-21, D-24, D-09), the INDEX Phase 11 bullet, LESSONS GB-CGB-002..006 and the phase COVERAGE.md no-external-API declaration (api-coverage verify:pre passes). Deviation for VERIFICATION (D-20): AGE has no CGB colour, attribute or priority ROM, so criterion 1 rests on the generated truth table, three MagenTests ROMs and original fixtures; AGE mode-3 cases are expected-unsupported (D-09, Phase 14). Owner veto items: D-15, D-17a, D-18, D-26, D-08, D-21, D-24. Phase 11 is not verified and not merged. **Next step: Phase 11 verification. Next command in fresh context: `/gsd-verify-work 11`.** Following phase (named, not started): **Phase 12: CGB Double Speed**, entered with `/gsd-discuss-phase 12` (no Phase 12 CONTEXT.md exists) only after verification passes and the owner chooses to continue. Both `workflow.auto_advance` and `workflow._auto_chain_active` stay false; nothing advances automatically.
+
+Completed workflow stage: **Phase 11 - CGB Colour Rendering and Player Colour, planning** (2026-10-12) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`. 11-RESEARCH.md (15 corrections to CONTEXT, MagenTests 0.5.0 pins and digests, validation architecture), 11-PATTERNS.md, 11-VALIDATION.md and plans 11-01..11-15 in 14 waves (serial except 11-11 with 11-12, because nearly every plan edits `tests/expected-tests.txt`, `tests/CMakeLists.txt` and `src/core/gabbaboy.c`). Plan checker passed on iteration 3 (iteration 1: missing D-09 AGE/Mealybug expected-unsupported records, two over-size plans, MagenTests predicate fixes, DECISIONS/INDEX and handoff persistence; iteration 2: file-count justifications). Coverage gates: CGB-04, CGB-05, CGB-09 covered; decisions 45/45. CONTEXT amended at planning: D-26 routes only the three player session sites through `select_profile` (RESEARCH Correction 2); D-42 "api-coverage" is the GSD COVERAGE.md gate. Research open questions auto-resolved per the owner's standing instruction (compat CRAM $7FFF POLICY, generated truth table from an independent Python oracle, research:11 timing gates re-tagged research:14, WRAM markers, default ramp $639F/$4275/$254B/$0421, bg_oam_priority fallback limited to D-09 mode-3 timing). One-way doors D-15/D-17a keep their ratings without checkpoints (already decided; owner veto window at PR review: D-15, D-17a, D-18, D-26, D-08, D-21, D-24). Execution preconditions: network for the pinned RGBDS 1.0.1 archive and MagenTests 0.5.0 sources, gh access and exact-head CI. Next step: **Phase 11 execution** via **`/gsd-execute-phase 11`**. Both auto-advance flags stay false; nothing advances automatically.
+
+Completed workflow stage: **Phase 11 - CGB Colour Rendering and Player Colour, discussion** (2026-10-12) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`. [11-CONTEXT.md](phases/GB-11-cgb-colour-rendering-and-player-colour/11-CONTEXT.md) locks D-01..D-44 from seven parallel advisor researches (PPU rendering/priority/OPRI, palette RAM, RGB555 API and compat palette, oracles, player and smoke, gap sweep, cross-emulator pixel pipeline) plus an adversarial review of the draft, auto-followed per the owner's standing instruction. Key choices: RGB555 resolved per dot into separate `uint16_t` buffers, DMG shade path untouched; LCDC.0 is master priority in CGB mode; OPRI stored with no post-boot priority effect; blocked palette writes still auto-increment; `gbb_copy_frame_rgb555` with byte pitch, DMG profile unsupported; compat palette as instance configuration with `gbb_set/get_compat_palette`; AGE has no CGB colour ROMs, so criterion 1 rests on the truth table, three MagenTests ROMs and original fixtures (deviation recorded); acid2 optional-local while G1 is open; player `--model auto|dmg|cgb` with default `dmg` (Libbet is dual-mode). Owner veto window: D-15, D-17a, D-18, D-26, D-08, D-21, D-24. Next step: **Phase 11 research and planning** via **`/gsd-plan-phase 11`**. Both auto-advance flags stay false; nothing advances automatically.
 
 Completed workflow stage: **Phase 10 - CGB Profile, Banking and Register Visibility, verification** (2026-10-12). `/gsd-verify-work 10` passed: 12/12 UAT items automated with no human checkpoint (10-UAT.md, DECISIONS D-069), mapped by hand from the 118 test names the SUMMARY coverage blocks cite (all registered CTests); all 20 SUMMARY commit claims reconcile. Local macOS arm64 at code head `3c0d6bc`: 541/541 CTest, inventory `--installed` 541 executed none skipped, `baseline status=pass`, `verify-model-gates.py` pass. Hosted at `3c0d6bc`: ci run 38318873877 (eight required jobs), fixture-repro 38318873887, preview-package-smoke success on attempt 2. The verify:pre api-coverage gate blocked on an over-long COVERAGE.md opt-out reason; shortened to the Phase 9 form. Completion predicate `phase uat-passed 10 --require-verification` passed; `threats_open: 0`. PR #66 squash-merges at its exact-head green branch head (pre-authorized); the six owner veto items stay recorded in the PR body. Next phase: **Phase 11 - CGB Colour Rendering and Player Colour** (no CONTEXT.md yet) via **`/gsd-discuss-phase 11`**. Both auto-advance flags stay false; nothing advances automatically.
 

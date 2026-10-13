@@ -1,0 +1,26 @@
+# Fails when a Phase 11 owner tag ("research:" followed by the number eleven) is still present in
+# any of the files named by GBB_FILES (a CMake list). Used by model_gates_no_phase11_rows and its
+# mutated-doc control (plan 11-14, D-32): Phase 11 resolves or re-assigns every PPU gate row, so a
+# row that silently reappears must be loud.
+if(NOT DEFINED GBB_FILES OR "${GBB_FILES}" STREQUAL "")
+  message(FATAL_ERROR "check_no_phase11_rows.cmake is missing GBB_FILES")
+endif()
+set(gbb_needle "research:11")
+set(gbb_open 0)
+foreach(gbb_file IN LISTS GBB_FILES)
+  if(NOT EXISTS "${gbb_file}")
+    message(FATAL_ERROR "check_no_phase11_rows.cmake: missing file ${gbb_file}")
+  endif()
+  file(STRINGS "${gbb_file}" gbb_lines)
+  foreach(gbb_line IN LISTS gbb_lines)
+    string(FIND "${gbb_line}" "${gbb_needle}" gbb_at)
+    if(NOT gbb_at EQUAL -1)
+      message(SEND_ERROR "phase-11-row-open: ${gbb_file}: ${gbb_line}")
+      set(gbb_open 1)
+    endif()
+  endforeach()
+endforeach()
+if(gbb_open)
+  message(FATAL_ERROR "phase-11-row-open")
+endif()
+message(STATUS "no-phase11-rows pass")

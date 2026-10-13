@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Rebuild the three MagenTests mbc_oob_sram ROMs at the pinned upstream commit with RGBDS v0.6.1 and
-# compare the bytes with the committed release ROMs (Phase 9, D-04). Never copies rebuilt bytes over
-# committed fixtures.
+# Rebuild every vendored MagenTests ROM (the three mbc_oob_sram ROMs and the three Phase 11 CGB PPU
+# ROMs) at the pinned upstream commit with RGBDS v0.6.1 and compare the bytes with the committed
+# release ROMs (Phase 9 D-04, Phase 11 D-21). One table below names each ROM, its source directory
+# and its rgbfix options; the self-check requires the manifest rows to agree with it. Never copies
+# rebuilt bytes over committed fixtures.
 #
 #   --self-check   offline: manifest, SOURCES.md pins and committed digests (default)
 #   --compare      networked: rebuild with rgbasm/rgblink/rgbfix v0.6.1 on PATH and compare
@@ -19,11 +21,23 @@ hardware_url=https://github.com/gbdev/hardware.inc.git
 hardware_commit=21ef22d01ac55151160f3d98110c2da8846a96b2
 rgbds_version=v0.6.1
 
+# Rebuild table: output name | upstream source directory | rgbfix options (upstream Makefile).
+rom_table() {
+  cat <<'TABLE'
+mbc_oob_sram_mbc1|src/mbc_oob_sram|--color-compatible --mbc-type MBC1+RAM --ram-size 2
+mbc_oob_sram_mbc3|src/mbc_oob_sram|--color-compatible --mbc-type MBC3+RAM --ram-size 2
+mbc_oob_sram_mbc5|src/mbc_oob_sram|--color-compatible --mbc-type MBC5+RAM --ram-size 2
+bg_oam_priority|src/color_bg_oam_priority|--color-only --mbc-type ROM
+oam_internal_priority|src/oam_internal_priority|--color-only --mbc-type ROM
+ppu_disabled_state|src/ppu_disabled_state|--color-compatible --mbc-type ROM
+TABLE
+}
+
 mode=${1:---self-check}
 work_dir=
 
 self_check() {
-  python3 -I - "$fixture" "$upstream_commit" "$hardware_commit" <<'PY'
+  python3 -I - "$fixture" "$upstream_commit" "$hardware_commit" "$(rom_table)" <<'PY'
 import hashlib
 import json
 import pathlib
@@ -31,7 +45,7 @@ import re
 import sys
 
 fixture = pathlib.Path(sys.argv[1])
-commit, hardware = sys.argv[2:4]
+commit, hardware, table_text = sys.argv[2:5]
 
 def fail(message):
     raise SystemExit('self-check failed: ' + message)
@@ -40,9 +54,17 @@ manifest = json.loads((fixture / 'manifest.json').read_text())
 if manifest['suite'].get('revision') != commit:
     fail('manifest revision differs from the pin')
 entries = manifest.get('fixtures', [])
-if len(entries) != 3:
-    fail('expected three MagenTests fixtures')
+table = {}
+for line in table_text.splitlines():
+    name, source_dir, options = line.split('|')
+    table[name + '.gbc'] = (source_dir, options)
+manifest_files = [entry['file'] for entry in entries]
+if sorted(manifest_files) != sorted(table):
+    fail('manifest rows and rebuild table name different files: %s vs %s' % (
+        sorted(manifest_files), sorted(table)))
 for entry in entries:
+    if (entry.get('source_dir'), entry.get('rgbfix_options')) != table[entry['file']]:
+        fail('manifest source_dir/rgbfix_options differ from the rebuild table for ' + entry['file'])
     data = (fixture / entry['file']).read_bytes()
     if len(data) != entry['size_bytes'] or hashlib.sha256(data).hexdigest() != entry['sha256']:
         fail('digest mismatch for ' + entry['file'])
@@ -92,17 +114,15 @@ compare() {
   (
     cd "$work_dir/src"
     mkdir -p build
-    while read -r name mbc; do
-      rgbasm -L -i src/mbc_oob_sram -i hardware.inc/ -o "build/$name.o" src/mbc_oob_sram/main.asm
+    while IFS='|' read -r name dir options; do
+      rgbasm -L -i "$dir" -i hardware.inc/ -o "build/$name.o" "$dir/main.asm"
       rgblink -o "build/$name.gbc" "build/$name.o"
-      rgbfix -v -p 0 --color-compatible --mbc-type "$mbc" --ram-size 2 "build/$name.gbc"
-    done <<'LIST'
-mbc_oob_sram_mbc1 MBC1+RAM
-mbc_oob_sram_mbc3 MBC3+RAM
-mbc_oob_sram_mbc5 MBC5+RAM
-LIST
+      # Options are deliberately word-split into separate rgbfix arguments.
+      # shellcheck disable=SC2086
+      rgbfix -v -p 0 $options "build/$name.gbc"
+    done < <(rom_table)
   )
-  python3 -I - "$fixture" "$work_dir/src/build" <<'PY'
+  python3 -I - "$fixture" "$work_dir/src/build" "$(rom_table)" <<'PY'
 import hashlib
 import pathlib
 import sys
@@ -110,7 +130,8 @@ import sys
 fixture = pathlib.Path(sys.argv[1])
 build = pathlib.Path(sys.argv[2])
 bad = False
-for name in ('mbc_oob_sram_mbc1.gbc', 'mbc_oob_sram_mbc3.gbc', 'mbc_oob_sram_mbc5.gbc'):
+for line in sys.argv[3].splitlines():
+    name = line.split('|')[0] + '.gbc'
     committed = (fixture / name).read_bytes()
     rebuilt = (build / name).read_bytes()
     if committed != rebuilt:

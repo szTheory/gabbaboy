@@ -1,0 +1,251 @@
+{
+  "id": "cgb-colour",
+  "source": [
+    "common.inc",
+    "attr.asm",
+    "compat.asm",
+    "cram.asm",
+    "hblank.asm",
+    "lcdoff.asm"
+  ],
+  "source_identity": "Original GabbaBoy project-authored assembly",
+  "source_sha256": {
+    "common.inc": "23a16af41a468060f370863ddf645ee35ea40b70fd8bdc87526a6bdb3df7db04",
+    "attr.asm": "fb42fa1a3d96791f5df087d546f285e2dbf0e198d28761a3ede47b1c34059924",
+    "compat.asm": "b5f726e3d0e175ea3f951b37884cbd38adbd979d7c8cab49ee7d0301d5b2789e",
+    "cram.asm": "66407f5c5f8ac37c9a7d4c5d3f7065879f3e5917b8a04e7de7ca2b229c21ab8b",
+    "hblank.asm": "4084cb89963c069abbd91715d99a2244c6c90bc6425bfc1002a90535a296f351",
+    "lcdoff.asm": "861ff09dadacb6e4c5774935b805464ccdc1dac56171a3797410aaf71b483cb4"
+  },
+  "license": "MIT; see LICENSE.txt and repository LICENSE",
+  "build": {
+    "assembler": "RGBDS",
+    "version": "1.0.1",
+    "archive": "rgbds-macos.zip",
+    "archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
+    "ci_archive": "rgbds-linux-x86_64.tar.xz",
+    "ci_archive_sha256": "80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9",
+    "recipe": "Per ROM, from fixtures[].recipe: rgbasm -I fixtures/cgb-colour/ [-D name]... -o <work>/<rom>.o fixtures/cgb-colour/<source> && rgblink -o <work>/<rom> <work>/<rom>.o && rgbfix <rgbfix_flags> <work>/<rom>; tests/scripts/reproduce-cgb-colour.sh runs every row verbatim and compares the bytes",
+    "committed_bytes_toolchain": "RGBDS v1.0.1 macOS release archive (digest above); the reproduction script rebuilds every ROM with the pinned tools and compares byte for byte"
+  },
+  "fixtures": [
+    {
+      "file": "colour-attr.gb",
+      "size_bytes": 32768,
+      "sha256": "35eb9a4466a06ff5a0d8de2f2ebd07e00525f048bfcd6cb871922f57ab0bfb76",
+      "recipe": {
+        "source": "attr.asm",
+        "defines": [],
+        "rgbfix_flags": [
+          "-c",
+          "-v",
+          "-p",
+          "0"
+        ]
+      }
+    },
+    {
+      "file": "colour-compat.gb",
+      "size_bytes": 32768,
+      "sha256": "0e18413cd704011f847d51498bbeb25bf3c0dc8aa8173173ea60b5f82b32aa9f",
+      "recipe": {
+        "source": "compat.asm",
+        "defines": [],
+        "rgbfix_flags": [
+          "-v",
+          "-p",
+          "0"
+        ]
+      }
+    },
+    {
+      "file": "colour-cram.gb",
+      "size_bytes": 32768,
+      "sha256": "d6ae42a8456c6d7be1cf208157b03f806e662d78e6cb980231cd086dd706dcdb",
+      "recipe": {
+        "source": "cram.asm",
+        "defines": [],
+        "rgbfix_flags": [
+          "-c",
+          "-v",
+          "-p",
+          "0"
+        ]
+      }
+    },
+    {
+      "file": "colour-hblank.gb",
+      "size_bytes": 32768,
+      "sha256": "3ec191ebae9405f5be4248794b7652a39bd1d4a8aabb3a32393ccfb79ddfbef8",
+      "recipe": {
+        "source": "hblank.asm",
+        "defines": [],
+        "rgbfix_flags": [
+          "-c",
+          "-v",
+          "-p",
+          "0"
+        ]
+      }
+    },
+    {
+      "file": "colour-lcdc0.gb",
+      "size_bytes": 32768,
+      "sha256": "f0acbd58d2ce876587cdb8e7fd94fa5aa013d3f468adbd94698460bd681b6e7a",
+      "recipe": {
+        "source": "attr.asm",
+        "defines": [
+          "LCDC0_CLEAR"
+        ],
+        "rgbfix_flags": [
+          "-c",
+          "-v",
+          "-p",
+          "0"
+        ]
+      }
+    },
+    {
+      "file": "colour-lcdoff.gb",
+      "size_bytes": 32768,
+      "sha256": "cb92643d662b1cb6c94de42ae4065adf267d78cba4ff284a844492ded585dcd5",
+      "recipe": {
+        "source": "lcdoff.asm",
+        "defines": [],
+        "rgbfix_flags": [
+          "-c",
+          "-v",
+          "-p",
+          "0"
+        ]
+      }
+    }
+  ],
+  "cartridge": {
+    "mapper": "none (ROM only)",
+    "type": "0x00",
+    "rom_size_code": "0x00 (32 KiB)",
+    "ram_size_code": "0x00 (none)",
+    "cgb_flag": "0x80 (rgbfix -c)"
+  },
+  "profile": {
+    "name": "CGB-CPU-E",
+    "boot": "Skipped; starts at cartridge entry 0x0100.",
+    "applicability": "Original software fixture for the deterministic bootless CGB-CPU-E profile in CGB mode; not physical hardware evidence."
+  },
+  "protocol": {
+    "colour-hblank.gb": {
+      "summary": "BG tile 0 (all colour index 0) fills the screen with attribute 0; the guest rewrites BG palette 0 colour 0 once per line.",
+      "line_0": "written during VBlank before the STAT mode-0 interrupt is armed",
+      "line_y_plus_1": "written by the STAT mode-0 (HBlank) interrupt handler during the HBlank of line y; the handler writes line (y + 1) mod 144",
+      "hblank_value": "(y * 229 + 1) & 0x7FFF for row y",
+      "regions": "rows 0-143 of the 160x144 RGB555 frame, columns 0-159",
+      "expected": "every row is uniform and equals hblank_value(row); the 144 row values are distinct and non-zero",
+      "structural_predicate": "checked by cgb_colour_hblank_rows before the frame digest pin is compared"
+    },
+    "run": "load on the CGB-CPU-E profile, run 10 frames, copy with gbb_copy_frame_rgb555",
+    "colour-attr.gb": {
+      "summary": "Ten 16x16-pixel cells in one row (x = 16 * cell, y 0..15); each cell is 2x2 copies of one 8x8 tile of four 4x4 quadrants. Rows 16..143 are BG palette 0 colour 0 (tile 0).",
+      "quadrant_order": "top-left, top-right, bottom-left, bottom-right of each 8x8 tile, indexed by (y % 8) / 4 * 2 + (x % 8) / 4",
+      "palettes": {
+        "bg0": [
+          "0x1111",
+          "0x2222",
+          "0x3333",
+          "0x0444"
+        ],
+        "bg3": [
+          "0x5555",
+          "0x6666",
+          "0x7777",
+          "0x4321"
+        ],
+        "obj0": [
+          "0x0A0A",
+          "0x1234",
+          "0x2345",
+          "0x3456"
+        ],
+        "obj2": [
+          "0x0B0B",
+          "0x4567",
+          "0x5678",
+          "0x6789"
+        ],
+        "obj5": [
+          "0x0C0C",
+          "0x789A",
+          "0x0ABC",
+          "0x1BCD"
+        ]
+      },
+      "tiles": {
+        "Q (bank 0, tile 1)": "indices 1, 2, 3, 0",
+        "R (bank 1, tile 1)": "indices 3, 0, 1, 2",
+        "solid (bank 0, tile 2)": "index 1"
+      },
+      "cells": {
+        "0": "BG attr palette 3, tile Q: 0x6666, 0x7777, 0x4321, 0x5555",
+        "1": "BG attr bank 1, tile R, palette 0: 0x0444, 0x1111, 0x2222, 0x3333",
+        "2": "BG attr X flip, tile Q, palette 0: 0x3333, 0x2222, 0x1111, 0x0444",
+        "3": "BG attr Y flip, tile Q, palette 0: 0x0444, 0x1111, 0x2222, 0x3333",
+        "4": "BG attr bit 4 set (unused), tile Q, palette 0: 0x2222, 0x3333, 0x0444, 0x1111, equal to cell 8",
+        "5": "BG attr bit 7, tile solid index 1, palette 0, under a clear-priority object: 0x2222 (BG wins); with LCDC bit 0 clear 0x1234 (object wins)",
+        "6": "OBJ tile R from bank 1, OBJ palette 5: 0x1BCD, BG colour 0 0x1111 (index 0 transparent), 0x789A, 0x0ABC",
+        "7": "OBJ tile Q from bank 0, OBJ palette 2: 0x4567, 0x5678, 0x6789, BG colour 0 0x1111 (index 0 transparent)",
+        "8": "reference: attr 0, tile Q, palette 0: 0x2222, 0x3333, 0x0444, 0x1111",
+        "9": "blank tile 0: 0x1111 everywhere"
+      },
+      "run": "load on the CGB-CPU-E profile, run 10 frames, copy with gbb_copy_frame_rgb555",
+      "structural_predicate": "checked by cgb_colour_attr before the frame digest pin is compared"
+    },
+    "colour-lcdc0.gb": {
+      "summary": "attr.asm built with LCDC = 0x92 (LCDC bit 0 clear). On CGB this removes BG-over-object priority but the BG is still drawn (D-06).",
+      "cells": "cells 0-4 and 6-9 as in colour-attr.gb; cell 5 shows the object colour 0x1234 because BG attribute bit 7 no longer forces the BG on top",
+      "run": "load on the CGB-CPU-E profile, run 10 frames, copy with gbb_copy_frame_rgb555",
+      "structural_predicate": "checked by cgb_colour_lcdc0 before the frame digest pin is compared"
+    },
+    "colour-cram.gb": {
+      "summary": "Guest exercises the BG colour data port (D-11) and reports through WRAM; it ends in a jr spin, so the host reads the markers after a few frames.",
+      "markers": {
+        "C000": "verdict: 0xA5 when cells 1-7 all passed, 0xEE otherwise",
+        "C001": "cell 1: 64 auto-increment writes then BCPS reads 0xC0 (wrap 63 to 0, bit 7 kept, bit 6 reads 1)",
+        "C002": "cell 2: 64 bytes read back through a non-incrementing index",
+        "C003": "cell 3: data-port reads do not advance the index (BCPS stays 0xC5)",
+        "C004": "cell 4: write at index 63 wraps to 0 and the next write lands in byte 0",
+        "C005": "cell 5: write during mode 3 is dropped but the index advances (BCPS 0xCB, byte keeps 0x77)",
+        "C006": "cell 6: read during mode 3 returns 0xFF",
+        "C007": "cell 7: write with the LCD off succeeds and advances the index (BCPS 0xD5)"
+      },
+      "cell_pass_value": "0x01",
+      "run": "load on the CGB-CPU-E profile, run 10 frames, read the markers with gbb_peek_ram",
+      "timeout_half_dots": 1404480,
+      "structural_predicate": "checked by cgb_colour_guest_cram: C000 == 0xA5 and every cell byte == 0x01"
+    },
+    "colour-compat.gb": {
+      "summary": "DMG-mode cartridge (0x143 = 0x00) on the CGB-CPU-E profile; BGP = 0xE4, OBP0 = 0xE4, OBP1 = 0x1B.",
+      "bg_bars": "x 16 * n .. 16 * n + 15 for n = 0..3, all 144 rows: BG colour index n, shade n",
+      "obj0": "8x8 objects at x 80, 88, 96 and y 0..7 with indices 1, 2, 3 through OBP0 (identity): shades 1, 2, 3",
+      "obj1": "8x8 objects at x 112, 120, 128 and y 0..7 with indices 1, 2, 3 through OBP1 (reversed): shades 2, 1, 0",
+      "elsewhere": "BG index 0, shade 0",
+      "default_palette": "every set {0x639F, 0x4275, 0x254B, 0x0421}; bars use set bg, OBJ0 objects set obj0, OBJ1 objects set obj1",
+      "override": "twelve distinct values given to gbb_set_compat_palette; the next completed frame uses each set for its own region",
+      "run": "load on the CGB-CPU-E profile, run 10 frames, copy with gbb_copy_frame_rgb555; then override and run 2 frames",
+      "structural_predicate": "checked by palette_compat_mapping before each frame digest pin is compared"
+    },
+    "colour-lcdoff.gb": {
+      "summary": "Solid BG colour 0 = 0x2A55 for four frames, LCD switched off in VBlank, then C000 = 0xA5 and a jr spin.",
+      "marker": "C000 == 0xA5 once the LCD is off",
+      "expected": "the retained completed frame is 0x2A55 in every pixel and its generation does not change while the guest keeps the LCD off; the internal rgb_working buffer is all 0x7FFF",
+      "run": "load on the CGB-CPU-E profile, run frames until the marker is set, then 5 more frames",
+      "structural_predicate": "checked by cgb_colour_lcd_off and cgb_rgb_store_lcdoff_fixture before the frame digest pin is compared"
+    }
+  },
+  "evidence_class": "original software fixture plus synthetic oracle, not hardware evidence",
+  "scope_limits": [
+    "No boot-ROM execution and no CGB boot palette table",
+    "CGB mode-3 timing is not claimed (D-09): the per-line write lands inside HBlank on this core's DMG mode-3 model, which is the only timing the fixture relies on",
+    "No physical CGB observation; the expectation is the guest's own value table",
+    "Not installed and not part of the install allowlist"
+  ]
+}

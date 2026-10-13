@@ -31,7 +31,7 @@
     {
       "number": "11",
       "name": "CGB Colour Rendering and Player Colour",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "12",
@@ -56,8 +56,8 @@
   ],
   "next": {
     "command": "/gsd:progress --next",
-    "label": "Advance to the next step",
-    "reason": "Phase 11 of 9 · 50% · executing"
+    "label": "Advance to the next step (plan phase 12)",
+    "reason": "Phase 12 of 9 — needs a plan"
   },
-  "updated_at": "2026-10-12T21:54:24.306Z"
+  "updated_at": "2026-10-13T04:59:03.878Z"
 }

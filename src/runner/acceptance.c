@@ -176,12 +176,19 @@ static void on_pcm(void *context, const gbb_audio_frame *frames, size_t count) {
     if (st->window_active) gbb_accept_pcm_stats_feed(&st->window, frames, count);
 }
 
+static uint8_t capture_format(const gbb_instance *instance);
+
 static void on_after_step(void *context, gbb_instance *instance, uint64_t actual_half_dots) {
     run_state *st = context;
     /* The PCM window holds the stepping calls that start at or after play_start. */
     st->window_active = st->has_play_start && actual_half_dots >= st->play_start_half_dots;
     if (st->error != NULL) return;
     gbb_frame_info info;
+    if (capture_format(instance) == 1u) {
+        /* D-43 covers frame-digest cases only; a silent "no completed frame" would hide the gap. */
+        st->error = "frame-unsupported-profile";
+        return;
+    }
     if (gbb_copy_frame(instance, st->scratch, sizeof(st->scratch), FRAME_PITCH, &info) != GBB_OK) {
         return; /* no completed frame yet (or since reset) */
     }
@@ -711,23 +718,53 @@ _Static_assert(GBB_LDBB_FRAME_BYTES == GBB_ACCEPT_FRAME_SHADE_BYTES, "frame buff
 
 typedef struct {
     uint8_t pixels[GBB_LDBB_FRAME_BYTES];
+    uint16_t pixels555[GBB_LDBB_FRAME_BYTES];
     gbb_frame_info info;
 } scratch_frame;
+
+#define FRAME_PITCH555 (GBB_ACCEPT_FRAME_WIDTH * 2u)
+
+_Static_assert(sizeof(((scratch_frame *)0)->pixels555) ==
+                   (size_t)GBB_ACCEPT_FRAME_WIDTH * GBB_ACCEPT_FRAME_HEIGHT * 2u,
+               "RGB555 scratch size");
+
+/* D-43: the store is decided by the instance profile. 2 means the profile could not be read; the
+ * callers report that as frame-invalid instead of silently using the DMG store on a CGB instance. */
+#define CAPTURE_FORMAT_UNKNOWN 2u
+static uint8_t capture_format(const gbb_instance *instance) {
+    gbb_info info;
+    memset(&info, 0, sizeof(info));
+    info.struct_size = GBB_INFO_SIZE_V1;
+    if (gbb_get_info(instance, &info) != GBB_OK) return CAPTURE_FORMAT_UNKNOWN;
+    return info.profile == (uint32_t)GBB_PROFILE_CGB_CPU_E ? 1u : 0u;
+}
+
+static void store_frame(gbb_ldbb_capture *out, const scratch_frame *next) {
+    if (out->format == 1u) memcpy(out->pixels555, next->pixels555, sizeof(out->pixels555));
+    else memcpy(out->pixels, next->pixels, sizeof(out->pixels));
+}
 
 /* A chunk is at most 2048 half-dots and a frame lasts 140448, so at most one frame completes per
  * chunk and "latest frame at or before time T" needs only the frame held before the chunk and the
  * one seen after it. */
-static int copy_latest(gbb_instance *instance, scratch_frame *frame) {
+static int copy_latest(gbb_instance *instance, uint8_t format, scratch_frame *frame) {
+    if (format == 1u) {
+        return gbb_copy_frame_rgb555(instance, frame->pixels555, sizeof(frame->pixels555), FRAME_PITCH555,
+                                     &frame->info) == GBB_OK;
+    }
     return gbb_copy_frame(instance, frame->pixels, sizeof(frame->pixels), FRAME_PITCH, &frame->info) == GBB_OK;
 }
 
 static int finish_capture(gbb_ldbb_capture *out) {
     if (!out->frame_ready) return 0;
+    if (out->format == 1u) return gbb_accept_rgb555_digest(out->pixels555, FRAME_PITCH555, out->digest) == 0 ? 0 : 2;
     return gbb_accept_rgb_digest(out->pixels, FRAME_PITCH, out->digest) == 0 ? 0 : 2;
 }
 
 int gbb_runner_capture_ldbb(gbb_instance *instance, uint64_t budget_half_dots, gbb_ldbb_capture *out) {
     memset(out, 0, sizeof(*out));
+    out->format = capture_format(instance);
+    if (out->format == CAPTURE_FORMAT_UNKNOWN) return 2;
     scratch_frame *next = malloc(sizeof(*next));
     gbb_trace_record *trace = malloc(CAPTURE_TRACE * sizeof(*trace));
     if (next == NULL || trace == NULL) {
@@ -744,10 +781,10 @@ int gbb_runner_capture_ldbb(gbb_instance *instance, uint64_t budget_half_dots, g
         for (size_t i = 0; i < r.trace_count && hit == NULL; ++i) {
             if (trace[i].opcode[0] == 0x40u) hit = &trace[i];
         }
-        bool fresh = copy_latest(instance, next) && (!out->frame_ready || next->info.generation != held_generation);
+        bool fresh = copy_latest(instance, out->format, next) && (!out->frame_ready || next->info.generation != held_generation);
         if (hit != NULL) {
             if (fresh && next->info.completion_half_dots <= hit->time_half_dots) {
-                memcpy(out->pixels, next->pixels, sizeof(out->pixels));
+                store_frame(out, next);
                 out->frame_ready = 1;
                 out->completion_half_dots = next->info.completion_half_dots;
                 out->generation = next->info.generation;
@@ -760,7 +797,7 @@ int gbb_runner_capture_ldbb(gbb_instance *instance, uint64_t budget_half_dots, g
             break;
         }
         if (fresh) {
-            memcpy(out->pixels, next->pixels, sizeof(out->pixels));
+            store_frame(out, next);
             out->frame_ready = 1;
             out->completion_half_dots = next->info.completion_half_dots;
             out->generation = held_generation = next->info.generation;
@@ -777,6 +814,8 @@ int gbb_runner_capture_ldbb(gbb_instance *instance, uint64_t budget_half_dots, g
 static int capture_frame_at(gbb_instance *instance, uint64_t at_half_dots, uint64_t budget_half_dots,
                             gbb_ldbb_capture *out) {
     memset(out, 0, sizeof(*out));
+    out->format = capture_format(instance);
+    if (out->format == CAPTURE_FORMAT_UNKNOWN) return 2;
     scratch_frame *next = malloc(sizeof(*next));
     if (next == NULL) return 1;
     uint64_t elapsed = 0, seen_generation = 0;
@@ -785,11 +824,11 @@ static int capture_frame_at(gbb_instance *instance, uint64_t at_half_dots, uint6
         uint64_t slice = budget_half_dots - elapsed < CAPTURE_CHUNK ? budget_half_dots - elapsed : CAPTURE_CHUNK;
         gbb_run_result r = gbb_run(instance, slice, NULL, 0);
         elapsed += r.consumed_half_dots;
-        if (copy_latest(instance, next) && (!seen || next->info.generation != seen_generation)) {
+        if (copy_latest(instance, out->format, next) && (!seen || next->info.generation != seen_generation)) {
             seen = true;
             seen_generation = next->info.generation;
             if (next->info.completion_half_dots >= at_half_dots) {
-                memcpy(out->pixels, next->pixels, sizeof(out->pixels));
+                store_frame(out, next);
                 out->frame_ready = 1;
                 out->completion_half_dots = next->info.completion_half_dots;
                 out->generation = next->info.generation;
@@ -805,7 +844,8 @@ static int capture_frame_at(gbb_instance *instance, uint64_t at_half_dots, uint6
 /* Frame-digest verdicts (D-26): every one is class=regression, because no frame-digest case has an
  * independent oracle this phase. An expected failure (model_fail) counts only for its declared reason. */
 static int frame_fail(const gbb_case *c, const gbb_acceptance_options *options, const char *reason,
-                      const char *observed, uint64_t end_half_dots, const uint8_t *pixels) {
+                      const char *observed, uint64_t end_half_dots, const gbb_ldbb_capture *shot) {
+    const bool cgb = shot != NULL && shot->format == 1u;
     if (options != NULL && options->expect_fail && options->expect_fail_reason != NULL &&
         strcmp(options->expect_fail_reason, reason) == 0) {
         printf("acceptance id=%s status=xfail model=%s reason=%s class=regression end_half_dots=%llu\n", c->id, run_model(options),
@@ -815,12 +855,13 @@ static int frame_fail(const gbb_case *c, const gbb_acceptance_options *options, 
     }
     char observed_note[96], ppm_note[MAX_DIR_BYTES + 160u];
     observed_note[0] = ppm_note[0] = '\0';
-    if (observed != NULL) snprintf(observed_note, sizeof(observed_note), " observed=%s", observed);
-    if (options != NULL && options->failure_dir != NULL && pixels != NULL) {
+    if (observed != NULL) snprintf(observed_note, sizeof(observed_note), cgb ? " observed555=%s" : " observed=%s", observed);
+    if (options != NULL && options->failure_dir != NULL && shot != NULL && observed != NULL) {
         char name[96], path[MAX_DIR_BYTES + 128u];
         snprintf(name, sizeof(name), "%s.ppm", c->id);
         if (join_path(path, sizeof(path), options->failure_dir, name) &&
-            gbb_accept_write_ppm(path, pixels, FRAME_PITCH) == 0) {
+            (cgb ? gbb_accept_write_ppm_rgb555(path, shot->pixels555, FRAME_PITCH555)
+                 : gbb_accept_write_ppm(path, shot->pixels, FRAME_PITCH)) == 0) {
             snprintf(ppm_note, sizeof(ppm_note), " ppm=%s", path);
         } else {
             snprintf(ppm_note, sizeof(ppm_note), " ppm=write-failed");
@@ -890,7 +931,8 @@ static int run_frame_case(const gbb_case *c, const gbb_acceptance_options *optio
             char name[128], path[MAX_DIR_BYTES + 128u];
             snprintf(name, sizeof(name), "%s.%s.ppm", c->id, label);
             if (!join_path(path, sizeof(path), dump_dir, name) ||
-                gbb_accept_write_ppm(path, capture->pixels, FRAME_PITCH) != 0) {
+                (capture->format == 1u ? gbb_accept_write_ppm_rgb555(path, capture->pixels555, FRAME_PITCH555)
+                                       : gbb_accept_write_ppm(path, capture->pixels, FRAME_PITCH)) != 0) {
                 fprintf(stderr, "acceptance id=%s status=invalid reason=dump-write-failed\n", c->id);
                 goto done;
             }
@@ -910,7 +952,7 @@ static int run_frame_case(const gbb_case *c, const gbb_acceptance_options *optio
         snprintf(key, sizeof(key), "checkpoint.%s.completion_half_dots", label);
         if (capture->frame_ready) emit_line(out, c->id, key, "%llu", (unsigned long long)capture->completion_half_dots);
         else emit_line(out, c->id, key, "none");
-        snprintf(key, sizeof(key), "checkpoint.%s.frame", label);
+        snprintf(key, sizeof(key), capture->format == 1u ? "checkpoint.%s.frame555" : "checkpoint.%s.frame", label);
         emit_line(out, c->id, key, "%s", capture->frame_ready ? capture->digest : "none");
         qsort(out->lines, out->count, OBSERVE_LINE_BYTES, compare_lines);
         for (size_t i = 0; i < out->count; ++i) printf("%s\n", out->lines[i]);
@@ -924,13 +966,16 @@ static int run_frame_case(const gbb_case *c, const gbb_acceptance_options *optio
     } else if (!capture->frame_ready) {
         code = frame_fail(c, options, "frame-not-ready", NULL, at_ldbb ? capture->ldbb_half_dots : c->budget_half_dots, NULL);
     } else if (strcmp(capture->digest, c->reference_digest) != 0) {
-        code = frame_fail(c, options, "frame-mismatch", capture->digest, capture->completion_half_dots, capture->pixels);
+        code = frame_fail(c, options, "frame-mismatch", capture->digest, capture->completion_half_dots, capture);
     } else if (options != NULL && options->expect_fail) {
         printf("acceptance id=%s status=unexpected-pass model=%s class=regression\n", c->id, run_model(options));
         code = EXIT_FAIL;
     } else {
-        printf("acceptance id=%s status=pass model=%s class=regression end_half_dots=%llu\n", c->id, run_model(options),
-               (unsigned long long)capture->completion_half_dots);
+        char digest_note[96];
+        digest_note[0] = '\0';
+        if (capture->format == 1u) snprintf(digest_note, sizeof(digest_note), " frame555=%s", capture->digest);
+        printf("acceptance id=%s status=pass model=%s class=regression end_half_dots=%llu%s\n", c->id, run_model(options),
+               (unsigned long long)capture->completion_half_dots, digest_note);
         code = EXIT_PASS;
     }
 

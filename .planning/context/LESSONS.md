@@ -541,3 +541,66 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** `cgb_runner_profile_unknown`, `cgb_runner_profile_model_conflict`, `cgb_runner_profile_manifest_cgb_excluded`, `cgb_runner_profile_acceptance_cgb_excluded` and the three `cgb_runner_profile_dmg_identity_*` tests in `tests/expected-tests.txt`.
 - **Source:** Phase 10, plans 10-03 and 10-05 (D-28).
 - **Status:** Adopted.
+
+### GB-CGB-002 / 2026-10-13 / A deliberately failing C negative control leaks under LeakSanitizer and the expected exit code is lost
+
+- **Cause and evidence:** Phase 11 mutant tests exit 1 through an early `REQUIRE` return that never destroys the instance. Under `phase1-asan` LeakSanitizer reports the leak and replaces exit 1 with its own code, so the expect-exit control failed at three successive CI heads (two or three mutants each). macOS cannot run `phase1-asan`, so local runs passed.
+- **Remedy:** Set `ASAN_OPTIONS=detect_leaks=0` on the failing mutant run only (commit 361256d); the paired control keeps leak checking. Simulate or run the sanitizer leg early when adding any expect-exit harness.
+- **Applies when:** Any C test that must exit with a specific non-zero code and is built under LSan.
+- **Verification:** Mutant CTests such as `cgb_priority_mutant_opri_live` and `magentests_cgb_mutant_lcdc0_inverted` pass on `phase1-asan` in CI, and their controls still run with leak detection.
+- **Source:** Phase 11 CI at three heads.
+- **Status:** Adopted.
+
+### GB-CGB-003 / 2026-10-13 / A guest that HALTs in its main loop never completes a frame
+
+- **Cause and evidence:** `gbb_run` returns at every HALT, so a fixture guest that halts between frames stalls frame-based assertions (plans 11-07 and 11-08).
+- **Remedy:** Original CGB fixture guests end in a `jr` spin loop instead of HALT.
+- **Applies when:** Writing guest fixtures whose checks depend on frame completion or `gbb_copy_frame_rgb555`.
+- **Verification:** `cgb_colour_attr`, `cgb_colour_hblank_rows` and `cgb_colour_fixture_digest` complete frames and pass.
+- **Source:** Phase 11 plans 11-07 and 11-08.
+- **Status:** Adopted.
+
+### GB-CGB-004 / 2026-10-13 / The host package-manager assembler differed from the pinned toolchain; the pinned archive rebuilt byte-identically
+
+- **Cause and evidence:** Homebrew RGBDS was 1.0.4 while the fixture pin is 1.0.1. Fetching the pinned release archive and checking its SHA-256 gave byte-identical rebuilds.
+- **Remedy:** The reproduce script refuses any version other than the pin and builds from the digest-checked archive.
+- **Applies when:** Fixture reproduction scripts and CI jobs that depend on an external assembler.
+- **Verification:** `fixture-repro` reports `byte-identical` for the colour fixtures; the script exits non-zero on a wrong version.
+- **Source:** Phase 11 plan 11-07.
+- **Status:** Adopted.
+
+### GB-CGB-005 / 2026-10-13 / A negative control must assert the specific failure reason, not only failure
+
+- **Cause and evidence:** In plan 11-13 a CMake list split on `;` silently corrupted a mutated claims control, so it failed for the wrong reason and still read as a pass.
+- **Remedy:** Pair each mutant with a `FAIL_REGULAR_EXPRESSION` (or exit-code check) naming the intended failure, and avoid passing `;`-joined text through CMake lists.
+- **Applies when:** Any CTest negative control, especially ones driven through CMake script arguments.
+- **Verification:** `player_claims_agree_mutated` matches its specific reason string.
+- **Source:** Phase 11 plan 11-13.
+- **Status:** Adopted.
+
+### GB-CGB-006 / 2026-10-13 / Per-line resolve timing, overlap and table-first mirrors need their own fixtures and controls
+
+- **Cause and evidence:** Resolving colour per dot is only proved by a fixture that changes the colour on every line (`cgb_colour_hblank_rows`) with a seam mutant that resolves at frame completion; an X-order control cannot be proved on a ROM whose objects never overlap; mirroring docs from the code table (table-first) kept the DEFERRED cell flips consistent; manifest-driven rebuild scripts let fixture plans split without editing the script.
+- **Remedy:** Add a per-line fixture and a seam mutant for any copy-time versus resolve-time claim, give every ordering control an overlapping-object case, generate or diff doc tables against code tables, and drive fixture rebuilds from the manifest.
+- **Applies when:** Renderer features with timing-dependent state and fixture suites spanning several plans.
+- **Verification:** `cgb_colour_mutant_frame_resolve` with its control, `cgb_priority_mutant_compat_bg_set_for_objects`, `cgb_tables_compat_palette_mutated_doc`.
+- **Source:** Phase 11 plans 11-05 to 11-12.
+- **Status:** Adopted.
+
+### GB-CGB-007 / 2026-10-13 / A bash-only test must be excluded in two places, or the Windows inventory fails
+
+- **Cause and evidence:** `cmake/ExpectedTests.cmake` leaves bash-only tests unregistered on Windows, but `.github/scripts/verify-test-inventory.sh` keeps its own Windows exclusion list. Phase 10 (`cgb_mooneye_repro_requires_manifest`) and Phase 11 (`cgb_colour_repro_tool_failure`, `cgb_colour_repro_missing_pin`, added by a review fix) each failed native-windows-x64 at the exact PR head with an inventory diff. Every other leg was green, and the package smokes failed only because they wait on that CI run.
+- **Remedy:** When a test is registered only on non-Windows hosts, add it to both lists in the same commit. Grep `verify-test-inventory.sh` whenever `ExpectedTests.cmake` gains a Windows-only exclusion.
+- **Applies when:** Adding any bash-only or POSIX-only CTest, especially late in a phase (review fixes) after the last hosted run.
+- **Verification:** native-windows-x64 green at fb7d14c (ci run 38355327717).
+- **Source:** Phase 11 execute-phase tail, PR #67.
+- **Status:** Adopted.
+
+### GB-CI-004 / 2026-10-13 / Hosted ASan outgrew its job timeout and its per-test limits
+
+- **Cause and evidence:** `linux-asan-ubsan` ran `ctest --preset phase1-asan` serially under a 30-minute job timeout. At b314686 the push-event run took 1194 s of test time (ci run 38360819833); the pull_request run of the same commit hit a runner about 1.6x slower and was cancelled at 30 minutes with 504 of 684 tests passed and none failing (ci run 38360825378). Running four tests in parallel (eb6f36e) cut test time to 826-915 s, but `acceptance_stall_diagnosis` and `acceptance_core_mutant` then exceeded their 300 s TIMEOUT (ci runs 38396258662, 38396266543). Serially the slowest already took 275 of 300 s on the slow runner, so the per-test limits were sized for normal builds, not Debug ASan.
+- **Remedy:** Run the ASan step with `--parallel 4` (pinned by `ci_asan_parallel_contract`, negative control `ci_asan_parallel_serial_selftest`) and, in sanitizer builds only, multiply every explicit test TIMEOUT by three at the end of `tests/CMakeLists.txt`. Normal builds keep their limits.
+- **Applies when:** A hosted job's duration grows with the test inventory, or a test's limit is set from a normal-build timing. Check job and per-test headroom at each phase tail rather than re-running a timeout.
+- **Verification:** Hosted ASan result is recorded in the Phase 11 UAT.
+- **Source:** Phase 11 verify-work, PR #67.
+- **Status:** Adopted.

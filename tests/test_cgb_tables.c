@@ -14,7 +14,10 @@
  * column (a zero-initialised hole is a failure); EXISTING rows are not published and must have no
  * doc row; every other cell has exactly one doc row that equals its rendering.
  *
- * Usage: test_cgb_tables postboot|postboot_selftest|io <doc.md>
+ * The compat palette default (D-18) is checked the same way against the cgb-compat-palette block
+ * and against the ramp rule recomputed here.
+ *
+ * Usage: test_cgb_tables postboot|postboot_selftest|io|compat_palette <doc.md>
  *        test_cgb_tables emit|emit_io    (prints the table rows for the doc maintainer) */
 #include "../src/core/gabbaboy.c"
 
@@ -36,6 +39,7 @@ static const char *const field_names[PB_FIELD_COUNT] = {
     "joypad_select", "joypad_buttons",
     "key1", "vram_bank", "svbk", "wram_bank", "bcps", "ocps",
     "ff72", "ff73", "ff74", "ff75",
+    "bg_cram_fill", "obj_cram_fill", "opri",
     "ram_fill",
 };
 
@@ -294,6 +298,18 @@ static int render_io(const io_cell *c, int col, char *rd, size_t rd_n, char *wr,
         snprintf(rd, rd_n, "stored or $%02X", (unsigned)c->read_or);
         snprintf(wr, wr_n, "stored and $%02X", (unsigned)c->write_mask);
         return 1;
+    case IO_BCPD:
+        snprintf(rd, rd_n, "palette byte at index, $FF while mode 3");
+        snprintf(wr, wr_n, "stores at index, auto-increments even when blocked");
+        return 1;
+    case IO_OCPD:
+        snprintf(rd, rd_n, "palette byte at index, $FF while mode 3");
+        snprintf(wr, wr_n, "stores at index, auto-increments even when blocked");
+        return 1;
+    case IO_OPRI:
+        snprintf(rd, rd_n, "$FE or bit 0");
+        snprintf(wr, wr_n, "bit 0 stored, no priority effect after boot");
+        return 1;
     case IO_DEFERRED_RW:
         snprintf(rd, rd_n, "stop");
         snprintf(wr, wr_n, "dropped, stop after retire");
@@ -449,6 +465,61 @@ static int case_emit_io(void) {
     return 0;
 }
 
+/* D-18: the doc block, compat_default_rgb555 and the rule agree. The rule is recomputed here so a
+ * change to the code table and the doc together still fails if it leaves the rule. */
+static int case_compat_palette(const char *path) {
+    static const char *const sets[3] = { "BG", "OBJ0", "OBJ1" };
+    static const unsigned ramp[4] = { 31u, 21u, 11u, 1u };
+    FILE *f = fopen(path, "rb");
+    if (f == NULL) {
+        fprintf(stderr, "cgb-tables cannot open %s\n", path);
+        return 1;
+    }
+    char line[512];
+    int inside = 0, begun = 0, ended = 0, rows = 0;
+    while (fgets(line, sizeof(line), f) != NULL) {
+        if (strstr(line, "<!-- cgb-compat-palette-begin -->") != NULL) { inside = 1; ++begun; continue; }
+        if (strstr(line, "<!-- cgb-compat-palette-end -->") != NULL) { inside = 0; ++ended; continue; }
+        if (!inside || line[0] != '|') continue;
+        char *cells[5];
+        char *p = line + 1;
+        int k = 0;
+        for (; k < 5; ++k) {
+            char *bar = strchr(p, '|');
+            if (bar == NULL) break;
+            *bar = '\0';
+            cells[k] = trim(p);
+            p = bar + 1;
+        }
+        if (k != 5) { fprintf(stderr, "cgb-tables malformed row: %s", line); fclose(f); return 1; }
+        if (strcmp(cells[0], "set") == 0 || cells[0][0] == '-') continue;
+        int set = -1;
+        for (int i = 0; i < 3; ++i) if (strcmp(cells[0], sets[i]) == 0) set = i;
+        if (set < 0 || set != rows) { printf("cgb-tables mismatch: compat %s\n", cells[0]); fclose(f); return 1; }
+        for (int shade = 0; shade < 4; ++shade) {
+            const char *cell = cells[1 + shade];
+            char *end = NULL;
+            unsigned long doc = cell[0] == '$' ? strtoul(cell + 1, &end, 16) : 0xFFFFFFFFul;
+            const unsigned y = ramp[shade];
+            const unsigned rule = y | ((y - (y >> 3)) << 5) | ((y - (y >> 2)) << 10);
+            if (cell[0] != '$' || end == NULL || *end != '\0' || doc != compat_default_rgb555[set][shade] ||
+                doc != rule || doc > 0x7FFFul) {
+                printf("cgb-tables mismatch: compat %s shade %d\n", sets[set], shade);
+                fclose(f);
+                return 1;
+            }
+        }
+        ++rows;
+    }
+    fclose(f);
+    if (begun != 1 || ended != 1 || rows != 3) {
+        printf("cgb-tables mismatch: compat markers or row count (%d rows)\n", rows);
+        return 1;
+    }
+    puts("cgb-tables compat_palette pass rows=3");
+    return 0;
+}
+
 int main(int argc, char **argv) {
     _Static_assert(sizeof(field_names) / sizeof(field_names[0]) == PB_FIELD_COUNT,
                    "field_names must cover every post_boot_field");
@@ -466,6 +537,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "postboot") == 0) return case_postboot(argv[2]);
     if (strcmp(argv[1], "postboot_selftest") == 0) return case_selftest(argv[2]);
     if (strcmp(argv[1], "io") == 0) return case_io(argv[2]);
+    if (strcmp(argv[1], "compat_palette") == 0) return case_compat_palette(argv[2]);
     fprintf(stderr, "unknown case %s\n", argv[1]);
     return 2;
 }

@@ -22,9 +22,28 @@
 | `mbc_oob_sram_mbc3.gbc` | 32768 | `03e13fa796a9e06fa90f9b396b728c1de9f6e7351aa47a038e33c11d3a8df7dd` | $12 |
 | `mbc_oob_sram_mbc5.gbc` | 32768 | `e99f526386f72a8992a72137d0bd9a431b380807b551747bb3baa03421d6f54b` | $1A |
 
+Phase 11 additions (release 0.5.0, downloaded 2026-10-12 into a fresh scratch directory, size, digest and `$143` checked before copying):
+
+| File | Size | SHA-256 | Header $143 | Source dir |
+|---|---|---|---|---|
+| `bg_oam_priority.gbc` | 32768 | `1b2132b354370b1eff22d867da67d8f59eb94872fdad00c277203d8d8b67b84c` | $C0 | `src/color_bg_oam_priority` |
+| `oam_internal_priority.gbc` | 32768 | `f54fb6366b3ea8597d07917729aeb358d961ae6ece7cecd003fe9c45dcb97fe7` | $C0 | `src/oam_internal_priority` |
+| `ppu_disabled_state.gbc` | 32768 | `4808fe834ea6a6344d74f007a45628c405aca5acd13d6c25f76d02f442f1eea6` | $80 | `src/ppu_disabled_state` |
+
 Each file was downloaded from the release into a fresh empty scratch directory,
 checked for size, digest and header byte, then copied. `manifest.json` carries
 the same digests and is checked by `cmake/VerifyFixtureManifest.cmake`.
+
+## Reproduction
+
+`bash tests/scripts/reproduce-magentests.sh --self-check` (offline) checks that the manifest rows
+(`source_dir`, `rgbfix_options`) and the script's per-ROM rebuild table name the same files and
+that committed digests match. `--compare` rebuilds all six ROMs with RGBDS v0.6.1 at the pinned
+commit and prints `result=byte-identical` or `result=differs <file> <rebuilt> <committed>`. The
+hosted `magentests-repro` job in `.github/workflows/fixture-repro.yml` reports the result for the
+three Phase 11 ROMs; a "differs" result is reported, never fixed by replacing committed bytes
+(RESEARCH A4). Until that job has run on this branch the Phase 11 ROMs are admitted by release
+digest only, not by a verified rebuild.
 
 ## Rebuild status
 

@@ -73,7 +73,7 @@ follow the queue-clear and save-ordering rules in
 byte count is not playback latency; application PCM underflow is not proof of
 hardware starvation.
 
-The preview does not implement MBC1M, MBC30, CGB, CGB double-speed clock behavior, VIN, full-machine snapshots, or
+The preview does not implement MBC1M, MBC30, CGB mode-3 timing, CGB double-speed clock behavior, CGB HDMA, CGB-E hardware qualification, VIN, full-machine snapshots, or
 arbitrary raw `.sav` import/export. Its digital audio is a deterministic
 DMG-CPU-B software model; physical hotplug, board/revision equivalence, analog
 output, and listening quality are not qualified. Passing software tests does

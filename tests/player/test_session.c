@@ -1814,6 +1814,73 @@ static int session_rom_cap_8mib(const char *rom_path) {
     return 0;
 }
 
+/* D-26: the select_profile seam. A 32 KiB ROM-only image with the given $143 byte. */
+static bool write_cgb_flag_rom(const char *path, uint8_t cgb_flag) {
+    uint8_t *rom = calloc(32768u, 1u);
+    if (rom == NULL) return false;
+    rom[0x143u] = cgb_flag;
+    fix_test_rom_checksum(rom);
+    FILE *file = fopen(path, "wb");
+    const bool ok = file != NULL && fwrite(rom, 1u, 32768u, file) == 32768u;
+    const bool closed = file != NULL && fclose(file) == 0;
+    free(rom);
+    return ok && closed;
+}
+
+static int session_model_select(const char *rom_path) {
+    static const uint8_t flags[3] = {0x00u, 0x80u, 0xC0u};
+    /* Rows are the three models in enum order dmg, auto, cgb; columns are $143 = $00, $80, $C0. */
+    static const gbb_profile expected[3][3] = {
+        {GBB_PROFILE_DMG_CPU_B, GBB_PROFILE_DMG_CPU_B, GBB_PROFILE_DMG_CPU_B},
+        {GBB_PROFILE_DMG_CPU_B, GBB_PROFILE_CGB_CPU_E, GBB_PROFILE_CGB_CPU_E},
+        {GBB_PROFILE_CGB_CPU_E, GBB_PROFILE_CGB_CPU_E, GBB_PROFILE_CGB_CPU_E}};
+    static const player_model models[3] = {PLAYER_MODEL_DMG, PLAYER_MODEL_AUTO, PLAYER_MODEL_CGB};
+    for (unsigned m = 0u; m < 3u; ++m) {
+        for (unsigned f = 0u; f < 3u; ++f) {
+            REQUIRE(write_cgb_flag_rom(rom_path, flags[f]));
+            gbb_profile profile = (gbb_profile)0;
+            uint32_t info_flags = 0xFFFFFFFFu;
+            char error[192];
+            REQUIRE(player_session_probe_profile(rom_path, models[m], &profile, &info_flags,
+                                                 error, sizeof(error)));
+            REQUIRE(profile == expected[m][f]);
+            /* The informational note appears only for a $C0 ROM on the DMG model. */
+            const bool note = (info_flags & GBB_INFO_CGB_ONLY_ON_DMG) != 0u;
+            REQUIRE(note == (models[m] == PLAYER_MODEL_DMG && flags[f] == 0xC0u));
+        }
+    }
+    (void)unlink(rom_path);
+    return 0;
+}
+
+static int session_model_pgb(const char *rom_path) {
+    static const player_model models[3] = {PLAYER_MODEL_DMG, PLAYER_MODEL_AUTO, PLAYER_MODEL_CGB};
+    REQUIRE(write_cgb_flag_rom(rom_path, 0x84u));
+    for (unsigned m = 0u; m < 3u; ++m) {
+        gbb_profile profile = (gbb_profile)77;
+        uint32_t info_flags = 0x1234u;
+        char error[192] = "";
+        REQUIRE(!player_session_probe_profile(rom_path, models[m], &profile, &info_flags,
+                                              error, sizeof(error)));
+        REQUIRE(strstr(error, "PGB") != NULL);
+        REQUIRE(profile == (gbb_profile)77 && info_flags == 0x1234u);
+    }
+    (void)unlink(rom_path);
+    return 0;
+}
+
+static int session_model_missing_file(const char *rom_path) {
+    (void)unlink(rom_path);
+    gbb_profile profile = (gbb_profile)77;
+    uint32_t info_flags = 0x1234u;
+    char error[192] = "";
+    REQUIRE(!player_session_probe_profile(rom_path, PLAYER_MODEL_AUTO, &profile, &info_flags,
+                                          error, sizeof(error)));
+    REQUIRE(error[0] != '\0');
+    REQUIRE(profile == (gbb_profile)77 && info_flags == 0x1234u);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc < 5 || !start_test_root(argv[4])) return 2;
     int result = 2;
@@ -1892,6 +1959,12 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "player_session_interrupt_after_rename") == 0)
         result = session_interrupt(argv[4],
             PLAYER_SESSION_TEST_INTERRUPT_AFTER_RENAME, true);
+    else if (strcmp(argv[1], "player_session_model_select") == 0)
+        result = session_model_select(argv[3]);
+    else if (strcmp(argv[1], "player_session_model_pgb") == 0)
+        result = session_model_pgb(argv[3]);
+    else if (strcmp(argv[1], "player_session_model_missing_file") == 0)
+        result = session_model_missing_file(argv[3]);
     else if (strcmp(argv[1], "player_session_script_no_input") == 0)
         result = argc == 7 ? script_no_input(argv[5], argv[6]) : 2;
     else if (strcmp(argv[1], "player_session_script_invalid") == 0)
