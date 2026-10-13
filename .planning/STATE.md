@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 14
+current_plan: 15
 status: planning
-stopped_at: Completed 11-13-PLAN.md
-last_updated: "2026-10-13T04:10:13.566Z"
+stopped_at: Completed 11-14-PLAN.md
+last_updated: "2026-10-13T04:21:15.835Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 11 execution started
-state_head: 20ca6f69b44e28323c27ba1f5df15a60e8ed6642
+state_head: 624ef7bb7aaab099b8dcb16a75f9d418aaa46848
 progress:
   total_phases: 9
   completed_phases: 5
   total_plans: 80
-  completed_plans: 78
+  completed_plans: 79
   percent: 56
 current_phase: 11
 current_phase_name: CGB Colour Rendering and Player Colour
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 14
+Current Plan: 15
 Total Plans in Phase: 15
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -188,6 +188,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 11 P11 | 25min | 2 tasks | 8 files |
 | Phase 11 P12 | 50min | 2 tasks | 11 files |
 | Phase 11 P13 | 25min | 2 tasks | 9 files |
+| Phase 11 P14 | 40 min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -353,6 +354,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 11]: 11-10: bg_oam_priority passed its predicate unmodified; no expected-unsupported record; AGE deviation (D-20) stated in ELIGIBILITY.md
 - [Phase 11]: 11-11: acid2 local runner uses frame-digest@ldbb and a PNG decoder covering palette and greyscale (pinned references are not 8-bit RGB)
 - [Phase 11]: 11-12: select_profile seam player_session_probe_profile serves the three session sites; CGB smoke pins the uploaded RGBA digest plus 40 independently computed spot pixels
+- [Phase 11]: D-04: no per-dot model hoist; the D-22 trigger did not fire (DMG median 98.5 to 100.2 percent of the Phase 10 head, margins 1.5 to 1.9)
+- [Phase 11]: D-32: ten PPU timing gates re-assigned research:14; model_gates_no_phase11_rows guards against a returning Phase 11 owner tag
 
 ### Pending Todos
 
@@ -388,8 +391,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-13T04:10:13.513Z
-Stopped at: Completed 11-13-PLAN.md
+Last session: 2026-10-13T04:21:15.777Z
+Stopped at: Completed 11-14-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 11`
 
