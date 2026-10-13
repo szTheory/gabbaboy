@@ -1,0 +1,40 @@
+{
+  "id": "age-cgb-speed-switch",
+  "source_identity": "AGE test ROMs, c-sp, pinned source commit",
+  "license": "MIT; see LICENSE.txt",
+  "build": {
+    "assembler": "RGBDS",
+    "version": "1.0.1",
+    "archive": "rgbds-macos.zip",
+    "archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
+    "ci_archive": "rgbds-linux-x86_64.tar.xz",
+    "ci_archive_sha256": "80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9",
+    "recipe": "rgbasm -Weverything -I src -I src/_include; rgblink -t; rgbfix -v -p 255"
+  },
+  "source": {
+    "repository": "https://github.com/c-sp/age-test-roms",
+    "commit": "1f5bc10e2cb60b86c19f8d0287ff78f410c4f639",
+    "tree": "2fece1a678edb18c1664efd7328a430a79c70be4"
+  },
+  "fixtures": [
+    {
+      "file": "spsw-div-cgbBCE.gb",
+      "size_bytes": 32768,
+      "sha256": "2c836288b58651f72a335417f11ba346863145dd9996048979ad8e5b9cd0aa7b",
+      "source_path": "src/speed-switch/spsw-div-cgbBCE.asm",
+      "header_143": "C0",
+      "test_results_address": "$C000",
+      "expected_address": "$144A",
+      "rows": 5,
+      "pass_pc": "$13CD",
+      "fail_pc": "$13D9",
+      "expected_role": "pass",
+      "verified": [
+        "2021-10-21 pass: CPU CGB E - CPU-CGB-06",
+        "2022-03-16 pass: CPU CGB C - CPU-CGB-04",
+        "2021-10-21 pass: CPU CGB B - CPU-CGB-02",
+        "2021-10-21 fail: DMG-CPU C (blob) - DMG-CPU-08"
+      ]
+    }
+  ]
+}
