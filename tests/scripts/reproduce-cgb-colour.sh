@@ -43,8 +43,16 @@ manifest = json.loads((fixture / 'manifest.json').read_text())
 reference = json.loads((root / 'fixtures/cgb-banking/manifest.json').read_text())
 
 def fail(message):
+    """A comparison found the rebuilt or pinned bytes to differ from what is checked in."""
     print(f'result=differs reason={message}')
     raise SystemExit(1)
+
+def error(message):
+    """The harness could not complete the comparison (bad recipe, tool failure, missing pin).
+    Distinct from fail() so a consumer grepping result=differs never mistakes it for a byte
+    difference."""
+    print(f'result=error reason={message}')
+    raise SystemExit(2)
 
 NAME = re.compile(r'^[A-Za-z0-9_][A-Za-z0-9_.-]*$')
 DEFINE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
@@ -53,6 +61,9 @@ FLAG = re.compile(r'^[-A-Za-z0-9_.]+$')
 build = manifest.get('build', {})
 ref = reference.get('build', {})
 for key in ('assembler', 'version', 'archive', 'archive_sha256', 'ci_archive', 'ci_archive_sha256'):
+    # A key absent from both manifests must not pass as None == None.
+    if not build.get(key):
+        error(f'build-pin-{key}-missing')
     if build.get(key) != ref.get(key):
         fail(f'build-pin-{key}-differs-from-cgb-banking')
 if build.get('version') != '1.0.1':
@@ -68,32 +79,32 @@ if not manifest.get('protocol') or not manifest.get('scope_limits'):
 
 for source_name, expected in manifest.get('source_sha256', {}).items():
     if not NAME.match(source_name):
-        fail(f'bad-source-name-{source_name}')
+        error(f'bad-source-name-{source_name}')
     actual = hashlib.sha256((fixture / source_name).read_bytes()).hexdigest()
     if actual != expected:
         fail(f'source-sha256-mismatch-{source_name}')
 
 entries = manifest.get('fixtures', [])
 if not entries:
-    fail('no-fixtures')
+    error('no-fixtures')
 for entry in entries:
     name = entry.get('file', '')
     recipe = entry.get('recipe')
     if not NAME.match(name):
-        fail(f'bad-rom-name-{name}')
+        error(f'bad-rom-name-{name}')
     if not isinstance(recipe, dict):
-        fail('missing-recipe')
+        error('missing-recipe')
     source = recipe.get('source', '')
     defines = recipe.get('defines')
     flags = recipe.get('rgbfix_flags')
     if not NAME.match(source) or not (fixture / source).is_file():
-        fail(f'bad-recipe-source-{name}')
+        error(f'bad-recipe-source-{name}')
     if source not in manifest.get('source_sha256', {}):
-        fail(f'recipe-source-has-no-digest-{name}')
+        error(f'recipe-source-has-no-digest-{name}')
     if not isinstance(defines, list) or not all(isinstance(d, str) and DEFINE.match(d) for d in defines):
-        fail(f'bad-recipe-defines-{name}')
+        error(f'bad-recipe-defines-{name}')
     if not isinstance(flags, list) or not all(isinstance(f, str) and FLAG.match(f) for f in flags):
-        fail(f'bad-recipe-rgbfix-flags-{name}')
+        error(f'bad-recipe-rgbfix-flags-{name}')
 
     obj = work / (name + '.o')
     rom = work / name
@@ -106,7 +117,8 @@ for entry in entries:
     for step in steps:
         done = subprocess.run(step, cwd=root, capture_output=True, text=True)
         if done.returncode != 0:
-            fail(f'tool-failed-{step[0]}-{name}')
+            tail = (done.stderr or done.stdout or '').strip().replace('\n', ' | ')[:300]
+            error(f'tool-failed-{step[0]}-{name} exit={done.returncode} stderr={tail}')
 
     rebuilt = rom.read_bytes()
     checked_in = (fixture / name).read_bytes()

@@ -2366,6 +2366,16 @@ add_test(NAME cgb_acid2_local_bad_manifest
     -DGBB_EXPECT_CODE=3
     "-DGBB_EXPECT_REGEX=acid2 error: manifest unusable"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# WR-03: the colour fixture reproduction script must report harness failures as result=error.
+if(NOT WIN32)
+  find_program(GBB_BASH_CGB_REPRO bash REQUIRED)
+  foreach(gbb_repro_case tool_failure missing_pin)
+    string(REPLACE "_" "-" gbb_repro_arg "${gbb_repro_case}")
+    add_test(NAME cgb_colour_repro_${gbb_repro_case}
+      COMMAND ${GBB_BASH_CGB_REPRO} ${PROJECT_SOURCE_DIR}/tests/scripts/test-reproduce-cgb-colour.sh ${gbb_repro_arg})
+    set_tests_properties(cgb_colour_repro_${gbb_repro_case} PROPERTIES TIMEOUT 60)
+  endforeach()
+endif()
 # --- Phase 11 plan 11-11 end ---
 
 # --- Phase 11 plan 11-14 begin ---
