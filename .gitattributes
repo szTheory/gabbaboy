@@ -58,3 +58,10 @@ fixtures/cgb-banking/manifest.json text eol=lf
 fixtures/cgb-banking/LICENSE.txt text eol=lf
 fixtures/cgb-banking/banking-cgb.gb -text
 fixtures/cgb-banking/banking-dmg.gb -text
+
+# CGB colour fixtures: digested sources, manifest and licence keep LF; the ROMs are binary.
+fixtures/cgb-colour/*.asm text eol=lf
+fixtures/cgb-colour/*.inc text eol=lf
+fixtures/cgb-colour/manifest.json text eol=lf
+fixtures/cgb-colour/LICENSE.txt text eol=lf
+fixtures/cgb-colour/*.gb -text
