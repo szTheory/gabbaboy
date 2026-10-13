@@ -184,6 +184,7 @@ static gbb_instance *make_machine(int cgb_mode) {
     static uint8_t rom[0x8000];
     memset(rom, 0, sizeof(rom));
     rom[0x101] = 0xC3u; rom[0x102] = 0x50u; rom[0x103] = 0x01u;
+    rom[0x150] = 0x18u; rom[0x151] = 0xFEu; /* jr $0150: an idle loop so rendering can run */
     rom[0x143] = cgb_mode ? 0x80u : 0x00u;
     uint8_t sum = 0u;
     for (size_t i = 0x134u; i <= 0x14Cu; ++i) sum = (uint8_t)(sum - rom[i] - 1u);
@@ -424,6 +425,384 @@ static int cgb_postboot_vram1_zero(void) {
     return 0;
 }
 
+
+/* ---- CGB-mode rendering (Phase 11 plan 11-03; D-01 to D-09) ---------------------------------------
+ * State is written straight into VRAM, OAM and CRAM after load and reset, then three frames run so
+ * rgb_completed holds a frame drawn entirely from that state. Expected colours come from the
+ * decisions: the CRAM pattern makes every (palette, index) pair a distinct word. */
+static const char *g_fixtures_root = NULL;
+
+static gbb_instance *make_render(void) {
+    gbb_instance *m = make_machine(1);
+    if (m == NULL || gbb_reset(m) != GBB_OK) { gbb_destroy(m); return NULL; }
+    for (unsigned p = 0; p < 8u; ++p)
+        for (unsigned i = 0; i < 4u; ++i) {
+            const unsigned at = p * 8u + i * 2u;
+            const uint16_t bg = (uint16_t)(0x0100u | (p << 4) | i);
+            const uint16_t obj = (uint16_t)(0x0200u | (p << 4) | i);
+            m->bg_cram[at] = (uint8_t)bg; m->bg_cram[at + 1u] = (uint8_t)(bg >> 8);
+            m->obj_cram[at] = (uint8_t)obj; m->obj_cram[at + 1u] = (uint8_t)(obj >> 8);
+        }
+    m->lcdc = 0x91u;
+    return m;
+}
+
+static uint16_t bgcol(unsigned p, unsigned i) { return (uint16_t)(0x0100u | (p << 4) | i); }
+static uint16_t objcol(unsigned p, unsigned i) { return (uint16_t)(0x0200u | (p << 4) | i); }
+
+/* One tile row at 0x8000 addressing (tile * 16 + row * 2) in the given VRAM bank. */
+static void tile_row(gbb_instance *m, unsigned bank, unsigned tile, unsigned row,
+                     uint8_t low, uint8_t high) {
+    m->vram[bank][tile * 16u + row * 2u] = low;
+    m->vram[bank][tile * 16u + row * 2u + 1u] = high;
+}
+
+static void tile_solid(gbb_instance *m, unsigned bank, unsigned tile, unsigned index) {
+    for (unsigned r = 0; r < 8u; ++r)
+        tile_row(m, bank, tile, r, (index & 1u) ? 0xFFu : 0u, (index & 2u) ? 0xFFu : 0u);
+}
+
+static void map_fill(gbb_instance *m, unsigned bank, uint16_t base, uint8_t value) {
+    memset(&m->vram[bank][base], value, 1024u);
+}
+
+static int render(gbb_instance *m) {
+    for (unsigned f = 0; f < 3u; ++f) {
+        gbb_run_result r = gbb_run(m, FRAME_HALF_DOTS, NULL, 0);
+        if (r.reason != GBB_STOP_BUDGET && r.reason != GBB_STOP_HALTED_IDLE) return 0;
+    }
+    return 1;
+}
+
+static uint16_t px(const gbb_instance *m, unsigned x, unsigned y) {
+    return m->rgb_completed[y * GBB_FRAME_WIDTH + x];
+}
+
+static int all_zero8(const uint8_t *p, size_t n) {
+    for (size_t i = 0; i < n; ++i) if (p[i] != 0u) return 0;
+    return 1;
+}
+static int all_zero16(const uint16_t *p, size_t n) {
+    for (size_t i = 0; i < n; ++i) if (p[i] != 0u) return 0;
+    return 1;
+}
+
+/* Tile 1 solid index 2 across the whole 9800 map with the given attribute. */
+static void solid_bg_scene(gbb_instance *m, uint8_t attr) {
+    tile_solid(m, 0, 1, 2);
+    map_fill(m, 0, 0x1800u, 1u);
+    map_fill(m, 1, 0x1800u, attr);
+}
+
+static int cgb_rgb_store_bg_palette(void) {
+    gbb_instance *m = make_render();
+    REQUIRE(m != NULL);
+    solid_bg_scene(m, 5u);
+    m->bg_cram[5u * 8u + 2u * 2u] = 0x34u;
+    m->bg_cram[5u * 8u + 2u * 2u + 1u] = 0x12u;
+    REQUIRE(render(m));
+    for (unsigned i = 0; i < GBB_FRAME_PIXELS; ++i) REQUIRE(m->rgb_completed[i] == 0x1234u);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cgb_rgb_store_shade_untouched(void) {
+    gbb_instance *m = make_render();
+    REQUIRE(m != NULL);
+    solid_bg_scene(m, 5u);
+    REQUIRE(render(m));
+    REQUIRE(px(m, 0, 0) == bgcol(5, 2));
+    REQUIRE(all_zero8(m->frame_working, sizeof(m->frame_working)));
+    REQUIRE(all_zero8(m->frame_completed, sizeof(m->frame_completed)));
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cgb_rgb_store_dmg_untouched(void) {
+    char path[1024];
+    REQUIRE(g_fixtures_root != NULL);
+    snprintf(path, sizeof(path), "%s/visible-demo/demo.gb", g_fixtures_root);
+    size_t size = 0;
+    uint8_t *rom = read_file(path, &size);
+    REQUIRE(rom != NULL);
+    gbb_instance *m = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, rom, size) == GBB_OK);
+    REQUIRE(render(m));
+    REQUIRE(!all_zero8(m->frame_completed, sizeof(m->frame_completed)));
+    REQUIRE(all_zero16(m->rgb_working, GBB_FRAME_PIXELS));
+    REQUIRE(all_zero16(m->rgb_completed, GBB_FRAME_PIXELS));
+    gbb_destroy(m);
+    free(rom);
+    return 0;
+}
+
+static int cgb_rgb_store_lcd_off(void) {
+    gbb_instance *m = make_render();
+    REQUIRE(m != NULL);
+    solid_bg_scene(m, 5u);
+    REQUIRE(render(m));
+    uint16_t before[GBB_FRAME_PIXELS];
+    memcpy(before, m->rgb_completed, sizeof(before));
+    REQUIRE(before[0] == bgcol(5, 2));
+    write8(m, 0xFF40u, 0x11u);
+    for (unsigned i = 0; i < GBB_FRAME_PIXELS; ++i) REQUIRE(m->rgb_working[i] == 0x7FFFu);
+    REQUIRE(memcmp(before, m->rgb_completed, sizeof(before)) == 0);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cgb_rgb_store_reset(void) {
+    gbb_instance *m = make_render();
+    REQUIRE(m != NULL);
+    solid_bg_scene(m, 5u);
+    REQUIRE(render(m));
+    REQUIRE(m->frame_generation != 0u && !all_zero16(m->rgb_completed, GBB_FRAME_PIXELS));
+    REQUIRE(gbb_reset(m) == GBB_OK);
+    REQUIRE(all_zero16(m->rgb_working, GBB_FRAME_PIXELS));
+    REQUIRE(all_zero16(m->rgb_completed, GBB_FRAME_PIXELS));
+    REQUIRE(m->frame_generation == 0u);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cgb_rgb_store_bit15_masked(void) {
+    gbb_instance *m = make_render();
+    REQUIRE(m != NULL);
+    solid_bg_scene(m, 5u);
+    m->bg_cram[5u * 8u + 2u * 2u] = 0xFFu;
+    m->bg_cram[5u * 8u + 2u * 2u + 1u] = 0xFFu;
+    REQUIRE(render(m));
+    for (unsigned i = 0; i < GBB_FRAME_PIXELS; ++i) {
+        REQUIRE(m->rgb_completed[i] <= 0x7FFFu);
+        REQUIRE(m->rgb_completed[i] == 0x7FFFu);
+    }
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cgb_attr_palette(void) {
+    gbb_instance *m = make_render();
+    REQUIRE(m != NULL);
+    solid_bg_scene(m, 3u);
+    REQUIRE(render(m));
+    REQUIRE(px(m, 0, 0) == bgcol(3, 2));
+    REQUIRE(px(m, 159, 143) == bgcol(3, 2));
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cgb_attr_bank(void) {
+    gbb_instance *m = make_render();
+    REQUIRE(m != NULL);
+    tile_solid(m, 0, 1, 1);
+    tile_solid(m, 1, 1, 3);
+    map_fill(m, 0, 0x1800u, 1u);
+    m->vram[1][0x1800u] = 0x08u; /* entry 0 reads tile data from bank 1; entry 1 from bank 0 */
+    REQUIRE(render(m));
+    REQUIRE(px(m, 0, 0) == bgcol(0, 3));
+    REQUIRE(px(m, 8, 0) == bgcol(0, 1));
+    gbb_destroy(m);
+    return 0;
+}
+
+/* Tile 1: index 1 in column 0 only. Tile 2: index 1 in row 0 column 0 only. Map entries 0 and 1
+ * use tile 1 without and with X flip; entries 2 and 3 use tile 2 without and with Y flip. */
+static void flip_scene(gbb_instance *m, uint8_t extra) {
+    for (unsigned r = 0; r < 8u; ++r) tile_row(m, 0, 1, r, 0x80u, 0u);
+    tile_row(m, 0, 2, 0, 0x80u, 0u);
+    m->vram[0][0x1800u + 0u] = 1u; m->vram[1][0x1800u + 0u] = extra;
+    m->vram[0][0x1800u + 1u] = 1u; m->vram[1][0x1800u + 1u] = (uint8_t)(0x20u | extra);
+    m->vram[0][0x1800u + 2u] = 2u; m->vram[1][0x1800u + 2u] = extra;
+    m->vram[0][0x1800u + 3u] = 2u; m->vram[1][0x1800u + 3u] = (uint8_t)(0x40u | extra);
+}
+
+static int cgb_attr_xflip(void) {
+    gbb_instance *m = make_render();
+    REQUIRE(m != NULL);
+    flip_scene(m, 0u);
+    REQUIRE(render(m));
+    REQUIRE(px(m, 0, 3) == bgcol(0, 1) && px(m, 7, 3) == bgcol(0, 0));
+    REQUIRE(px(m, 8, 3) == bgcol(0, 0) && px(m, 15, 3) == bgcol(0, 1));
+    /* Bit 5 changes columns only: the Y flipped entry keeps its pixel at column 0, not 7. */
+    REQUIRE(px(m, 24, 7) == bgcol(0, 1) && px(m, 31, 7) == bgcol(0, 0));
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cgb_attr_yflip(void) {
+    gbb_instance *m = make_render();
+    REQUIRE(m != NULL);
+    flip_scene(m, 0u);
+    REQUIRE(render(m));
+    REQUIRE(px(m, 16, 0) == bgcol(0, 1) && px(m, 16, 7) == bgcol(0, 0));
+    REQUIRE(px(m, 24, 0) == bgcol(0, 0) && px(m, 24, 7) == bgcol(0, 1));
+    /* Bit 6 changes rows only: X flip alone leaves tile 1 rows identical top to bottom. */
+    REQUIRE(px(m, 15, 0) == px(m, 15, 7));
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cgb_attr_bit4_ignored(void) {
+    gbb_instance *a = make_render();
+    gbb_instance *b = make_render();
+    REQUIRE(a != NULL && b != NULL);
+    flip_scene(a, 0x02u);
+    flip_scene(b, 0x12u);
+    REQUIRE(render(a) && render(b));
+    REQUIRE(px(a, 0, 0) == bgcol(2, 1));
+    REQUIRE(memcmp(a->rgb_completed, b->rgb_completed, sizeof(a->rgb_completed)) == 0);
+    gbb_destroy(a);
+    gbb_destroy(b);
+    return 0;
+}
+
+/* Object 0 covers x 0-7 of lines 0-7 with tile 3 (solid index 1) and the given OAM attribute. */
+static void priority_scene(gbb_instance *m, uint8_t bg_attr, uint8_t lcdc) {
+    tile_solid(m, 0, 1, 1);
+    tile_solid(m, 0, 3, 1);
+    map_fill(m, 0, 0x1800u, 1u);
+    map_fill(m, 1, 0x1800u, bg_attr);
+    m->oam[0] = 16u; m->oam[1] = 8u; m->oam[2] = 3u; m->oam[3] = 0u;
+    m->lcdc = lcdc;
+}
+
+static int cgb_attr_bg_priority(void) {
+    gbb_instance *m = make_render();
+    REQUIRE(m != NULL);
+    priority_scene(m, 0x80u, 0x93u);
+    REQUIRE(render(m));
+    REQUIRE(px(m, 0, 0) == bgcol(0, 1)); /* BG attribute 7 with LCDC.0 = 1 hides the object */
+    REQUIRE(px(m, 9, 0) == bgcol(0, 1));
+    gbb_destroy(m);
+    m = make_render();
+    REQUIRE(m != NULL);
+    priority_scene(m, 0x80u, 0x92u);
+    REQUIRE(render(m));
+    REQUIRE(px(m, 0, 0) == objcol(0, 1)); /* LCDC.0 = 0 removes the priority */
+    gbb_destroy(m);
+    m = make_render();
+    REQUIRE(m != NULL);
+    priority_scene(m, 0x00u, 0x93u);
+    REQUIRE(render(m));
+    REQUIRE(px(m, 0, 0) == objcol(0, 1)); /* neither priority bit: the object wins */
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cgb_attr_lcdc0_bg_drawn(void) {
+    gbb_instance *m = make_render();
+    REQUIRE(m != NULL);
+    solid_bg_scene(m, 4u);
+    m->lcdc = 0x90u;
+    REQUIRE(render(m));
+    REQUIRE(px(m, 0, 0) == bgcol(4, 2));
+    REQUIRE(px(m, 80, 70) == bgcol(4, 2));
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cgb_attr_window_same_fetch(void) {
+    gbb_instance *m = make_render();
+    REQUIRE(m != NULL);
+    /* Window map 9C00 entry 0 only; tile 1 index 1 lives in bank 1: column 0 on row 0 and
+     * column 7 on row 1. Attribute: palette 4, bank 1, X flip. */
+    tile_row(m, 1, 1, 0, 0x80u, 0u);
+    tile_row(m, 1, 1, 1, 0x01u, 0u);
+    m->vram[0][0x1C00u] = 1u;
+    m->vram[1][0x1C00u] = (uint8_t)(0x04u | 0x08u | 0x20u);
+    m->wx = 7u; m->wy = 0u;
+    m->lcdc = 0xF1u;
+    REQUIRE(render(m));
+    REQUIRE(px(m, 7, 0) == bgcol(4, 1) && px(m, 0, 0) == bgcol(4, 0));
+    REQUIRE(px(m, 0, 1) == bgcol(4, 1) && px(m, 7, 1) == bgcol(4, 0));
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cgb_attr_window_lcdc0_clear(void) {
+    gbb_instance *m = make_render();
+    REQUIRE(m != NULL);
+    tile_solid(m, 0, 1, 2);
+    map_fill(m, 0, 0x1C00u, 1u);
+    m->wx = 7u; m->wy = 0u;
+    m->lcdc = 0xF0u; /* window on, window map 9C00, BG bit 0 clear */
+    REQUIRE(render(m));
+    REQUIRE(px(m, 0, 0) == bgcol(0, 2));
+    REQUIRE(px(m, 159, 143) == bgcol(0, 2));
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cgb_attr_obj_bank_palette(void) {
+    uint16_t seen[4] = {0};
+    const uint8_t attrs[4] = {0x0Bu, 0x1Bu, 0x03u, 0x13u};
+    for (unsigned k = 0; k < 4u; ++k) {
+        gbb_instance *m = make_render();
+        REQUIRE(m != NULL);
+        tile_solid(m, 0, 2, 1);
+        tile_solid(m, 1, 2, 3);
+        m->oam[0] = 16u; m->oam[1] = 8u; m->oam[2] = 2u; m->oam[3] = attrs[k];
+        m->lcdc = 0x93u;
+        REQUIRE(render(m));
+        seen[k] = px(m, 0, 0);
+        gbb_destroy(m);
+    }
+    REQUIRE(seen[0] == objcol(3, 3) && seen[1] == objcol(3, 3)); /* bank 1, bit 4 ignored */
+    REQUIRE(seen[2] == objcol(3, 1) && seen[3] == objcol(3, 1)); /* bank 0 */
+    return 0;
+}
+
+static void order_scene(gbb_instance *m) {
+    tile_solid(m, 0, 2, 1);
+    for (unsigned r = 0; r < 8u; ++r) tile_row(m, 0, 3, r, 0x80u, 0u);
+    m->oam[0] = 16u; m->oam[1] = 12u; m->oam[2] = 2u; m->oam[3] = 1u;  /* index 0: x 4-11, palette 1 */
+    m->oam[4] = 16u; m->oam[5] = 8u;  m->oam[6] = 2u; m->oam[7] = 2u;  /* index 1: x 0-7, palette 2 */
+    m->lcdc = 0x93u;
+}
+
+static int cgb_attr_obj_oam_order(void) {
+    gbb_instance *m = make_render();
+    REQUIRE(m != NULL);
+    order_scene(m);
+    REQUIRE(render(m));
+    REQUIRE(px(m, 2, 0) == objcol(2, 1));
+    REQUIRE(px(m, 5, 0) == objcol(1, 1)); /* lower OAM index wins although its X is greater */
+    gbb_destroy(m);
+    m = make_render();
+    REQUIRE(m != NULL);
+    order_scene(m);
+    m->oam[2] = 3u; /* index 0 is opaque only in its first column (x = 4) */
+    REQUIRE(render(m));
+    REQUIRE(px(m, 4, 0) == objcol(1, 1));
+    REQUIRE(px(m, 5, 0) == objcol(2, 1)); /* the transparent winner pixel lets index 1 show */
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cgb_attr_vbk_not_read(void) {
+    gbb_instance *a = make_render();
+    gbb_instance *b = make_render();
+    REQUIRE(a != NULL && b != NULL);
+    flip_scene(a, 0x01u);
+    flip_scene(b, 0x01u);
+    for (unsigned k = 0; k < 2u; ++k) {
+        gbb_instance *m = k == 0u ? a : b;
+        tile_solid(m, 0, 2, 1);
+        tile_solid(m, 1, 2, 3);
+        m->oam[0] = 16u; m->oam[1] = 40u; m->oam[2] = 2u; m->oam[3] = 0x0Au;
+        m->lcdc = 0x93u;
+    }
+    b->vram_bank = 1u;
+    b->opri = 1u;
+    REQUIRE(render(a) && render(b));
+    REQUIRE(px(a, 32, 0) == objcol(2, 3));
+    REQUIRE(memcmp(a->rgb_completed, b->rgb_completed, sizeof(a->rgb_completed)) == 0);
+    gbb_destroy(a);
+    gbb_destroy(b);
+    return 0;
+}
+
 typedef struct {
     const char *name;
     int (*run)(void);
@@ -441,6 +820,24 @@ static const plain_case PLAIN_CASES[] = {
     {"palette_opri_compat", palette_opri_compat},
     {"cgb_postboot_cram_white", cgb_postboot_cram_white},
     {"cgb_postboot_vram1_zero", cgb_postboot_vram1_zero},
+    {"cgb_rgb_store_bg_palette", cgb_rgb_store_bg_palette},
+    {"cgb_rgb_store_shade_untouched", cgb_rgb_store_shade_untouched},
+    {"cgb_rgb_store_dmg_untouched", cgb_rgb_store_dmg_untouched},
+    {"cgb_rgb_store_lcd_off", cgb_rgb_store_lcd_off},
+    {"cgb_rgb_store_reset", cgb_rgb_store_reset},
+    {"cgb_rgb_store_bit15_masked", cgb_rgb_store_bit15_masked},
+    {"cgb_attr_palette", cgb_attr_palette},
+    {"cgb_attr_bank", cgb_attr_bank},
+    {"cgb_attr_xflip", cgb_attr_xflip},
+    {"cgb_attr_yflip", cgb_attr_yflip},
+    {"cgb_attr_bit4_ignored", cgb_attr_bit4_ignored},
+    {"cgb_attr_bg_priority", cgb_attr_bg_priority},
+    {"cgb_attr_lcdc0_bg_drawn", cgb_attr_lcdc0_bg_drawn},
+    {"cgb_attr_window_same_fetch", cgb_attr_window_same_fetch},
+    {"cgb_attr_window_lcdc0_clear", cgb_attr_window_lcdc0_clear},
+    {"cgb_attr_obj_bank_palette", cgb_attr_obj_bank_palette},
+    {"cgb_attr_obj_oam_order", cgb_attr_obj_oam_order},
+    {"cgb_attr_vbk_not_read", cgb_attr_vbk_not_read},
 };
 
 int main(int argc, char **argv) {
@@ -458,6 +855,7 @@ int main(int argc, char **argv) {
         if (rc == 0) puts("cgb-colour-internal cgb_priority_table_shape pass");
         return rc;
     }
+    if (argc >= 3) g_fixtures_root = argv[2];
     for (size_t i = 0; i < sizeof(PLAIN_CASES) / sizeof(PLAIN_CASES[0]); ++i) {
         if (strcmp(argv[1], PLAIN_CASES[i].name) != 0) continue;
         int rc = PLAIN_CASES[i].run();

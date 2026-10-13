@@ -70,7 +70,7 @@ occurs exactly once in code and once in the table.
 | GATE-25 | UNKNOWN | - | expected-failure:cgb-separate-buses | write8 | OAM-DMA CPU bus conflict: CGB uses separate buses (D-17) |
 | GATE-26 | BOTH | - | basis=cartridge-side | write8 | mapper register writes are decided by the cartridge |
 | GATE-27 | UNKNOWN | - | research:14 | write8 | JOYP write select and IF side effects |
-| GATE-28 | UNKNOWN | - | research:11 | write8 | LCDC bit 0 meaning and LCD on and off timing |
+| GATE-28 | UNKNOWN | - | research:14 | write8 | LCD on and off timing; the LCDC bit 0 meaning is carried by the CGB-mode siblings GATE-80 and GATE-81 |
 | GATE-29 | UNKNOWN | - | research:14 | write8 | STAT write spurious interrupt quirk is DMG-specific |
 | GATE-30 | UNKNOWN | - | research:12 | write8 | DMA restart and period |
 | GATE-31 | UNKNOWN | - | research:12 | write8 | DIV write resets the counter and clocks the frame sequencer |
@@ -85,10 +85,10 @@ occurs exactly once in code and once in the table.
 | GATE-40 | UNKNOWN | - | research:14 | read_supported | FEA0-FEFF stays fail-closed on both profiles this phase (A6) |
 | GATE-41 | UNKNOWN | - | research:12 | apply_input_events_now | STOP wake conditions |
 | GATE-42 | BOTH | - | basis="no SM83 opcode difference" | instruction_address | HALT bug PC repeat is an SM83 trait |
-| GATE-43 | UNKNOWN | - | research:11 | ppu_background_color | LCDC bit 0 gates the window on DMG and only priority on CGB; no BG attributes yet |
+| GATE-43 | BOTH | - | basis="DMG semantics: LCDC bit 0 gates BG and window; runs for the DMG profile and compat mode, CGB mode uses ppu_cgb_background" | ppu_background_color | the function now runs only under DMG semantics; the CGB-mode sibling is ppu_cgb_background |
 | GATE-44 | UNKNOWN | - | research:11 | ppu_scan_object | OAM scan against a DMA in flight |
-| GATE-45 | UNKNOWN | - | research:11 | ppu_object_color | object priority is by X on DMG and by OAM index on CGB |
-| GATE-46 | UNKNOWN | - | research:11 | ppu_pixel_shade | shade composition is the DMG palette path |
+| GATE-45 | BOTH | - | basis="DMG semantics: object priority by X then OAM index; runs for the DMG profile and compat mode, CGB mode uses ppu_cgb_object" | ppu_object_color | the function now runs only under DMG semantics; the CGB-mode sibling is ppu_cgb_object |
+| GATE-46 | BOTH | - | basis="DMG semantics: DMG palette shade composition; runs for the DMG profile and compat mode, CGB mode uses ppu_pixel_cgb" | ppu_pixel_shade | the function now runs only for the DMG profile and compat mode; the CGB-mode sibling is ppu_pixel_cgb |
 | GATE-47 | UNKNOWN | - | research:11 | ppu_fetcher_step | fetcher push timing |
 | GATE-48 | UNKNOWN | - | research:11 | ppu_object_should_stall | object fetch during DMA and its transfer timing |
 | GATE-49 | UNKNOWN | - | research:11 | ppu_transfer_dot | mode 3 start-up and window stall timing |
@@ -120,6 +120,10 @@ occurs exactly once in code and once in the table.
 | GATE-75 | DMG_ONLY | model_is_dmg | - | dma_source_read | the DMG OAM DMA source map is VRAM and WRAM only; ROM, cartridge RAM and E0-FF read $FF (D-024) |
 | GATE-76 | UNKNOWN | - | research:14 | cpu_cram_access_allowed | CRAM CPU lock is a plain mode-3 predicate; edge offsets unresearched (D-12) |
 | GATE-77 | UNKNOWN | - | research:14 | io_write_cgb | OPRI is stored without priority effect after boot (D-08) |
+| GATE-78 | CGB_ONLY | model_is_cgb | - | write8 | LCD off blanks the RGB working frame to white and keeps the completed RGB frame (D-02) |
+| GATE-79 | CGB_ONLY | model_is_cgb | - | ppu_advance_dot | the RGB frame completes with the shade frame on the CGB profile (D-02) |
+| GATE-80 | CGB_ONLY | model_is_cgb | - | ppu_transfer_dot | CGB mode resolves RGB555 per dot against live CRAM into rgb_working (D-01, D-02); compat mode routing is plan 11-04 |
+| GATE-81 | CGB_ONLY | model_is_cgb | - | ppu_window_should_start | CGB mode enables the window by LCDC bit 5 alone, shifting mode-3 window-start stall timing when LCDC bit 0 is clear; CGB mode-3 timing is not claimed (D-09) |
 <!-- model-gates-end -->
 
 ## Release status

@@ -2029,4 +2029,30 @@ gbb_colour_mutant(palette_lock_ignores_lcd_off test_cgb_colour_internal.c
   palette_cram_bg_autoinc)
 # --- Phase 11 plan 11-02 end ---
 
+# --- Phase 11 plan 11-03 begin ---
+# CGB-mode rendering (D-01 to D-09): white-box cases set VRAM, OAM and CRAM, run frames and read rgb_completed.
+foreach(gbb_rgb_case
+    cgb_rgb_store_bg_palette cgb_rgb_store_shade_untouched cgb_rgb_store_lcd_off
+    cgb_rgb_store_reset cgb_rgb_store_bit15_masked
+    cgb_attr_palette cgb_attr_bank cgb_attr_xflip cgb_attr_yflip cgb_attr_bit4_ignored
+    cgb_attr_bg_priority cgb_attr_lcdc0_bg_drawn cgb_attr_window_same_fetch
+    cgb_attr_window_lcdc0_clear cgb_attr_obj_bank_palette cgb_attr_obj_oam_order
+    cgb_attr_vbk_not_read)
+  add_test(NAME ${gbb_rgb_case} COMMAND test_cgb_colour_internal ${gbb_rgb_case})
+  set_tests_properties(${gbb_rgb_case} PROPERTIES
+    PASS_REGULAR_EXPRESSION "cgb-colour-internal ${gbb_rgb_case} pass")
+endforeach()
+add_test(NAME cgb_rgb_store_dmg_untouched
+  COMMAND test_cgb_colour_internal cgb_rgb_store_dmg_untouched ${PROJECT_SOURCE_DIR}/fixtures)
+set_tests_properties(cgb_rgb_store_dmg_untouched PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-colour-internal cgb_rgb_store_dmg_untouched pass")
+# A colour path that also writes the shade store must be caught (D-25).
+gbb_colour_mutant(colour_writes_shade test_cgb_colour_internal.c
+  cgb_dmg_identity_mutant_colour_writes_shade cgb_dmg_identity_mutant_colour_writes_shade_control
+  "m->rgb_working[pixel_at] = ppu_pixel_cgb(m, fetched_slot);"
+  "m->rgb_working[pixel_at] = ppu_pixel_cgb(m, fetched_slot); m->frame_working[pixel_at] = 1u;"
+  "cgb_rgb_store_shade_untouched" "frame_working"
+  cgb_rgb_store_bg_palette)
+# --- Phase 11 plan 11-03 end ---
+
 gabbaboy_verify_registered_tests()
