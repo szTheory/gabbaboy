@@ -171,7 +171,7 @@ Name the new set `cgb_colour_fixture_digest`, `cgb_colour_guest_*`.
 
 **CI:** add a step beside the cgb-banking one (`fixture-repro.yml:147` `bash tests/scripts/reproduce-cgb-banking.sh`, preceded by the `GBB_RGBDS_ARCHIVE`/`GBB_RGBDS_ARCHIVE_SHA256` env as in the mbc5 step excerpted in 10-PATTERNS) and extend the pin-consistency block (`:32-62`: `cgb_banking = json.loads(...)`, `cgb_banking_build = cgb_banking['build']`, `build.get(key) != cgb_banking_build.get(key)`) with `cgb-colour`. Add `.gitattributes` entries (`fixtures/cgb-banking/*.gb -text` precedent, `.gitattributes:56-60`).
 
-**Guest protocol:** WRAM result markers read via `gbb_peek_ram` after halt (C000 `0xA5` pass / `0xEE` fail), as in `cgb_banking_*`. The HBlank-per-line fixture and compat/LCDC.0/LCD-off fixtures are checked through `gbb_copy_frame_rgb555` digests (needs the RGB555 call, so those tests land with plan 11-06).
+**Guest protocol:** WRAM result markers read via `gbb_peek_ram` after halt (C000 `0xA5` pass / `0xEE` fail), as in `cgb_banking_*`. The HBlank-per-line fixture and compat/LCDC.0/LCD-off fixtures are checked through `gbb_copy_frame_rgb555` digests (needs the RGB555 call, so those tests land with plans 11-07 and 11-08).
 
 ---
 
@@ -249,7 +249,7 @@ The redistribution guard `magentests_not_installed` (`tests/CMakeLists.txt:1210-
 
 ### Configure-time mutant with exactly-once anchor
 **Source:** `tests/CMakeLists.txt:243-278` (`gbb_banking_mutant`)
-**Apply to:** all core mutant controls in plans 11-01, 11-03, 11-05, 11-06.
+**Apply to:** all core mutant controls in plans 11-01, 11-03, 11-05, 11-06, 11-07, 11-08 and 11-10.
 
 ### Exact-exit negative controls
 **Source:** `tests/expect_exit.cmake` (`GBB_CMD`, `GBB_EXPECT_CODE`, `GBB_EXPECT_REGEX`, optional `GBB_FORBID_REGEX`, `GBB_WORKDIR`)

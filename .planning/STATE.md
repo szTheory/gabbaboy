@@ -4,15 +4,15 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_plan: Not started
 status: planning
-stopped_at: Phase 11 context gathered
-last_updated: "2026-10-13T00:31:10.204Z"
+stopped_at: Phase 11 planned
+last_updated: "2026-10-13T02:02:36.671Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 10 verify-work passed; PR
-state_head: 6f2ab3d2ec60e259e876b06dfe16366466debb7c
+state_head: a361d8fbcbde78ca6940d8f4d6dc04bf34472183
 progress:
   total_phases: 9
   completed_phases: 5
-  total_plans: 65
+  total_plans: 80
   completed_plans: 65
   percent: 56
 current_phase: 11
@@ -26,19 +26,19 @@ current_phase_name: CGB Colour Rendering and Player Colour
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 11 — CGB Colour Rendering and Player Colour (not started)
+**Current focus:** Phase 11 — CGB Colour Rendering and Player Colour (planned, ready to execute)
 
 ## Current Position
 
 Current Plan: Not started
-Total Plans in Phase: 20
+Total Plans in Phase: 15
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
 Verified: Phase 9 `/gsd-verify-work 9` passed 2026-10-12 — 14/14 UAT items automated (09-UAT.md), the guide-wording item replaced by the `native_guide_rtc_contract` check; re-verification `passed` (09-VERIFICATION.md); PR #65 squash-merges at the exact-head green branch head (pre-authorized)
 Completed: Phase 10 - CGB Profile, Banking and Register Visibility, execution (plans 10-01..10-20), evidence head `2fe078e8f08ed98ba0ac0e244971e7c0ead16b1e` run https://github.com/szTheory/gabbaboy/actions/runs/38299323863; PR #66 ready and not merged
 Verified: Phase 10 `/gsd-verify-work 10` passed 2026-10-12 — 12/12 UAT items automated (10-UAT.md), local 541/541 with installed inventory at 3c0d6bc; verification `passed` (10-VERIFICATION.md); PR #66 squash-merges at the exact-head green branch head (pre-authorized)
-Completed: Phase 11 - CGB Colour Rendering and Player Colour, discussion (11-CONTEXT.md, D-01..D-44) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`
-Next step: Phase 11 research and planning via `/gsd-plan-phase 11`; the owner chooses when
+Completed: Phase 11 - CGB Colour Rendering and Player Colour, planning (11-RESEARCH, 11-PATTERNS, 11-VALIDATION, plans 11-01..11-15) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`
+Next step: Phase 11 execution via `/gsd-execute-phase 11`; the owner chooses when
 Last activity: 2026-10-12 — Phase 10 execute-phase tail: Nyquist validated (4 gaps filled), security 33/33 closed, code review 8 fixed + 1 no-change, regression gate 541/541 with installed inventory, gsd-verifier `passed` (10-VERIFICATION.md)
 
 Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
@@ -363,10 +363,12 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-13T00:31:10.108Z
-Stopped at: Phase 11 context gathered
-Resume file: .planning/phases/GB-11-cgb-colour-rendering-and-player-colour/11-CONTEXT.md
-Next command in fresh context: `/gsd-plan-phase 11`
+Last session: 2026-10-13T02:02:36.609Z
+Stopped at: Phase 11 planned
+Resume file: .planning/phases/GB-11-cgb-colour-rendering-and-player-colour/11-01-PLAN.md
+Next command in fresh context: `/gsd-execute-phase 11`
+
+Completed workflow stage: **Phase 11 - CGB Colour Rendering and Player Colour, planning** (2026-10-12) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`. 11-RESEARCH.md (15 corrections to CONTEXT, MagenTests 0.5.0 pins and digests, validation architecture), 11-PATTERNS.md, 11-VALIDATION.md and plans 11-01..11-15 in 14 waves (serial except 11-11 with 11-12, because nearly every plan edits `tests/expected-tests.txt`, `tests/CMakeLists.txt` and `src/core/gabbaboy.c`). Plan checker passed on iteration 3 (iteration 1: missing D-09 AGE/Mealybug expected-unsupported records, two over-size plans, MagenTests predicate fixes, DECISIONS/INDEX and handoff persistence; iteration 2: file-count justifications). Coverage gates: CGB-04, CGB-05, CGB-09 covered; decisions 45/45. CONTEXT amended at planning: D-26 routes only the three player session sites through `select_profile` (RESEARCH Correction 2); D-42 "api-coverage" is the GSD COVERAGE.md gate. Research open questions auto-resolved per the owner's standing instruction (compat CRAM $7FFF POLICY, generated truth table from an independent Python oracle, research:11 timing gates re-tagged research:14, WRAM markers, default ramp $639F/$4275/$254B/$0421, bg_oam_priority fallback limited to D-09 mode-3 timing). One-way doors D-15/D-17a keep their ratings without checkpoints (already decided; owner veto window at PR review: D-15, D-17a, D-18, D-26, D-08, D-21, D-24). Execution preconditions: network for the pinned RGBDS 1.0.1 archive and MagenTests 0.5.0 sources, gh access and exact-head CI. Next step: **Phase 11 execution** via **`/gsd-execute-phase 11`**. Both auto-advance flags stay false; nothing advances automatically.
 
 Completed workflow stage: **Phase 11 - CGB Colour Rendering and Player Colour, discussion** (2026-10-12) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`. [11-CONTEXT.md](phases/GB-11-cgb-colour-rendering-and-player-colour/11-CONTEXT.md) locks D-01..D-44 from seven parallel advisor researches (PPU rendering/priority/OPRI, palette RAM, RGB555 API and compat palette, oracles, player and smoke, gap sweep, cross-emulator pixel pipeline) plus an adversarial review of the draft, auto-followed per the owner's standing instruction. Key choices: RGB555 resolved per dot into separate `uint16_t` buffers, DMG shade path untouched; LCDC.0 is master priority in CGB mode; OPRI stored with no post-boot priority effect; blocked palette writes still auto-increment; `gbb_copy_frame_rgb555` with byte pitch, DMG profile unsupported; compat palette as instance configuration with `gbb_set/get_compat_palette`; AGE has no CGB colour ROMs, so criterion 1 rests on the truth table, three MagenTests ROMs and original fixtures (deviation recorded); acid2 optional-local while G1 is open; player `--model auto|dmg|cgb` with default `dmg` (Libbet is dual-mode). Owner veto window: D-15, D-17a, D-18, D-26, D-08, D-21, D-24. Next step: **Phase 11 research and planning** via **`/gsd-plan-phase 11`**. Both auto-advance flags stay false; nothing advances automatically.
 

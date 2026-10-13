@@ -185,7 +185,7 @@ Not in this phase:
 - **D-19: The core does no colour correction.** Hosts expand each channel with `(c<<3)|(c>>2)`, matching the AGE README. Colour correction is "none in v0.2", stated in the player help (V2-29).
 - **D-41: `gbb_frame_info` is unchanged** and reused by both calls; the header says so.
 - **D-42: ABI and docs move together.**
-  - Update the header comments, the api-coverage and consumer inventory tests (pin every new symbol), `docs/model-gates.md`, `docs/cgb-profile.md`, and `docs/native-integration.md` (a new RGB555 and compat-palette section).
+  - Update the header comments, the consumer inventory tests (pin every new symbol; "api-coverage" here means the GSD `verify:pre` COVERAGE.md gate, not a repo test — record the no-external-API opt-out there), `docs/model-gates.md`, `docs/cgb-profile.md`, and `docs/native-integration.md` (a new RGB555 and compat-palette section).
   - Changes are append-only. No existing struct changes layout.
 
 ### F. Oracles and fixtures
@@ -236,7 +236,7 @@ Not in this phase:
   | `cgb` | Always the CGB profile; a non-CGB ROM runs in compat mode |
 
   - A PGB header is an error: exit non-zero with a message. A bad value is a usage error, exit 2.
-  - The profile is re-probed on every open or reload through the single `select_profile` seam, which replaces the six hard-coded `GBB_PROFILE_DMG_CPU_B` sites. A probe failure leaves the running session intact.
+  - The profile is re-probed on every open or reload through the single `select_profile` seam. *Amended at planning (RESEARCH Correction 2):* of the six `GBB_PROFILE_DMG_CPU_B` literals in `src/player/main.c`, only the three session sites route through the seam; the other three are explicit-DMG uses (smoke/self-test paths) and stay literal DMG. A probe failure leaves the running session intact.
   - Existing Libbet player tests keep their current behaviour and pass explicitly or by default as `dmg`.
   - **Reversibility:** reversible.
 - **D-27: Presentation.**

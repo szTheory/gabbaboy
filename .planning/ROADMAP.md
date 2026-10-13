@@ -255,7 +255,52 @@ Plans (serial waves: every plan edits `tests/expected-tests.txt` and `tests/CMak
 
 **Rights gates**: G1 (mgblib font) gates vendoring cgb-acid2/dmg-acid2 into required CI (digest-pinned optional local runs otherwise); G4 excludes title-hash compatibility palettes.
 **Research**: DEEP (LCDC bit 0 in CGB mode, OPRI timing, CGB mode-3 length, blocked-write palette auto-increment).
-**Plans**: TBD
+**Plans**: 15 plans
+
+Plans:
+**Wave 1**
+- [ ] 11-01-PLAN.md — DMG shade-identity pin, colour mutant harness, independent 6144-row priority truth oracle
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 11-02-PLAN.md — CRAM storage and BCPD/OCPD ports, OPRI, post-boot CRAM rows, DEFERRED(11) cells flipped
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 11-03-PLAN.md — RGB555 dual store, per-dot dispatch, CGB attributes/priority composer
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 11-04-PLAN.md — compat renderer: default compat palette, ppu_compat_resolve, ppu_pixel_compat
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 11-05-PLAN.md — truth table through the real colour path, per-input priority and attribute mutants
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 11-06-PLAN.md — public gbb_copy_frame_rgb555 and compat palette API, docs and installed consumers
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 11-07-PLAN.md — RGB555 helpers, colour-hblank fixture with copy-time-resolve mutant, manifest-driven repro
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [ ] 11-08-PLAN.md — attribute, LCDC.0, CRAM, compat and LCD-off fixtures with predicates
+
+**Wave 9** *(blocked on Wave 8 completion)*
+- [ ] 11-09-PLAN.md — runner RGB555 frame cases (D-43) and independent RGB555 digest vectors
+
+**Wave 10** *(blocked on Wave 9 completion)*
+- [ ] 11-10-PLAN.md — MagenTests CGB ROMs with predicates and mutants; AGE deviation stated (D-20)
+
+**Wave 11** *(blocked on Wave 10 completion)*
+- [ ] 11-11-PLAN.md — AGE m3-bg-* / Mealybug m3_* disposition records (D-09) and optional local acid2 runner (D-24)
+- [ ] 11-12-PLAN.md — player --model auto|dmg|cgb, colour presentation, CGB smoke and mutants
+
+**Wave 12** *(blocked on Wave 11 completion)*
+- [ ] 11-13-PLAN.md — player claims follow evidence (D-44) with a cross-surface agreement check
+
+**Wave 13** *(blocked on Wave 12 completion)*
+- [ ] 11-14-PLAN.md — model-gate audit, palette fuzzing, A/B benchmark, final DMG identity and player suite
+
+**Wave 14** *(blocked on Wave 13 completion)*
+- [ ] 11-15-PLAN.md — DECISIONS/INDEX/LESSONS records, COVERAGE.md declaration, Phase 12 handoff
+
 **UI hint**: yes
 
 ### Phase 12: CGB Double Speed
