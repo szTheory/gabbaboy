@@ -1,3 +1,5 @@
+#include "colour.h"
+#include "gbb_accept.h"
 #include "input.h"
 #include "limitations.h"
 #include "presentation.h"
@@ -100,6 +102,8 @@ typedef struct {
     bool clock_override;
     int64_t clock_override_unix;
     player_transition pending_transition;
+    player_model player_model;  /* D-26: --model; default dmg */
+    uint8_t last_rgba[160u * 144u * 4u];  /* last uploaded CGB frame, for --smoke-colour */
 } player;
 
 extern char **environ;
@@ -147,6 +151,7 @@ static gbb_instance *create_authored_audio_guest(const char *rom_path) {
         checksum = (uint8_t)(checksum - rom[i] - 1u);
     rom[0x14Du] = checksum;
     gbb_instance *machine = NULL;
+    /* Authored DMG audio guest: explicit DMG by design (D-26 as amended; not a session site). */
     if (gbb_create(GBB_PROFILE_DMG_CPU_B, &machine) != GBB_OK ||
         machine == NULL || gbb_load_rom(machine, rom, sizeof(rom)) != GBB_OK) {
         gbb_destroy(machine);
@@ -392,9 +397,11 @@ static void print_player_help(void) {
         "physical or revision-specific hardware behavior, and listening quality are not "
         "qualified. SDL queued-input bytes are not latency; application PCM underflow is "
         "not hardware starvation.\n\n"
+        "Model: an optional leading --model auto|dmg|cgb picks the machine (default dmg). auto runs a ROM whose header declares CGB support on the CGB profile and any other ROM on the DMG profile; cgb runs every ROM on the CGB profile, where a DMG-only ROM uses the core's default compatibility palette (the player has no palette option); a PGB header is rejected. Colour frames are shown as the guest wrote them, with no colour correction.\n\n"
         "Developer diagnostics: --audio-dummy-smoke checks SDL dummy open/stream/close/recovery; "
         "--audio-measure frame|792 demo-rom emits bounded PCM for the scripted receipt; "
         "--audio-device-status reports default-device availability without playing a workload; "
+        "--smoke-colour rom renders a CGB ROM headless and prints one smoke_colour line; "
         "--smoke-package invalid-rom --input-script script rom replays a gbinput 1 script through "
         "the keyboard input path and prints one smoke_report line (exit 0 only on a pass).\n",
         stdout);
@@ -496,12 +503,22 @@ static char *resolve_demo_rom_path(const char *requested_path,
     return duplicate_path(GABBABOY_PLAYER_DEMO_ROM);
 }
 
+static const char cgb_only_note[] =
+    "CGB-only ROM on the DMG model (--model cgb to run it in colour)";
+
 static bool create_machine(player *app, const char *demo_rom_path) {
-    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &app->machine) != GBB_OK) {
-        fputs("Could not create the DMG-CPU-B machine\n", stderr);
+    char error[192];
+    gbb_profile profile;
+    uint32_t info_flags = 0u;
+    if (!player_session_probe_profile(demo_rom_path, app->player_model, &profile,
+                                      &info_flags, error, sizeof(error))) {
+        fprintf(stderr, "Could not load the owned demo ROM: %s\n", error);
         return false;
     }
-    char error[192];
+    if (gbb_create(profile, &app->machine) != GBB_OK) {
+        fputs("Could not create the machine\n", stderr);
+        return false;
+    }
     if (!player_session_replace_rom(app->machine, &app->current_rom_path,
                                     demo_rom_path, &app->save_identity,
                                     error, sizeof(error))) {
@@ -524,6 +541,8 @@ static bool create_machine(player *app, const char *demo_rom_path) {
     } else {
         set_status(app, "Ready");
     }
+    if (battery_loaded && (info_flags & GBB_INFO_CGB_ONLY_ON_DMG) != 0u)
+        set_status(app, cgb_only_note);
     /* D-22: before the first guest instruction; a rejected-save warning keeps
      * precedence over the clock line. */
     char catch_up[192];
@@ -639,7 +658,43 @@ static bool advance_to(player *app, uint64_t target_half_dots, bool finish_targe
     return true;
 }
 
+static bool update_frame_cgb(player *app, bool required) {
+    uint16_t pixels[PLAYER_FRAME_WIDTH * PLAYER_FRAME_HEIGHT];
+    gbb_frame_info info;
+    const gbb_error result = gbb_copy_frame_rgb555(app->machine, pixels, sizeof(pixels),
+                                                   PLAYER_FRAME_WIDTH * 2u, &info);
+    if (result == GBB_FRAME_NOT_READY && !required) return true;
+    if (result != GBB_OK) {
+        fprintf(stderr, "Could not copy completed colour frame (error %d)\n", (int)result);
+        return false;
+    }
+    if (info.generation == app->displayed_generation) return true;
+
+    /* D-27: expand each 5-bit channel; no colour correction. */
+    uint8_t rgba[PLAYER_FRAME_WIDTH * PLAYER_FRAME_HEIGHT * 4u];
+    player_rgb555_frame_to_rgba(pixels, PLAYER_FRAME_WIDTH * 2u, rgba);
+    if (!SDL_UpdateTexture(app->texture, NULL, rgba,
+                           (int)(PLAYER_FRAME_WIDTH * 4u))) {
+        fprintf(stderr, "SDL_UpdateTexture: %s\n", SDL_GetError());
+        return false;
+    }
+    memcpy(app->last_rgba, rgba, sizeof(rgba));
+    app->displayed_generation = info.generation;
+    app->needs_redraw = true;
+    return true;
+}
+
 static bool update_frame(player *app, bool required) {
+    gbb_info machine_info;
+    memset(&machine_info, 0, sizeof(machine_info));
+    machine_info.struct_size = GBB_INFO_SIZE_V1;
+    if (gbb_get_info(app->machine, &machine_info) != GBB_OK) {
+        fputs("Could not read the machine profile\n", stderr);
+        return false;
+    }
+    /* The profile comes from the machine, never from the flag (D-27). */
+    if (machine_info.profile == GBB_PROFILE_CGB_CPU_E)
+        return update_frame_cgb(app, required);
     uint8_t shades[PLAYER_FRAME_WIDTH * PLAYER_FRAME_HEIGHT];
     gbb_frame_info info;
     const gbb_error result = gbb_copy_frame(app->machine, shades, sizeof(shades),
@@ -689,6 +744,15 @@ static size_t utf8_prefix(const char *text, size_t maximum) {
     return length;
 }
 
+static const char *machine_model_token(const player *app) {
+    gbb_info info;
+    memset(&info, 0, sizeof(info));
+    info.struct_size = GBB_INFO_SIZE_V1;
+    if (app->machine == NULL || gbb_get_info(app->machine, &info) != GBB_OK)
+        return player_model_token(GBB_MODE_NONE);
+    return player_model_token(info.mode);
+}
+
 static void format_window_title(const player *app, char *title, size_t title_size) {
     const char *base = rom_basename(app->current_rom_path);
     char short_name[160];
@@ -696,8 +760,8 @@ static void format_window_title(const player *app, char *title, size_t title_siz
     memcpy(short_name, base, base_length);
     short_name[base_length] = '\0';
     (void)snprintf(title, title_size,
-        "GabbaBoy | %s | %s | Gain %u%% | %s | \xe2\x8c\x98O Open, \xe2\x8c\x98Q Quit, F1 Help | %s",
-        short_name, app->user_paused || app->input.paused ? "Paused" : "Running",
+        "GabbaBoy | %s | %s | %s | Gain %u%% | %s | \xe2\x8c\x98O Open, \xe2\x8c\x98Q Quit, F1 Help | %s",
+        short_name, machine_model_token(app), app->user_paused || app->input.paused ? "Paused" : "Running",
         (unsigned)(player_audio_gain(app->audio) * 100.0f),
         app->save_status_active ? app->save_status :
             (app->status[0] == '\0' ? "Ready" : app->status),
@@ -916,7 +980,15 @@ static bool replace_session_rom(player *app, const char *path) {
     char *candidate_path = NULL;
     player_save_identity candidate_identity;
     int candidate_lock_fd = -1;
-    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &candidate_machine) != GBB_OK) {
+    /* D-26: re-probe on every open; a failure here leaves the running session untouched. */
+    gbb_profile candidate_profile;
+    uint32_t candidate_info_flags = 0u;
+    if (!player_session_probe_profile(path, app->player_model, &candidate_profile,
+                                      &candidate_info_flags, error, sizeof(error))) {
+        set_status(app, error);
+        return false;
+    }
+    if (gbb_create(candidate_profile, &candidate_machine) != GBB_OK) {
         set_status(app, "Could not stage the selected ROM; current ROM unchanged");
         return false;
     }
@@ -979,6 +1051,8 @@ static bool replace_session_rom(player *app, const char *path) {
         set_status(app, catch_up);
     else if (app->save_identity.battery_backed)
         set_status(app, "Battery RAM loaded; changes are in memory until saved");
+    else if ((candidate_info_flags & GBB_INFO_CGB_ONLY_ON_DMG) != 0u)
+        set_status(app, cgb_only_note);
     else
         set_status(app, "ROM loaded; input and display state reset");
     return true;
@@ -1715,6 +1789,8 @@ static bool verify_software_layouts(void) {
 static bool identify_rom_with_core(const uint8_t *rom, size_t size,
                                    player_save_identity *out_identity) {
     gbb_instance *scratch = NULL;
+    /* Battery identity scratch instance: profile independent by design, explicit DMG (D-26 as
+     * amended: only the three session sites route through player_session_probe_profile). */
     if (gbb_create(GBB_PROFILE_DMG_CPU_B, &scratch) != GBB_OK) return false;
     const bool ok = gbb_load_rom(scratch, rom, size) == GBB_OK &&
                     player_session_identify_rom(rom, size, out_identity) &&
@@ -1961,6 +2037,7 @@ static bool identify_smoke_rom(const char *rom_path,
     gbb_instance *machine = NULL;
     char *owned_path = NULL;
     char error[192];
+    /* Authored-DMG battery smoke identity scratch instance: explicit DMG (D-26 as amended). */
     const bool created = gbb_create(GBB_PROFILE_DMG_CPU_B, &machine) == GBB_OK;
     const bool loaded = created && player_session_replace_rom(
         machine, &owned_path, rom_path, out_identity, error, sizeof(error));
@@ -2199,8 +2276,15 @@ static int run_script_smoke(player *app, const char *rom_path, const char *scrip
      * fallible step so every early exit, including an identity mismatch after the ROM load has
      * filled save_identity, skips the final battery save. */
     app->skip_final_save = true;
-    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &app->machine) != GBB_OK) {
-        fputs("Could not create the DMG-CPU-B machine\n", stderr);
+    gbb_profile script_profile;
+    uint32_t script_info_flags = 0u;
+    if (!player_session_probe_profile(rom_path, app->player_model, &script_profile,
+                                      &script_info_flags, error, sizeof(error))) {
+        fprintf(stderr, "Could not load the ROM: %s\n", error);
+        goto done;
+    }
+    if (gbb_create(script_profile, &app->machine) != GBB_OK) {
+        fputs("Could not create the machine\n", stderr);
         goto done;
     }
     if (!player_session_replace_rom(app->machine, &app->current_rom_path, rom_path,
@@ -2237,6 +2321,105 @@ done:
     return code;
 }
 
+/* D-30: headless colour smoke. Renders a CGB ROM through the same profile selection, RGB555
+ * expansion, RGBA32 texture and software renderer as the windowed player, then prints digests and
+ * spot pixels read back from the rendered surface. Exit code: 0 completed, 1 frame or surface
+ * failure, 2 bad input or setup. It never touches saves. */
+#define PLAYER_COLOUR_SMOKE_FRAMES 30u
+
+static int run_colour_smoke(player *app, const char *rom_path) {
+    char error[192];
+    gbb_profile profile;
+    uint32_t info_flags = 0u;
+    app->skip_final_save = true;
+    if (!player_session_probe_profile(rom_path, app->player_model, &profile, &info_flags,
+                                      error, sizeof(error))) {
+        fprintf(stderr, "Could not load the ROM: %s\n", error);
+        return 2;
+    }
+    if (profile != GBB_PROFILE_CGB_CPU_E) {
+        fputs("smoke-colour needs the CGB profile (use --model cgb or --model auto with a CGB ROM)\n",
+              stderr);
+        return 2;
+    }
+    if (gbb_create(profile, &app->machine) != GBB_OK) {
+        fputs("Could not create the machine\n", stderr);
+        return 2;
+    }
+    if (!player_session_replace_rom(app->machine, &app->current_rom_path, rom_path,
+                                    &app->save_identity, error, sizeof(error))) {
+        fprintf(stderr, "Could not load the ROM: %s\n", error);
+        return 2;
+    }
+    if (!create_video(app, true)) return 2;
+    player_input_reset(&app->input, SDL_GetTicksNS());
+    for (unsigned frame = 0u; frame < PLAYER_COLOUR_SMOKE_FRAMES; ++frame) {
+        /* Nothing plays the PCM here; clearing keeps the bounded queue from stalling the guest. */
+        (void)player_audio_clear(app->audio);
+        if (!smoke_render_next_frame(app)) return 1;
+    }
+    if (app->displayed_generation == 0u) {
+        fputs("smoke-colour: no frame was uploaded\n", stderr);
+        return 1;
+    }
+    char title[PLAYER_TITLE_SIZE];
+    format_window_title(app, title, sizeof(title));
+    const char *token = machine_model_token(app);
+    char padded[32];
+    (void)snprintf(padded, sizeof(padded), " | %s | ", token);
+    if (strstr(title, padded) == NULL) {
+        fprintf(stderr, "smoke-colour: window title lacks the model token: %s\n", title);
+        return 1;
+    }
+    char digest[65];
+    gbb_accept_sha256_hex(app->last_rgba, sizeof(app->last_rgba), digest);
+    static uint8_t seen[(1u << 15) / 8u];
+    memset(seen, 0, sizeof(seen));
+    unsigned distinct = 0u;
+    for (size_t i = 0u; i < PLAYER_FRAME_WIDTH * PLAYER_FRAME_HEIGHT; ++i) {
+        const uint8_t *px = app->last_rgba + i * 4u;
+        const unsigned key = (unsigned)(px[0] >> 3) | ((unsigned)(px[1] >> 3) << 5) |
+                             ((unsigned)(px[2] >> 3) << 10);
+        if ((seen[key >> 3] & (1u << (key & 7u))) == 0u) {
+            seen[key >> 3] |= (uint8_t)(1u << (key & 7u));
+            ++distinct;
+        }
+    }
+    /* frame_destination is in logical units; the surface is in output pixels. */
+    SDL_FRect presentation;
+    if (!SDL_GetRenderLogicalPresentationRect(app->renderer, &presentation)) {
+        fprintf(stderr, "smoke-colour: SDL_GetRenderLogicalPresentationRect: %s\n", SDL_GetError());
+        return 1;
+    }
+    if (!SDL_LockSurface(app->surface)) {
+        fprintf(stderr, "smoke-colour: could not lock the rendered surface: %s\n", SDL_GetError());
+        return 1;
+    }
+    printf("smoke_colour rgba_sha256=%s distinct=%u title_token=%s spot=", digest, distinct, token);
+    /* Quadrant centres of the ten 16x16 cells of colour-attr.gb, read from the rendered surface
+     * at the integer-scaled position of each frame pixel. */
+    for (unsigned cell = 0u; cell < 10u; ++cell) {
+        for (unsigned quadrant = 0u; quadrant < 4u; ++quadrant) {
+            const unsigned x = cell * 16u + 1u + (quadrant & 1u) * 4u;
+            const unsigned y = 1u + (quadrant >> 1) * 4u;
+            const float scale = presentation.w / (float)PLAYER_FRAME_WIDTH;
+            const int sx = (int)(presentation.x + ((float)x + 0.5f) * scale);
+            const int sy = (int)(presentation.y + ((float)y + 0.5f) * scale);
+            if (sx < 0 || sy < 0 || sx >= app->surface->w || sy >= app->surface->h) {
+                SDL_UnlockSurface(app->surface);
+                fputs("smoke-colour: spot outside the rendered surface\n", stderr);
+                return 1;
+            }
+            const uint8_t *pixel = (const uint8_t *)app->surface->pixels +
+                (size_t)sy * (size_t)app->surface->pitch + (size_t)sx * 4u;
+            printf("%u,%u:%02x%02x%02x;", x, y, pixel[0], pixel[1], pixel[2]);
+        }
+    }
+    SDL_UnlockSurface(app->surface);
+    putchar('\n');
+    return 0;
+}
+
 static void destroy_player(player *app) {
     for (unsigned i = 0; i < PLAYER_INPUT_GAMEPAD_CAPACITY; ++i) {
         if (app->gamepads[i].handle != NULL)
@@ -2269,7 +2452,30 @@ static void destroy_player(player *app) {
     app->pending_rom_path = NULL;
 }
 
+static const char player_usage[] =
+    "usage: %s [--model auto|dmg|cgb] [--help | --smoke [demo-rom invalid-rom] | --smoke-package invalid-rom [--input-script script rom] | --smoke-colour rom | --audio-dummy-smoke | --audio-measure frame|792 demo-rom | --audio-device-status | --battery-smoke-store|--battery-smoke-resume rom [--clock-unix seconds]]\n";
+
 int main(int argc, char **argv) {
+    /* D-26: an optional leading --model V, exactly auto, dmg or cgb (default dmg). It is consumed
+     * here so the rest of the argument grammar is unchanged; argv[0] moves up beside it. */
+    player_model selected_model = PLAYER_MODEL_DMG;
+    if (argc >= 2 && strcmp(argv[1], "--model") == 0) {
+        if (argc < 3) {
+            fprintf(stderr, player_usage, argv[0]);
+            return 2;
+        }
+        if (strcmp(argv[2], "auto") == 0) selected_model = PLAYER_MODEL_AUTO;
+        else if (strcmp(argv[2], "dmg") == 0) selected_model = PLAYER_MODEL_DMG;
+        else if (strcmp(argv[2], "cgb") == 0) selected_model = PLAYER_MODEL_CGB;
+        else {
+            fprintf(stderr, player_usage, argv[0]);
+            return 2;
+        }
+        argv[2] = argv[0];
+        argv += 2;
+        argc -= 2;
+    }
+    const bool colour_smoke = argc == 3 && strcmp(argv[1], "--smoke-colour") == 0;
     const bool help_requested = argc == 2 && strcmp(argv[1], "--help") == 0;
     const bool smoke = argc >= 2 && strcmp(argv[1], "--smoke") == 0;
     const bool audio_dummy_smoke = argc == 2 &&
@@ -2316,9 +2522,8 @@ int main(int argc, char **argv) {
         (battery_smoke && argc != 3 && !clock_override) ||
         !clock_flag_ok ||
         (!help_requested && !smoke && !audio_dummy_smoke && !audio_measure && !audio_device_status &&
-         !package_smoke && !battery_smoke && !script_smoke && argc > 1)) {
-        fprintf(stderr, "usage: %s [--help | --smoke [demo-rom invalid-rom] | --smoke-package invalid-rom [--input-script script rom] | --audio-dummy-smoke | --audio-measure frame|792 demo-rom | --audio-device-status | --battery-smoke-store|--battery-smoke-resume rom [--clock-unix seconds]]\n",
-                argv[0]);
+         !package_smoke && !battery_smoke && !script_smoke && !colour_smoke && argc > 1)) {
+        fprintf(stderr, player_usage, argv[0]);
         return 2;
     }
     if (help_requested) {
@@ -2333,6 +2538,7 @@ int main(int argc, char **argv) {
     player app;
     memset(&app, 0, sizeof(app));
     app.save_lock_fd = -1;
+    app.player_model = selected_model;
     app.clock_override = clock_override;
     app.clock_override_unix = clock_override_unix;
     app.running = true;
@@ -2342,7 +2548,7 @@ int main(int argc, char **argv) {
     atomic_init(&app.dialog_delivery_failed, false);
     Uint32 init_flags = SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD;
     if (smoke || audio_dummy_smoke || package_smoke || battery_smoke ||
-        audio_measure || script_smoke)
+        audio_measure || script_smoke || colour_smoke)
         init_flags = SDL_INIT_EVENTS | SDL_INIT_AUDIO;
     else if (audio_device_status)
         init_flags = SDL_INIT_AUDIO;
@@ -2371,6 +2577,12 @@ int main(int argc, char **argv) {
             "Audio unavailable; PCM is discarded and counted without a queue");
         fputs("Audio unavailable; PCM is discarded and counted without a queue\n",
               stderr);
+    }
+    if (colour_smoke) {
+        const int code = run_colour_smoke(&app, argv[2]);
+        destroy_player(&app);
+        SDL_Quit();
+        return code;
     }
     if (script_smoke) {
         const int code = run_script_smoke(&app, argv[5], argv[4]);

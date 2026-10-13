@@ -99,7 +99,9 @@ if(GABBABOY_BUILD_PLAYER)
   target_compile_features(gabbaboy-player-adapter PUBLIC c_std_17)
   set_target_properties(gabbaboy-player-adapter PROPERTIES C_EXTENSIONS OFF)
 
-  add_executable(gabbaboy-player src/player/main.c)
+  # colour.c is compiled here, not into the adapter library, so the D-30 mutant players can
+  # substitute a copy of it.
+  add_executable(gabbaboy-player src/player/main.c src/player/colour.c)
   target_link_libraries(gabbaboy-player PRIVATE gabbaboy-player-adapter SDL3::SDL3)
   target_compile_features(gabbaboy-player PRIVATE c_std_17)
   target_compile_definitions(gabbaboy-player PRIVATE

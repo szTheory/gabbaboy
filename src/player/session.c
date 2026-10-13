@@ -218,6 +218,61 @@ void player_session_set_clock(player_save_identity *identity, int64_t now_unix,
     identity->clock_valid = now_valid;
 }
 
+static bool model_wants_cgb(player_model model, uint8_t cgb_flag) {
+    if (model == PLAYER_MODEL_CGB) return true;
+    if (model == PLAYER_MODEL_AUTO) return (cgb_flag & 0x80u) != 0u;
+    return false;
+}
+
+bool player_session_probe_profile(const char *path, player_model model,
+                                  gbb_profile *out_profile,
+                                  uint32_t *out_info_flags,
+                                  char *out_error, size_t error_capacity) {
+    if (out_error != NULL && error_capacity > 0u) out_error[0] = '\0';
+    if (out_profile == NULL || out_info_flags == NULL ||
+        (model != PLAYER_MODEL_DMG && model != PLAYER_MODEL_AUTO &&
+         model != PLAYER_MODEL_CGB)) {
+        set_error(out_error, error_capacity, "The player session is unavailable.");
+        return false;
+    }
+    uint8_t *rom = NULL;
+    size_t rom_size = 0u;
+    if (!read_rom_file(path, &rom, &rom_size, out_error, error_capacity))
+        return false;
+    /* The CGB profile reports a PGB header as an error; the DMG profile would
+     * report it as a successful classification, so probe CGB first. */
+    gbb_info cgb_info;
+    memset(&cgb_info, 0, sizeof(cgb_info));
+    cgb_info.struct_size = GBB_INFO_SIZE_V1;
+    gbb_error result = gbb_probe_rom(GBB_PROFILE_CGB_CPU_E, rom, rom_size, &cgb_info);
+    if (result == GBB_UNSUPPORTED_EXECUTION_MODE) {
+        free(rom);
+        set_error(out_error, error_capacity, "PGB ROMs are not supported");
+        return false;
+    }
+    if (result != GBB_OK) {
+        free(rom);
+        set_error(out_error, error_capacity, rom_error(result));
+        return false;
+    }
+    const bool use_cgb = model_wants_cgb(model, cgb_info.cgb_flag);
+    gbb_info chosen = cgb_info;
+    if (!use_cgb) {
+        memset(&chosen, 0, sizeof(chosen));
+        chosen.struct_size = GBB_INFO_SIZE_V1;
+        result = gbb_probe_rom(GBB_PROFILE_DMG_CPU_B, rom, rom_size, &chosen);
+        if (result != GBB_OK) {
+            free(rom);
+            set_error(out_error, error_capacity, rom_error(result));
+            return false;
+        }
+    }
+    free(rom);
+    *out_profile = use_cgb ? GBB_PROFILE_CGB_CPU_E : GBB_PROFILE_DMG_CPU_B;
+    *out_info_flags = chosen.flags;
+    return true;
+}
+
 bool player_session_replace_rom(gbb_instance *machine, char **in_out_path,
                                 const char *path,
                                 player_save_identity *out_identity,

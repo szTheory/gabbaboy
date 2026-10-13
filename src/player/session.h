@@ -70,6 +70,25 @@ typedef enum {
  * KiB). The checksum detects accidental corruption and is not authentication.
  * Any future format change must migrate existing progress or retain v1 files. */
 
+/* D-26: which profile the session creates. dmg is the default; auto follows the
+ * ROM header ($143 bit 7); cgb always uses the CGB profile. */
+typedef enum {
+    PLAYER_MODEL_DMG = 0,
+    PLAYER_MODEL_AUTO,
+    PLAYER_MODEL_CGB
+} player_model;
+
+/* The one select_profile seam (D-26): reads the ROM with the same bounds as
+ * player_session_replace_rom, classifies it with gbb_probe_rom, rejects a PGB
+ * header, and picks the profile for the requested model. out_info_flags gets the
+ * GBB_INFO_* flags of the chosen profile's probe (GBB_INFO_CGB_ONLY_ON_DMG for a
+ * $C0 ROM on the DMG model). It never touches a running instance, and on any
+ * failure the out values are left unchanged and out_error says why. */
+bool player_session_probe_profile(const char *path, player_model model,
+                                  gbb_profile *out_profile,
+                                  uint32_t *out_info_flags,
+                                  char *out_error, size_t error_capacity);
+
 /* Replaces both the guest ROM and owned path only after bounded validation succeeds. */
 bool player_session_replace_rom(gbb_instance *machine, char **in_out_path,
                                 const char *path,
