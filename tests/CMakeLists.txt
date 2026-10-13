@@ -2055,4 +2055,16 @@ gbb_colour_mutant(colour_writes_shade test_cgb_colour_internal.c
   cgb_rgb_store_bg_palette)
 # --- Phase 11 plan 11-03 end ---
 
+# --- Phase 11 plan 11-04 begin ---
+# Compat rendering (D-17, D-18, D-39): DMG software on the CGB profile through the instance compat palette.
+foreach(gbb_compat_case
+    cgb_compat_internal_default cgb_compat_internal_bg cgb_compat_internal_obj_sets
+    cgb_compat_internal_attr_ignored cgb_compat_internal_lcdc0 cgb_compat_internal_x_order
+    cgb_compat_internal_live_config)
+  add_test(NAME ${gbb_compat_case} COMMAND test_cgb_colour_internal ${gbb_compat_case})
+  set_tests_properties(${gbb_compat_case} PROPERTIES
+    PASS_REGULAR_EXPRESSION "cgb-colour-internal ${gbb_compat_case} pass")
+endforeach()
+# --- Phase 11 plan 11-04 end ---
+
 gabbaboy_verify_registered_tests()

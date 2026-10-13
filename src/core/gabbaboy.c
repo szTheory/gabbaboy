@@ -350,6 +350,9 @@ struct gbb_instance {
      * pairs share frame_generation and frame_completion_half_dots. */
     uint16_t rgb_working[GBB_FRAME_PIXELS];
     uint16_t rgb_completed[GBB_FRAME_PIXELS];
+    /* Compat palette (D-17): sets BG, OBJ0, OBJ1 by shade. Instance configuration, set in
+     * gbb_create and never in reset_state, so it survives reset and ROM load. */
+    uint16_t compat_rgb555[3][4];
     uint64_t frame_generation;
     uint64_t frame_completion_half_dots;
     uint16_t ppu_dot;
@@ -2324,6 +2327,35 @@ static uint8_t ppu_pixel_shade(gbb_instance *m, unsigned x) {
     return ppu_palette_shade(m->bgp, background);
 }
 
+/* Compat palette default (D-18). One rule: a brightness ramp Y = 31, 21, 11, 1 per shade with
+ * R = Y, G = Y - (Y >> 3), B = Y - (Y >> 2), packed as RGB555 (bit 15 clear). The same ramp seeds
+ * BG, OBJ0 and OBJ1. These values were authored here without reference to any third-party,
+ * boot-ROM or title-hash table (G4); the look is an owner veto item. */
+static const uint16_t compat_default_rgb555[3][4] = {
+    {0x639Fu, 0x4275u, 0x254Bu, 0x0421u},
+    {0x639Fu, 0x4275u, 0x254Bu, 0x0421u},
+    {0x639Fu, 0x4275u, 0x254Bu, 0x0421u},
+};
+
+/* MODEL: BOTH GATE-00 basis="compat palette lookup; indices are masked so guest bytes cannot leave the table (T-11-34)" */
+static uint16_t ppu_compat_resolve(const gbb_instance *m, unsigned set, uint8_t shade) {
+    return m->compat_rgb555[set % 3u][shade & 3u];
+}
+
+/* MODEL: BOTH GATE-00 basis="compat mode pixel: DMG composition resolved through the compat palette (D-39); never reads vram[1]" */
+static uint16_t ppu_pixel_compat(gbb_instance *m, unsigned x) {
+    uint8_t background = (m->lcdc & 0x01u) != 0 ? ppu_background_color(m, x) : 0;
+    if ((m->lcdc & 0x01u) != 0 && ppu_window_visible_at(m, x))
+        m->ppu_window_line_drawn = 1;
+    uint8_t object = 0, attributes = 0;
+    if (ppu_object_color(m, x, &object, &attributes) &&
+        ((attributes & 0x80u) == 0 || background == 0)) {
+        const uint8_t palette = (attributes & 0x10u) != 0 ? m->obp1 : m->obp0;
+        return ppu_compat_resolve(m, 1u + ((attributes >> 4) & 1u), ppu_palette_shade(palette, object));
+    }
+    return ppu_compat_resolve(m, 0u, ppu_palette_shade(m->bgp, background));
+}
+
 /* ---- CGB-mode colour path (Phase 11, D-01 to D-09) -------------------------------------------------
  * Siblings of the DMG functions above, selected by the single per-dot branch in ppu_transfer_dot.
  * They read only PPU state (VRAM, OAM, CRAM, registers), never the CPU-visible VBK bank. */
@@ -2610,8 +2642,10 @@ static void ppu_transfer_dot(gbb_instance *m) {
     /* MODEL: CGB_ONLY GATE-80 GUARD=model_is_cgb -- CGB mode resolves RGB555 per dot against live CRAM into rgb_working (D-01, D-02); compat mode is routed by plan 11-04 */
     else if (model_is_cgb(m) && m->exec_mode == GBB_MODE_CGB) {
         m->rgb_working[pixel_at] = ppu_pixel_cgb(m, fetched_slot);
-    } else {
-        m->frame_working[pixel_at] = ppu_pixel_shade(m, fetched_slot);
+    }
+    /* MODEL: CGB_ONLY GATE-82 GUARD=model_is_cgb -- compat mode (DMG software on the CGB profile) resolves DMG shades through the instance compat palette into rgb_working (D-17, D-39) */
+    else if (model_is_cgb(m)) {
+        m->rgb_working[pixel_at] = ppu_pixel_compat(m, fetched_slot);
     }
     if (++m->ppu_output_x == GBB_FRAME_WIDTH) m->ppu_transfer_complete = 1;
 }
@@ -3101,6 +3135,7 @@ gbb_error gbb_create(gbb_profile profile, gbb_instance **out_instance) {
     if (m == NULL) return GBB_OUT_OF_MEMORY;
     m->profile = (uint8_t)profile;
     m->exec_mode = GBB_MODE_NONE;
+    memcpy(m->compat_rgb555, compat_default_rgb555, sizeof(m->compat_rgb555));
     reset_state(m); /* RAM fill is emulator policy; hardware power-on RAM is unspecified. */
     *out_instance = m;
     return GBB_OK;

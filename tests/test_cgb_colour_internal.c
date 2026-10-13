@@ -506,12 +506,202 @@ static int cgb_rgb_store_bg_palette(void) {
     return 0;
 }
 
+/* ---- Compat rendering (Phase 11 plan 11-04; D-17, D-18, D-39) ------------------------------------
+ * The compat palette is written by the test itself: cpal(set, shade) is a distinct word per cell,
+ * so an expected value is never read back from a core resolve. */
+static uint16_t cpal(unsigned set, unsigned shade) { return (uint16_t)(0x0300u | (set << 4) | shade); }
+
+static void compat_palette_write(gbb_instance *m) {
+    for (unsigned set = 0; set < 3u; ++set)
+        for (unsigned shade = 0; shade < 4u; ++shade) m->compat_rgb555[set][shade] = cpal(set, shade);
+}
+
+/* Compat machine: $143 = $00 on the CGB profile, BG index 0 mapped to shade 3 by BGP = $1B. */
+static gbb_instance *make_compat(void) {
+    gbb_instance *m = make_machine(0);
+    if (m == NULL || gbb_reset(m) != GBB_OK) { gbb_destroy(m); return NULL; }
+    compat_palette_write(m);
+    m->lcdc = 0x91u;
+    m->bgp = 0x1Bu;
+    m->obp0 = 0xE4u;
+    m->obp1 = 0xE4u;
+    return m;
+}
+
+static void compat_obj(gbb_instance *m, unsigned slot, uint8_t y, uint8_t x, uint8_t tile, uint8_t attr) {
+    m->oam[slot * 4u] = y; m->oam[slot * 4u + 1u] = x;
+    m->oam[slot * 4u + 2u] = tile; m->oam[slot * 4u + 3u] = attr;
+}
+
+static void fill_valid_rom(uint8_t *rom, size_t size) {
+    memset(rom, 0, size);
+    rom[0x101] = 0xC3u; rom[0x102] = 0x50u; rom[0x103] = 0x01u;
+    rom[0x150] = 0x18u; rom[0x151] = 0xFEu;
+    uint8_t sum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i) sum = (uint8_t)(sum - rom[i] - 1u);
+    rom[0x14Du] = sum;
+}
+
+static int is_default_palette(const gbb_instance *m) {
+    static const uint16_t ramp[4] = {0x639Fu, 0x4275u, 0x254Bu, 0x0421u};
+    for (unsigned set = 0; set < 3u; ++set)
+        for (unsigned shade = 0; shade < 4u; ++shade)
+            if (m->compat_rgb555[set][shade] != ramp[shade]) return 0;
+    return 1;
+}
+
+static int cgb_compat_internal_default(void) {
+    static uint8_t rom[0x8000];
+    fill_valid_rom(rom, sizeof(rom));
+    for (int profile = 0; profile < 2; ++profile) {
+        gbb_instance *m = NULL;
+        REQUIRE(gbb_create(profile ? GBB_PROFILE_CGB_CPU_E : GBB_PROFILE_DMG_CPU_B, &m) == GBB_OK);
+        REQUIRE(is_default_palette(m));
+        REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
+        REQUIRE(is_default_palette(m));
+        m->compat_rgb555[1][2] = 0x1111u; /* a host change must survive reset and reload */
+        REQUIRE(gbb_reset(m) == GBB_OK);
+        REQUIRE(m->compat_rgb555[1][2] == 0x1111u);
+        REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
+        REQUIRE(m->compat_rgb555[1][2] == 0x1111u);
+        m->compat_rgb555[1][2] = 0x254Bu;
+        REQUIRE(is_default_palette(m));
+        gbb_destroy(m);
+    }
+    return 0;
+}
+
+static int cgb_compat_internal_bg(void) {
+    gbb_instance *m = make_compat();
+    REQUIRE(m != NULL);
+    REQUIRE(render(m)); /* VRAM is zero: BG index 0, mapped to shade 3 by BGP = $1B */
+    for (unsigned i = 0; i < GBB_FRAME_PIXELS; ++i) REQUIRE(m->rgb_completed[i] == cpal(0, 3));
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cgb_compat_internal_obj_sets(void) {
+    for (unsigned variant = 0; variant < 2u; ++variant) {
+        gbb_instance *m = make_compat();
+        REQUIRE(m != NULL);
+        m->obp0 = 0x1Bu; /* index 1 -> shade 2 */
+        m->obp1 = 0xE4u; /* index 1 -> shade 1 */
+        tile_solid(m, 0, 2, 1);
+        const uint8_t low = variant ? 0x0Fu : 0x00u; /* OAM bits 0-3 must have no effect */
+        compat_obj(m, 0, 16u, 40u, 2u, (uint8_t)(0x00u | low));
+        compat_obj(m, 1, 16u, 80u, 2u, (uint8_t)(0x10u | low));
+        m->lcdc = 0x93u;
+        REQUIRE(render(m));
+        REQUIRE(px(m, 32, 0) == cpal(1, 2));
+        REQUIRE(px(m, 72, 0) == cpal(2, 1));
+        REQUIRE(px(m, 10, 0) == cpal(0, 3));
+        gbb_destroy(m);
+    }
+    return 0;
+}
+
+static void compat_attr_scene(gbb_instance *m) {
+    tile_solid(m, 0, 1, 2);
+    map_fill(m, 0, 0x1800u, 1u);
+    tile_solid(m, 0, 2, 1);
+    compat_obj(m, 0, 16u, 40u, 2u, 0x00u);
+    m->bgp = 0xE4u;
+    m->lcdc = 0x93u;
+}
+
+static int cgb_compat_internal_attr_ignored(void) {
+    gbb_instance *a = make_compat();
+    gbb_instance *b = make_compat();
+    REQUIRE(a != NULL && b != NULL);
+    compat_attr_scene(a);
+    compat_attr_scene(b);
+    memset(b->vram[1], 0xFFu, GBB_VRAM_BANK_SIZE); /* palette 7, flips, bank, priority everywhere */
+    b->oam[3] |= 0x0Fu;                           /* OAM bank bit 3 and palette bits 0-2 */
+    b->vram_bank = 1u;
+    b->opri = 1u;
+    REQUIRE(render(a) && render(b));
+    REQUIRE(px(a, 0, 20) == cpal(0, 2));
+    REQUIRE(px(a, 32, 0) == cpal(1, 1));
+    REQUIRE(memcmp(a->rgb_completed, b->rgb_completed, sizeof(a->rgb_completed)) == 0);
+    gbb_destroy(a);
+    gbb_destroy(b);
+    return 0;
+}
+
+static int cgb_compat_internal_lcdc0(void) {
+    gbb_instance *m = make_compat();
+    REQUIRE(m != NULL);
+    tile_solid(m, 0, 1, 3);
+    map_fill(m, 0, 0x1800u, 1u);
+    tile_solid(m, 0, 2, 1);
+    compat_obj(m, 0, 16u, 40u, 2u, 0x80u); /* bit 7 priority: BG is index 0 so the object shows */
+    m->bgp = 0xE4u;
+    m->lcdc = 0x92u; /* display and OBJ on, BG off */
+    REQUIRE(render(m));
+    REQUIRE(px(m, 0, 20) == cpal(0, 0)); /* BG index 0 through BGP, not the tile's index 3 */
+    REQUIRE(px(m, 32, 0) == cpal(1, 1));
+    gbb_destroy(m);
+    return 0;
+}
+
+static int cgb_compat_internal_x_order(void) {
+    for (unsigned equal_x = 0; equal_x < 2u; ++equal_x) {
+        gbb_instance *m = make_compat();
+        REQUIRE(m != NULL);
+        tile_solid(m, 0, 2, 1); /* object A: OBP0 -> set 1, shade 1 */
+        tile_solid(m, 0, 3, 2); /* object B: OBP1 -> set 2, shade 2 */
+        compat_obj(m, 0, 16u, equal_x ? 40u : 44u, 2u, 0x00u);
+        compat_obj(m, 1, 16u, 40u, 3u, 0x10u);
+        m->lcdc = 0x93u;
+        REQUIRE(render(m));
+        if (equal_x) {
+            REQUIRE(px(m, 35, 0) == cpal(1, 1)); /* equal X: lower OAM index wins */
+        } else {
+            REQUIRE(px(m, 37, 0) == cpal(2, 2)); /* smaller X (index 1) wins over index 0 */
+            REQUIRE(px(m, 33, 0) == cpal(2, 2));
+            REQUIRE(px(m, 41, 0) == cpal(1, 1));
+        }
+        gbb_destroy(m);
+    }
+    return 0;
+}
+
+static int cgb_compat_internal_live_config(void) {
+    gbb_instance *m = make_compat();
+    REQUIRE(m != NULL);
+    m->bgp = 0xE4u;
+    tile_solid(m, 0, 1, 2);
+    map_fill(m, 0, 0x1800u, 1u);
+    REQUIRE(render(m));
+    REQUIRE(px(m, 0, 0) == cpal(0, 2) && px(m, 0, 140) == cpal(0, 2));
+    /* Run to the next frame completion, then into the following frame down to about line 70. */
+    const uint64_t generation = m->frame_generation;
+    while (m->frame_generation == generation) gbb_run(m, 912u, NULL, 0);
+    for (unsigned line = 0; line < 80u; ++line) gbb_run(m, 912u, NULL, 0); /* vblank plus ~70 lines */
+    m->compat_rgb555[0][2] = 0x7001u; /* mid-frame palette change */
+    for (unsigned i = 0; i < GBB_FRAME_PIXELS; ++i) REQUIRE(m->rgb_completed[i] == cpal(0, 2));
+    const uint64_t next = m->frame_generation;
+    while (m->frame_generation == next) gbb_run(m, 912u, NULL, 0);
+    REQUIRE(px(m, 0, 10) == cpal(0, 2));  /* drawn before the change */
+    REQUIRE(px(m, 0, 140) == 0x7001u);    /* drawn after the change */
+    gbb_destroy(m);
+    return 0;
+}
+
 static int cgb_rgb_store_shade_untouched(void) {
     gbb_instance *m = make_render();
     REQUIRE(m != NULL);
     solid_bg_scene(m, 5u);
     REQUIRE(render(m));
     REQUIRE(px(m, 0, 0) == bgcol(5, 2));
+    REQUIRE(all_zero8(m->frame_working, sizeof(m->frame_working)));
+    REQUIRE(all_zero8(m->frame_completed, sizeof(m->frame_completed)));
+    gbb_destroy(m);
+    /* Compat mode ($143 = $00) also renders into the RGB store only (D-01, D-02). */
+    m = make_compat();
+    REQUIRE(m != NULL);
+    REQUIRE(render(m));
+    REQUIRE(px(m, 0, 0) == cpal(0, 3));
     REQUIRE(all_zero8(m->frame_working, sizeof(m->frame_working)));
     REQUIRE(all_zero8(m->frame_completed, sizeof(m->frame_completed)));
     gbb_destroy(m);
@@ -838,6 +1028,13 @@ static const plain_case PLAIN_CASES[] = {
     {"cgb_attr_obj_bank_palette", cgb_attr_obj_bank_palette},
     {"cgb_attr_obj_oam_order", cgb_attr_obj_oam_order},
     {"cgb_attr_vbk_not_read", cgb_attr_vbk_not_read},
+    {"cgb_compat_internal_default", cgb_compat_internal_default},
+    {"cgb_compat_internal_bg", cgb_compat_internal_bg},
+    {"cgb_compat_internal_obj_sets", cgb_compat_internal_obj_sets},
+    {"cgb_compat_internal_attr_ignored", cgb_compat_internal_attr_ignored},
+    {"cgb_compat_internal_lcdc0", cgb_compat_internal_lcdc0},
+    {"cgb_compat_internal_x_order", cgb_compat_internal_x_order},
+    {"cgb_compat_internal_live_config", cgb_compat_internal_live_config},
 };
 
 int main(int argc, char **argv) {
