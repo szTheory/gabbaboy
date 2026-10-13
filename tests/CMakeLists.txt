@@ -2545,6 +2545,16 @@ add_test(NAME cgb_speed_apu_tap COMMAND test_cgb_speed_internal_p12 cgb_speed_ap
 add_test(NAME cgb_speed_remainder_across_switch COMMAND test_cgb_speed_internal_p12 cgb_speed_remainder_across_switch)
 set_tests_properties(cgb_speed_serial_scaling cgb_speed_dma_scaling cgb_speed_apu_tap
   cgb_speed_remainder_across_switch PROPERTIES TIMEOUT 60)
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 2 serial_unscaled
+  cgb_speed_serial_scaling "machine->serial_active")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 4 apu_tap_unscaled
+  cgb_speed_apu_tap "volume == 9u|apu_sequencer_step == 4u")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 11 remainder_dropped_at_switch
+  cgb_speed_remainder_across_switch "serial_edge_remaining >|dma_phase >|timer_reload_remaining ==")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 14 dma_unscaled
+  cgb_speed_dma_scaling "!machine->dma_active")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 15 timer_reload_half_dot_units_switch
+  cgb_speed_remainder_across_switch "timer_reload_remaining == 4u")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 3 timer_unscaled
   cgb_speed_timer_scaling "tima_delta|div_delta")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 15 timer_reload_half_dot_units

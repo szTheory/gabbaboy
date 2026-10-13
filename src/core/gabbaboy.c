@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+
 #define GBB_INPUT_EVENT_CAPACITY 64u
 #define GBB_DIAGNOSTIC_OPERATION_RESERVE 16u
 #define GBB_FRAME_WIDTH 160u
@@ -1757,7 +1758,8 @@ static void apu_sequencer_clock(gbb_instance *m);
 
 /* MODEL: BOTH GATE-00 basis="DIV reset edge semantics are shared by both CPU models" */
 static void divider_reset(gbb_instance *m, int clock_apu_edge) {
-    const int apu_falling_edge = (m->divider_counter & 0x1000u) != 0u;
+    const uint16_t reset_tap = m->double_speed ? 0x2000u : 0x1000u; /* P12-M4 */
+    const int apu_falling_edge = (m->divider_counter & reset_tap) != 0u;
     m->divider_counter = 0u;
     m->div = 0u;
     m->divider_phase = 0u;
@@ -2010,7 +2012,7 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
             if (value & 0x80u) {
                 m->serial_active = 1;
                 m->serial_bits = 0;
-                if (value & 1u) m->serial_edge_remaining = 1024u;
+                if (value & 1u) m->serial_edge_remaining = 512u;
             }
         }
     }
@@ -2775,7 +2777,7 @@ static void dma_start(gbb_instance *m) {
 static void dma_advance_half_dot(gbb_instance *m) {
     if (!m->dma_active) return;
     /* MODEL: UNKNOWN GATE-53 research:12 -- DMA byte period */
-    if (++m->dma_phase < GBB_DMA_BYTE_PERIOD_HALF_DOTS) return;
+    if (++m->dma_phase < GBB_T_PER_M) return;
     m->dma_phase = 0;
     m->dma_cpu_blocked = 1;
     uint16_t source = (uint16_t)(((uint16_t)m->dma_page << 8) | m->dma_index);
@@ -2876,24 +2878,25 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
             diagnostic_add(m, GBB_DIAGNOSTIC_TIMER, m->time_half_dots, 0xFF05, m->tima);
         }
         /* MODEL: UNKNOWN GATE-55 research:14 -- serial internal clock rate */
-        if (m->serial_active && (m->serial_control & 1u) != 0 &&
-            m->serial_edge_remaining != 0 && --m->serial_edge_remaining == 0) {
+        if (cpu_tick && m->serial_active && (m->serial_control & 1u) != 0 &&
+            m->serial_edge_remaining != 0 && --m->serial_edge_remaining == 0) { /* P12-M2 */
             m->serial_data = (uint8_t)((m->serial_data << 1) | 1u);
             if (++m->serial_bits == 8u) {
                 m->serial_active = 0;
                 m->serial_control &= 1u;
                 m->interrupt_flags |= 0x08u;
             } else {
-                m->serial_edge_remaining = 1024u;
+                m->serial_edge_remaining = 512u;
             }
         }
         if (cpu_tick) {
             /* MODEL: UNKNOWN GATE-56 research:12 -- frame sequencer taps a DIV bit that moves in double speed */
-            const int apu_signal_before = (m->divider_counter & 0x1000u) != 0u;
+            const uint16_t tap = m->double_speed ? 0x2000u : 0x1000u; /* P12-M4 */
+            const int apu_signal_before = (m->divider_counter & tap) != 0u;
             ++m->divider_counter;
             m->div = (uint8_t)(m->divider_counter >> 8);
             timer_set_signal(m, timer_input(m), m->time_half_dots);
-            if (apu_signal_before && (m->divider_counter & 0x1000u) == 0u)
+            if (apu_signal_before && (m->divider_counter & tap) == 0u)
                 apu_sequencer_clock(m);
         }
         for (unsigned i = 0u; i < 2u; ++i) {
@@ -2945,7 +2948,7 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
                 m->audio_frame_count < m->audio_frame_capacity)
                 m->audio_frames[m->audio_frame_count++] = frame;
         }
-        dma_advance_half_dot(m);
+        if (cpu_tick) dma_advance_half_dot(m); /* P12-M14 */
         m->ppu_half_phase ^= 1u;
         if (m->ppu_half_phase == 0) ppu_advance_dot(m);
     }
@@ -4119,7 +4122,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
         if (instance->stop_switch_pending == 4u) {
             instance->stop_switch_pending = 0u;
             divider_reset(instance, 1);
-            instance->double_speed ^= 1u;
+            instance->double_speed ^= 1u; /* P12-M11 */
             instance->key1_armed = 0u;
             instance->cpu_stall_kind = GBB_STALL_SPEED_SWITCH; /* P12-M5 */
             instance->cpu_stall_half_dots = GBB_SPEED_SWITCH_STALL_T *

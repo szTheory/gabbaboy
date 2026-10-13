@@ -1,7 +1,27 @@
 # Phase 12 runtime-mask mutant table. Each id owns one or more exact source
 # anchors. Keep each anchor and replacement in a separate variable because C
 # replacement text may contain semicolons.
-set(GBB_P12_MUTANT_IDS 3 5 7 15 18 24 25 26)
+set(GBB_P12_MUTANT_IDS 2 3 4 5 7 11 14 15 18 24 25 26)
+
+set(GBB_P12_SITES_2 1)
+set(GBB_P12_ANCHOR_2_1 "if (cpu_tick && m->serial_active && (m->serial_control & 1u) != 0 &&")
+set(GBB_P12_REPLACEMENT_2_1 "if ((cpu_tick || GBB_P12_MUT(2)) && m->serial_active && (m->serial_control & 1u) != 0 &&")
+
+set(GBB_P12_SITES_4 2)
+set(GBB_P12_ANCHOR_4_1 "const uint16_t reset_tap = m->double_speed ? 0x2000u : 0x1000u; /* P12-M4 */")
+set(GBB_P12_REPLACEMENT_4_1 "const uint16_t reset_tap = GBB_P12_MUT(4) ? 0x1000u : (m->double_speed ? 0x2000u : 0x1000u); /* P12-M4 */")
+set(GBB_P12_ANCHOR_4_2 "const uint16_t tap = m->double_speed ? 0x2000u : 0x1000u; /* P12-M4 */")
+set(GBB_P12_REPLACEMENT_4_2 "const uint16_t tap = GBB_P12_MUT(4) ? 0x1000u : (m->double_speed ? 0x2000u : 0x1000u); /* P12-M4 */")
+
+set(GBB_P12_SITES_11 1)
+set(GBB_P12_ANCHOR_11_1 "instance->double_speed ^= 1u; /* P12-M11 */")
+set(GBB_P12_REPLACEMENT_11_1 "instance->double_speed ^= 1u; /* P12-M11 */\n            if (GBB_P12_MUT(11)) { instance->divider_phase = 0u; instance->serial_edge_remaining = 0u; instance->dma_phase = 0u; instance->timer_reload_remaining = 0u; }")
+
+set(GBB_P12_SITES_14 2)
+set(GBB_P12_ANCHOR_14_1 "if (++m->dma_phase < GBB_T_PER_M) return;")
+set(GBB_P12_REPLACEMENT_14_1 "if (++m->dma_phase < (GBB_P12_MUT(14) ? GBB_DMA_BYTE_PERIOD_HALF_DOTS : GBB_T_PER_M)) return;")
+set(GBB_P12_ANCHOR_14_2 "if (cpu_tick) dma_advance_half_dot(m); /* P12-M14 */")
+set(GBB_P12_REPLACEMENT_14_2 "if (cpu_tick || GBB_P12_MUT(14)) dma_advance_half_dot(m); /* P12-M14 */")
 
 set(GBB_P12_SITES_3 1)
 set(GBB_P12_ANCHOR_3_1 "const int cpu_tick = m->double_speed || m->divider_phase == 0u; /* P12-M3 */")

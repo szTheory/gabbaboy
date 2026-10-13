@@ -431,6 +431,9 @@ static int cgb_speed_serial_scaling(void) {
         machine->serial_control = 1u;
         machine->serial_edge_remaining = 512u;
         const uint64_t duration = speed ? 4096u : 8192u;
+        const uint64_t probe = duration - (speed ? 1u : 2u);
+        advance_devices_to(machine, probe);
+        REQUIRE(machine->serial_active);
         advance_devices_to(machine, duration);
         REQUIRE(!machine->serial_active);
         REQUIRE((machine->interrupt_flags & 0x08u) != 0u);
@@ -470,7 +473,7 @@ static int cgb_speed_apu_tap(void) {
         machine->apu_power = 1u;
         machine->apu_pulse[0].control = 0x40u;
         machine->apu_pulse[0].length = 256u;
-        machine->apu_pulse[0].envelope = 0xF7u;
+        machine->apu_pulse[0].envelope = 0x0Fu;
         machine->apu_pulse[0].envelope_timer = 7u;
         machine->apu_pulse[0].volume = 0u;
         advance_devices_to(machine, GBB_MASTER_HALF_DOTS_PER_SECOND);
@@ -481,6 +484,7 @@ static int cgb_speed_apu_tap(void) {
     gbb_instance *machine = NULL;
     REQUIRE(create_internal_machine(rom, &machine) == 0);
     machine->double_speed = 1u;
+    machine->apu_power = 1u;
     machine->divider_counter = 0x2000u;
     machine->apu_sequencer_step = 3u;
     divider_reset(machine, 1);
@@ -513,6 +517,12 @@ static int cgb_speed_remainder_across_switch(void) {
     REQUIRE(machine->serial_edge_remaining > 0u && machine->serial_edge_remaining < 512u);
     REQUIRE(machine->dma_phase > 0u && machine->dma_phase < GBB_T_PER_M);
     REQUIRE(machine->timer_reload_remaining == 92u);
+    gbb_destroy(machine);
+
+    REQUIRE(create_internal_machine(rom, &machine) == 0);
+    machine->tima = 0xFFu;
+    timer_increment(machine, 0u);
+    REQUIRE(machine->timer_reload_remaining == 4u);
     gbb_destroy(machine);
     return 0;
 }
