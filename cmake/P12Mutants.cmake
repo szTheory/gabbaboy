@@ -1,7 +1,7 @@
 # Phase 12 runtime-mask mutant table. Each id owns one or more exact source
 # anchors. Keep each anchor and replacement in a separate variable because C
 # replacement text may contain semicolons.
-set(GBB_P12_MUTANT_IDS 5 7 18)
+set(GBB_P12_MUTANT_IDS 5 7 18 24 25 26)
 
 set(GBB_P12_SITES_5 1)
 set(GBB_P12_ANCHOR_5_1 "instance->cpu_stall_kind = GBB_STALL_SPEED_SWITCH; /* P12-M5 */")
@@ -18,6 +18,20 @@ set(GBB_P12_ANCHOR_18_2 "advance_devices_to(m, m->instruction_start_half_dots + 
 set(GBB_P12_REPLACEMENT_18_2 "advance_devices_to(m, m->instruction_start_half_dots + (GBB_P12_MUT(18) ? offset : (offset >> m->double_speed))); /* P12-M18 bus-read */")
 set(GBB_P12_ANCHOR_18_3 "uint64_t timestamp = m->instruction_start_half_dots + (offset >> m->double_speed); /* P12-M18 bus-write */")
 set(GBB_P12_REPLACEMENT_18_3 "uint64_t timestamp = m->instruction_start_half_dots + (GBB_P12_MUT(18) ? offset : (offset >> m->double_speed)); /* P12-M18 bus-write */")
+
+set(GBB_P12_SITES_24 1)
+set(GBB_P12_ANCHOR_24_1 "m->double_speed = 0u; /* P12-M24 */")
+set(GBB_P12_REPLACEMENT_24_1 "m->double_speed = GBB_P12_MUT(24) ? 1u : 0u; /* P12-M24 */")
+
+set(GBB_P12_SITES_25 2)
+set(GBB_P12_ANCHOR_25_1 "m->cpu_stall_kind = GBB_STALL_NONE; /* P12-M25 */")
+set(GBB_P12_REPLACEMENT_25_1 "m->cpu_stall_kind = GBB_P12_MUT(25) ? GBB_STALL_SPEED_SWITCH : GBB_STALL_NONE; /* P12-M25 */")
+set(GBB_P12_ANCHOR_25_2 "m->cpu_stall_half_dots = 0u; /* P12-M25 */")
+set(GBB_P12_REPLACEMENT_25_2 "m->cpu_stall_half_dots = GBB_P12_MUT(25) ? 2048u : 0u; /* P12-M25 */")
+
+set(GBB_P12_SITES_26 1)
+set(GBB_P12_ANCHOR_26_1 "m->key1_armed = 0u; /* P12-M26 */")
+set(GBB_P12_REPLACEMENT_26_1 "m->key1_armed = GBB_P12_MUT(26) ? 1u : 0u; /* P12-M26 */")
 
 function(gbb_p12_make_mutant_core out_path default_mask)
   set(core_path "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c")

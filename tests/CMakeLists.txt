@@ -2537,6 +2537,12 @@ gbb_p12_mutant_test(test_cgb_speed_internal_p12 7 devices_frozen
   cgb_speed_tracer_switch "divider_counter != 0u")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 18 cpu_ticks_scaled_once
   cgb_speed_cpu_ticks "d.ticks / 2u")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 24 reset_retains_double_speed
+  cgb_speed_reset_clears "double_speed == 0u")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 25 reset_retains_stall
+  cgb_speed_reset_clears "cpu_stall_kind == GBB_STALL_NONE")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 26 reset_retains_key1_arm
+  cgb_speed_reset_clears "key1_armed == 0u")
 
 # Mutant core build 1 of the D-25 ceiling of 6. Duplicate one anchor in a build-tree copy;
 # script-mode generation must reject it rather than silently producing a partial mutant.

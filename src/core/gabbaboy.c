@@ -1422,11 +1422,11 @@ static void reset_state(gbb_instance *m) {
     m->halted = 0;
     m->stopped = 0;
     m->halt_bug = 0;
-    m->double_speed = 0u;
-    m->cpu_stall_kind = GBB_STALL_NONE;
-    m->cpu_stall_half_dots = 0u;
+    m->double_speed = 0u; /* P12-M24 */
+    m->cpu_stall_kind = GBB_STALL_NONE; /* P12-M25 */
+    m->cpu_stall_half_dots = 0u; /* P12-M25 */
     m->stop_switch_pending = 0u;
-    m->key1_armed = 0u;
+    m->key1_armed = 0u; /* P12-M26 */
     memset(m->frame_working, 0, sizeof(m->frame_working));
     memset(m->frame_completed, 0, sizeof(m->frame_completed));
     memset(m->rgb_working, 0, sizeof(m->rgb_working));
