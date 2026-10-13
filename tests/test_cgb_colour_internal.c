@@ -97,6 +97,85 @@ static int cgb_colour_internal_harness_alive(void) {
     return 0;
 }
 
+/* D-22 truth table: rows are the independent Python oracle's output (GB-CPU-002), never derived
+ * from the core. Fields follow the header in the .inc file. */
+typedef struct {
+    uint8_t mode, lcdc0, bg_attr7, bg_index, a_index, a_pri, b_index, b_pri, order;
+    uint8_t expect_layer, expect_index;
+} priority_row;
+
+static const priority_row PRIORITY_ROWS[] = {
+#include "data/cgb-priority-truth.inc"
+};
+
+static const priority_row *find_row(const priority_row *want_inputs) {
+    for (size_t i = 0; i < sizeof(PRIORITY_ROWS) / sizeof(PRIORITY_ROWS[0]); ++i) {
+        const priority_row *r = &PRIORITY_ROWS[i];
+        if (r->mode == want_inputs->mode && r->lcdc0 == want_inputs->lcdc0 &&
+            r->bg_attr7 == want_inputs->bg_attr7 && r->bg_index == want_inputs->bg_index &&
+            r->a_index == want_inputs->a_index && r->a_pri == want_inputs->a_pri &&
+            r->b_index == want_inputs->b_index && r->b_pri == want_inputs->b_pri &&
+            r->order == want_inputs->order)
+            return r;
+    }
+    return NULL;
+}
+
+/* Hand-written golden rows, each quoting the Pan Docs rule it exercises. Layer: 0 BG, 1 A, 2 B. */
+static const priority_row GOLDEN_ROWS[] = {
+    /* CGB: LCDC.0 = 0 removes all BG priority, so an opaque object wins over BG index 3 even with
+     * OAM bit 7 and BG attribute bit 7 set. */
+    {0, 0, 1, 3, 2, 1, 0, 0, 1, 1, 2},
+    /* CGB: LCDC.0 = 1 and BG attribute bit 7 set keeps BG index 1-3 in front of the object. */
+    {0, 1, 1, 1, 2, 0, 0, 0, 1, 0, 1},
+    /* BG colour index 0 never hides an object, whatever the priority bits say. */
+    {0, 1, 1, 0, 2, 1, 0, 0, 1, 1, 2},
+    /* CGB objects order by OAM index only, but a transparent A leaves B as the candidate. */
+    {0, 1, 0, 0, 0, 0, 3, 0, 2, 2, 3},
+    /* Compat: LCDC.0 = 0 blanks the BG (index 0) and no opaque object leaves the BG shown. */
+    {1, 0, 0, 3, 0, 0, 0, 0, 1, 0, 0},
+    /* Compat: BG map attribute bit 7 is ignored; with OAM bit 7 clear the object wins. */
+    {1, 1, 1, 2, 1, 0, 0, 0, 1, 1, 1},
+    /* Compat: objects order by X, so the lower X (B) wins when A.x is greater. */
+    {1, 1, 0, 0, 1, 0, 2, 0, 2, 2, 2},
+    /* Compat: equal X falls back to the lower OAM index (A). */
+    {1, 1, 0, 0, 1, 0, 2, 0, 1, 1, 1},
+};
+
+static int cgb_priority_table_shape(void) {
+    enum { ROWS = 2 * 2 * 2 * 4 * 8 * 8 * 3 };
+    static uint8_t seen[ROWS];
+    size_t count = sizeof(PRIORITY_ROWS) / sizeof(PRIORITY_ROWS[0]);
+    REQUIRE(GBB_CGB_PRIORITY_TRUTH_ROWS == 6144);
+    REQUIRE(count == GBB_CGB_PRIORITY_TRUTH_ROWS);
+    REQUIRE(count == (size_t)ROWS);
+    for (size_t i = 0; i < count; ++i) {
+        const priority_row *r = &PRIORITY_ROWS[i];
+        REQUIRE(r->mode < 2 && r->lcdc0 < 2 && r->bg_attr7 < 2 && r->bg_index < 4);
+        REQUIRE(r->a_index < 4 && r->a_pri < 2 && r->b_index < 4 && r->b_pri < 2 && r->order < 3);
+        REQUIRE(r->expect_layer < 3 && r->expect_index < 4);
+        size_t key = r->mode;
+        key = key * 2u + r->lcdc0;
+        key = key * 2u + r->bg_attr7;
+        key = key * 4u + r->bg_index;
+        key = key * 8u + (size_t)(r->a_index * 2u + r->a_pri);
+        key = key * 8u + (size_t)(r->b_index * 2u + r->b_pri);
+        key = key * 3u + r->order;
+        REQUIRE(key < (size_t)ROWS);
+        REQUIRE(seen[key] == 0u);
+        seen[key] = 1u;
+    }
+    for (size_t i = 0; i < sizeof(GOLDEN_ROWS) / sizeof(GOLDEN_ROWS[0]); ++i) {
+        const priority_row *row = find_row(&GOLDEN_ROWS[i]);
+        if (row == NULL || row->expect_layer != GOLDEN_ROWS[i].expect_layer ||
+            row->expect_index != GOLDEN_ROWS[i].expect_index) {
+            fprintf(stderr, "golden row %zu disagrees with the truth table\n", i);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) return 2;
     if (strcmp(argv[1], "cgb_colour_internal_harness_alive") == 0)
@@ -105,6 +184,11 @@ int main(int argc, char **argv) {
         if (argc != 3) return 2;
         int rc = cgb_dmg_identity_shade_pin(argv[2]);
         if (rc == 0) puts("cgb-colour-internal cgb_dmg_identity_shade_pin pass");
+        return rc;
+    }
+    if (strcmp(argv[1], "cgb_priority_table_shape") == 0) {
+        int rc = cgb_priority_table_shape();
+        if (rc == 0) puts("cgb-colour-internal cgb_priority_table_shape pass");
         return rc;
     }
     return 2;

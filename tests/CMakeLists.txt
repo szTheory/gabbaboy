@@ -1953,6 +1953,40 @@ gbb_colour_mutant(shade_flip test_cgb_colour_internal.c
   "return (uint8_t)(ppu_palette_shade(m->bgp, background) ^ 1u);"
   "cgb_dmg_identity_shade_pin;${PROJECT_SOURCE_DIR}/fixtures" "observed"
   cgb_colour_internal_harness_alive)
+# Priority truth table (D-22, GB-CPU-002): an independent stdlib oracle written from Pan Docs.
+set(GBB_PRIORITY_TRUTH_GEN "${PROJECT_SOURCE_DIR}/tests/scripts/gen-cgb-priority-truth.py")
+set(GBB_PRIORITY_TRUTH_INC "${PROJECT_SOURCE_DIR}/tests/data/cgb-priority-truth.inc")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${GBB_PRIORITY_TRUTH_GEN}" "${GBB_PRIORITY_TRUTH_INC}")
+target_sources(test_cgb_colour_internal PRIVATE "${GBB_PRIORITY_TRUTH_INC}")
+set_source_files_properties("${GBB_PRIORITY_TRUTH_INC}" PROPERTIES HEADER_FILE_ONLY TRUE)
+add_test(NAME cgb_priority_truth_regen
+  COMMAND ${Python3_EXECUTABLE} -I ${GBB_PRIORITY_TRUTH_GEN} --check ${GBB_PRIORITY_TRUTH_INC})
+set_tests_properties(cgb_priority_truth_regen PROPERTIES
+  PASS_REGULAR_EXPRESSION "check pass rows=6144")
+add_test(NAME cgb_priority_truth_selftest
+  COMMAND ${Python3_EXECUTABLE} -I ${GBB_PRIORITY_TRUTH_GEN} --self-test)
+set_tests_properties(cgb_priority_truth_selftest PROPERTIES
+  PASS_REGULAR_EXPRESSION "self-test pass inputs=9")
+# A configure-time copy with the first row's expect_layer altered must fail the regenerate check.
+file(READ "${GBB_PRIORITY_TRUTH_INC}" gbb_priority_truth_text)
+set(gbb_priority_first_row "{0,0,0,0,0,0,0,0,0,0,0},")
+string(REPLACE "${gbb_priority_first_row}" "{0,0,0,0,0,0,0,0,0,1,0}," gbb_priority_mutated
+  "${gbb_priority_truth_text}")
+if(gbb_priority_mutated STREQUAL gbb_priority_truth_text)
+  message(FATAL_ERROR "priority truth mutant: first row '${gbb_priority_first_row}' not found in "
+    "${GBB_PRIORITY_TRUTH_INC}")
+endif()
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/cgb-priority-truth-mutated.inc" "${gbb_priority_mutated}")
+add_test(NAME cgb_priority_truth_regen_mutated
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE}$<SEMICOLON>-I$<SEMICOLON>${GBB_PRIORITY_TRUTH_GEN}$<SEMICOLON>--check$<SEMICOLON>${CMAKE_CURRENT_BINARY_DIR}/cgb-priority-truth-mutated.inc"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=cgb-priority-truth mismatch"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_priority_table_shape COMMAND test_cgb_colour_internal cgb_priority_table_shape)
+set_tests_properties(cgb_priority_table_shape PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb_priority_table_shape pass")
 # --- Phase 11 plan 11-01 end ---
 
 gabbaboy_verify_registered_tests()
