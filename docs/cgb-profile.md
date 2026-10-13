@@ -499,24 +499,27 @@ DMG, compat and unarmed STOP path reports `GBB_STOP_STOPPED` as before.
 
 ### Speed-switch stall length
 
-The provisional `GBB_SPEED_SWITCH_STALL_T` value counts CPU T-cycles at the destination speed.
-The research-prototype derivation uses the distance between DIV reset at STOP retire and CPU resume:
-SameBoy's `0x20008` minus the 4 T SameBoy removes at IME=0 gives `0x20004`. The research-prototype
-AGE `spsw-div` and `spsw-tima` window was `[0x20004, 0x20007]`; plan 12-09 must re-measure the
-committed core before this value is pinned, and this paragraph makes no committed-core verdict or
-hardware-datasheet claim. The derivation rejects the 2050 M / 8200 T alternative. In the prototype
-window, `0x20004` is the only M-aligned value; a +1
-half-dot mutant remains inside the window, so the low bits are not distinguished by that evidence.
+The stall length is measured in CPU T-cycles at the destination speed. The pre-run derivation used
+the distance between DIV reset at STOP retire and CPU resume: SameBoy's `0x20008` minus the 4 T
+SameBoy removes at IME=0 gives `0x20004`. That was a working model pending the committed-core AGE
+run, not a hardware-datasheet claim.
 
+Measured window. On committed core revision `2e78a48`, the pinned AGE `spsw-div-cgbBCE` software
+fixture passes all five rows for the inclusive stall window `[0x20004, 0x20007]` T. The
+`age_stall_window` CTest re-measures the four boundary points on every run: `0x20003` fails,
+`0x20004` passes, `0x20007` passes, and `0x20008` fails. The committed
+`GBB_SPEED_SWITCH_STALL_T` remains `0x20004` T and counts CPU T-cycles at the destination speed;
+it is the only M-aligned value inside that window and equals SameBoy's `0x20008` minus the 4 T
+adjustment.
 The conversion is `T × 1` half-dot per T when switching to double speed and `T × 2` half-dots per
-T when switching to normal speed. At the provisional value this is 131076 half-dots to double and
-262152 to normal, or 32769 M-cycles in either direction. SameBoy uses a `0x20008` T countdown;
-Gambatte uses `0x20000` T to double and `0x20008` T to normal. The selected model follows the
-prototype AGE window, not either implementation's internal constant. Pan Docs' 2050 M / 8200 T
-(`0x2008`) pause and its statement that “DIV does not tick” are refuted by the prototype's
-`spsw-tima` TIMA and `spsw-div` DIV observations; plan 12-09 owns the committed-core recheck.
-Direction-dependent real-time asymmetry remains
-`expected-failure:speed-switch-stall-direction-asymmetry`.
+T when switching to normal speed. At `0x20004`, the measured model advances 131076 half-dots to
+double and 262152 to normal, or 32769 M-cycles in either direction. A +1 half-dot mutant remains
+inside the window, so the low bits are not distinguished by this evidence. These are software
+measurements from the pinned, author-attested AGE corpus; no physical hardware measurement is
+claimed. The 2050 M / 8200 T (`0x2008`) alternative and the claim that DIV does not tick are
+inconsistent with the AGE `spsw-tima` and `spsw-div` observations. SameBoy uses a `0x20008` T
+countdown; Gambatte uses `0x20000` T to double and `0x20008` T to normal. Direction-dependent
+real-time asymmetry remains `expected-failure:speed-switch-stall-direction-asymmetry`.
 
 ### Future save-state fields
 

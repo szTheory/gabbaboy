@@ -2504,10 +2504,25 @@ add_test(NAME model_gates_no_phase12_rows_mutated_doc
     "-DGBB_EXPECT_REGEX=phase-12-row-open"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
-# The provisional STOP stall derivation is in place before plan 12-09 runs the committed core on AGE.
+# Plan 12-08 recorded the derivation before the first AGE run; plan 12-09 now pins its committed-core window.
+file(STRINGS "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c" GBB_P12_STALL_DEFINE
+  REGEX "^#define GBB_SPEED_SWITCH_STALL_T 0x[0-9A-Fa-f]+u$")
+list(LENGTH GBB_P12_STALL_DEFINE GBB_P12_STALL_DEFINE_COUNT)
+if(NOT GBB_P12_STALL_DEFINE_COUNT EQUAL 1)
+  message(FATAL_ERROR "GBB_SPEED_SWITCH_STALL_T must have exactly one hexadecimal definition")
+endif()
+list(GET GBB_P12_STALL_DEFINE 0 GBB_P12_STALL_DEFINE_LINE)
+string(REGEX MATCH "0x[0-9A-Fa-f]+" GBB_P12_STALL_T_HEX "${GBB_P12_STALL_DEFINE_LINE}")
+if(NOT GBB_P12_STALL_T_HEX)
+  message(FATAL_ERROR "GBB_SPEED_SWITCH_STALL_T could not be parsed from its source definition")
+endif()
+math(EXPR GBB_P12_STALL_T_VALUE "${GBB_P12_STALL_T_HEX}")
+math(EXPR GBB_P12_STALL_HALF_DOTS_DOUBLE "${GBB_P12_STALL_T_VALUE} * 1")
+math(EXPR GBB_P12_STALL_HALF_DOTS_NORMAL "${GBB_P12_STALL_T_VALUE} * 2")
+
 set(GBB_SPEED_PROFILE_DOC "${PROJECT_SOURCE_DIR}/docs/cgb-profile.md")
 set(GBB_SPEED_PROFILE_SCOPE_START
-  "The provisional `GBB_SPEED_SWITCH_STALL_T` value counts CPU T-cycles at the destination speed.")
+  "Measured window. On committed core revision")
 set(GBB_SPEED_PROFILE_DECLARATIONS
   "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c;${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h")
 set(GBB_SPEED_PROFILE_REQUIRED
@@ -2515,7 +2530,11 @@ set(GBB_SPEED_PROFILE_REQUIRED
   "destination speed"
   "minus the 4 T"
   "2050"
-  "spsw-div")
+  "spsw-div"
+  "${GBB_P12_STALL_T_HEX}"
+  "${GBB_P12_STALL_HALF_DOTS_DOUBLE}"
+  "${GBB_P12_STALL_HALF_DOTS_NORMAL}"
+  "age_stall_window")
 list(LENGTH GBB_SPEED_PROFILE_REQUIRED GBB_SPEED_PROFILE_PHRASE_COUNT)
 add_test(NAME cgb_speed_profile_contract
   COMMAND ${CMAKE_COMMAND}
@@ -2870,19 +2889,7 @@ target_compile_definitions(test_age_p12 PRIVATE GBB_AGE_P12=1)
 target_link_libraries(test_age_p12 PRIVATE gabbaboy_core_p12_mutants gabbaboy_accept)
 set_target_properties(test_age_p12 PROPERTIES C_EXTENSIONS OFF)
 
-file(STRINGS "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c" GBB_P12_STALL_DEFINE
-  REGEX "^#define GBB_SPEED_SWITCH_STALL_T 0x[0-9A-Fa-f]+u$")
-list(LENGTH GBB_P12_STALL_DEFINE GBB_P12_STALL_DEFINE_COUNT)
-if(NOT GBB_P12_STALL_DEFINE_COUNT EQUAL 1)
-  message(FATAL_ERROR "GBB_SPEED_SWITCH_STALL_T must have exactly one hexadecimal definition")
-endif()
-list(GET GBB_P12_STALL_DEFINE 0 GBB_P12_STALL_DEFINE_LINE)
-string(REGEX MATCH "0x[0-9A-Fa-f]+" GBB_P12_STALL_T_HEX "${GBB_P12_STALL_DEFINE_LINE}")
-if(NOT GBB_P12_STALL_T_HEX)
-  message(FATAL_ERROR "GBB_SPEED_SWITCH_STALL_T could not be parsed from its source definition")
-endif()
-
-# The current bounds are provisional research values; Task 2's committed-core run confirms or re-pins them.
+# The measured committed-core bounds drive the four-point boundary assertion below.
 set(GBB_P12_AGE_STALL_WINDOW "0x20004;0x20007")
 list(GET GBB_P12_AGE_STALL_WINDOW 0 GBB_P12_AGE_STALL_WINDOW_LO)
 list(GET GBB_P12_AGE_STALL_WINDOW 1 GBB_P12_AGE_STALL_WINDOW_HI)

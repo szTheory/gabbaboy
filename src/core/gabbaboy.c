@@ -21,9 +21,8 @@
 #define GBB_HALF_DOTS_PER_T_NORMAL 2u
 #define GBB_HALF_DOTS_PER_T_DOUBLE 1u
 #define GBB_T_PER_M 4u
-/* SameBoy 0x20008 minus the 4 T it removes at IME=0, PROVISIONAL: inside the window
- * [0x20004,0x20007] measured on the research prototype, not yet on the committed core;
- * re-measured on the committed core by age_stall_window in plan 12-09. */
+/* SameBoy 0x20008 minus its 4 T IME=0 adjustment; confirmed in committed-core window
+ * [0x20004,0x20007] at revision 2e78a48 and re-measured by age_stall_window. */
 #define GBB_SPEED_SWITCH_STALL_T 0x20004u
 /* 2 M expressed in normal-speed half-dots; instruction_cost applies >> double_speed once. */
 #define GBB_STOP_SWITCH_COST_HALF_DOTS 16u
