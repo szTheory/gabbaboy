@@ -170,10 +170,10 @@ base value and the rule in its reason.
 | wram_bank | CGB | $01 | PANDOCS | 1 | Pan Docs Power Up Sequence, CGB |
 | wram_bank | COMPAT | $01 | PANDOCS | 1 | Pan Docs Power Up Sequence, CGB in compatibility mode |
 | bcps | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
-| bcps | CGB | $C0 | POLICY | 8 | [VERIFY] no hardware oracle for CGB-mode index |
+| bcps | CGB | $C0 | POLICY | 8 | no hardware oracle for CGB-mode index |
 | bcps | COMPAT | $C8 | HW_TEST | 5 | Mooneye boot_hwio-C, compat mode |
 | ocps | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
-| ocps | CGB | $C0 | POLICY | 8 | [VERIFY] no hardware oracle for CGB-mode index |
+| ocps | CGB | $C0 | POLICY | 8 | no hardware oracle for CGB-mode index |
 | ocps | COMPAT | $D0 | HW_TEST | 5 | Mooneye boot_hwio-C, compat mode |
 | ff72 | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
 | ff72 | CGB | $00 | POLICY | 8 | initial $00 per D-10; no hardware oracle for this CGB register |
@@ -464,11 +464,74 @@ resumes with another run call continues after the dropped write.
 
 ### STOP with KEY1 armed
 
-STOP with KEY1 bit 0 armed: DEFERRED(12). On the CGB profile in CGB mode the speed switch is not
-modelled, so the instruction retires and the run reports `GBB_STOP_UNSUPPORTED_BUS` with the KEY1
-address ($FF4D); the machine never enters the DMG STOP sleep and no speed change is faked. STOP
-without arming, STOP in compatibility mode (which ignores KEY1 writes) and STOP on the DMG profile
-use the shared path and report `GBB_STOP_STOPPED`.
+D-01 gates the speed-switch path on the CGB profile, CGB execution mode and KEY1 bit 0 armed. At
+STOP, the implementation evaluates the D-02 decision table before preflighting the bytes that case
+actually reads. The table is based on SameBoy `stop()` and triangulated with the named AGE rows;
+SameBoy details without an independent hardware pin remain explicitly qualified below.
+
+| Case | Condition when STOP is evaluated | Implemented outcome | Basis and boundary |
+| --- | --- | --- | --- |
+| 1 | A selected joypad line is low; no enabled interrupt is pending | No switch; KEY1 stays armed and DIV is not reset. STOP reads its operand, advances PC by two, and enters the normal HALT path. | `ORACLE_SAMEBOY`; held-button behavior is `expected-failure:speed-switch-held-button-oracle-only`. |
+| 2 | A selected joypad line is low; an enabled interrupt is pending | No switch or stall; STOP is one byte and does not halt. | `ORACLE_SAMEBOY`; one-byte handling is not independently pinned. |
+| 3 | No selected joypad line is low; an enabled interrupt is pending | Speed flips, KEY1 bit 0 clears and DIV resets at STOP retire. There is no stall and STOP is one byte, so the next byte executes as an opcode; with IME set, interrupt dispatch proceeds normally. | AGE `caution/spsw-interrupts*` author-attests no pause and the DIV reset; speed-flip and length details are `ORACLE_SAMEBOY` only, named `expected-failure:speed-switch-pending-irq-oracle-only`. |
+| 4 | No selected joypad line is low; no enabled interrupt is pending | STOP reads its operand, advances PC by two, flips speed, clears KEY1 bit 0, resets DIV and loads the persisted speed-switch stall. | AGE `spsw-stop-prefetch-cgbBCE` and `spsw-div-cgbBCE` author-attest the fetch and reset; `spsw-tima` contributes stall evidence. |
+
+The switching STOP in cases 3 and 4 costs two CPU M-cycles through
+`GBB_STOP_SWITCH_COST_HALF_DOTS` (D-38). DMG, compat, unarmed and held-button STOP keep their
+existing cost. Only cases that read an operand preflight it; cases 2 and 3 never read that byte.
+The operand value is ignored, so `$00` and `$FF` produce the same STOP result (D-04).
+
+The stall is persisted machine state, consumed by a dedicated branch after the stopped check and
+before interrupt dispatch. It advances devices in one CPU M-cycle quantum at a time, obeys the
+caller budget and output/headroom checks, and reports `GBB_STOP_BUDGET` when a call ends mid-stall;
+it never reports `GBB_STOP_STOPPED` or `GBB_STOP_HALTED_IDLE`, and never sets `stopped`. PPU, APU,
+DIV/TIMA, serial and OAM DMA continue advancing while the CPU is stalled. An enabled interrupt
+ends the stall at the next M-cycle boundary; IME dispatches the handler, while IME clear resumes
+after STOP (D-08/D-34). The IME-on AGE row is author-attested but warns of CGB-E instability; the
+other wake details remain `expected-failure:speed-switch-wake-oracle-only`.
+
+On every entry into normal speed, D-09 adds a four-half-dot persisted realignment tail when master
+time is four modulo eight. This applies at the normal-speed switch with no long stall, at a stall
+completion and at an early wake. The policy is deterministic; odd PPU-mode phase behavior remains
+`expected-failure:speed-switch-odd-mode-alignment`. The difference between armed and unarmed held
+button handling is recorded as `expected-failure:unarmed-stop-held-button` (D-36). The remaining
+DMG, compat and unarmed STOP path reports `GBB_STOP_STOPPED` as before.
+
+### Speed-switch stall length
+
+The provisional `GBB_SPEED_SWITCH_STALL_T` value counts CPU T-cycles at the destination speed.
+The research-prototype derivation uses the distance between DIV reset at STOP retire and CPU resume:
+SameBoy's `0x20008` minus the 4 T SameBoy removes at IME=0 gives `0x20004`. The research-prototype
+AGE `spsw-div` and `spsw-tima` window was `[0x20004, 0x20007]`; plan 12-09 must re-measure the
+committed core before this value is pinned, and this paragraph makes no committed-core verdict or
+hardware-datasheet claim. The derivation rejects the 2050 M / 8200 T alternative. In the prototype
+window, `0x20004` is the only M-aligned value; a +1
+half-dot mutant remains inside the window, so the low bits are not distinguished by that evidence.
+
+The conversion is `T × 1` half-dot per T when switching to double speed and `T × 2` half-dots per
+T when switching to normal speed. At the provisional value this is 131076 half-dots to double and
+262152 to normal, or 32769 M-cycles in either direction. SameBoy uses a `0x20008` T countdown;
+Gambatte uses `0x20000` T to double and `0x20008` T to normal. The selected model follows the
+prototype AGE window, not either implementation's internal constant. Pan Docs' 2050 M / 8200 T
+(`0x2008`) pause and its statement that “DIV does not tick” are refuted by the prototype's
+`spsw-tima` TIMA and `spsw-div` DIV observations; plan 12-09 owns the committed-core recheck.
+Direction-dependent real-time asymmetry remains
+`expected-failure:speed-switch-stall-direction-asymmetry`.
+
+### Future save-state fields
+
+The v0.3 state format will need `double_speed`, `cpu_stall_half_dots`, `cpu_stall_kind` and
+`key1_armed` so it can resume through a switch or during its stall.
+
+The following behavior remains explicitly unmodelled or outside this profile: PPU output during
+the pause (`expected-failure:speed-switch-pause-ppu-output`); odd-mode realignment
+(`expected-failure:speed-switch-odd-mode-alignment`); APU length-counter delay after a switch
+(`expected-failure:apu-lc-delay-after-switch`, Phase 14); the CGB-E immediate TIMA increment after
+DIV reset (`expected-failure:cgb-e-div-reset-immediate-increment-delay`, D-35); DMG double-speed
+LCD/CPU alignment (`expected-failure:ds-lcd-cpu-alignment`); CGB mode-3 length
+(`expected-failure:cgb-mode3-length`, Phase 14); HBlank DMA crossing a speed-switch stall
+(`expected-failure:speed-switch-hdma-hblank-across-stall`, Phase 13); and the STOP/OAM bug on a
+speed switch (`expected-failure:speed-switch-stop-oam-bug`, Phase 14).
 
 ### IE bits 5-7
 
@@ -499,12 +562,12 @@ CGB modes (D-16). Page numbers are the high byte written to FF46.
 
 | Pages | DMG | CGB | CGB provenance |
 |-------|-----|-----|----------------|
-| 00-7F | `$FF` | ROM through the mapper (`cart_read`) | PANDOCS [VERIFY], not hardware |
+| 00-7F | `$FF` | ROM through the mapper (`cart_read`) | PANDOCS, not hardware-verified |
 | 80-9F | VRAM | VRAM bank `VBK` | PANDOCS |
-| A0-BF | `$FF` | cartridge RAM or RTC through the mapper (`cart_read`; `$FF` when disabled) | PANDOCS [VERIFY], not hardware |
+| A0-BF | `$FF` | cartridge RAM or RTC through the mapper (`cart_read`; `$FF` when disabled) | PANDOCS, not hardware-verified |
 | C0-CF | WRAM | WRAM bank 0 | PANDOCS |
 | D0-DF | WRAM | WRAM bank `SVBK` (0 reads as 1) | PANDOCS |
-| E0-FF | `$FF` | `$FF` | ORACLE_SAMEBOY [VERIFY], not hardware |
+| E0-FF | `$FF` | `$FF` | ORACLE_SAMEBOY, not hardware-verified |
 
 The cartridge and E0-FF cells are documentation or oracle claims. They are not hardware-verified for
 CGB-E, and no document, test or release note may describe them as such. `banking_dma_rom_page`,
@@ -635,9 +698,9 @@ PPM, one-pixel mismatch and fake ROM) and `cgb_acid2_local_refuses_unpinned` onl
 ## Half-dot timeline (D-070)
 
 The `uint64_t` half-dot master timeline is the single clock for normal and double speed, and
-`GBB_MASTER_HALF_DOTS_PER_SECOND` is 2^23. A CPU T-cycle is `GBB_HALF_DOTS_PER_T_NORMAL` (2) half-dots at normal speed and `GBB_HALF_DOTS_PER_T_DOUBLE` (1) at double speed, and an M-cycle is `GBB_T_PER_M` (4) T-cycles, so 8 or 4 half-dots. A PPU dot is always `GBB_HALF_DOTS_PER_DOT` (2) half-dots, and a frame is `GBB_DOTS_PER_LINE` times `GBB_LINES_PER_FRAME` dots, 140448 half-dots. The APU, HDMA and RTC are constant in master time; the RTC stays at 2^23 half-dots per second and never reads `double_speed`. Only CPU-side devices (timer and DIV, serial, the OAM DMA byte period `GBB_DMA_BYTE_PERIOD_HALF_DOTS`, TIMA reload) scale with the speed bit, through one shift of the T-cycle count. Each device keeps its remainder and phase across a speed switch, including the divider phase, and the switch stall is a named constant in master half-dots.
+`GBB_MASTER_HALF_DOTS_PER_SECOND` is 2^23. A CPU T-cycle is `GBB_HALF_DOTS_PER_T_NORMAL` (2) half-dots at normal speed and `GBB_HALF_DOTS_PER_T_DOUBLE` (1) at double speed, and an M-cycle is `GBB_T_PER_M` (4) T-cycles, so 8 or 4 half-dots. A PPU dot is always `GBB_HALF_DOTS_PER_DOT` (2) half-dots, and a frame is `GBB_DOTS_PER_LINE` times `GBB_LINES_PER_FRAME` dots, 140448 half-dots. The APU, HDMA and RTC are constant in master time; the RTC stays at 2^23 half-dots per second and never reads `double_speed`. Only CPU-side devices (timer and DIV, serial, the OAM DMA byte period `GBB_DMA_BYTE_PERIOD_HALF_DOTS`, TIMA reload, instruction cost, bus offsets, and interrupt/HALT literals) scale through `cpu_ticks(t) = t >> double_speed`. PPU dots, APU channel time and RTC stay in master half-dots; the APU frame-sequencer tap is DIV bit 12 at normal speed and bit 13 at double speed, keeping its master-time rate unchanged. Timer and serial countdowns retain their remaining CPU ticks across a switch. STOP resets DIV and divider phase at retire through shared `divider_reset`, before the speed bit flips and before the destination-speed stall is loaded, so the APU edge uses the pre-switch tap. The stall is counted at the destination speed.
 
-Rejected alternatives: a quarter-dot unit, and a speed multiplier on the master clock (V2-03). Open for Phase 12 `[VERIFY]`: the DIV and APU phase at the switch, and whether the stall is counted before or after the switch. SameBoy uses the same 8 MHz-unit model (differential oracle, not hardware). Double speed itself is not implemented in Phase 10; the core compiles the constants and checks them as `_Static_assert` facts so a later change must be deliberate.
+Rejected alternatives remain a quarter-dot unit and a speed multiplier on the master clock (V2-03). SameBoy uses the same 8 MHz-unit model (differential oracle, not hardware). The APU tap and DIV reset order follow the implemented CGB switch path; no CGB-E one-M-cycle quirk is claimed as modelled behavior.
 
 ## Sources
 

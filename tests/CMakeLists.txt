@@ -2503,6 +2503,39 @@ add_test(NAME model_gates_no_phase12_rows_mutated_doc
     -DGBB_EXPECT_CODE=1
     "-DGBB_EXPECT_REGEX=phase-12-row-open"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+# The provisional STOP stall derivation is in place before plan 12-09 runs the committed core on AGE.
+set(GBB_SPEED_PROFILE_DOC "${PROJECT_SOURCE_DIR}/docs/cgb-profile.md")
+set(GBB_SPEED_PROFILE_SCOPE_START
+  "The provisional `GBB_SPEED_SWITCH_STALL_T` value counts CPU T-cycles at the destination speed.")
+set(GBB_SPEED_PROFILE_DECLARATIONS
+  "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c;${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h")
+set(GBB_SPEED_PROFILE_REQUIRED
+  "GBB_SPEED_SWITCH_STALL_T"
+  "destination speed"
+  "minus the 4 T"
+  "2050"
+  "spsw-div")
+list(LENGTH GBB_SPEED_PROFILE_REQUIRED GBB_SPEED_PROFILE_PHRASE_COUNT)
+add_test(NAME cgb_speed_profile_contract
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_DOC=${GBB_SPEED_PROFILE_DOC}
+    "-DGBB_DECLARATIONS=${GBB_SPEED_PROFILE_DECLARATIONS}"
+    "-DGBB_REQUIRED=${GBB_SPEED_PROFILE_REQUIRED}"
+    "-DGBB_SCOPE_START=${GBB_SPEED_PROFILE_SCOPE_START}"
+    -P ${GBB_DOC_CONTRACT_SCRIPT})
+set_tests_properties(cgb_speed_profile_contract PROPERTIES
+  PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=${GBB_SPEED_PROFILE_PHRASE_COUNT}[^0-9]")
+
+# Negative control: the same guide and declarations reject an extra absent phrase.
+set(GBB_SPEED_PROFILE_MISSING_PHRASE "committed-core AGE window recorded")
+string(REPLACE ";" "\\;" GBB_SPEED_PROFILE_DECLARATIONS_ESCAPED "${GBB_SPEED_PROFILE_DECLARATIONS}")
+add_test(NAME cgb_speed_profile_contract_missing_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${GBB_SPEED_PROFILE_DOC};-DGBB_DECLARATIONS=${GBB_SPEED_PROFILE_DECLARATIONS_ESCAPED};-DGBB_REQUIRED=${GBB_SPEED_PROFILE_MISSING_PHRASE};-DGBB_SCOPE_START=${GBB_SPEED_PROFILE_SCOPE_START};-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=doc-contract-missing: ${GBB_SPEED_PROFILE_MISSING_PHRASE}"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # --- Phase 12 plan 12-08 end ---
 
 # Per-test TIMEOUTs are sized for normal builds. Debug ASan/UBSan runs the same work several times

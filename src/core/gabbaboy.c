@@ -830,7 +830,7 @@ typedef struct {
  * inert. The reason says so rather than inventing a hardware claim. */
 #define PB_NA(v) { (v), PROV_POLICY, SRC_V01_POLICY_D025, "not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored)" }
 #define PB_INIT0 "initial $00 per D-10; no hardware oracle for this CGB register"
-#define PB_IDX_VERIFY "[VERIFY] no hardware oracle for CGB-mode index"
+#define PB_IDX_VERIFY "no hardware oracle for CGB-mode index"
 
 #define PB_VARIES "no hardware oracle for CGB mode; real hardware varies with the header and held buttons"
 #define PB_CRAM_COMPAT "the compat renderer never reads CRAM and the data ports read $FF in compat mode; deterministic fill only"
