@@ -197,7 +197,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 12 P01 | 10 min | 2 tasks | 8 files |
 | Phase 12 P02 | 7 min | 2 tasks | 10 files |
 | Phase 12 P03 | 19 min | 3 tasks | 5 files |
-| Phase GB-12 P04 | 14 min | 2 tasks | 14 files |
+| Phase GB-12 P04 | 4 min | 2 tasks | 14 files |
 
 ## Accumulated Context
 

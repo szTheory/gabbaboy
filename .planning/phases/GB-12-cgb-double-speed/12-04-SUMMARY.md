@@ -69,7 +69,7 @@ coverage:
       - kind: unit
         ref: "ctest --test-dir build -R '^summary_coverage$' --output-on-failure"
         status: pass
-duration: 14 min
+duration: 4 min
 completed: 2026-10-13
 status: complete
 commits: 2
@@ -81,9 +81,9 @@ All 13 D-19 AGE ROMs are now vendored with source provenance and expected roles,
 
 ## Performance
 
-- **Duration:** 14 min
+- **Duration:** 4 min
 - **Started:** 2026-10-13T17:28:35Z
-- **Completed:** 2026-10-13T17:42:35Z
+- **Completed:** 2026-10-13T17:32:10Z
 - **Tasks:** 2
 - **Files modified:** 14
 
