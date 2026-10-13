@@ -1,0 +1,40 @@
+{
+  "schema": "gabbaboy-acid2-manifest-v1",
+  "note": "Not vendored: rights gate G1 (mgblib font) is open; optional local runs only (D-24). No ROM or image bytes are stored in this repository; the SHA-256 pins below are the only link to the upstream files.",
+  "recorded": "2026-10-12",
+  "ldbb_budget_half_dots": 4213440,
+  "kinds": {
+    "cgb-acid2": {
+      "repository": "https://github.com/mattcurrie/cgb-acid2",
+      "release_tag": "v1.1",
+      "licence": "MIT License",
+      "rom_url": "https://github.com/mattcurrie/cgb-acid2/releases/download/v1.1/cgb-acid2.gbc",
+      "rom_asset": "cgb-acid2.gbc",
+      "rom_size": 32768,
+      "rom_sha256": "197fb0bcec544f0400527fc707e0a94f55435974986e6986b424ace5de81720e",
+      "reference_url": "https://raw.githubusercontent.com/mattcurrie/cgb-acid2/v1.1/img/reference.png",
+      "reference_asset": "img/reference.png",
+      "reference_sha256": "9ea9c262c5383353e77d715d021a0f7c5ccbe438f88082cb225756e50c4fdf01",
+      "profile": "CGB-CPU-E",
+      "runner_model": "cgb-cpu-e",
+      "comparison": "RGB555 frame expanded per channel with (c << 3) | (c >> 2), as the upstream README prescribes",
+      "comparison_source": "https://github.com/mattcurrie/cgb-acid2/blob/v1.1/README.md"
+    },
+    "dmg-acid2": {
+      "repository": "https://github.com/mattcurrie/dmg-acid2",
+      "release_tag": "v1.0",
+      "licence": "MIT License",
+      "rom_url": "https://github.com/mattcurrie/dmg-acid2/releases/download/v1.0/dmg-acid2.gb",
+      "rom_asset": "dmg-acid2.gb",
+      "rom_size": 32768,
+      "rom_sha256": "464e14b7d42e7feea0b7ede42be7071dc88913f75b9ffa444299424b63d1dff1",
+      "reference_url": "https://raw.githubusercontent.com/mattcurrie/dmg-acid2/v1.0/img/reference-dmg.png",
+      "reference_asset": "img/reference-dmg.png",
+      "reference_sha256": "ca966d50895c7efef05838590d148c2cbfd7fba57dab986f25b35b4da71abb57",
+      "profile": "DMG-CPU-B",
+      "runner_model": "dmg-cpu-b",
+      "comparison": "DMG shades mapped to greyscale 255, 170, 85, 0 for shades 0 to 3 (the upstream values $FF, $AA, $55, $00)",
+      "comparison_source": "https://github.com/mattcurrie/dmg-acid2/blob/v1.0/README.md"
+    }
+  }
+}

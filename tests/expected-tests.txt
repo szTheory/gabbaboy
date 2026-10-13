@@ -673,3 +673,5 @@ acceptance_cgb_colour_progress_refused
 acceptance_digest_rgb555_vectors
 cgb_external_dispositions
 cgb_external_dispositions_mutated
+cgb_acid2_local_selftest
+cgb_acid2_local_refuses_unpinned

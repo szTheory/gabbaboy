@@ -599,6 +599,26 @@ proves that a changed reason is caught.
 | mealybug | m3_wx_6_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
 <!-- cgb-external-dispositions-end -->
 
+## Optional acid2 local runs
+
+`cgb-acid2` v1.1 and `dmg-acid2` v1.0 (both MIT licensed, by Matt Currie) are not vendored and never
+run in required CI: rights gate G1 (the mgblib font in the images) is open (D-24). They can be run
+locally against the upstream release files, whose SHA-256 values are pinned in
+`tests/acid2/manifest.json` together with the profile and the comparison rule:
+
+```
+python3 -I tests/scripts/run-acid2-local.py --rom cgb-acid2.gbc --reference reference.png \
+  --runner build/gabbaboy-runner --rom-kind cgb-acid2
+```
+
+The script refuses (exit 2, `acid2 refused`) any ROM or reference PNG that is not the pinned file,
+runs the ROM on the manifest's model to its `ld b,b` through `gabbaboy-runner --failure-dir`, and
+compares the frame pixel by pixel (`acid2 result=match`, or `acid2 result=differs pixels=N` with exit
+1). `cgb-acid2` runs on the CGB profile with the `(c << 3) | (c >> 2)` expansion, `dmg-acid2` on
+DMG-CPU-B with the greyscale shade map. A local match is a differential check against the upstream
+reference image, not hardware evidence. Required CI runs `cgb_acid2_local_selftest` (synthetic PNG,
+PPM, one-pixel mismatch and fake ROM) and `cgb_acid2_local_refuses_unpinned` only.
+
 ## Half-dot timeline (D-070)
 
 The `uint64_t` half-dot master timeline is the single clock for normal and double speed, and

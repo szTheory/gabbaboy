@@ -2337,6 +2337,18 @@ add_test(NAME cgb_external_dispositions_mutated
     -DGBB_EXPECT_CODE=1
     "-DGBB_EXPECT_REGEX=disposition-mismatch"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# Optional acid2 local runner (D-24): required CI runs synthetic self-tests only, never an acid2 file.
+set(GBB_ACID2_LOCAL "${PROJECT_SOURCE_DIR}/tests/scripts/run-acid2-local.py")
+add_test(NAME cgb_acid2_local_selftest COMMAND "${Python3_EXECUTABLE}" -I "${GBB_ACID2_LOCAL}" --self-test)
+set_tests_properties(cgb_acid2_local_selftest PROPERTIES
+  PASS_REGULAR_EXPRESSION "self-test pass checks=4" TIMEOUT 30)
+# The repository LICENSE is not a pinned ROM, so the runner must refuse it before running anything.
+add_test(NAME cgb_acid2_local_refuses_unpinned
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_ACID2_LOCAL};--rom;${PROJECT_SOURCE_DIR}/LICENSE;--reference;${PROJECT_SOURCE_DIR}/LICENSE;--runner;$<TARGET_FILE:gabbaboy-runner>;--rom-kind;cgb-acid2"
+    -DGBB_EXPECT_CODE=2
+    "-DGBB_EXPECT_REGEX=acid2 refused"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # --- Phase 11 plan 11-11 end ---
 
 gabbaboy_verify_registered_tests()
