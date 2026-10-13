@@ -1,5 +1,6 @@
 #include "gbb_accept.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -93,7 +94,9 @@ static const uint16_t *rgb555_row(const uint16_t *pixels, size_t pitch_bytes, si
 }
 
 static int rgb555_valid(const uint16_t *pixels, size_t pitch_bytes) {
-    if (pixels == NULL || pitch_bytes < GBB_ACCEPT_FRAME_WIDTH * 2u || (pitch_bytes & 1u) != 0u) return 0;
+    /* The uint16_t reads below are undefined on a misaligned base, so refuse it up front. */
+    if (pixels == NULL || ((uintptr_t)pixels & 1u) != 0u ||
+        pitch_bytes < GBB_ACCEPT_FRAME_WIDTH * 2u || (pitch_bytes & 1u) != 0u) return 0;
     for (size_t y = 0; y < GBB_ACCEPT_FRAME_HEIGHT; ++y) {
         const uint16_t *row = rgb555_row(pixels, pitch_bytes, y);
         for (size_t x = 0; x < GBB_ACCEPT_FRAME_WIDTH; ++x) {
@@ -129,7 +132,7 @@ int gbb_accept_rgb555_digest(const uint16_t *pixels, size_t pitch_bytes, char ou
 
 int gbb_accept_rgb555_digest_bin(const uint16_t *pixels, size_t pitch_bytes, uint8_t out[32]) {
     char hex[65];
-    if (gbb_accept_rgb555_digest(pixels, pitch_bytes, hex) != 0) return 1;
+    if (out == NULL || gbb_accept_rgb555_digest(pixels, pitch_bytes, hex) != 0) return 1;
     for (size_t i = 0; i < 32u; ++i) {
         out[i] = (uint8_t)((hex_nibble(hex[i * 2u]) << 4) | hex_nibble(hex[i * 2u + 1u]));
     }
@@ -138,7 +141,7 @@ int gbb_accept_rgb555_digest_bin(const uint16_t *pixels, size_t pitch_bytes, uin
 
 int gbb_accept_write_ppm_rgb555(const char *path, const uint16_t *pixels, size_t pitch_bytes) {
     static const char header[] = "P6\n160 144\n255\n";
-    if (!rgb555_valid(pixels, pitch_bytes)) return 1;
+    if (path == NULL || !rgb555_valid(pixels, pitch_bytes)) return 1;
     FILE *file = fopen(path, "wb");
     if (file == NULL) return 2;
     int failed = fwrite(header, 1, sizeof(header) - 1u, file) != sizeof(header) - 1u;

@@ -1,5 +1,6 @@
 #include "gbb_accept.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -90,6 +91,20 @@ static int helper555(const char *ppm_path) {
         rejected = 0;
     }
     printf("invalid_value=%s\n", rejected ? "rejected" : "accepted");
+
+    /* IN-03 hardening: a misaligned base, a NULL path and a NULL output are refused, not read.
+     * Exit code only, so the printed vector set stays unchanged. */
+    static uint8_t raw[GBB_ACCEPT_FRAME_WIDTH * GBB_ACCEPT_FRAME_HEIGHT * 2u + 2u];
+    const uint16_t *aligned = (const uint16_t *)(void *)(raw + ((uintptr_t)raw & 1u));
+    const uint16_t *odd = (const uint16_t *)(const void *)((const uint8_t *)aligned + 1);
+    uint8_t bin[32];
+    char odd_hex[65] = "unchanged";
+    frame[5u * GBB_ACCEPT_FRAME_WIDTH + 7u] = 0u;
+    if (gbb_accept_rgb555_digest_bin(frame, GBB_ACCEPT_FRAME_WIDTH * 2u, bin) != 0) return 1;
+    if (gbb_accept_rgb555_digest(odd, GBB_ACCEPT_FRAME_WIDTH * 2u, odd_hex) == 0 ||
+        strcmp(odd_hex, "unchanged") != 0) return 1;
+    if (gbb_accept_rgb555_digest_bin(frame, GBB_ACCEPT_FRAME_WIDTH * 2u, NULL) == 0) return 1;
+    if (gbb_accept_write_ppm_rgb555(NULL, frame, GBB_ACCEPT_FRAME_WIDTH * 2u) == 0) return 1;
     return 0;
 }
 
