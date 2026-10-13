@@ -285,7 +285,7 @@ static int render_io(const io_cell *c, int col, char *rd, size_t rd_n, char *wr,
     case IO_EXISTING: return 0;
     case IO_DMG_STOP: snprintf(rd, rd_n, "stop"); snprintf(wr, wr_n, "ignored"); return 1;
     case IO_CONST_FF: snprintf(rd, rd_n, "$FF"); snprintf(wr, wr_n, "ignored"); return 1;
-    case IO_KEY1: snprintf(rd, rd_n, "$7E or armed bit"); snprintf(wr, wr_n, "bit 0 arms the switch"); return 1;
+    case IO_KEY1: snprintf(rd, rd_n, "$7E, bit 7 speed, bit 0 armed"); snprintf(wr, wr_n, "bit 0 arms the switch"); return 1;
     case IO_VBK:
         snprintf(rd, rd_n, "$FE or bank");
         snprintf(wr, wr_n, col == 1 ? "bit 0 selects the bank" : "ignored, bank stays 0");

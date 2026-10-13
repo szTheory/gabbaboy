@@ -20,6 +20,14 @@
 #define GBB_HALF_DOTS_PER_T_NORMAL 2u
 #define GBB_HALF_DOTS_PER_T_DOUBLE 1u
 #define GBB_T_PER_M 4u
+/* SameBoy 0x20008 minus the 4 T it removes at IME=0, PROVISIONAL: inside the window
+ * [0x20004,0x20007] measured on the research prototype, not yet on the committed core;
+ * re-measured on the committed core by age_stall_window in plan 12-09. */
+#define GBB_SPEED_SWITCH_STALL_T 0x20004u
+/* 2 M expressed in normal-speed half-dots; instruction_cost applies >> double_speed once. */
+#define GBB_STOP_SWITCH_COST_HALF_DOTS 16u
+#define GBB_STALL_NONE 0u
+#define GBB_STALL_SPEED_SWITCH 1u
 #define GBB_HALF_DOTS_PER_DOT 2u
 #define GBB_DOTS_PER_LINE 456u
 #define GBB_LINES_PER_FRAME 154u
@@ -204,6 +212,8 @@ _Static_assert(GBB_HALF_DOTS_PER_T_NORMAL == 2u,
 _Static_assert(GBB_HALF_DOTS_PER_T_DOUBLE == 1u,
                "half-dot timeline: a double-speed T-cycle is 1 half-dot");
 _Static_assert(GBB_T_PER_M == 4u, "half-dot timeline: an M-cycle is 4 T-cycles");
+_Static_assert(GBB_SPEED_SWITCH_STALL_T % GBB_T_PER_M == 0u,
+               "half-dot timeline: the speed-switch stall is a whole number of M-cycles");
 _Static_assert(GBB_HALF_DOTS_PER_DOT == 2u, "half-dot timeline: a PPU dot is 2 half-dots");
 _Static_assert(RTC_HALF_DOTS_PER_SECOND_SHIFT == 23u,
                "half-dot timeline: the RTC counts 2^23 half-dots per second");
@@ -335,10 +345,11 @@ struct gbb_instance {
     uint8_t vram_bank;
     uint8_t wram_bank;
     uint8_t svbk;
-    /* CGB-profile I/O register state (Plan 10-09). key1_armed is KEY1 bit 0 (the speed switch is
-     * not built; STOP ignores it). bcps/ocps are the palette index registers, ff72-ff75 the
+    /* CGB-profile I/O register state (Plan 10-09). key1_armed is KEY1 bit 0. bcps/ocps are the palette index registers, ff72-ff75 the
      * undocumented CGB scratch registers. DMG never reads or writes any of these. */
     uint8_t key1_armed, bcps, ocps, ff72, ff73, ff74, ff75;
+    uint8_t double_speed, cpu_stall_kind, stop_switch_pending;
+    uint32_t cpu_stall_half_dots;
     /* CGB palette RAM (Phase 11): 8 palettes of 4 little-endian RGB555 colours per side, addressed
      * through BCPS/OCPS bits 0-5. opri is the stored OPRI bit 0; it never changes object order after
      * boot (D-08), which exec_mode decides. */
@@ -1206,7 +1217,7 @@ static const io_row io_visibility[IO_VISIBILITY_ROWS] = {
     [0x4A] = IO_EXISTING_ROW,
     [0x4B] = IO_EXISTING_ROW,
     [0x4C] = { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_PANDOCS }, /* KEY0: CPU mode register, locked after boot; reads $FF, writes ignored */
-    [0x4D] = { IOC(DMG_STOP), IOC(KEY1), IOC(CONST_FF), IOS_PANDOCS }, /* KEY1: speed switch; only the armed bit is kept, no double speed is built */
+    [0x4D] = { IOC(DMG_STOP), IOC(KEY1), IOC(CONST_FF), IOS_PANDOCS }, /* KEY1: speed switch; bit 7 reports speed and bit 0 arms it */
     [0x4E] = IO_UNUSED_ROW,
     [0x4F] = { IOC(DMG_STOP), IOC(VBK), IOC(VBK), IOS_PANDOCS }, /* VBK: VRAM bank; bit 0 selects the bank in CGB mode only */
     [0x50] = IO_UNUSED_ROW,
@@ -1325,7 +1336,7 @@ static uint8_t io_read_cgb(const gbb_instance *m, uint16_t address) {
     if (!model_is_cgb(m)) return 0xFFu;
     const io_cell *c = io_cgb_cell(m, address);
     switch (c->kind) {
-    case IO_KEY1: return (uint8_t)(0x7Eu | (m->key1_armed & 1u));
+    case IO_KEY1: return (uint8_t)(0x7Eu | ((m->double_speed & 1u) << 7) | (m->key1_armed & 1u));
     case IO_VBK: return (uint8_t)(0xFEu | (m->vram_bank & 1u));
     case IO_SVBK: return (uint8_t)(0xF8u | (m->svbk & 7u));
     case IO_STORE: {
@@ -1411,6 +1422,11 @@ static void reset_state(gbb_instance *m) {
     m->halted = 0;
     m->stopped = 0;
     m->halt_bug = 0;
+    m->double_speed = 0u;
+    m->cpu_stall_kind = GBB_STALL_NONE;
+    m->cpu_stall_half_dots = 0u;
+    m->stop_switch_pending = 0u;
+    m->key1_armed = 0u;
     memset(m->frame_working, 0, sizeof(m->frame_working));
     memset(m->frame_completed, 0, sizeof(m->frame_completed));
     memset(m->rgb_working, 0, sizeof(m->rgb_working));
@@ -1693,7 +1709,7 @@ static void advance_devices_to(gbb_instance *m, uint64_t target);
 
 /* MODEL: BOTH GATE-00 basis=model-neutral */
 static uint8_t bus_read(gbb_instance *m, uint16_t address, uint64_t offset) {
-    advance_devices_to(m, m->instruction_start_half_dots + offset);
+    advance_devices_to(m, m->instruction_start_half_dots + (offset >> m->double_speed));
     uint8_t value = read8(m, address);
     observe_bus(m, 0, address, 1, value);
     return value;
@@ -1733,6 +1749,16 @@ static void timer_set_signal(gbb_instance *m, int next, uint64_t at) {
 }
 
 static void apu_sequencer_clock(gbb_instance *m);
+
+/* MODEL: BOTH GATE-00 basis="DIV reset edge semantics are shared by both CPU models" */
+static void divider_reset(gbb_instance *m, int clock_apu_edge) {
+    const int apu_falling_edge = (m->divider_counter & 0x1000u) != 0u;
+    m->divider_counter = 0u;
+    m->div = 0u;
+    m->divider_phase = 0u;
+    timer_set_signal(m, timer_input(m), m->time_half_dots);
+    if (clock_apu_edge && apu_falling_edge) apu_sequencer_clock(m);
+}
 
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
@@ -1950,10 +1976,7 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     else if (address == 0xFF4B) m->wx = value;
     /* MODEL: UNKNOWN GATE-31 research:12 -- DIV write resets the counter and clocks the frame sequencer */
     else if (address == 0xFF04) {
-        int apu_falling_edge = (m->divider_counter & 0x1000u) != 0u;
-        m->divider_counter = 0; m->div = 0; m->divider_phase = 0;
-        timer_set_signal(m, timer_input(m), m->time_half_dots);
-        if (apu_falling_edge) apu_sequencer_clock(m);
+        divider_reset(m, 1);
     }
     else if (address == 0xFF05) {
         if (m->time_half_dots == m->timer_reloaded_at) { /* reload wins this sampled write */ }
@@ -2087,7 +2110,7 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
 
 /* MODEL: BOTH GATE-00 basis=model-neutral */
 static void bus_write(gbb_instance *m, uint16_t address, uint8_t value, uint64_t offset) {
-    uint64_t timestamp = m->instruction_start_half_dots + offset;
+    uint64_t timestamp = m->instruction_start_half_dots + (offset >> m->double_speed);
     /* TMA feeds the reload when the write shares its exact reload timestamp. */
     if (address == 0xFF06 && m->timer_reload_pending && timestamp >= m->time_half_dots &&
         timestamp - m->time_half_dots == m->timer_reload_remaining)
@@ -3548,6 +3571,11 @@ static int condition_true(const gbb_instance *m, unsigned condition) {
     }
 }
 
+/* MODEL: BOTH GATE-00 basis="CGB speed selection is gated at execution" */
+static int stop_case(const gbb_instance *m) {
+    return model_is_cgb(m) && m->exec_mode == GBB_MODE_CGB && (m->key1_armed & 1u) ? 4 : 0;
+}
+
 /* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static decoded decode(const gbb_instance *m) {
     uint8_t op = read8(m, m->pc);
@@ -3575,10 +3603,15 @@ static decoded decode(const gbb_instance *m) {
     if ((op & 0xC7u) == 0xC6u) return (decoded){2, 16, 1};
     if ((op & 0xC7u) == 0xC7u) return (decoded){1, 32, 1};
     switch (op) {
-        case 0x00: case 0x07: case 0x0F: case 0x10: case 0x17: case 0x1F:
+        case 0x00: case 0x07: case 0x0F: case 0x17: case 0x1F:
         case 0x27: case 0x2F: case 0x37: case 0x3F: case 0x76: case 0xC9:
         case 0xD9: case 0xE9: case 0xF3: case 0xFB:
-            return (decoded){(uint8_t)(op == 0x10 ? 2 : 1), (uint8_t)((op == 0xC9 || op == 0xD9) ? 32 : 8), 1};
+            return (decoded){1, (uint8_t)((op == 0xC9 || op == 0xD9) ? 32 : 8), 1};
+        case 0x10: {
+            const int selected = stop_case(m);
+            return (decoded){2, (uint8_t)((selected == 3 || selected == 4)
+                ? GBB_STOP_SWITCH_COST_HALF_DOTS : 8u), 1};
+        }
         case 0x08: return (decoded){3, 40, 1};
         case 0x18: return (decoded){2, 24, 1};
         case 0x02: case 0x0A: case 0x12: case 0x1A:
@@ -3596,7 +3629,9 @@ static decoded decode(const gbb_instance *m) {
 }
 
 /* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
-static uint8_t instruction_cost(const gbb_instance *m, decoded d) { (void)m; return d.ticks; }
+static uint8_t instruction_cost(const gbb_instance *m, decoded d) {
+    return (uint8_t)(d.ticks >> m->double_speed);
+}
 
 /* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static uint16_t pair_value(const gbb_instance *m, unsigned pair) {
@@ -3813,11 +3848,10 @@ static void execute(gbb_instance *m, uint8_t cost) {
             case 0x08: { uint16_t addr=(uint16_t)(instruction_byte(m,pc,1)|((uint16_t)instruction_byte(m,pc,2)<<8)); bus_write(m,addr,(uint8_t)m->sp,24); bus_write(m,(uint16_t)(addr+1),(uint8_t)(m->sp>>8),32); m->pc+=3; break; }
             /* MODEL: UNKNOWN GATE-62 research:12 -- STOP, including CGB speed switch */
             case 0x10:
-                /* MODEL: CGB_ONLY GATE-74 GUARD=model_is_cgb -- STOP with KEY1 armed is the CGB speed switch; Phase 12 owns it, so it stops visibly instead of sleeping (D-23) */
-                if (model_is_cgb(m) && m->exec_mode == GBB_MODE_CGB && (m->key1_armed & 1u) != 0u) {
-                    m->pc=(uint16_t)(pc+2);
-                    m->bus_unsupported=1;
-                    m->bus_unsupported_address=0xFF4Du;
+                /* MODEL: CGB_ONLY GATE-74 GUARD=model_is_cgb -- CGB mode STOP with KEY1 armed requests the speed switch (D-23) */
+                if (model_is_cgb(m) && stop_case(m) == 4) {
+                    m->pc = (uint16_t)(pc + 2u);
+                    m->stop_switch_pending = 4u;
                     break;
                 }
                 m->pc=(uint16_t)(pc+2); m->stopped=1; break;
@@ -3864,7 +3898,7 @@ static void enter_interrupt(gbb_instance *m, unsigned bit) {
     m->ime = 0;
     m->ime_delay = 0;
     /* Device deadlines at the acknowledge phase precede the IF bus write. */
-    advance_devices_to(m, m->instruction_start_half_dots + 8u);
+    advance_devices_to(m, m->instruction_start_half_dots + (8u >> m->double_speed));
     m->interrupt_flags = (uint8_t)(m->interrupt_flags & (uint8_t)~mask);
     observe_bus(m, 0, 0xFF0F, 2, (uint8_t)(0xE0u | m->interrupt_flags));
     /* MODEL: BOTH GATE-63 basis="no SM83 opcode difference" -- interrupt entry timing is a CPU trait */
@@ -3902,12 +3936,29 @@ void gbb_test_bank_state(const gbb_instance *m, uint8_t *out_vram_bank, uint8_t 
     if (out_wram_bank != NULL) *out_wram_bank = m->wram_bank;
 }
 
+/* Private test seam for Phase 12 speed-switch state; NULL outputs are ignored. */
+/* MODEL: BOTH GATE-00 basis="test seam reports private per-instance state" */
+void gbb_test_speed_state(const gbb_instance *m, uint8_t *double_speed,
+                          uint8_t *stall_kind, uint32_t *stall_half_dots,
+                          uint8_t *key1_armed) {
+    if (m == NULL) return;
+    if (double_speed != NULL) *double_speed = m->double_speed;
+    if (stall_kind != NULL) *stall_kind = m->cpu_stall_kind;
+    if (stall_half_dots != NULL) *stall_half_dots = m->cpu_stall_half_dots;
+    if (key1_armed != NULL) *key1_armed = m->key1_armed;
+}
+
 /* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static int halt_bug_keeps_control_target(const gbb_instance *m, uint8_t op) {
     if (op == 0xC3 || op == 0xC9 || op == 0xCD || op == 0xD9 || op == 0xE9 || (op & 0xC7u) == 0xC7u) return 1;
     if ((op & 0xE7u) == 0xC0u || (op & 0xE7u) == 0xC2u || (op & 0xE7u) == 0xC4u)
         return condition_true(m, (op >> 3) & 3u);
     return 0;
+}
+
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static int cpu_stalled(const gbb_instance *m) {
+    return m->cpu_stall_kind != GBB_STALL_NONE;
 }
 
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
@@ -3943,11 +3994,36 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             }
             continue;
         }
+        if (cpu_stalled(instance)) {
+            const uint32_t quantum = 8u >> instance->double_speed;
+            const uint32_t step = instance->cpu_stall_half_dots < quantum
+                ? instance->cpu_stall_half_dots : quantum;
+            if (step == 0u) {
+                instance->cpu_stall_kind = GBB_STALL_NONE;
+                continue;
+            }
+            if (budget_half_dots - result.consumed_half_dots < step) return result;
+            if (!audio_preflight(instance, step)) {
+                result.reason = GBB_STOP_OUTPUT_FULL;
+                return result;
+            }
+            if (UINT64_MAX - instance->time_half_dots < step) {
+                result.reason = GBB_STOP_INVALID_STATE;
+                return result;
+            }
+            advance_devices(instance, step); /* P12-M7 */
+            instance->cpu_stall_half_dots -= step;
+            result.consumed_half_dots += step;
+            if (instance->cpu_stall_half_dots == 0u)
+                instance->cpu_stall_kind = GBB_STALL_NONE;
+            continue;
+        }
         unsigned interrupt = instance->ime ? pending_interrupt(instance) : 5;
         if (interrupt < 5) {
-            if (40u > budget_half_dots - result.consumed_half_dots) return result;
-            if (!audio_preflight(instance, 40u)) { result.reason=GBB_STOP_OUTPUT_FULL; return result; }
-            if (UINT64_MAX - instance->time_half_dots < 40u) { result.reason=GBB_STOP_INVALID_STATE; return result; }
+            const uint32_t irq_cost = 40u >> instance->double_speed;
+            if (irq_cost > budget_half_dots - result.consumed_half_dots) return result;
+            if (!audio_preflight(instance, irq_cost)) { result.reason=GBB_STOP_OUTPUT_FULL; return result; }
+            if (UINT64_MAX - instance->time_half_dots < irq_cost) { result.reason=GBB_STOP_INVALID_STATE; return result; }
             gbb_diagnostic_record operation[GBB_DIAGNOSTIC_OPERATION_RESERVE];
             if (instance->diagnostic_output != NULL &&
                 instance->diagnostic_output_capacity - instance->diagnostic_output_count < GBB_DIAGNOSTIC_OPERATION_RESERVE) {
@@ -3956,9 +4032,9 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             diagnostic_begin(instance, operation, instance->pc, 0);
             instance->instruction_start_half_dots = instance->time_half_dots;
             enter_interrupt(instance, interrupt);
-            advance_devices_to(instance, instance->instruction_start_half_dots + 40u);
+            advance_devices_to(instance, instance->instruction_start_half_dots + irq_cost);
             diagnostic_commit(instance);
-            result.consumed_half_dots += 40;
+            result.consumed_half_dots += irq_cost;
             /* The entry push can itself hit a deferred register; report it at this boundary. */
             if (instance->bus_unsupported) {
                 instance->bus_unsupported = 0;
@@ -3973,14 +4049,15 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 result.reason=GBB_STOP_BUDGET;
                 continue;
             }
-            if (budget_half_dots - result.consumed_half_dots < 8u) return result;
-            if (!audio_preflight(instance, 8u)) { result.reason=GBB_STOP_OUTPUT_FULL; return result; }
-            if (UINT64_MAX - instance->time_half_dots < 8u) { result.reason=GBB_STOP_INVALID_STATE; return result; }
+            const uint32_t m_cycle = 8u >> instance->double_speed;
+            if (budget_half_dots - result.consumed_half_dots < m_cycle) return result;
+            if (!audio_preflight(instance, m_cycle)) { result.reason=GBB_STOP_OUTPUT_FULL; return result; }
+            if (UINT64_MAX - instance->time_half_dots < m_cycle) { result.reason=GBB_STOP_INVALID_STATE; return result; }
             /* HALT samples wake conditions at each machine-cycle boundary.
              * A timer/serial interrupt midway through a long budget must wake
              * at the same boundary as it does through shorter run calls. */
-            advance_devices(instance, 8u);
-            result.consumed_half_dots += 8u;
+            advance_devices(instance, m_cycle);
+            result.consumed_half_dots += m_cycle;
             result.reason=GBB_STOP_HALTED_IDLE;
             if ((instance->ie & instance->interrupt_flags & 0x1Fu) != 0) {
                 instance->halted=0;
@@ -4033,12 +4110,19 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
         result.consumed_half_dots += cost;
         diagnostic_commit(instance);
         if (instance->ime_delay != 0 && --instance->ime_delay == 0) instance->ime = 1;
+        if (instance->stop_switch_pending == 4u) {
+            instance->stop_switch_pending = 0u;
+            divider_reset(instance, 1);
+            instance->double_speed ^= 1u;
+            instance->key1_armed = 0u;
+            instance->cpu_stall_kind = GBB_STALL_SPEED_SWITCH; /* P12-M5 */
+            instance->cpu_stall_half_dots = GBB_SPEED_SWITCH_STALL_T *
+                (instance->double_speed ? GBB_HALF_DOTS_PER_T_DOUBLE : GBB_HALF_DOTS_PER_T_NORMAL); /* P12-M6 */
+            continue;
+        }
         /* MODEL: UNKNOWN GATE-65 research:12 -- DIV reset on STOP */
         if (instance->stopped) {
-            instance->divider_counter = 0;
-            instance->div = 0;
-            instance->divider_phase = 0;
-            timer_set_signal(instance, timer_input(instance), instance->time_half_dots);
+            divider_reset(instance, 0);
             result.reason=GBB_STOP_STOPPED;
             return result;
         }

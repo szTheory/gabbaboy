@@ -175,6 +175,85 @@ static int cgb_speed_internal_harness_alive(void) {
     return 0;
 }
 
+static int run_tracer_guest(int with_trace) {
+    _Static_assert(sizeof(gbb_trace_record) == 24u,
+                   "trace record has no speed field (D-13)");
+    uint8_t rom[32768] = {0};
+    rom[0x143] = 0xC0;
+    rom[0x147] = 0u;
+    rom[0x148] = 0u;
+    rom[0x149] = 0u;
+    const uint8_t code[] = {
+        0x3E,0x01, 0xE0,0x4D, 0xF0,0x4D, 0xEA,0x00,0xC0,
+        0x10,0x00, 0xF0,0x4D, 0xEA,0x01,0xC0, 0xF0,0x04,
+        0xEA,0x02,0xC0, 0x76
+    };
+    memcpy(rom + 0x100, code, sizeof(code));
+    uint8_t checksum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14D] = checksum;
+    gbb_instance *machine = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &machine) == GBB_OK);
+    REQUIRE(gbb_load_rom(machine, rom, sizeof(rom)) == GBB_OK);
+
+    gbb_trace_record records[16];
+    size_t traced = 0u;
+    gbb_trace_record *trace = with_trace ? records : NULL;
+    size_t capacity = with_trace ? 16u : 0u;
+    const uint64_t want_to_double = GBB_SPEED_SWITCH_STALL_T * GBB_HALF_DOTS_PER_T_DOUBLE;
+    gbb_run_result result = gbb_run(machine, 112u, trace, capacity);
+    REQUIRE(result.reason == GBB_STOP_BUDGET && result.consumed_half_dots == 112u);
+    traced += result.trace_count;
+    REQUIRE(gbb_peek_ram(machine, 0xC000u) == 0x7Fu);
+    uint8_t speed = 0u, kind = 0u, armed = 0u;
+    uint32_t remaining = 0u;
+    gbb_test_speed_state(machine, &speed, &kind, &remaining, &armed);
+    REQUIRE(speed == 1u && kind == GBB_STALL_SPEED_SWITCH && armed == 0u);
+    REQUIRE(remaining == want_to_double && machine->divider_counter == 0u && !machine->stopped);
+
+    result = gbb_run(machine, 1000u, trace == NULL ? NULL : records + traced,
+                     trace == NULL ? 0u : 16u - traced);
+    REQUIRE(result.reason == GBB_STOP_BUDGET && result.consumed_half_dots == 1000u);
+    REQUIRE(result.trace_count == 0u);
+    traced += result.trace_count;
+    result = gbb_run(machine, 3u, trace == NULL ? NULL : records + traced,
+                     trace == NULL ? 0u : 16u - traced);
+    REQUIRE(result.reason == GBB_STOP_BUDGET && result.consumed_half_dots == 0u);
+    REQUIRE(result.trace_count == 0u);
+    traced += result.trace_count;
+    result = gbb_run(machine, want_to_double - 1000u,
+                     trace == NULL ? NULL : records + traced,
+                     trace == NULL ? 0u : 16u - traced);
+    REQUIRE(result.reason == GBB_STOP_BUDGET &&
+            result.consumed_half_dots == want_to_double - 1000u);
+    REQUIRE(result.trace_count == 0u);
+    traced += result.trace_count;
+    REQUIRE(machine->time_half_dots == 112u + want_to_double);
+    gbb_test_speed_state(machine, &speed, &kind, &remaining, &armed);
+    REQUIRE(speed == 1u && kind == GBB_STALL_NONE && remaining == 0u && armed == 0u);
+
+    result = gbb_run(machine, 60u, trace == NULL ? NULL : records + traced,
+                     trace == NULL ? 0u : 16u - traced);
+    REQUIRE(result.reason == GBB_STOP_HALTED_IDLE && result.consumed_half_dots == 60u);
+    traced += result.trace_count;
+    REQUIRE(gbb_peek_ram(machine, 0xC001u) == 0xFEu);
+    if (with_trace) {
+        unsigned stops = 0u;
+        for (size_t i = 0; i < traced; ++i)
+            if (records[i].opcode_size != 0u && records[i].opcode[0] == 0x10u) ++stops;
+        REQUIRE(traced == 10u && stops == 1u);
+    }
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int cgb_speed_tracer_switch(void) {
+    REQUIRE(run_tracer_guest(0) == 0);
+    REQUIRE(run_tracer_guest(1) == 0);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) return 2;
     if (strcmp(argv[1], "cgb_speed_internal_harness_alive") == 0) {
@@ -188,6 +267,11 @@ int main(int argc, char **argv) {
         if (argc == 4 && !flip) return 2;
         int rc = cgb_speed_identity_pin(argv[2], flip);
         if (rc == 0) puts("cgb-speed-internal cgb_speed_identity_pin pass");
+        return rc;
+    }
+    if (strcmp(argv[1], "cgb_speed_tracer_switch") == 0) {
+        int rc = cgb_speed_tracer_switch();
+        if (rc == 0) puts("cgb-speed-internal cgb_speed_tracer_switch pass");
         return rc;
     }
     return 2;

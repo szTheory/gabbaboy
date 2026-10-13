@@ -299,7 +299,7 @@ column is the evidence class (Pan Docs, Mooneye hardware test, SameBoy, or proje
 | $FF4C | CGB | $FF | ignored | IMPL | PANDOCS |
 | $FF4C | COMPAT | $FF | ignored | IMPL | PANDOCS |
 | $FF4D | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF4D | CGB | $7E or armed bit | bit 0 arms the switch | IMPL | PANDOCS |
+| $FF4D | CGB | $7E, bit 7 speed, bit 0 armed | bit 0 arms the switch | IMPL | PANDOCS |
 | $FF4D | COMPAT | $FF | ignored | IMPL | PANDOCS |
 | $FF4E | DMG | stop | ignored | IMPL | HW_TEST |
 | $FF4E | CGB | $FF | ignored | IMPL | HW_TEST |

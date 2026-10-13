@@ -2515,6 +2515,9 @@ set_tests_properties(cgb_speed_identity_pin_flipped PROPERTIES
   ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0" TIMEOUT 60)
 add_test(NAME cgb_speed_internal_harness_alive
   COMMAND test_cgb_speed_internal cgb_speed_internal_harness_alive)
+add_test(NAME cgb_speed_tracer_switch
+  COMMAND test_cgb_speed_internal cgb_speed_tracer_switch)
+set_tests_properties(cgb_speed_tracer_switch PROPERTIES TIMEOUT 60)
 # --- Phase 12 plan 12-01 end ---
 
 gabbaboy_verify_registered_tests()
