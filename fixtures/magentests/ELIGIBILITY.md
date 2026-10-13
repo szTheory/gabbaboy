@@ -39,7 +39,9 @@ typed from the pinned upstream source must hold before any frame digest is accep
 
 `ppu_disabled_state` reads STAT mode 0 right after the guest turns the LCD off at vblank. A
 second case clears `$143` (recomputing `$14D`) so the same ROM runs in compatibility mode, where
-the guest's CRAM writes are ignored and the frame must be one uniform default BG value.
+the guest's CRAM writes are ignored. The guest paints colour index 1 and its verdict is BGP (0x00
+pass, 0x0C fail), so the frame must be the default BG shade 0 everywhere; the failure maps to
+shade 3. The `magentests_lcd_off_no_mode0_compat` mutant proves the case fails when STAT mode 0 is skipped.
 
 `bg_oam_priority` outcome: it passed its predicate on the core without any expected-unsupported
 record (the per-band LCDC writes from STAT/LYC interrupts land before x = 32), so its digest is

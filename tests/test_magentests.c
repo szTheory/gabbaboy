@@ -224,7 +224,9 @@ static int cgb_ppu_disabled_state_compat(const char *label, const char *path) {
     int rc = cgb_capture(label, rom, size, last, previous);
     free(rom);
     if (rc != 0) return 1;
-    /* The pass path writes BGP = 0, so every BG pixel is shade 0: the default BG shade 0 value. */
+    /* The guest paints colour index 1 across the screen. Its pass path writes BGP = 0x00 (index 1
+     * -> shade 0) and its fail path BGP = 0x0C (index 1 -> shade 3), so the verdict stays visible
+     * in compat mode as bg[0] versus bg[3]. The lcd_off_no_mode0_compat mutant proves it. */
     gbb_instance *probe = NULL;
     gbb_compat_palette palette;
     memset(&palette, 0, sizeof(palette));

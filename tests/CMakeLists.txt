@@ -2292,6 +2292,14 @@ gbb_colour_mutant(magentests_lcd_off_no_mode0 test_magentests.c
   "            m->ppu_selected_object_count = 0;"
   "magentests_cgb_ppu_disabled_state;${GBB_MAGENTESTS_DIR}/ppu_disabled_state.gbc" "0x001F|pixel"
   "magentests_oob_sram_mbc1;${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc")
+# WR-01: the compat variant must also see the guest's STAT verdict (BGP 0x00 pass vs 0x0C fail maps
+# colour index 1 to shade 0 vs shade 3). Same mutant, compat case.
+gbb_colour_mutant(magentests_lcd_off_no_mode0_compat test_magentests.c
+  magentests_cgb_mutant_lcd_off_no_mode0_compat magentests_cgb_mutant_lcd_off_no_mode0_compat_control
+  "            ppu_set_mode(m, 0);\n            m->ppu_selected_object_count = 0;"
+  "            m->ppu_selected_object_count = 0;"
+  "magentests_cgb_ppu_disabled_state_compat;${GBB_MAGENTESTS_DIR}/ppu_disabled_state.gbc" "ppu_disabled_state_compat: pixel 0,0 expected"
+  "magentests_oob_sram_mbc1;${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc")
 # Object colours resolved from BG CRAM instead of object CRAM must turn the green and red
 # triangles of oam_internal_priority into the BG white (RESEARCH Correction 4: this ROM's objects
 # never share an opaque pixel, so X ordering is not its control; ordering stays in the truth table).
