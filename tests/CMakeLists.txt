@@ -2075,6 +2075,81 @@ set_tests_properties(cgb_priority_truth_table PROPERTIES
 add_test(NAME cgb_priority_truth_frames COMMAND test_cgb_colour_internal cgb_priority_truth_frames)
 set_tests_properties(cgb_priority_truth_frames PROPERTIES
   PASS_REGULAR_EXPRESSION "cgb-colour-internal cgb_priority_truth_frames pass sampled=")
+add_test(NAME cgb_priority_opri_no_effect COMMAND test_cgb_colour_internal cgb_priority_opri_no_effect)
+set_tests_properties(cgb_priority_opri_no_effect PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-colour-internal cgb_priority_opri_no_effect pass rows=6144")
+gbb_colour_mutant(priority_ignore_bg_attr7 test_cgb_colour_internal.c
+  cgb_priority_mutant_ignore_bg_attr7 cgb_priority_mutant_ignore_bg_attr7_control
+  "((obj_attr | bg_attr) & 0x80u)"
+  "((obj_attr) & 0x80u)"
+  "cgb_priority_truth_table" "truth mismatch row="
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(priority_ignore_obj_attr7 test_cgb_colour_internal.c
+  cgb_priority_mutant_ignore_obj_attr7 cgb_priority_mutant_ignore_obj_attr7_control
+  "((obj_attr | bg_attr) & 0x80u)"
+  "((bg_attr) & 0x80u)"
+  "cgb_priority_truth_table" "truth mismatch row="
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(priority_lcdc0_inverted test_cgb_colour_internal.c
+  cgb_priority_mutant_lcdc0_inverted cgb_priority_mutant_lcdc0_inverted_control
+  "if ((lcdc & 0x01u) == 0) return CGB_LAYER_OBJ;"
+  "if ((lcdc & 0x01u) != 0) return CGB_LAYER_OBJ;"
+  "cgb_priority_truth_table" "truth mismatch row="
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(priority_no_index0_rule test_cgb_colour_internal.c
+  cgb_priority_mutant_no_index0_rule cgb_priority_mutant_no_index0_rule_control
+  "    if (bg_index == 0u) return CGB_LAYER_OBJ;\n"
+  ""
+  "cgb_priority_truth_table" "truth mismatch row="
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(priority_cgb_x_order test_cgb_colour_internal.c
+  cgb_priority_mutant_cgb_x_order cgb_priority_mutant_cgb_x_order_control
+  "int opaque = ppu_cgb_object(m, x, &object, &object_attr);"
+  "int opaque = ppu_object_color(m, x, &object, &object_attr);"
+  "cgb_priority_truth_table" "truth mismatch row="
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(priority_compat_lcdc0_ignored test_cgb_colour_internal.c
+  cgb_priority_mutant_compat_lcdc0_ignored cgb_priority_mutant_compat_lcdc0_ignored_control
+  "static uint16_t ppu_pixel_compat(gbb_instance *m, unsigned x) {\n    uint8_t background = (m->lcdc & 0x01u) != 0 ?"
+  "static uint16_t ppu_pixel_compat(gbb_instance *m, unsigned x) {\n    uint8_t background = 1 ?"
+  "cgb_priority_truth_table" "truth mismatch row="
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(priority_compat_bg_set_for_objects test_cgb_colour_internal.c
+  cgb_priority_mutant_compat_bg_set_for_objects cgb_priority_mutant_compat_bg_set_for_objects_control
+  "return ppu_compat_resolve(m, 1u + ((attributes >> 4) & 1u), ppu_palette_shade(palette, object));"
+  "return ppu_compat_resolve(m, 0u, ppu_palette_shade(palette, object));"
+  "cgb_priority_truth_table" "truth mismatch row="
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(priority_opri_live test_cgb_colour_internal.c
+  cgb_priority_mutant_opri_live cgb_priority_mutant_opri_live_control
+  "int opaque = ppu_cgb_object(m, x, &object, &object_attr);"
+  "int opaque = (m->opri & 1u) ? ppu_object_color(m, x, &object, &object_attr) : ppu_cgb_object(m, x, &object, &object_attr);"
+  "cgb_priority_opri_no_effect" "truth mismatch row="
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(attr_ignore_bank test_cgb_colour_internal.c
+  cgb_attr_mutant_ignore_bank cgb_attr_mutant_ignore_bank_control
+  "return ppu_cgb_tile_color(m, tile, (attributes >> 3) & 1u, row, column, 0);"
+  "return ppu_cgb_tile_color(m, tile, 0u, row, column, 0);"
+  "cgb_attr_bank" "bgcol"
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(attr_swap_flips test_cgb_colour_internal.c
+  cgb_attr_mutant_swap_flips cgb_attr_mutant_swap_flips_control
+  "if ((attributes & 0x40u) != 0) row = 7u - row;\n    if ((attributes & 0x20u) != 0) column = 7u - column;"
+  "if ((attributes & 0x20u) != 0) row = 7u - row;\n    if ((attributes & 0x40u) != 0) column = 7u - column;"
+  "cgb_attr_xflip" "bgcol"
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(attr_reads_vbk test_cgb_colour_internal.c
+  cgb_attr_mutant_reads_vbk cgb_attr_mutant_reads_vbk_control
+  "return ppu_cgb_tile_color(m, tile, (attributes >> 3) & 1u, row, column, 0);"
+  "return ppu_cgb_tile_color(m, tile, m->vram_bank & 1u, row, column, 0);"
+  "cgb_attr_vbk_not_read" "memcmp"
+  cgb_colour_internal_harness_alive)
+gbb_colour_mutant(attr_obj_bank_ignored test_cgb_colour_internal.c
+  cgb_attr_mutant_obj_bank_ignored cgb_attr_mutant_obj_bank_ignored_control
+  "ppu_cgb_tile_color(m, (uint8_t)tile, (attrs >> 3) & 1u,"
+  "ppu_cgb_tile_color(m, (uint8_t)tile, 0u,"
+  "cgb_attr_obj_bank_palette" "objcol"
+  cgb_colour_internal_harness_alive)
 # --- Phase 11 plan 11-05 end ---
 
 gabbaboy_verify_registered_tests()
