@@ -56,6 +56,7 @@ CMakeUserPresets.json
 !/fixtures/cgb-banking/banking-cgb.gb
 !/fixtures/cgb-banking/banking-dmg.gb
 !/fixtures/cgb-colour/*.gb
+!/fixtures/cgb-speed/speed.gb
 !/fixtures/magentests/mbc_oob_sram_mbc1.gbc
 !/fixtures/magentests/mbc_oob_sram_mbc3.gbc
 !/fixtures/magentests/mbc_oob_sram_mbc5.gbc

@@ -2903,4 +2903,28 @@ set_tests_properties(age_stall_window PROPERTIES
   TIMEOUT ${GBB_AGE_STALL_WINDOW_TIMEOUT})
 # --- Phase 12 plan 12-09 end ---
 
+# --- Phase 12 plan 12-10 begin ---
+# Original project-authored CGB speed probes (D-22); the expectations are generated only from
+# documented clock units, and this driver observes the guest solely through the public API.
+set(GBB_CGB_SPEED_DIR "${PROJECT_SOURCE_DIR}/fixtures/cgb-speed")
+add_executable(test_cgb_speed_fixture test_cgb_speed_fixture.c)
+target_include_directories(test_cgb_speed_fixture PRIVATE "${PROJECT_SOURCE_DIR}/src/accept")
+target_link_libraries(test_cgb_speed_fixture PRIVATE GabbaBoy::core gabbaboy_accept)
+target_compile_features(test_cgb_speed_fixture PRIVATE c_std_17)
+set_target_properties(test_cgb_speed_fixture PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_speed_fixture_digest
+  COMMAND ${CMAKE_COMMAND} -DMANIFEST=${GBB_CGB_SPEED_DIR}/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixtureManifest.cmake)
+add_test(NAME cgb_speed_expectations_derive
+  COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/derive-cgb-speed-expectations.py
+    --check ${PROJECT_SOURCE_DIR}/tests/data/cgb-speed-expectations.txt)
+set_tests_properties(cgb_speed_expectations_derive PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-speed-expectations check pass")
+add_test(NAME cgb_speed_fixture_probes
+  COMMAND test_cgb_speed_fixture probes ${GBB_CGB_SPEED_DIR}/speed.gb
+    ${PROJECT_SOURCE_DIR}/tests/data/cgb-speed-expectations.txt)
+set_tests_properties(cgb_speed_fixture_probes PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-speed-fixture probes pass checks=" TIMEOUT 60)
+# --- Phase 12 plan 12-10 end ---
+
 gabbaboy_verify_registered_tests()

@@ -1,0 +1,69 @@
+{
+  "id": "cgb-speed",
+  "source": [
+    "common.inc",
+    "speed.asm"
+  ],
+  "source_identity": "Original GabbaBoy project-authored assembly",
+  "source_sha256": {
+    "common.inc": "4a717e135d9bdba8529b304d8957c50aba085aadf32a6e12c79ffd3370b45854",
+    "speed.asm": "3ac09d350f85291c97fd6292987bf74f26216038532f505537d0d57054a0a161"
+  },
+  "license": "MIT; see LICENSE.txt and repository LICENSE",
+  "evidence_class": "Pinned author-attested software-model corpus and original deterministic software guest; not hardware evidence.",
+  "build": {
+    "assembler": "RGBDS",
+    "version": "1.0.1",
+    "archive": "rgbds-macos.zip",
+    "archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
+    "ci_archive": "rgbds-linux-x86_64.tar.xz",
+    "ci_archive_sha256": "80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9",
+    "recipe": "Per ROM, from fixtures[].recipe: rgbasm -I fixtures/cgb-speed/ [-D name]... -o <work>/<rom>.o fixtures/cgb-speed/<source> && rgblink -o <work>/<rom> <work>/<rom>.o && rgbfix <rgbfix_flags> <work>/<rom>; every tool comes from the digest-pinned RGBDS v1.0.1 release archive.",
+    "committed_bytes_toolchain": "RGBDS v1.0.1 macOS release archive (digest above); committed ROM is fixed with the manifest recipe."
+  },
+  "fixtures": [
+    {
+      "file": "speed.gb",
+      "size_bytes": 32768,
+      "sha256": "9ac3bff9ee4f21b7adfd3b33f7baca4ee017ff20fa901c161f3fdb63ab53f123",
+      "recipe": {
+        "source": "speed.asm",
+        "defines": [],
+        "rgbfix_flags": [
+          "-v",
+          "-p",
+          "0"
+        ]
+      }
+    }
+  ],
+  "cartridge": {
+    "mapper": "none (ROM only)",
+    "type": "0x00",
+    "rom_size_code": "0x00 (32 KiB)",
+    "ram_size_code": "0x00 (none)",
+    "cgb_flag": "0xC0 (CGB only)"
+  },
+  "profile": {
+    "name": "CGB-CPU-E",
+    "boot": "Skipped; starts at cartridge entry 0x0100.",
+    "applicability": "Original software fixture for the deterministic bootless CGB-CPU-E profile in CGB mode; not physical-hardware evidence."
+  },
+  "protocol": {
+    "sample_layout": "Four phase-major 32-byte records begin at WRAM $C100; the host reads them through gbb_peek_ram after the done marker at $C0FE.",
+    "phase_order": [
+      "normal speed",
+      "switch to double speed",
+      "switch back to normal speed",
+      "switch to double speed again"
+    ],
+    "tima": "TAC selects 16 T-cycles; the unsigned counter delta between two adjacent LY transitions is stored at record offset 3.",
+    "key1": "Offsets 0, 1, and 2 hold the phase readback, armed readback, and readback after STOP respectively.",
+    "stop_lines": "LY is sampled directly before STOP and immediately after resume at offsets 13 and 15; the difference is interpreted modulo 154 lines."
+  },
+  "scope_limits": [
+    "This is a deterministic emulator-software probe, not physical hardware evidence.",
+    "Timing bounds are independently derived from documented clock units and the confirmed 12-09 stall value; they are not fitted to this core's observations.",
+    "The host driver uses only public API calls and fixed WRAM observations."
+  ]
+}
