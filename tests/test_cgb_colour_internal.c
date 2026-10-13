@@ -993,6 +993,125 @@ static int cgb_attr_vbk_not_read(void) {
     return 0;
 }
 
+/* ---- Priority truth table through the real colour path (Phase 11 plan 11-05; D-22) ---------------
+ * Every row of the independent oracle is applied to a real instance and compared with the colour the
+ * core produces. Expected colours are the distinct words below, derived from the row's expectation
+ * alone: BG palette 0 / OBJ palette 1 (object A) / OBJ palette 2 (object B) in CGB mode, compat sets
+ * 0 / 1 (OBP0) / 2 (OBP1) with identity shades in compat mode. */
+#define TRUTH_X 80u
+#define TRUTH_LY 40u
+
+static uint16_t truth_expect(const priority_row *r) {
+    if (r->mode == 0u) {
+        if (r->expect_layer == 0u) return bgcol(0, r->expect_index);
+        return objcol(r->expect_layer, r->expect_index);
+    }
+    return cpal(r->expect_layer, r->expect_index);
+}
+
+/* Both objects cover x = 80 on line 40; A has the lower OAM index (4), B the higher (9). */
+static void truth_row_state(gbb_instance *m, const priority_row *r, int via_oam) {
+    const uint8_t left_a = r->order == 0u ? 76u : r->order == 1u ? 77u : 78u;
+    const uint8_t left_b = r->order == 0u ? 78u : r->order == 1u ? 77u : 76u;
+    const uint8_t oam_y = (uint8_t)(TRUTH_LY + 16u);
+    uint8_t attr_a, attr_b;
+    if (r->mode == 0u) { attr_a = 1u; attr_b = 2u; }   /* OBJ palettes 1 and 2 */
+    else { attr_a = 0x00u; attr_b = 0x10u; }           /* OBP0 and OBP1 */
+    if (r->a_pri) attr_a |= 0x80u;
+    if (r->b_pri) attr_b |= 0x80u;
+    tile_solid(m, 0, 1, r->bg_index);
+    tile_solid(m, 0, 2, r->a_index);
+    tile_solid(m, 0, 3, r->b_index);
+    map_fill(m, 0, 0x1800u, 1u);
+    map_fill(m, 1, 0x1800u, (uint8_t)(r->bg_attr7 ? 0x80u : 0x00u)); /* compat must ignore it too */
+    m->scx = 0u; m->scy = 0u; m->wx = 0u; m->wy = 0u;
+    m->ly = (uint8_t)TRUTH_LY;
+    m->lcdc = (uint8_t)(0x80u | 0x10u | 0x02u | (r->lcdc0 ? 0x01u : 0x00u));
+    memset(m->oam, 0, sizeof(m->oam));
+    m->oam[4u * 4u] = oam_y; m->oam[4u * 4u + 1u] = (uint8_t)(left_a + 8u);
+    m->oam[4u * 4u + 2u] = 2u; m->oam[4u * 4u + 3u] = attr_a;
+    m->oam[9u * 4u] = oam_y; m->oam[9u * 4u + 1u] = (uint8_t)(left_b + 8u);
+    m->oam[9u * 4u + 2u] = 3u; m->oam[9u * 4u + 3u] = attr_b;
+    if (!via_oam) {
+        /* What ppu_scan_object stores for these two entries, in ascending OAM index. */
+        m->ppu_selected_object_count = 2u;
+        m->ppu_selected_objects[0] = 4u; m->ppu_selected_objects[1] = 9u;
+        m->ppu_selected_y[0] = oam_y; m->ppu_selected_y[1] = oam_y;
+        m->ppu_selected_x[0] = (uint8_t)(left_a + 8u); m->ppu_selected_x[1] = (uint8_t)(left_b + 8u);
+        m->ppu_selected_tile[0] = 2u; m->ppu_selected_tile[1] = 3u;
+        m->ppu_selected_attributes[0] = attr_a; m->ppu_selected_attributes[1] = attr_b;
+    }
+}
+
+static gbb_instance *make_truth_instance(int mode) {
+    gbb_instance *m = mode == 0 ? make_render() : make_compat();
+    if (m == NULL) return NULL;
+    m->bgp = 0xE4u; m->obp0 = 0xE4u; m->obp1 = 0xE4u;
+    return m;
+}
+
+static int truth_table_run(int opri_write, const char *name) {
+    gbb_instance *machines[2] = {make_truth_instance(0), make_truth_instance(1)};
+    REQUIRE(machines[0] != NULL && machines[1] != NULL);
+    if (opri_write) {
+        write8(machines[0], OPRI_PORT, 0x01u);
+        REQUIRE(machines[0]->opri == 1u);
+    }
+    const size_t count = sizeof(PRIORITY_ROWS) / sizeof(PRIORITY_ROWS[0]);
+    size_t checked = 0;
+    for (size_t i = 0; i < count; ++i) {
+        const priority_row *r = &PRIORITY_ROWS[i];
+        gbb_instance *m = machines[r->mode];
+        truth_row_state(m, r, 0);
+        const uint16_t got = r->mode == 0u ? ppu_pixel_cgb(m, TRUTH_X) : ppu_pixel_compat(m, TRUTH_X);
+        if (got != truth_expect(r)) {
+            fprintf(stderr, "truth mismatch row=%zu mode=%u lcdc0=%u bg_attr7=%u bg_index=%u a=%u/%u "
+                    "b=%u/%u order=%u expect=%u/%u got=%04x want=%04x\n", i, r->mode, r->lcdc0,
+                    r->bg_attr7, r->bg_index, r->a_index, r->a_pri, r->b_index, r->b_pri, r->order,
+                    r->expect_layer, r->expect_index, got, truth_expect(r));
+            return 1;
+        }
+        ++checked;
+    }
+    REQUIRE(checked == GBB_CGB_PRIORITY_TRUTH_ROWS);
+    printf("cgb-colour-internal %s pass rows=%zu\n", name, checked);
+    gbb_destroy(machines[0]);
+    gbb_destroy(machines[1]);
+    return 0;
+}
+
+static int cgb_priority_truth_table(void) {
+    return truth_table_run(0, "cgb_priority_truth_table");
+}
+
+/* D-08: OPRI written through write8 in CGB mode leaves every row unchanged. */
+static int cgb_priority_opri_no_effect(void) {
+    return truth_table_run(1, "cgb_priority_opri_no_effect");
+}
+
+/* Frame-level sample: real OAM, the scan, dispatch and the completed frame. */
+static int cgb_priority_truth_frames(void) {
+    const size_t count = sizeof(PRIORITY_ROWS) / sizeof(PRIORITY_ROWS[0]);
+    size_t sampled = 0;
+    for (size_t i = 0; i < count; i += 97u) {
+        const priority_row *r = &PRIORITY_ROWS[i];
+        gbb_instance *m = make_truth_instance((int)r->mode);
+        REQUIRE(m != NULL);
+        truth_row_state(m, r, 1);
+        REQUIRE(render(m));
+        if (px(m, TRUTH_X, TRUTH_LY) != truth_expect(r)) {
+            fprintf(stderr, "truth mismatch row=%zu (frame) got=%04x want=%04x\n", i,
+                    px(m, TRUTH_X, TRUTH_LY), truth_expect(r));
+            return 1;
+        }
+        gbb_destroy(m);
+        ++sampled;
+    }
+    REQUIRE(sampled >= 64u);
+    printf("cgb-colour-internal cgb_priority_truth_frames pass sampled=%zu\n", sampled);
+    return 0;
+}
+
 typedef struct {
     const char *name;
     int (*run)(void);
@@ -1035,6 +1154,9 @@ static const plain_case PLAIN_CASES[] = {
     {"cgb_compat_internal_lcdc0", cgb_compat_internal_lcdc0},
     {"cgb_compat_internal_x_order", cgb_compat_internal_x_order},
     {"cgb_compat_internal_live_config", cgb_compat_internal_live_config},
+    {"cgb_priority_truth_table", cgb_priority_truth_table},
+    {"cgb_priority_truth_frames", cgb_priority_truth_frames},
+    {"cgb_priority_opri_no_effect", cgb_priority_opri_no_effect},
 };
 
 int main(int argc, char **argv) {

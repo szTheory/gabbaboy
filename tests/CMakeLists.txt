@@ -2067,4 +2067,14 @@ foreach(gbb_compat_case
 endforeach()
 # --- Phase 11 plan 11-04 end ---
 
+# --- Phase 11 plan 11-05 begin ---
+# Priority truth table and attribute mutants (D-22, D-06 to D-08, D-39). Tests only: no core edit.
+add_test(NAME cgb_priority_truth_table COMMAND test_cgb_colour_internal cgb_priority_truth_table)
+set_tests_properties(cgb_priority_truth_table PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-colour-internal cgb_priority_truth_table pass rows=6144")
+add_test(NAME cgb_priority_truth_frames COMMAND test_cgb_colour_internal cgb_priority_truth_frames)
+set_tests_properties(cgb_priority_truth_frames PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-colour-internal cgb_priority_truth_frames pass sampled=")
+# --- Phase 11 plan 11-05 end ---
+
 gabbaboy_verify_registered_tests()
