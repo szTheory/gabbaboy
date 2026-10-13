@@ -680,3 +680,5 @@ model_gates_no_phase11_rows
 model_gates_no_phase11_rows_mutated_doc
 cgb_fuzz_palette_mutant_no_mask
 cgb_fuzz_palette_mutant_no_mask_control
+cgb_measure_core_cgb_profile
+cgb_measure_core_unknown_profile

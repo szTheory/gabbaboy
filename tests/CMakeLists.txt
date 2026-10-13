@@ -2414,6 +2414,18 @@ add_test(NAME model_gates_no_phase11_rows_mutated_doc
     -DGBB_EXPECT_CODE=1
     "-DGBB_EXPECT_REGEX=phase-11-row-open"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# The CGB colour workload form of measure_core (D-33): it must create the CGB profile and report it.
+add_test(NAME cgb_measure_core_cgb_profile
+  COMMAND measure_core --no-trace --profile cgb ${PROJECT_SOURCE_DIR}/fixtures/cgb-colour/colour-attr.gb)
+set_tests_properties(cgb_measure_core_cgb_profile PROPERTIES
+  PASS_REGULAR_EXPRESSION "correctness_digest_fnv1a64=[0-9a-f]+ profile=cgb-cpu-e")
+# Negative control: an unknown profile name is a usage error (exit 2), not a silent DMG run.
+add_test(NAME cgb_measure_core_unknown_profile
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:measure_core>;--no-trace;--profile;dmg;${PROJECT_SOURCE_DIR}/fixtures/cgb-colour/colour-attr.gb"
+    -DGBB_EXPECT_CODE=2
+    "-DGBB_EXPECT_REGEX=usage: measure_core"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # --- Phase 11 plan 11-14 end ---
 
 gabbaboy_verify_registered_tests()

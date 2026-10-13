@@ -90,23 +90,30 @@ static uint64_t peak_rss_bytes(void) {
 }
 
 int main(int argc, char **argv) {
-    if (argc != 3 || (strcmp(argv[1], "--trace") != 0 &&
-                      strcmp(argv[1], "--no-trace") != 0)) {
-        fprintf(stderr, "usage: measure_core (--trace|--no-trace) <rom>\n");
+    /* "--no-trace --profile cgb <rom>" measures the CGB-CPU-E profile (the colour workload); the
+     * three-argument DMG form and its output are unchanged. */
+    const int cgb_form = argc == 5 && strcmp(argv[2], "--profile") == 0 &&
+                         strcmp(argv[3], "cgb") == 0;
+    if ((argc != 3 && !cgb_form) || (strcmp(argv[1], "--trace") != 0 &&
+                                     strcmp(argv[1], "--no-trace") != 0) ||
+        (cgb_form && strcmp(argv[1], "--no-trace") != 0)) {
+        fprintf(stderr, "usage: measure_core (--trace|--no-trace) <rom>\n"
+                        "       measure_core --no-trace --profile cgb <rom>\n");
         return 2;
     }
     const int trace_enabled = strcmp(argv[1], "--trace") == 0;
+    const char *rom_path = cgb_form ? argv[4] : argv[2];
     uint8_t rom[MAX_ROM_BYTES];
     size_t rom_size = 0;
-    if (!read_rom(argv[2], rom, &rom_size)) {
+    if (!read_rom(rom_path, rom, &rom_size)) {
         fprintf(stderr, "measurement ROM missing, oversized, or unreadable\n");
         return 2;
     }
     gbb_instance *machine = NULL;
-    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &machine) != GBB_OK ||
+    if (gbb_create(cgb_form ? GBB_PROFILE_CGB_CPU_E : GBB_PROFILE_DMG_CPU_B, &machine) != GBB_OK ||
         gbb_load_rom(machine, rom, rom_size) != GBB_OK) {
         gbb_destroy(machine);
-        fprintf(stderr, "measurement ROM rejected by the DMG-CPU-B profile\n");
+        fprintf(stderr, "measurement ROM rejected by the selected profile\n");
         return 2;
     }
     gbb_trace_record *trace = NULL;
@@ -131,10 +138,10 @@ int main(int argc, char **argv) {
     printf("mode=%s workload=original-wram-tracer-1m-half-dots-v1 budget_half_dots=%" PRIu64
            " consumed_half_dots=%" PRIu64 " stop_reason=%u elapsed_ns=%" PRId64
            " clock_resolution_ns=%ld clock_method=monotonic peak_rss_bytes=%" PRIu64
-           " trace_records=%zu correctness_digest_fnv1a64=%016" PRIx64 "\n",
+           " trace_records=%zu correctness_digest_fnv1a64=%016" PRIx64 "%s\n",
            trace_enabled ? "trace" : "no-trace", WORKLOAD_HALF_DOTS,
            result.consumed_half_dots, (unsigned)result.reason, elapsed_ns, clock_resolution, rss_bytes,
-           result.trace_count, digest);
+           result.trace_count, digest, cgb_form ? " profile=cgb-cpu-e" : "");
     free(trace);
     gbb_destroy(machine);
     return result.reason == GBB_STOP_BUDGET && result.consumed_half_dots > 0 &&
