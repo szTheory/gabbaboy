@@ -3875,6 +3875,7 @@ static void execute(gbb_instance *m, uint8_t cost) {
                     break;
                 default: m->pc=(uint16_t)(pc+2u); m->stopped=1u; break;
                 }
+                break; /* P12-M34: STOP must not execute RLCA. */
             case 0x07: { uint8_t c=(uint8_t)(m->a>>7); m->a=(uint8_t)((m->a<<1)|c); m->f=c?0x10:0; m->pc++; break; }
             case 0x0F: { uint8_t c=(uint8_t)(m->a&1); m->a=(uint8_t)((m->a>>1)|(c<<7)); m->f=c?0x10:0; m->pc++; break; }
             case 0x17: { uint8_t c=(uint8_t)(m->a>>7), old=(uint8_t)((m->f>>4)&1); m->a=(uint8_t)((m->a<<1)|old); m->f=c?0x10:0; m->pc++; break; }

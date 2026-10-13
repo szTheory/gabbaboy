@@ -919,7 +919,8 @@ static int case_stop_armed_cgb(void) {
     REQUIRE(r.reason == GBB_STOP_HALTED_IDLE);
     REQUIRE(seam != 0xFF4D);
     REQUIRE(second == (int)GBB_STOP_HALTED_IDLE);
-    REQUIRE(marker != 0x5A);
+    /* Armed case 4 resumes after the stall and executes the marker store. */
+    REQUIRE(marker == 0x5A);
     /* Control: without the arming write the same program does sleep, so the stop above is caused by
      * KEY1 and not by STOP itself. */
     gbb_run_result u; int s2, m2;

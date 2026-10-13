@@ -2535,6 +2535,12 @@ gbb_p12_mutant_test(test_cgb_speed_internal_p12 5 stall_sets_stopped
   cgb_speed_tracer_switch "stopped|GBB_STOP_STOPPED")
 add_test(NAME cgb_speed_stop_cases COMMAND test_cgb_speed_internal_p12 cgb_speed_stop_cases)
 set_tests_properties(cgb_speed_stop_cases PROPERTIES TIMEOUT 60)
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 34 stop_falls_into_rlca
+  cgb_speed_stop_cases "machine->pc == 0x101u")
+add_test(NAME cgb_speed_stop_guest_timer_irq COMMAND test_cgb_speed_internal_p12 cgb_speed_stop_guest_timer_irq)
+set_tests_properties(cgb_speed_stop_guest_timer_irq PROPERTIES TIMEOUT 60)
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 20 guest_timer_pending_ignored
+  cgb_speed_stop_guest_timer_irq "cpu_stall_kind")
 foreach(stop_case IN ITEMS cgb_speed_stop_operand cgb_speed_stop_prefetch_ff04
     cgb_speed_stop_cost cgb_speed_dmg_unarmed_unchanged cgb_speed_key1_readback
     cgb_speed_key0_no_switch)
