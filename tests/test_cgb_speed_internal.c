@@ -420,6 +420,103 @@ static int cgb_speed_timer_scaling(void) {
     return 0;
 }
 
+static int cgb_speed_serial_scaling(void) {
+    uint8_t rom[32768];
+    make_internal_rom(rom, NULL, 0u);
+    for (unsigned speed = 0u; speed <= 1u; ++speed) {
+        gbb_instance *machine = NULL;
+        REQUIRE(create_internal_machine(rom, &machine) == 0);
+        machine->double_speed = (uint8_t)speed;
+        machine->serial_active = 1;
+        machine->serial_control = 1u;
+        machine->serial_edge_remaining = 512u;
+        const uint64_t duration = speed ? 4096u : 8192u;
+        advance_devices_to(machine, duration);
+        REQUIRE(!machine->serial_active);
+        REQUIRE((machine->interrupt_flags & 0x08u) != 0u);
+        gbb_destroy(machine);
+    }
+    return 0;
+}
+
+static int cgb_speed_dma_scaling(void) {
+    uint8_t rom[32768];
+    make_internal_rom(rom, NULL, 0u);
+    for (unsigned speed = 0u; speed <= 1u; ++speed) {
+        gbb_instance *machine = NULL;
+        REQUIRE(create_internal_machine(rom, &machine) == 0);
+        machine->double_speed = (uint8_t)speed;
+        machine->dma_active = 1;
+        machine->dma_page = 0xC0u;
+        machine->dma_index = 0u;
+        machine->dma_phase = 0u;
+        const uint64_t half_dots_per_m = 8u >> speed;
+        advance_devices_to(machine, 159u * half_dots_per_m);
+        REQUIRE(machine->dma_active && machine->dma_index < GBB_OAM_BYTES);
+        advance_devices_to(machine, 161u * half_dots_per_m);
+        REQUIRE(!machine->dma_active && machine->dma_index == GBB_OAM_BYTES);
+        gbb_destroy(machine);
+    }
+    return 0;
+}
+
+static int cgb_speed_apu_tap(void) {
+    uint8_t rom[32768];
+    make_internal_rom(rom, NULL, 0u);
+    for (unsigned speed = 0u; speed <= 1u; ++speed) {
+        gbb_instance *machine = NULL;
+        REQUIRE(create_internal_machine(rom, &machine) == 0);
+        machine->double_speed = (uint8_t)speed;
+        machine->apu_power = 1u;
+        machine->apu_pulse[0].control = 0x40u;
+        machine->apu_pulse[0].length = 256u;
+        machine->apu_pulse[0].envelope = 0xF7u;
+        machine->apu_pulse[0].envelope_timer = 7u;
+        machine->apu_pulse[0].volume = 0u;
+        advance_devices_to(machine, GBB_MASTER_HALF_DOTS_PER_SECOND);
+        REQUIRE(machine->apu_pulse[0].volume == 9u);
+        gbb_destroy(machine);
+    }
+
+    gbb_instance *machine = NULL;
+    REQUIRE(create_internal_machine(rom, &machine) == 0);
+    machine->double_speed = 1u;
+    machine->divider_counter = 0x2000u;
+    machine->apu_sequencer_step = 3u;
+    divider_reset(machine, 1);
+    REQUIRE(machine->apu_sequencer_step == 4u);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int cgb_speed_remainder_across_switch(void) {
+    uint8_t rom[32768];
+    make_internal_rom(rom, NULL, 0u);
+    gbb_instance *machine = NULL;
+    REQUIRE(create_internal_machine(rom, &machine) == 0);
+    machine->pc = 0x200u;
+    machine->rom[0x200u] = 0x10u;
+    machine->rom[0x201u] = 0x00u;
+    machine->key1_armed = 1u;
+    machine->dma_active = 1;
+    machine->dma_page = 0xC0u;
+    machine->dma_phase = 1u;
+    machine->serial_active = 1;
+    machine->serial_control = 1u;
+    machine->serial_edge_remaining = 512u;
+    machine->timer_reload_pending = 1;
+    machine->timer_reload_remaining = 100u;
+    gbb_run_result run = gbb_run(machine, 16u, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET);
+    REQUIRE(machine->double_speed == 1u && machine->cpu_stall_kind == GBB_STALL_SPEED_SWITCH);
+    REQUIRE(machine->divider_phase < 2u);
+    REQUIRE(machine->serial_edge_remaining > 0u && machine->serial_edge_remaining < 512u);
+    REQUIRE(machine->dma_phase > 0u && machine->dma_phase < GBB_T_PER_M);
+    REQUIRE(machine->timer_reload_remaining == 92u);
+    gbb_destroy(machine);
+    return 0;
+}
+
 static int cgb_speed_reset_double_speed(void) {
     uint8_t rom[32768];
     const uint8_t switch_program[] = {0x3Eu, 0x01u, 0xE0u, 0x4Du, 0x10u, 0x00u};
@@ -531,6 +628,26 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "cgb_speed_timer_scaling") == 0) {
         int rc = cgb_speed_timer_scaling();
         if (rc == 0) puts("cgb-speed-internal cgb_speed_timer_scaling pass");
+        return rc;
+    }
+    if (strcmp(argv[1], "cgb_speed_serial_scaling") == 0) {
+        int rc = cgb_speed_serial_scaling();
+        if (rc == 0) puts("cgb-speed-internal cgb_speed_serial_scaling pass");
+        return rc;
+    }
+    if (strcmp(argv[1], "cgb_speed_dma_scaling") == 0) {
+        int rc = cgb_speed_dma_scaling();
+        if (rc == 0) puts("cgb-speed-internal cgb_speed_dma_scaling pass");
+        return rc;
+    }
+    if (strcmp(argv[1], "cgb_speed_apu_tap") == 0) {
+        int rc = cgb_speed_apu_tap();
+        if (rc == 0) puts("cgb-speed-internal cgb_speed_apu_tap pass");
+        return rc;
+    }
+    if (strcmp(argv[1], "cgb_speed_remainder_across_switch") == 0) {
+        int rc = cgb_speed_remainder_across_switch();
+        if (rc == 0) puts("cgb-speed-internal cgb_speed_remainder_across_switch pass");
         return rc;
     }
     if (strcmp(argv[1], "cgb_speed_reset_stall") == 0) {
