@@ -422,12 +422,12 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-13T21:39:31.714Z
-Stopped at: Completed GB-12-08-PLAN.md
+Last session: 2026-10-13T22:00:33Z
+Stopped at: Completed GB-12-09-PLAN.md
 Resume file: phases/GB-12-cgb-double-speed/continue.md
-Completed workflow stage: **Phase GB-12 plan 12-06 execution** (2026-10-13), summary [12-06-SUMMARY.md](phases/GB-12-cgb-double-speed/12-06-SUMMARY.md), on branch `gsd/phase-12-cgb-double-speed`. Three task commits are recorded. Focused STOP/identity/mutant checks passed 52/52 and the DMG baseline passed. The pending-IRQ tracer uses white-box IE/IF setup; timer-generated guest IF and natural run-loop dispatch remain unverified. Phase 12 remains in progress.
-Next plan: **GB-12 plan 12-07 — STOP stall wake, boundary sampling, and realignment**, documented in `phases/GB-12-cgb-double-speed/12-07-PLAN.md`.
-Next command in fresh context: **`/gsd-execute-phase 12`** (resumes at 12-07). Stop after Phase 12 and wait for the owner; both auto-advance flags remain false.
+Completed workflow stage: **Phase GB-12 plan 12-09 execution** (2026-10-13), summary [12-09-SUMMARY.md](phases/GB-12-cgb-double-speed/12-09-SUMMARY.md), on branch `gsd/phase-12-cgb-double-speed`. The measured committed-core AGE window is `[0x20004, 0x20007]` T; `GBB_SPEED_SWITCH_STALL_T` remains `0x20004`, with a 46,000,000-half-dot budget. Focused gates and full local CTest passed (820/820). This is pinned software-corpus evidence; no physical-hardware claim is made. Phase 12 remains in progress.
+Next plan: **GB-12 plan 12-10 — original CGB speed probe fixture and independently derived expectations**, documented in `phases/GB-12-cgb-double-speed/12-10-PLAN.md`.
+Next command in fresh context: **`/gsd-execute-phase 12`** (resumes at 12-10). The next phase after the remaining Phase 12 plans is **Phase 13 — CGB HDMA**; it is not started. Stop after Phase 12 and wait for the owner; both auto-advance flags remain false.
 
 OpenGSD settings (2026-10-13): switched the project runtime from `claude` to `codex` for current development. Profile `adaptive`; heavy (`opus`) uses `gpt-6-sol`, medium (`sonnet`) and light (`haiku`) use `gpt-6-luna`; reasoning effort is `medium` for all three. Project pins take precedence over machine-wide defaults. Completed workflow stage: **Phase GB-12 plan 12-01 execution** (2026-10-13), with task commits `9dfc604` and `43114cb`; the phase remains in progress. Next: **Phase 12 - CGB Double Speed execution, plan 12-02 onward**, via **`/gsd-execute-phase 12`**. Both auto-advance flags stay false; stop after Phase 12 and wait for the owner.
 
