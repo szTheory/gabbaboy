@@ -26,6 +26,7 @@
       "test_results_address": "$C000",
       "expected_address": "$144A",
       "rows": 5,
+      "budget_half_dots": 46000000,
       "pass_pc": "$13CD",
       "fail_pc": "$13D9",
       "expected_role": "pass",

@@ -2799,4 +2799,49 @@ add_test(NAME cgb_speed_mutant_m31_stall_offset_noop
 set_tests_properties(cgb_speed_mutant_m31_stall_offset_noop PROPERTIES TIMEOUT 60)
 # --- Phase 12 plan 12-07 end ---
 
+# --- Phase 12 plan 12-09 begin ---
+add_executable(test_age test_age.c)
+target_include_directories(test_age PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_link_libraries(test_age PRIVATE GabbaBoy::core gabbaboy_accept)
+target_compile_features(test_age PRIVATE c_std_17)
+set_target_properties(test_age PROPERTIES C_EXTENSIONS OFF)
+
+set(GBB_AGE_MANIFEST "${PROJECT_SOURCE_DIR}/fixtures/age/manifest.json")
+file(READ "${GBB_AGE_MANIFEST}" GBB_AGE_MANIFEST_JSON)
+string(JSON GBB_AGE_FIXTURE_COUNT LENGTH "${GBB_AGE_MANIFEST_JSON}" fixtures)
+math(EXPR GBB_AGE_FIXTURE_LAST "${GBB_AGE_FIXTURE_COUNT} - 1")
+set(GBB_AGE_SPSW_FOUND OFF)
+foreach(GBB_AGE_FIXTURE_INDEX RANGE 0 ${GBB_AGE_FIXTURE_LAST})
+  string(JSON GBB_AGE_FIXTURE_FILE GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} file)
+  if("${GBB_AGE_FIXTURE_FILE}" STREQUAL "spsw-div-cgbBCE.gb")
+    set(GBB_AGE_SPSW_FOUND ON)
+    string(JSON GBB_AGE_SPSW_RESULTS GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} test_results_address)
+    string(JSON GBB_AGE_SPSW_EXPECTED GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} expected_address)
+    string(JSON GBB_AGE_SPSW_ROWS GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} rows)
+    string(JSON GBB_AGE_SPSW_BUDGET GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} budget_half_dots)
+  endif()
+endforeach()
+if(NOT GBB_AGE_SPSW_FOUND OR NOT DEFINED GBB_AGE_SPSW_BUDGET)
+  message(FATAL_ERROR "AGE manifest must define spsw-div-cgbBCE and its measured budget")
+endif()
+string(REPLACE "$" "0x" GBB_AGE_SPSW_RESULTS_HEX "${GBB_AGE_SPSW_RESULTS}")
+string(REPLACE "$" "0x" GBB_AGE_SPSW_EXPECTED_HEX "${GBB_AGE_SPSW_EXPECTED}")
+set(GBB_AGE_SPSW_ROM "${PROJECT_SOURCE_DIR}/fixtures/age/spsw-div-cgbBCE.gb")
+add_test(NAME age_spsw_div_cgbBCE
+  COMMAND test_age "${GBB_AGE_SPSW_ROM}" "${GBB_AGE_SPSW_RESULTS_HEX}"
+    "${GBB_AGE_SPSW_EXPECTED_HEX}" "${GBB_AGE_SPSW_ROWS}"
+    "${GBB_AGE_SPSW_BUDGET}" --check-disposition pass)
+set_tests_properties(age_spsw_div_cgbBCE PROPERTIES
+  PASS_REGULAR_EXPRESSION "age verdict=pass rows_ok=5/5" TIMEOUT 120)
+
+# Negative control: one half-dot cannot reach an executed verdict and must report timeout distinctly.
+add_test(NAME age_spsw_div_cgbBCE_timeout
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_age>;${GBB_AGE_SPSW_ROM};${GBB_AGE_SPSW_RESULTS_HEX};${GBB_AGE_SPSW_EXPECTED_HEX};${GBB_AGE_SPSW_ROWS};1;--verdict"
+    -DGBB_EXPECT_CODE=3
+    "-DGBB_EXPECT_REGEX=age-timeout half_dots="
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(age_spsw_div_cgbBCE_timeout PROPERTIES TIMEOUT 30)
+# --- Phase 12 plan 12-09 end ---
+
 gabbaboy_verify_registered_tests()
