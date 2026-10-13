@@ -266,7 +266,7 @@ static void rtc_sync(cart_state *c, uint64_t now) {
     c->rtc_synced_at = now;
     if (c->rtc_dh & 0x40u) return;
     const uint64_t low = (el & RTC_SUB_MASK) + c->rtc_sub;
-    const uint64_t secs = (el >> RTC_HALF_DOTS_PER_SECOND_SHIFT) +
+    const uint64_t secs = (el >> RTC_HALF_DOTS_PER_SECOND_SHIFT) + /* P12-M12 */
                           (low >> RTC_HALF_DOTS_PER_SECOND_SHIFT);
     c->rtc_sub = (uint32_t)(low & RTC_SUB_MASK);
     rtc_add_seconds(c, secs);
@@ -2902,7 +2902,7 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
         for (unsigned i = 0u; i < 2u; ++i) {
             apu_pulse_channel *pulse = &m->apu_pulse[i];
             if (pulse->enabled) {
-                if (pulse->timer > 1u) --pulse->timer;
+                if (pulse->timer > 1u) --pulse->timer; /* P12-M17 */
                 else {
                     pulse->timer = (uint16_t)((2048u - pulse->frequency) * 64u);
                     pulse->phase = (uint8_t)((pulse->phase + 1u) & 7u);
@@ -2949,7 +2949,7 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
                 m->audio_frames[m->audio_frame_count++] = frame;
         }
         if (cpu_tick) dma_advance_half_dot(m); /* P12-M14 */
-        m->ppu_half_phase ^= 1u;
+        m->ppu_half_phase ^= 1u; /* P12-M1 */
         if (m->ppu_half_phase == 0) ppu_advance_dot(m);
     }
 }

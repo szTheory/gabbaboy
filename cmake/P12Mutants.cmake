@@ -1,7 +1,11 @@
 # Phase 12 runtime-mask mutant table. Each id owns one or more exact source
 # anchors. Keep each anchor and replacement in a separate variable because C
 # replacement text may contain semicolons.
-set(GBB_P12_MUTANT_IDS 2 3 4 5 7 11 14 15 18 24 25 26)
+set(GBB_P12_MUTANT_IDS 1 2 3 4 5 7 11 12 14 15 17 18 24 25 26)
+
+set(GBB_P12_SITES_1 1)
+set(GBB_P12_ANCHOR_1_1 "m->ppu_half_phase ^= 1u; /* P12-M1 */")
+set(GBB_P12_REPLACEMENT_1_1 "m->ppu_half_phase ^= 1u; /* P12-M1 */\n        if (GBB_P12_MUT(1) && m->double_speed) ppu_advance_dot(m);")
 
 set(GBB_P12_SITES_2 1)
 set(GBB_P12_ANCHOR_2_1 "if (cpu_tick && m->serial_active && (m->serial_control & 1u) != 0 &&")
@@ -17,11 +21,19 @@ set(GBB_P12_SITES_11 1)
 set(GBB_P12_ANCHOR_11_1 "instance->double_speed ^= 1u; /* P12-M11 */")
 set(GBB_P12_REPLACEMENT_11_1 "instance->double_speed ^= 1u; /* P12-M11 */\n            if (GBB_P12_MUT(11)) { instance->divider_phase = 0u; instance->serial_edge_remaining = 0u; instance->dma_phase = 0u; instance->timer_reload_remaining = 0u; }")
 
+set(GBB_P12_SITES_12 1)
+set(GBB_P12_ANCHOR_12_1 "const uint64_t secs = (el >> RTC_HALF_DOTS_PER_SECOND_SHIFT) +")
+set(GBB_P12_REPLACEMENT_12_1 "const uint64_t secs = (GBB_P12_MUT(12) ? (el >> (RTC_HALF_DOTS_PER_SECOND_SHIFT + 1u)) : (el >> RTC_HALF_DOTS_PER_SECOND_SHIFT)) +")
+
 set(GBB_P12_SITES_14 2)
 set(GBB_P12_ANCHOR_14_1 "if (++m->dma_phase < GBB_T_PER_M) return;")
 set(GBB_P12_REPLACEMENT_14_1 "if (++m->dma_phase < (GBB_P12_MUT(14) ? GBB_DMA_BYTE_PERIOD_HALF_DOTS : GBB_T_PER_M)) return;")
 set(GBB_P12_ANCHOR_14_2 "if (cpu_tick) dma_advance_half_dot(m); /* P12-M14 */")
 set(GBB_P12_REPLACEMENT_14_2 "if (cpu_tick || GBB_P12_MUT(14)) dma_advance_half_dot(m); /* P12-M14 */")
+
+set(GBB_P12_SITES_17 1)
+set(GBB_P12_ANCHOR_17_1 "if (pulse->timer > 1u) --pulse->timer; /* P12-M17 */")
+set(GBB_P12_REPLACEMENT_17_1 "if (GBB_P12_MUT(17) && m->double_speed && pulse->timer > 1u) --pulse->timer;\n                if (pulse->timer > 1u) --pulse->timer; /* P12-M17 */")
 
 set(GBB_P12_SITES_3 1)
 set(GBB_P12_ANCHOR_3_1 "const int cpu_tick = m->double_speed || m->divider_phase == 0u; /* P12-M3 */")

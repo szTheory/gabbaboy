@@ -527,6 +527,71 @@ static int cgb_speed_remainder_across_switch(void) {
     return 0;
 }
 
+static void set_header_checksum(uint8_t rom[32768]) {
+    uint8_t checksum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14Du] = checksum;
+}
+
+static int cgb_speed_ppu_apu_rtc_unscaled(void) {
+    uint8_t rom[32768];
+    make_internal_rom(rom, NULL, 0u);
+    for (unsigned speed = 0u; speed <= 1u; ++speed) {
+        gbb_instance *machine = NULL;
+        REQUIRE(create_internal_machine(rom, &machine) == 0);
+        machine->double_speed = (uint8_t)speed;
+        machine->ly = 0u;
+        machine->ppu_dot = 0u;
+        machine->ppu_half_phase = 0u;
+        const uint64_t frame_start = machine->frame_generation;
+        advance_devices_to(machine, 912u);
+        REQUIRE(machine->ly == 1u);
+        advance_devices_to(machine, 140448u);
+        REQUIRE(machine->frame_generation == frame_start + 1u);
+        gbb_destroy(machine);
+
+        REQUIRE(create_internal_machine(rom, &machine) == 0);
+        machine->double_speed = (uint8_t)speed;
+        machine->apu_pulse[0].enabled = 1;
+        machine->apu_pulse[0].timer = 100u;
+        advance_devices_to(machine, 10u);
+        REQUIRE(machine->apu_pulse[0].timer == 90u);
+        gbb_destroy(machine);
+    }
+
+    size_t pcm_counts[2] = {0u, 0u};
+    for (unsigned speed = 0u; speed <= 1u; ++speed) {
+        gbb_instance *machine = NULL;
+        REQUIRE(create_internal_machine(rom, &machine) == 0);
+        machine->double_speed = (uint8_t)speed;
+        gbb_audio_frame pcm[1024];
+        machine->audio_frames = pcm;
+        machine->audio_frame_capacity = sizeof(pcm) / sizeof(pcm[0]);
+        machine->audio_frame_count = 0u;
+        advance_devices_to(machine, 140448u);
+        pcm_counts[speed] = machine->audio_frame_count;
+        gbb_destroy(machine);
+    }
+    REQUIRE(pcm_counts[0] > 0u && pcm_counts[0] == pcm_counts[1]);
+
+    make_internal_rom(rom, NULL, 0u);
+    rom[0x147u] = 0x10u;
+    rom[0x149u] = 0x03u;
+    set_header_checksum(rom);
+    for (unsigned speed = 0u; speed <= 1u; ++speed) {
+        gbb_instance *machine = NULL;
+        REQUIRE(create_internal_machine(rom, &machine) == 0);
+        machine->double_speed = (uint8_t)speed;
+        rtc_sync(&machine->cart, 3u * GBB_MASTER_HALF_DOTS_PER_SECOND);
+        rtc_latch_write(&machine->cart, 3u * GBB_MASTER_HALF_DOTS_PER_SECOND, 0u);
+        rtc_latch_write(&machine->cart, 3u * GBB_MASTER_HALF_DOTS_PER_SECOND, 1u);
+        REQUIRE(machine->cart.rtc_l[0] == 3u);
+        gbb_destroy(machine);
+    }
+    return 0;
+}
+
 static int cgb_speed_reset_double_speed(void) {
     uint8_t rom[32768];
     const uint8_t switch_program[] = {0x3Eu, 0x01u, 0xE0u, 0x4Du, 0x10u, 0x00u};
@@ -658,6 +723,11 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "cgb_speed_remainder_across_switch") == 0) {
         int rc = cgb_speed_remainder_across_switch();
         if (rc == 0) puts("cgb-speed-internal cgb_speed_remainder_across_switch pass");
+        return rc;
+    }
+    if (strcmp(argv[1], "cgb_speed_ppu_apu_rtc_unscaled") == 0) {
+        int rc = cgb_speed_ppu_apu_rtc_unscaled();
+        if (rc == 0) puts("cgb-speed-internal cgb_speed_ppu_apu_rtc_unscaled pass");
         return rc;
     }
     if (strcmp(argv[1], "cgb_speed_reset_stall") == 0) {

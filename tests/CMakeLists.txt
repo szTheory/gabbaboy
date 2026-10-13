@@ -2543,8 +2543,10 @@ add_test(NAME cgb_speed_serial_scaling COMMAND test_cgb_speed_internal_p12 cgb_s
 add_test(NAME cgb_speed_dma_scaling COMMAND test_cgb_speed_internal_p12 cgb_speed_dma_scaling)
 add_test(NAME cgb_speed_apu_tap COMMAND test_cgb_speed_internal_p12 cgb_speed_apu_tap)
 add_test(NAME cgb_speed_remainder_across_switch COMMAND test_cgb_speed_internal_p12 cgb_speed_remainder_across_switch)
+add_test(NAME cgb_speed_ppu_apu_rtc_unscaled
+  COMMAND test_cgb_speed_internal_p12 cgb_speed_ppu_apu_rtc_unscaled --mutants 0x20000)
 set_tests_properties(cgb_speed_serial_scaling cgb_speed_dma_scaling cgb_speed_apu_tap
-  cgb_speed_remainder_across_switch PROPERTIES TIMEOUT 60)
+  cgb_speed_remainder_across_switch cgb_speed_ppu_apu_rtc_unscaled PROPERTIES TIMEOUT 60)
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 2 serial_unscaled
   cgb_speed_serial_scaling "machine->serial_active")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 4 apu_tap_unscaled
@@ -2555,6 +2557,38 @@ gbb_p12_mutant_test(test_cgb_speed_internal_p12 14 dma_unscaled
   cgb_speed_dma_scaling "!machine->dma_active")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 15 timer_reload_half_dot_units_switch
   cgb_speed_remainder_across_switch "timer_reload_remaining == 4u")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 1 ppu_scaled
+  cgb_speed_ppu_apu_rtc_unscaled "machine->ly == 1u|frame_generation ==")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 12 rtc_scaled
+  cgb_speed_ppu_apu_rtc_unscaled "rtc_l\[0\] == 3u")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 17 apu_channels_scaled
+  cgb_speed_ppu_apu_rtc_unscaled "apu_pulse\[0\]\.timer == 90u")
+
+add_test(NAME cgb_speed_domains_scan
+  COMMAND ${Python3_EXECUTABLE} -I
+    ${PROJECT_SOURCE_DIR}/tests/scripts/verify-speed-domains.py
+    ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c)
+set_tests_properties(cgb_speed_domains_scan PROPERTIES
+  PASS_REGULAR_EXPRESSION "speed-domains pass functions=[1-9]" TIMEOUT 30)
+set(GBB_P12_SPEED_DOMAIN_MUTANT_CORE "${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_p12_speed_domain_mutant.c")
+file(READ "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c" gbb_p12_speed_domain_text)
+set(gbb_p12_speed_domain_anchor "static void ppu_advance_dot(gbb_instance *m) {")
+string(FIND "${gbb_p12_speed_domain_text}" "${gbb_p12_speed_domain_anchor}" gbb_p12_speed_domain_first)
+string(FIND "${gbb_p12_speed_domain_text}" "${gbb_p12_speed_domain_anchor}" gbb_p12_speed_domain_last REVERSE)
+if(gbb_p12_speed_domain_first EQUAL -1 OR NOT gbb_p12_speed_domain_first EQUAL gbb_p12_speed_domain_last)
+  message(FATAL_ERROR "speed-domain negative control needs one ppu_ function anchor")
+endif()
+string(REPLACE "${gbb_p12_speed_domain_anchor}"
+  "${gbb_p12_speed_domain_anchor}\n    (void)m->double_speed;"
+  gbb_p12_speed_domain_text "${gbb_p12_speed_domain_text}")
+file(WRITE "${GBB_P12_SPEED_DOMAIN_MUTANT_CORE}" "${gbb_p12_speed_domain_text}")
+add_test(NAME cgb_speed_domains_scan_mutated
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-speed-domains.py;${GBB_P12_SPEED_DOMAIN_MUTANT_CORE}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=speed-domain-violation ppu_advance_dot"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(cgb_speed_domains_scan_mutated PROPERTIES TIMEOUT 30)
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 3 timer_unscaled
   cgb_speed_timer_scaling "tima_delta|div_delta")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 15 timer_reload_half_dot_units
