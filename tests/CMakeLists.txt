@@ -1547,7 +1547,10 @@ set(GBB_NATIVE_GUIDE_CGB_PHRASES
   "returns `GBB_UNSUPPORTED_EXECUTION_MODE`"
   "returns `GBB_UNSUPPORTED_PROFILE` on the CGB profile"
   "follows the selected WRAM bank"
-  "stop with `GBB_STOP_UNSUPPORTED_BUS`")
+  "stop with `GBB_STOP_UNSUPPORTED_BUS`"
+  "bit 15 is rejected, not masked"
+  "a set never recolours a completed frame"
+  "minimum pitch is 320 bytes")
 list(LENGTH GBB_NATIVE_GUIDE_CGB_PHRASES GBB_NATIVE_GUIDE_CGB_PHRASE_COUNT)
 set(GBB_NATIVE_GUIDE_CGB_SCOPE "The CGB-CPU-E profile is selected with")
 set(GBB_NATIVE_GUIDE_CGB_DECLS
@@ -2196,6 +2199,26 @@ add_test(NAME cgb_tables_compat_palette_mutated_doc
     "-DGBB_CMD=$<TARGET_FILE:test_cgb_tables>;compat_palette;${PROJECT_BINARY_DIR}/cgb-tables/mutated-compat-palette.md"
     -DGBB_EXPECT_CODE=1
     "-DGBB_EXPECT_REGEX=cgb-tables mismatch"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# Every Phase 11 public symbol is called by both installed consumers (D-42).
+set(GBB_PHASE11_CONSUMER_SYMBOLS
+  "gbb_copy_frame_rgb555,gbb_set_compat_palette,gbb_get_compat_palette,GBB_COMPAT_PALETTE_SIZE_V1")
+add_test(NAME cgb_consumer_symbol_coverage
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CONSUMER_SOURCES=${PROJECT_SOURCE_DIR}/tests/consumers/c/main.c,${PROJECT_SOURCE_DIR}/tests/consumers/cpp/main.cpp"
+    "-DGBB_SYMBOLS=${GBB_PHASE11_CONSUMER_SYMBOLS}"
+    -P ${PROJECT_SOURCE_DIR}/tests/cgb_consumer_symbol_coverage.cmake)
+set_tests_properties(cgb_consumer_symbol_coverage PROPERTIES
+  PASS_REGULAR_EXPRESSION "consumer-symbol-coverage pass")
+file(READ "${PROJECT_SOURCE_DIR}/tests/consumers/c/main.c" gbb_consumer_c_text)
+string(REPLACE "gbb_get_compat_palette" "gbb_removed_symbol" gbb_consumer_c_missing "${gbb_consumer_c_text}")
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/consumer-symbol-selftest")
+file(WRITE "${PROJECT_BINARY_DIR}/consumer-symbol-selftest/main.c" "${gbb_consumer_c_missing}")
+add_test(NAME cgb_consumer_symbol_coverage_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_CONSUMER_SOURCES=${PROJECT_BINARY_DIR}/consumer-symbol-selftest/main.c;-DGBB_SYMBOLS=${GBB_PHASE11_CONSUMER_SYMBOLS};-P;${PROJECT_SOURCE_DIR}/tests/cgb_consumer_symbol_coverage.cmake"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=consumer-symbol-missing gbb_get_compat_palette"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # --- Phase 11 plan 11-06 end ---
 

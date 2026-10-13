@@ -117,12 +117,48 @@ static int cgb_api_smoke(void) {
     if (gbb_probe_rom(GBB_PROFILE_CGB_CPU_E, rom, sizeof(rom), &info) !=
             GBB_UNSUPPORTED_EXECUTION_MODE ||
         gbb_load_rom(machine, rom, sizeof(rom)) != GBB_UNSUPPORTED_EXECUTION_MODE) goto done;
-    /* There is no colour output yet: a valid frame request is refused on the CGB profile. */
+    /* The shade call is refused on the CGB profile; colour is read with the RGB555 call. */
     {
         uint8_t pixels[160 * 144];
         gbb_frame_info frame;
         if (gbb_copy_frame(machine, pixels, sizeof(pixels), 160u, &frame) !=
             GBB_UNSUPPORTED_PROFILE) goto done;
+    }
+    {
+        static uint16_t rgb[160u * 144u];
+        gbb_frame_info frame;
+        gbb_instance *dmg = NULL;
+        gbb_compat_palette palette;
+        gbb_compat_palette override_palette;
+        int colour_ok = 0;
+        /* The refused PGB load left the earlier CGB image in place; run two frames of it. */
+        for (int i = 0; i < 2; ++i) gbb_run(machine, UINT64_C(140448), NULL, 0);
+        if (gbb_copy_frame_rgb555(machine, rgb, sizeof(rgb), 320u, &frame) != GBB_OK ||
+            frame.width != 160u || frame.height != 144u || frame.generation == 0u) goto colour_done;
+        for (size_t i = 0; i < 160u * 144u; ++i)
+            if (rgb[i] > 0x7FFFu) goto colour_done;
+        memset(rgb, 0xA7, sizeof(rgb));
+        if (gbb_copy_frame_rgb555(machine, rgb, sizeof(rgb), 319u, &frame) != GBB_INVALID_ARGUMENT ||
+            ((const uint8_t *)rgb)[0] != 0xA7u) goto colour_done;
+        if (gbb_create(GBB_PROFILE_DMG_CPU_B, &dmg) != GBB_OK ||
+            gbb_copy_frame_rgb555(dmg, rgb, sizeof(rgb), 320u, &frame) != GBB_UNSUPPORTED_PROFILE)
+            goto colour_done;
+        memset(&palette, 0, sizeof(palette));
+        palette.struct_size = GBB_COMPAT_PALETTE_SIZE_V1;
+        if (gbb_get_compat_palette(machine, &palette) != GBB_OK ||
+            palette.struct_size != GBB_COMPAT_PALETTE_SIZE_V1) goto colour_done;
+        override_palette = palette;
+        override_palette.bg[0] = 0x1234u;
+        if (gbb_set_compat_palette(machine, &override_palette) != GBB_OK) goto colour_done;
+        override_palette.bg[1] = 0x8000u;
+        if (gbb_set_compat_palette(machine, &override_palette) != GBB_INVALID_ARGUMENT) goto colour_done;
+        if (gbb_get_compat_palette(machine, &palette) != GBB_OK || palette.bg[0] != 0x1234u ||
+            palette.bg[1] == 0x8000u) goto colour_done;
+        if (gbb_set_compat_palette(machine, NULL) != GBB_OK) goto colour_done;
+        colour_ok = 1;
+colour_done:
+        gbb_destroy(dmg);
+        if (!colour_ok) goto done;
     }
     passed = 1;
 
