@@ -2480,4 +2480,19 @@ add_test(NAME cgb_measure_core_unknown_profile
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # --- Phase 11 plan 11-14 end ---
 
+# Per-test TIMEOUTs are sized for normal builds. Debug ASan/UBSan runs the same work several times
+# slower, and the whole-run acceptance and RTC cases reached their 300 s limits on a slow hosted
+# runner (LESSONS GB-CI-004). Sanitizer builds scale every explicit limit by three, so a limit
+# still catches a hang without turning a slow runner into a failure.
+if(GABBABOY_ENABLE_SANITIZERS)
+  get_property(gbb_all_tests DIRECTORY PROPERTY TESTS)
+  foreach(gbb_test IN LISTS gbb_all_tests)
+    get_test_property(${gbb_test} TIMEOUT gbb_timeout)
+    if(gbb_timeout)
+      math(EXPR gbb_timeout "${gbb_timeout} * 3")
+      set_tests_properties(${gbb_test} PROPERTIES TIMEOUT ${gbb_timeout})
+    endif()
+  endforeach()
+endif()
+
 gabbaboy_verify_registered_tests()
