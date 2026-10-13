@@ -24,8 +24,8 @@ extern void gbb_p12_set_mutants(uint64_t mask);
     } \
 } while (0)
 
-#define AUDIO_DIGEST_PIN "0000000000000000000000000000000000000000000000000000000000000000"
-#define FRAME_DIGEST_PIN "0000000000000000000000000000000000000000000000000000000000000000"
+#define AUDIO_DIGEST_PIN "126c6ddf5cf8f0e2fb394e8978c1ad018b633e0bd8e1a0785ecb6cca72d4db82"
+#define FRAME_DIGEST_PIN "1f550c49fa9c6c3e99fbb3cc2982198125a89eb0c2ef6ca95e3c935bcbb7a100"
 
 static const char *const METRICS[] = {
     "tima", "div", "serial-lines", "serial-sc", "serial-if", "nr52-start",
