@@ -381,20 +381,66 @@ static int cgb_speed_cpu_ticks(void) {
     return 0;
 }
 
-static int cgb_speed_reset_clears(void) {
+static int cgb_speed_reset_double_speed(void) {
+    uint8_t rom[32768];
+    const uint8_t switch_program[] = {0x3Eu, 0x01u, 0xE0u, 0x4Du, 0x10u, 0x00u};
+    make_internal_rom(rom, switch_program, sizeof(switch_program));
+    gbb_instance *machine = NULL;
+    REQUIRE(create_internal_machine(rom, &machine) == 0);
+    gbb_run_result run = gbb_run(machine, 1024u, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET);
+    REQUIRE(machine->double_speed == 1u);
+    REQUIRE(gbb_reset(machine) == GBB_OK);
+    REQUIRE(machine->double_speed == 0u);
+    REQUIRE(bus_read(machine, 0xFF4Du, 0u) == 0x7Eu);
+    memset(machine->rom + 0x200u, 0u, 1000u);
+    machine->pc = 0x200u;
+    const uint64_t start = machine->time_half_dots;
+    for (unsigned i = 0u; i < 1000u; ++i) {
+        run = gbb_run(machine, 8u, NULL, 0u);
+        REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 8u);
+    }
+    REQUIRE(machine->time_half_dots - start == 8000u);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int cgb_speed_reset_stall(void) {
     uint8_t rom[32768];
     make_internal_rom(rom, NULL, 0u);
     gbb_instance *machine = NULL;
     REQUIRE(create_internal_machine(rom, &machine) == 0);
-    machine->double_speed = 1u;
     machine->cpu_stall_kind = GBB_STALL_SPEED_SWITCH;
     machine->cpu_stall_half_dots = 2048u;
-    machine->key1_armed = 1u;
     REQUIRE(gbb_reset(machine) == GBB_OK);
-    REQUIRE(machine->double_speed == 0u);
     REQUIRE(machine->cpu_stall_kind == GBB_STALL_NONE);
     REQUIRE(machine->cpu_stall_half_dots == 0u);
+    machine->pc = 0x200u;
+    gbb_run_result run = gbb_run(machine, 8u, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 8u);
+    REQUIRE(machine->pc == 0x201u);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int cgb_speed_reset_key1(void) {
+    uint8_t rom[32768];
+    const uint8_t stop_program[] = {0x10u, 0x00u};
+    make_internal_rom(rom, stop_program, sizeof(stop_program));
+    gbb_instance *machine = NULL;
+    REQUIRE(create_internal_machine(rom, &machine) == 0);
+    machine->key1_armed = 1u;
+    machine->time_half_dots = 32u;
+    REQUIRE(gbb_reset(machine) == GBB_OK);
     REQUIRE(machine->key1_armed == 0u);
+    REQUIRE(gbb_load_rom(machine, rom, sizeof(rom)) == GBB_OK);
+    REQUIRE(machine->key1_armed == 0u);
+    machine->rom[0x200u] = 0x10u;
+    machine->rom[0x201u] = 0x00u;
+    machine->pc = 0x200u;
+    gbb_run_result run = gbb_run(machine, 16u, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_STOPPED);
+    REQUIRE(machine->stopped == 1u && machine->double_speed == 0u);
     gbb_destroy(machine);
     return 0;
 }
@@ -438,9 +484,19 @@ int main(int argc, char **argv) {
         if (rc == 0) puts("cgb-speed-internal cgb_speed_cpu_ticks pass");
         return rc;
     }
-    if (strcmp(argv[1], "cgb_speed_reset_clears") == 0) {
-        int rc = cgb_speed_reset_clears();
-        if (rc == 0) puts("cgb-speed-internal cgb_speed_reset_clears pass");
+    if (strcmp(argv[1], "cgb_speed_reset_double_speed") == 0) {
+        int rc = cgb_speed_reset_double_speed();
+        if (rc == 0) puts("cgb-speed-internal cgb_speed_reset_double_speed pass");
+        return rc;
+    }
+    if (strcmp(argv[1], "cgb_speed_reset_stall") == 0) {
+        int rc = cgb_speed_reset_stall();
+        if (rc == 0) puts("cgb-speed-internal cgb_speed_reset_stall pass");
+        return rc;
+    }
+    if (strcmp(argv[1], "cgb_speed_reset_key1") == 0) {
+        int rc = cgb_speed_reset_key1();
+        if (rc == 0) puts("cgb-speed-internal cgb_speed_reset_key1 pass");
         return rc;
     }
     return 2;

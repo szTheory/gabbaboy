@@ -1709,7 +1709,7 @@ static void advance_devices_to(gbb_instance *m, uint64_t target);
 
 /* MODEL: BOTH GATE-00 basis=model-neutral */
 static uint8_t bus_read(gbb_instance *m, uint16_t address, uint64_t offset) {
-    advance_devices_to(m, m->instruction_start_half_dots + (offset >> m->double_speed)); /* P12-M18 bus-read */
+    advance_devices_to(m, m->instruction_start_half_dots + (offset >> m->double_speed)); /* P12-M18 */ /* bus-read */
     uint8_t value = read8(m, address);
     observe_bus(m, 0, address, 1, value);
     return value;
@@ -2110,7 +2110,7 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
 
 /* MODEL: BOTH GATE-00 basis=model-neutral */
 static void bus_write(gbb_instance *m, uint16_t address, uint8_t value, uint64_t offset) {
-    uint64_t timestamp = m->instruction_start_half_dots + (offset >> m->double_speed); /* P12-M18 bus-write */
+    uint64_t timestamp = m->instruction_start_half_dots + (offset >> m->double_speed); /* P12-M18 */ /* bus-write */
     /* TMA feeds the reload when the write shares its exact reload timestamp. */
     if (address == 0xFF06 && m->timer_reload_pending && timestamp >= m->time_half_dots &&
         timestamp - m->time_half_dots == m->timer_reload_remaining)
@@ -3630,7 +3630,7 @@ static decoded decode(const gbb_instance *m) {
 
 /* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static uint8_t instruction_cost(const gbb_instance *m, decoded d) {
-    return (uint8_t)(d.ticks >> m->double_speed); /* P12-M18 instruction-cost */
+    return (uint8_t)(d.ticks >> m->double_speed); /* P12-M18 */ /* instruction-cost */
 }
 
 /* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
