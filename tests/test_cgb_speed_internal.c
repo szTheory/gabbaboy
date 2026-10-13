@@ -383,18 +383,27 @@ static int cgb_speed_cpu_ticks(void) {
 
 static int cgb_speed_timer_scaling(void) {
     uint8_t rom[32768];
-    make_internal_rom(rom, NULL, 0u);
+    const uint8_t timer_guest[] = {
+        0x3Eu,0x05u,0xE0u,0x07u,0xF0u,0x44u,0x47u,
+        0xF0u,0x05u,0xEAu,0x01u,0xC0u,0xF0u,0x04u,0xEAu,0x02u,0xC0u,
+        0xF0u,0x44u,0xB8u,0x28u,0xFBu,0x47u,
+        0xF0u,0x44u,0xB8u,0x28u,0xFBu,0x47u,
+        0xF0u,0x05u,0xEAu,0x03u,0xC0u,0xF0u,0x04u,0xEAu,0x04u,0xC0u,
+        0x3Eu,0xAAu,0xEAu,0x00u,0xC0u,0x18u,0xFEu
+    };
+    make_internal_rom(rom, timer_guest, sizeof(timer_guest));
     for (unsigned speed = 0u; speed <= 1u; ++speed) {
         gbb_instance *machine = NULL;
         REQUIRE(create_internal_machine(rom, &machine) == 0);
         machine->double_speed = (uint8_t)speed;
-        machine->tac = 5u;
-        machine->timer_signal = timer_input(machine);
-        const uint8_t tima_start = machine->tima;
-        const uint8_t div_start = machine->div;
-        advance_devices_to(machine, 1824u);
-        const unsigned tima_delta = (uint8_t)(machine->tima - tima_start);
-        const unsigned div_delta = (uint8_t)(machine->div - div_start);
+        machine->pc = 0x100u;
+        for (unsigned calls = 0u; machine->wram[0][0] != 0xAAu && calls < 200u; ++calls) {
+            const gbb_run_result run = gbb_run(machine, 64u, NULL, 0u);
+            REQUIRE(run.reason == GBB_STOP_BUDGET);
+        }
+        REQUIRE(machine->wram[0][0] == 0xAAu);
+        const unsigned tima_delta = (uint8_t)(machine->wram[0][3] - machine->wram[0][1]);
+        const unsigned div_delta = (uint8_t)(machine->wram[0][4] - machine->wram[0][2]);
         if (speed == 0u) {
             REQUIRE(tima_delta >= 56u && tima_delta <= 58u);
             REQUIRE(div_delta >= 3u && div_delta <= 4u);
