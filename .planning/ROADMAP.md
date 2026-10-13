@@ -314,7 +314,7 @@ Plans:
   3. Partitioned runs (run N, stop, run M) equal one run of N+M across a speed switch and stall, and unresearched pause behaviors are recorded as named expected failures.
 
 **Research**: DEEP (interrupts, DIV and PPU during the pause; applicable test list).
-**Plans**: 2/19 plans executed
+**Plans**: 3/19 plans executed
 
 Plans:
 **Wave 1**
@@ -322,7 +322,7 @@ Plans:
 - [x] 12-02-PLAN.md — AGE vendoring part 1: rights/provenance, manifest-driven rebuild script with offline negative controls, spsw-div ROM, fixture-repro step
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 12-03-PLAN.md — runtime-mask mutant harness (multi-site anchors, guard control), cpu_ticks contract (M18), per-field reset clears
+- [x] 12-03-PLAN.md — runtime-mask mutant harness (multi-site anchors, guard control), cpu_ticks contract (M18), per-field reset clears
 - [ ] 12-04-PLAN.md — AGE vendoring part 2: the remaining 12 ROMs and manifest rows
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -420,7 +420,7 @@ Plans:
 | 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 18/18 | Complete    | 2026-10-11 |
 | 10. CGB Profile, Banking and Register Visibility | v0.2 | 20/20 | Complete    | 2026-10-12 |
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 15/15 | Complete    | 2026-10-13 |
-| 12. CGB Double Speed | v0.2 | 2/19 | In Progress | - |
+| 12. CGB Double Speed | v0.2 | 3/19 | In Progress | - |
 | 13. CGB HDMA | v0.2 | 0/TBD | Not started | - |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 0/TBD | Not started | - |
 | 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 0/TBD | Not started | - |
