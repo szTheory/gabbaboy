@@ -390,4 +390,25 @@ gbb_add_acceptance_exit(acceptance_cgb_colour_hblank 0
 gbb_add_acceptance_exit(acceptance_cgb_colour_hblank_profile_flag 0
   "acceptance id=cgb-colour-hblank status=pass model=cgb-cpu-e.*frame555=${gbb_hex64_re}" 60
   "--acceptance;${GBB_CGB_COLOUR_CASES};--case;cgb-colour-hblank;--profile;cgb")
+# Controls: the wrong model is excluded, a flipped reference digest fails with an RGB555 failure image,
+# and a CGB progress-predicate observation is refused with an explicit reason.
+gbb_add_acceptance_exit(acceptance_cgb_colour_excluded_dmg 4
+  "status=excluded reason=unsupported-model model=dmg-cpu-b" 30
+  "--acceptance;${GBB_CGB_COLOUR_CASES};--case;cgb-colour-hblank;--model;dmg-cpu-b")
+set(GBB_CGB_COLOUR_FAIL_DIR ${PROJECT_BINARY_DIR}/acceptance-failures/acceptance_cgb_colour_flipped_ppm)
+file(MAKE_DIRECTORY ${GBB_CGB_COLOUR_FAIL_DIR})
+add_test(NAME acceptance_cgb_colour_flipped_ppm
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:gabbaboy-runner>;--acceptance;${GBB_CGB_COLOUR_CASES};--case;cgb-colour-hblank-flipped;--model;cgb-cpu-e;--failure-dir;${GBB_CGB_COLOUR_FAIL_DIR}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=reason=frame-mismatch class=regression observed555="
+    -DGBB_EXPECT_FILE=${GBB_CGB_COLOUR_FAIL_DIR}/cgb-colour-hblank-flipped.ppm
+    -DGBB_EXPECT_FILE_SIZE=69135
+    -DGBB_EXPECT_FILE_FRESH=1
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(acceptance_cgb_colour_flipped_ppm PROPERTIES TIMEOUT 60 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+gbb_add_acceptance_exit(acceptance_cgb_colour_progress_refused 3
+  "frame-unsupported-profile" 300
+  "--acceptance;${GBB_CGB_COLOUR_CASES};--case;libbet-cgb-progress;--model;cgb-cpu-e")
 # --- Phase 11 plan 11-09 end ---
