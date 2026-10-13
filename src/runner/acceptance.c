@@ -20,6 +20,38 @@
 #define EXIT_EXCLUDED 4
 #define DRIVE_MAX_BATCH 64u
 
+/* The model a run executes: the --model/--profile token, or dmg-cpu-b when none was given. Every
+ * create call and every printed model label goes through these so a CGB run can never carry a DMG
+ * label (D-25). The mapping itself is gbb_runner_profile_for_model in this file. */
+static const char *run_model(const gbb_acceptance_options *options) {
+    return options != NULL && options->model != NULL ? options->model : "dmg-cpu-b";
+}
+/* Only valid after gbb_acceptance_run_case has refused an unknown model; the DMG value is never the
+ * profile of an unrecognised token, because that run is rejected before any instance exists. */
+static gbb_profile run_profile(const gbb_acceptance_options *options) {
+    gbb_profile profile = GBB_RUNNER_PROFILE_DMG;
+    (void)gbb_runner_profile_for_model(run_model(options), &profile);
+    return profile;
+}
+
+int gbb_runner_profile_for_model(const char *model, gbb_profile *out) {
+    if (model == NULL || out == NULL) return 0;
+    if (strcmp(model, "dmg-cpu-b") == 0) { *out = GBB_PROFILE_DMG_CPU_B; return 1; }
+    if (strcmp(model, "cgb-cpu-e") == 0) { *out = GBB_RUNNER_PROFILE_CGB; return 1; }
+    return 0;
+}
+
+const char *gbb_runner_profile_label(gbb_profile profile) {
+    return profile == GBB_RUNNER_PROFILE_CGB ? "CGB-CPU-E" : "DMG-CPU-B";
+}
+
+const char *gbb_runner_model_for_option(const char *option) {
+    if (option == NULL) return NULL;
+    if (strcmp(option, "dmg") == 0) return "dmg-cpu-b";
+    if (strcmp(option, "cgb") == 0) return "cgb-cpu-e";
+    return NULL;
+}
+
 int gbb_runner_read_file(const char *path, size_t capacity, uint8_t **out, size_t *length) {
     *out = NULL;
     *length = 0;
@@ -333,12 +365,12 @@ static int fail_run(const gbb_case *c, const gbb_acceptance_options *options, co
     if (options != NULL && options->expect_fail && options->expect_fail_reason != NULL &&
         options->expect_fail_reason[0] != '\0' && strcmp(options->expect_fail_reason, reason) == 0) {
         /* Strict expected failure (D-22): only the declared reason counts, and it counts as xfail. */
-        printf("acceptance id=%s status=xfail model=dmg-cpu-b reason=%s end_half_dots=%llu%s%s\n", c->id, reason,
+        printf("acceptance id=%s status=xfail model=%s reason=%s end_half_dots=%llu%s%s\n", c->id, run_model(options), reason,
                (unsigned long long)end_half_dots, final_note, note);
         if (options->xfailed != NULL) *options->xfailed = 1;
         return EXIT_PASS;
     }
-    printf("acceptance id=%s status=fail model=dmg-cpu-b reason=%s end_half_dots=%llu%s%s%s\n", c->id, reason,
+    printf("acceptance id=%s status=fail model=%s reason=%s end_half_dots=%llu%s%s%s\n", c->id, run_model(options), reason,
            (unsigned long long)end_half_dots, final_note, note, ppm_note);
     return EXIT_FAIL;
 }
@@ -366,6 +398,7 @@ typedef struct {
     bool want_trace;
     replay_visit_fn visit;
     void *context;
+    gbb_profile profile;     /* the model under test, from run_profile */
 } replay_request;
 
 /* Returns 0 on success, 1 when the instance or buffers cannot be built, 2 when the guest stopped
@@ -378,7 +411,7 @@ static int replay_diag(const replay_request *rq, gbb_instance **out_instance, ui
     gbb_trace_record *trace = malloc(DIAG_RECORDS * sizeof(*trace));
     gbb_diagnostic_record *diag = malloc(DIAG_RECORDS * sizeof(*diag));
     int status = 1;
-    if (trace == NULL || diag == NULL || gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) != GBB_OK) goto done;
+    if (trace == NULL || diag == NULL || gbb_create(rq->profile, &instance) != GBB_OK) goto done;
     *out_instance = instance;
     if (gbb_load_rom(instance, rq->rom, rq->rom_length) != GBB_OK) goto done;
 
@@ -473,13 +506,14 @@ static void visit_pulses(void *context, const gbb_trace_record *trace, size_t tr
 
 /* Returns 0 when the probe ran. hw is the hw_capability byte at the probe frame. */
 static int sgb_probe(const gbb_accept_predicate *predicate, const uint8_t *rom, size_t rom_length,
-                     const gbb_accept_script *script, uint8_t *hw, unsigned *pulses) {
+                     const gbb_accept_script *script, gbb_profile profile, uint8_t *hw, unsigned *pulses) {
     pulse_state ps = {false, 0};
     replay_request rq;
     memset(&rq, 0, sizeof(rq));
     rq.rom = rom;
     rq.rom_length = rom_length;
     rq.script = script;
+    rq.profile = profile;
     rq.end_half_dots = (uint64_t)predicate->sgb_probe_frames * GBB_ACCEPT_HALF_DOTS_PER_FRAME;
     rq.visit = visit_pulses;
     rq.context = &ps;
@@ -629,6 +663,7 @@ static void write_stall_report(const gbb_case *c, const gbb_acceptance_options *
     rq.rom = rom;
     rq.rom_length = rom_length;
     rq.script = script;
+    rq.profile = run_profile(options);
     rq.end_half_dots = t_end;
     rq.observe_from = t_end > GBB_ACCEPT_HALF_DOTS_PER_FRAME ? t_end - GBB_ACCEPT_HALF_DOTS_PER_FRAME : 0u;
     rq.want_trace = true;
@@ -773,7 +808,7 @@ static int frame_fail(const gbb_case *c, const gbb_acceptance_options *options, 
                       const char *observed, uint64_t end_half_dots, const uint8_t *pixels) {
     if (options != NULL && options->expect_fail && options->expect_fail_reason != NULL &&
         strcmp(options->expect_fail_reason, reason) == 0) {
-        printf("acceptance id=%s status=xfail model=dmg-cpu-b reason=%s class=regression end_half_dots=%llu\n", c->id,
+        printf("acceptance id=%s status=xfail model=%s reason=%s class=regression end_half_dots=%llu\n", c->id, run_model(options),
                reason, (unsigned long long)end_half_dots);
         if (options->xfailed != NULL) *options->xfailed = 1;
         return EXIT_PASS;
@@ -791,7 +826,7 @@ static int frame_fail(const gbb_case *c, const gbb_acceptance_options *options, 
             snprintf(ppm_note, sizeof(ppm_note), " ppm=write-failed");
         }
     }
-    printf("acceptance id=%s status=fail model=dmg-cpu-b reason=%s class=regression%s end_half_dots=%llu%s\n", c->id,
+    printf("acceptance id=%s status=fail model=%s reason=%s class=regression%s end_half_dots=%llu%s\n", c->id, run_model(options),
            reason, observed_note, (unsigned long long)end_half_dots, ppm_note);
     return EXIT_FAIL;
 }
@@ -826,8 +861,13 @@ static int run_frame_case(const gbb_case *c, const gbb_acceptance_options *optio
     if (dump_dir != NULL && !probe_directory(dump_dir)) { code = input_error(c, "dump-dir-unwritable"); goto done; }
 
     capture = malloc(sizeof(*capture));
-    if (capture == NULL || gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) != GBB_OK) {
+    if (capture == NULL) {
         fprintf(stderr, "runner-error: instance allocation failed\n");
+        goto done;
+    }
+    if (gbb_create(run_profile(options), &instance) != GBB_OK) {
+        printf("acceptance id=%s status=unsupported reason=create-failed model=%s\n", c->id, run_model(options));
+        code = EXIT_UNSUPPORTED;
         goto done;
     }
     if (gbb_load_rom(instance, rom, rom_length) != GBB_OK) { code = input_error(c, "rom-rejected"); goto done; }
@@ -836,7 +876,7 @@ static int run_frame_case(const gbb_case *c, const gbb_acceptance_options *optio
     rc = at_ldbb ? gbb_runner_capture_ldbb(instance, c->budget_half_dots, capture)
                  : capture_frame_at(instance, c->oracle_half_dots, c->budget_half_dots, capture);
     if (rc != 0) {
-        printf("acceptance id=%s status=unsupported model=dmg-cpu-b reason=%s\n", c->id,
+        printf("acceptance id=%s status=unsupported model=%s reason=%s\n", c->id, run_model(options),
                rc == 1 ? "capture-allocation" : "frame-invalid");
         code = EXIT_UNSUPPORTED;
         goto done;
@@ -886,10 +926,10 @@ static int run_frame_case(const gbb_case *c, const gbb_acceptance_options *optio
     } else if (strcmp(capture->digest, c->reference_digest) != 0) {
         code = frame_fail(c, options, "frame-mismatch", capture->digest, capture->completion_half_dots, capture->pixels);
     } else if (options != NULL && options->expect_fail) {
-        printf("acceptance id=%s status=unexpected-pass model=dmg-cpu-b class=regression\n", c->id);
+        printf("acceptance id=%s status=unexpected-pass model=%s class=regression\n", c->id, run_model(options));
         code = EXIT_FAIL;
     } else {
-        printf("acceptance id=%s status=pass model=dmg-cpu-b class=regression end_half_dots=%llu\n", c->id,
+        printf("acceptance id=%s status=pass model=%s class=regression end_half_dots=%llu\n", c->id, run_model(options),
                (unsigned long long)capture->completion_half_dots);
         code = EXIT_PASS;
     }
@@ -912,6 +952,13 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
     int code = EXIT_INVALID;
     const bool observe = options != NULL && options->observe;
     memset(&script, 0, sizeof(script));
+
+    /* D-25: an unrecognised model is refused, never run on DMG under its own label. */
+    gbb_profile known_profile;
+    if (!gbb_runner_profile_for_model(run_model(options), &known_profile)) {
+        printf("acceptance id=%s status=unsupported reason=unknown-model model=%s\n", c->id, run_model(options));
+        return EXIT_UNSUPPORTED;
+    }
 
     if (c->oracle != GBB_ORACLE_PROGRESS_PREDICATE) return run_frame_case(c, options);
 
@@ -1005,8 +1052,9 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
         goto done;
     }
 
-    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) != GBB_OK) {
-        fprintf(stderr, "runner-error: instance allocation failed\n");
+    if (gbb_create(run_profile(options), &instance) != GBB_OK) {
+        printf("acceptance id=%s status=unsupported reason=create-failed model=%s\n", c->id, run_model(options));
+        code = EXIT_UNSUPPORTED;
         goto done;
     }
     if (gbb_load_rom(instance, rom, rom_length) != GBB_OK) { code = input_error(c, "rom-rejected"); goto done; }
@@ -1048,7 +1096,7 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
     gbb_accept_sha256_final(&st->rolling, rolling_hex);
 
     if (st->error != NULL) {
-        printf("acceptance id=%s status=unsupported model=dmg-cpu-b reason=%s end_half_dots=%llu\n", c->id,
+        printf("acceptance id=%s status=unsupported model=%s reason=%s end_half_dots=%llu\n", c->id, run_model(options),
                st->error, (unsigned long long)result.end_half_dots);
         unsupported_diagnostics(c, options, st, rom, rom_length, &script, st->error, result.end_half_dots);
         code = EXIT_UNSUPPORTED;
@@ -1095,7 +1143,7 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
         unsigned sgb_pulses = 0;
         const bool probe = predicate->sgb_probe_frames != 0;
         if (probe) {
-            int probe_rc = sgb_probe(predicate, rom, rom_length, &script, &hw_probe, &sgb_pulses);
+            int probe_rc = sgb_probe(predicate, rom, rom_length, &script, run_profile(options), &hw_probe, &sgb_pulses);
             if (probe_rc != 0 || sgb_pulses < 1u || hw_probe != c->expect_hw_capability) {
                 code = fail_run(c, options, st, "sgb-probe", result.end_half_dots);
                 if (code == EXIT_FAIL) {
@@ -1108,12 +1156,12 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
         run_note(options, note);
         if (options != NULL && options->expect_fail) {
             /* model_fail is strict: a case that was expected to fail and passed is a failure. */
-            printf("acceptance id=%s status=unexpected-pass model=dmg-cpu-b t_hit_half_dots=%llu%s\n", c->id,
+            printf("acceptance id=%s status=unexpected-pass model=%s t_hit_half_dots=%llu%s\n", c->id, run_model(options),
                    (unsigned long long)result.t_hit_half_dots, note);
             code = EXIT_FAIL;
             break;
         }
-        printf("acceptance id=%s status=pass model=dmg-cpu-b t_hit_half_dots=%llu%s\n", c->id,
+        printf("acceptance id=%s status=pass model=%s t_hit_half_dots=%llu%s\n", c->id, run_model(options),
                (unsigned long long)result.t_hit_half_dots, note);
         if (options != NULL && options->receipt) {
             printf("receipt id=%s rom_sha256=%s rom_size=%u input_sha256=%s predicate=%s "
@@ -1146,25 +1194,25 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
         }
         break;
     case GBB_ACCEPT_DRIVE_STOPPED:
-        printf("acceptance id=%s status=unsupported model=dmg-cpu-b reason=guest-stopped stop=%d end_half_dots=%llu\n",
-               c->id, (int)result.stop_reason, (unsigned long long)result.end_half_dots);
+        printf("acceptance id=%s status=unsupported model=%s reason=guest-stopped stop=%d end_half_dots=%llu\n",
+               c->id, run_model(options), (int)result.stop_reason, (unsigned long long)result.end_half_dots);
         unsupported_diagnostics(c, options, st, rom, rom_length, &script, "guest-stopped", result.end_half_dots);
         code = EXIT_UNSUPPORTED;
         break;
     case GBB_ACCEPT_DRIVE_GUARD:
-        printf("acceptance id=%s status=unsupported model=dmg-cpu-b reason=step-guard end_half_dots=%llu\n",
-               c->id, (unsigned long long)result.end_half_dots);
+        printf("acceptance id=%s status=unsupported model=%s reason=step-guard end_half_dots=%llu\n",
+               c->id, run_model(options), (unsigned long long)result.end_half_dots);
         unsupported_diagnostics(c, options, st, rom, rom_length, &script, "step-guard", result.end_half_dots);
         code = EXIT_UNSUPPORTED;
         break;
     case GBB_ACCEPT_DRIVE_DELIVER_FAILED:
-        printf("acceptance id=%s status=unsupported model=dmg-cpu-b reason=event-delivery-failed detail=core-queue-full-or-invalid end_half_dots=%llu\n",
-               c->id, (unsigned long long)result.end_half_dots);
+        printf("acceptance id=%s status=unsupported model=%s reason=event-delivery-failed detail=core-queue-full-or-invalid end_half_dots=%llu\n",
+               c->id, run_model(options), (unsigned long long)result.end_half_dots);
         code = EXIT_UNSUPPORTED;
         break;
     default:
-        printf("acceptance id=%s status=unsupported model=dmg-cpu-b reason=drive-error status_code=%d\n",
-               c->id, (int)result.status);
+        printf("acceptance id=%s status=unsupported model=%s reason=drive-error status_code=%d\n",
+               c->id, run_model(options), (int)result.status);
         code = EXIT_UNSUPPORTED;
         break;
     }
@@ -1180,7 +1228,8 @@ done:
 }
 
 /* Applies D-22 applicability, then runs the case with the expected-failure fields filled in. An
- * excluded case exits 4 without creating an instance; only dmg-cpu-b can execute in this phase. */
+ * excluded case exits 4 without creating an instance. A model the core cannot create yet reports
+ * create-failed honestly instead of falling back to DMG. */
 static int run_applicable(const gbb_case *c, const gbb_acceptance_options *options, int *excluded,
                           int *xfailed) {
     const char *model = options->model != NULL ? options->model : "dmg-cpu-b";
@@ -1192,10 +1241,6 @@ static int run_applicable(const gbb_case *c, const gbb_acceptance_options *optio
                kind == GBB_CASE_EXCLUDED_MODEL ? "unsupported-model" : "target-revision", model);
         *excluded = 1;
         return EXIT_EXCLUDED;
-    }
-    if (strcmp(model, "dmg-cpu-b") != 0) {
-        printf("acceptance id=%s status=unsupported reason=unsupported-profile model=%s\n", c->id, model);
-        return EXIT_UNSUPPORTED;
     }
     gbb_acceptance_options run = *options;
     run.expect_fail = kind == GBB_CASE_EXPECT_FAIL && !options->raw_verdict;

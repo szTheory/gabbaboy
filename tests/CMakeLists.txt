@@ -1,5 +1,8 @@
 set(GBB_TEST_INSTALL_PREFIX "" CACHE PATH "Relocated install prefix used by installed-package smoke tests")
 include(${PROJECT_SOURCE_DIR}/cmake/ExpectedTests.cmake)
+# Internal core test-seam header (src/core/gabbaboy_test.h). Directory-scoped so the mutant copies of
+# gabbaboy.c, which are compiled from the build tree, resolve the same include as the real core.
+include_directories("${PROJECT_SOURCE_DIR}/src/core")
 
 add_executable(test_api test_api.c)
 target_link_libraries(test_api PRIVATE GabbaBoy::core)
@@ -19,6 +22,8 @@ target_compile_features(test_instance_concurrency PRIVATE c_std_17)
 set_target_properties(test_instance_concurrency PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME concurrent_independent_instances COMMAND test_instance_concurrency
   ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
+add_test(NAME cgb_instance_isolation COMMAND test_instance_concurrency
+  ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb cgb_instance_isolation)
 
 add_executable(test_cartridge test_cartridge.c)
 target_link_libraries(test_cartridge PRIVATE GabbaBoy::core)
@@ -191,6 +196,98 @@ target_compile_features(test_mbc5_internal PRIVATE c_std_17)
 set_target_properties(test_mbc5_internal PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME mbc5_rumble_saturation COMMAND test_mbc5_internal mbc5_rumble_saturation)
 
+# White-box banking checks (D-19): single TU including the core source, so no GabbaBoy::core link.
+add_executable(test_banking_internal test_banking_internal.c)
+target_include_directories(test_banking_internal PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_banking_internal PRIVATE c_std_17)
+set_target_properties(test_banking_internal PROPERTIES C_EXTENSIONS OFF)
+foreach(case dmg_flat_reference cgb_diverges_from_flat dmg_bank_pins_after_reset)
+  add_test(NAME banking_${case} COMMAND test_banking_internal banking_${case})
+endforeach()
+# The reshape must not move the DMG correctness digest of the tracer fixture.
+add_test(NAME banking_tracer_digest_unchanged
+  COMMAND measure_core --no-trace ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
+set_tests_properties(banking_tracer_digest_unchanged PROPERTIES
+  PASS_REGULAR_EXPRESSION "correctness_digest_fnv1a64=4c7a57ff3d50d228")
+
+# Public-API banking, echo and OAM DMA source cases (Plan 10-12; D-15, D-16, D-17).
+add_executable(test_banking test_banking.c)
+target_link_libraries(test_banking PRIVATE GabbaBoy::core)
+target_compile_features(test_banking PRIVATE c_std_17)
+set_target_properties(test_banking PROPERTIES C_EXTENSIONS OFF)
+foreach(case dma_wram_bank vbk_independence svbk_readback echo_follows_bank dma_vram_bank
+  dma_rom_page dma_high_pages dma_cart_ram dmg_banks_frozen bus_conflict_cgb_pin)
+  add_test(NAME banking_${case} COMMAND test_banking ${case})
+endforeach()
+
+# Original CGB banking fixture (Plan 10-13; D-18). The guests are checked-in, digest-verified ROMs.
+set(GBB_CGB_BANKING_DIR "${PROJECT_SOURCE_DIR}/fixtures/cgb-banking")
+add_test(NAME cgb_banking_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DMANIFEST=${GBB_CGB_BANKING_DIR}/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixtureManifest.cmake)
+foreach(case cgb_banking_guest_cgb cgb_banking_guest_compat cgb_banking_guest_dmg
+  cgb_banking_patched_expected cgb_banking_cgb_on_dmg cgb_banking_skip_svbk)
+  add_test(NAME ${case} COMMAND test_banking ${case} ${GBB_CGB_BANKING_DIR})
+endforeach()
+
+# Core mutants for the banking cases (D-19). Each is a configure-time copy of the core with one
+# exactly-once source anchor rewritten, built as a test-only STATIC library (never installed or
+# exported) and linked to its own copy of test_banking. The failing case must exit 1 at its named
+# REQUIRE, and an unrelated case must still exit 0 in the same mutant so the mutant is shown to be
+# otherwise functional. The anchor is checked forward and in reverse so a drifted core fails the
+# configure step instead of silently disabling the control.
+set(GBB_BANKING_CORE_SOURCE ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GBB_BANKING_CORE_SOURCE})
+file(READ ${GBB_BANKING_CORE_SOURCE} gbb_banking_core_text)
+function(gbb_banking_mutant name fail_test control_test anchor replacement failing_case failing_regex control_case)
+  string(FIND "${gbb_banking_core_text}" "${anchor}" first)
+  string(FIND "${gbb_banking_core_text}" "${anchor}" final REVERSE)
+  if(first EQUAL -1 OR NOT first EQUAL final)
+    message(FATAL_ERROR "banking mutant ${name}: anchor '${anchor}' must occur exactly once in "
+      "${GBB_BANKING_CORE_SOURCE} (first=${first} last=${final})")
+  endif()
+  # The core text carries semicolons, so it stays quoted and never enters a list operation.
+  string(REPLACE "${anchor}" "${replacement}" text "${gbb_banking_core_text}")
+  set(source ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_banking_mutant_${name}.c)
+  file(WRITE ${source} "${text}")
+  set(library gabbaboy_core_banking_mutant_${name})
+  add_library(${library} STATIC ${source})
+  target_include_directories(${library} PUBLIC ${PROJECT_SOURCE_DIR}/include)
+  target_compile_features(${library} PUBLIC c_std_17)
+  set_target_properties(${library} PROPERTIES C_EXTENSIONS OFF)
+  target_compile_definitions(${library} PRIVATE
+    GBB_BUILD_REVISION="banking-mutant-${name}" GBB_BUILD_QUALIFIED=0)
+  set(target test_banking_mutant_${name})
+  add_executable(${target} test_banking.c)
+  target_link_libraries(${target} PRIVATE ${library})
+  target_compile_features(${target} PRIVATE c_std_17)
+  set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
+  add_test(NAME ${fail_test}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:${target}>;${failing_case}"
+      -DGBB_EXPECT_CODE=1
+      "-DGBB_EXPECT_REGEX=${failing_regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  add_test(NAME ${control_test}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:${target}>;${control_case}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=.*"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+endfunction()
+
+# Echo mutant: F000-FDFF ignores SVBK and always lands in bank 1, while D000-DFFF stays banked.
+gbb_banking_mutant(echo banking_mutant_echo_ignores_bank banking_mutant_echo_control
+  "unsigned bank = offset < GBB_WRAM_BANK_SIZE ? 0u : m->wram_bank;"
+  "unsigned bank = offset < GBB_WRAM_BANK_SIZE ? 0u : (address >= 0xF000u ? 1u : m->wram_bank);"
+  echo_follows_bank "echo_reads_match" vbk_independence)
+# DMA mutant: the CGB OAM DMA D0-DF page reads bank 1 whatever SVBK says; the CPU path is untouched.
+gbb_banking_mutant(dma banking_mutant_dma_wrong_bank banking_mutant_dma_control
+  "return *wram_byte(m, address);\n        return 0xFFu;"
+  "return m->wram[address < 0xD000u ? 0u : 1u][address & (GBB_WRAM_BANK_SIZE - 1u)];\n        return 0xFFu;"
+  dma_wram_bank "oam_is_pattern.m, 0x20." svbk_readback)
+
 # Original banking guest (D-33): the committed 64 KiB ROM is run through the real CPU and bus.
 add_test(NAME mbc5_banking_guest
   COMMAND test_mbc5 mbc5_banking_guest ${PROJECT_SOURCE_DIR}/fixtures/mbc5-banking/banking.gb)
@@ -257,6 +354,7 @@ set_target_properties(test_loader_matrix PROPERTIES C_EXTENSIONS OFF)
 foreach(case contradiction_mbc2 contradiction_mbc3 contradiction_mbc5 mbc30_variant type_byte_sweep bad_checksum)
   add_test(NAME loader_${case} COMMAND test_loader_matrix loader_${case})
 endforeach()
+add_test(NAME cgb_loader_matrix COMMAND test_loader_matrix cgb_loader_matrix)
 
 add_executable(test_battery test_battery.c)
 target_link_libraries(test_battery PRIVATE GabbaBoy::core)
@@ -278,6 +376,93 @@ target_compile_features(test_bus PRIVATE c_std_17)
 set_target_properties(test_bus PROPERTIES C_EXTENSIONS OFF)
 foreach(case wram_guest echo_hram absent_cart preflight unsupported_reads unsupported_stack unsupported_fetch halt_bug_fetch)
   add_test(NAME bus_${case} COMMAND test_bus ${case})
+endforeach()
+
+add_executable(test_cgb_visibility test_cgb_visibility.c)
+target_link_libraries(test_cgb_visibility PRIVATE GabbaBoy::core)
+target_compile_features(test_cgb_visibility PRIVATE c_std_17)
+set_target_properties(test_cgb_visibility PROPERTIES C_EXTENSIONS OFF)
+foreach(case vbk_tracer svbk_select unmapped_cgb boundaries deferred_stop ie_gate deferred_latch_interrupt
+     matrix_compat flip_control matrix_cgb matrix_dmg cross_column_control sweep_control)
+  add_test(NAME cgb_visibility_${case} COMMAND test_cgb_visibility ${case})
+endforeach()
+# Plan 10-11: STOP/KEY1 fail-closed and the KEY0 lock keep their plan-named CTests.
+foreach(case stop_armed_cgb stop_unarmed_cgb stop_compat_ignores_key1 stop_dmg_control
+     key0_lock_cgb key0_lock_compat key0_lock_cross_column key0_lock_reset_idempotent)
+  add_test(NAME cgb_${case} COMMAND test_cgb_visibility ${case})
+endforeach()
+
+add_executable(test_cgb_postboot test_cgb_postboot.c)
+target_link_libraries(test_cgb_postboot PRIVATE GabbaBoy::core)
+target_compile_features(test_cgb_postboot PRIVATE c_std_17)
+set_target_properties(test_cgb_postboot PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_postboot_dmg_pin COMMAND test_cgb_postboot dmg_pin)
+add_test(NAME cgb_postboot_dmg_pin_checksum_zero COMMAND test_cgb_postboot dmg_pin_checksum_zero)
+# Negative controls: one flipped CPU field (F, index 1) and one flipped I/O field
+# (NR12, index 10 + 12); each must fail with exit 1 naming the field.
+add_test(NAME cgb_postboot_dmg_pin_flipped
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_postboot>;dmg_pin;--flip;1"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=post-boot mismatch: F "
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_postboot_dmg_pin_flipped_io
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_postboot>;dmg_pin;--flip;22"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=post-boot mismatch: NR12 "
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+foreach(case cgb_cpu_tracer compat_cpu compat_no_rom compat_title_sum compat_io cgb_io ch1_silent)
+  add_test(NAME cgb_postboot_${case} COMMAND test_cgb_postboot ${case})
+endforeach()
+# White-box: includes src/core/gabbaboy.c itself, so it must not link GabbaBoy::core.
+add_executable(test_cgb_postboot_internal test_cgb_postboot_internal.c)
+target_include_directories(test_cgb_postboot_internal PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_cgb_postboot_internal PRIVATE c_std_17)
+set_target_properties(test_cgb_postboot_internal PROPERTIES C_EXTENSIONS OFF)
+foreach(case div_phase_sweep div_compat_default)
+  add_test(NAME cgb_postboot_${case} COMMAND test_cgb_postboot_internal ${case})
+endforeach()
+# A1: the same DIV-phase sweep on the real derived boot_div-cgbABCDE ROM (callback and result PCs from the
+# manifest). White-box like the sweep above, so it must not link GabbaBoy::core either.
+add_executable(test_mooneye_cgb_div_sweep test_mooneye_cgb_div_sweep.c)
+target_include_directories(test_mooneye_cgb_div_sweep PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_mooneye_cgb_div_sweep PRIVATE c_std_17)
+set_target_properties(test_mooneye_cgb_div_sweep PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_postboot_div_real_rom_sweep
+  COMMAND test_mooneye_cgb_div_sweep ${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/boot_div-cgbABCDE.gb 4000 4327)
+set_tests_properties(cgb_postboot_div_real_rom_sweep PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "ok 2 - passing set is exactly 0x2678..0x267B for both divider phases")
+# Negative control: asserting the window one counter later must fail naming the observed set, so a drifted
+# table cell cannot pass silently.
+add_test(NAME cgb_postboot_div_real_rom_sweep_shifted
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_mooneye_cgb_div_sweep>;${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/boot_div-cgbABCDE.gb;4000;4327;--expect-first;2679"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=passing set mismatch: phase 0 observed mask 0xF00"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(cgb_postboot_div_real_rom_sweep_shifted PROPERTIES TIMEOUT 60)
+# Negative controls: a flipped NR52 expectation (index 8) must fail naming the field.
+foreach(case compat_io cgb_io)
+  add_test(NAME cgb_postboot_${case}_flipped
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:test_cgb_postboot>;${case};--flip;8"
+      -DGBB_EXPECT_CODE=1
+      "-DGBB_EXPECT_REGEX=post-boot mismatch: NR52 "
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+endforeach()
+
+# CGB profile API (CGB-01): probe/info contract, the $143 x profile matrix, the PGB rejection and
+# probe/load parity with a skewed-validator negative control.
+add_executable(test_cgb_profile test_cgb_profile.c)
+target_link_libraries(test_cgb_profile PRIVATE GabbaBoy::core)
+target_compile_features(test_cgb_profile PRIVATE c_std_17)
+set_target_properties(test_cgb_profile PROPERTIES C_EXTENSIONS OFF)
+foreach(case probe_tracer info_no_rom info_after_load info_reset_constant info_failed_load_unchanged
+             info_struct_size cgb_only_on_dmg probe_matrix probe_pgb probe_parity profile_unknown
+             probe_args profile_create copy_frame_cgb)
+  add_test(NAME cgb_${case} COMMAND test_cgb_profile ${case})
 endforeach()
 
 add_executable(test_timer test_timer.c)
@@ -376,6 +561,8 @@ target_compile_features(test_loader_fuzz PRIVATE c_std_17)
 set_target_properties(test_loader_fuzz PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME loader_boundary_fuzz
   COMMAND test_loader_fuzz ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb)
+add_test(NAME cgb_loader_fuzz_parity
+  COMMAND test_loader_fuzz ${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb cgb_loader_fuzz_parity)
 
 add_executable(test_fuzz_core test_fuzz_core.c fuzz_core.c)
 target_link_libraries(test_fuzz_core PRIVATE GabbaBoy::core)
@@ -383,6 +570,8 @@ target_compile_features(test_fuzz_core PRIVATE c_std_17)
 target_compile_definitions(test_fuzz_core PRIVATE GBB_FUZZ_STANDALONE_TEST=1)
 set_target_properties(test_fuzz_core PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME fuzz_core_regressions COMMAND test_fuzz_core)
+add_test(NAME cgb_fuzz_io_regressions COMMAND test_fuzz_core cgb)
+add_test(NAME cgb_fuzz_profile_select COMMAND test_fuzz_core cgb_profile_select)
 
 if(CMAKE_C_COMPILER_ID MATCHES "Clang")
   include(CheckCSourceCompiles)
@@ -566,6 +755,70 @@ add_test(NAME mooneye_mbc_pc_table_tamper
     -DGBB_EXPECT_CODE=1
     -DGBB_EXPECT_REGEX=pc-table-mismatch
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# Phase 10 Mooneye CGB derivatives (D-26, names per D-27): digest and inventory modes of the
+# fail-closed verifier, plus the pc-table mode that ties the runner's cgb_cases[] to the manifest (Plan 10-16).
+add_test(NAME cgb_mooneye_fixture_digest
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_MODE=digest
+    -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake)
+set_tests_properties(cgb_mooneye_fixture_digest PROPERTIES
+  PASS_REGULAR_EXPRESSION "Verified 4 eligible Mooneye-cgb ROM\\(s\\)")
+add_test(NAME cgb_mooneye_inventory
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_MODE=inventory
+    -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake)
+set_tests_properties(cgb_mooneye_inventory PROPERTIES
+  PASS_REGULAR_EXPRESSION "Verified Mooneye-cgb inventory: 4 fixtures")
+# Configure-time mutants (exact exit code 1 plus a named token): a flipped ROM digest and a
+# duplicated fixture id. Each differs from the committed manifest by exactly one fact.
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/digest" "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/dup-id")
+file(READ "${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json" GBB_CGB_MANIFEST_JSON)
+string(JSON GBB_CGB_FIRST_DIGEST GET "${GBB_CGB_MANIFEST_JSON}" fixtures 0 sha256)
+string(JSON GBB_CGB_FIRST_ID GET "${GBB_CGB_MANIFEST_JSON}" fixtures 0 id)
+string(SUBSTRING "${GBB_CGB_FIRST_DIGEST}" 0 1 GBB_CGB_FIRST_NIBBLE)
+if(GBB_CGB_FIRST_NIBBLE STREQUAL "0")
+  set(GBB_CGB_FLIPPED_NIBBLE "1")
+else()
+  set(GBB_CGB_FLIPPED_NIBBLE "0")
+endif()
+string(SUBSTRING "${GBB_CGB_FIRST_DIGEST}" 1 -1 GBB_CGB_DIGEST_TAIL)
+string(JSON GBB_CGB_DIGEST_TAMPERED SET "${GBB_CGB_MANIFEST_JSON}" fixtures 0 sha256
+  "\"${GBB_CGB_FLIPPED_NIBBLE}${GBB_CGB_DIGEST_TAIL}\"")
+file(WRITE "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/digest/manifest.json" "${GBB_CGB_DIGEST_TAMPERED}")
+string(JSON GBB_CGB_DUP_TAMPERED SET "${GBB_CGB_MANIFEST_JSON}" fixtures 1 id "\"${GBB_CGB_FIRST_ID}\"")
+file(WRITE "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/dup-id/manifest.json" "${GBB_CGB_DUP_TAMPERED}")
+function(gbb_add_cgb_mooneye_tamper_test name mode manifest regex)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_MODE=${mode};-DGBB_MANIFEST=${manifest};-DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb;-P;${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake"
+      -DGBB_EXPECT_CODE=1
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+endfunction()
+gbb_add_cgb_mooneye_tamper_test(cgb_mooneye_digest_tamper digest
+  "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/digest/manifest.json" "Fixture mooneye-misc-boot-regs-cgb mismatch")
+gbb_add_cgb_mooneye_tamper_test(cgb_mooneye_inventory_tamper inventory
+  "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/dup-id/manifest.json" "Duplicate fixture id: mooneye-misc-boot-regs-cgb")
+add_test(NAME cgb_mooneye_pc_table
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_MODE=pc-table
+    -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb
+    -DGBB_RUNNER_SOURCE=${PROJECT_SOURCE_DIR}/src/runner/main.c
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake)
+set_tests_properties(cgb_mooneye_pc_table PROPERTIES
+  PASS_REGULAR_EXPRESSION "Verified pc-table: 4 manifest rows agree with the compiled cgb_cases")
+# Negative control: a manifest whose first result_pc was changed must fail the pc-table check, naming the field.
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/pc")
+string(JSON GBB_CGB_PC_TAMPERED SET "${GBB_CGB_MANIFEST_JSON}" fixtures 0 result_pc "\"0x4328\"")
+file(WRITE "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/pc/manifest.json" "${GBB_CGB_PC_TAMPERED}")
+add_test(NAME cgb_mooneye_pc_table_tamper
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_MODE=pc-table;-DGBB_MANIFEST=${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/pc/manifest.json;-DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb;-DGBB_RUNNER_SOURCE=${PROJECT_SOURCE_DIR}/src/runner/main.c;-P;${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=pc-table-mismatch: mooneye-misc-boot-regs-cgb result_pc"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # Negative control (D-28): an edited sibling manifest is refused with invalid-manifest and exactly exit code 2.
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-mbc-unknown")
 configure_file("${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/manifest.json"
@@ -603,6 +856,15 @@ add_test(NAME runner_guest_failure
 add_test(NAME mooneye_mbc_type_mutation
   COMMAND test_runner mooneye_mbc_type_mutation ${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/mbc5_rom_512kb.gb)
 set_tests_properties(mooneye_mbc_type_mutation PROPERTIES TIMEOUT 30)
+# D-26: an expected-unsupported row is met only by a stop at the declared address; a tampered "pass" expectation,
+# a wrong address and a passing ROM are all failing statuses (the configure-time copy is made below).
+add_test(NAME cgb_mooneye_expected_unsupported_tamper
+  COMMAND test_runner cgb_mooneye_expected_unsupported_tamper
+    ${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/expect/manifest.json
+    ${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json
+    ${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb)
+set_tests_properties(cgb_mooneye_expected_unsupported_tamper PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "control=expected-unsupported-tampered-to-pass.*control=expected-unsupported-wrong-address.*control=expected-unsupported-pass-is-failure")
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/runner-missing-fixture")
 configure_file("${PROJECT_SOURCE_DIR}/fixtures/mooneye/manifest.json"
   "${PROJECT_BINARY_DIR}/runner-missing-fixture/manifest.json" COPYONLY)
@@ -651,7 +913,7 @@ set_tests_properties(
   runner_pass runner_help runner_fail runner_wrong_breakpoint runner_timeout runner_unsupported
   runner_zero_eligible runner_guest_failure runner_missing_fixture runner_bad_digest
   runner_bad_manifest runner_bad_metadata
-  concurrent_independent_instances
+  concurrent_independent_instances cgb_instance_isolation
   mooneye_required_suite mooneye_case_daa mooneye_case_tim00 mooneye_case_tim00-div-trigger
   PROPERTIES TIMEOUT 30)
 set_tests_properties(mooneye_case_daa PROPERTIES PASS_REGULAR_EXPRESSION
@@ -684,6 +946,64 @@ foreach(entry IN LISTS GBB_MBC_CASES)
   set_tests_properties(mooneye_mbc_case_${alias} PROPERTIES TIMEOUT 60 PASS_REGULAR_EXPRESSION
     "status=pass.*source_revision=31510e12eea6286d36eea060a6adde755e1067aa.*fixture_origin=derived-headless-report-closure upstream_assertions=unchanged.*protocol_stage=callback-then-ld-b-b callback_result=pass callback_pc=${callback_pc} result_pc=${result_pc}")
 endforeach()
+# Phase 10 CGB-profile Mooneye derivatives (D-26): the runner's third suite. Each row runs on the CGB-CPU-E
+# profile in compat mode and prints its own label; the DMG label must never appear.
+set(GBB_CGB_MOONEYE_MANIFEST ${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json)
+add_test(NAME cgb_mooneye_case_boot_regs-cgb
+  COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --case boot_regs-cgb --receipt)
+set_tests_properties(cgb_mooneye_case_boot_regs-cgb PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "status=pass.*profile=CGB-CPU-E.*callback_result=pass callback_pc=4000 result_pc=4327"
+  FAIL_REGULAR_EXPRESSION "DMG-CPU-B")
+add_test(NAME cgb_mooneye_case_boot_div-cgbABCDE
+  COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --case boot_div-cgbABCDE --receipt)
+set_tests_properties(cgb_mooneye_case_boot_div-cgbABCDE PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "status=pass.*profile=CGB-CPU-E.*callback_result=pass callback_pc=4000 result_pc=4327"
+  FAIL_REGULAR_EXPRESSION "DMG-CPU-B")
+# The two staged ROMs stop on the unbuilt FF76 register: the status is expected-unsupported (never pass),
+# the stop reason and address are named, and the run exits 0 only on that exact stop.
+foreach(alias boot_hwio-C unused_hwio-C)
+  add_test(NAME cgb_mooneye_case_${alias}
+    COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --case ${alias} --receipt)
+  set_tests_properties(cgb_mooneye_case_${alias} PROPERTIES TIMEOUT 30
+    PASS_REGULAR_EXPRESSION "status=expected-unsupported stop=unsupported-bus address=ff76.*profile=CGB-CPU-E"
+    FAIL_REGULAR_EXPRESSION "DMG-CPU-B|status=pass|status=unexpected-pass|status=fail")
+endforeach()
+add_test(NAME cgb_mooneye_required_suite
+  COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --suite --receipt)
+set_tests_properties(cgb_mooneye_required_suite PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "suite eligible=4 executed=4 status=pass-with-expected-unsupported.*suite categories post-boot-registers=1/1 post-boot-div=1/1 post-boot-hwio=0/1 post-boot-hwio.expected-unsupported=1 unused-hwio=0/1 unused-hwio.expected-unsupported=1.*expected-unsupported=2/2"
+  FAIL_REGULAR_EXPRESSION "DMG-CPU-B|post-boot-hwio=1/1|unused-hwio=1/1")
+# D-25 / D-05: --observe prints the not-applicable token for a CGB row and no DMG-labelled line.
+add_test(NAME cgb_mooneye_observe_not_applicable
+  COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --case boot_regs-cgb --observe)
+set_tests_properties(cgb_mooneye_observe_not_applicable PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "mooneye[.]boot_regs-cgb[.]frame\tnot-applicable"
+  FAIL_REGULAR_EXPRESSION "frame_generation|ldbb_half_dots|not-ready")
+# WR-03: reproduce-mooneye-cgb.sh --compare refuses a fixture directory without its manifest before any
+# network work (offline; bash-only).
+if(NOT WIN32)
+  find_program(GBB_BASH_REPRO bash REQUIRED)
+  add_test(NAME cgb_mooneye_repro_requires_manifest
+    COMMAND "${GBB_BASH_REPRO}" ${PROJECT_SOURCE_DIR}/tests/scripts/test-reproduce-mooneye-cgb-guard.sh ${PROJECT_SOURCE_DIR})
+  set_tests_properties(cgb_mooneye_repro_requires_manifest PROPERTIES TIMEOUT 60
+    PASS_REGULAR_EXPRESSION "reproduce-mooneye-cgb guard ok")
+endif()
+# Negative control (D-28): a one-byte-longer manifest is refused with invalid-manifest and exactly exit code 2.
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-cgb-unknown")
+configure_file("${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json"
+  "${PROJECT_BINARY_DIR}/mooneye-cgb-unknown/manifest.json" COPYONLY)
+file(APPEND "${PROJECT_BINARY_DIR}/mooneye-cgb-unknown/manifest.json" " ")
+add_test(NAME cgb_mooneye_unknown_manifest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:gabbaboy-runner>;--manifest;${PROJECT_BINARY_DIR}/mooneye-cgb-unknown/manifest.json;--suite"
+    -DGBB_EXPECT_CODE=2
+    -DGBB_EXPECT_REGEX=invalid-manifest
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# Negative control: a configure-time copy of the manifest whose boot_hwio-C row says "pass". The raw-SHA gate
+# would reject it on the command line, so test_runner reads the row expectation from the copy itself.
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/expect")
+string(JSON GBB_CGB_EXPECT_TAMPERED SET "${GBB_CGB_MANIFEST_JSON}" fixtures 2 expect "\"pass\"")
+file(WRITE "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/expect/manifest.json" "${GBB_CGB_EXPECT_TAMPERED}")
 set(GBB_TEST_SANITIZER_LINK_OPTIONS "")
 if(GABBABOY_ENABLE_SANITIZERS)
   set(GBB_TEST_SANITIZER_LINK_OPTIONS "-fsanitize=address,undefined")
@@ -859,6 +1179,33 @@ gbb_add_mbc_scan_test(mooneye_mbc_not_installed_empty 1 "scan-dir-empty"
   "${GBB_MBC_SCAN_EMPTY}")
 gbb_add_mbc_scan_test(mooneye_mbc_fixture_dirs_selftest 1 "fixture-dirs-mismatch"
   "${GBB_MBC_DIRS_SELFTEST}" "-DGBB_EXPECT_FIXTURE_DIRS=${GBB_MBC_SCAN_DIRS}")
+
+# Mooneye CGB ROM redistribution guard (D-26, T-10-22). The four third-party CGB derivatives are
+# repository fixtures only; the same scan runs over the install tree with the CGB manifest's size and
+# digest list. The self-test plants one CGB ROM under an innocuous name, so a pass cannot come
+# from a scan that never matches by bytes.
+set(GBB_CGB_MOONEYE_SCAN_SELFTEST "${PROJECT_BINARY_DIR}/mooneye-cgb-scan-selftest")
+file(MAKE_DIRECTORY "${GBB_CGB_MOONEYE_SCAN_SELFTEST}/share")
+file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/boot_regs-cgb.gb"
+  "${GBB_CGB_MOONEYE_SCAN_SELFTEST}/share/payload.bin")
+function(gbb_add_cgb_mooneye_scan_test name code regex scan_dir)
+  set(command "${CMAKE_COMMAND}" "-DGBB_SCAN_DIR=${scan_dir}"
+    "-DGBB_FORBIDDEN_MANIFEST=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json"
+    -P "${PROJECT_SOURCE_DIR}/cmake/ScanForbiddenFixtures.cmake")
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60)
+endfunction()
+gbb_add_cgb_mooneye_scan_test(cgb_mooneye_not_installed 0 "mooneye-mbc absent from scanned tree files=[1-9]"
+  "${GBB_LIBBET_INSTALL_CHECK}")
+set_tests_properties(cgb_mooneye_not_installed PROPERTIES FIXTURES_REQUIRED libbet_install)
+gbb_add_cgb_mooneye_scan_test(cgb_mooneye_not_installed_selftest 1 "mooneye-installed: share/payload.bin"
+  "${GBB_CGB_MOONEYE_SCAN_SELFTEST}")
 
 # MagenTests redistribution guard (D-06): same scan, label magentests, digest list from its manifest.
 # The renamed-copy self-test proves the scan matches by size and digest, not by file name.
@@ -1190,5 +1537,343 @@ add_test(NAME doc_contract_scope_selftest
     -DGBB_EXPECT_CODE=1
     "-DGBB_EXPECT_REGEX=doc-contract-missing: once per open"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+# CGB host-guide contract (D-28): the CGB section of the integration guide names only declared symbols
+# and keeps each promise the header makes about the info API, PGB rejection, frame copy, banking and
+# deferred registers. The missing-phrase selftest proves the check can fail.
+set(GBB_NATIVE_GUIDE_CGB_PHRASES
+  "sets it to 28"
+  "outputs unchanged on error"
+  "returns `GBB_UNSUPPORTED_EXECUTION_MODE`"
+  "returns `GBB_UNSUPPORTED_PROFILE` on the CGB profile"
+  "follows the selected WRAM bank"
+  "stop with `GBB_STOP_UNSUPPORTED_BUS`")
+list(LENGTH GBB_NATIVE_GUIDE_CGB_PHRASES GBB_NATIVE_GUIDE_CGB_PHRASE_COUNT)
+set(GBB_NATIVE_GUIDE_CGB_SCOPE "The CGB-CPU-E profile is selected with")
+set(GBB_NATIVE_GUIDE_CGB_DECLS
+  "${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;${PROJECT_SOURCE_DIR}/examples/relocated-c/CMakeLists.txt")
+add_test(NAME cgb_native_guide_contract
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_DOC=${PROJECT_SOURCE_DIR}/docs/native-integration.md
+    "-DGBB_DECLARATIONS=${GBB_NATIVE_GUIDE_CGB_DECLS}"
+    "-DGBB_REQUIRED=${GBB_NATIVE_GUIDE_CGB_PHRASES}"
+    "-DGBB_SCOPE_START=${GBB_NATIVE_GUIDE_CGB_SCOPE}"
+    -P ${GBB_DOC_CONTRACT_SCRIPT})
+set_tests_properties(cgb_native_guide_contract PROPERTIES
+  PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=${GBB_NATIVE_GUIDE_CGB_PHRASE_COUNT}[^0-9]")
+file(READ "${PROJECT_SOURCE_DIR}/docs/native-integration.md" gbb_cgb_guide_text)
+set(gbb_cgb_guide_anchor "outputs unchanged on error")
+string(FIND "${gbb_cgb_guide_text}" "${gbb_cgb_guide_anchor}" gbb_cgb_first)
+string(FIND "${gbb_cgb_guide_text}" "${gbb_cgb_guide_anchor}" gbb_cgb_last REVERSE)
+if(gbb_cgb_first EQUAL -1 OR NOT gbb_cgb_first EQUAL gbb_cgb_last)
+  message(FATAL_ERROR "CGB guide selftest anchor '${gbb_cgb_guide_anchor}' must occur exactly once")
+endif()
+string(REPLACE "${gbb_cgb_guide_anchor}" "outputs kept" gbb_cgb_guide_missing_text "${gbb_cgb_guide_text}")
+file(WRITE "${PROJECT_BINARY_DIR}/cgb-guide-selftest/missing.md" "${gbb_cgb_guide_missing_text}")
+add_test(NAME cgb_native_guide_contract_missing_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${PROJECT_BINARY_DIR}/cgb-guide-selftest/missing.md;-DGBB_DECLARATIONS=${GBB_NATIVE_GUIDE_CGB_DECLS};-DGBB_REQUIRED=outputs unchanged on error;-DGBB_SCOPE_START=${GBB_NATIVE_GUIDE_CGB_SCOPE};-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=doc-contract-missing: outputs unchanged on error"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+# Half-dot timeline ADR (D-070, D-20, D-21): the doc section may name only macros declared in the core,
+# and must keep each rule the ADR states. The static asserts in src/core/gabbaboy.c make the numbers
+# compile-time facts; a mutant TU (below) proves they can fail.
+set(GBB_ADR_DOC "${PROJECT_SOURCE_DIR}/docs/cgb-profile.md")
+set(GBB_ADR_SCOPE_START "The `uint64_t` half-dot master timeline")
+set(GBB_ADR_HALF_DOT_PHRASES
+  "single clock for normal and double speed"
+  "`GBB_MASTER_HALF_DOTS_PER_SECOND` is 2^23"
+  "`GBB_HALF_DOTS_PER_T_NORMAL` (2)"
+  "`GBB_HALF_DOTS_PER_T_DOUBLE` (1)"
+  "`GBB_T_PER_M` (4)"
+  "`GBB_HALF_DOTS_PER_DOT` (2)"
+  "140448 half-dots"
+  "never reads `double_speed`")
+list(LENGTH GBB_ADR_HALF_DOT_PHRASES GBB_ADR_HALF_DOT_PHRASE_COUNT)
+add_test(NAME cgb_adr_half_dot_contract
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_DOC=${GBB_ADR_DOC}
+    "-DGBB_DECLARATIONS=${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c;${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h"
+    "-DGBB_REQUIRED=${GBB_ADR_HALF_DOT_PHRASES}"
+    "-DGBB_SCOPE_START=${GBB_ADR_SCOPE_START}"
+    -P ${GBB_DOC_CONTRACT_SCRIPT})
+set_tests_properties(cgb_adr_half_dot_contract PROPERTIES
+  PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=${GBB_ADR_HALF_DOT_PHRASE_COUNT}[^0-9]")
+
+# Negative controls for the ADR contract: each doc copy breaks exactly one rule, so a pass cannot come
+# from a check that never fails.
+file(READ "${GBB_ADR_DOC}" gbb_adr_doc_text)
+set(GBB_ADR_SELFTEST_DIR "${PROJECT_BINARY_DIR}/cgb-adr-selftest")
+foreach(anchor IN ITEMS "`GBB_T_PER_M` (4)" "single clock for normal and double speed")
+  string(FIND "${gbb_adr_doc_text}" "${anchor}" gbb_adr_first)
+  string(FIND "${gbb_adr_doc_text}" "${anchor}" gbb_adr_last REVERSE)
+  if(gbb_adr_first EQUAL -1 OR NOT gbb_adr_first EQUAL gbb_adr_last)
+    message(FATAL_ERROR "ADR selftest anchor '${anchor}' must occur exactly once in ${GBB_ADR_DOC}")
+  endif()
+endforeach()
+string(REPLACE "`GBB_T_PER_M` (4)" "`GBB_NO_SUCH_TIMELINE_MACRO` (4)" gbb_adr_undeclared_text "${gbb_adr_doc_text}")
+string(REPLACE "single clock for normal and double speed" "clock" gbb_adr_missing_text "${gbb_adr_doc_text}")
+file(WRITE "${GBB_ADR_SELFTEST_DIR}/undeclared.md" "${gbb_adr_undeclared_text}")
+file(WRITE "${GBB_ADR_SELFTEST_DIR}/missing.md" "${gbb_adr_missing_text}")
+foreach(kind IN ITEMS undeclared missing)
+  if(kind STREQUAL "undeclared")
+    set(gbb_adr_regex "doc-contract-undeclared: GBB_NO_SUCH_TIMELINE_MACRO")
+  else()
+    set(gbb_adr_regex "doc-contract-missing: single clock for normal and double speed")
+  endif()
+  add_test(NAME cgb_adr_half_dot_contract_${kind}_selftest
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${GBB_ADR_SELFTEST_DIR}/${kind}.md;-DGBB_DECLARATIONS=${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c;-DGBB_REQUIRED=single clock for normal and double speed;-DGBB_SCOPE_START=${GBB_ADR_SCOPE_START};-P;${GBB_DOC_CONTRACT_SCRIPT}"
+      -DGBB_EXPECT_CODE=1
+      "-DGBB_EXPECT_REGEX=${gbb_adr_regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+endforeach()
+
+# Static-assert mutant: the core with the double-speed T-cycle changed from 1 to 2 half-dots must fail to
+# compile on a "half-dot timeline:" assert. The library is EXCLUDE_FROM_ALL and never installed.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c)
+file(READ ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c gbb_adr_core_text)
+set(gbb_adr_anchor "#define GBB_HALF_DOTS_PER_T_DOUBLE 1u")
+string(FIND "${gbb_adr_core_text}" "${gbb_adr_anchor}" gbb_adr_first)
+string(FIND "${gbb_adr_core_text}" "${gbb_adr_anchor}" gbb_adr_last REVERSE)
+if(gbb_adr_first EQUAL -1 OR NOT gbb_adr_first EQUAL gbb_adr_last)
+  message(FATAL_ERROR "ADR mutant anchor '${gbb_adr_anchor}' must occur exactly once in src/core/gabbaboy.c")
+endif()
+string(REPLACE "${gbb_adr_anchor}" "#define GBB_HALF_DOTS_PER_T_DOUBLE 2u" gbb_adr_mutant_text "${gbb_adr_core_text}")
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_adr_mutant.c "${gbb_adr_mutant_text}")
+add_library(gabbaboy_core_adr_mutant STATIC EXCLUDE_FROM_ALL ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_adr_mutant.c)
+target_include_directories(gabbaboy_core_adr_mutant PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_compile_features(gabbaboy_core_adr_mutant PUBLIC c_std_17)
+set_target_properties(gabbaboy_core_adr_mutant PROPERTIES C_EXTENSIONS OFF)
+target_compile_definitions(gabbaboy_core_adr_mutant PRIVATE GBB_BUILD_REVISION="adr-mutant" GBB_BUILD_QUALIFIED=0)
+add_test(NAME cgb_adr_half_dot_static_assert_mutant
+  COMMAND ${CMAKE_COMMAND} --build ${PROJECT_BINARY_DIR} --target gabbaboy_core_adr_mutant)
+set_tests_properties(cgb_adr_half_dot_static_assert_mutant PROPERTIES
+  PASS_REGULAR_EXPRESSION "half-dot timeline:" TIMEOUT 180)
+
+# Model-gate scanner (CGB-02, decision D-08). Stdlib-only Python run with -I; every negative
+# control goes through expect_exit.cmake so it must fail with exactly the expected reason.
+set(GBB_MODEL_GATE_SCANNER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-model-gates.py")
+set(GBB_MODEL_GATE_DIR "${PROJECT_BINARY_DIR}/model-gates")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_MODEL_GATE_SCANNER}")
+
+function(gbb_add_model_gate_test name code regex)
+  set(command "${Python3_EXECUTABLE}" -I "${GBB_MODEL_GATE_SCANNER}" ${ARGN})
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60)
+endfunction()
+
+# Tracer corpus: two tagged functions, a matching doc, and a copy whose GATE-01 class is wrong.
+file(MAKE_DIRECTORY "${GBB_MODEL_GATE_DIR}")
+set(GBB_MODEL_GATE_TRACER_SOURCE [=[
+/* MODEL: BOTH GATE-00 basis="model-neutral function" */
+static int neutral(int x) { return x + 1; }
+
+/* MODEL: DMG_ONLY GATE-01 GUARD=model_is_dmg */
+static int dmg_only(int model) {
+    if (model_is_dmg(model)) return 1;
+    return 0;
+}
+]=])
+set(GBB_MODEL_GATE_TRACER_DOC [=[
+# Tracer corpus
+<!-- model-gates-begin -->
+| Gate | Class | Guard | Resolution | Site | Note |
+| --- | --- | --- | --- | --- | --- |
+| GATE-00 | BOTH | - | basis="model-neutral function" | any | shared |
+| GATE-01 | DMG_ONLY | model_is_dmg | - | dmg_only | tracer |
+<!-- model-gates-end -->
+]=])
+string(REPLACE "| GATE-01 | DMG_ONLY |" "| GATE-01 | BOTH |"
+  GBB_MODEL_GATE_TRACER_DOC_BAD "${GBB_MODEL_GATE_TRACER_DOC}")
+file(WRITE "${GBB_MODEL_GATE_DIR}/tracer.c" "${GBB_MODEL_GATE_TRACER_SOURCE}")
+file(WRITE "${GBB_MODEL_GATE_DIR}/tracer.md" "${GBB_MODEL_GATE_TRACER_DOC}")
+file(WRITE "${GBB_MODEL_GATE_DIR}/tracer-bad.md" "${GBB_MODEL_GATE_TRACER_DOC_BAD}")
+
+gbb_add_model_gate_test(model_gates_tracer_pass 0 "model-gates pass functions=2"
+  --source "${GBB_MODEL_GATE_DIR}/tracer.c" --doc "${GBB_MODEL_GATE_DIR}/tracer.md")
+gbb_add_model_gate_test(model_gates_tracer_doc_mismatch 1 "gate-doc-mismatch"
+  --source "${GBB_MODEL_GATE_DIR}/tracer.c" --doc "${GBB_MODEL_GATE_DIR}/tracer-bad.md")
+# The real core and the real gate table (Plan 10-02): every function and model-differing branch is tagged.
+gbb_add_model_gate_test(model_gates 0 "model-gates pass functions=1[2-9][0-9] gates=")
+gbb_add_model_gate_test(model_gates_selftest 0
+  "model-gates self-test pass mutants=[1-9][0-9]* functions=1[2-9][0-9]" --self-test)
+
+# Real-file negative controls (Plan 10-02). Each mutant is a configure-time copy of the real source or
+# doc under build/model-gates/real, with its anchor asserted to occur exactly once (forward and
+# REVERSE) so a drifted anchor fails the configure instead of building an unmutated "mutant".
+set(GBB_MODEL_GATE_REAL_DIR "${GBB_MODEL_GATE_DIR}/real")
+set(GBB_MODEL_GATE_REAL_SOURCE "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c")
+set(GBB_MODEL_GATE_REAL_DOC "${PROJECT_SOURCE_DIR}/docs/model-gates.md")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${GBB_MODEL_GATE_REAL_SOURCE}" "${GBB_MODEL_GATE_REAL_DOC}")
+file(MAKE_DIRECTORY "${GBB_MODEL_GATE_REAL_DIR}")
+file(READ "${GBB_MODEL_GATE_REAL_SOURCE}" gbb_mg_source)
+file(READ "${GBB_MODEL_GATE_REAL_DOC}" gbb_mg_doc)
+
+# (a) The STOP gate tag deleted. The gate number is not part of the anchor so later plans may renumber.
+set(GBB_MG_STOP_TAG_REGEX
+  "[ ]*/\\* MODEL: UNKNOWN GATE-[0-9][0-9] research:12 -- STOP, including CGB speed switch \\*/\n")
+string(REGEX MATCHALL "${GBB_MG_STOP_TAG_REGEX}" gbb_mg_stop_matches "${gbb_mg_source}")
+list(LENGTH gbb_mg_stop_matches gbb_mg_stop_count)
+if(NOT gbb_mg_stop_count EQUAL 1)
+  message(FATAL_ERROR "model-gate mutant: the STOP gate tag must occur exactly once in "
+    "${GBB_MODEL_GATE_REAL_SOURCE} (found ${gbb_mg_stop_count})")
+endif()
+string(REGEX REPLACE "${GBB_MG_STOP_TAG_REGEX}" "" gbb_mg_deleted "${gbb_mg_source}")
+file(WRITE "${GBB_MODEL_GATE_REAL_DIR}/deleted-tag.c" "${gbb_mg_deleted}")
+
+# (b) One untagged definition appended to the real source.
+file(WRITE "${GBB_MODEL_GATE_REAL_DIR}/untagged-function.c"
+  "${gbb_mg_source}\nstatic int gbb_model_gate_probe(void) { return 0; }\n")
+
+# (c) The read8 bus-conflict row claims research:14 instead of the declared expected failure.
+set(GBB_MG_ROW_ANCHOR "expected-failure:cgb-separate-buses | read8 |")
+string(FIND "${gbb_mg_doc}" "${GBB_MG_ROW_ANCHOR}" gbb_mg_row_first)
+string(FIND "${gbb_mg_doc}" "${GBB_MG_ROW_ANCHOR}" gbb_mg_row_last REVERSE)
+if(gbb_mg_row_first EQUAL -1 OR NOT gbb_mg_row_first EQUAL gbb_mg_row_last)
+  message(FATAL_ERROR "model-gate mutant: '${GBB_MG_ROW_ANCHOR}' must occur exactly once in "
+    "${GBB_MODEL_GATE_REAL_DOC} (first=${gbb_mg_row_first} last=${gbb_mg_row_last})")
+endif()
+string(REPLACE "${GBB_MG_ROW_ANCHOR}" "research:14 | read8 |" gbb_mg_doc_bad "${gbb_mg_doc}")
+file(WRITE "${GBB_MODEL_GATE_REAL_DIR}/doc-mismatch.md" "${gbb_mg_doc_bad}")
+
+# A deleted branch tag leaves its doc row without a code tag, so R2 (gate-doc-mismatch) fires first.
+gbb_add_model_gate_test(model_gates_real_deleted_tag 1 "gate-doc-mismatch: doc GATE-[0-9][0-9] has no code tag"
+  --source "${GBB_MODEL_GATE_REAL_DIR}/deleted-tag.c" --doc "${GBB_MODEL_GATE_REAL_DOC}")
+gbb_add_model_gate_test(model_gates_real_untagged_function 1 "gate-untagged-function: gbb_model_gate_probe"
+  --source "${GBB_MODEL_GATE_REAL_DIR}/untagged-function.c" --doc "${GBB_MODEL_GATE_REAL_DOC}")
+gbb_add_model_gate_test(model_gates_real_doc_mismatch 1 "gate-doc-mismatch"
+  --source "${GBB_MODEL_GATE_REAL_SOURCE}" --doc "${GBB_MODEL_GATE_REAL_DIR}/doc-mismatch.md")
+# Release mode records that research: items stay open until Phase 14; it becomes a pass gate in Phase 15.
+gbb_add_model_gate_test(model_gates_release_blocked 1 "gate-unresolved-unknown"
+  --release --source "${GBB_MODEL_GATE_REAL_SOURCE}" --doc "${GBB_MODEL_GATE_REAL_DOC}")
+
+# Plan SUMMARY coverage blocks (DECISIONS D-069, LESSONS GB-GSD-015): from Phase 11 on, every
+# entry must be in the GSD classifier's block schema and auto-passable, so /gsd-verify-work never
+# hands an automated deliverable to the owner. Phases 9-10 used a rejected shape; Phase 10 is the
+# negative control.
+set(GBB_SUMMARY_COVERAGE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-summary-coverage.py")
+function(gbb_add_summary_coverage_test name code regex)
+  set(command "${Python3_EXECUTABLE}" -I "${GBB_SUMMARY_COVERAGE_CHECKER}"
+    --phases-dir "${PROJECT_SOURCE_DIR}/.planning/phases" ${ARGN})
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60)
+endfunction()
+gbb_add_summary_coverage_test(summary_coverage_selftest 0 "summary-coverage self-test pass mutants=1[2-9]" --self-test)
+gbb_add_summary_coverage_test(summary_coverage 0 "summary-coverage pass files=[0-9]+" --since 11)
+gbb_add_summary_coverage_test(summary_coverage_phase10_rejected 1
+  "summary-coverage-invalid: 10-01-SUMMARY.md: flow-style-not-supported" --since 10)
+
+# Post-boot table mirror (D-06): docs/cgb-profile.md must equal post_boot[] and obey the provenance
+# rules. White-box like test_mbc5_internal, so it includes the core and must not link it.
+add_executable(test_cgb_tables test_cgb_tables.c)
+target_include_directories(test_cgb_tables PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_cgb_tables PRIVATE c_std_17)
+set_target_properties(test_cgb_tables PROPERTIES C_EXTENSIONS OFF)
+set(GBB_CGB_PROFILE_DOC "${PROJECT_SOURCE_DIR}/docs/cgb-profile.md")
+add_test(NAME cgb_tables_postboot COMMAND test_cgb_tables postboot "${GBB_CGB_PROFILE_DOC}")
+set_tests_properties(cgb_tables_postboot PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-tables postboot pass rows=[1-9]")
+add_test(NAME cgb_tables_postboot_selftest COMMAND test_cgb_tables postboot_selftest "${GBB_CGB_PROFILE_DOC}")
+set_tests_properties(cgb_tables_postboot_selftest PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-tables self-test pass mutants=6")
+
+# Negative control: the real doc with the compat A value changed from $11 to $12 must be rejected.
+file(READ "${GBB_CGB_PROFILE_DOC}" gbb_cgb_doc)
+set(GBB_CGB_ROW_ANCHOR "| a | COMPAT | $11 |")
+string(FIND "${gbb_cgb_doc}" "${GBB_CGB_ROW_ANCHOR}" gbb_cgb_anchor_at)
+string(FIND "${gbb_cgb_doc}" "${GBB_CGB_ROW_ANCHOR}" gbb_cgb_anchor_last REVERSE)
+if(gbb_cgb_anchor_at EQUAL -1 OR NOT gbb_cgb_anchor_at EQUAL gbb_cgb_anchor_last)
+  message(FATAL_ERROR "cgb-tables mutation anchor '${GBB_CGB_ROW_ANCHOR}' must occur exactly once in docs/cgb-profile.md")
+endif()
+string(REPLACE "${GBB_CGB_ROW_ANCHOR}" "| a | COMPAT | $12 |" gbb_cgb_doc_bad "${gbb_cgb_doc}")
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/cgb-tables")
+file(WRITE "${PROJECT_BINARY_DIR}/cgb-tables/mutated-postboot.md" "${gbb_cgb_doc_bad}")
+add_test(NAME cgb_tables_postboot_mutated_doc
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_tables>;postboot;${PROJECT_BINARY_DIR}/cgb-tables/mutated-postboot.md"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=cgb-tables mismatch"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+# Register visibility mirror (Plan 10-10, D-06): io_visibility[] against the cgb-io-visibility block.
+add_test(NAME cgb_tables_io COMMAND test_cgb_tables io "${GBB_CGB_PROFILE_DOC}")
+set_tests_properties(cgb_tables_io PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-tables io pass rows=[1-9]"
+  FAIL_REGULAR_EXPRESSION "cgb-tables mismatch")
+
+# Negative control: the compat FF4F read value changed to $FF in the doc must be rejected.
+set(GBB_CGB_IO_ANCHOR "| $FF4F | COMPAT | $FE or bank |")
+string(FIND "${gbb_cgb_doc}" "${GBB_CGB_IO_ANCHOR}" gbb_cgb_io_at)
+string(FIND "${gbb_cgb_doc}" "${GBB_CGB_IO_ANCHOR}" gbb_cgb_io_last REVERSE)
+if(gbb_cgb_io_at EQUAL -1 OR NOT gbb_cgb_io_at EQUAL gbb_cgb_io_last)
+  message(FATAL_ERROR "cgb-tables io mutation anchor '${GBB_CGB_IO_ANCHOR}' must occur exactly once in docs/cgb-profile.md")
+endif()
+string(REPLACE "${GBB_CGB_IO_ANCHOR}" "| $FF4F | COMPAT | $FF |" gbb_cgb_io_doc_bad "${gbb_cgb_doc}")
+file(WRITE "${PROJECT_BINARY_DIR}/cgb-tables/mutated-io.md" "${gbb_cgb_io_doc_bad}")
+add_test(NAME cgb_tables_io_mutated_doc
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_tables>;io;${PROJECT_BINARY_DIR}/cgb-tables/mutated-io.md"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=cgb-tables mismatch"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+# D-22 advisory A/B benchmark harness (Plan 10-17). Only the digest check and the receipt shape are
+# asserted; timing is never a CTest result. bash-only, so absent on Windows.
+if(NOT WIN32)
+  find_program(GBB_BASH bash REQUIRED)
+  set(GBB_AB_SCRIPT "${PROJECT_SOURCE_DIR}/tests/scripts/measure-release-baseline.sh")
+  set(GBB_AB_DIR "${PROJECT_BINARY_DIR}/bench-ab")
+  file(MAKE_DIRECTORY "${GBB_AB_DIR}")
+  add_test(NAME cgb_bench_ab_selftest
+    COMMAND "${GBB_BASH}" "${GBB_AB_SCRIPT}" --ab $<TARGET_FILE:measure_core> $<TARGET_FILE:measure_core>
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+  set_tests_properties(cgb_bench_ab_selftest PROPERTIES TIMEOUT 120
+    ENVIRONMENT "GBB_RELEASE_MEASURE_SAMPLES=3;GBB_RELEASE_MEASURE_WARMUPS=1;GBB_AB_RECEIPT=${GBB_AB_DIR}/selftest-receipt.json"
+    PASS_REGULAR_EXPRESSION "ab pass samples=3")
+
+  # Negative controls: a wrong expected digest and a receipt missing one field must each fail
+  # with exactly exit code 1 and their named reason.
+  function(gbb_add_bench_ab_control name drop_field digest regex)
+    add_test(NAME ${name}
+      COMMAND ${CMAKE_COMMAND}
+        "-DGBB_CMD=${GBB_BASH}$<SEMICOLON>${GBB_AB_SCRIPT}$<SEMICOLON>--ab$<SEMICOLON>$<TARGET_FILE:measure_core>$<SEMICOLON>$<TARGET_FILE:measure_core>"
+        -DGBB_EXPECT_CODE=1
+        "-DGBB_EXPECT_REGEX=${regex}"
+        "-DGBB_WORKDIR=${PROJECT_SOURCE_DIR}"
+        -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+    set_tests_properties(${name} PROPERTIES TIMEOUT 120
+      ENVIRONMENT "GBB_RELEASE_MEASURE_SAMPLES=3;GBB_RELEASE_MEASURE_WARMUPS=1;GBB_AB_TEST_HOOKS=1;GBB_AB_RECEIPT=${GBB_AB_DIR}/${name}.json;GBB_AB_DROP_FIELD=${drop_field};GBB_AB_EXPECT_DIGEST=${digest}")
+  endfunction()
+  gbb_add_bench_ab_control(cgb_bench_ab_wrong_digest "" 0000000000000000 "ab-digest-mismatch")
+  gbb_add_bench_ab_control(cgb_bench_ab_missing_field uncertainty 4c7a57ff3d50d228
+    "ab-receipt-missing: uncertainty")
+  # IN-03: a measure binary whose mode= line has no elapsed_ns is a named error, not a KeyError traceback.
+  add_test(NAME cgb_bench_ab_missing_elapsed
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${GBB_BASH}$<SEMICOLON>${GBB_AB_SCRIPT}$<SEMICOLON>--ab$<SEMICOLON>${PROJECT_SOURCE_DIR}/tests/scripts/ab-stub-no-elapsed.sh$<SEMICOLON>${PROJECT_SOURCE_DIR}/tests/scripts/ab-stub-no-elapsed.sh"
+      -DGBB_EXPECT_CODE=1
+      "-DGBB_EXPECT_REGEX=ab-field-missing: base elapsed_ns=absent"
+      "-DGBB_FORBID_REGEX=Traceback|KeyError"
+      "-DGBB_WORKDIR=${PROJECT_SOURCE_DIR}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(cgb_bench_ab_missing_elapsed PROPERTIES TIMEOUT 120
+    ENVIRONMENT "GBB_RELEASE_MEASURE_SAMPLES=3;GBB_RELEASE_MEASURE_WARMUPS=1;GBB_AB_RECEIPT=${GBB_AB_DIR}/missing-elapsed.json")
+endif()
 
 gabbaboy_verify_registered_tests()

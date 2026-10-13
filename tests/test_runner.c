@@ -28,7 +28,7 @@ static int induced_guest_failure_on(uint8_t *rom,size_t rom_size) {
 
     protocol_evidence evidence;uint64_t ticks=0;size_t recent_count=0;const char *stop=NULL;
     gbb_diagnostic_record recent[RECENT_CAPACITY];
-    const char *status=run_guest(&cases[0],rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
+    const char *status=run_guest(GBB_RUNNER_PROFILE_DMG,&cases[0],rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
     REQUIRE(strcmp(status,"fail")==0);
     REQUIRE(evidence.reached_result);
     REQUIRE(evidence.result_pc==cases[0].result_pc);
@@ -70,7 +70,7 @@ static const fixture_case *mbc_case_by_alias(const char *alias) {
 static int type_mutation_on(const fixture_case *fc,uint8_t *rom,size_t rom_size) {
     protocol_evidence evidence;uint64_t ticks=0;size_t recent_count=0;const char *stop=NULL;
     gbb_diagnostic_record recent[RECENT_CAPACITY];
-    const char *baseline=run_guest(fc,rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
+    const char *baseline=run_guest(GBB_RUNNER_PROFILE_DMG,fc,rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
     REQUIRE(baseline!=NULL && strcmp(baseline,"pass")==0);
 
     REQUIRE(rom_size>0x14d && rom[0x147]>=0x19 && rom[0x147]<=0x1e); /* an MBC5 cartridge type */
@@ -79,7 +79,7 @@ static int type_mutation_on(const fixture_case *fc,uint8_t *rom,size_t rom_size)
     for(size_t i=0x134;i<=0x14c;i++)checksum=(uint8_t)(checksum-rom[i]-1u);
     rom[0x14d]=checksum;
 
-    const char *status=run_guest(fc,rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
+    const char *status=run_guest(GBB_RUNNER_PROFILE_DMG,fc,rom,rom_size,&evidence,&ticks,&stop,recent,&recent_count);
     REQUIRE(status!=NULL && strcmp(status,"pass")!=0);
     printf("control=mbc5-type-byte-mutation alias=%s header147=01 header_checksum=%02x status=%s stop=%s ticks=%llu\n",
            fc->alias,checksum,status,stop!=NULL?stop:"none",(unsigned long long)ticks);
@@ -102,8 +102,113 @@ static int run_type_mutation(const char *path) {
     return code;
 }
 
+/* D-26 expected-unsupported controls. The runner's compiled rows are gated by the manifest SHA, so a
+ * tampered manifest never reaches them through the command line; this control therefore reads the row's
+ * expectation from the tampered manifest copy itself and applies it to the compiled row. */
+static const fixture_case *cgb_case_by_alias(const char *alias) {
+    for(size_t i=0;i<sizeof(cgb_cases)/sizeof(cgb_cases[0]);i++)
+        if(strcmp(cgb_cases[i].alias,alias)==0)return &cgb_cases[i];
+    return NULL;
+}
+/* The string value of `"key"` inside [from,to), tolerant of the whitespace around the colon (CMake rewrites
+ * JSON as `"key" : "value"`). A key like "expect_stop" never matches "expect" because the closing quote is part
+ * of the needle. */
+static int json_string_in(const char *from,const char *to,const char *key,char out[32]) {
+    char needle[64];
+    if(snprintf(needle,sizeof(needle),"\"%s\"",key)>=(int)sizeof(needle))return 0;
+    for(const char *at=from;at<to;at++){
+        const char *hit=strstr(at,needle);if(hit==NULL||hit>=to)return 0;
+        const char *p=hit+strlen(needle);
+        while(p<to&&(*p==' '||*p=='\t'||*p=='\n'||*p=='\r'))p++;
+        if(p>=to||*p!=':'){at=hit;continue;}
+        p++;while(p<to&&(*p==' '||*p=='\t'||*p=='\n'||*p=='\r'))p++;
+        if(p>=to||*p!='"'){at=hit;continue;}
+        p++;const char *quote=memchr(p,'"',(size_t)(to-p));
+        if(quote==NULL||quote-p>=31)return 0;
+        memcpy(out,p,(size_t)(quote-p));out[quote-p]=0;return 1;
+    }
+    return 0;
+}
+/* The "expect" value of the fixture object whose alias is given, read from raw manifest JSON text. The object
+ * is bounded by the braces around the alias (fixture objects hold no nested objects), so the key cannot come
+ * from another row. */
+static int manifest_expect(const char *json,const char *alias,char out[32]) {
+    const char *fixtures=strstr(json,"\"fixtures\"");if(fixtures==NULL)return 0;
+    for(const char *open=strchr(fixtures,'{');open!=NULL;open=strchr(open+1,'{')){
+        const char *close=strchr(open,'}');if(close==NULL)return 0;
+        char found[32];
+        if(json_string_in(open,close,"alias",found)&&strcmp(found,alias)==0)return json_string_in(open,close,"expect",out);
+    }
+    return 0;
+}
+/* Apply a manifest expect value to a copy of the compiled row. */
+static int apply_manifest_expect(fixture_case *row,const char *expect) {
+    if(strcmp(expect,"pass")==0){row->expect_stop=0;return 1;}
+    if(strcmp(expect,"expected-unsupported")==0){row->expect_stop=1;return 1;}
+    return 0;
+}
+static int run_cgb_row(const fixture_case *row,const char *dir,const char **status_out,const char **reason_out,int *code_out) {
+    char path[4096];
+    if(snprintf(path,sizeof(path),"%s/%s",dir,row->rom)>=(int)sizeof(path))return 0;
+    uint8_t *rom=malloc(row->size_bytes+1);if(rom==NULL)return 0;
+    size_t length=0;
+    int loaded=read_bounded(path,rom,row->size_bytes,&length)&&length==row->size_bytes&&hash_matches(rom,length,row->sha256);
+    if(loaded){
+        protocol_evidence evidence;uint64_t ticks=0;size_t recent_count=0;const char *stop=NULL;stop_evidence stopped;
+        gbb_diagnostic_record recent[RECENT_CAPACITY];
+        const char *run=run_guest_stop(row_profile(row),row,rom,length,&evidence,&ticks,&stop,recent,&recent_count,&stopped);
+        *code_out=row_outcome(row,run,&stopped,status_out,reason_out);
+    }
+    free(rom);
+    return loaded;
+}
+static int run_expected_unsupported_tamper(const char *tampered_manifest,const char *untampered_manifest,const char *dir) {
+    uint8_t *tampered=malloc(MAX_MANIFEST+1),*untampered=malloc(MAX_MANIFEST+1);
+    REQUIRE(tampered!=NULL&&untampered!=NULL);
+    size_t n=0,m=0;
+    REQUIRE(read_bounded(tampered_manifest,tampered,MAX_MANIFEST,&n)&&read_bounded(untampered_manifest,untampered,MAX_MANIFEST,&m));
+    tampered[n]=0;untampered[m]=0;
+    char tampered_expect[32],untampered_expect[32];
+    REQUIRE(manifest_expect((const char *)tampered,"boot_hwio-C",tampered_expect));
+    REQUIRE(manifest_expect((const char *)untampered,"boot_hwio-C",untampered_expect));
+    REQUIRE(strcmp(tampered_expect,"pass")==0);                       /* the tamper is really in the copy */
+    REQUIRE(strcmp(untampered_expect,"expected-unsupported")==0);
+    free(tampered);free(untampered);
+    const fixture_case *compiled=cgb_case_by_alias("boot_hwio-C");REQUIRE(compiled!=NULL);
+    const char *status=NULL,*reason=NULL;int code=-1;
+
+    /* Baseline: the committed expectation is met by the real stop at FF76. */
+    fixture_case row=*compiled;
+    REQUIRE(apply_manifest_expect(&row,untampered_expect));
+    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code));
+    REQUIRE(strcmp(status,"expected-unsupported")==0&&code==0);
+
+    /* Control 1: the tampered manifest says boot_hwio-C must pass, so the stop on unbuilt hardware is a failure. */
+    row=*compiled;
+    REQUIRE(apply_manifest_expect(&row,tampered_expect));
+    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code));
+    REQUIRE(strcmp(status,"pass")!=0&&code!=0);
+    printf("control=expected-unsupported-tampered-to-pass alias=boot_hwio-C status=%s code=%d\n",status,code);
+
+    /* Control 2: a stop at any address other than the declared one never satisfies the row. */
+    row=*compiled;row.expect_stop_address=0xFF77u;
+    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code));
+    REQUIRE(strcmp(status,"fail")==0&&strcmp(reason,"wrong-stop-address")==0&&code==1);
+    printf("control=expected-unsupported-wrong-address alias=boot_hwio-C status=%s reason=%s code=%d\n",status,reason,code);
+
+    /* Control 3: a ROM that passes is never an expected-unsupported row, whatever its declared stop. */
+    const fixture_case *passing=cgb_case_by_alias("boot_regs-cgb");REQUIRE(passing!=NULL);
+    row=*passing;row.expect_stop=1;row.expect_stop_address=0xFF76u;
+    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code));
+    REQUIRE(strcmp(status,"unexpected-pass")==0&&code==1);
+    printf("control=expected-unsupported-pass-is-failure alias=boot_regs-cgb status=%s code=%d\n",status,code);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) return 2;
+    if (strcmp(argv[1],"cgb_mooneye_expected_unsupported_tamper")==0)
+        return argc==5?run_expected_unsupported_tamper(argv[2],argv[3],argv[4]):2;
     if (strcmp(argv[1],"runner_guest_failure")==0)
         return argc==3?run_induced_guest_failure(argv[2]):2;
     if (strcmp(argv[1],"mooneye_mbc_type_mutation")==0)

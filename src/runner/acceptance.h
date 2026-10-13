@@ -91,6 +91,18 @@ typedef enum {
     GBB_CASE_EXCLUDED_REVISION     /* target_revision differs from the effective revision */
 } gbb_case_applicability_kind;
 
+/* The one runner model<->profile mapping (D-25). The runner aliases the public profile values below
+ * so every create call and printed label goes through one mapping, and an unknown model is refused
+ * instead of falling back to DMG. */
+#define GBB_RUNNER_PROFILE_DMG GBB_PROFILE_DMG_CPU_B
+#define GBB_RUNNER_PROFILE_CGB GBB_PROFILE_CGB_CPU_E
+/* Maps dmg-cpu-b / cgb-cpu-e to a profile. Returns 1 when known, 0 otherwise (*out untouched). */
+int gbb_runner_profile_for_model(const char *model, gbb_profile *out);
+/* "DMG-CPU-B" or "CGB-CPU-E" for the receipt profile= field. */
+const char *gbb_runner_profile_label(gbb_profile profile);
+/* Maps the --profile values dmg and cgb to the model token, or NULL for anything else. */
+const char *gbb_runner_model_for_option(const char *option);
+
 /* Recognised --model tokens: dmg-cpu-b and cgb-cpu-e. Returns 1 when known. */
 int gbb_case_model_known(const char *model);
 /* Decides what a run of this case on `model` at `revision` must show. model_fail wins over
@@ -133,7 +145,7 @@ typedef struct {
     uint64_t frame_digest_at;     /* extra checkpoint labelled t<half-dots> */
     int pcm_only;                 /* limit output to the PCM lines */
     const char *dump_dir;         /* write <id>.<label>.ppm per checkpoint */
-    /* Applicability (D-22). Only dmg-cpu-b can execute in this phase. */
+    /* Applicability (D-22). The model maps to a profile through gbb_runner_profile_for_model. */
     const char *model;            /* NULL means dmg-cpu-b */
     const char *revision;         /* NULL means the model token */
     int suite;                    /* run every case in file order */
@@ -153,7 +165,7 @@ typedef struct {
     const char *mutate_label;     /* "drop:START", echoed on status lines */
 } gbb_acceptance_options;
 
-/* Runs one parsed case on DMG-CPU-B. Exit codes: 0 pass, 1 fail, 2 invalid
+/* Runs one parsed case on the requested model (default DMG-CPU-B). Exit codes: 0 pass, 1 fail, 2 invalid
  * input (every input check completes before an instance is created), 3
  * unsupported or stopped, 4 excluded by model or target revision (file entry
  * points only). With expect_fail set, the declared failure reason prints

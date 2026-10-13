@@ -13,6 +13,11 @@ function(gabbaboy_verify_registered_tests)
       installed_runner_smoke installed_consumer_c installed_consumer_cpp
       installed_consumer_phase2_c installed_consumer_phase2_cpp)
   endif()
+  if(WIN32)
+    # The A/B benchmark harness is a bash script (Plan 10-17).
+    list(REMOVE_ITEM expected_tests cgb_bench_ab_selftest cgb_bench_ab_wrong_digest
+      cgb_bench_ab_missing_field cgb_bench_ab_missing_elapsed cgb_mooneye_repro_requires_manifest)
+  endif()
   list(SORT expected_tests)
   if(NOT registered_tests STREQUAL expected_tests)
     message(FATAL_ERROR

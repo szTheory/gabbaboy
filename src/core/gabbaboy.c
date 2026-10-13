@@ -1,4 +1,5 @@
 #include "gabbaboy/gabbaboy.h"
+#include "gabbaboy_test.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +10,19 @@
 #define GBB_FRAME_HEIGHT 144u
 #define GBB_FRAME_PIXELS (GBB_FRAME_WIDTH * GBB_FRAME_HEIGHT)
 #define GBB_OAM_BYTES 160u
+#define GBB_VRAM_BANKS 2u
+#define GBB_VRAM_BANK_SIZE 8192u
+#define GBB_WRAM_BANKS 8u
+#define GBB_WRAM_BANK_SIZE 4096u
+/* Half-dot timeline (D-070): one uint64_t half-dot counter is the single clock for normal and
+ * double speed. A CPU T-cycle is 2 half-dots normal, 1 double; a PPU dot is always 2. */
+#define GBB_MASTER_HALF_DOTS_PER_SECOND UINT64_C(8388608)
+#define GBB_HALF_DOTS_PER_T_NORMAL 2u
+#define GBB_HALF_DOTS_PER_T_DOUBLE 1u
+#define GBB_T_PER_M 4u
+#define GBB_HALF_DOTS_PER_DOT 2u
+#define GBB_DOTS_PER_LINE 456u
+#define GBB_LINES_PER_FRAME 154u
 #define GBB_DMA_BYTE_PERIOD_HALF_DOTS 8u
 #define GBB_LINE_OBJECT_LIMIT 10u
 #define GBB_PPU_FIFO_CAPACITY 16u
@@ -129,6 +143,7 @@ static const cart_type_row cart_type_table[] = {
     { 0x1Eu, CART_MBC5,     1u, 1u, 0u, 1u, 0x08u, CART_RAM_MBC5,      0u,    GBB_MAX_ROM_SIZE },
 };
 
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 static const cart_type_row *cart_row_for_type(uint8_t type) {
     for (size_t i = 0; i < sizeof(cart_type_table) / sizeof(cart_type_table[0]); ++i)
         if (cart_type_table[i].type == type) return &cart_type_table[i];
@@ -137,6 +152,7 @@ static const cart_type_row *cart_row_for_type(uint8_t type) {
 
 /* Mapper registers only. Never touches cartridge RAM, battery generation, kind
  * or flags, and is safe on an unloaded (calloc-zeroed) instance. */
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 static void cart_reset_registers(cart_state *c) {
     c->rom_bank_lo = 1u;
     c->rom_bank_hi = 0u;
@@ -146,6 +162,7 @@ static void cart_reset_registers(cart_state *c) {
     c->rtc_latch_prev = 0xFFu; /* a single $01 after load or reset never latches */
 }
 
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 static size_t mbc1_rom_bank(const cart_state *c, size_t rom_size, uint16_t address) {
     const size_t mask = rom_size / 0x4000u - 1u;
     if (address < 0x4000u)
@@ -159,10 +176,12 @@ static size_t mbc1_rom_bank(const cart_state *c, size_t rom_size, uint16_t addre
 /* MBC5 has two independent ROM bank registers: $2000-$2FFF holds the low eight
  * bits and $3000-$3FFF bit 8. Bank 0 is a legal selection for $4000-$7FFF (no
  * 0-to-1 remap), and a bank beyond the image wraps by masking. */
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 static size_t mbc5_rom_bank(const cart_state *c, size_t rom_banks) {
     return ((((size_t)(c->rom_bank_hi & 1u) << 8) | c->rom_bank_lo) & (rom_banks - 1u));
 }
 
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 static size_t mbc1_ram_offset(const cart_state *c, size_t ram_size, uint16_t address) {
     const size_t bank_size = 0x2000u;
     const size_t bank_count = ram_size / bank_size;
@@ -176,12 +195,29 @@ static size_t mbc1_ram_offset(const cart_state *c, size_t ram_size, uint16_t add
  * half-dot counter, lazily, when the guest touches a clock register. 2^23
  * half-dots are exactly one second (4194304 Hz * 2 half-dots per T-cycle). */
 #define RTC_HALF_DOTS_PER_SECOND_SHIFT 23u
+
+_Static_assert(GBB_MASTER_HALF_DOTS_PER_SECOND == (UINT64_C(1) << 23) &&
+               GBB_MASTER_HALF_DOTS_PER_SECOND == GBB_AUDIO_CLOCK_HALF_DOTS,
+               "half-dot timeline: master rate must be 2^23 half-dots per second");
+_Static_assert(GBB_HALF_DOTS_PER_T_NORMAL == 2u,
+               "half-dot timeline: a normal-speed T-cycle is 2 half-dots");
+_Static_assert(GBB_HALF_DOTS_PER_T_DOUBLE == 1u,
+               "half-dot timeline: a double-speed T-cycle is 1 half-dot");
+_Static_assert(GBB_T_PER_M == 4u, "half-dot timeline: an M-cycle is 4 T-cycles");
+_Static_assert(GBB_HALF_DOTS_PER_DOT == 2u, "half-dot timeline: a PPU dot is 2 half-dots");
+_Static_assert(RTC_HALF_DOTS_PER_SECOND_SHIFT == 23u,
+               "half-dot timeline: the RTC counts 2^23 half-dots per second");
+_Static_assert(GBB_DOTS_PER_LINE * GBB_LINES_PER_FRAME * GBB_HALF_DOTS_PER_DOT == 140448u,
+               "half-dot timeline: a frame is 140448 half-dots");
+_Static_assert(GBB_DMA_BYTE_PERIOD_HALF_DOTS == GBB_T_PER_M * GBB_HALF_DOTS_PER_T_NORMAL,
+               "half-dot timeline: an OAM DMA byte takes one normal-speed M-cycle");
 #define RTC_SUB_MASK 0x7FFFFFu
 
 /* Add n ticks to a field that carries at `limit` and stores `mask` bits. A value
  * at or above the limit (only reachable by a guest write) is not a legal count:
  * it steps to (v + 1) & mask without carrying until it wraps to 0, and only then
  * counts normally. Returns the number of carries into the next field. */
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 static uint64_t rtc_step_field(uint8_t *field, uint64_t n, uint32_t limit, uint32_t mask) {
     uint64_t f = *field;
     if (f >= limit) {
@@ -199,6 +235,7 @@ static uint64_t rtc_step_field(uint8_t *field, uint64_t n, uint32_t limit, uint3
     return n / limit + low / limit;
 }
 
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 static void rtc_add_seconds(cart_state *c, uint64_t secs) {
     if (secs == 0u) return;
     const uint64_t minutes = rtc_step_field(&c->rtc_s, secs, 60u, 0x3Fu);
@@ -212,6 +249,7 @@ static void rtc_add_seconds(cart_state *c, uint64_t secs) {
 
 /* Credit the half-dots since the last sync. A halted clock gets no time, but
  * the anchor still advances so un-halting never credits the halted period. */
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 static void rtc_sync(cart_state *c, uint64_t now) {
     const uint64_t el = now >= c->rtc_synced_at ? now - c->rtc_synced_at : 0u;
     c->rtc_synced_at = now;
@@ -223,12 +261,14 @@ static void rtc_sync(cart_state *c, uint64_t now) {
     rtc_add_seconds(c, secs);
 }
 
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 static uint8_t rtc_read_mask(unsigned reg, uint8_t value) {
     static const uint8_t masks[5] = {0x3Fu, 0x3Fu, 0x1Fu, 0xFFu, 0xC1u};
     return (uint8_t)(value & masks[reg]);
 }
 
 /* Returns 1 when the observable clock state changed (for the D-10 generation). */
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 static int rtc_write_register(cart_state *c, uint64_t now, unsigned reg, uint8_t value) {
     rtc_sync(c, now);
     const uint8_t b_s = c->rtc_s, b_m = c->rtc_m, b_h = c->rtc_h;
@@ -250,6 +290,7 @@ static int rtc_write_register(cart_state *c, uint64_t now, unsigned reg, uint8_t
            b_dl != c->rtc_dl || b_dh != c->rtc_dh || sub_before != c->rtc_sub;
 }
 
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 static void rtc_latch_write(cart_state *c, uint64_t now, uint8_t value) {
     const int latch_now = c->rtc_latch_prev == 0x00u && value == 0x01u; /* rtc: latch only on 00 then 01 */
     if (latch_now) {
@@ -269,8 +310,12 @@ typedef struct {
     uint8_t has_battery;
     uint8_t has_timer;
     uint8_t has_rumble;
+    uint8_t cgb_flag;       /* raw $143 */
+    uint8_t cgb_support;    /* a gbb_cgb_support value */
     size_t ram_size;
 } cartridge_info;
+
+_Static_assert(sizeof(gbb_info) == GBB_INFO_SIZE_V1, "gbb_info layout");
 
 typedef struct gbb_test_dma_event gbb_test_dma_event;
 
@@ -281,9 +326,18 @@ struct gbb_instance {
     size_t cartridge_ram_size;
     uint64_t battery_generation;
     cart_state cart;
-    uint8_t wram[8192];
+    uint8_t wram[GBB_WRAM_BANKS][GBB_WRAM_BANK_SIZE];
     uint8_t hram[127];
-    uint8_t vram[8192];
+    uint8_t vram[GBB_VRAM_BANKS][GBB_VRAM_BANK_SIZE];
+    /* Effective banks. vram_bank is 0 or 1; wram_bank is 1..7 (SVBK 0 selects 1). svbk is the raw
+     * 3-bit register. DMG pins 0 and 1 and never changes them. */
+    uint8_t vram_bank;
+    uint8_t wram_bank;
+    uint8_t svbk;
+    /* CGB-profile I/O register state (Plan 10-09). key1_armed is KEY1 bit 0 (the speed switch is
+     * not built; STOP ignores it). bcps/ocps are the palette index registers, ff72-ff75 the
+     * undocumented CGB scratch registers. DMG never reads or writes any of these. */
+    uint8_t key1_armed, bcps, ocps, ff72, ff73, ff74, ff75;
     uint8_t oam[GBB_OAM_BYTES];
     uint8_t frame_working[GBB_FRAME_PIXELS];
     uint8_t frame_completed[GBB_FRAME_PIXELS];
@@ -343,7 +397,13 @@ struct gbb_instance {
     uint64_t timer_reloaded_at;
     uint64_t instruction_start_half_dots;
     uint16_t serial_edge_remaining;
-    int serial_active, serial_unsupported;
+    int serial_active;
+    /* Deferred-access latch (OQ5): set by a write the core refuses to model (serial while a
+     * transfer is active, or a DEFERRED CGB register); reported as GBB_STOP_UNSUPPORTED_BUS after
+     * the instruction retires. bus_unsupported_address is the refused address (a failed read
+     * pre-flight records its address here too, with no other state change). */
+    int bus_unsupported;
+    uint16_t bus_unsupported_address;
     int halted, stopped, halt_bug;
     uint16_t pc, sp;
     uint64_t time_half_dots;
@@ -362,6 +422,11 @@ struct gbb_instance {
     size_t test_dma_event_capacity;
     size_t test_dma_event_count;
     int loaded;
+    uint8_t profile;        /* fixed at gbb_create */
+    uint8_t exec_mode;      /* a gbb_exec_mode value; committed with the ROM swap */
+    uint8_t cgb_flag;       /* raw $143 of the loaded ROM */
+    uint8_t cgb_support;
+    uint8_t cartridge_type; /* raw $147 of the loaded ROM */
     gbb_diagnostic_record *diagnostic_output;
     size_t diagnostic_output_capacity;
     size_t diagnostic_output_count;
@@ -371,12 +436,14 @@ struct gbb_instance {
     uint8_t diagnostic_opcode;
 };
 
+/* MODEL: BOTH GATE-00 basis=host-side-mixing */
 static int16_t audio_saturate_s16(int64_t value) {
     if (value > INT16_MAX) value = INT16_MAX;
     if (value < INT16_MIN) value = INT16_MIN;
     return (int16_t)value;
 }
 
+/* MODEL: BOTH GATE-00 basis=host-side-mixing */
 static int64_t audio_round_q15(int64_t value) {
     if (value >= 0) return (value + 16384) / 32768;
     return -((-value + 16384) / 32768);
@@ -393,6 +460,7 @@ static const int16_t audio_step_q15[GBB_AUDIO_EVENT_PHASES][GBB_AUDIO_EVENT_TAPS
     {4096, 8192, 12288, 16384, 20480, 24575, 28671, 30719, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767}
 };
 
+/* MODEL: BOTH GATE-00 basis=host-side-mixing */
 static void audio_add_edge(gbb_instance *m, unsigned channel, int32_t delta,
                            unsigned phase) {
     for (unsigned tap = 0u; tap < GBB_AUDIO_EVENT_TAPS; ++tap) {
@@ -403,6 +471,7 @@ static void audio_add_edge(gbb_instance *m, unsigned channel, int32_t delta,
     }
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static gbb_audio_frame audio_process_sample(gbb_instance *m) {
     int16_t output[2];
     for (unsigned channel = 0u; channel < 2u; ++channel) {
@@ -411,6 +480,7 @@ static gbb_audio_frame audio_process_sample(gbb_instance *m) {
             (int64_t)m->audio_mix_level[channel] * 32768 +
             m->audio_event_ring[channel][slot]));
         m->audio_event_ring[channel][slot] = 0;
+        /* MODEL: UNKNOWN GATE-01 research:14 -- high-pass filter constant differs by model */
         const int64_t hp = sample - m->audio_hpf_input[channel] +
             audio_round_q15((int64_t)m->audio_hpf_output[channel] * GBB_AUDIO_HPF_Q15);
         m->audio_hpf_input[channel] = audio_saturate_s16(sample);
@@ -421,6 +491,7 @@ static gbb_audio_frame audio_process_sample(gbb_instance *m) {
     return (gbb_audio_frame){output[0], output[1]};
 }
 
+/* MODEL: BOTH GATE-00 basis=host-side-mixing */
 static void audio_current_mix(const gbb_instance *m, int32_t *left, int32_t *right) {
     static const uint8_t duty_pattern[4] = {0x01u, 0x81u, 0x87u, 0x7Eu};
     *left = 0; *right = 0;
@@ -458,6 +529,7 @@ static void audio_current_mix(const gbb_instance *m, int32_t *left, int32_t *rig
         *left += noise_sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u) / GBB_AUDIO_MIX_HEADROOM_DIV;
 }
 
+/* MODEL: BOTH GATE-00 basis=host-side-mixing */
 void gbb_test_audio_kernel(gbb_instance *m, const int32_t *left,
                            const int32_t *right, size_t count,
                            gbb_audio_frame *output) {
@@ -470,6 +542,7 @@ void gbb_test_audio_kernel(gbb_instance *m, const int32_t *left,
     }
 }
 
+/* MODEL: BOTH GATE-00 basis=host-side-mixing */
 void gbb_test_audio_edge(gbb_instance *m, int32_t left_delta, int32_t right_delta,
                          unsigned phase, gbb_audio_frame *output) {
     if (m == NULL || output == NULL || phase >= GBB_AUDIO_EVENT_PHASES) return;
@@ -480,11 +553,13 @@ void gbb_test_audio_edge(gbb_instance *m, int32_t left_delta, int32_t right_delt
     *output = audio_process_sample(m);
 }
 
+/* MODEL: BOTH GATE-00 basis=diagnostics-only */
 static uint8_t diagnostic_timer_state(const gbb_instance *m) {
     return (uint8_t)((m->tac & 7u) | (m->timer_reload_pending ? 0x08u : 0u) |
                      (m->timer_signal ? 0x10u : 0u));
 }
 
+/* MODEL: BOTH GATE-00 basis=diagnostics-only */
 static void diagnostic_add(gbb_instance *m, gbb_diagnostic_kind kind,
                            uint64_t time, uint16_t address, uint8_t value) {
     if (m->diagnostic_operation == NULL ||
@@ -499,6 +574,7 @@ static void diagnostic_add(gbb_instance *m, gbb_diagnostic_kind kind,
     record->timer_state = diagnostic_timer_state(m);
 }
 
+/* MODEL: BOTH GATE-00 basis=diagnostics-only */
 static void diagnostic_begin(gbb_instance *m, gbb_diagnostic_record records[GBB_DIAGNOSTIC_OPERATION_RESERVE], uint16_t pc, uint8_t opcode) {
     if (m->diagnostic_output == NULL) return;
     m->diagnostic_operation = records;
@@ -508,6 +584,7 @@ static void diagnostic_begin(gbb_instance *m, gbb_diagnostic_record records[GBB_
     diagnostic_add(m, GBB_DIAGNOSTIC_INSTRUCTION, m->time_half_dots, 0, opcode);
 }
 
+/* MODEL: BOTH GATE-00 basis=diagnostics-only */
 static void diagnostic_commit(gbb_instance *m) {
     if (m->diagnostic_output == NULL || m->diagnostic_operation == NULL) return;
     memcpy(m->diagnostic_output + m->diagnostic_output_count, m->diagnostic_operation,
@@ -531,6 +608,7 @@ struct gbb_test_dma_event {
     uint8_t value;
 };
 
+/* MODEL: BOTH GATE-00 basis=diagnostics-only */
 void gbb_test_observer_set(gbb_instance *m, gbb_test_bus_event *events, size_t capacity) {
     if (m == NULL) return;
     m->test_events = events;
@@ -538,10 +616,12 @@ void gbb_test_observer_set(gbb_instance *m, gbb_test_bus_event *events, size_t c
     m->test_event_count = 0;
 }
 
+/* MODEL: BOTH GATE-00 basis=diagnostics-only */
 size_t gbb_test_observer_count(const gbb_instance *m) {
     return m == NULL ? 0 : m->test_event_count;
 }
 
+/* MODEL: BOTH GATE-00 basis=diagnostics-only */
 void gbb_test_ppu_observer_set(gbb_instance *m, gbb_test_bus_event *events,
                                size_t capacity) {
     if (m == NULL) return;
@@ -550,10 +630,12 @@ void gbb_test_ppu_observer_set(gbb_instance *m, gbb_test_bus_event *events,
     m->test_ppu_event_count = 0;
 }
 
+/* MODEL: BOTH GATE-00 basis=diagnostics-only */
 size_t gbb_test_ppu_observer_count(const gbb_instance *m) {
     return m == NULL ? 0 : m->test_ppu_event_count;
 }
 
+/* MODEL: BOTH GATE-00 basis=diagnostics-only */
 void gbb_test_dma_observer_set(gbb_instance *m, gbb_test_dma_event *events,
                                size_t capacity) {
     if (m == NULL) return;
@@ -562,10 +644,12 @@ void gbb_test_dma_observer_set(gbb_instance *m, gbb_test_dma_event *events,
     m->test_dma_event_count = 0;
 }
 
+/* MODEL: BOTH GATE-00 basis=diagnostics-only */
 size_t gbb_test_dma_observer_count(const gbb_instance *m) {
     return m == NULL ? 0 : m->test_dma_event_count;
 }
 
+/* MODEL: BOTH GATE-00 basis=diagnostics-only */
 static void observe_dma(gbb_instance *m, uint16_t address, uint8_t access,
                         uint8_t value) {
     if (m->test_dma_events != NULL &&
@@ -578,6 +662,7 @@ static void observe_dma(gbb_instance *m, uint16_t address, uint8_t access,
     }
 }
 
+/* MODEL: BOTH GATE-00 basis=diagnostics-only */
 static void observe_ppu(gbb_instance *m, uint16_t address, uint8_t access,
                         uint8_t value) {
     if (m->test_ppu_events != NULL &&
@@ -593,6 +678,7 @@ static void observe_ppu(gbb_instance *m, uint16_t address, uint8_t access,
 
 static void ppu_update_stat_line(gbb_instance *m);
 
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static void ppu_set_mode(gbb_instance *m, uint8_t mode) {
     if (m->ppu_mode != mode) {
         m->ppu_mode = mode;
@@ -601,6 +687,7 @@ static void ppu_set_mode(gbb_instance *m, uint8_t mode) {
     }
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void ppu_update_stat_line(gbb_instance *m) {
     int line = 0;
     if ((m->lcdc & 0x80u) != 0) {
@@ -609,6 +696,7 @@ static void ppu_update_stat_line(gbb_instance *m) {
                 ((m->ppu_mode == 2u) && ((m->stat & 0x20u) != 0)) ||
                 ((m->ly == m->lyc) && ((m->stat & 0x40u) != 0)));
     }
+    /* MODEL: UNKNOWN GATE-02 research:11 -- STAT interrupt line edge timing is unresearched for CGB */
     if (line && !m->ppu_stat_line) {
         m->interrupt_flags |= 0x02u;
         observe_ppu(m, 0xFF0F, 5, (uint8_t)(0xE0u | m->interrupt_flags));
@@ -616,6 +704,7 @@ static void ppu_update_stat_line(gbb_instance *m) {
     m->ppu_stat_line = (uint8_t)line;
 }
 
+/* MODEL: BOTH GATE-00 basis=diagnostics-only */
 static void observe_bus(gbb_instance *m, uint64_t offset, uint16_t address, uint8_t access, uint8_t value) {
     if (access == 1) diagnostic_add(m, GBB_DIAGNOSTIC_BUS_READ, m->time_half_dots + offset, address, value);
     else if (access == 2) diagnostic_add(m, GBB_DIAGNOSTIC_BUS_WRITE, m->time_half_dots + offset, address, value);
@@ -629,26 +718,589 @@ static void observe_bus(gbb_instance *m, uint64_t offset, uint16_t address, uint
     }
 }
 
+/* Model predicates are profile tests. They are the only way later code asks which console is
+ * running, so a model difference is always visible as a guarded branch. */
+/* MODEL: BOTH GATE-00 basis=profile-test */
+static int model_is_dmg(const gbb_instance *m) { return m->profile == GBB_PROFILE_DMG_CPU_B; }
+
+/* MODEL: BOTH GATE-00 basis=profile-test */
+static int model_is_cgb(const gbb_instance *m) { return m->profile == GBB_PROFILE_CGB_CPU_E; }
+
+/* Post-boot provenance table (D-06). Every value a profile starts with lives in one row, with
+ * where the number came from. There are three columns: DMG (the DMG-CPU-B profile), CGB (the
+ * CGB-CPU-E profile running a CGB-mode ROM) and COMPAT (the CGB-CPU-E profile running in DMG
+ * compatibility mode, including with no ROM loaded, D-04). The DMG column records the value this
+ * core implements, not necessarily Pan Docs: a cell that differs from Pan Docs says so in its
+ * reason (diverges-from-pandocs) instead of being quietly "corrected", because the v0.1 DMG
+ * baseline is byte-pinned (tests/test_cgb_postboot.c, tests/scripts/verify-dmg-baseline.sh).
+ * Only COMPAT cells may carry HW_TEST, and only where a named Mooneye hardware test pins them;
+ * no CGB-mode cell has a hardware oracle. */
+typedef enum {
+    PROV_HW_TEST = 1,
+    PROV_PANDOCS,
+    PROV_ORACLE_SAMEBOY,
+    PROV_POLICY,
+    PROV_HEADER_DERIVED
+} post_boot_prov;
+
+/* Numbered source list. */
+typedef enum {
+    SRC_NONE = 0,
+    SRC_PANDOCS_POWER_UP = 1,   /* Pan Docs, Power Up Sequence */
+    SRC_V01_POLICY_D025 = 2,    /* v0.1 DMG-CPU-B policy, DECISIONS D-025 */
+    SRC_CART_HEADER = 3,        /* cartridge header byte $14D */
+    SRC_MOONEYE_BOOT_REGS = 4,  /* Mooneye boot_regs-cgb (CPU registers, compat mode) */
+    SRC_MOONEYE_BOOT_HWIO = 5,  /* Mooneye boot_hwio-C (I/O registers, compat mode) */
+    SRC_MOONEYE_BOOT_DIV = 6,   /* Mooneye boot_div-cgbABCDE (DIV phase, compat mode) */
+    SRC_SAMEBOY_ORACLE = 7,     /* SameBoy CGB boot state (differential oracle) */
+    SRC_CGB_POLICY_D007 = 8     /* CGB-profile policy, phase 10 D-06 / D-07 */
+} post_boot_source;
+
+typedef enum {
+    PB_A, PB_F, PB_B, PB_C, PB_D, PB_E, PB_H, PB_L, PB_SP, PB_PC,
+    PB_DIV, PB_DIVIDER_COUNTER, PB_DIVIDER_PHASE,
+    PB_TIMA, PB_TMA, PB_TAC,
+    PB_SERIAL_DATA, PB_SERIAL_CONTROL,
+    PB_IE, PB_IF, PB_IME,
+    PB_NR11, PB_NR12, PB_CH1_ENABLED,
+    PB_NR50, PB_NR51, PB_APU_POWER,
+    PB_DMA_REGISTER,
+    PB_LCDC, PB_STAT, PB_LY, PB_LYC, PB_SCX, PB_SCY, PB_WX, PB_WY,
+    PB_BGP, PB_OBP0, PB_OBP1, PB_PPU_MODE,
+    PB_JOYPAD_SELECT, PB_JOYPAD_BUTTONS,
+    PB_KEY1, PB_VRAM_BANK, PB_SVBK, PB_WRAM_BANK, PB_BCPS, PB_OCPS,
+    PB_FF72, PB_FF73, PB_FF74, PB_FF75,
+    PB_RAM_FILL,
+    PB_FIELD_COUNT
+} post_boot_field;
+
+typedef struct {
+    uint16_t value;
+    uint8_t prov;
+    uint8_t src_id;
+    const char *reason;
+} post_boot_cell;
+
+typedef struct {
+    uint8_t field;
+    post_boot_cell dmg;
+    post_boot_cell cgb;    /* CGB-CPU-E running a CGB-mode ROM */
+    post_boot_cell compat; /* CGB-CPU-E in DMG compatibility mode, or with no ROM (D-04) */
+} post_boot_row;
+
+#define PB_PD(v) { (v), PROV_PANDOCS, SRC_PANDOCS_POWER_UP, "Pan Docs Power Up Sequence, DMG" }
+#define PB_DIVERGES(v, why) { (v), PROV_POLICY, SRC_V01_POLICY_D025, why }
+#define PB_POLICY(v, why) { (v), PROV_POLICY, SRC_V01_POLICY_D025, why }
+/* CGB-profile cells. A CGB-mode cell never claims HW_TEST (no hardware oracle covers CGB mode). */
+#define PBC_PD(v) { (v), PROV_PANDOCS, SRC_PANDOCS_POWER_UP, "Pan Docs Power Up Sequence, CGB" }
+#define PBC_POLICY(v, why) { (v), PROV_POLICY, SRC_CGB_POLICY_D007, why }
+/* Compat-mode cells pinned by a named Mooneye hardware test. */
+#define PBK_REGS(v) { (v), PROV_HW_TEST, SRC_MOONEYE_BOOT_REGS, "Mooneye boot_regs-cgb, compat mode" }
+#define PBK_HWIO(v) { (v), PROV_HW_TEST, SRC_MOONEYE_BOOT_HWIO, "Mooneye boot_hwio-C, compat mode" }
+#define PBK_PD(v) { (v), PROV_PANDOCS, SRC_PANDOCS_POWER_UP, "Pan Docs Power Up Sequence, CGB in compatibility mode" }
+
+/* DMG-column cells of CGB-only registers: the profile does not decode them (D-09), so the value is
+ * inert. The reason says so rather than inventing a hardware claim. */
+#define PB_NA(v) { (v), PROV_POLICY, SRC_V01_POLICY_D025, "not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored)" }
+#define PB_INIT0 "initial $00 per D-10; no hardware oracle for this CGB register"
+#define PB_IDX_VERIFY "[VERIFY] no hardware oracle for CGB-mode index"
+
+#define PB_VARIES "no hardware oracle for CGB mode; real hardware varies with the header and held buttons"
+#define PB_SAME_AS_DMG "same value as the DMG cell; Pan Docs gives no CGB-specific value"
+#define PB_CH1_SILENT "channel 1 enabled-but-silent: current volume 0, no boot chime is synthesised (A2)"
+
+static const post_boot_row post_boot[PB_FIELD_COUNT] = {
+    { PB_A,  PB_PD(0x01u), PBC_PD(0x11u), PBK_REGS(0x11u) },
+    /* F is $B0 (H and C set) on the DMG profile when header byte $14D is non-zero, else $80; the
+     * DMG cell holds the $80 base. On the CGB profile F is $80 regardless of the header checksum. */
+    { PB_F,  { 0x80u, PROV_HEADER_DERIVED, SRC_CART_HEADER, "$B0 when header byte $14D is non-zero, else $80" },
+             PBC_PD(0x80u), PBK_REGS(0x80u) },
+    /* Compat B follows the licensee title-sum rule, so the compat cell holds the no-ROM value and
+     * post_boot_apply derives the rest from the header. */
+    { PB_B,  PB_PD(0x00u), PBC_PD(0x00u),
+             { 0x00u, PROV_PANDOCS, SRC_PANDOCS_POWER_UP, "Pan Docs: B is the title-byte sum when the licensee is $01 (or $33 with new licensee \"01\"), else $00; header-derived" } },
+    { PB_C,  PB_PD(0x13u), PBC_PD(0x00u), PBK_REGS(0x00u) },
+    { PB_D,  PB_PD(0x00u), PBC_PD(0xFFu), PBK_REGS(0x00u) },
+    { PB_E,  PB_PD(0xD8u), PBC_PD(0x56u), PBK_REGS(0x08u) },
+    { PB_H,  PB_PD(0x01u), PBC_PD(0x00u), PBK_REGS(0x00u) },
+    /* Compat L is $7C unless the title-sum rule selects HL = $991A; post_boot_apply derives that. */
+    { PB_L,  PB_PD(0x4Du), PBC_PD(0x0Du), PBK_REGS(0x7Cu) },
+    { PB_SP, PB_PD(0xFFFEu), PBC_PD(0xFFFEu), PBK_REGS(0xFFFEu) },
+    { PB_PC, PB_PD(0x0100u), PBC_PD(0x0100u), PBK_PD(0x0100u) },
+    { PB_DIV, PB_PD(0xABu), PBC_POLICY(0x26u, PB_VARIES),
+              { 0x26u, PROV_HW_TEST, SRC_MOONEYE_BOOT_DIV, "Mooneye boot_div-cgbABCDE; applicability CGB A-E, not a CGB-E-only claim" } },
+    { PB_DIVIDER_COUNTER, PB_POLICY(0xAB00u, "internal 16-bit counter whose high byte is DIV"),
+              PBC_POLICY(0x2678u, PB_VARIES),
+              { 0x2678u, PROV_HW_TEST, SRC_MOONEYE_BOOT_DIV, "Mooneye boot_div-cgbABCDE; applicability CGB A-E, not a CGB-E-only claim" } },
+    { PB_DIVIDER_PHASE, PB_POLICY(0u, "sub-tick phase of the divider counter starts aligned"),
+              PBC_POLICY(0u, PB_VARIES),
+              { 0u, PROV_HW_TEST, SRC_MOONEYE_BOOT_DIV, "Mooneye boot_div-cgbABCDE; applicability CGB A-E, not a CGB-E-only claim" } },
+    { PB_TIMA, PB_PD(0x00u), PBC_PD(0x00u), PBK_PD(0x00u) },
+    { PB_TMA, PB_PD(0x00u), PBC_PD(0x00u), PBK_PD(0x00u) },
+    { PB_TAC, PB_PD(0x00u), PBC_PD(0x00u), PBK_PD(0x00u) },
+    { PB_SERIAL_DATA, PB_PD(0x00u), PBC_PD(0x00u), PBK_PD(0x00u) },
+    { PB_SERIAL_CONTROL, PB_PD(0x7Eu), PBC_PD(0x7Fu), PBK_HWIO(0x7Eu) },
+    { PB_IE, PB_PD(0x00u), PBC_PD(0x00u), PBK_PD(0x00u) },
+    { PB_IF, PB_DIVERGES(0x00u, "diverges-from-pandocs: IF reads $E0 here; Pan Docs lists $E1"),
+             PBC_PD(0x01u), PBK_HWIO(0x01u) },
+    { PB_IME, PB_PD(0x00u), PBC_PD(0x00u), PBK_PD(0x00u) },
+    /* Channel 1 is enabled at hand-off (NR52 $F1) but its current volume is 0, so it is silent. */
+    { PB_NR11, PB_PD(0x00u), PBC_PD(0x80u), PBK_HWIO(0x80u) },
+    { PB_NR12, PB_PD(0x00u), PBC_PD(0xF3u), PBK_HWIO(0xF3u) },
+    { PB_CH1_ENABLED, PB_PD(0u), PBC_POLICY(1u, PB_CH1_SILENT),
+                      { 1u, PROV_POLICY, SRC_CGB_POLICY_D007, PB_CH1_SILENT } },
+    { PB_NR50, PB_DIVERGES(0x00u, "diverges-from-pandocs: NR50 is 0 here; Pan Docs lists $77"),
+               PBC_PD(0x77u), PBK_HWIO(0x77u) },
+    { PB_NR51, PB_DIVERGES(0xFFu, "diverges-from-pandocs: NR51 is $FF here; Pan Docs lists $F3"),
+               PBC_PD(0xF3u), PBK_HWIO(0xF3u) },
+    { PB_APU_POWER, PB_DIVERGES(1u, "diverges-from-pandocs: NR52 reads $F0 here; Pan Docs lists $F1 (channel 1 on)"),
+                    PBC_PD(1u), PBK_HWIO(1u) },
+    { PB_DMA_REGISTER, PB_PD(0xFFu), PBC_PD(0x00u), PBK_PD(0x00u) },
+    { PB_LCDC, PB_PD(0x91u), PBC_PD(0x91u), PBK_PD(0x91u) },
+    { PB_STAT, PB_DIVERGES(0x00u, "diverges-from-pandocs: stored STAT bits are 0 and the mode/LY below make STAT read $86; Pan Docs lists $85"),
+               PBC_POLICY(0x00u, PB_VARIES), PBC_POLICY(0x00u, PB_VARIES) },
+    { PB_LY, PB_PD(0x00u), PBC_POLICY(0x00u, PB_VARIES), PBC_POLICY(0x00u, PB_VARIES) },
+    { PB_LYC, PB_PD(0x00u), PBC_PD(0x00u), PBK_PD(0x00u) },
+    { PB_SCX, PB_PD(0x00u), PBC_PD(0x00u), PBK_PD(0x00u) },
+    { PB_SCY, PB_PD(0x00u), PBC_PD(0x00u), PBK_PD(0x00u) },
+    { PB_WX, PB_PD(0x00u), PBC_PD(0x00u), PBK_PD(0x00u) },
+    { PB_WY, PB_PD(0x00u), PBC_PD(0x00u), PBK_PD(0x00u) },
+    { PB_BGP, PB_PD(0xFCu), PBC_PD(0xFCu), PBK_PD(0xFCu) },
+    { PB_OBP0, PB_DIVERGES(0xFFu, "diverges-from-pandocs: OBP0 is $FF here; Pan Docs does not give a fixed value"),
+               PBC_POLICY(0xFFu, PB_SAME_AS_DMG), PBC_POLICY(0xFFu, PB_SAME_AS_DMG) },
+    { PB_OBP1, PB_DIVERGES(0xFFu, "diverges-from-pandocs: OBP1 is $FF here; Pan Docs does not give a fixed value"),
+               PBC_POLICY(0xFFu, PB_SAME_AS_DMG), PBC_POLICY(0xFFu, PB_SAME_AS_DMG) },
+    { PB_PPU_MODE, PB_DIVERGES(2u, "diverges-from-pandocs: starts in mode 2 at line 0; Pan Docs STAT $85 implies vblank"),
+                   PBC_POLICY(2u, PB_VARIES), PBC_POLICY(2u, PB_VARIES) },
+    /* P1 reads $FF (select lines $30, no buttons) where Pan Docs lists $CF. */
+    { PB_JOYPAD_SELECT, PB_DIVERGES(0x30u, "diverges-from-pandocs: P1 reads $FF here; Pan Docs lists $CF"),
+                        { 0x30u, PROV_ORACLE_SAMEBOY, SRC_SAMEBOY_ORACLE, "SameBoy CGB boot state: P1 reads $FF" },
+                        PBK_HWIO(0x30u) },
+    { PB_JOYPAD_BUTTONS, PB_POLICY(0u, "no button held at power-on"),
+                         PBC_POLICY(0u, "no button held at power-on"), PBC_POLICY(0u, "no button held at power-on") },
+    /* KEY1 bit 0 is the armed flag; no speed switch is built, so it stays 0 until written. */
+    { PB_KEY1, PB_NA(0u), PBC_PD(0u), PBK_PD(0u) },
+    { PB_VRAM_BANK, PB_POLICY(0u, "the DMG profile pins the VRAM bank at 0"), PBC_PD(0u), PBK_PD(0u) },
+    { PB_SVBK, PB_NA(0u), PBC_PD(0u), PBK_PD(0u) },
+    { PB_WRAM_BANK, PB_POLICY(1u, "the DMG profile pins the switchable WRAM bank at 1"), PBC_PD(1u), PBK_PD(1u) },
+    /* BCPS and OCPS: unused bit 6 reads 1. Compat-mode values are pinned by Mooneye boot_hwio-C;
+     * the CGB-mode index has no oracle. */
+    { PB_BCPS, PB_NA(0u), PBC_POLICY(0xC0u, PB_IDX_VERIFY), PBK_HWIO(0xC8u) },
+    { PB_OCPS, PB_NA(0u), PBC_POLICY(0xC0u, PB_IDX_VERIFY), PBK_HWIO(0xD0u) },
+    { PB_FF72, PB_NA(0u), PBC_POLICY(0u, PB_INIT0), PBC_POLICY(0u, PB_INIT0) },
+    { PB_FF73, PB_NA(0u), PBC_POLICY(0u, PB_INIT0), PBC_POLICY(0u, PB_INIT0) },
+    { PB_FF74, PB_NA(0u), PBC_POLICY(0u, PB_INIT0), PBC_POLICY(0u, "compat mode does not decode FF74: reads $FF, writes ignored; stored value stays 0") },
+    { PB_FF75, PB_NA(0u), PBC_POLICY(0u, "bits 4-6 stored; reads $8F with them clear"), PBC_POLICY(0u, "bits 4-6 stored; reads $8F with them clear") },
+    { PB_RAM_FILL, PB_POLICY(0u, "D-025 deterministic fill"),
+                   PBC_POLICY(0u, "D-025 deterministic fill"), PBC_POLICY(0u, "D-025 deterministic fill") },
+};
+
+_Static_assert(sizeof(post_boot) / sizeof(post_boot[0]) == PB_FIELD_COUNT,
+               "post_boot[] must have one row per post_boot_field");
+
+/* The column a profile and execution mode select (D-06). The no-ROM state of a CGB instance is
+ * the compatibility column (D-04). */
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static const post_boot_cell *post_boot_column(const gbb_instance *m, const post_boot_row *row) {
+    if (model_is_dmg(m)) return &row->dmg;
+    if (m->exec_mode == GBB_MODE_CGB) return &row->cgb;
+    return &row->compat;
+}
+
+/* Compat-mode B and HL follow the licensee title-sum rule (Pan Docs): when the old licensee byte
+ * $14B is $01, or $33 with new licensee "01" at $144-$145, B is the 8-bit sum of the title bytes
+ * $134-$143 and HL is $991A if that sum is $43 or $58. Otherwise B is $00 and HL is $007C. */
+/* MODEL: CGB_ONLY GATE-68 GUARD=model_is_cgb -- compat-mode B and HL are derived from the licensee title sum */
+static void compat_title_registers(const gbb_instance *m, uint8_t *b, uint16_t *hl) {
+    *b = 0u;
+    *hl = 0x007Cu;
+    if (!model_is_cgb(m) || m->rom == NULL || m->rom_size <= 0x14Cu) return;
+    const uint8_t old_licensee = m->rom[0x14Bu];
+    const int new_licensee_01 = m->rom[0x144u] == (uint8_t)'0' && m->rom[0x145u] == (uint8_t)'1';
+    if (old_licensee != 0x01u && !(old_licensee == 0x33u && new_licensee_01)) return;
+    uint8_t sum = 0u;
+    for (unsigned i = 0x134u; i <= 0x143u; ++i) sum = (uint8_t)(sum + m->rom[i]);
+    *b = sum;
+    if (sum == 0x43u || sum == 0x58u) *hl = 0x991Au;
+}
+
+/* Assign every table-backed field. Rows are indexed by field, so each field is set exactly once;
+ * the switch has no default so the compiler flags a field added to the enum but not handled. */
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static void post_boot_apply(gbb_instance *m) {
+    const int compat_column = model_is_cgb(m) && m->exec_mode != GBB_MODE_CGB;
+    uint8_t title_b = 0u;
+    uint16_t title_hl = 0x007Cu;
+    if (compat_column) compat_title_registers(m, &title_b, &title_hl);
+    for (unsigned i = 0; i < PB_FIELD_COUNT; ++i) {
+        const post_boot_cell *c = post_boot_column(m, &post_boot[i]);
+        const uint8_t v = (uint8_t)c->value;
+        switch ((post_boot_field)post_boot[i].field) {
+        case PB_A: m->a = v; break;
+        case PB_F: {
+            /* MODEL: DMG_ONLY GATE-03 GUARD=model_is_dmg -- the header-checksum F branch exists on the DMG profile only; CGB F is $80 */
+            const int checksum_nonzero = model_is_dmg(m) && m->rom != NULL && m->rom_size > 0x14Du &&
+                                         m->rom[0x14Du] != 0;
+            m->f = checksum_nonzero ? (uint8_t)(v | 0x30u) : v;
+            break;
+        }
+        case PB_B: m->b = compat_column ? title_b : v; break;
+        case PB_C: m->c = v; break;
+        case PB_D: m->d = v; break;
+        case PB_E: m->e = v; break;
+        case PB_H: m->h = compat_column ? (uint8_t)(title_hl >> 8) : v; break;
+        case PB_L: m->l = compat_column ? (uint8_t)title_hl : v; break;
+        case PB_SP: m->sp = c->value; break;
+        case PB_PC: m->pc = c->value; break;
+        case PB_DIV:
+            /* MODEL: BOTH GATE-04 basis="post_boot[] column per profile (D-06)" -- post-boot DIV differs by model */
+            m->div = v; break;
+        case PB_DIVIDER_COUNTER: m->divider_counter = c->value; break;
+        case PB_DIVIDER_PHASE: m->divider_phase = v; break;
+        case PB_TIMA: m->tima = v; break;
+        case PB_TMA: m->tma = v; break;
+        case PB_TAC: m->tac = v; break;
+        case PB_SERIAL_DATA: m->serial_data = v; break;
+        case PB_SERIAL_CONTROL:
+            /* MODEL: BOTH GATE-05 basis="post_boot[] column per profile (D-06)" -- post-boot SC differs by model */
+            m->serial_control = v; break;
+        case PB_IE: m->ie = v; break;
+        case PB_IF:
+            /* MODEL: BOTH GATE-06 basis="post_boot[] column per profile (D-06)" -- post-boot IF differs by model */
+            m->interrupt_flags = v; break;
+        case PB_IME: m->ime = v; break;
+        case PB_NR11: m->apu_pulse[0].duty_length = v; break;
+        case PB_NR12: m->apu_pulse[0].envelope = v; break;
+        case PB_CH1_ENABLED:
+            /* Enabled with current volume 0 (the zeroed pulse state): NR52 reports channel 1 on but
+             * the mixer produces no sample, and no boot chime is synthesised. The frequency and
+             * timer are a valid idle state; the length counter is the value NR11 would load. */
+            if (v != 0u) {
+                apu_pulse_channel *p = &m->apu_pulse[0];
+                p->enabled = 1;
+                p->length = (uint16_t)(64u - (p->duty_length & 0x3Fu));
+                p->frequency = 0x7FFu;
+                p->frequency_low = 0xFFu;
+                p->timer = (uint16_t)((2048u - p->frequency) * 64u);
+                p->envelope_timer = (uint8_t)((p->envelope & 7u) == 0u ? 8u : p->envelope & 7u);
+            }
+            break;
+        case PB_NR50:
+            /* MODEL: BOTH GATE-07 basis="post_boot[] column per profile (D-06)" -- post-boot APU register literals differ by model */
+            m->apu_nr50 = v; break;
+        case PB_NR51: m->apu_nr51 = v; break;
+        case PB_APU_POWER: m->apu_power = v; break;
+        case PB_DMA_REGISTER:
+            /* MODEL: BOTH GATE-08 basis="post_boot[] column per profile (D-06)" -- post-boot DMA register differs by model */
+            m->dma_register = v; break;
+        case PB_LCDC:
+            /* MODEL: BOTH GATE-11 basis=PANDOCS -- LCDC, BGP and OBP post-boot values are common to both models */
+            m->lcdc = v; break;
+        case PB_STAT: m->stat = v; break;
+        case PB_LY: m->ly = v; break;
+        case PB_LYC: m->lyc = v; break;
+        case PB_SCX: m->scx = v; break;
+        case PB_SCY: m->scy = v; break;
+        case PB_WX: m->wx = v; break;
+        case PB_WY: m->wy = v; break;
+        case PB_BGP: m->bgp = v; break;
+        case PB_OBP0: m->obp0 = v; break;
+        case PB_OBP1: m->obp1 = v; break;
+        case PB_PPU_MODE:
+            /* MODEL: UNKNOWN GATE-10 research:11 -- post-boot PPU mode, LY and STAT literals differ by model */
+            m->ppu_mode = v; break;
+        case PB_JOYPAD_SELECT: m->joypad_select = v; break;
+        case PB_JOYPAD_BUTTONS: m->joypad_buttons = v; break;
+        case PB_KEY1: m->key1_armed = v; break;
+        case PB_VRAM_BANK: m->vram_bank = v; break;
+        case PB_SVBK: m->svbk = v; break;
+        case PB_WRAM_BANK: m->wram_bank = v; break;
+        case PB_BCPS: m->bcps = v; break;
+        case PB_OCPS: m->ocps = v; break;
+        case PB_FF72: m->ff72 = v; break;
+        case PB_FF73: m->ff73 = v; break;
+        case PB_FF74: m->ff74 = v; break;
+        case PB_FF75: m->ff75 = v; break;
+        case PB_RAM_FILL:
+            /* MODEL: BOTH GATE-09 basis=D-025 -- RAM fill is emulator policy; hardware power-on RAM is unspecified */
+            memset(m->wram, v, sizeof(m->wram));
+            memset(m->hram, v, sizeof(m->hram));
+            memset(m->vram, v, sizeof(m->vram));
+            memset(m->oam, v, sizeof(m->oam));
+            break;
+        case PB_FIELD_COUNT: break;
+        }
+    }
+}
+
+/* Work RAM is two fixed 4 KiB halves: C000-CFFF (and its echo E000-EFFF) is always bank 0, and
+ * D000-DFFF (echo F000-FDFF) is wram[wram_bank]. Masking to 13 bits folds the echo onto the main
+ * range. DMG pins wram_bank to 1, so the two halves are contiguous there and no profile branch is
+ * needed on the access path. Callers pass only C000-FDFF. */
+/* MODEL: BOTH GATE-00 basis="DMG pins wram_bank=1 and vram_bank=0" */
+static const uint8_t *wram_byte(const gbb_instance *m, uint16_t address) {
+    unsigned offset = (unsigned)address & 0x1FFFu;
+    unsigned bank = offset < GBB_WRAM_BANK_SIZE ? 0u : m->wram_bank;
+    return &m->wram[bank][offset & (GBB_WRAM_BANK_SIZE - 1u)];
+}
+
+/* MODEL: BOTH GATE-00 basis="DMG pins wram_bank=1 and vram_bank=0" */
+static uint8_t *wram_byte_mut(gbb_instance *m, uint16_t address) {
+    return (uint8_t *)wram_byte(m, address);
+}
+
+/* Register visibility (D-06, D-09, D-10). One row per address FF00-FF7F with a DMG, CGB-mode and
+ * CGB-compat column. Rows for addresses the pre-CGB code in read8/write8 already handles are
+ * EXISTING and are not decoded here. The DMG column of FF4C-FF7F is DMG_STOP: the DMG profile never
+ * enters io_read_cgb/io_write_cgb, so reads there still stop and writes stay silent no-ops (C4).
+ * A DEFERRED cell belongs to a later phase: its reads stop through read_supported before anything
+ * changes, and its writes latch bus_unsupported and are dropped, so a guest never sees an invented
+ * value (OQ5). Sources: IOS_PANDOCS (Pan Docs), IOS_HW_TEST (Mooneye boot_hwio-C / unused_hwio-C),
+ * IOS_SAMEBOY (SameBoy oracle), IOS_POLICY (project choice). */
+typedef enum {
+    IO_UNSET = 0,     /* zero-initialised hole: a row missing from the table */
+    IO_EXISTING,      /* handled by the pre-CGB read8/write8 chain */
+    IO_DMG_STOP,      /* DMG only: reads stop UNSUPPORTED_BUS, writes are ignored */
+    IO_CONST_FF,      /* reads $FF, writes ignored */
+    IO_KEY1,
+    IO_VBK,
+    IO_SVBK,
+    IO_STORE,         /* stored byte: reads (stored | read_or), writes keep (value & write_mask) */
+    IO_DEFERRED_RW,   /* read stops, write latches and is dropped */
+    IO_DEFERRED_W     /* reads $FF, write latches and is dropped */
+} io_kind;
+
+typedef enum { IOS_NONE = 0, IOS_PANDOCS, IOS_HW_TEST, IOS_SAMEBOY, IOS_POLICY, IOS_EXISTING } io_source;
+
+typedef struct {
+    uint8_t kind;
+    uint8_t phase;       /* owning phase of a DEFERRED cell */
+    uint8_t read_or;     /* STORE: bits that always read 1 */
+    uint8_t write_mask;  /* STORE: bits that are stored */
+} io_cell;
+
+typedef struct {
+    io_cell dmg, cgb, compat;
+    uint8_t src;
+} io_row;
+
+#define IOC(k) { IO_##k, 0, 0, 0 }
+#define IOC_DEF(k, ph) { IO_##k, (ph), 0, 0 }
+#define IOC_ST(or_bits, wmask) { IO_STORE, 0, (or_bits), (wmask) }
+#define IO_EXISTING_ROW { IOC(EXISTING), IOC(EXISTING), IOC(EXISTING), IOS_EXISTING }
+#define IO_UNUSED_ROW { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_HW_TEST }
+
+#define IO_VISIBILITY_ROWS 0x80u
+static const io_row io_visibility[IO_VISIBILITY_ROWS] = {
+    [0x00] = IO_EXISTING_ROW,
+    [0x01] = IO_EXISTING_ROW,
+    [0x02] = IO_EXISTING_ROW,
+    [0x03] = IO_UNUSED_ROW,
+    [0x04] = IO_EXISTING_ROW,
+    [0x05] = IO_EXISTING_ROW,
+    [0x06] = IO_EXISTING_ROW,
+    [0x07] = IO_EXISTING_ROW,
+    [0x08] = IO_UNUSED_ROW,
+    [0x09] = IO_UNUSED_ROW,
+    [0x0A] = IO_UNUSED_ROW,
+    [0x0B] = IO_UNUSED_ROW,
+    [0x0C] = IO_UNUSED_ROW,
+    [0x0D] = IO_UNUSED_ROW,
+    [0x0E] = IO_UNUSED_ROW,
+    [0x0F] = IO_EXISTING_ROW,
+    [0x10] = IO_EXISTING_ROW,
+    [0x11] = IO_EXISTING_ROW,
+    [0x12] = IO_EXISTING_ROW,
+    [0x13] = IO_EXISTING_ROW,
+    [0x14] = IO_EXISTING_ROW,
+    [0x15] = IO_UNUSED_ROW,
+    [0x16] = IO_EXISTING_ROW,
+    [0x17] = IO_EXISTING_ROW,
+    [0x18] = IO_EXISTING_ROW,
+    [0x19] = IO_EXISTING_ROW,
+    [0x1A] = IO_EXISTING_ROW,
+    [0x1B] = IO_EXISTING_ROW,
+    [0x1C] = IO_EXISTING_ROW,
+    [0x1D] = IO_EXISTING_ROW,
+    [0x1E] = IO_EXISTING_ROW,
+    [0x1F] = IO_UNUSED_ROW,
+    [0x20] = IO_EXISTING_ROW,
+    [0x21] = IO_EXISTING_ROW,
+    [0x22] = IO_EXISTING_ROW,
+    [0x23] = IO_EXISTING_ROW,
+    [0x24] = IO_EXISTING_ROW,
+    [0x25] = IO_EXISTING_ROW,
+    [0x26] = IO_EXISTING_ROW,
+    [0x27] = IO_UNUSED_ROW,
+    [0x28] = IO_UNUSED_ROW,
+    [0x29] = IO_UNUSED_ROW,
+    [0x2A] = IO_UNUSED_ROW,
+    [0x2B] = IO_UNUSED_ROW,
+    [0x2C] = IO_UNUSED_ROW,
+    [0x2D] = IO_UNUSED_ROW,
+    [0x2E] = IO_UNUSED_ROW,
+    [0x2F] = IO_UNUSED_ROW,
+    [0x30] = IO_EXISTING_ROW,
+    [0x31] = IO_EXISTING_ROW,
+    [0x32] = IO_EXISTING_ROW,
+    [0x33] = IO_EXISTING_ROW,
+    [0x34] = IO_EXISTING_ROW,
+    [0x35] = IO_EXISTING_ROW,
+    [0x36] = IO_EXISTING_ROW,
+    [0x37] = IO_EXISTING_ROW,
+    [0x38] = IO_EXISTING_ROW,
+    [0x39] = IO_EXISTING_ROW,
+    [0x3A] = IO_EXISTING_ROW,
+    [0x3B] = IO_EXISTING_ROW,
+    [0x3C] = IO_EXISTING_ROW,
+    [0x3D] = IO_EXISTING_ROW,
+    [0x3E] = IO_EXISTING_ROW,
+    [0x3F] = IO_EXISTING_ROW,
+    [0x40] = IO_EXISTING_ROW,
+    [0x41] = IO_EXISTING_ROW,
+    [0x42] = IO_EXISTING_ROW,
+    [0x43] = IO_EXISTING_ROW,
+    [0x44] = IO_EXISTING_ROW,
+    [0x45] = IO_EXISTING_ROW,
+    [0x46] = IO_EXISTING_ROW,
+    [0x47] = IO_EXISTING_ROW,
+    [0x48] = IO_EXISTING_ROW,
+    [0x49] = IO_EXISTING_ROW,
+    [0x4A] = IO_EXISTING_ROW,
+    [0x4B] = IO_EXISTING_ROW,
+    [0x4C] = { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_PANDOCS }, /* KEY0: CPU mode register, locked after boot; reads $FF, writes ignored */
+    [0x4D] = { IOC(DMG_STOP), IOC(KEY1), IOC(CONST_FF), IOS_PANDOCS }, /* KEY1: speed switch; only the armed bit is kept, no double speed is built */
+    [0x4E] = IO_UNUSED_ROW,
+    [0x4F] = { IOC(DMG_STOP), IOC(VBK), IOC(VBK), IOS_PANDOCS }, /* VBK: VRAM bank; bit 0 selects the bank in CGB mode only */
+    [0x50] = IO_UNUSED_ROW,
+    [0x51] = { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA source/destination: accepted without state until the HDMA phase */
+    [0x52] = { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA source/destination: accepted without state until the HDMA phase */
+    [0x53] = { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA source/destination: accepted without state until the HDMA phase */
+    [0x54] = { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA source/destination: accepted without state until the HDMA phase */
+    [0x55] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_W, 13), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA control: a write is deferred to phase 13 and stops visibly */
+    [0x56] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 14), IOC(CONST_FF), IOS_PANDOCS }, /* RP infrared port: deferred to phase 14 */
+    [0x57] = IO_UNUSED_ROW,
+    [0x58] = IO_UNUSED_ROW,
+    [0x59] = IO_UNUSED_ROW,
+    [0x5A] = IO_UNUSED_ROW,
+    [0x5B] = IO_UNUSED_ROW,
+    [0x5C] = IO_UNUSED_ROW,
+    [0x5D] = IO_UNUSED_ROW,
+    [0x5E] = IO_UNUSED_ROW,
+    [0x5F] = IO_UNUSED_ROW,
+    [0x60] = IO_UNUSED_ROW,
+    [0x61] = IO_UNUSED_ROW,
+    [0x62] = IO_UNUSED_ROW,
+    [0x63] = IO_UNUSED_ROW,
+    [0x64] = IO_UNUSED_ROW,
+    [0x65] = IO_UNUSED_ROW,
+    [0x66] = IO_UNUSED_ROW,
+    [0x67] = IO_UNUSED_ROW,
+    [0x68] = { IOC(DMG_STOP), IOC_ST(0x40, 0xBF), IOC_ST(0x40, 0xBF), IOS_HW_TEST }, /* BCPS: background palette index; unused bit 6 reads 1 */
+    [0x69] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 11), IOC(CONST_FF), IOS_PANDOCS }, /* BCPD: palette data port deferred to phase 11; compat mode ignores it without increment */
+    [0x6A] = { IOC(DMG_STOP), IOC_ST(0x40, 0xBF), IOC_ST(0x40, 0xBF), IOS_HW_TEST }, /* OCPS: object palette index; unused bit 6 reads 1 */
+    [0x6B] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 11), IOC(CONST_FF), IOS_PANDOCS }, /* OCPD: palette data port deferred to phase 11 */
+    [0x6C] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 11), IOC(CONST_FF), IOS_PANDOCS }, /* OPRI: object priority mode deferred to phase 11 */
+    [0x6D] = IO_UNUSED_ROW,
+    [0x6E] = IO_UNUSED_ROW,
+    [0x6F] = IO_UNUSED_ROW,
+    [0x70] = { IOC(DMG_STOP), IOC(SVBK), IOC(CONST_FF), IOS_PANDOCS }, /* SVBK: WRAM bank; raw 3 bits read back, 0 selects bank 1 */
+    [0x71] = IO_UNUSED_ROW,
+    [0x72] = { IOC(DMG_STOP), IOC_ST(0x00, 0xFF), IOC_ST(0x00, 0xFF), IOS_SAMEBOY }, /* FF72: undocumented CGB register, fully read/write */
+    [0x73] = { IOC(DMG_STOP), IOC_ST(0x00, 0xFF), IOC_ST(0x00, 0xFF), IOS_SAMEBOY }, /* FF73: undocumented CGB register, fully read/write */
+    [0x74] = { IOC(DMG_STOP), IOC_ST(0x00, 0xFF), IOC(CONST_FF), IOS_SAMEBOY }, /* FF74: undocumented CGB register; compat mode locks it */
+    [0x75] = { IOC(DMG_STOP), IOC_ST(0x8F, 0x70), IOC_ST(0x8F, 0x70), IOS_PANDOCS }, /* FF75: only bits 4-6 are stored; the rest read 1 */
+    [0x76] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 14), IOC_DEF(DEFERRED_RW, 14), IOS_PANDOCS }, /* PCM12: audio channel output readback deferred to phase 14 */
+    [0x77] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 14), IOC_DEF(DEFERRED_RW, 14), IOS_PANDOCS }, /* PCM34: audio channel output readback deferred to phase 14 */
+    [0x78] = IO_UNUSED_ROW,
+    [0x79] = IO_UNUSED_ROW,
+    [0x7A] = IO_UNUSED_ROW,
+    [0x7B] = IO_UNUSED_ROW,
+    [0x7C] = IO_UNUSED_ROW,
+    [0x7D] = IO_UNUSED_ROW,
+    [0x7E] = IO_UNUSED_ROW,
+    [0x7F] = IO_UNUSED_ROW,
+};
+
+/* The cell the profile and execution mode select. Callers pass FF00-FF7F on the CGB profile. */
+/* MODEL: CGB_ONLY GATE-69 GUARD=model_is_cgb -- the CGB register decode is never reached on the DMG profile */
+static const io_cell *io_cgb_cell(const gbb_instance *m, uint16_t address) {
+    const io_row *row = &io_visibility[address - 0xFF00u];
+    if (!model_is_cgb(m)) return &row->dmg;
+    return m->exec_mode == GBB_MODE_CGB ? &row->cgb : &row->compat;
+}
+
+/* Storage behind a STORE cell. */
+/* MODEL: BOTH GATE-00 basis="CGB-only storage selected by address" */
+static const uint8_t *io_store_ptr(const gbb_instance *m, uint16_t address) {
+    switch (address) {
+    case 0xFF68: return &m->bcps;
+    case 0xFF6A: return &m->ocps;
+    case 0xFF72: return &m->ff72;
+    case 0xFF73: return &m->ff73;
+    case 0xFF74: return &m->ff74;
+    case 0xFF75: return &m->ff75;
+    default: return NULL;
+    }
+}
+
+/* Read FF4C-FF7F on the CGB profile. */
+/* MODEL: CGB_ONLY GATE-70 GUARD=model_is_cgb -- CGB register reads */
+static uint8_t io_read_cgb(const gbb_instance *m, uint16_t address) {
+    if (!model_is_cgb(m)) return 0xFFu;
+    const io_cell *c = io_cgb_cell(m, address);
+    switch (c->kind) {
+    case IO_KEY1: return (uint8_t)(0x7Eu | (m->key1_armed & 1u));
+    case IO_VBK: return (uint8_t)(0xFEu | (m->vram_bank & 1u));
+    case IO_SVBK: return (uint8_t)(0xF8u | (m->svbk & 7u));
+    case IO_STORE: {
+        const uint8_t *p = io_store_ptr(m, address);
+        return p == NULL ? 0xFFu : (uint8_t)(*p | c->read_or);
+    }
+    default: return 0xFFu; /* CONST_FF, DEFERRED_W; DEFERRED_RW is refused before the read */
+    }
+}
+
+/* Write FF4C-FF7F on the CGB profile. */
+/* MODEL: CGB_ONLY GATE-71 GUARD=model_is_cgb -- CGB register writes */
+static void io_write_cgb(gbb_instance *m, uint16_t address, uint8_t value) {
+    if (!model_is_cgb(m)) return;
+    const io_cell *c = io_cgb_cell(m, address);
+    switch (c->kind) {
+    case IO_KEY1: m->key1_armed = (uint8_t)(value & 1u); break;
+    case IO_VBK:
+        /* Compatibility mode keeps the bank at 0: a DMG ROM cannot reach VRAM bank 1. */
+        if (m->exec_mode == GBB_MODE_CGB) m->vram_bank = (uint8_t)(value & 1u);
+        break;
+    case IO_SVBK:
+        m->svbk = (uint8_t)(value & 7u);
+        m->wram_bank = m->svbk != 0u ? m->svbk : 1u;
+        break;
+    case IO_STORE: {
+        uint8_t *p = (uint8_t *)io_store_ptr(m, address); /* m is mutable here */
+        if (p != NULL) *p = (uint8_t)(value & c->write_mask);
+        break;
+    }
+    case IO_DEFERRED_RW:
+    case IO_DEFERRED_W:
+        m->bus_unsupported = 1;
+        m->bus_unsupported_address = address;
+        break;
+    default: break;
+    }
+}
+
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void reset_state(gbb_instance *m) {
     cart_reset_registers(&m->cart);
-    m->a = 0x01;
-    m->f = m->rom != NULL && m->rom_size > 0x14Du && m->rom[0x14Du] != 0 ? 0xB0u : 0x80u;
-    m->b = 0x00; m->c = 0x13;
-    m->d = 0x00; m->e = 0xD8; m->h = 0x01; m->l = 0x4D;
-    m->pc = 0x0100; m->sp = 0xFFFE;
-    m->div = 0xAB; m->stat = 0;
-    m->tima = 0; m->tma = 0; m->tac = 0;
-    m->serial_data = 0; m->serial_control = 0x7Eu; m->serial_bits = 0;
-    m->ie = 0;
-    m->interrupt_flags = 0;
-    m->ime_delay = 0;
-    m->ime = 0;
-    m->divider_phase = 0;
-    m->divider_counter = 0xAB00u;
+    /* APU channel state is cleared first: the post-boot table then sets channel 1 on the CGB
+     * columns. The DMG column leaves it zero, as before. */
     memset(m->apu_pulse, 0, sizeof(m->apu_pulse));
     memset(&m->apu_wave, 0, sizeof(m->apu_wave));
     memset(&m->apu_noise, 0, sizeof(m->apu_noise));
-    m->apu_nr50 = 0u; m->apu_nr51 = 0xFFu; m->apu_power = 1u;
+    post_boot_apply(m);
+    m->ime_delay = 0;
+    m->serial_bits = 0;
     m->apu_sequencer_step = 0u;
     m->apu_sample_phase = 0u;
     memset(m->audio_event_ring, 0, sizeof(m->audio_event_ring));
@@ -663,8 +1315,8 @@ static void reset_state(gbb_instance *m) {
     m->instruction_start_half_dots = 0;
     m->serial_edge_remaining = 0;
     m->serial_active = 0;
-    m->serial_unsupported = 0;
-    m->dma_register = 0xFFu;
+    m->bus_unsupported = 0;
+    m->bus_unsupported_address = 0u;
     m->dma_page = 0;
     m->dma_pending_page = 0;
     m->dma_index = 0;
@@ -675,17 +1327,12 @@ static void reset_state(gbb_instance *m) {
     m->halted = 0;
     m->stopped = 0;
     m->halt_bug = 0;
-    memset(m->wram, 0, sizeof(m->wram));
-    memset(m->hram, 0, sizeof(m->hram));
-    memset(m->vram, 0, sizeof(m->vram));
-    memset(m->oam, 0, sizeof(m->oam));
     memset(m->frame_working, 0, sizeof(m->frame_working));
     memset(m->frame_completed, 0, sizeof(m->frame_completed));
     m->frame_generation = 0;
     m->frame_completion_half_dots = 0;
     m->ppu_dot = 0;
     m->ppu_half_phase = 0;
-    m->ppu_mode = 2;
     m->ppu_stat_line = 0;
     m->ppu_scan_index = 0;
     memset(m->ppu_fifo, 0, sizeof(m->ppu_fifo));
@@ -707,18 +1354,6 @@ static void reset_state(gbb_instance *m) {
     m->ppu_selected_object_count = 0;
     m->ppu_window_line = 0;
     m->ppu_window_line_drawn = 0;
-    m->lcdc = 0x91;
-    m->scy = 0;
-    m->scx = 0;
-    m->ly = 0;
-    m->lyc = 0;
-    m->bgp = 0xFC;
-    m->obp0 = 0xFF;
-    m->obp1 = 0xFF;
-    m->wy = 0;
-    m->wx = 0;
-    m->joypad_select = 0x30;
-    m->joypad_buttons = 0;
     m->time_half_dots = 0;
     m->input_event_count = 0;
     m->lockup_pc = 0;
@@ -726,8 +1361,10 @@ static void reset_state(gbb_instance *m) {
     m->locked = 0;
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static uint8_t joypad_value(const gbb_instance *m) {
     uint8_t lines = 0x0Fu;
+    /* MODEL: BOTH GATE-12 basis=pandocs-joyp -- P1 button and direction select lines are the same on both models */
     if ((m->joypad_select & 0x20u) == 0)
         lines &= (uint8_t)~((m->joypad_buttons >> 4) & 0x0Fu);
     if ((m->joypad_select & 0x10u) == 0)
@@ -738,29 +1375,37 @@ static uint8_t joypad_value(const gbb_instance *m) {
 /* Request JOYP IF at the ordered software boundary that changes the selected
  * active-low pins. Pin settling, bounce, and CPU-B sampling latency are outside
  * this event-boundary model. */
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static void joypad_request_falling_edge(gbb_instance *m, uint8_t previous) {
     uint8_t current = (uint8_t)(joypad_value(m) & 0x0Fu);
     if ((previous & (uint8_t)~current & 0x0Fu) != 0)
         m->interrupt_flags |= 0x10u;
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static int cpu_vram_access_allowed(const gbb_instance *m) {
+    /* MODEL: UNKNOWN GATE-13 research:11 -- VRAM CPU lock window during mode 3 */
     return (m->lcdc & 0x80u) == 0 || m->ppu_mode != 3u;
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static int cpu_oam_access_allowed(const gbb_instance *m) {
+    /* MODEL: UNKNOWN GATE-14 research:11 -- OAM CPU lock window during modes 2 and 3 */
     return (m->lcdc & 0x80u) == 0 || m->ppu_mode == 0u || m->ppu_mode == 1u;
 }
 
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static uint16_t apu_pulse_frequency(const apu_pulse_channel *pulse) {
     return (uint16_t)(pulse->frequency_low | ((pulse->control & 7u) << 8));
 }
 
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static uint32_t apu_noise_period(const apu_noise_channel *noise) {
     static const uint8_t divisor[8] = {8u,16u,32u,48u,64u,80u,96u,112u};
     return ((uint32_t)divisor[noise->polynomial & 7u] << (noise->polynomial >> 4)) * 2u;
 }
 
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static void apu_pulse_trigger(gbb_instance *m, unsigned index) {
     apu_pulse_channel *pulse = &m->apu_pulse[index];
     int sweep_overflow = 0;
@@ -791,10 +1436,12 @@ static void apu_pulse_trigger(gbb_instance *m, unsigned index) {
                      !sweep_overflow;
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void apu_power_off(gbb_instance *m) {
     memset(m->apu_pulse, 0, sizeof(m->apu_pulse));
     memset(&m->apu_noise, 0, sizeof(m->apu_noise));
     /* Wave RAM survives NR52 power-off in this scoped DMG software model. */
+    /* MODEL: UNKNOWN GATE-15 research:14 -- NR52 power-off effect on APU state and wave RAM */
     memset(&m->apu_wave, 0, offsetof(apu_wave_channel, ram));
     memset((uint8_t *)&m->apu_wave + offsetof(apu_wave_channel, position), 0,
            sizeof(m->apu_wave) - offsetof(apu_wave_channel, position));
@@ -803,74 +1450,19 @@ static void apu_power_off(gbb_instance *m) {
     m->apu_sequencer_step = 0u;
 }
 
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static int cpu_hram_address(uint16_t address) {
     return address >= 0xFF80u && address <= 0xFFFEu;
 }
 
 static void ppu_begin_object_scan(gbb_instance *m);
 
-static uint8_t read8(const gbb_instance *m, uint16_t address) {
-    if (m->dma_active && m->dma_cpu_blocked &&
-        !cpu_hram_address(address) && address != 0xFF46u) return 0xFFu;
-    if (address == 0xFF00) return joypad_value(m);
-    if (address == 0xFF04) return m->div;
-    if (address == 0xFF05) return m->tima;
-    if (address == 0xFF06) return m->tma;
-    if (address == 0xFF07) return (uint8_t)(0xF8u | m->tac);
-    if (address == 0xFF01) return m->serial_data;
-    if (address == 0xFF02) return (uint8_t)(0x7Eu | m->serial_control);
-    if (address == 0xFF10) return (uint8_t)(0x80u | m->apu_pulse[0].sweep);
-    if (address == 0xFF11) return (uint8_t)(0x3Fu | (m->apu_pulse[0].duty_length & 0xC0u));
-    if (address == 0xFF12) return m->apu_pulse[0].envelope;
-    if (address == 0xFF13) return 0xFFu;
-    if (address == 0xFF14) return (uint8_t)(0xBFu | (m->apu_pulse[0].control & 0x40u));
-    if (address == 0xFF16) return (uint8_t)(0x3Fu | (m->apu_pulse[1].duty_length & 0xC0u));
-    if (address == 0xFF17) return m->apu_pulse[1].envelope;
-    if (address == 0xFF18) return 0xFFu;
-    if (address == 0xFF19) return (uint8_t)(0xBFu | (m->apu_pulse[1].control & 0x40u));
-    if (address == 0xFF1A) return (uint8_t)(0x7Fu | (m->apu_wave.dac & 0x80u));
-    if (address == 0xFF1B) return 0xFFu;
-    if (address == 0xFF1C) return (uint8_t)(0x9Fu | (m->apu_wave.level & 0x60u));
-    if (address == 0xFF1D) return 0xFFu;
-    if (address == 0xFF1E) return (uint8_t)(0xBFu | (m->apu_wave.control & 0x40u));
-    if (address == 0xFF20) return 0xFFu;
-    if (address == 0xFF21) return m->apu_noise.envelope;
-    if (address == 0xFF22) return m->apu_noise.polynomial;
-    if (address == 0xFF23) return (uint8_t)(0xBFu | (m->apu_noise.control & 0x40u));
-    if (address >= 0xFF30u && address <= 0xFF3Fu) {
-        unsigned index = address - 0xFF30u;
-        /* Active access aliases the current byte in this revision-scoped software model. */
-        if (m->apu_wave.enabled) index = m->apu_wave.position >> 1;
-        return m->apu_wave.ram[index];
-    }
-    if (address == 0xFF24) return m->apu_nr50;
-    if (address == 0xFF25) return m->apu_nr51;
-    if (address == 0xFF26)
-        return (uint8_t)(0x70u | (m->apu_power ? 0x80u : 0u) |
-                         (m->apu_pulse[0].enabled ? 1u : 0u) |
-                         (m->apu_pulse[1].enabled ? 2u : 0u) |
-                         (m->apu_wave.enabled ? 4u : 0u) |
-                         (m->apu_noise.enabled ? 8u : 0u));
-    if (address == 0xFF40) return m->lcdc;
-    if (address == 0xFF41)
-        return (uint8_t)(0x80u | (m->stat & 0x78u) |
-                         (m->ly == m->lyc ? 0x04u : 0u) | m->ppu_mode);
-    if (address == 0xFF42) return m->scy;
-    if (address == 0xFF43) return m->scx;
-    if (address == 0xFF44) return m->ly;
-    if (address == 0xFF45) return m->lyc;
-    if (address == 0xFF46) return m->dma_register;
-    if (address == 0xFF47) return m->bgp;
-    if (address == 0xFF48) return m->obp0;
-    if (address == 0xFF49) return m->obp1;
-    if (address == 0xFF4A) return m->wy;
-    if (address == 0xFF4B) return m->wx;
-    if (address == 0xFF0F) return (uint8_t)(0xE0u | m->interrupt_flags);
-    if (address == 0xFFFF) return (uint8_t)(0xE0u | m->ie);
-    if (address >= 0x8000 && address <= 0x9FFF)
-        return cpu_vram_access_allowed(m) ? m->vram[address - 0x8000] : 0xFF;
-    if (address >= 0xFE00 && address <= 0xFE9F)
-        return cpu_oam_access_allowed(m) ? m->oam[address - 0xFE00] : 0xFF;
+/* Cartridge-side read: ROM at 0000-7FFF and cartridge RAM or RTC at A000-BFFF, decided by the mapper and
+ * not by the console. Shared by the CPU bus (read8) and the CGB OAM DMA source map (D-16), so the two
+ * can never disagree about what the cartridge returns. Any other address reads $FF. */
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
+static uint8_t cart_read(const gbb_instance *m, uint16_t address) {
+    /* MODEL: BOTH GATE-22 basis=cartridge-side -- ROM reads are decided by the mapper, not the console */
     if (address < 0x8000u) {
         if (m->rom == NULL || address >= m->rom_size) return 0xFFu;
         switch (m->cart.kind) {
@@ -942,14 +1534,90 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
             return 0xFFu;
         }
     }
-    if (address >= 0xC000 && address <= 0xDFFF) return m->wram[address - 0xC000];
-    if (address >= 0xE000 && address <= 0xFDFF) return m->wram[address - 0xE000];
+    return 0xFFu;
+}
+
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static uint8_t read8(const gbb_instance *m, uint16_t address) {
+    /* MODEL: UNKNOWN GATE-16 expected-failure:cgb-separate-buses -- OAM-DMA CPU bus conflict: CGB uses separate buses (D-17) */
+    if (m->dma_active && m->dma_cpu_blocked &&
+        !cpu_hram_address(address) && address != 0xFF46u) return 0xFFu;
+    if (address == 0xFF00) return joypad_value(m);
+    if (address == 0xFF04) return m->div;
+    if (address == 0xFF05) return m->tima;
+    if (address == 0xFF06) return m->tma;
+    if (address == 0xFF07) return (uint8_t)(0xF8u | m->tac);
+    if (address == 0xFF01) return m->serial_data;
+    /* MODEL: UNKNOWN GATE-17 research:14 -- SC unused bits read differently on CGB (fast clock bit) */
+    if (address == 0xFF02) return (uint8_t)(0x7Eu | m->serial_control);
+    /* MODEL: UNKNOWN GATE-18 research:14 -- APU read masks, including NR52 length bits */
+    if (address == 0xFF10) return (uint8_t)(0x80u | m->apu_pulse[0].sweep);
+    if (address == 0xFF11) return (uint8_t)(0x3Fu | (m->apu_pulse[0].duty_length & 0xC0u));
+    if (address == 0xFF12) return m->apu_pulse[0].envelope;
+    if (address == 0xFF13) return 0xFFu;
+    if (address == 0xFF14) return (uint8_t)(0xBFu | (m->apu_pulse[0].control & 0x40u));
+    if (address == 0xFF16) return (uint8_t)(0x3Fu | (m->apu_pulse[1].duty_length & 0xC0u));
+    if (address == 0xFF17) return m->apu_pulse[1].envelope;
+    if (address == 0xFF18) return 0xFFu;
+    if (address == 0xFF19) return (uint8_t)(0xBFu | (m->apu_pulse[1].control & 0x40u));
+    if (address == 0xFF1A) return (uint8_t)(0x7Fu | (m->apu_wave.dac & 0x80u));
+    if (address == 0xFF1B) return 0xFFu;
+    if (address == 0xFF1C) return (uint8_t)(0x9Fu | (m->apu_wave.level & 0x60u));
+    if (address == 0xFF1D) return 0xFFu;
+    if (address == 0xFF1E) return (uint8_t)(0xBFu | (m->apu_wave.control & 0x40u));
+    if (address == 0xFF20) return 0xFFu;
+    if (address == 0xFF21) return m->apu_noise.envelope;
+    if (address == 0xFF22) return m->apu_noise.polynomial;
+    if (address == 0xFF23) return (uint8_t)(0xBFu | (m->apu_noise.control & 0x40u));
+    /* MODEL: UNKNOWN GATE-19 research:14 -- wave RAM access aliasing while the channel is enabled */
+    if (address >= 0xFF30u && address <= 0xFF3Fu) {
+        unsigned index = address - 0xFF30u;
+        /* Active access aliases the current byte in this revision-scoped software model. */
+        if (m->apu_wave.enabled) index = m->apu_wave.position >> 1;
+        return m->apu_wave.ram[index];
+    }
+    if (address == 0xFF24) return m->apu_nr50;
+    if (address == 0xFF25) return m->apu_nr51;
+    if (address == 0xFF26)
+        return (uint8_t)(0x70u | (m->apu_power ? 0x80u : 0u) |
+                         (m->apu_pulse[0].enabled ? 1u : 0u) |
+                         (m->apu_pulse[1].enabled ? 2u : 0u) |
+                         (m->apu_wave.enabled ? 4u : 0u) |
+                         (m->apu_noise.enabled ? 8u : 0u));
+    if (address == 0xFF40) return m->lcdc;
+    /* MODEL: UNKNOWN GATE-20 research:11 -- STAT mode and coincidence bits at LCD transitions */
+    if (address == 0xFF41)
+        return (uint8_t)(0x80u | (m->stat & 0x78u) |
+                         (m->ly == m->lyc ? 0x04u : 0u) | m->ppu_mode);
+    if (address == 0xFF42) return m->scy;
+    if (address == 0xFF43) return m->scx;
+    if (address == 0xFF44) return m->ly;
+    if (address == 0xFF45) return m->lyc;
+    if (address == 0xFF46) return m->dma_register;
+    if (address == 0xFF47) return m->bgp;
+    if (address == 0xFF48) return m->obp0;
+    if (address == 0xFF49) return m->obp1;
+    if (address == 0xFF4A) return m->wy;
+    if (address == 0xFF4B) return m->wx;
+    /* MODEL: CGB_ONLY GATE-72 GUARD=model_is_cgb -- FF4C-FF7F decode through io_visibility[]; the DMG profile falls through unchanged (D-09) */
+    if (address >= 0xFF4Cu && address <= 0xFF7Fu && model_is_cgb(m)) return io_read_cgb(m, address);
+    if (address == 0xFF0F) return (uint8_t)(0xE0u | m->interrupt_flags);
+    /* MODEL: CGB_ONLY GATE-21 GUARD=model_is_cgb -- IE bits 5-7 are stored on the CGB profile (unused_hwio-C/-GS); DMG reads them as 1 (OQ2) */
+    if (address == 0xFFFF) return model_is_cgb(m) ? m->ie : (uint8_t)(0xE0u | m->ie);
+    if (address >= 0x8000 && address <= 0x9FFF)
+        return cpu_vram_access_allowed(m) ? m->vram[m->vram_bank][address - 0x8000] : 0xFF;
+    if (address >= 0xFE00 && address <= 0xFE9F)
+        return cpu_oam_access_allowed(m) ? m->oam[address - 0xFE00] : 0xFF;
+    if (address < 0x8000u || (address >= 0xA000u && address <= 0xBFFFu)) return cart_read(m, address);
+    /* MODEL: BOTH GATE-23 basis=wram-echo-map -- work RAM and echo mapping; CGB WRAM banking is selected in wram_byte */
+    if (address >= 0xC000 && address <= 0xFDFF) return *wram_byte(m, address);
     if (address >= 0xFF80 && address <= 0xFFFE) return m->hram[address - 0xFF80];
     return 0xFF;
 }
 
 static void advance_devices_to(gbb_instance *m, uint64_t target);
 
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static uint8_t bus_read(gbb_instance *m, uint16_t address, uint64_t offset) {
     advance_devices_to(m, m->instruction_start_half_dots + offset);
     uint8_t value = read8(m, address);
@@ -957,17 +1625,21 @@ static uint8_t bus_read(gbb_instance *m, uint16_t address, uint64_t offset) {
     return value;
 }
 
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static unsigned timer_bit(uint8_t tac) {
     static const uint8_t bits[4] = {9, 3, 5, 7};
     return bits[tac & 3u];
 }
 
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static int timer_input(const gbb_instance *m) {
     return (m->tac & 4u) != 0 && ((m->divider_counter >> timer_bit(m->tac)) & 1u) != 0;
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void timer_increment(gbb_instance *m, uint64_t at) {
     if (m->timer_reload_pending) return;
+    /* MODEL: UNKNOWN GATE-24 research:14 -- TIMA overflow and reload timing */
     if (m->tima == 0xFFu) {
         m->tima = 0;
         m->timer_reload_pending = 1;
@@ -980,6 +1652,7 @@ static void timer_increment(gbb_instance *m, uint64_t at) {
     }
 }
 
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static void timer_set_signal(gbb_instance *m, int next, uint64_t at) {
     if (m->timer_signal && !next) timer_increment(m, at);
     m->timer_signal = next;
@@ -987,9 +1660,12 @@ static void timer_set_signal(gbb_instance *m, int next, uint64_t at) {
 
 static void apu_sequencer_clock(gbb_instance *m);
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
+    /* MODEL: UNKNOWN GATE-25 expected-failure:cgb-separate-buses -- OAM-DMA CPU bus conflict: CGB uses separate buses (D-17) */
     if (m->dma_active && m->dma_cpu_blocked &&
         !cpu_hram_address(address) && address != 0xFF46u) return;
+    /* MODEL: BOTH GATE-26 basis=cartridge-side -- mapper register writes are decided by the cartridge */
     if (address < 0x8000u) {
         switch (m->cart.kind) {
         case CART_MBC1:
@@ -1063,7 +1739,7 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
         }
     }
     else if (address >= 0x8000 && address <= 0x9FFF) {
-        if (cpu_vram_access_allowed(m)) m->vram[address - 0x8000] = value;
+        if (cpu_vram_access_allowed(m)) m->vram[m->vram_bank][address - 0x8000] = value;
     }
     else if (address >= 0xFE00 && address <= 0xFE9F) {
         if (cpu_oam_access_allowed(m)) m->oam[address - 0xFE00] = value;
@@ -1138,11 +1814,13 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
             break;
         }
     }
+    /* MODEL: UNKNOWN GATE-27 research:14 -- JOYP write select and IF side effects */
     else if (address == 0xFF00) {
         uint8_t previous = (uint8_t)(joypad_value(m) & 0x0Fu);
         m->joypad_select = (uint8_t)(value & 0x30u);
         joypad_request_falling_edge(m, previous);
     }
+    /* MODEL: UNKNOWN GATE-28 research:11 -- LCDC bit 0 meaning and LCD on and off timing */
     else if (address == 0xFF40) {
         uint8_t old = m->lcdc;
         m->lcdc = value;
@@ -1169,6 +1847,7 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
             ppu_begin_object_scan(m);
         }
     }
+    /* MODEL: UNKNOWN GATE-29 research:14 -- STAT write spurious interrupt quirk is DMG-specific */
     else if (address == 0xFF41) {
         m->stat = (uint8_t)(value & 0x78u);
         ppu_update_stat_line(m);
@@ -1180,6 +1859,7 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
         m->lyc = value;
         ppu_update_stat_line(m);
     }
+    /* MODEL: UNKNOWN GATE-30 research:12 -- DMA restart and period */
     else if (address == 0xFF46) {
         m->dma_register = value;
         m->dma_pending_page = value;
@@ -1190,6 +1870,7 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     else if (address == 0xFF49) m->obp1 = value;
     else if (address == 0xFF4A) m->wy = value;
     else if (address == 0xFF4B) m->wx = value;
+    /* MODEL: UNKNOWN GATE-31 research:12 -- DIV write resets the counter and clocks the frame sequencer */
     else if (address == 0xFF04) {
         int apu_falling_edge = (m->divider_counter & 0x1000u) != 0u;
         m->divider_counter = 0; m->div = 0; m->divider_phase = 0;
@@ -1204,17 +1885,20 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
         m->tma = value;
         if (m->time_half_dots == m->timer_reloaded_at) m->tima = value;
     }
+    /* MODEL: UNKNOWN GATE-32 research:14 -- TAC write glitch timing */
     else if (address == 0xFF07) {
         m->tac = (uint8_t)(value & 7u);
         timer_set_signal(m, timer_input(m), m->time_half_dots);
     }
+    /* MODEL: UNKNOWN GATE-33 research:14 -- serial data and control write behaviour */
     else if (address == 0xFF01) {
-        if (m->serial_active) m->serial_unsupported = 1;
+        if (m->serial_active) { m->bus_unsupported = 1; m->bus_unsupported_address = address; }
         else m->serial_data = value;
     }
     else if (address == 0xFF02) {
         if (m->serial_active) {
-            m->serial_unsupported = 1;
+            m->bus_unsupported = 1;
+            m->bus_unsupported_address = address;
         } else {
             m->serial_control = (uint8_t)(value & 0x81u);
             if (value & 0x80u) {
@@ -1224,16 +1908,19 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
             }
         }
     }
+    /* MODEL: UNKNOWN GATE-34 research:14 -- NR52 power-off and power-on behaviour */
     else if (address == 0xFF26) {
         if ((value & 0x80u) == 0u) { m->apu_power = 0u; apu_power_off(m); }
         else if (!m->apu_power) { m->apu_power = 1u; m->apu_sequencer_step = 0u; }
     }
+    /* MODEL: UNKNOWN GATE-35 research:14 -- wave RAM write aliasing while the channel is enabled */
     else if (address >= 0xFF30u && address <= 0xFF3Fu) {
         unsigned index = address - 0xFF30u;
         /* CPU-B revision variation in active wave-RAM access is not hardware-qualified. */
         if (m->apu_wave.enabled) index = m->apu_wave.position >> 1;
         m->apu_wave.ram[index] = value;
     }
+    /* MODEL: UNKNOWN GATE-36 research:14 -- APU register writes while powered on */
     else if (m->apu_power && address == 0xFF10) {
         if (m->apu_pulse[0].sweep_negate_used &&
             (m->apu_pulse[0].sweep & 8u) != 0u && (value & 8u) == 0u)
@@ -1310,13 +1997,17 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     }
     else if (m->apu_power && address == 0xFF24) m->apu_nr50 = value;
     else if (m->apu_power && address == 0xFF25) m->apu_nr51 = value;
+    /* MODEL: CGB_ONLY GATE-73 GUARD=model_is_cgb -- FF4C-FF7F decode through io_visibility[]; a no-op on the DMG profile (C4) */
+    else if (address >= 0xFF4Cu && address <= 0xFF7Fu) { if (model_is_cgb(m)) io_write_cgb(m, address, value); }
     else if (address == 0xFF0F) m->interrupt_flags = (uint8_t)(value & 0x1Fu);
-    else if (address == 0xFFFF) m->ie = (uint8_t)(value & 0x1Fu);
-    else if (address >= 0xC000 && address <= 0xDFFF) m->wram[address - 0xC000] = value;
-    else if (address >= 0xE000 && address <= 0xFDFF) m->wram[address - 0xE000] = value;
+    /* MODEL: CGB_ONLY GATE-37 GUARD=model_is_cgb -- IE bits 5-7 are stored on the CGB profile; DMG keeps IE & $1F (OQ2) */
+    else if (address == 0xFFFF) m->ie = (uint8_t)(value & (model_is_cgb(m) ? 0xFFu : 0x1Fu));
+    /* MODEL: BOTH GATE-38 basis=wram-echo-map -- work RAM and echo mapping; CGB WRAM banking is selected in wram_byte */
+    else if (address >= 0xC000 && address <= 0xFDFF) *wram_byte_mut(m, address) = value;
     else if (address >= 0xFF80 && address <= 0xFFFE) m->hram[address - 0xFF80] = value;
 }
 
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static void bus_write(gbb_instance *m, uint16_t address, uint8_t value, uint64_t offset) {
     uint64_t timestamp = m->instruction_start_half_dots + offset;
     /* TMA feeds the reload when the write shares its exact reload timestamp. */
@@ -1328,7 +2019,12 @@ static void bus_write(gbb_instance *m, uint16_t address, uint8_t value, uint64_t
     write8(m, address, value);
 }
 
-static int read_supported(const gbb_instance *m, uint16_t address) {
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static int read_supported_map(const gbb_instance *m, uint16_t address) {
+    /* MODEL: CGB_ONLY GATE-39 GUARD=model_is_cgb -- on the CGB profile FF00-FF7F readability comes from io_visibility[]; the DMG chain below is unchanged */
+    if (m != NULL && model_is_cgb(m) && address >= 0xFF00u && address <= 0xFF7Fu)
+        return io_cgb_cell(m, address)->kind != IO_DEFERRED_RW;
+    /* MODEL: UNKNOWN GATE-40 research:14 -- FEA0-FEFF stays fail-closed on both profiles this phase (A6) */
     return address < 0xA000 || (address >= 0xFE00 && address <= 0xFE9F) ||
            (address >= 0xA000 && address <= 0xBFFF && m != NULL &&
             ((m->cartridge_ram != NULL && m->cartridge_ram_size != 0u) ||
@@ -1348,9 +2044,20 @@ static int read_supported(const gbb_instance *m, uint16_t address) {
            (address >= 0xFF80 && address <= 0xFFFE);
 }
 
+/* The pre-flight check also records the refused address for the test seam; it changes nothing the
+ * guest can observe. */
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static int read_supported(gbb_instance *m, uint16_t address) {
+    const int ok = read_supported_map(m, address);
+    if (!ok && m != NULL) m->bus_unsupported_address = address;
+    return ok;
+}
+
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static uint16_t hl(const gbb_instance *m) { return (uint16_t)(((uint16_t)m->h << 8) | m->l); }
 static unsigned pending_interrupt(const gbb_instance *m);
 
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static void shift_external_serial(gbb_instance *m, uint8_t bit) {
     if (!m->serial_active || (m->serial_control & 1u) != 0) return;
     m->serial_data = (uint8_t)((m->serial_data << 1) | bit);
@@ -1361,6 +2068,7 @@ static void shift_external_serial(gbb_instance *m, uint8_t bit) {
     }
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void apply_input_events_now(gbb_instance *m) {
     while (m->input_event_count != 0 &&
            m->input_events[0].at_half_dots == m->time_half_dots) {
@@ -1369,6 +2077,7 @@ static void apply_input_events_now(gbb_instance *m) {
         if (m->input_event_count != 0)
             memmove(m->input_events, m->input_events + 1,
                     m->input_event_count * sizeof(m->input_events[0]));
+        /* MODEL: UNKNOWN GATE-41 research:12 -- STOP wake conditions */
         if (event.kind == GBB_INPUT_STOP_WAKE) {
             if (m->stopped && event.value == 1u) m->stopped = 0;
         } else if (event.kind == GBB_INPUT_SERIAL_EDGE) {
@@ -1385,15 +2094,19 @@ static void apply_input_events_now(gbb_instance *m) {
     }
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static uint16_t instruction_address(const gbb_instance *m, uint16_t pc, unsigned offset) {
+    /* MODEL: BOTH GATE-42 basis="no SM83 opcode difference" -- HALT bug PC repeat is an SM83 trait */
     if (m->halt_bug && offset != 0) --offset;
     return (uint16_t)(pc + offset);
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static uint8_t instruction_byte(const gbb_instance *m, uint16_t pc, unsigned offset) {
     return read8(m, instruction_address(m, pc, offset));
 }
 
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static uint8_t ppu_tile_color(const gbb_instance *m, uint8_t tile,
                               unsigned row, unsigned column, int object) {
     int tile_base;
@@ -1406,11 +2119,12 @@ static uint8_t ppu_tile_color(const gbb_instance *m, uint8_t tile,
         return 0;
     unsigned address = (unsigned)tile_base + row * 2u;
     uint8_t bit = (uint8_t)(7u - column);
-    uint8_t low = m->vram[address];
-    uint8_t high = m->vram[address + 1u];
+    uint8_t low = m->vram[0][address];
+    uint8_t high = m->vram[0][address + 1u];
     return (uint8_t)(((low >> bit) & 1u) | (((high >> bit) & 1u) << 1));
 }
 
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static int ppu_window_visible_at(const gbb_instance *m, unsigned x) {
     if ((m->lcdc & 0x21u) != 0x21u || m->ly < m->wy || m->wx > 166u)
         return 0;
@@ -1418,7 +2132,9 @@ static int ppu_window_visible_at(const gbb_instance *m, unsigned x) {
     return (int)x >= left;
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static uint8_t ppu_background_color(const gbb_instance *m, unsigned x) {
+    /* MODEL: UNKNOWN GATE-43 research:11 -- LCDC bit 0 gates the window on DMG and only priority on CGB; no BG attributes yet */
     int window = (m->lcdc & 0x01u) != 0 && ppu_window_visible_at(m, x);
     unsigned source_x;
     unsigned source_y;
@@ -1434,11 +2150,12 @@ static uint8_t ppu_background_color(const gbb_instance *m, unsigned x) {
     }
     uint16_t map_index = (uint16_t)(((source_y >> 3) * 32u) + ((source_x & 0xFFu) >> 3));
     uint16_t map_address = (uint16_t)(map_base + map_index);
-    if (map_address >= sizeof(m->vram)) return 0;
-    uint8_t tile = m->vram[map_address];
+    if (map_address >= GBB_VRAM_BANK_SIZE) return 0;
+    uint8_t tile = m->vram[0][map_address];
     return ppu_tile_color(m, tile, source_y & 7u, source_x & 7u, 0);
 }
 
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static void ppu_begin_object_scan(gbb_instance *m) {
     m->ppu_selected_object_count = 0;
     m->ppu_scan_index = 0;
@@ -1447,6 +2164,7 @@ static void ppu_begin_object_scan(gbb_instance *m) {
 /* Sample one OAM entry every two modeled mode-2 dots. If DMA overlaps that
  * read, this software model treats the candidate as off-screen for the line.
  * The scan-dot placement remains policy, not measured CPU-B timing. */
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void ppu_scan_object(gbb_instance *m, unsigned index) {
     if (index >= 40u) return;
     m->ppu_scan_index = (uint8_t)(index + 1u);
@@ -1455,6 +2173,7 @@ static void ppu_scan_object(gbb_instance *m, unsigned index) {
     if (m->ly == 0u)
         observe_ppu(m, (uint16_t)(0xFE00u + index), 9,
                     (uint8_t)(m->dma_active ? 0u : 1u));
+    /* MODEL: UNKNOWN GATE-44 research:11 -- OAM scan against a DMA in flight */
     if (m->dma_active || m->ppu_selected_object_count >= GBB_LINE_OBJECT_LIMIT)
         return;
     unsigned height = (m->lcdc & 0x04u) != 0 ? 16u : 8u;
@@ -1470,8 +2189,10 @@ static void ppu_scan_object(gbb_instance *m, unsigned index) {
     m->ppu_selected_attributes[slot] = m->oam[offset + 3u];
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static int ppu_object_color(const gbb_instance *m, unsigned x, uint8_t *color,
                             uint8_t *attributes) {
+    /* MODEL: UNKNOWN GATE-45 research:11 -- object priority is by X on DMG and by OAM index on CGB */
     if ((m->lcdc & 0x02u) == 0) return 0;
     int found = 0;
     int best_left = 0;
@@ -1512,11 +2233,14 @@ static int ppu_object_color(const gbb_instance *m, unsigned x, uint8_t *color,
     return 1;
 }
 
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static uint8_t ppu_palette_shade(uint8_t palette, uint8_t color) {
     return (uint8_t)((palette >> (color * 2u)) & 3u);
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static uint8_t ppu_pixel_shade(gbb_instance *m, unsigned x) {
+    /* MODEL: UNKNOWN GATE-46 research:11 -- shade composition is the DMG palette path */
     uint8_t background = (m->lcdc & 0x01u) != 0 ? ppu_background_color(m, x) : 0;
     if ((m->lcdc & 0x01u) != 0 && ppu_window_visible_at(m, x))
         m->ppu_window_line_drawn = 1;
@@ -1529,6 +2253,7 @@ static uint8_t ppu_pixel_shade(gbb_instance *m, unsigned x) {
     return ppu_palette_shade(m->bgp, background);
 }
 
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static void ppu_begin_transfer(gbb_instance *m) {
     m->ppu_fifo_head = 0;
     m->ppu_fifo_count = 0;
@@ -1546,9 +2271,11 @@ static void ppu_begin_transfer(gbb_instance *m) {
     m->ppu_object_tiles_fetched = 0;
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void ppu_fetcher_step(gbb_instance *m) {
     uint16_t needed = (uint16_t)(GBB_FRAME_WIDTH + m->ppu_fine_scroll);
     if (m->ppu_fetch_enqueued >= needed) return;
+    /* MODEL: UNKNOWN GATE-47 research:11 -- fetcher push timing */
     if (m->ppu_fetch_stage == 3u && m->ppu_fetch_phase == 1u) {
         if (m->ppu_fifo_count > 8u) return;
         uint16_t remaining = (uint16_t)(needed - m->ppu_fetch_enqueued);
@@ -1573,6 +2300,7 @@ static void ppu_fetcher_step(gbb_instance *m) {
     }
 }
 
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static int ppu_window_should_start(const gbb_instance *m) {
     if (m->ppu_window_started || (m->lcdc & 0x21u) != 0x21u ||
         m->ly < m->wy || m->wx > 166u) return 0;
@@ -1580,6 +2308,7 @@ static int ppu_window_should_start(const gbb_instance *m) {
     return m->ppu_output_x == start_x;
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static int ppu_object_should_stall(gbb_instance *m, uint8_t *stall) {
     if ((m->lcdc & 0x02u) == 0) return 0;
     unsigned fine_scroll = m->ppu_fine_scroll;
@@ -1592,6 +2321,7 @@ static int ppu_object_should_stall(gbb_instance *m, uint8_t *stall) {
         if (left < 0 || left >= (int)GBB_FRAME_WIDTH ||
             left != (int)m->ppu_output_x) continue;
         m->ppu_objects_stalled |= object_bit;
+        /* MODEL: UNKNOWN GATE-48 research:11 -- object fetch during DMA and its transfer timing */
         if (m->dma_active) {
             /* advance_devices_to advances the DMA byte before this PPU event.
              * The aligned word read is the declared deterministic model; its
@@ -1626,12 +2356,14 @@ static int ppu_object_should_stall(gbb_instance *m, uint8_t *stall) {
     return 0;
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void ppu_transfer_dot(gbb_instance *m) {
     if (m->ppu_transfer_complete) {
         ppu_set_mode(m, 0);
         return;
     }
     ppu_fetcher_step(m);
+    /* MODEL: UNKNOWN GATE-49 research:11 -- mode 3 start-up and window stall timing */
     if (m->ppu_transfer_age < 12u) {
         ++m->ppu_transfer_age;
         if (m->ppu_transfer_age < 12u) return;
@@ -1673,9 +2405,11 @@ static void ppu_transfer_dot(gbb_instance *m) {
     if (++m->ppu_output_x == GBB_FRAME_WIDTH) m->ppu_transfer_complete = 1;
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void ppu_advance_dot(gbb_instance *m) {
     if ((m->lcdc & 0x80u) == 0) return;
-    if (m->ppu_dot < 455u) {
+    /* MODEL: UNKNOWN GATE-50 research:11 -- line length and LY timing */
+    if (m->ppu_dot < GBB_DOTS_PER_LINE - 1u) {
         ++m->ppu_dot;
     } else {
         if (m->ly < GBB_FRAME_HEIGHT && m->ppu_window_line_drawn &&
@@ -1683,7 +2417,7 @@ static void ppu_advance_dot(gbb_instance *m) {
             ++m->ppu_window_line;
         m->ppu_dot = 0;
         ++m->ly;
-        if (m->ly == 154u) {
+        if (m->ly == GBB_LINES_PER_FRAME) {
             m->ly = 0;
             m->ppu_window_line = 0;
         }
@@ -1721,17 +2455,36 @@ static void ppu_advance_dot(gbb_instance *m) {
     }
 }
 
+/* OAM DMA source map (D-16). The DMG envelope is frozen (D-024): VRAM and WRAM are read and every other
+ * page, including ROM, cartridge RAM and E0-FF, reads $FF. The CGB profile (both modes) reads ROM and
+ * cartridge RAM through cart_read, VRAM from the selected bank, WRAM through the banked helper, and
+ * E0-FF as $FF. The cartridge and E0-FF cells are PANDOCS or ORACLE_SAMEBOY claims and are not
+ * hardware-verified for CGB-E (see docs/cgb-profile.md). */
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static uint8_t dma_source_read(const gbb_instance *m, uint16_t address) {
-    if (address >= 0x8000u && address <= 0x9FFFu)
-        return m->vram[address - 0x8000u];
-    if (address >= 0xC000u && address <= 0xDFFFu)
-        return m->wram[address - 0xC000u];
-    /* The ROM-only profile has no external cartridge RAM. Other source pages
-     * are outside the DMG manual's 8000-DFFF DMA range. */
+    /* MODEL: CGB_ONLY GATE-51 GUARD=model_is_cgb -- OAM DMA reads the cartridge and the banked VRAM and WRAM on the CGB profile */
+    if (model_is_cgb(m)) {
+        if (address < 0x8000u || (address >= 0xA000u && address <= 0xBFFFu))
+            return cart_read(m, address);
+        if (address >= 0x8000u && address <= 0x9FFFu)
+            return m->vram[m->vram_bank][address - 0x8000u];
+        if (address >= 0xC000u && address <= 0xDFFFu)
+            return *wram_byte(m, address);
+        return 0xFFu;
+    }
+    /* MODEL: DMG_ONLY GATE-75 GUARD=model_is_dmg -- the DMG source map is VRAM and WRAM only; everything else reads $FF (D-024) */
+    if (model_is_dmg(m)) {
+        if (address >= 0x8000u && address <= 0x9FFFu)
+            return m->vram[m->vram_bank][address - 0x8000u];
+        if (address >= 0xC000u && address <= 0xDFFFu)
+            return *wram_byte(m, address);
+    }
     return 0xFFu;
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void dma_start(gbb_instance *m) {
+    /* MODEL: UNKNOWN GATE-52 research:12 -- DMA restart behaviour */
     m->dma_page = m->dma_pending_page;
     m->dma_index = 0;
     m->dma_phase = 0;
@@ -1741,8 +2494,10 @@ static void dma_start(gbb_instance *m) {
     observe_dma(m, 0xFF46u, 1, m->dma_page);
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void dma_advance_half_dot(gbb_instance *m) {
     if (!m->dma_active) return;
+    /* MODEL: UNKNOWN GATE-53 research:12 -- DMA byte period */
     if (++m->dma_phase < GBB_DMA_BYTE_PERIOD_HALF_DOTS) return;
     m->dma_phase = 0;
     m->dma_cpu_blocked = 1;
@@ -1757,6 +2512,7 @@ static void dma_advance_half_dot(gbb_instance *m) {
     }
 }
 
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static void apu_sequencer_clock(gbb_instance *m) {
     if (!m->apu_power) return;
     const uint8_t step = m->apu_sequencer_step;
@@ -1824,10 +2580,12 @@ static void apu_sequencer_clock(gbb_instance *m) {
     m->apu_sequencer_step = (uint8_t)((step + 1u) & 7u);
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void advance_devices_to(gbb_instance *m, uint64_t target) {
     while (m->time_half_dots < target) {
         ++m->time_half_dots;
         apply_input_events_now(m);
+        /* MODEL: UNKNOWN GATE-54 research:14 -- timer reload and IF delay */
         if (m->timer_reload_pending && m->timer_reload_remaining != 0 &&
             --m->timer_reload_remaining == 0) {
             m->tima = m->tma;
@@ -1838,6 +2596,7 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
             observe_bus(m, 0, 0xFF0F, 3, (uint8_t)(0xE0u | m->interrupt_flags));
             diagnostic_add(m, GBB_DIAGNOSTIC_TIMER, m->time_half_dots, 0xFF05, m->tima);
         }
+        /* MODEL: UNKNOWN GATE-55 research:14 -- serial internal clock rate */
         if (m->serial_active && (m->serial_control & 1u) != 0 &&
             m->serial_edge_remaining != 0 && --m->serial_edge_remaining == 0) {
             m->serial_data = (uint8_t)((m->serial_data << 1) | 1u);
@@ -1851,6 +2610,7 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
         }
         m->divider_phase ^= 1u;
         if (m->divider_phase == 0) {
+            /* MODEL: UNKNOWN GATE-56 research:12 -- frame sequencer taps a DIV bit that moves in double speed */
             const int apu_signal_before = (m->divider_counter & 0x1000u) != 0u;
             ++m->divider_counter;
             m->div = (uint8_t)(m->divider_counter >> 8);
@@ -1913,6 +2673,7 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
     }
 }
 
+/* MODEL: BOTH GATE-00 basis=host-api */
 gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events,
                            size_t count) {
     if (instance == NULL || (events == NULL && count != 0)) return GBB_INVALID_ARGUMENT;
@@ -1941,6 +2702,7 @@ gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events
     return GBB_OK;
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 gbb_error gbb_copy_frame(const gbb_instance *instance, uint8_t *pixels,
                          size_t capacity_bytes, size_t pitch_bytes,
                          gbb_frame_info *out_info) {
@@ -1960,6 +2722,8 @@ gbb_error gbb_copy_frame(const gbb_instance *instance, uint8_t *pixels,
     uintptr_t info_end = info_begin + sizeof(*out_info);
     if (pixels_begin < info_end && info_begin < pixels_end)
         return GBB_INVALID_ARGUMENT;
+    /* MODEL: DMG_ONLY GATE-57 GUARD=model_is_dmg -- frame output is DMG shades only; the CGB profile has no colour output yet (D-05) */
+    if (!model_is_dmg(instance)) return GBB_UNSUPPORTED_PROFILE;
     if (instance->frame_generation == 0) return GBB_FRAME_NOT_READY;
     for (size_t y = 0; y < GBB_FRAME_HEIGHT; ++y)
         memcpy(pixels + y * pitch_bytes,
@@ -1971,6 +2735,7 @@ gbb_error gbb_copy_frame(const gbb_instance *instance, uint8_t *pixels,
     return GBB_OK;
 }
 
+/* MODEL: BOTH GATE-00 basis=host-side-mixing */
 static int audio_preflight(const gbb_instance *m, uint64_t half_dots) {
     if (!m->audio_run_active) return 1;
     const uint64_t samples = (m->apu_sample_phase +
@@ -1978,11 +2743,14 @@ static int audio_preflight(const gbb_instance *m, uint64_t half_dots) {
     return samples <= (uint64_t)(m->audio_frame_capacity - m->audio_frame_count);
 }
 
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static void advance_devices(gbb_instance *m, uint64_t half_dots) {
     advance_devices_to(m, m->time_half_dots + half_dots);
 }
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static void set_hl(gbb_instance *m, uint16_t value) { m->h = (uint8_t)(value >> 8); m->l = (uint8_t)value; }
 
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 static int recognized_mbc1m_candidate(const uint8_t *rom, size_t size) {
     static const uint8_t nintendo_logo[48] = {
         0xCEu, 0xEDu, 0x66u, 0x66u, 0xCCu, 0x0Du, 0x00u, 0x0Bu,
@@ -2003,7 +2771,19 @@ static int recognized_mbc1m_candidate(const uint8_t *rom, size_t size) {
            rom[bank + 0x147u] >= 0x01u && rom[bank + 0x147u] <= 0x03u;
 }
 
-static gbb_error validate_header(const uint8_t *rom, size_t size,
+/* $143 classification (D-03). Hardware decodes CGB mode from bit 7 and PGB mode from bits 2-3;
+ * the $C0 convention is ignored by hardware but reported so callers can see it. */
+/* MODEL: BOTH GATE-00 basis=header-byte-143 */
+static uint8_t cgb_support_of(uint8_t flag) {
+    if ((flag & 0x80u) == 0u) return GBB_CGB_SUPPORT_NONE;
+    if ((flag & 0x0Cu) != 0u) return GBB_CGB_SUPPORT_PGB;
+    if (flag == 0x80u) return GBB_CGB_SUPPORT_ENHANCED;
+    if (flag == 0xC0u) return GBB_CGB_SUPPORT_ONLY;
+    return GBB_CGB_SUPPORT_OTHER;
+}
+
+/* MODEL: BOTH GATE-00 basis=D-24 */
+static gbb_error validate_header(gbb_profile profile, const uint8_t *rom, size_t size,
                                  cartridge_info *out_info) {
     if (rom == NULL || size == 0) return GBB_INVALID_ARGUMENT;
     if (size < 0x150) return GBB_ROM_TRUNCATED;
@@ -2056,6 +2836,7 @@ static gbb_error validate_header(const uint8_t *rom, size_t size,
     if (size != declared) return GBB_ROM_SIZE_MISMATCH;
     uint8_t checksum = 0;
     for (size_t i = 0x134; i <= 0x14C; ++i) checksum = (uint8_t)(checksum - rom[i] - 1u);
+    /* MODEL: BOTH GATE-58 basis=D-24 -- header and checksum validation is profile-independent */
     if (checksum != rom[0x14D]) return GBB_INVALID_ROM;
     if (row->kind == CART_MBC1 && declared >= 512u * 1024u &&
         recognized_mbc1m_candidate(rom, size))
@@ -2063,7 +2844,14 @@ static gbb_error validate_header(const uint8_t *rom, size_t size,
     /* MBC30 (ROM code $07 or 64 KiB RAM) has an undocumented register layout here. */
     if (row->kind == CART_MBC3 && (rom_size_code == 0x07u || mbc30_ram_marker))
         return GBB_UNSUPPORTED_CARTRIDGE_VARIANT;
+    const uint8_t cgb_flag = rom[0x143];
+    const uint8_t cgb_support = cgb_support_of(cgb_flag);
+    /* MODEL: CGB_ONLY GATE-67 GUARD=GBB_PROFILE_CGB_CPU_E -- a PGB-flagged $143 is rejected on the CGB profile instead of running in a mode the hardware would not enter (D-03) */
+    if (profile == GBB_PROFILE_CGB_CPU_E && cgb_support == GBB_CGB_SUPPORT_PGB)
+        return GBB_UNSUPPORTED_EXECUTION_MODE;
     if (out_info != NULL) {
+        out_info->cgb_flag = cgb_flag;
+        out_info->cgb_support = cgb_support;
         out_info->type = type;
         out_info->kind = row->kind;
         out_info->ram_window_mapped = row->ram_window_mapped;
@@ -2075,17 +2863,36 @@ static gbb_error validate_header(const uint8_t *rom, size_t size,
     return GBB_OK;
 }
 
+/* Execution mode is a property of profile plus $143 (D-03): the DMG profile ignores $143, the
+ * CGB profile runs CGB mode when bit 7 is set and DMG compatibility mode otherwise. */
+/* MODEL: BOTH GATE-00 basis=header-byte-143 */
+static uint8_t exec_mode_for(int cgb_profile, uint8_t cgb_flag) {
+    if (!cgb_profile) return GBB_MODE_DMG;
+    return (cgb_flag & 0x80u) != 0u ? GBB_MODE_CGB : GBB_MODE_CGB_DMG_COMPAT;
+}
+
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 gbb_error gbb_create(gbb_profile profile, gbb_instance **out_instance) {
     if (out_instance == NULL) return GBB_INVALID_ARGUMENT;
     *out_instance = NULL;
-    if (profile != GBB_PROFILE_DMG_CPU_B) return GBB_UNSUPPORTED_PROFILE;
+    /* MODEL: BOTH GATE-59 basis=profile-argument-validated -- the switch accepts exactly the two implemented profiles (D-01) */
+    switch (profile) {
+    case GBB_PROFILE_DMG_CPU_B:
+    case GBB_PROFILE_CGB_CPU_E:
+        break;
+    default:
+        return GBB_UNSUPPORTED_PROFILE;
+    }
     gbb_instance *m = calloc(1, sizeof(*m));
     if (m == NULL) return GBB_OUT_OF_MEMORY;
+    m->profile = (uint8_t)profile;
+    m->exec_mode = GBB_MODE_NONE;
     reset_state(m); /* RAM fill is emulator policy; hardware power-on RAM is unspecified. */
     *out_instance = m;
     return GBB_OK;
 }
 
+/* MODEL: BOTH GATE-00 basis=host-api */
 void gbb_destroy(gbb_instance *instance) {
     if (instance != NULL) {
         free(instance->rom);
@@ -2094,6 +2901,7 @@ void gbb_destroy(gbb_instance *instance) {
     }
 }
 
+/* MODEL: BOTH GATE-00 basis=host-api */
 gbb_error gbb_reset(gbb_instance *instance) {
     if (instance == NULL) return GBB_INVALID_ARGUMENT;
     /* Reset drops the motor line; only a line that was on is a transition.
@@ -2110,10 +2918,11 @@ gbb_error gbb_reset(gbb_instance *instance) {
     return GBB_OK;
 }
 
+/* MODEL: BOTH GATE-00 basis=host-api */
 gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_size) {
     if (instance == NULL) return GBB_INVALID_ARGUMENT;
     cartridge_info info = {0};
-    gbb_error validation = validate_header(rom, rom_size, &info);
+    gbb_error validation = validate_header((gbb_profile)instance->profile, rom, rom_size, &info);
     if (validation != GBB_OK) return validation;
     uint8_t *copy = malloc(rom_size);
     if (copy == NULL) return GBB_OUT_OF_MEMORY;
@@ -2140,18 +2949,98 @@ gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_si
     instance->cart.has_battery = info.has_battery;
     instance->cart.has_timer = info.has_timer;
     instance->cart.has_rumble = info.has_rumble;
+    /* The mode commits here, after both allocations, so a failed load leaves it unchanged. */
+    instance->exec_mode = exec_mode_for(model_is_cgb(instance), info.cgb_flag);
+    instance->cgb_flag = info.cgb_flag;
+    instance->cgb_support = info.cgb_support;
+    instance->cartridge_type = info.type;
     reset_state(instance);
     instance->loaded = 1;
     return GBB_OK;
 }
 
+/* MODEL: BOTH GATE-00 basis=host-api */
+static void info_store(gbb_info *out, const gbb_info *src) {
+    /* Field by field, never a struct copy: the caller's struct may be larger than V1 and its
+     * extra bytes stay untouched. The V1 floor was checked, so every field below fits. */
+    out->profile = src->profile;
+    out->mode = src->mode;
+    out->flags = src->flags;
+    out->cgb_flag = src->cgb_flag;
+    out->cgb_support = src->cgb_support;
+    out->cartridge_type = src->cartridge_type;
+    out->reserved0 = 0u;
+    out->rom_size_bytes = src->rom_size_bytes;
+    out->ram_size_bytes = src->ram_size_bytes;
+    out->struct_size = GBB_INFO_SIZE_V1;
+}
+
+/* MODEL: BOTH GATE-00 basis=host-api */
+static uint32_t info_flags(int profile_is_dmg, uint8_t cgb_support, int battery, int timer,
+                           int rumble) {
+    uint32_t flags = GBB_INFO_HAS_ROM;
+    if (profile_is_dmg && cgb_support == GBB_CGB_SUPPORT_ONLY) flags |= GBB_INFO_CGB_ONLY_ON_DMG;
+    if (battery) flags |= GBB_INFO_HAS_BATTERY;
+    if (timer) flags |= GBB_INFO_HAS_RTC;
+    if (rumble) flags |= GBB_INFO_HAS_RUMBLE;
+    return flags;
+}
+
+/* MODEL: BOTH GATE-00 basis=host-api */
+gbb_error gbb_probe_rom(gbb_profile profile, const uint8_t *rom, size_t rom_size,
+                        gbb_info *out_info) {
+    if (profile != GBB_PROFILE_DMG_CPU_B && profile != GBB_PROFILE_CGB_CPU_E)
+        return GBB_UNSUPPORTED_PROFILE;
+    if (out_info == NULL || (rom == NULL && rom_size != 0u) ||
+        out_info->struct_size < GBB_INFO_SIZE_V1)
+        return GBB_INVALID_ARGUMENT;
+    cartridge_info cart = {0};
+    gbb_error validation = validate_header(profile, rom, rom_size, &cart);
+    if (validation != GBB_OK) return validation;
+    gbb_info info = {0};
+    info.profile = (uint32_t)profile;
+    info.mode = exec_mode_for(profile == GBB_PROFILE_CGB_CPU_E, cart.cgb_flag);
+    info.flags = info_flags(profile == GBB_PROFILE_DMG_CPU_B, cart.cgb_support,
+                            cart.has_battery, cart.has_timer, cart.has_rumble);
+    info.cgb_flag = cart.cgb_flag;
+    info.cgb_support = cart.cgb_support;
+    info.cartridge_type = cart.type;
+    info.rom_size_bytes = (uint32_t)rom_size; /* validated <= 8 MiB */
+    info.ram_size_bytes = (uint32_t)cart.ram_size;
+    info_store(out_info, &info);
+    return GBB_OK;
+}
+
+/* MODEL: BOTH GATE-00 basis=host-api */
+gbb_error gbb_get_info(const gbb_instance *instance, gbb_info *out_info) {
+    if (instance == NULL || out_info == NULL || out_info->struct_size < GBB_INFO_SIZE_V1)
+        return GBB_INVALID_ARGUMENT;
+    gbb_info info = {0};
+    info.profile = instance->profile;
+    if (instance->loaded) {
+        info.mode = instance->exec_mode;
+        info.flags = info_flags(model_is_dmg(instance), instance->cgb_support,
+                                instance->cart.has_battery, instance->cart.has_timer,
+                                instance->cart.has_rumble);
+        info.cgb_flag = instance->cgb_flag;
+        info.cgb_support = instance->cgb_support;
+        info.cartridge_type = instance->cartridge_type;
+        info.rom_size_bytes = (uint32_t)instance->rom_size;
+        info.ram_size_bytes = (uint32_t)instance->cartridge_ram_size;
+    }
+    info_store(out_info, &info);
+    return GBB_OK;
+}
+
 /* A timer cartridge is battery-backed even when it has no RAM ($0F): its image
  * is the RTC block alone. */
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 static int has_battery_image(const gbb_instance *instance) {
     return instance != NULL && instance->loaded && instance->cart.has_battery &&
            (instance->cartridge_ram_size != 0u || instance->cart.has_timer);
 }
 
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 static size_t battery_image_size(const gbb_instance *instance) {
     return instance->cartridge_ram_size +
            (instance->cart.has_timer ? (size_t)GBB_RTC_BLOCK_SIZE : 0u);
@@ -2160,6 +3049,7 @@ static size_t battery_image_size(const gbb_instance *instance) {
 /* RTC block v1 (D-16), written field by field so no struct layout leaks:
  *   0-3 "GBRT", 4 version, 5-8 sub (u32 LE), 9-13 live S M H DL DH,
  *   14-18 latched S M H DL DH, 19 latch_prev, 20 reserved zero. */
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 static void rtc_block_write(const cart_state *c, uint8_t out[GBB_RTC_BLOCK_SIZE]) {
     out[0] = 'G'; out[1] = 'B'; out[2] = 'R'; out[3] = 'T';
     out[4] = 1u;
@@ -2177,6 +3067,7 @@ static void rtc_block_write(const cart_state *c, uint8_t out[GBB_RTC_BLOCK_SIZE]
 /* Validates every field before storing any of them; out is written only on
  * success. Out-of-range-but-legal values (S = 63, H = 31) are accepted because
  * a guest can store them. */
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 static gbb_error rtc_block_parse(const uint8_t in[GBB_RTC_BLOCK_SIZE], cart_state *out) {
     if (in[0] != 'G' || in[1] != 'B' || in[2] != 'R' || in[3] != 'T') return GBB_INVALID_ARGUMENT;
     if (in[4] != 1u) return GBB_INVALID_ARGUMENT;
@@ -2197,12 +3088,14 @@ static gbb_error rtc_block_parse(const uint8_t in[GBB_RTC_BLOCK_SIZE], cart_stat
     return GBB_OK;
 }
 
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 static int rtc_fields_equal(const cart_state *a, const cart_state *b) {
     return a->rtc_sub == b->rtc_sub && a->rtc_s == b->rtc_s && a->rtc_m == b->rtc_m &&
            a->rtc_h == b->rtc_h && a->rtc_dl == b->rtc_dl && a->rtc_dh == b->rtc_dh &&
            memcmp(a->rtc_l, b->rtc_l, 5u) == 0 && a->rtc_latch_prev == b->rtc_latch_prev;
 }
 
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 gbb_error gbb_battery_size(const gbb_instance *instance, size_t *out_size) {
     if (instance == NULL || out_size == NULL) return GBB_INVALID_ARGUMENT;
     if (!has_battery_image(instance)) return GBB_NO_BATTERY;
@@ -2210,6 +3103,7 @@ gbb_error gbb_battery_size(const gbb_instance *instance, size_t *out_size) {
     return GBB_OK;
 }
 
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 gbb_error gbb_copy_battery(const gbb_instance *instance, uint8_t *out_bytes,
                            size_t capacity_bytes) {
     if (instance == NULL || out_bytes == NULL) return GBB_INVALID_ARGUMENT;
@@ -2226,6 +3120,7 @@ gbb_error gbb_copy_battery(const gbb_instance *instance, uint8_t *out_bytes,
     return GBB_OK;
 }
 
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 gbb_error gbb_import_battery(gbb_instance *instance, const uint8_t *bytes,
                              size_t size_bytes) {
     if (instance == NULL || bytes == NULL) return GBB_INVALID_ARGUMENT;
@@ -2276,6 +3171,7 @@ gbb_error gbb_import_battery(gbb_instance *instance, const uint8_t *bytes,
     return GBB_OK;
 }
 
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 gbb_error gbb_battery_generation(const gbb_instance *instance,
                                  uint64_t *out_generation) {
     if (instance == NULL || out_generation == NULL) return GBB_INVALID_ARGUMENT;
@@ -2284,6 +3180,7 @@ gbb_error gbb_battery_generation(const gbb_instance *instance,
     return GBB_OK;
 }
 
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 gbb_error gbb_rtc_catch_up(gbb_instance *instance, int64_t elapsed_seconds) {
     if (instance == NULL) return GBB_INVALID_ARGUMENT;
     if (!instance->loaded || !instance->cart.has_timer) return GBB_NO_RTC;
@@ -2300,6 +3197,7 @@ gbb_error gbb_rtc_catch_up(gbb_instance *instance, int64_t elapsed_seconds) {
     return GBB_OK;
 }
 
+/* MODEL: BOTH GATE-00 basis=cartridge-side */
 gbb_error gbb_rumble_state(const gbb_instance *instance, uint8_t *out_on,
                            uint64_t *out_changes) {
     if (instance == NULL || out_on == NULL || out_changes == NULL)
@@ -2312,11 +3210,13 @@ gbb_error gbb_rumble_state(const gbb_instance *instance, uint8_t *out_on,
 
 typedef struct { uint8_t size; uint8_t ticks; int supported; } decoded;
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static int is_unused_opcode(uint8_t op) {
     return op == 0xD3 || op == 0xDB || op == 0xDD || op == 0xE3 || op == 0xE4 ||
            op == 0xEB || op == 0xEC || op == 0xED || op == 0xF4 || op == 0xFC || op == 0xFD;
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static int condition_true(const gbb_instance *m, unsigned condition) {
     switch (condition & 3u) {
         case 0: return (m->f & 0x80) == 0;
@@ -2326,8 +3226,10 @@ static int condition_true(const gbb_instance *m, unsigned condition) {
     }
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static decoded decode(const gbb_instance *m) {
     uint8_t op = read8(m, m->pc);
+    /* MODEL: BOTH GATE-60 basis="no SM83 opcode difference" -- illegal-opcode decode is identical on DMG and CGB */
     if (is_unused_opcode(op)) return (decoded){1, 0, 0};
     if (op == 0xCB) {
         uint8_t extension = instruction_byte(m, m->pc, 1);
@@ -2371,8 +3273,10 @@ static decoded decode(const gbb_instance *m) {
     }
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static uint8_t instruction_cost(const gbb_instance *m, decoded d) { (void)m; return d.ticks; }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static uint16_t pair_value(const gbb_instance *m, unsigned pair) {
     switch (pair & 3u) {
         case 0: return (uint16_t)(((uint16_t)m->b << 8) | m->c);
@@ -2382,7 +3286,8 @@ static uint16_t pair_value(const gbb_instance *m, unsigned pair) {
     }
 }
 
-static int instruction_reads_supported(const gbb_instance *m, decoded d, uint8_t op) {
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
+static int instruction_reads_supported(gbb_instance *m, decoded d, uint8_t op) {
     /* Address checks have no bus phases or side effects. Every byte is checked
      * before an instruction can change registers, RAM, devices or outputs. */
     for (unsigned i = 0; i < d.size; ++i)
@@ -2414,6 +3319,7 @@ static int instruction_reads_supported(const gbb_instance *m, decoded d, uint8_t
     }
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static void set_pair(gbb_instance *m, unsigned pair, uint16_t value) {
     switch (pair & 3u) {
         case 0: m->b=(uint8_t)(value>>8); m->c=(uint8_t)value; break;
@@ -2423,15 +3329,18 @@ static void set_pair(gbb_instance *m, unsigned pair, uint16_t value) {
     }
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static uint16_t stack_pair(const gbb_instance *m, unsigned pair) {
     return pair == 3 ? (uint16_t)(((uint16_t)m->a << 8) | m->f) : pair_value(m,pair);
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static void set_stack_pair(gbb_instance *m, unsigned pair, uint16_t value) {
     if (pair == 3) { m->a=(uint8_t)(value>>8); m->f=(uint8_t)(value&0xF0u); }
     else set_pair(m,pair,value);
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static uint8_t get_reg(gbb_instance *m, unsigned reg, uint64_t offset) {
     switch (reg & 7u) {
         case 0: return m->b; case 1: return m->c; case 2: return m->d; case 3: return m->e;
@@ -2439,6 +3348,7 @@ static uint8_t get_reg(gbb_instance *m, unsigned reg, uint64_t offset) {
     }
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static void set_reg(gbb_instance *m, unsigned reg, uint8_t value, uint64_t offset) {
     switch (reg & 7u) {
         case 0: m->b=value; break; case 1: m->c=value; break; case 2: m->d=value; break; case 3: m->e=value; break;
@@ -2446,6 +3356,7 @@ static void set_reg(gbb_instance *m, unsigned reg, uint8_t value, uint64_t offse
     }
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static void execute_cb(gbb_instance *m, uint16_t pc, uint8_t extension) {
     unsigned group = extension >> 6;
     unsigned operation = (extension >> 3) & 7u;
@@ -2480,16 +3391,19 @@ static void execute_cb(gbb_instance *m, uint16_t pc, uint8_t extension) {
     m->pc = (uint16_t)(pc + 2u);
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static uint8_t add8(gbb_instance *m, uint8_t lhs, uint8_t rhs, unsigned carry) {
     unsigned sum=(unsigned)lhs+(unsigned)rhs+carry; uint8_t result=(uint8_t)sum;
     m->f=(uint8_t)((result==0?0x80:0)|(((lhs&15u)+(rhs&15u)+carry>15u)?0x20:0)|(sum>255u?0x10:0)); return result;
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static uint8_t sub8(gbb_instance *m, uint8_t lhs, uint8_t rhs, unsigned carry) {
     unsigned sub=(unsigned)rhs+carry; uint8_t result=(uint8_t)((unsigned)lhs-sub);
     m->f=(uint8_t)(0x40|(result==0?0x80:0)|((lhs&15u)<((rhs&15u)+carry)?0x20:0)|((unsigned)lhs<sub?0x10:0)); return result;
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static void alu(gbb_instance *m, unsigned operation, uint8_t value) {
     switch (operation & 7u) {
         case 0: m->a=add8(m,m->a,value,0); break;
@@ -2503,20 +3417,24 @@ static void alu(gbb_instance *m, unsigned operation, uint8_t value) {
     }
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static void push16(gbb_instance *m, uint16_t value, uint64_t high_time, uint64_t low_time) {
     --m->sp; bus_write(m,m->sp,(uint8_t)(value>>8),high_time);
     --m->sp; bus_write(m,m->sp,(uint8_t)value,low_time);
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static uint16_t pop16(gbb_instance *m, uint64_t low_time, uint64_t high_time) {
     uint8_t lo=bus_read(m,m->sp,low_time); ++m->sp;
     uint8_t hi=bus_read(m,m->sp,high_time); ++m->sp;
     return (uint16_t)(lo | ((uint16_t)hi<<8));
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static void execute(gbb_instance *m, uint8_t cost) {
     uint16_t pc=m->pc; uint8_t op=read8(m,pc); uint64_t base=0;
     if (op>=0x40 && op<=0x7F) {
+        /* MODEL: BOTH GATE-61 basis="no SM83 opcode difference" -- HALT and the halt bug */
         if (op==0x76) {
             if (!m->ime && pending_interrupt(m) < 5) m->halt_bug=1;
             else m->halted=1;
@@ -2571,7 +3489,16 @@ static void execute(gbb_instance *m, uint8_t cost) {
             case 0x32: bus_write(m,hl(m),m->a,8); set_hl(m,(uint16_t)(hl(m)-1)); m->pc++; break;
             case 0x3A: m->a=bus_read(m,hl(m),8); set_hl(m,(uint16_t)(hl(m)-1)); m->pc++; break;
             case 0x08: { uint16_t addr=(uint16_t)(instruction_byte(m,pc,1)|((uint16_t)instruction_byte(m,pc,2)<<8)); bus_write(m,addr,(uint8_t)m->sp,24); bus_write(m,(uint16_t)(addr+1),(uint8_t)(m->sp>>8),32); m->pc+=3; break; }
-            case 0x10: m->pc=(uint16_t)(pc+2); m->stopped=1; break;
+            /* MODEL: UNKNOWN GATE-62 research:12 -- STOP, including CGB speed switch */
+            case 0x10:
+                /* MODEL: CGB_ONLY GATE-74 GUARD=model_is_cgb -- STOP with KEY1 armed is the CGB speed switch; Phase 12 owns it, so it stops visibly instead of sleeping (D-23) */
+                if (model_is_cgb(m) && m->exec_mode == GBB_MODE_CGB && (m->key1_armed & 1u) != 0u) {
+                    m->pc=(uint16_t)(pc+2);
+                    m->bus_unsupported=1;
+                    m->bus_unsupported_address=0xFF4Du;
+                    break;
+                }
+                m->pc=(uint16_t)(pc+2); m->stopped=1; break;
             case 0x07: { uint8_t c=(uint8_t)(m->a>>7); m->a=(uint8_t)((m->a<<1)|c); m->f=c?0x10:0; m->pc++; break; }
             case 0x0F: { uint8_t c=(uint8_t)(m->a&1); m->a=(uint8_t)((m->a>>1)|(c<<7)); m->f=c?0x10:0; m->pc++; break; }
             case 0x17: { uint8_t c=(uint8_t)(m->a>>7), old=(uint8_t)((m->f>>4)&1); m->a=(uint8_t)((m->a<<1)|old); m->f=c?0x10:0; m->pc++; break; }
@@ -2602,12 +3529,14 @@ static void execute(gbb_instance *m, uint8_t cost) {
     m->f &= 0xF0u;
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static unsigned pending_interrupt(const gbb_instance *m) {
     uint8_t pending = (uint8_t)(m->ie & m->interrupt_flags & 0x1Fu);
     for (unsigned bit = 0; bit < 5; ++bit) if (pending & (1u << bit)) return bit;
     return 5;
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static void enter_interrupt(gbb_instance *m, unsigned bit) {
     uint8_t mask = (uint8_t)(1u << bit);
     m->ime = 0;
@@ -2616,11 +3545,13 @@ static void enter_interrupt(gbb_instance *m, unsigned bit) {
     advance_devices_to(m, m->instruction_start_half_dots + 8u);
     m->interrupt_flags = (uint8_t)(m->interrupt_flags & (uint8_t)~mask);
     observe_bus(m, 0, 0xFF0F, 2, (uint8_t)(0xE0u | m->interrupt_flags));
+    /* MODEL: BOTH GATE-63 basis="no SM83 opcode difference" -- interrupt entry timing is a CPU trait */
     push16(m, m->pc, 16, 24);
     m->pc = (uint16_t)(0x0040u + bit * 8u);
     m->halted = 0;
 }
 
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static void save_trace(const gbb_instance *m, decoded d, gbb_trace_record *r) {
     memset(r, 0, sizeof(*r));
     r->time_half_dots = m->time_half_dots; r->pc = m->pc; r->opcode_size = d.size;
@@ -2629,10 +3560,27 @@ static void save_trace(const gbb_instance *m, decoded d, gbb_trace_record *r) {
 }
 
 /* Private regression seam, like the bus observer: no guest execution or reads. */
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 void gbb_test_cpu_snapshot(const gbb_instance *m, gbb_trace_record *record) {
     if (m != NULL && record != NULL) save_trace(m, (decoded){0, 0, 1}, record);
 }
 
+/* Private test seam: the address of the last refused read pre-flight or deferred/serial write.
+ * Not public ABI; read only by tests. */
+/* MODEL: BOTH GATE-00 basis="debug seam" */
+uint16_t gbb_test_last_unsupported_address(const gbb_instance *m) {
+    return m == NULL ? 0u : m->bus_unsupported_address;
+}
+
+/* Private test seam, like gbb_test_cpu_snapshot: reports the effective banks, never public ABI. */
+/* MODEL: BOTH GATE-00 basis="DMG pins wram_bank=1 and vram_bank=0" */
+void gbb_test_bank_state(const gbb_instance *m, uint8_t *out_vram_bank, uint8_t *out_wram_bank) {
+    if (m == NULL) return;
+    if (out_vram_bank != NULL) *out_vram_bank = m->vram_bank;
+    if (out_wram_bank != NULL) *out_wram_bank = m->wram_bank;
+}
+
+/* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static int halt_bug_keeps_control_target(const gbb_instance *m, uint8_t op) {
     if (op == 0xC3 || op == 0xC9 || op == 0xCD || op == 0xD9 || op == 0xE9 || (op & 0xC7u) == 0xC7u) return 1;
     if ((op & 0xE7u) == 0xC0u || (op & 0xE7u) == 0xC2u || (op & 0xE7u) == 0xC4u)
@@ -2640,6 +3588,7 @@ static int halt_bug_keeps_control_target(const gbb_instance *m, uint8_t op) {
     return 0;
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_half_dots,
                                        gbb_trace_record *trace, size_t trace_capacity) {
     gbb_run_result result={0, GBB_STOP_BUDGET, 0, 0, 0, 0};
@@ -2688,6 +3637,12 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             advance_devices_to(instance, instance->instruction_start_half_dots + 40u);
             diagnostic_commit(instance);
             result.consumed_half_dots += 40;
+            /* The entry push can itself hit a deferred register; report it at this boundary. */
+            if (instance->bus_unsupported) {
+                instance->bus_unsupported = 0;
+                result.reason = GBB_STOP_UNSUPPORTED_BUS;
+                return result;
+            }
             continue;
         }
         if (instance->halted) {
@@ -2718,6 +3673,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             result.reason=GBB_STOP_UNSUPPORTED_BUS;
             return result;
         }
+        /* MODEL: BOTH GATE-64 basis="no SM83 opcode difference" -- illegal-opcode lockup is a CPU trait */
         decoded d=decode(instance);
         if (!d.supported) {
             instance->locked=1; instance->lockup_pc=instance->pc; instance->lockup_opcode=read8(instance,instance->pc);
@@ -2755,6 +3711,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
         result.consumed_half_dots += cost;
         diagnostic_commit(instance);
         if (instance->ime_delay != 0 && --instance->ime_delay == 0) instance->ime = 1;
+        /* MODEL: UNKNOWN GATE-65 research:12 -- DIV reset on STOP */
         if (instance->stopped) {
             instance->divider_counter = 0;
             instance->div = 0;
@@ -2763,8 +3720,8 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             result.reason=GBB_STOP_STOPPED;
             return result;
         }
-        if (instance->serial_unsupported) {
-            instance->serial_unsupported = 0;
+        if (instance->bus_unsupported) {
+            instance->bus_unsupported = 0;
             result.reason = GBB_STOP_UNSUPPORTED_BUS;
             return result;
         }
@@ -2773,6 +3730,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
     return result;
 }
 
+/* MODEL: BOTH GATE-00 basis=host-api */
 gbb_run_result gbb_run_ex(gbb_instance *instance, uint64_t budget_half_dots,
                           gbb_trace_record *trace, size_t trace_capacity,
                           gbb_diagnostic_record *diagnostics, size_t diagnostic_capacity) {
@@ -2795,11 +3753,13 @@ gbb_run_result gbb_run_ex(gbb_instance *instance, uint64_t budget_half_dots,
     return result;
 }
 
+/* MODEL: BOTH GATE-00 basis=host-api */
 gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
                        gbb_trace_record *trace, size_t trace_capacity) {
     return gbb_run_ex(instance, budget_half_dots, trace, trace_capacity, NULL, 0);
 }
 
+/* MODEL: BOTH GATE-00 basis=host-api */
 gbb_run_result gbb_run_audio(gbb_instance *instance, uint64_t budget_half_dots,
                              gbb_audio_frame *frames, size_t frame_capacity,
                              size_t *out_frame_count) {
@@ -2834,10 +3794,11 @@ gbb_run_result gbb_run_audio(gbb_instance *instance, uint64_t budget_half_dots,
     return result;
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 uint8_t gbb_peek_ram(const gbb_instance *instance, uint16_t address) {
     if (instance == NULL) return 0xFF;
-    if (address >= 0xC000 && address <= 0xDFFF) return instance->wram[address - 0xC000];
-    if (address >= 0xE000 && address <= 0xFDFF) return instance->wram[address - 0xE000];
+    /* MODEL: BOTH GATE-66 basis=wram-echo-map -- debug peek of work RAM */
+    if (address >= 0xC000 && address <= 0xFDFF) return *wram_byte(instance, address);
     if (address >= 0xFF80 && address <= 0xFFFE) return instance->hram[address - 0xFF80];
     return 0xFF;
 }

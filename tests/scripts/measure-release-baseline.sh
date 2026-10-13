@@ -3,19 +3,155 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 SELF_TEST=false
-if [[ "${1:-}" == "--self-test" ]]; then SELF_TEST=true; shift; fi
-[[ $# -eq 0 ]] || { echo "usage: $0 [--self-test]" >&2; exit 2; }
+AB_MODE=false
+AB_BASE=""
+AB_HEAD=""
+if [[ "${1:-}" == "--self-test" ]]; then SELF_TEST=true; shift
+elif [[ "${1:-}" == "--ab" ]]; then
+  [[ $# -eq 3 && -x "${2}" && -x "${3}" ]] || { echo "usage: $0 --ab <base-measure_core> <head-measure_core>" >&2; exit 2; }
+  AB_MODE=true; AB_BASE="$2"; AB_HEAD="$3"; shift 3
+fi
+[[ $# -eq 0 ]] || { echo "usage: $0 [--self-test | --ab <base-measure_core> <head-measure_core>]" >&2; exit 2; }
 BUILD_DIR="${GBB_RELEASE_MEASURE_BUILD_DIR:-${ROOT_DIR}/build/release-measure}"
 ROM="${ROOT_DIR}/fixtures/tracer/tracer.gb"
 MANIFEST="${ROOT_DIR}/fixtures/tracer/manifest.json"
 TIMEOUT_SECONDS="${GBB_RELEASE_MEASURE_TIMEOUT_SECONDS:-30}"
 TOTAL_TIMEOUT_SECONDS="${GBB_RELEASE_MEASURE_TOTAL_TIMEOUT_SECONDS:-900}"
-SAMPLE_COUNT="${GBB_RELEASE_MEASURE_SAMPLES:-10}"
-WARMUP_COUNT="${GBB_RELEASE_MEASURE_WARMUPS:-2}"
+if [[ "$AB_MODE" == true ]]; then
+  SAMPLE_COUNT="${GBB_RELEASE_MEASURE_SAMPLES:-30}"
+  WARMUP_COUNT="${GBB_RELEASE_MEASURE_WARMUPS:-3}"
+else
+  SAMPLE_COUNT="${GBB_RELEASE_MEASURE_SAMPLES:-10}"
+  WARMUP_COUNT="${GBB_RELEASE_MEASURE_WARMUPS:-2}"
+fi
 [[ "$TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] && (( TIMEOUT_SECONDS >= 1 && TIMEOUT_SECONDS <= 300 )) || { echo "timeout must be 1..300 seconds" >&2; exit 2; }
 [[ "$TOTAL_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] && (( TOTAL_TIMEOUT_SECONDS >= 30 && TOTAL_TIMEOUT_SECONDS <= 3600 )) || { echo "total timeout must be 30..3600 seconds" >&2; exit 2; }
 [[ "$SAMPLE_COUNT" =~ ^[0-9]+$ ]] && (( SAMPLE_COUNT >= 3 && SAMPLE_COUNT <= 30 )) || { echo "samples must be 3..30" >&2; exit 2; }
 [[ "$WARMUP_COUNT" =~ ^[0-9]+$ ]] && (( WARMUP_COUNT >= 1 && WARMUP_COUNT <= 20 )) || { echo "warmups must be 1..20" >&2; exit 2; }
+
+# D-22 advisory A/B mode: strictly interleaved pairs of two prebuilt measure_core binaries on the
+# frozen DMG workload. Timing is reported, never asserted; only the output digest and the receipt
+# shape can fail the run. Host facts are limited to a hardware class (no host or user names).
+if [[ "$AB_MODE" == true ]]; then
+python3 -I - "$ROOT_DIR" "$ROM" "$AB_BASE" "$AB_HEAD" "$SAMPLE_COUNT" "$WARMUP_COUNT" "$TIMEOUT_SECONDS" <<'PYAB'
+import json
+import os
+import pathlib
+import platform
+import re
+import statistics
+import subprocess
+import sys
+
+_root, rom, base_bin, head_bin, samples_text, warmups_text, timeout_text = sys.argv[1:]
+samples, warmups, timeout_s = int(samples_text), int(warmups_text), int(timeout_text)
+WORKLOAD = "original-wram-tracer-1m-half-dots-v1"
+expected_digest = "4c7a57ff3d50d228"
+receipt_path = pathlib.Path(os.environ.get("GBB_AB_RECEIPT", "ab-receipt.json"))
+drop_field = ""
+# The digest and drop-field overrides exist only for the negative controls; a stray exported variable
+# must not weaken the digest guard, so they are honoured only when GBB_AB_TEST_HOOKS=1 is also set.
+if os.environ.get("GBB_AB_TEST_HOOKS") == "1":
+    expected_digest = os.environ.get("GBB_AB_EXPECT_DIGEST", expected_digest)
+    drop_field = os.environ.get("GBB_AB_DROP_FIELD", "")
+FIELDS = ("revision", "build", "hardware", "workload", "model", "output_digest", "warmups",
+          "samples", "uncertainty", "ratio", "noise_label", "review_trigger")
+
+def run_once(label, binary):
+    done = subprocess.run([binary, "--no-trace", rom], text=True, stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT, timeout=timeout_s, check=False)
+    if done.returncode != 0:
+        raise SystemExit(f"ab-run-failed: {label} exited {done.returncode}")
+    line = next((l for l in done.stdout.splitlines() if l.startswith("mode=")), "")
+    fields = dict(p.split("=", 1) for p in line.split() if "=" in p)
+    if fields.get("workload") != WORKLOAD:
+        raise SystemExit(f"ab-workload-mismatch: {label}")
+    if fields.get("correctness_digest_fnv1a64") != expected_digest:
+        raise SystemExit(f"ab-digest-mismatch: {label} printed {fields.get('correctness_digest_fnv1a64')}")
+    elapsed = fields.get("elapsed_ns", "")
+    if not re.fullmatch(r"[0-9]+", elapsed):
+        raise SystemExit(f"ab-field-missing: {label} elapsed_ns={elapsed or 'absent'}")
+    return int(elapsed)
+
+def validate_receipt(receipt):
+    for field in FIELDS:
+        if field not in receipt:
+            raise SystemExit(f"ab-receipt-missing: {field}")
+    for field in ("sd", "margin_95"):
+        if field not in receipt["uncertainty"]:
+            raise SystemExit(f"ab-receipt-missing: uncertainty.{field}")
+    text = json.dumps(receipt)
+    if re.search(r"/(Users|home)/", text):
+        raise SystemExit("ab-receipt-private-path")
+
+def hardware_class():
+    brand = ""
+    if sys.platform == "darwin":
+        brand = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], text=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.strip()
+    elif os.path.exists("/proc/cpuinfo"):
+        for l in open("/proc/cpuinfo", encoding="utf-8", errors="replace"):
+            if l.startswith("model name"):
+                brand = l.split(":", 1)[1].strip(); break
+    return f"{platform.system()} {platform.machine()}; cpu={brand or 'unknown'}"
+
+def build_string(binary):
+    cache = pathlib.Path(binary).resolve().parent / "CMakeCache.txt"
+    if not cache.is_file():
+        return "unknown"
+    keys = {}
+    for l in cache.read_text(encoding="utf-8", errors="replace").splitlines():
+        for k in ("CMAKE_BUILD_TYPE", "CMAKE_C_COMPILER", "CMAKE_C_FLAGS_RELEASE"):
+            if l.startswith(k + ":"):
+                keys[k] = l.split("=", 1)[1]
+    compiler = keys.get("CMAKE_C_COMPILER", "")
+    version = "unknown"
+    if compiler:
+        out = subprocess.run([compiler, "--version"], text=True, stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL).stdout.splitlines()
+        version = out[0] if out else "unknown"
+    return f"{keys.get('CMAKE_BUILD_TYPE', 'unknown')} flags={keys.get('CMAKE_C_FLAGS_RELEASE', 'unknown')} cc={version}"
+
+builds = (("base", base_bin), ("head", head_bin))
+for _ in range(warmups):
+    for label, binary in builds:
+        run_once(label, binary)
+base_ns, head_ns = [], []
+for index in range(samples):
+    # Alternate which build runs first so drift and thermal state do not favour one side.
+    order = builds if index % 2 == 0 else tuple(reversed(builds))
+    got = {label: run_once(label, binary) for label, binary in order}
+    base_ns.append(got["base"]); head_ns.append(got["head"])
+pair_pct = [100.0 * h / b for h, b in zip(head_ns, base_ns)]
+sd = statistics.stdev(pair_pct)
+margin = 1.96 * sd / (len(pair_pct) ** 0.5)
+median = statistics.median(pair_pct)
+min_of_n = 100.0 * min(head_ns) / min(base_ns)
+delta = median - 100.0
+noise_label = ("within noise (under 3%)" if abs(delta) < 3.0 else
+               ("slower than base by more than 3%" if delta > 0 else "faster than base by more than 3%"))
+fired = median > 105.0 and (median - margin) > 100.0
+receipt = {
+    "revision": {"base": os.environ.get("GBB_AB_BASE_REVISION", "unknown"),
+                 "head": os.environ.get("GBB_AB_HEAD_REVISION", "unknown")},
+    "build": {"base": build_string(base_bin), "head": build_string(head_bin)},
+    "hardware": hardware_class(), "workload": WORKLOAD, "model": "DMG-CPU-B",
+    "output_digest": expected_digest, "warmups": warmups, "samples": samples,
+    "uncertainty": {"sd": sd, "margin_95": margin, "unit": "percent of base time per pair"},
+    "ratio": {"median": median, "min": min_of_n, "mean": statistics.mean(pair_pct),
+              "unit": "head time as percent of base time"},
+    "noise_label": noise_label, "review_trigger": fired,
+    "raw_core_elapsed_ns": {"base": base_ns, "head": head_ns},
+}
+if drop_field:
+    receipt.pop(drop_field, None)
+validate_receipt(receipt)
+receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+print(f"ab pass samples={samples} median_ratio_pct={median:.2f} min_of_n_ratio_pct={min_of_n:.2f} "
+      f"sd_pct={sd:.2f} margin95_pct={margin:.2f} label='{noise_label}' review_trigger={str(fired).lower()}")
+PYAB
+exit $?
+fi
 
 python3 - "$ROOT_DIR" "$BUILD_DIR" "$ROM" "$MANIFEST" "$SELF_TEST" \
   "$TIMEOUT_SECONDS" "$TOTAL_TIMEOUT_SECONDS" "$SAMPLE_COUNT" "$WARMUP_COUNT" "${SOURCE_SHA:-}" \

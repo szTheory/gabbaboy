@@ -44,7 +44,7 @@ Milestone-wide rules:
 - [x] **Phase 7: DMG Game Acceptance and Regression Baseline** - Admit one rights-clear DMG game, prove it end to end headless and in the player, and freeze the DMG baseline (completed 2026-10-11)
 - [x] **Phase 8: Cartridge Seam, MBC5 and MBC2** - Move MBC1 behind a type-table mapper seam with no observable change, then add MBC5 and MBC2 (completed 2026-10-11)
 - [x] **Phase 9: MBC3, Deterministic RTC and Cartridge Persistence** - Add MBC3 with an emulated-time RTC, explicit host catch-up, versioned battery block, loader-matrix hardening and new-mapper continuation (completed 2026-10-11)
-- [ ] **Phase 10: CGB Profile, Banking and Register Visibility** - Select CGB-CPU-E, detect execution mode, bank VRAM/WRAM, and gate every model-specific behavior
+- [x] **Phase 10: CGB Profile, Banking and Register Visibility** - Select CGB-CPU-E, detect execution mode, bank VRAM/WRAM, and gate every model-specific behavior (completed 2026-10-12)
 - [ ] **Phase 11: CGB Colour Rendering and Player Colour** - Render CGB attributes and palettes through an RGB555 frame call, a DMG-compatibility palette, and `--model` in the player
 - [ ] **Phase 12: CGB Double Speed** - KEY1/STOP speed switching with a modelled pause and a CPU-stall run-loop branch
 - [ ] **Phase 13: CGB HDMA** - General-purpose and HBlank VRAM DMA with stall, cancel, readback and HALT interaction
@@ -219,7 +219,29 @@ Plans:
   4. The half-dot timeline-unit decision for double speed is recorded in DECISIONS.md, and a banking-indirection benchmark shows the DMG cost against the Phase 7 baseline.
 
 **Research**: Moderate (CGB-E post-boot DIV/LY/STAT; compat-mode register readability per Mooneye `unused_hwio-C` and AGE).
-**Plans**: TBD
+**Plans**: 20/20 plans complete
+
+Plans (serial waves: every plan edits `tests/expected-tests.txt` and `tests/CMakeLists.txt`, most also `src/core/gabbaboy.c`):
+- [x] 10-01-PLAN.md — Wave 1: model-gate scanner (R1-R5, --release, self-test mutants) and docs/model-gates.md skeleton
+- [x] 10-02-PLAN.md — Wave 2: tag every core function and model-differing branch (comment-only), gate table, real-file controls
+- [x] 10-03-PLAN.md — Wave 3: runner model<->profile mapping, --profile, removed unsupported-profile rejection, DMG byte-identity controls
+- [x] 10-04-PLAN.md — Wave 4: DMG post-boot pin test, then the post_boot[] provenance table refactor (own commit)
+- [x] 10-05-PLAN.md — Wave 5: appended profile/info API, gbb_probe_rom, gbb_get_info, PGB rejection, parity tests
+- [x] 10-06-PLAN.md — Wave 6: CGB and compat post-boot columns, create flip, copy_frame gate, DIV sweep, channel-1 silence
+- [x] 10-07-PLAN.md — Wave 7: docs/cgb-profile.md post-boot mirror and test_cgb_tables provenance checks
+- [x] 10-08-PLAN.md — Wave 8: banked VRAM/WRAM arrays and helpers with the DMG flat-reference metamorphic test
+- [x] 10-09-PLAN.md — Wave 9: io_visibility table and CGB decode, deferred-access latch, IE gate, VBK/SVBK selection, behaviour cases
+- [x] 10-10-PLAN.md — Wave 10: per-cell visibility matrix (DMG/CGB/compat) with flip, cross-column and sweep controls; io doc mirror and table check
+- [x] 10-11-PLAN.md — Wave 11: KEY0 lock behavioural probe and STOP with KEY1 armed fail-closed
+- [x] 10-12-PLAN.md — Wave 12: CGB OAM DMA source map, echo/bank public tests, D-17 pin, core-mutant controls
+- [x] 10-13-PLAN.md — Wave 13: original fixtures/cgb-banking (two builds, three controls, byte-identical repro)
+- [x] 10-14-PLAN.md — Wave 14: fixtures/mooneye-cgb derivation, manifest, rights files and eligibility (byte-identical repro)
+- [x] 10-15-PLAN.md — Wave 15: VerifyMooneyeCgb digest/inventory verifier with tamper controls, install scan and CI repro job
+- [x] 10-16-PLAN.md — Wave 16: Mooneye CGB runner suite with expected-unsupported rows and the real-ROM DIV sweep
+- [x] 10-17-PLAN.md — Wave 17: banking-indirection A/B benchmark, CTest receipt checks and evidence report
+- [x] 10-18-PLAN.md — Wave 18: fuzz, loader and consumer coverage on both profiles, instance isolation, ASan
+- [x] 10-19-PLAN.md — Wave 19: D-070 half-dot ADR with static asserts and contract, guide, support ledger, D-071+
+- [x] 10-20-PLAN.md — Wave 20: phase gates, evidence head, PR with six owner veto items (left open), handoff to /gsd-verify-work 10
 
 ### Phase 11: CGB Colour Rendering and Player Colour
 
@@ -299,7 +321,7 @@ Plans:
 | 7. DMG Game Acceptance and Regression Baseline | v0.2 | 17/17 | Complete    | 2026-10-11 |
 | 8. Cartridge Seam, MBC5 and MBC2 | v0.2 | 10/10 | Complete    | 2026-10-11 |
 | 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 18/18 | Complete    | 2026-10-11 |
-| 10. CGB Profile, Banking and Register Visibility | v0.2 | 0/TBD | Not started | - |
+| 10. CGB Profile, Banking and Register Visibility | v0.2 | 20/20 | Complete    | 2026-10-12 |
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 0/TBD | Not started | - |
 | 12. CGB Double Speed | v0.2 | 0/TBD | Not started | - |
 | 13. CGB HDMA | v0.2 | 0/TBD | Not started | - |

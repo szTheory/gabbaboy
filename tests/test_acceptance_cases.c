@@ -205,11 +205,28 @@ static int acceptance_parse_paths(void) {
     PASS("acceptance_parse_paths");
 }
 
+/* WR-01: a model token the runner does not recognise is refused as unsupported before any input is
+ * read. Without the guard the run fell back to DMG and failed on the (absent) ROM as exit 2 while
+ * still carrying the unknown label. */
+static int acceptance_unknown_model_refused(void) {
+    gbb_case c;
+    memset(&c, 0, sizeof(c));
+    snprintf(c.id, sizeof(c.id), "unknown-model");
+    gbb_acceptance_options options;
+    memset(&options, 0, sizeof(options));
+    options.model = "gbc-bogus";
+    REQUIRE(gbb_acceptance_run_case(&c, &options) == 3);
+    options.model = "cgb-cpu-e";
+    REQUIRE(gbb_acceptance_run_case(&c, &options) != 3);
+    PASS("acceptance_unknown_model_refused");
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) { fprintf(stderr, "usage: test_acceptance_cases <name>\n"); return 2; }
     if (strcmp(argv[1], "acceptance_parse_cases_bounds") == 0) return acceptance_parse_cases_bounds();
     if (strcmp(argv[1], "acceptance_parse_cases_errors") == 0) return acceptance_parse_cases_errors();
     if (strcmp(argv[1], "acceptance_parse_paths") == 0) return acceptance_parse_paths();
+    if (strcmp(argv[1], "acceptance_unknown_model_refused") == 0) return acceptance_unknown_model_refused();
     fprintf(stderr, "unknown test %s\n", argv[1]);
     return 2;
 }

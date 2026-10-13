@@ -5,7 +5,8 @@
 # and the compiled core library must not import one. Two independent layers:
 #
 #   source layer  every #include is one of <stddef.h> <stdint.h> <stdlib.h> <string.h> or
-#                 "gabbaboy/gabbaboy.h", and no denied call appears after comments and string
+#                 "gabbaboy/gabbaboy.h" or "gabbaboy_test.h" (the internal test-seam header),
+#                 and no denied call appears after comments and string
 #                 literals are removed. Calls are matched with a left-context class
 #                 (^|[^A-Za-z0-9_]) rather than \b, which CMake regular expressions lack.
 #   object layer  the undefined symbols of the gabbaboy_core library, read with nm / llvm-nm or
@@ -28,7 +29,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 set(gbb_allowed_includes "<stddef.h>" "<stdint.h>" "<stdlib.h>" "<string.h>"
-  "\"gabbaboy/gabbaboy.h\"")
+  "\"gabbaboy/gabbaboy.h\"" "\"gabbaboy_test.h\"")
 
 # Denied call names (source layer). Anything that reads or waits on host time, or reads the
 # ambient environment, would make a replay depend on the machine that runs it.

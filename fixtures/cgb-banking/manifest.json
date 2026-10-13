@@ -1,0 +1,61 @@
+{
+  "id": "original-cgb-banking",
+  "source": "banking.asm",
+  "source_identity": "Original GabbaBoy project-authored assembly",
+  "source_sha256": "7fd3afcb43e4610e72d9834b37af81710dc1d3bfd1e5f135c1a6ca8562edfa7f",
+  "license": "MIT; see LICENSE.txt and repository LICENSE",
+  "build": {
+    "assembler": "RGBDS",
+    "version": "1.0.1",
+    "archive": "rgbds-macos.zip",
+    "archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
+    "ci_archive": "rgbds-linux-x86_64.tar.xz",
+    "ci_archive_sha256": "80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9",
+    "recipe": "rgbasm -o <work>/banking.o fixtures/cgb-banking/banking.asm && rgblink -n <work>/banking.sym -o <work>/banking.gb <work>/banking.o && cp <work>/banking.gb <work>/banking-cgb.gb && cp <work>/banking.gb <work>/banking-dmg.gb && rgbfix -c -v -p 0 <work>/banking-cgb.gb && rgbfix -v -p 0 <work>/banking-dmg.gb",
+    "committed_bytes_toolchain": "RGBDS v1.0.1 macOS release archive (digest above); the reproduction script rebuilds both ROMs with the pinned tools and compares byte for byte"
+  },
+  "fixtures": [
+    {
+      "file": "banking-cgb.gb",
+      "size_bytes": 32768,
+      "sha256": "9c4837783f286fbd1deb95e4381d2926f6b088414075944ebe4af5ab26203087"
+    },
+    {
+      "file": "banking-dmg.gb",
+      "size_bytes": 32768,
+      "sha256": "41189a49b68edf116f3f3521becd6c8feea154bb4b0ba48ac8b5bdcf09f37115"
+    }
+  ],
+  "cartridge": {
+    "mapper": "none (ROM only)",
+    "type": "0x00",
+    "rom_size_code": "0x00 (32 KiB)",
+    "ram_size_code": "0x00 (none)",
+    "cgb_flag": "banking-cgb.gb 0x80 (rgbfix -c); banking-dmg.gb 0x00"
+  },
+  "profile": {
+    "name": "CGB-CPU-E and DMG-CPU-B",
+    "boot": "Skipped; starts at cartridge entry 0x0100.",
+    "applicability": "Original software banking fixture for the deterministic bootless CGB-CPU-E profile (CGB mode and compatibility mode) and, for banking-dmg.gb and the negative control, the DMG-CPU-B profile; not physical hardware evidence."
+  },
+  "protocol": {
+    "markers": "WRAM C000=0xA5 is pass and 0xEE is fail; C001 is the run kind (1 CGB mode, 2 compatibility mode, 3 DMG profile); the guest then halts with interrupts disabled.",
+    "result_bytes": "C002 VBK read-back and bank independence, C003 SVBK 0..7 read-back with a D000 marker per bank, C004 F000+n written under bank k read at D000+n, C005 E000 mirrors C000, C006 OAM DMA from D0 under SVBK 2 and 3, C007 OAM DMA from 80 under VBK 0 and 1, C008 OAM DMA from E0 and FE reads 0xFF, C009 OAM DMA from page 00 matches ROM (CGB) or is 0xFF (DMG header on the DMG profile), C00A ignored bank writes and the D-10 read values (DMG header only). Each is 0x01 pass, 0xFF fail, 0x00 not run.",
+    "expectation_selection": "The guest reads its own header byte 0x143 and the A register at entry (0x11 CGB profile, 0x01 DMG profile). A CGB header, or the CGB profile, selects CGB expectations; only a DMG header on the DMG profile expects the frozen DMG behaviour (D-024). FF4F and FF70 are read or written only when A is 0x11 because those accesses stop the core on the DMG profile (D-09).",
+    "variants": "banking-cgb.gb ($143 = 0x80, rgbfix -c) runs on the CGB profile (CGB mode) and, as a negative control, on the DMG profile. banking-dmg.gb ($143 = 0x00) runs on the CGB profile (compatibility mode) and on the DMG profile.",
+    "negative_controls": "patched_expected: in memory, ROM offset 0x01F1 (operand of the CP at 0x01F0, label Start.expectVbk0) changes 0x10 to 0x11, so cell C002 fails and the verdict is 0xEE. skip_svbk: in memory, ROM offsets 0x023A-0x023B (label Start.svbkWriteMarkers, LDH (0x70),A) become NOPs, so cell C003 fails and the verdict is 0xEE. cgb_on_dmg: banking-cgb.gb on the DMG profile fails C002, C003, C004, C006, C007 and C009 and passes C005 and C008.",
+    "patch_offsets": {
+      "expect_vbk0_compare": "0x01F0",
+      "svbk_write_markers": "0x023A"
+    },
+    "timeout_half_dots": 2000000
+  },
+  "evidence_class": "original software fixture plus synthetic oracle, not hardware evidence",
+  "scope_limits": [
+    "No boot-ROM execution and no CGB boot palette table",
+    "No physical CGB or DMG hardware observation; expectations come from Pan Docs and the project's own decisions D-09, D-10, D-15 and D-16",
+    "Cartridge and E0-FF OAM DMA source cells are labelled PANDOCS or ORACLE_SAMEBOY in docs/cgb-profile.md, never hardware",
+    "No CGB-E specific claim beyond the project's CGB-CPU-E profile model",
+    "Not installed and not part of the install allowlist"
+  ]
+}

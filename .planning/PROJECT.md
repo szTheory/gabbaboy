@@ -10,6 +10,7 @@ GabbaBoy is a portable C17 emulator core for Nintendo Game Boy (DMG) and Game Bo
 - **Phase 7 (2026-10-11):** Libbet and the Magic Floor v0.08 passes headless acceptance on three OSes and in the macOS packaged player; the DMG baseline is frozen. One game on one software model; no hardware evidence.
 - **Phase 8 (2026-10-11):** Cartridge behavior sits behind one type-table mapper seam with zero observed DMG change (old-versus-new differential, frozen baseline); MBC5 (9-bit banking, 8 MiB, rumble query) and MBC2 (built-in nibble RAM, 512-byte battery image) run in the core. Mooneye mbc2 7/7 and mbc5 8/8 pass. Player persistence is still MBC1 only; no hardware MBC observation.
 - **Phase 9 (2026-10-11):** MBC3 (`$0F`-`$13`, 7-bit ROM banking, RAM banks 0-3; MBC30 rejected) runs with an RTC that advances only from emulated time (rtc3test v004 basic/range/sub-second pass; no host clock in `src/core`, proven by source and object scans). Hosts apply wall-clock time only through `gbb_rtc_catch_up(instance, int64_t)`; timer cartridges append a 21-byte versioned RTC block to the battery image. The macOS player persists MBC2/MBC3/MBC5 in a v2 envelope with `saved_at` and catch-up on reopen, and every v0.1 save loads unchanged. MagenTests OOB SRAM passes for MBC1/3/5. No physical RTC or cartridge observation.
+- **Phase 10 (2026-10-12):** A caller can create the `GBB_PROFILE_CGB_CPU_E` profile, probe a ROM and read model and execution mode through a sized `gbb_info`; post-boot state is a provenance-labelled table per DMG/CGB/compat column. VRAM (2x8 KiB) and WRAM (8x4 KiB) are banked with echo and OAM DMA sources; FF00-FF7F visibility is a tested per-cell matrix, KEY0 is locked and unbuilt CGB registers fail closed. Every core function and model branch carries a scanned model tag. DMG output is byte-identical (frozen baseline), but the DMG path measured about +6-7% slower than the Phase 7 baseline on a loaded host (advisory; review trigger fired). No colour output, double speed or HDMA yet; CGB-mode post-boot cells are Pan Docs/SameBoy/policy, not hardware evidence.
 - **Code:** ~18k lines of C/C++ (about 7k in `src/` + `include/`); CMake/Ninja/CTest; 184 local CTest cases at the 06.1 regression run; required CI on Linux, macOS and Windows (MinGW-w64).
 - **Evidence scope:** admitted corpus is three source-qualified derived Mooneye CPU/timer closures plus original project ROMs. No physical hardware, perceptual output, signing/notarization, or live Playstead integration is claimed.
 - **Open:** No open issues or PRs at the v0.2 start (2026-10-10); releases `v0.1.0` and `v0.1.2` published. Accepted info-level debt is listed in the [v0.1 audit](milestones/v0.1-MILESTONE-AUDIT.md).
@@ -46,12 +47,13 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 - ✓ Rights-clear DMG game acceptance (Libbet v0.08, bootless DMG-CPU-B): headless run on Linux/macOS/Windows with guest-memory predicate, frame and PCM digests and failing controls; macOS packaged-player smoke; LD B,B frame digests, input replay and model applicability; frozen DMG baseline `tests/baseline/dmg-cpu-b-v1.txt` (GAME-01..03, EVID-01..02) — Phase 7.
 - ✓ Cartridge mapper seam with no observable DMG change, MBC5 (incl. bank `$1FF`, rumble state query) and MBC2 (bit-8 register decode, canonical nibble RAM and battery image), Mooneye mbc2/mbc5 derivatives kept out of install and package artifacts (CART-01..03) — Phase 8.
 - ✓ MBC3 with MBC30 rejection, loader contradiction matrix with no partial mutation and 8 MiB fuzz bound, MBC2/MBC3/MBC5 fresh-process player continuation with v0.1 saves unchanged, emulated-time RTC with explicit signed catch-up and a versioned battery block (CART-04..06, RTC-01..03) — Phase 9.
+- ✓ CGB-CPU-E profile with probe/info API and execution mode, mode-specific post-boot state with provenance, model-tagged core and register visibility matrix with KEY0 lock, VRAM/WRAM banking with echo and OAM DMA sources; original banking fixture and Mooneye CGB derivatives; DMG baseline unchanged (CGB-01..03) — Phase 10.
 
 ### Active
 
 v0.2 Color & Cartridge Breadth (scoped in [REQUIREMENTS.md](REQUIREMENTS.md)):
 
-- [ ] CGB silicon profile, color and DMG-compatibility modes, speed switching, banking, palettes, and HDMA with model-qualified tests (CGB-01..03).
+- [ ] CGB colour rendering (BG/OBJ palettes and attributes), double-speed switching and HDMA with model-qualified tests (Phases 11+; profile, banking and visibility delivered in Phase 10).
 
 Next (v0.3, provisional): transactional versioned native save states (STATE-01) and a qualified Playstead adapter (INT-01).
 
@@ -117,4 +119,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-10-11 after Phase 9.
+Last updated: 2026-10-12 after Phase 10.

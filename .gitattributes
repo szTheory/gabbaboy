@@ -25,6 +25,14 @@ fixtures/mooneye-mbc/FONT-LICENSE.txt text eol=lf
 fixtures/mooneye-mbc/SOURCES.md text eol=lf
 fixtures/mooneye-mbc/ELIGIBILITY.md text eol=lf
 
+# Mooneye CGB-profile derivatives (Phase 10): ROM bytes are binary; the manifest is admitted by the SHA-256 of its raw bytes.
+fixtures/mooneye-cgb/*.gb binary
+fixtures/mooneye-cgb/manifest.json -text
+fixtures/mooneye-cgb/LICENSE.txt text eol=lf
+fixtures/mooneye-cgb/FONT-LICENSE.txt text eol=lf
+fixtures/mooneye-cgb/SOURCES.md text eol=lf
+fixtures/mooneye-cgb/ELIGIBILITY.md text eol=lf
+
 # Parent references digested by the sibling Mooneye manifest must survive Windows checkouts byte for byte.
 fixtures/mooneye/headless-report.patch text eol=lf
 fixtures/mooneye/font-source.c text eol=lf
@@ -43,3 +51,10 @@ fixtures/rtc3test/LICENSE.txt text eol=lf
 fixtures/rtc3test/SOURCES.md text eol=lf
 fixtures/rtc3test/ELIGIBILITY.md text eol=lf
 tests/rtc3test/** text eol=lf
+
+# CGB banking guest: digested source and manifest keep LF; both ROMs are binary.
+fixtures/cgb-banking/banking.asm text eol=lf
+fixtures/cgb-banking/manifest.json text eol=lf
+fixtures/cgb-banking/LICENSE.txt text eol=lf
+fixtures/cgb-banking/banking-cgb.gb -text
+fixtures/cgb-banking/banking-dmg.gb -text
