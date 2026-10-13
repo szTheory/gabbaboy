@@ -107,7 +107,7 @@ occurs exactly once in code and once in the table.
 | GATE-62 | UNKNOWN | - | research:12 | execute | STOP, including CGB speed switch |
 | GATE-63 | BOTH | - | basis="no SM83 opcode difference" | enter_interrupt | interrupt entry timing is a CPU trait |
 | GATE-64 | BOTH | - | basis="no SM83 opcode difference" | gbb_run_internal | illegal-opcode lockup is a CPU trait |
-| GATE-65 | UNKNOWN | - | research:12 | gbb_run_internal | DIV reset on STOP |
+| GATE-65 | BOTH | - | basis="DIV and the divider phase reset at STOP on both models; shared divider_reset, D-02/D-39" | gbb_run_internal | DIV and divider phase reset through the shared helper on both STOP paths |
 | GATE-66 | BOTH | - | basis=wram-echo-map | gbb_peek_ram | debug peek of work RAM |
 | GATE-67 | CGB_ONLY | GBB_PROFILE_CGB_CPU_E | - | validate_header | a PGB-flagged $143 is rejected on the CGB profile instead of running in a mode the hardware would not enter (D-03) |
 | GATE-68 | CGB_ONLY | model_is_cgb | - | compat_title_registers | compat-mode B and HL are derived from the licensee title sum |

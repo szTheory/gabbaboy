@@ -4176,7 +4176,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             }
             continue;
         }
-        /* MODEL: UNKNOWN GATE-65 research:12 -- DIV reset on STOP */
+        /* MODEL: BOTH GATE-65 basis="DIV and the divider phase reset at STOP on both models; shared divider_reset, D-02/D-39" */
         if (instance->stopped) {
             divider_reset(instance, 0); /* P12-M30 */
             result.reason=GBB_STOP_STOPPED;
