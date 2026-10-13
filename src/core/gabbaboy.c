@@ -3983,7 +3983,7 @@ static int cpu_stalled(const gbb_instance *m) {
     return m->cpu_stall_kind != GBB_STALL_NONE;
 }
 
-/* MODEL: CGB_ONLY GATE-74 GUARD=model_is_cgb -- normal-speed entry phase alignment (D-09) */
+/* MODEL: BOTH GATE-00 basis="normal-speed phase alignment is guarded and a no-op outside CGB mode" */
 static void speed_switch_apply_realign(gbb_instance *m) {
     if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB ||
         m->double_speed != 0u || (m->time_half_dots & 7u) != 4u) return; /* P12-M23 */
@@ -4040,7 +4040,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 instance->cpu_stall_kind = GBB_STALL_NONE;
                 continue;
             }
-            if (budget_half_dots - result.consumed_half_dots < step) return result;
+            if (budget_half_dots - result.consumed_half_dots < step) return result; /* P12-M9 */
             if (!audio_preflight(instance, step)) {
                 result.reason = GBB_STOP_OUTPUT_FULL;
                 return result;
@@ -4125,6 +4125,17 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
         uint8_t cost=instruction_cost(instance,d);
         if (cost > budget_half_dots-result.consumed_half_dots) return result;
         if (!audio_preflight(instance, cost)) { result.reason=GBB_STOP_OUTPUT_FULL; return result; }
+        if (opcode == 0x10u) {
+            const int selected_stop_case = stop_case(instance);
+            if (selected_stop_case == 3 || selected_stop_case == 4) {
+                const uint64_t switch_headroom = (uint64_t)cost +
+                    2u * (uint64_t)GBB_SPEED_SWITCH_STALL_T + 4u;
+                if (UINT64_MAX - instance->time_half_dots < switch_headroom) { /* P12-M22 */
+                    result.reason = GBB_STOP_INVALID_STATE;
+                    return result;
+                }
+            }
+        }
         if (UINT64_MAX - instance->time_half_dots < cost) {
             result.reason = GBB_STOP_INVALID_STATE;
             return result;

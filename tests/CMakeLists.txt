@@ -2540,7 +2540,7 @@ gbb_p12_mutant_test(test_cgb_speed_internal_p12 34 stop_falls_into_rlca
 add_test(NAME cgb_speed_stop_guest_timer_irq COMMAND test_cgb_speed_internal_p12 cgb_speed_stop_guest_timer_irq)
 set_tests_properties(cgb_speed_stop_guest_timer_irq PROPERTIES TIMEOUT 60)
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 20 guest_timer_pending_ignored
-  cgb_speed_stop_guest_timer_irq "cpu_stall_kind")
+  cgb_speed_stop_guest_timer_irq "cpu_stall_kind|m->wram")
 foreach(stop_case IN ITEMS cgb_speed_stop_operand cgb_speed_stop_prefetch_ff04
     cgb_speed_stop_cost cgb_speed_dmg_unarmed_unchanged cgb_speed_key1_readback
     cgb_speed_key0_no_switch)
@@ -2718,6 +2718,27 @@ gbb_p12_mutant_test(test_cgb_speed_internal_p12 23 realignment_omitted
   cgb_speed_realign "GBB_STALL_SWITCH_REALIGN|cpu_stall_half_dots == 4u")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 34 ei_delay_not_retired
   cgb_speed_ei_stop "machine->ime == 1")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 6 stall_one_m_long
+  cgb_speed_stall_length "expected_stall|trace\[0\]\.time_half_dots|cpu_stall_kind")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 21 stall_one_m_short
+  cgb_speed_stall_length "expected_stall|trace\[0\]\.time_half_dots|cpu_stall_kind")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 28 stall_one_half_dot_long
+  cgb_speed_stall_length "expected_stall|trace\[0\]\.time_half_dots|cpu_stall_kind")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 9 stall_budget_unbounded
+  cgb_speed_budget_semantics "run\.consumed_half_dots == expected_consumed|run\.consumed_half_dots <= budget")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 22 switch_headroom_omitted
+  cgb_speed_headroom "GBB_STOP_INVALID_STATE|memcmp")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 5 stall_sets_stopped_never
+  cgb_speed_never_stopped "GBB_STOP_STOPPED|machine->stopped")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 7 devices_frozen_never
+  cgb_speed_never_stopped "divider_counter != divider_before")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 5 stall_sets_stopped_devices
+  cgb_speed_stall_devices_advance "GBB_STOP_BUDGET")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 7 devices_frozen_devices
+  cgb_speed_stall_devices_advance "machine->ly >= 143u|machine->tima != initial_tima")
+add_test(NAME cgb_speed_mutant_m31_stall_offset_noop
+  COMMAND test_cgb_speed_internal_p12 cgb_speed_stall_length --mutants 0x80000000)
+set_tests_properties(cgb_speed_mutant_m31_stall_offset_noop PROPERTIES TIMEOUT 60)
 # --- Phase 12 plan 12-07 end ---
 
 gabbaboy_verify_registered_tests()

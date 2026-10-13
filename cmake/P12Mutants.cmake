@@ -1,7 +1,7 @@
 # Phase 12 runtime-mask mutant table. Each id owns one or more exact source
 # anchors. Keep each anchor and replacement in a separate variable because C
 # replacement text may contain semicolons.
-set(GBB_P12_MUTANT_IDS 1 2 3 4 5 7 8 10 11 12 13 14 15 16 17 18 19 20 23 24 25 26 27 29 30 32 33 34)
+set(GBB_P12_MUTANT_IDS 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34)
 
 set(GBB_P12_SITES_13 1)
 set(GBB_P12_ANCHOR_13_1 "if (instance->cpu_stall_kind == GBB_STALL_SPEED_SWITCH && wake_pending) { /* P12-M13 */")
@@ -20,6 +20,14 @@ set(GBB_P12_REPLACEMENT_34_2 "if (instance->ime_delay != 0 && --instance->ime_de
 set(GBB_P12_SITES_23 1)
 set(GBB_P12_ANCHOR_23_1 "if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB ||\n        m->double_speed != 0u || (m->time_half_dots & 7u) != 4u) return; /* P12-M23 */")
 set(GBB_P12_REPLACEMENT_23_1 "if (GBB_P12_MUT(23) || !model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB ||\n        m->double_speed != 0u || (m->time_half_dots & 7u) != 4u) return; /* P12-M23 */")
+
+set(GBB_P12_SITES_22 1)
+set(GBB_P12_ANCHOR_22_1 "if (UINT64_MAX - instance->time_half_dots < switch_headroom) { /* P12-M22 */")
+set(GBB_P12_REPLACEMENT_22_1 "if (!GBB_P12_MUT(22) && UINT64_MAX - instance->time_half_dots < switch_headroom) { /* P12-M22 */")
+
+set(GBB_P12_SITES_9 1)
+set(GBB_P12_ANCHOR_9_1 "if (budget_half_dots - result.consumed_half_dots < step) return result; /* P12-M9 */")
+set(GBB_P12_REPLACEMENT_9_1 "if (!GBB_P12_MUT(9) && budget_half_dots - result.consumed_half_dots < step) return result; /* P12-M9 */")
 
 set(GBB_P12_SITES_8 1)
 set(GBB_P12_ANCHOR_8_1 "if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB || !(m->key1_armed & 1u)) /* P12-M8 */")
@@ -104,6 +112,19 @@ set(GBB_P12_REPLACEMENT_5_1 "instance->cpu_stall_kind = GBB_STALL_SPEED_SWITCH; 
 set(GBB_P12_SITES_7 1)
 set(GBB_P12_ANCHOR_7_1 "advance_devices(instance, step); /* P12-M7 */")
 set(GBB_P12_REPLACEMENT_7_1 "if (GBB_P12_MUT(7)) instance->time_half_dots += step; else advance_devices(instance, step);")
+
+set(GBB_P12_SITES_6 1)
+set(GBB_P12_ANCHOR_6_1 "instance->cpu_stall_half_dots = GBB_SPEED_SWITCH_STALL_T *\n                    (instance->double_speed ? GBB_HALF_DOTS_PER_T_DOUBLE : GBB_HALF_DOTS_PER_T_NORMAL); /* P12-M6 */")
+set(GBB_P12_REPLACEMENT_6_1 "instance->cpu_stall_half_dots = (uint32_t)(((int64_t)GBB_SPEED_SWITCH_STALL_T +\n                    (GBB_P12_MUT(6) ? (int64_t)GBB_T_PER_M : 0) -\n                    (GBB_P12_MUT(21) ? (int64_t)GBB_T_PER_M : 0) +\n                    (GBB_P12_MUT(31) ? (int64_t)gbb_p12_stall_offset_t : 0)) *\n                    (instance->double_speed ? GBB_HALF_DOTS_PER_T_DOUBLE : GBB_HALF_DOTS_PER_T_NORMAL)) +\n                    (GBB_P12_MUT(28) ? 1u : 0u); /* P12-M6 */")
+set(GBB_P12_SITES_21 1)
+set(GBB_P12_ANCHOR_21_1 "(GBB_P12_MUT(21) ? (int64_t)GBB_T_PER_M : 0)")
+set(GBB_P12_REPLACEMENT_21_1 "(GBB_P12_MUT(21) ? (int64_t)GBB_T_PER_M : 0)")
+set(GBB_P12_SITES_28 1)
+set(GBB_P12_ANCHOR_28_1 "(GBB_P12_MUT(28) ? 1u : 0u)")
+set(GBB_P12_REPLACEMENT_28_1 "(GBB_P12_MUT(28) ? 1u : 0u)")
+set(GBB_P12_SITES_31 1)
+set(GBB_P12_ANCHOR_31_1 "(GBB_P12_MUT(31) ? (int64_t)gbb_p12_stall_offset_t : 0)")
+set(GBB_P12_REPLACEMENT_31_1 "(GBB_P12_MUT(31) ? (int64_t)gbb_p12_stall_offset_t : 0)")
 
 set(GBB_P12_SITES_18 3)
 set(GBB_P12_ANCHOR_18_1 "return (uint8_t)(d.ticks >> m->double_speed); /* P12-M18 */ /* instruction-cost */")
