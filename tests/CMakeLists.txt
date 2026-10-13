@@ -1876,4 +1876,83 @@ if(NOT WIN32)
     ENVIRONMENT "GBB_RELEASE_MEASURE_SAMPLES=3;GBB_RELEASE_MEASURE_WARMUPS=1;GBB_AB_RECEIPT=${GBB_AB_DIR}/missing-elapsed.json")
 endif()
 
+# --- Phase 11 plan 11-01 begin ---
+# Colour tests (D-25, D-35 stage 1). The white-box driver includes the core (or, in a mutant, a
+# build-tree copy named by GBB_COLOUR_CORE_SOURCE) and must not link GabbaBoy::core.
+add_executable(test_cgb_colour_internal test_cgb_colour_internal.c)
+target_include_directories(test_cgb_colour_internal PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_cgb_colour_internal PRIVATE c_std_17)
+set_target_properties(test_cgb_colour_internal PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_dmg_identity_shade_pin
+  COMMAND test_cgb_colour_internal cgb_dmg_identity_shade_pin ${PROJECT_SOURCE_DIR}/fixtures)
+set_tests_properties(cgb_dmg_identity_shade_pin PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-colour-internal cgb_dmg_identity_shade_pin pass")
+
+add_executable(test_cgb_colour test_cgb_colour.c)
+target_link_libraries(test_cgb_colour PRIVATE GabbaBoy::core)
+target_compile_features(test_cgb_colour PRIVATE c_std_17)
+set_target_properties(test_cgb_colour PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_colour_copy_frame_unsupported COMMAND test_cgb_colour cgb_colour_copy_frame_unsupported)
+
+# Generalised colour mutant harness. Like gbb_banking_mutant, but it reads the core text itself and
+# supports a white-box test source (compiled with the mutated copy as the included core through
+# GBB_COLOUR_CORE_SOURCE) or a public test source (linked to a STATIC mutant library). The anchor
+# must occur exactly once, checked forward and in reverse, so a drifted core stops configure.
+# failing_case and control_case are the full argument lists for the test executable.
+set(GBB_COLOUR_CORE_SOURCE_PATH ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GBB_COLOUR_CORE_SOURCE_PATH})
+file(READ ${GBB_COLOUR_CORE_SOURCE_PATH} gbb_colour_core_text)
+function(gbb_colour_mutant name test_source fail_test control_test anchor replacement failing_case failing_regex control_case)
+  string(FIND "${gbb_colour_core_text}" "${anchor}" first)
+  string(FIND "${gbb_colour_core_text}" "${anchor}" final REVERSE)
+  if(first EQUAL -1 OR NOT first EQUAL final)
+    message(FATAL_ERROR "colour mutant ${name}: anchor '${anchor}' must occur exactly once in "
+      "${GBB_COLOUR_CORE_SOURCE_PATH} (first=${first} last=${final})")
+  endif()
+  string(REPLACE "${anchor}" "${replacement}" text "${gbb_colour_core_text}")
+  set(source ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_colour_mutant_${name}.c)
+  file(WRITE ${source} "${text}")
+  set(target test_cgb_colour_mutant_${name})
+  if(test_source STREQUAL "test_cgb_colour_internal.c")
+    add_executable(${target} ${test_source})
+    target_include_directories(${target} PRIVATE ${PROJECT_SOURCE_DIR}/include)
+    target_compile_definitions(${target} PRIVATE
+      "GBB_COLOUR_CORE_SOURCE=\"${source}\""
+      GBB_BUILD_REVISION="colour-mutant-${name}" GBB_BUILD_QUALIFIED=0)
+  else()
+    set(library gabbaboy_core_colour_mutant_${name})
+    add_library(${library} STATIC ${source})
+    target_include_directories(${library} PUBLIC ${PROJECT_SOURCE_DIR}/include)
+    target_compile_features(${library} PUBLIC c_std_17)
+    set_target_properties(${library} PROPERTIES C_EXTENSIONS OFF)
+    target_compile_definitions(${library} PRIVATE
+      GBB_BUILD_REVISION="colour-mutant-${name}" GBB_BUILD_QUALIFIED=0)
+    add_executable(${target} ${test_source})
+    target_link_libraries(${target} PRIVATE ${library})
+  endif()
+  target_compile_features(${target} PRIVATE c_std_17)
+  set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
+  add_test(NAME ${fail_test}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:${target}>;${failing_case}"
+      -DGBB_EXPECT_CODE=1
+      "-DGBB_EXPECT_REGEX=${failing_regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  add_test(NAME ${control_test}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:${target}>;${control_case}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=.*"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+endfunction()
+
+# Harness proof: flipping the low bit of the DMG BG shade must trip the shade-identity pin.
+gbb_colour_mutant(shade_flip test_cgb_colour_internal.c
+  cgb_dmg_identity_mutant_shade_flip cgb_dmg_identity_mutant_shade_flip_control
+  "return ppu_palette_shade(m->bgp, background);"
+  "return (uint8_t)(ppu_palette_shade(m->bgp, background) ^ 1u);"
+  "cgb_dmg_identity_shade_pin;${PROJECT_SOURCE_DIR}/fixtures" "observed"
+  cgb_colour_internal_harness_alive)
+# --- Phase 11 plan 11-01 end ---
+
 gabbaboy_verify_registered_tests()
