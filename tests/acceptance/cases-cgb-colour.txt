@@ -1,0 +1,5 @@
+# CGB colour frame-digest cases (Phase 11, D-43). reference_digest is the GBB-RGB555LE-v1 digest of the
+# colour-hblank.gb frame; it equals the digest pinned in tests/test_cgb_colour.c (HBLANK_FRAME_DIGEST), which
+# is recomputed independently in Python from the per-row table and checked row by row by cgb_colour_hblank_rows.
+id=cgb-colour-hblank rom=fixtures/cgb-colour/colour-hblank.gb rom_sha256=3ec191ebae9405f5be4248794b7652a39bd1d4a8aabb3a32393ccfb79ddfbef8 rom_size=32768 oracle=frame-digest@t=1535808 reference_digest=abb528b8ffd636f85dcd62b1f13e60ea2f1ef7ac368c84b4767e5b967d2e9546 model_pass=cgb-cpu-e budget_half_dots=1685376
+# Control: the first hex digit of the reference digest is changed, so the case must fail frame-mismatch.

@@ -378,3 +378,16 @@ add_test(NAME cgb_runner_profile_dmg_identity_negative
     -P ${PROJECT_SOURCE_DIR}/tests/runner_profile_identity.cmake)
 set_tests_properties(cgb_runner_profile_dmg_identity_negative PROPERTIES TIMEOUT 30
   PASS_REGULAR_EXPRESSION "profile-identity-baseline-failed|profile-identity-mismatch" WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
+# --- Phase 11 plan 11-09 begin ---
+# CGB frame-digest cases (D-43): the runner reads the RGB555 frame on the CGB profile and prints the
+# GBB-RGB555LE-v1 digest under frame555/observed555, never the DMG RGB888 keys. --model cgb-cpu-e and
+# --profile cgb select the same run (main.c maps the profile to the model token).
+set(GBB_CGB_COLOUR_CASES tests/acceptance/cases-cgb-colour.txt)
+gbb_add_acceptance_exit(acceptance_cgb_colour_hblank 0
+  "acceptance id=cgb-colour-hblank status=pass model=cgb-cpu-e.*frame555=${gbb_hex64_re}" 60
+  "--acceptance;${GBB_CGB_COLOUR_CASES};--case;cgb-colour-hblank;--model;cgb-cpu-e")
+gbb_add_acceptance_exit(acceptance_cgb_colour_hblank_profile_flag 0
+  "acceptance id=cgb-colour-hblank status=pass model=cgb-cpu-e.*frame555=${gbb_hex64_re}" 60
+  "--acceptance;${GBB_CGB_COLOUR_CASES};--case;cgb-colour-hblank;--profile;cgb")
+# --- Phase 11 plan 11-09 end ---

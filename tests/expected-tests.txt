@@ -655,3 +655,5 @@ cgb_colour_lcd_off
 cgb_rgb_store_lcdoff_fixture
 cgb_colour_mutant_frame_resolve
 cgb_colour_mutant_frame_resolve_control
+acceptance_cgb_colour_hblank
+acceptance_cgb_colour_hblank_profile_flag
