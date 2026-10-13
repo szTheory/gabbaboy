@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 2
+current_plan: 3
 status: planning
-stopped_at: Completed 11-01-PLAN.md
-last_updated: "2026-10-13T02:14:25.731Z"
+stopped_at: Completed 11-02-PLAN.md
+last_updated: "2026-10-13T02:25:42.001Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 11 execution started
-state_head: 452c1918340922253e5e182a245ad1d0c9cb29b4
+state_head: e18baccca04db018d68106906ee319f5f0725d71
 progress:
   total_phases: 9
   completed_phases: 5
   total_plans: 80
-  completed_plans: 66
+  completed_plans: 67
   percent: 56
 current_phase: 11
 current_phase_name: CGB Colour Rendering and Player Colour
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 15
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -176,6 +176,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 10 P19 | 25 min | 3 tasks | 8 files |
 | Phase 10 P20 | 95 min | 2 tasks | 8 files |
 | Phase 11 P01 | 25 min | 2 tasks | 6 files |
+| Phase 11 P02 | 45 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -330,6 +331,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 10]: Phase 10 evidence head 2fe078e8f08ed98ba0ac0e244971e7c0ead16b1e is exact-head green (8 required checks, 7 fixture-repro jobs); PR #66 is ready and left open until /gsd-verify-work 10 passes
 - [Phase 10]: The +5% banking benchmark review trigger fired (about +6 to 7 percent vs the Phase 7 baseline, advisory on a loaded host); no optimisation in Phase 10, owner decides per D-016
 - [Phase 11]: libbet shade pin runs 900 frames (blank earlier); pins are regression, not hardware evidence
+- [Phase 11]: 11-02: palette RAM lock is a plain mode-3 predicate (GATE-76) and OPRI is stored without priority effect (GATE-77); both UNKNOWN research:14
+- [Phase 11]: 11-02: post-boot BCPS is C0 so bit 7 auto-increment is on; visibility port cells park the index at 0 and turn the LCD off
 
 ### Pending Todos
 
@@ -365,8 +368,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-13T02:14:25.653Z
-Stopped at: Completed 11-01-PLAN.md
+Last session: 2026-10-13T02:25:41.888Z
+Stopped at: Completed 11-02-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 11`
 
