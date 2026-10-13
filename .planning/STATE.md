@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 5
+current_plan: 6
 status: executing
-stopped_at: Completed GB-12-12-04-PLAN.md
-last_updated: "2026-10-13T17:31:21.022Z"
+stopped_at: Completed GB-12 plan 12-05 execution
+last_updated: "2026-10-13T18:01:29.007Z"
 last_activity: 2026-10-13
 last_activity_desc: Phase GB-12 execution started
-state_head: ec5dc8a28daf54a722f4da9b036c5fa48690bc6e
+state_head: 921debc6f1c253ca843d8aaf6f765af974106eb6
 progress:
   total_phases: 9
   completed_phases: 6
   total_plans: 99
-  completed_plans: 84
+  completed_plans: 85
   percent: 67
 current_phase: 12
 current_phase_name: CGB Double Speed
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 5
+Current Plan: 6
 Total Plans in Phase: 19
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -198,6 +198,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 12 P02 | 7 min | 2 tasks | 10 files |
 | Phase 12 P03 | 19 min | 3 tasks | 5 files |
 | Phase GB-12 P04 | 4 min | 2 tasks | 14 files |
+| Phase GB-12 P05 | 19m55s lower bound | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -373,6 +374,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 12]: Runtime-mask mutant cores remain build-tree-only and use forward/reverse exactly-once anchor checks.
 - [Phase 12]: Reset mutants target the explicit reset boundary because post-boot initialization also clears some speed fields.
 - [Phase GB-12]: Upstream AGE Verified lines remain source attestations, while manifest expected_role records D-19 expectations.
+- [Phase GB-12]: Store timer, serial and DMA countdowns in CPU ticks so speed changes preserve integer remainder state.
+- [Phase GB-12]: Use DIV bit 12 at normal speed and bit 13 at double speed for frame sequencing, including divider reset.
 
 ### Pending Todos
 
@@ -408,10 +411,12 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-13T17:31:20.948Z
-Stopped at: Completed GB-12-12-04-PLAN.md
+Last session: 2026-10-13T18:01:09.339Z
+Stopped at: Completed GB-12 plan 12-05 execution
 Resume file: None
-Next command in fresh context: `/gsd-execute-phase 12`
+Completed workflow stage: **Phase GB-12 plan 12-05 execution** (2026-10-13), summary [12-05-SUMMARY.md](phases/GB-12-cgb-double-speed/12-05-SUMMARY.md), on branch `gsd/phase-12-cgb-double-speed`. Seven task commits are recorded in the summary. Timer, serial and DMA scale in CPU ticks; the speed-domain scanner and all 741 local tests pass. Phase 12 remains in progress.
+Next plan: **GB-12 plan 12-06 — STOP decision cases and KEY1 contract**, documented in `phases/GB-12-cgb-double-speed/12-06-PLAN.md`.
+Next command in fresh context: **`/gsd-execute-phase 12`** (resumes at 12-06). Stop after Phase 12 and wait for the owner; both auto-advance flags remain false.
 
 OpenGSD settings (2026-10-13): switched the project runtime from `claude` to `codex` for current development. Profile `adaptive`; heavy (`opus`) uses `gpt-6-sol`, medium (`sonnet`) and light (`haiku`) use `gpt-6-luna`; reasoning effort is `medium` for all three. Project pins take precedence over machine-wide defaults. Completed workflow stage: **Phase GB-12 plan 12-01 execution** (2026-10-13), with task commits `9dfc604` and `43114cb`; the phase remains in progress. Next: **Phase 12 - CGB Double Speed execution, plan 12-02 onward**, via **`/gsd-execute-phase 12`**. Both auto-advance flags stay false; stop after Phase 12 and wait for the owner.
 
@@ -499,7 +504,7 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Completed workflow stage: **Phase GB-12 plan 12-04 execution**; Phase 12 remains in progress.
+- Completed workflow stage: **Phase GB-12 plan 12-05 execution**; Phase 12 remains in progress.
 - OpenGSD development uses the project's Codex `adaptive` model profile.
-- Next plan: **GB-12 plan 12-05 — device scaling**, via **`/gsd-execute-phase 12`** (resumes at 12-05).
+- Next plan: **GB-12 plan 12-06 — STOP decision cases and KEY1 contract**, via **`/gsd-execute-phase 12`** (resumes at 12-06).
 - Phase-stop rule: stop after Phase 12 and yield; never auto-advance into the next phase or milestone.

@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 11
+open_count: 13
 waived_count: 0
 fixed_count: 0
-total_count: 11
-last_updated: 2026-10-13T17:06:18.785Z
+total_count: 13
+last_updated: 2026-10-13T18:02:22.362Z
 ---
 
 # Broken Windows Ledger
@@ -26,6 +26,8 @@ last_updated: 2026-10-13T17:06:18.785Z
 | 9 | 05 | deviation | src/player/audio.h |  | Added the existing internal adapter header to the task scope so new audio transition functions have declarations shared by main and tests. | open |  | 2026-10-08T16:00:39.497Z |  |
 | 10 | 05 | deviation | .github/workflows/preview.yml |  | Corrected stale preview capability claims and package metadata to describe the implemented scoped DMG audio contract. | open |  | 2026-10-08T16:24:49.415Z |  |
 | 11 | 12 | deviation | tests/scripts/test-reproduce-age.sh |  | The byte-difference negative control mutates the scratch rebuilt ROM because mutating the committed fixture is rejected first by self-check. | open |  | 2026-10-13T17:06:18.785Z |  |
+| 12 | 12 | deviation | cmake/P12Mutants.cmake |  | Adjusted the M3 mutant because divider_phase remains zero and its initial normal-speed phase replacement was equivalent in double speed. | open |  | 2026-10-13T18:02:22.258Z |  |
+| 13 | 12 | deviation | cmake/P12Mutants.cmake |  | Made the generated M12 RTC fault use an explicit double_speed local while keeping production RTC code outside that trust domain. | open |  | 2026-10-13T18:02:22.362Z |  |
 
 ````json
 [
@@ -169,6 +171,32 @@ last_updated: 2026-10-13T17:06:18.785Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-10-13T17:06:18.785Z",
+    "resolved_at": null,
+    "milestone": "v0.2"
+  },
+  {
+    "id": 12,
+    "kind": "deviation",
+    "phase": "12",
+    "file": "cmake/P12Mutants.cmake",
+    "line": null,
+    "description": "Adjusted the M3 mutant because divider_phase remains zero and its initial normal-speed phase replacement was equivalent in double speed.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-13T18:02:22.258Z",
+    "resolved_at": null,
+    "milestone": "v0.2"
+  },
+  {
+    "id": 13,
+    "kind": "deviation",
+    "phase": "12",
+    "file": "cmake/P12Mutants.cmake",
+    "line": null,
+    "description": "Made the generated M12 RTC fault use an explicit double_speed local while keeping production RTC code outside that trust domain.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-13T18:02:22.362Z",
     "resolved_at": null,
     "milestone": "v0.2"
   }
