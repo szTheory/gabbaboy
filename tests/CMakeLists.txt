@@ -2692,4 +2692,14 @@ set_tests_properties(cgb_speed_stall_static_assert_mutant PROPERTIES
   PASS_REGULAR_EXPRESSION "half-dot timeline:" TIMEOUT 180)
 # --- Phase 12 plan 12-03 end ---
 
+# --- Phase 12 plan 12-07 begin ---
+add_test(NAME cgb_speed_wake_ime_on
+  COMMAND test_cgb_speed_internal_p12 cgb_speed_wake_ime_on)
+set_tests_properties(cgb_speed_wake_ime_on PROPERTIES TIMEOUT 60)
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 13 wake_ime_on_ignored
+  cgb_speed_wake_ime_on "run.reason == GBB_STOP_TRACE_FULL|run.trace_count == 1u|stall_end >= machine->timer_reloaded_at")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 16 wake_ime_on_per_call
+  cgb_speed_wake_ime_on "run.reason == GBB_STOP_TRACE_FULL|run.trace_count == 1u|stall_end >= machine->timer_reloaded_at")
+# --- Phase 12 plan 12-07 end ---
+
 gabbaboy_verify_registered_tests()

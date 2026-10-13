@@ -4016,6 +4016,13 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             continue;
         }
         if (cpu_stalled(instance)) {
+            const int wake_pending =
+                (instance->ie & instance->interrupt_flags & 0x1Fu) != 0; /* P12-M16 */
+            if (instance->cpu_stall_kind == GBB_STALL_SPEED_SWITCH && wake_pending) { /* P12-M13 */
+                instance->cpu_stall_kind = GBB_STALL_NONE;
+                instance->cpu_stall_half_dots = 0u;
+                continue;
+            }
             const uint32_t quantum = 8u >> instance->double_speed;
             const uint32_t step = instance->cpu_stall_half_dots < quantum
                 ? instance->cpu_stall_half_dots : quantum;
