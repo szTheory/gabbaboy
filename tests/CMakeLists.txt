@@ -2495,4 +2495,26 @@ if(GABBABOY_ENABLE_SANITIZERS)
   endforeach()
 endif()
 
+# --- Phase 12 plan 12-01 begin ---
+# Pre-change CGB speed identities; this source includes the core and must not link it.
+add_executable(test_cgb_speed_internal test_cgb_speed_internal.c)
+target_include_directories(test_cgb_speed_internal PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_cgb_speed_internal PRIVATE c_std_17)
+set_target_properties(test_cgb_speed_internal PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_speed_identity_pin
+  COMMAND test_cgb_speed_internal cgb_speed_identity_pin ${PROJECT_SOURCE_DIR}/fixtures)
+set_tests_properties(cgb_speed_identity_pin PROPERTIES TIMEOUT 60)
+add_test(NAME cgb_speed_identity_pin_flipped
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_speed_internal>;cgb_speed_identity_pin;${PROJECT_SOURCE_DIR}/fixtures;--flip"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=observed
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(cgb_speed_identity_pin_flipped PROPERTIES
+  ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0" TIMEOUT 60)
+add_test(NAME cgb_speed_internal_harness_alive
+  COMMAND test_cgb_speed_internal cgb_speed_internal_harness_alive)
+# --- Phase 12 plan 12-01 end ---
+
 gabbaboy_verify_registered_tests()

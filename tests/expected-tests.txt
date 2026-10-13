@@ -689,3 +689,6 @@ cgb_fuzz_palette_mutant_no_mask
 cgb_fuzz_palette_mutant_no_mask_control
 cgb_measure_core_cgb_profile
 cgb_measure_core_unknown_profile
+cgb_speed_identity_pin
+cgb_speed_identity_pin_flipped
+cgb_speed_internal_harness_alive
