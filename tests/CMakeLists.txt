@@ -2537,6 +2537,12 @@ gbb_p12_mutant_test(test_cgb_speed_internal_p12 7 devices_frozen
   cgb_speed_tracer_switch "divider_counter != 0u")
 add_test(NAME cgb_speed_cpu_ticks COMMAND test_cgb_speed_internal_p12 cgb_speed_cpu_ticks)
 set_tests_properties(cgb_speed_cpu_ticks PROPERTIES TIMEOUT 60)
+add_test(NAME cgb_speed_timer_scaling COMMAND test_cgb_speed_internal_p12 cgb_speed_timer_scaling)
+set_tests_properties(cgb_speed_timer_scaling PROPERTIES TIMEOUT 60)
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 3 timer_unscaled
+  cgb_speed_timer_scaling "tima_delta|div_delta")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 15 timer_reload_half_dot_units
+  cgb_speed_timer_scaling "timer_reload_remaining == 4u")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 18 cost_unscaled
   cgb_speed_cpu_ticks "d.ticks / 2u")
 add_test(NAME cgb_speed_reset_double_speed COMMAND test_cgb_speed_internal_p12 cgb_speed_reset_double_speed)

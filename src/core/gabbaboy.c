@@ -1733,7 +1733,7 @@ static void timer_increment(gbb_instance *m, uint64_t at) {
     if (m->tima == 0xFFu) {
         m->tima = 0;
         m->timer_reload_pending = 1;
-        m->timer_reload_remaining = 8u;
+        m->timer_reload_remaining = 4u; /* P12-M15 */
         observe_bus(m, 0, 0xFF05, 3, m->tima);
         diagnostic_add(m, GBB_DIAGNOSTIC_TIMER, at, 0xFF05, m->tima);
     } else {
@@ -1746,6 +1746,11 @@ static void timer_increment(gbb_instance *m, uint64_t at) {
 static void timer_set_signal(gbb_instance *m, int next, uint64_t at) {
     if (m->timer_signal && !next) timer_increment(m, at);
     m->timer_signal = next;
+}
+
+/* MODEL: BOTH GATE-00 basis=cpu-tick-countdown-converts-to-master-half-dots */
+static uint32_t timer_reload_hd(const gbb_instance *m) {
+    return (uint32_t)m->timer_reload_remaining << (1u - (m->double_speed & 1u));
 }
 
 static void apu_sequencer_clock(gbb_instance *m);
@@ -2113,7 +2118,7 @@ static void bus_write(gbb_instance *m, uint16_t address, uint8_t value, uint64_t
     uint64_t timestamp = m->instruction_start_half_dots + (offset >> m->double_speed); /* P12-M18 */ /* bus-write */
     /* TMA feeds the reload when the write shares its exact reload timestamp. */
     if (address == 0xFF06 && m->timer_reload_pending && timestamp >= m->time_half_dots &&
-        timestamp - m->time_half_dots == m->timer_reload_remaining)
+        timestamp - m->time_half_dots == timer_reload_hd(m))
         m->tma = value;
     advance_devices_to(m, timestamp);
     observe_bus(m, 0, address, 2, value);
@@ -2857,8 +2862,10 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
     while (m->time_half_dots < target) {
         ++m->time_half_dots;
         apply_input_events_now(m);
+        if (!m->double_speed) m->divider_phase ^= 1u;
+        const int cpu_tick = m->double_speed || m->divider_phase == 0u; /* P12-M3 */
         /* MODEL: UNKNOWN GATE-54 research:14 -- timer reload and IF delay */
-        if (m->timer_reload_pending && m->timer_reload_remaining != 0 &&
+        if (cpu_tick && m->timer_reload_pending && m->timer_reload_remaining != 0 &&
             --m->timer_reload_remaining == 0) {
             m->tima = m->tma;
             m->timer_reload_pending = 0;
@@ -2880,8 +2887,7 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
                 m->serial_edge_remaining = 1024u;
             }
         }
-        m->divider_phase ^= 1u;
-        if (m->divider_phase == 0) {
+        if (cpu_tick) {
             /* MODEL: UNKNOWN GATE-56 research:12 -- frame sequencer taps a DIV bit that moves in double speed */
             const int apu_signal_before = (m->divider_counter & 0x1000u) != 0u;
             ++m->divider_counter;

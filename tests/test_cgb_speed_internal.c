@@ -381,6 +381,45 @@ static int cgb_speed_cpu_ticks(void) {
     return 0;
 }
 
+static int cgb_speed_timer_scaling(void) {
+    uint8_t rom[32768];
+    make_internal_rom(rom, NULL, 0u);
+    for (unsigned speed = 0u; speed <= 1u; ++speed) {
+        gbb_instance *machine = NULL;
+        REQUIRE(create_internal_machine(rom, &machine) == 0);
+        machine->double_speed = (uint8_t)speed;
+        machine->tac = 5u;
+        machine->timer_signal = timer_input(machine);
+        const uint8_t tima_start = machine->tima;
+        const uint8_t div_start = machine->div;
+        advance_devices_to(machine, 1824u);
+        const unsigned tima_delta = (uint8_t)(machine->tima - tima_start);
+        const unsigned div_delta = (uint8_t)(machine->div - div_start);
+        if (speed == 0u) {
+            REQUIRE(tima_delta >= 56u && tima_delta <= 58u);
+            REQUIRE(div_delta >= 3u && div_delta <= 4u);
+        } else {
+            REQUIRE(tima_delta >= 113u && tima_delta <= 115u);
+            REQUIRE(div_delta >= 7u && div_delta <= 8u);
+        }
+        gbb_destroy(machine);
+    }
+
+    gbb_instance *machine = NULL;
+    REQUIRE(create_internal_machine(rom, &machine) == 0);
+    machine->tima = 0xFFu;
+    timer_increment(machine, 0u);
+    REQUIRE(machine->timer_reload_pending && machine->timer_reload_remaining == 4u);
+    advance_devices_to(machine, 4u);
+    REQUIRE(machine->timer_reload_pending && machine->timer_reload_remaining == 2u);
+    machine->double_speed = 1u;
+    advance_devices_to(machine, 6u);
+    REQUIRE(!machine->timer_reload_pending && machine->timer_reload_remaining == 0u);
+    REQUIRE(machine->tima == machine->tma);
+    gbb_destroy(machine);
+    return 0;
+}
+
 static int cgb_speed_reset_double_speed(void) {
     uint8_t rom[32768];
     const uint8_t switch_program[] = {0x3Eu, 0x01u, 0xE0u, 0x4Du, 0x10u, 0x00u};
@@ -487,6 +526,11 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "cgb_speed_reset_double_speed") == 0) {
         int rc = cgb_speed_reset_double_speed();
         if (rc == 0) puts("cgb-speed-internal cgb_speed_reset_double_speed pass");
+        return rc;
+    }
+    if (strcmp(argv[1], "cgb_speed_timer_scaling") == 0) {
+        int rc = cgb_speed_timer_scaling();
+        if (rc == 0) puts("cgb-speed-internal cgb_speed_timer_scaling pass");
         return rc;
     }
     if (strcmp(argv[1], "cgb_speed_reset_stall") == 0) {

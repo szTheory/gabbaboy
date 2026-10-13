@@ -1,7 +1,15 @@
 # Phase 12 runtime-mask mutant table. Each id owns one or more exact source
 # anchors. Keep each anchor and replacement in a separate variable because C
 # replacement text may contain semicolons.
-set(GBB_P12_MUTANT_IDS 5 7 18 24 25 26)
+set(GBB_P12_MUTANT_IDS 3 5 7 15 18 24 25 26)
+
+set(GBB_P12_SITES_3 1)
+set(GBB_P12_ANCHOR_3_1 "const int cpu_tick = m->double_speed || m->divider_phase == 0u; /* P12-M3 */")
+set(GBB_P12_REPLACEMENT_3_1 "const int cpu_tick = GBB_P12_MUT(3) ? ((m->time_half_dots & 1u) == 0u) : (m->double_speed || m->divider_phase == 0u); /* P12-M3 */")
+
+set(GBB_P12_SITES_15 1)
+set(GBB_P12_ANCHOR_15_1 "m->timer_reload_remaining = 4u; /* P12-M15 */")
+set(GBB_P12_REPLACEMENT_15_1 "m->timer_reload_remaining = GBB_P12_MUT(15) ? 8u : 4u; /* P12-M15 */")
 
 set(GBB_P12_SITES_5 1)
 set(GBB_P12_ANCHOR_5_1 "instance->cpu_stall_kind = GBB_STALL_SPEED_SWITCH; /* P12-M5 */")
