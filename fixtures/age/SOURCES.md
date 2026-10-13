@@ -27,6 +27,17 @@ directory without network access or RGBDS.
 |---|---:|---|---|---|
 | `spsw-div-cgbBCE.gb` | 32768 | `2c836288b58651f72a335417f11ba346863145dd9996048979ad8e5b9cd0aa7b` | `src/speed-switch/spsw-div-cgbBCE.asm` | `C0` |
 | `spsw-tima-cgbE.gb` | 32768 | `3cb0918fb194d2704bb57f2afd5af3be21b5e97e269fde5224c34914d5f5936e` | `src/speed-switch/spsw-tima-cgbE.asm` | `C0` |
+| `spsw-tima-cgbBC.gb` | 32768 | `2fcfdc0d8595b642cfc1c16cab42f619a13b9a0d20e668a9c471436573a2e860` | `src/speed-switch/spsw-tima-cgbBC.asm` | `C0` |
+| `spsw-stop-prefetch-cgbBCE.gb` | 32768 | `df782c73f08c6778c7b926c6a4ebbd0816c58b53faf4b6abf5b2b812766eab4f` | `src/speed-switch/spsw-stop-prefetch-cgbBCE.asm` | `C0` |
+| `spsw-interrupts-cgbE.gb` | 32768 | `bd240315c0b8e7fd5f0d0521785c6c5a10769dae36339e88d777fc507bca44b6` | `src/speed-switch/caution/spsw-interrupts-cgbE.asm` | `C0` |
+| `spsw-mode0-cgbBCE.gb` | 32768 | `07eefc27d8bdd98569510ebef662aba388715bbe5ddf9993763fbf1aab290f2e` | `src/speed-switch/spsw-mode0-cgbBCE.asm` | `C0` |
+| `spsw-ch2-lc-delay-cgbBCE.gb` | 32768 | `76920fa2f63f5a5b9b8b907b98a78e06410d88fb09491826f3930dedf96cff19` | `src/speed-switch/spsw-ch2-lc-delay-cgbBCE.asm` | `C0` |
+| `stat-mode-ds-cgbBCE.gb` | 32768 | `c371664f71cb95b6de9cf9a1ecd4ff80147b5603b08deacea7c9495eb45d1cf0` | `src/stat-mode/stat-mode-ds-cgbBCE.asm` | `C0` |
+| `stat-mode-cgbE.gb` | 32768 | `b2789ba04e79c25aba7a947e0d4b7938171457960264702dbaa4826acfdb2fc3` | `src/stat-mode/stat-mode-cgbE.asm` | `80` |
+| `stat-mode-sprites-ds-cgbBCE.gb` | 32768 | `3ee5bb3fc7fa724a832a082dd8c4979af5abb3f837dbc489a2f04cdf2332a64d` | `src/stat-mode-sprites/stat-mode-sprites-ds-cgbBCE.asm` | `C0` |
+| `stat-mode-sprites-dmgC-cgbBCE.gb` | 32768 | `173ff267a4ecbd2e5bb3bd209f7b08c971900d54382bd6281969c7a3a98507c1` | `src/stat-mode-sprites/stat-mode-sprites-dmgC-cgbBCE.asm` | `80` |
+| `stat-mode-window-ds-cgbBCE.gb` | 32768 | `055c641aaf9464b637f6206126a165fa23433fbced0d5fbafa0d3cdb813aaa41` | `src/stat-mode-window/stat-mode-window-ds-cgbBCE.asm` | `C0` |
+| `stat-mode-window-cgbBCE.gb` | 32768 | `69fb62868aa256ff79e77cabb88caab9db43dbe302eb6f4628550d99b7ef12da` | `src/stat-mode-window/stat-mode-window-cgbBCE.asm` | `80` |
 
 The source's `Verified:` lines are author-attested hardware observations, not a
 reproducible receipt. Emulator results are numeric; no screenshot comparison is
