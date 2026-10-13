@@ -3,11 +3,11 @@ gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_plan: Not started
-status: executed_awaiting_verification
-stopped_at: Phase 11 execute-phase complete, awaiting /gsd-verify-work 11
-last_updated: "2026-10-13T04:59:03.868Z"
+status: planning
+stopped_at: Phase 11 verify-work passed (11/11 automated UAT); next /gsd-discuss-phase 12
+last_updated: "2026-10-13T13:10:00.000Z"
 last_activity: 2026-10-13
-last_activity_desc: Phase 11 complete, transitioned to Phase 12
+last_activity_desc: Phase 11 verify-work passed; PR #67 squash-merges at its exact-head green head
 state_head: 4e61ab7a627fd8e8b4789a7db427c807853508ea
 progress:
   total_phases: 9
@@ -26,7 +26,7 @@ current_phase_name: CGB Double Speed
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 11 — CGB Colour Rendering and Player Colour
+**Current focus:** Phase 12 — CGB Double Speed
 
 ## Current Position
 
@@ -39,8 +39,9 @@ Completed: Phase 10 - CGB Profile, Banking and Register Visibility, execution (p
 Verified: Phase 10 `/gsd-verify-work 10` passed 2026-10-12 — 12/12 UAT items automated (10-UAT.md), local 541/541 with installed inventory at 3c0d6bc; verification `passed` (10-VERIFICATION.md); PR #66 squash-merges at the exact-head green branch head (pre-authorized)
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, planning (11-RESEARCH, 11-PATTERNS, 11-VALIDATION, plans 11-01..11-15) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, execution (plans 11-01..11-15) plus the execute-phase tail; gsd-verifier `passed` 3/3 (11-VERIFICATION.md); evidence head `fb7d14c` exact-head green; PR #67 open, not merged
-Next step: Phase 11 verification via `/gsd-verify-work 11`; the owner chooses when
-Last activity: 2026-10-13 — Phase 11 execute-phase complete; awaiting `/gsd-verify-work 11`
+Verified: Phase 11 `/gsd-verify-work 11` passed 2026-10-13 — 11/11 UAT rows automated covering all 91 SUMMARY coverage entries (11-UAT.md); verification `passed` (11-VERIFICATION.md); hosted ASan timeout fixed in the PR (LESSONS GB-CI-004); PR #67 squash-merges at the exact-head green branch head (pre-authorized)
+Next step: Phase 12 - CGB Double Speed (no CONTEXT.md yet) via `/gsd-discuss-phase 12`; the owner chooses when
+Last activity: 2026-10-13 — Phase 11 verify-work passed; exact-head CI green at 4811033
 
 Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 
@@ -397,6 +398,8 @@ Last session: 2026-10-13T04:29:43.285Z
 Stopped at: Phase 11 complete, ready to plan Phase 12
 Resume file: .planning/.continue-here.md
 Next command in fresh context: `/gsd-verify-work 11`
+
+Completed workflow stage: **Phase 11 - CGB Colour Rendering and Player Colour, verify-work** (2026-10-13): `/gsd-verify-work 11` passed with zero human checkpoints (D-069): all 91 SUMMARY coverage entries classify as auto-passed and are grouped into 11 UAT rows (11-UAT.md); every named test a coverage ref cites is registered; `phase uat-passed --require-verification` passed; security `threats_open: 0`; ui-review not applicable (SDL player). Verification found one CI defect, fixed on the branch: hosted linux-asan-ubsan ran serially at 20 of 30 minutes and timed out on a slow pull_request runner at b314686. eb6f36e runs it with `--parallel 4` (pinned by `ci_asan_parallel_contract` and its negative control) and 4811033 scales explicit test TIMEOUTs by three in sanitizer builds (LESSONS GB-CI-004). Evidence head `4811033`: ci push 38398631736 and pull_request 38398639883 all jobs success (ASan 686/686, 16-18 min), fixture-repro 38398631778/38398639816 success, preview-package-smoke 38398639852 success; local 691/691. PR #67 (https://github.com/szTheory/gabbaboy/pull/67) squash-merges at its exact-head green head (pre-authorized). Owner veto items before merge: D-15, D-17a, D-18, D-26, D-08, D-21, D-24. **Next step: Phase 12 - CGB Double Speed. Next command in fresh context: `/gsd-discuss-phase 12`.** Continue only when the owner chooses to. Both auto-advance flags stay false.
 
 Completed workflow stage: **Phase 11 - CGB Colour Rendering and Player Colour, execute-phase** (2026-10-13): plans 11-01..11-15 plus the execute-phase tail. Tail: post-merge gate 684/684 + DMG baseline + player package (93/93); wave-post gates (schema drift, codebase drift, UI safety) pass; Nyquist validation `validated`/`nyquist_compliant: true` (25 rows, no gaps); security 43/43 threats closed, `threats_open: 0` (11-SECURITY.md); code review 0 critical / 3 warning / 5 info, 7 fixed and 1 no-change with an added control (11-REVIEW-DISPOSITION.md); regression gate 689/689, `baseline status=pass`; gsd-verifier `passed` 3/3 (11-VERIFICATION.md); `phase.complete` marked CGB-04/05/09 complete (its 11 summary-path warnings are commands parsed as paths, all files exist). ui-review was not run: the 6-pillar web audit does not apply to the SDL player and Phase 10 skipped it too. CI defects fixed in the PR: LeakSanitizer exit codes on deliberately failing mutants (361256d) and the Windows inventory missing two bash-only repro guards (fb7d14c, LESSONS GB-CGB-007). Evidence head `fb7d14c`: ci run 38355327717 (https://github.com/szTheory/gabbaboy/actions/runs/38355327717) all eight required jobs success; fixture-repro run 38355327835 all seven jobs success (CGB colour and MagenTests byte-identical); preview-package-smoke run 38355327755 success. PR #67 (https://github.com/szTheory/gabbaboy/pull/67) is open and stays unmerged; the pre-authorized squash merge happens only after `/gsd-verify-work 11` passes at an exact-head green head. Owner veto items: D-15, D-17a, D-18, D-26, D-08, D-21, D-24. **Next step: Phase 11 verification. Next command in fresh context: `/gsd-verify-work 11`.** Following phase (named, not started): **Phase 12: CGB Double Speed** via `/gsd-discuss-phase 12`, only after verification passes and the owner chooses to continue. Both auto-advance flags stay false.
 
