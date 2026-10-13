@@ -2148,13 +2148,13 @@ gbb_colour_mutant(attr_ignore_bank test_cgb_colour_internal.c
   cgb_attr_mutant_ignore_bank cgb_attr_mutant_ignore_bank_control
   "return ppu_cgb_tile_color(m, tile, (attributes >> 3) & 1u, row, column, 0);"
   "return ppu_cgb_tile_color(m, tile, 0u, row, column, 0);"
-  "cgb_attr_bank" "bgcol"
+  "cgb_attr_bank" "px[(]m, 0, 0[)] == bgcol[(]0, 3[)]"
   cgb_colour_internal_harness_alive)
 gbb_colour_mutant(attr_swap_flips test_cgb_colour_internal.c
   cgb_attr_mutant_swap_flips cgb_attr_mutant_swap_flips_control
   "if ((attributes & 0x40u) != 0) row = 7u - row;\n    if ((attributes & 0x20u) != 0) column = 7u - column;"
   "if ((attributes & 0x20u) != 0) row = 7u - row;\n    if ((attributes & 0x40u) != 0) column = 7u - column;"
-  "cgb_attr_xflip" "bgcol"
+  "cgb_attr_xflip" "px[(]m, 8, 3[)] == bgcol[(]0, 0[)]"
   cgb_colour_internal_harness_alive)
 gbb_colour_mutant(attr_reads_vbk test_cgb_colour_internal.c
   cgb_attr_mutant_reads_vbk cgb_attr_mutant_reads_vbk_control
@@ -2166,7 +2166,7 @@ gbb_colour_mutant(attr_obj_bank_ignored test_cgb_colour_internal.c
   cgb_attr_mutant_obj_bank_ignored cgb_attr_mutant_obj_bank_ignored_control
   "ppu_cgb_tile_color(m, (uint8_t)tile, (attrs >> 3) & 1u,"
   "ppu_cgb_tile_color(m, (uint8_t)tile, 0u,"
-  "cgb_attr_obj_bank_palette" "objcol"
+  "cgb_attr_obj_bank_palette" "seen[[]0[]] == objcol[(]3, 3[)]"
   cgb_colour_internal_harness_alive)
 # --- Phase 11 plan 11-05 end ---
 
@@ -2254,7 +2254,7 @@ gbb_colour_mutant(frame_resolve test_cgb_colour.c
   cgb_colour_mutant_frame_resolve cgb_colour_mutant_frame_resolve_control
   "    return cram_colour(m->bg_cram, bg_attr & 7u, bg_index);\n"
   "    static uint8_t gbb_frame_cram_snapshot[64];\n    if (m->ly == 0 && x == 0u) memcpy(gbb_frame_cram_snapshot, m->bg_cram, sizeof(gbb_frame_cram_snapshot));\n    return cram_colour(gbb_frame_cram_snapshot, bg_attr & 7u, bg_index);\n"
-  "cgb_colour_hblank_rows;${GBB_CGB_COLOUR_DIR}" "row"
+  "cgb_colour_hblank_rows;${GBB_CGB_COLOUR_DIR}" "row [0-9]+ is not uniform"
   cgb_rgb555_both_modes)
 # --- Phase 11 plan 11-07 end ---
 
@@ -2290,7 +2290,7 @@ gbb_colour_mutant(magentests_lcd_off_no_mode0 test_magentests.c
   magentests_cgb_mutant_lcd_off_no_mode0 magentests_cgb_mutant_lcd_off_no_mode0_control
   "            ppu_set_mode(m, 0);\n            m->ppu_selected_object_count = 0;"
   "            m->ppu_selected_object_count = 0;"
-  "magentests_cgb_ppu_disabled_state;${GBB_MAGENTESTS_DIR}/ppu_disabled_state.gbc" "0x001F|pixel"
+  "magentests_cgb_ppu_disabled_state;${GBB_MAGENTESTS_DIR}/ppu_disabled_state.gbc" "magentests_cgb_ppu_disabled_state: pixel 0,0 expected 0x03E0 got 0x001F"
   "magentests_oob_sram_mbc1;${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc")
 # WR-01: the compat variant must also see the guest's STAT verdict (BGP 0x00 pass vs 0x0C fail maps
 # colour index 1 to shade 0 vs shade 3). Same mutant, compat case.
@@ -2298,7 +2298,7 @@ gbb_colour_mutant(magentests_lcd_off_no_mode0_compat test_magentests.c
   magentests_cgb_mutant_lcd_off_no_mode0_compat magentests_cgb_mutant_lcd_off_no_mode0_compat_control
   "            ppu_set_mode(m, 0);\n            m->ppu_selected_object_count = 0;"
   "            m->ppu_selected_object_count = 0;"
-  "magentests_cgb_ppu_disabled_state_compat;${GBB_MAGENTESTS_DIR}/ppu_disabled_state.gbc" "ppu_disabled_state_compat: pixel 0,0 expected"
+  "magentests_cgb_ppu_disabled_state_compat;${GBB_MAGENTESTS_DIR}/ppu_disabled_state.gbc" "magentests_cgb_ppu_disabled_state_compat: pixel 0,0 expected"
   "magentests_oob_sram_mbc1;${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc")
 # Object colours resolved from BG CRAM instead of object CRAM must turn the green and red
 # triangles of oam_internal_priority into the BG white (RESEARCH Correction 4: this ROM's objects
@@ -2307,14 +2307,14 @@ gbb_colour_mutant(magentests_obj_from_bg_cram test_magentests.c
   magentests_cgb_mutant_obj_from_bg_cram magentests_cgb_mutant_obj_from_bg_cram_control
   "return cram_colour(m->obj_cram, object_attr & 7u, object);"
   "return cram_colour(m->bg_cram, object_attr & 7u, object);"
-  "magentests_cgb_oam_internal_priority;${GBB_MAGENTESTS_DIR}/oam_internal_priority.gbc" "pixel"
+  "magentests_cgb_oam_internal_priority;${GBB_MAGENTESTS_DIR}/oam_internal_priority.gbc" "magentests_cgb_oam_internal_priority: pixel [0-9]+,[0-9]+ expected 0x"
   "magentests_oob_sram_mbc1;${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc")
 # An inverted LCDC.0 test in the composer must break the per-band priority layout of bg_oam_priority.
 gbb_colour_mutant(magentests_lcdc0_inverted test_magentests.c
   magentests_cgb_mutant_lcdc0_inverted magentests_cgb_mutant_lcdc0_inverted_control
   "if ((lcdc & 0x01u) == 0) return CGB_LAYER_OBJ;"
   "if ((lcdc & 0x01u) != 0) return CGB_LAYER_OBJ;"
-  "magentests_cgb_bg_oam_priority;${GBB_MAGENTESTS_DIR}/bg_oam_priority.gbc" "pixel"
+  "magentests_cgb_bg_oam_priority;${GBB_MAGENTESTS_DIR}/bg_oam_priority.gbc" "magentests_cgb_bg_oam_priority: pixel [0-9]+,[0-9]+ expected 0x"
   "magentests_oob_sram_mbc1;${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc")
 # --- Phase 11 plan 11-10 end ---
 

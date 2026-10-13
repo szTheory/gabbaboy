@@ -44,9 +44,12 @@ static void contract_failed(const char *what) {
 #endif
 }
 
-static void require_contract(int condition) {
-    if (!condition) contract_failed("contract violated");
-}
+/* The macro keeps the failing expression and line in the report (a bare abort() preserved this in a
+ * core dump; the standalone build has none). */
+#define GBB_FUZZ_STR2(x) #x
+#define GBB_FUZZ_STR(x) GBB_FUZZ_STR2(x)
+#define require_contract(condition) \
+    do { if (!(condition)) contract_failed(#condition " at fuzz_core.c:" GBB_FUZZ_STR(__LINE__)); } while (0)
 
 /* Internal test seam, defined by the core and linked into every fuzz target. */
 extern void gbb_test_bank_state(const gbb_instance *, uint8_t *, uint8_t *);
