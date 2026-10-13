@@ -22,6 +22,12 @@
 | `mbc_oob_sram_mbc3.gbc` | 32768 | `03e13fa796a9e06fa90f9b396b728c1de9f6e7351aa47a038e33c11d3a8df7dd` | $12 |
 | `mbc_oob_sram_mbc5.gbc` | 32768 | `e99f526386f72a8992a72137d0bd9a431b380807b551747bb3baa03421d6f54b` | $1A |
 
+Phase 11 additions (release 0.5.0, downloaded 2026-10-12 into a fresh scratch directory, size, digest and `$143` checked before copying):
+
+| File | Size | SHA-256 | Header $143 | Source dir |
+|---|---|---|---|---|
+| `ppu_disabled_state.gbc` | 32768 | `4808fe834ea6a6344d74f007a45628c405aca5acd13d6c25f76d02f442f1eea6` | $80 | `src/ppu_disabled_state` |
+
 Each file was downloaded from the release into a fresh empty scratch directory,
 checked for size, digest and header byte, then copied. `manifest.json` carries
 the same digests and is checked by `cmake/VerifyFixtureManifest.cmake`.

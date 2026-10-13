@@ -678,7 +678,7 @@ add_test(NAME mbc5_banking_fixture_digest
 # MagenTests mbc_oob_sram screen oracle (D-05). Public API only; repository fixtures, never installed.
 set(GBB_MAGENTESTS_DIR "${PROJECT_SOURCE_DIR}/fixtures/magentests")
 add_executable(test_magentests test_magentests.c)
-target_link_libraries(test_magentests PRIVATE GabbaBoy::core)
+target_link_libraries(test_magentests PRIVATE gabbaboy_accept)
 target_compile_features(test_magentests PRIVATE c_std_17)
 set_target_properties(test_magentests PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME magentests_fixture_digest
@@ -691,6 +691,10 @@ add_test(NAME magentests_oob_sram_mbc1
   COMMAND test_magentests magentests_oob_sram_mbc1 ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc)
 add_test(NAME magentests_oob_sram_mbc5
   COMMAND test_magentests magentests_oob_sram_mbc5 ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc5.gbc)
+add_test(NAME magentests_cgb_ppu_disabled_state
+  COMMAND test_magentests magentests_cgb_ppu_disabled_state ${GBB_MAGENTESTS_DIR}/ppu_disabled_state.gbc)
+add_test(NAME magentests_cgb_ppu_disabled_state_compat
+  COMMAND test_magentests magentests_cgb_ppu_disabled_state_compat ${GBB_MAGENTESTS_DIR}/ppu_disabled_state.gbc)
 add_test(NAME magentests_oob_sram_negative_control
   COMMAND test_magentests magentests_oob_sram_negative_control
     ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc
@@ -2271,5 +2275,18 @@ gbb_colour_mutant(guest_cram_blocked_no_increment test_cgb_colour.c
   "cgb_colour_guest_cram;${GBB_CGB_COLOUR_DIR}" "C00"
   "cgb_colour_attr;${GBB_CGB_COLOUR_DIR}")
 # --- Phase 11 plan 11-08 end ---
+
+# --- Phase 11 plan 11-10 begin ---
+# MagenTests CGB PPU ROMs (D-21): colour mutants of the public test_magentests.c driver. The
+# failing run is a REQUIRE-style early return, handled by gbb_colour_mutant (leak detection off).
+# ppu_disabled_state needs STAT mode 0 with the LCD off; skipping the mode-0 transition leaves the
+# guest in mode 1 and it paints the failure red.
+gbb_colour_mutant(magentests_lcd_off_no_mode0 test_magentests.c
+  magentests_cgb_mutant_lcd_off_no_mode0 magentests_cgb_mutant_lcd_off_no_mode0_control
+  "            ppu_set_mode(m, 0);\n            m->ppu_selected_object_count = 0;"
+  "            m->ppu_selected_object_count = 0;"
+  "magentests_cgb_ppu_disabled_state;${GBB_MAGENTESTS_DIR}/ppu_disabled_state.gbc" "0x001F|pixel"
+  "magentests_oob_sram_mbc1;${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc")
+# --- Phase 11 plan 11-10 end ---
 
 gabbaboy_verify_registered_tests()

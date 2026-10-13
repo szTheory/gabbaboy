@@ -27,6 +27,16 @@
       "size_bytes": 32768,
       "sha256": "e99f526386f72a8992a72137d0bd9a431b380807b551747bb3baa03421d6f54b",
       "cartridge_type": "0x1A"
+    },
+    {
+      "alias": "ppu_disabled_state",
+      "file": "ppu_disabled_state.gbc",
+      "size_bytes": 32768,
+      "sha256": "4808fe834ea6a6344d74f007a45628c405aca5acd13d6c25f76d02f442f1eea6",
+      "cartridge_type": "0x00",
+      "source_dir": "src/ppu_disabled_state",
+      "rgbfix_options": "--color-compatible --mbc-type ROM",
+      "cgb_flag": "0x80"
     }
   ]
 }
