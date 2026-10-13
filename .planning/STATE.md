@@ -2,21 +2,21 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 1
+current_plan: 2
 status: planning
-stopped_at: Phase 11 planned
-last_updated: "2026-10-13T02:06:00.695Z"
+stopped_at: Completed 11-01-PLAN.md
+last_updated: "2026-10-13T02:14:25.731Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 11 execution started
-state_head: 264d202fd872698dc7b25ff3695846a55de5329a
+state_head: 452c1918340922253e5e182a245ad1d0c9cb29b4
 progress:
   total_phases: 9
   completed_phases: 5
   total_plans: 80
-  completed_plans: 65
+  completed_plans: 66
   percent: 56
-current_phase_name: CGB Colour Rendering and Player Colour
 current_phase: 11
+current_phase_name: CGB Colour Rendering and Player Colour
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 1
+Current Plan: 2
 Total Plans in Phase: 15
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -175,6 +175,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 10 P18 | 45 min | 3 tasks | 9 files |
 | Phase 10 P19 | 25 min | 3 tasks | 8 files |
 | Phase 10 P20 | 95 min | 2 tasks | 8 files |
+| Phase 11 P01 | 25 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -328,6 +329,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 10]: D-070 half-dot master timeline ADR adopted; D-071..D-075 record IE, ch1 policy, deferred-register asymmetry, GATE-00, FEA0-FEFF/cgb-separate-buses
 - [Phase 10]: Phase 10 evidence head 2fe078e8f08ed98ba0ac0e244971e7c0ead16b1e is exact-head green (8 required checks, 7 fixture-repro jobs); PR #66 is ready and left open until /gsd-verify-work 10 passes
 - [Phase 10]: The +5% banking benchmark review trigger fired (about +6 to 7 percent vs the Phase 7 baseline, advisory on a loaded host); no optimisation in Phase 10, owner decides per D-016
+- [Phase 11]: libbet shade pin runs 900 frames (blank earlier); pins are regression, not hardware evidence
 
 ### Pending Todos
 
@@ -363,9 +365,9 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-13T02:02:36.609Z
-Stopped at: Phase 11 planned
-Resume file: .planning/phases/GB-11-cgb-colour-rendering-and-player-colour/11-01-PLAN.md
+Last session: 2026-10-13T02:14:25.653Z
+Stopped at: Completed 11-01-PLAN.md
+Resume file: None
 Next command in fresh context: `/gsd-execute-phase 11`
 
 Completed workflow stage: **Phase 11 - CGB Colour Rendering and Player Colour, planning** (2026-10-12) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`. 11-RESEARCH.md (15 corrections to CONTEXT, MagenTests 0.5.0 pins and digests, validation architecture), 11-PATTERNS.md, 11-VALIDATION.md and plans 11-01..11-15 in 14 waves (serial except 11-11 with 11-12, because nearly every plan edits `tests/expected-tests.txt`, `tests/CMakeLists.txt` and `src/core/gabbaboy.c`). Plan checker passed on iteration 3 (iteration 1: missing D-09 AGE/Mealybug expected-unsupported records, two over-size plans, MagenTests predicate fixes, DECISIONS/INDEX and handoff persistence; iteration 2: file-count justifications). Coverage gates: CGB-04, CGB-05, CGB-09 covered; decisions 45/45. CONTEXT amended at planning: D-26 routes only the three player session sites through `select_profile` (RESEARCH Correction 2); D-42 "api-coverage" is the GSD COVERAGE.md gate. Research open questions auto-resolved per the owner's standing instruction (compat CRAM $7FFF POLICY, generated truth table from an independent Python oracle, research:11 timing gates re-tagged research:14, WRAM markers, default ramp $639F/$4275/$254B/$0421, bg_oam_priority fallback limited to D-09 mode-3 timing). One-way doors D-15/D-17a keep their ratings without checkpoints (already decided; owner veto window at PR review: D-15, D-17a, D-18, D-26, D-08, D-21, D-24). Execution preconditions: network for the pinned RGBDS 1.0.1 archive and MagenTests 0.5.0 sources, gh access and exact-head CI. Next step: **Phase 11 execution** via **`/gsd-execute-phase 11`**. Both auto-advance flags stay false; nothing advances automatically.
