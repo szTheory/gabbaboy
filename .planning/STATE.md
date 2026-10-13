@@ -40,10 +40,10 @@ Verified: Phase 10 `/gsd-verify-work 10` passed 2026-10-12 — 12/12 UAT items a
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, planning (11-RESEARCH, 11-PATTERNS, 11-VALIDATION, plans 11-01..11-15) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, execution (plans 11-01..11-15) plus the execute-phase tail; gsd-verifier `passed` 3/3 (11-VERIFICATION.md); evidence head `fb7d14c` exact-head green; PR #67 open, not merged
 Verified: Phase 11 `/gsd-verify-work 11` passed 2026-10-13 — 11/11 UAT rows automated covering all 91 SUMMARY coverage entries (11-UAT.md); verification `passed` (11-VERIFICATION.md); hosted ASan timeout fixed in the PR (LESSONS GB-CI-004); PR #67 squash-merges at the exact-head green branch head (pre-authorized)
-Completed workflow stage: **Phase GB-12 plan 12-04 execution** (2026-10-13), summary [12-04-SUMMARY.md](phases/GB-12-cgb-double-speed/12-04-SUMMARY.md). All 13 admitted AGE ROMs rebuilt byte-identically with digest-pinned RGBDS 1.0.1; local manifest and tamper controls passed. Hosted Linux confirmation remains pending. Phase 12 remains in progress.
-Next plan: **GB-12 plan 12-05 — device scaling**. Its plan is `.planning/phases/GB-12-cgb-double-speed/12-05-PLAN.md`.
-Next command: **`/gsd-execute-phase 12`** (resumes from the first incomplete plan, 12-05). Stop after Phase 12 and wait for the owner.
-Last activity: 2026-10-13 — Phase GB-12 plan 12-04 execution completed
+Completed workflow stage: **Phase GB-12 plan 12-06 execution** (2026-10-13), summary [12-06-SUMMARY.md](phases/GB-12-cgb-double-speed/12-06-SUMMARY.md). Focused STOP and identity regression passed 52/52 and the DMG baseline passed; timer-generated pending IRQ behavior remains an explicit limitation. Phase 12 remains in progress.
+Next plan: **GB-12 plan 12-07 — STOP stall wake, boundary sampling, and realignment**. Its plan is `.planning/phases/GB-12-cgb-double-speed/12-07-PLAN.md`.
+Next command: **`/gsd-execute-phase 12`** (resumes at 12-07). Stop after Phase 12 and wait for the owner.
+Last activity: 2026-10-13 — Phase GB-12 plan 12-06 execution completed
 
 Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 
