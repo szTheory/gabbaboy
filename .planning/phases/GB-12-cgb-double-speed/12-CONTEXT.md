@@ -280,6 +280,41 @@ Not in this phase:
   - Research may promote either quirk to modelled behaviour only through its own decision row with a source, and never by tuning the shared DIV-reset helper or the D-05 constant.
 - **D-36: The held-button rule (D-02 case 1) applies to the armed path only in Phase 12.** Unarmed held-button STOP stays under GATE-62 (research:14). The asymmetry is recorded in `docs/cgb-profile.md` as `expected-failure:unarmed-stop-held-button`.
 
+### I. Amendments from planning research (auto-followed, 2026-10-13)
+
+`12-RESEARCH.md` "Evidence against locked decisions" measured these against a scratch prototype. Each one applies an existing decision's own rule rather than reversing it. They supersede the conflicting literal text above, and each is recorded in DECISIONS (D-084+) by the close-out plan.
+- **D-37 (amends D-05): `GBB_SPEED_SWITCH_STALL_T = 0x20004` (131076 T = 32769 M at the destination speed).**
+  - That is 131076 half-dots to double speed and 262152 to normal.
+  - The literal 0x20008 fails `spsw-div-cgbBCE` 0/5; the measured pass window is `[0x20004, 0x20007]`.
+  - 0x20004 is SameBoy 0x20008 minus the 4 T SameBoy removes at IME=0, and the only M-aligned value in the window.
+  - Add `_Static_assert(GBB_SPEED_SWITCH_STALL_T % GBB_T_PER_M == 0, ...)` plus a static-assert mutant.
+  - The committed core must re-measure the window before the constant is pinned. If the window moves, take the M-aligned value inside it. If no M-aligned value exists, stop and surface it to the owner.
+  - Low-bit insensitivity is recorded: a +1 half-dot mutant stays inside the window and is not detected.
+- **D-38 (amends the D-02 STOP length): an armed STOP that switches (cases 3 and 4) costs 2 M, and the named constant is `GBB_STOP_SWITCH_COST_HALF_DOTS`.**
+  - DMG, unarmed, compat and held-button STOP keep their current cost, so the DMG baseline is untouched.
+  - Evidence: `spsw-tima-cgbBC` rises from 4/8 to 7/8 and `spsw-div`/`stop-prefetch` are unchanged. This matches SameBoy's 2 M STOP.
+  - The cost is tested by name. The remaining `tima` rows are D-35 expected failures.
+- **D-39 (refines D-02/D-01): `divider_reset(m, clock_apu_edge)`.**
+  - The DMG/unarmed STOP passes 0 and stays byte-identical. The DIV write and the armed switch pass 1.
+  - The helper is called before `double_speed` toggles, so the edge uses the pre-switch tap.
+- **D-40 (refines D-28): before any mutation, an armed switching STOP pre-checks headroom of `cost + 2*GBB_SPEED_SWITCH_STALL_T + 4` half-dots and returns `GBB_STOP_INVALID_STATE`.** The per-step stall check stays as defence in depth. The mutant drops the pre-check.
+- **D-41 (amends D-15): the player's runtime logic is unchanged, but its now-false claim is edited.** The claim "double speed ... not claimed or implemented" is changed in five places, all atomically with `tests/player/test_limitations.c`:
+  - `src/player/limitations.h`
+  - `README.md`
+  - `.github/workflows/preview.yml` (two strings)
+  - `src/player/main.c` help text
+  
+  "CGB mode-3 timing ... and HDMA are not claimed or implemented" is kept. A phrase is added to the `player_claims_agree` list.
+  - `player_cgb_speed_smoke` pins the RGBA digest only. The audio digest and the APU-2x mutant run at core level (`cgb_speed_fixture_audio_digest`).
+- **D-42 (amends D-16): each installed consumer builds an inline guest of 40 bytes or less, in the style of `cgb_api_smoke`, and runs it in partitions.** The install allow-list is not widened (D-055 precedent).
+- **D-43 (refines D-27): the fuzz dictionary `tests/fuzz/fuzz_core.dict` and its `-dict=` argument are new infrastructure.**
+  - The speed mode gets its own half-dot limit define; `FUZZ_RUN_LIMIT` and `FUZZ_INPUT_HALF_DOT_LIMIT` stay unchanged because the self-test greps them.
+- **D-44 (frames D-19/D-20 expectations): the prototype passes only `spsw-div` and `spsw-stop-prefetch`.**
+  - Wave 5 means pinning signatures and dispositions for the rest, not making them pass.
+  - The three single-speed STAT controls already fail on main and are dispositioned the same way.
+  - The AGE vendoring plan has no core dependency and may start in the first wave, so CI learns the Linux RGBDS digests early.
+- **D-45 (process): the first task of the tracer plan records the pre-change CGB single-speed identity pins (`cgb_speed_identity_pin`) from the unmodified core, before any `gabbaboy.c` edit.**
+
 ### Claude's Discretion
 
 - Internal names, and whether `cpu_stall_kind` is an enum or a `uint8_t`.
@@ -298,6 +333,9 @@ These are adopted, but they are the points the owner may want to override:
 6. **D-02 case 1:** a held button sends the CPU into HALT without switching (SameBoy semantics).
 7. **D-12:** GATE-41 and the DMG/unarmed part of GATE-62 are deferred to Phase 14.
 8. **D-26:** the reduced partition sweep (boundary windows plus fixed interior points, not a full interior stride).
+9. **D-37:** the stall constant is 0x20004 rather than the literal 0x20008, taken from the AGE `spsw-div` window.
+10. **D-38:** a switching STOP costs 2 M, not the 1 M in D-02.
+11. **D-41:** the public player, README and preview claim text is edited inside this phase.
 
 </decisions>
 
