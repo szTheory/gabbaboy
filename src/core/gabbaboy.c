@@ -338,6 +338,10 @@ struct gbb_instance {
      * not built; STOP ignores it). bcps/ocps are the palette index registers, ff72-ff75 the
      * undocumented CGB scratch registers. DMG never reads or writes any of these. */
     uint8_t key1_armed, bcps, ocps, ff72, ff73, ff74, ff75;
+    /* CGB palette RAM (Phase 11): 8 palettes of 4 little-endian RGB555 colours per side, addressed
+     * through BCPS/OCPS bits 0-5. opri is the stored OPRI bit 0; it never changes object order after
+     * boot (D-08), which exec_mode decides. */
+    uint8_t bg_cram[64], obj_cram[64], opri;
     uint8_t oam[GBB_OAM_BYTES];
     uint8_t frame_working[GBB_FRAME_PIXELS];
     uint8_t frame_completed[GBB_FRAME_PIXELS];
@@ -1067,7 +1071,10 @@ typedef enum {
     IO_SVBK,
     IO_STORE,         /* stored byte: reads (stored | read_or), writes keep (value & write_mask) */
     IO_DEFERRED_RW,   /* read stops, write latches and is dropped */
-    IO_DEFERRED_W     /* reads $FF, write latches and is dropped */
+    IO_DEFERRED_W,    /* reads $FF, write latches and is dropped */
+    IO_BCPD,          /* background palette data port (appended: IO_UNSET stays 0) */
+    IO_OCPD,          /* object palette data port */
+    IO_OPRI           /* object priority mode: bit 0 stored, no effect after boot */
 } io_kind;
 
 typedef enum { IOS_NONE = 0, IOS_PANDOCS, IOS_HW_TEST, IOS_SAMEBOY, IOS_POLICY, IOS_EXISTING } io_source;
@@ -1197,7 +1204,7 @@ static const io_row io_visibility[IO_VISIBILITY_ROWS] = {
     [0x66] = IO_UNUSED_ROW,
     [0x67] = IO_UNUSED_ROW,
     [0x68] = { IOC(DMG_STOP), IOC_ST(0x40, 0xBF), IOC_ST(0x40, 0xBF), IOS_HW_TEST }, /* BCPS: background palette index; unused bit 6 reads 1 */
-    [0x69] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 11), IOC(CONST_FF), IOS_PANDOCS }, /* BCPD: palette data port deferred to phase 11; compat mode ignores it without increment */
+    [0x69] = { IOC(DMG_STOP), IOC(BCPD), IOC(CONST_FF), IOS_PANDOCS }, /* BCPD: background palette data; auto-increment on write even when blocked, reads never increment; compat mode ignores it without increment */
     [0x6A] = { IOC(DMG_STOP), IOC_ST(0x40, 0xBF), IOC_ST(0x40, 0xBF), IOS_HW_TEST }, /* OCPS: object palette index; unused bit 6 reads 1 */
     [0x6B] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 11), IOC(CONST_FF), IOS_PANDOCS }, /* OCPD: palette data port deferred to phase 11 */
     [0x6C] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 11), IOC(CONST_FF), IOS_PANDOCS }, /* OPRI: object priority mode deferred to phase 11 */
@@ -1230,6 +1237,44 @@ static const io_cell *io_cgb_cell(const gbb_instance *m, uint16_t address) {
     return m->exec_mode == GBB_MODE_CGB ? &row->cgb : &row->compat;
 }
 
+/* CPU access locks for the PPU-owned memories. CRAM has its own predicate (D-12). */
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static int cpu_vram_access_allowed(const gbb_instance *m) {
+    /* MODEL: UNKNOWN GATE-13 research:11 -- VRAM CPU lock window during mode 3 */
+    return (m->lcdc & 0x80u) == 0 || m->ppu_mode != 3u;
+}
+
+/* CRAM CPU lock. SameBoy's edge offsets and the black-pixel quirk are not modelled (D-12). */
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static int cpu_cram_access_allowed(const gbb_instance *m) {
+    /* MODEL: UNKNOWN GATE-76 research:14 -- CRAM CPU lock is a plain mode-3 predicate; edge offsets unresearched (D-12) */
+    return (m->lcdc & 0x80u) == 0 || m->ppu_mode != 3u;
+}
+
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static int cpu_oam_access_allowed(const gbb_instance *m) {
+    /* MODEL: UNKNOWN GATE-14 research:11 -- OAM CPU lock window during modes 2 and 3 */
+    return (m->lcdc & 0x80u) == 0 || m->ppu_mode == 0u || m->ppu_mode == 1u;
+}
+
+/* Palette data port write (D-11). The index register keeps bit 7 (auto-increment) and bit 6 reads 1
+ * through the STORE mask on BCPS/OCPS; here only bits 0-5 address the 64-byte array. The index
+ * advances after every write while bit 7 is set, even a write the mode-3 lock blocked, and it wraps
+ * 63 to 0 inside bits 0-5 so no index bit leaks into bit 6. */
+/* MODEL: BOTH GATE-00 basis=cgb-only-callers */
+static void cram_data_write(uint8_t *index_reg, uint8_t cram[64], uint8_t value, int allowed) {
+    const unsigned idx = (unsigned)*index_reg & 0x3Fu;
+    if (allowed) cram[idx] = value;
+    if ((*index_reg & 0x80u) != 0u) *index_reg = (uint8_t)(0x80u | ((idx + 1u) & 0x3Fu));
+}
+
+/* Palette data port read (D-11): the stored byte, or $FF while the lock blocks it. Never touches
+ * the index register. */
+/* MODEL: BOTH GATE-00 basis=cgb-only-callers */
+static uint8_t cram_data_read(uint8_t index_reg, const uint8_t cram[64], int allowed) {
+    return allowed ? cram[(unsigned)index_reg & 0x3Fu] : 0xFFu;
+}
+
 /* Storage behind a STORE cell. */
 /* MODEL: BOTH GATE-00 basis="CGB-only storage selected by address" */
 static const uint8_t *io_store_ptr(const gbb_instance *m, uint16_t address) {
@@ -1257,6 +1302,7 @@ static uint8_t io_read_cgb(const gbb_instance *m, uint16_t address) {
         const uint8_t *p = io_store_ptr(m, address);
         return p == NULL ? 0xFFu : (uint8_t)(*p | c->read_or);
     }
+    case IO_BCPD: return cram_data_read(m->bcps, m->bg_cram, cpu_cram_access_allowed(m));
     default: return 0xFFu; /* CONST_FF, DEFERRED_W; DEFERRED_RW is refused before the read */
     }
 }
@@ -1281,6 +1327,7 @@ static void io_write_cgb(gbb_instance *m, uint16_t address, uint8_t value) {
         if (p != NULL) *p = (uint8_t)(value & c->write_mask);
         break;
     }
+    case IO_BCPD: cram_data_write(&m->bcps, m->bg_cram, value, cpu_cram_access_allowed(m)); break;
     case IO_DEFERRED_RW:
     case IO_DEFERRED_W:
         m->bus_unsupported = 1;
@@ -1380,18 +1427,6 @@ static void joypad_request_falling_edge(gbb_instance *m, uint8_t previous) {
     uint8_t current = (uint8_t)(joypad_value(m) & 0x0Fu);
     if ((previous & (uint8_t)~current & 0x0Fu) != 0)
         m->interrupt_flags |= 0x10u;
-}
-
-/* MODEL: BOTH GATE-00 basis=see-branch-gates */
-static int cpu_vram_access_allowed(const gbb_instance *m) {
-    /* MODEL: UNKNOWN GATE-13 research:11 -- VRAM CPU lock window during mode 3 */
-    return (m->lcdc & 0x80u) == 0 || m->ppu_mode != 3u;
-}
-
-/* MODEL: BOTH GATE-00 basis=see-branch-gates */
-static int cpu_oam_access_allowed(const gbb_instance *m) {
-    /* MODEL: UNKNOWN GATE-14 research:11 -- OAM CPU lock window during modes 2 and 3 */
-    return (m->lcdc & 0x80u) == 0 || m->ppu_mode == 0u || m->ppu_mode == 1u;
 }
 
 /* MODEL: BOTH GATE-00 basis=model-neutral */

@@ -294,6 +294,10 @@ static int render_io(const io_cell *c, int col, char *rd, size_t rd_n, char *wr,
         snprintf(rd, rd_n, "stored or $%02X", (unsigned)c->read_or);
         snprintf(wr, wr_n, "stored and $%02X", (unsigned)c->write_mask);
         return 1;
+    case IO_BCPD:
+        snprintf(rd, rd_n, "palette byte at index, $FF while mode 3");
+        snprintf(wr, wr_n, "stores at index, auto-increments even when blocked");
+        return 1;
     case IO_DEFERRED_RW:
         snprintf(rd, rd_n, "stop");
         snprintf(wr, wr_n, "dropped, stop after retire");

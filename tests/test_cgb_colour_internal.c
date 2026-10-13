@@ -176,6 +176,135 @@ static int cgb_priority_table_shape(void) {
     return 0;
 }
 
+
+/* ---- Palette RAM ports (Phase 11 plan 11-02; D-08, D-10 to D-14) ----------------------------------
+ * These cases drive read8/write8 directly with lcdc and ppu_mode set by hand, so each lock state is
+ * exact. Expected bytes come from the decisions, not from the core. */
+static gbb_instance *make_machine(int cgb_mode) {
+    static uint8_t rom[0x8000];
+    memset(rom, 0, sizeof(rom));
+    rom[0x101] = 0xC3u; rom[0x102] = 0x50u; rom[0x103] = 0x01u;
+    rom[0x143] = cgb_mode ? 0x80u : 0x00u;
+    uint8_t sum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i) sum = (uint8_t)(sum - rom[i] - 1u);
+    rom[0x14Du] = sum;
+    gbb_instance *m = NULL;
+    if (gbb_create(GBB_PROFILE_CGB_CPU_E, &m) != GBB_OK || gbb_load_rom(m, rom, sizeof(rom)) != GBB_OK) {
+        gbb_destroy(m);
+        return NULL;
+    }
+    m->lcdc = 0x91u;   /* LCD on ... */
+    m->ppu_mode = 0u;  /* ... in HBlank, where the CPU may reach CRAM */
+    return m;
+}
+
+#define BCPS 0xFF68u
+#define BCPD 0xFF69u
+#define OCPS 0xFF6Au
+#define OCPD 0xFF6Bu
+#define OPRI_PORT 0xFF6Cu
+
+static int palette_cram_bg_autoinc(void) {
+    gbb_instance *m = make_machine(1);
+    REQUIRE(m != NULL);
+    write8(m, BCPS, 0x80u);
+    uint8_t seq[64];
+    int saw_bit7 = 0;
+    for (unsigned i = 0; i < 64u; ++i) {
+        seq[i] = (uint8_t)(i * 5u + 0x83u); /* all 8 bits of each byte are kept */
+        saw_bit7 |= (seq[i] & 0x80u) != 0u;
+        write8(m, BCPD, seq[i]);
+        if (i == 0u) REQUIRE(read8(m, BCPS) == 0xC1u);
+    }
+    REQUIRE(saw_bit7);
+    for (unsigned i = 0; i < 64u; ++i) REQUIRE(m->bg_cram[i] == seq[i]);
+    REQUIRE(read8(m, BCPS) == 0xC0u); /* wrapped 63 to 0, bit 7 kept, bit 6 reads 1 */
+    gbb_destroy(m);
+    return 0;
+}
+
+static int palette_cram_bg_readback(void) {
+    gbb_instance *m = make_machine(1);
+    REQUIRE(m != NULL);
+    write8(m, BCPS, 0x03u);
+    write8(m, BCPD, 0x6Bu); /* bit 7 clear: no increment */
+    REQUIRE(read8(m, BCPS) == 0x43u);
+    REQUIRE(read8(m, BCPD) == 0x6Bu);
+    REQUIRE(read8(m, BCPD) == 0x6Bu);
+    REQUIRE(read8(m, BCPS) == 0x43u);
+    write8(m, BCPS, 0x83u); /* bit 7 set: reads still never advance the index */
+    REQUIRE(read8(m, BCPD) == 0x6Bu);
+    REQUIRE(read8(m, BCPD) == 0x6Bu);
+    REQUIRE(read8(m, BCPS) == 0xC3u);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int palette_cram_bg_blocked_write(void) {
+    gbb_instance *m = make_machine(1);
+    REQUIRE(m != NULL);
+    write8(m, BCPS, 0x05u);
+    write8(m, BCPD, 0x34u);
+    REQUIRE(m->bg_cram[5] == 0x34u);
+    m->ppu_mode = 3u; /* LCD on, pixel transfer: the write is blocked */
+    write8(m, BCPS, 0x85u);
+    write8(m, BCPD, 0x12u);
+    REQUIRE(m->bg_cram[5] == 0x34u);
+    REQUIRE(read8(m, BCPS) == 0xC6u); /* the index still advanced */
+    gbb_destroy(m);
+    return 0;
+}
+
+static int palette_cram_bg_blocked_read(void) {
+    gbb_instance *m = make_machine(1);
+    REQUIRE(m != NULL);
+    write8(m, BCPS, 0x07u);
+    write8(m, BCPD, 0x77u);
+    write8(m, BCPS, 0x87u);
+    m->ppu_mode = 3u;
+    REQUIRE(read8(m, BCPD) == 0xFFu);
+    REQUIRE(read8(m, BCPS) == 0xC7u); /* a blocked read does not advance either */
+    m->ppu_mode = 0u;
+    REQUIRE(read8(m, BCPD) == 0x77u);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int palette_cram_lockout_lcd_off(void) {
+    gbb_instance *m = make_machine(1);
+    REQUIRE(m != NULL);
+    m->lcdc = 0x11u; /* LCD off: ppu_mode is stale, the lock does not apply */
+    m->ppu_mode = 3u;
+    write8(m, BCPS, 0x00u);
+    write8(m, BCPD, 0x12u);
+    REQUIRE(m->bg_cram[0] == 0x12u);
+    REQUIRE(read8(m, BCPD) == 0x12u);
+    /* LCD on, every mode except 3 allows the access. */
+    m->lcdc = 0x91u;
+    for (unsigned mode = 0; mode < 4u; ++mode) {
+        m->ppu_mode = (uint8_t)mode;
+        write8(m, BCPS, 0x01u);
+        m->bg_cram[1] = 0u;
+        write8(m, BCPD, 0x5Au);
+        REQUIRE((m->bg_cram[1] == 0x5Au) == (mode != 3u));
+    }
+    gbb_destroy(m);
+    return 0;
+}
+
+typedef struct {
+    const char *name;
+    int (*run)(void);
+} plain_case;
+
+static const plain_case PLAIN_CASES[] = {
+    {"palette_cram_bg_autoinc", palette_cram_bg_autoinc},
+    {"palette_cram_bg_readback", palette_cram_bg_readback},
+    {"palette_cram_bg_blocked_write", palette_cram_bg_blocked_write},
+    {"palette_cram_bg_blocked_read", palette_cram_bg_blocked_read},
+    {"palette_cram_lockout_lcd_off", palette_cram_lockout_lcd_off},
+};
+
 int main(int argc, char **argv) {
     if (argc < 2) return 2;
     if (strcmp(argv[1], "cgb_colour_internal_harness_alive") == 0)
@@ -189,6 +318,12 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "cgb_priority_table_shape") == 0) {
         int rc = cgb_priority_table_shape();
         if (rc == 0) puts("cgb-colour-internal cgb_priority_table_shape pass");
+        return rc;
+    }
+    for (size_t i = 0; i < sizeof(PLAIN_CASES) / sizeof(PLAIN_CASES[0]); ++i) {
+        if (strcmp(argv[1], PLAIN_CASES[i].name) != 0) continue;
+        int rc = PLAIN_CASES[i].run();
+        if (rc == 0) printf("cgb-colour-internal %s pass\n", PLAIN_CASES[i].name);
         return rc;
     }
     return 2;

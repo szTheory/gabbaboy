@@ -1989,4 +1989,15 @@ set_tests_properties(cgb_priority_table_shape PROPERTIES
   PASS_REGULAR_EXPRESSION "cgb_priority_table_shape pass")
 # --- Phase 11 plan 11-01 end ---
 
+# --- Phase 11 plan 11-02 begin ---
+# Palette RAM and OPRI ports (D-08, D-10 to D-14). White-box cases drive read8/write8 directly.
+foreach(gbb_palette_case
+    palette_cram_bg_autoinc palette_cram_bg_readback palette_cram_bg_blocked_write
+    palette_cram_bg_blocked_read palette_cram_lockout_lcd_off)
+  add_test(NAME ${gbb_palette_case} COMMAND test_cgb_colour_internal ${gbb_palette_case})
+  set_tests_properties(${gbb_palette_case} PROPERTIES
+    PASS_REGULAR_EXPRESSION "cgb-colour-internal ${gbb_palette_case} pass")
+endforeach()
+# --- Phase 11 plan 11-02 end ---
+
 gabbaboy_verify_registered_tests()

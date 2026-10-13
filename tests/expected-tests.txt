@@ -550,3 +550,8 @@ cgb_priority_truth_regen
 cgb_priority_truth_selftest
 cgb_priority_truth_regen_mutated
 cgb_priority_table_shape
+palette_cram_bg_autoinc
+palette_cram_bg_readback
+palette_cram_bg_blocked_write
+palette_cram_bg_blocked_read
+palette_cram_lockout_lcd_off

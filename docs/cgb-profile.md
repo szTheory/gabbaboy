@@ -198,9 +198,12 @@ base value and the rule in its reason.
 cells. On the CGB profile FF4C-FF7F is decoded from it: KEY0 reads `$FF`; KEY1 reads `$7E` or the
 armed bit in CGB mode; VBK reads `$FE` or the bank in both modes and selects VRAM only in CGB mode;
 SVBK (CGB mode) reads `$F8` or the raw 3 bits and selects WRAM bank 1-7 (0 selects 1); BCPS and OCPS
-store a byte and read it with bit 6 set; FF72-FF75 are plain registers (FF75 stores bits 4-6 only).
+store a byte and read it with bit 6 set; BCPD (FF69) in CGB mode stores a write at index `BCPS & $3F`
+and reads that byte back, and when BCPS bit 7 is set every write advances the index (wrapping 63 to 0,
+bit 7 kept) even when the mode-3 lock blocked the write; a blocked read returns `$FF` and a read never
+advances the index; FF72-FF75 are plain registers (FF75 stores bits 4-6 only).
 Unused addresses read `$FF` and ignore writes. Registers owned by a later phase (FF55 write, FF56,
-FF69, FF6B, FF6C, FF76, FF77) are deferred: a read stops with `GBB_STOP_UNSUPPORTED_BUS` before
+FF6B, FF6C, FF76, FF77) are deferred: a read stops with `GBB_STOP_UNSUPPORTED_BUS` before
 anything changes and a write is dropped and reported as the same stop once the instruction retires.
 The DMG profile never enters this decode: its FF4C-FF7F reads still stop and its writes are silent
 no-ops. IE bits 5-7 are stored and read back on the CGB profile only (owner veto item 6).
@@ -364,7 +367,7 @@ column is the evidence class (Pan Docs, Mooneye hardware test, SameBoy, or proje
 | $FF68 | CGB | stored or $40 | stored and $BF | IMPL | HW_TEST |
 | $FF68 | COMPAT | stored or $40 | stored and $BF | IMPL | HW_TEST |
 | $FF69 | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF69 | CGB | stop | dropped, stop after retire | DEFERRED(11) | PANDOCS |
+| $FF69 | CGB | palette byte at index, $FF while mode 3 | stores at index, auto-increments even when blocked | IMPL | PANDOCS |
 | $FF69 | COMPAT | $FF | ignored | IMPL | PANDOCS |
 | $FF6A | DMG | stop | ignored | IMPL | HW_TEST |
 | $FF6A | CGB | stored or $40 | stored and $BF | IMPL | HW_TEST |
