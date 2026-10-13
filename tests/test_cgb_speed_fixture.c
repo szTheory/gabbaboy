@@ -73,7 +73,7 @@ static int load_rom(const char *path, uint8_t **bytes, size_t *size) {
 }
 
 static int run_to_done(gbb_instance *machine, int *saw_halted_idle) {
-    for (unsigned frame = 0; frame < 120u; ++frame) {
+    for (unsigned frame = 0; frame < 60u; ++frame) {
         gbb_run_result result = gbb_run(machine, FRAME_HALF_DOTS, NULL, 0u);
         if (saw_halted_idle != NULL && result.reason == GBB_STOP_HALTED_IDLE &&
             gbb_peek_ram(machine, DONE_ADDRESS) != 1u)

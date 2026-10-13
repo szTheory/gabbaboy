@@ -9,7 +9,7 @@
   "source_sha256": {
     "common.inc": "a51e137d24d221463cec6f1eefe4a88b7c12c805e51734acd1cec43c033cede8",
     "speed.asm": "f7cf7c81ba0571fadab662376724d69c4ee2ce625b0c005f34d0cf2d96323c51",
-    "speed-hostile.asm": "1a14faaea154070553d6716c244556c1fc041ef99670567d9cdc41c0d223627c"
+    "speed-hostile.asm": "e2ed657067d127215ddb329bc97a16057de7ad7330bc6c15c10cd181dd3544d2"
   },
   "license": "MIT; see LICENSE.txt and repository LICENSE",
   "evidence_class": "Pinned author-attested software-model corpus and original deterministic software guest; not hardware evidence.",
@@ -41,7 +41,7 @@
     {
       "file": "speed-hostile.gb",
       "size_bytes": 32768,
-      "sha256": "649524bf93a69f6bdb8ea5e50ad28eaf6410f5e2c013ae303e8cd19c6594b9e1",
+      "sha256": "c03dc826d8da5fcb7adba5fcd9d5c231686519d8fa3ab23cefa57e2e5c027471",
       "recipe": {
         "source": "speed-hostile.asm",
         "defines": [],

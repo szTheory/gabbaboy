@@ -1,6 +1,7 @@
 ; Original hostile-entry CGB speed guest. The host patches only ROM byte $0200 in memory.
 ; Outcome bytes at $C200: marker, selector, KEY1 before/armed/after, handler ran,
-; LY before/after STOP, then reserved bytes. $C0FE is the done marker.
+; LY before/after STOP, final IF bit 2, reserved byte, post-stall DIV and DMA sentinel.
+; $C0FE is the done marker. Selector 0 records no-variant; values above 8 record bad-selector.
 
 INCLUDE "common.inc"
 
@@ -47,10 +48,21 @@ Start:
     jr z, NoVariant
     cp 1
     jp z, Entry1PendingIme
+    cp 2
+    jp z, Entry2PendingIme0
+    cp 3
+    jp z, Entry3IrqInStall
+    cp 4
+    jp z, Entry4HeldButton
+    cp 5
+    jp z, Entry5EiStop
+    cp 6
+    jp z, Entry6LcdOff
+    cp 7
+    jp z, Entry7DmaActive
     cp 8
-    jr c, NotImplemented
-    jr nz, BadSelector
-    jp Entry8BackToBack
+    jp z, Entry8BackToBack
+    jp BadSelector
 
 NoVariant:
     ld a, $A0
@@ -62,19 +74,36 @@ BadSelector:
     ld [wHostileMarker], a
     jp Complete
 
-NotImplemented:
-    ld a, $E0
-    ld [wHostileMarker], a
-    jp Complete
+SECTION "Selector", ROM0[$0200]
+    db 0
+
+SECTION "Hostile program", ROM0[$0201]
 
 Entry1PendingIme:
-    ; The enabled timer raises IF while IME is clear. EI immediately precedes STOP, so
-    ; its delayed enable matures at STOP retirement; the case-3 switch is immediate and
-    ; the handler then runs after the speed change.
+    call PrepareFastPending
+    ei
+    stop
+    nop
+    jp RecordAfterStop
+
+Entry2PendingIme0:
+    call PrepareFastPending
+    ; Keep the pending request but make this entry's IME-off precondition explicit.
+    di
+    stop
+    nop
+    jp RecordAfterStop
+
+PrepareFastPending:
+    ; Generate one timer request while IME is clear. For selector 1, EI is the next
+    ; instruction before STOP, so its delayed enable matures at STOP retirement.
+    di
     ld a, $04
     ld [rIE], a
-    ld a, $FF
+    ; A zero reload value avoids an immediate repeated overflow while IF is pending.
+    xor a
     ldh [rTMA], a
+    ld a, $FF
     ldh [rTIMA], a
     ld a, $05
     ldh [rTAC], a
@@ -92,13 +121,137 @@ Entry1PendingIme:
     ld [wHostileOutcome + 3], a
     ldh a, [rLY]
     ld [wHostileOutcome + 6], a
+    ret
+
+Entry3IrqInStall:
+    ld a, $04
+    ld [rIE], a
+    xor a
+    ldh [rIF], a
+    ldh [rTMA], a
+    ldh [rTIMA], a
+    ld a, $05
+    ldh [rTAC], a
+    call RecordBeforeArm
     ei
+    stop
+    nop
+    jp RecordAfterStop
+
+Entry4HeldButton:
+    ; The host holds RIGHT through the public input-event API. FF00 selects the
+    ; direction row; the enabled slow timer later wakes the HALT selected by STOP.
+    ld a, $20
+    ldh [rP1], a
+    ld a, $04
+    ld [rIE], a
+    xor a
+    ldh [rIF], a
+    ldh [rTMA], a
+    ldh [rTIMA], a
+    call RecordBeforeArm
+    ld a, $04
+    ldh [rTAC], a
+    xor a
+    ldh [rIF], a
+    ei
+    stop
+    nop
+    jp RecordAfterStop
+
+Entry5EiStop:
+    xor a
+    ld [rIE], a
+    ldh [rIF], a
+    call RecordBeforeArm
+    ei
+    stop
+    nop
+    jp RecordAfterStop
+
+Entry6LcdOff:
+    xor a
+    ld [rIE], a
+    ldh [rIF], a
+    ldh [rLCDC], a
+    call RecordBeforeArm
     stop
     nop
     ldh a, [rLY]
     ld [wHostileOutcome + 7], a
     ldh a, [rKEY1]
     ld [wHostileOutcome + 4], a
+    ldh a, [rDIV]
+    ld [wHostileOutcome + 10], a
+    jp RecordFinalIf
+
+Entry7DmaActive:
+    xor a
+    ld [rIE], a
+    ldh [rIF], a
+    ld hl, $C000
+    ld b, 160
+    ld a, $A5
+.fill_oam_source:
+    ld [hli], a
+    dec b
+    jr nz, .fill_oam_source
+    ld hl, DmaStopRoutine
+    ld de, $FF80
+    ld bc, DmaStopRoutineEnd - DmaStopRoutine
+    CopyBytes
+    call RecordBeforeArm
+    jp $FF80
+
+DmaAfterResume:
+    ldh a, [rLY]
+    ld [wHostileOutcome + 7], a
+    ldh a, [rKEY1]
+    ld [wHostileOutcome + 4], a
+    xor a
+    ldh [rLCDC], a
+    ld a, [$FE9F]
+    ld [wHostileOutcome + 11], a
+    jp RecordFinalIf
+
+Entry8BackToBack:
+    xor a
+    ld [rIE], a
+    ldh [rIF], a
+    call RecordBeforeArm
+    ld b, 4
+.switch_again:
+    ld a, 1
+    ldh [rKEY1], a
+    stop
+    nop
+    dec b
+    jr nz, .switch_again
+    ldh a, [rLY]
+    ld [wHostileOutcome + 7], a
+    ldh a, [rKEY1]
+    ld [wHostileOutcome + 4], a
+    jp RecordFinalIf
+
+RecordBeforeArm:
+    ldh a, [rKEY1]
+    ld [wHostileOutcome + 2], a
+    ld a, 1
+    ldh [rKEY1], a
+    ldh a, [rKEY1]
+    ld [wHostileOutcome + 3], a
+    ldh a, [rLY]
+    ld [wHostileOutcome + 6], a
+    ret
+
+RecordAfterStop:
+    ldh a, [rLY]
+    ld [wHostileOutcome + 7], a
+    ldh a, [rKEY1]
+    ld [wHostileOutcome + 4], a
+    jp RecordFinalIf
+
+RecordFinalIf:
     ldh a, [rIF]
     and $04
     jr z, .if_clear
@@ -112,19 +265,25 @@ Entry1PendingIme:
     ld [wHostileMarker], a
     jp Complete
 
-Entry8BackToBack:
-    ; Added by the second execution task.
-    jr NotImplemented
-
 Complete:
+    ; Once every observable is recorded, disarm pending requests before the stable idle loop.
+    xor a
+    ld [rIE], a
+    ldh [rIF], a
     ld a, 1
     ld [wDone], a
 .idle:
     halt
     jr .idle
 
-SECTION "Selector", ROM0[$0200]
-    db 0
+; The two-byte STOP and the immediate continuation both live in HRAM while OAM DMA owns ROM.
+DmaStopRoutine:
+    ld a, $C0
+    ldh [rDMA], a
+    stop
+    nop
+    jp DmaAfterResume
+DmaStopRoutineEnd:
 
 SECTION "Header", ROM0[$0134]
     db "GBB HOSTILE"

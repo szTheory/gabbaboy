@@ -3020,7 +3020,33 @@ add_test(NAME cgb_speed_fixture_hostile
   COMMAND test_cgb_speed_fixture hostile ${GBB_CGB_SPEED_DIR}/speed-hostile.gb
     ${PROJECT_SOURCE_DIR}/tests/data/cgb-speed-expectations.txt)
 set_tests_properties(cgb_speed_fixture_hostile PROPERTIES
-  PASS_REGULAR_EXPRESSION "cgb-speed-fixture hostile pass entries=3" TIMEOUT 60)
+  PASS_REGULAR_EXPRESSION "cgb-speed-fixture hostile pass entries=10" TIMEOUT 60)
+
+# A hostile outcome is independently checked by the public-API selector driver.
+set(GBB_CGB_SPEED_HOSTILE_TAMPERED_TABLE
+  "${PROJECT_BINARY_DIR}/cgb-speed/hostile-tampered-expectations.txt")
+file(READ "${PROJECT_SOURCE_DIR}/tests/data/cgb-speed-expectations.txt"
+  gbb_cgb_speed_hostile_expectations)
+string(FIND "${gbb_cgb_speed_hostile_expectations}" "hostile-key1-after 4 127 127"
+  gbb_cgb_speed_hostile_anchor)
+string(FIND "${gbb_cgb_speed_hostile_expectations}" "hostile-key1-after 4 127 127"
+  gbb_cgb_speed_hostile_anchor_last REVERSE)
+if(gbb_cgb_speed_hostile_anchor EQUAL -1 OR
+   NOT gbb_cgb_speed_hostile_anchor EQUAL gbb_cgb_speed_hostile_anchor_last)
+  message(FATAL_ERROR "hostile expectation tamper anchor must occur exactly once")
+endif()
+string(REPLACE "hostile-key1-after 4 127 127" "hostile-key1-after 4 254 254"
+  gbb_cgb_speed_hostile_expectations_bad "${gbb_cgb_speed_hostile_expectations}")
+file(WRITE "${GBB_CGB_SPEED_HOSTILE_TAMPERED_TABLE}"
+  "${gbb_cgb_speed_hostile_expectations_bad}")
+add_test(NAME cgb_speed_expectations_hostile_tampered
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_speed_fixture>;hostile;${GBB_CGB_SPEED_DIR}/speed-hostile.gb;${GBB_CGB_SPEED_HOSTILE_TAMPERED_TABLE}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=cgb-speed-fixture verdict-fail hostile-4 hostile-key1-after"
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(cgb_speed_expectations_hostile_tampered PROPERTIES TIMEOUT 60)
 # --- Phase 12 plan 12-11 end ---
 
 gabbaboy_verify_registered_tests()
