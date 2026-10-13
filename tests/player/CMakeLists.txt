@@ -423,8 +423,8 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
     set(claims_phrases_file "${CMAKE_CURRENT_BINARY_DIR}/claims_phrases.txt")
     set(claims_linux_phrases_file "${CMAKE_CURRENT_BINARY_DIR}/claims_linux_phrases.txt")
     file(WRITE "${claims_phrases_file}"
-      "no colour correction\nDMG APU model\n--model auto|dmg|cgb\nno palette flag\nCGB mode-3 timing\n")
-    file(WRITE "${claims_linux_phrases_file}" "no colour correction\nCGB mode-3 timing\n")
+      "no colour correction\nDMG APU model\n--model auto|dmg|cgb\nno palette flag\nCGB double speed is implemented\nCGB mode-3 timing\n")
+    file(WRITE "${claims_linux_phrases_file}" "no colour correction\nCGB double speed is implemented\nCGB mode-3 timing\n")
     set(claims_script "${CMAKE_CURRENT_SOURCE_DIR}/claims_agree.cmake")
     set(claims_args
       "-DPHRASES_FILE=${claims_phrases_file}" "-DLINUX_PHRASES_FILE=${claims_linux_phrases_file}"
