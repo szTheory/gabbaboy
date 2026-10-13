@@ -4,10 +4,10 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_plan: Not started
 status: planning
-stopped_at: Phase 11 verify-work passed (11/11 automated UAT); next /gsd-discuss-phase 12
+stopped_at: Phase 12 context gathered (12-CONTEXT.md D-01..D-36); next /gsd-plan-phase 12
 last_updated: "2026-10-13T13:10:00.000Z"
 last_activity: 2026-10-13
-last_activity_desc: Phase 11 verify-work passed; PR #67 squash-merges at its exact-head green head
+last_activity_desc: Phase 12 discussion complete; CONTEXT locked from six-lens fan-out plus adversarial review
 state_head: 4e61ab7a627fd8e8b4789a7db427c807853508ea
 progress:
   total_phases: 9
@@ -40,7 +40,7 @@ Verified: Phase 10 `/gsd-verify-work 10` passed 2026-10-12 — 12/12 UAT items a
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, planning (11-RESEARCH, 11-PATTERNS, 11-VALIDATION, plans 11-01..11-15) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, execution (plans 11-01..11-15) plus the execute-phase tail; gsd-verifier `passed` 3/3 (11-VERIFICATION.md); evidence head `fb7d14c` exact-head green; PR #67 open, not merged
 Verified: Phase 11 `/gsd-verify-work 11` passed 2026-10-13 — 11/11 UAT rows automated covering all 91 SUMMARY coverage entries (11-UAT.md); verification `passed` (11-VERIFICATION.md); hosted ASan timeout fixed in the PR (LESSONS GB-CI-004); PR #67 squash-merges at the exact-head green branch head (pre-authorized)
-Next step: Phase 12 - CGB Double Speed (no CONTEXT.md yet) via `/gsd-discuss-phase 12`; the owner chooses when
+Next step: Phase 12 - CGB Double Speed research and planning via `/gsd-plan-phase 12`; the owner chooses when
 Last activity: 2026-10-13 — Phase 11 verify-work passed; exact-head CI green at 4811033
 
 Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
@@ -395,9 +395,11 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 ## Session Continuity
 
 Last session: 2026-10-13T04:29:43.285Z
-Stopped at: Phase 11 complete, ready to plan Phase 12
+Stopped at: Phase 12 context gathered, ready to plan Phase 12
 Resume file: .planning/.continue-here.md
-Next command in fresh context: `/gsd-verify-work 11`
+Next command in fresh context: `/gsd-plan-phase 12`
+
+Completed workflow stage: **Phase 12 - CGB Double Speed, discussion** (2026-10-13) on branch `gsd/phase-12-cgb-double-speed`. [12-CONTEXT.md](phases/GB-12-cgb-double-speed/12-CONTEXT.md) locks D-01..D-36 from six parallel advisor researches (switch sequence and pause, clock domains and research:12 gates, oracles and fixtures, host API/player/docs, cross-emulator gap sweep, robustness/security/verification) plus an adversarial review of the draft, auto-followed per the owner's standing instruction. Key choices: SameBoy `stop()` decision table (held button enters HALT without switching; pending IRQ switches with no pause and a 1-byte STOP); pause 0x20008 CPU T at the destination speed, pinned as the AGE-verified DIV-reset-to-resume distance (Pan Docs 2050 M rejected as refuted by AGE hardware rows); a separate resumable stall branch with the halt-branch shape, M-cycle steps, interrupt wake, reported as BUDGET; every device advances during the pause; APU DIV tap bit 12 to bit 13 in double speed; CPU-side countdowns move to T-tick units; no public ABI change; 13 AGE ROMs admitted under `fixtures/age/` plus an original per-scanline fixture; every research:12 gate resolved, expected-failed or reassigned to Phase 14. Owner veto window: D-05, D-02/D-08, D-19, D-14, D-09, D-02 case 1, D-12 deferrals, D-26 reduced sweep. **Next step: Phase 12 research and planning. Next command in fresh context: `/gsd-plan-phase 12`.** Both auto-advance flags stay false; nothing advances automatically.
 
 Completed workflow stage: **Phase 11 - CGB Colour Rendering and Player Colour, verify-work** (2026-10-13): `/gsd-verify-work 11` passed with zero human checkpoints (D-069): all 91 SUMMARY coverage entries classify as auto-passed and are grouped into 11 UAT rows (11-UAT.md); every named test a coverage ref cites is registered; `phase uat-passed --require-verification` passed; security `threats_open: 0`; ui-review not applicable (SDL player). Verification found one CI defect, fixed on the branch: hosted linux-asan-ubsan ran serially at 20 of 30 minutes and timed out on a slow pull_request runner at b314686. eb6f36e runs it with `--parallel 4` (pinned by `ci_asan_parallel_contract` and its negative control) and 4811033 scales explicit test TIMEOUTs by three in sanitizer builds (LESSONS GB-CI-004). Evidence head `4811033`: ci push 38398631736 and pull_request 38398639883 all jobs success (ASan 686/686, 16-18 min), fixture-repro 38398631778/38398639816 success, preview-package-smoke 38398639852 success; local 691/691. PR #67 (https://github.com/szTheory/gabbaboy/pull/67) squash-merges at its exact-head green head (pre-authorized). Owner veto items before merge: D-15, D-17a, D-18, D-26, D-08, D-21, D-24. **Next step: Phase 12 - CGB Double Speed. Next command in fresh context: `/gsd-discuss-phase 12`.** Continue only when the owner chooses to. Both auto-advance flags stay false.
 
