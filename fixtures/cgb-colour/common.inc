@@ -9,6 +9,13 @@ DEF rLY   EQU $FF44
 DEF rIF   EQU $FF0F
 DEF rBCPS EQU $FF68
 DEF rBCPD EQU $FF69
+DEF rOCPS EQU $FF6A
+DEF rOCPD EQU $FF6B
+DEF rVBK  EQU $FF4F
+DEF rBGP  EQU $FF47
+DEF rOBP0 EQU $FF48
+DEF rOBP1 EQU $FF49
+DEF rOAM  EQU $FE00
 DEF rIE   EQU $FFFF
 
 ; Cartridge entry: the core starts at $0100, so a jump over the header area to Start.
@@ -36,4 +43,30 @@ MACRO WriteBgColour0
     ldh [rBCPD], a
     ld a, [hl]
     ldh [rBCPD], a
+ENDM
+
+; Copy BC bytes from [HL] to [DE]. Clobbers A, BC, DE, HL.
+MACRO CopyBytes
+.copy\@:
+    ld a, [hl+]
+    ld [de], a
+    inc de
+    dec bc
+    ld a, b
+    or c
+    jr nz, .copy\@
+ENDM
+
+; Palette RAM load from [HL]: \1 is the index register (rBCPS or rOCPS), \2 the byte count. Index
+; $80 selects byte 0 with auto-increment, so the data port is the register after the index one.
+; Clobbers A, B, HL.
+MACRO LoadCram
+    ld a, $80
+    ldh [\1], a
+    ld b, \2
+.cram\@:
+    ld a, [hl+]
+    ldh [\1 + 1], a
+    dec b
+    jr nz, .cram\@
 ENDM

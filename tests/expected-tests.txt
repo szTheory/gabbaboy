@@ -645,5 +645,7 @@ cgb_consumer_symbol_coverage
 cgb_consumer_symbol_coverage_selftest
 cgb_colour_fixture_digest
 cgb_colour_hblank_rows
+cgb_colour_attr
+cgb_colour_lcdc0
 cgb_colour_mutant_frame_resolve
 cgb_colour_mutant_frame_resolve_control

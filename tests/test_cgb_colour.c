@@ -465,6 +465,108 @@ static int cgb_colour_hblank_rows(void) {
     return 0;
 }
 
+/* ---- Original fixtures: colour-attr.gb and colour-lcdc0.gb (D-23 items 1, 2 and 6) ---- */
+/* Ten 16x16 cells in one row. Each cell is 2x2 copies of one 8x8 tile of four 4x4 quadrants, so a
+ * cell's expected colours are four literals typed here from the fixture design in the manifest
+ * protocol (never read back from the core). Quadrant order: TL, TR, BL, BR. */
+#define ATTR_CELLS 10u
+#define ATTR_BLANK 0x1111u   /* BG palette 0 colour 0 */
+static const uint16_t attr_expected[ATTR_CELLS][4] = {
+    {0x6666u, 0x7777u, 0x4321u, 0x5555u},   /* 0 BG palette 3 */
+    {0x0444u, 0x1111u, 0x2222u, 0x3333u},   /* 1 tile bank 1 */
+    {0x3333u, 0x2222u, 0x1111u, 0x0444u},   /* 2 X flip */
+    {0x0444u, 0x1111u, 0x2222u, 0x3333u},   /* 3 Y flip */
+    {0x2222u, 0x3333u, 0x0444u, 0x1111u},   /* 4 attr bit 4 set: equals cell 8 */
+    {0x2222u, 0x2222u, 0x2222u, 0x2222u},   /* 5 BG priority bit: the BG wins over the object */
+    {0x1BCDu, 0x1111u, 0x789Au, 0x0ABCu},   /* 6 OBJ bank 1, palette 5 (index 0 shows the BG) */
+    {0x4567u, 0x5678u, 0x6789u, 0x1111u},   /* 7 OBJ bank 0, palette 2 */
+    {0x2222u, 0x3333u, 0x0444u, 0x1111u},   /* 8 reference: attr 0 */
+    {0x1111u, 0x1111u, 0x1111u, 0x1111u},   /* 9 blank */
+};
+#define ATTR_OBJ_OVER_BG 0x1234u   /* OBJ palette 0 colour 1: cell 5 when LCDC bit 0 is clear */
+
+static unsigned attr_quadrant(size_t x, size_t y) { return (unsigned)((y % 8u) / 4u * 2u + (x % 8u) / 4u); }
+
+/* Returns 0 when every pixel matches; prints the first mismatch. `cell5` replaces cell 5's colour. */
+static int attr_frame_matches(const uint16_t *frame, uint16_t cell5) {
+    for (size_t y = 0; y < FRAME_H; ++y) {
+        for (size_t x = 0; x < FRAME_W; ++x) {
+            const size_t cell = x / 16u;
+            uint16_t want = ATTR_BLANK;
+            if (y < 16u) want = cell == 5u ? cell5 : attr_expected[cell][attr_quadrant(x, y)];
+            if (frame[y * FRAME_W + x] != want) {
+                printf("not ok 1 - cell %zu pixel (%zu,%zu) is %04X, expected %04X\n", cell, x, y,
+                       (unsigned)frame[y * FRAME_W + x], (unsigned)want);
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+/* Cell 4 must equal the attr-0 reference cell 8, pixel for pixel (bit 4 is an unused attribute bit). */
+static int attr_bit4_equals_reference(const uint16_t *frame) {
+    for (size_t y = 0; y < 16u; ++y)
+        for (size_t x = 0; x < 16u; ++x)
+            if (frame[y * FRAME_W + 4u * 16u + x] != frame[y * FRAME_W + 8u * 16u + x]) return 1;
+    return 0;
+}
+
+static int run_fixture_frame(const char *name, gbb_profile profile, uint16_t *frame, gbb_instance **out) {
+    static uint8_t rom[ROM_SIZE];
+    gbb_frame_info info;
+    gbb_instance *m = NULL;
+    REQUIRE(read_fixture(name, rom, sizeof(rom)) == ROM_SIZE);
+    REQUIRE(gbb_create(profile, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
+    for (int i = 0; i < 10; ++i) {
+        gbb_run_result r = gbb_run(m, FRAME_HALF_DOTS, NULL, 0);
+        REQUIRE(r.reason != GBB_STOP_INVALID_STATE);
+    }
+    memset(frame, 0xFF, sizeof(uint16_t) * FRAME_W * FRAME_H);
+    REQUIRE(gbb_copy_frame_rgb555(m, frame, sizeof(uint16_t) * FRAME_W * FRAME_H, 320u, &info) == GBB_OK);
+    *out = m;
+    return 0;
+}
+
+static int check_digest(const uint16_t *frame, const char *want) {
+    char hex[65];
+    REQUIRE(gbb_accept_rgb555_digest(frame, 320u, hex) == 0);
+    if (strcmp(hex, want) != 0) {
+        printf("observed digest %s\n", hex);
+        REQUIRE(strcmp(hex, want) == 0);
+    }
+    return 0;
+}
+
+#define ATTR_FRAME_DIGEST "38f5419acf11682ef8054b7d568b136b236ff807985d26f9ca1485a6ce9f3c52"
+#define LCDC0_FRAME_DIGEST "e3c3f19f2c201c9f092e006b5c9dfee718af3cf571a5b73f78df44a5e15da1b8"
+
+static int cgb_colour_attr(void) {
+    static uint16_t frame[FRAME_W * FRAME_H];
+    gbb_instance *m = NULL;
+    if (run_fixture_frame("colour-attr.gb", GBB_PROFILE_CGB_CPU_E, frame, &m) != 0) return 1;
+    REQUIRE(attr_frame_matches(frame, 0x2222u) == 0);
+    REQUIRE(attr_bit4_equals_reference(frame) == 0);
+    REQUIRE(check_digest(frame, ATTR_FRAME_DIGEST) == 0);
+    gbb_destroy(m);
+    return 0;
+}
+
+/* D-06: with LCDC bit 0 clear the BG is still drawn with its colours; only the priority bit's
+ * force-the-BG-on-top effect goes away, so cell 5 shows the object. */
+static int cgb_colour_lcdc0(void) {
+    static uint16_t frame[FRAME_W * FRAME_H];
+    gbb_instance *m = NULL;
+    if (run_fixture_frame("colour-lcdc0.gb", GBB_PROFILE_CGB_CPU_E, frame, &m) != 0) return 1;
+    REQUIRE(attr_frame_matches(frame, ATTR_OBJ_OVER_BG) == 0);
+    REQUIRE(attr_bit4_equals_reference(frame) == 0);
+    REQUIRE(frame[0] == 0x6666u);   /* a BG cell is drawn although LCDC bit 0 is clear */
+    REQUIRE(check_digest(frame, LCDC0_FRAME_DIGEST) == 0);
+    gbb_destroy(m);
+    return 0;
+}
+
 typedef int (*case_fn)(void);
 static const struct { const char *name; case_fn fn; } cases[] = {
     {"cgb_colour_copy_frame_unsupported", cgb_colour_copy_frame_unsupported},
@@ -481,6 +583,8 @@ static const struct { const char *name; case_fn fn; } cases[] = {
     {"palette_compat_api_survives", palette_compat_api_survives},
     {"palette_compat_effect_next_frame", palette_compat_effect_next_frame},
     {"cgb_colour_hblank_rows", cgb_colour_hblank_rows},
+    {"cgb_colour_attr", cgb_colour_attr},
+    {"cgb_colour_lcdc0", cgb_colour_lcdc0},
 };
 
 int main(int argc, char **argv) {

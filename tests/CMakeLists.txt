@@ -2244,4 +2244,14 @@ gbb_colour_mutant(frame_resolve test_cgb_colour.c
   cgb_rgb555_both_modes)
 # --- Phase 11 plan 11-07 end ---
 
+# --- Phase 11 plan 11-08 begin ---
+# Remaining original colour fixtures (D-23): attribute bits and LCDC.0 priority first; each case
+# checks its literal structural predicate before the frame digest is compared.
+foreach(gbb_colour_fixture_case cgb_colour_attr cgb_colour_lcdc0)
+  add_test(NAME ${gbb_colour_fixture_case} COMMAND test_cgb_colour ${gbb_colour_fixture_case} ${GBB_CGB_COLOUR_DIR})
+  set_tests_properties(${gbb_colour_fixture_case} PROPERTIES
+    PASS_REGULAR_EXPRESSION "ok 1 - ${gbb_colour_fixture_case}")
+endforeach()
+# --- Phase 11 plan 11-08 end ---
+
 gabbaboy_verify_registered_tests()

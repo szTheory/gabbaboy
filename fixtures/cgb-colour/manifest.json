@@ -2,11 +2,13 @@
   "id": "cgb-colour",
   "source": [
     "common.inc",
+    "attr.asm",
     "hblank.asm"
   ],
   "source_identity": "Original GabbaBoy project-authored assembly",
   "source_sha256": {
-    "common.inc": "60638035901961861da904428ddeb3df57d5304a5d358334b98dabe4436e677c",
+    "common.inc": "23a16af41a468060f370863ddf645ee35ea40b70fd8bdc87526a6bdb3df7db04",
+    "attr.asm": "fb42fa1a3d96791f5df087d546f285e2dbf0e198d28761a3ede47b1c34059924",
     "hblank.asm": "4084cb89963c069abbd91715d99a2244c6c90bc6425bfc1002a90535a296f351"
   },
   "license": "MIT; see LICENSE.txt and repository LICENSE",
@@ -22,12 +24,44 @@
   },
   "fixtures": [
     {
+      "file": "colour-attr.gb",
+      "size_bytes": 32768,
+      "sha256": "35eb9a4466a06ff5a0d8de2f2ebd07e00525f048bfcd6cb871922f57ab0bfb76",
+      "recipe": {
+        "source": "attr.asm",
+        "defines": [],
+        "rgbfix_flags": [
+          "-c",
+          "-v",
+          "-p",
+          "0"
+        ]
+      }
+    },
+    {
       "file": "colour-hblank.gb",
       "size_bytes": 32768,
       "sha256": "3ec191ebae9405f5be4248794b7652a39bd1d4a8aabb3a32393ccfb79ddfbef8",
       "recipe": {
         "source": "hblank.asm",
         "defines": [],
+        "rgbfix_flags": [
+          "-c",
+          "-v",
+          "-p",
+          "0"
+        ]
+      }
+    },
+    {
+      "file": "colour-lcdc0.gb",
+      "size_bytes": 32768,
+      "sha256": "f0acbd58d2ce876587cdb8e7fd94fa5aa013d3f468adbd94698460bd681b6e7a",
+      "recipe": {
+        "source": "attr.asm",
+        "defines": [
+          "LCDC0_CLEAR"
+        ],
         "rgbfix_flags": [
           "-c",
           "-v",
@@ -59,7 +93,68 @@
       "expected": "every row is uniform and equals hblank_value(row); the 144 row values are distinct and non-zero",
       "structural_predicate": "checked by cgb_colour_hblank_rows before the frame digest pin is compared"
     },
-    "run": "load on the CGB-CPU-E profile, run 10 frames, copy with gbb_copy_frame_rgb555"
+    "run": "load on the CGB-CPU-E profile, run 10 frames, copy with gbb_copy_frame_rgb555",
+    "colour-attr.gb": {
+      "summary": "Ten 16x16-pixel cells in one row (x = 16 * cell, y 0..15); each cell is 2x2 copies of one 8x8 tile of four 4x4 quadrants. Rows 16..143 are BG palette 0 colour 0 (tile 0).",
+      "quadrant_order": "top-left, top-right, bottom-left, bottom-right of each 8x8 tile, indexed by (y % 8) / 4 * 2 + (x % 8) / 4",
+      "palettes": {
+        "bg0": [
+          "0x1111",
+          "0x2222",
+          "0x3333",
+          "0x0444"
+        ],
+        "bg3": [
+          "0x5555",
+          "0x6666",
+          "0x7777",
+          "0x4321"
+        ],
+        "obj0": [
+          "0x0A0A",
+          "0x1234",
+          "0x2345",
+          "0x3456"
+        ],
+        "obj2": [
+          "0x0B0B",
+          "0x4567",
+          "0x5678",
+          "0x6789"
+        ],
+        "obj5": [
+          "0x0C0C",
+          "0x789A",
+          "0x0ABC",
+          "0x1BCD"
+        ]
+      },
+      "tiles": {
+        "Q (bank 0, tile 1)": "indices 1, 2, 3, 0",
+        "R (bank 1, tile 1)": "indices 3, 0, 1, 2",
+        "solid (bank 0, tile 2)": "index 1"
+      },
+      "cells": {
+        "0": "BG attr palette 3, tile Q: 0x6666, 0x7777, 0x4321, 0x5555",
+        "1": "BG attr bank 1, tile R, palette 0: 0x0444, 0x1111, 0x2222, 0x3333",
+        "2": "BG attr X flip, tile Q, palette 0: 0x3333, 0x2222, 0x1111, 0x0444",
+        "3": "BG attr Y flip, tile Q, palette 0: 0x0444, 0x1111, 0x2222, 0x3333",
+        "4": "BG attr bit 4 set (unused), tile Q, palette 0: 0x2222, 0x3333, 0x0444, 0x1111, equal to cell 8",
+        "5": "BG attr bit 7, tile solid index 1, palette 0, under a clear-priority object: 0x2222 (BG wins); with LCDC bit 0 clear 0x1234 (object wins)",
+        "6": "OBJ tile R from bank 1, OBJ palette 5: 0x1BCD, BG colour 0 0x1111 (index 0 transparent), 0x789A, 0x0ABC",
+        "7": "OBJ tile Q from bank 0, OBJ palette 2: 0x4567, 0x5678, 0x6789, BG colour 0 0x1111 (index 0 transparent)",
+        "8": "reference: attr 0, tile Q, palette 0: 0x2222, 0x3333, 0x0444, 0x1111",
+        "9": "blank tile 0: 0x1111 everywhere"
+      },
+      "run": "load on the CGB-CPU-E profile, run 10 frames, copy with gbb_copy_frame_rgb555",
+      "structural_predicate": "checked by cgb_colour_attr before the frame digest pin is compared"
+    },
+    "colour-lcdc0.gb": {
+      "summary": "attr.asm built with LCDC = 0x92 (LCDC bit 0 clear). On CGB this removes BG-over-object priority but the BG is still drawn (D-06).",
+      "cells": "cells 0-4 and 6-9 as in colour-attr.gb; cell 5 shows the object colour 0x1234 because BG attribute bit 7 no longer forces the BG on top",
+      "run": "load on the CGB-CPU-E profile, run 10 frames, copy with gbb_copy_frame_rgb555",
+      "structural_predicate": "checked by cgb_colour_lcdc0 before the frame digest pin is compared"
+    }
   },
   "evidence_class": "original software fixture plus synthetic oracle, not hardware evidence",
   "scope_limits": [
