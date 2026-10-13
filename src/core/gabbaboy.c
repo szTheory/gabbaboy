@@ -1355,6 +1355,7 @@ static uint8_t io_read_cgb(const gbb_instance *m, uint16_t address) {
 /* MODEL: CGB_ONLY GATE-71 GUARD=model_is_cgb -- CGB register writes */
 static void io_write_cgb(gbb_instance *m, uint16_t address, uint8_t value) {
     if (!model_is_cgb(m)) return;
+    if (address == 0xFF4Cu) return; /* D-03: KEY0 never changes speed or mode. P12-M32 */
     const io_cell *c = io_cgb_cell(m, address);
     switch (c->kind) {
     case IO_KEY1: m->key1_armed = (uint8_t)(value & 1u); break;
@@ -3870,7 +3871,7 @@ static void execute(gbb_instance *m, uint8_t cost) {
                 case 3: m->pc = (uint16_t)(pc + 1u); m->stop_switch_pending = 3u; break;
                 case 4:
                     m->pc = (uint16_t)(pc + 2u);
-                    m->stop_switch_pending = 4u;
+                    m->stop_switch_pending = 4u; /* P12-M33 */
                     break;
                 default: m->pc=(uint16_t)(pc+2u); m->stopped=1u; break;
                 }
@@ -4144,7 +4145,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
         }
         /* MODEL: UNKNOWN GATE-65 research:12 -- DIV reset on STOP */
         if (instance->stopped) {
-            divider_reset(instance, 0);
+            divider_reset(instance, 0); /* P12-M30 */
             result.reason=GBB_STOP_STOPPED;
             return result;
         }

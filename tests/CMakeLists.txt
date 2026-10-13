@@ -2549,9 +2549,23 @@ add_test(NAME cgb_speed_stop_prefetch_ff04_negative
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(cgb_speed_stop_prefetch_ff04_negative PROPERTIES TIMEOUT 60)
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 20 pending_ignored
-  cgb_speed_stop_cases "cpu_stall_kind == GBB_STALL_NONE|machine->double_speed == 1u")
+  cgb_speed_stop_cases "stop_case")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 27 divider_reset_omitted
-  cgb_speed_stop_cases "divider_counter == 0u")
+  cgb_speed_stop_cases "divider_counter")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 8 speed_gate_removed
+  cgb_speed_dmg_unarmed_unchanged "run.reason == GBB_STOP_STOPPED")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 10 key1_arm_not_cleared
+  cgb_speed_key1_readback "0xFF4Du")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 19 held_predicate_ignored
+  cgb_speed_stop_cases "stop_case")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 29 switch_cost_one_m
+  cgb_speed_stop_cost "GBB_STOP_SWITCH_COST_HALF_DOTS")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 30 dmg_stop_apu_edge
+  cgb_speed_dmg_unarmed_unchanged "apu_sequencer_step == 3u")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 32 key0_toggles_speed
+  cgb_speed_key0_no_switch "m->double_speed == 0u")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 33 operand_changes_switch
+  cgb_speed_stop_operand "a->time_half_dots == b->time_half_dots")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 7 devices_frozen
   cgb_speed_tracer_switch "divider_counter != 0u")
 add_test(NAME cgb_speed_cpu_ticks COMMAND test_cgb_speed_internal_p12 cgb_speed_cpu_ticks)

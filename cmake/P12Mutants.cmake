@@ -1,7 +1,35 @@
 # Phase 12 runtime-mask mutant table. Each id owns one or more exact source
 # anchors. Keep each anchor and replacement in a separate variable because C
 # replacement text may contain semicolons.
-set(GBB_P12_MUTANT_IDS 1 2 3 4 5 7 11 12 14 15 17 18 20 24 25 26 27)
+set(GBB_P12_MUTANT_IDS 1 2 3 4 5 7 8 10 11 12 14 15 17 18 19 20 24 25 26 27 29 30 32 33)
+
+set(GBB_P12_SITES_8 1)
+set(GBB_P12_ANCHOR_8_1 "if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB || !(m->key1_armed & 1u)) /* P12-M8 */")
+set(GBB_P12_REPLACEMENT_8_1 "if (!model_is_cgb(m) || (GBB_P12_MUT(8) ? 0 : m->exec_mode != GBB_MODE_CGB) || !(m->key1_armed & 1u)) /* P12-M8 */")
+
+set(GBB_P12_SITES_10 1)
+set(GBB_P12_ANCHOR_10_1 "instance->key1_armed = 0u; /* P12-M10 */")
+set(GBB_P12_REPLACEMENT_10_1 "if (!GBB_P12_MUT(10)) instance->key1_armed = 0u; /* P12-M10 */")
+
+set(GBB_P12_SITES_19 1)
+set(GBB_P12_ANCHOR_19_1 "const int held = (joypad_value(m) & 0x0Fu) != 0x0Fu; /* P12-M19 */")
+set(GBB_P12_REPLACEMENT_19_1 "const int held = GBB_P12_MUT(19) ? 0 : (joypad_value(m) & 0x0Fu) != 0x0Fu; /* P12-M19 */")
+
+set(GBB_P12_SITES_29 1)
+set(GBB_P12_ANCHOR_29_1 "? GBB_STOP_SWITCH_COST_HALF_DOTS : 8u), 1};")
+set(GBB_P12_REPLACEMENT_29_1 "? (GBB_P12_MUT(29) ? 8u : GBB_STOP_SWITCH_COST_HALF_DOTS) : 8u), 1};")
+
+set(GBB_P12_SITES_30 1)
+set(GBB_P12_ANCHOR_30_1 "divider_reset(instance, 0); /* P12-M30 */")
+set(GBB_P12_REPLACEMENT_30_1 "divider_reset(instance, GBB_P12_MUT(30) ? 1 : 0); /* P12-M30 */")
+
+set(GBB_P12_SITES_32 1)
+set(GBB_P12_ANCHOR_32_1 "if (address == 0xFF4Cu) return; /* D-03: KEY0 never changes speed or mode. P12-M32 */")
+set(GBB_P12_REPLACEMENT_32_1 "if (address == 0xFF4Cu) { if (GBB_P12_MUT(32)) m->double_speed ^= 1u; return; } /* D-03: KEY0 never changes speed or mode. P12-M32 */")
+
+set(GBB_P12_SITES_33 1)
+set(GBB_P12_ANCHOR_33_1 "m->stop_switch_pending = 4u; /* P12-M33 */")
+set(GBB_P12_REPLACEMENT_33_1 "if (!(GBB_P12_MUT(33) && instruction_byte(m, pc, 1) == 0xFFu)) m->stop_switch_pending = 4u; /* P12-M33 */")
 
 set(GBB_P12_SITES_20 1)
 set(GBB_P12_ANCHOR_20_1 "const int pending = (m->ie & m->interrupt_flags & 0x1Fu) != 0; /* P12-M20 */")

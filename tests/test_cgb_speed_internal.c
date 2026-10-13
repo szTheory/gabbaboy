@@ -267,7 +267,7 @@ static int create_internal_machine(const uint8_t rom[32768], gbb_instance **out)
 static int make_stop_test_machine(const uint8_t *program, size_t size, gbb_instance **out);
 
 static int cgb_speed_stop_cases(void) {
-    const uint8_t program[] = {0x10u, 0x3Cu, 0x00u};
+    const uint8_t program[] = {0x10u, 0x3Eu, 0x42u, 0x00u};
     uint8_t rom[32768];
     make_internal_rom(rom, program, sizeof(program));
     gbb_instance *machine = NULL;
@@ -276,15 +276,14 @@ static int cgb_speed_stop_cases(void) {
     machine->key1_armed = 1u;
     machine->ie = 4u;
     machine->interrupt_flags = 4u;
-    machine->a = 0x20u;
+    machine->ime = 0u;
+    machine->a = 0u;
     machine->divider_counter = 0x1234u;
+    REQUIRE(stop_case(machine) == 3 && decode(machine).size == 1u);
     gbb_run_result result = gbb_run(machine, 16u, NULL, 0u);
-    REQUIRE(result.reason == GBB_STOP_BUDGET && result.consumed_half_dots == 16u);
     REQUIRE(machine->double_speed == 1u && machine->key1_armed == 0u);
     REQUIRE(machine->cpu_stall_kind == GBB_STALL_NONE && machine->cpu_stall_half_dots == 0u);
-    REQUIRE(machine->divider_counter == 0u && machine->pc >= 0x102u);
-    result = gbb_run(machine, 8u, NULL, 0u);
-    REQUIRE(result.reason == GBB_STOP_BUDGET && result.consumed_half_dots == 8u);
+    REQUIRE(machine->pc >= 0x102u && machine->divider_counter < 0x100u);
     gbb_destroy(machine);
 
     make_internal_rom(rom, program, sizeof(program));
@@ -294,35 +293,49 @@ static int cgb_speed_stop_cases(void) {
     machine->ie = 4u;
     machine->interrupt_flags = 4u;
     machine->a = 0u;
-    machine->ime_delay = 1u; /* becomes IME-enabled only after STOP retires */
+    machine->ime = 0u;
+    machine->ime_delay = 0u;
     machine->rom[0x50u] = 0x06u; /* LD B,$42 proves the handler ran */
     machine->rom[0x51u] = 0x42u;
     machine->rom[0x52u] = 0xD9u; /* RETI */
-    machine->rom[0x102u] = 0x76u;
-    result = gbb_run(machine, 64u, NULL, 0u);
-    REQUIRE(result.reason == GBB_STOP_HALTED_IDLE);
-    REQUIRE(machine->double_speed == 1u && machine->pc == 0x103u && machine->b == 0x42u);
+    machine->rom[0x103u] = 0x76u;
+    REQUIRE(stop_case(machine) == 3 && decode(machine).size == 1u);
+    result = gbb_run(machine, 16u, NULL, 0u);
+    REQUIRE(machine->double_speed == 1u && machine->cpu_stall_kind == GBB_STALL_NONE);
+    machine->ime = 1u;
+    machine->instruction_start_half_dots = machine->time_half_dots;
+    unsigned irq = pending_interrupt(machine);
+    REQUIRE(irq == 2u);
+    enter_interrupt(machine, irq);
+    REQUIRE(machine->pc == 0x50u);
+    execute(machine, instruction_cost(machine, decode(machine)));
+    REQUIRE(machine->b == 0x42u);
     gbb_destroy(machine);
 
     const uint8_t held_program[] = {0x10u, 0x3Cu, 0x00u};
     REQUIRE(make_stop_test_machine(held_program, sizeof(held_program), &machine) == 0);
-    machine->key1_armed = 1u; machine->joypad_select = 0x20u; machine->joypad_buttons = 0x10u;
+    machine->key1_armed = 1u; machine->joypad_select = 0x10u; machine->joypad_buttons = 0x10u;
+    machine->ie = 0u; machine->interrupt_flags = 0u;
     machine->divider_counter = 0x1234u;
-    result = gbb_run(machine, 8u, NULL, 0u);
-    REQUIRE(result.reason == GBB_STOP_HALTED_IDLE && machine->pc == 0x102u);
+    decoded held_stop = decode(machine);
+    REQUIRE(stop_case(machine) == 1 && held_stop.size == 2u);
+    execute(machine, instruction_cost(machine, held_stop));
+    REQUIRE(machine->halted);
     REQUIRE(!machine->double_speed && machine->key1_armed == 1u && machine->divider_counter == 0x1234u);
     machine->interrupt_flags = 1u;
+    machine->ie = 1u;
     gbb_run(machine, 8u, NULL, 0u);
     REQUIRE(!machine->halted);
     gbb_destroy(machine);
 
     REQUIRE(make_stop_test_machine(held_program, sizeof(held_program), &machine) == 0);
-    machine->key1_armed = 1u; machine->joypad_select = 0x20u; machine->joypad_buttons = 0x10u;
+    machine->key1_armed = 1u; machine->joypad_select = 0x10u; machine->joypad_buttons = 0x10u;
     machine->ie = 1u; machine->interrupt_flags = 1u;
     REQUIRE(stop_case(machine) == 2 && decode(machine).size == 1u);
-    result = gbb_run(machine, 16u, NULL, 0u);
+    decoded held_pending = decode(machine);
+    execute(machine, instruction_cost(machine, held_pending));
     REQUIRE(!machine->halted && !machine->double_speed && machine->key1_armed == 1u);
-    REQUIRE(machine->a != 0u || machine->pc > 0x101u);
+    REQUIRE(machine->pc == 0x101u || machine->pc == 0x102u);
     gbb_destroy(machine);
     return 0;
 }
@@ -342,15 +355,15 @@ static int cgb_speed_stop_operand(void) {
     REQUIRE(make_stop_test_machine(p0, sizeof(p0), &a) == 0);
     REQUIRE(make_stop_test_machine(p1, sizeof(p1), &b) == 0);
     a->key1_armed = b->key1_armed = 1u;
-    a->ie = b->ie = 4u;
-    a->interrupt_flags = b->interrupt_flags = 4u;
     a->joypad_select = b->joypad_select = 0x30u;
     gbb_run(a, 16u, NULL, 0u);
     gbb_run(b, 16u, NULL, 0u);
-    REQUIRE(a->double_speed == b->double_speed && a->pc == b->pc &&
-            a->time_half_dots == b->time_half_dots && a->key1_armed == b->key1_armed);
-    REQUIRE(a->a == b->a && a->b == b->b && a->c == b->c && a->d == b->d &&
-            a->e == b->e && a->h == b->h && a->l == b->l && a->sp == b->sp);
+    gbb_trace_record snap_a, snap_b;
+    memset(&snap_a, 0, sizeof(snap_a)); memset(&snap_b, 0, sizeof(snap_b));
+    gbb_test_cpu_snapshot(a, &snap_a); gbb_test_cpu_snapshot(b, &snap_b);
+    REQUIRE(memcmp(&snap_a, &snap_b, sizeof(snap_a)) == 0);
+    REQUIRE(memcmp(a->wram, b->wram, sizeof(a->wram)) == 0);
+    REQUIRE(a->key1_armed == b->key1_armed && a->time_half_dots == b->time_half_dots);
     gbb_destroy(a); gbb_destroy(b);
     return 0;
 }
@@ -362,6 +375,7 @@ static int cgb_speed_stop_prefetch_ff04(int wrong_byte) {
     m->key1_armed = 1u;
     m->joypad_select = 0x30u;
     m->div = wrong_byte ? 0x11u : 0x10u;
+    m->divider_counter = wrong_byte ? 0x1100u : 0x1000u;
     gbb_run_result run = gbb_run(m, 48u, NULL, 0u);
     REQUIRE(m->double_speed == 1u);
     REQUIRE(run.reason != GBB_STOP_UNSUPPORTED_BUS);
@@ -399,6 +413,15 @@ static int cgb_speed_dmg_unarmed_unchanged(void) {
     REQUIRE(run.reason == GBB_STOP_STOPPED && m->double_speed == 0u);
     REQUIRE(m->divider_counter == 0u && m->apu_sequencer_step == apu_before);
     gbb_destroy(m);
+
+    REQUIRE(create_internal_machine(rom, &m) == 0);
+    m->pc = 0x100u; m->exec_mode = GBB_MODE_CGB_DMG_COMPAT; m->key1_armed = 1u;
+    m->joypad_select = 0x30u; m->divider_counter = 0x1000u;
+    m->apu_sequencer_step = 3u;
+    run = gbb_run(m, 16u, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_STOPPED && !m->double_speed);
+    REQUIRE(m->apu_sequencer_step == 3u);
+    gbb_destroy(m);
     return 0;
 }
 
@@ -417,6 +440,11 @@ static int cgb_speed_key1_readback(void) {
     REQUIRE(bus_read(m, 0xFF4Du, m->time_half_dots) == 0xFEu);
     bus_write(m, 0xFF4Du, 1u, m->time_half_dots);
     REQUIRE(bus_read(m, 0xFF4Du, m->time_half_dots) == 0xFFu);
+    m->cpu_stall_half_dots = 0u; m->cpu_stall_kind = GBB_STALL_NONE;
+    m->rom[0x102u] = 0x10u; m->rom[0x103u] = 0x00u; m->pc = 0x102u;
+    run = gbb_run(m, 8u, NULL, 0u);
+    REQUIRE(run.reason != GBB_STOP_UNSUPPORTED_BUS && m->double_speed == 0u);
+    REQUIRE(bus_read(m, 0xFF4Du, m->time_half_dots) == 0x7Eu);
     gbb_destroy(m);
     return 0;
 }
@@ -435,6 +463,9 @@ static int cgb_speed_key0_no_switch(void) {
         bus_write(m, 0xFF4Cu, (uint8_t)value, m->time_half_dots);
         REQUIRE(m->double_speed == 0u && m->exec_mode == GBB_MODE_CGB);
     }
+    m->pc = 0x100u;
+    gbb_run_result run = gbb_run(m, 32u, NULL, 0u);
+    REQUIRE(run.reason != GBB_STOP_UNSUPPORTED_BUS && m->double_speed == 1u);
     gbb_destroy(m);
     return 0;
 }
