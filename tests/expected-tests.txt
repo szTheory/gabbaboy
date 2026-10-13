@@ -675,3 +675,5 @@ cgb_external_dispositions
 cgb_external_dispositions_mutated
 cgb_acid2_local_selftest
 cgb_acid2_local_refuses_unpinned
+model_gates_no_phase11_rows
+model_gates_no_phase11_rows_mutated_doc

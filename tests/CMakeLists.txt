@@ -2351,4 +2351,29 @@ add_test(NAME cgb_acid2_local_refuses_unpinned
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # --- Phase 11 plan 11-11 end ---
 
+# --- Phase 11 plan 11-14 begin ---
+# D-32: no Phase 11 owner tag may remain in the gate table or the core. The control reverts one row.
+add_test(NAME model_gates_no_phase11_rows
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_FILES=${PROJECT_SOURCE_DIR}/docs/model-gates.md;${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c"
+    -P ${PROJECT_SOURCE_DIR}/tests/check_no_phase11_rows.cmake)
+set_tests_properties(model_gates_no_phase11_rows PROPERTIES
+  PASS_REGULAR_EXPRESSION "no-phase11-rows pass" TIMEOUT 30)
+file(READ "${PROJECT_SOURCE_DIR}/docs/model-gates.md" gbb_p11_doc)
+set(GBB_P11_ROW_ANCHOR "| GATE-50 | UNKNOWN | - | research:14 |")
+string(FIND "${gbb_p11_doc}" "${GBB_P11_ROW_ANCHOR}" gbb_p11_first)
+string(FIND "${gbb_p11_doc}" "${GBB_P11_ROW_ANCHOR}" gbb_p11_last REVERSE)
+if(gbb_p11_first EQUAL -1 OR NOT gbb_p11_first EQUAL gbb_p11_last)
+  message(FATAL_ERROR "phase-11 row mutant: '${GBB_P11_ROW_ANCHOR}' must occur exactly once in docs/model-gates.md")
+endif()
+string(REPLACE "${GBB_P11_ROW_ANCHOR}" "| GATE-50 | UNKNOWN | - | research:11 |" gbb_p11_doc_bad "${gbb_p11_doc}")
+file(WRITE "${GBB_MODEL_GATE_DIR}/phase11-row-mutated.md" "${gbb_p11_doc_bad}")
+add_test(NAME model_gates_no_phase11_rows_mutated_doc
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_FILES=${GBB_MODEL_GATE_DIR}/phase11-row-mutated.md;-P;${PROJECT_SOURCE_DIR}/tests/check_no_phase11_rows.cmake"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=phase-11-row-open"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# --- Phase 11 plan 11-14 end ---
+
 gabbaboy_verify_registered_tests()

@@ -44,7 +44,7 @@ occurs exactly once in code and once in the table.
 | --- | --- | --- | --- | --- | --- |
 | GATE-00 | BOTH | - | basis="model-neutral function; see its branch gates" | any function | shared id for model-neutral function tags |
 | GATE-01 | UNKNOWN | - | research:14 | audio_process_sample | high-pass filter constant differs by model |
-| GATE-02 | UNKNOWN | - | research:11 | ppu_update_stat_line | STAT interrupt line edge timing is unresearched for CGB |
+| GATE-02 | UNKNOWN | - | research:14 | ppu_update_stat_line | STAT interrupt line edge timing on CGB is unresearched; deferred by D-09/D-12 |
 | GATE-03 | DMG_ONLY | model_is_dmg | - | post_boot_apply | the header-checksum F branch exists on the DMG profile only; CGB F is $80 |
 | GATE-04 | BOTH | - | basis="post_boot[] column per profile (D-06)" | post_boot_apply | post-boot DIV differs by model |
 | GATE-05 | BOTH | - | basis="post_boot[] column per profile (D-06)" | post_boot_apply | post-boot SC differs by model |
@@ -52,17 +52,17 @@ occurs exactly once in code and once in the table.
 | GATE-07 | BOTH | - | basis="post_boot[] column per profile (D-06)" | post_boot_apply | post-boot APU register literals differ by model |
 | GATE-08 | BOTH | - | basis="post_boot[] column per profile (D-06)" | post_boot_apply | post-boot DMA register differs by model |
 | GATE-09 | BOTH | - | basis=D-025 | post_boot_apply | RAM fill is emulator policy; hardware power-on RAM is unspecified |
-| GATE-10 | UNKNOWN | - | research:11 | post_boot_apply | post-boot PPU mode, LY and STAT literals differ by model |
+| GATE-10 | UNKNOWN | - | research:14 | post_boot_apply | post-boot PPU mode, LY and STAT literals differ by model; the CGB mode-3 and line-0 timing question is deferred by D-09/D-12 |
 | GATE-11 | BOTH | - | basis=PANDOCS | post_boot_apply | LCDC, BGP and OBP post-boot values are common to both models |
 | GATE-12 | BOTH | - | basis=pandocs-joyp | joypad_value | P1 button and direction select lines are the same on both models |
-| GATE-13 | UNKNOWN | - | research:11 | cpu_vram_access_allowed | VRAM CPU lock window during mode 3 |
-| GATE-14 | UNKNOWN | - | research:11 | cpu_oam_access_allowed | OAM CPU lock window during modes 2 and 3 |
+| GATE-13 | UNKNOWN | - | research:14 | cpu_vram_access_allowed | VRAM CPU lock window during mode 3; CGB lock-edge offsets are unresearched and deferred by D-09/D-12 |
+| GATE-14 | UNKNOWN | - | research:14 | cpu_oam_access_allowed | OAM CPU lock window during modes 2 and 3; CGB lock-edge offsets are unresearched and deferred by D-09/D-12 |
 | GATE-15 | UNKNOWN | - | research:14 | apu_power_off | NR52 power-off effect on APU state and wave RAM |
 | GATE-16 | UNKNOWN | - | expected-failure:cgb-separate-buses | read8 | OAM-DMA CPU bus conflict: CGB uses separate buses (D-17) |
 | GATE-17 | UNKNOWN | - | research:14 | read8 | SC unused bits read differently on CGB (fast clock bit) |
 | GATE-18 | UNKNOWN | - | research:14 | read8 | APU read masks, including NR52 length bits |
 | GATE-19 | UNKNOWN | - | research:14 | read8 | wave RAM access aliasing while the channel is enabled |
-| GATE-20 | UNKNOWN | - | research:11 | read8 | STAT mode and coincidence bits at LCD transitions |
+| GATE-20 | UNKNOWN | - | research:14 | read8 | STAT mode and coincidence bits at LCD transitions; CGB transition timing is unresearched and deferred by D-09/D-12 |
 | GATE-21 | CGB_ONLY | model_is_cgb | - | read8 | IE bits 5-7 are stored on the CGB profile (Mooneye unused_hwio-C and unused_hwio-GS); DMG reads them as 1 (OQ2, owner veto item 6) |
 | GATE-22 | BOTH | - | basis=cartridge-side | cart_read | ROM reads are decided by the mapper, not the console |
 | GATE-23 | BOTH | - | basis=wram-echo-map | read8 | work RAM and echo mapping; CGB WRAM banking is selected in wram_byte |
@@ -86,13 +86,13 @@ occurs exactly once in code and once in the table.
 | GATE-41 | UNKNOWN | - | research:12 | apply_input_events_now | STOP wake conditions |
 | GATE-42 | BOTH | - | basis="no SM83 opcode difference" | instruction_address | HALT bug PC repeat is an SM83 trait |
 | GATE-43 | BOTH | - | basis="DMG semantics: LCDC bit 0 gates BG and window; runs for the DMG profile and compat mode, CGB mode uses ppu_cgb_background" | ppu_background_color | the function now runs only under DMG semantics; the CGB-mode sibling is ppu_cgb_background |
-| GATE-44 | UNKNOWN | - | research:11 | ppu_scan_object | OAM scan against a DMA in flight |
+| GATE-44 | UNKNOWN | - | research:14 | ppu_scan_object | OAM scan against a DMA in flight; the CGB scan timing question is deferred by D-09/D-12 |
 | GATE-45 | BOTH | - | basis="DMG semantics: object priority by X then OAM index; runs for the DMG profile and compat mode, CGB mode uses ppu_cgb_object" | ppu_object_color | the function now runs only under DMG semantics; the CGB-mode sibling is ppu_cgb_object |
 | GATE-46 | BOTH | - | basis="DMG semantics: DMG palette shade composition; runs for the DMG profile and compat mode, CGB mode uses ppu_pixel_cgb" | ppu_pixel_shade | the function now runs only for the DMG profile and compat mode; the CGB-mode sibling is ppu_pixel_cgb |
-| GATE-47 | UNKNOWN | - | research:11 | ppu_fetcher_step | fetcher push timing |
-| GATE-48 | UNKNOWN | - | research:11 | ppu_object_should_stall | object fetch during DMA and its transfer timing |
-| GATE-49 | UNKNOWN | - | research:11 | ppu_transfer_dot | mode 3 start-up and window stall timing |
-| GATE-50 | UNKNOWN | - | research:11 | ppu_advance_dot | line length and LY timing |
+| GATE-47 | UNKNOWN | - | research:14 | ppu_fetcher_step | fetcher push timing; CGB mode-3 fetcher timing is not claimed and is deferred by D-09/D-12 |
+| GATE-48 | UNKNOWN | - | research:14 | ppu_object_should_stall | object fetch during DMA and its transfer timing; CGB mode-3 stall timing is not claimed and is deferred by D-09/D-12 |
+| GATE-49 | UNKNOWN | - | research:14 | ppu_transfer_dot | mode 3 start-up and window stall timing; CGB mode-3 length, WX and window-range differences are not claimed and are deferred by D-09/D-12 |
+| GATE-50 | UNKNOWN | - | research:14 | ppu_advance_dot | line length and LY timing; CGB line-edge timing is unresearched and deferred by D-09/D-12 |
 | GATE-51 | CGB_ONLY | model_is_cgb | - | dma_source_read | OAM DMA reads the cartridge and the banked VRAM and WRAM on the CGB profile (D-16); cartridge and E0-FF cells are PANDOCS or ORACLE_SAMEBOY, not hardware |
 | GATE-52 | UNKNOWN | - | research:12 | dma_start | DMA restart behaviour |
 | GATE-53 | UNKNOWN | - | research:12 | dma_advance_half_dot | DMA byte period |
@@ -128,14 +128,38 @@ occurs exactly once in code and once in the table.
 | GATE-83 | CGB_ONLY | model_is_cgb | - | gbb_copy_frame_rgb555 | colour frames are CGB-profile only; the DMG profile returns GBB_UNSUPPORTED_PROFILE (D-15), symmetric with GATE-57 |
 <!-- model-gates-end -->
 
+## Phase 11 dispositions
+
+Phase 11 resolved or re-assigned every row it owned. A row re-assigned to Phase 14 keeps class
+`UNKNOWN`; the reason is that the question is CGB mode-3 timing or lock-edge work that D-09 and D-12
+deferred, not colour. `model_gates_no_phase11_rows` fails if a Phase 11 owner tag reappears in this
+file or in `src/core/gabbaboy.c`.
+
+| Gate | Site | Outcome | Reason |
+| --- | --- | --- | --- |
+| GATE-02 | ppu_update_stat_line | re-assigned to Phase 14 | CGB STAT line edge timing is timing work deferred by D-09/D-12 |
+| GATE-10 | post_boot_apply | re-assigned to Phase 14 | post-boot PPU mode and line literals on CGB are timing work deferred by D-09/D-12 |
+| GATE-13 | cpu_vram_access_allowed | re-assigned to Phase 14 | VRAM lock-edge offsets are lock-edge work deferred by D-09/D-12 |
+| GATE-14 | cpu_oam_access_allowed | re-assigned to Phase 14 | OAM lock-edge offsets are lock-edge work deferred by D-09/D-12 |
+| GATE-20 | read8 | re-assigned to Phase 14 | STAT bits at LCD transitions are timing work deferred by D-09/D-12 |
+| GATE-28 | write8 | split | the LCDC bit 0 meaning is carried by GATE-80 and GATE-81; LCD on and off timing stays with Phase 14 |
+| GATE-43 | ppu_background_color | resolved BOTH | DMG semantics only; CGB mode uses ppu_cgb_background (plan 11-03) |
+| GATE-44 | ppu_scan_object | re-assigned to Phase 14 | OAM scan against DMA is timing work deferred by D-09/D-12 |
+| GATE-45 | ppu_object_color | resolved BOTH | DMG semantics only; CGB mode uses ppu_cgb_object (plan 11-03) |
+| GATE-46 | ppu_pixel_shade | resolved BOTH | DMG semantics and compat mode; CGB mode uses ppu_pixel_cgb (plan 11-03) |
+| GATE-47 | ppu_fetcher_step | re-assigned to Phase 14 | CGB fetcher push timing is mode-3 timing deferred by D-09/D-12 |
+| GATE-48 | ppu_object_should_stall | re-assigned to Phase 14 | object fetch stall timing is mode-3 timing deferred by D-09/D-12 |
+| GATE-49 | ppu_transfer_dot | re-assigned to Phase 14 | mode 3 start-up, WX and window-range timing is deferred by D-09/D-12 |
+| GATE-50 | ppu_advance_dot | re-assigned to Phase 14 | CGB line length and LY timing is deferred by D-09/D-12 |
+
 ## Release status
 
 `python3 -I tests/scripts/verify-model-gates.py --release` currently fails by design
 (`gate-unresolved-unknown`, test `model_gates_release_blocked`): every `research:` row still names a
-phase that has not resolved it. Phase 10 resolves the `research:10` and `research:11` rows by
-turning them into `DMG_ONLY`/`CGB_ONLY`/`BOTH` classes with guards (Plans 10-04, 10-06, 10-09 and
-10-20 assert that none remain). Phase 11 owns the remaining PPU rows noted `research:11`, Phase 12
-owns `research:12` (STOP, DMA and double-speed timing) and Phase 14 owns `research:14` (APU, timer,
-serial, STAT and JOYP quirks). `expected-failure:cgb-separate-buses` is a declared, reasoned
-expected failure (D-17) and does not block release. The release-mode test becomes a pass gate in
-Phase 15.
+phase that has not resolved it. Phase 10 resolved its own rows by turning them into
+`DMG_ONLY`/`CGB_ONLY`/`BOTH` classes with guards. Phase 11 resolved or re-assigned every row it was
+given (see the dispositions above), so no row names Phase 11 as owner. Phase 12 owns `research:12`
+(STOP, DMA and double-speed timing) and Phase 14 owns `research:14` (APU, timer, serial, STAT and
+JOYP quirks, and the CGB PPU timing rows listed above). `expected-failure:cgb-separate-buses` is a
+declared, reasoned expected failure (D-17) and does not block release. The release-mode test becomes
+a pass gate in Phase 15.

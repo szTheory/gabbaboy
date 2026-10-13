@@ -539,6 +539,19 @@ These values were authored for GabbaBoy from the rule above without reference to
 title-hash, peer-emulator or other third-party palette table (rights gate G4). The look is an owner
 veto item (D-18). `cgb_tables_compat_palette` compares this block with the code and with the rule.
 
+## Colour path scope
+
+CGB mode-3 length, WX and window-range timing differences are not claimed (D-09). The one
+timing-adjacent difference that is modelled is that CGB mode enables the window by LCDC bit 5 alone;
+when LCDC bit 0 is clear that changes the window-start stall, and it is recorded in the GATE-81 row of
+`docs/model-gates.md`. The colour path reads PPU dot time only (D-36): it resolves each pixel against
+the live palette RAM at the dot it is produced and never consults a wall clock or a host-side frame
+boundary. The renderer reads VRAM through an explicit bank argument rather than through the CPU
+`VBK` selection, so a CPU bank switch cannot change what the renderer draws. FF55 (HDMA control)
+stays DEFERRED(13). The AGE test suite has no CGB colour, attribute or priority ROM at its pinned
+commit, so it is not Phase 11 colour evidence (D-20); its mode-3 pixel-timing cases are recorded as
+`expected-unsupported` in the external-suite section below.
+
 ## External CGB PPU suites not run in Phase 11
 
 Phase 11 records, but does not run, two external CGB PPU suites. Neither contributes evidence to

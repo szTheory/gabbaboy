@@ -709,7 +709,7 @@ static void ppu_update_stat_line(gbb_instance *m) {
                 ((m->ppu_mode == 2u) && ((m->stat & 0x20u) != 0)) ||
                 ((m->ly == m->lyc) && ((m->stat & 0x40u) != 0)));
     }
-    /* MODEL: UNKNOWN GATE-02 research:11 -- STAT interrupt line edge timing is unresearched for CGB */
+    /* MODEL: UNKNOWN GATE-02 research:14 -- STAT interrupt line edge timing on CGB is unresearched; deferred by D-09/D-12 */
     if (line && !m->ppu_stat_line) {
         m->interrupt_flags |= 0x02u;
         observe_ppu(m, 0xFF0F, 5, (uint8_t)(0xE0u | m->interrupt_flags));
@@ -1030,7 +1030,7 @@ static void post_boot_apply(gbb_instance *m) {
         case PB_OBP0: m->obp0 = v; break;
         case PB_OBP1: m->obp1 = v; break;
         case PB_PPU_MODE:
-            /* MODEL: UNKNOWN GATE-10 research:11 -- post-boot PPU mode, LY and STAT literals differ by model */
+            /* MODEL: UNKNOWN GATE-10 research:14 -- post-boot PPU mode, LY and STAT literals differ by model; the CGB mode-3 and line-0 timing question is deferred by D-09/D-12 */
             m->ppu_mode = v; break;
         case PB_JOYPAD_SELECT: m->joypad_select = v; break;
         case PB_JOYPAD_BUTTONS: m->joypad_buttons = v; break;
@@ -1270,7 +1270,7 @@ static const io_cell *io_cgb_cell(const gbb_instance *m, uint16_t address) {
 /* CPU access locks for the PPU-owned memories. CRAM has its own predicate (D-12). */
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static int cpu_vram_access_allowed(const gbb_instance *m) {
-    /* MODEL: UNKNOWN GATE-13 research:11 -- VRAM CPU lock window during mode 3 */
+    /* MODEL: UNKNOWN GATE-13 research:14 -- VRAM CPU lock window during mode 3; CGB lock-edge offsets are unresearched and deferred by D-09/D-12 */
     return (m->lcdc & 0x80u) == 0 || m->ppu_mode != 3u;
 }
 
@@ -1283,7 +1283,7 @@ static int cpu_cram_access_allowed(const gbb_instance *m) {
 
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static int cpu_oam_access_allowed(const gbb_instance *m) {
-    /* MODEL: UNKNOWN GATE-14 research:11 -- OAM CPU lock window during modes 2 and 3 */
+    /* MODEL: UNKNOWN GATE-14 research:14 -- OAM CPU lock window during modes 2 and 3; CGB lock-edge offsets are unresearched and deferred by D-09/D-12 */
     return (m->lcdc & 0x80u) == 0 || m->ppu_mode == 0u || m->ppu_mode == 1u;
 }
 
@@ -1659,7 +1659,7 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
                          (m->apu_wave.enabled ? 4u : 0u) |
                          (m->apu_noise.enabled ? 8u : 0u));
     if (address == 0xFF40) return m->lcdc;
-    /* MODEL: UNKNOWN GATE-20 research:11 -- STAT mode and coincidence bits at LCD transitions */
+    /* MODEL: UNKNOWN GATE-20 research:14 -- STAT mode and coincidence bits at LCD transitions; CGB transition timing is unresearched and deferred by D-09/D-12 */
     if (address == 0xFF41)
         return (uint8_t)(0x80u | (m->stat & 0x78u) |
                          (m->ly == m->lyc ? 0x04u : 0u) | m->ppu_mode);
@@ -2250,7 +2250,7 @@ static void ppu_scan_object(gbb_instance *m, unsigned index) {
     if (m->ly == 0u)
         observe_ppu(m, (uint16_t)(0xFE00u + index), 9,
                     (uint8_t)(m->dma_active ? 0u : 1u));
-    /* MODEL: UNKNOWN GATE-44 research:11 -- OAM scan against a DMA in flight */
+    /* MODEL: UNKNOWN GATE-44 research:14 -- OAM scan against a DMA in flight; the CGB scan timing question is deferred by D-09/D-12 */
     if (m->dma_active || m->ppu_selected_object_count >= GBB_LINE_OBJECT_LIMIT)
         return;
     unsigned height = (m->lcdc & 0x04u) != 0 ? 16u : 8u;
@@ -2509,7 +2509,7 @@ static void ppu_begin_transfer(gbb_instance *m) {
 static void ppu_fetcher_step(gbb_instance *m) {
     uint16_t needed = (uint16_t)(GBB_FRAME_WIDTH + m->ppu_fine_scroll);
     if (m->ppu_fetch_enqueued >= needed) return;
-    /* MODEL: UNKNOWN GATE-47 research:11 -- fetcher push timing */
+    /* MODEL: UNKNOWN GATE-47 research:14 -- fetcher push timing; CGB mode-3 fetcher timing is not claimed and is deferred by D-09/D-12 */
     if (m->ppu_fetch_stage == 3u && m->ppu_fetch_phase == 1u) {
         if (m->ppu_fifo_count > 8u) return;
         uint16_t remaining = (uint16_t)(needed - m->ppu_fetch_enqueued);
@@ -2557,7 +2557,7 @@ static int ppu_object_should_stall(gbb_instance *m, uint8_t *stall) {
         if (left < 0 || left >= (int)GBB_FRAME_WIDTH ||
             left != (int)m->ppu_output_x) continue;
         m->ppu_objects_stalled |= object_bit;
-        /* MODEL: UNKNOWN GATE-48 research:11 -- object fetch during DMA and its transfer timing */
+        /* MODEL: UNKNOWN GATE-48 research:14 -- object fetch during DMA and its transfer timing; CGB mode-3 stall timing is not claimed and is deferred by D-09/D-12 */
         if (m->dma_active) {
             /* advance_devices_to advances the DMA byte before this PPU event.
              * The aligned word read is the declared deterministic model; its
@@ -2599,7 +2599,7 @@ static void ppu_transfer_dot(gbb_instance *m) {
         return;
     }
     ppu_fetcher_step(m);
-    /* MODEL: UNKNOWN GATE-49 research:11 -- mode 3 start-up and window stall timing */
+    /* MODEL: UNKNOWN GATE-49 research:14 -- mode 3 start-up and window stall timing; CGB mode-3 length, WX and window-range differences are not claimed and are deferred by D-09/D-12 */
     if (m->ppu_transfer_age < 12u) {
         ++m->ppu_transfer_age;
         if (m->ppu_transfer_age < 12u) return;
@@ -2654,7 +2654,7 @@ static void ppu_transfer_dot(gbb_instance *m) {
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void ppu_advance_dot(gbb_instance *m) {
     if ((m->lcdc & 0x80u) == 0) return;
-    /* MODEL: UNKNOWN GATE-50 research:11 -- line length and LY timing */
+    /* MODEL: UNKNOWN GATE-50 research:14 -- line length and LY timing; CGB line-edge timing is unresearched and deferred by D-09/D-12 */
     if (m->ppu_dot < GBB_DOTS_PER_LINE - 1u) {
         ++m->ppu_dot;
     } else {
