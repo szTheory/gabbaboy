@@ -314,7 +314,7 @@ Plans:
   3. Partitioned runs (run N, stop, run M) equal one run of N+M across a speed switch and stall, and unresearched pause behaviors are recorded as named expected failures.
 
 **Research**: DEEP (interrupts, DIV and PPU during the pause; applicable test list).
-**Plans**: 12/19 plans executed
+**Plans**: 13/19 plans executed
 
 Plans:
 **Wave 1**
@@ -348,7 +348,7 @@ Plans:
 - [x] 12-12-PLAN.md — player speed smoke, claims edit, installed consumer speed guests with an unarmed-twin negative
 
 **Wave 10** *(blocked on Wave 9 completion)*
-- [ ] 12-13-PLAN.md — cgb-speed byte-exact rebuild script, repro controls and fixture-repro step
+- [x] 12-13-PLAN.md — cgb-speed byte-exact rebuild script, repro controls and fixture-repro step
 
 **Wave 11** *(blocked on Wave 10 completion)*
 - [ ] 12-14-PLAN.md — partition equivalence sweeps, real-constant stall-end windows in both directions via snapshot
@@ -420,7 +420,7 @@ Plans:
 | 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 18/18 | Complete    | 2026-10-11 |
 | 10. CGB Profile, Banking and Register Visibility | v0.2 | 20/20 | Complete    | 2026-10-12 |
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 15/15 | Complete    | 2026-10-13 |
-| 12. CGB Double Speed | v0.2 | 12/19 | In Progress | - |
+| 12. CGB Double Speed | v0.2 | 13/19 | In Progress | - |
 | 13. CGB HDMA | v0.2 | 0/TBD | Not started | - |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 0/TBD | Not started | - |
 | 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 0/TBD | Not started | - |
