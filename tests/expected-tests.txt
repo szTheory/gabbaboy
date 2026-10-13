@@ -176,6 +176,7 @@ loader_boundary_fuzz
 fuzz_core_regressions
 cgb_fuzz_io_regressions
 cgb_fuzz_profile_select
+cgb_fuzz_palette_regressions
 cgb_loader_matrix
 cgb_loader_fuzz_parity
 cgb_instance_isolation
@@ -677,3 +678,5 @@ cgb_acid2_local_selftest
 cgb_acid2_local_refuses_unpinned
 model_gates_no_phase11_rows
 model_gates_no_phase11_rows_mutated_doc
+cgb_fuzz_palette_mutant_no_mask
+cgb_fuzz_palette_mutant_no_mask_control

@@ -572,6 +572,7 @@ set_target_properties(test_fuzz_core PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME fuzz_core_regressions COMMAND test_fuzz_core)
 add_test(NAME cgb_fuzz_io_regressions COMMAND test_fuzz_core cgb)
 add_test(NAME cgb_fuzz_profile_select COMMAND test_fuzz_core cgb_profile_select)
+add_test(NAME cgb_fuzz_palette_regressions COMMAND test_fuzz_core cgb_palette)
 
 if(CMAKE_C_COMPILER_ID MATCHES "Clang")
   include(CheckCSourceCompiles)
@@ -2352,6 +2353,45 @@ add_test(NAME cgb_acid2_local_refuses_unpinned
 # --- Phase 11 plan 11-11 end ---
 
 # --- Phase 11 plan 11-14 begin ---
+# D-34: the bit-15 invariant must be able to fail. The mutant core drops the 0x7FFF resolve mask in
+# cram_colour, so a guest CRAM word of $FFFF reaches the frame with bit 15 set. The same executable
+# stays quiet on seeds that never write such a word, so the failure belongs to the removed mask.
+set(GBB_FUZZ_MASK_ANCHOR "return (uint16_t)((cram[at] | (cram[at + 1u] << 8)) & 0x7FFFu);")
+string(FIND "${gbb_colour_core_text}" "${GBB_FUZZ_MASK_ANCHOR}" gbb_fuzz_mask_first)
+string(FIND "${gbb_colour_core_text}" "${GBB_FUZZ_MASK_ANCHOR}" gbb_fuzz_mask_last REVERSE)
+if(gbb_fuzz_mask_first EQUAL -1 OR NOT gbb_fuzz_mask_first EQUAL gbb_fuzz_mask_last)
+  message(FATAL_ERROR "fuzz mask mutant: anchor must occur exactly once in src/core/gabbaboy.c")
+endif()
+string(REPLACE "${GBB_FUZZ_MASK_ANCHOR}" "return (uint16_t)(cram[at] | (cram[at + 1u] << 8));"
+  gbb_fuzz_mask_text "${gbb_colour_core_text}")
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_fuzz_mutant_no_mask.c "${gbb_fuzz_mask_text}")
+add_library(gabbaboy_core_fuzz_mutant_no_mask STATIC
+  ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_fuzz_mutant_no_mask.c)
+target_include_directories(gabbaboy_core_fuzz_mutant_no_mask PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_compile_features(gabbaboy_core_fuzz_mutant_no_mask PUBLIC c_std_17)
+set_target_properties(gabbaboy_core_fuzz_mutant_no_mask PROPERTIES C_EXTENSIONS OFF)
+target_compile_definitions(gabbaboy_core_fuzz_mutant_no_mask PRIVATE
+  GBB_BUILD_REVISION="fuzz-mutant-no-mask" GBB_BUILD_QUALIFIED=0)
+add_executable(test_fuzz_core_mutant_no_mask test_fuzz_core.c fuzz_core.c)
+target_link_libraries(test_fuzz_core_mutant_no_mask PRIVATE gabbaboy_core_fuzz_mutant_no_mask)
+target_compile_features(test_fuzz_core_mutant_no_mask PRIVATE c_std_17)
+target_compile_definitions(test_fuzz_core_mutant_no_mask PRIVATE GBB_FUZZ_STANDALONE_TEST=1)
+set_target_properties(test_fuzz_core_mutant_no_mask PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_fuzz_palette_mutant_no_mask
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_fuzz_core_mutant_no_mask>;cgb_palette"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=pixel above 0x7FFF"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_fuzz_palette_mutant_no_mask_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_fuzz_core_mutant_no_mask>;cgb_palette_plain"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=.*"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# The mutant is meant to trip an invariant and may leave the instance undestroyed on the failing
+# path; leak detection is off for this deliberately failing run only (precedent: commit 361256d).
+set_tests_properties(cgb_fuzz_palette_mutant_no_mask PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 # D-32: no Phase 11 owner tag may remain in the gate table or the core. The control reverts one row.
 add_test(NAME model_gates_no_phase11_rows
   COMMAND ${CMAKE_COMMAND}
