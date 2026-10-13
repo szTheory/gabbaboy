@@ -1,11 +1,9 @@
 # Phase GB-12 Continuation
 
-Completed workflow stage: **Phase GB-12 — CGB Double Speed, plan 12-07 execution**. Phase 12 remains in progress; see [12-07-SUMMARY.md](12-07-SUMMARY.md).
+Completed workflow stage: **Phase GB-12 — CGB Double Speed, plan 12-08 execution**. Phase 12 remains in progress; see [12-08-SUMMARY.md](12-08-SUMMARY.md). Plan 12-07 evidence remains in [12-07-SUMMARY.md](12-07-SUMMARY.md).
 
-Plan head after the five task commits: `07d00cf`. The plan ledger starts at `80bf2b5` and records five commits: tracer `bf0ded3`, Task 2 RED/GREEN `09b5aa3`/`231c07a`, and Task 3 RED/GREEN `15234f0`/`07d00cf`.
+Task commits: gate 65 tracer `8b0a59e`, remaining model-gate dispositions and no-reopen control `f19b949`, and STOP profile documentation and contract `a378f51`. Fresh checks: model-gate scanner **169 functions / 91 gates**, phase1 configure/build passed, focused CTest **24/24**, and `summary_coverage` **1/1**. The CGB post-boot evidence wording still says there is no hardware oracle; no hardware claim was added.
 
-Verification passed: full CTest **813/813**, Phase 12/STOP/model-gate selection **149/149**, DMG baseline, and `summary_coverage` **1/1**. TDD classifier accepted the Task 2 `cgb_speed_realign` RED and Task 3 `cgb_speed_headroom` RED reports; both have a preceding `test(12-07)` commit and a passing `feat(12-07)` commit.
+Carry-forward constraint: `GBB_SPEED_SWITCH_STALL_T` remains provisional at its existing value. This plan did not run AGE or produce a committed-core window/verdict; plan 12-09 owns the first AGE run and measurement before any constant-derived expectations are pinned.
 
-Next plan: **GB-12 plan 12-08**, covering the remaining model-gate dispositions and STOP documentation. Next command: **`/gsd-execute-phase 12`**. Auto-advance and auto-chain remain false. Stop at the end of Phase 12 and wait for the owner before entering another phase.
-
-Carry-forward constraint: preserve the provisional `GBB_SPEED_SWITCH_STALL_T` value and do not re-pin expectations; plan 12-09 owns the re-measurement. The M31 signed stall-offset mutant is already wired with a default-zero no-op check.
+Next plan: **GB-12 plan 12-09 — AGE driver, dispositions, sensitivity sweep**. Next command: **`/gsd-execute-phase 12`** (resumes at 12-09). Auto-advance and auto-chain remain false. Stop after Phase 12 and wait for the owner before entering another phase.

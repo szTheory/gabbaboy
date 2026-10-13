@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 8
+current_plan: 9
 status: executing
-stopped_at: Completed Phase GB-12 plan 12-07 execution
-last_updated: "2026-10-13T21:24:48.339Z"
+stopped_at: Completed GB-12-08-PLAN.md
+last_updated: "2026-10-13T21:39:31.795Z"
 last_activity: 2026-10-13
-last_activity_desc: Phase GB-12 plan 12-07 execution completed
-state_head: 07d00cf0192b94fe1a595e3a85e07ed046ecbc29
+last_activity_desc: Phase GB-12 plan 12-08 execution completed
+state_head: a378f5170cdf33cf542ecaed83eac0530884c55e
 progress:
   total_phases: 9
   completed_phases: 6
   total_plans: 99
-  completed_plans: 87
+  completed_plans: 88
   percent: 67
 current_phase: 12
 current_phase_name: CGB Double Speed
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 8
+Current Plan: 9
 Total Plans in Phase: 19
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -40,10 +40,10 @@ Verified: Phase 10 `/gsd-verify-work 10` passed 2026-10-12 — 12/12 UAT items a
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, planning (11-RESEARCH, 11-PATTERNS, 11-VALIDATION, plans 11-01..11-15) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, execution (plans 11-01..11-15) plus the execute-phase tail; gsd-verifier `passed` 3/3 (11-VERIFICATION.md); evidence head `fb7d14c` exact-head green; PR #67 open, not merged
 Verified: Phase 11 `/gsd-verify-work 11` passed 2026-10-13 — 11/11 UAT rows automated covering all 91 SUMMARY coverage entries (11-UAT.md); verification `passed` (11-VERIFICATION.md); hosted ASan timeout fixed in the PR (LESSONS GB-CI-004); PR #67 squash-merges at the exact-head green branch head (pre-authorized)
-Completed workflow stage: **Phase GB-12 plan 12-07 execution** (2026-10-13), summary [12-07-SUMMARY.md](phases/GB-12-cgb-double-speed/12-07-SUMMARY.md), with five measured task commits. Full CTest passed 813/813, the Phase 12 regression selection passed 149/149, and the DMG baseline passed. Phase 12 remains in progress.
-Next plan: **GB-12 plan 12-08 — Remaining D-12 dispositions, new GATE-84.. rows, GATE-62 retag, and STOP documentation**. Its plan is `.planning/phases/GB-12-cgb-double-speed/12-08-PLAN.md`.
-Next command: **`/gsd-execute-phase 12`** (resumes at 12-08). Auto-advance remains disabled; stop after Phase 12 and wait for the owner.
-Last activity: 2026-10-13 — Phase GB-12 plan 12-06 execution completed
+Completed workflow stage: **Phase GB-12 plan 12-08 execution** (2026-10-13), summary [12-08-SUMMARY.md](phases/GB-12-cgb-double-speed/12-08-SUMMARY.md). The D-12 scanner reports 169 functions and 91 gates; the selected model/documentation checks passed 24/24 and `summary_coverage` passed 1/1. Phase 12 remains in progress; no AGE run or committed-core stall window was produced.
+Next plan: **GB-12 plan 12-09 — AGE driver, dispositions, sensitivity sweep**. It owns the committed-core `spsw-div` window re-measurement before any constant-derived expectation is pinned.
+Next command: **`/gsd-execute-phase 12`** (resumes at 12-09). Auto-advance remains disabled; stop after Phase 12 and wait for the owner.
+Last activity: 2026-10-13 — Phase GB-12 plan 12-08 execution completed
 
 Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 
@@ -201,6 +201,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase GB-12 P05 | 19m55s lower bound | 3 tasks | 6 files |
 | Phase GB-12 P06 | 41m28s | 2 tasks | 5 files |
 | Phase GB-12 P07 | 112m | 3 tasks | 5 files |
+| Phase GB-12 P08 | 9m 25s | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -383,6 +384,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase GB-12]: Wake is sampled only between persisted stall M-cycle steps so host budget partitioning does not change resume time.
 - [Phase GB-12]: Normal-speed realignment uses a four-half-dot tail at phase four; the provisional stall duration remains for plan 12-09 re-measurement.
 - [Phase GB-12]: The signed M31 stall-offset seam is wired with a zero default and a passing no-op check.
+- [Phase GB-12]: Resolve Phase 12 model-gate ownership at the code-tag/table level; preserve the Phase 14 timer and serial differences and named unsupported STOP subcases.
+- [Phase GB-12]: Keep the speed-switch stall constant provisional until plan 12-09 measures the committed-core AGE window; do not pin a value from the prototype alone.
 
 ### Pending Todos
 
@@ -418,9 +421,9 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-13T21:24:48.272Z
-Stopped at: Completed Phase GB-12 plan 12-07 execution
-Resume file: .planning/phases/GB-12-cgb-double-speed/continue.md
+Last session: 2026-10-13T21:39:31.714Z
+Stopped at: Completed GB-12-08-PLAN.md
+Resume file: phases/GB-12-cgb-double-speed/continue.md
 Completed workflow stage: **Phase GB-12 plan 12-06 execution** (2026-10-13), summary [12-06-SUMMARY.md](phases/GB-12-cgb-double-speed/12-06-SUMMARY.md), on branch `gsd/phase-12-cgb-double-speed`. Three task commits are recorded. Focused STOP/identity/mutant checks passed 52/52 and the DMG baseline passed. The pending-IRQ tracer uses white-box IE/IF setup; timer-generated guest IF and natural run-loop dispatch remain unverified. Phase 12 remains in progress.
 Next plan: **GB-12 plan 12-07 — STOP stall wake, boundary sampling, and realignment**, documented in `phases/GB-12-cgb-double-speed/12-07-PLAN.md`.
 Next command in fresh context: **`/gsd-execute-phase 12`** (resumes at 12-07). Stop after Phase 12 and wait for the owner; both auto-advance flags remain false.
@@ -511,7 +514,7 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Completed workflow stage: **Phase GB-12 plan 12-07 execution**; Phase 12 remains in progress.
+- Completed workflow stage: **Phase GB-12 plan 12-08 execution**; Phase 12 remains in progress.
 - OpenGSD development uses the project's Codex `adaptive` model profile.
-- Next plan: **GB-12 plan 12-08 — remaining D-12 dispositions and STOP documentation**, via **`/gsd-execute-phase 12`** (resumes at 12-08).
+- Next plan: **GB-12 plan 12-09 — AGE driver, dispositions, sensitivity sweep**, via **`/gsd-execute-phase 12`** (resumes at 12-09).
 - Phase-stop rule: stop after Phase 12 and yield; never auto-advance into the next phase or milestone.
