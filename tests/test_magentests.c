@@ -242,6 +242,80 @@ static int cgb_ppu_disabled_state_compat(const char *label, const char *path) {
     return 0;
 }
 
+/* oam_internal_priority: four triangle objects (two per box) drawn from tile rows 1-6, opaque
+ * columns 1-6. Mask derived from the pinned source (see ELIGIBILITY.md "oam_internal_priority
+ * mask derivation"): G is object colour 1 (green), R is object colour 2 (red), . is the white
+ * BG. Each 12x6 box spans x 33-44; the green triangle comes from the object at X=40 (x 32-39)
+ * and the red one from X=46 (x 38-45). The two never share an opaque pixel, so this ROM does
+ * not constrain object ordering; the truth table does. */
+#define BOX_X 33u
+#define BOX_W 12u
+#define BOX_H 6u
+static const char *const oam_box_rows[BOX_H] = {
+    ".....G.....R",
+    "....GG....RR",
+    "...GGG...RRR",
+    "..GGGG..RRRR",
+    ".GGGGG.RRRRR",
+    "GGGGGGRRRRRR",
+};
+static const unsigned oam_box_y[2] = {25u, 45u};
+#define OAM_INTERNAL_DIGEST "edf38b0b758a27d2d5c0fee8e0664b51e66dfbd380dfb23f950d6a145ae06299"
+static int cgb_oam_internal_priority(const char *label, const char *path) {
+    static uint16_t last[PIXELS], previous[PIXELS];
+    uint8_t *rom; size_t size;
+    if (cgb_load(label, path, &rom, &size) != 0) return 1;
+    int rc = cgb_capture(label, rom, size, last, previous);
+    free(rom);
+    if (rc != 0) return 1;
+    unsigned opaque = 0u;
+    for (unsigned y = 0u; y < HEIGHT; ++y) {
+        for (unsigned x = 0u; x < WIDTH; ++x) {
+            unsigned expected = WHITE555;
+            for (unsigned box = 0u; box < 2u; ++box) {
+                if (y >= oam_box_y[box] && y < oam_box_y[box] + BOX_H &&
+                    x >= BOX_X && x < BOX_X + BOX_W) {
+                    const char c = oam_box_rows[y - oam_box_y[box]][x - BOX_X];
+                    if (c == 'G') { expected = GREEN555; ++opaque; }
+                    else if (c == 'R') { expected = RED555; ++opaque; }
+                }
+            }
+            if (cgb_expect_pixel(label, last, x, y, expected) != 0) return 1;
+        }
+    }
+    if (opaque != 84u) { fprintf(stderr, "%s: mask has %u opaque pixels, expected 84\n", label, opaque); return 1; }
+    return cgb_expect_digest(label, last, OAM_INTERNAL_DIGEST);
+}
+
+/* bg_oam_priority: eight 8x8 cells at x 32-39, y 16k to 16k+7. Objects 1, 4, 5, 6, 7 draw an
+ * all-colour-1 tile and win on every band (green). Objects 0, 2, 3 draw a half-green half-red tile
+ * and the BG (blue) wins on the colour-1 rows because OAM bit 7, BG attribute bit 7 and LCDC.0 are
+ * all set where required. No pixel is ever the failure red 0x001F. */
+#define BG_OAM_DIGEST "5a356fe01e4eddb98ac204bd963bf5249d0a685d69b5a404eaa897ef476b895a"
+static int cgb_bg_oam_priority(const char *label, const char *path) {
+    static uint16_t last[PIXELS], previous[PIXELS];
+    uint8_t *rom; size_t size;
+    if (cgb_load(label, path, &rom, &size) != 0) return 1;
+    int rc = cgb_capture(label, rom, size, last, previous);
+    free(rom);
+    if (rc != 0) return 1;
+    for (unsigned y = 0u; y < HEIGHT; ++y) {
+        for (unsigned x = 0u; x < WIDTH; ++x) {
+            unsigned expected = WHITE555;
+            if (x >= 32u && x < 40u && y < 128u) {
+                const unsigned cell = y / 16u;
+                const unsigned row = y % 16u;
+                if (row < 8u) {
+                    const int split = cell == 0u || cell == 2u || cell == 3u;
+                    expected = (split && row >= 4u) ? BLUE555 : GREEN555;
+                }
+            }
+            if (cgb_expect_pixel(label, last, x, y, expected) != 0) return 1;
+        }
+    }
+    return cgb_expect_digest(label, last, BG_OAM_DIGEST);
+}
+
 int main(int argc, char **argv) {
     if (argc < 3) {
         fprintf(stderr, "usage: test_magentests <case> <rom>...\n");
@@ -257,6 +331,10 @@ int main(int argc, char **argv) {
         return cgb_ppu_disabled_state(argv[1], argv[2]);
     if (strcmp(argv[1], "magentests_cgb_ppu_disabled_state_compat") == 0)
         return cgb_ppu_disabled_state_compat(argv[1], argv[2]);
+    if (strcmp(argv[1], "magentests_cgb_oam_internal_priority") == 0)
+        return cgb_oam_internal_priority(argv[1], argv[2]);
+    if (strcmp(argv[1], "magentests_cgb_bg_oam_priority") == 0)
+        return cgb_bg_oam_priority(argv[1], argv[2]);
     fprintf(stderr, "unknown case %s\n", argv[1]);
     return 2;
 }

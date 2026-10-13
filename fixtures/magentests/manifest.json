@@ -37,6 +37,26 @@
       "source_dir": "src/ppu_disabled_state",
       "rgbfix_options": "--color-compatible --mbc-type ROM",
       "cgb_flag": "0x80"
+    },
+    {
+      "alias": "bg_oam_priority",
+      "file": "bg_oam_priority.gbc",
+      "size_bytes": 32768,
+      "sha256": "1b2132b354370b1eff22d867da67d8f59eb94872fdad00c277203d8d8b67b84c",
+      "cartridge_type": "0x00",
+      "source_dir": "src/color_bg_oam_priority",
+      "rgbfix_options": "--color-only --mbc-type ROM",
+      "cgb_flag": "0xC0"
+    },
+    {
+      "alias": "oam_internal_priority",
+      "file": "oam_internal_priority.gbc",
+      "size_bytes": 32768,
+      "sha256": "f54fb6366b3ea8597d07917729aeb358d961ae6ece7cecd003fe9c45dcb97fe7",
+      "cartridge_type": "0x00",
+      "source_dir": "src/oam_internal_priority",
+      "rgbfix_options": "--color-only --mbc-type ROM",
+      "cgb_flag": "0xC0"
     }
   ]
 }

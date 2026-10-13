@@ -26,6 +26,8 @@ Phase 11 additions (release 0.5.0, downloaded 2026-10-12 into a fresh scratch di
 
 | File | Size | SHA-256 | Header $143 | Source dir |
 |---|---|---|---|---|
+| `bg_oam_priority.gbc` | 32768 | `1b2132b354370b1eff22d867da67d8f59eb94872fdad00c277203d8d8b67b84c` | $C0 | `src/color_bg_oam_priority` |
+| `oam_internal_priority.gbc` | 32768 | `f54fb6366b3ea8597d07917729aeb358d961ae6ece7cecd003fe9c45dcb97fe7` | $C0 | `src/oam_internal_priority` |
 | `ppu_disabled_state.gbc` | 32768 | `4808fe834ea6a6344d74f007a45628c405aca5acd13d6c25f76d02f442f1eea6` | $80 | `src/ppu_disabled_state` |
 
 Each file was downloaded from the release into a fresh empty scratch directory,

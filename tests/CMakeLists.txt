@@ -695,6 +695,10 @@ add_test(NAME magentests_cgb_ppu_disabled_state
   COMMAND test_magentests magentests_cgb_ppu_disabled_state ${GBB_MAGENTESTS_DIR}/ppu_disabled_state.gbc)
 add_test(NAME magentests_cgb_ppu_disabled_state_compat
   COMMAND test_magentests magentests_cgb_ppu_disabled_state_compat ${GBB_MAGENTESTS_DIR}/ppu_disabled_state.gbc)
+add_test(NAME magentests_cgb_oam_internal_priority
+  COMMAND test_magentests magentests_cgb_oam_internal_priority ${GBB_MAGENTESTS_DIR}/oam_internal_priority.gbc)
+add_test(NAME magentests_cgb_bg_oam_priority
+  COMMAND test_magentests magentests_cgb_bg_oam_priority ${GBB_MAGENTESTS_DIR}/bg_oam_priority.gbc)
 add_test(NAME magentests_oob_sram_negative_control
   COMMAND test_magentests magentests_oob_sram_negative_control
     ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc
@@ -2286,6 +2290,22 @@ gbb_colour_mutant(magentests_lcd_off_no_mode0 test_magentests.c
   "            ppu_set_mode(m, 0);\n            m->ppu_selected_object_count = 0;"
   "            m->ppu_selected_object_count = 0;"
   "magentests_cgb_ppu_disabled_state;${GBB_MAGENTESTS_DIR}/ppu_disabled_state.gbc" "0x001F|pixel"
+  "magentests_oob_sram_mbc1;${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc")
+# Object colours resolved from BG CRAM instead of object CRAM must turn the green and red
+# triangles of oam_internal_priority into the BG white (RESEARCH Correction 4: this ROM's objects
+# never share an opaque pixel, so X ordering is not its control; ordering stays in the truth table).
+gbb_colour_mutant(magentests_obj_from_bg_cram test_magentests.c
+  magentests_cgb_mutant_obj_from_bg_cram magentests_cgb_mutant_obj_from_bg_cram_control
+  "return cram_colour(m->obj_cram, object_attr & 7u, object);"
+  "return cram_colour(m->bg_cram, object_attr & 7u, object);"
+  "magentests_cgb_oam_internal_priority;${GBB_MAGENTESTS_DIR}/oam_internal_priority.gbc" "pixel"
+  "magentests_oob_sram_mbc1;${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc")
+# An inverted LCDC.0 test in the composer must break the per-band priority layout of bg_oam_priority.
+gbb_colour_mutant(magentests_lcdc0_inverted test_magentests.c
+  magentests_cgb_mutant_lcdc0_inverted magentests_cgb_mutant_lcdc0_inverted_control
+  "if ((lcdc & 0x01u) == 0) return CGB_LAYER_OBJ;"
+  "if ((lcdc & 0x01u) != 0) return CGB_LAYER_OBJ;"
+  "magentests_cgb_bg_oam_priority;${GBB_MAGENTESTS_DIR}/bg_oam_priority.gbc" "pixel"
   "magentests_oob_sram_mbc1;${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc")
 # --- Phase 11 plan 11-10 end ---
 
