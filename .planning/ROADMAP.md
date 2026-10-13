@@ -255,7 +255,7 @@ Plans (serial waves: every plan edits `tests/expected-tests.txt` and `tests/CMak
 
 **Rights gates**: G1 (mgblib font) gates vendoring cgb-acid2/dmg-acid2 into required CI (digest-pinned optional local runs otherwise); G4 excludes title-hash compatibility palettes.
 **Research**: DEEP (LCDC bit 0 in CGB mode, OPRI timing, CGB mode-3 length, blocked-write palette auto-increment).
-**Plans**: 9/15 plans executed
+**Plans**: 10/15 plans executed
 
 Plans:
 **Wave 1**
@@ -286,7 +286,7 @@ Plans:
 - [x] 11-09-PLAN.md — runner RGB555 frame cases (D-43) and independent RGB555 digest vectors
 
 **Wave 10** *(blocked on Wave 9 completion)*
-- [ ] 11-10-PLAN.md — MagenTests CGB ROMs with predicates and mutants; AGE deviation stated (D-20)
+- [x] 11-10-PLAN.md — MagenTests CGB ROMs with predicates and mutants; AGE deviation stated (D-20)
 
 **Wave 11** *(blocked on Wave 10 completion)*
 - [ ] 11-11-PLAN.md — AGE m3-bg-* / Mealybug m3_* disposition records (D-09) and optional local acid2 runner (D-24)
@@ -367,7 +367,7 @@ Plans:
 | 8. Cartridge Seam, MBC5 and MBC2 | v0.2 | 10/10 | Complete    | 2026-10-11 |
 | 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 18/18 | Complete    | 2026-10-11 |
 | 10. CGB Profile, Banking and Register Visibility | v0.2 | 20/20 | Complete    | 2026-10-12 |
-| 11. CGB Colour Rendering and Player Colour | v0.2 | 9/15 | In Progress | - |
+| 11. CGB Colour Rendering and Player Colour | v0.2 | 10/15 | In Progress | - |
 | 12. CGB Double Speed | v0.2 | 0/TBD | Not started | - |
 | 13. CGB HDMA | v0.2 | 0/TBD | Not started | - |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 0/TBD | Not started | - |

@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 10
+current_plan: 11
 status: planning
-stopped_at: Completed 11-09-PLAN.md
-last_updated: "2026-10-13T03:34:24.313Z"
+stopped_at: Completed 11-10-PLAN.md
+last_updated: "2026-10-13T03:45:07.554Z"
 last_activity: 2026-10-12
 last_activity_desc: Phase 11 execution started
-state_head: cc2fdd8ef979874c900b04b97ec7ebe1c9ee66d6
+state_head: a52953b2716c9106f412e71383f211053d96cbbe
 progress:
   total_phases: 9
   completed_phases: 5
   total_plans: 80
-  completed_plans: 74
+  completed_plans: 75
   percent: 56
 current_phase: 11
 current_phase_name: CGB Colour Rendering and Player Colour
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
 
 ## Current Position
 
-Current Plan: 10
+Current Plan: 11
 Total Plans in Phase: 15
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
@@ -184,6 +184,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 11 P07 | 50 min | 2 tasks | 14 files |
 | Phase 11 P08 | 45 min | 2 tasks | 22 files |
 | Phase 11 P09 | 25 min | 3 tasks | 7 files |
+| Phase 11 P10 | 30 min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -346,6 +347,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 11]: 11-07: fixtures/cgb-colour ROMs are admitted by a wildcard .gitignore exception and added as manifest rows with per-row recipes
 - [Phase 11]: 11-08: CRAM guest ends in a jr spin (not HALT) because gbb_run returns at every HALT; markers read with gbb_peek_ram after 10 frames
 - [Phase 11]: 11-09: CGB runner frame cases print GBB-RGB555LE-v1 digests under frame555/observed555; store chosen from instance profile; CGB progress-predicate observation refused with frame-unsupported-profile
+- [Phase 11]: 11-10: bg_oam_priority passed its predicate unmodified; no expected-unsupported record; AGE deviation (D-20) stated in ELIGIBILITY.md
 
 ### Pending Todos
 
@@ -381,8 +383,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-13T03:34:24.248Z
-Stopped at: Completed 11-09-PLAN.md
+Last session: 2026-10-13T03:45:07.494Z
+Stopped at: Completed 11-10-PLAN.md
 Resume file: None
 Next command in fresh context: `/gsd-execute-phase 11`
 
