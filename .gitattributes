@@ -65,3 +65,4 @@ fixtures/cgb-colour/*.inc text eol=lf
 fixtures/cgb-colour/manifest.json text eol=lf
 fixtures/cgb-colour/LICENSE.txt text eol=lf
 fixtures/cgb-colour/*.gb -text
+fixtures/magentests/*.gbc binary

@@ -34,6 +34,17 @@ Each file was downloaded from the release into a fresh empty scratch directory,
 checked for size, digest and header byte, then copied. `manifest.json` carries
 the same digests and is checked by `cmake/VerifyFixtureManifest.cmake`.
 
+## Reproduction
+
+`bash tests/scripts/reproduce-magentests.sh --self-check` (offline) checks that the manifest rows
+(`source_dir`, `rgbfix_options`) and the script's per-ROM rebuild table name the same files and
+that committed digests match. `--compare` rebuilds all six ROMs with RGBDS v0.6.1 at the pinned
+commit and prints `result=byte-identical` or `result=differs <file> <rebuilt> <committed>`. The
+hosted `magentests-repro` job in `.github/workflows/fixture-repro.yml` reports the result for the
+three Phase 11 ROMs; a "differs" result is reported, never fixed by replacing committed bytes
+(RESEARCH A4). Until that job has run on this branch the Phase 11 ROMs are admitted by release
+digest only, not by a verified rebuild.
+
 ## Rebuild status
 
 Release bytes equal the rebuild: claimed. The hosted `magentests-repro` job in `.github/workflows/fixture-repro.yml` printed `result=byte-identical` in pull-request run 38189871131 at head `fb8972d9e30e6bdf5ff2038e4508ecd3ebfb8522` (read in Plan 09-18). A mismatch is reported, never replaced by rebuilt bytes.

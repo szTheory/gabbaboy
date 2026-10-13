@@ -12,21 +12,27 @@
       "file": "mbc_oob_sram_mbc1.gbc",
       "size_bytes": 32768,
       "sha256": "83f1fc44cc26581163b58fe3df426f119dd5813c2e94a187ee0909d6ace1a8bb",
-      "cartridge_type": "0x02"
+      "cartridge_type": "0x02",
+      "source_dir": "src/mbc_oob_sram",
+      "rgbfix_options": "--color-compatible --mbc-type MBC1+RAM --ram-size 2"
     },
     {
       "alias": "mbc3",
       "file": "mbc_oob_sram_mbc3.gbc",
       "size_bytes": 32768,
       "sha256": "03e13fa796a9e06fa90f9b396b728c1de9f6e7351aa47a038e33c11d3a8df7dd",
-      "cartridge_type": "0x12"
+      "cartridge_type": "0x12",
+      "source_dir": "src/mbc_oob_sram",
+      "rgbfix_options": "--color-compatible --mbc-type MBC3+RAM --ram-size 2"
     },
     {
       "alias": "mbc5",
       "file": "mbc_oob_sram_mbc5.gbc",
       "size_bytes": 32768,
       "sha256": "e99f526386f72a8992a72137d0bd9a431b380807b551747bb3baa03421d6f54b",
-      "cartridge_type": "0x1A"
+      "cartridge_type": "0x1A",
+      "source_dir": "src/mbc_oob_sram",
+      "rgbfix_options": "--color-compatible --mbc-type MBC5+RAM --ram-size 2"
     },
     {
       "alias": "ppu_disabled_state",
