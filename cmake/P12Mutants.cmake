@@ -1,7 +1,7 @@
 # Phase 12 runtime-mask mutant table. Each id owns one or more exact source
 # anchors. Keep each anchor and replacement in a separate variable because C
 # replacement text may contain semicolons.
-set(GBB_P12_MUTANT_IDS 1 2 3 4 5 7 8 10 11 12 13 14 15 16 17 18 19 20 24 25 26 27 29 30 32 33 34)
+set(GBB_P12_MUTANT_IDS 1 2 3 4 5 7 8 10 11 12 13 14 15 16 17 18 19 20 23 24 25 26 27 29 30 32 33 34)
 
 set(GBB_P12_SITES_13 1)
 set(GBB_P12_ANCHOR_13_1 "if (instance->cpu_stall_kind == GBB_STALL_SPEED_SWITCH && wake_pending) { /* P12-M13 */")
@@ -11,9 +11,15 @@ set(GBB_P12_SITES_16 1)
 set(GBB_P12_ANCHOR_16_1 "const int wake_pending =\n                (instance->ie & instance->interrupt_flags & 0x1Fu) != 0; /* P12-M16 */")
 set(GBB_P12_REPLACEMENT_16_1 "const int wake_pending = (!GBB_P12_MUT(16) || result.consumed_half_dots == 0u) &&\n                ((instance->ie & instance->interrupt_flags & 0x1Fu) != 0); /* P12-M16 */")
 
-set(GBB_P12_SITES_34 1)
+set(GBB_P12_SITES_34 2)
 set(GBB_P12_ANCHOR_34_1 "break; /* P12-M34: STOP must not execute RLCA. */")
 set(GBB_P12_REPLACEMENT_34_1 "if (!GBB_P12_MUT(34)) break; /* P12-M34: STOP must not execute RLCA. */")
+set(GBB_P12_ANCHOR_34_2 "if (instance->ime_delay != 0 && --instance->ime_delay == 0) instance->ime = 1; /* P12-M34 */")
+set(GBB_P12_REPLACEMENT_34_2 "if (instance->ime_delay != 0 && --instance->ime_delay == 0) instance->ime = 1; /* P12-M34 */\n        if (GBB_P12_MUT(34) && instance->stop_switch_pending == 4u) instance->ime = 0;")
+
+set(GBB_P12_SITES_23 1)
+set(GBB_P12_ANCHOR_23_1 "if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB ||\n        m->double_speed != 0u || (m->time_half_dots & 7u) != 4u) return; /* P12-M23 */")
+set(GBB_P12_REPLACEMENT_23_1 "if (GBB_P12_MUT(23) || !model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB ||\n        m->double_speed != 0u || (m->time_half_dots & 7u) != 4u) return; /* P12-M23 */")
 
 set(GBB_P12_SITES_8 1)
 set(GBB_P12_ANCHOR_8_1 "if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB || !(m->key1_armed & 1u)) /* P12-M8 */")

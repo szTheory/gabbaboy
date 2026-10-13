@@ -29,6 +29,7 @@
 #define GBB_STOP_SWITCH_COST_HALF_DOTS 16u
 #define GBB_STALL_NONE 0u
 #define GBB_STALL_SPEED_SWITCH 1u
+#define GBB_STALL_SWITCH_REALIGN 2u
 #define GBB_HALF_DOTS_PER_DOT 2u
 #define GBB_DOTS_PER_LINE 456u
 #define GBB_LINES_PER_FRAME 154u
@@ -3982,6 +3983,14 @@ static int cpu_stalled(const gbb_instance *m) {
     return m->cpu_stall_kind != GBB_STALL_NONE;
 }
 
+/* MODEL: CGB_ONLY GATE-74 GUARD=model_is_cgb -- normal-speed entry phase alignment (D-09) */
+static void speed_switch_apply_realign(gbb_instance *m) {
+    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB ||
+        m->double_speed != 0u || (m->time_half_dots & 7u) != 4u) return; /* P12-M23 */
+    m->cpu_stall_kind = GBB_STALL_SWITCH_REALIGN;
+    m->cpu_stall_half_dots = 4u;
+}
+
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_half_dots,
                                        gbb_trace_record *trace, size_t trace_capacity) {
@@ -4021,6 +4030,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             if (instance->cpu_stall_kind == GBB_STALL_SPEED_SWITCH && wake_pending) { /* P12-M13 */
                 instance->cpu_stall_kind = GBB_STALL_NONE;
                 instance->cpu_stall_half_dots = 0u;
+                speed_switch_apply_realign(instance);
                 continue;
             }
             const uint32_t quantum = 8u >> instance->double_speed;
@@ -4042,8 +4052,10 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             advance_devices(instance, step); /* P12-M7 */
             instance->cpu_stall_half_dots -= step;
             result.consumed_half_dots += step;
-            if (instance->cpu_stall_half_dots == 0u)
+            if (instance->cpu_stall_half_dots == 0u) {
                 instance->cpu_stall_kind = GBB_STALL_NONE;
+                speed_switch_apply_realign(instance);
+            }
             continue;
         }
         unsigned interrupt = instance->ime ? pending_interrupt(instance) : 5;
@@ -4137,7 +4149,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
         }
         result.consumed_half_dots += cost;
         diagnostic_commit(instance);
-        if (instance->ime_delay != 0 && --instance->ime_delay == 0) instance->ime = 1;
+        if (instance->ime_delay != 0 && --instance->ime_delay == 0) instance->ime = 1; /* P12-M34 */
         if (instance->stop_switch_pending == 3u || instance->stop_switch_pending == 4u) {
             const uint8_t switch_case = instance->stop_switch_pending;
             instance->stop_switch_pending = 0u;
@@ -4148,6 +4160,8 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 instance->cpu_stall_kind = GBB_STALL_SPEED_SWITCH; /* P12-M5 */
                 instance->cpu_stall_half_dots = GBB_SPEED_SWITCH_STALL_T *
                     (instance->double_speed ? GBB_HALF_DOTS_PER_T_DOUBLE : GBB_HALF_DOTS_PER_T_NORMAL); /* P12-M6 */
+            } else {
+                speed_switch_apply_realign(instance);
             }
             continue;
         }

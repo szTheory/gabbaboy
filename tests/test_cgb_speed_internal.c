@@ -425,6 +425,7 @@ static int cgb_speed_ei_stop(void) {
     REQUIRE(create_internal_machine(rom, &machine) == 0);
     machine->pc = 0x100u;
     machine->joypad_select = 0x30u;
+    machine->key1_armed = 1u;
     machine->ie = 0x04u;
     machine->ime = 0;
     unsigned instructions = 0u;
@@ -500,11 +501,11 @@ static int cgb_speed_realign(void) {
     REQUIRE(make_switch_test_machine(1u, 4u, 0x04u, 0x04u, 0, &machine) == 0);
     REQUIRE(retire_internal_instruction(machine) == 0);
     REQUIRE(machine->double_speed == 0u);
-    REQUIRE(machine->cpu_stall_kind == 2u && machine->cpu_stall_half_dots == 4u);
+    REQUIRE(machine->cpu_stall_kind == GBB_STALL_SWITCH_REALIGN && machine->cpu_stall_half_dots == 4u);
     const uint64_t case3_tail_start = machine->time_half_dots;
     gbb_run_result run = gbb_run(machine, 3u, NULL, 0u);
     REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 0u);
-    REQUIRE(machine->cpu_stall_kind == 2u && machine->cpu_stall_half_dots == 4u);
+    REQUIRE(machine->cpu_stall_kind == GBB_STALL_SWITCH_REALIGN && machine->cpu_stall_half_dots == 4u);
     run = gbb_run(machine, 4u, NULL, 0u);
     REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 4u);
     REQUIRE(machine->time_half_dots == case3_tail_start + 4u &&
@@ -526,7 +527,7 @@ static int cgb_speed_realign(void) {
                                   GBB_HALF_DOTS_PER_T_NORMAL;
     run = gbb_run(machine, normal_stall, NULL, 0u);
     REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == normal_stall);
-    REQUIRE(machine->cpu_stall_kind == 2u && machine->cpu_stall_half_dots == 4u);
+    REQUIRE(machine->cpu_stall_kind == GBB_STALL_SWITCH_REALIGN && machine->cpu_stall_half_dots == 4u);
     const uint64_t completion_tail_start = machine->time_half_dots;
     run = gbb_run(machine, 4u, NULL, 0u);
     REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 4u);
@@ -544,7 +545,7 @@ static int cgb_speed_realign(void) {
     const uint64_t wake_tail_start = machine->time_half_dots;
     run = gbb_run(machine, 3u, NULL, 0u);
     REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 0u);
-    REQUIRE(machine->cpu_stall_kind == 2u && machine->cpu_stall_half_dots == 4u);
+    REQUIRE(machine->cpu_stall_kind == GBB_STALL_SWITCH_REALIGN && machine->cpu_stall_half_dots == 4u);
     REQUIRE(machine->time_half_dots == wake_tail_start);
     run = gbb_run(machine, 4u, NULL, 0u);
     REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 4u);

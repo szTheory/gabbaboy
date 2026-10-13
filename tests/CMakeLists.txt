@@ -2705,6 +2705,14 @@ gbb_p12_mutant_test(test_cgb_speed_internal_p12 13 wake_ime_on_ignored
   cgb_speed_wake_ime_on "run.reason == GBB_STOP_TRACE_FULL|run.trace_count == 1u|stall_end >= machine->timer_reloaded_at")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 16 wake_ime_on_per_call
   cgb_speed_wake_ime_on "run.reason == GBB_STOP_TRACE_FULL|run.trace_count == 1u|stall_end >= machine->timer_reloaded_at")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 13 wake_ime_off_ignored
+  cgb_speed_wake_ime_off "timer_reloaded_at > stall_start|machine->b == 1u")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 16 wake_sampled_per_call
+  cgb_speed_wake_m_boundary "machine->b == 1u|machine->cpu_stall_kind")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 23 realignment_omitted
+  cgb_speed_realign "GBB_STALL_SWITCH_REALIGN|cpu_stall_half_dots == 4u")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 34 ei_delay_not_retired
+  cgb_speed_ei_stop "machine->ime == 1")
 # --- Phase 12 plan 12-07 end ---
 
 gabbaboy_verify_registered_tests()
