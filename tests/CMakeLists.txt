@@ -2696,6 +2696,11 @@ set_tests_properties(cgb_speed_stall_static_assert_mutant PROPERTIES
 add_test(NAME cgb_speed_wake_ime_on
   COMMAND test_cgb_speed_internal_p12 cgb_speed_wake_ime_on)
 set_tests_properties(cgb_speed_wake_ime_on PROPERTIES TIMEOUT 60)
+foreach(wake_case IN ITEMS cgb_speed_wake_ime_off cgb_speed_ei_stop
+    cgb_speed_wake_m_boundary cgb_speed_realign)
+  add_test(NAME ${wake_case} COMMAND test_cgb_speed_internal_p12 ${wake_case})
+  set_tests_properties(${wake_case} PROPERTIES TIMEOUT 60)
+endforeach()
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 13 wake_ime_on_ignored
   cgb_speed_wake_ime_on "run.reason == GBB_STOP_TRACE_FULL|run.trace_count == 1u|stall_end >= machine->timer_reloaded_at")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 16 wake_ime_on_per_call

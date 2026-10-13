@@ -364,6 +364,196 @@ static int cgb_speed_wake_ime_on(void) {
     return 0;
 }
 
+static int make_switch_test_machine(uint8_t speed, uint64_t time_half_dots,
+                                    uint8_t ie, uint8_t interrupt_flags,
+                                    int ime, gbb_instance **out) {
+    const uint8_t program[] = {0x10u,0x00u,0x04u,0x00u};
+    if (make_stop_test_machine(program, sizeof(program), out) != 0) return 1;
+    (*out)->double_speed = speed;
+    (*out)->time_half_dots = time_half_dots;
+    (*out)->divider_counter = 0u;
+    (*out)->divider_phase = 0u;
+    (*out)->div = 0u;
+    (*out)->key1_armed = 1u;
+    (*out)->joypad_select = 0x30u;
+    (*out)->ie = ie;
+    (*out)->interrupt_flags = interrupt_flags;
+    (*out)->ime = ime;
+    return 0;
+}
+
+static int retire_internal_instruction(gbb_instance *machine) {
+    decoded instruction = decode(machine);
+    REQUIRE(instruction.supported && instruction.ticks != 0u);
+    const uint8_t cost = instruction_cost(machine, instruction);
+    gbb_run_result run = gbb_run(machine, cost, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == cost);
+    return 0;
+}
+
+static int cgb_speed_wake_ime_off(void) {
+    gbb_instance *machine = NULL;
+    REQUIRE(make_switch_test_machine(0u, 0u, 0x04u, 0u, 0, &machine) == 0);
+    REQUIRE(retire_internal_instruction(machine) == 0);
+    REQUIRE(machine->double_speed == 1u &&
+            machine->cpu_stall_kind == GBB_STALL_SPEED_SWITCH);
+    machine->tma = 0x27u;
+    machine->timer_reload_pending = 1;
+    machine->timer_reload_remaining = 2u;
+    const uint64_t stall_start = machine->time_half_dots;
+
+    gbb_run_result run = gbb_run(machine, 8u, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 8u);
+    REQUIRE(machine->timer_reloaded_at > stall_start &&
+            machine->instruction_start_half_dots >= machine->timer_reloaded_at &&
+            machine->instruction_start_half_dots - machine->timer_reloaded_at <= 4u);
+    REQUIRE(machine->b == 1u && machine->ime == 0);
+    REQUIRE((machine->interrupt_flags & 0x04u) != 0u);
+    REQUIRE(machine->cpu_stall_kind == GBB_STALL_NONE &&
+            machine->cpu_stall_half_dots == 0u && machine->halt_bug == 0);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int cgb_speed_ei_stop(void) {
+    const uint8_t program[] = {0xFBu,0x10u,0x00u,0x18u,0xFEu};
+    const uint8_t handler[] = {0x3Eu,0x5Au,0xEAu,0x00u,0xC0u,0xD9u};
+    uint8_t rom[32768];
+    make_internal_rom(rom, program, sizeof(program));
+    memcpy(rom + 0x50u, handler, sizeof(handler));
+    gbb_instance *machine = NULL;
+    REQUIRE(create_internal_machine(rom, &machine) == 0);
+    machine->pc = 0x100u;
+    machine->joypad_select = 0x30u;
+    machine->ie = 0x04u;
+    machine->ime = 0;
+    unsigned instructions = 0u;
+    while (machine->cpu_stall_kind == GBB_STALL_NONE && instructions++ < 8u)
+        REQUIRE(retire_internal_instruction(machine) == 0);
+    REQUIRE(machine->cpu_stall_kind == GBB_STALL_SPEED_SWITCH);
+    REQUIRE(machine->ime == 1);
+    machine->tma = 0x42u;
+    machine->timer_reload_pending = 1;
+    machine->timer_reload_remaining = 2u;
+
+    gbb_run_result run = gbb_run(machine, 64u, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET);
+    REQUIRE(machine->double_speed == 1u && machine->wram[0][0] == 0x5Au);
+    REQUIRE(machine->cpu_stall_kind == GBB_STALL_NONE &&
+            machine->cpu_stall_half_dots == 0u && machine->halt_bug == 0);
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int cgb_speed_wake_m_boundary(void) {
+    uint64_t reference_resume = UINT64_MAX;
+    uint64_t reference_end = UINT64_MAX;
+    for (uint32_t offset = 1u; offset <= 4u; ++offset) {
+        for (unsigned split = 0u; split < 2u; ++split) {
+            gbb_instance *machine = NULL;
+            REQUIRE(make_switch_test_machine(0u, 0u, 0x04u, 0u, 0, &machine) == 0);
+            REQUIRE(retire_internal_instruction(machine) == 0);
+            REQUIRE(machine->double_speed == 1u &&
+                    machine->cpu_stall_kind == GBB_STALL_SPEED_SWITCH);
+            machine->tma = 0x31u;
+            machine->timer_reload_pending = 1;
+            machine->timer_reload_remaining = (uint8_t)offset;
+            const uint64_t stall_start = machine->time_half_dots;
+
+            gbb_run_result run = {0};
+            if (split == 0u) {
+                run = gbb_run(machine, 8u, NULL, 0u);
+                REQUIRE(run.reason == GBB_STOP_BUDGET &&
+                        run.consumed_half_dots == 8u);
+            } else {
+                const uint64_t budgets[] = {1u,3u,4u,7u};
+                const uint64_t consumed[] = {0u,0u,4u,4u};
+                for (size_t i = 0u; i < sizeof(budgets) / sizeof(budgets[0]); ++i) {
+                    run = gbb_run(machine, budgets[i], NULL, 0u);
+                    REQUIRE(run.reason == GBB_STOP_BUDGET &&
+                            run.consumed_half_dots == consumed[i]);
+                }
+            }
+            REQUIRE(machine->timer_reloaded_at == stall_start + offset);
+            REQUIRE(machine->b == 1u && machine->ime == 0);
+            REQUIRE(machine->instruction_start_half_dots >= machine->timer_reloaded_at &&
+                    machine->instruction_start_half_dots - machine->timer_reloaded_at <= 4u);
+            REQUIRE(machine->cpu_stall_kind == GBB_STALL_NONE &&
+                    machine->cpu_stall_half_dots == 0u && machine->halt_bug == 0);
+            if (split == 0u) {
+                reference_resume = machine->instruction_start_half_dots;
+                reference_end = machine->time_half_dots;
+            } else {
+                REQUIRE(machine->instruction_start_half_dots == reference_resume);
+                REQUIRE(machine->time_half_dots == reference_end);
+            }
+            REQUIRE(machine->instruction_start_half_dots == stall_start + 4u);
+            REQUIRE(machine->time_half_dots == stall_start + 8u);
+            gbb_destroy(machine);
+        }
+    }
+    return 0;
+}
+
+static int cgb_speed_realign(void) {
+    gbb_instance *machine = NULL;
+    REQUIRE(make_switch_test_machine(1u, 4u, 0x04u, 0x04u, 0, &machine) == 0);
+    REQUIRE(retire_internal_instruction(machine) == 0);
+    REQUIRE(machine->double_speed == 0u);
+    REQUIRE(machine->cpu_stall_kind == 2u && machine->cpu_stall_half_dots == 4u);
+    const uint64_t case3_tail_start = machine->time_half_dots;
+    gbb_run_result run = gbb_run(machine, 3u, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 0u);
+    REQUIRE(machine->cpu_stall_kind == 2u && machine->cpu_stall_half_dots == 4u);
+    run = gbb_run(machine, 4u, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 4u);
+    REQUIRE(machine->time_half_dots == case3_tail_start + 4u &&
+            machine->cpu_stall_kind == GBB_STALL_NONE);
+    gbb_destroy(machine);
+
+    REQUIRE(make_switch_test_machine(1u, 0u, 0x04u, 0x04u, 0, &machine) == 0);
+    REQUIRE(retire_internal_instruction(machine) == 0);
+    REQUIRE(machine->double_speed == 0u &&
+            machine->cpu_stall_kind == GBB_STALL_NONE &&
+            machine->cpu_stall_half_dots == 0u);
+    gbb_destroy(machine);
+
+    REQUIRE(make_switch_test_machine(1u, 4u, 0u, 0u, 0, &machine) == 0);
+    REQUIRE(retire_internal_instruction(machine) == 0);
+    REQUIRE(machine->double_speed == 0u &&
+            machine->cpu_stall_kind == GBB_STALL_SPEED_SWITCH);
+    const uint64_t normal_stall = (uint64_t)GBB_SPEED_SWITCH_STALL_T *
+                                  GBB_HALF_DOTS_PER_T_NORMAL;
+    run = gbb_run(machine, normal_stall, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == normal_stall);
+    REQUIRE(machine->cpu_stall_kind == 2u && machine->cpu_stall_half_dots == 4u);
+    const uint64_t completion_tail_start = machine->time_half_dots;
+    run = gbb_run(machine, 4u, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 4u);
+    REQUIRE(machine->time_half_dots == completion_tail_start + 4u &&
+            machine->cpu_stall_kind == GBB_STALL_NONE);
+    gbb_destroy(machine);
+
+    REQUIRE(make_switch_test_machine(1u, 4u, 0u, 0u, 0, &machine) == 0);
+    REQUIRE(retire_internal_instruction(machine) == 0);
+    REQUIRE(gbb_run(machine, 8u, NULL, 0u).consumed_half_dots == 8u);
+    REQUIRE(machine->cpu_stall_kind == GBB_STALL_SPEED_SWITCH &&
+            (machine->time_half_dots & 7u) == 4u);
+    machine->ie = 0x04u;
+    machine->interrupt_flags = 0x04u;
+    const uint64_t wake_tail_start = machine->time_half_dots;
+    run = gbb_run(machine, 3u, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 0u);
+    REQUIRE(machine->cpu_stall_kind == 2u && machine->cpu_stall_half_dots == 4u);
+    REQUIRE(machine->time_half_dots == wake_tail_start);
+    run = gbb_run(machine, 4u, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 4u);
+    REQUIRE(machine->time_half_dots == wake_tail_start + 4u &&
+            machine->cpu_stall_kind == GBB_STALL_NONE);
+    gbb_destroy(machine);
+    return 0;
+}
+
 static int cgb_speed_stop_cases(void) {
     const uint8_t program[] = {0x10u, 0x3Eu, 0x42u, 0x00u};
     uint8_t rom[32768];
@@ -1013,6 +1203,10 @@ int main(int argc, char **argv) {
         if (rc == 0) puts("cgb-speed-internal cgb_speed_wake_ime_on pass");
         return rc;
     }
+    if (strcmp(argv[1], "cgb_speed_wake_ime_off") == 0) return cgb_speed_wake_ime_off();
+    if (strcmp(argv[1], "cgb_speed_ei_stop") == 0) return cgb_speed_ei_stop();
+    if (strcmp(argv[1], "cgb_speed_wake_m_boundary") == 0) return cgb_speed_wake_m_boundary();
+    if (strcmp(argv[1], "cgb_speed_realign") == 0) return cgb_speed_realign();
     if (strcmp(argv[1], "cgb_speed_stop_operand") == 0) return cgb_speed_stop_operand();
     if (strcmp(argv[1], "cgb_speed_stop_prefetch_ff04") == 0) {
         return cgb_speed_stop_prefetch_ff04(argc > 2 && strcmp(argv[2], "--ff04-wrong-byte") == 0);
