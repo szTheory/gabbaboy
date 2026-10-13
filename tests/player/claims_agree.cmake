@@ -3,13 +3,19 @@
 # every phrase of a shorter list in the Linux string (which has no player). A miss prints
 # "claims-disagree PHRASE FILE" and exits 1.
 #
-# Inputs (-D): PHRASES (;-list, all surfaces with a player), LINUX_PHRASES (;-list),
+# Inputs (-D): PHRASES_FILE (one phrase per line, all surfaces with a player), LINUX_PHRASES_FILE,
 # LIMITATIONS, README, PREVIEW_YML.
-foreach(required PHRASES LINUX_PHRASES LIMITATIONS README PREVIEW_YML)
+foreach(required PHRASES_FILE LINUX_PHRASES_FILE LIMITATIONS README PREVIEW_YML)
   if(NOT DEFINED ${required} OR "${${required}}" STREQUAL "")
     message(FATAL_ERROR "claims_agree.cmake is missing ${required}")
   endif()
 endforeach()
+
+file(STRINGS "${PHRASES_FILE}" PHRASES)
+file(STRINGS "${LINUX_PHRASES_FILE}" LINUX_PHRASES)
+if(NOT PHRASES OR NOT LINUX_PHRASES)
+  message(FATAL_ERROR "claims_agree.cmake: empty phrase list")
+endif()
 
 function(gbb_require_phrases label text)
   foreach(phrase IN LISTS ARGN)

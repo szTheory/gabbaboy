@@ -393,11 +393,12 @@ static void print_player_help(void) {
         "host backlog; reset and successful ROM replacement clear it after save transitions.\n\n"
         "If reset, ROM replacement, or quit is blocked by a failed save, R retries; "
         "C continues without saving; Escape cancels.\n\n"
-        "Evidence: the APU is a deterministic DMG-CPU-B digital software model. CGB/VIN, "
+        "Evidence: the APU is a deterministic DMG-CPU-B digital software model (the DMG APU model also serves the CGB profile). CGB/VIN, "
         "physical or revision-specific hardware behavior, and listening quality are not "
         "qualified. SDL queued-input bytes are not latency; application PCM underflow is "
         "not hardware starvation.\n\n"
         "Model: an optional leading --model auto|dmg|cgb picks the machine (default dmg). auto runs a ROM whose header declares CGB support on the CGB profile and any other ROM on the DMG profile; cgb runs every ROM on the CGB profile, where a DMG-only ROM uses the core's default compatibility palette (the player has no palette option); a PGB header is rejected. Colour frames are shown as the guest wrote them, with no colour correction.\n\n"
+        "Claims: the player runs DMG and CGB software with --model auto|dmg|cgb (default dmg); DMG software on the CGB profile uses the core's fixed compatibility palette and there is no palette flag. There is no colour correction. Audio on the CGB profile is the DMG APU model. CGB mode-3 timing, double speed and HDMA are not claimed or implemented; CGB-E hardware is not qualified.\n\n"
         "Developer diagnostics: --audio-dummy-smoke checks SDL dummy open/stream/close/recovery; "
         "--audio-measure frame|792 demo-rom emits bounded PCM for the scripted receipt; "
         "--audio-device-status reports default-device availability without playing a workload; "
@@ -786,7 +787,7 @@ static void show_help(player *app) {
     (void)player_input_focus_lost(&app->input, app->machine, SDL_GetTicksNS());
     if (!player_audio_clear(app->audio))
         set_status(app, "Audio flush failed before the help dialog");
-    char message[2048];
+    char message[4096];
     (void)snprintf(message, sizeof(message),
         "Current ROM: %s\n\n"
         "Open ROM: Command-O\nQuit: Command-Q\n"
@@ -802,7 +803,7 @@ static void show_help(player *app) {
         "If no device opens, PCM is discarded and counted.\n"
         "Pause/focus cleanup and device recovery clear host backlog; reset and successful "
         "replacement clear it after save transitions.\n"
-        "The APU is a DMG-CPU-B digital model. CGB/VIN, physical/revision-specific behavior, "
+        "The APU is a DMG-CPU-B digital model (on the CGB profile, the DMG APU model). CGB/VIN, physical/revision-specific behavior, "
         "and listening quality are not qualified. SDL queued-input bytes are not latency; "
         "application PCM underflow is not hardware starvation.\n\n"
         "Status: %.160s\n"
