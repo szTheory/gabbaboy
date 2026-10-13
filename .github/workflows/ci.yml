@@ -169,7 +169,8 @@ jobs:
           grep -F -- '-fsanitize=address,undefined' build-asan/build.ninja
       - name: Run and verify nonempty test inventory
         run: |
-          ctest --preset phase1-asan --output-on-failure --no-tests=error --output-junit ctest.xml
+          # Parallel: serial ASan used about 20 of the 30 minutes and timed out on a slow runner (LESSONS GB-CI-004).
+          ctest --preset phase1-asan --parallel 4 --output-on-failure --no-tests=error --output-junit ctest.xml
           bash .github/scripts/verify-test-inventory.sh build-asan/ctest.xml tests/expected-tests.txt
       - name: Print no-host-clock proof
         shell: bash

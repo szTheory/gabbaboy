@@ -595,3 +595,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** native-windows-x64 green at fb7d14c (ci run 38355327717).
 - **Source:** Phase 11 execute-phase tail, PR #67.
 - **Status:** Adopted.
+
+### GB-CI-004 / 2026-10-13 / Serial hosted ASan ran out of its job timeout as the suite grew
+
+- **Cause and evidence:** `linux-asan-ubsan` ran `ctest --preset phase1-asan` serially under a 30-minute timeout. At b314686 the push-event run took 20 minutes (ci run 38360819833); the pull_request run of the same commit hit a runner about 1.6x slower and was cancelled at 30 minutes with 504 of 684 tests passed and none failing (ci run 38360825378). The PR package smokes then failed only because they wait on that run.
+- **Remedy:** Run the ASan step with `--parallel 4` (the runner's vCPU count). `ci_asan_parallel_contract` pins the flag in the job, and `ci_asan_parallel_serial_selftest` fails on a copy of the workflow without it.
+- **Applies when:** A hosted job's duration grows with the test inventory; check its headroom against `timeout-minutes` at each phase tail rather than re-running a timeout.
+- **Verification:** Both CTests pass locally. The hosted ASan duration is recorded in the Phase 11 UAT.
+- **Source:** Phase 11 verify-work, PR #67.
+- **Status:** Adopted.

@@ -1547,6 +1547,31 @@ add_test(NAME doc_contract_scope_selftest
     "-DGBB_EXPECT_REGEX=doc-contract-missing: once per open"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
+# Hosted ASan runs the whole suite under one 30-minute job timeout; serially it used about 20
+# minutes and timed out on a slow runner (LESSONS GB-CI-004). The contract keeps the ASan ctest
+# step parallel. The workflow declares its own identifiers, so only the scoped phrase is checked.
+set(GBB_CI_WORKFLOW "${PROJECT_SOURCE_DIR}/.github/workflows/ci.yml")
+set(GBB_CI_ASAN_PHRASE "ctest --preset phase1-asan --parallel 4")
+add_test(NAME ci_asan_parallel_contract
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_DOC=${GBB_CI_WORKFLOW}
+    -DGBB_DECLARATIONS=${GBB_CI_WORKFLOW}
+    "-DGBB_REQUIRED=${GBB_CI_ASAN_PHRASE}"
+    "-DGBB_SCOPE_START=name: linux-asan-ubsan"
+    -P ${GBB_DOC_CONTRACT_SCRIPT})
+set_tests_properties(ci_asan_parallel_contract PROPERTIES
+  PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[0-9]+ phrases=1[^0-9]")
+file(READ "${GBB_CI_WORKFLOW}" GBB_CI_WORKFLOW_TEXT)
+string(REPLACE "phase1-asan --parallel 4" "phase1-asan" GBB_CI_WORKFLOW_SERIAL "${GBB_CI_WORKFLOW_TEXT}")
+file(WRITE "${GBB_DOC_SELFTEST}/ci-serial.yml" "${GBB_CI_WORKFLOW_SERIAL}")
+add_test(NAME ci_asan_parallel_serial_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${GBB_DOC_SELFTEST}/ci-serial.yml;-DGBB_DECLARATIONS=${GBB_DOC_SELFTEST}/ci-serial.yml;-DGBB_REQUIRED=${GBB_CI_ASAN_PHRASE};-DGBB_SCOPE_START=name: linux-asan-ubsan;-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=doc-contract-missing: ctest --preset phase1-asan --parallel 4"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_CI_WORKFLOW}")
+
 # CGB host-guide contract (D-28): the CGB section of the integration guide names only declared symbols
 # and keeps each promise the header makes about the info API, PGB rejection, frame copy, banking and
 # deferred registers. The missing-phrase selftest proves the check can fail.
