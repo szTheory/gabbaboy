@@ -3013,4 +3013,14 @@ set_tests_properties(
   PROPERTIES TIMEOUT 60)
 # --- Phase 12 plan 12-10 end ---
 
+# --- Phase 12 plan 12-11 begin ---
+# Hostile STOP decision-table cases run from a separate original ROM. The selector is patched
+# only in a private in-memory copy by the public-API test driver.
+add_test(NAME cgb_speed_fixture_hostile
+  COMMAND test_cgb_speed_fixture hostile ${GBB_CGB_SPEED_DIR}/speed-hostile.gb
+    ${PROJECT_SOURCE_DIR}/tests/data/cgb-speed-expectations.txt)
+set_tests_properties(cgb_speed_fixture_hostile PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-speed-fixture hostile pass entries=3" TIMEOUT 60)
+# --- Phase 12 plan 12-11 end ---
+
 gabbaboy_verify_registered_tests()

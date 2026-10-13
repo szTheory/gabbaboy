@@ -17,6 +17,11 @@ STOP_M_CYCLES = 2
 LY_POLL_LOOP_M_CYCLES = 7
 M_CYCLE_T = 4
 PHASE_SPEEDS = (1, 2, 1, 2)
+HOSTILE_BASE_METRICS = (
+    "hostile-key1-before", "hostile-key1-armed", "hostile-key1-after",
+    "hostile-double-speed", "hostile-handler", "hostile-lines",
+    "hostile-halt", "hostile-if",
+)
 
 
 def rows(speed_factor):
@@ -62,6 +67,27 @@ def rows(speed_factor):
             result.append(("stop-lines", phase, line_min, line_max))
             next_key1 = 0xFE if destination != 1 else 0x7E
             result.append(("key1-after", phase, next_key1, next_key1))
+
+    # D-02 case 3: a timer request is pending with IE set while IME is clear;
+    # EI immediately precedes STOP, so its delayed enable matures at retirement.
+    # The switch is the no-stall branch, then the pending handler runs. Bounds
+    # for the line delta use the named 2-M switch cost plus worst-case five-M
+    # interrupt entry, bounded guest handler, and post-handler LY sample: under
+    # one PPU line at the destination speed.
+    fast_stop_half_dots = STOP_M_CYCLES * M_CYCLE_T * 2
+    case3_path_max_m = 5 + 40 + 8
+    case3_max_half_dots = fast_stop_half_dots + case3_path_max_m * M_CYCLE_T
+    case3_line_max = math.ceil(case3_max_half_dots / (2 * DOTS_PER_LINE))
+    result.extend((
+        ("hostile-key1-before", 1, 0x7E, 0x7E),
+        ("hostile-key1-armed", 1, 0x7F, 0x7F),
+        ("hostile-key1-after", 1, 0xFE, 0xFE),
+        ("hostile-double-speed", 1, 1, 1),
+        ("hostile-handler", 1, 1, 1),
+        ("hostile-lines", 1, 0, case3_line_max),
+        ("hostile-halt", 1, 0, 0),
+        ("hostile-if", 1, 0, 0),
+    ))
     return result
 
 

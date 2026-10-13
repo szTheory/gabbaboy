@@ -10,10 +10,13 @@ extern void gbb_p12_set_mutants(uint64_t mask);
 #endif
 
 #define FRAME_HALF_DOTS UINT64_C(140448)
-#define MAX_EXPECTATIONS 64u
+#define MAX_EXPECTATIONS 128u
 #define SAMPLE_BASE 0xC100u
 #define SAMPLE_STRIDE 32u
 #define DONE_ADDRESS 0xC0FEu
+#define HOSTILE_MARKER_ADDRESS 0xC1F0u
+#define HOSTILE_OUTCOME_BASE 0xC200u
+#define HOSTILE_SELECTOR_OFFSET 0x0200u
 #define DIGEST_FRAMES 60u
 #define PCM_CAPACITY 1024u
 #define REQUIRE(condition) do { \
@@ -31,6 +34,12 @@ static const char *const METRICS[] = {
     "tima", "div", "serial-lines", "serial-sc", "serial-if", "nr52-start",
     "nr52-lines", "nr52-end", "dma-159", "dma-161", "key1", "key1-armed",
     "stop-lines", "key1-after"
+};
+
+static const char *const HOSTILE_METRICS[] = {
+    "hostile-key1-before", "hostile-key1-armed", "hostile-key1-after",
+    "hostile-double-speed", "hostile-handler", "hostile-lines",
+    "hostile-halt", "hostile-if", "hostile-div", "hostile-dma"
 };
 
 typedef struct {
@@ -63,9 +72,12 @@ static int load_rom(const char *path, uint8_t **bytes, size_t *size) {
     return 0;
 }
 
-static int run_to_done(gbb_instance *machine) {
+static int run_to_done(gbb_instance *machine, int *saw_halted_idle) {
     for (unsigned frame = 0; frame < 120u; ++frame) {
         gbb_run_result result = gbb_run(machine, FRAME_HALF_DOTS, NULL, 0u);
+        if (saw_halted_idle != NULL && result.reason == GBB_STOP_HALTED_IDLE &&
+            gbb_peek_ram(machine, DONE_ADDRESS) != 1u)
+            *saw_halted_idle = 1;
         if (result.reason != GBB_STOP_BUDGET &&
             result.reason != GBB_STOP_HALTED_IDLE &&
             result.reason != GBB_STOP_NO_PROGRESS) {
@@ -88,7 +100,12 @@ static int read_expectations(const char *path, expectation rows[MAX_EXPECTATIONS
         expectation row;
         int read = fscanf(file, "%23s %u %u %u", row.name, &row.phase, &row.low, &row.high);
         if (read == EOF) break;
-        if (read != 4 || *count == MAX_EXPECTATIONS || row.phase > 3u || row.low > row.high) {
+        if (read != 4 || row.low > row.high) {
+            fclose(file);
+            return 1;
+        }
+        if (strncmp(row.name, "hostile-", 8u) == 0) continue;
+        if (*count == MAX_EXPECTATIONS || row.phase > 3u) {
             fclose(file);
             return 1;
         }
@@ -163,7 +180,7 @@ static int probes(const char *rom_path, const char *table_path) {
     REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &machine) == GBB_OK);
     REQUIRE(gbb_load_rom(machine, rom, rom_size) == GBB_OK);
     free(rom);
-    REQUIRE(run_to_done(machine) == 0);
+    REQUIRE(run_to_done(machine, NULL) == 0);
 
     expectation rows[MAX_EXPECTATIONS];
     size_t count = 0u;
@@ -187,6 +204,192 @@ static int probes(const char *rom_path, const char *table_path) {
     }
     gbb_destroy(machine);
     printf("cgb-speed-fixture probes pass checks=%u\n", checks);
+    return 0;
+}
+
+static int hostile_metric_index(const char *name) {
+    for (size_t i = 0u; i < sizeof(HOSTILE_METRICS) / sizeof(HOSTILE_METRICS[0]); ++i)
+        if (strcmp(name, HOSTILE_METRICS[i]) == 0) return (int)i;
+    return -1;
+}
+
+static int read_hostile_expectations(const char *path, expectation rows[MAX_EXPECTATIONS],
+                                    size_t *count, unsigned *max_entry) {
+    FILE *file = fopen(path, "r");
+    if (file == NULL) return 1;
+    unsigned seen[sizeof(HOSTILE_METRICS) / sizeof(HOSTILE_METRICS[0])][9] = {{0u}};
+    *count = 0u;
+    *max_entry = 0u;
+    for (;;) {
+        expectation row;
+        int read = fscanf(file, "%23s %u %u %u", row.name, &row.phase, &row.low, &row.high);
+        if (read == EOF) break;
+        if (read != 4 || row.low > row.high) {
+            fclose(file);
+            return 1;
+        }
+        if (strncmp(row.name, "hostile-", 8u) != 0) continue;
+        const int metric = hostile_metric_index(row.name);
+        if (metric < 0 || row.phase == 0u || row.phase > 8u || *count == MAX_EXPECTATIONS ||
+            seen[(size_t)metric][row.phase] != 0u) {
+            fclose(file);
+            return 1;
+        }
+        seen[(size_t)metric][row.phase] = 1u;
+        rows[(*count)++] = row;
+        if (row.phase > *max_entry) *max_entry = row.phase;
+    }
+    fclose(file);
+    if (*max_entry == 0u) return 1;
+    for (unsigned entry = 1u; entry <= *max_entry; ++entry)
+        for (size_t metric = 0u; metric < 8u; ++metric)
+            if (seen[metric][entry] == 0u) return 1;
+    if (*max_entry >= 6u && seen[8][6] != 1u) return 1;
+    if (*max_entry >= 7u && seen[9][7] != 1u) return 1;
+    return 0;
+}
+
+static unsigned hostile_byte(const gbb_instance *machine, unsigned offset) {
+    return gbb_peek_ram(machine, (uint16_t)(HOSTILE_OUTCOME_BASE + offset));
+}
+
+static int hostile_actual(const gbb_instance *machine, const expectation *row,
+                          int saw_halted_idle, unsigned *value) {
+    if (strcmp(row->name, "hostile-key1-before") == 0) {
+        *value = hostile_byte(machine, 2u);
+    } else if (strcmp(row->name, "hostile-key1-armed") == 0) {
+        *value = hostile_byte(machine, 3u);
+    } else if (strcmp(row->name, "hostile-key1-after") == 0) {
+        *value = hostile_byte(machine, 4u);
+    } else if (strcmp(row->name, "hostile-double-speed") == 0) {
+        *value = (hostile_byte(machine, 4u) >> 7) & 1u;
+    } else if (strcmp(row->name, "hostile-handler") == 0) {
+        *value = hostile_byte(machine, 5u);
+    } else if (strcmp(row->name, "hostile-lines") == 0) {
+        const unsigned before = hostile_byte(machine, 6u);
+        const unsigned after = hostile_byte(machine, 7u);
+        *value = (after + 154u - before) % 154u;
+    } else if (strcmp(row->name, "hostile-halt") == 0) {
+        *value = saw_halted_idle != 0 ? 1u : 0u;
+    } else if (strcmp(row->name, "hostile-if") == 0) {
+        *value = hostile_byte(machine, 8u);
+    } else if (strcmp(row->name, "hostile-div") == 0) {
+        *value = hostile_byte(machine, 10u);
+    } else if (strcmp(row->name, "hostile-dma") == 0) {
+        *value = hostile_byte(machine, 11u);
+    } else {
+        return 1;
+    }
+    return 0;
+}
+
+static int run_hostile_selector(const uint8_t *original, size_t rom_size, unsigned selector,
+                                const expectation *rows, size_t row_count,
+                                int *saw_halted_idle) {
+    uint8_t *patched = malloc(rom_size);
+    if (patched == NULL) return 1;
+    memcpy(patched, original, rom_size);
+    patched[HOSTILE_SELECTOR_OFFSET] = (uint8_t)selector;
+
+    gbb_instance *machine = NULL;
+    if (gbb_create(GBB_PROFILE_CGB_CPU_E, &machine) != GBB_OK || machine == NULL) {
+        free(patched);
+        return 1;
+    }
+    if (gbb_load_rom(machine, patched, rom_size) != GBB_OK) {
+        gbb_destroy(machine);
+        free(patched);
+        fprintf(stderr, "cgb-speed-fixture hostile-load-fail selector=%u\n", selector);
+        return 1;
+    }
+    free(patched);
+    if (selector == 4u) {
+        const gbb_input_event press = {0u, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_RIGHT};
+        if (gbb_queue_events(machine, &press, 1u) != GBB_OK) {
+            gbb_destroy(machine);
+            return 1;
+        }
+    }
+    if (run_to_done(machine, saw_halted_idle) != 0) {
+        gbb_destroy(machine);
+        return 1;
+    }
+    const unsigned marker = gbb_peek_ram(machine, HOSTILE_MARKER_ADDRESS);
+    const unsigned expected_marker = selector == 0u ? 0xA0u : selector == 9u ? 0xA9u : 1u;
+    if (marker != expected_marker) {
+        fprintf(stderr, "cgb-speed-fixture verdict-fail hostile-%u marker got=%u want=%u\n",
+                selector, marker, expected_marker);
+        gbb_destroy(machine);
+        return 1;
+    }
+    if (selector != 0u && selector != 9u) {
+        if (hostile_byte(machine, 1u) != selector) {
+            fprintf(stderr, "cgb-speed-fixture verdict-fail hostile-%u selector got=%u want=%u\n",
+                    selector, hostile_byte(machine, 1u), selector);
+            gbb_destroy(machine);
+            return 1;
+        }
+        for (size_t i = 0u; i < row_count; ++i) {
+            if (rows[i].phase != selector) continue;
+            unsigned value = 0u;
+            if (hostile_actual(machine, &rows[i], *saw_halted_idle, &value) != 0) {
+                gbb_destroy(machine);
+                return 1;
+            }
+            if (value < rows[i].low || value > rows[i].high) {
+                fprintf(stderr, "cgb-speed-fixture verdict-fail hostile-%u %s got=%u want=[%u,%u]\n",
+                        selector, rows[i].name, value, rows[i].low, rows[i].high);
+                gbb_destroy(machine);
+                return 1;
+            }
+        }
+    }
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int hostile(const char *rom_path, const char *table_path) {
+    uint8_t *original = NULL;
+    size_t rom_size = 0u;
+    if (load_rom(rom_path, &original, &rom_size) != 0 ||
+        rom_size <= HOSTILE_SELECTOR_OFFSET || original[HOSTILE_SELECTOR_OFFSET] != 0u) {
+        free(original);
+        fprintf(stderr, "cgb-speed-fixture hostile-base-invalid\n");
+        return 1;
+    }
+    expectation rows[MAX_EXPECTATIONS];
+    size_t row_count = 0u;
+    unsigned max_entry = 0u;
+    if (read_hostile_expectations(table_path, rows, &row_count, &max_entry) != 0) {
+        free(original);
+        fprintf(stderr, "cgb-speed-fixture hostile-expectations-invalid\n");
+        return 1;
+    }
+    int saw_halted_idle = 0;
+    if (run_hostile_selector(original, rom_size, 0u, rows, row_count, &saw_halted_idle) != 0) {
+        free(original);
+        return 1;
+    }
+    for (unsigned selector = 1u; selector <= max_entry; ++selector) {
+        saw_halted_idle = 0;
+        if (run_hostile_selector(original, rom_size, selector, rows, row_count,
+                                 &saw_halted_idle) != 0) {
+            free(original);
+            return 1;
+        }
+    }
+    saw_halted_idle = 0;
+    if (run_hostile_selector(original, rom_size, 9u, rows, row_count, &saw_halted_idle) != 0) {
+        free(original);
+        return 1;
+    }
+    if (original[HOSTILE_SELECTOR_OFFSET] != 0u) {
+        free(original);
+        fprintf(stderr, "cgb-speed-fixture hostile-base-mutated\n");
+        return 1;
+    }
+    free(original);
+    printf("cgb-speed-fixture hostile pass entries=%u\n", max_entry + 2u);
     return 0;
 }
 
@@ -293,6 +496,8 @@ static int parse_mutant_mask(int argc, char **argv, uint64_t *mask) {
 int main(int argc, char **argv) {
     if (argc == 4 && strcmp(argv[1], "probes") == 0)
         return probes(argv[2], argv[3]);
+    if (argc == 4 && strcmp(argv[1], "hostile") == 0)
+        return hostile(argv[2], argv[3]);
 #ifdef GBB_P12_PUBLIC_MUTANT
     if (argc >= 4 && (strcmp(argv[1], "audio") == 0 || strcmp(argv[1], "frame") == 0)) {
         uint64_t mask = 0u;
@@ -304,6 +509,6 @@ int main(int argc, char **argv) {
     if (argc == 3 && (strcmp(argv[1], "audio") == 0 || strcmp(argv[1], "frame") == 0))
         return digest_case(argv[1], argv[2]);
 #endif
-    fprintf(stderr, "usage: %s probes <rom> <expectations> | audio|frame <rom> [--mutants mask]\n", argv[0]);
+    fprintf(stderr, "usage: %s probes|hostile <rom> <expectations> | audio|frame <rom> [--mutants mask]\n", argv[0]);
     return 2;
 }

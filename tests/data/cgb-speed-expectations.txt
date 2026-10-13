@@ -51,3 +51,11 @@ nr52-end 3 0 0
 dma-159 3 255 255
 dma-161 3 165 165
 key1 3 254 254
+hostile-key1-before 1 126 126
+hostile-key1-armed 1 127 127
+hostile-key1-after 1 254 254
+hostile-double-speed 1 1 1
+hostile-handler 1 1 1
+hostile-lines 1 0 1
+hostile-halt 1 0 0
+hostile-if 1 0 0
