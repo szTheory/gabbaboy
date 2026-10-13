@@ -2000,6 +2000,33 @@ foreach(gbb_palette_case
   set_tests_properties(${gbb_palette_case} PROPERTIES
     PASS_REGULAR_EXPRESSION "cgb-colour-internal ${gbb_palette_case} pass")
 endforeach()
+# Negative controls for the palette ports (D-11, D-12). Each mutant rewrites one statement of the
+# core in a build-tree copy; the named case must exit 1 on the REQUIRE that guards that rule, and
+# a case the mutant does not touch must still exit 0.
+gbb_colour_mutant(palette_blocked_no_increment test_cgb_colour_internal.c
+  palette_mutant_blocked_no_increment palette_mutant_blocked_no_increment_control
+  "if ((*index_reg & 0x80u) != 0u) *index_reg ="
+  "if (allowed && (*index_reg & 0x80u) != 0u) *index_reg ="
+  "palette_cram_bg_blocked_write" "0xC6u"
+  palette_cram_bg_autoinc)
+gbb_colour_mutant(palette_read_increments test_cgb_colour_internal.c
+  palette_mutant_read_increments palette_mutant_read_increments_control
+  "case IO_BCPD: return cram_data_read(m->bcps, m->bg_cram, cpu_cram_access_allowed(m));"
+  "case IO_BCPD: { const uint8_t mutant_byte = cram_data_read(m->bcps, m->bg_cram, cpu_cram_access_allowed(m)); if ((m->bcps & 0x80u) != 0u) ((gbb_instance *)m)->bcps = (uint8_t)(0x80u | ((m->bcps + 1u) & 0x3Fu)); return mutant_byte; }"
+  "palette_cram_bg_readback" "read8.m, BCPD. == 0x6Bu"
+  palette_cram_obj_autoinc)
+gbb_colour_mutant(palette_lock_always_allowed test_cgb_colour_internal.c
+  palette_mutant_lock_always_allowed palette_mutant_lock_always_allowed_control
+  "edge offsets unresearched (D-12) */"
+  "edge offsets unresearched (D-12) */ return 1;"
+  "palette_cram_bg_blocked_write" "bg_cram.5. == 0x34u"
+  palette_cram_bg_autoinc)
+gbb_colour_mutant(palette_lock_ignores_lcd_off test_cgb_colour_internal.c
+  palette_mutant_lock_ignores_lcd_off palette_mutant_lock_ignores_lcd_off_control
+  "edge offsets unresearched (D-12) */"
+  "edge offsets unresearched (D-12) */ return m->ppu_mode != 3u;"
+  "palette_cram_lockout_lcd_off" "bg_cram.0. == 0x12u"
+  palette_cram_bg_autoinc)
 # --- Phase 11 plan 11-02 end ---
 
 gabbaboy_verify_registered_tests()
