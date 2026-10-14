@@ -457,6 +457,10 @@ add_test(NAME cgb_hdma_guest_halt COMMAND test_cgb_hdma guest_halt)
 add_test(NAME cgb_hdma_guest_steal COMMAND test_cgb_hdma guest_steal)
 add_test(NAME cgb_hdma_guest_controls COMMAND test_cgb_hdma guest_controls)
 add_test(NAME cgb_hdma_guest_banks COMMAND test_cgb_hdma guest_banks)
+# Plan 13-08 Task 1: the public API must execute the original CPU-programmed
+# HBlank DMA guest and verify its own marker and source-derived RGB555 frame.
+add_test(NAME cgb_hdma_original_fixture COMMAND test_cgb_hdma --fixture
+  ${PROJECT_SOURCE_DIR}/fixtures/cgb-colour/colour-hblank.gb)
 
 # Reuses the explicit private-state hash from the speed-switch partition tests.
 add_executable(test_cgb_hdma_partition test_cgb_hdma_partition.c)

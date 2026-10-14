@@ -525,6 +525,7 @@ cgb_hdma_guest_halt
 cgb_hdma_guest_steal
 cgb_hdma_guest_controls
 cgb_hdma_guest_banks
+cgb_hdma_original_fixture
 cgb_hdma_partition_midbyte
 cgb_hdma_partition_windows
 cgb_hdma_partition_multicut

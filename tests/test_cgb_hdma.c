@@ -9,6 +9,9 @@
 #define ROM_SIZE 32768u
 #define HALT_WAKE_BUDGET 60000u
 #define GUEST_BUDGET 100000u
+#define FIXTURE_BUDGET 1404480u
+#define FIXTURE_FRAME_WIDTH 160u
+#define FIXTURE_FRAME_HEIGHT 144u
 #define MAX_FIXUPS 16u
 
 typedef struct {
@@ -347,35 +350,148 @@ static int run_banks_guest(void) {
     return 0;
 }
 
-static int run_fixture(const char *path) {
+static int read_fixture(const char *path, uint8_t **out_rom, size_t *out_size) {
+    *out_rom = NULL;
+    *out_size = 0u;
     FILE *file = fopen(path, "rb");
     if (file == NULL || fseek(file, 0, SEEK_END) != 0) {
         if (file != NULL) fclose(file);
-        fprintf(stderr, "fixture: cannot open ROM\n"); return 1;
+        fprintf(stderr, "fixture: cannot open ROM\n"); return 0;
     }
     const long length = ftell(file);
-    if (length <= 0L || length > 8L * 1024L * 1024L || fseek(file, 0, SEEK_SET) != 0) {
-        fclose(file); fprintf(stderr, "fixture: ROM size is outside the 8 MiB bound\n"); return 1;
+    if (length != (long)ROM_SIZE || fseek(file, 0, SEEK_SET) != 0) {
+        fclose(file); fprintf(stderr, "fixture: ROM size is not exactly 32 KiB\n"); return 0;
     }
-    uint8_t *rom = (uint8_t *)malloc((size_t)length);
-    if (rom == NULL || fread(rom, 1u, (size_t)length, file) != (size_t)length) {
-        free(rom); fclose(file); fprintf(stderr, "fixture: bounded ROM read failed\n"); return 1;
+    uint8_t *rom = (uint8_t *)malloc(ROM_SIZE);
+    if (rom == NULL || fread(rom, 1u, ROM_SIZE, file) != ROM_SIZE) {
+        free(rom); fclose(file); fprintf(stderr, "fixture: bounded ROM read failed\n"); return 0;
     }
     fclose(file);
+    *out_rom = rom;
+    *out_size = ROM_SIZE;
+    return 1;
+}
+
+static int disable_fixture_transfer(uint8_t *rom, size_t size) {
+    size_t found = 0u;
+    size_t offset = 0u;
+    if (size != ROM_SIZE) return 0;
+    for (size_t i = 0u; i + 1u < size; ++i) {
+        if (rom[i] == 0xE0u && rom[i + 1u] == 0x55u) {
+            offset = i;
+            ++found;
+        }
+    }
+    if (found != 1u) {
+        fprintf(stderr, "control: FF55 start signature count=%zu, expected=1\n", found);
+        return 0;
+    }
+    rom[offset] = 0x00u;
+    rom[offset + 1u] = 0x00u;
+    return 1;
+}
+
+static int run_fixture_image(const uint8_t *rom, size_t size, int expect_pass,
+                             uint8_t *out_marker, uint8_t *out_initial_status) {
     gbb_instance *machine = NULL;
-    const int loaded = load_machine(rom, (size_t)length, &machine);
-    free(rom);
-    if (!loaded) { fprintf(stderr, "fixture: public ROM loader rejected image\n"); return 1; }
-    const gbb_run_result run = gbb_run(machine, 1000000u, NULL, 0u);
-    printf("fixture-run consumed=%llu reason=%d\n",
-           (unsigned long long)run.consumed_half_dots, (int)run.reason);
+    if (!load_machine(rom, size, &machine)) {
+        fprintf(stderr, "fixture: public ROM loader rejected image\n"); return 0;
+    }
+    static const uint64_t partitions[] = {997u, 8191u, 4093u, 16384u, 6553u};
+    uint64_t total = 0u;
+    size_t partition = 0u;
+    while (total < FIXTURE_BUDGET) {
+        const uint64_t remaining = FIXTURE_BUDGET - total;
+        uint64_t budget = partitions[partition % (sizeof(partitions) / sizeof(partitions[0]))];
+        if (remaining < 256u) budget = 256u;
+        else if (budget > remaining) budget = remaining;
+        const gbb_run_result run = gbb_run(machine, budget, NULL, 0u);
+        if (run.reason != GBB_STOP_BUDGET || run.consumed_half_dots == 0u ||
+            run.consumed_half_dots > budget || run.consumed_half_dots > remaining + 255u) {
+            fprintf(stderr, "fixture: bounded run stopped reason=%d consumed=%llu budget=%llu remaining=%llu\n",
+                    (int)run.reason, (unsigned long long)run.consumed_half_dots,
+                    (unsigned long long)budget, (unsigned long long)remaining);
+            gbb_destroy(machine); return 0;
+        }
+        total += run.consumed_half_dots;
+        ++partition;
+    }
+    const uint8_t marker = gbb_peek_ram(machine, 0xC000u);
+    const uint8_t initial_status = gbb_peek_ram(machine, 0xC001u);
+    const uint8_t first_block_status = gbb_peek_ram(machine, 0xC002u);
+    const uint8_t completed_status = gbb_peek_ram(machine, 0xC003u);
+    if (out_marker != NULL) *out_marker = marker;
+    if (out_initial_status != NULL) *out_initial_status = initial_status;
+    if (marker != (expect_pass ? 0xA5u : 0xEEu)) {
+        fprintf(stderr, "fixture guest marker expected=%02X actual=%02X\n",
+                expect_pass ? 0xA5u : 0xEEu, marker);
+        gbb_destroy(machine); return 0;
+    }
+    if (expect_pass && (initial_status != 0x01u || first_block_status != 0x00u ||
+                        completed_status != 0xFFu)) {
+        fprintf(stderr, "fixture guest FF55 status expected=01/00/FF actual=%02X/%02X/%02X\n",
+                initial_status, first_block_status, completed_status);
+        gbb_destroy(machine); return 0;
+    }
+    if (!expect_pass && initial_status != 0xFFu) {
+        fprintf(stderr, "control guest FF55 status expected=FF actual=%02X\n", initial_status);
+        gbb_destroy(machine); return 0;
+    }
+
+    uint16_t pixels[FIXTURE_FRAME_WIDTH * FIXTURE_FRAME_HEIGHT];
+    gbb_frame_info info;
+    const gbb_error copied = gbb_copy_frame_rgb555(machine, pixels, sizeof(pixels),
+                                                   FIXTURE_FRAME_WIDTH * sizeof(uint16_t), &info);
+    if (copied != GBB_OK || info.generation == 0u || info.width != FIXTURE_FRAME_WIDTH ||
+        info.height != FIXTURE_FRAME_HEIGHT) {
+        fprintf(stderr, "fixture pixel predicate: completed RGB555 frame unavailable (error=%d)\n",
+                (int)copied);
+        gbb_destroy(machine); return 0;
+    }
+    const uint16_t left = expect_pass ? 0x001Fu : 0x7FFFu;
+    const uint16_t right = expect_pass ? 0x7C00u : 0x7FFFu;
+    for (unsigned y = 0u; y < FIXTURE_FRAME_HEIGHT; ++y) {
+        for (unsigned x = 0u; x < FIXTURE_FRAME_WIDTH; ++x) {
+            const uint16_t expected = expect_pass && x >= 80u ? right : left;
+            const uint16_t actual = pixels[y * FIXTURE_FRAME_WIDTH + x];
+            if (actual != expected) {
+                fprintf(stderr, "fixture pixel predicate expected=%04X actual=%04X at (%u,%u)\n",
+                        expected, actual, x, y);
+                gbb_destroy(machine); return 0;
+            }
+        }
+    }
+    printf("fixture guest=%s marker=%02X ff55=%02X/%02X/%02X pixel_predicate=pass generation=%llu\n",
+           expect_pass ? "pass" : "fail", marker, initial_status,
+           first_block_status, completed_status, (unsigned long long)info.generation);
     gbb_destroy(machine);
-    return run.reason == GBB_STOP_INVALID_STATE || run.reason == GBB_STOP_UNSUPPORTED_BUS ||
-           run.reason == GBB_STOP_LOCKUP ? 1 : 0;
+    return 1;
+}
+
+static int run_fixture(const char *path, int check_controls) {
+    uint8_t *rom = NULL;
+    size_t size = 0u;
+    if (!read_fixture(path, &rom, &size)) return 1;
+    if (!run_fixture_image(rom, size, 1, NULL, NULL)) { free(rom); return 1; }
+    if (check_controls) {
+        uint8_t *disabled = (uint8_t *)malloc(size);
+        if (disabled == NULL) { free(rom); fprintf(stderr, "control: bounded ROM copy allocation failed\n"); return 1; }
+        memcpy(disabled, rom, size);
+        if (!disable_fixture_transfer(disabled, size) ||
+            !run_fixture_image(disabled, size, 0, NULL, NULL)) {
+            free(disabled); free(rom); return 1;
+        }
+        free(disabled);
+        puts("fixture control=disabled-transfer guest=fail pixel_predicate=pass");
+    }
+    free(rom);
+    return 0;
 }
 
 int main(int argc, char **argv) {
-    if (argc == 3 && strcmp(argv[1], "--fixture") == 0) return run_fixture(argv[2]);
+    if (argc == 3 && strcmp(argv[1], "--fixture") == 0) return run_fixture(argv[2], 0);
+    if (argc == 4 && strcmp(argv[1], "--fixture") == 0 &&
+        strcmp(argv[3], "--check-controls") == 0) return run_fixture(argv[2], 1);
     if (argc == 2 && strcmp(argv[1], "guest_halt") == 0) {
         if (run_halt_wake(1, 0) == 0 && run_halt_wake(1, 1) == 0) {
             puts("cgb-hdma guest_halt pass"); return 0;
@@ -400,6 +516,6 @@ int main(int argc, char **argv) {
         if (run_banks_guest() == 0) { puts("cgb-hdma guest_banks pass"); return 0; }
         return 1;
     }
-    fprintf(stderr, "usage: test_cgb_hdma <guest_halt|guest_controls|guest_steal|guest_steal_data|guest_banks|--fixture ROM>\n");
+    fprintf(stderr, "usage: test_cgb_hdma <guest_halt|guest_controls|guest_steal|guest_steal_data|guest_banks|--fixture ROM [--check-controls]>\n");
     return 2;
 }
