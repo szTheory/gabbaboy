@@ -3095,11 +3095,46 @@ add_test(NAME cgb_partition_mutant_m16
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 add_test(NAME cgb_partition_mutant_m16_control
   COMMAND test_cgb_partition_p12 cgb_partition_hostile_irq_in_stall --mutants 0)
+# Fresh local Darwin arm64 Debug CTest -V -j1 wall seconds: start .14, hostile
+# IRQ .11, mutant/control .08/.10, snapshot .02, real ends .13/.13, seeded end
+# .12, interior .03, multicut .50, budget .01, pending .56, held .12, LCD-off
+# .12, back-to-back .25, chained .57.
+# These are local CTest timings, not an ASan benchmark. The 6,000,000 half-dot
+# cap uses 12-RESEARCH.md's prior ~92 ns/hd ad-hoc -O0 ASan measurement; it was
+# not re-measured in this run. Largest observed case: multicut, 2,187,264 hd,
+# 0.50 s local Debug; each CTest retains TIMEOUT 60 for sanitizer headroom.
+foreach(gbb_partition_case IN ITEMS
+    cgb_partition_snapshot_fidelity
+    cgb_partition_stall_end_window_to_double
+    cgb_partition_stall_end_window_to_normal
+    cgb_partition_stall_end_window_seeded
+    cgb_partition_interior_points
+    cgb_partition_seeded_multicut
+    cgb_partition_zero_and_subquantum
+    cgb_partition_pending_at_stop
+    cgb_partition_held_button
+    cgb_partition_lcd_off
+    cgb_partition_back_to_back
+    cgb_partition_chained)
+  add_test(NAME ${gbb_partition_case} COMMAND test_cgb_partition ${gbb_partition_case})
+endforeach()
 set_tests_properties(
   cgb_partition_stall_start_window
   cgb_partition_hostile_irq_in_stall
   cgb_partition_mutant_m16
   cgb_partition_mutant_m16_control
+  cgb_partition_snapshot_fidelity
+  cgb_partition_stall_end_window_to_double
+  cgb_partition_stall_end_window_to_normal
+  cgb_partition_stall_end_window_seeded
+  cgb_partition_interior_points
+  cgb_partition_seeded_multicut
+  cgb_partition_zero_and_subquantum
+  cgb_partition_pending_at_stop
+  cgb_partition_held_button
+  cgb_partition_lcd_off
+  cgb_partition_back_to_back
+  cgb_partition_chained
   PROPERTIES TIMEOUT 60)
 # --- Phase 12 plan 12-14 end ---
 
