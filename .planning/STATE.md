@@ -4,17 +4,17 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: 13
 current_phase_name: CGB HDMA
-current_plan: 9
-status: Phase 13 execution in progress; plans 13-01 through 13-09 are complete, and plans 13-10 through 13-12 remain.
-stopped_at: Completed 13-09-PLAN.md; next Phase 13 Wave 8 plan 13-10 via /gsd-execute-phase 13 --wave 8
-last_updated: "2026-10-14T23:01:04.294Z"
-last_activity: "2026-10-14: Phase 13 Wave 7 plan 13-09 complete; next Phase 13 Wave 8 plan 13-10."
-state_head: 12a5a63eb1f4884eb742c12c20b66018c4e968ae
+current_plan: 10
+status: Phase 13 execution in progress; plans 13-01 through 13-10 are complete, and plans 13-11 through 13-12 remain.
+stopped_at: Completed 13-10-PLAN.md
+last_updated: "2026-10-14T23:28:05.066Z"
+last_activity: "2026-10-14: Phase 13 Wave 8 plan 13-10 complete; next Phase 13 Wave 9 plan 13-11."
+state_head: e3c81812766474ead9ac2bb28edf6fffab67455e
 progress:
   total_phases: 9
   completed_phases: 7
   total_plans: 111
-  completed_plans: 108
+  completed_plans: 109
   percent: 78
 ---
 
@@ -30,18 +30,18 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-14)
 ## Current Position
 
 Phase: 13 (CGB HDMA) — EXECUTING
-Status: Phase 13 execution in progress; plans 13-01 through 13-09 are complete, and plans 13-10 through 13-12 remain.
-Current Plan: 9
+Status: Phase 13 execution in progress; plans 13-01 through 13-10 are complete, and plans 13-11 through 13-12 remain.
+Current Plan: 10
 Total Plans in Phase: 12
 
-Completed workflow stage: Phase 13 Wave 7 plan 13-09 execution (2026-10-14). Both tasks and four TDD task commits are complete. All four pinned SameSuite ROMs pass their guest/data/readback predicates; Magen passes as differential evidence with three named controls; fresh CTest passed 984/984 and the frozen DMG baseline has zero changes. Optional Mealybug CGB-C remains not-run:rights-gate-G1. CGB-07 remains open; no physical CGB-E qualification is claimed.
-Next stage: Phase 13 Wave 8, plan 13-10, Installed C/C++ DMA consumers and closed package contents. Reuse current Phase 13 research and summaries; revisit decisions only for concrete failed evidence. Phase 14 remains unstarted.
-Next command: /gsd-execute-phase 13 --wave 8. Phase 13 remains active; stop before Phase 14 and keep both auto-advance flags false.
-Last activity: 2026-10-14: Phase 13 Wave 7 plan 13-09 complete; next Phase 13 Wave 8 plan 13-10.
+Completed workflow stage: Phase 13 Wave 8 plan 13-10 execution (2026-10-14). Both tasks and four TDD task commits are complete. Relocated installed C/C++ guests passed normal/double-speed DMA checks; renamed SameSuite/Magen package controls and exact fixture children passed. The summary coverage contract and its self-test passed. CGB-07 remains open; physical CGB-E qualification is not established.
+Next stage: Phase 13 Wave 9, plan 13-11, Atomic consumer claims and executable documentation contracts. Reuse current Phase 13 research and summaries; revisit decisions only for concrete failed evidence. The next project phase is Phase 14, CGB-E Model Qualification and Corpus, and it remains unstarted.
+Next command: /gsd-execute-phase 13 --wave 9. Phase 13 remains active; stop before Phase 14 and keep both auto-advance flags false.
+Last activity: 2026-10-14: Phase 13 Wave 8 plan 13-10 complete; next Phase 13 Wave 9 plan 13-11.
 
 Phase 12 is merged: PR #68 at `8091fb591de7fb68e666be01d344f5f26ebedc5c`, reviewed/tested head `ffde21c0e2a7b71c6328ac8152d04496f5d387e7`; final PR-event runs `38586393122`, `38586392787`, `38586392931` passed all 19 jobs. Its 73/73 automated UAT stays closed absent changed covered behavior or concrete contradictory evidence. D-069, D-096 and D-098 are durable defaults; GB-GSD-017/018 prevent missing-test and unwired-prohibition churn.
 
-Progress (v0.2): 78% (7/9 phases complete); 108/111 plans complete. Phase 13 is executing (9/12 plans complete; Wave 8 plan 13-10 is next); Phases 14–15 are unstarted.
+Progress (v0.2): 78% (7/9 phases complete); 109/111 plans complete. Phase 13 is executing (10/12 plans complete; Wave 9 plan 13-11 is next); Phases 14–15 are unstarted.
 
 ### Prior stage receipts (historical, before the final merges)
 
@@ -229,6 +229,7 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 13 P05 | 12 min | 2 tasks | 8 files |
 | Phase 13 P07 | 20m | 2 tasks | 12 files |
 | Phase 13 P09 | 30 min | 2 tasks | 9 files |
+| Phase 13 P10 | 20min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -449,6 +450,9 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 13]: Plan 13-07: Report only selected software-model and differential evidence; physical CGB-E hardware qualification remains open.
 - [Phase 13]: Plan 13-09 preserves the D-06/Pan Docs conflict; software-model outcomes do not qualify physical CGB-E behavior.
 - [Phase 13]: Optional Mealybug CGB-C remains not-run:rights-gate-G1 and outside the CGB-E denominator.
+- [Phase 13]: Pin every relocated consumer configure to the package config under the current install prefix.
+- [Phase 13]: Check positive FF55 completion, ROM-derived readback, and DIV timing; the disabled twin diagnoses missing data and CPU-steal timing because FF55 reads FF before and after completion.
+- [Phase 13]: Preserve the exact installed fixture child allow-list and reject SameSuite/Magen bytes under neutral filenames.
 
 ### Pending Todos
 
@@ -484,9 +488,9 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-14T23:01:04.212Z
-Stopped at: Completed 13-09-PLAN.md; next Phase 13 Wave 8 plan 13-10
-Resume file: None
+Last session: 2026-10-14T23:28:04.992Z
+Stopped at: Completed 13-10-PLAN.md
+Resume file: .planning/phases/GB-13-cgb-hdma/continue.md
 Completed workflow stage: **Phase 12 - CGB Double Speed, execution** (2026-10-14), plans 12-01..12-19 plus Nyquist validation, security, UI scope review, code review and fixes, regression gate, and goal verification. [12-VERIFICATION.md](phases/GB-12-cgb-double-speed/12-VERIFICATION.md) passes 109/109 with zero unverified behaviors; OpenGSD phase.complete accepted 19/19. Local CTest passed 898/898 in 52.66 seconds, and the DMG baseline had zero changed rows. Exact tested source head `502f992fe9fd2d848845947057c2b327747c3edd`: PR CI `38565349295`, fixture reproduction `38565349297`, and package smoke `38565349116` all succeeded with every PR-event job successful; ASan/UBSan passed 893/893 in 1217.04 seconds. All three review findings are fixed; 34 security threats are closed. Draft [PR #68](https://github.com/szTheory/gabbaboy/pull/68) remains unmerged. Only AGE DIV and STOP-prefetch are passes; eleven qualified expected failures remain, and no physical hardware claim is made. The original plan 12-19 benchmark receipt is historical at `301f1b05577e6d35a4c3a756ded1ec15a4082c8d`, runs `38502094649`, `38502094682`, and `38502094771`; later metadata commits require their own exact-head checks.
 Next command in fresh context: **`/gsd-verify-work 12`**. The following phase is **Phase 13: CGB HDMA**, not started; after verification and merge, enter it with **`/gsd-discuss-phase 13`**. `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop at this handoff for the owner.
 
@@ -581,8 +585,9 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Completed workflow stage: **Phase 13 Wave 7, plan 13-09 — Executed SameSuite dispositions and optional CGB-C boundary**; both tasks, four TDD task commits, the plan SUMMARY, and verification receipts are recorded.
-- Next stage: **Phase 13 Wave 8, plan 13-10 — Installed C/C++ DMA consumers and closed package contents**. Exact command: **`/gsd-execute-phase 13 --wave 8`**.
-- Reuse the 13-09, 13-08, 13-07, 13-05, 13-04, 13-03, 13-06, 13-02 and 13-01 summaries and recorded decisions; revisit them only for a concrete failed discriminator or changed evidence.
+- Completed workflow stage: **Phase 13 Wave 8, plan 13-10 — Installed C/C++ DMA consumers and closed package contents**; both tasks, four TDD task commits, the plan SUMMARY, and verification receipts are recorded.
+- Next stage: **Phase 13 Wave 9, plan 13-11 — Atomic consumer claims and executable documentation contracts**. Exact command: **`/gsd-execute-phase 13 --wave 9`**.
+- Reuse the 13-10, 13-09, 13-08, 13-07, 13-05, 13-04, 13-03, 13-06, 13-02 and 13-01 summaries and recorded decisions; revisit them only for a concrete failed discriminator or changed evidence.
+- **Phase 14: CGB-E Model Qualification and Corpus** remains unstarted. Keep CGB-07 open until Phase 13 closure; both auto-advance flags remain false.
 - Phase 12 is merged and its automated UAT stays closed absent changed evidence. Preserve owner model/runtime config edits.
 - CGB-07 remains open. Stop before Phase 14. Both auto-advance flags remain false. Phase 14: CGB-E Model Qualification and Corpus remains unstarted.
