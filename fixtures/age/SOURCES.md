@@ -13,8 +13,13 @@
 
 The upstream Makefile recipe is `rgbasm -Weverything -I src -I src/_include`,
 `rgblink -t`, and `rgbfix -v -p 255`, using RGBDS 1.0.1. Sources are used only
-at this pinned commit; the rebuild is the provenance. The macOS digests are
-provisional until the Linux `fixture-repro` leg confirms them.
+at this pinned commit; the rebuild is the provenance. The exact-head Linux
+`fixture-repro` run 38502094682 (PR job 115651190879, source revision
+`301f1b05577e6d35a4c3a756ded1ec15a4082c8d`) used the digest-pinned RGBDS
+1.0.1 Linux archive and reported `result=byte-identical` for all 13
+manifest-listed ROMs. The compare-tampered and selfcheck-tampered negative
+controls also passed. This closes the provisional macOS-versus-Linux byte
+reproduction check; it establishes fixture bytes, not hardware behavior.
 
 `bash tests/scripts/reproduce-age.sh --self-check` validates this record and
 the committed digest offline. `--compare` fetches the pinned source and rebuilds
