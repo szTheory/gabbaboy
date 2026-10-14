@@ -192,7 +192,55 @@
           "vendored": false,
           "flip_rule": "remains source-digest-only; never add fixture bytes without a renewed rights and scope decision"
         }
-      ]
+      ],
+      "sensitivity": {
+        "source_revision": "db1dd7b9635752c96f99f76fd9f2594ad80af5d1",
+        "comparison": "clean versus mutant AGE register verdict or row-result signature on the same core build",
+        "fixture_count": 13,
+        "mutants": [
+          {
+            "mutant": "M6",
+            "description": "stall one M-cycle longer at the destination speed",
+            "discriminating_cases": [
+              "spsw-div-cgbBCE",
+              "spsw-tima-cgbE",
+              "spsw-tima-cgbBC",
+              "spsw-mode0-cgbBCE",
+              "spsw-ch2-lc-delay-cgbBCE"
+            ]
+          },
+          {
+            "mutant": "M21",
+            "description": "stall one M-cycle shorter at the destination speed",
+            "discriminating_cases": [
+              "spsw-div-cgbBCE",
+              "spsw-tima-cgbE",
+              "spsw-tima-cgbBC",
+              "spsw-mode0-cgbBCE",
+              "spsw-ch2-lc-delay-cgbBCE"
+            ]
+          },
+          {
+            "mutant": "M28",
+            "description": "add one half-dot to the stall when switching to double speed",
+            "discriminating_cases": [
+              "spsw-mode0-cgbBCE"
+            ],
+            "note": "spsw-div-cgbBCE does not detect M28, so its low-bit stall window remains unchanged; the all-ROM sweep shows spsw-mode0-cgbBCE does detect the mutant through its mode/timing result. cgb_speed_stall_length also detects M28."
+          },
+          {
+            "mutant": "M27",
+            "description": "omit the divider reset at the speed switch",
+            "discriminating_cases": [
+              "spsw-div-cgbBCE",
+              "spsw-tima-cgbE",
+              "spsw-tima-cgbBC",
+              "spsw-interrupts-cgbE",
+              "spsw-ch2-lc-delay-cgbBCE"
+            ]
+          }
+        ]
+      }
     },
     {
       "suite": "gabbaboy-model",

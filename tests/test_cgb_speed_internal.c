@@ -899,6 +899,11 @@ static int cgb_speed_stall_length(void) {
     return 0;
 }
 
+static int cgb_speed_m28_normal_unchanged(void) {
+    REQUIRE(run_stall_length_case(1u, 0u, GBB_HALF_DOTS_PER_T_NORMAL) == 0);
+    return 0;
+}
+
 static int check_stall_budget(gbb_instance *machine, uint64_t budget,
                               uint64_t expected_consumed) {
     const uint32_t remaining = machine->cpu_stall_half_dots;
@@ -1638,6 +1643,8 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "cgb_speed_wake_m_boundary") == 0) return cgb_speed_wake_m_boundary();
     if (strcmp(argv[1], "cgb_speed_realign") == 0) return cgb_speed_realign();
     if (strcmp(argv[1], "cgb_speed_stall_length") == 0) return cgb_speed_stall_length();
+    if (strcmp(argv[1], "cgb_speed_m28_normal_unchanged") == 0)
+        return cgb_speed_m28_normal_unchanged();
     if (strcmp(argv[1], "cgb_speed_budget_semantics") == 0) return cgb_speed_budget_semantics();
     if (strcmp(argv[1], "cgb_speed_never_stopped") == 0) return cgb_speed_never_stopped();
     if (strcmp(argv[1], "cgb_speed_stall_devices_advance") == 0) return cgb_speed_stall_devices_advance();

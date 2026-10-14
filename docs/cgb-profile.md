@@ -513,10 +513,12 @@ it is the only M-aligned value inside that window and equals SameBoy's `0x20008`
 adjustment.
 The conversion is `T × 1` half-dot per T when switching to double speed and `T × 2` half-dots per
 T when switching to normal speed. At `0x20004`, the measured model advances 131076 half-dots to
-double and 262152 to normal, or 32769 M-cycles in either direction. A +1 half-dot mutant remains
-inside the window, so the low bits are not distinguished by this evidence. These are software
-measurements from the pinned, author-attested AGE corpus; no physical hardware measurement is
-claimed. The 2050 M / 8200 T (`0x2008`) alternative and the claim that DIV does not tick are
+double and 262152 to normal, or 32769 M-cycles in either direction. A +1 half-dot M28 mutant stays
+inside the `spsw-div-cgbBCE` window, so that ROM alone does not distinguish the low bits. The full
+D-21 AGE sweep also shows `spsw-mode0-cgbBCE` changes its result under M28; this is recorded as
+discriminating evidence, not as a reason to fit the constant. These are software measurements from
+the pinned, author-attested AGE corpus; no physical hardware measurement is claimed. The 2050 M /
+8200 T (`0x2008`) alternative and the claim that DIV does not tick are
 inconsistent with the AGE `spsw-tima` and `spsw-div` observations. SameBoy uses a `0x20008` T
 countdown; Gambatte uses `0x20000` T to double and `0x20008` T to normal. Direction-dependent
 real-time asymmetry remains `expected-failure:speed-switch-stall-direction-asymmetry`.
@@ -575,6 +577,8 @@ speed switch (`expected-failure:speed-switch-stop-oam-bug`, Phase 14).
 | not-applicable | blargg | not-applicable | no-applicable-cgb-speed-switch-tests | 12 | - |
 | not-applicable | acid2 | not-applicable | no-applicable-cgb-speed-switch-tests | 12 | - |
 <!-- cgb-speed-dispositions-end -->
+
+AGE rows cover the 13 admitted ROMs listed in `fixtures/age/manifest.json`; `spsw-interrupts-cgbBC` remains source-digest-only and is not vendored. The Phase 11 dispositions retain `m3-bg-*` as `vendored: false`. The D-21 sweep records that `spsw-div-cgbBCE` is insensitive to M28, while `spsw-mode0-cgbBCE` changes its measured result.
 
 AGE rows cover the 13 admitted ROMs listed in `fixtures/age/manifest.json`; `spsw-interrupts-cgbBC` remains source-digest-only and is not vendored. The Phase 11 dispositions retain `m3-bg-*` as `vendored: false`.
 

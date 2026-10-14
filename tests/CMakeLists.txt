@@ -2904,6 +2904,12 @@ gbb_p12_mutant_test(test_cgb_speed_internal_p12 21 stall_one_m_short
   cgb_speed_stall_length "expected_stall|trace\[0\]\.time_half_dots|cpu_stall_kind")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 28 stall_one_half_dot_long
   cgb_speed_stall_length "expected_stall|trace\[0\]\.time_half_dots|cpu_stall_kind")
+add_test(NAME cgb_speed_m28_normal_unchanged
+  COMMAND test_cgb_speed_internal_p12 cgb_speed_m28_normal_unchanged --mutants 0x10000000)
+set_tests_properties(cgb_speed_m28_normal_unchanged PROPERTIES TIMEOUT 60)
+add_test(NAME cgb_speed_m28_normal_unchanged_control
+  COMMAND test_cgb_speed_internal_p12 cgb_speed_m28_normal_unchanged --mutants 0)
+set_tests_properties(cgb_speed_m28_normal_unchanged_control PROPERTIES TIMEOUT 60)
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 9 stall_budget_unbounded
   cgb_speed_budget_semantics "run\.consumed_half_dots == expected_consumed|run\.consumed_half_dots <= budget")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 22 switch_headroom_omitted
@@ -3086,6 +3092,95 @@ endforeach()
 if(NOT GBB_AGE_DISPOSITION_SUITE_FOUND OR GBB_AGE_DISPOSITION_ROW_COUNT LESS 1)
   message(FATAL_ERROR "AGE dispositions must contain non-empty age-test-roms rows")
 endif()
+
+# D-21 sensitivity tests run every admitted AGE fixture and compare its clean and mutant results.
+set(GBB_AGE_SENSITIVITY_ENTRIES)
+foreach(GBB_AGE_SENSITIVITY_INDEX RANGE 0 ${GBB_AGE_FIXTURE_LAST})
+  string(JSON GBB_AGE_SENSITIVITY_FILE GET "${GBB_AGE_MANIFEST_JSON}"
+    fixtures ${GBB_AGE_SENSITIVITY_INDEX} file)
+  string(JSON GBB_AGE_SENSITIVITY_RESULTS GET "${GBB_AGE_MANIFEST_JSON}"
+    fixtures ${GBB_AGE_SENSITIVITY_INDEX} test_results_address)
+  string(JSON GBB_AGE_SENSITIVITY_EXPECTED GET "${GBB_AGE_MANIFEST_JSON}"
+    fixtures ${GBB_AGE_SENSITIVITY_INDEX} expected_address)
+  string(JSON GBB_AGE_SENSITIVITY_ROWS GET "${GBB_AGE_MANIFEST_JSON}"
+    fixtures ${GBB_AGE_SENSITIVITY_INDEX} rows)
+  string(JSON GBB_AGE_SENSITIVITY_BUDGET GET "${GBB_AGE_MANIFEST_JSON}"
+    fixtures ${GBB_AGE_SENSITIVITY_INDEX} budget_half_dots)
+  string(REGEX REPLACE "[.]gb$" "" GBB_AGE_SENSITIVITY_CASE "${GBB_AGE_SENSITIVITY_FILE}")
+  string(REPLACE "$" "0x" GBB_AGE_SENSITIVITY_RESULTS "${GBB_AGE_SENSITIVITY_RESULTS}")
+  string(REPLACE "$" "0x" GBB_AGE_SENSITIVITY_EXPECTED "${GBB_AGE_SENSITIVITY_EXPECTED}")
+  list(APPEND GBB_AGE_SENSITIVITY_ENTRIES
+    "${GBB_AGE_SENSITIVITY_CASE}|${GBB_AGE_SENSITIVITY_RESULTS}|${GBB_AGE_SENSITIVITY_EXPECTED}|${GBB_AGE_SENSITIVITY_ROWS}|${GBB_AGE_SENSITIVITY_BUDGET}")
+endforeach()
+list(JOIN GBB_AGE_SENSITIVITY_ENTRIES ";" GBB_AGE_SENSITIVITY_ENTRIES_TEXT)
+set(GBB_AGE_SENSITIVITY_SCRIPT_DIR "${PROJECT_BINARY_DIR}/age-sensitivity")
+file(MAKE_DIRECTORY "${GBB_AGE_SENSITIVITY_SCRIPT_DIR}")
+set(GBB_AGE_SENSITIVITY_SCRIPT "${GBB_AGE_SENSITIVITY_SCRIPT_DIR}/run.cmake")
+file(WRITE "${GBB_AGE_SENSITIVITY_SCRIPT}"
+  "set(GBB_AGE_SENSITIVITY_ENTRIES [==[${GBB_AGE_SENSITIVITY_ENTRIES_TEXT}]==])\n")
+file(APPEND "${GBB_AGE_SENSITIVITY_SCRIPT}" [=[
+foreach(GBB_ENTRY IN LISTS GBB_AGE_SENSITIVITY_ENTRIES)
+  string(REPLACE "|" ";" GBB_FIELDS "${GBB_ENTRY}")
+  list(GET GBB_FIELDS 0 GBB_CASE)
+  list(GET GBB_FIELDS 1 GBB_RESULTS)
+  list(GET GBB_FIELDS 2 GBB_EXPECTED)
+  list(GET GBB_FIELDS 3 GBB_ROWS)
+  list(GET GBB_FIELDS 4 GBB_BUDGET)
+  execute_process(
+    COMMAND "${GBB_AGE_SENSITIVITY_EXECUTABLE}"
+      "${GBB_AGE_SENSITIVITY_ROOT}/${GBB_CASE}.gb"
+      "${GBB_RESULTS}" "${GBB_EXPECTED}" "${GBB_ROWS}" "${GBB_BUDGET}"
+      --sensitivity "${GBB_AGE_SENSITIVITY_MASK}" "${GBB_AGE_SENSITIVITY_JSON}"
+    RESULT_VARIABLE GBB_RESULT OUTPUT_VARIABLE GBB_OUTPUT ERROR_VARIABLE GBB_ERROR)
+  if(NOT GBB_RESULT EQUAL 0)
+    message(FATAL_ERROR "age-sensitivity mismatch mutant=${GBB_AGE_SENSITIVITY_MUTANT} case=${GBB_CASE}\n${GBB_OUTPUT}${GBB_ERROR}")
+  endif()
+endforeach()
+message(STATUS "age-sensitivity-sweep pass mutant=${GBB_AGE_SENSITIVITY_MUTANT} fixtures=13")
+]=])
+foreach(GBB_AGE_SENSITIVITY_MUTANT IN ITEMS M6 M21 M28 M27)
+  if(GBB_AGE_SENSITIVITY_MUTANT STREQUAL "M6")
+    set(GBB_AGE_SENSITIVITY_MASK "0x40")
+  elseif(GBB_AGE_SENSITIVITY_MUTANT STREQUAL "M21")
+    set(GBB_AGE_SENSITIVITY_MASK "0x200000")
+  elseif(GBB_AGE_SENSITIVITY_MUTANT STREQUAL "M28")
+    set(GBB_AGE_SENSITIVITY_MASK "0x10000000")
+  else()
+    set(GBB_AGE_SENSITIVITY_MASK "0x8000000")
+  endif()
+  string(TOLOWER "${GBB_AGE_SENSITIVITY_MUTANT}" GBB_AGE_SENSITIVITY_TEST_SUFFIX)
+  add_test(NAME age_sensitivity_${GBB_AGE_SENSITIVITY_TEST_SUFFIX}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_AGE_SENSITIVITY_EXECUTABLE=$<TARGET_FILE:test_age_p12>"
+      "-DGBB_AGE_SENSITIVITY_ROOT=${PROJECT_SOURCE_DIR}/fixtures/age"
+      "-DGBB_AGE_SENSITIVITY_JSON=${GBB_AGE_DISPOSITIONS_FILE}"
+      "-DGBB_AGE_SENSITIVITY_MASK=${GBB_AGE_SENSITIVITY_MASK}"
+      "-DGBB_AGE_SENSITIVITY_MUTANT=${GBB_AGE_SENSITIVITY_MUTANT}"
+      -P "${GBB_AGE_SENSITIVITY_SCRIPT}")
+  set_tests_properties(age_sensitivity_${GBB_AGE_SENSITIVITY_TEST_SUFFIX} PROPERTIES
+    PASS_REGULAR_EXPRESSION "age-sensitivity-sweep pass mutant=${GBB_AGE_SENSITIVITY_MUTANT} fixtures=13"
+    TIMEOUT 240)
+endforeach()
+
+# A deliberately wrong M28 reference proves the new mode rejects altered coverage.
+set(gbb_age_m28_reference_anchor "\"mutant\": \"M28\",\n            \"description\": \"add one half-dot to the stall when switching to double speed\",\n            \"discriminating_cases\": [\n              \"spsw-mode0-cgbBCE\"")
+string(FIND "${GBB_AGE_DISPOSITIONS_JSON}" "${gbb_age_m28_reference_anchor}" gbb_age_m28_anchor_at)
+string(FIND "${GBB_AGE_DISPOSITIONS_JSON}" "${gbb_age_m28_reference_anchor}" gbb_age_m28_anchor_last REVERSE)
+if(gbb_age_m28_anchor_at EQUAL -1 OR NOT gbb_age_m28_anchor_at EQUAL gbb_age_m28_anchor_last)
+  message(FATAL_ERROR "AGE M28 sensitivity negative-control anchor must occur exactly once")
+endif()
+string(REPLACE "${gbb_age_m28_reference_anchor}"
+  "\"mutant\": \"M28\",\n            \"description\": \"add one half-dot to the stall when switching to double speed\",\n            \"discriminating_cases\": []"
+  gbb_age_m28_reference_mutated "${GBB_AGE_DISPOSITIONS_JSON}")
+set(GBB_AGE_M28_MUTATED_JSON "${GBB_AGE_SENSITIVITY_SCRIPT_DIR}/m28-mutated.json")
+file(WRITE "${GBB_AGE_M28_MUTATED_JSON}" "${gbb_age_m28_reference_mutated}")
+add_test(NAME age_sensitivity_m28_reference_mutated
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_age_p12>;${PROJECT_SOURCE_DIR}/fixtures/age/spsw-mode0-cgbBCE.gb;0xC000;0x144A;15;4000000;--sensitivity;0x10000000;${GBB_AGE_M28_MUTATED_JSON}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=age-sensitivity mismatch"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(age_sensitivity_m28_reference_mutated PROPERTIES TIMEOUT 60)
 
 # AGE fixture integrity and redistribution guards (D-19, T-12-20). The digest
 # mutation proves the manifest verifier rejects a changed pin; the install scan

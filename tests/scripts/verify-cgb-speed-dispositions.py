@@ -77,6 +77,24 @@ def main() -> int:
              digest_only[0].get("vendored") is False and
              re.fullmatch(r"[0-9a-f]{64}", digest_only[0].get("source_sha256", "")) is not None,
              "age-digest-only")
+        sensitivity = suites["age-test-roms"].get("sensitivity", {})
+        mutants = {row.get("mutant"): row for row in sensitivity.get("mutants", [])}
+        need(set(mutants) == {"M6", "M21", "M28", "M27"} and
+             sensitivity.get("fixture_count") == len(admitted) and
+             re.fullmatch(r"[0-9a-f]{40}", sensitivity.get("source_revision", "")) is not None,
+             "age-sensitivity-shape")
+        for mutant, row in mutants.items():
+            cases = row.get("discriminating_cases", [])
+            need(len(cases) == len(set(cases)) and set(cases) <= set(admitted),
+                 f"age-sensitivity-cases {mutant}")
+        need({"spsw-div-cgbBCE"} <= set(mutants["M6"].get("discriminating_cases", [])) and
+             {"spsw-div-cgbBCE"} <= set(mutants["M21"].get("discriminating_cases", [])) and
+             {"spsw-div-cgbBCE"} <= set(mutants["M27"].get("discriminating_cases", [])),
+             "age-sensitivity-div-required")
+        need("spsw-div-cgbBCE" not in mutants["M28"].get("discriminating_cases", []) and
+             "spsw-mode0-cgbBCE" in mutants["M28"].get("discriminating_cases", []) and
+             "low-bit stall window remains unchanged" in mutants["M28"].get("note", ""),
+             "age-sensitivity-m28-evidence")
 
         inventory = set()
         for rel in ("tests/expected-tests.txt", "tests/player/expected-tests.txt"):

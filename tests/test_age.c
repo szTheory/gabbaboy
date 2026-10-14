@@ -57,6 +57,7 @@ typedef enum {
     MODE_PRINT_SIGNATURE,
     MODE_CHECK_DISPOSITION,
     MODE_STALL_WINDOW,
+    MODE_SENSITIVITY,
     MODE_SCAN
 } age_mode;
 
@@ -279,6 +280,136 @@ static int run_and_print(const age_config *config, age_result *result) {
     return 0;
 }
 
+#ifdef GBB_AGE_P12
+static const char *sensitivity_mutant_name(uint64_t mask) {
+    if (mask == (UINT64_C(1) << 6)) return "M6";
+    if (mask == (UINT64_C(1) << 21)) return "M21";
+    if (mask == (UINT64_C(1) << 28)) return "M28";
+    if (mask == (UINT64_C(1) << 27)) return "M27";
+    return NULL;
+}
+
+static int sensitivity_expected_case(const char *json_path, uint64_t mask,
+                                     const char *case_name, int *expected) {
+    FILE *file = fopen(json_path, "rb");
+    char marker[64];
+    char *json = NULL;
+    long file_size;
+    const char *mutant;
+    const char *cases;
+    const char *array;
+    const char *cursor;
+    size_t case_length = strlen(case_name);
+    int found = 0;
+
+    if (file == NULL || sensitivity_mutant_name(mask) == NULL) {
+        if (file != NULL) fclose(file);
+        return 0;
+    }
+    if (fseek(file, 0, SEEK_END) != 0 || (file_size = ftell(file)) < 0 ||
+        file_size > 1024 * 1024 || fseek(file, 0, SEEK_SET) != 0) {
+        fclose(file);
+        return 0;
+    }
+    json = (char *)malloc((size_t)file_size + 1u);
+    if (json == NULL) {
+        fclose(file);
+        return 0;
+    }
+    if (fread(json, 1u, (size_t)file_size, file) != (size_t)file_size || ferror(file)) {
+        free(json);
+        fclose(file);
+        return 0;
+    }
+    fclose(file);
+    json[file_size] = '\0';
+    (void)snprintf(marker, sizeof(marker), "\"mutant\": \"%s\"",
+                   sensitivity_mutant_name(mask));
+    mutant = strstr(json, marker);
+    cases = mutant == NULL ? NULL : strstr(mutant, "\"discriminating_cases\"");
+    array = cases == NULL ? NULL : strchr(cases, '[');
+    if (array == NULL) {
+        free(json);
+        return 0;
+    }
+    cursor = array + 1;
+    while (*cursor != '\0' && *cursor != ']') {
+        if (*cursor != '"') {
+            ++cursor;
+            continue;
+        }
+        const char *start = ++cursor;
+        while (*cursor != '\0' && *cursor != '"') {
+            if (*cursor == '\\' && cursor[1] != '\0') ++cursor;
+            ++cursor;
+        }
+        if (*cursor == '\0') break;
+        if ((size_t)(cursor - start) == case_length &&
+            memcmp(start, case_name, case_length) == 0) found = 1;
+        ++cursor;
+    }
+    if (*cursor != ']') {
+        free(json);
+        return 0;
+    }
+    free(json);
+    *expected = found;
+    return 1;
+}
+
+static int age_case_name(const char *rom_path, char *out, size_t capacity) {
+    const char *base = strrchr(rom_path, '/');
+    const char *backslash = strrchr(rom_path, '\\');
+    size_t length;
+    if (backslash != NULL && (base == NULL || backslash > base)) base = backslash;
+    base = base == NULL ? rom_path : base + 1;
+    length = strlen(base);
+    if (length >= 3u && strcmp(base + length - 3u, ".gb") == 0) length -= 3u;
+    if (length == 0u || length >= capacity) return 0;
+    memcpy(out, base, length);
+    out[length] = '\0';
+    return 1;
+}
+
+static int run_sensitivity(const age_config *config, uint64_t mutant_mask,
+                           const char *json_path) {
+    age_result clean;
+    age_result mutant;
+    char case_name[128];
+    int expected_discriminates = 0;
+    const char *mutant_name = sensitivity_mutant_name(mutant_mask);
+    int code;
+
+    if (mutant_name == NULL || !age_case_name(config->rom_path, case_name, sizeof(case_name)) ||
+        !sensitivity_expected_case(json_path, mutant_mask, case_name, &expected_discriminates)) {
+        fprintf(stderr, "age-error invalid sensitivity reference\n");
+        return 2;
+    }
+    age_mutant_mask = 0u;
+    code = read_verdict(config, &clean);
+    if (code != 0) return code;
+    age_mutant_mask = mutant_mask;
+    code = read_verdict(config, &mutant);
+    if (code != 0) return code;
+    {
+        const int discriminates = clean.register_pass != mutant.register_pass ||
+            strcmp(clean.signature, mutant.signature) != 0;
+        if (discriminates != expected_discriminates) {
+            fprintf(stderr,
+                "age-sensitivity mismatch mutant=%s case=%s expected=%s observed=%s clean=%s/%s mutant=%s/%s\n",
+                mutant_name, case_name, expected_discriminates ? "discriminates" : "same",
+                discriminates ? "discriminates" : "same",
+                clean.register_pass ? "pass" : "fail", clean.signature,
+                mutant.register_pass ? "pass" : "fail", mutant.signature);
+            return 1;
+        }
+        printf("age-sensitivity pass mutant=%s case=%s discriminates=%s\n",
+               mutant_name, case_name, discriminates ? "true" : "false");
+    }
+    return 0;
+}
+#endif
+
 static int set_mode(age_mode *mode, age_mode next) {
     if (*mode != MODE_NONE) return 0;
     *mode = next;
@@ -293,6 +424,7 @@ int main(int argc, char **argv) {
     uint16_t expected_mask = 0u;
     int have_expected_signature = 0;
     uint64_t parsed = 0u;
+    const char *sensitivity_json_path = NULL;
     int64_t window_constant = 0;
     int64_t window_lo = 0;
     int64_t window_hi = 0;
@@ -358,6 +490,14 @@ int main(int argc, char **argv) {
 #else
             goto bad_mode;
 #endif
+        } else if (strcmp(argv[i], "--sensitivity") == 0) {
+#ifdef GBB_AGE_P12
+            if (!set_mode(&mode, MODE_SENSITIVITY) || i + 2 >= argc ||
+                !parse_u64(argv[++i], &age_mutant_mask)) goto bad_mode;
+            sensitivity_json_path = argv[++i];
+#else
+            goto bad_mode;
+#endif
         } else if (strcmp(argv[i], "--scan") == 0) {
 #ifdef GBB_AGE_P12
             if (!set_mode(&mode, MODE_SCAN) || i + 2 >= argc ||
@@ -420,6 +560,15 @@ int main(int argc, char **argv) {
                    result.register_pass ? "pass" : "fail", result.rows_ok, config.rows);
         }
         return 0;
+#endif
+    }
+
+    if (mode == MODE_SENSITIVITY) {
+#ifdef GBB_AGE_P12
+        if (sensitivity_json_path == NULL) goto bad_mode;
+        return run_sensitivity(&config, age_mutant_mask, sensitivity_json_path);
+#else
+        goto bad_mode;
 #endif
     }
 
