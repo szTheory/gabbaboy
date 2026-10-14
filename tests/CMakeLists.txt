@@ -3004,6 +3004,76 @@ endforeach()
 if(NOT GBB_AGE_DISPOSITION_SUITE_FOUND OR GBB_AGE_DISPOSITION_ROW_COUNT LESS 1)
   message(FATAL_ERROR "AGE dispositions must contain non-empty age-test-roms rows")
 endif()
+
+# AGE fixture integrity and redistribution guards (D-19, T-12-20). The digest
+# mutation proves the manifest verifier rejects a changed pin; the install scan
+# and renamed-copy control prevent repository-only ROMs from entering packages.
+add_test(NAME age_fixture_digest
+  COMMAND ${CMAKE_COMMAND} -DMANIFEST=${GBB_AGE_MANIFEST}
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixtureManifest.cmake)
+
+string(JSON GBB_AGE_TAMPERED_DIGEST GET "${GBB_AGE_MANIFEST_JSON}" fixtures 0 sha256)
+string(SUBSTRING "${GBB_AGE_TAMPERED_DIGEST}" 0 1 GBB_AGE_TAMPERED_FIRST)
+string(SUBSTRING "${GBB_AGE_TAMPERED_DIGEST}" 1 63 GBB_AGE_TAMPERED_REST)
+if(GBB_AGE_TAMPERED_FIRST STREQUAL "0")
+  set(GBB_AGE_TAMPERED_FIRST "1")
+else()
+  set(GBB_AGE_TAMPERED_FIRST "0")
+endif()
+set(GBB_AGE_TAMPERED_DIGEST "${GBB_AGE_TAMPERED_FIRST}${GBB_AGE_TAMPERED_REST}")
+string(JSON GBB_AGE_TAMPERED_MANIFEST SET "${GBB_AGE_MANIFEST_JSON}"
+  fixtures 0 sha256 "\"${GBB_AGE_TAMPERED_DIGEST}\"")
+set(GBB_AGE_TAMPERED_MANIFEST_FILE "${PROJECT_BINARY_DIR}/age-tampered/manifest.json")
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/age-tampered")
+file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/age/spsw-div-cgbBCE.gb"
+  "${PROJECT_BINARY_DIR}/age-tampered/spsw-div-cgbBCE.gb")
+file(WRITE "${GBB_AGE_TAMPERED_MANIFEST_FILE}" "${GBB_AGE_TAMPERED_MANIFEST}")
+add_test(NAME age_fixture_digest_tampered
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DMANIFEST=${GBB_AGE_TAMPERED_MANIFEST_FILE};-P;${PROJECT_SOURCE_DIR}/cmake/VerifyFixtureManifest.cmake"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=fixture-digest-mismatch: spsw-div-cgbBCE[.]gb"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+set(GBB_AGE_SCAN_SELFTEST "${PROJECT_BINARY_DIR}/age-scan-selftest")
+file(MAKE_DIRECTORY "${GBB_AGE_SCAN_SELFTEST}/share")
+file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/age/spsw-div-cgbBCE.gb"
+  "${GBB_AGE_SCAN_SELFTEST}/share/payload.bin")
+set(GBB_AGE_SCAN_ARGS "-DGBB_FORBIDDEN_MANIFEST=${GBB_AGE_MANIFEST}"
+  -DGBB_FORBIDDEN_LABEL=fixtures/age)
+function(gbb_add_age_scan_test name code regex scan_dir)
+  set(command "${CMAKE_COMMAND}" "-DGBB_SCAN_DIR=${scan_dir}" ${GBB_AGE_SCAN_ARGS}
+    -P "${GBB_MBC_SCAN_SCRIPT}")
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60)
+endfunction()
+gbb_add_age_scan_test(age_not_installed 0 "fixtures/age absent from scanned tree files=[1-9]"
+  "${GBB_LIBBET_INSTALL_CHECK}")
+set_tests_properties(age_not_installed PROPERTIES FIXTURES_REQUIRED libbet_install)
+gbb_add_age_scan_test(age_not_installed_selftest 1 "fixtures/age-installed: share/payload[.]bin"
+  "${GBB_AGE_SCAN_SELFTEST}")
+
+if(NOT WIN32)
+  find_program(GBB_BASH_AGE_REPRO bash REQUIRED)
+  add_test(NAME age_repro_selfcheck
+    COMMAND "${GBB_BASH_AGE_REPRO}" "${PROJECT_SOURCE_DIR}/tests/scripts/reproduce-age.sh" --self-check)
+  set_tests_properties(age_repro_selfcheck PROPERTIES TIMEOUT 30
+    PASS_REGULAR_EXPRESSION "self-check=pass")
+  add_test(NAME age_repro_selfcheck_tampered
+    COMMAND "${GBB_BASH_AGE_REPRO}" "${PROJECT_SOURCE_DIR}/tests/scripts/test-reproduce-age.sh" selfcheck-tampered)
+  set_tests_properties(age_repro_selfcheck_tampered PROPERTIES TIMEOUT 60
+    PASS_REGULAR_EXPRESSION "reproduce-age negative control selfcheck-tampered ok")
+  add_test(NAME age_repro_compare_tampered
+    COMMAND "${GBB_BASH_AGE_REPRO}" "${PROJECT_SOURCE_DIR}/tests/scripts/test-reproduce-age.sh" compare-tampered)
+  set_tests_properties(age_repro_compare_tampered PROPERTIES TIMEOUT 60
+    PASS_REGULAR_EXPRESSION "reproduce-age negative control compare-tampered ok")
+endif()
 # --- Phase 12 plan 12-16 end ---
 
 # --- Phase 12 plan 12-10 begin ---
