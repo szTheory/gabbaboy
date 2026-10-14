@@ -66,6 +66,14 @@ RGBDS v0.6.1 recipe uses `rgbasm -L`, include paths `src/hblank_vram_dma` and
 `hardware.inc/`, then `rgblink`, followed by `rgbfix -v -p 0 --color-only
 --mbc-type ROM`.
 
+The pinned link places `NewTileMap` at ROM `$022C`. FF52 ignores its low four
+bits, so the first aligned HDMA source is `$0220`: the first 12 transferred
+bytes are the preceding tile-data tail (`$FF`), followed by 1012 tile-index-1
+bytes. The guest sets SCX to 96 pixels (12 tiles) and SCY to 112 pixels (14
+rows), placing those 12 bytes outside the viewport. This is why the structural
+oracle checks the exact source-derived map and the 20-by-18 visible tile-1
+region instead of requiring every map byte to be 1.
+
 The complete build and rights closure is pinned in `manifest.json`:
 
 | Pinned input | SHA-256 | License / role |

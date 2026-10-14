@@ -865,6 +865,10 @@ add_test(NAME magentests_fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DMANIFEST=${GBB_MAGENTESTS_DIR}/manifest.json
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixtureManifest.cmake)
+add_test(NAME magentests_manifest_self_check
+  COMMAND bash ${PROJECT_SOURCE_DIR}/tests/scripts/reproduce-magentests.sh --self-check)
+add_test(NAME magentests_repro_self_test
+  COMMAND bash ${PROJECT_SOURCE_DIR}/tests/scripts/reproduce-magentests.sh --self-test)
 add_test(NAME magentests_oob_sram_mbc3
   COMMAND test_magentests magentests_oob_sram_mbc3 ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc3.gbc)
 add_test(NAME magentests_oob_sram_mbc1
@@ -884,6 +888,27 @@ add_test(NAME magentests_oob_sram_negative_control
     ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc
     ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc3.gbc
     ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc5.gbc)
+# Phase 13 D-17/D-19/D-21/D-22: source-derived Magen HDMA guest evidence and
+# runtime-mask controls. This in-tree target includes the P13 mutant core TU;
+# no test core behavior or public API changes are required.
+add_executable(test_magentests_hdma test_magentests.c
+  ${PROJECT_SOURCE_DIR}/src/accept/sha256.c
+  ${PROJECT_SOURCE_DIR}/src/accept/digest.c)
+target_include_directories(test_magentests_hdma PRIVATE
+  "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/src/accept")
+target_compile_features(test_magentests_hdma PRIVATE c_std_17)
+target_compile_definitions(test_magentests_hdma PRIVATE
+  GBB_P12_MUTANT_BUILD=1
+  "GBB_P13_CORE_SOURCE=\"${GBB_P13_MUTANT_CORE}\""
+  GBB_BUILD_REVISION="p13-mutants" GBB_BUILD_QUALIFIED=0)
+set_target_properties(test_magentests_hdma PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME magentests_hblank_vram_dma
+  COMMAND test_magentests_hdma magentests_hblank_vram_dma
+    ${GBB_MAGENTESTS_DIR}/hblank_vram_dma.gbc)
+add_test(NAME cgb_hdma_magen_controls
+  COMMAND test_magentests_hdma cgb_hdma_magen_controls
+    ${GBB_MAGENTESTS_DIR}/hblank_vram_dma.gbc)
+set_tests_properties(magentests_hblank_vram_dma cgb_hdma_magen_controls PROPERTIES TIMEOUT 60)
 # rtc3test v004 screen oracle (D-11). White-box single TU: it includes the core and the acceptance
 # sources it needs, so it must not link GabbaBoy::core or gabbaboy_accept (duplicate definitions).
 set(GBB_RTC3TEST_DIR "${PROJECT_SOURCE_DIR}/fixtures/rtc3test")

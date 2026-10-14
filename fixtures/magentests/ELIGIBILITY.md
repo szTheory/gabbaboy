@@ -51,10 +51,15 @@ The source-derived guest contract is:
 - Tile 0 is colour index 1 and palette colour 1 is red `0x001F`, the initial
   failure display. Tile 1 is colour index 2 and palette colour 2 is green
   `0x03E0`. Tile 2 is colour index 3 and palette colour 3 is blue `0x7C00`.
-- `NewTileMap` contains `$400` bytes of tile index 1. The first HBlank DMA
-  programs source `NewTileMap`, destination `$9800`, and 64 blocks, then polls
-  FF55 until the busy bit clears. Completion must leave VRAM bank 0's
-  `$1800..$1BFF` map bytes equal to 1 and the screen uniformly green.
+- `NewTileMap` contains `$400` bytes of tile index 1. It links at ROM `$022C`,
+  and FF52 ignores the low nibble, so the first aligned HBlank-DMA source is
+  `$0220`. The first 12 transferred bytes are `$FF` from the preceding tile-2
+  data; the remaining 1012 bytes are tile index 1. The guest sets SCX to 96
+  pixels (12 tile columns) and SCY to 112 pixels (14 rows), so those first 12
+  entries are outside the display. The source-derived map must have exactly
+  that byte sequence, and visible rows 14-31 / columns 12-31 must be tile 1.
+  The first transfer targets `$9800`, uses 64 blocks, and the guest polls FF55
+  until the busy bit clears; the visible screen must be uniformly green.
 - The guest then arms a second 64-block transfer from `NewBadTileMap`, whose
   bytes are tile index 2, and enters a HALT loop. That transfer must remain
   pending: the guest is halted, FF55 retains the active/busy count, and the map
