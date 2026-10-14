@@ -52,6 +52,27 @@
       "spdx": "X11"
     },
     {
+      "path": "dma/gdma_addr_mask.asm",
+      "size_bytes": 2214,
+      "sha256": "8b745a069332ae4052376e873bfaf7cb0c04c960535062ab24fbd5202287f183",
+      "role": "ROM source",
+      "spdx": "X11"
+    },
+    {
+      "path": "dma/hdma_lcd_off.asm",
+      "size_bytes": 2468,
+      "sha256": "2dcb5c71564905ec054cfef09296632cf8d02c0275ca69c5d87409bd139451a2",
+      "role": "ROM source",
+      "spdx": "X11"
+    },
+    {
+      "path": "dma/hdma_mode0.asm",
+      "size_bytes": 2814,
+      "sha256": "ee249f2430c45ebdfa7c6bb23f9fe3af5f82384c0cc3d8b503b34114f5158828",
+      "role": "ROM source",
+      "spdx": "X11"
+    },
+    {
       "path": "include/base.inc",
       "size_bytes": 5750,
       "sha256": "9283500f9c2ebac16b52ffa2f1e497212a72425439a89e57fa1ee9fe7c820847",
@@ -106,6 +127,75 @@
       ],
       "expectation": "Two consecutive one-block GDMA starts copy contiguous expected bytes into VRAM.",
       "applicability": "CGB-mode guest test; starts transfers with LCD off and observes source-derived VRAM bytes.",
+      "target_revision": "CGB-E",
+      "model": "CGB-CPU-E selected software model",
+      "bootless_applicability": true,
+      "author_test_evidence": "SameSuite is an author test suite developed to aid SameBoy; the pinned DMA source encodes the expected byte/status sequence. The upstream material supplies no independent per-ROM physical CGB-E measurement."
+    },
+    {
+      "alias": "gdma_addr_mask",
+      "file": "gdma_addr_mask.gb",
+      "original_filename": "dma/gdma_addr_mask.gb",
+      "size_bytes": 32768,
+      "sha256": "d409c95ddf291c2d9debc0fc3f9bf0d49b24adbcef7f560aa2ae8f6e8299e5f3",
+      "source_path": "dma/gdma_addr_mask.asm",
+      "source_size_bytes": 2214,
+      "source_sha256": "8b745a069332ae4052376e873bfaf7cb0c04c960535062ab24fbd5202287f183",
+      "includes": [
+        "include/base.inc",
+        "include/common.inc",
+        "include/config.inc",
+        "include/hardware.inc",
+        "include/hexdigits.2bpp"
+      ],
+      "expectation": "Low address nibbles written to HDMA1-4 are ignored and one block copies the expected WRAM bytes.",
+      "applicability": "CGB-mode guest test; checks masked source and destination address programming with LCD off.",
+      "target_revision": "CGB-E",
+      "model": "CGB-CPU-E selected software model",
+      "bootless_applicability": true,
+      "author_test_evidence": "SameSuite is an author test suite developed to aid SameBoy; the pinned DMA source encodes the expected byte/status sequence. The upstream material supplies no independent per-ROM physical CGB-E measurement."
+    },
+    {
+      "alias": "hdma_lcd_off",
+      "file": "hdma_lcd_off.gb",
+      "original_filename": "dma/hdma_lcd_off.gb",
+      "size_bytes": 32768,
+      "sha256": "637a3612dcb99bd5f2b0739fb31ad26ce390361e6878b193b894b40f882e44eb",
+      "source_path": "dma/hdma_lcd_off.asm",
+      "source_size_bytes": 2468,
+      "source_sha256": "2dcb5c71564905ec054cfef09296632cf8d02c0275ca69c5d87409bd139451a2",
+      "includes": [
+        "include/base.inc",
+        "include/common.inc",
+        "include/config.inc",
+        "include/hardware.inc",
+        "include/hexdigits.2bpp"
+      ],
+      "expectation": "The author-encoded result expects one block on an LCD-off HBlank-DMA start, then verifies the remaining/cancel status sequence.",
+      "applicability": "CGB-mode guest test; LCD is off at the start and the ROM records HDMA5 before and after cancellation.",
+      "target_revision": "CGB-E",
+      "model": "CGB-CPU-E selected software model",
+      "bootless_applicability": true,
+      "author_test_evidence": "SameSuite is an author test suite developed to aid SameBoy; the pinned DMA source encodes the expected byte/status sequence. The upstream material supplies no independent per-ROM physical CGB-E measurement."
+    },
+    {
+      "alias": "hdma_mode0",
+      "file": "hdma_mode0.gb",
+      "original_filename": "dma/hdma_mode0.gb",
+      "size_bytes": 32768,
+      "sha256": "53f8d643548cecfc8ba5bd03721e4609571fa6a5ac383c96a2342b058fb5f2a1",
+      "source_path": "dma/hdma_mode0.asm",
+      "source_size_bytes": 2814,
+      "source_sha256": "ee249f2430c45ebdfa7c6bb23f9fe3af5f82384c0cc3d8b503b34114f5158828",
+      "includes": [
+        "include/base.inc",
+        "include/common.inc",
+        "include/config.inc",
+        "include/hardware.inc",
+        "include/hexdigits.2bpp"
+      ],
+      "expectation": "After waiting for a visible Mode 0 period, the author-encoded result expects one block and verifies the remaining/cancel status sequence.",
+      "applicability": "CGB-mode guest test; enters visible LCD operation, starts in Mode 0, and turns the LCD off before the test ends.",
       "target_revision": "CGB-E",
       "model": "CGB-CPU-E selected software model",
       "bootless_applicability": true,

@@ -166,7 +166,7 @@ def check_eligibility(fixture):
     path = fixture / "ELIGIBILITY.md"
     if not path.is_file():
         fail("missing ELIGIBILITY.md for the complete admitted set")
-    text = path.read_text()
+    text = " ".join(path.read_text().split())
     for token in [REV, *ALL, "G7", "CC0-1.0", "D-06", "Pan Docs", "physical CGB-E evidence", "G1", "CGB-C"]:
         if token not in text:
             fail("eligibility ledger is missing required provenance: " + token)
@@ -297,12 +297,21 @@ def self_test(fixture, script, case_name):
             data["fixtures"].append(row)
             path.write_text(json.dumps(data, indent=2) + "\n")
 
+        def changed_d06_expectation(target):
+            path = target / "manifest.json"
+            data = json.loads(path.read_text())
+            row = next(row for row in data["fixtures"] if row["alias"] == "hdma_lcd_off")
+            row["expectation"] = "Changed expected HDMA5 value: $82."
+            path.write_text(json.dumps(data, indent=2) + "\n")
+
         mutate("missing-license", "missing license notice LICENSE.txt", missing_license)
         mutate("changed-rom-digest", "ROM SHA-256/size mismatch", changed_rom)
         mutate("changed-source-digest", "source pin mismatch", changed_source_hash)
         mutate("wrong-source-revision", "source revision or SameSuite identity differs", wrong_revision)
         mutate("wrong-tool-pin", "RGBDS tool version/archive digest/options differ", wrong_tool)
         mutate("extra-unapproved-row", "fixture rows differ from selected cases", extra_row)
+        if "hdma_lcd_off" in names:
+            mutate("changed-d06-expectation", "fixture source/model/license metadata differs from the pin: hdma_lcd_off", changed_d06_expectation)
 
         rebuilt = root / "rebuilt"
         rebuilt.mkdir()
