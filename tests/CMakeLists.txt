@@ -1497,6 +1497,47 @@ set_tests_properties(magentests_not_installed PROPERTIES FIXTURES_REQUIRED libbe
 gbb_add_magentests_scan_test(magentests_not_installed_selftest 1 "magentests-installed: share/payload.bin"
   "${GBB_MAGENTESTS_SCAN_SELFTEST}")
 
+# CGB DMA package boundary: keep the author-test ROMs and MagenTests differential guest
+# repository-only, including renamed copies. The two self-tests use the opposite single
+# manifest as the baseline so they fail until the scanner consumes the complete digest set.
+set(GBB_CGB_HDMA_SCAN_MANIFESTS
+  "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json|${GBB_MAGENTESTS_DIR}/manifest.json")
+set(GBB_CGB_HDMA_SCAN_PATH_LABELS "samesuite|magentests|mealybug")
+set(GBB_CGB_HDMA_SCAN_SELFTEST_SAMESUITE "${PROJECT_BINARY_DIR}/cgb-hdma-scan-samesuite-selftest")
+set(GBB_CGB_HDMA_SCAN_SELFTEST_MAGEN "${PROJECT_BINARY_DIR}/cgb-hdma-scan-magentests-selftest")
+file(MAKE_DIRECTORY "${GBB_CGB_HDMA_SCAN_SELFTEST_SAMESUITE}/share"
+  "${GBB_CGB_HDMA_SCAN_SELFTEST_MAGEN}/share")
+file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/samesuite/gbc_dma_cont.gb"
+  "${GBB_CGB_HDMA_SCAN_SELFTEST_SAMESUITE}/share/renamed-payload.bin")
+file(COPY_FILE "${GBB_MAGENTESTS_DIR}/hblank_vram_dma.gbc"
+  "${GBB_CGB_HDMA_SCAN_SELFTEST_MAGEN}/share/renamed-payload.bin")
+function(gbb_add_cgb_hdma_scan_test name code regex scan_dir baseline_manifest)
+  set(command "${CMAKE_COMMAND}" "-DGBB_SCAN_DIR=${scan_dir}"
+    "-DGBB_FORBIDDEN_MANIFEST=${baseline_manifest}"
+    "-DGBB_FORBIDDEN_MANIFESTS=${GBB_CGB_HDMA_SCAN_MANIFESTS}"
+    "-DGBB_FORBIDDEN_PATH_LABELS=${GBB_CGB_HDMA_SCAN_PATH_LABELS}"
+    -DGBB_FORBIDDEN_LABEL=cgb-hdma
+    -P "${GBB_MBC_SCAN_SCRIPT}")
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60)
+endfunction()
+gbb_add_cgb_hdma_scan_test(cgb_hdma_not_installed 0
+  "cgb-hdma absent from scanned tree files=[1-9]" "${GBB_LIBBET_INSTALL_CHECK}"
+  "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json")
+set_tests_properties(cgb_hdma_not_installed PROPERTIES FIXTURES_REQUIRED libbet_install)
+gbb_add_cgb_hdma_scan_test(cgb_hdma_not_installed_selftest 1
+  "cgb-hdma-installed: share/renamed-payload.bin" "${GBB_CGB_HDMA_SCAN_SELFTEST_MAGEN}"
+  "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json")
+gbb_add_cgb_hdma_scan_test(cgb_hdma_not_installed_samesuite_selftest 1
+  "cgb-hdma-installed: share/renamed-payload.bin" "${GBB_CGB_HDMA_SCAN_SELFTEST_SAMESUITE}"
+  "${GBB_MAGENTESTS_DIR}/manifest.json")
+
 # EVID-02 baseline comparator self-tests (D-30, D-31, D-34). Each test runs cmake/VerifyDmgBaseline.cmake
 # on committed synthetic fixtures (or a generated variant of them) and asserts the exact exit code
 # and failure token through expect_exit.cmake; nothing here touches the real ledger.
