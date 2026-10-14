@@ -334,7 +334,7 @@ typedef struct {
     uint8_t byte_index;
     uint8_t byte_phase;
     uint16_t source_cursor;
-    uint16_t destination_cursor;
+    uint32_t destination_cursor;
     uint8_t block_vram_bank;
     uint8_t source_high, source_low, destination_high, destination_low;
     uint8_t control_readback;
@@ -1673,19 +1673,13 @@ static void hdma_request(gbb_instance *m) {
         m->hdma.pending_hblank = 1u;
 }
 
-/* MODEL: CGB_ONLY GATE-93 GUARD=model_is_cgb -- HDMA preflight accepts only mapped ROM, enabled cartridge RAM and WRAM/echo windows */
+/* MODEL: CGB_ONLY GATE-93 GUARD=model_is_cgb -- HDMA preflight accepts only cartridge ROM/RAM and direct WRAM windows */
 static int hdma_source_valid(const gbb_instance *m, uint16_t address) {
     if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB) return 0;
     if (address < 0x8000u)
-        return m->rom != NULL && (size_t)address < m->rom_size;
-    if (address >= 0xA000u && address <= 0xBFFFu) {
-        if (!m->cart.ram_enabled || m->cartridge_ram == NULL ||
-            m->cartridge_ram_size == 0u) return 0;
-        if (m->cart.kind == CART_MBC3 && m->cart.ram_bank >= 0x08u) return 0;
-        return 1;
-    }
-    return (address >= 0xC000u && address <= 0xDFFFu) ||
-           (address >= 0xE000u && address <= 0xFDFFu);
+        return m->rom != NULL;
+    return (address >= 0xA000u && address <= 0xBFFFu) ||
+           (address >= 0xC000u && address <= 0xDFFFu);
 }
 
 /* MODEL: CGB_ONLY GATE-94 GUARD=model_is_cgb -- HDMA reads only the reviewed mapper or WRAM storage path */
@@ -1754,7 +1748,7 @@ static void hdma_advance_half_dot(gbb_instance *m) {
     m->hdma.byte_index = 0u;
     if (m->hdma.blocks_remaining != 0u) --m->hdma.blocks_remaining;
     m->hdma.source_cursor = (uint16_t)(m->hdma.source_cursor + 16u);
-    m->hdma.destination_cursor = (uint16_t)(m->hdma.destination_cursor + 16u);
+    m->hdma.destination_cursor += 16u;
     if (m->hdma.blocks_remaining == 0u) {
         m->hdma.mode = 0u;
         m->hdma.pending_hblank = 0u;
@@ -1784,15 +1778,15 @@ static void hdma_register_write(gbb_instance *m, uint16_t address, uint8_t value
     case 0xFF53u:
         if (m->hdma.mode != 0u || m->hdma.active || m->hdma.pending_hblank) return;
         m->hdma.destination_high = (uint8_t)(value & 0x1Fu);
-        m->hdma.destination_cursor = (uint16_t)(0x8000u |
+        m->hdma.destination_cursor = 0x8000u |
             ((uint16_t)m->hdma.destination_high << 8) |
-            (m->hdma.destination_cursor & 0x00FFu));
+            (m->hdma.destination_cursor & 0x00FFu);
         break;
     case 0xFF54u:
         if (m->hdma.mode != 0u || m->hdma.active || m->hdma.pending_hblank) return;
         m->hdma.destination_low = (uint8_t)(value & 0xF0u);
-        m->hdma.destination_cursor = (uint16_t)((m->hdma.destination_cursor & 0xFF00u) |
-                                                m->hdma.destination_low);
+        m->hdma.destination_cursor = (m->hdma.destination_cursor & 0xFF00u) |
+                                     m->hdma.destination_low;
         break;
     case 0xFF55u:
         if (m->hdma.mode == 2u || m->hdma.active) return;

@@ -788,6 +788,71 @@ static int expect_rom_mapping_crossing(void) {
     return 0;
 }
 
+static int admit_following_hblank_block(gbb_instance *m) {
+    m->ly = 0u;
+    m->lcdc = 0x91u;
+    ppu_set_mode(m, 3u);
+    ppu_set_mode(m, 0u);
+    REQUIRE(m->hdma.pending_hblank);
+    gbb_run_result run = gbb_run(m, 64u, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 64u &&
+            !m->hdma.pending_hblank && !m->hdma.active && m->hdma.blocks_remaining == 0u);
+    return 0;
+}
+
+static int expect_source_banks_change_between_blocks(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(address_fixture_create(&m, 0x4000u, 0x8000u, 0x81u, 0x01u, 1u, 0u,
+                                   65536u) == 0);
+    gbb_run_result first_rom = gbb_run(m, 104u, NULL, 0u);
+    REQUIRE(first_rom.reason == GBB_STOP_BUDGET && first_rom.consumed_half_dots == 104u &&
+            m->hdma.blocks_remaining == 1u && memcmp(m->vram[0], m->rom + 0x4000u, 16u) == 0);
+    write8(m, 0x2000u, 0x02u);
+    REQUIRE(admit_following_hblank_block(m) == 0);
+    REQUIRE(memcmp(m->vram[0] + 16u, m->rom + 0x8010u, 16u) == 0);
+    gbb_destroy(m);
+
+    REQUIRE(address_fixture_create(&m, 0xA000u, 0x8000u, 0x81u, 0x03u, 0u, 3u,
+                                   32768u) == 0);
+    write8(m, 0x0000u, 0x0Au);
+    write8(m, 0x6000u, 0x01u);
+    gbb_run_result first_ram = gbb_run(m, 104u, NULL, 0u);
+    REQUIRE(first_ram.reason == GBB_STOP_BUDGET && first_ram.consumed_half_dots == 104u &&
+            m->hdma.blocks_remaining == 1u &&
+            memcmp(m->vram[0], m->cartridge_ram, 16u) == 0);
+    write8(m, 0x4000u, 0x01u);
+    REQUIRE(admit_following_hblank_block(m) == 0);
+    REQUIRE(memcmp(m->vram[0] + 16u, m->cartridge_ram + 0x2010u, 16u) == 0);
+    gbb_destroy(m);
+
+    REQUIRE(address_fixture_create(&m, 0xD000u, 0x8000u, 0x81u, 0x00u, 0u, 0u,
+                                   32768u) == 0);
+    gbb_run_result first_wram = gbb_run(m, 104u, NULL, 0u);
+    REQUIRE(first_wram.reason == GBB_STOP_BUDGET && first_wram.consumed_half_dots == 104u &&
+            m->hdma.blocks_remaining == 1u &&
+            memcmp(m->vram[0], m->wram[1], 16u) == 0);
+    write8(m, 0xFF70u, 0x02u);
+    REQUIRE(admit_following_hblank_block(m) == 0);
+    REQUIRE(memcmp(m->vram[0] + 16u, m->wram[2] + 16u, 16u) == 0);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int expect_vbk_changes_between_blocks(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(address_fixture_create(&m, 0xC000u, 0x8000u, 0x81u, 0x00u, 0u, 0u,
+                                   32768u) == 0);
+    gbb_run_result first = gbb_run(m, 104u, NULL, 0u);
+    REQUIRE(first.reason == GBB_STOP_BUDGET && first.consumed_half_dots == 104u &&
+            m->hdma.blocks_remaining == 1u && memcmp(m->vram[0], m->wram[0], 16u) == 0);
+    write8(m, 0xFF4Fu, 0x01u);
+    REQUIRE(admit_following_hblank_block(m) == 0);
+    REQUIRE(memcmp(m->vram[1] + 16u, m->wram[0] + 16u, 16u) == 0);
+    for (unsigned i = 16u; i < 32u; ++i) REQUIRE(m->vram[0][i] == 0xA5u);
+    gbb_destroy(m);
+    return 0;
+}
+
 static int expect_prefix_then_invalid(uint16_t source, uint8_t cart_type,
                                       uint8_t rom_size_code, uint8_t ram_size_code,
                                       size_t rom_size, uint16_t next_source,
@@ -816,6 +881,8 @@ static int expect_prefix_then_invalid(uint16_t source, uint8_t cart_type,
 static int test_address_matrix(void) {
     REQUIRE(expect_rom_block(0x0000u) == 0);
     REQUIRE(expect_rom_mapping_crossing() == 0);
+    REQUIRE(expect_source_banks_change_between_blocks() == 0);
+    REQUIRE(expect_vbk_changes_between_blocks() == 0);
     gbb_instance *m = NULL;
     REQUIRE(address_fixture_create(&m, 0x7FF0u, 0x8000u, 0x01u, 0x01u, 1u, 0u,
                                    65536u) == 0);
@@ -868,13 +935,13 @@ static int test_address_matrix(void) {
     gbb_run_result wram_cross = gbb_run(m, 168u, NULL, 0u);
     REQUIRE(wram_cross.reason == GBB_STOP_BUDGET && wram_cross.consumed_half_dots == 168u);
     REQUIRE(memcmp(m->vram[0], c_prefix, 16u) == 0);
-    REQUIRE(memcmp(m->vram[0] + 16u, m->wram[1] + 0x1000u, 16u) == 0);
+    REQUIRE(memcmp(m->vram[0] + 16u, m->wram[1], 16u) == 0);
     gbb_destroy(m);
 
     REQUIRE(address_fixture_create(&m, 0xDFF0u, 0x8000u, 0x01u, 0x00u, 0u, 0u,
                                    32768u) == 0);
     REQUIRE(expect_prefix_then_invalid(0xDFF0u, 0x00u, 0u, 0u, 32768u,
-                                       0xE000u, m->wram[1] + 0x1FF0u) == 0);
+                                       0xE000u, m->wram[1] + 0x0FF0u) == 0);
     gbb_destroy(m);
 
     static const uint16_t invalid_sources[] = {

@@ -249,6 +249,25 @@ UNKNOWN / author-test plus emulator differential for physical CGB-E, not a hardw
 [Pan Docs FF55](https://gbdev.io/pandocs/CGB_Registers.html#ff55--hdma5-cgb-mode-only-vram-dma-lengthmode-start)
 and the Phase 13 research record.
 
+### HDMA source map and overflow policy
+
+Each requested 16-byte block is prevalidated before its first byte. The CGB-only source windows
+are ROM `$0000-$7FFF`, cartridge mapping `$A000-$BFFF`, and direct WRAM `$C000-$DFFF`; bytes use
+`cart_read` or the banked `wram_byte` helper without CPU-bus lockouts. Missing or disabled cartridge
+RAM is still a mapped source and returns `$FF` through `cart_read`. Echo RAM, VRAM, OAM, FEA0-FEFF,
+I/O, and HRAM are rejected before the block mutates VRAM or observes peripheral registers. A failed
+continuation preserves completed blocks, the rejected source/destination cursors and remaining
+count, clears active/pending state, and stops at the run boundary with `GBB_STOP_UNSUPPORTED_BUS`;
+FF55 reads `$80 | (remaining - 1)`. The address and overflow matrices exercise these cells as
+UNKNOWN / software POLICY, not a physical CGB-E result.
+
+Destination `$9FF0` is legal and commits its 16 bytes. The widened cursor then represents `$A000`:
+one requested block completes with FF55 `$FF`, while additional work stops before wrapping or
+writing another byte and retains the remaining-count status. Restarting at `$A000` rejects again;
+idle FF53/FF54 writes can reprogram the destination. Mapper ROM, cartridge RAM, WRAM and VBK are
+sampled for each newly admitted block, so changes between blocks affect the next source/destination
+bank. `cgb_hdma_address_matrix` and `cgb_hdma_overflow_policy` pin these software choices.
+
 Each byte commits every four master half-dots, for 64 per block with no modeled startup/teardown.
 The policy test checks every half-dot around all 16 byte edges at normal and double CPU speed; shifts
 of -8, -4, -2, -1, +1, +2, +4 and +8 half-dots fail the sampled-edge contract, with no software blind
