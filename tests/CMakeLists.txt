@@ -421,6 +421,7 @@ foreach(case state_matrix trigger_matrix trigger_controls timing_policy address_
              lifecycle resource_bounds hostile_seeds)
   add_test(NAME cgb_hdma_${case} COMMAND test_cgb_hdma_internal ${case})
 endforeach()
+add_test(NAME cgb_hdma_timing_sensitivity COMMAND test_cgb_hdma_internal timing_sensitivity)
 foreach(case lifecycle resource_bounds hostile_seeds)
   add_test(NAME cgb_hdma_${case}_controls
     COMMAND ${CMAKE_COMMAND}

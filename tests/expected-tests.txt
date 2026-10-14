@@ -517,6 +517,7 @@ cgb_hdma_trigger_controls
 cgb_hdma_trigger_matrix_controls
 cgb_hdma_timing_policy
 cgb_hdma_timing_policy_controls
+cgb_hdma_timing_sensitivity
 cgb_hdma_address_matrix
 cgb_hdma_address_matrix_controls
 cgb_hdma_overflow_policy

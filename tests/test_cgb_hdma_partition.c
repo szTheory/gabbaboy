@@ -688,6 +688,64 @@ static int cgb_hdma_partition_order_control(void) {
     return 1;
 }
 
+static void mutant_phase_rom(uint8_t rom[32768]) {
+    memset(rom, 0, 32768u);
+    rom[0x143u] = 0xC0u;
+    uint8_t checksum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14Du] = checksum;
+}
+
+static int mutant_phase_machine(gbb_instance **out) {
+    uint8_t rom[32768];
+    mutant_phase_rom(rom);
+    *out = NULL;
+    if (gbb_create(GBB_PROFILE_CGB_CPU_E, out) != GBB_OK ||
+        gbb_load_rom(*out, rom, sizeof(rom)) != GBB_OK) {
+        if (*out != NULL) gbb_destroy(*out);
+        *out = NULL;
+        fputs("hdma mutant lost_phase fixture setup failed\n", stderr);
+        return 1;
+    }
+    gbb_instance *m = *out;
+    for (unsigned i = 0u; i < 16u; ++i)
+        m->wram[0][i] = (uint8_t)(0x31u + 11u * i);
+    memset(m->vram[0], 0xA5, sizeof(m->vram[0]));
+    m->hdma.mode = 2u;
+    m->hdma.active = 1u;
+    m->hdma.blocks_remaining = 1u;
+    m->hdma.source_cursor = 0xC000u;
+    m->hdma.destination_cursor = 0x8000u;
+    m->hdma.block_vram_bank = 0u;
+    return 0;
+}
+
+static int cgb_hdma_partition_mutant_lost_phase(void) {
+    gbb_instance *whole = NULL, *split = NULL;
+    REQUIRE(mutant_phase_machine(&whole) == 0);
+    REQUIRE(mutant_phase_machine(&split) == 0);
+    gbb_run_result one = gbb_run(whole, 4u, NULL, 0u);
+    REQUIRE(one.consumed_half_dots == 4u);
+    for (unsigned cut = 0u; cut < 4u; ++cut) {
+        gbb_run_result part = gbb_run(split, 1u, NULL, 0u);
+        REQUIRE(part.consumed_half_dots == 1u);
+    }
+    const int equal = whole->time_half_dots == split->time_half_dots &&
+        whole->hdma.active == split->hdma.active &&
+        whole->hdma.byte_phase == split->hdma.byte_phase &&
+        whole->hdma.blocks_remaining == split->hdma.blocks_remaining &&
+        memcmp(whole->vram[0], split->vram[0], sizeof(whole->vram[0])) == 0;
+    gbb_destroy(whole);
+    gbb_destroy(split);
+    if (!equal) {
+        fputs("hdma mutant lost_phase detected one-call versus four-cut state predicate\n", stderr);
+        return 1;
+    }
+    puts("cgb-hdma mutant_lost_phase pass");
+    return 0;
+}
+
 int main(int argc, char **argv) {
 #ifdef GBB_P12_MUTANT_BUILD
     if (argc >= 4 && strcmp(argv[argc - 2], "--mutants") == 0) {
@@ -707,5 +765,7 @@ int main(int argc, char **argv) {
         return cgb_hdma_partition_lost_remainder_control();
     if (strcmp(argv[1], "order_control") == 0)
         return cgb_hdma_partition_order_control();
+    if (strcmp(argv[1], "mutant_lost_phase") == 0)
+        return cgb_hdma_partition_mutant_lost_phase();
     return 2;
 }

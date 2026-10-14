@@ -1302,8 +1302,16 @@ static int test_oam_order(void) {
     const uint64_t start = m->time_half_dots;
     gbb_run_result tick = gbb_run(m, 1u, NULL, 0u);
     REQUIRE(tick.reason == GBB_STOP_BUDGET && tick.consumed_half_dots == 1u);
-    REQUIRE(m->oam[15u] == 0x11u && m->vram[0][15u] == 0x22u &&
-            !m->hdma.active && m->hdma.pending_hblank && m->hdma.blocks_remaining == 1u);
+    if (m->oam[15u] != 0x11u || m->vram[0][15u] != 0x22u ||
+        m->hdma.active || !m->hdma.pending_hblank || m->hdma.blocks_remaining != 1u) {
+        if (GBB_P13_MUT(52))
+            fputs("hdma mutant shifted_order detected OAM-before-HDMA predicate\n", stderr);
+        fprintf(stderr, "oam order: OAM=%02X VRAM=%02X active=%u pending=%u remaining=%u\n",
+                m->oam[15u], m->vram[0][15u], m->hdma.active,
+                m->hdma.pending_hblank, m->hdma.blocks_remaining);
+        gbb_destroy(m);
+        return 1;
+    }
     REQUIRE(gbb_test_dma_observer_count(m) == 1u && dma[0].address == 0xFE0Fu &&
             dma[0].access == 2u && dma[0].value == 0x11u && dma[0].time_half_dots == start + 1u);
     REQUIRE(gbb_test_ppu_observer_count(m) != 0u && ppu[0].address == 0xFF41u &&
@@ -1818,6 +1826,7 @@ static int test_hdma_hostile_seed_controls(void) {
 }
 
 static int mutant_machine_create(gbb_instance **out) {
+    *out = NULL;
     uint8_t rom[32768] = {0};
     rom[0x143u] = 0xC0u;
     finish_rom(rom);
@@ -1861,6 +1870,198 @@ static int test_mutant_no_copy(void) {
         return 1;
     }
     gbb_destroy(m);
+    return 0;
+}
+
+static int test_mutant_duplicate_copy(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(mutant_machine_create(&m) == 0);
+    mutant_advance_block(m);
+    if (m->vram[0][16u] != 0xA5u) {
+        fputs("hdma mutant duplicate_copy detected adjacent destination predicate\n", stderr);
+        gbb_destroy(m);
+        return 1;
+    }
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_mutant_wrong_vbk(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(mutant_machine_create(&m) == 0);
+    mutant_advance_block(m);
+    if (memcmp(m->vram[0], m->wram[0], 16u) != 0) {
+        fputs("hdma mutant wrong_vbk detected sampled-bank destination predicate\n", stderr);
+        gbb_destroy(m);
+        return 1;
+    }
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_mutant_unmasked_address(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(mutant_machine_create(&m) == 0);
+    m->hdma.mode = 0u;
+    m->hdma.active = 0u;
+    m->hdma.destination_cursor = 0x8000u;
+    hdma_register_write(m, 0xFF54u, 0x0Fu);
+    if (m->hdma.destination_cursor != 0x8000u) {
+        fputs("hdma mutant unmasked_address detected FF54 low-nibble predicate\n", stderr);
+        gbb_destroy(m);
+        return 1;
+    }
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_mutant_wrong_count(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(mutant_machine_create(&m) == 0);
+    m->hdma.blocks_remaining = 2u;
+    mutant_advance_block(m);
+    if (m->hdma.blocks_remaining != 1u || m->hdma.mode != 2u ||
+        m->hdma.control_readback != 0u) {
+        fputs("hdma mutant wrong_count detected one-block decrement predicate\n", stderr);
+        gbb_destroy(m);
+        return 1;
+    }
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_mutant_wrong_cancel(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(mutant_machine_create(&m) == 0);
+    m->hdma.mode = 1u;
+    m->hdma.active = 0u;
+    m->hdma.blocks_remaining = 5u;
+    hdma_register_write(m, 0xFF55u, 0x02u);
+    if (m->hdma.blocks_remaining != 0u || m->hdma.control_readback != 0x82u) {
+        fputs("hdma mutant wrong_cancel detected written-count readback predicate\n", stderr);
+        gbb_destroy(m);
+        return 1;
+    }
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_mutant_halt_admission(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(mutant_machine_create(&m) == 0);
+    m->halted = 1u;
+    m->hdma.mode = 1u;
+    m->hdma.active = 0u;
+    m->hdma.pending_hblank = 0u;
+    m->hdma.blocks_remaining = 1u;
+    hdma_request(m);
+    if (m->hdma.pending_hblank) {
+        fputs("hdma mutant halt_admission detected HALT request predicate\n", stderr);
+        gbb_destroy(m);
+        return 1;
+    }
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_mutant_false_trigger(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(mutant_machine_create(&m) == 0);
+    m->hdma.mode = 1u;
+    m->hdma.active = 0u;
+    m->hdma.blocks_remaining = 1u;
+    m->lcdc = 0x91u;
+    m->ly = GBB_FRAME_HEIGHT;
+    m->ppu_mode = 3u;
+    ppu_set_mode(m, 0u);
+    if (m->hdma.pending_hblank) {
+        fputs("hdma mutant false_trigger detected visible-line admission predicate\n", stderr);
+        gbb_destroy(m);
+        return 1;
+    }
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_mutant_lost_dma_irq(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(mutant_machine_create(&m) == 0);
+    m->hdma.mode = 1u;
+    m->hdma.active = 1u;
+    m->hdma.blocks_remaining = 1u;
+    m->hdma.byte_index = 4u;
+    m->cpu_stall_kind = GBB_STALL_SPEED_SWITCH;
+    m->cpu_stall_half_dots = 8u;
+    m->ie = 0x04u;
+    m->interrupt_flags = 0x04u;
+    (void)gbb_run(m, 1u, NULL, 0u);
+    if (!m->hdma.active || m->hdma.blocks_remaining != 1u) {
+        fputs("hdma mutant lost_dma_irq detected admitted-block retention predicate\n", stderr);
+        gbb_destroy(m);
+        return 1;
+    }
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_mutant_dma_realign(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(mutant_machine_create(&m) == 0);
+    m->time_half_dots = 4u;
+    mutant_advance_block(m);
+    if (m->cpu_stall_kind != GBB_STALL_NONE || m->cpu_stall_half_dots != 0u) {
+        fputs("hdma mutant dma_realign detected DMA-only phase predicate\n", stderr);
+        gbb_destroy(m);
+        return 1;
+    }
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_mutant_shifted_order(void) {
+    return test_oam_order();
+}
+
+static int timing_offset_commit(int offset, unsigned expected_half_dots) {
+    gbb_p13_set_duration_offset(offset);
+    gbb_instance *m = NULL;
+    if (policy_fixture_create(&m, 0x80u, 0u, 0, 0, 0, 0u, 0u, 0u, 16u) != 0) {
+        gbb_p13_set_duration_offset(0);
+        return 1;
+    }
+    const uint64_t start = m->time_half_dots;
+    gbb_run_result start_block = gbb_run(m, 40u, NULL, 0u);
+    if (start_block.consumed_half_dots != 40u || !m->hdma.pending_hblank ||
+        !hdma_admit_block(m)) {
+        gbb_destroy(m);
+        gbb_p13_set_duration_offset(0);
+        return 1;
+    }
+    unsigned observed = 0u;
+    for (unsigned half_dot = 1u; half_dot <= 12u; ++half_dot) {
+        gbb_run_result tick = gbb_run(m, 1u, NULL, 0u);
+        if (tick.consumed_half_dots != 1u) break;
+        if (m->vram[0][0] == m->wram[0][0]) {
+            observed = half_dot;
+            break;
+        }
+    }
+    gbb_destroy(m);
+    gbb_p13_set_duration_offset(0);
+    return observed == expected_half_dots ? 0 : 1;
+}
+
+static int test_timing_sensitivity(void) {
+    static const int offsets[] = {-8, -4, -2, -1, 1, 2, 4, 8};
+    static const unsigned expected[] = {1u, 1u, 2u, 3u, 5u, 6u, 8u, 12u};
+    for (size_t i = 0u; i < sizeof(offsets) / sizeof(offsets[0]); ++i) {
+        if (timing_offset_commit(offsets[i], expected[i]) != 0) {
+            fprintf(stderr, "timing sensitivity: offset %+d expected first commit at %u half-dots\n",
+                    offsets[i], expected[i]);
+            return 1;
+        }
+    }
+    puts("timing sensitivity offsets -8,-4,-2,-1,+1,+2,+4,+8 detected in one normal-speed master-time series; double-speed cadence covered separately; physical CGB-E UNKNOWN");
     return 0;
 }
 
@@ -1910,6 +2111,17 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "hostile_seeds_controls") == 0)
         rc = test_hdma_hostile_seed_controls();
     else if (strcmp(argv[1], "mutant_no_copy") == 0) rc = test_mutant_no_copy();
+    else if (strcmp(argv[1], "mutant_duplicate_copy") == 0) rc = test_mutant_duplicate_copy();
+    else if (strcmp(argv[1], "mutant_wrong_vbk") == 0) rc = test_mutant_wrong_vbk();
+    else if (strcmp(argv[1], "mutant_unmasked_address") == 0) rc = test_mutant_unmasked_address();
+    else if (strcmp(argv[1], "mutant_wrong_count") == 0) rc = test_mutant_wrong_count();
+    else if (strcmp(argv[1], "mutant_wrong_cancel") == 0) rc = test_mutant_wrong_cancel();
+    else if (strcmp(argv[1], "mutant_halt_admission") == 0) rc = test_mutant_halt_admission();
+    else if (strcmp(argv[1], "mutant_false_trigger") == 0) rc = test_mutant_false_trigger();
+    else if (strcmp(argv[1], "mutant_lost_dma_irq") == 0) rc = test_mutant_lost_dma_irq();
+    else if (strcmp(argv[1], "mutant_dma_realign") == 0) rc = test_mutant_dma_realign();
+    else if (strcmp(argv[1], "mutant_shifted_order") == 0) rc = test_mutant_shifted_order();
+    else if (strcmp(argv[1], "timing_sensitivity") == 0) rc = test_timing_sensitivity();
     else return 2;
     if (rc == 0) printf("cgb-hdma %s pass\n", argv[1]);
     return rc;

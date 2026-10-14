@@ -5,7 +5,9 @@ if(NOT DEFINED PROJECT_SOURCE_DIR)
 endif()
 include("${PROJECT_SOURCE_DIR}/cmake/P12Mutants.cmake")
 
-set(GBB_P13_ANCHOR_TAGS P13-05-M01)
+set(GBB_P13_ANCHOR_TAGS
+  P13-05-M01 P13-05-M02 P13-05-M03 P13-05-M04 P13-05-M05 P13-05-M06 P13-05-M07
+  P13-05-M08 P13-05-M09 P13-05-M10 P13-05-M11 P13-05-M12 P13-05-M13 P13-05-M14)
 set(GBB_P13_MUTANT_BITS
   no_steal=40 no_copy=41 duplicate_copy=42 wrong_vbk=43
   unmasked_address=44 wrong_count=45 wrong_cancel=46 speed_scaled=47
@@ -30,7 +32,14 @@ function(gbb_p13_make_mutant_core out_path)
     gbb_p12_require_unique_anchor("${core_text}" "${tag}" "p13 mutant ${tag}" "${core_path}")
   endforeach()
   file(WRITE "${out_path}"
-    "#define GBB_P13_MUT(n) ((unsigned)((gbb_p12_mutants >> (n)) & 1u))\n${core_text}")
+    "#include <stdint.h>\n"
+    "int32_t gbb_p13_duration_offset = 0;\n"
+    "#define GBB_P13_MUT(n) ((unsigned)((gbb_p12_mutants >> (n)) & 1u))\n"
+    "#define GBB_P13_DURATION_OFFSET gbb_p13_duration_offset\n"
+    "${core_text}\n"
+    "void gbb_p13_set_duration_offset(int32_t offset) {\n"
+    "  if (offset >= -8 && offset <= 8) gbb_p13_duration_offset = offset;\n"
+    "}\n")
 endfunction()
 
 function(gbb_p13_mutant_test exe suffix bit case_name regex)
