@@ -447,6 +447,14 @@ add_test(NAME cgb_hdma_guest_halt COMMAND test_cgb_hdma guest_halt)
 add_test(NAME cgb_hdma_guest_steal COMMAND test_cgb_hdma guest_steal)
 add_test(NAME cgb_hdma_guest_controls COMMAND test_cgb_hdma guest_controls)
 add_test(NAME cgb_hdma_guest_banks COMMAND test_cgb_hdma guest_banks)
+
+# Reuses the explicit private-state hash from the speed-switch partition tests.
+add_executable(test_cgb_hdma_partition test_cgb_hdma_partition.c)
+target_include_directories(test_cgb_hdma_partition PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_cgb_hdma_partition PRIVATE c_std_17)
+set_target_properties(test_cgb_hdma_partition PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_hdma_partition_midbyte COMMAND test_cgb_hdma_partition midbyte)
+
 # Plan 13-03 reserves Task 2's exact tests before that harness expands.
 foreach(case competing_stalls stop_policy oam_order)
   add_test(NAME cgb_hdma_${case} COMMAND test_cgb_hdma_internal ${case})
