@@ -334,11 +334,11 @@
           "case": "speed-switch-hdma-hblank-across-stall",
           "disposition": "pass",
           "reason": "-",
-          "reason_detail": "The guest accepts a post-switch FF55 HBlank request and reads back its active one-block status. The transfer is armed after the pause, so this does not test an armed transfer spanning the stall or qualify physical CGB-E behavior.",
+          "reason_detail": "The Phase 13 competing-stall control keeps an admitted HBlank block active through both speed-switch directions and a timer wake, then verifies completion before interrupt dispatch. This is selected software POLICY and does not qualify physical CGB-E timing or arbitration.",
           "owner_phase": 13,
           "decision": "D-09",
-          "pinned_by": "cgb_speed_xfail_hdma_fails_closed",
-          "flip_rule": "fails if the post-switch FF55 request/readback regresses or the FF54 substitution passes; armed-across-pause coverage remains untested"
+          "pinned_by": "cgb_hdma_competing_stalls",
+          "flip_rule": "fails if admitted HBlank progress is lost, the switch pause erases DMA, timer wake dispatches before block completion, or either speed direction regresses; physical arbitration remains UNKNOWN"
         },
         {
           "case": "speed-switch-stop-oam-bug",

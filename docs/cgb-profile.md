@@ -282,6 +282,23 @@ normal interrupt vector before the guest resumes. The edge observed during HALT 
 the guest waits for a later visible HBlank. Public guest tests check FF55 at wake and then observe the
 remaining transfer. This behavior is tested at the CGB-CPU-E model boundary only; HALT/DMA arbitration
 and exact edge timing remain UNKNOWN for physical CGB-E hardware.
+
+STOP sleep retains an admitted or pending HDMA block and its byte phase while the oscillator is
+paused. The stopped run advances the master timeline and applies a queued wake event, but freezes
+HDMA, OAM DMA, PPU, timer/DIV, serial and APU state; wake resumes the retained work without creating
+a missed HBlank edge. The RTC has no hidden core clock: it changes only through the explicit
+catch-up operation, so STOP wall time does not mutate its remainder. These are selected software
+policies covered by `cgb_hdma_stop_policy` and its waiting-edge control, not physical CGB-E results.
+
+During an armed speed-switch pause, OAM DMA and HDMA advance alongside the independent speed-pause
+remainder. With active or pending HDMA the scheduler commits bounded one-half-dot master ticks;
+timer IF/IE can end the switch pause only at its M-cycle boundary, then the admitted block finishes
+before interrupt dispatch or guest execution. Completing a block never invokes speed-only
+realignment. On a shared half-dot, the established order remains OAM commit, HDMA commit, then PPU
+advance and HBlank request. The competing-stall controls exercise both speed directions, timer
+wake, OAM, serial, APU and PPU progress, and the unchanged RTC remainder. `cgb_hdma_competing_stalls`
+and `cgb_hdma_oam_order` pin this deterministic software policy; collision and speed-pause timing
+remain UNKNOWN for physical CGB-E.
 The DMG profile never enters this decode: its FF4C-FF7F reads still stop and its writes are silent
 no-ops. IE bits 5-7 are stored and read back on the CGB profile only (owner veto item 6).
 
@@ -543,8 +560,10 @@ existing cost. Only cases that read an operand preflight it; cases 2 and 3 never
 The operand value is ignored, so `$00` and `$FF` produce the same STOP result (D-04).
 
 The stall is persisted machine state, consumed by a dedicated branch after the stopped check and
-before interrupt dispatch. It advances devices in one CPU M-cycle quantum at a time, obeys the
-caller budget and output/headroom checks, and reports `GBB_STOP_BUDGET` when a call ends mid-stall;
+before interrupt dispatch. Without competing HDMA it advances devices in one CPU M-cycle quantum;
+with active or pending HDMA it uses one-half-dot ticks and decrements the independent switch
+remainder on those same ticks. It obeys the caller budget and output/headroom checks, and reports
+`GBB_STOP_BUDGET` when a call ends mid-stall;
 it never reports `GBB_STOP_STOPPED` or `GBB_STOP_HALTED_IDLE`, and never sets `stopped`. PPU, APU,
 DIV/TIMA, serial and OAM DMA continue advancing while the CPU is stalled. An enabled interrupt
 ends the stall at the next M-cycle boundary; IME dispatches the handler, while IME clear resumes
@@ -595,9 +614,9 @@ the pause (`expected-failure:speed-switch-pause-ppu-output`); odd-mode realignme
 (`expected-failure:apu-lc-delay-after-switch`, Phase 14); the CGB-E immediate TIMA increment after
 DIV reset (`expected-failure:cgb-e-div-reset-immediate-increment-delay`, D-35); DMG double-speed
 LCD/CPU alignment (`expected-failure:ds-lcd-cpu-alignment`); CGB mode-3 length
-(`expected-failure:cgb-mode3-length`, Phase 14); HBlank DMA crossing a speed-switch stall
-armed-across-pause HDMA transfer is not covered by the post-switch register check (Phase 13); and the STOP/OAM bug on a
-speed switch (`expected-failure:speed-switch-stop-oam-bug`, Phase 14).
+(`expected-failure:cgb-mode3-length`, Phase 14); the selected armed-HDMA/speed-pause overlap policy
+is exercised by `cgb_hdma_competing_stalls`, while physical collision and timing remain UNKNOWN;
+and the STOP/OAM bug on a speed switch (`expected-failure:speed-switch-stop-oam-bug`, Phase 14).
 
 <!-- cgb-speed-dispositions-begin -->
 | suite | case | disposition | reason | owner phase | pinned_by |
@@ -624,7 +643,7 @@ speed switch (`expected-failure:speed-switch-stop-oam-bug`, Phase 14).
 | gabbaboy-model | cgb-e-div-reset-immediate-increment-delay-tima | expected-failure | expected-failure:cgb-e-div-reset-immediate-increment-delay | 12 | age_spsw_tima_cgbE |
 | gabbaboy-model | cgb-e-div-reset-immediate-increment-delay-interrupts | expected-failure | expected-failure:cgb-e-div-reset-immediate-increment-delay | 12 | age_spsw_interrupts_cgbE |
 | gabbaboy-model | unarmed-stop-held-button | expected-failure | expected-failure:unarmed-stop-held-button | 12 | cgb_speed_dmg_unarmed_unchanged |
-| gabbaboy-model | speed-switch-hdma-hblank-across-stall | pass | - | 13 | cgb_speed_xfail_hdma_fails_closed |
+| gabbaboy-model | speed-switch-hdma-hblank-across-stall | pass | - | 13 | cgb_hdma_competing_stalls |
 | gabbaboy-model | speed-switch-stop-oam-bug | expected-failure | expected-failure:speed-switch-stop-oam-bug | 14 | cgb_speed_xfail_stop_oam_unchanged |
 | gabbaboy-model | ds-lcd-cpu-alignment | expected-failure | expected-failure:ds-lcd-cpu-alignment | 14 | age_spsw_mode0_cgbBCE |
 | gabbaboy-model | cgb-mode3-length | expected-failure | expected-failure:cgb-mode3-length | 14 | age_stat_mode_cgbE |

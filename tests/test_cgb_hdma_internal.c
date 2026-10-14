@@ -1029,15 +1029,24 @@ static int competing_fixture_create(gbb_instance **out, int speed, int ime,
     REQUIRE(policy_fixture_create(out, 0u, 0u, 0, 0, speed, 0u, 0u, 0u, 16u) == 0);
     gbb_instance *m = *out;
     const uint32_t quantum = 8u >> speed;
-    m->double_speed = (uint8_t)speed;
+    m->double_speed = (uint8_t)(1 - speed);
     m->divider_phase = 0u;
     m->divider_counter = 0u;
     m->div = 0u;
-    m->cpu_stall_kind = GBB_STALL_SPEED_SWITCH;
-    m->cpu_stall_half_dots = quantum * 2u;
-    m->ime = ime;
     m->ie = 0x04u;
     m->interrupt_flags = 0u;
+    m->joypad_select = 0x30u;
+    m->key1_armed = 1u;
+    m->rom[0x150u] = 0x10u;
+    m->rom[0x151u] = 0x00u;
+    m->pc = 0x150u;
+    const uint64_t switch_cost = GBB_STOP_SWITCH_COST_HALF_DOTS >> m->double_speed;
+    gbb_run_result switched = gbb_run(m, switch_cost, NULL, 0u);
+    REQUIRE(switched.reason == GBB_STOP_BUDGET && switched.consumed_half_dots == switch_cost &&
+            m->double_speed == speed && m->cpu_stall_kind == GBB_STALL_SPEED_SWITCH &&
+            m->key1_armed == 0u);
+    m->cpu_stall_half_dots = quantum * 2u;
+    m->ime = ime;
     m->timer_reloaded_at = UINT64_MAX;
     m->timer_reload_pending = timer_wake;
     m->timer_reload_remaining = timer_wake ? 1u : 0u;
@@ -1048,7 +1057,7 @@ static int competing_fixture_create(gbb_instance **out, int speed, int ime,
         m->wram[0][i] = (uint8_t)(0x27u + 37u * i);
         m->vram[0][i] = 0xA5u;
     }
-    m->hdma.mode = active_hdma ? 2u : 1u;
+    m->hdma.mode = 1u;
     m->hdma.active = (uint8_t)active_hdma;
     m->hdma.pending_hblank = 0u;
     m->hdma.blocks_remaining = 1u;
@@ -1081,8 +1090,14 @@ static int test_competing_stalls(void) {
         REQUIRE(boundary.reason == GBB_STOP_BUDGET && boundary.consumed_half_dots == quantum - 1u);
         REQUIRE(m->timer_reloaded_at == before + (speed ? 1u : 2u));
         REQUIRE(m->time_half_dots == before + quantum &&
-                m->cpu_stall_kind == GBB_STALL_NONE && m->cpu_stall_half_dots == 0u &&
+                m->cpu_stall_kind == GBB_STALL_SPEED_SWITCH &&
+                m->cpu_stall_half_dots == quantum &&
                 m->hdma.active && m->hdma.byte_index > 12u);
+
+        gbb_run_result sampled = gbb_run(m, 1u, NULL, 0u);
+        REQUIRE(sampled.reason == GBB_STOP_BUDGET && sampled.consumed_half_dots == 1u &&
+                m->cpu_stall_kind == GBB_STALL_NONE && m->cpu_stall_half_dots == 0u &&
+                m->hdma.active);
 
         gbb_trace_record trace;
         gbb_run_result wake = gbb_run(m, 64u, &trace, 1u);
@@ -1108,6 +1123,23 @@ static int test_competing_stalls_controls(void) {
         REQUIRE(competing_fixture_create(&m, speed, 0, 0, 1) == 0);
         m->hdma.byte_index = 0u;
         m->hdma.blocks_remaining = 2u;
+        m->lcdc = 0x91u;
+        m->ly = 0u;
+        m->ppu_mode = 3u;
+        m->ppu_dot = 100u;
+        m->ppu_half_phase = 0u;
+        m->ppu_transfer_age = 0u;
+        m->ppu_transfer_complete = 0u;
+        m->dma_active = 1u;
+        m->dma_page = 0xC0u;
+        m->dma_index = 0u;
+        m->dma_phase = 0u;
+        m->serial_active = 1u;
+        m->serial_control = 1u;
+        m->serial_edge_remaining = 100u;
+        m->apu_pulse[0].enabled = 1u;
+        m->apu_pulse[0].timer = 100u;
+        m->cart.rtc_sub = 123456u;
         const uint32_t quantum = 8u >> speed;
         const uint64_t duration = m->cpu_stall_half_dots;
         const uint64_t start = m->time_half_dots;
@@ -1116,7 +1148,10 @@ static int test_competing_stalls_controls(void) {
                 m->time_half_dots == start + duration &&
                 m->cpu_stall_kind == GBB_STALL_NONE && m->hdma.active &&
                 m->hdma.byte_index == duration / 4u &&
-                (m->interrupt_flags & 0x04u) == 0u);
+                (m->interrupt_flags & 0x04u) == 0u && m->dma_active &&
+                m->dma_index == 2u && m->dma_phase == 0u &&
+                m->serial_edge_remaining == 92u && m->ppu_dot == 100u + duration / 2u &&
+                m->apu_pulse[0].timer == 100u - duration && m->cart.rtc_sub == 123456u);
         REQUIRE(quantum * 2u == duration);
         gbb_destroy(m);
 

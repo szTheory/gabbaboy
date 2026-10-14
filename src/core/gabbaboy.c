@@ -4235,15 +4235,26 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             /* MODEL: UNKNOWN GATE-88 expected-failure:speed-switch-wake-oracle-only -- only the IME-on wake has an AGE hardware row */
             const int wake_pending =
                 (instance->ie & instance->interrupt_flags & 0x1Fu) != 0; /* P12-M16 */
-            if (instance->cpu_stall_kind == GBB_STALL_SPEED_SWITCH && wake_pending) { /* P12-M13 */
-                instance->cpu_stall_kind = GBB_STALL_NONE;
-                instance->cpu_stall_half_dots = 0u;
-                speed_switch_apply_realign(instance);
-                continue;
-            }
             const uint32_t quantum = 8u >> instance->double_speed;
-            const uint32_t step = instance->cpu_stall_half_dots < quantum
-                ? instance->cpu_stall_half_dots : quantum;
+            const uint32_t stall_phase = instance->cpu_stall_half_dots % quantum;
+            if (instance->cpu_stall_kind == GBB_STALL_SPEED_SWITCH && wake_pending) { /* P12-M13 */
+                if (stall_phase == 0u) {
+                    instance->cpu_stall_kind = GBB_STALL_NONE;
+                    instance->cpu_stall_half_dots = 0u;
+                    speed_switch_apply_realign(instance);
+                    continue;
+                }
+            }
+            const int hdma_active = instance->hdma.active != 0u;
+            const int hdma_pending_at_boundary =
+                instance->cpu_stall_kind == GBB_STALL_SPEED_SWITCH &&
+                instance->hdma.pending_hblank && stall_phase == 0u;
+            const uint32_t to_boundary = stall_phase == 0u ? quantum : stall_phase;
+            const uint32_t desired_step = (hdma_active ||
+                (instance->cpu_stall_kind == GBB_STALL_SPEED_SWITCH &&
+                 instance->hdma.pending_hblank)) ? 1u : to_boundary;
+            const uint32_t step = instance->cpu_stall_half_dots < desired_step
+                ? instance->cpu_stall_half_dots : desired_step;
             if (step == 0u) {
                 instance->cpu_stall_kind = GBB_STALL_NONE;
                 continue;
@@ -4257,7 +4268,25 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 result.reason = GBB_STOP_INVALID_STATE;
                 return result;
             }
+            if (instance->diagnostic_output != NULL &&
+                instance->diagnostic_output_capacity - instance->diagnostic_output_count <
+                    GBB_DIAGNOSTIC_OPERATION_RESERVE) {
+                result.reason = GBB_STOP_OUTPUT_FULL;
+                return result;
+            }
+            if (hdma_pending_at_boundary && !hdma_admit_block(instance)) {
+                hdma_stop_at_invalid_block(instance, instance->hdma.source_cursor);
+                instance->bus_unsupported = 0;
+                result.reason = GBB_STOP_UNSUPPORTED_BUS;
+                return result;
+            }
+            gbb_diagnostic_record operation[GBB_DIAGNOSTIC_OPERATION_RESERVE];
+            if (instance->diagnostic_output != NULL) {
+                instance->diagnostic_operation = operation;
+                instance->diagnostic_operation_count = 0u;
+            }
             advance_devices(instance, step); /* P12-M7 */
+            if (instance->diagnostic_output != NULL) diagnostic_commit(instance);
             instance->cpu_stall_half_dots -= step;
             result.consumed_half_dots += step;
             if (instance->cpu_stall_half_dots == 0u) {
