@@ -396,10 +396,23 @@ endforeach()
 
 # Phase 13 plan 13-01: private real-transfer seam tracer. This source includes
 # the core to place a deterministic PPU collision inside guest instructions.
+include(${PROJECT_SOURCE_DIR}/cmake/P13Mutants.cmake)
+set(GBB_P13_MUTANT_CORE ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_p13_mutants.c)
+gbb_p13_make_mutant_core(${GBB_P13_MUTANT_CORE})
+add_library(gabbaboy_core_p13_mutants STATIC ${GBB_P13_MUTANT_CORE})
+target_include_directories(gabbaboy_core_p13_mutants PUBLIC "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(gabbaboy_core_p13_mutants PUBLIC c_std_17)
+target_compile_definitions(gabbaboy_core_p13_mutants PRIVATE
+  GBB_BUILD_REVISION="p13-mutants" GBB_BUILD_QUALIFIED=0)
+set_target_properties(gabbaboy_core_p13_mutants PROPERTIES C_EXTENSIONS OFF)
+
 add_executable(test_cgb_hdma_internal test_cgb_hdma_internal.c fuzz_core.c)
 target_include_directories(test_cgb_hdma_internal PRIVATE "${PROJECT_SOURCE_DIR}/include")
 target_compile_features(test_cgb_hdma_internal PRIVATE c_std_17)
-target_compile_definitions(test_cgb_hdma_internal PRIVATE GBB_FUZZ_STANDALONE_TEST=1)
+target_compile_definitions(test_cgb_hdma_internal PRIVATE
+  GBB_FUZZ_STANDALONE_TEST=1 GBB_P12_MUTANT_BUILD=1
+  "GBB_P12_CORE_SOURCE=\"${GBB_P13_MUTANT_CORE}\""
+  GBB_BUILD_REVISION="p13-mutants" GBB_BUILD_QUALIFIED=0)
 set_target_properties(test_cgb_hdma_internal PROPERTIES C_EXTENSIONS OFF)
 foreach(case ld_sp cb controls partition outputs)
   add_test(NAME cgb_hdma_tracer_${case} COMMAND test_cgb_hdma_internal ${case})
@@ -449,8 +462,9 @@ add_test(NAME cgb_hdma_overflow_policy_controls
 
 # Public-API guest wake/steal cases use original inline CGB ROMs and the installed core API.
 add_executable(test_cgb_hdma test_cgb_hdma.c)
-target_link_libraries(test_cgb_hdma PRIVATE GabbaBoy::core)
+target_link_libraries(test_cgb_hdma PRIVATE gabbaboy_core_p13_mutants)
 target_compile_features(test_cgb_hdma PRIVATE c_std_17)
+target_compile_definitions(test_cgb_hdma PRIVATE GBB_P12_MUTANT_BUILD=1)
 set_target_properties(test_cgb_hdma PROPERTIES
   C_EXTENSIONS OFF RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 add_test(NAME cgb_hdma_guest_halt COMMAND test_cgb_hdma guest_halt)
@@ -466,6 +480,10 @@ add_test(NAME cgb_hdma_original_fixture COMMAND test_cgb_hdma --fixture
 add_executable(test_cgb_hdma_partition test_cgb_hdma_partition.c)
 target_include_directories(test_cgb_hdma_partition PRIVATE "${PROJECT_SOURCE_DIR}/include")
 target_compile_features(test_cgb_hdma_partition PRIVATE c_std_17)
+target_compile_definitions(test_cgb_hdma_partition PRIVATE
+  GBB_P12_MUTANT_BUILD=1
+  "GBB_P12_CORE_SOURCE=\"${GBB_P13_MUTANT_CORE}\""
+  GBB_BUILD_REVISION="p13-mutants" GBB_BUILD_QUALIFIED=0)
 set_target_properties(test_cgb_hdma_partition PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME cgb_hdma_partition_midbyte COMMAND test_cgb_hdma_partition midbyte)
 add_test(NAME cgb_hdma_partition_windows COMMAND test_cgb_hdma_partition windows)
@@ -491,43 +509,42 @@ foreach(case competing_stalls stop_policy oam_order)
   add_test(NAME cgb_hdma_${case}_controls COMMAND test_cgb_hdma_internal ${case}_controls)
 endforeach()
 
-# A test-only core mutation omits the active-block CPU steal but leaves master
-# time and VRAM copying intact. The guest must reject only its timing result.
-set(GBB_P13_NO_STEAL_ANCHOR "if (instance->hdma.pending_hblank || instance->hdma.active) {")
-set(GBB_P13_NO_STEAL_REPLACEMENT
-  "if (instance->hdma.pending_hblank || (instance->hdma.active && 0)) {")
-set(GBB_P13_NO_STEAL_CORE_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_p13_no_steal.c")
-file(READ "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c" GBB_P13_NO_STEAL_CORE_TEXT)
-string(FIND "${GBB_P13_NO_STEAL_CORE_TEXT}" "${GBB_P13_NO_STEAL_ANCHOR}" GBB_P13_NO_STEAL_FIRST)
-string(FIND "${GBB_P13_NO_STEAL_CORE_TEXT}" "${GBB_P13_NO_STEAL_ANCHOR}" GBB_P13_NO_STEAL_LAST REVERSE)
-if(GBB_P13_NO_STEAL_FIRST EQUAL -1 OR NOT GBB_P13_NO_STEAL_FIRST EQUAL GBB_P13_NO_STEAL_LAST)
-  message(FATAL_ERROR "Phase 13 no-steal mutant anchor must occur exactly once")
-endif()
-string(REPLACE "${GBB_P13_NO_STEAL_ANCHOR}" "${GBB_P13_NO_STEAL_REPLACEMENT}"
-  GBB_P13_NO_STEAL_CORE_TEXT "${GBB_P13_NO_STEAL_CORE_TEXT}")
-file(WRITE "${GBB_P13_NO_STEAL_CORE_SOURCE}" "${GBB_P13_NO_STEAL_CORE_TEXT}")
-add_library(gabbaboy_core_p13_no_steal STATIC "${GBB_P13_NO_STEAL_CORE_SOURCE}")
-target_include_directories(gabbaboy_core_p13_no_steal PUBLIC "${PROJECT_SOURCE_DIR}/include")
-target_compile_features(gabbaboy_core_p13_no_steal PUBLIC c_std_17)
-set_target_properties(gabbaboy_core_p13_no_steal PROPERTIES C_EXTENSIONS OFF)
-target_compile_definitions(gabbaboy_core_p13_no_steal PRIVATE
-  GBB_BUILD_REVISION="p13-no-steal-mutant" GBB_BUILD_QUALIFIED=0)
-add_executable(test_cgb_hdma_no_steal test_cgb_hdma.c)
-target_link_libraries(test_cgb_hdma_no_steal PRIVATE gabbaboy_core_p13_no_steal)
-target_compile_features(test_cgb_hdma_no_steal PRIVATE c_std_17)
-set_target_properties(test_cgb_hdma_no_steal PROPERTIES C_EXTENSIONS OFF)
+# Preserve the Phase 13-03 compatibility names while routing both through the
+# single shared runtime-mask core introduced by this plan.
+math(EXPR GBB_P13_NO_STEAL_MASK "1 << 40" OUTPUT_FORMAT HEXADECIMAL)
 add_test(NAME cgb_hdma_guest_steal_no_steal_mutant
   COMMAND ${CMAKE_COMMAND}
-    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_no_steal>;guest_steal"
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma>;guest_steal;--mutants;${GBB_P13_NO_STEAL_MASK}"
     -DGBB_EXPECT_CODE=1
-    -DGBB_EXPECT_REGEX=guest\ steal:\ CPU\ timing\ predicate
+    "-DGBB_EXPECT_REGEX=guest steal: CPU timing predicate"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 add_test(NAME cgb_hdma_guest_steal_no_steal_control
   COMMAND ${CMAKE_COMMAND}
-    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_no_steal>;guest_steal_data"
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma>;guest_steal_data;--mutants;0"
     -DGBB_EXPECT_CODE=0
     -DGBB_EXPECT_REGEX=.*
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+# Reserve every narrow Phase 13 source mutation and mask-zero twin here so the
+# inventory has one owner before the case predicates arrive in plan 13-05 Task 2.
+gbb_p13_mutant_test(test_cgb_hdma no_steal 40 guest_steal "guest steal: CPU timing predicate")
+gbb_p13_mutant_test(test_cgb_hdma_internal no_copy 41 mutant_no_copy "hdma mutant no_copy detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal duplicate_copy 42 mutant_duplicate_copy "hdma mutant duplicate_copy detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal wrong_vbk 43 mutant_wrong_vbk "hdma mutant wrong_vbk detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal unmasked_address 44 mutant_unmasked_address "hdma mutant unmasked_address detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal wrong_count 45 mutant_wrong_count "hdma mutant wrong_count detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal wrong_cancel 46 mutant_wrong_cancel "hdma mutant wrong_cancel detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal speed_scaled 47 timing_policy "timing policy: byte")
+gbb_p13_mutant_test(test_cgb_hdma_internal halt_admission 48 mutant_halt_admission "hdma mutant halt_admission detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal false_trigger 49 mutant_false_trigger "hdma mutant false_trigger detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal lost_dma_irq 50 mutant_lost_dma_irq "hdma mutant lost_dma_irq detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal dma_realign 51 mutant_dma_realign "hdma mutant dma_realign detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal shifted_order 52 mutant_shifted_order "hdma mutant shifted_order detected")
+gbb_p13_mutant_test(test_cgb_hdma_partition lost_phase 53 mutant_lost_phase "hdma mutant lost_phase detected")
+add_test(NAME cgb_hdma_mutant_anchor_guard
+  COMMAND ${CMAKE_COMMAND} -DGBB_P13_SCRIPT_ANCHOR_GUARD=1
+    "-DGBB_P13_GUARD_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+    -P ${PROJECT_SOURCE_DIR}/cmake/P13Mutants.cmake)
 
 add_executable(test_cgb_postboot test_cgb_postboot.c)
 target_link_libraries(test_cgb_postboot PRIVATE GabbaBoy::core)

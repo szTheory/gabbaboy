@@ -689,6 +689,15 @@ static int cgb_hdma_partition_order_control(void) {
 }
 
 int main(int argc, char **argv) {
+#ifdef GBB_P12_MUTANT_BUILD
+    if (argc >= 4 && strcmp(argv[argc - 2], "--mutants") == 0) {
+        char *end = NULL;
+        unsigned long long mask = strtoull(argv[argc - 1], &end, 0);
+        if (end == argv[argc - 1] || *end != '\0') return 2;
+        gbb_p12_set_mutants((uint64_t)mask);
+        argc -= 2;
+    }
+#endif
     if (argc != 2) return 2;
     if (strcmp(argv[1], "midbyte") == 0) return cgb_hdma_partition_midbyte();
     if (strcmp(argv[1], "windows") == 0) return cgb_hdma_partition_windows();

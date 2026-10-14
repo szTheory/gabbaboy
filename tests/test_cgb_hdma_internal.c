@@ -1818,6 +1818,15 @@ static int test_hdma_hostile_seed_controls(void) {
 }
 
 int main(int argc, char **argv) {
+#ifdef GBB_P12_MUTANT_BUILD
+    if (argc >= 4 && strcmp(argv[argc - 2], "--mutants") == 0) {
+        char *end = NULL;
+        unsigned long long mask = strtoull(argv[argc - 1], &end, 0);
+        if (end == argv[argc - 1] || *end != '\0') return 2;
+        gbb_p12_set_mutants((uint64_t)mask);
+        argc -= 2;
+    }
+#endif
     if (argc < 2 || argc > 3) return 2;
     int rc;
     if (strcmp(argv[1], "ld_sp") == 0) rc = test_ld_sp();

@@ -4,6 +4,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef GBB_P13_MUT
+#define GBB_P13_MUT(n) 0u
+#endif
+
 
 #define GBB_INPUT_EVENT_CAPACITY 64u
 #define GBB_DIAGNOSTIC_OPERATION_RESERVE 16u
@@ -4414,7 +4418,8 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
          * opcode. The current instruction has already retired, so its final
          * bus access and event trace remain whole. Each committed master tick
          * is independently bounded by the caller's outputs and budget. */
-        if (instance->hdma.pending_hblank || instance->hdma.active) {
+        if (instance->hdma.pending_hblank ||
+            (instance->hdma.active && !GBB_P13_MUT(40))) { /* P13-05-M01: no-steal discriminator */
             if (budget_half_dots - result.consumed_half_dots < 1u) return result;
             if (!audio_preflight(instance, 1u)) {
                 result.reason = GBB_STOP_OUTPUT_FULL;
