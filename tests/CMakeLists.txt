@@ -454,6 +454,21 @@ target_include_directories(test_cgb_hdma_partition PRIVATE "${PROJECT_SOURCE_DIR
 target_compile_features(test_cgb_hdma_partition PRIVATE c_std_17)
 set_target_properties(test_cgb_hdma_partition PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME cgb_hdma_partition_midbyte COMMAND test_cgb_hdma_partition midbyte)
+add_test(NAME cgb_hdma_partition_windows COMMAND test_cgb_hdma_partition windows)
+add_test(NAME cgb_hdma_partition_multicut COMMAND test_cgb_hdma_partition multicut)
+add_test(NAME cgb_hdma_partition_outputs COMMAND test_cgb_hdma_partition outputs)
+add_test(NAME cgb_hdma_partition_lost_remainder_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_partition>;lost_remainder_control"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=hdma-partition-control-detected
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_hdma_partition_order_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_partition>;order_control"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=hdma-partition-control-detected
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
 # Plan 13-03 reserves Task 2's exact tests before that harness expands.
 foreach(case competing_stalls stop_policy oam_order)
