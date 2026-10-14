@@ -249,6 +249,33 @@ UNKNOWN / author-test plus emulator differential for physical CGB-E, not a hardw
 [Pan Docs FF55](https://gbdev.io/pandocs/CGB_Registers.html#ff55--hdma5-cgb-mode-only-vram-dma-lengthmode-start)
 and the Phase 13 research record.
 
+### CGB HDMA fixture execution and evidence boundary
+
+The executed CGB HDMA set is the four source- and ROM-pinned SameSuite cases at
+`f15645fb049a47ea235f6d2c9a033e72d8087901`, plus MagenTests `hblank_vram_dma` from release
+0.5.0. SameSuite rows assert the author-encoded guest result and copied bytes; Magen remains
+SameBoy-assisted differential evidence. These results apply to the bootless selected CGB-CPU-E
+software model and are not independent physical CGB-E measurements. The D-06 `hdma_lcd_off` and
+`hdma_mode0` sequence stays `$83` -> `$02` -> `$00` -> `$80` despite the separate Pan Docs
+description; its physical behavior remains UNKNOWN/POLICY. Optional Mealybug CGB-C ROMs remain
+`not-run:rights-gate-G1`, informational only, and outside the CGB-E denominator.
+
+<!-- cgb-hdma-dispositions-begin -->
+| suite | case | disposition | reason | owner phase | pinned_by |
+| --- | --- | --- | --- | --- | --- |
+| samesuite | gbc_dma_cont | pass | selected software model pass; physical CGB-E remains UNKNOWN/POLICY | 13 | samesuite_hdma_gbc_dma_cont |
+| samesuite | gdma_addr_mask | pending | task 2 execution pending | 13 | samesuite_hdma_gdma_addr_mask |
+| samesuite | hdma_lcd_off | pending | task 2 execution pending | 13 | samesuite_hdma_hdma_lcd_off |
+| samesuite | hdma_mode0 | pending | task 2 execution pending | 13 | samesuite_hdma_hdma_mode0 |
+| magentests | hblank_vram_dma | pending | task 2 execution pending | 13 | magentests_hblank_vram_dma |
+| mealybug-cgb-c | hdma_timing-C | not-run:rights-gate-G1 | not-run:rights-gate-G1 | 13 | - |
+| mealybug-cgb-c | hdma_during_halt-C | not-run:rights-gate-G1 | not-run:rights-gate-G1 | 13 | - |
+<!-- cgb-hdma-dispositions-end -->
+
+`tests/external/cgb-hdma-dispositions.json` is the provenance and result record; the disposition
+verifier checks its fixture pins, denominator, CTest registrations, and this mirror. A missing
+optional ROM is not a failure or a pass, and no result here resolves physical CGB-E UNKNOWN/POLICY.
+
 ### HDMA source map and overflow policy
 
 Each requested 16-byte block is prevalidated before its first byte. The CGB-only source windows

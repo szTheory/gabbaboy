@@ -931,8 +931,11 @@ add_test(NAME samesuite_hdma_hdma_mode0
 set_tests_properties(samesuite_hdma_gbc_dma_cont samesuite_hdma_gdma_addr_mask
   samesuite_hdma_hdma_lcd_off samesuite_hdma_hdma_mode0 PROPERTIES TIMEOUT 60)
 add_test(NAME samesuite_hdma_gbc_dma_cont_control
-  COMMAND test_samesuite_hdma gbc_dma_cont
-    "${GBB_SAMESUITE_DIR}/gbc_dma_cont.gb" --mutants 0x20000000000)
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_samesuite_hdma>;gbc_dma_cont;${GBB_SAMESUITE_DIR}/gbc_dma_cont.gb;--mutants;0x20000000000"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=samesuite-hdma guest-result: expected pass sentinel"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
 set_tests_properties(samesuite_hdma_gbc_dma_cont_control PROPERTIES TIMEOUT 60)
 add_test(NAME samesuite_hdma_gbc_dma_cont_corrupted_result_control
   COMMAND ${CMAKE_COMMAND}
