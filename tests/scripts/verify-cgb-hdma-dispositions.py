@@ -247,6 +247,7 @@ def self_test(data: dict, root: Path) -> int:
         ("cgb-c-denominator", "mealybug-rights-model", lambda d: d["suites"][2].update({"included_in_cgb_e_denominator": True})),
         ("cgb-c-absent", "suite-set", lambda d: d["suites"].pop()),
         ("rights-gate", "mealybug-rights-model", lambda d: d["suites"][2].update({"rights_gate": "closed"})),
+        ("cgb-c-hardware-claim", "mealybug-hardware-claim", lambda d: d["suites"][2].update({"evidence_class": "hardware-backed CGB-E measurement"})),
         ("missing-magen", "magen-case-set", lambda d: d["suites"][1]["rows"].clear()),
         ("phase12-boundary", "phase12-ff55-distinct-boundary", lambda d: d["phase12_ff55_boundary"].update({"test_name": "samesuite_hdma_hdma_lcd_off"})),
     ]
