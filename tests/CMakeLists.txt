@@ -576,6 +576,28 @@ add_test(NAME cgb_fuzz_palette_regressions COMMAND test_fuzz_core cgb_palette)
 add_test(NAME cgb_fuzz_speed_regressions COMMAND test_fuzz_core cgb_speed)
 set_tests_properties(cgb_fuzz_speed_regressions PROPERTIES TIMEOUT 60)
 
+# Invert only the speed harness's guest KEY1 consistency oracle. The speed seed must make it fail,
+# while an existing CGB seed that never selects cgb_speed stays quiet in the same executable.
+add_executable(test_fuzz_core_speed_oracle_mutant test_fuzz_core.c fuzz_core.c)
+target_link_libraries(test_fuzz_core_speed_oracle_mutant PRIVATE GabbaBoy::core)
+target_compile_features(test_fuzz_core_speed_oracle_mutant PRIVATE c_std_17)
+target_compile_definitions(test_fuzz_core_speed_oracle_mutant PRIVATE
+  GBB_FUZZ_STANDALONE_TEST=1 GBB_FUZZ_SPEED_ORACLE_INVERTED=1)
+set_target_properties(test_fuzz_core_speed_oracle_mutant PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_fuzz_speed_oracle_mutant
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_fuzz_core_speed_oracle_mutant>;cgb_speed"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=KEY1 consistency oracle inverted"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_fuzz_speed_oracle_mutant_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_fuzz_core_speed_oracle_mutant>;cgb"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=.*"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(cgb_fuzz_speed_oracle_mutant PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+
 if(CMAKE_C_COMPILER_ID MATCHES "Clang")
   include(CheckCSourceCompiles)
   set(_gbb_saved_required_flags "${CMAKE_REQUIRED_FLAGS}")

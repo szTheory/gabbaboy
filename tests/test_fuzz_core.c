@@ -113,38 +113,85 @@ int gbb_fuzz_core_one_input(const uint8_t *data, size_t size);
 void gbb_fuzz_core_speed_observation(int *, uint8_t *, unsigned *, unsigned *,
                                      unsigned *, unsigned *, uint8_t *, uint8_t *,
                                      uint8_t *, uint32_t *, uint32_t *, uint32_t *,
-                                     uint64_t *, uint64_t *, uint64_t *, int *, int *);
+                                     uint64_t *, uint64_t *, uint64_t *, uint32_t *, int *, int *);
 
 /* cgb_fuzz_speed_regressions: a real guest arms KEY1, retires STOP, observes the switched
  * KEY1 value in a later guest store, and maintains exact master-time accounting across slices. */
-static int run_speed_seed(void) {
-    static const uint8_t seed_arm_and_switch[] = {0x90u, 0x00u, 0x0Fu};
+static int run_speed_seed_case(const uint8_t *seed, size_t seed_size,
+                               uint8_t expected_scenario, uint32_t expected_mode,
+                               uint32_t expected_profile, unsigned min_switches,
+                               unsigned min_reads, uint8_t expected_speed,
+                               uint8_t expected_armed, int check_key1,
+                               uint8_t expected_key1, uint32_t required_flags,
+                               int require_dma_stop, int require_lcd_off) {
     const int failures_before = gbb_fuzz_core_contract_failures();
-    if (gbb_fuzz_core_one_input(seed_arm_and_switch, sizeof(seed_arm_and_switch)) != 0) {
-        fprintf(stderr, "CGB speed seed was rejected\n");
+    if (gbb_fuzz_core_one_input(seed, seed_size) != 0) {
+        fprintf(stderr, "speed seed %u was rejected\n", expected_scenario);
         return 1;
     }
     int selected = 0, saw_dma_stop = 0, saw_lcd_off = 0;
     uint8_t scenario = 0u, speed = 0u, armed = 0u, key1 = 0u;
     unsigned switches = 0u, reads = 0u, stops = 0u, calls = 0u;
-    uint32_t stall = 0u, mode = 0u, profile = 0u;
+    uint32_t stall = 0u, mode = 0u, profile = 0u, path_flags = 0u;
     uint64_t consumed = 0u, master_time = 0u, last_trace_time = 0u;
     gbb_fuzz_core_speed_observation(&selected, &scenario, &switches, &reads, &stops, &calls,
                                    &speed, &armed, &key1, &stall, &mode, &profile,
-                                   &consumed, &master_time, &last_trace_time,
+                                   &consumed, &master_time, &last_trace_time, &path_flags,
                                    &saw_dma_stop, &saw_lcd_off);
-    if (gbb_fuzz_core_contract_failures() != failures_before || !selected || scenario != 0u ||
-        switches == 0u || reads == 0u || stops == 0u || calls == 0u || speed != 1u ||
-        armed != 0u || key1 != 0xFEu || mode != GBB_MODE_CGB ||
-        profile != GBB_PROFILE_CGB_CPU_E || consumed != master_time ||
-        consumed > UINT64_C(600000) || last_trace_time > master_time) {
-        fprintf(stderr, "CGB arm/switch positive control failed: selected=%d scenario=%u "
-                        "switches=%u reads=%u stops=%u speed=%u armed=%u KEY1=%02X "
-                        "mode=%u profile=%u time=%llu/%llu\n",
-                selected, scenario, switches, reads, stops, speed, armed, key1, mode, profile,
+    if (gbb_fuzz_core_contract_failures() != failures_before || !selected ||
+        scenario != expected_scenario || stops == 0u || calls == 0u ||
+        switches < min_switches || reads < min_reads || speed != expected_speed ||
+        armed != expected_armed || mode != expected_mode || profile != expected_profile ||
+        consumed != master_time || consumed > UINT64_C(600000) ||
+        last_trace_time > master_time || (path_flags & required_flags) != required_flags ||
+        (require_dma_stop && !saw_dma_stop) || (require_lcd_off && !saw_lcd_off) ||
+        (check_key1 && key1 != expected_key1)) {
+        fprintf(stderr, "speed seed %u positive control failed: selected=%d switches=%u reads=%u "
+                        "stops=%u speed=%u armed=%u KEY1=%02X mode=%u profile=%u "
+                        "flags=0x%X time=%llu/%llu\n",
+                expected_scenario, selected, switches, reads, stops, speed, armed, key1,
+                mode, profile, path_flags,
                 (unsigned long long)consumed, (unsigned long long)master_time);
         return 1;
     }
+    return 0;
+}
+
+static int run_speed_seed(void) {
+    static const uint8_t seed_arm_and_switch[] = {0x90u, 0x00u, 0x0Fu};
+    static const uint8_t seed_switch_every_four[] = {0x90u, 0x01u, 0x0Fu};
+    static const uint8_t seed_pending_if[] = {0x90u, 0x02u, 0x0Fu};
+    static const uint8_t seed_held_button[] = {0x90u, 0x03u, 0x0Fu};
+    static const uint8_t seed_oam_dma[] = {0x90u, 0x04u, 0x0Fu};
+    static const uint8_t seed_lcd_off[] = {0x90u, 0x05u, 0x0Fu};
+    static const uint8_t seed_compat_twin[] = {0x90u, 0x06u, 0x0Fu};
+    static const uint8_t seed_dmg_twin[] = {0x10u, 0x07u, 0x0Fu};
+
+    if (run_speed_seed_case(seed_arm_and_switch, sizeof(seed_arm_and_switch), 0u,
+                            GBB_MODE_CGB, GBB_PROFILE_CGB_CPU_E, 1u, 1u, 1u, 0u,
+                            1, 0xFEu, 0x01u, 0, 0) != 0 ||
+        run_speed_seed_case(seed_switch_every_four, sizeof(seed_switch_every_four), 1u,
+                            GBB_MODE_CGB, GBB_PROFILE_CGB_CPU_E, 2u, 1u, 0u, 0u,
+                            0, 0u, 0x01u, 0, 0) != 0 ||
+        run_speed_seed_case(seed_pending_if, sizeof(seed_pending_if), 2u,
+                            GBB_MODE_CGB, GBB_PROFILE_CGB_CPU_E, 1u, 1u, 1u, 0u,
+                            0, 0u, 0x07u, 0, 0) != 0 ||
+        run_speed_seed_case(seed_held_button, sizeof(seed_held_button), 3u,
+                            GBB_MODE_CGB, GBB_PROFILE_CGB_CPU_E, 0u, 0u, 0u, 1u,
+                            0, 0u, 0x0Fu, 0, 0) != 0 ||
+        run_speed_seed_case(seed_oam_dma, sizeof(seed_oam_dma), 4u,
+                            GBB_MODE_CGB, GBB_PROFILE_CGB_CPU_E, 1u, 1u, 1u, 0u,
+                            0, 0u, 0x11u, 1, 0) != 0 ||
+        run_speed_seed_case(seed_lcd_off, sizeof(seed_lcd_off), 5u,
+                            GBB_MODE_CGB, GBB_PROFILE_CGB_CPU_E, 1u, 1u, 1u, 0u,
+                            0, 0u, 0x01u, 0, 1) != 0 ||
+        run_speed_seed_case(seed_compat_twin, sizeof(seed_compat_twin), 6u,
+                            GBB_MODE_CGB_DMG_COMPAT, GBB_PROFILE_CGB_CPU_E, 0u, 1u, 0u, 0u,
+                            1, 0xFFu, 0x01u, 0, 0) != 0 ||
+        run_speed_seed_case(seed_dmg_twin, sizeof(seed_dmg_twin), 7u,
+                            GBB_MODE_DMG, GBB_PROFILE_DMG_CPU_B, 0u, 0u, 0u, 0u,
+                            0, 0u, 0x00u, 0, 0) != 0)
+        return 1;
     printf("ok 1 - cgb_fuzz_speed_regressions\n");
     return 0;
 }

@@ -22,6 +22,7 @@ runtime_available() {
 }
 
 fuzz_binary="$BUILD_DIR/tests/fuzz_core"
+fuzz_dictionary="$ROOT/tests/fuzz/fuzz_core.dict"
 if [[ "$(uname -s)" == "Windows_NT" ]]; then
   fuzz_binary+=".exe"
 fi
@@ -31,10 +32,14 @@ case "$MODE" in
     grep -q '^loader_boundary_fuzz$' "$ROOT/tests/expected-tests.txt"
     grep -q '^battery_api_fuzz$' "$ROOT/tests/expected-tests.txt"
     grep -q '^fuzz_core_regressions$' "$ROOT/tests/expected-tests.txt"
+    grep -q '^cgb_fuzz_speed_regressions$' "$ROOT/tests/expected-tests.txt"
     grep -q 'FUZZ_INPUT_LIMIT 65536u' "$ROOT/tests/fuzz_core.c"
     grep -q 'FUZZ_OPERATION_LIMIT 16u' "$ROOT/tests/fuzz_core.c"
     grep -q 'FUZZ_RUN_LIMIT UINT64_C(2048)' "$ROOT/tests/fuzz_core.c"
     grep -q 'FUZZ_INPUT_HALF_DOT_LIMIT UINT64_C(8192)' "$ROOT/tests/fuzz_core.c"
+    [[ -f "$fuzz_dictionary" ]]
+    [[ $(grep -F '"$fuzz_binary" "$corpus"' "$ROOT/tests/scripts/run-bounded-fuzz.sh" |
+         grep -F -c -- '-dict="$fuzz_dictionary"') -eq 2 ]]
     grep -q -- '-max_len=65536' "$ROOT/tests/scripts/run-bounded-fuzz.sh"
     grep -q -- '-max_total_time=60' "$ROOT/tests/scripts/run-bounded-fuzz.sh"
     grep -q -- '-rss_limit_mb=512' "$ROOT/tests/scripts/run-bounded-fuzz.sh"
@@ -57,20 +62,14 @@ case "$MODE" in
     else
       sanitizer_status=not-enabled
     fi
+    if [[ ! -x "$fuzz_binary" ]] && grep -q '^GBB_HAS_CLANG_LIBFUZZER_RUNTIME:INTERNAL=1$' "$BUILD_DIR/CMakeCache.txt"; then
+      cmake --build "$BUILD_DIR" --target fuzz_core
+    fi
     if [[ -x "$fuzz_binary" ]]; then
       corpus=$(mktemp -d "${TMPDIR:-/tmp}/gbb-fuzz-seeds.XXXXXX")
       cp "$ROOT/fixtures/tracer/tracer.gb" "$corpus/tracer.gb"
       mkdir -p "$BUILD_DIR/fuzz-artifacts"
-      (cd "$BUILD_DIR" && "$fuzz_binary" "$corpus" -runs=128 -seed=1 -max_len=65536 \
-        -timeout=2 -rss_limit_mb=512 -jobs=1 -workers=1 \
-        -artifact_prefix="$BUILD_DIR/fuzz-artifacts/")
-      rm -rf "$corpus"
-    elif grep -q '^GBB_HAS_CLANG_LIBFUZZER_RUNTIME:INTERNAL=1$' "$BUILD_DIR/CMakeCache.txt"; then
-      cmake --build "$BUILD_DIR" --target fuzz_core
-      corpus=$(mktemp -d "${TMPDIR:-/tmp}/gbb-fuzz-seeds.XXXXXX")
-      cp "$ROOT/fixtures/tracer/tracer.gb" "$corpus/tracer.gb"
-      mkdir -p "$BUILD_DIR/fuzz-artifacts"
-      (cd "$BUILD_DIR" && "$fuzz_binary" "$corpus" -runs=128 -seed=1 -max_len=65536 \
+      (cd "$BUILD_DIR" && "$fuzz_binary" "$corpus" -runs=128 -seed=1 -max_len=65536 -dict="$fuzz_dictionary" \
         -timeout=2 -rss_limit_mb=512 -jobs=1 -workers=1 \
         -artifact_prefix="$BUILD_DIR/fuzz-artifacts/")
       rm -rf "$corpus"
@@ -91,7 +90,7 @@ case "$MODE" in
       cp "$ROOT/fixtures/tracer/tracer.gb" "$corpus/tracer.gb"
     fi
     mkdir -p "$BUILD_DIR/fuzz-artifacts"
-    (cd "$BUILD_DIR" && "$fuzz_binary" "$corpus" -max_len=65536 -max_total_time=60 \
+    (cd "$BUILD_DIR" && "$fuzz_binary" "$corpus" -max_len=65536 -dict="$fuzz_dictionary" -max_total_time=60 \
       -timeout=2 -rss_limit_mb=512 -jobs=1 -workers=1 \
       -artifact_prefix="$BUILD_DIR/fuzz-artifacts/")
     echo "Minimized corpus retained at $corpus"
