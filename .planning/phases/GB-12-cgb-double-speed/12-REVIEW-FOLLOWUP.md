@@ -63,3 +63,7 @@ The timeout-policy self-test now includes a real child CMake directory with 120/
 A configure-only wrapper also exercised the actual `tests/player/CMakeLists.txt` with stub link targets, preserving normal 120/240/300 limits and producing sanitizer 360/720/900 limits. A scratch copy omitting the child scaler failed the actual `player_cgb_speed_smoke expected 360` assertion. This is test-property evidence, not an SDL build or sanitizer runtime claim.
 
 After the fix, the configured regression command (CMake configure/build and CTest with `CTEST_PARALLEL_LEVEL=8`) passed 898/898 in 52.66 seconds. No fixture or output pin changed. Hosted sanitizer and optional-player checks remain required on the pushed revision.
+
+## Verify-work closeout delta (2026-10-14)
+
+Reviewed the corrected plan 12-04 ending SHA against `git rev-parse ec5dc8a` and its two-commit ancestry window. Reviewed `verify-uat-contract.py`: exact SUMMARY/id set equality, unchanged acceptance descriptions and full evidence refs, automated passing results, counts and closed gaps are checked; nine scratch-record mutations are rejected. The existing schema checker truncates escaped interior quotes when inspecting refs, so the closure checker compares complete original ref scalars as the installed classifier does. No production code or workflow syntax changed; no new finding. Existing three review findings remain fixed.

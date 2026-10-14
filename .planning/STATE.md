@@ -3,12 +3,12 @@ gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_plan: 19
-status: awaiting_verification
-stopped_at: Phase 12 execution complete; awaiting /gsd-verify-work 12
-last_updated: "2026-10-14T13:07:53Z"
+status: phase_complete
+stopped_at: Phase 12 verification complete; owner chooses when to discuss Phase 13
+last_updated: "2026-10-14T14:35:44.163455+00:00"
 last_activity: 2026-10-14
-last_activity_desc: Phase 12 execution and goal verification complete; owner verification is next
-state_head: 502f992fe9fd2d848845947057c2b327747c3edd
+last_activity_desc: Phase 12 automated UAT complete; zero human checkpoints
+state_head: da98d56ef8fadadf34ae951b337dcdecce495936
 progress:
   total_phases: 9
   completed_phases: 6
@@ -26,7 +26,7 @@ current_phase_name: CGB Double Speed
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-14)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase GB-12 — CGB Double Speed
+**Current focus:** Phase 12 verified; Phase 13: CGB HDMA awaits the owner
 
 ## Current Position
 
@@ -41,8 +41,9 @@ Completed: Phase 11 - CGB Colour Rendering and Player Colour, planning (11-RESEA
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, execution (plans 11-01..11-15) plus the execute-phase tail; gsd-verifier `passed` 3/3 (11-VERIFICATION.md); evidence head `fb7d14c` exact-head green; PR #67 open, not merged
 Verified: Phase 11 `/gsd-verify-work 11` passed 2026-10-13 — 11/11 UAT rows automated covering all 91 SUMMARY coverage entries (11-UAT.md); verification `passed` (11-VERIFICATION.md); hosted ASan timeout fixed in the PR (LESSONS GB-CI-004); PR #67 squash-merges at the exact-head green branch head (pre-authorized)
 Completed workflow stage: **Phase 12 - CGB Double Speed, execution** (2026-10-14), plans 12-01..12-19 plus Nyquist validation, security, UI scope review, code review and fixes, regression gate, and goal verification. [12-VERIFICATION.md](phases/GB-12-cgb-double-speed/12-VERIFICATION.md) passes 109/109 with zero unverified behaviors; OpenGSD phase.complete accepted 19/19. Local CTest passed 898/898 in 52.66 seconds, and the DMG baseline had zero changed rows. Exact tested source head `502f992fe9fd2d848845947057c2b327747c3edd`: PR CI `38565349295`, fixture reproduction `38565349297`, and package smoke `38565349116` all succeeded with every PR-event job successful; ASan/UBSan passed 893/893 in 1217.04 seconds. All three review findings are fixed; 34 security threats are closed. Draft [PR #68](https://github.com/szTheory/gabbaboy/pull/68) remains unmerged. Only AGE DIV and STOP-prefetch are passes; eleven qualified expected failures remain, and no physical hardware claim is made. The original plan 12-19 benchmark receipt is historical at `301f1b05577e6d35a4c3a756ded1ec15a4082c8d`, runs `38502094649`, `38502094682`, and `38502094771`; later metadata commits require their own exact-head checks.
-Next command: **`/gsd-verify-work 12`**. The following phase is **Phase 13: CGB HDMA** (not started); after Phase 12 verification and merge, the owner can enter it with **`/gsd-discuss-phase 13`**. `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop at this handoff for the owner.
-Last activity: 2026-10-14 — Phase 12 execution complete; paused before owner verification
+Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-14), via `/gsd-verify-work 12`: [12-UAT.md](phases/GB-12-cgb-double-speed/12-UAT.md) closes 73/73 deliverables automatically, zero issues and zero human checkpoints. Fresh local CTest passed 898/898 in 107.00 seconds; the closure contract rejects nine weakened records, and all 19 bounded commit claims reconcile after correcting plan 12-04's ending SHA. D-069 and LESSONS GB-GSD-016 preserve this default. Exact execution-head `da98d56ef8fadadf34ae951b337dcdecce495936` PR-event runs `38569486172`, `38569486169`, and `38569486126` passed all 19 jobs; ASan/UBSan passed 893/893 in 1089.77 seconds. This verification-record revision requires its own exact-head checks before the pre-authorized PR #68 merge; GitHub holds that final receipt and merge state.
+Next command: **`/gsd-discuss-phase 13`**. Next phase: **Phase 13: CGB HDMA** (not started). Phase 12 UAT is complete: do not rerun it, reopen decisions, or create gap plans without a concrete new regression, changed covered behavior, stale/unavailable evidence, or an owner scope change. `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop for the owner after the protected Phase 12 handoff.
+Last activity: 2026-10-14 — Phase 12 automated verification complete; paused before Phase 13
 
 Progress (v0.2): [███████░░░] 67% (6/9 phases); 99/99 existing plans complete, Phases 13–15 unplanned
 
@@ -546,8 +547,8 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Completed workflow stage: **Phase 12 - CGB Double Speed, execution**, 19/19 plans plus required tail gates; source goal verification passed 109/109.
-- Next command: **`/gsd-verify-work 12`**.
-- Next phase: **Phase 13: CGB HDMA** (not started); after Phase 12 verification and merge, enter it with **`/gsd-discuss-phase 13`**.
-- Draft PR #68 stays unmerged. Preserve the current project model configuration and resolve it through OpenGSD when resuming.
+- Completed workflow stage: **Phase 12 - CGB Double Speed, verification**, 73/73 automated UAT rows and zero human checkpoints; execution was 19/19 plans and goal verification passed 109/109.
+- Next phase: **Phase 13: CGB HDMA**, not started. Next command: **`/gsd-discuss-phase 13`**.
+- The agent completes the pre-authorized PR #68 merge only after its exact final head has every required check successful. GitHub records that receipt; this does not require owner UAT.
+- Preserve owner model/config changes and use the installed OpenGSD resolver. Do not repeat completed Phase 12 work without changed evidence.
 - Stop here; both workflow auto-advance flags stay false.

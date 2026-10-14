@@ -1,7 +1,7 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v0.2 — Color & Cartridge Breadth",
+  "milestone": "v0.2 \u2014 Color & Cartridge Breadth",
   "phases": [
     {
       "number": "1",
@@ -36,7 +36,7 @@
     {
       "number": "12",
       "name": "CGB Double Speed",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "13",
@@ -55,9 +55,9 @@
     }
   ],
   "next": {
-    "command": "/gsd:progress --next",
-    "label": "Advance to the next step (plan phase 12)",
-    "reason": "Phase 12 of 9 — needs a plan"
+    "command": "/gsd-discuss-phase 13",
+    "label": "Discuss Phase 13: CGB HDMA",
+    "reason": "Phase 12 automated verification complete; Phase 13 remains unstarted; owner chooses when to continue"
   },
-  "updated_at": "2026-10-13T16:39:26.673Z"
+  "updated_at": "2026-10-14T14:35:44.163455+00:00"
 }

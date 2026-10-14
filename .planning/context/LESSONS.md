@@ -649,3 +649,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** Inventory self-test cleanup and original-trap marker controls pass; a nested hostile caller TMPDIR creates no parent marker, while the old inherited-prefix helper control does.
 - **Source:** Phase 12 CR-01 fixes `be53c43`, `d979ba5` and `.github/scripts/test-inventory-cleanup.sh`.
 - **Status:** Adopted.
+
+### GB-GSD-016 / 2026-10-14 / Close automated UAT once and reuse its bounded evidence
+
+- **Cause and evidence:** Phase 12 already had 73 auto-passable deliverables and 898 registered regressions. Replacing the workflow's confirmation-only summary with another owner checkpoint would repeat the Phase 9 toil despite D-069. The bounded commit audit also found plan 12-04's full `plan_head_after` mistyped; `git rev-parse ec5dc8a` identifies the real two-task window.
+- **Remedy:** Derive UAT directly from the classifier, preserve every SUMMARY/coverage-id/evidence mapping, and run the actual behavioral, integration, seam, e2e and smoke checks with their negative controls. Record completed UAT plus canonical freshness and exact-head CI receipts. An unchanged completed session is a no-op; do not replan, rerun every review, or ask a confirmation-only question without changed evidence. Correct metadata from measured Git objects, then let the verification owner refresh its covered digest. Keep session-specific closure checks local when existing CI already covers recurring behavior; add CI only for recurring value.
+- **Applies when:** Every verify-work handoff, future phase planning and SUMMARY authoring. Only true perceptual, physical-hardware, credential and owner-decision limits may require the smallest necessary owner action. A qualified unsupported behavior outside the adopted scope is a recorded limit, not invented manual UAT.
+- **Verification:** `12-UAT.md` records 73 automated passes, zero human checkpoints and no gaps. `verify-uat-contract.py --self-test` rejects nine missing/weaker/misrouted closure mutations; `summary_coverage` and its twelve schema mutants remain recurring CI gates. All 19 bounded commit windows reconcile after the SHA correction.
+- **Source:** Phase 12 verify-work and renewed owner automation directive; DECISIONS D-069, GB-GSD-014 and GB-GSD-015.
+- **Status:** Adopted. Reopen only for a concrete new regression, changed covered behavior, stale/unavailable evidence, or an owner scope change.
