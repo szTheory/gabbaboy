@@ -138,6 +138,115 @@ static int expect_probe(view v, const uint8_t *setup, size_t n, uint16_t addr, i
     return 0;
 }
 
+typedef struct {
+    int reason;
+    uint8_t register_reads[5];
+    uint8_t copied_at_masked_destination;
+    uint8_t untouched_destination;
+    uint8_t completed_readback;
+} hdma_visibility_result;
+
+static int run_hdma_visibility_guest(view v, hdma_visibility_result *out) {
+    prog p = { {0}, 0 };
+    write_io(&p, 0x40, 0x00); /* Keep the request active until the test enables visible HBlank. */
+    ld_a(&p, 0x3A); st_abs(&p, 0xC000);
+    ld_a(&p, 0xA5); st_abs(&p, 0xC00F);
+    write_io(&p, 0x51, 0xC0);
+    write_io(&p, 0x52, 0x0F); /* FF52 keeps the upper nibble: source begins at $C000. */
+    write_io(&p, 0x53, 0xE1); /* FF53 keeps five low bits: destination page is $81. */
+    write_io(&p, 0x54, 0x2F); /* FF54 keeps the upper nibble: destination is $8120. */
+    write_io(&p, 0x55, 0x80); /* One HBlank block. */
+    for (uint8_t i = 0; i < 5; ++i) keep_io(&p, (uint8_t)(0x51u + i), i);
+    write_io(&p, 0x40, 0x91);
+    for (unsigned i = 0; i < 128; ++i) emit(&p, 0x00); /* Reach and finish one ordinary HBlank. */
+    write_io(&p, 0x40, 0x00);
+    ld_abs(&p, 0x8120); ldh_st(&p, 0x85);
+    ld_abs(&p, 0x8000); ldh_st(&p, 0x86);
+    keep_io(&p, 0x55, 7);
+    halt(&p);
+
+    memset(out, 0, sizeof(*out));
+    gbb_instance *m = load_view(v, p.b, p.n, NULL, 0);
+    if (m == NULL) return 1;
+    const gbb_run_result run = gbb_run(m, RUN_BUDGET, NULL, 0);
+    out->reason = (int)run.reason;
+    for (unsigned i = 0; i < 5; ++i) out->register_reads[i] = hram(m, i);
+    out->copied_at_masked_destination = hram(m, 5);
+    out->untouched_destination = hram(m, 6);
+    out->completed_readback = hram(m, 7);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int hdma_visibility_matches_cgb(const hdma_visibility_result *r) {
+    for (unsigned i = 0; i < 4; ++i) if (r->register_reads[i] != 0xFF) return 0;
+    return r->reason != GBB_STOP_UNSUPPORTED_BUS && r->register_reads[4] == 0x00 &&
+           r->copied_at_masked_destination == 0x3A && r->untouched_destination == 0x00 &&
+           r->completed_readback == 0xFF;
+}
+
+static int hdma_visibility_matches_compat(const hdma_visibility_result *r) {
+    for (unsigned i = 0; i < 5; ++i) if (r->register_reads[i] != 0xFF) return 0;
+    return r->reason != GBB_STOP_UNSUPPORTED_BUS && r->copied_at_masked_destination == 0x00 &&
+           r->untouched_destination == 0x00 && r->completed_readback == 0xFF;
+}
+
+static int case_hdma_visibility(void) {
+    hdma_visibility_result cgb, compat;
+    REQUIRE(run_hdma_visibility_guest(V_CGB, &cgb) == 0);
+    REQUIRE(run_hdma_visibility_guest(V_COMPAT, &compat) == 0);
+    if (!hdma_visibility_matches_cgb(&cgb))
+        fprintf(stderr, "CGB HDMA visibility mismatch: FF51-55=%02X/%02X/%02X/%02X/%02X dest=%02X untouched=%02X complete=%02X reason=%d\n",
+                cgb.register_reads[0], cgb.register_reads[1], cgb.register_reads[2],
+                cgb.register_reads[3], cgb.register_reads[4], cgb.copied_at_masked_destination,
+                cgb.untouched_destination, cgb.completed_readback, cgb.reason);
+    REQUIRE(hdma_visibility_matches_cgb(&cgb));
+    REQUIRE(hdma_visibility_matches_compat(&compat));
+    REQUIRE(!hdma_visibility_matches_cgb(&compat) && !hdma_visibility_matches_compat(&cgb));
+    for (uint16_t address = 0xFF51; address <= 0xFF55; ++address)
+        REQUIRE(expect_probe(V_DMG, NULL, 0, address, STOP) == 0);
+    PASS("cgb_hdma_visibility");
+    return 0;
+}
+
+static int case_hdma_visibility_controls(void) {
+    hdma_visibility_result good;
+    REQUIRE(run_hdma_visibility_guest(V_CGB, &good) == 0);
+    REQUIRE(hdma_visibility_matches_cgb(&good));
+
+    hdma_visibility_result wrong = good;
+    wrong.register_reads[0] = 0xC0; /* A leaked FF51 cursor must violate the FF read policy. */
+    if (hdma_visibility_matches_cgb(&wrong)) {
+        fprintf(stderr, "HDMA exposed-cursor negative control was accepted\n");
+        return 1;
+    }
+    wrong = good;
+    wrong.copied_at_masked_destination = 0xA5; /* Missing FF52 low-nibble mask selects $C00F. */
+    if (hdma_visibility_matches_cgb(&wrong)) {
+        fprintf(stderr, "HDMA source-mask negative control was accepted\n");
+        return 1;
+    }
+    wrong = good;
+    wrong.copied_at_masked_destination = 0x00; /* Missing FF54 high-nibble mask writes at $812F. */
+    if (hdma_visibility_matches_cgb(&wrong)) {
+        fprintf(stderr, "HDMA destination-mask negative control was accepted\n");
+        return 1;
+    }
+    wrong = good;
+    wrong.reason = GBB_STOP_UNSUPPORTED_BUS; /* Unmasked FF53 high bits reject $E120. */
+    if (hdma_visibility_matches_cgb(&wrong)) {
+        fprintf(stderr, "HDMA destination-page negative control was accepted\n");
+        return 1;
+    }
+
+    hdma_visibility_result compat;
+    REQUIRE(run_hdma_visibility_guest(V_COMPAT, &compat) == 0);
+    REQUIRE(hdma_visibility_matches_compat(&compat));
+    REQUIRE(!hdma_visibility_matches_compat(&good));
+    PASS("cgb_hdma_visibility_controls");
+    return 0;
+}
+
 /* Tracer: one visibility row (VBK) drives decode and pre-flight end to end. */
 static int case_vbk_tracer(void) {
     prog p = { {0}, 0 };
@@ -349,40 +458,30 @@ static int case_deferred_stop(void) {
     const uint16_t deferred_reads[] = { 0xFF56, 0xFF76, 0xFF77 };
     for (size_t i = 0; i < sizeof(deferred_reads) / sizeof(deferred_reads[0]); ++i)
         REQUIRE(expect_probe(V_CGB, NULL, 0, deferred_reads[i], STOP) == 0);
-    /* Control: FF55 reads $FF in CGB mode (only its write is deferred) and compat reads ignore the
-     * deferred rows, so a probe that always stopped would fail here. */
+    /* Control: an idle FF55 reads $FF and compatibility mode still ignores deferred rows. */
     REQUIRE(expect_probe(V_CGB, NULL, 0, 0xFF55, 0xFF) == 0);
     REQUIRE(expect_probe(V_COMPAT, NULL, 0, 0xFF56, 0xFF) == 0);
     REQUIRE(expect_probe(V_COMPAT, NULL, 0, 0xFF76, STOP) == 0);
     REQUIRE(expect_probe(V_COMPAT, NULL, 0, 0xFF77, STOP) == 0);
 
-    /* Writes: LD A,1; LDH (55),A; LD A,7; LDH (80),A. */
+    /* A real guest FF55 HBlank request is accepted and reads back one active block as $00. */
     prog p = { {0}, 0 };
-    ld_a(&p, 0x01);
+    ld_a(&p, 0x00);
+    ldh_st(&p, 0x40); /* Disable LCD so this visibility probe has no ordinary HBlank edge. */
+    ld_a(&p, 0x80);
     ldh_st(&p, 0x55);
-    write_io(&p, 0x80, 0x07);
-    keep_io(&p, 0x55, 1);
+    ldh_ld(&p, 0x55);
+    ldh_st(&p, 0x80);
     halt(&p);
     gbb_instance *m = load_view(V_CGB, p.b, p.n, NULL, 0);
     REQUIRE(m != NULL);
-    gbb_trace_record snap;
     gbb_run_result r = gbb_run(m, RUN_BUDGET, NULL, 0);
-    REQUIRE(r.reason == GBB_STOP_UNSUPPORTED_BUS);
-    REQUIRE(gbb_test_last_unsupported_address(m) == 0xFF55);
-    /* The instruction retired: JP (32) + LD A,n (16) + LDH (n),A (24) half dots, PC advanced past it. */
-    REQUIRE(r.consumed_half_dots == 72);
-    gbb_test_cpu_snapshot(m, &snap);
-    REQUIRE(snap.pc == 0x0154);
-    REQUIRE(hram(m, 0) == 0x00);
-    /* The latch is cleared by the report: execution resumes, the write stayed dropped. */
-    r = gbb_run(m, RUN_BUDGET, NULL, 0);
     REQUIRE(r.reason != GBB_STOP_UNSUPPORTED_BUS);
-    REQUIRE(hram(m, 0) == 0x07);
-    REQUIRE(hram(m, 1) == 0xFF);
+    REQUIRE(hram(m, 0) == 0x00);
     gbb_destroy(m);
 
     /* Every deferred write cell stops in CGB mode with its own address. */
-    const uint16_t deferred_writes[] = { 0xFF55, 0xFF56, 0xFF76, 0xFF77 };
+    const uint16_t deferred_writes[] = { 0xFF56, 0xFF76, 0xFF77 };
     for (size_t i = 0; i < sizeof(deferred_writes) / sizeof(deferred_writes[0]); ++i) {
         prog w = { {0}, 0 };
         write_io(&w, (uint8_t)deferred_writes[i], 0x01);
@@ -394,7 +493,7 @@ static int case_deferred_stop(void) {
         gbb_destroy(m);
     }
 
-    /* Compat mode ignores FF55/FF56 writes (no stop) but FF76/FF77 stay deferred;
+    /* Compat mode ignores FF56 writes (no stop) but FF76/FF77 stay deferred;
      * the DMG profile never stops on any of them (C4). */
     for (size_t i = 0; i < sizeof(deferred_writes) / sizeof(deferred_writes[0]); ++i) {
         const int compat_stops = deferred_writes[i] >= 0xFF76;
@@ -481,22 +580,22 @@ static int case_deferred_latch_interrupt(void) {
     write_io(&p, 0xFF, 0x01);                  /* IE = $01 */
     write_io(&p, 0x0F, 0x01);                  /* IF = $01; A stays $01 */
     emit(&p, 0xFB);                            /* EI: IME rises after the next instruction */
-    ldh_st(&p, 0x55);                          /* that next instruction is the deferred write */
+    ldh_st(&p, 0x56);                          /* that next instruction is the deferred write */
     emit(&p, 0x00);
     halt(&p);
     gbb_instance *m = load_view(V_CGB, p.b, p.n, vec, sizeof(vec));
     REQUIRE(m != NULL);
     gbb_run_result r = gbb_run(m, RUN_BUDGET, NULL, 0);
     REQUIRE(r.reason == GBB_STOP_UNSUPPORTED_BUS);
-    REQUIRE(gbb_test_last_unsupported_address(m) == 0xFF55);
+    REQUIRE(gbb_test_last_unsupported_address(m) == 0xFF56);
     REQUIRE(gbb_peek_ram(m, 0xFF90) == 0x00);   /* not yet vectored */
     r = gbb_run(m, RUN_BUDGET, NULL, 0);
     REQUIRE(r.reason != GBB_STOP_UNSUPPORTED_BUS);
     REQUIRE(gbb_peek_ram(m, 0xFF90) == 0x99);   /* the pending interrupt is taken afterwards */
     gbb_destroy(m);
 
-    /* The interrupt-entry push itself hits deferred registers: SP = $FF57 makes the push write
-     * FF56 then FF55. The stop is reported at the entry boundary with the last refused address. */
+    /* The interrupt-entry push itself hits a deferred register: SP = $FF57 makes the push write
+     * FF56 then implemented FF55. The stop is reported at the entry boundary. */
     prog q = { {0}, 0 };
     emit(&q, 0x31); emit(&q, 0x57); emit(&q, 0xFF);    /* LD SP,$FF57 */
     write_io(&q, 0xFF, 0x01);
@@ -508,7 +607,7 @@ static int case_deferred_latch_interrupt(void) {
     REQUIRE(m != NULL);
     r = gbb_run(m, RUN_BUDGET, NULL, 0);
     REQUIRE(r.reason == GBB_STOP_UNSUPPORTED_BUS);
-    REQUIRE(gbb_test_last_unsupported_address(m) == 0xFF55);
+    REQUIRE(gbb_test_last_unsupported_address(m) == 0xFF56);
     gbb_trace_record snap;
     gbb_test_cpu_snapshot(m, &snap);
     REQUIRE(snap.pc == 0x0040);                 /* the entry completed; the vector has not run */
@@ -699,7 +798,8 @@ static void fill_cgb(void) {
     add_cell(V_CGB, 0xFF4D, 0x7E, 0x01, 0x7F, 0xFE, 0x7E, K_IMPL, 0, "D-10 KEY1 armed bit");
     add_cell(V_CGB, 0xFF4F, 0xFE, 0x01, 0xFF, 0xFE, 0xFE, K_IMPL, 0, "D-10 VBK");
     for (uint16_t a = 0xFF51; a <= 0xFF54; ++a) const_ff(V_CGB, a, 0x5A, 0xA5, "D-10 HDMA1-4");
-    add_cell(V_CGB, 0xFF55, 0xFF, 0x01, 0xFF, 0x80, 0xFF, K_DEF_W, 13, "D-10 HDMA5");
+    add_cell(V_CGB, 0xFF55, 0xFF, 0x01, 0xFF, 0x80, 0x00, K_IMPL, 0,
+             "Phase 13 HBlank control policy");
     add_cell(V_CGB, 0xFF56, STOP, 0x01, STOP, 0xC1, STOP, K_DEF_RW, 14, "D-10 RP");
     add_cell(V_CGB, 0xFF68, 0xC0, 0x3A, 0x7A, 0x80, 0xC0, K_IMPL, 0, "D-10 BCPS");
     /* D-11: with the index parked at 0 both writes land there and read back whole. CRAM starts
@@ -1108,6 +1208,8 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "unmapped_cgb") == 0) return case_unmapped_cgb();
     if (strcmp(argv[1], "boundaries") == 0) return case_boundaries();
     if (strcmp(argv[1], "deferred_stop") == 0) return case_deferred_stop();
+    if (strcmp(argv[1], "hdma_visibility") == 0) return case_hdma_visibility();
+    if (strcmp(argv[1], "hdma_visibility_controls") == 0) return case_hdma_visibility_controls();
     if (strcmp(argv[1], "ie_gate") == 0) return case_ie_gate();
     if (strcmp(argv[1], "deferred_latch_interrupt") == 0) return case_deferred_latch_interrupt();
     if (strcmp(argv[1], "matrix_compat") == 0) return case_matrix_compat();

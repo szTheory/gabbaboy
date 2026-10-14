@@ -520,6 +520,8 @@ cgb_visibility_svbk_select
 cgb_visibility_unmapped_cgb
 cgb_visibility_boundaries
 cgb_visibility_deferred_stop
+cgb_hdma_visibility
+cgb_hdma_visibility_controls
 cgb_visibility_ie_gate
 cgb_visibility_deferred_latch_interrupt
 cgb_visibility_matrix_compat

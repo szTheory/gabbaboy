@@ -386,6 +386,8 @@ foreach(case vbk_tracer svbk_select unmapped_cgb boundaries deferred_stop ie_gat
      matrix_compat flip_control matrix_cgb matrix_dmg cross_column_control sweep_control)
   add_test(NAME cgb_visibility_${case} COMMAND test_cgb_visibility ${case})
 endforeach()
+add_test(NAME cgb_hdma_visibility COMMAND test_cgb_visibility hdma_visibility)
+add_test(NAME cgb_hdma_visibility_controls COMMAND test_cgb_visibility hdma_visibility_controls)
 # Plan 10-11: STOP/KEY1 fail-closed and the KEY0 lock keep their plan-named CTests.
 foreach(case stop_armed_cgb stop_unarmed_cgb stop_compat_ignores_key1 stop_dmg_control
      key0_lock_cgb key0_lock_compat key0_lock_cross_column key0_lock_reset_idempotent)
@@ -2646,7 +2648,7 @@ add_test(NAME cgb_speed_xfail_hdma_fails_closed_negative
   COMMAND ${CMAKE_COMMAND}
     "-DGBB_CMD=$<TARGET_FILE:test_cgb_speed_internal_p12>;cgb_speed_xfail_hdma_fails_closed;--write-ff54"
     -DGBB_EXPECT_CODE=1
-    "-DGBB_EXPECT_REGEX=hdma-targeted-negative"
+    "-DGBB_EXPECT_REGEX=hdma-ff54-targeted-negative"
     -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
 set_tests_properties(cgb_speed_xfail_hdma_fails_closed_negative PROPERTIES TIMEOUT 60)
 add_test(NAME cgb_speed_xfail_stop_oam_unchanged
