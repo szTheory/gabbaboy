@@ -16,6 +16,7 @@ extern void gbb_p12_set_mutants(uint64_t mask);
 #define ROM_BYTES 32768u
 #define TRACE_CAPACITY 1u
 #define OBSERVER_CAPACITY 32768u
+#define INITIAL_RESULT_BYTES 32u
 #define RUN_SLICE UINT64_C(2048)
 #define RUN_BUDGET UINT64_C(1404480)
 #define NO_COPY_MASK (UINT64_C(1) << 41)
@@ -35,7 +36,7 @@ static const same_case CASE_GBC_DMA_CONT = {
     "gbc_dma_cont", 2u, 32u, 48u, 2u, 0, 0, 0
 };
 static const same_case CASE_GDMA_ADDR_MASK = {
-    "gdma_addr_mask", 1u, 16u, 32u, 1u, 1, 1, 0
+    "gdma_addr_mask", 4u, 64u, 64u, 1u, 1, 1, 0
 };
 static const same_case CASE_HDMA_LCD_OFF = {
     "hdma_lcd_off", 1u, 16u, 40u, 1u, 1, 0, 1
@@ -76,6 +77,41 @@ static int read_rom(const char *path, uint8_t rom[ROM_BYTES]) {
 static uint8_t expected_source_byte(uint16_t source, unsigned offset) {
     const uint16_t address = (uint16_t)(source + offset);
     return (offset & 1u) == 0u ? (uint8_t)address : (uint8_t)(address >> 8);
+}
+
+static int capture_initial_result(gbb_instance *machine,
+                                  const gbb_test_bus_event *events,
+                                  size_t event_count,
+                                  uint8_t snapshot[INITIAL_RESULT_BYTES],
+                                  uint16_t *source, uint16_t *destination,
+                                  uint8_t *vram_bank, int *captured) {
+    uint8_t regs[4] = {0u, 0u, 0u, 0u};
+    for (size_t i = 0u; i < event_count; ++i) {
+        const gbb_test_bus_event *event = &events[i];
+        if (event->access == 2u && event->address >= 0xFF51u &&
+            event->address <= 0xFF54u) {
+            regs[event->address - 0xFF51u] = event->value;
+        } else if (event->access == 2u && event->address == 0xFF55u) {
+            const uint16_t start_source =
+                (uint16_t)(((uint16_t)regs[0] << 8) | (regs[1] & 0xF0u));
+            const uint16_t start_destination = (uint16_t)(0x8000u |
+                ((uint16_t)(regs[2] & 0x1Fu) << 8) | (regs[3] & 0xF0u));
+            const unsigned offset = (unsigned)(start_destination - 0x8000u);
+            if (start_destination < 0x8000u || start_destination > 0x9FC0u ||
+                offset + INITIAL_RESULT_BYTES > GBB_VRAM_BANK_SIZE) {
+                fprintf(stderr, "samesuite-hdma initial-result: destination out of range=%04X\n",
+                        start_destination);
+                return 0;
+            }
+            *source = start_source;
+            *destination = start_destination;
+            *vram_bank = machine->vram_bank;
+            memcpy(snapshot, &machine->vram[*vram_bank][offset], INITIAL_RESULT_BYTES);
+            *captured = 1;
+            return 1;
+        }
+    }
+    return 1;
 }
 
 static int observe_registers(gbb_instance *machine, const gbb_test_bus_event *events,
@@ -159,7 +195,10 @@ static int observe_registers(gbb_instance *machine, const gbb_test_bus_event *ev
         machine->hdma.source_cursor != (uint16_t)(first_source + test->copied_bytes) ||
         machine->hdma.destination_cursor != (uint32_t)first_destination + test->copied_bytes ||
         *last_status != (test->checks_status ? 0x80u : 0xFFu)) {
-        fprintf(stderr, "samesuite-hdma completion predicate: cursor/status mismatch source=%04X destination=%05X FF55=%02X blocks=%u\n",
+        fprintf(stderr, "samesuite-hdma completion predicate: start=%04X/%04X expected-end=%04X/%05X actual=%04X/%05X FF55=%02X blocks=%u\n",
+                first_source, first_destination,
+                (uint16_t)(first_source + test->copied_bytes),
+                (uint32_t)first_destination + test->copied_bytes,
                 machine->hdma.source_cursor, machine->hdma.destination_cursor,
                 *last_status, (unsigned)machine->hdma.blocks_remaining);
         return 0;
@@ -177,8 +216,11 @@ static int run_case(const same_case *test, const char *rom_path, uint64_t mutant
     uint64_t elapsed = 0u;
     uint16_t source = 0u, destination = 0u;
     uint8_t last_status = 0u;
+    uint8_t initial_snapshot[INITIAL_RESULT_BYTES] = {0u};
+    uint8_t initial_vram_bank = 0u;
     int reached_sentinel = 0;
     int guest_pass = 0;
+    int initial_snapshot_captured = 0;
 
     if (!read_rom(rom_path, rom)) return 2;
     events = calloc(OBSERVER_CAPACITY, sizeof(*events));
@@ -213,12 +255,21 @@ static int run_case(const same_case *test, const char *rom_path, uint64_t mutant
             return 2;
         }
         elapsed += run.consumed_half_dots;
+        if (!initial_snapshot_captured && !capture_initial_result(machine, events,
+                                    gbb_test_observer_count(machine),
+                                    initial_snapshot, &source, &destination,
+                                    &initial_vram_bank, &initial_snapshot_captured)) {
+            free(events);
+            gbb_destroy(machine);
+            return 1;
+        }
         if (run.trace_count == 1u && trace.pc >= 0x0150u && trace.opcode[0] == 0x40u) {
             gbb_test_cpu_snapshot(machine, &registers);
             reached_sentinel = 1;
             break;
         }
-        if (run.reason != GBB_STOP_BUDGET && run.reason != GBB_STOP_TRACE_FULL) {
+        if (run.reason != GBB_STOP_BUDGET && run.reason != GBB_STOP_TRACE_FULL &&
+            run.reason != GBB_STOP_HALTED_IDLE) {
             fprintf(stderr, "samesuite-hdma run: unexpected stop=%d at half-dots=%llu\n",
                     (int)run.reason, (unsigned long long)elapsed);
             free(events);
@@ -244,6 +295,12 @@ static int run_case(const same_case *test, const char *rom_path, uint64_t mutant
         gbb_destroy(machine);
         return 1;
     }
+    if (!initial_snapshot_captured) {
+        fprintf(stderr, "samesuite-hdma initial-result: first FF55 start was not observed\n");
+        free(events);
+        gbb_destroy(machine);
+        return 1;
+    }
     if (gbb_test_observer_count(machine) >= OBSERVER_CAPACITY) {
         fprintf(stderr, "samesuite-hdma observer: capacity exhausted\n");
         free(events);
@@ -255,6 +312,26 @@ static int run_case(const same_case *test, const char *rom_path, uint64_t mutant
         free(events);
         gbb_destroy(machine);
         return 1;
+    }
+    if (test == &CASE_GDMA_ADDR_MASK) {
+        for (unsigned i = 0u; i < INITIAL_RESULT_BYTES; ++i) {
+            const uint8_t expected = i < 16u ? expected_source_byte(source, i) : 0u;
+            if (initial_snapshot[i] != expected) {
+                fprintf(stderr, "samesuite-hdma initial-result: address-mask index=%u expected=%02X actual=%02X source=%04X destination=%04X bank=%u\n",
+                        i, expected, initial_snapshot[i], source, destination,
+                        (unsigned)initial_vram_bank);
+                free(events);
+                gbb_destroy(machine);
+                return 1;
+            }
+        }
+        if (initial_vram_bank != 0u) {
+            fprintf(stderr, "samesuite-hdma initial-result: expected VRAM bank 0 actual=%u\n",
+                    (unsigned)initial_vram_bank);
+            free(events);
+            gbb_destroy(machine);
+            return 1;
+        }
     }
     {
         const unsigned destination_offset = (unsigned)(destination - 0x8000u);

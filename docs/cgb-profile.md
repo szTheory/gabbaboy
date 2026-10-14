@@ -264,10 +264,10 @@ description; its physical behavior remains UNKNOWN/POLICY. Optional Mealybug CGB
 | suite | case | disposition | reason | owner phase | pinned_by |
 | --- | --- | --- | --- | --- | --- |
 | samesuite | gbc_dma_cont | pass | selected software model pass; physical CGB-E remains UNKNOWN/POLICY | 13 | samesuite_hdma_gbc_dma_cont |
-| samesuite | gdma_addr_mask | pending | task 2 execution pending | 13 | samesuite_hdma_gdma_addr_mask |
-| samesuite | hdma_lcd_off | pending | task 2 execution pending | 13 | samesuite_hdma_hdma_lcd_off |
-| samesuite | hdma_mode0 | pending | task 2 execution pending | 13 | samesuite_hdma_hdma_mode0 |
-| magentests | hblank_vram_dma | pending | task 2 execution pending | 13 | magentests_hblank_vram_dma |
+| samesuite | gdma_addr_mask | pass | selected software model pass; physical CGB-E remains UNKNOWN/POLICY | 13 | samesuite_hdma_gdma_addr_mask |
+| samesuite | hdma_lcd_off | pass | selected software model pass; physical CGB-E remains UNKNOWN/POLICY | 13 | samesuite_hdma_hdma_lcd_off |
+| samesuite | hdma_mode0 | pass | selected software model pass; physical CGB-E remains UNKNOWN/POLICY | 13 | samesuite_hdma_hdma_mode0 |
+| magentests | hblank_vram_dma | pass | selected software model pass; MagenTests differential evidence; physical CGB-E remains UNKNOWN/POLICY | 13 | magentests_hblank_vram_dma |
 | mealybug-cgb-c | hdma_timing-C | not-run:rights-gate-G1 | not-run:rights-gate-G1 | 13 | - |
 | mealybug-cgb-c | hdma_during_halt-C | not-run:rights-gate-G1 | not-run:rights-gate-G1 | 13 | - |
 <!-- cgb-hdma-dispositions-end -->

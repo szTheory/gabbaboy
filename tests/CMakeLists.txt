@@ -949,7 +949,7 @@ find_package(Python3 COMPONENTS Interpreter REQUIRED)
 set(GBB_CGB_HDMA_DISPOSITIONS_VERIFIER
   "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-hdma-dispositions.py")
 add_test(NAME cgb_hdma_dispositions
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_HDMA_DISPOSITIONS_VERIFIER}" --tracer)
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_HDMA_DISPOSITIONS_VERIFIER}" --complete)
 set_tests_properties(cgb_hdma_dispositions PROPERTIES TIMEOUT 30
   PASS_REGULAR_EXPRESSION "cgb-hdma-dispositions pass")
 add_test(NAME cgb_hdma_dispositions_selftest

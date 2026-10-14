@@ -22,6 +22,38 @@ CASE_TESTS = {
     "hdma_lcd_off": "samesuite_hdma_hdma_lcd_off",
     "hdma_mode0": "samesuite_hdma_hdma_mode0",
 }
+SAME_EXECUTION = {
+    "gbc_dma_cont": {
+        "ff55_starts": [0, 0],
+        "copied_bytes": 32,
+        "continuation_cursor": "0xC020/0x8820",
+        "elapsed_half_dots": 772848,
+    },
+    "gdma_addr_mask": {
+        "ff55_starts": [131],
+        "copied_bytes": 64,
+        "continuation_cursor": "0xC040/0x8840",
+        "final_ff55": "0xFF",
+        "elapsed_half_dots": 769688,
+        "initial_snapshot": "first 16 bytes match source-address pattern; next 16 bytes remain 0x00 after the initial block",
+    },
+    "hdma_lcd_off": {
+        "ff55_starts": [131, 0],
+        "ff55_reads": [2, 128],
+        "copied_bytes": 16,
+        "continuation_cursor": "0xC010/0x8810",
+        "final_ff55": "0x80",
+        "elapsed_half_dots": 774944,
+    },
+    "hdma_mode0": {
+        "ff55_starts": [131, 0],
+        "ff55_reads": [2, 128],
+        "copied_bytes": 16,
+        "continuation_cursor": "0xC010/0x8810",
+        "final_ff55": "0x80",
+        "elapsed_half_dots": 1046904,
+    },
+}
 
 
 class Mismatch(Exception):
@@ -145,10 +177,16 @@ def validate(data: dict, root: Path, complete: bool) -> None:
              bool(row.get("predicate")), f"samesuite-test-binding {case}")
         need(row.get("execution_status") in {"pending", "pass"}, f"samesuite-execution-state {case}")
         if row["execution_status"] == "pass":
+            execution = row.get("execution", {})
             need(row.get("actual_result") == "pass" and row.get("disposition") == "pass" and
-                 row.get("execution", {}).get("status") == "pass" and
-                 row.get("execution", {}).get("test_name") == row["test_name"],
+                 execution.get("status") == "pass" and execution.get("test_name") == row["test_name"],
                  f"samesuite-passing-evidence {case}")
+            need(execution.get("guest_result") == "P" and
+                 execution.get("pass_sentinel_b_to_l") == [3, 5, 8, 13, 21, 34] and
+                 execution.get("source_start") == "0xC000" and
+                 execution.get("destination_start") == "0x8800" and
+                 all(execution.get(key) == value for key, value in SAME_EXECUTION[case].items()),
+                 f"samesuite-execution-observation {case}")
         else:
             need(row.get("actual_result") == "not-run" and row.get("disposition") == "pending" and
                  row.get("reason", "").strip() != "", f"samesuite-pending-state {case}")
@@ -175,10 +213,21 @@ def validate(data: dict, root: Path, complete: bool) -> None:
          bool(magen_row.get("predicate")), "magen-test-binding")
     need(magen_row.get("execution_status") in {"pending", "pass"}, "magen-execution-state")
     if magen_row["execution_status"] == "pass":
+        magen_execution = magen_row.get("execution", {})
         need(magen_row.get("actual_result") == "pass" and magen_row.get("disposition") == "pass" and
-             magen_row.get("execution", {}).get("status") == "pass" and
-             magen_row.get("execution", {}).get("test_name") == magen_row["test_name"],
-             "magen-passing-evidence")
+             magen_execution.get("status") == "pass" and
+             magen_execution.get("test_name") == magen_row["test_name"], "magen-passing-evidence")
+        need(magen_execution.get("exact_map_bytes") == 1024 and
+             magen_execution.get("alignment_prefix_bytes") == 12 and
+             magen_execution.get("alignment_prefix_value") == "0xFF" and
+             magen_execution.get("ff55_busy_then_complete") is True and
+             magen_execution.get("halt64_second_transfer_blocked") is True and
+             magen_execution.get("viewport_rgb555_green") == "0x03E0" and
+             magen_execution.get("stable_frame_generations") == [16, 17] and
+             re.fullmatch(r"[0-9a-f]{64}", magen_execution.get("structural_digest", "")) is not None,
+             "magen-execution-observation")
+        need(set(magen_execution.get("controls", [])) == {"no-transfer", "wrong-bank", "wrong-HALT"},
+             "magen-execution-controls")
     else:
         need(magen_row.get("actual_result") == "not-run" and magen_row.get("disposition") == "pending",
              "magen-pending-state")
@@ -188,6 +237,8 @@ def validate(data: dict, root: Path, complete: bool) -> None:
          mealybug.get("rights_gate") == "G1" and mealybug.get("target_revision") == "CGB-C" and
          mealybug.get("informational") is True and
          mealybug.get("included_in_cgb_e_denominator") is False, "mealybug-rights-model")
+    need(mealybug.get("evidence_class") == "optional local differential only; no hardware claim",
+         "mealybug-hardware-claim")
     mealy_rows = mealybug.get("rows", [])
     need([row.get("case") for row in mealy_rows] == ["hdma_timing-C", "hdma_during_halt-C"],
          "mealybug-case-set")
@@ -235,7 +286,7 @@ def validate(data: dict, root: Path, complete: bool) -> None:
 
 
 def self_test(data: dict, root: Path) -> int:
-    validate(data, root, complete=False)
+    validate(data, root, complete=True)
     mutations = [
         ("status", "samesuite-passing-evidence", lambda d: d["suites"][0]["rows"][0].update({"disposition": "pending"})),
         ("revision", "samesuite-model-tags", lambda d: d["suites"][0].update({"repository_revision": "0" * 40})),
@@ -248,6 +299,9 @@ def self_test(data: dict, root: Path) -> int:
         ("cgb-c-absent", "suite-set", lambda d: d["suites"].pop()),
         ("rights-gate", "mealybug-rights-model", lambda d: d["suites"][2].update({"rights_gate": "closed"})),
         ("cgb-c-hardware-claim", "mealybug-hardware-claim", lambda d: d["suites"][2].update({"evidence_class": "hardware-backed CGB-E measurement"})),
+        ("samesuite-data-outcome", "samesuite-execution-observation gdma_addr_mask", lambda d: d["suites"][0]["rows"][1]["execution"].update({"copied_bytes": 32})),
+        ("magen-data-predicate", "magen-execution-observation", lambda d: d["suites"][1]["rows"][0]["execution"].update({"exact_map_bytes": 1023})),
+        ("magen-control-set", "magen-execution-controls", lambda d: d["suites"][1]["rows"][0]["execution"].update({"controls": ["no-transfer", "wrong-bank"]})),
         ("missing-magen", "magen-case-set", lambda d: d["suites"][1]["rows"].clear()),
         ("phase12-boundary", "phase12-ff55-distinct-boundary", lambda d: d["phase12_ff55_boundary"].update({"test_name": "samesuite_hdma_hdma_lcd_off"})),
     ]
@@ -259,7 +313,7 @@ def self_test(data: dict, root: Path) -> int:
             path.write_text(json.dumps(twin), encoding="utf-8")
             try:
                 changed = json.loads(path.read_text(encoding="utf-8"))
-                validate(changed, root, complete=False)
+                validate(changed, root, complete=True)
             except (Mismatch, KeyError, IndexError, ValueError) as error:
                 need(expected_error in str(error), f"self-test-wrong-rejection {name}: {error}")
             else:
