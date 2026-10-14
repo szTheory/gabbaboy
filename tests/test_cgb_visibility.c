@@ -155,9 +155,9 @@ static int run_hdma_visibility_guest(view v, hdma_visibility_result *out) {
     write_io(&p, 0x52, 0x0F); /* FF52 keeps the upper nibble: source begins at $C000. */
     write_io(&p, 0x53, 0xE1); /* FF53 keeps five low bits: destination page is $81. */
     write_io(&p, 0x54, 0x2F); /* FF54 keeps the upper nibble: destination is $8120. */
+    write_io(&p, 0x40, 0x91); /* Arm from visible mode 2, not the selected LCD-off initial-kick policy. */
     write_io(&p, 0x55, 0x80); /* One HBlank block. */
     for (uint8_t i = 0; i < 5; ++i) keep_io(&p, (uint8_t)(0x51u + i), i);
-    write_io(&p, 0x40, 0x91);
     for (unsigned i = 0; i < 128; ++i) emit(&p, 0x00); /* Reach and finish one ordinary HBlank. */
     write_io(&p, 0x40, 0x00);
     ld_abs(&p, 0x8120); ldh_st(&p, 0x85);

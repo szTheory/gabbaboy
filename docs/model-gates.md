@@ -140,6 +140,7 @@ occurs exactly once in code and once in the table.
 | GATE-95 | CGB_ONLY | model_is_cgb | - | hdma_admit_block | all 16 source addresses and destination offsets validate before mutation; VBK is sampled once |
 | GATE-96 | CGB_ONLY | model_is_cgb | - | hdma_advance_half_dot | one byte commits per four master half-dots after OAM and before PPU; 64-half-dot duration is policy |
 | GATE-97 | CGB_ONLY | model_is_cgb | - | hdma_register_write | FF55 starts or clears the bounded HBlank request and updates private status |
+| GATE-98 | CGB_ONLY | model_is_cgb | - | hdma_stop_at_invalid_block | invalid block stop preserves remaining FF55 status and rejects before the next block mutates |
 <!-- model-gates-end -->
 
 ## Phase 11 dispositions

@@ -220,13 +220,40 @@ after boot (the execution mode latch decides that, D-08). In compat mode FF69, F
 and ignore writes with no index increment. FF72-FF75 are plain registers (FF75 stores bits 4-6 only).
 Unused addresses read `$FF` and ignore writes. On the CGB profile, FF51-FF54 program private HDMA
 source/destination latches while reads stay `$FF` by POLICY; the source low nibble, destination high
-three bits and destination low nibble are masked. FF55 accepts the bounded HBlank request used by
-this phase's tracer, reports the active remaining-block field, and reads `$FF` when idle or complete.
-An ordinary visible mode-3-to-0 edge latches the request; the current guest instruction retires
-before one 16-byte block is admitted, before IRQ dispatch or another opcode. Each byte commits every
-four master half-dots, for 64 per block with no modeled startup/teardown. The boundary, cadence and
-sampling phase are software policy/unknown for physical CGB-E. Other HDMA start/cancel and lifecycle
-cases remain unqualified. FF56, FF76 and FF77 remain deferred: a read stops with
+three bits and destination low nibble are masked. Idle writes also reprogram only the corresponding
+internal cursor bits. Starts after completion or cancellation continue those cursors unless the
+software reprograms them. Writes to FF51-FF54 during an active transfer are ignored by policy.
+
+FF55 implements this bounded state table:
+
+| State and write | Selected software behavior | FF55 readback |
+| --- | --- | --- |
+| Idle, bit 7 clear | Start GDMA for `low7 + 1` blocks; the CPU is held until all blocks finish. | Remaining blocks minus one while active; `$FF` at completion. |
+| Idle, bit 7 set | Arm HDMA for `low7 + 1` blocks. LCD-off or visible mode 0 grants one initial block; otherwise wait for a visible mode-3-to-0 edge. | Remaining blocks minus one while active; `$FF` at completion. |
+| Waiting HDMA, bit 7 clear | Cancel the request, discard its remaining work, and retain the advanced cursors. | `$80 | written_low7`; the adopted `$00` sequence reads `$80`. |
+| Waiting HDMA, bit 7 set | Replace the remaining block count at the current cursors; keep the existing wait state and do not grant another initial block. | New count minus one. |
+| Active block or active GDMA, synthetic register write | Ignore FF51-FF55 writes; normal guest code cannot execute while the modeled steal is active. | Transfer status is unchanged. |
+
+An initial LCD-off/mode-0 kick is one-shot: repeated mode-0 levels and LCD-off time do not drain
+remaining HDMA blocks. Later blocks require a genuine visible-line mode-3-to-0 edge; VBlank never
+admits one. Disabling LCD while HDMA is waiting discards an unadmitted edge but leaves the request
+armed; enabling LCD waits for the next visible edge without a kick. The current guest instruction
+retires before a latched edge is serviced, before IRQ dispatch or another opcode.
+
+The selected D-06 software behavior follows the exact SameSuite `hdma_lcd_off` and `hdma_mode0`
+sequence: write `$83`, transfer one initial block, read `$02`, cancel with `$00`, then read `$80`.
+SameBoy agrees with that sequence. Pan Docs instead describes FF55 cancellation as retaining the
+remaining length in the low bits and warns against starting during mode 0; this project preserves
+that contradiction and does not modify the upstream expected values. The adopted sequence is tagged
+UNKNOWN / author-test plus emulator differential for physical CGB-E, not a hardware result. See
+[Pan Docs FF55](https://gbdev.io/pandocs/CGB_Registers.html#ff55--hdma5-cgb-mode-only-vram-dma-lengthmode-start)
+and the Phase 13 research record.
+
+Each byte commits every four master half-dots, for 64 per block with no modeled startup/teardown.
+The policy test checks every half-dot around all 16 byte edges at normal and double CPU speed; shifts
+of -8, -4, -2, -1, +1, +2, +4 and +8 half-dots fail the sampled-edge contract, with no software blind
+window around those edges. The transfer boundary, cadence and sampling phase remain UNKNOWN for
+physical CGB-E. FF56, FF76 and FF77 remain deferred: a read stops with
 `GBB_STOP_UNSUPPORTED_BUS` before anything changes and a write is dropped and reported as the same
 stop once the instruction retires.
 The DMG profile never enters this decode: its FF4C-FF7F reads still stop and its writes are silent

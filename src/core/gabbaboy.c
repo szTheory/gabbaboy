@@ -327,7 +327,7 @@ typedef struct {
 } cartridge_info;
 
 typedef struct {
-    uint8_t mode; /* 0 idle, 1 ordinary visible-line HBlank transfer */
+    uint8_t mode; /* 0 idle, 1 HBlank transfer, 2 general-purpose transfer */
     uint8_t active; /* one admitted 16-byte block is consuming master time */
     uint8_t pending_hblank;
     uint16_t blocks_remaining;
@@ -1398,7 +1398,7 @@ static void io_write_cgb(gbb_instance *m, uint16_t address, uint8_t value) {
         m->wram_bank = m->svbk != 0u ? m->svbk : 1u;
         break;
     case IO_STORE: {
-        if (address == 0xFF55u) {
+        if (address >= 0xFF51u && address <= 0xFF55u) {
             hdma_register_write(m, address, value);
             break;
         }
@@ -1719,6 +1719,20 @@ static int hdma_admit_block(gbb_instance *m) {
     return 1;
 }
 
+/* MODEL: CGB_ONLY GATE-98 GUARD=model_is_cgb -- invalid block stop retains FF55 remaining status */
+static void hdma_stop_at_invalid_block(gbb_instance *m, uint16_t address) {
+    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB) return;
+    m->bus_unsupported = 1u;
+    m->bus_unsupported_address = address;
+    m->hdma.active = 0u;
+    m->hdma.pending_hblank = 0u;
+    m->hdma.mode = 0u;
+    m->hdma.byte_index = 0u;
+    m->hdma.byte_phase = 0u;
+    if (m->hdma.blocks_remaining != 0u)
+        m->hdma.control_readback = (uint8_t)(0x80u | ((m->hdma.blocks_remaining - 1u) & 0x7Fu));
+}
+
 /* MODEL: CGB_ONLY GATE-96 GUARD=model_is_cgb -- HDMA commits one byte every four master half-dots after OAM and before PPU */
 static void hdma_advance_half_dot(gbb_instance *m) {
     if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB || !m->hdma.active) return;
@@ -1730,13 +1744,7 @@ static void hdma_advance_half_dot(gbb_instance *m) {
     uint8_t value = 0xFFu;
     if (destination >= GBB_VRAM_BANK_SIZE ||
         !hdma_source_read(m, source, &value)) {
-        m->bus_unsupported = 1;
-        m->bus_unsupported_address = source;
-        m->hdma.active = 0u;
-        m->hdma.pending_hblank = 0u;
-        m->hdma.mode = 0u;
-        m->hdma.blocks_remaining = 0u;
-        m->hdma.control_readback = 0xFFu;
+        hdma_stop_at_invalid_block(m, source);
         return;
     }
     m->vram[m->hdma.block_vram_bank][destination] = value;
@@ -1745,43 +1753,74 @@ static void hdma_advance_half_dot(gbb_instance *m) {
     m->hdma.active = 0u;
     m->hdma.byte_index = 0u;
     if (m->hdma.blocks_remaining != 0u) --m->hdma.blocks_remaining;
+    m->hdma.source_cursor = (uint16_t)(m->hdma.source_cursor + 16u);
+    m->hdma.destination_cursor = (uint16_t)(m->hdma.destination_cursor + 16u);
     if (m->hdma.blocks_remaining == 0u) {
         m->hdma.mode = 0u;
         m->hdma.pending_hblank = 0u;
         m->hdma.control_readback = 0xFFu;
     } else {
-        m->hdma.source_cursor = (uint16_t)(m->hdma.source_cursor + 16u);
-        m->hdma.destination_cursor = (uint16_t)(m->hdma.destination_cursor + 16u);
         m->hdma.control_readback = (uint8_t)((m->hdma.blocks_remaining - 1u) & 0x7Fu);
+        if (m->hdma.mode == 2u) m->hdma.pending_hblank = 1u;
     }
 }
 
-/* MODEL: CGB_ONLY GATE-97 GUARD=model_is_cgb -- FF55 starts or clears the bounded HBlank request */
+/* MODEL: CGB_ONLY GATE-97 GUARD=model_is_cgb -- FF51-55 maintain bounded cursor and transfer state */
 static void hdma_register_write(gbb_instance *m, uint16_t address, uint8_t value) {
     if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB) return;
     switch (address) {
+    case 0xFF51u:
+        if (m->hdma.mode != 0u || m->hdma.active || m->hdma.pending_hblank) return;
+        m->hdma.source_high = value;
+        m->hdma.source_cursor = (uint16_t)(((uint16_t)value << 8) |
+                                           (m->hdma.source_cursor & 0x00FFu));
+        break;
+    case 0xFF52u:
+        if (m->hdma.mode != 0u || m->hdma.active || m->hdma.pending_hblank) return;
+        m->hdma.source_low = (uint8_t)(value & 0xF0u);
+        m->hdma.source_cursor = (uint16_t)((m->hdma.source_cursor & 0xFF00u) |
+                                           m->hdma.source_low);
+        break;
+    case 0xFF53u:
+        if (m->hdma.mode != 0u || m->hdma.active || m->hdma.pending_hblank) return;
+        m->hdma.destination_high = (uint8_t)(value & 0x1Fu);
+        m->hdma.destination_cursor = (uint16_t)(0x8000u |
+            ((uint16_t)m->hdma.destination_high << 8) |
+            (m->hdma.destination_cursor & 0x00FFu));
+        break;
+    case 0xFF54u:
+        if (m->hdma.mode != 0u || m->hdma.active || m->hdma.pending_hblank) return;
+        m->hdma.destination_low = (uint8_t)(value & 0xF0u);
+        m->hdma.destination_cursor = (uint16_t)((m->hdma.destination_cursor & 0xFF00u) |
+                                                m->hdma.destination_low);
+        break;
     case 0xFF55u:
-        if ((value & 0x80u) == 0u) {
-            m->hdma.mode = 0u;
-            m->hdma.active = 0u;
-            m->hdma.pending_hblank = 0u;
-            m->hdma.blocks_remaining = 0u;
-            m->hdma.byte_index = 0u;
-            m->hdma.byte_phase = 0u;
-            m->hdma.control_readback = 0xFFu;
+        if (m->hdma.mode == 2u || m->hdma.active) return;
+        if (m->hdma.mode == 1u) {
+            if ((value & 0x80u) == 0u) {
+                m->hdma.mode = 0u;
+                m->hdma.pending_hblank = 0u;
+                m->hdma.blocks_remaining = 0u;
+                m->hdma.byte_index = 0u;
+                m->hdma.byte_phase = 0u;
+                m->hdma.control_readback = (uint8_t)(0x80u | (value & 0x7Fu));
+            } else {
+                m->hdma.blocks_remaining = (uint16_t)((value & 0x7Fu) + 1u);
+                m->hdma.control_readback = (uint8_t)(value & 0x7Fu);
+            }
             break;
         }
-        m->hdma.mode = 1u;
+        m->hdma.mode = (value & 0x80u) != 0u ? 1u : 2u;
         m->hdma.active = 0u;
-        m->hdma.pending_hblank = 0u;
+        m->hdma.pending_hblank = m->hdma.mode == 2u ? 1u : 0u;
         m->hdma.blocks_remaining = (uint16_t)((value & 0x7Fu) + 1u);
         m->hdma.byte_index = 0u;
         m->hdma.byte_phase = 0u;
-        m->hdma.source_cursor = (uint16_t)(((uint16_t)m->hdma.source_high << 8) |
-                                           m->hdma.source_low);
-        m->hdma.destination_cursor = (uint16_t)(0x8000u |
-            ((uint16_t)m->hdma.destination_high << 8) | m->hdma.destination_low);
-        m->hdma.control_readback = (uint8_t)((m->hdma.blocks_remaining - 1u) & 0x7Fu);
+        m->hdma.control_readback = (uint8_t)(value & 0x7Fu);
+        if (m->hdma.mode == 1u &&
+            ((m->lcdc & 0x80u) == 0u ||
+             (m->ly < GBB_FRAME_HEIGHT && m->ppu_mode == 0u)))
+            m->hdma.pending_hblank = 1u;
         break;
     default: break;
     }
@@ -2091,6 +2130,8 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
         uint8_t old = m->lcdc;
         m->lcdc = value;
         if ((value & 0x80u) == 0) {
+            if (m->hdma.mode == 1u && !m->hdma.active)
+                m->hdma.pending_hblank = 0u;
             m->ppu_dot = 0;
             m->ppu_half_phase = 0;
             m->ly = 0;
@@ -4250,13 +4291,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 return result;
             }
             if (instance->hdma.pending_hblank && !hdma_admit_block(instance)) {
-                instance->bus_unsupported = 1;
-                instance->bus_unsupported_address = instance->hdma.source_cursor;
-                instance->hdma.pending_hblank = 0u;
-                instance->hdma.active = 0u;
-                instance->hdma.mode = 0u;
-                instance->hdma.blocks_remaining = 0u;
-                instance->hdma.control_readback = 0xFFu;
+                hdma_stop_at_invalid_block(instance, instance->hdma.source_cursor);
                 instance->bus_unsupported = 0;
                 result.reason = GBB_STOP_UNSUPPORTED_BUS;
                 return result;

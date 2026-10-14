@@ -66,7 +66,7 @@ static int fixture_create(hdma_fixture *f, int is_ld_sp, int speed,
     f->edge_offset = is_ld_sp ? (speed ? 14u : 26u) : (speed ? 10u : 18u);
     REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &f->machine) == GBB_OK);
     REQUIRE(gbb_load_rom(f->machine, rom, sizeof(rom)) == GBB_OK);
-    f->machine->lcdc = 0u; /* Hold the PPU until the guest has programmed FF51-FF55. */
+    f->machine->lcdc = 0x91u; /* Let setup reach visible mode 3 before FF55, avoiding an LCD-off kick. */
     for (unsigned i = 0u; i < 16u; ++i) {
         f->source[i] = (uint8_t)(0x31u + 11u * i);
         f->machine->wram[0][i] = f->source[i];
@@ -214,10 +214,6 @@ static int test_cb(void) {
 static int test_controls(void) {
     hdma_fixture no_edge;
     REQUIRE(fixture_create(&no_edge, 1, 0, 1, 0) == 0);
-    no_edge.machine->lcdc = 0x91u;
-    no_edge.machine->ppu_mode = 3u;
-    no_edge.machine->ppu_transfer_age = 12u;
-    no_edge.machine->ppu_fifo_count = 0u;
     gbb_run_result no_edge_run = gbb_run(no_edge.machine,
         no_edge.instruction_cost + 64u, NULL, 0u);
     if (no_edge_run.consumed_half_dots != no_edge.instruction_cost ||
@@ -378,6 +374,8 @@ static int policy_fixture_create(gbb_instance **machine, uint8_t start,
     m->double_speed = (uint8_t)speed;
     m->lcdc = lcdc;
     m->ppu_mode = mode;
+    m->ppu_dot = mode == 0u ? 300u : (mode == 3u ? 100u : 0u);
+    m->ppu_half_phase = 0u;
     m->ly = line;
     return 0;
 }
@@ -446,10 +444,13 @@ static int run_gdma_count(unsigned blocks, int speed) {
     const unsigned read_cost = 48u >> speed;
     gbb_run_result readback = gbb_run(m, read_cost, NULL, 0u);
     if (readback.consumed_half_dots != read_cost || m->hram[0] != 0xFFu ||
-        m->time_half_dots - start != (uint64_t)((40u >> speed) + 64u * blocks) ||
+        m->time_half_dots - start != (uint64_t)((40u >> speed) + 64u * blocks + read_cost) ||
         m->hdma.source_cursor != (uint16_t)(0xC000u + blocks * 16u) ||
         m->hdma.destination_cursor != 0x8000u + blocks * 16u) {
-        fprintf(stderr, "gdma completion/count readback mismatch count=%u speed=%d\n", blocks, speed);
+        fprintf(stderr, "gdma completion/count readback mismatch count=%u speed=%d consumed=%llu expected=%u status=%02X source=%04X destination=%04X\n",
+                blocks, speed, (unsigned long long)(m->time_half_dots - start),
+                (40u >> speed) + 64u * blocks + read_cost, m->hram[0],
+                m->hdma.source_cursor, m->hdma.destination_cursor);
         gbb_destroy(m);
         return 1;
     }
@@ -464,6 +465,55 @@ static int run_gdma_count(unsigned blocks, int speed) {
     return 0;
 }
 
+static int test_cursor_continuation(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(policy_fixture_create(&m, 0x80u, 0u, 0, 0, 0, 0u, 0u, 0u, 64u) == 0);
+    gbb_run_result first = gbb_run(m, 104u, NULL, 0u);
+    REQUIRE(first.consumed_half_dots == 104u && m->hdma.blocks_remaining == 0u &&
+            m->hdma.source_cursor == 0xC010u && m->hdma.destination_cursor == 0x8010u &&
+            m->hdma.control_readback == 0xFFu);
+    hdma_register_write(m, 0xFF55u, 0x00u); /* a new idle GDMA continues the cursors */
+    gbb_run_result second = gbb_run(m, 64u, NULL, 0u);
+    REQUIRE(second.consumed_half_dots == 64u && m->hdma.source_cursor == 0xC020u &&
+            m->hdma.destination_cursor == 0x8020u);
+    REQUIRE(memcmp(m->vram[0] + 16u, m->wram[0] + 16u, 16u) == 0);
+
+    for (unsigned i = 0u; i < 16u; ++i)
+        m->wram[1][0x30u + i] = (uint8_t)(0xD0u + i);
+    hdma_register_write(m, 0xFF51u, 0xD0u);
+    REQUIRE(m->hdma.source_cursor == 0xD020u);
+    hdma_register_write(m, 0xFF52u, 0x30u);
+    REQUIRE(m->hdma.source_cursor == 0xD030u);
+    hdma_register_write(m, 0xFF53u, 0x05u);
+    REQUIRE(m->hdma.destination_cursor == 0x8520u);
+    hdma_register_write(m, 0xFF54u, 0x30u);
+    REQUIRE(m->hdma.destination_cursor == 0x8530u);
+    hdma_register_write(m, 0xFF55u, 0x00u);
+    gbb_run_result reprogrammed = gbb_run(m, 64u, NULL, 0u);
+    REQUIRE(reprogrammed.consumed_half_dots == 64u && m->hdma.source_cursor == 0xD040u &&
+            m->hdma.destination_cursor == 0x8540u && m->hdma.control_readback == 0xFFu);
+    REQUIRE(memcmp(m->vram[0] + 0x530u, m->wram[1] + 0x30u, 16u) == 0);
+
+    m->hdma.mode = 2u;
+    m->hdma.active = 1u;
+    m->hdma.pending_hblank = 0u;
+    m->hdma.blocks_remaining = 7u;
+    m->hdma.control_readback = 6u;
+    const uint16_t source = m->hdma.source_cursor;
+    const uint16_t destination = m->hdma.destination_cursor;
+    hdma_register_write(m, 0xFF51u, 0xC0u);
+    hdma_register_write(m, 0xFF52u, 0x00u);
+    hdma_register_write(m, 0xFF53u, 0x00u);
+    hdma_register_write(m, 0xFF54u, 0x00u);
+    hdma_register_write(m, 0xFF55u, 0x85u);
+    REQUIRE(m->hdma.mode == 2u && m->hdma.active && !m->hdma.pending_hblank &&
+            m->hdma.blocks_remaining == 7u && m->hdma.control_readback == 6u &&
+            m->hdma.source_cursor == source && m->hdma.destination_cursor == destination &&
+            m->hdma.source_high == 0xD0u && m->hdma.source_low == 0x30u);
+    gbb_destroy(m);
+    return 0;
+}
+
 static int test_state_matrix(int flip_cancel) {
     for (int speed = 0; speed <= 1; ++speed) {
         REQUIRE(check_guest_kick_cancel(0u, 0u, speed, 0u, 0x80u, flip_cancel) == 0);
@@ -473,6 +523,7 @@ static int test_state_matrix(int flip_cancel) {
         REQUIRE(run_gdma_count(2u, speed) == 0);
         REQUIRE(run_gdma_count(128u, speed) == 0);
     }
+    REQUIRE(test_cursor_continuation() == 0);
 
     gbb_instance *m = NULL;
     REQUIRE(policy_fixture_create(&m, 0x83u, 0u, 0, 1, 0, 0x91u, 3u, 0u, 16u) == 0);
@@ -500,8 +551,10 @@ static int test_trigger_matrix(void) {
     m->ly = 144u;
     ppu_set_mode(m, 0u);
     REQUIRE(!m->hdma.pending_hblank);
-    gbb_run_result vblank = gbb_run(m, 64u, NULL, 0u);
-    REQUIRE(vblank.consumed_half_dots == 0u && m->vram[0][0] == 0xA5u);
+    gbb_run_result vblank = gbb_run(m, 48u, NULL, 0u);
+    REQUIRE(vblank.consumed_half_dots == 48u && m->hram[0] == 0x02u &&
+            m->hdma.blocks_remaining == 3u &&
+            m->vram[0][0] == 0xA5u);
     m->ly = 0u;
     m->lcdc = 0u;
     ppu_set_mode(m, 3u);
@@ -511,18 +564,30 @@ static int test_trigger_matrix(void) {
 
     REQUIRE(policy_fixture_create(&m, 0x82u, 0u, 0, 0, 0, 0u, 0u, 0u, 32u) == 0);
     gbb_run_result kick = gbb_run(m, 104u, NULL, 0u);
-    REQUIRE(kick.consumed_half_dots == 104u && m->hdma.blocks_remaining == 3u &&
+    REQUIRE(kick.consumed_half_dots == 104u && m->hdma.blocks_remaining == 2u &&
             !m->hdma.pending_hblank && m->vram[0][0] == m->wram[0][0] &&
             m->vram[0][16] == 0xA5u);
     ppu_set_mode(m, 0u); /* same mode is a level, not a second initial kick */
-    gbb_run_result no_repeat = gbb_run(m, 64u, NULL, 0u);
-    REQUIRE(no_repeat.consumed_half_dots == 0u && m->vram[0][16] == 0xA5u);
+    gbb_run_result no_repeat = gbb_run(m, 48u, NULL, 0u);
+    REQUIRE(no_repeat.consumed_half_dots == 48u && m->vram[0][16] == 0xA5u);
     m->lcdc = 0x91u;
     ppu_set_mode(m, 3u);
     ppu_set_mode(m, 0u);
     REQUIRE(m->hdma.pending_hblank);
     gbb_run_result visible = gbb_run(m, 64u, NULL, 0u);
     REQUIRE(visible.consumed_half_dots == 64u && m->vram[0][16] == m->wram[0][16]);
+    ppu_set_mode(m, 3u);
+    ppu_set_mode(m, 0u);
+    REQUIRE(m->hdma.pending_hblank);
+    write8(m, 0xFF40u, 0u);
+    REQUIRE(m->hdma.mode == 1u && !m->hdma.pending_hblank &&
+            m->hdma.blocks_remaining == 1u);
+    write8(m, 0xFF40u, 0x91u);
+    ppu_set_mode(m, 3u);
+    ppu_set_mode(m, 0u);
+    REQUIRE(m->hdma.pending_hblank);
+    gbb_run_result resumed = gbb_run(m, 64u, NULL, 0u);
+    REQUIRE(resumed.consumed_half_dots == 64u && m->vram[0][32u] == m->wram[0][32u]);
     gbb_destroy(m);
     return 0;
 }
@@ -539,8 +604,9 @@ static int test_trigger_controls(void) {
     ppu_set_mode(m, 3u);
     ppu_set_mode(m, 0u);
     REQUIRE(!m->hdma.pending_hblank);
-    gbb_run_result none = gbb_run(m, 64u, NULL, 0u);
-    REQUIRE(none.consumed_half_dots == 0u && m->vram[0][0] == 0xA5u);
+    gbb_run_result none = gbb_run(m, 48u, NULL, 0u);
+    REQUIRE(none.consumed_half_dots == 48u && m->hdma.blocks_remaining == 2u &&
+            m->vram[0][0] == 0xA5u);
     gbb_destroy(m);
     return 0;
 }
@@ -549,7 +615,7 @@ static int test_trigger_flip(void) {
     gbb_instance *m = NULL;
     REQUIRE(policy_fixture_create(&m, 0x82u, 0u, 0, 0, 0, 0u, 0u, 0u, 32u) == 0);
     gbb_run_result kick = gbb_run(m, 104u, NULL, 0u);
-    REQUIRE(kick.consumed_half_dots == 104u && m->hdma.blocks_remaining == 3u);
+    REQUIRE(kick.consumed_half_dots == 104u && m->hdma.blocks_remaining == 2u);
     ppu_set_mode(m, 0u);
     m->hdma.pending_hblank = 1u; /* injected duplicate event must be caught */
     if (m->hdma.pending_hblank) {
@@ -593,7 +659,7 @@ static int test_timing_policy(int flip) {
         REQUIRE(m->time_half_dots - start == (40u >> speed) + 64u);
         gbb_destroy(m);
     }
-    puts("timing sensitivity offsets: +/-1, +/-2, +/-4, +/-8 half-dots; exact byte timestamps checked; silicon window UNKNOWN");
+    puts("timing sensitivity: shifts -8,-4,-2,-1,+1,+2,+4,+8 half-dots are detected by per-half-dot checks at all 16 byte edges; software blind window around sampled edges: none; physical CGB-E timing: UNKNOWN");
     return 0;
 }
 
