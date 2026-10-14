@@ -48,3 +48,16 @@ gbb_require_phrases("${LIMITATIONS}" "${limitations_text}" ${PHRASES})
 gbb_require_phrases("${README}" "${readme_text}" ${PHRASES})
 gbb_require_phrases("${PREVIEW_YML} (macOS capability_limits)" "${macos_limits}" ${PHRASES})
 gbb_require_phrases("${PREVIEW_YML} (Linux capability_limits)" "${linux_limits}" ${LINUX_PHRASES})
+
+# Delivered CGB DMA must be described consistently without dropping the model,
+# timing, audio, hardware, or compatibility limits on any package surface.
+set(required_scope_claims
+  "GDMA and HBlank DMA run on the selected bootless CGB-CPU-E software model"
+  "CGB mode-3 timing is not claimed"
+  "CGB-profile audio uses the DMG APU model"
+  "physical CGB-E remains UNKNOWN/POLICY"
+  "General game compatibility is not claimed")
+gbb_require_phrases("${LIMITATIONS}" "${limitations_text}" ${required_scope_claims})
+gbb_require_phrases("${README}" "${readme_text}" ${required_scope_claims})
+gbb_require_phrases("${PREVIEW_YML} (macOS capability_limits)" "${macos_limits}" ${required_scope_claims})
+gbb_require_phrases("${PREVIEW_YML} (Linux capability_limits)" "${linux_limits}" ${required_scope_claims})
