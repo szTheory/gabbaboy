@@ -29,9 +29,8 @@ function(gbb_p13_make_mutant_core out_path)
   foreach(tag IN LISTS GBB_P13_ANCHOR_TAGS)
     gbb_p12_require_unique_anchor("${core_text}" "${tag}" "p13 mutant ${tag}" "${core_path}")
   endforeach()
-  # RED-phase baseline: the generated core owns the mask but ignores P13 bits.
-  # The GREEN change wires this selector to the shared runtime mask.
-  file(WRITE "${out_path}" "#define GBB_P13_MUT(n) 0u\n${core_text}")
+  file(WRITE "${out_path}"
+    "#define GBB_P13_MUT(n) ((unsigned)((gbb_p12_mutants >> (n)) & 1u))\n${core_text}")
 endfunction()
 
 function(gbb_p13_mutant_test exe suffix bit case_name regex)
