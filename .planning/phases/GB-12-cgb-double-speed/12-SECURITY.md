@@ -3,7 +3,7 @@ phase: "12"
 slug: "cgb-double-speed"
 status: verified
 threats_open: 0
-threats_open_nonblocking: 1
+threats_open_nonblocking: 0
 asvs_level: 1
 block_on: high
 register_authored_at_plan_time: true
@@ -12,7 +12,7 @@ created: "2026-10-14"
 
 # Phase 12 — Security Verification
 
-The read-only security auditor checked all 19 authored threat registers at `fbfeb24306bde6b45e9f0e0c9037b8cd1486ff2a`. Repeated T-12-SC rows are consolidated: 33 unique threats, 32 closed, one medium open below the high blocking threshold. The timeout gap remains scheduled for a verified fix before phase completion.
+The read-only security auditor checked all 19 authored threat registers at `fbfeb24306bde6b45e9f0e0c9037b8cd1486ff2a`. Repeated T-12-SC rows are consolidated: 33 authored unique threats were initially audited, with 32 closed and one medium open below the high blocking threshold. The timeout policy gap is now closed; code review added one environment-to-shell threat, also closed by verified fixes. Current total: 34 threats, all closed.
 
 ## Trust Boundaries
 
@@ -40,7 +40,7 @@ The read-only security auditor checked all 19 authored threat registers at `fbfe
 | T-12-12 | Repudiation | medium | mitigate | tests/scripts/verify-model-gates.py:317–398; CMake exactly-once STOP tag; no-phase12 and doc negative controls | closed |
 | T-12-13 | Repudiation | medium | mitigate | tests/scripts/derive-cgb-speed-expectations.py:23; no core reads/execution; regenerated table and factor3/tamper controls | closed |
 | T-12-14 | Tampering | medium | mitigate | tests/scripts/reproduce-cgb-speed.sh:21–25,57–59,80–118,134–144; workflow digest/pin checks; missing-pin/tool-failure controls | closed |
-| T-12-15 | Denial of Service | medium | mitigate | tests/CMakeLists.txt:2590–2598 scaler precedes partition registrations at 3474–3493; no later scaler; caps and snapshot controls present | open — non-blocking |
+| T-12-15 | Denial of Service | medium | mitigate | cmake/ScaleSanitizerTimeouts.cmake applies the multiplier after the final registration; manual AGE multipliers removed; real late-test configure assertions and sanitizer_timeout_policy_selftest reject early/double scaling | closed |
 | T-12-16 | Repudiation | medium | mitigate | tests/player/test_limitations.c:10; tests/player/claims_agree.cmake:47–50; hosted player package and mutation controls | closed |
 | T-12-17 | Tampering | medium | mitigate | Public-header tokens unchanged after stripping comments; cgb_consumer_symbol_coverage and missing-symbol control | closed |
 | T-12-18 | Denial of Service | high | mitigate | tests/fuzz_core.c:15,495,509–527,608–612; eight seeds and inverted-oracle controls | closed |
@@ -60,9 +60,13 @@ The read-only security auditor checked all 19 authored threat registers at `fbfe
 | T-12-32 | Tampering | medium | mitigate | tests/CMakeLists.txt:3153–3184; four AGE sensitivity sweeps plus mutated M28-reference control | closed |
 | T-12-SC | Tampering | high | mitigate | No new npm/pip/cargo install commands among changed executable/build/workflow files; digest-pinned RGBDS and unchanged SDL/compiler fuzz path | closed |
 
-## Open Mitigation
+| T-12-33 | Tampering / Elevation of Privilege | high | mitigate | Post-implementation CR-01: literal EXIT trap uses a script-scope quoted path; .github/scripts/test-inventory-cleanup.sh confines the unsafe copy to an owned prefix; hostile caller TMPDIR and original-trap controls passed at be53c43/d979ba5 | closed |
 
-T-12-15: the generic sanitizer timeout multiplier runs before the late Phase 12 tests are registered. Partition limits remain 60 seconds instead of the declared 180 seconds under sanitizers. Work caps and snapshot checks exist; hosted ASan passing does not prove this missing policy. All late registrations must be checked, including AGE limits already scaled separately, to prevent double scaling.
+## Closed Review Mitigations
+
+T-12-15 was open in the initial audit because the multiplier ran before Phase 12 registrations. Commit `fe61e2f` places one shared pass after all registrations, removes manual AGE multiplication and asserts actual late AGE/partition limits. The configure-only regression proves 120→360, 240→720 and 60→180, while rejecting early and double passes; normal limits stay unchanged. This is property evidence on Darwin, not an ASan runtime claim. The current root policy CTest passed.
+
+Code review added T-12-33 for CR-01's environment-to-shell trap interpolation. Commits `be53c43` and `d979ba5` close both the production self-test trap and its deliberately unsafe regression fixture boundary. The inventory self-test detects the original unsafe trap and verifies cleanup; a nested hostile caller TMPDIR leaves its parent marker absent.
 
 ## Accepted Risks Log
 
@@ -81,10 +85,11 @@ AGE outcomes are two passes and eleven pinned expected failures. Byte reproducti
 | Audit date | Revision | Unique threats | Closed | Blocking open | Non-blocking open |
 |---|---|---|---|---|---|
 | 2026-10-14 | fbfeb24 | 33 | 32 | 0 | 1 |
+| 2026-10-14 | d979ba5 | 34 | 34 | 0 | 0 |
 
 ## Sign-Off
 
 - [x] Every threat has a mitigation disposition and implementation evidence or an explicit gap.
 - [x] No accepted risks were invented.
 - [x] Severity-filtered `threats_open: 0` confirmed.
-- [ ] T-12-15 policy fix verified before phase completion.
+- [x] T-12-15 policy fix and post-implementation T-12-33 verified with meaningful negative controls before phase completion.
