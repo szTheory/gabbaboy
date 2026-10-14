@@ -604,3 +604,30 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** Hosted ASan result is recorded in the Phase 11 UAT.
 - **Source:** Phase 11 verify-work, PR #67.
 - **Status:** Adopted.
+
+### GB-CGB-008 / 2026-10-13 / A borrowed speed constant failed the ROM that was meant to bind it
+
+- **Cause and evidence:** The imported `0x20008` T-cycle stall literal failed AGE `spsw-div-cgbBCE` in all five starts, while the committed-core pass window is `[0x20004, 0x20007]`; the low bits are not discriminated by that fixture. `age_stall_window` records the window and selected aligned constant.
+- **Remedy:** Derive a model-scoped, M-aligned constant from the measured window, retain the low-bit uncertainty, and keep the result distinct from physical-hardware evidence.
+- **Applies when:** A fixed timing value is borrowed from an emulator or document and a fixture is expected to qualify the implementation.
+- **Verification:** `age_stall_window`, `age_sensitivity_m6`, `cgb_speed_stall_length`.
+- **Source:** Phase 12 plans 12-08, 12-09 and 12-17 (D-37).
+- **Status:** Adopted.
+
+### GB-CGB-009 / 2026-10-13 / Runtime-mask variants keep mutation builds inside the test budget
+
+- **Cause and evidence:** Phase 12 has several independent timing mutations; compiling a core per mutation would consume the build ceiling before the full suite. The runtime-mask and shared-mutant targets keep the phase at five distinct core variants, under D-25's six-build cap.
+- **Remedy:** Group non-interacting mutations behind named runtime masks and share their compiled core where the source change permits it; record the configured variant count and measured configure/build cost.
+- **Applies when:** A regression matrix explores multiple independent core mutations under a CI wall-time budget.
+- **Verification:** `cgb_speed_mutant_m27_divider_reset_omitted`, `cgb_speed_mutant_m22_switch_headroom_omitted`, `cgb_partition_mutant_m16`, `player_cgb_speed_smoke_mutant_ppu_follows_cpu`.
+- **Source:** Phase 12 plans 12-03, 12-09, 12-14 and 12-17 (D-25/D-26).
+- **Status:** Adopted.
+
+### GB-CGB-010 / 2026-10-13 / Keep a pre-change identity pin separate from the plan execution base
+
+- **Cause and evidence:** The eight single-speed output pins use the pre-phase source revision `fb45111`, while plan 12-01 execution began at `aac4772` after research and handoff commits. The relevant core and public-header files are identical across those two revisions; the different hashes name different provenance, not a changed pin.
+- **Remedy:** Record the pin's source revision and the plan's `plan_head_before` independently, check their relevant source diff, and never re-record identity values to absorb later implementation changes.
+- **Applies when:** A regression identity is captured at a pre-change baseline that differs from the planning or executor start head.
+- **Verification:** `cgb_speed_identity_pin`, `cgb_speed_identity_pin_flipped`, and `git diff fb45111..aac4772 -- src/core/gabbaboy.c include/gabbaboy/gabbaboy.h`.
+- **Source:** Phase 12 plan 12-01 and its recorded execution ledger.
+- **Status:** Adopted.
