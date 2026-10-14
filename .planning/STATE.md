@@ -7,9 +7,9 @@ current_phase_name: CGB HDMA
 current_plan: 11
 status: Phase 13 execution in progress; plans 13-01 through 13-11 are complete, and plan 13-12 remains.
 stopped_at: Completed 13-11-PLAN.md
-last_updated: "2026-10-14T23:45:37.986Z"
+last_updated: "2026-10-14T23:46:40.230Z"
 last_activity: "2026-10-14: Phase 13 Wave 9 plan 13-11 complete; next Phase 13 Wave 10 plan 13-12."
-state_head: d271508cee8c4740de782586d17e4c02481a1903
+state_head: 739584d395f86c200e1d57f8923ab00886b126e5
 progress:
   total_phases: 9
   completed_phases: 7
@@ -491,14 +491,14 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-14T23:45:37.831Z
+Last session: 2026-10-14T23:46:40.048Z
 Stopped at: Completed 13-11-PLAN.md
 Resume file: .planning/phases/GB-13-cgb-hdma/continue.md
-Completed workflow stage: **Phase 12 - CGB Double Speed, execution** (2026-10-14), plans 12-01..12-19 plus Nyquist validation, security, UI scope review, code review and fixes, regression gate, and goal verification. [12-VERIFICATION.md](phases/GB-12-cgb-double-speed/12-VERIFICATION.md) passes 109/109 with zero unverified behaviors; OpenGSD phase.complete accepted 19/19. Local CTest passed 898/898 in 52.66 seconds, and the DMG baseline had zero changed rows. Exact tested source head `502f992fe9fd2d848845947057c2b327747c3edd`: PR CI `38565349295`, fixture reproduction `38565349297`, and package smoke `38565349116` all succeeded with every PR-event job successful; ASan/UBSan passed 893/893 in 1217.04 seconds. All three review findings are fixed; 34 security threats are closed. Draft [PR #68](https://github.com/szTheory/gabbaboy/pull/68) remains unmerged. Only AGE DIV and STOP-prefetch are passes; eleven qualified expected failures remain, and no physical hardware claim is made. The original plan 12-19 benchmark receipt is historical at `301f1b05577e6d35a4c3a756ded1ec15a4082c8d`, runs `38502094649`, `38502094682`, and `38502094771`; later metadata commits require their own exact-head checks.
-Next command in fresh context: **`/gsd-verify-work 12`**. The following phase is **Phase 13: CGB HDMA**, not started; after verification and merge, enter it with **`/gsd-discuss-phase 13`**. `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop at this handoff for the owner.
+Completed workflow stage: **Phase 13 Wave 9 plan 13-11 — Atomic consumer claims and executable documentation contracts** (2026-10-14). Both tasks and five TDD/fix commits are complete; checker mutations and subject controls, focused player checks, native/model contracts, strict summary coverage and its self-test pass. [13-11-SUMMARY.md](phases/GB-13-cgb-hdma/13-11-SUMMARY.md) records the evidence and deviations. CGB-07 remains open; physical CGB-E qualification remains UNKNOWN/POLICY.
+Next command in fresh context: **`/gsd-execute-phase 13 --wave 10`**. The next workflow stage is **Phase 13 Wave 10 plan 13-12 — Current-revision lane cost, evidence closure and phase pause**. Phase 14, CGB-E Model Qualification and Corpus, remains unstarted. `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop after Phase 13 and wait for the owner.
 
 Completion advisories: OpenGSD's broad SUMMARY reference scan produced 10 warnings across 13 inline references: eleven command strings treated as file paths, the historical ignored `build/tdd-red-audio.xml`, and the unavailable optional `scripts/ci_monitor.cjs`. The verifier checked all 45 declared artifacts and actual behavioral evidence; current audio and mutant controls pass. Hosted monitoring used `gh` with exact PR-event run/head checks. These are recorded advisory/reference limitations, not missing implementation or manual UAT checkpoints.
-Boundary triage: no open issues; only draft PR #68 is open. No release, merge or Phase 13 work was performed. Global learnings are disabled; graduation has no phase LEARNINGS inputs; no phase-resolved pending todos or stale phase `.continue-here` files exist.
+Boundary triage: no open issues; only draft PR #68 is open. Plan 13-11 execution and its local commits are complete; no release or merge was performed. CGB-07 stays open for Phase 13 closure. Global learnings are disabled; graduation has no phase LEARNINGS inputs; no phase-resolved pending todos or stale phase `.continue-here` files exist.
 
 ### Historical handoffs (superseded by the route above)
 
