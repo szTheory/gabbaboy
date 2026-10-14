@@ -4,19 +4,19 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: 13
 current_phase_name: CGB HDMA
-current_plan: 0
-status: planned
-stopped_at: Phase 13 planning complete; next /gsd-execute-phase 13; stop before execution
-last_updated: "2026-10-14T18:09:23.207Z"
+current_plan: 2
+status: executing
+stopped_at: Completed 13-01-PLAN.md
+last_updated: "2026-10-14T18:42:07Z"
 last_activity: 2026-10-14
-last_activity_desc: Phase 13 planning complete; ready to execute
-state_head: acda327dcf0a874faa68da1cb066824454ac4c45
+last_activity_desc: Phase 13 plan 13-01 complete; plan 13-02 next
+state_head: aab4a865c325f21a86f0b989ee527eb202ce7e00
 progress:
   total_phases: 9
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 111
-  completed_plans: 99
-  percent: 67
+  completed_plans: 100
+  percent: 78
 ---
 
 # Project State
@@ -26,23 +26,23 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-14)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 13: CGB HDMA planning complete; next /gsd-execute-phase 13
+**Current focus:** Phase 13 — CGB HDMA
 
 ## Current Position
 
-Phase: 13 (CGB HDMA) — READY TO EXECUTE
-Status: Ready to execute
-Current Plan: 0
+Phase: 13 (CGB HDMA) — EXECUTING
+Status: Phase 13 execution in progress; plan 13-01 complete
+Current Plan: 2
 Total Plans in Phase: 12
 
-Completed workflow stage: **Phase 13: CGB HDMA, planning** (2026-10-14). DEEP research, the source-only CPU/PPU seam probe, pattern mapping and 12 independently checked plans (24 tasks / 10 waves) are ready. [Planning verification](phases/GB-13-cgb-hdma/13-PLAN-CHECK.md) records the reviews, 25/25 decisions, 24 verification commands and negative controls; no DMA implementation or CGB-07 completion is claimed.
-Next stage: **Phase 13: CGB HDMA, execution**, beginning with the actual-transfer gate in 13-01. Selected policies retain physical UNKNOWNs; no routine human UAT or new hosted dependency is planned.
-Next command: **`/gsd-execute-phase 13`**. Stop for the owner. Phase 14: CGB-E Model Qualification and Corpus remains unstarted. Both auto-advance flags remain false.
-Last activity: 2026-10-14 — Phase 13 planning complete; ready to execute
+Completed workflow stage: **Phase 13 plan 13-01 execution** (2026-10-14). The bounded HBlank transfer, guest-visible masks/readback, model-gate mirrors, and speed disposition pass their plan checks; 45/45 Task 1 CTests and 37/37 Task 2 CTests passed, and the frozen DMG baseline has zero changed rows. Task commits: `e9e3f77`, `e0ecbd6`, `aab4a86`. No physical CGB-E timing claim is made and CGB-07 remains open.
+Next stage: **Phase 13 plan 13-02 execution** — Complete bounded transfer, restart and address policies. Reuse [13-01-SUMMARY.md](phases/GB-13-cgb-hdma/13-01-SUMMARY.md) and the adopted Phase 13 decisions; reopen them only for a concrete gap or changed evidence.
+Next command: **`/gsd-execute-phase 13`**. Phase 13 remains active; stop before Phase 14. Both auto-advance flags remain false.
+Last activity: 2026-10-14 — Phase 13 plan 13-01 complete; plan 13-02 next
 
 Phase 12 is merged: PR #68 at `8091fb591de7fb68e666be01d344f5f26ebedc5c`, reviewed/tested head `ffde21c0e2a7b71c6328ac8152d04496f5d387e7`; final PR-event runs `38586393122`, `38586392787`, `38586392931` passed all 19 jobs. Its 73/73 automated UAT stays closed absent changed covered behavior or concrete contradictory evidence. D-069, D-096 and D-098 are durable defaults; GB-GSD-017/018 prevent missing-test and unwired-prohibition churn.
 
-Progress (v0.2): 67% (6/9 phases complete); 99/111 plans complete. Phase 13 is planned, not executed; Phases 14–15 are unstarted.
+Progress (v0.2): 78% (7/9 phases complete); 100/111 plans complete. Phase 13 is executing (13-01 of 12 plans complete); Phases 14–15 are unstarted.
 
 ### Prior stage receipts (historical, before the final merges)
 
@@ -221,6 +221,7 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 12 P17 | 23m+ lower bound | 3 tasks | 8 files |
 | Phase GB-12 P18 | 8 min | 2 tasks | 9 files |
 | Phase 12 P19 | 50 min | 3 tasks | 12 files |
+| Phase 13 P01 | 26 min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -424,6 +425,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 12]: Phase 12 plan 12-17: Every named expected failure has an exact registered behavior pin, with manifest-to-doc and pin inventory checks plus negative controls.
 - [Phase GB-12]: Plan 12-18 preserves the CGB speed API surface: KEY1 bit 7 is guest-visible and there is no public speed getter.
 - [Phase GB-12]: AGE evidence is limited to two passing cases and eleven named expected failures; the corrected M28 mutation applies only when switching to double speed.
+- [Phase 13]: Treat the post-instruction service boundary, four-half-dot byte cadence, and 64-half-dot block as software policy; physical CGB-E timing remains unknown.
+- [Phase 13]: FF51-FF54 CPU reads return FF as policy while writes apply the documented source and destination masks.
 
 ### Pending Todos
 
@@ -459,9 +462,9 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-14T18:09:22.871Z
-Stopped at: Phase 13 planning complete; next /gsd-execute-phase 13; stop before execution
-Resume file: .planning/phases/GB-13-cgb-hdma/continue.md
+Last session: 2026-10-14T18:41:31.542Z
+Stopped at: Completed 13-01-PLAN.md
+Resume file: None
 Completed workflow stage: **Phase 12 - CGB Double Speed, execution** (2026-10-14), plans 12-01..12-19 plus Nyquist validation, security, UI scope review, code review and fixes, regression gate, and goal verification. [12-VERIFICATION.md](phases/GB-12-cgb-double-speed/12-VERIFICATION.md) passes 109/109 with zero unverified behaviors; OpenGSD phase.complete accepted 19/19. Local CTest passed 898/898 in 52.66 seconds, and the DMG baseline had zero changed rows. Exact tested source head `502f992fe9fd2d848845947057c2b327747c3edd`: PR CI `38565349295`, fixture reproduction `38565349297`, and package smoke `38565349116` all succeeded with every PR-event job successful; ASan/UBSan passed 893/893 in 1217.04 seconds. All three review findings are fixed; 34 security threats are closed. Draft [PR #68](https://github.com/szTheory/gabbaboy/pull/68) remains unmerged. Only AGE DIV and STOP-prefetch are passes; eleven qualified expected failures remain, and no physical hardware claim is made. The original plan 12-19 benchmark receipt is historical at `301f1b05577e6d35a4c3a756ded1ec15a4082c8d`, runs `38502094649`, `38502094682`, and `38502094771`; later metadata commits require their own exact-head checks.
 Next command in fresh context: **`/gsd-verify-work 12`**. The following phase is **Phase 13: CGB HDMA**, not started; after verification and merge, enter it with **`/gsd-discuss-phase 13`**. `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop at this handoff for the owner.
 
@@ -556,8 +559,8 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Completed workflow stage: **Phase 13: CGB HDMA, planning**; 12 plans / 24 tasks / 10 waves independently checked.
-- Next stage and phase: **Phase 13: CGB HDMA, execution**. Exact command: **`/gsd-execute-phase 13`**.
-- Start with 13-01's actual-transfer gate. Reuse recorded research and decisions; reopen only a concrete failed discriminator or contradictory evidence.
+- Completed workflow stage: **Phase 13 plan 13-01 execution**; both tasks, all three task commits, the plan SUMMARY, and automated checks are recorded.
+- Next phase and plan: **Phase 13 — CGB HDMA, plan 13-02 — Complete bounded transfer, restart and address policies**. Exact command: **`/gsd-execute-phase 13`**.
+- Reuse the 13-01 summary and recorded decisions; reopen them only for a concrete failed discriminator or changed evidence.
 - Phase 12 is merged and its automated UAT stays closed absent changed evidence. Preserve owner model/runtime config edits.
-- Stop here. Both auto-advance flags remain false. Phase 14: CGB-E Model Qualification and Corpus remains unstarted.
+- Stop before Phase 14. Both auto-advance flags remain false. Phase 14: CGB-E Model Qualification and Corpus remains unstarted.
