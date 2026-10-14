@@ -8,7 +8,9 @@ fi
 
 source_script=$1
 source_script="$(cd -- "$(dirname -- "$source_script")" && pwd)/$(basename -- "$source_script")"
-scratch=$(mktemp -d "${TMPDIR:-/tmp}/gbb-inventory-cleanup.XXXXXX")
+# The unsafe-trap control must evaluate only the payload this fixture constructs. Do not let an
+# inherited TMPDIR contribute shell source to that deliberately unsafe temporary copy.
+scratch=$(mktemp -d "/tmp/gbb-inventory-cleanup.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
 
 marker="$scratch/injected"
