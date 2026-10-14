@@ -142,6 +142,9 @@ status: complete
 | 2 | RED | ac135181e9e7387af4f3186b3a67492319c4b47d | Competing-stall and policy controls expose missing bounded progress |
 | 2 | GREEN | 22a35bade8550d8978fa67f154313cc965e96874 | Independent stall progress, STOP/OAM policies, and qualifications |
 
+**Plan metadata:** b7a6f63 (SUMMARY, STATE, ROADMAP, and continuation route).
+**Route correction:** 452ef99 (Operator Next Steps aligned with Phase 13 wave 4).
+
 ## Files Created/Modified
 
 - tests/test_cgb_hdma.c — bounded public-API guest emitter and guest-visible HALT, IRQ, steal, and bank checks.
