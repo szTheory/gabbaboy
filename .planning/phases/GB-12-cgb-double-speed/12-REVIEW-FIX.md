@@ -56,3 +56,7 @@ _Iteration: 1_
 - Fresh inventory self-test passed its exact platform-filter checks and cleanup trap regression. A nested hostile caller TMPDIR left its parent marker absent; the old inherited-prefix helper mutation triggered that benign marker. This closes the regression-harness data-flow gap as part of CR-01.
 - Fresh `ctest --test-dir build -R '^(sanitizer_timeout_policy_selftest|cgb_speed_xfail_pause_ppu_output|cgb_speed_mutant_m7_xfail_ppu)' --output-on-failure --no-tests=error` passed 4/4, including both PPU controls and the timeout policy.
 - `cgb_speed_mutant_m7_xfail_ppu` passed 100 consecutive executions under CTest `--repeat until-fail:100`. The prior isolated failure's detailed output was not preserved and its cause remains unknown; no assertion or fixture was changed to absorb it. Final regression and hosted CI checks remain required.
+
+## Independent Follow-up WR-02
+
+The follow-up review found a child-directory gap in the timeout policy, recorded in `12-REVIEW-FOLLOWUP.md`. The optional player now calls the shared helper after its own final registration. A child-directory policy probe verifies normal 120/240/300 and sanitizer 360/720/900 limits, and detects the parent-only omission. A configure-only wrapper around the actual player test directory agrees; omitting its call fails the real configure assertion. CMake configure/build and full CTest passed 898/898 in 52.66 seconds after this fix. The original two-finding report above remains historical; the additional follow-up finding is fixed with zero open follow-up dispositions.

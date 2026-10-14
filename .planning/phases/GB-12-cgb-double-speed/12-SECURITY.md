@@ -40,7 +40,7 @@ The read-only security auditor checked all 19 authored threat registers at `fbfe
 | T-12-12 | Repudiation | medium | mitigate | tests/scripts/verify-model-gates.py:317–398; CMake exactly-once STOP tag; no-phase12 and doc negative controls | closed |
 | T-12-13 | Repudiation | medium | mitigate | tests/scripts/derive-cgb-speed-expectations.py:23; no core reads/execution; regenerated table and factor3/tamper controls | closed |
 | T-12-14 | Tampering | medium | mitigate | tests/scripts/reproduce-cgb-speed.sh:21–25,57–59,80–118,134–144; workflow digest/pin checks; missing-pin/tool-failure controls | closed |
-| T-12-15 | Denial of Service | medium | mitigate | cmake/ScaleSanitizerTimeouts.cmake applies the multiplier after the final registration; manual AGE multipliers removed; real late-test configure assertions and sanitizer_timeout_policy_selftest reject early/double scaling | closed |
+| T-12-15 | Denial of Service | medium | mitigate | Shared multiplier runs after the final registration in both tests directories; manual AGE multipliers removed; real late-test configure assertions and sanitizer_timeout_policy_selftest reject early/double/parent-only scaling | closed |
 | T-12-16 | Repudiation | medium | mitigate | tests/player/test_limitations.c:10; tests/player/claims_agree.cmake:47–50; hosted player package and mutation controls | closed |
 | T-12-17 | Tampering | medium | mitigate | Public-header tokens unchanged after stripping comments; cgb_consumer_symbol_coverage and missing-symbol control | closed |
 | T-12-18 | Denial of Service | high | mitigate | tests/fuzz_core.c:15,495,509–527,608–612; eight seeds and inverted-oracle controls | closed |
@@ -59,12 +59,11 @@ The read-only security auditor checked all 19 authored threat registers at `fbfe
 | T-12-31 | Tampering | medium | mitigate | tests/test_cgb_partition.c:357–374,410–415,898–911; independent owned copies; snapshot fidelity/unsupported-pointer negative | closed |
 | T-12-32 | Tampering | medium | mitigate | tests/CMakeLists.txt:3153–3184; four AGE sensitivity sweeps plus mutated M28-reference control | closed |
 | T-12-SC | Tampering | high | mitigate | No new npm/pip/cargo install commands among changed executable/build/workflow files; digest-pinned RGBDS and unchanged SDL/compiler fuzz path | closed |
-
 | T-12-33 | Tampering / Elevation of Privilege | high | mitigate | Post-implementation CR-01: literal EXIT trap uses a script-scope quoted path; .github/scripts/test-inventory-cleanup.sh confines the unsafe copy to an owned prefix; hostile caller TMPDIR and original-trap controls passed at be53c43/d979ba5 | closed |
 
 ## Closed Review Mitigations
 
-T-12-15 was open in the initial audit because the multiplier ran before Phase 12 registrations. Commit `fe61e2f` places one shared pass after all registrations, removes manual AGE multiplication and asserts actual late AGE/partition limits. The configure-only regression proves 120→360, 240→720 and 60→180, while rejecting early and double passes; normal limits stay unchanged. This is property evidence on Darwin, not an ASan runtime claim. The current root policy CTest passed.
+T-12-15 was open in the initial audit because the multiplier ran before Phase 12 registrations. Commit `fe61e2f` places one shared pass after the parent registrations, removes manual AGE multiplication and asserts actual late AGE/partition limits. Follow-up WR-02 adds a separate final pass for the optional player's directory, required by the CMake 3.25 property scope. The configure-only regression proves parent 120→360, 240→720 and 60→180 plus child 120→360, 240→720 and 300→900, while rejecting early, double and parent-only passes; normal limits stay unchanged. The actual player directory's missing-call mutant is rejected by its configure assertion. This is property evidence on Darwin, not an ASan runtime claim. The post-fix full CTest run passed 898/898 in 52.66 seconds.
 
 Code review added T-12-33 for CR-01's environment-to-shell trap interpolation. Commits `be53c43` and `d979ba5` close both the production self-test trap and its deliberately unsafe regression fixture boundary. The inventory self-test detects the original unsafe trap and verifies cleanup; a nested hostile caller TMPDIR leaves its parent marker absent.
 
