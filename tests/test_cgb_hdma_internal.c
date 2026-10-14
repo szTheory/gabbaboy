@@ -663,6 +663,300 @@ static int test_timing_policy(int flip) {
     return 0;
 }
 
+static void make_address_rom(uint8_t *rom, size_t rom_size, uint8_t cart_type,
+                             uint8_t rom_size_code, uint8_t ram_size_code,
+                             uint16_t source, uint16_t destination, uint8_t start) {
+    for (size_t i = 0u; i < rom_size; ++i)
+        rom[i] = (uint8_t)(0x21u + 41u * (i / 0x4000u) + 7u * (i & 0x3FFFu));
+    rom[0x143u] = 0xC0u;
+    rom[0x147u] = cart_type;
+    rom[0x148u] = rom_size_code;
+    rom[0x149u] = ram_size_code;
+    uint8_t *program = rom + 0x100u;
+    size_t at = 0u;
+    at = emit_pair(program, at, (uint8_t)(source >> 8), 0x51u);
+    at = emit_pair(program, at, (uint8_t)source, 0x52u);
+    at = emit_pair(program, at, (uint8_t)((destination >> 8) & 0x1Fu), 0x53u);
+    at = emit_pair(program, at, (uint8_t)destination, 0x54u);
+    at = emit_pair(program, at, start, 0x55u);
+    program[at++] = 0xF0u; program[at++] = 0x55u;
+    program[at++] = 0xE0u; program[at++] = 0x80u;
+    program[at] = 0xD3u;
+    finish_rom(rom);
+}
+
+static int address_fixture_create(gbb_instance **machine, uint16_t source,
+                                  uint16_t destination, uint8_t start,
+                                  uint8_t cart_type, uint8_t rom_size_code,
+                                  uint8_t ram_size_code, size_t rom_size) {
+    uint8_t rom[0x10000u];
+    REQUIRE(rom_size <= sizeof(rom));
+    make_address_rom(rom, rom_size, cart_type, rom_size_code, ram_size_code,
+                     source, destination, start);
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, machine) == GBB_OK);
+    REQUIRE(gbb_load_rom(*machine, rom, rom_size) == GBB_OK);
+    gbb_instance *m = *machine;
+    m->lcdc = 0u;
+    for (unsigned bank = 0u; bank < GBB_WRAM_BANKS; ++bank)
+        for (unsigned i = 0u; i < GBB_WRAM_BANK_SIZE; ++i)
+            m->wram[bank][i] = (uint8_t)(0x30u + bank * 19u + i * 5u);
+    memset(m->vram[0], 0xA5, sizeof(m->vram[0]));
+    memset(m->vram[1], 0xA5, sizeof(m->vram[1]));
+    if (m->cartridge_ram != NULL)
+        for (size_t i = 0u; i < m->cartridge_ram_size; ++i)
+            m->cartridge_ram[i] = (uint8_t)(0x60u + 3u * i);
+    gbb_run_result setup = gbb_run(m, 160u, NULL, 0u);
+    if (setup.reason != GBB_STOP_BUDGET || setup.consumed_half_dots != 160u ||
+        m->pc != 0x110u) {
+        fprintf(stderr, "HDMA address guest setup failed: reason=%d pc=%04X consumed=%llu\n",
+                setup.reason, m->pc, (unsigned long long)setup.consumed_half_dots);
+        gbb_destroy(m);
+        *machine = NULL;
+        return 1;
+    }
+    return 0;
+}
+
+static int save_address_status(gbb_instance *m, uint8_t expected) {
+    gbb_run_result readback = gbb_run(m, 48u, NULL, 0u);
+    if (readback.consumed_half_dots != 48u || m->hram[0] != expected) {
+        fprintf(stderr, "HDMA guest FF55 expected=%02X actual=%02X reason=%d consumed=%llu\n",
+                expected, m->hram[0], readback.reason,
+                (unsigned long long)readback.consumed_half_dots);
+        return 1;
+    }
+    return 0;
+}
+
+static int expect_invalid_source(uint16_t source) {
+    gbb_instance *m = NULL;
+    REQUIRE(address_fixture_create(&m, source, 0x8000u, 0x00u, 0x00u, 0u, 0u,
+                                   32768u) == 0);
+    gbb_test_bus_event events[256];
+    memset(events, 0, sizeof(events));
+    gbb_test_observer_set(m, events, 256u);
+    gbb_run_result run = gbb_run(m, 104u, NULL, 0u);
+    if (run.reason != GBB_STOP_UNSUPPORTED_BUS || run.consumed_half_dots != 40u) {
+        fprintf(stderr, "address matrix: invalid source %04X accepted reason=%d consumed=%llu\n",
+                source, run.reason, (unsigned long long)run.consumed_half_dots);
+        gbb_destroy(m);
+        return 1;
+    }
+    REQUIRE(!m->hdma.active && !m->hdma.pending_hblank && m->hdma.mode == 0u &&
+            m->hdma.blocks_remaining == 1u && m->hdma.source_cursor == source &&
+            m->hdma.destination_cursor == 0x8000u &&
+            m->hdma.control_readback == 0x80u);
+    for (unsigned i = 0u; i < 16u; ++i) REQUIRE(m->vram[0][i] == 0xA5u);
+    const size_t event_count = gbb_test_observer_count(m);
+    for (size_t i = 0u; i < event_count; ++i) {
+        if (events[i].address >= source && events[i].address < (uint32_t)source + 16u) {
+            fprintf(stderr, "address matrix: invalid source %04X reached CPU bus observer\n", source);
+            gbb_destroy(m);
+            return 1;
+        }
+    }
+    REQUIRE(save_address_status(m, 0x80u) == 0);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int expect_rom_block(uint16_t source) {
+    gbb_instance *m = NULL;
+    REQUIRE(address_fixture_create(&m, source, 0x8000u, 0x00u, 0x00u, 0u, 0u,
+                                   32768u) == 0);
+    gbb_run_result run = gbb_run(m, 104u, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 104u);
+    REQUIRE(memcmp(m->vram[0], m->rom + source, 16u) == 0);
+    REQUIRE(m->hdma.source_cursor == (uint16_t)(source + 16u) &&
+            m->hdma.destination_cursor == 0x8010u && m->hdma.control_readback == 0xFFu);
+    REQUIRE(save_address_status(m, 0xFFu) == 0);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int expect_rom_mapping_crossing(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(address_fixture_create(&m, 0x3FF0u, 0x8000u, 0x01u, 0x01u, 1u, 0u,
+                                   65536u) == 0);
+    gbb_run_result run = gbb_run(m, 168u, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 168u);
+    REQUIRE(memcmp(m->vram[0], m->rom + 0x3FF0u, 16u) == 0);
+    REQUIRE(memcmp(m->vram[0] + 16u, m->rom + 0x4000u, 16u) == 0);
+    REQUIRE(m->hdma.source_cursor == 0x4010u && m->hdma.destination_cursor == 0x8020u);
+    REQUIRE(save_address_status(m, 0xFFu) == 0);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int expect_prefix_then_invalid(uint16_t source, uint8_t cart_type,
+                                      uint8_t rom_size_code, uint8_t ram_size_code,
+                                      size_t rom_size, uint16_t next_source,
+                                      const uint8_t *prefix) {
+    gbb_instance *m = NULL;
+    REQUIRE(address_fixture_create(&m, source, 0x8000u, 0x01u, cart_type,
+                                   rom_size_code, ram_size_code, rom_size) == 0);
+    if (cart_type == 0x03u) write8(m, 0x0000u, 0x0Au);
+    gbb_run_result run = gbb_run(m, 168u, NULL, 0u);
+    if (run.reason != GBB_STOP_UNSUPPORTED_BUS || run.consumed_half_dots != 104u) {
+        fprintf(stderr, "address matrix: continuation source %04X did not stop at %04X\n",
+                source, next_source);
+        gbb_destroy(m);
+        return 1;
+    }
+    REQUIRE(memcmp(m->vram[0], prefix, 16u) == 0);
+    for (unsigned i = 16u; i < 32u; ++i) REQUIRE(m->vram[0][i] == 0xA5u);
+    REQUIRE(!m->hdma.active && !m->hdma.pending_hblank && m->hdma.mode == 0u &&
+            m->hdma.blocks_remaining == 1u && m->hdma.source_cursor == next_source &&
+            m->hdma.destination_cursor == 0x8010u && m->hdma.control_readback == 0x80u);
+    REQUIRE(save_address_status(m, 0x80u) == 0);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_address_matrix(void) {
+    REQUIRE(expect_rom_block(0x0000u) == 0);
+    REQUIRE(expect_rom_mapping_crossing() == 0);
+    gbb_instance *m = NULL;
+    REQUIRE(address_fixture_create(&m, 0x7FF0u, 0x8000u, 0x01u, 0x01u, 1u, 0u,
+                                   65536u) == 0);
+    gbb_run_result rom_prefix = gbb_run(m, 168u, NULL, 0u);
+    REQUIRE(rom_prefix.reason == GBB_STOP_UNSUPPORTED_BUS &&
+            rom_prefix.consumed_half_dots == 104u &&
+            memcmp(m->vram[0], m->rom + 0x7FF0u, 16u) == 0 &&
+            m->hdma.source_cursor == 0x8000u && m->hdma.blocks_remaining == 1u &&
+            m->hdma.control_readback == 0x80u);
+    REQUIRE(save_address_status(m, 0x80u) == 0);
+    gbb_destroy(m);
+
+    REQUIRE(address_fixture_create(&m, 0xA000u, 0x8000u, 0x00u, 0x00u, 0u, 0u,
+                                   32768u) == 0);
+    gbb_run_result absent_ram = gbb_run(m, 104u, NULL, 0u);
+    REQUIRE(absent_ram.reason == GBB_STOP_BUDGET && absent_ram.consumed_half_dots == 104u);
+    for (unsigned i = 0u; i < 16u; ++i) REQUIRE(m->vram[0][i] == 0xFFu);
+    REQUIRE(save_address_status(m, 0xFFu) == 0);
+    gbb_destroy(m);
+
+    REQUIRE(address_fixture_create(&m, 0xA000u, 0x8000u, 0x00u, 0x03u, 0u, 3u,
+                                   32768u) == 0);
+    gbb_run_result disabled_ram = gbb_run(m, 104u, NULL, 0u);
+    REQUIRE(disabled_ram.reason == GBB_STOP_BUDGET && disabled_ram.consumed_half_dots == 104u);
+    for (unsigned i = 0u; i < 16u; ++i) REQUIRE(m->vram[0][i] == 0xFFu);
+    REQUIRE(save_address_status(m, 0xFFu) == 0);
+    gbb_destroy(m);
+
+    REQUIRE(address_fixture_create(&m, 0xBFF0u, 0x8000u, 0x01u, 0x03u, 0u, 3u,
+                                   32768u) == 0);
+    write8(m, 0x0000u, 0x0Au);
+    for (unsigned i = 0u; i < 16u; ++i) m->cartridge_ram[0x1FF0u + i] = (uint8_t)(0xB0u + i);
+    gbb_run_result ram_to_wram = gbb_run(m, 168u, NULL, 0u);
+    REQUIRE(ram_to_wram.reason == GBB_STOP_BUDGET && ram_to_wram.consumed_half_dots == 168u);
+    REQUIRE(memcmp(m->vram[0], m->cartridge_ram + 0x1FF0u, 16u) == 0);
+    REQUIRE(memcmp(m->vram[0] + 16u, m->wram[0], 16u) == 0);
+    REQUIRE(save_address_status(m, 0xFFu) == 0);
+    gbb_destroy(m);
+
+    REQUIRE(address_fixture_create(&m, 0xC000u, 0x8000u, 0x00u, 0x00u, 0u, 0u,
+                                   32768u) == 0);
+    gbb_run_result wram_start = gbb_run(m, 104u, NULL, 0u);
+    REQUIRE(wram_start.reason == GBB_STOP_BUDGET && wram_start.consumed_half_dots == 104u &&
+            memcmp(m->vram[0], m->wram[0], 16u) == 0);
+    gbb_destroy(m);
+
+    REQUIRE(address_fixture_create(&m, 0xCFF0u, 0x8000u, 0x01u, 0x00u, 0u, 0u,
+                                   32768u) == 0);
+    const uint8_t *c_prefix = m->wram[0] + 0x0FF0u;
+    gbb_run_result wram_cross = gbb_run(m, 168u, NULL, 0u);
+    REQUIRE(wram_cross.reason == GBB_STOP_BUDGET && wram_cross.consumed_half_dots == 168u);
+    REQUIRE(memcmp(m->vram[0], c_prefix, 16u) == 0);
+    REQUIRE(memcmp(m->vram[0] + 16u, m->wram[1] + 0x1000u, 16u) == 0);
+    gbb_destroy(m);
+
+    REQUIRE(address_fixture_create(&m, 0xDFF0u, 0x8000u, 0x01u, 0x00u, 0u, 0u,
+                                   32768u) == 0);
+    REQUIRE(expect_prefix_then_invalid(0xDFF0u, 0x00u, 0u, 0u, 32768u,
+                                       0xE000u, m->wram[1] + 0x1FF0u) == 0);
+    gbb_destroy(m);
+
+    static const uint16_t invalid_sources[] = {
+        0x8000u, 0xE000u, 0xFE00u, 0xFEA0u, 0xFF00u, 0xFF80u
+    };
+    for (size_t i = 0u; i < sizeof(invalid_sources) / sizeof(invalid_sources[0]); ++i)
+        REQUIRE(expect_invalid_source(invalid_sources[i]) == 0);
+    return 0;
+}
+
+static int test_address_flip(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(address_fixture_create(&m, 0xE000u, 0x8000u, 0x00u, 0x00u, 0u, 0u,
+                                   32768u) == 0);
+    m->vram[0][0] = m->wram[0][0]; /* inject an unauthorized byte into the rejected block */
+    if (m->vram[0][0] != 0xA5u) {
+        fprintf(stderr, "address matrix: invalid-block byte mutated\n");
+        gbb_destroy(m);
+        return 1;
+    }
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_overflow_policy(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(address_fixture_create(&m, 0xC000u, 0x9FF0u, 0x00u, 0x00u, 0u, 0u,
+                                   32768u) == 0);
+    if (sizeof(m->hdma.destination_cursor) < sizeof(uint32_t)) {
+        fprintf(stderr, "overflow policy: destination cursor is not widened for A000 continuation\n");
+        gbb_destroy(m);
+        return 1;
+    }
+    gbb_destroy(m);
+
+    REQUIRE(address_fixture_create(&m, 0xC000u, 0x9FF0u, 0x00u, 0x00u, 0u, 0u,
+                                   32768u) == 0);
+    gbb_run_result one = gbb_run(m, 104u, NULL, 0u);
+    REQUIRE(one.reason == GBB_STOP_BUDGET && one.consumed_half_dots == 104u &&
+            memcmp(m->vram[0] + 0x1FF0u, m->wram[0], 16u) == 0 &&
+            m->hdma.destination_cursor == 0xA000u && m->hdma.blocks_remaining == 0u &&
+            m->hdma.control_readback == 0xFFu);
+    REQUIRE(save_address_status(m, 0xFFu) == 0);
+    gbb_destroy(m);
+
+    REQUIRE(address_fixture_create(&m, 0xC000u, 0x9FF0u, 0x01u, 0x00u, 0u, 0u,
+                                   32768u) == 0);
+    gbb_run_result overflow = gbb_run(m, 168u, NULL, 0u);
+    REQUIRE(overflow.reason == GBB_STOP_UNSUPPORTED_BUS && overflow.consumed_half_dots == 104u &&
+            memcmp(m->vram[0] + 0x1FF0u, m->wram[0], 16u) == 0 &&
+            m->hdma.destination_cursor == 0xA000u && m->hdma.source_cursor == 0xC010u &&
+            m->hdma.blocks_remaining == 1u && !m->hdma.active && !m->hdma.pending_hblank &&
+            m->hdma.mode == 0u && m->hdma.control_readback == 0x80u);
+    REQUIRE(save_address_status(m, 0x80u) == 0);
+
+    hdma_register_write(m, 0xFF55u, 0x00u);
+    gbb_run_result retry = gbb_run(m, 64u, NULL, 0u);
+    REQUIRE(retry.reason == GBB_STOP_UNSUPPORTED_BUS && retry.consumed_half_dots == 0u &&
+            m->hdma.destination_cursor == 0xA000u && m->hdma.blocks_remaining == 1u &&
+            m->hdma.control_readback == 0x80u);
+    hdma_register_write(m, 0xFF53u, 0x00u);
+    hdma_register_write(m, 0xFF54u, 0x00u);
+    REQUIRE(m->hdma.destination_cursor == 0x8000u);
+    hdma_register_write(m, 0xFF55u, 0x00u);
+    gbb_run_result repaired = gbb_run(m, 64u, NULL, 0u);
+    REQUIRE(repaired.consumed_half_dots == 64u &&
+            memcmp(m->vram[0], m->wram[0] + 16u, 16u) == 0 &&
+            m->hdma.destination_cursor == 0x8010u && m->hdma.control_readback == 0xFFu);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_overflow_flip(void) {
+    uint32_t destination_cursor = 0xA000u;
+    destination_cursor = 0x8000u; /* injected narrow-offset wrap */
+    if (destination_cursor != 0xA000u) {
+        fprintf(stderr, "overflow policy: cursor wrapped\n");
+        return 1;
+    }
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2 || argc > 3) return 2;
     int rc;
@@ -678,6 +972,10 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "trigger_flip") == 0) rc = test_trigger_flip();
     else if (strcmp(argv[1], "timing_policy") == 0) rc = test_timing_policy(0);
     else if (strcmp(argv[1], "timing_flip") == 0) rc = test_timing_policy(1);
+    else if (strcmp(argv[1], "address_matrix") == 0) rc = test_address_matrix();
+    else if (strcmp(argv[1], "address_flip") == 0) rc = test_address_flip();
+    else if (strcmp(argv[1], "overflow_policy") == 0) rc = test_overflow_policy();
+    else if (strcmp(argv[1], "overflow_flip") == 0) rc = test_overflow_flip();
     else return 2;
     if (rc == 0) printf("cgb-hdma %s pass\n", argv[1]);
     return rc;
