@@ -379,7 +379,7 @@ Plans:
   3. Every transfer is bounded (at most 128 blocks) and partitioned runs stay equivalent across transfers; MagenTests `hblank_vram_dma` passes with its oracle class recorded, and Mealybug `hdma_*-C` results are reported as informational CGB-C evidence outside the CGB-E denominator.
 
 **Research**: DEEP (LCD-off, mode-3 GDMA, overflow state, HALT, cross-bank source, same-half-dot ordering).
-**Plans**: 5/12 plans executed
+**Plans**: 6/12 plans executed
 
 Plans:
 **Wave 1**
@@ -394,7 +394,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [x] 13-04-PLAN.md — Partition, lifecycle and hostile-resource invariants
-- [ ] 13-08-PLAN.md — Original visible DMA guest and existing player smoke
+- [x] 13-08-PLAN.md — Original visible DMA guest and existing player smoke
 
 **Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 13-05-PLAN.md — Bounded runtime mutation sensitivity and inherited anchors
