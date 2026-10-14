@@ -396,15 +396,25 @@ endforeach()
 
 # Phase 13 plan 13-01: private real-transfer seam tracer. This source includes
 # the core to place a deterministic PPU collision inside guest instructions.
-add_executable(test_cgb_hdma_internal test_cgb_hdma_internal.c)
+add_executable(test_cgb_hdma_internal test_cgb_hdma_internal.c fuzz_core.c)
 target_include_directories(test_cgb_hdma_internal PRIVATE "${PROJECT_SOURCE_DIR}/include")
 target_compile_features(test_cgb_hdma_internal PRIVATE c_std_17)
+target_compile_definitions(test_cgb_hdma_internal PRIVATE GBB_FUZZ_STANDALONE_TEST=1)
 set_target_properties(test_cgb_hdma_internal PROPERTIES C_EXTENSIONS OFF)
 foreach(case ld_sp cb controls partition outputs)
   add_test(NAME cgb_hdma_tracer_${case} COMMAND test_cgb_hdma_internal ${case})
 endforeach()
-foreach(case state_matrix trigger_matrix trigger_controls timing_policy address_matrix overflow_policy)
+foreach(case state_matrix trigger_matrix trigger_controls timing_policy address_matrix overflow_policy
+             lifecycle resource_bounds hostile_seeds)
   add_test(NAME cgb_hdma_${case} COMMAND test_cgb_hdma_internal ${case})
+endforeach()
+foreach(case lifecycle resource_bounds hostile_seeds)
+  add_test(NAME cgb_hdma_${case}_controls
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_internal>;${case}_controls"
+      -DGBB_EXPECT_CODE=1
+      -DGBB_EXPECT_REGEX=hdma-${case}-control-detected
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 endforeach()
 add_test(NAME cgb_hdma_state_matrix_controls
   COMMAND ${CMAKE_COMMAND}
@@ -469,6 +479,7 @@ add_test(NAME cgb_hdma_partition_order_control
     -DGBB_EXPECT_CODE=1
     -DGBB_EXPECT_REGEX=hdma-partition-control-detected
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
 
 # Plan 13-03 reserves Task 2's exact tests before that harness expands.
 foreach(case competing_stalls stop_policy oam_order)

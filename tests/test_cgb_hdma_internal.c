@@ -1,10 +1,8 @@
-/* White-box CGB HDMA seam tests. The private PPU fixture places a genuine
- * mode-3-to-mode-0 transition inside a real guest instruction; it does not
- * claim physical CGB-E timing. */
-#include "../src/core/gabbaboy.c"
-
-#include <stdio.h>
-#include <string.h>
+/* White-box CGB HDMA seams reuse the explicit partition digest for lifecycle
+ * transaction checks; none of these fixtures claim physical CGB-E timing. */
+#define main cgb_hdma_partition_existing_main
+#include "test_cgb_partition.c"
+#undef main
 
 #define REQUIRE(x) do { if (!(x)) { \
     fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #x); return 1; \
@@ -1352,6 +1350,395 @@ static int test_oam_order_controls(void) {
     return 0;
 }
 
+static const char *hdma_lifecycle_missing_field(const gbb_instance *m) {
+#define HDMA_EXPECT(field, expected) do { if (m->hdma.field != (expected)) return #field; } while (0)
+    HDMA_EXPECT(mode, 0u);
+    HDMA_EXPECT(active, 0u);
+    HDMA_EXPECT(pending_hblank, 0u);
+    HDMA_EXPECT(blocks_remaining, 0u);
+    HDMA_EXPECT(byte_index, 0u);
+    HDMA_EXPECT(byte_phase, 0u);
+    HDMA_EXPECT(source_cursor, 0u);
+    HDMA_EXPECT(destination_cursor, 0u);
+    HDMA_EXPECT(block_vram_bank, 0u);
+    HDMA_EXPECT(source_high, 0u);
+    HDMA_EXPECT(source_low, 0u);
+    HDMA_EXPECT(destination_high, 0u);
+    HDMA_EXPECT(destination_low, 0u);
+    HDMA_EXPECT(control_readback, 0xFFu);
+#undef HDMA_EXPECT
+    return NULL;
+}
+
+static void hdma_lifecycle_prime(gbb_instance *m) {
+    m->hdma.mode = 2u;
+    m->hdma.active = 1u;
+    m->hdma.pending_hblank = 1u;
+    m->hdma.blocks_remaining = 128u;
+    m->hdma.byte_index = 15u;
+    m->hdma.byte_phase = 3u;
+    m->hdma.source_cursor = 0xCFF0u;
+    m->hdma.destination_cursor = 0x9FF0u;
+    m->hdma.block_vram_bank = 1u;
+    m->hdma.source_high = 0xC0u;
+    m->hdma.source_low = 0xF0u;
+    m->hdma.destination_high = 0x1Fu;
+    m->hdma.destination_low = 0xF0u;
+    m->hdma.control_readback = 0x7Fu;
+}
+
+static uint64_t hdma_partition_state_digest(const gbb_instance *m) {
+    partition_streams empty_streams;
+    memset(&empty_streams, 0, sizeof(empty_streams));
+    return partition_digest(m, &empty_streams);
+}
+
+static int test_hdma_lifecycle(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &m) == GBB_OK);
+    REQUIRE(hdma_lifecycle_missing_field(m) == NULL);
+    uint8_t rom[32768];
+    make_rom(rom, 0, 1);
+    REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
+
+    hdma_lifecycle_prime(m);
+    REQUIRE(gbb_reset(m) == GBB_OK);
+    const char *missing = hdma_lifecycle_missing_field(m);
+    if (missing != NULL) {
+        fprintf(stderr, "hdma-lifecycle-reset-left-field %s\n", missing);
+        gbb_destroy(m);
+        return 1;
+    }
+    hdma_lifecycle_prime(m);
+    REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
+    missing = hdma_lifecycle_missing_field(m);
+    if (missing != NULL) {
+        fprintf(stderr, "hdma-lifecycle-load-left-field %s\n", missing);
+        gbb_destroy(m);
+        return 1;
+    }
+    gbb_destroy(m);
+
+    gbb_instance *active = NULL, *control = NULL;
+    REQUIRE(policy_fixture_create(&active, 0x7Fu, 0u, 0, 0, 0, 0u, 0u, 0u, 2048u) == 0);
+    REQUIRE(policy_fixture_create(&control, 0x7Fu, 0u, 0, 0, 0, 0u, 0u, 0u, 2048u) == 0);
+    active->pc = control->pc = 0x112u;
+    active->a = control->a = 0x7Fu;
+    REQUIRE(gbb_run(active, 24u, NULL, 0u).consumed_half_dots == 24u);
+    REQUIRE(gbb_run(control, 24u, NULL, 0u).consumed_half_dots == 24u);
+    REQUIRE(gbb_run(active, 1u, NULL, 0u).consumed_half_dots == 1u);
+    REQUIRE(gbb_run(control, 1u, NULL, 0u).consumed_half_dots == 1u);
+    REQUIRE(active->hdma.active && active->hdma.byte_phase == 1u &&
+            active->hdma.blocks_remaining == 128u);
+
+    const uint64_t before = hdma_partition_state_digest(active);
+    REQUIRE(gbb_load_rom(active, NULL, 0u) == GBB_INVALID_ARGUMENT);
+    REQUIRE(hdma_partition_state_digest(active) == before);
+    REQUIRE(gbb_load_rom(active, active->rom, 0x14Fu) == GBB_ROM_TRUNCATED);
+    REQUIRE(hdma_partition_state_digest(active) == before);
+    REQUIRE(gbb_load_rom(active, active->rom, GBB_MAX_ROM_SIZE + 1u) == GBB_ROM_TOO_LARGE);
+    REQUIRE(hdma_partition_state_digest(active) == before);
+
+    (void)gbb_run(active, 63u, NULL, 0u);
+    (void)gbb_run(control, 63u, NULL, 0u);
+    REQUIRE(hdma_partition_state_digest(active) == hdma_partition_state_digest(control));
+    gbb_destroy(active);
+    gbb_destroy(control);
+
+    gbb_instance *bank0 = NULL, *bank1 = NULL;
+    REQUIRE(policy_fixture_create(&bank0, 0x00u, 0u, 0, 0, 0, 0u, 0u, 0u, 32u) == 0);
+    REQUIRE(policy_fixture_create(&bank1, 0x01u, 0u, 0, 0, 0, 0u, 0u, 0u, 32u) == 0);
+    for (size_t i = 0u; i < 32u; ++i) {
+        bank0->wram[0][i] = (uint8_t)(0x20u + i);
+        bank1->wram[0][i] = (uint8_t)(0xC0u - i);
+    }
+    memset(bank0->vram[0], 0xA5, sizeof(bank0->vram[0]));
+    memset(bank1->vram[0], 0xA5, sizeof(bank1->vram[0]));
+    bank0->vram_bank = 0u;
+    bank1->vram_bank = 1u;
+    hdma_register_write(bank0, 0xFF55u, 0x00u);
+    hdma_register_write(bank1, 0xFF55u, 0x01u);
+    REQUIRE(gbb_run(bank0, 64u, NULL, 0u).consumed_half_dots == 64u);
+    REQUIRE(gbb_run(bank1, 64u, NULL, 0u).consumed_half_dots == 64u);
+    REQUIRE(gbb_run(bank1, 64u, NULL, 0u).consumed_half_dots == 64u);
+    REQUIRE(bank0->hdma.blocks_remaining == 0u &&
+            bank1->hdma.blocks_remaining == 0u &&
+            memcmp(bank0->vram[0], bank0->wram[0], 16u) == 0 &&
+            memcmp(bank1->vram[1], bank1->wram[0], 32u) == 0 &&
+            bank1->vram[0][0] == 0xA5u);
+    gbb_destroy(bank0);
+    gbb_destroy(bank1);
+    return 0;
+}
+
+static int test_hdma_lifecycle_controls(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &m) == GBB_OK);
+    REQUIRE(hdma_lifecycle_missing_field(m) == NULL);
+    m->hdma.source_cursor = 0xC000u;
+    const char *missing = hdma_lifecycle_missing_field(m);
+    gbb_destroy(m);
+    if (missing == NULL) {
+        fputs("hdma-lifecycle-control-inert source_cursor\n", stderr);
+        return 1;
+    }
+    fprintf(stderr, "hdma-lifecycle-control-detected %s\n", missing);
+    return 1;
+}
+
+static int hdma_active_block_fixture(gbb_instance **out) {
+    REQUIRE(policy_fixture_create(out, 0x80u, 0u, 0, 0, 0, 0u, 0u, 0u, 64u) == 0);
+    hdma_register_write(*out, 0xFF55u, 0x00u);
+    if (!hdma_admit_block(*out)) {
+        gbb_destroy(*out);
+        *out = NULL;
+        return 1;
+    }
+    return 0;
+}
+
+static int hdma_start_headroom_case(uint8_t control, uint64_t headroom,
+                                    int expect_rejection) {
+    gbb_instance *m = NULL;
+    REQUIRE(policy_fixture_create(&m, control, 0u, 0, 0, 0, 0u, 0u, 0u,
+                                  (size_t)((control & 0x7Fu) + 1u) * 16u) == 0);
+    m->pc = 0x112u;
+    m->a = control;
+    m->time_half_dots = UINT64_MAX - headroom;
+    const uint64_t before = hdma_partition_state_digest(m);
+    gbb_trace_record trace[2];
+    memset(trace, 0xA5, sizeof(trace));
+    const gbb_run_result start = gbb_run_ex(m, 24u, trace, 1u, NULL, 0u);
+    if (expect_rejection) {
+        if (start.reason != GBB_STOP_INVALID_STATE || start.consumed_half_dots != 0u ||
+            m->time_half_dots != UINT64_MAX - headroom ||
+            hdma_partition_state_digest(m) != before) {
+            fprintf(stderr, "hdma-resource-start-headroom not-rejected blocks=%u headroom=%" PRIu64
+                            " reason=%d consumed=%" PRIu64 "\n",
+                    (unsigned)(control & 0x7Fu) + 1u, headroom, start.reason,
+                    start.consumed_half_dots);
+            gbb_destroy(m);
+            return 1;
+        }
+        const uint8_t *guard = (const uint8_t *)&trace[0];
+        for (size_t i = 0u; i < sizeof(trace[0]); ++i) {
+            if (guard[i] != 0xA5u) {
+                fprintf(stderr, "hdma-resource-start-output-mutated byte=%zu\n", i);
+                gbb_destroy(m);
+                return 1;
+            }
+        }
+        gbb_destroy(m);
+        return 0;
+    }
+    REQUIRE(start.reason == GBB_STOP_BUDGET && start.consumed_half_dots == 24u &&
+            m->hdma.mode == 2u && m->hdma.pending_hblank);
+    const uint64_t work = (uint64_t)((control & 0x7Fu) + 1u) * 64u;
+    const gbb_run_result transfer = gbb_run(m, work, NULL, 0u);
+    REQUIRE(transfer.consumed_half_dots == work && m->time_half_dots == UINT64_MAX &&
+            m->hdma.mode == 0u && m->hdma.blocks_remaining == 0u);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int hdma_guard_is(const uint8_t *guard, size_t size, uint8_t value) {
+    for (size_t i = 0u; i < size; ++i)
+        if (guard[i] != value) return 0;
+    return 1;
+}
+
+static int test_hdma_resource_bounds(void) {
+    static const uint64_t budgets[] = {0u, 1u, 3u, 4u, 63u, 64u, 65u, 67u};
+    for (size_t i = 0u; i < sizeof(budgets) / sizeof(budgets[0]); ++i) {
+        gbb_instance *m = NULL;
+        REQUIRE(hdma_active_block_fixture(&m) == 0);
+        const uint64_t start_time = m->time_half_dots;
+        const uint64_t budget = budgets[i];
+        const gbb_run_result run = gbb_run(m, budget, NULL, 0u);
+        const uint64_t expected = budget < 64u ? budget : 64u;
+        REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == expected &&
+                m->time_half_dots == start_time + expected);
+        if (expected < 64u) {
+            REQUIRE(m->hdma.active && m->hdma.byte_index == expected / 4u &&
+                    m->hdma.byte_phase == expected % 4u);
+        } else {
+            REQUIRE(m->hdma.mode == 0u && !m->hdma.active &&
+                    m->hdma.blocks_remaining == 0u &&
+                    memcmp(m->vram[0], m->wram[0], 16u) == 0);
+        }
+        gbb_destroy(m);
+    }
+
+    REQUIRE(hdma_start_headroom_case(0x02u, 215u, 1) == 0);
+    REQUIRE(hdma_start_headroom_case(0x02u, 216u, 0) == 0);
+
+    gbb_instance *lcd_off_halt = NULL;
+    REQUIRE(policy_fixture_create(&lcd_off_halt, 0x80u, 0u, 0, 0, 0,
+                                  0u, 0u, 0u, 2048u) == 0);
+    lcd_off_halt->halted = 1u;
+    for (size_t i = 0u; i < 2048u; ++i)
+        lcd_off_halt->wram[0][i] = (uint8_t)(i * 29u + 3u);
+    hdma_register_write(lcd_off_halt, 0xFF55u, 0x7Fu);
+    REQUIRE(lcd_off_halt->hdma.blocks_remaining == 128u &&
+            lcd_off_halt->hdma.pending_hblank);
+    const gbb_run_result maximum = gbb_run(lcd_off_halt, 8192u, NULL, 0u);
+    REQUIRE(maximum.consumed_half_dots == 8192u && lcd_off_halt->halted &&
+            lcd_off_halt->hdma.mode == 0u && lcd_off_halt->hdma.blocks_remaining == 0u &&
+            memcmp(lcd_off_halt->vram[0], lcd_off_halt->wram[0], 2048u) == 0);
+    gbb_destroy(lcd_off_halt);
+
+    gbb_instance *near_byte = NULL;
+    REQUIRE(hdma_active_block_fixture(&near_byte) == 0);
+    near_byte->time_half_dots = UINT64_MAX - 5u;
+    const gbb_run_result partial = gbb_run(near_byte, 8u, NULL, 0u);
+    REQUIRE(partial.reason == GBB_STOP_INVALID_STATE && partial.consumed_half_dots == 5u &&
+            near_byte->time_half_dots == UINT64_MAX && near_byte->hdma.active &&
+            near_byte->hdma.byte_index == 1u && near_byte->hdma.byte_phase == 1u);
+    gbb_destroy(near_byte);
+
+    gbb_instance *near_block = NULL;
+    REQUIRE(hdma_active_block_fixture(&near_block) == 0);
+    near_block->hdma.blocks_remaining = 1u;
+    near_block->hdma.byte_index = 15u;
+    near_block->hdma.byte_phase = 3u;
+    near_block->time_half_dots = UINT64_MAX - 1u;
+    const gbb_run_result final_byte = gbb_run(near_block, 1u, NULL, 0u);
+    REQUIRE(final_byte.reason == GBB_STOP_BUDGET && final_byte.consumed_half_dots == 1u &&
+            near_block->time_half_dots == UINT64_MAX && near_block->hdma.mode == 0u &&
+            near_block->hdma.blocks_remaining == 0u);
+    gbb_destroy(near_block);
+
+    gbb_instance *trace_case = NULL;
+    REQUIRE(hdma_active_block_fixture(&trace_case) == 0);
+    gbb_trace_record traces[2];
+    memset(traces, 0xA5, sizeof(traces));
+    gbb_run_result no_trace = gbb_run_ex(trace_case, 64u, traces, 0u, NULL, 0u);
+    REQUIRE(no_trace.reason == GBB_STOP_BUDGET && no_trace.consumed_half_dots == 64u &&
+            hdma_guard_is((const uint8_t *)traces, sizeof(traces), 0xA5u));
+    gbb_run_result trace_zero = gbb_run_ex(trace_case, 64u, traces, 0u, NULL, 0u);
+    REQUIRE(trace_zero.reason == GBB_STOP_TRACE_FULL && trace_zero.consumed_half_dots == 0u &&
+            hdma_guard_is((const uint8_t *)traces, sizeof(traces), 0xA5u));
+    gbb_destroy(trace_case);
+
+    gbb_instance *audio_case = NULL;
+    REQUIRE(hdma_active_block_fixture(&audio_case) == 0);
+    gbb_audio_frame audio[66];
+    memset(audio, 0x6B, sizeof(audio));
+    size_t frame_count = 0u;
+    const gbb_run_result audio_zero = gbb_run_audio(audio_case, 4096u, audio, 0u, &frame_count);
+    REQUIRE(audio_zero.reason == GBB_STOP_OUTPUT_FULL && frame_count == 0u &&
+            hdma_guard_is((const uint8_t *)audio, sizeof(audio), 0x6Bu));
+    const gbb_run_result audio_one = gbb_run_audio(audio_case, 4096u, audio, 1u, &frame_count);
+    REQUIRE(audio_one.reason == GBB_STOP_OUTPUT_FULL && frame_count == 1u &&
+            hdma_guard_is((const uint8_t *)&audio[1], sizeof(audio[0]), 0x6Bu));
+    const gbb_run_result audio_full = gbb_run_audio(audio_case, 512u, audio, 64u, &frame_count);
+    REQUIRE(audio_full.reason == GBB_STOP_BUDGET && frame_count <= 64u &&
+            hdma_guard_is((const uint8_t *)&audio[64], sizeof(audio[0]), 0x6Bu));
+    gbb_destroy(audio_case);
+
+    gbb_instance *diagnostic_case = NULL;
+    REQUIRE(hdma_active_block_fixture(&diagnostic_case) == 0);
+    enum { DIAGNOSTIC_CAPACITY = GBB_DIAGNOSTIC_OPERATION_RESERVE * 65u };
+    gbb_diagnostic_record diagnostics[DIAGNOSTIC_CAPACITY + 1u];
+    memset(diagnostics, 0x5A, sizeof(diagnostics));
+    const uint64_t diagnostic_time = diagnostic_case->time_half_dots;
+    gbb_run_result diagnostic_zero = gbb_run_ex(diagnostic_case, 4u, NULL, 0u,
+                                                diagnostics, 0u);
+    REQUIRE(diagnostic_zero.reason == GBB_STOP_OUTPUT_FULL &&
+            diagnostic_zero.consumed_half_dots == 0u &&
+            diagnostic_case->time_half_dots == diagnostic_time &&
+            hdma_guard_is((const uint8_t *)diagnostics, sizeof(diagnostics), 0x5Au));
+    gbb_run_result diagnostic_one = gbb_run_ex(diagnostic_case, 4u, NULL, 0u,
+                                               diagnostics, 1u);
+    REQUIRE(diagnostic_one.reason == GBB_STOP_OUTPUT_FULL &&
+            diagnostic_one.consumed_half_dots == 0u &&
+            hdma_guard_is((const uint8_t *)diagnostics, sizeof(diagnostics), 0x5Au));
+    gbb_run_result diagnostic_full = gbb_run_ex(diagnostic_case, 64u, NULL, 0u,
+                                                diagnostics, DIAGNOSTIC_CAPACITY);
+    REQUIRE(diagnostic_full.reason == GBB_STOP_BUDGET &&
+            diagnostic_full.consumed_half_dots == 64u &&
+            hdma_guard_is((const uint8_t *)&diagnostics[DIAGNOSTIC_CAPACITY],
+                          sizeof(diagnostics[0]), 0x5Au));
+    gbb_destroy(diagnostic_case);
+
+    gbb_instance *repeat = NULL;
+    REQUIRE(policy_fixture_create(&repeat, 0x80u, 0u, 0, 0, 0, 0u, 0u, 0u, 16u) == 0);
+    for (unsigned i = 0u; i < 256u; ++i) {
+        hdma_register_write(repeat, 0xFF55u, 0x80u);
+        REQUIRE(repeat->hdma.pending_hblank && repeat->hdma.blocks_remaining == 1u);
+        hdma_register_write(repeat, 0xFF55u, 0x00u);
+        REQUIRE(repeat->hdma.mode == 0u && !repeat->hdma.active &&
+                !repeat->hdma.pending_hblank && repeat->hdma.blocks_remaining == 0u &&
+                repeat->hdma.control_readback == 0x80u);
+    }
+    gbb_destroy(repeat);
+    return 0;
+}
+
+static int test_hdma_resource_controls(void) {
+    uint8_t guard[2] = {0xA5u, 0x5Au};
+    guard[1] ^= 1u;
+    if (hdma_guard_is(&guard[1], 1u, 0x5Au)) {
+        fputs("hdma-resource-control-inert diagnostic_capacity_guard\n", stderr);
+        return 1;
+    }
+    fputs("hdma-resource_bounds-control-detected diagnostic_capacity_guard\n", stderr);
+    return 1;
+}
+
+extern int gbb_fuzz_core_one_input(const uint8_t *data, size_t size);
+extern int gbb_fuzz_core_contract_failures(void);
+extern void gbb_fuzz_core_hdma_observation(int *selected, unsigned *operations,
+                                          unsigned *run_calls,
+                                          uint64_t *consumed_half_dots);
+
+static int test_hdma_hostile_seeds(void) {
+    static const uint8_t seed_maximum[] = {
+        0xB0u, 0x00u, 0u, 0xC0u, 1u, 0u, 2u, 0x80u, 3u, 0u, 4u, 0x7Fu
+    };
+    static const uint8_t seed_restart_cancel[] = {
+        0xB0u, 1u, 0u, 0xC0u, 1u, 0u, 2u, 0u, 3u, 0u, 4u, 0x7Fu,
+        4u, 0x00u, 4u, 0x81u, 4u, 0x00u, 4u, 0x02u
+    };
+    static const uint8_t seed_address_edges[] = {
+        0xB0u, 0u, 0u, 0xFFu, 1u, 0xF0u, 2u, 0x1Fu, 3u, 0xF0u,
+        4u, 0x7Fu, 0u, 0xC0u, 1u, 0u, 2u, 0u, 3u, 0u, 4u, 0x7Eu
+    };
+    const struct { const uint8_t *data; size_t size; unsigned operations; } cases[] = {
+        {seed_maximum, sizeof(seed_maximum), 5u},
+        {seed_restart_cancel, sizeof(seed_restart_cancel), 9u},
+        {seed_address_edges, sizeof(seed_address_edges), 10u}
+    };
+    for (size_t i = 0u; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        const int failures_before = gbb_fuzz_core_contract_failures();
+        REQUIRE(gbb_fuzz_core_one_input(cases[i].data, cases[i].size) == 0);
+        int selected = 0;
+        unsigned operations = 0u, calls = 0u;
+        uint64_t consumed = 0u;
+        gbb_fuzz_core_hdma_observation(&selected, &operations, &calls, &consumed);
+        REQUIRE(gbb_fuzz_core_contract_failures() == failures_before && selected == 1 &&
+                operations == cases[i].operations && operations <= 16u &&
+                calls != 0u && calls <= 16u && consumed <= 16384u);
+    }
+    puts("cgb-hdma hostile seeds pass cases=3 operations<=16 run<=16384");
+    return 0;
+}
+
+static int test_hdma_hostile_seed_controls(void) {
+    static const uint8_t non_hdma_seed[] = {0x80u, 0u};
+    REQUIRE(gbb_fuzz_core_one_input(non_hdma_seed, sizeof(non_hdma_seed)) == 0);
+    int selected = 1;
+    unsigned operations = 1u, calls = 1u;
+    uint64_t consumed = UINT64_MAX;
+    gbb_fuzz_core_hdma_observation(&selected, &operations, &calls, &consumed);
+    if (selected != 0 || operations != 0u || calls != 0u || consumed != 0u) {
+        fputs("hdma-hostile-control-selected no-ff51-ff55-route\n", stderr);
+        return 1;
+    }
+    fputs("hdma-hostile_seeds-control-detected no-ff51-ff55-route\n", stderr);
+    return 1;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2 || argc > 3) return 2;
     int rc;
@@ -1377,6 +1764,17 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "stop_policy_controls") == 0) rc = test_stop_policy_controls();
     else if (strcmp(argv[1], "oam_order") == 0) rc = test_oam_order();
     else if (strcmp(argv[1], "oam_order_controls") == 0) rc = test_oam_order_controls();
+    else if (strcmp(argv[1], "lifecycle") == 0) rc = test_hdma_lifecycle();
+    else if (strcmp(argv[1], "lifecycle_controls") == 0)
+        rc = test_hdma_lifecycle_controls();
+    else if (strcmp(argv[1], "resource_bounds") == 0)
+        rc = test_hdma_resource_bounds();
+    else if (strcmp(argv[1], "resource_bounds_controls") == 0)
+        rc = test_hdma_resource_controls();
+    else if (strcmp(argv[1], "hostile_seeds") == 0)
+        rc = test_hdma_hostile_seeds();
+    else if (strcmp(argv[1], "hostile_seeds_controls") == 0)
+        rc = test_hdma_hostile_seed_controls();
     else return 2;
     if (rc == 0) printf("cgb-hdma %s pass\n", argv[1]);
     return rc;

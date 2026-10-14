@@ -13,6 +13,8 @@
 #define FUZZ_RUN_LIMIT UINT64_C(2048)
 #define FUZZ_INPUT_HALF_DOT_LIMIT UINT64_C(8192)
 #define FUZZ_SPEED_HALF_DOT_LIMIT UINT64_C(600000)
+#define FUZZ_CGB_HDMA_OPERATION_LIMIT 16u
+#define FUZZ_CGB_HDMA_RUN_LIMIT UINT64_C(16384)
 
 static void fix_checksum(uint8_t rom[32768]) {
     uint8_t checksum = 0u;
@@ -76,6 +78,13 @@ static struct {
     int saw_hram_dma_stop;
     int saw_lcd_off;
 } last_speed_observation;
+
+static struct {
+    int selected;
+    unsigned operations;
+    unsigned run_calls;
+    uint64_t consumed_half_dots;
+} last_hdma_observation;
 
 #ifdef GBB_FUZZ_STANDALONE_TEST
 void gbb_fuzz_core_speed_observation(int *selected, uint8_t *scenario,
@@ -311,6 +320,69 @@ static void fuzz_cgb_io(gbb_instance *machine, const uint8_t *data, size_t size)
                      run.reason == GBB_STOP_UNSUPPORTED_BUS);
     require_banks(machine, 1);
 }
+
+/* D-01/D-22: bounded CGB guest traffic focused on FF51-FF55. Each operation
+ * chooses one register and value; the guest run budget and number of run slices
+ * are capped independently so hostile lengths cannot create unbounded work. */
+static void fuzz_cgb_hdma(gbb_instance *machine, const uint8_t *data, size_t size) {
+    static uint8_t rom[32768];
+    size_t at = FUZZ_CGB_PROGRAM;
+    size_t cursor = 2u;
+    unsigned operations = 0u;
+
+    memset(rom, 0, sizeof(rom));
+    rom[0x100u] = 0xC3u; rom[0x101u] = 0x50u; rom[0x102u] = 0x01u;
+    rom[0x143u] = size > 1u && (data[1] & 1u) != 0u ? 0x80u : 0xC0u;
+    while (operations < FUZZ_CGB_HDMA_OPERATION_LIMIT && cursor + 1u < size) {
+        const uint8_t selector = data[cursor++];
+        const uint8_t value = data[cursor++];
+        const uint8_t offset = (uint8_t)(0x51u + selector % 5u);
+        rom[at++] = 0x3Eu; rom[at++] = value;
+        rom[at++] = 0xE0u; rom[at++] = offset;
+        ++operations;
+    }
+    rom[at] = 0x76u;
+    fix_checksum(rom);
+    require_contract(gbb_load_rom(machine, rom, sizeof(rom)) == GBB_OK);
+
+    uint64_t remaining = FUZZ_CGB_HDMA_RUN_LIMIT;
+    uint64_t consumed_total = 0u;
+    unsigned run_calls = 0u;
+    while (remaining != 0u && run_calls < FUZZ_CGB_HDMA_OPERATION_LIMIT) {
+        const uint64_t slice = remaining < FUZZ_RUN_LIMIT ? remaining : FUZZ_RUN_LIMIT;
+        const gbb_run_result run = gbb_run(machine, slice, NULL, 0u);
+        require_contract(run.consumed_half_dots <= slice);
+        consumed_total += run.consumed_half_dots;
+        remaining -= run.consumed_half_dots;
+        ++run_calls;
+        if (run.reason == GBB_STOP_UNSUPPORTED_BUS ||
+            run.reason == GBB_STOP_INVALID_STATE ||
+            run.reason == GBB_STOP_LOCKUP || run.consumed_half_dots == 0u)
+            break;
+        require_contract(run.reason == GBB_STOP_BUDGET ||
+                         run.reason == GBB_STOP_HALTED_IDLE ||
+                         run.reason == GBB_STOP_OUTPUT_FULL);
+    }
+    require_contract(operations <= FUZZ_CGB_HDMA_OPERATION_LIMIT &&
+                     run_calls <= FUZZ_CGB_HDMA_OPERATION_LIMIT &&
+                     consumed_total <= FUZZ_CGB_HDMA_RUN_LIMIT);
+    last_hdma_observation.selected = 1;
+    last_hdma_observation.operations = operations;
+    last_hdma_observation.run_calls = run_calls;
+    last_hdma_observation.consumed_half_dots = consumed_total;
+}
+
+#ifdef GBB_FUZZ_STANDALONE_TEST
+void gbb_fuzz_core_hdma_observation(int *selected, unsigned *operations,
+                                    unsigned *run_calls,
+                                    uint64_t *consumed_half_dots) {
+    if (selected != NULL) *selected = last_hdma_observation.selected;
+    if (operations != NULL) *operations = last_hdma_observation.operations;
+    if (run_calls != NULL) *run_calls = last_hdma_observation.run_calls;
+    if (consumed_half_dots != NULL)
+        *consumed_half_dots = last_hdma_observation.consumed_half_dots;
+}
+#endif
 
 /* D-27: exercise the real guest KEY1/STOP path under bounded, repeatable inputs. The speed mode has
  * its own budget because a CGB switch stalls for far longer than the ordinary 2,048-half-dot fuzz
@@ -815,6 +887,7 @@ int gbb_fuzz_core_last_profile_cgb(void) { return last_profile_cgb; }
 
 int gbb_fuzz_core_one_input(const uint8_t *data, size_t size) {
     if (data == NULL || size == 0u || size > FUZZ_INPUT_LIMIT) return 0;
+    memset(&last_hdma_observation, 0, sizeof(last_hdma_observation));
 
     /* data[0] bit 7 selects the profile. CGB data[0] with bits 6 or 5 select I/O/palette paths;
      * bits 4..6 equal to 0x10 select the guest KEY1/STOP path on either profile. */
@@ -827,7 +900,9 @@ int gbb_fuzz_core_one_input(const uint8_t *data, size_t size) {
     make_battery_rom(base_rom);
     require_contract(gbb_load_rom(machine, base_rom, sizeof(base_rom)) == GBB_OK);
 
-    if (cgb && (data[0] & 0x70u) == 0x10u)
+    if (cgb && data[0] == 0xB0u)
+        fuzz_cgb_hdma(machine, data, size);
+    else if (cgb && (data[0] & 0x70u) == 0x10u)
         fuzz_speed(machine, data, size, 1);
     else if (!cgb && (data[0] & 0x70u) == 0x10u)
         fuzz_speed(machine, data, size, 0);
