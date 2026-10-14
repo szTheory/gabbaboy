@@ -35,6 +35,7 @@ key-files:
     - docs/cgb-profile.md
     - docs/model-gates.md
     - .planning/context/DECISIONS.md
+    - .planning/context/LESSONS.md
 key-decisions:
   - "Admit only ROM, cartridge-mapped A000-BFFF, and direct WRAM C000-DFFF sources; preserve cart_read FF behavior for absent or disabled RAM."
   - "Prevalidate all 16 bytes before block mutation and preserve completed prefixes, rejected cursors, and remaining FF55 status on failure."
@@ -55,6 +56,9 @@ coverage:
         status: pass
       - kind: integration
         ref: ctest:cgb_hdma_state_matrix_controls,cgb_hdma_trigger_matrix_controls,cgb_hdma_timing_policy_controls
+        status: pass
+      - kind: integration
+        ref: ctest:cgb_visibility_deferred_stop,cgb_visibility_deferred_latch_interrupt,cgb_visibility_matrix_cgb,cgb_visibility_cross_column_control
         status: pass
   - id: CGB-07-MAP
     description: ROM, cartridge RAM, and WRAM endpoints and between-block bank changes use mapped storage paths; invalid windows leave the rejected block unchanged.
@@ -159,6 +163,17 @@ status: complete
 - The OpenGSD coverage classifier reports all four deliverables auto-covered with no schema errors.
 - The exact phase policy remains UNKNOWN for physical CGB-E. No hardware result or armed-across-speed-pause transfer claim is made.
 
+## Post-wave integration follow-up
+
+The later Wave 2 full-suite run found three visibility guests that issued FF55 without first programming FF51–FF54. Prevalidation correctly rejected the zero destination; the existing stop seam reported the source cursor `$0000`, which initially obscured the rejected field. No transfer implementation change was needed.
+
+- The deferred-stop guest now programs mapped C000 WRAM to 8000 VRAM before requesting two LCD-off HBlank blocks. The selected single initial kick leaves one block active, so the `$00` FF55 readback remains asserted.
+- The interrupt-entry fixture programs that same valid map before the stack push crosses `$FF56` into FF55. The first run still proves retirement and the exact `$FF56` stop; the next run completes the neighboring transfer and resumes the vector.
+- The CGB FF55 matrix supplies valid mappings and makes the second request an LCD-off two-block HBlank transfer. Its one initial kick leaves status `$00`; the compatibility twin remains `$FF`, so the cross-column negative control still discriminates the profiles.
+- Fresh exact-name inventory contained 13 `cgb_visibility_*` and 18 `cgb_hdma_*` tests; all required matrix/control names were present. The combined `cgb_visibility_*`, `cgb_hdma_*`, `cgb_speed_*`, and `model_gates*` regression group passed 199/199, including the cross-column, deferred-interrupt, address, and overflow controls.
+
+The fixture cause and prevention rule are recorded as GB-CGB-012 in `.planning/context/LESSONS.md`. The full repository suite remains assigned to the orchestrator's Wave 2 integration rerun.
+
 ## Deviations from Plan
 
 ### Auto-fixed Issues
@@ -208,4 +223,4 @@ Phase 13 plan 13-02 is complete and the phase remains active. Plan 13-03, **Real
 
 ## Self-Check: PASSED
 
-The SUMMARY file exists, all four task commits are ancestors of HEAD, and `git diff --check` passes.
+The SUMMARY, lesson, and visibility fixture files exist; all four original task commits are ancestors of HEAD; the coverage checker validates all four entries and its 12 schema mutants; the post-wave regression group passed 199/199; and `git diff --check` passes.

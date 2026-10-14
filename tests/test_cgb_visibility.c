@@ -468,7 +468,11 @@ static int case_deferred_stop(void) {
     prog p = { {0}, 0 };
     ld_a(&p, 0x00);
     ldh_st(&p, 0x40); /* Disable LCD so this visibility probe has no ordinary HBlank edge. */
-    ld_a(&p, 0x80);
+    write_io(&p, 0x51, 0xC0); /* Use a mapped WRAM source and VRAM destination for the real transfer. */
+    write_io(&p, 0x52, 0x00);
+    write_io(&p, 0x53, 0x00);
+    write_io(&p, 0x54, 0x00);
+    ld_a(&p, 0x81); /* One LCD-off initial kick; one block remains active for readback. */
     ldh_st(&p, 0x55);
     ldh_ld(&p, 0x55);
     ldh_st(&p, 0x80);
@@ -476,6 +480,8 @@ static int case_deferred_stop(void) {
     gbb_instance *m = load_view(V_CGB, p.b, p.n, NULL, 0);
     REQUIRE(m != NULL);
     gbb_run_result r = gbb_run(m, RUN_BUDGET, NULL, 0);
+    if (r.reason == GBB_STOP_UNSUPPORTED_BUS)
+        fprintf(stderr, "deferred FF55 guest stopped at $%04X\n", gbb_test_last_unsupported_address(m));
     REQUIRE(r.reason != GBB_STOP_UNSUPPORTED_BUS);
     REQUIRE(hram(m, 0) == 0x00);
     gbb_destroy(m);
@@ -590,6 +596,8 @@ static int case_deferred_latch_interrupt(void) {
     REQUIRE(gbb_test_last_unsupported_address(m) == 0xFF56);
     REQUIRE(gbb_peek_ram(m, 0xFF90) == 0x00);   /* not yet vectored */
     r = gbb_run(m, RUN_BUDGET, NULL, 0);
+    if (r.reason == GBB_STOP_UNSUPPORTED_BUS)
+        fprintf(stderr, "interrupt continuation stopped at $%04X\n", gbb_test_last_unsupported_address(m));
     REQUIRE(r.reason != GBB_STOP_UNSUPPORTED_BUS);
     REQUIRE(gbb_peek_ram(m, 0xFF90) == 0x99);   /* the pending interrupt is taken afterwards */
     gbb_destroy(m);
@@ -598,6 +606,10 @@ static int case_deferred_latch_interrupt(void) {
      * FF56 then implemented FF55. The stop is reported at the entry boundary. */
     prog q = { {0}, 0 };
     emit(&q, 0x31); emit(&q, 0x57); emit(&q, 0xFF);    /* LD SP,$FF57 */
+    write_io(&q, 0x51, 0xC0);                           /* FF55 neighbor must target mapped memory. */
+    write_io(&q, 0x52, 0x00);
+    write_io(&q, 0x53, 0x00);
+    write_io(&q, 0x54, 0x00);
     write_io(&q, 0xFF, 0x01);
     write_io(&q, 0x0F, 0x01);
     emit(&q, 0xFB);
@@ -683,8 +695,16 @@ static int run_cell(const cell *c) {
             write_io(&p, 0x40, 0x00);                 /* LCD off */
             write_io(&p, (uint8_t)(lo - 1u), 0x00);   /* index register: index 0, no auto-increment */
         }
+        if (c->col == V_CGB && c->addr == 0xFF55 && target > 0) {
+            write_io(&p, 0x51, 0xC0);                 /* FF55 starts a real transfer; map it safely. */
+            write_io(&p, 0x52, 0x00);
+            write_io(&p, 0x53, 0x00);
+            write_io(&p, 0x54, 0x00);
+        }
         for (int step = 0; step <= target; ++step) {
             if (step > 0) {
+                if (c->col == V_CGB && c->addr == 0xFF55 && step == 2)
+                    write_io(&p, 0x40, 0x00);         /* Bound the second HBlank request to its initial kick. */
                 write_io(&p, lo, writes[step - 1]);
                 if (c->kind == K_DEF_RW || c->kind == K_DEF_W) expected[nexp++] = WRITE_STOP;
             }
@@ -698,7 +718,11 @@ static int run_cell(const cell *c) {
         for (;;) {
             gbb_run_result r = gbb_run(m, RUN_BUDGET, NULL, 0);
             if (r.reason != GBB_STOP_UNSUPPORTED_BUS) break;
-            if (idx >= nexp) { cell_fail(c, "unexpected stop", 1, 0); bad = 1; break; }
+            if (idx >= nexp) {
+                fprintf(stderr, "visibility matrix unsupported address $%04X\n",
+                        gbb_test_last_unsupported_address(m));
+                cell_fail(c, "unexpected stop", 1, 0); bad = 1; break;
+            }
             if (gbb_test_last_unsupported_address(m) != c->addr) {
                 cell_fail(c, "stop address", gbb_test_last_unsupported_address(m), c->addr); bad = 1; break;
             }
@@ -773,7 +797,7 @@ static void fill_compat(void) {
     const_ff(V_COMPAT, 0xFF4D, 0x01, 0xFE, "D-10 KEY1");
     add_cell(V_COMPAT, 0xFF4F, 0xFE, 0x01, 0xFE, 0xFE, 0xFE, K_IMPL, 0, "boot_hwio-C");
     for (uint16_t a = 0xFF51; a <= 0xFF54; ++a) const_ff(V_COMPAT, a, 0x5A, 0xA5, "D-10 HDMA1-4");
-    const_ff(V_COMPAT, 0xFF55, 0x01, 0x80, "D-10 HDMA5");
+    const_ff(V_COMPAT, 0xFF55, 0x01, 0x81, "D-10 HDMA5");
     const_ff(V_COMPAT, 0xFF56, 0x01, 0xC1, "D-10 RP");
     add_cell(V_COMPAT, 0xFF68, 0xC8, 0x3A, 0x7A, 0x80, 0xC0, K_IMPL, 0, "boot_hwio-C");
     const_ff(V_COMPAT, 0xFF69, 0x5A, 0xA5, "D-10 BCPD");
@@ -798,8 +822,8 @@ static void fill_cgb(void) {
     add_cell(V_CGB, 0xFF4D, 0x7E, 0x01, 0x7F, 0xFE, 0x7E, K_IMPL, 0, "D-10 KEY1 armed bit");
     add_cell(V_CGB, 0xFF4F, 0xFE, 0x01, 0xFF, 0xFE, 0xFE, K_IMPL, 0, "D-10 VBK");
     for (uint16_t a = 0xFF51; a <= 0xFF54; ++a) const_ff(V_CGB, a, 0x5A, 0xA5, "D-10 HDMA1-4");
-    add_cell(V_CGB, 0xFF55, 0xFF, 0x01, 0xFF, 0x80, 0x00, K_IMPL, 0,
-             "Phase 13 HBlank control policy");
+    add_cell(V_CGB, 0xFF55, 0xFF, 0x01, 0xFF, 0x81, 0x00, K_IMPL, 0,
+             "Phase 13 GDMA completion and LCD-off HBlank initial-kick policy");
     add_cell(V_CGB, 0xFF56, STOP, 0x01, STOP, 0xC1, STOP, K_DEF_RW, 14, "D-10 RP");
     add_cell(V_CGB, 0xFF68, 0xC0, 0x3A, 0x7A, 0x80, 0xC0, K_IMPL, 0, "D-10 BCPS");
     /* D-11: with the index parked at 0 both writes land there and read back whole. CRAM starts

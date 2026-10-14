@@ -685,3 +685,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** Direct runtime call reproduced the unresolved entry's flagged-unverified result. Phase 13 revision 2 plans the connected producer proof; its future execution receipt remains required and is not claimed here.
 - **Source:** Installed prohibition producer/probe/verifier contracts and independent Phase 13 plan review.
 - **Status:** Adopted planning rule; execution of the Phase 13 enforcement bridge remains pending.
+
+### GB-CGB-012 / 2026-10-14 / Prime mapped HDMA addresses in register-visibility guests
+
+- **Cause and evidence:** Wave 2's full suite exposed three older visibility guests that wrote FF55 before programming FF51–FF54. The zero-initialized destination cursor is not a legal VRAM address, so whole-block prevalidation correctly stopped admission; the stop seam reports the current source cursor `$0000`, which obscured that the invalid field was the destination. The affected guests were the LCD-off FF55 readback, the CGB FF55 matrix, and an interrupt-entry stack push into FF55 after the retained `$FF56` deferred write.
+- **Remedy:** Any guest that expects an FF55 request to be accepted must set a mapped source and VRAM destination first. Keep the LCD-off initial-kick status explicit, and retain separate controls proving that a genuine `$FF56` neighbor still stops and CGB/compatibility FF55 outcomes remain distinguishable.
+- **Applies when:** A test reaches a newly implemented DMA or device-control path through ordinary IO or stack side effects; register visibility alone no longer isolates the instruction from the triggered device behavior.
+- **Verification:** Exact CTest inventory found all 13 `cgb_visibility_*` and 18 `cgb_hdma_*` names, including named controls. The combined visibility, HDMA, CGB-speed and model-gate set passed 199/199; `cgb_visibility_cross_column_control`, `cgb_visibility_deferred_latch_interrupt`, and the HDMA address/overflow controls passed.
+- **Source:** Phase 13 Wave 2 integration follow-up; `.planning/phases/GB-13-cgb-hdma/13-02-SUMMARY.md`.
+- **Status:** Adopted for guest fixtures that exercise accepted FF55 writes.
