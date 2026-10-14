@@ -1,0 +1,115 @@
+{
+  "suite": {
+    "name": "SameSuite",
+    "revision": "f15645fb049a47ea235f6d2c9a033e72d8087901",
+    "upstream": "https://github.com/LIJI32/SameSuite/tree/f15645fb049a47ea235f6d2c9a033e72d8087901",
+    "license": "X11; see LICENSE.txt"
+  },
+  "license": {
+    "notice_file": "LICENSE.txt",
+    "notice_sha256": "0ec39366cbff2aeed9f06f43941c98974355db52d72940ba1ddc5b7e0de925af",
+    "spdx": "X11",
+    "rights_basis": "G7",
+    "included_material": [
+      {
+        "path": "include/hexdigits.2bpp",
+        "spdx": "X11",
+        "basis": "covered by the SameSuite repository X11 license under G7"
+      },
+      {
+        "path": "include/hardware.inc",
+        "spdx": "CC0-1.0",
+        "basis": "the pinned file carries its CC0-1.0 waiver and SPDX notice"
+      }
+    ]
+  },
+  "build": {
+    "assembler": "RGBDS",
+    "version": "1.0.1",
+    "archive": "rgbds-macos.zip",
+    "archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
+    "ci_archive": "rgbds-linux-x86_64.tar.xz",
+    "ci_archive_sha256": "80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9",
+    "rgbasm_options": [
+      "-I",
+      "include/"
+    ],
+    "rgblink_options": [
+      "-n",
+      "<work>/<name>.sym"
+    ],
+    "rgbfix_options": [
+      "-jv"
+    ],
+    "command": "rgbasm -I include/ -o <work>/<name>.o <source> && rgblink -o <work>/<name>.gb -n <work>/<name>.sym <work>/<name>.o && rgbfix -jv <work>/<name>.gb"
+  },
+  "source_files": [
+    {
+      "path": "dma/gbc_dma_cont.asm",
+      "size_bytes": 1988,
+      "sha256": "136048e8b882e7d71c03587ed48c2ac3db6cfc059b846ed14b3101e52c374d92",
+      "role": "ROM source",
+      "spdx": "X11"
+    },
+    {
+      "path": "include/base.inc",
+      "size_bytes": 5750,
+      "sha256": "9283500f9c2ebac16b52ffa2f1e497212a72425439a89e57fa1ee9fe7c820847",
+      "role": "included source",
+      "spdx": "X11"
+    },
+    {
+      "path": "include/common.inc",
+      "size_bytes": 2401,
+      "sha256": "73a06345d63e29c8031ecf9fc844c275685e838b688d1d5e98954f02c3316c0b",
+      "role": "included source",
+      "spdx": "X11"
+    },
+    {
+      "path": "include/config.inc",
+      "size_bytes": 44,
+      "sha256": "1fc948486e59c3c8003dec05d1cba59bc05733beec1e752403d516de10a58ec9",
+      "role": "included source",
+      "spdx": "X11"
+    },
+    {
+      "path": "include/hardware.inc",
+      "size_bytes": 28763,
+      "sha256": "f0fe34491c902f7f98cddd26676448403dcdd44ac7190894e7f820b78df063cc",
+      "role": "included source",
+      "spdx": "CC0-1.0"
+    },
+    {
+      "path": "include/hexdigits.2bpp",
+      "size_bytes": 512,
+      "sha256": "601ca4f503393d2ec9db5a595f3cbf1fa78f1be39ca8378aaa2f2540d650a34d",
+      "role": "included asset",
+      "spdx": "X11"
+    }
+  ],
+  "fixtures": [
+    {
+      "alias": "gbc_dma_cont",
+      "file": "gbc_dma_cont.gb",
+      "original_filename": "dma/gbc_dma_cont.gb",
+      "size_bytes": 32768,
+      "sha256": "cd20f67ff24d4cc90815bdd9b2c41bbeec5ec9a8abedb949f2fc704ff6d61512",
+      "source_path": "dma/gbc_dma_cont.asm",
+      "source_size_bytes": 1988,
+      "source_sha256": "136048e8b882e7d71c03587ed48c2ac3db6cfc059b846ed14b3101e52c374d92",
+      "includes": [
+        "include/base.inc",
+        "include/common.inc",
+        "include/config.inc",
+        "include/hardware.inc",
+        "include/hexdigits.2bpp"
+      ],
+      "expectation": "Two consecutive one-block GDMA starts copy contiguous expected bytes into VRAM.",
+      "applicability": "CGB-mode guest test; starts transfers with LCD off and observes source-derived VRAM bytes.",
+      "target_revision": "CGB-E",
+      "model": "CGB-CPU-E selected software model",
+      "bootless_applicability": true,
+      "author_test_evidence": "SameSuite is an author test suite developed to aid SameBoy; the pinned DMA source encodes the expected byte/status sequence. The upstream material supplies no independent per-ROM physical CGB-E measurement."
+    }
+  ]
+}
