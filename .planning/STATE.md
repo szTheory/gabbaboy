@@ -7,10 +7,10 @@ current_phase_name: CGB HDMA
 current_plan: 4
 status: executing
 stopped_at: Completed 13-03-PLAN.md; next wave 4 plans 13-04 and 13-08
-last_updated: "2026-10-14T20:39:47.101Z"
+last_updated: "2026-10-14T20:41:07.912Z"
 last_activity: 2026-10-14
 last_activity_desc: Phase 13 plan 13-03 complete; wave 4 plans 13-04 and 13-08 next
-state_head: 22a35bade8550d8978fa67f154313cc965e96874
+state_head: b7a6f6328f37b6fa436d262cf6537b843ec9df42
 progress:
   total_phases: 9
   completed_phases: 7
@@ -473,7 +473,7 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-14T20:39:47.023Z
+Last session: 2026-10-14T20:41:07.780Z
 Stopped at: Completed 13-03-PLAN.md; next wave 4 plans 13-04 and 13-08
 Resume file: phases/GB-13-cgb-hdma/continue.md
 Completed workflow stage: **Phase 12 - CGB Double Speed, execution** (2026-10-14), plans 12-01..12-19 plus Nyquist validation, security, UI scope review, code review and fixes, regression gate, and goal verification. [12-VERIFICATION.md](phases/GB-12-cgb-double-speed/12-VERIFICATION.md) passes 109/109 with zero unverified behaviors; OpenGSD phase.complete accepted 19/19. Local CTest passed 898/898 in 52.66 seconds, and the DMG baseline had zero changed rows. Exact tested source head `502f992fe9fd2d848845947057c2b327747c3edd`: PR CI `38565349295`, fixture reproduction `38565349297`, and package smoke `38565349116` all succeeded with every PR-event job successful; ASan/UBSan passed 893/893 in 1217.04 seconds. All three review findings are fixed; 34 security threats are closed. Draft [PR #68](https://github.com/szTheory/gabbaboy/pull/68) remains unmerged. Only AGE DIV and STOP-prefetch are passes; eleven qualified expected failures remain, and no physical hardware claim is made. The original plan 12-19 benchmark receipt is historical at `301f1b05577e6d35a4c3a756ded1ec15a4082c8d`, runs `38502094649`, `38502094682`, and `38502094771`; later metadata commits require their own exact-head checks.
@@ -570,8 +570,8 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Completed workflow stage: **Phase 13 plan 13-06 execution**; both tasks, four task commits, the plan SUMMARY, and full-set reproduction evidence are recorded.
-- Next plan: **Phase 13 — CGB HDMA, plan 13-03 — Real HALT wake and independent competing stalls**. Exact command: **`/gsd-execute-phase 13`**.
-- Reuse the 13-06, 13-02 and 13-01 summaries and recorded decisions; reopen them only for a concrete failed discriminator or changed evidence.
+- Completed workflow stage: **Phase 13 plan 13-03 execution — Real HALT wake and independent competing stalls**; both tasks, four task commits, the plan SUMMARY, and full verification evidence are recorded.
+- Next plans: **Phase 13 wave 4 — 13-04 Partition, lifecycle and hostile-resource invariants; 13-08 Original visible DMA guest and existing player smoke**. Exact command: **`/gsd-execute-phase 13`**.
+- Reuse the 13-03, 13-06, 13-02 and 13-01 summaries and recorded decisions; reopen them only for a concrete failed discriminator or changed evidence.
 - Phase 12 is merged and its automated UAT stays closed absent changed evidence. Preserve owner model/runtime config edits.
 - Stop before Phase 14. Both auto-advance flags remain false. Phase 14: CGB-E Model Qualification and Corpus remains unstarted.
