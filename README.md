@@ -8,7 +8,7 @@ real-time clock and explicit host catch-up; MBC30 is rejected) and MBC5
 cartridges; the optional macOS player keeps battery saves (with the game clock)
 for MBC1, MBC2, MBC3 and MBC5 battery cartridges across restarts, with v0.1
 MBC1 saves unchanged, and plays back the core's scoped DMG-CPU-B digital APU
-model through SDL3. The player runs DMG and CGB software with `--model auto|dmg|cgb` (default dmg) and colour presentation on the CGB profile; DMG software on the CGB profile uses the core's fixed original compatibility palette and the player has no palette flag. There is no colour correction: each 5-bit channel is expanded with (c << 3) | (c >> 2). Audio on the CGB profile is the DMG APU model. CGB double speed, GDMA and HBlank DMA are implemented in the selected bootless CGB-CPU-E software model. The bounded transfer cadence remains software policy; physical CGB-E remains UNKNOWN/POLICY, CGB mode-3 timing is not claimed, and there is no general
+model through SDL3. The player runs DMG and CGB software with `--model auto|dmg|cgb` (default dmg) and colour presentation on the CGB profile; DMG software on the CGB profile uses the core's fixed original compatibility palette and the player has no palette flag. There is no colour correction: each 5-bit channel is expanded with (c << 3) | (c >> 2). Audio on the CGB profile is the DMG APU model. CGB double speed is implemented; GDMA and HBlank DMA run on the selected bootless CGB-CPU-E software model. The bounded transfer cadence remains software policy; physical CGB-E remains UNKNOWN/POLICY, CGB mode-3 timing is not claimed, and there is no general
 game compatibility or physical-hardware accuracy claim.
 
 ## Audio and playback evidence
