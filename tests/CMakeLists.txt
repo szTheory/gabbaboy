@@ -3062,4 +3062,45 @@ if(NOT WIN32)
 endif()
 # --- Phase 12 plan 12-13 end ---
 
+# --- Phase 12 plan 12-14 begin ---
+set(GBB_P12_PARTITION_MUTANT_CORE "${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_p12_partition_mutants.c")
+gbb_p12_make_mutant_core("${GBB_P12_PARTITION_MUTANT_CORE}" 0)
+add_executable(test_cgb_partition test_cgb_partition.c)
+target_include_directories(test_cgb_partition PRIVATE
+  "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/src/core")
+target_compile_features(test_cgb_partition PRIVATE c_std_17)
+target_compile_definitions(test_cgb_partition PRIVATE
+  "GBB_PARTITION_CASE_HALF_DOT_CAP=6000000")
+set_target_properties(test_cgb_partition PROPERTIES C_EXTENSIONS OFF)
+
+add_executable(test_cgb_partition_p12 test_cgb_partition.c)
+target_include_directories(test_cgb_partition_p12 PRIVATE
+  "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/src/core")
+target_compile_features(test_cgb_partition_p12 PRIVATE c_std_17)
+target_compile_definitions(test_cgb_partition_p12 PRIVATE
+  "GBB_P12_CORE_SOURCE=\"${GBB_P12_PARTITION_MUTANT_CORE}\""
+  GBB_P12_MUTANT_BUILD=1 GBB_BUILD_REVISION="p12-partition-mutant" GBB_BUILD_QUALIFIED=0
+  "GBB_PARTITION_CASE_HALF_DOT_CAP=6000000")
+set_target_properties(test_cgb_partition_p12 PROPERTIES C_EXTENSIONS OFF)
+
+add_test(NAME cgb_partition_stall_start_window
+  COMMAND test_cgb_partition cgb_partition_stall_start_window)
+add_test(NAME cgb_partition_hostile_irq_in_stall
+  COMMAND test_cgb_partition cgb_partition_hostile_irq_in_stall)
+add_test(NAME cgb_partition_mutant_m16
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_partition_p12>;cgb_partition_hostile_irq_in_stall;--mutants;65536"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=partition-mismatch scenario=cgb_partition_hostile_irq_in_stall"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_partition_mutant_m16_control
+  COMMAND test_cgb_partition_p12 cgb_partition_hostile_irq_in_stall --mutants 0)
+set_tests_properties(
+  cgb_partition_stall_start_window
+  cgb_partition_hostile_irq_in_stall
+  cgb_partition_mutant_m16
+  cgb_partition_mutant_m16_control
+  PROPERTIES TIMEOUT 60)
+# --- Phase 12 plan 12-14 end ---
+
 gabbaboy_verify_registered_tests()
