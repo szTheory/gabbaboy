@@ -275,6 +275,13 @@ window around those edges. The transfer boundary, cadence and sampling phase rem
 physical CGB-E. FF56, FF76 and FF77 remain deferred: a read stops with
 `GBB_STOP_UNSUPPORTED_BUS` before anything changes and a write is dropped and reported as the same
 stop once the instruction retires.
+
+In the selected software model, a manually HALTed CPU does not admit new ordinary HBlank blocks.
+An already admitted block continues, a timer IF/IE condition wakes HALT, and IME-on wake follows the
+normal interrupt vector before the guest resumes. The edge observed during HALT is not replayed;
+the guest waits for a later visible HBlank. Public guest tests check FF55 at wake and then observe the
+remaining transfer. This behavior is tested at the CGB-CPU-E model boundary only; HALT/DMA arbitration
+and exact edge timing remain UNKNOWN for physical CGB-E hardware.
 The DMG profile never enters this decode: its FF4C-FF7F reads still stop and its writes are silent
 no-ops. IE bits 5-7 are stored and read back on the CGB profile only (owner veto item 6).
 

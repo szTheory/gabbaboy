@@ -444,6 +444,52 @@ target_compile_features(test_cgb_hdma PRIVATE c_std_17)
 set_target_properties(test_cgb_hdma PROPERTIES
   C_EXTENSIONS OFF RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 add_test(NAME cgb_hdma_guest_halt COMMAND test_cgb_hdma guest_halt)
+add_test(NAME cgb_hdma_guest_steal COMMAND test_cgb_hdma guest_steal)
+add_test(NAME cgb_hdma_guest_controls COMMAND test_cgb_hdma guest_controls)
+add_test(NAME cgb_hdma_guest_banks COMMAND test_cgb_hdma guest_banks)
+# Plan 13-03 reserves Task 2's exact tests before that harness expands.
+foreach(case competing_stalls stop_policy oam_order)
+  add_test(NAME cgb_hdma_${case} COMMAND test_cgb_hdma_internal ${case})
+  add_test(NAME cgb_hdma_${case}_controls COMMAND test_cgb_hdma_internal ${case}_controls)
+endforeach()
+
+# A test-only core mutation omits the active-block CPU steal but leaves master
+# time and VRAM copying intact. The guest must reject only its timing result.
+set(GBB_P13_NO_STEAL_ANCHOR "if (instance->hdma.pending_hblank || instance->hdma.active) {")
+set(GBB_P13_NO_STEAL_REPLACEMENT
+  "if (instance->hdma.pending_hblank || (instance->hdma.active && 0)) {")
+set(GBB_P13_NO_STEAL_CORE_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_p13_no_steal.c")
+file(READ "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c" GBB_P13_NO_STEAL_CORE_TEXT)
+string(FIND "${GBB_P13_NO_STEAL_CORE_TEXT}" "${GBB_P13_NO_STEAL_ANCHOR}" GBB_P13_NO_STEAL_FIRST)
+string(FIND "${GBB_P13_NO_STEAL_CORE_TEXT}" "${GBB_P13_NO_STEAL_ANCHOR}" GBB_P13_NO_STEAL_LAST REVERSE)
+if(GBB_P13_NO_STEAL_FIRST EQUAL -1 OR NOT GBB_P13_NO_STEAL_FIRST EQUAL GBB_P13_NO_STEAL_LAST)
+  message(FATAL_ERROR "Phase 13 no-steal mutant anchor must occur exactly once")
+endif()
+string(REPLACE "${GBB_P13_NO_STEAL_ANCHOR}" "${GBB_P13_NO_STEAL_REPLACEMENT}"
+  GBB_P13_NO_STEAL_CORE_TEXT "${GBB_P13_NO_STEAL_CORE_TEXT}")
+file(WRITE "${GBB_P13_NO_STEAL_CORE_SOURCE}" "${GBB_P13_NO_STEAL_CORE_TEXT}")
+add_library(gabbaboy_core_p13_no_steal STATIC "${GBB_P13_NO_STEAL_CORE_SOURCE}")
+target_include_directories(gabbaboy_core_p13_no_steal PUBLIC "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(gabbaboy_core_p13_no_steal PUBLIC c_std_17)
+set_target_properties(gabbaboy_core_p13_no_steal PROPERTIES C_EXTENSIONS OFF)
+target_compile_definitions(gabbaboy_core_p13_no_steal PRIVATE
+  GBB_BUILD_REVISION="p13-no-steal-mutant" GBB_BUILD_QUALIFIED=0)
+add_executable(test_cgb_hdma_no_steal test_cgb_hdma.c)
+target_link_libraries(test_cgb_hdma_no_steal PRIVATE gabbaboy_core_p13_no_steal)
+target_compile_features(test_cgb_hdma_no_steal PRIVATE c_std_17)
+set_target_properties(test_cgb_hdma_no_steal PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_hdma_guest_steal_no_steal_mutant
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_no_steal>;guest_steal"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=guest\ steal:\ CPU\ timing\ predicate
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_hdma_guest_steal_no_steal_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_no_steal>;guest_steal_data"
+    -DGBB_EXPECT_CODE=0
+    -DGBB_EXPECT_REGEX=.*
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
 add_executable(test_cgb_postboot test_cgb_postboot.c)
 target_link_libraries(test_cgb_postboot PRIVATE GabbaBoy::core)

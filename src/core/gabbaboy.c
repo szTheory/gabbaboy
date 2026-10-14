@@ -1667,7 +1667,9 @@ static uint8_t cart_read(const gbb_instance *m, uint16_t address) {
 
 /* MODEL: CGB_ONLY GATE-92 GUARD=model_is_cgb -- a visible HBlank edge latches one request for an armed block */
 static void hdma_request(gbb_instance *m) {
-    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB) return;
+    /* A manual HALT pauses ordinary admission. An already admitted block is
+     * owned by the scheduler and continues through its active state. */
+    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB || m->halted) return;
     if (m->hdma.mode == 1u && !m->hdma.active && !m->hdma.pending_hblank &&
         m->hdma.blocks_remaining != 0u)
         m->hdma.pending_hblank = 1u;
