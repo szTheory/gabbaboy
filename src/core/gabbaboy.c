@@ -3973,6 +3973,12 @@ void gbb_test_speed_state(const gbb_instance *m, uint8_t *double_speed,
     if (key1_armed != NULL) *key1_armed = m->key1_armed;
 }
 
+/* Private test seam: reports the exact per-instance master clock without advancing it. */
+/* MODEL: BOTH GATE-00 basis="test seam reads the instance clock" */
+uint64_t gbb_test_master_time_half_dots(const gbb_instance *m) {
+    return m == NULL ? 0u : m->time_half_dots;
+}
+
 /* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static int halt_bug_keeps_control_target(const gbb_instance *m, uint8_t op) {
     if (op == 0xC3 || op == 0xC9 || op == 0xCD || op == 0xD9 || op == 0xE9 || (op & 0xC7u) == 0xC7u) return 1;

@@ -24,6 +24,9 @@ void gbb_test_speed_state(const gbb_instance *m, uint8_t *double_speed,
                           uint8_t *stall_kind, uint32_t *stall_half_dots,
                           uint8_t *key1_armed);
 
+/* Read the monotonic emulated master clock for invariant tests; no guest work is performed. */
+uint64_t gbb_test_master_time_half_dots(const gbb_instance *m);
+
 #ifdef __cplusplus
 }
 #endif

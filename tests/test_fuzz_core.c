@@ -109,6 +109,45 @@ static int run_profile_select(void) {
 }
 
 int gbb_fuzz_core_contract_failures(void);
+int gbb_fuzz_core_one_input(const uint8_t *data, size_t size);
+void gbb_fuzz_core_speed_observation(int *, uint8_t *, unsigned *, unsigned *,
+                                     unsigned *, unsigned *, uint8_t *, uint8_t *,
+                                     uint8_t *, uint32_t *, uint32_t *, uint32_t *,
+                                     uint64_t *, uint64_t *, uint64_t *, int *, int *);
+
+/* cgb_fuzz_speed_regressions: a real guest arms KEY1, retires STOP, observes the switched
+ * KEY1 value in a later guest store, and maintains exact master-time accounting across slices. */
+static int run_speed_seed(void) {
+    static const uint8_t seed_arm_and_switch[] = {0x90u, 0x00u, 0x0Fu};
+    const int failures_before = gbb_fuzz_core_contract_failures();
+    if (gbb_fuzz_core_one_input(seed_arm_and_switch, sizeof(seed_arm_and_switch)) != 0) {
+        fprintf(stderr, "CGB speed seed was rejected\n");
+        return 1;
+    }
+    int selected = 0, saw_dma_stop = 0, saw_lcd_off = 0;
+    uint8_t scenario = 0u, speed = 0u, armed = 0u, key1 = 0u;
+    unsigned switches = 0u, reads = 0u, stops = 0u, calls = 0u;
+    uint32_t stall = 0u, mode = 0u, profile = 0u;
+    uint64_t consumed = 0u, master_time = 0u, last_trace_time = 0u;
+    gbb_fuzz_core_speed_observation(&selected, &scenario, &switches, &reads, &stops, &calls,
+                                   &speed, &armed, &key1, &stall, &mode, &profile,
+                                   &consumed, &master_time, &last_trace_time,
+                                   &saw_dma_stop, &saw_lcd_off);
+    if (gbb_fuzz_core_contract_failures() != failures_before || !selected || scenario != 0u ||
+        switches == 0u || reads == 0u || stops == 0u || calls == 0u || speed != 1u ||
+        armed != 0u || key1 != 0xFEu || mode != GBB_MODE_CGB ||
+        profile != GBB_PROFILE_CGB_CPU_E || consumed != master_time ||
+        consumed > UINT64_C(600000) || last_trace_time > master_time) {
+        fprintf(stderr, "CGB arm/switch positive control failed: selected=%d scenario=%u "
+                        "switches=%u reads=%u stops=%u speed=%u armed=%u KEY1=%02X "
+                        "mode=%u profile=%u time=%llu/%llu\n",
+                selected, scenario, switches, reads, stops, speed, armed, key1, mode, profile,
+                (unsigned long long)consumed, (unsigned long long)master_time);
+        return 1;
+    }
+    printf("ok 1 - cgb_fuzz_speed_regressions\n");
+    return 0;
+}
 
 /* cgb_fuzz_palette_regressions (D-34): palette RAM and compat-palette seeds on the CGB profile.
  * data[0] = 0xA0 selects the palette path and data[1] bit 0 picks CGB mode ($80) or compat mode
@@ -173,6 +212,7 @@ static int run_palette_white_word(void) {
 static int run(int argc, char **argv) {
     if (argc > 1 && strcmp(argv[1], "cgb_profile_select") == 0) return run_profile_select();
     if (argc > 1 && strcmp(argv[1], "cgb") == 0) return run_cgb_seeds();
+    if (argc > 1 && strcmp(argv[1], "cgb_speed") == 0) return run_speed_seed();
     if (argc > 1 && strcmp(argv[1], "cgb_palette") == 0) {
         const int rc = run_palette_seeds();
         return rc != 0 ? rc : run_palette_white_word();

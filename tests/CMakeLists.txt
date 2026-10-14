@@ -573,6 +573,8 @@ add_test(NAME fuzz_core_regressions COMMAND test_fuzz_core)
 add_test(NAME cgb_fuzz_io_regressions COMMAND test_fuzz_core cgb)
 add_test(NAME cgb_fuzz_profile_select COMMAND test_fuzz_core cgb_profile_select)
 add_test(NAME cgb_fuzz_palette_regressions COMMAND test_fuzz_core cgb_palette)
+add_test(NAME cgb_fuzz_speed_regressions COMMAND test_fuzz_core cgb_speed)
+set_tests_properties(cgb_fuzz_speed_regressions PROPERTIES TIMEOUT 60)
 
 if(CMAKE_C_COMPILER_ID MATCHES "Clang")
   include(CheckCSourceCompiles)

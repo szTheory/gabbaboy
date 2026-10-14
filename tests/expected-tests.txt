@@ -177,6 +177,7 @@ fuzz_core_regressions
 cgb_fuzz_io_regressions
 cgb_fuzz_profile_select
 cgb_fuzz_palette_regressions
+cgb_fuzz_speed_regressions
 cgb_loader_matrix
 cgb_loader_fuzz_parity
 cgb_instance_isolation
