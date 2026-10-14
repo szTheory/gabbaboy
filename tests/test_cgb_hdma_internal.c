@@ -1817,6 +1817,53 @@ static int test_hdma_hostile_seed_controls(void) {
     return 1;
 }
 
+static int mutant_machine_create(gbb_instance **out) {
+    uint8_t rom[32768] = {0};
+    rom[0x143u] = 0xC0u;
+    finish_rom(rom);
+    if (gbb_create(GBB_PROFILE_CGB_CPU_E, out) != GBB_OK ||
+        gbb_load_rom(*out, rom, sizeof(rom)) != GBB_OK) {
+        if (*out != NULL) gbb_destroy(*out);
+        *out = NULL;
+        fputs("hdma mutant fixture: CGB machine setup failed\n", stderr);
+        return 1;
+    }
+    gbb_instance *m = *out;
+    for (unsigned i = 0u; i < 32u; ++i)
+        m->wram[0][i] = (uint8_t)(0x27u + 37u * i);
+    memset(m->vram[0], 0xA5, sizeof(m->vram[0]));
+    memset(m->vram[1], 0x5A, sizeof(m->vram[1]));
+    m->lcdc = 0u;
+    m->hdma.mode = 2u;
+    m->hdma.active = 1u;
+    m->hdma.pending_hblank = 0u;
+    m->hdma.blocks_remaining = 1u;
+    m->hdma.source_cursor = 0xC000u;
+    m->hdma.destination_cursor = 0x8000u;
+    m->hdma.block_vram_bank = 0u;
+    m->hdma.byte_index = 0u;
+    m->hdma.byte_phase = 0u;
+    return 0;
+}
+
+static void mutant_advance_block(gbb_instance *m) {
+    for (unsigned half_dot = 0u; half_dot < 64u; ++half_dot)
+        hdma_advance_half_dot(m);
+}
+
+static int test_mutant_no_copy(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(mutant_machine_create(&m) == 0);
+    mutant_advance_block(m);
+    if (memcmp(m->vram[0], m->wram[0], 16u) != 0) {
+        fputs("hdma mutant no_copy detected destination data mismatch\n", stderr);
+        gbb_destroy(m);
+        return 1;
+    }
+    gbb_destroy(m);
+    return 0;
+}
+
 int main(int argc, char **argv) {
 #ifdef GBB_P12_MUTANT_BUILD
     if (argc >= 4 && strcmp(argv[argc - 2], "--mutants") == 0) {
@@ -1862,6 +1909,7 @@ int main(int argc, char **argv) {
         rc = test_hdma_hostile_seeds();
     else if (strcmp(argv[1], "hostile_seeds_controls") == 0)
         rc = test_hdma_hostile_seed_controls();
+    else if (strcmp(argv[1], "mutant_no_copy") == 0) rc = test_mutant_no_copy();
     else return 2;
     if (rc == 0) printf("cgb-hdma %s pass\n", argv[1]);
     return rc;
