@@ -392,6 +392,16 @@ foreach(case stop_armed_cgb stop_unarmed_cgb stop_compat_ignores_key1 stop_dmg_c
   add_test(NAME cgb_${case} COMMAND test_cgb_visibility ${case})
 endforeach()
 
+# Phase 13 plan 13-01: private real-transfer seam tracer. This source includes
+# the core to place a deterministic PPU collision inside guest instructions.
+add_executable(test_cgb_hdma_internal test_cgb_hdma_internal.c)
+target_include_directories(test_cgb_hdma_internal PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_cgb_hdma_internal PRIVATE c_std_17)
+set_target_properties(test_cgb_hdma_internal PROPERTIES C_EXTENSIONS OFF)
+foreach(case ld_sp cb controls partition outputs)
+  add_test(NAME cgb_hdma_tracer_${case} COMMAND test_cgb_hdma_internal ${case})
+endforeach()
+
 add_executable(test_cgb_postboot test_cgb_postboot.c)
 target_link_libraries(test_cgb_postboot PRIVATE GabbaBoy::core)
 target_compile_features(test_cgb_postboot PRIVATE c_std_17)

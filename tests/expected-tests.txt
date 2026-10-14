@@ -505,6 +505,11 @@ model_gates_release_blocked
 summary_coverage_selftest
 summary_coverage
 summary_coverage_phase10_rejected
+cgb_hdma_tracer_ld_sp
+cgb_hdma_tracer_cb
+cgb_hdma_tracer_controls
+cgb_hdma_tracer_partition
+cgb_hdma_tracer_outputs
 cgb_tables_postboot
 cgb_tables_postboot_mutated_doc
 cgb_tables_postboot_selftest
