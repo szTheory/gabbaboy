@@ -259,7 +259,14 @@ gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events
 gbb_error gbb_copy_frame(const gbb_instance *instance, uint8_t *pixels,
                          size_t capacity_bytes, size_t pitch_bytes,
                          gbb_frame_info *out_info);
-/* Runs whole supported instructions. GBB_STOP_HALTED_IDLE means the run has
+/* Runs whole supported instructions. On the CGB profile, guest KEY1/STOP can
+ * switch to double speed, visible to the guest through KEY1 bit 7; there is no
+ * public speed getter. Budgets and consumed_half_dots use master half-dots at
+ * both speeds, with 140448 half-dots per frame. A modeled speed-switch pause
+ * consumes budget across calls and returns GBB_STOP_BUDGET with progress,
+ * never GBB_STOP_STOPPED or GBB_STOP_HALTED_IDLE. A budget below one instruction
+ * or one stall M-cycle returns GBB_STOP_BUDGET with consumed_half_dots zero.
+ * GBB_STOP_HALTED_IDLE means the run has
  * consumed eligible idle ticks and the CPU remains halted; GBB_STOP_STOPPED
  * means STOP is waiting for a modeled wake event. A positive STOP wait can
  * consume master timeline ticks while CPU, divider, timer and internal serial

@@ -1608,7 +1608,8 @@ set(GBB_NATIVE_GUIDE_CGB_PHRASES
   "stop with `GBB_STOP_UNSUPPORTED_BUS`"
   "bit 15 is rejected, not masked"
   "a set never recolours a completed frame"
-  "minimum pitch is 320 bytes")
+  "minimum pitch is 320 bytes"
+  "master half-dots at both speeds")
 list(LENGTH GBB_NATIVE_GUIDE_CGB_PHRASES GBB_NATIVE_GUIDE_CGB_PHRASE_COUNT)
 set(GBB_NATIVE_GUIDE_CGB_SCOPE "The CGB-CPU-E profile is selected with")
 set(GBB_NATIVE_GUIDE_CGB_DECLS

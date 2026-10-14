@@ -140,7 +140,15 @@ buffer contracts.
 - CGB mode has two VRAM banks and eight WRAM banks, selected by the guest
   through VBK and SVBK. `gbb_peek_ram` follows the selected WRAM bank for
   `$D000`-`$DFFF` and its echo, so read it after the guest has set SVBK.
-- Limitations: no double speed, no HDMA, and CGB mode-3 timing is not claimed. Registers whose
+- On the CGB profile, guest code can switch to double speed with KEY1 and STOP.
+  Budgets, `consumed_half_dots`, and frame intervals use master half-dots at
+  both speeds: one frame is 140448 half-dots. The speed-switch pause is
+  consumed across calls; each call returns `GBB_STOP_BUDGET` with progress,
+  never `GBB_STOP_STOPPED` or `GBB_STOP_HALTED_IDLE`. A budget below one
+  instruction or one stall M-cycle returns `GBB_STOP_BUDGET` with
+  `consumed_half_dots` equal to zero. Speed is guest-visible through KEY1 bit 7;
+  there is no public speed getter.
+- Limitations: no HDMA, and CGB mode-3 timing is not claimed. Registers whose
   behaviour is owned by a later phase stop with `GBB_STOP_UNSUPPORTED_BUS`
   rather than invent a value. DMG addresses `$FF4C`-`$FF7F` stay fail-closed.
   IE bits 5-7 are stored on the CGB profile only. The DMG rule that OAM DMA
