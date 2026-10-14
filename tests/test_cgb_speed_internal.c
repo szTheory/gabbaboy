@@ -266,6 +266,97 @@ static int make_internal_rom(uint8_t rom[32768], const uint8_t *program, size_t 
 static int create_internal_machine(const uint8_t rom[32768], gbb_instance **out);
 static int make_stop_test_machine(const uint8_t *program, size_t size, gbb_instance **out);
 
+static void set_speed_pause_ppu_fixture(gbb_instance *machine) {
+    machine->lcdc = 0x91u;
+    machine->bgp = 0xE4u;
+    machine->ly = 0u;
+    machine->lyc = 0u;
+    machine->ppu_mode = 2u;
+    machine->ppu_dot = 0u;
+    machine->ppu_half_phase = 0u;
+    machine->stat = 0x86u;
+    machine->scx = 0u;
+    machine->scy = 0u;
+    machine->wx = 0u;
+    machine->wy = 0u;
+    machine->frame_generation = 0u;
+    memset(machine->vram, 0, sizeof(machine->vram));
+    for (unsigned row = 0u; row < 8u; ++row) {
+        machine->vram[0][row * 2u] = (row & 1u) ? 0xAAu : 0x55u;
+        machine->vram[0][row * 2u + 1u] = (row & 1u) ? 0x33u : 0xCCu;
+    }
+    for (unsigned i = 0u; i < 4u; ++i) {
+        const uint16_t color = (uint16_t[]){0x0000u, 0x001Fu, 0x03E0u, 0x7C00u}[i];
+        machine->bg_cram[i * 2u] = (uint8_t)color;
+        machine->bg_cram[i * 2u + 1u] = (uint8_t)(color >> 8);
+    }
+}
+
+static int cgb_speed_xfail_pause_ppu_output(void) {
+    const uint8_t switching_guest[] = {
+        0x3Eu, 0x01u,             /* arm KEY1 */
+        0xE0u, 0x4Du,
+        0x10u, 0x00u              /* STOP; blank ROM bytes busy-wait after the pause */
+    };
+    const uint8_t busy_wait_guest[] = {0x00u, 0x18u, 0xFDu};
+    uint8_t switching_rom[32768], busy_wait_rom[32768];
+    make_internal_rom(switching_rom, switching_guest, sizeof(switching_guest));
+    make_internal_rom(busy_wait_rom, busy_wait_guest, sizeof(busy_wait_guest));
+    gbb_instance *switching = NULL, *busy_wait = NULL;
+    REQUIRE(create_internal_machine(switching_rom, &switching) == 0);
+    REQUIRE(create_internal_machine(busy_wait_rom, &busy_wait) == 0);
+    set_speed_pause_ppu_fixture(switching);
+    set_speed_pause_ppu_fixture(busy_wait);
+    switching->joypad_select = busy_wait->joypad_select = 0x30u;
+
+    gbb_run_result switched = {0};
+    unsigned steps = 0u;
+    while (switching->cpu_stall_kind == GBB_STALL_NONE && steps++ < 16u) {
+        switched = gbb_run(switching, 256u, NULL, 0u);
+        REQUIRE(switched.reason == GBB_STOP_BUDGET);
+    }
+    REQUIRE(switching->cpu_stall_kind == GBB_STALL_SPEED_SWITCH);
+    while (switching->cpu_stall_kind != GBB_STALL_NONE && steps++ < 1024u) {
+        switched = gbb_run(switching, 256u, NULL, 0u);
+        REQUIRE(switched.reason == GBB_STOP_BUDGET);
+    }
+    REQUIRE(switching->cpu_stall_kind == GBB_STALL_NONE);
+    REQUIRE(switching->time_half_dots <= FRAME_HALF_DOTS &&
+            (FRAME_HALF_DOTS - switching->time_half_dots) % 4u == 0u);
+    switched = gbb_run(switching, FRAME_HALF_DOTS - switching->time_half_dots,
+                       NULL, 0u);
+    gbb_run_result waited = gbb_run(busy_wait, FRAME_HALF_DOTS, NULL, 0u);
+    REQUIRE(switched.reason == GBB_STOP_BUDGET &&
+            switching->time_half_dots == FRAME_HALF_DOTS);
+    REQUIRE(waited.reason == GBB_STOP_BUDGET &&
+            busy_wait->time_half_dots == FRAME_HALF_DOTS);
+    REQUIRE(switching->double_speed == 1u &&
+            switching->cpu_stall_kind == GBB_STALL_NONE);
+
+    uint16_t switched_frame[GBB_FRAME_PIXELS];
+    uint16_t waited_frame[GBB_FRAME_PIXELS];
+    gbb_frame_info info;
+    const gbb_error switched_copy = gbb_copy_frame_rgb555(switching, switched_frame,
+        sizeof(switched_frame), GBB_FRAME_WIDTH * sizeof(uint16_t), &info);
+    const gbb_error waited_copy = gbb_copy_frame_rgb555(busy_wait, waited_frame,
+        sizeof(waited_frame), GBB_FRAME_WIDTH * sizeof(uint16_t), &info);
+    if (switched_copy != GBB_OK || waited_copy != GBB_OK) {
+        fprintf(stderr, "frame differs across the speed-switch pause: RGB555 output unavailable\n");
+        gbb_destroy(switching);
+        gbb_destroy(busy_wait);
+        return 1;
+    }
+    if (memcmp(switched_frame, waited_frame, sizeof(switched_frame)) != 0) {
+        fprintf(stderr, "frame differs across the speed-switch pause\n");
+        gbb_destroy(switching);
+        gbb_destroy(busy_wait);
+        return 1;
+    }
+    gbb_destroy(switching);
+    gbb_destroy(busy_wait);
+    return 0;
+}
+
 /* The guest configures IE, IF, TIMA/TMA/TAC, waits for its own timer IRQ,
  * disables the timer, arms KEY1, and executes STOP. The following INC B is
  * the one-byte case-3 marker. EI retires at STOP, so the second variant must
@@ -1388,6 +1479,11 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "cgb_speed_tracer_switch") == 0) {
         int rc = cgb_speed_tracer_switch();
         if (rc == 0) puts("cgb-speed-internal cgb_speed_tracer_switch pass");
+        return rc;
+    }
+    if (strcmp(argv[1], "cgb_speed_xfail_pause_ppu_output") == 0) {
+        int rc = cgb_speed_xfail_pause_ppu_output();
+        if (rc == 0) puts("cgb-speed-internal cgb_speed_xfail_pause_ppu_output pass");
         return rc;
     }
     if (strcmp(argv[1], "cgb_speed_stop_cases") == 0) {

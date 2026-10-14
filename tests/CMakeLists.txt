@@ -2632,6 +2632,41 @@ target_compile_definitions(test_cgb_speed_internal_p12 PRIVATE
   "GBB_P12_CORE_SOURCE=\"${GBB_P12_MUTANT_CORE}\""
   GBB_P12_MUTANT_BUILD=1 GBB_BUILD_REVISION="p12-mutant" GBB_BUILD_QUALIFIED=0)
 set_target_properties(test_cgb_speed_internal_p12 PROPERTIES C_EXTENSIONS OFF)
+# --- Phase 12 plan 12-17 begin ---
+add_test(NAME cgb_speed_xfail_pause_ppu_output
+  COMMAND test_cgb_speed_internal_p12 cgb_speed_xfail_pause_ppu_output)
+set_tests_properties(cgb_speed_xfail_pause_ppu_output PROPERTIES TIMEOUT 60)
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 7 xfail_ppu
+  cgb_speed_xfail_pause_ppu_output "frame differs")
+set(GBB_SPEED_DISPOSITIONS_RECORD
+  "${PROJECT_SOURCE_DIR}/tests/external/cgb-speed-dispositions.json")
+set(GBB_SPEED_DISPOSITIONS_VERIFIER
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-speed-dispositions.py")
+add_test(NAME cgb_speed_dispositions
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_SPEED_DISPOSITIONS_VERIFIER}")
+set_tests_properties(cgb_speed_dispositions PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-speed-dispositions pass rows=" TIMEOUT 30)
+file(READ "${GBB_SPEED_DISPOSITIONS_RECORD}" gbb_speed_dispositions_record)
+set(gbb_speed_pinned_anchor "\"pinned_by\": \"cgb_speed_xfail_pause_ppu_output\"")
+string(FIND "${gbb_speed_dispositions_record}" "${gbb_speed_pinned_anchor}" gbb_speed_pin_at)
+string(FIND "${gbb_speed_dispositions_record}" "${gbb_speed_pinned_anchor}" gbb_speed_pin_last REVERSE)
+if(gbb_speed_pin_at EQUAL -1 OR NOT gbb_speed_pin_at EQUAL gbb_speed_pin_last)
+  message(FATAL_ERROR "speed disposition pinned_by mutation anchor must occur exactly once")
+endif()
+string(REPLACE "${gbb_speed_pinned_anchor}"
+  "\"pinned_by\": \"cgb_speed_no_such_test\""
+  gbb_speed_dispositions_missing_pin "${gbb_speed_dispositions_record}")
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/cgb-speed-dispositions")
+file(WRITE "${PROJECT_BINARY_DIR}/cgb-speed-dispositions/pinned-by-missing.json"
+  "${gbb_speed_dispositions_missing_pin}")
+add_test(NAME cgb_speed_dispositions_pinned_by_missing
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_SPEED_DISPOSITIONS_VERIFIER};--record;${PROJECT_BINARY_DIR}/cgb-speed-dispositions/pinned-by-missing.json"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=disposition-mismatch pinned_by"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(cgb_speed_dispositions_pinned_by_missing PROPERTIES TIMEOUT 30)
+# --- Phase 12 plan 12-17 end ---
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 5 stall_sets_stopped
   cgb_speed_tracer_switch "stopped|GBB_STOP_STOPPED")
 add_test(NAME cgb_speed_stop_cases COMMAND test_cgb_speed_internal_p12 cgb_speed_stop_cases)

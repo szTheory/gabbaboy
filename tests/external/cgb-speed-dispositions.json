@@ -34,7 +34,8 @@
           "decision": "D-35",
           "signature_sha256": "342c237168425867d882c1152a9a5ffd5b02d984c8b97361fd8d8b86e400932f",
           "row_mask": "003B",
-          "flip_rule": "fails until promoted if the signature changes or this ROM passes"
+          "flip_rule": "fails until promoted if the signature changes or this ROM passes",
+          "pinned_by": "age_spsw_tima_cgbE"
         },
         {
           "case": "spsw-tima-cgbBC",
@@ -46,7 +47,8 @@
           "decision": "D-19",
           "signature_sha256": "924c56b62be24ad85d648ac6b2068e8ea82138b503956561fea3bf12605c3e28",
           "row_mask": "00FB",
-          "flip_rule": "fails until promoted if the signature changes or this ROM passes"
+          "flip_rule": "fails until promoted if the signature changes or this ROM passes",
+          "pinned_by": "age_spsw_tima_cgbBC"
         },
         {
           "case": "spsw-stop-prefetch-cgbBCE",
@@ -70,7 +72,8 @@
           "decision": "D-35",
           "signature_sha256": "4f487df317ace108f9eb0e154ff5558fc5e1993c3432d50b13f007f3adaacd66",
           "row_mask": "07FA",
-          "flip_rule": "fails until promoted if the signature changes or this ROM passes"
+          "flip_rule": "fails until promoted if the signature changes or this ROM passes",
+          "pinned_by": "age_spsw_interrupts_cgbE"
         },
         {
           "case": "spsw-mode0-cgbBCE",
@@ -82,7 +85,8 @@
           "decision": "D-19",
           "signature_sha256": "d2410ea8e30311f12de296781986f7e12edd0b87b729033d879cef5e2f133e82",
           "row_mask": "01C0",
-          "flip_rule": "fails until promoted if the signature changes or this ROM passes"
+          "flip_rule": "fails until promoted if the signature changes or this ROM passes",
+          "pinned_by": "age_spsw_mode0_cgbBCE"
         },
         {
           "case": "spsw-ch2-lc-delay-cgbBCE",
@@ -94,7 +98,8 @@
           "decision": "D-11",
           "signature_sha256": "63c6abeb8c7db84507bcacaaafe564213ed126e257a7125fe729838dae55c698",
           "row_mask": "0038",
-          "flip_rule": "fails until promoted if the signature changes or this ROM passes"
+          "flip_rule": "fails until promoted if the signature changes or this ROM passes",
+          "pinned_by": "age_spsw_ch2_lc_delay_cgbBCE"
         },
         {
           "case": "stat-mode-ds-cgbBCE",
@@ -106,7 +111,8 @@
           "decision": "D-19",
           "signature_sha256": "fae5d30ca7d7b365a3473cd0c50d3b344ca03336ca0fa3453f3eee8c05a3edae",
           "row_mask": "0000",
-          "flip_rule": "fails until promoted if the signature changes or this ROM passes"
+          "flip_rule": "fails until promoted if the signature changes or this ROM passes",
+          "pinned_by": "age_stat_mode_ds_cgbBCE"
         },
         {
           "case": "stat-mode-cgbE",
@@ -118,7 +124,8 @@
           "decision": "D-19",
           "signature_sha256": "529c3f4d3b1571437d88b1c4806ada4dfa786b4740751b3128628df6abe8ffe9",
           "row_mask": "0D11",
-          "flip_rule": "fails until promoted if the signature changes or this ROM passes"
+          "flip_rule": "fails until promoted if the signature changes or this ROM passes",
+          "pinned_by": "age_stat_mode_cgbE"
         },
         {
           "case": "stat-mode-sprites-ds-cgbBCE",
@@ -130,7 +137,8 @@
           "decision": "D-19",
           "signature_sha256": "d1b74bbc89aa11ae7fe0a06b3842228a8d9f3fbd46cf9d1c2bdda8eb67f0e0ac",
           "row_mask": "C000",
-          "flip_rule": "fails until promoted if the signature changes or this ROM passes"
+          "flip_rule": "fails until promoted if the signature changes or this ROM passes",
+          "pinned_by": "age_stat_mode_sprites_ds_cgbBCE"
         },
         {
           "case": "stat-mode-sprites-dmgC-cgbBCE",
@@ -142,7 +150,8 @@
           "decision": "D-19",
           "signature_sha256": "bfea670a3244b4f9af3612734515c352b91c43bd4da71c3d8ced4ffdaf0e1c9c",
           "row_mask": "0302",
-          "flip_rule": "fails until promoted if the signature changes or this ROM passes"
+          "flip_rule": "fails until promoted if the signature changes or this ROM passes",
+          "pinned_by": "age_stat_mode_sprites_dmgC_cgbBCE"
         },
         {
           "case": "stat-mode-window-ds-cgbBCE",
@@ -154,7 +163,8 @@
           "decision": "D-19",
           "signature_sha256": "04eaea242e58909b211fcd4508c50a5119c576460901f96fa4f45169321b8cd9",
           "row_mask": "0000",
-          "flip_rule": "fails until promoted if the signature changes or this ROM passes"
+          "flip_rule": "fails until promoted if the signature changes or this ROM passes",
+          "pinned_by": "age_stat_mode_window_ds_cgbBCE"
         },
         {
           "case": "stat-mode-window-cgbBCE",
@@ -166,7 +176,25 @@
           "decision": "D-19",
           "signature_sha256": "2a178c6cb341ce03811fbd88537255d90a044ee0d27f1320a19d08ea537ecb69",
           "row_mask": "0000",
-          "flip_rule": "fails until promoted if the signature changes or this ROM passes"
+          "flip_rule": "fails until promoted if the signature changes or this ROM passes",
+          "pinned_by": "age_stat_mode_window_cgbBCE"
+        }
+      ]
+    },
+    {
+      "suite": "gabbaboy-model",
+      "repository": "GabbaBoy model behavior",
+      "vendored": false,
+      "rows": [
+        {
+          "case": "speed-switch-pause-ppu-output",
+          "disposition": "expected-failure",
+          "reason": "expected-failure:speed-switch-pause-ppu-output",
+          "reason_detail": "The committed CGB model draws PPU output during the speed-switch pause; Pan Docs no-output behavior remains unresolved.",
+          "owner_phase": 12,
+          "decision": "D-07",
+          "pinned_by": "cgb_speed_xfail_pause_ppu_output",
+          "flip_rule": "fails until promoted if the pause output changes or the hardware behavior is resolved"
         }
       ]
     }
