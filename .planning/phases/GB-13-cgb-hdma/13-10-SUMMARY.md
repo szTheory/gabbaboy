@@ -146,3 +146,9 @@ Phase 13 Wave 8 Plan 13-10 is complete. Continue with Phase 13 Wave 9 Plan 13-11
 ---
 *Phase: 13-cgb-hdma*
 *Completed: 2026-10-14*
+
+## Self-Check: PASSED
+
+- Summary and all seven listed modified files exist.
+- All four task commits and the initial summary commit are ancestors of the current plan branch.
+- `summary_coverage` and `summary_coverage_selftest` passed (2/2).
