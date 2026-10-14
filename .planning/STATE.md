@@ -4,16 +4,16 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_plan: 19
 status: executing
-stopped_at: Completed GB-12-18-PLAN.md
-last_updated: "2026-10-14T02:05:03.741Z"
-last_activity: 2026-10-13
-last_activity_desc: Phase GB-12 plan 12-18 execution completed
-state_head: 081f45096f2b37ebc549fabd591bb80c305592a1
+stopped_at: Completed GB-12-19-PLAN.md; awaiting Phase 12 verification
+last_updated: "2026-10-14T02:55:40Z"
+last_activity: 2026-10-14
+last_activity_desc: Phase 12 plan 12-19 close-out completed; verification is next
+state_head: 301f1b05577e6d35a4c3a756ded1ec15a4082c8d
 progress:
   total_phases: 9
   completed_phases: 6
   total_plans: 99
-  completed_plans: 98
+  completed_plans: 99
   percent: 67
 current_phase: 12
 current_phase_name: CGB Double Speed
@@ -40,10 +40,9 @@ Verified: Phase 10 `/gsd-verify-work 10` passed 2026-10-12 — 12/12 UAT items a
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, planning (11-RESEARCH, 11-PATTERNS, 11-VALIDATION, plans 11-01..11-15) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, execution (plans 11-01..11-15) plus the execute-phase tail; gsd-verifier `passed` 3/3 (11-VERIFICATION.md); evidence head `fb7d14c` exact-head green; PR #67 open, not merged
 Verified: Phase 11 `/gsd-verify-work 11` passed 2026-10-13 — 11/11 UAT rows automated covering all 91 SUMMARY coverage entries (11-UAT.md); verification `passed` (11-VERIFICATION.md); hosted ASan timeout fixed in the PR (LESSONS GB-CI-004); PR #67 squash-merges at the exact-head green branch head (pre-authorized)
-Completed workflow stage: **Phase GB-12 plan 12-18 execution** (2026-10-13), summary [12-18-SUMMARY.md](phases/GB-12-cgb-double-speed/12-18-SUMMARY.md), code evidence head `081f45096f2b37ebc549fabd591bb80c305592a1`. Host docs now state master-time budgets and modeled pause behavior; the stale-claim scanner and mutated control pass; full local CTest passed 897/897. AGE evidence remains software-model scoped, with two passing cases, eleven named expected failures, and M28 sensitivity limited to the mode-0 case. Phase 12 remains in progress.
-Next plan: **GB-12 plan 12-19 — Phase 12 close-out, benchmark, and evidence handoff**, documented in [12-19-PLAN.md](phases/GB-12-cgb-double-speed/12-19-PLAN.md).
-Next command: **`/gsd-execute-phase 12`** (resumes at plan 12-19 from the current STATE.md pointer). The next phase after Phase 12 is **Phase 13: CGB HDMA** (not started). `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop after Phase 12 and wait for the owner.
-Last activity: 2026-10-13 — Phase GB-12 plan 12-18 execution completed
+Completed workflow stage: **Phase 12 - CGB Double Speed, execution** (2026-10-14), including plans 12-01..12-19. Plan close-out summary: [12-19-SUMMARY.md](phases/GB-12-cgb-double-speed/12-19-SUMMARY.md). Exact hosted CI evidence head: `301f1b05577e6d35a4c3a756ded1ec15a4082c8d`; draft PR [#68](https://github.com/szTheory/gabbaboy/pull/68). The exact PR CI, fixture reproduction and package-smoke runs `38502094649`, `38502094682`, and `38502094771` passed, including the required-native gate. Local CTest passed 897/897; the DMG baseline check passed with zero changed rows. The hosted CGB/AGE reproductions are byte evidence, not hardware evidence. The first exact-head PR run exposed a Windows test-inventory gate mismatch; the narrowly scoped WIN32 exclusions and their positive/negative self-test passed on the corrected H2 revision. PR #68 remains draft and unmerged; Phase 12 is awaiting `/gsd-verify-work 12` and the execute-phase tail reviews.
+Next command: **`/gsd-verify-work 12`**. The following phase is **Phase 13: CGB HDMA** (not started); after Phase 12 verification and merge, the owner can enter it with **`/gsd-discuss-phase 13`**. `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop at this handoff for the owner.
+Last activity: 2026-10-14 — Phase 12 plan 12-19 close-out completed; verification remains next
 
 Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 
