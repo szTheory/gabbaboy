@@ -314,7 +314,7 @@ Plans:
   3. Partitioned runs (run N, stop, run M) equal one run of N+M across a speed switch and stall, and unresearched pause behaviors are recorded as named expected failures.
 
 **Research**: DEEP (interrupts, DIV and PPU during the pause; applicable test list).
-**Plans**: 16/19 plans executed
+**Plans**: 17/19 plans executed
 
 Plans:
 **Wave 1**
@@ -360,7 +360,7 @@ Plans:
 - [x] 12-16-PLAN.md — AGE per-ROM dispositions decided by measurement, generated age_ tests, vendored-byte guards
 
 **Wave 14** *(blocked on Wave 13 completion)*
-- [ ] 12-17-PLAN.md — pinned_by for every named expected failure (four new pin tests), verifier and docs mirror, sensitivity sweep
+- [x] 12-17-PLAN.md — pinned_by for every named expected failure (four new pin tests), verifier and docs mirror, sensitivity sweep
 
 **Wave 15** *(blocked on Wave 14 completion)*
 - [ ] 12-18-PLAN.md — host docs, header comments and stale-claim scanner
@@ -420,7 +420,7 @@ Plans:
 | 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 18/18 | Complete    | 2026-10-11 |
 | 10. CGB Profile, Banking and Register Visibility | v0.2 | 20/20 | Complete    | 2026-10-12 |
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 15/15 | Complete    | 2026-10-13 |
-| 12. CGB Double Speed | v0.2 | 16/19 | In Progress | - |
+| 12. CGB Double Speed | v0.2 | 17/19 | In Progress | - |
 | 13. CGB HDMA | v0.2 | 0/TBD | Not started | - |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 0/TBD | Not started | - |
 | 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 0/TBD | Not started | - |

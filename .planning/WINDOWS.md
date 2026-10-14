@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 14
+open_count: 15
 waived_count: 0
 fixed_count: 0
-total_count: 14
-last_updated: 2026-10-14T01:20:16.619Z
+total_count: 15
+last_updated: 2026-10-14T01:52:45.826Z
 ---
 
 # Broken Windows Ledger
@@ -29,6 +29,7 @@ last_updated: 2026-10-14T01:20:16.619Z
 | 12 | 12 | deviation | cmake/P12Mutants.cmake |  | Adjusted the M3 mutant because divider_phase remains zero and its initial normal-speed phase replacement was equivalent in double speed. | open |  | 2026-10-13T18:02:22.258Z |  |
 | 13 | 12 | deviation | cmake/P12Mutants.cmake |  | Made the generated M12 RTC fault use an explicit double_speed local while keeping production RTC code outside that trust domain. | open |  | 2026-10-13T18:02:22.362Z |  |
 | 14 | 12 | deviation | tests/expected-tests.txt |  | The planned broad AGE selector includes the pre-existing div timeout negative control (14 tests total; 13 ROM disposition tests). | open |  | 2026-10-14T01:20:16.619Z |  |
+| 15 | 12 | deviation | cmake/P12Mutants.cmake |  | M28 mutant scope corrected to double-speed destinations after the AGE sweep measured mode-0 discrimination. | open |  | 2026-10-14T01:52:45.826Z |  |
 
 ````json
 [
@@ -211,6 +212,19 @@ last_updated: 2026-10-14T01:20:16.619Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-10-14T01:20:16.619Z",
+    "resolved_at": null,
+    "milestone": "v0.2"
+  },
+  {
+    "id": 15,
+    "kind": "deviation",
+    "phase": "12",
+    "file": "cmake/P12Mutants.cmake",
+    "line": null,
+    "description": "M28 mutant scope corrected to double-speed destinations after the AGE sweep measured mode-0 discrimination.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-14T01:52:45.826Z",
     "resolved_at": null,
     "milestone": "v0.2"
   }
