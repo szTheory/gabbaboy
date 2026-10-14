@@ -658,3 +658,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** `12-UAT.md` records 73 automated passes, zero human checkpoints and no gaps. `verify-uat-contract.py --self-test` rejects nine missing/weaker/misrouted closure mutations; `summary_coverage` and its twelve schema mutants remain recurring CI gates. All 19 bounded commit windows reconcile after the SHA correction.
 - **Source:** Phase 12 verify-work and renewed owner automation directive; DECISIONS D-069, GB-GSD-014 and GB-GSD-015.
 - **Status:** Adopted. Reopen only for a concrete new regression, changed covered behavior, stale/unavailable evidence, or an owner scope change.
+
+### GB-CGB-011 / 2026-10-14 / Inspect the actual run boundary before adding a device steal
+
+- **Cause and evidence:** Phase 13 discussion found that `execute` calls `advance_devices_to` inside timed bus reads/writes, while `gbb_run` preflights and reports only nominal whole-instruction cost. The public header promises whole instructions and full-cost preflight; no persisted micro-op cursor exists. A proposed “set a stall flag at HBlank” or “copy the block immediately” therefore cannot be assumed correct from the existing speed-pause branch. The milestone research also describes live counters, while the actual FF51–54 contract is CPU write-only.
+- **Remedy:** Lock the observable budget/time, bus/IRQ order and partition contracts first. Require a focused mechanism prototype with a HBlank between later bus accesses, output-capacity/headroom cases and a discriminator for omitted/delayed stealing. Separate internal cursors from CPU register observations and preserve independently ending stall causes. Keep an unproven exact boundary model-tagged UNKNOWN rather than presenting an implementation's scheduling choice as hardware fact.
+- **Applies when:** A new DMA/device event can interrupt synchronous execution or share a scheduler stall reason; current code/API contracts take precedence over architecture sketches.
+- **Verification:** Read-only source inspection of `src/core/gabbaboy.c` (`execute`, `bus_read`, `bus_write`, `gbb_run_internal`), `include/gabbaboy/gabbaboy.h` stepping contract, and pinned SameSuite/SameBoy sources; the planning evidence gate is recorded in Phase 13 CONTEXT D-03/D-09 and DECISIONS D-097. Runtime DMA checks remain future Phase 13 work, not a claimed pass.
+- **Source:** Phase 13 code-seam investigation and adversarial reconciliation, `13-DISCUSSION-LOG.md`.
+- **Status:** Adopted prevention rule; implementation evidence pending.

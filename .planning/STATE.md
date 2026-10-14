@@ -2,21 +2,21 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 19
-status: phase_complete
-stopped_at: Phase 12 verification complete; owner chooses when to discuss Phase 13
-last_updated: "2026-10-14T14:35:44.163455+00:00"
+current_phase: 13
+current_phase_name: CGB HDMA
+current_plan: 0
+status: planning
+stopped_at: Phase 13 context gathered; next /gsd-plan-phase 13; stop before planning
+last_updated: "2026-10-14T16:40:31.204Z"
 last_activity: 2026-10-14
-last_activity_desc: Phase 12 automated UAT complete; zero human checkpoints
-state_head: da98d56ef8fadadf34ae951b337dcdecce495936
+last_activity_desc: Phase 13 context gathered; ready for planning
+state_head: 8091fb591de7fb68e666be01d344f5f26ebedc5c
 progress:
   total_phases: 9
   completed_phases: 6
   total_plans: 99
   completed_plans: 99
   percent: 67
-current_phase: 12
-current_phase_name: CGB Double Speed
 ---
 
 # Project State
@@ -26,12 +26,25 @@ current_phase_name: CGB Double Speed
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-14)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 12 verified; Phase 13: CGB HDMA awaits the owner
+**Current focus:** Phase 13: CGB HDMA discussion complete; next /gsd-plan-phase 13 with DEEP research
 
 ## Current Position
 
-Current Plan: 19 (execution complete)
-Total Plans in Phase: 19
+Phase: 13 (CGB HDMA)
+Status: Ready to plan
+Current Plan: 0
+Total Plans in Phase: 0
+
+Completed workflow stage: **Phase 13: CGB HDMA, discussion** (2026-10-14). [13-CONTEXT.md](phases/GB-13-cgb-hdma/13-CONTEXT.md) records 25 adopted decisions from three independent investigations and a focused adversarial follow-up. DEEP planning research remains required; no DMA implementation or CGB-07 completion is claimed. The local discussion contract checks source/path/decision and handoff integrity with negative controls; it is not emulator conformance evidence.
+Next stage: **Phase 13: CGB HDMA, planning**, including the in-flight HBlank/preflight prototype gate, exact timing, low-power/competing stalls, source/bank/overflow and register-transition research.
+Next command: **`/gsd-plan-phase 13`**. Stop for the owner. Phase 14: CGB-E Model Qualification and Corpus remains unstarted. Both auto-advance flags remain false.
+Last activity: 2026-10-14 — Phase 13 context gathered; ready for planning
+
+Phase 12 delivery is already merged: PR #68 at `8091fb591de7fb68e666be01d344f5f26ebedc5c`, reviewed/tested head `ffde21c0e2a7b71c6328ac8152d04496f5d387e7`; final PR-event runs `38586393122`, `38586392787`, `38586392931` passed all 19 jobs before merge. Its 73/73 automated UAT remains closed. Reopen only changed covered behavior, stale/unavailable evidence, concrete regression or owner scope change. D-096 records smaller/flatter dependencies; D-097 records the mechanism evidence gate; D-069 remains automation-first with zero routine human UAT.
+
+Progress (v0.2): [███████░░░] 67% (6/9 phases); 99/99 existing plans complete. Phase 13 discussed but unplanned; Phases 14–15 unstarted.
+
+### Prior stage receipts (historical, before the final merges)
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
 Verified: Phase 9 `/gsd-verify-work 9` passed 2026-10-12 — 14/14 UAT items automated (09-UAT.md), the guide-wording item replaced by the `native_guide_rtc_contract` check; re-verification `passed` (09-VERIFICATION.md); PR #65 squash-merges at the exact-head green branch head (pre-authorized)
@@ -42,10 +55,6 @@ Completed: Phase 11 - CGB Colour Rendering and Player Colour, execution (plans 1
 Verified: Phase 11 `/gsd-verify-work 11` passed 2026-10-13 — 11/11 UAT rows automated covering all 91 SUMMARY coverage entries (11-UAT.md); verification `passed` (11-VERIFICATION.md); hosted ASan timeout fixed in the PR (LESSONS GB-CI-004); PR #67 squash-merges at the exact-head green branch head (pre-authorized)
 Completed workflow stage: **Phase 12 - CGB Double Speed, execution** (2026-10-14), plans 12-01..12-19 plus Nyquist validation, security, UI scope review, code review and fixes, regression gate, and goal verification. [12-VERIFICATION.md](phases/GB-12-cgb-double-speed/12-VERIFICATION.md) passes 109/109 with zero unverified behaviors; OpenGSD phase.complete accepted 19/19. Local CTest passed 898/898 in 52.66 seconds, and the DMG baseline had zero changed rows. Exact tested source head `502f992fe9fd2d848845947057c2b327747c3edd`: PR CI `38565349295`, fixture reproduction `38565349297`, and package smoke `38565349116` all succeeded with every PR-event job successful; ASan/UBSan passed 893/893 in 1217.04 seconds. All three review findings are fixed; 34 security threats are closed. Draft [PR #68](https://github.com/szTheory/gabbaboy/pull/68) remains unmerged. Only AGE DIV and STOP-prefetch are passes; eleven qualified expected failures remain, and no physical hardware claim is made. The original plan 12-19 benchmark receipt is historical at `301f1b05577e6d35a4c3a756ded1ec15a4082c8d`, runs `38502094649`, `38502094682`, and `38502094771`; later metadata commits require their own exact-head checks.
 Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-14), via `/gsd-verify-work 12`: [12-UAT.md](phases/GB-12-cgb-double-speed/12-UAT.md) closes 73/73 deliverables automatically, zero issues and zero human checkpoints. Fresh local CTest passed 898/898 in 107.00 seconds; the closure contract rejects nine weakened records, and all 19 bounded commit claims reconcile after correcting plan 12-04's ending SHA. D-069 and LESSONS GB-GSD-016 preserve this default. Exact execution-head `da98d56ef8fadadf34ae951b337dcdecce495936` PR-event runs `38569486172`, `38569486169`, and `38569486126` passed all 19 jobs; ASan/UBSan passed 893/893 in 1089.77 seconds. This verification-record revision requires its own exact-head checks before the pre-authorized PR #68 merge; GitHub holds that final receipt and merge state.
-Next command: **`/gsd-discuss-phase 13`**. Next phase: **Phase 13: CGB HDMA** (not started). Phase 12 UAT is complete: do not rerun it, reopen decisions, or create gap plans without a concrete new regression, changed covered behavior, stale/unavailable evidence, or an owner scope change. `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop for the owner after the protected Phase 12 handoff.
-Last activity: 2026-10-14 — Phase 12 automated verification complete; paused before Phase 13
-
-Progress (v0.2): [███████░░░] 67% (6/9 phases); 99/99 existing plans complete, Phases 13–15 unplanned
 
 ## Performance Metrics
 
@@ -450,9 +459,9 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-14T13:07:53Z
-Stopped at: Phase 12 execution complete; awaiting `/gsd-verify-work 12`
-Resume file: .planning/.continue-here.md
+Last session: 2026-10-14T16:40:31.081Z
+Stopped at: Phase 13 context gathered; next /gsd-plan-phase 13; stop before planning
+Resume file: .planning/phases/GB-13-cgb-hdma/13-CONTEXT.md
 Completed workflow stage: **Phase 12 - CGB Double Speed, execution** (2026-10-14), plans 12-01..12-19 plus Nyquist validation, security, UI scope review, code review and fixes, regression gate, and goal verification. [12-VERIFICATION.md](phases/GB-12-cgb-double-speed/12-VERIFICATION.md) passes 109/109 with zero unverified behaviors; OpenGSD phase.complete accepted 19/19. Local CTest passed 898/898 in 52.66 seconds, and the DMG baseline had zero changed rows. Exact tested source head `502f992fe9fd2d848845947057c2b327747c3edd`: PR CI `38565349295`, fixture reproduction `38565349297`, and package smoke `38565349116` all succeeded with every PR-event job successful; ASan/UBSan passed 893/893 in 1217.04 seconds. All three review findings are fixed; 34 security threats are closed. Draft [PR #68](https://github.com/szTheory/gabbaboy/pull/68) remains unmerged. Only AGE DIV and STOP-prefetch are passes; eleven qualified expected failures remain, and no physical hardware claim is made. The original plan 12-19 benchmark receipt is historical at `301f1b05577e6d35a4c3a756ded1ec15a4082c8d`, runs `38502094649`, `38502094682`, and `38502094771`; later metadata commits require their own exact-head checks.
 Next command in fresh context: **`/gsd-verify-work 12`**. The following phase is **Phase 13: CGB HDMA**, not started; after verification and merge, enter it with **`/gsd-discuss-phase 13`**. `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop at this handoff for the owner.
 
@@ -547,8 +556,8 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Completed workflow stage: **Phase 12 - CGB Double Speed, verification**, 73/73 automated UAT rows and zero human checkpoints; execution was 19/19 plans and goal verification passed 109/109.
-- Next phase: **Phase 13: CGB HDMA**, not started. Next command: **`/gsd-discuss-phase 13`**.
-- The agent completes the pre-authorized PR #68 merge only after its exact final head has every required check successful. GitHub records that receipt; this does not require owner UAT.
-- Preserve owner model/config changes and use the installed OpenGSD resolver. Do not repeat completed Phase 12 work without changed evidence.
-- Stop here; both workflow auto-advance flags stay false.
+- Completed workflow stage: **Phase 13: CGB HDMA, discussion**; 25 decisions recorded, DEEP research and implementation pending.
+- Next stage and phase: **Phase 13: CGB HDMA, planning**. Exact next command: **`/gsd-plan-phase 13`**.
+- Phase 12 PR #68 is merged and its automated UAT is complete; do not restart it without changed evidence.
+- Preserve owner model/config edits. D-069 automation and D-096 flat dependencies are defaults; use recorded decisions and primary pins.
+- Stop here. Both auto-advance flags stay false. Phase 14: CGB-E Model Qualification and Corpus remains unstarted.

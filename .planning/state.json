@@ -55,9 +55,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-discuss-phase 13",
-    "label": "Discuss Phase 13: CGB HDMA",
-    "reason": "Phase 12 automated verification complete; Phase 13 remains unstarted; owner chooses when to continue"
+    "command": "/gsd-plan-phase 13",
+    "label": "Plan Phase 13: CGB HDMA",
+    "reason": "Phase 13 discussion complete; DEEP planning research required; owner chooses when to continue"
   },
-  "updated_at": "2026-10-14T14:35:44.163455+00:00"
+  "updated_at": "2026-10-14T16:40:01.162350+00:00"
 }

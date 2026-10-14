@@ -1,6 +1,6 @@
 # GabbaBoy research index
 
-Updated: 2026-10-12. Target: original C Game Boy / Game Boy Color core. These documents establish research and recommendations; they do not establish an implemented emulator.
+Updated: 2026-10-14. Target: original C Game Boy / Game Boy Color core. These documents establish research and recommendations; they do not establish an implemented emulator.
 
 ## Start here
 
@@ -24,6 +24,8 @@ Milestone delta research lives in [v0.2/](v0.2/): start with [v0.2/SUMMARY.md](v
 | How do CI, release, safety, performance and adoption evidence work? | [QUALITY-AND-DELIVERY.md](QUALITY-AND-DELIVERY.md) | [ASan](https://clang.llvm.org/docs/AddressSanitizer.html), [UBSan](https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html), [GitHub tokens](https://docs.github.com/en/actions/concepts/security/github_token), [required checks](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks), [Apple notarization](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow) |
 
 ## Current phase evidence
+
+- [Phase 13 discussion context](../phases/GB-13-cgb-hdma/13-CONTEXT.md) records 25 adopted HDMA decisions, pinned primary sources, the exact SameSuite start/cancel model exception, actual fixture admission/rights boundaries and the whole-instruction/preflight research gate. [Discussion log](../phases/GB-13-cgb-hdma/13-DISCUSSION-LOG.md) preserves the comparison and adversarial reconciliation. This is discussion only; DEEP planning research, fixture admission and DMA implementation are pending. Next: `/gsd-plan-phase 13`. Prefer small flat dependencies (D-096), retain automation-first D-069, and reuse the recorded choices unless concrete new evidence warrants a narrow amendment.
 
 - [Phase 1 planning research](../milestones/v0.1-phases/GB-01-portable-foundation-and-original-rom-tracer/01-RESEARCH.md) narrows the initial fixture to the named DMG-CPU-B post-boot profile, records candidate opcode/tool/host-floor choices, and identifies what still needs implementation or hosted evidence. It is planning evidence only; it does not qualify an emulator or CI run.
 - [Phase 2 planning research](../milestones/v0.1-phases/GB-02-dmg-cpu-bus-and-time/02-RESEARCH.md) covers timed SM83 execution, CPU-visible mapping, timer/serial behavior and a pinned Mooneye candidate set. Mooneye fixture reproduction needs WLA-DX; ordinary tests will consume reviewed checked-in bytes. Gekkio revision 192 §12.1 documents undefined reads when no cartridge device responds, so no universal absent-RAM byte is qualified. Fixture admission and implementation evidence remain pending. [Validation contract](../milestones/v0.1-phases/GB-02-dmg-cpu-bus-and-time/02-VALIDATION.md).
