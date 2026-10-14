@@ -434,9 +434,9 @@ hardware results, executed here on the bootless profile). The original fixture i
 its source and 32 KiB ROM digests are recorded in
 [`fixtures/mbc1-continuation/manifest.json`](../fixtures/mbc1-continuation/manifest.json).
 These results establish software behavior under the named bootless profile.
-No physical DMG-CPU-B/MBC1/MBC2/MBC3/MBC5 or real-time-clock observation,
-boot-ROM execution, CGB, CGB double-speed clock behavior, MBC30, MBC1M, other
-mapper, physical rumble, general game-compatibility, or arbitrary
+No physical DMG-CPU-B/MBC1/MBC2/MBC3/MBC5, real-time-clock or CGB/double-speed
+observation, boot-ROM execution, MBC30, MBC1M, other mapper, physical rumble,
+general game-compatibility, or arbitrary
 save-interchange claim is made. The MBC3 clock is evidenced by author-attested
 test-ROM results, original tests and project decisions; see
 [`docs/mbc3-rtc-evidence.md`](mbc3-rtc-evidence.md). Process-interruption tests exercise old-or-new complete file outcomes;

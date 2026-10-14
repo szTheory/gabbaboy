@@ -3493,4 +3493,34 @@ set_tests_properties(
   PROPERTIES TIMEOUT 60)
 # --- Phase 12 plan 12-14 end ---
 
+# --- Phase 12 plan 12-18 begin ---
+set(GBB_SPEED_DOC_FILES
+  "${PROJECT_SOURCE_DIR}/docs/native-integration.md"
+  "${PROJECT_SOURCE_DIR}/docs/support/unreleased.md"
+  "${PROJECT_SOURCE_DIR}/docs/preview.md"
+  "${PROJECT_SOURCE_DIR}/docs/cartridge-and-saves.md"
+  "${PROJECT_SOURCE_DIR}/docs/mbc3-rtc-evidence.md"
+  "${PROJECT_SOURCE_DIR}/README.md"
+  "${PROJECT_SOURCE_DIR}/src/player/limitations.h")
+add_test(NAME cgb_speed_docs_no_stale_claims
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_FILES=${GBB_SPEED_DOC_FILES}"
+    -P "${PROJECT_SOURCE_DIR}/tests/check_no_stale_speed_claims.cmake")
+set_tests_properties(cgb_speed_docs_no_stale_claims PROPERTIES
+  PASS_REGULAR_EXPRESSION "no-stale-speed-claims pass" TIMEOUT 30)
+
+set(GBB_SPEED_DOC_SELFTEST_DIR "${PROJECT_BINARY_DIR}/cgb-speed-doc-selftest")
+file(MAKE_DIRECTORY "${GBB_SPEED_DOC_SELFTEST_DIR}")
+file(READ "${PROJECT_SOURCE_DIR}/docs/preview.md" gbb_speed_preview_text)
+string(APPEND gbb_speed_preview_text "\nno double speed\n")
+set(GBB_SPEED_DOC_MUTATED_PREVIEW "${GBB_SPEED_DOC_SELFTEST_DIR}/preview.md")
+file(WRITE "${GBB_SPEED_DOC_MUTATED_PREVIEW}" "${gbb_speed_preview_text}")
+add_test(NAME cgb_speed_docs_no_stale_claims_mutated
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_FILES=${GBB_SPEED_DOC_MUTATED_PREVIEW};-P;${PROJECT_SOURCE_DIR}/tests/check_no_stale_speed_claims.cmake"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=stale-speed-claim"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(cgb_speed_docs_no_stale_claims_mutated PROPERTIES TIMEOUT 30)
+# --- Phase 12 plan 12-18 end ---
 gabbaboy_verify_registered_tests()
