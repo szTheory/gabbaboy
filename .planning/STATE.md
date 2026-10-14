@@ -4,18 +4,18 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: 13
 current_phase_name: CGB HDMA
-current_plan: 5
-status: Phase 13 execution in progress; plans 13-01, 13-02, 13-03, 13-04, 13-06 and 13-08 complete
-stopped_at: Completed 13-08-PLAN.md; next Phase 13 wave 5 plan 13-05 via /gsd-execute-phase 13 --wave 5
-last_updated: "2026-10-14T21:40:14Z"
+current_plan: 7
+status: Phase 13 execution in progress; plans 13-01, 13-02, 13-03, 13-04, 13-05, 13-06 and 13-08 complete
+stopped_at: Completed 13-05-PLAN.md; next Phase 13 wave 6 plan 13-07 via /gsd-execute-phase 13 --wave 6
+last_updated: "2026-10-14T22:03:49Z"
 last_activity: 2026-10-14
-last_activity_desc: Phase 13 plan 13-08 complete; Phase 13 wave 5 plan 13-05 is next.
+last_activity_desc: Phase 13 plan 13-05 complete; Phase 13 wave 6 plan 13-07 is next.
 state_head: eb87c27fb2abfa380342579b6f20eb6398faa30b
 progress:
   total_phases: 9
   completed_phases: 7
   total_plans: 111
-  completed_plans: 105
+  completed_plans: 106
   percent: 78
 ---
 
@@ -31,18 +31,18 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-14)
 ## Current Position
 
 Phase: 13 (CGB HDMA) — EXECUTING
-Status: Phase 13 execution in progress; plans 13-01, 13-02, 13-03, 13-04, 13-06 and 13-08 complete
-Current Plan: 5
+Status: Phase 13 execution in progress; plans 13-01, 13-02, 13-03, 13-04, 13-05, 13-06 and 13-08 complete
+Current Plan: 7
 Total Plans in Phase: 12
 
-Completed workflow stage: Phase 13 plan 13-08 execution (2026-10-14). Both tasks pass: the original RGBDS-pinned guest reaches C000=A5 and FF55 00/FF/00/FF with exact source-derived pixels; its no-transfer twin records C000=EE at stage 1 and keeps a white frame. Both real-player smoke cases and reproduction negatives pass. CGB-07 remains open.
-Next stage: Phase 13 wave 5 plan 13-05 execution — Bounded runtime mutation sensitivity and inherited anchors. Reuse 13-08, 13-04, 13-03, 13-06, 13-02 and 13-01 summaries; reopen decisions only for a concrete gap or changed evidence.
-Next command: /gsd-execute-phase 13 --wave 5. Phase 13 remains active; Phase 14 (CGB-E Model Qualification and Corpus) remains unstarted. Stop before Phase 14. Both auto-advance flags remain false.
-Last activity: 2026-10-14 — Phase 13 plan 13-08 complete; Phase 13 wave 5 plan 13-05 is next.
+Completed workflow stage: Phase 13 plan 13-05 execution (2026-10-14). Both TDD tasks pass with four task commits. The selected P13 fault/control and anchor lane passes 29/29; affected P12/P13 mutation and timing checks pass 123/123; the full native suite passes 971/971. Model-gate and frozen DMG baseline checks pass. One shared generated runtime-mask core serves three HDMA harnesses; the native build used 166 actions and 3.65 seconds wall time. CGB-07 remains open, and no physical timing or libFuzzer campaign is claimed.
+Next stage: Phase 13 Wave 6, plan 13-07 — Magen HDMA admission and structural differential oracle. Reuse 13-05, 13-08, 13-04, 13-03, 13-06, 13-02 and 13-01 summaries; revisit decisions only for a concrete failed discriminator or changed evidence.
+Next command: /gsd-execute-phase 13 --wave 6. Phase 13 remains active; Phase 14 (CGB-E Model Qualification and Corpus) remains unstarted. Stop before Phase 14. Both auto-advance flags remain false.
+Last activity: 2026-10-14 — Phase 13 plan 13-05 complete; Phase 13 Wave 6 plan 13-07 is next.
 
 Phase 12 is merged: PR #68 at `8091fb591de7fb68e666be01d344f5f26ebedc5c`, reviewed/tested head `ffde21c0e2a7b71c6328ac8152d04496f5d387e7`; final PR-event runs `38586393122`, `38586392787`, `38586392931` passed all 19 jobs. Its 73/73 automated UAT stays closed absent changed covered behavior or concrete contradictory evidence. D-069, D-096 and D-098 are durable defaults; GB-GSD-017/018 prevent missing-test and unwired-prohibition churn.
 
-Progress (v0.2): 78% (7/9 phases complete); 105/111 plans complete. Phase 13 is executing (plans 13-01, 13-02, 13-03, 13-04, 13-06 and 13-08 of 12 complete; wave 5 plan 13-05 is next); Phases 14–15 are unstarted.
+Progress (v0.2): 78% (7/9 phases complete); 106/111 plans complete. Phase 13 is executing (plans 13-01, 13-02, 13-03, 13-04, 13-05, 13-06 and 13-08 of 12 complete; Wave 6 plan 13-07 is next); Phases 14–15 are unstarted.
 
 ### Prior stage receipts (historical, before the final merges)
 
@@ -227,6 +227,7 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 13 P03 | 43min | 2 tasks | 7 files |
 | Phase 13 P04 | 30min | 2 tasks | 8 files |
 | Phase 13 P08 | 18min | 2 tasks | 13 files |
+| Phase 13 P05 | 12 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -574,8 +575,8 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Completed workflow stage: **Phase 13 plan 13-08 execution — Original visible DMA guest and existing player smoke**; both tasks, four TDD task commits, the plan SUMMARY, and current automated evidence are recorded.
-- Next plan: **Phase 13 wave 5 — 13-05 Bounded runtime mutation sensitivity and inherited anchors**. Exact command: **`/gsd-execute-phase 13 --wave 5`**.
-- Reuse the 13-08, 13-04, 13-03, 13-06, 13-02 and 13-01 summaries and recorded decisions; reopen them only for a concrete failed discriminator or changed evidence.
+- Completed workflow stage: **Phase 13 plan 13-05 execution — Bounded runtime mutation sensitivity and inherited anchors**; both tasks, four TDD task commits, the plan SUMMARY, and verification receipts are recorded.
+- Next stage: **Phase 13 Wave 6, plan 13-07 — Magen HDMA admission and structural differential oracle**. Exact command: **`/gsd-execute-phase 13 --wave 6`**.
+- Reuse the 13-05, 13-08, 13-04, 13-03, 13-06, 13-02 and 13-01 summaries and recorded decisions; revisit them only for a concrete failed discriminator or changed evidence.
 - Phase 12 is merged and its automated UAT stays closed absent changed evidence. Preserve owner model/runtime config edits.
 - Stop before Phase 14. Both auto-advance flags remain false. Phase 14: CGB-E Model Qualification and Corpus remains unstarted.
