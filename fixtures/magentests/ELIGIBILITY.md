@@ -37,6 +37,38 @@ typed from the pinned upstream source must hold before any frame digest is accep
 | `bg_oam_priority.gbc` | CGB hardware photo, revision E unattested | eight 8x8 cells at x 32-39, y 16k to 16k+7: cells 0, 2, 3 rows 0-3 `0x03E0` and rows 4-7 `0x7C00`; cells 1, 4, 5, 6, 7 all `0x03E0`; no `0x001F`; all else `0x7FFF` |
 | `oam_internal_priority.gbc` | SameBoy differential, not hardware | 84 opaque pixels inside two 12x6 boxes (see the mask derivation), green `0x03E0` or red `0x001F`; all else `0x7FFF` |
 
+## HBlank VRAM DMA ROM (Phase 13)
+
+`hblank_vram_dma.gbc` is admitted from MagenTests 0.5.0 at the pinned source
+commit. Its license and complete build/include closure are recorded in
+`SOURCES.md`, `manifest.json`, and `LICENSE.txt`. It is a bootless
+`GBB_PROFILE_CGB_CPU_E` selected-model case with **SameBoy-assisted
+differential** evidence; the author screenshot and source are not physical
+CGB-E qualification.
+
+The source-derived guest contract is:
+
+- Tile 0 is colour index 1 and palette colour 1 is red `0x001F`, the initial
+  failure display. Tile 1 is colour index 2 and palette colour 2 is green
+  `0x03E0`. Tile 2 is colour index 3 and palette colour 3 is blue `0x7C00`.
+- `NewTileMap` contains `$400` bytes of tile index 1. The first HBlank DMA
+  programs source `NewTileMap`, destination `$9800`, and 64 blocks, then polls
+  FF55 until the busy bit clears. Completion must leave VRAM bank 0's
+  `$1800..$1BFF` map bytes equal to 1 and the screen uniformly green.
+- The guest then arms a second 64-block transfer from `NewBadTileMap`, whose
+  bytes are tile index 2, and enters a HALT loop. That transfer must remain
+  pending: the guest is halted, FF55 retains the active/busy count, and the map
+  stays tile 1. The wrong-HALT control must turn the map blue; wrong-bank and
+  no-transfer controls must fail their named map/transfer assertions.
+- The structural display predicate is all 23040 RGB555 pixels equal to
+  `0x03E0`, with two distinct increasing LCD-on frame generations and equal
+  final frames. Guest data, FF55 status/read evidence, HALT state, and the
+  source-derived green predicate gate any digest comparison.
+
+These expectations establish software-model behavior only. They make no
+physical console timing claim, and there is no mandatory external emulator or
+hardware setup.
+
 `ppu_disabled_state` reads STAT mode 0 right after the guest turns the LCD off at vblank. A
 second case clears `$143` (recomputing `$14D`) so the same ROM runs in compatibility mode, where
 the guest's CRAM writes are ignored. The guest paints colour index 1 and its verdict is BGP (0x00

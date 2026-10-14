@@ -65,6 +65,7 @@ CMakeUserPresets.json
 !/fixtures/magentests/ppu_disabled_state.gbc
 !/fixtures/magentests/bg_oam_priority.gbc
 !/fixtures/magentests/oam_internal_priority.gbc
+!/fixtures/magentests/hblank_vram_dma.gbc
 !/fixtures/rtc3test/rtc3test.gb
 
 # Temporary OpenGSD runtime state (retain planning documents)

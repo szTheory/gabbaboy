@@ -6,6 +6,22 @@
     "license": "MIT; see LICENSE.txt",
     "upstream": "https://github.com/alloncm/MagenTests/tree/3f9c090f16e5a721db776febb9ba7d773e1c819c"
   },
+  "toolchain": {
+    "rgbds": {
+      "version": "0.6.1",
+      "release": "https://github.com/gbdev/rgbds/releases/tag/v0.6.1",
+      "archives": {
+        "linux-x86_64": {
+          "asset": "rgbds-0.6.1-linux-x86_64.tar.xz",
+          "sha256": "cfaff18e0db0006863de921d6f5a10eb5fb04dba453f967955a8b0f30bc7ba5b"
+        },
+        "macos-x86-64": {
+          "asset": "rgbds-0.6.1-macos-x86-64.zip",
+          "sha256": "65929a5483c89b20955df0d78ceb87744d8ad0cf7c80919f6ee9ef90fc55c08d"
+        }
+      }
+    }
+  },
   "fixtures": [
     {
       "alias": "mbc1",
@@ -63,6 +79,30 @@
       "source_dir": "src/oam_internal_priority",
       "rgbfix_options": "--color-only --mbc-type ROM",
       "cgb_flag": "0xC0"
+    },
+    {
+      "alias": "hblank_vram_dma",
+      "file": "hblank_vram_dma.gbc",
+      "release": "0.5.0",
+      "release_url": "https://github.com/alloncm/MagenTests/releases/tag/0.5.0",
+      "size_bytes": 32768,
+      "sha256": "e8124ce687d37a2402e20af92af1299610bfbda0871d605084c0bba2bf57135c",
+      "cartridge_type": "0x00",
+      "source_dir": "src/hblank_vram_dma",
+      "rgbfix_options": "--color-only --mbc-type ROM",
+      "cgb_flag": "0xC0",
+      "evidence_class": "SameBoy-assisted differential",
+      "applicability": "GBB_PROFILE_CGB_CPU_E bootless selected model; not physical CGB-E qualification",
+      "source_files": [
+        {"path": "Makefile", "sha256": "f1c9d27f09fd751f853d91f458a222851ae5c7ea61f6ec53572a4cf779814418"},
+        {"path": "LICENSE", "sha256": "cfff09304691f49ac2ffb3453b5adc3a4abe9605387b4b89b4f0d384963a2042"},
+        {"path": "src/common.asm", "sha256": "88fc0a6ca5af136a3e948e5b8abab2700140442cf0c0f1871244c835cfd23abb"},
+        {"path": "src/hblank_vram_dma/main.asm", "sha256": "e242af4afb63702a41960de4863d732d51220ac649b2e6b8697bedfddc1e9f77"},
+        {"path": "src/hblank_vram_dma/graphics_data.asm", "sha256": "37c55f20c064b9b4dce00516b9938057a342019b7b850c2014e7c3c1cad6cba9"},
+        {"path": "hardware.inc/hardware.inc", "sha256": "6463577e5aba17cdf678eebf206f9fc40e0372c8d8a26a6dc7647c9e7a5c3964"},
+        {"path": "hardware.inc/LICENSE", "sha256": "36ffd9dc085d529a7e60e1276d73ae5a030b020313e6c5408593a6ae2af39673"}
+      ],
+      "rights": "MagenTests MIT; included hardware.inc CC0-1.0; notices in LICENSE.txt"
     }
   ]
 }
