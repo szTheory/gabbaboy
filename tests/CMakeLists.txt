@@ -2582,21 +2582,6 @@ add_test(NAME cgb_speed_profile_contract_missing_selftest
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # --- Phase 12 plan 12-08 end ---
 
-# Per-test TIMEOUTs are sized for normal builds. Debug ASan/UBSan runs the same work several times
-# slower, and the whole-run acceptance and RTC cases reached their 300 s limits on a slow hosted
-# runner (LESSONS GB-CI-004). Sanitizer builds scale every explicit limit by three, so a limit
-# still catches a hang without turning a slow runner into a failure.
-if(GABBABOY_ENABLE_SANITIZERS)
-  get_property(gbb_all_tests DIRECTORY PROPERTY TESTS)
-  foreach(gbb_test IN LISTS gbb_all_tests)
-    get_test_property(${gbb_test} TIMEOUT gbb_timeout)
-    if(gbb_timeout)
-      math(EXPR gbb_timeout "${gbb_timeout} * 3")
-      set_tests_properties(${gbb_test} PROPERTIES TIMEOUT ${gbb_timeout})
-    endif()
-  endforeach()
-endif()
-
 # --- Phase 12 plan 12-01 begin ---
 # Pre-change CGB speed identities; this source includes the core and must not link it.
 add_executable(test_cgb_speed_internal test_cgb_speed_internal.c)
@@ -2956,14 +2941,8 @@ endif()
 string(REPLACE "$" "0x" GBB_AGE_SPSW_RESULTS_HEX "${GBB_AGE_SPSW_RESULTS}")
 string(REPLACE "$" "0x" GBB_AGE_SPSW_EXPECTED_HEX "${GBB_AGE_SPSW_EXPECTED}")
 set(GBB_AGE_SPSW_ROM "${PROJECT_SOURCE_DIR}/fixtures/age/spsw-div-cgbBCE.gb")
-set(GBB_AGE_SPSW_TIMEOUT 120)
 set(GBB_AGE_TIMEOUT_CONTROL_TIMEOUT 30)
 set(GBB_AGE_STALL_WINDOW_TIMEOUT 240)
-if(GABBABOY_ENABLE_SANITIZERS)
-  math(EXPR GBB_AGE_SPSW_TIMEOUT "${GBB_AGE_SPSW_TIMEOUT} * 3")
-  math(EXPR GBB_AGE_TIMEOUT_CONTROL_TIMEOUT "${GBB_AGE_TIMEOUT_CONTROL_TIMEOUT} * 3")
-  math(EXPR GBB_AGE_STALL_WINDOW_TIMEOUT "${GBB_AGE_STALL_WINDOW_TIMEOUT} * 3")
-endif()
 # Negative control: one half-dot cannot reach an executed verdict and must report timeout distinctly.
 add_test(NAME age_spsw_div_cgbBCE_timeout
   COMMAND ${CMAKE_COMMAND}
@@ -3070,9 +3049,6 @@ foreach(GBB_AGE_DISPOSITION_SUITE_INDEX RANGE 0 ${GBB_AGE_DISPOSITION_SUITE_COUN
         string(REPLACE "-" "_" GBB_AGE_CASE_CTEST "${GBB_AGE_CASE}")
         set(GBB_AGE_CASE_TEST "age_${GBB_AGE_CASE_CTEST}")
         set(GBB_AGE_CASE_TIMEOUT 120)
-        if(GABBABOY_ENABLE_SANITIZERS)
-          math(EXPR GBB_AGE_CASE_TIMEOUT "${GBB_AGE_CASE_TIMEOUT} * 3")
-        endif()
         set(GBB_AGE_DISPOSITION_ARGS "${GBB_AGE_DISPOSITION}")
         set(GBB_AGE_EXPECTED_VERDICT "pass")
         if(GBB_AGE_DISPOSITION STREQUAL "expected-failure")
@@ -3523,4 +3499,40 @@ add_test(NAME cgb_speed_docs_no_stale_claims_mutated
     -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
 set_tests_properties(cgb_speed_docs_no_stale_claims_mutated PROPERTIES TIMEOUT 30)
 # --- Phase 12 plan 12-18 end ---
+
+# Configure-only regression for the shared sanitizer timeout policy. This is last so adding a
+# test after the scaler cannot silently escape the policy pass.
+add_test(NAME sanitizer_timeout_policy_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
+    "-DGBB_BINARY_DIR=${PROJECT_BINARY_DIR}"
+    -P "${PROJECT_SOURCE_DIR}/tests/check_sanitizer_timeout_policy.cmake")
+set_tests_properties(sanitizer_timeout_policy_selftest PROPERTIES TIMEOUT 30)
+
 gabbaboy_verify_registered_tests()
+
+# Per-test TIMEOUTs are normal-build limits. Debug ASan/UBSan runs the same work several times
+# slower, and the whole-run acceptance and RTC cases reached their 300 s limits on a slow hosted
+# runner (LESSONS GB-CI-004). Apply one shared multiplier after every test registration.
+include("${PROJECT_SOURCE_DIR}/cmake/ScaleSanitizerTimeouts.cmake")
+gbb_scale_sanitizer_test_timeouts()
+
+if(GABBABOY_ENABLE_SANITIZERS)
+  foreach(gbb_timeout_case IN ITEMS
+      "age_spsw_div_cgbBCE=360"
+      "age_spsw_div_cgbBCE_timeout=90"
+      "age_stall_window=720"
+      "age_sensitivity_m6=720"
+      "age_sensitivity_m28_reference_mutated=180"
+      "cgb_partition_stall_start_window=180")
+    string(REPLACE "=" ";" gbb_timeout_pair "${gbb_timeout_case}")
+    list(GET gbb_timeout_pair 0 gbb_timeout_test)
+    list(GET gbb_timeout_pair 1 gbb_timeout_expected)
+    get_test_property(${gbb_timeout_test} TIMEOUT gbb_timeout_actual)
+    if(NOT "${gbb_timeout_actual}" STREQUAL "${gbb_timeout_expected}")
+      message(FATAL_ERROR
+        "Sanitizer timeout policy: ${gbb_timeout_test} expected ${gbb_timeout_expected}, "
+        "got ${gbb_timeout_actual}")
+    endif()
+  endforeach()
+endif()

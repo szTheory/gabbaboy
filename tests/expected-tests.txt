@@ -895,3 +895,4 @@ age_sensitivity_m27
 age_sensitivity_m28_reference_mutated
 cgb_speed_docs_no_stale_claims
 cgb_speed_docs_no_stale_claims_mutated
+sanitizer_timeout_policy_selftest
