@@ -141,8 +141,8 @@ buffer contracts.
   through VBK and SVBK. `gbb_peek_ram` follows the selected WRAM bank for
   `$D000`-`$DFFF` and its echo, so read it after the guest has set SVBK.
 - On the CGB profile, guest code can switch to double speed with KEY1 and STOP.
-  Budgets, `consumed_half_dots`, and frame intervals use master half-dots at
-  both speeds: one frame is 140448 half-dots. The speed-switch pause is
+  Budgets, `consumed_half_dots`, and frame intervals use master half-dots at both speeds:
+  one frame is 140448 half-dots. The speed-switch pause is
   consumed across calls; each call returns `GBB_STOP_BUDGET` with progress,
   never `GBB_STOP_STOPPED` or `GBB_STOP_HALTED_IDLE`. A budget below one
   instruction or one stall M-cycle returns `GBB_STOP_BUDGET` with
