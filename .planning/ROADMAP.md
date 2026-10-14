@@ -379,7 +379,7 @@ Plans:
   3. Every transfer is bounded (at most 128 blocks) and partitioned runs stay equivalent across transfers; MagenTests `hblank_vram_dma` passes with its oracle class recorded, and Mealybug `hdma_*-C` results are reported as informational CGB-C evidence outside the CGB-E denominator.
 
 **Research**: DEEP (LCD-off, mode-3 GDMA, overflow state, HALT, cross-bank source, same-half-dot ordering).
-**Plans**: 2/12 plans executed
+**Plans**: 3/12 plans executed
 
 Plans:
 **Wave 1**
@@ -387,7 +387,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [x] 13-02-PLAN.md — Complete bounded transfer, restart and address policies
-- [ ] 13-06-PLAN.md — Pinned four-case SameSuite admission and reproduction
+- [x] 13-06-PLAN.md — Pinned four-case SameSuite admission and reproduction
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 13-03-PLAN.md — Real HALT wake and independent competing stalls
@@ -454,6 +454,6 @@ Plans:
 | 10. CGB Profile, Banking and Register Visibility | v0.2 | 20/20 | Complete    | 2026-10-12 |
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 15/15 | Complete    | 2026-10-13 |
 | 12. CGB Double Speed | v0.2 | 19/19 | Complete    | 2026-10-14 |
-| 13. CGB HDMA | v0.2 | 2/12 | In Progress | - |
+| 13. CGB HDMA | v0.2 | 3/12 | In Progress | - |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 0/TBD | Not started | - |
 | 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 0/TBD | Not started | - |

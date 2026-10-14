@@ -1,12 +1,10 @@
 # Phase 13 continuation
 
-Completed stage: **Phase 13 plan 13-01 execution** (2026-10-14); Phase 13 remains active.
-Next stage: **Phase 13 plan 13-02 execution — Complete bounded transfer, restart and address policies** — **`/gsd-execute-phase 13`**.
+Completed stage: **Phase 13 plan 13-06 execution** (2026-10-14); Phase 13 remains active and CGB-07 remains open.
+Next stage: **Phase 13 plan 13-03 execution — Real HALT wake and independent competing stalls** — **`/gsd-execute-phase 13`**.
 
-12 plans / 24 tasks / 10 waves are independently checked. Plan 13-01 is complete; its tests pass both late-access seams, mode/mask contracts, negative controls, model mirrors and the frozen DMG baseline. Read `13-01-SUMMARY.md`, `13-PLAN-CHECK.md`, `13-PLAN-COVERAGE.md`, `13-RESEARCH.md` and `13-VALIDATION.md`. Continue with `13-02-PLAN.md` and preserve the actual-transfer evidence before expanding.
+Plan 13-06 admits exactly `gbc_dma_cont`, `gdma_addr_mask`, `hdma_lcd_off`, and `hdma_mode0` from SameSuite revision `f15645fb049a47ea235f6d2c9a033e72d8087901`. Offline provenance checks, all named negative controls, and exact RGBDS 1.0.1 rebuild comparisons pass. The existing fixture-repro job runs the mandatory complete set. See [13-06-SUMMARY.md](13-06-SUMMARY.md), [13-02-SUMMARY.md](13-02-SUMMARY.md), and [13-01-SUMMARY.md](13-01-SUMMARY.md).
 
-Use the recorded policies and source pins. This plan implements only one ordinary visible HBlank block; general-purpose DMA, cancellation/restart, LCD-off/VBlank transfers, HALT behavior, fixture admission and CGB-07 completion remain pending. Mealybug remains optional G1/CGB-C evidence. Physical UNKNOWNs are limits, not owner UAT. D-069 zero routine human UAT, D-096 flat dependencies, D-098 and GB-GSD-017/018 apply. GSD-specific producer proof runs automatically locally; native CI adds no GSD/Node install.
+The fixture results establish source/ROM provenance only. The SameSuite author expectations and SameBoy agreement are not independent physical CGB-E evidence; the D-06/Pan Docs contradiction remains recorded without changing upstream expectations. Mealybug CGB-C bytes remain outside this admitted set under the unresolved G1 rights gate.
 
-Phase 12 PR #68 is merged; its completed UAT stays closed absent changed covered behavior or contradictory evidence. Branch: `gsd/phase-13-cgb-hdma`. Preserve the owner's unstaged model/runtime config edits.
-
-Both auto-advance flags remain false. Stop before Phase 14. Phase 14: CGB-E Model Qualification and Corpus remains unstarted.
+Continue in plan order with `13-03-PLAN.md`, which depends on the completed 13-02 implementation. Reuse the established decisions and evidence unless a concrete discriminator fails or new evidence changes them. Phase 14 remains unstarted. Both auto-advance flags remain false; stop before Phase 14.
