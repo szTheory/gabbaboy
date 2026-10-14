@@ -849,3 +849,5 @@ cgb_partition_held_button
 cgb_partition_lcd_off
 cgb_partition_back_to_back
 cgb_partition_chained
+cgb_partition_sensitivity_joypad_shift
+cgb_partition_sensitivity_digest_input

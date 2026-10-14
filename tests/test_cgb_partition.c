@@ -1419,6 +1419,114 @@ static int cgb_partition_chained(void) {
     return 0;
 }
 
+static int cgb_partition_sensitivity_joypad_shift(void) {
+    partition_scenario early = {0};
+    const uint64_t stop_retire = partition_stop_retire_half_dots(&early);
+    early.button_at_half_dots = stop_retire + 256u;
+    partition_scenario late = early;
+    late.button_at_half_dots += half_dots_per_m(1u);
+    const uint64_t total = stop_retire +
+        (uint64_t)GBB_SPEED_SWITCH_STALL_T * GBB_HALF_DOTS_PER_T_DOUBLE + 4096u;
+    partition_meter meter = {0};
+    uint64_t early_digest = 0u;
+    uint64_t late_digest = 0u;
+    REQUIRE(partition_run_reference(&early, total, &meter, &early_digest) == 0);
+    REQUIRE(partition_run_reference(&late, total, &meter, &late_digest) == 0);
+    if (early_digest == late_digest) {
+        fputs("partition-joypad-shift-inert\n", stderr);
+        return 1;
+    }
+    printf("cgb_partition_sensitivity_joypad_shift pass delta_half_dots=%" PRIu64
+           " emulated_half_dots=%" PRIu64 "\n", half_dots_per_m(1u),
+           meter.consumed_half_dots);
+    return 0;
+}
+
+static int cgb_partition_sensitivity_digest_input(void) {
+    partition_scenario scenario = {0};
+    const uint64_t total = partition_stop_retire_half_dots(&scenario) +
+        partition_stall_half_dots(&scenario) + 4096u;
+    partition_meter meter = {0};
+    partition_machine run;
+    REQUIRE(partition_machine_create(&scenario, &run) == 0);
+    gbb_run_result result;
+    REQUIRE(partition_run_budget(&run, total, &meter, GBB_STOP_HALTED_IDLE,
+                                 &result) == 0);
+    const uint64_t baseline = partition_digest(run.machine, &run.streams);
+    REQUIRE(run.streams.pcm_count != 0u);
+    REQUIRE(run.streams.serial_count != 0u);
+    static const char *const groups[] = {
+        "cpu", "time-speed-stall", "divider", "timer", "serial-dma", "ppu",
+        "apu", "rtc", "interrupt-bus", "wram", "rgb555", "pcm", "serial-output"
+    };
+    for (size_t i = 0u; i < sizeof(groups) / sizeof(groups[0]); ++i) {
+        gbb_instance changed = *run.machine;
+        partition_streams changed_streams = run.streams;
+        switch (i) {
+            case 0u: changed.a ^= 1u; break;
+            case 1u: changed.time_half_dots ^= 1u; break;
+            case 2u: changed.divider_counter ^= 1u; break;
+            case 3u: changed.tima ^= 1u; break;
+            case 4u: changed.serial_edge_remaining ^= 1u; break;
+            case 5u: changed.ppu_half_phase ^= 1u; break;
+            case 6u: changed.apu_sequencer_step ^= 1u; break;
+            case 7u: changed.cart.rtc_s ^= 1u; break;
+            case 8u: changed.interrupt_flags ^= 1u; break;
+            case 9u: changed.wram[0][0] ^= 1u; break;
+            case 10u: changed.rgb_working[0] ^= 1u; break;
+            case 11u: changed_streams.pcm[0].left ^= 1; break;
+            case 12u: changed_streams.serial_output[0] ^= 1u; break;
+            default: return 1;
+        }
+        if (partition_digest(&changed, &changed_streams) == baseline) {
+            fprintf(stderr, "partition-inert-input %s\n", groups[i]);
+            partition_machine_destroy(&run);
+            return 1;
+        }
+    }
+    uint8_t *rom_copy = malloc(run.machine->rom_size);
+    if (rom_copy == NULL) {
+        partition_machine_destroy(&run);
+        return 1;
+    }
+    memcpy(rom_copy, run.machine->rom, run.machine->rom_size);
+    rom_copy[0x100u] ^= 1u;
+    gbb_instance changed_rom = *run.machine;
+    changed_rom.rom = rom_copy;
+    const int rom_is_sensitive = partition_digest(&changed_rom, &run.streams) != baseline;
+    free(rom_copy);
+    if (!rom_is_sensitive) {
+        fputs("partition-inert-input immutable-rom\n", stderr);
+        partition_machine_destroy(&run);
+        return 1;
+    }
+    if (run.machine->cartridge_ram == NULL || run.machine->cartridge_ram_size == 0u) {
+        fputs("partition-digest-cartridge-ram-unavailable\n", stderr);
+        partition_machine_destroy(&run);
+        return 1;
+    }
+    uint8_t *ram_copy = malloc(run.machine->cartridge_ram_size);
+    if (ram_copy == NULL) {
+        partition_machine_destroy(&run);
+        return 1;
+    }
+    memcpy(ram_copy, run.machine->cartridge_ram, run.machine->cartridge_ram_size);
+    ram_copy[0] ^= 1u;
+    gbb_instance changed_ram = *run.machine;
+    changed_ram.cartridge_ram = ram_copy;
+    const int ram_is_sensitive = partition_digest(&changed_ram, &run.streams) != baseline;
+    free(ram_copy);
+    if (!ram_is_sensitive) {
+        fputs("partition-inert-input cartridge-ram\n", stderr);
+        partition_machine_destroy(&run);
+        return 1;
+    }
+    partition_machine_destroy(&run);
+    printf("cgb_partition_sensitivity_digest_input pass groups=%zu\n",
+           sizeof(groups) / sizeof(groups[0]) + 2u);
+    return 0;
+}
+
 static int cgb_partition_stall_start_window(void) {
     partition_scenario scenario = {0};
     const uint64_t stall_start = partition_stop_retire_half_dots(&scenario);
@@ -1490,6 +1598,10 @@ int main(int argc, char **argv) {
         return cgb_partition_zero_and_subquantum();
     if (strcmp(argv[1], "cgb_partition_pending_at_stop") == 0)
         return cgb_partition_pending_at_stop();
+    if (strcmp(argv[1], "cgb_partition_sensitivity_joypad_shift") == 0)
+        return cgb_partition_sensitivity_joypad_shift();
+    if (strcmp(argv[1], "cgb_partition_sensitivity_digest_input") == 0)
+        return cgb_partition_sensitivity_digest_input();
     if (strcmp(argv[1], "cgb_partition_held_button") == 0)
         return cgb_partition_held_button();
     if (strcmp(argv[1], "cgb_partition_lcd_off") == 0)
