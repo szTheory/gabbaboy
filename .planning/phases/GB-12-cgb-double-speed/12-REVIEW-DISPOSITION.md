@@ -5,23 +5,23 @@ titles: json
 findings:
   - id: CR-01
     severity: critical
-    disposition: open
+    disposition: fixed
     title: "[BLOCKER] TMPDIR can inject commands through the cleanup trap"
   - id: WR-01
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "[WARNING] Late Phase 12 CTest timeouts bypass sanitizer scaling"
-open: 2
+open: 0
 total: 2
-recorded: 2026-10-14T04:30:33.835Z
+recorded: 2026-10-14T12:21:24.401Z
 ---
 
 # Phase 12: Code Review Disposition
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| CR-01 | critical | open | - |
-| WR-01 | warning | open | - |
+| CR-01 | critical | fixed | 12-REVIEW-FIX.md |
+| WR-01 | warning | fixed | 12-REVIEW-FIX.md |
 
 Dispositions: `open` (recorded, not yet triaged), `fixed`, `skipped`, `deferred`.
 Set `deferred` by hand and put the reason in the Source cell; both are preserved. A `|` in the reason is kept as prose and escaped on the next run.
