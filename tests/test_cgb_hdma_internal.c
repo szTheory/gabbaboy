@@ -1541,6 +1541,62 @@ static int hdma_start_headroom_case(uint8_t control, uint64_t headroom,
     return 0;
 }
 
+static int hdma_rejected_store_case(const uint8_t *instruction, size_t size,
+                                    unsigned setup) {
+    gbb_instance *m = NULL;
+    REQUIRE(policy_fixture_create(&m, 0x80u, 0u, 0, 0, 0, 0u, 0u, 0u, 48u) == 0);
+    memcpy(m->rom + 0x200u, instruction, size);
+    m->pc = 0x200u;
+    m->a = 0x02u;
+    if (setup == 1u) m->c = 0x55u;
+    else if (setup == 2u) { m->h = 0xFFu; m->l = 0x55u; }
+    else if (setup == 3u) m->sp = 0x02ABu;
+    else if (setup == 4u) { m->b = 0x02u; m->c = 0x00u; m->sp = 0xFF56u; }
+    const decoded decoded_instruction = decode(m);
+    const uint64_t cost = instruction_cost(m, decoded_instruction);
+    m->time_half_dots = UINT64_MAX - (cost + 3u * 64u - 1u);
+    const uint64_t before = hdma_partition_state_digest(m);
+    gbb_trace_record trace;
+    memset(&trace, 0xA5, sizeof(trace));
+    const gbb_run_result rejected = gbb_run_ex(m, cost, &trace, 1u, NULL, 0u);
+    const int unchanged = rejected.reason == GBB_STOP_INVALID_STATE &&
+        rejected.consumed_half_dots == 0u && hdma_partition_state_digest(m) == before;
+    const uint8_t *trace_bytes = (const uint8_t *)&trace;
+    for (size_t i = 0u; i < sizeof(trace); ++i)
+        if (trace_bytes[i] != 0xA5u) {
+            gbb_destroy(m);
+            return 1;
+        }
+    gbb_destroy(m);
+    return unchanged ? 0 : 1;
+}
+
+static int hdma_check_store_headroom_forms(void) {
+    static const uint8_t ldh[] = {0xE0u, 0x55u};
+    static const uint8_t absolute[] = {0xEAu, 0x55u, 0xFFu};
+    static const uint8_t c_register[] = {0xE2u};
+    static const uint8_t indirect[] = {0x77u};
+    static const uint8_t store_sp[] = {0x08u, 0x54u, 0xFFu};
+    static const uint8_t push_bc[] = {0xC5u};
+    const struct { const uint8_t *code; size_t size; unsigned setup; const char *name; } cases[] = {
+        {ldh, sizeof(ldh), 0u, "LDH"},
+        {absolute, sizeof(absolute), 0u, "absolute"},
+        {c_register, sizeof(c_register), 1u, "C-register"},
+        {indirect, sizeof(indirect), 2u, "HL-indirect"},
+        {store_sp, sizeof(store_sp), 3u, "SP-high-byte"},
+        {push_bc, sizeof(push_bc), 4u, "stack-high-byte"}
+    };
+    for (size_t i = 0u; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        if (hdma_rejected_store_case(cases[i].code, cases[i].size,
+                                     cases[i].setup) != 0) {
+            fprintf(stderr, "hdma-resource-store-form accepted without headroom form=%s\n",
+                    cases[i].name);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int hdma_guard_is(const uint8_t *guard, size_t size, uint8_t value) {
     for (size_t i = 0u; i < size; ++i)
         if (guard[i] != value) return 0;
@@ -1571,6 +1627,7 @@ static int test_hdma_resource_bounds(void) {
 
     REQUIRE(hdma_start_headroom_case(0x02u, 215u, 1) == 0);
     REQUIRE(hdma_start_headroom_case(0x02u, 216u, 0) == 0);
+    REQUIRE(hdma_check_store_headroom_forms() == 0);
 
     gbb_instance *lcd_off_halt = NULL;
     REQUIRE(policy_fixture_create(&lcd_off_halt, 0x80u, 0u, 0, 0, 0,
@@ -1610,19 +1667,30 @@ static int test_hdma_resource_bounds(void) {
 
     gbb_instance *trace_case = NULL;
     REQUIRE(hdma_active_block_fixture(&trace_case) == 0);
-    gbb_trace_record traces[2];
+    gbb_trace_record traces[3];
     memset(traces, 0xA5, sizeof(traces));
     gbb_run_result no_trace = gbb_run_ex(trace_case, 64u, traces, 0u, NULL, 0u);
     REQUIRE(no_trace.reason == GBB_STOP_BUDGET && no_trace.consumed_half_dots == 64u &&
             hdma_guard_is((const uint8_t *)traces, sizeof(traces), 0xA5u));
+    trace_case->pc = 0x200u;
     gbb_run_result trace_zero = gbb_run_ex(trace_case, 64u, traces, 0u, NULL, 0u);
     REQUIRE(trace_zero.reason == GBB_STOP_TRACE_FULL && trace_zero.consumed_half_dots == 0u &&
             hdma_guard_is((const uint8_t *)traces, sizeof(traces), 0xA5u));
+    gbb_run_result trace_one = gbb_run_ex(trace_case, 16u, traces, 1u, NULL, 0u);
+    REQUIRE(trace_one.reason == GBB_STOP_TRACE_FULL && trace_one.consumed_half_dots == 8u &&
+            trace_one.trace_count == 1u && traces[0].pc == 0x200u &&
+            hdma_guard_is((const uint8_t *)&traces[1], sizeof(traces[1]), 0xA5u));
+    memset(traces, 0xA5, sizeof(traces));
+    gbb_run_result trace_full = gbb_run_ex(trace_case, 16u, traces, 2u, NULL, 0u);
+    REQUIRE(trace_full.reason == GBB_STOP_BUDGET && trace_full.consumed_half_dots == 16u &&
+            trace_full.trace_count == 2u && traces[0].pc == 0x201u &&
+            traces[1].pc == 0x202u &&
+            hdma_guard_is((const uint8_t *)&traces[2], sizeof(traces[0]), 0xA5u));
     gbb_destroy(trace_case);
 
     gbb_instance *audio_case = NULL;
     REQUIRE(hdma_active_block_fixture(&audio_case) == 0);
-    gbb_audio_frame audio[66];
+    gbb_audio_frame audio[4098];
     memset(audio, 0x6B, sizeof(audio));
     size_t frame_count = 0u;
     const gbb_run_result audio_zero = gbb_run_audio(audio_case, 4096u, audio, 0u, &frame_count);
@@ -1631,10 +1699,20 @@ static int test_hdma_resource_bounds(void) {
     const gbb_run_result audio_one = gbb_run_audio(audio_case, 4096u, audio, 1u, &frame_count);
     REQUIRE(audio_one.reason == GBB_STOP_OUTPUT_FULL && frame_count == 1u &&
             hdma_guard_is((const uint8_t *)&audio[1], sizeof(audio[0]), 0x6Bu));
-    const gbb_run_result audio_full = gbb_run_audio(audio_case, 512u, audio, 64u, &frame_count);
-    REQUIRE(audio_full.reason == GBB_STOP_BUDGET && frame_count <= 64u &&
-            hdma_guard_is((const uint8_t *)&audio[64], sizeof(audio[0]), 0x6Bu));
     gbb_destroy(audio_case);
+    gbb_instance *audio_full_case = NULL;
+    REQUIRE(hdma_active_block_fixture(&audio_full_case) == 0);
+    const gbb_run_result audio_full = gbb_run_audio(audio_full_case, 64u, audio, 4096u, &frame_count);
+    if (audio_full.reason != GBB_STOP_BUDGET || frame_count > 4096u ||
+        !hdma_guard_is((const uint8_t *)&audio[4096], sizeof(audio[0]), 0x6Bu)) {
+        fprintf(stderr, "hdma-resource-audio-full reason=%d consumed=%" PRIu64
+                        " frames=%zu guard=%d\n", audio_full.reason,
+                audio_full.consumed_half_dots, frame_count,
+                hdma_guard_is((const uint8_t *)&audio[4096], sizeof(audio[0]), 0x6Bu));
+        gbb_destroy(audio_full_case);
+        return 1;
+    }
+    gbb_destroy(audio_full_case);
 
     gbb_instance *diagnostic_case = NULL;
     REQUIRE(hdma_active_block_fixture(&diagnostic_case) == 0);

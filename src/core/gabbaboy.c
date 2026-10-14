@@ -4188,6 +4188,121 @@ static int cpu_stalled(const gbb_instance *m) {
     return m->cpu_stall_kind != GBB_STALL_NONE;
 }
 
+/* MODEL: CGB_ONLY GATE-99 GUARD=model_is_cgb -- an accepted FF55 start reserves checked master-time headroom for its finite byte work */
+static int hdma_start_headroom_available(const gbb_instance *m, uint8_t value,
+                                         uint64_t operation_cost) {
+    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB ||
+        m->hdma.mode == 2u || m->hdma.active ||
+        (m->hdma.mode == 1u && (value & 0x80u) == 0u)) return 1;
+    const uint64_t blocks = (uint64_t)(value & 0x7Fu) + 1u;
+    if (blocks > (UINT64_MAX - operation_cost) / UINT64_C(64)) return 0;
+    const uint64_t required = operation_cost + blocks * UINT64_C(64);
+    return UINT64_MAX - m->time_half_dots >= required;
+}
+
+/* MODEL: BOTH GATE-00 basis="model-neutral function; see its branch gates" */
+static int hdma_stack_push_headroom_available(const gbb_instance *m,
+                                              uint16_t value,
+                                              uint64_t operation_cost) {
+    const uint16_t high_address = (uint16_t)(m->sp - 1u);
+    const uint16_t low_address = (uint16_t)(m->sp - 2u);
+    if (high_address == 0xFF55u &&
+        !hdma_start_headroom_available(m, (uint8_t)(value >> 8), operation_cost)) return 0;
+    if (low_address == 0xFF55u &&
+        !hdma_start_headroom_available(m, (uint8_t)value, operation_cost)) return 0;
+    return 1;
+}
+
+/* Resolve CPU stores to FF55 before their bus phases, so a rejected start
+ * cannot partially change CPU state, another register, or output buffers. */
+/* MODEL: BOTH GATE-00 basis="model-neutral function; see its branch gates" */
+static int hdma_instruction_headroom_available(const gbb_instance *m,
+                                               uint8_t opcode,
+                                               uint64_t operation_cost) {
+    uint16_t address = 0u;
+    uint8_t value = 0u;
+    int writes = 0;
+    if (opcode == 0xE0u) {
+        address = (uint16_t)(0xFF00u + instruction_byte(m, m->pc, 1u));
+        value = m->a;
+        writes = 1;
+    } else if (opcode == 0xE2u) {
+        address = (uint16_t)(0xFF00u + m->c);
+        value = m->a;
+        writes = 1;
+    } else if (opcode == 0xEAu) {
+        address = (uint16_t)(instruction_byte(m, m->pc, 1u) |
+            ((uint16_t)instruction_byte(m, m->pc, 2u) << 8));
+        value = m->a;
+        writes = 1;
+    } else if (opcode == 0x02u || opcode == 0x12u ||
+               opcode == 0x22u || opcode == 0x32u) {
+        address = opcode == 0x02u ? pair_value(m, 0u) :
+                  opcode == 0x12u ? pair_value(m, 1u) : hl(m);
+        value = m->a;
+        writes = 1;
+    } else if (opcode >= 0x70u && opcode <= 0x77u && opcode != 0x76u) {
+        address = hl(m);
+        value = get_reg((gbb_instance *)m, opcode & 7u, 0u);
+        writes = 1;
+    } else if (opcode == 0x36u && hl(m) == 0xFF55u) {
+        address = hl(m);
+        value = instruction_byte(m, m->pc, 1u);
+        writes = 1;
+    } else if (((opcode & 0xC7u) == 0x04u || (opcode & 0xC7u) == 0x05u) &&
+               ((opcode >> 3) & 7u) == 6u && hl(m) == 0xFF55u) {
+        address = hl(m);
+        const uint8_t old = read8(m, address);
+        value = (opcode & 1u) != 0u ? (uint8_t)(old - 1u) : (uint8_t)(old + 1u);
+        writes = 1;
+    } else if (opcode == 0xCBu) {
+        const uint8_t extension = instruction_byte(m, m->pc, 1u);
+        const unsigned group = extension >> 6;
+        const unsigned operation = (extension >> 3) & 7u;
+        if ((extension & 7u) == 6u && group != 1u && hl(m) == 0xFF55u) {
+            address = hl(m);
+            value = read8(m, address);
+            if (group == 0u) {
+                const uint8_t carry_in = (uint8_t)((m->f & 0x10u) != 0u);
+                switch (operation) {
+                case 0u: value = (uint8_t)((value << 1) | (value >> 7)); break;
+                case 1u: value = (uint8_t)((value >> 1) | (value << 7)); break;
+                case 2u: value = (uint8_t)((value << 1) | carry_in); break;
+                case 3u: value = (uint8_t)((value >> 1) | (carry_in << 7)); break;
+                case 4u: value = (uint8_t)(value << 1); break;
+                case 5u: value = (uint8_t)((value >> 1) | (value & 0x80u)); break;
+                case 6u: value = (uint8_t)((value << 4) | (value >> 4)); break;
+                default: value = (uint8_t)(value >> 1); break;
+                }
+            } else if (group == 2u) {
+                value = (uint8_t)(value & (uint8_t)~(1u << operation));
+            } else {
+                value = (uint8_t)(value | (uint8_t)(1u << operation));
+            }
+            writes = 1;
+        }
+    } else if (opcode == 0x08u) {
+        address = (uint16_t)(instruction_byte(m, m->pc, 1u) |
+            ((uint16_t)instruction_byte(m, m->pc, 2u) << 8));
+        if (address == 0xFF55u)
+            return hdma_start_headroom_available(m, (uint8_t)m->sp, operation_cost);
+        if ((uint16_t)(address + 1u) == 0xFF55u)
+            return hdma_start_headroom_available(m, (uint8_t)(m->sp >> 8), operation_cost);
+    } else if ((opcode & 0xCFu) == 0xC5u) {
+        return hdma_stack_push_headroom_available(m,
+            stack_pair(m, (opcode >> 4) & 3u), operation_cost);
+    } else if (opcode == 0xCDu ||
+               ((opcode & 0xE7u) == 0xC4u && condition_true(m, (opcode >> 3) & 3u))) {
+        const uint16_t pushed = (uint16_t)(m->pc + 3u - (m->halt_bug ? 1u : 0u));
+        return hdma_stack_push_headroom_available(m, pushed, operation_cost);
+    } else if ((opcode & 0xC7u) == 0xC7u) {
+        const uint16_t pushed = (uint16_t)(m->pc + (m->halt_bug ? 0u : 1u));
+        return hdma_stack_push_headroom_available(m, pushed, operation_cost);
+    }
+    if (!writes || address != 0xFF55u) return 1;
+    return hdma_start_headroom_available(m, value, operation_cost);
+}
+
 /* MODEL: BOTH GATE-00 basis="normal-speed phase alignment is guarded and a no-op outside CGB mode" */
 static void speed_switch_apply_realign(gbb_instance *m) {
     /* MODEL: UNKNOWN GATE-89 expected-failure:speed-switch-odd-mode-alignment -- entry into normal speed may land in an unsupported odd PPU mode phase */
@@ -4341,6 +4456,10 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             const uint32_t irq_cost = 40u >> instance->double_speed;
             if (irq_cost > budget_half_dots - result.consumed_half_dots) return result;
             if (!audio_preflight(instance, irq_cost)) { result.reason=GBB_STOP_OUTPUT_FULL; return result; }
+            if (!hdma_stack_push_headroom_available(instance, instance->pc, irq_cost)) {
+                result.reason = GBB_STOP_INVALID_STATE;
+                return result;
+            }
             if (UINT64_MAX - instance->time_half_dots < irq_cost) { result.reason=GBB_STOP_INVALID_STATE; return result; }
             gbb_diagnostic_record operation[GBB_DIAGNOSTIC_OPERATION_RESERVE];
             if (instance->diagnostic_output != NULL &&
@@ -4403,6 +4522,10 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
         uint8_t cost=instruction_cost(instance,d);
         if (cost > budget_half_dots-result.consumed_half_dots) return result;
         if (!audio_preflight(instance, cost)) { result.reason=GBB_STOP_OUTPUT_FULL; return result; }
+        if (!hdma_instruction_headroom_available(instance, opcode, cost)) {
+            result.reason = GBB_STOP_INVALID_STATE;
+            return result;
+        }
         if (opcode == 0x10u) {
             const int selected_stop_case = stop_case(instance);
             if (selected_stop_case == 3 || selected_stop_case == 4) {

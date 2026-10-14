@@ -141,6 +141,7 @@ occurs exactly once in code and once in the table.
 | GATE-96 | CGB_ONLY | model_is_cgb | - | hdma_advance_half_dot | one byte commits per four master half-dots after OAM and before PPU; 64-half-dot duration is policy |
 | GATE-97 | CGB_ONLY | model_is_cgb | - | hdma_register_write | FF55 starts or clears the bounded HBlank request and updates private status |
 | GATE-98 | CGB_ONLY | model_is_cgb | - | hdma_stop_at_invalid_block | invalid block stop preserves remaining FF55 status and rejects before the next block mutates |
+| GATE-99 | CGB_ONLY | model_is_cgb | - | hdma_start_headroom_available | FF55 starts reserve finite byte-work headroom before master-time overflow |
 <!-- model-gates-end -->
 
 ## Phase 11 dispositions
@@ -210,6 +211,7 @@ checks only that a guest can program FF55 and read its active one-block status a
 | GATE-95 | hdma_admit_block | resolved CGB_ONLY | a full block validates before admission and samples VBK once |
 | GATE-96 | hdma_advance_half_dot | resolved CGB_ONLY | service consumes bounded master time with the selected four-half-dot cadence |
 | GATE-97 | hdma_register_write | resolved CGB_ONLY | FF55 initializes private cursors and exposes active or completed status |
+| GATE-99 | hdma_start_headroom_available | resolved CGB_ONLY | accepted FF55 starts reserve checked master-time headroom for their finite byte work |
 
 ## Phase 13 plan 13-02 dispositions
 
@@ -226,6 +228,16 @@ resolutions and keep physical timing and arbitration UNKNOWN.
 | GATE-95 | hdma_admit_block | resolved CGB_ONLY | all source bytes and the destination are checked before first mutation; VBK is sampled per block |
 | GATE-97 | hdma_register_write | resolved CGB_ONLY | cursors continue across blocks; idle writes can repair the widened overflow continuation |
 | GATE-98 | hdma_stop_at_invalid_block | resolved CGB_ONLY | invalid source or destination stops with prefix, cursors and remaining FF55 status preserved |
+
+## Phase 13 plan 13-04 dispositions
+
+Accepted FF55 starts reserve enough widened master-time headroom for the instruction and finite
+64-half-dot-per-byte transfer work. Rejected starts preserve the CPU, DMA state and output buffers;
+the check does not forecast arbitrary HBlank waits.
+
+| Gate | Site | Outcome | Reason |
+| --- | --- | --- | --- |
+| GATE-99 | hdma_start_headroom_available | resolved CGB_ONLY | finite transfer byte work cannot wrap the master-time counter |
 
 ## Release status
 
