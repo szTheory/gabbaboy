@@ -471,3 +471,24 @@ if(NOT registered_player_tests STREQUAL GABBABOY_PLAYER_EXPECTED_TESTS)
   message(FATAL_ERROR
     "Optional player tests differ from their inventory. Expected: ${GABBABOY_PLAYER_EXPECTED_TESTS}; registered: ${registered_player_tests}")
 endif()
+
+# The parent pass cannot reach child-directory test properties at the CMake 3.25 floor.
+include("${PROJECT_SOURCE_DIR}/cmake/ScaleSanitizerTimeouts.cmake")
+gbb_scale_sanitizer_test_timeouts()
+
+if(GABBABOY_ENABLE_SANITIZERS)
+  foreach(gbb_player_timeout_case IN ITEMS
+      "player_cgb_speed_smoke=360"
+      "player_cgb_cli=720"
+      "player_cgb_model_auto_smoke=900")
+    string(REPLACE "=" ";" gbb_player_timeout_pair "${gbb_player_timeout_case}")
+    list(GET gbb_player_timeout_pair 0 gbb_player_timeout_test)
+    list(GET gbb_player_timeout_pair 1 gbb_player_timeout_expected)
+    get_test_property(${gbb_player_timeout_test} TIMEOUT gbb_player_timeout_actual)
+    if(NOT "${gbb_player_timeout_actual}" STREQUAL "${gbb_player_timeout_expected}")
+      message(FATAL_ERROR
+        "Sanitizer timeout policy: ${gbb_player_timeout_test} expected ${gbb_player_timeout_expected}, "
+        "got ${gbb_player_timeout_actual}")
+    endif()
+  endforeach()
+endif()

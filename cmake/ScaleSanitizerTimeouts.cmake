@@ -1,3 +1,5 @@
+# Test properties are directory-scoped at the CMake 3.25 floor. Call this once after the
+# final registration in each test directory, including optional child directories.
 function(gbb_scale_sanitizer_test_timeouts)
   if(NOT GABBABOY_ENABLE_SANITIZERS)
     return()
