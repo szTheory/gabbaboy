@@ -631,3 +631,21 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** `cgb_speed_identity_pin`, `cgb_speed_identity_pin_flipped`, and `git diff fb45111..aac4772 -- src/core/gabbaboy.c include/gabbaboy/gabbaboy.h`.
 - **Source:** Phase 12 plan 12-01 and its recorded execution ledger.
 - **Status:** Adopted.
+
+### GB-CI-005 / 2026-10-14 / Scale sanitizer timeouts after registration in each CMake test directory
+
+- **Cause and evidence:** The old scaler ran before late Phase 12 registrations. Moving it to the parent directory's end fixed those tests but still missed `tests/player`: CMake 3.25 test properties are directory-scoped. Independent review reproduced a child TIMEOUT of 120 under sanitizer mode.
+- **Remedy:** Call one shared scaler after the final registration in each test directory; remove individual sanitizer multipliers. Assert representative late and player values during configure.
+- **Applies when:** CMake tests are appended or registered in optional subdirectories, especially at the CMake 3.25 floor.
+- **Verification:** `sanitizer_timeout_policy_selftest` proves unchanged normal limits and once-only parent/child scaling, and rejects early, double and parent-only passes. The actual player directory's missing-call mutant fails its property assertion. Full post-fix CTest passed 898/898; the configure-only player probe used stub link targets and is not runtime sanitizer evidence.
+- **Source:** Phase 12 CR/WR review fixes `fe61e2f`, `40e7f08`; `12-REVIEW-FOLLOWUP.md`.
+- **Status:** Adopted.
+
+### GB-CI-006 / 2026-10-14 / Keep environment paths out of shell source, including unsafe regression copies
+
+- **Cause and evidence:** An interpolated EXIT trap converted a TMPDIR-derived cleanup path into shell source. A deliberately unsafe regression copy initially inherited its caller's TMPDIR too, so its confinement needed the same scrutiny as the production fix.
+- **Remedy:** Use a literal trap body with quoted variable expansion. Construct unsafe negative-control paths only under a fixture-owned scratch prefix; never let caller environment text contribute shell source to the mutant.
+- **Applies when:** Shell cleanup paths or deliberately vulnerable test copies contain environment-supplied values.
+- **Verification:** Inventory self-test cleanup and original-trap marker controls pass; a nested hostile caller TMPDIR creates no parent marker, while the old inherited-prefix helper control does.
+- **Source:** Phase 12 CR-01 fixes `be53c43`, `d979ba5` and `.github/scripts/test-inventory-cleanup.sh`.
+- **Status:** Adopted.
