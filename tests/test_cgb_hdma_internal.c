@@ -1024,6 +1024,299 @@ static int test_overflow_flip(void) {
     return 0;
 }
 
+static int competing_fixture_create(gbb_instance **out, int speed, int ime,
+                                   int timer_wake, int active_hdma) {
+    REQUIRE(policy_fixture_create(out, 0u, 0u, 0, 0, speed, 0u, 0u, 0u, 16u) == 0);
+    gbb_instance *m = *out;
+    const uint32_t quantum = 8u >> speed;
+    m->double_speed = (uint8_t)speed;
+    m->divider_phase = 0u;
+    m->divider_counter = 0u;
+    m->div = 0u;
+    m->cpu_stall_kind = GBB_STALL_SPEED_SWITCH;
+    m->cpu_stall_half_dots = quantum * 2u;
+    m->ime = ime;
+    m->ie = 0x04u;
+    m->interrupt_flags = 0u;
+    m->timer_reloaded_at = UINT64_MAX;
+    m->timer_reload_pending = timer_wake;
+    m->timer_reload_remaining = timer_wake ? 1u : 0u;
+    m->tma = 0x42u;
+    m->sp = 0x8010u;
+    m->pc = 0x1234u;
+    for (unsigned i = 0u; i < 16u; ++i) {
+        m->wram[0][i] = (uint8_t)(0x27u + 37u * i);
+        m->vram[0][i] = 0xA5u;
+    }
+    m->hdma.mode = active_hdma ? 2u : 1u;
+    m->hdma.active = (uint8_t)active_hdma;
+    m->hdma.pending_hblank = 0u;
+    m->hdma.blocks_remaining = 1u;
+    m->hdma.source_cursor = 0xC000u;
+    m->hdma.destination_cursor = 0x8000u;
+    m->hdma.byte_index = active_hdma ? 12u : 0u;
+    m->hdma.byte_phase = 0u;
+    m->hdma.block_vram_bank = 0u;
+    m->hdma.control_readback = 0u;
+    return 0;
+}
+
+static int test_competing_stalls(void) {
+    for (int speed = 0; speed <= 1; ++speed) {
+        gbb_instance *m = NULL;
+        REQUIRE(competing_fixture_create(&m, speed, 1, 1, 1) == 0);
+        const uint32_t quantum = 8u >> speed;
+        const uint64_t before = m->time_half_dots;
+        const uint32_t stall_before = m->cpu_stall_half_dots;
+        gbb_run_result partial = gbb_run(m, 1u, NULL, 0u);
+        if (partial.consumed_half_dots != 1u || m->time_half_dots != before + 1u ||
+            m->cpu_stall_half_dots != stall_before - 1u || !m->hdma.active) {
+            fprintf(stderr,
+                "competing stalls: active HDMA must advance one half-dot with its own speed-pause remainder (speed=%d consumed=%llu)\n",
+                speed, (unsigned long long)partial.consumed_half_dots);
+            gbb_destroy(m);
+            return 1;
+        }
+        gbb_run_result boundary = gbb_run(m, quantum - 1u, NULL, 0u);
+        REQUIRE(boundary.reason == GBB_STOP_BUDGET && boundary.consumed_half_dots == quantum - 1u);
+        REQUIRE(m->timer_reloaded_at == before + (speed ? 1u : 2u));
+        REQUIRE(m->time_half_dots == before + quantum &&
+                m->cpu_stall_kind == GBB_STALL_NONE && m->cpu_stall_half_dots == 0u &&
+                m->hdma.active && m->hdma.byte_index > 12u);
+
+        gbb_trace_record trace;
+        gbb_run_result wake = gbb_run(m, 64u, &trace, 1u);
+        REQUIRE(wake.reason == GBB_STOP_TRACE_FULL && wake.trace_count == 1u &&
+                trace.pc == 0x0050u && !m->hdma.active && m->hdma.blocks_remaining == 0u);
+        const uint8_t stack_lo = m->vram[0][14u];
+        const uint8_t stack_hi = m->vram[0][15u];
+        if (stack_lo != 0x34u || stack_hi != 0x12u) {
+            fprintf(stderr,
+                "competing stalls: timer IRQ stack writes must follow admitted DMA completion (speed=%d VRAM=%02X/%02X)\n",
+                speed, stack_lo, stack_hi);
+            gbb_destroy(m);
+            return 1;
+        }
+        gbb_destroy(m);
+    }
+    return 0;
+}
+
+static int test_competing_stalls_controls(void) {
+    for (int speed = 0; speed <= 1; ++speed) {
+        gbb_instance *m = NULL;
+        REQUIRE(competing_fixture_create(&m, speed, 0, 0, 1) == 0);
+        m->hdma.byte_index = 0u;
+        m->hdma.blocks_remaining = 2u;
+        const uint32_t quantum = 8u >> speed;
+        const uint64_t duration = m->cpu_stall_half_dots;
+        const uint64_t start = m->time_half_dots;
+        gbb_run_result run = gbb_run(m, duration, NULL, 0u);
+        REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == duration &&
+                m->time_half_dots == start + duration &&
+                m->cpu_stall_kind == GBB_STALL_NONE && m->hdma.active &&
+                m->hdma.byte_index == duration / 4u &&
+                (m->interrupt_flags & 0x04u) == 0u);
+        REQUIRE(quantum * 2u == duration);
+        gbb_destroy(m);
+
+        REQUIRE(competing_fixture_create(&m, speed, 0, 1, 0) == 0);
+        run = gbb_run(m, duration, NULL, 0u);
+        REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == duration &&
+                m->cpu_stall_kind == GBB_STALL_NONE && !m->hdma.active &&
+                m->hdma.mode == 1u && m->hdma.blocks_remaining == 1u &&
+                !m->hdma.pending_hblank && m->vram[0][0] == 0xA5u &&
+                (m->interrupt_flags & 0x04u) != 0u);
+        gbb_destroy(m);
+    }
+    return 0;
+}
+
+static int stop_fixture_create(gbb_instance **out) {
+    uint8_t rom[32768] = {0};
+    rom[0x143u] = 0xC0u;
+    rom[0x100u] = 0x10u;
+    rom[0x101u] = 0x00u;
+    rom[0x102u] = 0x00u;
+    finish_rom(rom);
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, out) == GBB_OK);
+    REQUIRE(gbb_load_rom(*out, rom, sizeof(rom)) == GBB_OK);
+    (*out)->pc = 0x100u;
+    gbb_run_result stop = gbb_run(*out, 8u, NULL, 0u);
+    REQUIRE(stop.reason == GBB_STOP_STOPPED && (*out)->stopped && (*out)->pc == 0x102u);
+    return 0;
+}
+
+static int queue_stop_wake(gbb_instance *m, uint64_t offset) {
+    const gbb_input_event event = {m->time_half_dots + offset, GBB_INPUT_STOP_WAKE, 1u};
+    REQUIRE(gbb_queue_events(m, &event, 1u) == GBB_OK);
+    return 0;
+}
+
+static int test_stop_policy(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(stop_fixture_create(&m) == 0);
+    m->hdma.mode = 1u;
+    m->hdma.active = 0u;
+    m->hdma.pending_hblank = 1u;
+    m->hdma.blocks_remaining = 2u;
+    m->hdma.source_cursor = 0xC000u;
+    m->hdma.destination_cursor = 0x8000u;
+    m->hdma.byte_index = 5u;
+    m->hdma.byte_phase = 2u;
+    m->hdma.block_vram_bank = 0u;
+    m->dma_active = 1u;
+    m->dma_page = 0xC0u;
+    m->dma_index = 3u;
+    m->dma_phase = 2u;
+    m->lcdc = 0u;
+    m->timer_reload_pending = 1;
+    m->timer_reload_remaining = 6u;
+    m->serial_active = 1u;
+    m->serial_control = 1u;
+    m->serial_edge_remaining = 90u;
+    m->apu_sequencer_step = 5u;
+    m->apu_sample_phase = 777u;
+    m->cart.rtc_sub = 123456u;
+
+    const uint64_t start = m->time_half_dots;
+    REQUIRE(queue_stop_wake(m, 5u) == 0);
+    gbb_run_result sleep = gbb_run(m, 5u, NULL, 0u);
+    REQUIRE(sleep.consumed_half_dots == 5u && m->time_half_dots == start + 5u && !m->stopped);
+    REQUIRE(m->hdma.pending_hblank && !m->hdma.active &&
+            m->hdma.blocks_remaining == 2u && m->hdma.byte_index == 5u &&
+            m->hdma.byte_phase == 2u && m->dma_active && m->dma_index == 3u &&
+            m->dma_phase == 2u && m->timer_reload_pending && m->timer_reload_remaining == 6u &&
+            m->serial_edge_remaining == 90u && m->apu_sequencer_step == 5u &&
+            m->apu_sample_phase == 777u && m->cart.rtc_sub == 123456u);
+
+    gbb_run_result resume = gbb_run(m, 1u, NULL, 0u);
+    REQUIRE(resume.reason == GBB_STOP_BUDGET && resume.consumed_half_dots == 1u &&
+            !m->hdma.pending_hblank && m->hdma.active && m->hdma.byte_phase == 1u &&
+            m->dma_phase == 2u && m->pc == 0x102u);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_stop_policy_controls(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(stop_fixture_create(&m) == 0);
+    m->hdma.mode = 1u;
+    m->hdma.active = 0u;
+    m->hdma.pending_hblank = 0u;
+    m->hdma.blocks_remaining = 2u;
+    m->hdma.source_cursor = 0xC000u;
+    m->hdma.destination_cursor = 0x8000u;
+    m->lcdc = 0x91u;
+    m->ly = 0u;
+    m->ppu_mode = 3u;
+    m->ppu_dot = 200u;
+    m->ppu_half_phase = 1u;
+    m->ppu_transfer_complete = 1u;
+    gbb_test_bus_event events[8];
+    memset(events, 0, sizeof(events));
+    gbb_test_ppu_observer_set(m, events, 8u);
+    const uint64_t start = m->time_half_dots;
+    REQUIRE(queue_stop_wake(m, 3u) == 0);
+    gbb_run_result sleep = gbb_run(m, 3u, NULL, 0u);
+    REQUIRE(sleep.consumed_half_dots == 3u && m->time_half_dots == start + 3u &&
+            !m->stopped && m->ppu_mode == 3u && m->ppu_dot == 200u &&
+            !m->hdma.pending_hblank);
+    gbb_run_result resumed = gbb_run(m, 8u, NULL, 0u);
+    REQUIRE(resumed.reason == GBB_STOP_BUDGET && resumed.consumed_half_dots == 8u &&
+            m->hdma.pending_hblank && m->ppu_mode == 0u &&
+            gbb_test_ppu_observer_count(m) != 0u &&
+            events[0].time_half_dots == start + 4u);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_oam_order(void) {
+    uint8_t rom[32768] = {0};
+    rom[0x143u] = 0xC0u;
+    finish_rom(rom);
+    gbb_instance *m = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
+    m->wram[0][15u] = 0x22u;
+    m->vram[0][15u] = 0x11u;
+    m->double_speed = 0u;
+    m->divider_phase = 1u;
+    m->dma_active = 1u;
+    m->dma_page = 0x80u;
+    m->dma_index = 15u;
+    m->dma_phase = 3u;
+    m->hdma.mode = 1u;
+    m->hdma.active = 1u;
+    m->hdma.blocks_remaining = 2u;
+    m->hdma.source_cursor = 0xC000u;
+    m->hdma.destination_cursor = 0x8000u;
+    m->hdma.byte_index = 15u;
+    m->hdma.byte_phase = 3u;
+    m->hdma.block_vram_bank = 0u;
+    m->lcdc = 0x91u;
+    m->ly = 0u;
+    m->ppu_mode = 3u;
+    m->ppu_dot = 200u;
+    m->ppu_half_phase = 1u;
+    m->ppu_transfer_complete = 1u;
+    struct gbb_test_dma_event dma[4];
+    gbb_test_bus_event ppu[4];
+    memset(dma, 0, sizeof(dma));
+    memset(ppu, 0, sizeof(ppu));
+    gbb_test_dma_observer_set(m, dma, 4u);
+    gbb_test_ppu_observer_set(m, ppu, 4u);
+    const uint64_t start = m->time_half_dots;
+    gbb_run_result tick = gbb_run(m, 1u, NULL, 0u);
+    REQUIRE(tick.reason == GBB_STOP_BUDGET && tick.consumed_half_dots == 1u);
+    REQUIRE(m->oam[15u] == 0x11u && m->vram[0][15u] == 0x22u &&
+            !m->hdma.active && m->hdma.pending_hblank && m->hdma.blocks_remaining == 1u);
+    REQUIRE(gbb_test_dma_observer_count(m) == 1u && dma[0].address == 0xFE0Fu &&
+            dma[0].access == 2u && dma[0].value == 0x11u && dma[0].time_half_dots == start + 1u);
+    REQUIRE(gbb_test_ppu_observer_count(m) != 0u && ppu[0].address == 0xFF41u &&
+            ppu[0].value == 0u && ppu[0].time_half_dots == dma[0].time_half_dots);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_oam_order_controls(void) {
+    uint8_t rom[32768] = {0};
+    rom[0x143u] = 0xC0u;
+    finish_rom(rom);
+    gbb_instance *m = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &m) == GBB_OK);
+    REQUIRE(gbb_load_rom(m, rom, sizeof(rom)) == GBB_OK);
+    m->wram[0][15u] = 0x22u;
+    m->vram[0][15u] = 0x11u;
+    m->divider_phase = 1u;
+    m->dma_active = 1u;
+    m->dma_page = 0x80u;
+    m->dma_index = 15u;
+    m->dma_phase = 2u;
+    m->hdma.mode = 1u;
+    m->hdma.active = 1u;
+    m->hdma.blocks_remaining = 2u;
+    m->hdma.source_cursor = 0xC000u;
+    m->hdma.destination_cursor = 0x8000u;
+    m->hdma.byte_index = 15u;
+    m->hdma.byte_phase = 3u;
+    m->hdma.block_vram_bank = 0u;
+    m->lcdc = 0x91u;
+    m->ppu_mode = 3u;
+    m->ppu_dot = 200u;
+    m->ppu_half_phase = 1u;
+    m->ppu_transfer_complete = 1u;
+    struct gbb_test_dma_event dma[4];
+    memset(dma, 0, sizeof(dma));
+    gbb_test_dma_observer_set(m, dma, 4u);
+    gbb_run_result tick = gbb_run(m, 1u, NULL, 0u);
+    REQUIRE(tick.reason == GBB_STOP_BUDGET && tick.consumed_half_dots == 1u &&
+            m->dma_phase == 3u && m->oam[15u] == 0u && m->vram[0][15u] == 0x22u &&
+            m->hdma.pending_hblank && gbb_test_dma_observer_count(m) == 0u);
+    gbb_destroy(m);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2 || argc > 3) return 2;
     int rc;
@@ -1043,6 +1336,12 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "address_flip") == 0) rc = test_address_flip();
     else if (strcmp(argv[1], "overflow_policy") == 0) rc = test_overflow_policy();
     else if (strcmp(argv[1], "overflow_flip") == 0) rc = test_overflow_flip();
+    else if (strcmp(argv[1], "competing_stalls") == 0) rc = test_competing_stalls();
+    else if (strcmp(argv[1], "competing_stalls_controls") == 0) rc = test_competing_stalls_controls();
+    else if (strcmp(argv[1], "stop_policy") == 0) rc = test_stop_policy();
+    else if (strcmp(argv[1], "stop_policy_controls") == 0) rc = test_stop_policy_controls();
+    else if (strcmp(argv[1], "oam_order") == 0) rc = test_oam_order();
+    else if (strcmp(argv[1], "oam_order_controls") == 0) rc = test_oam_order_controls();
     else return 2;
     if (rc == 0) printf("cgb-hdma %s pass\n", argv[1]);
     return rc;
