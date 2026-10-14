@@ -20,6 +20,9 @@ jobs:
         run: python3 .github/scripts/wait-exact-head-ci.py --self-test
       - name: Self-test the player result gate
         run: bash .github/scripts/check-player-result.sh --self-test
+      - name: Self-test CTest platform inventory filter
+        shell: bash
+        run: bash .github/scripts/verify-test-inventory.sh --self-test
       - name: Self-test the release support-ledger binding
         run: python3 tests/scripts/verify-support-ledger.py --self-test
       - name: Self-test the release gates
