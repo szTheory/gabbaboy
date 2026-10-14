@@ -1,6 +1,6 @@
 ---
 phase: GB-12-cgb-double-speed
-verified: 2026-10-14T12:50:30Z
+verified: 2026-10-14T15:05:03Z
 status: passed
 score: 109/109 must-haves verified
 covered_files:
@@ -48,7 +48,9 @@ covered_files:
   - ".planning/phases/GB-12-cgb-double-speed/12-18-SUMMARY.md"
   - ".planning/phases/GB-12-cgb-double-speed/12-19-PLAN.md"
   - ".planning/phases/GB-12-cgb-double-speed/12-19-SUMMARY.md"
+  - ".planning/phases/GB-12-cgb-double-speed/12-UAT.md"
   - ".planning/phases/GB-12-cgb-double-speed/verify-closeout-contract.py"
+  - ".planning/phases/GB-12-cgb-double-speed/verify-uat-contract.py"
   - "README.md"
   - "THIRD_PARTY_NOTICES.md"
   - "cmake/ExpectedTests.cmake"
@@ -123,17 +125,23 @@ covered_files:
   - "tests/test_cgb_tables.c"
   - "tests/test_cgb_visibility.c"
   - "tests/test_fuzz_core.c"
-covered_digest: "v3:sha256:445fd92087273e041bce572d1da659716c67943c32b39927840cef188f75b786"
+covered_digest: "v3:sha256:561b22625520a939bbf8fb6ba0364cd76db8bb6afd64ee1b4bad50bb7081891f"
 behavior_unverified: 0
 overrides_applied: 0
+re_verification:
+  previous_status: passed
+  previous_score: 109/109
+  gaps_closed: []
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 12: CGB Double Speed Verification Report
 
 **Phase Goal:** CGB software can switch speed through KEY1 and STOP, with CPU-side devices running at twice the rate while PPU and APU timing are unchanged.
-**Verified:** 2026-10-14T12:50:30Z
+**Verified:** 2026-10-14T15:05:03Z
 **Status:** passed
-**Re-verification:** No — initial verification
+**Re-verification:** Yes — metadata correction and automated UAT closure
 
 ## Goal Achievement
 
@@ -171,7 +179,7 @@ All 106 plan-level truth assertions from the 19 plans were checked against imple
 | 12-18 | 5 | `docs/cgb-profile.md` states host-visible speed behavior and model/fixture limits. |
 | 12-19 | 6 | Closeout contract positive case and 17 scratch mutations validate required closeout evidence. |
 
-The 45 declared plan artifact entries pass the OpenGSD artifact checks. The 30 declared key links use descriptive `from` labels rather than root-relative paths, so the CLI could not mechanically resolve them; each link was traced manually. The traces confirm STOP state flows through retirement into the run-loop stall, device ticks use the intended clock domain, fixtures flow through the emulator into checked output, test names flow through CMake and the expected-test inventory, and model dispositions flow through the validators and test driver. There are no orphaned plan requirement IDs.
+All 46 declared plan artifact entries pass the OpenGSD artifact checks. The key-link query verified 9/30 links mechanically. The remaining links use descriptive `from` labels rather than root-relative paths, so I traced their source and target in the implementation, tests, CMake, workflow, and documentation. These traces confirm STOP state flows through retirement into the run-loop stall, device ticks use the intended clock domain, fixtures flow through the emulator into checked output, test names flow through CMake and the expected-test inventory, and model dispositions flow through the validators and test driver. For the fixture expectations link, CMake passes `tests/data/cgb-speed-expectations.txt` to the runtime test at `tests/CMakeLists.txt:3250-3253`; the table does not repeat its filename internally. There are no orphaned plan requirement IDs.
 
 ## Required Artifacts
 
@@ -187,7 +195,7 @@ The 45 declared plan artifact entries pass the OpenGSD artifact checks. The 30 d
 | `tests/scripts/verify-speed-domains.py` | CPU/master clock-domain invariant check | ✓ VERIFIED | Connected to the test suite; mutant controls detect scaling PPU/APU channels or RTC incorrectly. |
 | `docs/cgb-profile.md` | Host-facing behavior and limitations | ✓ VERIFIED | Updated claims match implemented behavior and do not assert hardware qualification. |
 
-The declaration-level checks reported 45/45 artifacts passing. Source/test/doc files above also pass the substantive and wiring checks; the guest-to-core-to-observation path is traced below.
+The declaration-level checks reported 46/46 artifacts passing. Source/test/doc files above also pass the substantive and wiring checks; the guest-to-core-to-observation path is traced below.
 
 ## Key Link Verification
 
@@ -218,9 +226,16 @@ The declaration-level checks reported 45/45 artifacts passing. Source/test/doc f
 | Fixture observations, frame/PCM digests, and model-qualified STAT outcomes | Targeted CTest fixture/AGE/STAT selection | 8/8 passed; guest reports 53 checks; 60-frame output digests match | ✓ PASS |
 | Natural timer IRQ across EI;STOP, STOP EI path, and hostile pre-switch inputs | `ctest --test-dir build -R '^(cgb_speed_stop_guest_timer_irq|cgb_speed_ei_stop|cgb_speed_fixture_hostile)$' --output-on-failure -j1` | 3/3 passed; the timer guest reaches the ordinary `gbb_run` interrupt dispatch path; hostile selector covers 10 cases | ✓ PASS |
 | AGE stall window, DIV/TIMA dispositions, and switch/stall partition windows | Targeted verbose CTest AGE and partition selection | 9/9 passed; DIV and STOP-prefetch pass; TIMA and other unresolved rows match their exact-signature expected-failure dispositions; both partition directions and 256 seeded cuts pass | ✓ PASS |
-| Complete configured regression suite | Root-run `ctest --test-dir build --output-on-failure` after functional fix `40e7f08` | 898/898 passed in 52.66 s; no implementation or test-source changes occurred through verified HEAD `502f992` | ✓ PASS |
+| Complete configured regression suite | `cmake --preset phase1 && cmake --build --preset phase1 && CTEST_PARALLEL_LEVEL=8 ctest --preset phase1 --output-on-failure --no-tests=error` | Fresh configure/build and 898/898 tests passed in 107.00 s at implementation head `da98d56ef8fadadf34ae951b337dcdecce495936` | ✓ PASS |
 | DMG compatibility baseline | `bash tests/scripts/verify-dmg-baseline.sh` | Pass: 313 inventory, 15 Mooneye, 20 acceptance, 2 benchmark observations; zero changed rows | ✓ PASS |
 | Closeout contract and negative controls | `python3 -I .planning/phases/GB-12-cgb-double-speed/verify-closeout-contract.py --self-test` | Positive case and 17 scratch-mutation controls pass | ✓ PASS |
+| Automated UAT closure contract | `python3 -I .planning/phases/GB-12-cgb-double-speed/verify-uat-contract.py --self-test` | Exact one-to-one mapping of 73 coverage rows passes; all 9 weakened-record mutations are rejected | ✓ PASS |
+
+## UAT Closure and Fresh Evidence
+
+The current [12-UAT.md](12-UAT.md) records 73/73 automated deliverables, zero issues, and zero human checkpoints. OpenGSD's coverage classifier reports all 73 rows `auto_passed`, with zero `present` rows or errors; all 19 SUMMARY coverage blocks pass schema validation, including the 3/3 `summary_coverage` checks. The closeout contract also passes its positive case and 17 negative controls. The added UAT closure checker validates the session mapping and negative controls; it is not a production or registered test change. No production code, registered tests, build configuration, workflow, or fixture changed after implementation head `da98d56ef8fadadf34ae951b337dcdecce495936`.
+
+The bounded commit audit found one mistyped metadata value: plan 12-04's `plan_head_after` in its SUMMARY. The full SHA is now `ec5dc8a28daf54a722f4da9b036c5fa48690bc6e`; its task commits remain ancestors, and all 19 bounded plan commit windows reconcile. This correction does not change implementation or behavioral evidence.
 
 One earlier isolated M7 control run failed once without retained diagnostic output; its cause remains unknown. The same control passed 100 repeated runs, and the fresh 898-test suite passed. No assertion or pin was changed to accommodate that event.
 
@@ -254,13 +269,13 @@ None. Per the project automation contract, phase deliverables have automated che
 
 ## External Exact-Revision CI
 
-The verifier completed the local source checks while hosted checks were running. Root subsequently read the exact-source PR-event receipts for `502f992fe9fd2d848845947057c2b327747c3edd`: [CI 38565349295](https://github.com/szTheory/gabbaboy/actions/runs/38565349295), [fixture reproduction 38565349297](https://github.com/szTheory/gabbaboy/actions/runs/38565349297), and [package smoke 38565349116](https://github.com/szTheory/gabbaboy/actions/runs/38565349116) all succeeded, with every PR-event job successful. ASan/UBSan ran 893/893 tests in 1217.04 seconds; native Linux/macOS/Windows, CMake 3.25 floor, player package, required-native, installed C/C++ consumers and fixture reproductions passed. Push-event skipped jobs are excluded from this evidence. Later tracking/report commits require their own exact-head hosted checks before the final handoff; the source receipt above remains identified by its actual SHA.
+The current exact tested source head is `da98d56ef8fadadf34ae951b337dcdecce495936`: [CI 38569486172](https://github.com/szTheory/gabbaboy/actions/runs/38569486172), [fixture reproduction 38569486169](https://github.com/szTheory/gabbaboy/actions/runs/38569486169), and [package smoke 38569486126](https://github.com/szTheory/gabbaboy/actions/runs/38569486126) all succeeded, with all 19 PR-event jobs successful. ASan/UBSan ran 893/893 tests in 1089.77 seconds; native Linux/macOS/Windows, CMake 3.25 floor, player package, required-native, installed C/C++ consumers, and fixture reproductions passed. Push-event skipped jobs are excluded. The verification/UAT metadata revision recorded here still needs exact-head hosted checks after it is committed; these source-head receipts do not certify that later metadata commit.
 
 ## Gaps Summary
 
-No codebase gaps block the Phase 12 goal. Implementation, data flow, test wiring, all 109 roadmap/plan truths, requirement CGB-06, and the unchanged DMG baseline are verified. Declared model limits remain explicit and are not presented as physical hardware facts.
+No codebase gaps block the Phase 12 goal. Implementation, data flow, test wiring, all 109 roadmap/plan truths, 46 plan artifacts, requirement CGB-06, automated UAT closure, and the unchanged DMG baseline are verified. Declared model limits remain explicit and are not presented as physical hardware facts.
 
 ---
 
-_Verified: 2026-10-14T12:50:30Z_  
+_Verified: 2026-10-14T15:05:03Z_
 _Verifier: the agent (gsd-verifier)_
