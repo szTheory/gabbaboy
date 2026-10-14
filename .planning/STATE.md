@@ -5,10 +5,10 @@ milestone_name: Color & Cartridge Breadth
 current_plan: 19
 status: executing
 stopped_at: Completed GB-12-19-PLAN.md; awaiting Phase 12 verification
-last_updated: "2026-10-14T02:55:40Z"
+last_updated: "2026-10-14T03:02:25.695Z"
 last_activity: 2026-10-14
 last_activity_desc: Phase 12 plan 12-19 close-out completed; verification is next
-state_head: 301f1b05577e6d35a4c3a756ded1ec15a4082c8d
+state_head: d1254a82e8c2904d4a6e6897eeb9b35d8b879ecb
 progress:
   total_phases: 9
   completed_phases: 6
@@ -210,6 +210,7 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 12 P16 | 15min | 3 tasks | 6 files |
 | Phase 12 P17 | 23m+ lower bound | 3 tasks | 8 files |
 | Phase GB-12 P18 | 8 min | 2 tasks | 9 files |
+| Phase 12 P19 | 50 min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -448,12 +449,11 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-14T02:05:03.648Z
-Stopped at: Completed GB-12-18-PLAN.md
-Resume file: None
-Completed workflow stage: **Phase GB-12 plan 12-18 execution** (2026-10-13), summary `phases/GB-12-cgb-double-speed/12-18-SUMMARY.md`, code evidence head `081f45096f2b37ebc549fabd591bb80c305592a1`; local CTest passed 897/897. Phase 12 remains in progress.
-Next plan: **GB-12 plan 12-19 — Phase 12 close-out, benchmark, and evidence handoff**, documented in `phases/GB-12-cgb-double-speed/12-19-PLAN.md`.
-Next command in fresh context: **`/gsd-execute-phase 12`** (resumes at plan 12-19 from the current STATE.md pointer). The next phase is **Phase 13: CGB HDMA**, not started. Stop after Phase 12; both `workflow.auto_advance` and `workflow._auto_chain_active` stay false.
+Last session: 2026-10-14T03:02:25.618Z
+Stopped at: Completed GB-12-19-PLAN.md; awaiting Phase 12 verification
+Resume file: .planning/.continue-here.md
+Completed workflow stage: **Phase 12 - CGB Double Speed, execution** (2026-10-14), plans 12-01..12-19, summary `phases/GB-12-cgb-double-speed/12-19-SUMMARY.md`; exact hosted evidence is at `301f1b05577e6d35a4c3a756ded1ec15a4082c8d`, with PR runs `38502094649`, `38502094682`, and `38502094771`. Phase 12 remains in progress pending owner verification and tail reviews.
+Next command in fresh context: **`/gsd-verify-work 12`**. The following phase is **Phase 13: CGB HDMA**, not started; after verification and merge, enter it with **`/gsd-discuss-phase 13`**. `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop at this handoff for the owner.
 
 OpenGSD settings (2026-10-13): switched the project runtime from `claude` to `codex` for current development. Profile `adaptive`; heavy (`opus`) uses `gpt-6-sol`, medium (`sonnet`) and light (`haiku`) use `gpt-6-luna`; reasoning effort is `medium` for all three. Project pins take precedence over machine-wide defaults. Completed workflow stage: **Phase GB-12 plan 12-01 execution** (2026-10-13), with task commits `9dfc604` and `43114cb`; the phase remains in progress. Next: **Phase 12 - CGB Double Speed execution, plan 12-02 onward**, via **`/gsd-execute-phase 12`**. Both auto-advance flags stay false; stop after Phase 12 and wait for the owner.
 
@@ -541,8 +541,8 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Completed workflow stage: **Phase GB-12 plan 12-18 execution**; Phase 12 remains in progress.
+- Completed workflow stage: **Phase 12 - CGB Double Speed, execution** (plans 12-01..12-19); Phase 12 remains in progress pending verification and tail reviews.
 - OpenGSD development uses the project's Codex `adaptive` model profile.
-- Next plan: **GB-12 plan 12-19 — Phase 12 close-out, benchmark, and evidence handoff**, via **`/gsd-execute-phase 12`** (resumes at 12-19).
-- Next phase after Phase 12: **Phase 13: CGB HDMA** (not started).
-- Phase-stop rule: stop after Phase 12 and yield; never auto-advance into the next phase or milestone.
+- Next command: **`/gsd-verify-work 12`**.
+- Next phase after Phase 12: **Phase 13: CGB HDMA** (not started); after verification and merge, enter it with **`/gsd-discuss-phase 13`**.
+- Phase-stop rule: stop after this handoff; both workflow auto-advance flags stay false.
