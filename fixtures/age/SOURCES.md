@@ -28,21 +28,21 @@ on core revision `db1dd7b9635752c96f99f76fd9f2594ad80af5d1`. Wall times are
 local elapsed seconds; they are not hardware observations. Each manifest budget
 is twice the measured half-dots rounded up to the next million.
 
-| ROM | Verdict | Half-dots to verdict | Wall time (s) |
+| ROM | Verdict and passing rows | Half-dots to verdict | Wall time (s) |
 |---|---|---:|---:|
-| `spsw-div-cgbBCE.gb` | pass | 22,702,928 | 0.328 |
-| `spsw-tima-cgbE.gb` | expected failure, 5/8 rows | 12,550,888 | 0.200 |
-| `spsw-tima-cgbBC.gb` | expected failure, 7/8 rows | 12,549,832 | 0.200 |
-| `spsw-stop-prefetch-cgbBCE.gb` | pass | 1,318,104 | 0.039 |
-| `spsw-interrupts-cgbE.gb` | expected failure, 9/11 rows | 759,328 | 0.024 |
-| `spsw-mode0-cgbBCE.gb` | expected failure, 3/15 rows | 1,697,720 | 0.048 |
-| `spsw-ch2-lc-delay-cgbBCE.gb` | expected failure, 3/8 rows | 35,229,976 | 0.532 |
-| `stat-mode-ds-cgbBCE.gb` | expected failure, 0/14 rows | 20,731,712 | 0.983 |
-| `stat-mode-cgbE.gb` | expected failure, 5/14 rows | 11,609,032 | 0.407 |
-| `stat-mode-sprites-ds-cgbBCE.gb` | expected failure, 2/16 rows | 1,823,912 | 0.094 |
-| `stat-mode-sprites-dmgC-cgbBCE.gb` | expected failure, 3/10 rows | 1,528,248 | 0.055 |
-| `stat-mode-window-ds-cgbBCE.gb` | expected failure, 0/16 rows | 2,803,884 | 0.146 |
-| `stat-mode-window-cgbBCE.gb` | expected failure, 0/16 rows | 2,970,040 | 0.110 |
+| `spsw-div-cgbBCE.gb` | pass, 5/5 rows | 22,702,928 | 0.328 |
+| `spsw-tima-cgbE.gb` | expected failure, 5/8 rows pass | 12,550,888 | 0.200 |
+| `spsw-tima-cgbBC.gb` | expected failure, 7/8 rows pass | 12,549,832 | 0.200 |
+| `spsw-stop-prefetch-cgbBCE.gb` | pass, 1/1 row | 1,318,104 | 0.039 |
+| `spsw-interrupts-cgbE.gb` | expected failure, 9/11 rows pass | 759,328 | 0.024 |
+| `spsw-mode0-cgbBCE.gb` | expected failure, 3/15 rows pass | 1,697,720 | 0.048 |
+| `spsw-ch2-lc-delay-cgbBCE.gb` | expected failure, 3/8 rows pass | 35,229,976 | 0.532 |
+| `stat-mode-ds-cgbBCE.gb` | expected failure, 0/14 rows pass | 20,731,712 | 0.983 |
+| `stat-mode-cgbE.gb` | expected failure, 5/14 rows pass | 11,609,032 | 0.407 |
+| `stat-mode-sprites-ds-cgbBCE.gb` | expected failure, 2/16 rows pass | 1,823,912 | 0.094 |
+| `stat-mode-sprites-dmgC-cgbBCE.gb` | expected failure, 3/10 rows pass | 1,528,248 | 0.055 |
+| `stat-mode-window-ds-cgbBCE.gb` | expected failure, 0/16 rows pass | 2,803,884 | 0.146 |
+| `stat-mode-window-cgbBCE.gb` | expected failure, 0/16 rows pass | 2,970,040 | 0.110 |
 
 ## Admitted bytes
 
