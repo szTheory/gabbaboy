@@ -521,6 +521,7 @@ cgb_hdma_address_matrix
 cgb_hdma_address_matrix_controls
 cgb_hdma_overflow_policy
 cgb_hdma_overflow_policy_controls
+cgb_hdma_guest_halt
 cgb_tables_postboot
 cgb_tables_postboot_mutated_doc
 cgb_tables_postboot_selftest
