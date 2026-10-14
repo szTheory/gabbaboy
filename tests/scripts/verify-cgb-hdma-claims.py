@@ -7,6 +7,7 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -87,6 +88,8 @@ def check_symbols(texts: dict[str, str]) -> None:
         raise ContractError(f"public declaration header unavailable: {error}") from error
     declared = set(SYMBOL_RE.findall(header))
     for relative, text in texts.items():
+        if relative not in NATIVE_SURFACES:
+            continue
         for symbol in sorted(set(SYMBOL_RE.findall(text)) - declared):
             raise ContractError(f"{relative}: cited public symbol is not declared: {symbol}")
 
@@ -197,9 +200,34 @@ def check_contract(texts: dict[str, str], paths: tuple[str, ...], context: bool 
             require(relative in texts, f"missing player/package surface: {relative}")
             if relative in ("src/player/limitations.h", "src/player/main.c", ".github/workflows/preview.yml"):
                 require(
-                    "HDMA" in texts[relative],
+                    "HDMA" in texts[relative] or "HBlank DMA" in texts[relative],
                     f"{relative}: delivered HDMA behavior is missing from the player/package claim",
                 )
+        player_scope = (
+            "GDMA and HBlank DMA run on the selected bootless CGB-CPU-E software model",
+            "CGB mode-3 timing is not claimed",
+            "CGB-profile audio uses the DMG APU model",
+            "physical CGB-E remains UNKNOWN/POLICY",
+            "General game compatibility is not claimed",
+        )
+        for relative in (
+            "src/player/limitations.h",
+            "src/player/main.c",
+            "README.md",
+            ".github/workflows/preview.yml",
+        ):
+            folded = texts[relative].casefold()
+            for phrase in player_scope:
+                require(
+                    phrase.casefold() in folded,
+                    f"{relative}: player/package copy is missing required claim: {phrase}",
+                )
+        claim_contract = texts["tests/player/claims_agree.cmake"].casefold()
+        for phrase in player_scope:
+            require(
+                phrase.casefold() in claim_contract,
+                f"claims_agree.cmake is missing required player-scope assertion: {phrase}",
+            )
         workflow = texts[".github/workflows/preview.yml"]
         require(
             not STALE_HDMA.search(workflow),
@@ -242,7 +270,7 @@ def self_test() -> int:
     mutation_error(stale, "obsolete HDMA-not-implemented limitation remains")
 
     unqualified = dict(clean)
-    for relative in NATIVE_SURFACES:
+    for relative in paths:
         unqualified[relative] = re.sub(
             re.escape("physical CGB-E remains UNKNOWN/POLICY"),
             "physical CGB-E behavior is qualified",
@@ -250,6 +278,49 @@ def self_test() -> int:
             flags=re.IGNORECASE,
         )
     mutation_error(unqualified, "physical CGB-E qualification")
+
+    for pattern, diagnostic in (
+        (r"CGB mode-3 timing", "mode-3 timing limitation"),
+        (r"APU", "APU limitation"),
+        (r"game compatibility", "game-compatibility limitation"),
+    ):
+        removed = dict(clean)
+        for relative in paths:
+            removed[relative] = re.sub(pattern, "", removed[relative], flags=re.IGNORECASE)
+        mutation_error(removed, diagnostic)
+
+    def subject_rejection(subject_text: str, expected: str) -> None:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-cgb-hdma-subject-") as directory:
+            path = Path(directory) / "subject.json"
+            path.write_text(subject_text, encoding="utf-8")
+            try:
+                result = subprocess.run(
+                    [sys.executable, "-I", str(SCRIPT), "--subject", str(path)],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    timeout=10,
+                    check=False,
+                )
+            except subprocess.TimeoutExpired as error:
+                raise ContractError(f"subject self-test timed out for {expected}: {error}") from error
+            require(
+                result.returncode == 1 and expected in result.stderr,
+                f"subject self-test expected {expected!r}, got exit {result.returncode}: {result.stderr}",
+            )
+
+    subject = source_texts(ALL_SURFACES)
+    missing_surface = dict(subject)
+    missing_surface.pop(ALL_SURFACES[-1])
+    subject_rejection(
+        json.dumps(missing_surface), "subject is missing required surfaces"
+    )
+    extra_surface = dict(subject)
+    extra_surface["README.extra.md"] = "unexpected"
+    subject_rejection(
+        json.dumps(extra_surface), "subject has unexpected surfaces"
+    )
+    subject_rejection("{malformed", "malformed subject JSON")
 
     undeclared = dict(clean)
     undeclared["docs/native-integration.md"] += "\nCall `gbb_get_hdma_status` for the transfer state.\n"
@@ -261,7 +332,9 @@ def self_test() -> int:
         guide, "Optional CGB-C evidence proves physical CGB-E hardware behavior."
     )
     mutation_error(conflated, "CGB-C evidence must not be presented as physical CGB-E qualification")
-    print(f"CGB HDMA claims: self-test passed ({len(paths)} surfaces, four rejected mutations)")
+    print(
+        f"CGB HDMA claims: self-test passed ({len(paths)} surfaces, seven claim mutations and three subject rejections)"
+    )
     return 0
 
 
