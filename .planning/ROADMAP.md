@@ -379,7 +379,40 @@ Plans:
   3. Every transfer is bounded (at most 128 blocks) and partitioned runs stay equivalent across transfers; MagenTests `hblank_vram_dma` passes with its oracle class recorded, and Mealybug `hdma_*-C` results are reported as informational CGB-C evidence outside the CGB-E denominator.
 
 **Research**: DEEP (LCD-off, mode-3 GDMA, overflow state, HALT, cross-bank source, same-half-dot ordering).
-**Plans**: TBD
+**Plans**: 12 plans
+
+Plans:
+**Wave 1**
+- [ ] 13-01-PLAN.md — Real-transfer boundary gate and guest register visibility
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 13-02-PLAN.md — Complete bounded transfer, restart and address policies
+- [ ] 13-06-PLAN.md — Pinned four-case SameSuite admission and reproduction
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 13-03-PLAN.md — Real HALT wake and independent competing stalls
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 13-04-PLAN.md — Partition, lifecycle and hostile-resource invariants
+- [ ] 13-08-PLAN.md — Original visible DMA guest and existing player smoke
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 13-05-PLAN.md — Bounded runtime mutation sensitivity and inherited anchors
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 13-07-PLAN.md — Magen HDMA admission and structural differential oracle
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 13-09-PLAN.md — Executed SameSuite dispositions and optional CGB-C boundary
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [ ] 13-10-PLAN.md — Installed C/C++ DMA consumers and closed package contents
+
+**Wave 9** *(blocked on Wave 8 completion)*
+- [ ] 13-11-PLAN.md — Atomic consumer claims and executable documentation contracts
+
+**Wave 10** *(blocked on Wave 9 completion)*
+- [ ] 13-12-PLAN.md — Current-revision lane cost, evidence closure and phase pause
 
 ### Phase 14: CGB-E Model Qualification and Corpus
 

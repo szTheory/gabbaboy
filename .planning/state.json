@@ -41,7 +41,7 @@
     {
       "number": "13",
       "name": "CGB HDMA",
-      "status": "pending"
+      "status": "planned"
     },
     {
       "number": "14",
@@ -55,9 +55,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-plan-phase 13",
-    "label": "Plan Phase 13: CGB HDMA",
-    "reason": "Phase 13 discussion complete; DEEP planning research required; owner chooses when to continue"
+    "command": "/gsd-execute-phase 13",
+    "label": "Execute Phase 13: CGB HDMA",
+    "reason": "Phase 13 planning independently checked; start actual-transfer gate; owner chooses when to continue"
   },
-  "updated_at": "2026-10-14T16:40:01.162350+00:00"
+  "updated_at": "2026-10-14T18:09:23.510605+00:00"
 }

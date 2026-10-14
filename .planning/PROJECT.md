@@ -6,7 +6,7 @@ GabbaBoy is an original, portable C17 emulator core for Game Boy (DMG) and Game 
 
 ## Current State
 
-Phase 13: CGB HDMA discussion completed 2026-10-14 with 25 adopted decisions in `phases/GB-13-cgb-hdma/13-CONTEXT.md`. Next is `/gsd-plan-phase 13`, including DEEP research; no HDMA is implemented yet. Phase 12 is merged (PR #68) and its 73/73 automated UAT remains closed. D-069 remains the verification default; D-096 records the owner's preference for smaller, flatter dependencies. Auto-advance remains disabled.
+Phase 13: CGB HDMA planning completed 2026-10-14: 12 plans, 24 tasks and 10 waves, with DEEP research, a source-only boundary probe, independent checks and complete decision/requirement mapping. Next is `/gsd-execute-phase 13`; no HDMA is implemented yet. The actual-transfer tracer gates expansion. Phase 12 is merged (PR #68) and its 73/73 automated UAT remains closed. D-069 remains the verification default; D-096 records flat dependencies, and D-098 records selected policies without a hardware claim. Auto-advance remains disabled.
 
 - **Shipped:** v0.1 Limited DMG Preview (milestone closed 2026-10-10; release [`v0.1.0`](https://github.com/szTheory/gabbaboy/releases/tag/v0.1.0) published 2026-10-09). 7 phases, 64 plans, 35/35 requirements, audit `passed`.
 - **Phase 7 (2026-10-11):** Libbet and the Magic Floor v0.08 passes headless acceptance on three OSes and in the macOS packaged player; the DMG baseline is frozen. One game on one software model; no hardware evidence.
@@ -127,4 +127,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-10-14 after Phase 12 goal verification.
+Last updated: 2026-10-14 after Phase 13 planning; implementation pending.
