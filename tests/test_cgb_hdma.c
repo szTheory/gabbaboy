@@ -374,20 +374,30 @@ static int read_fixture(const char *path, uint8_t **out_rom, size_t *out_size) {
 
 static int disable_fixture_transfer(uint8_t *rom, size_t size) {
     size_t found = 0u;
-    size_t offset = 0u;
     if (size != ROM_SIZE) return 0;
     for (size_t i = 0u; i + 1u < size; ++i) {
-        if (rom[i] == 0xE0u && rom[i + 1u] == 0x55u) {
-            offset = i;
-            ++found;
-        }
+        if (rom[i] == 0xE0u && rom[i + 1u] == 0x55u) ++found;
     }
-    if (found != 1u) {
-        fprintf(stderr, "control: FF55 start signature count=%zu, expected=1\n", found);
+    if (found != 2u) {
+        fprintf(stderr, "control: FF55 start signature count=%zu, expected=2\n", found);
         return 0;
     }
-    rom[offset] = 0x00u;
-    rom[offset + 1u] = 0x00u;
+    for (size_t i = 0u; i + 1u < size; ++i) {
+        if (rom[i] == 0xE0u && rom[i + 1u] == 0x55u) {
+            rom[i] = 0x00u;
+            rom[i + 1u] = 0x00u;
+            ++i;
+        }
+    }
+    uint8_t header = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+        header = (uint8_t)(header - rom[i] - 1u);
+    rom[0x14Du] = header;
+    unsigned global = 0u;
+    for (size_t i = 0u; i < size; ++i)
+        if (i != 0x14Eu && i != 0x14Fu) global += rom[i];
+    rom[0x14Eu] = (uint8_t)(global >> 8);
+    rom[0x14Fu] = (uint8_t)global;
     return 1;
 }
 
@@ -420,21 +430,29 @@ static int run_fixture_image(const uint8_t *rom, size_t size, int expect_pass,
     const uint8_t initial_status = gbb_peek_ram(machine, 0xC001u);
     const uint8_t first_block_status = gbb_peek_ram(machine, 0xC002u);
     const uint8_t completed_status = gbb_peek_ram(machine, 0xC003u);
+    const uint8_t second_completed_status = gbb_peek_ram(machine, 0xC004u);
+    const uint8_t failure_stage = gbb_peek_ram(machine, 0xC005u);
     if (out_marker != NULL) *out_marker = marker;
     if (out_initial_status != NULL) *out_initial_status = initial_status;
     if (marker != (expect_pass ? 0xA5u : 0xEEu)) {
-        fprintf(stderr, "fixture guest marker expected=%02X actual=%02X\n",
-                expect_pass ? 0xA5u : 0xEEu, marker);
+        fprintf(stderr, "fixture guest marker expected=%02X actual=%02X ff55=%02X/%02X/%02X/%02X stage=%02X\n",
+                expect_pass ? 0xA5u : 0xEEu, marker, initial_status,
+                first_block_status, completed_status, second_completed_status, failure_stage);
         gbb_destroy(machine); return 0;
     }
-    if (expect_pass && (initial_status != 0x01u || first_block_status != 0x00u ||
-                        completed_status != 0xFFu)) {
-        fprintf(stderr, "fixture guest FF55 status expected=01/00/FF actual=%02X/%02X/%02X\n",
-                initial_status, first_block_status, completed_status);
+    if (expect_pass && (initial_status != 0x00u || first_block_status != 0xFFu ||
+                        completed_status != 0x00u || second_completed_status != 0xFFu)) {
+        fprintf(stderr, "fixture guest FF55 status expected=00/FF/00/FF actual=%02X/%02X/%02X/%02X\n",
+                initial_status, first_block_status, completed_status, second_completed_status);
         gbb_destroy(machine); return 0;
     }
     if (!expect_pass && initial_status != 0xFFu) {
         fprintf(stderr, "control guest FF55 status expected=FF actual=%02X\n", initial_status);
+        gbb_destroy(machine); return 0;
+    }
+    if ((!expect_pass && failure_stage != 0x01u) || (expect_pass && failure_stage != 0u)) {
+        fprintf(stderr, "fixture guest failure stage expected=%02X actual=%02X\n",
+                expect_pass ? 0u : 0x01u, failure_stage);
         gbb_destroy(machine); return 0;
     }
 
@@ -461,9 +479,10 @@ static int run_fixture_image(const uint8_t *rom, size_t size, int expect_pass,
             }
         }
     }
-    printf("fixture guest=%s marker=%02X ff55=%02X/%02X/%02X pixel_predicate=pass generation=%llu\n",
+    printf("fixture guest=%s marker=%02X ff55=%02X/%02X/%02X/%02X pixel_predicate=pass generation=%llu\n",
            expect_pass ? "pass" : "fail", marker, initial_status,
-           first_block_status, completed_status, (unsigned long long)info.generation);
+           first_block_status, completed_status, second_completed_status,
+           (unsigned long long)info.generation);
     gbb_destroy(machine);
     return 1;
 }
