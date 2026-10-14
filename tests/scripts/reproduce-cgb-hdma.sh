@@ -114,7 +114,8 @@ def validate(source_bytes=None, rom_bytes=None, candidate_manifest=None):
         return "source-ff55-start-count-differs-from-two"
     if "SECTION \"DMA source\", ROM0[$0400]" not in source_text:
         return "source-dma-data-offset-differs"
-    for required in ("RGB555 001F", "RGB555 7C00", "ld a, $A5", "ld a, $EE",
+    for required in ("RGB555 001F", "RGB555 03E0", "RGB555 7C00", "RGB555 7FFF",
+                     "ld a, $A5", "ld a, $EE",
                      "ld [$C000], a", "ld [$C001], a", "ld [$C002], a",
                      "ld [$C003], a", "ld [$C004], a", "ld [$C005], a"):
         if required not in source_text:
@@ -139,15 +140,16 @@ def validate(source_bytes=None, rom_bytes=None, candidate_manifest=None):
     if not all(markers.get(address) for address in ("C000", "C001", "C002", "C003", "C004", "C005")):
         return "guest-marker-contract-incomplete"
     pixels = protocol.get("pixels", {})
-    expected_pixels = (pixels.get("success_left_rgb555"), pixels.get("success_right_rgb555"),
-                       pixels.get("failure_rgb555"))
-    if expected_pixels != ("0x001F", "0x7C00", "0x7FFF"):
+    expected_pixels = (pixels.get("success_quadrants_rgb555"), pixels.get("failure_rgb555"))
+    if expected_pixels != ({"top_left": "0x001F", "top_right": "0x03E0",
+                            "bottom_left": "0x7C00", "bottom_right": "0x7FFF"}, "0x7FFF"):
         return "source-derived-pixel-contract-differs"
-    if "columns 0-79" not in pixels.get("success_regions", "") or \
-       "columns 80-159" not in pixels.get("success_regions", "") or \
+    if "every 8x8 tile repeats" not in pixels.get("success_regions", "") or \
+       "four 4x4 quadrants" not in pixels.get("success_regions", "") or \
        "every pixel white RGB555 0x7FFF" not in pixels.get("failure_regions", ""):
         return "source-derived-pixel-regions-incomplete"
-    if "RGB555 001F" not in source_text or "RGB555 7C00" not in source_text:
+    if any(value not in source_text for value in ("RGB555 001F", "RGB555 03E0",
+                                                   "RGB555 7C00", "RGB555 7FFF")):
         return "source-derived-pixel-comments-missing"
 
     source_data_pin = protocol.get("source_data", {})
@@ -155,9 +157,10 @@ def validate(source_bytes=None, rom_bytes=None, candidate_manifest=None):
         return "source-data-offset-pin-differs"
     bank0 = bytes.fromhex(source_data_pin.get("bank0_tile0_hex", ""))
     bank1 = bytes.fromhex(source_data_pin.get("bank1_tile0_hex", ""))
-    if bank0 != bytes([0xFF, 0x00] * 8) or bank1 != bytes([0x00, 0xFF] * 8):
+    if bank0 != bytes([0xF0, 0x0F] * 4 + [0xF0, 0xF0] * 4) or \
+       bank1 != bytes([0x0F, 0x0F] * 8):
         return "source-data-pattern-pin-differs"
-    if "db $FF, $00" not in source_text or "db $00, $FF" not in source_text:
+    if "db $F0, $0F" not in source_text or "db $0F, $0F" not in source_text:
         return "source-data-pattern-not-in-assembly"
     if rom_data[0x400:0x410] != bank0 or rom_data[0x410:0x420] != bank1:
         return "rom-source-data-pattern-mismatch"
@@ -288,6 +291,11 @@ def self_test():
     rom_reason = validate(rom_bytes=bytes(mutated_rom))
     if rom_reason != "rom-sha256-mismatch-hblank.gb":
         fail(f"rom-negative-control-not-detected-{rom_reason}")
+    mutated_data = bytearray(rom_data)
+    mutated_data[0x400] ^= 1
+    data_reason = validate(rom_bytes=bytes(mutated_data))
+    if data_reason != "rom-source-data-pattern-mismatch":
+        fail(f"source-data-negative-control-not-detected-{data_reason}")
     mutated_manifest = copy.deepcopy(manifest)
     mutated_manifest["build"]["archive_sha256"] = "0" * 64
     pin_reason = validate(candidate_manifest=mutated_manifest)
@@ -297,7 +305,7 @@ def self_test():
     signature = bytes.fromhex("e055")
     if twin.count(signature) != 0 or twin[0x14D] != header_checksum(twin):
         fail("no-transfer-negative-control-mutation-invalid")
-    print("result=self-test-pass controls=source-sha256,rom-sha256,rgbds-pin,no-transfer-signature")
+    print("result=self-test-pass controls=source-sha256,rom-sha256,source-data-pattern,rgbds-pin,no-transfer-signature")
 
 
 def write_no_transfer():

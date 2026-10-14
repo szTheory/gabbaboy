@@ -5,13 +5,16 @@
 ; tile byte, then records C000=A5. Any failed predicate records C000=EE and
 ; leaves the visible background at the distinct white failure colour.
 ;
-; Source-derived pixels: bank-0 tile 0 is solid colour index 1 (RGB555 001F,
-; red); bank-1 tile 0 is solid index 2 (RGB555 7C00, blue). The right ten tile
-; columns select bank 1 in the attribute map; the left ten select bank 0.
+; Source-derived pixels: bank-0 tile 0 contains four 4x4 quadrants: red
+; RGB555 001F, green RGB555 03E0, blue RGB555 7C00, and white RGB555 7FFF.
+; Bank 1 receives a distinct checked tile while the repeated visible map uses
+; bank-0 tile 0. The no-transfer twin leaves the reset zero tile as white.
 
 DEF rLCDC EQU $FF40
 DEF rSTAT EQU $FF41
 DEF rLY   EQU $FF44
+DEF rSCY  EQU $FF42
+DEF rSCX  EQU $FF43
 DEF rBCPS EQU $FF68
 DEF rBCPD EQU $FF69
 DEF rVBK  EQU $FF4F
@@ -31,7 +34,6 @@ Start:
     di
     ld sp, $FFFE
     xor a
-    ldh [rLCDC], a
     ld [$C000], a
     ld [$C001], a
     ld [$C002], a
@@ -39,7 +41,16 @@ Start:
     ld [$C004], a
     ld [$C005], a
 
-    ; BG palette 0: failure colour 0 is white; colours 1 and 2 are red and blue.
+.wait_setup_vblank:
+    ldh a, [rLY]
+    cp 144
+    jr c, .wait_setup_vblank
+
+    xor a
+    ldh [rSCX], a
+    ldh [rSCY], a
+
+    ; BG palette 0: white, red, green, and blue (little-endian RGB555 words).
     ld a, $80
     ldh [rBCPS], a
     ld a, $FF
@@ -50,63 +61,17 @@ Start:
     ldh [rBCPD], a
     xor a
     ldh [rBCPD], a
-    ld a, $00
+    ld a, $E0
+    ldh [rBCPD], a
+    ld a, $03
+    ldh [rBCPD], a
+    xor a
     ldh [rBCPD], a
     ld a, $7C
     ldh [rBCPD], a
     xor a
     ldh [rBCPD], a
-    ldh [rBCPD], a
-
-    ; Clear the tile map and attributes so the frame has no reset-state inputs.
-    xor a
     ldh [rVBK], a
-    ld hl, $9800
-    ld b, 4
-    ld c, 0
-.clear_bank0_map:
-    xor a
-    ld [hli], a
-    dec c
-    jr nz, .clear_bank0_map
-    dec b
-    jr nz, .clear_bank0_map
-
-    ld a, 1
-    ldh [rVBK], a
-    ld hl, $9800
-    ld b, 4
-    ld c, 0
-.clear_bank1_attributes:
-    xor a
-    ld [hli], a
-    dec c
-    jr nz, .clear_bank1_attributes
-    dec b
-    jr nz, .clear_bank1_attributes
-
-    ; Attribute bit 3 selects the bank-1 red/blue tile in the right half.
-    ld a, $08
-    ld hl, $980A
-    ld de, 22
-    ld b, 18
-.attribute_row:
-    push bc
-    ld c, 10
-.attribute_cell:
-    ld [hl], a
-    inc hl
-    dec c
-    jr nz, .attribute_cell
-    add hl, de
-    pop bc
-    dec b
-    jr nz, .attribute_row
-
-    xor a
-    ldh [rVBK], a
-    ld a, $91                  ; LCD on, BG on, unsigned tile data at $8000, map at $9800
-    ldh [rLCDC], a
 
     ; Program FF51-54 before the visible Mode-2 window; source is two aligned
     ; sixteen-byte tiles at $0400 and destination is tile 0 at $8000.
@@ -194,7 +159,6 @@ Start:
     ld [$C004], a             ; second transaction completed
 
     ; Read every transferred byte back through the guest CPU during VBlank.
-    ; Keeping the LCD on gives the consumer a complete visible frame.
 .wait_vblank_for_checks:
     ldh a, [rLY]
     cp 144
@@ -202,17 +166,17 @@ Start:
     xor a
     ldh [rVBK], a
     ld hl, $8000
-    ld b, 8
+    ld b, 4
 .check_bank0_tile:
     ld a, [hli]
-    cp $FF
+    cp $F0
     jr z, .bank0_low_ok
     ld a, $05
     ld [$C005], a
     jp GuestFailure
 .bank0_low_ok:
     ld a, [hli]
-    or a
+    cp $0F
     jr z, .bank0_high_ok
     ld a, $05
     ld [$C005], a
@@ -221,20 +185,39 @@ Start:
     dec b
     jr nz, .check_bank0_tile
 
+    ld b, 4
+.check_bank0_lower_tile:
+    ld a, [hli]
+    cp $F0
+    jr z, .bank0_lower_low_ok
+    ld a, $05
+    ld [$C005], a
+    jp GuestFailure
+.bank0_lower_low_ok:
+    ld a, [hli]
+    cp $F0
+    jr z, .bank0_lower_high_ok
+    ld a, $05
+    ld [$C005], a
+    jp GuestFailure
+.bank0_lower_high_ok:
+    dec b
+    jr nz, .check_bank0_lower_tile
+
     ld a, $01
     ldh [rVBK], a
     ld hl, $8000
     ld b, 8
 .check_bank1_tile:
     ld a, [hli]
-    or a
+    cp $0F
     jr z, .bank1_low_ok
     ld a, $06
     ld [$C005], a
     jp GuestFailure
 .bank1_low_ok:
     ld a, [hli]
-    cp $FF
+    cp $0F
     jr z, .bank1_high_ok
     ld a, $06
     ld [$C005], a
@@ -256,10 +239,13 @@ GuestFailure:
 
 SECTION "DMA source", ROM0[$0400]
 TileBank0:
-REPT 8
-    db $FF, $00
+REPT 4
+    db $F0, $0F
+ENDR
+REPT 4
+    db $F0, $F0
 ENDR
 TileBank1:
 REPT 8
-    db $00, $FF
+    db $0F, $0F
 ENDR

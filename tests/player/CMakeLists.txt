@@ -41,8 +41,9 @@ set(GBB_PLAYER_CGB_RGBA_SHA "8633f67ec1a9009a3597ad0260c24c5a75940d5f76301427d92
 set(GBB_PLAYER_CGB_ROM "${PROJECT_SOURCE_DIR}/fixtures/cgb-colour/colour-attr.gb")
 set(GBB_PLAYER_CGB_SPEED_RGBA_SHA "b53366fee4959a4220b6380816c20b1f2f74ba4ed0608adda0e3afc34c4a13e7")
 set(GBB_PLAYER_CGB_SPEED_ROM "${PROJECT_SOURCE_DIR}/fixtures/cgb-speed/speed.gb")
-set(GBB_PLAYER_CGB_HDMA_RGBA_SHA "0000000000000000000000000000000000000000000000000000000000000000")
-set(GBB_PLAYER_CGB_HDMA_ROM "${PROJECT_SOURCE_DIR}/fixtures/cgb-colour/colour-hblank.gb")
+set(GBB_PLAYER_CGB_HDMA_RGBA_SHA "e1fcfbf37d36972e4c9f6674d964e49107097ae38632966f7c86a86295912479")
+set(GBB_PLAYER_CGB_HDMA_NO_TRANSFER_RGBA_SHA "fc7bc70fa8de6eb76d3a6c47669324e70f084c326e0ea1166224c516b5c4e642")
+set(GBB_PLAYER_CGB_HDMA_ROM "${PROJECT_SOURCE_DIR}/fixtures/cgb-hdma/hblank.gb")
 set(GBB_PLAYER_CGB_SMOKE_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/cgb_smoke.cmake")
 set(GBB_PLAYER_CGB_HOME "${CMAKE_CURRENT_BINARY_DIR}/player-cgb-home")
 file(MAKE_DIRECTORY "${GBB_PLAYER_CGB_HOME}")
@@ -80,6 +81,15 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
         -DGBB_CHECK=hdma -DGBB_PLAYER=$<TARGET_FILE:gabbaboy-player>
         -DGBB_ROM=${GBB_PLAYER_CGB_HDMA_ROM}
         -DGBB_EXPECT_RGBA_SHA=${GBB_PLAYER_CGB_HDMA_RGBA_SHA}
+        -P "${GBB_PLAYER_CGB_SMOKE_SCRIPT}")
+      set_tests_properties(${test_name} PROPERTIES TIMEOUT 120 ENVIRONMENT "${cgb_env}")
+    elseif(test_name STREQUAL "player_cgb_hdma_smoke_no_transfer")
+      add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+        -DGBB_CHECK=hdma-no-transfer -DGBB_PLAYER=$<TARGET_FILE:gabbaboy-player>
+        -DGBB_ROM=${GBB_PLAYER_CGB_HDMA_ROM}
+        -DGBB_EXPECT_RGBA_SHA=${GBB_PLAYER_CGB_HDMA_NO_TRANSFER_RGBA_SHA}
+        -DGBB_CONTROL_ROM=${CMAKE_CURRENT_BINARY_DIR}/player-cgb-hdma-no-transfer.gb
+        -DGBB_REPRO_SCRIPT=${PROJECT_SOURCE_DIR}/tests/scripts/reproduce-cgb-hdma.sh
         -P "${GBB_PLAYER_CGB_SMOKE_SCRIPT}")
       set_tests_properties(${test_name} PROPERTIES TIMEOUT 120 ENVIRONMENT "${cgb_env}")
     elseif(test_name STREQUAL "player_cgb_speed_smoke_wrong_sha")

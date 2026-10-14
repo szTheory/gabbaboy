@@ -466,11 +466,15 @@ static int run_fixture_image(const uint8_t *rom, size_t size, int expect_pass,
                 (int)copied);
         gbb_destroy(machine); return 0;
     }
-    const uint16_t left = expect_pass ? 0x001Fu : 0x7FFFu;
-    const uint16_t right = expect_pass ? 0x7C00u : 0x7FFFu;
     for (unsigned y = 0u; y < FIXTURE_FRAME_HEIGHT; ++y) {
         for (unsigned x = 0u; x < FIXTURE_FRAME_WIDTH; ++x) {
-            const uint16_t expected = expect_pass && x >= 80u ? right : left;
+            uint16_t expected = 0x7FFFu;
+            if (expect_pass) {
+                const unsigned quadrant = (y % 8u >= 4u ? 2u : 0u) +
+                                          (x % 8u >= 4u ? 1u : 0u);
+                static const uint16_t colours[] = {0x001Fu, 0x03E0u, 0x7C00u, 0x7FFFu};
+                expected = colours[quadrant];
+            }
             const uint16_t actual = pixels[y * FIXTURE_FRAME_WIDTH + x];
             if (actual != expected) {
                 fprintf(stderr, "fixture pixel predicate expected=%04X actual=%04X at (%u,%u)\n",

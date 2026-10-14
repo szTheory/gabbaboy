@@ -171,6 +171,14 @@ jobs:
           GBB_RGBDS_ARCHIVE="$RUNNER_TEMP/rgbds-$RGBDS_RELEASE_VERSION/$RGBDS_ARCHIVE" \
             GBB_RGBDS_ARCHIVE_SHA256="$RGBDS_ARCHIVE_SHA256" \
             bash tests/scripts/reproduce-cgb-colour.sh
+      - name: Reproduce original CGB HDMA guest and negative controls
+        shell: bash
+        run: |
+          export GBB_RGBDS_ARCHIVE="$RUNNER_TEMP/rgbds-$RGBDS_RELEASE_VERSION/$RGBDS_ARCHIVE"
+          export GBB_RGBDS_ARCHIVE_SHA256="$RGBDS_ARCHIVE_SHA256"
+          bash tests/scripts/reproduce-cgb-hdma.sh --self-check
+          bash tests/scripts/reproduce-cgb-hdma.sh --self-test
+          bash tests/scripts/reproduce-cgb-hdma.sh --compare-pinned
       - name: Reproduce CGB speed fixture bytes
         shell: bash
         run: |

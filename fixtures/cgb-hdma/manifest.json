@@ -5,7 +5,7 @@
     "hblank.asm"
   ],
   "source_sha256": {
-    "hblank.asm": "abde49ae7af09d0417c27029e3ec86dc8a2dd850997e508b7b7c16d9d87eaf82"
+    "hblank.asm": "cd707de5a1245e9dd52265f76130a5457a52b197073dddb922386c06abf92e59"
   },
   "license": "MIT; see LICENSE.txt and repository LICENSE",
   "build": {
@@ -22,7 +22,7 @@
     {
       "file": "hblank.gb",
       "size_bytes": 32768,
-      "sha256": "368a663db3d83283a3d3a2174760eef974805a0f534e61cc41731e3075292633",
+      "sha256": "f21cdc65d24f98cbf7713686c96a5e41f29e6769f78fc6a6f61b0d230ebbf431",
       "recipe": {
         "source": "hblank.asm",
         "defines": [],
@@ -62,14 +62,18 @@
     },
     "source_data": {
       "rom_offset": "0x0400",
-      "bank0_tile0_hex": "ff00ff00ff00ff00ff00ff00ff00ff00",
-      "bank1_tile0_hex": "00ff00ff00ff00ff00ff00ff00ff00ff"
+      "bank0_tile0_hex": "f00ff00ff00ff00ff0f0f0f0f0f0f0f0",
+      "bank1_tile0_hex": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"
     },
     "pixels": {
-      "success_left_rgb555": "0x001F",
-      "success_right_rgb555": "0x7C00",
+      "success_quadrants_rgb555": {
+        "top_left": "0x001F",
+        "top_right": "0x03E0",
+        "bottom_left": "0x7C00",
+        "bottom_right": "0x7FFF"
+      },
       "failure_rgb555": "0x7FFF",
-      "success_regions": "Every pixel in columns 0-79 of the 160x144 frame is red RGB555 0x001F; every pixel in columns 80-159 is blue RGB555 0x7C00.",
+      "success_regions": "every 8x8 tile repeats four 4x4 quadrants: top-left red RGB555 0x001F, top-right green RGB555 0x03E0, bottom-left blue RGB555 0x7C00, and bottom-right white RGB555 0x7FFF.",
       "failure_regions": "The no-transfer twin records C000=0xEE and keeps every pixel white RGB555 0x7FFF.",
       "structural_predicate": "Checked through the public guest marker and gbb_copy_frame_rgb555 before any fixture digest comparison."
     },
