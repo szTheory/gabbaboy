@@ -403,6 +403,39 @@ set_target_properties(test_cgb_hdma_internal PROPERTIES C_EXTENSIONS OFF)
 foreach(case ld_sp cb controls partition outputs)
   add_test(NAME cgb_hdma_tracer_${case} COMMAND test_cgb_hdma_internal ${case})
 endforeach()
+foreach(case state_matrix trigger_matrix trigger_controls timing_policy address_matrix overflow_policy)
+  add_test(NAME cgb_hdma_${case} COMMAND test_cgb_hdma_internal ${case})
+endforeach()
+add_test(NAME cgb_hdma_state_matrix_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_internal>;state_matrix;--flip-cancel"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=guest\ cancel\ readback\ expected=80\ actual=81
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_hdma_timing_policy_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_internal>;timing_flip"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=timing\ policy:\ byte\ 0\ committed\ early
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_hdma_trigger_matrix_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_internal>;trigger_flip"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=trigger\ matrix:\ injected\ repeated-mode\ event\ detected
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_hdma_address_matrix_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_internal>;address_flip"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=address\ matrix:\ invalid-block\ byte\ mutated
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_hdma_overflow_policy_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_internal>;overflow_flip"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=overflow\ policy:\ cursor\ wrapped
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
 add_executable(test_cgb_postboot test_cgb_postboot.c)
 target_link_libraries(test_cgb_postboot PRIVATE GabbaBoy::core)

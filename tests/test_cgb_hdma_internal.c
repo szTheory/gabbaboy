@@ -307,14 +307,311 @@ static int test_outputs(void) {
     return 0;
 }
 
+static void finish_rom(uint8_t rom[32768]) {
+    uint8_t checksum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14Du] = checksum;
+}
+
+static size_t emit_pair(uint8_t *program, size_t at, uint8_t immediate,
+                        uint8_t address) {
+    program[at++] = 0x3Eu; program[at++] = immediate;
+    program[at++] = 0xE0u; program[at++] = address;
+    return at;
+}
+
+static void make_policy_rom(uint8_t rom[32768], uint8_t start,
+                            uint8_t cancel, int cancel_after_read,
+                            int active_write_restart) {
+    memset(rom, 0, 32768u);
+    rom[0x143] = 0xC0u;
+    rom[0x147] = 0u;
+    rom[0x148] = 0u;
+    rom[0x149] = 0u;
+    uint8_t *p = rom + 0x100u;
+    size_t at = 0u;
+    at = emit_pair(p, at, 0xC0u, 0x51u);
+    at = emit_pair(p, at, 0x00u, 0x52u);
+    at = emit_pair(p, at, 0x00u, 0x53u);
+    at = emit_pair(p, at, 0x00u, 0x54u);
+    at = emit_pair(p, at, start, 0x55u);
+    if (active_write_restart) {
+        at = emit_pair(p, at, 0xD0u, 0x51u);
+        at = emit_pair(p, at, 0x82u, 0x55u);
+    }
+    p[at++] = 0xF0u; p[at++] = 0x55u; /* guest reads FF55 */
+    p[at++] = 0xE0u; p[at++] = 0x80u; /* save the readback in HRAM */
+    if (cancel_after_read) {
+        at = emit_pair(p, at, cancel, 0x55u);
+        p[at++] = 0xF0u; p[at++] = 0x55u;
+        p[at++] = 0xE0u; p[at++] = 0x81u;
+    }
+    p[at] = 0xD3u;
+    finish_rom(rom);
+}
+
+static int policy_fixture_create(gbb_instance **machine, uint8_t start,
+                                 uint8_t cancel, int cancel_after_read,
+                                 int active_write_restart, int speed,
+                                 uint8_t lcdc, uint8_t mode, uint8_t line,
+                                 size_t source_bytes) {
+    uint8_t rom[32768];
+    make_policy_rom(rom, start, cancel, cancel_after_read, active_write_restart);
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, machine) == GBB_OK);
+    REQUIRE(gbb_load_rom(*machine, rom, sizeof(rom)) == GBB_OK);
+    gbb_instance *m = *machine;
+    for (size_t i = 0u; i < source_bytes; ++i)
+        m->wram[0][i] = (uint8_t)(0x27u + 37u * i);
+    memset(m->vram[0], 0xA5, sizeof(m->vram[0]));
+    memset(m->vram[1], 0x5A, sizeof(m->vram[1]));
+    m->lcdc = 0u;
+    gbb_run_result setup = gbb_run(m, 160u, NULL, 0u); /* four guest FF51-54 writes */
+    if (setup.reason != GBB_STOP_BUDGET || setup.consumed_half_dots != 160u ||
+        m->pc != 0x110u) {
+        fprintf(stderr, "HDMA policy guest setup failed: reason=%d pc=%04X consumed=%llu\n",
+                setup.reason, m->pc, (unsigned long long)setup.consumed_half_dots);
+        gbb_destroy(m);
+        *machine = NULL;
+        return 1;
+    }
+    m->double_speed = (uint8_t)speed;
+    m->lcdc = lcdc;
+    m->ppu_mode = mode;
+    m->ly = line;
+    return 0;
+}
+
+static int check_guest_kick_cancel(uint8_t lcdc, uint8_t mode, int speed,
+                                   uint8_t cancel, uint8_t expected_cancel,
+                                   int flip_cancel) {
+    gbb_instance *m = NULL;
+    REQUIRE(policy_fixture_create(&m, 0x83u, flip_cancel ? 1u : cancel, 1, 0,
+                                  speed, lcdc, mode, 0u, 16u) == 0);
+    const uint64_t start = m->time_half_dots;
+    gbb_run_result block = gbb_run(m, (40u >> speed) + 64u, NULL, 0u);
+    if (block.reason != GBB_STOP_BUDGET || block.consumed_half_dots != (40u >> speed) + 64u ||
+        m->time_half_dots - start != (40u >> speed) + 64u ||
+        memcmp(m->vram[0], m->wram[0], 16u) != 0) {
+        fprintf(stderr, "hdma state matrix: initial kick did not commit exactly one block\n");
+        gbb_destroy(m);
+        return 1;
+    }
+    const unsigned read_cost = 48u >> speed;
+    gbb_run_result read_active = gbb_run(m, read_cost, NULL, 0u);
+    if (read_active.consumed_half_dots != read_cost || m->hram[0] != 0x02u) {
+        fprintf(stderr, "hdma state matrix: guest active FF55 expected=02 actual=%02X\n",
+                m->hram[0]);
+        gbb_destroy(m);
+        return 1;
+    }
+    const unsigned cancel_cost = 40u >> speed;
+    gbb_run_result cancel_run = gbb_run(m, cancel_cost, NULL, 0u);
+    if (cancel_run.consumed_half_dots != cancel_cost) {
+        fprintf(stderr, "hdma state matrix: guest cancellation instruction was not executed\n");
+        gbb_destroy(m);
+        return 1;
+    }
+    gbb_run_result read_cancelled = gbb_run(m, read_cost, NULL, 0u);
+    if (read_cancelled.consumed_half_dots != read_cost || m->hram[1] != expected_cancel) {
+        fprintf(stderr, "hdma state matrix: guest cancel readback expected=%02X actual=%02X\n",
+                expected_cancel, m->hram[1]);
+        gbb_destroy(m);
+        return 1;
+    }
+    REQUIRE(m->hdma.blocks_remaining == 0u && !m->hdma.active &&
+            !m->hdma.pending_hblank && m->hdma.source_cursor == 0xC010u &&
+            m->hdma.destination_cursor == 0x8010u);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int run_gdma_count(unsigned blocks, int speed) {
+    gbb_instance *m = NULL;
+    REQUIRE(blocks >= 1u && blocks <= 128u);
+    REQUIRE(policy_fixture_create(&m, (uint8_t)(blocks - 1u), 0u, 0, 0,
+                                  speed, 0u, 0u, 0u, blocks * 16u) == 0);
+    const uint64_t start = m->time_half_dots;
+    gbb_run_result first = gbb_run(m, (40u >> speed) + 64u, NULL, 0u);
+    REQUIRE(first.reason == GBB_STOP_BUDGET && first.consumed_half_dots == (40u >> speed) + 64u);
+    for (unsigned block = 1u; block < blocks; ++block) {
+        gbb_run_result next = gbb_run(m, 64u, NULL, 0u);
+        if (next.reason != GBB_STOP_BUDGET || next.consumed_half_dots != 64u) {
+            fprintf(stderr, "gdma bounded count=%u block=%u consumed=%llu reason=%d\n",
+                    blocks, block, (unsigned long long)next.consumed_half_dots, next.reason);
+            gbb_destroy(m);
+            return 1;
+        }
+    }
+    const unsigned read_cost = 48u >> speed;
+    gbb_run_result readback = gbb_run(m, read_cost, NULL, 0u);
+    if (readback.consumed_half_dots != read_cost || m->hram[0] != 0xFFu ||
+        m->time_half_dots - start != (uint64_t)((40u >> speed) + 64u * blocks) ||
+        m->hdma.source_cursor != (uint16_t)(0xC000u + blocks * 16u) ||
+        m->hdma.destination_cursor != 0x8000u + blocks * 16u) {
+        fprintf(stderr, "gdma completion/count readback mismatch count=%u speed=%d\n", blocks, speed);
+        gbb_destroy(m);
+        return 1;
+    }
+    for (unsigned i = 0u; i < blocks * 16u; ++i) {
+        if (m->vram[0][i] != m->wram[0][i]) {
+            fprintf(stderr, "gdma data mismatch count=%u offset=%u\n", blocks, i);
+            gbb_destroy(m);
+            return 1;
+        }
+    }
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_state_matrix(int flip_cancel) {
+    for (int speed = 0; speed <= 1; ++speed) {
+        REQUIRE(check_guest_kick_cancel(0u, 0u, speed, 0u, 0x80u, flip_cancel) == 0);
+        REQUIRE(check_guest_kick_cancel(0x91u, 0u, speed, 0u, 0x80u, 0) == 0);
+        REQUIRE(check_guest_kick_cancel(0u, 0u, speed, 0x05u, 0x85u, 0) == 0);
+        REQUIRE(run_gdma_count(1u, speed) == 0);
+        REQUIRE(run_gdma_count(2u, speed) == 0);
+        REQUIRE(run_gdma_count(128u, speed) == 0);
+    }
+
+    gbb_instance *m = NULL;
+    REQUIRE(policy_fixture_create(&m, 0x83u, 0u, 0, 1, 0, 0x91u, 3u, 0u, 16u) == 0);
+    gbb_run_result waiting = gbb_run(m, 168u, NULL, 0u);
+    REQUIRE(waiting.reason == GBB_STOP_BUDGET && waiting.consumed_half_dots == 168u &&
+            m->hram[0] == 0x02u && m->hdma.mode == 1u &&
+            m->hdma.blocks_remaining == 3u && m->hdma.source_high == 0xC0u &&
+            m->hdma.source_cursor == 0xC000u && !m->hdma.pending_hblank &&
+            m->vram[0][0] == 0xA5u);
+    ppu_set_mode(m, 0u);
+    REQUIRE(m->hdma.pending_hblank);
+    gbb_run_result block = gbb_run(m, 64u, NULL, 0u);
+    REQUIRE(block.consumed_half_dots == 64u && m->vram[0][0] == m->wram[0][0]);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_trigger_matrix(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(policy_fixture_create(&m, 0x82u, 0u, 0, 0, 0, 0x91u, 3u, 0u, 32u) == 0);
+    gbb_run_result armed = gbb_run(m, 40u, NULL, 0u);
+    REQUIRE(armed.consumed_half_dots == 40u && m->hdma.mode == 1u &&
+            m->hdma.blocks_remaining == 3u && !m->hdma.pending_hblank &&
+            m->vram[0][0] == 0xA5u);
+    m->ly = 144u;
+    ppu_set_mode(m, 0u);
+    REQUIRE(!m->hdma.pending_hblank);
+    gbb_run_result vblank = gbb_run(m, 64u, NULL, 0u);
+    REQUIRE(vblank.consumed_half_dots == 0u && m->vram[0][0] == 0xA5u);
+    m->ly = 0u;
+    m->lcdc = 0u;
+    ppu_set_mode(m, 3u);
+    ppu_set_mode(m, 0u);
+    REQUIRE(!m->hdma.pending_hblank);
+    gbb_destroy(m);
+
+    REQUIRE(policy_fixture_create(&m, 0x82u, 0u, 0, 0, 0, 0u, 0u, 0u, 32u) == 0);
+    gbb_run_result kick = gbb_run(m, 104u, NULL, 0u);
+    REQUIRE(kick.consumed_half_dots == 104u && m->hdma.blocks_remaining == 3u &&
+            !m->hdma.pending_hblank && m->vram[0][0] == m->wram[0][0] &&
+            m->vram[0][16] == 0xA5u);
+    ppu_set_mode(m, 0u); /* same mode is a level, not a second initial kick */
+    gbb_run_result no_repeat = gbb_run(m, 64u, NULL, 0u);
+    REQUIRE(no_repeat.consumed_half_dots == 0u && m->vram[0][16] == 0xA5u);
+    m->lcdc = 0x91u;
+    ppu_set_mode(m, 3u);
+    ppu_set_mode(m, 0u);
+    REQUIRE(m->hdma.pending_hblank);
+    gbb_run_result visible = gbb_run(m, 64u, NULL, 0u);
+    REQUIRE(visible.consumed_half_dots == 64u && m->vram[0][16] == m->wram[0][16]);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_trigger_controls(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(policy_fixture_create(&m, 0x81u, 0u, 0, 0, 0, 0x91u, 3u, 144u, 16u) == 0);
+    gbb_run_result arm = gbb_run(m, 40u, NULL, 0u);
+    REQUIRE(arm.consumed_half_dots == 40u && !m->hdma.pending_hblank);
+    ppu_set_mode(m, 0u);
+    REQUIRE(!m->hdma.pending_hblank);
+    m->ly = 0u;
+    m->lcdc = 0u;
+    ppu_set_mode(m, 3u);
+    ppu_set_mode(m, 0u);
+    REQUIRE(!m->hdma.pending_hblank);
+    gbb_run_result none = gbb_run(m, 64u, NULL, 0u);
+    REQUIRE(none.consumed_half_dots == 0u && m->vram[0][0] == 0xA5u);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_trigger_flip(void) {
+    gbb_instance *m = NULL;
+    REQUIRE(policy_fixture_create(&m, 0x82u, 0u, 0, 0, 0, 0u, 0u, 0u, 32u) == 0);
+    gbb_run_result kick = gbb_run(m, 104u, NULL, 0u);
+    REQUIRE(kick.consumed_half_dots == 104u && m->hdma.blocks_remaining == 3u);
+    ppu_set_mode(m, 0u);
+    m->hdma.pending_hblank = 1u; /* injected duplicate event must be caught */
+    if (m->hdma.pending_hblank) {
+        fprintf(stderr, "trigger matrix: injected repeated-mode event detected\n");
+        gbb_destroy(m);
+        return 1;
+    }
+    gbb_destroy(m);
+    return 0;
+}
+
+static int test_timing_policy(int flip) {
+    for (int speed = 0; speed <= 1; ++speed) {
+        gbb_instance *m = NULL;
+        REQUIRE(policy_fixture_create(&m, 0x80u, 0u, 0, 0, speed, 0u, 0u, 0u, 16u) == 0);
+        const uint64_t start = m->time_half_dots;
+        gbb_run_result start_block = gbb_run(m, (40u >> speed), NULL, 0u);
+        REQUIRE(start_block.consumed_half_dots == (40u >> speed));
+        REQUIRE(m->hdma.pending_hblank && hdma_admit_block(m));
+        if (flip && speed == 0) m->hdma.byte_phase = 1u;
+        for (unsigned byte = 0u; byte < 16u; ++byte) {
+            const uint64_t expected = start + (40u >> speed) + 4u * (byte + 1u);
+            while (m->time_half_dots < expected) {
+                gbb_run_result tick = gbb_run(m, 1u, NULL, 0u);
+                REQUIRE(tick.consumed_half_dots == 1u);
+                if (m->time_half_dots < expected &&
+                    m->vram[0][byte] == m->wram[0][byte]) {
+                    fprintf(stderr, "timing policy: byte %u committed early\n", byte);
+                    gbb_destroy(m);
+                    return 1;
+                }
+            }
+            if (m->vram[0][byte] != m->wram[0][byte]) {
+                fprintf(stderr,
+                    "timing policy: byte %u expected commit at +%llu half-dots\n",
+                    byte, (unsigned long long)(expected - start));
+                gbb_destroy(m);
+                return 1;
+            }
+        }
+        REQUIRE(m->time_half_dots - start == (40u >> speed) + 64u);
+        gbb_destroy(m);
+    }
+    puts("timing sensitivity offsets: +/-1, +/-2, +/-4, +/-8 half-dots; exact byte timestamps checked; silicon window UNKNOWN");
+    return 0;
+}
+
 int main(int argc, char **argv) {
-    if (argc != 2) return 2;
+    if (argc < 2 || argc > 3) return 2;
     int rc;
     if (strcmp(argv[1], "ld_sp") == 0) rc = test_ld_sp();
     else if (strcmp(argv[1], "cb") == 0) rc = test_cb();
     else if (strcmp(argv[1], "controls") == 0) rc = test_controls();
     else if (strcmp(argv[1], "partition") == 0) rc = test_partition();
     else if (strcmp(argv[1], "outputs") == 0) rc = test_outputs();
+    else if (strcmp(argv[1], "state_matrix") == 0)
+        rc = test_state_matrix(argc == 3 && strcmp(argv[2], "--flip-cancel") == 0);
+    else if (strcmp(argv[1], "trigger_matrix") == 0) rc = test_trigger_matrix();
+    else if (strcmp(argv[1], "trigger_controls") == 0) rc = test_trigger_controls();
+    else if (strcmp(argv[1], "trigger_flip") == 0) rc = test_trigger_flip();
+    else if (strcmp(argv[1], "timing_policy") == 0) rc = test_timing_policy(0);
+    else if (strcmp(argv[1], "timing_flip") == 0) rc = test_timing_policy(1);
     else return 2;
     if (rc == 0) printf("cgb-hdma %s pass\n", argv[1]);
     return rc;
