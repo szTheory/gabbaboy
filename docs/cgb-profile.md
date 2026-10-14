@@ -536,6 +536,52 @@ LCD/CPU alignment (`expected-failure:ds-lcd-cpu-alignment`); CGB mode-3 length
 (`expected-failure:speed-switch-hdma-hblank-across-stall`, Phase 13); and the STOP/OAM bug on a
 speed switch (`expected-failure:speed-switch-stop-oam-bug`, Phase 14).
 
+<!-- cgb-speed-dispositions-begin -->
+| suite | case | disposition | reason | owner phase | pinned_by |
+|-------|------|-------------|--------|-------------|-----------|
+| age-test-roms | spsw-div-cgbBCE | pass | - | 12 | age_spsw_div_cgbBCE |
+| age-test-roms | spsw-tima-cgbE | expected-failure | expected-failure:cgb-e-div-reset-immediate-increment-delay | 12 | age_spsw_tima_cgbE |
+| age-test-roms | spsw-tima-cgbBC | expected-failure | expected-failure:cgb-e-div-reset-immediate-increment-delay | 12 | age_spsw_tima_cgbBC |
+| age-test-roms | spsw-stop-prefetch-cgbBCE | pass | - | 12 | age_spsw_stop_prefetch_cgbBCE |
+| age-test-roms | spsw-interrupts-cgbE | expected-failure | expected-failure:cgb-e-div-reset-immediate-increment-delay | 12 | age_spsw_interrupts_cgbE |
+| age-test-roms | spsw-mode0-cgbBCE | expected-failure | expected-failure:cgb-mode3-length | 14 | age_spsw_mode0_cgbBCE |
+| age-test-roms | spsw-ch2-lc-delay-cgbBCE | expected-failure | expected-failure:apu-lc-delay-after-switch | 14 | age_spsw_ch2_lc_delay_cgbBCE |
+| age-test-roms | stat-mode-ds-cgbBCE | expected-failure | expected-failure:cgb-mode3-length | 14 | age_stat_mode_ds_cgbBCE |
+| age-test-roms | stat-mode-cgbE | expected-failure | expected-failure:cgb-mode3-length | 14 | age_stat_mode_cgbE |
+| age-test-roms | stat-mode-sprites-ds-cgbBCE | expected-failure | expected-failure:cgb-mode3-length | 14 | age_stat_mode_sprites_ds_cgbBCE |
+| age-test-roms | stat-mode-sprites-dmgC-cgbBCE | expected-failure | expected-failure:cgb-mode3-length | 14 | age_stat_mode_sprites_dmgC_cgbBCE |
+| age-test-roms | stat-mode-window-ds-cgbBCE | expected-failure | expected-failure:cgb-mode3-length | 14 | age_stat_mode_window_ds_cgbBCE |
+| age-test-roms | stat-mode-window-cgbBCE | expected-failure | expected-failure:cgb-mode3-length | 14 | age_stat_mode_window_cgbBCE |
+| age-test-roms | spsw-interrupts-cgbBC | digest-only | not-vendored | 12 | - |
+| gabbaboy-model | speed-switch-stall-direction-asymmetry | expected-failure | expected-failure:speed-switch-stall-direction-asymmetry | 12 | cgb_speed_stall_length |
+| gabbaboy-model | speed-switch-pause-ppu-output | expected-failure | expected-failure:speed-switch-pause-ppu-output | 12 | cgb_speed_xfail_pause_ppu_output |
+| gabbaboy-model | speed-switch-odd-mode-alignment | expected-failure | expected-failure:speed-switch-odd-mode-alignment | 12 | cgb_speed_realign |
+| gabbaboy-model | apu-lc-delay-after-switch | expected-failure | expected-failure:apu-lc-delay-after-switch | 14 | age_spsw_ch2_lc_delay_cgbBCE |
+| gabbaboy-model | cgb-dma-restart-oracle-only | expected-failure | expected-failure:cgb-dma-restart-oracle-only | 12 | cgb_speed_xfail_dma_restart |
+| gabbaboy-model | cgb-e-div-reset-immediate-increment-delay-tima | expected-failure | expected-failure:cgb-e-div-reset-immediate-increment-delay | 12 | age_spsw_tima_cgbE |
+| gabbaboy-model | cgb-e-div-reset-immediate-increment-delay-interrupts | expected-failure | expected-failure:cgb-e-div-reset-immediate-increment-delay | 12 | age_spsw_interrupts_cgbE |
+| gabbaboy-model | unarmed-stop-held-button | expected-failure | expected-failure:unarmed-stop-held-button | 12 | cgb_speed_dmg_unarmed_unchanged |
+| gabbaboy-model | speed-switch-hdma-hblank-across-stall | expected-failure | expected-failure:speed-switch-hdma-hblank-across-stall | 13 | cgb_speed_xfail_hdma_fails_closed |
+| gabbaboy-model | speed-switch-stop-oam-bug | expected-failure | expected-failure:speed-switch-stop-oam-bug | 14 | cgb_speed_xfail_stop_oam_unchanged |
+| gabbaboy-model | ds-lcd-cpu-alignment | expected-failure | expected-failure:ds-lcd-cpu-alignment | 14 | age_spsw_mode0_cgbBCE |
+| gabbaboy-model | cgb-mode3-length | expected-failure | expected-failure:cgb-mode3-length | 14 | age_stat_mode_cgbE |
+| gabbaboy-model | speed-switch-held-button-oracle-only | expected-failure | expected-failure:speed-switch-held-button-oracle-only | 12 | cgb_speed_stop_cases |
+| gabbaboy-model | speed-switch-pending-irq-oracle-only | expected-failure | expected-failure:speed-switch-pending-irq-oracle-only | 12 | cgb_speed_stop_cases |
+| gabbaboy-model | speed-switch-wake-oracle-only | expected-failure | expected-failure:speed-switch-wake-oracle-only | 12 | cgb_speed_wake_ime_off |
+| gabbaboy-model | cgb-separate-buses | expected-failure | expected-failure:cgb-separate-buses | 11 | banking_bus_conflict_cgb_pin |
+| samesuite | key1-apu-aggregate | expected-unsupported | pcm-registers-unbuilt | 14 | - |
+| gambatte | speedchange | not-admitted | gpl-2.0-cgb-c-results | 12 | - |
+| not-applicable | mooneye | not-applicable | no-applicable-cgb-speed-switch-tests | 12 | - |
+| not-applicable | blargg | not-applicable | no-applicable-cgb-speed-switch-tests | 12 | - |
+| not-applicable | acid2 | not-applicable | no-applicable-cgb-speed-switch-tests | 12 | - |
+<!-- cgb-speed-dispositions-end -->
+
+AGE rows cover the 13 admitted ROMs listed in `fixtures/age/manifest.json`; `spsw-interrupts-cgbBC` remains source-digest-only and is not vendored. The Phase 11 dispositions retain `m3-bg-*` as `vendored: false`.
+
+AGE rows cover the 13 admitted ROMs listed in `fixtures/age/manifest.json`; `spsw-interrupts-cgbBC` remains source-digest-only and is not vendored. The Phase 11 dispositions retain `m3-bg-*` as `vendored: false`.
+
+AGE rows cover the 13 admitted ROMs listed in `fixtures/age/manifest.json`; `spsw-interrupts-cgbBC` remains source-digest-only and is not vendored. The Phase 11 dispositions retain `m3-bg-*` as `vendored: false`.
+
 ### IE bits 5-7
 
 On the CGB profile (both modes) IE stores and reads back all 8 bits. On the DMG profile IE keeps

@@ -22,7 +22,8 @@
           "decision": "D-19",
           "signature_sha256": "",
           "row_mask": "",
-          "flip_rule": "fails if any expected row stops passing"
+          "flip_rule": "fails if any expected row stops passing",
+          "pinned_by": "age_spsw_div_cgbBCE"
         },
         {
           "case": "spsw-tima-cgbE",
@@ -60,7 +61,8 @@
           "decision": "D-19",
           "signature_sha256": "",
           "row_mask": "",
-          "flip_rule": "fails if any expected row stops passing"
+          "flip_rule": "fails if any expected row stops passing",
+          "pinned_by": "age_spsw_stop_prefetch_cgbBCE"
         },
         {
           "case": "spsw-interrupts-cgbE",
@@ -178,6 +180,17 @@
           "row_mask": "0000",
           "flip_rule": "fails until promoted if the signature changes or this ROM passes",
           "pinned_by": "age_stat_mode_window_cgbBCE"
+        },
+        {
+          "case": "spsw-interrupts-cgbBC",
+          "upstream_path": "src/speed-switch/caution/spsw-interrupts-cgbBC.asm",
+          "disposition": "digest-only",
+          "reason": "not-vendored",
+          "source_sha256": "17840618d763d707fb72fa09ef1029ca0e6127d4228b54762a2c366059b3d9d1",
+          "owner_phase": 12,
+          "decision": "D-19",
+          "vendored": false,
+          "flip_rule": "remains source-digest-only; never add fixture bytes without a renewed rights and scope decision"
         }
       ]
     },
@@ -187,14 +200,232 @@
       "vendored": false,
       "rows": [
         {
+          "case": "speed-switch-stall-direction-asymmetry",
+          "disposition": "expected-failure",
+          "reason": "expected-failure:speed-switch-stall-direction-asymmetry",
+          "reason_detail": "Direction-specific real-time stall asymmetry lacks an independent hardware oracle.",
+          "owner_phase": 12,
+          "decision": "D-05",
+          "pinned_by": "cgb_speed_stall_length",
+          "flip_rule": "fails until hardware evidence distinguishes normal and double speed"
+        },
+        {
           "case": "speed-switch-pause-ppu-output",
           "disposition": "expected-failure",
           "reason": "expected-failure:speed-switch-pause-ppu-output",
-          "reason_detail": "The committed CGB model draws PPU output during the speed-switch pause; Pan Docs no-output behavior remains unresolved.",
+          "reason_detail": "Current RGB555 frame rendering during the speed-switch stall matches the same-time no-switch guest.",
           "owner_phase": 12,
           "decision": "D-07",
           "pinned_by": "cgb_speed_xfail_pause_ppu_output",
-          "flip_rule": "fails until promoted if the pause output changes or the hardware behavior is resolved"
+          "flip_rule": "fails until hardware behavior is resolved and the pause output is corrected"
+        },
+        {
+          "case": "speed-switch-odd-mode-alignment",
+          "disposition": "expected-failure",
+          "reason": "expected-failure:speed-switch-odd-mode-alignment",
+          "reason_detail": "Odd PPU-mode phase behavior remains outside the deterministic realignment policy.",
+          "owner_phase": 12,
+          "decision": "D-09",
+          "pinned_by": "cgb_speed_realign",
+          "flip_rule": "fails until odd-mode phase is independently resolved"
+        },
+        {
+          "case": "apu-lc-delay-after-switch",
+          "disposition": "expected-failure",
+          "reason": "expected-failure:apu-lc-delay-after-switch",
+          "reason_detail": "The one-M-cycle APU length-counter delay after a speed switch is deferred to Phase 14.",
+          "owner_phase": 14,
+          "decision": "D-11",
+          "pinned_by": "age_spsw_ch2_lc_delay_cgbBCE",
+          "flip_rule": "fails until the APU edge is modeled and the AGE row is promoted",
+          "signature_sha256": "63c6abeb8c7db84507bcacaaafe564213ed126e257a7125fe729838dae55c698"
+        },
+        {
+          "case": "cgb-dma-restart-oracle-only",
+          "disposition": "expected-failure",
+          "reason": "expected-failure:cgb-dma-restart-oracle-only",
+          "reason_detail": "DMA restart timing is pinned to current CGB behavior but lacks a CGB-specific hardware oracle.",
+          "owner_phase": 12,
+          "decision": "D-17",
+          "pinned_by": "cgb_speed_xfail_dma_restart",
+          "flip_rule": "fails until a CGB hardware result replaces the software-only pin"
+        },
+        {
+          "case": "cgb-e-div-reset-immediate-increment-delay-tima",
+          "disposition": "expected-failure",
+          "reason": "expected-failure:cgb-e-div-reset-immediate-increment-delay",
+          "reason_detail": "CGB-E immediate TIMA increment after DIV reset: rows 2, 6 and 7 remain the recorded contingency.",
+          "owner_phase": 12,
+          "decision": "D-35",
+          "pinned_by": "age_spsw_tima_cgbE",
+          "flip_rule": "fails until the CGB-E edge behavior is modeled and the AGE signature is promoted",
+          "signature_sha256": "342c237168425867d882c1152a9a5ffd5b02d984c8b97361fd8d8b86e400932f"
+        },
+        {
+          "case": "cgb-e-div-reset-immediate-increment-delay-interrupts",
+          "disposition": "expected-failure",
+          "reason": "expected-failure:cgb-e-div-reset-immediate-increment-delay",
+          "reason_detail": "The CGB-E interrupt ROM retains its measured OFS_B dispatch and DIV/TIMA signature.",
+          "owner_phase": 12,
+          "decision": "D-35",
+          "pinned_by": "age_spsw_interrupts_cgbE",
+          "flip_rule": "fails until the CGB-E dispatch offset is modeled and the AGE signature is promoted",
+          "signature_sha256": "4f487df317ace108f9eb0e154ff5558fc5e1993c3432d50b13f007f3adaacd66"
+        },
+        {
+          "case": "unarmed-stop-held-button",
+          "disposition": "expected-failure",
+          "reason": "expected-failure:unarmed-stop-held-button",
+          "reason_detail": "The unarmed STOP held-button distinction has no independent CGB hardware oracle.",
+          "owner_phase": 12,
+          "decision": "D-36",
+          "pinned_by": "cgb_speed_dmg_unarmed_unchanged",
+          "flip_rule": "fails until the held-button path is independently resolved"
+        },
+        {
+          "case": "speed-switch-hdma-hblank-across-stall",
+          "disposition": "expected-failure",
+          "reason": "expected-failure:speed-switch-hdma-hblank-across-stall",
+          "reason_detail": "HDMA5 remains unsupported and fails closed when addressed after a speed switch.",
+          "owner_phase": 13,
+          "decision": "D-09",
+          "pinned_by": "cgb_speed_xfail_hdma_fails_closed",
+          "flip_rule": "fails until Phase 13 implements and verifies HDMA across the switch stall"
+        },
+        {
+          "case": "speed-switch-stop-oam-bug",
+          "disposition": "expected-failure",
+          "reason": "expected-failure:speed-switch-stop-oam-bug",
+          "reason_detail": "The speed-switch STOP/OAM interaction remains unresolved; this pin records the current unchanged OAM.",
+          "owner_phase": 14,
+          "decision": "D-09",
+          "pinned_by": "cgb_speed_xfail_stop_oam_unchanged",
+          "flip_rule": "fails until Phase 14 resolves the STOP/OAM hardware behavior"
+        },
+        {
+          "case": "ds-lcd-cpu-alignment",
+          "disposition": "expected-failure",
+          "reason": "expected-failure:ds-lcd-cpu-alignment",
+          "reason_detail": "Double-speed LCD/CPU alignment observations remain assigned to Phase 14.",
+          "owner_phase": 14,
+          "decision": "D-09",
+          "pinned_by": "age_spsw_mode0_cgbBCE",
+          "flip_rule": "fails until the LCD/CPU phase is modeled and the AGE signature is promoted",
+          "signature_sha256": "d2410ea8e30311f12de296781986f7e12edd0b87b729033d879cef5e2f133e82"
+        },
+        {
+          "case": "cgb-mode3-length",
+          "disposition": "expected-failure",
+          "reason": "expected-failure:cgb-mode3-length",
+          "reason_detail": "CGB mode-3 length and LY timing remain assigned to Phase 14.",
+          "owner_phase": 14,
+          "decision": "D-09",
+          "pinned_by": "age_stat_mode_cgbE",
+          "flip_rule": "fails until mode-3 timing is implemented and the AGE control is promoted",
+          "signature_sha256": "529c3f4d3b1571437d88b1c4806ada4dfa786b4740751b3128628df6abe8ffe9"
+        },
+        {
+          "case": "speed-switch-held-button-oracle-only",
+          "disposition": "expected-failure",
+          "reason": "expected-failure:speed-switch-held-button-oracle-only",
+          "reason_detail": "Held selected joypad line STOP behavior follows the SameBoy-qualified decision table only.",
+          "owner_phase": 12,
+          "decision": "D-02",
+          "pinned_by": "cgb_speed_stop_cases",
+          "flip_rule": "fails until an independent hardware pin resolves the held-button case"
+        },
+        {
+          "case": "speed-switch-pending-irq-oracle-only",
+          "disposition": "expected-failure",
+          "reason": "expected-failure:speed-switch-pending-irq-oracle-only",
+          "reason_detail": "Pending-IRQ STOP width and speed-switch interpretation remains SameBoy-qualified.",
+          "owner_phase": 12,
+          "decision": "D-02",
+          "pinned_by": "cgb_speed_stop_cases",
+          "flip_rule": "fails until an independent hardware pin resolves the pending-IRQ case"
+        },
+        {
+          "case": "speed-switch-wake-oracle-only",
+          "disposition": "expected-failure",
+          "reason": "expected-failure:speed-switch-wake-oracle-only",
+          "reason_detail": "Wake behavior beyond the author-attested IME-on AGE row remains SameBoy-qualified.",
+          "owner_phase": 12,
+          "decision": "D-08",
+          "pinned_by": "cgb_speed_wake_ime_off",
+          "flip_rule": "fails until wake behavior has broader independent hardware coverage"
+        },
+        {
+          "case": "cgb-separate-buses",
+          "disposition": "expected-failure",
+          "reason": "expected-failure:cgb-separate-buses",
+          "reason_detail": "CGB separate-bus OAM-DMA conflicts remain an evidence-qualified Phase 11 behavior.",
+          "owner_phase": 11,
+          "decision": "D-17",
+          "pinned_by": "banking_bus_conflict_cgb_pin",
+          "flip_rule": "fails until the CGB OAM-DMA bus conflict is independently resolved"
+        }
+      ]
+    },
+    {
+      "suite": "samesuite",
+      "repository": "SameSuite KEY1/APU tests",
+      "vendored": false,
+      "rows": [
+        {
+          "case": "key1-apu-aggregate",
+          "disposition": "expected-unsupported",
+          "reason": "pcm-registers-unbuilt",
+          "reason_detail": "Aggregate suite remains unsupported until Phase 14 builds PCM register support; no ROM is vendored.",
+          "owner_phase": 14,
+          "decision": "D-23",
+          "flip_rule": "reassess after PCM register support is implemented"
+        }
+      ]
+    },
+    {
+      "suite": "gambatte",
+      "repository": "Gambatte speedchange",
+      "vendored": false,
+      "license": "GPL-2.0",
+      "rows": [
+        {
+          "case": "speedchange",
+          "disposition": "not-admitted",
+          "reason": "gpl-2.0-cgb-c-results",
+          "reason_detail": "CGB-C results were read for research only; no bytes or derived artifacts are committed.",
+          "owner_phase": 12,
+          "decision": "D-23",
+          "flip_rule": "requires an explicit license and fixture-admission review"
+        }
+      ]
+    },
+    {
+      "suite": "not-applicable",
+      "vendored": false,
+      "rows": [
+        {
+          "case": "mooneye",
+          "disposition": "not-applicable",
+          "reason": "no-applicable-cgb-speed-switch-tests",
+          "owner_phase": 12,
+          "decision": "D-23",
+          "flip_rule": "reassess only if a relevant suite is identified"
+        },
+        {
+          "case": "blargg",
+          "disposition": "not-applicable",
+          "reason": "no-applicable-cgb-speed-switch-tests",
+          "owner_phase": 12,
+          "decision": "D-23",
+          "flip_rule": "reassess only if a relevant suite is identified"
+        },
+        {
+          "case": "acid2",
+          "disposition": "not-applicable",
+          "reason": "no-applicable-cgb-speed-switch-tests",
+          "owner_phase": 12,
+          "decision": "D-23",
+          "flip_rule": "reassess only if a relevant suite is identified"
         }
       ]
     }

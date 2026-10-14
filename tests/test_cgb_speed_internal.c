@@ -357,6 +357,124 @@ static int cgb_speed_xfail_pause_ppu_output(void) {
     return 0;
 }
 
+static int cgb_speed_xfail_dma_restart(void) {
+    uint8_t rom[32768];
+    make_internal_rom(rom, NULL, 0u);
+    gbb_instance *machine = NULL;
+    REQUIRE(create_internal_machine(rom, &machine) == 0);
+    machine->double_speed = 1u;
+    machine->lcdc = 0u;
+    machine->wram_bank = 1u;
+    for (unsigned i = 0u; i < 256u; ++i) {
+        machine->wram[0][i] = (uint8_t)(i ^ 0x39u);
+        machine->wram[1][i] = (uint8_t)(0xA5u + i);
+    }
+
+    const uint64_t first_start = machine->time_half_dots;
+    bus_write(machine, 0xFF46u, 0xC0u, first_start);
+    dma_start(machine);
+    advance_devices_to(machine, first_start + 160u);
+    const unsigned index_before_restart = machine->dma_index;
+    const uint64_t restart_at = machine->time_half_dots;
+    bus_write(machine, 0xFF46u, 0xD0u, restart_at);
+    dma_start(machine);
+    const unsigned restart_index = machine->dma_index;
+
+    uint64_t completion_at = 0u;
+    const uint64_t deadline = restart_at + 640u;
+    for (uint64_t now = machine->time_half_dots + 1u; now <= deadline; ++now) {
+        advance_devices_to(machine, now);
+        if (!machine->dma_active) {
+            completion_at = now;
+            break;
+        }
+    }
+    uint64_t oam_digest = FNV_OFFSET;
+    hash_bytes(&oam_digest, machine->oam, sizeof(machine->oam));
+    const uint64_t completion_delta = completion_at == 0u ? UINT64_MAX : completion_at - restart_at;
+    const uint64_t expected_oam_digest = UINT64_C(0x71716b6bbfb00cc5);
+    if (index_before_restart != 40u || restart_index != 0u || completion_delta != 640u ||
+        machine->dma_index != GBB_OAM_BYTES || oam_digest != expected_oam_digest) {
+        fprintf(stderr,
+            "observed dma before_restart=%u restart_index=%u completion_delta=%llu final_index=%u oam_fnv=%016llx\n",
+            index_before_restart, restart_index, (unsigned long long)completion_delta,
+            machine->dma_index, (unsigned long long)oam_digest);
+        gbb_destroy(machine);
+        return 1;
+    }
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int cgb_speed_xfail_hdma_fails_closed(int write_ff54) {
+    uint8_t rom[32768];
+    uint8_t program[] = {
+        0x3Eu, 0x01u, 0xE0u, 0x4Du, 0x10u, 0x00u,
+        0x3Eu, 0x00u, 0xE0u, 0x55u, 0x18u, 0xFEu
+    };
+    if (write_ff54) program[9] = 0x54u;
+    make_internal_rom(rom, program, sizeof(program));
+    gbb_instance *machine = NULL;
+    REQUIRE(create_internal_machine(rom, &machine) == 0);
+    machine->joypad_select = 0x30u;
+    gbb_run_result run = gbb_run(machine, 200000u, NULL, 0u);
+    if (write_ff54) {
+        if (run.reason != GBB_STOP_UNSUPPORTED_BUS ||
+            gbb_test_last_unsupported_address(machine) != 0xFF55u) {
+            fprintf(stderr, "hdma-targeted-negative accepted FF54 without the FF55 stop\n");
+            gbb_destroy(machine);
+            return 1;
+        }
+        gbb_destroy(machine);
+        return 0;
+    }
+    if (run.reason != GBB_STOP_UNSUPPORTED_BUS || machine->double_speed != 1u ||
+        gbb_test_last_unsupported_address(machine) != 0xFF55u ||
+        machine->cpu_stall_kind != GBB_STALL_NONE || machine->cpu_stall_half_dots != 0u) {
+        fprintf(stderr, "hdma-fails-closed mismatch reason=%d address=%04x speed=%u stall=%u\n",
+            run.reason, gbb_test_last_unsupported_address(machine), machine->double_speed,
+            machine->cpu_stall_kind);
+        gbb_destroy(machine);
+        return 1;
+    }
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int cgb_speed_xfail_stop_oam_unchanged(int poke_oam) {
+    const uint8_t stop[] = {0x10u, 0x00u};
+    uint8_t rom[32768];
+    make_internal_rom(rom, stop, sizeof(stop));
+    gbb_instance *machine = NULL;
+    REQUIRE(create_internal_machine(rom, &machine) == 0);
+    machine->pc = 0x100u;
+    machine->key1_armed = 1u;
+    machine->joypad_select = 0x30u;
+    machine->lcdc = 0x91u;
+    machine->ppu_mode = 2u;
+    machine->ppu_dot = 0u;
+    machine->ppu_half_phase = 0u;
+    machine->ly = 0u;
+    machine->stat = 0x86u;
+    for (unsigned i = 0u; i < GBB_OAM_BYTES; ++i)
+        machine->oam[i] = (uint8_t)(i ^ 0x6Du);
+    uint8_t before[GBB_OAM_BYTES];
+    memcpy(before, machine->oam, sizeof(before));
+
+    gbb_run_result run = gbb_run(machine, GBB_SPEED_SWITCH_STALL_T + 256u,
+                                 NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && machine->double_speed == 1u &&
+            machine->cpu_stall_kind == GBB_STALL_NONE);
+    if (poke_oam) machine->oam[17] ^= 1u;
+    if (memcmp(before, machine->oam, sizeof(before)) != 0) {
+        fprintf(stderr, "OAM changed across the speed-switch STOP\n");
+        gbb_destroy(machine);
+        return 1;
+    }
+    gbb_destroy(machine);
+    return 0;
+}
+
 /* The guest configures IE, IF, TIMA/TMA/TAC, waits for its own timer IRQ,
  * disables the timer, arms KEY1, and executes STOP. The following INC B is
  * the one-byte case-3 marker. EI retires at STOP, so the second variant must
@@ -1485,6 +1603,19 @@ int main(int argc, char **argv) {
         int rc = cgb_speed_xfail_pause_ppu_output();
         if (rc == 0) puts("cgb-speed-internal cgb_speed_xfail_pause_ppu_output pass");
         return rc;
+    }
+    if (strcmp(argv[1], "cgb_speed_xfail_dma_restart") == 0) {
+        return cgb_speed_xfail_dma_restart();
+    }
+    if (strcmp(argv[1], "cgb_speed_xfail_hdma_fails_closed") == 0) {
+        const int write_ff54 = argc == 3 && strcmp(argv[2], "--write-ff54") == 0;
+        if (argc > 3 || (argc == 3 && !write_ff54)) return 2;
+        return cgb_speed_xfail_hdma_fails_closed(write_ff54);
+    }
+    if (strcmp(argv[1], "cgb_speed_xfail_stop_oam_unchanged") == 0) {
+        const int poke_oam = argc == 3 && strcmp(argv[2], "--poke-oam") == 0;
+        if (argc > 3 || (argc == 3 && !poke_oam)) return 2;
+        return cgb_speed_xfail_stop_oam_unchanged(poke_oam);
     }
     if (strcmp(argv[1], "cgb_speed_stop_cases") == 0) {
         int rc = cgb_speed_stop_cases();

@@ -2638,6 +2638,31 @@ add_test(NAME cgb_speed_xfail_pause_ppu_output
 set_tests_properties(cgb_speed_xfail_pause_ppu_output PROPERTIES TIMEOUT 60)
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 7 xfail_ppu
   cgb_speed_xfail_pause_ppu_output "frame differs")
+add_test(NAME cgb_speed_xfail_dma_restart
+  COMMAND test_cgb_speed_internal_p12 cgb_speed_xfail_dma_restart)
+set_tests_properties(cgb_speed_xfail_dma_restart PROPERTIES TIMEOUT 60)
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 14 xfail_dma_restart
+  cgb_speed_xfail_dma_restart "observed dma")
+add_test(NAME cgb_speed_xfail_hdma_fails_closed
+  COMMAND test_cgb_speed_internal_p12 cgb_speed_xfail_hdma_fails_closed)
+set_tests_properties(cgb_speed_xfail_hdma_fails_closed PROPERTIES TIMEOUT 60)
+add_test(NAME cgb_speed_xfail_hdma_fails_closed_negative
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_speed_internal_p12>;cgb_speed_xfail_hdma_fails_closed;--write-ff54"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=hdma-targeted-negative"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(cgb_speed_xfail_hdma_fails_closed_negative PROPERTIES TIMEOUT 60)
+add_test(NAME cgb_speed_xfail_stop_oam_unchanged
+  COMMAND test_cgb_speed_internal_p12 cgb_speed_xfail_stop_oam_unchanged)
+set_tests_properties(cgb_speed_xfail_stop_oam_unchanged PROPERTIES TIMEOUT 60)
+add_test(NAME cgb_speed_xfail_stop_oam_unchanged_negative
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_speed_internal_p12>;cgb_speed_xfail_stop_oam_unchanged;--poke-oam"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=OAM changed"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(cgb_speed_xfail_stop_oam_unchanged_negative PROPERTIES TIMEOUT 60)
 set(GBB_SPEED_DISPOSITIONS_RECORD
   "${PROJECT_SOURCE_DIR}/tests/external/cgb-speed-dispositions.json")
 set(GBB_SPEED_DISPOSITIONS_VERIFIER
@@ -2666,6 +2691,25 @@ add_test(NAME cgb_speed_dispositions_pinned_by_missing
     "-DGBB_EXPECT_REGEX=disposition-mismatch pinned_by"
     -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
 set_tests_properties(cgb_speed_dispositions_pinned_by_missing PROPERTIES TIMEOUT 30)
+# Negative control: changing one documented reason in a configure-time copy must be rejected.
+set(gbb_speed_reason_anchor "\"reason\": \"expected-failure:speed-switch-pause-ppu-output\"")
+string(FIND "${gbb_speed_dispositions_record}" "${gbb_speed_reason_anchor}" gbb_speed_reason_at)
+string(FIND "${gbb_speed_dispositions_record}" "${gbb_speed_reason_anchor}" gbb_speed_reason_last REVERSE)
+if(gbb_speed_reason_at EQUAL -1 OR NOT gbb_speed_reason_at EQUAL gbb_speed_reason_last)
+  message(FATAL_ERROR "speed disposition reason mutation anchor must occur exactly once")
+endif()
+string(REPLACE "${gbb_speed_reason_anchor}"
+  "\"reason\": \"expected-failure:wrong-speed-switch-pause-reason\""
+  gbb_speed_dispositions_mutated "${gbb_speed_dispositions_record}")
+file(WRITE "${PROJECT_BINARY_DIR}/cgb-speed-dispositions/reason-mutated.json"
+  "${gbb_speed_dispositions_mutated}")
+add_test(NAME cgb_speed_dispositions_mutated
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_SPEED_DISPOSITIONS_VERIFIER};--record;${PROJECT_BINARY_DIR}/cgb-speed-dispositions/reason-mutated.json"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=disposition-mismatch"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(cgb_speed_dispositions_mutated PROPERTIES TIMEOUT 30)
 # --- Phase 12 plan 12-17 end ---
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 5 stall_sets_stopped
   cgb_speed_tracer_switch "stopped|GBB_STOP_STOPPED")
@@ -2981,6 +3025,9 @@ foreach(GBB_AGE_DISPOSITION_SUITE_INDEX RANGE 0 ${GBB_AGE_DISPOSITION_SUITE_COUN
           suites ${GBB_AGE_DISPOSITION_SUITE_INDEX} rows ${GBB_AGE_DISPOSITION_ROW_INDEX} case)
         string(JSON GBB_AGE_DISPOSITION GET "${GBB_AGE_DISPOSITIONS_JSON}"
           suites ${GBB_AGE_DISPOSITION_SUITE_INDEX} rows ${GBB_AGE_DISPOSITION_ROW_INDEX} disposition)
+        if(GBB_AGE_DISPOSITION STREQUAL "digest-only")
+          continue()
+        endif()
         string(JSON GBB_AGE_SIGNATURE GET "${GBB_AGE_DISPOSITIONS_JSON}"
           suites ${GBB_AGE_DISPOSITION_SUITE_INDEX} rows ${GBB_AGE_DISPOSITION_ROW_INDEX} signature_sha256)
         string(JSON GBB_AGE_ROW_MASK GET "${GBB_AGE_DISPOSITIONS_JSON}"
