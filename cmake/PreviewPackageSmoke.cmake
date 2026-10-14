@@ -78,6 +78,20 @@ if(NOT scan_result EQUAL 0 OR NOT "${scan_output}${scan_error}" MATCHES "files="
 endif()
 execute_process(
   COMMAND "${GBB_CMAKE_COMMAND}"
+    "-DGBB_SCAN_DIR=${extracted_prefix}"
+    "-DGBB_FORBIDDEN_MANIFESTS=${source_dir}/fixtures/samesuite/manifest.json|${source_dir}/fixtures/magentests/manifest.json"
+    -DGBB_FORBIDDEN_LABEL=cgb-hdma
+    -DGBB_FORBIDDEN_PATH_LABELS=samesuite|magentests|mealybug
+    -DGBB_EXPECT_FIXTURE_DIRS=tracer|visible-demo|mbc1-continuation
+    -P "${source_dir}/cmake/ScanForbiddenFixtures.cmake"
+  RESULT_VARIABLE cgb_hdma_scan_result
+  OUTPUT_VARIABLE cgb_hdma_scan_output ERROR_VARIABLE cgb_hdma_scan_error)
+if(NOT cgb_hdma_scan_result EQUAL 0 OR
+   NOT "${cgb_hdma_scan_output}${cgb_hdma_scan_error}" MATCHES "cgb-hdma absent from scanned tree files=")
+  message(FATAL_ERROR "Extracted package CGB-HDMA forbidden-fixture scan failed (${cgb_hdma_scan_result}): ${cgb_hdma_scan_output}${cgb_hdma_scan_error}")
+endif()
+execute_process(
+  COMMAND "${GBB_CMAKE_COMMAND}"
     "-DGBB_INSTALL_PREFIX=${extracted_prefix}"
     "-DGBB_EXECUTABLE_SUFFIX=${GBB_EXECUTABLE_SUFFIX}"
     "-DGBB_RUNNER_WORKDIR=${runner_workdir}"

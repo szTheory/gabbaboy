@@ -470,6 +470,7 @@ magentests_not_installed_selftest
 cgb_hdma_not_installed
 cgb_hdma_not_installed_selftest
 cgb_hdma_not_installed_samesuite_selftest
+cgb_hdma_not_installed_directory_selftest
 no_host_clock
 no_host_clock_selftest
 no_host_clock_symbol_selftest

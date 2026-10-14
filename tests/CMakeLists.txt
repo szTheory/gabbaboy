@@ -1,4 +1,14 @@
-set(GBB_TEST_INSTALL_PREFIX "" CACHE PATH "Relocated install prefix used by installed-package smoke tests")
+set(GBB_TEST_INSTALL_PREFIX "" CACHE STRING "Relocated install prefix used by installed-package smoke tests")
+# PATH cache entries are normalized against CMake's process cwd before project code sees them.
+set_property(CACHE GBB_TEST_INSTALL_PREFIX PROPERTY TYPE STRING)
+# Resolve relative prefixes against the build tree before optional tests are filtered and
+# ExpectedTests.cmake compares the complete registered inventory.
+if(GBB_TEST_INSTALL_PREFIX)
+  set(GBB_TEST_INSTALL_PREFIX_INPUT "${GBB_TEST_INSTALL_PREFIX}")
+  get_filename_component(GBB_TEST_INSTALL_PREFIX_ABSOLUTE
+    "${GBB_TEST_INSTALL_PREFIX_INPUT}" ABSOLUTE BASE_DIR "${CMAKE_BINARY_DIR}")
+  set(GBB_TEST_INSTALL_PREFIX "${GBB_TEST_INSTALL_PREFIX_ABSOLUTE}")
+endif()
 include(${PROJECT_SOURCE_DIR}/cmake/ExpectedTests.cmake)
 # Internal core test-seam header (src/core/gabbaboy_test.h). Directory-scoped so the mutant copies of
 # gabbaboy.c, which are compiled from the build tree, resolve the same include as the real core.
@@ -1505,12 +1515,15 @@ set(GBB_CGB_HDMA_SCAN_MANIFESTS
 set(GBB_CGB_HDMA_SCAN_PATH_LABELS "samesuite|magentests|mealybug")
 set(GBB_CGB_HDMA_SCAN_SELFTEST_SAMESUITE "${PROJECT_BINARY_DIR}/cgb-hdma-scan-samesuite-selftest")
 set(GBB_CGB_HDMA_SCAN_SELFTEST_MAGEN "${PROJECT_BINARY_DIR}/cgb-hdma-scan-magentests-selftest")
+set(GBB_CGB_HDMA_SCAN_SELFTEST_DIRECTORY "${PROJECT_BINARY_DIR}/cgb-hdma-scan-directory-selftest")
 file(MAKE_DIRECTORY "${GBB_CGB_HDMA_SCAN_SELFTEST_SAMESUITE}/share"
-  "${GBB_CGB_HDMA_SCAN_SELFTEST_MAGEN}/share")
+  "${GBB_CGB_HDMA_SCAN_SELFTEST_MAGEN}/share"
+  "${GBB_CGB_HDMA_SCAN_SELFTEST_DIRECTORY}/share/SameSuite")
 file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/samesuite/gbc_dma_cont.gb"
   "${GBB_CGB_HDMA_SCAN_SELFTEST_SAMESUITE}/share/renamed-payload.bin")
 file(COPY_FILE "${GBB_MAGENTESTS_DIR}/hblank_vram_dma.gbc"
   "${GBB_CGB_HDMA_SCAN_SELFTEST_MAGEN}/share/renamed-payload.bin")
+file(WRITE "${GBB_CGB_HDMA_SCAN_SELFTEST_DIRECTORY}/share/SameSuite/marker.txt" "marker\n")
 function(gbb_add_cgb_hdma_scan_test name code regex scan_dir baseline_manifest)
   set(command "${CMAKE_COMMAND}" "-DGBB_SCAN_DIR=${scan_dir}"
     "-DGBB_FORBIDDEN_MANIFEST=${baseline_manifest}"
@@ -1537,6 +1550,9 @@ gbb_add_cgb_hdma_scan_test(cgb_hdma_not_installed_selftest 1
 gbb_add_cgb_hdma_scan_test(cgb_hdma_not_installed_samesuite_selftest 1
   "cgb-hdma-installed: share/renamed-payload.bin" "${GBB_CGB_HDMA_SCAN_SELFTEST_SAMESUITE}"
   "${GBB_MAGENTESTS_DIR}/manifest.json")
+gbb_add_cgb_hdma_scan_test(cgb_hdma_not_installed_directory_selftest 1
+  "cgb-hdma-installed: share/SameSuite/marker.txt" "${GBB_CGB_HDMA_SCAN_SELFTEST_DIRECTORY}"
+  "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json")
 
 # EVID-02 baseline comparator self-tests (D-30, D-31, D-34). Each test runs cmake/VerifyDmgBaseline.cmake
 # on committed synthetic fixtures (or a generated variant of them) and asserts the exact exit code
