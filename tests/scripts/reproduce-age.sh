@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+# Rebuild manifest-listed AGE ROMs from their pinned source with digest-pinned RGBDS.
+set -euo pipefail
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+repo_root=$(cd "$script_dir/../.." && pwd -P)
+fixture="$repo_root/fixtures/age"
+upstream_url=https://github.com/c-sp/age-test-roms.git
+upstream_commit=1f5bc10e2cb60b86c19f8d0287ff78f410c4f639
+upstream_tree=2fece1a678edb18c1664efd7328a430a79c70be4
+mode=${1:---self-check}
+
+python_check() {
+  local check_mode=${1:-$mode}
+  python3 -I - "$repo_root" "$check_mode" "${2:-}" "${3:-}" "${4:-}" "$upstream_commit" "$upstream_tree" <<'PY'
+import hashlib
+import json
+import pathlib
+import re
+import subprocess
+import sys
+
+root = pathlib.Path(sys.argv[1])
+mode = sys.argv[2]
+rebuilt_dir = pathlib.Path(sys.argv[3]) if sys.argv[3] else None
+source_root = pathlib.Path(sys.argv[4]) if sys.argv[4] else None
+out = pathlib.Path(sys.argv[5]) if sys.argv[5] else None
+commit, tree = sys.argv[6:8]
+fixture = root / 'fixtures/age'
+manifest_path = fixture / 'manifest.json'
+
+def fail(message):
+    print('self-check=fail ' + message)
+    raise SystemExit(1)
+
+def error(message):
+    print('result=error ' + message)
+    raise SystemExit(2)
+
+try:
+    manifest = json.loads(manifest_path.read_text())
+    entries = manifest['fixtures']
+    sources = (fixture / 'SOURCES.md').read_text()
+except (OSError, KeyError, ValueError) as exc:
+    fail('manifest-or-sources-unreadable ' + str(exc))
+if not entries:
+    fail('manifest-has-no-fixtures')
+if commit not in sources or tree not in sources:
+    fail('SOURCES-pins-differ-from-script')
+if manifest.get('source', {}).get('commit') != commit or manifest.get('source', {}).get('tree') != tree:
+    fail('manifest-source-pins-differ-from-script')
+file_re = re.compile(r'^[A-Za-z0-9_-]+\.gb$')
+source_re = re.compile(r'^src/(speed-switch|speed-switch/caution|stat-mode|stat-mode-sprites|stat-mode-window)/[A-Za-z0-9_-]+\.asm$')
+rows = []
+for entry in entries:
+    name = entry.get('file', '')
+    source = entry.get('source_path', '')
+    digest = entry.get('sha256', '')
+    if not file_re.fullmatch(name):
+        fail('file-outside-allow-list')
+    if not source_re.fullmatch(source):
+        fail('source_path-outside-allow-list')
+    if not re.fullmatch(r'[0-9a-f]{64}', digest):
+        fail('invalid-sha256-' + name)
+    committed_path = fixture / name
+    try:
+        committed = committed_path.read_bytes()
+    except OSError:
+        fail('committed-file-missing-' + name)
+    if len(committed) != entry.get('size_bytes') or hashlib.sha256(committed).hexdigest() != digest:
+        fail('committed-digest-mismatch-' + name)
+    rows.append((entry, name, source))
+if mode == '--self-check':
+    print('self-check=pass')
+    raise SystemExit(0)
+if mode == '--compare-built':
+    if rebuilt_dir is None or not rebuilt_dir.is_dir():
+        error('rebuilt-directory-missing')
+    mismatch = False
+    for entry, name, _ in rows:
+        rebuilt_path = rebuilt_dir / name
+        if not rebuilt_path.is_file():
+            error('missing-rebuilt-file-' + name)
+        rebuilt = rebuilt_path.read_bytes()
+        committed = (fixture / name).read_bytes()
+        if rebuilt != committed:
+            mismatch = True
+            print('result=differs %s %s %s' % (name, hashlib.sha256(rebuilt).hexdigest(), hashlib.sha256(committed).hexdigest()))
+    if mismatch:
+        raise SystemExit(1)
+    print('result=byte-identical')
+    raise SystemExit(0)
+
+if mode != '--compare':
+    error('usage: reproduce-age.sh [--self-check|--compare|--compare-built DIR]')
+
+build = manifest.get('build', {})
+if build.get('version') != '1.0.1':
+    error('manifest-does-not-pin-rgbds-1.0.1')
+archive_path = pathlib.Path(__import__('os').environ['GBB_RGBDS_ARCHIVE']) if __import__('os').environ.get('GBB_RGBDS_ARCHIVE') else None
+if archive_path:
+    if not archive_path.is_file():
+        error('GBB_RGBDS_ARCHIVE-not-a-file')
+    archive_digest = hashlib.sha256(archive_path.read_bytes()).hexdigest()
+    if archive_digest not in (build.get('archive_sha256'), build.get('ci_archive_sha256')):
+        error('RGBDS-archive-digest-not-pinned')
+    supplied = __import__('os').environ.get('GBB_RGBDS_ARCHIVE_SHA256')
+    if supplied and supplied != archive_digest:
+        error('RGBDS-archive-digest-differs-from-supplied-pin')
+for tool in ('rgbasm', 'rgblink', 'rgbfix'):
+    try:
+        version = subprocess.run([tool, '--version'], check=True, capture_output=True, text=True).stdout.splitlines()[0]
+    except (OSError, subprocess.CalledProcessError, IndexError) as exc:
+        error('RGBDS-tool-unavailable-' + tool + '-' + str(exc))
+    if version != tool + ' v1.0.1':
+        error('RGBDS-version-mismatch-' + tool + '-' + version)
+
+if mode == '--compare' and (source_root is None or out is None):
+    error('internal-source-or-output-path-missing')
+if mode == '--compare':
+    for entry, name, source in rows:
+        obj = out / (name + '.o')
+        rom = out / name
+        steps = [
+            ['rgbasm', '-Weverything', '-I', str(source_root / 'src'), '-I', str(source_root / 'src/_include'), '-o', str(obj), str(source_root / source)],
+            ['rgblink', '-t', '-n', str(out / (name + '.sym')), '-m', str(out / (name + '.map')), '-o', str(rom), str(obj)],
+            ['rgbfix', '-v', '-p', '255', str(rom)],
+        ]
+        for command in steps:
+            done = subprocess.run(command, cwd=root, capture_output=True, text=True)
+            if done.returncode:
+                error('tool-failed-' + command[0] + '-' + name + '-' + (done.stderr or done.stdout).strip()[:240])
+PY
+}
+
+case "$mode" in
+  --self-check)
+    python_check --self-check
+    ;;
+  --compare-built)
+    [ "$#" -eq 2 ] || { echo "usage: $0 --compare-built DIR" >&2; exit 2; }
+    python_check --compare-built "$2"
+    ;;
+  --compare)
+    python_check --self-check >/dev/null
+    work_dir=$(mktemp -d "${TMPDIR:-/tmp}/gabbaboy-age.XXXXXXXX")
+    trap 'rm -rf -- "$work_dir"' EXIT
+    mkdir "$work_dir/upstream" "$work_dir/out"
+    git -C "$work_dir/upstream" init -q
+    git -C "$work_dir/upstream" fetch -q --depth 1 "$upstream_url" "$upstream_commit"
+    git -C "$work_dir/upstream" checkout -q FETCH_HEAD
+    [[ "$(git -C "$work_dir/upstream" rev-parse HEAD)" == "$upstream_commit" ]] || { echo 'upstream HEAD differs from pin' >&2; exit 1; }
+    [[ "$(git -C "$work_dir/upstream" rev-parse 'HEAD^{tree}')" == "$upstream_tree" ]] || { echo 'upstream tree differs from pin' >&2; exit 1; }
+    python_check --compare '' "$work_dir/upstream" "$work_dir/out"
+    python_check --compare-built "$work_dir/out"
+    ;;
+  *) echo "usage: $0 [--self-check|--compare|--compare-built DIR]" >&2; exit 2 ;;
+esac

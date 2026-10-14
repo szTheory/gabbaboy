@@ -1,0 +1,278 @@
+{
+  "id": "age-cgb-speed-switch",
+  "source_identity": "AGE test ROMs, c-sp, pinned source commit",
+  "license": "MIT; see LICENSE.txt",
+  "build": {
+    "assembler": "RGBDS",
+    "version": "1.0.1",
+    "archive": "rgbds-macos.zip",
+    "archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
+    "ci_archive": "rgbds-linux-x86_64.tar.xz",
+    "ci_archive_sha256": "80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9",
+    "recipe": "rgbasm -Weverything -I src -I src/_include; rgblink -t; rgbfix -v -p 255"
+  },
+  "source": {
+    "repository": "https://github.com/c-sp/age-test-roms",
+    "commit": "1f5bc10e2cb60b86c19f8d0287ff78f410c4f639",
+    "tree": "2fece1a678edb18c1664efd7328a430a79c70be4"
+  },
+  "fixtures": [
+    {
+      "file": "spsw-div-cgbBCE.gb",
+      "size_bytes": 32768,
+      "sha256": "2c836288b58651f72a335417f11ba346863145dd9996048979ad8e5b9cd0aa7b",
+      "source_path": "src/speed-switch/spsw-div-cgbBCE.asm",
+      "header_143": "C0",
+      "test_results_address": "$C000",
+      "expected_address": "$144A",
+      "rows": 5,
+      "budget_half_dots": 46000000,
+      "pass_pc": "$13CD",
+      "fail_pc": "$13D9",
+      "expected_role": "pass",
+      "verified": [
+        "2021-10-21 pass: CPU CGB E - CPU-CGB-06",
+        "2022-03-16 pass: CPU CGB C - CPU-CGB-04",
+        "2021-10-21 pass: CPU CGB B - CPU-CGB-02",
+        "2021-10-21 fail: DMG-CPU C (blob) - DMG-CPU-08"
+      ]
+    },
+    {
+      "file": "spsw-tima-cgbE.gb",
+      "size_bytes": 32768,
+      "sha256": "3cb0918fb194d2704bb57f2afd5af3be21b5e97e269fde5224c34914d5f5936e",
+      "source_path": "src/speed-switch/spsw-tima-cgbE.asm",
+      "header_143": "C0",
+      "test_results_address": "$C000",
+      "expected_address": "$144A",
+      "rows": 8,
+      "budget_half_dots": 26000000,
+      "pass_pc": "$13CD",
+      "fail_pc": "$13D9",
+      "expected_role": "pass-target",
+      "verified": [
+        "2022-02-14 pass: CPU CGB E - CPU-CGB-06",
+        "2022-03-16 fail: CPU CGB C - CPU-CGB-04",
+        "2022-02-14 fail: CPU CGB B - CPU-CGB-02",
+        "2022-02-14 fail: DMG-CPU C (blob) - DMG-CPU-08"
+      ]
+    },
+    {
+      "file": "spsw-tima-cgbBC.gb",
+      "size_bytes": 32768,
+      "sha256": "2fcfdc0d8595b642cfc1c16cab42f619a13b9a0d20e668a9c471436573a2e860",
+      "source_path": "src/speed-switch/spsw-tima-cgbBC.asm",
+      "header_143": "C0",
+      "test_results_address": "$C000",
+      "expected_address": "$144A",
+      "rows": 8,
+      "budget_half_dots": 26000000,
+      "pass_pc": "$13CD",
+      "fail_pc": "$13D9",
+      "expected_role": "unsupported-model-control",
+      "verified": [
+        "2022-02-14 fail: CPU CGB E - CPU-CGB-06",
+        "2022-03-16 pass: CPU CGB C - CPU-CGB-04",
+        "2022-02-14 pass: CPU CGB B - CPU-CGB-02",
+        "2022-02-14 fail: DMG-CPU C (blob) - DMG-CPU-08"
+      ]
+    },
+    {
+      "file": "spsw-stop-prefetch-cgbBCE.gb",
+      "size_bytes": 32768,
+      "sha256": "df782c73f08c6778c7b926c6a4ebbd0816c58b53faf4b6abf5b2b812766eab4f",
+      "source_path": "src/speed-switch/spsw-stop-prefetch-cgbBCE.asm",
+      "header_143": "C0",
+      "test_results_address": "$C000",
+      "expected_address": "$144A",
+      "rows": 1,
+      "budget_half_dots": 3000000,
+      "pass_pc": "$13CD",
+      "fail_pc": "$13D9",
+      "expected_role": "pass-target",
+      "verified": [
+        "2022-02-12 pass: CPU CGB E - CPU-CGB-06",
+        "2022-03-16 pass: CPU CGB C - CPU-CGB-04",
+        "2022-02-12 pass: CPU CGB B - CPU-CGB-02"
+      ]
+    },
+    {
+      "file": "spsw-interrupts-cgbE.gb",
+      "size_bytes": 32768,
+      "sha256": "bd240315c0b8e7fd5f0d0521785c6c5a10769dae36339e88d777fc507bca44b6",
+      "source_path": "src/speed-switch/caution/spsw-interrupts-cgbE.asm",
+      "header_143": "C0",
+      "test_results_address": "$C000",
+      "expected_address": "$144A",
+      "rows": 11,
+      "budget_half_dots": 2000000,
+      "pass_pc": "$13CD",
+      "fail_pc": "$13D9",
+      "expected_role": "pass-target",
+      "verified": [
+        "2022-02-11 pass: CPU CGB E - CPU-CGB-06",
+        "2022-03-16 fail: CPU CGB C - CPU-CGB-04",
+        "2022-02-11 fail: CPU CGB B - CPU-CGB-02"
+      ]
+    },
+    {
+      "file": "spsw-mode0-cgbBCE.gb",
+      "size_bytes": 32768,
+      "sha256": "07eefc27d8bdd98569510ebef662aba388715bbe5ddf9993763fbf1aab290f2e",
+      "source_path": "src/speed-switch/spsw-mode0-cgbBCE.asm",
+      "header_143": "C0",
+      "test_results_address": "$C000",
+      "expected_address": "$144A",
+      "rows": 15,
+      "budget_half_dots": 4000000,
+      "pass_pc": "$13CD",
+      "fail_pc": "$13D9",
+      "expected_role": "expected-failure",
+      "verified": [
+        "2021-10-21 pass: CPU CGB E - CPU-CGB-06",
+        "2022-03-16 pass: CPU CGB C - CPU-CGB-04",
+        "2021-10-21 pass: CPU CGB B - CPU-CGB-02",
+        "2021-10-21 fail: DMG-CPU C (blob) - DMG-CPU-08"
+      ]
+    },
+    {
+      "file": "spsw-ch2-lc-delay-cgbBCE.gb",
+      "size_bytes": 32768,
+      "sha256": "76920fa2f63f5a5b9b8b907b98a78e06410d88fb09491826f3930dedf96cff19",
+      "source_path": "src/speed-switch/spsw-ch2-lc-delay-cgbBCE.asm",
+      "header_143": "C0",
+      "test_results_address": "$C000",
+      "expected_address": "$144A",
+      "rows": 8,
+      "budget_half_dots": 71000000,
+      "pass_pc": "$13CD",
+      "fail_pc": "$13D9",
+      "expected_role": "expected-failure",
+      "verified": [
+        "2022-02-23 pass: CPU CGB E - CPU-CGB-06",
+        "2022-03-16 pass: CPU CGB C - CPU-CGB-04",
+        "2022-02-23 pass: CPU CGB B - CPU-CGB-02"
+      ]
+    },
+    {
+      "file": "stat-mode-ds-cgbBCE.gb",
+      "size_bytes": 32768,
+      "sha256": "c371664f71cb95b6de9cf9a1ecd4ff80147b5603b08deacea7c9495eb45d1cf0",
+      "source_path": "src/stat-mode/stat-mode-ds-cgbBCE.asm",
+      "header_143": "C0",
+      "test_results_address": "$C600",
+      "expected_address": "$1B0A",
+      "rows": 14,
+      "budget_half_dots": 42000000,
+      "pass_pc": "$13CD",
+      "fail_pc": "$13D9",
+      "expected_role": "pass-target",
+      "verified": [
+        "2021-10-21 pass: CPU CGB E - CPU-CGB-06",
+        "2022-03-16 pass: CPU CGB C - CPU-CGB-04",
+        "2021-10-21 pass: CPU CGB B - CPU-CGB-02",
+        "2021-10-21 fail: DMG-CPU C (blob) - DMG-CPU-08"
+      ]
+    },
+    {
+      "file": "stat-mode-cgbE.gb",
+      "size_bytes": 32768,
+      "sha256": "b2789ba04e79c25aba7a947e0d4b7938171457960264702dbaa4826acfdb2fc3",
+      "source_path": "src/stat-mode/stat-mode-cgbE.asm",
+      "header_143": "80",
+      "test_results_address": "$C600",
+      "expected_address": "$1B0A",
+      "rows": 14,
+      "budget_half_dots": 24000000,
+      "pass_pc": "$13CD",
+      "fail_pc": "$13D9",
+      "expected_role": "single-speed-control",
+      "verified": [
+        "2021-10-21 pass: CPU CGB E - CPU-CGB-06",
+        "2022-03-16 fail: CPU CGB C - CPU-CGB-04",
+        "2021-10-21 fail: CPU CGB B - CPU-CGB-02",
+        "2021-10-21 fail: DMG-CPU C (blob) - DMG-CPU-08"
+      ]
+    },
+    {
+      "file": "stat-mode-sprites-ds-cgbBCE.gb",
+      "size_bytes": 32768,
+      "sha256": "3ee5bb3fc7fa724a832a082dd8c4979af5abb3f837dbc489a2f04cdf2332a64d",
+      "source_path": "src/stat-mode-sprites/stat-mode-sprites-ds-cgbBCE.asm",
+      "header_143": "C0",
+      "test_results_address": "$C400",
+      "expected_address": "$22C0",
+      "rows": 16,
+      "budget_half_dots": 4000000,
+      "pass_pc": "$13CD",
+      "fail_pc": "$13D9",
+      "expected_role": "pass-target",
+      "verified": [
+        "2022-02-24 pass: CPU CGB E - CPU-CGB-06",
+        "2022-03-17 pass: CPU CGB C - CPU-CGB-04",
+        "2022-02-24 pass: CPU CGB B - CPU-CGB-02",
+        "2022-02-24 fail: DMG-CPU C (blob) - DMG-CPU-08"
+      ]
+    },
+    {
+      "file": "stat-mode-sprites-dmgC-cgbBCE.gb",
+      "size_bytes": 32768,
+      "sha256": "173ff267a4ecbd2e5bb3bd209f7b08c971900d54382bd6281969c7a3a98507c1",
+      "source_path": "src/stat-mode-sprites/stat-mode-sprites-dmgC-cgbBCE.asm",
+      "header_143": "80",
+      "test_results_address": "$C400",
+      "expected_address": "$2185",
+      "rows": 10,
+      "budget_half_dots": 4000000,
+      "pass_pc": "$13CD",
+      "fail_pc": "$13D9",
+      "expected_role": "single-speed-control",
+      "verified": [
+        "2022-02-24 pass: CPU CGB E - CPU-CGB-06",
+        "2022-03-17 pass: CPU CGB C - CPU-CGB-04",
+        "2022-02-24 pass: CPU CGB B - CPU-CGB-02",
+        "2022-02-24 pass: DMG-CPU C (blob) - DMG-CPU-08"
+      ]
+    },
+    {
+      "file": "stat-mode-window-ds-cgbBCE.gb",
+      "size_bytes": 32768,
+      "sha256": "055c641aaf9464b637f6206126a165fa23433fbced0d5fbafa0d3cdb813aaa41",
+      "source_path": "src/stat-mode-window/stat-mode-window-ds-cgbBCE.asm",
+      "header_143": "C0",
+      "test_results_address": "$C300",
+      "expected_address": "$174A",
+      "rows": 16,
+      "budget_half_dots": 6000000,
+      "pass_pc": "$13CD",
+      "fail_pc": "$13D9",
+      "expected_role": "pass-target",
+      "verified": [
+        "2021-12-22 pass: CPU CGB E - CPU-CGB-06",
+        "2022-03-17 pass: CPU CGB C - CPU-CGB-04",
+        "2021-12-22 pass: CPU CGB B - CPU-CGB-02",
+        "2021-12-22 fail: DMG-CPU C (blob) - DMG-CPU-08"
+      ]
+    },
+    {
+      "file": "stat-mode-window-cgbBCE.gb",
+      "size_bytes": 32768,
+      "sha256": "69fb62868aa256ff79e77cabb88caab9db43dbe302eb6f4628550d99b7ef12da",
+      "source_path": "src/stat-mode-window/stat-mode-window-cgbBCE.asm",
+      "header_143": "80",
+      "test_results_address": "$C200",
+      "expected_address": "$164A",
+      "rows": 16,
+      "budget_half_dots": 6000000,
+      "pass_pc": "$13CD",
+      "fail_pc": "$13D9",
+      "expected_role": "single-speed-control",
+      "verified": [
+        "2021-12-22 pass: CPU CGB E - CPU-CGB-06",
+        "2022-03-17 pass: CPU CGB C - CPU-CGB-04",
+        "2021-12-22 pass: CPU CGB B - CPU-CGB-02",
+        "2021-12-22 fail: DMG-CPU C (blob) - DMG-CPU-08"
+      ]
+    }
+  ]
+}

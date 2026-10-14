@@ -604,3 +604,57 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** Hosted ASan result is recorded in the Phase 11 UAT.
 - **Source:** Phase 11 verify-work, PR #67.
 - **Status:** Adopted.
+
+### GB-CGB-008 / 2026-10-13 / A borrowed speed constant failed the ROM that was meant to bind it
+
+- **Cause and evidence:** The imported `0x20008` T-cycle stall literal failed AGE `spsw-div-cgbBCE` in all five starts, while the committed-core pass window is `[0x20004, 0x20007]`; the low bits are not discriminated by that fixture. `age_stall_window` records the window and selected aligned constant.
+- **Remedy:** Derive a model-scoped, M-aligned constant from the measured window, retain the low-bit uncertainty, and keep the result distinct from physical-hardware evidence.
+- **Applies when:** A fixed timing value is borrowed from an emulator or document and a fixture is expected to qualify the implementation.
+- **Verification:** `age_stall_window`, `age_sensitivity_m6`, `cgb_speed_stall_length`.
+- **Source:** Phase 12 plans 12-08, 12-09 and 12-17 (D-37).
+- **Status:** Adopted.
+
+### GB-CGB-009 / 2026-10-13 / Runtime-mask variants keep mutation builds inside the test budget
+
+- **Cause and evidence:** Phase 12 has several independent timing mutations; compiling a core per mutation would consume the build ceiling before the full suite. The runtime-mask and shared-mutant targets keep the phase at five distinct core variants, under D-25's six-build cap.
+- **Remedy:** Group non-interacting mutations behind named runtime masks and share their compiled core where the source change permits it; record the configured variant count and measured configure/build cost.
+- **Applies when:** A regression matrix explores multiple independent core mutations under a CI wall-time budget.
+- **Verification:** `cgb_speed_mutant_m27_divider_reset_omitted`, `cgb_speed_mutant_m22_switch_headroom_omitted`, `cgb_partition_mutant_m16`, `player_cgb_speed_smoke_mutant_ppu_follows_cpu`.
+- **Source:** Phase 12 plans 12-03, 12-09, 12-14 and 12-17 (D-25/D-26).
+- **Status:** Adopted.
+
+### GB-CGB-010 / 2026-10-13 / Keep a pre-change identity pin separate from the plan execution base
+
+- **Cause and evidence:** The eight single-speed output pins use the pre-phase source revision `fb45111`, while plan 12-01 execution began at `aac4772` after research and handoff commits. The relevant core and public-header files are identical across those two revisions; the different hashes name different provenance, not a changed pin.
+- **Remedy:** Record the pin's source revision and the plan's `plan_head_before` independently, check their relevant source diff, and never re-record identity values to absorb later implementation changes.
+- **Applies when:** A regression identity is captured at a pre-change baseline that differs from the planning or executor start head.
+- **Verification:** `cgb_speed_identity_pin`, `cgb_speed_identity_pin_flipped`, and `git diff fb45111..aac4772 -- src/core/gabbaboy.c include/gabbaboy/gabbaboy.h`.
+- **Source:** Phase 12 plan 12-01 and its recorded execution ledger.
+- **Status:** Adopted.
+
+### GB-CI-005 / 2026-10-14 / Scale sanitizer timeouts after registration in each CMake test directory
+
+- **Cause and evidence:** The old scaler ran before late Phase 12 registrations. Moving it to the parent directory's end fixed those tests but still missed `tests/player`: CMake 3.25 test properties are directory-scoped. Independent review reproduced a child TIMEOUT of 120 under sanitizer mode.
+- **Remedy:** Call one shared scaler after the final registration in each test directory; remove individual sanitizer multipliers. Assert representative late and player values during configure.
+- **Applies when:** CMake tests are appended or registered in optional subdirectories, especially at the CMake 3.25 floor.
+- **Verification:** `sanitizer_timeout_policy_selftest` proves unchanged normal limits and once-only parent/child scaling, and rejects early, double and parent-only passes. The actual player directory's missing-call mutant fails its property assertion. Full post-fix CTest passed 898/898; the configure-only player probe used stub link targets and is not runtime sanitizer evidence.
+- **Source:** Phase 12 CR/WR review fixes `fe61e2f`, `40e7f08`; `12-REVIEW-FOLLOWUP.md`.
+- **Status:** Adopted.
+
+### GB-CI-006 / 2026-10-14 / Keep environment paths out of shell source, including unsafe regression copies
+
+- **Cause and evidence:** An interpolated EXIT trap converted a TMPDIR-derived cleanup path into shell source. A deliberately unsafe regression copy initially inherited its caller's TMPDIR too, so its confinement needed the same scrutiny as the production fix.
+- **Remedy:** Use a literal trap body with quoted variable expansion. Construct unsafe negative-control paths only under a fixture-owned scratch prefix; never let caller environment text contribute shell source to the mutant.
+- **Applies when:** Shell cleanup paths or deliberately vulnerable test copies contain environment-supplied values.
+- **Verification:** Inventory self-test cleanup and original-trap marker controls pass; a nested hostile caller TMPDIR creates no parent marker, while the old inherited-prefix helper control does.
+- **Source:** Phase 12 CR-01 fixes `be53c43`, `d979ba5` and `.github/scripts/test-inventory-cleanup.sh`.
+- **Status:** Adopted.
+
+### GB-GSD-016 / 2026-10-14 / Close automated UAT once and reuse its bounded evidence
+
+- **Cause and evidence:** Phase 12 already had 73 auto-passable deliverables and 898 registered regressions. Replacing the workflow's confirmation-only summary with another owner checkpoint would repeat the Phase 9 toil despite D-069. The bounded commit audit also found plan 12-04's full `plan_head_after` mistyped; `git rev-parse ec5dc8a` identifies the real two-task window.
+- **Remedy:** Derive UAT directly from the classifier, preserve every SUMMARY/coverage-id/evidence mapping, and run the actual behavioral, integration, seam, e2e and smoke checks with their negative controls. Record completed UAT plus canonical freshness and exact-head CI receipts. An unchanged completed session is a no-op; do not replan, rerun every review, or ask a confirmation-only question without changed evidence. Correct metadata from measured Git objects, then let the verification owner refresh its covered digest. Keep session-specific closure checks local when existing CI already covers recurring behavior; add CI only for recurring value.
+- **Applies when:** Every verify-work handoff, future phase planning and SUMMARY authoring. Only true perceptual, physical-hardware, credential and owner-decision limits may require the smallest necessary owner action. A qualified unsupported behavior outside the adopted scope is a recorded limit, not invented manual UAT.
+- **Verification:** `12-UAT.md` records 73 automated passes, zero human checkpoints and no gaps. `verify-uat-contract.py --self-test` rejects nine missing/weaker/misrouted closure mutations; `summary_coverage` and its twelve schema mutants remain recurring CI gates. All 19 bounded commit windows reconcile after the SHA correction.
+- **Source:** Phase 12 verify-work and renewed owner automation directive; DECISIONS D-069, GB-GSD-014 and GB-GSD-015.
+- **Status:** Adopted. Reopen only for a concrete new regression, changed covered behavior, stale/unavailable evidence, or an owner scope change.

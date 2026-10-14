@@ -46,7 +46,7 @@ Milestone-wide rules:
 - [x] **Phase 9: MBC3, Deterministic RTC and Cartridge Persistence** - Add MBC3 with an emulated-time RTC, explicit host catch-up, versioned battery block, loader-matrix hardening and new-mapper continuation (completed 2026-10-11)
 - [x] **Phase 10: CGB Profile, Banking and Register Visibility** - Select CGB-CPU-E, detect execution mode, bank VRAM/WRAM, and gate every model-specific behavior (completed 2026-10-12)
 - [x] **Phase 11: CGB Colour Rendering and Player Colour** - Render CGB attributes and palettes through an RGB555 frame call, a DMG-compatibility palette, and `--model` in the player (completed 2026-10-13)
-- [ ] **Phase 12: CGB Double Speed** - KEY1/STOP speed switching with a modelled pause and a CPU-stall run-loop branch
+- [x] **Phase 12: CGB Double Speed** - KEY1/STOP speed switching with a modelled pause and a CPU-stall run-loop branch (completed 2026-10-14)
 - [ ] **Phase 13: CGB HDMA** - General-purpose and HBlank VRAM DMA with stall, cancel, readback and HALT interaction
 - [ ] **Phase 14: CGB-E Model Qualification and Corpus** - CGB-E APU/I/O deltas and a headless CGB-E corpus with per-suite denominators
 - [ ] **Phase 15: CGB Acceptance, Support Ledger and v0.2.0 Release** - CGB game-level evidence (or an explicit absence), current docs and consumers, and a qualified exact-tag release
@@ -314,7 +314,59 @@ Plans:
   3. Partitioned runs (run N, stop, run M) equal one run of N+M across a speed switch and stall, and unresearched pause behaviors are recorded as named expected failures.
 
 **Research**: DEEP (interrupts, DIV and PPU during the pause; applicable test list).
-**Plans**: TBD
+**Plans**: 19/19 plans complete
+
+Plans:
+**Wave 1**
+- [x] 12-01-PLAN.md — tracer: pre-change identity pin, KEY1 arm + STOP switch with persisted stall, cpu_ticks sites, D-13 trace rule
+- [x] 12-02-PLAN.md — AGE vendoring part 1: rights/provenance, manifest-driven rebuild script with offline negative controls, spsw-div ROM, fixture-repro step
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [x] 12-03-PLAN.md — runtime-mask mutant harness (multi-site anchors, guard control), cpu_ticks contract (M18), per-field reset clears
+- [x] 12-04-PLAN.md — AGE vendoring part 2: the remaining 12 ROMs and manifest rows
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [x] 12-05-PLAN.md — device scaling: tick-unit timer/serial/DMA, divider and APU tap, PPU/APU/RTC unscaled scan
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [x] 12-06-PLAN.md — STOP decision table cases 1-4, switch cost, KEY1/KEY0 contract, DMG identity, operand/FF04/KEY0 negatives
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [x] 12-07-PLAN.md — stall wake, realignment, exact length (macro-derived), budget semantics, headroom pre-check, EI;STOP mutant
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [x] 12-08-PLAN.md — research:12 gate dispositions, GATE-84.. rows, cgb-profile stall derivation and STOP docs
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [x] 12-09-PLAN.md — AGE driver, spsw-div pass, public mutant library, D-37 window re-measure and re-pin rule before any constant-derived pin
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [x] 12-10-PLAN.md — original cgb-speed probe ROM, first-principles expectations and controls, audio/frame digests
+
+**Wave 9** *(blocked on Wave 8 completion)*
+- [x] 12-11-PLAN.md — hostile pre-switch entry points (selector byte) with rule-derived outcomes
+- [x] 12-12-PLAN.md — player speed smoke, claims edit, installed consumer speed guests with an unarmed-twin negative
+
+**Wave 10** *(blocked on Wave 9 completion)*
+- [x] 12-13-PLAN.md — cgb-speed byte-exact rebuild script, repro controls and fixture-repro step
+
+**Wave 11** *(blocked on Wave 10 completion)*
+- [x] 12-14-PLAN.md — partition equivalence sweeps, real-constant stall-end windows in both directions via snapshot
+
+**Wave 12** *(blocked on Wave 11 completion)*
+- [x] 12-15-PLAN.md — cgb_speed fuzz mode, seeds, oracle control and dictionary
+
+**Wave 13** *(blocked on Wave 12 completion)*
+- [x] 12-16-PLAN.md — AGE per-ROM dispositions decided by measurement, generated age_ tests, vendored-byte guards
+
+**Wave 14** *(blocked on Wave 13 completion)*
+- [x] 12-17-PLAN.md — pinned_by for every named expected failure (four new pin tests), verifier and docs mirror, sensitivity sweep
+
+**Wave 15** *(blocked on Wave 14 completion)*
+- [x] 12-18-PLAN.md — host docs, header comments and stale-claim scanner
+
+**Wave 16** *(blocked on Wave 15 completion)*
+- [x] 12-19-PLAN.md — DECISIONS/LESSONS/INDEX, 12-BENCH.md with hosted ASan cost, COVERAGE.md, Phase 13 handoff
 
 ### Phase 13: CGB HDMA
 
@@ -368,7 +420,7 @@ Plans:
 | 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 18/18 | Complete    | 2026-10-11 |
 | 10. CGB Profile, Banking and Register Visibility | v0.2 | 20/20 | Complete    | 2026-10-12 |
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 15/15 | Complete    | 2026-10-13 |
-| 12. CGB Double Speed | v0.2 | 0/TBD | Not started | - |
+| 12. CGB Double Speed | v0.2 | 19/19 | Complete    | 2026-10-14 |
 | 13. CGB HDMA | v0.2 | 0/TBD | Not started | - |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 0/TBD | Not started | - |
 | 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 0/TBD | Not started | - |

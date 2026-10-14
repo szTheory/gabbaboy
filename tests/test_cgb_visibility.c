@@ -884,9 +884,8 @@ static int case_flip_control(void) {
     return 0;
 }
 
-/* ---- STOP with KEY1 armed (Plan 10-11; D-23) ---------------------------------------------------
- * Phase 12 owns the speed switch. Until then an armed STOP on the CGB profile in CGB mode must stop
- * visibly with the KEY1 address; it must never fall into the DMG STOP sleep. */
+/* ---- STOP with KEY1 armed (Phase 12; D-23) ------------------------------------------------------
+ * On the CGB profile, CGB-mode STOP with KEY1 armed switches speed and continues to the marker. */
 static void stop_op(prog *p) { emit(p, 0x10); emit(p, 0x00); }
 
 /* Runs [arm KEY1 if requested] STOP, then a marker store and HALT. Returns the first run reason. */
@@ -898,10 +897,17 @@ static int run_stop(view v, int arm, gbb_run_result *first, uint16_t *seam, int 
     halt(&p);
     gbb_instance *m = load_view(v, p.b, p.n, NULL, 0);
     if (m == NULL) return 1;
-    *first = gbb_run(m, RUN_BUDGET, NULL, 0);
+    *first = gbb_run(m, 140448u, NULL, 0);
     *seam = gbb_test_last_unsupported_address(m);
-    *second_reason = (int)gbb_run(m, RUN_BUDGET, NULL, 0).reason;
+    *second_reason = (int)first->reason;
     *marker = hram(m, 0);
+    for (unsigned frame = 0; frame < 3u && *marker != 0x5Au; ++frame) {
+        gbb_run_result next = gbb_run(m, 140448u, NULL, 0);
+        *second_reason = (int)next.reason;
+        *marker = hram(m, 0);
+        fprintf(stderr, "frame %u reason=%d marker=%02x\n", frame, next.reason, *marker);
+        if (next.reason == GBB_STOP_STOPPED || next.reason == GBB_STOP_UNSUPPORTED_BUS) break;
+    }
     gbb_destroy(m);
     return 0;
 }
@@ -909,10 +915,11 @@ static int run_stop(view v, int arm, gbb_run_result *first, uint16_t *seam, int 
 static int case_stop_armed_cgb(void) {
     gbb_run_result r; uint16_t seam; int second, marker;
     REQUIRE(run_stop(V_CGB, 1, &r, &seam, &second, &marker) == 0);
-    REQUIRE(r.reason == GBB_STOP_UNSUPPORTED_BUS);
-    REQUIRE(seam == 0xFF4D);
-    /* Never the DMG STOP sleep: the next run does not report STOPPED and the guest continues. */
-    REQUIRE(second != (int)GBB_STOP_STOPPED);
+    REQUIRE(r.reason != GBB_STOP_UNSUPPORTED_BUS);
+    REQUIRE(r.reason == GBB_STOP_HALTED_IDLE);
+    REQUIRE(seam != 0xFF4D);
+    REQUIRE(second == (int)GBB_STOP_HALTED_IDLE);
+    /* Armed case 4 resumes after the stall and executes the marker store. */
     REQUIRE(marker == 0x5A);
     /* Control: without the arming write the same program does sleep, so the stop above is caused by
      * KEY1 and not by STOP itself. */

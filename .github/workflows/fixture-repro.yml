@@ -31,6 +31,8 @@ jobs:
           banking = json.loads((root / 'fixtures/mbc5-banking/manifest.json').read_text())
           cgb_banking = json.loads((root / 'fixtures/cgb-banking/manifest.json').read_text())
           cgb_colour = json.loads((root / 'fixtures/cgb-colour/manifest.json').read_text())
+          cgb_speed = json.loads((root / 'fixtures/cgb-speed/manifest.json').read_text())
+          age = json.loads((root / 'fixtures/age/manifest.json').read_text())
           guests = {
               'MBC3+RTC continuation': json.loads((root / 'fixtures/mbc3-rtc-continuation/manifest.json').read_text()),
               'MBC2 continuation': json.loads((root / 'fixtures/mbc2-continuation/manifest.json').read_text()),
@@ -42,6 +44,8 @@ jobs:
           banking_build = banking['build']
           cgb_banking_build = cgb_banking['build']
           cgb_colour_build = cgb_colour['build']
+          cgb_speed_build = cgb_speed['build']
+          age_build = age['build']
           if build.get('version') != '1.0.1' or build.get('version') != tracer_build.get('version'):
               raise SystemExit('visible demo RGBDS version differs from the established v1.0.1 pin')
           if build.get('version') != continuation_build.get('version'):
@@ -66,6 +70,12 @@ jobs:
           for key in ('version', 'archive', 'archive_sha256', 'ci_archive', 'ci_archive_sha256'):
               if build.get(key) != cgb_colour_build.get(key):
                   raise SystemExit(f'CGB colour RGBDS pin {key} differs from the established fixture pin')
+          for key in ('version', 'archive', 'archive_sha256', 'ci_archive', 'ci_archive_sha256'):
+              if build.get(key) != cgb_speed_build.get(key):
+                  raise SystemExit(f'CGB speed RGBDS pin {key} differs from the established fixture pin')
+          for key in ('version', 'archive', 'archive_sha256', 'ci_archive', 'ci_archive_sha256'):
+              if age_build.get(key) != cgb_colour_build.get(key):
+                  raise SystemExit(f'AGE RGBDS pin {key} differs from the established fixture pin')
           for guest_name, guest in guests.items():
               guest_build = guest['build']
               if build.get('version') != guest_build.get('version'):
@@ -156,6 +166,20 @@ jobs:
           GBB_RGBDS_ARCHIVE="$RUNNER_TEMP/rgbds-$RGBDS_RELEASE_VERSION/$RGBDS_ARCHIVE" \
             GBB_RGBDS_ARCHIVE_SHA256="$RGBDS_ARCHIVE_SHA256" \
             bash tests/scripts/reproduce-cgb-colour.sh
+      - name: Reproduce CGB speed fixture bytes
+        shell: bash
+        run: |
+          GBB_RGBDS_ARCHIVE="$RUNNER_TEMP/rgbds-$RGBDS_RELEASE_VERSION/$RGBDS_ARCHIVE" \
+            GBB_RGBDS_ARCHIVE_SHA256="$RGBDS_ARCHIVE_SHA256" \
+            bash tests/scripts/reproduce-cgb-speed.sh
+      - name: Reproduce AGE test ROM bytes
+        shell: bash
+        run: |
+          GBB_RGBDS_ARCHIVE="$RUNNER_TEMP/rgbds-$RGBDS_RELEASE_VERSION/$RGBDS_ARCHIVE" \
+            GBB_RGBDS_ARCHIVE_SHA256="$RGBDS_ARCHIVE_SHA256" \
+            bash tests/scripts/reproduce-age.sh --compare
+          bash tests/scripts/test-reproduce-age.sh compare-tampered
+          bash tests/scripts/test-reproduce-age.sh selfcheck-tampered
       - name: Reproduce MBC3+RTC battery continuation fixture bytes
         shell: bash
         run: |

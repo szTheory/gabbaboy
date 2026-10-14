@@ -573,6 +573,30 @@ add_test(NAME fuzz_core_regressions COMMAND test_fuzz_core)
 add_test(NAME cgb_fuzz_io_regressions COMMAND test_fuzz_core cgb)
 add_test(NAME cgb_fuzz_profile_select COMMAND test_fuzz_core cgb_profile_select)
 add_test(NAME cgb_fuzz_palette_regressions COMMAND test_fuzz_core cgb_palette)
+add_test(NAME cgb_fuzz_speed_regressions COMMAND test_fuzz_core cgb_speed)
+set_tests_properties(cgb_fuzz_speed_regressions PROPERTIES TIMEOUT 60)
+
+# Invert only the speed harness's guest KEY1 consistency oracle. The speed seed must make it fail,
+# while an existing CGB seed that never selects cgb_speed stays quiet in the same executable.
+add_executable(test_fuzz_core_speed_oracle_mutant test_fuzz_core.c fuzz_core.c)
+target_link_libraries(test_fuzz_core_speed_oracle_mutant PRIVATE GabbaBoy::core)
+target_compile_features(test_fuzz_core_speed_oracle_mutant PRIVATE c_std_17)
+target_compile_definitions(test_fuzz_core_speed_oracle_mutant PRIVATE
+  GBB_FUZZ_STANDALONE_TEST=1 GBB_FUZZ_SPEED_ORACLE_INVERTED=1)
+set_target_properties(test_fuzz_core_speed_oracle_mutant PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_fuzz_speed_oracle_mutant
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_fuzz_core_speed_oracle_mutant>;cgb_speed"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=KEY1 consistency oracle inverted"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_fuzz_speed_oracle_mutant_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_fuzz_core_speed_oracle_mutant>;cgb"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=.*"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(cgb_fuzz_speed_oracle_mutant PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 
 if(CMAKE_C_COMPILER_ID MATCHES "Clang")
   include(CheckCSourceCompiles)
@@ -1584,7 +1608,8 @@ set(GBB_NATIVE_GUIDE_CGB_PHRASES
   "stop with `GBB_STOP_UNSUPPORTED_BUS`"
   "bit 15 is rejected, not masked"
   "a set never recolours a completed frame"
-  "minimum pitch is 320 bytes")
+  "minimum pitch is 320 bytes"
+  "master half-dots at both speeds")
 list(LENGTH GBB_NATIVE_GUIDE_CGB_PHRASES GBB_NATIVE_GUIDE_CGB_PHRASE_COUNT)
 set(GBB_NATIVE_GUIDE_CGB_SCOPE "The CGB-CPU-E profile is selected with")
 set(GBB_NATIVE_GUIDE_CGB_DECLS
@@ -1758,7 +1783,7 @@ file(READ "${GBB_MODEL_GATE_REAL_DOC}" gbb_mg_doc)
 
 # (a) The STOP gate tag deleted. The gate number is not part of the anchor so later plans may renumber.
 set(GBB_MG_STOP_TAG_REGEX
-  "[ ]*/\\* MODEL: UNKNOWN GATE-[0-9][0-9] research:12 -- STOP, including CGB speed switch \\*/\n")
+  "[ ]*/\\* MODEL: UNKNOWN GATE-62 research:14 -- STOP on the DMG, compat and unarmed paths \\*/\n")
 string(REGEX MATCHALL "${GBB_MG_STOP_TAG_REGEX}" gbb_mg_stop_matches "${gbb_mg_source}")
 list(LENGTH gbb_mg_stop_matches gbb_mg_stop_count)
 if(NOT gbb_mg_stop_count EQUAL 1)
@@ -2480,19 +2505,1034 @@ add_test(NAME cgb_measure_core_unknown_profile
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # --- Phase 11 plan 11-14 end ---
 
-# Per-test TIMEOUTs are sized for normal builds. Debug ASan/UBSan runs the same work several times
+# --- Phase 12 plan 12-08 begin ---
+# No current double-speed gate may remain owned by research:12.
+add_test(NAME model_gates_no_phase12_rows
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_FILES=${PROJECT_SOURCE_DIR}/docs/model-gates.md;${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c"
+    -P ${PROJECT_SOURCE_DIR}/tests/check_no_phase12_rows.cmake)
+set_tests_properties(model_gates_no_phase12_rows PROPERTIES
+  PASS_REGULAR_EXPRESSION "no-phase12-rows pass" TIMEOUT 30)
+file(READ "${PROJECT_SOURCE_DIR}/docs/model-gates.md" gbb_p12_doc)
+set(GBB_P12_ROW_ANCHOR "| GATE-54 | UNKNOWN | - | research:14 |")
+string(FIND "${gbb_p12_doc}" "${GBB_P12_ROW_ANCHOR}" gbb_p12_first)
+string(FIND "${gbb_p12_doc}" "${GBB_P12_ROW_ANCHOR}" gbb_p12_last REVERSE)
+if(gbb_p12_first EQUAL -1 OR NOT gbb_p12_first EQUAL gbb_p12_last)
+  message(FATAL_ERROR "phase-12 row mutant: '${GBB_P12_ROW_ANCHOR}' must occur exactly once in docs/model-gates.md")
+endif()
+string(REPLACE "${GBB_P12_ROW_ANCHOR}" "| GATE-54 | UNKNOWN | - | research:12 |" gbb_p12_doc_bad "${gbb_p12_doc}")
+file(WRITE "${GBB_MODEL_GATE_DIR}/phase12-row-mutated.md" "${gbb_p12_doc_bad}")
+add_test(NAME model_gates_no_phase12_rows_mutated_doc
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_FILES=${GBB_MODEL_GATE_DIR}/phase12-row-mutated.md;-P;${PROJECT_SOURCE_DIR}/tests/check_no_phase12_rows.cmake"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=phase-12-row-open"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+# Plan 12-08 recorded the derivation before the first AGE run; plan 12-09 now pins its committed-core window.
+file(STRINGS "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c" GBB_P12_STALL_DEFINE
+  REGEX "^#define GBB_SPEED_SWITCH_STALL_T 0x[0-9A-Fa-f]+u$")
+list(LENGTH GBB_P12_STALL_DEFINE GBB_P12_STALL_DEFINE_COUNT)
+if(NOT GBB_P12_STALL_DEFINE_COUNT EQUAL 1)
+  message(FATAL_ERROR "GBB_SPEED_SWITCH_STALL_T must have exactly one hexadecimal definition")
+endif()
+list(GET GBB_P12_STALL_DEFINE 0 GBB_P12_STALL_DEFINE_LINE)
+string(REGEX MATCH "0x[0-9A-Fa-f]+" GBB_P12_STALL_T_HEX "${GBB_P12_STALL_DEFINE_LINE}")
+if(NOT GBB_P12_STALL_T_HEX)
+  message(FATAL_ERROR "GBB_SPEED_SWITCH_STALL_T could not be parsed from its source definition")
+endif()
+math(EXPR GBB_P12_STALL_T_VALUE "${GBB_P12_STALL_T_HEX}")
+math(EXPR GBB_P12_STALL_HALF_DOTS_DOUBLE "${GBB_P12_STALL_T_VALUE} * 1")
+math(EXPR GBB_P12_STALL_HALF_DOTS_NORMAL "${GBB_P12_STALL_T_VALUE} * 2")
+
+set(GBB_SPEED_PROFILE_DOC "${PROJECT_SOURCE_DIR}/docs/cgb-profile.md")
+set(GBB_SPEED_PROFILE_SCOPE_START
+  "Measured window. On committed core revision")
+set(GBB_SPEED_PROFILE_DECLARATIONS
+  "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c;${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h")
+set(GBB_SPEED_PROFILE_REQUIRED
+  "GBB_SPEED_SWITCH_STALL_T"
+  "destination speed"
+  "minus the 4 T"
+  "2050"
+  "spsw-div"
+  "${GBB_P12_STALL_T_HEX}"
+  "${GBB_P12_STALL_HALF_DOTS_DOUBLE}"
+  "${GBB_P12_STALL_HALF_DOTS_NORMAL}"
+  "age_stall_window")
+list(LENGTH GBB_SPEED_PROFILE_REQUIRED GBB_SPEED_PROFILE_PHRASE_COUNT)
+add_test(NAME cgb_speed_profile_contract
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_DOC=${GBB_SPEED_PROFILE_DOC}
+    "-DGBB_DECLARATIONS=${GBB_SPEED_PROFILE_DECLARATIONS}"
+    "-DGBB_REQUIRED=${GBB_SPEED_PROFILE_REQUIRED}"
+    "-DGBB_SCOPE_START=${GBB_SPEED_PROFILE_SCOPE_START}"
+    -P ${GBB_DOC_CONTRACT_SCRIPT})
+set_tests_properties(cgb_speed_profile_contract PROPERTIES
+  PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=${GBB_SPEED_PROFILE_PHRASE_COUNT}[^0-9]")
+
+# Negative control: the same guide and declarations reject an extra absent phrase.
+set(GBB_SPEED_PROFILE_MISSING_PHRASE "committed-core AGE window recorded")
+string(REPLACE ";" "\\;" GBB_SPEED_PROFILE_DECLARATIONS_ESCAPED "${GBB_SPEED_PROFILE_DECLARATIONS}")
+add_test(NAME cgb_speed_profile_contract_missing_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${GBB_SPEED_PROFILE_DOC};-DGBB_DECLARATIONS=${GBB_SPEED_PROFILE_DECLARATIONS_ESCAPED};-DGBB_REQUIRED=${GBB_SPEED_PROFILE_MISSING_PHRASE};-DGBB_SCOPE_START=${GBB_SPEED_PROFILE_SCOPE_START};-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=doc-contract-missing: ${GBB_SPEED_PROFILE_MISSING_PHRASE}"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# --- Phase 12 plan 12-08 end ---
+
+# --- Phase 12 plan 12-01 begin ---
+# Pre-change CGB speed identities; this source includes the core and must not link it.
+add_executable(test_cgb_speed_internal test_cgb_speed_internal.c)
+target_include_directories(test_cgb_speed_internal PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_cgb_speed_internal PRIVATE c_std_17)
+set_target_properties(test_cgb_speed_internal PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_speed_identity_pin
+  COMMAND test_cgb_speed_internal cgb_speed_identity_pin ${PROJECT_SOURCE_DIR}/fixtures)
+set_tests_properties(cgb_speed_identity_pin PROPERTIES TIMEOUT 60)
+add_test(NAME cgb_speed_identity_pin_flipped
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_speed_internal>;cgb_speed_identity_pin;${PROJECT_SOURCE_DIR}/fixtures;--flip"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=observed
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(cgb_speed_identity_pin_flipped PROPERTIES
+  ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0" TIMEOUT 60)
+add_test(NAME cgb_speed_internal_harness_alive
+  COMMAND test_cgb_speed_internal cgb_speed_internal_harness_alive)
+add_test(NAME cgb_speed_tracer_switch
+  COMMAND test_cgb_speed_internal cgb_speed_tracer_switch)
+set_tests_properties(cgb_speed_tracer_switch PROPERTIES TIMEOUT 60)
+# --- Phase 12 plan 12-01 end ---
+
+# --- Phase 12 plan 12-03 begin ---
+include(${PROJECT_SOURCE_DIR}/cmake/P12Mutants.cmake)
+set(GBB_P12_MUTANT_CORE ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_p12_mutants.c)
+gbb_p12_make_mutant_core(${GBB_P12_MUTANT_CORE} 0)
+add_executable(test_cgb_speed_internal_p12 test_cgb_speed_internal.c)
+target_include_directories(test_cgb_speed_internal_p12 PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_cgb_speed_internal_p12 PRIVATE c_std_17)
+target_compile_definitions(test_cgb_speed_internal_p12 PRIVATE
+  "GBB_P12_CORE_SOURCE=\"${GBB_P12_MUTANT_CORE}\""
+  GBB_P12_MUTANT_BUILD=1 GBB_BUILD_REVISION="p12-mutant" GBB_BUILD_QUALIFIED=0)
+set_target_properties(test_cgb_speed_internal_p12 PROPERTIES C_EXTENSIONS OFF)
+# --- Phase 12 plan 12-17 begin ---
+add_test(NAME cgb_speed_xfail_pause_ppu_output
+  COMMAND test_cgb_speed_internal_p12 cgb_speed_xfail_pause_ppu_output)
+set_tests_properties(cgb_speed_xfail_pause_ppu_output PROPERTIES TIMEOUT 60)
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 7 xfail_ppu
+  cgb_speed_xfail_pause_ppu_output "frame differs")
+add_test(NAME cgb_speed_xfail_dma_restart
+  COMMAND test_cgb_speed_internal_p12 cgb_speed_xfail_dma_restart)
+set_tests_properties(cgb_speed_xfail_dma_restart PROPERTIES TIMEOUT 60)
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 14 xfail_dma_restart
+  cgb_speed_xfail_dma_restart "observed dma")
+add_test(NAME cgb_speed_xfail_hdma_fails_closed
+  COMMAND test_cgb_speed_internal_p12 cgb_speed_xfail_hdma_fails_closed)
+set_tests_properties(cgb_speed_xfail_hdma_fails_closed PROPERTIES TIMEOUT 60)
+add_test(NAME cgb_speed_xfail_hdma_fails_closed_negative
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_speed_internal_p12>;cgb_speed_xfail_hdma_fails_closed;--write-ff54"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=hdma-targeted-negative"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(cgb_speed_xfail_hdma_fails_closed_negative PROPERTIES TIMEOUT 60)
+add_test(NAME cgb_speed_xfail_stop_oam_unchanged
+  COMMAND test_cgb_speed_internal_p12 cgb_speed_xfail_stop_oam_unchanged)
+set_tests_properties(cgb_speed_xfail_stop_oam_unchanged PROPERTIES TIMEOUT 60)
+add_test(NAME cgb_speed_xfail_stop_oam_unchanged_negative
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_speed_internal_p12>;cgb_speed_xfail_stop_oam_unchanged;--poke-oam"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=OAM changed"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(cgb_speed_xfail_stop_oam_unchanged_negative PROPERTIES TIMEOUT 60)
+set(GBB_SPEED_DISPOSITIONS_RECORD
+  "${PROJECT_SOURCE_DIR}/tests/external/cgb-speed-dispositions.json")
+set(GBB_SPEED_DISPOSITIONS_VERIFIER
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-speed-dispositions.py")
+add_test(NAME cgb_speed_dispositions
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_SPEED_DISPOSITIONS_VERIFIER}")
+set_tests_properties(cgb_speed_dispositions PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-speed-dispositions pass rows=" TIMEOUT 30)
+file(READ "${GBB_SPEED_DISPOSITIONS_RECORD}" gbb_speed_dispositions_record)
+set(gbb_speed_pinned_anchor "\"pinned_by\": \"cgb_speed_xfail_pause_ppu_output\"")
+string(FIND "${gbb_speed_dispositions_record}" "${gbb_speed_pinned_anchor}" gbb_speed_pin_at)
+string(FIND "${gbb_speed_dispositions_record}" "${gbb_speed_pinned_anchor}" gbb_speed_pin_last REVERSE)
+if(gbb_speed_pin_at EQUAL -1 OR NOT gbb_speed_pin_at EQUAL gbb_speed_pin_last)
+  message(FATAL_ERROR "speed disposition pinned_by mutation anchor must occur exactly once")
+endif()
+string(REPLACE "${gbb_speed_pinned_anchor}"
+  "\"pinned_by\": \"cgb_speed_no_such_test\""
+  gbb_speed_dispositions_missing_pin "${gbb_speed_dispositions_record}")
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/cgb-speed-dispositions")
+file(WRITE "${PROJECT_BINARY_DIR}/cgb-speed-dispositions/pinned-by-missing.json"
+  "${gbb_speed_dispositions_missing_pin}")
+add_test(NAME cgb_speed_dispositions_pinned_by_missing
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_SPEED_DISPOSITIONS_VERIFIER};--record;${PROJECT_BINARY_DIR}/cgb-speed-dispositions/pinned-by-missing.json"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=disposition-mismatch pinned_by"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(cgb_speed_dispositions_pinned_by_missing PROPERTIES TIMEOUT 30)
+# Negative control: changing one documented reason in a configure-time copy must be rejected.
+set(gbb_speed_reason_anchor "\"reason\": \"expected-failure:speed-switch-pause-ppu-output\"")
+string(FIND "${gbb_speed_dispositions_record}" "${gbb_speed_reason_anchor}" gbb_speed_reason_at)
+string(FIND "${gbb_speed_dispositions_record}" "${gbb_speed_reason_anchor}" gbb_speed_reason_last REVERSE)
+if(gbb_speed_reason_at EQUAL -1 OR NOT gbb_speed_reason_at EQUAL gbb_speed_reason_last)
+  message(FATAL_ERROR "speed disposition reason mutation anchor must occur exactly once")
+endif()
+string(REPLACE "${gbb_speed_reason_anchor}"
+  "\"reason\": \"expected-failure:wrong-speed-switch-pause-reason\""
+  gbb_speed_dispositions_mutated "${gbb_speed_dispositions_record}")
+file(WRITE "${PROJECT_BINARY_DIR}/cgb-speed-dispositions/reason-mutated.json"
+  "${gbb_speed_dispositions_mutated}")
+add_test(NAME cgb_speed_dispositions_mutated
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_SPEED_DISPOSITIONS_VERIFIER};--record;${PROJECT_BINARY_DIR}/cgb-speed-dispositions/reason-mutated.json"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=disposition-mismatch"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(cgb_speed_dispositions_mutated PROPERTIES TIMEOUT 30)
+# --- Phase 12 plan 12-17 end ---
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 5 stall_sets_stopped
+  cgb_speed_tracer_switch "stopped|GBB_STOP_STOPPED")
+add_test(NAME cgb_speed_stop_cases COMMAND test_cgb_speed_internal_p12 cgb_speed_stop_cases)
+set_tests_properties(cgb_speed_stop_cases PROPERTIES TIMEOUT 60)
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 34 stop_falls_into_rlca
+  cgb_speed_stop_cases "machine->pc == 0x101u")
+add_test(NAME cgb_speed_stop_guest_timer_irq COMMAND test_cgb_speed_internal_p12 cgb_speed_stop_guest_timer_irq)
+set_tests_properties(cgb_speed_stop_guest_timer_irq PROPERTIES TIMEOUT 60)
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 20 guest_timer_pending_ignored
+  cgb_speed_stop_guest_timer_irq "cpu_stall_kind|m->wram")
+foreach(stop_case IN ITEMS cgb_speed_stop_operand cgb_speed_stop_prefetch_ff04
+    cgb_speed_stop_cost cgb_speed_dmg_unarmed_unchanged cgb_speed_key1_readback
+    cgb_speed_key0_no_switch)
+  add_test(NAME ${stop_case} COMMAND test_cgb_speed_internal_p12 ${stop_case})
+  set_tests_properties(${stop_case} PROPERTIES TIMEOUT 60)
+endforeach()
+add_test(NAME cgb_speed_stop_prefetch_ff04_negative
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_speed_internal_p12>;cgb_speed_stop_prefetch_ff04;--ff04-wrong-byte"
+    -DGBB_EXPECT_CODE=1 -DGBB_EXPECT_REGEX=double_speed
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(cgb_speed_stop_prefetch_ff04_negative PROPERTIES TIMEOUT 60)
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 20 pending_ignored
+  cgb_speed_stop_cases "stop_case")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 27 divider_reset_omitted
+  cgb_speed_stop_cases "divider_counter")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 8 speed_gate_removed
+  cgb_speed_dmg_unarmed_unchanged "run.reason == GBB_STOP_STOPPED")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 10 key1_arm_not_cleared
+  cgb_speed_key1_readback "0xFF4Du")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 19 held_predicate_ignored
+  cgb_speed_stop_cases "stop_case")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 29 switch_cost_one_m
+  cgb_speed_stop_cost "GBB_STOP_SWITCH_COST_HALF_DOTS")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 30 dmg_stop_apu_edge
+  cgb_speed_dmg_unarmed_unchanged "apu_sequencer_step == 3u")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 32 key0_toggles_speed
+  cgb_speed_key0_no_switch "m->double_speed == 0u")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 33 operand_changes_switch
+  cgb_speed_stop_operand "a->time_half_dots == b->time_half_dots")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 7 devices_frozen
+  cgb_speed_tracer_switch "divider_counter != 0u")
+add_test(NAME cgb_speed_cpu_ticks COMMAND test_cgb_speed_internal_p12 cgb_speed_cpu_ticks)
+set_tests_properties(cgb_speed_cpu_ticks PROPERTIES TIMEOUT 60)
+add_test(NAME cgb_speed_timer_scaling COMMAND test_cgb_speed_internal_p12 cgb_speed_timer_scaling)
+set_tests_properties(cgb_speed_timer_scaling PROPERTIES TIMEOUT 60)
+add_test(NAME cgb_speed_serial_scaling COMMAND test_cgb_speed_internal_p12 cgb_speed_serial_scaling)
+add_test(NAME cgb_speed_dma_scaling COMMAND test_cgb_speed_internal_p12 cgb_speed_dma_scaling)
+add_test(NAME cgb_speed_apu_tap COMMAND test_cgb_speed_internal_p12 cgb_speed_apu_tap)
+add_test(NAME cgb_speed_remainder_across_switch COMMAND test_cgb_speed_internal_p12 cgb_speed_remainder_across_switch)
+add_test(NAME cgb_speed_ppu_apu_rtc_unscaled
+  COMMAND test_cgb_speed_internal_p12 cgb_speed_ppu_apu_rtc_unscaled)
+set_tests_properties(cgb_speed_serial_scaling cgb_speed_dma_scaling cgb_speed_apu_tap
+  cgb_speed_remainder_across_switch cgb_speed_ppu_apu_rtc_unscaled PROPERTIES TIMEOUT 60)
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 2 serial_unscaled
+  cgb_speed_serial_scaling "machine->serial_active")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 4 apu_tap_unscaled
+  cgb_speed_apu_tap "volume == 9u|apu_sequencer_step == 4u")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 11 remainder_dropped_at_switch
+  cgb_speed_remainder_across_switch "serial_edge_remaining >|dma_phase >|timer_reload_remaining ==")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 14 dma_unscaled
+  cgb_speed_dma_scaling "!machine->dma_active")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 15 timer_reload_half_dot_units_switch
+  cgb_speed_remainder_across_switch "timer_reload_remaining == 4u")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 1 ppu_scaled
+  cgb_speed_ppu_apu_rtc_unscaled "machine->ly == 1u|frame_generation ==")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 12 rtc_scaled
+  cgb_speed_ppu_apu_rtc_unscaled "rtc_l")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 17 apu_channels_scaled
+  cgb_speed_ppu_apu_rtc_unscaled "timer == 90u")
+
+add_test(NAME cgb_speed_domains_scan
+  COMMAND ${Python3_EXECUTABLE} -I
+    ${PROJECT_SOURCE_DIR}/tests/scripts/verify-speed-domains.py
+    ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c)
+set_tests_properties(cgb_speed_domains_scan PROPERTIES
+  PASS_REGULAR_EXPRESSION "speed-domains pass functions=[1-9]" TIMEOUT 30)
+set(GBB_P12_SPEED_DOMAIN_MUTANT_CORE "${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_p12_speed_domain_mutant.c")
+file(READ "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c" gbb_p12_speed_domain_text)
+set(gbb_p12_speed_domain_anchor "static void ppu_advance_dot(gbb_instance *m) {")
+string(FIND "${gbb_p12_speed_domain_text}" "${gbb_p12_speed_domain_anchor}" gbb_p12_speed_domain_first)
+string(FIND "${gbb_p12_speed_domain_text}" "${gbb_p12_speed_domain_anchor}" gbb_p12_speed_domain_last REVERSE)
+if(gbb_p12_speed_domain_first EQUAL -1 OR NOT gbb_p12_speed_domain_first EQUAL gbb_p12_speed_domain_last)
+  message(FATAL_ERROR "speed-domain negative control needs one ppu_ function anchor")
+endif()
+string(REPLACE "${gbb_p12_speed_domain_anchor}"
+  "${gbb_p12_speed_domain_anchor}\n    (void)m->double_speed;"
+  gbb_p12_speed_domain_text "${gbb_p12_speed_domain_text}")
+file(WRITE "${GBB_P12_SPEED_DOMAIN_MUTANT_CORE}" "${gbb_p12_speed_domain_text}")
+add_test(NAME cgb_speed_domains_scan_mutated
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-speed-domains.py;${GBB_P12_SPEED_DOMAIN_MUTANT_CORE}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=speed-domain-violation ppu_advance_dot"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(cgb_speed_domains_scan_mutated PROPERTIES TIMEOUT 30)
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 3 timer_unscaled
+  cgb_speed_timer_scaling "tima_delta|div_delta")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 15 timer_reload_half_dot_units
+  cgb_speed_timer_scaling "timer_reload_remaining == 4u")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 18 cost_unscaled
+  cgb_speed_cpu_ticks "d.ticks / 2u")
+add_test(NAME cgb_speed_reset_double_speed COMMAND test_cgb_speed_internal_p12 cgb_speed_reset_double_speed)
+add_test(NAME cgb_speed_reset_stall COMMAND test_cgb_speed_internal_p12 cgb_speed_reset_stall)
+add_test(NAME cgb_speed_reset_key1 COMMAND test_cgb_speed_internal_p12 cgb_speed_reset_key1)
+set_tests_properties(cgb_speed_reset_double_speed cgb_speed_reset_stall cgb_speed_reset_key1 PROPERTIES TIMEOUT 60)
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 24 reset_retains_double_speed
+  cgb_speed_reset_double_speed "double_speed == 0u")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 25 reset_retains_stall
+  cgb_speed_reset_stall "cpu_stall_kind == GBB_STALL_NONE")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 26 reset_retains_key1_arm
+  cgb_speed_reset_key1 "key1_armed == 0u")
+
+# Mutant core build 1 of the D-25 ceiling of 6. Duplicate one anchor in a build-tree copy;
+# script-mode generation must reject it rather than silently producing a partial mutant.
+set(GBB_P12_ANCHOR_GUARD_CORE "${CMAKE_CURRENT_BINARY_DIR}/p12-anchor-guard-core.c")
+file(READ "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c" gbb_p12_anchor_guard_text)
+set(gbb_p12_anchor_guard_line "instance->cpu_stall_kind = GBB_STALL_SPEED_SWITCH; /* P12-M5 */")
+string(FIND "${gbb_p12_anchor_guard_text}" "${gbb_p12_anchor_guard_line}" gbb_p12_anchor_guard_pos)
+if(gbb_p12_anchor_guard_pos EQUAL -1)
+  message(FATAL_ERROR "missing P12-M5 anchor for negative control")
+endif()
+string(REPLACE "${gbb_p12_anchor_guard_line}"
+  "${gbb_p12_anchor_guard_line}\n            ${gbb_p12_anchor_guard_line}"
+  gbb_p12_anchor_guard_text "${gbb_p12_anchor_guard_text}")
+file(WRITE "${GBB_P12_ANCHOR_GUARD_CORE}" "${gbb_p12_anchor_guard_text}")
+add_test(NAME cgb_speed_mutant_anchor_guard
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_P12_SCRIPT_CORE=${GBB_P12_ANCHOR_GUARD_CORE};-DGBB_P12_SCRIPT_OUT=${CMAKE_CURRENT_BINARY_DIR}/anchor-guard.c;-P;${PROJECT_SOURCE_DIR}/cmake/P12Mutants.cmake"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=must occur exactly once"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(cgb_speed_mutant_anchor_guard PROPERTIES TIMEOUT 30)
+
+# Static assert mutant is mutant core build 2 of at most 6. The offset is additive so it
+# remains invalid when the M-aligned plan 12-09 stall constant is re-pinned.
+set(GBB_P12_STALL_ASSERT_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_p12_stall_assert.c")
+file(READ "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c" gbb_p12_stall_assert_text)
+set(gbb_p12_stall_assert_anchor "#define GBB_SPEED_SWITCH_STALL_T ")
+string(FIND "${gbb_p12_stall_assert_text}" "${gbb_p12_stall_assert_anchor}" gbb_p12_stall_assert_first)
+string(FIND "${gbb_p12_stall_assert_text}" "${gbb_p12_stall_assert_anchor}" gbb_p12_stall_assert_last REVERSE)
+if(gbb_p12_stall_assert_first EQUAL -1 OR NOT gbb_p12_stall_assert_first EQUAL gbb_p12_stall_assert_last)
+  message(FATAL_ERROR "P12 stall static assert anchor must occur exactly once")
+endif()
+string(REPLACE "${gbb_p12_stall_assert_anchor}" "#define GBB_SPEED_SWITCH_STALL_T 2u + "
+  gbb_p12_stall_assert_text "${gbb_p12_stall_assert_text}")
+file(WRITE "${GBB_P12_STALL_ASSERT_SOURCE}" "${gbb_p12_stall_assert_text}")
+add_library(gabbaboy_core_p12_stall_assert_mutant STATIC EXCLUDE_FROM_ALL
+  "${GBB_P12_STALL_ASSERT_SOURCE}")
+target_include_directories(gabbaboy_core_p12_stall_assert_mutant PUBLIC "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(gabbaboy_core_p12_stall_assert_mutant PUBLIC c_std_17)
+set_target_properties(gabbaboy_core_p12_stall_assert_mutant PROPERTIES C_EXTENSIONS OFF)
+target_compile_definitions(gabbaboy_core_p12_stall_assert_mutant PRIVATE
+  GBB_BUILD_REVISION="p12-stall-assert-mutant" GBB_BUILD_QUALIFIED=0)
+add_test(NAME cgb_speed_stall_static_assert_mutant
+  COMMAND ${CMAKE_COMMAND} --build ${PROJECT_BINARY_DIR} --target gabbaboy_core_p12_stall_assert_mutant)
+set_tests_properties(cgb_speed_stall_static_assert_mutant PROPERTIES
+  PASS_REGULAR_EXPRESSION "half-dot timeline:" TIMEOUT 180)
+# --- Phase 12 plan 12-03 end ---
+
+# --- Phase 12 plan 12-07 begin ---
+add_test(NAME cgb_speed_wake_ime_on
+  COMMAND test_cgb_speed_internal_p12 cgb_speed_wake_ime_on)
+set_tests_properties(cgb_speed_wake_ime_on PROPERTIES TIMEOUT 60)
+foreach(wake_case IN ITEMS cgb_speed_wake_ime_off cgb_speed_ei_stop
+    cgb_speed_wake_m_boundary cgb_speed_realign)
+  add_test(NAME ${wake_case} COMMAND test_cgb_speed_internal_p12 ${wake_case})
+  set_tests_properties(${wake_case} PROPERTIES TIMEOUT 60)
+endforeach()
+foreach(stall_case IN ITEMS cgb_speed_stall_length cgb_speed_budget_semantics
+    cgb_speed_never_stopped cgb_speed_stall_devices_advance cgb_speed_headroom)
+  add_test(NAME ${stall_case} COMMAND test_cgb_speed_internal_p12 ${stall_case})
+  set_tests_properties(${stall_case} PROPERTIES TIMEOUT 60)
+endforeach()
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 13 wake_ime_on_ignored
+  cgb_speed_wake_ime_on "run.reason == GBB_STOP_TRACE_FULL|run.trace_count == 1u|stall_end >= machine->timer_reloaded_at")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 16 wake_ime_on_per_call
+  cgb_speed_wake_ime_on "run.reason == GBB_STOP_TRACE_FULL|run.trace_count == 1u|stall_end >= machine->timer_reloaded_at")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 13 wake_ime_off_ignored
+  cgb_speed_wake_ime_off "timer_reloaded_at > stall_start|machine->b == 1u")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 16 wake_sampled_per_call
+  cgb_speed_wake_m_boundary "machine->b == 1u|machine->cpu_stall_kind")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 23 realignment_omitted
+  cgb_speed_realign "GBB_STALL_SWITCH_REALIGN|cpu_stall_half_dots == 4u")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 34 ei_delay_not_retired
+  cgb_speed_ei_stop "machine->ime == 1")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 6 stall_one_m_long
+  cgb_speed_stall_length "expected_stall|trace\[0\]\.time_half_dots|cpu_stall_kind")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 21 stall_one_m_short
+  cgb_speed_stall_length "expected_stall|trace\[0\]\.time_half_dots|cpu_stall_kind")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 28 stall_one_half_dot_long
+  cgb_speed_stall_length "expected_stall|trace\[0\]\.time_half_dots|cpu_stall_kind")
+add_test(NAME cgb_speed_m28_normal_unchanged
+  COMMAND test_cgb_speed_internal_p12 cgb_speed_m28_normal_unchanged --mutants 0x10000000)
+set_tests_properties(cgb_speed_m28_normal_unchanged PROPERTIES TIMEOUT 60)
+add_test(NAME cgb_speed_m28_normal_unchanged_control
+  COMMAND test_cgb_speed_internal_p12 cgb_speed_m28_normal_unchanged --mutants 0)
+set_tests_properties(cgb_speed_m28_normal_unchanged_control PROPERTIES TIMEOUT 60)
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 9 stall_budget_unbounded
+  cgb_speed_budget_semantics "run\.consumed_half_dots == expected_consumed|run\.consumed_half_dots <= budget")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 22 switch_headroom_omitted
+  cgb_speed_headroom "GBB_STOP_INVALID_STATE|memcmp")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 5 stall_sets_stopped_never
+  cgb_speed_never_stopped "GBB_STOP_STOPPED|machine->stopped")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 7 devices_frozen_never
+  cgb_speed_never_stopped "divider_counter != divider_before")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 5 stall_sets_stopped_devices
+  cgb_speed_stall_devices_advance "GBB_STOP_BUDGET")
+gbb_p12_mutant_test(test_cgb_speed_internal_p12 7 devices_frozen_devices
+  cgb_speed_stall_devices_advance "machine->ly >= 143u|machine->tima != initial_tima")
+add_test(NAME cgb_speed_mutant_m31_stall_offset_noop
+  COMMAND test_cgb_speed_internal_p12 cgb_speed_stall_length --mutants 0x80000000)
+set_tests_properties(cgb_speed_mutant_m31_stall_offset_noop PROPERTIES TIMEOUT 60)
+# --- Phase 12 plan 12-07 end ---
+
+# --- Phase 12 plan 12-09 begin ---
+add_executable(test_age test_age.c)
+target_include_directories(test_age PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_link_libraries(test_age PRIVATE GabbaBoy::core gabbaboy_accept)
+target_compile_features(test_age PRIVATE c_std_17)
+set_target_properties(test_age PROPERTIES C_EXTENSIONS OFF)
+
+set(GBB_AGE_MANIFEST "${PROJECT_SOURCE_DIR}/fixtures/age/manifest.json")
+file(READ "${GBB_AGE_MANIFEST}" GBB_AGE_MANIFEST_JSON)
+string(JSON GBB_AGE_FIXTURE_COUNT LENGTH "${GBB_AGE_MANIFEST_JSON}" fixtures)
+math(EXPR GBB_AGE_FIXTURE_LAST "${GBB_AGE_FIXTURE_COUNT} - 1")
+set(GBB_AGE_SPSW_FOUND OFF)
+foreach(GBB_AGE_FIXTURE_INDEX RANGE 0 ${GBB_AGE_FIXTURE_LAST})
+  string(JSON GBB_AGE_FIXTURE_FILE GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} file)
+  if("${GBB_AGE_FIXTURE_FILE}" STREQUAL "spsw-div-cgbBCE.gb")
+    set(GBB_AGE_SPSW_FOUND ON)
+    string(JSON GBB_AGE_SPSW_RESULTS GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} test_results_address)
+    string(JSON GBB_AGE_SPSW_EXPECTED GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} expected_address)
+    string(JSON GBB_AGE_SPSW_ROWS GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} rows)
+    string(JSON GBB_AGE_SPSW_BUDGET GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} budget_half_dots)
+  endif()
+endforeach()
+if(NOT GBB_AGE_SPSW_FOUND OR NOT DEFINED GBB_AGE_SPSW_BUDGET)
+  message(FATAL_ERROR "AGE manifest must define spsw-div-cgbBCE and its measured budget")
+endif()
+string(REPLACE "$" "0x" GBB_AGE_SPSW_RESULTS_HEX "${GBB_AGE_SPSW_RESULTS}")
+string(REPLACE "$" "0x" GBB_AGE_SPSW_EXPECTED_HEX "${GBB_AGE_SPSW_EXPECTED}")
+set(GBB_AGE_SPSW_ROM "${PROJECT_SOURCE_DIR}/fixtures/age/spsw-div-cgbBCE.gb")
+set(GBB_AGE_TIMEOUT_CONTROL_TIMEOUT 30)
+set(GBB_AGE_STALL_WINDOW_TIMEOUT 240)
+# Negative control: one half-dot cannot reach an executed verdict and must report timeout distinctly.
+add_test(NAME age_spsw_div_cgbBCE_timeout
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_age>;${GBB_AGE_SPSW_ROM};${GBB_AGE_SPSW_RESULTS_HEX};${GBB_AGE_SPSW_EXPECTED_HEX};${GBB_AGE_SPSW_ROWS};1;--verdict"
+    -DGBB_EXPECT_CODE=3
+    "-DGBB_EXPECT_REGEX=age-timeout half_dots="
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(age_spsw_div_cgbBCE_timeout PROPERTIES TIMEOUT ${GBB_AGE_TIMEOUT_CONTROL_TIMEOUT})
+
+# Mutant core build 3 of at most 6; the later AGE disposition and sensitivity plans reuse this library.
+set(GBB_P12_PUBLIC_MUTANT_CORE "${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_p12_public_mutants.c")
+gbb_p12_make_mutant_core("${GBB_P12_PUBLIC_MUTANT_CORE}" 0)
+add_library(gabbaboy_core_p12_mutants STATIC "${GBB_P12_PUBLIC_MUTANT_CORE}")
+target_include_directories(gabbaboy_core_p12_mutants
+  PUBLIC "${PROJECT_SOURCE_DIR}/include"
+  PRIVATE "${PROJECT_SOURCE_DIR}/src/core")
+target_compile_features(gabbaboy_core_p12_mutants PUBLIC c_std_17)
+set_target_properties(gabbaboy_core_p12_mutants PROPERTIES C_EXTENSIONS OFF)
+target_compile_definitions(gabbaboy_core_p12_mutants PRIVATE
+  GBB_BUILD_REVISION="p12-public-mutant-3" GBB_BUILD_QUALIFIED=0)
+
+add_executable(test_age_p12 test_age.c)
+target_include_directories(test_age_p12 PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_age_p12 PRIVATE c_std_17)
+target_compile_definitions(test_age_p12 PRIVATE GBB_AGE_P12=1)
+target_link_libraries(test_age_p12 PRIVATE gabbaboy_core_p12_mutants gabbaboy_accept)
+set_target_properties(test_age_p12 PROPERTIES C_EXTENSIONS OFF)
+
+# The measured committed-core bounds drive the four-point boundary assertion below.
+set(GBB_P12_AGE_STALL_WINDOW "0x20004;0x20007")
+list(GET GBB_P12_AGE_STALL_WINDOW 0 GBB_P12_AGE_STALL_WINDOW_LO)
+list(GET GBB_P12_AGE_STALL_WINDOW 1 GBB_P12_AGE_STALL_WINDOW_HI)
+add_test(NAME age_stall_window
+  COMMAND test_age_p12 "${GBB_AGE_SPSW_ROM}" "${GBB_AGE_SPSW_RESULTS_HEX}"
+    "${GBB_AGE_SPSW_EXPECTED_HEX}" "${GBB_AGE_SPSW_ROWS}"
+    "${GBB_AGE_SPSW_BUDGET}" --stall-window "${GBB_P12_STALL_T_HEX}"
+    "${GBB_P12_AGE_STALL_WINDOW_LO}" "${GBB_P12_AGE_STALL_WINDOW_HI}")
+set_tests_properties(age_stall_window PROPERTIES
+  PASS_REGULAR_EXPRESSION "age-stall-window pass window=\\[${GBB_P12_AGE_STALL_WINDOW_LO},${GBB_P12_AGE_STALL_WINDOW_HI}\\] constant=${GBB_P12_STALL_T_HEX}"
+  TIMEOUT ${GBB_AGE_STALL_WINDOW_TIMEOUT})
+# --- Phase 12 plan 12-09 end ---
+
+# --- Phase 12 plan 12-16 begin ---
+# The disposition rows pin committed-core results; the manifest supplies bounded run layouts.
+set(GBB_AGE_DISPOSITIONS_FILE "${PROJECT_SOURCE_DIR}/tests/external/cgb-speed-dispositions.json")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${GBB_AGE_MANIFEST}" "${GBB_AGE_DISPOSITIONS_FILE}")
+file(READ "${GBB_AGE_DISPOSITIONS_FILE}" GBB_AGE_DISPOSITIONS_JSON)
+string(JSON GBB_AGE_DISPOSITIONS_SCHEMA GET "${GBB_AGE_DISPOSITIONS_JSON}" schema)
+if(NOT GBB_AGE_DISPOSITIONS_SCHEMA STREQUAL "gabbaboy-external-dispositions-v1")
+  message(FATAL_ERROR "AGE dispositions have an unsupported schema")
+endif()
+string(JSON GBB_AGE_DISPOSITION_SUITE_COUNT LENGTH "${GBB_AGE_DISPOSITIONS_JSON}" suites)
+set(GBB_AGE_DISPOSITION_SUITE_FOUND OFF)
+foreach(GBB_AGE_DISPOSITION_SUITE_INDEX RANGE 0 ${GBB_AGE_DISPOSITION_SUITE_COUNT})
+  if(GBB_AGE_DISPOSITION_SUITE_INDEX LESS GBB_AGE_DISPOSITION_SUITE_COUNT)
+    string(JSON GBB_AGE_DISPOSITION_SUITE_NAME GET "${GBB_AGE_DISPOSITIONS_JSON}"
+      suites ${GBB_AGE_DISPOSITION_SUITE_INDEX} suite)
+    if(GBB_AGE_DISPOSITION_SUITE_NAME STREQUAL "age-test-roms")
+      set(GBB_AGE_DISPOSITION_SUITE_FOUND ON)
+      string(JSON GBB_AGE_DISPOSITION_ROW_COUNT LENGTH "${GBB_AGE_DISPOSITIONS_JSON}"
+        suites ${GBB_AGE_DISPOSITION_SUITE_INDEX} rows)
+      math(EXPR GBB_AGE_DISPOSITION_ROW_LAST "${GBB_AGE_DISPOSITION_ROW_COUNT} - 1")
+      foreach(GBB_AGE_DISPOSITION_ROW_INDEX RANGE 0 ${GBB_AGE_DISPOSITION_ROW_LAST})
+        string(JSON GBB_AGE_CASE GET "${GBB_AGE_DISPOSITIONS_JSON}"
+          suites ${GBB_AGE_DISPOSITION_SUITE_INDEX} rows ${GBB_AGE_DISPOSITION_ROW_INDEX} case)
+        string(JSON GBB_AGE_DISPOSITION GET "${GBB_AGE_DISPOSITIONS_JSON}"
+          suites ${GBB_AGE_DISPOSITION_SUITE_INDEX} rows ${GBB_AGE_DISPOSITION_ROW_INDEX} disposition)
+        if(GBB_AGE_DISPOSITION STREQUAL "digest-only")
+          continue()
+        endif()
+        string(JSON GBB_AGE_SIGNATURE GET "${GBB_AGE_DISPOSITIONS_JSON}"
+          suites ${GBB_AGE_DISPOSITION_SUITE_INDEX} rows ${GBB_AGE_DISPOSITION_ROW_INDEX} signature_sha256)
+        string(JSON GBB_AGE_ROW_MASK GET "${GBB_AGE_DISPOSITIONS_JSON}"
+          suites ${GBB_AGE_DISPOSITION_SUITE_INDEX} rows ${GBB_AGE_DISPOSITION_ROW_INDEX} row_mask)
+
+        set(GBB_AGE_CASE_FILE "${GBB_AGE_CASE}.gb")
+        set(GBB_AGE_CASE_FOUND OFF)
+        foreach(GBB_AGE_CASE_FIXTURE_INDEX RANGE 0 ${GBB_AGE_FIXTURE_LAST})
+          string(JSON GBB_AGE_FIXTURE_FILE GET "${GBB_AGE_MANIFEST_JSON}"
+            fixtures ${GBB_AGE_CASE_FIXTURE_INDEX} file)
+          if(GBB_AGE_FIXTURE_FILE STREQUAL GBB_AGE_CASE_FILE)
+            set(GBB_AGE_CASE_FOUND ON)
+            string(JSON GBB_AGE_CASE_RESULTS GET "${GBB_AGE_MANIFEST_JSON}"
+              fixtures ${GBB_AGE_CASE_FIXTURE_INDEX} test_results_address)
+            string(JSON GBB_AGE_CASE_EXPECTED GET "${GBB_AGE_MANIFEST_JSON}"
+              fixtures ${GBB_AGE_CASE_FIXTURE_INDEX} expected_address)
+            string(JSON GBB_AGE_CASE_ROWS GET "${GBB_AGE_MANIFEST_JSON}"
+              fixtures ${GBB_AGE_CASE_FIXTURE_INDEX} rows)
+            string(JSON GBB_AGE_CASE_BUDGET GET "${GBB_AGE_MANIFEST_JSON}"
+              fixtures ${GBB_AGE_CASE_FIXTURE_INDEX} budget_half_dots)
+          endif()
+        endforeach()
+        if(NOT GBB_AGE_CASE_FOUND OR GBB_AGE_CASE_BUDGET LESS 1)
+          message(FATAL_ERROR "AGE disposition ${GBB_AGE_CASE} lacks a manifest fixture or budget")
+        endif()
+        if(NOT GBB_AGE_DISPOSITION STREQUAL "pass" AND
+           NOT GBB_AGE_DISPOSITION STREQUAL "expected-failure")
+          message(FATAL_ERROR "AGE disposition ${GBB_AGE_CASE} is not runnable: ${GBB_AGE_DISPOSITION}")
+        endif()
+
+        string(REPLACE "$" "0x" GBB_AGE_CASE_RESULTS_HEX "${GBB_AGE_CASE_RESULTS}")
+        string(REPLACE "$" "0x" GBB_AGE_CASE_EXPECTED_HEX "${GBB_AGE_CASE_EXPECTED}")
+        string(REPLACE "-" "_" GBB_AGE_CASE_CTEST "${GBB_AGE_CASE}")
+        set(GBB_AGE_CASE_TEST "age_${GBB_AGE_CASE_CTEST}")
+        set(GBB_AGE_CASE_TIMEOUT 120)
+        set(GBB_AGE_DISPOSITION_ARGS "${GBB_AGE_DISPOSITION}")
+        set(GBB_AGE_EXPECTED_VERDICT "pass")
+        if(GBB_AGE_DISPOSITION STREQUAL "expected-failure")
+          list(APPEND GBB_AGE_DISPOSITION_ARGS "${GBB_AGE_SIGNATURE}" "${GBB_AGE_ROW_MASK}")
+          set(GBB_AGE_EXPECTED_VERDICT "fail")
+        endif()
+        add_test(NAME ${GBB_AGE_CASE_TEST}
+          COMMAND test_age "${PROJECT_SOURCE_DIR}/fixtures/age/${GBB_AGE_CASE_FILE}"
+            "${GBB_AGE_CASE_RESULTS_HEX}" "${GBB_AGE_CASE_EXPECTED_HEX}"
+            "${GBB_AGE_CASE_ROWS}" "${GBB_AGE_CASE_BUDGET}"
+            --check-disposition ${GBB_AGE_DISPOSITION_ARGS})
+        set_tests_properties(${GBB_AGE_CASE_TEST} PROPERTIES TIMEOUT ${GBB_AGE_CASE_TIMEOUT}
+          PASS_REGULAR_EXPRESSION "age verdict=${GBB_AGE_EXPECTED_VERDICT}")
+      endforeach()
+    endif()
+  endif()
+endforeach()
+if(NOT GBB_AGE_DISPOSITION_SUITE_FOUND OR GBB_AGE_DISPOSITION_ROW_COUNT LESS 1)
+  message(FATAL_ERROR "AGE dispositions must contain non-empty age-test-roms rows")
+endif()
+
+# D-21 sensitivity tests run every admitted AGE fixture and compare its clean and mutant results.
+set(GBB_AGE_SENSITIVITY_ENTRIES)
+foreach(GBB_AGE_SENSITIVITY_INDEX RANGE 0 ${GBB_AGE_FIXTURE_LAST})
+  string(JSON GBB_AGE_SENSITIVITY_FILE GET "${GBB_AGE_MANIFEST_JSON}"
+    fixtures ${GBB_AGE_SENSITIVITY_INDEX} file)
+  string(JSON GBB_AGE_SENSITIVITY_RESULTS GET "${GBB_AGE_MANIFEST_JSON}"
+    fixtures ${GBB_AGE_SENSITIVITY_INDEX} test_results_address)
+  string(JSON GBB_AGE_SENSITIVITY_EXPECTED GET "${GBB_AGE_MANIFEST_JSON}"
+    fixtures ${GBB_AGE_SENSITIVITY_INDEX} expected_address)
+  string(JSON GBB_AGE_SENSITIVITY_ROWS GET "${GBB_AGE_MANIFEST_JSON}"
+    fixtures ${GBB_AGE_SENSITIVITY_INDEX} rows)
+  string(JSON GBB_AGE_SENSITIVITY_BUDGET GET "${GBB_AGE_MANIFEST_JSON}"
+    fixtures ${GBB_AGE_SENSITIVITY_INDEX} budget_half_dots)
+  string(REGEX REPLACE "[.]gb$" "" GBB_AGE_SENSITIVITY_CASE "${GBB_AGE_SENSITIVITY_FILE}")
+  string(REPLACE "$" "0x" GBB_AGE_SENSITIVITY_RESULTS "${GBB_AGE_SENSITIVITY_RESULTS}")
+  string(REPLACE "$" "0x" GBB_AGE_SENSITIVITY_EXPECTED "${GBB_AGE_SENSITIVITY_EXPECTED}")
+  list(APPEND GBB_AGE_SENSITIVITY_ENTRIES
+    "${GBB_AGE_SENSITIVITY_CASE}|${GBB_AGE_SENSITIVITY_RESULTS}|${GBB_AGE_SENSITIVITY_EXPECTED}|${GBB_AGE_SENSITIVITY_ROWS}|${GBB_AGE_SENSITIVITY_BUDGET}")
+endforeach()
+list(JOIN GBB_AGE_SENSITIVITY_ENTRIES ";" GBB_AGE_SENSITIVITY_ENTRIES_TEXT)
+set(GBB_AGE_SENSITIVITY_SCRIPT_DIR "${PROJECT_BINARY_DIR}/age-sensitivity")
+file(MAKE_DIRECTORY "${GBB_AGE_SENSITIVITY_SCRIPT_DIR}")
+set(GBB_AGE_SENSITIVITY_SCRIPT "${GBB_AGE_SENSITIVITY_SCRIPT_DIR}/run.cmake")
+file(WRITE "${GBB_AGE_SENSITIVITY_SCRIPT}"
+  "set(GBB_AGE_SENSITIVITY_ENTRIES [==[${GBB_AGE_SENSITIVITY_ENTRIES_TEXT}]==])\n")
+file(APPEND "${GBB_AGE_SENSITIVITY_SCRIPT}" [=[
+foreach(GBB_ENTRY IN LISTS GBB_AGE_SENSITIVITY_ENTRIES)
+  string(REPLACE "|" ";" GBB_FIELDS "${GBB_ENTRY}")
+  list(GET GBB_FIELDS 0 GBB_CASE)
+  list(GET GBB_FIELDS 1 GBB_RESULTS)
+  list(GET GBB_FIELDS 2 GBB_EXPECTED)
+  list(GET GBB_FIELDS 3 GBB_ROWS)
+  list(GET GBB_FIELDS 4 GBB_BUDGET)
+  execute_process(
+    COMMAND "${GBB_AGE_SENSITIVITY_EXECUTABLE}"
+      "${GBB_AGE_SENSITIVITY_ROOT}/${GBB_CASE}.gb"
+      "${GBB_RESULTS}" "${GBB_EXPECTED}" "${GBB_ROWS}" "${GBB_BUDGET}"
+      --sensitivity "${GBB_AGE_SENSITIVITY_MASK}" "${GBB_AGE_SENSITIVITY_JSON}"
+    RESULT_VARIABLE GBB_RESULT OUTPUT_VARIABLE GBB_OUTPUT ERROR_VARIABLE GBB_ERROR)
+  if(NOT GBB_RESULT EQUAL 0)
+    message(FATAL_ERROR "age-sensitivity mismatch mutant=${GBB_AGE_SENSITIVITY_MUTANT} case=${GBB_CASE}\n${GBB_OUTPUT}${GBB_ERROR}")
+  endif()
+endforeach()
+message(STATUS "age-sensitivity-sweep pass mutant=${GBB_AGE_SENSITIVITY_MUTANT} fixtures=13")
+]=])
+foreach(GBB_AGE_SENSITIVITY_MUTANT IN ITEMS M6 M21 M28 M27)
+  if(GBB_AGE_SENSITIVITY_MUTANT STREQUAL "M6")
+    set(GBB_AGE_SENSITIVITY_MASK "0x40")
+  elseif(GBB_AGE_SENSITIVITY_MUTANT STREQUAL "M21")
+    set(GBB_AGE_SENSITIVITY_MASK "0x200000")
+  elseif(GBB_AGE_SENSITIVITY_MUTANT STREQUAL "M28")
+    set(GBB_AGE_SENSITIVITY_MASK "0x10000000")
+  else()
+    set(GBB_AGE_SENSITIVITY_MASK "0x8000000")
+  endif()
+  string(TOLOWER "${GBB_AGE_SENSITIVITY_MUTANT}" GBB_AGE_SENSITIVITY_TEST_SUFFIX)
+  add_test(NAME age_sensitivity_${GBB_AGE_SENSITIVITY_TEST_SUFFIX}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_AGE_SENSITIVITY_EXECUTABLE=$<TARGET_FILE:test_age_p12>"
+      "-DGBB_AGE_SENSITIVITY_ROOT=${PROJECT_SOURCE_DIR}/fixtures/age"
+      "-DGBB_AGE_SENSITIVITY_JSON=${GBB_AGE_DISPOSITIONS_FILE}"
+      "-DGBB_AGE_SENSITIVITY_MASK=${GBB_AGE_SENSITIVITY_MASK}"
+      "-DGBB_AGE_SENSITIVITY_MUTANT=${GBB_AGE_SENSITIVITY_MUTANT}"
+      -P "${GBB_AGE_SENSITIVITY_SCRIPT}")
+  set_tests_properties(age_sensitivity_${GBB_AGE_SENSITIVITY_TEST_SUFFIX} PROPERTIES
+    PASS_REGULAR_EXPRESSION "age-sensitivity-sweep pass mutant=${GBB_AGE_SENSITIVITY_MUTANT} fixtures=13"
+    TIMEOUT 240)
+endforeach()
+
+# A deliberately wrong M28 reference proves the new mode rejects altered coverage.
+set(gbb_age_m28_reference_anchor "\"mutant\": \"M28\",\n            \"description\": \"add one half-dot to the stall when switching to double speed\",\n            \"discriminating_cases\": [\n              \"spsw-mode0-cgbBCE\"")
+string(FIND "${GBB_AGE_DISPOSITIONS_JSON}" "${gbb_age_m28_reference_anchor}" gbb_age_m28_anchor_at)
+string(FIND "${GBB_AGE_DISPOSITIONS_JSON}" "${gbb_age_m28_reference_anchor}" gbb_age_m28_anchor_last REVERSE)
+if(gbb_age_m28_anchor_at EQUAL -1 OR NOT gbb_age_m28_anchor_at EQUAL gbb_age_m28_anchor_last)
+  message(FATAL_ERROR "AGE M28 sensitivity negative-control anchor must occur exactly once")
+endif()
+string(REPLACE "${gbb_age_m28_reference_anchor}"
+  "\"mutant\": \"M28\",\n            \"description\": \"add one half-dot to the stall when switching to double speed\",\n            \"discriminating_cases\": []"
+  gbb_age_m28_reference_mutated "${GBB_AGE_DISPOSITIONS_JSON}")
+set(GBB_AGE_M28_MUTATED_JSON "${GBB_AGE_SENSITIVITY_SCRIPT_DIR}/m28-mutated.json")
+file(WRITE "${GBB_AGE_M28_MUTATED_JSON}" "${gbb_age_m28_reference_mutated}")
+add_test(NAME age_sensitivity_m28_reference_mutated
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_age_p12>;${PROJECT_SOURCE_DIR}/fixtures/age/spsw-mode0-cgbBCE.gb;0xC000;0x144A;15;4000000;--sensitivity;0x10000000;${GBB_AGE_M28_MUTATED_JSON}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=age-sensitivity mismatch"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(age_sensitivity_m28_reference_mutated PROPERTIES TIMEOUT 60)
+
+# AGE fixture integrity and redistribution guards (D-19, T-12-20). The digest
+# mutation proves the manifest verifier rejects a changed pin; the install scan
+# and renamed-copy control prevent repository-only ROMs from entering packages.
+add_test(NAME age_fixture_digest
+  COMMAND ${CMAKE_COMMAND} -DMANIFEST=${GBB_AGE_MANIFEST}
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixtureManifest.cmake)
+
+string(JSON GBB_AGE_TAMPERED_DIGEST GET "${GBB_AGE_MANIFEST_JSON}" fixtures 0 sha256)
+string(SUBSTRING "${GBB_AGE_TAMPERED_DIGEST}" 0 1 GBB_AGE_TAMPERED_FIRST)
+string(SUBSTRING "${GBB_AGE_TAMPERED_DIGEST}" 1 63 GBB_AGE_TAMPERED_REST)
+if(GBB_AGE_TAMPERED_FIRST STREQUAL "0")
+  set(GBB_AGE_TAMPERED_FIRST "1")
+else()
+  set(GBB_AGE_TAMPERED_FIRST "0")
+endif()
+set(GBB_AGE_TAMPERED_DIGEST "${GBB_AGE_TAMPERED_FIRST}${GBB_AGE_TAMPERED_REST}")
+string(JSON GBB_AGE_TAMPERED_MANIFEST SET "${GBB_AGE_MANIFEST_JSON}"
+  fixtures 0 sha256 "\"${GBB_AGE_TAMPERED_DIGEST}\"")
+set(GBB_AGE_TAMPERED_MANIFEST_FILE "${PROJECT_BINARY_DIR}/age-tampered/manifest.json")
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/age-tampered")
+file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/age/spsw-div-cgbBCE.gb"
+  "${PROJECT_BINARY_DIR}/age-tampered/spsw-div-cgbBCE.gb")
+file(WRITE "${GBB_AGE_TAMPERED_MANIFEST_FILE}" "${GBB_AGE_TAMPERED_MANIFEST}")
+add_test(NAME age_fixture_digest_tampered
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DMANIFEST=${GBB_AGE_TAMPERED_MANIFEST_FILE};-P;${PROJECT_SOURCE_DIR}/cmake/VerifyFixtureManifest.cmake"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=fixture-digest-mismatch: spsw-div-cgbBCE[.]gb"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+set(GBB_AGE_SCAN_SELFTEST "${PROJECT_BINARY_DIR}/age-scan-selftest")
+file(MAKE_DIRECTORY "${GBB_AGE_SCAN_SELFTEST}/share")
+file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/age/spsw-div-cgbBCE.gb"
+  "${GBB_AGE_SCAN_SELFTEST}/share/payload.bin")
+set(GBB_AGE_SCAN_ARGS "-DGBB_FORBIDDEN_MANIFEST=${GBB_AGE_MANIFEST}"
+  -DGBB_FORBIDDEN_LABEL=fixtures/age)
+function(gbb_add_age_scan_test name code regex scan_dir)
+  set(command "${CMAKE_COMMAND}" "-DGBB_SCAN_DIR=${scan_dir}" ${GBB_AGE_SCAN_ARGS}
+    -P "${GBB_MBC_SCAN_SCRIPT}")
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60)
+endfunction()
+gbb_add_age_scan_test(age_not_installed 0 "fixtures/age absent from scanned tree files=[1-9]"
+  "${GBB_LIBBET_INSTALL_CHECK}")
+set_tests_properties(age_not_installed PROPERTIES FIXTURES_REQUIRED libbet_install)
+gbb_add_age_scan_test(age_not_installed_selftest 1 "fixtures/age-installed: share/payload[.]bin"
+  "${GBB_AGE_SCAN_SELFTEST}")
+
+if(NOT WIN32)
+  find_program(GBB_BASH_AGE_REPRO bash REQUIRED)
+  add_test(NAME age_repro_selfcheck
+    COMMAND "${GBB_BASH_AGE_REPRO}" "${PROJECT_SOURCE_DIR}/tests/scripts/reproduce-age.sh" --self-check)
+  set_tests_properties(age_repro_selfcheck PROPERTIES TIMEOUT 30
+    PASS_REGULAR_EXPRESSION "self-check=pass")
+  add_test(NAME age_repro_selfcheck_tampered
+    COMMAND "${GBB_BASH_AGE_REPRO}" "${PROJECT_SOURCE_DIR}/tests/scripts/test-reproduce-age.sh" selfcheck-tampered)
+  set_tests_properties(age_repro_selfcheck_tampered PROPERTIES TIMEOUT 60
+    PASS_REGULAR_EXPRESSION "reproduce-age negative control selfcheck-tampered ok")
+  add_test(NAME age_repro_compare_tampered
+    COMMAND "${GBB_BASH_AGE_REPRO}" "${PROJECT_SOURCE_DIR}/tests/scripts/test-reproduce-age.sh" compare-tampered)
+  set_tests_properties(age_repro_compare_tampered PROPERTIES TIMEOUT 60
+    PASS_REGULAR_EXPRESSION "reproduce-age negative control compare-tampered ok")
+endif()
+# --- Phase 12 plan 12-16 end ---
+
+# --- Phase 12 plan 12-10 begin ---
+# Original project-authored CGB speed probes (D-22); the expectations are generated only from
+# documented clock units, and this driver observes the guest solely through the public API.
+set(GBB_CGB_SPEED_DIR "${PROJECT_SOURCE_DIR}/fixtures/cgb-speed")
+add_executable(test_cgb_speed_fixture test_cgb_speed_fixture.c)
+target_include_directories(test_cgb_speed_fixture PRIVATE "${PROJECT_SOURCE_DIR}/src/accept")
+target_link_libraries(test_cgb_speed_fixture PRIVATE GabbaBoy::core gabbaboy_accept)
+target_compile_features(test_cgb_speed_fixture PRIVATE c_std_17)
+set_target_properties(test_cgb_speed_fixture PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_speed_fixture_digest
+  COMMAND ${CMAKE_COMMAND} -DMANIFEST=${GBB_CGB_SPEED_DIR}/manifest.json
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixtureManifest.cmake)
+add_test(NAME cgb_speed_expectations_derive
+  COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/derive-cgb-speed-expectations.py
+    --check ${PROJECT_SOURCE_DIR}/tests/data/cgb-speed-expectations.txt)
+set_tests_properties(cgb_speed_expectations_derive PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-speed-expectations check pass")
+add_test(NAME cgb_speed_fixture_probes
+  COMMAND test_cgb_speed_fixture probes ${GBB_CGB_SPEED_DIR}/speed.gb
+    ${PROJECT_SOURCE_DIR}/tests/data/cgb-speed-expectations.txt)
+set_tests_properties(cgb_speed_fixture_probes PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-speed-fixture probes pass checks=" TIMEOUT 60)
+
+# A configure-time out-of-range edit must be caught by the independent host verdict.
+set(GBB_CGB_SPEED_TAMPERED_TABLE "${PROJECT_BINARY_DIR}/cgb-speed/tampered-expectations.txt")
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/cgb-speed")
+file(READ "${PROJECT_SOURCE_DIR}/tests/data/cgb-speed-expectations.txt" gbb_cgb_speed_expectations)
+string(FIND "${gbb_cgb_speed_expectations}" "tima 0 26 31" gbb_cgb_speed_tima_anchor)
+if(gbb_cgb_speed_tima_anchor EQUAL -1)
+  message(FATAL_ERROR "cgb-speed expectation tamper anchor is missing")
+endif()
+string(REPLACE "tima 0 26 31" "tima 0 200 201" gbb_cgb_speed_expectations_bad
+  "${gbb_cgb_speed_expectations}")
+file(WRITE "${GBB_CGB_SPEED_TAMPERED_TABLE}" "${gbb_cgb_speed_expectations_bad}")
+add_test(NAME cgb_speed_expectations_tampered
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_speed_fixture>;probes;${GBB_CGB_SPEED_DIR}/speed.gb;${GBB_CGB_SPEED_TAMPERED_TABLE}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=cgb-speed-fixture verdict-fail tima 0"
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(cgb_speed_expectations_tampered PROPERTIES TIMEOUT 60)
+
+# The wrong speed ratio is derived afresh at test time, then must disagree with the clean ROM.
+set(GBB_CGB_SPEED_FACTOR3_SCRIPT "${PROJECT_BINARY_DIR}/cgb-speed/factor3.cmake")
+file(WRITE "${GBB_CGB_SPEED_FACTOR3_SCRIPT}" [=[
+execute_process(COMMAND "${PYTHON}" -I "${DERIVER}" --write "${OUTPUT}" --speed-factor 3
+  RESULT_VARIABLE derive_result OUTPUT_VARIABLE derive_out ERROR_VARIABLE derive_err)
+if(NOT derive_result EQUAL 0)
+  message(FATAL_ERROR "factor-3 derivation failed: ${derive_out}${derive_err}")
+endif()
+execute_process(COMMAND "${TEST_EXE}" probes "${ROM}" "${OUTPUT}"
+  RESULT_VARIABLE test_result OUTPUT_VARIABLE test_out ERROR_VARIABLE test_err)
+if(test_result EQUAL 0 OR NOT "${test_out}${test_err}" MATCHES "cgb-speed-fixture verdict-fail")
+  message(FATAL_ERROR "factor-3 negative control did not reject the clean core: ${test_out}${test_err}")
+endif()
+message("cgb-speed-expectations factor3 reject pass")
+]=])
+add_test(NAME cgb_speed_expectations_factor3
+  COMMAND ${CMAKE_COMMAND}
+    "-DPYTHON=${Python3_EXECUTABLE}"
+    "-DDERIVER=${PROJECT_SOURCE_DIR}/tests/scripts/derive-cgb-speed-expectations.py"
+    "-DOUTPUT=${PROJECT_BINARY_DIR}/cgb-speed/factor3-expectations.txt"
+    "-DTEST_EXE=$<TARGET_FILE:test_cgb_speed_fixture>"
+    "-DROM=${GBB_CGB_SPEED_DIR}/speed.gb"
+    -P "${GBB_CGB_SPEED_FACTOR3_SCRIPT}")
+set_tests_properties(cgb_speed_expectations_factor3 PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-speed-expectations factor3 reject pass" TIMEOUT 60)
+
+# Core-level fixture identities use only the public API; mutant code is generated in the build tree.
+add_executable(test_cgb_speed_fixture_p12 test_cgb_speed_fixture.c)
+target_include_directories(test_cgb_speed_fixture_p12 PRIVATE
+  "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/src/accept")
+target_compile_features(test_cgb_speed_fixture_p12 PRIVATE c_std_17)
+target_compile_definitions(test_cgb_speed_fixture_p12 PRIVATE GBB_P12_PUBLIC_MUTANT=1)
+target_link_libraries(test_cgb_speed_fixture_p12 PRIVATE
+  gabbaboy_core_p12_mutants gabbaboy_accept)
+set_target_properties(test_cgb_speed_fixture_p12 PROPERTIES C_EXTENSIONS OFF)
+
+add_test(NAME cgb_speed_fixture_audio_digest
+  COMMAND test_cgb_speed_fixture audio "${GBB_CGB_SPEED_DIR}/speed.gb")
+add_test(NAME cgb_speed_fixture_frame_digest
+  COMMAND test_cgb_speed_fixture frame "${GBB_CGB_SPEED_DIR}/speed.gb")
+set_tests_properties(cgb_speed_fixture_audio_digest cgb_speed_fixture_frame_digest
+  PROPERTIES TIMEOUT 60)
+
+add_test(NAME cgb_speed_fixture_audio_digest_mutant_m17
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_speed_fixture_p12>;audio;${GBB_CGB_SPEED_DIR}/speed.gb;--mutants;131072"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=cgb-speed-fixture audio-digest mismatch observed audio"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_speed_fixture_audio_digest_mutant_m17_control
+  COMMAND test_cgb_speed_fixture_p12 audio "${GBB_CGB_SPEED_DIR}/speed.gb" --mutants 0)
+add_test(NAME cgb_speed_fixture_frame_digest_mutant_m1
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_speed_fixture_p12>;frame;${GBB_CGB_SPEED_DIR}/speed.gb;--mutants;2"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=cgb-speed-fixture frame-digest mismatch observed frame"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_speed_fixture_frame_digest_mutant_m1_control
+  COMMAND test_cgb_speed_fixture_p12 frame "${GBB_CGB_SPEED_DIR}/speed.gb" --mutants 0)
+set_tests_properties(
+  cgb_speed_fixture_audio_digest_mutant_m17
+  cgb_speed_fixture_audio_digest_mutant_m17_control
+  cgb_speed_fixture_frame_digest_mutant_m1
+  cgb_speed_fixture_frame_digest_mutant_m1_control
+  PROPERTIES TIMEOUT 60)
+# --- Phase 12 plan 12-10 end ---
+
+# --- Phase 12 plan 12-11 begin ---
+# Hostile STOP decision-table cases run from a separate original ROM. The selector is patched
+# only in a private in-memory copy by the public-API test driver.
+add_test(NAME cgb_speed_fixture_hostile
+  COMMAND test_cgb_speed_fixture hostile ${GBB_CGB_SPEED_DIR}/speed-hostile.gb
+    ${PROJECT_SOURCE_DIR}/tests/data/cgb-speed-expectations.txt)
+set_tests_properties(cgb_speed_fixture_hostile PROPERTIES
+  PASS_REGULAR_EXPRESSION "cgb-speed-fixture hostile pass entries=10" TIMEOUT 60)
+
+# A hostile outcome is independently checked by the public-API selector driver.
+set(GBB_CGB_SPEED_HOSTILE_TAMPERED_TABLE
+  "${PROJECT_BINARY_DIR}/cgb-speed/hostile-tampered-expectations.txt")
+file(READ "${PROJECT_SOURCE_DIR}/tests/data/cgb-speed-expectations.txt"
+  gbb_cgb_speed_hostile_expectations)
+string(FIND "${gbb_cgb_speed_hostile_expectations}" "hostile-key1-after 4 127 127"
+  gbb_cgb_speed_hostile_anchor)
+string(FIND "${gbb_cgb_speed_hostile_expectations}" "hostile-key1-after 4 127 127"
+  gbb_cgb_speed_hostile_anchor_last REVERSE)
+if(gbb_cgb_speed_hostile_anchor EQUAL -1 OR
+   NOT gbb_cgb_speed_hostile_anchor EQUAL gbb_cgb_speed_hostile_anchor_last)
+  message(FATAL_ERROR "hostile expectation tamper anchor must occur exactly once")
+endif()
+string(REPLACE "hostile-key1-after 4 127 127" "hostile-key1-after 4 254 254"
+  gbb_cgb_speed_hostile_expectations_bad "${gbb_cgb_speed_hostile_expectations}")
+file(WRITE "${GBB_CGB_SPEED_HOSTILE_TAMPERED_TABLE}"
+  "${gbb_cgb_speed_hostile_expectations_bad}")
+add_test(NAME cgb_speed_expectations_hostile_tampered
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_speed_fixture>;hostile;${GBB_CGB_SPEED_DIR}/speed-hostile.gb;${GBB_CGB_SPEED_HOSTILE_TAMPERED_TABLE}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=cgb-speed-fixture verdict-fail hostile-4 hostile-key1-after"
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(cgb_speed_expectations_hostile_tampered PROPERTIES TIMEOUT 60)
+# --- Phase 12 plan 12-11 end ---
+
+# --- Phase 12 plan 12-13 begin ---
+# Offline controls prove manifest-driven fixture rebuild errors stay distinct from byte differences.
+if(NOT WIN32)
+  find_program(GBB_BASH_CGB_REPRO bash REQUIRED)
+  foreach(gbb_repro_case tool_failure missing_pin)
+    string(REPLACE "_" "-" gbb_repro_arg "${gbb_repro_case}")
+    add_test(NAME cgb_speed_repro_${gbb_repro_case}
+      COMMAND ${GBB_BASH_CGB_REPRO} ${PROJECT_SOURCE_DIR}/tests/scripts/test-reproduce-cgb-speed.sh ${gbb_repro_arg})
+    set_tests_properties(cgb_speed_repro_${gbb_repro_case} PROPERTIES TIMEOUT 60)
+  endforeach()
+endif()
+# --- Phase 12 plan 12-13 end ---
+
+# --- Phase 12 plan 12-14 begin ---
+set(GBB_P12_PARTITION_MUTANT_CORE "${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_p12_partition_mutants.c")
+gbb_p12_make_mutant_core("${GBB_P12_PARTITION_MUTANT_CORE}" 0)
+add_executable(test_cgb_partition test_cgb_partition.c)
+target_include_directories(test_cgb_partition PRIVATE
+  "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/src/core")
+target_compile_features(test_cgb_partition PRIVATE c_std_17)
+target_compile_definitions(test_cgb_partition PRIVATE
+  "GBB_PARTITION_CASE_HALF_DOT_CAP=6000000")
+set_target_properties(test_cgb_partition PROPERTIES C_EXTENSIONS OFF)
+
+add_executable(test_cgb_partition_p12 test_cgb_partition.c)
+target_include_directories(test_cgb_partition_p12 PRIVATE
+  "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/src/core")
+target_compile_features(test_cgb_partition_p12 PRIVATE c_std_17)
+target_compile_definitions(test_cgb_partition_p12 PRIVATE
+  "GBB_P12_CORE_SOURCE=\"${GBB_P12_PARTITION_MUTANT_CORE}\""
+  GBB_P12_MUTANT_BUILD=1 GBB_BUILD_REVISION="p12-partition-mutant" GBB_BUILD_QUALIFIED=0
+  "GBB_PARTITION_CASE_HALF_DOT_CAP=6000000")
+set_target_properties(test_cgb_partition_p12 PROPERTIES C_EXTENSIONS OFF)
+
+add_test(NAME cgb_partition_stall_start_window
+  COMMAND test_cgb_partition cgb_partition_stall_start_window)
+add_test(NAME cgb_partition_hostile_irq_in_stall
+  COMMAND test_cgb_partition cgb_partition_hostile_irq_in_stall)
+add_test(NAME cgb_partition_mutant_m16
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_partition_p12>;cgb_partition_hostile_irq_in_stall;--mutants;65536"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=partition-mismatch scenario=cgb_partition_hostile_irq_in_stall"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_partition_mutant_m16_control
+  COMMAND test_cgb_partition_p12 cgb_partition_hostile_irq_in_stall --mutants 0)
+# Fresh local Darwin arm64 Debug CTest -V -j1 wall seconds: start .11, hostile
+# IRQ .11, mutant/control .09/.10, snapshot .01, real ends .11/.12, seeded end
+# .10, interior .03, multicut .43, budget .01, pending .55, held .11, LCD-off
+# .11, back-to-back .22, chained .52, joypad/digest sensitivities .02/.02.
+# These are local CTest timings, not an ASan benchmark. The 6,000,000 half-dot
+# cap uses 12-RESEARCH.md's prior ~92 ns/hd ad-hoc -O0 ASan measurement; it was
+# not re-measured in this run. Largest observed case: multicut, 2,187,264 hd,
+# 0.43 s local Debug; each CTest retains TIMEOUT 60 for sanitizer headroom.
+foreach(gbb_partition_case IN ITEMS
+    cgb_partition_snapshot_fidelity
+    cgb_partition_stall_end_window_to_double
+    cgb_partition_stall_end_window_to_normal
+    cgb_partition_stall_end_window_seeded
+    cgb_partition_interior_points
+    cgb_partition_seeded_multicut
+    cgb_partition_zero_and_subquantum
+    cgb_partition_pending_at_stop
+    cgb_partition_held_button
+    cgb_partition_lcd_off
+    cgb_partition_back_to_back
+    cgb_partition_chained
+    cgb_partition_sensitivity_joypad_shift
+    cgb_partition_sensitivity_digest_input)
+  add_test(NAME ${gbb_partition_case} COMMAND test_cgb_partition ${gbb_partition_case})
+endforeach()
+set_tests_properties(
+  cgb_partition_stall_start_window
+  cgb_partition_hostile_irq_in_stall
+  cgb_partition_mutant_m16
+  cgb_partition_mutant_m16_control
+  cgb_partition_snapshot_fidelity
+  cgb_partition_stall_end_window_to_double
+  cgb_partition_stall_end_window_to_normal
+  cgb_partition_stall_end_window_seeded
+  cgb_partition_interior_points
+  cgb_partition_seeded_multicut
+  cgb_partition_zero_and_subquantum
+  cgb_partition_pending_at_stop
+  cgb_partition_held_button
+  cgb_partition_lcd_off
+  cgb_partition_back_to_back
+  cgb_partition_chained
+  cgb_partition_sensitivity_joypad_shift
+  cgb_partition_sensitivity_digest_input
+  PROPERTIES TIMEOUT 60)
+# --- Phase 12 plan 12-14 end ---
+
+# --- Phase 12 plan 12-18 begin ---
+set(GBB_SPEED_DOC_FILES
+  "${PROJECT_SOURCE_DIR}/docs/native-integration.md"
+  "${PROJECT_SOURCE_DIR}/docs/support/unreleased.md"
+  "${PROJECT_SOURCE_DIR}/docs/preview.md"
+  "${PROJECT_SOURCE_DIR}/docs/cartridge-and-saves.md"
+  "${PROJECT_SOURCE_DIR}/docs/mbc3-rtc-evidence.md"
+  "${PROJECT_SOURCE_DIR}/README.md"
+  "${PROJECT_SOURCE_DIR}/src/player/limitations.h")
+add_test(NAME cgb_speed_docs_no_stale_claims
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_FILES=${GBB_SPEED_DOC_FILES}"
+    -P "${PROJECT_SOURCE_DIR}/tests/check_no_stale_speed_claims.cmake")
+set_tests_properties(cgb_speed_docs_no_stale_claims PROPERTIES
+  PASS_REGULAR_EXPRESSION "no-stale-speed-claims pass" TIMEOUT 30)
+
+set(GBB_SPEED_DOC_SELFTEST_DIR "${PROJECT_BINARY_DIR}/cgb-speed-doc-selftest")
+file(MAKE_DIRECTORY "${GBB_SPEED_DOC_SELFTEST_DIR}")
+file(READ "${PROJECT_SOURCE_DIR}/docs/preview.md" gbb_speed_preview_text)
+string(APPEND gbb_speed_preview_text "\nno double speed\n")
+set(GBB_SPEED_DOC_MUTATED_PREVIEW "${GBB_SPEED_DOC_SELFTEST_DIR}/preview.md")
+file(WRITE "${GBB_SPEED_DOC_MUTATED_PREVIEW}" "${gbb_speed_preview_text}")
+add_test(NAME cgb_speed_docs_no_stale_claims_mutated
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_FILES=${GBB_SPEED_DOC_MUTATED_PREVIEW};-P;${PROJECT_SOURCE_DIR}/tests/check_no_stale_speed_claims.cmake"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=stale-speed-claim"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(cgb_speed_docs_no_stale_claims_mutated PROPERTIES TIMEOUT 30)
+# --- Phase 12 plan 12-18 end ---
+
+# Configure-only regression for the shared sanitizer timeout policy. This is last so adding a
+# test after the scaler cannot silently escape the policy pass.
+add_test(NAME sanitizer_timeout_policy_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
+    "-DGBB_BINARY_DIR=${PROJECT_BINARY_DIR}"
+    -P "${PROJECT_SOURCE_DIR}/tests/check_sanitizer_timeout_policy.cmake")
+set_tests_properties(sanitizer_timeout_policy_selftest PROPERTIES TIMEOUT 30)
+
+gabbaboy_verify_registered_tests()
+
+# Per-test TIMEOUTs are normal-build limits. Debug ASan/UBSan runs the same work several times
 # slower, and the whole-run acceptance and RTC cases reached their 300 s limits on a slow hosted
-# runner (LESSONS GB-CI-004). Sanitizer builds scale every explicit limit by three, so a limit
-# still catches a hang without turning a slow runner into a failure.
+# runner (LESSONS GB-CI-004). Apply one shared multiplier after every test registration.
+include("${PROJECT_SOURCE_DIR}/cmake/ScaleSanitizerTimeouts.cmake")
+gbb_scale_sanitizer_test_timeouts()
+
 if(GABBABOY_ENABLE_SANITIZERS)
-  get_property(gbb_all_tests DIRECTORY PROPERTY TESTS)
-  foreach(gbb_test IN LISTS gbb_all_tests)
-    get_test_property(${gbb_test} TIMEOUT gbb_timeout)
-    if(gbb_timeout)
-      math(EXPR gbb_timeout "${gbb_timeout} * 3")
-      set_tests_properties(${gbb_test} PROPERTIES TIMEOUT ${gbb_timeout})
+  foreach(gbb_timeout_case IN ITEMS
+      "age_spsw_div_cgbBCE=360"
+      "age_spsw_div_cgbBCE_timeout=90"
+      "age_stall_window=720"
+      "age_sensitivity_m6=720"
+      "age_sensitivity_m28_reference_mutated=180"
+      "cgb_partition_stall_start_window=180")
+    string(REPLACE "=" ";" gbb_timeout_pair "${gbb_timeout_case}")
+    list(GET gbb_timeout_pair 0 gbb_timeout_test)
+    list(GET gbb_timeout_pair 1 gbb_timeout_expected)
+    get_test_property(${gbb_timeout_test} TIMEOUT gbb_timeout_actual)
+    if(NOT "${gbb_timeout_actual}" STREQUAL "${gbb_timeout_expected}")
+      message(FATAL_ERROR
+        "Sanitizer timeout policy: ${gbb_timeout_test} expected ${gbb_timeout_expected}, "
+        "got ${gbb_timeout_actual}")
     endif()
   endforeach()
 endif()
-
-gabbaboy_verify_registered_tests()

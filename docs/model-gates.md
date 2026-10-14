@@ -72,8 +72,8 @@ occurs exactly once in code and once in the table.
 | GATE-27 | UNKNOWN | - | research:14 | write8 | JOYP write select and IF side effects |
 | GATE-28 | UNKNOWN | - | research:14 | write8 | LCD on and off timing; the LCDC bit 0 meaning is carried by the CGB-mode siblings GATE-80 and GATE-81 |
 | GATE-29 | UNKNOWN | - | research:14 | write8 | STAT write spurious interrupt quirk is DMG-specific |
-| GATE-30 | UNKNOWN | - | research:12 | write8 | DMA restart and period |
-| GATE-31 | UNKNOWN | - | research:12 | write8 | DIV write resets the counter and clocks the frame sequencer |
+| GATE-30 | BOTH | - | basis="OAM DMA start requests and byte period are shared; its CPU-rate conversion is declared by GATE-90" | write8 | FF46 records the pending OAM DMA page and starts the shared transfer period |
+| GATE-31 | BOTH | - | basis="DIV reset and frame-sequencer edge use the same selected-speed tap on both models, D-11" | write8 | DIV write resets the counter and clocks the frame sequencer through the shared helper |
 | GATE-32 | UNKNOWN | - | research:14 | write8 | TAC write glitch timing |
 | GATE-33 | UNKNOWN | - | research:14 | write8 | serial data and control write behaviour |
 | GATE-34 | UNKNOWN | - | research:14 | write8 | NR52 power-off and power-on behaviour |
@@ -83,7 +83,7 @@ occurs exactly once in code and once in the table.
 | GATE-38 | BOTH | - | basis=wram-echo-map | write8 | work RAM and echo mapping; CGB WRAM banking is selected in wram_byte |
 | GATE-39 | CGB_ONLY | model_is_cgb | - | read_supported_map | on the CGB profile FF00-FF7F readability comes from io_visibility[]; only DEFERRED read cells stop; the DMG chain is unchanged |
 | GATE-40 | UNKNOWN | - | research:14 | read_supported | FEA0-FEFF stays fail-closed on both profiles this phase (A6) |
-| GATE-41 | UNKNOWN | - | research:12 | apply_input_events_now | STOP wake conditions |
+| GATE-41 | UNKNOWN | - | research:14 | apply_input_events_now | STOP wake conditions outside the armed CGB speed-switch path |
 | GATE-42 | BOTH | - | basis="no SM83 opcode difference" | instruction_address | HALT bug PC repeat is an SM83 trait |
 | GATE-43 | BOTH | - | basis="DMG semantics: LCDC bit 0 gates BG and window; runs for the DMG profile and compat mode, CGB mode uses ppu_cgb_background" | ppu_background_color | the function now runs only under DMG semantics; the CGB-mode sibling is ppu_cgb_background |
 | GATE-44 | UNKNOWN | - | research:14 | ppu_scan_object | OAM scan against a DMA in flight; the CGB scan timing question is deferred by D-09/D-12 |
@@ -94,20 +94,20 @@ occurs exactly once in code and once in the table.
 | GATE-49 | UNKNOWN | - | research:14 | ppu_transfer_dot | mode 3 start-up and window stall timing; CGB mode-3 length, WX and window-range differences are not claimed and are deferred by D-09/D-12 |
 | GATE-50 | UNKNOWN | - | research:14 | ppu_advance_dot | line length and LY timing; CGB line-edge timing is unresearched and deferred by D-09/D-12 |
 | GATE-51 | CGB_ONLY | model_is_cgb | - | dma_source_read | OAM DMA reads the cartridge and the banked VRAM and WRAM on the CGB profile (D-16); cartridge and E0-FF cells are PANDOCS or ORACLE_SAMEBOY, not hardware |
-| GATE-52 | UNKNOWN | - | research:12 | dma_start | DMA restart behaviour |
-| GATE-53 | UNKNOWN | - | research:12 | dma_advance_half_dot | DMA byte period |
+| GATE-52 | UNKNOWN | - | expected-failure:cgb-dma-restart-oracle-only | dma_start | restart timing has no CGB-specific oracle |
+| GATE-53 | BOTH | - | basis="OAM DMA byte period is measured in CPU ticks and remains common across profiles, D-10" | dma_advance_half_dot | OAM DMA byte period |
 | GATE-54 | UNKNOWN | - | research:14 | advance_devices_to | timer reload and IF delay |
 | GATE-55 | UNKNOWN | - | research:14 | advance_devices_to | serial internal clock rate |
-| GATE-56 | UNKNOWN | - | research:12 | advance_devices_to | frame sequencer taps a DIV bit that moves in double speed |
+| GATE-56 | CGB_ONLY | double_speed | - | advance_devices_to | the CGB APU frame sequencer uses the selected DIV tap, bit 12 normal and bit 13 double (D-11) |
 | GATE-57 | DMG_ONLY | model_is_dmg | - | gbb_copy_frame | frame output is DMG shades only; the CGB profile returns GBB_UNSUPPORTED_PROFILE (D-05) |
 | GATE-58 | BOTH | - | basis=D-24 | validate_header | header and checksum validation is profile-independent |
 | GATE-59 | BOTH | - | basis=profile-argument-validated | gbb_create | the switch accepts exactly the two implemented profiles (D-01) |
 | GATE-60 | BOTH | - | basis="no SM83 opcode difference" | decode | illegal-opcode decode is identical on DMG and CGB |
 | GATE-61 | BOTH | - | basis="no SM83 opcode difference" | execute | HALT and the halt bug |
-| GATE-62 | UNKNOWN | - | research:12 | execute | STOP, including CGB speed switch |
+| GATE-62 | UNKNOWN | - | research:14 | execute | STOP on the DMG, compat and unarmed paths |
 | GATE-63 | BOTH | - | basis="no SM83 opcode difference" | enter_interrupt | interrupt entry timing is a CPU trait |
 | GATE-64 | BOTH | - | basis="no SM83 opcode difference" | gbb_run_internal | illegal-opcode lockup is a CPU trait |
-| GATE-65 | UNKNOWN | - | research:12 | gbb_run_internal | DIV reset on STOP |
+| GATE-65 | BOTH | - | basis="DIV and the divider phase reset at STOP on both models; shared divider_reset, D-02/D-39" | gbb_run_internal | DIV and divider phase reset through the shared helper on both STOP paths |
 | GATE-66 | BOTH | - | basis=wram-echo-map | gbb_peek_ram | debug peek of work RAM |
 | GATE-67 | CGB_ONLY | GBB_PROFILE_CGB_CPU_E | - | validate_header | a PGB-flagged $143 is rejected on the CGB profile instead of running in a mode the hardware would not enter (D-03) |
 | GATE-68 | CGB_ONLY | model_is_cgb | - | compat_title_registers | compat-mode B and HL are derived from the licensee title sum |
@@ -116,7 +116,7 @@ occurs exactly once in code and once in the table.
 | GATE-71 | CGB_ONLY | model_is_cgb | - | io_write_cgb | FF4C-FF7F writes on the CGB profile; DEFERRED cells latch bus_unsupported |
 | GATE-72 | CGB_ONLY | model_is_cgb | - | read8 | FF4C-FF7F decode goes through io_visibility[]; the DMG profile falls through unchanged (D-09) |
 | GATE-73 | CGB_ONLY | model_is_cgb | - | write8 | FF4C-FF7F decode goes through io_visibility[]; a no-op on the DMG profile (C4) |
-| GATE-74 | CGB_ONLY | model_is_cgb | - | execute | STOP with KEY1 armed latches bus_unsupported at FF4D instead of sleeping; the speed switch is DEFERRED(12) (D-23) |
+| GATE-74 | CGB_ONLY | model_is_cgb | - | execute | CGB mode STOP with KEY1 armed takes the implemented speed-switch path (D-01/D-23) |
 | GATE-75 | DMG_ONLY | model_is_dmg | - | dma_source_read | the DMG OAM DMA source map is VRAM and WRAM only; ROM, cartridge RAM and E0-FF read $FF (D-024) |
 | GATE-76 | UNKNOWN | - | research:14 | cpu_cram_access_allowed | CRAM CPU lock is a plain mode-3 predicate; edge offsets unresearched (D-12) |
 | GATE-77 | UNKNOWN | - | research:14 | io_write_cgb | OPRI is stored without priority effect after boot (D-08) |
@@ -126,6 +126,13 @@ occurs exactly once in code and once in the table.
 | GATE-81 | CGB_ONLY | model_is_cgb | - | ppu_window_should_start | CGB mode enables the window by LCDC bit 5 alone, shifting mode-3 window-start stall timing when LCDC bit 0 is clear; CGB mode-3 timing is not claimed (D-09) |
 | GATE-82 | CGB_ONLY | model_is_cgb | - | ppu_transfer_dot | compat mode resolves DMG shades through the instance compat palette into rgb_working and never writes the shade store (D-17, D-39) |
 | GATE-83 | CGB_ONLY | model_is_cgb | - | gbb_copy_frame_rgb555 | colour frames are CGB-profile only; the DMG profile returns GBB_UNSUPPORTED_PROFILE (D-15), symmetric with GATE-57 |
+| GATE-84 | CGB_ONLY | key1_armed | - | stop_case | an armed CGB-mode STOP selects the speed-switch decision table (D-01/D-02) |
+| GATE-85 | UNKNOWN | - | expected-failure:speed-switch-held-button-oracle-only | stop_case | held-button STOP semantics have SameBoy evidence but no independent hardware pin |
+| GATE-86 | UNKNOWN | - | expected-failure:speed-switch-pending-irq-oracle-only | stop_case | pending-IRQ switch and instruction-length semantics are not independently pinned |
+| GATE-87 | CGB_ONLY | cpu_stalled | - | gbb_run_internal | the CGB speed-switch pause advances through the bounded CPU stall branch (D-06/D-07) |
+| GATE-88 | UNKNOWN | - | expected-failure:speed-switch-wake-oracle-only | gbb_run_internal | only the IME-on stall wake has an AGE hardware row; the remaining wake semantics use SameBoy |
+| GATE-89 | UNKNOWN | - | expected-failure:speed-switch-odd-mode-alignment | speed_switch_apply_realign | normal-speed entry phase in odd PPU modes remains unsupported (D-09) |
+| GATE-90 | CGB_ONLY | double_speed | - | advance_devices_to | cpu_ticks scales instruction cost, bus offsets, interrupt and halt literals, timer reload (GATE-54), serial (GATE-55) and OAM DMA period |
 <!-- model-gates-end -->
 
 ## Phase 11 dispositions
@@ -152,14 +159,41 @@ file or in `src/core/gabbaboy.c`.
 | GATE-49 | ppu_transfer_dot | re-assigned to Phase 14 | mode 3 start-up, WX and window-range timing is deferred by D-09/D-12 |
 | GATE-50 | ppu_advance_dot | re-assigned to Phase 14 | CGB line length and LY timing is deferred by D-09/D-12 |
 
+## Phase 12 dispositions
+
+The CGB double-speed work resolved the gate rows it owned and returned independent silicon questions
+to their researched phase. The shared scanner checks the code tags against the rows above, while
+`model_gates_no_phase12_rows` rejects any stale Phase 12 owner marker in this table or the core.
+
+| Gate | Site | Outcome | Reason |
+| --- | --- | --- | --- |
+| GATE-30 | write8 | resolved BOTH | FF46 records the DMA start request; the common byte period scales through the declared CPU-tick path |
+| GATE-31 | write8 | resolved BOTH | DIV reset and APU edge use the shared selected-speed tap (D-11) |
+| GATE-41 | apply_input_events_now | re-assigned to Phase 14 | generic STOP wake behavior is outside the armed CGB switch and remains researched there |
+| GATE-52 | dma_start | expected failure | restart timing has no CGB-specific oracle (`cgb-dma-restart-oracle-only`) |
+| GATE-53 | dma_advance_half_dot | resolved BOTH | the OAM DMA byte period follows CPU ticks at both speeds |
+| GATE-54 | advance_devices_to | stays research:14 (single-speed DMG/CGB difference); double-speed scaling is declared by the cpu_ticks row | TIMA reload and IF-delay differences remain Phase 14 work; scaling belongs to GATE-90 |
+| GATE-55 | advance_devices_to | stays research:14 (single-speed DMG/CGB difference); double-speed scaling is declared by the cpu_ticks row | serial internal clock and the CGB fast-serial SC bit remain Phase 14 work; scaling belongs to GATE-90 |
+| GATE-56 | advance_devices_to | resolved CGB_ONLY | APU frame-sequencer tap follows DIV bit 12 at normal speed and bit 13 at double speed (D-11) |
+| GATE-62 | execute | re-assigned to Phase 14 | only DMG, compat and unarmed STOP remain on the original sleep path |
+| GATE-65 | gbb_run_internal | resolved BOTH | shared `divider_reset` handles DIV and divider phase on both STOP paths (D-02/D-39) |
+| GATE-74 | execute | resolved CGB_ONLY | armed CGB-mode STOP takes the implemented speed-switch path |
+| GATE-84 | stop_case | resolved CGB_ONLY | armed CGB STOP selects the four-case decision table |
+| GATE-85 | stop_case | expected failure | held-button details have SameBoy coverage only |
+| GATE-86 | stop_case | expected failure | pending-IRQ switch and one-byte STOP interpretation lacks an independent hardware pin |
+| GATE-87 | gbb_run_internal | resolved CGB_ONLY | persisted speed-switch stall uses a bounded run-loop branch |
+| GATE-88 | gbb_run_internal | expected failure | only the IME-on wake has an AGE row; wake behavior remains SameBoy-qualified |
+| GATE-89 | speed_switch_apply_realign | expected failure | odd PPU-mode phase alignment is unsupported (D-09) |
+| GATE-90 | advance_devices_to | resolved CGB_ONLY | CPU-tick conversion declares each double-speed scaling site, including the timer, serial and OAM DMA paths |
+
 ## Release status
 
 `python3 -I tests/scripts/verify-model-gates.py --release` currently fails by design
-(`gate-unresolved-unknown`, test `model_gates_release_blocked`): every `research:` row still names a
-phase that has not resolved it. Phase 10 resolved its own rows by turning them into
+(`gate-unresolved-unknown`, test `model_gates_release_blocked`): each remaining `research:` row
+names a phase that has not resolved it. Phase 10 resolved its own rows by turning them into
 `DMG_ONLY`/`CGB_ONLY`/`BOTH` classes with guards. Phase 11 resolved or re-assigned every row it was
-given (see the dispositions above), so no row names Phase 11 as owner. Phase 12 owns `research:12`
-(STOP, DMA and double-speed timing) and Phase 14 owns `research:14` (APU, timer, serial, STAT and
-JOYP quirks, and the CGB PPU timing rows listed above). `expected-failure:cgb-separate-buses` is a
-declared, reasoned expected failure (D-17) and does not block release. The release-mode test becomes
-a pass gate in Phase 15.
+given (see the dispositions above). The double-speed switch gates are now resolved or explicitly
+re-assigned in the Phase 12 dispositions above; Phase 14 owns the remaining timer, serial, APU,
+STAT, JOYP and CGB PPU research. `expected-failure:cgb-separate-buses` is a declared, reasoned
+expected failure (D-17) and does not block release. The release-mode test becomes a pass gate in
+Phase 15.

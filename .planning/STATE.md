@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: Not started
-status: planning
-stopped_at: Phase 11 verify-work passed (11/11 automated UAT); next /gsd-discuss-phase 12
-last_updated: "2026-10-13T13:10:00.000Z"
-last_activity: 2026-10-13
-last_activity_desc: Phase 11 verify-work passed; PR #67 squash-merges at its exact-head green head
-state_head: 4e61ab7a627fd8e8b4789a7db427c807853508ea
+current_plan: 19
+status: phase_complete
+stopped_at: Phase 12 verification complete; owner chooses when to discuss Phase 13
+last_updated: "2026-10-14T14:35:44.163455+00:00"
+last_activity: 2026-10-14
+last_activity_desc: Phase 12 automated UAT complete; zero human checkpoints
+state_head: da98d56ef8fadadf34ae951b337dcdecce495936
 progress:
   total_phases: 9
   completed_phases: 6
-  total_plans: 80
-  completed_plans: 80
-  percent: 60
+  total_plans: 99
+  completed_plans: 99
+  percent: 67
 current_phase: 12
 current_phase_name: CGB Double Speed
 ---
@@ -23,15 +23,15 @@ current_phase_name: CGB Double Speed
 
 ## Project Reference
 
-See: [PROJECT.md](PROJECT.md) (updated 2026-10-11)
+See: [PROJECT.md](PROJECT.md) (updated 2026-10-14)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 12 — CGB Double Speed
+**Current focus:** Phase 12 verified; Phase 13: CGB HDMA awaits the owner
 
 ## Current Position
 
-Current Plan: Not started
-Total Plans in Phase: 15
+Current Plan: 19 (execution complete)
+Total Plans in Phase: 19
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
 Verified: Phase 9 `/gsd-verify-work 9` passed 2026-10-12 — 14/14 UAT items automated (09-UAT.md), the guide-wording item replaced by the `native_guide_rtc_contract` check; re-verification `passed` (09-VERIFICATION.md); PR #65 squash-merges at the exact-head green branch head (pre-authorized)
@@ -40,10 +40,12 @@ Verified: Phase 10 `/gsd-verify-work 10` passed 2026-10-12 — 12/12 UAT items a
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, planning (11-RESEARCH, 11-PATTERNS, 11-VALIDATION, plans 11-01..11-15) on branch `gsd/phase-11-cgb-colour-rendering-and-player-colour`
 Completed: Phase 11 - CGB Colour Rendering and Player Colour, execution (plans 11-01..11-15) plus the execute-phase tail; gsd-verifier `passed` 3/3 (11-VERIFICATION.md); evidence head `fb7d14c` exact-head green; PR #67 open, not merged
 Verified: Phase 11 `/gsd-verify-work 11` passed 2026-10-13 — 11/11 UAT rows automated covering all 91 SUMMARY coverage entries (11-UAT.md); verification `passed` (11-VERIFICATION.md); hosted ASan timeout fixed in the PR (LESSONS GB-CI-004); PR #67 squash-merges at the exact-head green branch head (pre-authorized)
-Next step: Phase 12 - CGB Double Speed (no CONTEXT.md yet) via `/gsd-discuss-phase 12`; the owner chooses when
-Last activity: 2026-10-13 — Phase 11 verify-work passed; exact-head CI green at 4811033
+Completed workflow stage: **Phase 12 - CGB Double Speed, execution** (2026-10-14), plans 12-01..12-19 plus Nyquist validation, security, UI scope review, code review and fixes, regression gate, and goal verification. [12-VERIFICATION.md](phases/GB-12-cgb-double-speed/12-VERIFICATION.md) passes 109/109 with zero unverified behaviors; OpenGSD phase.complete accepted 19/19. Local CTest passed 898/898 in 52.66 seconds, and the DMG baseline had zero changed rows. Exact tested source head `502f992fe9fd2d848845947057c2b327747c3edd`: PR CI `38565349295`, fixture reproduction `38565349297`, and package smoke `38565349116` all succeeded with every PR-event job successful; ASan/UBSan passed 893/893 in 1217.04 seconds. All three review findings are fixed; 34 security threats are closed. Draft [PR #68](https://github.com/szTheory/gabbaboy/pull/68) remains unmerged. Only AGE DIV and STOP-prefetch are passes; eleven qualified expected failures remain, and no physical hardware claim is made. The original plan 12-19 benchmark receipt is historical at `301f1b05577e6d35a4c3a756ded1ec15a4082c8d`, runs `38502094649`, `38502094682`, and `38502094771`; later metadata commits require their own exact-head checks.
+Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-14), via `/gsd-verify-work 12`: [12-UAT.md](phases/GB-12-cgb-double-speed/12-UAT.md) closes 73/73 deliverables automatically, zero issues and zero human checkpoints. Fresh local CTest passed 898/898 in 107.00 seconds; the closure contract rejects nine weakened records, and all 19 bounded commit claims reconcile after correcting plan 12-04's ending SHA. D-069 and LESSONS GB-GSD-016 preserve this default. Exact execution-head `da98d56ef8fadadf34ae951b337dcdecce495936` PR-event runs `38569486172`, `38569486169`, and `38569486126` passed all 19 jobs; ASan/UBSan passed 893/893 in 1089.77 seconds. This verification-record revision requires its own exact-head checks before the pre-authorized PR #68 merge; GitHub holds that final receipt and merge state.
+Next command: **`/gsd-discuss-phase 13`**. Next phase: **Phase 13: CGB HDMA** (not started). Phase 12 UAT is complete: do not rerun it, reopen decisions, or create gap plans without a concrete new regression, changed covered behavior, stale/unavailable evidence, or an owner scope change. `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop for the owner after the protected Phase 12 handoff.
+Last activity: 2026-10-14 — Phase 12 automated verification complete; paused before Phase 13
 
-Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
+Progress (v0.2): [███████░░░] 67% (6/9 phases); 99/99 existing plans complete, Phases 13–15 unplanned
 
 ## Performance Metrics
 
@@ -192,6 +194,24 @@ Progress (v0.2): [███░░░░░░░] 33% (3/9 phases)
 | Phase 11 P13 | 25min | 2 tasks | 9 files |
 | Phase 11 P14 | 40 min | 3 tasks | 11 files |
 | Phase 11 P15 | 25 min | 2 tasks | 6 files |
+| Phase 12 P01 | 10 min | 2 tasks | 8 files |
+| Phase 12 P02 | 7 min | 2 tasks | 10 files |
+| Phase 12 P03 | 19 min | 3 tasks | 5 files |
+| Phase GB-12 P04 | 4 min | 2 tasks | 14 files |
+| Phase GB-12 P05 | 19m55s lower bound | 3 tasks | 6 files |
+| Phase GB-12 P06 | 41m28s | 2 tasks | 5 files |
+| Phase GB-12 P07 | 112m | 3 tasks | 5 files |
+| Phase GB-12 P08 | 9m 25s | 3 tasks | 6 files |
+| Phase GB-12 P09 | Not captured (task commits span 4m 08s) | 3 tasks | 6 files |
+| Phase GB-12 P10 | 13m+ lower bound | 3 tasks | 11 files |
+| Phase GB-12 P11 | >=42min lower bound | 2 tasks | 9 files |
+| Phase 12 P12 | 14 min | 3 tasks | 10 files |
+| Phase 12 P13 | not captured | 2 tasks | 6 files |
+| Phase 12 P15 | 8min | 2 tasks | 8 files |
+| Phase 12 P16 | 15min | 3 tasks | 6 files |
+| Phase 12 P17 | 23m+ lower bound | 3 tasks | 8 files |
+| Phase GB-12 P18 | 8 min | 2 tasks | 9 files |
+| Phase 12 P19 | 50 min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -359,6 +379,42 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 11]: 11-12: select_profile seam player_session_probe_profile serves the three session sites; CGB smoke pins the uploaded RGBA digest plus 40 independently computed spot pixels
 - [Phase 11]: D-04: no per-dot model hoist; the D-22 trigger did not fire (DMG median 98.5 to 100.2 percent of the Phase 10 head, margins 1.5 to 1.9)
 - [Phase 11]: D-32: ten PPU timing gates re-assigned research:14; model_gates_no_phase11_rows guards against a returning Phase 11 owner tag
+- [Phase 12]: Recorded eight pre-change CGB single-speed identity digests at fb45111; regression pins are not hardware evidence.
+- [Phase 12]: Keep speed state private to the core test seam; no public header or API symbol changes.
+- [Phase 12]: Model STOP's 2 M cost in normal-speed half-dots and apply the speed shift once in instruction_cost.
+- [Phase 12]: AGE fixture bytes are tied to pinned source commit/tree and RGBDS 1.0.1 archive digests.
+- [Phase 12]: The byte-difference negative control mutates rebuilt bytes so it reaches the comparator after committed-fixture integrity validation.
+- [Phase 12]: Runtime-mask mutant cores remain build-tree-only and use forward/reverse exactly-once anchor checks.
+- [Phase 12]: Reset mutants target the explicit reset boundary because post-boot initialization also clears some speed fields.
+- [Phase GB-12]: Upstream AGE Verified lines remain source attestations, while manifest expected_role records D-19 expectations.
+- [Phase GB-12]: Store timer, serial and DMA countdowns in CPU ticks so speed changes preserve integer remainder state.
+- [Phase GB-12]: Use DIV bit 12 at normal speed and bit 13 at double speed for frame sequencing, including divider reset.
+- [Phase GB-12]: STOP case 3 switches immediately without a stall; only case 4 loads the stall.
+- [Phase GB-12]: DMG, compatibility and unarmed STOP, including held-button behavior, stay on the existing STOP path.
+- [Phase GB-12]: Wake is sampled only between persisted stall M-cycle steps so host budget partitioning does not change resume time.
+- [Phase GB-12]: Normal-speed realignment uses a four-half-dot tail at phase four; the provisional stall duration remains for plan 12-09 re-measurement.
+- [Phase GB-12]: The signed M31 stall-offset seam is wired with a zero default and a passing no-op check.
+- [Phase GB-12]: Resolve Phase 12 model-gate ownership at the code-tag/table level; preserve the Phase 14 timer and serial differences and named unsupported STOP subcases.
+- [Phase GB-12]: Keep the speed-switch stall constant provisional until plan 12-09 measures the committed-core AGE window; do not pin a value from the prototype alone.
+- [Phase GB-12]: Plan 12-10: derive timing bounds from clock units and measured guest-loop resolution, never from fitted emulator outputs.
+- [Phase GB-12]: Plan 12-10: start the OAM DMA straddle in VBlank and read at M+159/M+161 to isolate DMA from PPU OAM arbitration.
+- [Phase GB-12]: Plan 12-10: pin audio and frame digests through public APIs with M17/M1 mutant failures and mask-zero controls.
+- [Phase GB-12]: Use a separate selector guest for hostile STOP paths; keep speed.gb, its digest, and identity pins unchanged.
+- [Phase GB-12]: Derive hostile timing intervals from D-02/D-08, 912 master half-dots per line, D-09 realignment, and the locked 0x20004 T stall.
+- [Phase GB-12]: Capture pending IF before disarming IE/IF for the guest idle loop.
+- [Phase 12]: Installed frame generation is verified through gbb_frame_info from gbb_copy_frame_rgb555, preserving the public ABI.
+- [Phase 12]: Continue public runs after HALTED_IDLE until the first frame is available, bounded by two frame durations.
+- [Phase 12]: CGB speed fixture rebuilds validate manifest recipes and separate harness errors from byte differences.
+- [Phase 12]: The fixture-repro workflow cross-checks CGB speed RGBDS 1.0.1 pins and archive digests.
+- [Phase 12]: Offline CGB speed controls also reject a tampered workflow manifest pin under D-069.
+- [Phase 12]: Use a private read-only master-time getter to prove per-call consumed-time equality during stalls and STOP waits; CPU traces alone are insufficient.
+- [Phase 12]: Keep CGB compatibility and DMG controls model-applicable: compatibility KEY1 reads as $FF, and the DMG twin verifies STOP/wake without accessing KEY1.
+- [Phase 12]: Pin AGE ROM pass and expected-failure outcomes from committed-core measurements; the CGB-E Tima failure triggers the D-19 contingency, so both Tima ROMs are expected failures and the B/C claim is dropped.
+- [Phase 12]: Keep Linux AGE fixture reproduction provisional until a hosted fixture-repro run verifies the digest; do not claim hardware evidence.
+- [Phase 12]: Phase 12 plan 12-17: M28 adds one half-dot only on transitions to double speed; measured AGE discrimination includes spsw-mode0-cgbBCE while spsw-div-cgbBCE remains low-bit-insensitive.
+- [Phase 12]: Phase 12 plan 12-17: Every named expected failure has an exact registered behavior pin, with manifest-to-doc and pin inventory checks plus negative controls.
+- [Phase GB-12]: Plan 12-18 preserves the CGB speed API surface: KEY1 bit 7 is guest-visible and there is no public speed getter.
+- [Phase GB-12]: AGE evidence is limited to two passing cases and eleven named expected failures; the corrected M28 mutation applies only when switching to double speed.
 
 ### Pending Todos
 
@@ -394,10 +450,22 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-13T04:29:43.285Z
-Stopped at: Phase 11 complete, ready to plan Phase 12
+Last session: 2026-10-14T13:07:53Z
+Stopped at: Phase 12 execution complete; awaiting `/gsd-verify-work 12`
 Resume file: .planning/.continue-here.md
-Next command in fresh context: `/gsd-verify-work 11`
+Completed workflow stage: **Phase 12 - CGB Double Speed, execution** (2026-10-14), plans 12-01..12-19 plus Nyquist validation, security, UI scope review, code review and fixes, regression gate, and goal verification. [12-VERIFICATION.md](phases/GB-12-cgb-double-speed/12-VERIFICATION.md) passes 109/109 with zero unverified behaviors; OpenGSD phase.complete accepted 19/19. Local CTest passed 898/898 in 52.66 seconds, and the DMG baseline had zero changed rows. Exact tested source head `502f992fe9fd2d848845947057c2b327747c3edd`: PR CI `38565349295`, fixture reproduction `38565349297`, and package smoke `38565349116` all succeeded with every PR-event job successful; ASan/UBSan passed 893/893 in 1217.04 seconds. All three review findings are fixed; 34 security threats are closed. Draft [PR #68](https://github.com/szTheory/gabbaboy/pull/68) remains unmerged. Only AGE DIV and STOP-prefetch are passes; eleven qualified expected failures remain, and no physical hardware claim is made. The original plan 12-19 benchmark receipt is historical at `301f1b05577e6d35a4c3a756ded1ec15a4082c8d`, runs `38502094649`, `38502094682`, and `38502094771`; later metadata commits require their own exact-head checks.
+Next command in fresh context: **`/gsd-verify-work 12`**. The following phase is **Phase 13: CGB HDMA**, not started; after verification and merge, enter it with **`/gsd-discuss-phase 13`**. `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop at this handoff for the owner.
+
+Completion advisories: OpenGSD's broad SUMMARY reference scan produced 10 warnings across 13 inline references: eleven command strings treated as file paths, the historical ignored `build/tdd-red-audio.xml`, and the unavailable optional `scripts/ci_monitor.cjs`. The verifier checked all 45 declared artifacts and actual behavioral evidence; current audio and mutant controls pass. Hosted monitoring used `gh` with exact PR-event run/head checks. These are recorded advisory/reference limitations, not missing implementation or manual UAT checkpoints.
+Boundary triage: no open issues; only draft PR #68 is open. No release, merge or Phase 13 work was performed. Global learnings are disabled; graduation has no phase LEARNINGS inputs; no phase-resolved pending todos or stale phase `.continue-here` files exist.
+
+### Historical handoffs (superseded by the route above)
+
+OpenGSD settings (2026-10-13): switched the project runtime from `claude` to `codex` for current development. Profile `adaptive`; heavy (`opus`) uses `gpt-6-sol`, medium (`sonnet`) and light (`haiku`) use `gpt-6-luna`; reasoning effort is `medium` for all three. Project pins take precedence over machine-wide defaults. Completed workflow stage: **Phase GB-12 plan 12-01 execution** (2026-10-13), with task commits `9dfc604` and `43114cb`; the phase remains in progress. Next: **Phase 12 - CGB Double Speed execution, plan 12-02 onward**, via **`/gsd-execute-phase 12`**. Both auto-advance flags stay false; stop after Phase 12 and wait for the owner.
+
+Completed workflow stage: **Phase 12 - CGB Double Speed, planning** (2026-10-13) on branch `gsd/phase-12-cgb-double-speed`. 12-RESEARCH.md (code map, test infrastructure map, AGE measurements on a scratch prototype, validation architecture), 12-PATTERNS.md, 12-VALIDATION.md and plans 12-01..12-19 in 16 waves (mostly serial because plans share `src/core/gabbaboy.c`, `tests/CMakeLists.txt` and `tests/expected-tests.txt`; AGE vendoring 12-02/12-04 runs beside the core track). Research evidence amended CONTEXT with D-37..D-45, auto-followed: stall constant `GBB_SPEED_SWITCH_STALL_T` = 0x20004 (the literal 0x20008 fails AGE `spsw-div`; measured pass window [0x20004,0x20007]); this value is provisional until plan 12-09 re-measures the window on the committed core, before any constant-derived pin, and stops for the owner if no M-aligned value fits. Also: a switching STOP costs 2 M; `divider_reset(m, clock_apu_edge)` keeps DMG STOP byte-identical; the headroom pre-check runs before mutation; the player claim text drops "double speed" (runtime logic unchanged); installed consumers use inline guests; a fuzz dictionary; only `spsw-div`/`spsw-stop-prefetch` are expected to pass, the rest are pinned dispositions; identity pins are recorded before any core edit. Plan checker iteration 1: 4 blockers (D-37 ordering, D-26 real-stall end window, D-24 pins tied to tests, unresolved research questions) and 8 warnings, all fixed in 0ac4528. Iteration 2: 0 blockers; the one warning (12-04 file count, 12 vendored binary ROMs) was accepted with a recorded rationale. Coverage: CGB-06 in 19/19 plans, decisions 45/45, every plan within the token budget. Owner veto window: D-05/D-37 stall constant, D-02/D-08 SameBoy hostile cases, D-19 AGE vendoring, D-14 no getter, D-09 realignment, D-02 case 1 held-button HALT, D-12 Phase 14 deferrals, D-26 sweep, D-38 2 M switch cost, D-41 public claim edit. Execution preconditions: network for the pinned RGBDS 1.0.1 archive and the AGE commit `1f5bc10e`, gh access and exact-head CI. **Next step: Phase 12 execution. Next command in fresh context: `/gsd-execute-phase 12`.** Both auto-advance flags stay false; nothing advances automatically.
+
+Completed workflow stage: **Phase 12 - CGB Double Speed, discussion** (2026-10-13) on branch `gsd/phase-12-cgb-double-speed`. [12-CONTEXT.md](phases/GB-12-cgb-double-speed/12-CONTEXT.md) locks D-01..D-36 from six parallel advisor researches (switch sequence and pause, clock domains and research:12 gates, oracles and fixtures, host API/player/docs, cross-emulator gap sweep, robustness/security/verification) plus an adversarial review of the draft, auto-followed per the owner's standing instruction. Key choices: SameBoy `stop()` decision table (held button enters HALT without switching; pending IRQ switches with no pause and a 1-byte STOP); pause 0x20008 CPU T at the destination speed, pinned as the AGE-verified DIV-reset-to-resume distance (Pan Docs 2050 M rejected as refuted by AGE hardware rows); a separate resumable stall branch with the halt-branch shape, M-cycle steps, interrupt wake, reported as BUDGET; every device advances during the pause; APU DIV tap bit 12 to bit 13 in double speed; CPU-side countdowns move to T-tick units; no public ABI change; 13 AGE ROMs admitted under `fixtures/age/` plus an original per-scanline fixture; every research:12 gate resolved, expected-failed or reassigned to Phase 14. Owner veto window: D-05, D-02/D-08, D-19, D-14, D-09, D-02 case 1, D-12 deferrals, D-26 reduced sweep. **Next step: Phase 12 research and planning. Next command in fresh context: `/gsd-plan-phase 12`.** Both auto-advance flags stay false; nothing advances automatically.
 
 Completed workflow stage: **Phase 11 - CGB Colour Rendering and Player Colour, verify-work** (2026-10-13): `/gsd-verify-work 11` passed with zero human checkpoints (D-069): all 91 SUMMARY coverage entries classify as auto-passed and are grouped into 11 UAT rows (11-UAT.md); every named test a coverage ref cites is registered; `phase uat-passed --require-verification` passed; security `threats_open: 0`; ui-review not applicable (SDL player). Verification found one CI defect, fixed on the branch: hosted linux-asan-ubsan ran serially at 20 of 30 minutes and timed out on a slow pull_request runner at b314686. eb6f36e runs it with `--parallel 4` (pinned by `ci_asan_parallel_contract` and its negative control) and 4811033 scales explicit test TIMEOUTs by three in sanitizer builds (LESSONS GB-CI-004). Evidence head `4811033`: ci push 38398631736 and pull_request 38398639883 all jobs success (ASan 686/686, 16-18 min), fixture-repro 38398631778/38398639816 success, preview-package-smoke 38398639852 success; local 691/691. PR #67 (https://github.com/szTheory/gabbaboy/pull/67) squash-merges at its exact-head green head (pre-authorized). Owner veto items before merge: D-15, D-17a, D-18, D-26, D-08, D-21, D-24. **Next step: Phase 12 - CGB Double Speed. Next command in fresh context: `/gsd-discuss-phase 12`.** Continue only when the owner chooses to. Both auto-advance flags stay false.
 
@@ -479,6 +547,8 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Phase 10 (CGB Profile, Banking and Register Visibility) is executed and verified (`/gsd-verify-work 10` passed, 12/12 automated). PR #66 squash-merges at its exact-head green head.
-- The owner chooses when to start Phase 11 - CGB Colour Rendering and Player Colour: `/gsd-discuss-phase 11`.
-- Phase-stop rule: stop after each phase and yield; never auto-advance into the next phase or milestone.
+- Completed workflow stage: **Phase 12 - CGB Double Speed, verification**, 73/73 automated UAT rows and zero human checkpoints; execution was 19/19 plans and goal verification passed 109/109.
+- Next phase: **Phase 13: CGB HDMA**, not started. Next command: **`/gsd-discuss-phase 13`**.
+- The agent completes the pre-authorized PR #68 merge only after its exact final head has every required check successful. GitHub records that receipt; this does not require owner UAT.
+- Preserve owner model/config changes and use the installed OpenGSD resolver. Do not repeat completed Phase 12 work without changed evidence.
+- Stop here; both workflow auto-advance flags stay false.

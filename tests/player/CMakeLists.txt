@@ -26,7 +26,7 @@ endfunction()
 function(gbb_player_mutant_binary target main_source colour_source)
   add_executable(${target} "${main_source}" "${colour_source}")
   target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}/src/player")
-  target_link_libraries(${target} PRIVATE gabbaboy-player-adapter SDL3::SDL3)
+  target_link_libraries(${target} PRIVATE ${ARGN} gabbaboy-player-adapter SDL3::SDL3)
   target_compile_features(${target} PRIVATE c_std_17)
   target_compile_definitions(${target} PRIVATE
     GABBABOY_PLAYER_DEMO_ROM=\"${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb\"
@@ -39,6 +39,8 @@ endfunction()
 # change cannot leave this pin stale unnoticed.
 set(GBB_PLAYER_CGB_RGBA_SHA "8633f67ec1a9009a3597ad0260c24c5a75940d5f76301427d92435c0d769a6c4")
 set(GBB_PLAYER_CGB_ROM "${PROJECT_SOURCE_DIR}/fixtures/cgb-colour/colour-attr.gb")
+set(GBB_PLAYER_CGB_SPEED_RGBA_SHA "b53366fee4959a4220b6380816c20b1f2f74ba4ed0608adda0e3afc34c4a13e7")
+set(GBB_PLAYER_CGB_SPEED_ROM "${PROJECT_SOURCE_DIR}/fixtures/cgb-speed/speed.gb")
 set(GBB_PLAYER_CGB_SMOKE_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/cgb_smoke.cmake")
 set(GBB_PLAYER_CGB_HOME "${CMAKE_CURRENT_BINARY_DIR}/player-cgb-home")
 file(MAKE_DIRECTORY "${GBB_PLAYER_CGB_HOME}")
@@ -63,7 +65,49 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       -DGBB_ROM=${GBB_PLAYER_CGB_ROM}
       -DGBB_DEMO=${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb
       -DGBB_EXPECT_RGBA_SHA=${GBB_PLAYER_CGB_RGBA_SHA})
-    if(test_name STREQUAL "player_cgb_smoke")
+    set(cgb_speed_smoke_args
+      -DGBB_ROM=${GBB_PLAYER_CGB_SPEED_ROM}
+      -DGBB_EXPECT_RGBA_SHA=${GBB_PLAYER_CGB_SPEED_RGBA_SHA})
+    if(test_name STREQUAL "player_cgb_speed_smoke")
+      add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+        -DGBB_CHECK=speed -DGBB_PLAYER=$<TARGET_FILE:gabbaboy-player> ${cgb_speed_smoke_args}
+        -P "${GBB_PLAYER_CGB_SMOKE_SCRIPT}")
+      set_tests_properties(${test_name} PROPERTIES TIMEOUT 120 ENVIRONMENT "${cgb_env}")
+    elseif(test_name STREQUAL "player_cgb_speed_smoke_wrong_sha")
+      string(SUBSTRING "${GBB_PLAYER_CGB_SPEED_RGBA_SHA}" 0 1 first_sha_digit)
+      if(first_sha_digit STREQUAL "0")
+        set(wrong_sha_digit "1")
+      else()
+        set(wrong_sha_digit "0")
+      endif()
+      string(SUBSTRING "${GBB_PLAYER_CGB_SPEED_RGBA_SHA}" 1 -1 remaining_sha_digits)
+      set(wrong_sha "${wrong_sha_digit}${remaining_sha_digits}")
+      add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+        "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_CHECK=speed;-DGBB_PLAYER=$<TARGET_FILE:gabbaboy-player>;-DGBB_ROM=${GBB_PLAYER_CGB_SPEED_ROM};-DGBB_EXPECT_RGBA_SHA=${wrong_sha};-P;${GBB_PLAYER_CGB_SMOKE_SCRIPT}"
+        -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=cgb speed smoke: RGBA buffer digest"
+        -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+      set_tests_properties(${test_name} PROPERTIES TIMEOUT 120 ENVIRONMENT "${cgb_env}")
+    elseif(test_name STREQUAL "player_cgb_speed_smoke_mutant_ppu_follows_cpu")
+      # Fifth public-player core mutant build; the default mask selects M1 (1 << 1).
+      include("${PROJECT_SOURCE_DIR}/cmake/P12Mutants.cmake")
+      set(mutant_core_source "${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_core_p12_mutant_m1.c")
+      gbb_p12_make_mutant_core("${mutant_core_source}" 2)
+      add_library(gabbaboy-player-mutant-core-m1 STATIC "${mutant_core_source}")
+      target_include_directories(gabbaboy-player-mutant-core-m1 PRIVATE
+        "${PROJECT_SOURCE_DIR}/include")
+      target_compile_features(gabbaboy-player-mutant-core-m1 PRIVATE c_std_17)
+      set_target_properties(gabbaboy-player-mutant-core-m1 PROPERTIES C_EXTENSIONS OFF)
+      set(mutant_player gabbaboy-player-mutant-ppu-follows-cpu)
+      gbb_player_mutant_binary(${mutant_player}
+        "${PROJECT_SOURCE_DIR}/src/player/main.c"
+        "${PROJECT_SOURCE_DIR}/src/player/colour.c"
+        gabbaboy-player-mutant-core-m1)
+      add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+        "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_CHECK=speed;-DGBB_PLAYER=$<TARGET_FILE:${mutant_player}>;-DGBB_ROM=${GBB_PLAYER_CGB_SPEED_ROM};-DGBB_EXPECT_RGBA_SHA=${GBB_PLAYER_CGB_SPEED_RGBA_SHA};-P;${GBB_PLAYER_CGB_SMOKE_SCRIPT}"
+        -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=cgb speed smoke: RGBA buffer digest"
+        -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+      set_tests_properties(${test_name} PROPERTIES TIMEOUT 120 ENVIRONMENT "${cgb_env}")
+    elseif(test_name STREQUAL "player_cgb_smoke")
       add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
         -DGBB_CHECK=smoke -DGBB_PLAYER=$<TARGET_FILE:gabbaboy-player> ${cgb_smoke_args}
         -P "${GBB_PLAYER_CGB_SMOKE_SCRIPT}")
@@ -379,8 +423,8 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
     set(claims_phrases_file "${CMAKE_CURRENT_BINARY_DIR}/claims_phrases.txt")
     set(claims_linux_phrases_file "${CMAKE_CURRENT_BINARY_DIR}/claims_linux_phrases.txt")
     file(WRITE "${claims_phrases_file}"
-      "no colour correction\nDMG APU model\n--model auto|dmg|cgb\nno palette flag\nCGB mode-3 timing\n")
-    file(WRITE "${claims_linux_phrases_file}" "no colour correction\nCGB mode-3 timing\n")
+      "no colour correction\nDMG APU model\n--model auto|dmg|cgb\nno palette flag\nCGB double speed is implemented\nCGB mode-3 timing\n")
+    file(WRITE "${claims_linux_phrases_file}" "no colour correction\nCGB double speed is implemented\nCGB mode-3 timing\n")
     set(claims_script "${CMAKE_CURRENT_SOURCE_DIR}/claims_agree.cmake")
     set(claims_args
       "-DPHRASES_FILE=${claims_phrases_file}" "-DLINUX_PHRASES_FILE=${claims_linux_phrases_file}"
@@ -426,4 +470,25 @@ list(SORT GABBABOY_PLAYER_EXPECTED_TESTS)
 if(NOT registered_player_tests STREQUAL GABBABOY_PLAYER_EXPECTED_TESTS)
   message(FATAL_ERROR
     "Optional player tests differ from their inventory. Expected: ${GABBABOY_PLAYER_EXPECTED_TESTS}; registered: ${registered_player_tests}")
+endif()
+
+# The parent pass cannot reach child-directory test properties at the CMake 3.25 floor.
+include("${PROJECT_SOURCE_DIR}/cmake/ScaleSanitizerTimeouts.cmake")
+gbb_scale_sanitizer_test_timeouts()
+
+if(GABBABOY_ENABLE_SANITIZERS)
+  foreach(gbb_player_timeout_case IN ITEMS
+      "player_cgb_speed_smoke=360"
+      "player_cgb_cli=720"
+      "player_cgb_model_auto_smoke=900")
+    string(REPLACE "=" ";" gbb_player_timeout_pair "${gbb_player_timeout_case}")
+    list(GET gbb_player_timeout_pair 0 gbb_player_timeout_test)
+    list(GET gbb_player_timeout_pair 1 gbb_player_timeout_expected)
+    get_test_property(${gbb_player_timeout_test} TIMEOUT gbb_player_timeout_actual)
+    if(NOT "${gbb_player_timeout_actual}" STREQUAL "${gbb_player_timeout_expected}")
+      message(FATAL_ERROR
+        "Sanitizer timeout policy: ${gbb_player_timeout_test} expected ${gbb_player_timeout_expected}, "
+        "got ${gbb_player_timeout_actual}")
+    endif()
+  endforeach()
 endif()

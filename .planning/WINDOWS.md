@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 10
+open_count: 15
 waived_count: 0
 fixed_count: 0
-total_count: 10
-last_updated: 2026-10-08T16:24:49.415Z
+total_count: 15
+last_updated: 2026-10-14T01:52:45.826Z
 ---
 
 # Broken Windows Ledger
@@ -25,6 +25,11 @@ last_updated: 2026-10-08T16:24:49.415Z
 | 8 | 05 | deviation | tests/player/test_input.c |  | The reconnect queue-full fixture now loads the demo ROM so its retry case has a live guest timeline. | open |  | 2026-10-08T15:55:37.132Z |  |
 | 9 | 05 | deviation | src/player/audio.h |  | Added the existing internal adapter header to the task scope so new audio transition functions have declarations shared by main and tests. | open |  | 2026-10-08T16:00:39.497Z |  |
 | 10 | 05 | deviation | .github/workflows/preview.yml |  | Corrected stale preview capability claims and package metadata to describe the implemented scoped DMG audio contract. | open |  | 2026-10-08T16:24:49.415Z |  |
+| 11 | 12 | deviation | tests/scripts/test-reproduce-age.sh |  | The byte-difference negative control mutates the scratch rebuilt ROM because mutating the committed fixture is rejected first by self-check. | open |  | 2026-10-13T17:06:18.785Z |  |
+| 12 | 12 | deviation | cmake/P12Mutants.cmake |  | Adjusted the M3 mutant because divider_phase remains zero and its initial normal-speed phase replacement was equivalent in double speed. | open |  | 2026-10-13T18:02:22.258Z |  |
+| 13 | 12 | deviation | cmake/P12Mutants.cmake |  | Made the generated M12 RTC fault use an explicit double_speed local while keeping production RTC code outside that trust domain. | open |  | 2026-10-13T18:02:22.362Z |  |
+| 14 | 12 | deviation | tests/expected-tests.txt |  | The planned broad AGE selector includes the pre-existing div timeout negative control (14 tests total; 13 ROM disposition tests). | open |  | 2026-10-14T01:20:16.619Z |  |
+| 15 | 12 | deviation | cmake/P12Mutants.cmake |  | M28 mutant scope corrected to double-speed destinations after the AGE sweep measured mode-0 discrimination. | open |  | 2026-10-14T01:52:45.826Z |  |
 
 ````json
 [
@@ -157,6 +162,71 @@ last_updated: 2026-10-08T16:24:49.415Z
     "recorded_at": "2026-10-08T16:24:49.415Z",
     "resolved_at": null,
     "milestone": "v0.1"
+  },
+  {
+    "id": 11,
+    "kind": "deviation",
+    "phase": "12",
+    "file": "tests/scripts/test-reproduce-age.sh",
+    "line": null,
+    "description": "The byte-difference negative control mutates the scratch rebuilt ROM because mutating the committed fixture is rejected first by self-check.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-13T17:06:18.785Z",
+    "resolved_at": null,
+    "milestone": "v0.2"
+  },
+  {
+    "id": 12,
+    "kind": "deviation",
+    "phase": "12",
+    "file": "cmake/P12Mutants.cmake",
+    "line": null,
+    "description": "Adjusted the M3 mutant because divider_phase remains zero and its initial normal-speed phase replacement was equivalent in double speed.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-13T18:02:22.258Z",
+    "resolved_at": null,
+    "milestone": "v0.2"
+  },
+  {
+    "id": 13,
+    "kind": "deviation",
+    "phase": "12",
+    "file": "cmake/P12Mutants.cmake",
+    "line": null,
+    "description": "Made the generated M12 RTC fault use an explicit double_speed local while keeping production RTC code outside that trust domain.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-13T18:02:22.362Z",
+    "resolved_at": null,
+    "milestone": "v0.2"
+  },
+  {
+    "id": 14,
+    "kind": "deviation",
+    "phase": "12",
+    "file": "tests/expected-tests.txt",
+    "line": null,
+    "description": "The planned broad AGE selector includes the pre-existing div timeout negative control (14 tests total; 13 ROM disposition tests).",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-14T01:20:16.619Z",
+    "resolved_at": null,
+    "milestone": "v0.2"
+  },
+  {
+    "id": 15,
+    "kind": "deviation",
+    "phase": "12",
+    "file": "cmake/P12Mutants.cmake",
+    "line": null,
+    "description": "M28 mutant scope corrected to double-speed destinations after the AGE sweep measured mode-0 discrimination.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-14T01:52:45.826Z",
+    "resolved_at": null,
+    "milestone": "v0.2"
   }
 ]
 ````

@@ -1,8 +1,8 @@
 # D-30: automated colour check for gabbaboy-player (CGB colour presentation) with independent
 # expectations. Inputs (all passed with -D):
-#   GBB_CHECK            smoke (default) or cli
+#   GBB_CHECK            smoke (default), speed or cli
 #   GBB_PLAYER           the gabbaboy-player binary under test
-#   GBB_ROM              colour-attr.gb (original fixture; manifest.json documents each cell)
+#   GBB_ROM              ROM selected by the smoke check
 #   GBB_DEMO             fixtures/visible-demo/demo.gb (a DMG-only cartridge)
 #   GBB_EXPECT_RGBA_SHA  pinned SHA-256 of the uploaded 160x144 RGBA buffer (smoke only)
 #
@@ -108,6 +108,28 @@ if(GBB_CHECK STREQUAL "smoke")
     message(FATAL_ERROR "cgb smoke: RGBA buffer digest ${actual_sha} differs from the pinned ${GBB_EXPECT_RGBA_SHA}")
   endif()
   message(STATUS "cgb smoke passed: ${checked} spots, ${distinct} distinct colours, digest ${actual_sha}")
+
+elseif(GBB_CHECK STREQUAL "speed")
+  if(NOT DEFINED GBB_EXPECT_RGBA_SHA OR "${GBB_EXPECT_RGBA_SHA}" STREQUAL "")
+    message(FATAL_ERROR "cgb_smoke.cmake speed is missing GBB_EXPECT_RGBA_SHA")
+  endif()
+  gbb_run_player(code text --model cgb --smoke-colour "${GBB_ROM}")
+  if(NOT code EQUAL 0)
+    message(FATAL_ERROR "cgb speed smoke: the player exited ${code}\n${text}")
+  endif()
+  if(NOT text MATCHES "smoke_colour rgba_sha256=([0-9a-f]+) distinct=[0-9]+ title_token=([^ \n]+) spot=")
+    message(FATAL_ERROR "cgb speed smoke: no smoke_colour line in the output\n${text}")
+  endif()
+  set(actual_sha "${CMAKE_MATCH_1}")
+  set(token "${CMAKE_MATCH_2}")
+  if(NOT token STREQUAL "CGB")
+    message(FATAL_ERROR "cgb speed smoke: title token is '${token}', expected CGB")
+  endif()
+  if(NOT actual_sha STREQUAL GBB_EXPECT_RGBA_SHA)
+    message(FATAL_ERROR "cgb speed smoke: RGBA buffer digest ${actual_sha} differs from the pinned ${GBB_EXPECT_RGBA_SHA}")
+  endif()
+  # This guest is not the colour-attribute fixture; its palette diversity and spot grid are not asserted.
+  message(STATUS "cgb speed smoke passed: RGBA digest ${actual_sha}, title_token=CGB")
 
 elseif(GBB_CHECK STREQUAL "cli")
   if(NOT DEFINED GBB_DEMO OR "${GBB_DEMO}" STREQUAL "")

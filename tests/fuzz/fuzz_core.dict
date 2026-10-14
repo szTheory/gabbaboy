@@ -1,0 +1,3 @@
+kw_speed_switch="\xE0\x4D\x10\x00"
+kw_key1_arm="\x3E\x01\xE0\x4D"
+kw_stop="\x10\x00"

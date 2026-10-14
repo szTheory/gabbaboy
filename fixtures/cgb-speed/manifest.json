@@ -1,0 +1,89 @@
+{
+  "id": "cgb-speed",
+  "source": [
+    "common.inc",
+    "speed.asm",
+    "speed-hostile.asm"
+  ],
+  "source_identity": "Original GabbaBoy project-authored assembly",
+  "source_sha256": {
+    "common.inc": "a51e137d24d221463cec6f1eefe4a88b7c12c805e51734acd1cec43c033cede8",
+    "speed.asm": "f7cf7c81ba0571fadab662376724d69c4ee2ce625b0c005f34d0cf2d96323c51",
+    "speed-hostile.asm": "e2ed657067d127215ddb329bc97a16057de7ad7330bc6c15c10cd181dd3544d2"
+  },
+  "license": "MIT; see LICENSE.txt and repository LICENSE",
+  "evidence_class": "Pinned author-attested software-model corpus and original deterministic software guest; not hardware evidence.",
+  "build": {
+    "assembler": "RGBDS",
+    "version": "1.0.1",
+    "archive": "rgbds-macos.zip",
+    "archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
+    "ci_archive": "rgbds-linux-x86_64.tar.xz",
+    "ci_archive_sha256": "80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9",
+    "recipe": "Per ROM, from fixtures[].recipe: rgbasm -I fixtures/cgb-speed/ [-D name]... -o <work>/<rom>.o fixtures/cgb-speed/<source> && rgblink -o <work>/<rom> <work>/<rom>.o && rgbfix <rgbfix_flags> <work>/<rom>; every tool comes from the digest-pinned RGBDS v1.0.1 release archive.",
+    "committed_bytes_toolchain": "RGBDS v1.0.1 macOS release archive (digest above); committed ROM is fixed with the manifest recipe."
+  },
+  "fixtures": [
+    {
+      "file": "speed.gb",
+      "size_bytes": 32768,
+      "sha256": "3c6e88de1e28d47566f7486dd13813c8fb1baf48ee336509e3902bd9ff8e2f3f",
+      "recipe": {
+        "source": "speed.asm",
+        "defines": [],
+        "rgbfix_flags": [
+          "-v",
+          "-p",
+          "0"
+        ]
+      }
+    },
+    {
+      "file": "speed-hostile.gb",
+      "size_bytes": 32768,
+      "sha256": "c03dc826d8da5fcb7adba5fcd9d5c231686519d8fa3ab23cefa57e2e5c027471",
+      "recipe": {
+        "source": "speed-hostile.asm",
+        "defines": [],
+        "rgbfix_flags": [
+          "-v",
+          "-p",
+          "0"
+        ]
+      }
+    }
+  ],
+  "cartridge": {
+    "mapper": "none (ROM only)",
+    "type": "0x00",
+    "rom_size_code": "0x00 (32 KiB)",
+    "ram_size_code": "0x00 (none)",
+    "cgb_flag": "0xC0 (CGB only)"
+  },
+  "profile": {
+    "name": "CGB-CPU-E",
+    "boot": "Skipped; starts at cartridge entry 0x0100.",
+    "applicability": "Original software fixture for the deterministic bootless CGB-CPU-E profile in CGB mode; not physical-hardware evidence."
+  },
+  "protocol": {
+    "sample_layout": "Four phase-major 32-byte records begin at WRAM $C100; the host reads them through gbb_peek_ram after the done marker at $C0FE.",
+    "phase_order": [
+      "normal speed",
+      "switch to double speed",
+      "switch back to normal speed",
+      "switch to double speed again"
+    ],
+    "tima": "TAC selects 16 T-cycles; the unsigned counter delta between two adjacent LY transitions is stored at record offset 3. The derived interval includes the seven-M-cycle LY polling loop's maximum read-phase jitter.",
+    "key1": "Offsets 0, 1, and 2 hold the phase readback, armed readback, and readback after STOP respectively.",
+    "stop_lines": "LY is sampled directly before STOP and immediately after resume at offsets 13 and 15; the difference is interpreted modulo 154 lines.",
+    "div": "DIV is read at two adjacent LY transitions after reset; its byte delta is stored at offset 4.",
+    "serial": "SB is written with $A5 and SC starts an internal 512-T-cycle bit clock; D counts LY transitions through 8-bit completion, SC is stored at offset 6, and IF bit 3 is stored as a boolean at offset 7.",
+    "nr52_length": "Channel 1 is power-cycled, triggered with length 1 and length enabled, then NR52 bit 0 is sampled once per LY until expiry; offsets 8-10 store start, elapsed lines, and end.",
+    "oam_dma": "At the start of VBlank, two HRAM-only routines trigger DMA from C000 and perform CPU OAM reads at the bus phases 159 and 161 M-cycles after the FF46 write; this avoids PPU mode-2/3 OAM arbitration. Offsets 11 and 12 capture the returned data values."
+  },
+  "scope_limits": [
+    "This is a deterministic emulator-software probe, not physical hardware evidence.",
+    "Timing bounds are independently derived from documented clock units and the confirmed 12-09 stall value; they are not fitted to this core's observations.",
+    "The host driver uses only public API calls and fixed WRAM observations."
+  ]
+}

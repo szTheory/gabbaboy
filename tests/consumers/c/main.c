@@ -167,6 +167,118 @@ done:
     return passed ? 0 : 1;
 }
 
+/* Build a self-contained, ROM-only CGB guest for the installed public API. */
+static void cgb_speed_fill_rom(uint8_t *rom, size_t size, uint8_t key1_value) {
+    memset(rom, 0, size);
+    rom[0x100u] = 0xC3u; /* JP $0150 */
+    rom[0x101u] = 0x50u;
+    rom[0x102u] = 0x01u;
+    rom[0x143u] = 0xC0u; /* CGB-only */
+    rom[0x147u] = 0x00u; /* ROM-only cartridge */
+    rom[0x148u] = 0x00u; /* 32 KiB ROM */
+    rom[0x149u] = 0x00u; /* no external RAM */
+    rom[0x150u] = 0x3Eu; /* LD A,$55: mark execution before STOP. */
+    rom[0x151u] = 0x55u;
+    rom[0x152u] = 0xEAu; /* LD ($C000),A */
+    rom[0x153u] = 0x00u;
+    rom[0x154u] = 0xC0u;
+    rom[0x155u] = 0x3Eu; /* LD A,key1_value */
+    rom[0x156u] = key1_value;
+    rom[0x157u] = 0xE0u; /* LDH ($4D),A: arm only in the positive guest. */
+    rom[0x158u] = 0x4Du;
+    rom[0x159u] = 0x10u; /* STOP $00 */
+    rom[0x15Au] = 0x00u;
+    rom[0x15Bu] = 0xF0u; /* LDH A,($4D): read KEY1 after the switch. */
+    rom[0x15Cu] = 0x4Du;
+    rom[0x15Du] = 0xEAu; /* LD ($C000),A */
+    rom[0x15Eu] = 0x00u;
+    rom[0x15Fu] = 0xC0u;
+    rom[0x160u] = 0x76u; /* HALT */
+    uint8_t checksum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14Du] = checksum;
+}
+
+/* Returns true only when an armed switch reaches HALT through partitioned public runs. */
+static int cgb_speed_partition_smoke(uint8_t key1_value, int *out_unarmed_rejected) {
+    enum { ROM_BYTES = 32768u, SLICE_HALF_DOTS = 4096u, FRAME_HALF_DOTS = 140448u };
+    const uint64_t cap_half_dots = UINT64_C(2) * FRAME_HALF_DOTS;
+    uint8_t rom[ROM_BYTES];
+    static uint16_t pixels[160u * 144u];
+    gbb_instance *machine = NULL;
+    gbb_run_result result = {0};
+    gbb_frame_info frame = {0};
+    gbb_error frame_error = GBB_FRAME_NOT_READY;
+    uint64_t consumed_total = 0u;
+    uint64_t full_slice_total = 0u;
+    uint64_t halt_partial_half_dots = 0u;
+    unsigned calls = 0u;
+    int halted = 0;
+    int frame_ready = 0;
+    int passed = 0;
+    if (out_unarmed_rejected != NULL) *out_unarmed_rejected = 0;
+    cgb_speed_fill_rom(rom, sizeof(rom), key1_value);
+    if (gbb_create(GBB_PROFILE_CGB_CPU_E, &machine) != GBB_OK ||
+        gbb_load_rom(machine, rom, sizeof(rom)) != GBB_OK) goto done;
+
+    result = gbb_run(machine, SLICE_HALF_DOTS, NULL, 0u);
+    ++calls;
+    consumed_total += result.consumed_half_dots;
+    if (result.reason == GBB_STOP_STOPPED) {
+        if (key1_value == 0u && result.consumed_half_dots > 0u &&
+            result.consumed_half_dots <= SLICE_HALF_DOTS &&
+            gbb_peek_ram(machine, 0xC000u) == 0x55u &&
+            (gbb_peek_ram(machine, 0xC000u) & 0x80u) == 0u &&
+            out_unarmed_rejected != NULL)
+            *out_unarmed_rejected = 1;
+        goto done;
+    }
+    if (key1_value == 0u || result.reason != GBB_STOP_BUDGET ||
+        result.consumed_half_dots != SLICE_HALF_DOTS ||
+        gbb_peek_ram(machine, 0xC000u) != 0x55u) goto done;
+    full_slice_total += SLICE_HALF_DOTS;
+
+    for (; calls < 69u; ++calls) {
+        result = gbb_run(machine, SLICE_HALF_DOTS, NULL, 0u);
+        consumed_total += result.consumed_half_dots;
+        if (result.reason == GBB_STOP_HALTED_IDLE && !halted) halted = 1;
+        if (result.reason == GBB_STOP_STOPPED && key1_value == 0u &&
+            result.consumed_half_dots > 0u &&
+            gbb_peek_ram(machine, 0xC000u) == 0x55u &&
+            (gbb_peek_ram(machine, 0xC000u) & 0x80u) == 0u &&
+            out_unarmed_rejected != NULL) {
+            *out_unarmed_rejected = 1;
+            goto done;
+        }
+        if ((!halted && result.reason != GBB_STOP_BUDGET) ||
+            (halted && result.reason != GBB_STOP_HALTED_IDLE) ||
+            result.consumed_half_dots == 0u ||
+            result.consumed_half_dots > SLICE_HALF_DOTS) goto done;
+        if (result.consumed_half_dots == SLICE_HALF_DOTS)
+            full_slice_total += SLICE_HALF_DOTS;
+        else if (halted)
+            halt_partial_half_dots = result.consumed_half_dots;
+        if (consumed_total > cap_half_dots) goto done;
+        frame_error = gbb_copy_frame_rgb555(machine, pixels, sizeof(pixels), 320u, &frame);
+        if (frame_error == GBB_OK) frame_ready = 1;
+        else if (frame_error != GBB_FRAME_NOT_READY) goto done;
+        if (halted && frame_ready) break;
+    }
+    if (!halted || !frame_ready ||
+        consumed_total != full_slice_total + halt_partial_half_dots ||
+        consumed_total > cap_half_dots ||
+        (gbb_peek_ram(machine, 0xC000u) & 0x80u) == 0u ||
+        frame.width != 160u || frame.height != 144u || frame.generation == 0u ||
+        frame.completion_half_dots > consumed_total)
+        goto done;
+    passed = 1;
+
+done:
+    gbb_destroy(machine);
+    return passed;
+}
+
 /* Installed-package RTC smoke: MBC3+TIMER+RAM+BATTERY ($10) synthetic ROM,
  * explicit host catch-up, block layout and a byte-identical import round trip. */
 static void rtc_fill_rom(uint8_t *rom, size_t size, uint8_t cart_type) {
@@ -407,6 +519,18 @@ int main(int argc, char **argv) {
     if (cgb_api_smoke() != 0) {
         fprintf(stderr, "C consumer public CGB API smoke failed\n");
         return 1;
+    }
+    {
+        int unarmed_rejected = 0;
+        if (!cgb_speed_partition_smoke(1u, NULL)) {
+            fprintf(stderr, "C consumer CGB speed partition smoke failed\n");
+            return 1;
+        }
+        if (cgb_speed_partition_smoke(0u, &unarmed_rejected) || !unarmed_rejected) {
+            fprintf(stderr, "C consumer CGB speed smoke accepted unarmed twin\n");
+            return 1;
+        }
+        printf("cgb_speed_partition_smoke unarmed twin rejected\n");
     }
     if (rtc_api_smoke() != 0) {
         fprintf(stderr, "C consumer public RTC API smoke failed\n");

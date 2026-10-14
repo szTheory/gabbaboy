@@ -1,4 +1,5 @@
 #include "gabbaboy/gabbaboy.h"
+#include "gabbaboy_test.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -11,6 +12,7 @@
 #define FUZZ_IMPORT_LIMIT (FUZZ_BATTERY_BYTES + 1u)
 #define FUZZ_RUN_LIMIT UINT64_C(2048)
 #define FUZZ_INPUT_HALF_DOT_LIMIT UINT64_C(8192)
+#define FUZZ_SPEED_HALF_DOT_LIMIT UINT64_C(600000)
 
 static void fix_checksum(uint8_t rom[32768]) {
     uint8_t checksum = 0u;
@@ -53,6 +55,63 @@ static void contract_failed(const char *what) {
 
 /* Internal test seam, defined by the core and linked into every fuzz target. */
 extern void gbb_test_bank_state(const gbb_instance *, uint8_t *, uint8_t *);
+
+static struct {
+    int selected;
+    uint8_t scenario;
+    unsigned switches;
+    unsigned key1_reads;
+    unsigned stop_count;
+    unsigned run_calls;
+    uint8_t double_speed;
+    uint8_t key1_armed;
+    uint8_t key1;
+    uint32_t stall_half_dots;
+    uint32_t mode;
+    uint32_t profile;
+    uint64_t consumed_half_dots;
+    uint64_t master_time_half_dots;
+    uint64_t last_trace_time;
+    uint32_t path_flags;
+    int saw_hram_dma_stop;
+    int saw_lcd_off;
+} last_speed_observation;
+
+#ifdef GBB_FUZZ_STANDALONE_TEST
+void gbb_fuzz_core_speed_observation(int *selected, uint8_t *scenario,
+                                     unsigned *switches, unsigned *key1_reads,
+                                     unsigned *stop_count, unsigned *run_calls,
+                                     uint8_t *double_speed, uint8_t *key1_armed,
+                                     uint8_t *key1, uint32_t *stall_half_dots,
+                                     uint32_t *mode, uint32_t *profile,
+                                     uint64_t *consumed_half_dots,
+                                     uint64_t *master_time_half_dots,
+                                     uint64_t *last_trace_time,
+                                     uint32_t *path_flags,
+                                     int *saw_hram_dma_stop, int *saw_lcd_off) {
+    if (selected != NULL) *selected = last_speed_observation.selected;
+    if (scenario != NULL) *scenario = last_speed_observation.scenario;
+    if (switches != NULL) *switches = last_speed_observation.switches;
+    if (key1_reads != NULL) *key1_reads = last_speed_observation.key1_reads;
+    if (stop_count != NULL) *stop_count = last_speed_observation.stop_count;
+    if (run_calls != NULL) *run_calls = last_speed_observation.run_calls;
+    if (double_speed != NULL) *double_speed = last_speed_observation.double_speed;
+    if (key1_armed != NULL) *key1_armed = last_speed_observation.key1_armed;
+    if (key1 != NULL) *key1 = last_speed_observation.key1;
+    if (stall_half_dots != NULL) *stall_half_dots = last_speed_observation.stall_half_dots;
+    if (mode != NULL) *mode = last_speed_observation.mode;
+    if (profile != NULL) *profile = last_speed_observation.profile;
+    if (consumed_half_dots != NULL)
+        *consumed_half_dots = last_speed_observation.consumed_half_dots;
+    if (master_time_half_dots != NULL)
+        *master_time_half_dots = last_speed_observation.master_time_half_dots;
+    if (last_trace_time != NULL) *last_trace_time = last_speed_observation.last_trace_time;
+    if (path_flags != NULL) *path_flags = last_speed_observation.path_flags;
+    if (saw_hram_dma_stop != NULL)
+        *saw_hram_dma_stop = last_speed_observation.saw_hram_dma_stop;
+    if (saw_lcd_off != NULL) *saw_lcd_off = last_speed_observation.saw_lcd_off;
+}
+#endif
 
 /* D-19(4) and D-27: bank indices are fixed on the DMG profile and bounded on the CGB profile no
  * matter what the untrusted input did. */
@@ -253,6 +312,328 @@ static void fuzz_cgb_io(gbb_instance *machine, const uint8_t *data, size_t size)
     require_banks(machine, 1);
 }
 
+/* D-27: exercise the real guest KEY1/STOP path under bounded, repeatable inputs. The speed mode has
+ * its own budget because a CGB switch stalls for far longer than the ordinary 2,048-half-dot fuzz
+ * slice. The private seams below only observe state; all transitions come from guest instructions. */
+#define FUZZ_SPEED_PROGRAM 0x150u
+#define FUZZ_SPEED_TRACE_CAPACITY 4096u
+static gbb_trace_record speed_trace[FUZZ_SPEED_TRACE_CAPACITY];
+
+static size_t speed_emit_a(uint8_t *rom, size_t at, uint8_t value) {
+    rom[at++] = 0x3Eu; rom[at++] = value;
+    return at;
+}
+
+static size_t speed_emit_ldh_write(uint8_t *rom, size_t at, uint8_t offset) {
+    rom[at++] = 0xE0u; rom[at++] = offset;
+    return at;
+}
+
+static size_t speed_emit_absolute_write(uint8_t *rom, size_t at, uint16_t address) {
+    rom[at++] = 0xEAu; rom[at++] = (uint8_t)address;
+    rom[at++] = (uint8_t)(address >> 8);
+    return at;
+}
+
+static size_t speed_emit_loop_jump(uint8_t *rom, size_t at, size_t target) {
+    const size_t jump_pc = at;
+    const int displacement = (int)target - (int)(jump_pc + 2u);
+    rom[at++] = 0x18u;
+    rom[at++] = (uint8_t)(int8_t)displacement;
+    return at;
+}
+
+static int speed_switches_on_stop(uint8_t scenario, uint32_t mode) {
+    return mode == GBB_MODE_CGB && scenario != 3u;
+}
+
+static void speed_apply_last_instruction(const gbb_trace_record *record,
+                                         uint8_t scenario, uint32_t mode,
+                                         int cgb_profile,
+                                         uint8_t *double_speed,
+                                         uint8_t *key1_armed,
+                                         unsigned *switches) {
+    if (cgb_profile && mode == GBB_MODE_CGB &&
+        record->opcode[0] == 0xE0u && record->opcode[1] == 0x4Du)
+        *key1_armed = (uint8_t)(record->a & 1u);
+    if (record->opcode[0] == 0x10u && speed_switches_on_stop(scenario, mode)) {
+        *double_speed ^= 1u;
+        *key1_armed = 0u;
+        ++*switches;
+    }
+}
+
+static void fuzz_speed(gbb_instance *machine, const uint8_t *data, size_t size,
+                       int cgb_profile) {
+    uint8_t rom[32768];
+    const uint8_t scenario = size > 1u ? (uint8_t)(data[1] & 7u) : 0u;
+    size_t at = FUZZ_SPEED_PROGRAM;
+    size_t key1_store_pc = 0u;
+    size_t dma_stop_pc = 0u;
+    size_t lcdc_write_pc = 0u;
+    size_t ie_write_pc = 0u, if_write_pc = 0u, joyp_write_pc = 0u, dma_start_pc = 0u;
+    const int switch_expected = scenario != 3u && scenario != 6u && scenario != 7u;
+
+    memset(&last_speed_observation, 0, sizeof(last_speed_observation));
+    last_speed_observation.selected = 1;
+    last_speed_observation.scenario = scenario;
+    memset(rom, 0, sizeof(rom));
+    rom[0x100u] = 0xC3u; rom[0x101u] = 0x50u; rom[0x102u] = 0x01u;
+    rom[0x143u] = cgb_profile && scenario != 6u ? 0x80u : 0x00u;
+
+    if (scenario == 1u) {
+        at = speed_emit_a(rom, at, 1u);
+        at = speed_emit_ldh_write(rom, at, 0x4Du);
+        rom[at++] = 0x10u; rom[at++] = 0x00u;
+        const size_t loop = at;
+        rom[at++] = 0xF0u; rom[at++] = 0x4Du;
+        key1_store_pc = at;
+        at = speed_emit_absolute_write(rom, at, 0xC000u);
+        at = speed_emit_a(rom, at, 1u);
+        at = speed_emit_ldh_write(rom, at, 0x4Du);
+        rom[at++] = 0x10u; rom[at++] = 0x00u;
+        (void)speed_emit_loop_jump(rom, at, loop);
+    } else if (scenario == 2u || scenario == 3u) {
+        if (scenario == 3u) {
+            at = speed_emit_a(rom, at, 0x20u); /* select the direction-button row */
+            joyp_write_pc = at;
+            at = speed_emit_ldh_write(rom, at, 0x00u);
+        }
+        at = speed_emit_a(rom, at, 1u);
+        ie_write_pc = at;
+        at = speed_emit_absolute_write(rom, at, 0xFFFFu); /* IE = 1, IME stays disabled */
+        if_write_pc = at;
+        at = speed_emit_ldh_write(rom, at, 0x0Fu);         /* IF = 1 */
+        at = speed_emit_a(rom, at, 1u);
+        at = speed_emit_ldh_write(rom, at, 0x4Du);
+        rom[at++] = 0x10u; rom[at++] = 0x00u;
+        const size_t loop = at;
+        rom[at++] = 0xF0u; rom[at++] = 0x4Du;
+        key1_store_pc = at;
+        at = speed_emit_absolute_write(rom, at, 0xC000u);
+        (void)speed_emit_loop_jump(rom, at, loop);
+    } else if (scenario == 4u) {
+        uint8_t stub[16] = {0x3Eu, 0xC0u, 0xE0u, 0x46u, 0x10u, 0x00u,
+                            0xF0u, 0x4Du, 0xEAu, 0x00u, 0xC0u, 0x18u, 0u};
+        const int8_t back = (int8_t)-7;
+        stub[12] = (uint8_t)back;
+        dma_start_pc = 0xFF82u;
+        dma_stop_pc = 0xFF84u;
+        key1_store_pc = 0xFF88u;
+        for (size_t i = 0u; i < 13u; ++i) {
+            at = speed_emit_a(rom, at, stub[i]);
+            at = speed_emit_ldh_write(rom, at, (uint8_t)(0x80u + i));
+        }
+        at = speed_emit_a(rom, at, 1u);
+        at = speed_emit_ldh_write(rom, at, 0x4Du);
+        rom[at++] = 0xC3u; rom[at++] = 0x80u; rom[at++] = 0xFFu;
+    } else if (scenario == 5u) {
+        at = speed_emit_a(rom, at, 0u);
+        lcdc_write_pc = at;
+        at = speed_emit_ldh_write(rom, at, 0x40u);
+        at = speed_emit_a(rom, at, 1u);
+        at = speed_emit_ldh_write(rom, at, 0x4Du);
+        rom[at++] = 0x10u; rom[at++] = 0x00u;
+        const size_t loop = at;
+        rom[at++] = 0xF0u; rom[at++] = 0x4Du;
+        key1_store_pc = at;
+        at = speed_emit_absolute_write(rom, at, 0xC000u);
+        (void)speed_emit_loop_jump(rom, at, loop);
+    } else if (scenario == 7u) {
+        /* DMG twin: KEY1 is not a valid guest register on this profile, so exercise STOP/wake only. */
+        rom[at++] = 0x10u; rom[at++] = 0x00u;
+        const size_t loop = at;
+        rom[at++] = 0x00u;
+        (void)speed_emit_loop_jump(rom, at, loop);
+    } else {
+        at = speed_emit_a(rom, at, 1u);
+        at = speed_emit_ldh_write(rom, at, 0x4Du);
+        rom[at++] = 0x10u; rom[at++] = 0x00u;
+        const size_t loop = at;
+        rom[at++] = 0xF0u; rom[at++] = 0x4Du;
+        key1_store_pc = at;
+        at = speed_emit_absolute_write(rom, at, 0xC000u);
+        (void)speed_emit_loop_jump(rom, at, loop);
+    }
+    (void)at;
+    fix_checksum(rom);
+    require_contract(gbb_load_rom(machine, rom, sizeof(rom)) == GBB_OK);
+
+    gbb_info info;
+    memset(&info, 0, sizeof(info));
+    info.struct_size = sizeof(info);
+    require_contract(gbb_get_info(machine, &info) == GBB_OK);
+    last_speed_observation.mode = info.mode;
+    last_speed_observation.profile = info.profile;
+    require_contract(info.profile == (cgb_profile ? GBB_PROFILE_CGB_CPU_E : GBB_PROFILE_DMG_CPU_B));
+    if (cgb_profile) {
+        const uint32_t expected_mode = scenario == 6u ? GBB_MODE_CGB_DMG_COMPAT : GBB_MODE_CGB;
+        require_contract(info.mode == expected_mode);
+    }
+
+    if (scenario == 3u) {
+        const gbb_input_event press = {0u, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_RIGHT};
+        require_contract(gbb_queue_events(machine, &press, 1u) == GBB_OK);
+    } else if (scenario == 6u || scenario == 7u) {
+        const gbb_input_event wake = {256u, GBB_INPUT_STOP_WAKE, 1u};
+        require_contract(gbb_queue_events(machine, &wake, 1u) == GBB_OK);
+    }
+
+    uint8_t model_speed = 0u, model_armed = 0u;
+    uint8_t prior_speed = 0u, prior_armed = 0u;
+    uint32_t prior_stall = 0u, dynamic_stall_bound = 0u;
+    int have_dynamic_stall_bound = 0;
+    int have_prior_instruction = 0, prior_effect_applied = 1;
+    gbb_trace_record prior_instruction;
+    memset(&prior_instruction, 0, sizeof(prior_instruction));
+    uint64_t total_consumed = 0u, last_trace_time = 0u;
+    unsigned calls = 0u;
+    int key1_inversion_checked = 0;
+    const uint64_t initial_clock = gbb_test_master_time_half_dots(machine);
+    require_contract(initial_clock == 0u);
+
+    while (total_consumed < FUZZ_SPEED_HALF_DOT_LIMIT && calls < 2048u) {
+        const uint8_t entropy = size > 2u ? data[2u + (calls % (size - 2u))] : (uint8_t)(calls + 7u);
+        uint64_t budget = ((uint64_t)(entropy & 0x0Fu) + 1u) * 4096u;
+        if (budget > FUZZ_SPEED_HALF_DOT_LIMIT - total_consumed)
+            budget = FUZZ_SPEED_HALF_DOT_LIMIT - total_consumed;
+
+        const uint64_t before_clock = gbb_test_master_time_half_dots(machine);
+        require_contract(before_clock == total_consumed);
+        gbb_test_speed_state(machine, &prior_speed, NULL, &prior_stall, &prior_armed);
+        if (calls == 0u) { model_speed = prior_speed; model_armed = prior_armed; }
+        memset(speed_trace, 0, sizeof(speed_trace));
+        const gbb_run_result run = gbb_run(machine, budget, speed_trace,
+                                           FUZZ_SPEED_TRACE_CAPACITY);
+        ++calls;
+        require_contract(run.consumed_half_dots <= budget);
+        require_contract(UINT64_MAX - before_clock >= run.consumed_half_dots);
+        const uint64_t after_clock = gbb_test_master_time_half_dots(machine);
+        require_contract(after_clock >= before_clock);
+        require_contract(after_clock - before_clock == run.consumed_half_dots);
+        require_contract(UINT64_MAX - total_consumed >= run.consumed_half_dots);
+        total_consumed += run.consumed_half_dots;
+        require_contract(after_clock == total_consumed);
+
+        info.struct_size = sizeof(info);
+        require_contract(gbb_get_info(machine, &info) == GBB_OK);
+        uint8_t after_speed = 0u, after_armed = 0u;
+        uint32_t after_stall = 0u;
+        gbb_test_speed_state(machine, &after_speed, NULL, &after_stall, &after_armed);
+        require_contract(after_speed <= 1u && after_armed <= 1u);
+        require_contract(info.profile == (cgb_profile ? GBB_PROFILE_CGB_CPU_E : GBB_PROFILE_DMG_CPU_B));
+        if (after_speed != 0u)
+            require_contract(info.profile == GBB_PROFILE_CGB_CPU_E && info.mode == GBB_MODE_CGB);
+        if (info.mode == GBB_MODE_CGB) require_contract(run.reason != GBB_STOP_STOPPED);
+        require_contract((run.reason == GBB_STOP_BUDGET) ||
+                         (run.reason == GBB_STOP_TRACE_FULL) ||
+                         (run.reason == GBB_STOP_HALTED_IDLE) ||
+                         (run.reason == GBB_STOP_STOPPED) ||
+                         (run.reason == GBB_STOP_NO_PROGRESS));
+
+        unsigned stop_in_run = 0u;
+        for (size_t i = 0u; i < run.trace_count; ++i) {
+            const gbb_trace_record *record = &speed_trace[i];
+            require_contract(record->time_half_dots >= before_clock);
+            require_contract(record->time_half_dots <= after_clock);
+            require_contract(record->time_half_dots >= last_trace_time);
+            last_trace_time = record->time_half_dots;
+            if (have_prior_instruction && !prior_effect_applied) {
+                speed_apply_last_instruction(&prior_instruction, scenario, info.mode, cgb_profile,
+                                             &model_speed, &model_armed,
+                                             &last_speed_observation.switches);
+                prior_effect_applied = 1;
+            }
+            if (record->opcode[0] == 0x10u) {
+                ++stop_in_run;
+                ++last_speed_observation.stop_count;
+                if (scenario == 4u && record->pc == dma_stop_pc)
+                    last_speed_observation.saw_hram_dma_stop = 1;
+            }
+            if (record->opcode[0] == 0xE0u && record->opcode[1] == 0x4Du &&
+                record->a == 1u)
+                last_speed_observation.path_flags |= 0x01u;
+            if ((scenario == 2u || scenario == 3u) && record->pc == ie_write_pc &&
+                record->opcode[0] == 0xEAu && record->opcode[1] == 0xFFu &&
+                record->opcode[2] == 0xFFu && record->a == 1u)
+                last_speed_observation.path_flags |= 0x02u;
+            if ((scenario == 2u || scenario == 3u) && record->pc == if_write_pc &&
+                record->opcode[0] == 0xE0u && record->opcode[1] == 0x0Fu && record->a == 1u)
+                last_speed_observation.path_flags |= 0x04u;
+            if (scenario == 3u && record->pc == joyp_write_pc &&
+                record->opcode[0] == 0xE0u && record->opcode[1] == 0x00u && record->a == 0x20u)
+                last_speed_observation.path_flags |= 0x08u;
+            if (scenario == 4u && record->pc == dma_start_pc &&
+                record->opcode[0] == 0xE0u && record->opcode[1] == 0x46u && record->a == 0xC0u)
+                last_speed_observation.path_flags |= 0x10u;
+            if (scenario == 5u && record->pc == lcdc_write_pc &&
+                record->opcode[0] == 0xE0u && record->opcode[1] == 0x40u)
+                last_speed_observation.saw_lcd_off = 1;
+            if (key1_store_pc != 0u && record->pc == key1_store_pc) {
+                const uint8_t expected_key1 = cgb_profile && info.mode == GBB_MODE_CGB
+                    ? (uint8_t)(0x7Eu | (uint8_t)(model_speed << 7) | model_armed)
+                    : 0xFFu;
+                ++last_speed_observation.key1_reads;
+                last_speed_observation.key1 = record->a;
+#ifdef GBB_FUZZ_SPEED_ORACLE_INVERTED
+                if (cgb_profile && info.mode == GBB_MODE_CGB && !key1_inversion_checked) {
+                    key1_inversion_checked = 1;
+                    if (record->a == expected_key1)
+                        contract_failed("KEY1 consistency oracle inverted");
+                    else
+                        require_contract(record->a != expected_key1);
+                } else {
+                    require_contract(record->a == expected_key1);
+                }
+#else
+                require_contract(record->a == expected_key1);
+#endif
+            }
+            prior_instruction = *record;
+            have_prior_instruction = 1;
+            prior_effect_applied = 0;
+        }
+        if (have_prior_instruction && !prior_effect_applied) {
+            speed_apply_last_instruction(&prior_instruction, scenario, info.mode, cgb_profile,
+                                         &model_speed, &model_armed,
+                                         &last_speed_observation.switches);
+            prior_effect_applied = 1;
+        }
+        require_contract(model_speed == after_speed && model_armed == after_armed);
+
+        const int stop_retired = after_speed != prior_speed ||
+                                 (prior_armed != 0u && after_armed == 0u) ||
+                                 stop_in_run != 0u;
+        if (stop_retired) {
+            dynamic_stall_bound = after_stall;
+            have_dynamic_stall_bound = 1;
+        } else {
+            require_contract(after_stall <= prior_stall);
+            if (have_dynamic_stall_bound) require_contract(after_stall <= dynamic_stall_bound);
+        }
+
+        last_speed_observation.double_speed = after_speed;
+        last_speed_observation.key1_armed = after_armed;
+        last_speed_observation.stall_half_dots = after_stall;
+        last_speed_observation.consumed_half_dots = total_consumed;
+        last_speed_observation.master_time_half_dots = after_clock;
+        last_speed_observation.last_trace_time = last_trace_time;
+        ++last_speed_observation.run_calls;
+        if (run.consumed_half_dots == 0u) break;
+    }
+
+    require_contract(calls != 0u);
+    require_contract(last_speed_observation.run_calls == calls);
+    require_contract(last_speed_observation.consumed_half_dots == total_consumed);
+    require_contract(last_speed_observation.master_time_half_dots == total_consumed);
+    if (switch_expected) require_contract(last_speed_observation.switches != 0u);
+    require_contract(last_speed_observation.stop_count != 0u);
+    if (scenario != 3u && scenario != 7u)
+        require_contract(last_speed_observation.key1_reads != 0u);
+    if (scenario == 4u) require_contract(last_speed_observation.saw_hram_dma_stop);
+    if (scenario == 5u) require_contract(last_speed_observation.saw_lcd_off);
+}
+
 /* D-34: palette RAM and the compatibility palette API under untrusted input. data[0] = 0xA0 | ... on
  * the CGB profile selects this path (bit 6 clear). data[1] bit 0 picks CGB mode ($143 = $80) or
  * compatibility mode ($143 = $00), so the same sequence is read in both. The remaining bytes are up
@@ -435,8 +816,8 @@ int gbb_fuzz_core_last_profile_cgb(void) { return last_profile_cgb; }
 int gbb_fuzz_core_one_input(const uint8_t *data, size_t size) {
     if (data == NULL || size == 0u || size > FUZZ_INPUT_LIMIT) return 0;
 
-    /* data[0] bit 7 selects the profile (clear = DMG-CPU-B, set = CGB-CPU-E); with bit 6 also set
-     * on the CGB profile the input drives the guest I/O path. Bits 0-1 keep the mode selector. */
+    /* data[0] bit 7 selects the profile. CGB data[0] with bits 6 or 5 select I/O/palette paths;
+     * bits 4..6 equal to 0x10 select the guest KEY1/STOP path on either profile. */
     const int cgb = (data[0] & 0x80u) != 0u;
     last_profile_cgb = cgb;
     gbb_instance *machine = NULL;
@@ -446,7 +827,11 @@ int gbb_fuzz_core_one_input(const uint8_t *data, size_t size) {
     make_battery_rom(base_rom);
     require_contract(gbb_load_rom(machine, base_rom, sizeof(base_rom)) == GBB_OK);
 
-    if (cgb && (data[0] & 0x40u) != 0u)
+    if (cgb && (data[0] & 0x70u) == 0x10u)
+        fuzz_speed(machine, data, size, 1);
+    else if (!cgb && (data[0] & 0x70u) == 0x10u)
+        fuzz_speed(machine, data, size, 0);
+    else if (cgb && (data[0] & 0x40u) != 0u)
         fuzz_cgb_io(machine, data, size);
     else if (cgb && (data[0] & 0x20u) != 0u)
         fuzz_palette(machine, data, size);

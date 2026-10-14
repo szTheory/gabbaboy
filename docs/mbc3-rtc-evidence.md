@@ -262,8 +262,10 @@ run was about 19.7 MB.
 - No physical MBC3, RTC crystal or cartridge observation by this project.
   rtc3test and MagenTests results are author-attested and were executed here
   on a software profile.
-- No CGB behavior and no CGB double-speed clock independence (planned for the
-  CGB phase); the DMG profile ignores the CGB flag and registers.
+- CGB RTC independence from CPU speed is covered by the software-profile tests
+  `cgb_speed_ppu_apu_rtc_unscaled` and `cgb_speed_mutant_m12_rtc_reads_speed`;
+  this is not a physical CGB or RTC observation. The DMG profile ignores the
+  CGB flag and registers.
 - No BGB or VBA-M footer import or export. The block holds every footer field,
   so a host adapter can map them (see the interop note in
   [cartridge-and-saves.md](cartridge-and-saves.md)); the core does not.
