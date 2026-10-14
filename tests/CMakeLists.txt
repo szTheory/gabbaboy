@@ -2878,13 +2878,6 @@ if(GABBABOY_ENABLE_SANITIZERS)
   math(EXPR GBB_AGE_TIMEOUT_CONTROL_TIMEOUT "${GBB_AGE_TIMEOUT_CONTROL_TIMEOUT} * 3")
   math(EXPR GBB_AGE_STALL_WINDOW_TIMEOUT "${GBB_AGE_STALL_WINDOW_TIMEOUT} * 3")
 endif()
-add_test(NAME age_spsw_div_cgbBCE
-  COMMAND test_age "${GBB_AGE_SPSW_ROM}" "${GBB_AGE_SPSW_RESULTS_HEX}"
-    "${GBB_AGE_SPSW_EXPECTED_HEX}" "${GBB_AGE_SPSW_ROWS}"
-    "${GBB_AGE_SPSW_BUDGET}" --check-disposition pass)
-set_tests_properties(age_spsw_div_cgbBCE PROPERTIES
-  PASS_REGULAR_EXPRESSION "age verdict=pass rows_ok=5/5" TIMEOUT ${GBB_AGE_SPSW_TIMEOUT})
-
 # Negative control: one half-dot cannot reach an executed verdict and must report timeout distinctly.
 add_test(NAME age_spsw_div_cgbBCE_timeout
   COMMAND ${CMAKE_COMMAND}
@@ -2926,6 +2919,92 @@ set_tests_properties(age_stall_window PROPERTIES
   PASS_REGULAR_EXPRESSION "age-stall-window pass window=\\[${GBB_P12_AGE_STALL_WINDOW_LO},${GBB_P12_AGE_STALL_WINDOW_HI}\\] constant=${GBB_P12_STALL_T_HEX}"
   TIMEOUT ${GBB_AGE_STALL_WINDOW_TIMEOUT})
 # --- Phase 12 plan 12-09 end ---
+
+# --- Phase 12 plan 12-16 begin ---
+# The disposition rows pin committed-core results; the manifest supplies bounded run layouts.
+set(GBB_AGE_DISPOSITIONS_FILE "${PROJECT_SOURCE_DIR}/tests/external/cgb-speed-dispositions.json")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${GBB_AGE_MANIFEST}" "${GBB_AGE_DISPOSITIONS_FILE}")
+file(READ "${GBB_AGE_DISPOSITIONS_FILE}" GBB_AGE_DISPOSITIONS_JSON)
+string(JSON GBB_AGE_DISPOSITIONS_SCHEMA GET "${GBB_AGE_DISPOSITIONS_JSON}" schema)
+if(NOT GBB_AGE_DISPOSITIONS_SCHEMA STREQUAL "gabbaboy-external-dispositions-v1")
+  message(FATAL_ERROR "AGE dispositions have an unsupported schema")
+endif()
+string(JSON GBB_AGE_DISPOSITION_SUITE_COUNT LENGTH "${GBB_AGE_DISPOSITIONS_JSON}" suites)
+set(GBB_AGE_DISPOSITION_SUITE_FOUND OFF)
+foreach(GBB_AGE_DISPOSITION_SUITE_INDEX RANGE 0 ${GBB_AGE_DISPOSITION_SUITE_COUNT})
+  if(GBB_AGE_DISPOSITION_SUITE_INDEX LESS GBB_AGE_DISPOSITION_SUITE_COUNT)
+    string(JSON GBB_AGE_DISPOSITION_SUITE_NAME GET "${GBB_AGE_DISPOSITIONS_JSON}"
+      suites ${GBB_AGE_DISPOSITION_SUITE_INDEX} suite)
+    if(GBB_AGE_DISPOSITION_SUITE_NAME STREQUAL "age-test-roms")
+      set(GBB_AGE_DISPOSITION_SUITE_FOUND ON)
+      string(JSON GBB_AGE_DISPOSITION_ROW_COUNT LENGTH "${GBB_AGE_DISPOSITIONS_JSON}"
+        suites ${GBB_AGE_DISPOSITION_SUITE_INDEX} rows)
+      math(EXPR GBB_AGE_DISPOSITION_ROW_LAST "${GBB_AGE_DISPOSITION_ROW_COUNT} - 1")
+      foreach(GBB_AGE_DISPOSITION_ROW_INDEX RANGE 0 ${GBB_AGE_DISPOSITION_ROW_LAST})
+        string(JSON GBB_AGE_CASE GET "${GBB_AGE_DISPOSITIONS_JSON}"
+          suites ${GBB_AGE_DISPOSITION_SUITE_INDEX} rows ${GBB_AGE_DISPOSITION_ROW_INDEX} case)
+        string(JSON GBB_AGE_DISPOSITION GET "${GBB_AGE_DISPOSITIONS_JSON}"
+          suites ${GBB_AGE_DISPOSITION_SUITE_INDEX} rows ${GBB_AGE_DISPOSITION_ROW_INDEX} disposition)
+        string(JSON GBB_AGE_SIGNATURE GET "${GBB_AGE_DISPOSITIONS_JSON}"
+          suites ${GBB_AGE_DISPOSITION_SUITE_INDEX} rows ${GBB_AGE_DISPOSITION_ROW_INDEX} signature_sha256)
+        string(JSON GBB_AGE_ROW_MASK GET "${GBB_AGE_DISPOSITIONS_JSON}"
+          suites ${GBB_AGE_DISPOSITION_SUITE_INDEX} rows ${GBB_AGE_DISPOSITION_ROW_INDEX} row_mask)
+
+        set(GBB_AGE_CASE_FILE "${GBB_AGE_CASE}.gb")
+        set(GBB_AGE_CASE_FOUND OFF)
+        foreach(GBB_AGE_CASE_FIXTURE_INDEX RANGE 0 ${GBB_AGE_FIXTURE_LAST})
+          string(JSON GBB_AGE_FIXTURE_FILE GET "${GBB_AGE_MANIFEST_JSON}"
+            fixtures ${GBB_AGE_CASE_FIXTURE_INDEX} file)
+          if(GBB_AGE_FIXTURE_FILE STREQUAL GBB_AGE_CASE_FILE)
+            set(GBB_AGE_CASE_FOUND ON)
+            string(JSON GBB_AGE_CASE_RESULTS GET "${GBB_AGE_MANIFEST_JSON}"
+              fixtures ${GBB_AGE_CASE_FIXTURE_INDEX} test_results_address)
+            string(JSON GBB_AGE_CASE_EXPECTED GET "${GBB_AGE_MANIFEST_JSON}"
+              fixtures ${GBB_AGE_CASE_FIXTURE_INDEX} expected_address)
+            string(JSON GBB_AGE_CASE_ROWS GET "${GBB_AGE_MANIFEST_JSON}"
+              fixtures ${GBB_AGE_CASE_FIXTURE_INDEX} rows)
+            string(JSON GBB_AGE_CASE_BUDGET GET "${GBB_AGE_MANIFEST_JSON}"
+              fixtures ${GBB_AGE_CASE_FIXTURE_INDEX} budget_half_dots)
+          endif()
+        endforeach()
+        if(NOT GBB_AGE_CASE_FOUND OR GBB_AGE_CASE_BUDGET LESS 1)
+          message(FATAL_ERROR "AGE disposition ${GBB_AGE_CASE} lacks a manifest fixture or budget")
+        endif()
+        if(NOT GBB_AGE_DISPOSITION STREQUAL "pass" AND
+           NOT GBB_AGE_DISPOSITION STREQUAL "expected-failure")
+          message(FATAL_ERROR "AGE disposition ${GBB_AGE_CASE} is not runnable: ${GBB_AGE_DISPOSITION}")
+        endif()
+
+        string(REPLACE "$" "0x" GBB_AGE_CASE_RESULTS_HEX "${GBB_AGE_CASE_RESULTS}")
+        string(REPLACE "$" "0x" GBB_AGE_CASE_EXPECTED_HEX "${GBB_AGE_CASE_EXPECTED}")
+        string(REPLACE "-" "_" GBB_AGE_CASE_CTEST "${GBB_AGE_CASE}")
+        set(GBB_AGE_CASE_TEST "age_${GBB_AGE_CASE_CTEST}")
+        set(GBB_AGE_CASE_TIMEOUT 120)
+        if(GABBABOY_ENABLE_SANITIZERS)
+          math(EXPR GBB_AGE_CASE_TIMEOUT "${GBB_AGE_CASE_TIMEOUT} * 3")
+        endif()
+        set(GBB_AGE_DISPOSITION_ARGS "${GBB_AGE_DISPOSITION}")
+        set(GBB_AGE_EXPECTED_VERDICT "pass")
+        if(GBB_AGE_DISPOSITION STREQUAL "expected-failure")
+          list(APPEND GBB_AGE_DISPOSITION_ARGS "${GBB_AGE_SIGNATURE}" "${GBB_AGE_ROW_MASK}")
+          set(GBB_AGE_EXPECTED_VERDICT "fail")
+        endif()
+        add_test(NAME ${GBB_AGE_CASE_TEST}
+          COMMAND test_age "${PROJECT_SOURCE_DIR}/fixtures/age/${GBB_AGE_CASE_FILE}"
+            "${GBB_AGE_CASE_RESULTS_HEX}" "${GBB_AGE_CASE_EXPECTED_HEX}"
+            "${GBB_AGE_CASE_ROWS}" "${GBB_AGE_CASE_BUDGET}"
+            --check-disposition ${GBB_AGE_DISPOSITION_ARGS})
+        set_tests_properties(${GBB_AGE_CASE_TEST} PROPERTIES TIMEOUT ${GBB_AGE_CASE_TIMEOUT}
+          PASS_REGULAR_EXPRESSION "age verdict=${GBB_AGE_EXPECTED_VERDICT}")
+      endforeach()
+    endif()
+  endif()
+endforeach()
+if(NOT GBB_AGE_DISPOSITION_SUITE_FOUND OR GBB_AGE_DISPOSITION_ROW_COUNT LESS 1)
+  message(FATAL_ERROR "AGE dispositions must contain non-empty age-test-roms rows")
+endif()
+# --- Phase 12 plan 12-16 end ---
 
 # --- Phase 12 plan 12-10 begin ---
 # Original project-authored CGB speed probes (D-22); the expectations are generated only from

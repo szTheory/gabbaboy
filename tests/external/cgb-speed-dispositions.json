@@ -1,0 +1,42 @@
+{
+  "schema": "gabbaboy-external-dispositions-v1",
+  "note": "AGE Verified lines are author-attested hardware observations. These entries record committed-core software measurements, never reproducible hardware receipts.",
+  "suites": [
+    {
+      "suite": "age-test-roms",
+      "repository": "https://github.com/c-sp/age-test-roms",
+      "commit": "1f5bc10e2cb60b86c19f8d0287ff78f410c4f639",
+      "licence": "MIT; included font is CC0",
+      "vendored": true,
+      "rights_gate": "D-19; provenance and fixture admission are documented in fixtures/age/ELIGIBILITY.md",
+      "enumeration": "AGE speed-switch and STAT ROMs listed in fixtures/age/manifest.json at the pinned source commit",
+      "upstream_count": 13,
+      "rows": [
+        {
+          "case": "spsw-div-cgbBCE",
+          "upstream_path": "src/speed-switch/spsw-div-cgbBCE.asm",
+          "disposition": "pass",
+          "reason": "-",
+          "reason_detail": "rows_ok=5/5; expected_role=pass; measured_half_dots=22702928",
+          "owner_phase": 12,
+          "decision": "D-19",
+          "signature_sha256": "",
+          "row_mask": "",
+          "flip_rule": "fails if any expected row stops passing"
+        },
+        {
+          "case": "spsw-stop-prefetch-cgbBCE",
+          "upstream_path": "src/speed-switch/spsw-stop-prefetch-cgbBCE.asm",
+          "disposition": "pass",
+          "reason": "-",
+          "reason_detail": "rows_ok=1/1; expected_role=pass-target; measured_half_dots=1318104",
+          "owner_phase": 12,
+          "decision": "D-19",
+          "signature_sha256": "",
+          "row_mask": "",
+          "flip_rule": "fails if any expected row stops passing"
+        }
+      ]
+    }
+  ]
+}
