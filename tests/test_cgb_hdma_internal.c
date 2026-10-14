@@ -134,17 +134,30 @@ static int run_seam_case(int is_ld_sp, int speed) {
 
     const uint64_t expected_late = is_ld_sp ? (speed ? 16u : 32u) : (speed ? 12u : 24u);
     size_t late_writes = 0u;
-    int saw_late_timing = 0;
+    int saw_first_write = !is_ld_sp;
+    int saw_second_write = !is_ld_sp;
+    int saw_cb_read = is_ld_sp;
+    int saw_cb_write = is_ld_sp;
     int saw_edge = 0;
     uint64_t edge_at = UINT64_MAX;
     for (size_t i = 0; i < gbb_test_observer_count(m); ++i) {
-        if (bus[i].access == 2u &&
-            ((is_ld_sp && (bus[i].address == 0xC100u || bus[i].address == 0xC101u)) ||
-             (!is_ld_sp && bus[i].address == 0xC100u))) {
-            ++late_writes;
-            if (bus[i].address == f.late_address &&
-                bus[i].time_half_dots == start + expected_late)
-                saw_late_timing = 1;
+        if (is_ld_sp && bus[i].access == 2u) {
+            if (bus[i].address == 0xC100u &&
+                bus[i].time_half_dots == start + (speed ? 12u : 24u)) {
+                ++late_writes;
+                saw_first_write = 1;
+            }
+            if (bus[i].address == 0xC101u &&
+                bus[i].time_half_dots == start + expected_late) {
+                ++late_writes;
+                saw_second_write = 1;
+            }
+        } else if (!is_ld_sp && bus[i].address == 0xC100u) {
+            if (bus[i].access == 1u &&
+                bus[i].time_half_dots == start + (speed ? 8u : 16u))
+                saw_cb_read = 1;
+            if (bus[i].access == 2u && bus[i].time_half_dots == start + expected_late)
+                saw_cb_write = 1;
         }
     }
     for (size_t i = 0; i < gbb_test_ppu_observer_count(m); ++i) {
@@ -153,7 +166,8 @@ static int run_seam_case(int is_ld_sp, int speed) {
             edge_at = ppu[i].time_half_dots;
         }
     }
-    REQUIRE(late_writes == (is_ld_sp ? 2u : 1u) && saw_late_timing);
+    REQUIRE(late_writes == (is_ld_sp ? 2u : 0u) && saw_first_write &&
+            saw_second_write && saw_cb_read && saw_cb_write);
     REQUIRE(saw_edge == 1 && edge_at == start + f.edge_offset);
 
     const uint64_t boundary = m->time_half_dots;
@@ -206,16 +220,24 @@ static int test_controls(void) {
     no_edge.machine->ppu_fifo_count = 0u;
     gbb_run_result no_edge_run = gbb_run(no_edge.machine,
         no_edge.instruction_cost + 64u, NULL, 0u);
-    REQUIRE(no_edge_run.consumed_half_dots == no_edge.instruction_cost &&
-            no_edge.machine->vram[0][0] != no_edge.source[0]);
+    if (no_edge_run.consumed_half_dots != no_edge.instruction_cost ||
+        no_edge.machine->vram[0][0] == no_edge.source[0]) {
+        fprintf(stderr, "no-edge control mismatch: an absent visible 3-to-0 event copied data\n");
+        gbb_destroy(no_edge.machine);
+        return 1;
+    }
     gbb_destroy(no_edge.machine);
 
     hdma_fixture disabled;
     REQUIRE(fixture_create(&disabled, 1, 0, 0, 1) == 0);
     gbb_run_result disabled_run = gbb_run(disabled.machine,
         disabled.instruction_cost + 64u, NULL, 0u);
-    REQUIRE(disabled_run.consumed_half_dots == disabled.instruction_cost &&
-            disabled.machine->vram[0][0] != disabled.source[0]);
+    if (disabled_run.consumed_half_dots != disabled.instruction_cost ||
+        disabled.machine->vram[0][0] == disabled.source[0]) {
+        fprintf(stderr, "disabled-transfer control mismatch: an unarmed edge copied data\n");
+        gbb_destroy(disabled.machine);
+        return 1;
+    }
     gbb_destroy(disabled.machine);
     return 0;
 }
@@ -248,14 +270,26 @@ static int test_outputs(void) {
     REQUIRE(fixture_create(&f, 1, 0, 1, 1) == 0);
     gbb_trace_record trace[2];
     memset(trace, 0xA5, sizeof(trace));
-    gbb_diagnostic_record diagnostics[GBB_DIAGNOSTIC_OPERATION_RESERVE + 1u];
-    memset(diagnostics, 0x5A, sizeof(diagnostics));
+    gbb_diagnostic_record short_diagnostics[GBB_DIAGNOSTIC_OPERATION_RESERVE + 1u];
+    memset(short_diagnostics, 0x5A, sizeof(short_diagnostics));
+    const uint64_t start = f.machine->time_half_dots;
     gbb_run_result run = gbb_run_ex(f.machine, f.instruction_cost + 64u,
-        trace, 1u, diagnostics, GBB_DIAGNOSTIC_OPERATION_RESERVE);
-    REQUIRE(run.consumed_half_dots == f.instruction_cost + 64u &&
-            f.machine->time_half_dots == run.consumed_half_dots + HDMA_SETUP_HALF_DOTS);
+        trace, 1u, short_diagnostics, GBB_DIAGNOSTIC_OPERATION_RESERVE);
+    REQUIRE(run.reason == GBB_STOP_OUTPUT_FULL &&
+            run.consumed_half_dots == f.instruction_cost &&
+            f.machine->time_half_dots - start == f.instruction_cost);
     REQUIRE(run.trace_count == 1u && trace[1].pc == UINT16_C(0xA5A5));
-    const uint8_t *after = (const uint8_t *)&diagnostics[GBB_DIAGNOSTIC_OPERATION_RESERVE];
+    const uint8_t *short_after = (const uint8_t *)&short_diagnostics[GBB_DIAGNOSTIC_OPERATION_RESERVE];
+    for (size_t i = 0u; i < sizeof(short_diagnostics[0]); ++i) REQUIRE(short_after[i] == 0x5Au);
+
+    enum { DIAGNOSTIC_CAPACITY = GBB_DIAGNOSTIC_OPERATION_RESERVE * 65u };
+    gbb_diagnostic_record diagnostics[DIAGNOSTIC_CAPACITY + 1u];
+    memset(diagnostics, 0x5A, sizeof(diagnostics));
+    run = gbb_run_ex(f.machine, 64u, NULL, 0u, diagnostics, DIAGNOSTIC_CAPACITY);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == 64u &&
+            f.machine->time_half_dots == start + f.instruction_cost + 64u);
+    REQUIRE(memcmp(f.machine->vram[0], f.source, sizeof(f.source)) == 0);
+    const uint8_t *after = (const uint8_t *)&diagnostics[DIAGNOSTIC_CAPACITY];
     for (size_t i = 0u; i < sizeof(diagnostics[0]); ++i) REQUIRE(after[i] == 0x5Au);
     gbb_destroy(f.machine);
 
@@ -265,7 +299,8 @@ static int test_outputs(void) {
     size_t frame_count = 0u;
     run = gbb_run_audio(f.machine, f.instruction_cost + 64u,
         frames, 7u, &frame_count);
-    REQUIRE(run.consumed_half_dots == f.instruction_cost + 64u && frame_count <= 7u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET &&
+            run.consumed_half_dots == f.instruction_cost + 64u && frame_count <= 7u);
     const uint8_t *audio_sentinel = (const uint8_t *)&frames[7];
     for (size_t i = 0u; i < sizeof(frames[0]); ++i) REQUIRE(audio_sentinel[i] == 0x6Bu);
     gbb_destroy(f.machine);

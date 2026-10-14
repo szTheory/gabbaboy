@@ -218,9 +218,17 @@ write; a blocked read returns `$FF` and a read never advances the index; all 8 b
 stored. OPRI (FF6C) stores bit 0 and reads `$FE` or that bit; it has no effect on object priority
 after boot (the execution mode latch decides that, D-08). In compat mode FF69, FF6B and FF6C read `$FF`
 and ignore writes with no index increment. FF72-FF75 are plain registers (FF75 stores bits 4-6 only).
-Unused addresses read `$FF` and ignore writes. Registers owned by a later phase (FF55 write, FF56,
-FF76, FF77) are deferred: a read stops with `GBB_STOP_UNSUPPORTED_BUS` before
-anything changes and a write is dropped and reported as the same stop once the instruction retires.
+Unused addresses read `$FF` and ignore writes. On the CGB profile, FF51-FF54 program private HDMA
+source/destination latches while reads stay `$FF` by POLICY; the source low nibble, destination high
+three bits and destination low nibble are masked. FF55 accepts the bounded HBlank request used by
+this phase's tracer, reports the active remaining-block field, and reads `$FF` when idle or complete.
+An ordinary visible mode-3-to-0 edge latches the request; the current guest instruction retires
+before one 16-byte block is admitted, before IRQ dispatch or another opcode. Each byte commits every
+four master half-dots, for 64 per block with no modeled startup/teardown. The boundary, cadence and
+sampling phase are software policy/unknown for physical CGB-E. Other HDMA start/cancel and lifecycle
+cases remain unqualified. FF56, FF76 and FF77 remain deferred: a read stops with
+`GBB_STOP_UNSUPPORTED_BUS` before anything changes and a write is dropped and reported as the same
+stop once the instruction retires.
 The DMG profile never enters this decode: its FF4C-FF7F reads still stop and its writes are silent
 no-ops. IE bits 5-7 are stored and read back on the CGB profile only (owner veto item 6).
 
@@ -310,21 +318,21 @@ column is the evidence class (Pan Docs, Mooneye hardware test, SameBoy, or proje
 | $FF50 | DMG | stop | ignored | IMPL | HW_TEST |
 | $FF50 | CGB | $FF | ignored | IMPL | HW_TEST |
 | $FF50 | COMPAT | $FF | ignored | IMPL | HW_TEST |
-| $FF51 | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF51 | CGB | $FF | ignored | IMPL | PANDOCS |
-| $FF51 | COMPAT | $FF | ignored | IMPL | PANDOCS |
-| $FF52 | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF52 | CGB | $FF | ignored | IMPL | PANDOCS |
-| $FF52 | COMPAT | $FF | ignored | IMPL | PANDOCS |
-| $FF53 | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF53 | CGB | $FF | ignored | IMPL | PANDOCS |
-| $FF53 | COMPAT | $FF | ignored | IMPL | PANDOCS |
-| $FF54 | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF54 | CGB | $FF | ignored | IMPL | PANDOCS |
-| $FF54 | COMPAT | $FF | ignored | IMPL | PANDOCS |
-| $FF55 | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF55 | CGB | $FF | dropped, stop after retire | DEFERRED(13) | PANDOCS |
-| $FF55 | COMPAT | $FF | ignored | IMPL | PANDOCS |
+| $FF51 | DMG | stop | ignored | IMPL | POLICY |
+| $FF51 | CGB | stored or $FF | stored and $FF | IMPL | POLICY |
+| $FF51 | COMPAT | $FF | ignored | IMPL | POLICY |
+| $FF52 | DMG | stop | ignored | IMPL | POLICY |
+| $FF52 | CGB | stored or $FF | stored and $F0 | IMPL | POLICY |
+| $FF52 | COMPAT | $FF | ignored | IMPL | POLICY |
+| $FF53 | DMG | stop | ignored | IMPL | POLICY |
+| $FF53 | CGB | stored or $FF | stored and $1F | IMPL | POLICY |
+| $FF53 | COMPAT | $FF | ignored | IMPL | POLICY |
+| $FF54 | DMG | stop | ignored | IMPL | POLICY |
+| $FF54 | CGB | stored or $FF | stored and $F0 | IMPL | POLICY |
+| $FF54 | COMPAT | $FF | ignored | IMPL | POLICY |
+| $FF55 | DMG | stop | ignored | IMPL | POLICY |
+| $FF55 | CGB | stored or $00 | stored and $FF | IMPL | POLICY |
+| $FF55 | COMPAT | $FF | ignored | IMPL | POLICY |
 | $FF56 | DMG | stop | ignored | IMPL | PANDOCS |
 | $FF56 | CGB | stop | dropped, stop after retire | DEFERRED(14) | PANDOCS |
 | $FF56 | COMPAT | $FF | ignored | IMPL | PANDOCS |
@@ -535,7 +543,7 @@ the pause (`expected-failure:speed-switch-pause-ppu-output`); odd-mode realignme
 DIV reset (`expected-failure:cgb-e-div-reset-immediate-increment-delay`, D-35); DMG double-speed
 LCD/CPU alignment (`expected-failure:ds-lcd-cpu-alignment`); CGB mode-3 length
 (`expected-failure:cgb-mode3-length`, Phase 14); HBlank DMA crossing a speed-switch stall
-(`expected-failure:speed-switch-hdma-hblank-across-stall`, Phase 13); and the STOP/OAM bug on a
+armed-across-pause HDMA transfer is not covered by the post-switch register check (Phase 13); and the STOP/OAM bug on a
 speed switch (`expected-failure:speed-switch-stop-oam-bug`, Phase 14).
 
 <!-- cgb-speed-dispositions-begin -->
@@ -563,7 +571,7 @@ speed switch (`expected-failure:speed-switch-stop-oam-bug`, Phase 14).
 | gabbaboy-model | cgb-e-div-reset-immediate-increment-delay-tima | expected-failure | expected-failure:cgb-e-div-reset-immediate-increment-delay | 12 | age_spsw_tima_cgbE |
 | gabbaboy-model | cgb-e-div-reset-immediate-increment-delay-interrupts | expected-failure | expected-failure:cgb-e-div-reset-immediate-increment-delay | 12 | age_spsw_interrupts_cgbE |
 | gabbaboy-model | unarmed-stop-held-button | expected-failure | expected-failure:unarmed-stop-held-button | 12 | cgb_speed_dmg_unarmed_unchanged |
-| gabbaboy-model | speed-switch-hdma-hblank-across-stall | expected-failure | expected-failure:speed-switch-hdma-hblank-across-stall | 13 | cgb_speed_xfail_hdma_fails_closed |
+| gabbaboy-model | speed-switch-hdma-hblank-across-stall | pass | - | 13 | cgb_speed_xfail_hdma_fails_closed |
 | gabbaboy-model | speed-switch-stop-oam-bug | expected-failure | expected-failure:speed-switch-stop-oam-bug | 14 | cgb_speed_xfail_stop_oam_unchanged |
 | gabbaboy-model | ds-lcd-cpu-alignment | expected-failure | expected-failure:ds-lcd-cpu-alignment | 14 | age_spsw_mode0_cgbBCE |
 | gabbaboy-model | cgb-mode3-length | expected-failure | expected-failure:cgb-mode3-length | 14 | age_stat_mode_cgbE |
@@ -663,8 +671,9 @@ when LCDC bit 0 is clear that changes the window-start stall, and it is recorded
 `docs/model-gates.md`. The colour path reads PPU dot time only (D-36): it resolves each pixel against
 the live palette RAM at the dot it is produced and never consults a wall clock or a host-side frame
 boundary. The renderer reads VRAM through an explicit bank argument rather than through the CPU
-`VBK` selection, so a CPU bank switch cannot change what the renderer draws. FF55 (HDMA control)
-stays DEFERRED(13). The AGE test suite has no CGB colour, attribute or priority ROM at its pinned
+`VBK` selection, so a CPU bank switch cannot change what the renderer draws. The Phase 13 HDMA
+tracer samples VBK at block admission; other HDMA behavior remains outside the colour path. The AGE
+test suite has no CGB colour, attribute or priority ROM at its pinned
 commit, so it is not Phase 11 colour evidence (D-20); its mode-3 pixel-timing cases are recorded as
 `expected-unsupported` in the external-suite section below.
 

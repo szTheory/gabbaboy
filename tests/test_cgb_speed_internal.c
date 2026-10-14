@@ -410,30 +410,31 @@ static int cgb_speed_xfail_hdma_fails_closed(int write_ff54) {
     uint8_t rom[32768];
     uint8_t program[] = {
         0x3Eu, 0x01u, 0xE0u, 0x4Du, 0x10u, 0x00u,
-        0x3Eu, 0x00u, 0xE0u, 0x55u, 0x18u, 0xFEu
+        0x3Eu, 0xC0u, 0xE0u, 0x51u, 0x3Eu, 0x00u, 0xE0u, 0x52u,
+        0x3Eu, 0x00u, 0xE0u, 0x53u, 0x3Eu, 0x00u, 0xE0u, 0x54u,
+        0x3Eu, 0x80u, 0xE0u, 0x55u, 0xF0u, 0x55u, 0xE0u, 0x80u, 0x76u
     };
-    if (write_ff54) program[9] = 0x54u;
+    if (write_ff54) program[25] = 0x54u;
     make_internal_rom(rom, program, sizeof(program));
     gbb_instance *machine = NULL;
     REQUIRE(create_internal_machine(rom, &machine) == 0);
     machine->joypad_select = 0x30u;
     gbb_run_result run = gbb_run(machine, 200000u, NULL, 0u);
     if (write_ff54) {
-        if (run.reason != GBB_STOP_UNSUPPORTED_BUS ||
-            gbb_test_last_unsupported_address(machine) != 0xFF55u) {
-            fprintf(stderr, "hdma-targeted-negative accepted FF54 without the FF55 stop\n");
+        if (run.reason == GBB_STOP_UNSUPPORTED_BUS || machine->double_speed != 1u ||
+            machine->hram[0] != 0x00u) {
+            fprintf(stderr, "hdma-ff54-targeted-negative did not distinguish FF54 from FF55 readback\n");
             gbb_destroy(machine);
             return 1;
         }
         gbb_destroy(machine);
         return 0;
     }
-    if (run.reason != GBB_STOP_UNSUPPORTED_BUS || machine->double_speed != 1u ||
-        gbb_test_last_unsupported_address(machine) != 0xFF55u ||
-        machine->cpu_stall_kind != GBB_STALL_NONE || machine->cpu_stall_half_dots != 0u) {
-        fprintf(stderr, "hdma-fails-closed mismatch reason=%d address=%04x speed=%u stall=%u\n",
-            run.reason, gbb_test_last_unsupported_address(machine), machine->double_speed,
-            machine->cpu_stall_kind);
+    if (run.reason != GBB_STOP_HALTED_IDLE || machine->double_speed != 1u ||
+        machine->hram[0] != 0x00u || machine->cpu_stall_kind != GBB_STALL_NONE ||
+        machine->cpu_stall_half_dots != 0u) {
+        fprintf(stderr, "hdma-post-switch-ff55-readback mismatch reason=%d value=%02x speed=%u stall=%u\n",
+            run.reason, machine->hram[0], machine->double_speed, machine->cpu_stall_kind);
         gbb_destroy(machine);
         return 1;
     }

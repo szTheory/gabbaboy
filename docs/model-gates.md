@@ -133,6 +133,13 @@ occurs exactly once in code and once in the table.
 | GATE-88 | UNKNOWN | - | expected-failure:speed-switch-wake-oracle-only | gbb_run_internal | only the IME-on stall wake has an AGE hardware row; the remaining wake semantics use SameBoy |
 | GATE-89 | UNKNOWN | - | expected-failure:speed-switch-odd-mode-alignment | speed_switch_apply_realign | normal-speed entry phase in odd PPU modes remains unsupported (D-09) |
 | GATE-90 | CGB_ONLY | double_speed | - | advance_devices_to | cpu_ticks scales instruction cost, bus offsets, interrupt and halt literals, timer reload (GATE-54), serial (GATE-55) and OAM DMA period |
+| GATE-91 | CGB_ONLY | model_is_cgb | - | ppu_set_mode | only a visible-line CGB mode-3-to-0 edge latches an ordinary HBlank request |
+| GATE-92 | CGB_ONLY | model_is_cgb | - | hdma_request | an armed waiting HBlank request is latched once at the selected safe event boundary |
+| GATE-93 | CGB_ONLY | model_is_cgb | - | hdma_source_valid | block admission accepts only reviewed mapped ROM, enabled cart RAM or WRAM/echo windows |
+| GATE-94 | CGB_ONLY | model_is_cgb | - | hdma_source_read | source bytes use cart_read or wram_byte without the CPU lockout path |
+| GATE-95 | CGB_ONLY | model_is_cgb | - | hdma_admit_block | all 16 source addresses and destination offsets validate before mutation; VBK is sampled once |
+| GATE-96 | CGB_ONLY | model_is_cgb | - | hdma_advance_half_dot | one byte commits per four master half-dots after OAM and before PPU; 64-half-dot duration is policy |
+| GATE-97 | CGB_ONLY | model_is_cgb | - | hdma_register_write | FF55 starts or clears the bounded HBlank request and updates private status |
 <!-- model-gates-end -->
 
 ## Phase 11 dispositions
@@ -185,6 +192,23 @@ to their researched phase. The shared scanner checks the code tags against the r
 | GATE-88 | gbb_run_internal | expected failure | only the IME-on wake has an AGE row; wake behavior remains SameBoy-qualified |
 | GATE-89 | speed_switch_apply_realign | expected failure | odd PPU-mode phase alignment is unsupported (D-09) |
 | GATE-90 | advance_devices_to | resolved CGB_ONLY | CPU-tick conversion declares each double-speed scaling site, including the timer, serial and OAM DMA paths |
+
+## Phase 13 plan 13-01 dispositions
+
+The tracer implements one ordinary visible-line HBlank block through the existing whole-instruction
+run loop. Its safe-boundary, byte cadence and transfer ordering are explicit software policy; no
+physical CGB-E transfer timing has been established. `speed-switch-hdma-hblank-across-stall` now
+checks only that a guest can program FF55 and read its active one-block status after the switch.
+
+| Gate | Site | Outcome | Reason |
+| --- | --- | --- | --- |
+| GATE-91 | ppu_set_mode | resolved CGB_ONLY | only the visible mode-3-to-0 edge latches the HBlank request |
+| GATE-92 | hdma_request | resolved CGB_ONLY | one pending request is held until the current instruction retires |
+| GATE-93 | hdma_source_valid | resolved CGB_ONLY | whole source windows are checked before block admission |
+| GATE-94 | hdma_source_read | resolved CGB_ONLY | source map is limited to cart and WRAM helpers |
+| GATE-95 | hdma_admit_block | resolved CGB_ONLY | a full block validates before admission and samples VBK once |
+| GATE-96 | hdma_advance_half_dot | resolved CGB_ONLY | service consumes bounded master time with the selected four-half-dot cadence |
+| GATE-97 | hdma_register_write | resolved CGB_ONLY | FF55 initializes private cursors and exposes active or completed status |
 
 ## Release status
 

@@ -326,6 +326,20 @@ typedef struct {
     size_t ram_size;
 } cartridge_info;
 
+typedef struct {
+    uint8_t mode; /* 0 idle, 1 ordinary visible-line HBlank transfer */
+    uint8_t active; /* one admitted 16-byte block is consuming master time */
+    uint8_t pending_hblank;
+    uint16_t blocks_remaining;
+    uint8_t byte_index;
+    uint8_t byte_phase;
+    uint16_t source_cursor;
+    uint16_t destination_cursor;
+    uint8_t block_vram_bank;
+    uint8_t source_high, source_low, destination_high, destination_low;
+    uint8_t control_readback;
+} hdma_state;
+
 _Static_assert(sizeof(gbb_info) == GBB_INFO_SIZE_V1, "gbb_info layout");
 _Static_assert(sizeof(gbb_compat_palette) == GBB_COMPAT_PALETTE_SIZE_V1, "gbb_compat_palette layout");
 
@@ -391,6 +405,7 @@ struct gbb_instance {
     uint8_t ppu_window_line_drawn;
     uint8_t dma_register, dma_page, dma_pending_page, dma_index, dma_phase;
     int dma_active, dma_start_pending, dma_cpu_blocked;
+    hdma_state hdma;
     uint8_t lcdc, scy, scx, ly, lyc, bgp, obp0, obp1, wy, wx;
     uint8_t joypad_select;
     uint8_t joypad_buttons;
@@ -702,12 +717,20 @@ static void observe_ppu(gbb_instance *m, uint16_t address, uint8_t access,
 }
 
 static void ppu_update_stat_line(gbb_instance *m);
+static int model_is_cgb(const gbb_instance *m);
+static void hdma_request(gbb_instance *m);
 
 /* MODEL: BOTH GATE-00 basis=model-neutral */
 static void ppu_set_mode(gbb_instance *m, uint8_t mode) {
     if (m->ppu_mode != mode) {
+        const uint8_t previous_mode = m->ppu_mode;
         m->ppu_mode = mode;
         observe_ppu(m, 0xFF41, 4, mode);
+        /* MODEL: CGB_ONLY GATE-91 GUARD=model_is_cgb -- ordinary HBlank DMA requests only on a visible mode-3-to-0 edge */
+        if (model_is_cgb(m) && previous_mode == 3u && mode == 0u &&
+            (m->lcdc & 0x80u) != 0u &&
+            m->ly < GBB_FRAME_HEIGHT)
+            hdma_request(m);
         ppu_update_stat_line(m);
     }
 }
@@ -1222,11 +1245,11 @@ static const io_row io_visibility[IO_VISIBILITY_ROWS] = {
     [0x4E] = IO_UNUSED_ROW,
     [0x4F] = { IOC(DMG_STOP), IOC(VBK), IOC(VBK), IOS_PANDOCS }, /* VBK: VRAM bank; bit 0 selects the bank in CGB mode only */
     [0x50] = IO_UNUSED_ROW,
-    [0x51] = { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA source/destination: accepted without state until the HDMA phase */
-    [0x52] = { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA source/destination: accepted without state until the HDMA phase */
-    [0x53] = { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA source/destination: accepted without state until the HDMA phase */
-    [0x54] = { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA source/destination: accepted without state until the HDMA phase */
-    [0x55] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_W, 13), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA control: a write is deferred to phase 13 and stops visibly */
+    [0x51] = { IOC(DMG_STOP), IOC_ST(0xFF, 0xFF), IOC(CONST_FF), IOS_POLICY }, /* FF51: private source high latch, read mask keeps $FF */
+    [0x52] = { IOC(DMG_STOP), IOC_ST(0xFF, 0xF0), IOC(CONST_FF), IOS_POLICY }, /* FF52: private source low latch, read mask keeps $FF */
+    [0x53] = { IOC(DMG_STOP), IOC_ST(0xFF, 0x1F), IOC(CONST_FF), IOS_POLICY }, /* FF53: private destination high latch */
+    [0x54] = { IOC(DMG_STOP), IOC_ST(0xFF, 0xF0), IOC(CONST_FF), IOS_POLICY }, /* FF54: private destination low latch */
+    [0x55] = { IOC(DMG_STOP), IOC_ST(0x00, 0xFF), IOC(CONST_FF), IOS_POLICY }, /* FF55: bounded HBlank control/status */
     [0x56] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 14), IOC(CONST_FF), IOS_PANDOCS }, /* RP infrared port: deferred to phase 14 */
     [0x57] = IO_UNUSED_ROW,
     [0x58] = IO_UNUSED_ROW,
@@ -1321,6 +1344,11 @@ static uint8_t cram_data_read(uint8_t index_reg, const uint8_t cram[64], int all
 /* MODEL: BOTH GATE-00 basis="CGB-only storage selected by address" */
 static const uint8_t *io_store_ptr(const gbb_instance *m, uint16_t address) {
     switch (address) {
+    case 0xFF51: return &m->hdma.source_high;
+    case 0xFF52: return &m->hdma.source_low;
+    case 0xFF53: return &m->hdma.destination_high;
+    case 0xFF54: return &m->hdma.destination_low;
+    case 0xFF55: return &m->hdma.control_readback;
     case 0xFF68: return &m->bcps;
     case 0xFF6A: return &m->ocps;
     case 0xFF72: return &m->ff72;
@@ -1330,6 +1358,8 @@ static const uint8_t *io_store_ptr(const gbb_instance *m, uint16_t address) {
     default: return NULL;
     }
 }
+
+static void hdma_register_write(gbb_instance *m, uint16_t address, uint8_t value);
 
 /* Read FF4C-FF7F on the CGB profile. */
 /* MODEL: CGB_ONLY GATE-70 GUARD=model_is_cgb -- CGB register reads */
@@ -1368,6 +1398,10 @@ static void io_write_cgb(gbb_instance *m, uint16_t address, uint8_t value) {
         m->wram_bank = m->svbk != 0u ? m->svbk : 1u;
         break;
     case IO_STORE: {
+        if (address == 0xFF55u) {
+            hdma_register_write(m, address, value);
+            break;
+        }
         uint8_t *p = (uint8_t *)io_store_ptr(m, address); /* m is mutable here */
         if (p != NULL) *p = (uint8_t)(value & c->write_mask);
         break;
@@ -1421,6 +1455,8 @@ static void reset_state(gbb_instance *m) {
     m->dma_active = 0;
     m->dma_start_pending = 0;
     m->dma_cpu_blocked = 0;
+    memset(&m->hdma, 0, sizeof(m->hdma));
+    m->hdma.control_readback = 0xFFu;
     m->halted = 0;
     m->stopped = 0;
     m->halt_bug = 0;
@@ -1627,6 +1663,128 @@ static uint8_t cart_read(const gbb_instance *m, uint16_t address) {
         }
     }
     return 0xFFu;
+}
+
+/* MODEL: CGB_ONLY GATE-92 GUARD=model_is_cgb -- a visible HBlank edge latches one request for an armed block */
+static void hdma_request(gbb_instance *m) {
+    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB) return;
+    if (m->hdma.mode == 1u && !m->hdma.active && !m->hdma.pending_hblank &&
+        m->hdma.blocks_remaining != 0u)
+        m->hdma.pending_hblank = 1u;
+}
+
+/* MODEL: CGB_ONLY GATE-93 GUARD=model_is_cgb -- HDMA preflight accepts only mapped ROM, enabled cartridge RAM and WRAM/echo windows */
+static int hdma_source_valid(const gbb_instance *m, uint16_t address) {
+    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB) return 0;
+    if (address < 0x8000u)
+        return m->rom != NULL && (size_t)address < m->rom_size;
+    if (address >= 0xA000u && address <= 0xBFFFu) {
+        if (!m->cart.ram_enabled || m->cartridge_ram == NULL ||
+            m->cartridge_ram_size == 0u) return 0;
+        if (m->cart.kind == CART_MBC3 && m->cart.ram_bank >= 0x08u) return 0;
+        return 1;
+    }
+    return (address >= 0xC000u && address <= 0xDFFFu) ||
+           (address >= 0xE000u && address <= 0xFDFFu);
+}
+
+/* MODEL: CGB_ONLY GATE-94 GUARD=model_is_cgb -- HDMA reads only the reviewed mapper or WRAM storage path */
+static int hdma_source_read(const gbb_instance *m, uint16_t address, uint8_t *value) {
+    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB || value == NULL ||
+        !hdma_source_valid(m, address)) return 0;
+    if (address < 0x8000u || (address >= 0xA000u && address <= 0xBFFFu))
+        *value = cart_read(m, address);
+    else
+        *value = *wram_byte(m, address);
+    return 1;
+}
+
+/* MODEL: CGB_ONLY GATE-95 GUARD=model_is_cgb -- validate an entire block before admission and sample VBK once */
+static int hdma_admit_block(gbb_instance *m) {
+    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB) return 0;
+    if (!m->hdma.pending_hblank) return 1;
+    if (m->hdma.blocks_remaining == 0u ||
+        m->hdma.source_cursor > UINT16_MAX - 15u ||
+        m->hdma.destination_cursor < 0x8000u ||
+        m->hdma.destination_cursor > 0x9FF0u) return 0;
+    for (unsigned i = 0u; i < 16u; ++i) {
+        const uint16_t address = (uint16_t)(m->hdma.source_cursor + i);
+        if (!hdma_source_valid(m, address)) return 0;
+    }
+    m->hdma.pending_hblank = 0u;
+    m->hdma.active = 1u;
+    m->hdma.byte_index = 0u;
+    m->hdma.byte_phase = 0u;
+    m->hdma.block_vram_bank = m->vram_bank;
+    return 1;
+}
+
+/* MODEL: CGB_ONLY GATE-96 GUARD=model_is_cgb -- HDMA commits one byte every four master half-dots after OAM and before PPU */
+static void hdma_advance_half_dot(gbb_instance *m) {
+    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB || !m->hdma.active) return;
+    if (++m->hdma.byte_phase < 4u) return;
+    m->hdma.byte_phase = 0u;
+    const uint16_t source = (uint16_t)(m->hdma.source_cursor + m->hdma.byte_index);
+    const unsigned destination = (unsigned)(m->hdma.destination_cursor - 0x8000u) +
+                                 m->hdma.byte_index;
+    uint8_t value = 0xFFu;
+    if (destination >= GBB_VRAM_BANK_SIZE ||
+        !hdma_source_read(m, source, &value)) {
+        m->bus_unsupported = 1;
+        m->bus_unsupported_address = source;
+        m->hdma.active = 0u;
+        m->hdma.pending_hblank = 0u;
+        m->hdma.mode = 0u;
+        m->hdma.blocks_remaining = 0u;
+        m->hdma.control_readback = 0xFFu;
+        return;
+    }
+    m->vram[m->hdma.block_vram_bank][destination] = value;
+    if (++m->hdma.byte_index != 16u) return;
+
+    m->hdma.active = 0u;
+    m->hdma.byte_index = 0u;
+    if (m->hdma.blocks_remaining != 0u) --m->hdma.blocks_remaining;
+    if (m->hdma.blocks_remaining == 0u) {
+        m->hdma.mode = 0u;
+        m->hdma.pending_hblank = 0u;
+        m->hdma.control_readback = 0xFFu;
+    } else {
+        m->hdma.source_cursor = (uint16_t)(m->hdma.source_cursor + 16u);
+        m->hdma.destination_cursor = (uint16_t)(m->hdma.destination_cursor + 16u);
+        m->hdma.control_readback = (uint8_t)((m->hdma.blocks_remaining - 1u) & 0x7Fu);
+    }
+}
+
+/* MODEL: CGB_ONLY GATE-97 GUARD=model_is_cgb -- FF55 starts or clears the bounded HBlank request */
+static void hdma_register_write(gbb_instance *m, uint16_t address, uint8_t value) {
+    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB) return;
+    switch (address) {
+    case 0xFF55u:
+        if ((value & 0x80u) == 0u) {
+            m->hdma.mode = 0u;
+            m->hdma.active = 0u;
+            m->hdma.pending_hblank = 0u;
+            m->hdma.blocks_remaining = 0u;
+            m->hdma.byte_index = 0u;
+            m->hdma.byte_phase = 0u;
+            m->hdma.control_readback = 0xFFu;
+            break;
+        }
+        m->hdma.mode = 1u;
+        m->hdma.active = 0u;
+        m->hdma.pending_hblank = 0u;
+        m->hdma.blocks_remaining = (uint16_t)((value & 0x7Fu) + 1u);
+        m->hdma.byte_index = 0u;
+        m->hdma.byte_phase = 0u;
+        m->hdma.source_cursor = (uint16_t)(((uint16_t)m->hdma.source_high << 8) |
+                                           m->hdma.source_low);
+        m->hdma.destination_cursor = (uint16_t)(0x8000u |
+            ((uint16_t)m->hdma.destination_high << 8) | m->hdma.destination_low);
+        m->hdma.control_readback = (uint8_t)((m->hdma.blocks_remaining - 1u) & 0x7Fu);
+        break;
+    default: break;
+    }
 }
 
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
@@ -2951,6 +3109,7 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
                 m->audio_frames[m->audio_frame_count++] = frame;
         }
         if (cpu_tick) dma_advance_half_dot(m); /* P12-M14 */
+        hdma_advance_half_dot(m); /* P13-M1: OAM retains precedence; HDMA commits before PPU advancement. */
         m->ppu_half_phase ^= 1u; /* P12-M1 */
         if (m->ppu_half_phase == 0) ppu_advance_dot(m);
     }
@@ -4067,6 +4226,53 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             if (instance->cpu_stall_half_dots == 0u) {
                 instance->cpu_stall_kind = GBB_STALL_NONE;
                 speed_switch_apply_realign(instance);
+            }
+            continue;
+        }
+        /* Service a latched HBlank request before interrupt dispatch or a new
+         * opcode. The current instruction has already retired, so its final
+         * bus access and event trace remain whole. Each committed master tick
+         * is independently bounded by the caller's outputs and budget. */
+        if (instance->hdma.pending_hblank || instance->hdma.active) {
+            if (budget_half_dots - result.consumed_half_dots < 1u) return result;
+            if (!audio_preflight(instance, 1u)) {
+                result.reason = GBB_STOP_OUTPUT_FULL;
+                return result;
+            }
+            if (UINT64_MAX - instance->time_half_dots < 1u) {
+                result.reason = GBB_STOP_INVALID_STATE;
+                return result;
+            }
+            if (instance->diagnostic_output != NULL &&
+                instance->diagnostic_output_capacity - instance->diagnostic_output_count <
+                    GBB_DIAGNOSTIC_OPERATION_RESERVE) {
+                result.reason = GBB_STOP_OUTPUT_FULL;
+                return result;
+            }
+            if (instance->hdma.pending_hblank && !hdma_admit_block(instance)) {
+                instance->bus_unsupported = 1;
+                instance->bus_unsupported_address = instance->hdma.source_cursor;
+                instance->hdma.pending_hblank = 0u;
+                instance->hdma.active = 0u;
+                instance->hdma.mode = 0u;
+                instance->hdma.blocks_remaining = 0u;
+                instance->hdma.control_readback = 0xFFu;
+                instance->bus_unsupported = 0;
+                result.reason = GBB_STOP_UNSUPPORTED_BUS;
+                return result;
+            }
+            gbb_diagnostic_record operation[GBB_DIAGNOSTIC_OPERATION_RESERVE];
+            if (instance->diagnostic_output != NULL) {
+                instance->diagnostic_operation = operation;
+                instance->diagnostic_operation_count = 0u;
+            }
+            advance_devices(instance, 1u);
+            if (instance->diagnostic_output != NULL) diagnostic_commit(instance);
+            ++result.consumed_half_dots;
+            if (instance->bus_unsupported) {
+                instance->bus_unsupported = 0;
+                result.reason = GBB_STOP_UNSUPPORTED_BUS;
+                return result;
             }
             continue;
         }

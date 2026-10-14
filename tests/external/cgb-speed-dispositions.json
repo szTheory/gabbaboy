@@ -332,13 +332,13 @@
         },
         {
           "case": "speed-switch-hdma-hblank-across-stall",
-          "disposition": "expected-failure",
-          "reason": "expected-failure:speed-switch-hdma-hblank-across-stall",
-          "reason_detail": "HDMA5 remains unsupported and fails closed when addressed after a speed switch.",
+          "disposition": "pass",
+          "reason": "-",
+          "reason_detail": "The guest accepts a post-switch FF55 HBlank request and reads back its active one-block status. The transfer is armed after the pause, so this does not test an armed transfer spanning the stall or qualify physical CGB-E behavior.",
           "owner_phase": 13,
           "decision": "D-09",
           "pinned_by": "cgb_speed_xfail_hdma_fails_closed",
-          "flip_rule": "fails until Phase 13 implements and verifies HDMA across the switch stall"
+          "flip_rule": "fails if the post-switch FF55 request/readback regresses or the FF54 substitution passes; armed-across-pause coverage remains untested"
         },
         {
           "case": "speed-switch-stop-oam-bug",
