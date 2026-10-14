@@ -909,6 +909,54 @@ add_test(NAME cgb_hdma_magen_controls
   COMMAND test_magentests_hdma cgb_hdma_magen_controls
     ${GBB_MAGENTESTS_DIR}/hblank_vram_dma.gbc)
 set_tests_properties(magentests_hblank_vram_dma cgb_hdma_magen_controls PROPERTIES TIMEOUT 60)
+
+# Phase 13 plan 13-09: run the exact admitted SameSuite DMA ROMs on the selected
+# CGB-CPU-E software model, with byte/status predicates and bounded test seams.
+add_executable(test_samesuite_hdma test_samesuite_hdma.c)
+target_include_directories(test_samesuite_hdma PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_samesuite_hdma PRIVATE c_std_17)
+target_compile_definitions(test_samesuite_hdma PRIVATE
+  "GBB_P13_CORE_SOURCE=\"${GBB_P13_MUTANT_CORE}\""
+  GBB_BUILD_REVISION="p13-mutants" GBB_BUILD_QUALIFIED=0)
+set_target_properties(test_samesuite_hdma PROPERTIES C_EXTENSIONS OFF)
+set(GBB_SAMESUITE_DIR "${PROJECT_SOURCE_DIR}/fixtures/samesuite")
+add_test(NAME samesuite_hdma_gbc_dma_cont
+  COMMAND test_samesuite_hdma gbc_dma_cont "${GBB_SAMESUITE_DIR}/gbc_dma_cont.gb")
+add_test(NAME samesuite_hdma_gdma_addr_mask
+  COMMAND test_samesuite_hdma gdma_addr_mask "${GBB_SAMESUITE_DIR}/gdma_addr_mask.gb")
+add_test(NAME samesuite_hdma_hdma_lcd_off
+  COMMAND test_samesuite_hdma hdma_lcd_off "${GBB_SAMESUITE_DIR}/hdma_lcd_off.gb")
+add_test(NAME samesuite_hdma_hdma_mode0
+  COMMAND test_samesuite_hdma hdma_mode0 "${GBB_SAMESUITE_DIR}/hdma_mode0.gb")
+set_tests_properties(samesuite_hdma_gbc_dma_cont samesuite_hdma_gdma_addr_mask
+  samesuite_hdma_hdma_lcd_off samesuite_hdma_hdma_mode0 PROPERTIES TIMEOUT 60)
+add_test(NAME samesuite_hdma_gbc_dma_cont_control
+  COMMAND test_samesuite_hdma gbc_dma_cont
+    "${GBB_SAMESUITE_DIR}/gbc_dma_cont.gb" --mutants 0x20000000000)
+set_tests_properties(samesuite_hdma_gbc_dma_cont_control PROPERTIES TIMEOUT 60)
+add_test(NAME samesuite_hdma_gbc_dma_cont_corrupted_result_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_samesuite_hdma>;gbc_dma_cont;${GBB_SAMESUITE_DIR}/gbc_dma_cont.gb;--corrupt-result"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=samesuite-hdma data: corrupted-result mismatch"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(samesuite_hdma_gbc_dma_cont_corrupted_result_control PROPERTIES TIMEOUT 60)
+
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(GBB_CGB_HDMA_DISPOSITIONS_VERIFIER
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-hdma-dispositions.py")
+add_test(NAME cgb_hdma_dispositions
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_HDMA_DISPOSITIONS_VERIFIER}" --tracer)
+set_tests_properties(cgb_hdma_dispositions PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-hdma-dispositions pass")
+add_test(NAME cgb_hdma_dispositions_selftest
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_HDMA_DISPOSITIONS_VERIFIER}" --self-test)
+set_tests_properties(cgb_hdma_dispositions_selftest PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-hdma-dispositions self-test pass")
+add_test(NAME samesuite_repro_selfcheck
+  COMMAND bash "${PROJECT_SOURCE_DIR}/tests/scripts/reproduce-samesuite.sh" --self-check)
+set_tests_properties(samesuite_repro_selfcheck PROPERTIES TIMEOUT 30)
+
 # rtc3test v004 screen oracle (D-11). White-box single TU: it includes the core and the acceptance
 # sources it needs, so it must not link GabbaBoy::core or gabbaboy_accept (duplicate definitions).
 set(GBB_RTC3TEST_DIR "${PROJECT_SOURCE_DIR}/fixtures/rtc3test")
