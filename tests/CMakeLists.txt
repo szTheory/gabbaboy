@@ -1293,9 +1293,17 @@ add_test(NAME cgb_corpus_inventory_selection
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-inventory.py" --selection-only)
 set_tests_properties(cgb_corpus_inventory_selection PROPERTIES TIMEOUT 30
   PASS_REGULAR_EXPRESSION "cgb-corpus-inventory pass mode=selection-only")
+add_test(NAME cgb_corpus_inventory
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-inventory.py" --complete)
+set_tests_properties(cgb_corpus_inventory PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "cgb-corpus-inventory pass mode=complete")
 add_test(NAME cgb_corpus_inventory_selftest
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-inventory.py" --self-test)
 set_tests_properties(cgb_corpus_inventory_selftest PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-corpus-inventory self-test pass")
+add_test(NAME cgb_corpus_inventory_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-inventory.py" --self-test)
+set_tests_properties(cgb_corpus_inventory_controls PROPERTIES TIMEOUT 30
   PASS_REGULAR_EXPRESSION "cgb-corpus-inventory self-test pass")
 set(GBB_CGB_CORPUS_REPORT_TEST
   "${PROJECT_SOURCE_DIR}/tests/scripts/test-cgb-corpus-report.py")
@@ -1310,6 +1318,9 @@ add_test(NAME cgb_corpus_report_tracer_controls
 add_test(NAME cgb_corpus_report_contract
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_REPORT_TEST}"
     CorpusReportCorpusTests.test_contract)
+add_test(NAME cgb_corpus_ci_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_REPORT_TEST}"
+    CorpusReportCorpusTests.test_native_full_ctest_receipt_contract)
 add_test(NAME cgb_corpus_report_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_REPORT_TEST}"
     CorpusReportControlsTests.test_controls)

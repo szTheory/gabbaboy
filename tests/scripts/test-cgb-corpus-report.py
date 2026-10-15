@@ -80,6 +80,20 @@ class CorpusReportTracerTests(unittest.TestCase):
 
 
 class CorpusReportCorpusTests(unittest.TestCase):
+    def test_native_full_ctest_receipt_contract(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        native_job = workflow.split("\n  native-macos:", 1)[0]
+        self.assertIn("--begin-run --build-dir build", native_job,
+                      "native job must create a fresh receipt run before CTest")
+        self.assertIn("-T Test --no-compress-output", native_job,
+                      "native job must retain the full CTest event output")
+        self.assertIn("--from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json",
+                      native_job, "native job must derive the receipt from that CTest run")
+        self.assertIn("cgb_corpus_build_stamp", (ROOT / "CMakeLists.txt").read_text(encoding="utf-8"),
+                      "CMake must maintain a dependency-backed build input stamp")
+        self.assertIn("cgb_corpus_ci_contract", (ROOT / "tests/expected-tests.txt").read_text(encoding="utf-8"),
+                      "the native receipt contract must be a required inventory member")
+
     def test_contract(self):
         completed = subprocess.run(
             [sys.executable, "-I", str(INVENTORY_VALIDATOR), "--self-test"],
