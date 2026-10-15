@@ -1,0 +1,10 @@
+{
+  "command": "python3 -I tests/scripts/verify-age-m3-pixels.py --self-test",
+  "exitCode": 1,
+  "output": "F\n======================================================================\nFAIL: test_decode_source_png_has_160_by_144_pixels (__main__.TestPngDecoder.test_decode_source_png_has_160_by_144_pixels)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"tests/scripts/verify-age-m3-pixels.py\", line 20, in test_decode_source_png_has_160_by_144_pixels\n    self.assertIsNotNone(decoded, \"source PNG must decode to a bounded image\")\n    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: unexpectedly None : source PNG must decode to a bounded image\n\n----------------------------------------------------------------------\nRan 1 test in 0.001s\n\nFAILED (failures=1)\n",
+  "targetTest": "test_decode_source_png_has_160_by_144_pixels",
+  "targetFile": "tests/scripts/verify-age-m3-pixels.py",
+  "expected": "A decoded source image with width 160 and height 144.",
+  "actual": "The target unittest executed and failed its assertion because decode_png returned None.",
+  "semanticAssessment": "Valid RED: unittest reports one executed target assertion failure for the planned PNG decoding behavior; no import, fixture, setup, or unrelated failure occurred."
+}
