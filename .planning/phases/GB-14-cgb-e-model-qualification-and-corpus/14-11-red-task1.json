@@ -1,0 +1,10 @@
+{
+  "command": "NO_COLOR=1 python3 -I tests/scripts/test-cgb-corpus-report.py CorpusReportTracerTests.test_tracer_single_case_receipt",
+  "exitCode": 1,
+  "output": "F\n======================================================================\nFAIL: test_tracer_single_case_receipt (__main__.CorpusReportTracerTests.test_tracer_single_case_receipt)\n----------------------------------------------------------------------\nAssertionError: 'incomplete' != 'complete'\n- incomplete\n? --\n+ complete\n : {'cases': [], 'counts': {'assertions': 0, 'attempted_cases': 0, 'completed_cases': 0, 'observed_pass_cases': 0}, 'failure_codes': ['receipt-not-implemented'], 'schema': 'gabbaboy-cgb-corpus-receipt-v1', 'status': 'incomplete', 'version': 1}\n----------------------------------------------------------------------\nRan 1 test in 0.017s\n\nFAILED (failures=1)\n",
+  "targetTest": "test_tracer_single_case_receipt",
+  "targetFile": "tests/scripts/test-cgb-corpus-report.py",
+  "expected": "status=complete with exactly one DAA case and one passing assertion",
+  "actual": "status=incomplete, no cases, no assertions",
+  "semanticAssessment": "The named unittest executed and failed on the planned receipt-status assertion after parsing valid JSON. The reporter's explicit incomplete stub is the only observed mismatch; this is not a setup, import, syntax, fixture, or discovery failure."
+}
