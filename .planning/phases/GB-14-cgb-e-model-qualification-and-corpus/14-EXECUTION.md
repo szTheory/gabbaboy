@@ -27,3 +27,13 @@ Native Debug source `1580533`: `cmake --preset phase1 && cmake --build --preset 
 The initial full gate failed 1/1,018 in 219.11 seconds because unexecuted DMG length-retention limitations were incorrectly tagged as expected failures. Source and documentation now use UNKNOWN/research classification, preserve the unresolved independent-DMG-fixture obligation and do not fabricate a corpus disposition. The focused correction passed 15/15 before this full rerun.
 
 Capability checks: schema drift did not block; codebase drift reported `no-structure-md`; UI safety reported no frontend files and did not block. Upcoming key links owned by the upcoming wave are intentionally deferred to that wave; no unmet prior-wave link is waived.
+
+## Wave 4
+
+Native Debug source `d08b728`: `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --parallel 2 --output-on-failure --no-tests=error --output-junit phase14-wave4.xml` passed **1025/1025**, zero failures/errors/skips. JUnit SHA-256 `814e1ced92d866f89d176f1a7112f19a7936e71cd6624f8923eb0455c0b602f1`; local generated file `build/phase14-wave4.xml`. Evidence is revision-bound; this is not hosted CI or physical hardware proof.
+
+Capability checks: schema drift did not block; codebase drift reported `no-structure-md`; UI safety reported no frontend files and did not block. Upcoming key links owned by the upcoming wave are intentionally deferred to that wave; no unmet prior-wave link is waived.
+
+## Phase-boundary remote triage
+
+The live GitHub query found zero open issues and one open release-please PR, [#70](https://github.com/szTheory/gabbaboy/pull/70), proposing v0.2.0. It remains pending Phase 15 acceptance/release gates and is outside this execution. The installed GitHub workflow skill has no `ci_monitor.cjs` at its documented path or in its installed skill/runtime tree; monitoring uses the available GitHub API fallback, with exact-head/event checks retained.
