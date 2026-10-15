@@ -1,6 +1,6 @@
 # GabbaBoy decision register
 
-Updated: 2026-10-14 after Phase 13 discussion. Initialization recommendations remain hypotheses unless an outcome below records adoption; implementation evidence remains separate from a reviewed plan.
+Updated: 2026-10-15 after Phase 13 execution and goal verification. Initialization recommendations remain hypotheses unless an outcome below records adoption; implementation evidence remains separate from a reviewed plan.
 
 **Status vocabulary:** **Adopted constraint** comes from owner/project policy; **Recommended** is the selected planning default awaiting phase-specific implementation review; **Verified observation** is an inspected fact with a limited scope, not a product capability. Implementation evidence must be linked separately before any recommendation is called working. Options below are considered alternatives, not pending permission requests.
 
@@ -102,13 +102,13 @@ Updated: 2026-10-14 after Phase 13 discussion. Initialization recommendations re
 | D-094 | Phase 12 D-19 (2026-10-13): admit 13 pinned AGE ROMs under `fixtures/age/` and include their applicable cases in required CI. **Adopted; owner may veto before merge** | The redistributable corpus supports named CGB-E model checks; AGE `Verified:` lines are author attestations, not a reproducible hardware receipt. | `age_fixture_digest`, `age_repro_selfcheck`, `age_not_installed`, `age_stall_window`. Revisit if AGE changes its license, fixture pin or model applicability. |
 | D-095 | Phase 12 D-26 (2026-10-13): use real-constant stall-end windows in both speed directions with white-box snapshots, fixed interior points, and seeded multi-cut partitions. **Adopted; owner may veto before merge** | This bounds exhaustive work at critical boundaries while avoiding an interior stride sweep whose measured runtime would add minutes per scenario. | `cgb_partition_stall_end_window_to_double`, `cgb_partition_stall_end_window_to_normal`, `cgb_partition_interior_points`, `cgb_partition_seeded_multicut`, `cgb_partition_snapshot_fidelity`. Revisit when the runtime budget or partition invariant changes. |
 | D-096 | Owner directive (2026-10-14): prefer smaller, flatter dependency trees; “another copy and paste is better than another dep.” **Adopted constraint / preference** | Prefer small original local helpers or modest duplication over a new package/framework when the behavior stays easy to inspect. Reuse matching existing helpers. A necessary dependency is permitted when its capability outweighs transitive, security, licensing and maintenance cost; copied third-party code still requires rights/attribution. This is not a mandate to duplicate complex algorithms. | Phase 13 CONTEXT D-02; applies to future phases by default. Revisit only for demonstrated capability/maintenance value or owner direction. |
-| D-097 | Phase 13 discussion D-03/D-09 (2026-10-14): resolve the interaction of an in-flight HBlank trigger with whole-instruction preflight before locking the HDMA scheduler mechanism. **Adopted planning gate; not implemented** | The current CPU performs synchronous timed accesses and has no resumable instruction cursor. A deferred flag can miss later accesses; a nested bulk transfer can exceed budget/output reservation. Prefer the smallest evidenced design preserving whole-instruction stepping, time conservation and partition equivalence; keep an unproven steal boundary UNKNOWN. | `13-CONTEXT.md` D-03/D-08..D-15; LESSONS GB-CGB-011. DEEP planning research must supply the focused prototype/discriminators; no new DMA capability or silicon result is claimed. |
-| D-098 | Phase 13 planning (2026-10-14): select a latched HBlank event serviced at the next whole-instruction boundary as qualified software POLICY, gated by an actual-transfer tracer. **Adopted direction; execution partial** | The real-core probe reproduces two in-flight edges but does not execute DMA. Preserve the public stepping contract and independent DMA/speed residuals. Plans specify nominal 64 master half-dots and unmeasured cadence/zero added overhead policy, explicit register/address/low-power rules and physical UNKNOWNs. | `13-RESEARCH.md` Q1–Q4; `13-PLAN-COVERAGE.md`; `13-01-PLAN.md` conservation/order/output/partition gate. Reopen only a counterexample or changed evidence. D-069 requires exact test membership and actual prohibition enforcement, with GSD-specific proof local and recurring Python checks in existing CI (GB-GSD-017/018). |
+| D-097 | Phase 13 discussion D-03/D-09 (2026-10-14): resolve the interaction of an in-flight HBlank trigger with whole-instruction preflight before locking the HDMA scheduler mechanism. **Adopted gate; actual-transfer tracer passed in 13-01** | The current CPU performs synchronous timed accesses and has no resumable instruction cursor. A deferred flag can miss later accesses; a nested bulk transfer can exceed budget/output reservation. Prefer the smallest evidenced design preserving whole-instruction stepping, time conservation and partition equivalence; keep an unproven steal boundary UNKNOWN. | `13-CONTEXT.md` D-03/D-08..D-15; LESSONS GB-CGB-011. DEEP research supplied the seam prototype; actual-transfer tests then passed conservation, output and partition discriminators at both late-access seams. See 13-01-SUMMARY and 13-VERIFICATION; no silicon result is claimed. |
+| D-098 | Phase 13 planning (2026-10-14): select a latched HBlank event serviced at the next whole-instruction boundary as qualified software POLICY, gated by an actual-transfer tracer. **Implemented and verified as software POLICY; physical behavior UNKNOWN** | The research probe reproduced two in-flight edges without DMA; subsequent real-transfer guests passed. The implementation preserves the public stepping contract and independent DMA/speed residuals, with 64 master half-dots and unmeasured cadence/zero added overhead policy, explicit register/address/low-power rules and physical UNKNOWNs. Phase 13 goal verification passes 37/37. | `13-RESEARCH.md` Q1–Q4; `13-PLAN-COVERAGE.md`; `13-01-PLAN.md` conservation/order/output/partition gate. Reopen only a counterexample or changed evidence. D-069 requires exact test membership and actual prohibition enforcement, with GSD-specific proof local and recurring Python checks in existing CI (GB-GSD-017/018). |
 
 <!-- phase13-policies-begin -->
-## Phase 13 CGB HDMA policies — execution partial
+## Phase 13 CGB HDMA policies — historical 13-02 checkpoint (execution partial)
 
-The current Phase 13 execution evidence adopts a **software POLICY** for guest-visible FF55
+At the historical 13-02 checkpoint, the execution evidence adopted a **software POLICY** for guest-visible FF55
 start/read/cancel/restart, one LCD-off or visible-mode-0 initial kick, later visible mode-3-to-0
 edges, active-write handling, a 64-master-half-dot block with four-half-dot byte commits, and
 whole-instruction safe-boundary service. The D-06 SameSuite `83→02→00→80` sequence and SameBoy
@@ -119,14 +119,16 @@ HDMA prevalidates 16-byte blocks from ROM, cartridge mapping or direct WRAM, rea
 RAM as `$FF`, rejects echo and peripheral windows before mutation, preserves valid prefixes and
 rejected cursors/status, and retains `$A000` in a widened destination cursor after `$9FF0`. A final
 block completes; remaining work stops without wrap, and restart requires destination
-reprogramming. Mapper/source banks and VBK are sampled for each admitted block. The implementation
-preserves the independent CPU speed-stall residual and does not claim its overlap behavior complete.
+reprogramming. Mapper/source banks and VBK are sampled for each admitted block. At this checkpoint, the implementation
+preserved the independent CPU speed-stall residual without claiming overlap behavior complete.
 
 Evidence: [docs/cgb-profile.md](../../docs/cgb-profile.md); `cgb_hdma_state_matrix`,
 `cgb_hdma_trigger_matrix`, `cgb_hdma_timing_policy`, `cgb_hdma_address_matrix`, and
-`cgb_hdma_overflow_policy` with their named negative controls. Phase 13 execution is partial; this
-entry records only the passed 13-01/13-02 software-policy evidence, not later stall, corpus, or
-phase closure.
+`cgb_hdma_overflow_policy` with their named negative controls. This historical entry records the 13-01/13-02 checkpoint only.
+Current closure: all 12 plans and 37/37 must-haves pass, including later independent stalls, HALT,
+partition and corpus/consumer checks; CGB-07 is closed. See
+[13-VERIFICATION.md](../phases/GB-13-cgb-hdma/13-VERIFICATION.md) and
+[13-BENCH.md](../phases/GB-13-cgb-hdma/13-BENCH.md). Physical CGB-E remains UNKNOWN/POLICY.
 <!-- phase13-policies-end -->
 
 ## Phase 2 adopted planning contract
