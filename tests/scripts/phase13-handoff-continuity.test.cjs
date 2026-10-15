@@ -27,3 +27,23 @@ test('phase 13 continuity documents route execution to automated verification an
   const output = `${result.stdout || ''}${result.stderr || ''}`;
   assert.equal(result.status, 0, output || `handoff contract exited ${result.status}`);
 });
+
+
+test('phase 13 completed goal verification retains the UAT route and phase pause', () => {
+  const progression = String.raw`import runpy, sys
+checks = runpy.run_path(sys.argv[1])
+state = "Current stage: Phase 13 execution and goal verification complete.\nNext command: /gsd-verify-work 13\nPhase 14 — CGB-E Model Qualification and Corpus remains unstarted.\n"
+config = {"workflow": {"auto_advance": False, "_auto_chain_active": False}}
+checks['handoff_values'](state, state, config)
+try:
+    checks['handoff_values'](state.replace('execution and goal verification complete', 'planning'), state, config)
+except checks['ContractError']:
+    pass
+else:
+    raise AssertionError('accepted an incorrect completed stage')`;
+  const result = spawnSync('python3', ['-I', '-c', progression, checker], {
+    cwd: root, encoding: 'utf8', maxBuffer: 1024 * 1024, timeout: 10000,
+  });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, `${result.stdout || ''}${result.stderr || ''}`);
+});
