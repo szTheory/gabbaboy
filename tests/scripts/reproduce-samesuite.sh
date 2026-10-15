@@ -242,7 +242,7 @@ def self_check(fixture, case_name, script):
 def call_script(script, fixture, args):
     env = os.environ.copy()
     env["GBB_SAMESUITE_FIXTURE_DIR"] = str(fixture)
-    return subprocess.run([str(script), *args], env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    return subprocess.run(["bash", str(script), *args], env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
 
 def copy_fixture(source, target, names):
