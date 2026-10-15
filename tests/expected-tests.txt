@@ -957,6 +957,8 @@ age_stat_mode_sprites_dmgC_cgbBCE
 age_stat_mode_window_ds_cgbBCE
 age_stat_mode_window_cgbBCE
 age_fixture_digest
+cgb_age_m3_tracer
+cgb_age_m3_pixel_controls
 age_fixture_digest_tampered
 age_manifest_unknown_class
 age_repro_selfcheck

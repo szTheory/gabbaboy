@@ -3510,6 +3510,25 @@ target_link_libraries(test_age PRIVATE GabbaBoy::core gabbaboy_accept)
 target_compile_features(test_age PRIVATE c_std_17)
 set_target_properties(test_age PROPERTIES C_EXTENSIONS OFF)
 
+# Phase 14 Plan 09: bounded public-API AGE frame capture plus a standard-library PNG oracle.
+add_executable(test_age_m3 test_age_m3.c)
+target_include_directories(test_age_m3 PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_link_libraries(test_age_m3 PRIVATE GabbaBoy::core gabbaboy_accept)
+target_compile_features(test_age_m3 PRIVATE c_std_17)
+set_target_properties(test_age_m3 PROPERTIES C_EXTENSIONS OFF)
+set(GBB_AGE_M3_PIXEL_ORACLE "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-m3-pixels.py")
+add_test(NAME cgb_age_m3_tracer
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_M3_PIXEL_ORACLE}"
+    --case m3-bg-lcdc-cgbBCE --harness $<TARGET_FILE:test_age_m3>
+    --frame "${PROJECT_BINARY_DIR}/age-m3/tracer.rgb555"
+    --reference "${PROJECT_SOURCE_DIR}/fixtures/age/references/m3-bg-lcdc-cgbBCE.png"
+    --observe-pending)
+set_tests_properties(cgb_age_m3_tracer PROPERTIES TIMEOUT 60)
+add_test(NAME cgb_age_m3_pixel_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_M3_PIXEL_ORACLE}" --self-test)
+set_tests_properties(cgb_age_m3_pixel_controls PROPERTIES
+  PASS_REGULAR_EXPRESSION "Ran [0-9]+ tests" TIMEOUT 30)
+
 set(GBB_AGE_MANIFEST "${PROJECT_SOURCE_DIR}/fixtures/age/manifest.json")
 file(READ "${GBB_AGE_MANIFEST}" GBB_AGE_MANIFEST_JSON)
 include("${PROJECT_SOURCE_DIR}/cmake/AgeFixtureProtocol.cmake")
