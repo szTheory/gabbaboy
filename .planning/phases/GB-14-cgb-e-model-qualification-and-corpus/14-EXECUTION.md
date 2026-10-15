@@ -63,3 +63,9 @@ Capability checks: schema drift did not block; codebase drift reported `no-struc
 Native Debug source `8ae187324f101393b35153f1b180b769d4ecefc3`: `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --parallel 2 --output-on-failure --no-tests=error --output-junit phase14-wave7.xml` passed **1117/1117**, zero failures/errors/skips. JUnit SHA-256 `d88f6f4956981164cedcc76ae512b20117886bd1a421f711abc276722b0f9dfe`; local generated file `build/phase14-wave7.xml`. Evidence is revision-bound; this is not hosted CI or physical hardware proof.
 
 Capability checks: schema drift did not block; codebase drift reported `no-structure-md`; UI safety reported no frontend files and did not block. Upcoming key links owned by the upcoming wave are intentionally deferred to that wave; no unmet prior-wave link is waived.
+
+## Wave 8
+
+Native Debug source `65bcbbc5872f17322ebae998c0653b4849490f74`: `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --parallel 2 --output-on-failure --no-tests=error --output-junit phase14-wave8.xml` passed **1123/1123**, zero failures/errors/skips. JUnit SHA-256 `eb89761460e73f90d39503fdd2b77c766ee3ef5c1a70b5c0c76044bfce577c40`; local generated file `build/phase14-wave8.xml`. Evidence is revision-bound; this is not hosted CI or physical hardware proof.
+
+Capability checks: schema drift did not block; codebase drift reported `no-structure-md`; UI safety reported no frontend files and did not block. Upcoming key links owned by the upcoming wave are intentionally deferred to that wave; no unmet prior-wave link is waived.
