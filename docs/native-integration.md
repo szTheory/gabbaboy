@@ -171,6 +171,12 @@ buffer contracts.
   before that block mutates VRAM; completed earlier blocks remain committed.
   These transfer boundaries and cadence are software policy, not a hardware
   measurement.
+- CGB audio observations are guest-only digital register samples. Guest code
+  can read FF76 and FF77 to observe the selected model's channel DAC inputs and
+  include those values in its own test result. There is no public PCM getter,
+  UI, or physical audio-device observation path. The existing `gbb_run_audio`
+  buffer contains generated software-model PCM; analog output, mixing quality,
+  and physical CGB-E audio remain unqualified.
 - The selected bootless CGB-CPU-E software model has no physical CGB-E
   qualification; physical CGB-E remains UNKNOWN/POLICY. The D-06 `$83` ->
   `$02` -> `$00` -> `$80` readback follows the pinned SameSuite sequence and

@@ -1906,6 +1906,42 @@ gbb_add_cgb_hdma_scan_test(cgb_hdma_not_installed_directory_selftest 1
   "cgb-hdma-installed: share/SameSuite/marker.txt" "${GBB_CGB_HDMA_SCAN_SELFTEST_DIRECTORY}"
   "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json")
 
+# The selected corpus remains repository-only. Compare installed bytes against all four
+# admitted manifests, including the six AGE reference PNGs, and keep the existing exact
+# installed fixture-child contract. Separate renamed ROM and PNG twins prove hash scanning.
+set(GBB_CGB_CORPUS_SCAN_MANIFESTS
+  "${PROJECT_SOURCE_DIR}/fixtures/age/manifest.json|${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json|${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json|${PROJECT_SOURCE_DIR}/fixtures/magentests/manifest.json")
+set(GBB_CGB_CORPUS_SCAN_PATH_LABELS "age|samesuite|mooneye-cgb|magentests|mealybug")
+set(GBB_CGB_CORPUS_SCAN_ROM_CONTROL "${PROJECT_BINARY_DIR}/cgb-corpus-scan-rom-control")
+set(GBB_CGB_CORPUS_SCAN_PNG_CONTROL "${PROJECT_BINARY_DIR}/cgb-corpus-scan-png-control")
+file(MAKE_DIRECTORY "${GBB_CGB_CORPUS_SCAN_ROM_CONTROL}/share"
+  "${GBB_CGB_CORPUS_SCAN_PNG_CONTROL}/share")
+file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/boot_regs-cgb.gb"
+  "${GBB_CGB_CORPUS_SCAN_ROM_CONTROL}/share/payload.bin")
+file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/age/references/m3-bg-lcdc-cgbBCE.png"
+  "${GBB_CGB_CORPUS_SCAN_PNG_CONTROL}/share/payload.bin")
+add_test(NAME cgb_corpus_not_installed
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_SCAN_DIR=${GBB_LIBBET_INSTALL_CHECK}"
+    "-DGBB_FORBIDDEN_MANIFESTS=${GBB_CGB_CORPUS_SCAN_MANIFESTS}"
+    "-DGBB_FORBIDDEN_PATH_LABELS=${GBB_CGB_CORPUS_SCAN_PATH_LABELS}"
+    -DGBB_FORBIDDEN_LABEL=cgb-corpus
+    -DGBB_EXPECT_FIXTURE_DIRS=tracer|visible-demo|mbc1-continuation
+    -P "${GBB_MBC_SCAN_SCRIPT}")
+set_tests_properties(cgb_corpus_not_installed PROPERTIES TIMEOUT 60
+  FIXTURES_REQUIRED libbet_install
+  PASS_REGULAR_EXPRESSION "cgb-corpus absent from scanned tree files=[1-9]")
+add_test(NAME cgb_corpus_not_installed_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_SCAN_SCRIPT=${GBB_MBC_SCAN_SCRIPT}"
+    "-DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
+    "-DGBB_BUILD_DIR=${PROJECT_BINARY_DIR}"
+    "-DGBB_MANIFESTS=${GBB_CGB_CORPUS_SCAN_MANIFESTS}"
+    "-DGBB_PATH_LABELS=${GBB_CGB_CORPUS_SCAN_PATH_LABELS}"
+    -P "${PROJECT_SOURCE_DIR}/tests/CheckCgbCorpusPackageControls.cmake")
+set_tests_properties(cgb_corpus_not_installed_controls PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-corpus package controls pass renamed-rom=1 renamed-png=1")
+
 # EVID-02 baseline comparator self-tests (D-30, D-31, D-34). Each test runs cmake/VerifyDmgBaseline.cmake
 # on committed synthetic fixtures (or a generated variant of them) and asserts the exact exit code
 # and failure token through expect_exit.cmake; nothing here touches the real ledger.

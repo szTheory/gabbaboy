@@ -179,6 +179,16 @@ def check_contract(texts: dict[str, str], paths: tuple[str, ...], context: bool 
     )
     for token, label in native_requirements:
         require(token.casefold() in folded_native, f"native claims are missing {label}")
+    normalized_native = " ".join(folded_native.split())
+    audio_requirements = (
+        "CGB audio observations are guest-only digital register samples",
+        "FF76 and FF77",
+        "There is no public PCM getter",
+        "analog output, mixing quality, and physical CGB-E audio remain unqualified",
+    )
+    for phrase in audio_requirements:
+        require(" ".join(phrase.casefold().split()) in normalized_native,
+                f"native guide is missing audio observation limit: {phrase}")
 
     for line in combined.splitlines():
         if re.search(r"CGB-C", line, re.IGNORECASE) and re.search(
