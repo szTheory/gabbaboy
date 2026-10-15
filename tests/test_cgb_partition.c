@@ -906,6 +906,37 @@ static int cgb_partition_snapshot_fidelity(void) {
     partition_machine prefix;
     partition_snap snapshot = {0};
     REQUIRE(partition_machine_create(&scenario, &prefix) == 0);
+    /* The partition digest is the private state contract for fields that a
+     * guest observation alone may not expose before the next wave fetch. */
+    const uint64_t apu_baseline = partition_digest(prefix.machine, &prefix.streams);
+    gbb_instance apu_mutant = *prefix.machine;
+    apu_mutant.apu_wave.sample_buffer ^= 1u;
+    if (partition_digest(&apu_mutant, &prefix.streams) == apu_baseline) {
+        fputs("partition-inert-input cgb-apu-wave-sample-buffer\n", stderr);
+        partition_machine_destroy(&prefix);
+        return 1;
+    }
+    apu_mutant = *prefix.machine;
+    apu_mutant.apu_wave.position ^= 1u;
+    if (partition_digest(&apu_mutant, &prefix.streams) == apu_baseline) {
+        fputs("partition-inert-input cgb-apu-wave-position\n", stderr);
+        partition_machine_destroy(&prefix);
+        return 1;
+    }
+    apu_mutant = *prefix.machine;
+    apu_mutant.apu_wave.timer ^= 1u;
+    if (partition_digest(&apu_mutant, &prefix.streams) == apu_baseline) {
+        fputs("partition-inert-input cgb-apu-wave-fetch-timer\n", stderr);
+        partition_machine_destroy(&prefix);
+        return 1;
+    }
+    apu_mutant = *prefix.machine;
+    apu_mutant.apu_sample_phase ^= 1u;
+    if (partition_digest(&apu_mutant, &prefix.streams) == apu_baseline) {
+        fputs("partition-inert-input cgb-apu-sample-residual\n", stderr);
+        partition_machine_destroy(&prefix);
+        return 1;
+    }
     REQUIRE(partition_prepare_stall(&prefix, &scenario, &meter) == 0);
     gbb_run_result at_mid_stall;
     REQUIRE(partition_run_budget(&prefix, prefix_stall, &meter,
