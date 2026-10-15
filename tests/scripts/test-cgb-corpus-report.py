@@ -176,7 +176,9 @@ class CorpusReportControlsTests(unittest.TestCase):
             "state": "expected-failure", "signature_sha256": signature}}}
         self.assertTrue(report.validate_case_outcome(xfail, "fail", "xfail", signature))
 
-        ctest_xml = (b'<Site><Testing>'
+        ctest_xml = (b'<Site><Testing><TestList>'
+                     b'<Test>./tests/cgb_case</Test><Test>./tests/other_case</Test>'
+                     b'</TestList>'
                      b'<Test Status="passed"><Name>cgb_case</Name><Results>'
                      b'<Measurement name="Test Output"><Value>terminal=pass</Value></Measurement>'
                      b'</Results></Test>'
