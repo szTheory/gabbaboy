@@ -16,18 +16,19 @@ affects:
   - 14-11
   - 14-12
 actuals:
-  tokens: 13305
+  tokens: 25917
   tasks: 2
-  commits: 4
-commits: 4
+  commits: 6
+commits: 6
 plan_head_before: b04f2378d8a4f931006d90b7415262a432baaf22
-plan_head_after: 3b2813cbede9c1a5a1f291608e03b687a7f0bb05
+plan_head_after: bc33b8941c3a4381681ff80921d1619fb815eaa7
 tech-stack:
   added: []
   patterns:
     - Independent expected identities for each pinned ROM, ASM source, and reference PNG
     - Offline digest checks plus exact pinned-source rebuild and image comparison
     - CMake consumes row metadata only for age-row-oracle fixtures
+    - Disposition validators enforce the same fixed row/image protocol and pending image status
 key-files:
   created:
     - fixtures/age/m3-bg-lcdc-cgbBCE.gb
@@ -52,6 +53,8 @@ key-files:
     - tests/scripts/test-reproduce-age.sh
     - tests/CMakeLists.txt
     - tests/expected-tests.txt
+    - tests/scripts/verify-cgb-speed-dispositions.py
+    - tests/scripts/verify-external-dispositions.py
 key-decisions:
   - CGB-E author Verified lines remain independent expectations; fixture admission does not imply emulator execution or a passing pixel result.
   - Native CGB, CGB-E DMG compatibility mode, and double-speed cases retain separate identities.
@@ -82,17 +85,17 @@ coverage:
         ref: "bash tests/scripts/test-reproduce-age.sh selfcheck-tampered"
         status: pass
   - id: D3
-    description: CMake registers all 13 AGE row-oracle cases, keeps six mode-3 image fixtures pending, and rejects unknown fixture classes.
+    description: CMake and disposition validators route the explicit AGE protocol to 13 row-oracle cases, keep six image fixtures pending, and reject unknown or altered membership.
     requirement: CGB-10
     human_judgment: false
     verification:
       - kind: integration
-        ref: "cmake -S . -B /tmp/gabbaboy14-wave2-fresh -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON && cmake --build /tmp/gabbaboy14-wave2-fresh --parallel 8 && ctest --test-dir /tmp/gabbaboy14-wave2-fresh --output-on-failure -R '^(age_|cgb_tables_|model_gates|summary_coverage|fixture_digest$)'"
+        ref: "cmake -S . -B /tmp/gabbaboy14-wave2-dispositions-20261015 -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON && cmake --build /tmp/gabbaboy14-wave2-dispositions-20261015 --parallel 8 && ctest --test-dir /tmp/gabbaboy14-wave2-dispositions-20261015 --output-on-failure -R '^(age_.*|cgb_tables_.*|model_gates.*|summary_coverage.*|fixture_digest|cgb_mooneye_(inventory|fixture_digest).*|cgb_external_dispositions.*|cgb_speed_dispositions.*)$'"
         status: pass
       - kind: unit
-        ref: "ctest --test-dir /tmp/gabbaboy14-wave2-fresh --output-on-failure -R '^age_manifest_unknown_class$'"
+        ref: "python3 -I tests/scripts/verify-external-dispositions.py --record tests/external/cgb-ppu-dispositions.json --doc docs/cgb-profile.md --repo-root . && python3 -I tests/scripts/verify-cgb-speed-dispositions.py"
         status: pass
-duration: 20min
+duration: 32min
 completed: 2026-10-15
 status: complete
 ---
@@ -103,11 +106,11 @@ status: complete
 
 ## Performance
 
-- **Duration:** 20 minutes
+- **Duration:** 32 minutes
 - **Started:** 2026-10-15T18:06:29Z
-- **Completed:** 2026-10-15T18:26:20Z
+- **Completed:** 2026-10-15T18:38:50Z
 - **Tasks:** 2
-- **Files modified:** 21
+- **Files modified:** 24
 
 ## Accomplishments
 
@@ -129,6 +132,12 @@ The follow-up adds manifest protocol `gabbaboy-age-fixture-protocol-v1`, classif
 
 A fresh configure in `/tmp/gabbaboy14-wave2-fresh` passed and printed `AGE fixture protocol pass row-oracle=13 image-pending=6`. The fresh build completed all 270 targets. The focused AGE/table/model/corpus/summary CTest selection passed 52/52, including the exact original set of 13 AGE row registrations, all four sensitivity sweeps, and the new `age_manifest_unknown_class` negative control. The CTest inventory check found 13/13 expected row cases and zero image fixtures registered as row tests. The reproduction self-check negative control also rejected `age-unknown-protocol` with `unsupported-fixture-class-age-unknown-protocol`.
 
+A later full Phase 14 wave-2 gate exposed three remaining failures (1004/1007 passed): `cgb_external_dispositions` rejected the newly admitted AGE image ROM as `disposition-mismatch tracked-age-file fixtures/age/m3-bg-lcdc-cgbBCE.gb`; `cgb_speed_dispositions` rejected the manifest's 19-entry set as `disposition-mismatch age-case-set`; and `cgb_speed_dispositions_pinned_by_missing` stopped on that same case-set error before reaching its intended missing-pin diagnostic. The first focused filter had not selected either disposition validator, so the CMake fix did not catch those consumers. This failure and its actual scope are recorded separately from the earlier configure failure.
+
+The correction makes the external disposition validator allow only the six exact, paired AGE ROM/PNG paths after it checks the versioned 13-row/6-image protocol, and requires every image entry to remain `admitted-not-executed` with no row metadata or output-result fields. The speed disposition validator independently enforces the fixed 13 row-case identities, keeps the existing digest-only record separate, and validates all six image entries only as pending. Existing external JSON rows, redistribution-rights records, D-09 model exclusions, and the precise speed dispositions were not changed.
+
+A fresh configure in `/tmp/gabbaboy14-wave2-dispositions-20261015` passed with `AGE fixture protocol pass row-oracle=13 image-pending=6`; its build completed all 270 targets. The corrected focused selection passed 62/62 across AGE, CGB tables, model gates, corpus inventory/digests, summary coverage, and all external/speed disposition positives and negatives. The direct validators reported `external-dispositions pass age=6 mealybug=30` and `cgb-speed-dispositions pass rows=35`. New negative controls reported `disposition-mismatch age-image-pending m3-bg-lcdc-cgbBCE.gb` when a temporary image manifest was marked `pass`, and `disposition-mismatch age-case-set` when a speed case identity was altered. The existing pin and reason negatives still pass their intended failure checks; in particular, the missing-pin diagnostic is now `disposition-mismatch pinned_by speed-switch-pause-ppu-output cgb_speed_no_such_test`. The fixed full-wave gate has not yet been rerun; that remains the parent executor's check.
+
 The rebuild checked all 19 manifest ROMs, including the 13 previously admitted files, and reported `result=byte-identical`. All six reference images reported `result=reference-source-identical`. The negative controls produced these expected diagnostics:
 
 - Rebuilt ROM mutation: `result=differs m3-bg-lcdc-cgbBCE.gb`.
@@ -144,8 +153,10 @@ The admitted set has 6 distinct ROM digests, 6 distinct ASM source digests, and 
 2. **Task 2: Expand the other five source/image pairs** — `cbb8158` (`feat(14-08)`).
 3. **Original summary metadata snapshot** — `a9176e8` (`docs(14-08)`).
 4. **Wave-2 integration correction: route fixture metadata by protocol** — `3b2813c` (`fix(14-08)`).
+5. **Refreshed summary after CMake integration correction** — `097b670` (`docs(14-08)`).
+6. **Wave-2 disposition correction: preserve row/image protocol in validators** — `bc33b89` (`fix(14-08)`).
 
-The measured `commits: 4` range includes this original summary snapshot; the refreshed summary below is committed after the measured plan head.
+The measured `commits: 6` range is from `b04f237` through `bc33b89`; this refreshed summary is committed after the measured plan head.
 
 ## Files Created and Modified
 
@@ -153,6 +164,7 @@ The measured `commits: 4` range includes this original summary snapshot; the ref
 - `fixtures/age/SOURCES.md` and `fixtures/age/ELIGIBILITY.md` — rights, exact source/image identities, admission status, and expectation boundaries.
 - `tests/scripts/reproduce-age.sh` and `tests/scripts/test-reproduce-age.sh` — pinned rebuild, source-image byte checks, and positive and negative controls.
 - `tests/CMakeLists.txt`, `tests/expected-tests.txt`, `cmake/AgeFixtureProtocol.cmake`, and `tests/scripts/check-age-fixture-protocol.cmake` — fail-closed registration classes, pending-image exclusion, and unknown-class control.
+- `tests/scripts/verify-external-dispositions.py` and `tests/scripts/verify-cgb-speed-dispositions.py` — protocol-aware tracked-file and fixed 13-case speed validation, with pending-image and case-set negative controls.
 - Six ROMs and six reference PNGs under `fixtures/age/` — pinned upstream artifacts listed in the manifest.
 
 ## Decisions Made
@@ -183,12 +195,21 @@ The versioned manifest protocol distinguishes row-oracle cases from source-image
 - **Verification:** Fresh configure/build passed; focused CTest passed 52/52; unknown-class negative controls failed with the expected diagnostic.
 - **Committed in:** `3b2813c`.
 
-**Total deviations:** 2 auto-fixed issues.
-**Impact on plan:** The original admission corpus and 13 row-test registrations remain unchanged. The follow-up repairs configure-time integration and preserves the six image-only entries for Plan 14-09.
+**3. [Rule 1 - Bug] Route disposition validators through explicit fixture classes**
+
+- **Found during:** Phase 14 wave-2 gate.
+- **Issue:** The external validator rejected every tracked `m3-bg-*` path, and the speed validator compared its fixed row ledger with all 19 manifest entries. The row-set failure also masked the existing missing-`pinned_by` negative control.
+- **Fix:** Validate exact protocol membership, keep the 13 row identities independent from six pending image references, and add pending-status and altered-case negative controls.
+- **Files modified:** `tests/scripts/verify-external-dispositions.py`, `tests/scripts/verify-cgb-speed-dispositions.py`, `tests/CMakeLists.txt`, `tests/expected-tests.txt`.
+- **Verification:** Fresh configure/build passed; corrected focused selection passed 62/62; direct controls reported `age-image-pending`, `age-case-set`, and the expected `pinned_by` diagnostics.
+- **Committed in:** `bc33b89`.
+
+**Total deviations:** 3 auto-fixed issues.
+**Impact on plan:** The original admission corpus and exact 13 row-test registrations remain unchanged. The six image-only entries are explicitly pending Plan 14-09; their qualification status is not converted to a pass or expected failure.
 
 ## Issues Encountered
 
-The initial wave-2 configure failure is documented above; it stopped before build. The managed sandbox also blocked direct writes to `.git` for the plan-head ledger and index lock. The task and integration commits were made through the authorized git path with hooks enabled; the measured commit count and head range use the persisted execution baseline. No hook bypass was used.
+The initial wave-2 configure failure and later 1004/1007 full-gate result are documented above. The managed sandbox blocked direct writes to `.git` for the index lock; commits were made through the authorized git path with hooks enabled. The measured commit count and head range use the recorded plan baseline. No hook bypass was used.
 
 ## User Setup Required
 
@@ -205,7 +226,7 @@ Plan 14-09 has six exact source-bound ROM/image pairs ready for its automated pi
 ## Self-Check: PASSED
 
 - All 12 fixture outputs and the summary file exist.
-- Commits `57b7d59`, `cbb8158`, and `3b2813c` are ancestors of the current branch head.
+- Plan commits `57b7d59`, `cbb8158`, `3b2813c`, `097b670`, and `bc33b89` are ancestors of the current branch head.
 - The 13 existing row registrations remain present; none of the six image fixtures appears as a row test.
-- The summary coverage script and focused CTest gate pass; all three coverage entries auto-pass without human judgment.
+- The fresh 62-test focused gate and summary coverage checks pass; all three coverage entries auto-pass without human judgment.
 - No new stub patterns were found in the modified scripts, manifest, CMake protocol, or fixture documentation.
