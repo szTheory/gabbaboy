@@ -5,16 +5,16 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 13
 current_phase_name: CGB HDMA
 current_plan: 12
-status: Phase 13 final-plan execution evidence is recorded; exact-head automated closure and verification are pending.
+status: Phase 13 Plan 13-12 execution is complete; exact final-metadata-head checks and Phase 13 verification remain pending.
 stopped_at: Completed 13-12-PLAN.md; awaiting exact-head automated closure
-last_updated: "2026-10-15T00:24:44Z"
-last_activity: "2026-10-15: Phase 13 Wave 10 plan 13-12 local evidence recorded; pending exact-head PR-event checks and /gsd-verify-work 13."
+last_updated: "2026-10-15T01:31:41Z"
+last_activity: "2026-10-15: Phase 13 Wave 10 plan 13-12 local and exact-source hosted evidence recorded; final metadata-head checks and /gsd-verify-work 13 remain."
 state_head: 739584d395f86c200e1d57f8923ab00886b126e5
 progress:
   total_phases: 9
   completed_phases: 7
   total_plans: 111
-  completed_plans: 110
+  completed_plans: 111
   percent: 78
 ---
 
@@ -30,14 +30,14 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-14)
 ## Current Position
 
 Phase: 13 (CGB HDMA) — EXECUTING
-Status: Phase 13 plan execution has reached its final plan; exact-head automated closure and Phase 13 verification are pending.
+Status: Phase 13 Plan 13-12 execution is complete; final metadata-head automated closure and Phase 13 verification are pending.
 Current Plan: 12
 Total Plans in Phase: 12
 
-Completed workflow stage: Phase 13 execution, pending automated closure. Wave 10 plan 13-12's local native, SDL3 player, installed-consumer/package, pinned-fixture, inventory and claim-prohibition evidence at tested source `e9bc47ed30f5eb4ee1303c06153303c2deb6bea3` is recorded in [13-12-SUMMARY.md](phases/GB-13-cgb-hdma/13-12-SUMMARY.md) and [13-BENCH.md](phases/GB-13-cgb-hdma/13-BENCH.md). Draft PR #69 publishes the tested branch; exact-source run 38661411340 is still running its Linux ASan/UBSan inventory, and the later metadata head must receive its own exact-head PR-event checks before verification closes. CGB-07 remains open until that verification; physical CGB-E qualification remains UNKNOWN/POLICY.
+Completed workflow stage: Phase 13 execution, pending automated closure and goal verification. Wave 10 plan 13-12's local native, SDL3 player, installed-consumer/package, pinned-fixture, inventory and claim-prohibition evidence at tested source `690c081e3714aa1039263255d572b6d0d06dad8e` is recorded in [13-12-SUMMARY.md](phases/GB-13-cgb-hdma/13-12-SUMMARY.md) and [13-BENCH.md](phases/GB-13-cgb-hdma/13-BENCH.md). PR-event run 38662784214 passed all eight jobs at that source; fixture/reproduction run 38662784222 passed 8/8 jobs and preview-package run 38662784151 passed all four jobs. Draft PR #69 publishes the tested branch; the unpushed final review/verification metadata head still requires separate exact-head checks during parent closeout. CGB-07 remains open until goal verification; physical CGB-E qualification remains UNKNOWN/POLICY.
 Next stage: Phase 13 goal verification. Exact command: /gsd-verify-work 13. Phase 14, CGB-E Model Qualification and Corpus, remains unstarted; stop after Phase 13, preserve both auto-advance flags as false, and wait for the owner.
 Next command: /gsd-verify-work 13.
-Last activity: 2026-10-15: Phase 13 final plan local execution recorded; exact-head automated closure pending.
+Last activity: 2026-10-15: Phase 13 Plan 13-12 local and exact-source hosted execution evidence recorded; final metadata-head checks pending.
 
 Phase 12 is merged: PR #68 at `8091fb591de7fb68e666be01d344f5f26ebedc5c`, reviewed/tested head `ffde21c0e2a7b71c6328ac8152d04496f5d387e7`; final PR-event runs `38586393122`, `38586392787`, `38586392931` passed all 19 jobs. Its 73/73 automated UAT stays closed absent changed covered behavior or concrete contradictory evidence. D-069, D-096 and D-098 are durable defaults; GB-GSD-017/018 prevent missing-test and unwired-prohibition churn.
 
