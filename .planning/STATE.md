@@ -4,11 +4,11 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: 13
 current_phase_name: CGB HDMA
-current_plan: 11
-status: Phase 13 execution in progress; plans 13-01 through 13-11 are complete, and plan 13-12 remains.
-stopped_at: Completed 13-11-PLAN.md
-last_updated: "2026-10-14T23:46:40.230Z"
-last_activity: "2026-10-14: Phase 13 Wave 9 plan 13-11 complete; next Phase 13 Wave 10 plan 13-12."
+current_plan: 12
+status: Phase 13 final-plan execution evidence is recorded; exact-head automated closure and verification are pending.
+stopped_at: Completed 13-12-PLAN.md; awaiting exact-head automated closure
+last_updated: "2026-10-15T00:24:44Z"
+last_activity: "2026-10-15: Phase 13 Wave 10 plan 13-12 local evidence recorded; pending exact-head PR-event checks and /gsd-verify-work 13."
 state_head: 739584d395f86c200e1d57f8923ab00886b126e5
 progress:
   total_phases: 9
@@ -30,18 +30,18 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-14)
 ## Current Position
 
 Phase: 13 (CGB HDMA) — EXECUTING
-Status: Phase 13 execution in progress; plans 13-01 through 13-11 are complete, and plan 13-12 remains.
-Current Plan: 11
+Status: Phase 13 plan execution has reached its final plan; exact-head automated closure and Phase 13 verification are pending.
+Current Plan: 12
 Total Plans in Phase: 12
 
-Completed workflow stage: Phase 13 Wave 9 plan 13-11 execution (2026-10-14). Both tasks and five TDD/fix commits are complete. The native/player claim checker, seven claim mutations, three subject rejections, checkout-derived clean/bad subjects, focused player tests, native/model contracts, and strict summary-coverage checks passed. CGB-07 remains open; physical CGB-E qualification is not established.
-Next stage: Phase 13 Wave 10, plan 13-12, Current-revision lane cost, evidence closure and phase pause. Reuse current Phase 13 research and summaries; revisit decisions only for concrete failed evidence. The next project phase is Phase 14, CGB-E Model Qualification and Corpus, and it remains unstarted.
-Next command: /gsd-execute-phase 13 --wave 10. Phase 13 remains active; stop before Phase 14 and keep both auto-advance flags false.
-Last activity: 2026-10-14: Phase 13 Wave 9 plan 13-11 complete; next Phase 13 Wave 10 plan 13-12.
+Completed workflow stage: Phase 13 execution, pending automated closure. Wave 10 plan 13-12's local native, SDL3 player, installed-consumer/package, pinned-fixture, inventory and claim-prohibition evidence is recorded in [13-12-SUMMARY.md](phases/GB-13-cgb-hdma/13-12-SUMMARY.md) and [13-BENCH.md](phases/GB-13-cgb-hdma/13-BENCH.md). Draft PR #69 publishes the tested branch; exact-head PR-event checks, including Linux ASan/UBSan, must pass before verification closes. CGB-07 remains open until that verification; physical CGB-E qualification remains UNKNOWN/POLICY.
+Next stage: Phase 13 goal verification. Exact command: /gsd-verify-work 13. Phase 14, CGB-E Model Qualification and Corpus, remains unstarted; stop after Phase 13, preserve both auto-advance flags as false, and wait for the owner.
+Next command: /gsd-verify-work 13.
+Last activity: 2026-10-15: Phase 13 final plan local execution recorded; exact-head automated closure pending.
 
 Phase 12 is merged: PR #68 at `8091fb591de7fb68e666be01d344f5f26ebedc5c`, reviewed/tested head `ffde21c0e2a7b71c6328ac8152d04496f5d387e7`; final PR-event runs `38586393122`, `38586392787`, `38586392931` passed all 19 jobs. Its 73/73 automated UAT stays closed absent changed covered behavior or concrete contradictory evidence. D-069, D-096 and D-098 are durable defaults; GB-GSD-017/018 prevent missing-test and unwired-prohibition churn.
 
-Progress (v0.2): 78% (7/9 phases complete); 110/111 plans complete. Phase 13 is executing (11/12 plans complete; Wave 10 plan 13-12 is next); Phases 14–15 are unstarted.
+Progress (v0.2): 78% (7/9 phases complete); 111/111 plans executed, with Phase 13 verification still pending. Phase 13 execution has reached plan 13-12; Phases 14–15 are unstarted.
 
 ### Prior stage receipts (historical, before the final merges)
 
@@ -491,11 +491,11 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-14T23:46:40.048Z
-Stopped at: Completed 13-11-PLAN.md
+Last session: 2026-10-15T00:24:44Z
+Stopped at: Completed 13-12-PLAN.md; awaiting exact-head automated closure
 Resume file: .planning/phases/GB-13-cgb-hdma/continue.md
-Completed workflow stage: **Phase 13 Wave 9 plan 13-11 — Atomic consumer claims and executable documentation contracts** (2026-10-14). Both tasks and five TDD/fix commits are complete; checker mutations and subject controls, focused player checks, native/model contracts, strict summary coverage and its self-test pass. [13-11-SUMMARY.md](phases/GB-13-cgb-hdma/13-11-SUMMARY.md) records the evidence and deviations. CGB-07 remains open; physical CGB-E qualification remains UNKNOWN/POLICY.
-Next command in fresh context: **`/gsd-execute-phase 13 --wave 10`**. The next workflow stage is **Phase 13 Wave 10 plan 13-12 — Current-revision lane cost, evidence closure and phase pause**. Phase 14, CGB-E Model Qualification and Corpus, remains unstarted. `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop after Phase 13 and wait for the owner.
+Completed workflow stage: **Phase 13 execution, pending automated closure**. Plan 13-12 local evidence and current limits are in [13-12-SUMMARY.md](phases/GB-13-cgb-hdma/13-12-SUMMARY.md) and [13-BENCH.md](phases/GB-13-cgb-hdma/13-BENCH.md). Draft PR #69 carries the tested source; exact-head PR-event CI is still the remote closure gate. CGB-07 remains open; physical CGB-E qualification remains UNKNOWN/POLICY.
+Next command in fresh context: **`/gsd-verify-work 13`**. Phase 14, CGB-E Model Qualification and Corpus, remains unstarted. `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop after Phase 13 and wait for the owner.
 
 Completion advisories: OpenGSD's broad SUMMARY reference scan produced 10 warnings across 13 inline references: eleven command strings treated as file paths, the historical ignored `build/tdd-red-audio.xml`, and the unavailable optional `scripts/ci_monitor.cjs`. The verifier checked all 45 declared artifacts and actual behavioral evidence; current audio and mutant controls pass. Hosted monitoring used `gh` with exact PR-event run/head checks. These are recorded advisory/reference limitations, not missing implementation or manual UAT checkpoints.
 Boundary triage: no open issues; only draft PR #68 is open. Plan 13-11 execution and its local commits are complete; no release or merge was performed. CGB-07 stays open for Phase 13 closure. Global learnings are disabled; graduation has no phase LEARNINGS inputs; no phase-resolved pending todos or stale phase `.continue-here` files exist.
@@ -588,9 +588,9 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Completed workflow stage: **Phase 13 Wave 9, plan 13-11 — Atomic consumer claims and executable documentation contracts**; both tasks, five TDD/fix commits, the plan SUMMARY, and verification receipts are recorded.
-- Next stage: **Phase 13 Wave 10, plan 13-12 — Current-revision lane cost, evidence closure and phase pause**. Exact command: **`/gsd-execute-phase 13 --wave 10`**.
+- Completed workflow stage: **Phase 13 execution, pending automated closure**; plans 13-01 through 13-12 have executed, and the exact-head CI/verification tail remains.
+- Next stage: **Phase 13 goal verification**. Exact command: **`/gsd-verify-work 13`**.
 - Reuse the 13-11, 13-10, 13-09, 13-08, 13-07, 13-05, 13-04, 13-03, 13-06, 13-02 and 13-01 summaries and recorded decisions; revisit them only for a concrete failed discriminator or changed evidence.
-- **Phase 14: CGB-E Model Qualification and Corpus** remains unstarted. Keep CGB-07 open until Phase 13 closure; both auto-advance flags remain false.
+- **Phase 14: CGB-E Model Qualification and Corpus** remains unstarted. Keep CGB-07 open until Phase 13 verification passes; both auto-advance flags remain false.
 - Phase 12 is merged and its automated UAT stays closed absent changed evidence. Preserve owner model/runtime config edits.
-- CGB-07 remains open. Stop before Phase 14. Both auto-advance flags remain false. Phase 14: CGB-E Model Qualification and Corpus remains unstarted.
+- CGB-07 remains open pending Phase 13 verification. Stop before Phase 14. Both auto-advance flags remain false. Phase 14: CGB-E Model Qualification and Corpus remains unstarted.
