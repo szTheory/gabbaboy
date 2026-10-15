@@ -1,6 +1,6 @@
 ---
 phase: 13-cgb-hdma
-verified: 2026-10-15T03:24:47Z
+verified: 2026-10-15T03:45:43Z
 status: passed
 score: 37/37 must-haves verified
 covered_files:
@@ -24,7 +24,9 @@ covered_files:
   - ".planning/phases/GB-13-cgb-hdma/13-08-PLAN.md"
   - ".planning/phases/GB-13-cgb-hdma/13-08-SUMMARY.md"
   - ".planning/phases/GB-13-cgb-hdma/13-09-PLAN.md"
+  - ".planning/phases/GB-13-cgb-hdma/13-09-RED-evidence.json"
   - ".planning/phases/GB-13-cgb-hdma/13-09-SUMMARY.md"
+  - ".planning/phases/GB-13-cgb-hdma/13-09-TASK2-RED-evidence.json"
   - ".planning/phases/GB-13-cgb-hdma/13-10-PLAN.md"
   - ".planning/phases/GB-13-cgb-hdma/13-10-SUMMARY.md"
   - ".planning/phases/GB-13-cgb-hdma/13-11-PLAN.md"
@@ -99,7 +101,7 @@ covered_files:
   - "tests/test_cgb_visibility.c"
   - "tests/test_magentests.c"
   - "tests/test_samesuite_hdma.c"
-covered_digest: "v3:sha256:ffff572c9cd25c8c6f516f21738c174dc849f81671e6f180010496565aaf6fcf"
+covered_digest: "v3:sha256:439fe655625f59d1ac33170e9fc103248c16fb1c21d95c6fd13d20c14e126456"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
@@ -114,7 +116,7 @@ re_verification:
 # Phase 13: CGB HDMA Verification Report
 
 **Phase Goal:** CGB software can use general-purpose and HBlank VRAM DMA with hardware-shaped CPU stall, cancel and readback, bounded per run.
-**Verified:** 2026-10-15T03:24:47Z
+**Verified:** 2026-10-15T03:45:43Z
 **Status:** passed
 **Re-verification:** Yes — after exact-head evidence closure
 
@@ -159,7 +161,7 @@ re_verification:
 | 33 | D-18/D-22: Model/oracle/rights qualifications and documentation have automated positive and mutated negative contracts with no routine human UAT. | ✓ VERIFIED | Claims checker, disposition checker, player contract and mutated controls pass; no plan human-check blocks or probe scripts are declared. |
 | 34 | D-21: Existing native/sanitizer/reproduction/consumer/package lanes run an exact inventory with measured added ASan and mutant cost and unchanged parallel4/timeout policy. | ✓ VERIFIED | GitHub API confirms all jobs completed successfully on exact reviewed behavior head `0f15a05`: CI 8/8 (ASan/UBSan 989/989 with no skips), fixture reproduction 7/7, and preview package 4/4. The source/test/fixture/build/workflow diff from freshly tested `3cdcef2` to `0f15a05` is empty; run IDs and measured costs are recorded in `13-BENCH.md`. |
 | 35 | D-18/D-22: The claim-language prohibition is machine-proven fail-first and resolves green/unflagged through the actual OpenGSD gate before verify-work; physical UNKNOWN is preserved. | ✓ VERIFIED | Actual OpenGSD producer clean, violating-subject RED and live GREEN evidence is recorded; projection/gate tests and negative controls pass; CGB-E remains UNKNOWN/POLICY. |
-| 36 | D-22/D-24: Current-revision evidence and machine-readable coverage qualify all delivered claims; skipped/stale remote checks cannot prove the revision green. | ✓ VERIFIED | `13-BENCH.md` binds local evidence to `3cdcef2`, records successful exact-head runs at `0f15a05`, and states that later metadata heads need their own checks; closure checker rejects skipped/stale results and machine-readable coverage passes. |
+| 36 | D-22/D-24: Current-revision evidence and machine-readable coverage qualify all delivered claims; skipped/stale remote checks cannot prove the revision green. | ✓ VERIFIED | `13-BENCH.md` binds the latest privacy-normalized local evidence to `10b0652`, records successful exact-head runs at `0f15a05`, and states that later metadata heads need their own checks; closure checker rejects skipped/stale results and machine-readable coverage passes. |
 | 37 | D-25: Planning stops before execution; after Phase13 execution/verification the durable route is Phase14 CGB-E Model Qualification and Corpus, never auto-advanced. | ✓ VERIFIED | Continuation now records the completed Phase 13 execution/verification stage, exact automated-UAT command, and Phase 14 as unstarted; the handoff contract passes both its live and completed-stage controls, with auto flags false. |
 
 **Score:** 37/37 truths verified (0 present, behavior-unverified).
@@ -225,7 +227,7 @@ The installed artifact verifier checked all plan-declared artifacts: 49/49 passe
 
 ## Behavioral Spot-Checks
 
-The full fresh-source regression evidence is from source `3cdcef2831ae71564b75186e976296275f59b68d`: native 994/994, player 1087/1087, relocated installed consumers/package 6/6; each report has zero failures, errors, or skips. JUnit files and hashes are identified in `13-BENCH.md`. Focused named tests passed during verification:
+The latest privacy-normalized full regression evidence is from source `10b0652b27fa72d89e6e0d64fafe0b9296d55b3c`: native 994/994 in 73.52 s, player 1087/1087 in 78.18 s, and relocated installed consumers/package 6/6 in 1.31 s, all with zero failures, errors, or skips. JUnit filenames and SHA-256 digests are in `13-BENCH.md`. The source/test/fixture/build/workflow bytes at this revision match the behavior revision qualified by the hosted runs below; the final report/continuation metadata head still needs its own exact-head checks before merge. Focused named tests passed during verification:
 
 | Behavior | Check | Result | Status |
 |---|---|---|---|
@@ -259,9 +261,9 @@ None. Physical CGB-E qualification is deliberately UNKNOWN/POLICY and outside th
 
 ## Gaps Summary
 
-All 37 merged roadmap and plan truths are verified. Current-source native, player, installed-consumer, SameSuite, Magen, HALT, cancellation, address, and partition checks pass; exact reviewed behavior head `0f15a05` also passes the required CI, fixture-reproduction, and preview-package jobs. The final report/continuation metadata head remains subject to its own exact-head CI before merge. Physical CGB-E remains UNKNOWN/POLICY, and no Mealybug CGB-C bytes were fetched.
+All 37 merged roadmap and plan truths are verified. Latest privacy-normalized local native, player, and installed-consumer suites at `10b0652` pass with zero failures, errors, or skips; exact reviewed behavior head `0f15a05` also passes the required CI, fixture-reproduction, and preview-package jobs. The final report/continuation metadata head remains subject to its own exact-head CI before merge. Physical CGB-E remains UNKNOWN/POLICY, and no Mealybug CGB-C bytes were fetched.
 
 ---
 
-_Verified: 2026-10-15T03:24:47Z_
+_Verified: 2026-10-15T03:45:43Z_
 _Verifier: the agent (gsd-verifier)_

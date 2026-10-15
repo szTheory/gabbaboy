@@ -4,17 +4,31 @@ These are bounded software-fixture and test-suite measurements. They do not qual
 
 ## Evidence revision and host
 
-- Source revision: `3cdcef2831ae71564b75186e976296275f59b68d`
-- The post-review local measurements immediately below use this exact source revision. All later sections explicitly headed historical retain their original `690c081` source identity. Each published head still requires its own PR-event checks.
+- Source revision: `10b0652b27fa72d89e6e0d64fafe0b9296d55b3c`
+- The privacy-normalized measurements immediately below use this exact source revision. Earlier post-review local measurements remain explicitly source `3cdcef2`, hosted evidence remains exact head `0f15a05`, and historical sections remain source `690c081`. No measurement is relabeled across revisions; each published head requires its own PR-event checks.
 - Runtime-mask mutant build-cost source revision: `41bb9bf9258f529e394ac14cf1396928281cdee0`.
 - Phase 12 inventory baseline: `8091fb591de7fb68e666be01d344f5f26ebedc5c` (`tests/expected-tests.txt`, 898 names).
 - Host class: Darwin arm64. Compiler: Apple clang 21.0.0. Generator: Ninja. Native/player CMake build type: Debug; C compilation uses `-g -std=c17`.
 - Model scope: the full suites mix unit, integration, fixture, mutation, and packaging checks. HDMA behavior-specific fixture evidence uses the bootless CGB-CPU-E software model. Physical CGB-E remains UNKNOWN/POLICY.
 - Samples: one full-suite run per configuration, no warm-up. CTest wall time and aggregate per-test time are different quantities. One sample does not estimate variance; uncertainty is not quantified (not zero). These are lane-cost observations, not emulator-speed measurements or comparable performance claims.
 
-## Post-review local evidence
+## Current privacy-normalized receipt revision — `10b0652`
 
-The source-revision gate and optional remote-receipt validator were fixed after independent security and code review; player help is split into labeled lines. Fresh configure/build and full CTest passed on the Darwin arm64 Debug host described above, after those fixes. The configured regression command ran under the existing 600-second bound with parallelism 4. Six prior reports referenced 44 existing test paths; the full native suite covers those paths and the current exact inventory. Installed selection was guarded for all six exact names and a missing-target negative control.
+Two historical RED receipts used absolute workspace paths in their command output argument. Commit `10b0652` changes only those paths to repository-relative values; parsed evidence fields and results are otherwise identical. Current artifact and author scans pass. Emulator, test, build, fixture, package and workflow bytes remain identical to the independently reviewed behavior revision `0f15a05`.
+
+Fresh configure/build and full native/player suites passed after this normalization, followed by the exact six installed/package targets. Native and player full suites ran concurrently on the same Darwin arm64 Debug host with parallelism 4 each. Their wall times are descriptive observations, not comparable speed claims. One sample, no warm-up, uncertainty unquantified.
+
+| Lane | Result | CTest wall | Output digest |
+|---|---|---:|---|
+| Native Debug | 994/994, zero failures/errors/skips | 73.52 s | `build/phase13-privacy-native.xml`, SHA-256 `40029ecbea1549ac99b9b15ed2993790d53de93e2a41f34f77b0fb18b56ed3b0` |
+| SDL3 player Debug | 1087/1087, zero failures/errors/skips | 78.18 s | `build-player/phase13-privacy-player.xml`, SHA-256 `644fbb9943d373bc19a7da1498d592de23730206834ea974b4c5db20e4a71a63` |
+| Relocated installed consumers/package | 6/6, zero failures/errors/skips | 1.31 s | `build/phase13-privacy-installed.xml`, SHA-256 `08cac33bbc7f7fd56bccb59d7a620ffb8bcaafe00a6bfb499e8e497d4aacecc9` |
+
+The exact-head hosted evidence below qualifies the unchanged behavior at `0f15a05`; the final privacy/handoff metadata head must also pass its own required PR-event checks before merge. No earlier result is substituted for that final-head gate.
+
+## Earlier post-review local evidence — source `3cdcef2`
+
+The source-revision gate and optional remote-receipt validator were fixed after independent security and code review; player help is split into labeled lines. Fresh configure/build and full CTest passed at source `3cdcef2831ae71564b75186e976296275f59b68d` on the Darwin arm64 Debug host described above, after those fixes. The configured regression command ran under the existing 600-second bound with parallelism 4. Six prior reports referenced 44 existing test paths; the full native suite covers those paths and the current exact inventory. Installed selection was guarded for all six exact names and a missing-target negative control.
 
 | Lane | Result | CTest wall | Output digest |
 |---|---|---:|---|
