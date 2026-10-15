@@ -16,6 +16,7 @@ INVENTORY = ROOT / "tests/external/cgb-corpus-inventory.json"
 DOC = ROOT / "docs/cgb-corpus.md"
 MAGEN_DOC = ROOT / "fixtures/magentests/ELIGIBILITY.md"
 MAX_INPUT_BYTES = 2_000_000
+MAX_FIXTURE_BYTES = 1_000_000
 SUITES = ("age", "samesuite", "magentests", "mooneye")
 PINS = {
     "mooneye": ("31510e12eea6286d36eea060a6adde755e1067aa", "2b8c52424a49a2a7466cf631fd8992c53d0de2fa"),
@@ -268,8 +269,11 @@ def check_admitted_outputs(root: Path, outputs: dict[str, dict], sources: dict[s
         need(row.get("sha256") == fixture.get("sha256") and row.get("size_bytes") == fixture.get("size_bytes"),
              f"manifest-digest-mismatch:{row['id']}")
         need(row["output_path"] in tracked_set, f"admitted-output-untracked:{row['id']}")
+        need(isinstance(fixture.get("size_bytes"), int) and 0 < fixture["size_bytes"] <= MAX_FIXTURE_BYTES,
+             f"manifest-output-size-limit:{row['id']}")
         file_path = root / row["output_path"]
         need(file_path.is_file(), f"admitted-output-missing:{row['id']}")
+        need(file_path.stat().st_size == fixture["size_bytes"], f"admitted-output-size:{row['id']}")
         content = file_path.read_bytes()
         need(len(content) == fixture["size_bytes"], f"admitted-output-size:{row['id']}")
         need(hashlib.sha256(content).hexdigest() == fixture["sha256"], f"admitted-output-hash:{row['id']}")
@@ -368,6 +372,7 @@ def check_complete(root: Path, outputs: dict[str, dict], cases: dict[str, dict])
 def check_test_bindings(root: Path, cases: dict[str, dict]) -> None:
     inventory = root / "tests/expected-tests.txt"
     need(inventory.is_file(), "complete-expected-test-inventory-missing")
+    need(inventory.stat().st_size <= MAX_INPUT_BYTES, "complete-expected-test-inventory-size-limit")
     registered = {
         line.strip() for line in inventory.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.lstrip().startswith("#")
@@ -400,6 +405,19 @@ def validate(root: Path, data: dict, complete: bool = False) -> tuple[dict[str, 
 def self_test(root: Path, data: dict) -> None:
     validate(root, data)
     controls = []
+
+    original_fixture_limit = MAX_FIXTURE_BYTES
+    try:
+        globals()["MAX_FIXTURE_BYTES"] = 1
+        validate(root, data)
+    except Mismatch as exc:
+        need(str(exc).startswith("manifest-output-size-limit:"),
+             f"self-test-wrong-diagnostic:oversized-output:{exc}")
+        controls.append("oversized-output-rejected")
+    else:
+        raise Mismatch("self-test-control-accepted:oversized-output")
+    finally:
+        globals()["MAX_FIXTURE_BYTES"] = original_fixture_limit
 
     def rejected(name: str, mutate, expected_code: str) -> None:
         trial = copy.deepcopy(data)
@@ -484,6 +502,20 @@ def self_test(root: Path, data: dict) -> None:
         controls.append("complete-requires-ctest-bindings")
     else:
         raise Mismatch("self-test-control-accepted:missing-test-binding")
+
+    _, _, case_map = validate(root, data)
+    original_input_limit = MAX_INPUT_BYTES
+    try:
+        globals()["MAX_INPUT_BYTES"] = 0
+        check_test_bindings(root, case_map)
+    except Mismatch as exc:
+        need(str(exc) == "complete-expected-test-inventory-size-limit",
+             f"self-test-wrong-diagnostic:oversized-test-inventory:{exc}")
+        controls.append("oversized-test-inventory-rejected")
+    else:
+        raise Mismatch("self-test-control-accepted:oversized-test-inventory")
+    finally:
+        globals()["MAX_INPUT_BYTES"] = original_input_limit
 
     try:
         _, outputs, cases = validate(root, data)
