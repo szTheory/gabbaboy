@@ -934,6 +934,7 @@ age_stat_mode_window_ds_cgbBCE
 age_stat_mode_window_cgbBCE
 age_fixture_digest
 age_fixture_digest_tampered
+age_manifest_unknown_class
 age_repro_selfcheck
 age_repro_selfcheck_tampered
 age_repro_compare_tampered

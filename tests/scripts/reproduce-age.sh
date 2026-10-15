@@ -45,6 +45,8 @@ except (OSError, KeyError, ValueError) as exc:
     fail('manifest-or-sources-unreadable ' + str(exc))
 if not entries:
     fail('manifest-has-no-fixtures')
+if manifest.get('fixture_protocol') != 'gabbaboy-age-fixture-protocol-v1':
+    fail('fixture-protocol-mismatch')
 if commit not in sources or tree not in sources:
     fail('SOURCES-pins-differ-from-script')
 if manifest.get('source', {}).get('commit') != commit or manifest.get('source', {}).get('tree') != tree:
@@ -183,8 +185,22 @@ m3_entries = {
     for entry in entries
     if entry.get('fixture_class') == 'age-m3-reference'
 }
+for entry in entries:
+    fixture_class = entry.get('fixture_class')
+    if fixture_class not in ('age-row-oracle', 'age-m3-reference'):
+        fail('unsupported-fixture-class-' + str(fixture_class))
+row_entries = [entry for entry in entries if entry.get('fixture_class') == 'age-row-oracle']
 if set(m3_entries) != set(m3_expected):
     fail('m3-manifest-membership-mismatch')
+if len(entries) != 19 or len(row_entries) != 13 or len(m3_entries) != 6:
+    fail('fixture-protocol-membership-mismatch')
+row_fields = ('test_results_address', 'expected_address', 'rows', 'budget_half_dots')
+for entry in row_entries:
+    if any(field not in entry for field in row_fields):
+        fail('row-metadata-missing-' + entry.get('file', 'unknown'))
+for entry in m3_entries.values():
+    if any(field in entry for field in row_fields):
+        fail('image-fixture-has-row-metadata-' + entry.get('file', 'unknown'))
 rows = []
 seen_names = set()
 for entry in entries:

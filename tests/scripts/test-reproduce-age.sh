@@ -108,5 +108,13 @@ data['fixtures'] = [row for row in data['fixtures'] if row['file'] != 'm3-bg-scx
 path.write_text(json.dumps(data))
 PY
   expect_selfcheck_failure 'm3-manifest-membership-mismatch'
+  reset_fixture
+  python3 -I - "$scratch/fixtures/age/manifest.json" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1]); data = json.loads(path.read_text())
+data['fixtures'][0]['fixture_class'] = 'age-unknown-protocol'
+path.write_text(json.dumps(data))
+PY
+  expect_selfcheck_failure 'unsupported-fixture-class-age-unknown-protocol'
 fi
 echo "reproduce-age negative control $case_name ok"

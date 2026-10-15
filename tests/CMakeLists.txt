@@ -3282,10 +3282,14 @@ set_target_properties(test_age PROPERTIES C_EXTENSIONS OFF)
 
 set(GBB_AGE_MANIFEST "${PROJECT_SOURCE_DIR}/fixtures/age/manifest.json")
 file(READ "${GBB_AGE_MANIFEST}" GBB_AGE_MANIFEST_JSON)
+include("${PROJECT_SOURCE_DIR}/cmake/AgeFixtureProtocol.cmake")
+gbb_validate_age_fixture_protocol("${GBB_AGE_MANIFEST_JSON}"
+  GBB_AGE_ROW_FIXTURE_INDICES GBB_AGE_PENDING_IMAGE_FIXTURE_INDICES)
 string(JSON GBB_AGE_FIXTURE_COUNT LENGTH "${GBB_AGE_MANIFEST_JSON}" fixtures)
 math(EXPR GBB_AGE_FIXTURE_LAST "${GBB_AGE_FIXTURE_COUNT} - 1")
+message(STATUS "AGE fixture protocol pass row-oracle=13 image-pending=6")
 set(GBB_AGE_SPSW_FOUND OFF)
-foreach(GBB_AGE_FIXTURE_INDEX RANGE 0 ${GBB_AGE_FIXTURE_LAST})
+foreach(GBB_AGE_FIXTURE_INDEX IN LISTS GBB_AGE_ROW_FIXTURE_INDICES)
   string(JSON GBB_AGE_FIXTURE_FILE GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} file)
   if("${GBB_AGE_FIXTURE_FILE}" STREQUAL "spsw-div-cgbBCE.gb")
     set(GBB_AGE_SPSW_FOUND ON)
@@ -3381,7 +3385,7 @@ foreach(GBB_AGE_DISPOSITION_SUITE_INDEX RANGE 0 ${GBB_AGE_DISPOSITION_SUITE_COUN
 
         set(GBB_AGE_CASE_FILE "${GBB_AGE_CASE}.gb")
         set(GBB_AGE_CASE_FOUND OFF)
-        foreach(GBB_AGE_CASE_FIXTURE_INDEX RANGE 0 ${GBB_AGE_FIXTURE_LAST})
+        foreach(GBB_AGE_CASE_FIXTURE_INDEX IN LISTS GBB_AGE_ROW_FIXTURE_INDICES)
           string(JSON GBB_AGE_FIXTURE_FILE GET "${GBB_AGE_MANIFEST_JSON}"
             fixtures ${GBB_AGE_CASE_FIXTURE_INDEX} file)
           if(GBB_AGE_FIXTURE_FILE STREQUAL GBB_AGE_CASE_FILE)
@@ -3432,7 +3436,7 @@ endif()
 
 # D-21 sensitivity tests run every admitted AGE fixture and compare its clean and mutant results.
 set(GBB_AGE_SENSITIVITY_ENTRIES)
-foreach(GBB_AGE_SENSITIVITY_INDEX RANGE 0 ${GBB_AGE_FIXTURE_LAST})
+foreach(GBB_AGE_SENSITIVITY_INDEX IN LISTS GBB_AGE_ROW_FIXTURE_INDICES)
   string(JSON GBB_AGE_SENSITIVITY_FILE GET "${GBB_AGE_MANIFEST_JSON}"
     fixtures ${GBB_AGE_SENSITIVITY_INDEX} file)
   string(JSON GBB_AGE_SENSITIVITY_RESULTS GET "${GBB_AGE_MANIFEST_JSON}"
@@ -3588,6 +3592,20 @@ if(NOT WIN32)
   set_tests_properties(age_repro_compare_tampered PROPERTIES TIMEOUT 60
     PASS_REGULAR_EXPRESSION "reproduce-age negative control compare-tampered ok")
 endif()
+
+# Unknown manifest protocols must fail closed before row metadata can be consumed.
+string(JSON GBB_AGE_UNKNOWN_CLASS_MANIFEST SET "${GBB_AGE_MANIFEST_JSON}"
+  fixtures 0 fixture_class "\"age-unknown-protocol\"")
+set(GBB_AGE_UNKNOWN_CLASS_MANIFEST_FILE "${PROJECT_BINARY_DIR}/age-unknown-class/manifest.json")
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/age-unknown-class")
+file(WRITE "${GBB_AGE_UNKNOWN_CLASS_MANIFEST_FILE}" "${GBB_AGE_UNKNOWN_CLASS_MANIFEST}")
+add_test(NAME age_manifest_unknown_class
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DMANIFEST=${GBB_AGE_UNKNOWN_CLASS_MANIFEST_FILE};-P;${PROJECT_SOURCE_DIR}/tests/scripts/check-age-fixture-protocol.cmake"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=age-fixture-protocol: unsupported fixture_class age-unknown-protocol"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(age_manifest_unknown_class PROPERTIES TIMEOUT 30)
 # --- Phase 12 plan 12-16 end ---
 
 # --- Phase 12 plan 12-10 begin ---
