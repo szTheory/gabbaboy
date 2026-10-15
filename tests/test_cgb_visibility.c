@@ -454,11 +454,7 @@ static int case_boundaries(void) {
 /* Deferred accesses stop visibly. A read stops before it happens; a write is dropped and the stop
  * follows the retire of the instruction that issued it. */
 static int case_deferred_stop(void) {
-    /* RP remains deferred in CGB mode; PCM12/34 are now implemented guest-visible reads. */
-    const uint16_t deferred_reads[] = { 0xFF56 };
-    for (size_t i = 0; i < sizeof(deferred_reads) / sizeof(deferred_reads[0]); ++i)
-        REQUIRE(expect_probe(V_CGB, NULL, 0, deferred_reads[i], STOP) == 0);
-    /* Control: an idle FF55 reads $FF and compatibility mode still ignores deferred rows. */
+    /* Control: an idle FF55 reads $FF; compatibility FF56 and PCM rows remain inaccessible. */
     REQUIRE(expect_probe(V_CGB, NULL, 0, 0xFF55, 0xFF) == 0);
     REQUIRE(expect_probe(V_COMPAT, NULL, 0, 0xFF56, 0xFF) == 0);
     REQUIRE(expect_probe(V_COMPAT, NULL, 0, 0xFF76, 0xFF) == 0);
@@ -486,34 +482,17 @@ static int case_deferred_stop(void) {
     REQUIRE(hram(m, 0) == 0x00);
     gbb_destroy(m);
 
-    /* RP is still a deferred write; PCM ports ignore writes in both CGB columns. */
-    const uint16_t deferred_writes[] = { 0xFF56 };
-    for (size_t i = 0; i < sizeof(deferred_writes) / sizeof(deferred_writes[0]); ++i) {
-        prog w = { {0}, 0 };
-        write_io(&w, (uint8_t)deferred_writes[i], 0x01);
-        halt(&w);
-        m = load_view(V_CGB, w.b, w.n, NULL, 0);
-        REQUIRE(m != NULL);
-        REQUIRE(gbb_run(m, RUN_BUDGET, NULL, 0).reason == GBB_STOP_UNSUPPORTED_BUS);
-        REQUIRE(gbb_test_last_unsupported_address(m) == deferred_writes[i]);
-        gbb_destroy(m);
-    }
-
-    /* Compatibility mode ignores the RP write, and the DMG profile never stops on it (C4). */
-    for (size_t i = 0; i < sizeof(deferred_writes) / sizeof(deferred_writes[0]); ++i) {
-        for (int v = V_DMG; v <= V_COMPAT; v += 2) {
-            prog w = { {0}, 0 };
-            write_io(&w, (uint8_t)deferred_writes[i], 0x01);
-            write_io(&w, 0x80, 0x09);
-            halt(&w);
-            m = load_view((view)v, w.b, w.n, NULL, 0);
-            REQUIRE(m != NULL);
-            r = gbb_run(m, RUN_BUDGET, NULL, 0);
-            REQUIRE(r.reason != GBB_STOP_UNSUPPORTED_BUS);
-            REQUIRE(hram(m, 0) == 0x09);
-            gbb_destroy(m);
-        }
-    }
+    /* DMG retains the ignored-write policy; native CGB readback is exercised by cgb_ir_tracer. */
+    prog w = { {0}, 0 };
+    write_io(&w, 0x56, 0x01);
+    write_io(&w, 0x80, 0x09);
+    halt(&w);
+    m = load_view(V_DMG, w.b, w.n, NULL, 0);
+    REQUIRE(m != NULL);
+    r = gbb_run(m, RUN_BUDGET, NULL, 0);
+    REQUIRE(r.reason == GBB_STOP_HALTED_IDLE);
+    REQUIRE(hram(m, 0) == 0x09);
+    gbb_destroy(m);
     PASS("cgb_visibility_deferred_stop");
     return 0;
 }
@@ -572,38 +551,28 @@ static int case_ie_gate(void) {
     return 0;
 }
 
-static int case_deferred_latch_interrupt(void) {
-    /* A deferred write is the instruction right after EI, with an interrupt pending: the stop is
-     * reported before the interrupt is taken, and the interrupt is taken on the next run. */
+static int case_ir_interrupt_continuation(void) {
+    /* An implemented IR write is the instruction right after EI; the pending interrupt follows
+     * normal retirement without an unsupported-bus stop. */
     const uint8_t vec[] = { 0x3E, 0x99, 0xE0, 0x90, 0x76 };
     prog p = { {0}, 0 };
     write_io(&p, 0xFF, 0x01);                  /* IE = $01 */
     write_io(&p, 0x0F, 0x01);                  /* IF = $01; A stays $01 */
     emit(&p, 0xFB);                            /* EI: IME rises after the next instruction */
-    ldh_st(&p, 0x56);                          /* that next instruction is the deferred write */
+    ldh_st(&p, 0x56);                          /* that next instruction writes the IR control */
     emit(&p, 0x00);
     halt(&p);
     gbb_instance *m = load_view(V_CGB, p.b, p.n, vec, sizeof(vec));
     REQUIRE(m != NULL);
     gbb_run_result r = gbb_run(m, RUN_BUDGET, NULL, 0);
-    REQUIRE(r.reason == GBB_STOP_UNSUPPORTED_BUS);
-    REQUIRE(gbb_test_last_unsupported_address(m) == 0xFF56);
-    REQUIRE(gbb_peek_ram(m, 0xFF90) == 0x00);   /* not yet vectored */
-    r = gbb_run(m, RUN_BUDGET, NULL, 0);
-    if (r.reason == GBB_STOP_UNSUPPORTED_BUS)
-        fprintf(stderr, "interrupt continuation stopped at $%04X\n", gbb_test_last_unsupported_address(m));
     REQUIRE(r.reason != GBB_STOP_UNSUPPORTED_BUS);
-    REQUIRE(gbb_peek_ram(m, 0xFF90) == 0x99);   /* the pending interrupt is taken afterwards */
+    REQUIRE(gbb_peek_ram(m, 0xFF90) == 0x99);   /* interrupt follows the implemented guest write */
     gbb_destroy(m);
 
-    /* The interrupt-entry push itself hits a deferred register: SP = $FF57 makes the push write
-     * FF56 then implemented FF55. The stop is reported at the entry boundary. */
+    /* The interrupt-entry push itself writes FF56 when SP=$FF58. The access stays bounded and the
+     * vector still runs; FF57 is the ignored neighbouring compatibility register. */
     prog q = { {0}, 0 };
-    emit(&q, 0x31); emit(&q, 0x57); emit(&q, 0xFF);    /* LD SP,$FF57 */
-    write_io(&q, 0x51, 0xC0);                           /* FF55 neighbor must target mapped memory. */
-    write_io(&q, 0x52, 0x00);
-    write_io(&q, 0x53, 0x00);
-    write_io(&q, 0x54, 0x00);
+    emit(&q, 0x31); emit(&q, 0x58); emit(&q, 0xFF);    /* LD SP,$FF58 */
     write_io(&q, 0xFF, 0x01);
     write_io(&q, 0x0F, 0x01);
     emit(&q, 0xFB);
@@ -611,13 +580,6 @@ static int case_deferred_latch_interrupt(void) {
     halt(&q);
     m = load_view(V_CGB, q.b, q.n, vec, sizeof(vec));
     REQUIRE(m != NULL);
-    r = gbb_run(m, RUN_BUDGET, NULL, 0);
-    REQUIRE(r.reason == GBB_STOP_UNSUPPORTED_BUS);
-    REQUIRE(gbb_test_last_unsupported_address(m) == 0xFF56);
-    gbb_trace_record snap;
-    gbb_test_cpu_snapshot(m, &snap);
-    REQUIRE(snap.pc == 0x0040);                 /* the entry completed; the vector has not run */
-    REQUIRE(gbb_peek_ram(m, 0xFF90) == 0x00);
     r = gbb_run(m, RUN_BUDGET, NULL, 0);
     REQUIRE(r.reason != GBB_STOP_UNSUPPORTED_BUS);
     REQUIRE(gbb_peek_ram(m, 0xFF90) == 0x99);
@@ -636,7 +598,7 @@ static int case_deferred_latch_interrupt(void) {
     REQUIRE(r.reason != GBB_STOP_UNSUPPORTED_BUS);
     REQUIRE(gbb_peek_ram(m, 0xFF90) == 0x99);
     gbb_destroy(m);
-    PASS("cgb_visibility_deferred_latch_interrupt");
+    PASS("cgb_ir_interrupt_continuation");
     return 0;
 }
 
@@ -683,7 +645,7 @@ static int case_ir_tracer(void) {
     static const uint8_t writes[] = { 0x00 };
     ir_guest_result result;
     REQUIRE(run_ir_values(V_CGB, writes, 1, &result) == 0);
-    if (result.reason != GBB_STOP_STOPPED) {
+    if (result.reason != GBB_STOP_HALTED_IDLE) {
         const char *actual = result.reason == GBB_STOP_UNSUPPORTED_BUS ? "STOP" : "non-halt";
         fprintf(stderr, "guest-memory assertion cgb-ir-tracer mode=CGB slot=0 address=$FF56 "
                         "expected=$3E actual=%s unsupported=$%04X\n",
@@ -700,7 +662,7 @@ static int case_ir_controls(void) {
     static const uint8_t native_write[] = { 0x00 };
     ir_guest_result native;
     REQUIRE(run_ir_values(V_CGB, native_write, 1, &native) == 0);
-    REQUIRE(native.reason == GBB_STOP_STOPPED);
+    REQUIRE(native.reason == GBB_STOP_HALTED_IDLE);
     REQUIRE(ir_guest_byte_matches("cgb-ir-mask", "CGB", 0, native.reads[0], 0x3E));
     REQUIRE(!ir_guest_byte_matches("cgb-ir-mask-control", "CGB", 0,
                                    (int)(native.reads[0] & (uint8_t)~0x20u), 0x3E));
@@ -709,7 +671,7 @@ static int case_ir_controls(void) {
     static const uint8_t compat_write[] = { 0x80 };
     ir_guest_result compat;
     REQUIRE(run_ir_values(V_COMPAT, compat_write, 1, &compat) == 0);
-    REQUIRE(compat.reason == GBB_STOP_STOPPED);
+    REQUIRE(compat.reason == GBB_STOP_HALTED_IDLE);
     REQUIRE(ir_guest_byte_matches("cgb-ir-mode", "COMPAT", 0, compat.reads[0], 0xFF));
     REQUIRE(!ir_guest_byte_matches("cgb-ir-mode-leak-control", "COMPAT", 0,
                                    0xBE, 0xFF));
@@ -722,7 +684,7 @@ static int case_ir_modes(void) {
     static const uint8_t expected[] = { 0x3E, 0xBE, 0xFE, 0xFF, 0x3F };
     ir_guest_result native;
     REQUIRE(run_ir_values(V_CGB, writes, sizeof(writes), &native) == 0);
-    REQUIRE(native.reason == GBB_STOP_STOPPED);
+    REQUIRE(native.reason == GBB_STOP_HALTED_IDLE);
     for (size_t i = 0; i < sizeof(expected); ++i)
         REQUIRE(ir_guest_byte_matches("cgb-ir-modes", "CGB", (unsigned)i,
                                       native.reads[i], expected[i]));
@@ -730,7 +692,7 @@ static int case_ir_modes(void) {
     static const uint8_t compat_write[] = { 0x80, 0xC1 };
     ir_guest_result compat;
     REQUIRE(run_ir_values(V_COMPAT, compat_write, sizeof(compat_write), &compat) == 0);
-    REQUIRE(compat.reason == GBB_STOP_STOPPED);
+    REQUIRE(compat.reason == GBB_STOP_HALTED_IDLE);
     for (size_t i = 0; i < sizeof(compat_write); ++i)
         REQUIRE(ir_guest_byte_matches("cgb-ir-modes", "COMPAT", (unsigned)i,
                                       compat.reads[i], 0xFF));
@@ -743,7 +705,7 @@ static int case_ir_modes(void) {
     halt(&dmg_write);
     gbb_instance *m = load_view(V_DMG, dmg_write.b, dmg_write.n, NULL, 0);
     REQUIRE(m != NULL);
-    REQUIRE(gbb_run(m, RUN_BUDGET, NULL, 0).reason == GBB_STOP_STOPPED);
+    REQUIRE(gbb_run(m, RUN_BUDGET, NULL, 0).reason == GBB_STOP_HALTED_IDLE);
     REQUIRE(hram(m, 0) == 0x5A);
     gbb_destroy(m);
     PASS("cgb_ir_modes");
@@ -928,7 +890,8 @@ static void fill_cgb(void) {
     for (uint16_t a = 0xFF51; a <= 0xFF54; ++a) const_ff(V_CGB, a, 0x5A, 0xA5, "D-10 HDMA1-4");
     add_cell(V_CGB, 0xFF55, 0xFF, 0x01, 0xFF, 0x81, 0x00, K_IMPL, 0,
              "Phase 13 GDMA completion and LCD-off HBlank initial-kick policy");
-    add_cell(V_CGB, 0xFF56, STOP, 0x01, STOP, 0xC1, STOP, K_DEF_RW, 14, "D-10 RP");
+    add_cell(V_CGB, 0xFF56, 0x3E, 0x01, 0x3F, 0xC1, 0xFF, K_IMPL, 0,
+             "D-07 disconnected RP: $C1 stored, reserved bits read $3E by policy");
     add_cell(V_CGB, 0xFF68, 0xC0, 0x3A, 0x7A, 0x80, 0xC0, K_IMPL, 0, "D-10 BCPS");
     /* D-11: with the index parked at 0 both writes land there and read back whole. CRAM starts
      * white (D-14), so the first read is the low byte of $7FFF. */
@@ -1339,10 +1302,10 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "hdma_visibility") == 0) return case_hdma_visibility();
     if (strcmp(argv[1], "hdma_visibility_controls") == 0) return case_hdma_visibility_controls();
     if (strcmp(argv[1], "ie_gate") == 0) return case_ie_gate();
-    if (strcmp(argv[1], "deferred_latch_interrupt") == 0) return case_deferred_latch_interrupt();
     if (strcmp(argv[1], "ir_tracer") == 0) return case_ir_tracer();
     if (strcmp(argv[1], "ir_controls") == 0) return case_ir_controls();
     if (strcmp(argv[1], "ir_modes") == 0) return case_ir_modes();
+    if (strcmp(argv[1], "ir_interrupt_continuation") == 0) return case_ir_interrupt_continuation();
     if (strcmp(argv[1], "matrix_compat") == 0) return case_matrix_compat();
     if (strcmp(argv[1], "flip_control") == 0) return case_flip_control();
     if (strcmp(argv[1], "matrix_cgb") == 0) return case_matrix_cgb();

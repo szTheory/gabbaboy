@@ -392,11 +392,11 @@ add_executable(test_cgb_visibility test_cgb_visibility.c)
 target_link_libraries(test_cgb_visibility PRIVATE GabbaBoy::core)
 target_compile_features(test_cgb_visibility PRIVATE c_std_17)
 set_target_properties(test_cgb_visibility PROPERTIES C_EXTENSIONS OFF)
-foreach(case vbk_tracer svbk_select unmapped_cgb boundaries deferred_stop ie_gate deferred_latch_interrupt
+foreach(case vbk_tracer svbk_select unmapped_cgb boundaries deferred_stop ie_gate
      matrix_compat flip_control matrix_cgb matrix_dmg cross_column_control sweep_control)
   add_test(NAME cgb_visibility_${case} COMMAND test_cgb_visibility ${case})
 endforeach()
-foreach(case ir_tracer ir_controls ir_modes)
+foreach(case ir_tracer ir_controls ir_modes ir_interrupt_continuation)
   add_test(NAME cgb_${case} COMMAND test_cgb_visibility ${case})
 endforeach()
 add_test(NAME cgb_hdma_visibility COMMAND test_cgb_visibility hdma_visibility)

@@ -609,7 +609,7 @@ cgb_visibility_deferred_stop
 cgb_hdma_visibility
 cgb_hdma_visibility_controls
 cgb_visibility_ie_gate
-cgb_visibility_deferred_latch_interrupt
+cgb_ir_interrupt_continuation
 cgb_visibility_matrix_compat
 cgb_visibility_flip_control
 cgb_visibility_matrix_cgb

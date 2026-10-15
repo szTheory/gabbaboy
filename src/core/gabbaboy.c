@@ -376,9 +376,10 @@ struct gbb_instance {
     uint8_t vram_bank;
     uint8_t wram_bank;
     uint8_t svbk;
-    /* CGB-profile I/O register state (Plan 10-09). key1_armed is KEY1 bit 0. bcps/ocps are the palette index registers, ff72-ff75 the
-     * undocumented CGB scratch registers. DMG never reads or writes any of these. */
-    uint8_t key1_armed, bcps, ocps, ff72, ff73, ff74, ff75;
+    /* CGB-profile I/O register state (Plan 10-09). key1_armed is KEY1 bit 0. bcps/ocps are the
+     * palette index registers, ff56 is the disconnected IR control stub, and ff72-ff75 are the
+     * undocumented CGB scratch registers. DMG never reads or writes these through the CGB path. */
+    uint8_t key1_armed, bcps, ocps, ff56, ff72, ff73, ff74, ff75;
     uint8_t double_speed, cpu_stall_kind, stop_switch_pending;
     uint32_t cpu_stall_half_dots;
     /* CGB palette RAM (Phase 11): 8 palettes of 4 little-endian RGB555 colours per side, addressed
@@ -1326,7 +1327,7 @@ static const io_row io_visibility[IO_VISIBILITY_ROWS] = {
     [0x53] = { IOC(DMG_STOP), IOC_ST(0xFF, 0x1F), IOC(CONST_FF), IOS_POLICY }, /* FF53: private destination high latch */
     [0x54] = { IOC(DMG_STOP), IOC_ST(0xFF, 0xF0), IOC(CONST_FF), IOS_POLICY }, /* FF54: private destination low latch */
     [0x55] = { IOC(DMG_STOP), IOC_ST(0x00, 0xFF), IOC(CONST_FF), IOS_POLICY }, /* FF55: bounded HBlank control/status */
-    [0x56] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 14), IOC(CONST_FF), IOS_PANDOCS }, /* RP infrared port: deferred to phase 14 */
+    [0x56] = { IOC(DMG_STOP), IOC_ST(0x3E, 0xC1), IOC(CONST_FF), IOS_POLICY }, /* RP: LED/enable per Pan Docs; reserved read bits are D-07 policy */
     [0x57] = IO_UNUSED_ROW,
     [0x58] = IO_UNUSED_ROW,
     [0x59] = IO_UNUSED_ROW,
@@ -1425,6 +1426,7 @@ static const uint8_t *io_store_ptr(const gbb_instance *m, uint16_t address) {
     case 0xFF53: return &m->hdma.destination_high;
     case 0xFF54: return &m->hdma.destination_low;
     case 0xFF55: return &m->hdma.control_readback;
+    case 0xFF56: return &m->ff56;
     case 0xFF68: return &m->bcps;
     case 0xFF6A: return &m->ocps;
     case 0xFF72: return &m->ff72;
@@ -1517,6 +1519,7 @@ static void reset_state(gbb_instance *m) {
     memset(m->apu_pulse, 0, sizeof(m->apu_pulse));
     memset(&m->apu_wave, 0, sizeof(m->apu_wave));
     memset(&m->apu_noise, 0, sizeof(m->apu_noise));
+    m->ff56 = 0u; /* LED and receiver disabled; reserved bits are supplied by the read mask. */
 #if GBB_TEST_CGB_PCM_WRITABLE
     memset(m->apu_pcm_test_override, 0, sizeof(m->apu_pcm_test_override));
     m->apu_pcm_test_override_valid = 0u;

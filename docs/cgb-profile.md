@@ -299,11 +299,14 @@ Each byte commits every four master half-dots, for 64 per block with no modeled 
 The policy test checks every half-dot around all 16 byte edges at normal and double CPU speed; shifts
 of -8, -4, -2, -1, +1, +2, +4 and +8 half-dots fail the sampled-edge contract, with no software blind
 window around those edges. The transfer boundary, cadence and sampling phase remain UNKNOWN for
-physical CGB-E. FF56 remains deferred: a read stops with `GBB_STOP_UNSUPPORTED_BUS` before anything
-changes and a write is dropped and reported as the same stop once the instruction retires. CGB-mode
-FF76/FF77 expose read-only digital DAC inputs for channel pairs 2:1 and 4:3; compatibility mode reads
-`$FF` and ignores writes. This is a software-model qualification based on the pinned Pan Docs
-register description, not a physical CGB-E timing or waveform measurement.
+physical CGB-E. Native CGB-mode FF56 stores LED and receiver-enable bits 7-6 and 0; the disconnected
+receiver reports no signal, so bit 1 reads high whether reception is disabled or enabled. Bits 5-2
+read high as a deterministic project policy because the pinned Pan Docs source leaves them
+unspecified. Compatibility mode reads `$FF` and ignores writes; the DMG profile keeps its existing
+fail-closed read and ignored-write policy. There is no host signal, network, peer link or physical IR
+path. CGB-mode FF76/FF77 expose read-only digital DAC inputs for channel pairs 2:1 and 4:3;
+compatibility mode reads `$FF` and ignores writes. These are software-model qualifications based on
+the pinned Pan Docs register description, not physical CGB-E measurements.
 
 In the selected software model, a manually HALTed CPU does not admit new ordinary HBlank blocks.
 An already admitted block continues, a timer IF/IE condition wakes HALT, and IME-on wake follows the
@@ -432,9 +435,9 @@ column is the evidence class (Pan Docs, Mooneye hardware test, SameBoy, or proje
 | $FF55 | DMG | stop | ignored | IMPL | POLICY |
 | $FF55 | CGB | stored or $00 | stored and $FF | IMPL | POLICY |
 | $FF55 | COMPAT | $FF | ignored | IMPL | POLICY |
-| $FF56 | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF56 | CGB | stop | dropped, stop after retire | DEFERRED(14) | PANDOCS |
-| $FF56 | COMPAT | $FF | ignored | IMPL | PANDOCS |
+| $FF56 | DMG | stop | ignored | IMPL | POLICY |
+| $FF56 | CGB | stored or $3E | stored and $C1 | IMPL | POLICY |
+| $FF56 | COMPAT | $FF | ignored | IMPL | POLICY |
 | $FF57 | DMG | stop | ignored | IMPL | HW_TEST |
 | $FF57 | CGB | $FF | ignored | IMPL | HW_TEST |
 | $FF57 | COMPAT | $FF | ignored | IMPL | HW_TEST |
