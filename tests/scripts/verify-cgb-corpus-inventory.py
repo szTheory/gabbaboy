@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import importlib.util
 import json
 import re
 import subprocess
@@ -615,6 +616,17 @@ def check_test_bindings(root: Path, cases: dict[str, dict]) -> None:
         names.add(name)
 
 
+def check_phase14_contract(root: Path, data: dict) -> None:
+    contract_path = root / "tests/scripts/verify-age-phase14-contract.py"
+    spec = importlib.util.spec_from_file_location("age_phase14_contract", contract_path)
+    need(spec is not None and spec.loader is not None, "phase14-contract-import")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    speed = module.read_json(root / "tests/external/cgb-speed-dispositions.json")
+    module.check_age_assertions(root, data, speed)
+    module.check_research14(root, data)
+
+
 def validate(root: Path, data: dict, complete: bool = False) -> tuple[dict[str, dict], dict[str, dict], dict[str, dict]]:
     need(data.get("schema") == "gabbaboy-cgb-corpus-inventory-v1" and data.get("phase") == 14, "schema")
     need(isinstance(data.get("selection_policy"), str) and data["selection_policy"], "selection-policy")
@@ -626,6 +638,7 @@ def validate(root: Path, data: dict, complete: bool = False) -> tuple[dict[str, 
     check_admitted_outputs(root, outputs, sources)
     check_mooneye_qualification(root, sources, outputs, cases)
     check_age_m3_qualification(root, cases)
+    check_phase14_contract(root, data)
     if complete:
         check_complete(root, outputs, cases)
     return sources, outputs, cases
@@ -762,9 +775,9 @@ def self_test(root: Path, data: dict) -> None:
         _, outputs, cases = validate(root, data)
         check_complete(root, outputs, cases)
     except Mismatch as exc:
-        need(str(exc) == "complete-test-binding-pending:age:spsw-ch2-lc-delay-cgbBCE",
+        need(str(exc) == "complete-test-binding-pending:magentests:bg_oam_priority",
              f"self-test-wrong-diagnostic:complete:{exc}")
-        controls.append("complete-rejects-unbound-existing-row-case")
+        controls.append("complete-rejects-next-unbound-magentests-case")
     else:
         raise Mismatch("self-test-control-accepted:incomplete-complete-mode")
     print("cgb-corpus-inventory self-test pass controls=" + ",".join(controls))

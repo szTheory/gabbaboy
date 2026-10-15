@@ -290,6 +290,8 @@ static int run_and_print(const age_config *config, age_result *result) {
     return 0;
 }
 
+static void print_row_hex(const uint8_t *bytes);
+
 #ifdef GBB_AGE_P12
 static const char *sensitivity_mutant_name(uint64_t mask) {
     if (mask == (UINT64_C(1) << 6)) return "M6";
@@ -531,6 +533,7 @@ int main(int argc, char **argv) {
     char expected_signature[65] = {0};
     uint16_t expected_mask = 0u;
     int have_expected_signature = 0;
+    int print_phase14_observations = 0;
     uint64_t parsed = 0u;
     const char *sensitivity_json_path = NULL;
     int64_t window_constant = 0;
@@ -611,6 +614,9 @@ int main(int argc, char **argv) {
                 !valid_signature(argv[++i], expected_signature) ||
                 !parse_mask16(argv[++i], &expected_mask)) goto bad_mode;
             have_expected_signature = 1;
+        } else if (strcmp(argv[i], "--phase14-observations") == 0) {
+            if (print_phase14_observations) goto bad_mode;
+            print_phase14_observations = 1;
         } else if (strcmp(argv[i], "--scan") == 0) {
 #ifdef GBB_AGE_P12
             if (!set_mode(&mode, MODE_SCAN) || i + 2 >= argc ||
@@ -624,6 +630,7 @@ int main(int argc, char **argv) {
         }
     }
     if (mode == MODE_NONE) goto bad_mode;
+    if (print_phase14_observations && mode != MODE_CHECK_DISPOSITION) goto bad_mode;
 
     if (mode == MODE_STALL_WINDOW) {
 #ifdef GBB_AGE_P12
@@ -694,6 +701,28 @@ int main(int argc, char **argv) {
         age_result result;
         const int code = run_and_print(&config, &result);
         if (code != 0) return code;
+        if (print_phase14_observations) {
+            const char *base = strrchr(config.rom_path, '/');
+            char case_name[128];
+            size_t length;
+            base = base == NULL ? config.rom_path : base + 1;
+            length = strlen(base);
+            if (length > 3u && strcmp(base + length - 3u, ".gb") == 0) length -= 3u;
+            if (length == 0u || length >= sizeof(case_name)) goto bad_mode;
+            memcpy(case_name, base, length);
+            case_name[length] = '\0';
+            for (unsigned row = 0u; row < config.rows; ++row) {
+                const size_t offset = (size_t)row * 8u;
+                const uint8_t *expected = age_rom + (size_t)config.expected_address + 1u + offset;
+                const uint8_t *actual = result.row_bytes + offset;
+                printf("age-assertion-row id=%s/row-%02u expected=", case_name, row);
+                print_row_hex(expected);
+                printf(" actual=");
+                print_row_hex(actual);
+                printf(" disposition=%s\n",
+                       (result.row_mask & (uint16_t)(1u << row)) != 0u ? "pass" : "fail");
+            }
+        }
         if (mode == MODE_CHECK_DISPOSITION) {
             if (strcmp(disposition, "pass") == 0) {
                 if (!result.register_pass || result.rows_ok != config.rows) {

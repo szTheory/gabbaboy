@@ -1297,6 +1297,26 @@ add_test(NAME cgb_corpus_inventory_selftest
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-inventory.py" --self-test)
 set_tests_properties(cgb_corpus_inventory_selftest PROPERTIES TIMEOUT 30
   PASS_REGULAR_EXPRESSION "cgb-corpus-inventory self-test pass")
+set(GBB_AGE_PHASE14_CONTRACT "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py")
+add_test(NAME cgb_age_assertion_identity
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_PHASE14_CONTRACT}" --assertions --runner $<TARGET_FILE:test_age>)
+set_tests_properties(cgb_age_assertion_identity PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "cgb-age-assertion-identity pass cases=13 rows=142 mode0-semantic=105 age-identities=19")
+add_test(NAME cgb_age_assertion_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_PHASE14_CONTRACT}" --assertions-controls)
+set_tests_properties(cgb_age_assertion_controls PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-age-assertion-controls pass controls=")
+add_test(NAME cgb_phase14_inherited_contract_unit
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/test_age_phase14_inherited_contract.py")
+set_tests_properties(cgb_phase14_inherited_contract_unit PROPERTIES TIMEOUT 30)
+add_test(NAME cgb_research14_dispositions
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_PHASE14_CONTRACT}" --research14)
+set_tests_properties(cgb_research14_dispositions PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-research14-dispositions pass gates=31 unknown=27")
+add_test(NAME cgb_research14_dispositions_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_PHASE14_CONTRACT}" --research14-controls)
+set_tests_properties(cgb_research14_dispositions_controls PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-research14-dispositions-controls pass controls=")
 # Configure-time mutants (exact exit code 1 plus a named token): a flipped ROM digest and a
 # duplicated fixture id. Each differs from the committed manifest by exactly one fact.
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/digest" "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/dup-id")
