@@ -4,19 +4,19 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: 14
 current_phase_name: CGB-E Model Qualification and Corpus
-current_plan: 2
+current_plan: 4
 status: executing
-stopped_at: Phase 14 wave 1/11 verified; 2/13 plans summarized; execution continues
-last_updated: "2026-10-15T17:41:17.182Z"
+stopped_at: Phase 14 wave 2/11 verified; 4/13 plans summarized; execution continues
+last_updated: "2026-10-15T18:56:01.717Z"
 last_activity: 2026-10-15
-last_activity_desc: Phase 14 wave 1/11 verified; 2/13 plans summarized; execution continues
-state_head: ed41d6f32725613639ae9c7df5011637e5f11903
+last_activity_desc: Phase 14 wave 2/11 verified; 4/13 plans summarized; execution continues
+state_head: ffb2644d07eda61ef4365f97667fd045640b5ffc
 progress:
   total_phases: 9
   completed_phases: 8
   total_plans: 124
-  completed_plans: 113
-  percent: 91
+  completed_plans: 115
+  percent: 93
 ---
 
 # Project State
@@ -26,28 +26,28 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-15)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 14 wave 1/11 verified; 2/13 plans summarized; execution continues
+**Current focus:** Phase 14 wave 2/11 verified; 4/13 plans summarized; execution continues
 
 ## Current Position
 
 Phase: 14 (CGB-E Model Qualification and Corpus) — EXECUTING
 Status: Executing Phase 14
-Current Plan: 2
+Current Plan: 4
 Total Plans in Phase: 13
 Last Activity: 2026-10-15
-Last Activity Description: Phase 14 wave 1/11 verified; 2/13 plans summarized; execution continues
+Last Activity Description: Phase 14 wave 2/11 verified; 4/13 plans summarized; execution continues
 
-Completed workflow stage: **Phase 14 execution through wave 1/11** (2/13 plans).
+Completed workflow stage: **Phase 14 execution through wave 2/11** (4/13 plans).
 
-Completed plans: 14-01, 14-05. Their committed SUMMARY files contain task checks, negative controls and limitations. Wave-wide build/regression evidence is recorded in [14-EXECUTION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-EXECUTION.md). The phase and CGB-08/CGB-10 remain pending final qualification, review and goal verification.
+Completed plans: 14-01, 14-02, 14-05, 14-08. Their committed SUMMARY files contain task checks, negative controls and limitations. Wave-wide build/regression evidence is recorded in [14-EXECUTION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-EXECUTION.md). The phase and CGB-08/CGB-10 remain pending final qualification, review and goal verification.
 
-Next stage: **Phase 14 — CGB-E Model Qualification and Corpus, execution wave 2/11**.
+Next stage: **Phase 14 — CGB-E Model Qualification and Corpus, execution wave 3/11**.
 Next command if interrupted: /gsd-execute-phase 14.
 Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release** remains unstarted.
 
 Both auto-advance flags remain false. Preserve D-069 zero routine human UAT, negative controls, strict SUMMARY coverage, D-096 small/flat dependencies, D-099 independent case/assertion membership, bounded work and the frozen DMG baseline. Reuse completed discussion/research and Phase 13 UAT. Physical CGB-E remains UNKNOWN/POLICY.
 
-Progress (v0.2): 7/9 phases executed (78%); 113/124 plans complete (91%). Phase 14 execution is active.
+Progress (v0.2): 7/9 phases executed (78%); 115/124 plans complete (93%). Phase 14 execution is active.
 
 ### Historical Phase 13 handoff (superseded route; preserved receipts)
 
@@ -523,14 +523,14 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-15T17:41:17.038Z
-Stopped at: Phase 14 wave 1/11 verified; 2/13 plans summarized; execution continues
+Last session: 2026-10-15T18:56:01.540Z
+Stopped at: Phase 14 wave 2/11 verified; 4/13 plans summarized; execution continues
 Resume file: .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/continue.md
 Next command in fresh context: **`/gsd-execute-phase 14`**. Resume from the first incomplete dependency-ready plan; do not replay completed plans. Next phase is **15 — CGB Acceptance, Support Ledger and v0.2.0 Release**, unstarted. Both auto flags remain false.
 
 ## Operator Next Steps
 
-- Current stage: **Phase 14 execution**, 2/13 plans complete through wave 1/11.
+- Current stage: **Phase 14 execution**, 4/13 plans complete through wave 2/11.
 - Resume command if interrupted: /gsd-execute-phase 14.
 - Continue the recorded dependencies, remaining verification and handoff within Phase 14.
 - Stop after Phase 14; Phase 15 remains unstarted.
