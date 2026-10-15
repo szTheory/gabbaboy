@@ -25,11 +25,17 @@ key-files:
     - tests/test_cgb_apu.c
   modified:
     - src/core/gabbaboy.c
+    - src/runner/main.c
     - tests/test_cgb_visibility.c
+    - tests/test_runner.c
     - tests/CMakeLists.txt
     - tests/expected-tests.txt
+    - cmake/VerifyMooneyeCgb.cmake
+    - fixtures/mooneye-cgb/manifest.json
+    - fixtures/mooneye-cgb/ELIGIBILITY.md
     - docs/cgb-profile.md
     - docs/audio-and-playback.md
+    - docs/support/unreleased.md
 key-decisions:
   - Native CGB PCM reads expose digital DAC inputs before NR50/NR51 routing and host sample generation.
   - Keep the claim at the software-model boundary; no physical CGB-E waveform or timing claim is made.
@@ -69,6 +75,16 @@ coverage:
       - kind: other
         ref: "Negative controls: swapped-nibble observed expected=0x0f actual=0xf0; routing-coupled observed expected-muted=0x0f actual=0x00; writable PCM observed expected-readonly=0x0f actual=0xa5."
         status: pass
+  - id: D4
+    description: Existing CGB Mooneye author pass assertions remain separate from exact current software-model failure observations; failing guests are never counted as passes.
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build -R '^cgb_mooneye_' --output-on-failure --no-tests=error"
+        status: pass
+      - kind: other
+        ref: "Raw protocol verdicts: boot_hwio-C fail callback 0x01F5/result 0x4067; unused_hwio-C fail callback 0x1A31/result 0x4070. Tampered pass disposition, stale unsupported stop, changed fail callback, and false xfail on a passing ROM all remain nonzero controls."
+        status: pass
 duration: 12min
 completed: 2026-10-15
 status: complete
@@ -86,7 +102,7 @@ status: complete
 - **Tasks:** 2
 - **Files modified:** 7
 
-The 8,400-token actual is 33,602 characters divided by four across the seven implementation, test, and documentation files at task HEAD; it excludes this summary. Commits are measured from the persisted plan ledger and exclude the separate summary commit.
+The 8,400-token actual is 33,602 characters divided by four across the seven implementation, test, and documentation files at the original task HEAD; it excludes this summary. Those metrics preserve the original two-task completion snapshot. The later Rule 2 integration correction is listed separately below, after the plan commit ledger was already measured.
 
 ## Accomplishments
 
@@ -100,6 +116,7 @@ The 8,400-token actual is 33,602 characters divided by four across the seven imp
 2. **Task 1 GREEN:** `dfe02e5` — timestamped CGB PCM register reads and profile evidence.
 3. **Task 2 RED:** `b12eddb` — four-channel, gating, read-only, host-invariance, and mutant-control tests.
 4. **Task 2 GREEN:** `789ddc8` — compile-time mutation controls and audio-model evidence limits.
+5. **Rule 2 integration correction:** `074695e` — replaced stale CGB Mooneye unsupported dispositions with exact observed-failure xfails while preserving author pass assertions.
 
 ## Files Created/Modified
 
@@ -109,6 +126,7 @@ The 8,400-token actual is 33,602 characters divided by four across the seven imp
 - `tests/CMakeLists.txt`, `tests/expected-tests.txt` — registered exact PCM contracts and compile-time mutant targets.
 - `docs/cgb-profile.md` — CGB/compatibility/DMG register policy and Pan Docs evidence separated from hardware qualification.
 - `docs/audio-and-playback.md` — digital readback contract, host-path independence, and CH3 fetch-boundary limitation.
+- Integration follow-up also changed `src/runner/main.c`, `tests/test_runner.c`, `tests/CMakeLists.txt`, `tests/expected-tests.txt`, `cmake/VerifyMooneyeCgb.cmake`, `fixtures/mooneye-cgb/manifest.json`, `fixtures/mooneye-cgb/ELIGIBILITY.md`, and `docs/support/unreleased.md`.
 
 ## Decisions Made
 
@@ -129,6 +147,7 @@ The 8,400-token actual is 33,602 characters divided by four across the seven imp
 - Nearby APU, visibility, CGB speed, and CGB HDMA regression selection passed **266/266** tests.
 - `bash tests/scripts/verify-dmg-baseline.sh`: inventory 313 keys, Mooneye 15 keys, acceptance 20 keys, benchmark 2 keys; zero baseline changes; status pass.
 - `cmake --preset phase1` and `cmake --build --preset phase1` passed. Expected-test membership had no missing required names.
+- After the integration correction, the CGB Mooneye selection passed 18/18 tests including its fixture prerequisite; the CGB visibility matrices passed 3/3; `verify-cgb-corpus-inventory.py --selection-only` reported 181 sources, 109 outputs, 28 admitted, 81 pending and 107 cases. `summary_coverage` passed 1/1 after this summary update.
 
 ## Deviations from Plan
 
@@ -143,8 +162,21 @@ The 8,400-token actual is 33,602 characters divided by four across the seven imp
 - **Verification:** `cgb_visibility_matrix_dmg`, `cgb_visibility_matrix_compat`, `cgb_visibility_matrix_cgb`, `cgb_visibility_boundaries`, and `cgb_visibility_deferred_stop` passed.
 - **Committed in:** `77748af` (Task 1 RED test commit; scope addition authorized by the orchestrator).
 
-**Total deviations:** 1 Rule 2 coverage correction.
-**Impact on plan:** Necessary to keep the visibility matrix aligned with the shipped register behavior; no unrelated rows or requirements were changed.
+**Original plan deviation:** One Rule 2 visibility coverage correction, necessary to keep the matrix aligned with the shipped register behavior; no unrelated rows or requirements were changed.
+
+**2. [Rule 2 - Missing Critical Functionality] Replace stale unsupported-bus expectations with exact observed-failure dispositions**
+- **Found during:** Phase 14 Wave 1 integration after the PCM visibility change.
+- **Issue:** `boot_hwio-C` and `unused_hwio-C` no longer stop at unsupported bus address `$FF76`; both reach their Mooneye protocol result with a failing guest verdict. The old manifest, runner rows, CTest predicates and unsupported-stop control produced four integration failures.
+- **Fix:** Kept each manifest author assertion at `expect=pass`, added a separate `observed_disposition=expected-failure`, and accepted only the compiled failure callback, result PC and all six failure registers as an xfail. Updated suite/category counts, the manifest SHA admission pin, fail-closed inventory/pc-table checks, tamper controls and support notes. A failing guest remains `observed=fail` and is excluded from guest-pass totals.
+- **Actual verdicts:** `boot_hwio-C` reports `callback_result=fail callback_pc=01f5 result_pc=4067` after 25,904 half-dots; `unused_hwio-C` reports `callback_result=fail callback_pc=1a31 result_pc=4070` after 34,504 half-dots. The local profile-runner receipts mark these observations `build_qualified=false`.
+- **Negative-control diagnostics:** Tampered-to-pass `status=fail observed=fail code=1`; stale unsupported disposition `status=fail reason=no-unsupported-bus-stop code=1`; wrong callback `status=unexpected-failure reason=callback-not-reached code=1`; passing guest mislabeled as expected failure `status=unexpected-pass code=1`.
+- **Files modified:** `src/runner/main.c`, `tests/test_runner.c`, `tests/CMakeLists.txt`, `tests/expected-tests.txt`, `cmake/VerifyMooneyeCgb.cmake`, `fixtures/mooneye-cgb/manifest.json`, `fixtures/mooneye-cgb/ELIGIBILITY.md`, `docs/support/unreleased.md`.
+- **Verification:** CGB Mooneye CTest selection passed 18/18 (including its fixture prerequisite); CGB visibility matrices passed 3/3; CGB corpus inventory selection-only reported 181 sources, 109 outputs, 28 admitted, 81 pending and 107 cases; DMG baseline reported zero changes; `summary_coverage` passed 1/1 after this summary update.
+- **Commit:** `074695e`.
+- **Full-suite status:** The parent stopped the Phase 14 full CTest run after its integration failures. That run is not a pass; the parent will rerun the full suite after this correction.
+
+**Total deviations:** 2 Rule 2 corrections.
+**Impact on plan:** Both corrections align existing verification with the implemented CGB PCM behavior and actual guest protocol results; corpus membership and author assertions were preserved.
 
 ## Issues Encountered
 
@@ -162,6 +194,7 @@ Plan 14-01 is complete. Phase 14 and requirement CGB-08 remain under the parent 
 
 - Summary file exists at the planned path.
 - All four task commits are ancestors of the current phase branch head.
+- Integration correction commit `074695e` is an ancestor of the current phase branch head.
 - No task commit deleted tracked files.
 
 ---
