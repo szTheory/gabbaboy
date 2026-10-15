@@ -65,4 +65,19 @@ fixtures/cgb-colour/*.inc text eol=lf
 fixtures/cgb-colour/manifest.json text eol=lf
 fixtures/cgb-colour/LICENSE.txt text eol=lf
 fixtures/cgb-colour/*.gb -text
+
+# Phase 13 HDMA source, provenance text, and committed ROM bytes.
+fixtures/cgb-hdma/hblank.asm text eol=lf
+fixtures/cgb-hdma/manifest.json text eol=lf
+fixtures/cgb-hdma/LICENSE.txt text eol=lf
+fixtures/cgb-hdma/hblank.gb -text
+fixtures/samesuite/manifest.json text eol=lf
+fixtures/samesuite/LICENSE.txt text eol=lf
+fixtures/samesuite/ELIGIBILITY.md text eol=lf
+fixtures/samesuite/*.gb -text
+fixtures/magentests/manifest.json text eol=lf
+fixtures/magentests/LICENSE.txt text eol=lf
+fixtures/magentests/SOURCES.md text eol=lf
+fixtures/magentests/ELIGIBILITY.md text eol=lf
+
 fixtures/magentests/*.gbc binary

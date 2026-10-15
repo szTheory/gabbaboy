@@ -174,11 +174,27 @@ def check_eligibility(fixture):
 
 def self_check(fixture, case_name, script):
     repo_root = script.resolve().parents[2]
-    attribute = subprocess.run(
-        ["git", "-C", str(repo_root), "check-attr", "eol", "--", "fixtures/samesuite/LICENSE.txt"],
-        text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    if attribute.returncode != 0 or attribute.stdout.strip() != "fixtures/samesuite/LICENSE.txt: eol: lf":
-        fail("raw-hashed license notice lacks LF checkout policy")
+    for path in (
+        "fixtures/cgb-hdma/hblank.asm", "fixtures/cgb-hdma/manifest.json",
+        "fixtures/cgb-hdma/LICENSE.txt", "fixtures/samesuite/manifest.json",
+        "fixtures/samesuite/LICENSE.txt", "fixtures/samesuite/ELIGIBILITY.md",
+        "fixtures/magentests/manifest.json", "fixtures/magentests/LICENSE.txt",
+        "fixtures/magentests/SOURCES.md", "fixtures/magentests/ELIGIBILITY.md",
+    ):
+        attribute = subprocess.run(
+            ["git", "-C", str(repo_root), "check-attr", "eol", "--", path],
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        if attribute.returncode != 0 or attribute.stdout.strip() != path + ": eol: lf":
+            fail("digest-pinned text closure lacks LF checkout policy: " + path)
+    for path in (
+        "fixtures/cgb-hdma/hblank.gb", "fixtures/samesuite/gbc_dma_cont.gb",
+        "fixtures/magentests/hblank_vram_dma.gbc",
+    ):
+        attribute = subprocess.run(
+            ["git", "-C", str(repo_root), "check-attr", "text", "--", path],
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        if attribute.returncode != 0 or attribute.stdout.strip() != path + ": text: unset":
+            fail("digest-pinned binary fixture lacks binary checkout policy: " + path)
     names = selected(case_name)
     data = manifest(fixture)
     suite = {"name": "SameSuite", "revision": REV, "upstream": "https://github.com/LIJI32/SameSuite/tree/" + REV, "license": "X11; see LICENSE.txt"}
