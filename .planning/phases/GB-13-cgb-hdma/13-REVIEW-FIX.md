@@ -26,7 +26,7 @@ status: all_fixed
 
 **Files modified:** `.planning/phases/GB-13-cgb-hdma/verify-hdma-closure.py`, `tests/CMakeLists.txt`, `tests/expected-tests.txt`, `tests/scripts/test_hdma_remote_evidence.py`
 **Commit:** `ec54205` (test-only RED commit: `42e330f`)
-**Status:** fixed: requires human verification
+**Status:** fixed; independently re-reviewed at `774ee6c`, positive and 16 negative controls passed automatically.
 **Applied fix:** Require the fixed aggregate contexts `required-native`, `fixture-repro`, and `preview-package-smoke`, with their workflow provenance, `pull_request` event, exact head, unique bounded run IDs and attempts, completed status, and successful conclusion. Reject missing, duplicate, unrecognized, malformed, oversized, or contradictory receipt data. The optional local receipt is diagnostic only; GitHub's actual required PR checks remain the merge authority. Added a Python-only positive control and 16 negative controls.
 
 ### WR-01: Player help compresses support claims and exclusions into one hard-to-scan paragraph

@@ -51,7 +51,8 @@ SOURCE_CLOSEOUT_METADATA = frozenset((
     *(PHASE_METADATA_DIR + f"13-{number:02d}-SUMMARY.md" for number in range(1, 13)),
     *(PHASE_METADATA_DIR + name for name in (
         "13-BENCH.md", "13-VALIDATION.md", "13-SECURITY.md", "13-REVIEW.md",
-        "13-REVIEW-DISPOSITION.md", "13-VERIFICATION.md", "13-LEARNINGS.md",
+        "13-REVIEW-DISPOSITION.md", "13-REVIEW-FIX.md", "13-UI-REVIEW.md",
+        "13-VERIFICATION.md", "13-LEARNINGS.md",
         "continue.md", "deferred-items.md", "13-ASAN-ADDED-COST.json")),
 ))
 
@@ -574,10 +575,12 @@ def prohibition_self_test(root: Path) -> None:
 
 def handoff_values(state: str, continuation: str, config: dict) -> None:
     required_route = "/gsd-verify-work 13"
-    require("Phase 13 execution, pending automated closure" in state,
-            "STATE.md does not name the Phase 13 execution/automated-closure stage")
-    require("Phase 13 execution, pending automated closure" in continuation,
-            "continue.md does not name the Phase 13 execution/automated-closure stage")
+    stages = ("Phase 13 execution, pending automated closure",
+              "Phase 13 execution and goal verification complete")
+    require(any(stage in state for stage in stages),
+            "STATE.md does not name the Phase 13 execution stage")
+    require(any(stage in continuation for stage in stages),
+            "continue.md does not name the Phase 13 execution stage")
     state_commands = [line for line in state.splitlines() if line.strip().startswith("Next command:")]
     continuation_commands = [line for line in continuation.splitlines() if line.strip().startswith("Next command:")]
     require(any(required_route in line for line in state_commands),
@@ -613,7 +616,7 @@ def handoff_contract(root: Path) -> None:
     state = read(root, ".planning/STATE.md")
     continuation = read(root, ".planning/phases/GB-13-cgb-hdma/continue.md")
     handoff_values(state, continuation, config)
-    print("hdma-handoff pass stage=Phase13-execution-pending-automated-closure next=/gsd-verify-work-13 phase14=unstarted auto=false")
+    print("hdma-handoff pass stage=Phase13-execution next=/gsd-verify-work-13 phase14=unstarted auto=false")
 
 
 def summary_contract(root: Path, summary: str) -> None:
