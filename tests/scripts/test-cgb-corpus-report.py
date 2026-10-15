@@ -1,17 +1,26 @@
 #!/usr/bin/env python3
 """Contract tests for the private CGB corpus report adapter."""
 
+import contextlib
+import copy
+import importlib.util
+import io
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
 REPORTER = ROOT / "tests" / "scripts" / "verify-cgb-corpus-report.py"
+INVENTORY_VALIDATOR = ROOT / "tests" / "scripts" / "verify-cgb-corpus-inventory.py"
 DAA_CASE_ID = "mooneye:acceptance/instr/daa.s"
+REPORTER_SPEC = importlib.util.spec_from_file_location("cgb_corpus_reporter", REPORTER)
+REPORTER_IMPL = importlib.util.module_from_spec(REPORTER_SPEC)
+REPORTER_SPEC.loader.exec_module(REPORTER_IMPL)
 
 
 class CorpusReportTracerTests(unittest.TestCase):
@@ -68,6 +77,196 @@ class CorpusReportTracerTests(unittest.TestCase):
             self.assertEqual(current.get("status"), "incomplete", current)
             self.assertEqual(current.get("counts", {}).get("completed_cases"), 0, current)
             self.assertEqual(current.get("failure_codes"), ["input-unavailable"], current)
+
+
+class CorpusReportCorpusTests(unittest.TestCase):
+    def test_contract(self):
+        completed = subprocess.run(
+            [sys.executable, "-I", str(INVENTORY_VALIDATOR), "--self-test"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        self.assertIn("cgb-corpus-inventory self-test pass", completed.stdout)
+        context = REPORTER_IMPL.load_corpus_context()
+        self.assertEqual(len(context["cases"]), 107)
+        self.assertEqual(context["assertion_rows"], 4959)
+        self.assertEqual(set(context["case_by_test"]), set(context["test_names"]))
+
+
+class CorpusReportControlsTests(unittest.TestCase):
+    def test_controls(self):
+        report = REPORTER_IMPL
+        one = "cgb_case"
+
+        def block(test_id, name, output="terminal=pass"):
+            return (f"test {test_id}\n        Start {test_id}: {name}\n"
+                    f"{test_id}: {output}\n  1/1 Test #{test_id}: {name} ... Passed 0.01 sec\n")
+
+        good_log = (block(1, one) + "\n100% tests passed out of 1\n").encode()
+        parsed, count = report.parse_ctest_log(good_log, {one})
+        self.assertEqual(count, 1)
+        self.assertEqual(parsed[0]["output"], "terminal=pass")
+        for expected_names, bad_log, code in (
+            (set(), good_log, "ctest-log-membership"),
+            ({one, "cgb_other"}, good_log, "ctest-log-membership"),
+            ({one}, block(1, one).encode(), "ctest-log-incomplete"),
+            ({one}, b"x" * (report.MAX_RUN_LOG_BYTES + 1), "ctest-log-too-large"),
+        ):
+            with self.subTest(code=code, names=sorted(expected_names)):
+                with self.assertRaises(report.ReportError) as raised:
+                    report.parse_ctest_log(bad_log, expected_names)
+                self.assertEqual(raised.exception.code, code)
+        duplicate_log = (block(1, one) + block(2, one) +
+                         "\n100% tests passed out of 2\n").encode()
+        with self.assertRaises(report.ReportError) as raised:
+            report.parse_ctest_log(duplicate_log, {one, "cgb_other"})
+        self.assertEqual(raised.exception.code, "ctest-log-membership")
+
+        for path in ("../escape", "/etc/passwd", "C:\\private\\file", "a//b"):
+            with self.subTest(path=path):
+                with self.assertRaises(report.ReportError) as raised:
+                    report.validate_relative_path(path, "path-invalid")
+                self.assertEqual(raised.exception.code, "path-invalid")
+        with tempfile.TemporaryDirectory(prefix="cgb-report-input-", dir=ROOT / "build") as temp:
+            oversized = Path(temp) / "oversized.bin"
+            oversized.write_bytes(b"0123456789")
+            with self.assertRaises(report.ReportError) as raised:
+                report.bounded_read(oversized, 8)
+            self.assertEqual(raised.exception.code, "input-too-large")
+
+        signature = "a" * 64
+        xfail = {"case": {"evaluator_disposition": {
+            "state": "expected-failure", "signature_sha256": signature}}}
+        self.assertTrue(report.validate_case_outcome(xfail, "fail", "xfail", signature))
+        for observed, evaluator, actual_signature, code in (
+            ("pass", "pass", signature, "expected-failure-disposition-mismatch"),
+            ("fail", "pass", signature, "expected-failure-disposition-mismatch"),
+            ("fail", "xfail", "b" * 64, "expected-failure-signature-mismatch"),
+        ):
+            with self.subTest(observed=observed, evaluator=evaluator, code=code):
+                with self.assertRaises(report.ReportError) as raised:
+                    report.validate_case_outcome(xfail, observed, evaluator, actual_signature)
+                self.assertEqual(raised.exception.code, code)
+
+        age_item = {
+            "case": {
+                "id": "age:case", "suite": "age", "model": "CGB-CPU-E",
+                "mode": "native", "speed": "normal",
+                "test_binding": {"ctest_name": "age_case"},
+                "source_id": "age:source",
+                "evaluator_disposition": {"state": "expected-failure", "value": "expected-failure",
+                                          "signature_sha256": signature},
+                "execution": {"budget_half_dots": 10},
+                "assertion_contract": {"rows": [
+                    {"id": "case/row-00", "expected_disposition": "pass", "expected_hex": "0000000000000000"},
+                    {"id": "case/row-01", "expected_disposition": "pass", "expected_hex": "0000000000000000"},
+                ]},
+            },
+            "output": {"id": "age:case", "output_path": "fixtures/age/case.gb", "sha256": "0" * 64},
+            "source": {"source_path": "src/case.asm", "source_commit": "1" * 40},
+        }
+        rows = ("age verdict=fail rows_ok=1/2 mask=0001 signature=" + signature + " half_dots=2\n"
+                "age-assertion-row id=case/row-00 expected=0000000000000000 actual=0000000000000000 disposition=pass\n"
+                "age-assertion-row id=case/row-01 expected=0000000000000000 actual=0000000000000001 disposition=fail\n")
+        normalized = report._normalize_age_rows(age_item, rows)
+        self.assertEqual(normalized["observed_result"], "fail")
+        self.assertTrue(normalized["matched_xfail"])
+        for mutated, code in (
+            (rows.replace("age-assertion-row id=case/row-01", "age-assertion-row id=unknown"), "age-row-id-membership"),
+            (rows + "age-assertion-row id=case/row-00 expected=0000000000000000 actual=0000000000000000 disposition=pass\n",
+             "age-row-id-membership"),
+            (rows.replace("mask=0001", "mask=0003"), "age-verdict-count-mismatch"),
+            (rows.replace(signature, "b" * 64), "expected-failure-signature-mismatch"),
+            (rows.replace("rows_ok=1/2", "rows_ok=2/2").replace("mask=0001", "mask=0003"),
+             "age-verdict-count-mismatch"),
+        ):
+            with self.subTest(code=code):
+                with self.assertRaises(report.ReportError) as raised:
+                    report._normalize_age_rows(age_item, mutated)
+                self.assertEqual(raised.exception.code, code)
+
+        context = report.load_corpus_context()
+        identity = report.full_build_identity(Path("build"), context)
+        mooneye_id = "mooneye:misc/boot_hwio-C.s"
+        mooneye_item = copy.deepcopy(context["cases"][mooneye_id])
+        case = mooneye_item["case"]
+        evaluator = case["evaluator_disposition"]
+        source = mooneye_item["source"]
+        output = mooneye_item["output"]
+        runner_case = identity["mooneye_case_ids"][source["source_path"]]
+        ticks = case["execution"]["ticks"]
+        budget = case["execution"]["budget_half_dots"]
+        event_fields = {
+            "case": runner_case, "status": "xfail", "observed": "fail",
+            "observed_disposition": "expected-failure", "reason": evaluator["reason"],
+            "source_path": source["source_path"], "source_revision": source["source_commit"],
+            "fixture_sha256": output["sha256"], "manifest_sha256": identity["mooneye_manifest_sha256"],
+            "core_revision": identity["core_revision"], "runner_revision": identity["core_revision"],
+            "profile": "CGB-CPU-E", "boot": "skipped", "protocol": "mooneye-ld-b-b",
+            "eligible": "1", "executed": "1", "stop": "protocol-result",
+            "ticks": str(ticks), "budget": str(budget),
+        }
+        def mooneye_output(fields):
+            event = "case=" + " ".join(f"{key}={value}" for key, value in fields.items())
+            assertion = (f"assertion case={runner_case} id=ld-b-b-result expected=pass observed=fail "
+                         f"evaluator_status=xfail callback_pc={evaluator['callback_pc'][2:]} "
+                         f"result_pc={evaluator['result_pc'][2:]} terminal=1 ticks={ticks} budget={budget}")
+            return event + "\n" + assertion + "\n"
+        self.assertTrue(report._normalize_mooneye(mooneye_item, mooneye_output(event_fields), identity)["matched_xfail"])
+        for fields, item, code in (
+            ({**event_fields, "boot": "bootless"}, mooneye_item, "mooneye-identity-mismatch"),
+            ({**event_fields, "reason": "changed"}, mooneye_item, "mooneye-result-mismatch"),
+            (event_fields, {**mooneye_item, "case": {**case, "mode": "native"}}, "mooneye-case-profile"),
+            (event_fields, {**mooneye_item, "case": {**case, "speed": "double"}}, "mooneye-case-profile"),
+            (event_fields, {**mooneye_item, "case": {**case, "model": "CGB-E"}}, "mooneye-case-profile"),
+        ):
+            with self.subTest(code=code):
+                with self.assertRaises(report.ReportError) as raised:
+                    report._normalize_mooneye(item, mooneye_output(fields), identity)
+                self.assertEqual(raised.exception.code, code)
+
+        log = good_log
+        log_digest = report.sha256(log)
+        run_metadata = {
+            "schema": report.RUN_ID_SCHEMA, "status": "complete", "ctest_exit_code": 0,
+            "input_identity_sha256": "a" * 64, "ctest_names": [one],
+            "log_sha256": log_digest, "started_at_ns": 1, "completed_at_ns": 2,
+            "run_id": report._run_id("a" * 64, log_digest, 1, 2),
+        }
+        with tempfile.TemporaryDirectory(prefix="cgb-report-run-", dir=ROOT / "build") as temp:
+            run_dir = Path(temp)
+            (run_dir / "cgb-corpus-ctest.log").write_bytes(log)
+            report.write_receipt(run_dir / "cgb-corpus-run.json", run_metadata)
+            self.assertEqual(report._load_existing_ctest_run(run_dir, {"identity_sha256": "a" * 64}, {one})[0], log)
+            run_metadata["input_identity_sha256"] = "b" * 64
+            report.write_receipt(run_dir / "cgb-corpus-run.json", run_metadata)
+            with self.assertRaises(report.ReportError) as raised:
+                report._load_existing_ctest_run(run_dir, {"identity_sha256": "a" * 64}, {one})
+            self.assertEqual(raised.exception.code, "ctest-run-identity-mismatch")
+
+        with self.assertRaises(report.ReportError) as raised:
+            report.run_bounded([sys.executable, "-c", "import time; time.sleep(1)"], timeout_seconds=0.05)
+        self.assertEqual(raised.exception.code, "runner-timeout")
+
+        with tempfile.TemporaryDirectory(prefix="cgb-report-late-failure-", dir=ROOT / "build") as temp:
+            receipt_path = Path(temp) / "receipt.json"
+            receipt_path.write_text('{"schema":"gabbaboy-cgb-corpus-receipt-v1","status":"complete"}\n',
+                                    encoding="utf-8")
+            arguments = [str(REPORTER), "--from-ctest", "--build-dir", str(ROOT / "build"),
+                         "--receipt", str(receipt_path)]
+            with mock.patch.object(report, "build_corpus_report",
+                                   side_effect=report.ReportError("ctest-log-incomplete")):
+                with mock.patch.object(sys, "argv", arguments):
+                    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                        exit_code = report.main()
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertNotEqual(exit_code, 0)
+            self.assertEqual(receipt.get("status"), "incomplete")
+            self.assertEqual(receipt.get("failure_codes"), ["ctest-log-incomplete"])
 
 
 class PrivatePathFreeResult(unittest.TextTestResult):

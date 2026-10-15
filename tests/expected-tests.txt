@@ -647,6 +647,8 @@ cgb_corpus_inventory_selection
 cgb_corpus_inventory_selftest
 cgb_corpus_report_tracer
 cgb_corpus_report_tracer_controls
+cgb_corpus_report_contract
+cgb_corpus_report_controls
 cgb_mooneye_digest_tamper
 cgb_mooneye_inventory_tamper
 cgb_mooneye_not_installed

@@ -1307,7 +1307,14 @@ add_test(NAME cgb_corpus_report_tracer
 add_test(NAME cgb_corpus_report_tracer_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_REPORT_TEST}"
     CorpusReportTracerTests.test_tracer_controls)
+add_test(NAME cgb_corpus_report_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_REPORT_TEST}"
+    CorpusReportCorpusTests.test_contract)
+add_test(NAME cgb_corpus_report_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_REPORT_TEST}"
+    CorpusReportControlsTests.test_controls)
 set_tests_properties(cgb_corpus_report_tracer cgb_corpus_report_tracer_controls
+  cgb_corpus_report_contract cgb_corpus_report_controls
   PROPERTIES TIMEOUT 45)
 set(GBB_AGE_PHASE14_CONTRACT "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py")
 add_test(NAME cgb_age_assertion_identity
