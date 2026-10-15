@@ -37,3 +37,15 @@ Capability checks: schema drift did not block; codebase drift reported `no-struc
 ## Phase-boundary remote triage
 
 The live GitHub query found zero open issues and one open release-please PR, [#70](https://github.com/szTheory/gabbaboy/pull/70), proposing v0.2.0. It remains pending Phase 15 acceptance/release gates and is outside this execution. The installed GitHub workflow skill has no `ci_monitor.cjs` at its documented path or in its installed skill/runtime tree; monitoring uses the available GitHub API fallback, with exact-head/event checks retained.
+
+## Early hosted seam
+
+Draft [PR #71](https://github.com/szTheory/gabbaboy/pull/71) was opened at `74bad9a53867584190e7be66c32d6c387b9f03b3` after the Wave 4 local gate. PR-event runs started: [CI](https://github.com/szTheory/gabbaboy/actions/runs/38798590344), [fixtures](https://github.com/szTheory/gabbaboy/actions/runs/38798590343), and [preview](https://github.com/szTheory/gabbaboy/actions/runs/38798592496). They were running when recorded; no success is inferred. Later code, review fixes and final metadata need their own eligible exact-head checks before merge. The release-please PR remains pending Phase 15.
+
+The initial head `74bad9a53867584190e7be66c32d6c387b9f03b3` subsequently passed all 19 jobs across those three PR-event runs: fixture reproduction 7/7, CI 8/8 (including Linux ASan/UBSan, Windows/macOS native, CMake floor and player package), preview/installed/downloaded-byte smoke 4/4. Every job was completed/success; zero skipped jobs. This is historical evidence for work through Wave 4, not proof for later commits or merge authorization for a later head.
+
+## Wave 5
+
+Native Debug source `8b9bb46`: `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --parallel 2 --output-on-failure --no-tests=error --output-junit phase14-wave5.xml` passed **1032/1032**, zero failures/errors/skips. JUnit SHA-256 `870c404d66f3873cb48de05058c2ff46ca6dd68542d8e939aee72961f5bf9ce6`; local generated file `build/phase14-wave5.xml`. Evidence is revision-bound; this is not hosted CI or physical hardware proof.
+
+Capability checks: schema drift did not block; codebase drift reported `no-structure-md`; UI safety reported no frontend files and did not block. Upcoming key links owned by the upcoming wave are intentionally deferred to that wave; no unmet prior-wave link is waived.
