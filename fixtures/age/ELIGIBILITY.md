@@ -16,10 +16,11 @@ research and are re-measured.
 ## Scope and exclusions
 
 The AGE warning is preserved verbatim, with its emulator-only context recorded
-in `SOURCES.md`. Phase 14 admits `m3-bg-lcdc-cgbBCE.gb` and its source PNG as a
-native CGB-E, normal-speed expected pixel target. It is admitted but not yet
-executed; the other five selected mode-3 pairs remain source-only until the
-second 14-08 task. The broader single-speed corpus and `_in-progress/*` remain
-excluded.
+in `SOURCES.md`. Phase 14 admits six source-bound mode-3 ROM/reference pairs:
+native and DMG-compatibility LCDC/SCX cases at normal speed, plus separately
+identified native double-speed LCDC/SCX siblings. Their upstream CGB-E
+`Verified:` lines are expected outcomes, not emulator results; all six remain
+admitted but unexecuted until the automated pixel checks in 14-09. The broader
+single-speed corpus and `_in-progress/*` remain excluded.
 
 Fixtures are repository test data only. They are not installed or packaged.
