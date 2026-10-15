@@ -892,7 +892,7 @@ typedef enum {
     PB_BGP, PB_OBP0, PB_OBP1, PB_PPU_MODE,
     PB_JOYPAD_SELECT, PB_JOYPAD_BUTTONS,
     PB_KEY1, PB_VRAM_BANK, PB_SVBK, PB_WRAM_BANK, PB_BCPS, PB_OCPS,
-    PB_FF72, PB_FF73, PB_FF74, PB_FF75,
+    PB_FF56, PB_FF72, PB_FF73, PB_FF74, PB_FF75,
     PB_BG_CRAM_FILL, PB_OBJ_CRAM_FILL, PB_OPRI,
     PB_RAM_FILL,
     PB_FIELD_COUNT
@@ -1012,6 +1012,8 @@ static const post_boot_row post_boot[PB_FIELD_COUNT] = {
      * the CGB-mode index has no oracle. */
     { PB_BCPS, PB_NA(0u), PBC_POLICY(0xC0u, PB_IDX_VERIFY), PBK_HWIO(0xC8u) },
     { PB_OCPS, PB_NA(0u), PBC_POLICY(0xC0u, PB_IDX_VERIFY), PBK_HWIO(0xD0u) },
+    { PB_FF56, PB_NA(0u), PBC_POLICY(0u, "FF56 latch starts clear; LED and receiver-enable off; read mask is separate D-07 policy"),
+              PBC_POLICY(0u, "compat mode does not decode FF56: reads $FF, writes ignored; internal latch remains 0") },
     { PB_FF72, PB_NA(0u), PBC_POLICY(0u, PB_INIT0), PBC_POLICY(0u, PB_INIT0) },
     { PB_FF73, PB_NA(0u), PBC_POLICY(0u, PB_INIT0), PBC_POLICY(0u, PB_INIT0) },
     { PB_FF74, PB_NA(0u), PBC_POLICY(0u, PB_INIT0), PBC_POLICY(0u, "compat mode does not decode FF74: reads $FF, writes ignored; stored value stays 0") },
@@ -1150,6 +1152,7 @@ static void post_boot_apply(gbb_instance *m) {
         case PB_WRAM_BANK: m->wram_bank = v; break;
         case PB_BCPS: m->bcps = v; break;
         case PB_OCPS: m->ocps = v; break;
+        case PB_FF56: m->ff56 = v; break;
         case PB_FF72: m->ff72 = v; break;
         case PB_FF73: m->ff73 = v; break;
         case PB_FF74: m->ff74 = v; break;
@@ -4258,6 +4261,12 @@ void gbb_test_cpu_snapshot(const gbb_instance *m, gbb_trace_record *record) {
 /* MODEL: BOTH GATE-00 basis="debug seam" */
 uint16_t gbb_test_last_unsupported_address(const gbb_instance *m) {
     return m == NULL ? 0u : m->bus_unsupported_address;
+}
+
+/* Private test seam: exposes the disconnected FF56 latch for lifecycle checks, never public ABI. */
+/* MODEL: BOTH GATE-00 basis="debug seam" */
+uint8_t gbb_test_ir_latch(const gbb_instance *m) {
+    return m == NULL ? 0u : m->ff56;
 }
 
 /* Private test seam, like gbb_test_cpu_snapshot: reports the effective banks, never public ABI. */

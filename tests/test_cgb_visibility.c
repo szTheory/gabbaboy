@@ -27,6 +27,7 @@ extern void gbb_test_observer_set(gbb_instance *, gbb_test_bus_event *, size_t);
 extern size_t gbb_test_observer_count(const gbb_instance *);
 extern void gbb_test_cpu_snapshot(const gbb_instance *, gbb_trace_record *);
 extern void gbb_test_bank_state(const gbb_instance *, uint8_t *, uint8_t *);
+extern uint8_t gbb_test_ir_latch(const gbb_instance *);
 
 /* The three views of one guest. */
 typedef enum { V_DMG = 0, V_CGB, V_COMPAT, V_COUNT } view;
@@ -641,6 +642,51 @@ static int ir_guest_byte_matches(const char *control, const char *mode, unsigned
     return 0;
 }
 
+static int ir_latch_matches(const char *control, const char *mode, uint8_t actual,
+                            uint8_t expected) {
+    if (actual == expected) return 1;
+    fprintf(stderr, "guest lifecycle assertion %s mode=%s port=$FF56 expected=$%02X actual=$%02X\n",
+            control, mode, expected, actual);
+    return 0;
+}
+
+static int check_ir_lifecycle(void) {
+    prog p = { {0}, 0 };
+    write_io(&p, 0x56, 0xC1);
+    halt(&p);
+    uint8_t rom[32768] = {0};
+    rom[0x100] = 0xC3; rom[0x101] = 0x50; rom[0x102] = 0x01;
+    memcpy(rom + 0x150, p.b, p.n);
+    rom[0x143] = 0x80;
+    fix_checksum(rom);
+
+    gbb_instance *first = NULL, *second = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &first) == GBB_OK);
+    REQUIRE(ir_latch_matches("cgb-ir-create", "CGB", gbb_test_ir_latch(first), 0x00));
+    REQUIRE(gbb_create(GBB_PROFILE_CGB_CPU_E, &second) == GBB_OK);
+    REQUIRE(gbb_load_rom(first, rom, sizeof(rom)) == GBB_OK);
+    REQUIRE(gbb_load_rom(second, rom, sizeof(rom)) == GBB_OK);
+    REQUIRE(ir_latch_matches("cgb-ir-successful-load", "CGB", gbb_test_ir_latch(first), 0x00));
+    REQUIRE(gbb_run(first, RUN_BUDGET, NULL, 0).reason == GBB_STOP_HALTED_IDLE);
+    REQUIRE(ir_latch_matches("cgb-ir-independent-first", "CGB", gbb_test_ir_latch(first), 0xC1));
+    REQUIRE(ir_latch_matches("cgb-ir-independent-second", "CGB", gbb_test_ir_latch(second), 0x00));
+
+    REQUIRE(gbb_reset(first) == GBB_OK);
+    REQUIRE(ir_latch_matches("cgb-ir-reset", "CGB", gbb_test_ir_latch(first), 0x00));
+    /* The deliberate wrong-state twin proves the reset assertion rejects a retained latch. */
+    REQUIRE(!ir_latch_matches("cgb-ir-reset-control", "CGB", 0x01, 0x00));
+    REQUIRE(gbb_run(first, RUN_BUDGET, NULL, 0).reason == GBB_STOP_HALTED_IDLE);
+
+    uint8_t invalid_rom[32768] = {0};
+    REQUIRE(gbb_load_rom(first, invalid_rom, sizeof(invalid_rom)) != GBB_OK);
+    REQUIRE(ir_latch_matches("cgb-ir-failed-load", "CGB", gbb_test_ir_latch(first), 0xC1));
+    /* The deliberate cleared-state twin proves the failed-load assertion rejects mutation. */
+    REQUIRE(!ir_latch_matches("cgb-ir-failed-load-control", "CGB", 0x00, 0xC1));
+    gbb_destroy(first);
+    gbb_destroy(second);
+    return 0;
+}
+
 static int case_ir_tracer(void) {
     static const uint8_t writes[] = { 0x00 };
     ir_guest_result result;
@@ -675,6 +721,7 @@ static int case_ir_controls(void) {
     REQUIRE(ir_guest_byte_matches("cgb-ir-mode", "COMPAT", 0, compat.reads[0], 0xFF));
     REQUIRE(!ir_guest_byte_matches("cgb-ir-mode-leak-control", "COMPAT", 0,
                                    0xBE, 0xFF));
+    REQUIRE(check_ir_lifecycle() == 0);
     PASS("cgb_ir_controls");
     return 0;
 }

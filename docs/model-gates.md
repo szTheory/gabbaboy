@@ -112,8 +112,8 @@ occurs exactly once in code and once in the table.
 | GATE-67 | CGB_ONLY | GBB_PROFILE_CGB_CPU_E | - | validate_header | a PGB-flagged $143 is rejected on the CGB profile instead of running in a mode the hardware would not enter (D-03) |
 | GATE-68 | CGB_ONLY | model_is_cgb | - | compat_title_registers | compat-mode B and HL are derived from the licensee title sum |
 | GATE-69 | CGB_ONLY | model_is_cgb | - | io_cgb_cell | the io_visibility[] column is chosen by profile and execution mode |
-| GATE-70 | CGB_ONLY | model_is_cgb | - | io_read_cgb | FF4C-FF7F reads on the CGB profile |
-| GATE-71 | CGB_ONLY | model_is_cgb | - | io_write_cgb | FF4C-FF7F writes on the CGB profile; DEFERRED cells latch bus_unsupported |
+| GATE-70 | CGB_ONLY | model_is_cgb | - | io_read_cgb | FF4C-FF7F reads on the CGB profile; native FF56 applies the disconnected-receiver mask from D-07 |
+| GATE-71 | CGB_ONLY | model_is_cgb | - | io_write_cgb | FF4C-FF7F writes on the CGB profile; DEFERRED cells latch bus_unsupported, while native FF56 stores its declared bits |
 | GATE-72 | CGB_ONLY | model_is_cgb | - | read8 | FF4C-FF7F decode goes through io_visibility[]; the DMG profile falls through unchanged (D-09) |
 | GATE-73 | CGB_ONLY | model_is_cgb | - | write8 | FF4C-FF7F decode goes through io_visibility[]; a no-op on the DMG profile (C4) |
 | GATE-74 | CGB_ONLY | model_is_cgb | - | execute | CGB mode STOP with KEY1 armed takes the implemented speed-switch path (D-01/D-23) |

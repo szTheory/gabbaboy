@@ -175,6 +175,9 @@ base value and the rule in its reason.
 | ocps | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
 | ocps | CGB | $C0 | POLICY | 8 | no hardware oracle for CGB-mode index |
 | ocps | COMPAT | $D0 | HW_TEST | 5 | Mooneye boot_hwio-C, compat mode |
+| ff56 | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
+| ff56 | CGB | $00 | POLICY | 8 | FF56 latch starts clear; LED and receiver-enable off; read mask is separate D-07 policy |
+| ff56 | COMPAT | $00 | POLICY | 8 | compat mode does not decode FF56: reads $FF, writes ignored; internal latch remains 0 |
 | ff72 | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
 | ff72 | CGB | $00 | POLICY | 8 | initial $00 per D-10; no hardware oracle for this CGB register |
 | ff72 | COMPAT | $00 | POLICY | 8 | initial $00 per D-10; no hardware oracle for this CGB register |
@@ -302,8 +305,10 @@ window around those edges. The transfer boundary, cadence and sampling phase rem
 physical CGB-E. Native CGB-mode FF56 stores LED and receiver-enable bits 7-6 and 0; the disconnected
 receiver reports no signal, so bit 1 reads high whether reception is disabled or enabled. Bits 5-2
 read high as a deterministic project policy because the pinned Pan Docs source leaves them
-unspecified. Compatibility mode reads `$FF` and ignores writes; the DMG profile keeps its existing
-fail-closed read and ignored-write policy. There is no host signal, network, peer link or physical IR
+unspecified. The post-boot table records the FF56 latch's initial value as zero in the CGB policy
+column; the read mask is applied at the bus and is not a hardware power-up measurement. Compatibility
+mode reads `$FF` and ignores writes; the DMG profile keeps its existing fail-closed read and ignored-write
+policy. There is no host signal, network, peer link or physical IR
 path. CGB-mode FF76/FF77 expose read-only digital DAC inputs for channel pairs 2:1 and 4:3;
 compatibility mode reads `$FF` and ignores writes. These are software-model qualifications based on
 the pinned Pan Docs register description, not physical CGB-E measurements.

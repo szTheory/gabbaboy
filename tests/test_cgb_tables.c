@@ -37,7 +37,7 @@ static const char *const field_names[PB_FIELD_COUNT] = {
     "lcdc", "stat", "ly", "lyc", "scx", "scy", "wx", "wy",
     "bgp", "obp0", "obp1", "ppu_mode",
     "joypad_select", "joypad_buttons",
-    "key1", "vram_bank", "svbk", "wram_bank", "bcps", "ocps",
+    "key1", "vram_bank", "svbk", "wram_bank", "bcps", "ocps", "ff56",
     "ff72", "ff73", "ff74", "ff75",
     "bg_cram_fill", "obj_cram_fill", "opri",
     "ram_fill",
@@ -242,12 +242,12 @@ static int case_selftest(const char *path) {
     if (check_all(g_copy, g_doc, n) != CHECK_HW_OUTSIDE_COMPAT) goto accepted;
 
     const int io_rejected = io_selftest(path);
-    if (io_rejected != 9) {
-        printf("cgb-tables self-test: io mutation accepted (rejected %d of 9)\n", io_rejected);
+    if (io_rejected != 11) {
+        printf("cgb-tables self-test: io mutation accepted (rejected %d of 11)\n", io_rejected);
         return 1;
     }
 
-    printf("cgb-tables self-test pass mutants=12\n");
+    printf("cgb-tables self-test pass mutants=14\n");
     return 0;
 accepted:
     printf("cgb-tables self-test: mutation accepted\n");
@@ -410,6 +410,31 @@ static int pcm_io_contract(const io_row *code) {
     return 1;
 }
 
+/* Independent undocumented-port oracle for D-04/D-10. Compatibility FF72/73 remain stored,
+ * FF74 is absent, and FF75 stores only bits 4-6. These expectations do not come from the rows
+ * being checked. */
+static int undocumented_io_contract(const io_row *code) {
+    for (unsigned address = 0x72u; address <= 0x73u; ++address) {
+        const io_row *row = &code[address];
+        if (row->src != IOS_SAMEBOY || row->dmg.kind != IO_DMG_STOP ||
+            row->cgb.kind != IO_STORE || row->cgb.read_or != 0u || row->cgb.write_mask != 0xFFu ||
+            row->compat.kind != IO_STORE || row->compat.read_or != 0u ||
+            row->compat.write_mask != 0xFFu) return 0;
+    }
+    const io_row *ff74 = &code[0x74];
+    if (ff74->src != IOS_SAMEBOY || ff74->dmg.kind != IO_DMG_STOP ||
+        ff74->cgb.kind != IO_STORE || ff74->cgb.read_or != 0u || ff74->cgb.write_mask != 0xFFu ||
+        ff74->compat.kind != IO_CONST_FF) return 0;
+    const io_row *ff75 = &code[0x75];
+    if (ff75->src != IOS_PANDOCS || ff75->dmg.kind != IO_DMG_STOP) return 0;
+    for (int col = 1; col < 3; ++col) {
+        const io_cell *cell = io_cell_of(ff75, col);
+        if (cell->kind != IO_STORE || cell->read_or != 0x8Fu || cell->write_mask != 0x70u)
+            return 0;
+    }
+    return 1;
+}
+
 static int io_mismatch(const char *addr, const char *column) {
     printf("cgb-tables mismatch: %s %s\n", addr, column);
     return 1;
@@ -458,6 +483,10 @@ static int case_io(const char *path) {
         printf("cgb-tables PCM policy mismatch: native/compat/DMG FF76-FF77\n");
         return 1;
     }
+    if (!undocumented_io_contract(io_visibility)) {
+        printf("cgb-tables undocumented-port policy mismatch: FF72-FF75\n");
+        return 1;
+    }
     if (compare_io(io_visibility, g_io_doc, n) != 0) return 1;
     printf("cgb-tables io pass rows=%d\n", n);
     return 0;
@@ -469,7 +498,8 @@ static int io_selftest(const char *path) {
     const int n = parse_io_doc(path, g_io_doc, MAX_IO_DOC_ROWS);
     if (n < 0) return -1;
     memcpy(g_io_copy, io_visibility, sizeof(g_io_copy));
-    if (!pcm_io_contract(g_io_copy) || compare_io(g_io_copy, g_io_doc, n) != 0) return -1;
+    if (!pcm_io_contract(g_io_copy) || !undocumented_io_contract(g_io_copy) ||
+        compare_io(g_io_copy, g_io_doc, n) != 0) return -1;
     int rejected = 0;
 
     /* (d) an io row removed from the code copy (reclassified as handled elsewhere). */
@@ -506,6 +536,13 @@ static int io_selftest(const char *path) {
         g_io_copy[address].dmg.kind = IO_CONST_FF;
         if (!pcm_io_contract(g_io_copy)) ++rejected;
     }
+    memcpy(g_io_copy, io_visibility, sizeof(g_io_copy));
+    g_io_copy[0x75].cgb.write_mask = 0xF0u;
+    if (!undocumented_io_contract(g_io_copy)) ++rejected;
+
+    memcpy(g_io_copy, io_visibility, sizeof(g_io_copy));
+    g_io_copy[0x74].compat = (io_cell){ IO_STORE, 0u, 0u, 0xFFu };
+    if (!undocumented_io_contract(g_io_copy)) ++rejected;
     return rejected;
 }
 

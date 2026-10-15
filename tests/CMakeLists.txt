@@ -2213,7 +2213,7 @@ set_tests_properties(cgb_tables_postboot PROPERTIES
   PASS_REGULAR_EXPRESSION "cgb-tables postboot pass rows=[1-9]")
 add_test(NAME cgb_tables_postboot_selftest COMMAND test_cgb_tables postboot_selftest "${GBB_CGB_PROFILE_DOC}")
 set_tests_properties(cgb_tables_postboot_selftest PROPERTIES
-  PASS_REGULAR_EXPRESSION "cgb-tables self-test pass mutants=12")
+  PASS_REGULAR_EXPRESSION "cgb-tables self-test pass mutants=14")
 
 # Negative control: the real doc with the compat A value changed from $11 to $12 must be rejected.
 file(READ "${GBB_CGB_PROFILE_DOC}" gbb_cgb_doc)
