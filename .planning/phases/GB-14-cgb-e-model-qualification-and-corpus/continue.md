@@ -1,10 +1,10 @@
 # Phase 14 continuation
 
-Current stage: **Phase 14 execution**, through wave 6/11; 8/13 plans complete: 14-01, 14-02, 14-03, 14-04, 14-05, 14-06, 14-07, 14-08.
+Current stage: **Phase 14 execution**, through wave 7/11; 9/13 plans complete: 14-01, 14-02, 14-03, 14-04, 14-05, 14-06, 14-07, 14-08, 14-09.
 
 Read [14-EXECUTION.md](14-EXECUTION.md), completed SUMMARY frontmatter, [14-CONTEXT.md](14-CONTEXT.md), [14-RESEARCH.md](14-RESEARCH.md), [14-SOURCE-COVERAGE.md](14-SOURCE-COVERAGE.md) and [14-PLAN-CHECK.md](14-PLAN-CHECK.md). Reuse these decisions and evidence; do not repeat research, planning or completed Phase 13 UAT.
 
-Next stage: **Phase 14 — CGB-E Model Qualification and Corpus, execution wave 7/11**.
+Next stage: **Phase 14 — CGB-E Model Qualification and Corpus, execution wave 8/11**.
 Next command if interrupted: `/gsd-execute-phase 14`.
 Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release** remains unstarted.
 

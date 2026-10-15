@@ -54,6 +54,12 @@ Capability checks: schema drift did not block; codebase drift reported `no-struc
 
 Native Debug source `dbef238`: `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --parallel 2 --output-on-failure --no-tests=error --output-junit phase14-wave6.xml` passed **1107/1107**, zero failures/errors/skips. JUnit SHA-256 `7cd0560e6148d479de79973653ed12ac1aa70066fc1d99a3e526b4f78837bd8d`; local generated file `build/phase14-wave6.xml`. Evidence is revision-bound; this is not hosted CI or physical hardware proof.
 
-The SameSuite APU run completed all70 cases with8 actual guest passes,62 exact xfails and4,784 assertions; all70 author expectations remain pass. Existing four DMA outputs are retained. All74 SameSuite outputs reproduce byte-identically; total corpus inventory is109 admitted ROM outputs with zero pending output bytes and107 required case identities. Six admitted AGE image cases still await execution in14-09. CTest success is evaluation-contract success and does not convert those62 guest failures to passes.
+The SameSuite APU run completed all 70 cases with 8 actual guest passes, 62 exact xfails and 4,784 assertions; all 70 author expectations remain pass. Existing four DMA outputs are retained. All 74 SameSuite outputs reproduce byte-identically; total corpus inventory is 109 admitted ROM outputs with zero pending output bytes and 107 required case identities. Six admitted AGE image cases still await execution in 14-09. CTest success is evaluation-contract success and does not convert those 62 guest failures to passes.
+
+Capability checks: schema drift did not block; codebase drift reported `no-structure-md`; UI safety reported no frontend files and did not block. Upcoming key links owned by the upcoming wave are intentionally deferred to that wave; no unmet prior-wave link is waived.
+
+## Wave 7
+
+Native Debug source `8ae187324f101393b35153f1b180b769d4ecefc3`: `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --parallel 2 --output-on-failure --no-tests=error --output-junit phase14-wave7.xml` passed **1117/1117**, zero failures/errors/skips. JUnit SHA-256 `d88f6f4956981164cedcc76ae512b20117886bd1a421f711abc276722b0f9dfe`; local generated file `build/phase14-wave7.xml`. Evidence is revision-bound; this is not hosted CI or physical hardware proof.
 
 Capability checks: schema drift did not block; codebase drift reported `no-structure-md`; UI safety reported no frontend files and did not block. Upcoming key links owned by the upcoming wave are intentionally deferred to that wave; no unmet prior-wave link is waived.
