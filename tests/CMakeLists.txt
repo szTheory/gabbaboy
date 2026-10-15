@@ -987,9 +987,12 @@ set_tests_properties(
   cgb_hdma_claims_contract cgb_hdma_claims_contract_native
   cgb_hdma_claims_contract_selftest cgb_hdma_lane_contract
   cgb_hdma_lane_contract_selftest PROPERTIES TIMEOUT 30)
+find_program(GBB_SAMESUITE_REPRO_BASH bash REQUIRED)
 add_test(NAME samesuite_repro_selfcheck
-  COMMAND bash "${PROJECT_SOURCE_DIR}/tests/scripts/reproduce-samesuite.sh" --self-test)
-set_tests_properties(samesuite_repro_selfcheck PROPERTIES TIMEOUT 30)
+  COMMAND "${GBB_SAMESUITE_REPRO_BASH}" "${PROJECT_SOURCE_DIR}/tests/scripts/reproduce-samesuite.sh" --self-test)
+set_tests_properties(samesuite_repro_selfcheck PROPERTIES
+  TIMEOUT 30
+  ENVIRONMENT "GBB_SAMESUITE_BASH=${GBB_SAMESUITE_REPRO_BASH}")
 
 # rtc3test v004 screen oracle (D-11). White-box single TU: it includes the core and the acceptance
 # sources it needs, so it must not link GabbaBoy::core or gabbaboy_accept (duplicate definitions).

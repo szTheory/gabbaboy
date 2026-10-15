@@ -242,7 +242,17 @@ def self_check(fixture, case_name, script):
 def call_script(script, fixture, args):
     env = os.environ.copy()
     env["GBB_SAMESUITE_FIXTURE_DIR"] = str(fixture)
-    return subprocess.run(["bash", str(script), *args], env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    launcher = env.get("GBB_SAMESUITE_BASH") or shutil.which("bash")
+    if not launcher:
+        fail("Bash executable is not available for recursive self-check")
+
+    def bash_path(value):
+        if os.name == "nt" and len(value) >= 3 and value[1] == ":" and value[2] in "\\/":
+            return "/" + value[0].lower() + value[2:].replace("\\", "/")
+        return value
+
+    command = [launcher, bash_path(str(script)), *(bash_path(str(arg)) for arg in args)]
+    return subprocess.run(command, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
 
 def copy_fixture(source, target, names):
