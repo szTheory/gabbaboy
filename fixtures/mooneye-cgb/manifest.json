@@ -35,7 +35,8 @@
     "boot_regs-cgb.gb",
     "boot_div-cgbABCDE.gb",
     "boot_hwio-C.gb",
-    "unused_hwio-C.gb"
+    "unused_hwio-C.gb",
+    "daa.gb"
   ],
   "evidence_class": "Author-attested Mooneye hardware expectations as stated in each source header, executed here on the CGB-CPU-E profile in compat mode (header $143 bit 7 clear). boot_div-cgbABCDE claims CGB A-E only. No CGB-E-alone claim, no AGB claim, never game compatibility. The two HWIO rows retain author_expect=pass and currently have exact software-model expected-failure dispositions.",
   "fixtures": [
@@ -180,6 +181,42 @@
         "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
         "apply the parent headless report patch ../mooneye/headless-report.patch (SHA-256 c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d) with patch --batch --fuzz=0 -p1",
         "assemble misc/bits/unused_hwio-C.s with wla-gb -I common using the WLA-DX revision pinned by ../mooneye/manifest.json",
+        "link with wlalink -nS -d -S; -nS preserves source section order",
+        "reproduce with tests/scripts/reproduce-mooneye-cgb.sh --compare fixtures/mooneye-cgb"
+      ]
+    },
+    {
+      "id": "mooneye-acceptance-instr-daa",
+      "alias": "daa",
+      "category": "instruction",
+      "eligible": true,
+      "source_path": "acceptance/instr/daa.s",
+      "rom": "daa.gb",
+      "size_bytes": 32768,
+      "sha256": "3a39eda77a09b817e4e38004a3d117990565fb797e8a4f470920f1b7608f0a08",
+      "original_sha256": "7ce07c2d88b721d5cf2f4597f687622357f41c580ef5cd8e70a66038421394d8",
+      "license": "MIT; see LICENSE.txt",
+      "asset_notice": "FONT-LICENSE.txt",
+      "model_pass": [
+        "cgb-cpu-e"
+      ],
+      "target_revision": "CGB",
+      "cart_header_143": "0x00",
+      "mode": "compat (header $143 bit 7 clear)",
+      "result_pc": "0x409a",
+      "pass_callback_pc": "0x0166",
+      "fail_callback_pcs": [
+        "0x01b3"
+      ],
+      "budget_half_dots": 2000000,
+      "expect": "pass",
+      "observed_disposition": "pass",
+      "note": "Mooneye source header: pass on CGB. The source is exercised on the CGB-CPU-E software profile in compat mode; this is not physical-hardware qualification.",
+      "build_recipe": [
+        "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
+        "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
+        "apply the parent headless report patch ../mooneye/headless-report.patch (SHA-256 c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d) with patch --batch --fuzz=0 -p1",
+        "assemble acceptance/instr/daa.s with wla-gb -I common using the WLA-DX revision pinned by ../mooneye/manifest.json",
         "link with wlalink -nS -d -S; -nS preserves source section order",
         "reproduce with tests/scripts/reproduce-mooneye-cgb.sh --compare fixtures/mooneye-cgb"
       ]

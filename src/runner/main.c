@@ -29,8 +29,8 @@
 #define MOONEYE_MANIFEST_SHA256 "98a1799b8be9c022ac13467a552890fb12bdd706017e42e12c944ec618d60527"
 /* Sibling mbc2/mbc5 suite (Phase 8): admitted by the SHA-256 of its raw manifest bytes, like the parent. */
 #define MOONEYE_MBC_MANIFEST_SHA256 "9800c795fcf033abd6bda2e171af6c22d27e745f2b5946fc49bd0f9ce2fb5801"
-/* Phase 10 CGB-profile suite (D-26): admitted by the SHA-256 of its raw manifest bytes, like the others. */
-#define MOONEYE_CGB_MANIFEST_SHA256 "691876d28296f1105976b40631e89663042342787cea4c0407bc0440e656a7ab"
+/* CGB-profile suite: admitted by the SHA-256 of its raw manifest bytes, like the others. */
+#define MOONEYE_CGB_MANIFEST_SHA256 "023bfd1ce4c49c7721f7d8934c711f2610928a428b147c045c8fc68c26b84649"
 
 typedef struct {
     const char *id;
@@ -101,7 +101,7 @@ static const fixture_case mbc_cases[] = {
 /* gbb:mbc-rows-end */
 };
 
-/* Phase 10 CGB-profile derivatives (D-26): the profile and observed disposition are columns of the row.
+/* CGB-profile derivatives: the profile and observed disposition are columns of the row.
  * One row per line, each starting with the id literal:
  * cmake/VerifyMooneyeCgb.cmake pc-table mode parses these against fixtures/mooneye-cgb/manifest.json.
  * Assert-style ROMs (boot_regs-cgb, boot_div-cgbABCDE) end in one shared check_asserts_cb callback, so
@@ -112,7 +112,8 @@ static const fixture_case cgb_cases[] = {
     {"mooneye-misc-boot-regs-cgb", "boot_regs-cgb", "post-boot-registers", "boot_regs-cgb.gb", "77eb76b5448ff9e6bb885e789b0ce0a9113146bc3f0949f3655587968dae5c77", "86c4ab93428b849864409cd10bcfdb231d2dd066c200c2791af1faa6eeb23dd1", "misc/boot_regs-cgb.s", 0x4000, 0x4000, 0x4327, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(500000), 32768u, {0x4000, 0x01da}, 2, GBB_PROFILE_CGB_CPU_E, GBB_OBSERVED_PASS, 0x0000},
     {"mooneye-misc-boot-div-cgbabcde", "boot_div-cgbABCDE", "post-boot-div", "boot_div-cgbABCDE.gb", "7887a53a1b308c4f35c4e1e94a0ffb67397c6d213c034a706a7f92258ba93f90", "24b1be8fe190fe5c585b245203e95ab756fe7ff68e342d446395392ca8f9b822", "misc/boot_div-cgbABCDE.s", 0x4000, 0x4000, 0x4327, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(500000), 32768u, {0x4000}, 1, GBB_PROFILE_CGB_CPU_E, GBB_OBSERVED_PASS, 0x0000},
     {"mooneye-misc-boot-hwio-c", "boot_hwio-C", "post-boot-hwio", "boot_hwio-C.gb", "267eb659c4995ad7fa38b7d442a6076a630cf88824fe2d16e5de5927c7a8b7a9", "d69232d9b71b4cfccc710f6693363a7b5b627f0bf0bb7333997cdee19cfa8b86", "misc/boot_hwio-C.s", 0x01ce, 0x01f5, 0x4067, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(2000000), 32768u, {0x01f5}, 1, GBB_PROFILE_CGB_CPU_E, GBB_OBSERVED_FAILURE, 0x0000},
-    {"mooneye-misc-unused-hwio-c", "unused_hwio-C", "unused-hwio", "unused_hwio-C.gb", "a44d65497bbec81ec1ba51a06ad1177b2193f6ca1e829a9cb2307dea8ab4cc27", "7ab9e7ccbefe0740f55b7f6172a8780e8c67632f979365bc8381f5bf65e7929b", "misc/bits/unused_hwio-C.s", 0x1a02, 0x1a31, 0x4070, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(2000000), 32768u, {0x1a31}, 1, GBB_PROFILE_CGB_CPU_E, GBB_OBSERVED_FAILURE, 0x0000}
+    {"mooneye-misc-unused-hwio-c", "unused_hwio-C", "unused-hwio", "unused_hwio-C.gb", "a44d65497bbec81ec1ba51a06ad1177b2193f6ca1e829a9cb2307dea8ab4cc27", "7ab9e7ccbefe0740f55b7f6172a8780e8c67632f979365bc8381f5bf65e7929b", "misc/bits/unused_hwio-C.s", 0x1a02, 0x1a31, 0x4070, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(2000000), 32768u, {0x1a31}, 1, GBB_PROFILE_CGB_CPU_E, GBB_OBSERVED_FAILURE, 0x0000},
+    {"mooneye-acceptance-instr-daa", "daa", "instruction", "daa.gb", "3a39eda77a09b817e4e38004a3d117990565fb797e8a4f470920f1b7608f0a08", "7ce07c2d88b721d5cf2f4597f687622357f41c580ef5cd8e70a66038421394d8", "acceptance/instr/daa.s", 0x0166, 0x01b3, 0x409a, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(2000000), 32768u, {0x01b3}, 1, GBB_PROFILE_CGB_CPU_E, GBB_OBSERVED_PASS, 0x0000}
 /* gbb:cgb-rows-end */
 };
 
@@ -126,13 +127,13 @@ typedef struct {
     size_t category_count;
 } suite_def;
 static const char *const mbc_categories[] = {"mbc2", "mbc5"};
-static const char *const cgb_categories[] = {"post-boot-registers", "post-boot-div", "post-boot-hwio", "unused-hwio"};
+static const char *const cgb_categories[] = {"post-boot-registers", "post-boot-div", "post-boot-hwio", "unused-hwio", "instruction"};
 
 /* The runner admits a suite only by the exact SHA-256 of its manifest bytes (D-28). */
 static const suite_def suites[] = {
     {MOONEYE_MANIFEST_SHA256, MOONEYE_PATCH_SHA256, cases, sizeof(cases)/sizeof(cases[0]), NULL, 0},
     {MOONEYE_MBC_MANIFEST_SHA256, MOONEYE_PATCH_SHA256, mbc_cases, sizeof(mbc_cases)/sizeof(mbc_cases[0]), mbc_categories, 2},
-    {MOONEYE_CGB_MANIFEST_SHA256, MOONEYE_PATCH_SHA256, cgb_cases, sizeof(cgb_cases)/sizeof(cgb_cases[0]), cgb_categories, 4}
+    {MOONEYE_CGB_MANIFEST_SHA256, MOONEYE_PATCH_SHA256, cgb_cases, sizeof(cgb_cases)/sizeof(cgb_cases[0]), cgb_categories, 5}
 };
 
 static int read_bounded(const char *path, uint8_t *buffer, size_t capacity, size_t *length) {
