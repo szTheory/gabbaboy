@@ -396,6 +396,9 @@ foreach(case vbk_tracer svbk_select unmapped_cgb boundaries deferred_stop ie_gat
      matrix_compat flip_control matrix_cgb matrix_dmg cross_column_control sweep_control)
   add_test(NAME cgb_visibility_${case} COMMAND test_cgb_visibility ${case})
 endforeach()
+foreach(case ir_tracer ir_controls ir_modes)
+  add_test(NAME cgb_${case} COMMAND test_cgb_visibility ${case})
+endforeach()
 add_test(NAME cgb_hdma_visibility COMMAND test_cgb_visibility hdma_visibility)
 add_test(NAME cgb_hdma_visibility_controls COMMAND test_cgb_visibility hdma_visibility_controls)
 # Plan 10-11: STOP/KEY1 fail-closed and the KEY0 lock keep their plan-named CTests.

@@ -598,6 +598,9 @@ cgb_tables_postboot_mutated_doc
 cgb_tables_postboot_selftest
 cgb_tables_io
 cgb_tables_io_mutated_doc
+cgb_ir_tracer
+cgb_ir_controls
+cgb_ir_modes
 cgb_visibility_vbk_tracer
 cgb_visibility_svbk_select
 cgb_visibility_unmapped_cgb

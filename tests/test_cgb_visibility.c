@@ -640,6 +640,116 @@ static int case_deferred_latch_interrupt(void) {
     return 0;
 }
 
+/* FF56 (D-07) is a disconnected register stub. These checks observe it only through real guest
+ * bus instructions; the selected native-CGB read mask is (stored & $C1) | $3E. */
+typedef struct {
+    gbb_stop_reason reason;
+    uint16_t unsupported_address;
+    uint8_t reads[8];
+} ir_guest_result;
+
+static int run_ir_values(view v, const uint8_t *writes, size_t count, ir_guest_result *out) {
+    if (count > sizeof(out->reads)) return 1;
+    prog p = { {0}, 0 };
+    for (size_t i = 0; i < count; ++i) {
+        write_io(&p, 0x56, writes[i]);
+        keep_io(&p, 0x56, (uint8_t)i);
+    }
+    halt(&p);
+    gbb_instance *m = load_view(v, p.b, p.n, NULL, 0);
+    if (m == NULL) return 1;
+    const gbb_run_result run = gbb_run(m, RUN_BUDGET, NULL, 0);
+    memset(out, 0, sizeof(*out));
+    out->reason = run.reason;
+    out->unsupported_address = gbb_test_last_unsupported_address(m);
+    for (size_t i = 0; i < count; ++i) out->reads[i] = hram(m, (unsigned)i);
+    gbb_destroy(m);
+    return 0;
+}
+
+static int ir_guest_byte_matches(const char *control, const char *mode, unsigned slot,
+                                 int actual, uint8_t expected) {
+    if (actual == expected) return 1;
+    if (actual < 0)
+        fprintf(stderr, "guest-memory assertion %s mode=%s slot=%u expected=$%02X actual=STOP\n",
+                control, mode, slot, expected);
+    else
+        fprintf(stderr, "guest-memory assertion %s mode=%s slot=%u expected=$%02X actual=$%02X\n",
+                control, mode, slot, expected, (unsigned)actual & 0xFFu);
+    return 0;
+}
+
+static int case_ir_tracer(void) {
+    static const uint8_t writes[] = { 0x00 };
+    ir_guest_result result;
+    REQUIRE(run_ir_values(V_CGB, writes, 1, &result) == 0);
+    if (result.reason != GBB_STOP_STOPPED) {
+        const char *actual = result.reason == GBB_STOP_UNSUPPORTED_BUS ? "STOP" : "non-halt";
+        fprintf(stderr, "guest-memory assertion cgb-ir-tracer mode=CGB slot=0 address=$FF56 "
+                        "expected=$3E actual=%s unsupported=$%04X\n",
+                actual, result.unsupported_address);
+        return 1;
+    }
+    REQUIRE(ir_guest_byte_matches("cgb-ir-tracer", "CGB", 0, result.reads[0], 0x3E));
+    PASS("cgb_ir_tracer");
+    return 0;
+}
+
+static int case_ir_controls(void) {
+    /* A wrong reserved-bit mask must disagree with the independent native guest expectation. */
+    static const uint8_t native_write[] = { 0x00 };
+    ir_guest_result native;
+    REQUIRE(run_ir_values(V_CGB, native_write, 1, &native) == 0);
+    REQUIRE(native.reason == GBB_STOP_STOPPED);
+    REQUIRE(ir_guest_byte_matches("cgb-ir-mask", "CGB", 0, native.reads[0], 0x3E));
+    REQUIRE(!ir_guest_byte_matches("cgb-ir-mask-control", "CGB", 0,
+                                   (int)(native.reads[0] & (uint8_t)~0x20u), 0x3E));
+
+    /* In compatibility mode, a native-only write value must remain inaccessible as $FF. */
+    static const uint8_t compat_write[] = { 0x80 };
+    ir_guest_result compat;
+    REQUIRE(run_ir_values(V_COMPAT, compat_write, 1, &compat) == 0);
+    REQUIRE(compat.reason == GBB_STOP_STOPPED);
+    REQUIRE(ir_guest_byte_matches("cgb-ir-mode", "COMPAT", 0, compat.reads[0], 0xFF));
+    REQUIRE(!ir_guest_byte_matches("cgb-ir-mode-leak-control", "COMPAT", 0,
+                                   0xBE, 0xFF));
+    PASS("cgb_ir_controls");
+    return 0;
+}
+
+static int case_ir_modes(void) {
+    static const uint8_t writes[] = { 0x00, 0x80, 0xC0, 0xC1, 0x01 };
+    static const uint8_t expected[] = { 0x3E, 0xBE, 0xFE, 0xFF, 0x3F };
+    ir_guest_result native;
+    REQUIRE(run_ir_values(V_CGB, writes, sizeof(writes), &native) == 0);
+    REQUIRE(native.reason == GBB_STOP_STOPPED);
+    for (size_t i = 0; i < sizeof(expected); ++i)
+        REQUIRE(ir_guest_byte_matches("cgb-ir-modes", "CGB", (unsigned)i,
+                                      native.reads[i], expected[i]));
+
+    static const uint8_t compat_write[] = { 0x80, 0xC1 };
+    ir_guest_result compat;
+    REQUIRE(run_ir_values(V_COMPAT, compat_write, sizeof(compat_write), &compat) == 0);
+    REQUIRE(compat.reason == GBB_STOP_STOPPED);
+    for (size_t i = 0; i < sizeof(compat_write); ++i)
+        REQUIRE(ir_guest_byte_matches("cgb-ir-modes", "COMPAT", (unsigned)i,
+                                      compat.reads[i], 0xFF));
+
+    /* DMG retains its prior fail-closed read and ignored-write policy. */
+    REQUIRE(expect_probe(V_DMG, NULL, 0, 0xFF56, STOP) == 0);
+    prog dmg_write = { {0}, 0 };
+    write_io(&dmg_write, 0x56, 0xC1);
+    write_io(&dmg_write, 0x80, 0x5A);
+    halt(&dmg_write);
+    gbb_instance *m = load_view(V_DMG, dmg_write.b, dmg_write.n, NULL, 0);
+    REQUIRE(m != NULL);
+    REQUIRE(gbb_run(m, RUN_BUDGET, NULL, 0).reason == GBB_STOP_STOPPED);
+    REQUIRE(hram(m, 0) == 0x5A);
+    gbb_destroy(m);
+    PASS("cgb_ir_modes");
+    return 0;
+}
+
 /* ---- Per-cell matrix (Plan 10-10, D-11) -------------------------------------------------------
  *
  * The table below is written from the D-10 decision table, not from io_visibility[] in the core, so
@@ -1230,6 +1340,9 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "hdma_visibility_controls") == 0) return case_hdma_visibility_controls();
     if (strcmp(argv[1], "ie_gate") == 0) return case_ie_gate();
     if (strcmp(argv[1], "deferred_latch_interrupt") == 0) return case_deferred_latch_interrupt();
+    if (strcmp(argv[1], "ir_tracer") == 0) return case_ir_tracer();
+    if (strcmp(argv[1], "ir_controls") == 0) return case_ir_controls();
+    if (strcmp(argv[1], "ir_modes") == 0) return case_ir_modes();
     if (strcmp(argv[1], "matrix_compat") == 0) return case_matrix_compat();
     if (strcmp(argv[1], "flip_control") == 0) return case_flip_control();
     if (strcmp(argv[1], "matrix_cgb") == 0) return case_matrix_cgb();
