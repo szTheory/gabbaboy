@@ -192,6 +192,19 @@ static doc_row g_doc[MAX_DOC_ROWS];
 static int case_postboot(const char *path) {
     const int n = parse_doc(path, g_doc, MAX_DOC_ROWS);
     if (n < 0) return 1;
+    /* FF56 now has instance-owned state. Keep its reset row in this table so creation, reset, and
+     * successful-load initialization cannot be mistaken for an undocumented hardware power-up
+     * value. The implementation/doc mirror below checks all three mode columns independently. */
+    for (int col = 0; col < 3; ++col) {
+        int found = 0;
+        for (int i = 0; i < n; ++i)
+            if (strcmp(g_doc[i].field, "ff56") == 0 &&
+                strcmp(g_doc[i].column, column_names[col]) == 0) found = 1;
+        if (!found) {
+            printf("cgb-tables missing postboot field: ff56 %s\n", column_names[col]);
+            return 1;
+        }
+    }
     if (check_all(post_boot, g_doc, n) != CHECK_OK) return 1;
     printf("cgb-tables postboot pass rows=%d\n", n);
     return 0;
