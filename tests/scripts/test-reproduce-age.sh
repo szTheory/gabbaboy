@@ -104,6 +104,33 @@ PY
   python3 -I - "$scratch/fixtures/age/manifest.json" <<'PY'
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1]); data = json.loads(path.read_text())
+entry = next(row for row in data['fixtures'] if row['file'] == 'm3-bg-lcdc-cgbBCE.gb')
+entry['qualification_status'] = 'admitted-not-executed'
+path.write_text(json.dumps(data))
+PY
+  expect_selfcheck_failure 'm3-qualification-status-mismatch-m3-bg-lcdc-cgbBCE.gb'
+  reset_fixture
+  python3 -I - "$scratch/fixtures/age/manifest.json" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1]); data = json.loads(path.read_text())
+entry = next(row for row in data['fixtures'] if row['file'] == 'm3-bg-lcdc-cgbBCE.gb')
+entry['case_id'] = 'wrong-case-identity'
+path.write_text(json.dumps(data))
+PY
+  expect_selfcheck_failure 'm3-case-identity-mismatch-m3-bg-lcdc-cgbBCE.gb'
+  reset_fixture
+  python3 -I - "$scratch/fixtures/age/manifest.json" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1]); data = json.loads(path.read_text())
+entry = next(row for row in data['fixtures'] if row['file'] == 'm3-bg-lcdc-cgbBCE.gb')
+entry['pixel_mismatch_signature_sha256'] = '0' * 64
+path.write_text(json.dumps(data))
+PY
+  expect_selfcheck_failure 'm3-pixel-signature-mismatch-m3-bg-lcdc-cgbBCE.gb'
+  reset_fixture
+  python3 -I - "$scratch/fixtures/age/manifest.json" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1]); data = json.loads(path.read_text())
 data['fixtures'] = [row for row in data['fixtures'] if row['file'] != 'm3-bg-scx-ds-cgbBCE.gb']
 path.write_text(json.dumps(data))
 PY

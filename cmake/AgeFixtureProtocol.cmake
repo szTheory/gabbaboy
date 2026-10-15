@@ -38,8 +38,36 @@ function(gbb_validate_age_fixture_protocol manifest_json out_row_indices out_ima
       string(JSON qualification_status ERROR_VARIABLE status_error GET "${manifest_json}"
         fixtures ${index} qualification_status)
       if(NOT "${status_error}" STREQUAL "NOTFOUND" OR
-         NOT qualification_status STREQUAL "admitted-not-executed")
-        message(FATAL_ERROR "age-fixture-protocol: image fixture at index ${index} must remain admitted-not-executed")
+         NOT qualification_status STREQUAL "executed")
+        message(FATAL_ERROR "age-fixture-protocol: image fixture at index ${index} must be executed")
+      endif()
+      foreach(field IN ITEMS execution_result disposition reason case_id pixel_mismatch_signature_sha256)
+        string(JSON field_type ERROR_VARIABLE field_error TYPE "${manifest_json}" fixtures ${index} ${field})
+        if(NOT "${field_error}" STREQUAL "NOTFOUND" OR NOT field_type STREQUAL "STRING")
+          message(FATAL_ERROR "age-fixture-protocol: executed image fixture at index ${index} lacks string ${field}")
+        endif()
+      endforeach()
+      foreach(field IN ITEMS pixel_assertion_count pixel_mismatch_count)
+        string(JSON field_type ERROR_VARIABLE field_error TYPE "${manifest_json}" fixtures ${index} ${field})
+        if(NOT "${field_error}" STREQUAL "NOTFOUND" OR NOT field_type STREQUAL "NUMBER")
+          message(FATAL_ERROR "age-fixture-protocol: executed image fixture at index ${index} lacks numeric ${field}")
+        endif()
+        string(JSON ${field} GET "${manifest_json}" fixtures ${index} ${field})
+      endforeach()
+      if(NOT pixel_assertion_count EQUAL 23040 OR pixel_mismatch_count LESS 1 OR pixel_mismatch_count GREATER 23040)
+        message(FATAL_ERROR "age-fixture-protocol: invalid RGB555 assertion counts at index ${index}")
+      endif()
+      string(JSON execution_result GET "${manifest_json}" fixtures ${index} execution_result)
+      string(JSON disposition GET "${manifest_json}" fixtures ${index} disposition)
+      string(JSON expected_role GET "${manifest_json}" fixtures ${index} expected_role)
+      if(NOT execution_result STREQUAL "fail" OR NOT disposition STREQUAL "expected-failure" OR
+         NOT expected_role STREQUAL "pass-target")
+        message(FATAL_ERROR "age-fixture-protocol: image fixture at index ${index} must preserve its pass target and exact xfail")
+      endif()
+      string(JSON signature GET "${manifest_json}" fixtures ${index} pixel_mismatch_signature_sha256)
+      string(LENGTH "${signature}" signature_length)
+      if(NOT signature_length EQUAL 64 OR NOT signature MATCHES "^[0-9a-f]+$")
+        message(FATAL_ERROR "age-fixture-protocol: image fixture at index ${index} has invalid mismatch signature")
       endif()
       foreach(field IN ITEMS test_results_address expected_address rows budget_half_dots)
         string(JSON field_type ERROR_VARIABLE field_error TYPE "${manifest_json}" fixtures ${index} ${field})
@@ -55,8 +83,23 @@ function(gbb_validate_age_fixture_protocol manifest_json out_row_indices out_ima
 
   list(LENGTH row_indices row_count)
   list(LENGTH image_indices image_count)
-  if(NOT row_count EQUAL 13 OR NOT image_count EQUAL 6)
-    message(FATAL_ERROR "age-fixture-protocol: expected 13 row-oracle and 6 pending image fixtures")
+  set(expected_image_files
+    m3-bg-lcdc-cgbBCE.gb
+    m3-bg-lcdc-nocgb-ncmBCE.gb
+    m3-bg-lcdc-ds-cgbBCE.gb
+    m3-bg-scx-cgbBCE.gb
+    m3-bg-scx-nocgb-ncmBCE.gb
+    m3-bg-scx-ds-cgbBCE.gb)
+  set(actual_image_files)
+  foreach(index IN LISTS image_indices)
+    string(JSON image_file GET "${manifest_json}" fixtures ${index} file)
+    list(APPEND actual_image_files "${image_file}")
+  endforeach()
+  list(SORT expected_image_files)
+  list(SORT actual_image_files)
+  if(NOT row_count EQUAL 13 OR NOT image_count EQUAL 6 OR
+     NOT actual_image_files STREQUAL expected_image_files)
+    message(FATAL_ERROR "age-fixture-protocol: expected 13 row-oracle and exact six executed image fixtures")
   endif()
   set(${out_row_indices} "${row_indices}" PARENT_SCOPE)
   set(${out_image_indices} "${image_indices}" PARENT_SCOPE)

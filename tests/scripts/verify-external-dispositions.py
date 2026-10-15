@@ -21,7 +21,8 @@ AGE_ROW_CASES = {
     "stat-mode-sprites-dmgC-cgbBCE", "stat-mode-window-ds-cgbBCE", "stat-mode-window-cgbBCE",
 }
 ROW_METADATA = {"test_results_address", "expected_address", "rows", "budget_half_dots"}
-PIXEL_OUTCOMES = {"disposition", "execution_result", "pixel_result", "emulator_result", "actual_result"}
+AGE_COMMIT = "1f5bc10e2cb60b86c19f8d0287ff78f410c4f639"
+AGE_XFAIL_REASON = "expected-failure:cgb-e-mode3-reference-mismatch"
 BEGIN = "<!-- cgb-external-dispositions-begin -->"
 END = "<!-- cgb-external-dispositions-end -->"
 
@@ -54,9 +55,15 @@ def check_rows(suites: dict) -> list[tuple[str, str, str, str]]:
     need(len(cases) == len(set(cases)) and set(cases) == AGE_CASES and age["upstream_count"] == 6,
          "age-case-set")
     for r in rows:
-        need(r["disposition"] == "expected-unsupported", f"age-disposition {r['case']}")
-        need(r["reason"] == "mode-3-pixel-timing", f"age-reason {r['case']}")
+        need(r["disposition"] == "expected-failure", f"age-disposition {r['case']}")
+        need(r["reason"] == AGE_XFAIL_REASON, f"age-reason {r['case']}")
         need(r["decision"] == "D-09" and r["owner_phase"] == 14, f"age-decision {r['case']}")
+        need(r.get("observed_result") == "fail" and r.get("evaluator_status") == "xfail",
+             f"age-observed-result {r['case']}")
+        need(r.get("expected_role") == "pass-target" and r.get("model") == "CGB-E",
+             f"age-author-target-or-model {r['case']}")
+        need(r.get("promotion_rule", "").startswith("Promote only after this same pinned CGB-E model"),
+             f"age-promotion-rule {r['case']}")
     mb = suites["mealybug"]
     need(mb.get("rights_gate") == "G1", "mealybug-rights-gate")
     mrows = mb["rows"]
@@ -72,7 +79,7 @@ def check_rows(suites: dict) -> list[tuple[str, str, str, str]]:
             for s in ("age", "mealybug") for r in suites[s]["rows"]]
 
 
-def admitted_age_image_paths(repo_root: pathlib.Path, manifest_path: pathlib.Path | None = None) -> set[str]:
+def executed_age_image_paths(repo_root: pathlib.Path, manifest_path: pathlib.Path | None = None) -> set[str]:
     path = manifest_path or repo_root / "fixtures/age/manifest.json"
     manifest = json.loads(path.read_text(encoding="utf-8"))
     need(manifest.get("fixture_protocol") == "gabbaboy-age-fixture-protocol-v1",
@@ -91,16 +98,45 @@ def admitted_age_image_paths(repo_root: pathlib.Path, manifest_path: pathlib.Pat
     need(image_cases == AGE_CASES and len(image_entries) == 6, "age-image-fixture-set")
 
     paths = set()
+    age_rows = {row["case"]: row for row in load_suites(repo_root / "tests/external/cgb-ppu-dispositions.json")["age"]["rows"]}
     for entry in image_entries:
         name = entry.get("file", "")
-        need(entry.get("qualification_status") == "admitted-not-executed",
-             f"age-image-pending {name}")
+        case = name.removesuffix(".gb")
+        row = age_rows[case]
+        need(entry.get("qualification_status") == "executed", f"age-image-not-executed {name}")
         need(not ROW_METADATA.intersection(entry), f"age-image-row-metadata {name}")
-        need(not PIXEL_OUTCOMES.intersection(entry), f"age-image-outcome-present {name}")
+        need(entry.get("expected_role") == "pass-target" and entry.get("execution_result") == "fail"
+             and entry.get("disposition") == "expected-failure" and entry.get("reason") == AGE_XFAIL_REASON,
+             f"age-image-execution-outcome {name}")
         reference = entry.get("reference", {})
         expected_reference = f"references/{name.removesuffix('.gb')}.png"
         need(reference.get("file") == expected_reference,
              f"age-image-reference-pair {name}")
+        identity = "/".join((
+            f"age@{AGE_COMMIT}",
+            f"{entry['source_path']}#{entry['source_sha256']}",
+            f"{name}#{entry['sha256']}",
+            entry["model"], entry["mode"], entry["speed"], case,
+        ))
+        need(entry.get("case_id") == identity and row.get("case_id") == identity,
+             f"age-image-case-identity-mismatch {case}")
+        need(row.get("reason") == entry.get("reason") and row.get("disposition") == entry.get("disposition"),
+             f"age-image-disposition-mismatch {case}")
+        need(row.get("mode") == entry.get("mode") and row.get("speed") == entry.get("speed")
+             and row.get("pinned_by") == "cgb_age_m3_" + case.replace("-", "_"),
+             f"age-image-execution-identity-mismatch {case}")
+        count = entry.get("pixel_assertion_count")
+        mismatch_count = entry.get("pixel_mismatch_count")
+        signature = entry.get("pixel_mismatch_signature_sha256", "")
+        need(count == 23040 and isinstance(mismatch_count, int) and 0 < mismatch_count <= count
+             and re.fullmatch(r"[0-9a-f]{64}", signature) is not None,
+             f"age-image-signature-invalid {case}")
+        need(row.get("pixel_assertion_count") == count and row.get("pixel_mismatch_count") == mismatch_count
+             and row.get("pixel_mismatch_signature_sha256") == signature
+             and row.get("source_sha256") == entry.get("source_sha256")
+             and row.get("rom_sha256") == entry.get("sha256")
+             and row.get("reference_sha256") == reference.get("sha256"),
+             f"age-image-signature-mismatch {case}")
         paths.add(f"fixtures/age/{name}")
         paths.add(f"fixtures/age/{expected_reference}")
     return paths
@@ -110,7 +146,7 @@ def check_tracked(repo_root: pathlib.Path, suites: dict,
                   manifest_path: pathlib.Path | None = None) -> None:
     out = subprocess.run(["git", "-C", str(repo_root), "ls-files", "-z", "--", "fixtures"],
                          check=True, capture_output=True).stdout.decode("utf-8", "replace")
-    allowed_age_images = admitted_age_image_paths(repo_root, manifest_path)
+    allowed_age_images = executed_age_image_paths(repo_root, manifest_path)
     stems = [r["case"] for r in suites["mealybug"]["rows"]]
     tracked_age_images = set()
     for path in filter(None, out.split("\0")):

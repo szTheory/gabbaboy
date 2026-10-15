@@ -2926,14 +2926,14 @@ set_tests_properties(cgb_external_dispositions PROPERTIES
   PASS_REGULAR_EXPRESSION "external-dispositions pass age=6" TIMEOUT 30)
 # Negative control: one AGE reason changed in a configure-time copy must be rejected.
 file(READ "${GBB_EXT_DISPOSITIONS_RECORD}" gbb_ext_record)
-set(GBB_EXT_REASON_ANCHOR "\"src/m3-bg-lcdc/m3-bg-lcdc-cgbBCE.png\",\n          \"disposition\": \"expected-unsupported\",\n          \"reason\": \"mode-3-pixel-timing\"")
+set(GBB_EXT_REASON_ANCHOR "\"src/m3-bg-lcdc/m3-bg-lcdc-cgbBCE.png\",\n          \"disposition\": \"expected-failure\",\n          \"reason\": \"expected-failure:cgb-e-mode3-reference-mismatch\"")
 string(FIND "${gbb_ext_record}" "${GBB_EXT_REASON_ANCHOR}" gbb_ext_at)
 string(FIND "${gbb_ext_record}" "${GBB_EXT_REASON_ANCHOR}" gbb_ext_last REVERSE)
 if(gbb_ext_at EQUAL -1 OR NOT gbb_ext_at EQUAL gbb_ext_last)
   message(FATAL_ERROR "external disposition mutation anchor must occur exactly once in cgb-ppu-dispositions.json")
 endif()
 string(REPLACE "${GBB_EXT_REASON_ANCHOR}"
-  "\"src/m3-bg-lcdc/m3-bg-lcdc-cgbBCE.png\",\n          \"disposition\": \"expected-unsupported\",\n          \"reason\": \"timing-not-needed\""
+  "\"src/m3-bg-lcdc/m3-bg-lcdc-cgbBCE.png\",\n          \"disposition\": \"expected-failure\",\n          \"reason\": \"expected-failure:timing-not-needed\""
   gbb_ext_record_bad "${gbb_ext_record}")
 file(WRITE "${PROJECT_BINARY_DIR}/external-dispositions/mutated.json" "${gbb_ext_record_bad}")
 add_test(NAME cgb_external_dispositions_mutated
@@ -2942,30 +2942,30 @@ add_test(NAME cgb_external_dispositions_mutated
     -DGBB_EXPECT_CODE=1
     "-DGBB_EXPECT_REGEX=disposition-mismatch"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
-# Negative control: an image fixture cannot be marked executed by an external disposition scan.
+# Negative control: an executed image must retain its exact source/ROM/mode/reference identity.
 file(READ "${PROJECT_SOURCE_DIR}/fixtures/age/manifest.json" gbb_ext_age_manifest)
 string(JSON gbb_ext_age_fixture_count LENGTH "${gbb_ext_age_manifest}" fixtures)
 math(EXPR gbb_ext_age_fixture_last "${gbb_ext_age_fixture_count} - 1")
-set(gbb_ext_pending_image_found OFF)
+set(gbb_ext_image_contract_found OFF)
 foreach(gbb_ext_age_index RANGE 0 ${gbb_ext_age_fixture_last})
   string(JSON gbb_ext_age_file GET "${gbb_ext_age_manifest}" fixtures ${gbb_ext_age_index} file)
   if(gbb_ext_age_file STREQUAL "m3-bg-lcdc-cgbBCE.gb")
-    set(gbb_ext_pending_image_found ON)
-    string(JSON gbb_ext_age_manifest_pending_bad SET "${gbb_ext_age_manifest}"
-      fixtures ${gbb_ext_age_index} qualification_status "\"pass\"")
+    set(gbb_ext_image_contract_found ON)
+    string(JSON gbb_ext_age_manifest_contract_bad SET "${gbb_ext_age_manifest}"
+      fixtures ${gbb_ext_age_index} case_id "\"wrong-case-identity\"")
   endif()
 endforeach()
-if(NOT gbb_ext_pending_image_found)
-  message(FATAL_ERROR "external disposition pending-image control could not find its AGE manifest entry")
+if(NOT gbb_ext_image_contract_found)
+  message(FATAL_ERROR "external disposition image-contract control could not find its AGE manifest entry")
 endif()
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/external-dispositions")
-file(WRITE "${PROJECT_BINARY_DIR}/external-dispositions/image-pending-mutated.json"
-  "${gbb_ext_age_manifest_pending_bad}")
-add_test(NAME cgb_external_dispositions_image_pending
+file(WRITE "${PROJECT_BINARY_DIR}/external-dispositions/image-contract-mutated.json"
+  "${gbb_ext_age_manifest_contract_bad}")
+add_test(NAME cgb_external_dispositions_image_contract
   COMMAND ${CMAKE_COMMAND}
-    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_EXT_DISPOSITIONS_VERIFIER};--record;${GBB_EXT_DISPOSITIONS_RECORD};--doc;${GBB_CGB_PROFILE_DOC};--repo-root;${PROJECT_SOURCE_DIR};--age-manifest;${PROJECT_BINARY_DIR}/external-dispositions/image-pending-mutated.json"
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_EXT_DISPOSITIONS_VERIFIER};--record;${GBB_EXT_DISPOSITIONS_RECORD};--doc;${GBB_CGB_PROFILE_DOC};--repo-root;${PROJECT_SOURCE_DIR};--age-manifest;${PROJECT_BINARY_DIR}/external-dispositions/image-contract-mutated.json"
     -DGBB_EXPECT_CODE=1
-    "-DGBB_EXPECT_REGEX=disposition-mismatch age-image-pending"
+    "-DGBB_EXPECT_REGEX=disposition-mismatch age-image-case-identity-mismatch"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # Optional acid2 local runner (D-24): required CI runs synthetic self-tests only, never an acid2 file.
 set(GBB_ACID2_LOCAL "${PROJECT_SOURCE_DIR}/tests/scripts/run-acid2-local.py")
@@ -3521,22 +3521,48 @@ add_test(NAME cgb_age_m3_tracer
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_M3_PIXEL_ORACLE}"
     --case m3-bg-lcdc-cgbBCE --harness $<TARGET_FILE:test_age_m3>
     --frame "${PROJECT_BINARY_DIR}/age-m3/tracer.rgb555"
-    --reference "${PROJECT_SOURCE_DIR}/fixtures/age/references/m3-bg-lcdc-cgbBCE.png"
-    --observe-pending)
+    --reference "${PROJECT_SOURCE_DIR}/fixtures/age/references/m3-bg-lcdc-cgbBCE.png")
 set_tests_properties(cgb_age_m3_tracer PROPERTIES TIMEOUT 60)
+set(GBB_AGE_M3_CASES
+  m3-bg-lcdc-cgbBCE
+  m3-bg-lcdc-nocgb-ncmBCE
+  m3-bg-lcdc-ds-cgbBCE
+  m3-bg-scx-cgbBCE
+  m3-bg-scx-nocgb-ncmBCE
+  m3-bg-scx-ds-cgbBCE)
+foreach(GBB_AGE_M3_CASE IN LISTS GBB_AGE_M3_CASES)
+  string(REPLACE "-" "_" GBB_AGE_M3_ALIAS "${GBB_AGE_M3_CASE}")
+  add_test(NAME "cgb_age_m3_${GBB_AGE_M3_ALIAS}"
+    COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_M3_PIXEL_ORACLE}"
+      --case "${GBB_AGE_M3_CASE}" --harness $<TARGET_FILE:test_age_m3>
+      --frame "${PROJECT_BINARY_DIR}/age-m3/${GBB_AGE_M3_CASE}.rgb555"
+      --reference "${PROJECT_SOURCE_DIR}/fixtures/age/references/${GBB_AGE_M3_CASE}.png")
+  set_tests_properties("cgb_age_m3_${GBB_AGE_M3_ALIAS}" PROPERTIES TIMEOUT 60)
+endforeach()
+add_test(NAME cgb_age_m3_membership
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_M3_PIXEL_ORACLE}" --membership)
+set_tests_properties(cgb_age_m3_membership PROPERTIES
+  PASS_REGULAR_EXPRESSION "age-m3-membership pass cases=6 executed=6" TIMEOUT 30)
 add_test(NAME cgb_age_m3_pixel_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_M3_PIXEL_ORACLE}" --self-test)
 set_tests_properties(cgb_age_m3_pixel_controls PROPERTIES
   PASS_REGULAR_EXPRESSION "Ran [0-9]+ tests" TIMEOUT 30)
+add_test(NAME cgb_age_m3_early_frame_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_age_m3>;--case;m3-bg-lcdc-cgbBCE;--rom;${PROJECT_SOURCE_DIR}/fixtures/age/m3-bg-lcdc-cgbBCE.gb;--frame;${PROJECT_BINARY_DIR}/age-m3/early.rgb555;--max-half-dots;140448"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=age-m3 source-frame-not-complete"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(cgb_age_m3_early_frame_control PROPERTIES TIMEOUT 30)
 
 set(GBB_AGE_MANIFEST "${PROJECT_SOURCE_DIR}/fixtures/age/manifest.json")
 file(READ "${GBB_AGE_MANIFEST}" GBB_AGE_MANIFEST_JSON)
 include("${PROJECT_SOURCE_DIR}/cmake/AgeFixtureProtocol.cmake")
 gbb_validate_age_fixture_protocol("${GBB_AGE_MANIFEST_JSON}"
-  GBB_AGE_ROW_FIXTURE_INDICES GBB_AGE_PENDING_IMAGE_FIXTURE_INDICES)
+  GBB_AGE_ROW_FIXTURE_INDICES GBB_AGE_IMAGE_FIXTURE_INDICES)
 string(JSON GBB_AGE_FIXTURE_COUNT LENGTH "${GBB_AGE_MANIFEST_JSON}" fixtures)
 math(EXPR GBB_AGE_FIXTURE_LAST "${GBB_AGE_FIXTURE_COUNT} - 1")
-message(STATUS "AGE fixture protocol pass row-oracle=13 image-pending=6")
+message(STATUS "AGE fixture protocol pass row-oracle=13 image-executed=6")
 set(GBB_AGE_SPSW_FOUND OFF)
 foreach(GBB_AGE_FIXTURE_INDEX IN LISTS GBB_AGE_ROW_FIXTURE_INDICES)
   string(JSON GBB_AGE_FIXTURE_FILE GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} file)

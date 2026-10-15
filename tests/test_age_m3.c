@@ -4,6 +4,7 @@
 #include "gabbaboy_test.h"
 
 #include <inttypes.h>
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,6 +45,17 @@ static const age_m3_case *find_case(const char *name) {
         if (strcmp(name, age_m3_cases[i].case_name) == 0) return &age_m3_cases[i];
     }
     return NULL;
+}
+
+static int parse_u64(const char *text, uint64_t *out) {
+    char *end = NULL;
+    unsigned long long value;
+    if (text == NULL || text[0] == '\0' || text[0] == '-') return 0;
+    errno = 0;
+    value = strtoull(text, &end, 10);
+    if (errno != 0 || end == text || *end != '\0') return 0;
+    *out = (uint64_t)value;
+    return 1;
 }
 
 static int read_rom(const char *path, uint8_t rom[AGE_ROM_BYTES]) {
@@ -150,7 +162,7 @@ static int write_metadata(const char *frame_path, const age_m3_case *test_case,
 }
 
 static int run_case(const age_m3_case *test_case, const char *rom_path,
-                    const char *frame_path) {
+                    const char *frame_path, uint64_t max_run_half_dots) {
     uint8_t rom[AGE_ROM_BYTES];
     uint8_t frame_bytes[FRAME_BYTES];
     uint16_t pixels[PIXEL_COUNT];
@@ -195,8 +207,8 @@ static int run_case(const age_m3_case *test_case, const char *rom_path,
         return 1;
     }
 
-    while (elapsed < MAX_RUN_HALF_DOTS) {
-        const uint64_t remaining = MAX_RUN_HALF_DOTS - elapsed;
+    while (elapsed < max_run_half_dots) {
+        const uint64_t remaining = max_run_half_dots - elapsed;
         const uint64_t slice = remaining < RUN_SLICE ? remaining : RUN_SLICE;
         const gbb_run_result run = gbb_run(instance, slice, NULL, 0u);
         if (run.consumed_half_dots > remaining) {
@@ -219,6 +231,9 @@ static int run_case(const age_m3_case *test_case, const char *rom_path,
                 gbb_destroy(instance);
                 return 1;
             }
+            /* The pinned AGE source turns LCD off during setup, seeds its
+             * VBlank counter to five, then enables LCD. Generation 5 is the
+             * first completed frame at the source's terminal boundary. */
             if (frame_info.generation == 5u) {
                 have_frame = 1;
                 break;
@@ -235,7 +250,7 @@ static int run_case(const age_m3_case *test_case, const char *rom_path,
         }
     }
     if (!have_frame) {
-        fprintf(stderr, "age-m3 source-frame-not-complete bound=%" PRIu64 "\n", MAX_RUN_HALF_DOTS);
+        fprintf(stderr, "age-m3 source-frame-not-complete bound=%" PRIu64 "\n", max_run_half_dots);
         gbb_destroy(instance);
         return 1;
     }
@@ -277,9 +292,16 @@ int main(int argc, char **argv) {
     const age_m3_case *test_case = NULL;
     const char *rom_path = NULL;
     const char *frame_path = NULL;
-    if (argc != 7 || strcmp(argv[1], "--case") != 0 ||
+    uint64_t max_run_half_dots = MAX_RUN_HALF_DOTS;
+    if ((argc != 7 && argc != 9) || strcmp(argv[1], "--case") != 0 ||
         strcmp(argv[3], "--rom") != 0 || strcmp(argv[5], "--frame") != 0) {
-        fprintf(stderr, "usage: test_age_m3 --case CASE --rom ROM --frame RGB555\n");
+        fprintf(stderr, "usage: test_age_m3 --case CASE --rom ROM --frame RGB555 [--max-half-dots N]\n");
+        return 2;
+    }
+    if (argc == 9 && (strcmp(argv[7], "--max-half-dots") != 0 ||
+                      !parse_u64(argv[8], &max_run_half_dots) ||
+                      max_run_half_dots == 0u || max_run_half_dots > MAX_RUN_HALF_DOTS)) {
+        fprintf(stderr, "age-m3 run-bound-invalid\n");
         return 2;
     }
     test_case = find_case(argv[2]);
@@ -293,5 +315,5 @@ int main(int argc, char **argv) {
         fprintf(stderr, "age-m3 path-too-long\n");
         return 2;
     }
-    return run_case(test_case, rom_path, frame_path);
+    return run_case(test_case, rom_path, frame_path, max_run_half_dots);
 }

@@ -108,10 +108,11 @@ source-only and is not vendored. The existing `hblank_vram_dma.gbc` output is
 admitted as the seventh fixture in `manifest.json` and remains a selected
 native CGB case.
 
-AGE has no CGB colour, attribute or priority ROM at 1f5bc10e (only m3-bg-lcdc and m3-bg-scx,
-which are expected-unsupported for mode-3 pixel timing, D-09). Roadmap success criterion 1 is
-met by these MagenTests ROMs, the original fixtures/cgb-colour ROMs and the exhaustive priority
-truth table, not by AGE. (D-20; the AGE expected-unsupported records are plan 11-11.)
+AGE has no CGB colour, attribute or priority ROM at 1f5bc10e. Its six m3-bg-lcdc and m3-bg-scx
+image targets were executed in Phase 14 and currently have exact expected-failure RGB555
+signatures for CGB-E (D-09); they remain upstream author pass targets and are not Phase 11 colour
+evidence (D-20). Roadmap success criterion 1 is met by these MagenTests ROMs, the original
+fixtures/cgb-colour ROMs and the exhaustive priority truth table, not by AGE.
 
 ## Distribution
 

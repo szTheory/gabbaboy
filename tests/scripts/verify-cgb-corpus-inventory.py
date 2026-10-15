@@ -71,6 +71,15 @@ MOONEYE_CTEST_NAMES = {
     "acceptance/timer/tim00_div_trigger.s": "cgb_corpus_mooneye_tim00_div_trigger",
     "misc/ppu/vblank_stat_intr-C.s": "cgb_corpus_mooneye_vblank_stat_intr_C",
 }
+AGE_M3_CASE_IDS = {
+    "m3-bg-lcdc-cgbBCE": "age:m3-bg-lcdc",
+    "m3-bg-lcdc-nocgb-ncmBCE": "age:m3-bg-lcdc-nocgb",
+    "m3-bg-lcdc-ds-cgbBCE": "age:m3-bg-lcdc-ds",
+    "m3-bg-scx-cgbBCE": "age:m3-bg-scx",
+    "m3-bg-scx-nocgb-ncmBCE": "age:m3-bg-scx-nocgb",
+    "m3-bg-scx-ds-cgbBCE": "age:m3-bg-scx-ds",
+}
+AGE_M3_XFAIL_REASON = "expected-failure:cgb-e-mode3-reference-mismatch"
 IMMUTABLE_OUTPUT_FIELDS = ("id", "suite", "source_id", "output_path", "selected_for_corpus", "case_ids")
 IMMUTABLE_CASE_FIELDS = ("id", "suite", "source_id", "output_id", "model", "mode", "speed", "author_expectation")
 
@@ -395,6 +404,107 @@ def check_mooneye_qualification(root: Path, sources: dict[str, dict],
              f"mooneye-test-binding:{alias}")
 
 
+def check_age_m3_qualification(root: Path, cases: dict[str, dict]) -> None:
+    manifest = bounded_json(root / "fixtures/age/manifest.json")
+    ppu = bounded_json(root / "tests/external/cgb-ppu-dispositions.json")
+    commit = manifest.get("source", {}).get("commit")
+    need(commit == PINS["age"][0], "age-m3-source-pin")
+    fixtures = {
+        row.get("file", "").removesuffix(".gb"): row
+        for row in manifest.get("fixtures", [])
+        if row.get("fixture_class") == "age-m3-reference"
+    }
+    suites = {row.get("suite"): row for row in ppu.get("suites", [])}
+    ppu_rows = {row.get("case"): row for row in suites.get("age", {}).get("rows", [])}
+    need(set(fixtures) == set(AGE_M3_CASE_IDS) and set(ppu_rows) == set(AGE_M3_CASE_IDS),
+         "age-m3-case-set")
+
+    for case, inventory_id in AGE_M3_CASE_IDS.items():
+        fixture = fixtures[case]
+        ppu_row = ppu_rows[case]
+        inventory_case = cases.get(inventory_id)
+        need(inventory_case is not None, f"age-m3-inventory-case:{case}")
+        identity = "/".join((
+            "age@" + commit,
+            fixture["source_path"] + "#" + fixture["source_sha256"],
+            fixture["file"] + "#" + fixture["sha256"],
+            fixture["model"], fixture["mode"], fixture["speed"], case,
+        ))
+        mismatches = fixture.get("pixel_mismatch_count")
+        signature = fixture.get("pixel_mismatch_signature_sha256")
+        need(fixture.get("qualification_status") == "executed"
+             and fixture.get("expected_role") == "pass-target"
+             and fixture.get("execution_result") == "fail"
+             and fixture.get("disposition") == "expected-failure"
+             and fixture.get("reason") == AGE_M3_XFAIL_REASON,
+             f"age-m3-manifest-disposition:{case}")
+        need(fixture.get("case_id") == identity
+             and fixture.get("pixel_assertion_count") == 23040
+             and isinstance(mismatches, int) and 0 < mismatches <= 23040
+             and re.fullmatch(r"[0-9a-f]{64}", str(signature)) is not None,
+             f"age-m3-manifest-signature:{case}")
+        need(ppu_row.get("case_id") == identity
+             and ppu_row.get("disposition") == fixture.get("disposition")
+             and ppu_row.get("reason") == fixture.get("reason")
+             and ppu_row.get("observed_result") == "fail"
+             and ppu_row.get("evaluator_status") == "xfail"
+             and ppu_row.get("model") == "CGB-E"
+             and ppu_row.get("mode") == fixture.get("mode")
+             and ppu_row.get("speed") == fixture.get("speed")
+             and ppu_row.get("pixel_assertion_count") == 23040
+             and ppu_row.get("pixel_mismatch_count") == mismatches
+             and ppu_row.get("pixel_mismatch_signature_sha256") == signature,
+             f"age-m3-ppu-disposition:{case}")
+        need(ppu_row.get("source_sha256") == fixture.get("source_sha256")
+             and ppu_row.get("rom_sha256") == fixture.get("sha256")
+             and ppu_row.get("reference_sha256") == fixture.get("reference", {}).get("sha256")
+             and ppu_row.get("pinned_by") == "cgb_age_m3_" + case.replace("-", "_"),
+             f"age-m3-ppu-identity:{case}")
+
+        expected_mode = "native" if fixture["mode"] == "native-cgb" else "compat"
+        need(inventory_case.get("model") == "CGB-CPU-E"
+             and inventory_case.get("mode") == expected_mode
+             and inventory_case.get("speed") == fixture.get("speed"),
+             f"age-m3-inventory-model-mode:{case}")
+        need(inventory_case.get("case_identity") == identity
+             and inventory_case.get("author_expectation", {}).get("class") == "author-verified-source"
+             and "CGB-E" in inventory_case["author_expectation"].get("value", ""),
+             f"age-m3-inventory-identity-or-author:{case}")
+        execution = inventory_case.get("execution", {})
+        need(execution.get("state") == "completed" and execution.get("terminal") is True
+             and execution.get("terminal_observation") == "frame-counter-vblank-5"
+             and execution.get("observed_result") == "fail"
+             and execution.get("evaluator_status") == "xfail"
+             and execution.get("case_id") == identity
+             and execution.get("assertion_count") == 23040
+             and execution.get("mismatch_count") == mismatches
+             and execution.get("signature_sha256") == signature,
+             f"age-m3-inventory-execution:{case}")
+        evaluator = inventory_case.get("evaluator_disposition", {})
+        need(evaluator.get("reference") == "tests/external/cgb-ppu-dispositions.json#age"
+             and evaluator.get("state") == "expected-failure"
+             and evaluator.get("value") == AGE_M3_XFAIL_REASON
+             and evaluator.get("signature_sha256") == signature,
+             f"age-m3-inventory-evaluator:{case}")
+        contract = inventory_case.get("assertion_contract", {})
+        rows = contract.get("rows")
+        need(contract.get("state") == "qualified" and contract.get("count") == 1
+             and isinstance(rows, list) and len(rows) == 1,
+             f"age-m3-inventory-assertion-contract:{case}")
+        assertion = rows[0]
+        need(assertion.get("id") == identity + "/rgb555-frame"
+             and assertion.get("expected_disposition") == "pass"
+             and assertion.get("observed_result") == "fail"
+             and assertion.get("evaluator_status") == "xfail"
+             and assertion.get("assertion_count") == 23040
+             and assertion.get("mismatch_count") == mismatches
+             and assertion.get("signature_sha256") == signature,
+             f"age-m3-inventory-assertion:{case}")
+        test_name = "cgb_age_m3_" + case.replace("-", "_")
+        need(inventory_case.get("test_binding") == {"ctest_name": test_name, "state": "bound"},
+             f"age-m3-inventory-test-binding:{case}")
+
+
 def check_documentation(root: Path, data: dict) -> None:
     doc = (root / DOC.relative_to(ROOT)).read_text(encoding="utf-8")
     begin, end = "<!-- cgb-corpus-inventory-begin -->", "<!-- cgb-corpus-inventory-end -->"
@@ -402,8 +512,9 @@ def check_documentation(root: Path, data: dict) -> None:
     block = doc.split(begin, 1)[1].split(end, 1)[0]
     required = (
         "gabbaboy-cgb-corpus-inventory-v1", "Mooneye", "SameSuite", "AGE", "MagenTests",
-        "83", "70", "19", "9", "74", "5", "107", "109", "0", "101", "13", "6", "8", "62", "4,784",
+        "83", "70", "19", "9", "74", "5", "107", "109", "0", "13", "6", "8", "62", "4,784",
         "CGB-CPU-E", "assertion", "admitted", "pending", "author", "evaluator", "rights", "ctest",
+        "expected-failure", "RGB555",
     )
     for token in required:
         need(token.lower() in block.lower(), f"documentation-token:{token}")
@@ -514,6 +625,7 @@ def validate(root: Path, data: dict, complete: bool = False) -> tuple[dict[str, 
     check_documentation(root, data)
     check_admitted_outputs(root, outputs, sources)
     check_mooneye_qualification(root, sources, outputs, cases)
+    check_age_m3_qualification(root, cases)
     if complete:
         check_complete(root, outputs, cases)
     return sources, outputs, cases
@@ -650,9 +762,9 @@ def self_test(root: Path, data: dict) -> None:
         _, outputs, cases = validate(root, data)
         check_complete(root, outputs, cases)
     except Mismatch as exc:
-        need(str(exc) == "complete-test-binding-pending:age:m3-bg-lcdc",
+        need(str(exc) == "complete-test-binding-pending:age:spsw-ch2-lc-delay-cgbBCE",
              f"self-test-wrong-diagnostic:complete:{exc}")
-        controls.append("complete-rejects-admitted-pending-image-case")
+        controls.append("complete-rejects-unbound-existing-row-case")
     else:
         raise Mismatch("self-test-control-accepted:incomplete-complete-mode")
     print("cgb-corpus-inventory self-test pass controls=" + ",".join(controls))

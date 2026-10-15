@@ -21,9 +21,10 @@ admitted with pinned manifest bytes and provenance; three admitted Magen MBC
 outputs remain outside the CGB case set, and one Magen PPU output supplies
 separate native and compatibility-mode cases. All nine selected Mooneye CGB
 outputs are admitted, reproducible and bound to individual tests. The 107
-required case identities remain fixed; 101 cases have terminal execution
-receipts, while the six AGE mode-3 image cases are admitted but remain
-not-executed pending their image comparisons.
+required case identities remain fixed and now all have terminal execution
+receipts. The six AGE mode-3 image cases have exact expected-failure software
+model results against independent source images; their author pass targets
+remain separate from those observed results.
 
 The Mooneye roster contains 59 source headers with CGB in a pass list, 26 with
 CGB in a fail list, and two in both. Its nine required identities include the
@@ -54,8 +55,10 @@ AGE has 19 admitted outputs: 13 existing row-oracle cases and six mode-3
 source/reference image pairs. Four new targets are normal-speed
 native/compatibility cases and two are separate double-speed siblings. Each
 image pair records its own source, PNG, rights, build provenance, and output
-digest. The six image cases remain admitted-not-executed for Plan 14-09; their
-reference images and author expectations do not count as emulator results.
+digest. Each image case was executed at its pinned model, mode, speed, ROM, and
+reference identity, and all six produced nonzero exact RGB555 mismatch
+signatures. These are expected failures for the current software model; the
+pinned upstream author expectation remains pass for every case.
 
 MagenTests contributes five CGB-CPU-E model/mode cases from already admitted
 outputs. The HBlank VRAM DMA output is the seventh admitted ROM in its manifest

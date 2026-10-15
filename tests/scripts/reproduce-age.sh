@@ -177,6 +177,14 @@ m3_expected = {
         },
     },
 }
+m3_execution_expected = {
+    'm3-bg-lcdc-cgbBCE.gb': (4736, 'f872cd7b88efd0e650abbe6b6e665c520db922680393cbb03ae961ff88cadba9'),
+    'm3-bg-lcdc-nocgb-ncmBCE.gb': (4736, 'f8e73561af491063f68efbca0ce1db1c54385587bbc4d98f80a0661ff49e3949'),
+    'm3-bg-lcdc-ds-cgbBCE.gb': (6944, '2caeb6b70a0dc22096be7a9ac3283d4428166e31dd224cda21caa8432baa8917'),
+    'm3-bg-scx-cgbBCE.gb': (672, 'f35aeda05f98fb815d1bc19a8d83a1dea0400c2b7c1e775efeedf8ef3646d97c'),
+    'm3-bg-scx-nocgb-ncmBCE.gb': (672, '1da05a373b6bc39943f657ddb63a07bb6e62d13335e4af10e461ecfd73c3d611'),
+    'm3-bg-scx-ds-cgbBCE.gb': (448, '639c32dd649abd954020590d056cf41900536f37c704a7f3888a6393455b65f0'),
+}
 build = manifest.get('build', {})
 if any(build.get(field) != value for field, value in expected_build.items()):
     fail('RGBDS-build-pin-mismatch')
@@ -221,8 +229,25 @@ for entry in entries:
         for field in ('source_path', 'source_size_bytes', 'source_sha256', 'size_bytes', 'sha256', 'header_143', 'model', 'mode', 'speed', 'expected_role'):
             if entry.get(field) != expected_m3[field]:
                 fail('m3-' + field.replace('_', '-') + '-mismatch-' + name)
-        if entry.get('qualification_status') != 'admitted-not-executed':
+        if entry.get('qualification_status') != 'executed':
             fail('m3-qualification-status-mismatch-' + name)
+        mismatch_count, mismatch_signature = m3_execution_expected[name]
+        identity = '/'.join((
+            'age@' + commit,
+            entry['source_path'] + '#' + entry['source_sha256'],
+            name + '#' + entry['sha256'],
+            entry['model'], entry['mode'], entry['speed'], name.removesuffix('.gb'),
+        ))
+        if (entry.get('execution_result') != 'fail'
+                or entry.get('disposition') != 'expected-failure'
+                or entry.get('reason') != 'expected-failure:cgb-e-mode3-reference-mismatch'):
+            fail('m3-execution-disposition-mismatch-' + name)
+        if entry.get('case_id') != identity:
+            fail('m3-case-identity-mismatch-' + name)
+        if (entry.get('pixel_assertion_count') != 23040
+                or entry.get('pixel_mismatch_count') != mismatch_count
+                or entry.get('pixel_mismatch_signature_sha256') != mismatch_signature):
+            fail('m3-pixel-signature-mismatch-' + name)
         if expected_m3['cgb_e_verified'] not in entry.get('verified', []):
             fail('m3-author-attestation-mismatch-' + name)
         reference = entry.get('reference', {})

@@ -20,8 +20,9 @@ AGE_IMAGE_CASES = {
     for variant in ("cgbBCE", "ds-cgbBCE", "nocgb-ncmBCE")
 }
 AGE_DIGEST_ONLY_CASE = "spsw-interrupts-cgbBC"
+AGE_COMMIT = "1f5bc10e2cb60b86c19f8d0287ff78f410c4f639"
 ROW_METADATA = {"test_results_address", "expected_address", "rows", "budget_half_dots"}
-IMAGE_OUTCOMES = {"disposition", "execution_result", "pixel_result", "emulator_result", "actual_result"}
+IMAGE_XFAIL_REASON = "expected-failure:cgb-e-mode3-reference-mismatch"
 
 
 class Mismatch(Exception):
@@ -79,13 +80,29 @@ def admitted_age_row_fixtures(root: pathlib.Path) -> dict[str, dict]:
     for case, fixture in rows.items():
         need(ROW_METADATA <= set(fixture) and fixture.get("file") == f"{case}.gb",
              f"age-row-metadata {case}")
-        need("qualification_status" not in fixture and not IMAGE_OUTCOMES.intersection(fixture),
+        need("qualification_status" not in fixture and "pixel_assertion_count" not in fixture,
              f"age-row-image-status {case}")
     for case, fixture in images.items():
-        need(fixture.get("qualification_status") == "admitted-not-executed",
-             f"age-image-pending {case}")
-        need(not ROW_METADATA.intersection(fixture) and not IMAGE_OUTCOMES.intersection(fixture),
-             f"age-image-row-or-outcome {case}")
+        need(fixture.get("qualification_status") == "executed",
+             f"age-image-not-executed {case}")
+        need(not ROW_METADATA.intersection(fixture), f"age-image-row-metadata {case}")
+        need(fixture.get("expected_role") == "pass-target" and
+             fixture.get("execution_result") == "fail" and
+             fixture.get("disposition") == "expected-failure" and
+             fixture.get("reason") == IMAGE_XFAIL_REASON,
+             f"age-image-execution-disposition {case}")
+        identity = "/".join((
+            f"age@{AGE_COMMIT}",
+            f"{fixture['source_path']}#{fixture['source_sha256']}",
+            f"{fixture['file']}#{fixture['sha256']}",
+            fixture["model"], fixture["mode"], fixture["speed"], case,
+        ))
+        need(fixture.get("case_id") == identity, f"age-image-case-identity {case}")
+        need(fixture.get("pixel_assertion_count") == 23040 and
+             isinstance(fixture.get("pixel_mismatch_count"), int) and
+             0 < fixture["pixel_mismatch_count"] <= 23040 and
+             re.fullmatch(r"[0-9a-f]{64}", str(fixture.get("pixel_mismatch_signature_sha256", ""))) is not None,
+             f"age-image-signature {case}")
         reference = fixture.get("reference", {})
         need(reference.get("file") == f"references/{case}.png",
              f"age-image-reference-pair {case}")

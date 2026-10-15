@@ -6,9 +6,11 @@ import argparse
 import hashlib
 import json
 import pathlib
+import re
 import struct
 import subprocess
 import sys
+import tempfile
 import unittest
 import zlib
 from dataclasses import dataclass
@@ -24,6 +26,7 @@ AGE_TEST_NAMES = {
     "cgb_age_m3_tracer",
     "cgb_age_m3_pixel_controls",
     "cgb_age_m3_membership",
+    "cgb_age_m3_early_frame_control",
     *(f"cgb_age_m3_{case.replace('-', '_')}" for case in AGE_CASES),
 }
 FRAME_WIDTH = 160
@@ -248,14 +251,6 @@ def decode_png(data: bytes) -> PngImage:
     return PngImage(width, height, tuple(pixel for row in rows for pixel in row), color_type)
 
 
-def rgb8_to_rgb555(rgb: tuple[int, ...]) -> int:
-    red, green, blue = rgb[:3]
-    r = (red * 31 + 127) // 255
-    g = (green * 31 + 127) // 255
-    b = (blue * 31 + 127) // 255
-    return r | (g << 5) | (b << 10)
-
-
 def expected_frame(image: PngImage, mode: str) -> tuple[int, ...]:
     if image.width != FRAME_WIDTH or image.height != FRAME_HEIGHT:
         fail(f"reference-dimensions actual={image.width}x{image.height} expected=160x144")
@@ -356,10 +351,27 @@ def validate_frame_metadata(metadata: dict, entry: dict, case: str, rom_sha256: 
         fail("compat-palette-policy-mismatch")
 
 
+def validate_reference_selection(root: pathlib.Path, entry: dict, case: str,
+                                 reference_argument: pathlib.Path | None) -> pathlib.Path:
+    reference_path = safe_repo_file(root, f"fixtures/age/{entry['reference']['file']}", "reference")
+    if reference_argument is not None and reference_argument.resolve() != reference_path:
+        fail(f"reference-case-mismatch {case}")
+    return reference_path
+
+
+def validate_frame_size(frame: bytes) -> None:
+    if len(frame) != FRAME_BYTES:
+        fail(f"frame-size-mismatch expected={FRAME_BYTES} actual={len(frame)}")
+
+
+def validate_frame_digest(frame: bytes, metadata: dict) -> None:
+    if hashlib.sha256(frame).hexdigest() != metadata.get("frame_sha256"):
+        fail("frame-digest-mismatch")
+
+
 def verify_case(root: pathlib.Path, case: str, harness: pathlib.Path,
                 frame_path: pathlib.Path, reference_argument: pathlib.Path | None,
-                manifest_path: pathlib.Path, dispositions_path: pathlib.Path,
-                observe_pending: bool = False) -> int:
+                manifest_path: pathlib.Path, dispositions_path: pathlib.Path) -> int:
     try:
         manifest = json.loads(read_bounded(manifest_path, 256 * 1024))
         record = json.loads(read_bounded(dispositions_path, 256 * 1024))
@@ -377,10 +389,7 @@ def verify_case(root: pathlib.Path, case: str, harness: pathlib.Path,
             fail(f"manifest-header-invalid {case}")
         if rom[0x143] != header:
             fail(f"rom-mode-header-mismatch {case}")
-        reference_rel = f"fixtures/age/{entry['reference']['file']}"
-        reference_path = safe_repo_file(root, reference_rel, "reference")
-        if reference_argument is not None and reference_argument.resolve() != reference_path:
-            fail(f"reference-case-mismatch {case}")
+        reference_path = validate_reference_selection(root, entry, case, reference_argument)
         reference = read_bounded(reference_path, MAX_PNG_BYTES)
         if len(reference) != entry["reference"].get("size_bytes") or hashlib.sha256(reference).hexdigest() != entry["reference"].get("sha256"):
             fail(f"reference-digest-or-size-mismatch {case}")
@@ -396,28 +405,18 @@ def verify_case(root: pathlib.Path, case: str, harness: pathlib.Path,
             sys.stderr.write(result.stderr)
             fail(f"guest-harness-failed case={case} exit={result.returncode}")
         frame = read_bounded(frame_path, FRAME_BYTES)
-        if len(frame) != FRAME_BYTES:
-            fail(f"frame-size-mismatch expected={FRAME_BYTES} actual={len(frame)}")
+        validate_frame_size(frame)
         metadata_path = pathlib.Path(str(frame_path) + ".json")
         metadata = json.loads(read_bounded(metadata_path, 16 * 1024))
         rom_sha256 = hashlib.sha256(rom).hexdigest()
         validate_frame_metadata(metadata, entry, case, rom_sha256)
-        if hashlib.sha256(frame).hexdigest() != metadata.get("frame_sha256"):
-            fail("frame-digest-mismatch")
+        validate_frame_digest(frame, metadata)
         png = decode_png(reference)
         expected = expected_frame(png, entry["mode"])
         actual = tuple(struct.unpack_from("<H", frame, index * 2)[0] for index in range(PIXEL_COUNT))
         identity = case_identity(entry, case)
         comparison = compare_pixels(expected, actual, identity)
         observed = "pass" if comparison.mismatch_count == 0 else "fail"
-        if observe_pending:
-            if entry.get("qualification_status") != "admitted-not-executed":
-                fail("observe-mode-requires-pending-image")
-            print(f"age-m3 observed case={case} model=CGB-E mode={entry['mode']} speed={entry['speed']} result={observed} assertions={PIXEL_COUNT} mismatches={comparison.mismatch_count} signature={comparison.mismatch_signature}")
-            for index, wanted, got in comparison.first_mismatches:
-                print(f"pixel-mismatch assertion={pixel_assertion_id(identity, index)} expected={wanted:04x} actual={got:04x}")
-            return 0
-
         if entry.get("qualification_status") != "executed":
             fail(f"age-image-not-executed {case}")
         if entry.get("execution_result") != observed or disposition.get("observed_result") != observed:
@@ -475,20 +474,38 @@ def membership_check(root: pathlib.Path, manifest_path: pathlib.Path,
         identity = case_identity(entry, case)
         if entry.get("expected_role") != "pass-target":
             fail(f"age-image-author-target-lost {case}")
-        if entry.get("qualification_status") == "admitted-not-executed":
-            if row.get("disposition") != "expected-unsupported":
-                fail(f"age-image-pending-disposition-mismatch {case}")
-            continue
         if entry.get("qualification_status") != "executed":
-            fail(f"age-image-status-invalid {case}")
+            fail(f"age-image-not-executed {case}")
         if row.get("case_id") != identity or entry.get("case_id") != identity:
             fail(f"age-image-case-identity-mismatch {case}")
         if entry.get("execution_result") not in {"pass", "fail"} or row.get("observed_result") != entry.get("execution_result"):
             fail(f"age-image-observed-result-mismatch {case}")
         if entry.get("disposition") != row.get("disposition"):
             fail(f"age-image-disposition-mismatch {case}")
+        if entry.get("reason") != row.get("reason") or not str(row.get("reason", "")).startswith("expected-failure:"):
+            fail(f"age-image-reason-mismatch {case}")
+        if (entry.get("pixel_assertion_count") != PIXEL_COUNT or
+                row.get("pixel_assertion_count") != PIXEL_COUNT or
+                entry.get("pixel_mismatch_count") != row.get("pixel_mismatch_count") or
+                entry.get("pixel_mismatch_signature_sha256") != row.get("pixel_mismatch_signature_sha256")):
+            fail(f"age-image-signature-mismatch membership {case}")
+        if (not isinstance(entry.get("pixel_mismatch_count"), int) or
+                entry["pixel_mismatch_count"] <= 0 or entry["pixel_mismatch_count"] > PIXEL_COUNT or
+                not isinstance(entry.get("pixel_mismatch_signature_sha256"), str) or
+                re.fullmatch(r"[0-9a-f]{64}", entry["pixel_mismatch_signature_sha256"]) is None):
+            fail(f"age-image-signature-invalid {case}")
+        if (entry.get("execution_result") != "fail" or row.get("observed_result") != "fail" or
+                entry.get("disposition") != "expected-failure" or row.get("disposition") != "expected-failure"):
+            fail(f"age-image-fail-disposition-mismatch {case}")
         if row.get("pinned_by") != f"cgb_age_m3_{case.replace('-', '_')}" or row.get("mode") != entry.get("mode") or row.get("speed") != entry.get("speed"):
             fail(f"age-image-execution-identity-mismatch {case}")
+        if (row.get("model") != "CGB-E" or row.get("expected_role") != "pass-target" or
+                row.get("evaluator_status") != "xfail"):
+            fail(f"age-image-evaluator-contract-mismatch {case}")
+        if (row.get("source_sha256") != entry.get("source_sha256") or
+                row.get("rom_sha256") != entry.get("sha256") or
+                row.get("reference_sha256") != entry.get("reference", {}).get("sha256")):
+            fail(f"age-image-source-pin-mismatch {case}")
 
 
 def run_membership(root: pathlib.Path, manifest_path: pathlib.Path,
@@ -569,6 +586,20 @@ class TestExecutedDispositionContract(unittest.TestCase):
                 self.assertEqual(entry.get("pixel_mismatch_signature_sha256"),
                                  row.get("pixel_mismatch_signature_sha256"))
                 self.assertRegex(entry.get("pixel_mismatch_signature_sha256", ""), r"^[0-9a-f]{64}$")
+                self.assertEqual(entry.get("pixel_mismatch_count"), row.get("pixel_mismatch_count"))
+                self.assertGreater(entry.get("pixel_mismatch_count", 0), 0)
+
+    def test_missing_ctest_target_is_rejected(self) -> None:
+        root = pathlib.Path(__file__).resolve().parents[2]
+        manifest = root / "fixtures/age/manifest.json"
+        dispositions = root / "tests/external/cgb-ppu-dispositions.json"
+        expected = (root / "tests/expected-tests.txt").read_text(encoding="utf-8").splitlines()
+        omitted = "cgb_age_m3_m3_bg_lcdc_cgbBCE"
+        with tempfile.TemporaryDirectory() as directory:
+            expected_copy = pathlib.Path(directory) / "expected-tests.txt"
+            expected_copy.write_text("\n".join(line for line in expected if line != omitted) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(OracleError, f"age-image-ctest-membership-missing {omitted}"):
+                membership_check(root, manifest, dispositions, expected_copy)
 
 
 class TestPixelControls(unittest.TestCase):
@@ -598,13 +629,66 @@ class TestPixelControls(unittest.TestCase):
         self.assertGreater(wrong.mismatch_count, 0)
         self.assertEqual(len(wrong.mismatch_signature), 64)
 
+    def test_all_white_frame_fails_exact_pixel_assertions(self) -> None:
+        wrong = compare_pixels(self.expected, (0x7FFF,) * PIXEL_COUNT, self.identity)
+        self.assertGreater(wrong.mismatch_count, 0)
+        clean = compare_pixels(self.expected, self.expected, self.identity)
+        self.assertNotEqual(wrong.mismatch_signature, clean.mismatch_signature)
+
+    def test_swapped_reference_is_rejected_by_case_identity(self) -> None:
+        entry = self.fixtures["m3-bg-lcdc-cgbBCE"]
+        swapped = self.root / "fixtures/age/references/m3-bg-scx-cgbBCE.png"
+        with self.assertRaisesRegex(OracleError, "reference-case-mismatch m3-bg-lcdc-cgbBCE"):
+            validate_reference_selection(self.root, entry, "m3-bg-lcdc-cgbBCE", swapped)
+
+    def test_wrong_mode_metadata_is_rejected(self) -> None:
+        entry = self.fixtures["m3-bg-lcdc-cgbBCE"]
+        metadata = {
+            "schema": "gabbaboy-age-m3-frame-v1",
+            "case": "m3-bg-lcdc-cgbBCE",
+            "model": "CGB-E",
+            "mode": "dmg-compatibility",
+            "speed": "normal",
+            "terminal": "frame-counter-vblank-5",
+            "generation": 5,
+            "width": FRAME_WIDTH,
+            "height": FRAME_HEIGHT,
+            "rom_sha256": "0" * 64,
+            "compat_palette_bg": list(COMPAT_PALETTE_BG),
+        }
+        with self.assertRaisesRegex(OracleError, "frame-metadata-mismatch mode"):
+            validate_frame_metadata(metadata, entry, "m3-bg-lcdc-cgbBCE", "0" * 64)
+
+    def test_stale_digest_and_missing_frame_are_rejected(self) -> None:
+        with self.assertRaisesRegex(OracleError, "frame-digest-mismatch"):
+            validate_frame_digest(bytes(FRAME_BYTES), {"frame_sha256": "0" * 64})
+        with self.assertRaisesRegex(OracleError, "frame-size-mismatch"):
+            validate_frame_size(b"")
+
+    def test_early_terminal_generation_is_rejected(self) -> None:
+        entry = self.fixtures["m3-bg-lcdc-cgbBCE"]
+        metadata = {
+            "schema": "gabbaboy-age-m3-frame-v1",
+            "case": "m3-bg-lcdc-cgbBCE",
+            "model": "CGB-E",
+            "mode": "native-cgb",
+            "speed": "normal",
+            "terminal": "frame-counter-vblank-5",
+            "generation": 4,
+            "width": FRAME_WIDTH,
+            "height": FRAME_HEIGHT,
+            "rom_sha256": "0" * 64,
+            "compat_palette_bg": list(COMPAT_PALETTE_BG),
+        }
+        with self.assertRaisesRegex(OracleError, "frame-metadata-mismatch generation"):
+            validate_frame_metadata(metadata, entry, "m3-bg-lcdc-cgbBCE", "0" * 64)
+
 
 def main() -> int:
     root = pathlib.Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser()
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--membership", action="store_true")
-    parser.add_argument("--observe-pending", action="store_true")
     parser.add_argument("--case")
     parser.add_argument("--harness", type=pathlib.Path)
     parser.add_argument("--frame", type=pathlib.Path)
@@ -624,7 +708,7 @@ def main() -> int:
     if not args.case or not args.harness or not args.frame:
         parser.error("--case, --harness, and --frame are required for pixel comparison")
     return verify_case(root, args.case, args.harness, args.frame, args.reference,
-                       args.manifest, args.dispositions, args.observe_pending)
+                       args.manifest, args.dispositions)
 
 
 if __name__ == "__main__":
