@@ -172,7 +172,13 @@ def check_eligibility(fixture):
             fail("eligibility ledger is missing required provenance: " + token)
 
 
-def self_check(fixture, case_name):
+def self_check(fixture, case_name, script):
+    repo_root = script.resolve().parents[2]
+    attribute = subprocess.run(
+        ["git", "-C", str(repo_root), "check-attr", "eol", "--", "fixtures/samesuite/LICENSE.txt"],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if attribute.returncode != 0 or attribute.stdout.strip() != "fixtures/samesuite/LICENSE.txt: eol: lf":
+        fail("raw-hashed license notice lacks LF checkout policy")
     names = selected(case_name)
     data = manifest(fixture)
     suite = {"name": "SameSuite", "revision": REV, "upstream": "https://github.com/LIJI32/SameSuite/tree/" + REV, "license": "X11; see LICENSE.txt"}
@@ -260,6 +266,11 @@ def self_test(fixture, script, case_name):
         def missing_license(target):
             (target / "LICENSE.txt").unlink()
 
+        def crlf_license(target):
+            path = target / "LICENSE.txt"
+            content = path.read_bytes().replace(b"\r\n", b"\n")
+            path.write_bytes(content.replace(b"\n", b"\r\n"))
+
         def changed_rom(target):
             path = target / (names[0] + ".gb")
             content = bytearray(path.read_bytes())
@@ -305,6 +316,7 @@ def self_test(fixture, script, case_name):
             path.write_text(json.dumps(data, indent=2) + "\n")
 
         mutate("missing-license", "missing license notice LICENSE.txt", missing_license)
+        mutate("crlf-license-notice", "X11/CC0 license notice SHA-256 mismatch: LICENSE.txt", crlf_license)
         mutate("changed-rom-digest", "ROM SHA-256/size mismatch", changed_rom)
         mutate("changed-source-digest", "source pin mismatch", changed_source_hash)
         mutate("wrong-source-revision", "source revision or SameSuite identity differs", wrong_revision)
@@ -374,12 +386,13 @@ def main():
     action = sys.argv[1]
     fixture = Path(sys.argv[2])
     case_name = sys.argv[3] or None
+    script = Path(sys.argv[4])
     if action == "self-check":
-        self_check(fixture, case_name)
+        self_check(fixture, case_name, script)
     elif action == "self-test":
-        self_test(fixture, Path(sys.argv[4]), case_name)
+        self_test(fixture, script, case_name)
     elif action == "compare-built":
-        self_check(fixture, case_name)
+        self_check(fixture, case_name, script)
         compare_built(fixture, Path(sys.argv[5]), case_name)
     elif action == "source-check":
         source_check(fixture, Path(sys.argv[5]))
