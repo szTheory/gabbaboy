@@ -348,6 +348,12 @@ static void observe_case(gbb_profile profile,const fixture_case *fc,const uint8_
     }
     free(capture);
 }
+static void print_report_assertion(const fixture_case *fc,const char *observed,const char *evaluator,
+                                   const protocol_evidence *evidence,uint64_t ticks) {
+    printf("assertion case=%s id=ld-b-b-result expected=pass observed=%s evaluator_status=%s callback_pc=%04x result_pc=%04x terminal=1 ticks=%llu budget=%llu\n",
+      fc->id,observed,evaluator,evidence->callback_pc,evidence->result_pc,
+      (unsigned long long)ticks,(unsigned long long)fc->budget);
+}
 static int run_one(const suite_def *suite,const fixture_case *fc,const char *manifest,int receipt,int observe,size_t eligible,size_t *executed,suite_tally *tally) {
     const gbb_profile profile=row_profile(fc); /* the row, never the command line, picks the run profile (D-25) */
     size_t rom_size=0;
@@ -384,6 +390,7 @@ static int run_one(const suite_def *suite,const fixture_case *fc,const char *man
           suite->manifest_sha256,MOONEYE_SOURCE_REVISION,MOONEYE_SOURCE_TREE,fc->source_path,suite->patch_sha256,fc->original_sha256,fc->sha256,
           GBB_BUILD_REVISION,GBB_BUILD_REVISION,GBB_BUILD_QUALIFIED?"true":"false",gbb_runner_profile_label(profile),
           (unsigned long long)ticks,(unsigned long long)fc->budget,eligible,*executed,stop);
+        if(receipt&&code==0)print_report_assertion(fc,"fail","xfail",&evidence,ticks);
         return code;
     }
     if(receipt){
@@ -391,6 +398,7 @@ static int run_one(const suite_def *suite,const fixture_case *fc,const char *man
             evidence.reached_result?"ld-b-b-without-expected-callback":"not-reached";
         printf("case=%s category=%s status=%s manifest_sha256=%s source_revision=%s source_tree=%s source_path=%s report_patch_sha256=%s builder_revision=%s builder_archive_sha256=%s original_rom_sha256=%s fixture_sha256=%s fixture_origin=derived-headless-report-closure upstream_assertions=unchanged core_revision=%s runner_revision=%s build_qualified=%s profile=%s boot=skipped protocol=mooneye-ld-b-b protocol_stage=%s callback_result=%s callback_pc=%04x result_pc=%04x protocol_reason=%s ticks=%llu budget=%llu eligible=%zu executed=%zu stop=%s recent=%zu\n",
           fc->id,fc->category,status,suite->manifest_sha256,MOONEYE_SOURCE_REVISION,MOONEYE_SOURCE_TREE,fc->source_path,suite->patch_sha256,MOONEYE_BUILDER_REVISION,MOONEYE_BUILDER_ARCHIVE_SHA256,fc->original_sha256,fc->sha256,GBB_BUILD_REVISION,GBB_BUILD_REVISION,GBB_BUILD_QUALIFIED?"true":"false",gbb_runner_profile_label(profile),stage,evidence.callback_result?evidence.callback_result:"none",evidence.callback_pc,evidence.result_pc,evidence.reason?evidence.reason:"none",(unsigned long long)ticks,(unsigned long long)fc->budget,eligible,*executed,stop,recent_count);
+        if(code==0)print_report_assertion(fc,"pass","pass",&evidence,ticks);
         size_t start=recent_count>8?recent_count-8:0;
         for(size_t i=start;i<recent_count;i++)printf("diag time=%llu kind=%u pc=%04x opcode=%02x address=%04x value=%02x timer=%02x\n",(unsigned long long)recent[i].time_half_dots,(unsigned)recent[i].kind,recent[i].pc,recent[i].opcode,recent[i].address,recent[i].value,recent[i].timer_state);
     }

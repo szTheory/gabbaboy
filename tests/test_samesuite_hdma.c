@@ -352,6 +352,16 @@ static int run_case(const same_case *test, const char *rom_path, uint64_t mutant
             }
         }
     }
+    printf("samesuite-hdma assertion case=%s id=guest-pass-sentinel expected=pass observed=pass status=match\n",
+           test->name);
+    printf("samesuite-hdma assertion case=%s id=ff55-register-sequence expected=pass observed=pass status=match\n",
+           test->name);
+    printf("samesuite-hdma assertion case=%s id=transfer-copy-bytes expected=pass observed=pass status=match\n",
+           test->name);
+    if (test == &CASE_GDMA_ADDR_MASK) {
+        printf("samesuite-hdma assertion case=%s id=address-mask expected=pass observed=pass status=match\n",
+               test->name);
+    }
     printf("samesuite-hdma pass case=%s model=CGB-CPU-E source=%04X destination=%04X blocks=%u ff55=%02X sentinel=03/05/08/0D/15/22 elapsed=%llu\n",
            test->name, source, destination, test->blocks, last_status,
            (unsigned long long)elapsed);

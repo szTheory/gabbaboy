@@ -1137,7 +1137,7 @@ add_test(NAME cgb_samesuite_apu_suite
     "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json"
     "${PROJECT_SOURCE_DIR}/tests/external/cgb-apu-dispositions.json"
     "${PROJECT_SOURCE_DIR}/fixtures/samesuite")
-set_tests_properties(cgb_samesuite_apu_suite PROPERTIES TIMEOUT 600)
+set_tests_properties(cgb_samesuite_apu_suite PROPERTIES TIMEOUT 600 LABELS "cgb-corpus")
 
 add_executable(test_samesuite_hdma test_samesuite_hdma.c)
 target_include_directories(test_samesuite_hdma PRIVATE "${PROJECT_SOURCE_DIR}/include")
@@ -3812,7 +3812,7 @@ foreach(GBB_AGE_DISPOSITION_SUITE_INDEX RANGE 0 ${GBB_AGE_DISPOSITION_SUITE_COUN
           COMMAND test_age "${PROJECT_SOURCE_DIR}/fixtures/age/${GBB_AGE_CASE_FILE}"
             "${GBB_AGE_CASE_RESULTS_HEX}" "${GBB_AGE_CASE_EXPECTED_HEX}"
             "${GBB_AGE_CASE_ROWS}" "${GBB_AGE_CASE_BUDGET}"
-            --check-disposition ${GBB_AGE_DISPOSITION_ARGS})
+            --check-disposition ${GBB_AGE_DISPOSITION_ARGS} --phase14-observations)
         set_tests_properties(${GBB_AGE_CASE_TEST} PROPERTIES TIMEOUT ${GBB_AGE_CASE_TIMEOUT}
           PASS_REGULAR_EXPRESSION "age verdict=${GBB_AGE_EXPECTED_VERDICT}")
       endforeach()
@@ -4283,6 +4283,30 @@ add_test(NAME sanitizer_timeout_policy_selftest
     "-DGBB_BINARY_DIR=${PROJECT_BINARY_DIR}"
     -P "${PROJECT_SOURCE_DIR}/tests/check_sanitizer_timeout_policy.cmake")
 set_tests_properties(sanitizer_timeout_policy_selftest PROPERTIES TIMEOUT 30)
+
+# Phase 14's report adapter consumes exactly the inventory-bound corpus CTests.
+# Report/control tests stay unlabeled so --run cannot recursively schedule itself.
+set(GBB_CGB_CORPUS_INVENTORY "${PROJECT_SOURCE_DIR}/tests/external/cgb-corpus-inventory.json")
+file(READ "${GBB_CGB_CORPUS_INVENTORY}" GBB_CGB_CORPUS_INVENTORY_JSON)
+string(JSON GBB_CGB_CORPUS_CASE_COUNT LENGTH "${GBB_CGB_CORPUS_INVENTORY_JSON}" cases)
+if(NOT GBB_CGB_CORPUS_CASE_COUNT EQUAL 107)
+  message(FATAL_ERROR "CGB corpus CTest label set must contain exactly 107 cases")
+endif()
+get_property(GBB_CGB_REGISTERED_TESTS DIRECTORY PROPERTY TESTS)
+set(GBB_CGB_CORPUS_TEST_NAMES "")
+math(EXPR GBB_CGB_CORPUS_CASE_LAST "${GBB_CGB_CORPUS_CASE_COUNT} - 1")
+foreach(GBB_CGB_CORPUS_CASE_INDEX RANGE 0 ${GBB_CGB_CORPUS_CASE_LAST})
+  string(JSON GBB_CGB_CORPUS_CTEST GET "${GBB_CGB_CORPUS_INVENTORY_JSON}"
+    cases ${GBB_CGB_CORPUS_CASE_INDEX} test_binding ctest_name)
+  if(NOT GBB_CGB_CORPUS_CTEST IN_LIST GBB_CGB_REGISTERED_TESTS)
+    message(FATAL_ERROR "CGB corpus binding is not a registered CTest: ${GBB_CGB_CORPUS_CTEST}")
+  endif()
+  if(GBB_CGB_CORPUS_CTEST IN_LIST GBB_CGB_CORPUS_TEST_NAMES)
+    message(FATAL_ERROR "CGB corpus CTest binding is duplicated: ${GBB_CGB_CORPUS_CTEST}")
+  endif()
+  list(APPEND GBB_CGB_CORPUS_TEST_NAMES "${GBB_CGB_CORPUS_CTEST}")
+  set_tests_properties("${GBB_CGB_CORPUS_CTEST}" PROPERTIES LABELS "cgb-corpus")
+endforeach()
 
 gabbaboy_verify_registered_tests()
 

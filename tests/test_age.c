@@ -715,7 +715,13 @@ int main(int argc, char **argv) {
                 const size_t offset = (size_t)row * 8u;
                 const uint8_t *expected = age_rom + (size_t)config.expected_address + 1u + offset;
                 const uint8_t *actual = result.row_bytes + offset;
-                printf("age-assertion-row id=%s/row-%02u expected=", case_name, row);
+                if (strcmp(case_name, "stat-mode-cgbE") == 0) {
+                    const char *assertion_id = stat_mode_assertion_id(row);
+                    if (assertion_id == NULL) goto bad_mode;
+                    printf("age-assertion-row id=%s expected=", assertion_id);
+                } else {
+                    printf("age-assertion-row id=%s/row-%02u expected=", case_name, row);
+                }
                 print_row_hex(expected);
                 printf(" actual=");
                 print_row_hex(actual);

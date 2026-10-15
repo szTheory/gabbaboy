@@ -3414,9 +3414,16 @@
     },
     {
       "assertion_contract": {
-        "count": null,
-        "rows": null,
-        "state": "pending-qualification"
+        "state": "qualified",
+        "count": 1,
+        "rows": [
+          {
+            "id": "bg-oam-priority-source-frame",
+            "expected_disposition": "pass",
+            "observed_result": null,
+            "evaluator_status": null
+          }
+        ]
       },
       "author_expectation": {
         "class": "CGB hardware photo; revision E unattested",
@@ -3440,15 +3447,22 @@
       "speed": "normal",
       "suite": "magentests",
       "test_binding": {
-        "ctest_name": null,
-        "state": "pending-registration"
+        "ctest_name": "magentests_cgb_bg_oam_priority",
+        "state": "bound"
       }
     },
     {
       "assertion_contract": {
-        "count": null,
-        "rows": null,
-        "state": "pending-qualification"
+        "state": "qualified",
+        "count": 1,
+        "rows": [
+          {
+            "id": "hblank-vram-dma-source-contract",
+            "expected_disposition": "pass",
+            "observed_result": null,
+            "evaluator_status": null
+          }
+        ]
       },
       "author_expectation": {
         "class": "SameBoy-assisted differential",
@@ -3472,15 +3486,22 @@
       "speed": "normal",
       "suite": "magentests",
       "test_binding": {
-        "ctest_name": null,
-        "state": "pending-registration"
+        "ctest_name": "magentests_hblank_vram_dma",
+        "state": "bound"
       }
     },
     {
       "assertion_contract": {
-        "count": null,
-        "rows": null,
-        "state": "pending-qualification"
+        "state": "qualified",
+        "count": 1,
+        "rows": [
+          {
+            "id": "oam-internal-priority-source-frame",
+            "expected_disposition": "pass",
+            "observed_result": null,
+            "evaluator_status": null
+          }
+        ]
       },
       "author_expectation": {
         "class": "SameBoy-assisted differential",
@@ -3504,15 +3525,22 @@
       "speed": "normal",
       "suite": "magentests",
       "test_binding": {
-        "ctest_name": null,
-        "state": "pending-registration"
+        "ctest_name": "magentests_cgb_oam_internal_priority",
+        "state": "bound"
       }
     },
     {
       "assertion_contract": {
-        "count": null,
-        "rows": null,
-        "state": "pending-qualification"
+        "state": "qualified",
+        "count": 1,
+        "rows": [
+          {
+            "id": "lcd-off-stat-mode0-display",
+            "expected_disposition": "pass",
+            "observed_result": null,
+            "evaluator_status": null
+          }
+        ]
       },
       "author_expectation": {
         "class": "author-attested",
@@ -3536,15 +3564,22 @@
       "speed": "normal",
       "suite": "magentests",
       "test_binding": {
-        "ctest_name": null,
-        "state": "pending-registration"
+        "ctest_name": "magentests_cgb_ppu_disabled_state_compat",
+        "state": "bound"
       }
     },
     {
       "assertion_contract": {
-        "count": null,
-        "rows": null,
-        "state": "pending-qualification"
+        "state": "qualified",
+        "count": 1,
+        "rows": [
+          {
+            "id": "lcd-off-stat-mode0-display",
+            "expected_disposition": "pass",
+            "observed_result": null,
+            "evaluator_status": null
+          }
+        ]
       },
       "author_expectation": {
         "class": "author-attested",
@@ -3568,8 +3603,8 @@
       "speed": "normal",
       "suite": "magentests",
       "test_binding": {
-        "ctest_name": null,
-        "state": "pending-registration"
+        "ctest_name": "magentests_cgb_ppu_disabled_state",
+        "state": "bound"
       }
     },
     {
@@ -45604,9 +45639,28 @@
     },
     {
       "assertion_contract": {
-        "count": null,
-        "rows": null,
-        "state": "pending-qualification"
+        "state": "qualified",
+        "count": 3,
+        "rows": [
+          {
+            "id": "guest-pass-sentinel",
+            "expected_disposition": "pass",
+            "observed_result": null,
+            "evaluator_status": null
+          },
+          {
+            "id": "ff55-register-sequence",
+            "expected_disposition": "pass",
+            "observed_result": null,
+            "evaluator_status": null
+          },
+          {
+            "id": "transfer-copy-bytes",
+            "expected_disposition": "pass",
+            "observed_result": null,
+            "evaluator_status": null
+          }
+        ]
       },
       "author_expectation": {
         "class": "encoded-test-result",
@@ -45630,15 +45684,40 @@
       "speed": "normal",
       "suite": "samesuite",
       "test_binding": {
-        "ctest_name": null,
-        "state": "pending-registration"
+        "ctest_name": "samesuite_hdma_gbc_dma_cont",
+        "state": "bound"
       }
     },
     {
       "assertion_contract": {
-        "count": null,
-        "rows": null,
-        "state": "pending-qualification"
+        "state": "qualified",
+        "count": 4,
+        "rows": [
+          {
+            "id": "guest-pass-sentinel",
+            "expected_disposition": "pass",
+            "observed_result": null,
+            "evaluator_status": null
+          },
+          {
+            "id": "ff55-register-sequence",
+            "expected_disposition": "pass",
+            "observed_result": null,
+            "evaluator_status": null
+          },
+          {
+            "id": "transfer-copy-bytes",
+            "expected_disposition": "pass",
+            "observed_result": null,
+            "evaluator_status": null
+          },
+          {
+            "id": "address-mask",
+            "expected_disposition": "pass",
+            "observed_result": null,
+            "evaluator_status": null
+          }
+        ]
       },
       "author_expectation": {
         "class": "encoded-test-result",
@@ -45662,15 +45741,34 @@
       "speed": "normal",
       "suite": "samesuite",
       "test_binding": {
-        "ctest_name": null,
-        "state": "pending-registration"
+        "ctest_name": "samesuite_hdma_gdma_addr_mask",
+        "state": "bound"
       }
     },
     {
       "assertion_contract": {
-        "count": null,
-        "rows": null,
-        "state": "pending-qualification"
+        "state": "qualified",
+        "count": 3,
+        "rows": [
+          {
+            "id": "guest-pass-sentinel",
+            "expected_disposition": "pass",
+            "observed_result": null,
+            "evaluator_status": null
+          },
+          {
+            "id": "ff55-register-sequence",
+            "expected_disposition": "pass",
+            "observed_result": null,
+            "evaluator_status": null
+          },
+          {
+            "id": "transfer-copy-bytes",
+            "expected_disposition": "pass",
+            "observed_result": null,
+            "evaluator_status": null
+          }
+        ]
       },
       "author_expectation": {
         "class": "encoded-test-result",
@@ -45694,15 +45792,34 @@
       "speed": "normal",
       "suite": "samesuite",
       "test_binding": {
-        "ctest_name": null,
-        "state": "pending-registration"
+        "ctest_name": "samesuite_hdma_hdma_lcd_off",
+        "state": "bound"
       }
     },
     {
       "assertion_contract": {
-        "count": null,
-        "rows": null,
-        "state": "pending-qualification"
+        "state": "qualified",
+        "count": 3,
+        "rows": [
+          {
+            "id": "guest-pass-sentinel",
+            "expected_disposition": "pass",
+            "observed_result": null,
+            "evaluator_status": null
+          },
+          {
+            "id": "ff55-register-sequence",
+            "expected_disposition": "pass",
+            "observed_result": null,
+            "evaluator_status": null
+          },
+          {
+            "id": "transfer-copy-bytes",
+            "expected_disposition": "pass",
+            "observed_result": null,
+            "evaluator_status": null
+          }
+        ]
       },
       "author_expectation": {
         "class": "encoded-test-result",
@@ -45726,8 +45843,8 @@
       "speed": "normal",
       "suite": "samesuite",
       "test_binding": {
-        "ctest_name": null,
-        "state": "pending-registration"
+        "ctest_name": "samesuite_hdma_hdma_mode0",
+        "state": "bound"
       }
     }
   ],

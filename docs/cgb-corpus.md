@@ -86,12 +86,19 @@ does not admit pending bytes.
 
 `tests/scripts/verify-cgb-corpus-report.py` consumes bounded existing runner/CTest
 observations and writes a private, versioned receipt; it does not add a C-core
-JSON interface. Its DAA tracer binds the checkout revision, covered source and
-fixture digests, runner bytes, CMake configuration, Mooneye manifest and ROM,
-model profile, compatibility mode, speed, boot policy, callback PCs and tick
-budget. The receipt's public paths are repository-relative. A failed or partial
-run replaces any earlier receipt with an `incomplete` record. The one-case
-tracer is a contract check, not a claim that the full 107-case receipt has
-completed; suite and assertion denominators remain separate, and matched
-expected failures never count as observed guest passes.
+JSON interface. `--run --build-dir build --receipt build/cgb-corpus-receipt.json`
+runs the 107 case-bound CTests and the aggregate SameSuite APU suite once,
+capturing their structured output. `--from-ctest` consumes that captured run
+only when its run ID, log digest, CTest names and current input identity match;
+it does not rerun the guests. Receipt paths are repository-relative, and a
+failed or partial run replaces any earlier receipt with an `incomplete` record.
+
+The receipt keeps attempted, completed, actual guest-pass, matched-xfail and
+assertion counts separate. The current frozen run contains 107 completed cases
+(25 observed passes and 82 matched expected failures) and 4,959 assertion rows.
+Every required suite and source-behavior cohort has passing evidence. The six
+AGE image comparisons remain expected software-model failures, with 18,208
+pixel mismatches across 138,240 pixels. The DAA one-case tracer remains a
+separate contract test; matched expected failures never count as observed
+guest passes.
 <!-- cgb-corpus-inventory-end -->
