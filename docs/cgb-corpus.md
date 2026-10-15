@@ -21,8 +21,9 @@ admitted with pinned manifest bytes and provenance; three admitted Magen MBC
 outputs remain outside the CGB case set, and one Magen PPU output supplies
 separate native and compatibility-mode cases. All nine selected Mooneye CGB
 outputs are admitted, reproducible and bound to individual tests. The 107
-required case identities remain fixed and now all have terminal execution
-receipts. The six AGE mode-3 image cases have exact expected-failure software
+required case identities remain fixed. A fresh exact-membership CTest receipt
+establishes runtime completion; the static inventory does not rewrite an
+unobserved source-row result to make a summary pass. The six AGE mode-3 image cases have exact expected-failure software
 model results against independent source images; their author pass targets
 remain separate from those observed results.
 
@@ -68,9 +69,16 @@ this CGB corpus.
 Source identity, generated output, admission, required case, execution, and
 assertion rows are separate fields. Each case keeps its author expectation
 separate from the current evaluator disposition. An absent or unadmitted byte
-is never represented as an executed expected failure. The `--complete`
-validator mode requires admitted hashed outputs, unique exact CTest bindings,
-terminal case results, and nonempty assertion rows.
+is never represented as an executed expected failure. `--selection-only`
+validates pinned selection and allows outputs to remain pending admission.
+`--bindings` validates that every frozen case points to an admitted, hashed
+output and a unique registered CTest test. `--complete` adds terminal observed
+case/assertion outcomes; it remains stricter and currently rejects
+`magentests:bg_oam_priority` with
+`complete-case-not-terminal:magentests:bg_oam_priority`, because the inventory
+does not claim an observed result for that row. Runtime completeness comes from
+the fresh exact-107-case receipt (plus the aggregate SameSuite APU test), not
+from changing that static inventory fact.
 
 Optional local acid2 and Mealybug records remain `not-run:rights-gate-G1`.
 Mealybug CGB-C/D images also remain `unsupported-model` because they have no
@@ -86,12 +94,15 @@ does not admit pending bytes.
 
 `tests/scripts/verify-cgb-corpus-report.py` consumes bounded existing runner/CTest
 observations and writes a private, versioned receipt; it does not add a C-core
-JSON interface. `--run --build-dir build --receipt build/cgb-corpus-receipt.json`
-runs the 107 case-bound CTests and the aggregate SameSuite APU suite once,
-capturing their structured output. `--from-ctest` consumes that captured run
-only when its run ID, log digest, CTest names and current input identity match;
-it does not rerun the guests. Receipt paths are repository-relative, and a
-failed or partial run replaces any earlier receipt with an `incomplete` record.
+JSON interface. CMake stamps the compiled source/config/toolchain and corpus
+inputs. The native lane calls `--begin-run --build-dir build` before one full
+`ctest --test-dir build -T Test --no-compress-output` stream, then uses
+`--from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json` to
+consume its retained Test.xml and nonce-specific JUnit output. The receipt
+rejects stale, dirty, missing or changed input identities and missing selected
+test names; it does not rerun the guests. Receipt paths are repository-relative,
+and a failed or partial run replaces any earlier receipt with an `incomplete`
+record.
 
 The receipt keeps attempted, completed, actual guest-pass, matched-xfail and
 assertion counts separate. The current frozen run contains 107 completed cases
@@ -101,4 +112,12 @@ AGE image comparisons remain expected software-model failures, with 18,208
 pixel mismatches across 138,240 pixels. The DAA one-case tracer remains a
 separate contract test; matched expected failures never count as observed
 guest passes.
+
+The recurring native workflow retains the build stamp, Test.xml and nonce-named
+JUnit report; sanitizer CI continues to verify the full required CTest inventory.
+The pinned fixture workflow rebuilds all nine Mooneye CGB ROMs and all AGE and
+SameSuite corpus outputs, including the six AGE reference PNG digests. These
+workflow declarations are offline contract checks; they do not imply that a
+hosted workflow ran on this revision. Local configure/build and corpus timings
+and the measured reproduction elapsed times are recorded in the plan summary.
 <!-- cgb-corpus-inventory-end -->
