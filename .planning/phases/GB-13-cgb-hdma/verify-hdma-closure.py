@@ -671,7 +671,7 @@ def closure_self_test(root: Path) -> None:
     summary_contract(root, sample)
     for label, mutated in (
         ("ctest-kind", sample.replace("kind: integration", "kind: ctest", 1)),
-        ("missing-requirement", sample.replace("CGB-07", "CGB-99", 1)),
+        ("missing-requirement", sample.replace("CGB-07", "CGB-99")),
     ):
         try:
             summary_contract(root, mutated)
