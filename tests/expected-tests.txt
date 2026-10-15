@@ -300,6 +300,8 @@ apu_noise
 apu_envelope
 apu_sweep
 apu_power
+cgb_apu_wave_fetch
+cgb_apu_wave_latch
 cgb_pcm_tracer
 cgb_pcm_tracer_control
 cgb_pcm_channels

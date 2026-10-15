@@ -380,6 +380,115 @@ static int cgb_pcm_writable_mutant_control(const char *name) {
     return 1;
 }
 
+typedef struct {
+    gbb_stop_reason reason;
+    uint8_t first_sample;
+    uint8_t fetched_sample;
+    size_t read_count;
+    uint64_t read_times[2];
+} wave_transition_result;
+
+static size_t wave_transition_program(uint8_t *program, int wait_for_fetch) {
+    size_t length = 0u;
+    emit_write(program, &length, 0x26u, 0x80u); /* NR52 on. */
+    emit_write(program, &length, 0x30u, 0x77u); /* Previously fetched sample: 7. */
+    emit_write(program, &length, 0x1Au, 0x80u); /* CH3 DAC on. */
+    emit_write(program, &length, 0x1Cu, 0x20u); /* Full digital wave level. */
+    emit_write(program, &length, 0x1Du, 0xFFu);
+    emit_write(program, &length, 0x1Eu, 0x87u); /* Fast initial fetches load $77. */
+    program[length++] = 0x00u;
+    emit_write(program, &length, 0x1Au, 0x00u); /* Keep the fetched byte while disabled. */
+    emit_write(program, &length, 0x30u, 0xAAu); /* New wave data must wait for a fetch. */
+    emit_write(program, &length, 0x1Du, 0x00u);
+    emit_write(program, &length, 0x1Eu, 0x00u);
+    emit_write(program, &length, 0x1Au, 0x80u);
+    emit_write(program, &length, 0x1Eu, 0x80u); /* Trigger resets position, not buffer. */
+    program[length++] = 0xF0u; program[length++] = 0x77u; /* Guest reads FF77. */
+    program[length++] = 0xEAu; program[length++] = 0x00u; program[length++] = 0xC0u;
+    if (wait_for_fetch) {
+        /* Frequency zero gives a 4096-half-dot period; 512 NOPs cross one fetch. */
+        for (unsigned i = 0u; i < 512u; ++i) program[length++] = 0x00u;
+        program[length++] = 0xF0u; program[length++] = 0x77u;
+        program[length++] = 0xEAu; program[length++] = 0x01u; program[length++] = 0xC0u;
+    }
+    program[length++] = 0x76u;
+    return length;
+}
+
+static int run_wave_transition_guest(int wait_for_fetch, wave_transition_result *out) {
+    uint8_t program[1024];
+    const size_t length = wave_transition_program(program, wait_for_fetch);
+    gbb_instance *machine = load_cgb_guest(program, length);
+    if (machine == NULL) return 1;
+    gbb_test_bus_event events[256];
+    memset(events, 0, sizeof(events));
+    gbb_test_observer_set(machine, events, sizeof(events) / sizeof(events[0]));
+    const gbb_run_result run = gbb_run(machine, 16384u, NULL, 0u);
+    out->reason = run.reason;
+    out->first_sample = gbb_peek_ram(machine, 0xC000u);
+    out->fetched_sample = gbb_peek_ram(machine, 0xC001u);
+    out->read_count = 0u;
+    out->read_times[0] = 0u;
+    out->read_times[1] = 0u;
+    for (size_t i = 0u; i < sizeof(events) / sizeof(events[0]); ++i) {
+        if (events[i].access == 1u && events[i].address == 0xFF77u) {
+            if (out->read_count < 2u) out->read_times[out->read_count] = events[i].time_half_dots;
+            ++out->read_count;
+        }
+    }
+    gbb_destroy(machine);
+    return 0;
+}
+
+static int cgb_apu_wave_latch(void) {
+    wave_transition_result result;
+    if (run_wave_transition_guest(0, &result) != 0) {
+        printf("not ok 1 - cgb_apu_wave_latch\n");
+        fprintf(stderr, "could not create CGB CH3 guest\n");
+        return 1;
+    }
+    const int ok = result.reason == GBB_STOP_HALTED_IDLE &&
+                   result.first_sample == 0x07u && result.read_count == 1u;
+    if (!ok) {
+        printf("not ok 1 - cgb_apu_wave_latch\n");
+        fprintf(stderr,
+                "guest CH3 retained-sample mismatch expected=0x07 actual=0x%02x reads=%zu reason=%d\n",
+                result.first_sample, result.read_count, result.reason);
+        return 1;
+    }
+    fprintf(stderr, "guest CH3 retained sample expected=0x07 actual=0x%02x time_half_dots=%llu\n",
+            result.first_sample, (unsigned long long)result.read_times[0]);
+    printf("ok 1 - cgb_apu_wave_latch\n");
+    return 0;
+}
+
+static int cgb_apu_wave_fetch(void) {
+    wave_transition_result result;
+    if (run_wave_transition_guest(1, &result) != 0) {
+        printf("not ok 1 - cgb_apu_wave_fetch\n");
+        fprintf(stderr, "could not create CGB CH3 guest\n");
+        return 1;
+    }
+    const int ok = result.reason == GBB_STOP_HALTED_IDLE &&
+                   result.first_sample == 0x07u && result.fetched_sample == 0x0Au &&
+                   result.read_count == 2u && result.read_times[0] < result.read_times[1];
+    if (!ok) {
+        printf("not ok 1 - cgb_apu_wave_fetch\n");
+        fprintf(stderr,
+                "guest CH3 fetch mismatch expected=0x07,0x0a actual=0x%02x,0x%02x reads=%zu times=%llu,%llu reason=%d\n",
+                result.first_sample, result.fetched_sample, result.read_count,
+                (unsigned long long)result.read_times[0],
+                (unsigned long long)result.read_times[1], result.reason);
+        return 1;
+    }
+    fprintf(stderr, "guest CH3 fetch samples expected=0x07,0x0a actual=0x%02x,0x%02x times=%llu,%llu\n",
+            result.first_sample, result.fetched_sample,
+            (unsigned long long)result.read_times[0],
+            (unsigned long long)result.read_times[1]);
+    printf("ok 1 - cgb_apu_wave_fetch\n");
+    return 0;
+}
+
 int main(int argc, char **argv) {
     const char *name = argc > 1 ? argv[1] : "cgb_pcm_tracer";
     printf("TAP version 13\n1..1\n");
@@ -398,6 +507,8 @@ int main(int argc, char **argv) {
             return cgb_pcm_writable_mutant_control(name);
         return cgb_pcm_controls(name);
     }
+    if (strcmp(name, "cgb_apu_wave_latch") == 0) return cgb_apu_wave_latch();
+    if (strcmp(name, "cgb_apu_wave_fetch") == 0) return cgb_apu_wave_fetch();
     printf("not ok 1 - %s # unknown test\n", name);
     return 1;
 }

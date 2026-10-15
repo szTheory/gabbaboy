@@ -672,11 +672,13 @@ foreach(case pulse mixer sequencer timeline wave noise envelope sweep power)
   add_test(NAME apu_${case} COMMAND test_apu apu_${case})
 endforeach()
 
-# Phase 14 plan 14-01: a real CGB guest samples digital PCM through the timed bus path.
+# Phase 14 plans 14-01/14-03: CGB guests sample digital PCM and CH3 fetch state through the timed bus path.
 add_executable(test_cgb_apu test_cgb_apu.c)
 target_link_libraries(test_cgb_apu PRIVATE GabbaBoy::core)
 target_compile_features(test_cgb_apu PRIVATE c_std_17)
 set_target_properties(test_cgb_apu PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_apu_wave_latch COMMAND test_cgb_apu cgb_apu_wave_latch)
+add_test(NAME cgb_apu_wave_fetch COMMAND test_cgb_apu cgb_apu_wave_fetch)
 add_test(NAME cgb_pcm_tracer COMMAND test_cgb_apu cgb_pcm_tracer)
 foreach(case channels power_dac readonly host_invariance controls)
   add_test(NAME cgb_pcm_${case} COMMAND test_cgb_apu cgb_pcm_${case})
