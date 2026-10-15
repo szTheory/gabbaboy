@@ -178,9 +178,9 @@ def _validated_age_fixture(root: Path, name: str, fixture: dict) -> tuple[Path, 
     results, results_arg = address("test_results_address")
     expected, expected_arg = address("expected_address")
     row_count, budget = fixture.get("rows"), fixture.get("budget_half_dots")
-    need(isinstance(row_count, int) and 1 <= row_count <= 16,
+    need(type(row_count) is int and 1 <= row_count <= 16,
          f"age-fixture-row-bound:{name}")
-    need(isinstance(budget, int) and 0 < budget <= 71_000_000,
+    need(type(budget) is int and 0 < budget <= 71_000_000,
          f"age-fixture-budget-bound:{name}")
     need(results + row_count * 8 <= 0x10000
          and expected + 1 + row_count * 8 <= 0x8000,
@@ -457,6 +457,32 @@ def check_research14(root: Path, inventory: dict) -> None:
 def assertions_controls(root: Path, inventory: dict, speed: dict) -> None:
     check_age_assertions(root, inventory, speed)
     controls = []
+
+    manifest = read_json(root / "fixtures/age/manifest.json")
+    fixture = next(row for row in manifest["fixtures"]
+                   if row.get("file") == "spsw-mode0-cgbBCE.gb")
+
+    def fixture_rejected(name: str, mutate, expected: str) -> None:
+        trial = copy.deepcopy(fixture)
+        mutate(trial)
+        try:
+            _validated_age_fixture(root, "spsw-mode0-cgbBCE", trial)
+        except ContractError as exc:
+            need(str(exc) == expected, f"age-fixture-control-wrong-diagnostic:{name}:{exc}")
+            controls.append(name)
+            return
+        raise ContractError(f"age-fixture-control-accepted:{name}")
+
+    fixture_rejected("fixture-path-traversal", lambda row: row.update({"file": "../spsw-mode0-cgbBCE.gb"}),
+                     "age-fixture-path:spsw-mode0-cgbBCE")
+    fixture_rejected("fixture-size-drift", lambda row: row.update({"size_bytes": 0x8001}),
+                     "age-fixture-bounds:spsw-mode0-cgbBCE")
+    fixture_rejected("fixture-row-bound", lambda row: row.update({"rows": 17}),
+                     "age-fixture-row-bound:spsw-mode0-cgbBCE")
+    fixture_rejected("fixture-budget-bound", lambda row: row.update({"budget_half_dots": 71_000_001}),
+                     "age-fixture-budget-bound:spsw-mode0-cgbBCE")
+    fixture_rejected("fixture-address-range", lambda row: row.update({"expected_address": "$7FF0"}),
+                     "age-fixture-address-range:spsw-mode0-cgbBCE")
 
     def rejected(name: str, mutate, expected: str) -> None:
         trial_inventory, trial_speed = copy.deepcopy(inventory), copy.deepcopy(speed)
