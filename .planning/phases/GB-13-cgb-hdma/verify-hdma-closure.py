@@ -540,9 +540,16 @@ def handoff_values(state: str, continuation: str, config: dict) -> None:
     phase14_lines = [line.lower() for line in lines if "phase 14" in line.lower()]
     require(any("remains unstarted" in line for line in phase14_lines),
             "handoff must record Phase 14 CGB-E Model Qualification and Corpus as unstarted")
-    forbidden = [line for line in phase14_lines
-                 if re.search(r"\b(?:complete|completed|started)\b", line)
-                 and "remains unstarted" not in line]
+    forbidden = []
+    for line in phase14_lines:
+        if "remains unstarted" in line:
+            continue
+        for match in re.finditer(r"\bphase\s*14\b", line, flags=re.IGNORECASE):
+            context = line[max(0, match.start() - 80):match.end() + 80]
+            if re.search(r"\b(?:complete(?:d)?|start(?:ed|ing)?)\b", context,
+                         flags=re.IGNORECASE):
+                forbidden.append(line.lower())
+                break
     require(not forbidden, f"handoff prematurely marks Phase 14 started or complete: {forbidden}")
 
 
@@ -702,12 +709,19 @@ Phase 14 — CGB-E Model Qualification and Corpus remains unstarted.
 """
     handoff_base_config = {"workflow": {"auto_advance": False, "_auto_chain_active": False}}
     handoff_values(handoff_base_state, handoff_base_continue, handoff_base_config)
+    historical_state = handoff_base_state + (
+        "Completed workflow stage: Phase 12 planning with a long recorded rationale, "
+        "decision mapping, and owner review history before its future deferrals; "
+        "Phase 14 deferrals were documented as open follow-up work.\n")
+    handoff_values(historical_state, handoff_base_continue, handoff_base_config)
     handoff_mutants = (
         ("stale-route", handoff_base_state.replace("/gsd-verify-work 13", "/gsd-discuss-phase 14", 1),
          handoff_base_continue, handoff_base_config),
         ("auto-advance", handoff_base_state, handoff_base_continue,
          {"workflow": {"auto_advance": True, "_auto_chain_active": False}}),
         ("phase14-started", handoff_base_state.replace("remains unstarted", "started", 1),
+         handoff_base_continue, handoff_base_config),
+        ("phase14-completed", handoff_base_state.replace("remains unstarted", "completed", 1),
          handoff_base_continue, handoff_base_config),
     )
     for label, state, continuation, config in handoff_mutants:
@@ -735,7 +749,7 @@ Phase 14 — CGB-E Model Qualification and Corpus remains unstarted.
             pass
         else:
             raise ContractError(f"closure self-test accepted stale/skipped/missing remote result {index}")
-    print("hdma-closure self-test pass controls=9")
+    print("hdma-closure self-test pass controls=11")
 
 
 def main() -> int:
