@@ -302,6 +302,9 @@ apu_sweep
 apu_power
 cgb_apu_div_stop
 cgb_apu_off_writes
+cgb_apu_partition_controls
+cgb_apu_partition_fetch
+cgb_apu_partition_speed
 cgb_apu_power
 cgb_apu_transition_controls
 cgb_apu_trigger_length_sweep

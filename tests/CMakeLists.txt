@@ -3873,6 +3873,9 @@ add_test(NAME cgb_partition_mutant_m16_control
 # not re-measured in this run. Largest observed case: multicut, 2,187,264 hd,
 # 0.43 s local Debug; each CTest retains TIMEOUT 60 for sanitizer headroom.
 foreach(gbb_partition_case IN ITEMS
+    cgb_apu_partition_fetch
+    cgb_apu_partition_speed
+    cgb_apu_partition_controls
     cgb_partition_snapshot_fidelity
     cgb_partition_stall_end_window_to_double
     cgb_partition_stall_end_window_to_normal
@@ -3890,6 +3893,9 @@ foreach(gbb_partition_case IN ITEMS
   add_test(NAME ${gbb_partition_case} COMMAND test_cgb_partition ${gbb_partition_case})
 endforeach()
 set_tests_properties(
+  cgb_apu_partition_fetch
+  cgb_apu_partition_speed
+  cgb_apu_partition_controls
   cgb_partition_stall_start_window
   cgb_partition_hostile_irq_in_stall
   cgb_partition_mutant_m16
