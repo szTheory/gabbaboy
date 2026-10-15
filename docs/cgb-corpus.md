@@ -32,9 +32,11 @@ unsuffixed `acceptance/instr/daa.s`, `acceptance/timer/div_write.s`, and
 pinned header; a CGB pass statement does not create a CGB-E-only hardware claim.
 
 All 70 APU assembly sources at the pinned SameSuite commit remain selected,
-including revision-suffixed names. The aggregate README attestation and each
-ROM's encoded result remain author evidence; SameBoy comparisons remain
-differential evidence. The four existing DMA outputs are included separately.
+including revision-suffixed names. Its [pinned APU README](https://github.com/LIJI32/SameSuite/blob/f15645fb049a47ea235f6d2c9a033e72d8087901/apu/README.md)
+says `CPU-CGB-E – passes all tests`; the source roster preserves that
+applicability quote for each APU identity. Each ROM's encoded result remains
+author evidence, while SameBoy comparisons remain differential evidence. The
+four existing DMA outputs are included separately.
 
 AGE retains its 13 existing outputs and selects six mode-3 source/reference
 image pairs. Four are normal-speed native/compatibility targets and two are
@@ -52,7 +54,8 @@ separate from the current evaluator disposition. At this selection stage all 107
 case identities are frozen, while execution and assertion outcomes remain
 pending; an absent or unadmitted byte is never represented as an executed
 expected failure. The `--complete` validator mode later requires admitted
-hashed outputs, terminal case results, and nonempty assertion rows.
+hashed outputs, unique exact CTest bindings, terminal case results, and
+nonempty assertion rows.
 
 Optional local acid2 and Mealybug records remain `not-run:rights-gate-G1`.
 Mealybug CGB-C/D images also remain `unsupported-model` because they have no

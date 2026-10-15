@@ -31,9 +31,9 @@ COUNTS = {
 }
 SOURCE_DIGESTS = {
     "age": "a8b8e09ed54ff30a848afa7ad0f6ca768c040314b768ba23bcad0b645d301cdb",
-    "samesuite": "6ac51e6c186b004c8928f942dc8e6552ee0c1e60fcb943fbdc64581cf1bb0ef0",
+    "samesuite": "6362d2d4ec7b2d7781d592ff85837685412302a8b51ea593022cacaef4d7d8d6",
     "magentests": "3124e9d8044be19eaa3e516645586a20680fa054332b61f59800aa85b7e963d6",
-    "mooneye": "ad7e61d4aac679d68f6733f967f85d1eef45644779c39b37191d35026acfb326",
+    "mooneye": "f834287698586e0f22ff60824d0f1accf281e72075babafe7da3a4a502ed6f72",
 }
 OUTPUT_DIGESTS = {
     "age": "18f8a8cc28b1674d1ad7186b0cad0ed6960dddc18624229063039933f42c1e09",
@@ -125,6 +125,7 @@ def check_rosters(data: dict) -> tuple[dict[str, dict], dict[str, dict], dict[st
         need(row["id"] not in source_by_id, "duplicate-source-id")
         need(row.get("selection", {}).get("state") in ("required", "excluded"), "source-selection-state")
         need(row.get("selection", {}).get("reason"), "source-selection-reason")
+        need(isinstance(row.get("family"), str) and row["family"], "source-family")
         need(isinstance(row.get("applicability"), dict), "source-applicability")
         need(isinstance(row.get("rights"), dict) and row["rights"].get("state") == "clear", "source-rights")
         need(isinstance(row.get("build"), dict) and row["build"].get("toolchain"), "source-build")
@@ -147,6 +148,10 @@ def check_rosters(data: dict) -> tuple[dict[str, dict], dict[str, dict], dict[st
         need(source_by_id[f"mooneye:{path}"]["selection"]["state"] == "required", f"mooneye-unsuffixed-filtered:{path}")
     required_paths = {r["source_path"] for r in mooneye if r["selection"]["state"] == "required"}
     need(required_paths == MOONEYE_REQUIRED, "mooneye-required-source-set")
+    same_apu = [r for r in sources if r["suite"] == "samesuite" and r["source_path"].startswith("apu/")]
+    need(len(same_apu) == 70 and all(
+        r["applicability"].get("readme_quote") == "CPU-CGB-E – passes all tests" for r in same_apu
+    ), "samesuite-readme-applicability")
     for suite in SUITES:
         suite_rows = [r for r in sources if r["suite"] == suite]
         need(digest_rows(suite_rows, lambda r: r) == SOURCE_DIGESTS[suite], f"source-candidate-fingerprint:{suite}")
@@ -174,7 +179,7 @@ def check_rosters(data: dict) -> tuple[dict[str, dict], dict[str, dict], dict[st
         source = source_by_id.get(row.get("source_id"))
         output = output_by_id.get(row.get("output_id"))
         need(source is not None and source["selection"]["state"] == "required", "case-source-not-selected")
-        need(output is not None and output.get("admission_status") != "source-only", "case-output-reference")
+        need(output is not None, "case-output-reference")
         need(output["source_id"] == source["id"] and output["suite"] == suite, "case-source-output-mismatch")
         need(row.get("model") == "CGB-CPU-E" and row.get("mode") in ("native", "compat")
              and row.get("speed") in ("normal", "double"), "case-model-mode-speed")
@@ -184,7 +189,12 @@ def check_rosters(data: dict) -> tuple[dict[str, dict], dict[str, dict], dict[st
              "case-evaluator-disposition")
         need(isinstance(row.get("execution"), dict), "case-execution")
         need(isinstance(row.get("assertion_contract"), dict), "case-assertion-contract")
+        need(isinstance(row.get("test_binding"), dict), "case-test-binding")
         need(not row.get("hardware_qualified", False), "hardware-claim-forbidden")
+        if output["admission_status"] == "source-only":
+            execution = row["execution"]
+            need(execution.get("observed_result") is None and execution.get("terminal") is not True,
+                 "source-only-output-execution")
         if output["admission_status"] != "admitted":
             execution = row["execution"]
             need(execution.get("observed_result") is None and execution.get("terminal") is not True,
@@ -273,7 +283,7 @@ def check_documentation(root: Path, data: dict) -> None:
     required = (
         "gabbaboy-cgb-corpus-inventory-v1", "Mooneye", "SameSuite", "AGE", "MagenTests",
         "83", "70", "19", "9", "74", "5", "107", "81", "CGB-CPU-E",
-        "assertion", "admitted", "pending", "author", "evaluator", "rights",
+        "assertion", "admitted", "pending", "author", "evaluator", "rights", "ctest",
     )
     for token in required:
         need(token.lower() in block.lower(), f"documentation-token:{token}")
@@ -329,12 +339,13 @@ def reconcile_counts(data: dict, sources: dict, outputs: dict, cases: dict) -> N
     need(data["counts"].get("assertion_rows") is None, "assertion-count-must-remain-unqualified")
 
 
-def check_complete(outputs: dict[str, dict], cases: dict[str, dict]) -> None:
+def check_complete(root: Path, outputs: dict[str, dict], cases: dict[str, dict]) -> None:
     selected_outputs = {c["output_id"] for c in cases.values()}
     for oid in sorted(selected_outputs):
         output = outputs[oid]
         need(output["admission_status"] == "admitted" and re.fullmatch(r"[0-9a-f]{64}", str(output.get("sha256", ""))),
              f"complete-required-output-pending:{oid}")
+    check_test_bindings(root, cases)
     for cid, row in cases.items():
         execution = row["execution"]
         need(execution.get("state") == "completed" and execution.get("terminal") is True
@@ -349,6 +360,27 @@ def check_complete(outputs: dict[str, dict], cases: dict[str, dict]) -> None:
         need(len(ids) == len(set(ids)) and all(isinstance(x, str) and x for x in ids),
              f"complete-assertions-duplicate:{cid}")
         need(assertions.get("count") == len(rows), f"complete-assertion-count:{cid}")
+        for assertion in rows:
+            need(isinstance(assertion.get("expected_disposition"), str) and assertion["expected_disposition"]
+                 and assertion.get("observed_result") in ("pass", "fail"), f"complete-assertion-verdict:{cid}")
+
+
+def check_test_bindings(root: Path, cases: dict[str, dict]) -> None:
+    inventory = root / "tests/expected-tests.txt"
+    need(inventory.is_file(), "complete-expected-test-inventory-missing")
+    registered = {
+        line.strip() for line in inventory.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+    names = set()
+    for cid, row in cases.items():
+        binding = row.get("test_binding", {})
+        name = binding.get("ctest_name")
+        need(binding.get("state") == "bound" and isinstance(name, str)
+             and re.fullmatch(r"[A-Za-z0-9_.:-]+", name), f"complete-test-binding-pending:{cid}")
+        need(name in registered, f"complete-test-binding-not-registered:{cid}:{name}")
+        need(name not in names, f"complete-test-binding-duplicate:{name}")
+        names.add(name)
 
 
 def validate(root: Path, data: dict, complete: bool = False) -> tuple[dict[str, dict], dict[str, dict], dict[str, dict]]:
@@ -361,7 +393,7 @@ def validate(root: Path, data: dict, complete: bool = False) -> tuple[dict[str, 
     check_documentation(root, data)
     check_admitted_outputs(root, outputs, sources)
     if complete:
-        check_complete(outputs, cases)
+        check_complete(root, outputs, cases)
     return sources, outputs, cases
 
 
@@ -394,9 +426,24 @@ def self_test(root: Path, data: dict) -> None:
     rejected("substituted-case", lambda d: d["cases"].remove(
         next(r for r in d["cases"] if r["id"] == "mooneye:acceptance/timer/tim00.s")),
         "required-case-count:mooneye")
-    rejected("source-only-execution", lambda d: next(r for r in d["cases"]
-        if r["id"] == "mooneye:acceptance/timer/div_write.s").__setitem__("output_id", "missing-output"),
-        "case-output-reference")
+    rejected("empty-denominator", lambda d: d.update({"cases": []}), "required-case-count:age")
+    rejected("source-only-execution", lambda d: (
+        next(r for r in d["outputs"] if r["id"] == "age:spsw-div-cgbBCE").update({"admission_status": "source-only"}),
+        next(r for r in d["cases"] if r["id"] == "age:spsw-div-cgbBCE")["execution"].update(
+            {"state": "completed", "observed_result": "pass", "terminal": True})),
+        "source-only-output-execution")
+    rejected("missing-family", lambda d: d["source_candidates"][0].update({"family": ""}), "source-family")
+    rejected("changed-pin", lambda d: next(r for r in d["source_candidates"]
+        if r["suite"] == "age").update({"source_commit": "0000000000000000000000000000000000000000"}),
+        "source-row-pin:age")
+    rejected("unknown-source", lambda d: next(r for r in d["source_candidates"]
+        if r["id"] == "mooneye:acceptance/add_sp_e_timing.s").update({
+            "id": "mooneye:acceptance/unknown.s", "source_path": "acceptance/unknown.s"}),
+        "source-candidate-fingerprint:mooneye")
+    rejected("wrong-samesuite-readme", lambda d: next(r for r in d["source_candidates"]
+        if r["suite"] == "samesuite" and r["source_path"].startswith("apu/"))["applicability"].update(
+            {"readme_quote": "CPU-CGB-E is unqualified"}),
+        "samesuite-readme-applicability")
 
     trial = copy.deepcopy(data)
     trial_case = next(r for r in trial["cases"] if r["suite"] == "age")
@@ -430,8 +477,17 @@ def self_test(root: Path, data: dict) -> None:
         raise Mismatch("self-test-control-accepted:optional-rights")
 
     try:
+        _, _, case_map = validate(root, data)
+        check_test_bindings(root, case_map)
+    except Mismatch as exc:
+        need(str(exc).startswith("complete-test-binding-pending:"), f"self-test-wrong-diagnostic:test-binding:{exc}")
+        controls.append("complete-requires-ctest-bindings")
+    else:
+        raise Mismatch("self-test-control-accepted:missing-test-binding")
+
+    try:
         _, outputs, cases = validate(root, data)
-        check_complete(outputs, cases)
+        check_complete(root, outputs, cases)
     except Mismatch as exc:
         need(str(exc).startswith("complete-required-output-pending:"), f"self-test-wrong-diagnostic:complete:{exc}")
         controls.append("complete-rejects-unadmitted-required-bytes")

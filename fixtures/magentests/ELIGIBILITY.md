@@ -103,8 +103,10 @@ colour 2 red, LCDC `ON|BG8000|OBJON|BGON`). `src/common.asm` gives `GREEN = $03E
 - Box rows (x 33-44, `G` green, `R` red, `.` white): `.....G.....R`, `....GG....RR`,
   `...GGG...RRR`, `..GGGG..RRRR`, `.GGGGG.RRRRR`, `GGGGGGRRRRRR`.
 
-None of these ROMs is CGB-E hardware evidence. `key0_lock_after_boot` and `hblank_vram_dma` are
-not vendored.
+None of these ROMs is CGB-E hardware evidence. `key0_lock_after_boot` remains
+source-only and is not vendored. The existing `hblank_vram_dma.gbc` output is
+admitted as the seventh fixture in `manifest.json` and remains a selected
+native CGB case.
 
 AGE has no CGB colour, attribute or priority ROM at 1f5bc10e (only m3-bg-lcdc and m3-bg-scx,
 which are expected-unsupported for mode-3 pixel timing, D-09). Roadmap success criterion 1 is
