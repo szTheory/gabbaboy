@@ -542,6 +542,35 @@ class TestPngDecoder(unittest.TestCase):
             decode_png(b"x" * (MAX_PNG_BYTES + 1))
 
 
+class TestExecutedDispositionContract(unittest.TestCase):
+    def test_all_six_images_have_executed_exact_dispositions(self) -> None:
+        root = pathlib.Path(__file__).resolve().parents[2]
+        manifest = json.loads((root / "fixtures/age/manifest.json").read_text(encoding="utf-8"))
+        record = json.loads((root / "tests/external/cgb-ppu-dispositions.json").read_text(encoding="utf-8"))
+        fixtures = fixture_map(manifest)
+        rows = age_disposition_map(record)
+        self.assertEqual(set(fixtures), AGE_CASES)
+        self.assertEqual(set(rows), AGE_CASES)
+        for case in sorted(AGE_CASES):
+            with self.subTest(case=case):
+                entry = fixtures[case]
+                row = rows[case]
+                identity = case_identity(entry, case)
+                self.assertEqual(entry.get("qualification_status"), "executed",
+                                 f"age-image-not-executed {case}")
+                self.assertEqual(entry.get("case_id"), identity)
+                self.assertEqual(row.get("case_id"), identity)
+                self.assertEqual(entry.get("execution_result"), "fail")
+                self.assertEqual(row.get("observed_result"), "fail")
+                self.assertEqual(entry.get("disposition"), "expected-failure")
+                self.assertEqual(row.get("disposition"), "expected-failure")
+                self.assertEqual(entry.get("pixel_assertion_count"), PIXEL_COUNT)
+                self.assertEqual(row.get("pixel_assertion_count"), PIXEL_COUNT)
+                self.assertEqual(entry.get("pixel_mismatch_signature_sha256"),
+                                 row.get("pixel_mismatch_signature_sha256"))
+                self.assertRegex(entry.get("pixel_mismatch_signature_sha256", ""), r"^[0-9a-f]{64}$")
+
+
 class TestPixelControls(unittest.TestCase):
     def setUp(self) -> None:
         self.root = pathlib.Path(__file__).resolve().parents[2]
