@@ -5,18 +5,18 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 14
 current_phase_name: CGB-E Model Qualification and Corpus
 current_plan: 0
-status: Ready for planning with DEEP research
-stopped_at: Phase 14 discussion complete; awaiting /gsd-plan-phase 14
-last_updated: "2026-10-15T15:16:56.571Z"
+status: Ready to execute
+stopped_at: Phase 14 planning complete; awaiting /gsd-execute-phase 14
+last_updated: "2026-10-15T16:39:31.466Z"
 last_activity: 2026-10-15
-last_activity_desc: Phase 14 discussion captured; planning awaits owner invocation; owner pause retained
-state_head: 261c660396db65712dabb5f65b3e81ee5b0a3453
+last_activity_desc: Phase 14 planning complete; 13 plans / 31 tasks / 11 waves independently checked; owner pause retained
+state_head: 7e69d7bb7ed7cc3dfcd4183db185e2f046f74e6a
 progress:
-  total_plans: 111
   total_phases: 9
   completed_phases: 7
+  total_plans: 124
   completed_plans: 111
-  percent: 78
+  percent: 89
 ---
 
 # Project State
@@ -26,30 +26,30 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-15)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 14 discussion complete; ready for planning with DEEP research
+**Current focus:** Phase 14 planning complete; ready for owner-selected execution
 
 ## Current Position
 
 Phase: 14 (CGB-E Model Qualification and Corpus)
-Status: Ready for planning with DEEP research
+Status: Ready to execute
 Current Plan: 0
-Total Plans in Phase: 0
+Total Plans in Phase: 13
 Last Activity: 2026-10-15
-Last Activity Description: Phase 14 discussion captured; planning awaits owner invocation; owner pause retained
+Last Activity Description: Phase 14 planning complete; 13 plans / 31 tasks / 11 waves independently checked; owner pause retained
 
-Completed workflow stage: **Phase 14 discussion**.
+Completed workflow stage: **Phase 14 planning**.
 
-[14-CONTEXT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-CONTEXT.md) captures 25 adopted decisions from owner-delegated parallel primary-source research and adversarial reconciliation. Three investigations covered hardware/timing, corpus admission and reporting/CI. The final review blocker is closed: stable assertion IDs and separate ROM/assertion denominators prevent mixed-result cases from inflating passes. No Phase 14 implementation, fixture admission, new qualification run or CGB-08/CGB-10 completion is claimed.
+[DEEP research](phases/GB-14-cgb-e-model-qualification-and-corpus/14-RESEARCH.md), [source coverage](phases/GB-14-cgb-e-model-qualification-and-corpus/14-SOURCE-COVERAGE.md), [validation strategy](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VALIDATION.md) and [independent plan check](phases/GB-14-cgb-e-model-qualification-and-corpus/14-PLAN-CHECK.md) support 13 plans, 31 tasks and 11 dependency-ordered waves. The final checker has zero blockers/warnings after resolving all five initial findings. Requirements are covered 2/2 and decisions 25/25. Plan verification is static; implementation, 87 proposed fixture-output admissions, the 107-case corpus qualification and CGB-08/CGB-10 completion remain pending.
 
-Next stage: **Phase 14 — CGB-E Model Qualification and Corpus, planning**, including DEEP research Q1–Q5.
-Next command: /gsd-plan-phase 14.
+Next stage: **Phase 14 — CGB-E Model Qualification and Corpus, execution**.
+Next command: /gsd-execute-phase 14.
 Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release** remains unstarted.
 
-Both auto-advance flags remain false. D-069 zero routine human UAT, D-096 small/flat dependencies, D-099 corpus/report accounting and the frozen DMG baseline remain constraints. Reuse the recorded primary sources and completed Phase 13 UAT; reopen only a concrete contradiction, failed discriminator/prototype, changed requirement or owner direction.
+Both auto-advance flags remain false. Preserve D-069 zero routine human UAT with negative controls and strict SUMMARY coverage, D-096 small/flat dependencies, D-099 independent corpus membership and case/assertion accounting, bounded operations and the frozen DMG baseline. Reuse the completed discussion/research and Phase 13 UAT. Reopen only for a concrete contradiction, failed discriminator/prototype, changed requirement or owner direction. The two unclassified edge-probe rows remain flagged with domain-specific automated contracts; no human checkpoint is invented.
 
-Phase 13 is a completed prerequisite: PR #69 merged at 261c660396db65712dabb5f65b3e81ee5b0a3453; execution 12/12, goal verification 37/37 and automated UAT 45/45 with zero human checkpoints. Those are prior source-qualified receipts, not newly repeated suites. Physical CGB-E remains UNKNOWN/POLICY and game/perceptual evidence is not inferred.
+Phase 13 remains a completed prerequisite: PR #69 merged at 261c660396db65712dabb5f65b3e81ee5b0a3453; execution 12/12, goal verification 37/37, automated UAT 45/45 and zero human checkpoints. These are prior source-qualified receipts. Physical CGB-E remains UNKNOWN/POLICY; no game/perceptual evidence is inferred.
 
-Progress (v0.2): 7/9 phases executed (78%); 111/111 currently planned plans complete. Phase 14 discussion is complete; its planning/execution and Phase 15 remain unstarted.
+Progress (v0.2): 7/9 phases executed (78%); 111/124 planned plans complete (89%). Phase 14 planning is complete; Phase 14 execution and Phase 15 remain unstarted.
 
 ### Historical Phase 13 handoff (superseded route; preserved receipts)
 
@@ -525,20 +525,18 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-15T15:13:28.957Z
-Stopped at: Phase 14 discussion complete; awaiting /gsd-plan-phase 14
+Last session: 2026-10-15T16:39:31.327Z
+Stopped at: Phase 14 planning complete; awaiting /gsd-execute-phase 14
 Resume file: .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/continue.md
-Next command in fresh context: **`/gsd-plan-phase 14`**. Phase 14 — CGB-E Model Qualification and Corpus needs DEEP planning research using 14-CONTEXT.md; Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release remains unstarted. Both automatic-advance flags remain false.
+Next command in fresh context: **`/gsd-execute-phase 14`**. Phase 14 — CGB-E Model Qualification and Corpus has 13 checked plans / 31 tasks / 11 waves. Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release remains unstarted. Both automatic-advance flags remain false.
 
-Three independent investigations and adversarial follow-ups converged on 25 decisions. Remaining technical gates Q1–Q5 are research work, not routine owner UAT. Do not restart the completed Phase 13 verification, infer eligibility from suffix counts, conflate CGB silicon with execution mode or count matched xfails/partial assertion passes as passing ROMs.
-
-Prior Phase 13 execution/UAT/merge receipts remain in its own context, benchmark, verification and UAT records; the original historical Current Position above is superseded by this route. The only next command is the Phase 14 planning command above.
+Reuse the recorded research, prototype/build observations and independent plan check. Do not repeat discussion, planning or completed Phase 13 UAT without changed evidence. Existing model/rights/evidence boundaries, DMG baseline, exact membership and case/assertion distinctions remain mandatory. All implementation verification is pending.
 
 ## Operator Next Steps
 
-- Completed workflow stage: **Phase 14 discussion**; 25 adopted decisions, primary-source research and adversarial review complete.
-- Next stage: **Phase 14 — CGB-E Model Qualification and Corpus, planning**, with DEEP research.
-- Next command: /gsd-plan-phase 14.
+- Completed workflow stage: **Phase 14 planning**; DEEP research, pattern map, validation contract and independent check complete.
+- Next stage: **Phase 14 — CGB-E Model Qualification and Corpus, execution**.
+- Next command: /gsd-execute-phase 14.
 - Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release** remains unstarted.
-- Read 14-CONTEXT.md and continue.md. Keep both auto flags false; stop after discussion until the owner invokes planning.
-- Preserve automation-first verification, flat dependencies, the frozen DMG baseline and completed Phase 13 UAT. No new model/hardware/game qualification is claimed by discussion.
+- Read 14-CONTEXT.md, 14-RESEARCH.md, 14-SOURCE-COVERAGE.md, 14-VALIDATION.md, 14-PLAN-CHECK.md and continue.md; start the recorded wave 1 when invoked.
+- Keep both auto flags false and stop here. Execution later stops after Phase 14. Preserve zero routine human UAT, flat dependencies, the frozen DMG baseline and completed prior receipts.

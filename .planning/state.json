@@ -55,9 +55,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-plan-phase 14",
-    "label": "Plan Phase 14 \u2014 CGB-E Model Qualification and Corpus",
-    "reason": "Phase 14 discussion complete; 25 decisions captured. DEEP research/planning remains unstarted; preserve the owner pause."
+    "command": "/gsd-execute-phase 14",
+    "label": "Execute Phase 14 \u2014 CGB-E Model Qualification and Corpus",
+    "reason": "Phase 14 planning complete; 13 plans / 31 tasks / 11 waves passed independent checking. Preserve the owner pause; execution is unstarted."
   },
   "updated_at": "2026-10-14T18:09:23.510605+00:00"
 }

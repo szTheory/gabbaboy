@@ -428,7 +428,43 @@ Phase 13 automated UAT completed 2026-10-15: 45/45 deliverables, zero human chec
 
 **Rights gates**: G1 (mgblib font) gates cgb-acid2/dmg-acid2 and Mealybug bytes in the required corpus.
 **Research**: DEEP (CGB-E APU rules, wave RAM, enumeration of Mooneye CGB pass lists from the pinned tree).
-**Plans**: TBD
+**Plans**: 13 plans
+
+Plans:
+**Wave 1**
+- [ ] 14-01-PLAN.md — Timestamped digital PCM through guest reads
+- [ ] 14-05-PLAN.md — Pinned candidate inventory and independently frozen membership
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 14-02-PLAN.md — Per-mode IR and undocumented-port qualification
+- [ ] 14-08-PLAN.md — Six AGE source and reference-image admissions
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 14-03-PLAN.md — Qualified CGB APU transitions and CH3 fetch latch
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 14-04-PLAN.md — APU lifecycle, partition and bounded-execution evidence
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 14-06-PLAN.md — Mooneye nine-case executable admission
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 14-07-PLAN.md — All seventy SameSuite APU author expectations and execution
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 14-09-PLAN.md — Headless AGE pixel oracles for native, compatibility and DS cases
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [ ] 14-10-PLAN.md — Narrow inherited timing diagnosis and every research14 gate
+
+**Wave 9** *(blocked on Wave 8 completion)*
+- [ ] 14-11-PLAN.md — One bounded case/assertion receipt over existing execution
+
+**Wave 10** *(blocked on Wave 9 completion)*
+- [ ] 14-12-PLAN.md — Recurring native, sanitizer, reproduction and consumer closure
+
+**Wave 11** *(blocked on Wave 10 completion)*
+- [ ] 14-13-PLAN.md — Atomic claims, automated documentation and durable evidence handoff
 
 ### Phase 15: CGB Acceptance, Support Ledger and v0.2.0 Release
 
@@ -457,5 +493,5 @@ Phase 13 automated UAT completed 2026-10-15: 45/45 deliverables, zero human chec
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 15/15 | Complete    | 2026-10-13 |
 | 12. CGB Double Speed | v0.2 | 19/19 | Complete    | 2026-10-14 |
 | 13. CGB HDMA | v0.2 | 12/12 | Complete    | 2026-10-14 |
-| 14. CGB-E Model Qualification and Corpus | v0.2 | 0/TBD | Not started | - |
+| 14. CGB-E Model Qualification and Corpus | v0.2 | 0/13 | Planned | - |
 | 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 0/TBD | Not started | - |
