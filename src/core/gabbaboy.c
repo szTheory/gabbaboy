@@ -19,6 +19,9 @@
 #ifndef GBB_TEST_CGB_PCM_WRITABLE
 #define GBB_TEST_CGB_PCM_WRITABLE 0
 #endif
+#ifndef GBB_TEST_CGB_APU_DIRECT_RAM
+#define GBB_TEST_CGB_APU_DIRECT_RAM 0
+#endif
 
 
 #define GBB_INPUT_EVENT_CAPACITY 64u
@@ -70,6 +73,7 @@ typedef struct {
 } apu_pulse_channel;
 typedef struct {
     uint8_t dac, length_reg, level, frequency_low, control;
+    uint8_t sample_buffer;
     uint8_t ram[16], position;
     uint16_t length, timer;
     int enabled;
@@ -552,6 +556,22 @@ static gbb_audio_frame audio_process_sample(gbb_instance *m) {
 }
 
 /* MODEL: BOTH GATE-00 basis=host-side-mixing */
+static int model_is_cgb(const gbb_instance *m);
+
+/* MODEL: BOTH GATE-00 basis=host-side-mixing */
+static uint8_t apu_wave_current_sample(const gbb_instance *m, const apu_wave_channel *wave) {
+    uint8_t packed;
+    if (model_is_cgb(m)) {
+#if GBB_TEST_CGB_APU_DIRECT_RAM
+        packed = wave->ram[wave->position >> 1];
+#else
+        packed = wave->sample_buffer;
+#endif
+    } else packed = wave->ram[wave->position >> 1];
+    return (wave->position & 1u) == 0u ? (uint8_t)(packed >> 4) : (uint8_t)(packed & 0x0Fu);
+}
+
+/* MODEL: BOTH GATE-00 basis=host-side-mixing */
 static void audio_current_mix(const gbb_instance *m, int32_t *left, int32_t *right) {
     static const uint8_t duty_pattern[4] = {0x01u, 0x81u, 0x87u, 0x7Eu};
     *left = 0; *right = 0;
@@ -569,9 +589,7 @@ static void audio_current_mix(const gbb_instance *m, int32_t *left, int32_t *rig
     }
     int32_t wave_sample = 0;
     if (m->apu_wave.enabled && m->apu_wave.level != 0u) {
-        const uint8_t packed = m->apu_wave.ram[m->apu_wave.position >> 1];
-        const uint8_t digital = (m->apu_wave.position & 1u) == 0u
-            ? (uint8_t)(packed >> 4) : (uint8_t)(packed & 0x0Fu);
+        const uint8_t digital = apu_wave_current_sample(m, &m->apu_wave);
         const unsigned shift = (m->apu_wave.level >> 5) - 1u;
         wave_sample = (int32_t)(digital >> shift) * 2048 - 16384;
     }
@@ -608,9 +626,7 @@ static uint8_t apu_digital_output(const gbb_instance *m, unsigned channel) {
     if (channel == 2u) {
         const apu_wave_channel *wave = &m->apu_wave;
         if (!wave->enabled || (wave->dac & 0x80u) == 0u || wave->level == 0u) return 0u;
-        const uint8_t packed = wave->ram[wave->position >> 1];
-        const uint8_t sample = (wave->position & 1u) == 0u
-            ? (uint8_t)(packed >> 4) : (uint8_t)(packed & 0x0Fu);
+        const uint8_t sample = apu_wave_current_sample(m, wave);
         return (uint8_t)(sample >> ((wave->level >> 5) - 1u));
     }
     if (channel == 3u) {
@@ -787,7 +803,6 @@ static void observe_ppu(gbb_instance *m, uint16_t address, uint8_t access,
 }
 
 static void ppu_update_stat_line(gbb_instance *m);
-static int model_is_cgb(const gbb_instance *m);
 static void hdma_request(gbb_instance *m);
 static void speed_switch_apply_realign(gbb_instance *m);
 
@@ -1666,7 +1681,7 @@ static void apu_pulse_trigger(gbb_instance *m, unsigned index) {
 static void apu_power_off(gbb_instance *m) {
     memset(m->apu_pulse, 0, sizeof(m->apu_pulse));
     memset(&m->apu_noise, 0, sizeof(m->apu_noise));
-    /* Wave RAM survives NR52 power-off in this scoped DMG software model. */
+    /* Wave RAM survives NR52 power-off; channel state, including the fetched sample, resets. */
     /* MODEL: UNKNOWN GATE-15 research:14 -- NR52 power-off effect on APU state and wave RAM */
     memset(&m->apu_wave, 0, offsetof(apu_wave_channel, ram));
     memset((uint8_t *)&m->apu_wave + offsetof(apu_wave_channel, position), 0,
@@ -3225,6 +3240,8 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
                                                 ((m->apu_wave.control & 7u) << 8));
                 m->apu_wave.timer = (uint16_t)((2048u - frequency) * 2u);
                 m->apu_wave.position = (uint8_t)((m->apu_wave.position + 1u) & 31u);
+                if (model_is_cgb(m))
+                    m->apu_wave.sample_buffer = m->apu_wave.ram[m->apu_wave.position >> 1];
             }
         }
         if (m->apu_noise.enabled) {

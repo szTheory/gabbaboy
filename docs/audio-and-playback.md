@@ -31,10 +31,13 @@ This register mapping follows the pinned [Pan Docs Audio details reference](http
 The authored guest tests cover all four channel nibbles, APU power and DAC
 gates, ignored writes, and identical PCM observations with absent, full, and
 drained host output buffers and changed routing/volume. `cgb_pcm_tracer` also
-checks a named timed guest bus read. Wave-channel checks use the already
-fetched sample held by this model; the exact trigger-to-first-fetch latch
-boundary remains unqualified. No physical CGB-E timing or waveform measurement
-is claimed.
+checks a named timed guest bus read. On the CGB CPU profile, CH3 output uses a
+sample byte latched at a wave fetch: retriggering resets the wave position but
+retains the previous sample until the next timer fetch. Host mixing and FF77
+readback share that sample source. A compile-time direct-wave-RAM mutant is
+rejected by the retained-sample guest predicate. These tests establish the
+authored model transition only; they make no physical CGB-E timing or waveform
+measurement claim. The DMG output path keeps its prior direct Wave RAM behavior.
 
 ## PCM format and signal processing
 

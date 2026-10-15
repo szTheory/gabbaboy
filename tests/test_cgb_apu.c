@@ -154,8 +154,8 @@ static size_t configured_pcm_program(uint8_t *program, uint8_t nr50, uint8_t nr5
         emit_write(program, &length, 0x30u, 0xA5u);
         emit_write(program, &length, 0x1Au, 0x80u);
         emit_write(program, &length, 0x1Cu, 0x20u);
-        emit_write(program, &length, 0x1Du, 0x00u);
-        emit_write(program, &length, 0x1Eu, 0x80u);
+        emit_write(program, &length, 0x1Du, 0xFFu);
+        emit_write(program, &length, 0x1Eu, 0x87u);
         emit_write(program, &length, 0x20u, 0x00u);
         emit_write(program, &length, 0x21u, 0xF0u);
         emit_write(program, &length, 0x22u, 0x00u);
@@ -391,18 +391,16 @@ typedef struct {
 static size_t wave_transition_program(uint8_t *program, int wait_for_fetch) {
     size_t length = 0u;
     emit_write(program, &length, 0x26u, 0x80u); /* NR52 on. */
-    emit_write(program, &length, 0x30u, 0x77u); /* Previously fetched sample: 7. */
+    for (unsigned i = 0u; i < 16u; ++i)
+        emit_write(program, &length, (uint8_t)(0x30u + i), 0x77u);
     emit_write(program, &length, 0x1Au, 0x80u); /* CH3 DAC on. */
     emit_write(program, &length, 0x1Cu, 0x20u); /* Full digital wave level. */
     emit_write(program, &length, 0x1Du, 0xFFu);
     emit_write(program, &length, 0x1Eu, 0x87u); /* Fast initial fetches load $77. */
-    program[length++] = 0x00u;
-    emit_write(program, &length, 0x1Au, 0x00u); /* Keep the fetched byte while disabled. */
-    emit_write(program, &length, 0x30u, 0xAAu); /* New wave data must wait for a fetch. */
+    for (unsigned i = 0u; i < 8u; ++i) program[length++] = 0x00u;
     emit_write(program, &length, 0x1Du, 0x00u);
-    emit_write(program, &length, 0x1Eu, 0x00u);
-    emit_write(program, &length, 0x1Au, 0x80u);
     emit_write(program, &length, 0x1Eu, 0x80u); /* Trigger resets position, not buffer. */
+    emit_write(program, &length, 0x30u, 0xAAu); /* Active alias changes RAM, not the latch. */
     program[length++] = 0xF0u; program[length++] = 0x77u; /* Guest reads FF77. */
     program[length++] = 0xEAu; program[length++] = 0x00u; program[length++] = 0xC0u;
     if (wait_for_fetch) {
@@ -489,6 +487,26 @@ static int cgb_apu_wave_fetch(void) {
     return 0;
 }
 
+static int cgb_apu_wave_direct_ram_control(const char *name) {
+    wave_transition_result result;
+    if (run_wave_transition_guest(0, &result) != 0) {
+        printf("not ok 1 - %s\n", name);
+        fprintf(stderr, "could not create CGB CH3 negative-control guest\n");
+        return 1;
+    }
+    if (result.first_sample == 0x0Au) {
+        fprintf(stderr,
+                "negative-control diagnostic: direct-RAM mutant expected=0x07 actual=0x%02x before fetch\n",
+                result.first_sample);
+        printf("ok 1 - %s\n", name);
+        return 0;
+    }
+    fprintf(stderr, "direct-RAM mutant not detected expected=0x0a actual=0x%02x\n",
+            result.first_sample);
+    printf("not ok 1 - %s\n", name);
+    return 1;
+}
+
 int main(int argc, char **argv) {
     const char *name = argc > 1 ? argv[1] : "cgb_pcm_tracer";
     printf("TAP version 13\n1..1\n");
@@ -509,6 +527,10 @@ int main(int argc, char **argv) {
     }
     if (strcmp(name, "cgb_apu_wave_latch") == 0) return cgb_apu_wave_latch();
     if (strcmp(name, "cgb_apu_wave_fetch") == 0) return cgb_apu_wave_fetch();
+#if GBB_CGB_APU_CONTROL_MUTANT == 4
+    if (strcmp(name, "cgb_apu_wave_direct_ram_control") == 0)
+        return cgb_apu_wave_direct_ram_control(name);
+#endif
     printf("not ok 1 - %s # unknown test\n", name);
     return 1;
 }
