@@ -2756,6 +2756,31 @@ add_test(NAME cgb_external_dispositions_mutated
     -DGBB_EXPECT_CODE=1
     "-DGBB_EXPECT_REGEX=disposition-mismatch"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# Negative control: an image fixture cannot be marked executed by an external disposition scan.
+file(READ "${PROJECT_SOURCE_DIR}/fixtures/age/manifest.json" gbb_ext_age_manifest)
+string(JSON gbb_ext_age_fixture_count LENGTH "${gbb_ext_age_manifest}" fixtures)
+math(EXPR gbb_ext_age_fixture_last "${gbb_ext_age_fixture_count} - 1")
+set(gbb_ext_pending_image_found OFF)
+foreach(gbb_ext_age_index RANGE 0 ${gbb_ext_age_fixture_last})
+  string(JSON gbb_ext_age_file GET "${gbb_ext_age_manifest}" fixtures ${gbb_ext_age_index} file)
+  if(gbb_ext_age_file STREQUAL "m3-bg-lcdc-cgbBCE.gb")
+    set(gbb_ext_pending_image_found ON)
+    string(JSON gbb_ext_age_manifest_pending_bad SET "${gbb_ext_age_manifest}"
+      fixtures ${gbb_ext_age_index} qualification_status "\"pass\"")
+  endif()
+endforeach()
+if(NOT gbb_ext_pending_image_found)
+  message(FATAL_ERROR "external disposition pending-image control could not find its AGE manifest entry")
+endif()
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/external-dispositions")
+file(WRITE "${PROJECT_BINARY_DIR}/external-dispositions/image-pending-mutated.json"
+  "${gbb_ext_age_manifest_pending_bad}")
+add_test(NAME cgb_external_dispositions_image_pending
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_EXT_DISPOSITIONS_VERIFIER};--record;${GBB_EXT_DISPOSITIONS_RECORD};--doc;${GBB_CGB_PROFILE_DOC};--repo-root;${PROJECT_SOURCE_DIR};--age-manifest;${PROJECT_BINARY_DIR}/external-dispositions/image-pending-mutated.json"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=disposition-mismatch age-image-pending"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # Optional acid2 local runner (D-24): required CI runs synthetic self-tests only, never an acid2 file.
 set(GBB_ACID2_LOCAL "${PROJECT_SOURCE_DIR}/tests/scripts/run-acid2-local.py")
 add_test(NAME cgb_acid2_local_selftest COMMAND "${Python3_EXECUTABLE}" -I "${GBB_ACID2_LOCAL}" --self-test)
@@ -3056,6 +3081,25 @@ add_test(NAME cgb_speed_dispositions_mutated
     "-DGBB_EXPECT_REGEX=disposition-mismatch"
     -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
 set_tests_properties(cgb_speed_dispositions_mutated PROPERTIES TIMEOUT 30)
+# Negative control: keep the precise independent thirteen-case row set closed to extras.
+set(gbb_speed_case_anchor "\"case\": \"spsw-div-cgbBCE\"")
+string(FIND "${gbb_speed_dispositions_record}" "${gbb_speed_case_anchor}" gbb_speed_case_at)
+string(FIND "${gbb_speed_dispositions_record}" "${gbb_speed_case_anchor}" gbb_speed_case_last REVERSE)
+if(gbb_speed_case_at EQUAL -1 OR NOT gbb_speed_case_at EQUAL gbb_speed_case_last)
+  message(FATAL_ERROR "speed disposition AGE case mutation anchor must occur exactly once")
+endif()
+string(REPLACE "${gbb_speed_case_anchor}"
+  "\"case\": \"spsw-div-cgbBCE-extra\""
+  gbb_speed_dispositions_extra_age_case "${gbb_speed_dispositions_record}")
+file(WRITE "${PROJECT_BINARY_DIR}/cgb-speed-dispositions/age-case-set-mutated.json"
+  "${gbb_speed_dispositions_extra_age_case}")
+add_test(NAME cgb_speed_dispositions_age_case_set_mutated
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_SPEED_DISPOSITIONS_VERIFIER};--record;${PROJECT_BINARY_DIR}/cgb-speed-dispositions/age-case-set-mutated.json"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=disposition-mismatch age-case-set"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(cgb_speed_dispositions_age_case_set_mutated PROPERTIES TIMEOUT 30)
 # --- Phase 12 plan 12-17 end ---
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 5 stall_sets_stopped
   cgb_speed_tracer_switch "stopped|GBB_STOP_STOPPED")

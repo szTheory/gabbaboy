@@ -14,6 +14,14 @@ import subprocess
 import sys
 
 AGE_CASES = {f"m3-bg-{a}-{b}" for a in ("lcdc", "scx") for b in ("cgbBCE", "ds-cgbBCE", "nocgb-ncmBCE")}
+AGE_ROW_CASES = {
+    "spsw-div-cgbBCE", "spsw-tima-cgbE", "spsw-tima-cgbBC", "spsw-stop-prefetch-cgbBCE",
+    "spsw-interrupts-cgbE", "spsw-mode0-cgbBCE", "spsw-ch2-lc-delay-cgbBCE",
+    "stat-mode-ds-cgbBCE", "stat-mode-cgbE", "stat-mode-sprites-ds-cgbBCE",
+    "stat-mode-sprites-dmgC-cgbBCE", "stat-mode-window-ds-cgbBCE", "stat-mode-window-cgbBCE",
+}
+ROW_METADATA = {"test_results_address", "expected_address", "rows", "budget_half_dots"}
+PIXEL_OUTCOMES = {"disposition", "execution_result", "pixel_result", "emulator_result", "actual_result"}
 BEGIN = "<!-- cgb-external-dispositions-begin -->"
 END = "<!-- cgb-external-dispositions-end -->"
 
@@ -64,16 +72,57 @@ def check_rows(suites: dict) -> list[tuple[str, str, str, str]]:
             for s in ("age", "mealybug") for r in suites[s]["rows"]]
 
 
-def check_tracked(repo_root: pathlib.Path, suites: dict) -> None:
+def admitted_age_image_paths(repo_root: pathlib.Path, manifest_path: pathlib.Path | None = None) -> set[str]:
+    path = manifest_path or repo_root / "fixtures/age/manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    need(manifest.get("fixture_protocol") == "gabbaboy-age-fixture-protocol-v1",
+         "age-fixture-protocol")
+    entries = manifest.get("fixtures", [])
+    need(len(entries) == 19, "age-fixture-count")
+    files = [e.get("file", "") for e in entries]
+    need(len(files) == len(set(files)), "age-fixture-duplicate")
+    row_entries = [e for e in entries if e.get("fixture_class") == "age-row-oracle"]
+    image_entries = [e for e in entries if e.get("fixture_class") == "age-m3-reference"]
+    need(all(e.get("fixture_class") in {"age-row-oracle", "age-m3-reference"} for e in entries),
+         "age-fixture-class")
+    need({e.get("file", "").removesuffix(".gb") for e in row_entries} == AGE_ROW_CASES and
+         len(row_entries) == 13, "age-row-fixture-set")
+    image_cases = {e.get("file", "").removesuffix(".gb") for e in image_entries}
+    need(image_cases == AGE_CASES and len(image_entries) == 6, "age-image-fixture-set")
+
+    paths = set()
+    for entry in image_entries:
+        name = entry.get("file", "")
+        need(entry.get("qualification_status") == "admitted-not-executed",
+             f"age-image-pending {name}")
+        need(not ROW_METADATA.intersection(entry), f"age-image-row-metadata {name}")
+        need(not PIXEL_OUTCOMES.intersection(entry), f"age-image-outcome-present {name}")
+        reference = entry.get("reference", {})
+        expected_reference = f"references/{name.removesuffix('.gb')}.png"
+        need(reference.get("file") == expected_reference,
+             f"age-image-reference-pair {name}")
+        paths.add(f"fixtures/age/{name}")
+        paths.add(f"fixtures/age/{expected_reference}")
+    return paths
+
+
+def check_tracked(repo_root: pathlib.Path, suites: dict,
+                  manifest_path: pathlib.Path | None = None) -> None:
     out = subprocess.run(["git", "-C", str(repo_root), "ls-files", "-z", "--", "fixtures"],
                          check=True, capture_output=True).stdout.decode("utf-8", "replace")
+    allowed_age_images = admitted_age_image_paths(repo_root, manifest_path)
     stems = [r["case"] for r in suites["mealybug"]["rows"]]
+    tracked_age_images = set()
     for path in filter(None, out.split("\0")):
         name = path.rsplit("/", 1)[-1]
         if not name.lower().endswith((".gb", ".gbc", ".png")):
             continue
-        need("m3-bg-" not in name, f"tracked-age-file {path}")
+        if "m3-bg-" in name:
+            need(path in allowed_age_images, f"tracked-age-file {path}")
+            tracked_age_images.add(path)
         need(not any(name.startswith(stem) for stem in stems), f"tracked-mealybug-file {path}")
+    need(tracked_age_images == allowed_age_images,
+         f"tracked-age-file-set missing={sorted(allowed_age_images - tracked_age_images)}")
 
 
 def doc_rows(doc: pathlib.Path) -> list[tuple[str, str, str, str]]:
@@ -95,12 +144,13 @@ def main() -> int:
     ap.add_argument("--record", required=True, type=pathlib.Path)
     ap.add_argument("--doc", required=True, type=pathlib.Path)
     ap.add_argument("--repo-root", required=True, type=pathlib.Path)
+    ap.add_argument("--age-manifest", type=pathlib.Path)
     args = ap.parse_args()
     try:
         suites = load_suites(args.record)
         expected = check_rows(suites)
         need(doc_rows(args.doc) == expected, "doc-mirror-differs")
-        check_tracked(args.repo_root, suites)
+        check_tracked(args.repo_root.resolve(), suites, args.age_manifest)
     except (Mismatch, KeyError, ValueError, OSError, subprocess.CalledProcessError) as exc:
         print(f"disposition-mismatch {type(exc).__name__ if not isinstance(exc, Mismatch) else ''}{exc}")
         return 1

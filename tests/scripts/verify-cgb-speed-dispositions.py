@@ -8,6 +8,21 @@ import pathlib
 import re
 import sys
 
+AGE_ROW_CASES = {
+    "spsw-div-cgbBCE", "spsw-tima-cgbE", "spsw-tima-cgbBC", "spsw-stop-prefetch-cgbBCE",
+    "spsw-interrupts-cgbE", "spsw-mode0-cgbBCE", "spsw-ch2-lc-delay-cgbBCE",
+    "stat-mode-ds-cgbBCE", "stat-mode-cgbE", "stat-mode-sprites-ds-cgbBCE",
+    "stat-mode-sprites-dmgC-cgbBCE", "stat-mode-window-ds-cgbBCE", "stat-mode-window-cgbBCE",
+}
+AGE_IMAGE_CASES = {
+    f"m3-bg-{axis}-{variant}"
+    for axis in ("lcdc", "scx")
+    for variant in ("cgbBCE", "ds-cgbBCE", "nocgb-ncmBCE")
+}
+AGE_DIGEST_ONLY_CASE = "spsw-interrupts-cgbBC"
+ROW_METADATA = {"test_results_address", "expected_address", "rows", "budget_half_dots"}
+IMAGE_OUTCOMES = {"disposition", "execution_result", "pixel_result", "emulator_result", "actual_result"}
+
 
 class Mismatch(Exception):
     pass
@@ -44,6 +59,39 @@ def mirror_rows(document: str) -> list[tuple[str, ...]]:
     return rows
 
 
+def admitted_age_row_fixtures(root: pathlib.Path) -> dict[str, dict]:
+    manifest = json.loads((root / "fixtures/age/manifest.json").read_text(encoding="utf-8"))
+    need(manifest.get("fixture_protocol") == "gabbaboy-age-fixture-protocol-v1",
+         "age-fixture-protocol")
+    fixtures = manifest.get("fixtures", [])
+    files = [fixture.get("file", "") for fixture in fixtures]
+    need(len(fixtures) == 19 and len(files) == len(set(files)), "age-fixture-count")
+    need(all(fixture.get("fixture_class") in {"age-row-oracle", "age-m3-reference"}
+             for fixture in fixtures), "age-fixture-class")
+    row_fixtures = [fixture for fixture in fixtures
+                    if fixture.get("fixture_class") == "age-row-oracle"]
+    image_fixtures = [fixture for fixture in fixtures
+                      if fixture.get("fixture_class") == "age-m3-reference"]
+    rows = {fixture.get("file", "").removesuffix(".gb"): fixture for fixture in row_fixtures}
+    images = {fixture.get("file", "").removesuffix(".gb"): fixture for fixture in image_fixtures}
+    need(len(rows) == 13 and set(rows) == AGE_ROW_CASES, "age-row-fixture-set")
+    need(len(images) == 6 and set(images) == AGE_IMAGE_CASES, "age-image-fixture-set")
+    for case, fixture in rows.items():
+        need(ROW_METADATA <= set(fixture) and fixture.get("file") == f"{case}.gb",
+             f"age-row-metadata {case}")
+        need("qualification_status" not in fixture and not IMAGE_OUTCOMES.intersection(fixture),
+             f"age-row-image-status {case}")
+    for case, fixture in images.items():
+        need(fixture.get("qualification_status") == "admitted-not-executed",
+             f"age-image-pending {case}")
+        need(not ROW_METADATA.intersection(fixture) and not IMAGE_OUTCOMES.intersection(fixture),
+             f"age-image-row-or-outcome {case}")
+        reference = fixture.get("reference", {})
+        need(reference.get("file") == f"references/{case}.png",
+             f"age-image-reference-pair {case}")
+    return rows
+
+
 def main() -> int:
     root = pathlib.Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser()
@@ -64,28 +112,33 @@ def main() -> int:
                 need(re.fullmatch(r"[0-9a-f]{40}", suite.get("commit", "")) is not None,
                      f"commit {suite.get('suite', '')}")
 
-        age_manifest = json.loads((root / "fixtures/age/manifest.json").read_text(encoding="utf-8"))
+        admitted = admitted_age_row_fixtures(root)
         age_rows = suites["age-test-roms"].get("rows", [])
-        admitted = {fixture["file"][:-3]: fixture for fixture in age_manifest.get("fixtures", [])}
-        vendored_age = {row.get("case"): row for row in age_rows if row.get("vendored") is not False}
-        need(set(vendored_age) == set(admitted), "age-case-set")
+        age_case_names = [row.get("case") for row in age_rows]
+        need(len(age_rows) == 14 and len(age_case_names) == len(set(age_case_names)) and
+             set(age_case_names) == AGE_ROW_CASES | {AGE_DIGEST_ONLY_CASE}, "age-case-set")
+        vendored_age_rows = [row for row in age_rows if row.get("vendored") is not False]
+        vendored_age = {row.get("case"): row for row in vendored_age_rows}
+        need(len(vendored_age_rows) == 13 and len(vendored_age) == 13 and
+             set(vendored_age) == AGE_ROW_CASES and
+             set(vendored_age) == set(admitted), "age-case-set")
         for case, fixture in admitted.items():
             need(vendored_age[case].get("upstream_path") == fixture.get("source_path"),
                  f"age-upstream-path {case}")
         digest_only = [row for row in age_rows if row.get("disposition") == "digest-only"]
-        need(len(digest_only) == 1 and digest_only[0].get("case") == "spsw-interrupts-cgbBC" and
+        need(len(digest_only) == 1 and digest_only[0].get("case") == AGE_DIGEST_ONLY_CASE and
              digest_only[0].get("vendored") is False and
              re.fullmatch(r"[0-9a-f]{64}", digest_only[0].get("source_sha256", "")) is not None,
              "age-digest-only")
         sensitivity = suites["age-test-roms"].get("sensitivity", {})
         mutants = {row.get("mutant"): row for row in sensitivity.get("mutants", [])}
         need(set(mutants) == {"M6", "M21", "M28", "M27"} and
-             sensitivity.get("fixture_count") == len(admitted) and
+             sensitivity.get("fixture_count") == len(AGE_ROW_CASES) and
              re.fullmatch(r"[0-9a-f]{40}", sensitivity.get("source_revision", "")) is not None,
              "age-sensitivity-shape")
         for mutant, row in mutants.items():
             cases = row.get("discriminating_cases", [])
-            need(len(cases) == len(set(cases)) and set(cases) <= set(admitted),
+            need(len(cases) == len(set(cases)) and set(cases) <= AGE_ROW_CASES,
                  f"age-sensitivity-cases {mutant}")
         need({"spsw-div-cgbBCE"} <= set(mutants["M6"].get("discriminating_cases", [])) and
              {"spsw-div-cgbBCE"} <= set(mutants["M21"].get("discriminating_cases", [])) and
