@@ -20,11 +20,11 @@ provides:
   - Independent hostile-stream, exact-membership, and inventory controls.
 affects: [14-12, phase-14-qualification, cgb-corpus-reporting]
 actuals:
-  tokens: 28451
+  tokens: 31550
   tasks: 3
-  commits: 5
+  commits: 7
 plan_head_before: e5bd88f9ac63a69fc493d45f510d82ce56e2be6d
-plan_head_after: 89c966e629b45531a3359e5f27b84de682e53761
+plan_head_after: d963f75008071e09d5740dfcade638eb222bc467
 tech-stack:
   added: [Python standard library]
   patterns: [identity-bound run receipts, bounded CTest event parsing, source-derived assertion contracts]
@@ -40,6 +40,7 @@ key-files:
     - tests/test_magentests.c
     - tests/test_samesuite_hdma.c
     - tests/scripts/verify-cgb-corpus-inventory.py
+    - tests/scripts/verify-age-phase14-contract.py
     - tests/external/cgb-corpus-inventory.json
     - tests/CMakeLists.txt
     - tests/expected-tests.txt
@@ -80,7 +81,17 @@ coverage:
       - kind: unit
         ref: python3 -I tests/scripts/verify-cgb-corpus-inventory.py --self-test
         status: pass
-duration: 23min
+  - id: D4
+    description: The Phase 14 live AGE checker accepts exact source-labelled rows and rejects altered row values.
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: ctest --test-dir build -R '^cgb_age_assertion_identity$' --output-on-failure --no-tests=error
+        status: pass
+      - kind: unit
+        ref: ctest --test-dir build -R '^cgb_age_assertion_controls$' --output-on-failure --no-tests=error
+        status: pass
+duration: 30min
 completed: 2026-10-15
 status: complete
 ---
@@ -91,11 +102,11 @@ status: complete
 
 ## Performance
 
-- **Duration:** 23 minutes
+- **Duration:** 30 minutes
 - **Started:** 2026-10-15T22:36:44Z
-- **Completed:** 2026-10-15T22:59:50Z
+- **Completed:** 2026-10-15T23:06:27Z
 - **Tasks:** 3
-- **Files modified:** 13
+- **Files modified:** 14
 
 ## Accomplishments
 
@@ -104,9 +115,9 @@ status: complete
 - Added hostile stream, stale identity, path-bound, late-failure, and all-xfail cohort controls, with independent inventory self-tests.
 - Documented the receipt workflow and its current software-model limitations.
 
-The final fresh run on revision 89c966e completed 107/107 cases: 25 observed passes and 82 matched expected failures. Assertions totaled 2,845 passing rows out of 4,959. AGE compared 138,240 image pixels and recorded 18,208 mismatches.
+The final fresh run on revision d963f75 completed 107/107 cases: 25 observed passes and 82 matched expected failures. Assertions totaled 2,845 passing rows out of 4,959. AGE compared 138,240 image pixels and recorded 18,208 mismatches.
 
-The current run identity is 5e8d91372ac28426562fd97b6826e9319b28a654f94c1050355496068727d755. Its input identity SHA-256 is a7b63102b02240c54e7ad9025f8c5ebfdd578e25f2155b2252d5d6767427bc92.
+The current run identity is afb6256063084fa6939c576af114195f5418c011bf6e36d87ce42348018b9df5. Its input identity SHA-256 is b652fa1f42bc26301cca0b74aadbb15853a215341f46a7d7c14bf12df6f0d17d.
 
 | Suite | Cases | Observed pass | Matched expected failure | Passing assertion rows |
 | --- | ---: | ---: | ---: | ---: |
@@ -122,12 +133,16 @@ The receipt reports software CGB-CPU-E evidence only. It makes no hardware or ga
 1. **Task 1 RED:** 38c6a5b; **Task 1 GREEN:** 0b03fd5
 2. **Task 2:** ef0394d
 3. **Task 3 RED:** 95da9af; **Task 3 GREEN:** 89c966e
+4. **Wave 9 AGE integration correction:** d963f75
+
+The measured plan commit window also includes the earlier summary metadata commit 64fc488.
 
 ## Files Created or Modified
 
 - tests/scripts/verify-cgb-corpus-report.py — bounded run orchestration, identity checking, normalization, and receipt output.
 - tests/scripts/test-cgb-corpus-report.py — clean and hostile receipt contract controls.
 - tests/scripts/verify-cgb-corpus-inventory.py — independent mutation controls for the updated frozen bindings.
+- tests/scripts/verify-age-phase14-contract.py — live AGE row comparison now consumes the frozen source-labelled assertion IDs and retains exact value checks.
 - tests/external/cgb-corpus-inventory.json — exact CTest and assertion bindings for the admitted cases.
 - src/runner/main.c, tests/test_age.c, tests/test_magentests.c, and tests/test_samesuite_hdma.c — stable structured observations required by the report.
 - tests/CMakeLists.txt and tests/expected-tests.txt — corpus labels and required contract/control registrations.
@@ -161,12 +176,22 @@ The receipt reports software CGB-CPU-E evidence only. It makes no hardware or ga
 - **Verification:** Inventory self-test passed with the unbound and static not-run controls.
 - **Committed in:** 89c966e
 
-**Total deviations:** 2 targeted corrections.
+**3. [Rule 1 - Bug] Matched the Phase 14 live AGE verifier to frozen source-labelled row IDs**
+- **Found during:** Wave 9 integration verification
+- **Issue:** The live verifier synthesized case/row-NN IDs for stat-mode-cgbE although its frozen assertion contract and runner events use source-labelled IDs.
+- **Fix:** Compare parsed live events to the already-validated assertion IDs, expected bytes, observed bytes, and dispositions. Added positive coverage for the source-labelled event and a negative control that changes one observed value and requires the existing drift rejection.
+- **Files modified:** tests/scripts/verify-age-phase14-contract.py
+- **Verification:** The six focused AGE, report, and disposition CTests passed; the final 107-case report, its self-test, and --from-ctest passed.
+- **Committed in:** d963f75
+
+**Total deviations:** 3 targeted corrections.
 **Impact on plan:** The added consumer fields and adjusted negative fixture were needed for exact identity checks. No public ABI, dependency, hardware claim, or additional emulator behavior was introduced.
 
 ## Issues Encountered
 
 The first final run correctly rejected a runner executable built before the Task 3 commit because its embedded source revision did not match the current input identity; it wrote an incomplete receipt. Reconfiguring and rebuilding on 89c966e refreshed the executable identity. The subsequent fresh run, reporter self-test, and --from-ctest run all passed.
+
+The parent's Wave 9 run then exposed the live AGE verifier's stale generated row ID for stat-mode-cgbE. The verifier now compares against the frozen source IDs and still rejects changed bytes; focused AGE identity, control, report, and disposition tests pass. Rebuilding on d963f75 and rerunning --run, --self-test, and --from-ctest produced the current identity recorded above.
 
 The CMake configure step noted that the matching Clang libFuzzer runtime was unavailable; deterministic sanitizer regressions remained enabled and the full build succeeded. Static inventory rows marked not-run-by-inventory remain separate from the 107 runtime case results.
 
@@ -184,4 +209,4 @@ Plan 14-11 is complete. Phase 14 remains open pending the parent workflow's full
 
 ## Self-Check: PASSED
 
-The summary file exists, all five task commits are ancestors of the plan head, and the summary_coverage CTest passed.
+The summary file exists, all six implementation and regression commits are ancestors of the recorded plan head, and the summary_coverage CTest passed.
