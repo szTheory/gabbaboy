@@ -544,7 +544,7 @@ def prohibition_self_test(root: Path) -> None:
                             "live unqualified claim mutation")
     require(read(root, PLAN_PATH) == plan_before,
             "prohibition self-test changed the saved 13-01 projection")
-    print("hdma-prohibition self-test pass controls=7 projection-unchanged=true")
+    print("hdma-prohibition self-test pass controls=9 projection-unchanged=true")
 
 
 def handoff_values(state: str, continuation: str, config: dict) -> None:
