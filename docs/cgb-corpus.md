@@ -81,4 +81,17 @@ These records qualify repository software-model observations and source
 provenance. They do not qualify physical CGB-E hardware, analog audio/color,
 or general game compatibility. The inventory is not a fixture manifest and
 does not admit pending bytes.
+
+## Private execution receipt
+
+`tests/scripts/verify-cgb-corpus-report.py` consumes bounded existing runner/CTest
+observations and writes a private, versioned receipt; it does not add a C-core
+JSON interface. Its DAA tracer binds the checkout revision, covered source and
+fixture digests, runner bytes, CMake configuration, Mooneye manifest and ROM,
+model profile, compatibility mode, speed, boot policy, callback PCs and tick
+budget. The receipt's public paths are repository-relative. A failed or partial
+run replaces any earlier receipt with an `incomplete` record. The one-case
+tracer is a contract check, not a claim that the full 107-case receipt has
+completed; suite and assertion denominators remain separate, and matched
+expected failures never count as observed guest passes.
 <!-- cgb-corpus-inventory-end -->

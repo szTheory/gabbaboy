@@ -1297,6 +1297,18 @@ add_test(NAME cgb_corpus_inventory_selftest
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-inventory.py" --self-test)
 set_tests_properties(cgb_corpus_inventory_selftest PROPERTIES TIMEOUT 30
   PASS_REGULAR_EXPRESSION "cgb-corpus-inventory self-test pass")
+set(GBB_CGB_CORPUS_REPORT_TEST
+  "${PROJECT_SOURCE_DIR}/tests/scripts/test-cgb-corpus-report.py")
+set(GBB_CGB_CORPUS_REPORT_VERIFIER
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-report.py")
+add_test(NAME cgb_corpus_report_tracer
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_REPORT_TEST}"
+    CorpusReportTracerTests.test_tracer_single_case_receipt)
+add_test(NAME cgb_corpus_report_tracer_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_REPORT_TEST}"
+    CorpusReportTracerTests.test_tracer_controls)
+set_tests_properties(cgb_corpus_report_tracer cgb_corpus_report_tracer_controls
+  PROPERTIES TIMEOUT 45)
 set(GBB_AGE_PHASE14_CONTRACT "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py")
 add_test(NAME cgb_age_assertion_identity
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_PHASE14_CONTRACT}" --assertions --runner $<TARGET_FILE:test_age>)
