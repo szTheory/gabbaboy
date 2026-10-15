@@ -1,0 +1,11 @@
+{
+  "command": "build/tests/test_samesuite_apu cgb_samesuite_apu_tracer_controls",
+  "exitCode": 1,
+  "output": "TAP version 13\n1..1\nnot ok 1 - cgb_samesuite_apu_tracer_controls",
+  "consoleOutput": "samesuite-apu-control: mutated guest result was accepted expected=00 observed=01",
+  "targetTest": "cgb_samesuite_apu_tracer_controls",
+  "targetFile": "tests/test_samesuite_apu.c",
+  "expected": "A mutated guest result must be rejected by the comparison predicate",
+  "actual": "the placeholder comparison predicate accepts expected=00 observed=01",
+  "semanticAssessment": "The named target executed and failed only because the comparison predicate accepted the injected 0x01 result against expected 0x00; no fixture, setup, collection, or syntax failure occurred."
+}

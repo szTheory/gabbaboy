@@ -997,6 +997,13 @@ set_tests_properties(magentests_hblank_vram_dma cgb_hdma_magen_controls PROPERTI
 
 # Phase 13 plan 13-09: run the exact admitted SameSuite DMA ROMs on the selected
 # CGB-CPU-E software model, with byte/status predicates and bounded test seams.
+add_executable(test_samesuite_apu test_samesuite_apu.c)
+target_link_libraries(test_samesuite_apu PRIVATE GabbaBoy::core)
+target_compile_features(test_samesuite_apu PRIVATE c_std_17)
+set_target_properties(test_samesuite_apu PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_samesuite_apu_tracer_controls
+  COMMAND test_samesuite_apu cgb_samesuite_apu_tracer_controls)
+
 add_executable(test_samesuite_hdma test_samesuite_hdma.c)
 target_include_directories(test_samesuite_hdma PRIVATE "${PROJECT_SOURCE_DIR}/include")
 target_compile_features(test_samesuite_hdma PRIVATE c_std_17)
