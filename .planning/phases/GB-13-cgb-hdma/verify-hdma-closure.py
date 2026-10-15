@@ -29,6 +29,18 @@ PROHIBITION_STATEMENT = (
 ADAPTER_PATH = "tests/scripts/cgb-hdma-prohibition.test.cjs"
 CLAIMS_CHECKER = "tests/scripts/verify-cgb-hdma-claims.py"
 PROHIBITION_DIR = "build/phase13-prohibition"
+PHASE_METADATA_DIR = ".planning/phases/GB-13-cgb-hdma/"
+SOURCE_CLOSEOUT_METADATA = frozenset((
+    ".planning/STATE.md", ".planning/PROJECT.md", ".planning/ROADMAP.md",
+    ".planning/REQUIREMENTS.md", ".planning/config.json", ".planning/state.json",
+    ".planning/milestone.lock", ".planning/context/LESSONS.md",
+    ".planning/context/DECISIONS.md", ".planning/research/INDEX.md",
+    *(PHASE_METADATA_DIR + f"13-{number:02d}-SUMMARY.md" for number in range(1, 13)),
+    *(PHASE_METADATA_DIR + name for name in (
+        "13-BENCH.md", "13-VALIDATION.md", "13-SECURITY.md", "13-REVIEW.md",
+        "13-REVIEW-DISPOSITION.md", "13-VERIFICATION.md", "13-LEARNINGS.md",
+        "continue.md", "deferred-items.md", "13-ASAN-ADDED-COST.json")),
+))
 
 
 class ContractError(Exception):
@@ -649,17 +661,46 @@ def validate_source_revision(root: Path, bench: str, current_head: str) -> str:
     require(source_match is not None,
             "13-BENCH must record the exact tested source revision")
     source_revision = source_match.group(1)
+    require(current_head == git_output(root, "rev-parse", "HEAD"),
+            "source comparison must use the actual current HEAD")
     require(git_output(root, "merge-base", "--is-ancestor", source_revision, current_head) == "",
             "tested source revision is not in the current history")
-    changed = subprocess.run(["git", "diff", "--name-only", source_revision, current_head, "--",
-                             "tests/CMakeLists.txt", "tests/expected-tests.txt",
-                             "tests/scripts/cgb-hdma-prohibition.test.cjs",
-                             "tests/scripts/verify-cgb-hdma-claims.py",
-                             ".planning/phases/GB-13-cgb-hdma/verify-hdma-closure.py"],
-                            cwd=root, capture_output=True, text=True, check=False)
-    require(changed.returncode == 0 and not changed.stdout.strip(),
-            f"tested source files changed after their recorded revision: {changed.stdout}{changed.stderr}")
+
+    def paths(*args: str) -> set[str]:
+        result = subprocess.run(["git", *args], cwd=root, capture_output=True,
+                                check=False, timeout=30)
+        require(result.returncode == 0,
+                f"git source-path enumeration failed: {os.fsdecode(result.stderr).strip()}")
+        require(not result.stdout or result.stdout.endswith(b"\0"),
+                "git source-path enumeration did not return NUL-delimited records")
+        return {os.fsdecode(path) for path in result.stdout.split(b"\0") if path}
+
+    # Proof covers identical behavior/evidence bytes, plus only these exact
+    # closeout records. Unknown paths (including planning code, plans, docs and
+    # fixture provenance) invalidate it. Separate index/worktree checks prevent
+    # an untested staged change from hiding behind a reverted worktree file.
+    diff = ("diff", "--name-only", "-z", "--no-renames", "--no-ext-diff",
+            "--ignore-submodules=none")
+    changes = (
+        ("committed", paths(*diff, source_revision, current_head, "--")),
+        ("staged", paths(*diff, "--cached", current_head, "--")),
+        ("unstaged", paths(*diff, "--")),
+        ("untracked", paths("ls-files", "--others", "--exclude-standard", "-z", "--")),
+    )
+    invalid = [(state, sorted(changed - SOURCE_CLOSEOUT_METADATA))
+               for state, changed in changes if changed - SOURCE_CLOSEOUT_METADATA]
+    require(not invalid,
+            f"tested source inputs changed after their recorded revision or are dirty: {invalid!r}")
     return source_revision
+
+
+def source_revision_self_test(root: Path) -> None:
+    result = subprocess.run(
+        [sys.executable, "-I", str(root / PHASE_METADATA_DIR / "verify-hdma-source-revision.py")],
+        cwd=root, capture_output=True, text=True, check=False, timeout=60)
+    require(result.returncode == 0,
+            f"source-revision controls failed: {result.stdout}{result.stderr}")
+    print(result.stdout.rstrip())
 
 
 def self_test(root: Path) -> None:
@@ -699,6 +740,7 @@ def self_test(root: Path) -> None:
 
 
 def closure_self_test(root: Path) -> None:
+    source_revision_self_test(root)
     self_test(root)
     sample = read(root, ".planning/phases/GB-13-cgb-hdma/13-11-SUMMARY.md")
     summary_contract(root, sample)

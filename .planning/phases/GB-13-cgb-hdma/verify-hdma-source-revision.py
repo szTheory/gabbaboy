@@ -81,12 +81,12 @@ def main() -> int:
             try:
                 actual = validate(root, bench, git(root, "rev-parse", "HEAD"))
             except contract_error as error:
-                if reject:
+                if reject and str(error).startswith("tested source "):
                     print(f"PASS {label}: rejected ({error})")
                     passed += 1
                 else:
                     failures.append(label)
-                    print(f"FAIL {label}: rejected permitted source ({error})")
+                    print(f"FAIL {label}: unexpected rejection ({error})")
             else:
                 if reject:
                     failures.append(label)
