@@ -203,6 +203,26 @@ def _check_mode0_semantics(case: dict, row_assertions: list[dict]) -> None:
          "age-mode0-merged-semantic-id")
 
 
+def _check_live_age_rows(case_name: str, output: str,
+                         assertions: list[dict]) -> list[tuple[str, str, str, str]]:
+    records = []
+    for line in output.splitlines():
+        if not line.startswith("age-assertion-row "):
+            continue
+        match = re.fullmatch(
+            r"age-assertion-row id=([^ ]+) expected=([0-9A-F]{16}) actual=([0-9A-F]{16}) disposition=(pass|fail)",
+            line,
+        )
+        need(match is not None, f"age-live-row-event-invalid:{case_name}")
+        records.append(match.groups())
+    expected = [
+        (row["id"], row["expected_hex"], row["observed_hex"], row["observed_disposition"])
+        for row in assertions
+    ]
+    need(records == expected, f"age-live-row-drift:{case_name}")
+    return records
+
+
 def check_age_assertions(root: Path, inventory: dict, speed: dict,
                          run_guest: bool = False, runner: str | None = None) -> tuple[int, int]:
     manifest = read_json(root / "fixtures/age/manifest.json")
@@ -352,20 +372,7 @@ def check_age_assertions(root: Path, inventory: dict, speed: dict,
                                     check=False, timeout=15)
             need(result.returncode == 0,
                  f"age-live-guest-verdict:{case_name}:{result.returncode}:{result.stderr.strip()}")
-            records = []
-            for line in result.stdout.splitlines():
-                match = re.fullmatch(
-                    r"age-assertion-row id=([^ ]+) expected=([0-9A-F]{16}) actual=([0-9A-F]{16}) disposition=(pass|fail)",
-                    line,
-                )
-                if match:
-                    records.append(match.groups())
-            expected_live = [
-                (f"{case_name}/row-{index:02d}", row["expected_hex"],
-                 row["observed_hex"], row["observed_disposition"])
-                for index, row in enumerate(external["assertions"])
-            ]
-            need(records == expected_live, f"age-live-row-drift:{case_name}")
+            _check_live_age_rows(case_name, result.stdout, external["assertions"])
     return len(AGE_ROW_CASES), assertions_total
 
 
@@ -457,6 +464,27 @@ def check_research14(root: Path, inventory: dict) -> None:
 def assertions_controls(root: Path, inventory: dict, speed: dict) -> None:
     check_age_assertions(root, inventory, speed)
     controls = []
+
+    stat_rows = age_speed_rows(speed)["stat-mode-cgbE"]["assertions"]
+    stat_row = stat_rows[0]
+    live_event = (
+        f"age-assertion-row id={stat_row['id']} expected={stat_row['expected_hex']} "
+        f"actual={stat_row['observed_hex']} disposition={stat_row['observed_disposition']}"
+    )
+    _check_live_age_rows("stat-mode-cgbE", live_event, stat_rows[:1])
+    controls.append("live-source-labelled-row")
+    replacement = "0" * 16 if stat_row["observed_hex"] != "0" * 16 else "F" * 16
+    altered_event = live_event.replace(
+        f"actual={stat_row['observed_hex']}", f"actual={replacement}", 1,
+    )
+    try:
+        _check_live_age_rows("stat-mode-cgbE", altered_event, stat_rows[:1])
+    except ContractError as exc:
+        need(str(exc) == "age-live-row-drift:stat-mode-cgbE",
+             f"age-control-wrong-diagnostic:live-row-value-drift:{exc}")
+        controls.append("live-row-value-drift")
+    else:
+        raise ContractError("age-control-accepted:live-row-value-drift")
 
     manifest = read_json(root / "fixtures/age/manifest.json")
     fixture = next(row for row in manifest["fixtures"]
