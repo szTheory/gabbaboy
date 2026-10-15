@@ -86,6 +86,13 @@ static struct {
     uint64_t consumed_half_dots;
 } last_hdma_observation;
 
+static struct {
+    int selected;
+    unsigned operations;
+    unsigned run_calls;
+    uint64_t consumed_half_dots;
+} last_apu_observation;
+
 #ifdef GBB_FUZZ_STANDALONE_TEST
 void gbb_fuzz_core_speed_observation(int *selected, uint8_t *scenario,
                                      unsigned *switches, unsigned *key1_reads,
@@ -381,6 +388,16 @@ void gbb_fuzz_core_hdma_observation(int *selected, unsigned *operations,
     if (run_calls != NULL) *run_calls = last_hdma_observation.run_calls;
     if (consumed_half_dots != NULL)
         *consumed_half_dots = last_hdma_observation.consumed_half_dots;
+}
+
+void gbb_fuzz_core_apu_observation(int *selected, unsigned *operations,
+                                   unsigned *run_calls,
+                                   uint64_t *consumed_half_dots) {
+    if (selected != NULL) *selected = last_apu_observation.selected;
+    if (operations != NULL) *operations = last_apu_observation.operations;
+    if (run_calls != NULL) *run_calls = last_apu_observation.run_calls;
+    if (consumed_half_dots != NULL)
+        *consumed_half_dots = last_apu_observation.consumed_half_dots;
 }
 #endif
 
@@ -888,6 +905,7 @@ int gbb_fuzz_core_last_profile_cgb(void) { return last_profile_cgb; }
 int gbb_fuzz_core_one_input(const uint8_t *data, size_t size) {
     if (data == NULL || size == 0u || size > FUZZ_INPUT_LIMIT) return 0;
     memset(&last_hdma_observation, 0, sizeof(last_hdma_observation));
+    memset(&last_apu_observation, 0, sizeof(last_apu_observation));
 
     /* data[0] bit 7 selects the profile. CGB data[0] with bits 6 or 5 select I/O/palette paths;
      * bits 4..6 equal to 0x10 select the guest KEY1/STOP path on either profile. */

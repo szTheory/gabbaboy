@@ -25,6 +25,12 @@ typedef struct {
 
 extern void gbb_test_observer_set(gbb_instance *, gbb_test_bus_event *, size_t);
 
+#ifdef GBB_CGB_APU_HOSTILE_TEST
+extern int gbb_fuzz_core_one_input(const uint8_t *, size_t);
+extern int gbb_fuzz_core_contract_failures(void);
+extern void gbb_fuzz_core_apu_observation(int *, unsigned *, unsigned *, uint64_t *);
+#endif
+
 typedef struct {
     gbb_stop_reason reason;
     uint8_t value;
@@ -864,6 +870,33 @@ static int cgb_apu_transition_controls(void) {
     return 0;
 }
 
+#ifdef GBB_CGB_APU_HOSTILE_TEST
+static int cgb_apu_hostile_seeds(void) {
+    static const uint8_t seed[] = {
+        0xD3u, 0x01u,
+        0x26u, 0x80u, 0x12u, 0xF0u, 0x30u, 0xA5u,
+        0x04u, 0x00u, 0x56u, 0xC1u, 0x24u, 0x77u
+    };
+    int selected = 0;
+    unsigned operations = 0u, run_calls = 0u;
+    uint64_t consumed_half_dots = 0u;
+    REQUIRE_CASE(gbb_fuzz_core_one_input(seed, sizeof(seed)) == 0,
+                 "cgb_apu_hostile_seeds");
+    gbb_fuzz_core_apu_observation(&selected, &operations, &run_calls,
+                                  &consumed_half_dots);
+    REQUIRE_CASE(selected == 1 && operations != 0u && operations <= 16u &&
+                 run_calls != 0u && run_calls <= 16u &&
+                 consumed_half_dots <= 8192u &&
+                 gbb_fuzz_core_contract_failures() == 0,
+                 "cgb_apu_hostile_seeds");
+    fprintf(stderr, "bounded APU seed expected=selected,operations<=16,runs<=16,half_dots<=8192 actual=%d,%u,%u,%llu\n",
+            selected, operations, run_calls,
+            (unsigned long long)consumed_half_dots);
+    printf("ok 1 - cgb_apu_hostile_seeds\n");
+    return 0;
+}
+#endif
+
 int main(int argc, char **argv) {
     const char *name = argc > 1 ? argv[1] : "cgb_pcm_tracer";
     printf("TAP version 13\n1..1\n");
@@ -896,6 +929,10 @@ int main(int argc, char **argv) {
     if (strcmp(name, "cgb_apu_div_stop") == 0) return cgb_apu_div_stop();
     if (strcmp(name, "cgb_apu_transition_controls") == 0)
         return cgb_apu_transition_controls();
+#ifdef GBB_CGB_APU_HOSTILE_TEST
+    if (strcmp(name, "cgb_apu_hostile_seeds") == 0)
+        return cgb_apu_hostile_seeds();
+#endif
     printf("not ok 1 - %s # unknown test\n", name);
     return 1;
 }

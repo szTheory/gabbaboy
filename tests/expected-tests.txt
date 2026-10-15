@@ -301,6 +301,7 @@ apu_envelope
 apu_sweep
 apu_power
 cgb_apu_div_stop
+cgb_apu_hostile_seeds
 cgb_apu_off_writes
 cgb_apu_partition_controls
 cgb_apu_partition_fetch

@@ -690,6 +690,16 @@ foreach(case channels power_dac readonly host_invariance controls)
   add_test(NAME cgb_pcm_${case} COMMAND test_cgb_apu cgb_pcm_${case})
 endforeach()
 
+# Phase 14 plan 14-04: deterministic bounded hostile APU inputs use the same offline fuzz adapter.
+add_executable(test_cgb_apu_hostile test_cgb_apu.c fuzz_core.c)
+target_link_libraries(test_cgb_apu_hostile PRIVATE GabbaBoy::core)
+target_compile_features(test_cgb_apu_hostile PRIVATE c_std_17)
+target_compile_definitions(test_cgb_apu_hostile PRIVATE
+  GBB_FUZZ_STANDALONE_TEST=1 GBB_CGB_APU_HOSTILE_TEST=1)
+set_target_properties(test_cgb_apu_hostile PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_apu_hostile_seeds
+  COMMAND test_cgb_apu_hostile cgb_apu_hostile_seeds)
+
 # Compile-time-only mutant core: production instances have no runtime mutation selector or state.
 add_library(gabbaboy_core_cgb_pcm_nibble_mutant STATIC ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c)
 target_include_directories(gabbaboy_core_cgb_pcm_nibble_mutant PUBLIC "${PROJECT_SOURCE_DIR}/include")
