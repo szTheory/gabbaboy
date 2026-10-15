@@ -18,6 +18,11 @@ extern int32_t gbb_p12_stall_offset_t;
 #define AGE_STALL_OFFSET_MUTANT (UINT64_C(1) << 31)
 #endif
 
+#ifdef GBB_AGE_P14
+extern void gbb_p14_set_mutants(uint64_t mask);
+#define AGE_PHASE14_TRANSFER_MUTANT UINT64_C(1)
+#endif
+
 #define AGE_ROM_SIZE 0x8000u
 #define AGE_TRACE_CAPACITY 1u
 #define AGE_RUN_SLICE UINT64_C(2048)
@@ -58,6 +63,7 @@ typedef enum {
     MODE_CHECK_DISPOSITION,
     MODE_STALL_WINDOW,
     MODE_SENSITIVITY,
+    MODE_PHASE14_CONTROLS,
     MODE_SCAN
 } age_mode;
 
@@ -65,6 +71,7 @@ static uint8_t age_rom[AGE_ROM_SIZE];
 static uint64_t age_mutant_mask = 0u;
 static int32_t age_stall_offset_t = 0;
 static int age_has_stall_offset = 0;
+static uint64_t age_phase14_mutant_mask = 0u;
 
 static int parse_u64(const char *text, uint64_t *out) {
     char *end = NULL;
@@ -116,6 +123,9 @@ static void configure_mutants(void) {
 #ifdef GBB_AGE_P12
     gbb_p12_set_mutants(age_mutant_mask);
     if (age_has_stall_offset) gbb_p12_stall_offset_t = age_stall_offset_t;
+#endif
+#ifdef GBB_AGE_P14
+    gbb_p14_set_mutants(age_phase14_mutant_mask);
 #endif
 }
 
@@ -410,6 +420,104 @@ static int run_sensitivity(const age_config *config, uint64_t mutant_mask,
 }
 #endif
 
+static const char *stat_mode_assertion_id(unsigned row) {
+    static const char *const ids[14] = {
+        "stat-mode-cgbE/mode-0/scx-0", "stat-mode-cgbE/mode-0/scx-1",
+        "stat-mode-cgbE/mode-0/scx-2", "stat-mode-cgbE/mode-0/scx-3",
+        "stat-mode-cgbE/mode-0/scx-4", "stat-mode-cgbE/mode-0/scx-5",
+        "stat-mode-cgbE/mode-0/scx-6", "stat-mode-cgbE/mode-0/scx-7",
+        "stat-mode-cgbE/mode-0/scx-8", "stat-mode-cgbE/mode-0/scx-9",
+        "stat-mode-cgbE/mode-1-2/scx-0", "stat-mode-cgbE/mode-1-2/scx-7",
+        "stat-mode-cgbE/mode-3/scx-0", "stat-mode-cgbE/mode-3/scx-7"
+    };
+    return row < sizeof(ids) / sizeof(ids[0]) ? ids[row] : NULL;
+}
+
+static void print_row_hex(const uint8_t *bytes) {
+    for (unsigned byte = 0u; byte < 8u; ++byte) printf("%02X", bytes[byte]);
+}
+
+static int run_phase14_controls(const age_config *config,
+                                const char *expected_signature,
+                                uint16_t expected_mask) {
+#ifdef GBB_AGE_P14
+    age_result clean;
+    age_result mutant;
+    const char *base = strrchr(config->rom_path, '/');
+    const char *case_name;
+    int code;
+
+    base = base == NULL ? config->rom_path : base + 1;
+    if (strcmp(base, "stat-mode-cgbE.gb") != 0 || config->rows != 14u) {
+        fprintf(stderr, "age-phase14-control unexpected-tracer-case\n");
+        return 2;
+    }
+    case_name = "stat-mode-cgbE";
+    age_phase14_mutant_mask = 0u;
+    code = read_verdict(config, &clean);
+    if (code != 0) return code;
+    if (clean.register_pass || clean.row_mask != expected_mask ||
+        strcmp(clean.signature, expected_signature) != 0) {
+        fprintf(stderr,
+                "age-phase14-control baseline-drift expected=%s/%04X observed=%s/%04X\n",
+                expected_signature, (unsigned)expected_mask, clean.signature,
+                (unsigned)clean.row_mask);
+        return 1;
+    }
+
+    printf("age-phase14-control baseline=matched-xfail case=%s rows=%u/%u mask=%04X signature=%s\n",
+           case_name, clean.rows_ok, config->rows, (unsigned)clean.row_mask,
+           clean.signature);
+    for (unsigned row = 0u; row < config->rows; ++row) {
+        const size_t offset = (size_t)row * 8u;
+        const uint8_t *expected = age_rom + (size_t)config->expected_address + 1u + offset;
+        printf("age-assertion id=%s row=%u expected=", stat_mode_assertion_id(row), row);
+        print_row_hex(expected);
+        printf(" actual=");
+        print_row_hex(clean.row_bytes + offset);
+        printf(" disposition=%s\n",
+               (clean.row_mask & (uint16_t)(1u << row)) != 0u ? "pass" : "fail");
+    }
+
+    age_phase14_mutant_mask = AGE_PHASE14_TRANSFER_MUTANT;
+    code = read_verdict(config, &mutant);
+    if (code != 0) return code;
+    if (mutant.register_pass ||
+        (mutant.row_mask == clean.row_mask &&
+         strcmp(mutant.signature, clean.signature) == 0)) {
+        fprintf(stderr, "age-phase14-control intended-mutation-not-detected case=%s\n",
+                case_name);
+        return 1;
+    }
+    for (unsigned row = 0u; row < config->rows; ++row) {
+        const size_t offset = (size_t)row * 8u;
+        const uint8_t *expected = age_rom + (size_t)config->expected_address + 1u + offset;
+        if (memcmp(clean.row_bytes + offset, mutant.row_bytes + offset, 8u) != 0 &&
+            memcmp(expected, mutant.row_bytes + offset, 8u) != 0) {
+            printf("age-phase14-control intended-mismatch assertion=%s row=%u expected=",
+                   stat_mode_assertion_id(row), row);
+            print_row_hex(expected);
+            printf(" baseline=");
+            print_row_hex(clean.row_bytes + offset);
+            printf(" mutant=");
+            print_row_hex(mutant.row_bytes + offset);
+            printf(" signature=%s mask=%04X\n", mutant.signature,
+                   (unsigned)mutant.row_mask);
+            return 0;
+        }
+    }
+    fprintf(stderr, "age-phase14-control mutation-did-not-break-named-row case=%s\n",
+            case_name);
+    return 1;
+#else
+    (void)config;
+    (void)expected_signature;
+    (void)expected_mask;
+    fprintf(stderr, "age-phase14-control requires the private Phase 14 mutant build\n");
+    return 2;
+#endif
+}
+
 static int set_mode(age_mode *mode, age_mode next) {
     if (*mode != MODE_NONE) return 0;
     *mode = next;
@@ -498,6 +606,11 @@ int main(int argc, char **argv) {
 #else
             goto bad_mode;
 #endif
+        } else if (strcmp(argv[i], "--phase14-controls") == 0) {
+            if (!set_mode(&mode, MODE_PHASE14_CONTROLS) || i + 2 >= argc ||
+                !valid_signature(argv[++i], expected_signature) ||
+                !parse_mask16(argv[++i], &expected_mask)) goto bad_mode;
+            have_expected_signature = 1;
         } else if (strcmp(argv[i], "--scan") == 0) {
 #ifdef GBB_AGE_P12
             if (!set_mode(&mode, MODE_SCAN) || i + 2 >= argc ||
@@ -570,6 +683,11 @@ int main(int argc, char **argv) {
 #else
         goto bad_mode;
 #endif
+    }
+
+    if (mode == MODE_PHASE14_CONTROLS) {
+        if (!have_expected_signature) goto bad_mode;
+        return run_phase14_controls(&config, expected_signature, expected_mask);
     }
 
     {

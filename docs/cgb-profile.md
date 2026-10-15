@@ -709,6 +709,21 @@ AGE rows cover the 13 admitted ROMs listed in `fixtures/age/manifest.json`; `sps
 
 AGE rows cover the 13 admitted ROMs listed in `fixtures/age/manifest.json`; `spsw-interrupts-cgbBC` remains source-digest-only and is not vendored. The Phase 11 dispositions retain `m3-bg-*` as `vendored: false`.
 
+### Phase 14 inherited AGE timing assertions
+
+The pinned AGE `stat-mode.inc` labels all 14 normal-speed STAT rows by mode and SCX value. The
+`stat-mode-cgbE` record binds those source labels to the exact expected bytes in its ROM table and
+the observed bytes, row verdicts, mask `0D11`, and signature
+`529c3f4d3b1571437d88b1c4806ada4dfa786b4740751b3128628df6abe8ffe9`. Five rows match and nine
+fail. The complete ROM remains an expected failure; row-level passes do not promote the guest.
+
+`age_stat_mode_cgbE_phase14_controls` checks the unchanged guest against that record, then applies a
+one-dot mode-3 startup defect to a private test-core copy. The twin must produce a mismatch for a
+named source row. This verifies assertion sensitivity and does not select a production timing
+correction. The current AGE comparison does not isolate one PPU event well enough to justify
+changing `ppu_update_stat_line`, window timing, or fetch/stall behavior; those gates retain their
+specific evidence limits.
+
 ### IE bits 5-7
 
 On the CGB profile (both modes) IE stores and reads back all 8 bits. On the DMG profile IE keeps

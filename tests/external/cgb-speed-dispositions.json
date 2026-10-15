@@ -126,6 +126,22 @@
           "decision": "D-19",
           "signature_sha256": "529c3f4d3b1571437d88b1c4806ada4dfa786b4740751b3128628df6abe8ffe9",
           "row_mask": "0D11",
+          "assertions": [
+            {"id": "stat-mode-cgbE/mode-0/scx-0", "row_index": 0, "source_label": "mode 0 SCX 0", "expected_hex": "FFFFFF0000000000", "observed_hex": "FFFFFF0000000000", "observed_disposition": "pass"},
+            {"id": "stat-mode-cgbE/mode-0/scx-1", "row_index": 1, "source_label": "mode 0 SCX 1", "expected_hex": "FFFFFF0000000000", "observed_hex": "FF00FF0000000000", "observed_disposition": "fail"},
+            {"id": "stat-mode-cgbE/mode-0/scx-2", "row_index": 2, "source_label": "mode 0 SCX 2", "expected_hex": "FFFFFF0000000000", "observed_hex": "FF01FF0000000000", "observed_disposition": "fail"},
+            {"id": "stat-mode-cgbE/mode-0/scx-3", "row_index": 3, "source_label": "mode 0 SCX 3", "expected_hex": "FFFFFF0000000000", "observed_hex": "FF01FF0000000000", "observed_disposition": "fail"},
+            {"id": "stat-mode-cgbE/mode-0/scx-4", "row_index": 4, "source_label": "mode 0 SCX 4", "expected_hex": "FFFFFF0000000000", "observed_hex": "FFFFFF0000000000", "observed_disposition": "pass"},
+            {"id": "stat-mode-cgbE/mode-0/scx-5", "row_index": 5, "source_label": "mode 0 SCX 5", "expected_hex": "FFFFFF0000000000", "observed_hex": "FFFF000000000000", "observed_disposition": "fail"},
+            {"id": "stat-mode-cgbE/mode-0/scx-6", "row_index": 6, "source_label": "mode 0 SCX 6", "expected_hex": "FFFFFF0000000000", "observed_hex": "FFFF010000000000", "observed_disposition": "fail"},
+            {"id": "stat-mode-cgbE/mode-0/scx-7", "row_index": 7, "source_label": "mode 0 SCX 7", "expected_hex": "FFFFFF0000000000", "observed_hex": "FFFF010000000000", "observed_disposition": "fail"},
+            {"id": "stat-mode-cgbE/mode-0/scx-8", "row_index": 8, "source_label": "mode 0 SCX 8", "expected_hex": "FFFFFF0000000000", "observed_hex": "FFFFFF0000000000", "observed_disposition": "pass"},
+            {"id": "stat-mode-cgbE/mode-0/scx-9", "row_index": 9, "source_label": "mode 0 SCX 9", "expected_hex": "FFFFFF0000000000", "observed_hex": "FF00FF0000000000", "observed_disposition": "fail"},
+            {"id": "stat-mode-cgbE/mode-1-2/scx-0", "row_index": 10, "source_label": "mode 1,2 SCX 0", "expected_hex": "FFFFFF0000000000", "observed_hex": "FFFFFF0000000000", "observed_disposition": "pass"},
+            {"id": "stat-mode-cgbE/mode-1-2/scx-7", "row_index": 11, "source_label": "mode 1,2 SCX 7", "expected_hex": "FFFFFF0000000000", "observed_hex": "FFFFFF0000000000", "observed_disposition": "pass"},
+            {"id": "stat-mode-cgbE/mode-3/scx-0", "row_index": 12, "source_label": "mode 3 SCX 0", "expected_hex": "FFFF000000000000", "observed_hex": "00FF000000000000", "observed_disposition": "fail"},
+            {"id": "stat-mode-cgbE/mode-3/scx-7", "row_index": 13, "source_label": "mode 3 SCX 7", "expected_hex": "FFFF000000000000", "observed_hex": "00FF000000000000", "observed_disposition": "fail"}
+          ],
           "flip_rule": "fails until promoted if the signature changes or this ROM passes",
           "pinned_by": "age_stat_mode_cgbE"
         },

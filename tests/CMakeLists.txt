@@ -3557,6 +3557,8 @@ set_tests_properties(cgb_age_m3_early_frame_control PROPERTIES TIMEOUT 30)
 
 set(GBB_AGE_MANIFEST "${PROJECT_SOURCE_DIR}/fixtures/age/manifest.json")
 file(READ "${GBB_AGE_MANIFEST}" GBB_AGE_MANIFEST_JSON)
+set(GBB_AGE_DISPOSITIONS_FILE "${PROJECT_SOURCE_DIR}/tests/external/cgb-speed-dispositions.json")
+file(READ "${GBB_AGE_DISPOSITIONS_FILE}" GBB_AGE_DISPOSITIONS_JSON)
 include("${PROJECT_SOURCE_DIR}/cmake/AgeFixtureProtocol.cmake")
 gbb_validate_age_fixture_protocol("${GBB_AGE_MANIFEST_JSON}"
   GBB_AGE_ROW_FIXTURE_INDICES GBB_AGE_IMAGE_FIXTURE_INDICES)
@@ -3609,6 +3611,86 @@ target_compile_features(test_age_p12 PRIVATE c_std_17)
 target_compile_definitions(test_age_p12 PRIVATE GBB_AGE_P12=1)
 target_link_libraries(test_age_p12 PRIVATE gabbaboy_core_p12_mutants gabbaboy_accept)
 set_target_properties(test_age_p12 PROPERTIES C_EXTENSIONS OFF)
+
+# The Phase 14 timing control uses a private one-dot mode-3 startup mutant. The
+# clean model and its defect twin share the same guest and expected ROM bytes;
+# only the test-built core receives the mutation.
+set(GBB_AGE_P14_CORE "${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_age_p14_mutant.c")
+file(READ "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c" GBB_AGE_P14_CORE_TEXT)
+set(GBB_AGE_P14_ANCHOR "if (m->ppu_transfer_age < 12u) {\n        ++m->ppu_transfer_age;\n        if (m->ppu_transfer_age < 12u) return;\n    }")
+set(GBB_AGE_P14_REPLACEMENT
+  "if (m->ppu_transfer_age < (GBB_P14_MUT(0) ? 13u : 12u)) {\n        ++m->ppu_transfer_age;\n        if (m->ppu_transfer_age < (GBB_P14_MUT(0) ? 13u : 12u)) return;\n    }")
+string(FIND "${GBB_AGE_P14_CORE_TEXT}" "${GBB_AGE_P14_ANCHOR}" GBB_AGE_P14_ANCHOR_FIRST)
+string(FIND "${GBB_AGE_P14_CORE_TEXT}" "${GBB_AGE_P14_ANCHOR}" GBB_AGE_P14_ANCHOR_LAST REVERSE)
+if(GBB_AGE_P14_ANCHOR_FIRST EQUAL -1 OR NOT GBB_AGE_P14_ANCHOR_FIRST EQUAL GBB_AGE_P14_ANCHOR_LAST)
+  message(FATAL_ERROR "Phase 14 AGE mutant anchor must occur exactly once")
+endif()
+string(REPLACE "${GBB_AGE_P14_ANCHOR}" "${GBB_AGE_P14_REPLACEMENT}"
+  GBB_AGE_P14_CORE_TEXT "${GBB_AGE_P14_CORE_TEXT}")
+file(WRITE "${GBB_AGE_P14_CORE}"
+  "#include <stdint.h>\nuint64_t gbb_p14_mutants = 0u;\n"
+  "#define GBB_P14_MUT(n) ((unsigned)((gbb_p14_mutants >> (n)) & 1u))\n"
+  "${GBB_AGE_P14_CORE_TEXT}\n"
+  "void gbb_p14_set_mutants(uint64_t mask) { gbb_p14_mutants = mask; }\n")
+add_executable(test_age_p14 test_age.c "${GBB_AGE_P14_CORE}")
+target_include_directories(test_age_p14 PRIVATE
+  "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/src/core")
+target_compile_features(test_age_p14 PRIVATE c_std_17)
+target_compile_definitions(test_age_p14 PRIVATE
+  GBB_AGE_P14=1 GBB_BUILD_REVISION="p14-age-mutant-control" GBB_BUILD_QUALIFIED=0)
+target_link_libraries(test_age_p14 PRIVATE gabbaboy_accept)
+set_target_properties(test_age_p14 PROPERTIES C_EXTENSIONS OFF)
+
+set(GBB_AGE_STAT_CGBE_FOUND OFF)
+foreach(GBB_AGE_FIXTURE_INDEX IN LISTS GBB_AGE_ROW_FIXTURE_INDICES)
+  string(JSON GBB_AGE_STAT_FILE GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} file)
+  if(GBB_AGE_STAT_FILE STREQUAL "stat-mode-cgbE.gb")
+    set(GBB_AGE_STAT_CGBE_FOUND ON)
+    string(JSON GBB_AGE_STAT_RESULTS GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} test_results_address)
+    string(JSON GBB_AGE_STAT_EXPECTED GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} expected_address)
+    string(JSON GBB_AGE_STAT_ROWS GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} rows)
+    string(JSON GBB_AGE_STAT_BUDGET GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} budget_half_dots)
+  endif()
+endforeach()
+if(NOT GBB_AGE_STAT_CGBE_FOUND)
+  message(FATAL_ERROR "AGE manifest must define stat-mode-cgbE for the Phase 14 tracer")
+endif()
+string(REPLACE "$" "0x" GBB_AGE_STAT_RESULTS "${GBB_AGE_STAT_RESULTS}")
+string(REPLACE "$" "0x" GBB_AGE_STAT_EXPECTED "${GBB_AGE_STAT_EXPECTED}")
+set(GBB_AGE_STAT_CGBE_SIGNATURE "")
+set(GBB_AGE_STAT_CGBE_MASK "")
+string(JSON GBB_AGE_P14_DISPOSITION_SUITE_COUNT LENGTH "${GBB_AGE_DISPOSITIONS_JSON}" suites)
+math(EXPR GBB_AGE_P14_DISPOSITION_SUITE_LAST "${GBB_AGE_P14_DISPOSITION_SUITE_COUNT} - 1")
+foreach(GBB_AGE_P14_DISPOSITION_SUITE_INDEX RANGE 0 ${GBB_AGE_P14_DISPOSITION_SUITE_LAST})
+    string(JSON GBB_AGE_P14_DISPOSITION_SUITE_NAME GET "${GBB_AGE_DISPOSITIONS_JSON}"
+      suites ${GBB_AGE_P14_DISPOSITION_SUITE_INDEX} suite)
+    if(GBB_AGE_P14_DISPOSITION_SUITE_NAME STREQUAL "age-test-roms")
+      string(JSON GBB_AGE_P14_DISPOSITION_ROW_COUNT LENGTH "${GBB_AGE_DISPOSITIONS_JSON}"
+        suites ${GBB_AGE_P14_DISPOSITION_SUITE_INDEX} rows)
+      math(EXPR GBB_AGE_P14_DISPOSITION_ROW_LAST "${GBB_AGE_P14_DISPOSITION_ROW_COUNT} - 1")
+      foreach(GBB_AGE_P14_DISPOSITION_ROW_INDEX RANGE 0 ${GBB_AGE_P14_DISPOSITION_ROW_LAST})
+        string(JSON GBB_AGE_DISPOSITION_CASE GET "${GBB_AGE_DISPOSITIONS_JSON}"
+          suites ${GBB_AGE_P14_DISPOSITION_SUITE_INDEX} rows ${GBB_AGE_P14_DISPOSITION_ROW_INDEX} case)
+        if(GBB_AGE_DISPOSITION_CASE STREQUAL "stat-mode-cgbE")
+          string(JSON GBB_AGE_STAT_CGBE_SIGNATURE GET "${GBB_AGE_DISPOSITIONS_JSON}"
+            suites ${GBB_AGE_P14_DISPOSITION_SUITE_INDEX} rows ${GBB_AGE_P14_DISPOSITION_ROW_INDEX} signature_sha256)
+          string(JSON GBB_AGE_STAT_CGBE_MASK GET "${GBB_AGE_DISPOSITIONS_JSON}"
+            suites ${GBB_AGE_P14_DISPOSITION_SUITE_INDEX} rows ${GBB_AGE_P14_DISPOSITION_ROW_INDEX} row_mask)
+        endif()
+      endforeach()
+    endif()
+endforeach()
+if(GBB_AGE_STAT_CGBE_SIGNATURE STREQUAL "" OR GBB_AGE_STAT_CGBE_MASK STREQUAL "")
+  message(FATAL_ERROR "AGE dispositions must pin stat-mode-cgbE signature and row mask")
+endif()
+add_test(NAME age_stat_mode_cgbE_phase14_controls
+  COMMAND test_age_p14 "${PROJECT_SOURCE_DIR}/fixtures/age/stat-mode-cgbE.gb"
+    "${GBB_AGE_STAT_RESULTS}" "${GBB_AGE_STAT_EXPECTED}" "${GBB_AGE_STAT_ROWS}"
+    "${GBB_AGE_STAT_BUDGET}" --phase14-controls
+    "${GBB_AGE_STAT_CGBE_SIGNATURE}" "${GBB_AGE_STAT_CGBE_MASK}")
+set_tests_properties(age_stat_mode_cgbE_phase14_controls PROPERTIES
+  PASS_REGULAR_EXPRESSION "age-phase14-control intended-mismatch assertion=stat-mode-cgbE/"
+  TIMEOUT 60)
 
 # The measured committed-core bounds drive the four-point boundary assertion below.
 set(GBB_P12_AGE_STALL_WINDOW "0x20004;0x20007")

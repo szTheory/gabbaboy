@@ -263,6 +263,16 @@ length ordering covers all four channels; the channel-1 sweep guest clears a use
 and verifies that a fresh trigger restarts it. Its expected direction is consistent with the pinned
 SameSuite APU README's `channel_1_sweep_restart_2` CGB-E attestation, not with an emulator diff.
 
+## Phase 14 inherited timing dispositions
+
+These rows narrow the inherited software-model observations. They do not turn CTest evaluator
+success into a guest pass or physical measurement.
+
+| Gate | Model and mode | Executed evidence | Owner and limitation | Revisit condition |
+| --- | --- | --- | --- | --- |
+| GATE-02 | CGB-CPU-E, native CGB, normal speed | `age_stat_mode_cgbE` observes 5/14 matching source rows; `age_stat_mode_cgbE_phase14_controls` detects a one-dot timing mutation at a named row | Core owner; keep `UNKNOWN/research:14` because these snapshots do not isolate a precise STAT-line event | Promote only with an independent timing expectation, a boundary control, and a passing CGB-E guest assertion |
+| GATE-49 | CGB-CPU-E native CGB and DMG-compatibility mode, normal and double speed | The six admitted AGE mode-3 image cases compare 138,240 pixels and observe 18,208 mismatches; all six retain exact case signatures | Core owner; keep `UNKNOWN/research:14`; the narrow cases do not establish complete FIFO, window, sprite-stall, or physical timing behavior | Revisit a named mode-3/window discriminator with a source-derived expected boundary and an intended-defect control |
+
 ## Release status
 
 `python3 -I tests/scripts/verify-model-gates.py --release` currently fails by design

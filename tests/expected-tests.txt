@@ -952,6 +952,7 @@ age_spsw_mode0_cgbBCE
 age_spsw_ch2_lc_delay_cgbBCE
 age_stat_mode_ds_cgbBCE
 age_stat_mode_cgbE
+age_stat_mode_cgbE_phase14_controls
 age_stat_mode_sprites_ds_cgbBCE
 age_stat_mode_sprites_dmgC_cgbBCE
 age_stat_mode_window_ds_cgbBCE
