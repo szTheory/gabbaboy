@@ -1,5 +1,5 @@
 {
-  "command": "ctest --test-dir build -R '^cgb_hdma_dispositions_selftest$' --output-on-failure --output-junit /Users/jon/projects/gabbaboy/build/13-09-task2-red.xml",
+  "command": "ctest --test-dir build -R '^cgb_hdma_dispositions_selftest$' --output-on-failure --output-junit build/13-09-task2-red.xml",
   "exitCode": 8,
   "output": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuite name=\"Darwin-cc\"\n\ttests=\"1\"\n\tfailures=\"1\"\n\tdisabled=\"0\"\n\tskipped=\"0\"\n\thostname=\"MacBook-Pro.local\"\n\ttime=\"0\"\n\ttimestamp=\"2026-10-14T18:49:22\"\n\t>\n\t<testcase name=\"cgb_hdma_dispositions_selftest\" classname=\"cgb_hdma_dispositions_selftest\" time=\"0.0817767\" status=\"fail\">\n\t\t<failure message=\"Failed\"/>\n\t\t<properties/>\n\t\t<system-out>disposition-mismatch self-test-accepted cgb-c-hardware-claim\n</system-out>\n\t</testcase>\n</testsuite>\n",
   "targetTest": "cgb_hdma_dispositions_selftest",
