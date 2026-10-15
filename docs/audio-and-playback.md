@@ -12,9 +12,29 @@ and the frame sequencer follows the emulated divider edge, including DIV writes.
 
 Active wave-RAM reads and writes alias the currently fetched byte in this
 deterministic model. That behavior is revision-scoped and has no direct
-DMG-CPU-B hardware observation. The APU does not implement CGB differences or
-VIN. Its register and timing tests establish authored software-model results,
-not universal silicon or board equivalence.
+DMG-CPU-B hardware observation. Other CGB APU differences and VIN are not
+modeled. The channel generators and sequencer remain scoped to the DMG-CPU-B
+software timeline; CGB-specific oscillator timing and physical output remain
+outside this model. Phase 14 qualifies CGB-native guest reads of the digital
+channel outputs described below. These tests establish authored software-model
+results, not universal silicon or board equivalence.
+
+## CGB digital PCM registers
+
+In native CGB mode, guest reads of FF76 and FF77 return the digital DAC inputs
+for channel pairs 2:1 and 4:3. Each channel contributes its current 4-bit
+waveform value before NR50 level scaling, NR51 routing, host mute, or PCM sample
+generation. The registers are read-only. CGB compatibility mode reads `$FF`
+and ignores writes; the DMG profile keeps its existing fail-closed behavior.
+This register mapping follows the pinned [Pan Docs Audio details reference](https://github.com/gbdev/pandocs/blob/0191af06ac49661587dcde3d57a241a626b8df75/src/Audio_details.md).
+
+The authored guest tests cover all four channel nibbles, APU power and DAC
+gates, ignored writes, and identical PCM observations with absent, full, and
+drained host output buffers and changed routing/volume. `cgb_pcm_tracer` also
+checks a named timed guest bus read. Wave-channel checks use the already
+fetched sample held by this model; the exact trigger-to-first-fetch latch
+boundary remains unqualified. No physical CGB-E timing or waveform measurement
+is claimed.
 
 ## PCM format and signal processing
 

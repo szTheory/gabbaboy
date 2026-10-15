@@ -13,6 +13,12 @@
 #ifndef GBB_TEST_CGB_PCM_SWAP_NIBBLES
 #define GBB_TEST_CGB_PCM_SWAP_NIBBLES 0
 #endif
+#ifndef GBB_TEST_CGB_PCM_ROUTING_COUPLED
+#define GBB_TEST_CGB_PCM_ROUTING_COUPLED 0
+#endif
+#ifndef GBB_TEST_CGB_PCM_WRITABLE
+#define GBB_TEST_CGB_PCM_WRITABLE 0
+#endif
 
 
 #define GBB_INPUT_EVENT_CAPACITY 64u
@@ -431,6 +437,9 @@ struct gbb_instance {
     apu_wave_channel apu_wave;
     apu_noise_channel apu_noise;
     uint8_t apu_nr50, apu_nr51, apu_power, apu_sequencer_step;
+#if GBB_TEST_CGB_PCM_WRITABLE
+    uint8_t apu_pcm_test_override[2], apu_pcm_test_override_valid;
+#endif
     uint64_t apu_sample_phase;
     int64_t audio_event_ring[2][GBB_AUDIO_EVENT_TAPS];
     uint8_t audio_event_head;
@@ -583,6 +592,10 @@ static void audio_current_mix(const gbb_instance *m, int32_t *left, int32_t *rig
 static uint8_t apu_digital_output(const gbb_instance *m, unsigned channel) {
     static const uint8_t duty_pattern[4] = {0x01u, 0x81u, 0x87u, 0x7Eu};
     if (!m->apu_power) return 0u;
+#if GBB_TEST_CGB_PCM_ROUTING_COUPLED
+    if ((m->apu_nr51 & (uint8_t)((1u << channel) | (1u << (channel + 4u)))) == 0u)
+        return 0u;
+#endif
     if (channel < 2u) {
         const apu_pulse_channel *pulse = &m->apu_pulse[channel];
         const unsigned duty = pulse->duty_length >> 6;
@@ -609,6 +622,11 @@ static uint8_t apu_digital_output(const gbb_instance *m, unsigned channel) {
 
 static uint8_t apu_pcm_read(const gbb_instance *m, uint16_t address) {
     const unsigned first = address == 0xFF76u ? 0u : 2u;
+#if GBB_TEST_CGB_PCM_WRITABLE
+    const unsigned register_index = address == 0xFF76u ? 0u : 1u;
+    if ((m->apu_pcm_test_override_valid & (uint8_t)(1u << register_index)) != 0u)
+        return m->apu_pcm_test_override[register_index];
+#endif
     const uint8_t low = apu_digital_output(m, first);
     const uint8_t high = apu_digital_output(m, first + 1u);
     uint8_t value = (uint8_t)((high << 4) | (low & 0x0Fu));
@@ -1470,6 +1488,16 @@ static void io_write_cgb(gbb_instance *m, uint16_t address, uint8_t value) {
         /* MODEL: UNKNOWN GATE-77 research:14 -- OPRI is stored without priority effect after boot (D-08) */
         m->opri = (uint8_t)(value & 1u);
         break;
+    case IO_PCM12:
+    case IO_PCM34:
+#if GBB_TEST_CGB_PCM_WRITABLE
+        {
+            const unsigned index = address == 0xFF76u ? 0u : 1u;
+            m->apu_pcm_test_override[index] = value;
+            m->apu_pcm_test_override_valid |= (uint8_t)(1u << index);
+        }
+#endif
+        break;
     case IO_DEFERRED_RW:
     case IO_DEFERRED_W:
         m->bus_unsupported = 1;
@@ -1487,6 +1515,10 @@ static void reset_state(gbb_instance *m) {
     memset(m->apu_pulse, 0, sizeof(m->apu_pulse));
     memset(&m->apu_wave, 0, sizeof(m->apu_wave));
     memset(&m->apu_noise, 0, sizeof(m->apu_noise));
+#if GBB_TEST_CGB_PCM_WRITABLE
+    memset(m->apu_pcm_test_override, 0, sizeof(m->apu_pcm_test_override));
+    m->apu_pcm_test_override_valid = 0u;
+#endif
     post_boot_apply(m);
     m->ime_delay = 0;
     m->serial_bits = 0;

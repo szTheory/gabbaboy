@@ -213,8 +213,30 @@ static int cgb_pcm_channels(const char *name) {
     REQUIRE_CASE(run_program_pcm(program, length, 0, &pcm12, &pcm34) == 0, name);
     REQUIRE_CASE(pcm12 == 0xEFu, name);
     REQUIRE_CASE(pcm34 == 0xFAu, name);
+    size_t phase_length = 0u;
+    emit_write(program, &phase_length, 0x26u, 0x80u);
+    emit_write(program, &phase_length, 0x11u, 0x80u);
+    emit_write(program, &phase_length, 0x12u, 0xF0u);
+    emit_write(program, &phase_length, 0x13u, 0xFFu);
+    emit_write(program, &phase_length, 0x14u, 0x87u);
+    program[phase_length++] = 0xF0u; program[phase_length++] = 0x76u;
+    program[phase_length++] = 0xEAu; program[phase_length++] = 0x00u; program[phase_length++] = 0xC0u;
+    for (unsigned i = 0u; i < 30u; ++i) program[phase_length++] = 0x00u;
+    program[phase_length++] = 0xF0u; program[phase_length++] = 0x76u;
+    program[phase_length++] = 0xEAu; program[phase_length++] = 0x01u; program[phase_length++] = 0xC0u;
+    program[phase_length++] = 0x76u;
+    gbb_instance *phase_machine = load_cgb_guest(program, phase_length);
+    REQUIRE_CASE(phase_machine != NULL, name);
+    const gbb_run_result phase_run = gbb_run(phase_machine, 2048u, NULL, 0u);
+    const uint8_t phase_start = gbb_peek_ram(phase_machine, 0xC000u);
+    const uint8_t phase_later = gbb_peek_ram(phase_machine, 0xC001u);
+    gbb_destroy(phase_machine);
+    REQUIRE_CASE(phase_run.reason == GBB_STOP_HALTED_IDLE &&
+                 phase_start == 0x0Fu && phase_later == 0u, name);
     fprintf(stderr, "CGB PCM channel pairs expected=0xef,0xfa actual=0x%02x,0x%02x\n",
             pcm12, pcm34);
+    fprintf(stderr, "pulse phase advancement expected=0x0f,0x00 actual=0x%02x,0x%02x\n",
+            phase_start, phase_later);
     printf("ok 1 - %s\n", name);
     return 0;
 }
@@ -225,27 +247,31 @@ static int cgb_pcm_power_dac(const char *name) {
     emit_write(program, &length, 0x26u, 0x80u);
     emit_write(program, &length, 0x11u, 0x80u);
     emit_write(program, &length, 0x12u, 0xF0u);
+    program[length++] = 0xF0u; program[length++] = 0x76u; /* DAC on, channel not triggered. */
+    program[length++] = 0xEAu; program[length++] = 0x00u; program[length++] = 0xC0u;
+    emit_write(program, &length, 0x13u, 0x00u);
     emit_write(program, &length, 0x14u, 0x80u);
     program[length++] = 0xF0u; program[length++] = 0x76u;
-    program[length++] = 0xEAu; program[length++] = 0x00u; program[length++] = 0xC0u;
+    program[length++] = 0xEAu; program[length++] = 0x01u; program[length++] = 0xC0u;
     emit_write(program, &length, 0x12u, 0x00u); /* DAC disabled clears the channel. */
     program[length++] = 0xF0u; program[length++] = 0x76u;
-    program[length++] = 0xEAu; program[length++] = 0x01u; program[length++] = 0xC0u;
+    program[length++] = 0xEAu; program[length++] = 0x02u; program[length++] = 0xC0u;
     emit_write(program, &length, 0x26u, 0x00u); /* APU off clears every digital output. */
     program[length++] = 0xF0u; program[length++] = 0x76u;
-    program[length++] = 0xEAu; program[length++] = 0x02u; program[length++] = 0xC0u;
+    program[length++] = 0xEAu; program[length++] = 0x03u; program[length++] = 0xC0u;
     program[length++] = 0x76u;
     gbb_instance *machine = load_cgb_guest(program, length);
     REQUIRE_CASE(machine != NULL, name);
     const gbb_run_result run = gbb_run(machine, 2048u, NULL, 0u);
     REQUIRE_CASE(run.reason == GBB_STOP_HALTED_IDLE, name);
-    const uint8_t active = gbb_peek_ram(machine, 0xC000u);
-    const uint8_t dac_off = gbb_peek_ram(machine, 0xC001u);
-    const uint8_t power_off = gbb_peek_ram(machine, 0xC002u);
+    const uint8_t channel_off = gbb_peek_ram(machine, 0xC000u);
+    const uint8_t active = gbb_peek_ram(machine, 0xC001u);
+    const uint8_t dac_off = gbb_peek_ram(machine, 0xC002u);
+    const uint8_t power_off = gbb_peek_ram(machine, 0xC003u);
     gbb_destroy(machine);
-    REQUIRE_CASE(active == 0x0Fu && dac_off == 0u && power_off == 0u, name);
-    fprintf(stderr, "PCM power/DAC expected=0x0f,0x00,0x00 actual=0x%02x,0x%02x,0x%02x\n",
-            active, dac_off, power_off);
+    REQUIRE_CASE(channel_off == 0u && active == 0x0Fu && dac_off == 0u && power_off == 0u, name);
+    fprintf(stderr, "PCM channel/power/DAC expected=0x00,0x0f,0x00,0x00 actual=0x%02x,0x%02x,0x%02x,0x%02x\n",
+            channel_off, active, dac_off, power_off);
     printf("ok 1 - %s\n", name);
     return 0;
 }
