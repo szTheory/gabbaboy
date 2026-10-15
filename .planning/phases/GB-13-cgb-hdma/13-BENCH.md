@@ -4,26 +4,27 @@ These are bounded software-fixture and test-suite measurements. They do not qual
 
 ## Evidence revision and host
 
-- Source revision: `0d5bb9cbfc5dcc730c2d9ce45c6358b79154aaa9`
+- Source revision: `e9bc47ed30f5eb4ee1303c06153303c2deb6bea3`
+- The later plan/continuity documentation commit does not change tested source and has its own exact-head CI gate.
 - Runtime-mask mutant build-cost source revision: `41bb9bf9258f529e394ac14cf1396928281cdee0`.
 - Phase 12 inventory baseline: `8091fb591de7fb68e666be01d344f5f26ebedc5c` (`tests/expected-tests.txt`, 898 names).
 - Host class: Darwin arm64. Compiler: Apple clang 21.0.0. Generator: Ninja. Native/player CMake build type: Debug; C compilation uses `-g -std=c17`.
 - Model scope: the full suites mix unit, integration, fixture, mutation, and packaging checks. HDMA behavior-specific fixture evidence uses the bootless CGB-CPU-E software model. Physical CGB-E remains UNKNOWN/POLICY.
-- Samples: one full-suite run per configuration, no warm-up. CTest wall time and aggregate per-test time are different quantities. One sample does not estimate variance or support a performance threshold.
+- Samples: one full-suite run per configuration, no warm-up. CTest wall time and aggregate per-test time are different quantities. One sample does not estimate variance; uncertainty is not quantified (not zero). These are lane-cost observations, not emulator-speed measurements or comparable performance claims.
 
 ## Full test lanes
 
 | Lane | Command and workload | Result | Output digest |
 |---|---|---|---|
-| Native Debug | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --test-dir build --parallel 4 --output-on-failure --no-tests=error --output-junit build/phase13-wave10-native-0d5bb9c.xml` | 993/993 passed, 0 failed/errors/skipped; CTest wall 81.02 s | JUnit SHA-256 `94a0786bbfba97970361a23c73bada72b7643c5aac98fb499cf0acfbb64cf765` |
-| SDL3 player Debug | Existing `build-player` package uses SDL 3.4.18; `cmake --build build-player && ctest --test-dir build-player --parallel 4 --output-on-failure --no-tests=error --output-junit build-player/phase13-wave10-player-0d5bb9c.xml` | 1,086/1,086 passed, 0 failed/errors/skipped; CTest wall 81.80 s | JUnit SHA-256 `c90c990aa4490e17d71d9532d76461a811a4352fca5c6204c073a4f20ad48eff` |
-| Relocated installed consumers and preview package | Six exact CTest targets: `preview_package_smoke`, `installed_runner_smoke`, and C/C++ phase1/phase2 consumers; configured `GBB_TEST_INSTALL_PREFIX=relocated-prefix` | 6/6 passed, 0 failed/errors/skipped; CTest wall 1.19 s | JUnit SHA-256 `96f5bc93ba9bf960200c3d716a2e3f8859ccd05e7ab5a65e145d2eb35f71b65b` |
+| Native Debug | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --test-dir build --parallel 4 --output-on-failure --no-tests=error --output-junit build/phase13-wave10-native-e9bc47e.xml` | 993/993 passed, 0 failed/errors/skipped; CTest wall 66.41 s | JUnit SHA-256 `5c95a672422703592e3057d31567383e939b7b6f759a8733cab981e2f1c57424` |
+| SDL3 player Debug | Existing `build-player` package uses SDL 3.4.18; `cmake --build build-player && ctest --test-dir build-player --parallel 4 --output-on-failure --no-tests=error --output-junit build-player/phase13-wave10-player-e9bc47e.xml` | 1,086/1,086 passed, 0 failed/errors/skipped; CTest wall 73.09 s | JUnit SHA-256 `d8fe21aab8289c2eae5d6a6ce1cf41ea9fe4cf4a6012efd52355a85e2efa072f` |
+| Relocated installed consumers and preview package | Six exact CTest targets: `preview_package_smoke`, `installed_runner_smoke`, and C/C++ phase1/phase2 consumers; configured `GBB_TEST_INSTALL_PREFIX=relocated-prefix` | 6/6 passed, 0 failed/errors/skipped; CTest wall 1.21 s | JUnit SHA-256 `ab7ac8191dfefddb29c98f24196c2636462bef18719dec242b87ad81de27cfd5` |
 
-Against Phase 12's 898-name expected-test inventory at `8091fb591de7fb68e666be01d344f5f26ebedc5c`, the native report has 993 names, 95 added and none removed. The 95 added cases' individual CTest durations sum to 4.252 s on this Debug host; this is not the parallel wall-time increment. Five newly registered local-only Python contracts are included in that inventory. The local JUnit contains 29 HDMA mutant/control cases totaling 0.342 s.
+Against Phase 12's 898-name expected-test inventory at `8091fb591de7fb68e666be01d344f5f26ebedc5c`, the native report has 993 names, 95 added and none removed. The 95 added cases' individual CTest durations sum to 4.981 s on this Debug host; this is not the parallel wall-time increment. Five newly registered local-only Python contracts are included in that inventory. The local JUnit contains 29 HDMA mutant/control cases totaling 0.276 s.
 
 ## Debug ASan/UBSan lane
 
-The local command `cmake --preset phase1-asan` stops at the repository's explicit platform guard: `GABBABOY_ENABLE_SANITIZERS is supported only on Linux`. No sanitizer run or local ASan cost is claimed on Darwin. The existing CI policy remains Linux `phase1-asan --parallel 4`, a 30-minute job timeout, and the existing per-test timeout scaling. The PR-event run for source commit `41bb9bf9258f529e394ac14cf1396928281cdee0` is an earlier tested source, not a final-source sanitizer result. The final tested branch head will require its own exact-head PR-event evidence; no stale or skipped result will be used.
+The local command `cmake --preset phase1-asan` stops at the repository's explicit platform guard: `GABBABOY_ENABLE_SANITIZERS is supported only on Linux`. No sanitizer run or local ASan cost is claimed on Darwin. The existing CI policy remains Linux `phase1-asan --parallel 4`, a 30-minute job timeout, and the existing per-test timeout scaling. Exact-source PR-event run `38661411340` at `e9bc47ed30f5eb4ee1303c06153303c2deb6bea3` has Linux job `116183292071` running its full test inventory; its result and timing are pending. Older runs are not substituted. The final metadata head will require separate exact-head PR-event evidence; no stale, skipped, or absent check is treated as green.
 
 ## Runtime-mask mutant build cost
 
@@ -36,7 +37,7 @@ The current HDMA runtime-mask cases share `test_cgb_hdma` and the generated `gab
 | One combined mutant-source invalidation | Append a scratch-only comment to generated `build/phase13-mutant-cost/tests/gabbaboy_p13_mutants.c`, then rebuild the same target | 0.190 s | 3 Ninja steps: compile the shared mutant TU, relink its archive, relink `test_cgb_hdma` |
 | One representative mutant and mask-zero control | `cgb_hdma_mutant_no_copy` plus `cgb_hdma_mutant_no_copy_control`, in the native full report | 0.021 s aggregate | Both passed |
 
-Phase 12's local Debug record measured 16 steps/0.25 s for a broader set of internal, public-library, and partition mutant targets. The scopes differ, so the figures are descriptive only; no improvement is attributed to Phase 13. Each mutant-cost measurement has one sample, no warm-up, and uncertainty is not estimable. The 29 HDMA mutant/control CTests sum to 0.342 s in the native report at `0d5bb9cbfc5dcc730c2d9ce45c6358b79154aaa9`.
+Phase 12's local Debug record measured 16 steps/0.25 s for a broader set of internal, public-library, and partition mutant targets. The scopes differ, so the figures are descriptive only; no improvement is attributed to Phase 13. Each mutant-cost measurement has one sample, no warm-up, and uncertainty is not quantified (not zero). The 29 HDMA mutant/control CTests sum to 0.276 s in the native report at `e9bc47ed30f5eb4ee1303c06153303c2deb6bea3`.
 
 ## Pinned fixture and claim-prohibition evidence
 
