@@ -14,7 +14,7 @@ provides:
   - Updated model-gate and audio limitation claims with exact DMG boundary
 affects: [14-09, phase-14-integration, cgb-apu]
 actuals:
-  tokens: 10483
+  tokens: 10484
   tasks: 2
   commits: 4
   plan_head_before: 72dd987ab214a888c5605d7a2e015ff8f7d82c3c
@@ -74,6 +74,9 @@ coverage:
         status: pass
       - kind: other
         ref: python3 -I tests/scripts/verify-model-gates.py; model-gates pass functions=186 gates=100 unknown=34
+        status: pass
+      - kind: integration
+        ref: ctest --test-dir build -R '^(model_gates|summary_coverage|cgb_speed_dispositions(_.*)?|cgb_apu_(power|off_writes|wave_access|trigger_length_sweep|div_stop|transition_controls|wave_latch|wave_fetch|wave_direct_ram_control))$' --output-on-failure --no-tests=error -j2; 15/15 passed
         status: pass
       - kind: integration
         ref: cmake --preset phase1 && cmake --build --preset phase1
@@ -141,12 +144,20 @@ status: complete
 - **Verification:** The trigger/length guest and transition cohort pass; the frozen DMG baseline remains byte-identical.
 - **Committed in:** `e6e89a8`
 
-**Total deviations:** 1 auto-fixed bug (Rule 1).
-**Impact on plan:** This corrected behavior directly within the planned length-transition scope; no public API, new dependency, or Phase 15 work was introduced.
+**2. [Rule 1 - Bug] Keep unexecuted DMG length-retention evidence unresolved**
+- **Found during:** Wave 3 integration gate after plan execution
+- **Issue:** GATE-15 and GATE-34 used an expected-failure marker for DMG length retention even though no DMG case had executed. The speed-disposition checker correctly required each such marker to map to an executed disposition row.
+- **Fix:** Changed both source and table classifications to `UNKNOWN` with `research:14`; documented that no DMG case ran and retained the independent-fixture and baseline-revision promotion rule. No xfail or expectation was fabricated.
+- **Files modified:** `src/core/gabbaboy.c`, `docs/model-gates.md`
+- **Verification:** `model_gates`, all four `cgb_speed_dispositions` positives/negative controls, the nine affected APU guests, `summary_coverage`, and the frozen DMG baseline passed.
+- **Committed in:** Wave 3 correction commit recorded in the execution report.
+
+**Total deviations:** 2 auto-fixed bugs (Rule 1).
+**Impact on plan:** The first correction is within planned CGB length behavior. The second reconciles an unresolved DMG classification with the executed evidence; it adds no test expectation or xfail, changes no runtime behavior, and preserves the frozen baseline.
 
 ## Issues Encountered
 
-None unresolved. The full preset build passed; the focused transition set passed 7/7; the related APU, PCM, DMG, table, speed, runner, and disposition cohort passed 54/54 with no more than two CTest workers. The DMG baseline verifier passed all 313 inventory keys, 15 Mooneye keys, 20 acceptance keys, and 2 benchmark keys with zero changed rows. Model-gate verification passed with 186 functions, 100 gates, and 34 intentionally unknown gates.
+The full preset build passed; the focused transition set passed 7/7; the related APU, PCM, DMG, table, speed, runner, and disposition cohort passed 54/54 with no more than two CTest workers. The Wave 3 gate initially passed 1017/1018 tests; its sole failure was `cgb_speed_dispositions` reporting `disposition-mismatch expected-failure-model-gates ['dmg-length-retention']`. The marker described an unexecuted DMG case, so it was reclassified as unresolved research and the focused correction suite passed 15/15. The DMG baseline verifier passed all 313 inventory keys, 15 Mooneye keys, 20 acceptance keys, and 2 benchmark keys with zero changed rows. Model-gate verification passed with 186 functions, 100 gates, and 34 intentionally unknown gates.
 
 ## User Setup Required
 
@@ -160,7 +171,8 @@ The CGB APU contracts and model dispositions are ready for downstream Phase 14 c
 
 - Summary file exists at the expected phase path.
 - All four task commits are ancestors of the current phase branch head.
-- `summary_coverage` passed 1/1.
+- The Wave 3 classification correction and all four task commits are represented in the committed working history.
+- After the summary update, `summary_coverage` and the targeted correction suite passed.
 
 ---
 *Phase: 14-cgb-e-model-qualification-and-corpus*

@@ -57,7 +57,7 @@ occurs exactly once in code and once in the table.
 | GATE-12 | BOTH | - | basis=pandocs-joyp | joypad_value | P1 button and direction select lines are the same on both models |
 | GATE-13 | UNKNOWN | - | research:14 | cpu_vram_access_allowed | VRAM CPU lock window during mode 3; CGB lock-edge offsets are unresearched and deferred by D-09/D-12 |
 | GATE-14 | UNKNOWN | - | research:14 | cpu_oam_access_allowed | OAM CPU lock window during modes 2 and 3; CGB lock-edge offsets are unresearched and deferred by D-09/D-12 |
-| GATE-15 | UNKNOWN | - | expected-failure:dmg-length-retention | apu_power_off | CGB-E state clear and Wave RAM retention are guest-tested; DMG length-counter retention remains outside the frozen baseline |
+| GATE-15 | UNKNOWN | - | research:14 | apu_power_off | CGB-E state clear and Wave RAM retention are guest-tested; DMG length-counter retention has no executed case and remains outside the frozen baseline |
 | GATE-16 | UNKNOWN | - | expected-failure:cgb-separate-buses | read8 | OAM-DMA CPU bus conflict: CGB uses separate buses (D-17) |
 | GATE-17 | UNKNOWN | - | research:14 | read8 | SC unused bits read differently on CGB (fast clock bit) |
 | GATE-18 | BOTH | - | basis=PANDOCS | read8 | APU register masks and NR52 channel-status bits are covered by CGB guest readback and the DMG baseline |
@@ -76,7 +76,7 @@ occurs exactly once in code and once in the table.
 | GATE-31 | BOTH | - | basis="DIV reset and frame-sequencer edge use the same selected-speed tap on both models, D-11" | write8 | DIV write resets the counter and clocks the frame sequencer through the shared helper |
 | GATE-32 | UNKNOWN | - | research:14 | write8 | TAC write glitch timing |
 | GATE-33 | UNKNOWN | - | research:14 | write8 | serial data and control write behaviour |
-| GATE-34 | UNKNOWN | - | expected-failure:dmg-length-retention | write8 | CGB-E NR52 off/on behavior is guest-tested; DMG length-counter retention remains outside the frozen baseline |
+| GATE-34 | UNKNOWN | - | research:14 | write8 | CGB-E NR52 off/on behavior is guest-tested; DMG length-counter retention has no executed case and remains outside the frozen baseline |
 | GATE-35 | BOTH | - | basis="CGB current-byte alias; DMG alias remains scoped software policy" | write8 | active Wave RAM writes alias the current byte; the CGB guest checks the write/read and latch separation |
 | GATE-36 | BOTH | - | basis="APU register writes are gated by NR52 power; Wave RAM is decoded separately" | write8 | CGB off-state writes are ignored except Wave RAM; read masks and post-on state are guest-checked |
 | GATE-37 | CGB_ONLY | model_is_cgb | - | write8 | IE bits 5-7 are stored on the CGB profile; DMG keeps IE & $1F (OQ2); interrupt dispatch still masks with $1F |
@@ -249,10 +249,10 @@ and [Audio details](https://github.com/gbdev/pandocs/blob/0191af06ac49661587dcde
 
 | Gate | Model and mode | Outcome and evidence | Owner | Current signature | Promotion rule |
 | --- | --- | --- | --- | --- | --- |
-| GATE-15 | CGB-CPU-E, native CGB; DMG-CPU-B baseline | CGB off clears channel registers, resets the sample latch, retains Wave RAM; `cgb_apu_power` | core owner | DMG model also clears NRx1 length counters; hardware retention differs and is not changed in this phase | Resolve only in a DMG-scoped plan with an independent length-retention fixture and an explicit baseline revision |
+| GATE-15 | CGB-CPU-E, native CGB; DMG-CPU-B baseline | CGB off clears channel registers, resets the sample latch, retains Wave RAM; `cgb_apu_power` | core owner | DMG model also clears NRx1 length counters; hardware retention differs and no DMG case was executed | Keep UNKNOWN/research:14 until a DMG-scoped plan adds an independent length-retention fixture and explicit baseline revision |
 | GATE-18 | CGB-CPU-E, native CGB; DMG-CPU-B baseline | resolved BOTH; all APU masks, including NR52, `cgb_apu_off_writes` and `cgb_apu_power` | core owner | Fixed read masks and channel status bits; no measurement claim | Reopen only with pinned evidence that contradicts the register contract |
 | GATE-19 | CGB-CPU-E, native CGB; DMG-CPU-B software model | resolved BOTH; active current-byte alias and sample-buffer separation, `cgb_apu_wave_access` | core owner | FF30-FF3F reads alias `position >> 1` while CH3 is active | Reopen if a pinned CGB-E case disagrees; keep the DMG alias separately labeled as software policy |
-| GATE-34 | CGB-CPU-E, native CGB; DMG-CPU-B baseline | CGB NR52 off/on and DIV continuation pass, `cgb_apu_power`; exact DMG exception remains expected-failure | core owner | Off returns `$70`, on returns `$F0` before any channel is retriggered; global DIV continues | Resolve only with the same DMG-specific fixture and baseline revision required by GATE-15 |
+| GATE-34 | CGB-CPU-E, native CGB; DMG-CPU-B baseline | CGB NR52 off/on and DIV continuation pass, `cgb_apu_power`; DMG length retention remains unresolved and unexecuted | core owner | Off returns `$70`, on returns `$F0` before any channel is retriggered; global DIV continues | Keep UNKNOWN/research:14 until the DMG-specific fixture and baseline revision required by GATE-15 exist |
 | GATE-35 | CGB-CPU-E, native CGB; DMG-CPU-B software model | resolved BOTH; active aliased write and subsequent fetch, `cgb_apu_wave_access` | core owner | Active FF30-FF3F writes update the currently addressed byte without refilling the CH3 sample latch | Reopen if a pinned CGB-E case disagrees; retain the DMG software-policy boundary |
 | GATE-36 | CGB-CPU-E, native CGB; DMG-CPU-B baseline | resolved BOTH; all off-state APU writes ignored except Wave RAM, `cgb_apu_off_writes` | core owner | NR52 gates the register file; Wave RAM remains independently writable | Reopen only with pinned register evidence that contradicts the authored guest contract |
 

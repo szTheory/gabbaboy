@@ -1702,7 +1702,7 @@ static void apu_power_off(gbb_instance *m) {
     memset(m->apu_pulse, 0, sizeof(m->apu_pulse));
     memset(&m->apu_noise, 0, sizeof(m->apu_noise));
     /* Wave RAM survives NR52 power-off; channel state, including the fetched sample, resets. */
-    /* MODEL: UNKNOWN GATE-15 expected-failure:dmg-length-retention -- CGB-E off state is qualified; DMG length retention remains outside the frozen baseline */
+    /* MODEL: UNKNOWN GATE-15 research:14 -- CGB-E off state is qualified; DMG length retention is unexecuted and outside the frozen baseline */
     memset(&m->apu_wave, 0, offsetof(apu_wave_channel, ram));
     memset((uint8_t *)&m->apu_wave + offsetof(apu_wave_channel, position), 0,
            sizeof(m->apu_wave) - offsetof(apu_wave_channel, position));
@@ -2359,7 +2359,7 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
             }
         }
     }
-    /* MODEL: UNKNOWN GATE-34 expected-failure:dmg-length-retention -- CGB-E NR52 transitions are guest-tested; the DMG length exception remains frozen */
+    /* MODEL: UNKNOWN GATE-34 research:14 -- CGB-E NR52 transitions are guest-tested; DMG length retention is unexecuted and remains frozen */
     else if (address == 0xFF26) {
         if ((value & 0x80u) == 0u) { m->apu_power = 0u; apu_power_off(m); }
         else if (!m->apu_power) { m->apu_power = 1u; m->apu_sequencer_step = 0u; }
