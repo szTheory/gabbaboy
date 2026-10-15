@@ -469,6 +469,32 @@ def prohibition_self_test(root: Path) -> None:
     empty_bad.write_text("", encoding="utf-8")
     empty_bad_descriptor = dict(descriptor, violationFixture=str(empty_bad.relative_to(root)))
     require_closed_gate(run_gate(root, tools, gate_request(item, empty_bad_descriptor), "selftest-empty-bad"), "empty bad subject")
+    malformed_bad = directory / "malformed-known-bad.json"
+    malformed_bad.write_text("{", encoding="utf-8")
+    malformed_bad_descriptor = dict(descriptor, violationFixture=str(malformed_bad.relative_to(root)))
+    malformed_payload = run_gate(root, tools, gate_request(item, malformed_bad_descriptor),
+                                 "selftest-malformed-bad")
+    require_closed_gate(malformed_payload, "non-qualification checker failure")
+    require(not any(isinstance(row, dict) and row.get("failFirst") is True
+                    for row in malformed_payload.get("evidence", [])),
+            f"malformed subject was counted as semantic fail-first evidence: {malformed_payload}")
+    malformed_env = os.environ.copy()
+    malformed_env["GSD_PROHIB_SUBJECT"] = str(malformed_bad)
+    try:
+        malformed_run = subprocess.run(
+            ["node", "--test", "--test-reporter=tap", ADAPTER_PATH],
+            cwd=root, env=malformed_env, capture_output=True, text=True,
+            check=False, timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise ContractError(f"malformed-subject adapter control could not run: {error}") from error
+    malformed_output = malformed_run.stdout + malformed_run.stderr
+    semantic_test = "HDMA claim language does not turn software agreement into physical qualification"
+    require(malformed_run.returncode != 0,
+            "standalone adapter returned success for a malformed non-qualification subject")
+    require(f"# Subtest: {semantic_test}" not in malformed_output and
+            f"not ok 1 - {semantic_test}" not in malformed_output,
+            "malformed-subject setup failure executed the semantic fail-first target")
     missing_clean = dict(descriptor, cleanFixture=f"{PROHIBITION_DIR}/missing-clean.json")
     require_closed_gate(run_gate(root, tools, gate_request(item, missing_clean), "selftest-missing-clean"), "missing clean subject")
     empty_clean = directory / "empty-clean.json"
