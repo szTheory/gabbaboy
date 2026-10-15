@@ -180,7 +180,7 @@ class CorpusReportControlsTests(unittest.TestCase):
                      b'<Test>./tests/cgb_case</Test><Test>./tests/other_case</Test>'
                      b'</TestList>'
                      b'<Test Status="passed"><Name>cgb_case</Name><Results>'
-                     b'<Measurement name="Test Output"><Value>terminal=pass</Value></Measurement>'
+                     b'<Measurement><Value>terminal=pass</Value></Measurement>'
                      b'</Results></Test>'
                      b'<Test Status="passed"><Name>other_case</Name><Results/></Test>'
                      b'</Testing></Site>')
