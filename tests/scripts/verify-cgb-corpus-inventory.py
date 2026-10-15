@@ -37,14 +37,14 @@ SOURCE_DIGESTS = {
     "mooneye": "f834287698586e0f22ff60824d0f1accf281e72075babafe7da3a4a502ed6f72",
 }
 OUTPUT_DIGESTS = {
-    "age": "18f8a8cc28b1674d1ad7186b0cad0ed6960dddc18624229063039933f42c1e09",
-    "samesuite": "711855f181c1e2a61e511691455178ab0ea2f42064ce00911db4148f0f88db3f",
+    "age": "81ab90df48da3b888a210201fbd86e644f17fb83c9d14d18b9ee964add9832ce",
+    "samesuite": "c94ca9b8cafe7a5510ebf5abe353c350d69875fd3e36c8c420e0812ea61430b9",
     "magentests": "928c0ce4fcb770aa48d1959ee92c9fba480f548d42d8a79721942d3525f2119c",
     "mooneye": "af6927aab0463e1041551182817ba6c7a651ae3afe791314c186164805e818a5",
 }
 CASE_DIGESTS = {
     "age": "7bfeeb4af1ad26e59ac9e61a2f38cadb2a20667acf49589ccf38c68093217dfa",
-    "samesuite": "9cf6c0325706d4831eabb6d6d72a515474bd6b921c771bb98ff19fed5ad334c1",
+    "samesuite": "84cedec9d9f8790e5d9d1a4f84cde95d2b48152d37d3f38e9153f4af0c3eaea3",
     "magentests": "643808a7d9cf535b372b2df844f46fbe2b4e7454cd87e964302466c039e91b92",
     "mooneye": "3a1c17eefff83b0b693fc5cecc67bec944b08e9f042cff8cb6a5bb6f668e27ed",
 }
@@ -203,6 +203,33 @@ def check_rosters(data: dict) -> tuple[dict[str, dict], dict[str, dict], dict[st
         need(isinstance(row.get("assertion_contract"), dict), "case-assertion-contract")
         need(isinstance(row.get("test_binding"), dict), "case-test-binding")
         need(not row.get("hardware_qualified", False), "hardware-claim-forbidden")
+        if suite == "samesuite" and source["source_path"].startswith("apu/"):
+            alias = source["source_path"].removesuffix(".asm")
+            test_name = "cgb_samesuite_apu_" + alias.removeprefix("apu/").replace("/", "_").replace("-", "_")
+            execution = row["execution"]
+            evaluator = row["evaluator_disposition"]
+            assertions = row["assertion_contract"]
+            binding = row["test_binding"]
+            assertion_rows = assertions.get("rows")
+            need(output["admission_status"] == "admitted", f"samesuite-apu-output-not-admitted:{source['source_path']}")
+            need(row["author_expectation"].get("class") == "source-CorrectResults"
+                 and row["author_expectation"].get("value") == "pass",
+                 f"samesuite-apu-author-expectation:{source['source_path']}")
+            need(evaluator.get("state") in ("pass", "expected-failure")
+                 and execution.get("state") == "completed" and execution.get("terminal") is True
+                 and execution.get("observed_result") in ("pass", "fail"),
+                 f"samesuite-apu-execution:{source['source_path']}")
+            need(not (evaluator.get("state") == "expected-failure"
+                      and execution.get("observed_result") == "pass"),
+                 f"samesuite-apu-xfail-counted-as-pass:{source['source_path']}")
+            need(assertions.get("state") == "qualified" and isinstance(assertion_rows, list)
+                 and len(assertion_rows) == assertions.get("count") and assertion_rows,
+                 f"samesuite-apu-assertions:{source['source_path']}")
+            need(binding.get("state") == "bound" and binding.get("ctest_name") == test_name,
+                 f"samesuite-apu-test-binding:{source['source_path']}")
+            need(re.fullmatch(r"[0-9a-f]{64}", str(execution.get("signature_sha256", "")))
+                 and execution.get("signature_sha256") == evaluator.get("signature_sha256"),
+                 f"samesuite-apu-signature:{source['source_path']}")
         if output["admission_status"] == "source-only":
             execution = row["execution"]
             need(execution.get("observed_result") is None and execution.get("terminal") is not True,
@@ -268,9 +295,10 @@ def check_admitted_outputs(root: Path, outputs: dict[str, dict], sources: dict[s
     tracked_set = set(filter(None, tracked))
     for row in admitted:
         suite = row["suite"]
-        name = PurePosixPath(row["output_path"]).name
+        manifest_root = PurePosixPath(expected_manifest[suite]).parent
+        name = PurePosixPath(row["output_path"]).relative_to(manifest_root).as_posix()
         fixture = manifests[suite].get(name)
-        need(fixture is not None, f"manifest-output-missing:{row['id']}")
+        need(fixture is not None, f"manifest-output-missing:{row['id']}:{name}")
         source_path = sources[row["source_id"]]["source_path"]
         manifest_source = fixture.get("source_path")
         if suite == "magentests":
@@ -374,8 +402,8 @@ def check_documentation(root: Path, data: dict) -> None:
     block = doc.split(begin, 1)[1].split(end, 1)[0]
     required = (
         "gabbaboy-cgb-corpus-inventory-v1", "Mooneye", "SameSuite", "AGE", "MagenTests",
-        "83", "70", "19", "9", "74", "5", "107", "76", "CGB-CPU-E",
-        "assertion", "admitted", "pending", "author", "evaluator", "rights", "ctest",
+        "83", "70", "19", "9", "74", "5", "107", "109", "0", "101", "13", "6", "8", "62", "4,784",
+        "CGB-CPU-E", "assertion", "admitted", "pending", "author", "evaluator", "rights", "ctest",
     )
     for token in required:
         need(token.lower() in block.lower(), f"documentation-token:{token}")
@@ -622,8 +650,9 @@ def self_test(root: Path, data: dict) -> None:
         _, outputs, cases = validate(root, data)
         check_complete(root, outputs, cases)
     except Mismatch as exc:
-        need(str(exc).startswith("complete-required-output-pending:"), f"self-test-wrong-diagnostic:complete:{exc}")
-        controls.append("complete-rejects-unadmitted-required-bytes")
+        need(str(exc) == "complete-test-binding-pending:age:m3-bg-lcdc",
+             f"self-test-wrong-diagnostic:complete:{exc}")
+        controls.append("complete-rejects-admitted-pending-image-case")
     else:
         raise Mismatch("self-test-control-accepted:incomplete-complete-mode")
     print("cgb-corpus-inventory self-test pass controls=" + ",".join(controls))

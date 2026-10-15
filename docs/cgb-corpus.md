@@ -16,14 +16,14 @@ scratch-built but have not passed per-output admission.
 | MagenTests | 5 source paths | 7 admitted outputs | 5 CGB cases |
 | **Total** | **181** | **109** | **107** |
 
-The counts describe different objects. The 109 output records include three
-admitted Magen MBC outputs outside the CGB case set; one Magen PPU output
-supplies separate native and compatibility-mode cases. At this inventory
-revision, 33 outputs are admitted and 76 selected outputs remain pending
-per-output admission. All nine selected Mooneye CGB outputs are admitted,
-reproducible and bound to individual tests. The 107 required case identities
-remain fixed; nine Mooneye cases have terminal execution and assertion records,
-while other selected cases remain pending.
+The counts describe different objects. All 109 selected output records are
+admitted with pinned manifest bytes and provenance; three admitted Magen MBC
+outputs remain outside the CGB case set, and one Magen PPU output supplies
+separate native and compatibility-mode cases. All nine selected Mooneye CGB
+outputs are admitted, reproducible and bound to individual tests. The 107
+required case identities remain fixed; 101 cases have terminal execution
+receipts, while the six AGE mode-3 image cases are admitted but remain
+not-executed pending their image comparisons.
 
 The Mooneye roster contains 59 source headers with CGB in a pass list, 26 with
 CGB in a fail list, and two in both. Its nine required identities include the
@@ -45,10 +45,17 @@ applicability quote for each APU identity. Each ROM's encoded result remains
 author evidence, while SameBoy comparisons remain differential evidence. The
 four existing DMA outputs are included separately.
 
-AGE retains its 13 existing outputs and selects six mode-3 source/reference
-image pairs. Four are normal-speed native/compatibility targets and two are
-separate double-speed siblings. Each new ROM requires its own source, PNG,
-build provenance, output digest, and executable predicate before admission.
+Under the bounded CGB-CPU-E native, normal-speed software model, the 70
+terminal receipts comprise eight observed guest passes and 62 exact expected
+failures across 4,784 result assertions. Every source author expectation
+remains `pass`; the 62 evaluator xfails are not guest passes.
+
+AGE has 19 admitted outputs: 13 existing row-oracle cases and six mode-3
+source/reference image pairs. Four new targets are normal-speed
+native/compatibility cases and two are separate double-speed siblings. Each
+image pair records its own source, PNG, rights, build provenance, and output
+digest. The six image cases remain admitted-not-executed for Plan 14-09; their
+reference images and author expectations do not count as emulator results.
 
 MagenTests contributes five CGB-CPU-E model/mode cases from already admitted
 outputs. The HBlank VRAM DMA output is the seventh admitted ROM in its manifest

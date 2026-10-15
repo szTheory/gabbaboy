@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -12,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "fixtures/samesuite/manifest.json"
 DISPOSITIONS = ROOT / "tests/external/cgb-apu-dispositions.json"
 INVENTORY = ROOT / "tests/external/cgb-corpus-inventory.json"
+VALIDATOR = ROOT / "tests/scripts/verify-cgb-apu-dispositions.py"
 
 
 class SameSuiteApuMembershipTests(unittest.TestCase):
@@ -45,9 +47,19 @@ class SameSuiteApuMembershipTests(unittest.TestCase):
             "cgb_samesuite_apu_membership",
             "cgb_samesuite_apu_controls",
             "cgb_samesuite_apu_tracer",
+            "cgb_samesuite_apu_tracer_controls",
+            "cgb_samesuite_apu_suite",
         }
         expected_tests.update(row["test_name"] for row in dispositions["cases"])
         self.assertTrue(expected_tests <= test_names, f"missing required APU CTests: {sorted(expected_tests - test_names)}")
+
+        validation = subprocess.run(
+            [sys.executable, "-I", str(VALIDATOR), "--membership"],
+            check=False, capture_output=True, text=True,
+        )
+        self.assertEqual(0, validation.returncode, validation.stderr or validation.stdout)
+        self.assertIn("cases=70 author_expectation=pass observed_pass=8 xfail=62 assertions=4784",
+                      validation.stdout)
 
 
 if __name__ == "__main__":

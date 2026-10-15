@@ -997,6 +997,16 @@ set_tests_properties(magentests_hblank_vram_dma cgb_hdma_magen_controls PROPERTI
 
 # Phase 14 plan 14-07: qualify the pinned SameSuite APU membership on the
 # selected CGB-CPU-E model; one suite run emits the per-case receipts.
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(GBB_CGB_APU_DISPOSITIONS_VERIFIER
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-apu-dispositions.py")
+add_test(NAME cgb_samesuite_apu_membership
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/test_samesuite_apu_membership.py")
+set_tests_properties(cgb_samesuite_apu_membership PROPERTIES TIMEOUT 30)
+add_test(NAME cgb_samesuite_apu_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_APU_DISPOSITIONS_VERIFIER}" --self-test)
+set_tests_properties(cgb_samesuite_apu_controls PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-apu-dispositions self-test pass")
 add_executable(test_samesuite_apu test_samesuite_apu.c)
 target_sources(test_samesuite_apu PRIVATE "${PROJECT_SOURCE_DIR}/src/accept/sha256.c")
 target_include_directories(test_samesuite_apu PRIVATE "${PROJECT_SOURCE_DIR}/src/accept")
@@ -1162,7 +1172,6 @@ add_test(NAME samesuite_hdma_gbc_dma_cont_corrupted_result_control
     -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
 set_tests_properties(samesuite_hdma_gbc_dma_cont_corrupted_result_control PROPERTIES TIMEOUT 60)
 
-find_package(Python3 COMPONENTS Interpreter REQUIRED)
 set(GBB_CGB_HDMA_DISPOSITIONS_VERIFIER
   "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-hdma-dispositions.py")
 add_test(NAME cgb_hdma_dispositions
