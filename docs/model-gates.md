@@ -42,7 +42,7 @@ occurs exactly once in code and once in the table.
 <!-- model-gates-begin -->
 | Gate | Class | Guard | Resolution | Site | Note |
 | --- | --- | --- | --- | --- | --- |
-| GATE-00 | BOTH | - | basis="model-neutral function; see its branch gates" | any function | shared id for model-neutral function tags |
+| GATE-00 | BOTH | - | basis="model-neutral function; hardware-visible model access is declared by its caller branch gate" | any function | shared id for neutral helpers, including PCM channel taps; caller gates declare CGB-only access |
 | GATE-01 | UNKNOWN | - | research:14 | audio_process_sample | high-pass filter constant differs by model |
 | GATE-02 | UNKNOWN | - | research:14 | ppu_update_stat_line | STAT interrupt line edge timing on CGB is unresearched; deferred by D-09/D-12 |
 | GATE-03 | DMG_ONLY | model_is_dmg | - | post_boot_apply | the header-checksum F branch exists on the DMG profile only; CGB F is $80 |

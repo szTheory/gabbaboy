@@ -589,6 +589,7 @@ static void audio_current_mix(const gbb_instance *m, int32_t *left, int32_t *rig
 }
 
 /* CGB PCM readback is the digital DAC input, before NR50/NR51 routing and host mixing. */
+/* MODEL: BOTH GATE-00 basis="model-neutral function; hardware-visible model access is declared by its caller branch gate" */
 static uint8_t apu_digital_output(const gbb_instance *m, unsigned channel) {
     static const uint8_t duty_pattern[4] = {0x01u, 0x81u, 0x87u, 0x7Eu};
     if (!m->apu_power) return 0u;
@@ -620,6 +621,7 @@ static uint8_t apu_digital_output(const gbb_instance *m, unsigned channel) {
     return 0u;
 }
 
+/* MODEL: BOTH GATE-00 basis="model-neutral function; hardware-visible model access is declared by its caller branch gate" */
 static uint8_t apu_pcm_read(const gbb_instance *m, uint16_t address) {
     const unsigned first = address == 0xFF76u ? 0u : 2u;
 #if GBB_TEST_CGB_PCM_WRITABLE

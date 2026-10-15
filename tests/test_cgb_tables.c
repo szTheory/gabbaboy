@@ -229,12 +229,12 @@ static int case_selftest(const char *path) {
     if (check_all(g_copy, g_doc, n) != CHECK_HW_OUTSIDE_COMPAT) goto accepted;
 
     const int io_rejected = io_selftest(path);
-    if (io_rejected != 3) {
-        printf("cgb-tables self-test: io mutation accepted (rejected %d of 3)\n", io_rejected);
+    if (io_rejected != 9) {
+        printf("cgb-tables self-test: io mutation accepted (rejected %d of 9)\n", io_rejected);
         return 1;
     }
 
-    printf("cgb-tables self-test pass mutants=6\n");
+    printf("cgb-tables self-test pass mutants=12\n");
     return 0;
 accepted:
     printf("cgb-tables self-test: mutation accepted\n");
@@ -310,6 +310,14 @@ static int render_io(const io_cell *c, int col, char *rd, size_t rd_n, char *wr,
         snprintf(rd, rd_n, "$FE or bit 0");
         snprintf(wr, wr_n, "bit 0 stored, no priority effect after boot");
         return 1;
+    case IO_PCM12:
+        snprintf(rd, rd_n, "channel 2:channel 1 digital DAC values");
+        snprintf(wr, wr_n, "ignored");
+        return 1;
+    case IO_PCM34:
+        snprintf(rd, rd_n, "channel 4:channel 3 digital DAC values");
+        snprintf(wr, wr_n, "ignored");
+        return 1;
     case IO_DEFERRED_RW:
         snprintf(rd, rd_n, "stop");
         snprintf(wr, wr_n, "dropped, stop after retire");
@@ -374,6 +382,21 @@ static int parse_io_doc(const char *path, io_doc_row *rows, int max_rows) {
 
 static void io_addr_text(unsigned index, char *out, size_t n) { snprintf(out, n, "$FF%02X", index); }
 
+/* Independent PCM policy oracle: D-10 settles the native CGB, compatibility, and DMG cells.
+ * CGB mode exposes read-only PCM values, compatibility mode reads $FF, and the DMG profile keeps
+ * its fail-closed stop. The docs mirror remains a separate code/table comparison. */
+static int pcm_io_contract(const io_row *code) {
+    static const unsigned addresses[] = { 0x76u, 0x77u };
+    static const uint8_t cgb_kinds[] = { IO_PCM12, IO_PCM34 };
+    for (size_t i = 0; i < sizeof(addresses) / sizeof(addresses[0]); ++i) {
+        const io_row *row = &code[addresses[i]];
+        if (row->dmg.kind != IO_DMG_STOP || row->cgb.kind != cgb_kinds[i] ||
+            row->compat.kind != IO_CONST_FF || row->src != IOS_PANDOCS)
+            return 0;
+    }
+    return 1;
+}
+
 static int io_mismatch(const char *addr, const char *column) {
     printf("cgb-tables mismatch: %s %s\n", addr, column);
     return 1;
@@ -418,6 +441,10 @@ static io_row g_io_copy[IO_VISIBILITY_ROWS];
 static int case_io(const char *path) {
     const int n = parse_io_doc(path, g_io_doc, MAX_IO_DOC_ROWS);
     if (n < 0) return 1;
+    if (!pcm_io_contract(io_visibility)) {
+        printf("cgb-tables PCM policy mismatch: native/compat/DMG FF76-FF77\n");
+        return 1;
+    }
     if (compare_io(io_visibility, g_io_doc, n) != 0) return 1;
     printf("cgb-tables io pass rows=%d\n", n);
     return 0;
@@ -429,7 +456,7 @@ static int io_selftest(const char *path) {
     const int n = parse_io_doc(path, g_io_doc, MAX_IO_DOC_ROWS);
     if (n < 0) return -1;
     memcpy(g_io_copy, io_visibility, sizeof(g_io_copy));
-    if (compare_io(g_io_copy, g_io_doc, n) != 0) return -1;
+    if (!pcm_io_contract(g_io_copy) || compare_io(g_io_copy, g_io_doc, n) != 0) return -1;
     int rejected = 0;
 
     /* (d) an io row removed from the code copy (reclassified as handled elsewhere). */
@@ -448,6 +475,23 @@ static int io_selftest(const char *path) {
         memcpy(shortened, g_io_doc, sizeof(io_doc_row) * (size_t)n);
         memmove(&shortened[10], &shortened[11], sizeof(io_doc_row) * (size_t)(n - 11));
         if (compare_io(io_visibility, shortened, n - 1) != 0) ++rejected;
+    }
+
+    /* (g-i) Catch the superseded dispositions independently of the documentation mirror for
+     * both PCM registers: deferred CGB, readable compat, or non-stopping DMG cells are invalid. */
+    for (unsigned i = 0; i < 2; ++i) {
+        const unsigned address = i == 0 ? 0x76u : 0x77u;
+        memcpy(g_io_copy, io_visibility, sizeof(g_io_copy));
+        g_io_copy[address].cgb.kind = IO_DEFERRED_RW;
+        if (!pcm_io_contract(g_io_copy)) ++rejected;
+
+        memcpy(g_io_copy, io_visibility, sizeof(g_io_copy));
+        g_io_copy[address].compat.kind = i == 0 ? IO_PCM12 : IO_PCM34;
+        if (!pcm_io_contract(g_io_copy)) ++rejected;
+
+        memcpy(g_io_copy, io_visibility, sizeof(g_io_copy));
+        g_io_copy[address].dmg.kind = IO_CONST_FF;
+        if (!pcm_io_contract(g_io_copy)) ++rejected;
     }
     return rejected;
 }
