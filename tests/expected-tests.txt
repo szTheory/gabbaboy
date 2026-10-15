@@ -302,6 +302,13 @@ apu_sweep
 apu_power
 cgb_pcm_tracer
 cgb_pcm_tracer_control
+cgb_pcm_channels
+cgb_pcm_power_dac
+cgb_pcm_readonly
+cgb_pcm_host_invariance
+cgb_pcm_controls
+cgb_pcm_routing_control
+cgb_pcm_writable_control
 serial_internal_disconnected
 serial_external_pending
 serial_unqualified_overlap
