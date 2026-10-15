@@ -91,6 +91,7 @@ class CorpusReportCorpusTests(unittest.TestCase):
         )
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         self.assertIn("cgb-corpus-inventory self-test pass", completed.stdout)
+        self.assertIn("source-only-execution", completed.stdout)
         context = REPORTER_IMPL.load_corpus_context()
         self.assertEqual(len(context["cases"]), 107)
         self.assertEqual(context["assertion_rows"], 4959)
@@ -102,9 +103,9 @@ class CorpusReportControlsTests(unittest.TestCase):
         report = REPORTER_IMPL
         one = "cgb_case"
 
-        def block(test_id, name, output="terminal=pass"):
+        def block(test_id, name, output="terminal=pass", total=1):
             return (f"test {test_id}\n        Start {test_id}: {name}\n"
-                    f"{test_id}: {output}\n  1/1 Test #{test_id}: {name} ... Passed 0.01 sec\n")
+                    f"{test_id}: {output}\n  {test_id}/{total} Test #{test_id}: {name} ... Passed 0.01 sec\n")
 
         good_log = (block(1, one) + "\n100% tests passed out of 1\n").encode()
         parsed, count = report.parse_ctest_log(good_log, {one})
@@ -124,6 +125,11 @@ class CorpusReportControlsTests(unittest.TestCase):
                          "\n100% tests passed out of 2\n").encode()
         with self.assertRaises(report.ReportError) as raised:
             report.parse_ctest_log(duplicate_log, {one, "cgb_other"})
+        self.assertEqual(raised.exception.code, "ctest-log-membership")
+        narrowed_log = (block(1, one, total=2) + block(2, "cgb_other", total=2) +
+                        "\n100% tests passed out of 2\n").encode()
+        with self.assertRaises(report.ReportError) as raised:
+            report.parse_ctest_log(narrowed_log, {one})
         self.assertEqual(raised.exception.code, "ctest-log-membership")
 
         for path in ("../escape", "/etc/passwd", "C:\\private\\file", "a//b"):
@@ -151,6 +157,9 @@ class CorpusReportControlsTests(unittest.TestCase):
                 with self.assertRaises(report.ReportError) as raised:
                     report.validate_case_outcome(xfail, observed, evaluator, actual_signature)
                 self.assertEqual(raised.exception.code, code)
+        with self.assertRaises(report.ReportError) as raised:
+            report.required_cohort_summary("empty-cohort", [{"observed_result": "fail", "matched_xfail": True}])
+        self.assertEqual(raised.exception.code, "required-cohort-empty-or-all-xfail")
 
         age_item = {
             "case": {
@@ -176,8 +185,9 @@ class CorpusReportControlsTests(unittest.TestCase):
         self.assertEqual(normalized["observed_result"], "fail")
         self.assertTrue(normalized["matched_xfail"])
         for mutated, code in (
+            (rows.splitlines()[0] + "\n" + rows.splitlines()[1] + "\n", "age-row-membership"),
             (rows.replace("age-assertion-row id=case/row-01", "age-assertion-row id=unknown"), "age-row-id-membership"),
-            (rows + "age-assertion-row id=case/row-00 expected=0000000000000000 actual=0000000000000000 disposition=pass\n",
+            (rows.replace("age-assertion-row id=case/row-01", "age-assertion-row id=case/row-00"),
              "age-row-id-membership"),
             (rows.replace("mask=0001", "mask=0003"), "age-verdict-count-mismatch"),
             (rows.replace(signature, "b" * 64), "expected-failure-signature-mismatch"),
@@ -190,7 +200,7 @@ class CorpusReportControlsTests(unittest.TestCase):
                 self.assertEqual(raised.exception.code, code)
 
         context = report.load_corpus_context()
-        identity = report.full_build_identity(Path("build"), context)
+        identity = report.full_build_identity(ROOT / "build", context)
         mooneye_id = "mooneye:misc/boot_hwio-C.s"
         mooneye_item = copy.deepcopy(context["cases"][mooneye_id])
         case = mooneye_item["case"]
@@ -211,7 +221,7 @@ class CorpusReportControlsTests(unittest.TestCase):
             "ticks": str(ticks), "budget": str(budget),
         }
         def mooneye_output(fields):
-            event = "case=" + " ".join(f"{key}={value}" for key, value in fields.items())
+            event = " ".join(f"{key}={value}" for key, value in fields.items())
             assertion = (f"assertion case={runner_case} id=ld-b-b-result expected=pass observed=fail "
                          f"evaluator_status=xfail callback_pc={evaluator['callback_pc'][2:]} "
                          f"result_pc={evaluator['result_pc'][2:]} terminal=1 ticks={ticks} budget={budget}")
@@ -219,6 +229,10 @@ class CorpusReportControlsTests(unittest.TestCase):
         self.assertTrue(report._normalize_mooneye(mooneye_item, mooneye_output(event_fields), identity)["matched_xfail"])
         for fields, item, code in (
             ({**event_fields, "boot": "bootless"}, mooneye_item, "mooneye-identity-mismatch"),
+            ({**event_fields, "core_revision": "0" * 40}, mooneye_item, "mooneye-identity-mismatch"),
+            ({**event_fields, "fixture_sha256": "0" * 64}, mooneye_item, "mooneye-identity-mismatch"),
+            ({**event_fields, "manifest_sha256": "0" * 64}, mooneye_item, "mooneye-identity-mismatch"),
+            ({**event_fields, "profile": "CGB-CPU-D"}, mooneye_item, "mooneye-identity-mismatch"),
             ({**event_fields, "reason": "changed"}, mooneye_item, "mooneye-result-mismatch"),
             (event_fields, {**mooneye_item, "case": {**case, "mode": "native"}}, "mooneye-case-profile"),
             (event_fields, {**mooneye_item, "case": {**case, "speed": "double"}}, "mooneye-case-profile"),
@@ -228,6 +242,9 @@ class CorpusReportControlsTests(unittest.TestCase):
                 with self.assertRaises(report.ReportError) as raised:
                     report._normalize_mooneye(item, mooneye_output(fields), identity)
                 self.assertEqual(raised.exception.code, code)
+        with self.assertRaises(report.ReportError) as raised:
+            report._normalize_mooneye(mooneye_item, mooneye_output(event_fields).split("assertion ")[0], identity)
+        self.assertEqual(raised.exception.code, "mooneye-terminal-membership")
 
         log = good_log
         log_digest = report.sha256(log)

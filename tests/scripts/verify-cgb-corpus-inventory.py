@@ -749,7 +749,11 @@ def self_test(root: Path, data: dict) -> None:
         raise Mismatch("self-test-control-accepted:optional-rights")
 
     try:
-        _, _, case_map = validate(root, data)
+        trial = copy.deepcopy(data)
+        next(r for r in trial["cases"] if r["id"] == "magentests:bg_oam_priority")["test_binding"] = {
+            "ctest_name": None, "state": "pending-registration"
+        }
+        _, _, case_map = validate(root, trial)
         check_test_bindings(root, case_map)
     except Mismatch as exc:
         need(str(exc).startswith("complete-test-binding-pending:"), f"self-test-wrong-diagnostic:test-binding:{exc}")
@@ -775,9 +779,9 @@ def self_test(root: Path, data: dict) -> None:
         _, outputs, cases = validate(root, data)
         check_complete(root, outputs, cases)
     except Mismatch as exc:
-        need(str(exc) == "complete-test-binding-pending:magentests:bg_oam_priority",
+        need(str(exc) == "complete-case-not-terminal:magentests:bg_oam_priority",
              f"self-test-wrong-diagnostic:complete:{exc}")
-        controls.append("complete-rejects-next-unbound-magentests-case")
+        controls.append("complete-rejects-static-not-run-magentests-case")
     else:
         raise Mismatch("self-test-control-accepted:incomplete-complete-mode")
     print("cgb-corpus-inventory self-test pass controls=" + ",".join(controls))

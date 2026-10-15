@@ -639,8 +639,11 @@ def validate_case_outcome(item: dict, observed: str, evaluator_status: str,
 def _case_record(item: dict, assertions: list[dict], observed: str,
                  evaluator_status: str, details: dict | None = None,
                  signature: str | None = None) -> dict:
-    matched_xfail = validate_case_outcome(item, observed, evaluator_status, signature)
     case = item["case"]
+    if (case.get("model") != "CGB-CPU-E" or case.get("mode") not in ("native", "compat") or
+            case.get("speed") not in ("normal", "double")):
+        raise ReportError("case-profile-mismatch")
+    matched_xfail = validate_case_outcome(item, observed, evaluator_status, signature)
     output = item["output"]
     source = item["source"]
     return {
@@ -783,6 +786,9 @@ def _normalize_age_image(item: dict, output: str) -> dict:
 
 def _normalize_mooneye(item: dict, output: str, identity: dict) -> dict:
     case = item["case"]
+    if (case.get("model") != "CGB-CPU-E" or case.get("mode") != "compat" or
+            case.get("speed") != "normal"):
+        raise ReportError("mooneye-case-profile")
     source = item["source"]
     output_row = item["output"]
     events = lines_with_prefix(output, "case=mooneye-")
@@ -873,7 +879,9 @@ def _normalize_dma(item: dict, output: str) -> dict:
     if len(pass_lines) != 1 or len(assertion_lines) != len(contracts):
         raise ReportError("dma-terminal-membership")
     pass_fields = parse_kv_fields(pass_lines[0], "samesuite-hdma pass ")
-    if pass_fields.get("case") != source_name or pass_fields.get("model") != case["model"]:
+    if (pass_fields.get("case") != source_name or pass_fields.get("model") != case["model"] or
+            pass_fields.get("mode") != case["mode"] or pass_fields.get("speed") != case["speed"] or
+            pass_fields.get("boot") != "bootless" or pass_fields.get("terminal") != "1"):
         raise ReportError("dma-case-identity")
     rows = {}
     for line in assertion_lines:
@@ -897,6 +905,9 @@ def _normalize_apu_suite(context: dict, suite_output: str, blocks_by_name: dict)
                  item["source"]["source_path"].startswith("apu/")}
     by_alias = {}
     for cid, item in apu_cases.items():
+        if (item["case"].get("model") != "CGB-CPU-E" or
+                item["case"].get("mode") != "native" or item["case"].get("speed") != "normal"):
+            raise ReportError("apu-case-profile")
         alias = item["source"]["source_path"].removesuffix(".asm")
         by_alias[alias] = (cid, item)
         membership_name = item["case"]["test_binding"]["ctest_name"]
@@ -1036,6 +1047,18 @@ def inventory_summary(context: dict) -> tuple[dict, dict]:
     }, {"excluded_source_candidates": excluded_sources, "outputs_outside_required_case_set": noncase_outputs})
 
 
+def required_cohort_summary(name: str, rows: list[dict]) -> dict:
+    passing = sum(row.get("observed_result") == "pass" for row in rows)
+    if not rows or passing == 0:
+        raise ReportError("required-cohort-empty-or-all-xfail")
+    return {
+        "name": name,
+        "required_cases": len(rows),
+        "observed_pass_cases": passing,
+        "matched_xfail_cases": sum(row.get("matched_xfail") is True for row in rows),
+    }
+
+
 def normalize_corpus(context: dict, blocks: list[dict], identity: dict) -> dict:
     blocks_by_name = {block["name"]: block for block in blocks}
     expected_names = set(context["test_names"]) | {APU_SUITE_TEST}
@@ -1110,11 +1133,7 @@ def normalize_corpus(context: dict, blocks: list[dict], identity: dict) -> dict:
     }
     cohort_report = []
     for name, rows in required_cohorts.items():
-        passing = sum(row["observed_result"] == "pass" for row in rows)
-        if not rows or passing == 0:
-            raise ReportError("required-cohort-empty-or-all-xfail")
-        cohort_report.append({"name": name, "required_cases": len(rows), "observed_pass_cases": passing,
-                              "matched_xfail_cases": sum(row["matched_xfail"] for row in rows)})
+        cohort_report.append(required_cohort_summary(name, rows))
     inventory_counts, exclusions = inventory_summary(context)
     all_assertions = [assertion for row in records.values() for assertion in row["assertions"]]
     case_counts = {
