@@ -1148,6 +1148,12 @@ add_test(NAME cgb_mooneye_inventory
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake)
 set_tests_properties(cgb_mooneye_inventory PROPERTIES
   PASS_REGULAR_EXPRESSION "Verified Mooneye-cgb inventory: 4 fixtures")
+# RED: this binding test must reject the stale four-row inventory until Phase 14 expands it to nine.
+add_test(NAME cgb_corpus_mooneye_controls
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_MODE=inventory
+    -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake)
 # Configure-time mutants (exact exit code 1 plus a named token): a flipped ROM digest and a
 # duplicated fixture id. Each differs from the committed manifest by exactly one fact.
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/digest" "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/dup-id")

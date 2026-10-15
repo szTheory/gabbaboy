@@ -642,6 +642,7 @@ cgb_key0_lock_cross_column
 cgb_key0_lock_reset_idempotent
 cgb_mooneye_fixture_digest
 cgb_mooneye_inventory
+cgb_corpus_mooneye_controls
 cgb_mooneye_digest_tamper
 cgb_mooneye_inventory_tamper
 cgb_mooneye_not_installed
