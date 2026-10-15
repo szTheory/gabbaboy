@@ -37,7 +37,7 @@
     "boot_hwio-C.gb",
     "unused_hwio-C.gb"
   ],
-  "evidence_class": "Author-attested Mooneye hardware results as stated in each source header, executed here on the CGB-CPU-E profile in compat mode (header $143 bit 7 clear). boot_div-cgbABCDE claims CGB A-E only. No CGB-E-alone claim, no AGB claim, never game compatibility. Two rows are expected-unsupported until Phase 14.",
+  "evidence_class": "Author-attested Mooneye hardware expectations as stated in each source header, executed here on the CGB-CPU-E profile in compat mode (header $143 bit 7 clear). boot_div-cgbABCDE claims CGB A-E only. No CGB-E-alone claim, no AGB claim, never game compatibility. The two HWIO rows retain author_expect=pass and currently have exact software-model expected-failure dispositions.",
   "fixtures": [
     {
       "id": "mooneye-misc-boot-regs-cgb",
@@ -65,6 +65,7 @@
       ],
       "budget_half_dots": 500000,
       "expect": "pass",
+      "observed_disposition": "pass",
       "note": "Mooneye source header: pass on CGB. Compares the compat-mode post-boot register row.",
       "build_recipe": [
         "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
@@ -100,6 +101,7 @@
       ],
       "budget_half_dots": 500000,
       "expect": "pass",
+      "observed_disposition": "pass",
       "note": "Mooneye source header: pass on CGB A, B, C, D and E; fail on CGB 0. Never a CGB-E-alone claim.",
       "build_recipe": [
         "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
@@ -134,10 +136,9 @@
         "0x01f5"
       ],
       "budget_half_dots": 2000000,
-      "expect": "expected-unsupported",
-      "expect_stop": "unsupported-bus",
-      "expect_stop_address": "0xFF76",
-      "note": "Sequential FF00-FF7F compare; stops at the first unbuilt address FF76 (unsupported-bus). Flips to pass in Phase 14.",
+      "expect": "pass",
+      "observed_disposition": "expected-failure",
+      "note": "Author assertion remains pass on CGB. Current CGB-CPU-E software run reaches the exact fail callback 0x01F5 and LD B,B result at 0x4067 with failure registers; it is reported as xfail, never pass. Phase 14-06 owns further qualification.",
       "build_recipe": [
         "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
         "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
@@ -171,10 +172,9 @@
         "0x1a31"
       ],
       "budget_half_dots": 2000000,
-      "expect": "expected-unsupported",
-      "expect_stop": "unsupported-bus",
-      "expect_stop_address": "0xFF76",
-      "note": "Unmapped rows come after FF76, so FF76 is not proof of earlier rows. Flips to pass in Phase 14.",
+      "expect": "pass",
+      "observed_disposition": "expected-failure",
+      "note": "Author assertion remains pass on CGB, AGB and AGS. Current CGB-CPU-E software run reaches the exact fail callback 0x1A31 and LD B,B result at 0x4070 with failure registers; it is reported as xfail, never pass. Phase 14-06 owns further qualification.",
       "build_recipe": [
         "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
         "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",

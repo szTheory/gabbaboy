@@ -30,7 +30,7 @@
 /* Sibling mbc2/mbc5 suite (Phase 8): admitted by the SHA-256 of its raw manifest bytes, like the parent. */
 #define MOONEYE_MBC_MANIFEST_SHA256 "9800c795fcf033abd6bda2e171af6c22d27e745f2b5946fc49bd0f9ce2fb5801"
 /* Phase 10 CGB-profile suite (D-26): admitted by the SHA-256 of its raw manifest bytes, like the others. */
-#define MOONEYE_CGB_MANIFEST_SHA256 "e17346ad051482b767ad637bdd66d2e5916209c46b8cf7372a6d5bf1d2e6e844"
+#define MOONEYE_CGB_MANIFEST_SHA256 "691876d28296f1105976b40631e89663042342787cea4c0407bc0440e656a7ab"
 
 typedef struct {
     const char *id;
@@ -51,9 +51,10 @@ typedef struct {
     uint8_t fail_callback_count;
     /* Trailing so every pre-Phase-10 positional initialiser keeps its meaning (D-26). */
     gbb_profile profile;            /* 0 means DMG-CPU-B; the run profile of this row (D-25) */
-    uint8_t expect_stop;            /* 0: the row must pass; 1: it must stop on unsupported-bus */
-    uint16_t expect_stop_address;   /* the one address that stop must name when expect_stop is 1 */
+    uint8_t observed_disposition;   /* pass, exact expected-unsupported stop, or an exact protocol xfail */
+    uint16_t expect_stop_address;   /* the one address that stop must name for expected-unsupported */
 } fixture_case;
+enum { GBB_OBSERVED_PASS=0, GBB_OBSERVED_UNSUPPORTED=1, GBB_OBSERVED_FAILURE=2 };
 /* The parent and mbc rows predate the column: 0 selects the DMG profile. */
 static gbb_profile row_profile(const fixture_case *fc) { return fc->profile==0?GBB_RUNNER_PROFILE_DMG:fc->profile; }
 
@@ -100,18 +101,18 @@ static const fixture_case mbc_cases[] = {
 /* gbb:mbc-rows-end */
 };
 
-/* Phase 10 CGB-profile derivatives (D-26): the profile, and the stop an expected-unsupported row must
- * make, are columns of the row. One row per line, each starting with the id literal:
+/* Phase 10 CGB-profile derivatives (D-26): the profile and observed disposition are columns of the row.
+ * One row per line, each starting with the id literal:
  * cmake/VerifyMooneyeCgb.cmake pc-table mode parses these against fixtures/mooneye-cgb/manifest.json.
  * Assert-style ROMs (boot_regs-cgb, boot_div-cgbABCDE) end in one shared check_asserts_cb callback, so
  * their pass and fail callback PCs are the same, as for tim00; the ld b,b registers decide. PCs come from
  * the linker .sym (tests/scripts/reproduce-mooneye-cgb.sh --facts). */
 static const fixture_case cgb_cases[] = {
 /* gbb:cgb-rows-begin */
-    {"mooneye-misc-boot-regs-cgb", "boot_regs-cgb", "post-boot-registers", "boot_regs-cgb.gb", "77eb76b5448ff9e6bb885e789b0ce0a9113146bc3f0949f3655587968dae5c77", "86c4ab93428b849864409cd10bcfdb231d2dd066c200c2791af1faa6eeb23dd1", "misc/boot_regs-cgb.s", 0x4000, 0x4000, 0x4327, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(500000), 32768u, {0x4000, 0x01da}, 2, GBB_PROFILE_CGB_CPU_E, 0, 0x0000},
-    {"mooneye-misc-boot-div-cgbabcde", "boot_div-cgbABCDE", "post-boot-div", "boot_div-cgbABCDE.gb", "7887a53a1b308c4f35c4e1e94a0ffb67397c6d213c034a706a7f92258ba93f90", "24b1be8fe190fe5c585b245203e95ab756fe7ff68e342d446395392ca8f9b822", "misc/boot_div-cgbABCDE.s", 0x4000, 0x4000, 0x4327, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(500000), 32768u, {0x4000}, 1, GBB_PROFILE_CGB_CPU_E, 0, 0x0000},
-    {"mooneye-misc-boot-hwio-c", "boot_hwio-C", "post-boot-hwio", "boot_hwio-C.gb", "267eb659c4995ad7fa38b7d442a6076a630cf88824fe2d16e5de5927c7a8b7a9", "d69232d9b71b4cfccc710f6693363a7b5b627f0bf0bb7333997cdee19cfa8b86", "misc/boot_hwio-C.s", 0x01ce, 0x01f5, 0x4067, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(2000000), 32768u, {0x01f5}, 1, GBB_PROFILE_CGB_CPU_E, 1, 0xFF76},
-    {"mooneye-misc-unused-hwio-c", "unused_hwio-C", "unused-hwio", "unused_hwio-C.gb", "a44d65497bbec81ec1ba51a06ad1177b2193f6ca1e829a9cb2307dea8ab4cc27", "7ab9e7ccbefe0740f55b7f6172a8780e8c67632f979365bc8381f5bf65e7929b", "misc/bits/unused_hwio-C.s", 0x1a02, 0x1a31, 0x4070, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(2000000), 32768u, {0x1a31}, 1, GBB_PROFILE_CGB_CPU_E, 1, 0xFF76}
+    {"mooneye-misc-boot-regs-cgb", "boot_regs-cgb", "post-boot-registers", "boot_regs-cgb.gb", "77eb76b5448ff9e6bb885e789b0ce0a9113146bc3f0949f3655587968dae5c77", "86c4ab93428b849864409cd10bcfdb231d2dd066c200c2791af1faa6eeb23dd1", "misc/boot_regs-cgb.s", 0x4000, 0x4000, 0x4327, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(500000), 32768u, {0x4000, 0x01da}, 2, GBB_PROFILE_CGB_CPU_E, GBB_OBSERVED_PASS, 0x0000},
+    {"mooneye-misc-boot-div-cgbabcde", "boot_div-cgbABCDE", "post-boot-div", "boot_div-cgbABCDE.gb", "7887a53a1b308c4f35c4e1e94a0ffb67397c6d213c034a706a7f92258ba93f90", "24b1be8fe190fe5c585b245203e95ab756fe7ff68e342d446395392ca8f9b822", "misc/boot_div-cgbABCDE.s", 0x4000, 0x4000, 0x4327, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(500000), 32768u, {0x4000}, 1, GBB_PROFILE_CGB_CPU_E, GBB_OBSERVED_PASS, 0x0000},
+    {"mooneye-misc-boot-hwio-c", "boot_hwio-C", "post-boot-hwio", "boot_hwio-C.gb", "267eb659c4995ad7fa38b7d442a6076a630cf88824fe2d16e5de5927c7a8b7a9", "d69232d9b71b4cfccc710f6693363a7b5b627f0bf0bb7333997cdee19cfa8b86", "misc/boot_hwio-C.s", 0x01ce, 0x01f5, 0x4067, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(2000000), 32768u, {0x01f5}, 1, GBB_PROFILE_CGB_CPU_E, GBB_OBSERVED_FAILURE, 0x0000},
+    {"mooneye-misc-unused-hwio-c", "unused_hwio-C", "unused-hwio", "unused_hwio-C.gb", "a44d65497bbec81ec1ba51a06ad1177b2193f6ca1e829a9cb2307dea8ab4cc27", "7ab9e7ccbefe0740f55b7f6172a8780e8c67632f979365bc8381f5bf65e7929b", "misc/bits/unused_hwio-C.s", 0x1a02, 0x1a31, 0x4070, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(2000000), 32768u, {0x1a31}, 1, GBB_PROFILE_CGB_CPU_E, GBB_OBSERVED_FAILURE, 0x0000}
 /* gbb:cgb-rows-end */
 };
 
@@ -294,17 +295,28 @@ static const char *expect_stop_status(const fixture_case *fc,const char *run_sta
     if(stop->address!=fc->expect_stop_address){*reason="wrong-stop-address";return "fail";}
     return "expected-unsupported";
 }
-/* One row's final status and exit code. A row without expect_stop keeps the original mapping (pass 0,
- * fail 1, anything else 3); a row with expect_stop is judged by expect_stop_status (met 0, else 1). */
-static int row_outcome(const fixture_case *fc,const char *run_status,const stop_evidence *stop,const char **status_out,const char **reason_out) {
-    if(fc->expect_stop){
+/* One row's final status and exit code. An expected-failure disposition succeeds only for the exact
+ * Mooneye fail callback/register/result signature carried by this compiled row; it remains visible as xfail. */
+static int row_outcome(const fixture_case *fc,const char *run_status,const protocol_evidence *evidence,
+                       const stop_evidence *stop,const char **status_out,const char **reason_out) {
+    if(fc->observed_disposition==GBB_OBSERVED_UNSUPPORTED){
         *status_out=expect_stop_status(fc,run_status,stop,reason_out);
         return strcmp(*status_out,"expected-unsupported")==0?0:1;
+    }
+    if(fc->observed_disposition==GBB_OBSERVED_FAILURE){
+        int declared_callback=0;
+        for(uint8_t i=0;i<fc->fail_callback_count;i++)if(evidence->callback_pc==fc->fail_callback_pcs[i])declared_callback=1;
+        if(strcmp(run_status,"fail")==0&&evidence->reached_result&&evidence->result_pc==fc->result_pc&&
+           evidence->callback_result!=NULL&&strcmp(evidence->callback_result,"fail")==0&&declared_callback){
+            *status_out="xfail";*reason_out="declared-failure-signature";return 0;
+        }
+        if(strcmp(run_status,"pass")==0){*status_out="unexpected-pass";*reason_out="author-pass-assertion-observed";return 1;}
+        *status_out="unexpected-failure";*reason_out=evidence->reason!=NULL?evidence->reason:"failure-signature-changed";return 1;
     }
     *status_out=run_status;*reason_out="none";
     return strcmp(run_status,"pass")==0?0:strcmp(run_status,"fail")==0?1:3;
 }
-typedef struct { size_t expected_total, expected_met; } suite_tally;
+typedef struct { size_t expected_total, expected_met, expected_failure_total, expected_failure_met; } suite_tally;
 /* --observe lines for one Mooneye case. They come from the same gbb_runner_capture_ldbb helper as the
  * frame-digest@ldbb case-file oracle, so both paths yield the same canonical digest. A breakpoint
  * reached before the first completed frame is the token not-ready, an observation and not an error. */
@@ -351,13 +363,22 @@ static int run_one(const suite_def *suite,const fixture_case *fc,const char *man
     free(rom);
     ++*executed;
     const char *final_status=status,*reason="none";
-    int code=row_outcome(fc,status,&stopped,&final_status,&reason);
-    if(fc->expect_stop) {
+    int code=row_outcome(fc,status,&evidence,&stopped,&final_status,&reason);
+    if(fc->observed_disposition==GBB_OBSERVED_UNSUPPORTED) {
         const char *expectation=final_status;
         tally->expected_total++;if(code==0)tally->expected_met++;
         if(receipt)printf("case=%s category=%s status=%s stop=%s address=%04x reason=%s expect_stop=unsupported-bus expect_address=%04x manifest_sha256=%s source_revision=%s source_tree=%s source_path=%s report_patch_sha256=%s original_rom_sha256=%s fixture_sha256=%s fixture_origin=derived-headless-report-closure upstream_assertions=unchanged core_revision=%s runner_revision=%s build_qualified=%s profile=%s boot=skipped protocol=mooneye-ld-b-b ticks=%llu budget=%llu eligible=%zu executed=%zu\n",
           fc->id,fc->category,expectation,stopped.unsupported_bus?"unsupported-bus":stop,stopped.unsupported_bus?stopped.address:0u,reason,fc->expect_stop_address,
           suite->manifest_sha256,MOONEYE_SOURCE_REVISION,MOONEYE_SOURCE_TREE,fc->source_path,suite->patch_sha256,fc->original_sha256,fc->sha256,GBB_BUILD_REVISION,GBB_BUILD_REVISION,GBB_BUILD_QUALIFIED?"true":"false",gbb_runner_profile_label(profile),(unsigned long long)ticks,(unsigned long long)fc->budget,eligible,*executed);
+        return code;
+    }
+    if(fc->observed_disposition==GBB_OBSERVED_FAILURE) {
+        tally->expected_failure_total++;if(code==0)tally->expected_failure_met++;
+        if(receipt)printf("case=%s category=%s author_expect=pass observed_disposition=expected-failure status=%s observed=%s reason=%s callback_result=%s callback_pc=%04x result_pc=%04x manifest_sha256=%s source_revision=%s source_tree=%s source_path=%s report_patch_sha256=%s original_rom_sha256=%s fixture_sha256=%s fixture_origin=derived-headless-report-closure upstream_assertions=unchanged core_revision=%s runner_revision=%s build_qualified=%s profile=%s boot=skipped protocol=mooneye-ld-b-b ticks=%llu budget=%llu eligible=%zu executed=%zu stop=%s\n",
+          fc->id,fc->category,final_status,status,reason,evidence.callback_result?evidence.callback_result:"none",evidence.callback_pc,evidence.result_pc,
+          suite->manifest_sha256,MOONEYE_SOURCE_REVISION,MOONEYE_SOURCE_TREE,fc->source_path,suite->patch_sha256,fc->original_sha256,fc->sha256,
+          GBB_BUILD_REVISION,GBB_BUILD_REVISION,GBB_BUILD_QUALIFIED?"true":"false",gbb_runner_profile_label(profile),
+          (unsigned long long)ticks,(unsigned long long)fc->budget,eligible,*executed,stop);
         return code;
     }
     if(receipt){
@@ -493,34 +514,37 @@ int main(int argc,char **argv) {
         return 4;
     }
     if(suite){
-        size_t category_pass[MAX_SUITE_CATEGORIES]={0},category_total[MAX_SUITE_CATEGORIES]={0},category_xu[MAX_SUITE_CATEGORIES]={0};
-        suite_tally tally={0,0};
+        size_t category_pass[MAX_SUITE_CATEGORIES]={0},category_total[MAX_SUITE_CATEGORIES]={0};
+        size_t category_xu[MAX_SUITE_CATEGORIES]={0},category_xfail[MAX_SUITE_CATEGORIES]={0};
+        suite_tally tally={0};
         if(selected_suite->category_count>MAX_SUITE_CATEGORIES){fprintf(stderr,"runner-error: too many suite categories\n");return 2;}
         for(size_t i=0;i<eligible;i++){
             const fixture_case *fc=&selected_suite->cases[i];
             int code=run_one(selected_suite,fc,manifest,receipt,options.observe,eligible,&executed,&tally);
             if(code!=0&&suite_code==0)suite_code=code;
-            for(size_t k=0;k<selected_suite->category_count;k++)if(strcmp(fc->category,selected_suite->categories[k])==0){category_total[k]++;if(code==0){if(fc->expect_stop)category_xu[k]++;else category_pass[k]++;}}
+            for(size_t k=0;k<selected_suite->category_count;k++)if(strcmp(fc->category,selected_suite->categories[k])==0){category_total[k]++;if(code==0){if(fc->observed_disposition==GBB_OBSERVED_UNSUPPORTED)category_xu[k]++;else if(fc->observed_disposition==GBB_OBSERVED_FAILURE)category_xfail[k]++;else category_pass[k]++;}}
         }
-        /* A suite that passes only because rows met a declared unsupported-bus stop says so in the headline. */
+        /* Keep expected failures and unsupported stops visible in the suite headline. */
         if(receipt){const int ok=suite_counts_valid(eligible,executed)&&suite_code==0;
-            printf("suite eligible=%zu executed=%zu status=%s\n",eligible,executed,!ok?"fail":tally.expected_met!=0?"pass-with-expected-unsupported":"pass");}
+            const char *suite_status=!ok?"fail":tally.expected_failure_met!=0?"pass-with-expected-failure":tally.expected_met!=0?"pass-with-expected-unsupported":"pass";
+            printf("suite eligible=%zu executed=%zu status=%s\n",eligible,executed,suite_status);}
         if(receipt&&selected_suite->category_count!=0){
             printf("suite categories");
-            /* name=P/T counts plain passes only. A row that met its declared unsupported-bus stop never reached its
-             * verdict, so it is reported as name.expected-unsupported=N and not as a pass (D-26). */
+            /* name=P/T counts only observed guest passes. Expected failures and unsupported stops have separate counts. */
             for(size_t k=0;k<selected_suite->category_count;k++){
                 printf(" %s=%zu/%zu",selected_suite->categories[k],category_pass[k],category_total[k]);
                 if(category_xu[k]!=0)printf(" %s.expected-unsupported=%zu",selected_suite->categories[k],category_xu[k]);
+                if(category_xfail[k]!=0)printf(" %s.expected-failure=%zu",selected_suite->categories[k],category_xfail[k]);
             }
             printf("\n");
         }
         /* Rows that met their declared unsupported-bus stop count as passing for the suite status; this line
          * states how many rows were staged that way so a reader cannot take them for plain passes. */
         if(receipt&&tally.expected_total!=0)printf("suite expected-unsupported=%zu/%zu\n",tally.expected_met,tally.expected_total);
+        if(receipt&&tally.expected_failure_total!=0)printf("suite expected-failure=%zu/%zu\n",tally.expected_failure_met,tally.expected_failure_total);
         return suite_counts_valid(eligible,executed)?suite_code:2;
     }
     const fixture_case *fc=select_case(selected_suite,selected);if(!fc){fprintf(stderr,"unknown-case: use --help for invocation forms\n");return 2;}
-    suite_tally single={0,0};
+    suite_tally single={0};
     return run_one(selected_suite,fc,manifest,receipt,options.observe,eligible,&executed,&single);
 }

@@ -102,9 +102,9 @@ static int run_type_mutation(const char *path) {
     return code;
 }
 
-/* D-26 expected-unsupported controls. The runner's compiled rows are gated by the manifest SHA, so a
- * tampered manifest never reaches them through the command line; this control therefore reads the row's
- * expectation from the tampered manifest copy itself and applies it to the compiled row. */
+/* The runner's compiled rows are gated by the manifest SHA, so a tampered manifest never reaches them
+ * through the command line; this control reads the disposition from the tampered copy and applies it to
+ * the compiled row to prove that a failing guest cannot be relabelled as passing. */
 static const fixture_case *cgb_case_by_alias(const char *alias) {
     for(size_t i=0;i<sizeof(cgb_cases)/sizeof(cgb_cases[0]);i++)
         if(strcmp(cgb_cases[i].alias,alias)==0)return &cgb_cases[i];
@@ -129,25 +129,26 @@ static int json_string_in(const char *from,const char *to,const char *key,char o
     }
     return 0;
 }
-/* The "expect" value of the fixture object whose alias is given, read from raw manifest JSON text. The object
+/* A string field of the fixture object whose alias is given, read from raw manifest JSON text. The object
  * is bounded by the braces around the alias (fixture objects hold no nested objects), so the key cannot come
  * from another row. */
-static int manifest_expect(const char *json,const char *alias,char out[32]) {
+static int manifest_fixture_string(const char *json,const char *alias,const char *key,char out[32]) {
     const char *fixtures=strstr(json,"\"fixtures\"");if(fixtures==NULL)return 0;
     for(const char *open=strchr(fixtures,'{');open!=NULL;open=strchr(open+1,'{')){
         const char *close=strchr(open,'}');if(close==NULL)return 0;
         char found[32];
-        if(json_string_in(open,close,"alias",found)&&strcmp(found,alias)==0)return json_string_in(open,close,"expect",out);
+        if(json_string_in(open,close,"alias",found)&&strcmp(found,alias)==0)return json_string_in(open,close,key,out);
     }
     return 0;
 }
-/* Apply a manifest expect value to a copy of the compiled row. */
-static int apply_manifest_expect(fixture_case *row,const char *expect) {
-    if(strcmp(expect,"pass")==0){row->expect_stop=0;return 1;}
-    if(strcmp(expect,"expected-unsupported")==0){row->expect_stop=1;return 1;}
+/* Apply the manifest's observed disposition while leaving its author expectation untouched. */
+static int apply_manifest_disposition(fixture_case *row,const char *disposition) {
+    if(strcmp(disposition,"pass")==0){row->observed_disposition=GBB_OBSERVED_PASS;return 1;}
+    if(strcmp(disposition,"expected-unsupported")==0){row->observed_disposition=GBB_OBSERVED_UNSUPPORTED;return 1;}
+    if(strcmp(disposition,"expected-failure")==0){row->observed_disposition=GBB_OBSERVED_FAILURE;return 1;}
     return 0;
 }
-static int run_cgb_row(const fixture_case *row,const char *dir,const char **status_out,const char **reason_out,int *code_out) {
+static int run_cgb_row(const fixture_case *row,const char *dir,const char **status_out,const char **reason_out,int *code_out,protocol_evidence *evidence_out) {
     char path[4096];
     if(snprintf(path,sizeof(path),"%s/%s",dir,row->rom)>=(int)sizeof(path))return 0;
     uint8_t *rom=malloc(row->size_bytes+1);if(rom==NULL)return 0;
@@ -157,58 +158,92 @@ static int run_cgb_row(const fixture_case *row,const char *dir,const char **stat
         protocol_evidence evidence;uint64_t ticks=0;size_t recent_count=0;const char *stop=NULL;stop_evidence stopped;
         gbb_diagnostic_record recent[RECENT_CAPACITY];
         const char *run=run_guest_stop(row_profile(row),row,rom,length,&evidence,&ticks,&stop,recent,&recent_count,&stopped);
-        *code_out=row_outcome(row,run,&stopped,status_out,reason_out);
+        if(evidence_out!=NULL)*evidence_out=evidence;
+        *code_out=row_outcome(row,run,&evidence,&stopped,status_out,reason_out);
     }
     free(rom);
     return loaded;
 }
-static int run_expected_unsupported_tamper(const char *tampered_manifest,const char *untampered_manifest,const char *dir) {
+static int run_expected_disposition_controls(const char *tampered_manifest,const char *untampered_manifest,const char *dir) {
     uint8_t *tampered=malloc(MAX_MANIFEST+1),*untampered=malloc(MAX_MANIFEST+1);
     REQUIRE(tampered!=NULL&&untampered!=NULL);
     size_t n=0,m=0;
     REQUIRE(read_bounded(tampered_manifest,tampered,MAX_MANIFEST,&n)&&read_bounded(untampered_manifest,untampered,MAX_MANIFEST,&m));
     tampered[n]=0;untampered[m]=0;
-    char tampered_expect[32],untampered_expect[32];
-    REQUIRE(manifest_expect((const char *)tampered,"boot_hwio-C",tampered_expect));
-    REQUIRE(manifest_expect((const char *)untampered,"boot_hwio-C",untampered_expect));
-    REQUIRE(strcmp(tampered_expect,"pass")==0);                       /* the tamper is really in the copy */
-    REQUIRE(strcmp(untampered_expect,"expected-unsupported")==0);
+    char tampered_expect[32],untampered_expect[32],tampered_disposition[32],untampered_disposition[32];
+    REQUIRE(manifest_fixture_string((const char *)tampered,"boot_hwio-C","expect",tampered_expect));
+    REQUIRE(manifest_fixture_string((const char *)untampered,"boot_hwio-C","expect",untampered_expect));
+    REQUIRE(manifest_fixture_string((const char *)tampered,"boot_hwio-C","observed_disposition",tampered_disposition));
+    REQUIRE(manifest_fixture_string((const char *)untampered,"boot_hwio-C","observed_disposition",untampered_disposition));
+    REQUIRE(strcmp(tampered_expect,"pass")==0&&strcmp(untampered_expect,"pass")==0); /* source assertion stays pass */
+    REQUIRE(strcmp(tampered_disposition,"pass")==0);                                  /* tamper is in the observation */
+    REQUIRE(strcmp(untampered_disposition,"expected-failure")==0);
     free(tampered);free(untampered);
     const fixture_case *compiled=cgb_case_by_alias("boot_hwio-C");REQUIRE(compiled!=NULL);
     const char *status=NULL,*reason=NULL;int code=-1;
+    protocol_evidence evidence;
 
-    /* Baseline: the committed expectation is met by the real stop at FF76. */
+    /* The raw guest verdict is fail at the source's exact fail callback and result assertion. */
     fixture_case row=*compiled;
-    REQUIRE(apply_manifest_expect(&row,untampered_expect));
-    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code));
-    REQUIRE(strcmp(status,"expected-unsupported")==0&&code==0);
+    row.observed_disposition=GBB_OBSERVED_PASS;
+    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code,&evidence));
+    REQUIRE(strcmp(status,"fail")==0&&code==1);
+    REQUIRE(evidence.reached_result&&evidence.result_pc==row.result_pc);
+    REQUIRE(evidence.callback_result!=NULL&&strcmp(evidence.callback_result,"fail")==0);
+    REQUIRE(evidence.callback_pc==row.fail_callback_pcs[0]);
+    printf("observed=fail alias=boot_hwio-C callback_result=%s callback_pc=%04x result_pc=%04x\n",evidence.callback_result,evidence.callback_pc,evidence.result_pc);
 
-    /* Control 1: the tampered manifest says boot_hwio-C must pass, so the stop on unbuilt hardware is a failure. */
+    const fixture_case *unused=cgb_case_by_alias("unused_hwio-C");REQUIRE(unused!=NULL);
+    row=*unused;row.observed_disposition=GBB_OBSERVED_PASS;
+    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code,&evidence));
+    REQUIRE(strcmp(status,"fail")==0&&code==1&&evidence.reached_result&&evidence.result_pc==row.result_pc);
+    REQUIRE(evidence.callback_result!=NULL&&strcmp(evidence.callback_result,"fail")==0);
+    REQUIRE(evidence.callback_pc==row.fail_callback_pcs[0]);
+    printf("observed=fail alias=unused_hwio-C callback_result=%s callback_pc=%04x result_pc=%04x\n",evidence.callback_result,evidence.callback_pc,evidence.result_pc);
+
+    /* The pinned exact signature may be reported as xfail, never as a guest pass. */
     row=*compiled;
-    REQUIRE(apply_manifest_expect(&row,tampered_expect));
-    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code));
-    REQUIRE(strcmp(status,"pass")!=0&&code!=0);
-    printf("control=expected-unsupported-tampered-to-pass alias=boot_hwio-C status=%s code=%d\n",status,code);
+    REQUIRE(apply_manifest_disposition(&row,untampered_disposition));
+    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code,&evidence));
+    REQUIRE(strcmp(status,"xfail")==0&&strcmp(reason,"declared-failure-signature")==0&&code==0);
+    printf("control=exact-failure-disposition alias=boot_hwio-C status=%s observed=fail callback_pc=%04x result_pc=%04x\n",status,evidence.callback_pc,evidence.result_pc);
+    row=*unused;row.observed_disposition=GBB_OBSERVED_FAILURE;
+    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code,&evidence));
+    REQUIRE(strcmp(status,"xfail")==0&&strcmp(reason,"declared-failure-signature")==0&&code==0);
+    printf("control=exact-failure-disposition alias=unused_hwio-C status=%s observed=fail callback_pc=%04x result_pc=%04x\n",status,evidence.callback_pc,evidence.result_pc);
 
-    /* Control 2: a stop at any address other than the declared one never satisfies the row. */
-    row=*compiled;row.expect_stop_address=0xFF77u;
-    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code));
-    REQUIRE(strcmp(status,"fail")==0&&strcmp(reason,"wrong-stop-address")==0&&code==1);
-    printf("control=expected-unsupported-wrong-address alias=boot_hwio-C status=%s reason=%s code=%d\n",status,reason,code);
+    /* A changed observed disposition that claims pass still fails on the real failing guest. */
+    row=*compiled;
+    REQUIRE(apply_manifest_disposition(&row,tampered_disposition));
+    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code,&evidence));
+    REQUIRE(strcmp(status,"fail")==0&&code==1&&strcmp(evidence.callback_result,"fail")==0);
+    printf("control=xfail-tampered-to-pass alias=boot_hwio-C author_expect=pass status=%s observed=fail code=%d\n",status,code);
 
-    /* Control 3: a ROM that passes is never an expected-unsupported row, whatever its declared stop. */
+    /* Reclassifying the same terminal protocol result as an old FF76 stop remains a failure. */
+    row=*compiled;row.observed_disposition=GBB_OBSERVED_UNSUPPORTED;row.expect_stop_address=0xFF76u;
+    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code,&evidence));
+    REQUIRE(strcmp(status,"fail")==0&&strcmp(reason,"no-unsupported-bus-stop")==0&&code==1);
+    printf("control=stale-unsupported-disposition alias=boot_hwio-C status=%s reason=%s code=%d\n",status,reason,code);
+
+    /* A changed failure callback invalidates the exact xfail signature. */
+    row=*compiled;row.fail_callback_pcs[0]++;
+    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code,&evidence));
+    REQUIRE(strcmp(status,"unexpected-failure")==0&&code==1);
+    printf("control=expected-failure-wrong-callback alias=boot_hwio-C status=%s reason=%s code=%d\n",status,reason,code);
+
+    /* A passing ROM cannot be called an expected failure. */
     const fixture_case *passing=cgb_case_by_alias("boot_regs-cgb");REQUIRE(passing!=NULL);
-    row=*passing;row.expect_stop=1;row.expect_stop_address=0xFF76u;
-    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code));
+    row=*passing;row.observed_disposition=GBB_OBSERVED_FAILURE;
+    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code,&evidence));
     REQUIRE(strcmp(status,"unexpected-pass")==0&&code==1);
-    printf("control=expected-unsupported-pass-is-failure alias=boot_regs-cgb status=%s code=%d\n",status,code);
+    printf("control=expected-failure-pass-is-failure alias=boot_regs-cgb status=%s code=%d\n",status,code);
     return 0;
 }
 
 int main(int argc, char **argv) {
     if (argc < 2) return 2;
-    if (strcmp(argv[1],"cgb_mooneye_expected_unsupported_tamper")==0)
-        return argc==5?run_expected_unsupported_tamper(argv[2],argv[3],argv[4]):2;
+    if (strcmp(argv[1],"cgb_mooneye_expected_disposition_controls")==0)
+        return argc==5?run_expected_disposition_controls(argv[2],argv[3],argv[4]):2;
     if (strcmp(argv[1],"runner_guest_failure")==0)
         return argc==3?run_induced_guest_failure(argv[2]):2;
     if (strcmp(argv[1],"mooneye_mbc_type_mutation")==0)

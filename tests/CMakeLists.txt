@@ -1199,15 +1199,15 @@ add_test(NAME runner_guest_failure
 add_test(NAME mooneye_mbc_type_mutation
   COMMAND test_runner mooneye_mbc_type_mutation ${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/mbc5_rom_512kb.gb)
 set_tests_properties(mooneye_mbc_type_mutation PROPERTIES TIMEOUT 30)
-# D-26: an expected-unsupported row is met only by a stop at the declared address; a tampered "pass" expectation,
-# a wrong address and a passing ROM are all failing statuses (the configure-time copy is made below).
-add_test(NAME cgb_mooneye_expected_unsupported_tamper
-  COMMAND test_runner cgb_mooneye_expected_unsupported_tamper
+# Phase 14: the author pass assertion remains separate from the exact current software xfail; a tampered pass
+# disposition, changed fail callback, stale unsupported stop and passing guest all remain failing controls.
+add_test(NAME cgb_mooneye_expected_disposition_controls
+  COMMAND test_runner cgb_mooneye_expected_disposition_controls
     ${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/expect/manifest.json
     ${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json
     ${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb)
-set_tests_properties(cgb_mooneye_expected_unsupported_tamper PROPERTIES TIMEOUT 30
-  PASS_REGULAR_EXPRESSION "control=expected-unsupported-tampered-to-pass.*control=expected-unsupported-wrong-address.*control=expected-unsupported-pass-is-failure")
+set_tests_properties(cgb_mooneye_expected_disposition_controls PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "observed=fail alias=boot_hwio-C callback_result=fail callback_pc=01f5 result_pc=4067.*observed=fail alias=unused_hwio-C callback_result=fail callback_pc=1a31 result_pc=4070.*control=exact-failure-disposition alias=boot_hwio-C.*control=exact-failure-disposition alias=unused_hwio-C.*control=xfail-tampered-to-pass.*control=stale-unsupported-disposition.*control=expected-failure-wrong-callback.*control=expected-failure-pass-is-failure")
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/runner-missing-fixture")
 configure_file("${PROJECT_SOURCE_DIR}/fixtures/mooneye/manifest.json"
   "${PROJECT_BINARY_DIR}/runner-missing-fixture/manifest.json" COPYONLY)
@@ -1302,19 +1302,19 @@ add_test(NAME cgb_mooneye_case_boot_div-cgbABCDE
 set_tests_properties(cgb_mooneye_case_boot_div-cgbABCDE PROPERTIES TIMEOUT 30
   PASS_REGULAR_EXPRESSION "status=pass.*profile=CGB-CPU-E.*callback_result=pass callback_pc=4000 result_pc=4327"
   FAIL_REGULAR_EXPRESSION "DMG-CPU-B")
-# The two staged ROMs stop on the unbuilt FF76 register: the status is expected-unsupported (never pass),
-# the stop reason and address are named, and the run exits 0 only on that exact stop.
+# These rows retain the upstream pass assertion. The current software observation is a fail at the exact
+# listed fail callback and LD B,B result; the runner reports status=xfail, never status=pass.
 foreach(alias boot_hwio-C unused_hwio-C)
   add_test(NAME cgb_mooneye_case_${alias}
     COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --case ${alias} --receipt)
   set_tests_properties(cgb_mooneye_case_${alias} PROPERTIES TIMEOUT 30
-    PASS_REGULAR_EXPRESSION "status=expected-unsupported stop=unsupported-bus address=ff76.*profile=CGB-CPU-E"
-    FAIL_REGULAR_EXPRESSION "DMG-CPU-B|status=pass|status=unexpected-pass|status=fail")
+    PASS_REGULAR_EXPRESSION "author_expect=pass observed_disposition=expected-failure status=xfail observed=fail reason=declared-failure-signature callback_result=fail callback_pc=(01f5|1a31) result_pc=(4067|4070).*profile=CGB-CPU-E"
+    FAIL_REGULAR_EXPRESSION "DMG-CPU-B|status=pass|status=unexpected-pass|status=unexpected-failure")
 endforeach()
 add_test(NAME cgb_mooneye_required_suite
   COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --suite --receipt)
 set_tests_properties(cgb_mooneye_required_suite PROPERTIES TIMEOUT 30
-  PASS_REGULAR_EXPRESSION "suite eligible=4 executed=4 status=pass-with-expected-unsupported.*suite categories post-boot-registers=1/1 post-boot-div=1/1 post-boot-hwio=0/1 post-boot-hwio.expected-unsupported=1 unused-hwio=0/1 unused-hwio.expected-unsupported=1.*expected-unsupported=2/2"
+  PASS_REGULAR_EXPRESSION "suite eligible=4 executed=4 status=pass-with-expected-failure.*suite categories post-boot-registers=1/1 post-boot-div=1/1 post-boot-hwio=0/1 post-boot-hwio.expected-failure=1 unused-hwio=0/1 unused-hwio.expected-failure=1.*expected-failure=2/2"
   FAIL_REGULAR_EXPRESSION "DMG-CPU-B|post-boot-hwio=1/1|unused-hwio=1/1")
 # D-25 / D-05: --observe prints the not-applicable token for a CGB row and no DMG-labelled line.
 add_test(NAME cgb_mooneye_observe_not_applicable
@@ -1345,7 +1345,7 @@ add_test(NAME cgb_mooneye_unknown_manifest
 # Negative control: a configure-time copy of the manifest whose boot_hwio-C row says "pass". The raw-SHA gate
 # would reject it on the command line, so test_runner reads the row expectation from the copy itself.
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/expect")
-string(JSON GBB_CGB_EXPECT_TAMPERED SET "${GBB_CGB_MANIFEST_JSON}" fixtures 2 expect "\"pass\"")
+string(JSON GBB_CGB_EXPECT_TAMPERED SET "${GBB_CGB_MANIFEST_JSON}" fixtures 2 observed_disposition "\"pass\"")
 file(WRITE "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/expect/manifest.json" "${GBB_CGB_EXPECT_TAMPERED}")
 set(GBB_TEST_SANITIZER_LINK_OPTIONS "")
 if(GABBABOY_ENABLE_SANITIZERS)
