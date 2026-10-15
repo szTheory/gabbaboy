@@ -31,11 +31,15 @@ outside_repo() {
 }
 
 # alias = file stem of the committed ROM; the source path is inside the pinned Mooneye tree.
-roms=(boot_regs-cgb boot_div-cgbABCDE boot_hwio-C unused_hwio-C daa)
+roms=(boot_regs-cgb boot_div-cgbABCDE boot_hwio-C unused_hwio-C daa div_write tim00 tim00_div_trigger vblank_stat_intr-C)
 source_of() {
   case "$1" in
     unused_hwio-C) printf 'misc/bits/%s.s' "$1" ;;
     daa) printf 'acceptance/instr/daa.s' ;;
+    div_write) printf 'acceptance/timer/div_write.s' ;;
+    tim00) printf 'acceptance/timer/tim00.s' ;;
+    tim00_div_trigger) printf 'acceptance/timer/tim00_div_trigger.s' ;;
+    vblank_stat_intr-C) printf 'misc/ppu/vblank_stat_intr-C.s' ;;
     *) printf 'misc/%s.s' "$1" ;;
   esac
 }

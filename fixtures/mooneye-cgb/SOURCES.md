@@ -1,6 +1,6 @@
 # Mooneye CGB-profile derivative fixture sources
 
-These ROMs extend the Phase 10 sibling of the frozen `fixtures/mooneye` set and of `fixtures/mooneye-mbc` (D-26) with the first Phase 14 selected candidate. They are built from the same pinned Mooneye revision with the same headless-report patch and zero font, referenced by relative path and SHA-256 from the parent fixture rather than copied.
+These ROMs extend the Phase 10 sibling of the frozen `fixtures/mooneye` set and of `fixtures/mooneye-mbc` (D-26) with the five Phase 14 selected additions. They are built from the same pinned Mooneye revision with the same headless-report patch and zero font, referenced by relative path and SHA-256 from the parent fixture rather than copied.
 
 ## Upstream files (Mooneye Test Suite commit `31510e12eea6286d36eea060a6adde755e1067aa`)
 
@@ -11,19 +11,23 @@ These ROMs extend the Phase 10 sibling of the frozen `fixtures/mooneye` set and 
 | `boot_hwio-C.gb` | `misc/boot_hwio-C.s` | pass: CGB, AGB, AGS |
 | `unused_hwio-C.gb` | `misc/bits/unused_hwio-C.s` | pass: CGB, AGB, AGS |
 | `daa.gb` | `acceptance/instr/daa.s` | pass: CGB |
+| `div_write.gb` | `acceptance/timer/div_write.s` | pass: DMG, MGB, SGB, SGB2, CGB, AGB, AGS |
+| `tim00.gb` | `acceptance/timer/tim00.s` | pass: DMG, MGB, SGB, SGB2, CGB, AGB, AGS |
+| `tim00_div_trigger.gb` | `acceptance/timer/tim00_div_trigger.s` | pass: DMG, MGB, SGB, SGB2, CGB, AGB, AGS |
+| `vblank_stat_intr-C.gb` | `misc/ppu/vblank_stat_intr-C.s` | pass: CGB, AGB, AGS |
 
-Note the `misc/bits/` subpath of `unused_hwio-C`. None of the five defines `CART_CGB`, so `common.s` links the DMG-compatible header and `$143` is `0x00` (CGB-profile compat mode). The reproduction script asserts bit 7 of `$143` is clear for every ROM and prints the byte.
+Note the `misc/bits/` subpath of `unused_hwio-C`. None of the nine defines `CART_CGB`, so `common.s` links the DMG-compatible header and `$143` is `0x00` (CGB-profile compat mode). The reproduction script asserts bit 7 of `$143` is clear for every ROM and prints the byte.
 
 ## Immutable inputs and builder
 
 - Mooneye Test Suite: commit `31510e12eea6286d36eea060a6adde755e1067aa`, tree `2b8c52424a49a2a7466cf631fd8992c53d0de2fa`. The source declares MIT; the notice is retained in `LICENSE.txt`.
 - WLA-DX builder pin: commit `91c52b1f4ef3cc8ba3c0638f7536539579af6a9f`, built from source (wla-gb 10.7, wlalink 5.22). It is not copied into this directory; `manifest.json` carries no `builder` object and the pin (revision, tree and `git archive` digest) is read from the digest-checked parent manifest `../mooneye/manifest.json`. The GPL-2.0-or-later license covers the build tool only, which is not linked into the fixtures.
 - Parent references, each a real repository file with a SHA-256:
-  - `../mooneye/headless-report.patch`: `c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d` (applied with `patch --batch --fuzz=0 -p1`; it applies to all five sources without a reject)
+  - `../mooneye/headless-report.patch`: `c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d` (applied with `patch --batch --fuzz=0 -p1`; it applies to all nine sources without a reject)
   - `../mooneye/font-source.c`: `5e5b21a1ff66f226e0e3d3ea1630ad4e2d16edbc9fcbb76b70a26b44c2271f52` (emits the 2032-byte zero replacement for `common/font.bin`, digest `23ba65cb93433b65e7ddcae5f8a7dd2ca232491793848644e625875c6dd6ae43`)
   - `../mooneye/manifest.json`: `98a1799b8be9c022ac13467a552890fb12bdd706017e42e12c944ec618d60527` (builder pin)
 - No sibling patch exists; the parent patch is used unchanged.
-- The ROMs link with `wlalink -nS -d -S` (input-order sections), exactly as the parent derivatives do. The new DAA derivative is 32,768 bytes, SHA-256 `3a39eda77a09b817e4e38004a3d117990565fb797e8a4f470920f1b7608f0a08`; its unpatched upstream-font build has SHA-256 `7ce07c2d88b721d5cf2f4597f687622357f41c580ef5cd8e70a66038421394d8`. It retains the author's CGB pass assertion and executes on the bootless CGB-CPU-E profile in compat mode.
+- The ROMs link with `wlalink -nS -d -S` (input-order sections), exactly as the parent derivatives do. The five new derivatives each have a 32,768-byte output digest and an unpatched upstream-font digest recorded in `manifest.json`. They retain their source-header applicability and execute on the bootless CGB-CPU-E profile in compat mode.
 - `original_sha256` in the manifest is the digest of the same source assembled without the patch and with the upstream font. The reproduction script recomputes it; the unpatched ROMs and the upstream font are never committed.
 
 ## Derivation steps

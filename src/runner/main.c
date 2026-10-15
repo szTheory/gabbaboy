@@ -30,7 +30,7 @@
 /* Sibling mbc2/mbc5 suite (Phase 8): admitted by the SHA-256 of its raw manifest bytes, like the parent. */
 #define MOONEYE_MBC_MANIFEST_SHA256 "9800c795fcf033abd6bda2e171af6c22d27e745f2b5946fc49bd0f9ce2fb5801"
 /* CGB-profile suite: admitted by the SHA-256 of its raw manifest bytes, like the others. */
-#define MOONEYE_CGB_MANIFEST_SHA256 "023bfd1ce4c49c7721f7d8934c711f2610928a428b147c045c8fc68c26b84649"
+#define MOONEYE_CGB_MANIFEST_SHA256 "6efe380d1eae6f2ef1cfc17375d7e71610c9135fdeb67a1452ecf72b26e02fe9"
 
 typedef struct {
     const char *id;
@@ -113,7 +113,11 @@ static const fixture_case cgb_cases[] = {
     {"mooneye-misc-boot-div-cgbabcde", "boot_div-cgbABCDE", "post-boot-div", "boot_div-cgbABCDE.gb", "7887a53a1b308c4f35c4e1e94a0ffb67397c6d213c034a706a7f92258ba93f90", "24b1be8fe190fe5c585b245203e95ab756fe7ff68e342d446395392ca8f9b822", "misc/boot_div-cgbABCDE.s", 0x4000, 0x4000, 0x4327, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(500000), 32768u, {0x4000}, 1, GBB_PROFILE_CGB_CPU_E, GBB_OBSERVED_PASS, 0x0000},
     {"mooneye-misc-boot-hwio-c", "boot_hwio-C", "post-boot-hwio", "boot_hwio-C.gb", "267eb659c4995ad7fa38b7d442a6076a630cf88824fe2d16e5de5927c7a8b7a9", "d69232d9b71b4cfccc710f6693363a7b5b627f0bf0bb7333997cdee19cfa8b86", "misc/boot_hwio-C.s", 0x01ce, 0x01f5, 0x4067, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(2000000), 32768u, {0x01f5}, 1, GBB_PROFILE_CGB_CPU_E, GBB_OBSERVED_FAILURE, 0x0000},
     {"mooneye-misc-unused-hwio-c", "unused_hwio-C", "unused-hwio", "unused_hwio-C.gb", "a44d65497bbec81ec1ba51a06ad1177b2193f6ca1e829a9cb2307dea8ab4cc27", "7ab9e7ccbefe0740f55b7f6172a8780e8c67632f979365bc8381f5bf65e7929b", "misc/bits/unused_hwio-C.s", 0x1a02, 0x1a31, 0x4070, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(2000000), 32768u, {0x1a31}, 1, GBB_PROFILE_CGB_CPU_E, GBB_OBSERVED_FAILURE, 0x0000},
-    {"mooneye-acceptance-instr-daa", "daa", "instruction", "daa.gb", "3a39eda77a09b817e4e38004a3d117990565fb797e8a4f470920f1b7608f0a08", "7ce07c2d88b721d5cf2f4597f687622357f41c580ef5cd8e70a66038421394d8", "acceptance/instr/daa.s", 0x0166, 0x01b3, 0x409a, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(2000000), 32768u, {0x01b3}, 1, GBB_PROFILE_CGB_CPU_E, GBB_OBSERVED_PASS, 0x0000}
+    {"mooneye-acceptance-instr-daa", "daa", "instruction", "daa.gb", "3a39eda77a09b817e4e38004a3d117990565fb797e8a4f470920f1b7608f0a08", "7ce07c2d88b721d5cf2f4597f687622357f41c580ef5cd8e70a66038421394d8", "acceptance/instr/daa.s", 0x0166, 0x01b3, 0x409a, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(2000000), 32768u, {0x01b3}, 1, GBB_PROFILE_CGB_CPU_E, GBB_OBSERVED_PASS, 0x0000},
+    {"mooneye-acceptance-timer-div-write", "div_write", "timer", "div_write.gb", "85ece79e4a058db84465e0274276cf46b7906ffd4827c6b52b3f5e2e01798c6c", "19530b299baff6adfe0e8ee72de1e2bd1ed0d9e536376b1f46a2b9c506cb1bfc", "acceptance/timer/div_write.s", 0x0175, 0x018d, 0x4051, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(6000000), 32768u, {0x018d}, 1, GBB_PROFILE_CGB_CPU_E, GBB_OBSERVED_PASS, 0x0000},
+    {"mooneye-acceptance-timer-tim00", "tim00", "timer", "tim00.gb", "476b2332de3f2d6604f8e1478daa8cbc7c59c89c50837fd47cc95e96e784d4f7", "06f1a981bf77edc37ab2c1b14eca78db28aeef1778c420561133502fe973c8c0", "acceptance/timer/tim00.s", 0x4000, 0x4000, 0x4327, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(200000), 32768u, {0x4000}, 1, GBB_PROFILE_CGB_CPU_E, GBB_OBSERVED_PASS, 0x0000},
+    {"mooneye-acceptance-timer-tim00-div-trigger", "tim00_div_trigger", "timer", "tim00_div_trigger.gb", "566da853858061c69866c47cc31b85b1fef003d4c088c8e8dbb26973da9944da", "56e657fd0afd458f6f9081e463b8d523f603a92feadf2e177a35aecdc6890249", "acceptance/timer/tim00_div_trigger.s", 0x4000, 0x4000, 0x4327, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(200000), 32768u, {0x4000}, 1, GBB_PROFILE_CGB_CPU_E, GBB_OBSERVED_PASS, 0x0000},
+    {"mooneye-misc-ppu-vblank-stat-intr-c", "vblank_stat_intr-C", "ppu", "vblank_stat_intr-C.gb", "0f030fb1dd70e9b3912b8f58512512748c9be99f03c35826433c9506767c7d13", "f4727575f9f58881c36e4e8ca8f3e5ae0644b45246be5a0186f794b7e6a8ab5b", "misc/ppu/vblank_stat_intr-C.s", 0x4000, 0x4000, 0x4327, {3, 5, 8, 13, 21, 34}, {0x42, 0x42, 0x42, 0x42, 0x42, 0x42}, UINT64_C(2000000), 32768u, {0x4000, 0x0173}, 2, GBB_PROFILE_CGB_CPU_E, GBB_OBSERVED_FAILURE, 0x0000}
 /* gbb:cgb-rows-end */
 };
 
@@ -127,13 +131,13 @@ typedef struct {
     size_t category_count;
 } suite_def;
 static const char *const mbc_categories[] = {"mbc2", "mbc5"};
-static const char *const cgb_categories[] = {"post-boot-registers", "post-boot-div", "post-boot-hwio", "unused-hwio", "instruction"};
+static const char *const cgb_categories[] = {"post-boot-registers", "post-boot-div", "post-boot-hwio", "unused-hwio", "instruction", "timer", "ppu"};
 
 /* The runner admits a suite only by the exact SHA-256 of its manifest bytes (D-28). */
 static const suite_def suites[] = {
     {MOONEYE_MANIFEST_SHA256, MOONEYE_PATCH_SHA256, cases, sizeof(cases)/sizeof(cases[0]), NULL, 0},
     {MOONEYE_MBC_MANIFEST_SHA256, MOONEYE_PATCH_SHA256, mbc_cases, sizeof(mbc_cases)/sizeof(mbc_cases[0]), mbc_categories, 2},
-    {MOONEYE_CGB_MANIFEST_SHA256, MOONEYE_PATCH_SHA256, cgb_cases, sizeof(cgb_cases)/sizeof(cgb_cases[0]), cgb_categories, 5}
+    {MOONEYE_CGB_MANIFEST_SHA256, MOONEYE_PATCH_SHA256, cgb_cases, sizeof(cgb_cases)/sizeof(cgb_cases[0]), cgb_categories, 7}
 };
 
 static int read_bounded(const char *path, uint8_t *buffer, size_t capacity, size_t *length) {
@@ -181,7 +185,7 @@ static const char *load_case_rom(const fixture_case *fc,const char *manifest,uin
 static const char *unsupported_core_stop(gbb_stop_reason reason) {
     if(reason==GBB_STOP_UNSUPPORTED_BUS||reason==GBB_STOP_UNSUPPORTED_OPCODE||
        reason==GBB_STOP_LOCKUP||reason==GBB_STOP_INVALID_STATE||reason==GBB_STOP_STOPPED||
-       reason==GBB_STOP_HALTED_IDLE||reason==GBB_STOP_NO_PROGRESS)return "unsupported";
+       reason==GBB_STOP_NO_PROGRESS)return "unsupported";
     return NULL;
 }
 static const char *budget_status(uint64_t ticks,uint64_t budget) {

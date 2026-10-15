@@ -36,9 +36,13 @@
     "boot_div-cgbABCDE.gb",
     "boot_hwio-C.gb",
     "unused_hwio-C.gb",
-    "daa.gb"
+    "daa.gb",
+    "div_write.gb",
+    "tim00.gb",
+    "tim00_div_trigger.gb",
+    "vblank_stat_intr-C.gb"
   ],
-  "evidence_class": "Author-attested Mooneye hardware expectations as stated in each source header, executed here on the CGB-CPU-E profile in compat mode (header $143 bit 7 clear). boot_div-cgbABCDE claims CGB A-E only. No CGB-E-alone claim, no AGB claim, never game compatibility. The two HWIO rows retain author_expect=pass and currently have exact software-model expected-failure dispositions.",
+  "evidence_class": "Author-attested Mooneye hardware expectations as stated in each source header, executed here on the CGB-CPU-E profile in compat mode (header $143 bit 7 clear). boot_div-cgbABCDE claims CGB A-E only. No CGB-E-alone claim, no AGB claim, never game compatibility. The two HWIO rows and vblank_stat_intr-C retain author_expect=pass and currently have exact software-model expected-failure dispositions.",
   "fixtures": [
     {
       "id": "mooneye-misc-boot-regs-cgb",
@@ -217,6 +221,151 @@
         "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
         "apply the parent headless report patch ../mooneye/headless-report.patch (SHA-256 c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d) with patch --batch --fuzz=0 -p1",
         "assemble acceptance/instr/daa.s with wla-gb -I common using the WLA-DX revision pinned by ../mooneye/manifest.json",
+        "link with wlalink -nS -d -S; -nS preserves source section order",
+        "reproduce with tests/scripts/reproduce-mooneye-cgb.sh --compare fixtures/mooneye-cgb"
+      ]
+    },
+    {
+      "id": "mooneye-acceptance-timer-div-write",
+      "alias": "div_write",
+      "category": "timer",
+      "eligible": true,
+      "source_path": "acceptance/timer/div_write.s",
+      "rom": "div_write.gb",
+      "size_bytes": 32768,
+      "sha256": "85ece79e4a058db84465e0274276cf46b7906ffd4827c6b52b3f5e2e01798c6c",
+      "original_sha256": "19530b299baff6adfe0e8ee72de1e2bd1ed0d9e536376b1f46a2b9c506cb1bfc",
+      "license": "MIT; see LICENSE.txt",
+      "asset_notice": "FONT-LICENSE.txt",
+      "model_pass": [
+        "cgb-cpu-e"
+      ],
+      "target_revision": "CGB",
+      "cart_header_143": "0x00",
+      "mode": "compat (header $143 bit 7 clear)",
+      "result_pc": "0x4051",
+      "pass_callback_pc": "0x0175",
+      "fail_callback_pcs": [
+        "0x018d"
+      ],
+      "budget_half_dots": 6000000,
+      "expect": "pass",
+      "observed_disposition": "pass",
+      "note": "Mooneye source header: pass on CGB. The source is exercised on the CGB-CPU-E software profile in compat mode; this is not physical-hardware qualification.",
+      "build_recipe": [
+        "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
+        "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
+        "apply the parent headless report patch ../mooneye/headless-report.patch (SHA-256 c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d) with patch --batch --fuzz=0 -p1",
+        "assemble acceptance/timer/div_write.s with wla-gb -I common using the WLA-DX revision pinned by ../mooneye/manifest.json",
+        "link with wlalink -nS -d -S; -nS preserves source section order",
+        "reproduce with tests/scripts/reproduce-mooneye-cgb.sh --compare fixtures/mooneye-cgb"
+      ]
+    },
+    {
+      "id": "mooneye-acceptance-timer-tim00",
+      "alias": "tim00",
+      "category": "timer",
+      "eligible": true,
+      "source_path": "acceptance/timer/tim00.s",
+      "rom": "tim00.gb",
+      "size_bytes": 32768,
+      "sha256": "476b2332de3f2d6604f8e1478daa8cbc7c59c89c50837fd47cc95e96e784d4f7",
+      "original_sha256": "06f1a981bf77edc37ab2c1b14eca78db28aeef1778c420561133502fe973c8c0",
+      "license": "MIT; see LICENSE.txt",
+      "asset_notice": "FONT-LICENSE.txt",
+      "model_pass": [
+        "cgb-cpu-e"
+      ],
+      "target_revision": "CGB",
+      "cart_header_143": "0x00",
+      "mode": "compat (header $143 bit 7 clear)",
+      "result_pc": "0x4327",
+      "pass_callback_pc": "0x4000",
+      "fail_callback_pcs": [
+        "0x4000"
+      ],
+      "budget_half_dots": 200000,
+      "expect": "pass",
+      "observed_disposition": "pass",
+      "note": "Mooneye source header: pass on CGB. The source is exercised on the CGB-CPU-E software profile in compat mode; this is not physical-hardware qualification.",
+      "build_recipe": [
+        "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
+        "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
+        "apply the parent headless report patch ../mooneye/headless-report.patch (SHA-256 c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d) with patch --batch --fuzz=0 -p1",
+        "assemble acceptance/timer/tim00.s with wla-gb -I common using the WLA-DX revision pinned by ../mooneye/manifest.json",
+        "link with wlalink -nS -d -S; -nS preserves source section order",
+        "reproduce with tests/scripts/reproduce-mooneye-cgb.sh --compare fixtures/mooneye-cgb"
+      ]
+    },
+    {
+      "id": "mooneye-acceptance-timer-tim00-div-trigger",
+      "alias": "tim00_div_trigger",
+      "category": "timer",
+      "eligible": true,
+      "source_path": "acceptance/timer/tim00_div_trigger.s",
+      "rom": "tim00_div_trigger.gb",
+      "size_bytes": 32768,
+      "sha256": "566da853858061c69866c47cc31b85b1fef003d4c088c8e8dbb26973da9944da",
+      "original_sha256": "56e657fd0afd458f6f9081e463b8d523f603a92feadf2e177a35aecdc6890249",
+      "license": "MIT; see LICENSE.txt",
+      "asset_notice": "FONT-LICENSE.txt",
+      "model_pass": [
+        "cgb-cpu-e"
+      ],
+      "target_revision": "CGB",
+      "cart_header_143": "0x00",
+      "mode": "compat (header $143 bit 7 clear)",
+      "result_pc": "0x4327",
+      "pass_callback_pc": "0x4000",
+      "fail_callback_pcs": [
+        "0x4000"
+      ],
+      "budget_half_dots": 200000,
+      "expect": "pass",
+      "observed_disposition": "pass",
+      "note": "Mooneye source header: pass on CGB. The source is exercised on the CGB-CPU-E software profile in compat mode; this is not physical-hardware qualification.",
+      "build_recipe": [
+        "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
+        "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
+        "apply the parent headless report patch ../mooneye/headless-report.patch (SHA-256 c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d) with patch --batch --fuzz=0 -p1",
+        "assemble acceptance/timer/tim00_div_trigger.s with wla-gb -I common using the WLA-DX revision pinned by ../mooneye/manifest.json",
+        "link with wlalink -nS -d -S; -nS preserves source section order",
+        "reproduce with tests/scripts/reproduce-mooneye-cgb.sh --compare fixtures/mooneye-cgb"
+      ]
+    },
+    {
+      "id": "mooneye-misc-ppu-vblank-stat-intr-c",
+      "alias": "vblank_stat_intr-C",
+      "category": "ppu",
+      "eligible": true,
+      "source_path": "misc/ppu/vblank_stat_intr-C.s",
+      "rom": "vblank_stat_intr-C.gb",
+      "size_bytes": 32768,
+      "sha256": "0f030fb1dd70e9b3912b8f58512512748c9be99f03c35826433c9506767c7d13",
+      "original_sha256": "f4727575f9f58881c36e4e8ca8f3e5ae0644b45246be5a0186f794b7e6a8ab5b",
+      "license": "MIT; see LICENSE.txt",
+      "asset_notice": "FONT-LICENSE.txt",
+      "model_pass": [
+        "cgb-cpu-e"
+      ],
+      "target_revision": "CGB",
+      "cart_header_143": "0x00",
+      "mode": "compat (header $143 bit 7 clear)",
+      "result_pc": "0x4327",
+      "pass_callback_pc": "0x4000",
+      "fail_callback_pcs": [
+        "0x4000",
+        "0x0173"
+      ],
+      "budget_half_dots": 2000000,
+      "expect": "pass",
+      "observed_disposition": "expected-failure",
+      "note": "Mooneye source header: pass on CGB, AGB and AGS. The CGB-CPU-E compat software run reaches the exact assertion-failure signature at callback 0x4000 and result 0x4327; retain the author pass and report a named software-model xfail. Owner: CGB PPU/interrupt model. Promotion rule: remove the xfail only after this same pinned guest passes and wrong-callback/signature controls still fail.",
+      "build_recipe": [
+        "fetch Mooneye suite revision 31510e12eea6286d36eea060a6adde755e1067aa and verify tree 2b8c52424a49a2a7466cf631fd8992c53d0de2fa",
+        "generate the pinned 2032-byte zero replacement asset from ../mooneye/font-source.c",
+        "apply the parent headless report patch ../mooneye/headless-report.patch (SHA-256 c3679ab53b59da14a0f6af1fdd552316ba922762c3a91988f7f8ac4440516e5d) with patch --batch --fuzz=0 -p1",
+        "assemble misc/ppu/vblank_stat_intr-C.s with wla-gb -I common using the WLA-DX revision pinned by ../mooneye/manifest.json",
         "link with wlalink -nS -d -S; -nS preserves source section order",
         "reproduce with tests/scripts/reproduce-mooneye-cgb.sh --compare fixtures/mooneye-cgb"
       ]
