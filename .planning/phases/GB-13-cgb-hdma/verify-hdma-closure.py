@@ -52,7 +52,7 @@ SOURCE_CLOSEOUT_METADATA = frozenset((
     *(PHASE_METADATA_DIR + name for name in (
         "13-BENCH.md", "13-VALIDATION.md", "13-SECURITY.md", "13-REVIEW.md",
         "13-REVIEW-DISPOSITION.md", "13-REVIEW-FIX.md", "13-UI-REVIEW.md",
-        "13-VERIFICATION.md", "13-LEARNINGS.md",
+        "13-VERIFICATION.md", "13-LEARNINGS.md", "13-UAT.md",
         "continue.md", "deferred-items.md", "13-ASAN-ADDED-COST.json")),
 ))
 
@@ -574,19 +574,21 @@ def prohibition_self_test(root: Path) -> None:
 
 
 def handoff_values(state: str, continuation: str, config: dict) -> None:
-    required_route = "/gsd-verify-work 13"
+    uat_stage = "Phase 13 automated UAT complete"
+    uat_complete = uat_stage in state
+    require(uat_complete == (uat_stage in continuation),
+            "STATE.md and continue.md disagree on the completed UAT stage")
+    required_route = "/gsd-discuss-phase 14" if uat_complete else "/gsd-verify-work 13"
     stages = ("Phase 13 execution, pending automated closure",
-              "Phase 13 execution and goal verification complete")
+              "Phase 13 execution and goal verification complete", uat_stage)
     require(any(stage in state for stage in stages),
             "STATE.md does not name the Phase 13 execution stage")
     require(any(stage in continuation for stage in stages),
             "continue.md does not name the Phase 13 execution stage")
-    state_commands = [line for line in state.splitlines() if line.strip().startswith("Next command:")]
-    continuation_commands = [line for line in continuation.splitlines() if line.strip().startswith("Next command:")]
-    require(any(required_route in line for line in state_commands),
-            "STATE.md next command is not /gsd-verify-work 13")
-    require(any(required_route in line for line in continuation_commands),
-            "continue.md next command is not /gsd-verify-work 13")
+    for name, text in (("STATE.md", state), ("continue.md", continuation)):
+        commands = [line.split(":", 1)[1].strip().strip(".`* ")
+                    for line in text.splitlines() if line.strip().startswith("Next command:")]
+        require(commands == [required_route], f"{name} next command must be {required_route}")
     workflow = config.get("workflow", {}) if isinstance(config, dict) else {}
     require(workflow.get("auto_advance") is False and workflow.get("_auto_chain_active") is False,
             "workflow auto_advance and _auto_chain_active must both remain false")
@@ -616,7 +618,13 @@ def handoff_contract(root: Path) -> None:
     state = read(root, ".planning/STATE.md")
     continuation = read(root, ".planning/phases/GB-13-cgb-hdma/continue.md")
     handoff_values(state, continuation, config)
-    print("hdma-handoff pass stage=Phase13-execution next=/gsd-verify-work-13 phase14=unstarted auto=false")
+    if "Phase 13 automated UAT complete" in state:
+        result = subprocess.run([sys.executable, "-I", str(root / PHASE_METADATA_DIR / "verify-uat-contract.py")],
+                                cwd=root, capture_output=True, text=True, check=False, timeout=30)
+        require(result.returncode == 0, f"completed UAT receipt invalid: {result.stdout}{result.stderr}")
+        print("hdma-handoff pass stage=Phase13-UAT next=/gsd-discuss-phase-14 phase14=unstarted auto=false")
+    else:
+        print("hdma-handoff pass stage=Phase13-execution next=/gsd-verify-work-13 phase14=unstarted auto=false")
 
 
 def summary_contract(root: Path, summary: str) -> None:

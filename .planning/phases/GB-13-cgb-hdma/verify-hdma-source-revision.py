@@ -33,7 +33,7 @@ def main() -> int:
         *(phase + f"13-{number:02d}-SUMMARY.md" for number in range(1, 13)),
         *(phase + name for name in (
             "13-BENCH.md", "13-VALIDATION.md", "13-SECURITY.md", "13-REVIEW.md",
-            "13-REVIEW-DISPOSITION.md", "13-VERIFICATION.md", "13-LEARNINGS.md",
+            "13-REVIEW-DISPOSITION.md", "13-VERIFICATION.md", "13-LEARNINGS.md", "13-UAT.md",
             "continue.md", "deferred-items.md", "13-ASAN-ADDED-COST.json")),
     )
     # Paths are independent expectations, not copied from the gate's allowlist.
@@ -43,6 +43,7 @@ def main() -> int:
         ("committed-harness", "committed", "tests/test_cgb_hdma.c"),
         ("committed-workflow", "committed", ".github/workflows/ci.yml"),
         ("committed-unknown-planning-code", "committed", phase + "new-checker.py"),
+        ("committed-uat-checker", "committed", phase + "verify-uat-contract.py"),
         ("committed-closure-checker", "committed", phase + "verify-hdma-closure.py"),
         ("committed-projection-plan", "committed", phase + "13-01-PLAN.md"),
         ("committed-readme", "committed", "README.md"),

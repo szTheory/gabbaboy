@@ -47,3 +47,27 @@ else:
   assert.ifError(result.error);
   assert.equal(result.status, 0, `${result.stdout || ''}${result.stderr || ''}`);
 });
+
+test('completed automated UAT routes to phase 14 discussion without repeating verification', () => {
+  const progression = String.raw`import runpy, sys
+checks = runpy.run_path(sys.argv[1])
+state = "Completed stage: Phase 13 automated UAT complete.\nNext command: /gsd-discuss-phase 14\nPhase 14 — CGB-E Model Qualification and Corpus remains unstarted.\n"
+config = {"workflow": {"auto_advance": False, "_auto_chain_active": False}}
+checks['handoff_values'](state, state, config)
+for other_state, other_continuation in (
+    (state.replace('/gsd-discuss-phase 14', '/gsd-verify-work 13'), state),
+    (state, state.replace('automated UAT complete', 'planning')),
+    (state, state.replace('/gsd-discuss-phase 14', '/gsd-execute-phase 14')),
+):
+    try:
+        checks['handoff_values'](other_state, other_continuation, config)
+    except checks['ContractError']:
+        pass
+    else:
+        raise AssertionError('accepted stale route or conflicting completed stage')`;
+  const result = spawnSync('python3', ['-I', '-c', progression, checker], {
+    cwd: root, encoding: 'utf8', maxBuffer: 1024 * 1024, timeout: 10000,
+  });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, `${result.stdout || ''}${result.stderr || ''}`);
+});
