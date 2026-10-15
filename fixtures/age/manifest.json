@@ -273,6 +273,33 @@
         "2021-12-22 pass: CPU CGB B - CPU-CGB-02",
         "2021-12-22 fail: DMG-CPU C (blob) - DMG-CPU-08"
       ]
+    },
+    {
+      "file": "m3-bg-lcdc-cgbBCE.gb",
+      "fixture_class": "age-m3-reference",
+      "size_bytes": 32768,
+      "sha256": "fabdfd1c3f21df7543186a7303ad645a6b342f9c1ea7c1a4b26b4bb9b821b9f4",
+      "source_path": "src/m3-bg-lcdc/m3-bg-lcdc.asm",
+      "source_size_bytes": 287,
+      "source_sha256": "2f2ba3ecd5135265e9b8033ce967135df928d649fc17ad83c6aea073851e54c7",
+      "header_143": "80",
+      "model": "CPU CGB E - CPU-CGB-06",
+      "mode": "native-cgb",
+      "speed": "normal",
+      "expected_role": "pass-target",
+      "qualification_status": "admitted-not-executed",
+      "verified": [
+        "2021-11-29: CPU CGB E - CPU-CGB-06",
+        "2022-03-17: CPU CGB C - CPU-CGB-04",
+        "2021-11-29: CPU CGB B - CPU-CGB-02",
+        "2021-11-29: DMG-CPU C (blob) - DMG-CPU-08"
+      ],
+      "reference": {
+        "file": "references/m3-bg-lcdc-cgbBCE.png",
+        "source_path": "src/m3-bg-lcdc/m3-bg-lcdc-cgbBCE.png",
+        "size_bytes": 587,
+        "sha256": "69a0b85a82eddc884ec225a3c6353622876afe589125809d6517439cbeb91cef"
+      }
     }
   ]
 }

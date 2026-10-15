@@ -22,9 +22,10 @@ controls also passed. This closes the provisional macOS-versus-Linux byte
 reproduction check; it establishes fixture bytes, not hardware behavior.
 
 `bash tests/scripts/reproduce-age.sh --self-check` validates this record and
-the committed digest offline. `--compare` fetches the pinned source and rebuilds
-all manifest-listed ROMs. `--compare-built DIR` compares an already rebuilt
-directory without network access or RGBDS.
+the committed digests offline. `--compare` fetches the pinned source, rebuilds
+all manifest-listed ROMs, and byte-compares each admitted reference with its
+source PNG. `--compare-built DIR` compares an already rebuilt ROM directory
+without network access or RGBDS.
 
 ## Committed-core verdict measurements
 
@@ -68,6 +69,19 @@ is twice the measured half-dots rounded up to the next million.
 | `stat-mode-window-cgbBCE.gb` | 32768 | `69fb62868aa256ff79e77cabb88caab9db43dbe302eb6f4628550d99b7ef12da` | `src/stat-mode-window/stat-mode-window-cgbBCE.asm` | `80` |
 
 The source's `Verified:` lines are author-attested hardware observations, not a
-reproducible receipt. Emulator results are numeric; no screenshot comparison is
-used. Emulator-only context: the build and digest establish bytes, not hardware
-behavior.
+reproducible receipt. The new reference PNGs are source data for a later
+automated pixel oracle, not targets for human screenshot judgment. Emulator-only
+context: the build and digest establish bytes, not hardware behavior.
+
+## Admitted mode-3 source and reference pairs
+
+The first Phase 14 pair is the native normal-speed LCDC case. The ROM and PNG
+were copied from the exact pinned commit above and are covered by the upstream
+MIT license in `LICENSE.txt`. Source-referenced assets retain the licenses
+listed in the upstream record above. The CGB-E `Verified:` line records the
+author's expected model result; fixture admission does not mean the emulator
+has executed or passed the pixel check.
+
+| ROM | ROM bytes / SHA-256 | ASM source bytes / SHA-256 | Reference PNG / bytes / SHA-256 | Mode and source expectation |
+|---|---|---|---|---|
+| `m3-bg-lcdc-cgbBCE.gb` | 32768 / `fabdfd1c3f21df7543186a7303ad645a6b342f9c1ea7c1a4b26b4bb9b821b9f4` | `src/m3-bg-lcdc/m3-bg-lcdc.asm` / 287 / `2f2ba3ecd5135265e9b8033ce967135df928d649fc17ad83c6aea073851e54c7` | `references/m3-bg-lcdc-cgbBCE.png` / 587 / `69a0b85a82eddc884ec225a3c6353622876afe589125809d6517439cbeb91cef` | Native CGB, normal speed; `2021-11-29: CPU CGB E - CPU-CGB-06` |

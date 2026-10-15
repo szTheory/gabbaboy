@@ -29,19 +29,33 @@ PY
   output=$(bash "$scratch/tests/scripts/reproduce-age.sh" --compare-built "$scratch/rebuilt" 2>&1)
   status=$?
   set -e
-  [ "$status" -eq 1 ] && echo "$output" | grep -q '^result=differs spsw-div-cgbBCE.gb '
+  actual=$(echo "$output" | grep '^result=differs spsw-div-cgbBCE.gb ')
+  [ "$status" -eq 1 ] && [ -n "$actual" ]
+  echo "negative-control=pass $actual"
 else
+  reset_fixture() {
+    rm -rf -- "$scratch/fixtures/age"
+    cp -R "$repo_root/fixtures/age" "$scratch/fixtures/age"
+  }
+  expect_selfcheck_failure() {
+    local expected=$1 output status actual
+    set +e
+    output=$(bash "$scratch/tests/scripts/reproduce-age.sh" --self-check 2>&1)
+    status=$?
+    set -e
+    actual=$(echo "$output" | grep '^self-check=fail ' | head -n 1)
+    [ "$status" -eq 1 ] && [ "$actual" = "self-check=fail $expected" ] || return 1
+    echo "negative-control=pass $actual"
+  }
+  reset_fixture
   python3 -I - "$scratch/fixtures/age/manifest.json" <<'PY'
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1]); data = json.loads(path.read_text())
 data['fixtures'][0]['source_path'] = 'src/../../evil.asm'
 path.write_text(json.dumps(data))
 PY
-  set +e
-  output=$(bash "$scratch/tests/scripts/reproduce-age.sh" --self-check 2>&1)
-  status=$?
-  set -e
-  [ "$status" -eq 1 ] && echo "$output" | grep -q '^self-check=fail source_path-outside-allow-list$'
+  expect_selfcheck_failure 'source_path-outside-allow-list'
+  reset_fixture
   python3 -I - "$scratch/fixtures/age/manifest.json" <<'PY'
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1]); data = json.loads(path.read_text())
@@ -49,10 +63,33 @@ data['fixtures'][0]['source_path'] = 'src/speed-switch/spsw-div-cgbBCE.asm'
 data['fixtures'][0]['sha256'] = 'ABC'
 path.write_text(json.dumps(data))
 PY
-  set +e
-  output=$(bash "$scratch/tests/scripts/reproduce-age.sh" --self-check 2>&1)
-  status=$?
-  set -e
-  [ "$status" -eq 1 ] && echo "$output" | grep -q '^self-check=fail invalid-sha256-spsw-div-cgbBCE.gb$'
+  expect_selfcheck_failure 'invalid-sha256-spsw-div-cgbBCE.gb'
+  reset_fixture
+  python3 -I - "$scratch/fixtures/age/manifest.json" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1]); data = json.loads(path.read_text())
+entry = next(row for row in data['fixtures'] if row.get('fixture_class') == 'age-m3-reference')
+entry['reference']['file'] = 'references/m3-bg-scx-cgbBCE.png'
+path.write_text(json.dumps(data))
+PY
+  expect_selfcheck_failure 'm3-reference-file-mismatch-m3-bg-lcdc-cgbBCE.gb'
+  reset_fixture
+  rm "$scratch/fixtures/age/m3-bg-lcdc-cgbBCE.gb"
+  expect_selfcheck_failure 'committed-file-missing-m3-bg-lcdc-cgbBCE.gb'
+  reset_fixture
+  python3 -I - "$scratch/fixtures/age/references/m3-bg-lcdc-cgbBCE.png" <<'PY'
+import pathlib, sys
+path = pathlib.Path(sys.argv[1]); data = bytearray(path.read_bytes()); data[-1] ^= 1
+path.write_bytes(data)
+PY
+  expect_selfcheck_failure 'committed-reference-digest-mismatch-m3-bg-lcdc-cgbBCE.gb'
+  reset_fixture
+  python3 -I - "$scratch/fixtures/age/manifest.json" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1]); data = json.loads(path.read_text())
+data['build']['archive_sha256'] = '0' * 64
+path.write_text(json.dumps(data))
+PY
+  expect_selfcheck_failure 'RGBDS-build-pin-mismatch'
 fi
 echo "reproduce-age negative control $case_name ok"

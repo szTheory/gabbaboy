@@ -51,17 +51,73 @@ if manifest.get('source', {}).get('commit') != commit or manifest.get('source', 
     fail('manifest-source-pins-differ-from-script')
 file_re = re.compile(r'^[A-Za-z0-9_-]+\.gb$')
 source_re = re.compile(r'^src/(speed-switch|speed-switch/caution|stat-mode|stat-mode-sprites|stat-mode-window)/[A-Za-z0-9_-]+\.asm$')
+expected_build = {
+    'version': '1.0.1',
+    'archive': 'rgbds-macos.zip',
+    'archive_sha256': '2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645',
+    'ci_archive': 'rgbds-linux-x86_64.tar.xz',
+    'ci_archive_sha256': '80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9',
+    'recipe': 'rgbasm -Weverything -I src -I src/_include; rgblink -t; rgbfix -v -p 255',
+}
+m3_expected = {
+    'm3-bg-lcdc-cgbBCE.gb': {
+        'source_path': 'src/m3-bg-lcdc/m3-bg-lcdc.asm',
+        'source_size_bytes': 287,
+        'source_sha256': '2f2ba3ecd5135265e9b8033ce967135df928d649fc17ad83c6aea073851e54c7',
+        'size_bytes': 32768,
+        'sha256': 'fabdfd1c3f21df7543186a7303ad645a6b342f9c1ea7c1a4b26b4bb9b821b9f4',
+        'header_143': '80',
+        'model': 'CPU CGB E - CPU-CGB-06',
+        'mode': 'native-cgb',
+        'speed': 'normal',
+        'expected_role': 'pass-target',
+        'cgb_e_verified': '2021-11-29: CPU CGB E - CPU-CGB-06',
+        'reference': {
+            'file': 'references/m3-bg-lcdc-cgbBCE.png',
+            'source_path': 'src/m3-bg-lcdc/m3-bg-lcdc-cgbBCE.png',
+            'size_bytes': 587,
+            'sha256': '69a0b85a82eddc884ec225a3c6353622876afe589125809d6517439cbeb91cef',
+        },
+    },
+}
+build = manifest.get('build', {})
+if any(build.get(field) != value for field, value in expected_build.items()):
+    fail('RGBDS-build-pin-mismatch')
+m3_entries = {
+    entry.get('file'): entry
+    for entry in entries
+    if entry.get('fixture_class') == 'age-m3-reference'
+}
+if set(m3_entries) != set(m3_expected):
+    fail('m3-manifest-membership-mismatch')
 rows = []
+seen_names = set()
 for entry in entries:
     name = entry.get('file', '')
     source = entry.get('source_path', '')
     digest = entry.get('sha256', '')
+    if name in seen_names:
+        fail('duplicate-file-entry-' + name)
+    seen_names.add(name)
     if not file_re.fullmatch(name):
         fail('file-outside-allow-list')
-    if not source_re.fullmatch(source):
+    expected_m3 = m3_expected.get(name)
+    if not source_re.fullmatch(source) and expected_m3 is None:
         fail('source_path-outside-allow-list')
     if not re.fullmatch(r'[0-9a-f]{64}', digest):
         fail('invalid-sha256-' + name)
+    if expected_m3 is not None:
+        for field in ('source_path', 'source_size_bytes', 'source_sha256', 'size_bytes', 'sha256', 'header_143', 'model', 'mode', 'speed', 'expected_role'):
+            if entry.get(field) != expected_m3[field]:
+                fail('m3-' + field.replace('_', '-') + '-mismatch-' + name)
+        if entry.get('qualification_status') != 'admitted-not-executed':
+            fail('m3-qualification-status-mismatch-' + name)
+        if expected_m3['cgb_e_verified'] not in entry.get('verified', []):
+            fail('m3-author-attestation-mismatch-' + name)
+        reference = entry.get('reference', {})
+        for field, value in expected_m3['reference'].items():
+            if reference.get(field) != value:
+                fail('m3-reference-' + field.replace('_', '-') + '-mismatch-' + name)
     committed_path = fixture / name
     try:
         committed = committed_path.read_bytes()
@@ -69,6 +125,18 @@ for entry in entries:
         fail('committed-file-missing-' + name)
     if len(committed) != entry.get('size_bytes') or hashlib.sha256(committed).hexdigest() != digest:
         fail('committed-digest-mismatch-' + name)
+    if expected_m3 is not None:
+        if committed[0x143] != int(expected_m3['header_143'], 16):
+            fail('m3-header-143-mismatch-' + name)
+        reference_path = fixture / expected_m3['reference']['file']
+        try:
+            reference_bytes = reference_path.read_bytes()
+        except OSError:
+            fail('committed-reference-missing-' + name)
+        reference_expected = expected_m3['reference']
+        if (len(reference_bytes) != reference_expected['size_bytes']
+                or hashlib.sha256(reference_bytes).hexdigest() != reference_expected['sha256']):
+            fail('committed-reference-digest-mismatch-' + name)
     rows.append((entry, name, source))
 if mode == '--self-check':
     print('self-check=pass')
@@ -119,6 +187,30 @@ if mode == '--compare' and (source_root is None or out is None):
     error('internal-source-or-output-path-missing')
 if mode == '--compare':
     for entry, name, source in rows:
+        expected_m3 = m3_expected.get(name)
+        if expected_m3 is not None:
+            source_path = source_root / expected_m3['source_path']
+            reference_path = source_root / expected_m3['reference']['source_path']
+            try:
+                source_bytes = source_path.read_bytes()
+                source_text = source_bytes.decode('utf-8')
+                reference_bytes = reference_path.read_bytes()
+            except (OSError, UnicodeDecodeError) as exc:
+                error('upstream-source-or-reference-missing-' + name + '-' + str(exc))
+            if (len(source_bytes) != expected_m3['source_size_bytes']
+                    or hashlib.sha256(source_bytes).hexdigest() != expected_m3['source_sha256']):
+                error('upstream-source-digest-mismatch-' + name)
+            if expected_m3['cgb_e_verified'] not in source_text:
+                error('upstream-cgb-e-attestation-missing-' + name)
+            reference_expected = expected_m3['reference']
+            if (len(reference_bytes) != reference_expected['size_bytes']
+                    or hashlib.sha256(reference_bytes).hexdigest() != reference_expected['sha256']):
+                error('upstream-reference-digest-mismatch-' + name)
+            committed_reference = (fixture / reference_expected['file']).read_bytes()
+            if reference_bytes != committed_reference:
+                print('result=reference-differs ' + reference_expected['file'])
+                raise SystemExit(1)
+            print('result=reference-source-identical ' + reference_expected['file'])
         obj = out / (name + '.o')
         rom = out / name
         steps = [
