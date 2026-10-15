@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 17
+open_count: 19
 waived_count: 0
 fixed_count: 0
-total_count: 17
-last_updated: 2026-10-15T21:11:05.476Z
+total_count: 19
+last_updated: 2026-10-15T22:11:43.086Z
 ---
 
 # Broken Windows Ledger
@@ -32,6 +32,8 @@ last_updated: 2026-10-15T21:11:05.476Z
 | 15 | 12 | deviation | cmake/P12Mutants.cmake |  | M28 mutant scope corrected to double-speed destinations after the AGE sweep measured mode-0 discrimination. | open |  | 2026-10-14T01:52:45.826Z |  |
 | 16 | 14 | deviation | tests/scripts/verify-cgb-corpus-inventory.py |  | Manifest lookup by basename rejected nested SameSuite APU outputs despite admitted manifest-relative bytes. | open |  | 2026-10-15T21:11:05.368Z |  |
 | 17 | 14 | deviation | tests/external/cgb-corpus-inventory.json |  | Six AGE ROM outputs were marked pending despite pinned ROM, source, and PNG admission evidence; image cases remain pending execution. | open |  | 2026-10-15T21:11:05.476Z |  |
+| 18 | 14 | deviation | tests/scripts/verify-age-phase14-contract.py |  | Added hostile AGE fixture bound controls and strict integer bounds after trust-boundary review. | open |  | 2026-10-15T22:11:30.748Z |  |
+| 19 | 14 | deviation | tests/scripts/verify-cgb-corpus-inventory.py |  | Updated the corpus selection self-test expected first unbound case after binding all 19 AGE identities. | open |  | 2026-10-15T22:11:43.086Z |  |
 
 ````json
 [
@@ -253,6 +255,32 @@ last_updated: 2026-10-15T21:11:05.476Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-10-15T21:11:05.476Z",
+    "resolved_at": null,
+    "milestone": "v0.2"
+  },
+  {
+    "id": 18,
+    "kind": "deviation",
+    "phase": "14",
+    "file": "tests/scripts/verify-age-phase14-contract.py",
+    "line": null,
+    "description": "Added hostile AGE fixture bound controls and strict integer bounds after trust-boundary review.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-15T22:11:30.748Z",
+    "resolved_at": null,
+    "milestone": "v0.2"
+  },
+  {
+    "id": 19,
+    "kind": "deviation",
+    "phase": "14",
+    "file": "tests/scripts/verify-cgb-corpus-inventory.py",
+    "line": null,
+    "description": "Updated the corpus selection self-test expected first unbound case after binding all 19 AGE identities.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-15T22:11:43.086Z",
     "resolved_at": null,
     "milestone": "v0.2"
   }
