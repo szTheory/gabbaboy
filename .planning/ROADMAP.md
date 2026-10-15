@@ -428,12 +428,12 @@ Phase 13 automated UAT completed 2026-10-15: 45/45 deliverables, zero human chec
 
 **Rights gates**: G1 (mgblib font) gates cgb-acid2/dmg-acid2 and Mealybug bytes in the required corpus.
 **Research**: DEEP (CGB-E APU rules, wave RAM, enumeration of Mooneye CGB pass lists from the pinned tree).
-**Plans**: 13 plans
+**Plans**: 2/13 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 14-01-PLAN.md — Timestamped digital PCM through guest reads
-- [ ] 14-05-PLAN.md — Pinned candidate inventory and independently frozen membership
+- [x] 14-01-PLAN.md — Timestamped digital PCM through guest reads
+- [x] 14-05-PLAN.md — Pinned candidate inventory and independently frozen membership
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 14-02-PLAN.md — Per-mode IR and undocumented-port qualification
@@ -493,5 +493,5 @@ Plans:
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 15/15 | Complete    | 2026-10-13 |
 | 12. CGB Double Speed | v0.2 | 19/19 | Complete    | 2026-10-14 |
 | 13. CGB HDMA | v0.2 | 12/12 | Complete    | 2026-10-14 |
-| 14. CGB-E Model Qualification and Corpus | v0.2 | 0/13 | Planned | - |
+| 14. CGB-E Model Qualification and Corpus | v0.2 | 2/13 | In Progress | - |
 | 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 0/TBD | Not started | - |

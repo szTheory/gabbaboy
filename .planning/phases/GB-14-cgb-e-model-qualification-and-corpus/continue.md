@@ -1,15 +1,13 @@
 # Phase 14 continuation
 
-Completed stage: **Phase 14 planning** — DEEP research, pattern mapping, validation strategy, 13 plans / 31 tasks / 11 waves, and independent plan checking complete.
+Current stage: **Phase 14 execution**, through wave 1/11; 2/13 plans complete: 14-01, 14-05.
 
-Read [14-CONTEXT.md](14-CONTEXT.md), [14-RESEARCH.md](14-RESEARCH.md), [14-SOURCE-COVERAGE.md](14-SOURCE-COVERAGE.md), [14-VALIDATION.md](14-VALIDATION.md) and [14-PLAN-CHECK.md](14-PLAN-CHECK.md). The final independent check has zero blockers and zero warnings; all five initial findings are resolved. Requirements are covered 2/2 and decisions 25/25. Plan verification is static; no Phase 14 implementation, fixture admission, qualification run or requirement completion is claimed.
+Read [14-EXECUTION.md](14-EXECUTION.md), completed SUMMARY frontmatter, [14-CONTEXT.md](14-CONTEXT.md), [14-RESEARCH.md](14-RESEARCH.md), [14-SOURCE-COVERAGE.md](14-SOURCE-COVERAGE.md) and [14-PLAN-CHECK.md](14-PLAN-CHECK.md). Reuse these decisions and evidence; do not repeat research, planning or completed Phase 13 UAT.
 
-Next stage: **Phase 14 — CGB-E Model Qualification and Corpus, execution**.
-Next command: `/gsd-execute-phase 14`.
+Next stage: **Phase 14 — CGB-E Model Qualification and Corpus, execution wave 2/11**.
+Next command if interrupted: `/gsd-execute-phase 14`.
 Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release** remains unstarted.
 
-Start the recorded wave 1 (14-01 PCM tracer and 14-05 independent source inventory), then follow plan dependencies. Preserve the selected 107 case identities and separate assertion membership; all 87 proposed new ROM/reference outputs still need per-output admission evidence. The generated data collections do not waive rights, source/tool/build, digest, reproducibility or oracle checks. Physical CGB-E remains UNKNOWN/POLICY. Two unclassified edge-probe rows stay visibly flagged; domain-specific automated predicates cover the actual phase contracts.
+Runtime: explicit installed OpenGSD 1.16.0 CLI at `$HOME/.codex/gsd-core/bin/gsd-tools.cjs`; unqualified `gsd_run` can resolve another install. Runtime fork-base check selected sequential execution because origin/HEAD is unresolved. Preserve existing owner config/state changes.
 
-Reuse the completed research and decisions. Reopen only for a concrete contradiction, failed discriminator/prototype, changed requirement or owner direction. Do not repeat discussion, the research-only stage or completed Phase 13 UAT. Preserve D-069 zero routine human UAT, meaningful negative controls, D-096 small/flat dependencies, bounded operations, the frozen DMG baseline and existing CI lanes. Every SUMMARY uses the strict block coverage schema enforced by summary_coverage.
-
-Both `workflow.auto_advance` and `workflow._auto_chain_active` remain false. Stop here until the owner invokes execution; execution stops after Phase 14. Phase 15 game acceptance, support ledger and release remain deferred.
+Keep both auto flags false. Preserve D-069 zero routine human UAT and negative controls, strict SUMMARY coverage, fixed independent corpus membership, rights/model exclusions, bounded operations and DMG baseline. Physical CGB-E remains UNKNOWN/POLICY. Requirements stay open until the complete evidence and goal gates pass. Stop after Phase 14.
