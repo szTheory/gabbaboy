@@ -608,7 +608,9 @@ def parse_ctest_xml(data: bytes, expected_names: set[str]) -> tuple[list[dict], 
         root = ET.fromstring(data)
     except ET.ParseError as exc:
         raise ReportError("ctest-xml-invalid") from exc
-    tests = [node for node in root.iter() if node.tag.rsplit("}", 1)[-1] == "Test"]
+    tests = [node for node in root.iter()
+             if node.tag.rsplit("}", 1)[-1] == "Test" and
+             (node.get("Status") is not None or node.find("Name") is not None)]
     if not tests or len(tests) > MAX_CTEST_TESTS:
         raise ReportError("ctest-xml-incomplete")
     blocks = []
