@@ -11,10 +11,10 @@ affects: [CGB APU follow-up, audio-model evidence]
 actuals:
   tokens: 8400
   tasks: 2
-  commits: 4
-commits: 4
+  commits: 12
+commits: 12
 plan_head_before: e463512aae7ce03e2b429973b4baf2b40d67297d
-plan_head_after: 789ddc81c17bdc56380cd8393bff9dbd3f7fcb2f
+plan_head_after: 1ddacb60962d32e23133ef72de4bc4d105037d60
 tech-stack:
   added: []
   patterns:
@@ -34,8 +34,10 @@ key-files:
     - fixtures/mooneye-cgb/manifest.json
     - fixtures/mooneye-cgb/ELIGIBILITY.md
     - docs/cgb-profile.md
+    - docs/model-gates.md
     - docs/audio-and-playback.md
     - docs/support/unreleased.md
+    - tests/test_cgb_tables.c
 key-decisions:
   - Native CGB PCM reads expose digital DAC inputs before NR50/NR51 routing and host sample generation.
   - Keep the claim at the software-model boundary; no physical CGB-E waveform or timing claim is made.
@@ -85,6 +87,16 @@ coverage:
       - kind: other
         ref: "Raw protocol verdicts: boot_hwio-C fail callback 0x01F5/result 0x4067; unused_hwio-C fail callback 0x1A31/result 0x4070. Tampered pass disposition, stale unsupported stop, changed fail callback, and false xfail on a passing ROM all remain nonzero controls."
         status: pass
+  - id: D5
+    description: PCM helper model tags and independent visibility-table checks agree with the native CGB, compatibility, and DMG policies for FF76/FF77.
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build -R '^(model_gates.*|cgb_tables_.*)$' --output-on-failure --no-tests=error"
+        status: pass
+      - kind: other
+        ref: "Negative controls: model_gates_real_deleted_tag, model_gates_real_untagged_function, model_gates_real_doc_mismatch; cgb_tables self-test rejected six PCM profile-disposition mutations plus three existing visibility mutations (pass mutants=12 overall)."
+        status: pass
 duration: 12min
 completed: 2026-10-15
 status: complete
@@ -102,7 +114,7 @@ status: complete
 - **Tasks:** 2
 - **Files modified:** 7
 
-The 8,400-token actual is 33,602 characters divided by four across the seven implementation, test, and documentation files at the original task HEAD; it excludes this summary. Those metrics preserve the original two-task completion snapshot. The later Rule 2 integration correction is listed separately below, after the plan commit ledger was already measured.
+The 8,400-token actual is 33,602 characters divided by four across the seven implementation, test, and documentation files at the original task HEAD; it excludes this summary. Those metrics preserve the original two-task completion snapshot. The measured commit ledger now contains 12 commits from `plan_head_before` through `plan_head_after`, including four interleaved Phase 14-05 commits on the shared phase branch; the task-specific commits remain listed below.
 
 ## Accomplishments
 
@@ -117,6 +129,7 @@ The 8,400-token actual is 33,602 characters divided by four across the seven imp
 3. **Task 2 RED:** `b12eddb` — four-channel, gating, read-only, host-invariance, and mutant-control tests.
 4. **Task 2 GREEN:** `789ddc8` — compile-time mutation controls and audio-model evidence limits.
 5. **Rule 2 integration correction:** `074695e` — replaced stale CGB Mooneye unsupported dispositions with exact observed-failure xfails while preserving author pass assertions.
+6. **Rule 2 integration correction:** `1ddacb6` — tagged PCM helpers and added an independent three-model register-table oracle with six PCM mutants.
 
 ## Files Created/Modified
 
@@ -124,7 +137,9 @@ The 8,400-token actual is 33,602 characters divided by four across the seven imp
 - `tests/test_cgb_apu.c` — timed guest reads, all-channel and phase checks, power/DAC/read-only tests, host-invariance tests, and negative controls.
 - `tests/test_cgb_visibility.c` — updated only stale PCM matrix rows and deferred-access expectations; non-PCM assertions remain intact.
 - `tests/CMakeLists.txt`, `tests/expected-tests.txt` — registered exact PCM contracts and compile-time mutant targets.
+- `tests/test_cgb_tables.c` — independently pins FF76/FF77 visibility by model and compares the PCM register rows with the profile documentation.
 - `docs/cgb-profile.md` — CGB/compatibility/DMG register policy and Pan Docs evidence separated from hardware qualification.
+- `docs/model-gates.md` — documents the model-neutral PCM helpers' caller-gate basis.
 - `docs/audio-and-playback.md` — digital readback contract, host-path independence, and CH3 fetch-boundary limitation.
 - Integration follow-up also changed `src/runner/main.c`, `tests/test_runner.c`, `tests/CMakeLists.txt`, `tests/expected-tests.txt`, `cmake/VerifyMooneyeCgb.cmake`, `fixtures/mooneye-cgb/manifest.json`, `fixtures/mooneye-cgb/ELIGIBILITY.md`, and `docs/support/unreleased.md`.
 
@@ -148,6 +163,7 @@ The 8,400-token actual is 33,602 characters divided by four across the seven imp
 - `bash tests/scripts/verify-dmg-baseline.sh`: inventory 313 keys, Mooneye 15 keys, acceptance 20 keys, benchmark 2 keys; zero baseline changes; status pass.
 - `cmake --preset phase1` and `cmake --build --preset phase1` passed. Expected-test membership had no missing required names.
 - After the integration correction, the CGB Mooneye selection passed 18/18 tests including its fixture prerequisite; the CGB visibility matrices passed 3/3; `verify-cgb-corpus-inventory.py --selection-only` reported 181 sources, 109 outputs, 28 admitted, 81 pending and 107 cases. `summary_coverage` passed 1/1 after this summary update.
+- After the PCM model-gate/table correction, the focused model-gate and `cgb_tables_*` selection passed 19/19; PCM, visibility, Mooneye, inventory, and DMG identity contracts passed 43/43. Corpus selection reported 181 sources, 109 outputs, 28 admitted, 81 pending and 107 cases. The DMG baseline remains unchanged: 313 inventory keys, 15 Mooneye keys, 20 acceptance keys, 2 benchmark keys, zero changed rows.
 
 ## Deviations from Plan
 
@@ -175,7 +191,17 @@ The 8,400-token actual is 33,602 characters divided by four across the seven imp
 - **Commit:** `074695e`.
 - **Full-suite status:** The parent stopped the Phase 14 full CTest run after its integration failures. That run is not a pass; the parent will rerun the full suite after this correction.
 
-**Total deviations:** 2 Rule 2 corrections.
+**3. [Rule 2 - Missing Critical Coverage] Pin PCM model-gate tags and profile table semantics**
+- **Found during:** Phase 14 Wave 1 recheck; the full suite reported 997/1003 passing and six failures, so the run was not a pass.
+- **Issue:** Both PCM helpers were untagged, masking the expected diagnostics in four model-gate checks. The independent CGB register table could not render PCM cells and did not independently reject the superseded deferred/compatibility/DMG dispositions for both registers.
+- **Fix:** Tagged both model-neutral helpers with the caller-branch basis and documented that basis. Added PCM12/PCM34 table rendering and an independent FF76/FF77 oracle for native CGB PCM reads, compatibility `$FF`, and DMG fail-closed reads. Six PCM profile mutants (two addresses across three model columns) are now rejected alongside the three existing register-table controls. No Phase 14-02 IR/FF74 cells were changed.
+- **Negative-control evidence:** The model-gate deleted-tag, appended-untagged-function, and code/document mismatch tests passed with their expected diagnostics. The table self-test emitted `cgb-tables mismatch: a DMG`, `policy-without-reason: divider_counter DMG`, `hw-test-outside-compat: a CGB`, and register-row mismatches at `$FF4C CGB`, `$FF55 DMG`, and `$FF0A CGB`; it then reported `cgb-tables self-test pass mutants=12`, including the six PCM policy mutants.
+- **Files modified:** `src/core/gabbaboy.c`, `docs/model-gates.md`, `tests/test_cgb_tables.c`, `tests/CMakeLists.txt`.
+- **Verification:** Model-gate and CGB table contracts passed 19/19; the focused PCM, visibility, Mooneye, inventory, and DMG identity selection passed 43/43; CGB corpus selection reported 181 sources, 109 outputs, 28 admitted, 81 pending and 107 cases; the frozen DMG baseline reported zero changes.
+- **Commit:** `1ddacb6`.
+- **Full-suite status:** The failed 997/1003 Wave 1 recheck remains a failure. The parent owns the next full-suite rerun; no full-suite pass is claimed here.
+
+**Total deviations:** 3 Rule 2 corrections.
 **Impact on plan:** Both corrections align existing verification with the implemented CGB PCM behavior and actual guest protocol results; corpus membership and author assertions were preserved.
 
 ## Issues Encountered
@@ -193,8 +219,8 @@ Plan 14-01 is complete. Phase 14 and requirement CGB-08 remain under the parent 
 ## Self-Check: PASSED
 
 - Summary file exists at the planned path.
-- All four task commits are ancestors of the current phase branch head.
-- Integration correction commit `074695e` is an ancestor of the current phase branch head.
+- The four original task commits and both Rule 2 correction commits are ancestors of the current phase branch head.
+- Summary coverage passed 1/1; measured plan-ledger count is 12 commits through `1ddacb6`.
 - No task commit deleted tracked files.
 
 ---
