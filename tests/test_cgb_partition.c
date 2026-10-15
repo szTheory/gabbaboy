@@ -1006,6 +1006,164 @@ static int cgb_apu_partition_controls(void) {
     return 0;
 }
 
+static void apu_lifecycle_make_rom(uint8_t rom[32768]) {
+    memset(rom, 0, 32768u);
+    rom[0x100u] = 0xC3u; rom[0x101u] = 0x50u; rom[0x102u] = 0x01u;
+    rom[0x143u] = 0x80u;
+    rom[0x147u] = 0x00u;
+    rom[0x148u] = 0x00u;
+    rom[0x149u] = 0x00u;
+    size_t pc = 0x150u;
+    apu_partition_emit_write(rom, &pc, 0x26u, 0x80u);
+    apu_partition_emit_write(rom, &pc, 0x11u, 0x80u);
+    apu_partition_emit_write(rom, &pc, 0x12u, 0xF0u);
+    apu_partition_emit_write(rom, &pc, 0x13u, 0x00u);
+    apu_partition_emit_write(rom, &pc, 0x14u, 0x80u);
+    for (unsigned i = 0u; i < 16u; ++i)
+        apu_partition_emit_write(rom, &pc, (uint8_t)(0x30u + i), 0x77u);
+    apu_partition_emit_write(rom, &pc, 0x1Au, 0x80u);
+    apu_partition_emit_write(rom, &pc, 0x1Cu, 0x20u);
+    apu_partition_emit_write(rom, &pc, 0x1Du, 0xFFu);
+    apu_partition_emit_write(rom, &pc, 0x1Eu, 0x87u);
+    apu_partition_emit_write(rom, &pc, 0x24u, 0x77u);
+    apu_partition_emit_write(rom, &pc, 0x25u, 0x11u);
+    apu_partition_emit_write(rom, &pc, 0x56u, 0xC1u);
+    for (unsigned i = 0u; i < 512u; ++i) rom[pc++] = 0x00u;
+    apu_partition_emit_pcm_read(rom, &pc, 0xC000u);
+    rom[pc++] = 0xF0u; rom[pc++] = 0x76u;
+    rom[pc++] = 0xEAu; rom[pc++] = 0x01u; rom[pc++] = 0xC0u;
+    rom[pc++] = 0x76u;
+    uint8_t checksum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14Du] = checksum;
+}
+
+static int apu_lifecycle_create(gbb_instance **out, const uint8_t rom[32768]) {
+    if (gbb_create(GBB_PROFILE_CGB_CPU_E, out) != GBB_OK) return 1;
+    if (gbb_load_rom(*out, rom, 32768u) != GBB_OK) {
+        gbb_destroy(*out);
+        *out = NULL;
+        return 1;
+    }
+    return 0;
+}
+
+static int apu_lifecycle_run(gbb_instance *machine, gbb_run_result *result,
+                             gbb_audio_frame *frames, size_t *frame_count) {
+    *frame_count = 0u;
+    *result = gbb_run_audio(machine, 20000u, frames, 1024u, frame_count);
+    return result->reason == GBB_STOP_HALTED_IDLE &&
+           result->consumed_half_dots <= 20000u ? 0 : 1;
+}
+
+static int apu_lifecycle_frames_equal(const gbb_audio_frame *left, size_t left_count,
+                                      const gbb_audio_frame *right, size_t right_count) {
+    if (left_count != right_count) return 0;
+    for (size_t i = 0u; i < left_count; ++i)
+        if (left[i].left != right[i].left || left[i].right != right[i].right) return 0;
+    return 1;
+}
+
+static uint64_t apu_lifecycle_digest(const gbb_instance *machine) {
+    const partition_streams no_streams = {0};
+    return partition_digest(machine, &no_streams);
+}
+
+static int cgb_apu_lifecycle(void) {
+    uint8_t rom[32768];
+    uint8_t invalid_rom[32768] = {0};
+    apu_lifecycle_make_rom(rom);
+    gbb_instance *machine = NULL, *twin = NULL, *fresh = NULL, *isolated = NULL;
+    REQUIRE(apu_lifecycle_create(&machine, rom) == 0);
+    REQUIRE(apu_lifecycle_create(&twin, rom) == 0);
+    REQUIRE(apu_lifecycle_create(&fresh, rom) == 0);
+    REQUIRE(apu_lifecycle_create(&isolated, rom) == 0);
+    REQUIRE(gbb_test_ir_latch(machine) == 0u && gbb_test_ir_latch(isolated) == 0u);
+    const uint64_t isolated_before = apu_lifecycle_digest(isolated);
+    gbb_audio_frame machine_frames[1024] = {{0}}, twin_frames[1024] = {{0}};
+    size_t machine_count = 0u, twin_count = 0u;
+    gbb_run_result machine_run, twin_run;
+    REQUIRE(apu_lifecycle_run(machine, &machine_run, machine_frames, &machine_count) == 0);
+    REQUIRE(gbb_test_ir_latch(machine) == 0xC1u);
+    REQUIRE(gbb_peek_ram(machine, 0xC000u) == 0x07u &&
+            gbb_peek_ram(machine, 0xC001u) == 0x0Fu);
+    REQUIRE(apu_lifecycle_digest(machine) != isolated_before);
+    REQUIRE(apu_lifecycle_digest(isolated) == isolated_before);
+    REQUIRE(apu_lifecycle_run(twin, &twin_run, twin_frames, &twin_count) == 0);
+    REQUIRE(machine_run.consumed_half_dots == twin_run.consumed_half_dots &&
+            machine_count == twin_count &&
+            apu_lifecycle_frames_equal(machine_frames, machine_count,
+                                       twin_frames, twin_count));
+
+    const partition_streams no_streams = {0};
+    const uint64_t before_failed_load = partition_digest(machine, &no_streams);
+    REQUIRE(gbb_load_rom(machine, invalid_rom, sizeof(invalid_rom)) != GBB_OK);
+    REQUIRE(partition_digest(machine, &no_streams) == before_failed_load);
+    REQUIRE(gbb_test_ir_latch(machine) == 0xC1u);
+
+    gbb_audio_frame after_failure[1024] = {{0}}, twin_after_failure[1024] = {{0}};
+    size_t after_count = 0u, twin_after_count = 0u;
+    const gbb_run_result after_run = gbb_run_audio(machine, 4096u, after_failure,
+        1024u, &after_count);
+    const gbb_run_result twin_after_run = gbb_run_audio(twin, 4096u,
+        twin_after_failure, 1024u, &twin_after_count);
+    REQUIRE(after_run.reason == twin_after_run.reason &&
+            after_run.consumed_half_dots == twin_after_run.consumed_half_dots &&
+            after_count == twin_after_count &&
+            apu_lifecycle_frames_equal(after_failure, after_count,
+                                       twin_after_failure, twin_after_count));
+
+    REQUIRE(gbb_load_rom(machine, rom, sizeof(rom)) == GBB_OK);
+    REQUIRE(apu_lifecycle_digest(machine) == apu_lifecycle_digest(fresh));
+    REQUIRE(gbb_test_ir_latch(machine) == 0u);
+    REQUIRE(apu_lifecycle_run(machine, &machine_run, machine_frames, &machine_count) == 0);
+    REQUIRE(gbb_test_ir_latch(machine) == 0xC1u);
+    REQUIRE(gbb_reset(machine) == GBB_OK);
+    REQUIRE(apu_lifecycle_digest(machine) == apu_lifecycle_digest(fresh));
+    REQUIRE(gbb_test_ir_latch(machine) == 0u);
+    REQUIRE(apu_lifecycle_digest(isolated) == isolated_before);
+    gbb_destroy(machine); gbb_destroy(twin); gbb_destroy(fresh); gbb_destroy(isolated);
+    puts("cgb_apu_lifecycle pass create=postboot reset=clean load=atomic failed_load=preserved instances=isolated");
+    return 0;
+}
+
+static int cgb_apu_lifecycle_controls(void) {
+    uint8_t rom[32768];
+    apu_lifecycle_make_rom(rom);
+    gbb_instance *machine = NULL, *fresh = NULL;
+    REQUIRE(apu_lifecycle_create(&machine, rom) == 0);
+    REQUIRE(apu_lifecycle_create(&fresh, rom) == 0);
+    gbb_audio_frame frames[1024] = {{0}};
+    size_t frame_count = 0u;
+    gbb_run_result run;
+    REQUIRE(apu_lifecycle_run(machine, &run, frames, &frame_count) == 0);
+    const partition_streams no_streams = {0};
+    const uint64_t dirty_digest = partition_digest(machine, &no_streams);
+    REQUIRE(gbb_reset(machine) == GBB_OK);
+    const uint64_t reset_digest = partition_digest(machine, &no_streams);
+    REQUIRE(reset_digest == partition_digest(fresh, &no_streams));
+    machine->apu_sample_phase += 1u;
+    const uint64_t reset_leak_digest = partition_digest(machine, &no_streams);
+    REQUIRE(reset_leak_digest != reset_digest);
+    machine->apu_sample_phase -= 1u;
+    REQUIRE(gbb_load_rom(machine, rom, sizeof(rom)) == GBB_OK);
+    REQUIRE(gbb_run(machine, 20000u, NULL, 0u).reason == GBB_STOP_HALTED_IDLE);
+    REQUIRE(partition_digest(machine, &no_streams) == dirty_digest);
+    REQUIRE(gbb_reset(machine) == GBB_OK);
+    const uint64_t failed_load_clear_digest = partition_digest(machine, &no_streams);
+    REQUIRE(failed_load_clear_digest != dirty_digest);
+    fprintf(stderr, "negative-control diagnostic: reset-leak expected_digest=%016" PRIx64
+                    " actual_digest=%016" PRIx64
+                    "; failed-load-clear expected_digest=%016" PRIx64
+                    " actual_digest=%016" PRIx64 "\n",
+            reset_digest, reset_leak_digest, dirty_digest,
+            failed_load_clear_digest);
+    gbb_destroy(machine); gbb_destroy(fresh);
+    puts("cgb_apu_lifecycle_controls pass controls=reset-leak,failed-load-clear");
+    return 0;
+}
+
 static int partition_run_reference(const partition_scenario *scenario,
                                    uint64_t total_half_dots,
                                    partition_meter *meter, uint64_t *digest) {
@@ -2015,6 +2173,10 @@ int main(int argc, char **argv) {
         return cgb_apu_partition_speed();
     if (strcmp(argv[1], "cgb_apu_partition_controls") == 0)
         return cgb_apu_partition_controls();
+    if (strcmp(argv[1], "cgb_apu_lifecycle") == 0)
+        return cgb_apu_lifecycle();
+    if (strcmp(argv[1], "cgb_apu_lifecycle_controls") == 0)
+        return cgb_apu_lifecycle_controls();
     if (strcmp(argv[1], "cgb_partition_stall_start_window") == 0)
         return cgb_partition_stall_start_window();
     if (strcmp(argv[1], "cgb_partition_hostile_irq_in_stall") == 0)

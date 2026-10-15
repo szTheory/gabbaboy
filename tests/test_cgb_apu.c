@@ -24,11 +24,12 @@ typedef struct {
 } gbb_test_bus_event;
 
 extern void gbb_test_observer_set(gbb_instance *, gbb_test_bus_event *, size_t);
+extern size_t gbb_test_observer_count(const gbb_instance *);
 
 #ifdef GBB_CGB_APU_HOSTILE_TEST
 extern int gbb_fuzz_core_one_input(const uint8_t *, size_t);
 extern int gbb_fuzz_core_contract_failures(void);
-extern void gbb_fuzz_core_apu_observation(int *, unsigned *, unsigned *, uint64_t *);
+extern void gbb_fuzz_core_apu_observation(int *, unsigned *, unsigned *, uint64_t *, int *);
 #endif
 
 typedef struct {
@@ -870,28 +871,291 @@ static int cgb_apu_transition_controls(void) {
     return 0;
 }
 
+typedef struct {
+    uint8_t ram[6];
+    gbb_test_bus_event events[512];
+    size_t event_count;
+    gbb_audio_frame frames[4096];
+    size_t frame_count;
+    uint64_t consumed_half_dots;
+    gbb_stop_reason reason;
+} cgb_apu_pressure_result;
+
+static size_t cgb_apu_pressure_program(uint8_t *program) {
+    size_t length = 0u;
+    emit_write(program, &length, 0x26u, 0x80u);
+    emit_write(program, &length, 0x11u, 0x80u);
+    emit_write(program, &length, 0x12u, 0xF0u);
+    emit_write(program, &length, 0x13u, 0x00u);
+    emit_write(program, &length, 0x14u, 0x80u);
+    program[length++] = 0xF0u; program[length++] = 0x76u;
+    program[length++] = 0xEAu; program[length++] = 0x00u; program[length++] = 0xC0u;
+    emit_write(program, &length, 0x24u, 0x77u);
+    emit_write(program, &length, 0x25u, 0x11u);
+    for (unsigned i = 0u; i < 16u; ++i)
+        emit_write(program, &length, (uint8_t)(0x30u + i), 0x77u);
+    emit_write(program, &length, 0x1Au, 0x80u);
+    emit_write(program, &length, 0x1Cu, 0x20u);
+    emit_write(program, &length, 0x1Du, 0xFFu);
+    emit_write(program, &length, 0x1Eu, 0x87u);
+    for (unsigned i = 0u; i < 8u; ++i) program[length++] = 0x00u;
+    emit_write(program, &length, 0x1Du, 0x00u);
+    emit_write(program, &length, 0x1Eu, 0x80u);
+    emit_write(program, &length, 0x30u, 0xAAu);
+    program[length++] = 0xF0u; program[length++] = 0x77u;
+    program[length++] = 0xEAu; program[length++] = 0x01u; program[length++] = 0xC0u;
+    emit_write(program, &length, 0x04u, 0x00u); /* DIV sequencer edge. */
+    for (unsigned i = 0u; i < 16u; ++i) program[length++] = 0x00u;
+    program[length++] = 0xF0u; program[length++] = 0x76u;
+    program[length++] = 0xEAu; program[length++] = 0x02u; program[length++] = 0xC0u;
+    emit_write(program, &length, 0x26u, 0x00u); /* NR52 power-off transition. */
+    program[length++] = 0xF0u; program[length++] = 0x76u;
+    program[length++] = 0xEAu; program[length++] = 0x03u; program[length++] = 0xC0u;
+    emit_write(program, &length, 0x26u, 0x80u);
+    emit_write(program, &length, 0x4Du, 0x01u);
+    program[length++] = 0x10u; program[length++] = 0x00u; /* KEY1/STOP speed-switch stall. */
+    program[length++] = 0xF0u; program[length++] = 0x4Du;
+    program[length++] = 0xEAu; program[length++] = 0x05u; program[length++] = 0xC0u;
+    emit_write(program, &length, 0x51u, 0xC0u);
+    emit_write(program, &length, 0x52u, 0x00u);
+    emit_write(program, &length, 0x53u, 0x00u);
+    emit_write(program, &length, 0x54u, 0x00u);
+    emit_write(program, &length, 0x55u, 0x00u); /* One-block GDMA stall. */
+    program[length++] = 0xF0u; program[length++] = 0x77u;
+    program[length++] = 0xEAu; program[length++] = 0x04u; program[length++] = 0xC0u;
+    program[length++] = 0x76u;
+    return length;
+}
+
+static int cgb_apu_pressure_run(unsigned mode, cgb_apu_pressure_result *out) {
+    static const uint64_t tiny_budgets[] = {1u, 3u, 7u, 17u, 31u, 127u, 257u};
+    uint8_t program[512];
+    const size_t length = cgb_apu_pressure_program(program);
+    memset(out, 0, sizeof(*out));
+    gbb_instance *machine = load_cgb_guest(program, length);
+    if (machine == NULL) return 1;
+    gbb_test_observer_set(machine, out->events,
+                          sizeof(out->events) / sizeof(out->events[0]));
+    if (mode == 0u) {
+        const gbb_run_result run = gbb_run(machine, 200000u, NULL, 0u);
+        out->reason = run.reason;
+        out->consumed_half_dots = run.consumed_half_dots;
+    } else if (mode == 1u) {
+        const gbb_run_result run = gbb_run_audio(machine, 200000u, out->frames,
+            sizeof(out->frames) / sizeof(out->frames[0]), &out->frame_count);
+        out->reason = run.reason;
+        out->consumed_half_dots = run.consumed_half_dots;
+    } else {
+        uint64_t total = 0u;
+        unsigned calls = 0u;
+        int terminal = 0;
+        while (total < 200000u && calls < 2048u) {
+            uint64_t budget = calls < 6u ? tiny_budgets[calls] : 257u;
+            if (budget > 200000u - total) budget = 200000u - total;
+            gbb_audio_frame frame = {0, 0};
+            size_t count = 0u;
+            const gbb_run_result run = gbb_run_audio(machine, budget, &frame, 1u, &count);
+            if (run.consumed_half_dots > budget ||
+                run.consumed_half_dots > 200000u - total ||
+                count > 1u || out->frame_count + count >
+                    sizeof(out->frames) / sizeof(out->frames[0])) {
+                fprintf(stderr, "pressure-drain bound failure calls=%u reason=%u budget=%llu consumed=%llu total=%llu count=%zu frames=%zu\n",
+                        calls, (unsigned)run.reason, (unsigned long long)budget,
+                        (unsigned long long)run.consumed_half_dots,
+                        (unsigned long long)total, count, out->frame_count);
+                gbb_destroy(machine);
+                return 1;
+            }
+            total += run.consumed_half_dots;
+            if (count != 0u) out->frames[out->frame_count++] = frame;
+            ++calls;
+            if (run.reason == GBB_STOP_HALTED_IDLE) {
+                out->reason = run.reason;
+                terminal = 1;
+                break;
+            }
+            if (run.reason != GBB_STOP_BUDGET && run.reason != GBB_STOP_OUTPUT_FULL) {
+                fprintf(stderr, "pressure-drain reason failure calls=%u reason=%u budget=%llu consumed=%llu count=%zu total=%llu\n",
+                        calls, (unsigned)run.reason, (unsigned long long)budget,
+                        (unsigned long long)run.consumed_half_dots, count,
+                        (unsigned long long)total);
+                gbb_destroy(machine);
+                return 1;
+            }
+            if (run.consumed_half_dots == 0u && count == 0u &&
+                run.reason != GBB_STOP_BUDGET) {
+                fprintf(stderr, "pressure-drain no-progress calls=%u reason=%u budget=%llu total=%llu\n",
+                        calls, (unsigned)run.reason, (unsigned long long)budget,
+                        (unsigned long long)total);
+                gbb_destroy(machine);
+                return 1;
+            }
+        }
+        if (terminal == 0) {
+            fprintf(stderr, "pressure-drain incomplete total=%llu calls=%u frames=%zu\n",
+                    (unsigned long long)total, calls, out->frame_count);
+            gbb_destroy(machine);
+            return 1;
+        }
+        out->consumed_half_dots = total;
+    }
+    out->event_count = gbb_test_observer_count(machine);
+    gbb_test_observer_set(machine, NULL, 0u);
+    for (unsigned i = 0u; i < 6u; ++i)
+        out->ram[i] = gbb_peek_ram(machine, (uint16_t)(0xC000u + i));
+    const int ok = out->reason == GBB_STOP_HALTED_IDLE && out->event_count <
+        sizeof(out->events) / sizeof(out->events[0]);
+    if (!ok)
+        fprintf(stderr, "pressure-run failure mode=%u reason=%u consumed=%llu events=%zu frames=%zu ram=%02x,%02x,%02x,%02x,%02x,%02x\n",
+                mode, (unsigned)out->reason,
+                (unsigned long long)out->consumed_half_dots, out->event_count,
+                out->frame_count, out->ram[0], out->ram[1], out->ram[2],
+                out->ram[3], out->ram[4], out->ram[5]);
+    if (!ok) for (size_t i = 0u; i < out->event_count; ++i)
+        fprintf(stderr, "pressure-event %zu time=%llu access=%u address=%04x value=%02x\n",
+                i, (unsigned long long)out->events[i].time_half_dots,
+                out->events[i].access, out->events[i].address,
+                out->events[i].value);
+    gbb_destroy(machine);
+    return ok ? 0 : 1;
+}
+
+static int cgb_apu_pressure_equal(const cgb_apu_pressure_result *left,
+                                  const cgb_apu_pressure_result *right,
+                                  int compare_audio) {
+    if (memcmp(left->ram, right->ram, sizeof(left->ram)) != 0 ||
+        left->reason != right->reason ||
+        left->consumed_half_dots != right->consumed_half_dots ||
+        left->event_count != right->event_count) return 0;
+    for (size_t i = 0u; i < left->event_count; ++i) {
+        const gbb_test_bus_event *a = &left->events[i];
+        const gbb_test_bus_event *b = &right->events[i];
+        if (a->time_half_dots != b->time_half_dots || a->address != b->address ||
+            a->access != b->access || a->value != b->value) return 0;
+    }
+    if (compare_audio != 0) {
+        if (left->frame_count != right->frame_count) return 0;
+        for (size_t i = 0u; i < left->frame_count; ++i)
+            if (left->frames[i].left != right->frames[i].left ||
+                left->frames[i].right != right->frames[i].right) return 0;
+    }
+    return 1;
+}
+
+static int cgb_apu_output_pressure(void) {
+    cgb_apu_pressure_result no_output, full_output, drained_output;
+    REQUIRE_CASE(cgb_apu_pressure_run(0u, &no_output) == 0, "cgb_apu_output_pressure");
+    REQUIRE_CASE(cgb_apu_pressure_run(1u, &full_output) == 0, "cgb_apu_output_pressure");
+    REQUIRE_CASE(cgb_apu_pressure_run(2u, &drained_output) == 0, "cgb_apu_output_pressure");
+    REQUIRE_CASE(cgb_apu_pressure_equal(&no_output, &full_output, 0),
+                 "cgb_apu_output_pressure");
+    REQUIRE_CASE(cgb_apu_pressure_equal(&full_output, &drained_output, 1),
+                 "cgb_apu_output_pressure");
+    REQUIRE_CASE(no_output.ram[0] == 0x0Fu && no_output.ram[1] == 0x07u &&
+                 no_output.ram[2] == 0x0Fu && no_output.ram[3] == 0u &&
+                 no_output.ram[4] == 0u && no_output.ram[5] == 0xFEu,
+                 "cgb_apu_output_pressure");
+    int saw_div = 0, saw_power = 0, saw_speed = 0, saw_hdma = 0;
+    int saw_speed_status = 0, saw_post_hdma_pcm = 0;
+    uint64_t speed_write_time = 0u, speed_read_time = 0u;
+    uint64_t hdma_start_time = 0u, post_hdma_pcm_time = 0u;
+    for (size_t i = 0u; i < no_output.event_count; ++i) {
+        const gbb_test_bus_event *event = &no_output.events[i];
+        if (event->access == 2u) {
+            if (event->address == 0xFF04u) saw_div = 1;
+            if (event->address == 0xFF26u && event->value == 0u) saw_power = 1;
+            if (event->address == 0xFF4Du) {
+                saw_speed = 1;
+                speed_write_time = event->time_half_dots;
+            }
+            if (event->address == 0xFF55u) {
+                saw_hdma = 1;
+                hdma_start_time = event->time_half_dots;
+            }
+        } else if (event->access == 1u) {
+            if (event->address == 0xFF4Du && (event->value & 0x80u) != 0u) {
+                saw_speed_status = 1;
+                speed_read_time = event->time_half_dots;
+            }
+            if (event->address == 0xFF77u &&
+                event->time_half_dots > hdma_start_time && saw_hdma) {
+                saw_post_hdma_pcm = 1;
+                post_hdma_pcm_time = event->time_half_dots;
+            }
+        }
+    }
+    REQUIRE_CASE(saw_div && saw_power && saw_speed && saw_hdma &&
+                 saw_speed_status && speed_read_time >= speed_write_time + 131076u &&
+                 saw_post_hdma_pcm && post_hdma_pcm_time > hdma_start_time,
+                 "cgb_apu_output_pressure");
+    cgb_apu_pressure_result altered = drained_output;
+    altered.ram[0] ^= 1u;
+    REQUIRE_CASE(!cgb_apu_pressure_equal(&full_output, &altered, 1),
+                 "cgb_apu_output_pressure");
+    fprintf(stderr, "negative-control diagnostic: host-output comparison rejected altered guest PCM expected=0x%02x actual=0x%02x\n",
+            full_output.ram[0], altered.ram[0]);
+    fprintf(stderr, "pressure guest expected_pcm=0x%02x,0x%02x,0x%02x,0x%02x,0x%02x,0x%02x actual=%02x,%02x,%02x,%02x,%02x,%02x; frames=%zu events=%zu\n",
+            0x0Fu, 0x07u, 0x0Fu, 0x00u, 0x00u, 0xFEu,
+            no_output.ram[0],
+            no_output.ram[1], no_output.ram[2], no_output.ram[3],
+            no_output.ram[4], no_output.ram[5], full_output.frame_count,
+            full_output.event_count);
+    printf("ok 1 - cgb_apu_output_pressure\n");
+    return 0;
+}
+
 #ifdef GBB_CGB_APU_HOSTILE_TEST
+static int check_apu_hostile_seed(const uint8_t *seed, size_t size,
+                                  unsigned minimum_operations) {
+    int selected = 0, terminal = 0;
+    unsigned operations = 0u, run_calls = 0u;
+    uint64_t consumed_half_dots = 0u;
+    if (gbb_fuzz_core_one_input(seed, size) != 0) return 1;
+    gbb_fuzz_core_apu_observation(&selected, &operations, &run_calls,
+                                  &consumed_half_dots, &terminal);
+    if (selected != 1 || operations < minimum_operations || operations > 16u ||
+        run_calls == 0u || run_calls > 16u || consumed_half_dots > 8192u ||
+        terminal == 0) {
+        fprintf(stderr, "bounded APU seed mismatch expected=selected,operations=%u..16,runs=1..16,half_dots<=8192,terminal actual=%d,%u,%u,%llu,%d\n",
+                minimum_operations, selected, operations, run_calls,
+                (unsigned long long)consumed_half_dots, terminal);
+        return 1;
+    }
+    fprintf(stderr, "bounded APU seed size=%zu selected=%d operations=%u run_calls=%u half_dots=%llu terminal=%d\n",
+            size, selected, operations, run_calls,
+            (unsigned long long)consumed_half_dots, terminal);
+    return 0;
+}
+
 static int cgb_apu_hostile_seeds(void) {
     static const uint8_t seed[] = {
         0xD3u, 0x01u,
-        0x26u, 0x80u, 0x12u, 0xF0u, 0x30u, 0xA5u,
-        0x04u, 0x00u, 0x56u, 0xC1u, 0x24u, 0x77u
+        0x26u, 0x80u, 0x12u, 0xF0u, 0x30u, 0x77u,
+        0x1Au, 0x80u, 0x1Cu, 0x20u, 0x1Du, 0xFFu,
+        0x1Eu, 0x87u, 0x04u, 0x00u, 0x56u, 0xC1u,
+        0x26u, 0x00u, 0x26u, 0x80u
     };
-    int selected = 0;
-    unsigned operations = 0u, run_calls = 0u;
-    uint64_t consumed_half_dots = 0u;
-    REQUIRE_CASE(gbb_fuzz_core_one_input(seed, sizeof(seed)) == 0,
+    static const uint8_t truncated_seed[] = {0xD3u};
+    static const uint8_t burst_seed[] = {
+        0xD3u, 0x00u, 0x26u, 0x80u, 0x26u, 0x00u, 0x26u, 0x80u,
+        0x04u, 0x00u, 0x30u, 0xA5u, 0x30u, 0x5Au, 0x56u, 0xC1u
+    };
+    uint8_t *maximum_seed = malloc(65536u);
+    REQUIRE_CASE(maximum_seed != NULL, "cgb_apu_hostile_seeds");
+    memset(maximum_seed, 0xA5, 65536u);
+    maximum_seed[0] = 0xD3u;
+    maximum_seed[1] = 0x01u;
+    REQUIRE_CASE(check_apu_hostile_seed(seed, sizeof(seed), 1u) == 0,
                  "cgb_apu_hostile_seeds");
-    gbb_fuzz_core_apu_observation(&selected, &operations, &run_calls,
-                                  &consumed_half_dots);
-    REQUIRE_CASE(selected == 1 && operations != 0u && operations <= 16u &&
-                 run_calls != 0u && run_calls <= 16u &&
-                 consumed_half_dots <= 8192u &&
-                 gbb_fuzz_core_contract_failures() == 0,
+    REQUIRE_CASE(check_apu_hostile_seed(truncated_seed, sizeof(truncated_seed), 0u) == 0,
                  "cgb_apu_hostile_seeds");
-    fprintf(stderr, "bounded APU seed expected=selected,operations<=16,runs<=16,half_dots<=8192 actual=%d,%u,%u,%llu\n",
-            selected, operations, run_calls,
-            (unsigned long long)consumed_half_dots);
+    REQUIRE_CASE(check_apu_hostile_seed(burst_seed, sizeof(burst_seed), 1u) == 0,
+                 "cgb_apu_hostile_seeds");
+    REQUIRE_CASE(check_apu_hostile_seed(maximum_seed, 65536u, 16u) == 0,
+                 "cgb_apu_hostile_seeds");
+    free(maximum_seed);
+    REQUIRE_CASE(gbb_fuzz_core_contract_failures() == 0, "cgb_apu_hostile_seeds");
+    fprintf(stderr, "bounded APU seeds passed cases=truncated,repeated-transition,full-input and loader=truncated,oversized\n");
     printf("ok 1 - cgb_apu_hostile_seeds\n");
     return 0;
 }
@@ -929,6 +1193,8 @@ int main(int argc, char **argv) {
     if (strcmp(name, "cgb_apu_div_stop") == 0) return cgb_apu_div_stop();
     if (strcmp(name, "cgb_apu_transition_controls") == 0)
         return cgb_apu_transition_controls();
+    if (strcmp(name, "cgb_apu_output_pressure") == 0)
+        return cgb_apu_output_pressure();
 #ifdef GBB_CGB_APU_HOSTILE_TEST
     if (strcmp(name, "cgb_apu_hostile_seeds") == 0)
         return cgb_apu_hostile_seeds();

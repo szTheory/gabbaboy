@@ -685,6 +685,7 @@ add_test(NAME cgb_apu_wave_access COMMAND test_cgb_apu cgb_apu_wave_access)
 add_test(NAME cgb_apu_div_stop COMMAND test_cgb_apu cgb_apu_div_stop)
 add_test(NAME cgb_apu_transition_controls COMMAND test_cgb_apu cgb_apu_transition_controls)
 add_test(NAME cgb_apu_trigger_length_sweep COMMAND test_cgb_apu cgb_apu_trigger_length_sweep)
+add_test(NAME cgb_apu_output_pressure COMMAND test_cgb_apu cgb_apu_output_pressure)
 add_test(NAME cgb_pcm_tracer COMMAND test_cgb_apu cgb_pcm_tracer)
 foreach(case channels power_dac readonly host_invariance controls)
   add_test(NAME cgb_pcm_${case} COMMAND test_cgb_apu cgb_pcm_${case})
@@ -3883,6 +3884,8 @@ add_test(NAME cgb_partition_mutant_m16_control
 # not re-measured in this run. Largest observed case: multicut, 2,187,264 hd,
 # 0.43 s local Debug; each CTest retains TIMEOUT 60 for sanitizer headroom.
 foreach(gbb_partition_case IN ITEMS
+    cgb_apu_lifecycle
+    cgb_apu_lifecycle_controls
     cgb_apu_partition_fetch
     cgb_apu_partition_speed
     cgb_apu_partition_controls

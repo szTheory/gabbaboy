@@ -15,6 +15,9 @@
 #define FUZZ_SPEED_HALF_DOT_LIMIT UINT64_C(600000)
 #define FUZZ_CGB_HDMA_OPERATION_LIMIT 16u
 #define FUZZ_CGB_HDMA_RUN_LIMIT UINT64_C(16384)
+#define FUZZ_CGB_APU_OPERATION_LIMIT 16u
+#define FUZZ_CGB_APU_RUN_LIMIT UINT64_C(8192)
+#define FUZZ_CGB_APU_SLICE_HALF_DOTS UINT64_C(257)
 
 static void fix_checksum(uint8_t rom[32768]) {
     uint8_t checksum = 0u;
@@ -91,6 +94,7 @@ static struct {
     unsigned operations;
     unsigned run_calls;
     uint64_t consumed_half_dots;
+    int terminal;
 } last_apu_observation;
 
 #ifdef GBB_FUZZ_STANDALONE_TEST
@@ -392,14 +396,81 @@ void gbb_fuzz_core_hdma_observation(int *selected, unsigned *operations,
 
 void gbb_fuzz_core_apu_observation(int *selected, unsigned *operations,
                                    unsigned *run_calls,
-                                   uint64_t *consumed_half_dots) {
+                                   uint64_t *consumed_half_dots,
+                                   int *terminal) {
     if (selected != NULL) *selected = last_apu_observation.selected;
     if (operations != NULL) *operations = last_apu_observation.operations;
     if (run_calls != NULL) *run_calls = last_apu_observation.run_calls;
     if (consumed_half_dots != NULL)
         *consumed_half_dots = last_apu_observation.consumed_half_dots;
+    if (terminal != NULL) *terminal = last_apu_observation.terminal;
 }
 #endif
+
+/* D-20/D-21: hostile APU inputs build a bounded guest program from untrusted byte pairs. The two
+ * loader probes are deliberately malformed and must be rejected before replacing the live guest. */
+static void fuzz_cgb_apu(gbb_instance *machine, const uint8_t *data, size_t size) {
+    static const uint8_t apu_offsets[] = {
+        0x26u, 0x12u, 0x24u, 0x25u, 0x1Au, 0x1Cu,
+        0x1Du, 0x1Eu, 0x30u, 0x04u, 0x56u
+    };
+    static uint8_t oversized_rom[32769u];
+    uint8_t rom[32768u];
+    make_battery_rom(oversized_rom);
+    oversized_rom[0x143u] = 0x80u;
+    fix_checksum(oversized_rom);
+    require_contract(gbb_load_rom(machine, oversized_rom, 0x14Fu) == GBB_ROM_TRUNCATED);
+    require_contract(gbb_load_rom(machine, oversized_rom, sizeof(oversized_rom)) ==
+                     GBB_ROM_SIZE_MISMATCH);
+
+    make_battery_rom(rom);
+    rom[0x100u] = 0xC3u; rom[0x101u] = 0x50u; rom[0x102u] = 0x01u;
+    rom[0x143u] = size > 1u && (data[1] & 1u) != 0u ? 0xC0u : 0x80u;
+    size_t at = 0x150u;
+    unsigned operations = 0u;
+    size_t cursor = 2u;
+    while (operations < FUZZ_CGB_APU_OPERATION_LIMIT && cursor + 1u < size) {
+        const uint8_t selector = data[cursor++];
+        const uint8_t value = data[cursor++];
+        rom[at++] = 0x3Eu; rom[at++] = value;
+        rom[at++] = 0xE0u; rom[at++] = apu_offsets[selector % sizeof(apu_offsets)];
+        ++operations;
+    }
+    rom[at++] = 0xF0u; rom[at++] = 0x76u; /* Capture PCM12 through the guest bus. */
+    rom[at++] = 0xEAu; rom[at++] = 0x00u; rom[at++] = 0xC0u;
+    rom[at++] = 0xF0u; rom[at++] = 0x77u; /* Capture PCM34 through the guest bus. */
+    rom[at++] = 0xEAu; rom[at++] = 0x01u; rom[at++] = 0xC0u;
+    rom[at] = 0x76u;
+    fix_checksum(rom);
+    require_contract(gbb_load_rom(machine, rom, sizeof(rom)) == GBB_OK);
+
+    uint64_t consumed_total = 0u;
+    unsigned run_calls = 0u;
+    int terminal = 0;
+    while (consumed_total < FUZZ_CGB_APU_RUN_LIMIT &&
+           run_calls < FUZZ_CGB_APU_OPERATION_LIMIT) {
+        uint64_t budget = FUZZ_CGB_APU_SLICE_HALF_DOTS;
+        if (budget > FUZZ_CGB_APU_RUN_LIMIT - consumed_total)
+            budget = FUZZ_CGB_APU_RUN_LIMIT - consumed_total;
+        const gbb_run_result run = gbb_run(machine, budget, NULL, 0u);
+        require_contract(run.consumed_half_dots <= budget);
+        consumed_total += run.consumed_half_dots;
+        ++run_calls;
+        if (run.reason == GBB_STOP_HALTED_IDLE) {
+            terminal = 1;
+            break;
+        }
+        if (run.reason != GBB_STOP_BUDGET || run.consumed_half_dots == 0u) break;
+    }
+    require_contract(terminal != 0 && operations <= FUZZ_CGB_APU_OPERATION_LIMIT &&
+                     run_calls <= FUZZ_CGB_APU_OPERATION_LIMIT &&
+                     consumed_total <= FUZZ_CGB_APU_RUN_LIMIT);
+    last_apu_observation.selected = 1;
+    last_apu_observation.operations = operations;
+    last_apu_observation.run_calls = run_calls;
+    last_apu_observation.consumed_half_dots = consumed_total;
+    last_apu_observation.terminal = terminal;
+}
 
 /* D-27: exercise the real guest KEY1/STOP path under bounded, repeatable inputs. The speed mode has
  * its own budget because a CGB switch stalls for far longer than the ordinary 2,048-half-dot fuzz
@@ -907,8 +978,8 @@ int gbb_fuzz_core_one_input(const uint8_t *data, size_t size) {
     memset(&last_hdma_observation, 0, sizeof(last_hdma_observation));
     memset(&last_apu_observation, 0, sizeof(last_apu_observation));
 
-    /* data[0] bit 7 selects the profile. CGB data[0] with bits 6 or 5 select I/O/palette paths;
-     * bits 4..6 equal to 0x10 select the guest KEY1/STOP path on either profile. */
+    /* data[0] bit 7 selects the profile. Exact 0xD3 selects the APU hostile path; other CGB data
+     * with bits 6 or 5 select I/O/palette, while 0x10 in bits 4..6 selects KEY1/STOP. */
     const int cgb = (data[0] & 0x80u) != 0u;
     last_profile_cgb = cgb;
     gbb_instance *machine = NULL;
@@ -918,7 +989,9 @@ int gbb_fuzz_core_one_input(const uint8_t *data, size_t size) {
     make_battery_rom(base_rom);
     require_contract(gbb_load_rom(machine, base_rom, sizeof(base_rom)) == GBB_OK);
 
-    if (cgb && data[0] == 0xB0u)
+    if (cgb && data[0] == 0xD3u)
+        fuzz_cgb_apu(machine, data, size);
+    else if (cgb && data[0] == 0xB0u)
         fuzz_cgb_hdma(machine, data, size);
     else if (cgb && (data[0] & 0x70u) == 0x10u)
         fuzz_speed(machine, data, size, 1);
