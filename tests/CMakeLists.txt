@@ -669,6 +669,26 @@ foreach(case pulse mixer sequencer timeline wave noise envelope sweep power)
   add_test(NAME apu_${case} COMMAND test_apu apu_${case})
 endforeach()
 
+# Phase 14 plan 14-01: a real CGB guest samples digital PCM through the timed bus path.
+add_executable(test_cgb_apu test_cgb_apu.c)
+target_link_libraries(test_cgb_apu PRIVATE GabbaBoy::core)
+target_compile_features(test_cgb_apu PRIVATE c_std_17)
+set_target_properties(test_cgb_apu PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_pcm_tracer COMMAND test_cgb_apu cgb_pcm_tracer)
+
+# Compile-time-only mutant core: production instances have no runtime mutation selector or state.
+add_library(gabbaboy_core_cgb_pcm_nibble_mutant STATIC ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c)
+target_include_directories(gabbaboy_core_cgb_pcm_nibble_mutant PUBLIC "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(gabbaboy_core_cgb_pcm_nibble_mutant PRIVATE c_std_17)
+target_compile_definitions(gabbaboy_core_cgb_pcm_nibble_mutant PRIVATE GBB_TEST_CGB_PCM_SWAP_NIBBLES=1)
+set_target_properties(gabbaboy_core_cgb_pcm_nibble_mutant PROPERTIES C_EXTENSIONS OFF)
+add_executable(test_cgb_apu_nibble_mutant test_cgb_apu.c)
+target_link_libraries(test_cgb_apu_nibble_mutant PRIVATE gabbaboy_core_cgb_pcm_nibble_mutant)
+target_compile_features(test_cgb_apu_nibble_mutant PRIVATE c_std_17)
+target_compile_definitions(test_cgb_apu_nibble_mutant PRIVATE GBB_CGB_APU_CONTROL_MUTANT=1)
+set_target_properties(test_cgb_apu_nibble_mutant PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_pcm_tracer_control COMMAND test_cgb_apu_nibble_mutant cgb_pcm_tracer_control)
+
 add_executable(test_serial test_serial.c)
 target_link_libraries(test_serial PRIVATE GabbaBoy::core)
 target_compile_features(test_serial PRIVATE c_std_17)

@@ -429,9 +429,9 @@ static int case_boundaries(void) {
         { "FF74 stored", {0x3E, 0x33, 0xE0, 0x74}, 4, 0xFF74, STOP, 0x33, 0xFF },
         { "FF75 init",   {0}, 0, 0xFF75, STOP, 0x8F, 0x8F },
         { "FF75 stored", {0x3E, 0xA5, 0xE0, 0x75}, 4, 0xFF75, STOP, 0xAF, 0xAF },
-        { "FF76",        {0}, 0, 0xFF76, STOP, STOP, STOP },
+        { "FF76",        {0}, 0, 0xFF76, STOP, 0x00, 0xFF },
         /* FF77 / FF78 */
-        { "FF77",        {0}, 0, 0xFF77, STOP, STOP, STOP },
+        { "FF77",        {0}, 0, 0xFF77, STOP, 0x00, 0xFF },
         { "FF78",        {0}, 0, 0xFF78, STOP, 0xFF, 0xFF },
         /* FF7F / FF80 */
         { "FF7F",        {0}, 0, 0xFF7F, STOP, 0xFF, 0xFF },
@@ -454,15 +454,15 @@ static int case_boundaries(void) {
 /* Deferred accesses stop visibly. A read stops before it happens; a write is dropped and the stop
  * follows the retire of the instruction that issued it. */
 static int case_deferred_stop(void) {
-    /* Reads: the DEFERRED CGB-mode cells (RP, PCM12, PCM34); the stop is atomic and the seam names the address. */
-    const uint16_t deferred_reads[] = { 0xFF56, 0xFF76, 0xFF77 };
+    /* RP remains deferred in CGB mode; PCM12/34 are now implemented guest-visible reads. */
+    const uint16_t deferred_reads[] = { 0xFF56 };
     for (size_t i = 0; i < sizeof(deferred_reads) / sizeof(deferred_reads[0]); ++i)
         REQUIRE(expect_probe(V_CGB, NULL, 0, deferred_reads[i], STOP) == 0);
     /* Control: an idle FF55 reads $FF and compatibility mode still ignores deferred rows. */
     REQUIRE(expect_probe(V_CGB, NULL, 0, 0xFF55, 0xFF) == 0);
     REQUIRE(expect_probe(V_COMPAT, NULL, 0, 0xFF56, 0xFF) == 0);
-    REQUIRE(expect_probe(V_COMPAT, NULL, 0, 0xFF76, STOP) == 0);
-    REQUIRE(expect_probe(V_COMPAT, NULL, 0, 0xFF77, STOP) == 0);
+    REQUIRE(expect_probe(V_COMPAT, NULL, 0, 0xFF76, 0xFF) == 0);
+    REQUIRE(expect_probe(V_COMPAT, NULL, 0, 0xFF77, 0xFF) == 0);
 
     /* A real guest FF55 HBlank request is accepted and reads back one active block as $00. */
     prog p = { {0}, 0 };
@@ -486,8 +486,8 @@ static int case_deferred_stop(void) {
     REQUIRE(hram(m, 0) == 0x00);
     gbb_destroy(m);
 
-    /* Every deferred write cell stops in CGB mode with its own address. */
-    const uint16_t deferred_writes[] = { 0xFF56, 0xFF76, 0xFF77 };
+    /* RP is still a deferred write; PCM ports ignore writes in both CGB columns. */
+    const uint16_t deferred_writes[] = { 0xFF56 };
     for (size_t i = 0; i < sizeof(deferred_writes) / sizeof(deferred_writes[0]); ++i) {
         prog w = { {0}, 0 };
         write_io(&w, (uint8_t)deferred_writes[i], 0x01);
@@ -499,10 +499,8 @@ static int case_deferred_stop(void) {
         gbb_destroy(m);
     }
 
-    /* Compat mode ignores FF56 writes (no stop) but FF76/FF77 stay deferred;
-     * the DMG profile never stops on any of them (C4). */
+    /* Compatibility mode ignores the RP write, and the DMG profile never stops on it (C4). */
     for (size_t i = 0; i < sizeof(deferred_writes) / sizeof(deferred_writes[0]); ++i) {
-        const int compat_stops = deferred_writes[i] >= 0xFF76;
         for (int v = V_DMG; v <= V_COMPAT; v += 2) {
             prog w = { {0}, 0 };
             write_io(&w, (uint8_t)deferred_writes[i], 0x01);
@@ -511,12 +509,8 @@ static int case_deferred_stop(void) {
             m = load_view((view)v, w.b, w.n, NULL, 0);
             REQUIRE(m != NULL);
             r = gbb_run(m, RUN_BUDGET, NULL, 0);
-            if (v == V_COMPAT && compat_stops) {
-                REQUIRE(r.reason == GBB_STOP_UNSUPPORTED_BUS);
-            } else {
-                REQUIRE(r.reason != GBB_STOP_UNSUPPORTED_BUS);
-                REQUIRE(hram(m, 0) == 0x09);
-            }
+            REQUIRE(r.reason != GBB_STOP_UNSUPPORTED_BUS);
+            REQUIRE(hram(m, 0) == 0x09);
             gbb_destroy(m);
         }
     }
@@ -809,8 +803,8 @@ static void fill_compat(void) {
     add_cell(V_COMPAT, 0xFF73, 0x00, 0xA5, 0xA5, 0x5A, 0x5A, K_IMPL, 0, "D-10 FF73");
     const_ff(V_COMPAT, 0xFF74, 0xA5, 0x5A, "D-10 FF74");
     add_cell(V_COMPAT, 0xFF75, 0x8F, 0xA5, 0xAF, 0x5A, 0xDF, K_IMPL, 0, "D-10 FF75");
-    add_cell(V_COMPAT, 0xFF76, STOP, 0x5A, STOP, 0xA5, STOP, K_DEF_RW, 14, "D-10 PCM12");
-    add_cell(V_COMPAT, 0xFF77, STOP, 0x5A, STOP, 0xA5, STOP, K_DEF_RW, 14, "D-10 PCM34");
+    const_ff(V_COMPAT, 0xFF76, 0x5A, 0xA5, "D-10 PCM12 is unavailable in compatibility mode");
+    const_ff(V_COMPAT, 0xFF77, 0x5A, 0xA5, "D-10 PCM34 is unavailable in compatibility mode");
 }
 
 /* CGB-mode column ($143 = $80). */
@@ -838,8 +832,8 @@ static void fill_cgb(void) {
     add_cell(V_CGB, 0xFF73, 0x00, 0xA5, 0xA5, 0x5A, 0x5A, K_IMPL, 0, "D-10 FF73");
     add_cell(V_CGB, 0xFF74, 0x00, 0xA5, 0xA5, 0x5A, 0x5A, K_IMPL, 0, "D-10 FF74");
     add_cell(V_CGB, 0xFF75, 0x8F, 0xA5, 0xAF, 0x5A, 0xDF, K_IMPL, 0, "D-10 FF75");
-    add_cell(V_CGB, 0xFF76, STOP, 0x5A, STOP, 0xA5, STOP, K_DEF_RW, 14, "D-10 PCM12");
-    add_cell(V_CGB, 0xFF77, STOP, 0x5A, STOP, 0xA5, STOP, K_DEF_RW, 14, "D-10 PCM34");
+    add_cell(V_CGB, 0xFF76, 0x00, 0x5A, 0x00, 0xA5, 0x00, K_IMPL, 0, "Pan Docs PCM12; writes ignored");
+    add_cell(V_CGB, 0xFF77, 0x00, 0x5A, 0x00, 0xA5, 0x00, K_IMPL, 0, "Pan Docs PCM34; writes ignored");
 }
 
 /* DMG column (D-09): every address that is not a pre-CGB register stops on read, atomically, and a
