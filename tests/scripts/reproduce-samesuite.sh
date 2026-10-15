@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Verify and rebuild the four approved SameSuite CGB DMA ROMs at the immutable
+# Verify and rebuild the approved SameSuite CGB DMA and APU ROMs at the immutable
 # Phase 13 source revision. Rebuilt bytes stay in an isolated temporary folder.
 #
 #   no arguments                 offline checks, mutation controls, pinned rebuild
@@ -11,7 +11,7 @@
 #                                compare an independently supplied build
 #
 # The --case selector is only for admission-stage work. Default and CI always
-# require the full four-case set.
+# require the full pinned set of four DMA and seventy APU cases.
 set -euo pipefail
 
 script_dir=$(cd "$(dirname "$0")" && pwd -P)
@@ -48,7 +48,7 @@ while (($#)); do
   esac
 done
 
-if [[ -n "$case_name" ]] && [[ "$case_name" != gbc_dma_cont && "$case_name" != gdma_addr_mask && "$case_name" != hdma_lcd_off && "$case_name" != hdma_mode0 && "$case_name" != apu/channel_3/channel_3_first_sample ]]; then
+if [[ -n "$case_name" ]] && [[ "$case_name" != gbc_dma_cont && "$case_name" != gdma_addr_mask && "$case_name" != hdma_lcd_off && "$case_name" != hdma_mode0 && "$case_name" != apu/* ]]; then
   echo "unapproved SameSuite case: $case_name" >&2
   exit 2
 fi
@@ -60,6 +60,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -89,12 +90,7 @@ CASES = [
     ("hdma_lcd_off", "637a3612dcb99bd5f2b0739fb31ad26ce390361e6878b193b894b40f882e44eb", "The author-encoded result expects one block on an LCD-off HBlank-DMA start, then verifies the remaining/cancel status sequence.", "CGB-mode guest test; LCD is off at the start and the ROM records HDMA5 before and after cancellation."),
     ("hdma_mode0", "53f8d643548cecfc8ba5bd03721e4609571fa6a5ac383c96a2342b058fb5f2a1", "After waiting for a visible Mode 0 period, the author-encoded result expects one block and verifies the remaining/cancel status sequence.", "CGB-mode guest test; enters visible LCD operation, starts in Mode 0, and turns the LCD off before the test ends."),
 ]
-APU_CASES = [
-    ("apu/channel_3/channel_3_first_sample", "464b7139b6c2147fa0984006d32507559972404f538e53408369c1c337b1b6e7",
-     "Pinned channel-3 first-sample test records eight wave-PCM observations.",
-     "CGB-mode guest test; source encodes its expected result bytes and pass sentinel."),
-]
-ALL = [row[0] for row in CASES] + [row[0] for row in APU_CASES]
+DMA_CASES = [row[0] for row in CASES]
 LICENSES = [
     {"path": "include/hexdigits.2bpp", "spdx": "X11", "basis": "covered by the SameSuite repository X11 license under G7"},
     {"path": "include/hardware.inc", "spdx": "CC0-1.0", "basis": "the pinned file carries its CC0-1.0 waiver and SPDX notice"},
@@ -118,48 +114,43 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def selected(case_name):
+def selected(case_name, fixture):
+    data = manifest(fixture)
+    apu_cases = [row.get("alias") for row in data.get("fixtures", [])
+                 if isinstance(row, dict) and str(row.get("alias", "")).startswith("apu/")]
+    if len(apu_cases) != 70 or len(set(apu_cases)) != 70:
+        fail("pinned APU manifest must contain exactly 70 unique source aliases")
+    all_cases = DMA_CASES + apu_cases
     if case_name:
-        if case_name not in ALL:
+        if case_name not in all_cases:
             fail("unapproved case: " + case_name)
         return [case_name]
-    return ALL
+    return all_cases
 
 
-def source_rows(names):
+def source_rows(names, data):
     source_paths = [(name + ".asm") if name.startswith("apu/") else ("dma/" + name + ".asm")
                     for name in names]
     files = [path for path in source_paths if not path.startswith("apu/")]
     files += INCLUDES
     files += [path for path in source_paths if path.startswith("apu/")]
-    return [
-        {"path": path, "size_bytes": SOURCE[path][0], "sha256": SOURCE[path][1], "role": SOURCE[path][2], "spdx": SOURCE[path][3]}
-        for path in files
-    ]
+    source_by_path = {row.get("path"): row for row in data.get("source_files", [])}
+    result = []
+    for path in files:
+        if path in SOURCE:
+            size, sha, role, spdx = SOURCE[path]
+            result.append({"path": path, "size_bytes": size, "sha256": sha, "role": role, "spdx": spdx})
+        else:
+            row = source_by_path.get(path)
+            if row is None:
+                fail("missing pinned source-file row: " + path)
+            result.append(row)
+    return result
 
 
 def fixture_row(name):
     if name.startswith("apu/"):
-        case = next(row for row in APU_CASES if row[0] == name)
-        source_path = name + ".asm"
-        return {
-            "alias": name,
-            "file": name + ".gb",
-            "original_filename": name + ".gb",
-            "size_bytes": 32768,
-            "sha256": case[1],
-            "source_path": source_path,
-            "source_size_bytes": SOURCE[source_path][0],
-            "source_sha256": SOURCE[source_path][1],
-            "includes": INCLUDES,
-            "expectation": case[2],
-            "applicability": case[3],
-            "target_revision": "CGB-E",
-            "model": "CGB-CPU-E selected software model",
-            "bootless_applicability": True,
-            "author_test_evidence": "Pinned SameSuite APU README reports CPU-CGB-E passes all tests; this source independently encodes eight expected bytes and a guest pass sentinel. No independent physical CGB-E measurement is supplied.",
-            "author_expected_results": ["00", "00", "00", "00", "00", "0e", "0e", "0e"],
-        }
+        return None
     case = next(row for row in CASES if row[0] == name)
     source_path = next(path for path in SOURCE if path == "dma/" + name + ".asm")
     return {
@@ -198,7 +189,7 @@ def check_eligibility(fixture):
     if not path.is_file():
         fail("missing ELIGIBILITY.md for the complete admitted set")
     text = " ".join(path.read_text().split())
-    for token in [REV, *ALL, "G7", "CC0-1.0", "D-06", "Pan Docs", "physical CGB-E evidence", "G1", "CGB-C"]:
+    for token in [REV, *DMA_CASES, "apu/channel_1/channel_1_align", "G7", "CC0-1.0", "D-06", "Pan Docs", "physical CGB-E evidence", "G1", "CGB-C"]:
         if token not in text:
             fail("eligibility ledger is missing required provenance: " + token)
 
@@ -218,7 +209,8 @@ def self_check(fixture, case_name, script):
         if attribute.returncode != 0 or attribute.stdout.strip() != path + ": eol: lf":
             fail("digest-pinned text closure lacks LF checkout policy: " + path)
     for path in (
-        "fixtures/cgb-hdma/hblank.gb", "fixtures/samesuite/gbc_dma_cont.gb",
+    "fixtures/cgb-hdma/hblank.gb", "fixtures/samesuite/gbc_dma_cont.gb",
+    "fixtures/samesuite/apu/channel_4/channel_4_freq_change.gb",
         "fixtures/magentests/hblank_vram_dma.gbc",
     ):
         attribute = subprocess.run(
@@ -226,8 +218,8 @@ def self_check(fixture, case_name, script):
             text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         if attribute.returncode != 0 or attribute.stdout.strip() != path + ": text: unset":
             fail("digest-pinned binary fixture lacks binary checkout policy: " + path)
-    names = selected(case_name)
     data = manifest(fixture)
+    names = selected(case_name, fixture)
     suite = {"name": "SameSuite", "revision": REV, "upstream": "https://github.com/LIJI32/SameSuite/tree/" + REV, "license": "X11; see LICENSE.txt"}
     license_row = {"notice_file": "LICENSE.txt", "notice_sha256": LICENSE_SHA, "spdx": "X11", "rights_basis": "G7", "included_material": LICENSES}
     if data.get("suite") != suite:
@@ -241,7 +233,7 @@ def self_check(fixture, case_name, script):
         fail("X11/CC0 license notice SHA-256 mismatch: LICENSE.txt")
     if data.get("build") != BUILD:
         fail("RGBDS tool version/archive digest/options differ from the pinned 1.0.1 toolchain")
-    expected_sources = source_rows(names)
+    expected_sources = source_rows(names, data)
     if data.get("source_files") != expected_sources:
         observed = {row.get("path"): row for row in data.get("source_files", []) if isinstance(row, dict)}
         for row in expected_sources:
@@ -258,9 +250,27 @@ def self_check(fixture, case_name, script):
     if not expected_files <= found_files or (not case_name and found_files != expected_files):
         fail("committed ROM files differ from selected cases: expected " + repr(sorted(expected_files)) + ", got " + repr(sorted(found_files)))
     rows_by_alias = {row.get("alias"): row for row in rows if isinstance(row, dict)}
+    source_by_path = {row.get("path"): row for row in data.get("source_files", [])}
     for name in names:
         row = rows_by_alias.get(name)
-        if row != fixture_row(name):
+        if name.startswith("apu/"):
+            source_path = name + ".asm"
+            source = source_by_path.get(source_path)
+            if (row is None or source is None or row.get("file") != name + ".gb" or
+                row.get("source_path") != source_path or row.get("source_size_bytes") != source.get("size_bytes") or
+                row.get("source_sha256") != source.get("sha256") or row.get("size_bytes") != 32768 or
+                row.get("target_revision") != "CGB-E" or row.get("model") != "CGB-CPU-E selected software model" or
+                row.get("bootless_applicability") is not True or row.get("author_expectation", {}).get("result") != "pass" or
+                row.get("rights_basis", "").find("G7") < 0 or row.get("build_recipe") != BUILD["command"] or
+                row.get("reproduction", {}).get("suite_revision") != REV or
+                not isinstance(row.get("author_expected_results"), list) or
+                len(row["author_expected_results"]) == 0 or len(row["author_expected_results"]) > 144):
+                fail("APU fixture provenance/result metadata differs from the pinned contract: " + name)
+            if any(not re.fullmatch(r"[0-9a-f]{2}", value) for value in row["author_expected_results"]):
+                fail("APU source expected-result byte is malformed: " + name)
+            if not re.fullmatch(r"0x[0-9A-F]{4}", row.get("author_result_start", "")):
+                fail("APU source result-address is malformed: " + name)
+        elif row != fixture_row(name):
             fail("fixture source/model/license metadata differs from the pin: " + name)
         rom = fixture / (name + ".gb")
         if not rom.is_file():
@@ -303,7 +313,7 @@ def copy_fixture(source, target, names):
 
 
 def self_test(fixture, script, case_name):
-    names = selected(case_name)
+    names = selected(case_name, fixture)
     manifest(fixture)
     with tempfile.TemporaryDirectory(prefix="gabbaboy-samesuite-selftest-") as temporary:
         root = Path(temporary)
@@ -405,7 +415,7 @@ def self_test(fixture, script, case_name):
 
 
 def compare_built(fixture, directory, case_name):
-    names = selected(case_name)
+    names = selected(case_name, fixture)
     if not directory.is_dir():
         fail("rebuilt ROM directory is missing: " + str(directory))
     expected = {name + ".gb" for name in names}
@@ -432,7 +442,9 @@ def source_check(fixture, source_dir):
         except subprocess.CalledProcessError:
             fail("pinned upstream source path is missing: " + path)
         expected = SOURCE.get(path)
-        if expected is None or len(content) != expected[0] or digest(content) != expected[1]:
+        expected_size = expected[0] if expected else row.get("size_bytes")
+        expected_digest = expected[1] if expected else row.get("sha256")
+        if expected_size is None or len(content) != expected_size or digest(content) != expected_digest:
             fail("fetched upstream source digest differs from the pin: " + path)
     upstream_license = subprocess.check_output(["git", "-C", str(source_dir), "show", REV + ":LICENSE"])
     if digest(upstream_license) != UPSTREAM_LICENSE_SHA:

@@ -2,7 +2,7 @@
 
 ## Pinned admission
 
-This directory contains four DMA and one APU fixture from SameSuite revision
+This directory contains four DMA and seventy APU fixtures from SameSuite revision
 `f15645fb049a47ea235f6d2c9a033e72d8087901`:
 
 | Case | Source | Intended observation |
@@ -17,8 +17,13 @@ admitted tracer is `apu/channel_3/channel_3_first_sample.asm`; its manifest row
 records the exact source and ROM SHA-256, RGBDS build recipe, output filename,
 and source-encoded result bytes `00 00 00 00 00 0e 0e 0e`. Each admitted APU
 output retains the same source-level CGB-E pass expectation, including revision
-suffix variants. The README's aggregate claim is not independent physical
-hardware evidence.
+suffix variants such as `apu/channel_1/channel_1_align`. Each output row records
+its source and ROM digest, result-start address, full `CorrectResults` byte
+sequence, RGBDS recipe, source revision, and the X11/G7 plus CC0 asset basis.
+The README's aggregate claim is not independent physical hardware evidence. A
+separate pinned CGB-CPU-E qualification run records 8 byte-exact guest passes
+and 62 exact current-observation xfails over 4,784 assertions; those xfails are
+not source-level passes or hardware conclusions.
 
 The manifest pins each source and include closure, source and ROM sizes and
 SHA-256 values, the upstream output filename, RGBDS 1.0.1 archive digests,

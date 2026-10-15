@@ -415,22 +415,6 @@
       ]
     },
     {
-      "suite": "samesuite",
-      "repository": "SameSuite KEY1/APU tests",
-      "vendored": false,
-      "rows": [
-        {
-          "case": "key1-apu-aggregate",
-          "disposition": "expected-unsupported",
-          "reason": "pcm-registers-unbuilt",
-          "reason_detail": "Aggregate suite remains unsupported until Phase 14 builds PCM register support; no ROM is vendored.",
-          "owner_phase": 14,
-          "decision": "D-23",
-          "flip_rule": "reassess after PCM register support is implemented"
-        }
-      ]
-    },
-    {
       "suite": "gambatte",
       "repository": "Gambatte speedchange",
       "vendored": false,

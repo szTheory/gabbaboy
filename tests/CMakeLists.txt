@@ -995,8 +995,8 @@ add_test(NAME cgb_hdma_magen_controls
     ${GBB_MAGENTESTS_DIR}/hblank_vram_dma.gbc)
 set_tests_properties(magentests_hblank_vram_dma cgb_hdma_magen_controls PROPERTIES TIMEOUT 60)
 
-# Phase 14 plan 14-07: execute the pinned SameSuite APU tracer on the selected
-# CGB-CPU-E software model and retain exact DMA consumers below.
+# Phase 14 plan 14-07: qualify the pinned SameSuite APU membership on the
+# selected CGB-CPU-E model; one suite run emits the per-case receipts.
 add_executable(test_samesuite_apu test_samesuite_apu.c)
 target_sources(test_samesuite_apu PRIVATE "${PROJECT_SOURCE_DIR}/src/accept/sha256.c")
 target_include_directories(test_samesuite_apu PRIVATE "${PROJECT_SOURCE_DIR}/src/accept")
@@ -1009,6 +1009,125 @@ add_test(NAME cgb_samesuite_apu_tracer
 add_test(NAME cgb_samesuite_apu_tracer_controls
   COMMAND test_samesuite_apu --controls
     "${PROJECT_SOURCE_DIR}/fixtures/samesuite/apu/channel_3/channel_3_first_sample.gb")
+file(READ "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json" GBB_SAMESUITE_MANIFEST_JSON)
+file(READ "${PROJECT_SOURCE_DIR}/tests/external/cgb-apu-dispositions.json"
+  GBB_SAMESUITE_APU_DISPOSITIONS_JSON)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json"
+  "${PROJECT_SOURCE_DIR}/tests/external/cgb-apu-dispositions.json")
+string(JSON GBB_SAMESUITE_FIXTURE_COUNT LENGTH "${GBB_SAMESUITE_MANIFEST_JSON}" fixtures)
+string(JSON GBB_SAMESUITE_APU_DISPOSITION_COUNT LENGTH
+  "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}" cases)
+if(NOT GBB_SAMESUITE_APU_DISPOSITION_COUNT EQUAL 70)
+  message(FATAL_ERROR "SameSuite APU disposition roster must contain exactly 70 cases")
+endif()
+file(SHA256 "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json"
+  GBB_SAMESUITE_MANIFEST_SHA256)
+file(SHA256 "${PROJECT_SOURCE_DIR}/tests/external/cgb-apu-dispositions.json"
+  GBB_SAMESUITE_DISPOSITIONS_SHA256)
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/tests")
+set(GBB_SAMESUITE_APU_CASE_HEADER
+  "${PROJECT_BINARY_DIR}/tests/samesuite_apu_cases.h")
+file(WRITE "${GBB_SAMESUITE_APU_CASE_HEADER}"
+  "#define GBB_SAMESUITE_MANIFEST_SHA256 \"${GBB_SAMESUITE_MANIFEST_SHA256}\"\n#define GBB_SAMESUITE_DISPOSITIONS_SHA256 \"${GBB_SAMESUITE_DISPOSITIONS_SHA256}\"\n")
+set(GBB_SAMESUITE_APU_CASE_ENTRIES "")
+set(GBB_SAMESUITE_APU_CASE_INDEX 0)
+if(GBB_SAMESUITE_FIXTURE_COUNT GREATER 0)
+  math(EXPR GBB_SAMESUITE_FIXTURE_LAST "${GBB_SAMESUITE_FIXTURE_COUNT} - 1")
+  foreach(GBB_SAMESUITE_FIXTURE_INDEX RANGE 0 ${GBB_SAMESUITE_FIXTURE_LAST})
+    string(JSON GBB_SAMESUITE_ALIAS GET "${GBB_SAMESUITE_MANIFEST_JSON}"
+      fixtures ${GBB_SAMESUITE_FIXTURE_INDEX} alias)
+    if(GBB_SAMESUITE_ALIAS MATCHES "^apu/")
+      string(JSON GBB_SAMESUITE_FILE GET "${GBB_SAMESUITE_MANIFEST_JSON}"
+        fixtures ${GBB_SAMESUITE_FIXTURE_INDEX} file)
+      string(JSON GBB_SAMESUITE_ROM_SHA GET "${GBB_SAMESUITE_MANIFEST_JSON}"
+        fixtures ${GBB_SAMESUITE_FIXTURE_INDEX} sha256)
+      string(JSON GBB_SAMESUITE_SOURCE_PATH GET "${GBB_SAMESUITE_MANIFEST_JSON}"
+        fixtures ${GBB_SAMESUITE_FIXTURE_INDEX} source_path)
+      string(JSON GBB_SAMESUITE_SOURCE_SHA GET "${GBB_SAMESUITE_MANIFEST_JSON}"
+        fixtures ${GBB_SAMESUITE_FIXTURE_INDEX} source_sha256)
+      string(JSON GBB_SAMESUITE_RESULT_ADDRESS GET "${GBB_SAMESUITE_MANIFEST_JSON}"
+        fixtures ${GBB_SAMESUITE_FIXTURE_INDEX} author_result_start)
+      string(JSON GBB_SAMESUITE_RESULT_COUNT LENGTH "${GBB_SAMESUITE_MANIFEST_JSON}"
+        fixtures ${GBB_SAMESUITE_FIXTURE_INDEX} author_expected_results)
+      if(GBB_SAMESUITE_RESULT_COUNT LESS 1 OR GBB_SAMESUITE_RESULT_COUNT GREATER 144)
+        message(FATAL_ERROR "SameSuite APU result count is outside the bounded runner at ${GBB_SAMESUITE_ALIAS}")
+      endif()
+      math(EXPR GBB_SAMESUITE_RESULT_LAST "${GBB_SAMESUITE_RESULT_COUNT} - 1")
+      if(GBB_SAMESUITE_APU_CASE_INDEX GREATER_EQUAL GBB_SAMESUITE_APU_DISPOSITION_COUNT)
+        message(FATAL_ERROR "SameSuite APU disposition roster is missing ${GBB_SAMESUITE_ALIAS}")
+      endif()
+      string(JSON GBB_SAMESUITE_DISPOSITION_ID GET "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}"
+        cases ${GBB_SAMESUITE_APU_CASE_INDEX} id)
+      string(JSON GBB_SAMESUITE_DISPOSITION_STATUS GET "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}"
+        cases ${GBB_SAMESUITE_APU_CASE_INDEX} evaluator_disposition status)
+      string(JSON GBB_SAMESUITE_DISPOSITION_SIGNATURE GET "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}"
+        cases ${GBB_SAMESUITE_APU_CASE_INDEX} evaluator_disposition signature_sha256)
+      string(JSON GBB_SAMESUITE_DISPOSITION_FIXTURE GET "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}"
+        cases ${GBB_SAMESUITE_APU_CASE_INDEX} fixture_path)
+      string(JSON GBB_SAMESUITE_DISPOSITION_ROM_SHA GET "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}"
+        cases ${GBB_SAMESUITE_APU_CASE_INDEX} rom_sha256)
+      string(JSON GBB_SAMESUITE_DISPOSITION_SOURCE_SHA GET "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}"
+        cases ${GBB_SAMESUITE_APU_CASE_INDEX} source_sha256)
+      string(JSON GBB_SAMESUITE_DISPOSITION_RESULT_START GET "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}"
+        cases ${GBB_SAMESUITE_APU_CASE_INDEX} author_expectation result_start)
+      string(JSON GBB_SAMESUITE_DISPOSITION_ASSERTION_COUNT GET "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}"
+        cases ${GBB_SAMESUITE_APU_CASE_INDEX} author_expectation assertion_count)
+      string(JSON GBB_SAMESUITE_DISPOSITION_ASSERTIONS LENGTH "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}"
+        cases ${GBB_SAMESUITE_APU_CASE_INDEX} author_expectation assertions)
+      string(JSON GBB_SAMESUITE_AUTHOR_EXPECTATION GET "${GBB_SAMESUITE_MANIFEST_JSON}"
+        fixtures ${GBB_SAMESUITE_FIXTURE_INDEX} author_expectation result)
+      if(NOT GBB_SAMESUITE_DISPOSITION_ID STREQUAL "samesuite:${GBB_SAMESUITE_SOURCE_PATH}")
+        message(FATAL_ERROR "SameSuite APU disposition order/identity differs at ${GBB_SAMESUITE_ALIAS}")
+      endif()
+      if(NOT "${GBB_SAMESUITE_DISPOSITION_FIXTURE}" STREQUAL "fixtures/samesuite/${GBB_SAMESUITE_FILE}" OR
+         NOT "${GBB_SAMESUITE_DISPOSITION_ROM_SHA}" STREQUAL "${GBB_SAMESUITE_ROM_SHA}" OR
+         NOT "${GBB_SAMESUITE_DISPOSITION_SOURCE_SHA}" STREQUAL "${GBB_SAMESUITE_SOURCE_SHA}" OR
+         NOT "${GBB_SAMESUITE_DISPOSITION_RESULT_START}" STREQUAL "${GBB_SAMESUITE_RESULT_ADDRESS}" OR
+         NOT GBB_SAMESUITE_DISPOSITION_ASSERTION_COUNT EQUAL GBB_SAMESUITE_RESULT_COUNT OR
+         NOT GBB_SAMESUITE_DISPOSITION_ASSERTIONS EQUAL GBB_SAMESUITE_RESULT_COUNT OR
+         NOT "${GBB_SAMESUITE_AUTHOR_EXPECTATION}" STREQUAL "pass" OR
+         NOT "${GBB_SAMESUITE_DISPOSITION_STATUS}" MATCHES "^(pass|xfail)$")
+        message(FATAL_ERROR "SameSuite APU source/disposition contract differs at ${GBB_SAMESUITE_ALIAS}")
+      endif()
+      set(GBB_SAMESUITE_EXPECTED_INITIALIZER "")
+      foreach(GBB_SAMESUITE_RESULT_INDEX RANGE 0 ${GBB_SAMESUITE_RESULT_LAST})
+        string(JSON GBB_SAMESUITE_RESULT_BYTE GET "${GBB_SAMESUITE_MANIFEST_JSON}"
+          fixtures ${GBB_SAMESUITE_FIXTURE_INDEX} author_expected_results ${GBB_SAMESUITE_RESULT_INDEX})
+        if(GBB_SAMESUITE_RESULT_INDEX GREATER 0)
+          string(APPEND GBB_SAMESUITE_EXPECTED_INITIALIZER ",")
+        endif()
+        string(APPEND GBB_SAMESUITE_EXPECTED_INITIALIZER "0x${GBB_SAMESUITE_RESULT_BYTE}u")
+      endforeach()
+      file(APPEND "${GBB_SAMESUITE_APU_CASE_HEADER}"
+        "static const uint8_t gbb_apu_expected_${GBB_SAMESUITE_APU_CASE_INDEX}[] = {${GBB_SAMESUITE_EXPECTED_INITIALIZER}};\n")
+      string(APPEND GBB_SAMESUITE_APU_CASE_ENTRIES
+        "  {\"${GBB_SAMESUITE_ALIAS}\", \"${GBB_SAMESUITE_ROM_SHA}\", (uint16_t)${GBB_SAMESUITE_RESULT_ADDRESS}, gbb_apu_expected_${GBB_SAMESUITE_APU_CASE_INDEX}, ${GBB_SAMESUITE_RESULT_COUNT}u, \"${GBB_SAMESUITE_FILE}\", \"${GBB_SAMESUITE_DISPOSITION_STATUS}\", \"${GBB_SAMESUITE_DISPOSITION_SIGNATURE}\"},\n")
+      math(EXPR GBB_SAMESUITE_APU_CASE_INDEX "${GBB_SAMESUITE_APU_CASE_INDEX} + 1")
+      string(REGEX REPLACE "^apu/" "" GBB_SAMESUITE_TEST_SUFFIX "${GBB_SAMESUITE_ALIAS}")
+      string(REPLACE "/" "_" GBB_SAMESUITE_TEST_SUFFIX "${GBB_SAMESUITE_TEST_SUFFIX}")
+      string(REPLACE "-" "_" GBB_SAMESUITE_TEST_SUFFIX "${GBB_SAMESUITE_TEST_SUFFIX}")
+      add_test(NAME "cgb_samesuite_apu_${GBB_SAMESUITE_TEST_SUFFIX}"
+        COMMAND test_samesuite_apu --membership "${GBB_SAMESUITE_ALIAS}"
+          "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json"
+          "${PROJECT_SOURCE_DIR}/tests/external/cgb-apu-dispositions.json")
+      set_tests_properties("cgb_samesuite_apu_${GBB_SAMESUITE_TEST_SUFFIX}"
+        PROPERTIES TIMEOUT 60)
+    endif()
+  endforeach()
+endif()
+if(NOT GBB_SAMESUITE_APU_CASE_INDEX EQUAL GBB_SAMESUITE_APU_DISPOSITION_COUNT)
+  message(FATAL_ERROR "SameSuite APU disposition roster contains unbound cases")
+endif()
+file(APPEND "${GBB_SAMESUITE_APU_CASE_HEADER}"
+  "static const apu_case samesuite_apu_cases[] = {\n${GBB_SAMESUITE_APU_CASE_ENTRIES}};\n#define GBB_SAMESUITE_APU_CASE_COUNT (sizeof(samesuite_apu_cases) / sizeof(samesuite_apu_cases[0]))\n")
+target_include_directories(test_samesuite_apu PRIVATE "${PROJECT_BINARY_DIR}/tests")
+add_test(NAME cgb_samesuite_apu_suite
+  COMMAND test_samesuite_apu --suite
+    "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json"
+    "${PROJECT_SOURCE_DIR}/tests/external/cgb-apu-dispositions.json"
+    "${PROJECT_SOURCE_DIR}/fixtures/samesuite")
+set_tests_properties(cgb_samesuite_apu_suite PROPERTIES TIMEOUT 600)
 
 add_executable(test_samesuite_hdma test_samesuite_hdma.c)
 target_include_directories(test_samesuite_hdma PRIVATE "${PROJECT_SOURCE_DIR}/include")

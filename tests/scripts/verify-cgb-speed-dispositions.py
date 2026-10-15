@@ -102,7 +102,7 @@ def main() -> int:
         data = json.loads(args.record.read_text(encoding="utf-8"))
         need(data.get("schema") == "gabbaboy-external-dispositions-v1", "schema")
         suites = suite_map(data)
-        need({"age-test-roms", "gabbaboy-model", "samesuite", "gambatte",
+        need({"age-test-roms", "gabbaboy-model", "gambatte",
               "not-applicable"} <= set(suites), "suite-set")
         rows = [(suite["suite"], row)
                 for suite in data.get("suites", []) for row in suite.get("rows", [])]
@@ -197,12 +197,9 @@ def main() -> int:
         gate_names.discard("reason")
         need(gate_names <= row_names, f"expected-failure-model-gates {sorted(gate_names - row_names)}")
 
-        same = suites["samesuite"]
-        need(same.get("vendored") is False and len(same.get("rows", [])) == 1 and
-             same["rows"][0].get("disposition") == "expected-unsupported" and
-             same["rows"][0].get("reason") == "pcm-registers-unbuilt" and
-             sum(row.get("reason") == "pcm-registers-unbuilt" for _, row in rows) == 1,
-             "samesuite-aggregate")
+        need("samesuite" not in suites and
+             (root / "tests/external/cgb-apu-dispositions.json").is_file(),
+             "samesuite-apu-routed-to-qualified-corpus")
         gambatte = suites["gambatte"]
         need(gambatte.get("vendored") is False and gambatte.get("license") == "GPL-2.0" and
              len(gambatte.get("rows", [])) == 1 and

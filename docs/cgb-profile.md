@@ -313,6 +313,13 @@ path. CGB-mode FF76/FF77 expose read-only digital DAC inputs for channel pairs 2
 compatibility mode reads `$FF` and ignores writes. These are software-model qualifications based on
 the pinned Pan Docs register description, not physical CGB-E measurements.
 
+The pinned SameSuite APU corpus adds 70 source-encoded CGB-E cases on the selected CGB-CPU-E model.
+Its frozen qualification records 8 terminal guest passes and 62 exact current-observation xfails
+across 4,784 assertions; the xfails remain distinct from the author-pass expectation. These receipts
+are model evidence only, not physical CGB-E audio measurements. See
+[`cgb-apu-dispositions.json`](../tests/external/cgb-apu-dispositions.json) and
+[`cgb-corpus-inventory.json`](../tests/external/cgb-corpus-inventory.json).
+
 In the selected software model, a manually HALTed CPU does not admit new ordinary HBlank blocks.
 An already admitted block continues, a timer IF/IE condition wakes HALT, and IME-on wake follows the
 normal interrupt vector before the guest resumes. The edge observed during HALT is not replayed;
@@ -688,7 +695,6 @@ and the STOP/OAM bug on a speed switch (`expected-failure:speed-switch-stop-oam-
 | gabbaboy-model | speed-switch-pending-irq-oracle-only | expected-failure | expected-failure:speed-switch-pending-irq-oracle-only | 12 | cgb_speed_stop_cases |
 | gabbaboy-model | speed-switch-wake-oracle-only | expected-failure | expected-failure:speed-switch-wake-oracle-only | 12 | cgb_speed_wake_ime_off |
 | gabbaboy-model | cgb-separate-buses | expected-failure | expected-failure:cgb-separate-buses | 11 | banking_bus_conflict_cgb_pin |
-| samesuite | key1-apu-aggregate | expected-unsupported | pcm-registers-unbuilt | 14 | - |
 | gambatte | speedchange | not-admitted | gpl-2.0-cgb-c-results | 12 | - |
 | not-applicable | mooneye | not-applicable | no-applicable-cgb-speed-switch-tests | 12 | - |
 | not-applicable | blargg | not-applicable | no-applicable-cgb-speed-switch-tests | 12 | - |
