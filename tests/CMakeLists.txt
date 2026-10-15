@@ -1294,9 +1294,10 @@ add_test(NAME cgb_corpus_inventory_selection
 set_tests_properties(cgb_corpus_inventory_selection PROPERTIES TIMEOUT 30
   PASS_REGULAR_EXPRESSION "cgb-corpus-inventory pass mode=selection-only")
 add_test(NAME cgb_corpus_inventory
-  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-inventory.py" --complete)
-set_tests_properties(cgb_corpus_inventory PROPERTIES TIMEOUT 60
-  PASS_REGULAR_EXPRESSION "cgb-corpus-inventory pass mode=complete")
+  COMMAND "${Python3_EXECUTABLE}" -I
+    "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-inventory.py" --bindings)
+set_tests_properties(cgb_corpus_inventory PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-corpus-inventory pass mode=bindings")
 add_test(NAME cgb_corpus_inventory_selftest
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-inventory.py" --self-test)
 set_tests_properties(cgb_corpus_inventory_selftest PROPERTIES TIMEOUT 30
@@ -1635,6 +1636,49 @@ if(GBB_TEST_INSTALL_PREFIX AND EXISTS "${GBB_TEST_INSTALL_PREFIX}")
         -P ${PROJECT_SOURCE_DIR}/cmake/RunInstalledConsumer.cmake)
   endforeach()
 endif()
+
+# The stamp is built after the project and every test target so it binds the exact
+# executables, source/config/toolchain inputs, fixture bytes, and CTest membership.
+# Real file dependencies make it stale whenever any covered input changes.
+file(GLOB_RECURSE GBB_CGB_BUILD_CODE_INPUTS CONFIGURE_DEPENDS
+  "${PROJECT_SOURCE_DIR}/include/*.h"
+  "${PROJECT_SOURCE_DIR}/src/*.c" "${PROJECT_SOURCE_DIR}/src/*.h"
+  "${PROJECT_SOURCE_DIR}/tests/*.c" "${PROJECT_SOURCE_DIR}/tests/*.h"
+  "${PROJECT_SOURCE_DIR}/tests/*.cmake" "${PROJECT_SOURCE_DIR}/tests/*.py")
+file(GLOB_RECURSE GBB_CGB_BUILD_FIXTURE_INPUTS CONFIGURE_DEPENDS
+  "${PROJECT_SOURCE_DIR}/fixtures/age/*.gb"
+  "${PROJECT_SOURCE_DIR}/fixtures/age/references/*.png"
+  "${PROJECT_SOURCE_DIR}/fixtures/samesuite/*.gb"
+  "${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/*.gb"
+  "${PROJECT_SOURCE_DIR}/fixtures/magentests/*.gb")
+set(GBB_CGB_BUILD_CONTRACT_INPUTS
+  "${PROJECT_SOURCE_DIR}/CMakeLists.txt"
+  "${PROJECT_SOURCE_DIR}/CMakePresets.json"
+  "${PROJECT_SOURCE_DIR}/tests/CMakeLists.txt"
+  "${PROJECT_SOURCE_DIR}/tests/expected-tests.txt"
+  "${PROJECT_SOURCE_DIR}/tests/external/cgb-corpus-inventory.json"
+  "${PROJECT_SOURCE_DIR}/tests/external/cgb-apu-dispositions.json"
+  "${PROJECT_SOURCE_DIR}/tests/external/cgb-ppu-dispositions.json"
+  "${PROJECT_SOURCE_DIR}/tests/external/cgb-speed-dispositions.json"
+  "${PROJECT_SOURCE_DIR}/fixtures/age/manifest.json"
+  "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json"
+  "${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json"
+  "${PROJECT_SOURCE_DIR}/fixtures/magentests/manifest.json"
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-report.py"
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-inventory.py"
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-m3-pixels.py"
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py"
+  "${PROJECT_SOURCE_DIR}/.github/workflows/ci.yml")
+set(GBB_CGB_CORPUS_BUILD_STAMP "${PROJECT_BINARY_DIR}/cgb-corpus-build-stamp.json")
+add_custom_target(cgb_corpus_build_stamp ALL
+  COMMAND "${Python3_EXECUTABLE}" -I
+    "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-report.py"
+    --write-build-stamp --build-dir "${PROJECT_BINARY_DIR}"
+  DEPENDS ${GBB_CGB_BUILD_CODE_INPUTS} ${GBB_CGB_BUILD_FIXTURE_INPUTS}
+    ${GBB_CGB_BUILD_CONTRACT_INPUTS}
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+  COMMENT "Stamping the exact CGB corpus build inputs"
+  VERBATIM)
 
 # Libbet admission (GAME-01, gate G5). The verifier is stdlib-only Python run with -I; every
 # negative control goes through expect_exit.cmake so it must exit with exactly the expected code
@@ -4353,3 +4397,11 @@ if(GABBABOY_ENABLE_SANITIZERS)
     endif()
   endforeach()
 endif()
+
+# The command-only stamp target runs on every build, so a new Git HEAD cannot
+# leave an otherwise up-to-date build stamp tied to the previous revision.
+# Capture target names only after all tests/executables have been registered.
+set(GBB_CGB_BUILD_TARGETS
+  gabbaboy-runner measure_core test_age test_age_m3 test_magentests
+  test_magentests_hdma test_samesuite_apu test_samesuite_hdma)
+add_dependencies(cgb_corpus_build_stamp ${GBB_CGB_BUILD_TARGETS})

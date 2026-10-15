@@ -571,13 +571,17 @@ def reconcile_counts(data: dict, sources: dict, outputs: dict, cases: dict) -> N
     need(data["counts"].get("assertion_rows") is None, "assertion-count-must-remain-unqualified")
 
 
-def check_complete(root: Path, outputs: dict[str, dict], cases: dict[str, dict]) -> None:
+def check_complete_bindings(root: Path, outputs: dict[str, dict], cases: dict[str, dict]) -> None:
     selected_outputs = {c["output_id"] for c in cases.values()}
     for oid in sorted(selected_outputs):
         output = outputs[oid]
         need(output["admission_status"] == "admitted" and re.fullmatch(r"[0-9a-f]{64}", str(output.get("sha256", ""))),
-             f"complete-required-output-pending:{oid}")
+             f"bindings-required-output-pending:{oid}")
     check_test_bindings(root, cases)
+
+
+def check_complete(root: Path, outputs: dict[str, dict], cases: dict[str, dict]) -> None:
+    check_complete_bindings(root, outputs, cases)
     for cid, row in cases.items():
         execution = row["execution"]
         need(execution.get("state") == "completed" and execution.get("terminal") is True
@@ -599,8 +603,8 @@ def check_complete(root: Path, outputs: dict[str, dict], cases: dict[str, dict])
 
 def check_test_bindings(root: Path, cases: dict[str, dict]) -> None:
     inventory = root / "tests/expected-tests.txt"
-    need(inventory.is_file(), "complete-expected-test-inventory-missing")
-    need(inventory.stat().st_size <= MAX_INPUT_BYTES, "complete-expected-test-inventory-size-limit")
+    need(inventory.is_file(), "bindings-expected-test-inventory-missing")
+    need(inventory.stat().st_size <= MAX_INPUT_BYTES, "bindings-expected-test-inventory-size-limit")
     registered = {
         line.strip() for line in inventory.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.lstrip().startswith("#")
@@ -610,9 +614,9 @@ def check_test_bindings(root: Path, cases: dict[str, dict]) -> None:
         binding = row.get("test_binding", {})
         name = binding.get("ctest_name")
         need(binding.get("state") == "bound" and isinstance(name, str)
-             and re.fullmatch(r"[A-Za-z0-9_.:-]+", name), f"complete-test-binding-pending:{cid}")
-        need(name in registered, f"complete-test-binding-not-registered:{cid}:{name}")
-        need(name not in names, f"complete-test-binding-duplicate:{name}")
+             and re.fullmatch(r"[A-Za-z0-9_.:-]+", name), f"bindings-test-binding-pending:{cid}")
+        need(name in registered, f"bindings-test-binding-not-registered:{cid}:{name}")
+        need(name not in names, f"bindings-test-binding-duplicate:{name}")
         names.add(name)
 
 
@@ -625,6 +629,56 @@ def check_phase14_contract(root: Path, data: dict) -> None:
     speed = module.read_json(root / "tests/external/cgb-speed-dispositions.json")
     module.check_age_assertions(root, data, speed)
     module.check_research14(root, data)
+
+
+def check_ci_contract(root: Path) -> None:
+    ci_path = root / ".github/workflows/ci.yml"
+    repro_path = root / ".github/workflows/fixture-repro.yml"
+    cmake_path = root / "tests/CMakeLists.txt"
+    expected_path = root / "tests/expected-tests.txt"
+    ci = ci_path.read_text(encoding="utf-8")
+    repro = repro_path.read_text(encoding="utf-8")
+    cmake = cmake_path.read_text(encoding="utf-8")
+    expected = {
+        line.strip() for line in expected_path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+    required = {
+        "cgb_corpus_inventory", "cgb_corpus_inventory_controls", "cgb_corpus_ci_contract",
+        "cgb_corpus_report_contract", "cgb_corpus_report_controls", "summary_coverage",
+    }
+    need(required <= expected, "ci-contract-required-inventory-members")
+    for name in required:
+        registered = (f"add_test(NAME {name}" in cmake or
+                      f"gbb_add_summary_coverage_test({name} " in cmake)
+        need(registered,
+             f"ci-contract-test-not-registered:{name}")
+    native_start = ci.find("  native-linux:")
+    native_end = ci.find("\n  native-macos:", native_start)
+    native = ci[native_start:native_end if native_end >= 0 else None]
+    begin = native.find("--begin-run --build-dir build")
+    stream = native.find("ctest --test-dir build -T Test --no-compress-output")
+    receipt = native.find("--from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json")
+    need(native_start >= 0 and begin >= 0, "ci-contract-begin-run")
+    need(stream >= 0 and native.count("ctest --test-dir build -T Test --no-compress-output") == 1,
+         "ci-contract-one-full-ctest-stream")
+    need(begin < stream < receipt, "ci-contract-receipt-order")
+    need("--output-junit \"cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml\"" in native,
+         "ci-contract-junit-run-nonce")
+    need("build/cgb-corpus-build-stamp.json" in native and "build/Testing/*/Test.xml" in native,
+         "ci-contract-retains-build-stamp-and-ctest-xml")
+    sanitizer_start = ci.find("  linux-sanitizers:")
+    sanitizer_end = ci.find("\n  cmake-floor-", sanitizer_start)
+    sanitizer = ci[sanitizer_start:sanitizer_end if sanitizer_end >= 0 else None]
+    need(sanitizer_start >= 0 and "ctest --preset phase1-asan" in sanitizer and
+         "verify-test-inventory.sh build-asan/ctest.xml tests/expected-tests.txt" in sanitizer,
+         "ci-contract-sanitizer-inventory")
+    need("tests/scripts/reproduce-age.sh --compare" in repro and
+         "test-reproduce-age.sh compare-tampered" in repro and
+         "tests/scripts/reproduce-samesuite.sh" in repro,
+         "ci-contract-age-samesuite-reproduction")
+    need("tests/scripts/reproduce-mooneye-cgb.sh --compare fixtures/mooneye-cgb" in repro,
+         "ci-contract-mooneye-cgb-reproduction")
 
 
 def validate(root: Path, data: dict, complete: bool = False) -> tuple[dict[str, dict], dict[str, dict], dict[str, dict]]:
@@ -756,8 +810,8 @@ def self_test(root: Path, data: dict) -> None:
         _, _, case_map = validate(root, trial)
         check_test_bindings(root, case_map)
     except Mismatch as exc:
-        need(str(exc).startswith("complete-test-binding-pending:"), f"self-test-wrong-diagnostic:test-binding:{exc}")
-        controls.append("complete-requires-ctest-bindings")
+        need(str(exc).startswith("bindings-test-binding-pending:"), f"self-test-wrong-diagnostic:test-binding:{exc}")
+        controls.append("bindings-require-ctest-bindings")
     else:
         raise Mismatch("self-test-control-accepted:missing-test-binding")
 
@@ -767,7 +821,7 @@ def self_test(root: Path, data: dict) -> None:
         globals()["MAX_INPUT_BYTES"] = 0
         check_test_bindings(root, case_map)
     except Mismatch as exc:
-        need(str(exc) == "complete-expected-test-inventory-size-limit",
+        need(str(exc) == "bindings-expected-test-inventory-size-limit",
              f"self-test-wrong-diagnostic:oversized-test-inventory:{exc}")
         controls.append("oversized-test-inventory-rejected")
     else:
@@ -791,18 +845,28 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--selection-only", action="store_true")
+    group.add_argument("--bindings", action="store_true")
     group.add_argument("--complete", action="store_true")
+    group.add_argument("--ci-contract", action="store_true")
     group.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     try:
         data = bounded_json(INVENTORY)
         if args.self_test:
             self_test(ROOT, data)
+        elif args.ci_contract:
+            sources, outputs, cases = validate(ROOT, data)
+            check_complete_bindings(ROOT, outputs, cases)
+            check_ci_contract(ROOT)
+            print("cgb-corpus-inventory ci-contract pass cases=107 workflow=native-sanitizer-repro")
         else:
             sources, outputs, cases = validate(ROOT, data, complete=args.complete)
+            if args.bindings:
+                check_complete_bindings(ROOT, outputs, cases)
+            mode = "complete" if args.complete else "bindings" if args.bindings else "selection-only"
             print(
                 "cgb-corpus-inventory pass mode={} sources={} outputs={} admitted={} pending={} cases={} assertions=pending".format(
-                    "complete" if args.complete else "selection-only",
+                    mode,
                     len(sources), len(outputs),
                     sum(r["admission_status"] == "admitted" for r in outputs.values()),
                     sum(r["admission_status"] != "admitted" for r in outputs.values()),

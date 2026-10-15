@@ -81,6 +81,12 @@ class CorpusReportTracerTests(unittest.TestCase):
 
 class CorpusReportCorpusTests(unittest.TestCase):
     def test_native_full_ctest_receipt_contract(self):
+        checked = subprocess.run(
+            [sys.executable, "-I", str(INVENTORY_VALIDATOR), "--ci-contract"],
+            cwd=ROOT, capture_output=True, text=True, timeout=30, check=False,
+        )
+        self.assertEqual(checked.returncode, 0, checked.stdout + checked.stderr)
+        self.assertIn("ci-contract pass cases=107", checked.stdout)
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         native_job = workflow.split("\n  native-macos:", 1)[0]
         self.assertIn("--begin-run --build-dir build", native_job,
@@ -89,8 +95,15 @@ class CorpusReportCorpusTests(unittest.TestCase):
                       "native job must retain the full CTest event output")
         self.assertIn("--from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json",
                       native_job, "native job must derive the receipt from that CTest run")
-        self.assertIn("cgb_corpus_build_stamp", (ROOT / "CMakeLists.txt").read_text(encoding="utf-8"),
+        cmake = (ROOT / "tests/CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn("cgb_corpus_build_stamp", cmake,
                       "CMake must maintain a dependency-backed build input stamp")
+        self.assertIn("CONFIGURE_DEPENDS", cmake,
+                      "CMake must refresh the stamp dependency set when input membership changes")
+        self.assertIn("DEPENDS ${GBB_CGB_BUILD_CODE_INPUTS}", cmake,
+                      "the stamp must depend on the inputs that are compiled")
+        self.assertIn("cgb_corpus_inventory", (ROOT / "tests/expected-tests.txt").read_text(encoding="utf-8"),
+                      "the complete inventory validator must remain required")
         self.assertIn("cgb_corpus_ci_contract", (ROOT / "tests/expected-tests.txt").read_text(encoding="utf-8"),
                       "the native receipt contract must be a required inventory member")
 
@@ -162,6 +175,77 @@ class CorpusReportControlsTests(unittest.TestCase):
         xfail = {"case": {"evaluator_disposition": {
             "state": "expected-failure", "signature_sha256": signature}}}
         self.assertTrue(report.validate_case_outcome(xfail, "fail", "xfail", signature))
+
+        ctest_xml = (b'<Site><Testing>'
+                     b'<Test Status="passed"><Name>cgb_case</Name><Results>'
+                     b'<Measurement name="Test Output"><Value>terminal=pass</Value></Measurement>'
+                     b'</Results></Test>'
+                     b'<Test Status="passed"><Name>other_case</Name><Results/></Test>'
+                     b'</Testing></Site>')
+        blocks, denominator = report.parse_ctest_xml(ctest_xml, {one})
+        self.assertEqual(denominator, 2)
+        self.assertEqual([item["name"] for item in blocks], [one])
+        self.assertEqual(blocks[0]["output"], "terminal=pass")
+        with self.assertRaises(report.ReportError) as raised:
+            report.parse_ctest_xml(ctest_xml.replace(b"cgb_case", b"omitted_case"), {one})
+        self.assertEqual(raised.exception.code, "ctest-xml-membership")
+        with self.assertRaises(report.ReportError) as raised:
+            report.parse_ctest_xml(ctest_xml.replace(b'Status="passed"><Name>cgb_case',
+                                                     b'Status="failed"><Name>cgb_case'), {one})
+        self.assertEqual(raised.exception.code, "ctest-test-failed")
+        with self.assertRaises(report.ReportError) as raised:
+            report.parse_ctest_xml(b"<!DOCTYPE x [<!ENTITY y 'z'>]><Site/>", set())
+        self.assertEqual(raised.exception.code, "ctest-xml-invalid")
+
+        context = report.load_corpus_context()
+        expected_corpus_tests = set(context["test_names"]) | {report.APU_SUITE_TEST}
+        omitted_name = context["cases"]["magentests:bg_oam_priority"]["case"]["test_binding"]["ctest_name"]
+        complete_xml = ("<Site><Testing>" + "".join(
+            f'<Test Status="passed"><Name>{name}</Name><Results/></Test>'
+            for name in sorted(expected_corpus_tests)) + "</Testing></Site>").encode("utf-8")
+        complete_blocks, complete_count = report.parse_ctest_xml(complete_xml, expected_corpus_tests)
+        self.assertEqual({item["name"] for item in complete_blocks}, expected_corpus_tests)
+        self.assertEqual(complete_count, len(expected_corpus_tests))
+        omitted_xml = ("<Site><Testing>" + "".join(
+            f'<Test Status="passed"><Name>{name}</Name><Results/></Test>'
+            for name in sorted(expected_corpus_tests - {omitted_name})) + "</Testing></Site>").encode("utf-8")
+        with self.assertRaises(report.ReportError) as raised:
+            report.parse_ctest_xml(omitted_xml, expected_corpus_tests)
+        self.assertEqual(raised.exception.code, "ctest-xml-membership")
+
+        with tempfile.TemporaryDirectory(prefix="cgb-stamp-control-", dir=ROOT / "build") as temp:
+            fake_build = Path(temp)
+            stamp = {
+                "schema": report.BUILD_STAMP_SCHEMA,
+                "input_identity_sha256": "a" * 64,
+                "core_revision": "b" * 40,
+                "build_artifacts": [{"path": "build/runner", "size_bytes": 1, "sha256": "c" * 64}],
+                "case_ids": ["case-1"],
+                "ctest_names": ["cgb_case"],
+            }
+            report.write_receipt(report.build_stamp_path(fake_build), stamp)
+            identity = {
+                "identity_sha256": "a" * 64,
+                "core_revision": "b" * 40,
+                "build_artifacts": stamp["build_artifacts"],
+                "case_ids": stamp["case_ids"],
+                "ctest_names": stamp["ctest_names"],
+            }
+            self.assertEqual(report.verify_build_stamp(fake_build, identity), stamp)
+            changed = dict(identity, identity_sha256="d" * 64)
+            with self.assertRaises(report.ReportError) as raised:
+                report.verify_build_stamp(fake_build, changed)
+            self.assertEqual(raised.exception.code, "build-input-stamp-mismatch")
+
+        with tempfile.TemporaryDirectory(prefix="cgb-stale-run-control-", dir=ROOT / "build") as temp:
+            stale_build = Path(temp)
+            report.write_receipt(stale_build / "cgb-corpus-run.json", {
+                "schema": report.RUN_ID_SCHEMA, "status": "complete", "run_nonce": "0" * 32,
+                "started_at_ns": 1, "input_identity_sha256": "a" * 64, "ctest_names": [one],
+            })
+            with self.assertRaises(report.ReportError) as raised:
+                report.load_ctest_run(stale_build, {"identity_sha256": "a" * 64}, {one})
+            self.assertEqual(raised.exception.code, "ctest-run-identity-mismatch")
         for observed, evaluator, actual_signature, code in (
             ("pass", "pass", signature, "expected-failure-disposition-mismatch"),
             ("fail", "pass", signature, "expected-failure-disposition-mismatch"),

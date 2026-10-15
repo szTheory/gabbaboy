@@ -10,12 +10,14 @@ import platform
 from pathlib import Path
 import re
 import selectors
+import secrets
 import signal
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
+import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -30,6 +32,9 @@ FULL_RUN_TIMEOUT_SECONDS = 1200
 MAX_TOTAL_INPUT_BYTES = 32 * 1024 * 1024
 MAX_RUN_LOG_BYTES = 16 * 1024 * 1024
 RUN_ID_SCHEMA = "gabbaboy-cgb-corpus-run-v1"
+BUILD_STAMP_SCHEMA = "gabbaboy-cgb-corpus-build-stamp-v1"
+MAX_CTEST_XML_BYTES = 64 * 1024 * 1024
+MAX_CTEST_TESTS = 10000
 APU_SUITE_TEST = "cgb_samesuite_apu_suite"
 DAA_ID = "mooneye:acceptance/instr/daa.s"
 DAA_TEST = "cgb_corpus_mooneye_daa"
@@ -522,6 +527,182 @@ def ctest_test_names(build_dir: Path) -> set[str]:
                 raise ReportError("ctest-name-duplicate")
             names.add(name)
     return names
+
+
+def build_stamp_path(build_dir: Path) -> Path:
+    return inside_root(build_dir) / "cgb-corpus-build-stamp.json"
+
+
+def write_build_stamp(build_dir: Path) -> dict:
+    context = load_corpus_context()
+    identity = full_build_identity(build_dir, context)
+    stamp = {
+        "schema": BUILD_STAMP_SCHEMA,
+        "input_identity_sha256": identity["identity_sha256"],
+        "core_revision": identity["core_revision"],
+        "build_artifacts": identity["build_artifacts"],
+        "case_ids": identity["case_ids"],
+        "ctest_names": identity["ctest_names"],
+    }
+    write_receipt(build_stamp_path(build_dir), stamp)
+    return stamp
+
+
+def verify_build_stamp(build_dir: Path, identity: dict) -> dict:
+    stamp = bounded_json(build_stamp_path(build_dir), 4 * 1024 * 1024)
+    if (stamp.get("schema") != BUILD_STAMP_SCHEMA or
+            stamp.get("input_identity_sha256") != identity.get("identity_sha256") or
+            stamp.get("core_revision") != identity.get("core_revision") or
+            stamp.get("build_artifacts") != identity.get("build_artifacts") or
+            stamp.get("case_ids") != identity.get("case_ids") or
+            stamp.get("ctest_names") != identity.get("ctest_names")):
+        raise ReportError("build-input-stamp-mismatch")
+    return stamp
+
+
+def begin_corpus_run(build_dir: Path, receipt_path: Path) -> dict:
+    context = load_corpus_context()
+    identity = full_build_identity(build_dir, context)
+    expected_names = set(context["test_names"]) | {APU_SUITE_TEST}
+    if set(identity["ctest_names"]) != expected_names or ctest_test_names(build_dir) != expected_names:
+        raise ReportError("ctest-expected-membership")
+    verify_build_stamp(build_dir, identity)
+    inventory_code, _ = run_bounded(
+        [sys.executable, "-I", str(ROOT / "tests/scripts/verify-cgb-corpus-inventory.py"), "--selection-only"],
+        timeout_seconds=60)
+    if inventory_code != 0:
+        raise ReportError("inventory-contract-invalid")
+    nonce = secrets.token_hex(16)
+    started_ns = time.time_ns()
+    build_dir = inside_root(build_dir)
+    junit_path = build_dir / f"cgb-corpus-ctest-{nonce}.xml"
+    metadata = {
+        "schema": RUN_ID_SCHEMA,
+        "status": "running",
+        "run_nonce": nonce,
+        "started_at_ns": started_ns,
+        "input_identity_sha256": identity["identity_sha256"],
+        "build_stamp_sha256": sha256(bounded_read(build_stamp_path(build_dir), 4 * 1024 * 1024)),
+        "ctest_names": sorted(expected_names),
+        "junit_path": junit_path.relative_to(ROOT).as_posix(),
+        "ctest_xml_path": "",
+    }
+    write_receipt(build_dir / "cgb-corpus-run.json", metadata)
+    incomplete = receipt_base("ctest-run-in-progress")
+    incomplete["identity"] = {
+        "input_identity_sha256": identity["identity_sha256"],
+        "build_stamp_sha256": metadata["build_stamp_sha256"],
+        "run_nonce_sha256": sha256(nonce.encode("ascii")),
+        "ctest_names": sorted(expected_names),
+    }
+    write_receipt(inside_root(receipt_path), incomplete)
+    return metadata
+
+
+def parse_ctest_xml(data: bytes, expected_names: set[str]) -> tuple[list[dict], int]:
+    if len(data) > MAX_CTEST_XML_BYTES:
+        raise ReportError("ctest-xml-too-large")
+    if b"<!DOCTYPE" in data.upper() or b"<!ENTITY" in data.upper():
+        raise ReportError("ctest-xml-invalid")
+    try:
+        root = ET.fromstring(data)
+    except ET.ParseError as exc:
+        raise ReportError("ctest-xml-invalid") from exc
+    tests = [node for node in root.iter() if node.tag.rsplit("}", 1)[-1] == "Test"]
+    if not tests or len(tests) > MAX_CTEST_TESTS:
+        raise ReportError("ctest-xml-incomplete")
+    blocks = []
+    names = set()
+    for test in tests:
+        name = test.findtext("Name")
+        status = test.get("Status")
+        if (type(name) is not str or not re.fullmatch(r"[A-Za-z0-9_.:-]+", name) or
+                name in names or status not in ("passed", "failed", "notrun")):
+            raise ReportError("ctest-xml-test-identity")
+        names.add(name)
+        output = ""
+        for measurement in test.iter():
+            if measurement.tag.rsplit("}", 1)[-1] == "Measurement" and measurement.get("name") == "Test Output":
+                value = next((child for child in measurement if child.tag.rsplit("}", 1)[-1] == "Value"), None)
+                output = value.text or "" if value is not None else ""
+                break
+        if name in expected_names:
+            if status != "passed":
+                raise ReportError("ctest-test-failed")
+            if len(output.encode("utf-8")) > MAX_STREAM_BYTES:
+                raise ReportError("captured-stream-too-large")
+            blocks.append({"name": name, "passed": True, "output": output})
+    if not expected_names <= names or {block["name"] for block in blocks} != expected_names:
+        raise ReportError("ctest-xml-membership")
+    return blocks, len(tests)
+
+
+def verify_junit(data: bytes, expected_names: set[str]) -> None:
+    if len(data) > MAX_CTEST_XML_BYTES:
+        raise ReportError("ctest-junit-too-large")
+    if b"<!DOCTYPE" in data.upper() or b"<!ENTITY" in data.upper():
+        raise ReportError("ctest-junit-invalid")
+    try:
+        root = ET.fromstring(data)
+    except ET.ParseError as exc:
+        raise ReportError("ctest-junit-invalid") from exc
+    cases = [node for node in root.iter() if node.tag.rsplit("}", 1)[-1] == "testcase"]
+    names = []
+    for case in cases:
+        name = case.get("name")
+        if type(name) is not str or not name:
+            raise ReportError("ctest-junit-test-identity")
+        names.append(name)
+        if name in expected_names and any(
+                child.tag.rsplit("}", 1)[-1] in ("failure", "error", "skipped") for child in case):
+            raise ReportError("ctest-test-failed")
+    if len(names) != len(set(names)) or not expected_names <= set(names):
+        raise ReportError("ctest-junit-membership")
+
+
+def load_ctest_run(build_dir: Path, identity: dict, expected_names: set[str]) -> tuple[bytes, bytes, dict]:
+    build_dir = inside_root(build_dir)
+    run_path = build_dir / "cgb-corpus-run.json"
+    metadata = bounded_json(run_path, 1024 * 1024)
+    nonce = metadata.get("run_nonce")
+    if (metadata.get("schema") != RUN_ID_SCHEMA or metadata.get("status") != "running" or
+            type(nonce) is not str or not re.fullmatch(r"[0-9a-f]{32}", nonce) or
+            type(metadata.get("started_at_ns")) is not int or
+            metadata.get("input_identity_sha256") != identity["identity_sha256"] or
+            metadata.get("ctest_names") != sorted(expected_names)):
+        raise ReportError("ctest-run-identity-mismatch")
+    stamp_data = bounded_read(build_stamp_path(build_dir), 4 * 1024 * 1024)
+    if metadata.get("build_stamp_sha256") != sha256(stamp_data):
+        raise ReportError("ctest-run-identity-mismatch")
+    junit_path = inside_root(ROOT / validate_relative_path(metadata.get("junit_path"), "ctest-junit-path-invalid"))
+    if junit_path != build_dir / f"cgb-corpus-ctest-{nonce}.xml":
+        raise ReportError("ctest-junit-path-invalid")
+    tag_path = build_dir / "Testing" / "TAG"
+    tag_data = bounded_read(tag_path, 256).decode("ascii", "strict")
+    tag_lines = tag_data.splitlines()
+    tag = tag_lines[0].strip() if tag_lines else ""
+    if not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", tag):
+        raise ReportError("ctest-tag-invalid")
+    ctest_xml_path = build_dir / "Testing" / tag / "Test.xml"
+    ctest_xml_data = bounded_read(ctest_xml_path, MAX_CTEST_XML_BYTES)
+    junit_data = bounded_read(junit_path, MAX_CTEST_XML_BYTES)
+    started_ns = metadata["started_at_ns"]
+    if any(path.stat().st_mtime_ns < started_ns for path in (ctest_xml_path, junit_path)):
+        raise ReportError("ctest-run-stale")
+    blocks, total_tests = parse_ctest_xml(ctest_xml_data, expected_names)
+    verify_junit(junit_data, expected_names)
+    metadata["ctest_xml_path"] = repo_path(ctest_xml_path)
+    metadata["test_xml_sha256"] = sha256(ctest_xml_data)
+    metadata["junit_sha256"] = sha256(junit_data)
+    metadata["status"] = "complete"
+    metadata["ctest_exit_code"] = 0
+    metadata["completed_at_ns"] = time.time_ns()
+    metadata["ctest_total_cases"] = total_tests
+    metadata["run_id"] = _run_id(identity["identity_sha256"], metadata["test_xml_sha256"],
+                                 started_ns, metadata["completed_at_ns"])
+    write_receipt(run_path, metadata)
+    metadata["selected_blocks"] = blocks
+    return ctest_xml_data, junit_data, metadata
 
 
 def parse_ctest_log(data: bytes, expected_names: set[str]) -> tuple[list[dict], int]:
@@ -1470,6 +1651,7 @@ def build_corpus_report(build_dir: Path, from_ctest: bool = False) -> dict:
         raise ReportError("ctest-expected-membership")
     if ctest_test_names(build_dir) != expected_names:
         raise ReportError("ctest-actual-membership")
+    verify_build_stamp(build_dir, identity)
     inventory_code, _ = run_bounded(
         [sys.executable, "-I", str(ROOT / "tests/scripts/verify-cgb-corpus-inventory.py"), "--selection-only"],
         timeout_seconds=60)
@@ -1477,7 +1659,9 @@ def build_corpus_report(build_dir: Path, from_ctest: bool = False) -> dict:
         raise ReportError("inventory-contract-invalid")
     build_dir = inside_root(build_dir)
     if from_ctest:
-        log_data, run_metadata = _load_existing_ctest_run(build_dir, identity, expected_names)
+        _, _, run_metadata = load_ctest_run(build_dir, identity, expected_names)
+        blocks = run_metadata.pop("selected_blocks")
+        denominator = run_metadata["ctest_total_cases"]
     else:
         started_ns = time.time_ns()
         running_metadata = {
@@ -1514,20 +1698,23 @@ def build_corpus_report(build_dir: Path, from_ctest: bool = False) -> dict:
         write_receipt(build_dir / "cgb-corpus-run.json", run_metadata)
         if code != 0:
             raise ReportError("ctest-run-failed")
-    blocks, denominator = parse_ctest_log(log_data, expected_names)
-    if denominator != len(expected_names):
+        blocks, denominator = parse_ctest_log(log_data, expected_names)
+    if denominator < len(expected_names):
         raise ReportError("ctest-run-denominator")
     report = normalize_corpus(context, blocks, identity)
     report["run"] = {
         "id": run_metadata["run_id"],
         "started_at_ns": run_metadata["started_at_ns"],
         "completed_at_ns": run_metadata["completed_at_ns"],
-        "ctest_log_sha256": run_metadata["log_sha256"],
-        "ctest_cases": denominator,
+        "ctest_log_sha256": run_metadata.get("test_xml_sha256", run_metadata.get("log_sha256", "")),
+        "ctest_cases": len(expected_names),
+        "ctest_total_cases": denominator,
+        "run_nonce_sha256": sha256(run_metadata["run_nonce"].encode("ascii"))
+        if type(run_metadata.get("run_nonce")) is str else "",
     }
     report["identity"]["input_identity_sha256"] = identity["identity_sha256"]
     report["identity"]["run_id"] = run_metadata["run_id"]
-    report["identity"]["ctest_log_sha256"] = run_metadata["log_sha256"]
+    report["identity"]["ctest_log_sha256"] = report["run"]["ctest_log_sha256"]
     report["identity"].pop("identity_sha256", None)
     report["identity"]["identity_sha256"] = sha256(
         json.dumps(report["identity"], sort_keys=True, separators=(",", ":")).encode("utf-8"))
@@ -1601,6 +1788,8 @@ def main() -> int:
     group.add_argument("--self-test", action="store_true")
     group.add_argument("--self-test-controls", action="store_true")
     group.add_argument("--run", action="store_true")
+    group.add_argument("--write-build-stamp", action="store_true")
+    group.add_argument("--begin-run", action="store_true")
     group.add_argument("--from-ctest", action="store_true")
     parser.add_argument("--build-dir", type=Path, default=ROOT / "build")
     parser.add_argument("--receipt", type=Path, default=ROOT / "build/cgb-corpus-receipt.json")
@@ -1618,6 +1807,14 @@ def main() -> int:
             print(json.dumps({**receipt_base(exc.code), "schema": SCHEMA},
                              sort_keys=True, separators=(",", ":")))
             return 1
+    if args.write_build_stamp:
+        try:
+            stamp = write_build_stamp(args.build_dir)
+            print("cgb-corpus-build-stamp pass input_identity_sha256=" + stamp["input_identity_sha256"])
+            return 0
+        except ReportError as exc:
+            print("cgb-corpus-build-stamp failed: " + exc.code, file=sys.stderr)
+            return 1
     receipt_path = args.receipt
     try:
         receipt_path = inside_root(receipt_path)
@@ -1626,6 +1823,11 @@ def main() -> int:
         return 2
     write_receipt(receipt_path, receipt_base("execution-not-started"))
     try:
+        if args.begin_run:
+            metadata = begin_corpus_run(args.build_dir, receipt_path)
+            print("run_nonce=" + metadata["run_nonce"])
+            print("junit_path=" + metadata["junit_path"])
+            return 0
         report = build_corpus_report(args.build_dir, from_ctest=args.from_ctest)
         write_receipt(receipt_path, report)
         print_corpus_summary(report)
