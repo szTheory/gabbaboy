@@ -179,7 +179,12 @@ class CorpusReportControlsTests(unittest.TestCase):
         ctest_xml = (b'<Site><Testing><TestList>'
                      b'<Test>./tests/cgb_case</Test><Test>./tests/other_case</Test>'
                      b'</TestList>'
-                     b'<Test Status="passed"><Name>cgb_case</Name><Results>'
+                     b'<Test Status="passed"><Name>cgb_case</Name><Path>./tests</Path>'
+                     b'<FullName>./tests/cgb_case</FullName><Results>'
+                     b'<NamedMeasurement type="numeric/double" name="Execution Time">'
+                     b'<Value>0.01</Value></NamedMeasurement>'
+                     b'<NamedMeasurement type="text/string" name="Completion Status">'
+                     b'<Value>Completed</Value></NamedMeasurement>'
                      b'<Measurement><Value>terminal=pass</Value></Measurement>'
                      b'</Results></Test>'
                      b'<Test Status="passed"><Name>other_case</Name><Results/></Test>'
@@ -195,6 +200,23 @@ class CorpusReportControlsTests(unittest.TestCase):
             report.parse_ctest_xml(ctest_xml.replace(b'Status="passed"><Name>cgb_case',
                                                      b'Status="failed"><Name>cgb_case'), {one})
         self.assertEqual(raised.exception.code, "ctest-test-failed")
+        missing_output = ctest_xml.replace(
+            b'<Measurement><Value>terminal=pass</Value></Measurement>', b'')
+        with self.assertRaises(report.ReportError) as raised:
+            report.parse_ctest_xml(missing_output, {one})
+        self.assertEqual(raised.exception.code, "ctest-xml-output-membership")
+        duplicate_output = ctest_xml.replace(
+            b'<Measurement><Value>terminal=pass</Value></Measurement>',
+            b'<Measurement><Value>terminal=pass</Value></Measurement>'
+            b'<Measurement><Value>terminal=pass</Value></Measurement>')
+        with self.assertRaises(report.ReportError) as raised:
+            report.parse_ctest_xml(duplicate_output, {one})
+        self.assertEqual(raised.exception.code, "ctest-xml-output-membership")
+        duplicate_result = ctest_xml.replace(
+            b'</Testing>', b'<Test Status="passed"><Name>cgb_case</Name><Results/></Test></Testing>')
+        with self.assertRaises(report.ReportError) as raised:
+            report.parse_ctest_xml(duplicate_result, {one})
+        self.assertEqual(raised.exception.code, "ctest-xml-test-identity")
         with self.assertRaises(report.ReportError) as raised:
             report.parse_ctest_xml(b"<!DOCTYPE x [<!ENTITY y 'z'>]><Site/>", set())
         self.assertEqual(raised.exception.code, "ctest-xml-invalid")
@@ -202,14 +224,19 @@ class CorpusReportControlsTests(unittest.TestCase):
         context = report.load_corpus_context()
         expected_corpus_tests = set(context["test_names"]) | {report.APU_SUITE_TEST}
         omitted_name = context["cases"]["magentests:bg_oam_priority"]["case"]["test_binding"]["ctest_name"]
-        complete_xml = ("<Site><Testing>" + "".join(
-            f'<Test Status="passed"><Name>{name}</Name><Results/></Test>'
-            for name in sorted(expected_corpus_tests)) + "</Testing></Site>").encode("utf-8")
+        complete_rows = sorted(expected_corpus_tests)
+        complete_xml = ("<Site><Testing><TestList>" + "".join(
+            f'<Test>./tests/{name}</Test>' for name in complete_rows) + "</TestList>" + "".join(
+            f'<Test Status="passed"><Name>{name}</Name><Path>./tests</Path><Results>'
+            f'<NamedMeasurement type="numeric/double" name="Execution Time"><Value>0.01</Value>'
+            f'</NamedMeasurement><Measurement><Value>terminal=pass</Value></Measurement></Results></Test>'
+            for name in complete_rows) + "</Testing></Site>").encode("utf-8")
         complete_blocks, complete_count = report.parse_ctest_xml(complete_xml, expected_corpus_tests)
         self.assertEqual({item["name"] for item in complete_blocks}, expected_corpus_tests)
         self.assertEqual(complete_count, len(expected_corpus_tests))
         omitted_xml = ("<Site><Testing>" + "".join(
-            f'<Test Status="passed"><Name>{name}</Name><Results/></Test>'
+            f'<Test Status="passed"><Name>{name}</Name><Results>'
+            f'<Measurement><Value>terminal=pass</Value></Measurement></Results></Test>'
             for name in sorted(expected_corpus_tests - {omitted_name})) + "</Testing></Site>").encode("utf-8")
         with self.assertRaises(report.ReportError) as raised:
             report.parse_ctest_xml(omitted_xml, expected_corpus_tests)
