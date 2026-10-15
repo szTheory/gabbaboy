@@ -985,4 +985,9 @@ samesuite_hdma_hdma_lcd_off
 samesuite_hdma_hdma_mode0
 cgb_hdma_dispositions
 cgb_hdma_dispositions_selftest
+cgb_hdma_claims_contract
+cgb_hdma_claims_contract_native
+cgb_hdma_claims_contract_selftest
+cgb_hdma_lane_contract
+cgb_hdma_lane_contract_selftest
 samesuite_repro_selfcheck
