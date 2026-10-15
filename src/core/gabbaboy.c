@@ -10,6 +10,9 @@
 #ifndef GBB_P13_DURATION_OFFSET
 #define GBB_P13_DURATION_OFFSET 0
 #endif
+#ifndef GBB_TEST_CGB_PCM_SWAP_NIBBLES
+#define GBB_TEST_CGB_PCM_SWAP_NIBBLES 0
+#endif
 
 
 #define GBB_INPUT_EVENT_CAPACITY 64u
@@ -574,6 +577,45 @@ static void audio_current_mix(const gbb_instance *m, int32_t *left, int32_t *rig
         *right += noise_sample * (int32_t)((m->apu_nr50 & 7u) + 1u) / GBB_AUDIO_MIX_HEADROOM_DIV;
     if ((m->apu_nr51 & 0x80u) != 0u)
         *left += noise_sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u) / GBB_AUDIO_MIX_HEADROOM_DIV;
+}
+
+/* CGB PCM readback is the digital DAC input, before NR50/NR51 routing and host mixing. */
+static uint8_t apu_digital_output(const gbb_instance *m, unsigned channel) {
+    static const uint8_t duty_pattern[4] = {0x01u, 0x81u, 0x87u, 0x7Eu};
+    if (!m->apu_power) return 0u;
+    if (channel < 2u) {
+        const apu_pulse_channel *pulse = &m->apu_pulse[channel];
+        const unsigned duty = pulse->duty_length >> 6;
+        return pulse->enabled && (pulse->envelope & 0xF8u) != 0u &&
+               pulse->volume != 0u && ((duty_pattern[duty] >> pulse->phase) & 1u) != 0u
+            ? pulse->volume : 0u;
+    }
+    if (channel == 2u) {
+        const apu_wave_channel *wave = &m->apu_wave;
+        if (!wave->enabled || (wave->dac & 0x80u) == 0u || wave->level == 0u) return 0u;
+        const uint8_t packed = wave->ram[wave->position >> 1];
+        const uint8_t sample = (wave->position & 1u) == 0u
+            ? (uint8_t)(packed >> 4) : (uint8_t)(packed & 0x0Fu);
+        return (uint8_t)(sample >> ((wave->level >> 5) - 1u));
+    }
+    if (channel == 3u) {
+        const apu_noise_channel *noise = &m->apu_noise;
+        return noise->enabled && (noise->envelope & 0xF8u) != 0u &&
+               noise->volume != 0u && (noise->lfsr & 1u) == 0u
+            ? noise->volume : 0u;
+    }
+    return 0u;
+}
+
+static uint8_t apu_pcm_read(const gbb_instance *m, uint16_t address) {
+    const unsigned first = address == 0xFF76u ? 0u : 2u;
+    const uint8_t low = apu_digital_output(m, first);
+    const uint8_t high = apu_digital_output(m, first + 1u);
+    uint8_t value = (uint8_t)((high << 4) | (low & 0x0Fu));
+#if GBB_TEST_CGB_PCM_SWAP_NIBBLES
+    value = (uint8_t)((value << 4) | (value >> 4));
+#endif
+    return value;
 }
 
 /* MODEL: BOTH GATE-00 basis=host-side-mixing */
@@ -1151,7 +1193,9 @@ typedef enum {
     IO_DEFERRED_W,    /* reads $FF, write latches and is dropped */
     IO_BCPD,          /* background palette data port (appended: IO_UNSET stays 0) */
     IO_OCPD,          /* object palette data port */
-    IO_OPRI           /* object priority mode: bit 0 stored, no effect after boot */
+    IO_OPRI,          /* object priority mode: bit 0 stored, no effect after boot */
+    IO_PCM12,         /* PCM12: channel 2:channel 1 digital DAC values */
+    IO_PCM34          /* PCM34: channel 4:channel 3 digital DAC values */
 } io_kind;
 
 typedef enum { IOS_NONE = 0, IOS_PANDOCS, IOS_HW_TEST, IOS_SAMEBOY, IOS_POLICY, IOS_EXISTING } io_source;
@@ -1294,8 +1338,8 @@ static const io_row io_visibility[IO_VISIBILITY_ROWS] = {
     [0x73] = { IOC(DMG_STOP), IOC_ST(0x00, 0xFF), IOC_ST(0x00, 0xFF), IOS_SAMEBOY }, /* FF73: undocumented CGB register, fully read/write */
     [0x74] = { IOC(DMG_STOP), IOC_ST(0x00, 0xFF), IOC(CONST_FF), IOS_SAMEBOY }, /* FF74: undocumented CGB register; compat mode locks it */
     [0x75] = { IOC(DMG_STOP), IOC_ST(0x8F, 0x70), IOC_ST(0x8F, 0x70), IOS_PANDOCS }, /* FF75: only bits 4-6 are stored; the rest read 1 */
-    [0x76] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 14), IOC_DEF(DEFERRED_RW, 14), IOS_PANDOCS }, /* PCM12: audio channel output readback deferred to phase 14 */
-    [0x77] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 14), IOC_DEF(DEFERRED_RW, 14), IOS_PANDOCS }, /* PCM34: audio channel output readback deferred to phase 14 */
+    [0x76] = { IOC(DMG_STOP), IOC(PCM12), IOC(CONST_FF), IOS_PANDOCS }, /* PCM12: channel 2:channel 1 digital output; compatibility mode locks it */
+    [0x77] = { IOC(DMG_STOP), IOC(PCM34), IOC(CONST_FF), IOS_PANDOCS }, /* PCM34: channel 4:channel 3 digital output; compatibility mode locks it */
     [0x78] = IO_UNUSED_ROW,
     [0x79] = IO_UNUSED_ROW,
     [0x7A] = IO_UNUSED_ROW,
@@ -1389,6 +1433,8 @@ static uint8_t io_read_cgb(const gbb_instance *m, uint16_t address) {
     case IO_BCPD: return cram_data_read(m->bcps, m->bg_cram, cpu_cram_access_allowed(m));
     case IO_OCPD: return cram_data_read(m->ocps, m->obj_cram, cpu_cram_access_allowed(m));
     case IO_OPRI: return (uint8_t)(0xFEu | (m->opri & 1u));
+    case IO_PCM12:
+    case IO_PCM34: return apu_pcm_read(m, address);
     default: return 0xFFu; /* CONST_FF, DEFERRED_W; DEFERRED_RW is refused before the read */
     }
 }
