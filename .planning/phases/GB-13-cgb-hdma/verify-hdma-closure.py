@@ -575,16 +575,21 @@ def prohibition_self_test(root: Path) -> None:
 
 def handoff_values(state: str, continuation: str, config: dict) -> None:
     uat_stage = "Phase 13 automated UAT complete"
-    uat_complete = uat_stage in state
-    require(uat_complete == (uat_stage in continuation),
-            "STATE.md and continue.md disagree on the completed UAT stage")
-    required_route = "/gsd-discuss-phase 14" if uat_complete else "/gsd-verify-work 13"
     stages = ("Phase 13 execution, pending automated closure",
               "Phase 13 execution and goal verification complete", uat_stage)
-    require(any(stage in state for stage in stages),
-            "STATE.md does not name the Phase 13 execution stage")
-    require(any(stage in continuation for stage in stages),
-            "continue.md does not name the Phase 13 execution stage")
+    def current_stage(text: str, name: str) -> str:
+        # STATE deliberately retains older receipts below this heading. Only
+        # the active handoff block may choose the current route.
+        active = text.split("### Prior stage receipts", 1)[0]
+        declarations = re.findall(r"(?m)^(?:Current|Completed)(?: workflow)? stage:\s*\**([^\n]+)", active)
+        require(len(declarations) == 1, f"{name} must declare exactly one current/completed stage")
+        matches = [stage for stage in stages if declarations[0].startswith(stage)]
+        require(len(matches) == 1, f"{name} has an unknown completed stage")
+        return matches[0]
+    stage = current_stage(state, "STATE.md")
+    require(stage == current_stage(continuation, "continue.md"),
+            "STATE.md and continue.md disagree on the completed stage")
+    required_route = "/gsd-discuss-phase 14" if stage == uat_stage else "/gsd-verify-work 13"
     for name, text in (("STATE.md", state), ("continue.md", continuation)):
         commands = [line.split(":", 1)[1].strip().strip(".`* ")
                     for line in text.splitlines() if line.strip().startswith("Next command:")]
@@ -859,6 +864,7 @@ Phase 14 — CGB-E Model Qualification and Corpus remains unstarted.
     handoff_base_config = {"workflow": {"auto_advance": False, "_auto_chain_active": False}}
     handoff_values(handoff_base_state, handoff_base_continue, handoff_base_config)
     historical_state = handoff_base_state + (
+        "### Prior stage receipts\n\n"
         "Completed workflow stage: Phase 12 planning with a long recorded rationale, "
         "decision mapping, and owner review history before its future deferrals; "
         "Phase 14 deferrals were documented as open follow-up work.\n")

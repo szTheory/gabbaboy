@@ -49,9 +49,16 @@ def check(root):
             entry['uat_refs'] = [v[1:-1] if v[:1] in ('"', "'") and v[-1:] == v[:1] else v for v in refs]
             expected[(summary.name, entry['id'])] = entry
     tests = text.split('## Tests\n', 1)[1].split('## Summary\n', 1)[0]
-    blocks = re.split(r'^### \d+\. ', tests, flags=re.M)[1:]
+    headings = re.findall(r'^#{1,6} .+$', tests, re.M)
+    numbers = [re.match(r'^### (\d+)\. ', heading) for heading in headings]
+    assert all(numbers) and [int(match[1]) for match in numbers] == list(range(1, 46)), 'unparsed or misnumbered test heading'
+    prelude, *blocks = re.split(r'^### \d+\. ', tests, flags=re.M)
+    assert not prelude.strip(), 'unparsed test prelude'
     seen = set()
     for block in blocks:
+        allowed = {'expected', 'result', 'source', 'summary_file', 'coverage_id', 'evidence'}
+        for line in block.splitlines()[1:]:
+            assert not line.strip() or line.partition(':')[0] in allowed, 'unparsed test content'
         def field(name):
             matches = re.findall(r'^' + name + r': (.+)$', block, re.M)
             assert len(matches) == 1, f'missing or duplicate {name}'
@@ -85,6 +92,11 @@ def self_test(root):
         'missing-source': lambda t: t.replace('13-01-SUMMARY.md, ', '', 1),
         'duplicate-row': lambda t: t.replace('## Summary\n', re.search(r'^### 1\..*?(?=^### 2\.)', t, re.M | re.S)[0] + '## Summary\n', 1),
         'wrong-phase': lambda t: t.replace('phase: GB-13-cgb-hdma', 'phase: GB-14-cgb-hdma', 1),
+        'unnumbered-human-checkpoint': lambda t: t.replace('## Summary\n', '### Manual checkpoint\nresult: pending\nsource: human\n\n## Summary\n', 1),
+        'extra-section': lambda t: t.replace('## Summary\n', '## Manual checks\n\n## Summary\n', 1),
+        'unparsed-field': lambda t: t.replace('result: pass', 'manual_checkpoint: pending\nresult: pass', 1),
+        'unparsed-prelude': lambda t: t.replace('## Tests\n', '## Tests\n\nManual checkpoint: pending\n', 1),
+        'misnumbered-row': lambda t: t.replace('### 2. ', '### 99. ', 1),
         'open-gap': lambda t: t.replace('## Gaps\n\n[none]', '## Gaps\n\n- status: failed'),
     }
     for label, mutate in mutations.items():
