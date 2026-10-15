@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 import sys
+import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -59,6 +61,17 @@ def rejected(checker, receipt: dict) -> bool:
     return False
 
 
+def file_rejected(checker, payload: bytes) -> bool:
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-remote-receipt-") as directory:
+        path = Path(directory) / "remote-checks.json"
+        path.write_bytes(payload)
+        try:
+            checker.load_remote_evidence(path)
+        except checker.ContractError:
+            return True
+    return False
+
+
 def main() -> int:
     checker = load_checker()
     checker.validate_remote_evidence(valid_receipt(), EXPECTED_HEAD)
@@ -95,6 +108,17 @@ def main() -> int:
     invalid_provenance = valid_receipt()
     invalid_provenance["results"][0] = dict(invalid_provenance["results"][0], databaseId=0)
 
+    invalid_attempt = valid_receipt()
+    invalid_attempt["results"][0] = dict(invalid_attempt["results"][0], attempt=0)
+
+    duplicate_required = valid_receipt()
+    duplicate_required["requiredJobs"][-1] = duplicate_required["requiredJobs"][0]
+
+    stale_top_level = dict(valid_receipt(), headSha="b" * 40)
+
+    unknown_field = valid_receipt()
+    unknown_field["operatorOverride"] = True
+
     controls = {
         "missing-required-context": missing,
         "contradictory-duplicate": duplicate,
@@ -105,15 +129,30 @@ def main() -> int:
         "pending-status": pending,
         "failed-conclusion": failed_conclusion,
         "invalid-run-provenance": invalid_provenance,
+        "invalid-attempt": invalid_attempt,
+        "duplicate-required-context": duplicate_required,
+        "stale-top-level-head": stale_top_level,
+        "unrecognized-top-level-field": unknown_field,
     }
     accepted = [name for name, receipt in controls.items() if not rejected(checker, receipt)]
+
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-remote-receipt-") as directory:
+        path = Path(directory) / "remote-checks.json"
+        path.write_text(json.dumps(valid_receipt()), encoding="utf-8")
+        checker.validate_remote_evidence(checker.load_remote_evidence(path), EXPECTED_HEAD)
+    if not file_rejected(checker, b" " * (checker.MAX_REMOTE_RECEIPT_BYTES + 1)):
+        accepted.append("oversized-receipt-file")
+    if not file_rejected(checker, b"{malformed"):
+        accepted.append("malformed-receipt-file")
+    if not file_rejected(checker, b'{"headSha":"a","headSha":"b"}'):
+        accepted.append("duplicate-json-field")
     if accepted:
         print("hdma-remote-evidence controls failed; invalid receipts accepted=" + ",".join(accepted),
               file=sys.stderr)
         return 1
 
     print("hdma-remote-evidence controls pass positive=1 negative=%d contexts=%d" %
-          (len(controls), len(REQUIRED_CONTEXTS)))
+          (len(controls) + 3, len(REQUIRED_CONTEXTS)))
     return 0
 
 

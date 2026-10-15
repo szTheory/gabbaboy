@@ -967,12 +967,14 @@ add_test(NAME cgb_hdma_dispositions_selftest
 set_tests_properties(cgb_hdma_dispositions_selftest PROPERTIES TIMEOUT 30
   PASS_REGULAR_EXPRESSION "cgb-hdma-dispositions self-test pass")
 
-# Plan 13-12 keeps recurring claim and inventory contracts Python-only so the
+# Plan 13-12 keeps recurring claim, inventory and receipt-shape contracts Python-only so the
 # native and sanitizer lanes do not depend on Node or the local OpenGSD runtime.
 set(GBB_CGB_HDMA_CLAIMS_VERIFIER
   "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-hdma-claims.py")
 set(GBB_HDMA_CLOSURE_CHECKER
   "${PROJECT_SOURCE_DIR}/.planning/phases/GB-13-cgb-hdma/verify-hdma-closure.py")
+set(GBB_HDMA_REMOTE_EVIDENCE_TEST
+  "${PROJECT_SOURCE_DIR}/tests/scripts/test_hdma_remote_evidence.py")
 add_test(NAME cgb_hdma_claims_contract
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_HDMA_CLAIMS_VERIFIER}")
 add_test(NAME cgb_hdma_claims_contract_native
@@ -983,10 +985,12 @@ add_test(NAME cgb_hdma_lane_contract
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HDMA_CLOSURE_CHECKER}" --lane)
 add_test(NAME cgb_hdma_lane_contract_selftest
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HDMA_CLOSURE_CHECKER}" --lane-self-test)
+add_test(NAME cgb_hdma_remote_evidence_selftest
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HDMA_REMOTE_EVIDENCE_TEST}")
 set_tests_properties(
   cgb_hdma_claims_contract cgb_hdma_claims_contract_native
   cgb_hdma_claims_contract_selftest cgb_hdma_lane_contract
-  cgb_hdma_lane_contract_selftest PROPERTIES TIMEOUT 30)
+  cgb_hdma_lane_contract_selftest cgb_hdma_remote_evidence_selftest PROPERTIES TIMEOUT 30)
 find_program(GBB_SAMESUITE_REPRO_BASH bash REQUIRED)
 add_test(NAME samesuite_repro_selfcheck
   COMMAND "${GBB_SAMESUITE_REPRO_BASH}" "${PROJECT_SOURCE_DIR}/tests/scripts/reproduce-samesuite.sh" --self-test)

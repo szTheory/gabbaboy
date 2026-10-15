@@ -19,6 +19,7 @@ LANE_TESTS = (
     "cgb_hdma_claims_contract_selftest",
     "cgb_hdma_lane_contract",
     "cgb_hdma_lane_contract_selftest",
+    "cgb_hdma_remote_evidence_selftest",
 )
 LANE_SCRIPT = ".planning/phases/GB-13-cgb-hdma/verify-hdma-closure.py"
 PLAN_PATH = ".planning/phases/GB-13-cgb-hdma/13-01-PLAN.md"
@@ -30,6 +31,18 @@ ADAPTER_PATH = "tests/scripts/cgb-hdma-prohibition.test.cjs"
 CLAIMS_CHECKER = "tests/scripts/verify-cgb-hdma-claims.py"
 PROHIBITION_DIR = "build/phase13-prohibition"
 PHASE_METADATA_DIR = ".planning/phases/GB-13-cgb-hdma/"
+REMOTE_REQUIRED_CONTEXTS = {
+    "required-native": "ci",
+    "fixture-repro": "fixture-repro",
+    "preview-package-smoke": "preview-package-smoke",
+}
+REMOTE_RECEIPT_FIELDS = frozenset(("headSha", "requiredJobs", "results"))
+REMOTE_RESULT_FIELDS = frozenset((
+    "name", "workflowName", "databaseId", "attempt", "event", "headSha", "status", "conclusion",
+))
+MAX_REMOTE_RECEIPT_BYTES = 16 * 1024
+MAX_REMOTE_DATABASE_ID = (1 << 63) - 1
+MAX_REMOTE_ATTEMPT = 1000
 SOURCE_CLOSEOUT_METADATA = frozenset((
     ".planning/STATE.md", ".planning/PROJECT.md", ".planning/ROADMAP.md",
     ".planning/REQUIREMENTS.md", ".planning/config.json", ".planning/state.json",
@@ -126,8 +139,8 @@ def lane_contract(root: Path) -> None:
             "existing per-test timeout policy appears to have been removed")
     require("gabbaboy_verify_registered_tests()" in cmake,
             "complete configure-time expected-test enumeration guard is missing")
-    print("hdma-lane-contract pass targets=5 core_hdma=%d player_hdma=%d parallel=4 timeout=30" %
-          (len(core_hdma), len(player_hdma)))
+    print("hdma-lane-contract pass targets=%d core_hdma=%d player_hdma=%d parallel=4 timeout=30" %
+          (len(LANE_TESTS), len(core_hdma), len(player_hdma)))
 
 
 def lane_self_test(root: Path) -> None:
@@ -639,21 +652,78 @@ def summary_contract(root: Path, summary: str) -> None:
                 f"official summary_coverage parser rejected the saved summary: {result.stdout}{result.stderr}")
 
 
-def validate_remote_evidence(data: dict, expected_head: str) -> None:
+def load_remote_evidence(path: Path) -> object:
+    try:
+        with path.open("rb") as stream:
+            payload = stream.read(MAX_REMOTE_RECEIPT_BYTES + 1)
+    except OSError as error:
+        raise ContractError(f"remote check evidence is unreadable: {error}") from error
+    require(len(payload) <= MAX_REMOTE_RECEIPT_BYTES,
+            f"remote check evidence exceeds {MAX_REMOTE_RECEIPT_BYTES} bytes")
+
+    def reject_duplicate_fields(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        value: dict[str, object] = {}
+        for key, field in pairs:
+            require(key not in value, f"remote check evidence contains duplicate JSON field: {key}")
+            value[key] = field
+        return value
+
+    try:
+        return json.loads(payload.decode("utf-8"), object_pairs_hook=reject_duplicate_fields)
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError, ValueError) as error:
+        raise ContractError(f"remote check evidence is malformed: {error}") from error
+
+
+def validate_remote_evidence(data: object, expected_head: str) -> None:
+    require(isinstance(expected_head, str) and re.fullmatch(r"[0-9a-f]{40}", expected_head) is not None,
+            "expected remote result head must be a 40-character lowercase commit SHA")
+    require(isinstance(data, dict), "remote evidence must be a JSON object")
+    require(set(data) == REMOTE_RECEIPT_FIELDS,
+            "remote evidence must contain only headSha, requiredJobs, and results")
     require(data.get("headSha") == expected_head,
             f"remote result head is stale: {data.get('headSha')} != {expected_head}")
-    results = data.get("results")
+
+    expected_contexts = set(REMOTE_REQUIRED_CONTEXTS)
     required = data.get("requiredJobs")
-    require(isinstance(required, list) and required and isinstance(results, list),
-            "remote evidence must list requiredJobs and results")
-    index = {row.get("name"): row for row in results if isinstance(row, dict)}
-    missing = [name for name in required if name not in index]
-    require(not missing, f"remote evidence is missing required results: {missing}")
-    bad = [name for name in required
-           if index[name].get("headSha") != expected_head or
-           index[name].get("status") != "completed" or
-           index[name].get("conclusion") != "success"]
-    require(not bad, f"remote required checks are skipped, stale, pending, or failed: {bad}")
+    require(isinstance(required, list) and len(required) == len(expected_contexts) and
+            all(isinstance(name, str) for name in required),
+            "remote evidence requiredJobs must name the three authoritative PR contexts")
+    require(len(set(required)) == len(required), "remote evidence requiredJobs contains duplicates")
+    require(set(required) == expected_contexts,
+            f"remote evidence requiredJobs must equal {sorted(expected_contexts)}")
+
+    results = data.get("results")
+    require(isinstance(results, list) and len(results) == len(expected_contexts),
+            "remote evidence must contain exactly the three authoritative PR context results")
+    seen: set[str] = set()
+    run_ids: set[int] = set()
+    for row in results:
+        require(isinstance(row, dict), "remote evidence result rows must be objects")
+        require(set(row) == REMOTE_RESULT_FIELDS,
+                "remote evidence result has missing or unrecognized fields")
+        name = row.get("name")
+        require(isinstance(name, str) and name in expected_contexts,
+                f"remote evidence has an unrecognized PR context: {name!r}")
+        require(name not in seen, f"remote evidence contains duplicate PR context: {name}")
+        seen.add(name)
+        require(row.get("workflowName") == REMOTE_REQUIRED_CONTEXTS[name],
+                f"remote context {name} has the wrong workflow provenance")
+        database_id = row.get("databaseId")
+        require(type(database_id) is int and 1 <= database_id <= MAX_REMOTE_DATABASE_ID,
+                f"remote context {name} has an invalid GitHub run databaseId")
+        require(database_id not in run_ids, "remote evidence reuses a GitHub run databaseId")
+        run_ids.add(database_id)
+        attempt = row.get("attempt")
+        require(type(attempt) is int and 1 <= attempt <= MAX_REMOTE_ATTEMPT,
+                f"remote context {name} has an invalid GitHub run attempt")
+        require(row.get("event") == "pull_request",
+                f"remote context {name} is not from a pull_request event")
+        require(row.get("headSha") == expected_head,
+                f"remote context {name} is stale: {row.get('headSha')} != {expected_head}")
+        require(row.get("status") == "completed" and row.get("conclusion") == "success",
+                f"remote context {name} is skipped, pending, or failed")
+    require(seen == expected_contexts,
+            f"remote evidence is missing required results: {sorted(expected_contexts - seen)}")
 
 
 def validate_source_revision(root: Path, bench: str, current_head: str) -> str:
@@ -731,12 +801,12 @@ def self_test(root: Path) -> None:
     if summary_path.is_file():
         summary_contract(root, summary_path.read_text(encoding="utf-8"))
     remote_path = root / PROHIBITION_DIR / "remote-checks.json"
+    remote_receipt = "absent-optional"
     if remote_path.is_file():
-        try:
-            validate_remote_evidence(json.loads(remote_path.read_text(encoding="utf-8")), current_head)
-        except (OSError, json.JSONDecodeError) as error:
-            raise ContractError(f"remote check evidence is unreadable: {error}") from error
-    print("hdma-closure self-test pass projection=resolved receipt=current-source summary=checked")
+        validate_remote_evidence(load_remote_evidence(remote_path), current_head)
+        remote_receipt = "validated-optional"
+    print("hdma-closure self-test pass projection=resolved receipt=current-source summary=checked "
+          f"remote_receipt={remote_receipt} merge_authority=github-pr-checks")
 
 
 def closure_self_test(root: Path) -> None:
@@ -800,15 +870,46 @@ Phase 14 — CGB-E Model Qualification and Corpus remains unstarted.
         else:
             raise ContractError(f"closure self-test accepted handoff mutation {label}")
 
-    remote_base = {"headSha": current_head, "requiredJobs": ["native", "fixture"], "results": [
-        {"name": "native", "headSha": current_head, "status": "completed", "conclusion": "success"},
-        {"name": "fixture", "headSha": current_head, "status": "completed", "conclusion": "success"},
-    ]}
+    context_names = tuple(REMOTE_REQUIRED_CONTEXTS)
+    remote_base = {
+        "headSha": current_head,
+        "requiredJobs": list(context_names),
+        "results": [
+            {
+                "name": name,
+                "workflowName": REMOTE_REQUIRED_CONTEXTS[name],
+                "databaseId": 1000 + index,
+                "attempt": 1,
+                "event": "pull_request",
+                "headSha": current_head,
+                "status": "completed",
+                "conclusion": "success",
+            }
+            for index, name in enumerate(context_names)
+        ],
+    }
     validate_remote_evidence(remote_base, current_head)
+    duplicate = dict(remote_base, results=[
+        *remote_base["results"], dict(remote_base["results"][0], conclusion="failure")
+    ])
+    unrecognized = dict(remote_base,
+                        requiredJobs=[*remote_base["requiredJobs"], "manual-green-check"],
+                        results=[*remote_base["results"], {
+                            **remote_base["results"][0], "name": "manual-green-check"
+                        }])
     remote_mutants = (
         dict(remote_base, headSha="0" * 40),
-        {**remote_base, "results": [dict(remote_base["results"][0], conclusion="skipped"), remote_base["results"][1]]},
-        {**remote_base, "results": [remote_base["results"][0]]},
+        {**remote_base, "results": [dict(remote_base["results"][0], conclusion="skipped"),
+                                     *remote_base["results"][1:]]},
+        {**remote_base, "results": remote_base["results"][:1]},
+        duplicate,
+        unrecognized,
+        {**remote_base, "results": [dict(remote_base["results"][0], event="push"),
+                                     *remote_base["results"][1:]]},
+        {**remote_base, "results": [dict(remote_base["results"][0], workflowName="fixture-repro"),
+                                     *remote_base["results"][1:]]},
+        {**remote_base, "results": [dict(remote_base["results"][0], databaseId=0),
+                                     *remote_base["results"][1:]]},
     )
     for index, mutant in enumerate(remote_mutants):
         try:
@@ -816,8 +917,8 @@ Phase 14 — CGB-E Model Qualification and Corpus remains unstarted.
         except ContractError:
             pass
         else:
-            raise ContractError(f"closure self-test accepted stale/skipped/missing remote result {index}")
-    print("hdma-closure self-test pass controls=11")
+            raise ContractError(f"closure self-test accepted forged remote result {index}")
+    print("hdma-closure self-test pass controls=11 remote=8")
 
 
 def main() -> int:

@@ -990,4 +990,5 @@ cgb_hdma_claims_contract_native
 cgb_hdma_claims_contract_selftest
 cgb_hdma_lane_contract
 cgb_hdma_lane_contract_selftest
+cgb_hdma_remote_evidence_selftest
 samesuite_repro_selfcheck
