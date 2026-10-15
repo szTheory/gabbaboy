@@ -507,6 +507,10 @@ static int cgb_apu_wave_direct_ram_control(const char *name) {
     return 1;
 }
 
+static void emit_readback(uint8_t *program, size_t *length, uint8_t address,
+                          unsigned slot);
+static int run_noise_frequency_guest(int slow_after_trigger, uint8_t samples[4]);
+
 static int cgb_apu_trigger_length_sweep(void) {
     uint8_t program[160];
     size_t length = 0u;
@@ -522,9 +526,33 @@ static int cgb_apu_trigger_length_sweep(void) {
     emit_write(program, &length, 0x11u, 0x3Fu); /* CH1 length counter = 1. */
     emit_write(program, &length, 0x12u, 0xF0u); /* Enable the channel DAC. */
     emit_write(program, &length, 0x14u, 0x80u); /* Trigger with length disabled. */
-    emit_write(program, &length, 0x14u, 0x40u); /* Enable length while next step will not clock it. */
-    program[length++] = 0xF0u; program[length++] = 0x26u;
-    program[length++] = 0xEAu; program[length++] = 0x01u; program[length++] = 0xC0u;
+    emit_write(program, &length, 0x16u, 0x3Fu);
+    emit_write(program, &length, 0x17u, 0xF0u);
+    emit_write(program, &length, 0x19u, 0x80u);
+    emit_write(program, &length, 0x30u, 0x77u);
+    emit_write(program, &length, 0x1Au, 0x80u);
+    emit_write(program, &length, 0x1Bu, 0xFFu);
+    emit_write(program, &length, 0x1Cu, 0x20u);
+    emit_write(program, &length, 0x1Eu, 0x80u);
+    emit_write(program, &length, 0x20u, 0x3Fu);
+    emit_write(program, &length, 0x21u, 0xF0u);
+    emit_write(program, &length, 0x22u, 0x00u);
+    emit_write(program, &length, 0x23u, 0x80u);
+    emit_write(program, &length, 0x14u, 0x40u); /* Enable length at the odd sequencer step. */
+    emit_write(program, &length, 0x19u, 0x40u);
+    emit_write(program, &length, 0x1Eu, 0x40u);
+    emit_write(program, &length, 0x23u, 0x40u);
+    emit_readback(program, &length, 0x26u, 1u);
+    /* The pinned channel_1_sweep_restart_2 author case expects CGB-E restart behavior. */
+    emit_write(program, &length, 0x11u, 0xBFu);
+    emit_write(program, &length, 0x10u, 0x19u); /* Period 1, negate, shift 1. */
+    emit_write(program, &length, 0x13u, 0x00u);
+    emit_write(program, &length, 0x14u, 0x82u); /* Frequency 512 and trigger. */
+    emit_readback(program, &length, 0x26u, 2u);
+    emit_write(program, &length, 0x10u, 0x11u); /* Clearing used negate disables CH1. */
+    emit_readback(program, &length, 0x26u, 3u);
+    emit_write(program, &length, 0x14u, 0x82u); /* A fresh trigger restarts sweep state. */
+    emit_readback(program, &length, 0x26u, 4u);
     program[length++] = 0x76u;
 
     gbb_instance *machine = load_cgb_guest(program, length);
@@ -535,21 +563,305 @@ static int cgb_apu_trigger_length_sweep(void) {
     }
     const gbb_run_result run = gbb_run(machine, 16384u, NULL, 0u);
     const uint8_t initial_div = gbb_peek_ram(machine, 0xC000u);
-    const uint8_t status = gbb_peek_ram(machine, 0xC001u);
+    const uint8_t length_status = gbb_peek_ram(machine, 0xC001u);
+    const uint8_t sweep_initial = gbb_peek_ram(machine, 0xC002u);
+    const uint8_t sweep_cleared = gbb_peek_ram(machine, 0xC003u);
+    const uint8_t sweep_restarted = gbb_peek_ram(machine, 0xC004u);
     gbb_destroy(machine);
     if (run.reason == GBB_STOP_HALTED_IDLE && (initial_div & 0x10u) != 0u &&
-        (status & 0x01u) == 0u) {
+        (length_status & 0x0Fu) == 0u && (sweep_initial & 0x01u) != 0u &&
+        (sweep_cleared & 0x01u) == 0u && (sweep_restarted & 0x01u) != 0u) {
         fprintf(stderr,
-                "CGB trigger/length expected immediate expiry after odd-step enable: DIV=%02x NR52=%02x\n",
-                initial_div, status);
-        printf("ok 1 - cgb_apu_trigger_length_sweep\n");
-        return 0;
+                "CGB trigger/length/sweep expected all four length expiries then sweep restart: DIV=%02x NR52=%02x,%02x,%02x,%02x\n",
+                initial_div, length_status, sweep_initial, sweep_cleared, sweep_restarted);
+    } else {
+        printf("not ok 1 - cgb_apu_trigger_length_sweep\n");
+        fprintf(stderr,
+                "CGB trigger/length mismatch expected DIV bit4=1, length status low=0, sweep CH1=1,0,1 actual DIV=%02x NR52=%02x,%02x,%02x,%02x reason=%d\n",
+                initial_div, length_status, sweep_initial, sweep_cleared,
+                sweep_restarted, run.reason);
+        return 1;
     }
-    printf("not ok 1 - cgb_apu_trigger_length_sweep\n");
+    uint8_t fast_noise[4] = {0u}, slowed_noise[4] = {0u};
+    if (run_noise_frequency_guest(0, fast_noise) != 0 ||
+        run_noise_frequency_guest(1, slowed_noise) != 0 ||
+        memcmp(fast_noise, slowed_noise, sizeof(fast_noise)) == 0) {
+        printf("not ok 1 - cgb_apu_trigger_length_sweep\n");
+        fprintf(stderr, "CH4 NR43 change control failed fast=%02x,%02x,%02x,%02x changed=%02x,%02x,%02x,%02x\n",
+                fast_noise[0], fast_noise[1], fast_noise[2], fast_noise[3],
+                slowed_noise[0], slowed_noise[1], slowed_noise[2], slowed_noise[3]);
+        return 1;
+    }
+    fprintf(stderr, "CH4 NR43 transition control expected PCM sequence difference fast=%02x,%02x,%02x,%02x changed=%02x,%02x,%02x,%02x\n",
+            fast_noise[0], fast_noise[1], fast_noise[2], fast_noise[3],
+            slowed_noise[0], slowed_noise[1], slowed_noise[2], slowed_noise[3]);
+    printf("ok 1 - cgb_apu_trigger_length_sweep\n");
+    return 0;
+}
+
+typedef struct {
+    gbb_stop_reason reason;
+    uint8_t values[32];
+} cgb_readback_result;
+
+static void emit_readback(uint8_t *program, size_t *length, uint8_t address,
+                          unsigned slot) {
+    program[(*length)++] = 0xF0u;
+    program[(*length)++] = address;
+    program[(*length)++] = 0xEAu;
+    program[(*length)++] = (uint8_t)slot;
+    program[(*length)++] = 0xC0u;
+}
+
+static int run_cgb_readback_guest(const uint8_t *program, size_t length,
+                                  uint64_t budget, size_t count,
+                                  cgb_readback_result *out) {
+    if (count > sizeof(out->values)) return 1;
+    gbb_instance *machine = load_cgb_guest(program, length);
+    if (machine == NULL) return 1;
+    const gbb_run_result run = gbb_run(machine, budget, NULL, 0u);
+    out->reason = run.reason;
+    for (size_t i = 0u; i < count; ++i)
+        out->values[i] = gbb_peek_ram(machine, (uint16_t)(0xC000u + i));
+    gbb_destroy(machine);
+    return 0;
+}
+
+static void emit_nops(uint8_t *program, size_t *length, unsigned count) {
+    for (unsigned i = 0u; i < count; ++i) program[(*length)++] = 0x00u;
+}
+
+static int run_noise_frequency_guest(int slow_after_trigger, uint8_t samples[4]) {
+    uint8_t program[256];
+    size_t length = 0u;
+    emit_write(program, &length, 0x26u, 0x80u);
+    emit_write(program, &length, 0x21u, 0xF0u);
+    emit_write(program, &length, 0x22u, 0x00u);
+    emit_write(program, &length, 0x23u, 0x80u);
+    if (slow_after_trigger) emit_write(program, &length, 0x22u, 0x70u);
+    for (unsigned i = 0u; i < 4u; ++i) {
+        if (i != 0u) emit_nops(program, &length, 32u);
+        emit_readback(program, &length, 0x77u, i);
+    }
+    program[length++] = 0x76u;
+    cgb_readback_result result = {0};
+    if (run_cgb_readback_guest(program, length, 8192u, 4u, &result) != 0 ||
+        result.reason != GBB_STOP_HALTED_IDLE)
+        return 1;
+    memcpy(samples, result.values, 4u);
+    return 0;
+}
+
+static int cgb_apu_power(void) {
+    uint8_t program[1024];
+    size_t length = 0u;
+    emit_write(program, &length, 0x26u, 0x80u);
+    emit_write(program, &length, 0x24u, 0x77u);
+    emit_write(program, &length, 0x25u, 0xFFu);
+    emit_write(program, &length, 0x11u, 0x80u);
+    emit_write(program, &length, 0x12u, 0xF0u);
+    emit_write(program, &length, 0x14u, 0x80u);
+    for (unsigned i = 0u; i < 16u; ++i)
+        emit_write(program, &length, (uint8_t)(0x30u + i), 0x77u);
+    emit_write(program, &length, 0x1Au, 0x80u);
+    emit_write(program, &length, 0x1Cu, 0x20u);
+    emit_write(program, &length, 0x1Du, 0xFFu);
+    emit_write(program, &length, 0x1Eu, 0x87u);
+    emit_nops(program, &length, 8u);
+    emit_readback(program, &length, 0x26u, 0u);
+    emit_write(program, &length, 0x26u, 0x00u);
+    emit_readback(program, &length, 0x26u, 1u);
+    emit_readback(program, &length, 0x11u, 2u);
+    emit_readback(program, &length, 0x12u, 3u);
+    emit_readback(program, &length, 0x24u, 4u);
+    emit_readback(program, &length, 0x25u, 5u);
+    emit_readback(program, &length, 0x30u, 6u);
+    emit_readback(program, &length, 0x04u, 7u);
+    emit_nops(program, &length, 256u);
+    emit_readback(program, &length, 0x04u, 8u);
+    emit_write(program, &length, 0x26u, 0x80u);
+    emit_readback(program, &length, 0x26u, 9u);
+    emit_readback(program, &length, 0x30u, 10u);
+    program[length++] = 0x76u;
+
+    cgb_readback_result result = {0};
+    if (run_cgb_readback_guest(program, length, 16384u, 11u, &result) != 0 ||
+        result.reason != GBB_STOP_HALTED_IDLE ||
+        (result.values[0] & 0x05u) != 0x05u || result.values[1] != 0x70u ||
+        result.values[2] != 0x3Fu || result.values[3] != 0x00u ||
+        result.values[4] != 0x00u || result.values[5] != 0x00u ||
+        result.values[6] != 0x77u || result.values[7] == result.values[8] ||
+        result.values[9] != 0xF0u || result.values[10] != 0x77u) {
+        printf("not ok 1 - cgb_apu_power\n");
+        fprintf(stderr,
+                "CGB power sequence mismatch reason=%d values=%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x\n",
+                result.reason, result.values[0], result.values[1], result.values[2],
+                result.values[3], result.values[4], result.values[5], result.values[6],
+                result.values[7], result.values[8], result.values[9], result.values[10]);
+        return 1;
+    }
     fprintf(stderr,
-            "CGB trigger/length mismatch expected DIV bit4=1 and NR52 CH1=0 actual DIV=%02x NR52=%02x reason=%d\n",
-            initial_div, status, run.reason);
-    return 1;
+            "CGB NR52 off/on expected status=70/f0 and retained wave=77; DIV advanced %02x->%02x\n",
+            result.values[7], result.values[8]);
+    printf("ok 1 - cgb_apu_power\n");
+    return 0;
+}
+
+static int cgb_apu_off_writes(void) {
+    static const uint8_t writes[][2] = {
+        {0x10u,0x7Fu},{0x11u,0xFFu},{0x12u,0xF0u},{0x13u,0xFFu},{0x14u,0xC7u},
+        {0x16u,0xFFu},{0x17u,0xF0u},{0x18u,0xFFu},{0x19u,0xC7u},{0x1Au,0x80u},
+        {0x1Bu,0xFFu},{0x1Cu,0x60u},{0x1Du,0xFFu},{0x1Eu,0xC7u},{0x20u,0x3Fu},
+        {0x21u,0xF0u},{0x22u,0xFFu},{0x23u,0xC0u},{0x24u,0x77u},{0x25u,0xFFu}
+    };
+    static const uint8_t reads[] = {
+        0x10u,0x11u,0x12u,0x13u,0x14u,0x16u,0x17u,0x18u,0x19u,
+        0x1Au,0x1Bu,0x1Cu,0x1Du,0x1Eu,0x20u,0x21u,0x22u,0x23u,
+        0x24u,0x25u,0x26u
+    };
+    static const uint8_t expected[] = {
+        0x80u,0x3Fu,0x00u,0xFFu,0xBFu,0x3Fu,0x00u,0xFFu,0xBFu,
+        0x7Fu,0xFFu,0x9Fu,0xFFu,0xBFu,0xFFu,0x00u,0x00u,0xBFu,
+        0x00u,0x00u,0x70u
+    };
+    uint8_t program[512];
+    size_t length = 0u;
+    emit_write(program, &length, 0x26u, 0x80u);
+    emit_write(program, &length, 0x30u, 0x77u);
+    emit_write(program, &length, 0x26u, 0x00u);
+    for (size_t i = 0u; i < sizeof(writes) / sizeof(writes[0]); ++i)
+        emit_write(program, &length, writes[i][0], writes[i][1]);
+    emit_write(program, &length, 0x30u, 0xABu); /* Wave RAM is writable while off. */
+    for (size_t i = 0u; i < sizeof(reads); ++i)
+        emit_readback(program, &length, reads[i], (unsigned)i);
+    emit_write(program, &length, 0x26u, 0x80u);
+    emit_readback(program, &length, 0x26u, 21u);
+    emit_readback(program, &length, 0x12u, 22u);
+    emit_readback(program, &length, 0x30u, 23u);
+    program[length++] = 0x76u;
+
+    cgb_readback_result result = {0};
+    int mismatch = run_cgb_readback_guest(program, length, 8192u, 24u, &result) != 0 ||
+                   result.reason != GBB_STOP_HALTED_IDLE;
+    for (size_t i = 0u; i < sizeof(expected); ++i)
+        if (result.values[i] != expected[i]) mismatch = 1;
+    if (mismatch) {
+        printf("not ok 1 - cgb_apu_off_writes\n");
+        fprintf(stderr, "off-state register writes/read masks mismatch reason=%d", result.reason);
+        for (size_t i = 0u; i < sizeof(expected); ++i)
+            fprintf(stderr, " %02x/%02x", result.values[i], expected[i]);
+        fputc('\n', stderr);
+        return 1;
+    }
+    fprintf(stderr, "CGB APU masks and off-state writes passed; Wave RAM retained 0xab\n");
+    printf("ok 1 - cgb_apu_off_writes\n");
+    return 0;
+}
+
+static int cgb_apu_wave_access(void) {
+    uint8_t program[1024];
+    size_t length = 0u;
+    emit_write(program, &length, 0x26u, 0x80u);
+    for (unsigned i = 0u; i < 16u; ++i)
+        emit_write(program, &length, (uint8_t)(0x30u + i), 0x77u);
+    emit_write(program, &length, 0x31u, 0x39u);
+    emit_write(program, &length, 0x1Au, 0x80u);
+    emit_write(program, &length, 0x1Cu, 0x20u);
+    emit_write(program, &length, 0x1Du, 0xFFu);
+    emit_write(program, &length, 0x1Eu, 0x87u);
+    emit_nops(program, &length, 8u);
+    emit_write(program, &length, 0x1Du, 0x00u);
+    emit_write(program, &length, 0x1Eu, 0x80u);
+    emit_write(program, &length, 0x31u, 0xA3u);
+    emit_readback(program, &length, 0x31u, 0u);
+    emit_readback(program, &length, 0x30u, 1u);
+    emit_readback(program, &length, 0x77u, 2u);
+    emit_nops(program, &length, 512u);
+    emit_readback(program, &length, 0x77u, 3u);
+    program[length++] = 0x76u;
+
+    cgb_readback_result result = {0};
+    if (run_cgb_readback_guest(program, length, 8192u, 4u, &result) != 0 ||
+        result.reason != GBB_STOP_HALTED_IDLE || result.values[0] != 0xA3u ||
+        result.values[1] != 0xA3u || result.values[2] != 0x07u ||
+        result.values[3] != 0x03u) {
+        printf("not ok 1 - cgb_apu_wave_access\n");
+        fprintf(stderr, "active Wave RAM mismatch reason=%d reads=%02x,%02x PCM=%02x->%02x\n",
+                result.reason, result.values[0], result.values[1],
+                result.values[2], result.values[3]);
+        return 1;
+    }
+    fprintf(stderr, "CGB active Wave RAM alias expected=0xa3; CH3 buffer 0x07->0x03 at fetch\n");
+    printf("ok 1 - cgb_apu_wave_access\n");
+    return 0;
+}
+
+static int run_cgb_div_edge_guest(int double_speed, int reset_div,
+                                  uint8_t *status, uint8_t *key1) {
+    uint8_t program[128];
+    size_t length = 0u;
+    emit_write(program, &length, 0x26u, 0x00u); /* Hold the sequencer reset while waiting for DIV. */
+    if (double_speed) {
+        emit_write(program, &length, 0x4Du, 0x01u);
+        program[length++] = 0x10u; program[length++] = 0x00u; /* Armed STOP switches speed. */
+    }
+    const uint8_t mask = double_speed ? 0x30u : 0x10u;
+    const uint8_t wanted = double_speed ? 0x20u : 0x10u;
+    program[length++] = 0xF0u; program[length++] = 0x04u;
+    program[length++] = 0xE6u; program[length++] = mask;
+    program[length++] = 0xFEu; program[length++] = wanted;
+    program[length++] = 0x20u; program[length++] = 0xF8u; /* Wait for the selected high tap. */
+    emit_write(program, &length, 0x26u, 0x80u); /* Power-on resets sequence step to zero. */
+    emit_write(program, &length, 0x11u, 0x3Fu);
+    emit_write(program, &length, 0x12u, 0xF0u);
+    emit_write(program, &length, 0x14u, 0xC0u); /* One count, trigger and length enabled. */
+    if (reset_div) emit_write(program, &length, 0x04u, 0x00u);
+    emit_readback(program, &length, 0x26u, 0u);
+    emit_readback(program, &length, 0x4Du, 1u);
+    program[length++] = 0x76u;
+
+    cgb_readback_result result = {0};
+    if (run_cgb_readback_guest(program, length, double_speed ? 200000u : 16384u,
+                               2u, &result) != 0 || result.reason != GBB_STOP_HALTED_IDLE)
+        return 1;
+    *status = result.values[0];
+    *key1 = result.values[1];
+    return 0;
+}
+
+static int cgb_apu_div_stop(void) {
+    uint8_t normal_status = 0u, normal_key1 = 0u;
+    uint8_t double_status = 0u, double_key1 = 0u;
+    if (run_cgb_div_edge_guest(0, 1, &normal_status, &normal_key1) != 0 ||
+        run_cgb_div_edge_guest(1, 1, &double_status, &double_key1) != 0 ||
+        (normal_status & 1u) != 0u || (double_status & 1u) != 0u ||
+        (normal_key1 & 0x80u) != 0u || (double_key1 & 0x80u) == 0u) {
+        printf("not ok 1 - cgb_apu_div_stop\n");
+        fprintf(stderr, "DIV tap/STOP mismatch NR52=%02x,%02x KEY1=%02x,%02x\n",
+                normal_status, double_status, normal_key1, double_key1);
+        return 1;
+    }
+    fprintf(stderr, "DIV falling-edge guests passed normal bit12 and double bit13 after STOP\n");
+    printf("ok 1 - cgb_apu_div_stop\n");
+    return 0;
+}
+
+static int cgb_apu_transition_controls(void) {
+    uint8_t normal_status = 0u, normal_key1 = 0u;
+    uint8_t double_status = 0u, double_key1 = 0u;
+    if (run_cgb_div_edge_guest(0, 0, &normal_status, &normal_key1) != 0 ||
+        run_cgb_div_edge_guest(1, 0, &double_status, &double_key1) != 0 ||
+        (normal_status & 1u) == 0u || (double_status & 1u) == 0u) {
+        printf("not ok 1 - cgb_apu_transition_controls\n");
+        fprintf(stderr, "omitted-DIV control mismatch NR52=%02x,%02x\n",
+                normal_status, double_status);
+        return 1;
+    }
+    fprintf(stderr,
+            "negative-control diagnostic: omitting the DIV write preserved CH1 at normal and double speed (%02x,%02x)\n",
+            normal_status, double_status);
+    printf("ok 1 - cgb_apu_transition_controls\n");
+    return 0;
 }
 
 int main(int argc, char **argv) {
@@ -578,6 +890,12 @@ int main(int argc, char **argv) {
 #endif
     if (strcmp(name, "cgb_apu_trigger_length_sweep") == 0)
         return cgb_apu_trigger_length_sweep();
+    if (strcmp(name, "cgb_apu_power") == 0) return cgb_apu_power();
+    if (strcmp(name, "cgb_apu_off_writes") == 0) return cgb_apu_off_writes();
+    if (strcmp(name, "cgb_apu_wave_access") == 0) return cgb_apu_wave_access();
+    if (strcmp(name, "cgb_apu_div_stop") == 0) return cgb_apu_div_stop();
+    if (strcmp(name, "cgb_apu_transition_controls") == 0)
+        return cgb_apu_transition_controls();
     printf("not ok 1 - %s # unknown test\n", name);
     return 1;
 }

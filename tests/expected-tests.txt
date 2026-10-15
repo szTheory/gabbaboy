@@ -300,10 +300,15 @@ apu_noise
 apu_envelope
 apu_sweep
 apu_power
-cgb_apu_wave_direct_ram_control
+cgb_apu_div_stop
+cgb_apu_off_writes
+cgb_apu_power
+cgb_apu_transition_controls
 cgb_apu_trigger_length_sweep
+cgb_apu_wave_direct_ram_control
 cgb_apu_wave_fetch
 cgb_apu_wave_latch
+cgb_apu_wave_access
 cgb_pcm_tracer
 cgb_pcm_tracer_control
 cgb_pcm_channels

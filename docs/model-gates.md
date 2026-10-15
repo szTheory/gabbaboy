@@ -57,11 +57,11 @@ occurs exactly once in code and once in the table.
 | GATE-12 | BOTH | - | basis=pandocs-joyp | joypad_value | P1 button and direction select lines are the same on both models |
 | GATE-13 | UNKNOWN | - | research:14 | cpu_vram_access_allowed | VRAM CPU lock window during mode 3; CGB lock-edge offsets are unresearched and deferred by D-09/D-12 |
 | GATE-14 | UNKNOWN | - | research:14 | cpu_oam_access_allowed | OAM CPU lock window during modes 2 and 3; CGB lock-edge offsets are unresearched and deferred by D-09/D-12 |
-| GATE-15 | UNKNOWN | - | research:14 | apu_power_off | NR52 power-off effect on APU state and wave RAM |
+| GATE-15 | UNKNOWN | - | expected-failure:dmg-length-retention | apu_power_off | CGB-E state clear and Wave RAM retention are guest-tested; DMG length-counter retention remains outside the frozen baseline |
 | GATE-16 | UNKNOWN | - | expected-failure:cgb-separate-buses | read8 | OAM-DMA CPU bus conflict: CGB uses separate buses (D-17) |
 | GATE-17 | UNKNOWN | - | research:14 | read8 | SC unused bits read differently on CGB (fast clock bit) |
-| GATE-18 | UNKNOWN | - | research:14 | read8 | APU read masks, including NR52 length bits |
-| GATE-19 | UNKNOWN | - | research:14 | read8 | wave RAM access aliasing while the channel is enabled |
+| GATE-18 | BOTH | - | basis=PANDOCS | read8 | APU register masks and NR52 channel-status bits are covered by CGB guest readback and the DMG baseline |
+| GATE-19 | BOTH | - | basis="CGB current-byte alias; DMG alias remains scoped software policy" | read8 | active Wave RAM reads alias the current byte; CGB guest coverage and DMG revision baseline are separate evidence |
 | GATE-20 | UNKNOWN | - | research:14 | read8 | STAT mode and coincidence bits at LCD transitions; CGB transition timing is unresearched and deferred by D-09/D-12 |
 | GATE-21 | CGB_ONLY | model_is_cgb | - | read8 | IE bits 5-7 are stored on the CGB profile (Mooneye unused_hwio-C and unused_hwio-GS); DMG reads them as 1 (OQ2, owner veto item 6) |
 | GATE-22 | BOTH | - | basis=cartridge-side | cart_read | ROM reads are decided by the mapper, not the console |
@@ -76,9 +76,9 @@ occurs exactly once in code and once in the table.
 | GATE-31 | BOTH | - | basis="DIV reset and frame-sequencer edge use the same selected-speed tap on both models, D-11" | write8 | DIV write resets the counter and clocks the frame sequencer through the shared helper |
 | GATE-32 | UNKNOWN | - | research:14 | write8 | TAC write glitch timing |
 | GATE-33 | UNKNOWN | - | research:14 | write8 | serial data and control write behaviour |
-| GATE-34 | UNKNOWN | - | research:14 | write8 | NR52 power-off and power-on behaviour |
-| GATE-35 | UNKNOWN | - | research:14 | write8 | wave RAM write aliasing while the channel is enabled |
-| GATE-36 | UNKNOWN | - | research:14 | write8 | APU register writes while powered on |
+| GATE-34 | UNKNOWN | - | expected-failure:dmg-length-retention | write8 | CGB-E NR52 off/on behavior is guest-tested; DMG length-counter retention remains outside the frozen baseline |
+| GATE-35 | BOTH | - | basis="CGB current-byte alias; DMG alias remains scoped software policy" | write8 | active Wave RAM writes alias the current byte; the CGB guest checks the write/read and latch separation |
+| GATE-36 | BOTH | - | basis="APU register writes are gated by NR52 power; Wave RAM is decoded separately" | write8 | CGB off-state writes are ignored except Wave RAM; read masks and post-on state are guest-checked |
 | GATE-37 | CGB_ONLY | model_is_cgb | - | write8 | IE bits 5-7 are stored on the CGB profile; DMG keeps IE & $1F (OQ2); interrupt dispatch still masks with $1F |
 | GATE-38 | BOTH | - | basis=wram-echo-map | write8 | work RAM and echo mapping; CGB WRAM banking is selected in wram_byte |
 | GATE-39 | CGB_ONLY | model_is_cgb | - | read_supported_map | on the CGB profile FF00-FF7F readability comes from io_visibility[]; only DEFERRED read cells stop; the DMG chain is unchanged |
@@ -239,6 +239,30 @@ the check does not forecast arbitrary HBlank waits.
 | --- | --- | --- | --- |
 | GATE-99 | hdma_start_headroom_available | resolved CGB_ONLY | finite transfer byte work cannot wrap the master-time counter |
 
+## Phase 14 CGB-E APU dispositions
+
+The native CGB-mode CPU-E guest cases below exercise authored register transitions and timing
+boundaries. They are software-model qualification against the pinned Pan Docs contracts and the
+SameSuite author expectations; they make no physical CGB-E measurement claim. The DMG software
+baseline remains frozen. Pan Docs pins: [Audio Registers](https://github.com/gbdev/pandocs/blob/0191af06ac49661587dcde3d57a241a626b8df75/src/Audio_Registers.md)
+and [Audio details](https://github.com/gbdev/pandocs/blob/0191af06ac49661587dcde3d57a241a626b8df75/src/Audio_details.md).
+
+| Gate | Model and mode | Outcome and evidence | Owner | Current signature | Promotion rule |
+| --- | --- | --- | --- | --- | --- |
+| GATE-15 | CGB-CPU-E, native CGB; DMG-CPU-B baseline | CGB off clears channel registers, resets the sample latch, retains Wave RAM; `cgb_apu_power` | core owner | DMG model also clears NRx1 length counters; hardware retention differs and is not changed in this phase | Resolve only in a DMG-scoped plan with an independent length-retention fixture and an explicit baseline revision |
+| GATE-18 | CGB-CPU-E, native CGB; DMG-CPU-B baseline | resolved BOTH; all APU masks, including NR52, `cgb_apu_off_writes` and `cgb_apu_power` | core owner | Fixed read masks and channel status bits; no measurement claim | Reopen only with pinned evidence that contradicts the register contract |
+| GATE-19 | CGB-CPU-E, native CGB; DMG-CPU-B software model | resolved BOTH; active current-byte alias and sample-buffer separation, `cgb_apu_wave_access` | core owner | FF30-FF3F reads alias `position >> 1` while CH3 is active | Reopen if a pinned CGB-E case disagrees; keep the DMG alias separately labeled as software policy |
+| GATE-34 | CGB-CPU-E, native CGB; DMG-CPU-B baseline | CGB NR52 off/on and DIV continuation pass, `cgb_apu_power`; exact DMG exception remains expected-failure | core owner | Off returns `$70`, on returns `$F0` before any channel is retriggered; global DIV continues | Resolve only with the same DMG-specific fixture and baseline revision required by GATE-15 |
+| GATE-35 | CGB-CPU-E, native CGB; DMG-CPU-B software model | resolved BOTH; active aliased write and subsequent fetch, `cgb_apu_wave_access` | core owner | Active FF30-FF3F writes update the currently addressed byte without refilling the CH3 sample latch | Reopen if a pinned CGB-E case disagrees; retain the DMG software-policy boundary |
+| GATE-36 | CGB-CPU-E, native CGB; DMG-CPU-B baseline | resolved BOTH; all off-state APU writes ignored except Wave RAM, `cgb_apu_off_writes` | core owner | NR52 gates the register file; Wave RAM remains independently writable | Reopen only with pinned register evidence that contradicts the authored guest contract |
+
+`cgb_apu_div_stop` forces DIV falling edges at bit 12 in normal speed and bit 13 after a guest
+STOP speed switch. `cgb_apu_transition_controls` omits the DIV write in paired guests and confirms
+the one-count channel remains on, so a missing edge cannot satisfy the positive case. Trigger and
+length ordering covers all four channels; the channel-1 sweep guest clears a used negate operation
+and verifies that a fresh trigger restarts it. Its expected direction is consistent with the pinned
+SameSuite APU README's `channel_1_sweep_restart_2` CGB-E attestation, not with an emulator diff.
+
 ## Release status
 
 `python3 -I tests/scripts/verify-model-gates.py --release` currently fails by design
@@ -246,7 +270,8 @@ the check does not forecast arbitrary HBlank waits.
 names a phase that has not resolved it. Phase 10 resolved its own rows by turning them into
 `DMG_ONLY`/`CGB_ONLY`/`BOTH` classes with guards. Phase 11 resolved or re-assigned every row it was
 given (see the dispositions above). The double-speed switch gates are now resolved or explicitly
-re-assigned in the Phase 12 dispositions above; Phase 14 owns the remaining timer, serial, APU,
-STAT, JOYP and CGB PPU research. `expected-failure:cgb-separate-buses` is a declared, reasoned
+re-assigned in the Phase 12 dispositions above; Phase 14 resolved the CGB-E APU cases listed above
+and retained only the explicit DMG length-retention exception. Timer, serial, STAT, JOYP and CGB
+PPU research remains. `expected-failure:cgb-separate-buses` is a declared, reasoned
 expected failure (D-17) and does not block release. The release-mode test becomes a pass gate in
 Phase 15.

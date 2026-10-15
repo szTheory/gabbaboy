@@ -1646,6 +1646,26 @@ static uint32_t apu_noise_period(const apu_noise_channel *noise) {
     return ((uint32_t)divisor[noise->polynomial & 7u] << (noise->polynomial >> 4)) * 2u;
 }
 
+/* MODEL: BOTH GATE-00 basis="shared channel length-counter helper" */
+static void apu_length_enable_write(gbb_instance *m, uint8_t previous_control,
+                                    uint8_t control, uint16_t *length, int *enabled) {
+    if (!model_is_cgb(m) || (m->apu_sequencer_step & 1u) == 0u ||
+        (previous_control & 0x40u) != 0u || (control & 0x40u) == 0u || *length == 0u)
+        return;
+    --*length;
+    if (*length == 0u) *enabled = 0;
+}
+
+/* MODEL: BOTH GATE-00 basis="shared channel length-counter helper" */
+static void apu_length_reload_on_trigger(gbb_instance *m, uint16_t *length,
+                                         uint16_t maximum, uint8_t control) {
+    if (*length != 0u) return;
+    *length = maximum;
+    if (model_is_cgb(m) && (control & 0x40u) != 0u &&
+        (m->apu_sequencer_step & 1u) != 0u)
+        --*length;
+}
+
 /* MODEL: BOTH GATE-00 basis=model-neutral */
 static void apu_pulse_trigger(gbb_instance *m, unsigned index) {
     apu_pulse_channel *pulse = &m->apu_pulse[index];
@@ -1655,7 +1675,7 @@ static void apu_pulse_trigger(gbb_instance *m, unsigned index) {
     pulse->phase = 0u;
     pulse->volume = (uint8_t)(pulse->envelope >> 4);
     pulse->envelope_timer = (uint8_t)((pulse->envelope & 7u) == 0u ? 8u : pulse->envelope & 7u);
-    if (pulse->length == 0u) pulse->length = 64u;
+    apu_length_reload_on_trigger(m, &pulse->length, 64u, pulse->control);
     if (index == 0u) {
         const uint8_t period = (uint8_t)((pulse->sweep >> 4) & 7u);
         const uint8_t shift = (uint8_t)(pulse->sweep & 7u);
@@ -1682,7 +1702,7 @@ static void apu_power_off(gbb_instance *m) {
     memset(m->apu_pulse, 0, sizeof(m->apu_pulse));
     memset(&m->apu_noise, 0, sizeof(m->apu_noise));
     /* Wave RAM survives NR52 power-off; channel state, including the fetched sample, resets. */
-    /* MODEL: UNKNOWN GATE-15 research:14 -- NR52 power-off effect on APU state and wave RAM */
+    /* MODEL: UNKNOWN GATE-15 expected-failure:dmg-length-retention -- CGB-E off state is qualified; DMG length retention remains outside the frozen baseline */
     memset(&m->apu_wave, 0, offsetof(apu_wave_channel, ram));
     memset((uint8_t *)&m->apu_wave + offsetof(apu_wave_channel, position), 0,
            sizeof(m->apu_wave) - offsetof(apu_wave_channel, position));
@@ -1962,7 +1982,7 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
     if (address == 0xFF01) return m->serial_data;
     /* MODEL: UNKNOWN GATE-17 research:14 -- SC unused bits read differently on CGB (fast clock bit) */
     if (address == 0xFF02) return (uint8_t)(0x7Eu | m->serial_control);
-    /* MODEL: UNKNOWN GATE-18 research:14 -- APU read masks, including NR52 length bits */
+    /* MODEL: BOTH GATE-18 basis=PANDOCS -- APU read masks and channel-status bits */
     if (address == 0xFF10) return (uint8_t)(0x80u | m->apu_pulse[0].sweep);
     if (address == 0xFF11) return (uint8_t)(0x3Fu | (m->apu_pulse[0].duty_length & 0xC0u));
     if (address == 0xFF12) return m->apu_pulse[0].envelope;
@@ -1981,7 +2001,7 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
     if (address == 0xFF21) return m->apu_noise.envelope;
     if (address == 0xFF22) return m->apu_noise.polynomial;
     if (address == 0xFF23) return (uint8_t)(0xBFu | (m->apu_noise.control & 0x40u));
-    /* MODEL: UNKNOWN GATE-19 research:14 -- wave RAM access aliasing while the channel is enabled */
+    /* MODEL: BOTH GATE-19 basis="CGB current-byte alias; DMG alias remains scoped software policy" -- active Wave RAM reads */
     if (address >= 0xFF30u && address <= 0xFF3Fu) {
         unsigned index = address - 0xFF30u;
         /* Active access aliases the current byte in this revision-scoped software model. */
@@ -2339,19 +2359,19 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
             }
         }
     }
-    /* MODEL: UNKNOWN GATE-34 research:14 -- NR52 power-off and power-on behaviour */
+    /* MODEL: UNKNOWN GATE-34 expected-failure:dmg-length-retention -- CGB-E NR52 transitions are guest-tested; the DMG length exception remains frozen */
     else if (address == 0xFF26) {
         if ((value & 0x80u) == 0u) { m->apu_power = 0u; apu_power_off(m); }
         else if (!m->apu_power) { m->apu_power = 1u; m->apu_sequencer_step = 0u; }
     }
-    /* MODEL: UNKNOWN GATE-35 research:14 -- wave RAM write aliasing while the channel is enabled */
+    /* MODEL: BOTH GATE-35 basis="CGB current-byte alias; DMG alias remains scoped software policy" -- active Wave RAM writes */
     else if (address >= 0xFF30u && address <= 0xFF3Fu) {
         unsigned index = address - 0xFF30u;
         /* CPU-B revision variation in active wave-RAM access is not hardware-qualified. */
         if (m->apu_wave.enabled) index = m->apu_wave.position >> 1;
         m->apu_wave.ram[index] = value;
     }
-    /* MODEL: UNKNOWN GATE-36 research:14 -- APU register writes while powered on */
+    /* MODEL: BOTH GATE-36 basis="APU register writes are gated by NR52 power; Wave RAM is decoded separately" -- APU register writes */
     else if (m->apu_power && address == 0xFF10) {
         if (m->apu_pulse[0].sweep_negate_used &&
             (m->apu_pulse[0].sweep & 8u) != 0u && (value & 8u) == 0u)
@@ -2368,7 +2388,10 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     }
     else if (m->apu_power && address == 0xFF13) m->apu_pulse[0].frequency_low = value;
     else if (m->apu_power && address == 0xFF14) {
-        m->apu_pulse[0].control = (uint8_t)(value & 0x47u);
+        const uint8_t control = (uint8_t)(value & 0x47u);
+        apu_length_enable_write(m, m->apu_pulse[0].control, control,
+                                &m->apu_pulse[0].length, &m->apu_pulse[0].enabled);
+        m->apu_pulse[0].control = control;
         if ((value & 0x80u) != 0u) apu_pulse_trigger(m, 0u);
     }
     else if (m->apu_power && address == 0xFF16) {
@@ -2381,7 +2404,10 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     }
     else if (m->apu_power && address == 0xFF18) m->apu_pulse[1].frequency_low = value;
     else if (m->apu_power && address == 0xFF19) {
-        m->apu_pulse[1].control = (uint8_t)(value & 0x47u);
+        const uint8_t control = (uint8_t)(value & 0x47u);
+        apu_length_enable_write(m, m->apu_pulse[1].control, control,
+                                &m->apu_pulse[1].length, &m->apu_pulse[1].enabled);
+        m->apu_pulse[1].control = control;
         if ((value & 0x80u) != 0u) apu_pulse_trigger(m, 1u);
     }
     else if (m->apu_power && address == 0xFF1A) {
@@ -2395,13 +2421,17 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     else if (m->apu_power && address == 0xFF1C) m->apu_wave.level = (uint8_t)(value & 0x60u);
     else if (m->apu_power && address == 0xFF1D) m->apu_wave.frequency_low = value;
     else if (m->apu_power && address == 0xFF1E) {
-        m->apu_wave.control = (uint8_t)(value & 0x47u);
+        const uint8_t control = (uint8_t)(value & 0x47u);
+        apu_length_enable_write(m, m->apu_wave.control, control,
+                                &m->apu_wave.length, &m->apu_wave.enabled);
+        m->apu_wave.control = control;
         if ((value & 0x80u) != 0u) {
             uint16_t frequency = (uint16_t)(m->apu_wave.frequency_low |
                                             ((m->apu_wave.control & 7u) << 8));
             m->apu_wave.timer = (uint16_t)((2048u - frequency) * 2u);
             m->apu_wave.position = 0u;
-            if (m->apu_wave.length == 0u) m->apu_wave.length = 256u;
+            apu_length_reload_on_trigger(m, &m->apu_wave.length, 256u,
+                                         m->apu_wave.control);
             m->apu_wave.enabled = m->apu_power && m->apu_wave.dac != 0u;
         }
     }
@@ -2415,14 +2445,18 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     }
     else if (m->apu_power && address == 0xFF22) m->apu_noise.polynomial = value;
     else if (m->apu_power && address == 0xFF23) {
-        m->apu_noise.control = (uint8_t)(value & 0x40u);
+        const uint8_t control = (uint8_t)(value & 0x40u);
+        apu_length_enable_write(m, m->apu_noise.control, control,
+                                &m->apu_noise.length, &m->apu_noise.enabled);
+        m->apu_noise.control = control;
         if ((value & 0x80u) != 0u) {
             m->apu_noise.timer = apu_noise_period(&m->apu_noise);
             m->apu_noise.lfsr = 0x7FFFu;
             m->apu_noise.volume = (uint8_t)(m->apu_noise.envelope >> 4);
             m->apu_noise.envelope_timer = (uint8_t)((m->apu_noise.envelope & 7u) == 0u
                 ? 8u : m->apu_noise.envelope & 7u);
-            if (m->apu_noise.length == 0u) m->apu_noise.length = 64u;
+            apu_length_reload_on_trigger(m, &m->apu_noise.length, 64u,
+                                         m->apu_noise.control);
             m->apu_noise.enabled = m->apu_power && (m->apu_noise.envelope & 0xF8u) != 0u;
         }
     }
