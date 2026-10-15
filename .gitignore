@@ -56,6 +56,7 @@ CMakeUserPresets.json
 !/fixtures/cgb-banking/banking-cgb.gb
 !/fixtures/cgb-banking/banking-dmg.gb
 !/fixtures/cgb-colour/*.gb
+!/fixtures/cgb-hdma/hblank.gb
 !/fixtures/cgb-speed/speed.gb
 !/fixtures/cgb-speed/speed-hostile.gb
 !/fixtures/magentests/mbc_oob_sram_mbc1.gbc
@@ -64,6 +65,7 @@ CMakeUserPresets.json
 !/fixtures/magentests/ppu_disabled_state.gbc
 !/fixtures/magentests/bg_oam_priority.gbc
 !/fixtures/magentests/oam_internal_priority.gbc
+!/fixtures/magentests/hblank_vram_dma.gbc
 !/fixtures/rtc3test/rtc3test.gb
 
 # Temporary OpenGSD runtime state (retain planning documents)

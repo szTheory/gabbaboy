@@ -514,6 +514,38 @@ static void partition_hash_instance(uint64_t *hash, const gbb_instance *machine,
     hash_byte(hash, (uint8_t)machine->dma_start_pending);
     hash_byte(hash, (uint8_t)machine->dma_cpu_blocked);
 
+    hash_byte(hash, machine->hdma.mode);
+    hash_byte(hash, machine->hdma.active);
+    hash_byte(hash, machine->hdma.pending_hblank);
+    hash_u16(hash, machine->hdma.blocks_remaining);
+    hash_byte(hash, machine->hdma.byte_index);
+    hash_byte(hash, machine->hdma.byte_phase);
+    hash_u16(hash, machine->hdma.source_cursor);
+    hash_u32(hash, machine->hdma.destination_cursor);
+    hash_byte(hash, machine->hdma.block_vram_bank);
+    hash_byte(hash, machine->hdma.source_high);
+    hash_byte(hash, machine->hdma.source_low);
+    hash_byte(hash, machine->hdma.destination_high);
+    hash_byte(hash, machine->hdma.destination_low);
+    hash_byte(hash, machine->hdma.control_readback);
+
+    hash_byte(hash, machine->cart.kind);
+    hash_byte(hash, machine->cart.ram_window_mapped);
+    hash_byte(hash, machine->cart.rom_bank_lo);
+    hash_byte(hash, machine->cart.rom_bank_hi);
+    hash_byte(hash, machine->cart.ram_bank);
+    hash_byte(hash, machine->cart.ram_enabled);
+    hash_byte(hash, machine->cart.mbc1_mode);
+    hash_byte(hash, machine->cart.rumble_on);
+    hash_u64(hash, machine->cart.rumble_changes);
+
+    hash_u64(hash, machine->input_event_count);
+    for (size_t i = 0u; i < machine->input_event_count; ++i) {
+        hash_u64(hash, machine->input_events[i].at_half_dots);
+        hash_byte(hash, (uint8_t)machine->input_events[i].kind);
+        hash_byte(hash, machine->input_events[i].value);
+    }
+
     hash_u16(hash, machine->ppu_dot);
     hash_byte(hash, machine->ppu_half_phase);
     hash_byte(hash, machine->ppu_mode);

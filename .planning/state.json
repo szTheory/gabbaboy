@@ -41,7 +41,7 @@
     {
       "number": "13",
       "name": "CGB HDMA",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "14",
@@ -55,9 +55,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-discuss-phase 13",
-    "label": "Discuss Phase 13: CGB HDMA",
-    "reason": "Phase 12 automated verification complete; Phase 13 remains unstarted; owner chooses when to continue"
+    "command": "/gsd-discuss-phase 14",
+    "label": "Discuss Phase 14 \u2014 CGB-E Model Qualification and Corpus",
+    "reason": "Phase 13 automated UAT complete; pause before the unstarted Phase 14."
   },
-  "updated_at": "2026-10-14T14:35:44.163455+00:00"
+  "updated_at": "2026-10-14T18:09:23.510605+00:00"
 }

@@ -1,0 +1,205 @@
+{
+  "suite": {
+    "name": "SameSuite",
+    "revision": "f15645fb049a47ea235f6d2c9a033e72d8087901",
+    "upstream": "https://github.com/LIJI32/SameSuite/tree/f15645fb049a47ea235f6d2c9a033e72d8087901",
+    "license": "X11; see LICENSE.txt"
+  },
+  "license": {
+    "notice_file": "LICENSE.txt",
+    "notice_sha256": "0ec39366cbff2aeed9f06f43941c98974355db52d72940ba1ddc5b7e0de925af",
+    "spdx": "X11",
+    "rights_basis": "G7",
+    "included_material": [
+      {
+        "path": "include/hexdigits.2bpp",
+        "spdx": "X11",
+        "basis": "covered by the SameSuite repository X11 license under G7"
+      },
+      {
+        "path": "include/hardware.inc",
+        "spdx": "CC0-1.0",
+        "basis": "the pinned file carries its CC0-1.0 waiver and SPDX notice"
+      }
+    ]
+  },
+  "build": {
+    "assembler": "RGBDS",
+    "version": "1.0.1",
+    "archive": "rgbds-macos.zip",
+    "archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
+    "ci_archive": "rgbds-linux-x86_64.tar.xz",
+    "ci_archive_sha256": "80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9",
+    "rgbasm_options": [
+      "-I",
+      "include/"
+    ],
+    "rgblink_options": [
+      "-n",
+      "<work>/<name>.sym"
+    ],
+    "rgbfix_options": [
+      "-jv"
+    ],
+    "command": "rgbasm -I include/ -o <work>/<name>.o <source> && rgblink -o <work>/<name>.gb -n <work>/<name>.sym <work>/<name>.o && rgbfix -jv <work>/<name>.gb"
+  },
+  "source_files": [
+    {
+      "path": "dma/gbc_dma_cont.asm",
+      "size_bytes": 1988,
+      "sha256": "136048e8b882e7d71c03587ed48c2ac3db6cfc059b846ed14b3101e52c374d92",
+      "role": "ROM source",
+      "spdx": "X11"
+    },
+    {
+      "path": "dma/gdma_addr_mask.asm",
+      "size_bytes": 2214,
+      "sha256": "8b745a069332ae4052376e873bfaf7cb0c04c960535062ab24fbd5202287f183",
+      "role": "ROM source",
+      "spdx": "X11"
+    },
+    {
+      "path": "dma/hdma_lcd_off.asm",
+      "size_bytes": 2468,
+      "sha256": "2dcb5c71564905ec054cfef09296632cf8d02c0275ca69c5d87409bd139451a2",
+      "role": "ROM source",
+      "spdx": "X11"
+    },
+    {
+      "path": "dma/hdma_mode0.asm",
+      "size_bytes": 2814,
+      "sha256": "ee249f2430c45ebdfa7c6bb23f9fe3af5f82384c0cc3d8b503b34114f5158828",
+      "role": "ROM source",
+      "spdx": "X11"
+    },
+    {
+      "path": "include/base.inc",
+      "size_bytes": 5750,
+      "sha256": "9283500f9c2ebac16b52ffa2f1e497212a72425439a89e57fa1ee9fe7c820847",
+      "role": "included source",
+      "spdx": "X11"
+    },
+    {
+      "path": "include/common.inc",
+      "size_bytes": 2401,
+      "sha256": "73a06345d63e29c8031ecf9fc844c275685e838b688d1d5e98954f02c3316c0b",
+      "role": "included source",
+      "spdx": "X11"
+    },
+    {
+      "path": "include/config.inc",
+      "size_bytes": 44,
+      "sha256": "1fc948486e59c3c8003dec05d1cba59bc05733beec1e752403d516de10a58ec9",
+      "role": "included source",
+      "spdx": "X11"
+    },
+    {
+      "path": "include/hardware.inc",
+      "size_bytes": 28763,
+      "sha256": "f0fe34491c902f7f98cddd26676448403dcdd44ac7190894e7f820b78df063cc",
+      "role": "included source",
+      "spdx": "CC0-1.0"
+    },
+    {
+      "path": "include/hexdigits.2bpp",
+      "size_bytes": 512,
+      "sha256": "601ca4f503393d2ec9db5a595f3cbf1fa78f1be39ca8378aaa2f2540d650a34d",
+      "role": "included asset",
+      "spdx": "X11"
+    }
+  ],
+  "fixtures": [
+    {
+      "alias": "gbc_dma_cont",
+      "file": "gbc_dma_cont.gb",
+      "original_filename": "dma/gbc_dma_cont.gb",
+      "size_bytes": 32768,
+      "sha256": "cd20f67ff24d4cc90815bdd9b2c41bbeec5ec9a8abedb949f2fc704ff6d61512",
+      "source_path": "dma/gbc_dma_cont.asm",
+      "source_size_bytes": 1988,
+      "source_sha256": "136048e8b882e7d71c03587ed48c2ac3db6cfc059b846ed14b3101e52c374d92",
+      "includes": [
+        "include/base.inc",
+        "include/common.inc",
+        "include/config.inc",
+        "include/hardware.inc",
+        "include/hexdigits.2bpp"
+      ],
+      "expectation": "Two consecutive one-block GDMA starts copy contiguous expected bytes into VRAM.",
+      "applicability": "CGB-mode guest test; starts transfers with LCD off and observes source-derived VRAM bytes.",
+      "target_revision": "CGB-E",
+      "model": "CGB-CPU-E selected software model",
+      "bootless_applicability": true,
+      "author_test_evidence": "SameSuite is an author test suite developed to aid SameBoy; the pinned DMA source encodes the expected byte/status sequence. The upstream material supplies no independent per-ROM physical CGB-E measurement."
+    },
+    {
+      "alias": "gdma_addr_mask",
+      "file": "gdma_addr_mask.gb",
+      "original_filename": "dma/gdma_addr_mask.gb",
+      "size_bytes": 32768,
+      "sha256": "d409c95ddf291c2d9debc0fc3f9bf0d49b24adbcef7f560aa2ae8f6e8299e5f3",
+      "source_path": "dma/gdma_addr_mask.asm",
+      "source_size_bytes": 2214,
+      "source_sha256": "8b745a069332ae4052376e873bfaf7cb0c04c960535062ab24fbd5202287f183",
+      "includes": [
+        "include/base.inc",
+        "include/common.inc",
+        "include/config.inc",
+        "include/hardware.inc",
+        "include/hexdigits.2bpp"
+      ],
+      "expectation": "Low address nibbles written to HDMA1-4 are ignored and one block copies the expected WRAM bytes.",
+      "applicability": "CGB-mode guest test; checks masked source and destination address programming with LCD off.",
+      "target_revision": "CGB-E",
+      "model": "CGB-CPU-E selected software model",
+      "bootless_applicability": true,
+      "author_test_evidence": "SameSuite is an author test suite developed to aid SameBoy; the pinned DMA source encodes the expected byte/status sequence. The upstream material supplies no independent per-ROM physical CGB-E measurement."
+    },
+    {
+      "alias": "hdma_lcd_off",
+      "file": "hdma_lcd_off.gb",
+      "original_filename": "dma/hdma_lcd_off.gb",
+      "size_bytes": 32768,
+      "sha256": "637a3612dcb99bd5f2b0739fb31ad26ce390361e6878b193b894b40f882e44eb",
+      "source_path": "dma/hdma_lcd_off.asm",
+      "source_size_bytes": 2468,
+      "source_sha256": "2dcb5c71564905ec054cfef09296632cf8d02c0275ca69c5d87409bd139451a2",
+      "includes": [
+        "include/base.inc",
+        "include/common.inc",
+        "include/config.inc",
+        "include/hardware.inc",
+        "include/hexdigits.2bpp"
+      ],
+      "expectation": "The author-encoded result expects one block on an LCD-off HBlank-DMA start, then verifies the remaining/cancel status sequence.",
+      "applicability": "CGB-mode guest test; LCD is off at the start and the ROM records HDMA5 before and after cancellation.",
+      "target_revision": "CGB-E",
+      "model": "CGB-CPU-E selected software model",
+      "bootless_applicability": true,
+      "author_test_evidence": "SameSuite is an author test suite developed to aid SameBoy; the pinned DMA source encodes the expected byte/status sequence. The upstream material supplies no independent per-ROM physical CGB-E measurement."
+    },
+    {
+      "alias": "hdma_mode0",
+      "file": "hdma_mode0.gb",
+      "original_filename": "dma/hdma_mode0.gb",
+      "size_bytes": 32768,
+      "sha256": "53f8d643548cecfc8ba5bd03721e4609571fa6a5ac383c96a2342b058fb5f2a1",
+      "source_path": "dma/hdma_mode0.asm",
+      "source_size_bytes": 2814,
+      "source_sha256": "ee249f2430c45ebdfa7c6bb23f9fe3af5f82384c0cc3d8b503b34114f5158828",
+      "includes": [
+        "include/base.inc",
+        "include/common.inc",
+        "include/config.inc",
+        "include/hardware.inc",
+        "include/hexdigits.2bpp"
+      ],
+      "expectation": "After waiting for a visible Mode 0 period, the author-encoded result expects one block and verifies the remaining/cancel status sequence.",
+      "applicability": "CGB-mode guest test; enters visible LCD operation, starts in Mode 0, and turns the LCD off before the test ends.",
+      "target_revision": "CGB-E",
+      "model": "CGB-CPU-E selected software model",
+      "bootless_applicability": true,
+      "author_test_evidence": "SameSuite is an author test suite developed to aid SameBoy; the pinned DMA source encodes the expected byte/status sequence. The upstream material supplies no independent per-ROM physical CGB-E measurement."
+    }
+  ]
+}

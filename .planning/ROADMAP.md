@@ -47,7 +47,7 @@ Milestone-wide rules:
 - [x] **Phase 10: CGB Profile, Banking and Register Visibility** - Select CGB-CPU-E, detect execution mode, bank VRAM/WRAM, and gate every model-specific behavior (completed 2026-10-12)
 - [x] **Phase 11: CGB Colour Rendering and Player Colour** - Render CGB attributes and palettes through an RGB555 frame call, a DMG-compatibility palette, and `--model` in the player (completed 2026-10-13)
 - [x] **Phase 12: CGB Double Speed** - KEY1/STOP speed switching with a modelled pause and a CPU-stall run-loop branch (completed 2026-10-14)
-- [ ] **Phase 13: CGB HDMA** - General-purpose and HBlank VRAM DMA with stall, cancel, readback and HALT interaction
+- [x] **Phase 13: CGB HDMA** - General-purpose and HBlank VRAM DMA with stall, cancel, readback and HALT interaction (completed 2026-10-14)
 - [ ] **Phase 14: CGB-E Model Qualification and Corpus** - CGB-E APU/I/O deltas and a headless CGB-E corpus with per-suite denominators
 - [ ] **Phase 15: CGB Acceptance, Support Ledger and v0.2.0 Release** - CGB game-level evidence (or an explicit absence), current docs and consumers, and a qualified exact-tag release
 
@@ -379,7 +379,42 @@ Plans:
   3. Every transfer is bounded (at most 128 blocks) and partitioned runs stay equivalent across transfers; MagenTests `hblank_vram_dma` passes with its oracle class recorded, and Mealybug `hdma_*-C` results are reported as informational CGB-C evidence outside the CGB-E denominator.
 
 **Research**: DEEP (LCD-off, mode-3 GDMA, overflow state, HALT, cross-bank source, same-half-dot ordering).
-**Plans**: TBD
+**Plans**: 12/12 plans complete
+
+Plans:
+**Wave 1**
+- [x] 13-01-PLAN.md — Real-transfer boundary gate and guest register visibility
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [x] 13-02-PLAN.md — Complete bounded transfer, restart and address policies
+- [x] 13-06-PLAN.md — Pinned four-case SameSuite admission and reproduction
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [x] 13-03-PLAN.md — Real HALT wake and independent competing stalls
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [x] 13-04-PLAN.md — Partition, lifecycle and hostile-resource invariants
+- [x] 13-08-PLAN.md — Original visible DMA guest and existing player smoke
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [x] 13-05-PLAN.md — Bounded runtime mutation sensitivity and inherited anchors
+
+**Wave 6**
+- [x] 13-07-PLAN.md — Magen HDMA admission and structural differential oracle
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [x] 13-09-PLAN.md — Executed SameSuite dispositions and optional CGB-C boundary
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [x] 13-10-PLAN.md — Installed C/C++ DMA consumers and closed package contents
+
+**Wave 9** *(blocked on Wave 8 completion)*
+- [x] 13-11-PLAN.md — Atomic consumer claims and executable documentation contracts
+
+**Wave 10** *(blocked on Wave 9 completion)*
+- [x] 13-12-PLAN.md — Current-revision lane cost, evidence closure and phase pause
+
+Phase 13 automated UAT completed 2026-10-15: 45/45 deliverables, zero human checkpoints or gaps ([13-UAT.md](phases/GB-13-cgb-hdma/13-UAT.md)). Reuse this closed receipt unless covered behavior or evidence changes. Next owner-selected command: `/gsd-discuss-phase 14`.
 
 ### Phase 14: CGB-E Model Qualification and Corpus
 
@@ -421,6 +456,6 @@ Plans:
 | 10. CGB Profile, Banking and Register Visibility | v0.2 | 20/20 | Complete    | 2026-10-12 |
 | 11. CGB Colour Rendering and Player Colour | v0.2 | 15/15 | Complete    | 2026-10-13 |
 | 12. CGB Double Speed | v0.2 | 19/19 | Complete    | 2026-10-14 |
-| 13. CGB HDMA | v0.2 | 0/TBD | Not started | - |
+| 13. CGB HDMA | v0.2 | 12/12 | Complete    | 2026-10-14 |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 0/TBD | Not started | - |
 | 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 0/TBD | Not started | - |

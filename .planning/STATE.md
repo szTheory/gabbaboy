@@ -2,36 +2,56 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_plan: 19
-status: phase_complete
-stopped_at: Phase 12 verification complete; owner chooses when to discuss Phase 13
-last_updated: "2026-10-14T14:35:44.163455+00:00"
-last_activity: 2026-10-14
-last_activity_desc: Phase 12 automated UAT complete; zero human checkpoints
-state_head: da98d56ef8fadadf34ae951b337dcdecce495936
+current_phase: 13
+current_phase_name: CGB HDMA
+current_plan: 12
+status: Phase 13 automated UAT complete; Phase 14 remains unstarted
+stopped_at: Phase 13 verified; awaiting /gsd-discuss-phase 14
+last_updated: "2026-10-15T12:42:01.647626+00:00"
+last_activity: "2026-10-15: Phase 13 automated UAT 45/45; zero human checkpoints; Phase 14 remains unstarted."
+last_activity_desc: Phase 13 automated UAT complete; owner pause retained
+state_head: eeb1ce94dec208b1baf7b1aae1b4c966f1b290ee
 progress:
   total_phases: 9
-  completed_phases: 6
-  total_plans: 99
-  completed_plans: 99
-  percent: 67
-current_phase: 12
-current_phase_name: CGB Double Speed
+  completed_phases: 7
+  total_plans: 111
+  completed_plans: 111
+  percent: 78
 ---
 
 # Project State
 
 ## Project Reference
 
-See: [PROJECT.md](PROJECT.md) (updated 2026-10-14)
+See: [PROJECT.md](PROJECT.md) (updated 2026-10-15)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 12 verified; Phase 13: CGB HDMA awaits the owner
+**Current focus:** Phase 13 verified; Phase 14 remains unstarted
 
 ## Current Position
 
-Current Plan: 19 (execution complete)
-Total Plans in Phase: 19
+Phase: 13 (CGB HDMA) — VERIFIED
+Status: Automated UAT complete; paused for the owner to choose the next phase.
+Current Plan: 12
+Total Plans in Phase: 12
+
+Completed workflow stage: **Phase 13 automated UAT complete**.
+
+[13-UAT.md](phases/GB-13-cgb-hdma/13-UAT.md) closes all 45 deliverables across 12 plans automatically: zero issues, pending/skipped/blocked rows and human checkpoints. All 12 bounded commit windows reconcile. The local closure check rejects 17 weakened records, including hidden manual rows; the handoff rejects contradictory stages and stale routes. [13-VERIFICATION.md](phases/GB-13-cgb-hdma/13-VERIFICATION.md) remains the canonical 37/37 goal report; covered-input refresh is performed by its owner after the UAT/handoff changes.
+
+Fresh source `e556c1b` passed native 994/994 and SDL3 player 1,087/1,087 with no skips. Reviewed source `eeb1ce9` passed focused 9/9 and exact relocated C/C++ consumer/package 6/6. The frozen DMG baseline has zero changed rows. Prior published execution head `b7b4418` passed all 19 exact-head PR-event jobs (CI 38677996444, fixtures 38677996408, preview 38677996566; Linux ASan/UBSan 989/989). [13-BENCH.md](phases/GB-13-cgb-hdma/13-BENCH.md) binds each receipt to its own revision. Final UAT metadata requires separate exact-head checks before the pre-authorized PR #69 merge; GitHub holds the newest head and merge receipt.
+
+D-069 and LESSONS GB-GSD-016 preserve this automation-first default: automate every decidable deliverable with a meaningful negative control, add hosted CI only for recurring value, and reuse completed UAT unless covered behavior or evidence changes. Existing security closes 25/25 threats; prior code-review fixes remain closed (four total findings including the UAT supplement, zero open). The two focused UAT automation findings are fixed and independently re-reviewed before final handoff. No new source/API behavior or owner decision is introduced.
+
+Next stage: **Phase 14 discussion**.
+Next command: /gsd-discuss-phase 14.
+Next phase: **14 — CGB-E Model Qualification and Corpus** remains unstarted. Stop after Phase 13 and retain both auto-advance flags as false. Physical CGB-E remains UNKNOWN/POLICY; optional CGB-C cases are rights-gated and outside the 5/5 software-fixture denominator.
+
+Phase 12 is merged at `8091fb591de7fb68e666be01d344f5f26ebedc5c` (PR #68); its completed UAT remains closed absent changed behavior or contrary evidence.
+
+Progress (v0.2): 7/9 phases complete (78%); 111/111 currently planned plans executed. Phases 14–15 are unstarted.
+
+### Prior stage receipts (historical, before the final merges)
 
 Completed: Phase 9 (MBC3, Deterministic RTC and Cartridge Persistence) — execution plus the execute-phase tail: code review (4 fixed, 1 skipped), Nyquist validation, security (0 open), regression gate and gsd-verifier `passed` (09-VERIFICATION.md)
 Verified: Phase 9 `/gsd-verify-work 9` passed 2026-10-12 — 14/14 UAT items automated (09-UAT.md), the guide-wording item replaced by the `native_guide_rtc_contract` check; re-verification `passed` (09-VERIFICATION.md); PR #65 squash-merges at the exact-head green branch head (pre-authorized)
@@ -42,10 +62,6 @@ Completed: Phase 11 - CGB Colour Rendering and Player Colour, execution (plans 1
 Verified: Phase 11 `/gsd-verify-work 11` passed 2026-10-13 — 11/11 UAT rows automated covering all 91 SUMMARY coverage entries (11-UAT.md); verification `passed` (11-VERIFICATION.md); hosted ASan timeout fixed in the PR (LESSONS GB-CI-004); PR #67 squash-merges at the exact-head green branch head (pre-authorized)
 Completed workflow stage: **Phase 12 - CGB Double Speed, execution** (2026-10-14), plans 12-01..12-19 plus Nyquist validation, security, UI scope review, code review and fixes, regression gate, and goal verification. [12-VERIFICATION.md](phases/GB-12-cgb-double-speed/12-VERIFICATION.md) passes 109/109 with zero unverified behaviors; OpenGSD phase.complete accepted 19/19. Local CTest passed 898/898 in 52.66 seconds, and the DMG baseline had zero changed rows. Exact tested source head `502f992fe9fd2d848845947057c2b327747c3edd`: PR CI `38565349295`, fixture reproduction `38565349297`, and package smoke `38565349116` all succeeded with every PR-event job successful; ASan/UBSan passed 893/893 in 1217.04 seconds. All three review findings are fixed; 34 security threats are closed. Draft [PR #68](https://github.com/szTheory/gabbaboy/pull/68) remains unmerged. Only AGE DIV and STOP-prefetch are passes; eleven qualified expected failures remain, and no physical hardware claim is made. The original plan 12-19 benchmark receipt is historical at `301f1b05577e6d35a4c3a756ded1ec15a4082c8d`, runs `38502094649`, `38502094682`, and `38502094771`; later metadata commits require their own exact-head checks.
 Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-14), via `/gsd-verify-work 12`: [12-UAT.md](phases/GB-12-cgb-double-speed/12-UAT.md) closes 73/73 deliverables automatically, zero issues and zero human checkpoints. Fresh local CTest passed 898/898 in 107.00 seconds; the closure contract rejects nine weakened records, and all 19 bounded commit claims reconcile after correcting plan 12-04's ending SHA. D-069 and LESSONS GB-GSD-016 preserve this default. Exact execution-head `da98d56ef8fadadf34ae951b337dcdecce495936` PR-event runs `38569486172`, `38569486169`, and `38569486126` passed all 19 jobs; ASan/UBSan passed 893/893 in 1089.77 seconds. This verification-record revision requires its own exact-head checks before the pre-authorized PR #68 merge; GitHub holds that final receipt and merge state.
-Next command: **`/gsd-discuss-phase 13`**. Next phase: **Phase 13: CGB HDMA** (not started). Phase 12 UAT is complete: do not rerun it, reopen decisions, or create gap plans without a concrete new regression, changed covered behavior, stale/unavailable evidence, or an owner scope change. `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop for the owner after the protected Phase 12 handoff.
-Last activity: 2026-10-14 — Phase 12 automated verification complete; paused before Phase 13
-
-Progress (v0.2): [███████░░░] 67% (6/9 phases); 99/99 existing plans complete, Phases 13–15 unplanned
 
 ## Performance Metrics
 
@@ -212,6 +228,17 @@ Progress (v0.2): [███████░░░] 67% (6/9 phases); 99/99 existi
 | Phase 12 P17 | 23m+ lower bound | 3 tasks | 8 files |
 | Phase GB-12 P18 | 8 min | 2 tasks | 9 files |
 | Phase 12 P19 | 50 min | 3 tasks | 12 files |
+| Phase 13 P01 | 26 min | 2 tasks | 9 files |
+| Phase 13 P02 | 24min | 2 tasks | 9 files |
+| Phase 13 P06 | 13 min | 2 tasks | 9 files |
+| Phase 13 P03 | 43min | 2 tasks | 7 files |
+| Phase 13 P04 | 30min | 2 tasks | 8 files |
+| Phase 13 P08 | 18min | 2 tasks | 13 files |
+| Phase 13 P05 | 12 min | 2 tasks | 8 files |
+| Phase 13 P07 | 20m | 2 tasks | 12 files |
+| Phase 13 P09 | 30 min | 2 tasks | 9 files |
+| Phase 13 P10 | 20min | 2 tasks | 7 files |
+| Phase 13 P11 | 9min+ | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -415,6 +442,28 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 12]: Phase 12 plan 12-17: Every named expected failure has an exact registered behavior pin, with manifest-to-doc and pin inventory checks plus negative controls.
 - [Phase GB-12]: Plan 12-18 preserves the CGB speed API surface: KEY1 bit 7 is guest-visible and there is no public speed getter.
 - [Phase GB-12]: AGE evidence is limited to two passing cases and eleven named expected failures; the corrected M28 mutation applies only when switching to double speed.
+- [Phase 13]: Treat the post-instruction service boundary, four-half-dot byte cadence, and 64-half-dot block as software policy; physical CGB-E timing remains unknown.
+- [Phase 13]: FF51-FF54 CPU reads return FF as policy while writes apply the documented source and destination masks.
+- [Phase 13]: CGB HDMA source admission is limited to ROM, cartridge mapping, and direct WRAM; absent or disabled cartridge RAM retains cart_read $FF semantics.
+- [Phase 13]: Validate each 16-byte source block and destination before mutation; preserve completed prefixes and rejected cursors/status on unsupported blocks.
+- [Phase 13]: Keep destination $A000 representable after $9FF0; complete a final block and stop remaining work without wrapping.
+- [Phase 13]: Source banks and VBK are sampled per admitted block; physical CGB-E timing and overflow status remain UNKNOWN.
+- [Phase 13]: HALT wakes on real IF/IE and dispatches normally; admitted HDMA finishes and a later HBlank is required for new admission.
+- [Phase 13]: Speed-pause and DMA residuals advance independently; IRQ wake is sampled at the persisted M boundary after admitted DMA retires.
+- [Phase 13]: STOP freezes DMA and device remainders until wake; no missed HBlank is synthesized.
+- [Phase 13]: Shared-tick software order is OAM DMA, HDMA, then PPU; physical CGB-E collision timing remains UNKNOWN.
+- [Phase 13]: Accepted FF55 starts require checked master-time headroom for instruction cost plus count×64 finite byte work, without forecasting HBlank waits.
+- [Phase 13]: Keep HDMA partition snapshots private and explicit; hash fields individually and do not expose raw C state or a new save-state API.
+- [Phase 13]: Plan 13-07: Admit MagenTests HDMA only with release 0.5.0, pinned source revision, RGBDS 0.6.1 tool digest, preserved notices, and byte-identical rebuild.
+- [Phase 13]: Plan 13-07: Derive the destination map from the linker address and FF52 alignment, then require source-derived guest data and green-screen structure before digest comparison.
+- [Phase 13]: Plan 13-07: Report only selected software-model and differential evidence; physical CGB-E hardware qualification remains open.
+- [Phase 13]: Plan 13-09 preserves the D-06/Pan Docs conflict; software-model outcomes do not qualify physical CGB-E behavior.
+- [Phase 13]: Optional Mealybug CGB-C remains not-run:rights-gate-G1 and outside the CGB-E denominator.
+- [Phase 13]: Pin every relocated consumer configure to the package config under the current install prefix.
+- [Phase 13]: Check positive FF55 completion, ROM-derived readback, and DIV timing; the disabled twin diagnoses missing data and CPU-steal timing because FF55 reads FF before and after completion.
+- [Phase 13]: Preserve the exact installed fixture child allow-list and reject SameSuite/Magen bytes under neutral filenames.
+- [Phase 13]: Run one all-surface native/player claim predicate against the checkout or exact-path JSON subject snapshots.
+- [Phase 13]: CGB-07 is closed by 37/37 goal verification; physical CGB-E remains UNKNOWN/POLICY, with no local libFuzzer campaign.
 
 ### Pending Todos
 
@@ -422,8 +471,11 @@ None outside the roadmap.
 
 ### Blockers/Concerns
 
-- The 2026-10-09 v0.1 audit initially accepted 2/6 verification reports; after the Phase 1 refresh, the live gate accepted 3/6 and the strict requirement matrix accepted 15/35. No integration blockers were found. PR #43 is squash-merged. Current phase-boundary triage found no open issues. PR #41 is an open 0.1.1 Release Please PR, currently merge-blocked at head `7e953ca552551a151c5837fd88add8ca879b69bc` with no checks reported; it is not green and remains unmerged.
-- Main branch protection now enforces the three strict required CI contexts for administrators. Follow-up readback showed no required approving-review gate. PR #34 predates admin enforcement and had no recorded approval; its exact required CI contexts were green when merged.
+- Phase 13 boundary triage: the live open inventory contains only draft PR #69 and zero open issues. Current branch-protection readback is unavailable (GitHub integration 403); the ruleset inventory is empty. No protection bypass or new protection claim is made.
+- phase.complete emitted two non-blocking literal-path warnings for command-form SUMMARY coverage refs (`bash tests/scripts/verify-dmg-baseline.sh`, `python3 -I tests/scripts/verify-model-gates.py`). Both scripts exist and their checks pass; the strict summary_coverage parser passes all entries. These are parser path interpretations, not missing implementations.
+
+- Historical 2026-10-09 v0.1 audit initially accepted 2/6 verification reports; after the Phase 1 refresh, the live gate accepted 3/6 and the strict requirement matrix accepted 15/35. No integration blockers were found. PR #43 is squash-merged. At that historical boundary PR #41 was open; it is no longer in the current open inventory.
+- Historical branch-protection readback recorded the three strict required CI contexts for administrators. Follow-up readback showed no required approving-review gate. PR #34 predates admin enforcement and had no recorded approval; its exact required CI contexts were green when merged.
 - Phase 1's refreshed validation report is `validated` and Nyquist-compliant, with 179/179 local CTest. Phase 3 Nyquist validation is `validated`, and its UAT is complete at 34/34.
 
 - Phase 2's refreshed canonical verifier passed all five requirements and roadmap truths. The current full local CTest run passed 179/179, the focused Phase 2 selection passed 88/88, all three admitted headless runner cases passed, and the protocol probe recorded zero PPU accesses. No physical DMG-CPU-B observation or broad compatibility claim is made. See [Phase 2 verification](milestones/v0.1-phases/GB-02-dmg-cpu-bus-and-time/02-VERIFICATION.md).
@@ -450,14 +502,13 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-14T13:07:53Z
-Stopped at: Phase 12 execution complete; awaiting `/gsd-verify-work 12`
-Resume file: .planning/.continue-here.md
-Completed workflow stage: **Phase 12 - CGB Double Speed, execution** (2026-10-14), plans 12-01..12-19 plus Nyquist validation, security, UI scope review, code review and fixes, regression gate, and goal verification. [12-VERIFICATION.md](phases/GB-12-cgb-double-speed/12-VERIFICATION.md) passes 109/109 with zero unverified behaviors; OpenGSD phase.complete accepted 19/19. Local CTest passed 898/898 in 52.66 seconds, and the DMG baseline had zero changed rows. Exact tested source head `502f992fe9fd2d848845947057c2b327747c3edd`: PR CI `38565349295`, fixture reproduction `38565349297`, and package smoke `38565349116` all succeeded with every PR-event job successful; ASan/UBSan passed 893/893 in 1217.04 seconds. All three review findings are fixed; 34 security threats are closed. Draft [PR #68](https://github.com/szTheory/gabbaboy/pull/68) remains unmerged. Only AGE DIV and STOP-prefetch are passes; eleven qualified expected failures remain, and no physical hardware claim is made. The original plan 12-19 benchmark receipt is historical at `301f1b05577e6d35a4c3a756ded1ec15a4082c8d`, runs `38502094649`, `38502094682`, and `38502094771`; later metadata commits require their own exact-head checks.
-Next command in fresh context: **`/gsd-verify-work 12`**. The following phase is **Phase 13: CGB HDMA**, not started; after verification and merge, enter it with **`/gsd-discuss-phase 13`**. `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop at this handoff for the owner.
+Last session: 2026-10-15T12:48:07.397533+00:00
+Stopped at: Phase 13 automated UAT complete; Phase 14 remains unstarted. Awaiting /gsd-discuss-phase 14
+Resume file: .planning/phases/GB-13-cgb-hdma/continue.md
+Phase 13 automated UAT closed 45/45 deliverables with zero human checkpoints. CGB-07 is closed; the canonical goal report is refreshed by its owner for the final local automation changes. The configured bounded regression gate passes 994/994 at source `0f1bb34`; prior source `e556c1b` also passes SDL3 player 1,087/1,087. The closure rejects 17 weakened UAT records, source controls pass 27/27, and all focused review findings are fixed and independently re-reviewed.
+Next command in fresh context: **`/gsd-discuss-phase 14`**. Phase 14, CGB-E Model Qualification and Corpus, remains unstarted. `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop after Phase 13 and wait for the owner.
 
-Completion advisories: OpenGSD's broad SUMMARY reference scan produced 10 warnings across 13 inline references: eleven command strings treated as file paths, the historical ignored `build/tdd-red-audio.xml`, and the unavailable optional `scripts/ci_monitor.cjs`. The verifier checked all 45 declared artifacts and actual behavioral evidence; current audio and mutant controls pass. Hosted monitoring used `gh` with exact PR-event run/head checks. These are recorded advisory/reference limitations, not missing implementation or manual UAT checkpoints.
-Boundary triage: no open issues; only draft PR #68 is open. No release, merge or Phase 13 work was performed. Global learnings are disabled; graduation has no phase LEARNINGS inputs; no phase-resolved pending todos or stale phase `.continue-here` files exist.
+Boundary triage: zero open issues or PR review/comments; PR #69 is the current phase PR. Actual final-head PR-event CI remains mandatory before the authorized merge; GitHub holds the latest head/checks/merge state. The installed optional `scripts/ci_monitor.cjs` is absent, so connected GitHub tools provide observable run/job records. No skipped or stale check counts as green. Global learnings are disabled; graduation has zero phase LEARNINGS inputs. The existing duplicate-static-library linker warning remains nonblocking build debt, with no new owner UAT action.
 
 ### Historical handoffs (superseded by the route above)
 
@@ -547,8 +598,9 @@ Completed workflow stage: **Phase 06.1 planning** (2026-10-10) on branch `gsd/ph
 
 ## Operator Next Steps
 
-- Completed workflow stage: **Phase 12 - CGB Double Speed, verification**, 73/73 automated UAT rows and zero human checkpoints; execution was 19/19 plans and goal verification passed 109/109.
-- Next phase: **Phase 13: CGB HDMA**, not started. Next command: **`/gsd-discuss-phase 13`**.
-- The agent completes the pre-authorized PR #68 merge only after its exact final head has every required check successful. GitHub records that receipt; this does not require owner UAT.
-- Preserve owner model/config changes and use the installed OpenGSD resolver. Do not repeat completed Phase 12 work without changed evidence.
-- Stop here; both workflow auto-advance flags stay false.
+- Completed workflow stage: **Phase 13 automated UAT complete**; 45/45 deliverables, zero issues or human checkpoints; 12/12 plans and 37/37 goal must-haves.
+- Next stage: **Phase 14 discussion**.
+- Next command: /gsd-discuss-phase 14.
+- Next phase: **14 — CGB-E Model Qualification and Corpus** remains unstarted. Stop at the phase pause; both auto-advance flags remain false.
+- Reuse the completed 13-UAT.md unless covered behavior changes, a new concrete regression appears, or evidence becomes stale/unavailable. D-069 and LESSONS GB-GSD-016 remain the default.
+- CGB-07 is closed for the selected software contract. Physical CGB-E, CGB-C rights and broader timing/APU/game qualification remain outside these passing claims.

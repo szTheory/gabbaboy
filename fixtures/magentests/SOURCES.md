@@ -4,7 +4,7 @@
 
 - Project: MagenTests, https://github.com/alloncm/MagenTests
 - Pinned commit: `3f9c090f16e5a721db776febb9ba7d773e1c819c`
-- Release: `0.5.0` (the three `mbc_oob_sram_mbc*.gbc` release assets)
+- Release: `0.5.0`
 - Source of the tests: `src/mbc_oob_sram/main.asm`
 - Licence: MIT, Copyright (c) 2022 alloncm; verbatim text in `LICENSE.txt`
 
@@ -55,3 +55,50 @@ The reproduction job downloads this archive from the gbdev/rgbds v0.6.1 release
 and must re-verify it before use. It was hashed without extraction or execution.
 
 rgbds-0.6.1-linux-x86_64.tar.xz sha256 cfaff18e0db0006863de921d6f5a10eb5fb04dba453f967955a8b0f30bc7ba5b
+
+## CGB HBlank VRAM DMA admission
+
+`hblank_vram_dma.gbc` is the MagenTests 0.5.0 release asset from the pinned
+repository revision above. Its release bytes are 32768 bytes with SHA-256
+`e8124ce687d37a2402e20af92af1299610bfbda0871d605084c0bba2bf57135c`; the
+ROM header is cartridge type `$00` and CGB flag `$C0`. The source Makefile's
+RGBDS v0.6.1 recipe uses `rgbasm -L`, include paths `src/hblank_vram_dma` and
+`hardware.inc/`, then `rgblink`, followed by `rgbfix -v -p 0 --color-only
+--mbc-type ROM`.
+
+The pinned link places `NewTileMap` at ROM `$022C`. FF52 ignores its low four
+bits, so the first aligned HDMA source is `$0220`: the first 12 transferred
+bytes are the preceding tile-data tail (`$FF`), followed by 1012 tile-index-1
+bytes. The guest sets SCX to 96 pixels (12 tiles) and SCY to 112 pixels (14
+rows), placing those 12 bytes outside the viewport. This is why the structural
+oracle checks the exact source-derived map and the 20-by-18 visible tile-1
+region instead of requiring every map byte to be 1.
+
+The complete build and rights closure is pinned in `manifest.json`:
+
+| Pinned input | SHA-256 | License / role |
+|---|---|---|
+| `Makefile` | `f1c9d27f09fd751f853d91f458a222851ae5c7ea61f6ec53572a4cf779814418` | MagenTests build recipe |
+| `LICENSE` | `cfff09304691f49ac2ffb3453b5adc3a4abe9605387b4b89b4f0d384963a2042` | MagenTests MIT notice, copied verbatim to `LICENSE.txt` |
+| `src/common.asm` | `88fc0a6ca5af136a3e948e5b8abab2700140442cf0c0f1871244c835cfd23abb` | Shared routines included by the guest |
+| `src/hblank_vram_dma/main.asm` | `e242af4afb63702a41960de4863d732d51220ac649b2e6b8697bedfddc1e9f77` | Guest program and HDMA/status flow |
+| `src/hblank_vram_dma/graphics_data.asm` | `37c55f20c064b9b4dce00516b9938057a342019b7b850c2014e7c3c1cad6cba9` | Guest tiles and transfer maps |
+| `hardware.inc/hardware.inc` | `6463577e5aba17cdf678eebf206f9fc40e0372c8d8a26a6dc7647c9e7a5c3964` | Include from gbdev/hardware.inc commit `21ef22d01ac55151160f3d98110c2da8846a96b2` |
+| `hardware.inc/LICENSE` | `36ffd9dc085d529a7e60e1276d73ae5a030b020313e6c5408593a6ae2af39673` | CC0-1.0 notice excerpt is retained in `LICENSE.txt` |
+
+The release's root `LICENSE` is MIT, Copyright (c) 2022 alloncm. The included
+`hardware.inc` file carries CC0-1.0; both notices are present in
+`LICENSE.txt`. The row is applicable to the bootless
+`GBB_PROFILE_CGB_CPU_E` selected model and is marked SameBoy-assisted
+differential evidence. It does not qualify physical CGB-E timing or hardware.
+
+RGBDS v0.6.1 official release archives used by `--compare-pinned` are
+verified before private-cache extraction (no global installation):
+
+rgbds-0.6.1-macos-x86-64.zip sha256 65929a5483c89b20955df0d78ceb87744d8ad0cf7c80919f6ee9ef90fc55c08d
+
+On Apple Silicon the pinned x86-64 binaries run under Rosetta. `--compare-pinned`
+rebuilds the full seven-ROM table and compares every output byte with its
+committed release asset. `--self-test` validates a clean copy and rejects
+changed release digest, missing row or source pin, missing license, and altered
+build options with distinct diagnostics.

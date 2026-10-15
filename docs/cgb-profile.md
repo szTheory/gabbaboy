@@ -218,9 +218,114 @@ write; a blocked read returns `$FF` and a read never advances the index; all 8 b
 stored. OPRI (FF6C) stores bit 0 and reads `$FE` or that bit; it has no effect on object priority
 after boot (the execution mode latch decides that, D-08). In compat mode FF69, FF6B and FF6C read `$FF`
 and ignore writes with no index increment. FF72-FF75 are plain registers (FF75 stores bits 4-6 only).
-Unused addresses read `$FF` and ignore writes. Registers owned by a later phase (FF55 write, FF56,
-FF76, FF77) are deferred: a read stops with `GBB_STOP_UNSUPPORTED_BUS` before
-anything changes and a write is dropped and reported as the same stop once the instruction retires.
+Unused addresses read `$FF` and ignore writes. On the CGB profile, FF51-FF54 program private HDMA
+source/destination latches while reads stay `$FF` by POLICY; the source low nibble, destination high
+three bits and destination low nibble are masked. Idle writes also reprogram only the corresponding
+internal cursor bits. Starts after completion or cancellation continue those cursors unless the
+software reprograms them. Writes to FF51-FF54 during an active transfer are ignored by policy.
+
+FF55 implements this bounded state table:
+
+| State and write | Selected software behavior | FF55 readback |
+| --- | --- | --- |
+| Idle, bit 7 clear | Start GDMA for `low7 + 1` blocks; the CPU is held until all blocks finish. | Remaining blocks minus one while active; `$FF` at completion. |
+| Idle, bit 7 set | Arm HDMA for `low7 + 1` blocks. LCD-off or visible mode 0 grants one initial block; otherwise wait for a visible mode-3-to-0 edge. | Remaining blocks minus one while active; `$FF` at completion. |
+| Waiting HDMA, bit 7 clear | Cancel the request, discard its remaining work, and retain the advanced cursors. | `$80 | written_low7`; the adopted `$00` sequence reads `$80`. |
+| Waiting HDMA, bit 7 set | Replace the remaining block count at the current cursors; keep the existing wait state and do not grant another initial block. | New count minus one. |
+| Active block or active GDMA, synthetic register write | Ignore FF51-FF55 writes; normal guest code cannot execute while the modeled steal is active. | Transfer status is unchanged. |
+
+An initial LCD-off/mode-0 kick is one-shot: repeated mode-0 levels and LCD-off time do not drain
+remaining HDMA blocks. Later blocks require a genuine visible-line mode-3-to-0 edge; VBlank never
+admits one. Disabling LCD while HDMA is waiting discards an unadmitted edge but leaves the request
+armed; enabling LCD waits for the next visible edge without a kick. The current guest instruction
+retires before a latched edge is serviced, before IRQ dispatch or another opcode.
+
+The selected D-06 software behavior follows the exact SameSuite `hdma_lcd_off` and `hdma_mode0`
+sequence: write `$83`, transfer one initial block, read `$02`, cancel with `$00`, then read `$80`.
+SameBoy agrees with that sequence. Pan Docs instead describes FF55 cancellation as retaining the
+remaining length in the low bits and warns against starting during mode 0; this project preserves
+that contradiction and does not modify the upstream expected values. The adopted sequence is tagged
+UNKNOWN / author-test plus emulator differential for physical CGB-E, not a hardware result. See
+[Pan Docs FF55](https://gbdev.io/pandocs/CGB_Registers.html#ff55--hdma5-cgb-mode-only-vram-dma-lengthmode-start)
+and the Phase 13 research record.
+
+### CGB HDMA fixture execution and evidence boundary
+
+The executed CGB HDMA set is the four source- and ROM-pinned SameSuite cases at
+`f15645fb049a47ea235f6d2c9a033e72d8087901`, plus MagenTests `hblank_vram_dma` from release
+0.5.0. SameSuite rows assert the author-encoded guest result and copied bytes; Magen remains
+SameBoy-assisted differential evidence. These results apply to the bootless selected CGB-CPU-E
+software model and are not independent physical CGB-E measurements. The D-06 `hdma_lcd_off` and
+`hdma_mode0` sequence stays `$83` -> `$02` -> `$00` -> `$80` despite the separate Pan Docs
+description; its physical behavior remains UNKNOWN/POLICY. Optional Mealybug CGB-C ROMs remain
+`not-run:rights-gate-G1`, informational only, and outside the CGB-E denominator.
+
+<!-- cgb-hdma-dispositions-begin -->
+| suite | case | disposition | reason | owner phase | pinned_by |
+| --- | --- | --- | --- | --- | --- |
+| samesuite | gbc_dma_cont | pass | selected software model pass; physical CGB-E remains UNKNOWN/POLICY | 13 | samesuite_hdma_gbc_dma_cont |
+| samesuite | gdma_addr_mask | pass | selected software model pass; physical CGB-E remains UNKNOWN/POLICY | 13 | samesuite_hdma_gdma_addr_mask |
+| samesuite | hdma_lcd_off | pass | selected software model pass; physical CGB-E remains UNKNOWN/POLICY | 13 | samesuite_hdma_hdma_lcd_off |
+| samesuite | hdma_mode0 | pass | selected software model pass; physical CGB-E remains UNKNOWN/POLICY | 13 | samesuite_hdma_hdma_mode0 |
+| magentests | hblank_vram_dma | pass | selected software model pass; MagenTests differential evidence; physical CGB-E remains UNKNOWN/POLICY | 13 | magentests_hblank_vram_dma |
+| mealybug-cgb-c | hdma_timing-C | not-run:rights-gate-G1 | not-run:rights-gate-G1 | 13 | - |
+| mealybug-cgb-c | hdma_during_halt-C | not-run:rights-gate-G1 | not-run:rights-gate-G1 | 13 | - |
+<!-- cgb-hdma-dispositions-end -->
+
+`tests/external/cgb-hdma-dispositions.json` is the provenance and result record; the disposition
+verifier checks its fixture pins, denominator, CTest registrations, and this mirror. A missing
+optional ROM is not a failure or a pass, and no result here resolves physical CGB-E UNKNOWN/POLICY.
+
+### HDMA source map and overflow policy
+
+Each requested 16-byte block is prevalidated before its first byte. The CGB-only source windows
+are ROM `$0000-$7FFF`, cartridge mapping `$A000-$BFFF`, and direct WRAM `$C000-$DFFF`; bytes use
+`cart_read` or the banked `wram_byte` helper without CPU-bus lockouts. Missing or disabled cartridge
+RAM is still a mapped source and returns `$FF` through `cart_read`. Echo RAM, VRAM, OAM, FEA0-FEFF,
+I/O, and HRAM are rejected before the block mutates VRAM or observes peripheral registers. A failed
+continuation preserves completed blocks, the rejected source/destination cursors and remaining
+count, clears active/pending state, and stops at the run boundary with `GBB_STOP_UNSUPPORTED_BUS`;
+FF55 reads `$80 | (remaining - 1)`. The address and overflow matrices exercise these cells as
+UNKNOWN / software POLICY, not a physical CGB-E result.
+
+Destination `$9FF0` is legal and commits its 16 bytes. The widened cursor then represents `$A000`:
+one requested block completes with FF55 `$FF`, while additional work stops before wrapping or
+writing another byte and retains the remaining-count status. Restarting at `$A000` rejects again;
+idle FF53/FF54 writes can reprogram the destination. Mapper ROM, cartridge RAM, WRAM and VBK are
+sampled for each newly admitted block, so changes between blocks affect the next source/destination
+bank. `cgb_hdma_address_matrix` and `cgb_hdma_overflow_policy` pin these software choices.
+
+Each byte commits every four master half-dots, for 64 per block with no modeled startup/teardown.
+The policy test checks every half-dot around all 16 byte edges at normal and double CPU speed; shifts
+of -8, -4, -2, -1, +1, +2, +4 and +8 half-dots fail the sampled-edge contract, with no software blind
+window around those edges. The transfer boundary, cadence and sampling phase remain UNKNOWN for
+physical CGB-E. FF56, FF76 and FF77 remain deferred: a read stops with
+`GBB_STOP_UNSUPPORTED_BUS` before anything changes and a write is dropped and reported as the same
+stop once the instruction retires.
+
+In the selected software model, a manually HALTed CPU does not admit new ordinary HBlank blocks.
+An already admitted block continues, a timer IF/IE condition wakes HALT, and IME-on wake follows the
+normal interrupt vector before the guest resumes. The edge observed during HALT is not replayed;
+the guest waits for a later visible HBlank. Public guest tests check FF55 at wake and then observe the
+remaining transfer. This behavior is tested at the CGB-CPU-E model boundary only; HALT/DMA arbitration
+and exact edge timing remain UNKNOWN for physical CGB-E hardware.
+
+STOP sleep retains an admitted or pending HDMA block and its byte phase while the oscillator is
+paused. The stopped run advances the master timeline and applies a queued wake event, but freezes
+HDMA, OAM DMA, PPU, timer/DIV, serial and APU state; wake resumes the retained work without creating
+a missed HBlank edge. The RTC has no hidden core clock: it changes only through the explicit
+catch-up operation, so STOP wall time does not mutate its remainder. These are selected software
+policies covered by `cgb_hdma_stop_policy` and its waiting-edge control, not physical CGB-E results.
+
+During an armed speed-switch pause, OAM DMA and HDMA advance alongside the independent speed-pause
+remainder. With active or pending HDMA the scheduler commits bounded one-half-dot master ticks;
+timer IF/IE can end the switch pause only at its M-cycle boundary, then the admitted block finishes
+before interrupt dispatch or guest execution. Completing a block never invokes speed-only
+realignment. On a shared half-dot, the established order remains OAM commit, HDMA commit, then PPU
+advance and HBlank request. The competing-stall controls exercise both speed directions, timer
+wake, OAM, serial, APU and PPU progress, and the unchanged RTC remainder. `cgb_hdma_competing_stalls`
+and `cgb_hdma_oam_order` pin this deterministic software policy; collision and speed-pause timing
+remain UNKNOWN for physical CGB-E.
 The DMG profile never enters this decode: its FF4C-FF7F reads still stop and its writes are silent
 no-ops. IE bits 5-7 are stored and read back on the CGB profile only (owner veto item 6).
 
@@ -310,21 +415,21 @@ column is the evidence class (Pan Docs, Mooneye hardware test, SameBoy, or proje
 | $FF50 | DMG | stop | ignored | IMPL | HW_TEST |
 | $FF50 | CGB | $FF | ignored | IMPL | HW_TEST |
 | $FF50 | COMPAT | $FF | ignored | IMPL | HW_TEST |
-| $FF51 | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF51 | CGB | $FF | ignored | IMPL | PANDOCS |
-| $FF51 | COMPAT | $FF | ignored | IMPL | PANDOCS |
-| $FF52 | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF52 | CGB | $FF | ignored | IMPL | PANDOCS |
-| $FF52 | COMPAT | $FF | ignored | IMPL | PANDOCS |
-| $FF53 | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF53 | CGB | $FF | ignored | IMPL | PANDOCS |
-| $FF53 | COMPAT | $FF | ignored | IMPL | PANDOCS |
-| $FF54 | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF54 | CGB | $FF | ignored | IMPL | PANDOCS |
-| $FF54 | COMPAT | $FF | ignored | IMPL | PANDOCS |
-| $FF55 | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF55 | CGB | $FF | dropped, stop after retire | DEFERRED(13) | PANDOCS |
-| $FF55 | COMPAT | $FF | ignored | IMPL | PANDOCS |
+| $FF51 | DMG | stop | ignored | IMPL | POLICY |
+| $FF51 | CGB | stored or $FF | stored and $FF | IMPL | POLICY |
+| $FF51 | COMPAT | $FF | ignored | IMPL | POLICY |
+| $FF52 | DMG | stop | ignored | IMPL | POLICY |
+| $FF52 | CGB | stored or $FF | stored and $F0 | IMPL | POLICY |
+| $FF52 | COMPAT | $FF | ignored | IMPL | POLICY |
+| $FF53 | DMG | stop | ignored | IMPL | POLICY |
+| $FF53 | CGB | stored or $FF | stored and $1F | IMPL | POLICY |
+| $FF53 | COMPAT | $FF | ignored | IMPL | POLICY |
+| $FF54 | DMG | stop | ignored | IMPL | POLICY |
+| $FF54 | CGB | stored or $FF | stored and $F0 | IMPL | POLICY |
+| $FF54 | COMPAT | $FF | ignored | IMPL | POLICY |
+| $FF55 | DMG | stop | ignored | IMPL | POLICY |
+| $FF55 | CGB | stored or $00 | stored and $FF | IMPL | POLICY |
+| $FF55 | COMPAT | $FF | ignored | IMPL | POLICY |
 | $FF56 | DMG | stop | ignored | IMPL | PANDOCS |
 | $FF56 | CGB | stop | dropped, stop after retire | DEFERRED(14) | PANDOCS |
 | $FF56 | COMPAT | $FF | ignored | IMPL | PANDOCS |
@@ -482,8 +587,10 @@ existing cost. Only cases that read an operand preflight it; cases 2 and 3 never
 The operand value is ignored, so `$00` and `$FF` produce the same STOP result (D-04).
 
 The stall is persisted machine state, consumed by a dedicated branch after the stopped check and
-before interrupt dispatch. It advances devices in one CPU M-cycle quantum at a time, obeys the
-caller budget and output/headroom checks, and reports `GBB_STOP_BUDGET` when a call ends mid-stall;
+before interrupt dispatch. Without competing HDMA it advances devices in one CPU M-cycle quantum;
+with active or pending HDMA it uses one-half-dot ticks and decrements the independent switch
+remainder on those same ticks. It obeys the caller budget and output/headroom checks, and reports
+`GBB_STOP_BUDGET` when a call ends mid-stall;
 it never reports `GBB_STOP_STOPPED` or `GBB_STOP_HALTED_IDLE`, and never sets `stopped`. PPU, APU,
 DIV/TIMA, serial and OAM DMA continue advancing while the CPU is stalled. An enabled interrupt
 ends the stall at the next M-cycle boundary; IME dispatches the handler, while IME clear resumes
@@ -534,9 +641,9 @@ the pause (`expected-failure:speed-switch-pause-ppu-output`); odd-mode realignme
 (`expected-failure:apu-lc-delay-after-switch`, Phase 14); the CGB-E immediate TIMA increment after
 DIV reset (`expected-failure:cgb-e-div-reset-immediate-increment-delay`, D-35); DMG double-speed
 LCD/CPU alignment (`expected-failure:ds-lcd-cpu-alignment`); CGB mode-3 length
-(`expected-failure:cgb-mode3-length`, Phase 14); HBlank DMA crossing a speed-switch stall
-(`expected-failure:speed-switch-hdma-hblank-across-stall`, Phase 13); and the STOP/OAM bug on a
-speed switch (`expected-failure:speed-switch-stop-oam-bug`, Phase 14).
+(`expected-failure:cgb-mode3-length`, Phase 14); the selected armed-HDMA/speed-pause overlap policy
+is exercised by `cgb_hdma_competing_stalls`, while physical collision and timing remain UNKNOWN;
+and the STOP/OAM bug on a speed switch (`expected-failure:speed-switch-stop-oam-bug`, Phase 14).
 
 <!-- cgb-speed-dispositions-begin -->
 | suite | case | disposition | reason | owner phase | pinned_by |
@@ -563,7 +670,7 @@ speed switch (`expected-failure:speed-switch-stop-oam-bug`, Phase 14).
 | gabbaboy-model | cgb-e-div-reset-immediate-increment-delay-tima | expected-failure | expected-failure:cgb-e-div-reset-immediate-increment-delay | 12 | age_spsw_tima_cgbE |
 | gabbaboy-model | cgb-e-div-reset-immediate-increment-delay-interrupts | expected-failure | expected-failure:cgb-e-div-reset-immediate-increment-delay | 12 | age_spsw_interrupts_cgbE |
 | gabbaboy-model | unarmed-stop-held-button | expected-failure | expected-failure:unarmed-stop-held-button | 12 | cgb_speed_dmg_unarmed_unchanged |
-| gabbaboy-model | speed-switch-hdma-hblank-across-stall | expected-failure | expected-failure:speed-switch-hdma-hblank-across-stall | 13 | cgb_speed_xfail_hdma_fails_closed |
+| gabbaboy-model | speed-switch-hdma-hblank-across-stall | pass | - | 13 | cgb_hdma_competing_stalls |
 | gabbaboy-model | speed-switch-stop-oam-bug | expected-failure | expected-failure:speed-switch-stop-oam-bug | 14 | cgb_speed_xfail_stop_oam_unchanged |
 | gabbaboy-model | ds-lcd-cpu-alignment | expected-failure | expected-failure:ds-lcd-cpu-alignment | 14 | age_spsw_mode0_cgbBCE |
 | gabbaboy-model | cgb-mode3-length | expected-failure | expected-failure:cgb-mode3-length | 14 | age_stat_mode_cgbE |
@@ -663,8 +770,9 @@ when LCDC bit 0 is clear that changes the window-start stall, and it is recorded
 `docs/model-gates.md`. The colour path reads PPU dot time only (D-36): it resolves each pixel against
 the live palette RAM at the dot it is produced and never consults a wall clock or a host-side frame
 boundary. The renderer reads VRAM through an explicit bank argument rather than through the CPU
-`VBK` selection, so a CPU bank switch cannot change what the renderer draws. FF55 (HDMA control)
-stays DEFERRED(13). The AGE test suite has no CGB colour, attribute or priority ROM at its pinned
+`VBK` selection, so a CPU bank switch cannot change what the renderer draws. The Phase 13 HDMA
+tracer samples VBK at block admission; other HDMA behavior remains outside the colour path. The AGE
+test suite has no CGB colour, attribute or priority ROM at its pinned
 commit, so it is not Phase 11 colour evidence (D-20); its mode-3 pixel-timing cases are recorded as
 `expected-unsupported` in the external-suite section below.
 

@@ -465,6 +465,131 @@ done:
     return passed;
 }
 
+// Execute a small original guest through the installed C API. The ROM is its
+// own GDMA source; the guest copies VRAM back to WRAM for public observation.
+static int cgb_dma_partition_smoke(int double_speed, int transfer_enabled,
+                                   int *out_data_match, int *out_status_match,
+                                   int *out_timing_match) {
+    constexpr size_t rom_bytes = 32768u;
+    constexpr uint64_t slice_half_dots = 257u;
+    constexpr size_t dma_bytes = 128u;
+    constexpr unsigned max_partitions = 600u;
+    uint8_t rom[rom_bytes]{};
+    gbb_instance *machine = nullptr;
+    uint64_t consumed = 0u;
+    unsigned calls = 0u;
+    int data_match = 1;
+    int status_match = 0;
+    int timing_match = 0;
+    int passed = 0;
+    int first_bad_byte = -1;
+    int failure = 0;
+    gbb_stop_reason last_reason = GBB_STOP_BUDGET;
+    size_t pc = 0x150u;
+    static const uint8_t normal_prefix[] = {
+        0xAFu, 0xE0u, 0x04u,
+        0x3Eu, 0x02u, 0xE0u, 0x51u,
+        0xAFu, 0xE0u, 0x52u, 0xAFu, 0xE0u, 0x53u,
+        0xAFu, 0xE0u, 0x54u,
+        0xF0u, 0x4Du, 0xEAu, 0x04u, 0xC1u
+    };
+    static const uint8_t double_speed_prefix[] = {
+        0x3Eu, 0x01u, 0xE0u, 0x4Du, 0x10u, 0x00u,
+        0xAFu, 0xE0u, 0x04u,
+        0x3Eu, 0x02u, 0xE0u, 0x51u,
+        0xAFu, 0xE0u, 0x52u, 0xAFu, 0xE0u, 0x53u,
+        0xAFu, 0xE0u, 0x54u,
+        0xF0u, 0x4Du, 0xEAu, 0x04u, 0xC1u
+    };
+    const uint8_t *prefix = double_speed ? double_speed_prefix : normal_prefix;
+    const size_t prefix_size = double_speed ? sizeof(double_speed_prefix)
+                                            : sizeof(normal_prefix);
+    if (out_data_match != nullptr) *out_data_match = 0;
+    if (out_status_match != nullptr) *out_status_match = 0;
+    if (out_timing_match != nullptr) *out_timing_match = 0;
+    rom[0x100u] = 0xC3u; rom[0x101u] = 0x50u; rom[0x102u] = 0x01u;
+    rom[0x143u] = 0xC0u; rom[0x147u] = 0x00u;
+    rom[0x148u] = 0x00u; rom[0x149u] = 0x00u;
+    std::memcpy(rom + pc, prefix, prefix_size);
+    pc += prefix_size;
+    rom[pc++] = 0xF0u; rom[pc++] = 0x41u;
+    rom[pc++] = 0xE6u; rom[pc++] = 0x03u;
+    rom[pc++] = 0xFEu; rom[pc++] = 0x03u;
+    rom[pc++] = 0x20u; rom[pc++] = 0xF8u;
+    rom[pc++] = 0xF0u; rom[pc++] = 0x04u;
+    rom[pc++] = 0xEAu; rom[pc++] = 0x00u; rom[pc++] = 0xC1u;
+    if (transfer_enabled) {
+        rom[pc++] = 0x3Eu; rom[pc++] = 0x07u;
+        rom[pc++] = 0xE0u; rom[pc++] = 0x55u;
+    }
+    rom[pc++] = 0xF0u; rom[pc++] = 0x04u;
+    rom[pc++] = 0xEAu; rom[pc++] = 0x01u; rom[pc++] = 0xC1u;
+    rom[pc++] = 0xF0u; rom[pc++] = 0x55u;
+    rom[pc++] = 0xEAu; rom[pc++] = 0x02u; rom[pc++] = 0xC1u;
+    rom[pc++] = 0xAFu; rom[pc++] = 0xE0u; rom[pc++] = 0x40u;
+    rom[pc++] = 0x21u; rom[pc++] = 0x00u; rom[pc++] = 0x80u;
+    rom[pc++] = 0x11u; rom[pc++] = 0x00u; rom[pc++] = 0xC2u;
+    rom[pc++] = 0x06u; rom[pc++] = static_cast<uint8_t>(dma_bytes);
+    rom[pc++] = 0x2Au; rom[pc++] = 0x12u; rom[pc++] = 0x13u; rom[pc++] = 0x05u;
+    rom[pc++] = 0x20u; rom[pc++] = 0xFAu;
+    rom[pc++] = 0x3Eu; rom[pc++] = 0xA5u;
+    rom[pc++] = 0xEAu; rom[pc++] = 0x03u; rom[pc++] = 0xC1u;
+    rom[pc++] = 0x76u;
+    for (size_t i = 0u; i < dma_bytes; ++i)
+        rom[0x0200u + i] = static_cast<uint8_t>(i ^ 0x5Au);
+    uint8_t checksum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+        checksum = static_cast<uint8_t>(checksum - rom[i] - 1u);
+    rom[0x14Du] = checksum;
+    if (gbb_create(GBB_PROFILE_CGB_CPU_E, &machine) != GBB_OK ||
+        gbb_load_rom(machine, rom, sizeof(rom)) != GBB_OK) { failure = 1; goto done; }
+    while (gbb_peek_ram(machine, 0xC103u) != 0xA5u && calls < max_partitions) {
+        const gbb_run_result result = gbb_run(machine, slice_half_dots, nullptr, 0u);
+        ++calls;
+        last_reason = result.reason;
+        if (result.consumed_half_dots == 0u ||
+            result.consumed_half_dots > slice_half_dots ||
+            (result.reason != GBB_STOP_BUDGET && result.reason != GBB_STOP_HALTED_IDLE)) {
+            failure = 2; goto done;
+        }
+        consumed += result.consumed_half_dots;
+        if (consumed > static_cast<uint64_t>(max_partitions) * slice_half_dots) { failure = 3; goto done; }
+    }
+    if (gbb_peek_ram(machine, 0xC103u) != 0xA5u || calls < 2u) { failure = 4; goto done; }
+    status_match = gbb_peek_ram(machine, 0xC102u) == 0xFFu;
+    timing_match = static_cast<uint8_t>(gbb_peek_ram(machine, 0xC101u) -
+                                        gbb_peek_ram(machine, 0xC100u)) > 0u;
+    if ((gbb_peek_ram(machine, 0xC104u) & 0x80u) != (double_speed ? 0x80u : 0u))
+        { failure = 5; goto done; }
+    for (size_t i = 0u; i < dma_bytes; ++i) {
+        if (gbb_peek_ram(machine, static_cast<uint16_t>(0xC200u + i)) !=
+            static_cast<uint8_t>(i ^ 0x5Au)) {
+            data_match = 0;
+            first_bad_byte = static_cast<int>(i);
+            break;
+        }
+    }
+    if (out_data_match != nullptr) *out_data_match = data_match;
+    if (out_status_match != nullptr) *out_status_match = status_match;
+    if (out_timing_match != nullptr) *out_timing_match = timing_match;
+    if (!transfer_enabled)
+        std::fprintf(stderr, "C++ consumer DMA disabled twin diagnosed: data=%d first_bad=%d status=%d timing=%d ff55=%02X calls=%u consumed=%llu\n",
+                     data_match, first_bad_byte, status_match, timing_match, gbb_peek_ram(machine, 0xC102u),
+                     calls, static_cast<unsigned long long>(consumed));
+    passed = transfer_enabled ? data_match && status_match && timing_match
+                              : !data_match && !timing_match;
+done:
+    if (!passed && transfer_enabled)
+        std::fprintf(stderr, "C++ consumer DMA guest failed: check=%d stop=%d marker=%02X ff55=%02X key1=%02X calls=%u consumed=%llu\n",
+                     failure, static_cast<int>(last_reason),
+                     machine != nullptr ? gbb_peek_ram(machine, 0xC103u) : 0u,
+                     machine != nullptr ? gbb_peek_ram(machine, 0xC102u) : 0u,
+                     machine != nullptr ? gbb_peek_ram(machine, 0xC104u) : 0u,
+                     calls, static_cast<unsigned long long>(consumed));
+    gbb_destroy(machine);
+    return passed;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
     FILE *file = std::fopen(argv[1], "rb");
@@ -535,6 +660,28 @@ int main(int argc, char **argv) {
             return 1;
         }
         std::printf("cgb_speed_partition_smoke unarmed twin rejected\n");
+    }
+    {
+        int data_match = 0, status_match = 0, timing_match = 0;
+        if (!cgb_dma_partition_smoke(0, 1, &data_match, &status_match, &timing_match)) {
+            std::fprintf(stderr, "C++ consumer CGB DMA normal-speed guest predicate failed: data=%d status=%d timing=%d\n",
+                         data_match, status_match, timing_match);
+            return 1;
+        }
+        if (!cgb_dma_partition_smoke(1, 1, &data_match, &status_match, &timing_match)) {
+            std::fprintf(stderr, "C++ consumer CGB DMA double-speed guest predicate failed: data=%d status=%d timing=%d\n",
+                         data_match, status_match, timing_match);
+            return 1;
+        }
+        // FF55 reads FF before a transfer and after GDMA completes, so the
+        // disabled twin must fail the data and CPU-steal timing predicates.
+        if (!cgb_dma_partition_smoke(0, 0, &data_match, &status_match, &timing_match) ||
+            data_match || timing_match) {
+            std::fprintf(stderr, "C++ consumer CGB DMA disabled twin lacked diagnosed mismatch\n");
+            return 1;
+        }
+        std::printf("cgb_dma_partition_smoke disabled twin rejected: data=%d status=%d timing=%d\n",
+                    data_match, status_match, timing_match);
     }
     if (rtc_api_smoke() != 0) {
         std::fprintf(stderr, "C++ consumer public RTC API smoke failed\n");

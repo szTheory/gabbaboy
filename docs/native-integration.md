@@ -148,13 +148,39 @@ buffer contracts.
   instruction or one stall M-cycle returns `GBB_STOP_BUDGET` with
   `consumed_half_dots` equal to zero. Speed is guest-visible through KEY1 bit 7;
   there is no public speed getter.
-- Limitations: no HDMA, and CGB mode-3 timing is not claimed. Registers whose
-  behaviour is owned by a later phase stop with `GBB_STOP_UNSUPPORTED_BUS`
-  rather than invent a value. DMG addresses `$FF4C`-`$FF7F` stay fail-closed.
-  IE bits 5-7 are stored on the CGB profile only. The DMG rule that OAM DMA
-  blocks the CPU outside HRAM is kept on the CGB profile although real CGB
-  hardware has separate buses. See [CGB profile](cgb-profile.md) and
-  [model gates](model-gates.md).
+- CGB DMA: guest writes to FF51-FF55 start GDMA (bit 7 clear) or HBlank DMA
+  (bit 7 set) in the selected CGB-CPU-E software model. GDMA holds the CPU
+  until its requested blocks complete. HBlank DMA can grant one initial
+  16-byte block while the LCD is off or in visible mode 0; later blocks wait
+  for a visible mode-3-to-0 edge. VBlank does not grant a block. FF55 reports
+  the active remaining count and reads `$FF` at completion. Cancelling a
+  waiting transfer with bit 7 clear discards its remaining work, keeps its
+  advanced cursors, and reads back `$80 | written_low7`; the adopted `$00`
+  sequence reads `$80`.
+- The unchanged `gbb_run` consumer path advances these guest operations. The
+  current instruction retires before a latched HBlank request is serviced;
+  the bounded DMA steal is applied before interrupt dispatch or the next
+  opcode. This instruction-boundary pending-steal model is an approximation,
+  not bus-cycle timing. In HALT, an admitted block continues, a timer
+  IF/IE condition can wake the CPU, and an HBlank edge seen during HALT is not
+  replayed; the guest waits for another visible edge.
+- Each selected 16-byte block uses 64 half-dots of data: one byte commits every
+  four master half-dots, with no modeled startup or teardown. Each block's
+  source and destination window is validated before its first byte. Invalid
+  windows and destination overflow stop with `GBB_STOP_UNSUPPORTED_BUS`
+  before that block mutates VRAM; completed earlier blocks remain committed.
+  These transfer boundaries and cadence are software policy, not a hardware
+  measurement.
+- The selected bootless CGB-CPU-E software model has no physical CGB-E
+  qualification; physical CGB-E remains UNKNOWN/POLICY. The D-06 `$83` ->
+  `$02` -> `$00` -> `$80` readback follows the pinned SameSuite sequence and
+  remains in contradiction with Pan Docs. Optional Mealybug CGB-C cases are
+  `not-run:rights-gate-G1`, informational only, and outside the CGB-E
+  denominator. CGB mode-3 timing remains unclaimed; the CGB profile's APU is
+  still the DMG APU software model, and no general game compatibility is
+  claimed. Registers whose behaviour belongs to a later phase stop with
+  `GBB_STOP_UNSUPPORTED_BUS`. DMG addresses `$FF4C`-`$FF7F` stay fail-closed.
+  See [CGB profile](cgb-profile.md) and [model gates](model-gates.md).
 
 ### Colour frames and the compatibility palette
 

@@ -4,6 +4,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef GBB_P13_MUT
+#define GBB_P13_MUT(n) 0u
+#endif
+#ifndef GBB_P13_DURATION_OFFSET
+#define GBB_P13_DURATION_OFFSET 0
+#endif
+
 
 #define GBB_INPUT_EVENT_CAPACITY 64u
 #define GBB_DIAGNOSTIC_OPERATION_RESERVE 16u
@@ -326,6 +333,20 @@ typedef struct {
     size_t ram_size;
 } cartridge_info;
 
+typedef struct {
+    uint8_t mode; /* 0 idle, 1 HBlank transfer, 2 general-purpose transfer */
+    uint8_t active; /* one admitted 16-byte block is consuming master time */
+    uint8_t pending_hblank;
+    uint16_t blocks_remaining;
+    uint8_t byte_index;
+    uint8_t byte_phase;
+    uint16_t source_cursor;
+    uint32_t destination_cursor;
+    uint8_t block_vram_bank;
+    uint8_t source_high, source_low, destination_high, destination_low;
+    uint8_t control_readback;
+} hdma_state;
+
 _Static_assert(sizeof(gbb_info) == GBB_INFO_SIZE_V1, "gbb_info layout");
 _Static_assert(sizeof(gbb_compat_palette) == GBB_COMPAT_PALETTE_SIZE_V1, "gbb_compat_palette layout");
 
@@ -391,6 +412,7 @@ struct gbb_instance {
     uint8_t ppu_window_line_drawn;
     uint8_t dma_register, dma_page, dma_pending_page, dma_index, dma_phase;
     int dma_active, dma_start_pending, dma_cpu_blocked;
+    hdma_state hdma;
     uint8_t lcdc, scy, scx, ly, lyc, bgp, obp0, obp1, wy, wx;
     uint8_t joypad_select;
     uint8_t joypad_buttons;
@@ -702,12 +724,25 @@ static void observe_ppu(gbb_instance *m, uint16_t address, uint8_t access,
 }
 
 static void ppu_update_stat_line(gbb_instance *m);
+static int model_is_cgb(const gbb_instance *m);
+static void hdma_request(gbb_instance *m);
+static void speed_switch_apply_realign(gbb_instance *m);
 
 /* MODEL: BOTH GATE-00 basis=model-neutral */
 static void ppu_set_mode(gbb_instance *m, uint8_t mode) {
     if (m->ppu_mode != mode) {
+        const uint8_t previous_mode = m->ppu_mode;
         m->ppu_mode = mode;
         observe_ppu(m, 0xFF41, 4, mode);
+        /* MODEL: CGB_ONLY GATE-91 GUARD=model_is_cgb -- ordinary HBlank DMA requests only on a visible mode-3-to-0 edge */
+        if (model_is_cgb(m) && previous_mode == 3u && mode == 0u &&
+            (m->lcdc & 0x80u) != 0u &&
+            m->ly < GBB_FRAME_HEIGHT)
+            hdma_request(m);
+        else if (GBB_P13_MUT(49) && model_is_cgb(m) &&
+                 previous_mode == 3u && mode == 0u) { /* P13-05-M10: false HBlank trigger */
+            hdma_request(m);
+        }
         ppu_update_stat_line(m);
     }
 }
@@ -1222,11 +1257,11 @@ static const io_row io_visibility[IO_VISIBILITY_ROWS] = {
     [0x4E] = IO_UNUSED_ROW,
     [0x4F] = { IOC(DMG_STOP), IOC(VBK), IOC(VBK), IOS_PANDOCS }, /* VBK: VRAM bank; bit 0 selects the bank in CGB mode only */
     [0x50] = IO_UNUSED_ROW,
-    [0x51] = { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA source/destination: accepted without state until the HDMA phase */
-    [0x52] = { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA source/destination: accepted without state until the HDMA phase */
-    [0x53] = { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA source/destination: accepted without state until the HDMA phase */
-    [0x54] = { IOC(DMG_STOP), IOC(CONST_FF), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA source/destination: accepted without state until the HDMA phase */
-    [0x55] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_W, 13), IOC(CONST_FF), IOS_PANDOCS }, /* HDMA control: a write is deferred to phase 13 and stops visibly */
+    [0x51] = { IOC(DMG_STOP), IOC_ST(0xFF, 0xFF), IOC(CONST_FF), IOS_POLICY }, /* FF51: private source high latch, read mask keeps $FF */
+    [0x52] = { IOC(DMG_STOP), IOC_ST(0xFF, 0xF0), IOC(CONST_FF), IOS_POLICY }, /* FF52: private source low latch, read mask keeps $FF */
+    [0x53] = { IOC(DMG_STOP), IOC_ST(0xFF, 0x1F), IOC(CONST_FF), IOS_POLICY }, /* FF53: private destination high latch */
+    [0x54] = { IOC(DMG_STOP), IOC_ST(0xFF, 0xF0), IOC(CONST_FF), IOS_POLICY }, /* FF54: private destination low latch */
+    [0x55] = { IOC(DMG_STOP), IOC_ST(0x00, 0xFF), IOC(CONST_FF), IOS_POLICY }, /* FF55: bounded HBlank control/status */
     [0x56] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 14), IOC(CONST_FF), IOS_PANDOCS }, /* RP infrared port: deferred to phase 14 */
     [0x57] = IO_UNUSED_ROW,
     [0x58] = IO_UNUSED_ROW,
@@ -1321,6 +1356,11 @@ static uint8_t cram_data_read(uint8_t index_reg, const uint8_t cram[64], int all
 /* MODEL: BOTH GATE-00 basis="CGB-only storage selected by address" */
 static const uint8_t *io_store_ptr(const gbb_instance *m, uint16_t address) {
     switch (address) {
+    case 0xFF51: return &m->hdma.source_high;
+    case 0xFF52: return &m->hdma.source_low;
+    case 0xFF53: return &m->hdma.destination_high;
+    case 0xFF54: return &m->hdma.destination_low;
+    case 0xFF55: return &m->hdma.control_readback;
     case 0xFF68: return &m->bcps;
     case 0xFF6A: return &m->ocps;
     case 0xFF72: return &m->ff72;
@@ -1330,6 +1370,8 @@ static const uint8_t *io_store_ptr(const gbb_instance *m, uint16_t address) {
     default: return NULL;
     }
 }
+
+static void hdma_register_write(gbb_instance *m, uint16_t address, uint8_t value);
 
 /* Read FF4C-FF7F on the CGB profile. */
 /* MODEL: CGB_ONLY GATE-70 GUARD=model_is_cgb -- CGB register reads */
@@ -1368,6 +1410,10 @@ static void io_write_cgb(gbb_instance *m, uint16_t address, uint8_t value) {
         m->wram_bank = m->svbk != 0u ? m->svbk : 1u;
         break;
     case IO_STORE: {
+        if (address >= 0xFF51u && address <= 0xFF55u) {
+            hdma_register_write(m, address, value);
+            break;
+        }
         uint8_t *p = (uint8_t *)io_store_ptr(m, address); /* m is mutable here */
         if (p != NULL) *p = (uint8_t)(value & c->write_mask);
         break;
@@ -1421,6 +1467,8 @@ static void reset_state(gbb_instance *m) {
     m->dma_active = 0;
     m->dma_start_pending = 0;
     m->dma_cpu_blocked = 0;
+    memset(&m->hdma, 0, sizeof(m->hdma));
+    m->hdma.control_readback = 0xFFu;
     m->halted = 0;
     m->stopped = 0;
     m->halt_bug = 0;
@@ -1627,6 +1675,177 @@ static uint8_t cart_read(const gbb_instance *m, uint16_t address) {
         }
     }
     return 0xFFu;
+}
+
+/* MODEL: CGB_ONLY GATE-92 GUARD=model_is_cgb -- a visible HBlank edge latches one request for an armed block */
+static void hdma_request(gbb_instance *m) {
+    /* A manual HALT pauses ordinary admission. An already admitted block is
+     * owned by the scheduler and continues through its active state. */
+    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB ||
+        (m->halted && !GBB_P13_MUT(48))) return; /* P13-05-M09: HALT admission */
+    if (m->hdma.mode == 1u && !m->hdma.active && !m->hdma.pending_hblank &&
+        m->hdma.blocks_remaining != 0u)
+        m->hdma.pending_hblank = 1u;
+}
+
+/* MODEL: CGB_ONLY GATE-93 GUARD=model_is_cgb -- HDMA preflight accepts only cartridge ROM/RAM and direct WRAM windows */
+static int hdma_source_valid(const gbb_instance *m, uint16_t address) {
+    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB) return 0;
+    if (address < 0x8000u)
+        return m->rom != NULL;
+    return (address >= 0xA000u && address <= 0xBFFFu) ||
+           (address >= 0xC000u && address <= 0xDFFFu);
+}
+
+/* MODEL: CGB_ONLY GATE-94 GUARD=model_is_cgb -- HDMA reads only the reviewed mapper or WRAM storage path */
+static int hdma_source_read(const gbb_instance *m, uint16_t address, uint8_t *value) {
+    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB || value == NULL ||
+        !hdma_source_valid(m, address)) return 0;
+    if (address < 0x8000u || (address >= 0xA000u && address <= 0xBFFFu))
+        *value = cart_read(m, address);
+    else
+        *value = *wram_byte(m, address);
+    return 1;
+}
+
+/* MODEL: CGB_ONLY GATE-95 GUARD=model_is_cgb -- validate an entire block before admission and sample VBK once */
+static int hdma_admit_block(gbb_instance *m) {
+    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB) return 0;
+    if (!m->hdma.pending_hblank) return 1;
+    if (m->hdma.blocks_remaining == 0u ||
+        m->hdma.source_cursor > UINT16_MAX - 15u ||
+        m->hdma.destination_cursor < 0x8000u ||
+        m->hdma.destination_cursor > 0x9FF0u) return 0;
+    for (unsigned i = 0u; i < 16u; ++i) {
+        const uint16_t address = (uint16_t)(m->hdma.source_cursor + i);
+        if (!hdma_source_valid(m, address)) return 0;
+    }
+    m->hdma.pending_hblank = 0u;
+    m->hdma.active = 1u;
+    m->hdma.byte_index = 0u;
+    m->hdma.byte_phase = 0u;
+    m->hdma.block_vram_bank = m->vram_bank;
+    return 1;
+}
+
+/* MODEL: CGB_ONLY GATE-98 GUARD=model_is_cgb -- invalid block stop retains FF55 remaining status */
+static void hdma_stop_at_invalid_block(gbb_instance *m, uint16_t address) {
+    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB) return;
+    m->bus_unsupported = 1u;
+    m->bus_unsupported_address = address;
+    m->hdma.active = 0u;
+    m->hdma.pending_hblank = 0u;
+    m->hdma.mode = 0u;
+    m->hdma.byte_index = 0u;
+    m->hdma.byte_phase = 0u;
+    if (m->hdma.blocks_remaining != 0u)
+        m->hdma.control_readback = (uint8_t)(0x80u | ((m->hdma.blocks_remaining - 1u) & 0x7Fu));
+}
+
+/* MODEL: CGB_ONLY GATE-96 GUARD=model_is_cgb -- HDMA commits one byte every four master half-dots after OAM and before PPU */
+static void hdma_advance_half_dot(gbb_instance *m) {
+    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB || !m->hdma.active) return;
+    const int byte_limit = GBB_P13_MUT(47) && m->double_speed != 0u
+        ? 2 : 4 + GBB_P13_DURATION_OFFSET;
+    if ((int)++m->hdma.byte_phase < byte_limit) return; /* P13-05-M08 */
+    m->hdma.byte_phase = 0u;
+    const uint16_t source = (uint16_t)(m->hdma.source_cursor + m->hdma.byte_index);
+    const unsigned destination = (unsigned)(m->hdma.destination_cursor - 0x8000u) +
+                                 m->hdma.byte_index;
+    uint8_t value = 0xFFu;
+    if (destination >= GBB_VRAM_BANK_SIZE ||
+        !hdma_source_read(m, source, &value)) {
+        hdma_stop_at_invalid_block(m, source);
+        return;
+    }
+    const unsigned write_bank = m->hdma.block_vram_bank ^ (GBB_P13_MUT(43) ? 1u : 0u); /* P13-05-M04 */
+    if (!GBB_P13_MUT(41))
+        m->vram[write_bank][destination] = value; /* P13-05-M02 */
+    if (GBB_P13_MUT(42) && m->hdma.byte_index == 15u &&
+        destination + 1u < GBB_VRAM_BANK_SIZE)
+        m->vram[write_bank][destination + 1u] = value; /* P13-05-M03 */
+    if (++m->hdma.byte_index != 16u) return;
+
+    m->hdma.active = 0u;
+    m->hdma.byte_index = 0u;
+    if (m->hdma.blocks_remaining != 0u) --m->hdma.blocks_remaining;
+    if (GBB_P13_MUT(45) && m->hdma.blocks_remaining != 0u)
+        --m->hdma.blocks_remaining; /* P13-05-M06 */
+    m->hdma.source_cursor = (uint16_t)(m->hdma.source_cursor + 16u);
+    m->hdma.destination_cursor += 16u;
+    if (m->hdma.blocks_remaining == 0u) {
+        m->hdma.mode = 0u;
+        m->hdma.pending_hblank = 0u;
+        m->hdma.control_readback = 0xFFu;
+    } else {
+        m->hdma.control_readback = (uint8_t)((m->hdma.blocks_remaining - 1u) & 0x7Fu);
+        if (m->hdma.mode == 2u) m->hdma.pending_hblank = 1u;
+    }
+    if (GBB_P13_MUT(51)) speed_switch_apply_realign(m); /* P13-05-M12 */
+}
+
+/* MODEL: CGB_ONLY GATE-97 GUARD=model_is_cgb -- FF51-55 maintain bounded cursor and transfer state */
+static void hdma_register_write(gbb_instance *m, uint16_t address, uint8_t value) {
+    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB) return;
+    switch (address) {
+    case 0xFF51u:
+        if (m->hdma.mode != 0u || m->hdma.active || m->hdma.pending_hblank) return;
+        m->hdma.source_high = value;
+        m->hdma.source_cursor = (uint16_t)(((uint16_t)value << 8) |
+                                           (m->hdma.source_cursor & 0x00FFu));
+        break;
+    case 0xFF52u:
+        if (m->hdma.mode != 0u || m->hdma.active || m->hdma.pending_hblank) return;
+        m->hdma.source_low = (uint8_t)(value & 0xF0u);
+        m->hdma.source_cursor = (uint16_t)((m->hdma.source_cursor & 0xFF00u) |
+                                           m->hdma.source_low);
+        break;
+    case 0xFF53u:
+        if (m->hdma.mode != 0u || m->hdma.active || m->hdma.pending_hblank) return;
+        m->hdma.destination_high = (uint8_t)(value & 0x1Fu);
+        m->hdma.destination_cursor = 0x8000u |
+            ((uint16_t)m->hdma.destination_high << 8) |
+            (m->hdma.destination_cursor & 0x00FFu);
+        break;
+    case 0xFF54u:
+        if (m->hdma.mode != 0u || m->hdma.active || m->hdma.pending_hblank) return;
+        m->hdma.destination_low = (uint8_t)(GBB_P13_MUT(44) ? value : (value & 0xF0u)); /* P13-05-M05 */
+        m->hdma.destination_cursor = (m->hdma.destination_cursor & 0xFF00u) |
+                                     m->hdma.destination_low;
+        break;
+    case 0xFF55u:
+        if (m->hdma.mode == 2u || m->hdma.active) return;
+        if (m->hdma.mode == 1u) {
+            if ((value & 0x80u) == 0u) {
+                const uint16_t retained_blocks = m->hdma.blocks_remaining;
+                m->hdma.mode = 0u;
+                m->hdma.pending_hblank = 0u;
+                m->hdma.blocks_remaining = 0u;
+                m->hdma.byte_index = 0u;
+                m->hdma.byte_phase = 0u;
+                m->hdma.control_readback = GBB_P13_MUT(46)
+                    ? (uint8_t)(0x80u | ((retained_blocks - 1u) & 0x7Fu))
+                    : (uint8_t)(0x80u | (value & 0x7Fu)); /* P13-05-M07 */
+            } else {
+                m->hdma.blocks_remaining = (uint16_t)((value & 0x7Fu) + 1u);
+                m->hdma.control_readback = (uint8_t)(value & 0x7Fu);
+            }
+            break;
+        }
+        m->hdma.mode = (value & 0x80u) != 0u ? 1u : 2u;
+        m->hdma.active = 0u;
+        m->hdma.pending_hblank = m->hdma.mode == 2u ? 1u : 0u;
+        m->hdma.blocks_remaining = (uint16_t)((value & 0x7Fu) + 1u);
+        m->hdma.byte_index = 0u;
+        m->hdma.byte_phase = 0u;
+        m->hdma.control_readback = (uint8_t)(value & 0x7Fu);
+        if (m->hdma.mode == 1u &&
+            ((m->lcdc & 0x80u) == 0u ||
+             (m->ly < GBB_FRAME_HEIGHT && m->ppu_mode == 0u)))
+            m->hdma.pending_hblank = 1u;
+        break;
+    default: break;
+    }
 }
 
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
@@ -1933,6 +2152,8 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
         uint8_t old = m->lcdc;
         m->lcdc = value;
         if ((value & 0x80u) == 0) {
+            if (m->hdma.mode == 1u && !m->hdma.active)
+                m->hdma.pending_hblank = 0u;
             m->ppu_dot = 0;
             m->ppu_half_phase = 0;
             m->ly = 0;
@@ -2950,7 +3171,10 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
                 m->audio_frame_count < m->audio_frame_capacity)
                 m->audio_frames[m->audio_frame_count++] = frame;
         }
+        if (GBB_P13_MUT(52)) hdma_advance_half_dot(m); /* P13-05-M13: shifted collision order */
         if (cpu_tick) dma_advance_half_dot(m); /* P12-M14 */
+        if (!GBB_P13_MUT(52))
+            hdma_advance_half_dot(m); /* P13-M1: OAM retains precedence; HDMA commits before PPU advancement. */
         m->ppu_half_phase ^= 1u; /* P12-M1 */
         if (m->ppu_half_phase == 0) ppu_advance_dot(m);
     }
@@ -3992,6 +4216,121 @@ static int cpu_stalled(const gbb_instance *m) {
     return m->cpu_stall_kind != GBB_STALL_NONE;
 }
 
+/* MODEL: CGB_ONLY GATE-99 GUARD=model_is_cgb -- an accepted FF55 start reserves checked master-time headroom for its finite byte work */
+static int hdma_start_headroom_available(const gbb_instance *m, uint8_t value,
+                                         uint64_t operation_cost) {
+    if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB ||
+        m->hdma.mode == 2u || m->hdma.active ||
+        (m->hdma.mode == 1u && (value & 0x80u) == 0u)) return 1;
+    const uint64_t blocks = (uint64_t)(value & 0x7Fu) + 1u;
+    if (blocks > (UINT64_MAX - operation_cost) / UINT64_C(64)) return 0;
+    const uint64_t required = operation_cost + blocks * UINT64_C(64);
+    return UINT64_MAX - m->time_half_dots >= required;
+}
+
+/* MODEL: BOTH GATE-00 basis="model-neutral function; see its branch gates" */
+static int hdma_stack_push_headroom_available(const gbb_instance *m,
+                                              uint16_t value,
+                                              uint64_t operation_cost) {
+    const uint16_t high_address = (uint16_t)(m->sp - 1u);
+    const uint16_t low_address = (uint16_t)(m->sp - 2u);
+    if (high_address == 0xFF55u &&
+        !hdma_start_headroom_available(m, (uint8_t)(value >> 8), operation_cost)) return 0;
+    if (low_address == 0xFF55u &&
+        !hdma_start_headroom_available(m, (uint8_t)value, operation_cost)) return 0;
+    return 1;
+}
+
+/* Resolve CPU stores to FF55 before their bus phases, so a rejected start
+ * cannot partially change CPU state, another register, or output buffers. */
+/* MODEL: BOTH GATE-00 basis="model-neutral function; see its branch gates" */
+static int hdma_instruction_headroom_available(const gbb_instance *m,
+                                               uint8_t opcode,
+                                               uint64_t operation_cost) {
+    uint16_t address = 0u;
+    uint8_t value = 0u;
+    int writes = 0;
+    if (opcode == 0xE0u) {
+        address = (uint16_t)(0xFF00u + instruction_byte(m, m->pc, 1u));
+        value = m->a;
+        writes = 1;
+    } else if (opcode == 0xE2u) {
+        address = (uint16_t)(0xFF00u + m->c);
+        value = m->a;
+        writes = 1;
+    } else if (opcode == 0xEAu) {
+        address = (uint16_t)(instruction_byte(m, m->pc, 1u) |
+            ((uint16_t)instruction_byte(m, m->pc, 2u) << 8));
+        value = m->a;
+        writes = 1;
+    } else if (opcode == 0x02u || opcode == 0x12u ||
+               opcode == 0x22u || opcode == 0x32u) {
+        address = opcode == 0x02u ? pair_value(m, 0u) :
+                  opcode == 0x12u ? pair_value(m, 1u) : hl(m);
+        value = m->a;
+        writes = 1;
+    } else if (opcode >= 0x70u && opcode <= 0x77u && opcode != 0x76u) {
+        address = hl(m);
+        value = get_reg((gbb_instance *)m, opcode & 7u, 0u);
+        writes = 1;
+    } else if (opcode == 0x36u && hl(m) == 0xFF55u) {
+        address = hl(m);
+        value = instruction_byte(m, m->pc, 1u);
+        writes = 1;
+    } else if (((opcode & 0xC7u) == 0x04u || (opcode & 0xC7u) == 0x05u) &&
+               ((opcode >> 3) & 7u) == 6u && hl(m) == 0xFF55u) {
+        address = hl(m);
+        const uint8_t old = read8(m, address);
+        value = (opcode & 1u) != 0u ? (uint8_t)(old - 1u) : (uint8_t)(old + 1u);
+        writes = 1;
+    } else if (opcode == 0xCBu) {
+        const uint8_t extension = instruction_byte(m, m->pc, 1u);
+        const unsigned group = extension >> 6;
+        const unsigned operation = (extension >> 3) & 7u;
+        if ((extension & 7u) == 6u && group != 1u && hl(m) == 0xFF55u) {
+            address = hl(m);
+            value = read8(m, address);
+            if (group == 0u) {
+                const uint8_t carry_in = (uint8_t)((m->f & 0x10u) != 0u);
+                switch (operation) {
+                case 0u: value = (uint8_t)((value << 1) | (value >> 7)); break;
+                case 1u: value = (uint8_t)((value >> 1) | (value << 7)); break;
+                case 2u: value = (uint8_t)((value << 1) | carry_in); break;
+                case 3u: value = (uint8_t)((value >> 1) | (carry_in << 7)); break;
+                case 4u: value = (uint8_t)(value << 1); break;
+                case 5u: value = (uint8_t)((value >> 1) | (value & 0x80u)); break;
+                case 6u: value = (uint8_t)((value << 4) | (value >> 4)); break;
+                default: value = (uint8_t)(value >> 1); break;
+                }
+            } else if (group == 2u) {
+                value = (uint8_t)(value & (uint8_t)~(1u << operation));
+            } else {
+                value = (uint8_t)(value | (uint8_t)(1u << operation));
+            }
+            writes = 1;
+        }
+    } else if (opcode == 0x08u) {
+        address = (uint16_t)(instruction_byte(m, m->pc, 1u) |
+            ((uint16_t)instruction_byte(m, m->pc, 2u) << 8));
+        if (address == 0xFF55u)
+            return hdma_start_headroom_available(m, (uint8_t)m->sp, operation_cost);
+        if ((uint16_t)(address + 1u) == 0xFF55u)
+            return hdma_start_headroom_available(m, (uint8_t)(m->sp >> 8), operation_cost);
+    } else if ((opcode & 0xCFu) == 0xC5u) {
+        return hdma_stack_push_headroom_available(m,
+            stack_pair(m, (opcode >> 4) & 3u), operation_cost);
+    } else if (opcode == 0xCDu ||
+               ((opcode & 0xE7u) == 0xC4u && condition_true(m, (opcode >> 3) & 3u))) {
+        const uint16_t pushed = (uint16_t)(m->pc + 3u - (m->halt_bug ? 1u : 0u));
+        return hdma_stack_push_headroom_available(m, pushed, operation_cost);
+    } else if ((opcode & 0xC7u) == 0xC7u) {
+        const uint16_t pushed = (uint16_t)(m->pc + (m->halt_bug ? 0u : 1u));
+        return hdma_stack_push_headroom_available(m, pushed, operation_cost);
+    }
+    if (!writes || address != 0xFF55u) return 1;
+    return hdma_start_headroom_available(m, value, operation_cost);
+}
+
 /* MODEL: BOTH GATE-00 basis="normal-speed phase alignment is guarded and a no-op outside CGB mode" */
 static void speed_switch_apply_realign(gbb_instance *m) {
     /* MODEL: UNKNOWN GATE-89 expected-failure:speed-switch-odd-mode-alignment -- entry into normal speed may land in an unsupported odd PPU mode phase */
@@ -4006,6 +4345,8 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                                        gbb_trace_record *trace, size_t trace_capacity) {
     gbb_run_result result={0, GBB_STOP_BUDGET, 0, 0, 0, 0};
     if (instance == NULL || !instance->loaded || (trace == NULL && trace_capacity != 0)) { result.reason=GBB_STOP_INVALID_STATE; return result; }
+    if (GBB_P13_MUT(53) && instance->hdma.active)
+        instance->hdma.byte_phase = 0u; /* P13-05-M14: run boundary drops byte remainder */
     if (budget_half_dots != 0) apply_input_events_now(instance);
     while (result.consumed_half_dots < budget_half_dots) {
         if (instance->locked) { result.reason=GBB_STOP_LOCKUP; result.lockup_pc=instance->lockup_pc; result.lockup_opcode=instance->lockup_opcode; return result; }
@@ -4039,15 +4380,31 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             /* MODEL: UNKNOWN GATE-88 expected-failure:speed-switch-wake-oracle-only -- only the IME-on wake has an AGE hardware row */
             const int wake_pending =
                 (instance->ie & instance->interrupt_flags & 0x1Fu) != 0; /* P12-M16 */
-            if (instance->cpu_stall_kind == GBB_STALL_SPEED_SWITCH && wake_pending) { /* P12-M13 */
-                instance->cpu_stall_kind = GBB_STALL_NONE;
-                instance->cpu_stall_half_dots = 0u;
-                speed_switch_apply_realign(instance);
-                continue;
-            }
             const uint32_t quantum = 8u >> instance->double_speed;
-            const uint32_t step = instance->cpu_stall_half_dots < quantum
-                ? instance->cpu_stall_half_dots : quantum;
+            const uint32_t stall_phase = instance->cpu_stall_half_dots % quantum;
+            if (instance->cpu_stall_kind == GBB_STALL_SPEED_SWITCH && wake_pending) { /* P12-M13 */
+                if (GBB_P13_MUT(50)) { /* P13-05-M11: IRQ wake loses admitted DMA */
+                    instance->hdma.active = 0u;
+                    instance->hdma.pending_hblank = 0u;
+                    instance->hdma.blocks_remaining = 0u;
+                }
+                if (stall_phase == 0u) {
+                    instance->cpu_stall_kind = GBB_STALL_NONE;
+                    instance->cpu_stall_half_dots = 0u;
+                    speed_switch_apply_realign(instance);
+                    continue;
+                }
+            }
+            const int hdma_active = instance->hdma.active != 0u;
+            const int hdma_pending_at_boundary =
+                instance->cpu_stall_kind == GBB_STALL_SPEED_SWITCH &&
+                instance->hdma.pending_hblank && stall_phase == 0u;
+            const uint32_t to_boundary = stall_phase == 0u ? quantum : stall_phase;
+            const uint32_t desired_step = (hdma_active ||
+                (instance->cpu_stall_kind == GBB_STALL_SPEED_SWITCH &&
+                 instance->hdma.pending_hblank)) ? 1u : to_boundary;
+            const uint32_t step = instance->cpu_stall_half_dots < desired_step
+                ? instance->cpu_stall_half_dots : desired_step;
             if (step == 0u) {
                 instance->cpu_stall_kind = GBB_STALL_NONE;
                 continue;
@@ -4061,7 +4418,25 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 result.reason = GBB_STOP_INVALID_STATE;
                 return result;
             }
+            if (instance->diagnostic_output != NULL &&
+                instance->diagnostic_output_capacity - instance->diagnostic_output_count <
+                    GBB_DIAGNOSTIC_OPERATION_RESERVE) {
+                result.reason = GBB_STOP_OUTPUT_FULL;
+                return result;
+            }
+            if (hdma_pending_at_boundary && !hdma_admit_block(instance)) {
+                hdma_stop_at_invalid_block(instance, instance->hdma.source_cursor);
+                instance->bus_unsupported = 0;
+                result.reason = GBB_STOP_UNSUPPORTED_BUS;
+                return result;
+            }
+            gbb_diagnostic_record operation[GBB_DIAGNOSTIC_OPERATION_RESERVE];
+            if (instance->diagnostic_output != NULL) {
+                instance->diagnostic_operation = operation;
+                instance->diagnostic_operation_count = 0u;
+            }
             advance_devices(instance, step); /* P12-M7 */
+            if (instance->diagnostic_output != NULL) diagnostic_commit(instance);
             instance->cpu_stall_half_dots -= step;
             result.consumed_half_dots += step;
             if (instance->cpu_stall_half_dots == 0u) {
@@ -4070,11 +4445,57 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             }
             continue;
         }
+        /* Service a latched HBlank request before interrupt dispatch or a new
+         * opcode. The current instruction has already retired, so its final
+         * bus access and event trace remain whole. Each committed master tick
+         * is independently bounded by the caller's outputs and budget. */
+        if (instance->hdma.pending_hblank ||
+            (instance->hdma.active && !GBB_P13_MUT(40))) { /* P13-05-M01: no-steal discriminator */
+            if (budget_half_dots - result.consumed_half_dots < 1u) return result;
+            if (!audio_preflight(instance, 1u)) {
+                result.reason = GBB_STOP_OUTPUT_FULL;
+                return result;
+            }
+            if (UINT64_MAX - instance->time_half_dots < 1u) {
+                result.reason = GBB_STOP_INVALID_STATE;
+                return result;
+            }
+            if (instance->diagnostic_output != NULL &&
+                instance->diagnostic_output_capacity - instance->diagnostic_output_count <
+                    GBB_DIAGNOSTIC_OPERATION_RESERVE) {
+                result.reason = GBB_STOP_OUTPUT_FULL;
+                return result;
+            }
+            if (instance->hdma.pending_hblank && !hdma_admit_block(instance)) {
+                hdma_stop_at_invalid_block(instance, instance->hdma.source_cursor);
+                instance->bus_unsupported = 0;
+                result.reason = GBB_STOP_UNSUPPORTED_BUS;
+                return result;
+            }
+            gbb_diagnostic_record operation[GBB_DIAGNOSTIC_OPERATION_RESERVE];
+            if (instance->diagnostic_output != NULL) {
+                instance->diagnostic_operation = operation;
+                instance->diagnostic_operation_count = 0u;
+            }
+            advance_devices(instance, 1u);
+            if (instance->diagnostic_output != NULL) diagnostic_commit(instance);
+            ++result.consumed_half_dots;
+            if (instance->bus_unsupported) {
+                instance->bus_unsupported = 0;
+                result.reason = GBB_STOP_UNSUPPORTED_BUS;
+                return result;
+            }
+            continue;
+        }
         unsigned interrupt = instance->ime ? pending_interrupt(instance) : 5;
         if (interrupt < 5) {
             const uint32_t irq_cost = 40u >> instance->double_speed;
             if (irq_cost > budget_half_dots - result.consumed_half_dots) return result;
             if (!audio_preflight(instance, irq_cost)) { result.reason=GBB_STOP_OUTPUT_FULL; return result; }
+            if (!hdma_stack_push_headroom_available(instance, instance->pc, irq_cost)) {
+                result.reason = GBB_STOP_INVALID_STATE;
+                return result;
+            }
             if (UINT64_MAX - instance->time_half_dots < irq_cost) { result.reason=GBB_STOP_INVALID_STATE; return result; }
             gbb_diagnostic_record operation[GBB_DIAGNOSTIC_OPERATION_RESERVE];
             if (instance->diagnostic_output != NULL &&
@@ -4137,6 +4558,10 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
         uint8_t cost=instruction_cost(instance,d);
         if (cost > budget_half_dots-result.consumed_half_dots) return result;
         if (!audio_preflight(instance, cost)) { result.reason=GBB_STOP_OUTPUT_FULL; return result; }
+        if (!hdma_instruction_headroom_available(instance, opcode, cost)) {
+            result.reason = GBB_STOP_INVALID_STATE;
+            return result;
+        }
         if (opcode == 0x10u) {
             const int selected_stop_case = stop_case(instance);
             if (selected_stop_case == 3 || selected_stop_case == 4) {

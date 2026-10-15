@@ -1,4 +1,14 @@
-set(GBB_TEST_INSTALL_PREFIX "" CACHE PATH "Relocated install prefix used by installed-package smoke tests")
+set(GBB_TEST_INSTALL_PREFIX "" CACHE STRING "Relocated install prefix used by installed-package smoke tests")
+# PATH cache entries are normalized against CMake's process cwd before project code sees them.
+set_property(CACHE GBB_TEST_INSTALL_PREFIX PROPERTY TYPE STRING)
+# Resolve relative prefixes against the build tree before optional tests are filtered and
+# ExpectedTests.cmake compares the complete registered inventory.
+if(GBB_TEST_INSTALL_PREFIX)
+  set(GBB_TEST_INSTALL_PREFIX_INPUT "${GBB_TEST_INSTALL_PREFIX}")
+  get_filename_component(GBB_TEST_INSTALL_PREFIX_ABSOLUTE
+    "${GBB_TEST_INSTALL_PREFIX_INPUT}" ABSOLUTE BASE_DIR "${CMAKE_BINARY_DIR}")
+  set(GBB_TEST_INSTALL_PREFIX "${GBB_TEST_INSTALL_PREFIX_ABSOLUTE}")
+endif()
 include(${PROJECT_SOURCE_DIR}/cmake/ExpectedTests.cmake)
 # Internal core test-seam header (src/core/gabbaboy_test.h). Directory-scoped so the mutant copies of
 # gabbaboy.c, which are compiled from the build tree, resolve the same include as the real core.
@@ -386,11 +396,166 @@ foreach(case vbk_tracer svbk_select unmapped_cgb boundaries deferred_stop ie_gat
      matrix_compat flip_control matrix_cgb matrix_dmg cross_column_control sweep_control)
   add_test(NAME cgb_visibility_${case} COMMAND test_cgb_visibility ${case})
 endforeach()
+add_test(NAME cgb_hdma_visibility COMMAND test_cgb_visibility hdma_visibility)
+add_test(NAME cgb_hdma_visibility_controls COMMAND test_cgb_visibility hdma_visibility_controls)
 # Plan 10-11: STOP/KEY1 fail-closed and the KEY0 lock keep their plan-named CTests.
 foreach(case stop_armed_cgb stop_unarmed_cgb stop_compat_ignores_key1 stop_dmg_control
      key0_lock_cgb key0_lock_compat key0_lock_cross_column key0_lock_reset_idempotent)
   add_test(NAME cgb_${case} COMMAND test_cgb_visibility ${case})
 endforeach()
+
+# Phase 13 plan 13-01: private real-transfer seam tracer. This source includes
+# the core to place a deterministic PPU collision inside guest instructions.
+include(${PROJECT_SOURCE_DIR}/cmake/P13Mutants.cmake)
+set(GBB_P13_MUTANT_CORE ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_p13_mutants.c)
+gbb_p13_make_mutant_core(${GBB_P13_MUTANT_CORE})
+add_library(gabbaboy_core_p13_mutants STATIC ${GBB_P13_MUTANT_CORE})
+target_include_directories(gabbaboy_core_p13_mutants PUBLIC "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(gabbaboy_core_p13_mutants PUBLIC c_std_17)
+target_compile_definitions(gabbaboy_core_p13_mutants PRIVATE
+  GBB_BUILD_REVISION="p13-mutants" GBB_BUILD_QUALIFIED=0)
+set_target_properties(gabbaboy_core_p13_mutants PROPERTIES C_EXTENSIONS OFF)
+
+add_executable(test_cgb_hdma_internal test_cgb_hdma_internal.c fuzz_core.c)
+target_include_directories(test_cgb_hdma_internal PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_cgb_hdma_internal PRIVATE c_std_17)
+target_compile_definitions(test_cgb_hdma_internal PRIVATE
+  GBB_FUZZ_STANDALONE_TEST=1 GBB_P12_MUTANT_BUILD=1
+  "GBB_P12_CORE_SOURCE=\"${GBB_P13_MUTANT_CORE}\""
+  GBB_BUILD_REVISION="p13-mutants" GBB_BUILD_QUALIFIED=0)
+set_target_properties(test_cgb_hdma_internal PROPERTIES C_EXTENSIONS OFF)
+foreach(case ld_sp cb controls partition outputs)
+  add_test(NAME cgb_hdma_tracer_${case} COMMAND test_cgb_hdma_internal ${case})
+endforeach()
+foreach(case state_matrix trigger_matrix trigger_controls timing_policy address_matrix overflow_policy
+             lifecycle resource_bounds hostile_seeds)
+  add_test(NAME cgb_hdma_${case} COMMAND test_cgb_hdma_internal ${case})
+endforeach()
+add_test(NAME cgb_hdma_timing_sensitivity COMMAND test_cgb_hdma_internal timing_sensitivity)
+foreach(case lifecycle resource_bounds hostile_seeds)
+  add_test(NAME cgb_hdma_${case}_controls
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_internal>;${case}_controls"
+      -DGBB_EXPECT_CODE=1
+      -DGBB_EXPECT_REGEX=hdma-${case}-control-detected
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+endforeach()
+add_test(NAME cgb_hdma_state_matrix_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_internal>;state_matrix;--flip-cancel"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=guest\ cancel\ readback\ expected=80\ actual=81
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_hdma_timing_policy_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_internal>;timing_flip"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=timing\ policy:\ byte\ 0\ committed\ early
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_hdma_trigger_matrix_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_internal>;trigger_flip"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=trigger\ matrix:\ injected\ repeated-mode\ event\ detected
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_hdma_address_matrix_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_internal>;address_flip"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=address\ matrix:\ invalid-block\ byte\ mutated
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_hdma_overflow_policy_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_internal>;overflow_flip"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=overflow\ policy:\ cursor\ wrapped
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+# Public-API guest wake/steal cases use original inline CGB ROMs and the installed core API.
+add_executable(test_cgb_hdma test_cgb_hdma.c)
+target_link_libraries(test_cgb_hdma PRIVATE gabbaboy_core_p13_mutants)
+target_compile_features(test_cgb_hdma PRIVATE c_std_17)
+target_compile_definitions(test_cgb_hdma PRIVATE GBB_P12_MUTANT_BUILD=1)
+set_target_properties(test_cgb_hdma PROPERTIES
+  C_EXTENSIONS OFF RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+add_test(NAME cgb_hdma_guest_halt COMMAND test_cgb_hdma guest_halt)
+add_test(NAME cgb_hdma_guest_steal COMMAND test_cgb_hdma guest_steal)
+add_test(NAME cgb_hdma_guest_controls COMMAND test_cgb_hdma guest_controls)
+add_test(NAME cgb_hdma_guest_banks COMMAND test_cgb_hdma guest_banks)
+# Plan 13-08 Task 1: the public API must execute the original CPU-programmed
+# HBlank DMA guest and verify its own marker and source-derived RGB555 frame.
+add_test(NAME cgb_hdma_original_fixture COMMAND test_cgb_hdma --fixture
+  ${PROJECT_SOURCE_DIR}/fixtures/cgb-hdma/hblank.gb --check-controls)
+
+# Reuses the explicit private-state hash from the speed-switch partition tests.
+add_executable(test_cgb_hdma_partition test_cgb_hdma_partition.c)
+target_include_directories(test_cgb_hdma_partition PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_cgb_hdma_partition PRIVATE c_std_17)
+target_compile_definitions(test_cgb_hdma_partition PRIVATE
+  GBB_P12_MUTANT_BUILD=1
+  "GBB_P12_CORE_SOURCE=\"${GBB_P13_MUTANT_CORE}\""
+  GBB_BUILD_REVISION="p13-mutants" GBB_BUILD_QUALIFIED=0)
+set_target_properties(test_cgb_hdma_partition PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_hdma_partition_midbyte COMMAND test_cgb_hdma_partition midbyte)
+add_test(NAME cgb_hdma_partition_windows COMMAND test_cgb_hdma_partition windows)
+add_test(NAME cgb_hdma_partition_multicut COMMAND test_cgb_hdma_partition multicut)
+add_test(NAME cgb_hdma_partition_outputs COMMAND test_cgb_hdma_partition outputs)
+add_test(NAME cgb_hdma_partition_lost_remainder_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_partition>;lost_remainder_control"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=hdma-partition-control-detected
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_hdma_partition_order_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma_partition>;order_control"
+    -DGBB_EXPECT_CODE=1
+    -DGBB_EXPECT_REGEX=hdma-partition-control-detected
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+
+# Plan 13-03 reserves Task 2's exact tests before that harness expands.
+foreach(case competing_stalls stop_policy oam_order)
+  add_test(NAME cgb_hdma_${case} COMMAND test_cgb_hdma_internal ${case})
+  add_test(NAME cgb_hdma_${case}_controls COMMAND test_cgb_hdma_internal ${case}_controls)
+endforeach()
+
+# Preserve the Phase 13-03 compatibility names while routing both through the
+# single shared runtime-mask core introduced by this plan.
+math(EXPR GBB_P13_NO_STEAL_MASK "1 << 40" OUTPUT_FORMAT HEXADECIMAL)
+add_test(NAME cgb_hdma_guest_steal_no_steal_mutant
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma>;guest_steal;--mutants;${GBB_P13_NO_STEAL_MASK}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=guest steal: CPU timing predicate"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME cgb_hdma_guest_steal_no_steal_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_cgb_hdma>;guest_steal_data;--mutants;0"
+    -DGBB_EXPECT_CODE=0
+    -DGBB_EXPECT_REGEX=.*
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+# Reserve every narrow Phase 13 source mutation and mask-zero twin here so the
+# inventory has one owner before the case predicates arrive in plan 13-05 Task 2.
+gbb_p13_mutant_test(test_cgb_hdma no_steal 40 guest_steal "guest steal: CPU timing predicate")
+gbb_p13_mutant_test(test_cgb_hdma_internal no_copy 41 mutant_no_copy "hdma mutant no_copy detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal duplicate_copy 42 mutant_duplicate_copy "hdma mutant duplicate_copy detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal wrong_vbk 43 mutant_wrong_vbk "hdma mutant wrong_vbk detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal unmasked_address 44 mutant_unmasked_address "hdma mutant unmasked_address detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal wrong_count 45 mutant_wrong_count "hdma mutant wrong_count detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal wrong_cancel 46 mutant_wrong_cancel "hdma mutant wrong_cancel detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal speed_scaled 47 timing_policy "timing policy: byte")
+gbb_p13_mutant_test(test_cgb_hdma_internal halt_admission 48 mutant_halt_admission "hdma mutant halt_admission detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal false_trigger 49 mutant_false_trigger "hdma mutant false_trigger detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal lost_dma_irq 50 mutant_lost_dma_irq "hdma mutant lost_dma_irq detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal dma_realign 51 mutant_dma_realign "hdma mutant dma_realign detected")
+gbb_p13_mutant_test(test_cgb_hdma_internal shifted_order 52 mutant_shifted_order "hdma mutant shifted_order detected")
+gbb_p13_mutant_test(test_cgb_hdma_partition lost_phase 53 mutant_lost_phase "hdma mutant lost_phase detected")
+add_test(NAME cgb_hdma_mutant_anchor_guard
+  COMMAND ${CMAKE_COMMAND} -DGBB_P13_SCRIPT_ANCHOR_GUARD=1
+    "-DGBB_P13_GUARD_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+    -P ${PROJECT_SOURCE_DIR}/cmake/P13Mutants.cmake)
 
 add_executable(test_cgb_postboot test_cgb_postboot.c)
 target_link_libraries(test_cgb_postboot PRIVATE GabbaBoy::core)
@@ -710,6 +875,10 @@ add_test(NAME magentests_fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DMANIFEST=${GBB_MAGENTESTS_DIR}/manifest.json
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyFixtureManifest.cmake)
+add_test(NAME magentests_manifest_self_check
+  COMMAND bash ${PROJECT_SOURCE_DIR}/tests/scripts/reproduce-magentests.sh --self-check)
+add_test(NAME magentests_repro_self_test
+  COMMAND bash ${PROJECT_SOURCE_DIR}/tests/scripts/reproduce-magentests.sh --self-test)
 add_test(NAME magentests_oob_sram_mbc3
   COMMAND test_magentests magentests_oob_sram_mbc3 ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc3.gbc)
 add_test(NAME magentests_oob_sram_mbc1
@@ -729,6 +898,106 @@ add_test(NAME magentests_oob_sram_negative_control
     ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc1.gbc
     ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc3.gbc
     ${GBB_MAGENTESTS_DIR}/mbc_oob_sram_mbc5.gbc)
+# Phase 13 D-17/D-19/D-21/D-22: source-derived Magen HDMA guest evidence and
+# runtime-mask controls. This in-tree target includes the P13 mutant core TU;
+# no test core behavior or public API changes are required.
+add_executable(test_magentests_hdma test_magentests.c
+  ${PROJECT_SOURCE_DIR}/src/accept/sha256.c
+  ${PROJECT_SOURCE_DIR}/src/accept/digest.c)
+target_include_directories(test_magentests_hdma PRIVATE
+  "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/src/accept")
+target_compile_features(test_magentests_hdma PRIVATE c_std_17)
+target_compile_definitions(test_magentests_hdma PRIVATE
+  GBB_P12_MUTANT_BUILD=1
+  "GBB_P13_CORE_SOURCE=\"${GBB_P13_MUTANT_CORE}\""
+  GBB_BUILD_REVISION="p13-mutants" GBB_BUILD_QUALIFIED=0)
+set_target_properties(test_magentests_hdma PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME magentests_hblank_vram_dma
+  COMMAND test_magentests_hdma magentests_hblank_vram_dma
+    ${GBB_MAGENTESTS_DIR}/hblank_vram_dma.gbc)
+add_test(NAME cgb_hdma_magen_controls
+  COMMAND test_magentests_hdma cgb_hdma_magen_controls
+    ${GBB_MAGENTESTS_DIR}/hblank_vram_dma.gbc)
+set_tests_properties(magentests_hblank_vram_dma cgb_hdma_magen_controls PROPERTIES TIMEOUT 60)
+
+# Phase 13 plan 13-09: run the exact admitted SameSuite DMA ROMs on the selected
+# CGB-CPU-E software model, with byte/status predicates and bounded test seams.
+add_executable(test_samesuite_hdma test_samesuite_hdma.c)
+target_include_directories(test_samesuite_hdma PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_samesuite_hdma PRIVATE c_std_17)
+target_compile_definitions(test_samesuite_hdma PRIVATE
+  "GBB_P13_CORE_SOURCE=\"${GBB_P13_MUTANT_CORE}\""
+  GBB_BUILD_REVISION="p13-mutants" GBB_BUILD_QUALIFIED=0)
+set_target_properties(test_samesuite_hdma PROPERTIES C_EXTENSIONS OFF)
+set(GBB_SAMESUITE_DIR "${PROJECT_SOURCE_DIR}/fixtures/samesuite")
+add_test(NAME samesuite_hdma_gbc_dma_cont
+  COMMAND test_samesuite_hdma gbc_dma_cont "${GBB_SAMESUITE_DIR}/gbc_dma_cont.gb")
+add_test(NAME samesuite_hdma_gdma_addr_mask
+  COMMAND test_samesuite_hdma gdma_addr_mask "${GBB_SAMESUITE_DIR}/gdma_addr_mask.gb")
+add_test(NAME samesuite_hdma_hdma_lcd_off
+  COMMAND test_samesuite_hdma hdma_lcd_off "${GBB_SAMESUITE_DIR}/hdma_lcd_off.gb")
+add_test(NAME samesuite_hdma_hdma_mode0
+  COMMAND test_samesuite_hdma hdma_mode0 "${GBB_SAMESUITE_DIR}/hdma_mode0.gb")
+set_tests_properties(samesuite_hdma_gbc_dma_cont samesuite_hdma_gdma_addr_mask
+  samesuite_hdma_hdma_lcd_off samesuite_hdma_hdma_mode0 PROPERTIES TIMEOUT 60)
+add_test(NAME samesuite_hdma_gbc_dma_cont_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_samesuite_hdma>;gbc_dma_cont;${GBB_SAMESUITE_DIR}/gbc_dma_cont.gb;--mutants;0x20000000000"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=samesuite-hdma guest-result: expected pass sentinel"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(samesuite_hdma_gbc_dma_cont_control PROPERTIES TIMEOUT 60)
+add_test(NAME samesuite_hdma_gbc_dma_cont_corrupted_result_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_samesuite_hdma>;gbc_dma_cont;${GBB_SAMESUITE_DIR}/gbc_dma_cont.gb;--corrupt-result"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=samesuite-hdma data: corrupted-result mismatch"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(samesuite_hdma_gbc_dma_cont_corrupted_result_control PROPERTIES TIMEOUT 60)
+
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(GBB_CGB_HDMA_DISPOSITIONS_VERIFIER
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-hdma-dispositions.py")
+add_test(NAME cgb_hdma_dispositions
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_HDMA_DISPOSITIONS_VERIFIER}" --complete)
+set_tests_properties(cgb_hdma_dispositions PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-hdma-dispositions pass")
+add_test(NAME cgb_hdma_dispositions_selftest
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_HDMA_DISPOSITIONS_VERIFIER}" --self-test)
+set_tests_properties(cgb_hdma_dispositions_selftest PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-hdma-dispositions self-test pass")
+
+# Plan 13-12 keeps recurring claim, inventory and receipt-shape contracts Python-only so the
+# native and sanitizer lanes do not depend on Node or the local OpenGSD runtime.
+set(GBB_CGB_HDMA_CLAIMS_VERIFIER
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-hdma-claims.py")
+set(GBB_HDMA_CLOSURE_CHECKER
+  "${PROJECT_SOURCE_DIR}/.planning/phases/GB-13-cgb-hdma/verify-hdma-closure.py")
+set(GBB_HDMA_REMOTE_EVIDENCE_TEST
+  "${PROJECT_SOURCE_DIR}/tests/scripts/test_hdma_remote_evidence.py")
+add_test(NAME cgb_hdma_claims_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_HDMA_CLAIMS_VERIFIER}")
+add_test(NAME cgb_hdma_claims_contract_native
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_HDMA_CLAIMS_VERIFIER}" --native-player)
+add_test(NAME cgb_hdma_claims_contract_selftest
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_HDMA_CLAIMS_VERIFIER}" --self-test)
+add_test(NAME cgb_hdma_lane_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HDMA_CLOSURE_CHECKER}" --lane)
+add_test(NAME cgb_hdma_lane_contract_selftest
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HDMA_CLOSURE_CHECKER}" --lane-self-test)
+add_test(NAME cgb_hdma_remote_evidence_selftest
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HDMA_REMOTE_EVIDENCE_TEST}")
+set_tests_properties(
+  cgb_hdma_claims_contract cgb_hdma_claims_contract_native
+  cgb_hdma_claims_contract_selftest cgb_hdma_lane_contract
+  cgb_hdma_lane_contract_selftest cgb_hdma_remote_evidence_selftest PROPERTIES TIMEOUT 30)
+find_program(GBB_SAMESUITE_REPRO_BASH bash REQUIRED)
+add_test(NAME samesuite_repro_selfcheck
+  COMMAND "${GBB_SAMESUITE_REPRO_BASH}" "${PROJECT_SOURCE_DIR}/tests/scripts/reproduce-samesuite.sh" --self-test)
+set_tests_properties(samesuite_repro_selfcheck PROPERTIES
+  TIMEOUT 30
+  ENVIRONMENT "GBB_SAMESUITE_BASH=${GBB_SAMESUITE_REPRO_BASH}")
+
 # rtc3test v004 screen oracle (D-11). White-box single TU: it includes the core and the acceptance
 # sources it needs, so it must not link GabbaBoy::core or gabbaboy_accept (duplicate definitions).
 set(GBB_RTC3TEST_DIR "${PROJECT_SOURCE_DIR}/fixtures/rtc3test")
@@ -1265,6 +1534,53 @@ gbb_add_magentests_scan_test(magentests_not_installed 0 "magentests absent from 
 set_tests_properties(magentests_not_installed PROPERTIES FIXTURES_REQUIRED libbet_install)
 gbb_add_magentests_scan_test(magentests_not_installed_selftest 1 "magentests-installed: share/payload.bin"
   "${GBB_MAGENTESTS_SCAN_SELFTEST}")
+
+# CGB DMA package boundary: keep the author-test ROMs and MagenTests differential guest
+# repository-only, including renamed copies. The two self-tests use the opposite single
+# manifest as the baseline so they fail until the scanner consumes the complete digest set.
+set(GBB_CGB_HDMA_SCAN_MANIFESTS
+  "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json|${GBB_MAGENTESTS_DIR}/manifest.json")
+set(GBB_CGB_HDMA_SCAN_PATH_LABELS "samesuite|magentests|mealybug")
+set(GBB_CGB_HDMA_SCAN_SELFTEST_SAMESUITE "${PROJECT_BINARY_DIR}/cgb-hdma-scan-samesuite-selftest")
+set(GBB_CGB_HDMA_SCAN_SELFTEST_MAGEN "${PROJECT_BINARY_DIR}/cgb-hdma-scan-magentests-selftest")
+set(GBB_CGB_HDMA_SCAN_SELFTEST_DIRECTORY "${PROJECT_BINARY_DIR}/cgb-hdma-scan-directory-selftest")
+file(MAKE_DIRECTORY "${GBB_CGB_HDMA_SCAN_SELFTEST_SAMESUITE}/share"
+  "${GBB_CGB_HDMA_SCAN_SELFTEST_MAGEN}/share"
+  "${GBB_CGB_HDMA_SCAN_SELFTEST_DIRECTORY}/share/SameSuite")
+file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/samesuite/gbc_dma_cont.gb"
+  "${GBB_CGB_HDMA_SCAN_SELFTEST_SAMESUITE}/share/renamed-payload.bin")
+file(COPY_FILE "${GBB_MAGENTESTS_DIR}/hblank_vram_dma.gbc"
+  "${GBB_CGB_HDMA_SCAN_SELFTEST_MAGEN}/share/renamed-payload.bin")
+file(WRITE "${GBB_CGB_HDMA_SCAN_SELFTEST_DIRECTORY}/share/SameSuite/marker.txt" "marker\n")
+function(gbb_add_cgb_hdma_scan_test name code regex scan_dir baseline_manifest)
+  set(command "${CMAKE_COMMAND}" "-DGBB_SCAN_DIR=${scan_dir}"
+    "-DGBB_FORBIDDEN_MANIFEST=${baseline_manifest}"
+    "-DGBB_FORBIDDEN_MANIFESTS=${GBB_CGB_HDMA_SCAN_MANIFESTS}"
+    "-DGBB_FORBIDDEN_PATH_LABELS=${GBB_CGB_HDMA_SCAN_PATH_LABELS}"
+    -DGBB_FORBIDDEN_LABEL=cgb-hdma
+    -P "${GBB_MBC_SCAN_SCRIPT}")
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60)
+endfunction()
+gbb_add_cgb_hdma_scan_test(cgb_hdma_not_installed 0
+  "cgb-hdma absent from scanned tree files=[1-9]" "${GBB_LIBBET_INSTALL_CHECK}"
+  "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json")
+set_tests_properties(cgb_hdma_not_installed PROPERTIES FIXTURES_REQUIRED libbet_install)
+gbb_add_cgb_hdma_scan_test(cgb_hdma_not_installed_selftest 1
+  "cgb-hdma-installed: share/renamed-payload.bin" "${GBB_CGB_HDMA_SCAN_SELFTEST_MAGEN}"
+  "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json")
+gbb_add_cgb_hdma_scan_test(cgb_hdma_not_installed_samesuite_selftest 1
+  "cgb-hdma-installed: share/renamed-payload.bin" "${GBB_CGB_HDMA_SCAN_SELFTEST_SAMESUITE}"
+  "${GBB_MAGENTESTS_DIR}/manifest.json")
+gbb_add_cgb_hdma_scan_test(cgb_hdma_not_installed_directory_selftest 1
+  "cgb-hdma-installed: share/SameSuite/marker.txt" "${GBB_CGB_HDMA_SCAN_SELFTEST_DIRECTORY}"
+  "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json")
 
 # EVID-02 baseline comparator self-tests (D-30, D-31, D-34). Each test runs cmake/VerifyDmgBaseline.cmake
 # on committed synthetic fixtures (or a generated variant of them) and asserts the exact exit code
@@ -2636,7 +2952,7 @@ add_test(NAME cgb_speed_xfail_hdma_fails_closed_negative
   COMMAND ${CMAKE_COMMAND}
     "-DGBB_CMD=$<TARGET_FILE:test_cgb_speed_internal_p12>;cgb_speed_xfail_hdma_fails_closed;--write-ff54"
     -DGBB_EXPECT_CODE=1
-    "-DGBB_EXPECT_REGEX=hdma-targeted-negative"
+    "-DGBB_EXPECT_REGEX=hdma-ff54-targeted-negative"
     -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
 set_tests_properties(cgb_speed_xfail_hdma_fails_closed_negative PROPERTIES TIMEOUT 60)
 add_test(NAME cgb_speed_xfail_stop_oam_unchanged

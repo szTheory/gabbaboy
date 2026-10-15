@@ -1,0 +1,95 @@
+{
+  "id": "cgb-hdma",
+  "source_identity": "Original GabbaBoy project-authored assembly",
+  "source": [
+    "hblank.asm"
+  ],
+  "source_sha256": {
+    "hblank.asm": "cd707de5a1245e9dd52265f76130a5457a52b197073dddb922386c06abf92e59"
+  },
+  "license": "MIT; see LICENSE.txt and repository LICENSE",
+  "build": {
+    "assembler": "RGBDS",
+    "version": "1.0.1",
+    "archive": "rgbds-macos.zip",
+    "archive_sha256": "2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
+    "ci_archive": "rgbds-linux-x86_64.tar.xz",
+    "ci_archive_sha256": "80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9",
+    "recipe": "rgbasm -I fixtures/cgb-hdma/ -o <work>/hblank.o fixtures/cgb-hdma/hblank.asm && rgblink -o <work>/hblank.gb <work>/hblank.o && rgbfix -c -v -p 0 <work>/hblank.gb; tools are isolated from the host and verified against the archive digest",
+    "committed_bytes_toolchain": "RGBDS v1.0.1 macOS release archive (digest above); the reproduction script rebuilds the ROM with pinned tools and compares byte for byte"
+  },
+  "fixtures": [
+    {
+      "file": "hblank.gb",
+      "size_bytes": 32768,
+      "sha256": "f21cdc65d24f98cbf7713686c96a5e41f29e6769f78fc6a6f61b0d230ebbf431",
+      "recipe": {
+        "source": "hblank.asm",
+        "defines": [],
+        "rgbfix_flags": [
+          "-c",
+          "-v",
+          "-p",
+          "0"
+        ]
+      }
+    }
+  ],
+  "cartridge": {
+    "mapper": "none (ROM only)",
+    "type": "0x00",
+    "rom_size_code": "0x00 (32 KiB)",
+    "ram_size_code": "0x00 (none)",
+    "cgb_flag": "0x80 (rgbfix -c)"
+  },
+  "profile": {
+    "name": "CGB-CPU-E",
+    "boot": "Skipped; starts at cartridge entry 0x0100.",
+    "applicability": "Original software fixture for the deterministic bootless CGB-CPU-E profile in CGB mode; not physical hardware evidence."
+  },
+  "protocol": {
+    "summary": "The CPU starts two separate one-block HBlank DMA transfers through FF51-55, selects VRAM bank 0 then bank 1, and validates both transferred tile patterns before reporting pass.",
+    "guest_markers": {
+      "C000": {
+        "pass": "0xA5 after both FF55 status sequences and all 32 transferred bytes pass",
+        "failure": "0xEE"
+      },
+      "C001": "first transfer active readback: 0x00",
+      "C002": "first transfer completed readback: 0xFF",
+      "C003": "second transfer active readback: 0x00",
+      "C004": "second transfer completed readback: 0xFF",
+      "C005": "failure stage: 0 success, 1 first active status, 2 first completion timeout, 3 second active status, 4 second completion timeout, 5 bank 0 bytes, 6 bank 1 bytes"
+    },
+    "source_data": {
+      "rom_offset": "0x0400",
+      "bank0_tile0_hex": "f00ff00ff00ff00ff0f0f0f0f0f0f0f0",
+      "bank1_tile0_hex": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"
+    },
+    "pixels": {
+      "success_quadrants_rgb555": {
+        "top_left": "0x001F",
+        "top_right": "0x03E0",
+        "bottom_left": "0x7C00",
+        "bottom_right": "0x7FFF"
+      },
+      "failure_rgb555": "0x7FFF",
+      "success_regions": "every 8x8 tile repeats four 4x4 quadrants: top-left red RGB555 0x001F, top-right green RGB555 0x03E0, bottom-left blue RGB555 0x7C00, and bottom-right white RGB555 0x7FFF.",
+      "failure_regions": "The no-transfer twin records C000=0xEE and keeps every pixel white RGB555 0x7FFF.",
+      "structural_predicate": "Checked through the public guest marker and gbb_copy_frame_rgb555 before any fixture digest comparison."
+    },
+    "no_transfer_control": {
+      "patch_signature_hex": "e055",
+      "replacement_hex": "0000",
+      "expected_unique_sites": 2,
+      "expected_marker": "C000=0xEE, C001=0xFF, C005=0x01"
+    },
+    "run": "Load on CGB-CPU-E; execute bounded varying half-dot partitions for ten frame budgets; inspect CPU marker/status RAM and latest complete RGB555 frame.",
+    "evidence_class": "Original software fixture plus synthetic disabled-transfer control, not hardware evidence."
+  },
+  "scope_limits": [
+    "No boot ROM and no commercial ROM content",
+    "No physical CGB-E observation; source-defined pixels and guest readbacks are the oracle",
+    "No claim about mode-3 timing beyond the HBlank transfer points exercised by this guest",
+    "Not installed and not added to any package fixture allowlist"
+  ]
+}

@@ -1,21 +1,22 @@
-# Repository-only policy scan for the sibling Mooneye MBC ROMs (D-31, D-32).
+# Repository-only policy scan for uninstalled fixture suites (D-31, D-32).
 #
-# The third-party derivatives under fixtures/mooneye-mbc are repository test fixtures. They must
-# never reach an install tree, the extracted preview package or the staged player package. This
-# script walks a tree, following file links to their bytes, and fails closed on either a path
-# component that contains "mooneye" (case-insensitive) or a file whose size and SHA-256 equal a
-# manifest ROM, so renaming a ROM or hiding it behind a link does not hide it. It uses only primitives available in CMake 3.25.
+# Third-party and author-test ROMs are repository fixtures. They must never reach an install tree,
+# the extracted preview package or the staged player package. This script walks a tree, follows
+# file links to their bytes, and fails closed on a forbidden path component or a file whose size
+# and SHA-256 match any supplied manifest ROM, so renaming a ROM or hiding it behind a link does
+# not hide it. It uses only primitives available in CMake 3.25.
 #
 # Inputs (all passed with -D):
 #   GBB_SCAN_DIR              tree to scan (required)
-#   GBB_FORBIDDEN_MANIFEST    fixtures/mooneye-mbc/manifest.json (required)
+#   GBB_FORBIDDEN_MANIFEST    one manifest (legacy-compatible, optional when plural is set)
+#   GBB_FORBIDDEN_MANIFESTS   optional pipe-separated manifest paths
 #   GBB_EXPECT_FIXTURE_DIRS   optional list of the exact children share/gabbaboy/fixtures must have;
 #                             '|' is accepted as the separator because callers pass this inside
 #                             another ';'-separated command list
-#   GBB_FORBIDDEN_LABEL       optional suite label (default "mooneye"); sets the forbidden path
-#                             component, the "<label>-installed:" failure token and the success
-#                             line. The default success line stays "mooneye-mbc absent ...";
-#                             any other label prints "<label> absent from scanned tree files=N".
+#   GBB_FORBIDDEN_LABEL       optional diagnostic label (default "mooneye"); sets the
+#                             "<label>-installed:" failure token and success line.
+#   GBB_FORBIDDEN_PATH_LABELS optional pipe-separated path components forbidden anywhere in tree;
+#                             defaults to GBB_FORBIDDEN_LABEL.
 #
 # Failure tokens: scan-dir-empty, <label>-installed: <relative path>, fixture-dirs-mismatch.
 cmake_minimum_required(VERSION 3.25)
@@ -25,36 +26,65 @@ if(NOT DEFINED GBB_FORBIDDEN_LABEL OR "${GBB_FORBIDDEN_LABEL}" STREQUAL "")
 endif()
 string(TOLOWER "${GBB_FORBIDDEN_LABEL}" forbidden_label)
 
-foreach(required GBB_SCAN_DIR GBB_FORBIDDEN_MANIFEST)
+foreach(required GBB_SCAN_DIR)
   if(NOT DEFINED ${required} OR "${${required}}" STREQUAL "")
     message(FATAL_ERROR "ScanForbiddenFixtures.cmake is missing ${required}")
+  endif()
+endforeach()
+
+set(forbidden_manifests "")
+if(DEFINED GBB_FORBIDDEN_MANIFEST AND NOT "${GBB_FORBIDDEN_MANIFEST}" STREQUAL "")
+  list(APPEND forbidden_manifests "${GBB_FORBIDDEN_MANIFEST}")
+endif()
+if(DEFINED GBB_FORBIDDEN_MANIFESTS AND NOT "${GBB_FORBIDDEN_MANIFESTS}" STREQUAL "")
+  string(REPLACE "|" ";" additional_manifests "${GBB_FORBIDDEN_MANIFESTS}")
+  list(APPEND forbidden_manifests ${additional_manifests})
+endif()
+list(REMOVE_DUPLICATES forbidden_manifests)
+if(NOT forbidden_manifests)
+  message(FATAL_ERROR "ScanForbiddenFixtures.cmake is missing GBB_FORBIDDEN_MANIFEST or GBB_FORBIDDEN_MANIFESTS")
+endif()
+
+set(forbidden_path_labels "${forbidden_label}")
+if(DEFINED GBB_FORBIDDEN_PATH_LABELS AND NOT "${GBB_FORBIDDEN_PATH_LABELS}" STREQUAL "")
+  string(REPLACE "|" ";" additional_path_labels "${GBB_FORBIDDEN_PATH_LABELS}")
+  list(APPEND forbidden_path_labels ${additional_path_labels})
+endif()
+list(REMOVE_DUPLICATES forbidden_path_labels)
+set(normalized_forbidden_path_labels "")
+foreach(path_label IN LISTS forbidden_path_labels)
+  string(TOLOWER "${path_label}" path_label)
+  if(NOT path_label STREQUAL "")
+    list(APPEND normalized_forbidden_path_labels "${path_label}")
   endif()
 endforeach()
 
 if(NOT IS_DIRECTORY "${GBB_SCAN_DIR}")
   message(FATAL_ERROR "scan-dir-empty: ${GBB_SCAN_DIR} missing")
 endif()
-if(NOT EXISTS "${GBB_FORBIDDEN_MANIFEST}")
-  message(FATAL_ERROR "forbidden-manifest-missing: ${GBB_FORBIDDEN_MANIFEST}")
-endif()
-
-# Collect (size, digest) for every sibling ROM, including the 4 MiB and 8 MiB derivatives.
-file(READ "${GBB_FORBIDDEN_MANIFEST}" manifest_text)
-string(JSON fixture_count LENGTH "${manifest_text}" fixtures)
-if(fixture_count LESS 1)
-  message(FATAL_ERROR "forbidden-manifest-empty: ${GBB_FORBIDDEN_MANIFEST}")
-endif()
 set(forbidden_sizes "")
 set(forbidden_digests "")
-math(EXPR last_index "${fixture_count} - 1")
-foreach(index RANGE ${last_index})
-  string(JSON rom_size GET "${manifest_text}" fixtures ${index} size_bytes)
-  string(JSON rom_digest GET "${manifest_text}" fixtures ${index} sha256)
-  # file(SHA256) prints lowercase; normalise so an uppercase manifest digest cannot fail open.
-  string(TOLOWER "${rom_digest}" rom_digest)
-  list(APPEND forbidden_sizes "${rom_size}")
-  list(APPEND forbidden_digests "${rom_digest}")
+foreach(manifest IN LISTS forbidden_manifests)
+  if(NOT EXISTS "${manifest}")
+    message(FATAL_ERROR "forbidden-manifest-missing: ${manifest}")
+  endif()
+  file(READ "${manifest}" manifest_text)
+  string(JSON fixture_count LENGTH "${manifest_text}" fixtures)
+  if(fixture_count LESS 1)
+    message(FATAL_ERROR "forbidden-manifest-empty: ${manifest}")
+  endif()
+  math(EXPR last_index "${fixture_count} - 1")
+  foreach(index RANGE ${last_index})
+    string(JSON rom_size GET "${manifest_text}" fixtures ${index} size_bytes)
+    string(JSON rom_digest GET "${manifest_text}" fixtures ${index} sha256)
+    # file(SHA256) prints lowercase; normalise so an uppercase manifest digest cannot fail open.
+    string(TOLOWER "${rom_digest}" rom_digest)
+    list(APPEND forbidden_sizes "${rom_size}")
+    list(APPEND forbidden_digests "${rom_digest}")
+  endforeach()
 endforeach()
+list(REMOVE_DUPLICATES forbidden_sizes)
+list(REMOVE_DUPLICATES forbidden_digests)
 
 file(GLOB_RECURSE scanned_files LIST_DIRECTORIES false RELATIVE "${GBB_SCAN_DIR}" "${GBB_SCAN_DIR}/*")
 list(SORT scanned_files)
@@ -65,9 +95,12 @@ endif()
 
 foreach(relative IN LISTS scanned_files)
   string(TOLOWER "${relative}" lowered)
-  if(lowered MATCHES "${forbidden_label}")
-    message(FATAL_ERROR "${GBB_FORBIDDEN_LABEL}-installed: ${relative}")
-  endif()
+  foreach(path_label IN LISTS normalized_forbidden_path_labels)
+    string(FIND "${lowered}" "${path_label}" path_label_position)
+    if(NOT path_label_position EQUAL -1)
+      message(FATAL_ERROR "${GBB_FORBIDDEN_LABEL}-installed: ${relative}")
+    endif()
+  endforeach()
   set(candidate "${GBB_SCAN_DIR}/${relative}")
   if(IS_SYMLINK "${candidate}")
     # Follow file links so a sibling ROM cannot pass under an innocuous link name; directory
