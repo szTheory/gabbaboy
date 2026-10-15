@@ -624,7 +624,9 @@ def parse_ctest_xml(data: bytes, expected_names: set[str]) -> tuple[list[dict], 
         names.add(name)
         output = ""
         for measurement in test.iter():
-            if measurement.tag.rsplit("}", 1)[-1] == "Measurement" and measurement.get("name") == "Test Output":
+            measurement_name = measurement.get("name")
+            if (measurement.tag.rsplit("}", 1)[-1] == "Measurement" and
+                    measurement_name in (None, "Test Output")):
                 value = next((child for child in measurement if child.tag.rsplit("}", 1)[-1] == "Value"), None)
                 output = value.text or "" if value is not None else ""
                 break
