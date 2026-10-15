@@ -97,9 +97,9 @@ status: complete
 
 ## Task Commits
 
-1. **Task 1 RED:** `e9e3f77` — `test(13-01): add failing CGB HDMA seam tracer`
-2. **Task 2 RED:** `e0ecbd6` — `test(13-01): cover CGB HDMA register masks and modes`
-3. **Shared GREEN implementation:** `aab4a86` — `feat(13-01): implement bounded CGB HBlank HDMA tracer`
+1. **Task 1: RED:** `e9e3f77` — `test(13-01): add failing CGB HDMA seam tracer`
+2. **Task 2: RED:** `e0ecbd6` — `test(13-01): cover CGB HDMA register masks and modes`
+3. **Task 1: Shared GREEN implementation (also Task 2):** `aab4a86` — `feat(13-01): implement bounded CGB HBlank HDMA tracer`
 
 The plan ledger measured 3 task commits from `a52bd84014e1bafb6e84f5b4d7d9910d9a33d16d` through `aab4a865c325f21a86f0b989ee527eb202ce7e00`.
 

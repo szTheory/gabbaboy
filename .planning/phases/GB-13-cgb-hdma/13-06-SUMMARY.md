@@ -114,8 +114,8 @@ Each task followed a RED/GREEN commit pair. These numbered rows are the machine-
 
 ## TDD Evidence
 
-- **Task 1 RED:** `test_gbc_dma_cont_is_pinned_and_committed` failed on the intended missing-manifest-row assertion; `gsd-tools check tdd-red-evidence` returned `RED_EVIDENCE_OK`. GREEN passed selected-case self-check, clean-copy positive control, all provenance mutations, and the pinned byte comparison.
-- **Task 2 RED:** `test_exact_four_cases_and_roms_are_admitted` failed on the intended exact-set assertion while only the tracer row existed; the classifier returned `RED_EVIDENCE_OK`. GREEN passed with all four rows and ROMs present.
+- **Task 1: RED:** `test_gbc_dma_cont_is_pinned_and_committed` failed on the intended missing-manifest-row assertion; `gsd-tools check tdd-red-evidence` returned `RED_EVIDENCE_OK`. GREEN passed selected-case self-check, clean-copy positive control, all provenance mutations, and the pinned byte comparison.
+- **Task 2: RED:** `test_exact_four_cases_and_roms_are_admitted` failed on the intended exact-set assertion while only the tracer row existed; the classifier returned `RED_EVIDENCE_OK`. GREEN passed with all four rows and ROMs present.
 - The temporary RED predicates and evidence records were removed after their GREEN commits. The committed reproducer retains the ongoing positive and negative controls.
 
 ## Reproduction Evidence

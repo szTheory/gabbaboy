@@ -81,3 +81,11 @@ Whole-block bounds, output/time headroom, lifecycle ownership, finite run loops,
 - [x] `threats_open: 0` confirmed.
 
 Approval: secured, 25/25 threats closed. This security verdict does not substitute for fresh execution or exact-head hosted checks.
+
+## Security Audit 2026-10-15
+
+| Metric | Count |
+|---|---|
+| Threats found | 25 |
+| Closed | 25 |
+| Open | 0 |

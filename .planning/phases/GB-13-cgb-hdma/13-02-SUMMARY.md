@@ -129,6 +129,8 @@ status: complete
 1. **Task 1: Tracer: exact start, kick, cancel and restart through CPU execution** — `9c9f3ef` (test), `736d785` (feat).
 2. **Task 2: Expand mapped sources and overflow without partial invalid blocks** — `9595d43` (test), `b257ac8` (feat).
 
+3. **Task 2: Post-plan visibility fixture repair (outside the original four-commit task window)** — `a6b115b`.
+
 ## Files Created/Modified
 
 - `src/core/gabbaboy.c` — narrow HDMA source validation and widened destination continuation.
@@ -149,10 +151,10 @@ status: complete
 
 ## TDD Gate Compliance
 
-- **Task 1 RED:** `cgb_hdma_state_matrix` reached its guest-visible initial-kick assertion and failed before implementation. `gsd-tools check tdd-red-evidence` returned `RED_EVIDENCE_OK` for the target JUnit report.
-- **Task 1 GREEN:** `736d785` implemented the state/trigger policy. The tracer feedback gate reran the required verification and negative controls successfully before Task 2 expansion.
-- **Task 2 RED:** `cgb_hdma_address_matrix` failed at the absent-RAM mapping assertion, and `cgb_hdma_overflow_policy` failed at the widened-cursor assertion. Both JUnit records passed `gsd-tools check tdd-red-evidence` with `RED_EVIDENCE_OK`; named address and overflow negative controls passed.
-- **Task 2 GREEN:** `b257ac8` implemented the source and overflow policies. No behavior-neutral refactor was needed; verification exposed and corrected a pre-existing out-of-range WRAM expectation and made the post-switch FF55 fixture retain one active block after its initial kick.
+- **Task 1: RED:** `cgb_hdma_state_matrix` reached its guest-visible initial-kick assertion and failed before implementation. `gsd-tools check tdd-red-evidence` returned `RED_EVIDENCE_OK` for the target JUnit report.
+- **Task 1: GREEN:** `736d785` implemented the state/trigger policy. The tracer feedback gate reran the required verification and negative controls successfully before Task 2 expansion.
+- **Task 2: RED:** `cgb_hdma_address_matrix` failed at the absent-RAM mapping assertion, and `cgb_hdma_overflow_policy` failed at the widened-cursor assertion. Both JUnit records passed `gsd-tools check tdd-red-evidence` with `RED_EVIDENCE_OK`; named address and overflow negative controls passed.
+- **Task 2: GREEN:** `b257ac8` implemented the source and overflow policies. No behavior-neutral refactor was needed; verification exposed and corrected a pre-existing out-of-range WRAM expectation and made the post-switch FF55 fixture retain one active block after its initial kick.
 
 ## Verification
 

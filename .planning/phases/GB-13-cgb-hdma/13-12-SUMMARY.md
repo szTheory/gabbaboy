@@ -98,6 +98,20 @@ coverage:
         ref: "GitHub Actions preview-package-smoke run 38662784151 at 690c081, all four jobs success"
         status: pass
     human_judgment: false
+  - id: POST_REVIEW
+    description: Closeout evidence rejects changed source and misleading remote receipts while preserving the exact completed-stage handoff.
+    human_judgment: false
+    verification:
+      - kind: other
+        ref: python3 -I .planning/phases/GB-13-cgb-hdma/verify-hdma-source-revision.py
+        status: pass
+      - kind: integration
+        ref: ctest:cgb_hdma_remote_evidence_selftest
+        status: pass
+      - kind: other
+        ref: node --test tests/scripts/phase13-handoff-continuity.test.cjs
+        status: pass
+
 duration: "not captured; earliest persisted task boundary was the Task 1 RED commit"
 completed: 2026-10-14
 status: complete
@@ -133,6 +147,15 @@ status: complete
 - The malformed-subject setup control `adapter-malformed-red-committed.json` is `INVALID_RED`, not semantic fail-first evidence. `4eab951` adds preflight before registering the semantic target, and producer controls prove malformed setup exits nonzero without running or passing that target.
 - The Windows LF contract RED `f67812a` reproduced in an isolated committed snapshot as CTest 439 `samesuite_repro_selfcheck`, with named diagnostic `raw-hashed license notice lacks LF checkout policy`; GSD classified the captured result as `RED_EVIDENCE_OK`. `e9bc47e` adds explicit LF attributes for digest-pinned text closures and leaves expected digests unchanged. A CRLF checkout simulation passed for 13 representative files. Later exact-source Windows evidence found the separate launcher defect; commits `7413a64` and `690c081` fixed it, and the exact-source Windows lane passed.
 - The runtime `tdd-review-checkpoint` reports zero `type: tdd` plans because this plan retains `type: execute` frontmatter. That checkpoint is non-applicable and is not TDD certification; task-level RED/GREEN evidence above is the audit.
+
+## Task Commits
+
+1. **Task 1: Claim producer, recurring lane and cross-platform closure** — `e8308d2`, `16c9d53`, `41bb9bf`, `0fef599`, `4eab951`, `f67812a`, `e9bc47e`, `7413a64`, `690c081`.
+2. **Task 2: Handoff and execution evidence** — `a2153b0`, `0d5bb9c`, `0bff701`, `d08313d`, `e40649c`, `baaff1f`, `e56ead2`, `09bf48e`, `8e56893`.
+3. **Task 1: Parent security and review follow-up controls** — `03292b1`, `5459b7c`, `42e330f`, `ec54205`, `f052ea3`.
+4. **Task 2: Completed-stage handoff follow-up** — `1d45145`, `3cdcef2`.
+
+The original plan commit count below remains historical; parent closeout fixes are separately identified above. These rows expose the actual referenced commits to the installed OpenGSD scope parser without changing their evidence classification.
 
 ## Plan commits
 
@@ -231,3 +254,7 @@ Plan 13-12 execution is complete; Phase 13 automated goal verification and paren
 ---
 *Phase: 13-cgb-hdma*
 *Completed: 2026-10-14*
+
+## Parent post-review closeout
+
+Security found one stale-source binding defect, fixed by RED `03292b1` / GREEN `5459b7c`, with 26 controls. Code review found incomplete optional remote receipts, fixed by RED `42e330f` / GREEN `ec54205`, with one positive and 16 negative controls. Help scanability was fixed by `f052ea3`. Independent re-audits closed all findings; the original reports remain preserved. Completed-stage handoff RED `1d45145` / GREEN `3cdcef2` preserves `/gsd-verify-work 13` and the Phase 14 pause. Fresh local evidence at `3cdcef2` is 994/994 native, 1,087/1,087 player and 6/6 installed/package; original measurements above remain source `690c081`. Goal verification and final published-head hosted checks remain pending at this record.

@@ -133,7 +133,7 @@ status: complete
 - Preserved independent DMA and speed-pause residuals; wake obeys the persisted M-cycle boundary and cannot erase admitted work before dispatch.
 - Added STOP and shared-tick OAM/HDMA/PPU ordering policies with paired controls and explicit physical-model qualifications.
 
-## Task Commit Ledger
+## Task Commits
 
 | Task | Stage | Commit | Purpose |
 | --- | --- | --- | --- |
@@ -144,6 +144,11 @@ status: complete
 
 **Plan metadata:** b7a6f63 (SUMMARY, STATE, ROADMAP, and continuation route).
 **Route correction:** 452ef99 (Operator Next Steps aligned with Phase 13 wave 4).
+
+Machine-readable references to the same task commits above:
+
+1. **Task 1: Recorded execution commits** — `08f0aef867883977b1b4a12689062483e8f713ca`, `8aee46acfdaaa30e0ccc08facc8b2a308678fc2b`.
+2. **Task 2: Recorded execution commits** — `ac135181e9e7387af4f3186b3a67492319c4b47d`, `22a35bade8550d8978fa67f154313cc965e96874`.
 
 ## Files Created/Modified
 

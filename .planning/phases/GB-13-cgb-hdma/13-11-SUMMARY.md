@@ -112,18 +112,18 @@ Every consumer-facing surface now describes delivered CGB DMA behavior with the 
 
 ## Task Commits
 
-1. **Task 1 RED:** `0cc07b5` — native guide checker failed on the intended missing HBlank DMA behavior claim; see `build/p13-11-task1-red.xml` and `build/p13-11-task1-red.json`.
-2. **Task 1 GREEN:** `5774aca` — documented the native DMA contract and added the native claim checker.
-3. **Rule 1 compatibility fix:** `074249a` — restored the existing README double-speed phrase after the player claim contract identified its removal.
-4. **Task 2 RED:** `3625661` — player claim contract failed specifically on the missing delivered-DMA software-model phrase; see `build/p13-11-task2-red.xml` and `build/p13-11-task2-red.json`.
-5. **Task 2 GREEN:** `d271508` — aligned player, help, workflow and package claims and completed the all-surface subject controls.
+1. **Task 1: RED:** `0cc07b5` — native guide checker failed on the intended missing HBlank DMA behavior claim; see `build/p13-11-task1-red.xml` and `build/p13-11-task1-red.json`.
+2. **Task 1: GREEN:** `5774aca` — documented the native DMA contract and added the native claim checker.
+3. **Task 1: Rule 1 compatibility fix:** `074249a` — restored the existing README double-speed phrase after the player claim contract identified its removal.
+4. **Task 2: RED:** `3625661` — player claim contract failed specifically on the missing delivered-DMA software-model phrase; see `build/p13-11-task2-red.xml` and `build/p13-11-task2-red.json`.
+5. **Task 2: GREEN:** `d271508` — aligned player, help, workflow and package claims and completed the all-surface subject controls.
 
 ## TDD Gate Compliance
 
-- **Task 1 RED:** The named CTest target executed and failed because `docs/native-integration.md` lacked the HBlank DMA behavior claim. The JUnit report and machine record classify this as a semantic assertion failure, not setup or test discovery failure.
-- **Task 1 GREEN:** The `--native` selector and checker self-test passed, including mutations for stale claims, missing qualifications, undeclared symbols, and CGB-C/CGB-E conflation.
-- **Task 2 RED:** The existing `player_claims_agree` target executed and failed on the new missing delivered-DMA phrase in `src/player/limitations.h`. Its unchanged JUnit report and machine record classify the intended semantic failure.
-- **Task 2 GREEN:** Both all-surface selectors, the independent claim and subject negative controls, clean subject, player checks, native contracts, and phase1 build passed. No separate refactor was needed after the focused checks passed.
+- **Task 1: RED:** The named CTest target executed and failed because `docs/native-integration.md` lacked the HBlank DMA behavior claim. The JUnit report and machine record classify this as a semantic assertion failure, not setup or test discovery failure.
+- **Task 1: GREEN:** The `--native` selector and checker self-test passed, including mutations for stale claims, missing qualifications, undeclared symbols, and CGB-C/CGB-E conflation.
+- **Task 2: RED:** The existing `player_claims_agree` target executed and failed on the new missing delivered-DMA phrase in `src/player/limitations.h`. Its unchanged JUnit report and machine record classify the intended semantic failure.
+- **Task 2: GREEN:** Both all-surface selectors, the independent claim and subject negative controls, clean subject, player checks, native contracts, and phase1 build passed. No separate refactor was needed after the focused checks passed.
 
 ## Deviations from Plan
 

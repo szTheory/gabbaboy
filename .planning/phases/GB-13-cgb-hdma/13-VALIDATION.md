@@ -9,9 +9,9 @@ created: "2026-10-14"
 
 # Phase13 — Validation Strategy
 
-Execution validation audit: all 24 tasks have implemented automated checks and named negative controls, with passing source-revision evidence at `690c081e3714aa1039263255d572b6d0d06dad8e`. The 12 SUMMARY files record the task results and controls.
+Execution validation audit: all 24 tasks have implemented automated checks and named negative controls, with original passing evidence at `690c081e3714aa1039263255d572b6d0d06dad8e` and fresh post-review native/player/installed evidence at `3cdcef2831ae71564b75186e976296275f59b68d`. The 12 SUMMARY files record the task results and controls.
 D-069/D-22 require zero routine human UAT. The claim-language prohibition now has an actual OpenGSD fail-first/clean/live proof and a resolved/test descriptor; the separate generic fallback edge remains open. Physical CGB-E remains UNKNOWN/POLICY, and optional CGB-C evidence remains rights-gated and outside the denominator.
-This validates automated coverage. Phase-level security review, code review, goal verification and final metadata-head CI are separate pending gates.
+This validates automated coverage. Security review closes 25/25 threats; both code-review findings are fixed and independently re-reviewed. Goal verification and final metadata-head CI remain separate pending gates.
 
 ## Test infrastructure
 
@@ -132,3 +132,9 @@ Revision2:13-11 and13-12 now each own nine files; preview wording moves to13-11,
 | Gaps found | 0 |
 | Resolved | 0 |
 | Escalated | 0 |
+
+## Post-review coverage audit
+
+At reviewed source `3cdcef2`, full native CTest passed 994/994, player passed 1,087/1,087 and the guarded relocated consumer/package selection passed 6/6, all without skips. Source-revision controls pass 26/26, remote-receipt controls pass one positive and 16 negatives, and completed-stage handoff checks retain the phase pause. [13-BENCH.md](13-BENCH.md) records fresh hashes and costs separately from historical source `690c081`.
+
+SUMMARY task rows were normalized to the installed OpenGSD parser's exact `**Task N:` shape. The actual evaluation-scope query now resolves 71 reachable commits and 64 non-planning paths, with no outside-union, missing or unreachable paths. A removed-heading negative control yields no parsed task references for each of all 12 SUMMARY files. This repairs scope visibility without changing task chronology or treating malformed setup as semantic RED evidence.

@@ -4,15 +4,27 @@ These are bounded software-fixture and test-suite measurements. They do not qual
 
 ## Evidence revision and host
 
-- Source revision: `690c081e3714aa1039263255d572b6d0d06dad8e`
-- The local measurements below were run against this source revision. Later documentation-only heads preserve the measured source identity; each pushed PR head still requires its own exact-head checks before it can be called green.
+- Source revision: `3cdcef2831ae71564b75186e976296275f59b68d`
+- The post-review local measurements immediately below use this exact source revision. All later sections explicitly headed historical retain their original `690c081` source identity. Each published head still requires its own PR-event checks.
 - Runtime-mask mutant build-cost source revision: `41bb9bf9258f529e394ac14cf1396928281cdee0`.
 - Phase 12 inventory baseline: `8091fb591de7fb68e666be01d344f5f26ebedc5c` (`tests/expected-tests.txt`, 898 names).
 - Host class: Darwin arm64. Compiler: Apple clang 21.0.0. Generator: Ninja. Native/player CMake build type: Debug; C compilation uses `-g -std=c17`.
 - Model scope: the full suites mix unit, integration, fixture, mutation, and packaging checks. HDMA behavior-specific fixture evidence uses the bootless CGB-CPU-E software model. Physical CGB-E remains UNKNOWN/POLICY.
 - Samples: one full-suite run per configuration, no warm-up. CTest wall time and aggregate per-test time are different quantities. One sample does not estimate variance; uncertainty is not quantified (not zero). These are lane-cost observations, not emulator-speed measurements or comparable performance claims.
 
-## Full test lanes
+## Post-review local evidence
+
+The source-revision gate and optional remote-receipt validator were fixed after independent security and code review; player help is split into labeled lines. Fresh configure/build and full CTest passed on the Darwin arm64 Debug host described above, after those fixes. The configured regression command ran under the existing 600-second bound with parallelism 4. Six prior reports referenced 44 existing test paths; the full native suite covers those paths and the current exact inventory. Installed selection was guarded for all six exact names and a missing-target negative control.
+
+| Lane | Result | CTest wall | Output digest |
+|---|---|---:|---|
+| Native Debug | 994/994, zero failures/errors/skips | 71.92 s | `build/phase13-review-native-3cdcef2.xml`, SHA-256 `ef3da47851e52da3c24108504b13f030179dc1889284838a956ba282a245373f` |
+| SDL3 player Debug | 1087/1087, zero failures/errors/skips | 75.27 s | `build-player/phase13-review-player-3cdcef2.xml`, SHA-256 `dd129d495530184fc91e4b766ce75ae10d16036dc64529b3633e8c40d23f46c0` |
+| Relocated installed consumers/package | 6/6, zero failures/errors/skips | 1.41 s | `build/phase13-review-installed-complete-3cdcef2.xml`, SHA-256 `a27078cac149ae0df6b57fbd225e7c57f793b6985d8f94b33f2dfb7f122eb77a` |
+
+The current native inventory is 994 names: 96 added versus Phase 12, none removed. The extra post-review target checks the optional remote receipt with one positive and 16 negative controls. Source revision controls pass 26/26; the completed-stage handoff has a positive and wrong-stage negative control. The actual OpenGSD claim producer passed fail-first, clean and live checks again. The frozen DMG baseline has zero changed rows. These observations are single samples, no warm-up, with unquantified uncertainty, and make no speedup claim. Hosted ASan/UBSan, fixture reproduction and package checks at the final published metadata head remain pending; the historical hosted evidence below is not reused as that proof.
+
+## Historical full test lanes — source `690c081`
 
 | Lane | Command and workload | Result | Output digest |
 |---|---|---|---|
@@ -22,13 +34,13 @@ These are bounded software-fixture and test-suite measurements. They do not qual
 
 Against Phase 12's 898-name expected-test inventory at `8091fb591de7fb68e666be01d344f5f26ebedc5c`, the native report has 993 names, 95 added and none removed. The 95 added cases' individual CTest durations sum to 7.290 s on this Debug host; this is not the parallel wall-time increment. Five newly registered Python-only recurring contracts are included in that inventory. The current JUnit contains 29 `cgb_hdma_mutant_*` cases totaling 0.397 s, including the anchor guard and mask-zero controls. The representative no-copy mutant/control pair took 0.022 s aggregate.
 
-## Debug ASan/UBSan lane
+## Historical Debug ASan/UBSan lane — source `690c081`
 
 The local command `cmake --preset phase1-asan` stops at the repository's explicit platform guard: `GABBABOY_ENABLE_SANITIZERS is supported only on Linux`. No sanitizer run or local ASan cost is claimed on Darwin. The existing CI policy remains Linux `phase1-asan --parallel 4`, a 30-minute job timeout, and the existing per-test timeout scaling. Historical PR-event run `38661411340` at source `e9bc47ed30f5eb4ee1303c06153303c2deb6bea3` passed Linux job `116183292071`: 988/988 tests, no skips, CTest wall 847.53 s. This is historical evidence only. Exact-source PR-event run `38662784214` at source `690c081e3714aa1039263255d572b6d0d06dad8e` passed Linux ASan/UBSan job `116187705198`: 988 executed cases, none skipped, zero failures, CTest wall 676.28 s. Its separate no-host-clock check, bounded-fuzz self-test, and three deterministic fuzz regressions passed; the log states the configured `fuzz_core` target is unavailable. This is test-harness evidence only and not a host-fuzzer campaign. No stale, skipped, or absent check is treated as green.
 
 The Phase 12 post-review sanitizer baseline at `502f992fe9fd2d848845947057c2b327747c3edd` executed 893 tests in 1,217.04 s CTest wall time, as recorded in [12-BENCH.md](../GB-12-cgb-double-speed/12-BENCH.md). The Phase 13 source run executes 988 tests. Comparing names with the 898-name Phase 12 installed inventory at `8091fb591de7fb68e666be01d344f5f26ebedc5c` identifies all 95 added cases in the successful sanitizer log; their logged durations sum to **19.03 s aggregate**, not parallel wall-time increase. [13-ASAN-ADDED-COST.json](13-ASAN-ADDED-COST.json) preserves the exact case/time rows, source, run and job IDs. Log values are rounded to 0.01 s. This is one sample, with no warm-up and unquantified uncertainty. Baseline and current runs use different runner instances and inventories; the total-wall difference is descriptive and does not establish a performance improvement or attribute it to HDMA.
 
-## Runtime-mask mutant build cost
+## Historical runtime-mask mutant build cost
 
 The current HDMA runtime-mask cases share `test_cgb_hdma` and the generated `gabbaboy_core_p13_mutants` translation unit; adding one CTest mask does not create a per-mutant executable or a new compilation target. A scratch-only source invalidation of that combined generated translation unit measures the rebuild cost of changing one generated mutant source site:
 
@@ -41,7 +53,7 @@ The current HDMA runtime-mask cases share `test_cgb_hdma` and the generated `gab
 
 Phase 12's local Debug record measured 16 steps/0.25 s for a broader set of internal, public-library, and partition mutant targets. The scopes differ, so the figures are descriptive only; no improvement is attributed to Phase 13. Each mutant-cost measurement has one sample, no warm-up, and uncertainty is not quantified (not zero). At current source `690c081`, the 29 `cgb_hdma_mutant_*` tests total 0.397 s; their one-sample lane cost is descriptive only and not comparable as a performance change against Phase 12.
 
-## Pinned fixture and claim-prohibition evidence
+## Historical pinned fixture and claim-prohibition evidence — source `690c081`
 
 - Original project-authored HDMA ROM: `fixtures/cgb-hdma/hblank.gb`, 32,768 bytes, SHA-256 `f21cdc65d24f98cbf7713686c96a5e41f29e6769f78fc6a6f61b0d230ebbf431`; local source/license checks and self-test controls passed, and the RGBDS 1.0.1 rebuild was byte-identical. The task-local macOS archive SHA-256 is `2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645`.
 - SameSuite's four admitted DMA fixtures rebuilt byte-identically at pinned source revision `f15645fb049a47ea235f6d2c9a033e72d8087901` with RGBDS 1.0.1. Mutation controls for license, source, tool, digest, D-06 expectation, and extra rows passed.
@@ -49,7 +61,7 @@ Phase 12's local Debug record measured 16 steps/0.25 s for a broader set of inte
 - The actual OpenGSD prohibition producer returned green, unflagged, located, `test`/`node-test`, with non-empty passed, fail-first, and `violation-fixture` evidence. The committed RED test is `e8308d2359d23abf67df314ce761b56ed1d288e8`; its isolated committed snapshot failed the named Node assertion on the expected CGB-C/physical-CGB-E diagnostic and passed `gsd_run check tdd-red-evidence`. Clean-subject and live-checkout GREEN checks passed. Missing/empty subjects, always-green/empty-TAP adapters, and a live unqualified claim were rejected. The public Python `--prohibitions`, `--prohibitions-self-test`, and `--handoff` commands resolve the installed OpenGSD runtime without a `GSD_TOOLS` override; an invalid explicit override fails.
 - The prohibition projection clears only the machine-checkable claim safeguard. Optional CGB-C material remains rights-gated, informational, and outside the CGB-E denominator; the separate generic unresolved edge remains open.
 
-## Exact-source hosted workflow status
+## Historical exact-source hosted workflow status — source `690c081`
 
 - PR-event workflow run `38662784214` targets source `690c081e3714aa1039263255d572b6d0d06dad8e` and completed success. All jobs passed: `linux-asan-ubsan` (988 executed, none skipped, 676.28 s CTest), `cmake-floor-3.25.3` (CMake 3.25.3 inventories: 988 base cases in 632.69 s and 993 relocated installed cases in 650.32 s, none skipped), `native-macos-arm64` (993 executed, none skipped, 628.13 s CTest), `native-windows-x64` (981 passed, 495.80 s CTest), `native-linux-x64` (993 passed, 475.61 s CTest), `player-gate`, `macos-player-package`, and aggregate `required-native`. Windows `samesuite_repro_selfcheck` passed in 4.87 s; macOS and Linux no-host-clock checks passed.
 - The macOS player-package job `116187733769` passed its 98 player-specific tests (17.34 s CTest) and extracted SDL 3.4.18 package smoke; package SHA-256 `3cb71a0118f5d60c81efad862406360c8999785c2aa3bb72a3d6ac433bd4d18b`. The run's initial macOS queue (job start record 00:55:37Z, runner assignment at 01:16:48Z) had no runner assigned and no check annotations. GitHub Status at 01:14:30Z reported all systems operational and no unresolved incidents; the official runner-images label table lists `macos-14` for macOS 14 Arm64. The deprecation notice's brownout windows did not include this run's Oct 15 00:55Z queue interval; the next scheduled brownout begins Oct 16 at 14:00Z. The jobs later received runners and passed. No label or timeout change was made.

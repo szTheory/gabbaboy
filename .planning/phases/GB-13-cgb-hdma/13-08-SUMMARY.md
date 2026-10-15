@@ -127,6 +127,11 @@ coverage:
 
 The TDD RED receipts are `build/13-08-task1-red.xml` and `build/13-08-task1-red-evidence.json` (task 1), and `build-player/13-08-task2-red.xml` and `build-player/13-08-task2-red-evidence.json` (task 2). Both evidence checks returned `RED_EVIDENCE_OK`; semantic inspection confirmed the task-specific guest-marker and source-pattern assertions failed before implementation. The source implementation is bounded by ending SHA `eb87c27fb2abfa380342579b6f20eb6398faa30b`.
 
+Machine-readable references to the same task commits above:
+
+1. **Task 1: Recorded execution commits** — `758fe69`, `af88ae4`.
+2. **Task 2: Recorded execution commits** — `e50c43a`, `eb87c27`.
+
 ## TDD Gate Compliance
 
 Both plan tasks were marked `tdd="true"` and used separate RED and GREEN commits. Task 1's persisted failing CTest report exposed the inherited fixture's missing pass marker before the original guest was added. Task 2's persisted player report failed the structural image predicate against the prior per-line fixture (`144 distinct colours, expected 2`) before switching the player smoke to the original guest. The OpenGSD red-evidence classifier returned `RED_EVIDENCE_OK` for each report, and both predicates passed after their respective implementation commits.

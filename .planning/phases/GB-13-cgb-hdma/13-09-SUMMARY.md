@@ -114,10 +114,10 @@ status: complete
 
 ## Task Commits
 
-1. **Task 1 RED:** `4c075f4` — `test(13-09): add SameSuite DMA tracer oracle`
-2. **Task 1 GREEN:** `293621b` — `feat(13-09): verify CGB HDMA tracer disposition`
-3. **Task 2 RED:** `4164c64` — `test(13-09): reject CGB-C hardware evidence claims`
-4. **Task 2 GREEN:** `12a5a63` — `feat(13-09): execute all CGB HDMA disposition cases`
+1. **Task 1: RED:** `4c075f4` — `test(13-09): add SameSuite DMA tracer oracle`
+2. **Task 1: GREEN:** `293621b` — `feat(13-09): verify CGB HDMA tracer disposition`
+3. **Task 2: RED:** `4164c64` — `test(13-09): reject CGB-C hardware evidence claims`
+4. **Task 2: GREEN:** `12a5a63` — `feat(13-09): execute all CGB HDMA disposition cases`
 
 Task 1's no-copy control fails at the guest pass sentinel and its corrupted-result twin fails at the first changed VRAM byte. Task 2's self-test initially accepted a mutated CGB-C `hardware-backed CGB-E measurement` claim; the targeted CTest failed for that named semantic reason. Both RED records were classified `RED_EVIDENCE_OK` before their GREEN commits. Task 2's GREEN verifier now rejects that claim and the other 15 named metadata/result mutations.
 

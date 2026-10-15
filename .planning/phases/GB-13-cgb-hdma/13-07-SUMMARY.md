@@ -117,6 +117,11 @@ status: complete
 | 2 RED | `b79d706` | Added a failing exact CTest inventory test |
 | 2 GREEN | `75f4547` | Added the source-derived guest oracle and controls |
 
+Machine-readable references to the same task commits above:
+
+1. **Task 1: Recorded execution commits** — `3420750`, `d481d7b`, `225a260`.
+2. **Task 2: Recorded execution commits** — `b79d706`, `75f4547`.
+
 ## Decisions Made
 
 - Kept the reproducer's RGBDS archive private to the build cache and verified its digest before use.

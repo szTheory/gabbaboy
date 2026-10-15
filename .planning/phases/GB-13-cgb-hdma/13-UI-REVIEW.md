@@ -74,3 +74,7 @@ Not applicable: `components.json` is absent, and there is no UI spec with third-
 - Text contracts: `tests/scripts/verify-cgb-hdma-claims.py`, `tests/player/claims_agree.cmake`, `tests/player/test_limitations.c`, `tests/player/CMakeLists.txt`, `tests/player/expected-tests.txt`, `tests/player/cgb_smoke.cmake`, `tests/CMakeLists.txt`.
 - Package claim surface: `.github/workflows/preview.yml`.
 - Scope evidence: installed `ui-safety-gate 13` result; no `13-UI-SPEC.md` or `components.json`.
+
+## Finding disposition
+
+The copywriting warning was fixed by `f052ea3`: the help now has labeled Models, Video, Audio, Speed, Transfers and Limits lines. Independent focused code re-review at `774ee6c` confirmed the change and the eight-surface claim contract passed. The original 2/4 score above records the pre-fix audit; the warning is closed, with no manual checkpoint. Visual pillars remain N/A.

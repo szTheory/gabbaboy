@@ -83,10 +83,10 @@ Installed C and C++ callers now execute bounded original CGB DMA guests from the
 
 ## Task Commits
 
-1. **Task 1 RED: installed guest behavior checks** - `6be24e1` (`test`)
-2. **Task 1 GREEN: pin relocated package resolution** - `0cbac03` (`feat`)
-3. **Task 2 RED: renamed forbidden-byte controls** - `22193e3` (`test`)
-4. **Task 2 GREEN: scan package digest and path boundaries** - `d33d967` (`feat`)
+1. **Task 1: RED: installed guest behavior checks** - `6be24e1` (`test`)
+2. **Task 1: GREEN: pin relocated package resolution** - `0cbac03` (`feat`)
+3. **Task 2: RED: renamed forbidden-byte controls** - `22193e3` (`test`)
+4. **Task 2: GREEN: scan package digest and path boundaries** - `d33d967` (`feat`)
 
 ## Files Modified
 
@@ -103,10 +103,10 @@ The package scanner checks exact SameSuite and Magen digests and path labels. Me
 
 ## TDD Gate Compliance
 
-- **Task 1 RED:** `build/tdd-red-13-10-task1-final.xml` records both installed consumers failing on the stale cached package, which rejected the FF55 write with `GBB_STOP_UNSUPPORTED_BUS`. The unchanged report was machine-classified as semantic stale-package evidence in `build/tdd-red-13-10-task1-final-evidence.json`.
-- **Task 1 GREEN:** after pinning `GabbaBoy_DIR` to the current relocated install, both consumers passed with symbol coverage and the preview package smoke test (5/5).
-- **Task 2 RED:** `build/tdd-red-13-10-task2.xml` records renamed SameSuite and Magen ROMs accepted by the single-manifest scanner. The unchanged report was machine-classified as the intended missing-digest-set failure in `build/tdd-red-13-10-task2-evidence.json`.
-- **Task 2 GREEN:** the multi-manifest and path-label scanner, clean package scan, renamed-byte controls, and preview smoke passed in the focused package group (13/13).
+- **Task 1: RED:** `build/tdd-red-13-10-task1-final.xml` records both installed consumers failing on the stale cached package, which rejected the FF55 write with `GBB_STOP_UNSUPPORTED_BUS`. The unchanged report was machine-classified as semantic stale-package evidence in `build/tdd-red-13-10-task1-final-evidence.json`.
+- **Task 1: GREEN:** after pinning `GabbaBoy_DIR` to the current relocated install, both consumers passed with symbol coverage and the preview package smoke test (5/5).
+- **Task 2: RED:** `build/tdd-red-13-10-task2.xml` records renamed SameSuite and Magen ROMs accepted by the single-manifest scanner. The unchanged report was machine-classified as the intended missing-digest-set failure in `build/tdd-red-13-10-task2-evidence.json`.
+- **Task 2: GREEN:** the multi-manifest and path-label scanner, clean package scan, renamed-byte controls, and preview smoke passed in the focused package group (13/13).
 
 ## Deviations from Plan
 

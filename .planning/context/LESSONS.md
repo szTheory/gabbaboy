@@ -694,3 +694,10 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** Exact CTest inventory found all 13 `cgb_visibility_*` and 18 `cgb_hdma_*` names, including named controls. The combined visibility, HDMA, CGB-speed and model-gate set passed 199/199; `cgb_visibility_cross_column_control`, `cgb_visibility_deferred_latch_interrupt`, and the HDMA address/overflow controls passed.
 - **Source:** Phase 13 Wave 2 integration follow-up; `.planning/phases/GB-13-cgb-hdma/13-02-SUMMARY.md`.
 - **Status:** Adopted for guest fixtures that exercise accepted FF55 writes.
+
+### GB-GSD-019 / 2026-10-15 / Bind execution evidence to every input and the exact PR revision
+
+- **Cause and evidence:** Phase 13 security review reproduced acceptance of a core-only change after a measured source revision. A second review reproduced an optional CI receipt accepting omitted contexts, duplicate failure/success rows and wrong-event data. Narrow path comparisons and caller-declared required-job sets both made stale evidence appear current.
+- **Remedy:** Compare committed, index, working-tree and non-ignored untracked paths independently with NUL delimiters; allow only named closeout metadata. Require the exact repository context set and PR event, head, workflow and run provenance, reject duplicates, and bound receipt reads. Keep local receipts diagnostic; query actual GitHub jobs at the final published head before merge. Preserve historical measurements under their original revision when retesting.
+- **Applicability:** Test, benchmark, package or workflow evidence reused across later commits, especially after metadata closeout.
+- **Verification:** Test-only RED `03292b1` preceded source-gate fix `5459b7c`; 26 controls pass. Receipt RED `42e330f` preceded `ec54205`; positive plus 16 negative controls pass. Independent re-audits closed both findings. Handoff RED `1d45145` precedes `3cdcef2`; the completed execution stage preserves the exact verification route and rejects a wrong stage.

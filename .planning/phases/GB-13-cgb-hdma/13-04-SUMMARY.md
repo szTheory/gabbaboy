@@ -132,6 +132,11 @@ Each TDD task has a semantic RED and a passing GREEN commit:
 | 2 | RED | `8f3c5e0` | Add HDMA lifecycle and headroom regressions |
 | 2 | GREEN | `f8aeaca` | Guard finite HDMA work against time overflow |
 
+Machine-readable references to the same task commits above:
+
+1. **Task 1: Recorded execution commits** — `b5e26fc`, `2bc3423`.
+2. **Task 2: Recorded execution commits** — `8f3c5e0`, `f8aeaca`.
+
 ## Verification Receipts
 
 - `build/13-04-task1-verify.xml` — required-name enumeration and 33/33 partition, inherited guest, and summary-coverage checks.

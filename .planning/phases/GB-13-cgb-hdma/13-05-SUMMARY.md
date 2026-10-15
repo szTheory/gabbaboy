@@ -125,6 +125,11 @@ Both tasks produced semantic RED evidence before implementation. Task 1's public
 
 The SUMMARY and state/roadmap handoff are recorded separately in the final plan-metadata commit.
 
+Machine-readable references to the same task commits above:
+
+1. **Task 1: Recorded execution commits** — `e892b11`, `cebca68`.
+2. **Task 2: Recorded execution commits** — `27e6583`, `4f1e3df`.
+
 ## Verification Receipts
 
 - `cmake --preset phase1` and `cmake --build --preset phase1 --parallel 4` passed; the full native build completed 166 actions in 3.65 seconds wall time.
