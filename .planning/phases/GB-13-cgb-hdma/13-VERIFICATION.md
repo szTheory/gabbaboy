@@ -1,9 +1,10 @@
 ---
 phase: 13-cgb-hdma
-verified: 2026-10-15T02:30:45Z
-status: gaps_found
-score: 36/37 must-haves verified
+verified: 2026-10-15T03:24:47Z
+status: passed
+score: 37/37 must-haves verified
 covered_files:
+  - ".github/workflows/ci.yml"
   - ".github/workflows/fixture-repro.yml"
   - ".github/workflows/preview.yml"
   - ".planning/phases/GB-13-cgb-hdma/13-01-PLAN.md"
@@ -30,14 +31,20 @@ covered_files:
   - ".planning/phases/GB-13-cgb-hdma/13-11-SUMMARY.md"
   - ".planning/phases/GB-13-cgb-hdma/13-12-PLAN.md"
   - ".planning/phases/GB-13-cgb-hdma/13-12-SUMMARY.md"
+  - ".planning/phases/GB-13-cgb-hdma/13-ASAN-ADDED-COST.json"
   - ".planning/phases/GB-13-cgb-hdma/13-BENCH.md"
   - ".planning/phases/GB-13-cgb-hdma/continue.md"
   - ".planning/phases/GB-13-cgb-hdma/verify-hdma-closure.py"
+  - ".planning/phases/GB-13-cgb-hdma/verify-hdma-source-revision.py"
   - "README.md"
+  - "cmake/ExpectedTests.cmake"
+  - "cmake/GabbaBoyConfig.cmake.in"
   - "cmake/P12Mutants.cmake"
   - "cmake/P13Mutants.cmake"
   - "cmake/PreviewPackageSmoke.cmake"
+  - "cmake/RunInstalledConsumer.cmake"
   - "cmake/ScanForbiddenFixtures.cmake"
+  - "cmake/VerifyInstalledPackage.cmake"
   - "docs/cgb-profile.md"
   - "docs/model-gates.md"
   - "docs/native-integration.md"
@@ -62,7 +69,11 @@ covered_files:
   - "src/player/limitations.h"
   - "src/player/main.c"
   - "tests/CMakeLists.txt"
+  - "tests/acceptance/CMakeLists.txt"
+  - "tests/cgb_consumer_symbol_coverage.cmake"
+  - "tests/consumers/c/CMakeLists.txt"
   - "tests/consumers/c/main.c"
+  - "tests/consumers/cpp/CMakeLists.txt"
   - "tests/consumers/cpp/main.cpp"
   - "tests/expected-tests.txt"
   - "tests/external/cgb-hdma-dispositions.json"
@@ -73,9 +84,11 @@ covered_files:
   - "tests/player/claims_agree.cmake"
   - "tests/player/expected-tests.txt"
   - "tests/scripts/cgb-hdma-prohibition.test.cjs"
+  - "tests/scripts/phase13-handoff-continuity.test.cjs"
   - "tests/scripts/reproduce-cgb-hdma.sh"
   - "tests/scripts/reproduce-magentests.sh"
   - "tests/scripts/reproduce-samesuite.sh"
+  - "tests/scripts/test_hdma_remote_evidence.py"
   - "tests/scripts/verify-cgb-hdma-claims.py"
   - "tests/scripts/verify-cgb-hdma-dispositions.py"
   - "tests/test_cgb_hdma.c"
@@ -86,26 +99,24 @@ covered_files:
   - "tests/test_cgb_visibility.c"
   - "tests/test_magentests.c"
   - "tests/test_samesuite_hdma.c"
-covered_digest: "v3:sha256:0babc771a45ae0c211b68af9b6ed62744c5266dad4d44172de253dd4d260d7fc"
+covered_digest: "v3:sha256:ffff572c9cd25c8c6f516f21738c174dc849f81671e6f180010496565aaf6fcf"
 behavior_unverified: 0
 overrides_applied: 0
-gaps:
-  - truth: "D-21: Existing native/sanitizer/reproduction/consumer/package lanes run an exact inventory with measured added ASan and mutant cost and unchanged parallel4/timeout policy."
-    status: failed
-    reason: "Native, player, and installed-package suites passed at source 3cdcef2, and measured mutant cost is recorded, but exact-current-revision hosted ASan/UBSan and fixture-reproduction results are pending. The recorded passing sanitizer and reproduction runs are historical source-690 evidence and cannot close this exact-revision requirement."
-    artifacts:
-      - path: ".planning/phases/GB-13-cgb-hdma/13-BENCH.md"
-        issue: "Explicitly marks exact-current-revision hosted ASan/UBSan and fixture-reproduction checks pending; historical results are identified as source 690c081."
-    missing:
-      - "Passing required hosted sanitizer and fixture-reproduction checks tied to the final reviewed source revision, with exact-head job evidence."
+re_verification:
+  previous_status: gaps_found
+  previous_score: 36/37
+  gaps_closed:
+    - "Exact-current-revision hosted ASan/UBSan and fixture-reproduction evidence for D-21."
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 13: CGB HDMA Verification Report
 
 **Phase Goal:** CGB software can use general-purpose and HBlank VRAM DMA with hardware-shaped CPU stall, cancel and readback, bounded per run.
-**Verified:** 2026-10-15T02:30:45Z
-**Status:** gaps_found
-**Re-verification:** No — initial verification
+**Verified:** 2026-10-15T03:24:47Z
+**Status:** passed
+**Re-verification:** Yes — after exact-head evidence closure
 
 ## Goal Achievement
 
@@ -129,10 +140,10 @@ gaps:
 | 14 | D-01/D-15: Create/reset/successful load clear DMA, failed load preserves active progress, and independent instances remain isolated. | ✓ VERIFIED | Lifecycle tests and controls exercise reset/load/instance behavior; `cgb_hdma_lifecycle` and `cgb_hdma_lifecycle_controls` pass. |
 | 15 | D-20/D-22: Bounded hostile seeds and all capacity/headroom paths have matching defect controls and truthful campaign status. | ✓ VERIFIED | Resource/hostile-seed tests and controls pass; `13-BENCH.md` and closure checks bound claims and report no local fuzz campaign. |
 | 16 | D-19/D-20: Guest no-steal and every selected HDMA fault are rejected by a behavioral predicate with a passing mask-zero twin. | ✓ VERIFIED | Runtime mutant matrix has paired named controls; all mutant/control cases are present and passing in the native and player JUnit reports. |
-| 17 | D-21: Mutation compilation stays bounded and ASan/native cost is measured with existing parallelism/timeouts. | ✓ VERIFIED | `13-BENCH.md` records native/ASan inventory and mutant measurements, sample limits, and existing parallelism/timeouts; exact-current local native/player/package suites pass. |
+| 17 | D-21: Mutation compilation stays bounded and ASan/native cost is measured with existing parallelism/timeouts. | ✓ VERIFIED | `13-BENCH.md` records bounded mutant cost and the exact-head Linux ASan/UBSan inventory at `0f15a05`: 989/989, no skips, with 96 added cases totaling 16.86 s; parallelism/timeouts are unchanged. |
 | 18 | D-24: Migrated P12 anchors remain unique and disposition semantics retain sensitivity. | ✓ VERIFIED | Anchor guard, disposition positive/mutated cases, and inherited CGB speed disposition tests pass in fresh native/player reports. |
 | 19 | D-16: Exactly gbc_dma_cont, gdma_addr_mask, hdma_lcd_off and hdma_mode0 are admitted at f15645fb049a47ea235f6d2c9a033e72d8087901 with X11/G7 and CC0 closure. | ✓ VERIFIED | Four pinned SameSuite manifest rows, license/source/tool/digest checks and named execution tests pass; manifest, eligibility and rebuild script are connected by CTest. |
-| 20 | D-02/D-21/D-22: Existing pinned RGBDS1.0.1 and fixture-repro lane reproduce exact bytes, rejecting tampered pins/rows/digests without new dependencies or jobs. | ✓ VERIFIED | Fixture manifests and reproduction scripts enforce exact pins and negative controls; native reproducibility self-checks pass. The separate exact-current hosted reproduction lane is pending as noted in the D-21 gap below. |
+| 20 | D-02/D-21/D-22: Existing pinned RGBDS1.0.1 and fixture-repro lane reproduce exact bytes, rejecting tampered pins/rows/digests without new dependencies or jobs. | ✓ VERIFIED | Fixture manifests and reproduction scripts enforce exact pins and negative controls; exact reviewed head `0f15a05` passed the PR-event fixture-reproduction workflow 7/7, including the admitted HDMA fixtures. |
 | 21 | D-17: hblank_vram_dma source3f9c090f16e5a721db776febb9ba7d773e1c819c/0.5.0 release matches e8124ce687d37a2402e20af92af1299610bfbda0871d605084c0bba2bf57135c and rebuild. | ✓ VERIFIED | Magen manifest pins release/source/digest; `magentests_fixture_digest`, manifest/rebuild controls, and `magentests_hblank_vram_dma` pass; focused Magen case passed. |
 | 22 | D-17/D-19/D-22: Guest data and source-derived green-screen structure gate success before a digest; wrong-HALT/bank/no-transfer twins fail specifically. | ✓ VERIFIED | Magen harness checks guest outputs and structural screen before digest; named control tests pass in native/player JUnit. |
 | 23 | D-21: Existing Magen/reproduction/CTest lanes gain this single case without hardware claims or a new mandatory emulator. | ✓ VERIFIED | One Magen test is registered in existing targets and expected-test inventory; structural/docs contracts preserve software-only evidence boundary. |
@@ -146,16 +157,28 @@ gaps:
 | 31 | D-24: Every native/player/package claim agrees with delivered qualified HDMA behavior while preserving mode3/APU/hardware/game limits. | ✓ VERIFIED | Claim mirrors and negative mutation controls pass; support docs explicitly keep mode3/APU/commercial-game/physical-hardware limits. |
 | 32 | D-01/D-23: Documentation uses only declared unchanged public consumer functions and describes bounded DMA progression. | ✓ VERIFIED | README, native integration and support docs describe unchanged APIs and bounded runs; docs contract tests pass. |
 | 33 | D-18/D-22: Model/oracle/rights qualifications and documentation have automated positive and mutated negative contracts with no routine human UAT. | ✓ VERIFIED | Claims checker, disposition checker, player contract and mutated controls pass; no plan human-check blocks or probe scripts are declared. |
-| 34 | D-21: Existing native/sanitizer/reproduction/consumer/package lanes run an exact inventory with measured added ASan and mutant cost and unchanged parallel4/timeout policy. | ✗ FAILED | Native/player/installed current-source reports pass at `3cdcef2`; however, exact-current hosted sanitizer and fixture-reproduction results remain pending. Historical source-`690c081` runs do not satisfy the exact-revision requirement. See structured gap. |
+| 34 | D-21: Existing native/sanitizer/reproduction/consumer/package lanes run an exact inventory with measured added ASan and mutant cost and unchanged parallel4/timeout policy. | ✓ VERIFIED | GitHub API confirms all jobs completed successfully on exact reviewed behavior head `0f15a05`: CI 8/8 (ASan/UBSan 989/989 with no skips), fixture reproduction 7/7, and preview package 4/4. The source/test/fixture/build/workflow diff from freshly tested `3cdcef2` to `0f15a05` is empty; run IDs and measured costs are recorded in `13-BENCH.md`. |
 | 35 | D-18/D-22: The claim-language prohibition is machine-proven fail-first and resolves green/unflagged through the actual OpenGSD gate before verify-work; physical UNKNOWN is preserved. | ✓ VERIFIED | Actual OpenGSD producer clean, violating-subject RED and live GREEN evidence is recorded; projection/gate tests and negative controls pass; CGB-E remains UNKNOWN/POLICY. |
-| 36 | D-22/D-24: Current-revision evidence and machine-readable coverage qualify all delivered claims; skipped/stale remote checks cannot prove the revision green. | ✓ VERIFIED | `13-BENCH.md` binds fresh local results to source `3cdcef2`, records remote status pending, and does not reuse historical runs as current; closure checker includes skipped/stale negatives and machine-readable coverage passes. |
-| 37 | D-25: Planning stops before execution; after Phase13 execution/verification the durable route is Phase14 CGB-E Model Qualification and Corpus, never auto-advanced. | ✓ VERIFIED | STATE/continuation route Phase13 to verification then Phase14 discussion; auto flags are false; current handoff and negative controls pass. |
+| 36 | D-22/D-24: Current-revision evidence and machine-readable coverage qualify all delivered claims; skipped/stale remote checks cannot prove the revision green. | ✓ VERIFIED | `13-BENCH.md` binds local evidence to `3cdcef2`, records successful exact-head runs at `0f15a05`, and states that later metadata heads need their own checks; closure checker rejects skipped/stale results and machine-readable coverage passes. |
+| 37 | D-25: Planning stops before execution; after Phase13 execution/verification the durable route is Phase14 CGB-E Model Qualification and Corpus, never auto-advanced. | ✓ VERIFIED | Continuation now records the completed Phase 13 execution/verification stage, exact automated-UAT command, and Phase 14 as unstarted; the handoff contract passes both its live and completed-stage controls, with auto flags false. |
 
-**Score:** 36/37 truths verified (0 present, behavior-unverified).
+**Score:** 37/37 truths verified (0 present, behavior-unverified).
+
+### Exact-Head Hosted Evidence
+
+GitHub API results show `pull_request`, `completed`, `success`, and exact head `0f15a05c30a30a0a73b5227906b648e85ae7a280` for all three runs. Every job in each run completed successfully:
+
+| Workflow run | Jobs | Relevant evidence |
+|---|---:|---|
+| [CI 38671449176](https://github.com/szTheory/gabbaboy/actions/runs/38671449176) | 8/8 | Linux ASan/UBSan 989/989, zero skips, 624.45 s; macOS native 994, Linux native 994, Windows native 982; CMake floor base 989 and relocated install 994; player gate, player package and required-native succeeded. |
+| [Fixture reproduction 38671449191](https://github.com/szTheory/gabbaboy/actions/runs/38671449191) | 7/7 | Pinned fixture rebuild and byte-comparison jobs succeeded, including SameSuite and MagenTests. |
+| [Preview package 38671449197](https://github.com/szTheory/gabbaboy/actions/runs/38671449197) | 4/4 | Linux/macOS installed-package and consumer smoke, downloaded macOS player package, and aggregate preview gate succeeded. Player package SHA-256: `c9165786b9c1f5cb09644cfaab82cdea2a2f0436706178886263ee223f9ce747`. |
+
+The 96 added sanitizer cases total 16.86 seconds in this single run; uncertainty remains unquantified. Detailed measurements and run identities are in [13-BENCH.md](13-BENCH.md) and [13-ASAN-ADDED-COST.json](13-ASAN-ADDED-COST.json). This closes D-21 at the reviewed behavior revision. The later report/continuation metadata head has not yet been published and retains its own exact-head CI requirement before merge.
 
 ## Required Artifacts
 
-The installed artifact verifier checked all plan-declared artifacts: 49/49 passed across the twelve plans. The key implementations are substantive and used by their registered callers/tests. `query verify.key-links` returned “Target not referenced in source” for each generic plan edge; manual source, fixture, CMake, and consumer tracing below confirms the actual links rather than treating that generic matcher result as proof of a broken implementation.
+The installed artifact verifier checked all plan-declared artifacts: 49/49 passed across the twelve plans. The key implementations are substantive and used by their registered callers/tests. `query verify.key-links` returned “Target not referenced in source” for each generic plan edge; manual source, fixture, CMake, and consumer tracing below confirms the actual links rather than treating that generic matcher result as proof of a broken implementation. Behavioral closure includes the exact-source revision validator and its 26 controls, the hosted-receipt validator with one positive and 16 negative controls, and the live Node handoff test. Installed consumer CMake glue and CI inventory wiring are included in the covered set.
 
 | Artifact group | Status | Details |
 |---|---|---|
@@ -165,7 +188,9 @@ The installed artifact verifier checked all plan-declared artifacts: 49/49 passe
 | SameSuite and Magen manifests, fixture sources/ROMs, reproduction scripts | ✓ VERIFIED | Pins, licensing, generated-byte digests and admission boundaries are checked by existing fixture tests. |
 | `tests/consumers/{c,cpp}/main.*` and installed package checks | ✓ VERIFIED | Both installed consumers execute guest DMA through public functions; package report passes 6/6. |
 | Player smoke and claim surfaces | ✓ VERIFIED | Existing player smoke validates source-derived visible pattern and no-transfer control; claim mirrors have mutation controls. |
-| `13-BENCH.md`, `verify-hdma-closure.py`, prohibition contracts | ✓ VERIFIED | Evidence/closure artifacts are substantive and wired; BENCH accurately labels exact-current hosted ASan/fixture-reproduction as pending. The pending run is the D-21 acceptance gap, not a missing artifact. |
+| `13-BENCH.md`, `13-ASAN-ADDED-COST.json`, `verify-hdma-closure.py` and `verify-hdma-source-revision.py` | ✓ VERIFIED | Exact-head evidence and closure artifacts are substantive; revision controls reject stale source evidence, and BENCH distinguishes the tested behavior revision from later metadata-head gates. |
+| `tests/scripts/test_hdma_remote_evidence.py` and `tests/scripts/phase13-handoff-continuity.test.cjs` | ✓ VERIFIED | Remote-receipt validator controls use a constructed positive receipt and 16 synthetic negatives; the live Node handoff test passes 2/2 for execution and completed-stage routes. Actual GitHub API evidence is recorded separately in `13-ASAN-ADDED-COST.json`. |
+| `cmake/ExpectedTests.cmake`, installed-consumer CMake glue and `.github/workflows/ci.yml` | ✓ VERIFIED | Required inventories and relocated C/C++ consumers are registered; exact-head CI and package jobs pass. |
 
 ## Key Link Verification
 
@@ -182,7 +207,12 @@ The installed artifact verifier checked all plan-declared artifacts: 49/49 passe
 | `tests/test_samesuite_hdma.c` | `tests/external/cgb-hdma-dispositions.json` | executed-case dispositions | ✓ WIRED | Test cases and disposition checks agree; pending/absent data cannot count as a pass. |
 | `tests/consumers/c/main.c` | `tests/consumers/cpp/main.cpp` | parallel installed consumers | ✓ WIRED | Not a direct call between files: each is separately wired to the installed library and tests the same inline guest/API contract. |
 | `docs/native-integration.md` | `docs/support/unreleased.md` | public API/support claim agreement | ✓ WIRED | Cross-surface contract checks agree on API and qualified behavior. |
-| `tests/scripts/cgb-hdma-prohibition.test.cjs` | `13-BENCH.md` | evidence and gate closure | ✓ WIRED | CTest and actual installed OpenGSD gate run RED/clean/live checks; evidence and pending remote lanes are recorded in BENCH. |
+| `tests/scripts/cgb-hdma-prohibition.test.cjs` | `13-BENCH.md` | evidence and gate closure | ✓ WIRED | CTest and actual installed OpenGSD gate run RED/clean/live checks; exact-head hosted run identities are recorded in BENCH. |
+| `verify-hdma-source-revision.py` | `13-BENCH.md` | source identity / tree-delta contract | ✓ WIRED | Closure runs 26 source-revision controls; the diff from tested `3cdcef2` to exact CI head `0f15a05` is empty for source, test, fixture, build and workflow files. |
+| `tests/scripts/test_hdma_remote_evidence.py` | `.planning/phases/GB-13-cgb-hdma/verify-hdma-closure.py::validate_remote_evidence` | constructed positive and negative receipts | ✓ WIRED | The registered control driver validates its synthetic receipt fixtures: one positive and 16 negative controls. It tests the validator contract; it does not fetch GitHub or consume the committed API evidence. |
+| `.planning/phases/GB-13-cgb-hdma/13-ASAN-ADDED-COST.json::post_review_hosted_evidence` | `.planning/phases/GB-13-cgb-hdma/13-ASAN-ADDED-COST.json::optional_validator_receipt` | GitHub API run/job/event/head records normalized to the validator schema | ✓ VERIFIED | The committed raw run records include all job outcomes for the three exact-head PR runs; the adjacent normalized receipt records the three authoritative contexts. The strict validator accepted this receipt and rejected its failed-result twin. |
+| `tests/scripts/phase13-handoff-continuity.test.cjs` | `continue.md` / `verify-hdma-closure.py` | live and completed-stage handoff | ✓ WIRED | Direct Node test passed 2/2 after the continuation update; it checks the live route, completed-stage route, phase pause and invalid-stage control. |
+| `tests/consumers/{c,cpp}/CMakeLists.txt` | `cmake/RunInstalledConsumer.cmake` / `cmake/VerifyInstalledPackage.cmake` | relocated installed consumers | ✓ WIRED | Preview run `38671449197` passed 4/4 jobs; CI run `38671449176` passed all 8, including the CMake-floor relocated inventory. |
 
 ## Data-Flow Trace (Level 4)
 
@@ -215,7 +245,7 @@ No `probe-*.sh` files were found or declared by the Phase 13 plans/summaries; no
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |---|---|---|---|---|
-| CGB-07 | 13-01 through 13-12 | General-purpose and HBlank VRAM DMA with bounded runs, CPU stalls, cancellation/readback, HALT, mapping and qualified model behavior | ✓ SATISFIED | All observable behavior criteria pass in code and fresh local test evidence; exact-current hosted lane closure remains the plan evidence gap above. No additional Phase 13 requirement is orphaned. |
+| CGB-07 | 13-01 through 13-12 | General-purpose and HBlank VRAM DMA with bounded runs, CPU stalls, cancellation/readback, HALT, mapping and qualified model behavior | ✓ SATISFIED | All observable behavior criteria pass in code, fresh local tests and exact-reviewed-head hosted CI; all 209 machine-readable coverage entries pass. No additional Phase 13 requirement is orphaned. |
 
 ## Anti-Patterns Found
 
@@ -225,13 +255,13 @@ No `probe-*.sh` files were found or declared by the Phase 13 plans/summaries; no
 
 ## Human Verification Required
 
-None. Physical CGB-E qualification is deliberately UNKNOWN/POLICY and outside this phase's software evidence claim; optional CGB-C Mealybug data is rights-gated, not run, informational only, and outside the CGB-E denominator. The remaining gap is an automated exact-revision CI evidence requirement, not a request for manual hardware UAT.
+None. Physical CGB-E qualification is deliberately UNKNOWN/POLICY and outside this phase's software evidence claim; optional CGB-C Mealybug data is rights-gated, not run, informational only, and outside the CGB-E denominator. The reviewed behavior revision has the required automated lane evidence. The final report/continuation metadata head still needs its own exact-head checks before merge, per the project handoff contract.
 
 ## Gaps Summary
 
-The CGB-07 behavior is implemented and its current-source native, player, installed-consumer, SameSuite, Magen, HALT, cancellation, address, and partition tests pass. One 13-12 plan acceptance truth remains unmet: current exact-head hosted sanitizer and fixture-reproduction results are pending. `13-BENCH.md` correctly labels older successful hosted runs as historical. Do not treat the phase as fully verified until the required checks pass on the exact reviewed source revision.
+All 37 merged roadmap and plan truths are verified. Current-source native, player, installed-consumer, SameSuite, Magen, HALT, cancellation, address, and partition checks pass; exact reviewed behavior head `0f15a05` also passes the required CI, fixture-reproduction, and preview-package jobs. The final report/continuation metadata head remains subject to its own exact-head CI before merge. Physical CGB-E remains UNKNOWN/POLICY, and no Mealybug CGB-C bytes were fetched.
 
 ---
 
-_Verified: 2026-10-15T02:30:45Z_  
+_Verified: 2026-10-15T03:24:47Z_
 _Verifier: the agent (gsd-verifier)_

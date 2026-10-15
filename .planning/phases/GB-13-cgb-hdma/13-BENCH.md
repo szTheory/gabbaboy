@@ -22,7 +22,23 @@ The source-revision gate and optional remote-receipt validator were fixed after 
 | SDL3 player Debug | 1087/1087, zero failures/errors/skips | 75.27 s | `build-player/phase13-review-player-3cdcef2.xml`, SHA-256 `dd129d495530184fc91e4b766ce75ae10d16036dc64529b3633e8c40d23f46c0` |
 | Relocated installed consumers/package | 6/6, zero failures/errors/skips | 1.41 s | `build/phase13-review-installed-complete-3cdcef2.xml`, SHA-256 `a27078cac149ae0df6b57fbd225e7c57f793b6985d8f94b33f2dfb7f122eb77a` |
 
-The current native inventory is 994 names: 96 added versus Phase 12, none removed. The extra post-review target checks the optional remote receipt with one positive and 16 negative controls. Source revision controls pass 26/26; the completed-stage handoff has a positive and wrong-stage negative control. The actual OpenGSD claim producer passed fail-first, clean and live checks again. The frozen DMG baseline has zero changed rows. These observations are single samples, no warm-up, with unquantified uncertainty, and make no speedup claim. Hosted ASan/UBSan, fixture reproduction and package checks at the final published metadata head remain pending; the historical hosted evidence below is not reused as that proof.
+The current native inventory is 994 names: 96 added versus Phase 12, none removed. The extra post-review target checks the optional remote receipt with one positive and 16 negative controls. Source revision controls pass 26/26; the completed-stage handoff has a positive and wrong-stage negative control. The actual OpenGSD claim producer passed fail-first, clean and live checks again. The frozen DMG baseline has zero changed rows. These observations are single samples, no warm-up, with unquantified uncertainty, and make no speedup claim. Hosted ASan/UBSan, fixture reproduction and package checks passed at published reviewed head `0f15a05c30a30a0a73b5227906b648e85ae7a280`, as recorded below. The source/test/fixture bytes match reviewed source `3cdcef2`; historical `690c081` results are not reused as this proof. Any later metadata head requires its own exact-head checks, available on GitHub under that head.
+
+## Post-review exact-head hosted evidence — `0f15a05`
+
+All three runs are completed successful `pull_request` events with exact head `0f15a05c30a30a0a73b5227906b648e85ae7a280`, independently read from the GitHub API. Every job is completed/success; no skipped or pending job is counted as green.
+
+| Workflow | Run | Jobs | Evidence |
+|---|---:|---:|---|
+| ci | [38671449176](https://github.com/szTheory/gabbaboy/actions/runs/38671449176) | 8/8 | ASan/UBSan 989 cases, 624.45 s; macOS native 994, 544.12 s; Linux native 994, 318.27 s; Windows 982, 687.63 s; CMake 3.25.3 base 989, 633.27 s and relocated 994, 646.71 s; player gate, package and required-native all success |
+| fixture-repro | [38671449191](https://github.com/szTheory/gabbaboy/actions/runs/38671449191) | 7/7 | All original, SameSuite, Magen, Mooneye and RTC rebuild jobs success, including exact pinned HDMA fixtures |
+| preview-package-smoke | [38671449197](https://github.com/szTheory/gabbaboy/actions/runs/38671449197) | 4/4 | Downloaded macOS player package and Linux/macOS installed-package/external-consumer smoke, plus aggregate preview-package-smoke, all success |
+
+ASan job `116215272328` logged all 989 executed cases passing, no skips, no-host-clock proof, bounded-fuzz self-test and three deterministic regressions. Configured `fuzz_core` remains unavailable; no host-fuzzer campaign is claimed. Against the Phase 12 898-name inventory, all 96 added cases are present in the sanitizer log and total **16.86 s aggregate** (not wall-time increment). The new remote-evidence case took 0.04 s. The `post_review_observation` in [13-ASAN-ADDED-COST.json](13-ASAN-ADDED-COST.json) preserves all 96 rows and exact source/run/job identities, alongside the unchanged historical 95-row observation. One sample, no warm-up, 0.01 s log precision, unquantified uncertainty; different runner instances/inventories preclude causal performance conclusions.
+
+The macOS player build job `116215300110` passed 98/98 player tests in 16.23 s and extracted SDL 3.4.18 package smoke. Package SHA-256 is `c9165786b9c1f5cb09644cfaab82cdea2a2f0436706178886263ee223f9ce747`; downstream job `116215272459` downloaded and passed that exact package for `0f15a05`. This is artifact/consumer evidence, not perceptual or hardware qualification.
+
+These checks close the previously pending D-21 hosted-lane acceptance at the reviewed behavior revision. Later review-report, requirement and handoff metadata must still receive separate exact-head checks before merge; the newest PR head's actual GitHub checks are the authority.
 
 ## Historical full test lanes — source `690c081`
 

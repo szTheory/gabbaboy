@@ -395,5 +395,599 @@
       "name": "samesuite_repro_selfcheck",
       "seconds": 0.75
     }
-  ]
+  ],
+  "post_review_observation": {
+    "tested_head": "0f15a05c30a30a0a73b5227906b648e85ae7a280",
+    "reviewed_source_revision": "3cdcef2831ae71564b75186e976296275f59b68d",
+    "run_id": 38671449176,
+    "job_id": 116215272328,
+    "event": "pull_request",
+    "configuration": "GitHub-hosted Ubuntu 22.04 x64, Debug ASan/UBSan, parallel 4",
+    "samples": 1,
+    "warmup": 0,
+    "uncertainty": "not quantified",
+    "precision": "CTest log values rounded to 0.01 second; aggregate is not wall-time increment",
+    "executed": 989,
+    "wall_seconds": 624.45,
+    "added_count": 96,
+    "added_seconds": 16.86,
+    "added_cases": [
+      {
+        "name": "cgb_hdma_visibility",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_visibility_controls",
+        "seconds": 0.02
+      },
+      {
+        "name": "cgb_hdma_tracer_ld_sp",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_tracer_cb",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_tracer_controls",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_tracer_partition",
+        "seconds": 0.02
+      },
+      {
+        "name": "cgb_hdma_tracer_outputs",
+        "seconds": 0.02
+      },
+      {
+        "name": "cgb_hdma_trigger_matrix",
+        "seconds": 0.02
+      },
+      {
+        "name": "cgb_hdma_state_matrix",
+        "seconds": 0.02
+      },
+      {
+        "name": "cgb_hdma_trigger_controls",
+        "seconds": 0.02
+      },
+      {
+        "name": "cgb_hdma_timing_policy",
+        "seconds": 0.02
+      },
+      {
+        "name": "cgb_hdma_overflow_policy",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_address_matrix",
+        "seconds": 0.03
+      },
+      {
+        "name": "cgb_hdma_lifecycle",
+        "seconds": 0.02
+      },
+      {
+        "name": "cgb_hdma_resource_bounds",
+        "seconds": 0.04
+      },
+      {
+        "name": "cgb_hdma_hostile_seeds",
+        "seconds": 0.03
+      },
+      {
+        "name": "cgb_hdma_timing_sensitivity",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_lifecycle_controls",
+        "seconds": 0.02
+      },
+      {
+        "name": "cgb_hdma_resource_bounds_controls",
+        "seconds": 0.02
+      },
+      {
+        "name": "cgb_hdma_hostile_seeds_controls",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_state_matrix_controls",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_timing_policy_controls",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_trigger_matrix_controls",
+        "seconds": 0.02
+      },
+      {
+        "name": "cgb_hdma_address_matrix_controls",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_overflow_policy_controls",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_guest_halt",
+        "seconds": 0.02
+      },
+      {
+        "name": "cgb_hdma_guest_controls",
+        "seconds": 0.03
+      },
+      {
+        "name": "cgb_hdma_guest_banks",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_guest_steal",
+        "seconds": 0.07
+      },
+      {
+        "name": "cgb_hdma_partition_midbyte",
+        "seconds": 0.23
+      },
+      {
+        "name": "cgb_hdma_original_fixture",
+        "seconds": 0.88
+      },
+      {
+        "name": "cgb_hdma_partition_outputs",
+        "seconds": 0.33
+      },
+      {
+        "name": "cgb_hdma_partition_lost_remainder_control",
+        "seconds": 0.17
+      },
+      {
+        "name": "cgb_hdma_partition_order_control",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_competing_stalls",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_competing_stalls_controls",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_stop_policy",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_stop_policy_controls",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_oam_order",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_oam_order_controls",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_guest_steal_no_steal_mutant",
+        "seconds": 0.02
+      },
+      {
+        "name": "cgb_hdma_guest_steal_no_steal_control",
+        "seconds": 0.02
+      },
+      {
+        "name": "cgb_hdma_mutant_no_steal",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_partition_multicut",
+        "seconds": 1.14
+      },
+      {
+        "name": "cgb_hdma_mutant_no_copy",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_mutant_no_copy_control",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_mutant_duplicate_copy",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_mutant_duplicate_copy_control",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_mutant_wrong_vbk",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_mutant_no_steal_control",
+        "seconds": 0.06
+      },
+      {
+        "name": "cgb_hdma_mutant_wrong_vbk_control",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_mutant_unmasked_address",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_mutant_wrong_count",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_mutant_unmasked_address_control",
+        "seconds": 0.02
+      },
+      {
+        "name": "cgb_hdma_mutant_wrong_cancel",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_mutant_wrong_count_control",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_mutant_speed_scaled",
+        "seconds": 0
+      },
+      {
+        "name": "cgb_hdma_mutant_wrong_cancel_control",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_partition_windows",
+        "seconds": 1.36
+      },
+      {
+        "name": "cgb_hdma_mutant_halt_admission",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_mutant_speed_scaled_control",
+        "seconds": 0.02
+      },
+      {
+        "name": "cgb_hdma_mutant_false_trigger",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_mutant_halt_admission_control",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_mutant_lost_dma_irq",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_mutant_false_trigger_control",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_mutant_lost_dma_irq_control",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_mutant_dma_realign",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_mutant_shifted_order",
+        "seconds": 0
+      },
+      {
+        "name": "cgb_hdma_mutant_dma_realign_control",
+        "seconds": 0.02
+      },
+      {
+        "name": "cgb_hdma_mutant_lost_phase",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_mutant_shifted_order_control",
+        "seconds": 0.02
+      },
+      {
+        "name": "cgb_hdma_mutant_lost_phase_control",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_mutant_anchor_guard",
+        "seconds": 0.07
+      },
+      {
+        "name": "magentests_manifest_self_check",
+        "seconds": 0.03
+      },
+      {
+        "name": "magentests_repro_self_test",
+        "seconds": 0.26
+      },
+      {
+        "name": "magentests_hblank_vram_dma",
+        "seconds": 0.68
+      },
+      {
+        "name": "samesuite_hdma_gbc_dma_cont",
+        "seconds": 1.24
+      },
+      {
+        "name": "samesuite_hdma_gdma_addr_mask",
+        "seconds": 1.28
+      },
+      {
+        "name": "cgb_hdma_magen_controls",
+        "seconds": 2.04
+      },
+      {
+        "name": "samesuite_hdma_hdma_lcd_off",
+        "seconds": 1.21
+      },
+      {
+        "name": "cgb_hdma_dispositions",
+        "seconds": 0.04
+      },
+      {
+        "name": "cgb_hdma_dispositions_selftest",
+        "seconds": 0.07
+      },
+      {
+        "name": "samesuite_hdma_hdma_mode0",
+        "seconds": 1.27
+      },
+      {
+        "name": "cgb_hdma_claims_contract",
+        "seconds": 0.05
+      },
+      {
+        "name": "cgb_hdma_claims_contract_native",
+        "seconds": 0.05
+      },
+      {
+        "name": "cgb_hdma_lane_contract",
+        "seconds": 0.04
+      },
+      {
+        "name": "cgb_hdma_lane_contract_selftest",
+        "seconds": 0.05
+      },
+      {
+        "name": "cgb_hdma_remote_evidence_selftest",
+        "seconds": 0.04
+      },
+      {
+        "name": "cgb_hdma_claims_contract_selftest",
+        "seconds": 0.21
+      },
+      {
+        "name": "samesuite_hdma_gbc_dma_cont_control",
+        "seconds": 1.17
+      },
+      {
+        "name": "samesuite_hdma_gbc_dma_cont_corrupted_result_control",
+        "seconds": 1.19
+      },
+      {
+        "name": "samesuite_repro_selfcheck",
+        "seconds": 0.71
+      },
+      {
+        "name": "cgb_hdma_not_installed",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_not_installed_selftest",
+        "seconds": 0
+      },
+      {
+        "name": "cgb_hdma_not_installed_samesuite_selftest",
+        "seconds": 0.01
+      },
+      {
+        "name": "cgb_hdma_not_installed_directory_selftest",
+        "seconds": 0.01
+      }
+    ]
+  },
+  "post_review_hosted_evidence": {
+    "headSha": "0f15a05c30a30a0a73b5227906b648e85ae7a280",
+    "runs": [
+      {
+        "id": 38671449176,
+        "name": "ci",
+        "event": "pull_request",
+        "headSha": "0f15a05c30a30a0a73b5227906b648e85ae7a280",
+        "status": "completed",
+        "conclusion": "success",
+        "attempt": 1,
+        "jobs": [
+          {
+            "id": 116215272169,
+            "name": "native-macos-arm64",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 116215272326,
+            "name": "native-linux-x64",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 116215272328,
+            "name": "linux-asan-ubsan",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 116215272363,
+            "name": "cmake-floor-3.25.3",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 116215272377,
+            "name": "player-gate",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 116215272397,
+            "name": "native-windows-x64",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 116215300110,
+            "name": "macos-player-package",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 116221404600,
+            "name": "required-native",
+            "status": "completed",
+            "conclusion": "success"
+          }
+        ]
+      },
+      {
+        "id": 38671449191,
+        "name": "fixture-repro",
+        "event": "pull_request",
+        "headSha": "0f15a05c30a30a0a73b5227906b648e85ae7a280",
+        "status": "completed",
+        "conclusion": "success",
+        "attempt": 1,
+        "jobs": [
+          {
+            "id": 116215272106,
+            "name": "mooneye-mbc-repro",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 116215272426,
+            "name": "mooneye-cgb-repro",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 116215272479,
+            "name": "mooneye-original-repro",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 116215272490,
+            "name": "rtc3test-repro",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 116215272527,
+            "name": "magentests-repro",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 116215272582,
+            "name": "fixture-repro",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 116215272678,
+            "name": "mooneye-candidate-repro",
+            "status": "completed",
+            "conclusion": "success"
+          }
+        ]
+      },
+      {
+        "id": 38671449197,
+        "name": "preview-package-smoke",
+        "event": "pull_request",
+        "headSha": "0f15a05c30a30a0a73b5227906b648e85ae7a280",
+        "status": "completed",
+        "conclusion": "success",
+        "attempt": 1,
+        "jobs": [
+          {
+            "id": 116215272189,
+            "name": "installed-package-smoke-macos-arm64",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 116215272351,
+            "name": "installed-package-smoke-linux-x64",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 116215272459,
+            "name": "player-package-smoke-macos",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 116221597116,
+            "name": "preview-package-smoke",
+            "status": "completed",
+            "conclusion": "success"
+          }
+        ]
+      }
+    ]
+  },
+  "optional_validator_receipt": {
+    "headSha": "0f15a05c30a30a0a73b5227906b648e85ae7a280",
+    "requiredJobs": [
+      "required-native",
+      "fixture-repro",
+      "preview-package-smoke"
+    ],
+    "results": [
+      {
+        "name": "required-native",
+        "workflowName": "ci",
+        "databaseId": 38671449176,
+        "attempt": 1,
+        "event": "pull_request",
+        "headSha": "0f15a05c30a30a0a73b5227906b648e85ae7a280",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "fixture-repro",
+        "workflowName": "fixture-repro",
+        "databaseId": 38671449191,
+        "attempt": 1,
+        "event": "pull_request",
+        "headSha": "0f15a05c30a30a0a73b5227906b648e85ae7a280",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "preview-package-smoke",
+        "workflowName": "preview-package-smoke",
+        "databaseId": 38671449197,
+        "attempt": 1,
+        "event": "pull_request",
+        "headSha": "0f15a05c30a30a0a73b5227906b648e85ae7a280",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  }
 }
