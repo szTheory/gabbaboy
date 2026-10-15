@@ -414,6 +414,8 @@ Plans:
 **Wave 10** *(blocked on Wave 9 completion)*
 - [x] 13-12-PLAN.md — Current-revision lane cost, evidence closure and phase pause
 
+Phase 13 automated UAT completed 2026-10-15: 45/45 deliverables, zero human checkpoints or gaps ([13-UAT.md](phases/GB-13-cgb-hdma/13-UAT.md)). Reuse this closed receipt unless covered behavior or evidence changes. Next owner-selected command: `/gsd-discuss-phase 14`.
+
 ### Phase 14: CGB-E Model Qualification and Corpus
 
 **Goal**: CGB-E specific APU and I/O differences are implemented under declared per-test applicability, and a headless CGB-E corpus reports honest denominators.

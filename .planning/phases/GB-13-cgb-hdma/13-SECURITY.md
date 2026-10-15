@@ -89,3 +89,7 @@ Approval: secured, 25/25 threats closed. This security verdict does not substitu
 | Threats found | 25 |
 | Closed | 25 |
 | Open | 0 |
+
+## UAT automation delta — 2026-10-15
+
+The portable core, guest-input boundaries, fixtures, dependency/workflow and package bytes are unchanged by the UAT work. Prior 25/25 threat dispositions therefore remain applicable. The strict source gate adds only the named data record `13-UAT.md`; its new independent negative case rejects a committed change to `verify-uat-contract.py` (27/27 controls). The UAT receipt is structural evidence, not a substitute for fresh behavioral or actual exact-head GitHub results. Independent focused code review reproduced and closed hidden-manual-row and ambiguous-stage bypasses; 17 record mutations plus exact-stage/route controls now reject them. No new production trust boundary or accepted risk is introduced.

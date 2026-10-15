@@ -3,8 +3,8 @@ phase: GB-13-cgb-hdma
 fixed_at: "2026-10-15T02:13:53Z"
 review_path: .planning/phases/GB-13-cgb-hdma/13-REVIEW.md
 iteration: 1
-findings_in_scope: 2
-fixed: 2
+findings_in_scope: 4
+fixed: 4
 skipped: 0
 status: all_fixed
 ---
@@ -53,3 +53,7 @@ The full closure self-test was not run. Its existing source-revision guard inten
 _Fixed: 2026-10-15T02:13:53Z_
 _Fixer: the agent (gsd-code-fixer)_
 _Iteration: 1_
+
+## Focused UAT supplement — 2026-10-15
+
+CR-UAT-01 and WR-UAT-01 are fixed in `eeb1ce9` and `0f1bb34`, independently re-reviewed by the original reviewer. The UAT checker rejects the original hidden manual heading; the handoff rejects duplicate and compound stages. Actual complete UAT passes 45 mappings, all 17 closure controls pass, Node continuity passes 3/3 and source gate controls pass 27/27. These two findings supplement the original two fixes above (four fixed, zero skipped/open); their original timestamps and RED/GREEN evidence remain historical.

@@ -1,6 +1,6 @@
 ---
 phase: 13-cgb-hdma
-verified: 2026-10-15T03:45:43Z
+verified: 2026-10-15T12:57:12Z
 status: passed
 score: 37/37 must-haves verified
 covered_files:
@@ -35,9 +35,12 @@ covered_files:
   - ".planning/phases/GB-13-cgb-hdma/13-12-SUMMARY.md"
   - ".planning/phases/GB-13-cgb-hdma/13-ASAN-ADDED-COST.json"
   - ".planning/phases/GB-13-cgb-hdma/13-BENCH.md"
+  - ".planning/phases/GB-13-cgb-hdma/13-UAT.md"
+  - ".planning/phases/GB-13-cgb-hdma/COVERAGE.md"
   - ".planning/phases/GB-13-cgb-hdma/continue.md"
   - ".planning/phases/GB-13-cgb-hdma/verify-hdma-closure.py"
   - ".planning/phases/GB-13-cgb-hdma/verify-hdma-source-revision.py"
+  - ".planning/phases/GB-13-cgb-hdma/verify-uat-contract.py"
   - "README.md"
   - "cmake/ExpectedTests.cmake"
   - "cmake/GabbaBoyConfig.cmake.in"
@@ -101,7 +104,7 @@ covered_files:
   - "tests/test_cgb_visibility.c"
   - "tests/test_magentests.c"
   - "tests/test_samesuite_hdma.c"
-covered_digest: "v3:sha256:439fe655625f59d1ac33170e9fc103248c16fb1c21d95c6fd13d20c14e126456"
+covered_digest: "v3:sha256:db0ace57a0696f427e2c3e53fbe0aacd56613524cf504bb65c632bf12dd80045"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
@@ -116,7 +119,7 @@ re_verification:
 # Phase 13: CGB HDMA Verification Report
 
 **Phase Goal:** CGB software can use general-purpose and HBlank VRAM DMA with hardware-shaped CPU stall, cancel and readback, bounded per run.
-**Verified:** 2026-10-15T03:45:43Z
+**Verified:** 2026-10-15T12:57:12Z
 **Status:** passed
 **Re-verification:** Yes — after exact-head evidence closure
 
@@ -161,12 +164,12 @@ re_verification:
 | 33 | D-18/D-22: Model/oracle/rights qualifications and documentation have automated positive and mutated negative contracts with no routine human UAT. | ✓ VERIFIED | Claims checker, disposition checker, player contract and mutated controls pass; no plan human-check blocks or probe scripts are declared. |
 | 34 | D-21: Existing native/sanitizer/reproduction/consumer/package lanes run an exact inventory with measured added ASan and mutant cost and unchanged parallel4/timeout policy. | ✓ VERIFIED | GitHub API confirms all jobs completed successfully on exact reviewed behavior head `0f15a05`: CI 8/8 (ASan/UBSan 989/989 with no skips), fixture reproduction 7/7, and preview package 4/4. The source/test/fixture/build/workflow diff from freshly tested `3cdcef2` to `0f15a05` is empty; run IDs and measured costs are recorded in `13-BENCH.md`. |
 | 35 | D-18/D-22: The claim-language prohibition is machine-proven fail-first and resolves green/unflagged through the actual OpenGSD gate before verify-work; physical UNKNOWN is preserved. | ✓ VERIFIED | Actual OpenGSD producer clean, violating-subject RED and live GREEN evidence is recorded; projection/gate tests and negative controls pass; CGB-E remains UNKNOWN/POLICY. |
-| 36 | D-22/D-24: Current-revision evidence and machine-readable coverage qualify all delivered claims; skipped/stale remote checks cannot prove the revision green. | ✓ VERIFIED | `13-BENCH.md` binds the latest privacy-normalized local evidence to `10b0652`, records successful exact-head runs at `0f15a05`, and states that later metadata heads need their own checks; closure checker rejects skipped/stale results and machine-readable coverage passes. |
-| 37 | D-25: Planning stops before execution; after Phase13 execution/verification the durable route is Phase14 CGB-E Model Qualification and Corpus, never auto-advanced. | ✓ VERIFIED | Continuation now records the completed Phase 13 execution/verification stage, exact automated-UAT command, and Phase 14 as unstarted; the handoff contract passes both its live and completed-stage controls, with auto flags false. |
+| 36 | D-22/D-24: Current-revision evidence and machine-readable coverage qualify all delivered claims; skipped/stale remote checks cannot prove the revision green. | ✓ VERIFIED | Final local source `0f1bb34340d8aa4a1c71cb5f913170dd9d3fa9da` passes the 994/994 regression and focused UAT/source/closure gates; 45/45 UAT records classify automated with zero human items or gaps. The source-revision guard and remote receipt controls reject stale/changed inputs. Exact hosted evidence is verified for published heads `0f15a05` and `b7b441`; current local `0f1bb` is unpublished and its exact-head GitHub checks remain a merge gate. |
+| 37 | D-25: Planning stops after Phase 13 automated UAT; the durable route is Phase 14 CGB-E Model Qualification and Corpus, never auto-advanced. | ✓ VERIFIED | Continuation records Phase 13 automated UAT as the completed stage, routes to `/gsd-discuss-phase 14`, and keeps Phase 14 unstarted with both auto flags false. Live and completed-stage controls pass, as do the three Node continuity cases. |
 
 **Score:** 37/37 truths verified (0 present, behavior-unverified).
 
-### Exact-Head Hosted Evidence
+### Hosted Evidence at Previously Published Reviewed Heads
 
 GitHub API results show `pull_request`, `completed`, `success`, and exact head `0f15a05c30a30a0a73b5227906b648e85ae7a280` for all three runs. Every job in each run completed successfully:
 
@@ -178,9 +181,19 @@ GitHub API results show `pull_request`, `completed`, `success`, and exact head `
 
 The 96 added sanitizer cases total 16.86 seconds in this single run; uncertainty remains unquantified. Detailed measurements and run identities are in [13-BENCH.md](13-BENCH.md) and [13-ASAN-ADDED-COST.json](13-ASAN-ADDED-COST.json). This closes D-21 at the reviewed behavior revision. The later report/continuation metadata head has not yet been published and retains its own exact-head CI requirement before merge.
 
+The latest published PR head independently checked during this verification was `b7b44188338c330974200bd49159452985c69f54`. GitHub API event, head, status, and every job were checked; these three PR-event runs are complete and successful:
+
+| Workflow run | Jobs | Result |
+|---|---:|---|
+| [CI 38677996444](https://github.com/szTheory/gabbaboy/actions/runs/38677996444) | 8/8 | All jobs succeeded, including Linux ASan/UBSan 989/989 with no skips. |
+| [Fixture reproduction 38677996408](https://github.com/szTheory/gabbaboy/actions/runs/38677996408) | 7/7 | All fixture reproduction jobs succeeded. |
+| [Preview package 38677996566](https://github.com/szTheory/gabbaboy/actions/runs/38677996566) | 4/4 | All package and consumer jobs succeeded. |
+
+The UAT verification source `0f1bb34340d8aa4a1c71cb5f913170dd9d3fa9da` is currently local and unpublished. These earlier hosted runs do not establish hosted status for `0f1bb`; its exact-head required checks remain pending before merge. The emulator core, native/player behavior tests, fixtures, build files, and workflows are unchanged from the already hosted behavior revision; this local delta is UAT/handoff automation, its local Node continuity test, and metadata.
+
 ## Required Artifacts
 
-The installed artifact verifier checked all plan-declared artifacts: 49/49 passed across the twelve plans. The key implementations are substantive and used by their registered callers/tests. `query verify.key-links` returned “Target not referenced in source” for each generic plan edge; manual source, fixture, CMake, and consumer tracing below confirms the actual links rather than treating that generic matcher result as proof of a broken implementation. Behavioral closure includes the exact-source revision validator and its 26 controls, the hosted-receipt validator with one positive and 16 negative controls, and the live Node handoff test. Installed consumer CMake glue and CI inventory wiring are included in the covered set.
+The installed artifact verifier checked all plan-declared artifacts: 49/49 passed across the twelve plans. The key implementations are substantive and used by their registered callers/tests. `query verify.key-links` returned “Target not referenced in source” for each generic plan edge; manual source, fixture, CMake, and consumer tracing below confirms the actual links rather than treating that generic matcher result as proof of a broken implementation. Behavioral closure includes the exact-source revision validator and its 27 controls, the hosted-receipt validator with one positive and 16 negative controls, the 45-record UAT contract and its 17 negative controls, and the three live Node handoff cases. Installed consumer CMake glue and CI inventory wiring are included in the covered set.
 
 | Artifact group | Status | Details |
 |---|---|---|
@@ -190,8 +203,9 @@ The installed artifact verifier checked all plan-declared artifacts: 49/49 passe
 | SameSuite and Magen manifests, fixture sources/ROMs, reproduction scripts | ✓ VERIFIED | Pins, licensing, generated-byte digests and admission boundaries are checked by existing fixture tests. |
 | `tests/consumers/{c,cpp}/main.*` and installed package checks | ✓ VERIFIED | Both installed consumers execute guest DMA through public functions; package report passes 6/6. |
 | Player smoke and claim surfaces | ✓ VERIFIED | Existing player smoke validates source-derived visible pattern and no-transfer control; claim mirrors have mutation controls. |
-| `13-BENCH.md`, `13-ASAN-ADDED-COST.json`, `verify-hdma-closure.py` and `verify-hdma-source-revision.py` | ✓ VERIFIED | Exact-head evidence and closure artifacts are substantive; revision controls reject stale source evidence, and BENCH distinguishes the tested behavior revision from later metadata-head gates. |
-| `tests/scripts/test_hdma_remote_evidence.py` and `tests/scripts/phase13-handoff-continuity.test.cjs` | ✓ VERIFIED | Remote-receipt validator controls use a constructed positive receipt and 16 synthetic negatives; the live Node handoff test passes 2/2 for execution and completed-stage routes. Actual GitHub API evidence is recorded separately in `13-ASAN-ADDED-COST.json`. |
+| `13-BENCH.md`, `13-ASAN-ADDED-COST.json`, `verify-hdma-closure.py` and `verify-hdma-source-revision.py` | ✓ VERIFIED | Exact-head evidence and closure artifacts are substantive; revision controls reject stale source evidence, and BENCH distinguishes tested behavior revisions from the unpublished local UAT head. |
+| `13-UAT.md`, `COVERAGE.md`, and `verify-uat-contract.py` | ✓ VERIFIED | 45 exact deliverables across all 12 summaries classify automated with zero present entries, errors, human items, or gaps; all 12 bounded commit windows reconcile. The checker rejects 17 weakened or malformed records. API pre-gate accepts the explicit no-external-integration declaration and a malformed-matrix negative control fails. |
+| `tests/scripts/test_hdma_remote_evidence.py` and `tests/scripts/phase13-handoff-continuity.test.cjs` | ✓ VERIFIED | Remote-receipt validator controls use a constructed positive receipt and 16 synthetic negatives; the live Node handoff test passes 3/3 for execution/UAT routes and stale/conflicting-stage controls. Actual GitHub API evidence is recorded separately in `13-ASAN-ADDED-COST.json`. |
 | `cmake/ExpectedTests.cmake`, installed-consumer CMake glue and `.github/workflows/ci.yml` | ✓ VERIFIED | Required inventories and relocated C/C++ consumers are registered; exact-head CI and package jobs pass. |
 
 ## Key Link Verification
@@ -210,10 +224,12 @@ The installed artifact verifier checked all plan-declared artifacts: 49/49 passe
 | `tests/consumers/c/main.c` | `tests/consumers/cpp/main.cpp` | parallel installed consumers | ✓ WIRED | Not a direct call between files: each is separately wired to the installed library and tests the same inline guest/API contract. |
 | `docs/native-integration.md` | `docs/support/unreleased.md` | public API/support claim agreement | ✓ WIRED | Cross-surface contract checks agree on API and qualified behavior. |
 | `tests/scripts/cgb-hdma-prohibition.test.cjs` | `13-BENCH.md` | evidence and gate closure | ✓ WIRED | CTest and actual installed OpenGSD gate run RED/clean/live checks; exact-head hosted run identities are recorded in BENCH. |
-| `verify-hdma-source-revision.py` | `13-BENCH.md` | source identity / tree-delta contract | ✓ WIRED | Closure runs 26 source-revision controls; the diff from tested `3cdcef2` to exact CI head `0f15a05` is empty for source, test, fixture, build and workflow files. |
+| `verify-hdma-source-revision.py` | `13-BENCH.md` | source identity / tree-delta contract | ✓ WIRED | Source guard passes 27 controls; the diff from tested `3cdcef2` to exact CI head `0f15a05` is empty for source, test, fixture, build and workflow files. |
 | `tests/scripts/test_hdma_remote_evidence.py` | `.planning/phases/GB-13-cgb-hdma/verify-hdma-closure.py::validate_remote_evidence` | constructed positive and negative receipts | ✓ WIRED | The registered control driver validates its synthetic receipt fixtures: one positive and 16 negative controls. It tests the validator contract; it does not fetch GitHub or consume the committed API evidence. |
 | `.planning/phases/GB-13-cgb-hdma/13-ASAN-ADDED-COST.json::post_review_hosted_evidence` | `.planning/phases/GB-13-cgb-hdma/13-ASAN-ADDED-COST.json::optional_validator_receipt` | GitHub API run/job/event/head records normalized to the validator schema | ✓ VERIFIED | The committed raw run records include all job outcomes for the three exact-head PR runs; the adjacent normalized receipt records the three authoritative contexts. The strict validator accepted this receipt and rejected its failed-result twin. |
-| `tests/scripts/phase13-handoff-continuity.test.cjs` | `continue.md` / `verify-hdma-closure.py` | live and completed-stage handoff | ✓ WIRED | Direct Node test passed 2/2 after the continuation update; it checks the live route, completed-stage route, phase pause and invalid-stage control. |
+| `tests/scripts/phase13-handoff-continuity.test.cjs` | `continue.md` / `verify-hdma-closure.py` | execution, verification, and automated-UAT stage transitions | ✓ WIRED | Direct Node test passed 3/3; it checks execution-to-verification, completed verification-to-UAT, completed UAT-to-Phase14 discussion, stale route, duplicate/conflicting stage and phase pause. |
+| `13-UAT.md` / `verify-uat-contract.py` | all 12 `13-*-SUMMARY.md` coverage blocks | exact summary/coverage/evidence mapping | ✓ WIRED | The checker parsed all 45 structured deliverables as automated; 12/12 bounded commit windows match Git ancestry. Its 17 negative controls reject weakened, hidden-human, duplicate, malformed and misrouted records. |
+| `COVERAGE.md` | `api-coverage.verify-pre` gate | explicit no-external-integration declaration | ✓ WIRED | Current pre-gate reports passed with no API matrix required; an isolated malformed-matrix negative control is rejected. |
 | `tests/consumers/{c,cpp}/CMakeLists.txt` | `cmake/RunInstalledConsumer.cmake` / `cmake/VerifyInstalledPackage.cmake` | relocated installed consumers | ✓ WIRED | Preview run `38671449197` passed 4/4 jobs; CI run `38671449176` passed all 8, including the CMake-floor relocated inventory. |
 
 ## Data-Flow Trace (Level 4)
@@ -225,9 +241,15 @@ The installed artifact verifier checked all plan-declared artifacts: 49/49 passe
 | Original visible fixture/player smoke | rendered pattern and guest status | fixture CPU program and source-derived framebuffer pixels | Yes | ✓ FLOWING |
 | Magen/SameSuite fixtures | ROM guest output/readback | pinned third-party test ROMs through fixture harness | Yes | ✓ FLOWING |
 
+## Phase 13 Automated UAT and Handoff
+
+At local source `0f1bb34340d8aa4a1c71cb5f913170dd9d3fa9da`, the OpenGSD UAT checker classifies all 45 SUMMARY-backed deliverables from plans 13-01 through 13-12 as automated. It reports zero unclassified/present entries, errors, human checkpoints, or gaps; each of the 12 bounded commit claims matches its actual Git ancestor window. The checker’s 17 negative controls reject missing, malformed, weakened, duplicated, unparsed/manual, and misrouted records.
+
+The API pre-gate accepts `COVERAGE.md`’s explicit no-external-integration declaration, and the malformed-matrix negative control rejects. `verify-hdma-source-revision.py` passes 27 controls, including detection of UAT checker changes; closure self-test passes 11 local controls and 8 remote-receipt controls. The live prohibition and handoff checks pass, and Node continuity tests pass 3/3, including the completed Phase 13 UAT route to `/gsd-discuss-phase 14`, Phase 14 unstarted, and both auto flags false. No human checkpoint was introduced.
+
 ## Behavioral Spot-Checks
 
-The latest privacy-normalized full regression evidence is from source `10b0652b27fa72d89e6e0d64fafe0b9296d55b3c`: native 994/994 in 73.52 s, player 1087/1087 in 78.18 s, and relocated installed consumers/package 6/6 in 1.31 s, all with zero failures, errors, or skips. JUnit filenames and SHA-256 digests are in `13-BENCH.md`. The source/test/fixture/build/workflow bytes at this revision match the behavior revision qualified by the hosted runs below; the final report/continuation metadata head still needs its own exact-head checks before merge. Focused named tests passed during verification:
+The latest full regression evidence recorded for UAT source `0f1bb34340d8aa4a1c71cb5f913170dd9d3fa9da` is the configured 600-second bounded configure/build plus native CTest: 994/994 in 105.76 s with zero failures, errors, or skips. JUnit `build/phase13-uat-regression.xml` is recorded in `13-BENCH.md` with SHA-256 `a82c94670b64db34bc3956e401ee711266c4188f4d9bcf247e4d8bd6db7113e2`. The same final source passes focused CTest 9/9, Node 3/3, UAT controls 17/17, source guard 27/27, closure self-test 11 controls plus 8 remote controls, and the live handoff check. Earlier full native/player/package inventories at e556, eeb and 10b remain separately identified in BENCH; no result is relabeled across revisions. Exact-head hosted evidence for published revisions is above; current local `0f1bb` still needs its own GitHub checks before merge. Focused DMA behavior tests passed during the prior goal verification:
 
 | Behavior | Check | Result | Status |
 |---|---|---|---|
@@ -247,7 +269,7 @@ No `probe-*.sh` files were found or declared by the Phase 13 plans/summaries; no
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |---|---|---|---|---|
-| CGB-07 | 13-01 through 13-12 | General-purpose and HBlank VRAM DMA with bounded runs, CPU stalls, cancellation/readback, HALT, mapping and qualified model behavior | ✓ SATISFIED | All observable behavior criteria pass in code, fresh local tests and exact-reviewed-head hosted CI; all 209 machine-readable coverage entries pass. No additional Phase 13 requirement is orphaned. |
+| CGB-07 | 13-01 through 13-12 | General-purpose and HBlank VRAM DMA with bounded runs, CPU stalls, cancellation/readback, HALT, mapping and qualified model behavior | ✓ SATISFIED | All observable behavior criteria pass in code, fresh local tests and hosted evidence for the previously published reviewed behavior heads; all 209 machine-readable coverage entries pass. UAT has 45/45 automated records, including HALT and lifecycle claims, and no additional Phase 13 requirement is orphaned. |
 
 ## Anti-Patterns Found
 
@@ -257,13 +279,13 @@ No `probe-*.sh` files were found or declared by the Phase 13 plans/summaries; no
 
 ## Human Verification Required
 
-None. Physical CGB-E qualification is deliberately UNKNOWN/POLICY and outside this phase's software evidence claim; optional CGB-C Mealybug data is rights-gated, not run, informational only, and outside the CGB-E denominator. The reviewed behavior revision has the required automated lane evidence. The final report/continuation metadata head still needs its own exact-head checks before merge, per the project handoff contract.
+None. Physical CGB-E qualification is deliberately UNKNOWN/POLICY and outside this phase's software evidence claim; optional CGB-C Mealybug data is rights-gated, not run, informational only, and outside the CGB-E denominator. UAT is entirely automated (45 entries, zero human checkpoints). The current local UAT source has not yet been published and requires exact-head hosted checks before merge; that is a pending repository gate, not a human UAT item.
 
 ## Gaps Summary
 
-All 37 merged roadmap and plan truths are verified. Latest privacy-normalized local native, player, and installed-consumer suites at `10b0652` pass with zero failures, errors, or skips; exact reviewed behavior head `0f15a05` also passes the required CI, fixture-reproduction, and preview-package jobs. The final report/continuation metadata head remains subject to its own exact-head CI before merge. Physical CGB-E remains UNKNOWN/POLICY, and no Mealybug CGB-C bytes were fetched.
+All 37 merged roadmap and plan truths are verified. At local UAT source `0f1bb34340d8aa4a1c71cb5f913170dd9d3fa9da`, native regression passes 994/994 and the focused UAT, source, closure, API-coverage, and handoff checks pass; UAT classifies all 45 deliverables automated with no human items or gaps. Previously published reviewed heads `0f15a05` and `b7b441` have independently verified hosted runs; the current local `0f1bb` remains unpublished, so exact-head GitHub checks are still required before merge. Physical CGB-E remains UNKNOWN/POLICY, optional Mealybug CGB-C bytes remain rights-gated/not run, and neither is included as a claim.
 
 ---
 
-_Verified: 2026-10-15T03:45:43Z_
+_Verified: 2026-10-15T12:57:12Z_
 _Verifier: the agent (gsd-verifier)_

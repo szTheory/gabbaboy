@@ -4,13 +4,28 @@ These are bounded software-fixture and test-suite measurements. They do not qual
 
 ## Evidence revision and host
 
-- Source revision: `10b0652b27fa72d89e6e0d64fafe0b9296d55b3c`
+- Source revision: `0f1bb34340d8aa4a1c71cb5f913170dd9d3fa9da`
 - The privacy-normalized measurements immediately below use this exact source revision. Earlier post-review local measurements remain explicitly source `3cdcef2`, hosted evidence remains exact head `0f15a05`, and historical sections remain source `690c081`. No measurement is relabeled across revisions; each published head requires its own PR-event checks.
 - Runtime-mask mutant build-cost source revision: `41bb9bf9258f529e394ac14cf1396928281cdee0`.
 - Phase 12 inventory baseline: `8091fb591de7fb68e666be01d344f5f26ebedc5c` (`tests/expected-tests.txt`, 898 names).
 - Host class: Darwin arm64. Compiler: Apple clang 21.0.0. Generator: Ninja. Native/player CMake build type: Debug; C compilation uses `-g -std=c17`.
 - Model scope: the full suites mix unit, integration, fixture, mutation, and packaging checks. HDMA behavior-specific fixture evidence uses the bootless CGB-CPU-E software model. Physical CGB-E remains UNKNOWN/POLICY.
 - Samples: one full-suite run per configuration, no warm-up. CTest wall time and aggregate per-test time are different quantities. One sample does not estimate variance; uncertainty is not quantified (not zero). These are lane-cost observations, not emulator-speed measurements or comparable performance claims.
+
+## Automated UAT verification — 2026-10-15
+
+The current source revision above contains the local UAT/handoff automation and reviewed fixes. The full emulator suites below ran at `e556c1b160431852d9dcf48b17e54da21be328da`; `eeb1ce9` changes only the local UAT parser, handoff predicate and their controls. The final exact-stage fix at `0f1bb34` changes only the same local handoff predicate and CJS control; its focused CTest 9/9 (0.76 s), Node 3/3 and UAT 17 controls pass. The fresh checks verify those local changes. No full-suite result is relabeled across revisions.
+
+At source `e556c1b`, native Debug passed 994/994 in 148.80 s; SDL3 player Debug passed 1,087/1,087 in 156.02 s, zero failures/errors/skips. They ran concurrently, each with parallelism 4, on the same Darwin arm64 Debug host. One sample, no warm-up, uncertainty unquantified; these are suite costs, not emulator throughput.
+
+- Native Debug: `build/phase13-uat-native.xml`, SHA-256 `1f53d49543971355dc93f733cfc1609ac8af450c49a661a718423e247b1e11bf`.
+- SDL3 player Debug: `build-player/phase13-uat-player.xml`, SHA-256 `1ee4fe0d98863897ada17d3fa872cda2d37d9152fe709904f013c9fe51cfe936`.
+
+At current source `eeb1ce9`, focused CTest passed 9/9 in 0.79 s and exact relocated consumer/package checks passed 6/6 in 1.73 s, zero failures/errors/skips. Installed JUnit `build/phase13-uat-installed.xml` has SHA-256 `f0d051971fcf6c17c113309927e76253266a643679a8d62643972da426ac865c`. Local UAT, handoff, source-gate and claim controls pass.
+
+The frozen DMG baseline reports zero changed rows. Prior published execution head `b7b44188338c330974200bd49159452985c69f54` was independently rechecked: CI `38677996444` 8/8, fixture reproduction `38677996408` 7/7, preview `38677996566` 4/4, all completed-success PR-event jobs at that exact SHA. Final UAT metadata and automation require their own exact-head checks before merge; GitHub is authoritative for that receipt.
+
+Final source `0f1bb34340d8aa4a1c71cb5f913170dd9d3fa9da` completed the configured 600-second bounded regression gate: configure/build passed, native CTest 994/994 in 105.76 s, zero failures/errors/skips. JUnit `build/phase13-uat-regression.xml` has SHA-256 `a82c94670b64db34bc3956e401ee711266c4188f4d9bcf247e4d8bd6db7113e2`. This run independently exercises the prior-phase regression inventory after the final local automation fix.
 
 ## Current privacy-normalized receipt revision — `10b0652`
 

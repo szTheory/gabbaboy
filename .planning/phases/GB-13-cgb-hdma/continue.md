@@ -1,8 +1,12 @@
 # Phase 13 continuation
 
-Completed stage: **Phase 13 execution and goal verification complete**. The goal verification report passes 37/37 merged roadmap and plan truths, including CGB-07. Latest privacy-normalized local suites at source `10b0652b27fa72d89e6e0d64fafe0b9296d55b3c` passed native 994/994 in 73.52 s, SDL3 player 1,087/1,087 in 78.18 s, and relocated installed/package consumers 6/6 in 1.31 s, with zero failures, errors, or skips. This privacy-only revision changes the two Phase 13-09 RED receipt command output paths from absolute workspace paths to repository-relative paths; parsed evidence fields and results are unchanged. The source/test/fixture/build/workflow bytes match exact reviewed behavior head `0f15a05c30a30a0a73b5227906b648e85ae7a280`, whose three completed PR-event runs passed CI 8/8, fixture reproduction 7/7, and preview-package smoke 4/4. The Linux ASan/UBSan job passed 989/989 with no skips; package, consumer, and local regression identities are recorded in [13-BENCH.md](13-BENCH.md) and [13-12-SUMMARY.md](13-12-SUMMARY.md). The final report/continuation metadata head still requires its own exact-head checks before merge. Physical CGB-E remains UNKNOWN/POLICY.
-Next stage: **Phase 13 automated UAT**. Exact command: **`/gsd-verify-work 13`**.
-Next command: `/gsd-verify-work 13`.
+Completed stage: **Phase 13 automated UAT complete**.
+
+All 45 deliverables across 12 plans close automatically, zero human checkpoints or gaps. The exact mapping and no-repeat rule are in [13-UAT.md](13-UAT.md); the goal report is [13-VERIFICATION.md](13-VERIFICATION.md). Fresh full native 994/994 and SDL3 player 1,087/1,087 suites at source `e556c1b` pass with no skips. Reviewed source `eeb1ce9` passes focused 9/9 and exact installed/package consumers 6/6. The DMG baseline has zero changed rows. See [13-BENCH.md](13-BENCH.md) for source-qualified receipts; final published UAT metadata requires its own exact-head CI before the pre-authorized PR #69 merge. GitHub holds that final head and merge receipt.
+Next stage: **Phase 14 discussion**.
+Next command: `/gsd-discuss-phase 14`.
+
+Reuse this completed UAT and existing research/decisions; do not rerun verify-work, replan or ask a confirmation-only question on unchanged evidence. Reopen only changed covered behavior, a concrete regression or stale/unavailable evidence. D-069 and LESSONS GB-GSD-016 govern future phases by default. Both auto flags remain false; Phase 14 — CGB-E Model Qualification and Corpus remains unstarted.
 
 The Phase 13 software fixture denominator remains 5/5 for CGB-E; optional CGB-C evidence remains rights-gated and outside that denominator. The D-06/Pan Docs discrepancy and timing/APU/mode-3/game limits remain explicit. These software test and fixture results do not qualify physical hardware.
 

@@ -11,8 +11,16 @@ findings:
     severity: warning
     disposition: fixed
     title: "Player help compresses support claims and exclusions into one hard-to-scan paragraph"
+  - id: CR-UAT-01
+    severity: critical
+    disposition: fixed
+    title: "Unparsed manual checkpoints escaped UAT closure"
+  - id: WR-UAT-01
+    severity: warning
+    disposition: fixed
+    title: "Conflicting or compound stages permitted a stale handoff route"
 open: 0
-total: 2
+total: 4
 recorded: 2026-10-15T02:17:51.100Z
 ---
 
@@ -22,6 +30,8 @@ recorded: 2026-10-15T02:17:51.100Z
 |---------|----------|-------------|--------|
 | CR-01 | critical | fixed | 13-REVIEW-FIX.md |
 | WR-01 | warning | fixed | 13-REVIEW-FIX.md |
+| CR-UAT-01 | critical | fixed | 13-REVIEW-FIX.md UAT supplement; independent re-review at 0f1bb34 |
+| WR-UAT-01 | warning | fixed | 13-REVIEW-FIX.md UAT supplement; independent re-review at 0f1bb34 |
 
 Dispositions: `open` (recorded, not yet triaged), `fixed`, `skipped`, `deferred`.
 Set `deferred` by hand and put the reason in the Source cell; both are preserved. A `|` in the reason is kept as prose and escaped on the next run.

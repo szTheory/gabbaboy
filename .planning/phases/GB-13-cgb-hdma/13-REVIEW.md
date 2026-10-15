@@ -2,7 +2,7 @@
 phase: 13-cgb-hdma
 reviewed: 2026-10-15T02:06:17Z
 depth: standard
-files_reviewed: 65
+files_reviewed: 68
 files_reviewed_list:
   - .gitattributes
   - .github/workflows/fixture-repro.yml
@@ -69,11 +69,14 @@ files_reviewed_list:
   - tests/test_samesuite_hdma.c
   - .planning/phases/GB-13-cgb-hdma/verify-hdma-closure.py
   - .planning/phases/GB-13-cgb-hdma/verify-hdma-source-revision.py
+  - .planning/phases/GB-13-cgb-hdma/COVERAGE.md
+  - .planning/phases/GB-13-cgb-hdma/verify-uat-contract.py
+  - tests/scripts/phase13-handoff-continuity.test.cjs
 findings:
-  critical: 1
-  warning: 1
+  critical: 2
+  warning: 2
   info: 0
-  total: 2
+  total: 4
 status: issues_found
 ---
 
@@ -117,3 +120,15 @@ Task-level RED/GREEN evidence was checked against the recorded commit sequence. 
 _Reviewed: 2026-10-15T02:06:17Z_  
 _Reviewer: the agent (gsd-code-reviewer)_  
 _Depth: standard_
+
+## Focused UAT automation review — 2026-10-15
+
+The unchanged emulator/fixture scope retains the prior full review. Five automation files introduced by `e556c1b` were independently reviewed at standard depth (three new unique files; total union 68). Both findings below were fixed and independently reproduced as rejected at `0f1bb34`; no additional open findings remain.
+
+### CR-UAT-01: Unparsed manual checkpoints escaped the UAT closure parser
+
+**Classification:** BLOCKER. A scratch complete record containing an extra unnumbered `### Manual checkpoint` with pending/human fields was accepted as 45 passes. Fixed in `eeb1ce9`: require exactly sequential headings, no test prelude and only known row fields; 17 negative controls include unparsed/manual content. Independent re-review reproduced rejection at `0f1bb34`.
+
+### WR-UAT-01: Conflicting or compound stage declarations permitted a stale route
+
+**Classification:** WARNING. Substring matching accepted inconsistent current/completed fields, then prefix matching accepted a compound declaration with a stale verify-work route. Fixed in `eeb1ce9` and `0f1bb34`: one standalone normalized exact stage, matching STATE/continuation, and one exact stage-specific command. CJS controls reject both original counterexamples and the compound residual; the actual completed-UAT handoff passes. Independent re-review confirms all three bypasses closed.
