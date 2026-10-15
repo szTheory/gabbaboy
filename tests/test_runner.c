@@ -171,10 +171,13 @@ static int run_expected_disposition_controls(const char *tampered_manifest,const
     REQUIRE(read_bounded(tampered_manifest,tampered,MAX_MANIFEST,&n)&&read_bounded(untampered_manifest,untampered,MAX_MANIFEST,&m));
     tampered[n]=0;untampered[m]=0;
     char tampered_expect[32],untampered_expect[32],tampered_disposition[32],untampered_disposition[32];
+    char vblank_expect[32],vblank_disposition[32];
     REQUIRE(manifest_fixture_string((const char *)tampered,"boot_hwio-C","expect",tampered_expect));
     REQUIRE(manifest_fixture_string((const char *)untampered,"boot_hwio-C","expect",untampered_expect));
     REQUIRE(manifest_fixture_string((const char *)tampered,"boot_hwio-C","observed_disposition",tampered_disposition));
     REQUIRE(manifest_fixture_string((const char *)untampered,"boot_hwio-C","observed_disposition",untampered_disposition));
+    REQUIRE(manifest_fixture_string((const char *)untampered,"vblank_stat_intr-C","expect",vblank_expect));
+    REQUIRE(manifest_fixture_string((const char *)untampered,"vblank_stat_intr-C","observed_disposition",vblank_disposition));
     REQUIRE(strcmp(tampered_expect,"pass")==0&&strcmp(untampered_expect,"pass")==0); /* source assertion stays pass */
     REQUIRE(strcmp(tampered_disposition,"pass")==0);                                  /* tamper is in the observation */
     REQUIRE(strcmp(untampered_disposition,"expected-failure")==0);
@@ -212,6 +215,19 @@ static int run_expected_disposition_controls(const char *tampered_manifest,const
     REQUIRE(strcmp(status,"xfail")==0&&strcmp(reason,"declared-failure-signature")==0&&code==0);
     printf("control=exact-failure-disposition alias=unused_hwio-C status=%s observed=fail callback_pc=%04x result_pc=%04x\n",status,evidence.callback_pc,evidence.result_pc);
 
+    const fixture_case *vblank=cgb_case_by_alias("vblank_stat_intr-C");REQUIRE(vblank!=NULL);
+    REQUIRE(strcmp(vblank_expect,"pass")==0&&strcmp(vblank_disposition,"expected-failure")==0);
+    row=*vblank;row.observed_disposition=GBB_OBSERVED_PASS;
+    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code,&evidence));
+    REQUIRE(strcmp(status,"fail")==0&&code==1&&evidence.reached_result&&evidence.result_pc==row.result_pc);
+    REQUIRE(evidence.callback_result!=NULL&&strcmp(evidence.callback_result,"fail")==0);
+    REQUIRE(evidence.callback_pc==row.fail_callback_pcs[0]);
+    printf("observed=fail alias=vblank_stat_intr-C callback_result=%s callback_pc=%04x result_pc=%04x\n",evidence.callback_result,evidence.callback_pc,evidence.result_pc);
+    REQUIRE(apply_manifest_disposition(&row,vblank_disposition));
+    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code,&evidence));
+    REQUIRE(strcmp(status,"xfail")==0&&strcmp(reason,"declared-failure-signature")==0&&code==0);
+    printf("control=exact-failure-disposition alias=vblank_stat_intr-C status=%s observed=fail callback_pc=%04x result_pc=%04x\n",status,evidence.callback_pc,evidence.result_pc);
+
     /* A changed observed disposition that claims pass still fails on the real failing guest. */
     row=*compiled;
     REQUIRE(apply_manifest_disposition(&row,tampered_disposition));
@@ -230,6 +246,15 @@ static int run_expected_disposition_controls(const char *tampered_manifest,const
     REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code,&evidence));
     REQUIRE(strcmp(status,"unexpected-failure")==0&&code==1);
     printf("control=expected-failure-wrong-callback alias=boot_hwio-C status=%s reason=%s code=%d\n",status,reason,code);
+
+    row=*vblank;row.fail_callback_pcs[0]++;
+    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code,&evidence));
+    REQUIRE(strcmp(status,"unexpected-failure")==0&&code==1);
+    printf("control=expected-failure-wrong-callback alias=vblank_stat_intr-C status=%s reason=%s code=%d\n",status,reason,code);
+    row=*vblank;row.fail_registers[0]++;
+    REQUIRE(run_cgb_row(&row,dir,&status,&reason,&code,&evidence));
+    REQUIRE(strcmp(status,"unexpected-failure")==0&&code==1);
+    printf("control=expected-failure-changed-registers alias=vblank_stat_intr-C status=%s reason=%s code=%d\n",status,reason,code);
 
     /* A passing ROM cannot be called an expected failure. */
     const fixture_case *passing=cgb_case_by_alias("boot_regs-cgb");REQUIRE(passing!=NULL);

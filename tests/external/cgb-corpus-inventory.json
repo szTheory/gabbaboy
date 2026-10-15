@@ -890,9 +890,18 @@
     },
     {
       "assertion_contract": {
-        "count": null,
-        "rows": null,
-        "state": "pending-qualification"
+        "count": 1,
+        "state": "qualified",
+        "rows": [
+          {
+            "id": "ld-b-b-result",
+            "expected_disposition": "pass",
+            "observed_result": "pass",
+            "evaluator_status": "pass",
+            "callback_pc": "0x0166",
+            "result_pc": "0x409a"
+          }
+        ]
       },
       "author_expectation": {
         "class": "author-header",
@@ -900,14 +909,24 @@
         "value": ";   pass: DMG, MGB, SGB, SGB2, CGB, AGB, AGS"
       },
       "evaluator_disposition": {
-        "reference": null,
-        "state": "not-qualified",
-        "value": null
+        "reference": "fixtures/mooneye-cgb/manifest.json",
+        "state": "pass",
+        "value": "pass",
+        "reason": "author-pass-assertion",
+        "callback_pc": "0x0166",
+        "result_pc": "0x409a"
       },
       "execution": {
-        "observed_result": null,
-        "state": "not-run-by-inventory",
-        "terminal": false
+        "state": "completed",
+        "terminal": true,
+        "observed_result": "pass",
+        "evaluator_status": "pass",
+        "reason": "none",
+        "callback_pc": "0x0166",
+        "result_pc": "0x409a",
+        "ticks": 1805896,
+        "budget_half_dots": 2000000,
+        "manifest_sha256": "6efe380d1eae6f2ef1cfc17375d7e71610c9135fdeb67a1452ecf72b26e02fe9"
       },
       "id": "mooneye:acceptance/instr/daa.s",
       "mode": "compat",
@@ -917,15 +936,24 @@
       "speed": "normal",
       "suite": "mooneye",
       "test_binding": {
-        "ctest_name": null,
-        "state": "pending-registration"
+        "ctest_name": "cgb_corpus_mooneye_daa",
+        "state": "bound"
       }
     },
     {
       "assertion_contract": {
-        "count": null,
-        "rows": null,
-        "state": "pending-qualification"
+        "count": 1,
+        "state": "qualified",
+        "rows": [
+          {
+            "id": "ld-b-b-result",
+            "expected_disposition": "pass",
+            "observed_result": "pass",
+            "evaluator_status": "pass",
+            "callback_pc": "0x0175",
+            "result_pc": "0x4051"
+          }
+        ]
       },
       "author_expectation": {
         "class": "author-header",
@@ -933,14 +961,24 @@
         "value": ";   pass: DMG, MGB, SGB, SGB2, CGB, AGB, AGS"
       },
       "evaluator_disposition": {
-        "reference": null,
-        "state": "not-qualified",
-        "value": null
+        "reference": "fixtures/mooneye-cgb/manifest.json",
+        "state": "pass",
+        "value": "pass",
+        "reason": "author-pass-assertion",
+        "callback_pc": "0x0175",
+        "result_pc": "0x4051"
       },
       "execution": {
-        "observed_result": null,
-        "state": "not-run-by-inventory",
-        "terminal": false
+        "state": "completed",
+        "terminal": true,
+        "observed_result": "pass",
+        "evaluator_status": "pass",
+        "reason": "none",
+        "callback_pc": "0x0175",
+        "result_pc": "0x4051",
+        "ticks": 5769264,
+        "budget_half_dots": 6000000,
+        "manifest_sha256": "6efe380d1eae6f2ef1cfc17375d7e71610c9135fdeb67a1452ecf72b26e02fe9"
       },
       "id": "mooneye:acceptance/timer/div_write.s",
       "mode": "compat",
@@ -950,15 +988,24 @@
       "speed": "normal",
       "suite": "mooneye",
       "test_binding": {
-        "ctest_name": null,
-        "state": "pending-registration"
+        "ctest_name": "cgb_corpus_mooneye_div_write",
+        "state": "bound"
       }
     },
     {
       "assertion_contract": {
-        "count": null,
-        "rows": null,
-        "state": "pending-qualification"
+        "count": 1,
+        "state": "qualified",
+        "rows": [
+          {
+            "id": "ld-b-b-result",
+            "expected_disposition": "pass",
+            "observed_result": "pass",
+            "evaluator_status": "pass",
+            "callback_pc": "0x4000",
+            "result_pc": "0x4327"
+          }
+        ]
       },
       "author_expectation": {
         "class": "author-header",
@@ -966,14 +1013,24 @@
         "value": ";   pass: DMG, MGB, SGB, SGB2, CGB, AGB, AGS"
       },
       "evaluator_disposition": {
-        "reference": null,
-        "state": "not-qualified",
-        "value": null
+        "reference": "fixtures/mooneye-cgb/manifest.json",
+        "state": "pass",
+        "value": "pass",
+        "reason": "author-pass-assertion",
+        "callback_pc": "0x4000",
+        "result_pc": "0x4327"
       },
       "execution": {
-        "observed_result": null,
-        "state": "not-run-by-inventory",
-        "terminal": false
+        "state": "completed",
+        "terminal": true,
+        "observed_result": "pass",
+        "evaluator_status": "pass",
+        "reason": "none",
+        "callback_pc": "0x4000",
+        "result_pc": "0x4327",
+        "ticks": 37056,
+        "budget_half_dots": 200000,
+        "manifest_sha256": "6efe380d1eae6f2ef1cfc17375d7e71610c9135fdeb67a1452ecf72b26e02fe9"
       },
       "id": "mooneye:acceptance/timer/tim00.s",
       "mode": "compat",
@@ -983,15 +1040,24 @@
       "speed": "normal",
       "suite": "mooneye",
       "test_binding": {
-        "ctest_name": null,
-        "state": "pending-registration"
+        "ctest_name": "cgb_corpus_mooneye_tim00",
+        "state": "bound"
       }
     },
     {
       "assertion_contract": {
-        "count": null,
-        "rows": null,
-        "state": "pending-qualification"
+        "count": 1,
+        "state": "qualified",
+        "rows": [
+          {
+            "id": "ld-b-b-result",
+            "expected_disposition": "pass",
+            "observed_result": "pass",
+            "evaluator_status": "pass",
+            "callback_pc": "0x4000",
+            "result_pc": "0x4327"
+          }
+        ]
       },
       "author_expectation": {
         "class": "author-header",
@@ -999,14 +1065,24 @@
         "value": ";   pass: DMG, MGB, SGB, SGB2, CGB, AGB, AGS"
       },
       "evaluator_disposition": {
-        "reference": null,
-        "state": "not-qualified",
-        "value": null
+        "reference": "fixtures/mooneye-cgb/manifest.json",
+        "state": "pass",
+        "value": "pass",
+        "reason": "author-pass-assertion",
+        "callback_pc": "0x4000",
+        "result_pc": "0x4327"
       },
       "execution": {
-        "observed_result": null,
-        "state": "not-run-by-inventory",
-        "terminal": false
+        "state": "completed",
+        "terminal": true,
+        "observed_result": "pass",
+        "evaluator_status": "pass",
+        "reason": "none",
+        "callback_pc": "0x4000",
+        "result_pc": "0x4327",
+        "ticks": 34928,
+        "budget_half_dots": 200000,
+        "manifest_sha256": "6efe380d1eae6f2ef1cfc17375d7e71610c9135fdeb67a1452ecf72b26e02fe9"
       },
       "id": "mooneye:acceptance/timer/tim00_div_trigger.s",
       "mode": "compat",
@@ -1016,15 +1092,24 @@
       "speed": "normal",
       "suite": "mooneye",
       "test_binding": {
-        "ctest_name": null,
-        "state": "pending-registration"
+        "ctest_name": "cgb_corpus_mooneye_tim00_div_trigger",
+        "state": "bound"
       }
     },
     {
       "assertion_contract": {
-        "count": null,
-        "rows": null,
-        "state": "pending-qualification"
+        "count": 1,
+        "state": "qualified",
+        "rows": [
+          {
+            "id": "ld-b-b-result",
+            "expected_disposition": "pass",
+            "observed_result": "fail",
+            "evaluator_status": "xfail",
+            "callback_pc": "0x1a31",
+            "result_pc": "0x4070"
+          }
+        ]
       },
       "author_expectation": {
         "class": "author-header",
@@ -1033,13 +1118,23 @@
       },
       "evaluator_disposition": {
         "reference": "fixtures/mooneye-cgb/manifest.json",
-        "state": "existing-manifest-disposition",
-        "value": "expected-unsupported"
+        "state": "expected-failure",
+        "value": "expected-failure",
+        "reason": "declared-failure-signature",
+        "callback_pc": "0x1a31",
+        "result_pc": "0x4070"
       },
       "execution": {
-        "observed_result": null,
-        "state": "not-run-by-inventory",
-        "terminal": false
+        "state": "completed",
+        "terminal": true,
+        "observed_result": "fail",
+        "evaluator_status": "xfail",
+        "reason": "declared-failure-signature",
+        "callback_pc": "0x1a31",
+        "result_pc": "0x4070",
+        "ticks": 34504,
+        "budget_half_dots": 2000000,
+        "manifest_sha256": "6efe380d1eae6f2ef1cfc17375d7e71610c9135fdeb67a1452ecf72b26e02fe9"
       },
       "id": "mooneye:misc/bits/unused_hwio-C.s",
       "mode": "compat",
@@ -1049,15 +1144,24 @@
       "speed": "normal",
       "suite": "mooneye",
       "test_binding": {
-        "ctest_name": null,
-        "state": "pending-registration"
+        "ctest_name": "cgb_corpus_mooneye_unused_hwio_C",
+        "state": "bound"
       }
     },
     {
       "assertion_contract": {
-        "count": null,
-        "rows": null,
-        "state": "pending-qualification"
+        "count": 1,
+        "state": "qualified",
+        "rows": [
+          {
+            "id": "ld-b-b-result",
+            "expected_disposition": "pass",
+            "observed_result": "pass",
+            "evaluator_status": "pass",
+            "callback_pc": "0x4000",
+            "result_pc": "0x4327"
+          }
+        ]
       },
       "author_expectation": {
         "class": "author-header",
@@ -1066,13 +1170,23 @@
       },
       "evaluator_disposition": {
         "reference": "fixtures/mooneye-cgb/manifest.json",
-        "state": "existing-manifest-disposition",
-        "value": "pass"
+        "state": "pass",
+        "value": "pass",
+        "reason": "author-pass-assertion",
+        "callback_pc": "0x4000",
+        "result_pc": "0x4327"
       },
       "execution": {
-        "observed_result": null,
-        "state": "not-run-by-inventory",
-        "terminal": false
+        "state": "completed",
+        "terminal": true,
+        "observed_result": "pass",
+        "evaluator_status": "pass",
+        "reason": "none",
+        "callback_pc": "0x4000",
+        "result_pc": "0x4327",
+        "ticks": 36784,
+        "budget_half_dots": 500000,
+        "manifest_sha256": "6efe380d1eae6f2ef1cfc17375d7e71610c9135fdeb67a1452ecf72b26e02fe9"
       },
       "id": "mooneye:misc/boot_div-cgbABCDE.s",
       "mode": "compat",
@@ -1082,15 +1196,24 @@
       "speed": "normal",
       "suite": "mooneye",
       "test_binding": {
-        "ctest_name": null,
-        "state": "pending-registration"
+        "ctest_name": "cgb_corpus_mooneye_boot_div_cgbABCDE",
+        "state": "bound"
       }
     },
     {
       "assertion_contract": {
-        "count": null,
-        "rows": null,
-        "state": "pending-qualification"
+        "count": 1,
+        "state": "qualified",
+        "rows": [
+          {
+            "id": "ld-b-b-result",
+            "expected_disposition": "pass",
+            "observed_result": "fail",
+            "evaluator_status": "xfail",
+            "callback_pc": "0x01f5",
+            "result_pc": "0x4067"
+          }
+        ]
       },
       "author_expectation": {
         "class": "author-header",
@@ -1099,13 +1222,23 @@
       },
       "evaluator_disposition": {
         "reference": "fixtures/mooneye-cgb/manifest.json",
-        "state": "existing-manifest-disposition",
-        "value": "expected-unsupported"
+        "state": "expected-failure",
+        "value": "expected-failure",
+        "reason": "declared-failure-signature",
+        "callback_pc": "0x01f5",
+        "result_pc": "0x4067"
       },
       "execution": {
-        "observed_result": null,
-        "state": "not-run-by-inventory",
-        "terminal": false
+        "state": "completed",
+        "terminal": true,
+        "observed_result": "fail",
+        "evaluator_status": "xfail",
+        "reason": "declared-failure-signature",
+        "callback_pc": "0x01f5",
+        "result_pc": "0x4067",
+        "ticks": 25904,
+        "budget_half_dots": 2000000,
+        "manifest_sha256": "6efe380d1eae6f2ef1cfc17375d7e71610c9135fdeb67a1452ecf72b26e02fe9"
       },
       "id": "mooneye:misc/boot_hwio-C.s",
       "mode": "compat",
@@ -1115,15 +1248,24 @@
       "speed": "normal",
       "suite": "mooneye",
       "test_binding": {
-        "ctest_name": null,
-        "state": "pending-registration"
+        "ctest_name": "cgb_corpus_mooneye_boot_hwio_C",
+        "state": "bound"
       }
     },
     {
       "assertion_contract": {
-        "count": null,
-        "rows": null,
-        "state": "pending-qualification"
+        "count": 1,
+        "state": "qualified",
+        "rows": [
+          {
+            "id": "ld-b-b-result",
+            "expected_disposition": "pass",
+            "observed_result": "pass",
+            "evaluator_status": "pass",
+            "callback_pc": "0x4000",
+            "result_pc": "0x4327"
+          }
+        ]
       },
       "author_expectation": {
         "class": "author-header",
@@ -1132,13 +1274,23 @@
       },
       "evaluator_disposition": {
         "reference": "fixtures/mooneye-cgb/manifest.json",
-        "state": "existing-manifest-disposition",
-        "value": "pass"
+        "state": "pass",
+        "value": "pass",
+        "reason": "author-pass-assertion",
+        "callback_pc": "0x4000",
+        "result_pc": "0x4327"
       },
       "execution": {
-        "observed_result": null,
-        "state": "not-run-by-inventory",
-        "terminal": false
+        "state": "completed",
+        "terminal": true,
+        "observed_result": "pass",
+        "evaluator_status": "pass",
+        "reason": "none",
+        "callback_pc": "0x4000",
+        "result_pc": "0x4327",
+        "ticks": 36760,
+        "budget_half_dots": 500000,
+        "manifest_sha256": "6efe380d1eae6f2ef1cfc17375d7e71610c9135fdeb67a1452ecf72b26e02fe9"
       },
       "id": "mooneye:misc/boot_regs-cgb.s",
       "mode": "compat",
@@ -1148,15 +1300,24 @@
       "speed": "normal",
       "suite": "mooneye",
       "test_binding": {
-        "ctest_name": null,
-        "state": "pending-registration"
+        "ctest_name": "cgb_corpus_mooneye_boot_regs_cgb",
+        "state": "bound"
       }
     },
     {
       "assertion_contract": {
-        "count": null,
-        "rows": null,
-        "state": "pending-qualification"
+        "count": 1,
+        "state": "qualified",
+        "rows": [
+          {
+            "id": "ld-b-b-result",
+            "expected_disposition": "pass",
+            "observed_result": "fail",
+            "evaluator_status": "xfail",
+            "callback_pc": "0x4000",
+            "result_pc": "0x4327"
+          }
+        ]
       },
       "author_expectation": {
         "class": "author-header",
@@ -1164,14 +1325,24 @@
         "value": ";   pass: CGB, AGB, AGS"
       },
       "evaluator_disposition": {
-        "reference": null,
-        "state": "not-qualified",
-        "value": null
+        "reference": "fixtures/mooneye-cgb/manifest.json",
+        "state": "expected-failure",
+        "value": "expected-failure",
+        "reason": "declared-failure-signature",
+        "callback_pc": "0x4000",
+        "result_pc": "0x4327"
       },
       "execution": {
-        "observed_result": null,
-        "state": "not-run-by-inventory",
-        "terminal": false
+        "state": "completed",
+        "terminal": true,
+        "observed_result": "fail",
+        "evaluator_status": "xfail",
+        "reason": "declared-failure-signature",
+        "callback_pc": "0x4000",
+        "result_pc": "0x4327",
+        "ticks": 1159160,
+        "budget_half_dots": 2000000,
+        "manifest_sha256": "6efe380d1eae6f2ef1cfc17375d7e71610c9135fdeb67a1452ecf72b26e02fe9"
       },
       "id": "mooneye:misc/ppu/vblank_stat_intr-C.s",
       "mode": "compat",
@@ -1181,8 +1352,8 @@
       "speed": "normal",
       "suite": "mooneye",
       "test_binding": {
-        "ctest_name": null,
-        "state": "pending-registration"
+        "ctest_name": "cgb_corpus_mooneye_vblank_stat_intr_C",
+        "state": "bound"
       }
     },
     {
@@ -3555,7 +3726,7 @@
     }
   ],
   "counts": {
-    "admitted_outputs": 28,
+    "admitted_outputs": 33,
     "assertion_rows": null,
     "assertion_status": "pending-qualification; per-case assertion identities are supplied by downstream admission/qualification contracts",
     "by_suite": {
@@ -3574,9 +3745,9 @@
         "source_candidates": 5
       },
       "mooneye": {
-        "admitted_outputs": 4,
+        "admitted_outputs": 9,
         "output_rows": 9,
-        "pending_outputs": 5,
+        "pending_outputs": 0,
         "required_cases": 9,
         "source_candidates": 83
       },
@@ -3589,7 +3760,7 @@
       }
     },
     "output_rows": 109,
-    "pending_outputs": 81,
+    "pending_outputs": 76,
     "required_cases": 107,
     "source_candidates": 181
   },
@@ -4042,64 +4213,60 @@
       "suite": "mooneye"
     },
     {
-      "admission_status": "built-scratch-not-admitted",
-      "build_note": "Exact pinned WLA-DX / patch / zero-font flow; generated bytes remain unadmitted.",
+      "admission_status": "admitted",
       "case_ids": [
         "mooneye:acceptance/instr/daa.s"
       ],
       "id": "mooneye:daa",
-      "manifest_ref": null,
+      "manifest_ref": "fixtures/mooneye-cgb/manifest.json",
       "output_path": "fixtures/mooneye-cgb/daa.gb",
-      "scratch_size_bytes": 32768,
       "selected_for_corpus": true,
-      "sha256": null,
+      "sha256": "3a39eda77a09b817e4e38004a3d117990565fb797e8a4f470920f1b7608f0a08",
       "source_id": "mooneye:acceptance/instr/daa.s",
-      "suite": "mooneye"
+      "suite": "mooneye",
+      "size_bytes": 32768
     },
     {
-      "admission_status": "built-scratch-not-admitted",
-      "build_note": "Exact pinned WLA-DX / patch / zero-font flow; generated bytes remain unadmitted.",
+      "admission_status": "admitted",
       "case_ids": [
         "mooneye:acceptance/timer/div_write.s"
       ],
       "id": "mooneye:div_write",
-      "manifest_ref": null,
+      "manifest_ref": "fixtures/mooneye-cgb/manifest.json",
       "output_path": "fixtures/mooneye-cgb/div_write.gb",
-      "scratch_size_bytes": 32768,
       "selected_for_corpus": true,
-      "sha256": null,
+      "sha256": "85ece79e4a058db84465e0274276cf46b7906ffd4827c6b52b3f5e2e01798c6c",
       "source_id": "mooneye:acceptance/timer/div_write.s",
-      "suite": "mooneye"
+      "suite": "mooneye",
+      "size_bytes": 32768
     },
     {
-      "admission_status": "built-scratch-not-admitted",
-      "build_note": "Exact pinned WLA-DX / patch / zero-font flow; generated bytes remain unadmitted.",
+      "admission_status": "admitted",
       "case_ids": [
         "mooneye:acceptance/timer/tim00.s"
       ],
       "id": "mooneye:tim00",
-      "manifest_ref": null,
+      "manifest_ref": "fixtures/mooneye-cgb/manifest.json",
       "output_path": "fixtures/mooneye-cgb/tim00.gb",
-      "scratch_size_bytes": 32768,
       "selected_for_corpus": true,
-      "sha256": null,
+      "sha256": "476b2332de3f2d6604f8e1478daa8cbc7c59c89c50837fd47cc95e96e784d4f7",
       "source_id": "mooneye:acceptance/timer/tim00.s",
-      "suite": "mooneye"
+      "suite": "mooneye",
+      "size_bytes": 32768
     },
     {
-      "admission_status": "built-scratch-not-admitted",
-      "build_note": "Exact pinned WLA-DX / patch / zero-font flow; generated bytes remain unadmitted.",
+      "admission_status": "admitted",
       "case_ids": [
         "mooneye:acceptance/timer/tim00_div_trigger.s"
       ],
       "id": "mooneye:tim00_div_trigger",
-      "manifest_ref": null,
+      "manifest_ref": "fixtures/mooneye-cgb/manifest.json",
       "output_path": "fixtures/mooneye-cgb/tim00_div_trigger.gb",
-      "scratch_size_bytes": 32768,
       "selected_for_corpus": true,
-      "sha256": null,
+      "sha256": "566da853858061c69866c47cc31b85b1fef003d4c088c8e8dbb26973da9944da",
       "source_id": "mooneye:acceptance/timer/tim00_div_trigger.s",
-      "suite": "mooneye"
+      "suite": "mooneye",
+      "size_bytes": 32768
     },
     {
       "admission_status": "admitted",
@@ -4116,19 +4283,18 @@
       "suite": "mooneye"
     },
     {
-      "admission_status": "built-scratch-not-admitted",
-      "build_note": "Exact pinned WLA-DX / patch / zero-font flow; generated bytes remain unadmitted.",
+      "admission_status": "admitted",
       "case_ids": [
         "mooneye:misc/ppu/vblank_stat_intr-C.s"
       ],
       "id": "mooneye:vblank_stat_intr-C",
-      "manifest_ref": null,
+      "manifest_ref": "fixtures/mooneye-cgb/manifest.json",
       "output_path": "fixtures/mooneye-cgb/vblank_stat_intr-C.gb",
-      "scratch_size_bytes": 32768,
       "selected_for_corpus": true,
-      "sha256": null,
+      "sha256": "0f030fb1dd70e9b3912b8f58512512748c9be99f03c35826433c9506767c7d13",
       "source_id": "mooneye:misc/ppu/vblank_stat_intr-C.s",
-      "suite": "mooneye"
+      "suite": "mooneye",
+      "size_bytes": 32768
     },
     {
       "admission_status": "built-scratch-not-admitted",
@@ -8388,7 +8554,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8417,7 +8583,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8446,7 +8612,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8475,7 +8641,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8504,7 +8670,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8533,7 +8699,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8562,7 +8728,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8591,7 +8757,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8620,7 +8786,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8649,7 +8815,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8678,7 +8844,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8707,7 +8873,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8736,7 +8902,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8765,7 +8931,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8794,7 +8960,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8823,7 +8989,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8852,7 +9018,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8881,7 +9047,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8910,7 +9076,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8939,7 +9105,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8968,7 +9134,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -8997,7 +9163,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9026,7 +9192,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9055,7 +9221,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9084,7 +9250,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9113,7 +9279,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9142,7 +9308,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9171,7 +9337,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9200,7 +9366,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9229,7 +9395,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9258,7 +9424,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9287,7 +9453,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9316,7 +9482,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9345,7 +9511,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9374,7 +9540,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9403,7 +9569,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9432,7 +9598,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9461,7 +9627,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9490,7 +9656,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9519,7 +9685,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9548,7 +9714,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9577,7 +9743,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9606,7 +9772,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9635,7 +9801,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9664,7 +9830,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9693,7 +9859,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9722,7 +9888,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9751,7 +9917,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9780,7 +9946,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9809,7 +9975,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9838,7 +10004,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9867,7 +10033,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9896,7 +10062,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9925,7 +10091,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9954,7 +10120,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -9983,7 +10149,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -10012,7 +10178,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -10041,7 +10207,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -10070,7 +10236,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -10099,7 +10265,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -10128,7 +10294,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -10157,7 +10323,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -10186,7 +10352,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -10215,7 +10381,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -10244,7 +10410,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -10273,7 +10439,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -10302,7 +10468,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -10331,7 +10497,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -10360,7 +10526,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",
@@ -10389,7 +10555,7 @@
         "basis": "pinned APU README aggregate CGB-E attestation",
         "mode": "native",
         "model_target": "CGB-CPU-E",
-        "readme_quote": "CPU-CGB-E \u2013 passes all tests"
+        "readme_quote": "CPU-CGB-E – passes all tests"
       },
       "build": {
         "status": "pinned-reproducer",

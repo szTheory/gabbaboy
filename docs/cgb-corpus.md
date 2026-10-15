@@ -19,17 +19,24 @@ scratch-built but have not passed per-output admission.
 The counts describe different objects. The 109 output records include three
 admitted Magen MBC outputs outside the CGB case set; one Magen PPU output
 supplies separate native and compatibility-mode cases. At this inventory
-revision, 28 outputs are admitted and 81 selected outputs remain pending
-per-output admission. The 107 required cases are fixed before new qualification
-outcomes are observed.
+revision, 33 outputs are admitted and 76 selected outputs remain pending
+per-output admission. All nine selected Mooneye CGB outputs are admitted,
+reproducible and bound to individual tests. The 107 required case identities
+remain fixed; nine Mooneye cases have terminal execution and assertion records,
+while other selected cases remain pending.
 
 The Mooneye roster contains 59 source headers with CGB in a pass list, 26 with
 CGB in a fail list, and two in both. Its nine required identities include the
 unsuffixed `acceptance/instr/daa.s`, `acceptance/timer/div_write.s`, and
 `acceptance/timer/tim00.s`, plus four previously admitted cases,
-`acceptance/timer/tim00_div_trigger.s`, and source-only
-`misc/ppu/vblank_stat_intr-C.s`. Source applicability comes from the
-pinned header; a CGB pass statement does not create a CGB-E-only hardware claim.
+`acceptance/timer/tim00_div_trigger.s`, and
+`misc/ppu/vblank_stat_intr-C.s`. All nine pass author assertions in their pinned
+headers. Their local CGB-CPU-E compatibility-mode receipts contain six guest
+passes and three exact expected failures (`boot_hwio-C`, `unused_hwio-C`, and
+`vblank_stat_intr-C`). The software evaluator reports each as `xfail` only for
+its pinned callback, result PC, and failure registers; none is counted as a
+guest pass. Source applicability comes from the pinned header; a CGB pass
+statement does not create a CGB-E-only hardware claim.
 
 All 70 APU assembly sources at the pinned SameSuite commit remain selected,
 including revision-suffixed names. Its [pinned APU README](https://github.com/LIJI32/SameSuite/blob/f15645fb049a47ea235f6d2c9a033e72d8087901/apu/README.md)
@@ -50,12 +57,10 @@ this CGB corpus.
 
 Source identity, generated output, admission, required case, execution, and
 assertion rows are separate fields. Each case keeps its author expectation
-separate from the current evaluator disposition. At this selection stage all 107 required
-case identities are frozen, while execution and assertion outcomes remain
-pending; an absent or unadmitted byte is never represented as an executed
-expected failure. The `--complete` validator mode later requires admitted
-hashed outputs, unique exact CTest bindings, terminal case results, and
-nonempty assertion rows.
+separate from the current evaluator disposition. An absent or unadmitted byte
+is never represented as an executed expected failure. The `--complete`
+validator mode requires admitted hashed outputs, unique exact CTest bindings,
+terminal case results, and nonempty assertion rows.
 
 Optional local acid2 and Mealybug records remain `not-run:rights-gate-G1`.
 Mealybug CGB-C/D images also remain `unsupported-model` because they have no

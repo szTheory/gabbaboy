@@ -60,6 +60,17 @@ MOONEYE_REQUIRED = {
     "misc/ppu/vblank_stat_intr-C.s",
 }
 MOONEYE_TRACER_HEADER = ";   pass: DMG, MGB, SGB, SGB2, CGB, AGB, AGS"
+MOONEYE_CTEST_NAMES = {
+    "misc/boot_regs-cgb.s": "cgb_corpus_mooneye_boot_regs_cgb",
+    "misc/boot_div-cgbABCDE.s": "cgb_corpus_mooneye_boot_div_cgbABCDE",
+    "misc/boot_hwio-C.s": "cgb_corpus_mooneye_boot_hwio_C",
+    "misc/bits/unused_hwio-C.s": "cgb_corpus_mooneye_unused_hwio_C",
+    "acceptance/instr/daa.s": "cgb_corpus_mooneye_daa",
+    "acceptance/timer/div_write.s": "cgb_corpus_mooneye_div_write",
+    "acceptance/timer/tim00.s": "cgb_corpus_mooneye_tim00",
+    "acceptance/timer/tim00_div_trigger.s": "cgb_corpus_mooneye_tim00_div_trigger",
+    "misc/ppu/vblank_stat_intr-C.s": "cgb_corpus_mooneye_vblank_stat_intr_C",
+}
 IMMUTABLE_OUTPUT_FIELDS = ("id", "suite", "source_id", "output_path", "selected_for_corpus", "case_ids")
 IMMUTABLE_CASE_FIELDS = ("id", "suite", "source_id", "output_id", "model", "mode", "speed", "author_expectation")
 
@@ -279,6 +290,83 @@ def check_admitted_outputs(root: Path, outputs: dict[str, dict], sources: dict[s
         need(hashlib.sha256(content).hexdigest() == fixture["sha256"], f"admitted-output-hash:{row['id']}")
 
 
+def check_mooneye_qualification(root: Path, sources: dict[str, dict],
+                                outputs: dict[str, dict], cases: dict[str, dict]) -> None:
+    manifest = bounded_json(root / "fixtures/mooneye-cgb/manifest.json")
+    manifest_rows_by_source = {row.get("source_path"): row for row in manifest.get("fixtures", [])}
+    manifest_rows_by_alias = {row.get("alias"): row for row in manifest.get("fixtures", [])}
+    required_case_ids = {f"mooneye:{path}" for path in MOONEYE_CTEST_NAMES}
+    mooneye_case_ids = {cid for cid, row in cases.items() if row["suite"] == "mooneye"}
+    need(mooneye_case_ids == required_case_ids, "mooneye-qualified-case-set")
+    need(set(manifest_rows_by_alias) == {
+        "boot_regs-cgb", "boot_div-cgbABCDE", "boot_hwio-C", "unused_hwio-C", "daa",
+        "div_write", "tim00", "tim00_div_trigger", "vblank_stat_intr-C",
+    }, "mooneye-manifest-case-set")
+    expected_roms = [row.get("rom") for row in manifest.get("fixtures", [])]
+    need(manifest.get("required_roms") == expected_roms and len(expected_roms) == 9,
+         "mooneye-required-rom-set")
+    raw_manifest_digest = hashlib.sha256((root / "fixtures/mooneye-cgb/manifest.json").read_bytes()).hexdigest()
+
+    for cid in sorted(required_case_ids):
+        case = cases[cid]
+        source = sources[case["source_id"]]
+        fixture = manifest_rows_by_source.get(source["source_path"])
+        need(fixture is not None, f"mooneye-manifest-source:{cid}")
+        alias = fixture["alias"]
+        output = outputs.get(case["output_id"])
+        need(output is not None and output["admission_status"] == "admitted",
+             f"mooneye-output-not-admitted:{alias}")
+        need(output.get("manifest_ref") == "fixtures/mooneye-cgb/manifest.json"
+             and output.get("output_path") == f"fixtures/mooneye-cgb/{fixture['rom']}"
+             and output.get("sha256") == fixture["sha256"]
+             and output.get("size_bytes") == fixture["size_bytes"], f"mooneye-output-manifest:{alias}")
+        need(case.get("model") == "CGB-CPU-E" and case.get("mode") == "compat"
+             and case.get("speed") == "normal", f"mooneye-case-model-mode:{alias}")
+        need(fixture.get("eligible") is True and fixture.get("expect") == "pass"
+             and fixture.get("model_pass") == ["cgb-cpu-e"]
+             and fixture.get("mode") == "compat (header $143 bit 7 clear)"
+             and fixture.get("cart_header_143") == "0x00", f"mooneye-manifest-model-mode:{alias}")
+        need(case.get("author_expectation", {}).get("class") == "author-header"
+             and case["author_expectation"].get("value") == source["applicability"].get("header_quote"),
+             f"mooneye-author-expectation:{alias}")
+        disposition = fixture.get("observed_disposition")
+        expected_state = "expected-failure" if disposition == "expected-failure" else "pass"
+        expected_result = "fail" if disposition == "expected-failure" else "pass"
+        expected_status = "xfail" if disposition == "expected-failure" else "pass"
+        evaluation = case.get("evaluator_disposition", {})
+        need(evaluation.get("reference") == "fixtures/mooneye-cgb/manifest.json"
+             and evaluation.get("state") == expected_state and evaluation.get("value") == disposition,
+             f"mooneye-evaluator-disposition:{alias}")
+        execution = case.get("execution", {})
+        need(execution.get("state") == "completed" and execution.get("terminal") is True
+             and execution.get("observed_result") == expected_result
+             and execution.get("evaluator_status") == expected_status
+             and execution.get("manifest_sha256") == raw_manifest_digest
+             and execution.get("budget_half_dots") == fixture.get("budget_half_dots"),
+             f"mooneye-execution-verdict:{alias}")
+        pc_field = "pass_callback_pc" if disposition == "pass" else "fail_callback_pcs"
+        expected_callbacks = [fixture[pc_field]] if disposition == "pass" else fixture[pc_field]
+        callback = execution.get("callback_pc")
+        need(callback in expected_callbacks, f"mooneye-assertion-callback:{alias}")
+        result_pc = fixture.get("result_pc")
+        need(execution.get("result_pc") == result_pc, f"mooneye-assertion-result:{alias}")
+        contract = case.get("assertion_contract", {})
+        rows = contract.get("rows")
+        need(contract.get("state") == "qualified" and contract.get("count") == 1
+             and isinstance(rows, list) and len(rows) == 1, f"mooneye-assertion-contract:{alias}")
+        assertion = rows[0]
+        need(assertion.get("id") == "ld-b-b-result"
+             and assertion.get("expected_disposition") == fixture.get("expect")
+             and assertion.get("observed_result") == expected_result
+             and assertion.get("evaluator_status") == expected_status
+             and assertion.get("callback_pc") == callback
+             and assertion.get("result_pc") == result_pc, f"mooneye-assertion-signature:{alias}")
+        binding = case.get("test_binding", {})
+        need(binding.get("state") == "bound"
+             and binding.get("ctest_name") == MOONEYE_CTEST_NAMES[source["source_path"]],
+             f"mooneye-test-binding:{alias}")
+
+
 def check_documentation(root: Path, data: dict) -> None:
     doc = (root / DOC.relative_to(ROOT)).read_text(encoding="utf-8")
     begin, end = "<!-- cgb-corpus-inventory-begin -->", "<!-- cgb-corpus-inventory-end -->"
@@ -286,7 +374,7 @@ def check_documentation(root: Path, data: dict) -> None:
     block = doc.split(begin, 1)[1].split(end, 1)[0]
     required = (
         "gabbaboy-cgb-corpus-inventory-v1", "Mooneye", "SameSuite", "AGE", "MagenTests",
-        "83", "70", "19", "9", "74", "5", "107", "81", "CGB-CPU-E",
+        "83", "70", "19", "9", "74", "5", "107", "76", "CGB-CPU-E",
         "assertion", "admitted", "pending", "author", "evaluator", "rights", "ctest",
     )
     for token in required:
@@ -397,6 +485,7 @@ def validate(root: Path, data: dict, complete: bool = False) -> tuple[dict[str, 
     check_optional_local(data)
     check_documentation(root, data)
     check_admitted_outputs(root, outputs, sources)
+    check_mooneye_qualification(root, sources, outputs, cases)
     if complete:
         check_complete(root, outputs, cases)
     return sources, outputs, cases
@@ -462,6 +551,18 @@ def self_test(root: Path, data: dict) -> None:
         if r["suite"] == "samesuite" and r["source_path"].startswith("apu/"))["applicability"].update(
             {"readme_quote": "CPU-CGB-E is unqualified"}),
         "samesuite-readme-applicability")
+    rejected("mooneye-wrong-model", lambda d: next(r for r in d["cases"]
+        if r["id"] == "mooneye:misc/ppu/vblank_stat_intr-C.s").update({"model": "CGB-CPU-D"}),
+        "case-model-mode-speed")
+    rejected("mooneye-wrong-mode", lambda d: next(r for r in d["cases"]
+        if r["id"] == "mooneye:misc/ppu/vblank_stat_intr-C.s").update({"mode": "native"}),
+        "required-case-fingerprint:mooneye")
+    rejected("mooneye-changed-failure-callback", lambda d: next(r for r in d["cases"]
+        if r["id"] == "mooneye:misc/ppu/vblank_stat_intr-C.s")["execution"].update(
+            {"callback_pc": "0x4001"}), "mooneye-assertion-callback:vblank_stat_intr-C")
+    rejected("mooneye-xfail-counted-as-pass", lambda d: next(r for r in d["cases"]
+        if r["id"] == "mooneye:misc/ppu/vblank_stat_intr-C.s")["execution"].update(
+            {"observed_result": "pass"}), "mooneye-execution-verdict:vblank_stat_intr-C")
 
     trial = copy.deepcopy(data)
     trial_case = next(r for r in trial["cases"] if r["suite"] == "age")

@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.25)
 
-# Fail-closed verification of the Phase 10 Mooneye CGB derivative set (D-26; adapted from
+# Fail-closed verification of the Phase 14 Mooneye CGB derivative set (D-26; adapted from
 # VerifyMooneyeMbc.cmake).
 #
 #   GBB_MOONEYE_DIR      fixtures/mooneye-cgb (required)
 #   GBB_MANIFEST         optional manifest path; defaults to <dir>/manifest.json (tamper controls point elsewhere)
-#   GBB_MODE             digest | inventory | pc-table
+#   GBB_MODE             digest | inventory | pc-table | controls
 #   GBB_RUNNER_SOURCE    src/runner/main.c (pc-table only)
 #
 # Failure tokens: Duplicate fixture id, Duplicate ROM path, Fixture ... mismatch (digest), inventory: ...,
@@ -16,10 +16,13 @@ if(NOT DEFINED GBB_MOONEYE_DIR)
   message(FATAL_ERROR "GBB_MOONEYE_DIR is required")
 endif()
 if(NOT DEFINED GBB_MODE)
-  message(FATAL_ERROR "GBB_MODE is required (digest | inventory | pc-table)")
+  message(FATAL_ERROR "GBB_MODE is required (digest | inventory | pc-table | controls)")
 endif()
-if(NOT GBB_MODE STREQUAL "digest" AND NOT GBB_MODE STREQUAL "inventory" AND NOT GBB_MODE STREQUAL "pc-table")
-  message(FATAL_ERROR "Unknown GBB_MODE: ${GBB_MODE}")
+#
+# Controls mode additionally accepts GBB_RUNNER, GBB_TEST_RUNNER, and GBB_CONTROL_DIR.
+if(NOT GBB_MODE STREQUAL "digest" AND NOT GBB_MODE STREQUAL "inventory" AND
+   NOT GBB_MODE STREQUAL "pc-table" AND NOT GBB_MODE STREQUAL "controls")
+  message(FATAL_ERROR "Unknown GBB_MODE: ${GBB_MODE}; expected digest | inventory | pc-table | controls")
 endif()
 
 cmake_path(ABSOLUTE_PATH GBB_MOONEYE_DIR
@@ -35,8 +38,8 @@ endif()
 
 file(READ "${manifest_path}" manifest_json)
 string(JSON fixture_count ERROR_VARIABLE json_error LENGTH "${manifest_json}" fixtures)
-if(NOT json_error STREQUAL "NOTFOUND" OR NOT fixture_count EQUAL 4)
-  message(FATAL_ERROR "Manifest fixtures must be a JSON array of exactly 4 entries: ${json_error} (${fixture_count})")
+if(NOT json_error STREQUAL "NOTFOUND" OR NOT fixture_count EQUAL 9)
+  message(FATAL_ERROR "Manifest fixtures must be a JSON array of exactly 9 entries: ${json_error} (${fixture_count})")
 endif()
 
 # Read one fixture field, failing with the field name when it is missing or empty.
@@ -51,7 +54,7 @@ endfunction()
 # Per-entry invariants shared by every mode.
 set(seen_ids "")
 set(seen_roms "")
-foreach(index RANGE 0 3)
+foreach(index RANGE 0 8)
   gbb_fixture_field(id ${index} id)
   gbb_fixture_field(rom ${index} rom)
   gbb_fixture_field(eligible ${index} eligible)
@@ -72,22 +75,29 @@ foreach(index RANGE 0 3)
 endforeach()
 
 if(GBB_MODE STREQUAL "inventory")
-  # The exact four-ROM set, in manifest order, with author assertion and observed disposition separate.
-  set(want_ids boot_regs-cgb boot_div-cgbABCDE boot_hwio-C unused_hwio-C)
-  set(want_categories post-boot-registers post-boot-div post-boot-hwio unused-hwio)
-  set(want_expects pass pass pass pass)
-  set(want_dispositions pass pass expected-failure expected-failure)
+  # The exact nine-ROM set, in manifest order, with author assertion and observed disposition separate.
+  set(want_ids boot_regs-cgb boot_div-cgbABCDE boot_hwio-C unused_hwio-C daa div_write tim00 tim00_div_trigger vblank_stat_intr-C)
+  set(want_categories post-boot-registers post-boot-div post-boot-hwio unused-hwio instruction timer timer timer ppu)
+  set(want_expects pass pass pass pass pass pass pass pass pass)
+  set(want_dispositions pass pass expected-failure expected-failure pass pass pass pass expected-failure)
   string(JSON required_count ERROR_VARIABLE json_error LENGTH "${manifest_json}" required_roms)
-  if(NOT json_error STREQUAL "NOTFOUND" OR NOT required_count EQUAL 4)
-    message(FATAL_ERROR "inventory: required_roms must list exactly 4 ROMs (${required_count})")
+  if(NOT json_error STREQUAL "NOTFOUND" OR NOT required_count EQUAL 9)
+    message(FATAL_ERROR "inventory: required_roms must list exactly 9 ROMs (${required_count})")
   endif()
-  foreach(index RANGE 0 3)
+  foreach(index RANGE 0 8)
     list(GET want_ids ${index} want_id)
     gbb_fixture_field(alias ${index} alias)
     gbb_fixture_field(category ${index} category)
     gbb_fixture_field(expect ${index} expect)
     gbb_fixture_field(disposition ${index} observed_disposition)
     gbb_fixture_field(rom ${index} rom)
+    gbb_fixture_field(model_mode ${index} mode)
+    gbb_fixture_field(header_143 ${index} cart_header_143)
+    string(JSON model_count ERROR_VARIABLE model_error LENGTH "${manifest_json}" fixtures ${index} model_pass)
+    if(NOT model_error STREQUAL "NOTFOUND" OR NOT model_count EQUAL 1)
+      message(FATAL_ERROR "inventory: ${alias} must target exactly one model (${model_count})")
+    endif()
+    string(JSON model_pass GET "${manifest_json}" fixtures ${index} model_pass 0)
     list(GET want_categories ${index} want_category)
     list(GET want_expects ${index} want_expect)
     list(GET want_dispositions ${index} want_disposition)
@@ -103,12 +113,74 @@ if(GBB_MODE STREQUAL "inventory")
     if(NOT disposition STREQUAL want_disposition)
       message(FATAL_ERROR "inventory: ${alias} observed_disposition '${disposition}' must be '${want_disposition}'")
     endif()
+    if(NOT model_pass STREQUAL "cgb-cpu-e" OR
+       NOT model_mode STREQUAL "compat (header $143 bit 7 clear)" OR
+       NOT header_143 STREQUAL "0x00")
+      message(FATAL_ERROR "inventory: ${alias} model/mode/header metadata mismatch")
+    endif()
     string(JSON required_rom ERROR_VARIABLE json_error GET "${manifest_json}" required_roms ${index})
     if(NOT json_error STREQUAL "NOTFOUND" OR NOT required_rom STREQUAL rom)
       message(FATAL_ERROR "inventory: required_roms[${index}] '${required_rom}' must equal fixture ROM '${rom}'")
     endif()
   endforeach()
-  message(STATUS "Verified Mooneye-cgb inventory: 4 fixtures (2 observed pass, 2 exact expected-failure dispositions; all author expectations remain pass), 4 required ROM(s)")
+  message(STATUS "Verified Mooneye-cgb inventory: 9 fixtures (6 observed pass, 3 exact expected-failure dispositions; all author expectations remain pass), 9 required ROM(s)")
+  return()
+endif()
+
+if(GBB_MODE STREQUAL "controls")
+  foreach(required_var IN ITEMS GBB_RUNNER GBB_TEST_RUNNER GBB_CONTROL_DIR)
+    if(NOT DEFINED ${required_var} OR "${${required_var}}" STREQUAL "")
+      message(FATAL_ERROR "controls mode needs ${required_var}")
+    endif()
+  endforeach()
+  file(MAKE_DIRECTORY "${GBB_CONTROL_DIR}/missing" "${GBB_CONTROL_DIR}/model"
+    "${GBB_CONTROL_DIR}/mode" "${GBB_CONTROL_DIR}/expect")
+
+  file(WRITE "${GBB_CONTROL_DIR}/missing/manifest.json" "${manifest_json}")
+  execute_process(COMMAND "${GBB_RUNNER}" --manifest "${GBB_CONTROL_DIR}/missing/manifest.json"
+    --case vblank_stat_intr-C --profile cgb --receipt
+    RESULT_VARIABLE missing_code OUTPUT_VARIABLE missing_out ERROR_VARIABLE missing_err)
+  string(CONCAT missing_output "${missing_out}" "${missing_err}")
+  if(NOT missing_code EQUAL 3 OR NOT missing_output MATCHES "reason=missing-fixture")
+    message(FATAL_ERROR "control=missing-required-rom expected exit 3 and missing-fixture, got ${missing_code}: ${missing_output}")
+  endif()
+  message(STATUS "control=missing-required-rom rejected: missing-fixture")
+
+  string(JSON wrong_model SET "${manifest_json}" fixtures 8 model_pass "[\"cgb-cpu-d\"]")
+  file(WRITE "${GBB_CONTROL_DIR}/model/manifest.json" "${wrong_model}")
+  execute_process(COMMAND "${GBB_RUNNER}" --manifest "${GBB_CONTROL_DIR}/model/manifest.json"
+    --case vblank_stat_intr-C --profile cgb --receipt
+    RESULT_VARIABLE model_code OUTPUT_VARIABLE model_out ERROR_VARIABLE model_err)
+  string(CONCAT model_output "${model_out}" "${model_err}")
+  if(NOT model_code EQUAL 2 OR NOT model_output MATCHES "invalid-manifest")
+    message(FATAL_ERROR "control=wrong-model expected invalid-manifest, got ${model_code}: ${model_output}")
+  endif()
+  message(STATUS "control=wrong-model rejected: invalid-manifest")
+
+  string(JSON wrong_mode SET "${manifest_json}" fixtures 8 mode "\"native\"")
+  file(WRITE "${GBB_CONTROL_DIR}/mode/manifest.json" "${wrong_mode}")
+  execute_process(COMMAND "${GBB_RUNNER}" --manifest "${GBB_CONTROL_DIR}/mode/manifest.json"
+    --case vblank_stat_intr-C --profile cgb --receipt
+    RESULT_VARIABLE mode_code OUTPUT_VARIABLE mode_out ERROR_VARIABLE mode_err)
+  string(CONCAT mode_output "${mode_out}" "${mode_err}")
+  if(NOT mode_code EQUAL 2 OR NOT mode_output MATCHES "invalid-manifest")
+    message(FATAL_ERROR "control=wrong-mode expected invalid-manifest, got ${mode_code}: ${mode_output}")
+  endif()
+  message(STATUS "control=wrong-mode rejected: invalid-manifest")
+
+  string(JSON tampered_disposition SET "${manifest_json}" fixtures 2 observed_disposition "\"pass\"")
+  file(WRITE "${GBB_CONTROL_DIR}/expect/manifest.json" "${tampered_disposition}")
+  execute_process(COMMAND "${GBB_TEST_RUNNER}" cgb_mooneye_expected_disposition_controls
+    "${GBB_CONTROL_DIR}/expect/manifest.json" "${manifest_path}" "${fixture_dir}"
+    RESULT_VARIABLE signature_code OUTPUT_VARIABLE signature_out ERROR_VARIABLE signature_err)
+  string(CONCAT signature_output "${signature_out}" "${signature_err}")
+  if(NOT signature_code EQUAL 0 OR
+     NOT signature_output MATCHES "control=expected-failure-wrong-callback alias=vblank_stat_intr-C" OR
+     NOT signature_output MATCHES "control=expected-failure-changed-registers alias=vblank_stat_intr-C" OR
+     NOT signature_output MATCHES "control=xfail-tampered-to-pass")
+    message(FATAL_ERROR "control=changed-expected-signature failed (${signature_code}): ${signature_output}")
+  endif()
+  message(STATUS "control=changed-expected-signature rejected: wrong-callback and wrong-register signatures")
   return()
 endif()
 
@@ -134,11 +206,11 @@ if(GBB_MODE STREQUAL "pc-table")
     endif()
   endforeach()
   list(LENGTH rows row_count)
-  if(NOT row_count EQUAL 4)
-    message(FATAL_ERROR "pc-table-mismatch: runner source has ${row_count} cgb rows, expected 4")
+  if(NOT row_count EQUAL 9)
+    message(FATAL_ERROR "pc-table-mismatch: runner source has ${row_count} cgb rows, expected 9")
   endif()
 
-  foreach(index RANGE 0 3)
+  foreach(index RANGE 0 8)
     gbb_fixture_field(id ${index} id)
     gbb_fixture_field(alias ${index} alias)
     gbb_fixture_field(category ${index} category)
@@ -219,7 +291,7 @@ if(GBB_MODE STREQUAL "pc-table")
   if(digest_found LESS 0)
     message(FATAL_ERROR "pc-table-mismatch: MOONEYE_CGB_MANIFEST_SHA256 is not the digest ${manifest_digest}")
   endif()
-  message(STATUS "Verified pc-table: 4 manifest rows agree with the compiled cgb_cases[]")
+  message(STATUS "Verified pc-table: 9 manifest rows agree with the compiled cgb_cases[]")
   return()
 endif()
 
@@ -230,7 +302,7 @@ foreach(required_file IN ITEMS manifest.json LICENSE.txt FONT-LICENSE.txt SOURCE
   endif()
 endforeach()
 
-foreach(index RANGE 0 3)
+foreach(index RANGE 0 8)
   gbb_fixture_field(id ${index} id)
   gbb_fixture_field(rom ${index} rom)
   gbb_fixture_field(digest ${index} sha256)
@@ -312,4 +384,4 @@ if(NOT suite_revision STREQUAL "31510e12eea6286d36eea060a6adde755e1067aa" OR
   message(FATAL_ERROR "Mooneye source revision or tree does not match the reviewed immutable pin")
 endif()
 
-message(STATUS "Verified 4 eligible Mooneye-cgb ROM(s) against ${manifest_path}")
+message(STATUS "Verified 9 eligible Mooneye-cgb ROM(s) against ${manifest_path}")

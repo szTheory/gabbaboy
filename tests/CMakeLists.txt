@@ -1132,28 +1132,30 @@ add_test(NAME mooneye_mbc_pc_table_tamper
     -DGBB_EXPECT_CODE=1
     -DGBB_EXPECT_REGEX=pc-table-mismatch
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
-# Phase 10 Mooneye CGB derivatives (D-26, names per D-27): digest and inventory modes of the
-# fail-closed verifier, plus the pc-table mode that ties the runner's cgb_cases[] to the manifest (Plan 10-16).
+# Phase 14 Mooneye CGB qualification: digest and inventory modes of the fail-closed verifier,
+# plus the pc-table mode that ties the runner's cgb_cases[] to the manifest.
 add_test(NAME cgb_mooneye_fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DGBB_MODE=digest
     -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake)
 set_tests_properties(cgb_mooneye_fixture_digest PROPERTIES
-  PASS_REGULAR_EXPRESSION "Verified 4 eligible Mooneye-cgb ROM\\(s\\)")
+  PASS_REGULAR_EXPRESSION "Verified 9 eligible Mooneye-cgb ROM\\(s\\)")
 add_test(NAME cgb_mooneye_inventory
   COMMAND ${CMAKE_COMMAND}
     -DGBB_MODE=inventory
     -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake)
 set_tests_properties(cgb_mooneye_inventory PROPERTIES
-  PASS_REGULAR_EXPRESSION "Verified Mooneye-cgb inventory: 4 fixtures")
-# RED: this binding test must reject the stale four-row inventory until Phase 14 expands it to nine.
-add_test(NAME cgb_corpus_mooneye_controls
-  COMMAND ${CMAKE_COMMAND}
-    -DGBB_MODE=inventory
-    -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb
-    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake)
+  PASS_REGULAR_EXPRESSION "Verified Mooneye-cgb inventory: 9 fixtures")
+add_test(NAME cgb_corpus_inventory_selection
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-inventory.py" --selection-only)
+set_tests_properties(cgb_corpus_inventory_selection PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-corpus-inventory pass mode=selection-only")
+add_test(NAME cgb_corpus_inventory_selftest
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-inventory.py" --self-test)
+set_tests_properties(cgb_corpus_inventory_selftest PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-corpus-inventory self-test pass")
 # Configure-time mutants (exact exit code 1 plus a named token): a flipped ROM digest and a
 # duplicated fixture id. Each differs from the committed manifest by exactly one fact.
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/digest" "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/dup-id")
@@ -1191,7 +1193,7 @@ add_test(NAME cgb_mooneye_pc_table
     -DGBB_RUNNER_SOURCE=${PROJECT_SOURCE_DIR}/src/runner/main.c
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake)
 set_tests_properties(cgb_mooneye_pc_table PROPERTIES
-  PASS_REGULAR_EXPRESSION "Verified pc-table: 4 manifest rows agree with the compiled cgb_cases")
+  PASS_REGULAR_EXPRESSION "Verified pc-table: 9 manifest rows agree with the compiled cgb_cases")
 # Negative control: a manifest whose first result_pc was changed must fail the pc-table check, naming the field.
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/pc")
 string(JSON GBB_CGB_PC_TAMPERED SET "${GBB_CGB_MANIFEST_JSON}" fixtures 0 result_pc "\"0x4328\"")
@@ -1239,15 +1241,6 @@ add_test(NAME runner_guest_failure
 add_test(NAME mooneye_mbc_type_mutation
   COMMAND test_runner mooneye_mbc_type_mutation ${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/mbc5_rom_512kb.gb)
 set_tests_properties(mooneye_mbc_type_mutation PROPERTIES TIMEOUT 30)
-# Phase 14: the author pass assertion remains separate from the exact current software xfail; a tampered pass
-# disposition, changed fail callback, stale unsupported stop and passing guest all remain failing controls.
-add_test(NAME cgb_mooneye_expected_disposition_controls
-  COMMAND test_runner cgb_mooneye_expected_disposition_controls
-    ${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/expect/manifest.json
-    ${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json
-    ${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb)
-set_tests_properties(cgb_mooneye_expected_disposition_controls PROPERTIES TIMEOUT 30
-  PASS_REGULAR_EXPRESSION "observed=fail alias=boot_hwio-C callback_result=fail callback_pc=01f5 result_pc=4067.*observed=fail alias=unused_hwio-C callback_result=fail callback_pc=1a31 result_pc=4070.*control=exact-failure-disposition alias=boot_hwio-C.*control=exact-failure-disposition alias=unused_hwio-C.*control=xfail-tampered-to-pass.*control=stale-unsupported-disposition.*control=expected-failure-wrong-callback.*control=expected-failure-pass-is-failure")
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/runner-missing-fixture")
 configure_file("${PROJECT_SOURCE_DIR}/fixtures/mooneye/manifest.json"
   "${PROJECT_BINARY_DIR}/runner-missing-fixture/manifest.json" COPYONLY)
@@ -1329,33 +1322,53 @@ foreach(entry IN LISTS GBB_MBC_CASES)
   set_tests_properties(mooneye_mbc_case_${alias} PROPERTIES TIMEOUT 60 PASS_REGULAR_EXPRESSION
     "status=pass.*source_revision=31510e12eea6286d36eea060a6adde755e1067aa.*fixture_origin=derived-headless-report-closure upstream_assertions=unchanged.*protocol_stage=callback-then-ld-b-b callback_result=pass callback_pc=${callback_pc} result_pc=${result_pc}")
 endforeach()
-# Phase 10 CGB-profile Mooneye derivatives (D-26): the runner's third suite. Each row runs on the CGB-CPU-E
-# profile in compat mode and prints its own label; the DMG label must never appear.
+# Phase 14 CGB-CPU-E Mooneye qualification. Each exact case has one CTest binding; source author
+# expectations remain pass while the three exact software-model failures are reported as xfail.
 set(GBB_CGB_MOONEYE_MANIFEST ${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json)
-add_test(NAME cgb_mooneye_case_boot_regs-cgb
-  COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --case boot_regs-cgb --receipt)
-set_tests_properties(cgb_mooneye_case_boot_regs-cgb PROPERTIES TIMEOUT 30
-  PASS_REGULAR_EXPRESSION "status=pass.*profile=CGB-CPU-E.*callback_result=pass callback_pc=4000 result_pc=4327"
-  FAIL_REGULAR_EXPRESSION "DMG-CPU-B")
-add_test(NAME cgb_mooneye_case_boot_div-cgbABCDE
-  COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --case boot_div-cgbABCDE --receipt)
-set_tests_properties(cgb_mooneye_case_boot_div-cgbABCDE PROPERTIES TIMEOUT 30
-  PASS_REGULAR_EXPRESSION "status=pass.*profile=CGB-CPU-E.*callback_result=pass callback_pc=4000 result_pc=4327"
-  FAIL_REGULAR_EXPRESSION "DMG-CPU-B")
-# These rows retain the upstream pass assertion. The current software observation is a fail at the exact
-# listed fail callback and LD B,B result; the runner reports status=xfail, never status=pass.
-foreach(alias boot_hwio-C unused_hwio-C)
-  add_test(NAME cgb_mooneye_case_${alias}
-    COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --case ${alias} --receipt)
-  set_tests_properties(cgb_mooneye_case_${alias} PROPERTIES TIMEOUT 30
-    PASS_REGULAR_EXPRESSION "author_expect=pass observed_disposition=expected-failure status=xfail observed=fail reason=declared-failure-signature callback_result=fail callback_pc=(01f5|1a31) result_pc=(4067|4070).*profile=CGB-CPU-E"
-    FAIL_REGULAR_EXPRESSION "DMG-CPU-B|status=pass|status=unexpected-pass|status=unexpected-failure")
+set(GBB_CGB_MOONEYE_CASES
+  boot_regs-cgb:cgb_corpus_mooneye_boot_regs_cgb:pass:4000:4327
+  boot_div-cgbABCDE:cgb_corpus_mooneye_boot_div_cgbABCDE:pass:4000:4327
+  boot_hwio-C:cgb_corpus_mooneye_boot_hwio_C:xfail:01f5:4067
+  unused_hwio-C:cgb_corpus_mooneye_unused_hwio_C:xfail:1a31:4070
+  daa:cgb_corpus_mooneye_daa:pass:0166:409a
+  div_write:cgb_corpus_mooneye_div_write:pass:0175:4051
+  tim00:cgb_corpus_mooneye_tim00:pass:4000:4327
+  tim00_div_trigger:cgb_corpus_mooneye_tim00_div_trigger:pass:4000:4327
+  vblank_stat_intr-C:cgb_corpus_mooneye_vblank_stat_intr_C:xfail:4000:4327)
+foreach(entry IN LISTS GBB_CGB_MOONEYE_CASES)
+  string(REPLACE ":" ";" parts "${entry}")
+  list(GET parts 0 alias)
+  list(GET parts 1 test_name)
+  list(GET parts 2 expected_status)
+  list(GET parts 3 callback_pc)
+  list(GET parts 4 result_pc)
+  add_test(NAME ${test_name}
+    COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --case ${alias} --profile cgb --receipt)
+  if(expected_status STREQUAL "xfail")
+    set_tests_properties(${test_name} PROPERTIES TIMEOUT 30
+      PASS_REGULAR_EXPRESSION "author_expect=pass observed_disposition=expected-failure status=xfail observed=fail reason=declared-failure-signature callback_result=fail callback_pc=${callback_pc} result_pc=${result_pc}.*profile=CGB-CPU-E"
+      FAIL_REGULAR_EXPRESSION "DMG-CPU-B|status=pass|status=unexpected-pass|status=unexpected-failure")
+  else()
+    set_tests_properties(${test_name} PROPERTIES TIMEOUT 30
+      PASS_REGULAR_EXPRESSION "status=pass.*profile=CGB-CPU-E.*callback_result=pass callback_pc=${callback_pc} result_pc=${result_pc}"
+      FAIL_REGULAR_EXPRESSION "DMG-CPU-B|status=xfail|status=unexpected-pass|status=unexpected-failure")
+  endif()
 endforeach()
+add_test(NAME cgb_corpus_mooneye_controls
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_MODE=controls
+    -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb
+    -DGBB_CONTROL_DIR=${PROJECT_BINARY_DIR}/mooneye-cgb-controls
+    -DGBB_RUNNER=$<TARGET_FILE:gabbaboy-runner>
+    -DGBB_TEST_RUNNER=$<TARGET_FILE:test_runner>
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake)
+set_tests_properties(cgb_corpus_mooneye_controls PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "control=missing-required-rom rejected: missing-fixture.*control=wrong-model rejected: invalid-manifest.*control=wrong-mode rejected: invalid-manifest.*control=changed-expected-signature rejected")
 add_test(NAME cgb_mooneye_required_suite
   COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --suite --receipt)
 set_tests_properties(cgb_mooneye_required_suite PROPERTIES TIMEOUT 30
-  PASS_REGULAR_EXPRESSION "suite eligible=4 executed=4 status=pass-with-expected-failure.*suite categories post-boot-registers=1/1 post-boot-div=1/1 post-boot-hwio=0/1 post-boot-hwio.expected-failure=1 unused-hwio=0/1 unused-hwio.expected-failure=1.*expected-failure=2/2"
-  FAIL_REGULAR_EXPRESSION "DMG-CPU-B|post-boot-hwio=1/1|unused-hwio=1/1")
+  PASS_REGULAR_EXPRESSION "suite eligible=9 executed=9 status=pass-with-expected-failure.*suite categories post-boot-registers=1/1 post-boot-div=1/1 post-boot-hwio=0/1 post-boot-hwio.expected-failure=1 unused-hwio=0/1 unused-hwio.expected-failure=1 instruction=1/1 timer=3/3 ppu=0/1 ppu.expected-failure=1.*expected-failure=3/3"
+  FAIL_REGULAR_EXPRESSION "DMG-CPU-B|post-boot-hwio=1/1|unused-hwio=1/1|ppu=1/1")
 # D-25 / D-05: --observe prints the not-applicable token for a CGB row and no DMG-labelled line.
 add_test(NAME cgb_mooneye_observe_not_applicable
   COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --case boot_regs-cgb --observe)
@@ -1382,11 +1395,6 @@ add_test(NAME cgb_mooneye_unknown_manifest
     -DGBB_EXPECT_CODE=2
     -DGBB_EXPECT_REGEX=invalid-manifest
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
-# Negative control: a configure-time copy of the manifest whose boot_hwio-C row says "pass". The raw-SHA gate
-# would reject it on the command line, so test_runner reads the row expectation from the copy itself.
-file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/expect")
-string(JSON GBB_CGB_EXPECT_TAMPERED SET "${GBB_CGB_MANIFEST_JSON}" fixtures 2 observed_disposition "\"pass\"")
-file(WRITE "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/expect/manifest.json" "${GBB_CGB_EXPECT_TAMPERED}")
 set(GBB_TEST_SANITIZER_LINK_OPTIONS "")
 if(GABBABOY_ENABLE_SANITIZERS)
   set(GBB_TEST_SANITIZER_LINK_OPTIONS "-fsanitize=address,undefined")
@@ -1563,7 +1571,7 @@ gbb_add_mbc_scan_test(mooneye_mbc_not_installed_empty 1 "scan-dir-empty"
 gbb_add_mbc_scan_test(mooneye_mbc_fixture_dirs_selftest 1 "fixture-dirs-mismatch"
   "${GBB_MBC_DIRS_SELFTEST}" "-DGBB_EXPECT_FIXTURE_DIRS=${GBB_MBC_SCAN_DIRS}")
 
-# Mooneye CGB ROM redistribution guard (D-26, T-10-22). The four third-party CGB derivatives are
+# Mooneye CGB ROM redistribution guard (D-26, T-10-22). The nine third-party CGB derivatives are
 # repository fixtures only; the same scan runs over the install tree with the CGB manifest's size and
 # digest list. The self-test plants one CGB ROM under an innocuous name, so a pass cannot come
 # from a scan that never matches by bytes.

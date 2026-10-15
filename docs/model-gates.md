@@ -63,7 +63,7 @@ occurs exactly once in code and once in the table.
 | GATE-18 | BOTH | - | basis=PANDOCS | read8 | APU register masks and NR52 channel-status bits are covered by CGB guest readback and the DMG baseline |
 | GATE-19 | BOTH | - | basis="CGB current-byte alias; DMG alias remains scoped software policy" | read8 | active Wave RAM reads alias the current byte; CGB guest coverage and DMG revision baseline are separate evidence |
 | GATE-20 | UNKNOWN | - | research:14 | read8 | STAT mode and coincidence bits at LCD transitions; CGB transition timing is unresearched and deferred by D-09/D-12 |
-| GATE-21 | CGB_ONLY | model_is_cgb | - | read8 | IE bits 5-7 are stored on the CGB profile (Mooneye unused_hwio-C and unused_hwio-GS); DMG reads them as 1 (OQ2, owner veto item 6) |
+| GATE-21 | CGB_ONLY | model_is_cgb | - | read8 | IE bits 5-7 are stored on the CGB profile (Mooneye unused_hwio-C author assertion; current corpus receipt is an exact software xfail, and unused_hwio-GS is not admitted); DMG reads them as 1 (OQ2, owner veto item 6) |
 | GATE-22 | BOTH | - | basis=cartridge-side | cart_read | ROM reads are decided by the mapper, not the console |
 | GATE-23 | BOTH | - | basis=wram-echo-map | read8 | work RAM and echo mapping; CGB WRAM banking is selected in wram_byte |
 | GATE-24 | UNKNOWN | - | research:14 | timer_increment | TIMA overflow and reload timing |
