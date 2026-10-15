@@ -665,6 +665,8 @@ def check_ci_contract(root: Path) -> None:
     need(begin < stream < receipt, "ci-contract-receipt-order")
     need("--output-junit \"cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml\"" in native,
          "ci-contract-junit-run-nonce")
+    need("--test-output-size-passed 16777216" in native,
+         "ci-contract-bounded-passed-test-output")
     need("build/cgb-corpus-build-stamp.json" in native and "build/Testing/*/Test.xml" in native,
          "ci-contract-retains-build-stamp-and-ctest-xml")
     sanitizer_start = ci.find("  linux-sanitizers:")

@@ -93,6 +93,8 @@ class CorpusReportCorpusTests(unittest.TestCase):
                       "native job must create a fresh receipt run before CTest")
         self.assertIn("-T Test --no-compress-output", native_job,
                       "native job must retain the full CTest event output")
+        self.assertIn("--test-output-size-passed 16777216", native_job,
+                      "native job must retain bounded full output for passing tests")
         self.assertIn("--from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json",
                       native_job, "native job must derive the receipt from that CTest run")
         cmake = (ROOT / "tests/CMakeLists.txt").read_text(encoding="utf-8")

@@ -96,7 +96,13 @@ does not admit pending bytes.
 observations and writes a private, versioned receipt; it does not add a C-core
 JSON interface. CMake stamps the compiled source/config/toolchain and corpus
 inputs. The native lane calls `--begin-run --build-dir build` before one full
-`ctest --test-dir build -T Test --no-compress-output` stream, then uses
+`ctest --test-dir build -T Test --no-compress-output` stream. CTest otherwise
+limits passing-test output to 1 KiB, so the lane sets
+`--test-output-size-passed 16777216`; the receipt parser enforces the same
+16 MiB per-test bound. This option is supported since CMake 3.4
+([CTest reference](https://cmake.org/cmake/help/v3.25/manual/ctest.1.html)).
+Measured APU-suite output was 617,531 bytes for 70 guest records and 4,784
+assertion rows, below that bound. The lane then uses
 `--from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json` to
 consume its retained Test.xml and nonce-specific JUnit output. The receipt
 rejects stale, dirty, missing or changed input identities and missing selected

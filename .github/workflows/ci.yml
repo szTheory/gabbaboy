@@ -52,7 +52,7 @@ jobs:
       - name: Run the full CTest stream once
         id: full_ctest
         continue-on-error: true
-        run: ctest --test-dir build -T Test --no-compress-output --output-on-failure --no-tests=error --output-junit "cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml"
+        run: ctest --test-dir build -T Test --no-compress-output --test-output-size-passed 16777216 --output-on-failure --no-tests=error --output-junit "cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml"
       - name: Build the CGB receipt from this CTest output
         if: always()
         run: python3 -I tests/scripts/verify-cgb-corpus-report.py --from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json

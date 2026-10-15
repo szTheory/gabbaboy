@@ -623,16 +623,19 @@ def parse_ctest_xml(data: bytes, expected_names: set[str]) -> tuple[list[dict], 
             raise ReportError("ctest-xml-test-identity")
         names.add(name)
         output = ""
-        for measurement in test.iter():
-            measurement_name = measurement.get("name")
-            if (measurement.tag.rsplit("}", 1)[-1] == "Measurement" and
-                    measurement_name in (None, "Test Output")):
-                value = next((child for child in measurement if child.tag.rsplit("}", 1)[-1] == "Value"), None)
-                output = value.text or "" if value is not None else ""
-                break
         if name in expected_names:
             if status != "passed":
                 raise ReportError("ctest-test-failed")
+            measurements = [measurement for measurement in test.iter()
+                            if measurement.tag.rsplit("}", 1)[-1] == "Measurement" and
+                            measurement.get("name") in (None, "Test Output")]
+            if len(measurements) != 1:
+                raise ReportError("ctest-xml-output-membership")
+            value = next((child for child in measurements[0]
+                          if child.tag.rsplit("}", 1)[-1] == "Value"), None)
+            if value is None:
+                raise ReportError("ctest-xml-output-membership")
+            output = value.text or ""
             if len(output.encode("utf-8")) > MAX_STREAM_BYTES:
                 raise ReportError("captured-stream-too-large")
             blocks.append({"name": name, "passed": True, "output": output})
