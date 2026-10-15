@@ -106,6 +106,13 @@
       "sha256": "601ca4f503393d2ec9db5a595f3cbf1fa78f1be39ca8378aaa2f2540d650a34d",
       "role": "included asset",
       "spdx": "X11"
+    },
+    {
+      "path": "apu/channel_3/channel_3_first_sample.asm",
+      "size_bytes": 1159,
+      "sha256": "15d6651df694adb54f77247752457f387ec3abf1b8a19e551b6e5ef94b47be32",
+      "role": "ROM source",
+      "spdx": "X11"
     }
   ],
   "fixtures": [
@@ -200,6 +207,30 @@
       "model": "CGB-CPU-E selected software model",
       "bootless_applicability": true,
       "author_test_evidence": "SameSuite is an author test suite developed to aid SameBoy; the pinned DMA source encodes the expected byte/status sequence. The upstream material supplies no independent per-ROM physical CGB-E measurement."
+    },
+    {
+      "alias": "apu/channel_3/channel_3_first_sample",
+      "file": "apu/channel_3/channel_3_first_sample.gb",
+      "original_filename": "apu/channel_3/channel_3_first_sample.gb",
+      "size_bytes": 32768,
+      "sha256": "464b7139b6c2147fa0984006d32507559972404f538e53408369c1c337b1b6e7",
+      "source_path": "apu/channel_3/channel_3_first_sample.asm",
+      "source_size_bytes": 1159,
+      "source_sha256": "15d6651df694adb54f77247752457f387ec3abf1b8a19e551b6e5ef94b47be32",
+      "includes": [
+        "include/base.inc",
+        "include/common.inc",
+        "include/config.inc",
+        "include/hardware.inc",
+        "include/hexdigits.2bpp"
+      ],
+      "expectation": "Pinned channel-3 first-sample test records eight wave-PCM observations.",
+      "applicability": "CGB-mode guest test; source encodes its expected result bytes and pass sentinel.",
+      "target_revision": "CGB-E",
+      "model": "CGB-CPU-E selected software model",
+      "bootless_applicability": true,
+      "author_test_evidence": "Pinned SameSuite APU README reports CPU-CGB-E passes all tests; this source independently encodes eight expected bytes and a guest pass sentinel. No independent physical CGB-E measurement is supplied.",
+      "author_expected_results": ["00", "00", "00", "00", "00", "0e", "0e", "0e"]
     }
   ]
 }

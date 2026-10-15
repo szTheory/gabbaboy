@@ -1,8 +1,8 @@
-# SameSuite CGB DMA fixture eligibility
+# SameSuite CGB DMA and APU fixture eligibility
 
 ## Pinned admission
 
-This directory contains exactly four DMA fixtures from SameSuite revision
+This directory contains four DMA and one APU fixture from SameSuite revision
 `f15645fb049a47ea235f6d2c9a033e72d8087901`:
 
 | Case | Source | Intended observation |
@@ -11,6 +11,14 @@ This directory contains exactly four DMA fixtures from SameSuite revision
 | `gdma_addr_mask` | `dma/gdma_addr_mask.asm` | Low address nibbles written to HDMA1-4 are ignored and one block copies expected WRAM bytes. |
 | `hdma_lcd_off` | `dma/hdma_lcd_off.asm` | The author-encoded result expects one block on an LCD-off HBlank-DMA start, then records the remaining and cancellation status sequence. |
 | `hdma_mode0` | `dma/hdma_mode0.asm` | After waiting for visible Mode 0, the author-encoded result expects one block and records the remaining and cancellation status sequence. |
+
+The selected APU corpus contains all 70 pinned `apu/*.asm` sources. The first
+admitted tracer is `apu/channel_3/channel_3_first_sample.asm`; its manifest row
+records the exact source and ROM SHA-256, RGBDS build recipe, output filename,
+and source-encoded result bytes `00 00 00 00 00 0e 0e 0e`. Each admitted APU
+output retains the same source-level CGB-E pass expectation, including revision
+suffix variants. The README's aggregate claim is not independent physical
+hardware evidence.
 
 The manifest pins each source and include closure, source and ROM sizes and
 SHA-256 values, the upstream output filename, RGBDS 1.0.1 archive digests,
@@ -41,7 +49,7 @@ starting in Mode 0. This contradiction remains visible here; the upstream
 expected results are unchanged, and this fixture admission does not resolve
 physical CGB-E behavior.
 
-The exact admission is limited to the four rows above. Mealybug
+The DMA admission is limited to the four rows above. Mealybug
 `hdma_timing-C` and `hdma_during_halt-C` are not included: they target CGB-C,
 and their unresolved font closure remains gated by G1. Any future CGB-C result
 is informational and outside the CGB-E evidence set.

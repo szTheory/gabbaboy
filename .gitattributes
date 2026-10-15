@@ -75,6 +75,7 @@ fixtures/samesuite/manifest.json text eol=lf
 fixtures/samesuite/LICENSE.txt text eol=lf
 fixtures/samesuite/ELIGIBILITY.md text eol=lf
 fixtures/samesuite/*.gb -text
+fixtures/samesuite/**/*.gb -text
 fixtures/magentests/manifest.json text eol=lf
 fixtures/magentests/LICENSE.txt text eol=lf
 fixtures/magentests/SOURCES.md text eol=lf

@@ -123,7 +123,8 @@ def validate(data: dict, root: Path, complete: bool) -> None:
     same_suite = manifest.get("suite", {})
     need(same_suite.get("revision") == REVISION and same_suite.get("license", "").startswith("X11"),
          "samesuite-manifest-revision")
-    fixture_by_alias = {row.get("alias"): row for row in manifest.get("fixtures", [])}
+    fixture_by_alias = {row.get("alias"): row for row in manifest.get("fixtures", [])
+                        if row.get("alias") in SAME_CASES}
     need(set(fixture_by_alias) == set(SAME_CASES), "samesuite-manifest-case-set")
     magen_fixture = next((row for row in magen_manifest.get("fixtures", [])
                           if row.get("alias") == "hblank_vram_dma"), None)

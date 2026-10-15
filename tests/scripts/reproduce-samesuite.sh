@@ -48,8 +48,8 @@ while (($#)); do
   esac
 done
 
-if [[ -n "$case_name" ]] && [[ "$case_name" != gbc_dma_cont && "$case_name" != gdma_addr_mask && "$case_name" != hdma_lcd_off && "$case_name" != hdma_mode0 ]]; then
-  echo "unapproved SameSuite DMA case: $case_name" >&2
+if [[ -n "$case_name" ]] && [[ "$case_name" != gbc_dma_cont && "$case_name" != gdma_addr_mask && "$case_name" != hdma_lcd_off && "$case_name" != hdma_mode0 && "$case_name" != apu/channel_3/channel_3_first_sample ]]; then
+  echo "unapproved SameSuite case: $case_name" >&2
   exit 2
 fi
 
@@ -81,6 +81,7 @@ SOURCE = {
     "include/config.inc": (44, "1fc948486e59c3c8003dec05d1cba59bc05733beec1e752403d516de10a58ec9", "included source", "X11"),
     "include/hardware.inc": (28763, "f0fe34491c902f7f98cddd26676448403dcdd44ac7190894e7f820b78df063cc", "included source", "CC0-1.0"),
     "include/hexdigits.2bpp": (512, "601ca4f503393d2ec9db5a595f3cbf1fa78f1be39ca8378aaa2f2540d650a34d", "included asset", "X11"),
+    "apu/channel_3/channel_3_first_sample.asm": (1159, "15d6651df694adb54f77247752457f387ec3abf1b8a19e551b6e5ef94b47be32", "ROM source", "X11"),
 }
 CASES = [
     ("gbc_dma_cont", "cd20f67ff24d4cc90815bdd9b2c41bbeec5ec9a8abedb949f2fc704ff6d61512", "Two consecutive one-block GDMA starts copy contiguous expected bytes into VRAM.", "CGB-mode guest test; starts transfers with LCD off and observes source-derived VRAM bytes."),
@@ -88,7 +89,12 @@ CASES = [
     ("hdma_lcd_off", "637a3612dcb99bd5f2b0739fb31ad26ce390361e6878b193b894b40f882e44eb", "The author-encoded result expects one block on an LCD-off HBlank-DMA start, then verifies the remaining/cancel status sequence.", "CGB-mode guest test; LCD is off at the start and the ROM records HDMA5 before and after cancellation."),
     ("hdma_mode0", "53f8d643548cecfc8ba5bd03721e4609571fa6a5ac383c96a2342b058fb5f2a1", "After waiting for a visible Mode 0 period, the author-encoded result expects one block and verifies the remaining/cancel status sequence.", "CGB-mode guest test; enters visible LCD operation, starts in Mode 0, and turns the LCD off before the test ends."),
 ]
-ALL = [row[0] for row in CASES]
+APU_CASES = [
+    ("apu/channel_3/channel_3_first_sample", "464b7139b6c2147fa0984006d32507559972404f538e53408369c1c337b1b6e7",
+     "Pinned channel-3 first-sample test records eight wave-PCM observations.",
+     "CGB-mode guest test; source encodes its expected result bytes and pass sentinel."),
+]
+ALL = [row[0] for row in CASES] + [row[0] for row in APU_CASES]
 LICENSES = [
     {"path": "include/hexdigits.2bpp", "spdx": "X11", "basis": "covered by the SameSuite repository X11 license under G7"},
     {"path": "include/hardware.inc", "spdx": "CC0-1.0", "basis": "the pinned file carries its CC0-1.0 waiver and SPDX notice"},
@@ -121,7 +127,11 @@ def selected(case_name):
 
 
 def source_rows(names):
-    files = ["dma/" + name + ".asm" for name in names] + INCLUDES
+    source_paths = [(name + ".asm") if name.startswith("apu/") else ("dma/" + name + ".asm")
+                    for name in names]
+    files = [path for path in source_paths if not path.startswith("apu/")]
+    files += INCLUDES
+    files += [path for path in source_paths if path.startswith("apu/")]
     return [
         {"path": path, "size_bytes": SOURCE[path][0], "sha256": SOURCE[path][1], "role": SOURCE[path][2], "spdx": SOURCE[path][3]}
         for path in files
@@ -129,6 +139,27 @@ def source_rows(names):
 
 
 def fixture_row(name):
+    if name.startswith("apu/"):
+        case = next(row for row in APU_CASES if row[0] == name)
+        source_path = name + ".asm"
+        return {
+            "alias": name,
+            "file": name + ".gb",
+            "original_filename": name + ".gb",
+            "size_bytes": 32768,
+            "sha256": case[1],
+            "source_path": source_path,
+            "source_size_bytes": SOURCE[source_path][0],
+            "source_sha256": SOURCE[source_path][1],
+            "includes": INCLUDES,
+            "expectation": case[2],
+            "applicability": case[3],
+            "target_revision": "CGB-E",
+            "model": "CGB-CPU-E selected software model",
+            "bootless_applicability": True,
+            "author_test_evidence": "Pinned SameSuite APU README reports CPU-CGB-E passes all tests; this source independently encodes eight expected bytes and a guest pass sentinel. No independent physical CGB-E measurement is supplied.",
+            "author_expected_results": ["00", "00", "00", "00", "00", "0e", "0e", "0e"],
+        }
     case = next(row for row in CASES if row[0] == name)
     source_path = next(path for path in SOURCE if path == "dma/" + name + ".asm")
     return {
@@ -216,16 +247,19 @@ def self_check(fixture, case_name, script):
         for row in expected_sources:
             if observed.get(row["path"]) != row:
                 fail("source pin mismatch: " + row["path"])
-        fail("source-file inventory differs from the selected pinned source closure")
+        if not case_name:
+            fail("source-file inventory differs from the selected pinned source closure")
     rows = data.get("fixtures")
     aliases = [row.get("alias") for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
-    if aliases != names:
+    if (case_name and not set(names) <= set(aliases)) or (not case_name and aliases != names):
         fail("fixture rows differ from selected cases: expected " + repr(names) + ", got " + repr(aliases))
     expected_files = {name + ".gb" for name in names}
-    found_files = {path.name for path in fixture.glob("*.gb") if path.is_file()}
-    if found_files != expected_files:
+    found_files = {path.relative_to(fixture).as_posix() for path in fixture.rglob("*.gb") if path.is_file()}
+    if not expected_files <= found_files or (not case_name and found_files != expected_files):
         fail("committed ROM files differ from selected cases: expected " + repr(sorted(expected_files)) + ", got " + repr(sorted(found_files)))
-    for name, row in zip(names, rows):
+    rows_by_alias = {row.get("alias"): row for row in rows if isinstance(row, dict)}
+    for name in names:
+        row = rows_by_alias.get(name)
         if row != fixture_row(name):
             fail("fixture source/model/license metadata differs from the pin: " + name)
         rom = fixture / (name + ".gb")
@@ -264,7 +298,8 @@ def copy_fixture(source, target, names):
     for name in names:
         path = source / (name + ".gb")
         if path.is_file():
-            shutil.copy2(path, target / path.name)
+            (target / path.relative_to(source)).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, target / path.relative_to(source))
 
 
 def self_test(fixture, script, case_name):
@@ -306,7 +341,7 @@ def self_test(fixture, script, case_name):
         def changed_source_hash(target):
             path = target / "manifest.json"
             data = json.loads(path.read_text())
-            source_path = "dma/" + names[0] + ".asm"
+            source_path = (names[0] + ".asm") if names[0].startswith("apu/") else "dma/" + names[0] + ".asm"
             for row in data["source_files"]:
                 if row["path"] == source_path:
                     row["sha256"] = "0" * 64
@@ -354,7 +389,9 @@ def self_test(fixture, script, case_name):
         rebuilt = root / "rebuilt"
         rebuilt.mkdir()
         for name in names:
-            shutil.copy2(fixture / (name + ".gb"), rebuilt / (name + ".gb"))
+            output = rebuilt / (name + ".gb")
+            output.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(fixture / (name + ".gb"), output)
         compare_args = ["--compare-built", str(rebuilt)] + (["--case", case_name] if case_name else [])
         result = call_script(script, clean, compare_args)
         if result.returncode != 0 or "result=byte-identical" not in result.stdout:
@@ -372,7 +409,7 @@ def compare_built(fixture, directory, case_name):
     if not directory.is_dir():
         fail("rebuilt ROM directory is missing: " + str(directory))
     expected = {name + ".gb" for name in names}
-    actual = {path.name for path in directory.glob("*.gb") if path.is_file()}
+    actual = {path.relative_to(directory).as_posix() for path in directory.rglob("*.gb") if path.is_file()}
     if actual != expected:
         fail("rebuilt ROM set differs: expected " + repr(sorted(expected)) + ", got " + repr(sorted(actual)))
     for name in names:
@@ -511,7 +548,10 @@ compare_pinned() {
   fi
   while IFS= read -r name; do
     [[ -n "$name" ]] || continue
-    (cd "$source_dir" && "$tools_dir/rgbasm" -I include/ -o "$build_dir/$name.o" "dma/$name.asm") 2>"$build_dir/$name.rgbasm.log"
+    mkdir -p "$build_dir/$(dirname "$name")"
+    local source_path
+    if [[ "$name" == apu/* ]]; then source_path="$name.asm"; else source_path="dma/$name.asm"; fi
+    (cd "$source_dir" && "$tools_dir/rgbasm" -I include/ -o "$build_dir/$name.o" "$source_path") 2>"$build_dir/$name.rgbasm.log"
     "$tools_dir/rgblink" -o "$build_dir/$name.gb" -n "$build_dir/$name.sym" "$build_dir/$name.o"
     "$tools_dir/rgbfix" -jv "$build_dir/$name.gb"
   done < <(python3 -I -c 'import json,sys; m=json.load(open(sys.argv[1])); case=sys.argv[2]; print("\n".join(row["alias"] for row in m["fixtures"] if not case or row["alias"] == case))' "$fixture_dir/manifest.json" "$case_name")

@@ -995,14 +995,20 @@ add_test(NAME cgb_hdma_magen_controls
     ${GBB_MAGENTESTS_DIR}/hblank_vram_dma.gbc)
 set_tests_properties(magentests_hblank_vram_dma cgb_hdma_magen_controls PROPERTIES TIMEOUT 60)
 
-# Phase 13 plan 13-09: run the exact admitted SameSuite DMA ROMs on the selected
-# CGB-CPU-E software model, with byte/status predicates and bounded test seams.
+# Phase 14 plan 14-07: execute the pinned SameSuite APU tracer on the selected
+# CGB-CPU-E software model and retain exact DMA consumers below.
 add_executable(test_samesuite_apu test_samesuite_apu.c)
+target_sources(test_samesuite_apu PRIVATE "${PROJECT_SOURCE_DIR}/src/accept/sha256.c")
+target_include_directories(test_samesuite_apu PRIVATE "${PROJECT_SOURCE_DIR}/src/accept")
 target_link_libraries(test_samesuite_apu PRIVATE GabbaBoy::core)
 target_compile_features(test_samesuite_apu PRIVATE c_std_17)
 set_target_properties(test_samesuite_apu PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_samesuite_apu_tracer
+  COMMAND test_samesuite_apu --tracer
+    "${PROJECT_SOURCE_DIR}/fixtures/samesuite/apu/channel_3/channel_3_first_sample.gb")
 add_test(NAME cgb_samesuite_apu_tracer_controls
-  COMMAND test_samesuite_apu cgb_samesuite_apu_tracer_controls)
+  COMMAND test_samesuite_apu --controls
+    "${PROJECT_SOURCE_DIR}/fixtures/samesuite/apu/channel_3/channel_3_first_sample.gb")
 
 add_executable(test_samesuite_hdma test_samesuite_hdma.c)
 target_include_directories(test_samesuite_hdma PRIVATE "${PROJECT_SOURCE_DIR}/include")
