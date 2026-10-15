@@ -178,7 +178,7 @@ The 13-02 summary's original task window remains four commits from `1062a6c8222c
 - Physical CGB-E remains UNKNOWN/POLICY. Optional CGB-C material is rights-gated, informational, and outside the CGB-E denominator; software fixture evidence is 5/5.
 - The D-06/Pan Docs contradiction remains explicit. Timing beyond the selected CGB-CPU-E software model, APU, mode-3 behavior, and commercial-game compatibility remain unqualified. No physical measurement or local libFuzzer campaign is claimed. No Mealybug bytes were fetched.
 - CGB-07 remains open until goal verification. `requirements-completed` stays empty for this handoff.
-- The owner's dirty `.planning/config.json`, `.planning/state.json`, and `.planning/milestone.lock` were preserved; `.planning/state.json` was not rewritten by a state helper. STATE.md and `continue.md` persist the exact verification route. ROADMAP plan progress will be reconciled with the OpenGSD helper after this summary is committed; Phase 13 remains open pending verification.
+- The owner's dirty `.planning/config.json`, `.planning/state.json`, and `.planning/milestone.lock` were preserved; `.planning/state.json` was not rewritten by a state helper. STATE.md and `continue.md` persist the exact verification route. The OpenGSD ROADMAP helper records 12/12 plans executed while leaving Phase 13 In Progress pending verification.
 
 ## Deviations from plan
 
@@ -226,7 +226,7 @@ Plan 13-12 execution is complete; Phase 13 automated goal verification and paren
 
 - The 12 tracked changed paths and all 18 plan commits exist from the pinned base through `8e56893`.
 - The five coverage entries pass `verify-summary-coverage.py`; the OpenGSD coverage classifier reports all entries automated.
-- Required deliverable paths exist; physical qualification and CGB-07 remain explicitly open, and the next route remains `/gsd-verify-work 13`.
+- Required deliverable paths exist, ROADMAP shows 12/12 plans with Phase 13 still In Progress, and physical qualification and CGB-07 remain open; the next route is `/gsd-verify-work 13`.
 
 ---
 *Phase: 13-cgb-hdma*
