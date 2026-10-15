@@ -75,7 +75,7 @@ coverage:
         ref: "bash tests/scripts/reproduce-samesuite.sh --self-test"
         status: pass
       - kind: e2e
-        ref: "GitHub Actions run 38662784222 at 690c081, 8/8 fixture and reproduction jobs passed"
+        ref: "GitHub Actions run 38662784222 at 690c081, 7/7 fixture and reproduction jobs passed"
         status: pass
     human_judgment: false
   - id: D4
@@ -166,7 +166,7 @@ status: complete
 - Exact-source PR-event run `38662784214` at `690c081e3714aa1039263255d572b6d0d06dad8e` completed successfully across all eight jobs: Linux ASan/UBSan 988 executed, none skipped, CTest wall 676.28 s; CMake 3.25.3 inventories 988 base cases in 632.69 s and 993 relocated installed cases in 650.32 s; macOS 993/993 in 628.13 s; Windows 981/981 in 495.80 s; native Linux 993/993 in 475.61 s; player gate, macOS player package and aggregate `required-native` passed. No-host-clock checks passed on Linux/macOS. Windows `samesuite_repro_selfcheck` passed in 4.87 s.
 - Linux ASan/UBSan also passed its bounded fuzz self-test and three deterministic fuzz regressions; the log states configured `fuzz_core` is unavailable. This is test-harness evidence only, not a host-fuzzer campaign.
 - macOS player-package job `116187733769` passed 98 player-specific tests in 17.34 s and extracted SDL 3.4.18 package smoke; package SHA-256 `3cb71a0118f5d60c81efad862406360c8999785c2aa3bb72a3d6ac433bd4d18b`.
-- Fixture/reproduction run `38662784222` at `690c081` passed all 8/8 jobs, including SameSuite and MagenTests rebuilds. Preview-package run `38662784151` completed successfully with all four jobs green: Linux/macOS installed-package smoke and external consumers passed (CTest targets 1.38 s and 2.47 s), the macOS player package smoke passed, and aggregate `preview-package-smoke` passed.
+- Fixture/reproduction run `38662784222` at `690c081` passed all 7/7 jobs, including SameSuite and MagenTests rebuilds. Preview-package run `38662784151` completed successfully with all four jobs green: Linux/macOS installed-package smoke and external consumers passed (CTest targets 1.38 s and 2.47 s), the macOS player package smoke passed, and aggregate `preview-package-smoke` passed.
 - Hosted results above are source-revision evidence for `690c081`. The final review/verification metadata head remains unpublished and requires separate exact-head checks during parent closeout.
 
 ## 13-02 bounded evidence span
