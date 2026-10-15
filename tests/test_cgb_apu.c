@@ -507,6 +507,51 @@ static int cgb_apu_wave_direct_ram_control(const char *name) {
     return 1;
 }
 
+static int cgb_apu_trigger_length_sweep(void) {
+    uint8_t program[160];
+    size_t length = 0u;
+    emit_write(program, &length, 0x26u, 0x80u);
+    program[length++] = 0x06u; program[length++] = 160u; /* Advance DIV by ten high-byte ticks. */
+    program[length++] = 0x05u; /* DEC B */
+    program[length++] = 0x20u; program[length++] = 0xFDu; /* JR NZ back to DEC B. */
+    emit_write(program, &length, 0x26u, 0x00u); /* Reset the sequence phase, not DIV. */
+    emit_write(program, &length, 0x26u, 0x80u);
+    program[length++] = 0xF0u; program[length++] = 0x04u;
+    program[length++] = 0xEAu; program[length++] = 0x00u; program[length++] = 0xC0u;
+    emit_write(program, &length, 0x04u, 0x00u); /* DIV falling edge leaves the next step odd. */
+    emit_write(program, &length, 0x11u, 0x3Fu); /* CH1 length counter = 1. */
+    emit_write(program, &length, 0x12u, 0xF0u); /* Enable the channel DAC. */
+    emit_write(program, &length, 0x14u, 0x80u); /* Trigger with length disabled. */
+    emit_write(program, &length, 0x14u, 0x40u); /* Enable length while next step will not clock it. */
+    program[length++] = 0xF0u; program[length++] = 0x26u;
+    program[length++] = 0xEAu; program[length++] = 0x01u; program[length++] = 0xC0u;
+    program[length++] = 0x76u;
+
+    gbb_instance *machine = load_cgb_guest(program, length);
+    if (machine == NULL) {
+        printf("not ok 1 - cgb_apu_trigger_length_sweep\n");
+        fprintf(stderr, "could not create CGB length-counter guest\n");
+        return 1;
+    }
+    const gbb_run_result run = gbb_run(machine, 16384u, NULL, 0u);
+    const uint8_t initial_div = gbb_peek_ram(machine, 0xC000u);
+    const uint8_t status = gbb_peek_ram(machine, 0xC001u);
+    gbb_destroy(machine);
+    if (run.reason == GBB_STOP_HALTED_IDLE && (initial_div & 0x10u) != 0u &&
+        (status & 0x01u) == 0u) {
+        fprintf(stderr,
+                "CGB trigger/length expected immediate expiry after odd-step enable: DIV=%02x NR52=%02x\n",
+                initial_div, status);
+        printf("ok 1 - cgb_apu_trigger_length_sweep\n");
+        return 0;
+    }
+    printf("not ok 1 - cgb_apu_trigger_length_sweep\n");
+    fprintf(stderr,
+            "CGB trigger/length mismatch expected DIV bit4=1 and NR52 CH1=0 actual DIV=%02x NR52=%02x reason=%d\n",
+            initial_div, status, run.reason);
+    return 1;
+}
+
 int main(int argc, char **argv) {
     const char *name = argc > 1 ? argv[1] : "cgb_pcm_tracer";
     printf("TAP version 13\n1..1\n");
@@ -531,6 +576,8 @@ int main(int argc, char **argv) {
     if (strcmp(name, "cgb_apu_wave_direct_ram_control") == 0)
         return cgb_apu_wave_direct_ram_control(name);
 #endif
+    if (strcmp(name, "cgb_apu_trigger_length_sweep") == 0)
+        return cgb_apu_trigger_length_sweep();
     printf("not ok 1 - %s # unknown test\n", name);
     return 1;
 }

@@ -301,6 +301,7 @@ apu_envelope
 apu_sweep
 apu_power
 cgb_apu_wave_direct_ram_control
+cgb_apu_trigger_length_sweep
 cgb_apu_wave_fetch
 cgb_apu_wave_latch
 cgb_pcm_tracer
