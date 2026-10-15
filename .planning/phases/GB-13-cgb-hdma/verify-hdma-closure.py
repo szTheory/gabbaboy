@@ -583,9 +583,9 @@ def handoff_values(state: str, continuation: str, config: dict) -> None:
         active = text.split("### Prior stage receipts", 1)[0]
         declarations = re.findall(r"(?m)^(?:Current|Completed)(?: workflow)? stage:\s*\**([^\n]+)", active)
         require(len(declarations) == 1, f"{name} must declare exactly one current/completed stage")
-        matches = [stage for stage in stages if declarations[0].startswith(stage)]
-        require(len(matches) == 1, f"{name} has an unknown completed stage")
-        return matches[0]
+        normalized = declarations[0].strip().removesuffix(".").strip("*` ")
+        require(normalized in stages, f"{name} has an unknown or compound completed stage")
+        return normalized
     stage = current_stage(state, "STATE.md")
     require(stage == current_stage(continuation, "continue.md"),
             "STATE.md and continue.md disagree on the completed stage")

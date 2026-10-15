@@ -59,6 +59,9 @@ for other_state, other_continuation in (
     (state, state.replace('automated UAT complete', 'planning')),
     (state, state.replace('/gsd-discuss-phase 14', '/gsd-execute-phase 14')),
     ('Current stage: Phase 13 execution and goal verification complete.\n' + state, state),
+    (state.replace('Phase 13 automated UAT complete.',
+                   'Phase 13 execution and goal verification complete; Phase 13 automated UAT complete.')
+          .replace('/gsd-discuss-phase 14', '/gsd-verify-work 13'), state),
 ):
     try:
         checks['handoff_values'](other_state, other_continuation, config)
