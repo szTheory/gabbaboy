@@ -1,0 +1,10 @@
+{
+  "command": "python3 -I tests/scripts/test_age_phase14_contract.py",
+  "exitCode": 1,
+  "output": "F\n======================================================================\nFAIL: test_stat_mode_cgbe_binds_source_rows_to_expected_values (__main__.TestAgePhase14Contract.test_stat_mode_cgbe_binds_source_rows_to_expected_values)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"tests/scripts/test_age_phase14_contract.py\", line 31, in test_stat_mode_cgbe_binds_source_rows_to_expected_values\n    self.assertEqual(\n    ~~~~~~~~~~~~~~~~^\n        len(assertions), 14,\n        ^^^^^^^^^^^^^^^^^^^^\n        \"stat-mode-cgbE must bind all source-labelled expected rows\",\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\nAssertionError: 0 != 14 : stat-mode-cgbE must bind all source-labelled expected rows\n\n----------------------------------------------------------------------\nRan 1 test in 0.001s\n\nFAILED (failures=1)\n",
+  "targetTest": "test_stat_mode_cgbe_binds_source_rows_to_expected_values",
+  "targetFile": "tests/scripts/test_age_phase14_contract.py",
+  "expected": "The exact 14 source-labelled stat-mode-cgbE rows are identity-bound to independent expected bytes.",
+  "actual": "The target unittest ran and found zero assertion records in the AGE disposition contract.",
+  "semanticAssessment": "Valid RED: the named target assertion failed because the planned source-row identity and expected-value contract is absent; fixture loading, collection, and unrelated tests succeeded."
+}
