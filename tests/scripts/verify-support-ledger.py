@@ -1564,7 +1564,12 @@ def self_test_v2_sidecar() -> None:
         destination_receipt = repository / receipt_path
         destination_receipt.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(receipt_source, destination_receipt)
-        git_fixture(repository, "add", *overlay_files)
+        # The fixture may run after these implementation files are already in
+        # HEAD. Add an isolated marker so the tagged fixture commit remains
+        # meaningful even when the overlay is byte-identical to its base.
+        marker_path = repository / ".support-ledger-self-test-marker"
+        marker_path.write_text("fixture\n", encoding="utf-8")
+        git_fixture(repository, "add", *overlay_files, marker_path.name)
         git_fixture(repository, "commit", "-m", "test: create v0.2 sidecar fixture")
         source_sha = git_fixture(repository, "rev-parse", "HEAD")
         for tag in ("v0.2.0", "v0.2.1"):
