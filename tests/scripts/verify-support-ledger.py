@@ -433,8 +433,10 @@ def validate_data_v2(data: dict, expected_version: str, expected_case_count: int
         fail("receipt contains a model or hardware-qualification mismatch")
     run = receipt.get("run")
     if (type(run) is not dict or run.get("id") != receipt.get("run_id") or
+            type(run.get("ctest_cases")) is not int or
             run.get("ctest_cases") != expected_case_count + 1 or
-            run.get("ctest_total_cases") != expected_case_count + 1):
+            type(run.get("ctest_total_cases")) is not int or
+            run.get("ctest_total_cases") < run.get("ctest_cases")):
         fail("receipt CTest run is incomplete or has a mismatched denominator")
     _sha_field(run.get("ctest_log_sha256"), "receipt CTest log SHA-256 is malformed")
     _sha_field(run.get("run_nonce_sha256"), "receipt run nonce SHA-256 is missing")
@@ -652,9 +654,12 @@ def _validate_run_identity(receipt: dict, inventory_sha256: str) -> dict:
         value = identity.get(field)
         if type(value) is not str or not re.fullmatch(r"[0-9a-f]{40,64}", value):
             fail("receipt identity field is malformed:" + field)
-    if run.get("id") != identity.get("run_id") or run.get("ctest_cases") != V2_REQUIRED_CASES + 1:
+    if (run.get("id") != identity.get("run_id") or
+            type(run.get("ctest_cases")) is not int or
+            run.get("ctest_cases") != V2_REQUIRED_CASES + 1):
         fail("receipt run identity or case denominator mismatch")
-    if run.get("ctest_total_cases") != run.get("ctest_cases"):
+    if (type(run.get("ctest_total_cases")) is not int or
+            run.get("ctest_total_cases") < run.get("ctest_cases")):
         fail("receipt CTest denominator is incomplete")
     if (type(run.get("started_at_ns")) is not int or type(run.get("completed_at_ns")) is not int or
             run["completed_at_ns"] <= run["started_at_ns"]):
@@ -778,6 +783,27 @@ def build_v2_data(receipt: dict, receipt_raw: bytes, inventory: dict, inventory_
     }
 
 
+def stable_v2_evidence(data: dict) -> dict:
+    """Project away only producer/run/build provenance from ledger equality."""
+    stable = copy.deepcopy(data)
+    receipt = stable.get("receipt")
+    if type(receipt) is not dict:
+        fail("complete corpus receipt identity is missing")
+    for field in ("sha256", "identity_sha256", "input_identity_sha256",
+                  "producer_revision", "run_id"):
+        receipt.pop(field, None)
+    run = receipt.get("run")
+    if type(run) is not dict:
+        fail("receipt CTest run is incomplete")
+    receipt["run"] = {"ctest_cases": run.get("ctest_cases")}
+    artifacts = receipt.get("build_artifacts")
+    if type(artifacts) is not list:
+        fail("receipt build artifact identities are missing")
+    receipt["build_artifacts"] = [{"path": row.get("path")} for row in artifacts
+                                  if type(row) is dict]
+    return stable
+
+
 def render_v2_ledger(data: dict) -> str:
     counts = data["receipt"]["counts"]
     suite_rows = data["receipt"]["suite_model_mode_counts"]
@@ -794,7 +820,7 @@ def render_v2_ledger(data: dict) -> str:
         "",
         "## CGB test-ROM evidence",
         "",
-        f"The current complete receipt records {counts['required_eligible_cases']} eligible cases, {counts['attempted_cases']} attempted, {counts['completed_cases']} completed, {counts['observed_pass_cases']} actual guest passes, {counts['observed_fail_cases']} actual guest failures, {counts['matched_xfail_cases']} matched expected failures, {counts['excluded_cases']} excluded and {counts['not_run_cases']} not run. There are {counts['assertions']} assertion rows ({counts['passing_assertions']} passing and {counts['failing_assertions']} failing). Matched expected failures remain failures and never increase the guest-pass total.",
+        f"The historical producer receipt records {counts['required_eligible_cases']} eligible cases, {counts['attempted_cases']} attempted, {counts['completed_cases']} completed, {counts['observed_pass_cases']} actual guest passes, {counts['observed_fail_cases']} actual guest failures, {counts['matched_xfail_cases']} matched expected failures, {counts['excluded_cases']} excluded and {counts['not_run_cases']} not run. There are {counts['assertions']} assertion rows ({counts['passing_assertions']} passing and {counts['failing_assertions']} failing). Fresh receipts must reproduce these stable case and assertion observations; matched expected failures remain failures and never increase the guest-pass total.",
         "",
         "| Suite | Model | Mode | Speed | Eligible | Attempted | Executed | Guest pass | Guest fail | Matched xfail | Excluded | Not run | Assertions | Assertion pass | Assertion fail |",
         "|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
@@ -803,7 +829,7 @@ def render_v2_ledger(data: dict) -> str:
         lines.append("| {suite} | {model} | {mode} | {speed} | {eligible} | {attempted} | {executed} | {actual_pass} | {actual_fail} | {matched_xfail} | {excluded} | {not_run} | {assertions} | {passing_assertions} | {failing_assertions} |".format(**row))
     lines.extend([
         "",
-        "The structured block binds exact case membership, source/output identities, inventory dispositions, assertion IDs, observed assertion rows, nonce-bound CTest run identity, receipt bytes, source inputs and build artifacts. Suite source provenance and each case's source revision remain attached to the inventory bindings. The source trees retain independent author expectations; evaluator outcomes are not rewritten to match them.",
+        "The structured block preserves the historical receipt's exact case membership, source/output identities, inventory dispositions, assertion IDs, observed assertion rows, nonce-bound CTest run identity, receipt bytes, source inputs and build artifacts. A fresh receipt is checked against the same stable evidence and its own actual source and build bytes. Suite source provenance and each case's source revision remain attached to the inventory bindings. The source trees retain independent author expectations; evaluator outcomes are not rewritten to match them.",
         "",
         "## Implemented cartridge and save matrix",
         "",
@@ -836,7 +862,7 @@ def render_v2_ledger(data: dict) -> str:
         "",
         "Evidence classes are kept distinct: source-backed expectations, admitted fixture bytes, independent inventory and assertion contracts, local software execution receipts, differential observations, project-authored regression tests, and game-level acceptance. Physical-hardware evidence is absent for this ledger.",
         "",
-        "The complete receipt below is a current working-tree evidence binding. A release sidecar binds a tagged source revision and the exact tagged ledger blob; this tracked ledger intentionally contains no release source SHA.",
+        "The receipt below is a historical producer snapshot: its exact bytes, producer revision, run identity and build artifacts identify that earlier run. A fresh receipt must independently validate its source and build bytes and reproduce the same stable corpus evidence before a release sidecar is created. The sidecar binds that supplied receipt's digest, producer revision, run identity and build artifacts alongside the tagged source and exact ledger blob; tag verification never regenerates this ledger. This tracked ledger intentionally contains no release source SHA.",
         "",
         "<!-- support-ledger-data-begin -->",
         "```json",
@@ -970,9 +996,10 @@ def check_current(receipt_path: pathlib.Path) -> dict:
     else:
         check_source_ancestry(identity.get("core_revision", ""), current)
     validate_data_v2(ledger, "0.2.0")
-    validate_source_bindings(ledger, ROOT)
-    if ledger != data:
-        fail("v0.2 ledger differs from the current receipt, independent inventory, source inputs, or signatures")
+    validate_data_v2(data, "0.2.0")
+    validate_source_bindings(data, ROOT)
+    if stable_v2_evidence(ledger) != stable_v2_evidence(data):
+        fail("v0.2 ledger stable evidence differs from the current receipt, inventory, source inputs, or assertions")
     return ledger
 
 
@@ -1062,15 +1089,13 @@ def build_v2_sidecar(tag: str, source_sha: str, repo_root: pathlib.Path,
     identity = _validate_run_identity(receipt, sha256(inventory_raw))
     producer_revision = identity["core_revision"]
     check_source_ancestry(producer_revision, source_sha, repo_root)
-    if (sha256(receipt_raw) != data["receipt"]["sha256"] or
-            producer_revision != data["receipt"]["producer_revision"]):
-        fail("forged or stale corpus receipt differs from tracked ledger")
     derived = build_v2_data(receipt, receipt_raw, inventory, inventory_raw,
                             repo_root, receipt_rel, tagged_inputs)
     validate_data_v2(data, "0.2.0")
-    if derived != data:
-        fail("tagged ledger differs from complete receipt or tagged source inputs")
-    validate_source_bindings(data, repo_root, tagged_inputs)
+    validate_data_v2(derived, "0.2.0")
+    if stable_v2_evidence(derived) != stable_v2_evidence(data):
+        fail("tagged ledger stable evidence differs from complete receipt or tagged source inputs")
+    validate_source_bindings(derived, repo_root, tagged_inputs)
     head = git("rev-parse", "HEAD", cwd=repo_root).decode("ascii", "strict").strip()
     if head == source_sha:
         run_inventory_validator(repo_root)
@@ -1090,9 +1115,14 @@ def build_v2_sidecar(tag: str, source_sha: str, repo_root: pathlib.Path,
         "manifest_identities": data["manifest_identities"],
         "inventory_sha256": data["inventory"]["sha256"],
         "disposition_identities": data["disposition_identities"],
-        "corpus_receipt_sha256": data["receipt"]["sha256"],
+        "corpus_receipt_sha256": derived["receipt"]["sha256"],
         "corpus_receipt_producer_revision": producer_revision,
         "corpus_receipt_source_relation": relation,
+        "corpus_receipt_identity_sha256": derived["receipt"]["identity_sha256"],
+        "corpus_receipt_input_identity_sha256": derived["receipt"]["input_identity_sha256"],
+        "corpus_receipt_run_id": derived["receipt"]["run_id"],
+        "corpus_run": derived["receipt"]["run"],
+        "corpus_receipt_build_artifacts": derived["receipt"]["build_artifacts"],
         "covered_source_inputs": data["source_inputs"],
         "suite_model_mode_counts": data["receipt"]["suite_model_mode_counts"],
         "case_counts": data["receipt"]["counts"],
@@ -1262,7 +1292,7 @@ def _schema2_test_data() -> dict:
                     "source_inputs_sha256": canonical_sha256(source_inputs), "run_id": "2" * 64,
                     "producer_revision": "5" * 40,
                     "model": "CGB-CPU-E selected software model", "hardware_qualified": False,
-                    "run": {"id": "2" * 64, "ctest_cases": 3, "ctest_total_cases": 3,
+                    "run": {"id": "2" * 64, "ctest_cases": 3, "ctest_total_cases": 1133,
                             "ctest_log_sha256": "3" * 64, "run_nonce_sha256": "4" * 64},
                     "counts": counts, "suite_model_mode_counts": suite_counts,
                     "case_ids": ["case-a", "case-b"], "case_observations": observations,
@@ -1277,6 +1307,32 @@ def self_test_v2() -> None:
     evidence_raw = b"identity"
     validate_data_v2(data, "0.2.0", expected_case_count=2)
     controls = []
+    positive_checks = ["complete-schema2-fixture"]
+
+    def below_selected_total(value: dict) -> None:
+        value["receipt"]["run"]["ctest_total_cases"] = 2
+
+    try:
+        altered = copy.deepcopy(data)
+        below_selected_total(altered)
+        validate_data_v2(altered, "0.2.0", expected_case_count=2)
+    except ValueError as error:
+        if "mismatched denominator" not in str(error):
+            fail("below-selected CTest total produced the wrong diagnostic")
+        controls.append("ctest-total-below-selected")
+    else:
+        fail("self-test accepted a CTest total below its selected corpus stream")
+
+    altered = copy.deepcopy(data)
+    altered["receipt"]["run"]["ctest_total_cases"] = "1133"
+    try:
+        validate_data_v2(altered, "0.2.0", expected_case_count=2)
+    except ValueError as error:
+        if "mismatched denominator" not in str(error):
+            fail("non-integer CTest total produced the wrong diagnostic")
+        controls.append("ctest-total-noninteger")
+    else:
+        fail("self-test accepted a non-integer CTest total")
 
     def rejected(name: str, mutate, expected: str) -> None:
         altered = copy.deepcopy(data)
@@ -1357,7 +1413,7 @@ def self_test_v2() -> None:
         fail("self-test Unicode identity was normalized")
     if _sorted_unique_strings(sorted([composed, decomposed]), "Unicode IDs changed") != sorted([composed, decomposed]):
         fail("self-test exact decoded IDs were changed")
-    controls.append("exact-unicode-id-and-byte-digest")
+    positive_checks.append("exact-unicode-id-and-byte-digest")
 
     with tempfile.TemporaryDirectory(prefix="gabbaboy-support-ledger-inputs-") as temporary:
         temp_root = pathlib.Path(temporary)
@@ -1393,7 +1449,8 @@ def self_test_v2() -> None:
             fail("self-test accepted stale build artifact")
     if not controls:
         fail("self-test selected zero rejection controls")
-    print("support ledger v0.2 self-test passed: positive=1 rejected_controls=" + str(len(controls)) +
+    print("support ledger v0.2 self-test passed: positive=" + str(len(positive_checks)) +
+          " rejected_controls=" + str(len(controls)) +
           " controls=" + ",".join(controls))
 
 
@@ -1498,14 +1555,21 @@ def self_test() -> None:
 
 
 def self_test_v2_sidecar() -> None:
-    """Exercise v0.2 exact-tag sidecars in isolated temporary Git repositories."""
+    """Exercise full-membership sidecars without relying on ignored build outputs."""
     ledger_path = ROOT / "docs/support/v0.2.0.md"
     ledger_raw = bounded_file(ledger_path, MAX_LEDGER_BYTES, "ledger")
     data = parse_ledger(ledger_raw, "0.2.0")
-    receipt_source = ROOT / "build/cgb-corpus-receipt.json"
+    validate_data_v2(data, "0.2.0")
     receipt_path = pathlib.Path("build/cgb-corpus-receipt.json")
-    receipt = strict_json(bounded_file(receipt_source, MAX_RECEIPT_BYTES, "receipt"), "receipt")
     base_revision = current_git_revision()
+    source_bytes = {}
+    for row in data["source_inputs"]:
+        raw = git("show", f"{base_revision}:{row['path']}")
+        if sha256(raw) != row["sha256"] or len(raw) != row["size_bytes"]:
+            fail("self-test tagged source differs from the tracked ledger:" + row["path"])
+        source_bytes[row["path"]] = raw
+    inventory_raw = source_bytes[data["inventory"]["path"]]
+    inventory = strict_json(inventory_raw, "self-test-inventory")
     author_env = dict(os.environ)
     author_env.update({
         "GIT_AUTHOR_NAME": "GabbaBoy Test",
@@ -1514,6 +1578,7 @@ def self_test_v2_sidecar() -> None:
         "GIT_COMMITTER_EMAIL": "test@example.invalid",
     })
     controls = []
+    positive_checks = []
 
     def git_fixture(repo: pathlib.Path, *args: str) -> str:
         completed = subprocess.run(["git", *args], cwd=repo, env=author_env,
@@ -1536,61 +1601,123 @@ def self_test_v2_sidecar() -> None:
     with tempfile.TemporaryDirectory(prefix="gabbaboy-v2-sidecar-") as temporary:
         temp_root = pathlib.Path(temporary)
         repository = temp_root / "tagged-repository"
-        completed = subprocess.run(["git", "clone", "--shared", "--no-checkout",
+        completed = subprocess.run(["git", "clone", "--shared", "--no-tags", "--no-checkout",
                                     str(ROOT), str(repository)],
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    text=True, check=False, timeout=60)
         if completed.returncode != 0:
             fail("v0.2 sidecar fixture clone failed: " + completed.stderr.strip())
         git_fixture(repository, "checkout", "-b", "support-ledger-v2-self-test", base_revision)
-
-        overlay_files = [
-            "docs/support/v0.2.0.md",
-            "docs/support/unreleased.md",
-            "docs/cgb-corpus.md",
-            "tests/scripts/verify-support-ledger.py",
-            "tests/scripts/verify-cgb-corpus-claims.py",
-        ]
-        for relative in overlay_files:
-            source = ROOT / relative
-            destination = repository / relative
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, destination)
-        for row in data["receipt"]["build_artifacts"]:
-            source = ROOT / row["path"]
-            destination = repository / row["path"]
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, destination)
         destination_receipt = repository / receipt_path
         destination_receipt.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(receipt_source, destination_receipt)
-        # The fixture may run after these implementation files are already in
-        # HEAD. Add an isolated marker so the tagged fixture commit remains
-        # meaningful even when the overlay is byte-identical to its base.
-        marker_path = repository / ".support-ledger-self-test-marker"
-        marker_path.write_text("fixture\n", encoding="utf-8")
-        git_fixture(repository, "add", *overlay_files, marker_path.name)
-        git_fixture(repository, "commit", "-m", "test: create v0.2 sidecar fixture")
+
+        def make_receipt(run_key: str) -> tuple[dict, bytes, dict[str, bytes]]:
+            build_artifacts = []
+            artifact_bytes = {}
+            for old in data["receipt"]["build_artifacts"]:
+                relative = old["path"]
+                raw = ("synthetic sidecar contract artifact\n" + run_key + "\n" + relative + "\n").encode()
+                artifact_bytes[relative] = raw
+                build_artifacts.append({"path": relative, "size_bytes": len(raw), "sha256": sha256(raw)})
+                destination = repository / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(raw)
+
+            run_id = sha256(("synthetic-run:" + run_key).encode("ascii"))
+            run_nonce_sha256 = sha256(("synthetic-nonce:" + run_key).encode("ascii"))
+            log_sha256 = sha256(("synthetic-ctest-log:" + run_key).encode("ascii"))
+            bindings = data["inventory"]["case_bindings"]
+            case_names = sorted(row["test_name"] for row in bindings)
+            identity = {
+                "core_revision": base_revision,
+                "run_id": run_id,
+                "input_identity_sha256": sha256(("synthetic-input-identity:" + run_key).encode("ascii")),
+                "inventory_sha256": sha256(inventory_raw),
+                "hardware_qualified": False,
+                "model": "CGB-CPU-E selected software model",
+                "case_ids": data["inventory"]["case_ids"],
+                "assertion_ids": {row["id"]: row["assertion_ids"] for row in bindings},
+                "case_ctest_names": case_names,
+                "aggregate_ctest_names": ["cgb_samesuite_apu_suite"],
+                "ctest_names": sorted([*case_names, "cgb_samesuite_apu_suite"]),
+                "ctest_log_sha256": log_sha256,
+                "input_hashes": data["source_inputs"],
+                "build_artifacts": build_artifacts,
+            }
+            identity["identity_sha256"] = canonical_sha256(identity)
+            receipt = {
+                "schema": "gabbaboy-cgb-corpus-receipt-v1",
+                "version": 1,
+                "status": "complete",
+                "failure_codes": [],
+                "identity": identity,
+                "run": {
+                    "id": run_id,
+                    "started_at_ns": 100,
+                    "completed_at_ns": 200,
+                    "ctest_cases": V2_REQUIRED_CASES + 1,
+                    "ctest_total_cases": 1133,
+                    "ctest_log_sha256": log_sha256,
+                    "run_nonce_sha256": run_nonce_sha256,
+                },
+                "cases": [copy.deepcopy(row["producer_case"])
+                          for row in data["receipt"]["case_observations"]],
+            }
+            raw = json.dumps(receipt, sort_keys=True, separators=(",", ":"),
+                             ensure_ascii=True).encode("utf-8") + b"\n"
+            destination_receipt.write_bytes(raw)
+            return receipt, raw, artifact_bytes
+
+        receipt, receipt_raw, first_artifact_bytes = make_receipt("first-independent-run")
+        fixture_data = build_v2_data(receipt, receipt_raw, inventory, inventory_raw,
+                                     repository, receipt_path.as_posix(), source_bytes)
+        validate_data_v2(fixture_data, "0.2.0")
+        if stable_v2_evidence(fixture_data) != stable_v2_evidence(data):
+            fail("synthetic full-membership receipt differs from stable historical evidence")
+        ledger_text = render_v2_ledger(fixture_data)
+        fixture_ledger = repository / "docs/support/v0.2.0.md"
+        fixture_ledger.parent.mkdir(parents=True, exist_ok=True)
+        fixture_ledger.write_text(ledger_text, encoding="utf-8")
+        git_fixture(repository, "add", "docs/support/v0.2.0.md")
+        git_fixture(repository, "commit", "-m", "test: create complete v0.2 sidecar contract fixture")
         source_sha = git_fixture(repository, "rev-parse", "HEAD")
         for tag in ("v0.2.0", "v0.2.1"):
             git_fixture(repository, "tag", tag, source_sha)
+        # Keep HEAD at the receipt producer's base revision so this synthetic
+        # contract fixture cannot be mistaken for a CTest execution receipt.
+        git_fixture(repository, "checkout", "--detach", base_revision)
 
         generated = build_sidecar("v0.2.0", source_sha, repository, receipt_path)
         if (generated.get("schema_version") != 2 or
                 generated.get("ledger", {}).get("path") != "docs/support/v0.2.0.md" or
-                generated.get("corpus_receipt_sha256") != data["receipt"]["sha256"] or
+                generated.get("corpus_receipt_sha256") != sha256(receipt_raw) or
+                generated.get("corpus_receipt_sha256") == data["receipt"]["sha256"] or
                 generated.get("corpus_receipt_producer_revision") != receipt["identity"]["core_revision"] or
+                generated.get("corpus_receipt_identity_sha256") != receipt["identity"]["identity_sha256"] or
+                generated.get("corpus_receipt_input_identity_sha256") != receipt["identity"]["input_identity_sha256"] or
+                generated.get("corpus_receipt_run_id") != receipt["run"]["id"] or
+                generated.get("corpus_run") != fixture_data["receipt"]["run"] or
+                generated.get("corpus_receipt_build_artifacts") != fixture_data["receipt"]["build_artifacts"] or
                 generated.get("corpus_receipt_source_relation") != "ancestor" or
                 generated.get("game_evidence") != data["game_evidence"]):
             fail("v0.2 sidecar positive fixture did not bind the exact tagged inputs")
-        controls.append("positive-v0.2-tagged-sidecar")
+        positive_checks.append("positive-v0.2-tagged-sidecar")
+
+        second_receipt, second_raw, second_artifact_bytes = make_receipt("second-independent-run")
+        second_sidecar = build_sidecar("v0.2.0", source_sha, repository, receipt_path)
+        if (second_sidecar.get("corpus_receipt_sha256") != sha256(second_raw) or
+                second_sidecar.get("corpus_receipt_sha256") == generated.get("corpus_receipt_sha256") or
+                second_sidecar.get("corpus_receipt_run_id") == generated.get("corpus_receipt_run_id") or
+                second_sidecar.get("corpus_receipt_build_artifacts") == generated.get("corpus_receipt_build_artifacts")):
+            fail("independent fresh receipt provenance was not rebound to its supplied bytes and artifacts")
+        positive_checks.append("independent-run-stable-ledger-and-fresh-provenance")
 
         patch_sidecar = build_sidecar("v0.2.1", source_sha, repository, receipt_path)
-        if (patch_sidecar.get("ledger") != generated.get("ledger") or
+        if (patch_sidecar.get("ledger") != second_sidecar.get("ledger") or
                 patch_sidecar.get("tag") != "v0.2.1" or
-                patch_sidecar.get("corpus_receipt_sha256") != generated.get("corpus_receipt_sha256")):
+                patch_sidecar.get("corpus_receipt_sha256") != second_sidecar.get("corpus_receipt_sha256")):
             fail("v0.2 patch tag did not reuse its same-scope ledger")
-        controls.append("v0.2-patch-compatibility")
+        positive_checks.append("v0.2-patch-compatibility")
 
         expect_rejected("missing-v2-receipt",
                         lambda: build_sidecar("v0.2.0", source_sha, repository),
@@ -1599,27 +1726,79 @@ def self_test_v2_sidecar() -> None:
                         lambda: build_sidecar("v0.2.0", "0" * 40, repository, receipt_path),
                         "supplied source SHA does not resolve")
         for key, value in (("source_sha", "0" * 40),
-                           ("ledger", {**generated["ledger"], "git_blob_oid": "0" * 40}),
+                           ("ledger", {**second_sidecar["ledger"], "git_blob_oid": "0" * 40}),
                            ("corpus_receipt_sha256", "0" * 64),
                            ("inventory_sha256", "0" * 64),
+                           ("corpus_receipt_run_id", "0" * 64),
+                           ("corpus_receipt_build_artifacts", []),
                            ("disposition_identities", []),
                            ("covered_source_inputs", []),
                            ("suite_model_mode_counts", []),
                            ("game_evidence", {"status": "present"})):
-            altered = copy.deepcopy(generated)
+            altered = copy.deepcopy(second_sidecar)
             altered[key] = value
             expect_rejected("altered-sidecar-" + key,
-                            lambda altered=altered: verify_sidecar_data(altered, generated),
+                            lambda altered=altered: verify_sidecar_data(altered, second_sidecar),
                             "sidecar source SHA")
 
         saved_receipt = destination_receipt.read_bytes()
-        destination_receipt.write_bytes(saved_receipt + b" ")
-        expect_rejected("forged-receipt-bytes",
+        changed_bytes = saved_receipt + b" \n"
+        destination_receipt.write_bytes(changed_bytes)
+        changed_bytes_sidecar = build_sidecar("v0.2.0", source_sha, repository, receipt_path)
+        if (changed_bytes_sidecar.get("corpus_receipt_sha256") != sha256(changed_bytes) or
+                changed_bytes_sidecar.get("corpus_receipt_sha256") == second_sidecar.get("corpus_receipt_sha256")):
+            fail("receipt byte-identity control did not use the supplied receipt bytes")
+        expect_rejected("old-sidecar-after-receipt-bytes-change",
+                        lambda: verify_sidecar_data(second_sidecar, changed_bytes_sidecar),
+                        "sidecar source SHA")
+        destination_receipt.write_bytes(saved_receipt)
+        positive_checks.append("fresh-receipt-byte-digest")
+
+        changed_outcome = copy.deepcopy(second_receipt)
+        passing_case = next(row for row in changed_outcome["cases"]
+                            if row["observed_result"] == "pass")
+        passing_case.update(observed_result="fail", evaluator_status="xfail", matched_xfail=True)
+        changed_outcome_raw = json.dumps(changed_outcome, sort_keys=True,
+                                         separators=(",", ":"), ensure_ascii=True).encode() + b"\n"
+        destination_receipt.write_bytes(changed_outcome_raw)
+        expect_rejected("changed-case-outcome",
                         lambda: build_sidecar("v0.2.0", source_sha, repository, receipt_path),
-                        "forged or stale corpus receipt")
+                        "unexpected failure")
         destination_receipt.write_bytes(saved_receipt)
 
-        base_ledger_text = (repository / "docs/support/v0.2.0.md").read_text(encoding="utf-8")
+        changed_assertion = copy.deepcopy(second_receipt)
+        assertion_case = changed_assertion["cases"][0]
+        assertion = assertion_case["assertions"][0]
+        assertion["observed_result"] = "fail" if assertion.get("observed_result") == "pass" else "pass"
+        changed_assertion_raw = json.dumps(changed_assertion, sort_keys=True,
+                                           separators=(",", ":"), ensure_ascii=True).encode() + b"\n"
+        destination_receipt.write_bytes(changed_assertion_raw)
+        expect_rejected("changed-assertion-observation",
+                        lambda: build_sidecar("v0.2.0", source_sha, repository, receipt_path),
+                        "stable evidence differs")
+        destination_receipt.write_bytes(saved_receipt)
+        artifact_path = next(iter(second_artifact_bytes))
+        artifact_file = repository / artifact_path
+        artifact_file.write_bytes(second_artifact_bytes[artifact_path] + b"changed")
+        expect_rejected("changed-build-artifact-bytes",
+                        lambda: build_sidecar("v0.2.0", source_sha, repository, receipt_path),
+                        "build input is stale")
+        artifact_file.write_bytes(second_artifact_bytes[artifact_path])
+
+        source_path = data["source_inputs"][0]["path"]
+        git_fixture(repository, "checkout", "-b", "sidecar-mutated-source", source_sha)
+        source_file = repository / source_path
+        source_file.write_bytes(source_file.read_bytes() + b"\nself-test source mutation\n")
+        git_fixture(repository, "add", source_path)
+        git_fixture(repository, "commit", "-m", "test: mutate covered source identity")
+        changed_source_sha = git_fixture(repository, "rev-parse", "HEAD")
+        git_fixture(repository, "tag", "v0.2.4", changed_source_sha)
+        git_fixture(repository, "checkout", "--detach", base_revision)
+        expect_rejected("changed-tagged-source-input",
+                        lambda: build_sidecar("v0.2.4", changed_source_sha, repository, receipt_path),
+                        "tagged source input differs from ledger")
+
+        base_ledger_text = ledger_text
 
         def tagged_ledger_variant(name: str, tag: str, mutate) -> None:
             branch = "sidecar-" + name
@@ -1639,6 +1818,7 @@ def self_test_v2_sidecar() -> None:
             git_fixture(repository, "commit", "-m", "test: alter disposition identities")
             variant_sha = git_fixture(repository, "rev-parse", "HEAD")
             git_fixture(repository, "tag", tag, variant_sha)
+            git_fixture(repository, "checkout", "--detach", base_revision)
             expect_rejected(name,
                             lambda: build_sidecar(tag, variant_sha, repository, receipt_path),
                             "disposition")
@@ -1669,8 +1849,12 @@ def self_test_v2_sidecar() -> None:
                         lambda: build_sidecar("v0.2.1", missing_sha, repository),
                         "major/minor scope")
 
-    print("support ledger v0.2 sidecar self-test passed: positive=1 controls=" +
-          str(len(controls)) + " names=" + ",".join(controls))
+    if not positive_checks:
+        fail("v0.2 sidecar self-test selected zero positive checks")
+    print("support ledger v0.2 sidecar self-test passed: positive=" +
+          str(len(positive_checks)) + " rejected_controls=" + str(len(controls)) +
+          " positives=" + ",".join(positive_checks) +
+          " controls=" + ",".join(controls))
 
 
 def main() -> int:
