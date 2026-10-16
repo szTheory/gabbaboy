@@ -37,9 +37,9 @@ Total Plans in Phase: 13
 Last Activity: 2026-10-16
 Last Activity Description: Phase 14 execution complete; 41/41 verified; next automated UAT
 
-Completed workflow stage: **Phase 14 — CGB-E Model Qualification and Corpus, execution and goal verification**. All 13 plans, 31 tasks and 11 waves are complete. [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08 and CGB-10 are complete. Nyquist covers 31/31, security closes 27/27 threats, and the two code-review blockers plus the player copy assertion are fixed and independently checked.
+Completed workflow stage: **Phase 14 — CGB-E Model Qualification and Corpus, execution and goal verification**. All 13 plans, 31 tasks and 11 waves are complete. [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08 and CGB-10 are complete. Nyquist covers 31/31, security closes 27/27 threats, and all eight code-review findings plus the player copy assertion are fixed and independently checked.
 
-[14-CLOSURE.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-CLOSURE.md) binds the final native 1,136/1,136 regression and complete 107-case receipt to actual producer `0018d4a9b8bfa0e60890be7fb3386b73601e0eb2`. There are 25 actual passes and 82 matched expected failures; no hardware or general game qualification is claimed. The exact final PR head requires its own hosted checks. PR #71 remains the phase PR; release PR #70 is reserved for Phase 15.
+[14-CLOSURE.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-CLOSURE.md) binds the final native 1,138/1,138 regression and complete 107-case receipt to actual producer `4fe97f8784ee9c8382dc014c13bc8bbff6f777c4`. There are 25 actual passes and 82 matched expected failures; no hardware or general game qualification is claimed. The exact final PR head requires its own hosted checks. PR #71 remains the phase PR; release PR #70 is reserved for Phase 15.
 
 Next stage: **Phase 14 automated UAT closure** from the completed SUMMARY coverage and bounded commit windows. Do not replay implementation, research or completed Phase 13 UAT.
 Next command: `/gsd-verify-work 14`.
