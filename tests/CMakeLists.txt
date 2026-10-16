@@ -1355,8 +1355,14 @@ set_tests_properties(cgb_corpus_report_tracer cgb_corpus_report_tracer_controls
 set_tests_properties(cgb_corpus_claims cgb_corpus_claims_controls
   cgb_corpus_red_evidence_privacy PROPERTIES TIMEOUT 60)
 set(GBB_AGE_PHASE14_CONTRACT "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py")
+set(GBB_AGE_PHASE14_GUEST_TIMEOUT 15)
+if(GABBABOY_ENABLE_SANITIZERS)
+  # Match ScaleSanitizerTimeouts.cmake's factor for the adapter's child deadline.
+  set(GBB_AGE_PHASE14_GUEST_TIMEOUT 45)
+endif()
 add_test(NAME cgb_age_assertion_identity
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_PHASE14_CONTRACT}" --assertions --runner $<TARGET_FILE:test_age>)
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_PHASE14_CONTRACT}" --assertions
+    --runner $<TARGET_FILE:test_age> --guest-timeout-seconds "${GBB_AGE_PHASE14_GUEST_TIMEOUT}")
 set_tests_properties(cgb_age_assertion_identity PROPERTIES TIMEOUT 60
   PASS_REGULAR_EXPRESSION "cgb-age-assertion-identity pass cases=13 rows=142 mode0-semantic=105 age-identities=19")
 add_test(NAME cgb_age_assertion_controls

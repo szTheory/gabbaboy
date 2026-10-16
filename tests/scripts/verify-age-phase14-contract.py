@@ -224,7 +224,10 @@ def _check_live_age_rows(case_name: str, output: str,
 
 
 def check_age_assertions(root: Path, inventory: dict, speed: dict,
-                         run_guest: bool = False, runner: str | None = None) -> tuple[int, int]:
+                         run_guest: bool = False, runner: str | None = None,
+                         guest_timeout_seconds: int = 15) -> tuple[int, int]:
+    need(type(guest_timeout_seconds) is int and 1 <= guest_timeout_seconds <= 45,
+         "age-guest-timeout-invalid")
     manifest = read_json(root / "fixtures/age/manifest.json")
     need(manifest.get("source", {}).get("commit") == AGE_COMMIT, "age-source-pin")
     fixtures = {row["file"][:-3]: row for row in manifest.get("fixtures", [])
@@ -369,7 +372,7 @@ def check_age_assertions(root: Path, inventory: dict, speed: dict,
                 args.extend((external["signature_sha256"], "0x" + external["row_mask"]))
             args.append("--phase14-observations")
             result = subprocess.run(args, cwd=root, text=True, capture_output=True,
-                                    check=False, timeout=15)
+                                    check=False, timeout=guest_timeout_seconds)
             need(result.returncode == 0,
                  f"age-live-guest-verdict:{case_name}:{result.returncode}:{result.stderr.strip()}")
             _check_live_age_rows(case_name, result.stdout, external["assertions"])
@@ -592,13 +595,15 @@ def main() -> int:
     group.add_argument("--research14", action="store_true")
     group.add_argument("--research14-controls", action="store_true")
     parser.add_argument("--runner")
+    parser.add_argument("--guest-timeout-seconds", type=int, default=15)
     args = parser.parse_args()
     try:
         inventory = read_json(INVENTORY)
         speed = read_json(SPEED)
         if args.assertions:
             count, assertions = check_age_assertions(ROOT, inventory, speed,
-                                                      run_guest=True, runner=args.runner)
+                run_guest=True, runner=args.runner,
+                guest_timeout_seconds=args.guest_timeout_seconds)
             print(f"cgb-age-assertion-identity pass cases={count} rows={assertions} mode0-semantic=105 age-identities=19")
         elif args.assertions_controls:
             assertions_controls(ROOT, inventory, speed)
