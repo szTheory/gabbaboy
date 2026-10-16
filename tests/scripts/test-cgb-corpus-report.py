@@ -214,6 +214,74 @@ class CorpusReportNativeExecutableTests(unittest.TestCase):
         self.assertEqual(command[0], str(build_dir / "gabbaboy-runner.exe"))
 
 
+class CorpusReportBoundedProcessTests(unittest.TestCase):
+    def _assert_windows_failure(self, command, expected_code, *, timeout=5,
+                                max_stream_bytes=None, reader_error=False):
+        original_popen = REPORTER_IMPL.subprocess.Popen
+        processes = []
+
+        def tracked_popen(*args, **kwargs):
+            proc = original_popen(*args, **kwargs)
+            processes.append(proc)
+            return proc
+
+        def terminate(proc):
+            try:
+                proc.kill()
+            except OSError:
+                pass
+            proc.wait(timeout=2)
+
+        reader_patch = (mock.patch.object(REPORTER_IMPL, "_read_bounded_pipe_chunk",
+                                          side_effect=OSError("injected read failure"))
+                        if reader_error else contextlib.nullcontext())
+        cap_patch = (mock.patch.object(REPORTER_IMPL, "MAX_STREAM_BYTES", max_stream_bytes)
+                     if max_stream_bytes is not None else contextlib.nullcontext())
+        with mock.patch.object(REPORTER_IMPL.os, "name", "nt"):
+            with mock.patch.object(REPORTER_IMPL.subprocess, "Popen", side_effect=tracked_popen):
+                with mock.patch.object(REPORTER_IMPL, "_terminate_bounded_process", side_effect=terminate):
+                    with reader_patch, cap_patch:
+                        with self.assertRaises(REPORTER_IMPL.ReportError) as raised:
+                            REPORTER_IMPL.run_bounded(command, timeout_seconds=timeout)
+        self.assertEqual(raised.exception.code, expected_code)
+        self.assertEqual(len(processes), 1)
+        self.assertIsNotNone(processes[0].poll(), "failed bounded run must terminate its child")
+
+    def test_windows_pipe_reader_supports_merged_output_and_nonzero_exit(self):
+        command = [
+            sys.executable,
+            "-c",
+            "import sys; sys.stdout.write('stdout-marker\\n'); "
+            "sys.stderr.write('stderr-marker\\n'); sys.exit(7)",
+        ]
+        with mock.patch.object(REPORTER_IMPL.os, "name", "nt"):
+            with mock.patch.object(REPORTER_IMPL.selectors, "DefaultSelector",
+                                   side_effect=OSError("anonymous pipe cannot be selected")):
+                code, output = REPORTER_IMPL.run_bounded(command, timeout_seconds=5)
+        self.assertEqual(code, 7)
+        self.assertIn(b"stdout-marker", output)
+        self.assertIn(b"stderr-marker", output)
+
+    def test_windows_output_overflow_terminates_child(self):
+        self._assert_windows_failure(
+            [sys.executable, "-c", "import sys,time; sys.stdout.buffer.write(b'x'*65536); "
+             "sys.stdout.flush(); time.sleep(30)"],
+            "captured-stream-too-large", max_stream_bytes=32,
+        )
+
+    def test_windows_deadline_terminates_child(self):
+        self._assert_windows_failure(
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+            "runner-timeout", timeout=0.05,
+        )
+
+    def test_windows_reader_error_terminates_child(self):
+        self._assert_windows_failure(
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+            "runner-output-read-failed", reader_error=True,
+        )
+
+
 class CorpusReportControlsTests(unittest.TestCase):
     def test_controls(self):
         report = REPORTER_IMPL

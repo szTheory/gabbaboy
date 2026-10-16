@@ -8,6 +8,7 @@ import json
 import os
 import platform
 from pathlib import Path
+import queue
 import re
 import selectors
 import secrets
@@ -17,6 +18,7 @@ import subprocess
 import sys
 import sysconfig
 import tempfile
+import threading
 import time
 import xml.etree.ElementTree as ET
 
@@ -1440,6 +1442,144 @@ def parse_event(stream: bytes, contract: dict, core_revision: str | None = None)
     }
 
 
+def _read_bounded_pipe_chunk(stream) -> bytes:
+    return stream.read1(65536)
+
+
+def _queue_reader_event(events, stop_event, event) -> bool:
+    while not stop_event.is_set():
+        try:
+            events.put(event, timeout=0.1)
+            return True
+        except queue.Full:
+            continue
+    return False
+
+
+def _threaded_pipe_reader(stream, events, stop_event) -> None:
+    while not stop_event.is_set():
+        try:
+            chunk = _read_bounded_pipe_chunk(stream)
+        except (OSError, ValueError) as exc:
+            _queue_reader_event(events, stop_event, ("error", exc))
+            return
+        if not chunk:
+            _queue_reader_event(events, stop_event, ("eof", None))
+            return
+        if not _queue_reader_event(events, stop_event, ("chunk", chunk)):
+            return
+
+
+def _terminate_bounded_process(proc) -> None:
+    if os.name == "posix":
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+    elif os.name == "nt":
+        try:
+            subprocess.run(
+                ["taskkill.exe", "/PID", str(proc.pid), "/T", "/F"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=2, check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    try:
+        proc.kill()
+    except OSError:
+        pass
+    try:
+        proc.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        try:
+            proc.kill()
+        except OSError:
+            pass
+        try:
+            proc.wait(timeout=2)
+        except subprocess.TimeoutExpired as exc:
+            raise ReportError("runner-cleanup-failed") from exc
+
+
+def _cancel_windows_reader(reader) -> None:
+    if os.name != "nt" or reader.native_id is None:
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        open_thread = kernel32.OpenThread
+        open_thread.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        open_thread.restype = wintypes.HANDLE
+        cancel_io = kernel32.CancelSynchronousIo
+        cancel_io.argtypes = [wintypes.HANDLE]
+        cancel_io.restype = wintypes.BOOL
+        close_handle = kernel32.CloseHandle
+        close_handle.argtypes = [wintypes.HANDLE]
+        close_handle.restype = wintypes.BOOL
+        handle = open_thread(0x0001, False, reader.native_id)  # THREAD_TERMINATE
+        if handle:
+            try:
+                cancel_io(handle)
+            finally:
+                close_handle(handle)
+    except (AttributeError, OSError):
+        pass
+
+
+def _run_bounded_threaded(proc, deadline: float) -> tuple[int, bytes]:
+    assert proc.stdout is not None
+    output = bytearray()
+    events = queue.Queue(maxsize=2)
+    stop_event = threading.Event()
+    reader = threading.Thread(target=_threaded_pipe_reader,
+                              args=(proc.stdout, events, stop_event), daemon=True)
+    reader_started = False
+    completed = False
+    try:
+        reader.start()
+        reader_started = True
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ReportError("runner-timeout")
+            try:
+                kind, value = events.get(timeout=min(remaining, 0.25))
+            except queue.Empty:
+                continue
+            if kind == "error":
+                raise ReportError("runner-output-read-failed") from value
+            if kind == "eof":
+                break
+            if len(output) + len(value) > MAX_STREAM_BYTES:
+                raise ReportError("captured-stream-too-large")
+            output.extend(value)
+            if not value:
+                break
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ReportError("runner-timeout")
+        try:
+            return_code = proc.wait(timeout=remaining)
+        except subprocess.TimeoutExpired as exc:
+            raise ReportError("runner-timeout") from exc
+        completed = True
+        return return_code, bytes(output)
+    finally:
+        stop_event.set()
+        if not completed:
+            _terminate_bounded_process(proc)
+        if reader_started:
+            reader.join(timeout=2)
+            if reader.is_alive():
+                _cancel_windows_reader(reader)
+                reader.join(timeout=1)
+        if not reader.is_alive():
+            proc.stdout.close()
+
+
 def run_bounded(command: list[str], timeout_seconds: int = RUN_TIMEOUT_SECONDS) -> tuple[int, bytes]:
     try:
         proc = subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE,
@@ -1448,46 +1588,43 @@ def run_bounded(command: list[str], timeout_seconds: int = RUN_TIMEOUT_SECONDS) 
     except OSError as exc:
         raise ReportError("runner-start-failed") from exc
     assert proc.stdout is not None
-    output = bytearray()
-    selector = selectors.DefaultSelector()
-    selector.register(proc.stdout, selectors.EVENT_READ)
     deadline = time.monotonic() + timeout_seconds
+    if os.name == "nt":
+        return _run_bounded_threaded(proc, deadline)
+    output = bytearray()
+    selector = None
+    completed = False
     try:
+        selector = selectors.DefaultSelector()
+        selector.register(proc.stdout, selectors.EVENT_READ)
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                if os.name == "posix":
-                    os.killpg(proc.pid, signal.SIGKILL)
-                else:
-                    proc.kill()
-                proc.wait(timeout=2)
                 raise ReportError("runner-timeout")
             ready = selector.select(min(remaining, 0.25))
             if ready:
-                chunk = os.read(proc.stdout.fileno(), 65536)
+                try:
+                    chunk = os.read(proc.stdout.fileno(), 65536)
+                except OSError as exc:
+                    raise ReportError("runner-output-read-failed") from exc
                 if not chunk:
                     selector.unregister(proc.stdout)
                 else:
-                    output.extend(chunk)
-                    if len(output) > MAX_STREAM_BYTES:
-                        if os.name == "posix":
-                            os.killpg(proc.pid, signal.SIGKILL)
-                        else:
-                            proc.kill()
-                        proc.wait(timeout=2)
+                    if len(output) + len(chunk) > MAX_STREAM_BYTES:
                         raise ReportError("captured-stream-too-large")
+                    output.extend(chunk)
             if proc.poll() is not None and not selector.get_map():
+                completed = True
                 break
         return proc.returncode, bytes(output)
+    except (OSError, ValueError) as exc:
+        raise ReportError("runner-output-read-failed") from exc
     finally:
-        selector.close()
+        if selector is not None:
+            selector.close()
+        if not completed:
+            _terminate_bounded_process(proc)
         proc.stdout.close()
-        if proc.poll() is None:
-            if os.name == "posix":
-                os.killpg(proc.pid, signal.SIGKILL)
-            else:
-                proc.kill()
-            proc.wait(timeout=2)
 
 
 def receipt_base(reason: str) -> dict:
