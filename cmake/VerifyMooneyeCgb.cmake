@@ -136,8 +136,14 @@ if(GBB_MODE STREQUAL "controls")
   file(MAKE_DIRECTORY "${GBB_CONTROL_DIR}/missing" "${GBB_CONTROL_DIR}/model"
     "${GBB_CONTROL_DIR}/mode" "${GBB_CONTROL_DIR}/expect")
 
-  file(WRITE "${GBB_CONTROL_DIR}/missing/manifest.json" "${manifest_json}")
-  execute_process(COMMAND "${GBB_RUNNER}" --manifest "${GBB_CONTROL_DIR}/missing/manifest.json"
+  set(missing_manifest_path "${GBB_CONTROL_DIR}/missing/manifest.json")
+  file(SHA256 "${manifest_path}" source_manifest_sha256)
+  file(COPY_FILE "${manifest_path}" "${missing_manifest_path}")
+  file(SHA256 "${missing_manifest_path}" copied_manifest_sha256)
+  if(NOT "${source_manifest_sha256}" STREQUAL "${copied_manifest_sha256}")
+    message(FATAL_ERROR "control=missing-required-rom manifest-copy-changed-bytes")
+  endif()
+  execute_process(COMMAND "${GBB_RUNNER}" --manifest "${missing_manifest_path}"
     --case vblank_stat_intr-C --profile cgb --receipt
     RESULT_VARIABLE missing_code OUTPUT_VARIABLE missing_out ERROR_VARIABLE missing_err)
   string(CONCAT missing_output "${missing_out}" "${missing_err}")
