@@ -510,12 +510,12 @@ def check_documentation(root: Path, data: dict) -> None:
     doc = (root / DOC.relative_to(ROOT)).read_text(encoding="utf-8")
     begin, end = "<!-- cgb-corpus-inventory-begin -->", "<!-- cgb-corpus-inventory-end -->"
     need(doc.count(begin) == 1 and doc.count(end) == 1, "documentation-markers")
-    block = doc.split(begin, 1)[1].split(end, 1)[0]
+    block = " ".join(doc.split(begin, 1)[1].split(end, 1)[0].split())
     required = (
         "gabbaboy-cgb-corpus-inventory-v1", "Mooneye", "SameSuite", "AGE", "MagenTests",
-        "83", "70", "19", "9", "74", "5", "107", "109", "0", "13", "6", "8", "62", "4,784",
+        "83", "70", "19", "9", "74", "5", "107", "109", "0", "13", "6", "8", "4,784",
         "CGB-CPU-E", "assertion", "admitted", "pending", "author", "evaluator", "rights", "ctest",
-        "expected-failure", "RGB555",
+        "expected-failure", "RGB555", "current complete receipt", "observed-pass", "matched-xfail",
     )
     for token in required:
         need(token.lower() in block.lower(), f"documentation-token:{token}")

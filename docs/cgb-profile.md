@@ -313,12 +313,19 @@ path. CGB-mode FF76/FF77 expose read-only digital DAC inputs for channel pairs 2
 compatibility mode reads `$FF` and ignores writes. These are software-model qualifications based on
 the pinned Pan Docs register description, not physical CGB-E measurements.
 
-The pinned SameSuite APU corpus adds 70 source-encoded CGB-E cases on the selected CGB-CPU-E model.
-Its frozen qualification records 8 terminal guest passes and 62 exact current-observation xfails
-across 4,784 assertions; the xfails remain distinct from the author-pass expectation. These receipts
-are model evidence only, not physical CGB-E audio measurements. See
-[`cgb-apu-dispositions.json`](../tests/external/cgb-apu-dispositions.json) and
-[`cgb-corpus-inventory.json`](../tests/external/cgb-corpus-inventory.json).
+<!-- cgb-apu-claims-begin -->
+FF76/FF77 expose read-only digital DAC inputs in native CGB mode; CGB compatibility mode reads
+`$FF` and ignores writes. The CH3 sample latch keeps its prior value until the next wave fetch.
+The pinned SameSuite APU roster contains 70 source-encoded cases, admitted for the CGB-CPU-E
+software model in native CGB mode. The `cgb-apu-dispositions.json` records keep each author's
+pass expectation separate from the software evaluator's result; current pass, matched-xfail, and
+assertion totals come from the current complete receipt in `cgb-corpus-receipt.json`, not this
+static profile page. These results qualify only the named digital register behavior and software
+transitions. They are not physical CGB-E audio measurements. See
+[`cgb-apu-dispositions.json`](../tests/external/cgb-apu-dispositions.json),
+[`cgb-corpus-inventory.json`](../tests/external/cgb-corpus-inventory.json), and the private,
+versioned receipt produced by `verify-cgb-corpus-report.py`.
+<!-- cgb-apu-claims-end -->
 
 In the selected software model, a manually HALTed CPU does not admit new ordinary HBlank blocks.
 An already admitted block continues, a timer IF/IE condition wakes HALT, and IME-on wake follows the

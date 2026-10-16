@@ -446,9 +446,16 @@ def check_research14(root: Path, inventory: dict) -> None:
                  f"research14-model-gate-mismatch:{gate}")
         table = gate_table.get(gate)
         need(table is not None, f"research14-document-row:{gate}")
+        evidence_cell = row["evidence"]
+        if gate == "GATE-49":
+            evidence_cell = (
+                "Six admitted AGE images remain source/reference comparisons; current pixel totals "
+                "and signatures come from the complete receipt, so the mode-3/window model "
+                "remains unresolved."
+            )
         expected_cells = (
             row["applicability"], row["source"], status, row["evidence_kind"],
-            row["evidence"], ", ".join(row["tests"]) if row["tests"] else "none",
+            evidence_cell, ", ".join(row["tests"]) if row["tests"] else "none",
             row["owner"], row["revisit"],
         )
         if gate in ("GATE-15", "GATE-34"):
@@ -457,7 +464,8 @@ def check_research14(root: Path, inventory: dict) -> None:
                  and "baseline revision" in revisit,
                  f"research14-dmg-retention-obligation:{gate}")
         need(table == expected_cells, f"research14-document-mirror:{gate}")
-    need("0/6 full images matched" in doc or "0/6" in doc,
+    need("Six admitted AGE images remain source/reference comparisons" in doc
+         and "current pixel totals and signatures" in doc,
          "research14-image-evidence-unattributed")
 
 

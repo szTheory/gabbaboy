@@ -47,10 +47,23 @@ applicability quote for each APU identity. Each ROM's encoded result remains
 author evidence, while SameBoy comparisons remain differential evidence. The
 four existing DMA outputs are included separately.
 
-Under the bounded CGB-CPU-E native, normal-speed software model, the 70
-terminal receipts comprise eight observed guest passes and 62 exact expected
-failures across 4,784 result assertions. Every source author expectation
-remains `pass`; the 62 evaluator xfails are not guest passes.
+<!-- cgb-corpus-evidence-begin -->
+For the bounded CGB-CPU-E native, normal-speed software model, all 70 source
+author expectations remain `pass`. Evaluator outcomes are independently
+recorded and a matched xfail is never a guest pass. Read current completed-case,
+observed-pass, matched-xfail, assertion, and image-pixel totals from the current
+complete receipt (`cgb-corpus-receipt.json`); do not copy those changing observations into
+this static contract. The pinned source, fixture, and result ancestry remain
+navigable through the inventory, APU disposition records, report schema, and
+build stamp. A fresh receipt is created by `--begin-run`, one full CTest stream,
+and `--from-ctest`; it is not a fixture-inventory completion flag. SameBoy
+agreement is differential evidence; author-encoded targets
+remain the expected result. This is software-model evidence only. It does not
+qualify physical CGB-E, analog audio/color, or general game compatibility. See
+[`cgb-corpus-inventory.json`](../tests/external/cgb-corpus-inventory.json),
+[`cgb-apu-dispositions.json`](../tests/external/cgb-apu-dispositions.json), and
+`tests/scripts/verify-cgb-corpus-report.py`.
+<!-- cgb-corpus-evidence-end -->
 
 AGE has 19 admitted outputs: 13 existing row-oracle cases and six mode-3
 source/reference image pairs. Four new targets are normal-speed
@@ -123,13 +136,11 @@ The receipt preserves their hashes for provenance without copying their raw
 host-specific contents into the artifact.
 
 The receipt keeps attempted, completed, actual guest-pass, matched-xfail and
-assertion counts separate. The current frozen run contains 107 completed cases
-(25 observed passes and 82 matched expected failures) and 4,959 assertion rows.
-Every required suite and source-behavior cohort has passing evidence. The six
-AGE image comparisons remain expected software-model failures, with 18,208
-pixel mismatches across 138,240 pixels. The DAA one-case tracer remains a
-separate contract test; matched expected failures never count as observed
-guest passes.
+assertion counts separate. Every required suite and source-behavior cohort has
+passing evidence. The six AGE image comparisons retain their individual
+software-model outcomes and pixel signatures in the receipt. The DAA one-case
+tracer remains a separate contract test; matched expected failures never count
+as observed guest passes.
 
 The recurring native workflow retains the build stamp and privacy-checked JSON
 receipt evidence; its parser and required-test inventory check still consume
