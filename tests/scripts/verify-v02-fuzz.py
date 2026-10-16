@@ -882,6 +882,46 @@ class ReceiptContractTests(unittest.TestCase):
         self.assertIn("receipt=pass", result.stdout)
         print("positive-control=real-campaign-receipt")
 
+    def test_selected_workflow_policy_and_mutations_use_production_checker(self) -> None:
+        result = self.run_cli("--check-workflow", str(ROOT / WORKFLOW))
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("workflow-contract=pass", result.stdout)
+        print("positive-control=selected-sanitizer-workflow-contract")
+
+        with tempfile.TemporaryDirectory() as directory:
+            baseline = (ROOT / WORKFLOW).read_text(encoding="utf-8")
+            mutations = (
+                ("runner-image", baseline.replace("runs-on: ubuntu-24.04", "runs-on: ubuntu-22.04", 1), None, "runner image"),
+                ("unpinned-c", baseline.replace("CC: clang-18", "CC: clang", 1), None, "CC must be clang-18"),
+                ("unpinned-cxx", baseline.replace("CXX: clang++-18", "CXX: clang++", 1), None, "CXX must be clang++-18"),
+                ("self-test-only", baseline.replace("--explore --receipt build-asan/v02-fuzz-receipt.json", "--self-test", 1), None, "60-second exploration route is missing"),
+                ("no-strict-validator", baseline.replace("python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json", "echo receipt unchecked", 1), None, "strict receipt validator is missing"),
+                ("no-run-attempt-binding", baseline.replace("v02-fuzz-${{ github.run_id }}-${{ github.run_attempt }}", "v02-fuzz-latest", 1), None, "artifact name must bind run and attempt"),
+                ("broadened-workers", baseline, ("-workers=1", "-workers=2"), "fuzzer argument contract does not match"),
+                ("broadened-time", baseline, ("-max_total_time=60", "-max_total_time=90"), "fuzzer argument contract does not match"),
+                ("broadened-rss", baseline, ("-rss_limit_mb=512", "-rss_limit_mb=1024"), "fuzzer argument contract does not match"),
+            )
+            rejected = 0
+            for name, workflow_text, replacement, reason in mutations:
+                case = Path(directory) / name
+                case.mkdir()
+                workflow_path = case / "ci.yml"
+                workflow_path.write_text(workflow_text, encoding="utf-8")
+                command = ["--check-workflow", str(workflow_path)]
+                if replacement:
+                    validator = (ROOT / SCRIPT.relative_to(ROOT)).read_text(encoding="utf-8")
+                    old, new = replacement
+                    self.assertIn(old, validator)
+                    validator_path = case / "validator.py"
+                    validator_path.write_text(validator.replace(old, new, 1), encoding="utf-8")
+                    command.extend(("--validator-source", str(validator_path)))
+                mutated = self.run_cli(*command)
+                self.assertNotEqual(mutated.returncode, 0, f"production checker accepted {name}")
+                self.assertIn(reason, mutated.stdout, f"wrong rejection for {name}: {mutated.stdout}")
+                rejected += 1
+            self.assertGreaterEqual(rejected, 8)
+            print(f"negative-controls={rejected} rejected_mutations=workflow-policy-and-resource-bounds")
+
 
 def self_test(receipt: Path | None) -> int:
     if receipt:
