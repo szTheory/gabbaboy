@@ -5,13 +5,13 @@ subsystem: testing
 tags: [cgb-e, age, ctest, corpus, model-gates]
 requires:
   - phase: "14-02"
-    provides: source and timing observations for inherited AGE cases
+    provides: FF56/FF72–FF75 visibility and register-policy contracts
   - phase: "14-03"
-    provides: qualified corpus candidates and identity records
+    provides: timed CH3 sample-latch and guest-qualified CGB APU transition behavior
   - phase: "14-04"
-    provides: frozen corpus selection and output inventory
+    provides: APU lifecycle, split-run execution, and bounded guest-test coverage
   - phase: "14-07"
-    provides: model-gate evidence and limitation policy
+    provides: pinned SameSuite APU corpus, author expectations, and per-case software observations
   - phase: "14-09"
     provides: inherited AGE image and row-oracle inputs
 provides:

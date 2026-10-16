@@ -5,15 +5,15 @@ subsystem: testing
 tags: [cgb, corpus, receipt, ctest, python]
 requires:
   - phase: 14-05
-    provides: Phase trust boundaries and threat mitigations.
+    provides: Pinned external source closure, frozen CGB case membership, and admission policy.
   - phase: 14-06
-    provides: CGB source and fixture qualification contracts.
+    provides: Nine bound Mooneye CGB-CPU-E cases with exact software dispositions.
   - phase: 14-07
-    provides: Frozen CGB corpus inventory and case identities.
+    provides: Pinned SameSuite APU source identities, author expectations, and case dispositions.
   - phase: 14-09
-    provides: Source coverage and expected disposition contracts.
+    provides: Six AGE image observations and source-bound row-oracle contracts.
   - phase: 14-10
-    provides: CGB-CPU-E behavior and fixture observations.
+    provides: Stable AGE source-row IDs, exact observations, and the 31-gate ownership ledger.
 provides:
   - Versioned identity-bound receipts for the frozen 107-case CGB corpus.
   - Fresh --run and identity-checked --from-ctest workflows with incomplete failure receipts.

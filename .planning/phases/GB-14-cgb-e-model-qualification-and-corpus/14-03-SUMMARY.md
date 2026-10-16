@@ -5,9 +5,9 @@ subsystem: testing
 tags: [cgb, apu, pcm, model-gates, guest-tests]
 requires:
   - phase: "14-01"
-    provides: CGB register tables and model-qualified test infrastructure
+    provides: Guest-visible PCM12/PCM34 per-mode reads and independent table contracts
   - phase: "14-02"
-    provides: CGB audio output and PCM observation contracts
+    provides: FF56 and FF72–FF75 visibility policies with guest and lifecycle checks
 provides:
   - Timed CGB CH3 sample-buffer behavior shared by PCM output and host mixing
   - Guest-qualified APU power, off-state writes, wave access, length, sweep, and DIV transitions
@@ -17,8 +17,9 @@ actuals:
   tokens: 10484
   tasks: 2
   commits: 4
-  plan_head_before: 72dd987ab214a888c5605d7a2e015ff8f7d82c3c
-  plan_head_after: e6e89a8f1730c004df9c90829b583c4853d07003
+commits: 4
+plan_head_before: 72dd987ab214a888c5605d7a2e015ff8f7d82c3c
+plan_head_after: e6e89a8f1730c004df9c90829b583c4853d07003
 tech-stack:
   added: []
   patterns:

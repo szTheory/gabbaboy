@@ -1328,9 +1328,22 @@ add_test(NAME cgb_corpus_artifact_privacy_controls
 add_test(NAME cgb_corpus_report_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_REPORT_TEST}"
     CorpusReportControlsTests.test_controls)
+set(GBB_CGB_CORPUS_CLAIMS_VERIFIER
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-claims.py")
+set(GBB_CGB_RED_PRIVACY_TEST
+  "${PROJECT_SOURCE_DIR}/tests/scripts/run-cgb-red-evidence-privacy-test.py")
+add_test(NAME cgb_corpus_claims
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_CLAIMS_VERIFIER}")
+add_test(NAME cgb_corpus_claims_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_CLAIMS_VERIFIER}" --self-test)
+# The wrapper compiles the unittest with its repository-relative filename so failed RED traces stay private.
+add_test(NAME cgb_corpus_red_evidence_privacy
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_RED_PRIVACY_TEST}")
 set_tests_properties(cgb_corpus_report_tracer cgb_corpus_report_tracer_controls
   cgb_corpus_report_contract cgb_corpus_artifact_privacy_controls cgb_corpus_report_controls
   PROPERTIES TIMEOUT 45)
+set_tests_properties(cgb_corpus_claims cgb_corpus_claims_controls
+  cgb_corpus_red_evidence_privacy PROPERTIES TIMEOUT 60)
 set(GBB_AGE_PHASE14_CONTRACT "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py")
 add_test(NAME cgb_age_assertion_identity
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_PHASE14_CONTRACT}" --assertions --runner $<TARGET_FILE:test_age>)

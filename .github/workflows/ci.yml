@@ -56,6 +56,9 @@ jobs:
       - name: Build the CGB receipt from this CTest output
         if: always()
         run: python3 -I tests/scripts/verify-cgb-corpus-report.py --from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json
+      - name: Verify public CGB claims against the fresh receipt
+        if: always()
+        run: python3 -I tests/scripts/verify-cgb-corpus-claims.py --receipt build/cgb-corpus-receipt.json
       - name: Verify required test inventory from the same CTest output
         if: always()
         run: bash .github/scripts/verify-test-inventory.sh "build/cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml" tests/expected-tests.txt --installed

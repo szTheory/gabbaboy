@@ -6,13 +6,13 @@ tags: [cgb-e, samesuite, apu, rgbds, corpus, ctest]
 requires:
   - phase: 14-03
     provides:
-      - bounded portable C execution and observable model receipts
+      - timed CGB CH3 sample latching and guest-qualified APU transition contracts
   - phase: 14-05
     provides:
-      - frozen external corpus identities and source qualification policy
+      - pinned external source closure, frozen CGB case membership, and rights/model evidence policy
   - phase: 14-06
     provides:
-      - CGB corpus inventory and Mooneye execution records
+      - exact nine-case Mooneye CGB-CPU-E compatibility corpus and bound execution records
 provides:
   - 70 pinned SameSuite APU ROM outputs with source, rights, digest, and reproduction evidence
   - 70 independent author pass expectations and bounded CGB-CPU-E observations

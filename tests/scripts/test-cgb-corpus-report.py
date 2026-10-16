@@ -97,6 +97,11 @@ class CorpusReportCorpusTests(unittest.TestCase):
                       "native job must retain bounded full output for passing tests")
         self.assertIn("--from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json",
                       native_job, "native job must derive the receipt from that CTest run")
+        self.assertIn("verify-cgb-corpus-claims.py --receipt build/cgb-corpus-receipt.json",
+                      native_job, "native job must validate claims against the derived receipt")
+        self.assertLess(native_job.index("--from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json"),
+                        native_job.index("verify-cgb-corpus-claims.py --receipt build/cgb-corpus-receipt.json"),
+                        "public claims must run only after receipt construction")
         cmake = (ROOT / "tests/CMakeLists.txt").read_text(encoding="utf-8")
         self.assertIn("cgb_corpus_build_stamp", cmake,
                       "CMake must maintain a dependency-backed build input stamp")

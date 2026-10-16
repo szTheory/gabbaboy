@@ -9,11 +9,11 @@ tags:
   - corpus
 requires:
   - phase: 14-04
-    provides: CGB-E execution model and source-pinned profile
+    provides: APU lifecycle, split-run CH3 behavior, and bounded execution coverage
   - phase: 14-07
-    provides: CGB-E APU corpus and exact disposition protocol
+    provides: pinned SameSuite APU outputs, independent author expectations, and exact case bindings
   - phase: 14-08
-    provides: CGB-E model and speed qualification contracts
+    provides: six admitted AGE mode-3 ROM/reference pairs and pending image-case protocol
 provides:
   - Bounded AGE mode-3 RGB555 guest capture and independent PNG pixel oracle
   - Exact executed dispositions for six native, compatibility, and double-speed image cases

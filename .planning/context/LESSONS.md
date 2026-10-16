@@ -702,3 +702,57 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Remedy:** Compare committed, index, working-tree and non-ignored untracked paths independently with NUL delimiters; allow only named closeout metadata. Require the exact repository context set and PR event, head, workflow and run provenance, reject duplicates, and bound receipt reads. Keep local receipts diagnostic; query actual GitHub jobs at the final published head before merge. Preserve historical measurements under their original revision when retesting.
 - **Applicability:** Test, benchmark, package or workflow evidence reused across later commits, especially after metadata closeout.
 - **Verification:** Test-only RED `03292b1` preceded source-gate fix `5459b7c`; 26 controls pass. Receipt RED `42e330f` preceded `ec54205`; positive plus 16 negative controls pass. Independent re-audits closed both findings. Handoff RED `1d45145` precedes `3cdcef2`; the completed execution stage preserves the exact verification route and rejects a wrong stage.
+
+### GB-CGB-013 / 2026-10-16 / Sweep every source and receipt consumer when a model contract changes
+
+- **Cause and evidence:** Phase 14 changed AGE row classifications, stable assertion identities, and the wording of GATE-49's current-receipt evidence. The corpus inventory contract and AGE research14 contract both consume those facts; changing only one validator left a stale cross-check. AGE identity checks also bind each source row to an exact observation ID, so prose-equivalent renaming could disconnect an assertion chain.
+- **Remedy:** For each model-visible change, trace consumers across runner/report adapters, gate tables, manifest/disposition validators, stable assertion-ID checks, documentation checks, CMake registrations, expected-test inventory, and CI. Keep source expectations and guest observations distinct at every layer.
+- **Applies when:** A source pin, manifest classification, model/mode cell, gate disposition, row ID, or receipt schema changes.
+- **Verification:** `verify-cgb-corpus-inventory.py --bindings` and `--self-test`; `verify-age-phase14-contract.py --research14` and `--research14-controls`; CTest `cgb_age_assertion_identity`, `cgb_research14_dispositions`, and `cgb_phase14_inherited_contract_unit`. Static bindings cover 181 sources, 109 outputs, and 107 cases; stable AGE assertion identities remain checked.
+- **Source:** Phase 14 plans 14-10 through 14-13; `14-10-SUMMARY.md`, `14-12-SUMMARY.md`, and `14-13-SUMMARY.md`.
+- **Status:** Adopted.
+
+### GB-CGB-014 / 2026-10-16 / Separate static inventory from live receipt completeness
+
+- **Cause and evidence:** Static inventory cannot truthfully assign a terminal result to every admitted case; `--complete` correctly rejects the unexecuted `magentests:bg_oam_priority` row. Full CTest `--begin-run` also invalidates the prior receipt before testing starts, so requiring a complete current receipt from an ordinary CTest contract creates a cycle.
+- **Remedy:** Use `--bindings` for static source, rights, output, and test identity. Keep static CTest checks limited to independently checkable contract semantics. After the single full CTest stream, derive the fresh receipt with `--from-ctest`, then validate terminal cases, actual counts, pass cohorts, and current build identity against that receipt.
+- **Applies when:** Fixture admission is stable but terminal observations are produced only by a bounded test run.
+- **Verification:** `verify-cgb-corpus-inventory.py --bindings` passes while its self-test preserves strict `--complete` rejection for the nonterminal Magen case; `verify-cgb-corpus-claims.py --receipt <fresh-receipt>` validates dynamic claims after receipt construction without rerunning guest tests.
+- **Source:** `14-12-SUMMARY.md` static-completeness correction and `14-13-SUMMARY.md` post-receipt claim check.
+- **Status:** Adopted.
+
+### GB-CI-007 / 2026-10-16 / Parse actual CTest output measurements and keep one nonce across consumers
+
+- **Cause and evidence:** CTest's real `Test.xml` includes path-only `TestList` records, stores captured output in an unnamed `<Measurement>`, and defaults passing output to 1 KiB. Parser runs passed CTests but could not derive complete evidence; the default cap also truncated APU output. A separate fixed JUnit path would let the receipt, required inventory, and DMG baseline consume different runs.
+- **Remedy:** Parse status-bearing results and the single unnamed output measurement, reject missing or duplicate measurements, and set a finite 16 MiB per-test output cap. Use the same nonce-specific JUnit for the receipt, required-test inventory, and DMG baseline. Measure actual aggregate output before changing the bound.
+- **Applies when:** CTest reports are converted into compatibility receipts or several evidence consumers share one test execution.
+- **Verification:** `test-cgb-corpus-report.py` covers TestList records, unnamed output, and missing/duplicate measurements. The 14-12 run measured 617,531 bytes for 70 APU records and 4,784 assertion rows under the 16 MiB cap. `cgb_corpus_report_contract` and the native CI contract require receipt construction before the post-receipt claim check and keep downstream JUnit paths nonce-bound.
+- **Source:** `14-12-SUMMARY.md` parser fixes and measured run; `14-13-SUMMARY.md` recurring consumer contract.
+- **Status:** Adopted.
+
+### GB-GSD-020 / 2026-10-16 / Reconfigure after the source revision changes
+
+- **Cause and evidence:** CMake embeds the Git revision during configure. A build after a commit can retain the previous revision in the runner while a new receipt observes the new HEAD, making an otherwise correct runner fail an exact-head check. Phase 14 also relies on a build-input stamp whose clean and incremental dependency order must remain intact.
+- **Remedy:** After source commits, run the configure and build presets before the exact-head CTest stream. Preserve the stamp's executable dependencies and verify clean and covered-input rebuild ordering if that contract changes; do not accept a stale runner as current evidence.
+- **Applies when:** Executable or test identity contains a configure-time source revision, or a build stamp consumes generated inputs.
+- **Verification:** `cmake --preset phase1 && cmake --build --preset phase1`; `cgb_corpus_report_tracer` and its stale-runner control; the 14-12 clean/incremental stamp checks and 14-13 exact-head receipt.
+- **Source:** `14-12-SUMMARY.md` stale-runner correction and build-stamp evidence; `14-13-SUMMARY.md` exact-head run.
+- **Status:** Adopted.
+
+### GB-GSD-021 / 2026-10-16 / Keep public evidence allowlisted and RED tracebacks repository-relative
+
+- **Cause and evidence:** Raw CTest XML and JUnit contain host paths. Five valid historical RED JSON records also captured absolute workspace paths in traceback output. The records had no output-hash field, so one could not claim a hash-verified redaction without changing their evidence contract.
+- **Remedy:** Publish only the established allowlist of privacy-checked JSON artifacts; keep raw reports local. Replace only the known workspace prefix in current RED tracebacks, preserve target/assertion/expected/actual/exit code and semantic failure text, and do not invent absent hashes. Verify path privacy with a generic negative control.
+- **Applies when:** CI artifacts, failure logs, or persisted TDD evidence might disclose host-specific paths.
+- **Verification:** The artifact scanner accepts the three public JSON files and rejects host paths in synthetic XML/JUnit. `test-cgb-red-evidence-privacy.py` checks the five preserved records and detects a synthetic absolute path; OpenGSD classifies all five historical records and the new real Task 3 record as `RED_EVIDENCE_OK`.
+- **Source:** `14-12-SUMMARY.md` artifact allowlist; `14-13-task3-red-evidence.json`; `14-13-SUMMARY.md` privacy verification.
+- **Status:** Adopted.
+
+### GB-GSD-022 / 2026-10-16 / Do not reconstruct a missing historical RED gate
+
+- **Cause and evidence:** Plan 14-12 Task 3 lacked a pre-implementation RED commit while its package-boundary implementation was already present. A test run after implementation cannot prove the earlier test-first sequence.
+- **Remedy:** Preserve the 14-12 deviation in its original summary. Do not fabricate or backdate a failure; for a new TDD task, capture and classify a real failing test before the current data or behavior fix, then keep the original failure record unchanged.
+- **Applies when:** A continued phase discovers that a previous task skipped its RED gate or a historical fixture/result is missing.
+- **Verification:** The current Task 3 privacy assertion failed against the five actual leaking records and was classified `RED_EVIDENCE_OK` before the sanitization commit; the records then pass the privacy test. The 14-12 summary still explicitly reports its missing RED.
+- **Source:** `14-12-SUMMARY.md` Task 3 deviation; `14-13-task3-red-evidence.json`; `14-13-SUMMARY.md` TDD gate record.
+- **Status:** Adopted.

@@ -648,6 +648,8 @@ cgb_corpus_inventory
 cgb_corpus_inventory_controls
 cgb_corpus_inventory_selftest
 cgb_corpus_artifact_privacy_controls
+cgb_corpus_claims
+cgb_corpus_claims_controls
 cgb_corpus_ci_contract
 cgb_corpus_not_installed
 cgb_corpus_not_installed_controls
@@ -655,6 +657,7 @@ cgb_corpus_report_tracer
 cgb_corpus_report_tracer_controls
 cgb_corpus_report_contract
 cgb_corpus_report_controls
+cgb_corpus_red_evidence_privacy
 cgb_mooneye_digest_tamper
 cgb_mooneye_inventory_tamper
 cgb_mooneye_not_installed
