@@ -220,6 +220,76 @@ def verify_sidecar_data(observed: dict, expected: dict) -> None:
         fail("sidecar source SHA, tagged ledger blob, or fixture/corpus identity differs from the tag")
 
 
+def _schema2_test_data() -> dict:
+    assertion = {
+        "id": "case-a:assertion-a",
+        "expected_disposition": "pass",
+        "observed_result": "pass",
+        "evaluator_status": "pass",
+        "signature_sha256": "1" * 64,
+    }
+    case = {
+        "id": "case-a",
+        "suite": "age",
+        "model": "CGB-CPU-E",
+        "mode": "native",
+        "speed": "normal",
+        "boot": "bootless",
+        "attempted": True,
+        "executed": True,
+        "observed_result": "pass",
+        "matched_xfail": False,
+        "excluded": False,
+        "assertions": [assertion],
+    }
+    return {
+        "schema_version": 2,
+        "version": "0.2.0",
+        "game_evidence": {
+            "status": "absent",
+            "statement": "No CGB game-level evidence exists",
+        },
+        "source_inputs": {
+            "tests/external/cgb-corpus-inventory.json": "a" * 64,
+        },
+        "inventory": {
+            "sha256": "a" * 64,
+            "case_ids": ["case-a"],
+        },
+        "receipt": {
+            "sha256": "b" * 64,
+            "identity_sha256": "c" * 64,
+            "source_sha": "d" * 40,
+            "run_id": "e" * 64,
+            "case_ids": ["case-a"],
+            "cases": [case],
+        },
+        "suite_model_counts": [{
+            "suite": "age",
+            "model": "CGB-CPU-E",
+            "mode": "native",
+            "eligible": 1,
+            "attempted": 1,
+            "executed": 1,
+            "actual_pass": 1,
+            "actual_fail": 0,
+            "matched_xfail": 0,
+            "excluded": 0,
+            "not_run": 0,
+            "assertions": 1,
+            "passing_assertions": 1,
+            "failing_assertions": 0,
+        }],
+    }
+
+
+def self_test_v2() -> None:
+    """Prove a minimal current v0.2 ledger is accepted before testing mutations."""
+    data = _schema2_test_data()
+    validate_data(data, "0.2.0")
+    print("support ledger v0.2 self-test passed: schema-2 positive fixture")
+
+
 def self_test() -> None:
     ledger = working_tree_ledger()
     current = ledger_version(ledger)
@@ -316,12 +386,16 @@ def self_test() -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--self-test-v2", action="store_true")
     parser.add_argument("--tag")
     parser.add_argument("--source-sha")
     parser.add_argument("--output", type=pathlib.Path)
     parser.add_argument("--verify-sidecar", type=pathlib.Path)
     args = parser.parse_args()
     try:
+        if args.self_test_v2:
+            self_test_v2()
+            return 0
         if args.self_test:
             self_test()
             return 0
