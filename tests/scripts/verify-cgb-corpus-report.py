@@ -24,6 +24,7 @@ import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[2]
+CTEST_COMMAND = os.environ.get("GBB_CTEST_COMMAND", "ctest")
 SCHEMA = "gabbaboy-cgb-corpus-receipt-v1"
 MAX_CASES = 4096
 MAX_ASSERTIONS = 65536
@@ -474,12 +475,12 @@ def full_build_identity(build_dir: Path, context: dict) -> dict:
                                 if item["case"]["suite"] == "mooneye"}
     if set(mooneye_case_ids) != expected_mooneye_sources:
         raise ReportError("mooneye-manifest-membership")
-    ctest_path = shutil.which("ctest")
+    ctest_path = shutil.which(CTEST_COMMAND)
     if not ctest_path:
         raise ReportError("ctest-tool-unavailable")
     ctest_bytes = bounded_read(Path(ctest_path).resolve(), 256 * 1024 * 1024)
     python_bytes = bounded_read(Path(sys.executable).resolve(), 256 * 1024 * 1024)
-    version_code, version_output = run_bounded(["ctest", "--version"], timeout_seconds=10)
+    version_code, version_output = run_bounded([CTEST_COMMAND, "--version"], timeout_seconds=10)
     if version_code != 0 or not version_output.startswith(b"ctest version "):
         raise ReportError("ctest-version-unavailable")
     identity = {
@@ -516,7 +517,7 @@ def full_build_identity(build_dir: Path, context: dict) -> dict:
 
 
 def ctest_test_names(build_dir: Path) -> set[str]:
-    command = ["ctest", "--test-dir", str(inside_root(build_dir)), "--show-only=json-v1"]
+    command = [CTEST_COMMAND, "--test-dir", str(inside_root(build_dir)), "--show-only=json-v1"]
     code, output = run_bounded(command, timeout_seconds=60)
     if code != 0:
         raise ReportError("ctest-inventory-failed")
@@ -1832,7 +1833,7 @@ def build_corpus_report(build_dir: Path, from_ctest: bool = False) -> dict:
             "command": "ctest --test-dir <build-dir> -L cgb-corpus -VV --output-on-failure --parallel 1",
         }
         write_receipt(build_dir / "cgb-corpus-run.json", running_metadata)
-        command = ["ctest", "--test-dir", str(build_dir), "-L", "cgb-corpus",
+        command = [CTEST_COMMAND, "--test-dir", str(build_dir), "-L", "cgb-corpus",
                    "-VV", "--output-on-failure", "--parallel", "1"]
         code, log_data = run_bounded(command, timeout_seconds=FULL_RUN_TIMEOUT_SECONDS)
         completed_ns = time.time_ns()
@@ -1896,7 +1897,8 @@ def self_test(build_dir: Path) -> int:
     return 0
 
 
-def self_test_controls() -> int:
+def self_test_controls(build_dir: Path) -> int:
+    build_dir = inside_root(build_dir)
     contract = load_daa_contract()
     clean = (b"case=mooneye-acceptance-instr-daa category=instruction status=pass "
              b"manifest_sha256=" + PINS["manifest_sha256"].encode() +
@@ -1923,7 +1925,7 @@ def self_test_controls() -> int:
             raise
     else:
         raise ReportError("altered-manifest-accepted")
-    with tempfile.TemporaryDirectory(prefix="cgb-report-control-", dir=ROOT / "build") as temp:
+    with tempfile.TemporaryDirectory(prefix="cgb-report-control-", dir=build_dir) as temp:
         base = Path(temp)
         out = base / "stale-receipt.json"
         out.write_text('{"schema":"gabbaboy-cgb-corpus-receipt-v1","status":"complete"}\n',
@@ -1951,7 +1953,7 @@ def main() -> int:
     args = parser.parse_args()
     if args.self_test_controls:
         try:
-            return self_test_controls()
+            return self_test_controls(args.build_dir)
         except ReportError as exc:
             print("cgb-corpus-report control failed: " + exc.code, file=sys.stderr)
             return 1

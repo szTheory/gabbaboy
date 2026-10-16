@@ -6,6 +6,7 @@ import copy
 import importlib.util
 import io
 import json
+import os
 import subprocess
 import sys
 import sysconfig
@@ -16,6 +17,9 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
+BUILD_DIR = Path(os.environ.get("GBB_TEST_BUILD_DIR", ROOT / "build"))
+if not BUILD_DIR.is_absolute():
+    BUILD_DIR = ROOT / BUILD_DIR
 REPORTER = ROOT / "tests" / "scripts" / "verify-cgb-corpus-report.py"
 INVENTORY_VALIDATOR = ROOT / "tests" / "scripts" / "verify-cgb-corpus-inventory.py"
 DAA_CASE_ID = "mooneye:acceptance/instr/daa.s"
@@ -27,7 +31,7 @@ REPORTER_SPEC.loader.exec_module(REPORTER_IMPL)
 class CorpusReportTracerTests(unittest.TestCase):
     def test_tracer_single_case_receipt(self):
         completed = subprocess.run(
-            [sys.executable, "-I", str(REPORTER), "--self-test"],
+            [sys.executable, "-I", str(REPORTER), "--self-test", "--build-dir", str(BUILD_DIR)],
             cwd=ROOT,
             capture_output=True,
             text=True,
@@ -43,10 +47,13 @@ class CorpusReportTracerTests(unittest.TestCase):
         self.assertEqual(receipt["counts"]["completed_cases"], 1)
         self.assertEqual(receipt["counts"]["observed_pass_cases"], 1)
         self.assertEqual(receipt["counts"]["assertions"], 1)
+        runner_path = REPORTER_IMPL.build_executable_path(BUILD_DIR, "gabbaboy-runner")
+        self.assertEqual(receipt["identity"]["executable_path"], REPORTER_IMPL.repo_path(runner_path))
 
     def test_tracer_controls(self):
         completed = subprocess.run(
-            [sys.executable, "-I", str(REPORTER), "--self-test-controls"],
+            [sys.executable, "-I", str(REPORTER), "--self-test-controls",
+             "--build-dir", str(BUILD_DIR)],
             cwd=ROOT,
             capture_output=True,
             text=True,
@@ -56,7 +63,7 @@ class CorpusReportTracerTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertIn("cgb-corpus-report tracer-controls pass clean=1 altered=1 stale-green=1",
                       completed.stdout)
-        with tempfile.TemporaryDirectory(prefix="cgb-report-control-", dir=ROOT / "build") as temp:
+        with tempfile.TemporaryDirectory(prefix="cgb-report-control-", dir=BUILD_DIR) as temp:
             base = Path(temp)
             fake_build = base / "missing-build"
             receipt_path = base / "receipt.json"
@@ -201,7 +208,7 @@ class CorpusReportNativeExecutableTests(unittest.TestCase):
         self.assertEqual(artifacts, expected)
 
     def test_build_tracer_report_runs_native_executable_path(self):
-        build_dir = ROOT / "build"
+        build_dir = BUILD_DIR
         contract = {"manifest_path": ROOT / "fixtures/age/manifest.json"}
         with mock.patch.object(sysconfig, "get_config_var", return_value=".exe"):
             with mock.patch.object(REPORTER_IMPL, "load_daa_contract", return_value=contract):
@@ -321,7 +328,7 @@ class CorpusReportControlsTests(unittest.TestCase):
                 with self.assertRaises(report.ReportError) as raised:
                     report.validate_relative_path(path, "path-invalid")
                 self.assertEqual(raised.exception.code, "path-invalid")
-        with tempfile.TemporaryDirectory(prefix="cgb-report-input-", dir=ROOT / "build") as temp:
+        with tempfile.TemporaryDirectory(prefix="cgb-report-input-", dir=BUILD_DIR) as temp:
             oversized = Path(temp) / "oversized.bin"
             oversized.write_bytes(b"0123456789")
             with self.assertRaises(report.ReportError) as raised:
@@ -399,7 +406,7 @@ class CorpusReportControlsTests(unittest.TestCase):
             report.parse_ctest_xml(omitted_xml, expected_corpus_tests)
         self.assertEqual(raised.exception.code, "ctest-xml-membership")
 
-        with tempfile.TemporaryDirectory(prefix="cgb-stamp-control-", dir=ROOT / "build") as temp:
+        with tempfile.TemporaryDirectory(prefix="cgb-stamp-control-", dir=BUILD_DIR) as temp:
             fake_build = Path(temp)
             stamp = {
                 "schema": report.BUILD_STAMP_SCHEMA,
@@ -423,7 +430,7 @@ class CorpusReportControlsTests(unittest.TestCase):
                 report.verify_build_stamp(fake_build, changed)
             self.assertEqual(raised.exception.code, "build-input-stamp-mismatch")
 
-        with tempfile.TemporaryDirectory(prefix="cgb-stale-run-control-", dir=ROOT / "build") as temp:
+        with tempfile.TemporaryDirectory(prefix="cgb-stale-run-control-", dir=BUILD_DIR) as temp:
             stale_build = Path(temp)
             report.write_receipt(stale_build / "cgb-corpus-run.json", {
                 "schema": report.RUN_ID_SCHEMA, "status": "complete", "run_nonce": "0" * 32,
@@ -484,7 +491,7 @@ class CorpusReportControlsTests(unittest.TestCase):
                 self.assertEqual(raised.exception.code, code)
 
         context = report.load_corpus_context()
-        identity = report.full_build_identity(ROOT / "build", context)
+        identity = report.full_build_identity(BUILD_DIR, context)
         mooneye_id = "mooneye:misc/boot_hwio-C.s"
         mooneye_item = copy.deepcopy(context["cases"][mooneye_id])
         case = mooneye_item["case"]
@@ -538,7 +545,7 @@ class CorpusReportControlsTests(unittest.TestCase):
             "log_sha256": log_digest, "started_at_ns": 1, "completed_at_ns": 2,
             "run_id": report._run_id("a" * 64, log_digest, 1, 2),
         }
-        with tempfile.TemporaryDirectory(prefix="cgb-report-run-", dir=ROOT / "build") as temp:
+        with tempfile.TemporaryDirectory(prefix="cgb-report-run-", dir=BUILD_DIR) as temp:
             run_dir = Path(temp)
             (run_dir / "cgb-corpus-ctest.log").write_bytes(log)
             report.write_receipt(run_dir / "cgb-corpus-run.json", run_metadata)
@@ -553,11 +560,11 @@ class CorpusReportControlsTests(unittest.TestCase):
             report.run_bounded([sys.executable, "-c", "import time; time.sleep(1)"], timeout_seconds=0.05)
         self.assertEqual(raised.exception.code, "runner-timeout")
 
-        with tempfile.TemporaryDirectory(prefix="cgb-report-late-failure-", dir=ROOT / "build") as temp:
+        with tempfile.TemporaryDirectory(prefix="cgb-report-late-failure-", dir=BUILD_DIR) as temp:
             receipt_path = Path(temp) / "receipt.json"
             receipt_path.write_text('{"schema":"gabbaboy-cgb-corpus-receipt-v1","status":"complete"}\n',
                                     encoding="utf-8")
-            arguments = [str(REPORTER), "--from-ctest", "--build-dir", str(ROOT / "build"),
+            arguments = [str(REPORTER), "--from-ctest", "--build-dir", str(BUILD_DIR),
                          "--receipt", str(receipt_path)]
             with mock.patch.object(report, "build_corpus_report",
                                    side_effect=report.ReportError("ctest-log-incomplete")):

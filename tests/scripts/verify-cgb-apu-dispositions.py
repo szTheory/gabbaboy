@@ -69,9 +69,9 @@ def mismatch_mask(assertions: list[dict]) -> str:
     return f"{value:0{width}x}"
 
 
-def current_ctest_names(root: Path) -> set[str]:
+def current_ctest_names(build_dir: Path, ctest_command: str) -> set[str]:
     result = subprocess.run(
-        ["ctest", "--test-dir", str(root / "build"), "--show-only=json-v1"],
+        [ctest_command, "--test-dir", str(build_dir), "--show-only=json-v1"],
         check=True, capture_output=True, text=True,
     )
     return {row["name"] for row in json.loads(result.stdout)["tests"]}
@@ -278,12 +278,12 @@ def validate(root: Path, manifest: dict, report: dict, inventory: dict,
             "assertions": assertion_total}
 
 
-def current_inputs(root: Path) -> tuple[dict, dict, dict, set[str]]:
+def current_inputs(root: Path, build_dir: Path, ctest_command: str) -> tuple[dict, dict, dict, set[str]]:
     return (
         read_json(root / "fixtures/samesuite/manifest.json"),
         read_json(root / "tests/external/cgb-apu-dispositions.json"),
         read_json(root / "tests/external/cgb-corpus-inventory.json"),
-        current_ctest_names(root),
+        current_ctest_names(build_dir, ctest_command),
     )
 
 
@@ -354,9 +354,12 @@ def main() -> int:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--membership", action="store_true")
     group.add_argument("--self-test", action="store_true")
+    parser.add_argument("--build-dir", type=Path, default=ROOT / "build")
+    parser.add_argument("--ctest-command", default="ctest")
     args = parser.parse_args()
     try:
-        manifest, report, inventory, registered_tests = current_inputs(ROOT)
+        manifest, report, inventory, registered_tests = current_inputs(
+            ROOT, args.build_dir, args.ctest_command)
         if args.self_test:
             self_test(ROOT, manifest, report, inventory, registered_tests)
             print("cgb-apu-dispositions self-test pass controls=8")

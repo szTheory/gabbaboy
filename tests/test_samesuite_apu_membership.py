@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import unittest
@@ -10,6 +11,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+BUILD_DIR = Path(os.environ.get("GBB_TEST_BUILD_DIR", ROOT / "build"))
+if not BUILD_DIR.is_absolute():
+    BUILD_DIR = ROOT / BUILD_DIR
+CTEST_COMMAND = os.environ.get("GBB_CTEST_COMMAND", "ctest")
 MANIFEST = ROOT / "fixtures/samesuite/manifest.json"
 DISPOSITIONS = ROOT / "tests/external/cgb-apu-dispositions.json"
 INVENTORY = ROOT / "tests/external/cgb-corpus-inventory.json"
@@ -39,7 +44,7 @@ class SameSuiteApuMembershipTests(unittest.TestCase):
         self.assertEqual(70, len(dispositions["cases"]), "dispositions retain all 70 source identities")
 
         listed = subprocess.run(
-            ["ctest", "--test-dir", str(ROOT / "build"), "--show-only=json-v1"],
+            [CTEST_COMMAND, "--test-dir", str(BUILD_DIR), "--show-only=json-v1"],
             check=True, capture_output=True, text=True,
         )
         test_names = {row["name"] for row in json.loads(listed.stdout)["tests"]}
@@ -54,7 +59,8 @@ class SameSuiteApuMembershipTests(unittest.TestCase):
         self.assertTrue(expected_tests <= test_names, f"missing required APU CTests: {sorted(expected_tests - test_names)}")
 
         validation = subprocess.run(
-            [sys.executable, "-I", str(VALIDATOR), "--membership"],
+            [sys.executable, "-I", str(VALIDATOR), "--membership",
+             "--build-dir", str(BUILD_DIR), "--ctest-command", CTEST_COMMAND],
             check=False, capture_output=True, text=True,
         )
         self.assertEqual(0, validation.returncode, validation.stderr or validation.stdout)

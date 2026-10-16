@@ -1002,9 +1002,11 @@ set(GBB_CGB_APU_DISPOSITIONS_VERIFIER
   "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-apu-dispositions.py")
 add_test(NAME cgb_samesuite_apu_membership
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/test_samesuite_apu_membership.py")
-set_tests_properties(cgb_samesuite_apu_membership PROPERTIES TIMEOUT 30)
+set_tests_properties(cgb_samesuite_apu_membership PROPERTIES TIMEOUT 30
+  ENVIRONMENT "GBB_TEST_BUILD_DIR=${PROJECT_BINARY_DIR};GBB_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}")
 add_test(NAME cgb_samesuite_apu_controls
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_APU_DISPOSITIONS_VERIFIER}" --self-test)
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_APU_DISPOSITIONS_VERIFIER}" --self-test
+    --build-dir "${PROJECT_BINARY_DIR}" --ctest-command "${CMAKE_CTEST_COMMAND}")
 set_tests_properties(cgb_samesuite_apu_controls PROPERTIES TIMEOUT 30
   PASS_REGULAR_EXPRESSION "cgb-apu-dispositions self-test pass")
 add_executable(test_samesuite_apu test_samesuite_apu.c)
@@ -1342,6 +1344,9 @@ add_test(NAME cgb_corpus_red_evidence_privacy
 set_tests_properties(cgb_corpus_report_tracer cgb_corpus_report_tracer_controls
   cgb_corpus_report_contract cgb_corpus_artifact_privacy_controls cgb_corpus_report_controls
   PROPERTIES TIMEOUT 45)
+set_tests_properties(cgb_corpus_report_tracer cgb_corpus_report_tracer_controls
+  cgb_corpus_report_contract cgb_corpus_report_controls PROPERTIES
+  ENVIRONMENT "GBB_TEST_BUILD_DIR=${PROJECT_BINARY_DIR};GBB_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}")
 set_tests_properties(cgb_corpus_claims cgb_corpus_claims_controls
   cgb_corpus_red_evidence_privacy PROPERTIES TIMEOUT 60)
 set(GBB_AGE_PHASE14_CONTRACT "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py")
