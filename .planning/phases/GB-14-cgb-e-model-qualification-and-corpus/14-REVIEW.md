@@ -93,17 +93,19 @@ The review covered the Phase 14 runtime, corpus validators, CMake wiring, manife
 
 ## Narrative Findings (AI reviewer)
 
-### Critical Issues
+## Critical Issues
 
-#### CR-01: Build stamp looks up extensionless executable names on Windows [BLOCKER]
+### CR-01: Build stamp looks up extensionless executable names on Windows
 
+**Severity:** BLOCKER
 **File:** `tests/scripts/verify-cgb-corpus-report.py:390-405`  
 **Issue:** `full_build_identity()` constructs artifact paths using extensionless names such as `build/gabbaboy-runner` and `build/tests/test_age`. Windows CMake builds these targets as `.exe` files, so the first `bounded_read()` fails with `input-unavailable`. The function is called by `--write-build-stamp`, which is an `ALL` custom target in `tests/CMakeLists.txt:1691-1699` and depends on these executables at `tests/CMakeLists.txt:4458-4461`; consequently the default `cmake --build --preset phase1` fails on the `native-windows` CI job.
 **Reproduction:** On Windows, configure and build the Phase 1 preset; `cgb_corpus_build_stamp` invokes `verify-cgb-corpus-report.py --write-build-stamp`, then fails while reading the first executable because only `gabbaboy-runner.exe` exists.
 **Fix:** Pass executable paths from CMake using `$<TARGET_FILE:...>` to the stamp command, or append `sysconfig.get_config_var("EXE")`/the platform executable suffix when constructing each path. Keep the recorded paths relative to the repository after resolving them.
 
-#### CR-02: Bounded subprocess reader cannot register Windows pipes [BLOCKER]
+### CR-02: Bounded subprocess reader cannot register Windows pipes
 
+**Severity:** BLOCKER
 **File:** `tests/scripts/verify-cgb-corpus-report.py:1433-1443`  
 **Issue:** `run_bounded()` registers `proc.stdout`, an anonymous pipe, with `selectors.DefaultSelector`. On Windows, `DefaultSelector` uses `SelectSelector`, which only supports sockets and rejects pipe handles. `full_build_identity()` calls this helper for `ctest --version` at line 470 while producing the same default build stamp, so even after correcting the executable suffixes, the Windows build still fails during stamp generation with a selector registration error.
 **Reproduction:** Invoke `run_bounded(["ctest", "--version"])` on Windows or build the Phase 1 preset after fixing CR-01; the `selector.register(proc.stdout, ...)` call fails before the report can be generated.
