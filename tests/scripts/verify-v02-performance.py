@@ -91,6 +91,15 @@ def summarize_ratios(values: list[float]) -> dict[str, object]:
     }
 
 
+def summarize_values(values: list[int]) -> dict[str, object]:
+    return {
+        "count": len(values),
+        "median": statistics.median(values),
+        "mean": statistics.mean(values),
+        "sample_standard_deviation": statistics.stdev(values) if len(values) > 1 else 0.0,
+    }
+
+
 def verify_receipt(receipt: object) -> dict[str, object]:
     require(isinstance(receipt, dict), "receipt-not-object")
     require(receipt.get("schema_version") == 1, "schema-version-unsupported")
@@ -239,6 +248,7 @@ def build_record(source: dict[str, str], marker: str) -> dict[str, object]:
     record: dict[str, object] = {
         "configuration": "Release",
         "cmake_version": "cmake version 3.29.0",
+        "generator": "Test Makefiles",
         "compiler": compiler,
         "c_flags_release": "-O3 -DNDEBUG",
         "binary_sha256": marker * 64,
@@ -266,6 +276,16 @@ def valid_fixture() -> dict[str, object]:
               "first": "baseline" if index % 2 == 0 else "candidate"}
              for index in range(30)]
     ratio_summary = summarize_ratios([102.0] * len(pairs))
+    def resource_record(elapsed: int, rss: int, digest: str = EXPECTED_DIGEST) -> dict[str, object]:
+        times = [elapsed + index * 10 for index in range(10)]
+        memory = [rss + index * 64 for index in range(10)]
+        return {
+            "core_elapsed_ns": times,
+            "peak_rss_bytes": memory,
+            "correctness_digest_fnv1a64": digest,
+            "elapsed_summary": summarize_values(times),
+            "peak_rss_summary_bytes": summarize_values(memory),
+        }
     fixture = git_bytes(candidate_sha, "fixtures/tracer/tracer.gb")
     manifest = git_bytes(candidate_sha, "fixtures/tracer/manifest.json")
     return {
@@ -301,6 +321,21 @@ def valid_fixture() -> dict[str, object]:
             "investigation": "No +5% review trigger; the paired estimate is within the predeclared noise band.",
             "release_disposition": "qualified-no-trigger",
         },
+        "resource_observations": {
+            "warmups": 3,
+            "paired_samples": 10,
+            "dmg": {
+                "trace": {
+                    "baseline": resource_record(11_000_000, 2_000_000),
+                    "candidate": resource_record(12_000_000, 2_100_000),
+                },
+                "no-trace": {
+                    "baseline": resource_record(10_000_000, 1_900_000),
+                    "candidate": resource_record(10_200_000, 1_950_000),
+                },
+            },
+            "cgb_cpu_e": {"candidate": resource_record(11_000_000, 2_200_000)},
+        },
     }
 
 
@@ -311,6 +346,20 @@ class PerformanceReceiptContractTests(unittest.TestCase):
             path.write_text(json.dumps(receipt, sort_keys=True), encoding="utf-8")
             return subprocess.run(
                 [sys.executable, "-I", str(SCRIPT), "--verify", str(path)],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                check=False,
+            )
+
+    def run_producer_collision(self) -> subprocess.CompletedProcess[str]:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-performance-collision-") as temp:
+            path = Path(temp) / "receipt.json"
+            path.write_text("existing", encoding="utf-8")
+            return subprocess.run(
+                ["bash", str(ROOT / "tests/scripts/measure-release-baseline.sh"),
+                 "--qualify-v02", "--output", str(path)],
                 cwd=ROOT,
                 text=True,
                 stdout=subprocess.PIPE,
@@ -361,6 +410,44 @@ class PerformanceReceiptContractTests(unittest.TestCase):
     def test_wrong_warmup_count_is_rejected(self) -> None:
         self.assert_rejected(lambda receipt: receipt["measurement"].update(warmups=2),
                              "warmup-count-mismatch")
+
+    def test_missing_regression_disposition_is_rejected(self) -> None:
+        def mutate(receipt: dict[str, object]) -> None:
+            receipt.pop("regression_disposition")
+        self.assert_rejected(mutate, "regression-disposition-missing")
+
+    def test_trigger_without_investigation_is_rejected(self) -> None:
+        def mutate(receipt: dict[str, object]) -> None:
+            measurement = receipt["measurement"]
+            for pair in measurement["pairs"]:
+                pair["candidate_ns"] = 11_000_000
+            measurement["summary"] = summarize_ratios([110.0] * 30)
+            receipt["regression_disposition"] = {
+                "review_trigger_percent": 5.0,
+                "estimate_percent": 10.0,
+                "uncertainty_margin_percent": 0.0,
+                "decision": "investigation-required",
+                "investigation": "",
+                "release_disposition": "pending-investigation",
+            }
+        self.assert_rejected(mutate, "regression-investigation-missing")
+
+    def test_hidden_host_or_path_data_is_rejected(self) -> None:
+        self.assert_rejected(lambda receipt: receipt.update(host_name="build-node.private.example"),
+                             "receipt-private-data")
+
+    def test_stale_covered_harness_identity_is_rejected(self) -> None:
+        self.assert_rejected(lambda receipt: receipt["source"]["candidate"].update(harness_sha256="0" * 64),
+                             "candidate-harness-identity-mismatch")
+
+    def test_missing_resource_observations_are_rejected(self) -> None:
+        self.assert_rejected(lambda receipt: receipt.pop("resource_observations"),
+                             "resource-observations-missing")
+
+    def test_producer_refuses_receipt_collision(self) -> None:
+        result = self.run_producer_collision()
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("qualify-v02-output-exists", result.stdout)
 
 
 def self_test() -> int:
