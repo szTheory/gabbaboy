@@ -530,7 +530,7 @@ Next command: /gsd-verify-work 14
 
 ## Operator Next Steps
 
-- Current stage: **Phase 14 qualification**, 13/13 plans complete through wave 11/11.
-- Resume command if interrupted: /gsd-execute-phase 14.
-- Continue the recorded dependencies, remaining verification and handoff within Phase 14.
-- Stop after Phase 14; Phase 15 remains unstarted.
+- Completed stage: **Phase 14 — CGB-E Model Qualification and Corpus, execution and goal verification**, 13/13 plans through wave 11/11.
+- Next stage: Phase 14 automated UAT closure; run `/gsd-verify-work 14`.
+- Reuse the completed implementation and source-bound evidence; exact-head hosted status is recorded on PR #71.
+- Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release** remains unstarted. Stop at the Phase 14 boundary.
