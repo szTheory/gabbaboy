@@ -23,6 +23,7 @@ tech-stack:
   patterns:
     - "Release ledger records exact corpus receipt and source-input identities; tagged sidecars supply release source binding"
     - "Positive and negative acceptance controls execute through production CLI entry points"
+    - "Stable support evidence is compared across fresh receipts while sidecars bind each run's exact provenance and build artifacts"
 key-files:
   created:
     - docs/support/v0.2.0.md
@@ -33,7 +34,7 @@ key-files:
     - tests/scripts/verify-cgb-corpus-claims.py
 key-decisions:
   - "v0.2.0 selects only docs/support/v0.2.0.md; patch-tag reuse remains within the validated major/minor scope."
-  - "The tracked ledger binds the actual receipt and producer revision without embedding a self-referential release source SHA; the exact-tag sidecar supplies that binding."
+  - "The tracked ledger preserves a historical producer snapshot and stable corpus evidence; fresh source/build-bound receipts must match the stable evidence while the sidecar binds the supplied receipt's exact digest, revision, run, and build artifacts."
   - "CGB game-level evidence remains explicitly absent, while software corpus evidence and physical-hardware limitations remain separate."
 patterns-established:
   - "Schema-2 support claims validate complete receipt, inventory, disposition, source-input, and build-artifact bytes before producing a release sidecar."
@@ -50,15 +51,21 @@ coverage:
       - kind: integration
         ref: "python3 -I tests/scripts/verify-support-ledger.py --self-test"
         status: pass
+      - kind: integration
+        ref: "python3 -I tests/scripts/verify-support-ledger.py --check-current --receipt build/cgb-corpus-receipt.json (two independent nonces 30504086ec6f506391cbb43d9b0e31e8a7a6555c75a221ef6769fa9f43675d8c and 84304bc51314373e9c1ddd310a5feaec1d4a8d6218ccdbed61c1ac4d906ea359; each full CTest stream 108 selected/1138 total)"
+        status: pass
   - id: D2
     description: "The v0.2.0 support ledger is selected exactly for v0.2.0 and binds release sidecars to the tagged ledger, receipt, inventory, and source inputs."
     human_judgment: false
     verification:
       - kind: integration
-        ref: "python3 -I tests/scripts/verify-support-ledger.py --self-test (positive schema-2 path and 14 rejected controls)"
+        ref: "python3 -I tests/scripts/verify-support-ledger.py --self-test (schema-2 positive=2, rejected_controls=15; accepts CTest total 1133+ with selected denominator fixed)"
         status: pass
       - kind: integration
-        ref: "python3 -I tests/scripts/verify-support-ledger.py --self-test (temporary Git sidecar fixture: positive path and 17 controls)"
+        ref: "python3 -I tests/scripts/verify-support-ledger.py --self-test (temporary Git sidecar fixture: positive=4, rejected_controls=21; clean checkout requires no build artifacts)"
+        status: pass
+      - kind: integration
+        ref: "Sidecar production-path controls: changed case outcome, assertion observation, tagged source bytes, build artifact bytes, and old sidecar after supplied receipt bytes change"
         status: pass
   - id: D3
     description: "The unreleased document is a bounded pointer to the reconciled v0.2.0 ledger, and the claim checker rejects missing or contrary statements."
@@ -86,6 +93,9 @@ coverage:
         status: pass
       - kind: integration
         ref: "python3 -I tests/scripts/verify-support-ledger.py --self-test"
+        status: pass
+      - kind: integration
+        ref: "python3 -I tests/scripts/verify-support-ledger.py --self-test (selected CTest count stays fixed; total-count and source/build byte-binding controls)"
         status: pass
 duration: 42min
 started: "2026-10-16T14:47:14Z"
@@ -122,7 +132,7 @@ Task 1 used a TDD acceptance fixture followed by implementation and receipt refr
 4. **Task 2:** `fd9a32d` — add exact-tag support sidecars and corpus ledger.
 5. **Task 2 verification fix:** `9ab24c9` — keep the isolated sidecar fixture commit reproducible.
 
-The plan metadata commit records this summary separately from the five measured task commits.
+The original plan metadata commit recorded the summary separately from the five measured task commits. The supplemental repair is bounded by `b5e9c81f4d059d215a1cc14dd254e52ec1fdd844..3d451b315e1be8a29f1d674c49f6e527a377af40` and contains one production commit; this addendum is committed immediately after it.
 
 ## Files Created/Modified
 
@@ -135,7 +145,7 @@ The plan metadata commit records this summary separately from the five measured 
 ## Decisions Made
 
 - v0.2.0 must resolve to the exact `docs/support/v0.2.0.md` path. Fix-only patch tags may reuse a ledger only inside the validated major/minor scope.
-- The tracked ledger records the actual producer revision and receipt bytes but omits a future release source SHA; the exact-tag sidecar binds that SHA without a self-reference.
+- The tracked ledger preserves a historical producer snapshot and stable evidence but omits a future release source SHA; fresh receipts are checked against stable evidence and their own source/build bytes, while the exact-tag sidecar binds supplied receipt provenance without a self-reference.
 - CGB software corpus evidence does not imply game-level compatibility or physical-hardware qualification. CGB game-level evidence remains explicitly absent.
 
 ## Deviations from Plan
@@ -150,7 +160,15 @@ The plan metadata commit records this summary separately from the five measured 
 - **Verification:** The full support-ledger self-test passes with schema-1 and schema-2 positive paths, 14 ledger controls, and 17 sidecar fixture controls.
 - **Committed in:** `9ab24c9`.
 
-**Total deviations:** 1 auto-fixed (Rule 1 - Bug). The fix only makes the planned isolated Git fixture reliable after the implementation is committed.
+**2. [Rule 1 - Bug] Compared stable corpus evidence across fresh producer runs while validating each run's own source and build identity.**
+- **Found during:** Supplemental prerequisite repair after the original plan summary.
+- **Issue:** The checker compared every fresh receipt field with the historical ledger, including nonce, run ID, receipt digest, producer revision and host-specific binary hashes. The self-test also read an ignored build receipt and copied the original host's binaries, while the CTest validator rejected a legitimate full-stream total above its 108 selected tests.
+- **Fix:** Preserved the ledger receipt as an explicitly historical snapshot; compare complete stable inventory, source, disposition, case, assertion and count evidence; verify fresh receipt source/build hashes against actual bytes; record fresh digest/revision/run/build identities in sidecars; require an integer CTest total at least as large as the unchanged 108 selected tests; generate a complete 107-case fixture without relying on build output.
+- **Files modified:** `tests/scripts/verify-support-ledger.py`, `docs/support/v0.2.0.md`.
+- **Verification:** Clean no-build checkout self-test passed with 2 schema-2 positives and 15 rejections plus 4 sidecar positives and 21 rejections. Two independent actual native corpus runs each passed 1,138/1,138 CTest tests, selected 108 corpus entries, and passed `--check-current` against the historical ledger.
+- **Committed in:** `3d451b3`.
+
+**Total deviations:** 2 auto-fixed (Rule 1 - Bug). The first keeps the isolated Git fixture reliable after implementation enters HEAD; the supplemental fix removes host-build dependencies while retaining receipt, source, artifact, and stable-evidence validation.
 
 ## Issues Encountered
 
@@ -159,6 +177,15 @@ The plan's abbreviated corpus command did not create a run nonce and was rejecte
 ## User Setup Required
 
 None. No external service or credential configuration is required.
+
+## Supplemental Ledger-Repair Evidence
+
+- **Production repair commit:** `3d451b315e1be8a29f1d674c49f6e527a377af40`. The bounded supplement range is `b5e9c81f4d059d215a1cc14dd254e52ec1fdd844..3d451b315e1be8a29f1d674c49f6e527a377af40` (one production commit); the summary addendum follows as a separate commit.
+- `check-current` validates each fresh receipt's source and binary hashes against actual repository/build bytes, then compares complete stable ledger evidence. Runtime nonce, run ID, raw receipt digest, producer revision, CTest total/log/nonce and artifact hash/size are provenance; selected CTest count and artifact path membership remain checked. The sidecar carries the supplied receipt digest, identity/run fields, producer revision and artifact identities.
+- Two independent actual native runs each passed full CTest **1,138/1,138**, including **108/108 selected CGB corpus entries**, then passed `verify-support-ledger.py --check-current`. Their nonce SHA-256 values were `30504086ec6f506391cbb43d9b0e31e8a7a6555c75a221ef6769fa9f43675d8c` and `84304bc51314373e9c1ddd310a5feaec1d4a8d6218ccdbed61c1ac4d906ea359`. Both receipts derived 107 cases, 25 guest passes, 82 matched expected failures and 4,959 assertion rows.
+- The second receipt's SHA-256 is `35b96db6807d6c05cb0882d586f428102f8fa133c6f222ab7bc7fc1638d62cc6`, run ID `f5bcbed1ff32a0dac361e473dc6f10b265575a12f5133905f4578b59da81a5e9`, with 108 selected / 1,138 total CTest cases and seven build artifacts. Its producer revision is `b5e9c81f4d059d215a1cc14dd254e52ec1fdd844`; post-commit source-ancestry validation also passed.
+- The full support-ledger self-test passed in a clean checkout with no `build/` directory. It retained schema-1 behavior, reported 2 schema-2 positive checks and 15 rejected controls, and exercised 4 temporary tagged-sidecar positives plus 21 rejected controls for missing/wrong tags, scope, case/assertion changes, source/build mutations, receipt byte identities and altered sidecars.
+- This is local CGB-CPU-E software corpus evidence only. No CGB game image or physical-hardware observation was used; game-level evidence remains absent and physical CGB-E remains UNKNOWN/POLICY. Hosted release qualification is still pending.
 
 ## Next Phase Readiness
 
@@ -171,4 +198,4 @@ The support ledger and its local evidence validators are ready for the remaining
 
 ## Self-Check: PASSED
 
-The summary file exists and all five measured task commits are ancestors of the recorded plan head.
+The summary file and owned production files exist. All five original measured task commits are ancestors of the recorded original plan head, and supplemental commit `3d451b3` is an ancestor of this addendum. The clean no-build self-test, two full native runs, receipt checks, corpus claims, inventory bindings and focused source/build rejection controls passed.
