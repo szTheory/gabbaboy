@@ -4,19 +4,19 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: 15
 current_phase_name: CGB Acceptance, Support Ledger and v0.2.0 Release
-current_plan: Not started
+current_plan: 06
 status: executing
-stopped_at: Phase 15 planning complete; paused before execution; 10 plans / 20 tasks / 7 waves; all four requirements pending
-last_updated: "2026-10-16T14:25:27.606Z"
+stopped_at: Phase 15 executing Wave 2; plans 01/02/03/05 complete; Plan 06 local implementation committed, resuming hosted campaign after prerequisite repairs
+last_updated: "2026-10-16T18:26:26.363334Z"
 last_activity: 2026-10-16
-last_activity_desc: Phase 15 planning complete; 10 plans / 20 tasks / 7 waves; next /gsd-execute-phase 15
-state_head: e0963da57a1c66fe92e4e5bd7faaae2e707071f7
+last_activity_desc: Phase 15: four plans complete; ledger clean-host/repeat-run and HDMA prerequisites repaired; next exact-source hosted fuzz qualification
+state_head: 7f38256a75daa3375f3e7f4b9a9b82cd73e95ec9
 progress:
   total_phases: 9
   completed_phases: 8
   total_plans: 134
-  completed_plans: 124
-  percent: 93
+  completed_plans: 128
+  percent: 96
 ---
 
 # Project State
@@ -26,30 +26,30 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-15)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 15 planning complete; paused before execution.
+**Current focus:** Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release
 
 ## Current Position
 
-Phase: 15 — CGB Acceptance, Support Ledger and v0.2.0 Release
-Status: Ready to execute
-Current Plan: Not started
+Phase: 15 (CGB Acceptance, Support Ledger and v0.2.0 Release) — EXECUTING
+Status: Executing Phase 15
+Current Plan: 06
 Total Plans in Phase: 10
-Last Activity: 2026-10-16
-Last Activity Description: Phase 15 planning complete; 10 plans / 20 tasks / 7 waves; next /gsd-execute-phase 15
+Last activity: 2026-10-16 — Phase 15 execution started
+Last Activity Description: Phase 15 execution started
 
-Completed workflow stage: **Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release, planning**. [Overview](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-PLAN-OVERVIEW.md), [LIGHT research](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-RESEARCH.md), [patterns](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-PATTERNS.md), [validation](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-VALIDATION.md) and [independent review](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-PLAN-CHECK.md) cover all four requirements and 24 adopted decisions. Ten plans and 20 tasks form seven waves. Two initial path/privacy warnings were corrected and independently rechecked; no finding remains. Static planning checks do not qualify implementation or release readiness.
+Completed workflow stage: **Phase 15 planning**. **Phase 15 execution is active**, with plans 15-01, 15-02, 15-03 and 15-05 summarized and verified. Wave 2 Plan 15-06 has committed its fuzz producer, strict receipt validator and Clang 18 hosted lane but has no SUMMARY and is not complete: actual hosted exploration remains pending.
 
-Next stage: **Phase 15 execution**.
-Next command: `/gsd-execute-phase 15`.
-Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release**. Execution remains unstarted; CGB-11/SHIP-09/SHIP-10/SHIP-11 remain pending. Stop at the planning boundary; do not auto-advance.
+Current route: **Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release, execution**, resume Plan 15-06 and then plans 15-04/07/08/09/10 in dependency order. Recovery command: `/gsd-execute-phase 15`; reconcile existing Plan 15-06 commits and its dependency checkpoint rather than repeating implementation.
 
-The bounded Rebound research attempt reached D-07's cutoff: pinned build failure and unresolved asset rights select explicit CGB game-evidence absence. No ROM was admitted and no new runner/core rewrite is planned. Execution still requires strict v0.2 ledger proof preserving v0.1, fresh relocated/downloaded consumers, controlled v0.1.0 paired performance, actual bounded hosted Clang/libFuzzer exploration and staged exact-tag delivery. Local unsupported fuzz is not a campaign. PR #70's dated action-required snapshot is not current green evidence.
+Evidence: public absence checks, relocated C/C++ clients (9 tests, six negative controls), complete current corpus (107 cases, 25 actual passes, 82 matched expected failures, 4,959 assertion rows), and controlled v0.1.0 paired performance (3 warmups/30 pairs; final recorded DMG slowdown 23.96%, approximate 95% margin 3.55%, explicitly disclosed). Physical CGB-E remains UNKNOWN/POLICY and no CGB game-level evidence exists.
 
-Phase 14 is merged as PR #71 at `c771b1b9c143d7589f8bb40c163c2e9f89ca1168`. Reuse its closed 49/49 automated UAT, 41/41 goal report and actual-producer receipts. Historical corpus counts are 107 cases, 25 actual passes and 82 matched expected failures; physical CGB-E remains UNKNOWN/POLICY and general game compatibility is unqualified.
+Hosted attempts exposed real prerequisites: the folded support pointer lost active HDMA qualifiers, the prior HDMA CI contract fixed the sanitizer job at 30 minutes, and support-ledger sidecar self-tests depended on ignored local artifacts. The first two are repaired in b5e9c81. The ledger repair 3d451b3 separates historical producer identities from stable evidence and independently validates fresh provenance; it passed two actual 1,138/1,138 native full streams (108 selected corpus tests) plus a clean no-build checkout self-test, 15 schema controls and 21 sidecar rejections. The source, results and artifact checks remain strict. The updated Plan 15-02 summary records its bounded repair window.
 
-Both auto-advance flags remain false. D-069 keeps zero routine human UAT through executable contracts and intended failing controls; D-096 keeps dependencies small/flat. Reopen completed research/UAT only for changed covered behavior, contrary evidence or stale/unavailable evidence.
+Plan 15-06 commits b842837/ec5c338/347cdb2/8b57a00/adcb511/e5b509d are preserved. Its local tests pass with 19 negative controls; unsupported local fuzz is not a campaign. Hosted runs 38934136095 (timeout) and 38938386905 (HDMA prerequisites) did not produce qualifying campaign evidence. Later runs retain the same blocked inputs; do not treat them as green. Resume by pushing the repaired current phase branch and validating the exact source with the existing hosted verifier.
 
-Progress (v0.2): 8/9 phases complete (89%); 124/134 planned plans complete (93%). Phase 15 has 0/10 plans executed; no implementation/release completion is claimed.
+All four phase requirements remain pending at phase level until their complete delivery gates pass. No phase PR merge, version PR #70 merge, exact-tag qualification or v0.2.0 publication is claimed. Both auto-advance flags remain false. Finish this phase only, then stop with `/gsd-verify-work 15`; no next milestone is selected.
+
+Progress (v0.2): 8/9 phases complete; 128/134 plans summarized; Phase 15 has 4/10 plans complete.
 
 ### Historical Phase 14 handoff (superseded route; preserved receipts)
 

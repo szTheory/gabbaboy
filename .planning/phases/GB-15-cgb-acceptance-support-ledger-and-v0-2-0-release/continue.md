@@ -1,18 +1,11 @@
-# Phase 15 continuation
+# Phase 15 execution continuation
 
-Completed stage: **Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release, planning** (2026-10-16).
+Completed stage: Phase 15 planning. Active stage: **Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release, execution**.
 
-Next stage: **Phase 15 execution**.
-Next command: `/gsd-execute-phase 15`.
+Recovery command: `/gsd-execute-phase 15`. Execution is continuing in the current session; no owner action is requested. Stop after Phase 15, with `/gsd-verify-work 15`; do not begin v0.3.
 
-Read `15-PLAN-OVERVIEW.md`, all ten PLAN files, `15-CONTEXT.md`, `15-RESEARCH.md`, `15-PATTERNS.md`, `15-VALIDATION.md` and `15-PLAN-CHECK.md`. The 20 tasks form seven waves, with disjoint ledger/consumer/performance/fuzz ownership in wave 2. Independent review passed after two initial path/privacy warnings were corrected; all four requirements and 24 decisions are covered. This is static planning evidence, not implementation qualification.
+Plans 15-01/02/03/05 are summarized. Plan 15-06 local implementation is committed through e5b509d but has no SUMMARY because actual hosted campaign evidence is pending. Reconcile its existing commits/checkpoint rather than reimplementing. Parent prerequisites b5e9c81 (HDMA qualifiers and bounded 45-minute policy) and 3d451b3 (portable ledger self-test, stable evidence/fresh provenance and full-stream totals) are verified; Plan 15-02 summary addendum is 7f38256. Push the repaired current branch and resume `python3 -I tests/scripts/verify-v02-fuzz.py --verify-hosted --source-sha "$(git rev-parse HEAD)"`. Old hosted runs are not qualifying evidence.
 
-Research reached the Rebound cutoff: exact pinned source failed the tested official RGBDS 1.0.1 build (494 errors), no ROM/digest resulted, and per-asset rights remain unresolved. Use “No CGB game-level evidence exists” and the contrary-claim controls; do not repeat the candidate/toolchain hunt or admit uncertain bytes. Native-CGB runner expansion is inapplicable without admitted bytes. Preserve Libbet and the frozen DMG baseline.
+Fresh repair proof: two real 1,138/1,138 native streams, 108 selected corpus tests each; independent nonces accepted by --check-current against the unchanged historical ledger; clean clone with no build directory passes full ledger self-test. Fifteen schema rejection controls and 21 sidecar rejections retain strict source, inventory, assertion and artifact identities. Historical producer fields stay historical; final tag receipt must have its own actual producer identity.
 
-Execution must provide strict versioned v0.2 ledger/sidecars preserving v0.1; fresh relocated/downloaded C/C++ behavior; semantic documentation/notices and source-archive checks; a controlled 3-warmup/30-pair v0.1.0 DMG comparison; and an actual bounded 60-second Clang/libFuzzer+ASan/UBSan campaign. Local fuzz is unsupported; route actual exploration through the eligible hosted lane. Unsupported success cannot close SHIP-11. Keep producer/PR/squash/tag identities distinct; regenerate final-tag evidence when covered inputs change.
-
-Follow the protected Phase 15 PR, refreshed version PR #70, staged exact-tag build/draft/download/gate/publish/readback order. Existing authorization covers normal run-approval recovery and reviewed/tested release; only actual permission/credential limits require the smallest external action. Dated action-required snapshots are not green proof. Published tags/assets are immutable; inspect live state before retry.
-
-Phase 14 is merged at `c771b1b9c143d7589f8bb40c163c2e9f89ca1168`; closed 49/49 automated UAT and 41/41 goal verification remain prerequisites. Historical receipts keep actual producer identities. Physical CGB-E remains UNKNOWN/POLICY; the 107-case corpus with 25 actual passes and 82 matched expected failures is not game compatibility.
-
-Execution is unstarted; all four requirements remain pending and validation stays draft. Preserve D-069 automated checks plus intended failing controls, strict SUMMARY block-schema coverage, D-096 small/flat dependencies and zero routine human UAT. Both auto flags remain false. Stop here until the owner invokes execution. Execution later stops at the Phase 15 boundary with `/gsd-verify-work 15`; do not begin v0.3 automatically.
+Preserve current corpus 107/25/82 and 4,959 assertion rows, explicit no-game evidence, physical UNKNOWN/POLICY and final recorded 23.96% DMG performance regression (3/30 paired sample, approximate 95% margin 3.55%, disclosed). All four phase requirements remain pending until complete release gates. Remaining dependency order after 15-06: 15-04, 15-07, 15-08, 15-09, 15-10. Parent owns STATE/ROADMAP/routing; preserve preexisting config/state.json changes. Both auto flags remain false.

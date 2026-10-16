@@ -479,16 +479,16 @@ Plans:
 
 **Rights gates**: Per-candidate rights audit for the CGB game (Rebound, Rex Runner, GBHack, Aevilia); none is admitted without the GAME-01 manifest checklist.
 **Research**: Light.
-**Plans**: 10 plans
+**Plans**: 4/10 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 15-01-PLAN.md — Publish the explicit CGB game-evidence boundary
+- [x] 15-01-PLAN.md — Publish the explicit CGB game-evidence boundary
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 15-02-PLAN.md — Bind a versioned support ledger to complete current corpus evidence
-- [ ] 15-03-PLAN.md — Prove relocated native consumers and API/save guidance
-- [ ] 15-05-PLAN.md — Measure a provenance-bound v0.1.0/candidate DMG comparison
+- [x] 15-02-PLAN.md — Bind a versioned support ledger to complete current corpus evidence
+- [x] 15-03-PLAN.md — Prove relocated native consumers and API/save guidance
+- [x] 15-05-PLAN.md — Measure a provenance-bound v0.1.0/candidate DMG comparison
 - [ ] 15-06-PLAN.md — Require actual bounded Clang/libFuzzer exploration
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -519,4 +519,4 @@ Plans:
 | 12. CGB Double Speed | v0.2 | 19/19 | Complete    | 2026-10-14 |
 | 13. CGB HDMA | v0.2 | 12/12 | Complete    | 2026-10-14 |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 13/13 | Complete    | 2026-10-15 |
-| 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 0/10 | Planned | - |
+| 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 4/10 | In Progress | - |
