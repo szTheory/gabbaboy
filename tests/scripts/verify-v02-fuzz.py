@@ -794,15 +794,24 @@ def assignment_value(source: str, name: str) -> object:
         tree = ast.parse(source)
     except SyntaxError as exc:
         raise ReceiptError("validator source is not valid Python") from exc
+    values: list[ast.expr | None] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and any(
             isinstance(target, ast.Name) and target.id == name for target in node.targets
         ):
-            try:
-                return ast.literal_eval(node.value)
-            except (ValueError, TypeError) as exc:
-                raise ReceiptError(f"validator {name} must use literal bounded values") from exc
-    raise ReceiptError(f"validator source is missing {name}")
+            values.append(node.value)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == name:
+            values.append(node.value)
+        elif isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name) and node.target.id == name:
+            values.append(None)
+        elif isinstance(node, ast.NamedExpr) and isinstance(node.target, ast.Name) and node.target.id == name:
+            values.append(node.value)
+    if len(values) != 1:
+        raise ReceiptError(f"validator {name} must use exactly one literal assignment")
+    try:
+        return ast.literal_eval(values[0])
+    except (ValueError, TypeError) as exc:
+        raise ReceiptError(f"validator {name} must use literal bounded values") from exc
 
 
 def selected_job_block(workflow: str) -> str:
@@ -993,6 +1002,7 @@ class ReceiptContractTests(unittest.TestCase):
                 ("broadened-workers", baseline, ("-workers=1", "-workers=2"), "fuzzer argument contract does not match"),
                 ("broadened-time", baseline, ("-max_total_time=60", "-max_total_time=90"), "fuzzer argument contract does not match"),
                 ("broadened-rss", baseline, ("-rss_limit_mb=512", "-rss_limit_mb=1024"), "fuzzer argument contract does not match"),
+                ("duplicate-worker-policy", baseline, ("def main() -> int:\n    parser = argparse.ArgumentParser", 'FUZZ_ARGS = ("-workers=2",)\n\n\ndef main() -> int:\n    parser = argparse.ArgumentParser'), "exactly one literal assignment"),
             )
             rejected = 0
             for name, workflow_text, replacement, reason in mutations:
@@ -1012,7 +1022,7 @@ class ReceiptContractTests(unittest.TestCase):
                 self.assertNotEqual(mutated.returncode, 0, f"production checker accepted {name}")
                 self.assertIn(reason, mutated.stdout, f"wrong rejection for {name}: {mutated.stdout}")
                 rejected += 1
-            self.assertGreaterEqual(rejected, 8)
+            self.assertEqual(rejected, len(mutations))
             print(f"negative-controls={rejected} rejected_mutations=workflow-policy-and-resource-bounds")
 
 
@@ -1023,7 +1033,7 @@ def self_test(receipt: Path | None) -> int:
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     # Tests are assertions; this inventory line makes a zero-control run visible in logs.
     state = "pass" if result.wasSuccessful() else "fail"
-    print(f"self-test={state} positive_controls=2 negative_controls=18 rejected_mutations={9 if result.wasSuccessful() else 0} skipped={len(result.skipped)}")
+    print(f"self-test={state} positive_controls=2 negative_controls=19 rejected_mutations={10 if result.wasSuccessful() else 0} skipped={len(result.skipped)}")
     return 0 if result.wasSuccessful() else 1
 
 
