@@ -11,3 +11,9 @@ explicit absence of CGB game-level evidence. Physical CGB-E remains
 UNKNOWN/POLICY. The separate DMG Libbet acceptance and prior mapper, save, RTC,
 CGB profile, colour, speed, HDMA, and digital APU scope are summarized with
 their boundaries in that ledger.
+
+GDMA and HBlank DMA remain implemented under the selected bootless CGB-CPU-E
+software model, with the cancellation, timing and physical-evidence limits in
+the versioned ledger and [CGB profile guide](../cgb-profile.md).
+
+Optional Mealybug CGB-C cases are `not-run:rights-gate-G1`, informational only, and outside the CGB-E denominator. Physical CGB-E remains UNKNOWN/POLICY.

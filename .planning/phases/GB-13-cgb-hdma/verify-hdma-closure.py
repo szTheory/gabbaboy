@@ -134,13 +134,13 @@ def lane_contract(root: Path) -> None:
     asan_job = re.search(r"(?ms)^  linux-sanitizers:\n(?P<section>.*?)(?=^  [a-z0-9-]+:\n|\Z)", ci)
     require(asan_job is not None and
             "name: linux-asan-ubsan" in asan_job.group("section") and
-            re.search(r"(?m)^    timeout-minutes:\s*30\s*$", asan_job.group("section")) is not None,
-            "Linux ASan job timeout changed from the recorded 30-minute policy")
+            re.search(r"(?m)^    timeout-minutes:\s*45\s*$", asan_job.group("section")) is not None,
+            "Linux ASan job must retain the 45-minute bounded campaign policy")
     require("TIMEOUT 60" in cmake and "TIMEOUT 30" in cmake,
             "existing per-test timeout policy appears to have been removed")
     require("gabbaboy_verify_registered_tests()" in cmake,
             "complete configure-time expected-test enumeration guard is missing")
-    print("hdma-lane-contract pass targets=%d core_hdma=%d player_hdma=%d parallel=4 timeout=30" %
+    print("hdma-lane-contract pass targets=%d core_hdma=%d player_hdma=%d parallel=4 timeout=45" %
           (len(LANE_TESTS), len(core_hdma), len(player_hdma)))
 
 
@@ -166,12 +166,15 @@ def lane_self_test(root: Path) -> None:
             ("missing-case", "tests/expected-tests.txt", "cgb_hdma_claims_contract_native"),
             ("skipped-lane", "tests/CMakeLists.txt", "cgb_hdma_lane_contract"),
             ("changed-parallelism", ".github/workflows/ci.yml", "--parallel 4"),
+            ("unbounded-timeout", ".github/workflows/ci.yml", "timeout-minutes: 45"),
         )
         for label, relative, token in controls:
             source = scratch / relative
             original = source.read_text(encoding="utf-8")
             if label == "changed-parallelism":
                 mutated = original.replace(token, "--parallel 1", 1)
+            elif label == "unbounded-timeout":
+                mutated = original.replace(token, "timeout-minutes: 0", 1)
             else:
                 line = next((line for line in original.splitlines() if token in line), "")
                 mutated = original.replace(line + "\n", "", 1)
@@ -180,12 +183,14 @@ def lane_self_test(root: Path) -> None:
             source.write_text(mutated, encoding="utf-8")
             try:
                 lane_contract(scratch)
-            except ContractError:
-                pass
+            except ContractError as error:
+                if label == "unbounded-timeout":
+                    require("45-minute bounded campaign policy" in str(error),
+                            "timeout mutation failed for the wrong reason")
             else:
                 raise ContractError(f"lane self-test did not reject {label}")
             source.write_text(original, encoding="utf-8")
-    print("hdma-lane self-test pass controls=3")
+    print("hdma-lane self-test pass controls=4")
 
 
 def git_output(root: Path, *args: str) -> str:
