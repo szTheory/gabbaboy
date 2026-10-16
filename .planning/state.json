@@ -51,13 +51,13 @@
     {
       "number": "15",
       "name": "CGB Acceptance, Support Ledger and v0.2.0 Release",
-      "status": "pending"
+      "status": "in_progress"
     }
   ],
   "next": {
-    "command": "/gsd-plan-phase 15",
-    "label": "Plan Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release",
-    "reason": "Phase 15 discussion complete: 24 adopted decisions and five focused LIGHT research gates. Planning and execution remain unstarted; reuse prior research/UAT and keep both auto flags false."
+    "command": "/gsd-execute-phase 15",
+    "label": "Execute Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release",
+    "reason": "Phase 15 planning complete: 10 plans / 20 tasks / 7 waves; all four requirements pending; execution unstarted; both auto flags false."
   },
   "updated_at": "2026-10-14T18:09:23.510605+00:00"
 }

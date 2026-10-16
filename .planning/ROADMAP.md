@@ -479,7 +479,32 @@ Plans:
 
 **Rights gates**: Per-candidate rights audit for the CGB game (Rebound, Rex Runner, GBHack, Aevilia); none is admitted without the GAME-01 manifest checklist.
 **Research**: Light.
-**Plans**: TBD
+**Plans**: 10 plans
+
+Plans:
+**Wave 1**
+- [ ] 15-01-PLAN.md — Publish the explicit CGB game-evidence boundary
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 15-02-PLAN.md — Bind a versioned support ledger to complete current corpus evidence
+- [ ] 15-03-PLAN.md — Prove relocated native consumers and API/save guidance
+- [ ] 15-05-PLAN.md — Measure a provenance-bound v0.1.0/candidate DMG comparison
+- [ ] 15-06-PLAN.md — Require actual bounded Clang/libFuzzer exploration
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 15-04-PLAN.md — Make adoption and limitation claims executable
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 15-07-PLAN.md — Verify licensed source archives separately from product packages
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 15-08-PLAN.md — Bind release qualification and recovery to exact evidence
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 15-09-PLAN.md — Wire strict qualification into the existing exact-tag release flow
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 15-10-PLAN.md — Complete protected delivery and verify the published exact-tag release
 
 ## Progress
 
@@ -494,4 +519,4 @@ Plans:
 | 12. CGB Double Speed | v0.2 | 19/19 | Complete    | 2026-10-14 |
 | 13. CGB HDMA | v0.2 | 12/12 | Complete    | 2026-10-14 |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 13/13 | Complete    | 2026-10-15 |
-| 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 0/TBD | Not started | - |
+| 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 0/10 | Planned | - |
