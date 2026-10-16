@@ -105,6 +105,44 @@ oversized, malformed, unsupported, or wrong-size data before modifying
 application state. The public header documents the full per-call behavior and
 buffer contracts.
 
+## Qualify a relocated C and C++ installation
+
+The release consumer verifier exercises the repository's installed C and C++
+clients against package bytes after moving a fresh install outside the
+checkout and build tree. It configures each client separately through
+`find_package(GabbaBoy CONFIG REQUIRED)` and links only `GabbaBoy::core`:
+
+```sh
+cmake --preset phase1
+cmake --build --preset phase1
+python3 -I tests/scripts/verify-v02-consumers.py --run \
+  --output build/v02-consumers.json
+python3 -I tests/scripts/verify-v02-consumers.py --self-test
+```
+
+The receipt is published only after both programs run successfully. It records
+the package tree SHA-256, the source revision reported by the installed
+runner, the C and C++ compiler identities, and the profile, probe/info,
+RGB555, and RTC behaviors completed by each client. The self-test also runs
+the production CLI against missing-prefix, missing-package-config, and
+failing-consumer controls. A positive installed-consumer result proves those
+software calls against the tested package; it does not promise a stable ABI
+or establish game compatibility.
+
+To verify an installation already extracted outside the checkout and build
+tree, pass its directory as `--prefix` and choose a fresh receipt path:
+
+```sh
+python3 -I tests/scripts/verify-v02-consumers.py \
+  --prefix "$TMPDIR/gabbaboy-v0.2.0" \
+  --output build/v02-downloaded-consumers.json
+```
+
+This checks the same CMake package and executes both clients against that
+prefix. The core remains filesystem- and clock-agnostic; your host owns save
+paths, save-file envelopes, and the wall-clock seconds passed to
+`gbb_rtc_catch_up`.
+
 ## CGB-CPU-E profile
 
 - The CGB-CPU-E profile is selected with `GBB_PROFILE_CGB_CPU_E` passed to
