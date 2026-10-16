@@ -1054,6 +1054,7 @@ cgb_samesuite_apu_tracer
 cgb_samesuite_apu_tracer_controls
 cgb_samesuite_apu_membership
 cgb_samesuite_apu_controls
+cgb_samesuite_apu_source_eol_controls
 cgb_hdma_dispositions
 cgb_hdma_dispositions_selftest
 cgb_hdma_claims_contract

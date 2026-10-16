@@ -1009,6 +1009,11 @@ add_test(NAME cgb_samesuite_apu_controls
     --build-dir "${PROJECT_BINARY_DIR}" --ctest-command "${CMAKE_CTEST_COMMAND}")
 set_tests_properties(cgb_samesuite_apu_controls PROPERTIES TIMEOUT 30
   PASS_REGULAR_EXPRESSION "cgb-apu-dispositions self-test pass")
+add_test(NAME cgb_samesuite_apu_source_eol_controls
+  COMMAND "${Python3_EXECUTABLE}" -I
+    "${PROJECT_SOURCE_DIR}/tests/scripts/test-cgb-apu-source-eol.py")
+set_tests_properties(cgb_samesuite_apu_source_eol_controls PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-apu-source-eol controls pass pinned=2 checkout=lf autocrlf-negative=crlf")
 add_executable(test_samesuite_apu test_samesuite_apu.c)
 target_sources(test_samesuite_apu PRIVATE "${PROJECT_SOURCE_DIR}/src/accept/sha256.c")
 target_include_directories(test_samesuite_apu PRIVATE "${PROJECT_SOURCE_DIR}/src/accept")
