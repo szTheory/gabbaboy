@@ -157,7 +157,7 @@ Plan 15-03 is complete. The consumer verifier and native guidance are available 
 
 ## TDD Gate Compliance
 
-- **Task 1 RED:** `test_relocated_prefix_runs_both_consumers` was recorded as invalid evidence initially then accepted as `RED_EVIDENCE_OK` by the runtime semantic and format checks.
+- **Task 1 RED:** `test_relocated_prefix_runs_both_consumers` failed on its expected-success assertion while the production CLI was still unimplemented; the runtime semantic and format checks accepted it as valid `RED_EVIDENCE_OK` evidence.
 - **Task 2 RED:** `test_interrupted_run_retries_without_partial_receipt` was recorded as valid RED evidence; the first green iteration exposed that the pause preceded staged bytes and the implementation moved it after installation.
 - **Green:** Final self-test passed all 9 contract tests, and the installed relocation run passed for both C and C++.
 
