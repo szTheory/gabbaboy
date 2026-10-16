@@ -1,7 +1,7 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v0.2 \u2014 Color & Cartridge Breadth",
+  "milestone": "v0.2 — Color & Cartridge Breadth",
   "phases": [
     {
       "number": "1",
@@ -55,9 +55,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-discuss-phase 15",
-    "label": "Discuss Phase 15 \u2014 CGB Acceptance, Support Ledger and v0.2.0 Release",
-    "reason": "Phase 14 automated UAT passed: 49/49 deliverables and 13/13 bounded commit windows, zero human checkpoints. Reuse completed research and evidence; Phase 15 remains unstarted and both auto flags stay false."
+    "command": "/gsd-plan-phase 15",
+    "label": "Plan Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release",
+    "reason": "Phase 15 discussion complete: 24 adopted decisions and five focused LIGHT research gates. Planning and execution remain unstarted; reuse prior research/UAT and keep both auto flags false."
   },
   "updated_at": "2026-10-14T18:09:23.510605+00:00"
 }

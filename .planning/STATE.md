@@ -2,15 +2,15 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_phase: 14
-current_phase_name: CGB-E Model Qualification and Corpus
-current_plan: 13
-status: complete
-stopped_at: Phase 14 automated UAT complete; paused before Phase 15
-last_updated: "2026-10-16T12:18:10.048952+00:00"
+current_phase: 15
+current_phase_name: CGB Acceptance, Support Ledger and v0.2.0 Release
+current_plan: Not started
+status: Ready for planning
+stopped_at: Phase 15 discussion complete; paused before Phase 15 planning. Planning and execution remain unstarted.
+last_updated: "2026-10-16T13:28:40.641Z"
 last_activity: 2026-10-16
-last_activity_desc: Phase 14 automated UAT complete; 49/49 automated; next Phase 15 discussion
-state_head: 2bc7d6e23393200f47bed44ede66bce8f945a538
+last_activity_desc: Phase 15 discussion complete; planning and execution unstarted; next /gsd-plan-phase 15
+state_head: c771b1b9c143d7589f8bb40c163c2e9f89ca1168
 progress:
   total_phases: 9
   completed_phases: 8
@@ -26,9 +26,30 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-15)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 14 automated UAT complete; paused before Phase 15.
+**Current focus:** Phase 15 discussion complete; paused before Phase 15 planning.
 
 ## Current Position
+
+Phase: 15 — CGB Acceptance, Support Ledger and v0.2.0 Release
+Status: Ready for planning
+Current Plan: Not started
+Total Plans in Phase: 0
+Last Activity: 2026-10-16
+Last Activity Description: Phase 15 discussion complete; planning and execution unstarted; next /gsd-plan-phase 15
+
+Completed workflow stage: **Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release, discussion**. [15-CONTEXT.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-CONTEXT.md) records 24 adopted decisions, three independent topic investigations and five focused LIGHT planning research gates. Rebound is a gated candidate with the explicit CGB-11 absence fallback, not an admitted game. Strict v0.2 ledger proof, current installed/downloaded consumers, controlled v0.1.0 performance, a real bounded Clang/libFuzzer campaign and staged exact-tag delivery remain execution work.
+
+Next stage: **Phase 15 planning**.
+Next command: `/gsd-plan-phase 15`.
+Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release**. Planning and execution remain unstarted; CGB-11/SHIP-09/SHIP-10/SHIP-11 remain pending. Stop at the discussion boundary; do not auto-advance.
+
+Phase 14 is merged as PR #71 at `c771b1b9c143d7589f8bb40c163c2e9f89ca1168`. Reuse its closed 49/49 automated UAT, 41/41 goal report and actual-producer receipts. The 107-case corpus has 25 actual passes and 82 matched expected failures; physical CGB-E remains UNKNOWN/POLICY and general game compatibility is unqualified. PR #70 and its discussion-time action-required run snapshot belong to later release execution, not current green readiness.
+
+Both auto-advance flags remain false. D-069 keeps zero routine human UAT through automated contracts and intended failing controls; D-096 keeps dependencies small/flat. Reopen settled research/UAT only for changed covered behavior, concrete contrary evidence or stale/unavailable evidence.
+
+Progress (v0.2): 8/9 phases complete (89%); 124/124 currently planned plans complete. Phase 15 has context, no plans and no implementation/release completion.
+
+### Historical Phase 14 handoff (superseded route; preserved receipts)
 
 Phase: 14 — CGB-E Model Qualification and Corpus
 Status: Phase 14 automated UAT complete; paused for the owner
@@ -524,13 +545,13 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 ## Session Continuity
 
 Last session: 2026-10-16
-Stopped at: Phase 14 automated UAT complete; paused before Phase 15 discussion. Phase 15 remains unstarted.
-Resume file: .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/continue.md
-Next command: /gsd-discuss-phase 15
+Stopped at: Phase 15 discussion complete; paused before Phase 15 planning. Planning and execution remain unstarted.
+Resume file: .planning/phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/continue.md
+Next command: /gsd-plan-phase 15
 
 ## Operator Next Steps
 
-- Completed stage: **Phase 14 — CGB-E Model Qualification and Corpus, automated UAT complete**, 49/49 deliverables and 13/13 bounded commit windows.
-- Next stage: Phase 15 discussion; run `/gsd-discuss-phase 15`.
-- Reuse the completed UAT and source-bound evidence; exact-head hosted status and merge state are recorded on PR #71.
-- Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release** remains unstarted. Stop at the Phase 14 boundary.
+- Completed stage: **Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release, discussion**; 24 decisions and five focused LIGHT research gates captured.
+- Next stage: Phase 15 planning; run `/gsd-plan-phase 15`.
+- Reuse `15-CONTEXT.md`, the three topic notes and completed Phase 14 UAT. Do not relabel old receipts, admit a game or infer release readiness from discussion.
+- Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release**. Planning/execution and all four requirements remain pending. Both auto flags remain false; stop here.
