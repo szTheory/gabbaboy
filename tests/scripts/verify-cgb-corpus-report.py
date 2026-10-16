@@ -15,6 +15,7 @@ import signal
 import shutil
 import subprocess
 import sys
+import sysconfig
 import tempfile
 import time
 import xml.etree.ElementTree as ET
@@ -94,6 +95,15 @@ def inside_root(path: Path) -> Path:
     except ValueError as exc:
         raise ReportError("path-outside-repository") from exc
     return resolved
+
+
+def build_executable_path(build_dir: Path, target: str) -> Path:
+    suffix = sysconfig.get_config_var("EXE") or ""
+    if not isinstance(suffix, str):
+        suffix = ""
+    if suffix and not target.lower().endswith(suffix.lower()):
+        target += suffix
+    return build_dir / target
 
 
 def repo_path(path: Path) -> str:
@@ -258,7 +268,7 @@ def load_daa_contract() -> dict:
 
 def build_identity(build_dir: Path, contract: dict) -> dict:
     build_dir = inside_root(build_dir)
-    executable = build_dir / "gabbaboy-runner"
+    executable = build_executable_path(build_dir, "gabbaboy-runner")
     cache = build_dir / "CMakeCache.txt"
     executable_data = bounded_read(executable, 128 * 1024 * 1024)
     cache_data = bounded_read(cache, 4 * 1024 * 1024)
@@ -400,7 +410,7 @@ def full_build_identity(build_dir: Path, context: dict) -> dict:
     cache_data = bounded_read(cache_path, 4 * 1024 * 1024)
     artifacts = []
     for name in executables:
-        path = build_dir / name
+        path = build_executable_path(build_dir, name)
         data = bounded_read(path, 128 * 1024 * 1024)
         artifacts.append({"path": repo_path(path), "size_bytes": len(data), "sha256": sha256(data)})
     paths = set(context["output_names"])
@@ -1597,7 +1607,7 @@ def write_receipt(path: Path, receipt: dict) -> None:
 def build_tracer_report(build_dir: Path) -> dict:
     contract = load_daa_contract()
     identity = build_identity(build_dir, contract)
-    runner = inside_root(build_dir) / "gabbaboy-runner"
+    runner = build_executable_path(inside_root(build_dir), "gabbaboy-runner")
     command = [str(runner), "--manifest", str(contract["manifest_path"]),
                "--case", "daa", "--profile", "cgb", "--receipt"]
     return_code, stream = run_bounded(command)

@@ -8,6 +8,7 @@ import io
 import json
 import subprocess
 import sys
+import sysconfig
 import tempfile
 import unittest
 from pathlib import Path
@@ -130,6 +131,87 @@ class CorpusReportCorpusTests(unittest.TestCase):
         self.assertEqual(len(context["cases"]), 107)
         self.assertEqual(context["assertion_rows"], 4959)
         self.assertEqual(set(context["case_by_test"]), set(context["test_names"]))
+
+
+class CorpusReportNativeExecutableTests(unittest.TestCase):
+    def _build_dir(self, suffix, *, extensionless=None, suffixed=None):
+        temp = tempfile.TemporaryDirectory(prefix="cgb-report-build-", dir=ROOT)
+        self.addCleanup(temp.cleanup)
+        build_dir = Path(temp.name)
+        (build_dir / "CMakeCache.txt").write_text(
+            "CMAKE_BUILD_TYPE:STRING=Release\nCMAKE_GENERATOR:INTERNAL=Ninja\n",
+            encoding="utf-8",
+        )
+        if extensionless is not None:
+            (build_dir / "gabbaboy-runner").write_bytes(extensionless)
+        if suffixed is not None:
+            (build_dir / f"gabbaboy-runner{suffix}").write_bytes(suffixed)
+        return build_dir
+
+    def test_build_identity_selects_native_executable_on_both_platform_shapes(self):
+        contract = REPORTER_IMPL.load_daa_contract()
+        for suffix, expected, decoy in (("", b"posix-native", b"wrong-exe"),
+                                        (".exe", b"windows-native", b"wrong-extensionless")):
+            with self.subTest(suffix=suffix):
+                if suffix:
+                    build_dir = self._build_dir(suffix, extensionless=decoy, suffixed=expected)
+                else:
+                    build_dir = self._build_dir(suffix, extensionless=expected)
+                    (build_dir / "gabbaboy-runner.exe").write_bytes(decoy)
+                with mock.patch.object(sysconfig, "get_config_var", return_value=suffix):
+                    identity = REPORTER_IMPL.build_identity(build_dir, contract)
+                native_path = build_dir / f"gabbaboy-runner{suffix}"
+                self.assertEqual(identity["executable_path"], native_path.relative_to(ROOT).as_posix())
+                self.assertEqual(identity["executable_sha256"], REPORTER_IMPL.sha256(expected))
+
+    def test_build_identity_rejects_missing_windows_native_path(self):
+        build_dir = self._build_dir(".exe", extensionless=b"wrong-extensionless")
+        with mock.patch.object(sysconfig, "get_config_var", return_value=".exe"):
+            with self.assertRaises(REPORTER_IMPL.ReportError) as raised:
+                REPORTER_IMPL.build_identity(build_dir, REPORTER_IMPL.load_daa_contract())
+        self.assertEqual(raised.exception.code, "input-unavailable")
+
+    def test_full_build_identity_uses_native_suffix_for_all_artifacts(self):
+        context = REPORTER_IMPL.load_corpus_context()
+        executable_names = (
+            "gabbaboy-runner", "tests/test_age", "tests/test_age_m3",
+            "tests/test_magentests", "tests/test_magentests_hdma",
+            "tests/test_samesuite_apu", "tests/test_samesuite_hdma",
+        )
+        temp = tempfile.TemporaryDirectory(prefix="cgb-report-full-build-", dir=ROOT)
+        self.addCleanup(temp.cleanup)
+        build_dir = Path(temp.name)
+        (build_dir / "CMakeCache.txt").write_text(
+            "CMAKE_BUILD_TYPE:STRING=Release\nCMAKE_GENERATOR:INTERNAL=Ninja\n",
+            encoding="utf-8",
+        )
+        expected = {}
+        for name in executable_names:
+            suffixed = build_dir / f"{name}.exe"
+            suffixed.parent.mkdir(parents=True, exist_ok=True)
+            data = f"native:{name}".encode()
+            suffixed.write_bytes(data)
+            extensionless = build_dir / name
+            extensionless.parent.mkdir(parents=True, exist_ok=True)
+            extensionless.write_bytes(b"wrong-extensionless")
+            expected[suffixed.relative_to(ROOT).as_posix()] = REPORTER_IMPL.sha256(data)
+        with mock.patch.object(sysconfig, "get_config_var", return_value=".exe"):
+            identity = REPORTER_IMPL.full_build_identity(build_dir, context)
+        artifacts = {row["path"]: row["sha256"] for row in identity["build_artifacts"]}
+        self.assertEqual(artifacts, expected)
+
+    def test_build_tracer_report_runs_native_executable_path(self):
+        build_dir = ROOT / "build"
+        contract = {"manifest_path": ROOT / "fixtures/age/manifest.json"}
+        with mock.patch.object(sysconfig, "get_config_var", return_value=".exe"):
+            with mock.patch.object(REPORTER_IMPL, "load_daa_contract", return_value=contract):
+                with mock.patch.object(REPORTER_IMPL, "build_identity", return_value={"identity": True}):
+                    with mock.patch.object(REPORTER_IMPL, "run_bounded", return_value=(0, b"event")) as run:
+                        with mock.patch.object(REPORTER_IMPL, "validate_event_with_identity", return_value={}):
+                            with mock.patch.object(REPORTER_IMPL, "complete_receipt", return_value={"status": "complete"}):
+                                REPORTER_IMPL.build_tracer_report(build_dir)
+        command = run.call_args.args[0]
+        self.assertEqual(command[0], str(build_dir / "gabbaboy-runner.exe"))
 
 
 class CorpusReportControlsTests(unittest.TestCase):
