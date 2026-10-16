@@ -121,10 +121,14 @@ def install_signal_handlers() -> None:
         signal.signal(signum, stop)
 
 
-def maybe_test_pause(marker_path: Path, temp_root: Path) -> None:
+def maybe_test_pause(marker_path: Path, temp_root: Path, staged_prefix: Path) -> None:
     """A bounded, private self-test pause lets the harness interrupt a real --run."""
     marker_path.parent.mkdir(parents=True, exist_ok=True)
-    marker_path.write_text(json.dumps({"temp_root": str(temp_root)}) + "\n", encoding="utf-8")
+    staged_file_count = sum(1 for path in staged_prefix.rglob("*") if path.is_file())
+    marker_path.write_text(
+        json.dumps({"temp_root": str(temp_root), "staged_file_count": staged_file_count}) + "\n",
+        encoding="utf-8",
+    )
     deadline = time.monotonic() + 45
     while time.monotonic() < deadline:
         time.sleep(0.05)
@@ -293,12 +297,12 @@ def install_package(project_root: Path, temp_root: Path, cmake: str) -> Path:
     need(build.is_dir(), "configured-build-missing")
     staged = temp_root / "staged-prefix"
     relocated = temp_root / "relocated-prefix"
-    marker = os.environ.get(TEST_PAUSE_ENV)
-    if marker:
-        maybe_test_pause(Path(marker), temp_root)
     run_command([cmake, "--install", str(build), "--prefix", str(staged)],
                 cwd=project_root, env=clean_package_environment(), rejection="package-install-failed")
     need(staged.is_dir(), "package-install-produced-no-prefix")
+    marker = os.environ.get(TEST_PAUSE_ENV)
+    if marker:
+        maybe_test_pause(Path(marker), temp_root, staged)
     staged.rename(relocated)
     need(not within(relocated.resolve(), project_root.resolve()), "installed-prefix-not-isolated")
     return relocated
