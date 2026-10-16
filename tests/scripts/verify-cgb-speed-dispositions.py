@@ -8,6 +8,22 @@ import pathlib
 import re
 import sys
 
+AGE_ROW_CASES = {
+    "spsw-div-cgbBCE", "spsw-tima-cgbE", "spsw-tima-cgbBC", "spsw-stop-prefetch-cgbBCE",
+    "spsw-interrupts-cgbE", "spsw-mode0-cgbBCE", "spsw-ch2-lc-delay-cgbBCE",
+    "stat-mode-ds-cgbBCE", "stat-mode-cgbE", "stat-mode-sprites-ds-cgbBCE",
+    "stat-mode-sprites-dmgC-cgbBCE", "stat-mode-window-ds-cgbBCE", "stat-mode-window-cgbBCE",
+}
+AGE_IMAGE_CASES = {
+    f"m3-bg-{axis}-{variant}"
+    for axis in ("lcdc", "scx")
+    for variant in ("cgbBCE", "ds-cgbBCE", "nocgb-ncmBCE")
+}
+AGE_DIGEST_ONLY_CASE = "spsw-interrupts-cgbBC"
+AGE_COMMIT = "1f5bc10e2cb60b86c19f8d0287ff78f410c4f639"
+ROW_METADATA = {"test_results_address", "expected_address", "rows", "budget_half_dots"}
+IMAGE_XFAIL_REASON = "expected-failure:cgb-e-mode3-reference-mismatch"
+
 
 class Mismatch(Exception):
     pass
@@ -44,6 +60,55 @@ def mirror_rows(document: str) -> list[tuple[str, ...]]:
     return rows
 
 
+def admitted_age_row_fixtures(root: pathlib.Path) -> dict[str, dict]:
+    manifest = json.loads((root / "fixtures/age/manifest.json").read_text(encoding="utf-8"))
+    need(manifest.get("fixture_protocol") == "gabbaboy-age-fixture-protocol-v1",
+         "age-fixture-protocol")
+    fixtures = manifest.get("fixtures", [])
+    files = [fixture.get("file", "") for fixture in fixtures]
+    need(len(fixtures) == 19 and len(files) == len(set(files)), "age-fixture-count")
+    need(all(fixture.get("fixture_class") in {"age-row-oracle", "age-m3-reference"}
+             for fixture in fixtures), "age-fixture-class")
+    row_fixtures = [fixture for fixture in fixtures
+                    if fixture.get("fixture_class") == "age-row-oracle"]
+    image_fixtures = [fixture for fixture in fixtures
+                      if fixture.get("fixture_class") == "age-m3-reference"]
+    rows = {fixture.get("file", "").removesuffix(".gb"): fixture for fixture in row_fixtures}
+    images = {fixture.get("file", "").removesuffix(".gb"): fixture for fixture in image_fixtures}
+    need(len(rows) == 13 and set(rows) == AGE_ROW_CASES, "age-row-fixture-set")
+    need(len(images) == 6 and set(images) == AGE_IMAGE_CASES, "age-image-fixture-set")
+    for case, fixture in rows.items():
+        need(ROW_METADATA <= set(fixture) and fixture.get("file") == f"{case}.gb",
+             f"age-row-metadata {case}")
+        need("qualification_status" not in fixture and "pixel_assertion_count" not in fixture,
+             f"age-row-image-status {case}")
+    for case, fixture in images.items():
+        need(fixture.get("qualification_status") == "executed",
+             f"age-image-not-executed {case}")
+        need(not ROW_METADATA.intersection(fixture), f"age-image-row-metadata {case}")
+        need(fixture.get("expected_role") == "pass-target" and
+             fixture.get("execution_result") == "fail" and
+             fixture.get("disposition") == "expected-failure" and
+             fixture.get("reason") == IMAGE_XFAIL_REASON,
+             f"age-image-execution-disposition {case}")
+        identity = "/".join((
+            f"age@{AGE_COMMIT}",
+            f"{fixture['source_path']}#{fixture['source_sha256']}",
+            f"{fixture['file']}#{fixture['sha256']}",
+            fixture["model"], fixture["mode"], fixture["speed"], case,
+        ))
+        need(fixture.get("case_id") == identity, f"age-image-case-identity {case}")
+        need(fixture.get("pixel_assertion_count") == 23040 and
+             isinstance(fixture.get("pixel_mismatch_count"), int) and
+             0 < fixture["pixel_mismatch_count"] <= 23040 and
+             re.fullmatch(r"[0-9a-f]{64}", str(fixture.get("pixel_mismatch_signature_sha256", ""))) is not None,
+             f"age-image-signature {case}")
+        reference = fixture.get("reference", {})
+        need(reference.get("file") == f"references/{case}.png",
+             f"age-image-reference-pair {case}")
+    return rows
+
+
 def main() -> int:
     root = pathlib.Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser()
@@ -54,7 +119,7 @@ def main() -> int:
         data = json.loads(args.record.read_text(encoding="utf-8"))
         need(data.get("schema") == "gabbaboy-external-dispositions-v1", "schema")
         suites = suite_map(data)
-        need({"age-test-roms", "gabbaboy-model", "samesuite", "gambatte",
+        need({"age-test-roms", "gabbaboy-model", "gambatte",
               "not-applicable"} <= set(suites), "suite-set")
         rows = [(suite["suite"], row)
                 for suite in data.get("suites", []) for row in suite.get("rows", [])]
@@ -64,28 +129,33 @@ def main() -> int:
                 need(re.fullmatch(r"[0-9a-f]{40}", suite.get("commit", "")) is not None,
                      f"commit {suite.get('suite', '')}")
 
-        age_manifest = json.loads((root / "fixtures/age/manifest.json").read_text(encoding="utf-8"))
+        admitted = admitted_age_row_fixtures(root)
         age_rows = suites["age-test-roms"].get("rows", [])
-        admitted = {fixture["file"][:-3]: fixture for fixture in age_manifest.get("fixtures", [])}
-        vendored_age = {row.get("case"): row for row in age_rows if row.get("vendored") is not False}
-        need(set(vendored_age) == set(admitted), "age-case-set")
+        age_case_names = [row.get("case") for row in age_rows]
+        need(len(age_rows) == 14 and len(age_case_names) == len(set(age_case_names)) and
+             set(age_case_names) == AGE_ROW_CASES | {AGE_DIGEST_ONLY_CASE}, "age-case-set")
+        vendored_age_rows = [row for row in age_rows if row.get("vendored") is not False]
+        vendored_age = {row.get("case"): row for row in vendored_age_rows}
+        need(len(vendored_age_rows) == 13 and len(vendored_age) == 13 and
+             set(vendored_age) == AGE_ROW_CASES and
+             set(vendored_age) == set(admitted), "age-case-set")
         for case, fixture in admitted.items():
             need(vendored_age[case].get("upstream_path") == fixture.get("source_path"),
                  f"age-upstream-path {case}")
         digest_only = [row for row in age_rows if row.get("disposition") == "digest-only"]
-        need(len(digest_only) == 1 and digest_only[0].get("case") == "spsw-interrupts-cgbBC" and
+        need(len(digest_only) == 1 and digest_only[0].get("case") == AGE_DIGEST_ONLY_CASE and
              digest_only[0].get("vendored") is False and
              re.fullmatch(r"[0-9a-f]{64}", digest_only[0].get("source_sha256", "")) is not None,
              "age-digest-only")
         sensitivity = suites["age-test-roms"].get("sensitivity", {})
         mutants = {row.get("mutant"): row for row in sensitivity.get("mutants", [])}
         need(set(mutants) == {"M6", "M21", "M28", "M27"} and
-             sensitivity.get("fixture_count") == len(admitted) and
+             sensitivity.get("fixture_count") == len(AGE_ROW_CASES) and
              re.fullmatch(r"[0-9a-f]{40}", sensitivity.get("source_revision", "")) is not None,
              "age-sensitivity-shape")
         for mutant, row in mutants.items():
             cases = row.get("discriminating_cases", [])
-            need(len(cases) == len(set(cases)) and set(cases) <= set(admitted),
+            need(len(cases) == len(set(cases)) and set(cases) <= AGE_ROW_CASES,
                  f"age-sensitivity-cases {mutant}")
         need({"spsw-div-cgbBCE"} <= set(mutants["M6"].get("discriminating_cases", [])) and
              {"spsw-div-cgbBCE"} <= set(mutants["M21"].get("discriminating_cases", [])) and
@@ -144,12 +214,9 @@ def main() -> int:
         gate_names.discard("reason")
         need(gate_names <= row_names, f"expected-failure-model-gates {sorted(gate_names - row_names)}")
 
-        same = suites["samesuite"]
-        need(same.get("vendored") is False and len(same.get("rows", [])) == 1 and
-             same["rows"][0].get("disposition") == "expected-unsupported" and
-             same["rows"][0].get("reason") == "pcm-registers-unbuilt" and
-             sum(row.get("reason") == "pcm-registers-unbuilt" for _, row in rows) == 1,
-             "samesuite-aggregate")
+        need("samesuite" not in suites and
+             (root / "tests/external/cgb-apu-dispositions.json").is_file(),
+             "samesuite-apu-routed-to-qualified-corpus")
         gambatte = suites["gambatte"]
         need(gambatte.get("vendored") is False and gambatte.get("license") == "GPL-2.0" and
              len(gambatte.get("rows", [])) == 1 and

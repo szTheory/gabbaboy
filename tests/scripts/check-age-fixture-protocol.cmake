@@ -1,0 +1,7 @@
+if(NOT DEFINED MANIFEST OR NOT EXISTS "${MANIFEST}")
+  message(FATAL_ERROR "age-fixture-protocol-check: MANIFEST is required")
+endif()
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/AgeFixtureProtocol.cmake")
+file(READ "${MANIFEST}" manifest_json)
+gbb_validate_age_fixture_protocol("${manifest_json}" row_indices image_indices)
+message(STATUS "age-fixture-protocol pass row=${row_indices} image-executed=${image_indices}")

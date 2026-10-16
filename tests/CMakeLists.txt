@@ -392,9 +392,12 @@ add_executable(test_cgb_visibility test_cgb_visibility.c)
 target_link_libraries(test_cgb_visibility PRIVATE GabbaBoy::core)
 target_compile_features(test_cgb_visibility PRIVATE c_std_17)
 set_target_properties(test_cgb_visibility PROPERTIES C_EXTENSIONS OFF)
-foreach(case vbk_tracer svbk_select unmapped_cgb boundaries deferred_stop ie_gate deferred_latch_interrupt
+foreach(case vbk_tracer svbk_select unmapped_cgb boundaries deferred_stop ie_gate
      matrix_compat flip_control matrix_cgb matrix_dmg cross_column_control sweep_control)
   add_test(NAME cgb_visibility_${case} COMMAND test_cgb_visibility ${case})
+endforeach()
+foreach(case ir_tracer ir_controls ir_modes ir_interrupt_continuation)
+  add_test(NAME cgb_${case} COMMAND test_cgb_visibility ${case})
 endforeach()
 add_test(NAME cgb_hdma_visibility COMMAND test_cgb_visibility hdma_visibility)
 add_test(NAME cgb_hdma_visibility_controls COMMAND test_cgb_visibility hdma_visibility_controls)
@@ -669,6 +672,78 @@ foreach(case pulse mixer sequencer timeline wave noise envelope sweep power)
   add_test(NAME apu_${case} COMMAND test_apu apu_${case})
 endforeach()
 
+# Phase 14 plans 14-01/14-03: CGB guests sample digital PCM and CH3 fetch state through the timed bus path.
+add_executable(test_cgb_apu test_cgb_apu.c)
+target_link_libraries(test_cgb_apu PRIVATE GabbaBoy::core)
+target_compile_features(test_cgb_apu PRIVATE c_std_17)
+set_target_properties(test_cgb_apu PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_apu_wave_latch COMMAND test_cgb_apu cgb_apu_wave_latch)
+add_test(NAME cgb_apu_wave_fetch COMMAND test_cgb_apu cgb_apu_wave_fetch)
+add_test(NAME cgb_apu_power COMMAND test_cgb_apu cgb_apu_power)
+add_test(NAME cgb_apu_off_writes COMMAND test_cgb_apu cgb_apu_off_writes)
+add_test(NAME cgb_apu_wave_access COMMAND test_cgb_apu cgb_apu_wave_access)
+add_test(NAME cgb_apu_div_stop COMMAND test_cgb_apu cgb_apu_div_stop)
+add_test(NAME cgb_apu_transition_controls COMMAND test_cgb_apu cgb_apu_transition_controls)
+add_test(NAME cgb_apu_trigger_length_sweep COMMAND test_cgb_apu cgb_apu_trigger_length_sweep)
+add_test(NAME cgb_apu_output_pressure COMMAND test_cgb_apu cgb_apu_output_pressure)
+add_test(NAME cgb_pcm_tracer COMMAND test_cgb_apu cgb_pcm_tracer)
+foreach(case channels power_dac readonly host_invariance controls)
+  add_test(NAME cgb_pcm_${case} COMMAND test_cgb_apu cgb_pcm_${case})
+endforeach()
+
+# Phase 14 plan 14-04: deterministic bounded hostile APU inputs use the same offline fuzz adapter.
+add_executable(test_cgb_apu_hostile test_cgb_apu.c fuzz_core.c)
+target_link_libraries(test_cgb_apu_hostile PRIVATE GabbaBoy::core)
+target_compile_features(test_cgb_apu_hostile PRIVATE c_std_17)
+target_compile_definitions(test_cgb_apu_hostile PRIVATE
+  GBB_FUZZ_STANDALONE_TEST=1 GBB_CGB_APU_HOSTILE_TEST=1)
+set_target_properties(test_cgb_apu_hostile PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_apu_hostile_seeds
+  COMMAND test_cgb_apu_hostile cgb_apu_hostile_seeds)
+
+# Compile-time-only mutant core: production instances have no runtime mutation selector or state.
+add_library(gabbaboy_core_cgb_pcm_nibble_mutant STATIC ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c)
+target_include_directories(gabbaboy_core_cgb_pcm_nibble_mutant PUBLIC "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(gabbaboy_core_cgb_pcm_nibble_mutant PRIVATE c_std_17)
+target_compile_definitions(gabbaboy_core_cgb_pcm_nibble_mutant PRIVATE GBB_TEST_CGB_PCM_SWAP_NIBBLES=1)
+set_target_properties(gabbaboy_core_cgb_pcm_nibble_mutant PROPERTIES C_EXTENSIONS OFF)
+add_executable(test_cgb_apu_nibble_mutant test_cgb_apu.c)
+target_link_libraries(test_cgb_apu_nibble_mutant PRIVATE gabbaboy_core_cgb_pcm_nibble_mutant)
+target_compile_features(test_cgb_apu_nibble_mutant PRIVATE c_std_17)
+target_compile_definitions(test_cgb_apu_nibble_mutant PRIVATE GBB_CGB_APU_CONTROL_MUTANT=1)
+set_target_properties(test_cgb_apu_nibble_mutant PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_pcm_tracer_control COMMAND test_cgb_apu_nibble_mutant cgb_pcm_tracer_control)
+
+# Negative controls are separate compile-time cores: no production runtime selector or API.
+foreach(kind routing writable)
+  add_library(gabbaboy_core_cgb_pcm_${kind}_mutant STATIC ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c)
+  target_include_directories(gabbaboy_core_cgb_pcm_${kind}_mutant PUBLIC "${PROJECT_SOURCE_DIR}/include")
+  target_compile_features(gabbaboy_core_cgb_pcm_${kind}_mutant PRIVATE c_std_17)
+  set_target_properties(gabbaboy_core_cgb_pcm_${kind}_mutant PROPERTIES C_EXTENSIONS OFF)
+  add_executable(test_cgb_apu_${kind}_mutant test_cgb_apu.c)
+  target_link_libraries(test_cgb_apu_${kind}_mutant PRIVATE gabbaboy_core_cgb_pcm_${kind}_mutant)
+  target_compile_features(test_cgb_apu_${kind}_mutant PRIVATE c_std_17)
+  set_target_properties(test_cgb_apu_${kind}_mutant PROPERTIES C_EXTENSIONS OFF)
+endforeach()
+target_compile_definitions(gabbaboy_core_cgb_pcm_routing_mutant PRIVATE GBB_TEST_CGB_PCM_ROUTING_COUPLED=1)
+target_compile_definitions(test_cgb_apu_routing_mutant PRIVATE GBB_CGB_APU_CONTROL_MUTANT=2)
+add_test(NAME cgb_pcm_routing_control COMMAND test_cgb_apu_routing_mutant cgb_pcm_controls)
+target_compile_definitions(gabbaboy_core_cgb_pcm_writable_mutant PRIVATE GBB_TEST_CGB_PCM_WRITABLE=1)
+target_compile_definitions(test_cgb_apu_writable_mutant PRIVATE GBB_CGB_APU_CONTROL_MUTANT=3)
+add_test(NAME cgb_pcm_writable_control COMMAND test_cgb_apu_writable_mutant cgb_pcm_controls)
+
+add_library(gabbaboy_core_cgb_apu_direct_ram_mutant STATIC ${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c)
+target_include_directories(gabbaboy_core_cgb_apu_direct_ram_mutant PUBLIC "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(gabbaboy_core_cgb_apu_direct_ram_mutant PRIVATE c_std_17)
+target_compile_definitions(gabbaboy_core_cgb_apu_direct_ram_mutant PRIVATE GBB_TEST_CGB_APU_DIRECT_RAM=1)
+set_target_properties(gabbaboy_core_cgb_apu_direct_ram_mutant PROPERTIES C_EXTENSIONS OFF)
+add_executable(test_cgb_apu_direct_ram_mutant test_cgb_apu.c)
+target_link_libraries(test_cgb_apu_direct_ram_mutant PRIVATE gabbaboy_core_cgb_apu_direct_ram_mutant)
+target_compile_features(test_cgb_apu_direct_ram_mutant PRIVATE c_std_17)
+target_compile_definitions(test_cgb_apu_direct_ram_mutant PRIVATE GBB_CGB_APU_CONTROL_MUTANT=4)
+set_target_properties(test_cgb_apu_direct_ram_mutant PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_apu_wave_direct_ram_control COMMAND test_cgb_apu_direct_ram_mutant cgb_apu_wave_direct_ram_control)
+
 add_executable(test_serial test_serial.c)
 target_link_libraries(test_serial PRIVATE GabbaBoy::core)
 target_compile_features(test_serial PRIVATE c_std_17)
@@ -920,8 +995,157 @@ add_test(NAME cgb_hdma_magen_controls
     ${GBB_MAGENTESTS_DIR}/hblank_vram_dma.gbc)
 set_tests_properties(magentests_hblank_vram_dma cgb_hdma_magen_controls PROPERTIES TIMEOUT 60)
 
-# Phase 13 plan 13-09: run the exact admitted SameSuite DMA ROMs on the selected
-# CGB-CPU-E software model, with byte/status predicates and bounded test seams.
+# Phase 14 plan 14-07: qualify the pinned SameSuite APU membership on the
+# selected CGB-CPU-E model; one suite run emits the per-case receipts.
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(GBB_CGB_APU_DISPOSITIONS_VERIFIER
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-apu-dispositions.py")
+add_test(NAME cgb_samesuite_apu_membership
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/test_samesuite_apu_membership.py")
+set_tests_properties(cgb_samesuite_apu_membership PROPERTIES TIMEOUT 30
+  ENVIRONMENT "GBB_TEST_BUILD_DIR=${PROJECT_BINARY_DIR};GBB_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}")
+add_test(NAME cgb_samesuite_apu_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_APU_DISPOSITIONS_VERIFIER}" --self-test
+    --build-dir "${PROJECT_BINARY_DIR}" --ctest-command "${CMAKE_CTEST_COMMAND}")
+set_tests_properties(cgb_samesuite_apu_controls PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-apu-dispositions self-test pass")
+add_test(NAME cgb_samesuite_apu_source_eol_controls
+  COMMAND "${Python3_EXECUTABLE}" -I
+    "${PROJECT_SOURCE_DIR}/tests/scripts/test-cgb-apu-source-eol.py")
+set_tests_properties(cgb_samesuite_apu_source_eol_controls PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-apu-source-eol controls pass pinned=2 checkout=lf autocrlf-negative=crlf")
+add_executable(test_samesuite_apu test_samesuite_apu.c)
+target_sources(test_samesuite_apu PRIVATE "${PROJECT_SOURCE_DIR}/src/accept/sha256.c")
+target_include_directories(test_samesuite_apu PRIVATE "${PROJECT_SOURCE_DIR}/src/accept")
+target_link_libraries(test_samesuite_apu PRIVATE GabbaBoy::core)
+target_compile_features(test_samesuite_apu PRIVATE c_std_17)
+set_target_properties(test_samesuite_apu PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME cgb_samesuite_apu_tracer
+  COMMAND test_samesuite_apu --tracer
+    "${PROJECT_SOURCE_DIR}/fixtures/samesuite/apu/channel_3/channel_3_first_sample.gb")
+add_test(NAME cgb_samesuite_apu_tracer_controls
+  COMMAND test_samesuite_apu --controls
+    "${PROJECT_SOURCE_DIR}/fixtures/samesuite/apu/channel_3/channel_3_first_sample.gb")
+file(READ "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json" GBB_SAMESUITE_MANIFEST_JSON)
+file(READ "${PROJECT_SOURCE_DIR}/tests/external/cgb-apu-dispositions.json"
+  GBB_SAMESUITE_APU_DISPOSITIONS_JSON)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json"
+  "${PROJECT_SOURCE_DIR}/tests/external/cgb-apu-dispositions.json")
+string(JSON GBB_SAMESUITE_FIXTURE_COUNT LENGTH "${GBB_SAMESUITE_MANIFEST_JSON}" fixtures)
+string(JSON GBB_SAMESUITE_APU_DISPOSITION_COUNT LENGTH
+  "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}" cases)
+if(NOT GBB_SAMESUITE_APU_DISPOSITION_COUNT EQUAL 70)
+  message(FATAL_ERROR "SameSuite APU disposition roster must contain exactly 70 cases")
+endif()
+file(SHA256 "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json"
+  GBB_SAMESUITE_MANIFEST_SHA256)
+file(SHA256 "${PROJECT_SOURCE_DIR}/tests/external/cgb-apu-dispositions.json"
+  GBB_SAMESUITE_DISPOSITIONS_SHA256)
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/tests")
+set(GBB_SAMESUITE_APU_CASE_HEADER
+  "${PROJECT_BINARY_DIR}/tests/samesuite_apu_cases.h")
+file(WRITE "${GBB_SAMESUITE_APU_CASE_HEADER}"
+  "#define GBB_SAMESUITE_MANIFEST_SHA256 \"${GBB_SAMESUITE_MANIFEST_SHA256}\"\n#define GBB_SAMESUITE_DISPOSITIONS_SHA256 \"${GBB_SAMESUITE_DISPOSITIONS_SHA256}\"\n")
+set(GBB_SAMESUITE_APU_CASE_ENTRIES "")
+set(GBB_SAMESUITE_APU_CASE_INDEX 0)
+if(GBB_SAMESUITE_FIXTURE_COUNT GREATER 0)
+  math(EXPR GBB_SAMESUITE_FIXTURE_LAST "${GBB_SAMESUITE_FIXTURE_COUNT} - 1")
+  foreach(GBB_SAMESUITE_FIXTURE_INDEX RANGE 0 ${GBB_SAMESUITE_FIXTURE_LAST})
+    string(JSON GBB_SAMESUITE_ALIAS GET "${GBB_SAMESUITE_MANIFEST_JSON}"
+      fixtures ${GBB_SAMESUITE_FIXTURE_INDEX} alias)
+    if(GBB_SAMESUITE_ALIAS MATCHES "^apu/")
+      string(JSON GBB_SAMESUITE_FILE GET "${GBB_SAMESUITE_MANIFEST_JSON}"
+        fixtures ${GBB_SAMESUITE_FIXTURE_INDEX} file)
+      string(JSON GBB_SAMESUITE_ROM_SHA GET "${GBB_SAMESUITE_MANIFEST_JSON}"
+        fixtures ${GBB_SAMESUITE_FIXTURE_INDEX} sha256)
+      string(JSON GBB_SAMESUITE_SOURCE_PATH GET "${GBB_SAMESUITE_MANIFEST_JSON}"
+        fixtures ${GBB_SAMESUITE_FIXTURE_INDEX} source_path)
+      string(JSON GBB_SAMESUITE_SOURCE_SHA GET "${GBB_SAMESUITE_MANIFEST_JSON}"
+        fixtures ${GBB_SAMESUITE_FIXTURE_INDEX} source_sha256)
+      string(JSON GBB_SAMESUITE_RESULT_ADDRESS GET "${GBB_SAMESUITE_MANIFEST_JSON}"
+        fixtures ${GBB_SAMESUITE_FIXTURE_INDEX} author_result_start)
+      string(JSON GBB_SAMESUITE_RESULT_COUNT LENGTH "${GBB_SAMESUITE_MANIFEST_JSON}"
+        fixtures ${GBB_SAMESUITE_FIXTURE_INDEX} author_expected_results)
+      if(GBB_SAMESUITE_RESULT_COUNT LESS 1 OR GBB_SAMESUITE_RESULT_COUNT GREATER 144)
+        message(FATAL_ERROR "SameSuite APU result count is outside the bounded runner at ${GBB_SAMESUITE_ALIAS}")
+      endif()
+      math(EXPR GBB_SAMESUITE_RESULT_LAST "${GBB_SAMESUITE_RESULT_COUNT} - 1")
+      if(GBB_SAMESUITE_APU_CASE_INDEX GREATER_EQUAL GBB_SAMESUITE_APU_DISPOSITION_COUNT)
+        message(FATAL_ERROR "SameSuite APU disposition roster is missing ${GBB_SAMESUITE_ALIAS}")
+      endif()
+      string(JSON GBB_SAMESUITE_DISPOSITION_ID GET "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}"
+        cases ${GBB_SAMESUITE_APU_CASE_INDEX} id)
+      string(JSON GBB_SAMESUITE_DISPOSITION_STATUS GET "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}"
+        cases ${GBB_SAMESUITE_APU_CASE_INDEX} evaluator_disposition status)
+      string(JSON GBB_SAMESUITE_DISPOSITION_SIGNATURE GET "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}"
+        cases ${GBB_SAMESUITE_APU_CASE_INDEX} evaluator_disposition signature_sha256)
+      string(JSON GBB_SAMESUITE_DISPOSITION_FIXTURE GET "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}"
+        cases ${GBB_SAMESUITE_APU_CASE_INDEX} fixture_path)
+      string(JSON GBB_SAMESUITE_DISPOSITION_ROM_SHA GET "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}"
+        cases ${GBB_SAMESUITE_APU_CASE_INDEX} rom_sha256)
+      string(JSON GBB_SAMESUITE_DISPOSITION_SOURCE_SHA GET "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}"
+        cases ${GBB_SAMESUITE_APU_CASE_INDEX} source_sha256)
+      string(JSON GBB_SAMESUITE_DISPOSITION_RESULT_START GET "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}"
+        cases ${GBB_SAMESUITE_APU_CASE_INDEX} author_expectation result_start)
+      string(JSON GBB_SAMESUITE_DISPOSITION_ASSERTION_COUNT GET "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}"
+        cases ${GBB_SAMESUITE_APU_CASE_INDEX} author_expectation assertion_count)
+      string(JSON GBB_SAMESUITE_DISPOSITION_ASSERTIONS LENGTH "${GBB_SAMESUITE_APU_DISPOSITIONS_JSON}"
+        cases ${GBB_SAMESUITE_APU_CASE_INDEX} author_expectation assertions)
+      string(JSON GBB_SAMESUITE_AUTHOR_EXPECTATION GET "${GBB_SAMESUITE_MANIFEST_JSON}"
+        fixtures ${GBB_SAMESUITE_FIXTURE_INDEX} author_expectation result)
+      if(NOT GBB_SAMESUITE_DISPOSITION_ID STREQUAL "samesuite:${GBB_SAMESUITE_SOURCE_PATH}")
+        message(FATAL_ERROR "SameSuite APU disposition order/identity differs at ${GBB_SAMESUITE_ALIAS}")
+      endif()
+      if(NOT "${GBB_SAMESUITE_DISPOSITION_FIXTURE}" STREQUAL "fixtures/samesuite/${GBB_SAMESUITE_FILE}" OR
+         NOT "${GBB_SAMESUITE_DISPOSITION_ROM_SHA}" STREQUAL "${GBB_SAMESUITE_ROM_SHA}" OR
+         NOT "${GBB_SAMESUITE_DISPOSITION_SOURCE_SHA}" STREQUAL "${GBB_SAMESUITE_SOURCE_SHA}" OR
+         NOT "${GBB_SAMESUITE_DISPOSITION_RESULT_START}" STREQUAL "${GBB_SAMESUITE_RESULT_ADDRESS}" OR
+         NOT GBB_SAMESUITE_DISPOSITION_ASSERTION_COUNT EQUAL GBB_SAMESUITE_RESULT_COUNT OR
+         NOT GBB_SAMESUITE_DISPOSITION_ASSERTIONS EQUAL GBB_SAMESUITE_RESULT_COUNT OR
+         NOT "${GBB_SAMESUITE_AUTHOR_EXPECTATION}" STREQUAL "pass" OR
+         NOT "${GBB_SAMESUITE_DISPOSITION_STATUS}" MATCHES "^(pass|xfail)$")
+        message(FATAL_ERROR "SameSuite APU source/disposition contract differs at ${GBB_SAMESUITE_ALIAS}")
+      endif()
+      set(GBB_SAMESUITE_EXPECTED_INITIALIZER "")
+      foreach(GBB_SAMESUITE_RESULT_INDEX RANGE 0 ${GBB_SAMESUITE_RESULT_LAST})
+        string(JSON GBB_SAMESUITE_RESULT_BYTE GET "${GBB_SAMESUITE_MANIFEST_JSON}"
+          fixtures ${GBB_SAMESUITE_FIXTURE_INDEX} author_expected_results ${GBB_SAMESUITE_RESULT_INDEX})
+        if(GBB_SAMESUITE_RESULT_INDEX GREATER 0)
+          string(APPEND GBB_SAMESUITE_EXPECTED_INITIALIZER ",")
+        endif()
+        string(APPEND GBB_SAMESUITE_EXPECTED_INITIALIZER "0x${GBB_SAMESUITE_RESULT_BYTE}u")
+      endforeach()
+      file(APPEND "${GBB_SAMESUITE_APU_CASE_HEADER}"
+        "static const uint8_t gbb_apu_expected_${GBB_SAMESUITE_APU_CASE_INDEX}[] = {${GBB_SAMESUITE_EXPECTED_INITIALIZER}};\n")
+      string(APPEND GBB_SAMESUITE_APU_CASE_ENTRIES
+        "  {\"${GBB_SAMESUITE_ALIAS}\", \"${GBB_SAMESUITE_ROM_SHA}\", (uint16_t)${GBB_SAMESUITE_RESULT_ADDRESS}, gbb_apu_expected_${GBB_SAMESUITE_APU_CASE_INDEX}, ${GBB_SAMESUITE_RESULT_COUNT}u, \"${GBB_SAMESUITE_FILE}\", \"${GBB_SAMESUITE_DISPOSITION_STATUS}\", \"${GBB_SAMESUITE_DISPOSITION_SIGNATURE}\"},\n")
+      math(EXPR GBB_SAMESUITE_APU_CASE_INDEX "${GBB_SAMESUITE_APU_CASE_INDEX} + 1")
+      string(REGEX REPLACE "^apu/" "" GBB_SAMESUITE_TEST_SUFFIX "${GBB_SAMESUITE_ALIAS}")
+      string(REPLACE "/" "_" GBB_SAMESUITE_TEST_SUFFIX "${GBB_SAMESUITE_TEST_SUFFIX}")
+      string(REPLACE "-" "_" GBB_SAMESUITE_TEST_SUFFIX "${GBB_SAMESUITE_TEST_SUFFIX}")
+      add_test(NAME "cgb_samesuite_apu_${GBB_SAMESUITE_TEST_SUFFIX}"
+        COMMAND test_samesuite_apu --membership "${GBB_SAMESUITE_ALIAS}"
+          "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json"
+          "${PROJECT_SOURCE_DIR}/tests/external/cgb-apu-dispositions.json")
+      set_tests_properties("cgb_samesuite_apu_${GBB_SAMESUITE_TEST_SUFFIX}"
+        PROPERTIES TIMEOUT 60)
+    endif()
+  endforeach()
+endif()
+if(NOT GBB_SAMESUITE_APU_CASE_INDEX EQUAL GBB_SAMESUITE_APU_DISPOSITION_COUNT)
+  message(FATAL_ERROR "SameSuite APU disposition roster contains unbound cases")
+endif()
+file(APPEND "${GBB_SAMESUITE_APU_CASE_HEADER}"
+  "static const apu_case samesuite_apu_cases[] = {\n${GBB_SAMESUITE_APU_CASE_ENTRIES}};\n#define GBB_SAMESUITE_APU_CASE_COUNT (sizeof(samesuite_apu_cases) / sizeof(samesuite_apu_cases[0]))\n")
+target_include_directories(test_samesuite_apu PRIVATE "${PROJECT_BINARY_DIR}/tests")
+add_test(NAME cgb_samesuite_apu_suite
+  COMMAND test_samesuite_apu --suite
+    "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json"
+    "${PROJECT_SOURCE_DIR}/tests/external/cgb-apu-dispositions.json"
+    "${PROJECT_SOURCE_DIR}/fixtures/samesuite")
+set_tests_properties(cgb_samesuite_apu_suite PROPERTIES TIMEOUT 600 LABELS "cgb-corpus")
+
 add_executable(test_samesuite_hdma test_samesuite_hdma.c)
 target_include_directories(test_samesuite_hdma PRIVATE "${PROJECT_SOURCE_DIR}/include")
 target_compile_features(test_samesuite_hdma PRIVATE c_std_17)
@@ -955,7 +1179,6 @@ add_test(NAME samesuite_hdma_gbc_dma_cont_corrupted_result_control
     -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
 set_tests_properties(samesuite_hdma_gbc_dma_cont_corrupted_result_control PROPERTIES TIMEOUT 60)
 
-find_package(Python3 COMPONENTS Interpreter REQUIRED)
 set(GBB_CGB_HDMA_DISPOSITIONS_VERIFIER
   "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-hdma-dispositions.py")
 add_test(NAME cgb_hdma_dispositions
@@ -1057,22 +1280,111 @@ add_test(NAME mooneye_mbc_pc_table_tamper
     -DGBB_EXPECT_CODE=1
     -DGBB_EXPECT_REGEX=pc-table-mismatch
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
-# Phase 10 Mooneye CGB derivatives (D-26, names per D-27): digest and inventory modes of the
-# fail-closed verifier, plus the pc-table mode that ties the runner's cgb_cases[] to the manifest (Plan 10-16).
+# Phase 14 Mooneye CGB qualification: digest and inventory modes of the fail-closed verifier,
+# plus the pc-table mode that ties the runner's cgb_cases[] to the manifest.
 add_test(NAME cgb_mooneye_fixture_digest
   COMMAND ${CMAKE_COMMAND}
     -DGBB_MODE=digest
     -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake)
 set_tests_properties(cgb_mooneye_fixture_digest PROPERTIES
-  PASS_REGULAR_EXPRESSION "Verified 4 eligible Mooneye-cgb ROM\\(s\\)")
+  PASS_REGULAR_EXPRESSION "Verified 9 eligible Mooneye-cgb ROM\\(s\\)")
 add_test(NAME cgb_mooneye_inventory
   COMMAND ${CMAKE_COMMAND}
     -DGBB_MODE=inventory
     -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake)
 set_tests_properties(cgb_mooneye_inventory PROPERTIES
-  PASS_REGULAR_EXPRESSION "Verified Mooneye-cgb inventory: 4 fixtures")
+  PASS_REGULAR_EXPRESSION "Verified Mooneye-cgb inventory: 9 fixtures")
+add_test(NAME cgb_corpus_inventory_selection
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-inventory.py" --selection-only)
+set_tests_properties(cgb_corpus_inventory_selection PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-corpus-inventory pass mode=selection-only")
+add_test(NAME cgb_corpus_inventory
+  COMMAND "${Python3_EXECUTABLE}" -I
+    "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-inventory.py" --bindings)
+set_tests_properties(cgb_corpus_inventory PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-corpus-inventory pass mode=bindings")
+add_test(NAME cgb_corpus_inventory_selftest
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-inventory.py" --self-test)
+set_tests_properties(cgb_corpus_inventory_selftest PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-corpus-inventory self-test pass")
+add_test(NAME cgb_corpus_inventory_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-inventory.py" --self-test)
+set_tests_properties(cgb_corpus_inventory_controls PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-corpus-inventory self-test pass")
+set(GBB_CGB_CORPUS_REPORT_TEST
+  "${PROJECT_SOURCE_DIR}/tests/scripts/test-cgb-corpus-report.py")
+set(GBB_CGB_CORPUS_REPORT_VERIFIER
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-report.py")
+add_test(NAME cgb_corpus_report_tracer
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_REPORT_TEST}"
+    CorpusReportTracerTests.test_tracer_single_case_receipt)
+add_test(NAME cgb_corpus_report_tracer_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_REPORT_TEST}"
+    CorpusReportTracerTests.test_tracer_controls)
+add_test(NAME cgb_corpus_report_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_REPORT_TEST}"
+    CorpusReportCorpusTests.test_contract)
+add_test(NAME cgb_corpus_ci_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_REPORT_TEST}"
+    CorpusReportCorpusTests.test_native_full_ctest_receipt_contract)
+add_test(NAME cgb_corpus_artifact_privacy_controls
+  COMMAND "${Python3_EXECUTABLE}" -I
+    "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-artifacts.py" --self-test)
+add_test(NAME cgb_corpus_report_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_REPORT_TEST}"
+    CorpusReportControlsTests.test_controls)
+add_test(NAME cgb_corpus_report_platform_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_REPORT_TEST}"
+    CorpusReportNativeExecutableTests CorpusReportBoundedProcessTests)
+set(GBB_CGB_CORPUS_CLAIMS_VERIFIER
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-claims.py")
+set(GBB_CGB_RED_PRIVACY_TEST
+  "${PROJECT_SOURCE_DIR}/tests/scripts/run-cgb-red-evidence-privacy-test.py")
+add_test(NAME cgb_corpus_claims
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_CLAIMS_VERIFIER}")
+add_test(NAME cgb_corpus_claims_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_CLAIMS_VERIFIER}" --self-test)
+# The wrapper compiles the unittest with its repository-relative filename so failed RED traces stay private.
+add_test(NAME cgb_corpus_red_evidence_privacy
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_RED_PRIVACY_TEST}")
+set_tests_properties(cgb_corpus_report_tracer cgb_corpus_report_tracer_controls
+  cgb_corpus_report_contract cgb_corpus_artifact_privacy_controls cgb_corpus_report_controls
+  cgb_corpus_report_platform_controls
+  PROPERTIES TIMEOUT 45)
+set_tests_properties(cgb_corpus_report_tracer cgb_corpus_report_tracer_controls
+  cgb_corpus_report_contract cgb_corpus_report_controls cgb_corpus_report_platform_controls PROPERTIES
+  ENVIRONMENT "GBB_TEST_BUILD_DIR=${PROJECT_BINARY_DIR};GBB_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}")
+set_tests_properties(cgb_corpus_claims cgb_corpus_claims_controls
+  cgb_corpus_red_evidence_privacy PROPERTIES TIMEOUT 60)
+set(GBB_AGE_PHASE14_CONTRACT "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py")
+set(GBB_AGE_PHASE14_GUEST_TIMEOUT 15)
+if(GABBABOY_ENABLE_SANITIZERS)
+  # Match ScaleSanitizerTimeouts.cmake's factor for the adapter's child deadline.
+  set(GBB_AGE_PHASE14_GUEST_TIMEOUT 45)
+endif()
+add_test(NAME cgb_age_assertion_identity
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_PHASE14_CONTRACT}" --assertions
+    --runner $<TARGET_FILE:test_age> --guest-timeout-seconds "${GBB_AGE_PHASE14_GUEST_TIMEOUT}")
+set_tests_properties(cgb_age_assertion_identity PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "cgb-age-assertion-identity pass cases=13 rows=142 mode0-semantic=105 age-identities=19")
+add_test(NAME cgb_age_assertion_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_PHASE14_CONTRACT}" --assertions-controls)
+set_tests_properties(cgb_age_assertion_controls PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-age-assertion-controls pass controls=")
+add_test(NAME cgb_phase14_inherited_contract_unit
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/test_age_phase14_inherited_contract.py")
+set_tests_properties(cgb_phase14_inherited_contract_unit PROPERTIES TIMEOUT 30)
+
+add_test(NAME cgb_research14_dispositions
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_PHASE14_CONTRACT}" --research14)
+set_tests_properties(cgb_research14_dispositions PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-research14-dispositions pass gates=31 unknown=27")
+add_test(NAME cgb_research14_dispositions_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_PHASE14_CONTRACT}" --research14-controls)
+set_tests_properties(cgb_research14_dispositions_controls PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-research14-dispositions-controls pass controls=")
 # Configure-time mutants (exact exit code 1 plus a named token): a flipped ROM digest and a
 # duplicated fixture id. Each differs from the committed manifest by exactly one fact.
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/digest" "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/dup-id")
@@ -1110,7 +1422,7 @@ add_test(NAME cgb_mooneye_pc_table
     -DGBB_RUNNER_SOURCE=${PROJECT_SOURCE_DIR}/src/runner/main.c
     -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake)
 set_tests_properties(cgb_mooneye_pc_table PROPERTIES
-  PASS_REGULAR_EXPRESSION "Verified pc-table: 4 manifest rows agree with the compiled cgb_cases")
+  PASS_REGULAR_EXPRESSION "Verified pc-table: 9 manifest rows agree with the compiled cgb_cases")
 # Negative control: a manifest whose first result_pc was changed must fail the pc-table check, naming the field.
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/pc")
 string(JSON GBB_CGB_PC_TAMPERED SET "${GBB_CGB_MANIFEST_JSON}" fixtures 0 result_pc "\"0x4328\"")
@@ -1158,15 +1470,6 @@ add_test(NAME runner_guest_failure
 add_test(NAME mooneye_mbc_type_mutation
   COMMAND test_runner mooneye_mbc_type_mutation ${PROJECT_SOURCE_DIR}/fixtures/mooneye-mbc/mbc5_rom_512kb.gb)
 set_tests_properties(mooneye_mbc_type_mutation PROPERTIES TIMEOUT 30)
-# D-26: an expected-unsupported row is met only by a stop at the declared address; a tampered "pass" expectation,
-# a wrong address and a passing ROM are all failing statuses (the configure-time copy is made below).
-add_test(NAME cgb_mooneye_expected_unsupported_tamper
-  COMMAND test_runner cgb_mooneye_expected_unsupported_tamper
-    ${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/expect/manifest.json
-    ${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json
-    ${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb)
-set_tests_properties(cgb_mooneye_expected_unsupported_tamper PROPERTIES TIMEOUT 30
-  PASS_REGULAR_EXPRESSION "control=expected-unsupported-tampered-to-pass.*control=expected-unsupported-wrong-address.*control=expected-unsupported-pass-is-failure")
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/runner-missing-fixture")
 configure_file("${PROJECT_SOURCE_DIR}/fixtures/mooneye/manifest.json"
   "${PROJECT_BINARY_DIR}/runner-missing-fixture/manifest.json" COPYONLY)
@@ -1248,33 +1551,53 @@ foreach(entry IN LISTS GBB_MBC_CASES)
   set_tests_properties(mooneye_mbc_case_${alias} PROPERTIES TIMEOUT 60 PASS_REGULAR_EXPRESSION
     "status=pass.*source_revision=31510e12eea6286d36eea060a6adde755e1067aa.*fixture_origin=derived-headless-report-closure upstream_assertions=unchanged.*protocol_stage=callback-then-ld-b-b callback_result=pass callback_pc=${callback_pc} result_pc=${result_pc}")
 endforeach()
-# Phase 10 CGB-profile Mooneye derivatives (D-26): the runner's third suite. Each row runs on the CGB-CPU-E
-# profile in compat mode and prints its own label; the DMG label must never appear.
+# Phase 14 CGB-CPU-E Mooneye qualification. Each exact case has one CTest binding; source author
+# expectations remain pass while the three exact software-model failures are reported as xfail.
 set(GBB_CGB_MOONEYE_MANIFEST ${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json)
-add_test(NAME cgb_mooneye_case_boot_regs-cgb
-  COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --case boot_regs-cgb --receipt)
-set_tests_properties(cgb_mooneye_case_boot_regs-cgb PROPERTIES TIMEOUT 30
-  PASS_REGULAR_EXPRESSION "status=pass.*profile=CGB-CPU-E.*callback_result=pass callback_pc=4000 result_pc=4327"
-  FAIL_REGULAR_EXPRESSION "DMG-CPU-B")
-add_test(NAME cgb_mooneye_case_boot_div-cgbABCDE
-  COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --case boot_div-cgbABCDE --receipt)
-set_tests_properties(cgb_mooneye_case_boot_div-cgbABCDE PROPERTIES TIMEOUT 30
-  PASS_REGULAR_EXPRESSION "status=pass.*profile=CGB-CPU-E.*callback_result=pass callback_pc=4000 result_pc=4327"
-  FAIL_REGULAR_EXPRESSION "DMG-CPU-B")
-# The two staged ROMs stop on the unbuilt FF76 register: the status is expected-unsupported (never pass),
-# the stop reason and address are named, and the run exits 0 only on that exact stop.
-foreach(alias boot_hwio-C unused_hwio-C)
-  add_test(NAME cgb_mooneye_case_${alias}
-    COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --case ${alias} --receipt)
-  set_tests_properties(cgb_mooneye_case_${alias} PROPERTIES TIMEOUT 30
-    PASS_REGULAR_EXPRESSION "status=expected-unsupported stop=unsupported-bus address=ff76.*profile=CGB-CPU-E"
-    FAIL_REGULAR_EXPRESSION "DMG-CPU-B|status=pass|status=unexpected-pass|status=fail")
+set(GBB_CGB_MOONEYE_CASES
+  boot_regs-cgb:cgb_corpus_mooneye_boot_regs_cgb:pass:4000:4327
+  boot_div-cgbABCDE:cgb_corpus_mooneye_boot_div_cgbABCDE:pass:4000:4327
+  boot_hwio-C:cgb_corpus_mooneye_boot_hwio_C:xfail:01f5:4067
+  unused_hwio-C:cgb_corpus_mooneye_unused_hwio_C:xfail:1a31:4070
+  daa:cgb_corpus_mooneye_daa:pass:0166:409a
+  div_write:cgb_corpus_mooneye_div_write:pass:0175:4051
+  tim00:cgb_corpus_mooneye_tim00:pass:4000:4327
+  tim00_div_trigger:cgb_corpus_mooneye_tim00_div_trigger:pass:4000:4327
+  vblank_stat_intr-C:cgb_corpus_mooneye_vblank_stat_intr_C:xfail:4000:4327)
+foreach(entry IN LISTS GBB_CGB_MOONEYE_CASES)
+  string(REPLACE ":" ";" parts "${entry}")
+  list(GET parts 0 alias)
+  list(GET parts 1 test_name)
+  list(GET parts 2 expected_status)
+  list(GET parts 3 callback_pc)
+  list(GET parts 4 result_pc)
+  add_test(NAME ${test_name}
+    COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --case ${alias} --profile cgb --receipt)
+  if(expected_status STREQUAL "xfail")
+    set_tests_properties(${test_name} PROPERTIES TIMEOUT 30
+      PASS_REGULAR_EXPRESSION "author_expect=pass observed_disposition=expected-failure status=xfail observed=fail reason=declared-failure-signature callback_result=fail callback_pc=${callback_pc} result_pc=${result_pc}.*profile=CGB-CPU-E"
+      FAIL_REGULAR_EXPRESSION "DMG-CPU-B|status=pass|status=unexpected-pass|status=unexpected-failure")
+  else()
+    set_tests_properties(${test_name} PROPERTIES TIMEOUT 30
+      PASS_REGULAR_EXPRESSION "status=pass.*profile=CGB-CPU-E.*callback_result=pass callback_pc=${callback_pc} result_pc=${result_pc}"
+      FAIL_REGULAR_EXPRESSION "DMG-CPU-B|status=xfail|status=unexpected-pass|status=unexpected-failure")
+  endif()
 endforeach()
+add_test(NAME cgb_corpus_mooneye_controls
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_MODE=controls
+    -DGBB_MOONEYE_DIR=${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb
+    -DGBB_CONTROL_DIR=${PROJECT_BINARY_DIR}/mooneye-cgb-controls
+    -DGBB_RUNNER=$<TARGET_FILE:gabbaboy-runner>
+    -DGBB_TEST_RUNNER=$<TARGET_FILE:test_runner>
+    -P ${PROJECT_SOURCE_DIR}/cmake/VerifyMooneyeCgb.cmake)
+set_tests_properties(cgb_corpus_mooneye_controls PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "control=missing-required-rom rejected: missing-fixture.*control=wrong-model rejected: invalid-manifest.*control=wrong-mode rejected: invalid-manifest.*control=changed-expected-signature rejected")
 add_test(NAME cgb_mooneye_required_suite
   COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --suite --receipt)
 set_tests_properties(cgb_mooneye_required_suite PROPERTIES TIMEOUT 30
-  PASS_REGULAR_EXPRESSION "suite eligible=4 executed=4 status=pass-with-expected-unsupported.*suite categories post-boot-registers=1/1 post-boot-div=1/1 post-boot-hwio=0/1 post-boot-hwio.expected-unsupported=1 unused-hwio=0/1 unused-hwio.expected-unsupported=1.*expected-unsupported=2/2"
-  FAIL_REGULAR_EXPRESSION "DMG-CPU-B|post-boot-hwio=1/1|unused-hwio=1/1")
+  PASS_REGULAR_EXPRESSION "suite eligible=9 executed=9 status=pass-with-expected-failure.*suite categories post-boot-registers=1/1 post-boot-div=1/1 post-boot-hwio=0/1 post-boot-hwio.expected-failure=1 unused-hwio=0/1 unused-hwio.expected-failure=1 instruction=1/1 timer=3/3 ppu=0/1 ppu.expected-failure=1.*expected-failure=3/3"
+  FAIL_REGULAR_EXPRESSION "DMG-CPU-B|post-boot-hwio=1/1|unused-hwio=1/1|ppu=1/1")
 # D-25 / D-05: --observe prints the not-applicable token for a CGB row and no DMG-labelled line.
 add_test(NAME cgb_mooneye_observe_not_applicable
   COMMAND gabbaboy-runner --manifest ${GBB_CGB_MOONEYE_MANIFEST} --case boot_regs-cgb --observe)
@@ -1301,11 +1624,6 @@ add_test(NAME cgb_mooneye_unknown_manifest
     -DGBB_EXPECT_CODE=2
     -DGBB_EXPECT_REGEX=invalid-manifest
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
-# Negative control: a configure-time copy of the manifest whose boot_hwio-C row says "pass". The raw-SHA gate
-# would reject it on the command line, so test_runner reads the row expectation from the copy itself.
-file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/expect")
-string(JSON GBB_CGB_EXPECT_TAMPERED SET "${GBB_CGB_MANIFEST_JSON}" fixtures 2 expect "\"pass\"")
-file(WRITE "${PROJECT_BINARY_DIR}/mooneye-cgb-tamper/expect/manifest.json" "${GBB_CGB_EXPECT_TAMPERED}")
 set(GBB_TEST_SANITIZER_LINK_OPTIONS "")
 if(GABBABOY_ENABLE_SANITIZERS)
   set(GBB_TEST_SANITIZER_LINK_OPTIONS "-fsanitize=address,undefined")
@@ -1355,6 +1673,52 @@ if(GBB_TEST_INSTALL_PREFIX AND EXISTS "${GBB_TEST_INSTALL_PREFIX}")
         -P ${PROJECT_SOURCE_DIR}/cmake/RunInstalledConsumer.cmake)
   endforeach()
 endif()
+
+# The stamp is built after the project and every test target so it binds the exact
+# executables, source/config/toolchain inputs, fixture bytes, and CTest membership.
+# Real file dependencies make it stale whenever any covered input changes.
+file(GLOB_RECURSE GBB_CGB_BUILD_CODE_INPUTS CONFIGURE_DEPENDS
+  "${PROJECT_SOURCE_DIR}/include/*.h"
+  "${PROJECT_SOURCE_DIR}/src/*.c" "${PROJECT_SOURCE_DIR}/src/*.h"
+  "${PROJECT_SOURCE_DIR}/tests/*.c" "${PROJECT_SOURCE_DIR}/tests/*.h"
+  "${PROJECT_SOURCE_DIR}/tests/*.cmake" "${PROJECT_SOURCE_DIR}/tests/*.py")
+file(GLOB_RECURSE GBB_CGB_BUILD_FIXTURE_INPUTS CONFIGURE_DEPENDS
+  "${PROJECT_SOURCE_DIR}/fixtures/age/*.gb"
+  "${PROJECT_SOURCE_DIR}/fixtures/age/references/*.png"
+  "${PROJECT_SOURCE_DIR}/fixtures/samesuite/*.gb"
+  "${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/*.gb"
+  "${PROJECT_SOURCE_DIR}/fixtures/magentests/*.gb")
+set(GBB_CGB_BUILD_CONTRACT_INPUTS
+  "${PROJECT_SOURCE_DIR}/CMakeLists.txt"
+  "${PROJECT_SOURCE_DIR}/CMakePresets.json"
+  "${PROJECT_SOURCE_DIR}/tests/CMakeLists.txt"
+  "${PROJECT_SOURCE_DIR}/tests/expected-tests.txt"
+  "${PROJECT_SOURCE_DIR}/tests/external/cgb-corpus-inventory.json"
+  "${PROJECT_SOURCE_DIR}/tests/external/cgb-apu-dispositions.json"
+  "${PROJECT_SOURCE_DIR}/tests/external/cgb-ppu-dispositions.json"
+  "${PROJECT_SOURCE_DIR}/tests/external/cgb-speed-dispositions.json"
+  "${PROJECT_SOURCE_DIR}/fixtures/age/manifest.json"
+  "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json"
+  "${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json"
+  "${PROJECT_SOURCE_DIR}/fixtures/magentests/manifest.json"
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-report.py"
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-inventory.py"
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-artifacts.py"
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-m3-pixels.py"
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py"
+  "${PROJECT_SOURCE_DIR}/.github/workflows/ci.yml")
+set(GBB_CGB_CORPUS_BUILD_STAMP "${PROJECT_BINARY_DIR}/cgb-corpus-build-stamp.json")
+add_custom_target(cgb_corpus_build_stamp ALL
+  COMMAND "${CMAKE_COMMAND}" -E env
+    "GBB_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}"
+    "${Python3_EXECUTABLE}" -I
+    "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-report.py"
+    --write-build-stamp --build-dir "${PROJECT_BINARY_DIR}"
+  DEPENDS ${GBB_CGB_BUILD_CODE_INPUTS} ${GBB_CGB_BUILD_FIXTURE_INPUTS}
+    ${GBB_CGB_BUILD_CONTRACT_INPUTS}
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+  COMMENT "Stamping the exact CGB corpus build inputs"
+  VERBATIM)
 
 # Libbet admission (GAME-01, gate G5). The verifier is stdlib-only Python run with -I; every
 # negative control goes through expect_exit.cmake so it must exit with exactly the expected code
@@ -1482,7 +1846,7 @@ gbb_add_mbc_scan_test(mooneye_mbc_not_installed_empty 1 "scan-dir-empty"
 gbb_add_mbc_scan_test(mooneye_mbc_fixture_dirs_selftest 1 "fixture-dirs-mismatch"
   "${GBB_MBC_DIRS_SELFTEST}" "-DGBB_EXPECT_FIXTURE_DIRS=${GBB_MBC_SCAN_DIRS}")
 
-# Mooneye CGB ROM redistribution guard (D-26, T-10-22). The four third-party CGB derivatives are
+# Mooneye CGB ROM redistribution guard (D-26, T-10-22). The nine third-party CGB derivatives are
 # repository fixtures only; the same scan runs over the install tree with the CGB manifest's size and
 # digest list. The self-test plants one CGB ROM under an innocuous name, so a pass cannot come
 # from a scan that never matches by bytes.
@@ -1581,6 +1945,42 @@ gbb_add_cgb_hdma_scan_test(cgb_hdma_not_installed_samesuite_selftest 1
 gbb_add_cgb_hdma_scan_test(cgb_hdma_not_installed_directory_selftest 1
   "cgb-hdma-installed: share/SameSuite/marker.txt" "${GBB_CGB_HDMA_SCAN_SELFTEST_DIRECTORY}"
   "${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json")
+
+# The selected corpus remains repository-only. Compare installed bytes against all four
+# admitted manifests, including the six AGE reference PNGs, and keep the existing exact
+# installed fixture-child contract. Separate renamed ROM and PNG twins prove hash scanning.
+set(GBB_CGB_CORPUS_SCAN_MANIFESTS
+  "${PROJECT_SOURCE_DIR}/fixtures/age/manifest.json|${PROJECT_SOURCE_DIR}/fixtures/samesuite/manifest.json|${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/manifest.json|${PROJECT_SOURCE_DIR}/fixtures/magentests/manifest.json")
+set(GBB_CGB_CORPUS_SCAN_PATH_LABELS "age|samesuite|mooneye-cgb|magentests|mealybug")
+set(GBB_CGB_CORPUS_SCAN_ROM_CONTROL "${PROJECT_BINARY_DIR}/cgb-corpus-scan-rom-control")
+set(GBB_CGB_CORPUS_SCAN_PNG_CONTROL "${PROJECT_BINARY_DIR}/cgb-corpus-scan-png-control")
+file(MAKE_DIRECTORY "${GBB_CGB_CORPUS_SCAN_ROM_CONTROL}/share"
+  "${GBB_CGB_CORPUS_SCAN_PNG_CONTROL}/share")
+file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/mooneye-cgb/boot_regs-cgb.gb"
+  "${GBB_CGB_CORPUS_SCAN_ROM_CONTROL}/share/payload.bin")
+file(COPY_FILE "${PROJECT_SOURCE_DIR}/fixtures/age/references/m3-bg-lcdc-cgbBCE.png"
+  "${GBB_CGB_CORPUS_SCAN_PNG_CONTROL}/share/payload.bin")
+add_test(NAME cgb_corpus_not_installed
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_SCAN_DIR=${GBB_LIBBET_INSTALL_CHECK}"
+    "-DGBB_FORBIDDEN_MANIFESTS=${GBB_CGB_CORPUS_SCAN_MANIFESTS}"
+    "-DGBB_FORBIDDEN_PATH_LABELS=${GBB_CGB_CORPUS_SCAN_PATH_LABELS}"
+    -DGBB_FORBIDDEN_LABEL=cgb-corpus
+    -DGBB_EXPECT_FIXTURE_DIRS=tracer|visible-demo|mbc1-continuation
+    -P "${GBB_MBC_SCAN_SCRIPT}")
+set_tests_properties(cgb_corpus_not_installed PROPERTIES TIMEOUT 60
+  FIXTURES_REQUIRED libbet_install
+  PASS_REGULAR_EXPRESSION "cgb-corpus absent from scanned tree files=[1-9]")
+add_test(NAME cgb_corpus_not_installed_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_SCAN_SCRIPT=${GBB_MBC_SCAN_SCRIPT}"
+    "-DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
+    "-DGBB_BUILD_DIR=${PROJECT_BINARY_DIR}"
+    "-DGBB_MANIFESTS=${GBB_CGB_CORPUS_SCAN_MANIFESTS}"
+    "-DGBB_PATH_LABELS=${GBB_CGB_CORPUS_SCAN_PATH_LABELS}"
+    -P "${PROJECT_SOURCE_DIR}/tests/CheckCgbCorpusPackageControls.cmake")
+set_tests_properties(cgb_corpus_not_installed_controls PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "cgb-corpus package controls pass renamed-rom=1 renamed-png=1")
 
 # EVID-02 baseline comparator self-tests (D-30, D-31, D-34). Each test runs cmake/VerifyDmgBaseline.cmake
 # on committed synthetic fixtures (or a generated variant of them) and asserts the exact exit code
@@ -2169,7 +2569,7 @@ set_tests_properties(cgb_tables_postboot PROPERTIES
   PASS_REGULAR_EXPRESSION "cgb-tables postboot pass rows=[1-9]")
 add_test(NAME cgb_tables_postboot_selftest COMMAND test_cgb_tables postboot_selftest "${GBB_CGB_PROFILE_DOC}")
 set_tests_properties(cgb_tables_postboot_selftest PROPERTIES
-  PASS_REGULAR_EXPRESSION "cgb-tables self-test pass mutants=6")
+  PASS_REGULAR_EXPRESSION "cgb-tables self-test pass mutants=14")
 
 # Negative control: the real doc with the compat A value changed from $11 to $12 must be rejected.
 file(READ "${GBB_CGB_PROFILE_DOC}" gbb_cgb_doc)
@@ -2696,14 +3096,14 @@ set_tests_properties(cgb_external_dispositions PROPERTIES
   PASS_REGULAR_EXPRESSION "external-dispositions pass age=6" TIMEOUT 30)
 # Negative control: one AGE reason changed in a configure-time copy must be rejected.
 file(READ "${GBB_EXT_DISPOSITIONS_RECORD}" gbb_ext_record)
-set(GBB_EXT_REASON_ANCHOR "\"src/m3-bg-lcdc/m3-bg-lcdc-cgbBCE.png\",\n          \"disposition\": \"expected-unsupported\",\n          \"reason\": \"mode-3-pixel-timing\"")
+set(GBB_EXT_REASON_ANCHOR "\"src/m3-bg-lcdc/m3-bg-lcdc-cgbBCE.png\",\n          \"disposition\": \"expected-failure\",\n          \"reason\": \"expected-failure:cgb-e-mode3-reference-mismatch\"")
 string(FIND "${gbb_ext_record}" "${GBB_EXT_REASON_ANCHOR}" gbb_ext_at)
 string(FIND "${gbb_ext_record}" "${GBB_EXT_REASON_ANCHOR}" gbb_ext_last REVERSE)
 if(gbb_ext_at EQUAL -1 OR NOT gbb_ext_at EQUAL gbb_ext_last)
   message(FATAL_ERROR "external disposition mutation anchor must occur exactly once in cgb-ppu-dispositions.json")
 endif()
 string(REPLACE "${GBB_EXT_REASON_ANCHOR}"
-  "\"src/m3-bg-lcdc/m3-bg-lcdc-cgbBCE.png\",\n          \"disposition\": \"expected-unsupported\",\n          \"reason\": \"timing-not-needed\""
+  "\"src/m3-bg-lcdc/m3-bg-lcdc-cgbBCE.png\",\n          \"disposition\": \"expected-failure\",\n          \"reason\": \"expected-failure:timing-not-needed\""
   gbb_ext_record_bad "${gbb_ext_record}")
 file(WRITE "${PROJECT_BINARY_DIR}/external-dispositions/mutated.json" "${gbb_ext_record_bad}")
 add_test(NAME cgb_external_dispositions_mutated
@@ -2711,6 +3111,31 @@ add_test(NAME cgb_external_dispositions_mutated
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_EXT_DISPOSITIONS_VERIFIER};--record;${PROJECT_BINARY_DIR}/external-dispositions/mutated.json;--doc;${GBB_CGB_PROFILE_DOC};--repo-root;${PROJECT_SOURCE_DIR}"
     -DGBB_EXPECT_CODE=1
     "-DGBB_EXPECT_REGEX=disposition-mismatch"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# Negative control: an executed image must retain its exact source/ROM/mode/reference identity.
+file(READ "${PROJECT_SOURCE_DIR}/fixtures/age/manifest.json" gbb_ext_age_manifest)
+string(JSON gbb_ext_age_fixture_count LENGTH "${gbb_ext_age_manifest}" fixtures)
+math(EXPR gbb_ext_age_fixture_last "${gbb_ext_age_fixture_count} - 1")
+set(gbb_ext_image_contract_found OFF)
+foreach(gbb_ext_age_index RANGE 0 ${gbb_ext_age_fixture_last})
+  string(JSON gbb_ext_age_file GET "${gbb_ext_age_manifest}" fixtures ${gbb_ext_age_index} file)
+  if(gbb_ext_age_file STREQUAL "m3-bg-lcdc-cgbBCE.gb")
+    set(gbb_ext_image_contract_found ON)
+    string(JSON gbb_ext_age_manifest_contract_bad SET "${gbb_ext_age_manifest}"
+      fixtures ${gbb_ext_age_index} case_id "\"wrong-case-identity\"")
+  endif()
+endforeach()
+if(NOT gbb_ext_image_contract_found)
+  message(FATAL_ERROR "external disposition image-contract control could not find its AGE manifest entry")
+endif()
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/external-dispositions")
+file(WRITE "${PROJECT_BINARY_DIR}/external-dispositions/image-contract-mutated.json"
+  "${gbb_ext_age_manifest_contract_bad}")
+add_test(NAME cgb_external_dispositions_image_contract
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_EXT_DISPOSITIONS_VERIFIER};--record;${GBB_EXT_DISPOSITIONS_RECORD};--doc;${GBB_CGB_PROFILE_DOC};--repo-root;${PROJECT_SOURCE_DIR};--age-manifest;${PROJECT_BINARY_DIR}/external-dispositions/image-contract-mutated.json"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=disposition-mismatch age-image-case-identity-mismatch"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # Optional acid2 local runner (D-24): required CI runs synthetic self-tests only, never an acid2 file.
 set(GBB_ACID2_LOCAL "${PROJECT_SOURCE_DIR}/tests/scripts/run-acid2-local.py")
@@ -3012,6 +3437,25 @@ add_test(NAME cgb_speed_dispositions_mutated
     "-DGBB_EXPECT_REGEX=disposition-mismatch"
     -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
 set_tests_properties(cgb_speed_dispositions_mutated PROPERTIES TIMEOUT 30)
+# Negative control: keep the precise independent thirteen-case row set closed to extras.
+set(gbb_speed_case_anchor "\"case\": \"spsw-div-cgbBCE\"")
+string(FIND "${gbb_speed_dispositions_record}" "${gbb_speed_case_anchor}" gbb_speed_case_at)
+string(FIND "${gbb_speed_dispositions_record}" "${gbb_speed_case_anchor}" gbb_speed_case_last REVERSE)
+if(gbb_speed_case_at EQUAL -1 OR NOT gbb_speed_case_at EQUAL gbb_speed_case_last)
+  message(FATAL_ERROR "speed disposition AGE case mutation anchor must occur exactly once")
+endif()
+string(REPLACE "${gbb_speed_case_anchor}"
+  "\"case\": \"spsw-div-cgbBCE-extra\""
+  gbb_speed_dispositions_extra_age_case "${gbb_speed_dispositions_record}")
+file(WRITE "${PROJECT_BINARY_DIR}/cgb-speed-dispositions/age-case-set-mutated.json"
+  "${gbb_speed_dispositions_extra_age_case}")
+add_test(NAME cgb_speed_dispositions_age_case_set_mutated
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_SPEED_DISPOSITIONS_VERIFIER};--record;${PROJECT_BINARY_DIR}/cgb-speed-dispositions/age-case-set-mutated.json"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=disposition-mismatch age-case-set"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(cgb_speed_dispositions_age_case_set_mutated PROPERTIES TIMEOUT 30)
 # --- Phase 12 plan 12-17 end ---
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 5 stall_sets_stopped
   cgb_speed_tracer_switch "stopped|GBB_STOP_STOPPED")
@@ -3236,12 +3680,63 @@ target_link_libraries(test_age PRIVATE GabbaBoy::core gabbaboy_accept)
 target_compile_features(test_age PRIVATE c_std_17)
 set_target_properties(test_age PROPERTIES C_EXTENSIONS OFF)
 
+# Phase 14 Plan 09: bounded public-API AGE frame capture plus a standard-library PNG oracle.
+add_executable(test_age_m3 test_age_m3.c)
+target_include_directories(test_age_m3 PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_link_libraries(test_age_m3 PRIVATE GabbaBoy::core gabbaboy_accept)
+target_compile_features(test_age_m3 PRIVATE c_std_17)
+set_target_properties(test_age_m3 PROPERTIES C_EXTENSIONS OFF)
+set(GBB_AGE_M3_PIXEL_ORACLE "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-m3-pixels.py")
+add_test(NAME cgb_age_m3_tracer
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_M3_PIXEL_ORACLE}"
+    --case m3-bg-lcdc-cgbBCE --harness $<TARGET_FILE:test_age_m3>
+    --frame "${PROJECT_BINARY_DIR}/age-m3/tracer.rgb555"
+    --reference "${PROJECT_SOURCE_DIR}/fixtures/age/references/m3-bg-lcdc-cgbBCE.png")
+set_tests_properties(cgb_age_m3_tracer PROPERTIES TIMEOUT 60)
+set(GBB_AGE_M3_CASES
+  m3-bg-lcdc-cgbBCE
+  m3-bg-lcdc-nocgb-ncmBCE
+  m3-bg-lcdc-ds-cgbBCE
+  m3-bg-scx-cgbBCE
+  m3-bg-scx-nocgb-ncmBCE
+  m3-bg-scx-ds-cgbBCE)
+foreach(GBB_AGE_M3_CASE IN LISTS GBB_AGE_M3_CASES)
+  string(REPLACE "-" "_" GBB_AGE_M3_ALIAS "${GBB_AGE_M3_CASE}")
+  add_test(NAME "cgb_age_m3_${GBB_AGE_M3_ALIAS}"
+    COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_M3_PIXEL_ORACLE}"
+      --case "${GBB_AGE_M3_CASE}" --harness $<TARGET_FILE:test_age_m3>
+      --frame "${PROJECT_BINARY_DIR}/age-m3/${GBB_AGE_M3_CASE}.rgb555"
+      --reference "${PROJECT_SOURCE_DIR}/fixtures/age/references/${GBB_AGE_M3_CASE}.png")
+  set_tests_properties("cgb_age_m3_${GBB_AGE_M3_ALIAS}" PROPERTIES TIMEOUT 60)
+endforeach()
+add_test(NAME cgb_age_m3_membership
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_M3_PIXEL_ORACLE}" --membership)
+set_tests_properties(cgb_age_m3_membership PROPERTIES
+  PASS_REGULAR_EXPRESSION "age-m3-membership pass cases=6 executed=6" TIMEOUT 30)
+add_test(NAME cgb_age_m3_pixel_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_M3_PIXEL_ORACLE}" --self-test)
+set_tests_properties(cgb_age_m3_pixel_controls PROPERTIES
+  PASS_REGULAR_EXPRESSION "Ran [0-9]+ tests" TIMEOUT 30)
+add_test(NAME cgb_age_m3_early_frame_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:test_age_m3>;--case;m3-bg-lcdc-cgbBCE;--rom;${PROJECT_SOURCE_DIR}/fixtures/age/m3-bg-lcdc-cgbBCE.gb;--frame;${PROJECT_BINARY_DIR}/age-m3/early.rgb555;--max-half-dots;140448"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=age-m3 source-frame-not-complete"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(cgb_age_m3_early_frame_control PROPERTIES TIMEOUT 30)
+
 set(GBB_AGE_MANIFEST "${PROJECT_SOURCE_DIR}/fixtures/age/manifest.json")
 file(READ "${GBB_AGE_MANIFEST}" GBB_AGE_MANIFEST_JSON)
+set(GBB_AGE_DISPOSITIONS_FILE "${PROJECT_SOURCE_DIR}/tests/external/cgb-speed-dispositions.json")
+file(READ "${GBB_AGE_DISPOSITIONS_FILE}" GBB_AGE_DISPOSITIONS_JSON)
+include("${PROJECT_SOURCE_DIR}/cmake/AgeFixtureProtocol.cmake")
+gbb_validate_age_fixture_protocol("${GBB_AGE_MANIFEST_JSON}"
+  GBB_AGE_ROW_FIXTURE_INDICES GBB_AGE_IMAGE_FIXTURE_INDICES)
 string(JSON GBB_AGE_FIXTURE_COUNT LENGTH "${GBB_AGE_MANIFEST_JSON}" fixtures)
 math(EXPR GBB_AGE_FIXTURE_LAST "${GBB_AGE_FIXTURE_COUNT} - 1")
+message(STATUS "AGE fixture protocol pass row-oracle=13 image-executed=6")
 set(GBB_AGE_SPSW_FOUND OFF)
-foreach(GBB_AGE_FIXTURE_INDEX RANGE 0 ${GBB_AGE_FIXTURE_LAST})
+foreach(GBB_AGE_FIXTURE_INDEX IN LISTS GBB_AGE_ROW_FIXTURE_INDICES)
   string(JSON GBB_AGE_FIXTURE_FILE GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} file)
   if("${GBB_AGE_FIXTURE_FILE}" STREQUAL "spsw-div-cgbBCE.gb")
     set(GBB_AGE_SPSW_FOUND ON)
@@ -3286,6 +3781,86 @@ target_compile_features(test_age_p12 PRIVATE c_std_17)
 target_compile_definitions(test_age_p12 PRIVATE GBB_AGE_P12=1)
 target_link_libraries(test_age_p12 PRIVATE gabbaboy_core_p12_mutants gabbaboy_accept)
 set_target_properties(test_age_p12 PROPERTIES C_EXTENSIONS OFF)
+
+# The Phase 14 timing control uses a private one-dot mode-3 startup mutant. The
+# clean model and its defect twin share the same guest and expected ROM bytes;
+# only the test-built core receives the mutation.
+set(GBB_AGE_P14_CORE "${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_age_p14_mutant.c")
+file(READ "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c" GBB_AGE_P14_CORE_TEXT)
+set(GBB_AGE_P14_ANCHOR "if (m->ppu_transfer_age < 12u) {\n        ++m->ppu_transfer_age;\n        if (m->ppu_transfer_age < 12u) return;\n    }")
+set(GBB_AGE_P14_REPLACEMENT
+  "if (m->ppu_transfer_age < (GBB_P14_MUT(0) ? 13u : 12u)) {\n        ++m->ppu_transfer_age;\n        if (m->ppu_transfer_age < (GBB_P14_MUT(0) ? 13u : 12u)) return;\n    }")
+string(FIND "${GBB_AGE_P14_CORE_TEXT}" "${GBB_AGE_P14_ANCHOR}" GBB_AGE_P14_ANCHOR_FIRST)
+string(FIND "${GBB_AGE_P14_CORE_TEXT}" "${GBB_AGE_P14_ANCHOR}" GBB_AGE_P14_ANCHOR_LAST REVERSE)
+if(GBB_AGE_P14_ANCHOR_FIRST EQUAL -1 OR NOT GBB_AGE_P14_ANCHOR_FIRST EQUAL GBB_AGE_P14_ANCHOR_LAST)
+  message(FATAL_ERROR "Phase 14 AGE mutant anchor must occur exactly once")
+endif()
+string(REPLACE "${GBB_AGE_P14_ANCHOR}" "${GBB_AGE_P14_REPLACEMENT}"
+  GBB_AGE_P14_CORE_TEXT "${GBB_AGE_P14_CORE_TEXT}")
+file(WRITE "${GBB_AGE_P14_CORE}"
+  "#include <stdint.h>\nuint64_t gbb_p14_mutants = 0u;\n"
+  "#define GBB_P14_MUT(n) ((unsigned)((gbb_p14_mutants >> (n)) & 1u))\n"
+  "${GBB_AGE_P14_CORE_TEXT}\n"
+  "void gbb_p14_set_mutants(uint64_t mask) { gbb_p14_mutants = mask; }\n")
+add_executable(test_age_p14 test_age.c "${GBB_AGE_P14_CORE}")
+target_include_directories(test_age_p14 PRIVATE
+  "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/src/core")
+target_compile_features(test_age_p14 PRIVATE c_std_17)
+target_compile_definitions(test_age_p14 PRIVATE
+  GBB_AGE_P14=1 GBB_BUILD_REVISION="p14-age-mutant-control" GBB_BUILD_QUALIFIED=0)
+target_link_libraries(test_age_p14 PRIVATE gabbaboy_accept)
+set_target_properties(test_age_p14 PROPERTIES C_EXTENSIONS OFF)
+
+set(GBB_AGE_STAT_CGBE_FOUND OFF)
+foreach(GBB_AGE_FIXTURE_INDEX IN LISTS GBB_AGE_ROW_FIXTURE_INDICES)
+  string(JSON GBB_AGE_STAT_FILE GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} file)
+  if(GBB_AGE_STAT_FILE STREQUAL "stat-mode-cgbE.gb")
+    set(GBB_AGE_STAT_CGBE_FOUND ON)
+    string(JSON GBB_AGE_STAT_RESULTS GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} test_results_address)
+    string(JSON GBB_AGE_STAT_EXPECTED GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} expected_address)
+    string(JSON GBB_AGE_STAT_ROWS GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} rows)
+    string(JSON GBB_AGE_STAT_BUDGET GET "${GBB_AGE_MANIFEST_JSON}" fixtures ${GBB_AGE_FIXTURE_INDEX} budget_half_dots)
+  endif()
+endforeach()
+if(NOT GBB_AGE_STAT_CGBE_FOUND)
+  message(FATAL_ERROR "AGE manifest must define stat-mode-cgbE for the Phase 14 tracer")
+endif()
+string(REPLACE "$" "0x" GBB_AGE_STAT_RESULTS "${GBB_AGE_STAT_RESULTS}")
+string(REPLACE "$" "0x" GBB_AGE_STAT_EXPECTED "${GBB_AGE_STAT_EXPECTED}")
+set(GBB_AGE_STAT_CGBE_SIGNATURE "")
+set(GBB_AGE_STAT_CGBE_MASK "")
+string(JSON GBB_AGE_P14_DISPOSITION_SUITE_COUNT LENGTH "${GBB_AGE_DISPOSITIONS_JSON}" suites)
+math(EXPR GBB_AGE_P14_DISPOSITION_SUITE_LAST "${GBB_AGE_P14_DISPOSITION_SUITE_COUNT} - 1")
+foreach(GBB_AGE_P14_DISPOSITION_SUITE_INDEX RANGE 0 ${GBB_AGE_P14_DISPOSITION_SUITE_LAST})
+    string(JSON GBB_AGE_P14_DISPOSITION_SUITE_NAME GET "${GBB_AGE_DISPOSITIONS_JSON}"
+      suites ${GBB_AGE_P14_DISPOSITION_SUITE_INDEX} suite)
+    if(GBB_AGE_P14_DISPOSITION_SUITE_NAME STREQUAL "age-test-roms")
+      string(JSON GBB_AGE_P14_DISPOSITION_ROW_COUNT LENGTH "${GBB_AGE_DISPOSITIONS_JSON}"
+        suites ${GBB_AGE_P14_DISPOSITION_SUITE_INDEX} rows)
+      math(EXPR GBB_AGE_P14_DISPOSITION_ROW_LAST "${GBB_AGE_P14_DISPOSITION_ROW_COUNT} - 1")
+      foreach(GBB_AGE_P14_DISPOSITION_ROW_INDEX RANGE 0 ${GBB_AGE_P14_DISPOSITION_ROW_LAST})
+        string(JSON GBB_AGE_DISPOSITION_CASE GET "${GBB_AGE_DISPOSITIONS_JSON}"
+          suites ${GBB_AGE_P14_DISPOSITION_SUITE_INDEX} rows ${GBB_AGE_P14_DISPOSITION_ROW_INDEX} case)
+        if(GBB_AGE_DISPOSITION_CASE STREQUAL "stat-mode-cgbE")
+          string(JSON GBB_AGE_STAT_CGBE_SIGNATURE GET "${GBB_AGE_DISPOSITIONS_JSON}"
+            suites ${GBB_AGE_P14_DISPOSITION_SUITE_INDEX} rows ${GBB_AGE_P14_DISPOSITION_ROW_INDEX} signature_sha256)
+          string(JSON GBB_AGE_STAT_CGBE_MASK GET "${GBB_AGE_DISPOSITIONS_JSON}"
+            suites ${GBB_AGE_P14_DISPOSITION_SUITE_INDEX} rows ${GBB_AGE_P14_DISPOSITION_ROW_INDEX} row_mask)
+        endif()
+      endforeach()
+    endif()
+endforeach()
+if(GBB_AGE_STAT_CGBE_SIGNATURE STREQUAL "" OR GBB_AGE_STAT_CGBE_MASK STREQUAL "")
+  message(FATAL_ERROR "AGE dispositions must pin stat-mode-cgbE signature and row mask")
+endif()
+add_test(NAME age_stat_mode_cgbE_phase14_controls
+  COMMAND test_age_p14 "${PROJECT_SOURCE_DIR}/fixtures/age/stat-mode-cgbE.gb"
+    "${GBB_AGE_STAT_RESULTS}" "${GBB_AGE_STAT_EXPECTED}" "${GBB_AGE_STAT_ROWS}"
+    "${GBB_AGE_STAT_BUDGET}" --phase14-controls
+    "${GBB_AGE_STAT_CGBE_SIGNATURE}" "${GBB_AGE_STAT_CGBE_MASK}")
+set_tests_properties(age_stat_mode_cgbE_phase14_controls PROPERTIES
+  PASS_REGULAR_EXPRESSION "age-phase14-control intended-mismatch assertion=stat-mode-cgbE/"
+  TIMEOUT 60)
 
 # The measured committed-core bounds drive the four-point boundary assertion below.
 set(GBB_P12_AGE_STALL_WINDOW "0x20004;0x20007")
@@ -3337,7 +3912,7 @@ foreach(GBB_AGE_DISPOSITION_SUITE_INDEX RANGE 0 ${GBB_AGE_DISPOSITION_SUITE_COUN
 
         set(GBB_AGE_CASE_FILE "${GBB_AGE_CASE}.gb")
         set(GBB_AGE_CASE_FOUND OFF)
-        foreach(GBB_AGE_CASE_FIXTURE_INDEX RANGE 0 ${GBB_AGE_FIXTURE_LAST})
+        foreach(GBB_AGE_CASE_FIXTURE_INDEX IN LISTS GBB_AGE_ROW_FIXTURE_INDICES)
           string(JSON GBB_AGE_FIXTURE_FILE GET "${GBB_AGE_MANIFEST_JSON}"
             fixtures ${GBB_AGE_CASE_FIXTURE_INDEX} file)
           if(GBB_AGE_FIXTURE_FILE STREQUAL GBB_AGE_CASE_FILE)
@@ -3375,7 +3950,7 @@ foreach(GBB_AGE_DISPOSITION_SUITE_INDEX RANGE 0 ${GBB_AGE_DISPOSITION_SUITE_COUN
           COMMAND test_age "${PROJECT_SOURCE_DIR}/fixtures/age/${GBB_AGE_CASE_FILE}"
             "${GBB_AGE_CASE_RESULTS_HEX}" "${GBB_AGE_CASE_EXPECTED_HEX}"
             "${GBB_AGE_CASE_ROWS}" "${GBB_AGE_CASE_BUDGET}"
-            --check-disposition ${GBB_AGE_DISPOSITION_ARGS})
+            --check-disposition ${GBB_AGE_DISPOSITION_ARGS} --phase14-observations)
         set_tests_properties(${GBB_AGE_CASE_TEST} PROPERTIES TIMEOUT ${GBB_AGE_CASE_TIMEOUT}
           PASS_REGULAR_EXPRESSION "age verdict=${GBB_AGE_EXPECTED_VERDICT}")
       endforeach()
@@ -3388,7 +3963,7 @@ endif()
 
 # D-21 sensitivity tests run every admitted AGE fixture and compare its clean and mutant results.
 set(GBB_AGE_SENSITIVITY_ENTRIES)
-foreach(GBB_AGE_SENSITIVITY_INDEX RANGE 0 ${GBB_AGE_FIXTURE_LAST})
+foreach(GBB_AGE_SENSITIVITY_INDEX IN LISTS GBB_AGE_ROW_FIXTURE_INDICES)
   string(JSON GBB_AGE_SENSITIVITY_FILE GET "${GBB_AGE_MANIFEST_JSON}"
     fixtures ${GBB_AGE_SENSITIVITY_INDEX} file)
   string(JSON GBB_AGE_SENSITIVITY_RESULTS GET "${GBB_AGE_MANIFEST_JSON}"
@@ -3544,6 +4119,20 @@ if(NOT WIN32)
   set_tests_properties(age_repro_compare_tampered PROPERTIES TIMEOUT 60
     PASS_REGULAR_EXPRESSION "reproduce-age negative control compare-tampered ok")
 endif()
+
+# Unknown manifest protocols must fail closed before row metadata can be consumed.
+string(JSON GBB_AGE_UNKNOWN_CLASS_MANIFEST SET "${GBB_AGE_MANIFEST_JSON}"
+  fixtures 0 fixture_class "\"age-unknown-protocol\"")
+set(GBB_AGE_UNKNOWN_CLASS_MANIFEST_FILE "${PROJECT_BINARY_DIR}/age-unknown-class/manifest.json")
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/age-unknown-class")
+file(WRITE "${GBB_AGE_UNKNOWN_CLASS_MANIFEST_FILE}" "${GBB_AGE_UNKNOWN_CLASS_MANIFEST}")
+add_test(NAME age_manifest_unknown_class
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DMANIFEST=${GBB_AGE_UNKNOWN_CLASS_MANIFEST_FILE};-P;${PROJECT_SOURCE_DIR}/tests/scripts/check-age-fixture-protocol.cmake"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=age-fixture-protocol: unsupported fixture_class age-unknown-protocol"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(age_manifest_unknown_class PROPERTIES TIMEOUT 30)
 # --- Phase 12 plan 12-16 end ---
 
 # --- Phase 12 plan 12-10 begin ---
@@ -3747,6 +4336,11 @@ add_test(NAME cgb_partition_mutant_m16_control
 # not re-measured in this run. Largest observed case: multicut, 2,187,264 hd,
 # 0.43 s local Debug; each CTest retains TIMEOUT 60 for sanitizer headroom.
 foreach(gbb_partition_case IN ITEMS
+    cgb_apu_lifecycle
+    cgb_apu_lifecycle_controls
+    cgb_apu_partition_fetch
+    cgb_apu_partition_speed
+    cgb_apu_partition_controls
     cgb_partition_snapshot_fidelity
     cgb_partition_stall_end_window_to_double
     cgb_partition_stall_end_window_to_normal
@@ -3764,6 +4358,9 @@ foreach(gbb_partition_case IN ITEMS
   add_test(NAME ${gbb_partition_case} COMMAND test_cgb_partition ${gbb_partition_case})
 endforeach()
 set_tests_properties(
+  cgb_apu_partition_fetch
+  cgb_apu_partition_speed
+  cgb_apu_partition_controls
   cgb_partition_stall_start_window
   cgb_partition_hostile_irq_in_stall
   cgb_partition_mutant_m16
@@ -3825,6 +4422,30 @@ add_test(NAME sanitizer_timeout_policy_selftest
     -P "${PROJECT_SOURCE_DIR}/tests/check_sanitizer_timeout_policy.cmake")
 set_tests_properties(sanitizer_timeout_policy_selftest PROPERTIES TIMEOUT 30)
 
+# Phase 14's report adapter consumes exactly the inventory-bound corpus CTests.
+# Report/control tests stay unlabeled so --run cannot recursively schedule itself.
+set(GBB_CGB_CORPUS_INVENTORY "${PROJECT_SOURCE_DIR}/tests/external/cgb-corpus-inventory.json")
+file(READ "${GBB_CGB_CORPUS_INVENTORY}" GBB_CGB_CORPUS_INVENTORY_JSON)
+string(JSON GBB_CGB_CORPUS_CASE_COUNT LENGTH "${GBB_CGB_CORPUS_INVENTORY_JSON}" cases)
+if(NOT GBB_CGB_CORPUS_CASE_COUNT EQUAL 107)
+  message(FATAL_ERROR "CGB corpus CTest label set must contain exactly 107 cases")
+endif()
+get_property(GBB_CGB_REGISTERED_TESTS DIRECTORY PROPERTY TESTS)
+set(GBB_CGB_CORPUS_TEST_NAMES "")
+math(EXPR GBB_CGB_CORPUS_CASE_LAST "${GBB_CGB_CORPUS_CASE_COUNT} - 1")
+foreach(GBB_CGB_CORPUS_CASE_INDEX RANGE 0 ${GBB_CGB_CORPUS_CASE_LAST})
+  string(JSON GBB_CGB_CORPUS_CTEST GET "${GBB_CGB_CORPUS_INVENTORY_JSON}"
+    cases ${GBB_CGB_CORPUS_CASE_INDEX} test_binding ctest_name)
+  if(NOT GBB_CGB_CORPUS_CTEST IN_LIST GBB_CGB_REGISTERED_TESTS)
+    message(FATAL_ERROR "CGB corpus binding is not a registered CTest: ${GBB_CGB_CORPUS_CTEST}")
+  endif()
+  if(GBB_CGB_CORPUS_CTEST IN_LIST GBB_CGB_CORPUS_TEST_NAMES)
+    message(FATAL_ERROR "CGB corpus CTest binding is duplicated: ${GBB_CGB_CORPUS_CTEST}")
+  endif()
+  list(APPEND GBB_CGB_CORPUS_TEST_NAMES "${GBB_CGB_CORPUS_CTEST}")
+  set_tests_properties("${GBB_CGB_CORPUS_CTEST}" PROPERTIES LABELS "cgb-corpus")
+endforeach()
+
 gabbaboy_verify_registered_tests()
 
 # Per-test TIMEOUTs are normal-build limits. Debug ASan/UBSan runs the same work several times
@@ -3852,3 +4473,11 @@ if(GABBABOY_ENABLE_SANITIZERS)
     endif()
   endforeach()
 endif()
+
+# The command-only stamp target runs on every build, so a new Git HEAD cannot
+# leave an otherwise up-to-date build stamp tied to the previous revision.
+# Capture target names only after all tests/executables have been registered.
+set(GBB_CGB_BUILD_TARGETS
+  gabbaboy-runner measure_core test_age test_age_m3 test_magentests
+  test_magentests_hdma test_samesuite_apu test_samesuite_hdma)
+add_dependencies(cgb_corpus_build_stamp ${GBB_CGB_BUILD_TARGETS})

@@ -43,6 +43,10 @@ relocated="$repo_root/build-cmake-3.25.3/package-prefix-relocated"
 "$cmake_bin" --preset cmake-3.25.3 -S "$repo_root" \
   -B "$repo_root/build-cmake-3.25.3" -DCMAKE_INSTALL_PREFIX="$stage"
 "$cmake_bin" --build "$repo_root/build-cmake-3.25.3" --verbose
+# Keep the Phase 14 adapter path checks early in this slow hosted floor job.
+"$ctest_bin" --test-dir "$repo_root/build-cmake-3.25.3" \
+  -R '^(cgb_samesuite_apu_membership|cgb_samesuite_apu_controls|cgb_corpus_report_tracer|cgb_corpus_report_tracer_controls|cgb_corpus_report_controls|cgb_corpus_report_platform_controls)$' \
+  --no-tests=error --output-on-failure
 "$ctest_bin" --test-dir "$repo_root/build-cmake-3.25.3" \
   --output-on-failure --no-tests=error --output-junit "$temp_root/floor-tests.xml"
 bash "$repo_root/.github/scripts/verify-test-inventory.sh" \

@@ -702,3 +702,87 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Remedy:** Compare committed, index, working-tree and non-ignored untracked paths independently with NUL delimiters; allow only named closeout metadata. Require the exact repository context set and PR event, head, workflow and run provenance, reject duplicates, and bound receipt reads. Keep local receipts diagnostic; query actual GitHub jobs at the final published head before merge. Preserve historical measurements under their original revision when retesting.
 - **Applicability:** Test, benchmark, package or workflow evidence reused across later commits, especially after metadata closeout.
 - **Verification:** Test-only RED `03292b1` preceded source-gate fix `5459b7c`; 26 controls pass. Receipt RED `42e330f` preceded `ec54205`; positive plus 16 negative controls pass. Independent re-audits closed both findings. Handoff RED `1d45145` precedes `3cdcef2`; the completed execution stage preserves the exact verification route and rejects a wrong stage.
+
+### GB-CGB-013 / 2026-10-16 / Sweep every source and receipt consumer when a model contract changes
+
+- **Cause and evidence:** Phase 14 changed AGE row classifications, stable assertion identities, and the wording of GATE-49's current-receipt evidence. The corpus inventory contract and AGE research14 contract both consume those facts; changing only one validator left a stale cross-check. AGE identity checks also bind each source row to an exact observation ID, so prose-equivalent renaming could disconnect an assertion chain.
+- **Remedy:** For each model-visible change, trace consumers across runner/report adapters, gate tables, manifest/disposition validators, stable assertion-ID checks, documentation checks, CMake registrations, expected-test inventory, and CI. Keep source expectations and guest observations distinct at every layer.
+- **Applies when:** A source pin, manifest classification, model/mode cell, gate disposition, row ID, or receipt schema changes.
+- **Verification:** `verify-cgb-corpus-inventory.py --bindings` and `--self-test`; `verify-age-phase14-contract.py --research14` and `--research14-controls`; CTest `cgb_age_assertion_identity`, `cgb_research14_dispositions`, and `cgb_phase14_inherited_contract_unit`. Static bindings cover 181 sources, 109 outputs, and 107 cases; stable AGE assertion identities remain checked.
+- **Player-copy supplement (2026-10-16):** UI scope review found that the core-only build omitted the player exact-string consumer after the limitation copy changed. Refresh the intended string and run `player_limitations`, `player_claims_agree`, and `player_claims_agree_mutated` in a player-enabled build; all 3 passed. Include optional adapters in the consumer sweep even when no UI layout changes.
+- **Source:** Phase 14 plans 14-10 through 14-13; `14-10-SUMMARY.md`, `14-12-SUMMARY.md`, and `14-13-SUMMARY.md`.
+- **Status:** Adopted.
+
+### GB-CGB-014 / 2026-10-16 / Separate static inventory from live receipt completeness
+
+- **Cause and evidence:** Static inventory cannot truthfully assign a terminal result to every admitted case; `--complete` correctly rejects the unexecuted `magentests:bg_oam_priority` row. Full CTest `--begin-run` also invalidates the prior receipt before testing starts, so requiring a complete current receipt from an ordinary CTest contract creates a cycle.
+- **Remedy:** Use `--bindings` for static source, rights, output, and test identity. Keep static CTest checks limited to independently checkable contract semantics. After the single full CTest stream, derive the fresh receipt with `--from-ctest`, then validate terminal cases, actual counts, pass cohorts, and current build identity against that receipt.
+- **Applies when:** Fixture admission is stable but terminal observations are produced only by a bounded test run.
+- **Verification:** `verify-cgb-corpus-inventory.py --bindings` passes while its self-test preserves strict `--complete` rejection for the nonterminal Magen case; `verify-cgb-corpus-claims.py --receipt <fresh-receipt>` validates dynamic claims after receipt construction without rerunning guest tests.
+- **Source:** `14-12-SUMMARY.md` static-completeness correction and `14-13-SUMMARY.md` post-receipt claim check.
+- **Status:** Adopted.
+
+### GB-CI-007 / 2026-10-16 / Parse actual CTest output measurements and keep one nonce across consumers
+
+- **Cause and evidence:** CTest's real `Test.xml` includes path-only `TestList` records, stores captured output in an unnamed `<Measurement>`, and defaults passing output to 1 KiB. Parser runs passed CTests but could not derive complete evidence; the default cap also truncated APU output. A separate fixed JUnit path would let the receipt, required inventory, and DMG baseline consume different runs.
+- **Remedy:** Parse status-bearing results and the single unnamed output measurement, reject missing or duplicate measurements, and set a finite 16 MiB per-test output cap. Use the same nonce-specific JUnit for the receipt, required-test inventory, and DMG baseline. Measure actual aggregate output before changing the bound.
+- **Applies when:** CTest reports are converted into compatibility receipts or several evidence consumers share one test execution.
+- **Verification:** `test-cgb-corpus-report.py` covers TestList records, unnamed output, and missing/duplicate measurements. The 14-12 run measured 617,531 bytes for 70 APU records and 4,784 assertion rows under the 16 MiB cap. `cgb_corpus_report_contract` and the native CI contract require receipt construction before the post-receipt claim check and keep downstream JUnit paths nonce-bound.
+- **Source:** `14-12-SUMMARY.md` parser fixes and measured run; `14-13-SUMMARY.md` recurring consumer contract.
+- **Status:** Adopted.
+
+### GB-GSD-020 / 2026-10-16 / Reconfigure after the source revision changes
+
+- **Cause and evidence:** CMake embeds the Git revision during configure. A build after a commit can retain the previous revision in the runner while a new receipt observes the new HEAD, making an otherwise correct runner fail an exact-head check. Phase 14 also relies on a build-input stamp whose clean and incremental dependency order must remain intact.
+- **Remedy:** After source commits, run the configure and build presets before the exact-head CTest stream. Preserve the stamp's executable dependencies and verify clean and covered-input rebuild ordering if that contract changes; do not accept a stale runner as current evidence.
+- **Applies when:** Executable or test identity contains a configure-time source revision, or a build stamp consumes generated inputs.
+- **Verification:** `cmake --preset phase1 && cmake --build --preset phase1`; `cgb_corpus_report_tracer` and its stale-runner control; the 14-12 clean/incremental stamp checks and 14-13 exact-head receipt.
+- **Source:** `14-12-SUMMARY.md` stale-runner correction and build-stamp evidence; `14-13-SUMMARY.md` exact-head run.
+- **Status:** Adopted.
+
+### GB-GSD-021 / 2026-10-16 / Keep public evidence allowlisted and RED tracebacks repository-relative
+
+- **Cause and evidence:** Raw CTest XML and JUnit contain host paths. Five valid historical RED JSON records also captured absolute workspace paths in traceback output. The records had no output-hash field, so one could not claim a hash-verified redaction without changing their evidence contract.
+- **Remedy:** Publish only the established allowlist of privacy-checked JSON artifacts; keep raw reports local. Replace only the known workspace prefix in current RED tracebacks, preserve target/assertion/expected/actual/exit code and semantic failure text, and do not invent absent hashes. Verify path privacy with a generic negative control.
+- **Applies when:** CI artifacts, failure logs, or persisted TDD evidence might disclose host-specific paths.
+- **Verification:** The artifact scanner accepts the three public JSON files and rejects host paths in synthetic XML/JUnit. `test-cgb-red-evidence-privacy.py` checks the five preserved records and detects a synthetic absolute path; OpenGSD classifies all five historical records and the new real Task 3 record as `RED_EVIDENCE_OK`.
+- **Source:** `14-12-SUMMARY.md` artifact allowlist; `14-13-task3-red-evidence.json`; `14-13-SUMMARY.md` privacy verification.
+- **Status:** Adopted.
+
+### GB-GSD-022 / 2026-10-16 / Do not reconstruct a missing historical RED gate
+
+- **Cause and evidence:** Plan 14-12 Task 3 lacked a pre-implementation RED commit while its package-boundary implementation was already present. A test run after implementation cannot prove the earlier test-first sequence.
+- **Remedy:** Preserve the 14-12 deviation in its original summary. Do not fabricate or backdate a failure; for a new TDD task, capture and classify a real failing test before the current data or behavior fix, then keep the original failure record unchanged.
+- **Applies when:** A continued phase discovers that a previous task skipped its RED gate or a historical fixture/result is missing.
+- **Verification:** The current Task 3 privacy assertion failed against the five actual leaking records and was classified `RED_EVIDENCE_OK` before the sanitization commit; the records then pass the privacy test. The 14-12 summary still explicitly reports its missing RED.
+- **Source:** `14-12-SUMMARY.md` Task 3 deviation; `14-13-task3-red-evidence.json`; `14-13-SUMMARY.md` TDD gate record.
+- **Status:** Adopted.
+
+### GB-CI-008 / 2026-10-16 / Exercise native artifact names and subprocess pipes before declaring tooling portable
+
+- **Cause and evidence:** Phase 14 independent review found that the default build-stamp target assumed extensionless binaries and registered anonymous pipes with selectors. Both assumptions fail on Windows, even though the native C code and local macOS corpus passed.
+- **Remedy:** Use the native executable suffix at every artifact and launch path. Use a bounded Windows pipe reader with a capped queue, deadline and process/reader cleanup; retain POSIX process-group cleanup. Keep the existing Windows CI job as actual platform evidence, with local simulations catching these defects earlier.
+- **Applies when:** A Python build or evidence adapter hashes or launches native binaries or captures subprocess output across platforms.
+- **Verification:** The report adapter's 8 focused positive/negative controls and all 13 report-contract tests passed; the independent fix recheck found no remaining material issues. Actual Windows execution must be established by the exact-head hosted job, not inferred from the simulations.
+- **Source:** `14-REVIEW.md`, `14-REVIEW-FIX.md`, `14-REVIEW-RECHECK.md`; fixes `e1deb42` and `bfd6f09`.
+- **Status:** Adopted.
+
+### GB-CI-009 / 2026-10-16 / Test configured paths, byte identity and nested deadlines at the real producer boundary
+
+- **Cause and evidence:** Phase 14 hosted floor/sanitizer builds exposed five adapters hardcoded to `build`; Windows exposed CRLF drift in raw-digested sources, a slash-only row identity and a reserialized control manifest. Independent review then found the stamp hashing PATH CTest while consumers used pinned CTest. The sanitizer adapter retained an unscaled 15-second child deadline inside a scaled outer CTest.
+- **Remedy:** Propagate the actual binary directory and configured CTest through producer and consumers; verify the real stamp and reject a substituted tool hash. Pin only raw-digested source bytes, copy admitted manifests byte-for-byte, reuse the bounded portable basename helper, and scale child deadlines explicitly while keeping strict finite caps. Put cheap seam checks before the floor's full suite.
+- **Applies when:** Evidence tooling runs across build presets, host platforms, pinned tools or sanitizer configurations. Parser-only fixtures and a successful default local build do not establish these integration contracts.
+- **Verification:** Nondefault-build five-test RED/GREEN; temporary Git autocrlf positive/negative control; four path spellings, seven invalid paths and capacity boundaries; exact missing-ROM failure; failing PATH CTest decoy RED/GREEN; actual-stamp substituted-tool rejection; all-child timeout propagation and invalid-limit rejection. Final hosted jobs must bind their own exact source head.
+- **Source:** Phase 14 CR-03 through CR-08, their fix/recheck reports and the exact-head CI failure receipts.
+- **Status:** Adopted. No new dependency or hosted job.
+
+- **GB-CI-009 default-run supplement:** Existing regression methods are now wired into the required `cgb_corpus_report_platform_controls` CTest and the early floor gate, so the eight suffix/reader controls run by default. Verify registration and the required inventory as well as a direct unittest pass. The pre-wiring aggregate stream was intentionally stopped before its inputs changed; its incomplete receipt is not a pass.
+
+### GB-GSD-023 / 2026-10-16 / Close automated UAT across every live handoff surface
+
+- **Cause and evidence:** Phase 14 execution and goal verification were complete, but PROJECT still routed to execution and INDEX called execution underway. The API gate selected a hardware source-coverage document as an external API matrix. All 49 deliverables already classified as automated, so confirmation-only UAT would add toil without evidence.
+- **Remedy:** Reconcile each SUMMARY against its bounded ancestor window, retain legacy count-location warnings, and map every coverage id, exact criterion and verification reference into automated UAT. Record the existing reasoned no-external-integration declaration. Check the live STATE, continuation, PROJECT and false auto flags together; keep historical receipts bounded and preserve their actual producer revisions. Reuse completed UAT unless covered contracts, contrary evidence or freshness change.
+- **Applies when:** A phase has deterministic SUMMARY coverage and several durable continuation surfaces; no human judgment or external credential/hardware action is needed for its declared deliverables.
+- **Verification:** Phase 14 `verify-uat-contract.py --self-test` rejects 17 weakened closure records, ten stale handoff/auto-advance records and two invalid commit claims; the API matrix accepts the reasoned declaration and rejects missing-reason and undecided opt-out controls. Existing CI retains recurring behavioral, integration, e2e, seam, smoke, package and schema checks; no new dependency or duplicate lane.
+- **Source:** `14-UAT.md`, `COVERAGE.md` and `verify-uat-contract.py` in the Phase 14 directory.
+- **Status:** Adopted; D-069 remains the standing zero-routine-human-UAT default. Stop before Phase 15.

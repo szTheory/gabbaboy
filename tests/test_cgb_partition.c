@@ -22,6 +22,7 @@ extern uint64_t gbb_p12_mutants;
 #define PARTITION_PREFIX_NOPS 15u
 #define PARTITION_PCM_CAPACITY 8192u
 #define PARTITION_SERIAL_CAPACITY 16u
+#define APU_PARTITION_TRACE_CAPACITY 8192u
 #define PARTITION_FNV_OFFSET UINT64_C(0xCBF29CE484222325)
 #define PARTITION_FNV_PRIME UINT64_C(0x100000001B3)
 #ifndef GBB_PARTITION_CASE_HALF_DOT_CAP
@@ -68,6 +69,11 @@ typedef struct {
     uint64_t rom_digest;
     partition_streams streams;
 } partition_snap;
+
+typedef struct {
+    gbb_test_bus_event events[APU_PARTITION_TRACE_CAPACITY];
+    size_t count;
+} apu_partition_trace;
 
 static void hash_byte(uint64_t *hash, uint8_t value) {
     *hash ^= value;
@@ -575,6 +581,46 @@ static void partition_hash_instance(uint64_t *hash, const gbb_instance *machine,
     hash_bytes(hash, machine->ppu_selected_tile, sizeof(machine->ppu_selected_tile));
     hash_bytes(hash, machine->ppu_selected_attributes, sizeof(machine->ppu_selected_attributes));
 
+    for (size_t channel = 0u; channel < 2u; ++channel) {
+        const apu_pulse_channel *pulse = &machine->apu_pulse[channel];
+        hash_byte(hash, pulse->sweep);
+        hash_byte(hash, pulse->duty_length);
+        hash_byte(hash, pulse->envelope);
+        hash_byte(hash, pulse->frequency_low);
+        hash_byte(hash, pulse->control);
+        hash_u16(hash, pulse->length);
+        hash_u16(hash, pulse->frequency);
+        hash_u16(hash, pulse->timer);
+        hash_u16(hash, pulse->sweep_shadow);
+        hash_byte(hash, pulse->phase);
+        hash_byte(hash, pulse->volume);
+        hash_byte(hash, pulse->envelope_timer);
+        hash_byte(hash, pulse->sweep_timer);
+        hash_byte(hash, (uint8_t)pulse->enabled);
+        hash_byte(hash, (uint8_t)pulse->sweep_enabled);
+        hash_byte(hash, (uint8_t)pulse->sweep_negate_used);
+    }
+    hash_byte(hash, machine->apu_wave.dac);
+    hash_byte(hash, machine->apu_wave.length_reg);
+    hash_byte(hash, machine->apu_wave.level);
+    hash_byte(hash, machine->apu_wave.frequency_low);
+    hash_byte(hash, machine->apu_wave.control);
+    hash_byte(hash, machine->apu_wave.sample_buffer);
+    hash_bytes(hash, machine->apu_wave.ram, sizeof(machine->apu_wave.ram));
+    hash_byte(hash, machine->apu_wave.position);
+    hash_u16(hash, machine->apu_wave.length);
+    hash_u16(hash, machine->apu_wave.timer);
+    hash_byte(hash, (uint8_t)machine->apu_wave.enabled);
+    hash_byte(hash, machine->apu_noise.length_reg);
+    hash_byte(hash, machine->apu_noise.envelope);
+    hash_byte(hash, machine->apu_noise.polynomial);
+    hash_byte(hash, machine->apu_noise.control);
+    hash_byte(hash, machine->apu_noise.volume);
+    hash_byte(hash, machine->apu_noise.envelope_timer);
+    hash_u16(hash, machine->apu_noise.length);
+    hash_u16(hash, machine->apu_noise.lfsr);
+    hash_u32(hash, machine->apu_noise.timer);
+    hash_byte(hash, (uint8_t)machine->apu_noise.enabled);
     hash_byte(hash, machine->apu_sequencer_step);
     hash_u64(hash, machine->apu_sample_phase);
     hash_byte(hash, machine->apu_nr50);
@@ -636,6 +682,486 @@ static uint64_t partition_digest(const gbb_instance *machine,
     uint64_t hash = PARTITION_FNV_OFFSET;
     partition_hash_instance(&hash, machine, streams);
     return hash;
+}
+
+static void apu_partition_emit_write(uint8_t rom[32768], size_t *pc,
+                                     uint8_t address, uint8_t value) {
+    rom[(*pc)++] = 0x3Eu;
+    rom[(*pc)++] = value;
+    rom[(*pc)++] = 0xE0u;
+    rom[(*pc)++] = address;
+}
+
+static void apu_partition_emit_pcm_read(uint8_t rom[32768], size_t *pc,
+                                        uint16_t destination) {
+    rom[(*pc)++] = 0xF0u;
+    rom[(*pc)++] = 0x77u;
+    rom[(*pc)++] = 0xEAu;
+    rom[(*pc)++] = (uint8_t)destination;
+    rom[(*pc)++] = (uint8_t)(destination >> 8);
+}
+
+static void apu_partition_make_rom(uint8_t rom[32768], unsigned double_speed) {
+    memset(rom, 0, 32768u);
+    rom[0x100u] = 0xC3u;
+    rom[0x101u] = 0x50u;
+    rom[0x102u] = 0x01u;
+    rom[0x143u] = 0xC0u;
+    rom[0x147u] = 0x00u;
+    rom[0x148u] = 0x00u;
+    rom[0x149u] = 0x00u;
+    size_t pc = 0x150u;
+    apu_partition_emit_write(rom, &pc, 0x26u, 0x80u);
+    for (unsigned i = 0u; i < 16u; ++i)
+        apu_partition_emit_write(rom, &pc, (uint8_t)(0x30u + i), 0x77u);
+    apu_partition_emit_write(rom, &pc, 0x1Au, 0x80u);
+    apu_partition_emit_write(rom, &pc, 0x1Cu, 0x20u);
+    apu_partition_emit_write(rom, &pc, 0x1Du, 0xFFu);
+    apu_partition_emit_write(rom, &pc, 0x1Eu, 0x87u);
+    for (unsigned i = 0u; i < 8u; ++i) rom[pc++] = 0x00u;
+    apu_partition_emit_write(rom, &pc, 0x1Du, 0x00u);
+    apu_partition_emit_write(rom, &pc, 0x1Eu, 0x80u);
+    apu_partition_emit_write(rom, &pc, 0x30u, 0xAAu);
+    apu_partition_emit_pcm_read(rom, &pc, 0xC000u);
+    for (unsigned i = 0u; i < 512u << double_speed; ++i) rom[pc++] = 0x00u;
+    apu_partition_emit_pcm_read(rom, &pc, 0xC001u);
+    rom[pc++] = 0x76u;
+
+    uint8_t checksum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14Du] = checksum;
+}
+
+static int apu_partition_machine_create(unsigned double_speed,
+                                        partition_machine *out) {
+    uint8_t rom[32768];
+    apu_partition_make_rom(rom, double_speed);
+    memset(out, 0, sizeof(*out));
+    if (gbb_create(GBB_PROFILE_CGB_CPU_E, &out->machine) != GBB_OK) return 1;
+    if (gbb_load_rom(out->machine, rom, sizeof(rom)) != GBB_OK) {
+        gbb_destroy(out->machine);
+        out->machine = NULL;
+        return 1;
+    }
+    out->machine->pc = 0x100u;
+    out->machine->double_speed = (uint8_t)double_speed;
+    out->machine->ime = 0;
+    out->machine->ime_delay = 0u;
+    return 0;
+}
+
+static int apu_partition_trace_equal(const apu_partition_trace *left,
+                                     const apu_partition_trace *right) {
+    if (left->count != right->count) return 0;
+    for (size_t i = 0u; i < left->count; ++i) {
+        const gbb_test_bus_event *a = &left->events[i];
+        const gbb_test_bus_event *b = &right->events[i];
+        if (a->time_half_dots != b->time_half_dots || a->address != b->address ||
+            a->access != b->access || a->value != b->value) return 0;
+    }
+    return 1;
+}
+
+static int apu_partition_run_budget(partition_machine *run, uint64_t budget,
+                                    partition_meter *meter,
+                                    apu_partition_trace *trace,
+                                    gbb_run_result *out_result) {
+    gbb_audio_frame frames[PARTITION_PCM_CAPACITY];
+    gbb_test_bus_event events[APU_PARTITION_TRACE_CAPACITY];
+    size_t frame_count = 0u;
+    gbb_test_observer_set(run->machine, events,
+                          sizeof(events) / sizeof(events[0]));
+    const gbb_run_result result = gbb_run_audio(run->machine, budget, frames,
+        sizeof(frames) / sizeof(frames[0]), &frame_count);
+    const size_t event_count = gbb_test_observer_count(run->machine);
+    gbb_test_observer_set(run->machine, NULL, 0u);
+    if (result.reason != GBB_STOP_BUDGET &&
+        result.reason != GBB_STOP_HALTED_IDLE) {
+        fprintf(stderr, "apu-partition-run-reason reason=%u consumed=%" PRIu64
+                        " budget=%" PRIu64 "\n", (unsigned)result.reason,
+                result.consumed_half_dots, budget);
+        return 1;
+    }
+    if (event_count > APU_PARTITION_TRACE_CAPACITY - trace->count) {
+        fputs("apu-partition-trace-cap-exceeded\n", stderr);
+        return 1;
+    }
+    if (partition_meter_add(meter, result.consumed_half_dots) != 0 ||
+        partition_append_audio(&run->streams, frames, frame_count) != 0) return 1;
+    for (size_t i = 0u; i < event_count; ++i) {
+        gbb_test_bus_event *dst = &trace->events[trace->count++];
+        dst->time_half_dots = events[i].time_half_dots;
+        dst->address = events[i].address;
+        dst->access = events[i].access;
+        dst->value = events[i].value;
+    }
+    if (out_result != NULL) *out_result = result;
+    return 0;
+}
+
+static int apu_partition_run_path(partition_machine *run, unsigned double_speed,
+                                  const uint64_t *cuts, size_t cut_count,
+                                  uint64_t total_half_dots,
+                                  partition_meter *meter,
+                                  apu_partition_trace *trace,
+                                  uint64_t *cut_times) {
+    uint64_t previous = 0u;
+    uint64_t pending_budget = 0u;
+    int terminal = 0;
+    for (size_t i = 0u; i < cut_count; ++i) {
+        if (cuts[i] < previous || cuts[i] > total_half_dots) {
+            fputs("apu-partition-cut-order\n", stderr);
+            return 1;
+        }
+        pending_budget += cuts[i] - previous;
+        previous = cuts[i];
+        if (pending_budget != 0u) {
+            gbb_run_result result;
+            if (apu_partition_run_budget(run, pending_budget, meter, trace,
+                                         &result) != 0) return 1;
+            pending_budget -= result.consumed_half_dots;
+            if (result.reason == GBB_STOP_HALTED_IDLE) terminal = 1;
+        }
+        if (cut_times != NULL) cut_times[i] = run->machine->time_half_dots;
+        if (terminal) break;
+    }
+    if (!terminal) pending_budget += total_half_dots - previous;
+    if (!terminal && pending_budget != 0u) {
+        gbb_run_result result;
+        if (apu_partition_run_budget(run, pending_budget, meter, trace,
+                                     &result) != 0) return 1;
+        pending_budget -= result.consumed_half_dots;
+        terminal = result.reason == GBB_STOP_HALTED_IDLE;
+    }
+    if ((!terminal && pending_budget != 0u) || run->machine->time_half_dots == 0u) {
+        fputs("apu-partition-incomplete\n", stderr);
+        return 1;
+    }
+    (void)double_speed;
+    return 0;
+}
+
+static int apu_partition_reference(unsigned double_speed,
+                                   partition_machine *run,
+                                   partition_meter *meter,
+                                   apu_partition_trace *trace,
+                                   uint64_t *fetch_time) {
+    REQUIRE(apu_partition_machine_create(double_speed, run) == 0);
+    gbb_run_result result;
+    REQUIRE(apu_partition_run_budget(run, UINT64_C(20000), meter, trace,
+                                     &result) == 0);
+    REQUIRE(result.reason == GBB_STOP_HALTED_IDLE);
+    REQUIRE(gbb_peek_ram(run->machine, 0xC000u) == 0x07u);
+    REQUIRE(gbb_peek_ram(run->machine, 0xC001u) == 0x0Au);
+    size_t trigger_count = 0u;
+    uint64_t trigger_time = 0u;
+    size_t pcm_reads = 0u;
+    for (size_t i = 0u; i < trace->count; ++i) {
+        const gbb_test_bus_event *event = &trace->events[i];
+        if (event->address == 0xFF1Eu && event->access == 2u &&
+            event->value == 0x80u) {
+            ++trigger_count;
+            trigger_time = event->time_half_dots;
+        }
+        if (event->address == 0xFF77u && event->access == 1u) {
+            if (pcm_reads == 0u && event->value != 0x07u) return 1;
+            if (pcm_reads == 1u && event->value != 0x0Au) return 1;
+            ++pcm_reads;
+        }
+    }
+    REQUIRE(trigger_count == 1u);
+    REQUIRE(pcm_reads == 2u);
+    REQUIRE(trigger_time <= UINT64_MAX - UINT64_C(4096));
+    *fetch_time = trigger_time + UINT64_C(4096);
+    REQUIRE(*fetch_time < run->machine->time_half_dots);
+    return 0;
+}
+
+static int apu_partition_compare(unsigned double_speed, int print_result,
+                                 uint64_t *out_digest, uint64_t *out_fetch_time,
+                                 apu_partition_trace *out_reference_trace) {
+    partition_meter meter = {0};
+    partition_machine reference;
+    apu_partition_trace reference_trace = {0};
+    uint64_t fetch_time = 0u;
+    if (apu_partition_reference(double_speed, &reference, &meter,
+                                &reference_trace, &fetch_time) != 0) {
+        partition_machine_destroy(&reference);
+        return 1;
+    }
+    const uint64_t reference_digest = partition_digest(reference.machine,
+                                                        &reference.streams);
+    const uint64_t quantum = UINT64_C(8) >> double_speed;
+    const uint64_t cuts[] = {fetch_time - quantum, fetch_time,
+                             fetch_time + quantum};
+    REQUIRE(cuts[0] < cuts[1] && cuts[2] < UINT64_C(20000));
+    partition_machine partitioned;
+    apu_partition_trace partitioned_trace = {0};
+    uint64_t cut_times[3] = {0};
+    REQUIRE(apu_partition_machine_create(double_speed, &partitioned) == 0);
+    if (apu_partition_run_path(&partitioned, double_speed, cuts, 3u,
+            UINT64_C(20000), &meter, &partitioned_trace, cut_times) != 0) {
+        partition_machine_destroy(&partitioned);
+        partition_machine_destroy(&reference);
+        return 1;
+    }
+    const uint64_t partitioned_digest = partition_digest(partitioned.machine,
+                                                          &partitioned.streams);
+    if (partitioned_digest != reference_digest ||
+        !apu_partition_trace_equal(&partitioned_trace, &reference_trace) ||
+        gbb_peek_ram(partitioned.machine, 0xC000u) != 0x07u ||
+        gbb_peek_ram(partitioned.machine, 0xC001u) != 0x0Au ||
+        cut_times[0] >= fetch_time || cut_times[2] < fetch_time) {
+        fprintf(stderr, "apu-partition-mismatch speed=%u fetch=%" PRIu64
+                        " actual-cuts=%" PRIu64 ",%" PRIu64 ",%" PRIu64
+                        " reference=%016" PRIx64 " actual=%016" PRIx64
+                        " trace-equal=%u\n", double_speed, fetch_time,
+                cut_times[0], cut_times[1], cut_times[2], reference_digest,
+                partitioned_digest,
+                (unsigned)apu_partition_trace_equal(&partitioned_trace,
+                                                     &reference_trace));
+        partition_machine_destroy(&partitioned);
+        partition_machine_destroy(&reference);
+        return 1;
+    }
+    if (print_result != 0)
+        printf("cgb_apu_partition_%s pass speed=%u fetch_half_dots=%" PRIu64
+               " events=%zu pcm_frames=%zu emulated_half_dots=%" PRIu64 "\n",
+               double_speed != 0u ? "speed" : "fetch", double_speed,
+               fetch_time, partitioned_trace.count, partitioned.streams.pcm_count,
+               meter.consumed_half_dots);
+    if (out_digest != NULL) *out_digest = reference_digest;
+    if (out_fetch_time != NULL) *out_fetch_time = fetch_time;
+    if (out_reference_trace != NULL) *out_reference_trace = reference_trace;
+    partition_machine_destroy(&partitioned);
+    partition_machine_destroy(&reference);
+    return 0;
+}
+
+static int apu_partition_fault_control(unsigned double_speed, uint64_t fetch_time,
+                                      const apu_partition_trace *reference_trace,
+                                      uint64_t reference_digest, uint8_t control) {
+    partition_meter meter = {0};
+    partition_machine run;
+    apu_partition_trace trace = {0};
+    REQUIRE(apu_partition_machine_create(double_speed, &run) == 0);
+    const uint64_t quantum = UINT64_C(8) >> double_speed;
+    REQUIRE(fetch_time > quantum);
+    gbb_run_result prefix;
+    REQUIRE(apu_partition_run_budget(&run, fetch_time - quantum, &meter,
+                                     &trace, &prefix) == 0);
+    REQUIRE(prefix.reason == GBB_STOP_BUDGET);
+    REQUIRE(run.machine->time_half_dots < fetch_time);
+    REQUIRE(run.machine->apu_wave.timer > 1u);
+    if (control == 1u) {
+        ++run.machine->apu_wave.timer;
+    } else {
+        run.machine->apu_wave.timer = 1u;
+    }
+    gbb_run_result suffix;
+    const uint64_t remaining = UINT64_C(20000) - run.machine->time_half_dots;
+    REQUIRE(apu_partition_run_budget(&run, remaining, &meter, &trace,
+                                     &suffix) == 0);
+    REQUIRE(suffix.reason == GBB_STOP_HALTED_IDLE);
+    const uint64_t actual_digest = partition_digest(run.machine, &run.streams);
+    const int events_equal = apu_partition_trace_equal(&trace, reference_trace);
+    const uint8_t pcm_after = gbb_peek_ram(run.machine, 0xC001u);
+    if (actual_digest == reference_digest || !events_equal) {
+        fprintf(stderr, "apu-partition-control-not-detected control=%u\n", control);
+        partition_machine_destroy(&run);
+        return 1;
+    }
+    fprintf(stderr, "negative-control diagnostic: %s expected_digest=%016" PRIx64
+                    " actual_digest=%016" PRIx64
+                    " bus_events=equal guest_pcm_after=0x%02x\n",
+            control == 1u ? "lost-fetch-remainder" : "duplicate-fetch",
+            reference_digest, actual_digest, pcm_after);
+    partition_machine_destroy(&run);
+    return 0;
+}
+
+static int cgb_apu_partition_fetch(void) {
+    return apu_partition_compare(0u, 1, NULL, NULL, NULL);
+}
+
+static int cgb_apu_partition_speed(void) {
+    for (unsigned speed = 0u; speed <= 1u; ++speed)
+        REQUIRE(apu_partition_compare(speed, 0, NULL, NULL, NULL) == 0);
+    puts("cgb_apu_partition_speed pass speeds=normal,double");
+    return 0;
+}
+
+static int cgb_apu_partition_controls(void) {
+    uint64_t reference_digest = 0u;
+    uint64_t fetch_time = 0u;
+    apu_partition_trace reference_trace = {0};
+    REQUIRE(apu_partition_compare(0u, 0, &reference_digest, &fetch_time,
+                                 &reference_trace) == 0);
+    REQUIRE(apu_partition_fault_control(0u, fetch_time, &reference_trace,
+                                        reference_digest, 1u) == 0);
+    REQUIRE(apu_partition_fault_control(0u, fetch_time, &reference_trace,
+                                        reference_digest, 2u) == 0);
+    puts("cgb_apu_partition_controls pass controls=lost-fetch-remainder,duplicate-fetch twin=split-equal");
+    return 0;
+}
+
+static void apu_lifecycle_make_rom(uint8_t rom[32768]) {
+    memset(rom, 0, 32768u);
+    rom[0x100u] = 0xC3u; rom[0x101u] = 0x50u; rom[0x102u] = 0x01u;
+    rom[0x143u] = 0x80u;
+    rom[0x147u] = 0x00u;
+    rom[0x148u] = 0x00u;
+    rom[0x149u] = 0x00u;
+    size_t pc = 0x150u;
+    apu_partition_emit_write(rom, &pc, 0x26u, 0x80u);
+    apu_partition_emit_write(rom, &pc, 0x11u, 0x80u);
+    apu_partition_emit_write(rom, &pc, 0x12u, 0xF0u);
+    apu_partition_emit_write(rom, &pc, 0x13u, 0x00u);
+    apu_partition_emit_write(rom, &pc, 0x14u, 0x80u);
+    for (unsigned i = 0u; i < 16u; ++i)
+        apu_partition_emit_write(rom, &pc, (uint8_t)(0x30u + i), 0x77u);
+    apu_partition_emit_write(rom, &pc, 0x1Au, 0x80u);
+    apu_partition_emit_write(rom, &pc, 0x1Cu, 0x20u);
+    apu_partition_emit_write(rom, &pc, 0x1Du, 0xFFu);
+    apu_partition_emit_write(rom, &pc, 0x1Eu, 0x87u);
+    apu_partition_emit_write(rom, &pc, 0x24u, 0x77u);
+    apu_partition_emit_write(rom, &pc, 0x25u, 0x11u);
+    apu_partition_emit_write(rom, &pc, 0x56u, 0xC1u);
+    for (unsigned i = 0u; i < 512u; ++i) rom[pc++] = 0x00u;
+    apu_partition_emit_pcm_read(rom, &pc, 0xC000u);
+    rom[pc++] = 0xF0u; rom[pc++] = 0x76u;
+    rom[pc++] = 0xEAu; rom[pc++] = 0x01u; rom[pc++] = 0xC0u;
+    rom[pc++] = 0x76u;
+    uint8_t checksum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14Du] = checksum;
+}
+
+static int apu_lifecycle_create(gbb_instance **out, const uint8_t rom[32768]) {
+    if (gbb_create(GBB_PROFILE_CGB_CPU_E, out) != GBB_OK) return 1;
+    if (gbb_load_rom(*out, rom, 32768u) != GBB_OK) {
+        gbb_destroy(*out);
+        *out = NULL;
+        return 1;
+    }
+    return 0;
+}
+
+static int apu_lifecycle_run(gbb_instance *machine, gbb_run_result *result,
+                             gbb_audio_frame *frames, size_t *frame_count) {
+    *frame_count = 0u;
+    *result = gbb_run_audio(machine, 20000u, frames, 1024u, frame_count);
+    return result->reason == GBB_STOP_HALTED_IDLE &&
+           result->consumed_half_dots <= 20000u ? 0 : 1;
+}
+
+static int apu_lifecycle_frames_equal(const gbb_audio_frame *left, size_t left_count,
+                                      const gbb_audio_frame *right, size_t right_count) {
+    if (left_count != right_count) return 0;
+    for (size_t i = 0u; i < left_count; ++i)
+        if (left[i].left != right[i].left || left[i].right != right[i].right) return 0;
+    return 1;
+}
+
+static uint64_t apu_lifecycle_digest(const gbb_instance *machine) {
+    const partition_streams no_streams = {0};
+    return partition_digest(machine, &no_streams);
+}
+
+static int cgb_apu_lifecycle(void) {
+    uint8_t rom[32768];
+    uint8_t invalid_rom[32768] = {0};
+    apu_lifecycle_make_rom(rom);
+    gbb_instance *machine = NULL, *twin = NULL, *fresh = NULL, *isolated = NULL;
+    REQUIRE(apu_lifecycle_create(&machine, rom) == 0);
+    REQUIRE(apu_lifecycle_create(&twin, rom) == 0);
+    REQUIRE(apu_lifecycle_create(&fresh, rom) == 0);
+    REQUIRE(apu_lifecycle_create(&isolated, rom) == 0);
+    REQUIRE(gbb_test_ir_latch(machine) == 0u && gbb_test_ir_latch(isolated) == 0u);
+    const uint64_t isolated_before = apu_lifecycle_digest(isolated);
+    gbb_audio_frame machine_frames[1024] = {{0}}, twin_frames[1024] = {{0}};
+    size_t machine_count = 0u, twin_count = 0u;
+    gbb_run_result machine_run, twin_run;
+    REQUIRE(apu_lifecycle_run(machine, &machine_run, machine_frames, &machine_count) == 0);
+    REQUIRE(gbb_test_ir_latch(machine) == 0xC1u);
+    REQUIRE(gbb_peek_ram(machine, 0xC000u) == 0x07u &&
+            gbb_peek_ram(machine, 0xC001u) == 0x0Fu);
+    REQUIRE(apu_lifecycle_digest(machine) != isolated_before);
+    REQUIRE(apu_lifecycle_digest(isolated) == isolated_before);
+    REQUIRE(apu_lifecycle_run(twin, &twin_run, twin_frames, &twin_count) == 0);
+    REQUIRE(machine_run.consumed_half_dots == twin_run.consumed_half_dots &&
+            machine_count == twin_count &&
+            apu_lifecycle_frames_equal(machine_frames, machine_count,
+                                       twin_frames, twin_count));
+
+    const partition_streams no_streams = {0};
+    const uint64_t before_failed_load = partition_digest(machine, &no_streams);
+    REQUIRE(gbb_load_rom(machine, invalid_rom, sizeof(invalid_rom)) != GBB_OK);
+    REQUIRE(partition_digest(machine, &no_streams) == before_failed_load);
+    REQUIRE(gbb_test_ir_latch(machine) == 0xC1u);
+
+    gbb_audio_frame after_failure[1024] = {{0}}, twin_after_failure[1024] = {{0}};
+    size_t after_count = 0u, twin_after_count = 0u;
+    const gbb_run_result after_run = gbb_run_audio(machine, 4096u, after_failure,
+        1024u, &after_count);
+    const gbb_run_result twin_after_run = gbb_run_audio(twin, 4096u,
+        twin_after_failure, 1024u, &twin_after_count);
+    REQUIRE(after_run.reason == twin_after_run.reason &&
+            after_run.consumed_half_dots == twin_after_run.consumed_half_dots &&
+            after_count == twin_after_count &&
+            apu_lifecycle_frames_equal(after_failure, after_count,
+                                       twin_after_failure, twin_after_count));
+
+    REQUIRE(gbb_load_rom(machine, rom, sizeof(rom)) == GBB_OK);
+    REQUIRE(apu_lifecycle_digest(machine) == apu_lifecycle_digest(fresh));
+    REQUIRE(gbb_test_ir_latch(machine) == 0u);
+    REQUIRE(apu_lifecycle_run(machine, &machine_run, machine_frames, &machine_count) == 0);
+    REQUIRE(gbb_test_ir_latch(machine) == 0xC1u);
+    REQUIRE(gbb_reset(machine) == GBB_OK);
+    REQUIRE(apu_lifecycle_digest(machine) == apu_lifecycle_digest(fresh));
+    REQUIRE(gbb_test_ir_latch(machine) == 0u);
+    REQUIRE(apu_lifecycle_digest(isolated) == isolated_before);
+    gbb_destroy(machine); gbb_destroy(twin); gbb_destroy(fresh); gbb_destroy(isolated);
+    puts("cgb_apu_lifecycle pass create=postboot reset=clean load=atomic failed_load=preserved instances=isolated");
+    return 0;
+}
+
+static int cgb_apu_lifecycle_controls(void) {
+    uint8_t rom[32768];
+    apu_lifecycle_make_rom(rom);
+    gbb_instance *machine = NULL, *fresh = NULL;
+    REQUIRE(apu_lifecycle_create(&machine, rom) == 0);
+    REQUIRE(apu_lifecycle_create(&fresh, rom) == 0);
+    gbb_audio_frame frames[1024] = {{0}};
+    size_t frame_count = 0u;
+    gbb_run_result run;
+    REQUIRE(apu_lifecycle_run(machine, &run, frames, &frame_count) == 0);
+    const partition_streams no_streams = {0};
+    const uint64_t dirty_digest = partition_digest(machine, &no_streams);
+    REQUIRE(gbb_reset(machine) == GBB_OK);
+    const uint64_t reset_digest = partition_digest(machine, &no_streams);
+    REQUIRE(reset_digest == partition_digest(fresh, &no_streams));
+    machine->apu_sample_phase += 1u;
+    const uint64_t reset_leak_digest = partition_digest(machine, &no_streams);
+    REQUIRE(reset_leak_digest != reset_digest);
+    machine->apu_sample_phase -= 1u;
+    REQUIRE(gbb_load_rom(machine, rom, sizeof(rom)) == GBB_OK);
+    REQUIRE(gbb_run(machine, 20000u, NULL, 0u).reason == GBB_STOP_HALTED_IDLE);
+    REQUIRE(partition_digest(machine, &no_streams) == dirty_digest);
+    REQUIRE(gbb_reset(machine) == GBB_OK);
+    const uint64_t failed_load_clear_digest = partition_digest(machine, &no_streams);
+    REQUIRE(failed_load_clear_digest != dirty_digest);
+    fprintf(stderr, "negative-control diagnostic: reset-leak expected_digest=%016" PRIx64
+                    " actual_digest=%016" PRIx64
+                    "; failed-load-clear expected_digest=%016" PRIx64
+                    " actual_digest=%016" PRIx64 "\n",
+            reset_digest, reset_leak_digest, dirty_digest,
+            failed_load_clear_digest);
+    gbb_destroy(machine); gbb_destroy(fresh);
+    puts("cgb_apu_lifecycle_controls pass controls=reset-leak,failed-load-clear");
+    return 0;
 }
 
 static int partition_run_reference(const partition_scenario *scenario,
@@ -906,6 +1432,37 @@ static int cgb_partition_snapshot_fidelity(void) {
     partition_machine prefix;
     partition_snap snapshot = {0};
     REQUIRE(partition_machine_create(&scenario, &prefix) == 0);
+    /* The partition digest is the private state contract for fields that a
+     * guest observation alone may not expose before the next wave fetch. */
+    const uint64_t apu_baseline = partition_digest(prefix.machine, &prefix.streams);
+    gbb_instance apu_mutant = *prefix.machine;
+    apu_mutant.apu_wave.sample_buffer ^= 1u;
+    if (partition_digest(&apu_mutant, &prefix.streams) == apu_baseline) {
+        fputs("partition-inert-input cgb-apu-wave-sample-buffer\n", stderr);
+        partition_machine_destroy(&prefix);
+        return 1;
+    }
+    apu_mutant = *prefix.machine;
+    apu_mutant.apu_wave.position ^= 1u;
+    if (partition_digest(&apu_mutant, &prefix.streams) == apu_baseline) {
+        fputs("partition-inert-input cgb-apu-wave-position\n", stderr);
+        partition_machine_destroy(&prefix);
+        return 1;
+    }
+    apu_mutant = *prefix.machine;
+    apu_mutant.apu_wave.timer ^= 1u;
+    if (partition_digest(&apu_mutant, &prefix.streams) == apu_baseline) {
+        fputs("partition-inert-input cgb-apu-wave-fetch-timer\n", stderr);
+        partition_machine_destroy(&prefix);
+        return 1;
+    }
+    apu_mutant = *prefix.machine;
+    apu_mutant.apu_sample_phase ^= 1u;
+    if (partition_digest(&apu_mutant, &prefix.streams) == apu_baseline) {
+        fputs("partition-inert-input cgb-apu-sample-residual\n", stderr);
+        partition_machine_destroy(&prefix);
+        return 1;
+    }
     REQUIRE(partition_prepare_stall(&prefix, &scenario, &meter) == 0);
     gbb_run_result at_mid_stall;
     REQUIRE(partition_run_budget(&prefix, prefix_stall, &meter,
@@ -1610,6 +2167,16 @@ int main(int argc, char **argv) {
     for (int i = 2; i < argc; ++i)
         if (strcmp(argv[i], "--mutants") == 0) return 2;
 #endif
+    if (strcmp(argv[1], "cgb_apu_partition_fetch") == 0)
+        return cgb_apu_partition_fetch();
+    if (strcmp(argv[1], "cgb_apu_partition_speed") == 0)
+        return cgb_apu_partition_speed();
+    if (strcmp(argv[1], "cgb_apu_partition_controls") == 0)
+        return cgb_apu_partition_controls();
+    if (strcmp(argv[1], "cgb_apu_lifecycle") == 0)
+        return cgb_apu_lifecycle();
+    if (strcmp(argv[1], "cgb_apu_lifecycle_controls") == 0)
+        return cgb_apu_lifecycle_controls();
     if (strcmp(argv[1], "cgb_partition_stall_start_window") == 0)
         return cgb_partition_stall_start_window();
     if (strcmp(argv[1], "cgb_partition_hostile_irq_in_stall") == 0)

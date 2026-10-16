@@ -37,7 +37,7 @@ static const char *const field_names[PB_FIELD_COUNT] = {
     "lcdc", "stat", "ly", "lyc", "scx", "scy", "wx", "wy",
     "bgp", "obp0", "obp1", "ppu_mode",
     "joypad_select", "joypad_buttons",
-    "key1", "vram_bank", "svbk", "wram_bank", "bcps", "ocps",
+    "key1", "vram_bank", "svbk", "wram_bank", "bcps", "ocps", "ff56",
     "ff72", "ff73", "ff74", "ff75",
     "bg_cram_fill", "obj_cram_fill", "opri",
     "ram_fill",
@@ -192,6 +192,19 @@ static doc_row g_doc[MAX_DOC_ROWS];
 static int case_postboot(const char *path) {
     const int n = parse_doc(path, g_doc, MAX_DOC_ROWS);
     if (n < 0) return 1;
+    /* FF56 now has instance-owned state. Keep its reset row in this table so creation, reset, and
+     * successful-load initialization cannot be mistaken for an undocumented hardware power-up
+     * value. The implementation/doc mirror below checks all three mode columns independently. */
+    for (int col = 0; col < 3; ++col) {
+        int found = 0;
+        for (int i = 0; i < n; ++i)
+            if (strcmp(g_doc[i].field, "ff56") == 0 &&
+                strcmp(g_doc[i].column, column_names[col]) == 0) found = 1;
+        if (!found) {
+            printf("cgb-tables missing postboot field: ff56 %s\n", column_names[col]);
+            return 1;
+        }
+    }
     if (check_all(post_boot, g_doc, n) != CHECK_OK) return 1;
     printf("cgb-tables postboot pass rows=%d\n", n);
     return 0;
@@ -229,12 +242,12 @@ static int case_selftest(const char *path) {
     if (check_all(g_copy, g_doc, n) != CHECK_HW_OUTSIDE_COMPAT) goto accepted;
 
     const int io_rejected = io_selftest(path);
-    if (io_rejected != 3) {
-        printf("cgb-tables self-test: io mutation accepted (rejected %d of 3)\n", io_rejected);
+    if (io_rejected != 11) {
+        printf("cgb-tables self-test: io mutation accepted (rejected %d of 11)\n", io_rejected);
         return 1;
     }
 
-    printf("cgb-tables self-test pass mutants=6\n");
+    printf("cgb-tables self-test pass mutants=14\n");
     return 0;
 accepted:
     printf("cgb-tables self-test: mutation accepted\n");
@@ -310,6 +323,14 @@ static int render_io(const io_cell *c, int col, char *rd, size_t rd_n, char *wr,
         snprintf(rd, rd_n, "$FE or bit 0");
         snprintf(wr, wr_n, "bit 0 stored, no priority effect after boot");
         return 1;
+    case IO_PCM12:
+        snprintf(rd, rd_n, "channel 2:channel 1 digital DAC values");
+        snprintf(wr, wr_n, "ignored");
+        return 1;
+    case IO_PCM34:
+        snprintf(rd, rd_n, "channel 4:channel 3 digital DAC values");
+        snprintf(wr, wr_n, "ignored");
+        return 1;
     case IO_DEFERRED_RW:
         snprintf(rd, rd_n, "stop");
         snprintf(wr, wr_n, "dropped, stop after retire");
@@ -374,6 +395,46 @@ static int parse_io_doc(const char *path, io_doc_row *rows, int max_rows) {
 
 static void io_addr_text(unsigned index, char *out, size_t n) { snprintf(out, n, "$FF%02X", index); }
 
+/* Independent PCM policy oracle: D-10 settles the native CGB, compatibility, and DMG cells.
+ * CGB mode exposes read-only PCM values, compatibility mode reads $FF, and the DMG profile keeps
+ * its fail-closed stop. The docs mirror remains a separate code/table comparison. */
+static int pcm_io_contract(const io_row *code) {
+    static const unsigned addresses[] = { 0x76u, 0x77u };
+    static const uint8_t cgb_kinds[] = { IO_PCM12, IO_PCM34 };
+    for (size_t i = 0; i < sizeof(addresses) / sizeof(addresses[0]); ++i) {
+        const io_row *row = &code[addresses[i]];
+        if (row->dmg.kind != IO_DMG_STOP || row->cgb.kind != cgb_kinds[i] ||
+            row->compat.kind != IO_CONST_FF || row->src != IOS_PANDOCS)
+            return 0;
+    }
+    return 1;
+}
+
+/* Independent undocumented-port oracle for D-04/D-10. Compatibility FF72/73 remain stored,
+ * FF74 is absent, and FF75 stores only bits 4-6. These expectations do not come from the rows
+ * being checked. */
+static int undocumented_io_contract(const io_row *code) {
+    for (unsigned address = 0x72u; address <= 0x73u; ++address) {
+        const io_row *row = &code[address];
+        if (row->src != IOS_SAMEBOY || row->dmg.kind != IO_DMG_STOP ||
+            row->cgb.kind != IO_STORE || row->cgb.read_or != 0u || row->cgb.write_mask != 0xFFu ||
+            row->compat.kind != IO_STORE || row->compat.read_or != 0u ||
+            row->compat.write_mask != 0xFFu) return 0;
+    }
+    const io_row *ff74 = &code[0x74];
+    if (ff74->src != IOS_SAMEBOY || ff74->dmg.kind != IO_DMG_STOP ||
+        ff74->cgb.kind != IO_STORE || ff74->cgb.read_or != 0u || ff74->cgb.write_mask != 0xFFu ||
+        ff74->compat.kind != IO_CONST_FF) return 0;
+    const io_row *ff75 = &code[0x75];
+    if (ff75->src != IOS_PANDOCS || ff75->dmg.kind != IO_DMG_STOP) return 0;
+    for (int col = 1; col < 3; ++col) {
+        const io_cell *cell = io_cell_of(ff75, col);
+        if (cell->kind != IO_STORE || cell->read_or != 0x8Fu || cell->write_mask != 0x70u)
+            return 0;
+    }
+    return 1;
+}
+
 static int io_mismatch(const char *addr, const char *column) {
     printf("cgb-tables mismatch: %s %s\n", addr, column);
     return 1;
@@ -418,6 +479,14 @@ static io_row g_io_copy[IO_VISIBILITY_ROWS];
 static int case_io(const char *path) {
     const int n = parse_io_doc(path, g_io_doc, MAX_IO_DOC_ROWS);
     if (n < 0) return 1;
+    if (!pcm_io_contract(io_visibility)) {
+        printf("cgb-tables PCM policy mismatch: native/compat/DMG FF76-FF77\n");
+        return 1;
+    }
+    if (!undocumented_io_contract(io_visibility)) {
+        printf("cgb-tables undocumented-port policy mismatch: FF72-FF75\n");
+        return 1;
+    }
     if (compare_io(io_visibility, g_io_doc, n) != 0) return 1;
     printf("cgb-tables io pass rows=%d\n", n);
     return 0;
@@ -429,7 +498,8 @@ static int io_selftest(const char *path) {
     const int n = parse_io_doc(path, g_io_doc, MAX_IO_DOC_ROWS);
     if (n < 0) return -1;
     memcpy(g_io_copy, io_visibility, sizeof(g_io_copy));
-    if (compare_io(g_io_copy, g_io_doc, n) != 0) return -1;
+    if (!pcm_io_contract(g_io_copy) || !undocumented_io_contract(g_io_copy) ||
+        compare_io(g_io_copy, g_io_doc, n) != 0) return -1;
     int rejected = 0;
 
     /* (d) an io row removed from the code copy (reclassified as handled elsewhere). */
@@ -449,6 +519,30 @@ static int io_selftest(const char *path) {
         memmove(&shortened[10], &shortened[11], sizeof(io_doc_row) * (size_t)(n - 11));
         if (compare_io(io_visibility, shortened, n - 1) != 0) ++rejected;
     }
+
+    /* (g-i) Catch the superseded dispositions independently of the documentation mirror for
+     * both PCM registers: deferred CGB, readable compat, or non-stopping DMG cells are invalid. */
+    for (unsigned i = 0; i < 2; ++i) {
+        const unsigned address = i == 0 ? 0x76u : 0x77u;
+        memcpy(g_io_copy, io_visibility, sizeof(g_io_copy));
+        g_io_copy[address].cgb.kind = IO_DEFERRED_RW;
+        if (!pcm_io_contract(g_io_copy)) ++rejected;
+
+        memcpy(g_io_copy, io_visibility, sizeof(g_io_copy));
+        g_io_copy[address].compat.kind = i == 0 ? IO_PCM12 : IO_PCM34;
+        if (!pcm_io_contract(g_io_copy)) ++rejected;
+
+        memcpy(g_io_copy, io_visibility, sizeof(g_io_copy));
+        g_io_copy[address].dmg.kind = IO_CONST_FF;
+        if (!pcm_io_contract(g_io_copy)) ++rejected;
+    }
+    memcpy(g_io_copy, io_visibility, sizeof(g_io_copy));
+    g_io_copy[0x75].cgb.write_mask = 0xF0u;
+    if (!undocumented_io_contract(g_io_copy)) ++rejected;
+
+    memcpy(g_io_copy, io_visibility, sizeof(g_io_copy));
+    g_io_copy[0x74].compat = (io_cell){ IO_STORE, 0u, 0u, 0xFFu };
+    if (!undocumented_io_contract(g_io_copy)) ++rejected;
     return rejected;
 }
 

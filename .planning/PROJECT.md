@@ -6,7 +6,9 @@ GabbaBoy is an original, portable C17 emulator core for Game Boy (DMG) and Game 
 
 ## Current State
 
-**Phase 13 execution, goal verification and automated UAT are complete:** 12/12 plans, 37/37 must-haves, CGB-07 closed and 45/45 deliverables automated with zero human checkpoints. Fresh native 994/994 and player 1,087/1,087 suites pass with no skips; focused UAT changes pass 9/9 plus exact relocated consumer/package 6/6, with zero changed DMG baseline rows. Source-qualified receipts are in 13-BENCH.md; final published revision CI and merge status are authoritative on PR #69. The software-fixture denominator remains 5/5; optional CGB-C stays rights-gated and excluded. Physical CGB-E remains UNKNOWN/POLICY and the D-06/Pan Docs discrepancy remains explicit. D-069 and LESSONS GB-GSD-016 preserve automation-first verification and completed-UAT reuse. Next owner-selected stage is Phase 14 discussion via `/gsd-discuss-phase 14`; Phase 14 — CGB-E Model Qualification and Corpus remains unstarted and both auto flags remain false.
+**Phase 14 automated UAT is complete.** [14-UAT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md) closes all 49 deliverables across 13 plans, reconciles all 13 bounded commit windows, and requires zero human checkpoints. [Goal verification](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08/CGB-10 are complete. The software corpus contains 107 cases, 25 actual passes and 82 matched expected failures. Exact-head hosted CI and merge status live on PR #71. Physical CGB-E remains UNKNOWN/POLICY; analog/perceptual output and general game compatibility remain unqualified. D-069 automation-first verification and D-096 small/flat dependencies carry forward; both auto flags remain false. Next command: `/gsd-discuss-phase 15`. Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release remains unstarted.
+
+**Phase 13 is a completed prerequisite:** execution 12/12, canonical goal verification 37/37, automated UAT 45/45 with zero human checkpoints, CGB-07 closed, and PR #69 merged at `261c660396db65712dabb5f65b3e81ee5b0a3453`. Reuse its source-qualified records and completed UAT rather than restarting them. Its 5/5 software-fixture denominator, physical CGB-E UNKNOWN/POLICY, optional CGB-C rights exclusion and D-06/Pan Docs discrepancy remain explicit.
 
 - **Shipped:** v0.1 Limited DMG Preview (milestone closed 2026-10-10; release [`v0.1.0`](https://github.com/szTheory/gabbaboy/releases/tag/v0.1.0) published 2026-10-09). 7 phases, 64 plans, 35/35 requirements, audit `passed`.
 - **Phase 7 (2026-10-11):** Libbet and the Magic Floor v0.08 passes headless acceptance on three OSes and in the macOS packaged player; the DMG baseline is frozen. One game on one software model; no hardware evidence.
@@ -58,11 +60,13 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 
 - ✓ General-purpose and HBlank VRAM DMA with bounded CPU stalls, cancellation/HDMA5 readback, HALT interaction, partition equivalence, mapped bank policies and qualified fixture/consumer evidence (CGB-07) — Phase 13, goal verification 37/37; physical CGB-E remains UNKNOWN/POLICY.
 
+- ✓ CGB-E digital PCM/I/O behavior and a pinned headless corpus with independent denominators (CGB-08, CGB-10) — Phase 14, goal verification 41/41; 107 complete cases, 25 actual passes and 82 matched expected failures. Physical CGB-E remains UNKNOWN/POLICY.
+
 ### Active
 
 v0.2 Color & Cartridge Breadth (scoped in [REQUIREMENTS.md](REQUIREMENTS.md)):
 
-- [ ] Further CGB-E APU/I/O and timing qualification with model-qualified corpus denominators (CGB-08 and CGB-10, Phase 14); physical CGB-E evidence remains outstanding.
+- [ ] CGB acceptance or explicit absence, current support ledger/docs/consumers, and an exact-tag qualified v0.2.0 release (CGB-11, SHIP-09, SHIP-10, SHIP-11, Phase 15).
 
 Next (v0.3, provisional): transactional versioned native save states (STATE-01) and a qualified Playstead adapter (INT-01).
 
@@ -130,4 +134,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-10-15 after Phase 13 automated UAT; /gsd-discuss-phase 14 is next.
+Last updated: 2026-10-16 after Phase 14 automated UAT; /gsd-discuss-phase 15 is next.

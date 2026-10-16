@@ -46,7 +46,7 @@
     {
       "number": "14",
       "name": "CGB-E Model Qualification and Corpus",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "15",
@@ -55,9 +55,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-discuss-phase 14",
-    "label": "Discuss Phase 14 \u2014 CGB-E Model Qualification and Corpus",
-    "reason": "Phase 13 automated UAT complete; pause before the unstarted Phase 14."
+    "command": "/gsd-discuss-phase 15",
+    "label": "Discuss Phase 15 \u2014 CGB Acceptance, Support Ledger and v0.2.0 Release",
+    "reason": "Phase 14 automated UAT passed: 49/49 deliverables and 13/13 bounded commit windows, zero human checkpoints. Reuse completed research and evidence; Phase 15 remains unstarted and both auto flags stay false."
   },
   "updated_at": "2026-10-14T18:09:23.510605+00:00"
 }

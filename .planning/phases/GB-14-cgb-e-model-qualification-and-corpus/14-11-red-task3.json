@@ -1,0 +1,10 @@
+{
+  "command": "NO_COLOR=1 python3 -I tests/scripts/test-cgb-corpus-report.py CorpusReportCorpusTests.test_contract",
+  "exitCode": 1,
+  "output": "F\n======================================================================\nFAIL: test_contract (__main__.CorpusReportCorpusTests.test_contract)\n----------------------------------------------------------------------\nAssertionError: 1 != 0 : cgb-corpus-inventory mismatch: self-test-control-accepted:missing-test-binding\n\n----------------------------------------------------------------------\nRan 1 test in 0.244s\n\nFAILED (failures=1)\n",
+  "targetTest": "__main__.CorpusReportCorpusTests.test_contract",
+  "targetFile": "tests/scripts/test-cgb-corpus-report.py",
+  "expected": "The inventory validator self-test exits 0 and reports its controls passed.",
+  "actual": "The inventory validator self-test exits 1 because its stale positive control now accepts the already-bound MagenTests case.",
+  "semanticAssessment": "Valid RED: exactly the requested unittest target ran and failed its assertion that the inventory self-test returns zero. The child process returned the expected self-test-control-accepted diagnostic; there were no import, collection, syntax, or fixture errors."
+}

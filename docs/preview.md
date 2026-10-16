@@ -73,6 +73,13 @@ follow the queue-clear and save-ordering rules in
 byte count is not playback latency; application PCM underflow is not proof of
 hardware starvation.
 
+The CGB-CPU-E software model separately exposes FF76/FF77 digital DAC inputs
+to native CGB guest reads; compatibility mode reads `$FF`. These register
+tests do not change player playback, which continues to use the DMG APU model.
+Current case and assertion totals are read from the fresh private corpus
+receipt. No physical CGB-E audio, analog output, or general game compatibility
+claim follows from that software-model evidence.
+
 Double-speed switching is implemented on the CGB profile through KEY1 and STOP;
 budgets and frames remain in master half-dots at both speeds. CGB GDMA and
 HBlank DMA run on the selected bootless CGB-CPU-E software model; their cadence

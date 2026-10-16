@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Explicit, networked rebuild of the Mooneye CGB-profile derivatives (Phase 10, D-26): boot_regs-cgb,
-# boot_div-cgbABCDE, boot_hwio-C and bits/unused_hwio-C. Ordinary CTest uses the checked-in ROMs.
+# Explicit, networked rebuild of the Mooneye CGB-profile derivatives: the Phase 10 D-26 boot/I/O cases
+# plus the Phase 14 selected acceptance and PPU cases. Ordinary CTest uses checked-in ROMs.
 # Adapted from reproduce-mooneye-mbc.sh: same Mooneye and WLA-DX pins, same headless-report patch and
 # zero font, read from the frozen parent fixtures by digest. None of the four defines CART_CGB, so each
 # ROM's $143 header byte is a non-CGB value (compat mode on the CGB profile); the build asserts that.
@@ -31,10 +31,15 @@ outside_repo() {
 }
 
 # alias = file stem of the committed ROM; the source path is inside the pinned Mooneye tree.
-roms=(boot_regs-cgb boot_div-cgbABCDE boot_hwio-C unused_hwio-C)
+roms=(boot_regs-cgb boot_div-cgbABCDE boot_hwio-C unused_hwio-C daa div_write tim00 tim00_div_trigger vblank_stat_intr-C)
 source_of() {
   case "$1" in
     unused_hwio-C) printf 'misc/bits/%s.s' "$1" ;;
+    daa) printf 'acceptance/instr/daa.s' ;;
+    div_write) printf 'acceptance/timer/div_write.s' ;;
+    tim00) printf 'acceptance/timer/tim00.s' ;;
+    tim00_div_trigger) printf 'acceptance/timer/tim00_div_trigger.s' ;;
+    vblank_stat_intr-C) printf 'misc/ppu/vblank_stat_intr-C.s' ;;
     *) printf 'misc/%s.s' "$1" ;;
   esac
 }

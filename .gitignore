@@ -22,6 +22,7 @@ CMakeUserPresets.json
 *.gb
 *.gbc
 *.gba
+!/fixtures/samesuite/apu/**/*.gb
 *.sav
 *.srm
 *.state

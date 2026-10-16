@@ -45,23 +45,215 @@ except (OSError, KeyError, ValueError) as exc:
     fail('manifest-or-sources-unreadable ' + str(exc))
 if not entries:
     fail('manifest-has-no-fixtures')
+if manifest.get('fixture_protocol') != 'gabbaboy-age-fixture-protocol-v1':
+    fail('fixture-protocol-mismatch')
 if commit not in sources or tree not in sources:
     fail('SOURCES-pins-differ-from-script')
 if manifest.get('source', {}).get('commit') != commit or manifest.get('source', {}).get('tree') != tree:
     fail('manifest-source-pins-differ-from-script')
 file_re = re.compile(r'^[A-Za-z0-9_-]+\.gb$')
 source_re = re.compile(r'^src/(speed-switch|speed-switch/caution|stat-mode|stat-mode-sprites|stat-mode-window)/[A-Za-z0-9_-]+\.asm$')
+expected_build = {
+    'version': '1.0.1',
+    'archive': 'rgbds-macos.zip',
+    'archive_sha256': '2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645',
+    'ci_archive': 'rgbds-linux-x86_64.tar.xz',
+    'ci_archive_sha256': '80a5cad8dae27e24e46a93041352c47cadbc165103983f41c2b3082c42f6dad9',
+    'recipe': 'rgbasm -Weverything -I src -I src/_include; rgblink -t; rgbfix -v -p 255',
+}
+m3_expected = {
+    'm3-bg-lcdc-cgbBCE.gb': {
+        'source_path': 'src/m3-bg-lcdc/m3-bg-lcdc.asm',
+        'source_size_bytes': 287,
+        'source_sha256': '2f2ba3ecd5135265e9b8033ce967135df928d649fc17ad83c6aea073851e54c7',
+        'size_bytes': 32768,
+        'sha256': 'fabdfd1c3f21df7543186a7303ad645a6b342f9c1ea7c1a4b26b4bb9b821b9f4',
+        'header_143': '80',
+        'model': 'CPU CGB E - CPU-CGB-06',
+        'mode': 'native-cgb',
+        'speed': 'normal',
+        'expected_role': 'pass-target',
+        'cgb_e_verified': '2021-11-29: CPU CGB E - CPU-CGB-06',
+        'reference': {
+            'file': 'references/m3-bg-lcdc-cgbBCE.png',
+            'source_path': 'src/m3-bg-lcdc/m3-bg-lcdc-cgbBCE.png',
+            'size_bytes': 587,
+            'sha256': '69a0b85a82eddc884ec225a3c6353622876afe589125809d6517439cbeb91cef',
+        },
+    },
+    'm3-bg-lcdc-nocgb-ncmBCE.gb': {
+        'source_path': 'src/m3-bg-lcdc/m3-bg-lcdc-nocgb.asm',
+        'source_size_bytes': 328,
+        'source_sha256': '5c726a8548fd254d5826888d692b6bca51e8d05a35b985d4a491cbda55effb1a',
+        'size_bytes': 32768,
+        'sha256': 'c7f6a09a69eb2ea550b497f0aea9910b30561623dec0aefbe9b16fd0d622b460',
+        'header_143': '00',
+        'model': 'CPU CGB E - CPU-CGB-06',
+        'mode': 'dmg-compatibility',
+        'speed': 'normal',
+        'expected_role': 'pass-target',
+        'cgb_e_verified': '2021-11-29: CPU CGB E - CPU-CGB-06 (non-CGB mode)',
+        'reference': {
+            'file': 'references/m3-bg-lcdc-nocgb-ncmBCE.png',
+            'source_path': 'src/m3-bg-lcdc/m3-bg-lcdc-nocgb-ncmBCE.png',
+            'size_bytes': 689,
+            'sha256': 'f4dbb03aff6fbd95c69eb85d264712b28727a1403f81b28ebba357bceb02f908',
+        },
+    },
+    'm3-bg-lcdc-ds-cgbBCE.gb': {
+        'source_path': 'src/m3-bg-lcdc/m3-bg-lcdc-ds.asm',
+        'source_size_bytes': 260,
+        'source_sha256': '579a3764a5a1a2d5fe70a63833ac9884ff9e06c86a1561d09f7c2a548bc3c9f8',
+        'size_bytes': 32768,
+        'sha256': 'e84cb10803c49197e4197347ffca138883fb628121d16308ccf4e5b6f657c55c',
+        'header_143': 'C0',
+        'model': 'CPU CGB E - CPU-CGB-06',
+        'mode': 'native-cgb',
+        'speed': 'double',
+        'expected_role': 'pass-target',
+        'cgb_e_verified': '2021-11-29: CPU CGB E - CPU-CGB-06',
+        'reference': {
+            'file': 'references/m3-bg-lcdc-ds-cgbBCE.png',
+            'source_path': 'src/m3-bg-lcdc/m3-bg-lcdc-ds-cgbBCE.png',
+            'size_bytes': 559,
+            'sha256': '804f5692b2d4897a6edcf2691004f1484cfbf9b77f5f779923aba91237a5abba',
+        },
+    },
+    'm3-bg-scx-cgbBCE.gb': {
+        'source_path': 'src/m3-bg-scx/m3-bg-scx.asm',
+        'source_size_bytes': 285,
+        'source_sha256': '9b9bce116583ca1700c5d0b178002d0be665e52974f531224a10effd44dd51f5',
+        'size_bytes': 32768,
+        'sha256': 'ac6726b81af5e3d3a88aa8b9ba80f9b72b629b408f3d5ebc6824ec1a3e22852e',
+        'header_143': '80',
+        'model': 'CPU CGB E - CPU-CGB-06',
+        'mode': 'native-cgb',
+        'speed': 'normal',
+        'expected_role': 'pass-target',
+        'cgb_e_verified': '2021-12-01: CPU CGB E - CPU-CGB-06',
+        'reference': {
+            'file': 'references/m3-bg-scx-cgbBCE.png',
+            'source_path': 'src/m3-bg-scx/m3-bg-scx-cgbBCE.png',
+            'size_bytes': 448,
+            'sha256': '6895b6111d432ea5f0422991a1d7143f1fe133481e018b3c8652616af759085d',
+        },
+    },
+    'm3-bg-scx-nocgb-ncmBCE.gb': {
+        'source_path': 'src/m3-bg-scx/m3-bg-scx-nocgb.asm',
+        'source_size_bytes': 326,
+        'source_sha256': '22375b480fae68a6af3b63fd71c77213967851a8eb537b35f17ee8bb11f43a9b',
+        'size_bytes': 32768,
+        'sha256': 'bf76542319c2a0bf0f428cdde7f9a9ec3dd50e7cac86dc57783005b2e79dcdf3',
+        'header_143': '00',
+        'model': 'CPU CGB E - CPU-CGB-06',
+        'mode': 'dmg-compatibility',
+        'speed': 'normal',
+        'expected_role': 'pass-target',
+        'cgb_e_verified': '2021-12-01: CPU CGB E - CPU-CGB-06 (non-CGB mode)',
+        'reference': {
+            'file': 'references/m3-bg-scx-nocgb-ncmBCE.png',
+            'source_path': 'src/m3-bg-scx/m3-bg-scx-nocgb-ncmBCE.png',
+            'size_bytes': 449,
+            'sha256': '1224f9f27644355067bec6e17f3db619926b85fbcd90ec8b06e5fa93ec536114',
+        },
+    },
+    'm3-bg-scx-ds-cgbBCE.gb': {
+        'source_path': 'src/m3-bg-scx/m3-bg-scx-ds.asm',
+        'source_size_bytes': 258,
+        'source_sha256': '8f6e0301f6aff5122c16c9a1c483e4852ea3bb2e0dd34ef26728f60096d29e88',
+        'size_bytes': 32768,
+        'sha256': '0756e38b86bef3ac4ce183b982f4f228c73f8e9bb5a5212e3bd1b48527e9759e',
+        'header_143': 'C0',
+        'model': 'CPU CGB E - CPU-CGB-06',
+        'mode': 'native-cgb',
+        'speed': 'double',
+        'expected_role': 'pass-target',
+        'cgb_e_verified': '2021-12-01: CPU CGB E - CPU-CGB-06',
+        'reference': {
+            'file': 'references/m3-bg-scx-ds-cgbBCE.png',
+            'source_path': 'src/m3-bg-scx/m3-bg-scx-ds-cgbBCE.png',
+            'size_bytes': 448,
+            'sha256': '6895b6111d432ea5f0422991a1d7143f1fe133481e018b3c8652616af759085d',
+        },
+    },
+}
+m3_execution_expected = {
+    'm3-bg-lcdc-cgbBCE.gb': (4736, 'f872cd7b88efd0e650abbe6b6e665c520db922680393cbb03ae961ff88cadba9'),
+    'm3-bg-lcdc-nocgb-ncmBCE.gb': (4736, 'f8e73561af491063f68efbca0ce1db1c54385587bbc4d98f80a0661ff49e3949'),
+    'm3-bg-lcdc-ds-cgbBCE.gb': (6944, '2caeb6b70a0dc22096be7a9ac3283d4428166e31dd224cda21caa8432baa8917'),
+    'm3-bg-scx-cgbBCE.gb': (672, 'f35aeda05f98fb815d1bc19a8d83a1dea0400c2b7c1e775efeedf8ef3646d97c'),
+    'm3-bg-scx-nocgb-ncmBCE.gb': (672, '1da05a373b6bc39943f657ddb63a07bb6e62d13335e4af10e461ecfd73c3d611'),
+    'm3-bg-scx-ds-cgbBCE.gb': (448, '639c32dd649abd954020590d056cf41900536f37c704a7f3888a6393455b65f0'),
+}
+build = manifest.get('build', {})
+if any(build.get(field) != value for field, value in expected_build.items()):
+    fail('RGBDS-build-pin-mismatch')
+m3_entries = {
+    entry.get('file'): entry
+    for entry in entries
+    if entry.get('fixture_class') == 'age-m3-reference'
+}
+for entry in entries:
+    fixture_class = entry.get('fixture_class')
+    if fixture_class not in ('age-row-oracle', 'age-m3-reference'):
+        fail('unsupported-fixture-class-' + str(fixture_class))
+row_entries = [entry for entry in entries if entry.get('fixture_class') == 'age-row-oracle']
+if set(m3_entries) != set(m3_expected):
+    fail('m3-manifest-membership-mismatch')
+if len(entries) != 19 or len(row_entries) != 13 or len(m3_entries) != 6:
+    fail('fixture-protocol-membership-mismatch')
+row_fields = ('test_results_address', 'expected_address', 'rows', 'budget_half_dots')
+for entry in row_entries:
+    if any(field not in entry for field in row_fields):
+        fail('row-metadata-missing-' + entry.get('file', 'unknown'))
+for entry in m3_entries.values():
+    if any(field in entry for field in row_fields):
+        fail('image-fixture-has-row-metadata-' + entry.get('file', 'unknown'))
 rows = []
+seen_names = set()
 for entry in entries:
     name = entry.get('file', '')
     source = entry.get('source_path', '')
     digest = entry.get('sha256', '')
+    if name in seen_names:
+        fail('duplicate-file-entry-' + name)
+    seen_names.add(name)
     if not file_re.fullmatch(name):
         fail('file-outside-allow-list')
-    if not source_re.fullmatch(source):
+    expected_m3 = m3_expected.get(name)
+    if not source_re.fullmatch(source) and expected_m3 is None:
         fail('source_path-outside-allow-list')
     if not re.fullmatch(r'[0-9a-f]{64}', digest):
         fail('invalid-sha256-' + name)
+    if expected_m3 is not None:
+        for field in ('source_path', 'source_size_bytes', 'source_sha256', 'size_bytes', 'sha256', 'header_143', 'model', 'mode', 'speed', 'expected_role'):
+            if entry.get(field) != expected_m3[field]:
+                fail('m3-' + field.replace('_', '-') + '-mismatch-' + name)
+        if entry.get('qualification_status') != 'executed':
+            fail('m3-qualification-status-mismatch-' + name)
+        mismatch_count, mismatch_signature = m3_execution_expected[name]
+        identity = '/'.join((
+            'age@' + commit,
+            entry['source_path'] + '#' + entry['source_sha256'],
+            name + '#' + entry['sha256'],
+            entry['model'], entry['mode'], entry['speed'], name.removesuffix('.gb'),
+        ))
+        if (entry.get('execution_result') != 'fail'
+                or entry.get('disposition') != 'expected-failure'
+                or entry.get('reason') != 'expected-failure:cgb-e-mode3-reference-mismatch'):
+            fail('m3-execution-disposition-mismatch-' + name)
+        if entry.get('case_id') != identity:
+            fail('m3-case-identity-mismatch-' + name)
+        if (entry.get('pixel_assertion_count') != 23040
+                or entry.get('pixel_mismatch_count') != mismatch_count
+                or entry.get('pixel_mismatch_signature_sha256') != mismatch_signature):
+            fail('m3-pixel-signature-mismatch-' + name)
+        if expected_m3['cgb_e_verified'] not in entry.get('verified', []):
+            fail('m3-author-attestation-mismatch-' + name)
+        reference = entry.get('reference', {})
+        for field, value in expected_m3['reference'].items():
+            if reference.get(field) != value:
+                fail('m3-reference-' + field.replace('_', '-') + '-mismatch-' + name)
     committed_path = fixture / name
     try:
         committed = committed_path.read_bytes()
@@ -69,6 +261,18 @@ for entry in entries:
         fail('committed-file-missing-' + name)
     if len(committed) != entry.get('size_bytes') or hashlib.sha256(committed).hexdigest() != digest:
         fail('committed-digest-mismatch-' + name)
+    if expected_m3 is not None:
+        if committed[0x143] != int(expected_m3['header_143'], 16):
+            fail('m3-header-143-mismatch-' + name)
+        reference_path = fixture / expected_m3['reference']['file']
+        try:
+            reference_bytes = reference_path.read_bytes()
+        except OSError:
+            fail('committed-reference-missing-' + name)
+        reference_expected = expected_m3['reference']
+        if (len(reference_bytes) != reference_expected['size_bytes']
+                or hashlib.sha256(reference_bytes).hexdigest() != reference_expected['sha256']):
+            fail('committed-reference-digest-mismatch-' + name)
     rows.append((entry, name, source))
 if mode == '--self-check':
     print('self-check=pass')
@@ -119,6 +323,30 @@ if mode == '--compare' and (source_root is None or out is None):
     error('internal-source-or-output-path-missing')
 if mode == '--compare':
     for entry, name, source in rows:
+        expected_m3 = m3_expected.get(name)
+        if expected_m3 is not None:
+            source_path = source_root / expected_m3['source_path']
+            reference_path = source_root / expected_m3['reference']['source_path']
+            try:
+                source_bytes = source_path.read_bytes()
+                source_text = source_bytes.decode('utf-8')
+                reference_bytes = reference_path.read_bytes()
+            except (OSError, UnicodeDecodeError) as exc:
+                error('upstream-source-or-reference-missing-' + name + '-' + str(exc))
+            if (len(source_bytes) != expected_m3['source_size_bytes']
+                    or hashlib.sha256(source_bytes).hexdigest() != expected_m3['source_sha256']):
+                error('upstream-source-digest-mismatch-' + name)
+            if expected_m3['cgb_e_verified'] not in source_text:
+                error('upstream-cgb-e-attestation-missing-' + name)
+            reference_expected = expected_m3['reference']
+            if (len(reference_bytes) != reference_expected['size_bytes']
+                    or hashlib.sha256(reference_bytes).hexdigest() != reference_expected['sha256']):
+                error('upstream-reference-digest-mismatch-' + name)
+            committed_reference = (fixture / reference_expected['file']).read_bytes()
+            if reference_bytes != committed_reference:
+                print('result=reference-differs ' + reference_expected['file'])
+                raise SystemExit(1)
+            print('result=reference-source-identical ' + reference_expected['file'])
         obj = out / (name + '.o')
         rom = out / name
         steps = [

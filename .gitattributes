@@ -75,6 +75,10 @@ fixtures/samesuite/manifest.json text eol=lf
 fixtures/samesuite/LICENSE.txt text eol=lf
 fixtures/samesuite/ELIGIBILITY.md text eol=lf
 fixtures/samesuite/*.gb -text
+fixtures/samesuite/**/*.gb -text
+# Phase 14 APU receipts pin these source bytes exactly across Windows checkouts.
+tests/test_samesuite_apu.c text eol=lf
+src/core/gabbaboy.c text eol=lf
 fixtures/magentests/manifest.json text eol=lf
 fixtures/magentests/LICENSE.txt text eol=lf
 fixtures/magentests/SOURCES.md text eol=lf

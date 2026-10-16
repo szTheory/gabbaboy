@@ -175,6 +175,9 @@ base value and the rule in its reason.
 | ocps | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
 | ocps | CGB | $C0 | POLICY | 8 | no hardware oracle for CGB-mode index |
 | ocps | COMPAT | $D0 | HW_TEST | 5 | Mooneye boot_hwio-C, compat mode |
+| ff56 | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
+| ff56 | CGB | $00 | POLICY | 8 | FF56 latch starts clear; LED and receiver-enable off; read mask is separate D-07 policy |
+| ff56 | COMPAT | $00 | POLICY | 8 | compat mode does not decode FF56: reads $FF, writes ignored; internal latch remains 0 |
 | ff72 | DMG | $00 | POLICY | 2 | not applicable on the DMG profile: the register is not decoded there (reads stop, writes are ignored) |
 | ff72 | CGB | $00 | POLICY | 8 | initial $00 per D-10; no hardware oracle for this CGB register |
 | ff72 | COMPAT | $00 | POLICY | 8 | initial $00 per D-10; no hardware oracle for this CGB register |
@@ -299,9 +302,30 @@ Each byte commits every four master half-dots, for 64 per block with no modeled 
 The policy test checks every half-dot around all 16 byte edges at normal and double CPU speed; shifts
 of -8, -4, -2, -1, +1, +2, +4 and +8 half-dots fail the sampled-edge contract, with no software blind
 window around those edges. The transfer boundary, cadence and sampling phase remain UNKNOWN for
-physical CGB-E. FF56, FF76 and FF77 remain deferred: a read stops with
-`GBB_STOP_UNSUPPORTED_BUS` before anything changes and a write is dropped and reported as the same
-stop once the instruction retires.
+physical CGB-E. Native CGB-mode FF56 stores LED and receiver-enable bits 7-6 and 0; the disconnected
+receiver reports no signal, so bit 1 reads high whether reception is disabled or enabled. Bits 5-2
+read high as a deterministic project policy because the pinned Pan Docs source leaves them
+unspecified. The post-boot table records the FF56 latch's initial value as zero in the CGB policy
+column; the read mask is applied at the bus and is not a hardware power-up measurement. Compatibility
+mode reads `$FF` and ignores writes; the DMG profile keeps its existing fail-closed read and ignored-write
+policy. There is no host signal, network, peer link or physical IR
+path. CGB-mode FF76/FF77 expose read-only digital DAC inputs for channel pairs 2:1 and 4:3;
+compatibility mode reads `$FF` and ignores writes. These are software-model qualifications based on
+the pinned Pan Docs register description, not physical CGB-E measurements.
+
+<!-- cgb-apu-claims-begin -->
+FF76/FF77 expose read-only digital DAC inputs in native CGB mode; CGB compatibility mode reads
+`$FF` and ignores writes. The CH3 sample latch keeps its prior value until the next wave fetch.
+The pinned SameSuite APU roster contains 70 source-encoded cases, admitted for the CGB-CPU-E
+software model in native CGB mode. The `cgb-apu-dispositions.json` records keep each author's
+pass expectation separate from the software evaluator's result; current pass, matched-xfail, and
+assertion totals come from the current complete receipt in `cgb-corpus-receipt.json`, not this
+static profile page. These results qualify only the named digital register behavior and software
+transitions. They are not physical CGB-E audio measurements. See
+[`cgb-apu-dispositions.json`](../tests/external/cgb-apu-dispositions.json),
+[`cgb-corpus-inventory.json`](../tests/external/cgb-corpus-inventory.json), and the private,
+versioned receipt produced by `verify-cgb-corpus-report.py`.
+<!-- cgb-apu-claims-end -->
 
 In the selected software model, a manually HALTed CPU does not admit new ordinary HBlank blocks.
 An already admitted block continues, a timer IF/IE condition wakes HALT, and IME-on wake follows the
@@ -430,9 +454,9 @@ column is the evidence class (Pan Docs, Mooneye hardware test, SameBoy, or proje
 | $FF55 | DMG | stop | ignored | IMPL | POLICY |
 | $FF55 | CGB | stored or $00 | stored and $FF | IMPL | POLICY |
 | $FF55 | COMPAT | $FF | ignored | IMPL | POLICY |
-| $FF56 | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF56 | CGB | stop | dropped, stop after retire | DEFERRED(14) | PANDOCS |
-| $FF56 | COMPAT | $FF | ignored | IMPL | PANDOCS |
+| $FF56 | DMG | stop | ignored | IMPL | POLICY |
+| $FF56 | CGB | stored or $3E | stored and $C1 | IMPL | POLICY |
+| $FF56 | COMPAT | $FF | ignored | IMPL | POLICY |
 | $FF57 | DMG | stop | ignored | IMPL | HW_TEST |
 | $FF57 | CGB | $FF | ignored | IMPL | HW_TEST |
 | $FF57 | COMPAT | $FF | ignored | IMPL | HW_TEST |
@@ -527,11 +551,11 @@ column is the evidence class (Pan Docs, Mooneye hardware test, SameBoy, or proje
 | $FF75 | CGB | stored or $8F | stored and $70 | IMPL | PANDOCS |
 | $FF75 | COMPAT | stored or $8F | stored and $70 | IMPL | PANDOCS |
 | $FF76 | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF76 | CGB | stop | dropped, stop after retire | DEFERRED(14) | PANDOCS |
-| $FF76 | COMPAT | stop | dropped, stop after retire | DEFERRED(14) | PANDOCS |
+| $FF76 | CGB | channel 2:channel 1 digital DAC values | ignored | IMPL | PANDOCS |
+| $FF76 | COMPAT | $FF | ignored | IMPL | PANDOCS |
 | $FF77 | DMG | stop | ignored | IMPL | PANDOCS |
-| $FF77 | CGB | stop | dropped, stop after retire | DEFERRED(14) | PANDOCS |
-| $FF77 | COMPAT | stop | dropped, stop after retire | DEFERRED(14) | PANDOCS |
+| $FF77 | CGB | channel 4:channel 3 digital DAC values | ignored | IMPL | PANDOCS |
+| $FF77 | COMPAT | $FF | ignored | IMPL | PANDOCS |
 | $FF78 | DMG | stop | ignored | IMPL | HW_TEST |
 | $FF78 | CGB | $FF | ignored | IMPL | HW_TEST |
 | $FF78 | COMPAT | $FF | ignored | IMPL | HW_TEST |
@@ -678,7 +702,6 @@ and the STOP/OAM bug on a speed switch (`expected-failure:speed-switch-stop-oam-
 | gabbaboy-model | speed-switch-pending-irq-oracle-only | expected-failure | expected-failure:speed-switch-pending-irq-oracle-only | 12 | cgb_speed_stop_cases |
 | gabbaboy-model | speed-switch-wake-oracle-only | expected-failure | expected-failure:speed-switch-wake-oracle-only | 12 | cgb_speed_wake_ime_off |
 | gabbaboy-model | cgb-separate-buses | expected-failure | expected-failure:cgb-separate-buses | 11 | banking_bus_conflict_cgb_pin |
-| samesuite | key1-apu-aggregate | expected-unsupported | pcm-registers-unbuilt | 14 | - |
 | gambatte | speedchange | not-admitted | gpl-2.0-cgb-c-results | 12 | - |
 | not-applicable | mooneye | not-applicable | no-applicable-cgb-speed-switch-tests | 12 | - |
 | not-applicable | blargg | not-applicable | no-applicable-cgb-speed-switch-tests | 12 | - |
@@ -692,6 +715,21 @@ AGE rows cover the 13 admitted ROMs listed in `fixtures/age/manifest.json`; `sps
 AGE rows cover the 13 admitted ROMs listed in `fixtures/age/manifest.json`; `spsw-interrupts-cgbBC` remains source-digest-only and is not vendored. The Phase 11 dispositions retain `m3-bg-*` as `vendored: false`.
 
 AGE rows cover the 13 admitted ROMs listed in `fixtures/age/manifest.json`; `spsw-interrupts-cgbBC` remains source-digest-only and is not vendored. The Phase 11 dispositions retain `m3-bg-*` as `vendored: false`.
+
+### Phase 14 inherited AGE timing assertions
+
+The pinned AGE `stat-mode.inc` labels all 14 normal-speed STAT rows by mode and SCX value. The
+`stat-mode-cgbE` record binds those source labels to the exact expected bytes in its ROM table and
+the observed bytes, row verdicts, mask `0D11`, and signature
+`529c3f4d3b1571437d88b1c4806ada4dfa786b4740751b3128628df6abe8ffe9`. Five rows match and nine
+fail. The complete ROM remains an expected failure; row-level passes do not promote the guest.
+
+`age_stat_mode_cgbE_phase14_controls` checks the unchanged guest against that record, then applies a
+one-dot mode-3 startup defect to a private test-core copy. The twin must produce a mismatch for a
+named source row. This verifies assertion sensitivity and does not select a production timing
+correction. The current AGE comparison does not isolate one PPU event well enough to justify
+changing `ppu_update_stat_line`, window timing, or fetch/stall behavior; those gates retain their
+specific evidence limits.
 
 ### IE bits 5-7
 
@@ -771,22 +809,24 @@ when LCDC bit 0 is clear that changes the window-start stall, and it is recorded
 the live palette RAM at the dot it is produced and never consults a wall clock or a host-side frame
 boundary. The renderer reads VRAM through an explicit bank argument rather than through the CPU
 `VBK` selection, so a CPU bank switch cannot change what the renderer draws. The Phase 13 HDMA
-tracer samples VBK at block admission; other HDMA behavior remains outside the colour path. The AGE
-test suite has no CGB colour, attribute or priority ROM at its pinned
-commit, so it is not Phase 11 colour evidence (D-20); its mode-3 pixel-timing cases are recorded as
-`expected-unsupported` in the external-suite section below.
+tracer samples VBK at block admission; other HDMA behavior remains outside the colour path. AGE
+has no CGB colour, attribute or priority ROM at its pinned commit, so it is not Phase 11 colour
+evidence (D-20). Phase 14 executed its six mode-3 image targets against pinned source references;
+all six remain author pass targets and currently record exact expected-failure RGB555 signatures.
 
 ## External CGB PPU suites not run in Phase 11
 
-Phase 11 records, but does not run, two external CGB PPU suites. Neither contributes evidence to
-the colour claim, and no file from either is stored in the repository (rights gate G1 is open for
-the Mealybug sources; D-09, D-20).
+Phase 11 did not run two external CGB PPU suites. Phase 14 later ran the six admitted AGE cases
+against their independent pinned images; those software-model observations do not contribute to
+the Phase 11 colour claim. No Mealybug file is stored in the repository (rights gate G1; D-09,
+D-20).
 
 - **AGE `m3-bg-lcdc` and `m3-bg-scx`** at `c-sp/age-test-roms` commit `1f5bc10e` are mode-3
   pixel-timing tests, each in the `cgbBCE`, `ds-cgbBCE` and `nocgb-ncmBCE` variants. This core
-  does not model mid-scanline pixel timing yet, so the six cases are `expected-unsupported` with
-  reason `mode-3-pixel-timing`, owned by Phase 14. AGE has no CGB colour, attribute or priority ROM
-  at this pin, so none of these is Phase 11 evidence (D-20).
+  produced six exact `expected-failure` image comparisons on the CGB-E software model. Each record
+  preserves its source, ROM, reference, model, mode, speed, mismatch count, and SHA-256 signature;
+  the author expectation remains pass. AGE has no CGB colour, attribute or priority ROM at this
+  pin, so these are not Phase 11 evidence (D-20).
 - **Mealybug Tearoom Tests `ppu/m3_*`** at `mattcurrie/mealybug-tearoom-tests` commit `70e88fb9`
   are `unsupported-model`: the upstream expected images were captured on CGB-C and CGB-D
   steppings only, and the project profile is CGB-CPU-E, for which upstream has no expectation.
@@ -798,12 +838,12 @@ proves that a changed reason is caught.
 <!-- cgb-external-dispositions-begin -->
 | suite | case | disposition | reason |
 | --- | --- | --- | --- |
-| age | m3-bg-lcdc-cgbBCE | expected-unsupported | mode-3-pixel-timing |
-| age | m3-bg-lcdc-ds-cgbBCE | expected-unsupported | mode-3-pixel-timing |
-| age | m3-bg-lcdc-nocgb-ncmBCE | expected-unsupported | mode-3-pixel-timing |
-| age | m3-bg-scx-cgbBCE | expected-unsupported | mode-3-pixel-timing |
-| age | m3-bg-scx-ds-cgbBCE | expected-unsupported | mode-3-pixel-timing |
-| age | m3-bg-scx-nocgb-ncmBCE | expected-unsupported | mode-3-pixel-timing |
+| age | m3-bg-lcdc-cgbBCE | expected-failure | expected-failure:cgb-e-mode3-reference-mismatch |
+| age | m3-bg-lcdc-ds-cgbBCE | expected-failure | expected-failure:cgb-e-mode3-reference-mismatch |
+| age | m3-bg-lcdc-nocgb-ncmBCE | expected-failure | expected-failure:cgb-e-mode3-reference-mismatch |
+| age | m3-bg-scx-cgbBCE | expected-failure | expected-failure:cgb-e-mode3-reference-mismatch |
+| age | m3-bg-scx-ds-cgbBCE | expected-failure | expected-failure:cgb-e-mode3-reference-mismatch |
+| age | m3-bg-scx-nocgb-ncmBCE | expected-failure | expected-failure:cgb-e-mode3-reference-mismatch |
 | mealybug | m3_bgp_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
 | mealybug | m3_bgp_change_sprites | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |
 | mealybug | m3_lcdc_bg_en_change | unsupported-model | upstream expected images cover CGB-C/D steppings only; no CGB-E expectation |

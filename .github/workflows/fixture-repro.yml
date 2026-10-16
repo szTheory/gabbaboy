@@ -322,7 +322,7 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Rebuild the 4 CGB derivatives and compare them with the committed ROMs
+      - name: Rebuild all nine selected CGB ROMs and compare them with the committed ROMs
         shell: bash
         env:
           GBB_REPRO_OUTPUT_DIR: ${{ runner.temp }}/mooneye-cgb-evidence

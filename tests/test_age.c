@@ -18,6 +18,11 @@ extern int32_t gbb_p12_stall_offset_t;
 #define AGE_STALL_OFFSET_MUTANT (UINT64_C(1) << 31)
 #endif
 
+#ifdef GBB_AGE_P14
+extern void gbb_p14_set_mutants(uint64_t mask);
+#define AGE_PHASE14_TRANSFER_MUTANT UINT64_C(1)
+#endif
+
 #define AGE_ROM_SIZE 0x8000u
 #define AGE_TRACE_CAPACITY 1u
 #define AGE_RUN_SLICE UINT64_C(2048)
@@ -58,6 +63,7 @@ typedef enum {
     MODE_CHECK_DISPOSITION,
     MODE_STALL_WINDOW,
     MODE_SENSITIVITY,
+    MODE_PHASE14_CONTROLS,
     MODE_SCAN
 } age_mode;
 
@@ -65,6 +71,7 @@ static uint8_t age_rom[AGE_ROM_SIZE];
 static uint64_t age_mutant_mask = 0u;
 static int32_t age_stall_offset_t = 0;
 static int age_has_stall_offset = 0;
+static uint64_t age_phase14_mutant_mask = 0u;
 
 static int parse_u64(const char *text, uint64_t *out) {
     char *end = NULL;
@@ -116,6 +123,9 @@ static void configure_mutants(void) {
 #ifdef GBB_AGE_P12
     gbb_p12_set_mutants(age_mutant_mask);
     if (age_has_stall_offset) gbb_p12_stall_offset_t = age_stall_offset_t;
+#endif
+#ifdef GBB_AGE_P14
+    gbb_p14_set_mutants(age_phase14_mutant_mask);
 #endif
 }
 
@@ -280,6 +290,25 @@ static int run_and_print(const age_config *config, age_result *result) {
     return 0;
 }
 
+static void print_row_hex(const uint8_t *bytes);
+
+static int age_case_name(const char *rom_path, char *out, size_t capacity) {
+    const char *base;
+    const char *backslash;
+    size_t length;
+    if (rom_path == NULL || out == NULL || capacity == 0u) return 0;
+    base = strrchr(rom_path, '/');
+    backslash = strrchr(rom_path, '\\');
+    if (backslash != NULL && (base == NULL || backslash > base)) base = backslash;
+    base = base == NULL ? rom_path : base + 1;
+    length = strlen(base);
+    if (length >= 3u && strcmp(base + length - 3u, ".gb") == 0) length -= 3u;
+    if (length == 0u || length >= capacity) return 0;
+    memcpy(out, base, length);
+    out[length] = '\0';
+    return 1;
+}
+
 #ifdef GBB_AGE_P12
 static const char *sensitivity_mutant_name(uint64_t mask) {
     if (mask == (UINT64_C(1) << 6)) return "M6";
@@ -357,20 +386,6 @@ static int sensitivity_expected_case(const char *json_path, uint64_t mask,
     return 1;
 }
 
-static int age_case_name(const char *rom_path, char *out, size_t capacity) {
-    const char *base = strrchr(rom_path, '/');
-    const char *backslash = strrchr(rom_path, '\\');
-    size_t length;
-    if (backslash != NULL && (base == NULL || backslash > base)) base = backslash;
-    base = base == NULL ? rom_path : base + 1;
-    length = strlen(base);
-    if (length >= 3u && strcmp(base + length - 3u, ".gb") == 0) length -= 3u;
-    if (length == 0u || length >= capacity) return 0;
-    memcpy(out, base, length);
-    out[length] = '\0';
-    return 1;
-}
-
 static int run_sensitivity(const age_config *config, uint64_t mutant_mask,
                            const char *json_path) {
     age_result clean;
@@ -410,6 +425,138 @@ static int run_sensitivity(const age_config *config, uint64_t mutant_mask,
 }
 #endif
 
+#ifdef GBB_AGE_P14
+static int age_case_name_controls(void) {
+    static const struct {
+        const char *path;
+        const char *expected;
+    } spellings[] = {
+        {"fixtures/age/stat-mode-cgbE.gb", "stat-mode-cgbE"},
+        {"C:\\repo\\fixtures\\age\\stat-mode-cgbE.gb", "stat-mode-cgbE"},
+        {"C:\\repo/fixtures\\age/stat-mode-cgbE.gb", "stat-mode-cgbE"},
+        {"stat-mode-cgbE.gb", "stat-mode-cgbE"},
+    };
+    static const char *const invalid_paths[] = {"", "/", "C:\\repo\\", ".gb"};
+    char case_name[32];
+    char bounded[8];
+    for (size_t index = 0u; index < sizeof(spellings) / sizeof(spellings[0]); ++index) {
+        if (!age_case_name(spellings[index].path, case_name, sizeof(case_name)) ||
+            strcmp(case_name, spellings[index].expected) != 0) return 0;
+    }
+    for (size_t index = 0u; index < sizeof(invalid_paths) / sizeof(invalid_paths[0]); ++index) {
+        if (age_case_name(invalid_paths[index], case_name, sizeof(case_name))) return 0;
+    }
+    if (age_case_name(NULL, case_name, sizeof(case_name)) ||
+        age_case_name("stat-mode-cgbE.gb", NULL, sizeof(case_name)) ||
+        age_case_name("stat-mode-cgbE.gb", case_name, 0u) ||
+        !age_case_name("dir/1234567.gb", bounded, sizeof(bounded)) ||
+        strcmp(bounded, "1234567") != 0 ||
+        age_case_name("dir/12345678.gb", bounded, sizeof(bounded))) return 0;
+    printf("age-case-name-controls pass spellings=4 invalid=7 bounds=2\n");
+    return 1;
+}
+#endif
+
+static const char *stat_mode_assertion_id(unsigned row) {
+    static const char *const ids[14] = {
+        "stat-mode-cgbE/mode-0/scx-0", "stat-mode-cgbE/mode-0/scx-1",
+        "stat-mode-cgbE/mode-0/scx-2", "stat-mode-cgbE/mode-0/scx-3",
+        "stat-mode-cgbE/mode-0/scx-4", "stat-mode-cgbE/mode-0/scx-5",
+        "stat-mode-cgbE/mode-0/scx-6", "stat-mode-cgbE/mode-0/scx-7",
+        "stat-mode-cgbE/mode-0/scx-8", "stat-mode-cgbE/mode-0/scx-9",
+        "stat-mode-cgbE/mode-1-2/scx-0", "stat-mode-cgbE/mode-1-2/scx-7",
+        "stat-mode-cgbE/mode-3/scx-0", "stat-mode-cgbE/mode-3/scx-7"
+    };
+    return row < sizeof(ids) / sizeof(ids[0]) ? ids[row] : NULL;
+}
+
+static void print_row_hex(const uint8_t *bytes) {
+    for (unsigned byte = 0u; byte < 8u; ++byte) printf("%02X", bytes[byte]);
+}
+
+static int run_phase14_controls(const age_config *config,
+                                const char *expected_signature,
+                                uint16_t expected_mask) {
+#ifdef GBB_AGE_P14
+    age_result clean;
+    age_result mutant;
+    char case_name[128];
+    int code;
+
+    if (!age_case_name_controls()) {
+        fprintf(stderr, "age-phase14-control case-name-controls-failed\n");
+        return 1;
+    }
+    if (!age_case_name(config->rom_path, case_name, sizeof(case_name)) ||
+        strcmp(case_name, "stat-mode-cgbE") != 0 || config->rows != 14u) {
+        fprintf(stderr, "age-phase14-control unexpected-tracer-case\n");
+        return 2;
+    }
+    age_phase14_mutant_mask = 0u;
+    code = read_verdict(config, &clean);
+    if (code != 0) return code;
+    if (clean.register_pass || clean.row_mask != expected_mask ||
+        strcmp(clean.signature, expected_signature) != 0) {
+        fprintf(stderr,
+                "age-phase14-control baseline-drift expected=%s/%04X observed=%s/%04X\n",
+                expected_signature, (unsigned)expected_mask, clean.signature,
+                (unsigned)clean.row_mask);
+        return 1;
+    }
+
+    printf("age-phase14-control baseline=matched-xfail case=%s rows=%u/%u mask=%04X signature=%s\n",
+           case_name, clean.rows_ok, config->rows, (unsigned)clean.row_mask,
+           clean.signature);
+    for (unsigned row = 0u; row < config->rows; ++row) {
+        const size_t offset = (size_t)row * 8u;
+        const uint8_t *expected = age_rom + (size_t)config->expected_address + 1u + offset;
+        printf("age-assertion id=%s row=%u expected=", stat_mode_assertion_id(row), row);
+        print_row_hex(expected);
+        printf(" actual=");
+        print_row_hex(clean.row_bytes + offset);
+        printf(" disposition=%s\n",
+               (clean.row_mask & (uint16_t)(1u << row)) != 0u ? "pass" : "fail");
+    }
+
+    age_phase14_mutant_mask = AGE_PHASE14_TRANSFER_MUTANT;
+    code = read_verdict(config, &mutant);
+    if (code != 0) return code;
+    if (mutant.register_pass ||
+        (mutant.row_mask == clean.row_mask &&
+         strcmp(mutant.signature, clean.signature) == 0)) {
+        fprintf(stderr, "age-phase14-control intended-mutation-not-detected case=%s\n",
+                case_name);
+        return 1;
+    }
+    for (unsigned row = 0u; row < config->rows; ++row) {
+        const size_t offset = (size_t)row * 8u;
+        const uint8_t *expected = age_rom + (size_t)config->expected_address + 1u + offset;
+        if (memcmp(clean.row_bytes + offset, mutant.row_bytes + offset, 8u) != 0 &&
+            memcmp(expected, mutant.row_bytes + offset, 8u) != 0) {
+            printf("age-phase14-control intended-mismatch assertion=%s row=%u expected=",
+                   stat_mode_assertion_id(row), row);
+            print_row_hex(expected);
+            printf(" baseline=");
+            print_row_hex(clean.row_bytes + offset);
+            printf(" mutant=");
+            print_row_hex(mutant.row_bytes + offset);
+            printf(" signature=%s mask=%04X\n", mutant.signature,
+                   (unsigned)mutant.row_mask);
+            return 0;
+        }
+    }
+    fprintf(stderr, "age-phase14-control mutation-did-not-break-named-row case=%s\n",
+            case_name);
+    return 1;
+#else
+    (void)config;
+    (void)expected_signature;
+    (void)expected_mask;
+    fprintf(stderr, "age-phase14-control requires the private Phase 14 mutant build\n");
+    return 2;
+#endif
+}
+
 static int set_mode(age_mode *mode, age_mode next) {
     if (*mode != MODE_NONE) return 0;
     *mode = next;
@@ -423,6 +570,7 @@ int main(int argc, char **argv) {
     char expected_signature[65] = {0};
     uint16_t expected_mask = 0u;
     int have_expected_signature = 0;
+    int print_phase14_observations = 0;
     uint64_t parsed = 0u;
     const char *sensitivity_json_path = NULL;
     int64_t window_constant = 0;
@@ -498,6 +646,14 @@ int main(int argc, char **argv) {
 #else
             goto bad_mode;
 #endif
+        } else if (strcmp(argv[i], "--phase14-controls") == 0) {
+            if (!set_mode(&mode, MODE_PHASE14_CONTROLS) || i + 2 >= argc ||
+                !valid_signature(argv[++i], expected_signature) ||
+                !parse_mask16(argv[++i], &expected_mask)) goto bad_mode;
+            have_expected_signature = 1;
+        } else if (strcmp(argv[i], "--phase14-observations") == 0) {
+            if (print_phase14_observations) goto bad_mode;
+            print_phase14_observations = 1;
         } else if (strcmp(argv[i], "--scan") == 0) {
 #ifdef GBB_AGE_P12
             if (!set_mode(&mode, MODE_SCAN) || i + 2 >= argc ||
@@ -511,6 +667,7 @@ int main(int argc, char **argv) {
         }
     }
     if (mode == MODE_NONE) goto bad_mode;
+    if (print_phase14_observations && mode != MODE_CHECK_DISPOSITION) goto bad_mode;
 
     if (mode == MODE_STALL_WINDOW) {
 #ifdef GBB_AGE_P12
@@ -572,10 +729,36 @@ int main(int argc, char **argv) {
 #endif
     }
 
+    if (mode == MODE_PHASE14_CONTROLS) {
+        if (!have_expected_signature) goto bad_mode;
+        return run_phase14_controls(&config, expected_signature, expected_mask);
+    }
+
     {
         age_result result;
         const int code = run_and_print(&config, &result);
         if (code != 0) return code;
+        if (print_phase14_observations) {
+            char case_name[128];
+            if (!age_case_name(config.rom_path, case_name, sizeof(case_name))) goto bad_mode;
+            for (unsigned row = 0u; row < config.rows; ++row) {
+                const size_t offset = (size_t)row * 8u;
+                const uint8_t *expected = age_rom + (size_t)config.expected_address + 1u + offset;
+                const uint8_t *actual = result.row_bytes + offset;
+                if (strcmp(case_name, "stat-mode-cgbE") == 0) {
+                    const char *assertion_id = stat_mode_assertion_id(row);
+                    if (assertion_id == NULL) goto bad_mode;
+                    printf("age-assertion-row id=%s expected=", assertion_id);
+                } else {
+                    printf("age-assertion-row id=%s/row-%02u expected=", case_name, row);
+                }
+                print_row_hex(expected);
+                printf(" actual=");
+                print_row_hex(actual);
+                printf(" disposition=%s\n",
+                       (result.row_mask & (uint16_t)(1u << row)) != 0u ? "pass" : "fail");
+            }
+        }
         if (mode == MODE_CHECK_DISPOSITION) {
             if (strcmp(disposition, "pass") == 0) {
                 if (!result.register_pass || result.rows_ok != config.rows) {

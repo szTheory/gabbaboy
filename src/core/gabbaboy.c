@@ -10,6 +10,18 @@
 #ifndef GBB_P13_DURATION_OFFSET
 #define GBB_P13_DURATION_OFFSET 0
 #endif
+#ifndef GBB_TEST_CGB_PCM_SWAP_NIBBLES
+#define GBB_TEST_CGB_PCM_SWAP_NIBBLES 0
+#endif
+#ifndef GBB_TEST_CGB_PCM_ROUTING_COUPLED
+#define GBB_TEST_CGB_PCM_ROUTING_COUPLED 0
+#endif
+#ifndef GBB_TEST_CGB_PCM_WRITABLE
+#define GBB_TEST_CGB_PCM_WRITABLE 0
+#endif
+#ifndef GBB_TEST_CGB_APU_DIRECT_RAM
+#define GBB_TEST_CGB_APU_DIRECT_RAM 0
+#endif
 
 
 #define GBB_INPUT_EVENT_CAPACITY 64u
@@ -61,6 +73,7 @@ typedef struct {
 } apu_pulse_channel;
 typedef struct {
     uint8_t dac, length_reg, level, frequency_low, control;
+    uint8_t sample_buffer;
     uint8_t ram[16], position;
     uint16_t length, timer;
     int enabled;
@@ -367,9 +380,10 @@ struct gbb_instance {
     uint8_t vram_bank;
     uint8_t wram_bank;
     uint8_t svbk;
-    /* CGB-profile I/O register state (Plan 10-09). key1_armed is KEY1 bit 0. bcps/ocps are the palette index registers, ff72-ff75 the
-     * undocumented CGB scratch registers. DMG never reads or writes any of these. */
-    uint8_t key1_armed, bcps, ocps, ff72, ff73, ff74, ff75;
+    /* CGB-profile I/O register state (Plan 10-09). key1_armed is KEY1 bit 0. bcps/ocps are the
+     * palette index registers, ff56 is the disconnected IR control stub, and ff72-ff75 are the
+     * undocumented CGB scratch registers. DMG never reads or writes these through the CGB path. */
+    uint8_t key1_armed, bcps, ocps, ff56, ff72, ff73, ff74, ff75;
     uint8_t double_speed, cpu_stall_kind, stop_switch_pending;
     uint32_t cpu_stall_half_dots;
     /* CGB palette RAM (Phase 11): 8 palettes of 4 little-endian RGB555 colours per side, addressed
@@ -428,6 +442,9 @@ struct gbb_instance {
     apu_wave_channel apu_wave;
     apu_noise_channel apu_noise;
     uint8_t apu_nr50, apu_nr51, apu_power, apu_sequencer_step;
+#if GBB_TEST_CGB_PCM_WRITABLE
+    uint8_t apu_pcm_test_override[2], apu_pcm_test_override_valid;
+#endif
     uint64_t apu_sample_phase;
     int64_t audio_event_ring[2][GBB_AUDIO_EVENT_TAPS];
     uint8_t audio_event_head;
@@ -539,6 +556,22 @@ static gbb_audio_frame audio_process_sample(gbb_instance *m) {
 }
 
 /* MODEL: BOTH GATE-00 basis=host-side-mixing */
+static int model_is_cgb(const gbb_instance *m);
+
+/* MODEL: BOTH GATE-00 basis=host-side-mixing */
+static uint8_t apu_wave_current_sample(const gbb_instance *m, const apu_wave_channel *wave) {
+    uint8_t packed;
+    if (model_is_cgb(m)) {
+#if GBB_TEST_CGB_APU_DIRECT_RAM
+        packed = wave->ram[wave->position >> 1];
+#else
+        packed = wave->sample_buffer;
+#endif
+    } else packed = wave->ram[wave->position >> 1];
+    return (wave->position & 1u) == 0u ? (uint8_t)(packed >> 4) : (uint8_t)(packed & 0x0Fu);
+}
+
+/* MODEL: BOTH GATE-00 basis=host-side-mixing */
 static void audio_current_mix(const gbb_instance *m, int32_t *left, int32_t *right) {
     static const uint8_t duty_pattern[4] = {0x01u, 0x81u, 0x87u, 0x7Eu};
     *left = 0; *right = 0;
@@ -556,9 +589,7 @@ static void audio_current_mix(const gbb_instance *m, int32_t *left, int32_t *rig
     }
     int32_t wave_sample = 0;
     if (m->apu_wave.enabled && m->apu_wave.level != 0u) {
-        const uint8_t packed = m->apu_wave.ram[m->apu_wave.position >> 1];
-        const uint8_t digital = (m->apu_wave.position & 1u) == 0u
-            ? (uint8_t)(packed >> 4) : (uint8_t)(packed & 0x0Fu);
+        const uint8_t digital = apu_wave_current_sample(m, &m->apu_wave);
         const unsigned shift = (m->apu_wave.level >> 5) - 1u;
         wave_sample = (int32_t)(digital >> shift) * 2048 - 16384;
     }
@@ -574,6 +605,54 @@ static void audio_current_mix(const gbb_instance *m, int32_t *left, int32_t *rig
         *right += noise_sample * (int32_t)((m->apu_nr50 & 7u) + 1u) / GBB_AUDIO_MIX_HEADROOM_DIV;
     if ((m->apu_nr51 & 0x80u) != 0u)
         *left += noise_sample * (int32_t)(((m->apu_nr50 >> 4) & 7u) + 1u) / GBB_AUDIO_MIX_HEADROOM_DIV;
+}
+
+/* CGB PCM readback is the digital DAC input, before NR50/NR51 routing and host mixing. */
+/* MODEL: BOTH GATE-00 basis="model-neutral function; hardware-visible model access is declared by its caller branch gate" */
+static uint8_t apu_digital_output(const gbb_instance *m, unsigned channel) {
+    static const uint8_t duty_pattern[4] = {0x01u, 0x81u, 0x87u, 0x7Eu};
+    if (!m->apu_power) return 0u;
+#if GBB_TEST_CGB_PCM_ROUTING_COUPLED
+    if ((m->apu_nr51 & (uint8_t)((1u << channel) | (1u << (channel + 4u)))) == 0u)
+        return 0u;
+#endif
+    if (channel < 2u) {
+        const apu_pulse_channel *pulse = &m->apu_pulse[channel];
+        const unsigned duty = pulse->duty_length >> 6;
+        return pulse->enabled && (pulse->envelope & 0xF8u) != 0u &&
+               pulse->volume != 0u && ((duty_pattern[duty] >> pulse->phase) & 1u) != 0u
+            ? pulse->volume : 0u;
+    }
+    if (channel == 2u) {
+        const apu_wave_channel *wave = &m->apu_wave;
+        if (!wave->enabled || (wave->dac & 0x80u) == 0u || wave->level == 0u) return 0u;
+        const uint8_t sample = apu_wave_current_sample(m, wave);
+        return (uint8_t)(sample >> ((wave->level >> 5) - 1u));
+    }
+    if (channel == 3u) {
+        const apu_noise_channel *noise = &m->apu_noise;
+        return noise->enabled && (noise->envelope & 0xF8u) != 0u &&
+               noise->volume != 0u && (noise->lfsr & 1u) == 0u
+            ? noise->volume : 0u;
+    }
+    return 0u;
+}
+
+/* MODEL: BOTH GATE-00 basis="model-neutral function; hardware-visible model access is declared by its caller branch gate" */
+static uint8_t apu_pcm_read(const gbb_instance *m, uint16_t address) {
+    const unsigned first = address == 0xFF76u ? 0u : 2u;
+#if GBB_TEST_CGB_PCM_WRITABLE
+    const unsigned register_index = address == 0xFF76u ? 0u : 1u;
+    if ((m->apu_pcm_test_override_valid & (uint8_t)(1u << register_index)) != 0u)
+        return m->apu_pcm_test_override[register_index];
+#endif
+    const uint8_t low = apu_digital_output(m, first);
+    const uint8_t high = apu_digital_output(m, first + 1u);
+    uint8_t value = (uint8_t)((high << 4) | (low & 0x0Fu));
+#if GBB_TEST_CGB_PCM_SWAP_NIBBLES
+    value = (uint8_t)((value << 4) | (value >> 4));
+#endif
+    return value;
 }
 
 /* MODEL: BOTH GATE-00 basis=host-side-mixing */
@@ -724,7 +803,6 @@ static void observe_ppu(gbb_instance *m, uint16_t address, uint8_t access,
 }
 
 static void ppu_update_stat_line(gbb_instance *m);
-static int model_is_cgb(const gbb_instance *m);
 static void hdma_request(gbb_instance *m);
 static void speed_switch_apply_realign(gbb_instance *m);
 
@@ -829,7 +907,7 @@ typedef enum {
     PB_BGP, PB_OBP0, PB_OBP1, PB_PPU_MODE,
     PB_JOYPAD_SELECT, PB_JOYPAD_BUTTONS,
     PB_KEY1, PB_VRAM_BANK, PB_SVBK, PB_WRAM_BANK, PB_BCPS, PB_OCPS,
-    PB_FF72, PB_FF73, PB_FF74, PB_FF75,
+    PB_FF56, PB_FF72, PB_FF73, PB_FF74, PB_FF75,
     PB_BG_CRAM_FILL, PB_OBJ_CRAM_FILL, PB_OPRI,
     PB_RAM_FILL,
     PB_FIELD_COUNT
@@ -949,6 +1027,8 @@ static const post_boot_row post_boot[PB_FIELD_COUNT] = {
      * the CGB-mode index has no oracle. */
     { PB_BCPS, PB_NA(0u), PBC_POLICY(0xC0u, PB_IDX_VERIFY), PBK_HWIO(0xC8u) },
     { PB_OCPS, PB_NA(0u), PBC_POLICY(0xC0u, PB_IDX_VERIFY), PBK_HWIO(0xD0u) },
+    { PB_FF56, PB_NA(0u), PBC_POLICY(0u, "FF56 latch starts clear; LED and receiver-enable off; read mask is separate D-07 policy"),
+              PBC_POLICY(0u, "compat mode does not decode FF56: reads $FF, writes ignored; internal latch remains 0") },
     { PB_FF72, PB_NA(0u), PBC_POLICY(0u, PB_INIT0), PBC_POLICY(0u, PB_INIT0) },
     { PB_FF73, PB_NA(0u), PBC_POLICY(0u, PB_INIT0), PBC_POLICY(0u, PB_INIT0) },
     { PB_FF74, PB_NA(0u), PBC_POLICY(0u, PB_INIT0), PBC_POLICY(0u, "compat mode does not decode FF74: reads $FF, writes ignored; stored value stays 0") },
@@ -1087,6 +1167,7 @@ static void post_boot_apply(gbb_instance *m) {
         case PB_WRAM_BANK: m->wram_bank = v; break;
         case PB_BCPS: m->bcps = v; break;
         case PB_OCPS: m->ocps = v; break;
+        case PB_FF56: m->ff56 = v; break;
         case PB_FF72: m->ff72 = v; break;
         case PB_FF73: m->ff73 = v; break;
         case PB_FF74: m->ff74 = v; break;
@@ -1151,7 +1232,9 @@ typedef enum {
     IO_DEFERRED_W,    /* reads $FF, write latches and is dropped */
     IO_BCPD,          /* background palette data port (appended: IO_UNSET stays 0) */
     IO_OCPD,          /* object palette data port */
-    IO_OPRI           /* object priority mode: bit 0 stored, no effect after boot */
+    IO_OPRI,          /* object priority mode: bit 0 stored, no effect after boot */
+    IO_PCM12,         /* PCM12: channel 2:channel 1 digital DAC values */
+    IO_PCM34          /* PCM34: channel 4:channel 3 digital DAC values */
 } io_kind;
 
 typedef enum { IOS_NONE = 0, IOS_PANDOCS, IOS_HW_TEST, IOS_SAMEBOY, IOS_POLICY, IOS_EXISTING } io_source;
@@ -1262,7 +1345,7 @@ static const io_row io_visibility[IO_VISIBILITY_ROWS] = {
     [0x53] = { IOC(DMG_STOP), IOC_ST(0xFF, 0x1F), IOC(CONST_FF), IOS_POLICY }, /* FF53: private destination high latch */
     [0x54] = { IOC(DMG_STOP), IOC_ST(0xFF, 0xF0), IOC(CONST_FF), IOS_POLICY }, /* FF54: private destination low latch */
     [0x55] = { IOC(DMG_STOP), IOC_ST(0x00, 0xFF), IOC(CONST_FF), IOS_POLICY }, /* FF55: bounded HBlank control/status */
-    [0x56] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 14), IOC(CONST_FF), IOS_PANDOCS }, /* RP infrared port: deferred to phase 14 */
+    [0x56] = { IOC(DMG_STOP), IOC_ST(0x3E, 0xC1), IOC(CONST_FF), IOS_POLICY }, /* RP: LED/enable per Pan Docs; reserved read bits are D-07 policy */
     [0x57] = IO_UNUSED_ROW,
     [0x58] = IO_UNUSED_ROW,
     [0x59] = IO_UNUSED_ROW,
@@ -1294,8 +1377,8 @@ static const io_row io_visibility[IO_VISIBILITY_ROWS] = {
     [0x73] = { IOC(DMG_STOP), IOC_ST(0x00, 0xFF), IOC_ST(0x00, 0xFF), IOS_SAMEBOY }, /* FF73: undocumented CGB register, fully read/write */
     [0x74] = { IOC(DMG_STOP), IOC_ST(0x00, 0xFF), IOC(CONST_FF), IOS_SAMEBOY }, /* FF74: undocumented CGB register; compat mode locks it */
     [0x75] = { IOC(DMG_STOP), IOC_ST(0x8F, 0x70), IOC_ST(0x8F, 0x70), IOS_PANDOCS }, /* FF75: only bits 4-6 are stored; the rest read 1 */
-    [0x76] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 14), IOC_DEF(DEFERRED_RW, 14), IOS_PANDOCS }, /* PCM12: audio channel output readback deferred to phase 14 */
-    [0x77] = { IOC(DMG_STOP), IOC_DEF(DEFERRED_RW, 14), IOC_DEF(DEFERRED_RW, 14), IOS_PANDOCS }, /* PCM34: audio channel output readback deferred to phase 14 */
+    [0x76] = { IOC(DMG_STOP), IOC(PCM12), IOC(CONST_FF), IOS_PANDOCS }, /* PCM12: channel 2:channel 1 digital output; compatibility mode locks it */
+    [0x77] = { IOC(DMG_STOP), IOC(PCM34), IOC(CONST_FF), IOS_PANDOCS }, /* PCM34: channel 4:channel 3 digital output; compatibility mode locks it */
     [0x78] = IO_UNUSED_ROW,
     [0x79] = IO_UNUSED_ROW,
     [0x7A] = IO_UNUSED_ROW,
@@ -1361,6 +1444,7 @@ static const uint8_t *io_store_ptr(const gbb_instance *m, uint16_t address) {
     case 0xFF53: return &m->hdma.destination_high;
     case 0xFF54: return &m->hdma.destination_low;
     case 0xFF55: return &m->hdma.control_readback;
+    case 0xFF56: return &m->ff56;
     case 0xFF68: return &m->bcps;
     case 0xFF6A: return &m->ocps;
     case 0xFF72: return &m->ff72;
@@ -1389,6 +1473,8 @@ static uint8_t io_read_cgb(const gbb_instance *m, uint16_t address) {
     case IO_BCPD: return cram_data_read(m->bcps, m->bg_cram, cpu_cram_access_allowed(m));
     case IO_OCPD: return cram_data_read(m->ocps, m->obj_cram, cpu_cram_access_allowed(m));
     case IO_OPRI: return (uint8_t)(0xFEu | (m->opri & 1u));
+    case IO_PCM12:
+    case IO_PCM34: return apu_pcm_read(m, address);
     default: return 0xFFu; /* CONST_FF, DEFERRED_W; DEFERRED_RW is refused before the read */
     }
 }
@@ -1424,6 +1510,16 @@ static void io_write_cgb(gbb_instance *m, uint16_t address, uint8_t value) {
         /* MODEL: UNKNOWN GATE-77 research:14 -- OPRI is stored without priority effect after boot (D-08) */
         m->opri = (uint8_t)(value & 1u);
         break;
+    case IO_PCM12:
+    case IO_PCM34:
+#if GBB_TEST_CGB_PCM_WRITABLE
+        {
+            const unsigned index = address == 0xFF76u ? 0u : 1u;
+            m->apu_pcm_test_override[index] = value;
+            m->apu_pcm_test_override_valid |= (uint8_t)(1u << index);
+        }
+#endif
+        break;
     case IO_DEFERRED_RW:
     case IO_DEFERRED_W:
         m->bus_unsupported = 1;
@@ -1441,6 +1537,11 @@ static void reset_state(gbb_instance *m) {
     memset(m->apu_pulse, 0, sizeof(m->apu_pulse));
     memset(&m->apu_wave, 0, sizeof(m->apu_wave));
     memset(&m->apu_noise, 0, sizeof(m->apu_noise));
+    m->ff56 = 0u; /* LED and receiver disabled; reserved bits are supplied by the read mask. */
+#if GBB_TEST_CGB_PCM_WRITABLE
+    memset(m->apu_pcm_test_override, 0, sizeof(m->apu_pcm_test_override));
+    m->apu_pcm_test_override_valid = 0u;
+#endif
     post_boot_apply(m);
     m->ime_delay = 0;
     m->serial_bits = 0;
@@ -1545,6 +1646,26 @@ static uint32_t apu_noise_period(const apu_noise_channel *noise) {
     return ((uint32_t)divisor[noise->polynomial & 7u] << (noise->polynomial >> 4)) * 2u;
 }
 
+/* MODEL: BOTH GATE-00 basis="shared channel length-counter helper" */
+static void apu_length_enable_write(gbb_instance *m, uint8_t previous_control,
+                                    uint8_t control, uint16_t *length, int *enabled) {
+    if (!model_is_cgb(m) || (m->apu_sequencer_step & 1u) == 0u ||
+        (previous_control & 0x40u) != 0u || (control & 0x40u) == 0u || *length == 0u)
+        return;
+    --*length;
+    if (*length == 0u) *enabled = 0;
+}
+
+/* MODEL: BOTH GATE-00 basis="shared channel length-counter helper" */
+static void apu_length_reload_on_trigger(gbb_instance *m, uint16_t *length,
+                                         uint16_t maximum, uint8_t control) {
+    if (*length != 0u) return;
+    *length = maximum;
+    if (model_is_cgb(m) && (control & 0x40u) != 0u &&
+        (m->apu_sequencer_step & 1u) != 0u)
+        --*length;
+}
+
 /* MODEL: BOTH GATE-00 basis=model-neutral */
 static void apu_pulse_trigger(gbb_instance *m, unsigned index) {
     apu_pulse_channel *pulse = &m->apu_pulse[index];
@@ -1554,7 +1675,7 @@ static void apu_pulse_trigger(gbb_instance *m, unsigned index) {
     pulse->phase = 0u;
     pulse->volume = (uint8_t)(pulse->envelope >> 4);
     pulse->envelope_timer = (uint8_t)((pulse->envelope & 7u) == 0u ? 8u : pulse->envelope & 7u);
-    if (pulse->length == 0u) pulse->length = 64u;
+    apu_length_reload_on_trigger(m, &pulse->length, 64u, pulse->control);
     if (index == 0u) {
         const uint8_t period = (uint8_t)((pulse->sweep >> 4) & 7u);
         const uint8_t shift = (uint8_t)(pulse->sweep & 7u);
@@ -1580,8 +1701,8 @@ static void apu_pulse_trigger(gbb_instance *m, unsigned index) {
 static void apu_power_off(gbb_instance *m) {
     memset(m->apu_pulse, 0, sizeof(m->apu_pulse));
     memset(&m->apu_noise, 0, sizeof(m->apu_noise));
-    /* Wave RAM survives NR52 power-off in this scoped DMG software model. */
-    /* MODEL: UNKNOWN GATE-15 research:14 -- NR52 power-off effect on APU state and wave RAM */
+    /* Wave RAM survives NR52 power-off; channel state, including the fetched sample, resets. */
+    /* MODEL: UNKNOWN GATE-15 research:14 -- CGB-E off state is qualified; DMG length retention is unexecuted and outside the frozen baseline */
     memset(&m->apu_wave, 0, offsetof(apu_wave_channel, ram));
     memset((uint8_t *)&m->apu_wave + offsetof(apu_wave_channel, position), 0,
            sizeof(m->apu_wave) - offsetof(apu_wave_channel, position));
@@ -1861,7 +1982,7 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
     if (address == 0xFF01) return m->serial_data;
     /* MODEL: UNKNOWN GATE-17 research:14 -- SC unused bits read differently on CGB (fast clock bit) */
     if (address == 0xFF02) return (uint8_t)(0x7Eu | m->serial_control);
-    /* MODEL: UNKNOWN GATE-18 research:14 -- APU read masks, including NR52 length bits */
+    /* MODEL: BOTH GATE-18 basis=PANDOCS -- APU read masks and channel-status bits */
     if (address == 0xFF10) return (uint8_t)(0x80u | m->apu_pulse[0].sweep);
     if (address == 0xFF11) return (uint8_t)(0x3Fu | (m->apu_pulse[0].duty_length & 0xC0u));
     if (address == 0xFF12) return m->apu_pulse[0].envelope;
@@ -1880,7 +2001,7 @@ static uint8_t read8(const gbb_instance *m, uint16_t address) {
     if (address == 0xFF21) return m->apu_noise.envelope;
     if (address == 0xFF22) return m->apu_noise.polynomial;
     if (address == 0xFF23) return (uint8_t)(0xBFu | (m->apu_noise.control & 0x40u));
-    /* MODEL: UNKNOWN GATE-19 research:14 -- wave RAM access aliasing while the channel is enabled */
+    /* MODEL: BOTH GATE-19 basis="CGB current-byte alias; DMG alias remains scoped software policy" -- active Wave RAM reads */
     if (address >= 0xFF30u && address <= 0xFF3Fu) {
         unsigned index = address - 0xFF30u;
         /* Active access aliases the current byte in this revision-scoped software model. */
@@ -2238,19 +2359,19 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
             }
         }
     }
-    /* MODEL: UNKNOWN GATE-34 research:14 -- NR52 power-off and power-on behaviour */
+    /* MODEL: UNKNOWN GATE-34 research:14 -- CGB-E NR52 transitions are guest-tested; DMG length retention is unexecuted and remains frozen */
     else if (address == 0xFF26) {
         if ((value & 0x80u) == 0u) { m->apu_power = 0u; apu_power_off(m); }
         else if (!m->apu_power) { m->apu_power = 1u; m->apu_sequencer_step = 0u; }
     }
-    /* MODEL: UNKNOWN GATE-35 research:14 -- wave RAM write aliasing while the channel is enabled */
+    /* MODEL: BOTH GATE-35 basis="CGB current-byte alias; DMG alias remains scoped software policy" -- active Wave RAM writes */
     else if (address >= 0xFF30u && address <= 0xFF3Fu) {
         unsigned index = address - 0xFF30u;
         /* CPU-B revision variation in active wave-RAM access is not hardware-qualified. */
         if (m->apu_wave.enabled) index = m->apu_wave.position >> 1;
         m->apu_wave.ram[index] = value;
     }
-    /* MODEL: UNKNOWN GATE-36 research:14 -- APU register writes while powered on */
+    /* MODEL: BOTH GATE-36 basis="APU register writes are gated by NR52 power; Wave RAM is decoded separately" -- APU register writes */
     else if (m->apu_power && address == 0xFF10) {
         if (m->apu_pulse[0].sweep_negate_used &&
             (m->apu_pulse[0].sweep & 8u) != 0u && (value & 8u) == 0u)
@@ -2267,7 +2388,10 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     }
     else if (m->apu_power && address == 0xFF13) m->apu_pulse[0].frequency_low = value;
     else if (m->apu_power && address == 0xFF14) {
-        m->apu_pulse[0].control = (uint8_t)(value & 0x47u);
+        const uint8_t control = (uint8_t)(value & 0x47u);
+        apu_length_enable_write(m, m->apu_pulse[0].control, control,
+                                &m->apu_pulse[0].length, &m->apu_pulse[0].enabled);
+        m->apu_pulse[0].control = control;
         if ((value & 0x80u) != 0u) apu_pulse_trigger(m, 0u);
     }
     else if (m->apu_power && address == 0xFF16) {
@@ -2280,7 +2404,10 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     }
     else if (m->apu_power && address == 0xFF18) m->apu_pulse[1].frequency_low = value;
     else if (m->apu_power && address == 0xFF19) {
-        m->apu_pulse[1].control = (uint8_t)(value & 0x47u);
+        const uint8_t control = (uint8_t)(value & 0x47u);
+        apu_length_enable_write(m, m->apu_pulse[1].control, control,
+                                &m->apu_pulse[1].length, &m->apu_pulse[1].enabled);
+        m->apu_pulse[1].control = control;
         if ((value & 0x80u) != 0u) apu_pulse_trigger(m, 1u);
     }
     else if (m->apu_power && address == 0xFF1A) {
@@ -2294,13 +2421,17 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     else if (m->apu_power && address == 0xFF1C) m->apu_wave.level = (uint8_t)(value & 0x60u);
     else if (m->apu_power && address == 0xFF1D) m->apu_wave.frequency_low = value;
     else if (m->apu_power && address == 0xFF1E) {
-        m->apu_wave.control = (uint8_t)(value & 0x47u);
+        const uint8_t control = (uint8_t)(value & 0x47u);
+        apu_length_enable_write(m, m->apu_wave.control, control,
+                                &m->apu_wave.length, &m->apu_wave.enabled);
+        m->apu_wave.control = control;
         if ((value & 0x80u) != 0u) {
             uint16_t frequency = (uint16_t)(m->apu_wave.frequency_low |
                                             ((m->apu_wave.control & 7u) << 8));
             m->apu_wave.timer = (uint16_t)((2048u - frequency) * 2u);
             m->apu_wave.position = 0u;
-            if (m->apu_wave.length == 0u) m->apu_wave.length = 256u;
+            apu_length_reload_on_trigger(m, &m->apu_wave.length, 256u,
+                                         m->apu_wave.control);
             m->apu_wave.enabled = m->apu_power && m->apu_wave.dac != 0u;
         }
     }
@@ -2314,14 +2445,18 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
     }
     else if (m->apu_power && address == 0xFF22) m->apu_noise.polynomial = value;
     else if (m->apu_power && address == 0xFF23) {
-        m->apu_noise.control = (uint8_t)(value & 0x40u);
+        const uint8_t control = (uint8_t)(value & 0x40u);
+        apu_length_enable_write(m, m->apu_noise.control, control,
+                                &m->apu_noise.length, &m->apu_noise.enabled);
+        m->apu_noise.control = control;
         if ((value & 0x80u) != 0u) {
             m->apu_noise.timer = apu_noise_period(&m->apu_noise);
             m->apu_noise.lfsr = 0x7FFFu;
             m->apu_noise.volume = (uint8_t)(m->apu_noise.envelope >> 4);
             m->apu_noise.envelope_timer = (uint8_t)((m->apu_noise.envelope & 7u) == 0u
                 ? 8u : m->apu_noise.envelope & 7u);
-            if (m->apu_noise.length == 0u) m->apu_noise.length = 64u;
+            apu_length_reload_on_trigger(m, &m->apu_noise.length, 64u,
+                                         m->apu_noise.control);
             m->apu_noise.enabled = m->apu_power && (m->apu_noise.envelope & 0xF8u) != 0u;
         }
     }
@@ -3139,6 +3274,8 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
                                                 ((m->apu_wave.control & 7u) << 8));
                 m->apu_wave.timer = (uint16_t)((2048u - frequency) * 2u);
                 m->apu_wave.position = (uint8_t)((m->apu_wave.position + 1u) & 31u);
+                if (model_is_cgb(m))
+                    m->apu_wave.sample_buffer = m->apu_wave.ram[m->apu_wave.position >> 1];
             }
         }
         if (m->apu_noise.enabled) {
@@ -4175,6 +4312,12 @@ void gbb_test_cpu_snapshot(const gbb_instance *m, gbb_trace_record *record) {
 /* MODEL: BOTH GATE-00 basis="debug seam" */
 uint16_t gbb_test_last_unsupported_address(const gbb_instance *m) {
     return m == NULL ? 0u : m->bus_unsupported_address;
+}
+
+/* Private test seam: exposes the disconnected FF56 latch for lifecycle checks, never public ABI. */
+/* MODEL: BOTH GATE-00 basis="debug seam" */
+uint8_t gbb_test_ir_latch(const gbb_instance *m) {
+    return m == NULL ? 0u : m->ff56;
 }
 
 /* Private test seam, like gbb_test_cpu_snapshot: reports the effective banks, never public ABI. */

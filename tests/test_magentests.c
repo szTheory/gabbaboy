@@ -578,6 +578,12 @@ static int magen_hdma_controls(const char *path) {
 }
 #endif /* GBB_P13_CORE_SOURCE */
 
+static void report_cgb_success(const char *case_id, const char *mode,
+                               const char *assertion_id) {
+    printf("magentests guest-result case=%s model=CGB-CPU-E mode=%s speed=normal observed=pass evaluator_status=pass terminal=1 assertions=1 assertion_id=%s\n",
+           case_id, mode, assertion_id);
+}
+
 int main(int argc, char **argv) {
 #ifdef GBB_P13_CORE_SOURCE
     if (argc == 5 && strcmp(argv[3], "--mutants") == 0) {
@@ -598,17 +604,37 @@ int main(int argc, char **argv) {
         return oob_sram(argv[1], argv[2]);
     if (strcmp(argv[1], "magentests_oob_sram_negative_control") == 0)
         return negative_control(argc - 2, argv + 2);
-    if (strcmp(argv[1], "magentests_cgb_ppu_disabled_state") == 0)
-        return cgb_ppu_disabled_state(argv[1], argv[2]);
-    if (strcmp(argv[1], "magentests_cgb_ppu_disabled_state_compat") == 0)
-        return cgb_ppu_disabled_state_compat(argv[1], argv[2]);
-    if (strcmp(argv[1], "magentests_cgb_oam_internal_priority") == 0)
-        return cgb_oam_internal_priority(argv[1], argv[2]);
-    if (strcmp(argv[1], "magentests_cgb_bg_oam_priority") == 0)
-        return cgb_bg_oam_priority(argv[1], argv[2]);
+    if (strcmp(argv[1], "magentests_cgb_ppu_disabled_state") == 0) {
+        const int result = cgb_ppu_disabled_state(argv[1], argv[2]);
+        if (result == 0) report_cgb_success("ppu_disabled_state:native", "native",
+                                             "lcd-off-stat-mode0-display");
+        return result;
+    }
+    if (strcmp(argv[1], "magentests_cgb_ppu_disabled_state_compat") == 0) {
+        const int result = cgb_ppu_disabled_state_compat(argv[1], argv[2]);
+        if (result == 0) report_cgb_success("ppu_disabled_state:compat", "compat",
+                                             "lcd-off-stat-mode0-display");
+        return result;
+    }
+    if (strcmp(argv[1], "magentests_cgb_oam_internal_priority") == 0) {
+        const int result = cgb_oam_internal_priority(argv[1], argv[2]);
+        if (result == 0) report_cgb_success("oam_internal_priority", "native",
+                                             "oam-internal-priority-source-frame");
+        return result;
+    }
+    if (strcmp(argv[1], "magentests_cgb_bg_oam_priority") == 0) {
+        const int result = cgb_bg_oam_priority(argv[1], argv[2]);
+        if (result == 0) report_cgb_success("bg_oam_priority", "native",
+                                             "bg-oam-priority-source-frame");
+        return result;
+    }
 #ifdef GBB_P13_CORE_SOURCE
-    if (strcmp(argv[1], "magentests_hblank_vram_dma") == 0)
-        return magen_hdma_check(argv[1], argv[2], 0u, 1);
+    if (strcmp(argv[1], "magentests_hblank_vram_dma") == 0) {
+        const int result = magen_hdma_check(argv[1], argv[2], 0u, 1);
+        if (result == 0) report_cgb_success("hblank_vram_dma", "native",
+                                             "hblank-vram-dma-source-contract");
+        return result;
+    }
     if (strcmp(argv[1], "cgb_hdma_magen_controls") == 0)
         return magen_hdma_controls(argv[2]);
 #endif

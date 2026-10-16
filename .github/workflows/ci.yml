@@ -46,10 +46,42 @@ jobs:
           "$runner" --manifest fixtures/mooneye/manifest.json --suite --observe
       - name: Install package
         run: cmake --install build --prefix build/package-prefix
-      - name: Run and verify required test inventory
-        run: |
-          ctest --test-dir build --output-on-failure --no-tests=error --output-junit ctest.xml
-          bash .github/scripts/verify-test-inventory.sh build/ctest.xml tests/expected-tests.txt --installed
+      - name: Begin exact CGB corpus receipt run
+        id: corpus_run
+        run: python3 -I tests/scripts/verify-cgb-corpus-report.py --begin-run --build-dir build --receipt build/cgb-corpus-receipt.json >> "$GITHUB_OUTPUT"
+      - name: Run the full CTest stream once
+        id: full_ctest
+        continue-on-error: true
+        run: ctest --test-dir build -T Test --no-compress-output --test-output-size-passed 16777216 --output-on-failure --no-tests=error --output-junit "cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml"
+      - name: Build the CGB receipt from this CTest output
+        if: always()
+        run: python3 -I tests/scripts/verify-cgb-corpus-report.py --from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json
+      - name: Verify public CGB claims against the fresh receipt
+        if: always()
+        run: python3 -I tests/scripts/verify-cgb-corpus-claims.py --receipt build/cgb-corpus-receipt.json
+      - name: Verify required test inventory from the same CTest output
+        if: always()
+        run: bash .github/scripts/verify-test-inventory.sh "build/cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml" tests/expected-tests.txt --installed
+      - name: Require the full CTest run to pass
+        if: always()
+        env:
+          FULL_CTEST_OUTCOME: ${{ steps.full_ctest.outcome }}
+        run: test "$FULL_CTEST_OUTCOME" = success
+      - name: Verify privacy-safe corpus artifact payload
+        if: always()
+        run: python3 -I tests/scripts/verify-cgb-corpus-artifacts.py --check --build-dir build
+      - name: Retain privacy-safe corpus receipt and diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cgb-corpus-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/cgb-corpus-receipt.json
+            build/cgb-corpus-build-stamp.json
+            build/cgb-corpus-run.json
+            build/cgb-corpus-public-artifacts.json
+          if-no-files-found: warn
+          retention-days: 7
       - name: Print no-host-clock proof
         shell: bash
         run: ctest --test-dir build -R '^no_host_clock$' --no-tests=error -V
@@ -58,7 +90,7 @@ jobs:
         run: bash tests/scripts/verify-dmg-baseline.sh
       - name: Verify DMG baseline JUnit inventory
         shell: bash
-        run: bash tests/scripts/verify-dmg-baseline.sh --junit build/ctest.xml --inventory core
+        run: bash tests/scripts/verify-dmg-baseline.sh --junit "build/cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml" --inventory core
 
   native-macos:
     name: native-macos-arm64

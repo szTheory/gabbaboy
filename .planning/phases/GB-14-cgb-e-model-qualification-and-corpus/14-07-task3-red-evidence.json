@@ -1,0 +1,10 @@
+{
+  "command": "python3 -I tests/test_samesuite_apu_membership.py",
+  "exitCode": 1,
+  "output": "test_exact_apu_membership_is_admitted_and_bound (__main__.SameSuiteApuMembershipTests.test_exact_apu_membership_is_admitted_and_bound) ... FAIL\n\n======================================================================\nFAIL: test_exact_apu_membership_is_admitted_and_bound (__main__.SameSuiteApuMembershipTests.test_exact_apu_membership_is_admitted_and_bound)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"tests/test_samesuite_apu_membership.py\", line 32, in test_exact_apu_membership_is_admitted_and_bound\n    self.assertEqual(\"admitted\", output[\"admission_status\"], f\"required APU output is admitted: {source_id}\")\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'admitted' != 'built-scratch-not-admitted'\n- admitted\n+ built-scratch-not-admitted\n : required APU output is admitted: samesuite:apu/channel_1/channel_1_align.asm\n\n----------------------------------------------------------------------\nRan 1 test in 0.007s\n\nFAILED (failures=1)\n",
+  "targetTest": "test_exact_apu_membership_is_admitted_and_bound",
+  "targetFile": "tests/test_samesuite_apu_membership.py",
+  "expected": "All 70 frozen SameSuite APU outputs are admitted and their source identities and CTests are bound.",
+  "actual": "The first required APU output is still marked built-scratch-not-admitted.",
+  "semanticAssessment": "The named unittest executed its admission-status assertion and failed on the intended missing-admission behavior; setup, collection, and fixtures succeeded."
+}

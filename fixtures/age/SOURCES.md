@@ -16,15 +16,17 @@ The upstream Makefile recipe is `rgbasm -Weverything -I src -I src/_include`,
 at this pinned commit; the rebuild is the provenance. The exact-head Linux
 `fixture-repro` run 38502094682 (PR job 115651190879, source revision
 `301f1b05577e6d35a4c3a756ded1ec15a4082c8d`) used the digest-pinned RGBDS
-1.0.1 Linux archive and reported `result=byte-identical` for all 13
-manifest-listed ROMs. The compare-tampered and selfcheck-tampered negative
+1.0.1 Linux archive and reported `result=byte-identical` for the 13 ROMs
+admitted at that revision. The compare-tampered and selfcheck-tampered negative
 controls also passed. This closes the provisional macOS-versus-Linux byte
-reproduction check; it establishes fixture bytes, not hardware behavior.
+reproduction check for those files; it establishes fixture bytes, not hardware
+behavior.
 
 `bash tests/scripts/reproduce-age.sh --self-check` validates this record and
-the committed digest offline. `--compare` fetches the pinned source and rebuilds
-all manifest-listed ROMs. `--compare-built DIR` compares an already rebuilt
-directory without network access or RGBDS.
+the committed digests offline. `--compare` fetches the pinned source, rebuilds
+all manifest-listed ROMs, and byte-compares each admitted reference with its
+source PNG. `--compare-built DIR` compares an already rebuilt ROM directory
+without network access or RGBDS.
 
 ## Committed-core verdict measurements
 
@@ -68,6 +70,25 @@ is twice the measured half-dots rounded up to the next million.
 | `stat-mode-window-cgbBCE.gb` | 32768 | `69fb62868aa256ff79e77cabb88caab9db43dbe302eb6f4628550d99b7ef12da` | `src/stat-mode-window/stat-mode-window-cgbBCE.asm` | `80` |
 
 The source's `Verified:` lines are author-attested hardware observations, not a
-reproducible receipt. Emulator results are numeric; no screenshot comparison is
-used. Emulator-only context: the build and digest establish bytes, not hardware
-behavior.
+reproducible receipt. The new reference PNGs are source data for a later
+automated pixel oracle, not targets for human screenshot judgment. Emulator-only
+context: the build and digest establish bytes, not hardware behavior.
+
+## Admitted mode-3 source and reference pairs
+
+The six Phase 14 pairs were copied from the exact pinned commit above and are
+covered by the upstream MIT license in `LICENSE.txt`. Source-referenced assets
+retain the licenses listed in the upstream record above. The CGB-E `Verified:`
+line records the author's expected model result; fixture admission does not
+mean the emulator has executed or passed the pixel check. The two SCX source
+paths for native normal and double speed reference byte-identical PNG content
+at this pin; their source paths and guest identities remain separate.
+
+| ROM | ROM bytes / SHA-256 | ASM source bytes / SHA-256 | Reference PNG / bytes / SHA-256 | Mode and source expectation |
+|---|---|---|---|---|
+| `m3-bg-lcdc-cgbBCE.gb` | 32768 / `fabdfd1c3f21df7543186a7303ad645a6b342f9c1ea7c1a4b26b4bb9b821b9f4` | `src/m3-bg-lcdc/m3-bg-lcdc.asm` / 287 / `2f2ba3ecd5135265e9b8033ce967135df928d649fc17ad83c6aea073851e54c7` | `references/m3-bg-lcdc-cgbBCE.png` / 587 / `69a0b85a82eddc884ec225a3c6353622876afe589125809d6517439cbeb91cef` | Native CGB, normal speed; `2021-11-29: CPU CGB E - CPU-CGB-06` |
+| `m3-bg-lcdc-nocgb-ncmBCE.gb` | 32768 / `c7f6a09a69eb2ea550b497f0aea9910b30561623dec0aefbe9b16fd0d622b460` | `src/m3-bg-lcdc/m3-bg-lcdc-nocgb.asm` / 328 / `5c726a8548fd254d5826888d692b6bca51e8d05a35b985d4a491cbda55effb1a` | `references/m3-bg-lcdc-nocgb-ncmBCE.png` / 689 / `f4dbb03aff6fbd95c69eb85d264712b28727a1403f81b28ebba357bceb02f908` | CGB-E in DMG compatibility mode, normal speed; `2021-11-29: CPU CGB E - CPU-CGB-06 (non-CGB mode)` |
+| `m3-bg-lcdc-ds-cgbBCE.gb` | 32768 / `e84cb10803c49197e4197347ffca138883fb628121d16308ccf4e5b6f657c55c` | `src/m3-bg-lcdc/m3-bg-lcdc-ds.asm` / 260 / `579a3764a5a1a2d5fe70a63833ac9884ff9e06c86a1561d09f7c2a548bc3c9f8` | `references/m3-bg-lcdc-ds-cgbBCE.png` / 559 / `804f5692b2d4897a6edcf2691004f1484cfbf9b77f5f779923aba91237a5abba` | Native CGB, double speed; `2021-11-29: CPU CGB E - CPU-CGB-06` |
+| `m3-bg-scx-cgbBCE.gb` | 32768 / `ac6726b81af5e3d3a88aa8b9ba80f9b72b629b408f3d5ebc6824ec1a3e22852e` | `src/m3-bg-scx/m3-bg-scx.asm` / 285 / `9b9bce116583ca1700c5d0b178002d0be665e52974f531224a10effd44dd51f5` | `references/m3-bg-scx-cgbBCE.png` / 448 / `6895b6111d432ea5f0422991a1d7143f1fe133481e018b3c8652616af759085d` | Native CGB, normal speed; `2021-12-01: CPU CGB E - CPU-CGB-06` |
+| `m3-bg-scx-nocgb-ncmBCE.gb` | 32768 / `bf76542319c2a0bf0f428cdde7f9a9ec3dd50e7cac86dc57783005b2e79dcdf3` | `src/m3-bg-scx/m3-bg-scx-nocgb.asm` / 326 / `22375b480fae68a6af3b63fd71c77213967851a8eb537b35f17ee8bb11f43a9b` | `references/m3-bg-scx-nocgb-ncmBCE.png` / 449 / `1224f9f27644355067bec6e17f3db619926b85fbcd90ec8b06e5fa93ec536114` | CGB-E in DMG compatibility mode, normal speed; `2021-12-01: CPU CGB E - CPU-CGB-06 (non-CGB mode)` |
+| `m3-bg-scx-ds-cgbBCE.gb` | 32768 / `0756e38b86bef3ac4ce183b982f4f228c73f8e9bb5a5212e3bd1b48527e9759e` | `src/m3-bg-scx/m3-bg-scx-ds.asm` / 258 / `8f6e0301f6aff5122c16c9a1c483e4852ea3bb2e0dd34ef26728f60096d29e88` | `references/m3-bg-scx-ds-cgbBCE.png` / 448 / `6895b6111d432ea5f0422991a1d7143f1fe133481e018b3c8652616af759085d` | Native CGB, double speed; `2021-12-01: CPU CGB E - CPU-CGB-06` |

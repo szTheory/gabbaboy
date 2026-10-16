@@ -1,0 +1,10 @@
+{
+  "command": "python3 -I tests/scripts/test_age_phase14_inherited_contract.py",
+  "exitCode": 1,
+  "output": "F\n======================================================================\nFAIL: test_all_research14_gates_have_owned_dispositions (__main__.InheritedPhase14Contract.test_all_research14_gates_have_owned_dispositions)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"tests/scripts/test_age_phase14_inherited_contract.py\", line 25, in test_all_research14_gates_have_owned_dispositions\n    self.assertEqual(\n    ~~~~~~~~~~~~~~~~^\n        RESEARCH14_GATES,\n        ^^^^^^^^^^^^^^^^^\n        {row.get(\"gate\") for row in rows},\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n        \"inventory must name every inherited research14 gate\",\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\nAssertionError: Items in the first set but not the second:\n'GATE-33'\n'GATE-54'\n'GATE-17'\n'GATE-48'\n'GATE-77'\n'GATE-49'\n'GATE-10'\n'GATE-55'\n'GATE-41'\n'GATE-44'\n'GATE-76'\n'GATE-40'\n'GATE-35'\n'GATE-29'\n'GATE-18'\n'GATE-14'\n'GATE-27'\n'GATE-34'\n'GATE-47'\n'GATE-19'\n'GATE-01'\n'GATE-36'\n'GATE-20'\n'GATE-15'\n'GATE-62'\n'GATE-13'\n'GATE-02'\n'GATE-28'\n'GATE-32'\n'GATE-24'\n'GATE-50' : inventory must name every inherited research14 gate\n\n----------------------------------------------------------------------\nRan 1 test in 0.004s\n\nFAILED (failures=1)\n",
+  "targetTest": "test_all_research14_gates_have_owned_dispositions",
+  "targetFile": "tests/scripts/test_age_phase14_inherited_contract.py",
+  "expected": "The exact 31 inherited research14 gates have owned evidence dispositions in the frozen inventory.",
+  "actual": "The target unittest ran and found no research14 disposition rows in the inventory.",
+  "semanticAssessment": "Valid RED: the named target assertion failed because the complete research14 ownership ledger is absent; inventory loading and unittest collection succeeded."
+}
