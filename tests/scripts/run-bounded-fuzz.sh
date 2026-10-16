@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 BUILD_DIR=${GBB_BUILD_DIR:-"$ROOT/build-asan"}
 MODE=${1:-}
+VERIFY="$ROOT/tests/scripts/verify-v02-fuzz.py"
 
 runtime_available() {
   command -v clang >/dev/null 2>&1 || return 1
@@ -38,16 +39,15 @@ case "$MODE" in
     grep -q 'FUZZ_RUN_LIMIT UINT64_C(2048)' "$ROOT/tests/fuzz_core.c"
     grep -q 'FUZZ_INPUT_HALF_DOT_LIMIT UINT64_C(8192)' "$ROOT/tests/fuzz_core.c"
     [[ -f "$fuzz_dictionary" ]]
-    [[ $(grep -F '"$fuzz_binary" "$corpus"' "$ROOT/tests/scripts/run-bounded-fuzz.sh" |
-         grep -F -c -- '-dict="$fuzz_dictionary"') -eq 2 ]]
-    grep -q -- '-max_len=65536' "$ROOT/tests/scripts/run-bounded-fuzz.sh"
-    grep -q -- '-max_total_time=60' "$ROOT/tests/scripts/run-bounded-fuzz.sh"
-    grep -q -- '-rss_limit_mb=512' "$ROOT/tests/scripts/run-bounded-fuzz.sh"
-    grep -q -- '-jobs=1' "$ROOT/tests/scripts/run-bounded-fuzz.sh"
-    if runtime_available; then
-      echo "self-test=pass libfuzzer_runtime=available limits=input:65536,operations:16,half_dots_per_input:8192,half_dots_per_run:2048,time:2s/60s,rss:512MiB,workers:1"
+    if [[ -f "$BUILD_DIR/v02-fuzz-receipt.json" ]]; then
+      python3 -I "$VERIFY" --self-test --receipt "$BUILD_DIR/v02-fuzz-receipt.json"
     else
-      echo "self-test=pass libfuzzer_runtime=unsupported deterministic_regressions=required"
+      python3 -I "$VERIFY" --self-test
+    fi
+    if runtime_available; then
+      echo "self-test=pass libfuzzer_runtime=available campaign=not-verified"
+    else
+      echo "self-test=pass libfuzzer_runtime=unsupported campaign=hosted-required"
     fi
     ;;
   --fast)
@@ -78,25 +78,14 @@ case "$MODE" in
     fi
     ;;
   --explore)
-    [[ -x "$fuzz_binary" ]] || {
-      echo "fuzzer=unsupported build a matching Clang libFuzzer target before exploration" >&2
+    [[ $# -eq 3 && "$2" == "--receipt" ]] || {
+      echo "Usage: $0 --explore --receipt PATH" >&2
       exit 2
     }
-    BUILD_DIR=$(cd "$BUILD_DIR" && pwd)
-    fuzz_binary="$BUILD_DIR/tests/fuzz_core"
-    corpus="$BUILD_DIR/fuzz-corpus"
-    mkdir -p "$corpus"
-    if [[ ! -f "$corpus/tracer.gb" ]]; then
-      cp "$ROOT/fixtures/tracer/tracer.gb" "$corpus/tracer.gb"
-    fi
-    mkdir -p "$BUILD_DIR/fuzz-artifacts"
-    (cd "$BUILD_DIR" && "$fuzz_binary" "$corpus" -max_len=65536 -dict="$fuzz_dictionary" -max_total_time=60 \
-      -timeout=2 -rss_limit_mb=512 -jobs=1 -workers=1 \
-      -artifact_prefix="$BUILD_DIR/fuzz-artifacts/")
-    echo "Minimized corpus retained at $corpus"
+    python3 -I "$VERIFY" --produce --build-dir "$BUILD_DIR" --receipt "$3"
     ;;
   *)
-    echo "Usage: $0 --self-test | --fast | --explore" >&2
+    echo "Usage: $0 --self-test | --fast | --explore --receipt PATH" >&2
     exit 2
     ;;
 esac
