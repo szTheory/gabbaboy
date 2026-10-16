@@ -63,7 +63,7 @@ All rows have severity **high**, disposition **mitigate** and status **closed**.
 
 The auditor ran 40 focused native/parser/receipt/claim/package positive and negative checks, all passing. Its `LastTest.log` contains 34 `Test Passed.` records and six `Test Pass Reason:` records, with zero failed records. The independently inspected Wave 11 JUnit has 1,136 passing cases, zero failures/errors/skips and SHA-256 `ab6b02a9b515499bcd406c9dd1311757c48143e24bf7dca7c16e5a8dbd5496b0`.
 
-The complete receipt binds source `f8260549009f3150dc82de801373f40de3a02aa0`: 107/107 completed cases, 25 actual passes, 82 matched expected failures, 2,845/4,959 passing assertion rows and 18,208/138,240 mismatching image pixels. Subsequent qualification commits changed metadata only; the unrelated CMake blank line was preserved. These are software-model observations, not hardware passes.
+The complete receipt binds source `f8260549009f3150dc82de801373f40de3a02aa0`: 107/107 completed cases, 25 actual passes, 82 matched expected failures, 2,845/4,959 passing assertion rows and 18,208/138,240 mismatching image pixels. At that audit, subsequent qualification commits had changed metadata only; the unrelated CMake blank line was preserved. These are software-model observations, not hardware passes.
 
 Original execution IDs and the privacy RED limitation are retained in [14-HISTORY-REDACTION.md](14-HISTORY-REDACTION.md). Task 14-12-3's absent pre-implementation RED is an explicit process deviation, not reconstructed evidence. Current positive/negative runtime mitigations remain independently verified.
 
@@ -85,3 +85,7 @@ No accepted risks. No transfers. No additional unregistered threat flags were id
 | Threats found | 27 |
 | Closed | 27 |
 | Open | 0 |
+
+## Post-review tooling changes
+
+Independent code review subsequently found two Windows portability blockers in the existing report adapter. The native executable suffix fix and bounded Windows pipe reader retain the T-14-21 identity checks and T-14-22 finite output/deadline boundaries. Their eight positive/negative controls and all 13 report-contract tests passed; an independent recheck closed both findings without a new material issue. The final full regression at actual producer `0018d4a9b8bfa0e60890be7fb3386b73601e0eb2` passed 1,136/1,136 with no skips and rebuilt the complete 107-case receipt; see `14-CLOSURE.md` for source-bound hashes. The register remains 27 closed and zero open. Local Windows behavior was simulated; hosted native Windows execution is a separate exact-head check.

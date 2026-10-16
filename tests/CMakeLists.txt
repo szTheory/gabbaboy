@@ -1356,6 +1356,7 @@ set_tests_properties(cgb_age_assertion_controls PROPERTIES TIMEOUT 30
 add_test(NAME cgb_phase14_inherited_contract_unit
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/test_age_phase14_inherited_contract.py")
 set_tests_properties(cgb_phase14_inherited_contract_unit PROPERTIES TIMEOUT 30)
+
 add_test(NAME cgb_research14_dispositions
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_AGE_PHASE14_CONTRACT}" --research14)
 set_tests_properties(cgb_research14_dispositions PROPERTIES TIMEOUT 30

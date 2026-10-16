@@ -709,6 +709,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Remedy:** For each model-visible change, trace consumers across runner/report adapters, gate tables, manifest/disposition validators, stable assertion-ID checks, documentation checks, CMake registrations, expected-test inventory, and CI. Keep source expectations and guest observations distinct at every layer.
 - **Applies when:** A source pin, manifest classification, model/mode cell, gate disposition, row ID, or receipt schema changes.
 - **Verification:** `verify-cgb-corpus-inventory.py --bindings` and `--self-test`; `verify-age-phase14-contract.py --research14` and `--research14-controls`; CTest `cgb_age_assertion_identity`, `cgb_research14_dispositions`, and `cgb_phase14_inherited_contract_unit`. Static bindings cover 181 sources, 109 outputs, and 107 cases; stable AGE assertion identities remain checked.
+- **Player-copy supplement (2026-10-16):** UI scope review found that the core-only build omitted the player exact-string consumer after the limitation copy changed. Refresh the intended string and run `player_limitations`, `player_claims_agree`, and `player_claims_agree_mutated` in a player-enabled build; all 3 passed. Include optional adapters in the consumer sweep even when no UI layout changes.
 - **Source:** Phase 14 plans 14-10 through 14-13; `14-10-SUMMARY.md`, `14-12-SUMMARY.md`, and `14-13-SUMMARY.md`.
 - **Status:** Adopted.
 
@@ -755,4 +756,13 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Applies when:** A continued phase discovers that a previous task skipped its RED gate or a historical fixture/result is missing.
 - **Verification:** The current Task 3 privacy assertion failed against the five actual leaking records and was classified `RED_EVIDENCE_OK` before the sanitization commit; the records then pass the privacy test. The 14-12 summary still explicitly reports its missing RED.
 - **Source:** `14-12-SUMMARY.md` Task 3 deviation; `14-13-task3-red-evidence.json`; `14-13-SUMMARY.md` TDD gate record.
+- **Status:** Adopted.
+
+### GB-CI-008 / 2026-10-16 / Exercise native artifact names and subprocess pipes before declaring tooling portable
+
+- **Cause and evidence:** Phase 14 independent review found that the default build-stamp target assumed extensionless binaries and registered anonymous pipes with selectors. Both assumptions fail on Windows, even though the native C code and local macOS corpus passed.
+- **Remedy:** Use the native executable suffix at every artifact and launch path. Use a bounded Windows pipe reader with a capped queue, deadline and process/reader cleanup; retain POSIX process-group cleanup. Keep the existing Windows CI job as actual platform evidence, with local simulations catching these defects earlier.
+- **Applies when:** A Python build or evidence adapter hashes or launches native binaries or captures subprocess output across platforms.
+- **Verification:** The report adapter's 8 focused positive/negative controls and all 13 report-contract tests passed; the independent fix recheck found no remaining material issues. Actual Windows execution must be established by the exact-head hosted job, not inferred from the simulations.
+- **Source:** `14-REVIEW.md`, `14-REVIEW-FIX.md`, `14-REVIEW-RECHECK.md`; fixes `e1deb42` and `bfd6f09`.
 - **Status:** Adopted.
