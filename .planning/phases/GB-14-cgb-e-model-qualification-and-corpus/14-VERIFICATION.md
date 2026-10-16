@@ -1,6 +1,6 @@
 ---
 phase: GB-14-cgb-e-model-qualification-and-corpus
-verified: "2026-10-16T03:25:12Z"
+verified: "2026-10-16T12:32:37Z"
 status: passed
 score: 41/41 must-haves verified
 covered_files:
@@ -59,8 +59,13 @@ covered_files:
   - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-REVIEW.md
   - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-SECURITY.md
   - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-SOURCE-COVERAGE.md
+  - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT-REVIEW.md
+  - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md
   - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-UI-REVIEW.md
   - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-VALIDATION.md
+  - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/COVERAGE.md
+  - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/continue.md
+  - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/verify-uat-contract.py
   - README.md
   - cmake/AgeFixtureProtocol.cmake
   - cmake/ScanForbiddenFixtures.cmake
@@ -213,7 +218,7 @@ covered_files:
   - tests/test_samesuite_apu.c
   - tests/test_samesuite_apu_membership.py
   - tests/test_samesuite_hdma.c
-covered_digest: "v3:sha256:a5de497f60a51cadfbc4a51e17733fc760971e7921562ca935e9e30b9eb98ffd"
+covered_digest: "v3:sha256:187635d0be89d8ee67cbd14affabc4c2a4a7ebf558eb7123dc781fd5691945d6"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
@@ -227,9 +232,9 @@ re_verification:
 # Phase 14: CGB-E Model Qualification and Corpus Verification Report
 
 **Phase Goal:** CGB-E specific APU and I/O differences are implemented under declared per-test applicability, and a headless CGB-E corpus reports honest denominators.
-**Verified:** 2026-10-16T03:25:12Z
+**Verified:** 2026-10-16T12:32:37Z
 **Status:** passed
-**Re-verification:** Yes — refreshed the prior passing 41/41 report for portability fixes and their new registered prevention controls.
+**Re-verification:** Yes — refreshed the prior passing 41/41 goal verification after automated UAT closure and a fresh local regression.
 
 ## Goal Achievement
 
@@ -238,8 +243,8 @@ re_verification:
 | # | Truth | Status | Evidence |
 |---|---|---|---|
 | R1 | PCM12/PCM34, FF72–FF75 masked registers and the IR port stub behave as specified on CGB-E, with per-test model applicability and named expected failures in the manifests. | ✓ VERIFIED | src/core/gabbaboy.c routes guest FF76/FF77 reads through timed CGB I/O; the bus tests cover PCM values, FF72–FF75, FF56 and compatibility mode. Corpus manifests bind applicability and exact outcomes, including channel_4_freq_change. |
-| R2 | A headless CGB-E corpus reports per-suite passed/executed denominators with each failure and exclusion reason, and Mealybug m3_* cases are recorded as unsupported-model. | ✓ VERIFIED | The producer receipt reports 107/107 required cases completed with per-suite counts; the pinned inventory and public CGB profile record optional G1 exclusions and 30 Mealybug m3_* unsupported-model entries. |
-| R3 | The DMG baseline remains byte-identical after the CGB-E deltas land. | ✓ VERIFIED | The refreshed producer CTest XML includes a passing dmg_baseline test; the frozen core DMG JUnit inventory check passed all 258 expected names. |
+| R2 | A headless CGB-E corpus reports per-suite passed/executed denominators with each failure and exclusion reason, and Mealybug m3_* cases are recorded as unsupported-model. | ✓ VERIFIED | Fresh nonce-bound receipt from producer cd3f6856c48df99a43665a96d99176d9557a6578: 107/107 required cases completed, 25 observed passes and 82 matched xfails; AGE 2/19, MagenTests 5/5, Mooneye 6/9 and SameSuite 12/74. The pinned inventory and public profile preserve optional rights/model exclusions and 30 Mealybug m3_* unsupported-model entries. |
+| R3 | The DMG baseline remains byte-identical after the CGB-E deltas land. | ✓ VERIFIED | The fresh regression JUnit includes a passing `dmg_baseline`; `bash tests/scripts/verify-dmg-baseline.sh --junit build/phase14-uat-regression.xml --inventory core` passes with all 258 frozen names. |
 | 1 | 14-01: CGB-native guest reads FF76/FF77 as CH2:CH1 and CH4:CH3 digital nibbles at the timed bus boundary. | ✓ VERIFIED | tests/test_cgb_apu.c guest programs read the nibbles and assert exact values; cgb_pcm_tracer passed in the focused run and full producer suite. |
 | 2 | 14-01: Changing host routing, volume, mute, sample capacity or drain does not change digital PCM observations. | ✓ VERIFIED | The guest PCM host-invariance and routing controls assert identical values across host configurations; all corresponding CTests pass in the refreshed 1138-test producer run. |
 | 3 | 14-01: The DMG output baseline remains byte-identical. | ✓ VERIFIED | Frozen baseline check passed; its 258-name core JUnit inventory matches the producer XML. |
@@ -277,7 +282,7 @@ re_verification:
 | 35 | 14-12: Existing installed/package consumers remain valid without installing qualification fixtures. | ✓ VERIFIED | Package scan and renamed-fixture negative controls are wired in CMake/CI; final CTest and required installed-inventory checks pass without fixture installation. |
 | 36 | 14-13: Public CGB/audio/preview claims agree with exact executed software-model evidence and named limitations. | ✓ VERIFIED | Public claims bind to inventory/dispositions and the producer receipt; the static claim contract passed 15 negative controls and retains physical, analog, peer and game limits. |
 | 37 | 14-13: Source, required membership, observed results, gate ownership and evidence ancestry remain navigable and automatically checked. | ✓ VERIFIED | Public docs link to inventory, receipts and gate ownership; corpus claims, inventory, privacy and source identity validators pass. |
-| 38 | 14-13: Phase14 ends at its verification/handoff boundary with both automatic-advance flags false and Phase15 unstarted. | ✓ VERIFIED | Current config has both automatic-advance flags false; STATE.md keeps Phase 14 current with automated UAT as the next stage, and Phase 15 remains unstarted. |
+| 38 | 14-13: Phase14 ends at its verification/handoff boundary with both automatic-advance flags false and Phase15 unstarted. | ✓ VERIFIED | `verify-uat-contract.py` passes 49/49 deliverables and 13/13 bounded commit windows; its self-test passes 29 negative controls. `.planning/state.json` records Phase 14 complete, Phase 15 pending and `/gsd-discuss-phase 15`; both auto-advance flags remain false. |
 
 **Score:** 41/41 truths verified (0 present, behavior-unverified).
 
@@ -330,7 +335,7 @@ The generic literal-reference checker marked 12 of 13 links false because severa
 | Artifact | Data Variable | Source | Produces Real Data | Status |
 |---|---|---|---|---|
 | Guest PCM tests | FF76/FF77 read values | Timed CGB APU state in gabbaboy.c | Yes; guest bus reads are compared with exact nibble expectations | ✓ FLOWING |
-| Corpus receipt | Case and assertion rows | Structured output from gabbaboy-runner and CTest XML | Yes; producer receipt contains 107 actual terminal cases and reconciled assertions | ✓ FLOWING |
+| Corpus receipt | Case and assertion rows | Structured output from gabbaboy-runner and CTest XML | Yes; fresh source-bound receipt contains 107 terminal cases and 4,959 reconciled assertions | ✓ FLOWING |
 | Inventory bindings | Case identities | Four pinned manifests and source/output digests | Yes; validator reports 181 candidates, 109 outputs and 107 fixed cases | ✓ FLOWING |
 | AGE pixel results | RGB555 frame pixels | test_age_m3 guest execution; expected pixels decoded from pinned upstream PNG | Yes; per-pixel comparison reports exact mismatches and signatures | ✓ FLOWING |
 
@@ -338,21 +343,22 @@ The generic literal-reference checker marked 12 of 13 links false because severa
 
 | Behavior | Command/evidence | Result | Status |
 |---|---|---|---|
-| Fresh source-bound post-portability regression | build/phase14-post-ci-regression.xml; SHA-256 a87dd13d0e65b83f4827860c699473bdf36c33bebba019b544b2b1b4a16363b1 | 1138/1138 passed; 0 failures, errors or skips | ✓ PASS |
-| CGB PCM and CH3 latch/fetch | ctest --test-dir build --output-on-failure --no-tests=error -R '^(cgb_pcm_tracer|cgb_pcm_tracer_control|cgb_apu_wave_latch|cgb_apu_wave_fetch|cgb_apu_wave_direct_ram_control)$' | 5/5 passed, including negative controls | ✓ PASS |
-| Corpus inventory/report controls | CTest selection for inventory self-test, report contract, report controls and tracer controls | 4/4 passed | ✓ PASS |
-| Current static corpus contracts | verify-cgb-corpus-inventory.py --bindings; verify-cgb-corpus-artifacts.py --check; verify-cgb-corpus-claims.py --self-test | 181/109/107 bindings pass; three privacy JSON files pass; 15 claim mutants rejected | ✓ PASS |
+| Fresh source-bound full regression | build/phase14-uat-regression.xml; SHA-256 7b1ececc5221becf764b7c6fecd4da1e2ac2d4d805884739218e8ee9d39f192d | Producer cd3f6856c48df99a43665a96d99176d9557a6578; 1,138/1,138 passed, 0 failures/errors/skips; installed inventory 1,138/1,138 and DMG inventory 258/258 | ✓ PASS |
+| Final automated UAT closure | `python3 .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/verify-uat-contract.py`; `python3 .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/verify-uat-contract.py --self-test` | 49/49 deliverables, 13/13 commit windows and 29 negative controls pass (17 closure, 10 handoff, 2 commit) | ✓ PASS |
+| CGB PCM and CH3 latch/fetch | Fresh full regression JUnit: `cgb_pcm_tracer`, `cgb_pcm_tracer_control`, `cgb_apu_wave_latch`, `cgb_apu_wave_fetch`, `cgb_apu_wave_direct_ram_control` | 5/5 passed, including negative controls | ✓ PASS |
+| Corpus inventory/report controls | Fresh full regression JUnit: `cgb_corpus_inventory`, `cgb_corpus_inventory_controls`, `cgb_corpus_report_contract`, `cgb_corpus_report_controls`, `cgb_corpus_ci_contract` | 5/5 passed | ✓ PASS |
+| Fresh configured corpus checks | `verify-cgb-corpus-inventory.py --bindings`; `verify-cgb-corpus-artifacts.py --check --build-dir build`; `verify-cgb-corpus-claims.py --receipt build/cgb-corpus-receipt.json` | 181 sources, 109 outputs and 107 required cases bind; privacy allowlist and claim checks pass | ✓ PASS |
 | Pinned AGE reproduction | reproduce-age.sh --compare with pinned RGBDS 1.0.1 | Six ROMs and six source PNGs byte-identical | ✓ PASS |
 | Pinned SameSuite reproduction | reproduce-samesuite.sh --compare-pinned with pinned RGBDS 1.0.1 | 74 fixture outputs byte-identical | ✓ PASS |
 | Pinned Mooneye CGB reproduction | reproduce-mooneye-cgb.sh --compare fixtures/mooneye-cgb | All nine ROMs byte-identical | ✓ PASS |
 | Post-portability prevention controls | `cgb_samesuite_apu_source_eol_controls`, `cgb_corpus_report_platform_controls` in the refreshed JUnit | Both required cases appear and pass; includes pinned LF/CRLF controls and all eight Windows executable/pipe regression methods | ✓ PASS |
-| Source-bound CGB receipt | build/cgb-corpus-receipt.json; SHA-256 75fbfb6b19214255e95f3537bb53339aa5f89d1b1302e5f2b4c69036faa1079d | Producer 4fe97f8784ee9c8382dc014c13bc8bbff6f777c4; 107/107 complete; 25 observed pass, 82 matched xfail; 2845/4959 assertions pass; 18208/138240 image pixels mismatch | ✓ PASS |
+| Source-bound CGB receipt | build/cgb-corpus-receipt.json; SHA-256 f14198a579f2cc8b1577a136a5998f2835a4fc65d3021096974a28d9758292de | Producer cd3f6856c48df99a43665a96d99176d9557a6578, nonce d6c53ece9cb5aa28f15ab663d1539b24; 107/107 complete (25 observed pass, 82 matched xfail); 2,845/4,959 assertions pass; 18,208/138,240 image pixels mismatch | ✓ PASS |
 | Stale stream/report controls | Refreshed corpus-report contract/control tests in the producer JUnit | Missing, duplicate, stale, malformed, wrong-identity, membership and unexpected-result controls remain required and pass | ✓ PASS |
-| Frozen DMG inventory | Producer JUnit checked against frozen core inventory | 258 expected test identities, including dmg_baseline, passed | ✓ PASS |
+| Frozen DMG inventory | `bash tests/scripts/verify-dmg-baseline.sh --junit build/phase14-uat-regression.xml --inventory core` | All 258 expected identities pass, including `dmg_baseline` | ✓ PASS |
 
 The corpus receipt reports suite results separately: AGE 2/19 observed pass and 17 exact xfails; MagenTests 5/5 pass; Mooneye 6/9 pass and 3 exact xfails; SameSuite 12/74 pass and 62 exact xfails (the 74 comprise 70 APU plus four DMA cases). These are software-model observations. Matched xfails do not inflate pass counts.
 
-The receipt's `identity.core_revision` is producer `4fe97f8784ee9c8382dc014c13bc8bbff6f777c4`; the receipt is not relabeled to current metadata HEAD `e473102357481871eb17352635607c7dfb0ef3c6`. The only changes after the producer are closure/security/validation/state metadata. The final exact-head hosted CI must configure, build, run and construct its own receipt before that delivery gate closes. The new controls exercise Windows-specific path, executable and pipe behavior locally, but no final hosted Windows, CMake-floor or sanitizer result is claimed.
+The receipt's `identity.core_revision` is producer `cd3f6856c48df99a43665a96d99176d9557a6578`, matching the full local regression JUnit and current source HEAD. No core, CI or product inputs changed after hosted execution head `9c5b32dc4c75ad5f9eba44ff1c7b0a15ba0f9c7f`; the later commits add UAT closure and handoff metadata. The hosted green receipt remains attached to `9c5b32dc4c75ad5f9eba44ff1c7b0a15ba0f9c7f`, and the final metadata head still requires its own exact-head hosted checks. The local checks do not claim final hosted Windows, CMake-floor or sanitizer results.
 
 ## Probe Execution
 
@@ -387,9 +393,9 @@ The installed decision-coverage verifier found 25/25 trackable CONTEXT.md decisi
 
 ## Gaps Summary
 
-No must-have gap was found. The CGB-E specific guest APU and I/O behavior is implemented under explicit per-test applicability, and the headless corpus produces reconciled suite denominators and named pass/xfail/exclusion outcomes. The refreshed complete local regression passes 1,138/1,138 and its receipt remains source-bound to producer revision 4fe97f8784ee9c8382dc014c13bc8bbff6f777c4. Later metadata HEAD e473102357481871eb17352635607c7dfb0ef3c6 is not used to relabel that evidence. The pending exact-head hosted CI result is a separate delivery check, not a human UAT item or a claim of remote success.
+No must-have gap was found. Fresh receipt-backed local evidence at source cd3f6856c48df99a43665a96d99176d9557a6578 confirms the 107-case software corpus and its declared pass/xfail denominators, while the full 1,138-test regression and 258-name frozen DMG inventory pass. The 49/49 automated UAT contract closes all 13 bounded windows with 29 passing negative controls and keeps the Phase 15 pause explicit. Hosted green remains bound to execution head 9c5b32dc4c75ad5f9eba44ff1c7b0a15ba0f9c7f; exact-head hosted checks for final UAT metadata are still a separate delivery check.
 
 ---
 
-_Verified: 2026-10-16T03:25:12Z_
+_Verified: 2026-10-16T12:32:37Z_
 _Verifier: the agent (gsd-verifier)_
