@@ -85,7 +85,7 @@ def check_game(root: Path) -> int:
 
 
 def check_readme(root: Path) -> int:
-    text = read_document(root, README)
+    text = " ".join(read_document(root, README).split())
     checks = 0
     require(ABSENCE_STATEMENT in text,
             f"absence-statement-missing:{README}")

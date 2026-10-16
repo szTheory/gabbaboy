@@ -13,9 +13,11 @@ model through SDL3. The player runs DMG and CGB software with `--model auto|dmg|
 Native CGB guest code can read FF76/FF77 digital DAC inputs on the CGB-CPU-E
 software model; CGB compatibility mode reads `$FF`. Those guest register observations do not change the player's
 DMG APU playback model; current corpus results come from the versioned private
-receipt. No physical CGB-E, analog audio, or general game compatibility claim
-follows from these software tests. See the [CGB corpus contract](docs/cgb-corpus.md)
-and [audio and playback contract](docs/audio-and-playback.md).
+receipt. No CGB game-level evidence exists. CGB test-ROM corpus results are
+software-model evidence, not game acceptance. Physical CGB-E remains
+UNKNOWN/POLICY. No physical or perceptual audio/color qualification is claimed.
+See the [CGB corpus contract](docs/cgb-corpus.md), [audio and playback
+contract](docs/audio-and-playback.md), and [game acceptance evidence](docs/game-acceptance.md).
 
 ## Audio and playback evidence
 
