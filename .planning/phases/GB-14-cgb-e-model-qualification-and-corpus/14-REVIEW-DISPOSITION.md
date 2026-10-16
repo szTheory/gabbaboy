@@ -11,9 +11,33 @@ findings:
     severity: critical
     disposition: fixed
     title: "Bounded subprocess reader cannot register Windows pipes"
+  - id: CR-03
+    severity: critical
+    disposition: fixed
+    title: "Configured builds fall back to the default build directory"
+  - id: CR-04
+    severity: critical
+    disposition: fixed
+    title: "Windows checkout rewrites raw-digested source bytes"
+  - id: CR-05
+    severity: critical
+    disposition: fixed
+    title: "AGE row identity uses a slash-only basename"
+  - id: CR-06
+    severity: critical
+    disposition: fixed
+    title: "Missing-ROM control rewrites the pinned manifest"
+  - id: CR-07
+    severity: critical
+    disposition: fixed
+    title: "Build stamp fingerprints a different CTest than its consumers"
+  - id: CR-08
+    severity: critical
+    disposition: fixed
+    title: "AGE child deadline ignores sanitizer slowdown"
 open: 0
-total: 2
-recorded: 2026-10-16T02:02:04.140Z
+total: 8
+recorded: 2026-10-16T03:11:51.570Z
 ---
 
 # Phase 14: Code Review Disposition
@@ -22,6 +46,12 @@ recorded: 2026-10-16T02:02:04.140Z
 |---------|----------|-------------|--------|
 | CR-01 | critical | fixed | 14-REVIEW-FIX.md |
 | CR-02 | critical | fixed | 14-REVIEW-FIX.md |
+| CR-03 | critical | fixed | 14-REVIEW-FIX.iter2.md |
+| CR-04 | critical | fixed | 14-REVIEW-FIX.iter2.md |
+| CR-05 | critical | fixed | 14-REVIEW-FIX.iter2.md |
+| CR-06 | critical | fixed | 14-REVIEW-FIX.iter2.md |
+| CR-07 | critical | fixed | 14-REVIEW-FIX.iter3.md |
+| CR-08 | critical | fixed | 14-REVIEW-FIX.iter4.md |
 
 Dispositions: `open` (recorded, not yet triaged), `fixed`, `skipped`, `deferred`.
 Set `deferred` by hand and put the reason in the Source cell; both are preserved. A `|` in the reason is kept as prose and escaped on the next run.

@@ -766,3 +766,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** The report adapter's 8 focused positive/negative controls and all 13 report-contract tests passed; the independent fix recheck found no remaining material issues. Actual Windows execution must be established by the exact-head hosted job, not inferred from the simulations.
 - **Source:** `14-REVIEW.md`, `14-REVIEW-FIX.md`, `14-REVIEW-RECHECK.md`; fixes `e1deb42` and `bfd6f09`.
 - **Status:** Adopted.
+
+### GB-CI-009 / 2026-10-16 / Test configured paths, byte identity and nested deadlines at the real producer boundary
+
+- **Cause and evidence:** Phase 14 hosted floor/sanitizer builds exposed five adapters hardcoded to `build`; Windows exposed CRLF drift in raw-digested sources, a slash-only row identity and a reserialized control manifest. Independent review then found the stamp hashing PATH CTest while consumers used pinned CTest. The sanitizer adapter retained an unscaled 15-second child deadline inside a scaled outer CTest.
+- **Remedy:** Propagate the actual binary directory and configured CTest through producer and consumers; verify the real stamp and reject a substituted tool hash. Pin only raw-digested source bytes, copy admitted manifests byte-for-byte, reuse the bounded portable basename helper, and scale child deadlines explicitly while keeping strict finite caps. Put cheap seam checks before the floor's full suite.
+- **Applies when:** Evidence tooling runs across build presets, host platforms, pinned tools or sanitizer configurations. Parser-only fixtures and a successful default local build do not establish these integration contracts.
+- **Verification:** Nondefault-build five-test RED/GREEN; temporary Git autocrlf positive/negative control; four path spellings, seven invalid paths and capacity boundaries; exact missing-ROM failure; failing PATH CTest decoy RED/GREEN; actual-stamp substituted-tool rejection; all-child timeout propagation and invalid-limit rejection. Final hosted jobs must bind their own exact source head.
+- **Source:** Phase 14 CR-03 through CR-08, their fix/recheck reports and the exact-head CI failure receipts.
+- **Status:** Adopted. No new dependency or hosted job.
