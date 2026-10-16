@@ -57,7 +57,7 @@ def version_key(match: re.Match) -> tuple[int, int, int]:
 
 
 def select_ledger(names: list[str], tag: str) -> str:
-    """Return the ledger path for the newest ledger version not above the tag."""
+    """Select only a ledger from this tag's major/minor support scope."""
     tag_match = TAG.fullmatch(tag)
     if not tag_match:
         fail("tag must be a vX.Y.Z release tag")
@@ -65,10 +65,13 @@ def select_ledger(names: list[str], tag: str) -> str:
     candidates = []
     for name in names:
         match = LEDGER_NAME.fullmatch(name)
-        if match and version_key(match) <= release:
-            candidates.append((version_key(match), name))
+        version = version_key(match) if match else None
+        if version and version[:2] == release[:2] and version <= release:
+            candidates.append((version, name))
     if not candidates:
-        fail("no support ledger exists at or below this release version")
+        if release == (0, 2, 0):
+            fail("exact v0.2.0 support ledger is missing")
+        fail("no support ledger exists in this release's major/minor scope")
     return f"{LEDGER_DIR}/{max(candidates)[1]}"
 
 
@@ -421,6 +424,9 @@ def validate_data_v2(data: dict, expected_version: str, expected_case_count: int
     relative_path(receipt.get("path"))
     for field in ("sha256", "identity_sha256", "input_identity_sha256", "run_id", "source_inputs_sha256"):
         _sha_field(receipt.get(field), "receipt " + field + " is malformed")
+    if (type(receipt.get("producer_revision")) is not str or
+            not re.fullmatch(r"[0-9a-f]{40,64}", receipt["producer_revision"])):
+        fail("receipt producer revision is malformed")
     if receipt["source_inputs_sha256"] != canonical_sha256(source_inputs):
         fail("receipt source-input identity digest mismatch")
     if receipt.get("model") != "CGB-CPU-E selected software model" or receipt.get("hardware_qualified") is not False:
@@ -663,7 +669,8 @@ def _validate_run_identity(receipt: dict, inventory_sha256: str) -> dict:
 
 
 def build_v2_data(receipt: dict, receipt_raw: bytes, inventory: dict, inventory_raw: bytes,
-                  repo_root: pathlib.Path, receipt_path: str) -> dict:
+                  repo_root: pathlib.Path, receipt_path: str,
+                  tagged_inputs: dict[str, bytes] | None = None) -> dict:
     inventory_sha = sha256(inventory_raw)
     identity = _validate_run_identity(receipt, inventory_sha)
     bindings = _case_binding_rows(inventory)
@@ -698,7 +705,13 @@ def build_v2_data(receipt: dict, receipt_raw: bytes, inventory: dict, inventory_
     def identities(paths: list[str]) -> list[dict]:
         rows = []
         for relative in paths:
-            name, raw = read_repo_file(repo_root, relative, MAX_INPUT_BYTES, "evidence-input")
+            if tagged_inputs is not None and relative in tagged_inputs:
+                name, raw = relative, tagged_inputs[relative]
+                if len(raw) > MAX_INPUT_BYTES:
+                    fail("evidence-input:too-large")
+            else:
+                name, raw = read_repo_file(repo_root, relative, MAX_INPUT_BYTES, "evidence-input")
+            strict_json(raw, "evidence-input:" + name)
             rows.append({"path": name, "sha256": sha256(raw), "size_bytes": len(raw)})
         return rows
 
@@ -731,6 +744,7 @@ def build_v2_data(receipt: dict, receipt_raw: bytes, inventory: dict, inventory_
         "identity_sha256": identity["identity_sha256"],
         "input_identity_sha256": identity["input_identity_sha256"],
         "source_inputs_sha256": canonical_sha256(source_inputs),
+        "producer_revision": identity["core_revision"],
         "run_id": receipt["run"]["id"],
         "model": identity.get("model"),
         "hardware_qualified": identity.get("hardware_qualified"),
@@ -798,10 +812,10 @@ def render_v2_ledger(data: dict) -> str:
         "| Mapper and header types | ROM / RAM bounds | Battery image and additional behavior |",
         "|---|---|---|",
         "| ROM-only `$00` | 32 KiB ROM; no RAM | No battery image |",
-        "| Standard MBC1 `$01`–`$03` | Up to 2 MiB ROM; 8 KiB or 32 KiB RAM under documented ROM-size constraints | Type `$03` persists RAM; MBC1M wiring is unsupported |",
-        "| MBC2 `$05`–`$06` | 32–256 KiB ROM; 512 built-in 4-bit cells | Type `$06` image is canonical 512 bytes; packed 256-byte files are unsupported |",
-        "| MBC3 `$0F`–`$13` | Up to 2 MiB ROM (4 MiB length ceiling); supported RAM codes by type; MBC30 rejected | Timer types `$0F`/`$10` use an emulated-time RTC and 21-byte versioned clock block; `$13` persists RAM |",
-        "| MBC5 `$19`–`$1E` | Up to 8 MiB ROM; 8–128 KiB RAM by type | Types `$1B`/`$1E` persist RAM; rumble-line state is exposed for `$1C`–`$1E`, with no host haptics or physical rumble claim |",
+        "| Standard MBC1 `$01`/`$02`/`$03` | ROM size codes `$00`–`$06` (32 KiB–2 MiB). `$01` has no RAM; `$02` is volatile; `$03` is battery-backed. RAM is 8 KiB, or 32 KiB only through 512 KiB ROM. | Type `$03` persists RAM. MBC1M wiring is unsupported. |",
+        "| MBC2 `$05`/`$06` | ROM size codes `$00`–`$03` (32–256 KiB); 512 built-in 4-bit cells and no header RAM | Type `$06` image is canonical 512 bytes; packed 256-byte files are unsupported |",
+        "| MBC3 `$0F`–`$13` | ROM size codes `$00`–`$06` (32 KiB–2 MiB); 4 MiB length ceiling. `$0F`/`$11` have no RAM; `$10` has timer and 8/32 KiB RAM; `$12` volatile 8/32 KiB; `$13` battery 8/32 KiB. | `$0F`/`$10` use emulated-time RTC and a 21-byte versioned clock block; `$13` persists RAM. MBC30 is rejected. |",
+        "| MBC5 `$19`–`$1E` | ROM size codes `$00`–`$08` (32 KiB–8 MiB); `$19`/`$1C` have no RAM, others support 8/32/64/128 KiB by type. | `$1B`/`$1E` persist RAM. `$1C`–`$1E` expose rumble-line state, with no host haptics or physical rumble claim. |",
         "",
         "Battery export/import is caller-buffer based and atomic on rejected input. MBC3 wall-clock catch-up is an explicit host call; the core never reads the host clock. RTC, mapper and save-format behavior are software evidence, not physical-board or cross-emulator compatibility claims. See [cartridge and save contract](../cartridge-and-saves.md).",
         "",
@@ -812,7 +826,7 @@ def render_v2_ledger(data: dict) -> str:
         "- **MBC3 and RTC:** RTC-capable `$0F`/`$10` cartridges advance from emulated half-dots; explicit host catch-up is separate. The 21-byte clock block, import bounds, phase preservation, and MBC1/MBC2/MBC3/MBC5 battery persistence are software contracts. No physical MBC3 or RTC observation is available; MBC30 is rejected.",
         "- **CGB profile and colour:** CGB-CPU-E exposes header-selected native or DMG-compatibility execution, CGB register/banking behavior and raw RGB555 frame output. Software fixtures and differential results cover named cases only; there is no perceptual color evidence or general game claim.",
         "- **CGB speed and HDMA:** double-speed execution keeps budgets in master half-dots; GDMA and HBlank DMA follow the documented bounded block model. The known `$83` → `$02` → `$00` → `$80` HDMA sequence remains unresolved against Pan Docs. No physical CGB-E timing qualification is made.",
-        "- **CGB digital APU reads:** native CGB reads of `$FF76`/`$FF77` expose digital channel-pair inputs in the selected software model; compatibility reads return `$FF`. This says nothing about analog output or perceptual audio quality.",
+        "- **CGB digital APU reads:** native CGB guest reads of FF76/FF77 expose digital DAC inputs on the CGB-CPU-E software model; CGB compatibility mode reads `$FF`. Player playback continues to use the scoped DMG APU model. This says nothing about analog output or perceptual audio quality.",
         "",
         "## Game-level evidence, known issues and exclusions",
         "",
@@ -864,7 +878,8 @@ def create_current_ledger(receipt_path: pathlib.Path) -> dict:
     return data
 
 
-def validate_source_bindings(data: dict, repo_root: pathlib.Path) -> None:
+def validate_source_bindings(data: dict, repo_root: pathlib.Path,
+                             source_bytes: dict[str, bytes] | None = None) -> None:
     root = repo_root.resolve()
     for section, rows in (("source", data.get("source_inputs")),
                           ("build", data.get("receipt", {}).get("build_artifacts"))):
@@ -873,7 +888,14 @@ def validate_source_bindings(data: dict, repo_root: pathlib.Path) -> None:
         for row in rows:
             if type(row) is not dict:
                 fail(section + " input identity is malformed")
-            name, raw = read_repo_file(root, row.get("path"), MAX_INPUT_BYTES, section + "-input")
+            if section == "source" and source_bytes is not None:
+                if row.get("path") not in source_bytes:
+                    fail(section + "-input:missing-tagged-byte")
+                name, raw = row["path"], source_bytes[row["path"]]
+                if len(raw) > MAX_INPUT_BYTES:
+                    fail(section + "-input:too-large")
+            else:
+                name, raw = read_repo_file(root, row.get("path"), MAX_INPUT_BYTES, section + "-input")
             if sha256(raw) != row.get("sha256") or len(raw) != row.get("size_bytes"):
                 fail(section + " input is stale:" + name)
 
@@ -882,19 +904,21 @@ def current_git_revision() -> str:
     return git("rev-parse", "HEAD").decode("ascii", "strict").strip()
 
 
-def check_source_ancestry(source_revision: str, current_revision: str) -> None:
+def check_source_ancestry(source_revision: str, current_revision: str,
+                          repo_root: pathlib.Path = ROOT) -> None:
     try:
         subprocess.run(["git", "merge-base", "--is-ancestor", source_revision, current_revision],
-                       cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                       cwd=repo_root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                        check=True, timeout=5)
     except (OSError, subprocess.SubprocessError):
         fail("receipt producer revision is not an ancestor of the current source")
 
 
-def run_inventory_validator() -> None:
-    command = [sys.executable, "-I", str(ROOT / "tests/scripts/verify-cgb-corpus-inventory.py"), "--bindings"]
+def run_inventory_validator(repo_root: pathlib.Path = ROOT) -> None:
+    validator = repo_root / "tests/scripts/verify-cgb-corpus-inventory.py"
+    command = [sys.executable, "-I", str(validator), "--bindings"]
     try:
-        completed = subprocess.run(command, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        completed = subprocess.run(command, cwd=repo_root, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    text=True, timeout=60, check=False)
     except (OSError, subprocess.SubprocessError) as error:
         fail("independent inventory validator unavailable")
@@ -902,15 +926,22 @@ def run_inventory_validator() -> None:
         fail("independent inventory validator failed: " + completed.stderr.strip())
 
 
-def run_existing_receipt_validator(receipt_path: pathlib.Path, inventory: dict) -> None:
-    script = ROOT / "tests/scripts/verify-cgb-corpus-claims.py"
+def run_existing_receipt_validator(receipt_path: pathlib.Path, inventory: dict,
+                                   repo_root: pathlib.Path = ROOT,
+                                   source_revision: str | None = None,
+                                   inventory_raw: bytes | None = None,
+                                   input_bytes: dict[str, bytes] | None = None) -> None:
+    script = repo_root / "tests/scripts/verify-cgb-corpus-claims.py"
     spec = importlib.util.spec_from_file_location("gabbaboy_cgb_claims", script)
     if spec is None or spec.loader is None:
         fail("existing corpus report validator unavailable")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     try:
-        module.validate_receipt(receipt_path, inventory)
+        module.validate_receipt(receipt_path, inventory, source_revision=source_revision,
+                                allow_ancestor=source_revision is not None,
+                                repo_root=repo_root, inventory_raw=inventory_raw,
+                                input_bytes=input_bytes)
     except module.ContractError as error:
         fail("existing corpus report validator failed: " + str(error))
 
@@ -979,7 +1010,99 @@ def git(*args: str, cwd: pathlib.Path = ROOT) -> bytes:
         fail(f"git {' '.join(args)} failed: {error.stderr.decode(errors='replace').strip()}")
 
 
-def build_sidecar(tag: str, source_sha: str, repo_root: pathlib.Path = ROOT) -> dict:
+def tagged_file(repo_root: pathlib.Path, tag: str, relative: str, limit: int) -> bytes:
+    relative_path(relative, "tagged-input-path-invalid")
+    raw = git("show", f"{tag}:{relative}", cwd=repo_root)
+    if len(raw) > limit:
+        fail("tagged-input-too-large:" + relative)
+    return raw
+
+
+def build_v2_sidecar(tag: str, source_sha: str, repo_root: pathlib.Path,
+                     ledger: str, ledger_raw: bytes, data: dict,
+                     receipt_path: pathlib.Path | None) -> dict:
+    if receipt_path is None:
+        fail("schema-2 sidecars require --receipt PATH")
+    try:
+        if not receipt_path.is_absolute():
+            receipt_path = repo_root / receipt_path
+        receipt_path = receipt_path.resolve(strict=True)
+        receipt_rel = receipt_path.relative_to(repo_root.resolve()).as_posix()
+    except (OSError, ValueError):
+        fail("receipt path must stay inside the tagged repository")
+    if receipt_rel != data.get("receipt", {}).get("path"):
+        fail("receipt path differs from the tracked ledger identity")
+
+    tagged_inputs = {}
+    source_rows = data.get("source_inputs")
+    if type(source_rows) is not list or not source_rows:
+        fail("tagged support ledger has no covered source inputs")
+    for row in source_rows:
+        if type(row) is not dict:
+            fail("tagged source input identity is malformed")
+        name = relative_path(row.get("path"))
+        raw = tagged_file(repo_root, tag, name, MAX_INPUT_BYTES)
+        if sha256(raw) != row.get("sha256") or len(raw) != row.get("size_bytes"):
+            fail("tagged source input differs from ledger:" + name)
+        tagged_inputs[name] = raw
+    inventory_path = data["inventory"]["path"]
+    inventory_raw = tagged_inputs.get(inventory_path)
+    if inventory_raw is None or sha256(inventory_raw) != data["inventory"]["sha256"]:
+        fail("tagged independent inventory identity mismatch")
+    inventory = strict_json(inventory_raw, "tagged-inventory")
+    for section in ("manifest_identities", "disposition_identities"):
+        for row in data[section]:
+            raw = tagged_inputs.get(row["path"])
+            if raw is None or sha256(raw) != row["sha256"] or len(raw) != row["size_bytes"]:
+                fail("tagged " + section.removesuffix("_identities") + " identity mismatch:" + row["path"])
+            strict_json(raw, "tagged-input:" + row["path"])
+
+    receipt_raw = bounded_file(receipt_path, MAX_RECEIPT_BYTES, "receipt")
+    receipt = strict_json(receipt_raw, "receipt")
+    identity = _validate_run_identity(receipt, sha256(inventory_raw))
+    producer_revision = identity["core_revision"]
+    check_source_ancestry(producer_revision, source_sha, repo_root)
+    if (sha256(receipt_raw) != data["receipt"]["sha256"] or
+            producer_revision != data["receipt"]["producer_revision"]):
+        fail("forged or stale corpus receipt differs from tracked ledger")
+    derived = build_v2_data(receipt, receipt_raw, inventory, inventory_raw,
+                            repo_root, receipt_rel, tagged_inputs)
+    validate_data_v2(data, "0.2.0")
+    if derived != data:
+        fail("tagged ledger differs from complete receipt or tagged source inputs")
+    validate_source_bindings(data, repo_root, tagged_inputs)
+    head = git("rev-parse", "HEAD", cwd=repo_root).decode("ascii", "strict").strip()
+    if head == source_sha:
+        run_inventory_validator(repo_root)
+        run_existing_receipt_validator(receipt_path, inventory, repo_root, source_sha,
+                                       inventory_raw, tagged_inputs)
+
+    blob_oid = git("rev-parse", f"{tag}:{ledger}", cwd=repo_root).decode().strip()
+    relation = "exact" if producer_revision == source_sha else "ancestor"
+    return {
+        "schema_version": 2,
+        "version": tag[1:],
+        "tag": tag,
+        "source_sha": source_sha,
+        "ledger_version": data["version"],
+        "ledger": {"path": ledger, "git_blob_oid": blob_oid,
+                   "sha256": sha256(ledger_raw)},
+        "manifest_identities": data["manifest_identities"],
+        "inventory_sha256": data["inventory"]["sha256"],
+        "disposition_identities": data["disposition_identities"],
+        "corpus_receipt_sha256": data["receipt"]["sha256"],
+        "corpus_receipt_producer_revision": producer_revision,
+        "corpus_receipt_source_relation": relation,
+        "covered_source_inputs": data["source_inputs"],
+        "suite_model_mode_counts": data["receipt"]["suite_model_mode_counts"],
+        "case_counts": data["receipt"]["counts"],
+        "game_evidence": data["game_evidence"],
+        "self_hash": None,
+    }
+
+
+def build_sidecar(tag: str, source_sha: str, repo_root: pathlib.Path = ROOT,
+                  receipt_path: pathlib.Path | None = None) -> dict:
     if not re.fullmatch(r"[0-9a-f]{40}", source_sha):
         fail("source SHA must be a full lowercase Git commit SHA")
     actual_sha = git("rev-parse", f"{tag}^{{commit}}", cwd=repo_root).decode().strip()
@@ -989,6 +1112,10 @@ def build_sidecar(tag: str, source_sha: str, repo_root: pathlib.Path = ROOT) -> 
     ledger = select_ledger(names, tag)
     ledger_raw = git("show", f"{tag}:{ledger}", cwd=repo_root)
     data = parse_ledger(ledger_raw, ledger_version(ledger))
+    if data.get("schema_version") == 2:
+        return build_v2_sidecar(tag, source_sha, repo_root, ledger, ledger_raw, data, receipt_path)
+    if receipt_path is not None:
+        fail("--receipt is only accepted for schema-2 support ledgers")
     manifests = {path: git("show", f"{tag}:{path}", cwd=repo_root) for path in data["manifest_paths"]}
     identities = validate_manifest_set(data, manifests)
     blob_oid = git("rev-parse", f"{tag}:{ledger}", cwd=repo_root).decode().strip()
@@ -1133,6 +1260,7 @@ def _schema2_test_data() -> dict:
         "receipt": {"path": "build/cgb-corpus-receipt.json", "sha256": "f" * 64,
                     "identity_sha256": "0" * 64, "input_identity_sha256": "1" * 64,
                     "source_inputs_sha256": canonical_sha256(source_inputs), "run_id": "2" * 64,
+                    "producer_revision": "5" * 40,
                     "model": "CGB-CPU-E selected software model", "hardware_qualified": False,
                     "run": {"id": "2" * 64, "ctest_cases": 3, "ctest_total_cases": 3,
                             "ctest_log_sha256": "3" * 64, "run_nonce_sha256": "4" * 64},
@@ -1305,15 +1433,22 @@ def self_test() -> None:
         fail("self-test accepted altered tagged manifest bytes")
     names = ["v0.1.0.md", "v0.2.0.md", "README.md"]
     for tag, expected in (("v0.1.0", "v0.1.0.md"), ("v0.1.1", "v0.1.0.md"), ("v0.1.10", "v0.1.0.md"),
-                          ("v0.2.0", "v0.2.0.md"), ("v1.0.0", "v0.2.0.md")):
+                          ("v0.2.0", "v0.2.0.md"), ("v0.2.1", "v0.2.0.md")):
         if select_ledger(names, tag) != f"{LEDGER_DIR}/{expected}":
             fail(f"self-test selected the wrong ledger for {tag}")
-    for tag in ("v0.0.9", "v0.1", "0.1.1", "v0.1.1-rc1"):
+    for tag in ("v0.0.9", "v0.1", "0.1.1", "v0.1.1-rc1", "v1.0.0"):
         try:
             select_ledger(names, tag)
         except ValueError:
             continue
         fail(f"self-test accepted tag without an applicable ledger: {tag}")
+    for missing_names, tag in ((["v0.1.0.md"], "v0.2.0"),
+                               (["v0.1.0.md"], "v0.2.1")):
+        try:
+            select_ledger(missing_names, tag)
+        except ValueError:
+            continue
+        fail("self-test allowed exact-ledger or cross-scope fallback")
     fixture_sidecar = {"tag": "v0.1.0", "source_sha": "a" * 40,
                        "ledger_sha256": hashlib.sha256(raw).hexdigest(),
                        "manifest_sha256": data["manifest_sha256"]}
@@ -1362,6 +1497,177 @@ def self_test() -> None:
     print("support ledger self-test passed: tagged sidecar binding, newest-applicable ledger selection, scope, corpus order, digests, malformed UTF-8, duplicate keys, denominator and claim controls")
 
 
+def self_test_v2_sidecar() -> None:
+    """Exercise v0.2 exact-tag sidecars in isolated temporary Git repositories."""
+    ledger_path = ROOT / "docs/support/v0.2.0.md"
+    ledger_raw = bounded_file(ledger_path, MAX_LEDGER_BYTES, "ledger")
+    data = parse_ledger(ledger_raw, "0.2.0")
+    receipt_source = ROOT / "build/cgb-corpus-receipt.json"
+    receipt_path = pathlib.Path("build/cgb-corpus-receipt.json")
+    receipt = strict_json(bounded_file(receipt_source, MAX_RECEIPT_BYTES, "receipt"), "receipt")
+    base_revision = current_git_revision()
+    author_env = dict(os.environ)
+    author_env.update({
+        "GIT_AUTHOR_NAME": "GabbaBoy Test",
+        "GIT_AUTHOR_EMAIL": "test@example.invalid",
+        "GIT_COMMITTER_NAME": "GabbaBoy Test",
+        "GIT_COMMITTER_EMAIL": "test@example.invalid",
+    })
+    controls = []
+
+    def git_fixture(repo: pathlib.Path, *args: str) -> str:
+        completed = subprocess.run(["git", *args], cwd=repo, env=author_env,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   text=True, check=False, timeout=30)
+        if completed.returncode != 0:
+            fail("self-test Git fixture command failed: " + completed.stderr.strip())
+        return completed.stdout.strip()
+
+    def expect_rejected(name: str, action, expected: str) -> None:
+        try:
+            action()
+        except ValueError as error:
+            if expected not in str(error):
+                fail("v0.2 sidecar control has wrong diagnostic:" + name + ":" + str(error))
+            controls.append(name)
+            return
+        fail("v0.2 sidecar control was accepted:" + name)
+
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-v2-sidecar-") as temporary:
+        temp_root = pathlib.Path(temporary)
+        repository = temp_root / "tagged-repository"
+        completed = subprocess.run(["git", "clone", "--shared", "--no-checkout",
+                                    str(ROOT), str(repository)],
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   text=True, check=False, timeout=60)
+        if completed.returncode != 0:
+            fail("v0.2 sidecar fixture clone failed: " + completed.stderr.strip())
+        git_fixture(repository, "checkout", "-b", "support-ledger-v2-self-test", base_revision)
+
+        overlay_files = [
+            "docs/support/v0.2.0.md",
+            "docs/support/unreleased.md",
+            "docs/cgb-corpus.md",
+            "tests/scripts/verify-support-ledger.py",
+            "tests/scripts/verify-cgb-corpus-claims.py",
+        ]
+        for relative in overlay_files:
+            source = ROOT / relative
+            destination = repository / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, destination)
+        for row in data["receipt"]["build_artifacts"]:
+            source = ROOT / row["path"]
+            destination = repository / row["path"]
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, destination)
+        destination_receipt = repository / receipt_path
+        destination_receipt.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(receipt_source, destination_receipt)
+        git_fixture(repository, "add", *overlay_files)
+        git_fixture(repository, "commit", "-m", "test: create v0.2 sidecar fixture")
+        source_sha = git_fixture(repository, "rev-parse", "HEAD")
+        for tag in ("v0.2.0", "v0.2.1"):
+            git_fixture(repository, "tag", tag, source_sha)
+
+        generated = build_sidecar("v0.2.0", source_sha, repository, receipt_path)
+        if (generated.get("schema_version") != 2 or
+                generated.get("ledger", {}).get("path") != "docs/support/v0.2.0.md" or
+                generated.get("corpus_receipt_sha256") != data["receipt"]["sha256"] or
+                generated.get("corpus_receipt_producer_revision") != receipt["identity"]["core_revision"] or
+                generated.get("corpus_receipt_source_relation") != "ancestor" or
+                generated.get("game_evidence") != data["game_evidence"]):
+            fail("v0.2 sidecar positive fixture did not bind the exact tagged inputs")
+        controls.append("positive-v0.2-tagged-sidecar")
+
+        patch_sidecar = build_sidecar("v0.2.1", source_sha, repository, receipt_path)
+        if (patch_sidecar.get("ledger") != generated.get("ledger") or
+                patch_sidecar.get("tag") != "v0.2.1" or
+                patch_sidecar.get("corpus_receipt_sha256") != generated.get("corpus_receipt_sha256")):
+            fail("v0.2 patch tag did not reuse its same-scope ledger")
+        controls.append("v0.2-patch-compatibility")
+
+        expect_rejected("missing-v2-receipt",
+                        lambda: build_sidecar("v0.2.0", source_sha, repository),
+                        "schema-2 sidecars require --receipt")
+        expect_rejected("wrong-tag-source-sha",
+                        lambda: build_sidecar("v0.2.0", "0" * 40, repository, receipt_path),
+                        "supplied source SHA does not resolve")
+        for key, value in (("source_sha", "0" * 40),
+                           ("ledger", {**generated["ledger"], "git_blob_oid": "0" * 40}),
+                           ("corpus_receipt_sha256", "0" * 64),
+                           ("inventory_sha256", "0" * 64),
+                           ("disposition_identities", []),
+                           ("covered_source_inputs", []),
+                           ("suite_model_mode_counts", []),
+                           ("game_evidence", {"status": "present"})):
+            altered = copy.deepcopy(generated)
+            altered[key] = value
+            expect_rejected("altered-sidecar-" + key,
+                            lambda altered=altered: verify_sidecar_data(altered, generated),
+                            "sidecar source SHA")
+
+        saved_receipt = destination_receipt.read_bytes()
+        destination_receipt.write_bytes(saved_receipt + b" ")
+        expect_rejected("forged-receipt-bytes",
+                        lambda: build_sidecar("v0.2.0", source_sha, repository, receipt_path),
+                        "forged or stale corpus receipt")
+        destination_receipt.write_bytes(saved_receipt)
+
+        base_ledger_text = (repository / "docs/support/v0.2.0.md").read_text(encoding="utf-8")
+
+        def tagged_ledger_variant(name: str, tag: str, mutate) -> None:
+            branch = "sidecar-" + name
+            git_fixture(repository, "checkout", "-b", branch, source_sha)
+            variant = copy.deepcopy(data)
+            mutate(variant)
+            text = base_ledger_text
+            start = text.index(BEGIN)
+            end = text.index(END, start)
+            block_start = text.index("```json", start)
+            json_start = text.index("\n", block_start) + 1
+            json_end = text.rindex("```", json_start, end)
+            rewritten = (text[:json_start] + json.dumps(variant, indent=2, sort_keys=True, ensure_ascii=False) +
+                         "\n" + text[json_end:])
+            (repository / "docs/support/v0.2.0.md").write_text(rewritten, encoding="utf-8")
+            git_fixture(repository, "add", "docs/support/v0.2.0.md")
+            git_fixture(repository, "commit", "-m", "test: alter disposition identities")
+            variant_sha = git_fixture(repository, "rev-parse", "HEAD")
+            git_fixture(repository, "tag", tag, variant_sha)
+            expect_rejected(name,
+                            lambda: build_sidecar(tag, variant_sha, repository, receipt_path),
+                            "disposition")
+
+        tagged_ledger_variant("omitted-disposition-identity", "v0.2.2",
+                              lambda altered: altered["disposition_identities"].pop())
+        tagged_ledger_variant("duplicate-disposition-identity", "v0.2.3",
+                              lambda altered: altered["disposition_identities"].append(
+                                  copy.deepcopy(altered["disposition_identities"][0])))
+
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-v2-scope-") as temporary:
+        repository = pathlib.Path(temporary)
+        legacy = repository / "docs/support/v0.1.0.md"
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / "docs/support/v0.1.0.md", legacy)
+        subprocess.run(["git", "init", "-q"], cwd=repository, env=author_env, check=True)
+        subprocess.run(["git", "add", "docs/support/v0.1.0.md"], cwd=repository,
+                       env=author_env, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "fixture"], cwd=repository,
+                       env=author_env, check=True)
+        missing_sha = git_fixture(repository, "rev-parse", "HEAD")
+        git_fixture(repository, "tag", "v0.2.0", missing_sha)
+        git_fixture(repository, "tag", "v0.2.1", missing_sha)
+        expect_rejected("missing-exact-v0.2-ledger",
+                        lambda: build_sidecar("v0.2.0", missing_sha, repository),
+                        "exact v0.2.0 support ledger is missing")
+        expect_rejected("cross-scope-fallback",
+                        lambda: build_sidecar("v0.2.1", missing_sha, repository),
+                        "major/minor scope")
+
+    print("support ledger v0.2 sidecar self-test passed: positive=1 controls=" +
+          str(len(controls)) + " names=" + ",".join(controls))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--self-test", action="store_true")
@@ -1381,6 +1687,7 @@ def main() -> int:
         if args.self_test:
             self_test()
             self_test_v2()
+            self_test_v2_sidecar()
             return 0
         if args.check_current:
             if not args.receipt:
@@ -1406,9 +1713,10 @@ def main() -> int:
             return 0
         if not (args.tag and args.source_sha and (args.output or args.verify_sidecar)):
             parser.error("supply --tag, --source-sha and --output or --verify-sidecar, or use --self-test")
-        sidecar = build_sidecar(args.tag, args.source_sha)
+        sidecar = build_sidecar(args.tag, args.source_sha, ROOT, args.receipt)
         if args.verify_sidecar:
-            observed = json.loads(args.verify_sidecar.read_text(encoding="utf-8"))
+            observed = strict_json(bounded_file(args.verify_sidecar, MAX_LEDGER_BYTES,
+                                                "sidecar"), "sidecar")
             verify_sidecar_data(observed, sidecar)
             print(f"verified source-bound support sidecar for {args.tag} ({args.source_sha})")
         else:
