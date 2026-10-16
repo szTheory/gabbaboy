@@ -4,14 +4,26 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 SELF_TEST=false
 AB_MODE=false
+QUALIFY_MODE=false
 AB_BASE=""
 AB_HEAD=""
-if [[ "${1:-}" == "--self-test" ]]; then SELF_TEST=true; shift
+QUALIFY_OUTPUT=""
+QUALIFY_REVIEW=""
+if [[ "${1:-}" == "--qualify-v02" ]]; then
+  if [[ $# -eq 3 && "${2}" == "--output" && -n "${3}" ]]; then
+    QUALIFY_MODE=true; QUALIFY_OUTPUT="$3"; shift 3
+  elif [[ $# -eq 5 && "${2}" == "--output" && -n "${3}" &&
+          "${4}" == "--review-regression" && -n "${5}" ]]; then
+    QUALIFY_MODE=true; QUALIFY_OUTPUT="$3"; QUALIFY_REVIEW="$5"; shift 5
+  else
+    echo "usage: $0 --qualify-v02 --output <receipt.json> [--review-regression <evidence>]" >&2; exit 2
+  fi
+elif [[ "${1:-}" == "--self-test" ]]; then SELF_TEST=true; shift
 elif [[ "${1:-}" == "--ab" ]]; then
   [[ $# -eq 3 && -x "${2}" && -x "${3}" ]] || { echo "usage: $0 --ab <base-measure_core> <head-measure_core>" >&2; exit 2; }
   AB_MODE=true; AB_BASE="$2"; AB_HEAD="$3"; shift 3
 fi
-[[ $# -eq 0 ]] || { echo "usage: $0 [--self-test | --ab <base-measure_core> <head-measure_core>]" >&2; exit 2; }
+[[ $# -eq 0 ]] || { echo "usage: $0 [--self-test | --ab <base-measure_core> <head-measure_core> | --qualify-v02 --output <receipt.json> [--review-regression <evidence>] ]" >&2; exit 2; }
 BUILD_DIR="${GBB_RELEASE_MEASURE_BUILD_DIR:-${ROOT_DIR}/build/release-measure}"
 ROM="${ROOT_DIR}/fixtures/tracer/tracer.gb"
 MANIFEST="${ROOT_DIR}/fixtures/tracer/manifest.json"
@@ -150,6 +162,272 @@ receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", en
 print(f"ab pass samples={samples} median_ratio_pct={median:.2f} min_of_n_ratio_pct={min_of_n:.2f} "
       f"sd_pct={sd:.2f} margin95_pct={margin:.2f} label='{noise_label}' review_trigger={str(fired).lower()}")
 PYAB
+exit $?
+fi
+
+if [[ "$QUALIFY_MODE" == true ]]; then
+python3 -I - "$ROOT_DIR" "$QUALIFY_OUTPUT" "$QUALIFY_REVIEW" <<'PYQUAL'
+import hashlib
+import json
+import os
+from pathlib import Path
+import platform
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+root = Path(sys.argv[1]).resolve()
+output = Path(sys.argv[2])
+review_notes = sys.argv[3]
+if not output.is_absolute():
+    output = root / output
+output.parent.mkdir(parents=True, exist_ok=True)
+if output.exists():
+    raise SystemExit(f"qualify-v02-output-exists: {output.name}")
+
+baseline_sha = "e30d168f7fc61de8db0a3801e7b1736362912cb7"
+workload_id = "original-wram-tracer-1m-half-dots-v1"
+expected_digest = "4c7a57ff3d50d228"
+fixture_path = "fixtures/tracer/tracer.gb"
+manifest_path = "fixtures/tracer/manifest.json"
+harness_path = "tests/measure_core.c"
+
+def run(command, *, cwd=None, env=None, timeout=600):
+    done = subprocess.run(command, cwd=cwd, env=env, text=True,
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                          timeout=timeout, check=False)
+    if done.returncode:
+        raise SystemExit("qualify-v02-command-failed: " + " ".join(map(str, command)) +
+                         "\n" + "\n".join((done.stdout or "").splitlines()[-30:]))
+    return done.stdout or ""
+
+def git(*args):
+    return run(["git", *args], cwd=root, timeout=30).strip()
+
+def sha_bytes(data):
+    return hashlib.sha256(data).hexdigest()
+
+def git_blob(revision, path):
+    return subprocess.check_output(["git", "show", f"{revision}:{path}"], cwd=root)
+
+def source_record(revision, *, tag=None):
+    record = {
+        "sha": revision,
+        "tree_sha": git("rev-parse", "--verify", f"{revision}^{{tree}}"),
+        "harness_sha256": sha_bytes(git_blob(revision, harness_path)),
+    }
+    if tag:
+        record["tag"] = tag
+    return record
+
+def parse_cache(path):
+    values = {}
+    for line in path.read_text(encoding="utf-8", errors="strict").splitlines():
+        if ":" not in line or "=" not in line:
+            continue
+        key, value = line.split("=", 1)[0].split(":", 1)[0], line.split("=", 1)[1]
+        values[key] = value
+    return values
+
+def build_identity(source, record):
+    payload = {key: value for key, value in record.items() if key != "identity_sha256"}
+    data = {"source_sha": source["sha"], "source_tree_sha": source["tree_sha"], **payload}
+    encoded = json.dumps(data, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return sha_bytes(encoded)
+
+baseline_tag_target = git("rev-parse", "v0.1.0^{commit}")
+if baseline_tag_target != baseline_sha:
+    raise SystemExit("qualify-v02-baseline-tag-mismatch")
+candidate_sha = git("rev-parse", "HEAD")
+if not re.fullmatch(r"[0-9a-f]{40}", candidate_sha):
+    raise SystemExit("qualify-v02-candidate-revision-invalid")
+if candidate_sha == baseline_sha:
+    raise SystemExit("qualify-v02-source-pair-identical")
+
+compiler_input = os.environ.get("CC", "cc")
+compiler = shutil.which(compiler_input) or compiler_input
+compiler = str(Path(compiler).resolve())
+compiler_hash = sha_bytes(Path(compiler).read_bytes())
+flags = os.environ.get("GBB_QUALIFY_C_FLAGS_RELEASE", "-O3 -DNDEBUG")
+if "\n" in flags or "\r" in flags:
+    raise SystemExit("qualify-v02-release-flags-invalid")
+
+with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-pair-") as temporary:
+    temp = Path(temporary)
+    baseline_src = temp / "baseline-src"
+    candidate_src = temp / "candidate-src"
+    baseline_build = temp / "baseline-build"
+    candidate_build = temp / "candidate-build"
+    base_worktree = False
+    candidate_worktree = False
+    try:
+        run(["git", "worktree", "add", "--detach", str(baseline_src), baseline_sha], cwd=root)
+        base_worktree = True
+        run(["git", "worktree", "add", "--detach", str(candidate_src), candidate_sha], cwd=root)
+        candidate_worktree = True
+
+        base_fixture = git_blob(baseline_sha, fixture_path)
+        candidate_fixture = git_blob(candidate_sha, fixture_path)
+        base_manifest = git_blob(baseline_sha, manifest_path)
+        candidate_manifest = git_blob(candidate_sha, manifest_path)
+        if base_fixture != candidate_fixture or base_manifest != candidate_manifest:
+            raise SystemExit("qualify-v02-covered-workload-inputs-differ")
+        fixture_hash, manifest_hash = sha_bytes(base_fixture), sha_bytes(base_manifest)
+        manifest = json.loads(base_manifest)
+        if manifest.get("id") != "original-wram-tracer" or manifest.get("sha256") != fixture_hash:
+            raise SystemExit("qualify-v02-workload-manifest-mismatch")
+
+        common_cache_args = ["-DCMAKE_BUILD_TYPE=Release", "-DBUILD_TESTING=ON",
+                             f"-DCMAKE_C_COMPILER={compiler}", f"-DCMAKE_C_FLAGS_RELEASE={flags}"]
+        for source_dir, build_dir in ((baseline_src, baseline_build), (candidate_src, candidate_build)):
+            run(["cmake", "-S", str(source_dir), "-B", str(build_dir), *common_cache_args])
+            run(["cmake", "--build", str(build_dir), "--target", "measure_core", "--parallel", "2"])
+
+        binaries = [baseline_build / "measure_core", candidate_build / "measure_core"]
+        if os.name == "nt":
+            binaries = [path.with_suffix(".exe") for path in binaries]
+        if not all(path.is_file() and os.access(path, os.X_OK) for path in binaries):
+            raise SystemExit("qualify-v02-measurement-binary-missing")
+
+        base_source = source_record(baseline_sha, tag="v0.1.0")
+        candidate_source = source_record(candidate_sha)
+        builds = {}
+        for label, source, build_dir, binary in (
+            ("baseline", base_source, baseline_build, binaries[0]),
+            ("candidate", candidate_source, candidate_build, binaries[1]),
+        ):
+            cache = parse_cache(build_dir / "CMakeCache.txt")
+            if cache.get("CMAKE_BUILD_TYPE") != "Release":
+                raise SystemExit(f"qualify-v02-{label}-not-release")
+            actual_compiler = str(Path(cache.get("CMAKE_C_COMPILER", "")).resolve())
+            if actual_compiler != compiler:
+                raise SystemExit(f"qualify-v02-{label}-compiler-mismatch")
+            if cache.get("CMAKE_C_FLAGS_RELEASE") != flags:
+                raise SystemExit(f"qualify-v02-{label}-release-flags-mismatch")
+            version_output = run([actual_compiler, "--version"], timeout=30).splitlines()
+            cmake_output = run(["cmake", "--version"], timeout=30).splitlines()
+            compiler_metadata = next(iter((build_dir / "CMakeFiles").glob("*/CMakeCCompiler.cmake")), None)
+            if compiler_metadata is None:
+                raise SystemExit(f"qualify-v02-{label}-compiler-metadata-missing")
+            compiler_text = compiler_metadata.read_text(encoding="utf-8", errors="strict")
+            compiler_id_match = re.search(r'set\(CMAKE_C_COMPILER_ID "([^"]+)"\)', compiler_text)
+            compiler_version_match = re.search(r'set\(CMAKE_C_COMPILER_VERSION "([^"]+)"\)', compiler_text)
+            record = {
+                "configuration": "Release",
+                "cmake_version": cmake_output[0] if cmake_output else "unknown",
+                "generator": cache.get("CMAKE_GENERATOR", "unknown"),
+                "compiler": {
+                    "id": compiler_id_match.group(1) if compiler_id_match else "unknown",
+                    "version": compiler_version_match.group(1) if compiler_version_match else "unknown",
+                    "binary_sha256": sha_bytes(Path(actual_compiler).read_bytes()),
+                },
+                "c_flags_release": cache.get("CMAKE_C_FLAGS_RELEASE", "unknown"),
+                "binary_sha256": sha_bytes(binary.read_bytes()),
+                "harness_sha256": source["harness_sha256"],
+            }
+            if record["compiler"]["binary_sha256"] != compiler_hash:
+                raise SystemExit(f"qualify-v02-{label}-compiler-binary-changed")
+            if not record["compiler"]["id"] or not record["compiler"]["version"] or not version_output:
+                raise SystemExit(f"qualify-v02-{label}-compiler-identity-unknown")
+            record["identity_sha256"] = build_identity(source, record)
+            builds[label] = record
+
+        environment = os.environ.copy()
+        environment["GBB_RELEASE_MEASURE_SAMPLES"] = "30"
+        environment["GBB_RELEASE_MEASURE_WARMUPS"] = "3"
+        environment["GBB_AB_BASE_REVISION"] = baseline_sha
+        environment["GBB_AB_HEAD_REVISION"] = candidate_sha
+        ab_path = temp / "interleaved-observation.json"
+        environment["GBB_AB_RECEIPT"] = str(ab_path)
+        script = root / "tests/scripts/measure-release-baseline.sh"
+        output_text = run(["bash", str(script), "--ab", str(binaries[0]), str(binaries[1])],
+                          cwd=root, env=environment, timeout=900)
+        print(output_text.strip())
+        ab = json.loads(ab_path.read_text(encoding="utf-8"))
+        raw_base = ab["raw_core_elapsed_ns"]["base"]
+        raw_candidate = ab["raw_core_elapsed_ns"]["head"]
+        pairs = [
+            {"baseline_ns": raw_base[index], "candidate_ns": raw_candidate[index],
+             "first": "baseline" if index % 2 == 0 else "candidate"}
+            for index in range(30)
+        ]
+        measurement_summary = {
+            "median_candidate_to_baseline_percent": ab["ratio"]["median"],
+            "mean_candidate_to_baseline_percent": ab["ratio"]["mean"],
+            "sample_standard_deviation_percent": ab["uncertainty"]["sd"],
+            "approx_95_percent_mean_margin": ab["uncertainty"]["margin_95"],
+            "noise_label": ab["noise_label"],
+            "review_trigger": ab["review_trigger"],
+        }
+        triggered = bool(ab["review_trigger"])
+        if review_notes and ("\n" in review_notes or "\r" in review_notes or
+                             re.search(r"/(Users|home|private|tmp)/|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+", review_notes)):
+            raise SystemExit("qualify-v02-review-notes-not-private")
+        estimate = ab["ratio"]["median"] - 100.0
+        margin = ab["uncertainty"]["margin_95"]
+        reviewed_trigger = triggered and bool(review_notes)
+        disposition = {
+            "review_trigger_percent": 5.0,
+            "estimate_percent": estimate,
+            "uncertainty_margin_percent": margin,
+            "decision": "accepted-with-disclosed-regression" if reviewed_trigger else
+                        ("investigation-required" if triggered else "within-noise"),
+            "investigation": review_notes if reviewed_trigger else
+                             ("The +5% trigger fired; automated qualification remains pending until a source and measurement review is recorded."
+                              if triggered else
+                              "The median estimate did not clear +5% after accounting for the approximate 95% mean margin."),
+            "release_disposition": "accepted-with-disclosed-regression" if reviewed_trigger else
+                                  ("pending-investigation" if triggered else "qualified-no-trigger"),
+        }
+        receipt = {
+            "schema_version": 1,
+            "result": "passed" if not triggered or reviewed_trigger else "pending-investigation",
+            "source": {"baseline": base_source, "candidate": candidate_source},
+            "builds": builds,
+            "hardware_class": f"{platform.system()} {platform.machine()}",
+            "workload": {
+                "id": workload_id,
+                "model": "DMG-CPU-B",
+                "fixture": fixture_path,
+                "fixture_sha256": fixture_hash,
+                "fixture_manifest_sha256": manifest_hash,
+                "budget_half_dots": 1_000_000,
+                "correctness_digest_fnv1a64": expected_digest,
+            },
+            "measurement": {
+                "warmups": 3,
+                "paired_samples": 30,
+                "pairs": pairs,
+                "summary": measurement_summary,
+                "uncertainty_method": "paired median, sample standard deviation and approximate 95% mean margin",
+            },
+            "regression_disposition": disposition,
+        }
+        text = json.dumps(receipt, indent=2, sort_keys=True) + "\n"
+        temp_output = output.with_name(output.name + f".tmp-{os.getpid()}")
+        with open(temp_output, "x", encoding="utf-8") as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        try:
+            os.link(temp_output, output)
+        except FileExistsError:
+            temp_output.unlink(missing_ok=True)
+            raise SystemExit(f"qualify-v02-output-exists: {output.name}")
+        temp_output.unlink()
+        print(f"wrote provenance-bound candidate receipt: {output.name}")
+        if triggered and not reviewed_trigger:
+            raise SystemExit("qualify-v02-review-trigger-fired: receipt remains pending-investigation")
+    finally:
+        if candidate_worktree:
+            subprocess.run(["git", "worktree", "remove", "--force", str(candidate_src)], cwd=root,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        if base_worktree:
+            subprocess.run(["git", "worktree", "remove", "--force", str(baseline_src)], cwd=root,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+PYQUAL
 exit $?
 fi
 
