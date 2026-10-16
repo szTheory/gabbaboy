@@ -19,8 +19,8 @@ actuals:
   tokens: 25768
   tasks: 3
   commits: 12
-plan_head_before: 4ac2120ecf41f8b96e999f2adb89b816bd184123
-plan_head_after: 019cb00fb6f62f6dac0ff085dfc8c1019209677e
+plan_head_before: 30fcb3a9bb6b8ed36f3f4e29225807c298d3e993
+plan_head_after: e21112c259a10d1d6c6a049eddb852435104facc
 commits: 12
 tech-stack:
   added: []
@@ -224,3 +224,7 @@ Plan 14-12 is complete. The parent workflow owns the aggregate Phase 14 verifica
 - Summary file exists at the required plan path.
 - All twelve measured plan commits are ancestors of the recorded `plan_head_after`.
 - `summary_coverage` passes with five entries; all coverage verification items are automated and marked `human_judgment: false`.
+
+## Sanitized ancestry
+
+The top-level commit windows use sanitized unpublished ancestry. Historical execution revision IDs and task IDs above remain as originally recorded; [14-HISTORY-REDACTION.md](14-HISTORY-REDACTION.md) maps them to the equivalent sanitized commits. Fresh final qualification is recorded separately after this rewrite.

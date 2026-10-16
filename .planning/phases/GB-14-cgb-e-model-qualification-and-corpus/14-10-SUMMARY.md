@@ -23,8 +23,8 @@ actuals:
   tokens: 65338
   tasks: 2
   commits: 5
-plan_head_before: f035813fc4fab2539d5bf913b645f8bd214824c8
-plan_head_after: 8083b255c4145b27ae39226d298a951351467043
+plan_head_before: affaa4f28665e2e5a4c655cf67b199bf8088c37a
+plan_head_after: 7721a5cefe05eaf4ce43188441ac82f8c42c61c3
 tech-stack:
   added: []
   patterns:
@@ -192,3 +192,7 @@ The first targeted CTest invocation used a nonexistent `build/phase1` directory;
 
 All created and modified plan artifacts exist, `summary_coverage` passes for the block-schema coverage records, and all five task commits are ancestors of the implementation head.
 
+
+## Sanitized ancestry
+
+The top-level commit windows use sanitized unpublished ancestry. Historical execution revision IDs and task IDs above remain as originally recorded; [14-HISTORY-REDACTION.md](14-HISTORY-REDACTION.md) maps them to the equivalent sanitized commits. Fresh final qualification is recorded separately after this rewrite.

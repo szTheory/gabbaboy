@@ -24,8 +24,8 @@ actuals:
   tasks: 3
   commits: 5
 commits: 5
-plan_head_before: cc7a2cefd7b8d7961bc064a8629355725fdff9e3
-plan_head_after: 048723cff5b686a8a7858ddb226fa36ce7cf5c94
+plan_head_before: e566a7fcd149ac7b6e801a61c0ed2ce15ca7044f
+plan_head_after: cb54cc62c2985eaef63d4f6f2d820d21ddde1c09
 tech-stack:
   added: []
   patterns:
@@ -173,3 +173,7 @@ The APU cohort is ready for Plan 14-11 receipt aggregation. The six admitted AGE
 ## Self-Check: PASSED
 
 The summary exists, all five task commits are ancestors of the recorded plan head, the commit window measures five commits, and the `summary_coverage` and `summary_coverage_selftest` CTests passed.
+
+## Sanitized ancestry
+
+The top-level commit windows use sanitized unpublished ancestry. Historical execution revision IDs and task IDs above remain as originally recorded; [14-HISTORY-REDACTION.md](14-HISTORY-REDACTION.md) maps them to the equivalent sanitized commits. Fresh final qualification is recorded separately after this rewrite.

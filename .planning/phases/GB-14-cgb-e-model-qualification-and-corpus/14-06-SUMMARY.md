@@ -21,7 +21,7 @@ actuals:
   commits: 4
 commits: 4
 plan_head_before: 74bad9a53867584190e7be66c32d6c387b9f03b3
-plan_head_after: b0224028f3e77aad09e3cfd9e2164086cc90d134
+plan_head_after: 4c927c4bf87dbabc41042c6757340d4e04f757ea
 tech-stack:
   added: []
   patterns:
@@ -209,3 +209,7 @@ Plan 14-06 is complete. Phase-level verification, STATE.md and continuation rout
 ## Self-Check: PASSED
 
 All five new fixture files and this summary exist. Task commits `401b6e0`, `fb1b4d4`, `52cd2ec`, and `b022402` are ancestors of HEAD.
+
+## Sanitized ancestry
+
+The top-level commit windows use sanitized unpublished ancestry. Historical execution revision IDs and task IDs above remain as originally recorded; [14-HISTORY-REDACTION.md](14-HISTORY-REDACTION.md) maps them to the equivalent sanitized commits. Fresh final qualification is recorded separately after this rewrite.

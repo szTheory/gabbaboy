@@ -61,8 +61,8 @@ actuals:
   tokens: 34452
   tasks: 2
   commits: 4
-plan_head_before: 3953b9429fe01d1ef8de4375df2818f24f7c91ba
-plan_head_after: d9a9bfaec6d81f801e131f0505a29c26d05daa37
+plan_head_before: ff3367ca22eac6f87cf8bbcb542264dd0c50bafe
+plan_head_after: f3827cc56b9198edc38d8f3c6215697ccbe9c662
 requirements-completed: []
 coverage:
   - id: D1
@@ -215,3 +215,7 @@ Plan 14-09 is complete. Plan 14-11 can consume the stable six image case identit
 ---
 *Phase: 14-cgb-e-model-qualification-and-corpus*
 *Completed: 2026-10-15*
+
+## Sanitized ancestry
+
+The top-level commit windows use sanitized unpublished ancestry. Historical execution revision IDs and task IDs above remain as originally recorded; [14-HISTORY-REDACTION.md](14-HISTORY-REDACTION.md) maps them to the equivalent sanitized commits. Fresh final qualification is recorded separately after this rewrite.

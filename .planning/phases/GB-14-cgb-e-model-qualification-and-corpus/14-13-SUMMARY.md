@@ -29,8 +29,8 @@ actuals:
   tasks: 3
   commits: 6
 commits: 6
-plan_head_before: a332e67b6b570c4e47f79a83b28b943dbff7d4d9
-plan_head_after: 42ff03c2611d5704ee7d0ca410e7ec4803a60e0e
+plan_head_before: b1ff601e665a45816a9606f1af5c5035e5ee8668
+plan_head_after: a29f8c92c84e072cb23775bdfecd88a8a839bc39
 tech-stack:
   added: []
   patterns:
@@ -235,3 +235,7 @@ Plan 14-13 is complete. The parent workflow still owns Phase 14 aggregate verifi
 - All newly created files listed in this summary exist.
 - All six task commits and all twelve earlier plan-head windows are ancestors of the current code head.
 - Strict `summary_coverage` and `summary_coverage_selftest` pass for this block-style summary.
+
+## Sanitized ancestry
+
+The top-level commit windows use sanitized unpublished ancestry. Historical execution revision IDs and task IDs above remain as originally recorded; [14-HISTORY-REDACTION.md](14-HISTORY-REDACTION.md) maps them to the equivalent sanitized commits. Fresh final qualification is recorded separately after this rewrite.

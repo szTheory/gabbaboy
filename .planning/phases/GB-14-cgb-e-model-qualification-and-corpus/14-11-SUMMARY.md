@@ -23,8 +23,8 @@ actuals:
   tokens: 31550
   tasks: 3
   commits: 7
-plan_head_before: e5bd88f9ac63a69fc493d45f510d82ce56e2be6d
-plan_head_after: d963f75008071e09d5740dfcade638eb222bc467
+plan_head_before: b78ba07c2f36d1fa837a90cbcd7d1d13742805d2
+plan_head_after: 8b1f120fa296ae1212bdf68e6147e0da3c5db47f
 tech-stack:
   added: [Python standard library]
   patterns: [identity-bound run receipts, bounded CTest event parsing, source-derived assertion contracts]
@@ -210,3 +210,7 @@ Plan 14-11 is complete. Phase 14 remains open pending the parent workflow's full
 ## Self-Check: PASSED
 
 The summary file exists, all six implementation and regression commits are ancestors of the recorded plan head, and the summary_coverage CTest passed.
+
+## Sanitized ancestry
+
+The top-level commit windows use sanitized unpublished ancestry. Historical execution revision IDs and task IDs above remain as originally recorded; [14-HISTORY-REDACTION.md](14-HISTORY-REDACTION.md) maps them to the equivalent sanitized commits. Fresh final qualification is recorded separately after this rewrite.
