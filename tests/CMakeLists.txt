@@ -1699,7 +1699,9 @@ set(GBB_CGB_BUILD_CONTRACT_INPUTS
   "${PROJECT_SOURCE_DIR}/.github/workflows/ci.yml")
 set(GBB_CGB_CORPUS_BUILD_STAMP "${PROJECT_BINARY_DIR}/cgb-corpus-build-stamp.json")
 add_custom_target(cgb_corpus_build_stamp ALL
-  COMMAND "${Python3_EXECUTABLE}" -I
+  COMMAND "${CMAKE_COMMAND}" -E env
+    "GBB_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}"
+    "${Python3_EXECUTABLE}" -I
     "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-report.py"
     --write-build-stamp --build-dir "${PROJECT_BINARY_DIR}"
   DEPENDS ${GBB_CGB_BUILD_CODE_INPUTS} ${GBB_CGB_BUILD_FIXTURE_INPUTS}

@@ -492,6 +492,16 @@ class CorpusReportControlsTests(unittest.TestCase):
 
         context = report.load_corpus_context()
         identity = report.full_build_identity(BUILD_DIR, context)
+        # Check the real producer stamp, including the configured CTest bytes.
+        # A PATH tool and a pinned floor tool must never share green evidence.
+        report.verify_build_stamp(BUILD_DIR, identity)
+        with mock.patch.object(report.shutil, "which", return_value=sys.executable):
+            wrong_tool_identity = report.full_build_identity(BUILD_DIR, context)
+        self.assertNotEqual(identity["tools"]["ctest_sha256"],
+                            wrong_tool_identity["tools"]["ctest_sha256"])
+        with self.assertRaises(report.ReportError) as raised:
+            report.verify_build_stamp(BUILD_DIR, wrong_tool_identity)
+        self.assertEqual(raised.exception.code, "build-input-stamp-mismatch")
         mooneye_id = "mooneye:misc/boot_hwio-C.s"
         mooneye_item = copy.deepcopy(context["cases"][mooneye_id])
         case = mooneye_item["case"]
