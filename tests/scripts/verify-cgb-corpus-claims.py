@@ -457,11 +457,7 @@ def validate_receipt(path: Path, inventory: dict[str, Any]) -> dict[str, Any]:
             if expected_value is not None:
                 require(evidence.get(field) == expected_value,
                         "receipt-source-result-ancestry-mismatch")
-    aggregate = ["cgb_samesuite_apu_suite"]
-    require(identity.get("case_ctest_names") == sorted(expected_names.values()) and
-            identity.get("aggregate_ctest_names") == aggregate and
-            identity.get("ctest_names") == sorted(expected_names.values() + aggregate),
-            "receipt-ctest-ancestry-mismatch")
+    validate_ctest_ancestry(identity, expected_names)
     require(receipt.get("run", {}).get("ctest_cases") == 108 and
             receipt.get("run", {}).get("id") == identity.get("run_id") and
             bool(receipt.get("run", {}).get("run_nonce_sha256")),
@@ -501,6 +497,16 @@ def validate_receipt(path: Path, inventory: dict[str, Any]) -> dict[str, Any]:
     return receipt
 
 
+def validate_ctest_ancestry(identity: dict[str, Any], expected_names: dict[str, str]) -> None:
+    aggregate = ["cgb_samesuite_apu_suite"]
+    case_names = sorted(expected_names.values())
+    all_names = sorted([*expected_names.values(), *aggregate])
+    require(identity.get("case_ctest_names") == case_names and
+            identity.get("aggregate_ctest_names") == aggregate and
+            identity.get("ctest_names") == all_names,
+            "receipt-ctest-ancestry-mismatch")
+
+
 def assert_control(name: str, fn, expected: str) -> None:
     try:
         fn()
@@ -525,6 +531,21 @@ def mutate_block(text: str, key: str, old: str, new: str) -> str:
 def run_self_test() -> None:
     baseline = read_surfaces()
     validate_static(baseline)
+
+    ctest_names = {"case-a": "cgb_case_a", "case-b": "cgb_case_b"}
+    ctest_identity = {
+        "case_ctest_names": ["cgb_case_a", "cgb_case_b"],
+        "aggregate_ctest_names": ["cgb_samesuite_apu_suite"],
+        "ctest_names": ["cgb_case_a", "cgb_case_b", "cgb_samesuite_apu_suite"],
+    }
+    validate_ctest_ancestry(ctest_identity, ctest_names)
+
+    def omitted_aggregate_test() -> None:
+        changed = dict(ctest_identity)
+        changed["ctest_names"] = ["cgb_case_a", "cgb_case_b"]
+        validate_ctest_ancestry(changed, ctest_names)
+    assert_control("omitted-aggregate-test", omitted_aggregate_test,
+                   "receipt-ctest-ancestry-mismatch")
 
     def matrix_mutant() -> None:
         changed = dict(baseline)
@@ -640,7 +661,7 @@ def run_self_test() -> None:
         validate_product_surfaces(changed)
     assert_control("product-analog-limit-omission", product_analog_limit_omission,
                    "product-limit-missing:preview")
-    print("cgb-corpus-claims self-test pass controls=14")
+    print("cgb-corpus-claims self-test pass controls=15")
 
 
 def main() -> int:
