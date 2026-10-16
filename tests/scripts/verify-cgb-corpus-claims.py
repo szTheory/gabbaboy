@@ -21,6 +21,10 @@ CLAIM_DOCS = {
     "audio": "docs/audio-and-playback.md",
     "gates": "docs/model-gates.md",
     "corpus": "docs/cgb-corpus.md",
+    "readme": "README.md",
+    "preview": "docs/preview.md",
+    "unreleased": "docs/support/unreleased.md",
+    "player": "src/player/limitations.h",
 }
 PROFILE_ROWS = {
     ("$FF76", "DMG"): ("stop", "ignored"),
@@ -73,6 +77,11 @@ UNQUALIFIED_CLAIM = re.compile(
     r"physical\s+CGB-E\s+analog\s+(?:audio|color)\s+(?:is\s+)?"
     r"(?:qualified|measured|verified|proven)|"
     r"general game compatibility\s+(?:is\s+)?(?:qualified|proven|claimed))",
+    re.IGNORECASE,
+)
+XFAIL_AS_PASS_CLAIM = re.compile(
+    r"(?:matched\s+xfails?|expected[- ]failures?)[\w\s-]{0,35}"
+    r"(?:are|count(?:ed)? as|treated as|included in).{0,35}(?:guest\s+|observed\s+)?passes?",
     re.IGNORECASE,
 )
 MARKERS = {
@@ -260,6 +269,31 @@ def validate_ledger(block: str, inventory: dict[str, Any]) -> None:
         require(actual.get(gate) == row, f"research14-ledger-row-mismatch:{gate}")
 
 
+def validate_product_surfaces(surfaces: dict[str, str]) -> None:
+    limits = {
+        "readme": "No physical CGB-E, analog audio, or general game compatibility claim follows",
+        "preview": "No physical CGB-E audio, analog output, or general game compatibility claim follows",
+        "unreleased": "These tests do not qualify physical CGB-E, analog audio/color, or general game compatibility",
+        "player": "physical CGB-E remains UNKNOWN/POLICY",
+    }
+    for key, limit in limits.items():
+        text = " ".join(surfaces[key].split())
+        require("FF76/FF77" in text and "digital DAC inputs" in text,
+                f"product-claim-missing:{key}")
+        require(re.search(r"compatibility mode reads `?\$FF`?", text, re.IGNORECASE) is not None,
+                f"product-compatibility-policy-missing:{key}")
+        require("CGB-CPU-E software model" in text,
+                f"product-model-scope-missing:{key}")
+        require(re.search(r"(?:DMG APU|APU.{0,20}DMG).{0,35}(?:model|playback)|"
+                          r"(?:model|playback).{0,35}(?:DMG APU|APU.{0,20}DMG)",
+                          text, re.IGNORECASE) is not None,
+                f"product-playback-scope-missing:{key}")
+        require(limit.lower() in text.lower(), f"product-limit-missing:{key}")
+    all_public = "\n".join(surfaces[key] for key in limits)
+    require(XFAIL_AS_PASS_CLAIM.search(all_public) is None,
+            "xfail-inflated-public-claim")
+
+
 def validate_observation_counts(cases: list[dict[str, Any]], claimed: dict[str, Any]) -> None:
     total = len(cases)
     passes = sum(case.get("observed_result") == "pass" and
@@ -350,11 +384,12 @@ def validate_static(surfaces: dict[str, str] | None = None) -> tuple[dict[str, A
             "receipt-schema-contract-mismatch")
     require("--begin-run" in corpus and "--from-ctest" in corpus,
             "receipt-protocol-evidence-missing")
-    all_public = "\n".join(surfaces[key] for key in ("profile", "audio", "gates", "corpus"))
+    all_public = "\n".join(surfaces.values())
     require(UNQUALIFIED_CLAIM.search(all_public) is None, "unqualified-hardware-or-game-claim")
     for token in ("eight observed guest passes", "8 terminal guest passes", "62 exact current-observation xfails",
                   "18,208 pixels differ", "4,784 result assertions", "25 observed passes and 82 matched"):
         require(token not in all_public, "stale-observed-count-in-public-claim")
+    validate_product_surfaces(surfaces)
     validate_observation_counts(
         [{"observed_result": "pass", "evaluator_status": "pass", "attempted": True,
           "completed": True, "matched_xfail": False, "assertions": [
@@ -514,6 +549,13 @@ def run_self_test() -> None:
         validate_static(changed)
     assert_control("hardware-overclaim", hardware_overclaim, "unqualified-hardware-or-game-claim")
 
+    def product_hardware_overclaim() -> None:
+        changed = dict(baseline)
+        changed["preview"] += "\nPhysical CGB-E is qualified by this corpus.\n"
+        validate_static(changed)
+    assert_control("product-hardware-overclaim", product_hardware_overclaim,
+                   "unqualified-hardware-or-game-claim")
+
     def analog_overclaim() -> None:
         changed = dict(baseline)
         changed["corpus"] = changed["corpus"].replace(
@@ -575,7 +617,30 @@ def run_self_test() -> None:
              "passing_assertions": 0},
         )
     assert_control("xfail-inflated-pass-count", inflated_xfail_passes, "receipt-counts-mismatch")
-    print("cgb-corpus-claims self-test pass controls=10")
+
+    def product_xfail_inflation() -> None:
+        changed = dict(baseline)
+        changed["readme"] += "\nMatched xfails are counted as observed passes.\n"
+        validate_product_surfaces(changed)
+    assert_control("xfail-inflated-product-claim", product_xfail_inflation,
+                   "xfail-inflated-public-claim")
+
+    def product_compatibility_omission() -> None:
+        changed = dict(baseline)
+        changed["readme"] = changed["readme"].replace(
+            "CGB compatibility mode reads `$FF`", "CGB compatibility mode is undocumented", 1)
+        validate_product_surfaces(changed)
+    assert_control("product-compatibility-omission", product_compatibility_omission,
+                   "product-compatibility-policy-missing:readme")
+
+    def product_analog_limit_omission() -> None:
+        changed = dict(baseline)
+        changed["preview"] = changed["preview"].replace(
+            "analog output", "digital output", 1)
+        validate_product_surfaces(changed)
+    assert_control("product-analog-limit-omission", product_analog_limit_omission,
+                   "product-limit-missing:preview")
+    print("cgb-corpus-claims self-test pass controls=14")
 
 
 def main() -> int:

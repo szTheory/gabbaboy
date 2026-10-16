@@ -10,6 +10,13 @@ for MBC1, MBC2, MBC3 and MBC5 battery cartridges across restarts, with v0.1
 MBC1 saves unchanged, and plays back the core's scoped DMG-CPU-B digital APU
 model through SDL3. The player runs DMG and CGB software with `--model auto|dmg|cgb` (default dmg) and colour presentation on the CGB profile; DMG software on the CGB profile uses the core's fixed original compatibility palette and the player has no palette flag. There is no colour correction: each 5-bit channel is expanded with (c << 3) | (c >> 2). CGB-profile audio uses the DMG APU model. CGB double speed is implemented; GDMA and HBlank DMA run on the selected bootless CGB-CPU-E software model. The bounded transfer cadence remains software policy; CGB mode-3 timing is not claimed; physical CGB-E remains UNKNOWN/POLICY. General game compatibility is not claimed, with no physical-hardware accuracy claim.
 
+Native CGB guest code can read FF76/FF77 digital DAC inputs on the CGB-CPU-E
+software model; CGB compatibility mode reads `$FF`. Those guest register observations do not change the player's
+DMG APU playback model; current corpus results come from the versioned private
+receipt. No physical CGB-E, analog audio, or general game compatibility claim
+follows from these software tests. See the [CGB corpus contract](docs/cgb-corpus.md)
+and [audio and playback contract](docs/audio-and-playback.md).
+
 ## Audio and playback evidence
 
 The core emits caller-owned 48 kHz signed 16-bit interleaved stereo PCM from

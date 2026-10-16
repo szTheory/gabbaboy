@@ -63,3 +63,8 @@ These entries are pending inclusion in the next versioned support ledger, `docs/
 - Timing and bounds: the selected model commits one byte every four master half-dots, 64 half-dots per 16-byte block, with no modeled startup or teardown. Source and destination ranges are checked per block before mutation; unsupported windows and overflow stop with `GBB_STOP_UNSUPPORTED_BUS`, retaining earlier completed blocks.
 - Evidence and limits: the admitted SameSuite and MagenTests cases pass on the selected model; MagenTests is SameBoy-assisted differential evidence. This does not qualify physical CGB-E hardware. The D-06 `$83` -> `$02` -> `$00` -> `$80` sequence remains in conflict with Pan Docs and physical CGB-E remains UNKNOWN/POLICY. Optional Mealybug CGB-C cases are `not-run:rights-gate-G1`, informational only, and outside the CGB-E denominator. CGB mode-3 timing, physical APU behavior, and general game compatibility are not claimed.
 
+## CGB digital APU reads (Phase 14)
+
+- Scope: native CGB guest reads of FF76/FF77 expose the channel-pair digital DAC inputs on the selected CGB-CPU-E software model. Compatibility mode reads `$FF`; player playback continues using the scoped DMG APU model.
+- Evidence and limits: pinned SameSuite author expectations remain separate from evaluator outcomes and SameBoy differential evidence. Current completion and changing result totals come from the fresh private receipt described in the [CGB corpus contract](../cgb-corpus.md). These tests do not qualify physical CGB-E, analog audio/color, or general game compatibility. See the [audio and playback contract](../audio-and-playback.md).
+
