@@ -1,9 +1,7 @@
 # Phase 14 continuation
 
-Completed stage: **Phase 14 — CGB-E Model Qualification and Corpus, execution and goal verification**. All 13 plans, 31 tasks and 11 waves are complete; canonical goal verification passes 41/41. CGB-08 and CGB-10 are complete. See `14-CLOSURE.md`, `14-VERIFICATION.md`, the 13 SUMMARY files and review dispositions for source-bound evidence.
+Completed stage: **Phase 14 — CGB-E Model Qualification and Corpus, automated UAT complete**. All 49 SUMMARY deliverables and 13 bounded commit windows close automatically with zero issues or human checkpoints. Canonical goal verification passes 41/41, security closes 27/27 threats and Nyquist covers 31/31 tasks. See `14-UAT.md`, `14-CLOSURE.md` and `14-VERIFICATION.md` for revision-bound proof.
 
-Next stage: **Phase 14 automated UAT closure**, reconciling completed SUMMARY coverage and bounded commit windows. Next command: `/gsd-verify-work 14`.
+Next stage: **Phase 15 discussion**. Next command: `/gsd-discuss-phase 15`.
 
-Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release** remains unstarted. Do not auto-start it. Both auto flags remain false. Reuse prior discussion/research and completed Phase 13 UAT; do not repeat implementation or fabricate human checkpoints. Physical CGB-E remains UNKNOWN/POLICY. Release PR #70 is reserved for Phase 15; phase PR #71 remains the execution handoff.
-
-Runtime: installed OpenGSD 1.16.0 at `$HOME/.codex/gsd-core/bin/gsd-tools.cjs`; never use an unqualified foreign `gsd_run`. Preserve the owner's config and state timestamp edits. Exact-head hosted checks are separate from historical producer receipts; GitHub holds final job status.
+Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release** remains unstarted. Both auto-advance flags remain false. Do not auto-start it, replay completed implementation/research/UAT, or fabricate confirmation-only checkpoints. Reopen only changed covered contracts, a concrete regression, or stale/unavailable evidence. Physical CGB-E remains UNKNOWN/POLICY. Release PR #70 remains reserved for Phase 15; PR #71 holds exact-head hosted status and its eventual merge receipt.

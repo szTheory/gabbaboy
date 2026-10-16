@@ -777,3 +777,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Status:** Adopted. No new dependency or hosted job.
 
 - **GB-CI-009 default-run supplement:** Existing regression methods are now wired into the required `cgb_corpus_report_platform_controls` CTest and the early floor gate, so the eight suffix/reader controls run by default. Verify registration and the required inventory as well as a direct unittest pass. The pre-wiring aggregate stream was intentionally stopped before its inputs changed; its incomplete receipt is not a pass.
+
+### GB-GSD-023 / 2026-10-16 / Close automated UAT across every live handoff surface
+
+- **Cause and evidence:** Phase 14 execution and goal verification were complete, but PROJECT still routed to execution and INDEX called execution underway. The API gate selected a hardware source-coverage document as an external API matrix. All 49 deliverables already classified as automated, so confirmation-only UAT would add toil without evidence.
+- **Remedy:** Reconcile each SUMMARY against its bounded ancestor window, retain legacy count-location warnings, and map every coverage id, exact criterion and verification reference into automated UAT. Record the existing reasoned no-external-integration declaration. Check the live STATE, continuation, PROJECT and false auto flags together; keep historical receipts bounded and preserve their actual producer revisions. Reuse completed UAT unless covered contracts, contrary evidence or freshness change.
+- **Applies when:** A phase has deterministic SUMMARY coverage and several durable continuation surfaces; no human judgment or external credential/hardware action is needed for its declared deliverables.
+- **Verification:** Phase 14 `verify-uat-contract.py --self-test` rejects 17 weakened closure records, ten stale handoff/auto-advance records and two invalid commit claims; the API matrix accepts the reasoned declaration and rejects missing-reason and undecided opt-out controls. Existing CI retains recurring behavioral, integration, e2e, seam, smoke, package and schema checks; no new dependency or duplicate lane.
+- **Source:** `14-UAT.md`, `COVERAGE.md` and `verify-uat-contract.py` in the Phase 14 directory.
+- **Status:** Adopted; D-069 remains the standing zero-routine-human-UAT default. Stop before Phase 15.

@@ -6,7 +6,7 @@ GabbaBoy is an original, portable C17 emulator core for Game Boy (DMG) and Game 
 
 ## Current State
 
-**Phase 14 planning is complete; execution remains unstarted.** [DEEP research](phases/GB-14-cgb-e-model-qualification-and-corpus/14-RESEARCH.md), [source/decision coverage](phases/GB-14-cgb-e-model-qualification-and-corpus/14-SOURCE-COVERAGE.md) and [independent plan check](phases/GB-14-cgb-e-model-qualification-and-corpus/14-PLAN-CHECK.md) support 13 plans, 31 tasks and 11 waves. The final checker reports zero blockers/warnings, with both requirements and all 25 decisions covered. Next command: `/gsd-execute-phase 14`. Plan verification is static; no new behavior, fixture admission, qualification corpus or CGB-08/CGB-10 completion is claimed. D-069 automation-first verification and D-096 small/flat dependencies carry forward; both auto flags remain false. Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release remains unstarted.
+**Phase 14 automated UAT is complete.** [14-UAT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md) closes all 49 deliverables across 13 plans, reconciles all 13 bounded commit windows, and requires zero human checkpoints. [Goal verification](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08/CGB-10 are complete. The software corpus contains 107 cases, 25 actual passes and 82 matched expected failures. Exact-head hosted CI and merge status live on PR #71. Physical CGB-E remains UNKNOWN/POLICY; analog/perceptual output and general game compatibility remain unqualified. D-069 automation-first verification and D-096 small/flat dependencies carry forward; both auto flags remain false. Next command: `/gsd-discuss-phase 15`. Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release remains unstarted.
 
 **Phase 13 is a completed prerequisite:** execution 12/12, canonical goal verification 37/37, automated UAT 45/45 with zero human checkpoints, CGB-07 closed, and PR #69 merged at `261c660396db65712dabb5f65b3e81ee5b0a3453`. Reuse its source-qualified records and completed UAT rather than restarting them. Its 5/5 software-fixture denominator, physical CGB-E UNKNOWN/POLICY, optional CGB-C rights exclusion and D-06/Pan Docs discrepancy remain explicit.
 
@@ -134,4 +134,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-10-15 after Phase 14 planning; /gsd-execute-phase 14 is next.
+Last updated: 2026-10-16 after Phase 14 automated UAT; /gsd-discuss-phase 15 is next.

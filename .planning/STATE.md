@@ -5,11 +5,11 @@ milestone_name: Color & Cartridge Breadth
 current_phase: 14
 current_phase_name: CGB-E Model Qualification and Corpus
 current_plan: 13
-status: verifying
-stopped_at: Phase 14 execution and goal verification complete; paused before automated UAT
-last_updated: "2026-10-16T02:19:39.171Z"
+status: complete
+stopped_at: Phase 14 automated UAT complete; paused before Phase 15
+last_updated: "2026-10-16T12:18:10.048952+00:00"
 last_activity: 2026-10-16
-last_activity_desc: Phase 14 execution complete; 41/41 verified; next automated UAT
+last_activity_desc: Phase 14 automated UAT complete; 49/49 automated; next Phase 15 discussion
 state_head: 2bc7d6e23393200f47bed44ede66bce8f945a538
 progress:
   total_phases: 9
@@ -26,28 +26,28 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-15)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 14 execution and goal verification complete; paused before automated UAT.
+**Current focus:** Phase 14 automated UAT complete; paused before Phase 15.
 
 ## Current Position
 
 Phase: 14 — CGB-E Model Qualification and Corpus
-Status: Phase 14 execution complete; paused for the owner
+Status: Phase 14 automated UAT complete; paused for the owner
 Current Plan: 13
 Total Plans in Phase: 13
 Last Activity: 2026-10-16
-Last Activity Description: Phase 14 execution complete; 41/41 verified; next automated UAT
+Last Activity Description: Phase 14 automated UAT complete; 49/49 automated; next Phase 15 discussion
 
-Completed workflow stage: **Phase 14 — CGB-E Model Qualification and Corpus, execution and goal verification**. All 13 plans, 31 tasks and 11 waves are complete. [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08 and CGB-10 are complete. Nyquist covers 31/31, security closes 27/27 threats, and all eight code-review findings plus the player copy assertion are fixed and independently checked.
+Completed workflow stage: **Phase 14 — CGB-E Model Qualification and Corpus, automated UAT complete**. [14-UAT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md) closes all 49 deliverables across 13 plans automatically, with zero issues, pending/skipped/blocked rows or human checkpoints. All 13 bounded commit windows reconcile. The canonical [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08 and CGB-10 are complete. Nyquist covers 31/31 tasks, security closes 27/27 threats, and all eight implementation review findings are fixed and independently checked.
 
-[14-CLOSURE.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-CLOSURE.md) binds the final native 1,138/1,138 regression and complete 107-case receipt to actual producer `4fe97f8784ee9c8382dc014c13bc8bbff6f777c4`. There are 25 actual passes and 82 matched expected failures; no hardware or general game qualification is claimed. The exact final PR head requires its own hosted checks. PR #71 remains the phase PR; release PR #70 is reserved for Phase 15.
+[14-CLOSURE.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-CLOSURE.md) preserves the execution receipts at their actual producers. Execution head `9c5b32dc4c75ad5f9eba44ff1c7b0a15ba0f9c7f` passed all 19 hosted jobs, including native Windows, Linux ASan/UBSan, fixture reproduction and packages. Final UAT metadata requires its own exact-head checks before the pre-authorized PR #71 merge; GitHub holds the current head and merge receipt. The complete software corpus contains 107 cases: 25 actual passes and 82 matched expected failures. Physical CGB-E remains UNKNOWN/POLICY; no analog, perceptual or general game qualification is claimed.
 
-Next stage: **Phase 14 automated UAT closure** from the completed SUMMARY coverage and bounded commit windows. Do not replay implementation, research or completed Phase 13 UAT.
-Next command: `/gsd-verify-work 14`.
-Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release** remains unstarted. After Phase 14 automated UAT, offer its discussion command and stop for the owner.
+Next stage: **Phase 15 discussion**.
+Next command: `/gsd-discuss-phase 15`.
+Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release** remains unstarted. Release PR #70 belongs to that phase. Stop at the Phase 14 boundary.
 
-Both auto-advance flags remain false. Preserve D-069 zero routine human UAT and negative controls, strict SUMMARY coverage, D-096 small/flat dependencies and D-099 independent corpus membership. Physical CGB-E remains UNKNOWN/POLICY. Completion warnings were heuristic prose/source-path references, assessed in [14-COMPLETION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-COMPLETION.md); no deliverable file is missing.
+Both auto-advance flags remain false. Preserve D-069 automated checks with meaningful negative controls, strict SUMMARY coverage, D-096 small/flat dependencies and D-099 independent corpus membership. Reuse completed UAT and research unless covered behavior changes, contrary evidence appears, or evidence is stale/unavailable; do not repeat execution or invent a confirmation-only checkpoint. Boundary-only closure and handoff checks stay local while recurring checks remain in existing CI.
 
-Progress (v0.2): 8/9 phases executed (89%); 124/124 currently planned plans complete (100%). Phase 15 has no plans and has not started.
+Progress (v0.2): 8/9 phases complete (89%); 124/124 currently planned plans complete (100%). Phase 15 has no plans and has not started.
 
 ### Historical Phase 13 handoff (superseded route; preserved receipts)
 
@@ -524,13 +524,13 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 ## Session Continuity
 
 Last session: 2026-10-16
-Stopped at: Phase 14 execution and goal verification complete; paused before automated UAT. Phase 15 remains unstarted.
+Stopped at: Phase 14 automated UAT complete; paused before Phase 15 discussion. Phase 15 remains unstarted.
 Resume file: .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/continue.md
-Next command: /gsd-verify-work 14
+Next command: /gsd-discuss-phase 15
 
 ## Operator Next Steps
 
-- Completed stage: **Phase 14 — CGB-E Model Qualification and Corpus, execution and goal verification**, 13/13 plans through wave 11/11.
-- Next stage: Phase 14 automated UAT closure; run `/gsd-verify-work 14`.
-- Reuse the completed implementation and source-bound evidence; exact-head hosted status is recorded on PR #71.
+- Completed stage: **Phase 14 — CGB-E Model Qualification and Corpus, automated UAT complete**, 49/49 deliverables and 13/13 bounded commit windows.
+- Next stage: Phase 15 discussion; run `/gsd-discuss-phase 15`.
+- Reuse the completed UAT and source-bound evidence; exact-head hosted status and merge state are recorded on PR #71.
 - Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release** remains unstarted. Stop at the Phase 14 boundary.
