@@ -775,3 +775,5 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** Nondefault-build five-test RED/GREEN; temporary Git autocrlf positive/negative control; four path spellings, seven invalid paths and capacity boundaries; exact missing-ROM failure; failing PATH CTest decoy RED/GREEN; actual-stamp substituted-tool rejection; all-child timeout propagation and invalid-limit rejection. Final hosted jobs must bind their own exact source head.
 - **Source:** Phase 14 CR-03 through CR-08, their fix/recheck reports and the exact-head CI failure receipts.
 - **Status:** Adopted. No new dependency or hosted job.
+
+- **GB-CI-009 default-run supplement:** Existing regression methods are now wired into the required `cgb_corpus_report_platform_controls` CTest and the early floor gate, so the eight suffix/reader controls run by default. Verify registration and the required inventory as well as a direct unittest pass. The pre-wiring aggregate stream was intentionally stopped before its inputs changed; its incomplete receipt is not a pass.

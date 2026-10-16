@@ -98,3 +98,7 @@ Approval: Nyquist validation is complete for Phase 14 deliverables. Phase closur
 | Gaps found | 31 |
 | Resolved | 31 |
 | Escalated | 0 |
+
+## Post-CI prevention controls
+
+The original 31 task coverage mappings remain automated. Two additional required CTests strengthen cross-platform prevention: `cgb_samesuite_apu_source_eol_controls` proves byte-stable autocrlf checkout, and `cgb_corpus_report_platform_controls` executes all eight existing executable/subprocess regression methods. The latter is also in the floor job's early gate. Its focused verbose run passed all eight methods; the full refreshed inventory is 1,138 tests. No manual-only row or new human checkpoint is introduced. Independent focused rechecks close all eight historical findings.
