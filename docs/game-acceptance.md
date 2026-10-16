@@ -9,6 +9,16 @@ This page states what the Phase 7 game acceptance evidence is, what each part pr
 - One game is not game compatibility. The evidence is not hardware evidence either: no physical DMG-CPU-B was observed.
 - Asset rights are stated as an inference, not a per-asset licence grant: they rest on single-author history (285 of 286 upstream commits by one author, one constants commit by another) plus the repository-wide zlib licence. This matches the `scope_note` in the fixture manifest.
 
+## CGB game evidence
+
+No CGB game-level evidence exists.
+
+The bounded native-CGB candidate attempt closed without admitting any game bytes. Rebound was inspected at source commit `cc2966e1643d480d0780fb6cc5b9ef53d5ef6898`. Its pinned build attempt failed with RGBDS v1.0.4; the official RGBDS v1.0.1 archive (SHA-256 `2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645`) was also checked and produced 494 assembler errors. No output ROM or ROM digest was produced. Per-asset rights remain unresolved. The older candidate digest `195765b8ca3b0fb7d37b7b92d0242d6c7e01ec71f27f93e565fa081e449cbb92` is unverified historical metadata and is not tied to an admitted ROM.
+
+This attempt ended at the build and rights gates. No broader candidate hunt or runner adaptation was performed, and no CGB game bytes were admitted. Libbet and the Magic Floor v0.08 remains the DMG game acceptance described below; its guest-memory progress predicate is separate from its RGB555 and PCM regression observations and from the CGB test-ROM corpus. See the [CGB corpus contract](cgb-corpus.md) for that software-model evidence.
+
+Physical CGB-E remains UNKNOWN/POLICY. No physical or perceptual audio/color qualification is claimed.
+
 ## How acceptance works
 
 - Input is a `gbinput 1` script (`tests/acceptance/inputs/libbet-tutorial.input`) whose times are master-timeline units (one frame is 140448 half-dots). Frame boundaries come from the master timeline, not from a count of completed frames.
