@@ -15,6 +15,7 @@ DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = Path(__file__).resolve()
 MAX_DOCUMENT_BYTES = 1_048_576
 GAME_GUIDE = "docs/game-acceptance.md"
+README = "README.md"
 ABSENCE_STATEMENT = "No CGB game-level evidence exists"
 UNSUPPORTED_GAME_CLAIM = re.compile(
     r"\bCGB\s+game(?:-level)?\s+(?:acceptance\s+)?"
@@ -83,9 +84,38 @@ def check_game(root: Path) -> int:
     return checks
 
 
-def child_result(root: Path, reason: str | None = None) -> None:
+def check_readme(root: Path) -> int:
+    text = read_document(root, README)
+    checks = 0
+    require(ABSENCE_STATEMENT in text,
+            f"absence-statement-missing:{README}")
+    checks += 1
+    require(UNSUPPORTED_GAME_CLAIM.search(text) is None,
+            f"unsupported-cgb-game-qualification:{README}")
+    checks += 1
+    evidence = (
+        ("Physical CGB-E remains UNKNOWN/POLICY", "physical-cgb-limit-missing"),
+        ("No physical or perceptual audio/color qualification is claimed",
+         "perceptual-output-limit-missing"),
+        ("CGB test-ROM corpus results are software-model evidence, not game acceptance",
+         "corpus-game-evidence-confused"),
+        ("[CGB corpus contract](docs/cgb-corpus.md)", "cgb-corpus-evidence-link-missing"),
+        ("[game acceptance evidence](docs/game-acceptance.md)",
+         "game-evidence-link-missing"),
+    )
+    for expected, reason in evidence:
+        require(expected in text, f"{reason}:{README}")
+        checks += 1
+    return checks
+
+
+def check_docs(root: Path) -> int:
+    return check_game(root) + check_readme(root)
+
+
+def child_result(root: Path, mode: str, reason: str | None = None) -> None:
     result = subprocess.run(
-        [sys.executable, "-I", str(SCRIPT), "--check", "game", "--root", str(root)],
+        [sys.executable, "-I", str(SCRIPT), "--check", mode, "--root", str(root)],
         cwd=DEFAULT_ROOT,
         capture_output=True,
         text=True,
@@ -114,7 +144,7 @@ def run_self_test_game(root: Path) -> tuple[int, int]:
         guide_path = test_root / GAME_GUIDE
         guide_path.parent.mkdir(parents=True, exist_ok=True)
         guide_path.write_text(baseline, encoding="utf-8")
-        child_result(test_root)
+        child_result(test_root, "game")
 
         mutations = (
             ("missing-absence-statement",
@@ -127,24 +157,74 @@ def run_self_test_game(root: Path) -> tuple[int, int]:
         for name, changed, reason in mutations:
             require(changed != baseline, f"self-test-mutation-no-op:{name}")
             guide_path.write_text(changed, encoding="utf-8")
-            child_result(test_root, reason)
+            child_result(test_root, "game", reason)
         guide_path.write_text(baseline, encoding="utf-8")
-        child_result(test_root)
+        child_result(test_root, "game")
     return 2, 2
+
+
+def run_self_test_docs(root: Path) -> tuple[int, int]:
+    originals = {
+        relative: read_document(root, relative)
+        for relative in (GAME_GUIDE, README)
+    }
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-docs-") as temp:
+        test_root = Path(temp)
+        paths: dict[str, Path] = {}
+        for relative, text in originals.items():
+            path = test_root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+            paths[relative] = path
+
+        child_result(test_root, "docs")
+        mutations = (
+            ("missing-readme-absence", README, ABSENCE_STATEMENT, "",
+             f"absence-statement-missing:{README}"),
+            ("missing-guide-absence", GAME_GUIDE, ABSENCE_STATEMENT, "",
+             f"absence-statement-missing:{GAME_GUIDE}"),
+            ("readme-positive-claim", README, None,
+             "\nCGB game passes all acceptance checks.\n",
+             f"unsupported-cgb-game-qualification:{README}"),
+            ("guide-positive-claim", GAME_GUIDE, None,
+             "\nCGB game passes all acceptance checks.\n",
+             f"unsupported-cgb-game-qualification:{GAME_GUIDE}"),
+            ("missing-readme-corpus-link", README,
+             "[CGB corpus contract](docs/cgb-corpus.md)", "",
+             f"cgb-corpus-evidence-link-missing:{README}"),
+            ("missing-readme-game-link", README,
+             "[game acceptance evidence](docs/game-acceptance.md)", "",
+             f"game-evidence-link-missing:{README}"),
+            ("missing-guide-corpus-link", GAME_GUIDE,
+             "[CGB corpus contract](cgb-corpus.md)", "",
+             f"cgb-corpus-evidence-link-missing:{GAME_GUIDE}"),
+        )
+        for name, relative, old, new, reason in mutations:
+            original = originals[relative]
+            if old is None:
+                changed = original + new
+            else:
+                changed = original.replace(old, new, 1)
+                require(changed != original, f"self-test-mutation-no-op:{name}")
+            paths[relative].write_text(changed, encoding="utf-8")
+            child_result(test_root, "docs", reason)
+            paths[relative].write_text(original, encoding="utf-8")
+        child_result(test_root, "docs")
+    return len(mutations), len(mutations)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--check", choices=("game",))
-    group.add_argument("--self-test", choices=("game",))
+    group.add_argument("--check", choices=("game", "docs"))
+    group.add_argument("--self-test", choices=("game", "docs"))
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     args = parser.parse_args()
     try:
         root = args.root.resolve(strict=True)
         require(root.is_dir(), "root-not-directory")
         if args.check:
-            checks = check_game(root)
+            checks = check_game(root) if args.check == "game" else check_docs(root)
             print(json.dumps({
                 "mode": "check",
                 "target": args.check,
@@ -154,8 +234,12 @@ def main() -> int:
                 "positive_success": True,
             }, sort_keys=True))
             return 0
-        checks = check_game(root)
-        negative_controls, rejected_controls = run_self_test_game(root)
+        if args.self_test == "game":
+            checks = check_game(root)
+            negative_controls, rejected_controls = run_self_test_game(root)
+        else:
+            checks = check_docs(root)
+            negative_controls, rejected_controls = run_self_test_docs(root)
         print(json.dumps({
             "mode": "self-test",
             "target": args.self_test,
