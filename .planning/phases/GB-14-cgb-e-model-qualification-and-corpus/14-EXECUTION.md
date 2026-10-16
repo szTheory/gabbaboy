@@ -87,3 +87,33 @@ Same-run required inventory, DMG JUnit inventory and allowlisted JSON artifact p
 The first parent gate passed all 1,133 CTests in 139.39 seconds, then rejected stale dashboard XML. Combining the test preset and dashboard action located dashboard output at the source root rather than the build tree; the existing stale-run guard correctly left the receipt incomplete. This rerun uses the same explicit `--test-dir build -T Test` form as CI. Earlier plan-level parser, stale-runner and package/CI findings, their negative controls and the Task 3 TDD deviation are preserved in 14-12-SUMMARY.md. Five later-plan RED tracebacks were found to contain personal workspace prefixes; publication is held until evidence and unpublished history are sanitized.
 
 Capability checks: schema drift did not block; codebase drift reported `no-structure-md`; UI safety reported no frontend files and did not block. Upcoming key links owned by the upcoming wave are intentionally deferred to that wave; no unmet prior-wave link is waived.
+
+## Wave 11
+
+Native Debug source `f826054`: `cmake --preset phase1 && cmake --build --preset phase1 && python3 -I tests/scripts/verify-cgb-corpus-report.py --begin-run --build-dir build --receipt build/cgb-corpus-receipt.json && ctest --test-dir build -T Test --no-compress-output --test-output-size-passed 16777216 --parallel 2 --output-on-failure --no-tests=error --output-junit cgb-corpus-ctest-82996a6a7c9cdd2d438af465fec592d1.xml && python3 -I tests/scripts/verify-cgb-corpus-report.py --from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json` passed **1136/1136**, zero failures/errors/skips. JUnit SHA-256 `ab6b02a9b515499bcd406c9dd1311757c48143e24bf7dca7c16e5a8dbd5496b0`; local generated file `build/phase14-wave11.xml`. Evidence is revision-bound; this is not hosted CI or physical hardware proof.
+
+Same-run required inventory, DMG JUnit inventory and allowlisted JSON artifact privacy checks passed. Complete 107-case receipt SHA-256 `2be80587e04fb7a1eb19568a4415a28e2df8d51fe49966c6aaa952d77d5f307a`; run ID `53a7b4be86a2bee9500a2ef55479bbef7a0794f17255663824451a01c16239ca`; 25 actual passes, 82 matched expected failures, 2,845/4,959 passing assertion rows and 18,208/138,240 mismatching image pixels. Raw CTest XML stays local; public artifact selection is checked separately.
+
+Capability checks: schema drift did not block; codebase drift reported `no-structure-md`; UI safety reported no frontend files and did not block. Upcoming key links owned by the upcoming wave are intentionally deferred to that wave; no unmet prior-wave link is waived.
+
+## All-wave implementation result
+
+All 13 plans / 31 tasks completed across 11 verified waves. This is implementation completion; Nyquist validation, security, UI scope, code review, regression and goal verification still gate Phase 14 closure. CGB-08/CGB-10 remain pending that qualification. Phase 15 remains unstarted and both auto-advance flags remain false.
+
+| Wave | Plans | Verified native tests |
+| --- | --- | ---: |
+| 1 | 14-01, 14-05 | 1,003 |
+| 2 | 14-02, 14-08 | 1,009 |
+| 3 | 14-03 | 1,018 |
+| 4 | 14-04 | 1,025 |
+| 5 | 14-06 | 1,032 |
+| 6 | 14-07 | 1,107 |
+| 7 | 14-09 | 1,117 |
+| 8 | 14-10 | 1,123 |
+| 9 | 14-11 | 1,127 |
+| 10 | 14-12 | 1,133 |
+| 11 | 14-13 | 1,136 |
+
+Digital PCM, mode-specific IR/ports, CH3 fetch and transitions, lifecycle/partition/bounds, independently frozen membership, pinned admission, AGE pixels, exact inherited gates, one bounded receipt, recurring CI/package boundaries and semantic claims each have automated positive and negative checks. Final corpus completion is 107/107, with 25 actual passes and 82 matched expected failures; physical CGB-E remains UNKNOWN/POLICY. The 31-gate ledger preserves four tested resolutions and 27 owned limitations.
+
+Original execution IDs are retained as recorded. Unpublished ancestry was sanitized before publication with a byte-identical final tree; see [14-HISTORY-REDACTION.md](14-HISTORY-REDACTION.md). Wave 11 is the fresh post-sanitization build/stream/receipt/claims proof. The private recovery refs are not published. No closed Phase 13 UAT was restarted.
