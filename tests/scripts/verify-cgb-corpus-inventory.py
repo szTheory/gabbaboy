@@ -631,21 +631,39 @@ def check_phase14_contract(root: Path, data: dict) -> None:
     module.check_research14(root, data)
 
 
-def check_ci_contract(root: Path) -> None:
+def check_cmake_stamp_contract(cmake: str) -> None:
+    target_match = re.search(r"set\(GBB_CGB_BUILD_TARGETS\s+([^)]*)\)", cmake, re.DOTALL)
+    need(target_match is not None, "ci-contract-build-stamp-target-list")
+    targets = set(re.findall(r"[A-Za-z0-9_.+-]+", target_match.group(1)))
+    required_targets = {
+        "gabbaboy-runner", "test_age", "test_age_m3", "test_magentests",
+        "test_magentests_hdma", "test_samesuite_apu", "test_samesuite_hdma",
+    }
+    missing = sorted(required_targets - targets)
+    need(not missing, f"ci-contract-build-stamp-target-missing:{missing[0] if missing else ''}")
+    need(re.search(
+        r"add_dependencies\(\s*cgb_corpus_build_stamp\s+\$\{GBB_CGB_BUILD_TARGETS\}\s*\)",
+        cmake), "ci-contract-build-stamp-target-order")
+
+
+def check_ci_contract(root: Path, *, ci_text: str | None = None,
+                      cmake_text: str | None = None) -> None:
     ci_path = root / ".github/workflows/ci.yml"
     repro_path = root / ".github/workflows/fixture-repro.yml"
     cmake_path = root / "tests/CMakeLists.txt"
     expected_path = root / "tests/expected-tests.txt"
-    ci = ci_path.read_text(encoding="utf-8")
+    ci = ci_text if ci_text is not None else ci_path.read_text(encoding="utf-8")
     repro = repro_path.read_text(encoding="utf-8")
-    cmake = cmake_path.read_text(encoding="utf-8")
+    cmake = cmake_text if cmake_text is not None else cmake_path.read_text(encoding="utf-8")
+    check_cmake_stamp_contract(cmake)
     expected = {
         line.strip() for line in expected_path.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     }
     required = {
         "cgb_corpus_inventory", "cgb_corpus_inventory_controls", "cgb_corpus_ci_contract",
-        "cgb_corpus_report_contract", "cgb_corpus_report_controls", "summary_coverage",
+        "cgb_corpus_report_contract", "cgb_corpus_report_controls",
+        "cgb_corpus_artifact_privacy_controls", "summary_coverage",
     }
     need(required <= expected, "ci-contract-required-inventory-members")
     for name in required:
@@ -663,12 +681,35 @@ def check_ci_contract(root: Path) -> None:
     need(stream >= 0 and native.count("ctest --test-dir build -T Test --no-compress-output") == 1,
          "ci-contract-one-full-ctest-stream")
     need(begin < stream < receipt, "ci-contract-receipt-order")
-    need("--output-junit \"cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml\"" in native,
+    junit = "cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml"
+    need(f'--output-junit "{junit}"' in native,
          "ci-contract-junit-run-nonce")
+    need("build/ctest.xml" not in native, "ci-contract-no-stale-junit-path")
+    need(f'verify-test-inventory.sh "build/{junit}"' in native and
+         f'--junit "build/{junit}"' in native,
+         "ci-contract-junit-all-consumers-run-nonce")
     need("--test-output-size-passed 16777216" in native,
          "ci-contract-bounded-passed-test-output")
-    need("build/cgb-corpus-build-stamp.json" in native and "build/Testing/*/Test.xml" in native,
-         "ci-contract-retains-build-stamp-and-ctest-xml")
+    need("build/cgb-corpus-build-stamp.json" in native,
+         "ci-contract-retains-build-stamp")
+    upload_start = native.find("      - name: Retain privacy-safe corpus receipt and diagnostics")
+    upload_end = native.find("\n      - name: Print no-host-clock proof", upload_start)
+    upload = native[upload_start:upload_end if upload_end >= 0 else None]
+    path_part = upload.split("          path: |", 1)[-1].split(
+        "          if-no-files-found:", 1)[0]
+    upload_paths = {line.strip() for line in path_part.splitlines() if line.strip()}
+    safe_upload_paths = {
+        "build/cgb-corpus-receipt.json", "build/cgb-corpus-build-stamp.json",
+        "build/cgb-corpus-run.json", "build/cgb-corpus-public-artifacts.json",
+    }
+    need(upload_start >= 0 and upload_end >= 0 and upload_paths == safe_upload_paths,
+         "ci-contract-public-artifact-allowlist")
+    need(".xml" not in path_part and "Test.xml" not in path_part,
+         "ci-contract-no-raw-xml-artifact")
+    privacy_check = native.find(
+        "verify-cgb-corpus-artifacts.py --check --build-dir build")
+    need(privacy_check > receipt and privacy_check < upload_start,
+         "ci-contract-privacy-check-before-upload")
     sanitizer_start = ci.find("  linux-sanitizers:")
     sanitizer_end = ci.find("\n  cmake-floor-", sanitizer_start)
     sanitizer = ci[sanitizer_start:sanitizer_end if sanitizer_end >= 0 else None]
@@ -840,6 +881,50 @@ def self_test(root: Path, data: dict) -> None:
         controls.append("complete-rejects-static-not-run-magentests-case")
     else:
         raise Mismatch("self-test-control-accepted:incomplete-complete-mode")
+
+    check_ci_contract(root)
+    ci_text = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    stale_junit = f'--junit "build/cgb-corpus-ctest-${{{{ steps.corpus_run.outputs.run_nonce }}}}.xml"'
+    mutated_ci = ci_text.replace(stale_junit,
+                                 "--junit build/ctest.xml", 1)
+    need(mutated_ci != ci_text, "self-test-ci-mutant-anchor:junit")
+    try:
+        check_ci_contract(root, ci_text=mutated_ci)
+    except Mismatch as exc:
+        need(str(exc) == "ci-contract-no-stale-junit-path",
+             f"self-test-wrong-diagnostic:stale-junit:{exc}")
+        controls.append("ci-rejects-stale-junit-consumer")
+    else:
+        raise Mismatch("self-test-control-accepted:stale-junit-consumer")
+
+    mutated_ci = ci_text.replace("build/cgb-corpus-public-artifacts.json",
+                                 "build/Testing/*/Test.xml", 1)
+    need(mutated_ci != ci_text, "self-test-ci-mutant-anchor:artifact")
+    try:
+        check_ci_contract(root, ci_text=mutated_ci)
+    except Mismatch as exc:
+        need(str(exc) == "ci-contract-public-artifact-allowlist",
+             f"self-test-wrong-diagnostic:raw-artifact:{exc}")
+        controls.append("ci-rejects-raw-xml-artifact")
+    else:
+        raise Mismatch("self-test-control-accepted:raw-xml-artifact")
+
+    cmake_text = (root / "tests/CMakeLists.txt").read_text(encoding="utf-8")
+    target_match = re.search(r"set\(GBB_CGB_BUILD_TARGETS\s+([^)]*)\)",
+                             cmake_text, re.DOTALL)
+    need(target_match is not None, "self-test-cmake-mutant-anchor:stamp-target")
+    target_block = target_match.group(0)
+    mutated_block = target_block.replace("test_age_m3", "", 1)
+    need(mutated_block != target_block, "self-test-cmake-mutant-anchor:hashed-target")
+    mutated_cmake = cmake_text.replace(target_block, mutated_block, 1)
+    try:
+        check_cmake_stamp_contract(mutated_cmake)
+    except Mismatch as exc:
+        need(str(exc) == "ci-contract-build-stamp-target-missing:test_age_m3",
+             f"self-test-wrong-diagnostic:missing-build-target:{exc}")
+        controls.append("build-stamp-rejects-missing-hashed-target")
+    else:
+        raise Mismatch("self-test-control-accepted:missing-build-target")
     print("cgb-corpus-inventory self-test pass controls=" + ",".join(controls))
 
 

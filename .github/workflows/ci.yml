@@ -64,7 +64,10 @@ jobs:
         env:
           FULL_CTEST_OUTCOME: ${{ steps.full_ctest.outcome }}
         run: test "$FULL_CTEST_OUTCOME" = success
-      - name: Retain the receipt and raw CTest reports
+      - name: Verify privacy-safe corpus artifact payload
+        if: always()
+        run: python3 -I tests/scripts/verify-cgb-corpus-artifacts.py --check --build-dir build
+      - name: Retain privacy-safe corpus receipt and diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -72,8 +75,8 @@ jobs:
           path: |
             build/cgb-corpus-receipt.json
             build/cgb-corpus-build-stamp.json
-            build/cgb-corpus-ctest-*.xml
-            build/Testing/*/Test.xml
+            build/cgb-corpus-run.json
+            build/cgb-corpus-public-artifacts.json
           if-no-files-found: warn
           retention-days: 7
       - name: Print no-host-clock proof
@@ -84,7 +87,7 @@ jobs:
         run: bash tests/scripts/verify-dmg-baseline.sh
       - name: Verify DMG baseline JUnit inventory
         shell: bash
-        run: bash tests/scripts/verify-dmg-baseline.sh --junit build/ctest.xml --inventory core
+        run: bash tests/scripts/verify-dmg-baseline.sh --junit "build/cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml" --inventory core
 
   native-macos:
     name: native-macos-arm64

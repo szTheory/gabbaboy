@@ -72,13 +72,18 @@ separate from the current evaluator disposition. An absent or unadmitted byte
 is never represented as an executed expected failure. `--selection-only`
 validates pinned selection and allows outputs to remain pending admission.
 `--bindings` validates that every frozen case points to an admitted, hashed
-output and a unique registered CTest test. `--complete` adds terminal observed
-case/assertion outcomes; it remains stricter and currently rejects
-`magentests:bg_oam_priority` with
-`complete-case-not-terminal:magentests:bg_oam_priority`, because the inventory
-does not claim an observed result for that row. Runtime completeness comes from
-the fresh exact-107-case receipt (plus the aggregate SameSuite APU test), not
-from changing that static inventory fact.
+output and a unique registered CTest test. The command
+`python3 -I tests/scripts/verify-cgb-corpus-inventory.py --complete` currently
+exits 1 with `complete-case-not-terminal:magentests:bg_oam_priority`, because
+the static inventory does not claim an observed result for that row. This
+rejection is an intentional negative control; `--complete` keeps its terminal
+observation requirement. Runtime completeness comes from `--begin-run`, one
+full `ctest --test-dir build -T Test --no-compress-output` stream, and
+`--from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json`, plus
+the independent required-test inventory check on that run's nonce JUnit file.
+The exact CTest and every consumer use the same run nonce. This proves the
+fresh exact-107-case execution (plus the aggregate SameSuite APU test) without
+changing the static inventory fact.
 
 Optional local acid2 and Mealybug records remain `not-run:rights-gate-G1`.
 Mealybug CGB-C/D images also remain `unsupported-model` because they have no
@@ -104,11 +109,18 @@ limits passing-test output to 1 KiB, so the lane sets
 Measured APU-suite output was 617,531 bytes for 70 guest records and 4,784
 assertion rows, below that bound. The lane then uses
 `--from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json` to
-consume its retained Test.xml and nonce-specific JUnit output. The receipt
+consume the local Test.xml and matching nonce-specific JUnit output. The receipt
 rejects stale, dirty, missing or changed input identities and missing selected
 test names; it does not rerun the guests. Receipt paths are repository-relative,
 and a failed or partial run replaces any earlier receipt with an `incomplete`
 record.
+
+The native workflow retains only the receipt, build stamp, run metadata, and a
+small artifact manifest. A pre-upload check validates their JSON schemas,
+relative paths, and contents. Raw Test.xml and JUnit remain local to the job:
+both include host names and absolute build commands, so neither is published.
+The receipt preserves their hashes for provenance without copying their raw
+host-specific contents into the artifact.
 
 The receipt keeps attempted, completed, actual guest-pass, matched-xfail and
 assertion counts separate. The current frozen run contains 107 completed cases
@@ -119,8 +131,10 @@ pixel mismatches across 138,240 pixels. The DAA one-case tracer remains a
 separate contract test; matched expected failures never count as observed
 guest passes.
 
-The recurring native workflow retains the build stamp, Test.xml and nonce-named
-JUnit report; sanitizer CI continues to verify the full required CTest inventory.
+The recurring native workflow retains the build stamp and privacy-checked JSON
+receipt evidence; its parser and required-test inventory check still consume
+the same local full-stream Test.xml and nonce-named JUnit report. Sanitizer CI
+continues to verify the full required CTest inventory.
 The pinned fixture workflow rebuilds all nine Mooneye CGB ROMs and all AGE and
 SameSuite corpus outputs, including the six AGE reference PNG digests. These
 workflow declarations are offline contract checks; they do not imply that a

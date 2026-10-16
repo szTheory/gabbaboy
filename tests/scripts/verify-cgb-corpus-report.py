@@ -162,6 +162,7 @@ def covered_dirty_digest(extra_paths: tuple[str, ...] = ()) -> str:
         "tests/expected-tests.txt",
         "tests/scripts/verify-cgb-corpus-report.py",
         "tests/scripts/verify-cgb-corpus-inventory.py",
+        "tests/scripts/verify-cgb-corpus-artifacts.py",
         "tests/scripts/verify-age-m3-pixels.py",
         "tests/scripts/verify-age-phase14-contract.py",
         "tests/test_age.c",

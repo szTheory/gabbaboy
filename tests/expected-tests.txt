@@ -647,6 +647,7 @@ cgb_corpus_inventory_selection
 cgb_corpus_inventory
 cgb_corpus_inventory_controls
 cgb_corpus_inventory_selftest
+cgb_corpus_artifact_privacy_controls
 cgb_corpus_ci_contract
 cgb_corpus_not_installed
 cgb_corpus_not_installed_controls

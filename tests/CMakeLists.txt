@@ -1322,11 +1322,14 @@ add_test(NAME cgb_corpus_report_contract
 add_test(NAME cgb_corpus_ci_contract
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_REPORT_TEST}"
     CorpusReportCorpusTests.test_native_full_ctest_receipt_contract)
+add_test(NAME cgb_corpus_artifact_privacy_controls
+  COMMAND "${Python3_EXECUTABLE}" -I
+    "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-artifacts.py" --self-test)
 add_test(NAME cgb_corpus_report_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_CORPUS_REPORT_TEST}"
     CorpusReportControlsTests.test_controls)
 set_tests_properties(cgb_corpus_report_tracer cgb_corpus_report_tracer_controls
-  cgb_corpus_report_contract cgb_corpus_report_controls
+  cgb_corpus_report_contract cgb_corpus_artifact_privacy_controls cgb_corpus_report_controls
   PROPERTIES TIMEOUT 45)
 set(GBB_AGE_PHASE14_CONTRACT "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py")
 add_test(NAME cgb_age_assertion_identity
@@ -1666,6 +1669,7 @@ set(GBB_CGB_BUILD_CONTRACT_INPUTS
   "${PROJECT_SOURCE_DIR}/fixtures/magentests/manifest.json"
   "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-report.py"
   "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-inventory.py"
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-corpus-artifacts.py"
   "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-m3-pixels.py"
   "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py"
   "${PROJECT_SOURCE_DIR}/.github/workflows/ci.yml")
