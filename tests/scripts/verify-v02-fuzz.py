@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import io
 import json
@@ -788,6 +789,98 @@ def verify_hosted(expected_sha: str, *, poll_seconds: int = 2700, interval_secon
     raise ReceiptError(f"hosted exact-source verification timed out after {poll_seconds}s: {last_state}")
 
 
+def assignment_value(source: str, name: str) -> object:
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as exc:
+        raise ReceiptError("validator source is not valid Python") from exc
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == name for target in node.targets
+        ):
+            try:
+                return ast.literal_eval(node.value)
+            except (ValueError, TypeError) as exc:
+                raise ReceiptError(f"validator {name} must use literal bounded values") from exc
+    raise ReceiptError(f"validator source is missing {name}")
+
+
+def selected_job_block(workflow: str) -> str:
+    lines = workflow.splitlines()
+    starts = [index for index, line in enumerate(lines) if re.fullmatch(r"  linux-sanitizers:\s*", line)]
+    if len(starts) != 1:
+        raise ReceiptError("selected linux-sanitizers job is missing or ambiguous")
+    start = starts[0]
+    end = next((index for index in range(start + 1, len(lines))
+                if re.fullmatch(r"  [A-Za-z0-9_-]+:\s*", lines[index])), len(lines))
+    return "\n".join(lines[start:end]) + "\n"
+
+
+def check_workflow_contract(
+    workflow_path: Path,
+    *,
+    runner_source: Path = ROOT / "tests/scripts/run-bounded-fuzz.sh",
+    validator_source: Path = SCRIPT,
+) -> None:
+    try:
+        workflow = workflow_path.read_text(encoding="utf-8")
+        runner = runner_source.read_text(encoding="utf-8")
+        validator = validator_source.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ReceiptError("workflow contract source is unavailable") from exc
+    job = selected_job_block(workflow)
+    if not re.search(r"(?m)^    name: linux-asan-ubsan$", job):
+        raise ReceiptError("selected sanitizer job name must be linux-asan-ubsan")
+    if not re.search(r"(?m)^    runs-on: ubuntu-24\.04$", job):
+        raise ReceiptError("selected sanitizer runner image must be ubuntu-24.04")
+    timeout = re.search(r"(?m)^    timeout-minutes: (\d+)\s*$", job)
+    if not timeout or not 30 <= int(timeout.group(1)) <= 45:
+        raise ReceiptError("selected sanitizer job timeout must remain bounded between 30 and 45 minutes")
+    if not re.search(r"(?m)^      CC: clang-18$", job):
+        raise ReceiptError("CC must be clang-18")
+    if not re.search(r"(?m)^      CXX: clang\+\+-18$", job):
+        raise ReceiptError("CXX must be clang++-18")
+    for check in (
+        "clang-18 --version",
+        "clang++-18 --version",
+        'test "$(clang-18 -dumpversion | cut -d. -f1)" = 18',
+        'test "$(clang++-18 -dumpversion | cut -d. -f1)" = 18',
+    ):
+        if check not in job:
+            raise ReceiptError("selected job must assert both pinned Clang 18 compiler versions")
+    if "cmake --preset phase1-asan" not in job:
+        raise ReceiptError("selected job must configure the ASan/UBSan preset")
+    campaign = "GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --explore --receipt build-asan/v02-fuzz-receipt.json"
+    if campaign not in job:
+        raise ReceiptError("selected job 60-second exploration route is missing")
+    if 'python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json' not in job:
+        raise ReceiptError("selected job strict receipt validator is missing")
+    if "bash tests/scripts/run-bounded-fuzz.sh --self-test" not in job:
+        raise ReceiptError("selected job production self-test is missing")
+    if "name: v02-fuzz-${{ github.run_id }}-${{ github.run_attempt }}" not in job:
+        raise ReceiptError("artifact name must bind run and attempt")
+    if "build-asan/v02-fuzz-receipt.json" not in job or "build-asan/fuzz-artifacts/" not in job:
+        raise ReceiptError("hosted artifact must contain receipt and minimized fuzz artifacts")
+    if "retention-days: 7" not in job:
+        raise ReceiptError("hosted campaign artifact retention must remain seven days")
+    if not re.search(r"(?m)^  --explore\)$", runner) or '--produce --build-dir "$BUILD_DIR" --receipt "$3"' not in runner:
+        raise ReceiptError("production runner does not forward the bounded exploration receipt")
+    fuzz_args = assignment_value(validator, "FUZZ_ARGS")
+    expected_args = (
+        f"-max_len={REQUIRED_LIMITS['max_input_bytes']}",
+        f"-max_total_time={REQUIRED_LIMITS['campaign_seconds']}",
+        f"-timeout={REQUIRED_LIMITS['per_input_timeout_seconds']}",
+        f"-rss_limit_mb={REQUIRED_LIMITS['rss_limit_mib']}",
+        f"-jobs={REQUIRED_LIMITS['jobs']}",
+        f"-workers={REQUIRED_LIMITS['workers']}",
+        "-print_final_stats=1",
+    )
+    if fuzz_args != expected_args:
+        raise ReceiptError("validator fuzzer argument contract does not match the bounded campaign")
+    if assignment_value(validator, "REQUIRED_LIMITS") != REQUIRED_LIMITS:
+        raise ReceiptError("validator resource limit contract does not match the bounded campaign")
+
+
 class ReceiptContractTests(unittest.TestCase):
     def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -930,7 +1023,7 @@ def self_test(receipt: Path | None) -> int:
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     # Tests are assertions; this inventory line makes a zero-control run visible in logs.
     state = "pass" if result.wasSuccessful() else "fail"
-    print(f"self-test={state} positive_controls=1 negative_controls=9 rejected_mutations=0 skipped={len(result.skipped)}")
+    print(f"self-test={state} positive_controls=2 negative_controls=18 rejected_mutations={9 if result.wasSuccessful() else 0} skipped={len(result.skipped)}")
     return 0 if result.wasSuccessful() else 1
 
 
@@ -943,6 +1036,9 @@ def main() -> int:
     parser.add_argument("--self-test", action="store_true", help="run positive and negative production-contract controls")
     parser.add_argument("--verify-hosted", action="store_true", help="await and verify exact-source hosted push evidence")
     parser.add_argument("--source-sha", help="full commit SHA required by --verify-hosted")
+    parser.add_argument("--check-workflow", type=Path, help=argparse.SUPPRESS)
+    parser.add_argument("--runner-source", type=Path, help=argparse.SUPPRESS)
+    parser.add_argument("--validator-source", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--poll-seconds", type=int, default=2700, help=argparse.SUPPRESS)
     parser.add_argument("--poll-interval-seconds", type=int, default=15, help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -958,6 +1054,14 @@ def main() -> int:
                 raise ReceiptError("--verify-hosted requires --source-sha")
             verify_hosted(args.source_sha, poll_seconds=max(1, args.poll_seconds),
                           interval_seconds=max(1, args.poll_interval_seconds))
+            return 0
+        if args.check_workflow:
+            check_workflow_contract(
+                args.check_workflow,
+                runner_source=args.runner_source or ROOT / "tests/scripts/run-bounded-fuzz.sh",
+                validator_source=args.validator_source or SCRIPT,
+            )
+            print("workflow-contract=pass selected_job=linux-asan-ubsan compiler=clang-18 resource_bounds=exact")
             return 0
         if args.produce:
             if not args.build_dir or not args.receipt:
