@@ -596,14 +596,112 @@ class ConsumerContractTests(unittest.TestCase):
         result = self.run_cli(["--prefix", str(self.prefix), "--output", str(output)], script=script)
         self.assert_rejected(result, "consumer-failed:cpp:exit-1", output)
 
+    def test_repeated_runs_keep_behavior_and_package_identity(self) -> None:
+        receipts: list[dict[str, object]] = []
+        for index in (1, 2):
+            output_dir = self.test_root / f"repeat-{index}"
+            output_dir.mkdir()
+            output = output_dir / "receipt.json"
+            result = self.run_cli(["--prefix", str(self.prefix), "--output", str(output)])
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            receipts.append(parse_receipt(result, output))
+            self.assertFalse(Path(str(output) + ".lock").exists())
+        for field in ("source_sha", "package_sha256", "compiler", "api_behaviors", "results"):
+            self.assertEqual(receipts[0].get(field), receipts[1].get(field), field)
+        self.assertNotEqual(receipts[0].get("build_run_id"), receipts[1].get("build_run_id"))
+
+    def test_concurrent_runs_use_distinct_build_and_output_roots(self) -> None:
+        outputs = [self.test_root / f"concurrent-{index}" / "receipt.json" for index in (1, 2)]
+        for output in outputs:
+            output.parent.mkdir()
+        processes = [
+            subprocess.Popen(
+                [sys.executable, "-I", str(SCRIPT), "--prefix", str(self.prefix),
+                 "--output", str(output)],
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            for output in outputs
+        ]
+        completed: list[subprocess.CompletedProcess[str]] = []
+        try:
+            for process in processes:
+                stdout, stderr = process.communicate(timeout=120)
+                completed.append(subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr))
+        except subprocess.TimeoutExpired:
+            for process in processes:
+                process.kill()
+            for process in processes:
+                process.communicate()
+            self.fail("concurrent consumer verification timed out")
+        for result in completed:
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        receipts = [json.loads(output.read_text(encoding="utf-8")) for output in outputs]
+        self.assertEqual(receipts[0].get("package_sha256"), receipts[1].get("package_sha256"))
+        self.assertEqual(receipts[0].get("source_sha"), receipts[1].get("source_sha"))
+        self.assertNotEqual(receipts[0].get("build_run_id"), receipts[1].get("build_run_id"))
+        for receipt in receipts:
+            results = receipt.get("results", {})
+            self.assertEqual(set(results), set(LANGUAGES))
+            self.assertTrue(all(item.get("build_isolated") for item in results.values()))
+
+    def test_active_output_collision_is_rejected(self) -> None:
+        output = self.test_root / "owned" / "receipt.json"
+        output.parent.mkdir()
+        lock = Path(str(output) + ".lock")
+        lock.write_text(json.dumps({"pid": os.getpid(), "token": "held-by-test"}), encoding="utf-8")
+        result = self.run_cli(["--prefix", str(self.prefix), "--output", str(output)])
+        self.assert_rejected(result, "output-owned", output)
+
+    def test_interrupted_run_retries_without_partial_receipt(self) -> None:
+        output_dir = self.test_root / "interrupted"
+        output_dir.mkdir()
+        output = output_dir / "receipt.json"
+        marker = output_dir / "install-paused.json"
+        environment = os.environ.copy()
+        environment[TEST_PAUSE_ENV] = str(marker)
+        process = subprocess.Popen(
+            [sys.executable, "-I", str(SCRIPT), "--run", "--output", str(output)],
+            cwd=ROOT,
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline and not marker.exists() and process.poll() is None:
+            time.sleep(0.05)
+        self.assertTrue(marker.exists(), "the interrupted install did not reach its controlled point")
+        marker_data = json.loads(marker.read_text(encoding="utf-8"))
+        process.terminate()
+        stdout, stderr = process.communicate(timeout=15)
+        self.assertNotEqual(process.returncode, 0, stdout + stderr)
+        self.assertFalse(output.exists(), "an interrupted run must not publish a success receipt")
+        temp_root = Path(marker_data.get("temp_root", ""))
+        temp_base = Path(tempfile.gettempdir()).resolve()
+        if temp_root.exists() and temp_root.resolve().parent == temp_base and temp_root.name.startswith("gabbaboy-v02-consumers-"):
+            shutil.rmtree(temp_root)
+        retry = self.run_cli(["--run", "--output", str(output)])
+        self.assertEqual(retry.returncode, 0, retry.stdout + retry.stderr)
+        receipt = parse_receipt(retry, output)
+        self.assertEqual(receipt.get("result"), "passed")
+        self.assertGreater(marker_data.get("staged_file_count", 0), 0,
+                           "interruption must occur after staged package bytes exist")
+
 
 def self_test() -> int:
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(ConsumerContractTests)
     result = unittest.TextTestRunner(stream=sys.stderr, verbosity=2).run(suite)
-    controls = 4
+    controls = 6
     summary = {
         "status": "passed" if result.wasSuccessful() else "failed",
-        "positive_successes": 1 if result.wasSuccessful() else 0,
+        "positive_successes": 5 if result.wasSuccessful() else 0,
         "negative_controls": controls,
         "tests_run": result.testsRun,
     }
