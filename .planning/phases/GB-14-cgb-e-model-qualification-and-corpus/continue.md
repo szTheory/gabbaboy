@@ -1,13 +1,9 @@
 # Phase 14 continuation
 
-Current stage: **Phase 14 execution**, through wave 11/11; 13/13 plans complete: 14-01, 14-02, 14-03, 14-04, 14-05, 14-06, 14-07, 14-08, 14-09, 14-10, 14-11, 14-12, 14-13.
+Completed stage: **Phase 14 — CGB-E Model Qualification and Corpus, execution and goal verification**. All 13 plans, 31 tasks and 11 waves are complete; canonical goal verification passes 41/41. CGB-08 and CGB-10 are complete. See `14-CLOSURE.md`, `14-VERIFICATION.md`, the 13 SUMMARY files and review dispositions for source-bound evidence.
 
-Read [14-EXECUTION.md](14-EXECUTION.md), completed SUMMARY frontmatter, [14-CONTEXT.md](14-CONTEXT.md), [14-RESEARCH.md](14-RESEARCH.md), [14-SOURCE-COVERAGE.md](14-SOURCE-COVERAGE.md) and [14-PLAN-CHECK.md](14-PLAN-CHECK.md). Reuse these decisions and evidence; do not repeat research, planning or completed Phase 13 UAT.
+Next stage: **Phase 14 automated UAT closure**, reconciling completed SUMMARY coverage and bounded commit windows. Next command: `/gsd-verify-work 14`.
 
-Next stage: **Phase 14 — CGB-E Model Qualification and Corpus, verification and phase closure**.
-Next command if interrupted: `/gsd-execute-phase 14`.
-Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release** remains unstarted.
+Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release** remains unstarted. Do not auto-start it. Both auto flags remain false. Reuse prior discussion/research and completed Phase 13 UAT; do not repeat implementation or fabricate human checkpoints. Physical CGB-E remains UNKNOWN/POLICY. Release PR #70 is reserved for Phase 15; phase PR #71 remains the execution handoff.
 
-Runtime: explicit installed OpenGSD 1.16.0 CLI at `$HOME/.codex/gsd-core/bin/gsd-tools.cjs`; unqualified `gsd_run` can resolve another install. Runtime fork-base check selected sequential execution because origin/HEAD is unresolved. Preserve existing owner config/state changes.
-
-Keep both auto flags false. Preserve D-069 zero routine human UAT and negative controls, strict SUMMARY coverage, fixed independent corpus membership, rights/model exclusions, bounded operations and DMG baseline. Physical CGB-E remains UNKNOWN/POLICY. Requirements stay open until the complete evidence and goal gates pass. Stop after Phase 14.
+Runtime: installed OpenGSD 1.16.0 at `$HOME/.codex/gsd-core/bin/gsd-tools.cjs`; never use an unqualified foreign `gsd_run`. Preserve the owner's config and state timestamp edits. Exact-head hosted checks are separate from historical producer receipts; GitHub holds final job status.

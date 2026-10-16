@@ -46,7 +46,7 @@
     {
       "number": "14",
       "name": "CGB-E Model Qualification and Corpus",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "15",
@@ -55,9 +55,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-execute-phase 14",
-    "label": "Execute Phase 14 \u2014 CGB-E Model Qualification and Corpus",
-    "reason": "Phase 14 planning complete; 13 plans / 31 tasks / 11 waves passed independent checking. Preserve the owner pause; execution is unstarted."
+    "command": "/gsd-verify-work 14",
+    "label": "Verify Phase 14 \u2014 automated UAT closure",
+    "reason": "Phase 14 execution and goal verification passed (13/13 plans, 41/41 truths). Reuse automated coverage and bounded commit windows; no routine human UAT. Phase 15 remains unstarted."
   },
   "updated_at": "2026-10-14T18:09:23.510605+00:00"
 }

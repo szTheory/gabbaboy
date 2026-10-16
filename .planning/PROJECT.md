@@ -60,11 +60,13 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 
 - ✓ General-purpose and HBlank VRAM DMA with bounded CPU stalls, cancellation/HDMA5 readback, HALT interaction, partition equivalence, mapped bank policies and qualified fixture/consumer evidence (CGB-07) — Phase 13, goal verification 37/37; physical CGB-E remains UNKNOWN/POLICY.
 
+- ✓ CGB-E digital PCM/I/O behavior and a pinned headless corpus with independent denominators (CGB-08, CGB-10) — Phase 14, goal verification 41/41; 107 complete cases, 25 actual passes and 82 matched expected failures. Physical CGB-E remains UNKNOWN/POLICY.
+
 ### Active
 
 v0.2 Color & Cartridge Breadth (scoped in [REQUIREMENTS.md](REQUIREMENTS.md)):
 
-- [ ] Further CGB-E APU/I/O and timing qualification with model-qualified corpus denominators (CGB-08 and CGB-10, Phase 14); physical CGB-E evidence remains outstanding.
+- [ ] CGB acceptance or explicit absence, current support ledger/docs/consumers, and an exact-tag qualified v0.2.0 release (CGB-11, SHIP-09, SHIP-10, SHIP-11, Phase 15).
 
 Next (v0.3, provisional): transactional versioned native save states (STATE-01) and a qualified Playstead adapter (INT-01).
 

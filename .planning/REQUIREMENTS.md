@@ -40,9 +40,9 @@ Every requirement maps to exactly one phase. Completion needs implementation and
 - [x] **CGB-05**: DMG software on the CGB profile renders through a fixed, original, documented compatibility palette that a host can override; no boot-ROM palette table is shipped.
 - [x] **CGB-06**: CGB software can switch to double speed via KEY1 and STOP: CPU, timer, serial and OAM DMA run at twice the rate while PPU and APU timing are unchanged, the switch pause is modelled, and partitioned runs stay equivalent.
 - [x] **CGB-07**: CGB software can use general-purpose and HBlank VRAM DMA with CPU stall, cancel, HDMA5 readback and HALT interaction, bounded per run.
-- [ ] **CGB-08**: CGB-E specific APU and I/O differences (PCM12/PCM34, `FF72-FF75`, IR port stub) are implemented with per-test model applicability and named expected failures.
+- [x] **CGB-08**: CGB-E specific APU and I/O differences (PCM12/PCM34, `FF72-FF75`, IR port stub) are implemented with per-test model applicability and named expected failures.
 - [x] **CGB-09**: The SDL3 player can run software as `--model auto|dmg|cgb` with colour presentation and passes an automated CGB smoke.
-- [ ] **CGB-10**: A headless CGB-E corpus (AGE, SameSuite, MagenTests and the CGB-applicable Mooneye subset; acid2/Mealybug only if font rights clear) reports per-suite denominators with failure and exclusion reasons.
+- [x] **CGB-10**: A headless CGB-E corpus (AGE, SameSuite, MagenTests and the CGB-applicable Mooneye subset; acid2/Mealybug only if font rights clear) reports per-suite denominators with failure and exclusion reasons.
 - [ ] **CGB-11**: One rights-clear CGB game passes a game-level acceptance run in the same style as GAME-02, or the ledger explicitly states that no CGB game-level evidence exists.
 
 ### Qualified release
@@ -101,9 +101,9 @@ Every v0.2 requirement maps to exactly one phase in [ROADMAP.md](ROADMAP.md).
 | CGB-05 | Phase 11 | Complete |
 | CGB-06 | Phase 12 | Complete |
 | CGB-07 | Phase 13 | Complete |
-| CGB-08 | Phase 14 | Pending |
+| CGB-08 | Phase 14 | Complete |
 | CGB-09 | Phase 11 | Complete |
-| CGB-10 | Phase 14 | Pending |
+| CGB-10 | Phase 14 | Complete |
 | CGB-11 | Phase 15 | Pending |
 | SHIP-09 | Phase 15 | Pending |
 | SHIP-10 | Phase 15 | Pending |

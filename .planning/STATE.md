@@ -6,17 +6,17 @@ current_phase: 14
 current_phase_name: CGB-E Model Qualification and Corpus
 current_plan: 13
 status: verifying
-stopped_at: Phase 14 wave 11/11 verified; 13/13 plans summarized; execution continues
-last_updated: "2026-10-16T01:19:19.552Z"
+stopped_at: Phase 14 execution and goal verification complete; paused before automated UAT
+last_updated: "2026-10-16T02:19:39.171Z"
 last_activity: 2026-10-16
-last_activity_desc: Phase 14 wave 11/11 verified; 13/13 plans summarized; execution continues
-state_head: adcd767a9ec9612b39121529f64ed42f1d9c4068
+last_activity_desc: Phase 14 execution complete; 41/41 verified; next automated UAT
+state_head: 2bc7d6e23393200f47bed44ede66bce8f945a538
 progress:
   total_phases: 9
   completed_phases: 8
   total_plans: 124
   completed_plans: 124
-  percent: 100
+  percent: 89
 ---
 
 # Project State
@@ -26,28 +26,28 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-15)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 14 wave 11/11 verified; 13/13 plans summarized; execution continues
+**Current focus:** Phase 14 execution and goal verification complete; paused before automated UAT.
 
 ## Current Position
 
-Phase: 14 (CGB-E Model Qualification and Corpus) — VERIFYING
-Status: Verifying Phase 14
+Phase: 14 — CGB-E Model Qualification and Corpus
+Status: Phase 14 execution complete; paused for the owner
 Current Plan: 13
 Total Plans in Phase: 13
 Last Activity: 2026-10-16
-Last Activity Description: Phase 14 wave 11/11 verified; 13/13 plans summarized; execution continues
+Last Activity Description: Phase 14 execution complete; 41/41 verified; next automated UAT
 
-Completed workflow stage: **Phase 14 execution through wave 11/11** (13/13 plans).
+Completed workflow stage: **Phase 14 — CGB-E Model Qualification and Corpus, execution and goal verification**. All 13 plans, 31 tasks and 11 waves are complete. [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08 and CGB-10 are complete. Nyquist covers 31/31, security closes 27/27 threats, and the two code-review blockers plus the player copy assertion are fixed and independently checked.
 
-Completed plans: 14-01, 14-02, 14-03, 14-04, 14-05, 14-06, 14-07, 14-08, 14-09, 14-10, 14-11, 14-12, 14-13. Their committed SUMMARY files contain task checks, negative controls and limitations. Wave-wide build/regression evidence is recorded in [14-EXECUTION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-EXECUTION.md). The phase and CGB-08/CGB-10 remain pending final qualification, review and goal verification.
+[14-CLOSURE.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-CLOSURE.md) binds the final native 1,136/1,136 regression and complete 107-case receipt to actual producer `0018d4a9b8bfa0e60890be7fb3386b73601e0eb2`. There are 25 actual passes and 82 matched expected failures; no hardware or general game qualification is claimed. The exact final PR head requires its own hosted checks. PR #71 remains the phase PR; release PR #70 is reserved for Phase 15.
 
-Next stage: **Phase 14 — CGB-E Model Qualification and Corpus, verification and phase closure**.
-Next command if interrupted: /gsd-execute-phase 14.
-Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release** remains unstarted.
+Next stage: **Phase 14 automated UAT closure** from the completed SUMMARY coverage and bounded commit windows. Do not replay implementation, research or completed Phase 13 UAT.
+Next command: `/gsd-verify-work 14`.
+Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release** remains unstarted. After Phase 14 automated UAT, offer its discussion command and stop for the owner.
 
-Both auto-advance flags remain false. Preserve D-069 zero routine human UAT, negative controls, strict SUMMARY coverage, D-096 small/flat dependencies, D-099 independent case/assertion membership, bounded work and the frozen DMG baseline. Reuse completed discussion/research and Phase 13 UAT. Physical CGB-E remains UNKNOWN/POLICY.
+Both auto-advance flags remain false. Preserve D-069 zero routine human UAT and negative controls, strict SUMMARY coverage, D-096 small/flat dependencies and D-099 independent corpus membership. Physical CGB-E remains UNKNOWN/POLICY. Completion warnings were heuristic prose/source-path references, assessed in [14-COMPLETION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-COMPLETION.md); no deliverable file is missing.
 
-Progress (v0.2): 7/9 phases executed (78%); 124/124 plans complete (100%). Phase 14 execution is active.
+Progress (v0.2): 8/9 phases executed (89%); 124/124 currently planned plans complete (100%). Phase 15 has no plans and has not started.
 
 ### Historical Phase 13 handoff (superseded route; preserved receipts)
 
@@ -523,10 +523,10 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-16T01:18:54.344Z
-Stopped at: Phase 14 wave 11/11 verified; 13/13 plans summarized; execution continues
+Last session: 2026-10-16
+Stopped at: Phase 14 execution and goal verification complete; paused before automated UAT. Phase 15 remains unstarted.
 Resume file: .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/continue.md
-Next command in fresh context: **`/gsd-execute-phase 14`**. All 13 plans are summarized and all 11 wave gates passed. Resume the verification tail; do not replay plans. Next phase is **15 — CGB Acceptance, Support Ledger and v0.2.0 Release**, unstarted. Both auto flags remain false.
+Next command: /gsd-verify-work 14
 
 ## Operator Next Steps
 
