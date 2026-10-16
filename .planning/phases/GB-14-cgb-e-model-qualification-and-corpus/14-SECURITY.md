@@ -61,7 +61,7 @@ All rows have severity **high**, disposition **mitigate** and status **closed**.
 
 ## Verification Evidence
 
-The auditor ran 40 focused native/parser/receipt/claim/package positive and negative checks, all passing. Its `LastTest.log` contains 40 `Test Passed.` records and zero failed records. The independently inspected Wave 11 JUnit has 1,136 passing cases, zero failures/errors/skips and SHA-256 `ab6b02a9b515499bcd406c9dd1311757c48143e24bf7dca7c16e5a8dbd5496b0`.
+The auditor ran 40 focused native/parser/receipt/claim/package positive and negative checks, all passing. Its `LastTest.log` contains 34 `Test Passed.` records and six `Test Pass Reason:` records, with zero failed records. The independently inspected Wave 11 JUnit has 1,136 passing cases, zero failures/errors/skips and SHA-256 `ab6b02a9b515499bcd406c9dd1311757c48143e24bf7dca7c16e5a8dbd5496b0`.
 
 The complete receipt binds source `f8260549009f3150dc82de801373f40de3a02aa0`: 107/107 completed cases, 25 actual passes, 82 matched expected failures, 2,845/4,959 passing assertion rows and 18,208/138,240 mismatching image pixels. Subsequent qualification commits changed metadata only; the unrelated CMake blank line was preserved. These are software-model observations, not hardware passes.
 
