@@ -166,7 +166,7 @@ exit $?
 fi
 
 if [[ "$QUALIFY_MODE" == true ]]; then
-python3 -I - "$ROOT_DIR" "$QUALIFY_OUTPUT" "$QUALIFY_REVIEW" <<'PYQUAL'
+python3 -I - "$ROOT_DIR" "$QUALIFY_OUTPUT" "$QUALIFY_REVIEW" "$TOTAL_TIMEOUT_SECONDS" <<'PYQUAL'
 import hashlib
 import json
 import os
@@ -174,13 +174,17 @@ from pathlib import Path
 import platform
 import re
 import shutil
+import statistics
 import subprocess
 import sys
 import tempfile
+import time
 
 root = Path(sys.argv[1]).resolve()
 output = Path(sys.argv[2])
 review_notes = sys.argv[3]
+total_timeout_seconds = int(sys.argv[4])
+deadline = time.monotonic() + total_timeout_seconds
 if not output.is_absolute():
     output = root / output
 output.parent.mkdir(parents=True, exist_ok=True)
@@ -195,9 +199,15 @@ manifest_path = "fixtures/tracer/manifest.json"
 harness_path = "tests/measure_core.c"
 
 def run(command, *, cwd=None, env=None, timeout=600):
-    done = subprocess.run(command, cwd=cwd, env=env, text=True,
-                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                          timeout=timeout, check=False)
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise SystemExit("qualify-v02-total-deadline-exceeded")
+    try:
+        done = subprocess.run(command, cwd=cwd, env=env, text=True,
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              timeout=min(timeout, remaining), check=False)
+    except subprocess.TimeoutExpired as error:
+        raise SystemExit("qualify-v02-bounded-command-timeout") from error
     if done.returncode:
         raise SystemExit("qualify-v02-command-failed: " + " ".join(map(str, command)) +
                          "\n" + "\n".join((done.stdout or "").splitlines()[-30:]))
@@ -237,6 +247,99 @@ def build_identity(source, record):
     encoded = json.dumps(data, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return sha_bytes(encoded)
 
+def summarize(values):
+    return {
+        "count": len(values),
+        "median": statistics.median(values),
+        "mean": statistics.mean(values),
+        "min": min(values),
+        "max": max(values),
+        "sample_standard_deviation": statistics.stdev(values) if len(values) > 1 else 0.0,
+        "approx_95_percent_mean_margin": 1.96 * (statistics.stdev(values) if len(values) > 1 else 0.0) / (len(values) ** 0.5),
+    }
+
+def measure_once(binary, mode, *, cgb=False):
+    command = [str(binary), f"--{mode}"]
+    if cgb:
+        if mode != "no-trace":
+            raise SystemExit("qualify-v02-cgb-trace-observation-unsupported")
+        command.extend(["--profile", "cgb"])
+    command.append(str(root / fixture_path))
+    output_text = run(command, cwd=root, timeout=30)
+    line = next((line for line in output_text.splitlines() if line.startswith("mode=")), "")
+    fields = dict(part.split("=", 1) for part in line.split() if "=" in part)
+    if fields.get("workload") != workload_id or fields.get("mode") != mode:
+        raise SystemExit("qualify-v02-resource-workload-mismatch")
+    if cgb and fields.get("profile") != "cgb-cpu-e":
+        raise SystemExit("qualify-v02-resource-profile-mismatch")
+    if not cgb and fields.get("correctness_digest_fnv1a64") != expected_digest:
+        raise SystemExit("qualify-v02-resource-digest-mismatch")
+    try:
+        elapsed = int(fields["elapsed_ns"])
+        rss = int(fields["peak_rss_bytes"])
+    except (KeyError, ValueError) as error:
+        raise SystemExit("qualify-v02-resource-observation-invalid") from error
+    digest = fields.get("correctness_digest_fnv1a64", "")
+    if elapsed <= 0 or rss <= 0 or not re.fullmatch(r"[0-9a-f]{16}", digest):
+        raise SystemExit("qualify-v02-resource-observation-invalid")
+    return elapsed, rss, digest
+
+def collect_resource_pair(base_binary, candidate_binary, mode):
+    samples = {"baseline": [], "candidate": []}
+    sample_order = []
+    for _ in range(3):
+        measure_once(base_binary, mode)
+        measure_once(candidate_binary, mode)
+    for index in range(10):
+        order = (("baseline", base_binary), ("candidate", candidate_binary)) if index % 2 == 0 else (
+            ("candidate", candidate_binary), ("baseline", base_binary))
+        sample_order.append(order[0][0])
+        for label, binary in order:
+            samples[label].append(measure_once(binary, mode))
+    if samples["baseline"][0][2] != samples["candidate"][0][2]:
+        raise SystemExit("qualify-v02-resource-pair-digest-mismatch")
+    if mode == "trace":
+        no_trace_digests = [measure_once(base_binary, "no-trace")[2],
+                            measure_once(candidate_binary, "no-trace")[2]]
+        if samples["baseline"][0][2] != no_trace_digests[0] or no_trace_digests[0] != no_trace_digests[1]:
+            raise SystemExit("qualify-v02-resource-trace-digest-mismatch")
+    result = {}
+    for label, rows in samples.items():
+        elapsed = [row[0] for row in rows]
+        rss = [row[1] for row in rows]
+        digests = {row[2] for row in rows}
+        if len(digests) != 1:
+            raise SystemExit("qualify-v02-resource-digest-not-stable")
+        result[label] = {
+            "core_elapsed_ns": elapsed,
+            "peak_rss_bytes": rss,
+            "correctness_digest_fnv1a64": next(iter(digests)),
+            "elapsed_summary": summarize(elapsed),
+            "peak_rss_summary_bytes": summarize(rss),
+        }
+    result["sample_order"] = sample_order
+    return result
+
+def collect_candidate_cgb(candidate_binary, execution_mode):
+    for _ in range(3):
+        measure_once(candidate_binary, "no-trace", cgb=True)
+    rows = [measure_once(candidate_binary, "no-trace", cgb=True) for _ in range(10)]
+    elapsed = [row[0] for row in rows]
+    rss = [row[1] for row in rows]
+    digests = {row[2] for row in rows}
+    if len(digests) != 1:
+        raise SystemExit("qualify-v02-cgb-resource-digest-not-stable")
+    return {
+        "model": "CGB-CPU-E",
+        "execution_mode": execution_mode,
+        "sample_order": ["candidate"] * len(rows),
+        "core_elapsed_ns": elapsed,
+        "peak_rss_bytes": rss,
+        "correctness_digest_fnv1a64": next(iter(digests)),
+        "elapsed_summary": summarize(elapsed),
+        "peak_rss_summary_bytes": summarize(rss),
+    }
+
 baseline_tag_target = git("rev-parse", "v0.1.0^{commit}")
 if baseline_tag_target != baseline_sha:
     raise SystemExit("qualify-v02-baseline-tag-mismatch")
@@ -275,6 +378,7 @@ with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-pair-") as temporary:
         if base_fixture != candidate_fixture or base_manifest != candidate_manifest:
             raise SystemExit("qualify-v02-covered-workload-inputs-differ")
         fixture_hash, manifest_hash = sha_bytes(base_fixture), sha_bytes(base_manifest)
+        cgb_execution_mode = "native-cgb" if base_fixture[0x143] & 0x80 else "compatibility"
         manifest = json.loads(base_manifest)
         if manifest.get("id") != "original-wram-tracer" or manifest.get("sha256") != fixture_hash:
             raise SystemExit("qualify-v02-workload-manifest-mismatch")
@@ -353,6 +457,11 @@ with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-pair-") as temporary:
              "first": "baseline" if index % 2 == 0 else "candidate"}
             for index in range(30)
         ]
+        dmg_resources = {
+            mode: collect_resource_pair(binaries[0], binaries[1], mode)
+            for mode in ("trace", "no-trace")
+        }
+        cgb_resource = collect_candidate_cgb(binaries[1], cgb_execution_mode)
         measurement_summary = {
             "median_candidate_to_baseline_percent": ab["ratio"]["median"],
             "mean_candidate_to_baseline_percent": ab["ratio"]["mean"],
@@ -373,7 +482,7 @@ with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-pair-") as temporary:
             "estimate_percent": estimate,
             "uncertainty_margin_percent": margin,
             "decision": "accepted-with-disclosed-regression" if reviewed_trigger else
-                        ("investigation-required" if triggered else "within-noise"),
+                        ("investigation-required" if triggered else "no-review-trigger"),
             "investigation": review_notes if reviewed_trigger else
                              ("The +5% trigger fired; automated qualification remains pending until a source and measurement review is recorded."
                               if triggered else
@@ -404,6 +513,22 @@ with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-pair-") as temporary:
                 "uncertainty_method": "paired median, sample standard deviation and approximate 95% mean margin",
             },
             "regression_disposition": disposition,
+            "resource_observations": {
+                "source_sha": candidate_sha,
+                "source_tree_sha": candidate_source["tree_sha"],
+                "build_identity_sha256": {
+                    "baseline": builds["baseline"]["identity_sha256"],
+                    "candidate": builds["candidate"]["identity_sha256"],
+                },
+                "warmups": 3,
+                "paired_samples": 10,
+                "dmg": dmg_resources,
+                "cgb_cpu_e": {
+                    "model": "CGB-CPU-E",
+                    "execution_mode": cgb_execution_mode,
+                    "candidate": cgb_resource,
+                },
+            },
         }
         text = json.dumps(receipt, indent=2, sort_keys=True) + "\n"
         temp_output = output.with_name(output.name + f".tmp-{os.getpid()}")

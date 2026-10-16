@@ -24,6 +24,16 @@ EXPECTED_WARMUPS = 3
 EXPECTED_PAIRS = 30
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
+HEX16 = re.compile(r"^[0-9a-f]{16}$")
+PRIVATE_KEY_NAMES = {
+    "host", "hostname", "host_name", "machine_id", "machine_identifier",
+    "serial", "serial_number", "username", "user_name", "compiler_path",
+    "build_path", "working_directory", "home_directory",
+}
+PRIVATE_PATH = re.compile(r"(?<![A-Za-z0-9_.-])/(?:[A-Za-z0-9._-]+/)+[^\s\"']*")
+WINDOWS_PATH = re.compile(r"(?:^|\s)[A-Za-z]:[\\/](?:[^\s]+)")
+EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+PRIVATE_HOSTNAME = re.compile(r"\b(?:[A-Za-z0-9-]+\.)+(?:local|internal|private|example|corp|lan)\b", re.IGNORECASE)
 
 
 class ReceiptError(ValueError):
@@ -92,17 +102,42 @@ def summarize_ratios(values: list[float]) -> dict[str, object]:
 
 
 def summarize_values(values: list[int]) -> dict[str, object]:
+    sample_sd = statistics.stdev(values) if len(values) > 1 else 0.0
     return {
         "count": len(values),
         "median": statistics.median(values),
         "mean": statistics.mean(values),
-        "sample_standard_deviation": statistics.stdev(values) if len(values) > 1 else 0.0,
+        "min": min(values),
+        "max": max(values),
+        "sample_standard_deviation": sample_sd,
+        "approx_95_percent_mean_margin": 1.96 * sample_sd / math.sqrt(len(values)),
     }
+
+
+def verify_privacy(value: object) -> None:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            normalized = str(key).lower().replace("-", "_")
+            require(normalized not in PRIVATE_KEY_NAMES, "receipt-private-data")
+            verify_privacy(item)
+    elif isinstance(value, list):
+        for item in value:
+            verify_privacy(item)
+    elif isinstance(value, str):
+        require(PRIVATE_PATH.search(value) is None and WINDOWS_PATH.search(value) is None and
+                EMAIL.search(value) is None and PRIVATE_HOSTNAME.search(value) is None,
+                "receipt-private-data")
+
+
+def close_number(actual: object, expected: float) -> bool:
+    return isinstance(actual, (int, float)) and not isinstance(actual, bool) and math.isclose(
+        actual, expected, rel_tol=1e-10, abs_tol=1e-9)
 
 
 def verify_receipt(receipt: object) -> dict[str, object]:
     require(isinstance(receipt, dict), "receipt-not-object")
     require(receipt.get("schema_version") == 1, "schema-version-unsupported")
+    verify_privacy(receipt)
     require(receipt.get("result") == "passed", "receipt-not-passed")
 
     source = receipt.get("source")
@@ -159,6 +194,8 @@ def verify_receipt(receipt: object) -> dict[str, object]:
         require(isinstance(build.get("cmake_version"), str) and
                 build["cmake_version"].startswith("cmake version "),
                 f"{label}-cmake-version-invalid")
+        require(isinstance(build.get("generator"), str) and build["generator"] != "unknown",
+                f"{label}-generator-invalid")
         flags = build.get("c_flags_release")
         require(isinstance(flags, str) and flags != "unknown", f"{label}-release-flags-unknown")
         require(isinstance(build.get("binary_sha256"), str) and
@@ -174,6 +211,7 @@ def verify_receipt(receipt: object) -> dict[str, object]:
     require(baseline_build["compiler"] == candidate_build["compiler"] and
             baseline_build["configuration"] == candidate_build["configuration"] and
             baseline_build["cmake_version"] == candidate_build["cmake_version"] and
+            baseline_build["generator"] == candidate_build["generator"] and
             baseline_build["c_flags_release"] == candidate_build["c_flags_release"],
             "build-configuration-mismatch")
 
@@ -205,7 +243,8 @@ def verify_receipt(receipt: object) -> dict[str, object]:
             "workload-manifest-mismatch")
 
     hardware = receipt.get("hardware_class")
-    require(isinstance(hardware, str) and re.fullmatch(r"[A-Za-z0-9._+-]+ [A-Za-z0-9._+-]+", hardware),
+    require(isinstance(hardware, str) and re.fullmatch(
+                r"(?:Darwin|Linux|Windows) (?:arm64|aarch64|x86_64|AMD64|i386|i686|armv7l|ppc64le|s390x)", hardware),
             "hardware-class-invalid")
     measurement = receipt.get("measurement")
     require(isinstance(measurement, dict), "measurement-missing")
@@ -236,6 +275,87 @@ def verify_receipt(receipt: object) -> dict[str, object]:
     require(isinstance(measurement.get("uncertainty_method"), str) and
             "standard deviation" in measurement["uncertainty_method"],
             "measurement-uncertainty-missing")
+
+    disposition = receipt.get("regression_disposition")
+    require(isinstance(disposition, dict), "regression-disposition-missing")
+    require(disposition.get("review_trigger_percent") == 5.0, "regression-review-threshold-mismatch")
+    estimate = recomputed["median_candidate_to_baseline_percent"] - 100.0
+    margin = recomputed["approx_95_percent_mean_margin"]
+    require(close_number(disposition.get("estimate_percent"), estimate) and
+            close_number(disposition.get("uncertainty_margin_percent"), margin),
+            "regression-estimate-mismatch")
+    investigation = disposition.get("investigation")
+    require(isinstance(investigation, str) and investigation.strip(),
+            "regression-investigation-missing")
+    if recomputed["review_trigger"]:
+        require(disposition.get("decision") == "accepted-with-disclosed-regression" and
+                disposition.get("release_disposition") == "accepted-with-disclosed-regression",
+                "regression-review-pending")
+    else:
+        require(disposition.get("decision") == "no-review-trigger" and
+                disposition.get("release_disposition") == "qualified-no-trigger",
+                "regression-disposition-inconsistent")
+
+    resources = receipt.get("resource_observations")
+    require(isinstance(resources, dict), "resource-observations-missing")
+    require(resources.get("source_sha") == candidate["sha"] and
+            resources.get("source_tree_sha") == candidate["tree_sha"],
+            "resource-source-identity-mismatch")
+    require(resources.get("build_identity_sha256") == {
+                "baseline": baseline_build["identity_sha256"],
+                "candidate": candidate_build["identity_sha256"],
+            }, "resource-build-identity-mismatch")
+    require(resources.get("warmups") == 3 and resources.get("paired_samples") == 10,
+            "resource-sample-count-mismatch")
+
+    def verify_resource_record(record: object, expected_digest: str | None = EXPECTED_DIGEST) -> str:
+        require(isinstance(record, dict), "resource-record-missing")
+        elapsed = record.get("core_elapsed_ns")
+        rss = record.get("peak_rss_bytes")
+        require(isinstance(elapsed, list) and len(elapsed) == 10 and
+                all(type(value) is int and value > 0 for value in elapsed),
+                "resource-timing-samples-invalid")
+        require(isinstance(rss, list) and len(rss) == 10 and
+                all(type(value) is int and value > 0 for value in rss),
+                "resource-memory-samples-invalid")
+        digest = record.get("correctness_digest_fnv1a64")
+        require(isinstance(digest, str) and HEX16.fullmatch(digest) is not None and
+                (expected_digest is None or digest == expected_digest),
+                "resource-digest-mismatch")
+        for name, values in (("elapsed_summary", elapsed), ("peak_rss_summary_bytes", rss)):
+            summary_record = record.get(name)
+            require(isinstance(summary_record, dict), "resource-summary-missing")
+            expected_summary = summarize_values(values)
+            for field, expected in expected_summary.items():
+                actual = summary_record.get(field)
+                if isinstance(expected, float):
+                    require(close_number(actual, expected), "resource-summary-mismatch")
+                else:
+                    require(actual == expected, "resource-summary-mismatch")
+        return digest
+
+    dmg_resources = resources.get("dmg")
+    require(isinstance(dmg_resources, dict), "resource-dmg-observations-missing")
+    for mode in ("trace", "no-trace"):
+        mode_record = dmg_resources.get(mode)
+        require(isinstance(mode_record, dict), "resource-dmg-observations-missing")
+        require(mode_record.get("sample_order") == [
+                    "baseline" if index % 2 == 0 else "candidate" for index in range(10)],
+                "resource-sample-order-invalid")
+        base_digest = verify_resource_record(mode_record.get("baseline"))
+        candidate_digest = verify_resource_record(mode_record.get("candidate"))
+        require(base_digest == candidate_digest, "resource-dmg-digest-mismatch")
+    cgb_resources = resources.get("cgb_cpu_e")
+    require(isinstance(cgb_resources, dict), "resource-cgb-observations-missing")
+    candidate_fixture = git_bytes(candidate["sha"], "fixtures/tracer/tracer.gb")
+    expected_cgb_mode = "native-cgb" if candidate_fixture[0x143] & 0x80 else "compatibility"
+    require(cgb_resources.get("model") == "CGB-CPU-E" and
+            cgb_resources.get("execution_mode") == expected_cgb_mode,
+            "resource-cgb-model-mismatch")
+    require(isinstance(cgb_resources.get("candidate"), dict) and
+            cgb_resources["candidate"].get("sample_order") == ["candidate"] * 10,
+            "resource-sample-order-invalid")
+    verify_resource_record(cgb_resources.get("candidate"))
     return receipt
 
 
@@ -276,6 +396,10 @@ def valid_fixture() -> dict[str, object]:
               "first": "baseline" if index % 2 == 0 else "candidate"}
              for index in range(30)]
     ratio_summary = summarize_ratios([102.0] * len(pairs))
+    builds = {
+        "baseline": build_record(baseline, "2"),
+        "candidate": build_record(candidate, "3"),
+    }
     def resource_record(elapsed: int, rss: int, digest: str = EXPECTED_DIGEST) -> dict[str, object]:
         times = [elapsed + index * 10 for index in range(10)]
         memory = [rss + index * 64 for index in range(10)]
@@ -292,10 +416,7 @@ def valid_fixture() -> dict[str, object]:
         "schema_version": 1,
         "result": "passed",
         "source": {"baseline": baseline, "candidate": candidate},
-        "builds": {
-            "baseline": build_record(baseline, "2"),
-            "candidate": build_record(candidate, "3"),
-        },
+        "builds": builds,
         "hardware_class": f"{platform.system()} {platform.machine()}",
         "workload": {
             "id": WORKLOAD_ID,
@@ -317,24 +438,41 @@ def valid_fixture() -> dict[str, object]:
             "review_trigger_percent": 5.0,
             "estimate_percent": 2.0,
             "uncertainty_margin_percent": 0.0,
-            "decision": "within-noise",
+            "decision": "no-review-trigger",
             "investigation": "No +5% review trigger; the paired estimate is within the predeclared noise band.",
             "release_disposition": "qualified-no-trigger",
         },
         "resource_observations": {
+            "source_sha": candidate_sha,
+            "source_tree_sha": candidate_tree,
+            "build_identity_sha256": {
+                "baseline": builds["baseline"]["identity_sha256"],
+                "candidate": builds["candidate"]["identity_sha256"],
+            },
             "warmups": 3,
             "paired_samples": 10,
             "dmg": {
                 "trace": {
+                    "sample_order": ["baseline" if index % 2 == 0 else "candidate" for index in range(10)],
                     "baseline": resource_record(11_000_000, 2_000_000),
                     "candidate": resource_record(12_000_000, 2_100_000),
                 },
                 "no-trace": {
+                    "sample_order": ["baseline" if index % 2 == 0 else "candidate" for index in range(10)],
                     "baseline": resource_record(10_000_000, 1_900_000),
                     "candidate": resource_record(10_200_000, 1_950_000),
                 },
             },
-            "cgb_cpu_e": {"candidate": resource_record(11_000_000, 2_200_000)},
+            "cgb_cpu_e": {
+                "model": "CGB-CPU-E",
+                "execution_mode": "compatibility",
+                "candidate": {
+                    "model": "CGB-CPU-E",
+                    "execution_mode": "compatibility",
+                    "sample_order": ["candidate"] * 10,
+                    **resource_record(11_000_000, 2_200_000),
+                },
+            },
         },
     }
 
@@ -357,7 +495,7 @@ class PerformanceReceiptContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="gabbaboy-performance-collision-") as temp:
             path = Path(temp) / "receipt.json"
             path.write_text("existing", encoding="utf-8")
-            return subprocess.run(
+            result = subprocess.run(
                 ["bash", str(ROOT / "tests/scripts/measure-release-baseline.sh"),
                  "--qualify-v02", "--output", str(path)],
                 cwd=ROOT,
@@ -366,6 +504,8 @@ class PerformanceReceiptContractTests(unittest.TestCase):
                 stderr=subprocess.STDOUT,
                 check=False,
             )
+            self.assertEqual(path.read_text(encoding="utf-8"), "existing")
+            return result
 
     def test_valid_receipt_is_accepted(self) -> None:
         result = self.run_cli(valid_fixture())
@@ -411,6 +551,11 @@ class PerformanceReceiptContractTests(unittest.TestCase):
         self.assert_rejected(lambda receipt: receipt["measurement"].update(warmups=2),
                              "warmup-count-mismatch")
 
+    def test_forged_uncertainty_summary_is_rejected(self) -> None:
+        self.assert_rejected(lambda receipt: receipt["measurement"]["summary"].update(
+            approx_95_percent_mean_margin=99.0),
+            "measurement-summary-mismatch:approx_95_percent_mean_margin")
+
     def test_missing_regression_disposition_is_rejected(self) -> None:
         def mutate(receipt: dict[str, object]) -> None:
             receipt.pop("regression_disposition")
@@ -432,9 +577,19 @@ class PerformanceReceiptContractTests(unittest.TestCase):
             }
         self.assert_rejected(mutate, "regression-investigation-missing")
 
+    def test_wrong_regression_threshold_is_rejected(self) -> None:
+        self.assert_rejected(lambda receipt: receipt["regression_disposition"].update(
+            review_trigger_percent=4.0),
+            "regression-review-threshold-mismatch")
+
     def test_hidden_host_or_path_data_is_rejected(self) -> None:
         self.assert_rejected(lambda receipt: receipt.update(host_name="build-node.private.example"),
                              "receipt-private-data")
+
+    def test_private_absolute_path_is_rejected(self) -> None:
+        self.assert_rejected(lambda receipt: receipt["regression_disposition"].update(
+            investigation="reviewed at /Users/owner/private-build/run-1"),
+            "receipt-private-data")
 
     def test_stale_covered_harness_identity_is_rejected(self) -> None:
         self.assert_rejected(lambda receipt: receipt["source"]["candidate"].update(harness_sha256="0" * 64),
@@ -443,6 +598,16 @@ class PerformanceReceiptContractTests(unittest.TestCase):
     def test_missing_resource_observations_are_rejected(self) -> None:
         self.assert_rejected(lambda receipt: receipt.pop("resource_observations"),
                              "resource-observations-missing")
+
+    def test_resource_pair_order_mutation_is_rejected(self) -> None:
+        self.assert_rejected(lambda receipt: receipt["resource_observations"]["dmg"]["trace"].update(
+            sample_order=["candidate" if index % 2 == 0 else "baseline" for index in range(10)]),
+            "resource-sample-order-invalid")
+
+    def test_cgb_resource_execution_mode_is_pinned(self) -> None:
+        self.assert_rejected(lambda receipt: receipt["resource_observations"]["cgb_cpu_e"].update(
+            execution_mode="native-cgb"),
+            "resource-cgb-model-mismatch")
 
     def test_producer_refuses_receipt_collision(self) -> None:
         result = self.run_producer_collision()
