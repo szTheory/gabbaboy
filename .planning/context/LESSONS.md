@@ -795,3 +795,11 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** Discussion uses local scope/reference/handoff contract checks and negative controls; implementation remains pending. Phase 15 plans must reject old-ledger fallback, xfail inflation, unknown/incompatible benchmark identities, unsupported/no-run campaigns and stale tag/source/package evidence through their real producers.
 - **Source:** `.planning/research/phase15-evidence-consumers.md`, `.planning/research/phase15-release-delivery.md` and `15-CONTEXT.md` D-08–D-23.
 - **Status:** Adopted planning lesson; no release qualification or product change is claimed. D-069/D-096 remain defaults; next command is `/gsd-plan-phase 15`.
+
+### GB-RELEASE-003 / 2026-10-16 / Separate a stable support claim from each execution receipt
+
+- **Cause and evidence:** Phase 15's first schema2 sidecar self-test read ignored local receipt/binary files, so clean Linux CI failed `receipt:unavailable`. Equality against the historical ledger also rejected valid independent runs and full-stream CTest totals.
+- **Remedy:** Keep the tracked producer snapshot historical. Compare stable membership, assertion outcomes and covered inputs; independently validate fresh source/build artifacts and place actual run/byte identity in the generated sidecar. Generate complete synthetic contract fixtures in an isolated repository, without weakening production inventory validators.
+- **Applies when:** One versioned support claim is qualified by different hosts, independent run nonces or a later exact tag. Synthetic fixtures test validators; they are not execution evidence.
+- **Verification:** Repair `3d451b3` passed two real 1138/1138 native streams with 108 selected corpus tests and independent accepted receipts; clean no-build clone self-test passed with 15 schema and 21 sidecar rejections. Actual hosted native Linux/macOS/Windows and floor jobs passed at `a175a39`; the separate campaign assertion remains unresolved.
+- **Source:** Phase 15 `15-02-SUMMARY.md` supplemental repair and pause handoff; `tests/scripts/verify-support-ledger.py`.
