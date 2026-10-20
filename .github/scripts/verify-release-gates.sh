@@ -69,13 +69,68 @@ def validate_verifier_invocations(text):
 def validate_extractor_destinations(text):
     if re.search(r"(?m)^\s*mkdir(?:\s+-p)?\s+[^\n]*\bbuild/extracted(?:-core)?(?:\s|$)", text):
         raise ValueError("safe release extractor destination must not be pre-created")
-def validate_performance_receipt_path(text):
-    pattern = (r"bash tests/scripts/measure-release-baseline\.sh --self-test\s+"
-               r"test -s build/release-measure/release-performance-receipt\.json\s+"
-               r"cp build/release-measure/release-performance-receipt\.json build/\s+"
-               r"cmp -s build/release-measure/release-performance-receipt\.json build/release-performance-receipt\.json")
-    if not re.search(pattern, text):
-        raise ValueError("generated performance receipt must be validated and copied byte-identically to its canonical build path")
+# Each real producer must be invoked, in the exact-tag workflow, as many times as it is needed. The counts make
+# deleting one invocation observable even where the same owner validator is also used for a downloaded readback.
+V02_PRODUCER_CALLS = {
+    "verify-v02-adoption.py --release-notes": 1,
+    "verify-v02-consumers.py --prefix": 1,
+    "verify-v02-source-archive.py --archive": 1,
+    "verify-v02-source-archive.py --check-receipt": 1,
+    "verify-release-candidate.sh --verify-final": 1,
+    "verify-cgb-corpus-report.py --begin-run": 1,
+    "verify-cgb-corpus-report.py --from-ctest": 1,
+    "verify-cgb-corpus-claims.py --receipt": 1,
+    "verify-support-ledger.py --check-current": 1,
+    "--output build/support-ledger.json": 1,
+    "--verify-sidecar build/support-ledger.json": 1,
+    "run-bounded-fuzz.sh --explore --receipt": 1,
+    "verify-v02-fuzz.py --verify": 2,
+    "measure-release-baseline.sh --qualify-v02 --output": 1,
+    "verify-v02-performance.py --verify": 2,
+    "--check-v02-evidence": 1,
+    'gh release upload "$RELEASE_TAG" build/v02-consumer-receipt.json': 1,
+    'gh release upload "$RELEASE_TAG" build/source-archive-receipt.json': 1,
+    'gh release upload "$RELEASE_TAG" build/v02-fuzz-receipt.json': 1,
+    'gh release upload "$RELEASE_TAG" build/v02-performance-receipt.json': 1,
+    "for name in support-ledger.json cgb-corpus-receipt.json; do": 1,
+}
+PRODUCER_JOBS = ("candidate-corpus", "candidate-fuzz", "candidate-performance")
+def validate_v02_producers(text):
+    for call, expected in V02_PRODUCER_CALLS.items():
+        if text.count(call) != expected:
+            raise ValueError(f"release workflow does not invoke the real v0.2 producer or transfer exactly as required: {call}")
+    publish = text.find("\n  publish-qualified-release:\n")
+    if publish < 0:
+        raise ValueError("release workflow has no qualified publication job")
+    for call in V02_PRODUCER_CALLS:
+        if text.rfind(call) > publish and not call.startswith("--check") and "RELEASE_TAG" not in call:
+            raise ValueError(f"v0.2 producer runs only after publication: {call}")
+    manifest = text.find("\n  candidate-platform-manifest:\n")
+    manifest_needs = text[manifest:text.find("\n    if:", manifest)]
+    for job in PRODUCER_JOBS:
+        if f"\n  {job}:\n" not in text or job not in manifest_needs:
+            raise ValueError(f"the aggregate manifest does not wait for the {job} evidence producer")
+    publish_needs = text[publish:text.find("\n    if:", publish + 1)]
+    if "candidate-platform-manifest" not in publish_needs:
+        raise ValueError("publication does not wait for the aggregate manifest")
+    first_gate = text.find("--check-draft-final")
+    for producer in ("verify-cgb-corpus-report.py --from-ctest", "run-bounded-fuzz.sh --explore", "--qualify-v02"):
+        position = text.find(producer)
+        if position < 0 or position > publish or position > first_gate:
+            raise ValueError(f"evidence producer {producer} is not upstream of the final gate")
+def validate_retained_platforms(text):
+    macos = text[text.find("\n  candidate-macos:\n"):text.find("\n  candidate-windows:\n")]
+    windows = text[text.find("\n  candidate-windows:\n"):text.find("\n  candidate-corpus:\n")]
+    if "-P cmake/VerifyInstalledPackage.cmake" not in macos or 'consumer-$language' not in macos:
+        raise ValueError("macOS arm64 downloaded C/C++ consumer behavior is not retained")
+    if "verify-phase3-player.sh --verify-package" not in macos:
+        raise ValueError("macOS arm64 downloaded player smoke is not retained")
+    if "-P cmake/VerifyInstalledPackage.cmake" not in windows or "consumer-$language.exe" not in windows:
+        raise ValueError("Windows x64 downloaded C/C++ consumer behavior is not retained")
+    if "-P cmake/VerifyInstalledPackage.cmake" not in text[:text.find("\n  candidate-macos:\n")]:
+        raise ValueError("Linux x64 downloaded C/C++ consumer behavior is not retained")
+    if text.count('"signed": False') < 2 or text.count('"notarized": False') < 2:
+        raise ValueError("the unsigned and not-notarized declaration is not preserved")
 def validate_downloaded_sidecars(text):
     required = (
         'bash "$RUNNER_TEMP/verify-release-gates.sh" --check-digest-sidecar \\\n            build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz.sha256 \\\n            build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz',
@@ -85,38 +140,24 @@ def validate_downloaded_sidecars(text):
     if "sha256sum --check" in text or any(call not in text for call in required):
         raise ValueError("every downloaded Mac/Windows digest-only sidecar must use the strict byte-check helper")
 def validate_isolated_release_readbacks(text):
-    validation_match = re.search(r'existing_performance_dir="([^"]+)"', text)
-    if not validation_match:
-        raise ValueError("existing performance receipt must use its dedicated validation download directory")
-    validation_path = validation_match.group(1)
-    section_start = text.find('for name in support-ledger.json release-performance-receipt.json; do')
-    section_end = text.find('      - name: Validate the exact candidate asset set after platform smoke', section_start)
-    if section_start < 0 or section_end < 0:
+    start = text.find("\n  candidate-corpus:\n")
+    end = text.find("\n  publish-qualified-release:\n")
+    if start < 0 or end < start:
         raise ValueError("release evidence attachment/readback section is missing")
-    section = text[section_start:section_end]
-    readback_match = re.search(r'existing_dir="([^"]+)"', section)
-    if not readback_match:
-        raise ValueError("existing release evidence comparison has no per-asset readback directory")
-    readback_path = readback_match.group(1)
-    if "$name" not in readback_path:
-        raise ValueError("later release evidence readbacks must isolate each asset by name")
-    performance_asset_readback = readback_path.replace("$name", "release-performance-receipt.json")
-    if validation_path == performance_asset_readback:
-        raise ValueError("performance validation and later asset comparison must use different download directories")
-    required = (
-        'existing_dir="build/existing/asset-readback/$name"',
-        'mkdir -p "$existing_dir"',
-        '--pattern "$name" --dir "$existing_dir"',
-        'cmp -s "build/$name" "$existing_dir/$name"',
-    )
-    if any(item not in section for item in required):
-        raise ValueError("each existing release evidence asset must be downloaded into its own readback directory")
-    if re.search(r'gh release download[^\\n]*--pattern "\$name"[^\\n]*--dir build/existing(?:\s|$)', section):
-        raise ValueError("per-asset release downloads must not reuse the shared readback directory")
+    section = text[start:end]
+    destinations = re.findall(r"gh release download[^\n]*?--dir (\S+)|--dir (\S+)\n", section)
+    downloads = []
+    for match in re.finditer(r"gh release download \"\$RELEASE_TAG\"(?:[^\n]|\\\n)*?--dir (\S+)", section):
+        downloads.append(match.group(1))
+    if len(downloads) < 5:
+        raise ValueError("the evidence jobs no longer download their attached assets for readback")
+    if len(downloads) != len(set(downloads)):
+        raise ValueError("each release evidence download must use its own readback directory")
 try:
     validate_verifier_invocations(workflow)
     validate_extractor_destinations(workflow)
-    validate_performance_receipt_path(workflow)
+    validate_v02_producers(workflow)
+    validate_retained_platforms(workflow)
     validate_downloaded_sidecars(workflow)
     validate_isolated_release_readbacks(workflow)
 except ValueError as error:
@@ -136,12 +177,39 @@ except ValueError:
     pass
 else:
     raise SystemExit("release workflow self-test accepted a pre-created safe-extractor destination")
+mutation_count = 0
+for call, expected in V02_PRODUCER_CALLS.items():
+    mutated = workflow.replace(call, "true # removed", 1)
+    try:
+        validate_v02_producers(mutated)
+    except ValueError:
+        mutation_count += 1
+    else:
+        raise SystemExit(f"release workflow self-test accepted a workflow without the required v0.2 invocation or transfer: {call}")
 try:
-    validate_performance_receipt_path(workflow.replace("cp build/release-measure/release-performance-receipt.json build/", "", 1))
+    validate_v02_producers("\n  publish-qualified-release:\n" + workflow.replace("\n  publish-qualified-release:\n", "\n", 1))
 except ValueError:
-    pass
+    mutation_count += 1
 else:
-    raise SystemExit("release workflow self-test accepted a missing performance receipt path mapping")
+    raise SystemExit("release workflow self-test accepted producers that run after publication")
+for job in PRODUCER_JOBS:
+    try:
+        validate_v02_producers(workflow.replace(f", {job}", "", 1))
+    except ValueError:
+        mutation_count += 1
+    else:
+        raise SystemExit(f"release workflow self-test accepted an aggregate manifest that does not wait for {job}")
+for needle, label in (("verify-phase3-player.sh --verify-package", "player smoke"),
+                      ("consumer-$language.exe", "Windows consumer"), ('"notarized": False', "unsigned declaration")):
+    try:
+        validate_retained_platforms(workflow.replace(needle, "removed", 1))
+    except ValueError:
+        mutation_count += 1
+    else:
+        raise SystemExit(f"release workflow self-test accepted a workflow without the retained {label}")
+if mutation_count < len(V02_PRODUCER_CALLS) + 4 or not V02_PRODUCER_CALLS:
+    raise SystemExit("release workflow self-test did not execute its v0.2 wiring controls")
+print(f"workflow-wiring-controls={mutation_count}")
 try:
     validate_downloaded_sidecars(workflow.replace("bash build/verify-release-gates.sh --check-digest-sidecar", "(cd build/downloaded && sha256sum --check", 1))
 except ValueError:
@@ -149,7 +217,7 @@ except ValueError:
 else:
     raise SystemExit("release workflow self-test accepted sha256sum --check for a digest-only sidecar")
 try:
-    validate_isolated_release_readbacks(workflow.replace('existing_performance_dir="build/existing/performance-validation"', 'existing_performance_dir="build/existing/asset-readback/release-performance-receipt.json"', 1))
+    validate_isolated_release_readbacks(workflow.replace("--dir build/fuzz-readback", "--dir build/corpus-readback", 1))
 except ValueError:
     pass
 else:

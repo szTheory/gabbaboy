@@ -131,6 +131,11 @@ jobs:
           set -euo pipefail
           git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > "$RUNNER_TEMP/verify-release-gates.sh"
           chmod +x "$RUNNER_TEMP/verify-release-gates.sh"
+      - name: Require final release notes to satisfy the v0.2 adoption contract
+        env:
+          RELEASE_NOTES_FILE: ${{ steps.identity.outputs.release_notes_file }}
+        shell: bash
+        run: python3 -I tests/scripts/verify-v02-adoption.py --release-notes "$RELEASE_NOTES_FILE"
       - name: Verify merged PR exact-head required evidence
         id: proof
         shell: bash
@@ -364,6 +369,50 @@ jobs:
             "build/consumer-work/$language/consumer-$language" \
               "$prefix/share/gabbaboy/fixtures/tracer/tracer.gb"
           done
+      - name: Prove downloaded relocated C and C++ consumer behavior and attach the receipt
+        env:
+          RELEASE_ID: ${{ steps.identity.outputs.release_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The v0.2 verifier rejects a prefix inside the checkout, so extract the downloaded bytes elsewhere.
+          bash tests/scripts/verify-release-candidate.sh --extract \
+            build/downloaded/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"
+          python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" \
+            --output build/v02-consumer-receipt.json
+          # The receipt carries a per-run identifier, so a retry keeps the already attached receipt and never replaces it.
+          count=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100" | jq '[.[] | select(.name == "v02-consumer-receipt.json")] | length')
+          [[ "$count" -le 1 ]] || { echo "Draft has duplicate consumer receipts." >&2; exit 1; }
+          if [[ "$count" == 0 ]]; then
+            gh release upload "$RELEASE_TAG" build/v02-consumer-receipt.json --repo "$GH_REPO"
+          fi
+      - name: Inspect the GitHub generated source archive and attach its receipt
+        env:
+          RELEASE_ID: ${{ steps.identity.outputs.release_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/source-archive.tar.gz"
+          curl --fail --silent --show-error --location --proto '=https' --max-filesize 1073741824 \
+            --output "$archive" "https://github.com/$GH_REPO/archive/refs/tags/$RELEASE_TAG.tar.gz"
+          python3 -I tests/scripts/verify-v02-source-archive.py --archive "$archive" \
+            --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json
+          python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json \
+            --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA"
+          # The archive receipt is deterministic for the same archive bytes, so an existing asset must be identical.
+          count=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100" | jq '[.[] | select(.name == "source-archive-receipt.json")] | length')
+          [[ "$count" -le 1 ]] || { echo "Draft has duplicate source archive receipts." >&2; exit 1; }
+          if [[ "$count" == 1 ]]; then
+            existing_dir="build/existing/asset-readback/source-archive-receipt.json"
+            mkdir -p "$existing_dir"
+            gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern source-archive-receipt.json --dir "$existing_dir"
+            cmp -s build/source-archive-receipt.json "$existing_dir/source-archive-receipt.json" || {
+              echo "Existing source archive receipt differs from the recomputed receipt." >&2
+              exit 1
+            }
+          else
+            gh release upload "$RELEASE_TAG" build/source-archive-receipt.json --repo "$GH_REPO"
+          fi
       - name: Write or revalidate downloaded-byte candidate receipt
         env:
           RELEASE_ID: ${{ steps.identity.outputs.release_id }}
@@ -474,6 +523,24 @@ jobs:
             gh release upload "$RELEASE_TAG" build/downloaded/candidate-receipt.json --repo "$GH_REPO"
           fi
           echo "Candidate is qualified and remains a draft. Only the final 06-06 gate may publish it."
+      - name: Verify the attached candidate, product package and source archive receipt together
+        env:
+          RELEASE_ID: ${{ steps.identity.outputs.release_id }}
+          RELEASE_VERSION: ${{ steps.identity.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/final-verify
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" \
+            --pattern candidate-receipt.json --pattern gabbaboy-core-linux-x64.tar.gz \
+            --pattern gabbaboy-notices.txt --pattern source-receipt.json \
+            --pattern build-receipt.json --pattern source-archive-receipt.json --dir build/final-verify
+          bash tests/scripts/verify-release-candidate.sh --verify-final \
+            build/final-verify/candidate-receipt.json build/final-verify/gabbaboy-core-linux-x64.tar.gz \
+            "$RELEASE_VERSION" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
+            build/final-verify/gabbaboy-notices.txt build/final-verify/source-receipt.json \
+            build/final-verify/build-receipt.json "$RUNNER_TEMP/source-archive.tar.gz" \
+            build/final-verify/source-archive-receipt.json
 
   candidate-macos:
     name: downloaded-macos-arm64-candidates
@@ -780,10 +847,267 @@ jobs:
           done
           # This adds exact downloaded-byte verification while reusing the existing native consumer sources and toolchain.
 
+  candidate-corpus:
+    name: exact-tag-corpus-and-support-sidecar
+    needs: [release, candidate]
+    if: ${{ always() && needs.candidate.result == 'success' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.retry && inputs.tag_name || needs.release.outputs.tag_name }}
+      SOURCE_SHA: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
+      INPUT_RELEASE_ID: ${{ inputs.retry && inputs.release_id || '' }}
+    steps:
+      - name: Check out exact tagged source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+      - name: Require the exact tag and one unpublished draft, and detect already attached corpus evidence
+        id: draft
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GH_REPO" == szTheory/gabbaboy && "$GITHUB_REF" == refs/heads/main ]] || { echo "Corpus evidence runs only from trusted main workflow runs." >&2; exit 1; }
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Malformed release tag or source SHA." >&2; exit 1; }
+          [[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" && "$(git rev-parse "$RELEASE_TAG^{commit}")" == "$SOURCE_SHA" ]] || { echo "Checkout is not the exact tagged source." >&2; exit 1; }
+          release_json=$(gh api "repos/$GH_REPO/releases?per_page=100")
+          [[ $(jq --arg tag "$RELEASE_TAG" '[.[] | select(.tag_name == $tag and .draft == true)] | length' <<<"$release_json") == 1 ]] || { echo "Expected exactly one unpublished draft." >&2; exit 1; }
+          release_id=$(jq --arg tag "$RELEASE_TAG" -r '.[] | select(.tag_name == $tag) | .id' <<<"$release_json")
+          if [[ -n "$INPUT_RELEASE_ID" ]]; then [[ "$release_id" == "$INPUT_RELEASE_ID" ]] || { echo "Retry release ID differs." >&2; exit 1; }; fi
+          echo "RELEASE_ID=$release_id" >> "$GITHUB_ENV"
+          assets=$(gh api "repos/$GH_REPO/releases/$release_id/assets?per_page=100")
+          corpus=$(jq '[.[] | select(.name == "cgb-corpus-receipt.json")] | length' <<<"$assets")
+          sidecar=$(jq '[.[] | select(.name == "support-ledger.json")] | length' <<<"$assets")
+          [[ "$corpus" -le 1 && "$sidecar" -le 1 ]] || { echo "Duplicate corpus evidence assets." >&2; exit 1; }
+          if [[ "$corpus" == 1 && "$sidecar" == 1 ]]; then
+            echo "reuse=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$corpus" == 0 && "$sidecar" == 0 ]]; then
+            echo "reuse=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Corpus receipt and support sidecar are only partially attached; refusing to regenerate over them." >&2
+            exit 1
+          fi
+      - name: Configure and build the exact tag with the native preset
+        if: steps.draft.outputs.reuse != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/package-prefix
+          cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$GITHUB_WORKSPACE/build/package-prefix"
+          cmake --build --preset phase1
+          cmake --install build --prefix build/package-prefix
+      - name: Begin exact CGB corpus receipt run
+        id: corpus_run
+        if: steps.draft.outputs.reuse != 'true'
+        run: python3 -I tests/scripts/verify-cgb-corpus-report.py --begin-run --build-dir build --receipt build/cgb-corpus-receipt.json >> "$GITHUB_OUTPUT"
+      - name: Run the full CTest stream once
+        id: full_ctest
+        if: steps.draft.outputs.reuse != 'true'
+        continue-on-error: true
+        run: ctest --test-dir build -T Test --no-compress-output --test-output-size-passed 16777216 --output-on-failure --no-tests=error --output-junit "cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml"
+      - name: Build the CGB receipt from this CTest output
+        if: steps.draft.outputs.reuse != 'true'
+        run: python3 -I tests/scripts/verify-cgb-corpus-report.py --from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json
+      - name: Verify public CGB claims, the current support ledger and the required test inventory
+        if: steps.draft.outputs.reuse != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I tests/scripts/verify-cgb-corpus-claims.py --receipt build/cgb-corpus-receipt.json
+          python3 -I tests/scripts/verify-support-ledger.py --check-current --receipt build/cgb-corpus-receipt.json
+          bash .github/scripts/verify-test-inventory.sh "build/cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml" tests/expected-tests.txt --installed
+      - name: Require the full CTest run to pass
+        if: steps.draft.outputs.reuse != 'true'
+        env:
+          FULL_CTEST_OUTCOME: ${{ steps.full_ctest.outcome }}
+        run: test "$FULL_CTEST_OUTCOME" = success
+      - name: Generate and validate the schema-2 support sidecar from the exact receipt
+        if: steps.draft.outputs.reuse != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I tests/scripts/verify-support-ledger.py --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" \
+            --receipt build/cgb-corpus-receipt.json --output build/support-ledger.json
+          python3 -I tests/scripts/verify-support-ledger.py --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" \
+            --receipt build/cgb-corpus-receipt.json --verify-sidecar build/support-ledger.json
+      - name: Attach the sidecar and then the corpus receipt without replacing an existing asset
+        if: steps.draft.outputs.reuse != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The receipt is attached last: its presence is what marks the pair as complete for a retry.
+          for name in support-ledger.json cgb-corpus-receipt.json; do
+            count=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100" | jq --arg name "$name" '[.[] | select(.name == $name)] | length')
+            [[ "$count" == 0 ]] || { echo "Evidence asset appeared during generation: $name" >&2; exit 1; }
+            gh release upload "$RELEASE_TAG" "build/$name" --repo "$GH_REPO"
+          done
+      - name: Read back the attached corpus evidence bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/corpus-readback
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" \
+            --pattern cgb-corpus-receipt.json --pattern support-ledger.json --dir build/corpus-readback
+          for name in cgb-corpus-receipt.json support-ledger.json; do
+            test -s "build/corpus-readback/$name"
+            if [[ -f "build/$name" ]]; then cmp -s "build/$name" "build/corpus-readback/$name" || { echo "Attached $name differs from the generated bytes." >&2; exit 1; }; fi
+          done
+
+  candidate-fuzz:
+    name: exact-tag-clang-libfuzzer-campaign
+    needs: [release, candidate]
+    if: ${{ always() && needs.candidate.result == 'success' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.retry && inputs.tag_name || needs.release.outputs.tag_name }}
+      SOURCE_SHA: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
+      INPUT_RELEASE_ID: ${{ inputs.retry && inputs.release_id || '' }}
+      CC: clang-18
+      CXX: clang++-18
+    steps:
+      - name: Check out exact tagged source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+      - name: Require the exact tag and one unpublished draft, and detect an already attached campaign receipt
+        id: draft
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GH_REPO" == szTheory/gabbaboy && "$GITHUB_REF" == refs/heads/main ]] || { echo "Fuzz evidence runs only from trusted main workflow runs." >&2; exit 1; }
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Malformed release tag or source SHA." >&2; exit 1; }
+          [[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" && "$(git rev-parse "$RELEASE_TAG^{commit}")" == "$SOURCE_SHA" ]] || { echo "Checkout is not the exact tagged source." >&2; exit 1; }
+          release_json=$(gh api "repos/$GH_REPO/releases?per_page=100")
+          [[ $(jq --arg tag "$RELEASE_TAG" '[.[] | select(.tag_name == $tag and .draft == true)] | length' <<<"$release_json") == 1 ]] || { echo "Expected exactly one unpublished draft." >&2; exit 1; }
+          release_id=$(jq --arg tag "$RELEASE_TAG" -r '.[] | select(.tag_name == $tag) | .id' <<<"$release_json")
+          if [[ -n "$INPUT_RELEASE_ID" ]]; then [[ "$release_id" == "$INPUT_RELEASE_ID" ]] || { echo "Retry release ID differs." >&2; exit 1; }; fi
+          echo "RELEASE_ID=$release_id" >> "$GITHUB_ENV"
+          count=$(gh api "repos/$GH_REPO/releases/$release_id/assets?per_page=100" | jq '[.[] | select(.name == "v02-fuzz-receipt.json")] | length')
+          [[ "$count" -le 1 ]] || { echo "Draft has duplicate fuzz receipts." >&2; exit 1; }
+          if [[ "$count" == 1 ]]; then echo "reuse=true" >> "$GITHUB_OUTPUT"; else echo "reuse=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Confirm pinned Clang 18 toolchain
+        if: steps.draft.outputs.reuse != 'true'
+        run: |
+          clang-18 --version
+          clang++-18 --version
+          test "$(clang-18 -dumpversion | cut -d. -f1)" = 18
+          test "$(clang++-18 -dumpversion | cut -d. -f1)" = 18
+      - name: Configure and build ASan and UBSan
+        if: steps.draft.outputs.reuse != 'true'
+        run: |
+          cmake --preset phase1-asan -DGBB_TEST_INSTALL_PREFIX=
+          cmake -LA -N build-asan | grep -q '^GABBABOY_ENABLE_SANITIZERS:BOOL=ON$'
+          cmake --build --preset phase1-asan
+      - name: Run the bounded Clang 18 libFuzzer campaign on the exact tagged source and verify its receipt
+        if: steps.draft.outputs.reuse != 'true'
+        env:
+          # The producer records GITHUB_SHA as the source identity; this workflow runs on main, so name the tagged source.
+          GITHUB_SHA: ${{ env.SOURCE_SHA }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --explore --receipt build-asan/v02-fuzz-receipt.json
+          python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json
+          GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --self-test
+          mkdir -p build
+          cp build-asan/v02-fuzz-receipt.json build/v02-fuzz-receipt.json
+      - name: Attach the campaign receipt without replacing an existing asset
+        if: steps.draft.outputs.reuse != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100" | jq '[.[] | select(.name == "v02-fuzz-receipt.json")] | length')
+          [[ "$count" == 0 ]] || { echo "Fuzz receipt appeared during the campaign." >&2; exit 1; }
+          gh release upload "$RELEASE_TAG" build/v02-fuzz-receipt.json --repo "$GH_REPO"
+      - name: Validate the downloaded campaign receipt for the exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/fuzz-readback
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern v02-fuzz-receipt.json --dir build/fuzz-readback
+          python3 -I tests/scripts/verify-v02-fuzz.py --verify build/fuzz-readback/v02-fuzz-receipt.json
+
+  candidate-performance:
+    name: exact-tag-paired-performance-qualification
+    needs: [release, candidate]
+    if: ${{ always() && needs.candidate.result == 'success' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.retry && inputs.tag_name || needs.release.outputs.tag_name }}
+      SOURCE_SHA: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
+      INPUT_RELEASE_ID: ${{ inputs.retry && inputs.release_id || '' }}
+      # Reviewed disposition for the shared-run-loop change; it is only recorded when the +5% trigger fires.
+      PERFORMANCE_REGRESSION_REVIEW: >-
+        Source delta reviewed: v0.2 adds CGB speed-switch, HDMA arbitration, unsupported-bus and output-boundary
+        checks to the shared run loop that the v0.1.0 baseline lacks; the slowdown is accepted and disclosed,
+        and no equivalent-speed claim is made.
+    steps:
+      - name: Check out exact tagged source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+      - name: Require the exact tag and one unpublished draft, and detect an already attached performance receipt
+        id: draft
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GH_REPO" == szTheory/gabbaboy && "$GITHUB_REF" == refs/heads/main ]] || { echo "Performance evidence runs only from trusted main workflow runs." >&2; exit 1; }
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Malformed release tag or source SHA." >&2; exit 1; }
+          [[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" && "$(git rev-parse "$RELEASE_TAG^{commit}")" == "$SOURCE_SHA" ]] || { echo "Checkout is not the exact tagged source." >&2; exit 1; }
+          release_json=$(gh api "repos/$GH_REPO/releases?per_page=100")
+          [[ $(jq --arg tag "$RELEASE_TAG" '[.[] | select(.tag_name == $tag and .draft == true)] | length' <<<"$release_json") == 1 ]] || { echo "Expected exactly one unpublished draft." >&2; exit 1; }
+          release_id=$(jq --arg tag "$RELEASE_TAG" -r '.[] | select(.tag_name == $tag) | .id' <<<"$release_json")
+          if [[ -n "$INPUT_RELEASE_ID" ]]; then [[ "$release_id" == "$INPUT_RELEASE_ID" ]] || { echo "Retry release ID differs." >&2; exit 1; }; fi
+          echo "RELEASE_ID=$release_id" >> "$GITHUB_ENV"
+          count=$(gh api "repos/$GH_REPO/releases/$release_id/assets?per_page=100" | jq '[.[] | select(.name == "v02-performance-receipt.json")] | length')
+          [[ "$count" -le 1 ]] || { echo "Draft has duplicate performance receipts." >&2; exit 1; }
+          if [[ "$count" == 1 ]]; then echo "reuse=true" >> "$GITHUB_OUTPUT"; else echo "reuse=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Measure the clean paired v0.1.0 baseline and exact-tag candidate
+        if: steps.draft.outputs.reuse != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json \
+            --review-regression "$PERFORMANCE_REGRESSION_REVIEW"
+          python3 -I tests/scripts/verify-v02-performance.py --verify build/v02-performance-receipt.json
+      - name: Attach the performance receipt without replacing an existing asset
+        if: steps.draft.outputs.reuse != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100" | jq '[.[] | select(.name == "v02-performance-receipt.json")] | length')
+          [[ "$count" == 0 ]] || { echo "Performance receipt appeared during measurement." >&2; exit 1; }
+          gh release upload "$RELEASE_TAG" build/v02-performance-receipt.json --repo "$GH_REPO"
+      - name: Validate the downloaded performance receipt for the exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/performance-readback
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern v02-performance-receipt.json --dir build/performance-readback
+          python3 -I tests/scripts/verify-v02-performance.py --verify build/performance-readback/v02-performance-receipt.json
+
   candidate-platform-manifest:
     name: fail-closed-platform-asset-manifest
-    needs: [release, candidate, candidate-macos, candidate-windows]
-    if: ${{ always() && needs.candidate.result == 'success' && needs.candidate-macos.result == 'success' && needs.candidate-windows.result == 'success' }}
+    needs: [release, candidate, candidate-macos, candidate-windows, candidate-corpus, candidate-fuzz, candidate-performance]
+    if: ${{ always() && needs.candidate.result == 'success' && needs.candidate-macos.result == 'success' && needs.candidate-windows.result == 'success' && needs.candidate-corpus.result == 'success' && needs.candidate-fuzz.result == 'success' && needs.candidate-performance.result == 'success' }}
     runs-on: ubuntu-22.04
     timeout-minutes: 25
     permissions:
@@ -800,7 +1124,7 @@ jobs:
         with:
           ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 0
-      - name: Generate or reuse exact-tag support and performance evidence
+      - name: Validate the attached v0.2 evidence families through their owner validators
         shell: bash
         run: |
           set -euo pipefail
@@ -810,67 +1134,16 @@ jobs:
           [[ $(jq --arg tag "$RELEASE_TAG" '[.[] | select(.tag_name == $tag and .draft == true)] | length' <<<"$release_json") == 1 ]] || exit 1
           release_id=$(jq --arg tag "$RELEASE_TAG" -r '.[] | select(.tag_name == $tag) | .id' <<<"$release_json")
           if [[ -n "$RELEASE_ID" ]]; then [[ "$release_id" == "$RELEASE_ID" ]] || exit 1; fi
-          mkdir -p build/release-proof
-          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern source-receipt.json --dir build/release-proof
-          pr_head_sha=$(jq -r '.prior_pr_proof.head_sha' build/release-proof/source-receipt.json)
-          pr_merge_sha=$(jq -r '.prior_pr_proof.merge_commit_sha' build/release-proof/source-receipt.json)
-          [[ "$pr_head_sha" =~ ^[0-9a-f]{40}$ && "$pr_merge_sha" == "$SOURCE_SHA" ]] || {
-            echo "Source receipt does not bind an exact PR head to this release merge commit." >&2; exit 1;
-          }
-          mkdir -p build
-          python3 tests/scripts/verify-support-ledger.py --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --output build/support-ledger.json
-          gh api "repos/$GH_REPO/commits/$pr_head_sha/check-runs?per_page=100" > build/all-head-check-runs.json
-          jq --arg expected_head "$pr_head_sha" \
-            '[.check_runs[] | select(.head_sha == $expected_head and .status == "completed" and .conclusion == "success") | {id, name, started_at, completed_at, conclusion, head_sha}]' \
-            build/all-head-check-runs.json > build/hosted-check-runs.json
-          assets=$(gh api "repos/$GH_REPO/releases/$release_id/assets?per_page=100")
-          for name in support-ledger.json release-performance-receipt.json; do
-            # shellcheck disable=SC2016
-            count=$(jq --arg name "$name" '[.[] | select(.name == $name)] | length' <<<"$assets")
-            [[ "$count" -le 1 ]] || { echo "Duplicate release evidence asset: $name" >&2; exit 1; }
-          done
-          if [[ $(jq '[.[] | select(.name == "release-performance-receipt.json")] | length' <<<"$assets") == 1 ]]; then
-            existing_performance_dir="build/existing/performance-validation"
-            mkdir -p "$existing_performance_dir"
-            gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern release-performance-receipt.json --dir "$existing_performance_dir"
-            RELEASE_CHECK_HEAD_SHA="$pr_head_sha" python3 - "$SOURCE_SHA" "$RELEASE_TAG" "$existing_performance_dir/release-performance-receipt.json" <<'PY'
-          import json, pathlib, sys
-          import os
-          source, tag, path = sys.argv[1:]
-          data = json.loads(pathlib.Path(path).read_text())
-          if data.get("source_sha") != source or data.get("release_tag") != tag or data.get("trace_pair_digest_equal") is not True or data.get("hosted_check_head_sha") != os.environ["RELEASE_CHECK_HEAD_SHA"]:
-              raise SystemExit("Existing performance receipt is stale or invalid")
-          PY
-            cp "$existing_performance_dir/release-performance-receipt.json" build/
-          else
-            SOURCE_SHA="$SOURCE_SHA" RELEASE_TAG="$RELEASE_TAG" EXPECTED_CHECK_HEAD_SHA="$pr_head_sha" HOSTED_CHECKS_JSON=build/hosted-check-runs.json \
-              bash tests/scripts/measure-release-baseline.sh --self-test
-            test -s build/release-measure/release-performance-receipt.json
-            cp build/release-measure/release-performance-receipt.json build/
-            cmp -s build/release-measure/release-performance-receipt.json build/release-performance-receipt.json
-          fi
-          python3 tests/scripts/verify-support-ledger.py --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" \
-            --verify-sidecar build/support-ledger.json
-          RELEASE_CHECK_HEAD_SHA="$pr_head_sha" python3 - "$SOURCE_SHA" "$RELEASE_TAG" build/release-performance-receipt.json <<'PY'
-          import json, pathlib, sys
-          import os
-          source, tag, path = sys.argv[1:]
-          data = json.loads(pathlib.Path(path).read_text())
-          if data.get("source_sha") != source or data.get("release_tag") != tag or data.get("trace_pair_digest_equal") is not True or data.get("hosted_check_head_sha") != os.environ["RELEASE_CHECK_HEAD_SHA"] or not data.get("hosted_exact_source_check_durations"):
-              raise SystemExit("Performance receipt is missing exact source, tag, paired digest, or hosted CI duration evidence")
-          PY
-          for name in support-ledger.json release-performance-receipt.json; do
-            # shellcheck disable=SC2016
-            count=$(gh api "repos/$GH_REPO/releases/$release_id/assets?per_page=100" | jq --arg name "$name" '[.[] | select(.name == $name)] | length')
-            if [[ "$count" == 1 ]]; then
-              existing_dir="build/existing/asset-readback/$name"
-              mkdir -p "$existing_dir"
-              gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern "$name" --dir "$existing_dir"
-              cmp -s "build/$name" "$existing_dir/$name" || { echo "Existing release evidence differs: $name" >&2; exit 1; }
-            else
-              gh release upload "$RELEASE_TAG" "build/$name" --repo "$GH_REPO"
-            fi
-          done
+          git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > "$RUNNER_TEMP/verify-release-gates.sh"
+          mkdir -p build/evidence-validation
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" \
+            --pattern cgb-corpus-receipt.json --pattern support-ledger.json --pattern v02-performance-receipt.json \
+            --pattern v02-fuzz-receipt.json --pattern source-archive-receipt.json --pattern v02-consumer-receipt.json \
+            --dir build/evidence-validation
+          curl --fail --silent --show-error --location --proto '=https' --max-filesize 1073741824 \
+            --output "$RUNNER_TEMP/source-archive.tar.gz" "https://github.com/$GH_REPO/archive/refs/tags/$RELEASE_TAG.tar.gz"
+          bash "$RUNNER_TEMP/verify-release-gates.sh" --check-v02-evidence \
+            build/evidence-validation "$RELEASE_TAG" "$SOURCE_SHA" "$RUNNER_TEMP/source-archive.tar.gz"
       - name: Validate the exact candidate asset set after platform smoke
         shell: bash
         run: |
@@ -893,7 +1166,8 @@ jobs:
               "gabbaboy-preview-macos-arm64.tar.gz", "gabbaboy-preview-macos-arm64-build-receipt.json",
               "gabbaboy-core-windows-x64.tar.gz", "gabbaboy-core-windows-x64.tar.gz.sha256",
               "gabbaboy-build-receipt-windows-x64.json", "support-ledger.json",
-              "release-performance-receipt.json",
+              "cgb-corpus-receipt.json", "v02-performance-receipt.json", "v02-fuzz-receipt.json",
+              "source-archive-receipt.json", "v02-consumer-receipt.json",
           }
           if len(names) != len(set(names)):
               raise SystemExit("release draft contains duplicate asset names")
@@ -902,7 +1176,7 @@ jobs:
               raise SystemExit(f"candidate asset set mismatch; missing={sorted(expected-actual)} unknown={sorted(actual-expected)}")
           PY
           mkdir -p build/downloaded
-          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern 'gabbaboy-core-*' --pattern 'gabbaboy-preview-*' --pattern 'gabbaboy-build-receipt-*' --pattern candidate-receipt.json --pattern gabbaboy-notices.txt --pattern source-receipt.json --pattern build-receipt.json --pattern support-ledger.json --pattern release-performance-receipt.json --dir build/downloaded
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern 'gabbaboy-core-*' --pattern 'gabbaboy-preview-*' --pattern 'gabbaboy-build-receipt-*' --pattern candidate-receipt.json --pattern gabbaboy-notices.txt --pattern source-receipt.json --pattern build-receipt.json --pattern support-ledger.json --pattern cgb-corpus-receipt.json --pattern v02-performance-receipt.json --pattern v02-fuzz-receipt.json --pattern source-archive-receipt.json --pattern v02-consumer-receipt.json --dir build/downloaded
           git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > build/verify-release-gates.sh
           bash build/verify-release-gates.sh --check-digest-sidecar \
             build/downloaded/gabbaboy-core-macos-arm64.tar.gz.sha256 \
@@ -924,10 +1198,13 @@ jobs:
                       "gabbaboy-preview-macos-arm64.tar.gz", "gabbaboy-preview-macos-arm64-build-receipt.json",
                       "gabbaboy-core-windows-x64.tar.gz", "gabbaboy-core-windows-x64.tar.gz.sha256",
                       "gabbaboy-build-receipt-windows-x64.json", "support-ledger.json",
-                      "release-performance-receipt.json"}
+                      "cgb-corpus-receipt.json", "v02-performance-receipt.json", "v02-fuzz-receipt.json",
+                      "source-archive-receipt.json", "v02-consumer-receipt.json"}
           if {item["name"] for item in assets} != required:
               raise SystemExit("downloaded release asset set differs from the qualified exact set")
-          for evidence_name in ("support-ledger.json", "release-performance-receipt.json"):
+          evidence_names = ("support-ledger.json", "cgb-corpus-receipt.json", "v02-performance-receipt.json",
+                            "v02-fuzz-receipt.json", "source-archive-receipt.json", "v02-consumer-receipt.json")
+          for evidence_name in evidence_names:
               if not any(item["name"] == evidence_name for item in assets):
                   raise SystemExit(f"generated source evidence missing from manifest: {evidence_name}")
           evidence = {}
@@ -945,7 +1222,11 @@ jobs:
               raise SystemExit("player build receipt identity or result mismatch")
           data = {"schema_version": 1, "source_sha": source_sha, "assets": assets, "builds": evidence,
                   "support_sidecar": "support-ledger.json",
-                  "performance_receipt": "release-performance-receipt.json",
+                  "corpus_receipt": "cgb-corpus-receipt.json",
+                  "performance_receipt": "v02-performance-receipt.json",
+                  "fuzz_receipt": "v02-fuzz-receipt.json",
+                  "source_archive_receipt": "source-archive-receipt.json",
+                  "consumer_receipt": "v02-consumer-receipt.json",
                   "player_build_receipt": "gabbaboy-preview-macos-arm64-build-receipt.json",
                   "downloaded_smoke": "Linux/macOS/Windows core consumers and macOS player passed",
                   "hardware_qualified": False, "signed": False, "notarized": False}
@@ -1060,6 +1341,9 @@ jobs:
                          for row in rows],
               "support_sidecar": "support-ledger.json",
               "support_sidecar_sha256": hashlib.sha256((root / "support-ledger.json").read_bytes()).hexdigest(),
+              "evidence_sha256": {name: hashlib.sha256((root / name).read_bytes()).hexdigest()
+                                  for name in ("cgb-corpus-receipt.json", "v02-performance-receipt.json", "v02-fuzz-receipt.json",
+                                               "source-archive-receipt.json", "v02-consumer-receipt.json")},
               "candidate_manifest_sha256": hashlib.sha256((root / "candidate-platform-manifest.json").read_bytes()).hexdigest(),
               "builds": manifest.get("builds", {}),
               "limits": ["DMG-CPU-B deterministic software profile only", "no physical DMG observation", "no Developer ID signature or notarization"],

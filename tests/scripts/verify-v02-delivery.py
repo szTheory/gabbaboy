@@ -217,7 +217,7 @@ def check_evidence(evidence: Path, tag: str, source: str, repo: Path, archive: P
         reject("consumer-binding", "downloaded C and C++ consumer results are missing, partial or for another source")
 
     run_owner("ledger", repo, "--tag", tag, "--source-sha", source, "--receipt", str(evidence / CORPUS),
-              "--verify-sidecar", str(evidence / SIDECAR))
+              "--verify-sidecar", str(evidence / SIDECAR), "--evidence-only")
     for family, option, name in (("performance", "--verify", PERFORMANCE), ("fuzz", "--verify", FUZZ)):
         if reuse[family] is None:
             run_owner(family, repo, option, str(evidence / name))
@@ -450,6 +450,7 @@ def die(m): print(m, file=sys.stderr); sys.exit(1)
 def load(p): return json.loads(pathlib.Path(p).read_text())
 def head(): return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 if name == "verify-support-ledger.py":
+    if "--evidence-only" not in a: die("downloaded sidecars must be verified without the producer's build tree")
     tag, sha = opt("--tag"), opt("--source-sha")
     oid = subprocess.check_output(["git", "rev-parse", tag + ":docs/support/v0.2.0.md"], text=True).strip()
     want = {"schema_version": 2, "version": tag[1:], "tag": tag, "source_sha": sha, "ledger_blob": oid,

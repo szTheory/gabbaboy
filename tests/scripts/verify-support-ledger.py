@@ -17,6 +17,11 @@ import sys
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
+# Set only by --evidence-only while verifying an already attached sidecar in a job that did not build the
+# product: the receipt then lives outside the checkout and the producer's build files are absent. Source
+# inputs, the receipt's content and every build file that IS present are still checked; generation and
+# --check-current never relax anything.
+EVIDENCE_ONLY = False
 # Ledgers are versioned when the support scope changes, not on every release.
 # A release binds the newest ledger at or below its own version, read from the
 # tagged tree, so a fixes-only patch release reuses the unchanged ledger.
@@ -921,6 +926,9 @@ def validate_source_bindings(data: dict, repo_root: pathlib.Path,
                 if len(raw) > MAX_INPUT_BYTES:
                     fail(section + "-input:too-large")
             else:
+                if (section == "build" and EVIDENCE_ONLY and type(row.get("path")) is str
+                        and not (root / row["path"]).exists()):
+                    continue
                 name, raw = read_repo_file(root, row.get("path"), MAX_INPUT_BYTES, section + "-input")
             if sha256(raw) != row.get("sha256") or len(raw) != row.get("size_bytes"):
                 fail(section + " input is stale:" + name)
@@ -1054,7 +1062,10 @@ def build_v2_sidecar(tag: str, source_sha: str, repo_root: pathlib.Path,
         if not receipt_path.is_absolute():
             receipt_path = repo_root / receipt_path
         receipt_path = receipt_path.resolve(strict=True)
-        receipt_rel = receipt_path.relative_to(repo_root.resolve()).as_posix()
+        if EVIDENCE_ONLY:
+            receipt_rel = data.get("receipt", {}).get("path")
+        else:
+            receipt_rel = receipt_path.relative_to(repo_root.resolve()).as_posix()
     except (OSError, ValueError):
         fail("receipt path must stay inside the tagged repository")
     if receipt_rel != data.get("receipt", {}).get("path"):
@@ -1556,6 +1567,7 @@ def self_test() -> None:
 
 def self_test_v2_sidecar() -> None:
     """Exercise full-membership sidecars without relying on ignored build outputs."""
+    global EVIDENCE_ONLY
     ledger_path = ROOT / "docs/support/v0.2.0.md"
     ledger_raw = bounded_file(ledger_path, MAX_LEDGER_BYTES, "ledger")
     data = parse_ledger(ledger_raw, "0.2.0")
@@ -1719,6 +1731,42 @@ def self_test_v2_sidecar() -> None:
             fail("v0.2 patch tag did not reuse its same-scope ledger")
         positive_checks.append("v0.2-patch-compatibility")
 
+        # Downloaded-evidence verification (publish job): the receipt is an asset outside the checkout and
+        # the producer's build files are absent. Only this opt-in mode accepts that; a present but altered
+        # build file, and an outside receipt without the opt-in, are still rejected.
+        outside_receipt = temp_root / "downloaded" / "cgb-corpus-receipt.json"
+        outside_receipt.parent.mkdir()
+        outside_receipt.write_bytes(second_raw)
+        expect_rejected("receipt-outside-checkout-without-evidence-only",
+                        lambda: build_sidecar("v0.2.0", source_sha, repository, outside_receipt),
+                        "receipt path must stay inside the tagged repository")
+        build_files = {row["path"]: (repository / row["path"]).read_bytes()
+                       for row in second_receipt["identity"]["build_artifacts"]}
+        for relative in build_files:
+            (repository / relative).unlink()
+        destination_receipt.unlink()
+        try:
+            expect_rejected("absent-build-without-evidence-only",
+                            lambda: build_sidecar("v0.2.0", source_sha, repository, outside_receipt),
+                            "receipt path must stay inside the tagged repository")
+            EVIDENCE_ONLY = True
+            downloaded = build_sidecar("v0.2.0", source_sha, repository, outside_receipt)
+            if downloaded != second_sidecar:
+                fail("downloaded-evidence verification did not reproduce the producer's sidecar")
+            positive_checks.append("downloaded-evidence-without-build")
+            tampered = sorted(build_files)[0]
+            (repository / tampered).parent.mkdir(parents=True, exist_ok=True)
+            (repository / tampered).write_bytes(build_files[tampered] + b"tampered\n")
+            expect_rejected("present-build-file-still-checked-in-evidence-only",
+                            lambda: build_sidecar("v0.2.0", source_sha, repository, outside_receipt),
+                            "build input is stale")
+        finally:
+            EVIDENCE_ONLY = False
+            for relative, raw in build_files.items():
+                (repository / relative).parent.mkdir(parents=True, exist_ok=True)
+                (repository / relative).write_bytes(raw)
+            destination_receipt.write_bytes(second_raw)
+
         expect_rejected("missing-v2-receipt",
                         lambda: build_sidecar("v0.2.0", source_sha, repository),
                         "schema-2 sidecars require --receipt")
@@ -1868,7 +1916,14 @@ def main() -> int:
     parser.add_argument("--check-current", action="store_true")
     parser.add_argument("--write-current", action="store_true")
     parser.add_argument("--receipt", type=pathlib.Path)
+    parser.add_argument("--evidence-only", action="store_true",
+                        help="with --verify-sidecar: the receipt is a downloaded asset and the producer's build is absent")
     args = parser.parse_args()
+    if args.evidence_only:
+        if not args.verify_sidecar:
+            parser.error("--evidence-only is only accepted with --verify-sidecar")
+        global EVIDENCE_ONLY
+        EVIDENCE_ONLY = True
     try:
         if args.self_test_v2:
             self_test_v2()
