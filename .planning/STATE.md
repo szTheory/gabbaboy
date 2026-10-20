@@ -6,17 +6,17 @@ current_phase: 15
 current_phase_name: CGB Acceptance, Support Ledger and v0.2.0 Release
 current_plan: 07
 status: paused
-stopped_at: Completed 15-07-PLAN.md
-last_updated: "2026-10-20T01:27:02.800Z"
+stopped_at: Completed 15-06-PLAN.md
+last_updated: "2026-10-20T02:30:32.964Z"
 last_activity: 2026-10-20
 last_activity_desc: Completed 15-04 adoption/notice claims; 5/10 plans complete; next 15-07, campaign parked
-state_head: 4c0f5c62791db52bd0ec7c6cb1f3ca0b17ba707e
+state_head: 92b213008832cc9d460a0dbc00d3706982578375
 progress:
   total_phases: 9
   completed_phases: 9
   total_plans: 134
-  completed_plans: 130
-  percent: 97
+  completed_plans: 131
+  percent: 98
 ---
 
 # Project State
@@ -47,7 +47,7 @@ Completed evidence: relocated C/C++ consumers (9 tests, six negative controls); 
 
 Both auto-advance flags remain false. All four phase requirements remain pending at phase level until complete release gates. No phase PR merge, version PR 70 merge, exact-tag release or publication occurred. Stop after Phase 15 with `/gsd-verify-work 15`; do not begin v0.3.
 
-Progress: [█████████░] 97%
+Progress: [█████████░] 98%
 
 ### Historical Phase 14 handoff (superseded route; preserved receipts)
 
@@ -283,6 +283,7 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 13 P11 | 9min+ | 2 tasks | 10 files |
 | Phase 15 P04 | 35 min | 2 tasks | 7 files |
 | Phase 15 P07 | 45 min | 2 tasks | 2 files |
+| Phase 15 P06 | 2h | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -510,6 +511,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 13]: CGB-07 is closed by 37/37 goal verification; physical CGB-E remains UNKNOWN/POLICY, with no local libFuzzer campaign.
 - [Phase 15]: 15-04: adoption checker reuses the production CGB claim parser with a negation guard; fuzz and publication stay unclaimed; notices carry a recomputed manifest/LICENSE digest table for all 19 fixture dirs
 - [Phase 15]: 15-07: source archive bound to tag via embedded commit ID plus tagged tree blob IDs; --verify-final requires the source archive receipt as distinct evidence; --verify gains product fixture-leak check
+- [Phase 15]: 15-06: fuzz speed oracle scoped to CGB profile; hosted verifier no longer forwards credentials on redirect; exact-source campaign run 39357838513 validated
 
 ### Pending Todos
 
@@ -548,8 +550,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-20T01:27:02.421Z
-Stopped at: Completed 15-07-PLAN.md
+Last session: 2026-10-20T02:30:32.677Z
+Stopped at: Completed 15-06-PLAN.md
 Resume file: None
 Next command: /gsd-execute-phase 15
 
