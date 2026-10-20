@@ -1012,8 +1012,9 @@ jobs:
       - name: Run the bounded Clang 18 libFuzzer campaign on the exact tagged source and verify its receipt
         if: steps.draft.outputs.reuse != 'true'
         env:
-          # The producer records GITHUB_SHA as the source identity; this workflow runs on main, so name the tagged source.
-          GITHUB_SHA: ${{ env.SOURCE_SHA }}
+          # The producer defaults to GITHUB_SHA, which is runner-owned and cannot be overridden by step
+          # env; this workflow runs on main, so name the tagged source explicitly (hosted rehearsal 39376198029).
+          GBB_SOURCE_SHA: ${{ env.SOURCE_SHA }}
         shell: bash
         run: |
           set -euo pipefail

@@ -88,24 +88,6 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-      - name: Prove a step-level GITHUB_SHA override is honoured
-        shell: bash
-        run: |
-          set -euo pipefail
-          # release.yml runs on main but must record the tagged source. Probe with a value that
-          # differs from the real GITHUB_SHA so a silently ignored override cannot pass.
-          probe=$(git rev-parse HEAD~1)
-          [[ "$probe" != "$GITHUB_SHA" ]]
-          echo "PROBE_SHA=$probe" >> "$GITHUB_ENV"
-      - name: Read the overridden value from a child process
-        env:
-          GITHUB_SHA: ${{ env.PROBE_SHA }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          observed=$(python3 -c 'import os; print(os.environ["GITHUB_SHA"])')
-          [[ "$observed" == "$PROBE_SHA" ]] || { echo "GITHUB_SHA override was not honoured: $observed" >&2; exit 1; }
-          echo "override honoured: $observed"
       - name: Confirm pinned Clang 18 toolchain
         run: |
           clang-18 --version
@@ -119,7 +101,7 @@ jobs:
           cmake --build --preset phase1-asan
       - name: Run the bounded Clang 18 libFuzzer campaign and verify its receipt
         env:
-          GITHUB_SHA: ${{ github.sha }}
+          GBB_SOURCE_SHA: ${{ github.sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -190,17 +172,21 @@ jobs:
             build/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"
           python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" \
             --output build/v02-consumer-receipt.json
-      - name: Inspect the GitHub generated source archive for this commit
+      - name: Inspect a real GitHub-generated tag archive (the published v0.1.0 tag)
         shell: bash
         run: |
           set -euo pipefail
+          # A commit-SHA archive has a different root than a tag archive, so exercise the checker on
+          # the one real tag archive that exists. This rehearses archive handling, not v0.2.0 bytes.
+          tag=v0.1.0
+          sha=$(git rev-parse "$tag^{commit}")
           archive="$RUNNER_TEMP/source-archive.tar.gz"
           curl --fail --silent --show-error --location --proto '=https' --max-filesize 1073741824 \
-            --output "$archive" "https://github.com/$GH_REPO/archive/$SOURCE_SHA.tar.gz"
+            --output "$archive" "https://github.com/$GH_REPO/archive/refs/tags/$tag.tar.gz"
           python3 -I tests/scripts/verify-v02-source-archive.py --archive "$archive" \
-            --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json
+            --tag "$tag" --source-sha "$sha" --repo . --output build/source-archive-receipt.json
           python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json \
-            --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA"
+            --archive "$archive" --tag "$tag" --source-sha "$sha"
       - name: Check the open version PR's release notes against the v0.2 adoption contract
         shell: bash
         run: |

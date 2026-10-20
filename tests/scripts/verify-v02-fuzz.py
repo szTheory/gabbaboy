@@ -116,7 +116,10 @@ def git_output(*args: str, cwd: Path = ROOT) -> str:
 
 
 def source_commit() -> str:
-    commit = os.environ.get("GITHUB_SHA") or git_output("rev-parse", "HEAD")
+    # GITHUB_SHA is runner-owned: a step-level `env:` override is silently ignored, so a workflow
+    # that runs on one commit but qualifies another names the qualified commit in GBB_SOURCE_SHA.
+    commit = (os.environ.get("GBB_SOURCE_SHA") or os.environ.get("GITHUB_SHA")
+              or git_output("rev-parse", "HEAD"))
     if not HEX_160.fullmatch(commit):
         raise ReceiptError("source SHA must be a full 40-character commit")
     return commit
@@ -503,7 +506,7 @@ def produce_campaign(build_dir: Path, receipt_path: Path) -> int:
         return 0
     except (ReceiptError, OSError, ValueError, KeyError, StopIteration, subprocess.TimeoutExpired) as exc:
         try:
-            failed_receipt(receipt_path, str(exc), os.environ.get("GITHUB_SHA") or None)
+            failed_receipt(receipt_path, str(exc), os.environ.get("GBB_SOURCE_SHA") or os.environ.get("GITHUB_SHA") or None)
         except OSError:
             pass
         print(f"campaign=unsupported reason={redact_output(str(exc))}", file=sys.stderr)
@@ -921,6 +924,25 @@ class ReceiptContractTests(unittest.TestCase):
         self.assertEqual(len(source_manifest(git_output("rev-parse", "HEAD"), compare_worktree=False)), len(SOURCE_FILES))
         print("positive-control=source-input-and-bounded-work-contract")
 
+    def test_explicit_source_identity_outranks_runner_sha(self) -> None:
+        explicit, runner = "a" * 40, "b" * 40
+        saved = {name: os.environ.get(name) for name in ("GBB_SOURCE_SHA", "GITHUB_SHA")}
+        try:
+            os.environ["GBB_SOURCE_SHA"], os.environ["GITHUB_SHA"] = explicit, runner
+            self.assertEqual(source_commit(), explicit)
+            del os.environ["GBB_SOURCE_SHA"]
+            self.assertEqual(source_commit(), runner)
+            os.environ["GBB_SOURCE_SHA"] = "not-a-commit"
+            with self.assertRaises(ReceiptError):
+                source_commit()
+        finally:
+            for name, value in saved.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+        print("positive-control=explicit-source-identity-outranks-runner-sha")
+
     def test_rejects_zero_execution_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.verify_rejects(Path(directory) / "zero.json", {
@@ -1046,7 +1068,7 @@ def self_test(receipt: Path | None) -> int:
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     # Tests are assertions; this inventory line makes a zero-control run visible in logs.
     state = "pass" if result.wasSuccessful() else "fail"
-    print(f"self-test={state} positive_controls=2 negative_controls=19 rejected_mutations={10 if result.wasSuccessful() else 0} skipped={len(result.skipped)}")
+    print(f"self-test={state} positive_controls=3 negative_controls=19 rejected_mutations={10 if result.wasSuccessful() else 0} skipped={len(result.skipped)}")
     return 0 if result.wasSuccessful() else 1
 
 
