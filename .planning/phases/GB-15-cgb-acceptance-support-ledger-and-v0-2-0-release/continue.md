@@ -1,9 +1,7 @@
-# Phase 15 paused continuation
+# Phase 15 continuation
 
-Phase **15 — CGB Acceptance, Support Ledger and v0.2.0 Release**, execution paused by the owner at 4/10 completed plans (01/02/03/05). No phase or release completion is claimed.
+Phase **15 — CGB Acceptance, Support Ledger and v0.2.0 Release**: all 10 plans are executed. v0.2.0 is published from tag source `ab301aa69b1f085050fd66bf7b1378863a0821f2` (release id 418219852) and was read back against live GitHub state; see [15-DELIVERY.md](15-DELIVERY.md).
 
-Resume: `/gsd-resume-work`. Underlying phase command: `/gsd-execute-phase 15`. Read [.continue-here.md](.continue-here.md) and ../../HANDOFF.json first. Next work is **15-04**, then 15-07, per owner request to focus on emulator/product work and park the fuzz campaign. No 15-04 work has started. Both auto flags remain false; stop at Phase 15 with `/gsd-verify-work 15`, do not begin v0.3.
+Completed stage: Phase 15 plan 15-10 execution. Next stage: Phase 15 verification. Exact command: `/gsd-verify-work 15`. Verification needs no human checkpoint by default (automated checks with negative controls exist for every deliverable); remaining physical and perceptual limits are listed in 15-DELIVERY.md.
 
-Plan 15-06 implementation is committed and intentionally has no SUMMARY. Hosted run38947419636 at a175a394 passed native Linux/macOS/Windows, CMake floor, and 1133 sanitizer CTests, then hit a model-applicability assertion: DMG scenario1 was expected to perform a CGB-only speed switch. The target is unchanged. Receipt/minimized input are preserved under build/phase15-pause-evidence; full paths/digests are in the detailed handoff. No campaign pass or broader security scope is authorized by this pause.
-
-Reuse completed summaries and supplemental ledger repair3d451b3/7f38256: two1138/1138 native streams, 108 selected corpus tests; clean no-build checkout self-test. Historical ledger producers stay historical; fresh sidecars validate actual supplied receipt provenance. Keep the measured 23.96% DMG regression disclosed. All four phase requirements remain pending until their complete release gates.
+Do not begin v0.3. Both auto-advance flags remain false. Open item: release-please PR #75 `release 0.2.1`, intentionally not merged. Reuse the recorded evidence and decisions; revisit them only for a concrete gap.
