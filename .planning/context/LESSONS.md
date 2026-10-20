@@ -820,3 +820,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Applies when:** Requirements close only after the final execution SUMMARY, or generated status fields and prose are maintained separately.
 - **Verification:** `.planning/verify-v02-milestone-audit.py --self-test` reconciles 28 central rows, 134 summary lists and nine phase reports; 16 controls reject inflated scores, hidden partials, false Nyquist claims, changed source rows and premature milestone routing. Independent focused core/player checks passed 63/63; no new human UAT.
 - **Source:** `.planning/v0.2-MILESTONE-AUDIT.md`; closure-record corrections remain pending, with `/gsd-validate-phase 7` as the next command.
+
+### GB-TEST-006 / 2026-10-20 / Existence and size do not prove useful diagnostics
+
+- **Cause and evidence:** Phase 7's stall-report CTest checked fresh file existence and a 64 KiB cap, so an empty report satisfied its file assertions. The validation frontmatter also contradicted its checked sign-off; rediscovery from all 17 plans / 40 tasks found the supporting task's unasserted sections and determinism contract.
+- **Remedy:** Check the actual failing producer twice, require complete count-matched trace/I/O/histogram sections with declared caps, expected identity/reason and fresh bounded artifacts, then compare repeated bytes. Run cheap malformed-report controls automatically inside the existing registered CTest, with a direct fast self-test command. Preserve an inventory pinned by release evidence: the first separate CTest entry failed the hosted support-ledger binding, so the repair retained the original inventory byte for byte and passed the full ledger self-test. Reconcile metadata only after executable evidence passes.
+- **Applies when:** Diagnostic, receipt or failure-artifact tests currently assert only file existence, size or successful command exit. Keep historical evidence limitations separate from missing behavioral assertions.
+- **Verification:** `acceptance_stall_diagnosis` passes two real dropped-START runs; its automatic checker self-test rejects 19 malformed reports plus a byte mismatch. Focused native 97/97, player 98/98 and packaged input/PCM/no-input controls pass. The frozen DMG baseline is unchanged; no emulator implementation changed.
+- **Source:** Phase 7 `07-VALIDATION.md`; `tests/scripts/verify-stall-report.py`; test revision `5f9bfbd`.
+- **Status:** Adopted; Phase 11/13 completion metadata and milestone re-audit remain separate owner-selected work.

@@ -276,16 +276,12 @@ gbb_add_acceptance_exit(acceptance_sgb_tolerance 0
 set(GBB_STALL_FAIL_DIR ${PROJECT_BINARY_DIR}/acceptance-failures/acceptance_stall_diagnosis)
 file(MAKE_DIRECTORY ${GBB_STALL_FAIL_DIR})
 add_test(NAME acceptance_stall_diagnosis
-  COMMAND ${CMAKE_COMMAND}
-    "-DGBB_CMD=$<TARGET_FILE:gabbaboy-runner>;--acceptance;${GBB_CASES};--case;libbet;--mutate;drop:START;--failure-dir;${GBB_STALL_FAIL_DIR}"
-    -DGBB_EXPECT_CODE=1
-    "-DGBB_EXPECT_REGEX=reason=predicate-not-reached"
-    -DGBB_EXPECT_FILE=${GBB_STALL_FAIL_DIR}/libbet.stall.txt
-    -DGBB_EXPECT_FILE_MAX_SIZE=65536
-    -DGBB_EXPECT_FILE_FRESH=1
-    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
-    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
-set_tests_properties(acceptance_stall_diagnosis PROPERTIES TIMEOUT 300 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+  COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-stall-report.py
+    --runner $<TARGET_FILE:gabbaboy-runner>
+    --cases ${PROJECT_SOURCE_DIR}/${GBB_CASES}
+    --workdir ${PROJECT_SOURCE_DIR}
+    --failure-dir ${GBB_STALL_FAIL_DIR})
+set_tests_properties(acceptance_stall_diagnosis PROPERTIES TIMEOUT 600 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 # Core mutant (D-14): a copy of the core whose JOYP direction/button select test is inverted, built into a
 # test-only static library and runner. The source line is the single anchor guaranteed by Plans 07-03 and
