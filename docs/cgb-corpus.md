@@ -155,7 +155,7 @@ and the measured reproduction elapsed times are recorded in the plan summary.
 ## Latest local complete receipt
 
 The fresh nonce-bound producer run from source revision
-`36be4dc093566b242d61c4d6afc0d024f2ff2059` completed CTest `108/108`: 107
+`1f583b130c5dd5f44f03796ddffd3a7a8bff5e00` completed CTest `108/108`: 107
 required model cases plus the aggregate SameSuite APU stream. Across the
 required cases, all 107 were attempted and completed: 25 actual guest passes,
 82 actual guest failures matched to expected-failure dispositions, zero
@@ -173,8 +173,8 @@ nothing about physical hardware or CGB game compatibility.
 
 The AGE image subset compared 138,240 pixels and recorded 18,208 mismatches.
 The complete private receipt has run id
-`bccb54cf2e23f758299550a47e54828d65b1e7c28f2862ad2305fa880c943f59` and
-SHA-256 `78e8a98f72be7431029dd8a7f05c31d7b3c198253b6506480e8570e76742c3b0`.
+`33f016b63dafbcef0223a3b3c1dbbd950cf7eb0e3439249bf2f925f4efeb661d` and
+SHA-256 `c2846337c5a2bd40319889782c7910e638c069b793fd3497e48d055fdf6fcba3`.
 These counts are local software-model evidence; the receipt does not imply a
 hosted workflow ran.
 <!-- cgb-corpus-inventory-end -->
