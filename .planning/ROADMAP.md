@@ -320,6 +320,8 @@ Plans:
 **Research**: DEEP (interrupts, DIV and PPU during the pause; applicable test list).
 **Plans**: 19/19 plans complete
 
+**Verification refresh (2026-10-20):** [12-VERIFICATION.md](phases/GB-12-cgb-double-speed/12-VERIFICATION.md) passes 109/109 truths and 48 prohibitions; CGB-06 remains satisfied. Current regression passed 1,144/1,144 and rebuilt player 98/98, zero skips. Canonical UAT closes 73 deliverables with 19 negative controls. Immutable boundary closeout passes 17 controls; later Phase 13 HDMA promotion stays separately attributed. No source change or new hardware/hosted qualification. Paused before Phase 13 verification refresh: `/gsd-execute-phase 13`.
+
 Plans:
 **Wave 1**
 - [x] 12-01-PLAN.md — tracer: pre-change identity pin, KEY1 arm + STOP switch with persisted stall, cpu_ticks sites, D-13 trace rule

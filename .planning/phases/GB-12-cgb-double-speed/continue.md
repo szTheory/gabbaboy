@@ -1,7 +1,14 @@
-# Phase 12 verification complete
+# Phase 12 verification refresh handoff
 
-Completed workflow stages: **Phase 12 - CGB Double Speed, execution** (19/19) and **verification** (73/73 automated UAT rows, zero human checkpoints), via `/gsd-verify-work 12`. Local CTest passed 898/898; goal verification passed 109/109. The earlier plan and execution handoffs are superseded.
+Completed stage: **Phase 12 — CGB Double Speed, verification refresh**. All 19 implementation plans were already complete. Verification passes 109/109 truths, all 48 prohibitions, 46 artifacts and 30 links; CGB-06 remains satisfied. OpenGSD freshness is `passed` over 132 covered files.
 
-Use the current [continuation note](../../.continue-here.md) and [12-UAT.md](12-UAT.md) for evidence, limits, final protected PR #68 delivery and D-069's automation default. Unchanged completed UAT is a no-op; reopen only for a concrete evidence change or regression.
+Fresh unchanged source `3930668`: configured core regression 1,144/1,144 in 414.22 seconds; rebuilt SDL player 98/98 in 25.28 seconds; zero skips. DMG baseline has zero changes. Canonical UAT closes 73 rows with 19 rejected controls. All 19 bounded commit windows reconcile. Closeout at immutable boundary `da98d56` passes 17 controls. The bounded review and verifier add focused positive/negative checks; no source changed.
 
-Next phase: **Phase 13: CGB HDMA**, not started. Next command: **`/gsd-discuss-phase 13`**. `workflow.auto_advance` and `workflow._auto_chain_active` remain false. Stop here for the owner.
+See `12-VERIFICATION.md`, `12-UAT.md` and `12-REFRESH-GATES.md` in `.planning/phases/GB-12-cgb-double-speed/`. Historical hosted receipts retain their actual source revisions. Local ROM rebuild is unavailable (RGBDS 1.0.4 installed, 1.0.1 required). Phase 13's HDMA-across-stall promotion is later scope. No new hosted, sanitizer runtime, hardware, perceptual or benchmark qualification is claimed.
+
+Next phase: **13 — CGB HDMA**, verification refresh only.
+Exact next command: `/gsd-execute-phase 13`.
+
+Stop after Phase 12. Both `workflow.auto_advance` and `workflow._auto_chain_active` remain false. Phases 7–12 are refreshed; Phases 13–14 remain before milestone completion. The milestone audit retains 28/28 requirements and 21 debt items; no debt is accepted here. No archive, tag, release or merge occurred. v0.3 remains provisional and unstarted.
+
+Review stack: `gsd/phase-12-verification-refresh` builds on Phase 11 PR #87. Existing PRs #78–87 and release-please #75 remain unmerged. No open issues were found. A draft PR for this refresh requires its own exact reviewed-head checks before merge. Preserve pre-existing config/state.json edits.
