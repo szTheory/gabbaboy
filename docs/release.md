@@ -135,6 +135,15 @@ runner label or one successful build.
   process. Never attach commercial ROMs, save files containing private data,
   or secrets.
 
+Before a version PR is merged, push a `rehearsal/<name>` branch to run
+`.github/workflows/release-rehearsal.yml`: it executes the corpus, support
+sidecar, fuzz, paired performance, relocated-consumer and source-archive
+producers on that commit with a read-only token and a runner-local tag, and it
+never creates a tag, release or upload. It does not exercise the draft-bound
+download, attach, final gate or publish steps. The fuzz producer takes the
+qualified commit from an explicit source-commit variable because `GITHUB_SHA` is
+runner-owned and cannot be overridden by a step.
+
 The version PR is the final review point for `CHANGELOG.md`; release-please may
 update it there. Its rendered release notes are checked with
 `python3 -I tests/scripts/verify-v02-adoption.py --release-notes PATH`, which

@@ -133,12 +133,9 @@ jobs:
           python3 -I tests/scripts/verify-v02-performance.py --verify build/v02-performance-receipt.json
 
   package:
-    name: rehearse-package-consumers-archive-and-notes
+    name: rehearse-package-consumers-and-archive
     runs-on: ubuntu-22.04
     timeout-minutes: 35
-    env:
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
     steps:
       - name: Check out the rehearsed source with full history
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -184,14 +181,3 @@ jobs:
             --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json
           python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json \
             --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA"
-      - name: Check the open version PR's release notes against the v0.2 adoption contract
-        shell: bash
-        run: |
-          set -euo pipefail
-          # The unpublished draft body is release-please's CHANGELOG section for the version PR.
-          branch=release-please--branches--main--components--GabbaBoy
-          git fetch --quiet origin "$branch"
-          git show "FETCH_HEAD:CHANGELOG.md" > "$RUNNER_TEMP/changelog.md"
-          awk '/^## /{n++} n==1' "$RUNNER_TEMP/changelog.md" > "$RUNNER_TEMP/release-notes.txt"
-          grep -q '^## .*0\.2\.0' "$RUNNER_TEMP/release-notes.txt"
-          python3 -I tests/scripts/verify-v02-adoption.py --release-notes "$RUNNER_TEMP/release-notes.txt"
