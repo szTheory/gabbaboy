@@ -29,7 +29,9 @@ BEHAVIORS = (
     "rtc_catch_up",
 )
 MAX_COMMAND_OUTPUT = 1_048_576
-COMMAND_TIMEOUT_SECONDS = 90
+# A sanitizer-built runner and package run several times slower; scale every bounded wait alike.
+TIMEOUT_SCALE = 5 if os.environ.get("GBB_SANITIZER_LINK_OPTIONS") else 1
+COMMAND_TIMEOUT_SECONDS = 90 * TIMEOUT_SCALE
 TEST_PAUSE_ENV = "GABBABOY_V02_TEST_INSTALL_PAUSE"
 _ACTIVE_PROCESSES: list[subprocess.Popen[str]] = []
 
@@ -309,7 +311,7 @@ def source_identity(prefix: Path, project_root: Path) -> tuple[str, bool]:
         [str(runner), "--acceptance", str(cases), "--case", "libbet", "--receipt"],
         cwd=project_root,
         env=clean_package_environment(),
-        timeout=45,
+        timeout=45 * TIMEOUT_SCALE,
         rejection="source-identity-probe-failed",
     )
     match = re.search(r"\bcore_revision=([0-9a-f]{40,64})\s+build_qualified=(true|false)\b", stdout)
@@ -371,9 +373,36 @@ def make_receipt(prefix: Path, config: Path, package_hash: str, project_root: Pa
     }
 
 
+def _windows_process_is_alive(pid: int) -> bool | None:
+    """os.kill(pid, 0) is not a liveness probe on Windows (signal 0 is CTRL_C_EVENT); ask the kernel."""
+    import ctypes
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    kernel32.OpenProcess.argtypes = [ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
+    kernel32.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
+    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+    process_query_limited_information = 0x1000
+    error_access_denied, error_invalid_parameter, still_active = 5, 87, 259
+    handle = kernel32.OpenProcess(process_query_limited_information, 0, pid)
+    if not handle:
+        error = ctypes.get_last_error()
+        if error == error_invalid_parameter:
+            return False
+        return True if error == error_access_denied else None
+    try:
+        code = ctypes.c_ulong()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+            return None
+        return code.value == still_active
+    finally:
+        kernel32.CloseHandle(handle)
+
+
 def process_is_alive(pid: int) -> bool | None:
     if pid <= 0:
         return None
+    if os.name == "nt":
+        return _windows_process_is_alive(pid)
     try:
         os.kill(pid, 0)
         return True
@@ -555,7 +584,7 @@ class ConsumerContractTests(unittest.TestCase):
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=120,
+            timeout=120 * TIMEOUT_SCALE,
             check=False,
         )
 
@@ -665,7 +694,7 @@ class ConsumerContractTests(unittest.TestCase):
         completed: list[subprocess.CompletedProcess[str]] = []
         try:
             for process in processes:
-                stdout, stderr = process.communicate(timeout=120)
+                stdout, stderr = process.communicate(timeout=120 * TIMEOUT_SCALE)
                 completed.append(subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr))
         except subprocess.TimeoutExpired:
             for process in processes:

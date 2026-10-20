@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import platform
 from pathlib import Path
 import re
@@ -491,12 +492,25 @@ class PerformanceReceiptContractTests(unittest.TestCase):
                 check=False,
             )
 
+    @staticmethod
+    def bash_executable() -> str:
+        """The producer is a bash script. A bare "bash" on Windows resolves to the WSL launcher in
+        System32 ahead of PATH, so take the first PATH entry that is not under the Windows directory."""
+        if os.name != "nt":
+            return "bash"
+        windows_dir = os.path.normcase(os.environ.get("SystemRoot", r"C:\Windows"))
+        for entry in os.environ.get("PATH", "").split(os.pathsep):
+            candidate = os.path.join(entry, "bash.exe")
+            if entry and os.path.isfile(candidate) and not os.path.normcase(candidate).startswith(windows_dir):
+                return candidate
+        raise AssertionError("no non-WSL bash.exe on PATH")
+
     def run_producer_collision(self) -> subprocess.CompletedProcess[str]:
         with tempfile.TemporaryDirectory(prefix="gabbaboy-performance-collision-") as temp:
             path = Path(temp) / "receipt.json"
             path.write_text("existing", encoding="utf-8")
             result = subprocess.run(
-                ["bash", str(ROOT / "tests/scripts/measure-release-baseline.sh"),
+                [self.bash_executable(), (ROOT / "tests/scripts/measure-release-baseline.sh").as_posix(),
                  "--qualify-v02", "--output", str(path)],
                 cwd=ROOT,
                 text=True,
