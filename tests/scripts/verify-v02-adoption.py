@@ -214,7 +214,6 @@ MARKED_SECTIONS: dict[str, tuple[tuple[str, tuple[tuple[str, str], ...]], ...]] 
         )),
     ),
 }
-REQUIRED.pop(RELEASE)  # task-1 stage: release/notice contract lands in task 2
 NOTICE_REQUIRED = (
     ("GitHub generated source archives retain the admitted licensed fixtures and "
      "their notices", "source-archive-distinction-missing"),
@@ -540,6 +539,7 @@ def check_docs(root: Path) -> int:
         checks += check_surface(root, relative)
     checks += check_marked(root)
     checks += check_symbols(root)
+    checks += check_notices(root)
     return checks
 
 
@@ -803,7 +803,6 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             ("missing-ledger-absence", LEDGER, drop(ABSENCE_STATEMENT, "n"),
              f"absence-statement-missing:{LEDGER}"),
         )
-        mutations = tuple(m for m in mutations if m[1] not in (RELEASE, NOTICES))
         for name, relative, edit, reason in mutations:
             original = originals[relative]
             changed = edit(original)
@@ -841,9 +840,10 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         header.write_text(header_text, encoding="utf-8")
         rejected += 1
         child_result(test_root, "docs")
-    controls = rejected
+    controls = len(mutations) + 3
     require(rejected == controls, "self-test-control-count-mismatch")
-    return controls, rejected
+    notes_controls, notes_rejected = run_self_test_release_notes()
+    return controls + notes_controls, rejected + notes_rejected
 
 
 def main() -> int:
