@@ -1308,7 +1308,6 @@ jobs:
           set -euo pipefail
           git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > "$RUNNER_TEMP/verify-release-gates.sh"
           git show "${GITHUB_SHA}:.github/scripts/verify-release-source-proof.py" > "$RUNNER_TEMP/verify-release-source-proof.py"
-          git show "${GITHUB_SHA}:.github/scripts/verify-published-release-assets.py" > "$RUNNER_TEMP/verify-published-release-assets.py"
           chmod +x "$RUNNER_TEMP/verify-release-gates.sh"
       - name: Validate draft candidate and all downloaded platform bytes
         shell: bash
@@ -1378,7 +1377,7 @@ jobs:
             fi
           done
       - name: Recheck final API inventory and downloaded receipts
-        run: bash "$RUNNER_TEMP/verify-release-gates.sh" --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"
+        run: bash .github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"
       - name: Publish the one qualified draft
         shell: bash
         run: |
@@ -1394,5 +1393,5 @@ jobs:
             echo "Published release readback did not preserve tag/draft transition." >&2; exit 1;
           }
           assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
-          python3 "$RUNNER_TEMP/verify-published-release-assets.py" "$assets" build/release-final/api-assets.json
+          python3 .github/scripts/verify-published-release-assets.py "$assets" build/release-final/api-assets.json
           echo "Published the exact qualified release $RELEASE_TAG ($SOURCE_SHA) with unsigned status recorded."

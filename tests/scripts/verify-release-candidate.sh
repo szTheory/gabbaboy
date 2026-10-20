@@ -196,10 +196,12 @@ EXTRACT_DIR="$TEMP_ROOT/downloaded"
 cmake -S "$ROOT_DIR" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DGABBABOY_BUILD_PLAYER=OFF
 cmake --build "$BUILD_DIR" --parallel 2
 cmake --install "$BUILD_DIR" --prefix "$STAGE_DIR"
-(cd "$TEMP_ROOT" && tar -czf "$ARCHIVE" -C "$TEMP_ROOT" stage)
+# The shipped product package has no wrapper directory: release.yml tars the installed prefix's
+# top-level entries exactly this way.
+(cd "$TEMP_ROOT" && tar -czf "$ARCHIVE" -C "$STAGE_DIR" include lib bin share)
 
 safe_extract "$ARCHIVE" "$EXTRACT_DIR"
-EXTRACTED_PREFIX="$EXTRACT_DIR/stage"
+EXTRACTED_PREFIX="$EXTRACT_DIR"
 [[ -f "$EXTRACTED_PREFIX/include/gabbaboy/gabbaboy.h" ]] || fail 'downloaded archive lacks public header'
 [[ -f "$EXTRACTED_PREFIX/share/gabbaboy/fixtures/tracer/manifest.json" ]] || fail 'downloaded archive lacks tracer manifest'
 [[ -f "$EXTRACTED_PREFIX/share/gabbaboy/fixtures/mbc1-continuation/manifest.json" ]] || fail 'downloaded archive lacks battery manifest'
@@ -387,7 +389,7 @@ make_leaky_archive() {
   cp -R "$STAGE_DIR" "$leak_dir/stage"
   mkdir -p "$(dirname "$leak_dir/stage/$2")"
   cp "$ROOT_DIR/fixtures/libbet/libbet.gb" "$leak_dir/stage/$2"
-  (cd "$leak_dir" && tar -czf "$leak_dir.tar.gz" stage)
+  (cd "$leak_dir" && tar -czf "$leak_dir.tar.gz" -C stage include lib bin share)
   write_receipts "$leak_dir.source.json" "$leak_dir.build.json" "$leak_dir.receipt.json" "$(sha256_file "$leak_dir.tar.gz")"
 }
 for leak in "leaked-fixture-dir:share/gabbaboy/fixtures/libbet/libbet.gb" "leaked-renamed-rom:share/gabbaboy/notes.txt"; do
@@ -450,8 +452,11 @@ python3 - "$ARCHIVE" "$TEMP_ROOT/product-as-source.tar.gz" "$VERSION" "$SOURCE_S
 import sys, tarfile
 src, dst, version, sha = sys.argv[1:]
 with tarfile.open(src) as bundle, tarfile.open(dst, "w:gz", format=tarfile.PAX_FORMAT, pax_headers={"comment": sha}) as out:
+    root = tarfile.TarInfo(f"gabbaboy-{version}")
+    root.type, root.mode = tarfile.DIRTYPE, 0o755
+    out.addfile(root)
     for member in bundle:
-        member.name = f"gabbaboy-{version}/" + member.name.split("/", 1)[1] if "/" in member.name else f"gabbaboy-{version}"
+        member.name = f"gabbaboy-{version}/" + member.name
         out.addfile(member, bundle.extractfile(member) if member.isreg() else None)
 PY
 if python3 -I "$SOURCE_ARCHIVE_CHECKER" --archive "$TEMP_ROOT/product-as-source.tar.gz" --tag "$SOURCE_TAG" --source-sha "$SOURCE_SHA" --output "$TEMP_ROOT/product-as-source.json" >"$TEMP_ROOT/product-as-source.log" 2>&1 \
