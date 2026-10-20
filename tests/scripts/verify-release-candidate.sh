@@ -11,6 +11,8 @@ sha256_file() {
 }
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 MODE=${1:-}
+SOURCE_ARCHIVE_CHECKER="$ROOT_DIR/tests/scripts/verify-v02-source-archive.py"
+USAGE='usage: verify-release-candidate.sh --self-test | --verify RECEIPT ASSET VERSION TAG SOURCE_SHA RELEASE_ID NOTICE_FILE SOURCE_RECEIPT BUILD_RECEIPT | --verify-final <the --verify arguments> SOURCE_ARCHIVE SOURCE_ARCHIVE_RECEIPT'
 safe_extract() {
   python3 - "$1" "$2" <<'PY'
 import pathlib, shutil, sys, tarfile
@@ -53,8 +55,25 @@ if [[ "$MODE" == --extract ]]; then
   exit 0
 fi
 command -v cmake >/dev/null || fail 'CMake is required'
-if [[ "$MODE" == --verify ]]; then
-  [[ $# -eq 10 ]] || fail 'usage: verify-release-candidate.sh --verify RECEIPT ASSET VERSION TAG SOURCE_SHA RELEASE_ID NOTICE_FILE SOURCE_RECEIPT BUILD_RECEIPT'
+if [[ "$MODE" == --verify || "$MODE" == --verify-final ]]; then
+  # The installed core archive is a product package: it must stay fixture-free. The licensed
+  # source archive is a different artifact and is proved by --verify-final, never by this check.
+  if [[ "$MODE" == --verify ]]; then
+    [[ $# -eq 10 ]] || fail "$USAGE"
+  else
+    [[ $# -eq 12 ]] || fail "--verify-final requires the source archive and its receipt as distinct final evidence; $USAGE"
+  fi
+  command -v python3 >/dev/null || fail 'Python 3 is required'
+  python3 -I "$SOURCE_ARCHIVE_CHECKER" --check-product-archive "$3" --repo-root "$ROOT_DIR" || fail 'product package fixture-leak check failed'
+  if [[ "$MODE" == --verify-final ]]; then
+    cmake \
+      "-DGBB_RECEIPT=$2" "-DGBB_ASSET=$3" "-DGBB_EXPECTED_VERSION=$4" \
+      "-DGBB_EXPECTED_TAG=$5" "-DGBB_EXPECTED_SOURCE_SHA=$6" \
+      "-DGBB_EXPECTED_RELEASE_ID=$7" "-DGBB_NOTICE_FILE=$8" \
+      "-DGBB_SOURCE_RECEIPT=$9" "-DGBB_BUILD_RECEIPT=${10}" \
+      -P "$ROOT_DIR/cmake/VerifyReleaseReceipt.cmake"
+    exec python3 -I "$SOURCE_ARCHIVE_CHECKER" --check-receipt "${12}" --archive "${11}" --tag "$5" --source-sha "$6"
+  fi
   exec cmake \
     "-DGBB_RECEIPT=$2" "-DGBB_ASSET=$3" "-DGBB_EXPECTED_VERSION=$4" \
     "-DGBB_EXPECTED_TAG=$5" "-DGBB_EXPECTED_SOURCE_SHA=$6" \
@@ -62,7 +81,7 @@ if [[ "$MODE" == --verify ]]; then
     "-DGBB_SOURCE_RECEIPT=$9" "-DGBB_BUILD_RECEIPT=${10}" \
     -P "$ROOT_DIR/cmake/VerifyReleaseReceipt.cmake"
 fi
-[[ "$MODE" == --self-test && $# -eq 1 ]] || fail 'usage: verify-release-candidate.sh --self-test | --verify RECEIPT ASSET VERSION TAG SOURCE_SHA RELEASE_ID NOTICE_FILE SOURCE_RECEIPT BUILD_RECEIPT'
+[[ "$MODE" == --self-test && $# -eq 1 ]] || fail "$USAGE"
 command -v tar >/dev/null || fail 'tar is required'
 command -v python3 >/dev/null || fail 'Python 3 is required'
 
@@ -210,7 +229,8 @@ CM_VERSION=$(cmake --version | head -n1)
 SOURCE_RECEIPT="$TEMP_ROOT/source-receipt.json"
 BUILD_RECEIPT="$TEMP_ROOT/build-receipt.json"
 RECEIPT="$TEMP_ROOT/receipt.json"
-python3 - "$SOURCE_RECEIPT" "$BUILD_RECEIPT" "$RECEIPT" "$VERSION" "$SOURCE_SHA" "$NOTICE_SHA" "$NOTES" "$TRACER_MANIFEST_SHA" "$BATTERY_MANIFEST_SHA" "$ASSET_SHA" "$COMPILER" "$CM_VERSION" <<'PY'
+write_receipts() {
+python3 - "$1" "$2" "$3" "$VERSION" "$SOURCE_SHA" "$NOTICE_SHA" "$NOTES" "$TRACER_MANIFEST_SHA" "$BATTERY_MANIFEST_SHA" "$4" "$COMPILER" "$CM_VERSION" <<'PY'
 import hashlib, json, pathlib, sys
 source_path, build_path, download_path = map(pathlib.Path, sys.argv[1:4])
 version, source_sha, notice_sha, notes, tracer_sha, battery_sha, asset_sha, compiler, cmake_version = sys.argv[4:]
@@ -253,6 +273,8 @@ download = {
 }
 download_path.write_text(json.dumps(download, indent=2) + "\n")
 PY
+}
+write_receipts "$SOURCE_RECEIPT" "$BUILD_RECEIPT" "$RECEIPT" "$ASSET_SHA"
 
 verify() {
   receipt_file=$1
@@ -338,4 +360,106 @@ if safe_extract "$TEMP_ROOT/escape.tar.gz" "$TEMP_ROOT/extract-negative" >/dev/n
 fi
 [[ ! -e "$TEMP_ROOT/escaped-release-file" ]] || fail 'archive traversal wrote outside extraction destination'
 printf 'rejected: archive traversal extraction escape\n'
-printf 'PASS: built archive, relocated external C/C++ consumers, receipt identity, digest tamper, and draft/proof negatives\n'
+
+# --- Source archive and product package are different artifacts (D-11/D-19/D-21). ---
+SELF="$ROOT_DIR/tests/scripts/verify-release-candidate.sh"
+entry_accept() {
+  name=$1; shift
+  bash "$SELF" "$@" >"$TEMP_ROOT/$name.log" 2>&1 || { cat "$TEMP_ROOT/$name.log" >&2; fail "release entry point rejected positive case: $name"; }
+  printf 'accepted: %s\n' "$name"
+}
+entry_reject() {
+  name=$1; expected=$2; shift 2
+  if bash "$SELF" "$@" >"$TEMP_ROOT/$name.log" 2>&1; then
+    cat "$TEMP_ROOT/$name.log" >&2
+    fail "release entry point accepted negative case: $name"
+  fi
+  grep -q -- "$expected" "$TEMP_ROOT/$name.log" || { cat "$TEMP_ROOT/$name.log" >&2; fail "negative case $name was rejected for the wrong reason (expected: $expected)"; }
+  printf 'rejected: %s (%s)\n' "$name" "$expected"
+}
+entry_accept clean-product-package --verify "$RECEIPT" "$ARCHIVE" "$VERSION" "v$VERSION" "$SOURCE_SHA" self-test-release "$NOTICE" "$SOURCE_RECEIPT" "$BUILD_RECEIPT"
+
+# Fixture leak through --verify: the receipt is bound to the leaked bytes, so only the product
+# fixture check can reject it. The receipt verifier alone must accept it (proving the control bites).
+make_leaky_archive() {
+  leak_dir="$TEMP_ROOT/$1"
+  mkdir "$leak_dir"
+  cp -R "$STAGE_DIR" "$leak_dir/stage"
+  mkdir -p "$(dirname "$leak_dir/stage/$2")"
+  cp "$ROOT_DIR/fixtures/libbet/libbet.gb" "$leak_dir/stage/$2"
+  (cd "$leak_dir" && tar -czf "$leak_dir.tar.gz" stage)
+  write_receipts "$leak_dir.source.json" "$leak_dir.build.json" "$leak_dir.receipt.json" "$(sha256_file "$leak_dir.tar.gz")"
+}
+for leak in "leaked-fixture-dir:share/gabbaboy/fixtures/libbet/libbet.gb" "leaked-renamed-rom:share/gabbaboy/notes.txt"; do
+  leak_name=${leak%%:*}; leak_member=${leak#*:}
+  make_leaky_archive "$leak_name" "$leak_member"
+  verify "$TEMP_ROOT/$leak_name.receipt.json" "$TEMP_ROOT/$leak_name.tar.gz" "$TEMP_ROOT/$leak_name.source.json" "$TEMP_ROOT/$leak_name.build.json" >/dev/null 2>&1 \
+    || fail "receipt verifier alone rejected $leak_name, so the fixture-leak control would not prove the product check"
+  entry_reject "$leak_name" 'REJECT product-fixture-leak' --verify "$TEMP_ROOT/$leak_name.receipt.json" "$TEMP_ROOT/$leak_name.tar.gz" "$VERSION" "v$VERSION" "$SOURCE_SHA" self-test-release "$NOTICE" "$TEMP_ROOT/$leak_name.source.json" "$TEMP_ROOT/$leak_name.build.json"
+done
+
+# Omitted behavioral consumer evidence must not reduce to an inventory check.
+python3 - "$RECEIPT" "$TEMP_ROOT" <<'PY'
+import json, pathlib, sys
+source, out = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+receipt = json.loads(source.read_text())
+skipped = json.loads(json.dumps(receipt)); skipped["smoke_result"] = "skipped"
+omitted = json.loads(json.dumps(receipt)); omitted.pop("smoke_result")
+(out / "smoke-skipped.json").write_text(json.dumps(skipped))
+(out / "smoke-omitted.json").write_text(json.dumps(omitted))
+PY
+entry_reject consumer-smoke-skipped 'consumer smoke did not pass' --verify "$TEMP_ROOT/smoke-skipped.json" "$ARCHIVE" "$VERSION" "v$VERSION" "$SOURCE_SHA" self-test-release "$NOTICE" "$SOURCE_RECEIPT" "$BUILD_RECEIPT"
+entry_reject consumer-smoke-omitted 'smoke_result' --verify "$TEMP_ROOT/smoke-omitted.json" "$ARCHIVE" "$VERSION" "v$VERSION" "$SOURCE_SHA" self-test-release "$NOTICE" "$SOURCE_RECEIPT" "$BUILD_RECEIPT"
+
+# A generated source archive of a private tagged clone of the committed tree.
+SOURCE_TAG="v$VERSION"
+CLONE="$TEMP_ROOT/source-clone"
+git clone -q --no-hardlinks "$ROOT_DIR" "$CLONE"
+git -C "$CLONE" -c user.name=selftest -c user.email=selftest@example.invalid tag -f "$SOURCE_TAG" "$SOURCE_SHA" >/dev/null
+SOURCE_ARCHIVE="$TEMP_ROOT/gabbaboy-source.tar.gz"
+git -C "$CLONE" archive --format=tar "--prefix=gabbaboy-$VERSION/" "$SOURCE_TAG" | python3 -c 'import gzip, sys; sys.stdout.buffer.write(gzip.compress(sys.stdin.buffer.read(), mtime=0))' >"$SOURCE_ARCHIVE"
+ARCHIVE_RECEIPT="$TEMP_ROOT/source-archive-receipt.json"
+python3 -I "$SOURCE_ARCHIVE_CHECKER" --archive "$SOURCE_ARCHIVE" --tag "$SOURCE_TAG" --source-sha "$SOURCE_SHA" --repo "$CLONE" --output "$ARCHIVE_RECEIPT"
+final_args=("$RECEIPT" "$ARCHIVE" "$VERSION" "$SOURCE_TAG" "$SOURCE_SHA" self-test-release "$NOTICE" "$SOURCE_RECEIPT" "$BUILD_RECEIPT")
+entry_accept final-source-archive-and-product --verify-final "${final_args[@]}" "$SOURCE_ARCHIVE" "$ARCHIVE_RECEIPT"
+
+# The final gate requires the source archive receipt as its own evidence item.
+entry_reject final-without-source-archive-receipt 'distinct final evidence' --verify-final "${final_args[@]}"
+entry_reject final-with-source-receipt-as-archive-receipt 'REJECT receipt-invalid' --verify-final "${final_args[@]}" "$SOURCE_ARCHIVE" "$SOURCE_RECEIPT"
+entry_reject final-with-build-receipt-as-archive-receipt 'REJECT receipt-invalid' --verify-final "${final_args[@]}" "$SOURCE_ARCHIVE" "$BUILD_RECEIPT"
+python3 - "$ARCHIVE_RECEIPT" "$TEMP_ROOT" <<'PY'
+import json, pathlib, sys
+source, out = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+base = json.loads(source.read_text())
+for name, mutate in {
+    "stale-archive-digest": lambda v: v.update(archive_sha256="0" * 64),
+    "other-tag": lambda v: v.update(tag="v9.9.9"),
+    "other-source": lambda v: v.update(source_sha="0" * 40),
+    "no-fixtures": lambda v: v.update(admitted_fixture_identities=[]),
+}.items():
+    value = json.loads(json.dumps(base)); mutate(value)
+    (out / f"archive-receipt-{name}.json").write_text(json.dumps(value))
+PY
+for negative in stale-archive-digest other-tag other-source no-fixtures; do
+  entry_reject "final-archive-receipt-$negative" 'REJECT receipt-invalid' --verify-final "${final_args[@]}" "$SOURCE_ARCHIVE" "$TEMP_ROOT/archive-receipt-$negative.json"
+done
+
+# Substitution in both directions.
+entry_reject final-product-package-as-source-archive 'REJECT' --verify-final "${final_args[@]}" "$ARCHIVE" "$ARCHIVE_RECEIPT"
+python3 - "$ARCHIVE" "$TEMP_ROOT/product-as-source.tar.gz" "$VERSION" "$SOURCE_SHA" <<'PY'
+import sys, tarfile
+src, dst, version, sha = sys.argv[1:]
+with tarfile.open(src) as bundle, tarfile.open(dst, "w:gz", format=tarfile.PAX_FORMAT, pax_headers={"comment": sha}) as out:
+    for member in bundle:
+        member.name = f"gabbaboy-{version}/" + member.name.split("/", 1)[1] if "/" in member.name else f"gabbaboy-{version}"
+        out.addfile(member, bundle.extractfile(member) if member.isreg() else None)
+PY
+if python3 -I "$SOURCE_ARCHIVE_CHECKER" --archive "$TEMP_ROOT/product-as-source.tar.gz" --tag "$SOURCE_TAG" --source-sha "$SOURCE_SHA" --output "$TEMP_ROOT/product-as-source.json" >"$TEMP_ROOT/product-as-source.log" 2>&1 \
+   || ! grep -q 'REJECT missing-notice' "$TEMP_ROOT/product-as-source.log"; then
+  cat "$TEMP_ROOT/product-as-source.log" >&2
+  fail 'a fixture-free product package with a source-shaped root was accepted as a source archive'
+fi
+printf 'rejected: product package repacked as a source archive (REJECT missing-notice)\n'
+write_receipts "$TEMP_ROOT/src-as-product.source.json" "$TEMP_ROOT/src-as-product.build.json" "$TEMP_ROOT/src-as-product.receipt.json" "$(sha256_file "$SOURCE_ARCHIVE")"
+entry_reject source-archive-as-core-package 'REJECT product-' --verify "$TEMP_ROOT/src-as-product.receipt.json" "$SOURCE_ARCHIVE" "$VERSION" "v$VERSION" "$SOURCE_SHA" self-test-release "$NOTICE" "$TEMP_ROOT/src-as-product.source.json" "$TEMP_ROOT/src-as-product.build.json"
+printf 'PASS: built archive, relocated external C/C++ consumers, receipt identity, digest tamper, draft/proof, fixture-leak, source-archive and substitution negatives\n'
