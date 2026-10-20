@@ -36,7 +36,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git tag "$REHEARSAL_TAG" "$GITHUB_SHA"
+          # -f: once the real release tag exists the full-history checkout already holds a copy of it;
+          # this only repoints the runner's local ref and never pushes.
+          git tag -f "$REHEARSAL_TAG" "$GITHUB_SHA"
           echo "SOURCE_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"
           echo "RELEASE_TAG=$REHEARSAL_TAG" >> "$GITHUB_ENV"
       - name: Configure and build the source with the native preset
@@ -145,7 +147,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git tag "$REHEARSAL_TAG" "$GITHUB_SHA"
+          # -f: once the real release tag exists the full-history checkout already holds a copy of it;
+          # this only repoints the runner's local ref and never pushes.
+          git tag -f "$REHEARSAL_TAG" "$GITHUB_SHA"
           echo "SOURCE_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"
           echo "RELEASE_TAG=$REHEARSAL_TAG" >> "$GITHUB_ENV"
       - name: Configure and build the cache-free release core package
@@ -195,7 +199,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git tag "$REHEARSAL_TAG" "$GITHUB_SHA"
+          # -f: once the real release tag exists the full-history checkout already holds a copy of it;
+          # this only repoints the runner's local ref and never pushes.
+          git tag -f "$REHEARSAL_TAG" "$GITHUB_SHA"
           echo "SOURCE_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"
           echo "RELEASE_TAG=$REHEARSAL_TAG" >> "$GITHUB_ENV"
       - name: Corpus receipt and support sidecar
@@ -249,6 +255,8 @@ jobs:
           export SOURCE_DATE_EPOCH
           tar --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --numeric-owner \
             -czf build/gabbaboy-core-linux-x64.tar.gz -C build/release-stage include lib bin share
+          # The product-package fixture-leak check judges the real package layout (members at the archive top level).
+          python3 -I tests/scripts/verify-v02-source-archive.py --check-product-archive build/gabbaboy-core-linux-x64.tar.gz --repo-root .
           bash tests/scripts/verify-release-candidate.sh --extract build/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"
           python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" --output build/v02-consumer-receipt.json
           git archive --format=tar.gz --prefix="gabbaboy-${RELEASE_TAG#v}/" -o "$RUNNER_TEMP/source-archive.tar.gz" "$RELEASE_TAG"
