@@ -39,7 +39,7 @@ Every per-task verification command re-ran green. The 15-02, 15-03-1, 15-05-1 an
 
 The verify-pre API gate passes: `COVERAGE.md` declares no external API integration. Scope is release, documentation and verification tooling, with no browser or perceptual checkpoint. Hardware CGB-E, analog and perceptual output, IR peers and CGB game-level acceptance remain unqualified, as the shipped docs state.
 
-`python3 -I .planning/phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/verify-uat-contract.py --self-test` preserves every SUMMARY, coverage id, criterion and evidence mapping. It rejects weakened closures. Phase 15 is the last v0.2 phase; the next owner-selected command is `/gsd-audit-milestone`.
+`python3 -I tests/scripts/verify-uat-closure.py .planning/phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release --self-test` preserves every SUMMARY, coverage id, criterion and evidence mapping. It rejects 19 weakened closures, including a SUMMARY that later routes a deliverable to a human. This is the shared closure tool; Phase 15 has no phase-local copy. Phase 15 is the last v0.2 phase; the next owner-selected command is `/gsd-audit-milestone`.
 
 ## Current Test
 
