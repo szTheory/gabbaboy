@@ -444,7 +444,7 @@ def collect_third_party_digests(repo_root):
 def check_product(archive, repo_root, limits):
     inspection = inspect_archive(archive, limits)
     if any(e.kind == "symlink" for e in inspection.entries):
-        raise Reject("link-not-allowed", "product package contains a link")
+        raise Reject("product-link-not-allowed", "product package contains a link")
     files = inspection.files()
     forbidden = collect_third_party_digests(repo_root) if repo_root else set()
     for path, entry in sorted(files.items()):
