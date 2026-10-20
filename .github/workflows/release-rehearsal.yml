@@ -181,3 +181,87 @@ jobs:
             --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json
           python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json \
             --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA"
+
+  aggregate:
+    name: rehearse-v02-evidence-aggregate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - name: Check out the rehearsed source with full history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Create the local-only rehearsal tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          git tag "$REHEARSAL_TAG" "$GITHUB_SHA"
+          echo "SOURCE_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=$REHEARSAL_TAG" >> "$GITHUB_ENV"
+      - name: Corpus receipt and support sidecar
+        id: corpus_run
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/package-prefix
+          cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$GITHUB_WORKSPACE/build/package-prefix"
+          cmake --build --preset phase1
+          cmake --install build --prefix build/package-prefix
+          nonce=$(python3 -I tests/scripts/verify-cgb-corpus-report.py --begin-run --build-dir build --receipt build/cgb-corpus-receipt.json | sed -n 's/^run_nonce=//p')
+          ctest --test-dir build -T Test --no-compress-output --test-output-size-passed 16777216 --output-on-failure --no-tests=error --output-junit "cgb-corpus-ctest-$nonce.xml"
+          python3 -I tests/scripts/verify-cgb-corpus-report.py --from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json
+          python3 -I tests/scripts/verify-cgb-corpus-claims.py --receipt build/cgb-corpus-receipt.json
+          python3 -I tests/scripts/verify-support-ledger.py --check-current --receipt build/cgb-corpus-receipt.json
+          python3 -I tests/scripts/verify-support-ledger.py --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" \
+            --receipt build/cgb-corpus-receipt.json --output build/support-ledger.json
+          python3 -I tests/scripts/verify-support-ledger.py --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" \
+            --receipt build/cgb-corpus-receipt.json --verify-sidecar build/support-ledger.json
+      - name: Fuzz campaign receipt
+        env:
+          CC: clang-18
+          CXX: clang++-18
+          GBB_SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --preset phase1-asan -DGBB_TEST_INSTALL_PREFIX=
+          cmake --build --preset phase1-asan
+          GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --explore --receipt build-asan/v02-fuzz-receipt.json
+          python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json
+          cp build-asan/v02-fuzz-receipt.json build/v02-fuzz-receipt.json
+      - name: Paired performance receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json \
+            --review-regression "Source delta reviewed: v0.2 adds CGB speed-switch, HDMA arbitration, unsupported-bus and output-boundary checks to the shared run loop that the v0.1.0 baseline lacks; the slowdown is accepted and disclosed, and no equivalent-speed claim is made."
+          python3 -I tests/scripts/verify-v02-performance.py --verify build/v02-performance-receipt.json
+      - name: Relocated consumer receipt and source archive receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DGABBABOY_BUILD_PLAYER=OFF
+          cmake --build build/release --parallel 2
+          cmake --install build/release --prefix build/release-stage
+          mkdir -p build/release-stage/share/gabbaboy
+          cp LICENSE build/release-stage/share/gabbaboy/LICENSE.txt
+          SOURCE_DATE_EPOCH=$(git show -s --format=%ct "$SOURCE_SHA")
+          export SOURCE_DATE_EPOCH
+          tar --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --numeric-owner \
+            -czf build/gabbaboy-core-linux-x64.tar.gz -C build/release-stage include lib bin share
+          bash tests/scripts/verify-release-candidate.sh --extract build/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"
+          python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" --output build/v02-consumer-receipt.json
+          git archive --format=tar.gz --prefix="gabbaboy-${RELEASE_TAG#v}/" -o "$RUNNER_TEMP/source-archive.tar.gz" "$RELEASE_TAG"
+          python3 -I tests/scripts/verify-v02-source-archive.py --archive "$RUNNER_TEMP/source-archive.tar.gz" \
+            --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json
+      - name: Validate the six evidence families together through the release gate owner validators
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/evidence
+          for name in cgb-corpus-receipt.json support-ledger.json v02-performance-receipt.json v02-fuzz-receipt.json \
+                      source-archive-receipt.json v02-consumer-receipt.json; do
+            cp "build/$name" "build/evidence/$name"
+          done
+          git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > "$RUNNER_TEMP/verify-release-gates.sh"
+          bash "$RUNNER_TEMP/verify-release-gates.sh" --check-v02-evidence build/evidence "$RELEASE_TAG" "$SOURCE_SHA" "$RUNNER_TEMP/source-archive.tar.gz"

@@ -110,7 +110,8 @@ jobs:
   player-package-smoke-macos:
     name: player-package-smoke-macos
     runs-on: macos-14
-    timeout-minutes: 35
+    # The wait covers the whole exact-head CI run, whose ASan lane now takes about 35 minutes.
+    timeout-minutes: 60
     steps:
       - name: Check out exact pull request head
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -126,7 +127,7 @@ jobs:
           python3 .github/scripts/wait-exact-head-ci.py
           --sha "$EXPECTED_SHA" --repo "$GITHUB_REPOSITORY"
           --require required-native --require macos-player-package
-          --deadline-seconds 1800 --github-output "$GITHUB_OUTPUT"
+          --deadline-seconds 2700 --github-output "$GITHUB_OUTPUT"
           --attempt-job macos-player-package
       - name: Download run-scoped candidate package
         env:
