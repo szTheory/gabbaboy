@@ -4,18 +4,18 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: 15
 current_phase_name: CGB Acceptance, Support Ledger and v0.2.0 Release
-current_plan: 04
+current_plan: 07
 status: paused
-stopped_at: Owner paused Phase 15 execution at 4/10 plans; next 15-04, park 15-06 campaign per owner direction
-last_updated: "2026-10-17T01:42:33.438521Z"
-last_activity: 2026-10-16
-last_activity_desc: Paused by owner; 4/10 plans complete; next 15-04 product/docs, campaign parked
-state_head: a175a394c2205d1b5529cf0e8c41b69aa46aa389
+stopped_at: Completed 15-04-PLAN.md; next 15-07 (source archive and product packaging)
+last_updated: "2026-10-20T01:17:16.190Z"
+last_activity: 2026-10-20
+last_activity_desc: Completed 15-04 adoption/notice claims; 5/10 plans complete; next 15-07, campaign parked
+state_head: 0ca7b347b308e838d0bc542fc9b784f412eccc1d
 progress:
   total_phases: 9
   completed_phases: 8
   total_plans: 134
-  completed_plans: 128
+  completed_plans: 129
   percent: 96
 ---
 
@@ -47,7 +47,7 @@ Completed evidence: relocated C/C++ consumers (9 tests, six negative controls); 
 
 Both auto-advance flags remain false. All four phase requirements remain pending at phase level until complete release gates. No phase PR merge, version PR 70 merge, exact-tag release or publication occurred. Stop after Phase 15 with `/gsd-verify-work 15`; do not begin v0.3.
 
-Progress: v0.2 has 8/9 phases complete, 128/134 plans summarized; Phase 15 has4/10 plans complete.
+Progress: v0.2 has 8/9 phases complete, 129/134 plans summarized; Phase 15 has 5/10 plans complete (15-01/02/03/04/05). Next: 15-07 via `/gsd-execute-phase 15`; 15-06 campaign parked. Stop after Phase 15.
 
 ### Historical Phase 14 handoff (superseded route; preserved receipts)
 
@@ -281,6 +281,7 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 13 P09 | 30 min | 2 tasks | 9 files |
 | Phase 13 P10 | 20min | 2 tasks | 7 files |
 | Phase 13 P11 | 9min+ | 2 tasks | 10 files |
+| Phase 15 P04 | 35 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -506,6 +507,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 13]: Preserve the exact installed fixture child allow-list and reject SameSuite/Magen bytes under neutral filenames.
 - [Phase 13]: Run one all-surface native/player claim predicate against the checkout or exact-path JSON subject snapshots.
 - [Phase 13]: CGB-07 is closed by 37/37 goal verification; physical CGB-E remains UNKNOWN/POLICY, with no local libFuzzer campaign.
+- [Phase 15]: 15-04: adoption checker reuses the production CGB claim parser with a negation guard; fuzz and publication stay unclaimed; notices carry a recomputed manifest/LICENSE digest table for all 19 fixture dirs
 
 ### Pending Todos
 
@@ -544,9 +546,9 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-16
-Stopped at: Phase 15 planning complete; paused before execution; 10 plans / 20 tasks / 7 waves; all four requirements pending
-Resume file: .planning/phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/continue.md
+Last session: 2026-10-20T01:17:15.913Z
+Stopped at: Completed 15-04-PLAN.md; next 15-07 (source archive and product packaging)
+Resume file: None
 Next command: /gsd-execute-phase 15
 
 ## Operator Next Steps
