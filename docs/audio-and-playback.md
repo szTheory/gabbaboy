@@ -127,7 +127,9 @@ source's overlapping hold. The transition rules are:
 | Audio device loss / recovery | Guest time semantics do not change. | The callback is quiesced before stale ring and SDL stream input are cleared and counted; the adapter follows SDL's default-device migration or reopen path. |
 
 These are deterministic host/software transition rules. Injected device events
-and the SDL dummy driver do not establish physical hotplug behavior.
+and the SDL dummy driver do not establish physical hotplug behavior. The
+digital PCM, the player's host mixing and the dummy-backend smoke are software
+evidence: no physical or perceptual audio qualification is claimed.
 
 ## Sustained measurement
 

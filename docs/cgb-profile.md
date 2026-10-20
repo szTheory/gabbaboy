@@ -9,6 +9,31 @@ The columns are: DMG (the DMG-CPU-B profile; the value this core implements, byt
 v0.1 baseline), CGB (the CGB-CPU-E profile running a CGB-mode ROM) and COMPAT (the CGB-CPU-E
 profile running in DMG compatibility mode, which is also the state with no ROM loaded).
 
+## Adopter summary: models, modes and limits
+
+<!-- adopter-model-summary-begin -->
+A host selects one of two software models with `gbb_create`: `GBB_PROFILE_DMG_CPU_B` or
+`GBB_PROFILE_CGB_CPU_E`. `gbb_probe_rom` reports whether a header fits a profile, and
+`gbb_get_info` reports the loaded cartridge. Both models start in a bootless post-boot state;
+boot ROMs are skipped and the startup values are emulator policy, not a hardware measurement. On
+the CGB-CPU-E software model the cartridge header at `$143` selects native CGB mode or DMG
+compatibility mode; with no ROM loaded the instance is in compatibility mode.
+
+Video leaves the core as raw RGB555 values through `gbb_copy_frame_rgb555`; the core applies no
+colour correction, and a DMG game in compatibility mode resolves its shades through the instance
+palette set with `gbb_set_compat_palette`. Audio leaves the core as digital PCM from
+`gbb_run_audio`: 48 kHz signed 16-bit interleaved stereo from the DMG APU model on both profiles.
+In native CGB mode a guest reads the digital DAC inputs at `$FF76` and `$FF77`; CGB compatibility
+mode reads `$FF`. Double-speed switching, GDMA and HBlank DMA run on the selected software model
+and keep their budgets in master half-dots.
+
+These are limits, not omissions. No CGB game-level evidence exists: the CGB test-ROM corpus is
+software-model evidence, not game acceptance. Physical CGB-E remains UNKNOWN/POLICY. CGB mode-3
+timing is not claimed. No physical or perceptual audio/color qualification is claimed, and
+nothing here describes general game compatibility. The evidence rows below say which cells rest
+on a hardware-derived test, a document, a differential oracle or project policy.
+<!-- adopter-model-summary-end -->
+
 ## Evidence classes
 
 | Class | Meaning | Where allowed |
