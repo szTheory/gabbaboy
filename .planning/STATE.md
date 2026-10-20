@@ -4,18 +4,18 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: 15
 current_phase_name: CGB Acceptance, Support Ledger and v0.2.0 Release
-current_plan: 07
-status: paused
-stopped_at: Completed 15-08-PLAN.md
-last_updated: "2026-10-20T03:25:10.850Z"
+current_plan: 10
+status: executing
+stopped_at: Completed 15-09-PLAN.md; next 15-10 hosted exact-tag execution (not started)
+last_updated: "2026-10-20T04:02:12.340Z"
 last_activity: 2026-10-20
 last_activity_desc: Completed 15-04 adoption/notice claims; 5/10 plans complete; next 15-07, campaign parked
-state_head: 56ace73239d06ba0585288ec06f5f16f5854c908
+state_head: 0c538043ad87c4af471271a6c59c0ecdd6b1fd53
 progress:
   total_phases: 9
   completed_phases: 9
   total_plans: 134
-  completed_plans: 132
+  completed_plans: 133
   percent: 99
 ---
 
@@ -30,16 +30,16 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-15)
 
 ## Current Position
 
-Phase: 15 (CGB Acceptance, Support Ledger and v0.2.0 Release) — PAUSED
-Status: Paused by owner
-Current Plan: 04
+Phase: 15 (CGB Acceptance, Support Ledger and v0.2.0 Release) — EXECUTING (stopped between plans)
+Status: Plans 15-01 through 15-09 are complete with committed SUMMARY files; 15-10 is the only remaining plan
+Current Plan: 10
 Total Plans in Phase: 10
-Last activity: 2026-10-16 — Phase 15 execution started
-Last Activity Description: Phase 15 execution started
+Last activity: 2026-10-20 — Completed 15-09 exact-tag evidence wiring and v02 contract registration
+Last Activity Description: Completed 15-09: release.yml now produces corpus, sidecar, fuzz, performance, consumer and source-archive evidence on the exact tag; eleven v02_* contracts registered; full CTest 1144/1144
 
-Completed workflow stage: **Phase 15 planning**. Phase 15 execution is **paused by the owner** at 4/10 complete plans (15-01/02/03/05). Plan 15-06 implementation is committed but its actual campaign failed; no SUMMARY or completion is claimed for it. Plans15-04/07/08/09/10 are unstarted.
+Completed workflow stage: **Phase 15 plan 15-09 execution**. Phase 15 is not complete and no phase advance is authorized. The new workflow jobs have only been verified locally (actionlint, gate self-test with 33 wiring controls, owner self-tests, full CTest); their first hosted execution is plan 15-10. Nothing is tagged, released, pushed or merged; v0.2.0 is not published; PR #70 is untouched.
 
-Resume command: `/gsd-resume-work`. Underlying phase command: `/gsd-execute-phase 15`. Next phase remains **15 — CGB Acceptance, Support Ledger and v0.2.0 Release**. **Start15-04, then 15-07**, per owner steering toward emulator/product progress; park the campaign. Its remaining prerequisite proof is still required before final release qualification. Read [detailed handoff](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/.continue-here.md) and [structured handoff](HANDOFF.json) before acting. Do not restart committed15-06 implementation or automatically repeat the long campaign loop.
+Next plan: **15-10 — hosted exact-tag execution, review and protected merge** of Phase 15 (CGB-11, SHIP-09, SHIP-10, SHIP-11 stay open until it completes). Exact command: `/gsd-execute-phase 15`. Read the 15-09 SUMMARY "Known Limitations and Hosted Risks" first.
 
 Fresh hosted run38947419636 at a175a394 passed native Linux/macOS/Windows, CMake floor and 1133 sanitizer CTests, then failed the actual campaign after 0.479s/4 executions. A 518-byte minimized input selects DMG speed scenario1, where the harness expects a CGB-only speed switch at tests/fuzz_core.c:789. The target has not been edited. Ignored receipt/input copies are preserved under build/phase15-pause-evidence with exact digests in the handoff. No human action is pending.
 
@@ -285,6 +285,7 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 15 P07 | 45 min | 2 tasks | 2 files |
 | Phase 15 P06 | 2h | 2 tasks | 5 files |
 | Phase 15 P08 | 60 min | 2 tasks | 3 files |
+| Phase 15 P09 | about 3 hours | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -514,6 +515,9 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 15]: 15-07: source archive bound to tag via embedded commit ID plus tagged tree blob IDs; --verify-final requires the source archive receipt as distinct evidence; --verify gains product fixture-leak check
 - [Phase 15]: 15-06: fuzz speed oracle scoped to CGB profile; hosted verifier no longer forwards credentials on redirect; exact-source campaign run 39357838513 validated
 - [Phase 15]: 15-08: producer reuse needs unaltered producer SHA, justification, covered-input Git-object equality and producer-checkout validation; published readback requires a distinct final download directory
+- [Phase 15]: 15-09: release evidence is transported through the unpublished draft; per-run receipts are attached once and reused on retry, never replaced
+- [Phase 15]: 15-09: v02_support_ledger is a receipt-free static ledger check; receipt-bound --check-current runs in the release corpus job after the receipt exists
+- [Phase 15]: 15-09: downloaded sidecars are verified with opt-in --evidence-only (no producer build tree); generation and --check-current are unrelaxed
 
 ### Pending Todos
 
@@ -552,8 +556,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-20T03:25:10.480Z
-Stopped at: Completed 15-08-PLAN.md
+Last session: 2026-10-20T04:02:12.059Z
+Stopped at: Completed 15-09-PLAN.md; next 15-10 hosted exact-tag execution (not started)
 Resume file: None
 Next command: /gsd-execute-phase 15
 
