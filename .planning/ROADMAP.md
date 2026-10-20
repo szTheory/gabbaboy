@@ -422,6 +422,8 @@ Plans:
 
 Phase 13 automated UAT completed 2026-10-15: 45/45 deliverables, zero human checkpoints or gaps ([13-UAT.md](phases/GB-13-cgb-hdma/13-UAT.md)). Reuse this closed receipt unless covered behavior or evidence changes. Next owner-selected command: `/gsd-discuss-phase 14`.
 
+**Verification refresh (2026-10-20):** [13-VERIFICATION.md](phases/GB-13-cgb-hdma/13-VERIFICATION.md) passes 37/37 truths, 49 artifact declarations, 12 traced links and one prohibition; CGB-07 remains satisfied. Current core 1,144/1,144, player 98/98, zero skips; canonical UAT 45/45 with 19 rejected controls. No source change or new hardware/hosted qualification; deferred duplicate-library warning and old-wrapper/tool compatibility limits remain. Paused before Phase 14 refresh: `/gsd-execute-phase 14`.
+
 ### Phase 14: CGB-E Model Qualification and Corpus
 
 **Goal**: CGB-E specific APU and I/O differences are implemented under declared per-test applicability, and a headless CGB-E corpus reports honest denominators.
