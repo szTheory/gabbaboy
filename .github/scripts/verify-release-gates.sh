@@ -4,9 +4,14 @@ set -euo pipefail
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 mode=${1:-}
+# One list for the draft inventory, the final inventory and the fixture the self-test builds from it.
+# The v02 evidence family (corpus, performance, fuzz, source archive, consumer) is validated by its
+# owner validators through tests/scripts/verify-v02-delivery.py; the names here only fix the inventory.
+REQUIRED_ASSETS="candidate-receipt.json candidate-platform-manifest.json gabbaboy-core-linux-x64.tar.gz gabbaboy-notices.txt source-receipt.json build-receipt.json gabbaboy-core-macos-arm64.tar.gz gabbaboy-core-macos-arm64.tar.gz.sha256 gabbaboy-build-receipt-macos-arm64.json gabbaboy-preview-macos-arm64.tar.gz gabbaboy-preview-macos-arm64-build-receipt.json gabbaboy-core-windows-x64.tar.gz gabbaboy-core-windows-x64.tar.gz.sha256 gabbaboy-build-receipt-windows-x64.json support-ledger.json cgb-corpus-receipt.json v02-performance-receipt.json v02-fuzz-receipt.json source-archive-receipt.json v02-consumer-receipt.json"
+export REQUIRED_ASSETS
 
 check_config() {
-  python3 - "$ROOT" <<'PY'
+  python3 - "$ROOT" <<'PY' || return $?
 import json, pathlib, re, sys
 root = pathlib.Path(sys.argv[1])
 config = json.loads((root / "release-please-config.json").read_text())
@@ -40,6 +45,24 @@ except ValueError:
     pass
 else:
     raise SystemExit("release gate self-test accepted an aggregate inventory without strict sidecar validation")
+v02_route = '\n    check_v02_evidence "$tmp" "$3" "$4" "$src/source.tar.gz"'
+def validate_v02_routes(text):
+    if text.count(v02_route) != 2:
+        raise ValueError("both the draft and the final gate must validate the v0.2 evidence through its owner validators")
+try:
+    validate_v02_routes(gate_source)
+except ValueError as error:
+    raise SystemExit(str(error))
+try:
+    validate_v02_routes(gate_source.replace(v02_route, "\n", 1))
+except ValueError:
+    pass
+else:
+    raise SystemExit("release gate self-test accepted a draft or final gate without v0.2 evidence validation")
+delivery_source = (root / "tests/scripts/verify-v02-delivery.py").read_text()
+for owner in ("verify-support-ledger.py", "verify-v02-performance.py", "verify-v02-fuzz.py", "verify-v02-source-archive.py"):
+    if f"tests/scripts/{owner}" not in delivery_source:
+        raise SystemExit(f"delivery checker does not call the owner validator {owner}")
 def validate_verifier_invocations(text):
     if re.search(r"(?m)^\s*(?!bash\s)(?:python\S*\s+)?tests/scripts/verify-release-candidate\.sh\b", text):
         raise ValueError("release-candidate Bash verifier must be invoked explicitly with bash")
@@ -184,7 +207,7 @@ PY
 
 check_required_checks() {
   local rules_json=$1 runs_json=$2 expected_sha=$3
-  python3 - "$rules_json" "$runs_json" "$expected_sha" <<'PY'
+  python3 - "$rules_json" "$runs_json" "$expected_sha" <<'PY' || return $?
 import json, pathlib, re, sys
 rules = json.loads(pathlib.Path(sys.argv[1]).read_text())
 runs = json.loads(pathlib.Path(sys.argv[2]).read_text())
@@ -217,21 +240,12 @@ PY
 
 check_asset_inventory() {
   local api_json=$1 downloaded_dir=$2 tag=$3 source_sha=$4 release_id=$5
-  python3 - "$api_json" "$downloaded_dir" "$tag" "$source_sha" "$release_id" <<'PY'
-import hashlib, json, pathlib, re, sys
+  python3 - "$api_json" "$downloaded_dir" "$tag" "$source_sha" "$release_id" <<'PY' || return $?
+import hashlib, json, os, pathlib, re, sys
 api_path, directory, tag, source_sha, release_id = sys.argv[1:]
 assets = json.loads(pathlib.Path(api_path).read_text())
 root = pathlib.Path(directory)
-required = {
-    "candidate-receipt.json", "candidate-platform-manifest.json",
-    "gabbaboy-core-linux-x64.tar.gz", "gabbaboy-notices.txt", "source-receipt.json",
-    "build-receipt.json", "gabbaboy-core-macos-arm64.tar.gz",
-    "gabbaboy-core-macos-arm64.tar.gz.sha256", "gabbaboy-build-receipt-macos-arm64.json",
-    "gabbaboy-preview-macos-arm64.tar.gz", "gabbaboy-preview-macos-arm64-build-receipt.json",
-    "gabbaboy-core-windows-x64.tar.gz", "gabbaboy-core-windows-x64.tar.gz.sha256",
-    "gabbaboy-build-receipt-windows-x64.json", "support-ledger.json",
-    "release-performance-receipt.json",
-}
+required = set(os.environ["REQUIRED_ASSETS"].split())
 names = [asset.get("name") for asset in assets]
 actual_names = set(names)
 if len(names) != len(actual_names) or actual_names not in (required, required | {"SHA256SUMS", "release-receipt.json"}):
@@ -254,6 +268,8 @@ for name in ("source-receipt.json", "candidate-receipt.json"):
         if receipt.get(field) != value:
             raise SystemExit(f"{name} has mismatched {field}")
 sidecar = json.loads((root / "support-ledger.json").read_text())
+if sidecar.get("schema_version") != 2:
+    raise SystemExit("v0.2 release requires the schema-2 support sidecar")
 if sidecar.get("tag") != tag or sidecar.get("source_sha") != source_sha:
     raise SystemExit("support sidecar is not bound to the exact tag/source")
 if not re.fullmatch(r"[0-9a-f]{40}", sidecar.get("ledger", {}).get("git_blob_oid", "")):
@@ -271,13 +287,14 @@ PY
 
 check_final_receipt() {
   local assets_json=$1 directory=$2 tag=$3 source_sha=$4 release_id=$5
-  python3 - "$assets_json" "$directory" "$tag" "$source_sha" "$release_id" <<'PY'
-import hashlib, json, pathlib, sys
+  python3 - "$assets_json" "$directory" "$tag" "$source_sha" "$release_id" <<'PY' || return $?
+import hashlib, json, os, pathlib, sys
 assets = json.loads(pathlib.Path(sys.argv[1]).read_text())
 root = pathlib.Path(sys.argv[2])
 tag, source, release_id = sys.argv[3:]
-if len(assets) != 18 or len({a.get("name") for a in assets}) != 18:
-    raise SystemExit("published candidate must contain exactly 18 unique assets including final receipts")
+expected_count = len(os.environ["REQUIRED_ASSETS"].split()) + 2
+if len(assets) != expected_count or len({a.get("name") for a in assets}) != expected_count:
+    raise SystemExit(f"published candidate must contain exactly {expected_count} unique assets including final receipts")
 receipt = json.loads((root / "release-receipt.json").read_text())
 if receipt.get("tag") != tag or receipt.get("source_sha") != source or str(receipt.get("release_id")) != release_id:
     raise SystemExit("release receipt tag, source SHA, or release ID mismatch")
@@ -307,7 +324,7 @@ PY
 
 check_runner_evidence() {
   local receipt_path=$1 build_path=$2 tag=$3 source_sha=$4 smoke_runner=$5
-  python3 - "$receipt_path" "$build_path" "$tag" "$source_sha" "$smoke_runner" <<'PY'
+  python3 - "$receipt_path" "$build_path" "$tag" "$source_sha" "$smoke_runner" <<'PY' || return $?
 import hashlib, json, pathlib, re, sys
 receipt_path, build_path, expected_tag, expected_source, expected_smoke_runner = sys.argv[1:]
 receipt = json.loads(pathlib.Path(receipt_path).read_text())
@@ -330,7 +347,7 @@ PY
 
 check_digest_sidecar() {
   local sidecar=$1 archive=$2
-  python3 - "$sidecar" "$archive" <<'PY'
+  python3 - "$sidecar" "$archive" <<'PY' || return $?
 import hashlib, pathlib, re, sys
 sidecar_path, archive_path = map(pathlib.Path, sys.argv[1:])
 contents = sidecar_path.read_bytes()
@@ -344,6 +361,42 @@ if expected != actual:
 PY
 }
 
+# Owner validators for the sidecar, performance, fuzz and source-archive receipts run from the tagged
+# checkout the caller is standing in (the performance and fuzz receipts bind that checkout's HEAD).
+check_v02_evidence() {
+  local directory=$1 tag=$2 source_sha=$3 archive=$4 repo_root
+  repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || fail 'v0.2 evidence validation must run in the exact tag checkout'
+  [[ $(git -C "$repo_root" rev-parse HEAD) == "$source_sha" ]] || fail 'checkout HEAD differs from the frozen source SHA'
+  python3 -I "$repo_root/tests/scripts/verify-v02-delivery.py" --check-evidence "$directory" \
+    --tag "$tag" --source-sha "$source_sha" --source-archive "$archive" --repo-root "$repo_root"
+}
+
+fetch_source_archive() {
+  local repo=$1 tag=$2 destination=$3
+  curl --fail --silent --show-error --location --proto '=https' --max-filesize 1073741824 \
+    --output "$destination" "https://github.com/$repo/archive/refs/tags/$tag.tar.gz"
+}
+
+# Recovery after a publication or readback error. Live release state is read BEFORE any decision, and
+# the only outcomes are: verify a published release, reuse an identical draft, or upload only the
+# missing assets. Nothing here writes to GitHub.
+recovery_decision() {
+  local release_id=$1 tag=$2 source_sha=$3 expected=$4 run_id=$5 run_attempt=$6 repo tmp
+  repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/gb-recovery.XXXXXX")
+  gh api "repos/$repo/releases/$release_id" > "$tmp/release.json" || { rm -rf "$tmp"; fail 'live release state could not be read'; }
+  [[ $(jq -r .tag_name "$tmp/release.json") == "$tag" ]] || { rm -rf "$tmp"; fail 'live release tag differs from the frozen tag'; }
+  gh api "repos/$repo/releases/$release_id/assets?per_page=100" > "$tmp/assets.json" || { rm -rf "$tmp"; fail 'live release assets could not be read'; }
+  [[ $(gh api "repos/$repo/commits/$tag" --jq .sha) == "$source_sha" ]] || { rm -rf "$tmp"; fail 'live tag does not resolve to the frozen source SHA'; }
+  gh api "repos/$repo/actions/runs?head_sha=$source_sha&per_page=100" \
+    --jq '[.workflow_runs[] | {id, run_attempt, status}]' > "$tmp/runs.json" || { rm -rf "$tmp"; fail 'live workflow runs could not be read'; }
+  python3 -I "$ROOT/.github/scripts/verify-published-release-assets.py" --decide \
+    "$tmp/release.json" "$tmp/assets.json" "$expected" "$tmp/runs.json" "$run_id" "$run_attempt"
+  local status=$?
+  rm -rf "$tmp"
+  return $status
+}
+
 check_required_asset_sidecars() {
   local directory=$1 platform
   for platform in macos-arm64 windows-x64; do
@@ -351,6 +404,109 @@ check_required_asset_sidecars() {
       "$directory/gabbaboy-core-$platform.tar.gz.sha256" \
       "$directory/gabbaboy-core-$platform.tar.gz" || return $?
   done
+}
+
+# expect_reject LABEL REASON COMMAND...: the command must fail and its message must contain REASON.
+expect_reject() {
+  local label=$1 reason=$2 output
+  shift 2
+  if output=$("$@" 2>&1); then
+    fail "gate accepted $label"
+  fi
+  [[ "$output" == *"$reason"* ]] || fail "gate rejected $label for the wrong reason: $output"
+}
+
+# Build one draft (or final) inventory from REQUIRED_ASSETS. $5 omits an asset, $6 breaks one binding.
+inventory_fixture() {
+  local dir=$1 tag=$2 sha=$3 release_id=$4 omit=${5:-} defect=${6:-} final=${7:-}
+  python3 - "$dir" "$tag" "$sha" "$release_id" "$omit" "$defect" "$final" <<'PY' || return $?
+import hashlib, json, os, pathlib, sys
+root, tag, sha, release_id, omit, defect, final = sys.argv[1:]
+directory = pathlib.Path(root) / "dir"
+directory.mkdir(parents=True)
+names = os.environ["REQUIRED_ASSETS"].split()
+def digest(data): return hashlib.sha256(data).hexdigest()
+content = {name: f"bytes of {name}\n".encode() for name in names}
+for name in ("source-receipt.json", "candidate-receipt.json"):
+    content[name] = json.dumps({"tag_name": tag, "source_sha": sha, "release_id": release_id, "draft": True}).encode()
+content["support-ledger.json"] = json.dumps({"schema_version": 1 if defect == "schema1" else 2, "tag": tag, "source_sha": sha,
+                                             "ledger": {"git_blob_oid": "d" * 40}}).encode()
+for platform in ("macos-arm64", "windows-x64"):
+    content[f"gabbaboy-core-{platform}.tar.gz.sha256"] = (digest(content[f"gabbaboy-core-{platform}.tar.gz"]) + "\n").encode()
+content["candidate-platform-manifest.json"] = json.dumps({"source_sha": sha, "assets": [
+    {"name": n, "sha256": digest(content[n])} for n in names if n != "candidate-platform-manifest.json"]}).encode()
+if defect == "stale":
+    content["v02-fuzz-receipt.json"] = b"altered after the platform manifest\n"
+if final:
+    sums = "".join(f"{digest(content[n])}  {n}\n" for n in sorted(names))
+    content["SHA256SUMS"] = sums.encode()
+    content["release-receipt.json"] = json.dumps({"tag": tag, "source_sha": sha, "release_id": release_id,
+                                                  "sha256sums_sha256": digest(content["SHA256SUMS"])}).encode()
+    if final == "final-short":
+        del content["release-receipt.json"]
+if omit:
+    del content[omit]
+api = []
+for index, (name, data) in enumerate(sorted(content.items()), start=1):
+    (directory / name).write_bytes(data)
+    api.append({"id": index, "name": name, "digest": "sha256:" + digest(data)})
+(pathlib.Path(root) / "api.json").write_text(json.dumps(api))
+PY
+}
+
+# Drive recovery_decision with a simulated gh and prove live release state is read first.
+recovery_self_test() {
+  local dir=$1 log="$1/gh-calls.log" sha
+  sha=$(printf 'c%.0s' {1..40})
+  mkdir -p "$dir"
+  python3 - "$dir" <<'PY' || return $?
+import hashlib, json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+rows, expected = [], []
+for index, name in enumerate(("a.tar.gz", "b.json"), 1):
+    data = f"{name} bytes".encode()
+    sha = hashlib.sha256(data).hexdigest()
+    rows.append({"id": index, "name": name, "size": len(data), "digest": "sha256:" + sha})
+    expected.append({"name": name, "size": len(data), "sha256": sha})
+(root / "assets-complete.json").write_text(json.dumps(rows))
+(root / "assets-changed.json").write_text(json.dumps([dict(rows[0], digest="sha256:" + "0" * 64), rows[1]]))
+(root / "assets-partial.json").write_text(json.dumps(rows[:1]))
+(root / "expected.json").write_text(json.dumps(expected))
+(root / "runs-quiet.json").write_text(json.dumps([{"id": 7, "run_attempt": 1, "status": "completed"}]))
+(root / "runs-active.json").write_text(json.dumps([{"id": 7, "run_attempt": 1, "status": "completed"},
+                                                     {"id": 9, "run_attempt": 1, "status": "in_progress"}]))
+PY
+  printf '%s\n' '{"tag_name": "v0.2.0", "draft": true}' > "$dir/release-draft.json"
+  printf '%s\n' '{"tag_name": "v0.2.0", "draft": false}' > "$dir/release-published.json"
+  local scenario outcome expected_text s_release s_assets s_runs status
+  for scenario in "draft assets-complete runs-quiet draft-reuse" "draft assets-complete runs-quiet draft-reuse" \
+                  "draft assets-partial runs-quiet draft-upload-missing:b.json" \
+                  "draft assets-changed runs-quiet REJECT" "draft assets-complete runs-active REJECT" \
+                  "published assets-changed runs-quiet REJECT"; do
+    read -r s_release s_assets s_runs expected_text <<<"$scenario"
+    : > "$log"
+    gh() {
+      printf '%s\n' "$*" >> "$log"
+      case "$*" in
+        'repo view'*) printf 'szTheory/gabbaboy\n' ;;
+        *"/releases/424242/assets"*) cat "$dir/$s_assets.json" ;;
+        *"/releases/424242") cat "$dir/release-$s_release.json" ;;
+        *"/commits/v0.2.0"*) printf '%s\n' "$sha" ;;
+        *"/actions/runs"*) cat "$dir/$s_runs.json" ;;
+        *) return 1 ;;
+      esac
+    }
+    outcome=$(recovery_decision 424242 v0.2.0 "$sha" "$dir/expected.json" 7 1 2>&1) && status=0 || status=$?
+    if [[ "$expected_text" == REJECT ]]; then
+      [[ $status -ne 0 && "$outcome" == *'REJECT recovery:'* ]] || fail "recovery accepted $scenario: $outcome"
+    else
+      [[ $status -eq 0 && "$outcome" == "$expected_text" ]] || fail "recovery decided wrongly for $scenario: $outcome"
+    fi
+    [[ $(sed -n 2p "$log") == *'/releases/424242' ]] || fail "recovery did not read live release state first for $scenario"
+    unset -f gh
+  done
+  printf 'PASS: recovery reads live release state first; identical draft bytes are reused, partial drafts upload only the missing asset\n'
+  printf 'rejected: changed attachment, concurrent attempt, changed published assets\n'
 }
 
 case "$mode" in
@@ -490,6 +646,34 @@ PY
     fi
     printf 'rejected: aggregate gate detects mismatched platform sidecar\n'
     printf 'PASS: one-line downloaded archive digest sidecar verification\n'
+    inventory_fixture "$temp/inventory" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    check_asset_inventory "$temp/inventory/api.json" "$temp/inventory/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    printf 'PASS: complete v0.2 draft inventory reaches the aggregate gate\n'
+    inventory_controls=0
+    for asset in $REQUIRED_ASSETS; do
+      inventory_fixture "$temp/omit-$asset" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "$asset"
+      expect_reject "omission of $asset" 'draft asset inventory differs' \
+        check_asset_inventory "$temp/omit-$asset/api.json" "$temp/omit-$asset/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+      inventory_controls=$((inventory_controls + 1))
+    done
+    printf 'rejected: %s single-asset omissions from the draft inventory\n' "$inventory_controls"
+    inventory_fixture "$temp/stale-manifest" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "" stale
+    expect_reject 'evidence bytes altered after the platform manifest' 'platform manifest does not bind downloaded bytes' \
+      check_asset_inventory "$temp/stale-manifest/api.json" "$temp/stale-manifest/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    printf 'rejected: evidence bytes altered after the platform manifest\n'
+    inventory_fixture "$temp/schema1" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "" schema1
+    expect_reject 'a schema-1 support sidecar' 'schema-2 support sidecar' \
+      check_asset_inventory "$temp/schema1/api.json" "$temp/schema1/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    printf 'rejected: schema-1 support sidecar\n'
+    inventory_fixture "$temp/final" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "" "" final
+    check_final_receipt "$temp/final/api.json" "$temp/final/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    inventory_fixture "$temp/final-short" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "" "" final-short
+    expect_reject 'an incomplete final inventory' 'must contain exactly' \
+      check_final_receipt "$temp/final-short/api.json" "$temp/final-short/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    printf 'PASS: final inventory binds every asset; rejected: incomplete final inventory\n'
+    python3 -I "$ROOT/tests/scripts/verify-v02-delivery.py" --self-test
+    python3 -I "$ROOT/.github/scripts/verify-published-release-assets.py" --self-test
+    recovery_self_test "$temp/recovery"
     printf 'PASS: release configuration and exact-head required-check gate\n'
     ;;
   --check-pr)
@@ -525,6 +709,10 @@ PY
     gh release download "$3" --repo "$repo" --dir "$tmp"
     printf '%s\n' "$assets" > "$tmp/api-assets.json"
     check_asset_inventory "$tmp/api-assets.json" "$tmp" "$3" "$4" "$2"
+    src=$(mktemp -d "${TMPDIR:-/tmp}/gb-source-archive.XXXXXX")
+    trap 'rm -rf "$tmp" "$src"' EXIT HUP INT TERM
+    fetch_source_archive "$repo" "$3" "$src/source.tar.gz"
+    check_v02_evidence "$tmp" "$3" "$4" "$src/source.tar.gz"
     printf 'PASS: draft bytes and IDs match the frozen tag/source; no publication performed\n'
     ;;
   --check-merged-source)
@@ -556,8 +744,21 @@ PY
     gh release download "$3" --repo "$repo" --dir "$tmp"
     printf '%s\n' "$assets" > "$tmp/api-assets.json"
     check_asset_inventory "$tmp/api-assets.json" "$tmp" "$3" "$4" "$2"
+    src=$(mktemp -d "${TMPDIR:-/tmp}/gb-source-archive.XXXXXX")
+    trap 'rm -rf "$tmp" "$src"' EXIT HUP INT TERM
+    fetch_source_archive "$repo" "$3" "$src/source.tar.gz"
+    check_v02_evidence "$tmp" "$3" "$4" "$src/source.tar.gz"
     check_final_receipt "$tmp/api-assets.json" "$tmp" "$3" "$4" "$2"
     printf 'PASS: final draft receipt and all downloaded bytes qualify; no publication performed\n'
+    ;;
+  --check-v02-evidence)
+    [[ $# -eq 5 ]] || fail 'usage: verify-release-gates.sh --check-v02-evidence EVIDENCE_DIR TAG SOURCE_SHA SOURCE_ARCHIVE'
+    check_v02_evidence "$2" "$3" "$4" "$5"
+    ;;
+  --check-recovery)
+    [[ $# -eq 7 ]] || fail 'usage: verify-release-gates.sh --check-recovery RELEASE_ID TAG SOURCE_SHA EXPECTED_INVENTORY_JSON RUN_ID RUN_ATTEMPT'
+    command -v gh >/dev/null || fail 'GitHub CLI is required'
+    recovery_decision "$2" "$3" "$4" "$5" "$6" "$7"
     ;;
   --check-runner-evidence)
     [[ $# -eq 6 ]] || fail 'usage: verify-release-gates.sh --check-runner-evidence CANDIDATE_RECEIPT BUILD_RECEIPT TAG SOURCE_SHA SMOKE_RUNNER'
@@ -569,5 +770,5 @@ PY
     check_digest_sidecar "$2" "$3"
     printf 'PASS: downloaded archive matches its one-line digest sidecar\n'
     ;;
-  *) fail 'usage: verify-release-gates.sh --self-test | --check-pr PR_NUMBER EXPECTED_HEAD_SHA | --check-merged-source SOURCE_SHA TAG RELEASE_ID SOURCE_RECEIPT PROOF_VERIFIER | --check-draft RELEASE_ID TAG SOURCE_SHA | --check-draft-final RELEASE_ID TAG SOURCE_SHA | --check-runner-evidence CANDIDATE_RECEIPT BUILD_RECEIPT TAG SOURCE_SHA SMOKE_RUNNER | --check-digest-sidecar SIDECAR ARCHIVE' ;;
+  *) fail 'usage: verify-release-gates.sh --self-test | --check-pr PR_NUMBER EXPECTED_HEAD_SHA | --check-merged-source SOURCE_SHA TAG RELEASE_ID SOURCE_RECEIPT PROOF_VERIFIER | --check-draft RELEASE_ID TAG SOURCE_SHA | --check-draft-final RELEASE_ID TAG SOURCE_SHA | --check-v02-evidence EVIDENCE_DIR TAG SOURCE_SHA SOURCE_ARCHIVE | --check-recovery RELEASE_ID TAG SOURCE_SHA EXPECTED_INVENTORY_JSON RUN_ID RUN_ATTEMPT | --check-runner-evidence CANDIDATE_RECEIPT BUILD_RECEIPT TAG SOURCE_SHA SMOKE_RUNNER | --check-digest-sidecar SIDECAR ARCHIVE' ;;
 esac
