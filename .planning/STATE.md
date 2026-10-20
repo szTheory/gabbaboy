@@ -6,10 +6,10 @@ current_phase: 15
 current_phase_name: CGB Acceptance, Support Ledger and v0.2.0 Release
 current_plan: 10/10 complete
 status: completed
-stopped_at: Phase 8 verification refresh complete; Phase 9 verification refresh next
-last_updated: "2026-10-20T20:39:08Z"
+stopped_at: Phase 9 verification refresh complete; Phase 10 verification refresh next
+last_updated: "2026-10-20T21:06:41Z"
 last_activity: 2026-10-20
-last_activity_desc: Refreshed Phase 8 verification; milestone close waits for Phases 9–14
+last_activity_desc: Refreshed Phase 9 verification and closed two concurrency backstops; Phases 10–14 remain
 state_head: 15275d6b0856a60dd3f3d8cac84a254ed21b3ff4
 progress:
   total_phases: 9
@@ -30,17 +30,17 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 ## Current Position
 
-Completed stage: **Phase 8 — Cartridge Seam, MBC5 and MBC2, verification refresh**. All 10 plans were already complete; implementation was not repeated. The refreshed [verification report](phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-VERIFICATION.md) passes 97/97 truths (four roadmap criteria plus 93 plan truths), 27 artifacts and 19 links, with CART-01, CART-02 and CART-03 satisfied. OpenGSD reports `passed` for the current covered inputs.
+Completed stage: **Phase 9 — MBC3, Deterministic RTC and Cartridge Persistence, verification refresh**. All 18 plans were already complete. The refreshed [verification report](phases/GB-09-mbc3-deterministic-rtc-and-cartridge-persistence/09-VERIFICATION.md) passes 115/115 truths (five roadmap criteria and 110 plan truths), 47 artifact references and 27 links. CART-04, CART-05, CART-06 and RTC-01, RTC-02, RTC-03 are satisfied; OpenGSD covered-input status is `passed`.
 
-Fresh evidence: focused CTest 58/58, configured full regression 1,144/1,144, unchanged frozen DMG baseline, three historical differential runs with zero differences, and the automated player warning/status contract with five negative controls. Boundary-only facts are read from Phase 8 commits, including `96d5eec`; later Phase 9 persistence is preserved. Existing review, security and validation records were reused (zero open findings/threats), not newly produced. D-062's accepted ninth-bit test replacement is explicit; no new owner override was introduced.
+Fresh evidence: configured full regression 1,144/1,144 in 375.09 seconds and focused SDL player 28/28 in 1.03 seconds. The verifier found two indirect concurrency backstops; the existing concurrency harness now directly exercises 128 rounds of independent MBC3 loads, guest execution and distinct RTC catch-up on two threads, with a neighbour-clock contamination control. After that test-only addition, concurrency and source-bound ledger checks passed 4/4 in 16.18 seconds. The full-suite receipt predates the harness addition; no emulator source changed. Test registration/inventory changes were reverted after the pinned release-ledger check correctly rejected them. The new checks run through the existing inventory entry. The focused harness review found no defect. Prior validation/security/review records and completed 14-row automated UAT were reused with their limits; legacy SUMMARY formatting was not rewritten. Boundary facts come from Phase 9 commits, never current mutable routes.
 
-Milestone completion is **pending**. Phases 7 and 8 verification are now refreshed; Phases 9–14 still require their own refresh. The closeout scanner additionally flags Phase 14's clean UAT review (zero pending scenarios) and Phase 13's deferred duplicate-library linker warning. The source-bound milestone audit remains `tech_debt` with 28/28 requirements and 21 retained debt items; this refresh does not accept or erase debt.
+Milestone completion remains **pending**. Phases 7–9 verification are refreshed; Phases 10–14 still require their own refresh. The closeout scanner also flags Phase 14's clean UAT review and Phase 13's deferred duplicate-library warning. The milestone audit retains 28/28 satisfied requirements and 21 debt items; this refresh does not accept debt.
 
-Next stage: **Phase 9 — MBC3, Deterministic RTC and Cartridge Persistence, verification refresh**.
-Exact next command: `/gsd-execute-phase 9`.
-Stop after Phase 8. Both automatic advance flags remain false. No milestone archive, tag, release or merge was performed. v0.3 — States & Integration remains provisional, unnumbered and unstarted.
+Next stage: **Phase 10 — CGB Profile, Banking and Register Visibility, verification refresh**.
+Exact next command: `/gsd-execute-phase 10`.
+Stop after Phase 9. Both automatic advance flags remain false. No milestone archive, tag, release or merge was performed. v0.3 — States & Integration remains provisional, unnumbered and unstarted.
 
-Review stack: this refresh builds on PR #83 (`gsd/phase-7-verification-refresh`). Preserve pre-existing config/state.json edits. Required remote checks must pass at the exact reviewed head before merging; local results do not establish remote readiness.
+Review stack: branch `gsd/phase-9-verification-refresh` builds on Phase 8 refresh PR #84. Preserve pre-existing config/state.json edits. Required remote checks must pass at the exact reviewed head before merging; local results do not establish remote readiness. Boundary triage found no open issues; PRs #78–84 remain in the review stack and release-please PR #75 remains unmerged.
 
 ### Historical Phase 14 handoff (superseded route; preserved receipts)
 
@@ -552,10 +552,10 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Completed stage: Phase 7 verification refresh; paused at the phase boundary.
-Next phase: 8 — Cartridge Seam, MBC5 and MBC2 (verification refresh only).
-Next command: `/gsd-execute-phase 8`.
+Completed stage: Phase 9 — MBC3, Deterministic RTC and Cartridge Persistence, verification refresh; paused at the phase boundary.
+Next phase: 10 — CGB Profile, Banking and Register Visibility (verification refresh only).
+Next command: `/gsd-execute-phase 10`.
 
 ## Operator Next Steps
 
-Resume Phase 8 verification using the command above. Phases 8–14 remain stale in the milestone closeout projection; do not archive or tag v0.2 until these are resolved or explicitly overridden. Preserve both automatic advance flags as false.
+Resume Phase 10 verification using the command above. Phases 10–14 remain stale; do not archive or tag v0.2 until these are resolved or explicitly overridden. Preserve both automatic advance flags as false.
