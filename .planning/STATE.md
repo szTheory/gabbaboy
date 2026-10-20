@@ -2,14 +2,15 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_phase: 7
-current_plan: 17/17 complete
+current_phase: 13
+current_phase_name: DMG Game Acceptance and Regression Baseline
+current_plan: 12/12 complete
 status: completed
-stopped_at: Phase 7 Nyquist reconciliation complete; Phase 11/13 SUMMARY trace reconciliation next
-last_updated: "2026-10-20T16:24:12Z"
+stopped_at: Quick task 261020-hr8 complete; milestone re-audit next
+last_updated: "2026-10-20T16:48:43.142Z"
 last_activity: 2026-10-20
-last_activity_desc: Phase 7 Nyquist reconciliation complete; one supporting test gap filled
-state_head: 5f9bfbd46b7794f64669f0a747164ac9919c79cc
+last_activity_desc: Completed quick task 261020-hr8; three CGB SUMMARY claims reconciled
+state_head: ba27c4b63c5a12f94c1129e9ce57da1f47ada4bc
 progress:
   total_phases: 9
   completed_phases: 9
@@ -25,26 +26,25 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** v0.2 audit closure (Phase 7 validation reconciled; three SUMMARY requirement traces remain partial)
+**Current focus:** v0.2 milestone re-audit after Phase 7 validation and Phase 11/13 SUMMARY trace reconciliation
 
 ## Current Position
 
-Phase: 7 — DMG Game Acceptance and Regression Baseline (retroactive validation)
-Status: Phase 7 Nyquist reconciliation complete; paused for the owner
-Current Plan: 17/17 complete
-Total Plans in Phase: 17
-Last activity: 2026-10-20 — Phase 7 validation reconciliation
+Stage: Quick task 261020-hr8 — SUMMARY requirement trace reconciliation
+Status: Complete; paused for the owner
+Last activity: 2026-10-20 — Completed quick task 261020-hr8
 
-Completed workflow stage: **Phase 7 — DMG Game Acceptance and Regression Baseline, retroactive Nyquist validation complete**. [07-VALIDATION.md](phases/GB-07-dmg-game-acceptance-and-regression-baseline/07-VALIDATION.md) now reconciles all 17 plans / 40 tasks and all five requirements, with `status: validated`, `nyquist_compliant: true` and no manual-only gaps. One supporting test gap was filled: stall diagnostics now require meaningful bounded sections and byte-identical fresh report/PPM artifacts across two real failing runs. Its self-test rejects 19 malformed report controls plus one repeated-byte mismatch. No emulator implementation changed. Tests are committed at `5f9bfbd`.
+Completed workflow stage: **SUMMARY reconciliation for Phase 11 — CGB Colour Rendering and Player Colour, and Phase 13 — CGB HDMA**. Closing summaries 11-15 and 13-12 now claim CGB-05/CGB-09 and CGB-07 respectively, supported by their existing passed goal reports, completed automated UAT and central checked Complete requirements. Execution-time handoffs, coverage and producer SHAs remain historical. Reconciliation commit: `ba27c4b`.
 
-Fresh local checks: focused native **97/97**, player **98/98**, packaged Libbet input/progress/PCM equality and failing no-input control. All **1,144 configured core test names** match the inventory; this is not a full-suite rerun claim. The validation report binds receipts to their actual producer revisions. The original draft inventory entry tripped the release ledger; the repair preserves the frozen inventory and passes its full self-test. New PR checks must pass at the exact reviewed head before any merge; local results do not certify remote CI.
+Fresh metadata check: **28/28** current requirement traces agree across SUMMARY, goal verification and central requirements; **3/3** requested claims are present. The check rejects **10** weakened records. Phase 11 legacy UAT remains **11/11** automated groups with **91/91** coverage entries accepted by OpenGSD; Phase 13 shared UAT check passes **45/45**, rejecting **19** controls. The shared checker cannot parse Phase 11's older grouped format; no schema migration or behavioral rerun is claimed. See the [quick SUMMARY](quick/261020-hr8-reconcile-phase-11-and-13-summary-comple/261020-hr8-SUMMARY.md).
 
-The earlier [v0.2-MILESTONE-AUDIT.md](v0.2-MILESTONE-AUDIT.md) remains an unchanged point-in-time `gaps_found` record: 25/28 satisfied, three partial SUMMARY traces (CGB-05, CGB-09, CGB-07), and the then-unresolved Phase 7 flag. Its boundary-only accounting still passes and rejects 16 negative controls. The independent [integration audit](v0.2-INTEGRATION-AUDIT.md) found no broken flow. Phase 15's 16 advisory review findings remain follow-ups before v0.2.1. D-027 / D-039 historical evidence limits remain recorded.
+The earlier [v0.2-MILESTONE-AUDIT.md](v0.2-MILESTONE-AUDIT.md) remains an unchanged point-in-time `gaps_found` record: 25/28 satisfied, three partial SUMMARY traces and the then-unresolved Phase 7 flag. Its boundary accounting passes with **16** negative controls. Current metadata reconciliation does not rewrite that historical verdict or certify milestone closure. Phase 7 validation is reconciled with native 97/97, player 98/98 and 20 diagnostic controls at the recorded producer revisions; see [07-VALIDATION.md](phases/GB-07-dmg-game-acceptance-and-regression-baseline/07-VALIDATION.md).
 
-Next stage: **SUMMARY trace reconciliation for Phase 11 — CGB Colour Rendering and Player Colour, and Phase 13 — CGB HDMA**. Reuse their passing goal verification and shared UAT closure checks to reconcile only CGB-05, CGB-09 and CGB-07 completion metadata. Then the owner can rerun `/gsd-audit-milestone`. No new implementation phase is needed or started; all v0.2 phases through 15 are executed. There is no next numbered phase in v0.2; **v0.3 — States & Integration** remains provisional and unnumbered.
-Next command: `/gsd-quick "Reconcile the Phase 11 and 13 SUMMARY completion fields for CGB-05, CGB-09 and CGB-07 using existing verification evidence"`.
+Next stage: **v0.2 milestone re-audit**, reusing completed evidence for Phases 7–15.
+Next command: `/gsd-audit-milestone`.
+There is no next numbered phase in v0.2. **v0.3 — States & Integration** remains provisional and unnumbered. No new phase or milestone has started. Stop here; both auto-advance flags remain false.
 
-Do not archive as clean or begin v0.3. Both auto-advance flags remain false. Boundary triage: zero open issues; PR #75 release 0.2.1 remains intentionally unmerged, PR #78 Phase 15 UAT/shared tooling and PR #79 milestone audit remain open. This change is stacked on #79 and does not merge those dependencies. Preserve the pre-existing config/state.json edits.
+Boundary triage: zero open issues. PR #75 release 0.2.1 remains intentionally unmerged; #78 Phase 15 UAT/shared tooling, #79 milestone audit and #80 Phase 7 reconciliation remain open. This quick branch stacks on #80. Required checks must pass at the exact reviewed head before merge. Phase 15's 16 advisory findings remain before v0.2.1; D-027/D-039 historical limits remain. Preserve pre-existing config/state.json edits.
 
 Latest phase evidence: **Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release, automated UAT complete**. [15-UAT.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-UAT.md) closes all 42 deliverables across 10 plans automatically. It has zero issues, zero pending, skipped or blocked rows, and zero human checkpoints. All 10 bounded commit windows reconcile; the 15-06 window interleaves other plans, and a manual recount gives 9/9 tagged commits. The shared `tests/scripts/verify-uat-closure.py --self-test` rejects 19 weakened closures. Earlier gates: [15-VERIFICATION.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-VERIFICATION.md) (passed 12/12, read back against live v0.2.0), [15-SECURITY.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-SECURITY.md) (21/21 closed), [15-VALIDATION.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-VALIDATION.md) (Nyquist-compliant, 20/20 green), [15-REVIEW.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-REVIEW.md) (0 critical, 8 warnings, 8 info; all open/advisory in 15-REVIEW-DISPOSITION.md — schedule before v0.2.1), [15-DELIVERY.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-DELIVERY.md). v0.2.0 is published (tag ab301aa, 22 assets).
 
@@ -547,6 +547,7 @@ None outside the roadmap.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
+| 261020-hr8 | Reconcile Phase 11 and 13 SUMMARY claims for CGB-05, CGB-09 and CGB-07 | 2026-10-20 | ba27c4b | [261020-hr8-reconcile-phase-11-and-13-summary-comple](./quick/261020-hr8-reconcile-phase-11-and-13-summary-comple/) |
 
 ### Roadmap Evolution
 
