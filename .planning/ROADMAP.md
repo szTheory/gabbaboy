@@ -479,7 +479,7 @@ Plans:
 
 **Rights gates**: Per-candidate rights audit for the CGB game (Rebound, Rex Runner, GBHack, Aevilia); none is admitted without the GAME-01 manifest checklist.
 **Research**: Light.
-**Plans**: 7/10 plans executed
+**Plans**: 8/10 plans executed
 
 Plans:
 **Wave 1**
@@ -498,7 +498,7 @@ Plans:
 - [x] 15-07-PLAN.md — Verify licensed source archives separately from product packages
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 15-08-PLAN.md — Bind release qualification and recovery to exact evidence
+- [x] 15-08-PLAN.md — Bind release qualification and recovery to exact evidence
 
 **Wave 6** *(blocked on Wave 5 completion)*
 - [ ] 15-09-PLAN.md — Wire strict qualification into the existing exact-tag release flow
@@ -519,4 +519,4 @@ Plans:
 | 12. CGB Double Speed | v0.2 | 19/19 | Complete    | 2026-10-14 |
 | 13. CGB HDMA | v0.2 | 12/12 | Complete    | 2026-10-14 |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 13/13 | Complete    | 2026-10-15 |
-| 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 7/10 | In Progress | - |
+| 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 8/10 | In Progress | - |
