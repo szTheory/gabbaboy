@@ -208,6 +208,16 @@ jobs:
           else
             gh release upload "$RELEASE_TAG" build/source-receipt.json --repo "$GH_REPO"
           fi
+      - name: Overlay the trusted release-candidate verifiers from the workflow commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          # These control-plane verifiers judge the tagged data but must not be frozen at the tag: the
+          # v0.2.0 tag shipped a product-package check that rejected the real package layout and could
+          # not be repaired afterwards. Run the workflow commit's copies; the producers stay tagged.
+          for path in tests/scripts/verify-release-candidate.sh tests/scripts/verify-v02-source-archive.py cmake/VerifyReleaseReceipt.cmake; do
+            git show "${GITHUB_SHA}:${path}" > "$path"
+          done
       - name: Revalidate a previously qualified candidate before retry
         env:
           RELEASE_ID: ${{ steps.identity.outputs.release_id }}
@@ -1298,6 +1308,7 @@ jobs:
           set -euo pipefail
           git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > "$RUNNER_TEMP/verify-release-gates.sh"
           git show "${GITHUB_SHA}:.github/scripts/verify-release-source-proof.py" > "$RUNNER_TEMP/verify-release-source-proof.py"
+          git show "${GITHUB_SHA}:.github/scripts/verify-published-release-assets.py" > "$RUNNER_TEMP/verify-published-release-assets.py"
           chmod +x "$RUNNER_TEMP/verify-release-gates.sh"
       - name: Validate draft candidate and all downloaded platform bytes
         shell: bash
@@ -1367,7 +1378,7 @@ jobs:
             fi
           done
       - name: Recheck final API inventory and downloaded receipts
-        run: bash .github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"
+        run: bash "$RUNNER_TEMP/verify-release-gates.sh" --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"
       - name: Publish the one qualified draft
         shell: bash
         run: |
@@ -1383,5 +1394,5 @@ jobs:
             echo "Published release readback did not preserve tag/draft transition." >&2; exit 1;
           }
           assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
-          python3 .github/scripts/verify-published-release-assets.py "$assets" build/release-final/api-assets.json
+          python3 "$RUNNER_TEMP/verify-published-release-assets.py" "$assets" build/release-final/api-assets.json
           echo "Published the exact qualified release $RELEASE_TAG ($SOURCE_SHA) with unsigned status recorded."
