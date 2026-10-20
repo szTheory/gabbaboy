@@ -6,10 +6,10 @@ current_phase: 7
 current_plan: 17/17 complete
 status: completed
 stopped_at: Phase 7 Nyquist reconciliation complete; Phase 11/13 SUMMARY trace reconciliation next
-last_updated: "2026-10-20T16:15:19Z"
+last_updated: "2026-10-20T16:24:12Z"
 last_activity: 2026-10-20
 last_activity_desc: Phase 7 Nyquist reconciliation complete; one supporting test gap filled
-state_head: 8c00c8db9631e52187ba7bac5f86ca0d66c607dc
+state_head: 5f9bfbd46b7794f64669f0a747164ac9919c79cc
 progress:
   total_phases: 9
   completed_phases: 9
@@ -35,9 +35,9 @@ Current Plan: 17/17 complete
 Total Plans in Phase: 17
 Last activity: 2026-10-20 — Phase 7 validation reconciliation
 
-Completed workflow stage: **Phase 7 — DMG Game Acceptance and Regression Baseline, retroactive Nyquist validation complete**. [07-VALIDATION.md](phases/GB-07-dmg-game-acceptance-and-regression-baseline/07-VALIDATION.md) now reconciles all 17 plans / 40 tasks and all five requirements, with `status: validated`, `nyquist_compliant: true` and no manual-only gaps. One supporting test gap was filled: stall diagnostics now require meaningful bounded sections and byte-identical fresh report/PPM artifacts across two real failing runs. Its self-test rejects 19 malformed report controls plus one repeated-byte mismatch. No emulator implementation changed. Tests are committed at `8c00c8d`.
+Completed workflow stage: **Phase 7 — DMG Game Acceptance and Regression Baseline, retroactive Nyquist validation complete**. [07-VALIDATION.md](phases/GB-07-dmg-game-acceptance-and-regression-baseline/07-VALIDATION.md) now reconciles all 17 plans / 40 tasks and all five requirements, with `status: validated`, `nyquist_compliant: true` and no manual-only gaps. One supporting test gap was filled: stall diagnostics now require meaningful bounded sections and byte-identical fresh report/PPM artifacts across two real failing runs. Its self-test rejects 19 malformed report controls plus one repeated-byte mismatch. No emulator implementation changed. Tests are committed at `5f9bfbd`.
 
-Fresh local checks: focused native **98/98**, player **98/98**, packaged Libbet input/progress/PCM equality and failing no-input control. All **1,145 configured core test names** match the inventory; this is not a full-suite rerun claim. The validation report binds receipts to their actual producer revisions. New PR checks must pass at the exact reviewed head before any merge; local results do not certify remote CI.
+Fresh local checks: focused native **97/97**, player **98/98**, packaged Libbet input/progress/PCM equality and failing no-input control. All **1,144 configured core test names** match the inventory; this is not a full-suite rerun claim. The validation report binds receipts to their actual producer revisions. The original draft inventory entry tripped the release ledger; the repair preserves the frozen inventory and passes its full self-test. New PR checks must pass at the exact reviewed head before any merge; local results do not certify remote CI.
 
 The earlier [v0.2-MILESTONE-AUDIT.md](v0.2-MILESTONE-AUDIT.md) remains an unchanged point-in-time `gaps_found` record: 25/28 satisfied, three partial SUMMARY traces (CGB-05, CGB-09, CGB-07), and the then-unresolved Phase 7 flag. Its boundary-only accounting still passes and rejects 16 negative controls. The independent [integration audit](v0.2-INTEGRATION-AUDIT.md) found no broken flow. Phase 15's 16 advisory review findings remain follow-ups before v0.2.1. D-027 / D-039 historical evidence limits remain recorded.
 
