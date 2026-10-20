@@ -2,27 +2,17 @@
 status: complete
 phase: GB-13-cgb-hdma
 source: 13-01-SUMMARY.md, 13-02-SUMMARY.md, 13-03-SUMMARY.md, 13-04-SUMMARY.md, 13-05-SUMMARY.md, 13-06-SUMMARY.md, 13-07-SUMMARY.md, 13-08-SUMMARY.md, 13-09-SUMMARY.md, 13-10-SUMMARY.md, 13-11-SUMMARY.md, 13-12-SUMMARY.md
-started: 2026-10-15T12:31:05.721937+00:00
-updated: 2026-10-15T12:42:01.647626+00:00
+started: 2026-10-20T23:27:41.090801+00:00
+updated: 2026-10-20T23:27:41.090801+00:00
 ---
 
 ## Automated Evidence
 
-All 45 structured SUMMARY deliverables across 12 plans classify as automated in OpenGSD 1.16.0: zero present entries and errors. All 12 bounded commit claims match actual ancestor windows. D-069 and the renewed owner instruction authorize automated closure without a confirmation-only checkpoint.
+Fresh refresh at unchanged source `a5f0d5962acb5eefa0143f7cde5942725ad2ac79`: configure/build succeeded; complete core regression passed 1,144/1,144 in 438.76 seconds and rebuilt SDL player selection passed 98/98 in 19.87 seconds; zero skips. Frozen DMG baseline has zero changed rows. All twelve bounded before/after task windows reconcile. Current focused evidence is recorded in 13-REFRESH-GATES.md. Canonical closure maps 45 deliverables and rejects 19 controls; zero human checkpoints.
 
-Fresh configure/build at `e556c1b160431852d9dcf48b17e54da21be328da`: native CTest 994/994 (148.80 s), SDL3 player CTest 1,087/1,087 (156.02 s), zero failures/errors/skips. Both ran concurrently on Darwin arm64 Debug with parallelism 4 each; one sample/no warm-up/uncertainty unquantified, not a throughput comparison. Native and player JUnit digests are preserved in 13-BENCH.md. The frozen DMG baseline reports zero changed rows.
+Boundary-only route and pause facts read an archive of completed boundary `e7ba52c81446096a9f6b5bf660d7721ea561eaa4`: the original pure handoff function passes and rejects four route/flag controls. The original full closeout wrapper pins OpenGSD 1.16.0 and refuses installed 1.18.0; that compatibility limitation is retained. The actual current prohibition producer separately passes saved-descriptor fail-first/clean/live proof. Historical hosted, fixture rebuild, sanitizer and benchmark receipts retain original revisions. Current full regression includes installed consumer/package checks. RGBDS 1.0.4 differs from required 1.0.1, so no fresh local fixture rebuild is claimed. No new physical, perceptual, release or hosted qualification.
 
-Reviewed source `eeb1ce94dec208b1baf7b1aae1b4c966f1b290ee` adds only stricter UAT/handoff checks. Fresh focused CTest passed 9/9 (0.79 s); exact six installed C/C++ consumer, runner and preview-package targets passed 6/6 (1.73 s), guarded by complete-name membership plus a missing-name negative control. The three Node continuity tests pass, including completed execution, completed UAT, stale route and conflicting stage controls. The source gate passes 27/27 controls and rejects changes to the UAT checker. UAT closure rejects 17 missing, malformed, weaker, duplicate, unparsed/manual and misrouted record mutations. The API pre-gate passes its explicit no-external-integration declaration and a malformed-matrix negative control rejects. This fixes the accidental selection of 13-PLAN-COVERAGE.md as an API matrix without disabling any gate.
-
-Final source `0f1bb34340d8aa4a1c71cb5f913170dd9d3fa9da` completed the configured 600-second bounded regression gate: configure/build passed, native CTest 994/994 in 105.76 s, zero failures/errors/skips. JUnit `build/phase13-uat-regression.xml` has SHA-256 `a82c94670b64db34bc3956e401ee711266c4188f4d9bcf247e4d8bd6db7113e2`. This run independently exercises the prior-phase regression inventory after the final local automation fix.
-
-Published execution head `b7b44188338c330974200bd49159452985c69f54` was independently rechecked: PR-event CI 38677996444 (8/8), fixture reproduction 38677996408 (7/7), preview 38677996566 (4/4), all jobs completed success at that exact SHA. This includes Linux ASan/UBSan 989/989 and downloaded package/installed consumer smoke. These are execution-head receipts; the final UAT revision needs its own exact-head checks before merge. GitHub is the authority for the latest published revision and merge state.
-
-The selected software fixture denominator remains 5/5 (four SameSuite, one Magen). Optional CGB-C rows are rights-gated and excluded. D-06/Pan Docs cancellation disagreement, timing/APU/mode-3/game limits and physical CGB-E UNKNOWN/POLICY remain explicit. No host-fuzzer campaign or perceptual/hardware qualification is claimed; no new owner-only action is required.
-
-Durable closure: `python3 -I .planning/phases/GB-13-cgb-hdma/verify-uat-contract.py --self-test` checks every exact SUMMARY/coverage-id/criterion/evidence mapping. Existing recurring CI already runs behavioral, integration, seam, e2e, smoke, provenance, consumer, package, schema and mutation checks. Local GSD-specific closure/handoff checks add no GSD dependency or duplicate CI lane. The two focused automation review findings, including the compound-stage residual, are fixed in `eeb1ce9` and `0f1bb34` and independently re-reviewed closed. Final source `0f1bb34` passes focused CTest 9/9 (0.76 s), Node 3/3 and all 17 UAT controls. Canonical verification refresh follows before committing this completed handoff.
-
-Do not reopen or rewrite this completed UAT on an unchanged checkout. Reopen only changed covered behavior, a concrete new regression, or stale/unavailable evidence; refresh through the canonical verification owner. No new phase plans or confirmation-only UAT are warranted. Next owner-selected stage is Phase 14 discussion via `/gsd-discuss-phase 14`; Phase 14 remains unstarted and both auto-advance flags remain false.
+The historical duplicate-library warning remains deferred and appeared during the fresh build. Reuse canonical UAT unless covered behavior changes, contrary evidence appears, or evidence is stale/unavailable. This refresh does not replay implementation.
 
 ## Current Test
 
@@ -151,7 +141,7 @@ coverage_id: D2
 evidence: ["ctest --test-dir build -R '^(cgb_hdma_(lifecycle|resource_bounds|hostile_seeds|partition_)|api_|cgb_instance_isolation$|summary_coverage)' --output-on-failure --no-tests=error"]
 
 ### 16. Finite transfer headroom, maximum block work, trace/audio/diagnostic capacities, and deterministic FF51–55 seeds stay bounded and non-mutating on named rejection controls.
-expected: "Finite transfer headroom, maximum block work, trace/audio/diagnostic capacities, and deterministic FF51–55 seeds stay bounded and non-mutating on named rejection controls."
+expected: "Finite transfer headroom, maximum block work, trace/audio/diagnostic capacities, and deterministic FF51\u201355 seeds stay bounded and non-mutating on named rejection controls."
 result: pass
 source: automated
 summary_file: 13-04-SUMMARY.md

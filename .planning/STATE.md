@@ -2,14 +2,14 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_phase: 15
-current_phase_name: CGB Acceptance, Support Ledger and v0.2.0 Release
-current_plan: 10/10 complete
+current_phase: 13
+current_phase_name: CGB HDMA
+current_plan: 12/12 complete
 status: completed
-stopped_at: Phase 12 verification refresh complete; Phase 13 verification refresh next
-last_updated: "2026-10-20T23:13:42Z"
+stopped_at: Phase 13 verification refresh complete; Phase 14 verification refresh next
+last_updated: "2026-10-20T23:32:42.226239+00:00"
 last_activity: 2026-10-20
-last_activity_desc: Refreshed Phase 12 goal verification and canonical 73-row UAT; Phases 13–14 remain
+last_activity_desc: Refreshed Phase 13 goal verification and canonical 45-row UAT; Phase 14 remains
 state_head: 3930668cb49dba7289dff34696d8de2ee96492ed
 progress:
   total_phases: 9
@@ -30,19 +30,19 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 ## Current Position
 
-Completed stage: **Phase 12 — CGB Double Speed, verification refresh**. All 19 implementation plans were already complete. The refreshed [verification report](phases/GB-12-cgb-double-speed/12-VERIFICATION.md) passes 109/109 truths (three roadmap criteria plus 106 plan truths), all 48 prohibitions, 46 artifact declarations and 30 links. CGB-06 remains satisfied; OpenGSD covered-input status is `passed` across 132 files.
+Completed stage: **Phase 13 — CGB HDMA, verification refresh**. All 12 implementation plans were already complete. The refreshed [verification report](phases/GB-13-cgb-hdma/13-VERIFICATION.md) passes **37/37 truths**, 49 artifact declarations, 12 independently traced links and one test-tier prohibition. CGB-07 remains satisfied; OpenGSD freshness is `passed` over 107 covered files. The generic key-link detector could not interpret the narrative declarations; the verifier traced actual wiring and executed predicates.
 
-Fresh unchanged source `3930668` passed configured core regression **1,144/1,144** in **414.22 seconds** and rebuilt SDL player **98/98** in **25.28 seconds**, zero skips. Independent verification added focused positive/negative speed, AGE, partition and HDMA checks. The frozen DMG baseline has zero changed rows. All 19 bounded plan commit windows reconcile. Original boundary `da98d56` passes the closeout contract and 17 controls; historical routes and absence facts are never asserted against live HEAD.
+Fresh unchanged source `a5f0d59` passed configured core regression **1,144/1,144** in **438.76 seconds** and rebuilt SDL player **98/98** in **19.87 seconds**, zero skips. Independent focused behavioral checks passed 21/21. Frozen DMG baseline has zero changed rows; all 12 bounded plan task windows reconcile. Canonical [13-UAT.md](phases/GB-13-cgb-hdma/13-UAT.md) closes **45/45 automated deliverables** with **19 rejected controls**, zero human checkpoints.
 
-Canonical [12-UAT.md](phases/GB-12-cgb-double-speed/12-UAT.md) closes **73/73 automated deliverables**, with **19 rejected controls**, zero human checkpoints. [12-REFRESH-GATES.md](phases/GB-12-cgb-double-speed/12-REFRESH-GATES.md) records the bounded audit and degraded scope resolver. Three historical review findings remain fixed; historical security/Nyquist/UI evidence is retained with applicability limits. Local pinned fixture rebuild is unavailable (RGBDS 1.0.4 versus required 1.0.1); existing hosted receipts remain revision-qualified. Later Phase 13 promoted HDMA-across-stall from expected failure to pass; it is not retroactively attributed to Phase 12. No new hardware, perceptual, hosted, sanitizer runtime or benchmark qualification is claimed.
+[13-REFRESH-GATES.md](phases/GB-13-cgb-hdma/13-REFRESH-GATES.md) retains historical review/security/Nyquist/UI applicability. Four historical review fixes remain closed; the duplicate-library warning persists as deferred debt. At immutable completed boundary `e7ba52c`, original pure handoff checks pass with four rejected route/flag controls. The original full wrapper pins OpenGSD 1.16.0 and refuses current 1.18.0; the actual current producer separately passes saved-prohibition fail-first/clean/live proof. Local pinned fixture rebuild is unavailable (RGBDS 1.0.4 versus required 1.0.1). Historical hosted receipts retain actual revisions; no new hosted, sanitizer runtime, hardware, perceptual or benchmark qualification is claimed.
 
-Milestone completion remains **pending**. Phases 7–12 verification are refreshed; Phases 13–14 still require their own refresh. The milestone audit retains 28/28 satisfied requirements and 21 debt items; no debt acceptance occurs here. Phase 14 clean UAT review and Phase 13 deferred duplicate-library warning remain owned items.
+Milestone completion remains **pending**. Phases 7–13 verification are refreshed; Phase 14 still requires refresh, including its clean UAT review. The milestone audit retains 28/28 satisfied requirements and 21 debt items; no debt acceptance occurs here. v0.3 remains provisional, unnumbered and unstarted.
 
-Next stage: **13 — CGB HDMA**, verification refresh.
-Exact next command: `/gsd-execute-phase 13`.
-Stop after Phase 12. Both automatic advance flags remain false. No archive, tag, release or merge was performed. v0.3 remains provisional, unnumbered and unstarted.
+Next phase: **14 — CGB-E Model Qualification and Corpus**, verification refresh only.
+Exact next command: `/gsd-execute-phase 14`.
+Stop after Phase 13. Both automatic advance flags remain false. No archive, tag, release or merge was performed.
 
-Review stack: branch `gsd/phase-12-verification-refresh` builds on Phase 11 refresh PR #87. Preserve pre-existing config/state.json edits. Required remote checks must pass at the exact reviewed head before merging; local results do not establish remote readiness. Boundary triage found no open issues; PRs #78–87 remain in the existing review stack and release-please PR #75 remains unmerged.
+Review stack: branch `gsd/phase-13-verification-refresh` builds on Phase 12 refresh PR #88. Boundary triage found no open issues; PRs #78–88 and release-please #75 remain unmerged. Required checks must pass at the exact reviewed head before merge; local results do not establish remote readiness. Preserve pre-existing config/state.json edits. The phase.complete CLI returned an incorrect last-phase route and incremented the already-complete phase count; the recorded current artifacts override that derived route without replaying completed phases. Its missing-path warnings include two command strings and historical `.planning/milestone.lock`; current artifact verification passes 49/49.
 
 ### Historical Phase 14 handoff (superseded route; preserved receipts)
 
@@ -554,10 +554,10 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Completed stage: Phase 11 — CGB Colour Rendering and Player Colour, verification refresh; paused at the phase boundary.
-Next phase: 12 — CGB Double Speed (verification refresh only).
-Next command: `/gsd-execute-phase 12`.
+Completed stage: Phase 13 — CGB HDMA, verification refresh; paused at the phase boundary.
+Next phase: 14 — CGB-E Model Qualification and Corpus (verification refresh only).
+Next command: `/gsd-execute-phase 14`.
 
 ## Operator Next Steps
 
-Resume Phase 12 verification using the command above. Phases 12–14 still require verification refresh; do not archive or tag v0.2 until these are resolved or explicitly overridden. Preserve both automatic advance flags as false.
+Resume Phase 14 verification using the command above. Do not archive or tag v0.2 until its remaining verification refresh and audit items are resolved or explicitly overridden. Preserve both automatic advance flags as false.
