@@ -2,15 +2,15 @@
 status: complete
 phase: GB-12-cgb-double-speed
 source: 12-01-SUMMARY.md, 12-02-SUMMARY.md, 12-03-SUMMARY.md, 12-04-SUMMARY.md, 12-05-SUMMARY.md, 12-06-SUMMARY.md, 12-07-SUMMARY.md, 12-08-SUMMARY.md, 12-09-SUMMARY.md, 12-10-SUMMARY.md, 12-11-SUMMARY.md, 12-12-SUMMARY.md, 12-13-SUMMARY.md, 12-14-SUMMARY.md, 12-15-SUMMARY.md, 12-16-SUMMARY.md, 12-17-SUMMARY.md, 12-18-SUMMARY.md, 12-19-SUMMARY.md
-started: 2026-10-14T14:33:09.590009+00:00
-updated: 2026-10-14T14:49:29.224Z
+started: 2026-10-20T22:58:55.431967+00:00
+updated: 2026-10-20T22:58:55.431967+00:00
 ---
 
-## Current Test
+## Automated Evidence
 
-[testing complete]
+Fresh verification refresh at unchanged source `3930668`: configure/build succeeded; complete configured core regression passed **1,144/1,144**, zero skips, **414.22 seconds**. Rebuilt SDL player passed **98/98**, zero skips, **25.28 seconds**. Frozen DMG baseline reports zero changed rows. All 19 bounded plan windows reconcile using their recorded before/after revisions. The original closeout checker passes 17 controls against `git archive da98d56`; no live route/tree fact is used as a historical boundary assertion. The shared canonical closure self-test passes 73 rows and rejects 19 controls. Local ROM rebuild remains unavailable (RGBDS 1.0.4 installed vs 1.0.1 required); original pinned-tool hosted receipts below remain historical.
 
-## Tests
+Verification refresh source: `3930668`. Original revision-qualified evidence follows; its counts and hosted receipts are historical. The shared canonical closure checker replaces the phase-local UAT checker for this refresh.
 
 All 73 structured SUMMARY coverage entries across 19 plans auto-pass in OpenGSD 1.16.0 (`uat.classify-coverage`): zero `present` entries and zero errors. D-069 and the renewed owner directive authorize automated closure with zero human checkpoints; no confirmation-only checkpoint is added.
 
@@ -21,6 +21,12 @@ Exact-head PR-event hosted evidence (fresh readback): [CI 38569486172](https://g
 Qualification: only AGE DIV (5/5) and STOP-prefetch (1/1) pass; eleven admitted ROMs have exact-signature expected-failure dispositions. Passing their disposition tests verifies the published boundaries, not the unsupported hardware behavior. The selected stall is `0x20004` destination-speed CPU T in the measured `[0x20004,0x20007]` window. M28 changes mode-0 but not DIV. No physical hardware or local libFuzzer campaign is claimed. No scope expansion or new owner decision is needed.
 
 Durable closure: `python3 -I .planning/phases/GB-12-cgb-double-speed/verify-uat-contract.py --self-test` checks the exact one-to-one 73-entry mapping and rejects nine weaker-closure mutations. Existing `summary_coverage` and its negative controls enforce the automation schema in CI before verify-work. This session-specific closure check stays local; existing recurring behavior, seam, fixture, install, package and mutation checks already run in CI. Rerunning verify-work on unchanged evidence resumes this completed file and must not create new plans or repeat UAT. Reopen only for changed covered behavior, a new regression, or stale/unavailable evidence; use the canonical verification owner to refresh that evidence.
+
+## Current Test
+
+[testing complete]
+
+## Tests
 
 ### 1. Pre-change CGB frame, PCM and inline timer/serial/DMA identity pins detect altered output.
 expected: "Pre-change CGB frame, PCM and inline timer/serial/DMA identity pins detect altered output."

@@ -6,11 +6,11 @@ current_phase: 15
 current_phase_name: CGB Acceptance, Support Ledger and v0.2.0 Release
 current_plan: 10/10 complete
 status: completed
-stopped_at: Phase 11 verification refresh complete; Phase 12 verification refresh next
-last_updated: "2026-10-20T22:34:51Z"
+stopped_at: Phase 12 verification refresh complete; Phase 13 verification refresh next
+last_updated: "2026-10-20T23:13:42Z"
 last_activity: 2026-10-20
-last_activity_desc: Refreshed Phase 11 goal verification and canonical 91-row UAT; Phases 12–14 remain
-state_head: e444dd2320acf0e4e0d83fb89009311edcaa5e13
+last_activity_desc: Refreshed Phase 12 goal verification and canonical 73-row UAT; Phases 13–14 remain
+state_head: 3930668cb49dba7289dff34696d8de2ee96492ed
 progress:
   total_phases: 9
   completed_phases: 9
@@ -30,19 +30,19 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 ## Current Position
 
-Completed stage: **Phase 11 — CGB Colour Rendering and Player Colour, verification refresh**. All 15 plans were already complete. The refreshed [verification report](phases/GB-11-cgb-colour-rendering-and-player-colour/11-VERIFICATION.md) passes 112/112 truths (three roadmap criteria and 109 plan truths), all 35 prohibitions, 47 artifact references and 31 links. CGB-04, CGB-05 and CGB-09 remain satisfied. OpenGSD covered-input status is `passed` across 106 files.
+Completed stage: **Phase 12 — CGB Double Speed, verification refresh**. All 19 implementation plans were already complete. The refreshed [verification report](phases/GB-12-cgb-double-speed/12-VERIFICATION.md) passes 109/109 truths (three roadmap criteria plus 106 plan truths), all 48 prohibitions, 46 artifact declarations and 30 links. CGB-06 remains satisfied; OpenGSD covered-input status is `passed` across 132 files.
 
-Fresh source evidence at `e444dd2`: configured full regression **1,144/1,144** in 486.68 seconds and rebuilt SDL player **98/98** in 21.72 seconds, zero skips. Independent bounded review passed 36 focused controls and found no new proven defect. The verifier additionally passed 16 focused checks, DMG baseline, reproduction recipe and API coverage checks. Boundary facts come from `4811033`; six weakened boundary records are rejected. No emulator source or test inventory changed.
+Fresh unchanged source `3930668` passed configured core regression **1,144/1,144** in **414.22 seconds** and rebuilt SDL player **98/98** in **25.28 seconds**, zero skips. Independent verification added focused positive/negative speed, AGE, partition and HDMA checks. The frozen DMG baseline has zero changed rows. All 19 bounded plan commit windows reconcile. Original boundary `da98d56` passes the closeout contract and 17 controls; historical routes and absence facts are never asserted against live HEAD.
 
-The old grouped UAT failed the shared canonical checker. Migration through `verify-uat-closure.py --write` now accounts for all **91 automated deliverables**; `--self-test` rejects **19 controls**, with zero human checkpoints. Original hosted, toolchain and benchmark receipts remain revision-qualified in [11-UAT.md](phases/GB-11-cgb-colour-rendering-and-player-colour/11-UAT.md). [11-REFRESH-GATES.md](phases/GB-11-cgb-colour-rendering-and-player-colour/11-REFRESH-GATES.md) records bounded audit reuse and the degraded scope resolver. D-20 (AGE has no colour ROM), hardware/perceptual limits, acid2 rights gate and existing model-gate evidence limits remain explicit.
+Canonical [12-UAT.md](phases/GB-12-cgb-double-speed/12-UAT.md) closes **73/73 automated deliverables**, with **19 rejected controls**, zero human checkpoints. [12-REFRESH-GATES.md](phases/GB-12-cgb-double-speed/12-REFRESH-GATES.md) records the bounded audit and degraded scope resolver. Three historical review findings remain fixed; historical security/Nyquist/UI evidence is retained with applicability limits. Local pinned fixture rebuild is unavailable (RGBDS 1.0.4 versus required 1.0.1); existing hosted receipts remain revision-qualified. Later Phase 13 promoted HDMA-across-stall from expected failure to pass; it is not retroactively attributed to Phase 12. No new hardware, perceptual, hosted, sanitizer runtime or benchmark qualification is claimed.
 
-Milestone completion remains **pending**. Phases 7–11 verification are refreshed; Phases 12–14 still require their own refresh. The milestone audit retains 28/28 satisfied requirements and 21 debt items; this refresh does not accept debt. Phase 14 clean UAT review and Phase 13 deferred duplicate-library warning remain owned items.
+Milestone completion remains **pending**. Phases 7–12 verification are refreshed; Phases 13–14 still require their own refresh. The milestone audit retains 28/28 satisfied requirements and 21 debt items; no debt acceptance occurs here. Phase 14 clean UAT review and Phase 13 deferred duplicate-library warning remain owned items.
 
-Next stage: **Phase 12 — CGB Double Speed, verification refresh**.
-Exact next command: `/gsd-execute-phase 12`.
-Stop after Phase 11. Both automatic advance flags remain false. No milestone archive, tag, release or merge was performed. v0.3 — States & Integration remains provisional, unnumbered and unstarted.
+Next stage: **13 — CGB HDMA**, verification refresh.
+Exact next command: `/gsd-execute-phase 13`.
+Stop after Phase 12. Both automatic advance flags remain false. No archive, tag, release or merge was performed. v0.3 remains provisional, unnumbered and unstarted.
 
-Review stack: branch `gsd/phase-11-verification-refresh` builds on Phase 10 refresh PR #86. Preserve pre-existing config/state.json edits. Required remote checks must pass at the exact reviewed head before merging; local results do not establish remote readiness. Boundary triage found no open issues; PRs #78–86 remain in the existing review stack and release-please PR #75 remains unmerged.
+Review stack: branch `gsd/phase-12-verification-refresh` builds on Phase 11 refresh PR #87. Preserve pre-existing config/state.json edits. Required remote checks must pass at the exact reviewed head before merging; local results do not establish remote readiness. Boundary triage found no open issues; PRs #78–87 remain in the existing review stack and release-please PR #75 remains unmerged.
 
 ### Historical Phase 14 handoff (superseded route; preserved receipts)
 
