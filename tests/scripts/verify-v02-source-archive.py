@@ -241,9 +241,12 @@ def inspect_zip(path, limits, want_git):
 
 
 def inspect_archive(path, limits, want_git=False):
-    if os.path.getsize(path) > limits.total:
-        raise Reject("archive-oversize", "archive file is larger than the uncompressed-size limit")
-    kind = open_kind(path)
+    try:
+        if os.path.getsize(path) > limits.total:
+            raise Reject("archive-oversize", "archive file is larger than the uncompressed-size limit")
+        kind = open_kind(path)
+    except OSError as error:
+        raise Reject("archive-unreadable", f"archive cannot be opened: {error.strerror or error}")
     inspection = (inspect_tar if kind == "tar.gz" else inspect_zip)(path, limits, want_git)
     if inspection.root is None:
         raise Reject("archive-unreadable", "archive has no entries")
