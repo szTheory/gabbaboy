@@ -255,6 +255,8 @@ Plans (serial waves: every plan edits `tests/expected-tests.txt` and `tests/CMak
   2. DMG software on the CGB profile renders through a fixed, original, documented compatibility palette that a host can override; no boot-ROM palette table ships.
   3. The SDL3 player runs software with `--model auto|dmg|cgb` and colour presentation and passes an automated CGB smoke in CI.
 
+**Verification refresh (2026-10-20):** [11-VERIFICATION.md](phases/GB-11-cgb-colour-rendering-and-player-colour/11-VERIFICATION.md) passes 112/112 truths and all 35 prohibitions; CGB-04/05/09 remain satisfied. Current regression passed 1,144/1,144 and rebuilt player 98/98. Canonical UAT closes 91 individual deliverables with 19 negative controls, preserving original receipt limits. No source change. Paused before Phase 12 verification refresh: `/gsd-execute-phase 12`.
+
 **Rights gates**: G1 (mgblib font) gates vendoring cgb-acid2/dmg-acid2 into required CI (digest-pinned optional local runs otherwise); G4 excludes title-hash compatibility palettes.
 **Research**: DEEP (LCDC bit 0 in CGB mode, OPRI timing, CGB mode-3 length, blocked-write palette auto-increment).
 **Plans**: 15/15 plans complete
