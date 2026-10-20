@@ -64,18 +64,32 @@ if(NOT extract_result EQUAL 0)
 endif()
 
 set(extracted_prefix "${extract_root}/installed-prefix")
-# D-32: the sibling Mooneye MBC ROMs are repository fixtures only; prove they are absent from the
+# D-32 / T-10-22: Mooneye MBC and CGB ROMs are repository fixtures only; prove they are absent from the
 # extracted package by name and digest, and that the installed fixture set is exactly as expected.
-execute_process(
-  COMMAND "${GBB_CMAKE_COMMAND}"
+set(mooneye_scan_command "${GBB_CMAKE_COMMAND}"
     "-DGBB_SCAN_DIR=${extracted_prefix}"
-    "-DGBB_FORBIDDEN_MANIFEST=${source_dir}/fixtures/mooneye-mbc/manifest.json"
+    "-DGBB_FORBIDDEN_MANIFESTS=${source_dir}/fixtures/mooneye-mbc/manifest.json|${source_dir}/fixtures/mooneye-cgb/manifest.json"
     "-DGBB_EXPECT_FIXTURE_DIRS=tracer|visible-demo|mbc1-continuation"
-    -P "${source_dir}/cmake/ScanForbiddenFixtures.cmake"
+    -P "${source_dir}/cmake/ScanForbiddenFixtures.cmake")
+execute_process(
+  COMMAND ${mooneye_scan_command}
   RESULT_VARIABLE scan_result OUTPUT_VARIABLE scan_output ERROR_VARIABLE scan_error)
 if(NOT scan_result EQUAL 0 OR NOT "${scan_output}${scan_error}" MATCHES "files=")
   message(FATAL_ERROR "Extracted package forbidden-fixture scan failed (${scan_result}): ${scan_output}${scan_error}")
 endif()
+# Exercise the exact preview scan with renamed CGB bytes outside the fixture directory allowlist.
+# Remove the planted file before any consumer executes, even if the control fails.
+set(cgb_scan_control "${extracted_prefix}/share/payload.bin")
+file(COPY_FILE "${source_dir}/fixtures/mooneye-cgb/boot_regs-cgb.gb" "${cgb_scan_control}")
+execute_process(
+  COMMAND ${mooneye_scan_command}
+  RESULT_VARIABLE cgb_control_result OUTPUT_VARIABLE cgb_control_output ERROR_VARIABLE cgb_control_error)
+file(REMOVE "${cgb_scan_control}")
+if(cgb_control_result EQUAL 0 OR
+   NOT "${cgb_control_output}${cgb_control_error}" MATCHES "mooneye-installed: share/payload.bin")
+  message(FATAL_ERROR "Extracted package renamed CGB fixture control failed (${cgb_control_result}): ${cgb_control_output}${cgb_control_error}")
+endif()
+message(STATUS "Extracted package renamed CGB fixture rejected by digest")
 execute_process(
   COMMAND "${GBB_CMAKE_COMMAND}"
     "-DGBB_SCAN_DIR=${extracted_prefix}"

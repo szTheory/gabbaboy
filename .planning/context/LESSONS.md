@@ -837,3 +837,11 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Applies when:** Build, fixture or evidence tooling promises to keep generated artifacts outside a checkout. A refusal exit alone does not prove absence of side effects.
 - **Verification:** The expanded offline guard passes nested, symlink, `..`, evidence-override and both default-TMPDIR rejection cases, and accepts missing external destinations up to a deliberate pre-network stop. The same guard fails against the original script with `refused output created a directory`. Independent bounded review also passes.
 - **Source:** Phase 10 `10-REFRESH-GATES.md`; `tests/scripts/reproduce-mooneye-cgb.sh`; `tests/scripts/test-reproduce-mooneye-cgb-guard.sh`.
+
+### GB-FIXTURE-002 / 2026-10-20 / Test exclusions through the actual package scan
+
+- **Cause and evidence:** Phase 10's CGB ROM exclusion scanned the install tree, while preview smoke supplied only the MBC manifest. A clean package and an isolated scanner self-test both passed, yet a renamed CGB ROM in the extracted preview passed its actual scan.
+- **Remedy:** Supply both manifests to one preview scan command. Exercise that same command against a planted CGB ROM outside the fixture-directory allowlist, require its exact digest-based rejection, and remove the control file before consumers run.
+- **Applies when:** A prohibition spans several distribution trees or a new fixture family reuses an older package check. Scanner capability alone does not prove every producer invokes it with the required inputs.
+- **Verification:** The new control failed with the original MBC-only scan accepting the payload. The combined-manifest scan passed the focused package/install/ledger selection 6/6; independent bounded review found no defect. Existing test registration and inventory are unchanged.
+- **Source:** Phase 10 plan 10-15 G1; `10-REFRESH-GATES.md`; `cmake/PreviewPackageSmoke.cmake`.
