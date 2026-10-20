@@ -811,3 +811,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Applies when:** Running `/gsd-verify-work`, or writing any check that encodes a phase-boundary fact.
 - **Verification:** The shared tool's self-test passes on the Phase 13, 14 and 15 UAT records (45, 49 and 42 deliverables, 19 controls each), and `--write` refuses a SUMMARY with `human_judgment: true`. The Phase 14 checker passes again, keeping all 29 of its controls. It stays local, not CI: the recurring SUMMARY side already runs in CI through `summary_coverage`, and the tool is exercised at every verify-work.
 - **Source:** Phase 15 verify-work, owner automation directive.
+
+
+### GB-GSD-025 / 2026-10-20 / Passing verification does not repair completion metadata
+
+- **Cause and evidence:** The v0.2 milestone audit read all 134 SUMMARY fields and nine goal reports. CGB-05, CGB-09 and CGB-07 were SATISFIED centrally and in verification but absent from every completing SUMMARY. Phase 7's validated record retained `nyquist_compliant: false` while its sign-off claimed true.
+- **Remedy:** Cross-reference all three independent sources at closure; record partial traceability without relabeling passing behavior as missing implementation. Reconcile validated/false records through validate-phase, then update the relevant closing metadata from actual evidence. Keep immutable producer and boundary facts distinct from current routes.
+- **Applies when:** Requirements close only after the final execution SUMMARY, or generated status fields and prose are maintained separately.
+- **Verification:** `.planning/verify-v02-milestone-audit.py --self-test` reconciles 28 central rows, 134 summary lists and nine phase reports; 16 controls reject inflated scores, hidden partials, false Nyquist claims, changed source rows and premature milestone routing. Independent focused core/player checks passed 63/63; no new human UAT.
+- **Source:** `.planning/v0.2-MILESTONE-AUDIT.md`; closure-record corrections remain pending, with `/gsd-validate-phase 7` as the next command.

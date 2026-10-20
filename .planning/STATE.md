@@ -3,12 +3,12 @@ gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: 15
-current_plan: Not started
+current_plan: 10/10 complete
 status: completed
-stopped_at: Phase 15 automated UAT complete (42/42); next /gsd-audit-milestone
-last_updated: "2026-10-20T12:00:58.767Z"
+stopped_at: v0.2 milestone audit gaps found; next /gsd-validate-phase 7
+last_updated: "2026-10-20T15:56:47Z"
 last_activity: 2026-10-20
-last_activity_desc: Phase 15 automated UAT complete
+last_activity_desc: v0.2 milestone audit complete; closure gaps recorded
 state_head: ea39f2c028cf1ded16e45a1dc1978edd4d6a7def
 progress:
   total_phases: 9
@@ -25,23 +25,26 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** v0.2 milestone audit (all 9 phases complete)
+**Current focus:** v0.2 audit closure (all 9 phases executed; three partial requirement traces and Phase 7 validation inconsistency)
 
 ## Current Position
 
-Phase: 15
-Status: Phase 15 complete: executed, verified 12/12, automated UAT 42/42; awaiting /gsd-audit-milestone
+Phase: 15 — CGB Acceptance, Support Ledger and v0.2.0 Release (last v0.2 phase)
+Status: v0.2 milestone audit complete — gaps_found; paused for the owner
 Current Plan: 10/10 complete
 Total Plans in Phase: 10
-Last activity: 2026-10-20 — Phase 15 automated UAT complete
-Last Activity Description: Phase 15 automated UAT complete
+Last activity: 2026-10-20 — v0.2 milestone audit complete
 
-Completed workflow stage: **Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release, automated UAT complete**. [15-UAT.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-UAT.md) closes all 42 deliverables across 10 plans automatically. It has zero issues, zero pending, skipped or blocked rows, and zero human checkpoints. All 10 bounded commit windows reconcile; the 15-06 window interleaves other plans, and a manual recount gives 9/9 tagged commits. The shared `tests/scripts/verify-uat-closure.py --self-test` rejects 19 weakened closures. Earlier gates: [15-VERIFICATION.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-VERIFICATION.md) (passed 12/12, read back against live v0.2.0), [15-SECURITY.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-SECURITY.md) (21/21 closed), [15-VALIDATION.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-VALIDATION.md) (Nyquist-compliant, 20/20 green), [15-REVIEW.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-REVIEW.md) (0 critical, 8 warnings, 8 info; all open/advisory in 15-REVIEW-DISPOSITION.md — schedule before v0.2.1), [15-DELIVERY.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-DELIVERY.md). v0.2.0 is published (tag ab301aa, 22 assets).
+Completed workflow stage: **v0.2 milestone audit**, following **Phase 15 automated UAT**. [v0.2-MILESTONE-AUDIT.md](v0.2-MILESTONE-AUDIT.md) reconciles 28 requirements across 134 summaries: **25 satisfied, 3 partial** (CGB-05, CGB-09 and CGB-07 lack SUMMARY completion claims despite passing verification). Phase 7 validation is `validated` but `nyquist_compliant: false`, contradicting its sign-off. All nine phase goal reports pass; the independent [integration audit](v0.2-INTEGRATION-AUDIT.md) finds no broken flow and records 63/63 focused checks passing. No requirement implementation is declared unsatisfied. Phase 15's 16 advisory review findings remain open before v0.2.1.
 
-Next stage: **v0.2 milestone audit**. Phase 15 is the last v0.2 phase, so there is no next phase in this milestone.
-Next command: `/gsd-audit-milestone`. Do not begin v0.3; both auto-advance flags remain false. Open: PR #75 `release 0.2.1` (release-please, intentionally not merged).
+Next stage: **retroactive Phase 7 validation reconciliation — DMG Game Acceptance and Regression Baseline**. Then reconcile the existing Phase 11/13 closing SUMMARY fields and rerun `/gsd-audit-milestone`. No new implementation phase is needed or started. There is no next numbered phase in v0.2; **v0.3 — States & Integration** is provisional and unnumbered.
+Next command: `/gsd-validate-phase 7`.
 
-Progress: [██████████] 100%
+Do not archive as clean or begin v0.3. Both auto-advance flags remain false. Live triage found zero open issues; PR #75 `release 0.2.1` remains intentionally unmerged, and PR #78 Phase 15 UAT/shared closure tooling at `488235f` remains open with required CI in progress. Do not treat skipped/stale checks as merge proof. The current audit does not merge either PR.
+
+Latest phase evidence: **Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release, automated UAT complete**. [15-UAT.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-UAT.md) closes all 42 deliverables across 10 plans automatically. It has zero issues, zero pending, skipped or blocked rows, and zero human checkpoints. All 10 bounded commit windows reconcile; the 15-06 window interleaves other plans, and a manual recount gives 9/9 tagged commits. The shared `tests/scripts/verify-uat-closure.py --self-test` rejects 19 weakened closures. Earlier gates: [15-VERIFICATION.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-VERIFICATION.md) (passed 12/12, read back against live v0.2.0), [15-SECURITY.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-SECURITY.md) (21/21 closed), [15-VALIDATION.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-VALIDATION.md) (Nyquist-compliant, 20/20 green), [15-REVIEW.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-REVIEW.md) (0 critical, 8 warnings, 8 info; all open/advisory in 15-REVIEW-DISPOSITION.md — schedule before v0.2.1), [15-DELIVERY.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-DELIVERY.md). v0.2.0 is published (tag ab301aa, 22 assets).
+
+Progress (execution): [██████████] 100%; milestone audit closure remains open.
 
 ### Historical Phase 14 handoff (superseded route; preserved receipts)
 
