@@ -132,8 +132,10 @@ typedef struct {
  * DMG-CPU-B deterministic post-boot state. GBB_PROFILE_CGB_CPU_E starts in the
  * bootless CGB-CPU-E post-boot state, in CGB mode or DMG compatibility mode
  * according to the loaded ROM's $143 (with no ROM it is the compatibility
- * state); its colour frames are read with gbb_copy_frame_rgb555. Any other
- * profile value returns GBB_UNSUPPORTED_PROFILE. */
+ * state); its colour frames are read with gbb_copy_frame_rgb555. These names
+ * describe software-profile behavior, not game compatibility or physical
+ * silicon equivalence; no stable ABI is promised. Any other profile value
+ * returns GBB_UNSUPPORTED_PROFILE. */
 gbb_error gbb_create(gbb_profile profile, gbb_instance **out_instance);
 void gbb_destroy(gbb_instance *instance);
 /* Reset restores the documented post-boot CPU/profile state, clears work RAM

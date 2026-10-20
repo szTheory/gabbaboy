@@ -1,3 +1,31 @@
+# Digest-bound text (v0.2 support ledger inputs, notices, adoption docs, fixture manifests and
+# their licences) must hash identically on Windows checkouts. These generic rules come first;
+# later, more specific rules (for example the raw-byte mooneye manifests) override them. Source
+# files stay path-specific because the APU eol control needs an unpinned negative control.
+fixtures/*/manifest.json text eol=lf
+fixtures/*/LICENSE.txt text eol=lf
+fixtures/*/FONT-LICENSE.txt text eol=lf
+fixtures/*/*.md text eol=lf
+fixtures/*/*.patch text eol=lf
+fixtures/*/*.asm text eol=lf
+fixtures/*/*.inc text eol=lf
+tests/external/*.json text eol=lf
+tests/expected-tests.txt text eol=lf
+tests/CMakeLists.txt text eol=lf
+tests/scripts/*.py text eol=lf
+tests/scripts/*.sh text eol=lf
+tests/test_age.c text eol=lf
+tests/test_magentests.c text eol=lf
+tests/test_samesuite_hdma.c text eol=lf
+src/runner/main.c text eol=lf
+docs/*.md text eol=lf
+docs/support/*.md text eol=lf
+README.md text eol=lf
+LICENSE* text eol=lf
+NOTICE* text eol=lf
+THIRD_PARTY* text eol=lf
+CHANGELOG.md text eol=lf
+
 # The runner admits this pinned manifest by its exact Git blob SHA-256.
 fixtures/mooneye/manifest.json -text
 

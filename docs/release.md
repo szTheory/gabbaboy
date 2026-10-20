@@ -1,12 +1,27 @@
 # Release, downloads, and recovery
 
-GabbaBoy v0.1 is a limited, bootless DMG-CPU-B software preview. Find the
-current candidate or published release under the repository's GitHub Releases
-page. The release notes identify the version and list assets. The package
+GabbaBoy v0.2 is a limited, bootless software preview with a DMG-CPU-B and a
+selected CGB-CPU-E software model. Find the current candidate or published
+release under the repository's GitHub Releases page; it is the only record of
+what has been published, and this page makes no publication claim for v0.2.0.
+The release notes identify the version and list assets. The package
 matrix is Linux x64, macOS arm64, and Windows x64 core archives; the optional
 SDL3 player archive is macOS arm64 only. These are tested runner/configuration
 combinations, not minimum OS versions, all-architecture promises, or general
 platform support floors. The C core itself has no SDL runtime dependency.
+
+## Source archives and product packages
+
+GitHub generated source archives retain the admitted licensed fixtures and
+their notices, because they are a snapshot of the whole repository tree. Those
+third-party and author-test ROMs are repository test fixtures: they are listed
+with their rights and digests in
+[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md). The installed and downloaded
+product packages remain fixture-free: they carry only the original
+project-authored tracer, visible demo and MBC1 continuation fixtures, and a
+policy scan fails a package that contains any other fixture ROM. A source
+archive therefore answers "what may I rebuild and test", and a product package
+answers "what do I run"; neither is a substitute for the other.
 
 ## Verify and unpack
 
@@ -15,7 +30,22 @@ provided. Check it before extraction (for example,
 `sha256sum --check gabbaboy-core-macos-arm64.tar.gz.sha256`; use the platform's
 SHA-256 utility on macOS/Windows). The release's candidate/platform manifest,
 build receipts, and `support-ledger.json` (named `support-ledger-v0.1.0.json` on v0.1.0) provide additional provenance;
-compare each asset name and digest with the downloaded bytes. The support
+compare each asset name and digest with the downloaded bytes.
+
+Native proof comes in two kinds that are kept apart. The installed-prefix check
+installs the build, relocates the prefix and runs C and C++ consumers against
+it, which shows that the package layout works. The downloaded-asset check runs
+the same consumers against the release archive's own bytes after download,
+which shows that the distributed file works. A passing installed-prefix check
+does not stand in for the downloaded-asset check.
+
+The tagged release evidence is bound to the exact tag and source revision:
+`support-ledger.json` binds the applicable ledger blob and the fresh corpus
+receipt, and `release-performance-receipt.json` records the paired v0.1.0
+comparison for that source. The bounded fuzz campaign receipt
+`v02-fuzz-receipt.json` is a release requirement that is attached only after an
+actual campaign passes on the exact source; no fuzz campaign result is claimed
+by this document. The support
 sidecar is generated after the tag. It records the exact source SHA and the
 Git blob digest of the applicable tagged ledger, plus fixture and corpus
 identity. A release binds the newest `docs/support/vX.Y.Z.md` at or below its
@@ -77,13 +107,15 @@ attempt. See [`preview.md`](preview.md) for controls and player behavior.
 
 ## Support and troubleshooting
 
-The versioned [support ledger](support/v0.1.0.md) records the bootless
-DMG-CPU-B profile, ROM-only and documented standard MBC1 scope, eligible
-derived CPU/timer denominator, exclusions, and known issues. The three passed
-derived cases are a small scoped software corpus; they are not a game
-compatibility percentage. There are no physical DMG observations, no CGB
-qualification, and no broad game-library claim. Do not infer a minimum OS from
-a runner label or one successful build.
+The versioned [support ledger](support/v0.2.0.md) records the bootless
+DMG-CPU-B and CGB-CPU-E software models, the cartridge and save matrix, the
+CGB test-ROM corpus rows, exclusions, and known issues; the earlier
+[v0.1.0 ledger](support/v0.1.0.md) remains the record for that release. The
+CGB corpus is a bounded set of test ROMs; its counts are software-model
+results, not a game compatibility percentage. No CGB game-level evidence
+exists. Physical CGB-E remains UNKNOWN/POLICY, and there are no physical DMG
+observations and no broad game-library claim. Do not infer a minimum OS from a
+runner label or one successful build.
 
 - **Package not found by CMake:** point `CMAKE_PREFIX_PATH` at the extracted
   install prefix and keep its directory layout intact.
@@ -103,8 +135,20 @@ a runner label or one successful build.
   process. Never attach commercial ROMs, save files containing private data,
   or secrets.
 
+Before a version PR is merged, push a `rehearsal/<name>` branch to run
+`.github/workflows/release-rehearsal.yml`: it executes the corpus, support
+sidecar, fuzz, paired performance, relocated-consumer and source-archive
+producers on that commit with a read-only token and a runner-local tag, and it
+never creates a tag, release or upload. It does not exercise the draft-bound
+download, attach, final gate or publish steps. The fuzz producer takes the
+qualified commit from an explicit source-commit variable because `GITHUB_SHA` is
+runner-owned and cannot be overridden by a step.
+
 The version PR is the final review point for `CHANGELOG.md`; release-please may
-update it there. The merged, tagged changelog and that tag's release notes are
+update it there. Its rendered release notes are checked with
+`python3 -I tests/scripts/verify-v02-adoption.py --release-notes PATH`, which
+requires the exact version, the sentence "No CGB game-level evidence exists.",
+the unsigned/not-notarized statement and a link to the exact-version ledger. The merged, tagged changelog and that tag's release notes are
 the public notes. The candidate is kept as one unpublished draft while exact
 tag bytes are built, attached, downloaded, and smoked. Publication is a single
 gated transition after all required checks and downloaded-byte tests pass.

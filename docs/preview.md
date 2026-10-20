@@ -8,9 +8,11 @@ For a relocated installed C consumer, including bounded stepping, timestamped
 input, caller-owned video/audio, and host battery import/export, see the
 [native integration guide](native-integration.md). Its Playstead section
 describes a possible future adapter seam; no live Game Boy integration exists.
-The tracked [v0.1.0 support ledger](support/v0.1.0.md) states the model and
-corpus limits. The release's separate `support-ledger.json`
-attachment binds that ledger to the exact tagged source revision.
+The tracked [v0.2.0 support ledger](support/v0.2.0.md) states the model and
+corpus limits; the [v0.1.0 ledger](support/v0.1.0.md) remains the record for
+that release. A release's separate `support-ledger.json` attachment binds the
+applicable ledger to the exact tagged source revision. No CGB game-level
+evidence exists; this page makes no publication claim for v0.2.0.
 
 For the one-game Libbet acceptance evidence, its controls, the DMG regression baseline and their limits, see [Game acceptance](game-acceptance.md).
 
@@ -72,6 +74,10 @@ follow the queue-clear and save-ordering rules in
 [Audio and playback contract](audio-and-playback.md). The SDL queued-input
 byte count is not playback latency; application PCM underflow is not proof of
 hardware starvation.
+
+With `--model cgb` the player presents the core's raw RGB555 frames with no
+colour correction (each 5-bit channel is expanded as `(c << 3) | (c >> 2)`);
+the offscreen smoke does not establish how a physical display would look.
 
 The CGB-CPU-E software model separately exposes FF76/FF77 digital DAC inputs
 to native CGB guest reads; compatibility mode reads `$FF`. These register

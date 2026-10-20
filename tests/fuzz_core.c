@@ -526,13 +526,18 @@ static void speed_apply_last_instruction(const gbb_trace_record *record,
 static void fuzz_speed(gbb_instance *machine, const uint8_t *data, size_t size,
                        int cgb_profile) {
     uint8_t rom[32768];
-    const uint8_t scenario = size > 1u ? (uint8_t)(data[1] & 7u) : 0u;
+    uint8_t scenario = size > 1u ? (uint8_t)(data[1] & 7u) : 0u;
     size_t at = FUZZ_SPEED_PROGRAM;
     size_t key1_store_pc = 0u;
     size_t dma_stop_pc = 0u;
     size_t lcdc_write_pc = 0u;
     size_t ie_write_pc = 0u, if_write_pc = 0u, joyp_write_pc = 0u, dma_start_pc = 0u;
-    const int switch_expected = scenario != 3u && scenario != 6u && scenario != 7u;
+    /* KEY1 is not a guest register on the DMG profile: the cartridge runs in DMG mode, STOP never
+     * switches speed, and a woken guest that touches $FF4D stops on an unsupported bus access by
+     * design. Scenarios built around KEY1 therefore apply only to the CGB profile; on DMG they
+     * fall back to the STOP/wake twin (scenario 7). Scenario 3 (held button) stays as is. */
+    if (!cgb_profile && scenario != 3u) scenario = 7u;
+    const int switch_expected = cgb_profile && scenario != 3u && scenario != 6u && scenario != 7u;
 
     memset(&last_speed_observation, 0, sizeof(last_speed_observation));
     last_speed_observation.selected = 1;
@@ -788,7 +793,7 @@ static void fuzz_speed(gbb_instance *machine, const uint8_t *data, size_t size,
     require_contract(last_speed_observation.master_time_half_dots == total_consumed);
     if (switch_expected) require_contract(last_speed_observation.switches != 0u);
     require_contract(last_speed_observation.stop_count != 0u);
-    if (scenario != 3u && scenario != 7u)
+    if (cgb_profile && scenario != 3u && scenario != 7u)
         require_contract(last_speed_observation.key1_reads != 0u);
     if (scenario == 4u) require_contract(last_speed_observation.saw_hram_dma_stop);
     if (scenario == 5u) require_contract(last_speed_observation.saw_lcd_off);

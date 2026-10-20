@@ -1,0 +1,183 @@
+name: release-rehearsal
+
+# Non-publishing hosted rehearsal of the source-side producers that release.yml runs on the
+# exact release tag. A defect in tagged source cannot be repaired without a new tag, so these
+# commands are exercised here, on a branch, before release-please is allowed to tag.
+#
+# Safety: read-only token, no release, tag push, upload, publish or secret use. The tag the
+# producers need is created only inside the runner's checkout and is never pushed. A rehearsal
+# branch is created by pushing `rehearsal/<anything>`; it proves nothing about the draft-bound
+# steps (download, attach, final gate, publish), which still need a real draft.
+on:
+  push:
+    branches: ['rehearsal/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-rehearsal-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REHEARSAL_TAG: v0.2.0
+
+jobs:
+  corpus:
+    name: rehearse-corpus-and-support-sidecar
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out the rehearsed source with full history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Create the local-only rehearsal tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          git tag "$REHEARSAL_TAG" "$GITHUB_SHA"
+          echo "SOURCE_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=$REHEARSAL_TAG" >> "$GITHUB_ENV"
+      - name: Configure and build the source with the native preset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/package-prefix
+          cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$GITHUB_WORKSPACE/build/package-prefix"
+          cmake --build --preset phase1
+          cmake --install build --prefix build/package-prefix
+      - name: Begin exact CGB corpus receipt run
+        id: corpus_run
+        run: python3 -I tests/scripts/verify-cgb-corpus-report.py --begin-run --build-dir build --receipt build/cgb-corpus-receipt.json >> "$GITHUB_OUTPUT"
+      - name: Run the full CTest stream once
+        id: full_ctest
+        continue-on-error: true
+        run: ctest --test-dir build -T Test --no-compress-output --test-output-size-passed 16777216 --output-on-failure --no-tests=error --output-junit "cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml"
+      - name: Build the CGB receipt from this CTest output
+        run: python3 -I tests/scripts/verify-cgb-corpus-report.py --from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json
+      - name: Verify public CGB claims, the current support ledger and the required test inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I tests/scripts/verify-cgb-corpus-claims.py --receipt build/cgb-corpus-receipt.json
+          python3 -I tests/scripts/verify-support-ledger.py --check-current --receipt build/cgb-corpus-receipt.json
+          bash .github/scripts/verify-test-inventory.sh "build/cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml" tests/expected-tests.txt --installed
+      - name: Require the full CTest run to pass
+        env:
+          FULL_CTEST_OUTCOME: ${{ steps.full_ctest.outcome }}
+        run: test "$FULL_CTEST_OUTCOME" = success
+      - name: Generate and validate the schema-2 support sidecar from the exact receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I tests/scripts/verify-support-ledger.py --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" \
+            --receipt build/cgb-corpus-receipt.json --output build/support-ledger.json
+          python3 -I tests/scripts/verify-support-ledger.py --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" \
+            --receipt build/cgb-corpus-receipt.json --verify-sidecar build/support-ledger.json
+
+  fuzz:
+    name: rehearse-clang-libfuzzer-campaign
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CC: clang-18
+      CXX: clang++-18
+    steps:
+      - name: Check out the rehearsed source with full history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Confirm pinned Clang 18 toolchain
+        run: |
+          clang-18 --version
+          clang++-18 --version
+          test "$(clang-18 -dumpversion | cut -d. -f1)" = 18
+          test "$(clang++-18 -dumpversion | cut -d. -f1)" = 18
+      - name: Configure and build ASan and UBSan
+        run: |
+          cmake --preset phase1-asan -DGBB_TEST_INSTALL_PREFIX=
+          cmake -LA -N build-asan | grep -q '^GABBABOY_ENABLE_SANITIZERS:BOOL=ON$'
+          cmake --build --preset phase1-asan
+      - name: Run the bounded Clang 18 libFuzzer campaign and verify its receipt
+        env:
+          GBB_SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --explore --receipt build-asan/v02-fuzz-receipt.json
+          python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json
+          GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --self-test
+
+  performance:
+    name: rehearse-paired-performance-qualification
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      PERFORMANCE_REGRESSION_REVIEW: >-
+        Source delta reviewed: v0.2 adds CGB speed-switch, HDMA arbitration, unsupported-bus and output-boundary
+        checks to the shared run loop that the v0.1.0 baseline lacks; the slowdown is accepted and disclosed,
+        and no equivalent-speed claim is made.
+    steps:
+      - name: Check out the rehearsed source with full history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Measure the clean paired v0.1.0 baseline and candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json \
+            --review-regression "$PERFORMANCE_REGRESSION_REVIEW"
+          python3 -I tests/scripts/verify-v02-performance.py --verify build/v02-performance-receipt.json
+
+  package:
+    name: rehearse-package-consumers-and-archive
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - name: Check out the rehearsed source with full history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Create the local-only rehearsal tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          git tag "$REHEARSAL_TAG" "$GITHUB_SHA"
+          echo "SOURCE_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=$REHEARSAL_TAG" >> "$GITHUB_ENV"
+      - name: Configure and build the cache-free release core package
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DGABBABOY_BUILD_PLAYER=OFF
+          cmake --build build/release --parallel 2
+          cmake --install build/release --prefix build/release-stage
+          mkdir -p build/release-stage/share/gabbaboy
+          cp LICENSE build/release-stage/share/gabbaboy/LICENSE.txt
+          SOURCE_DATE_EPOCH=$(git show -s --format=%ct "$SOURCE_SHA")
+          export SOURCE_DATE_EPOCH
+          tar --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --numeric-owner \
+            -czf build/gabbaboy-core-linux-x64.tar.gz -C build/release-stage include lib bin share
+      - name: Prove relocated C and C++ consumer behavior on the extracted package bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tests/scripts/verify-release-candidate.sh --extract \
+            build/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"
+          python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" \
+            --output build/v02-consumer-receipt.json
+      - name: Inspect a git-generated source archive of the rehearsed tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          # GitHub's tag archive is `git archive` with a <name>-<version>/ root. The real tag archive
+          # does not exist yet, so build the equivalent from the local-only tag and run the same checker.
+          archive="$RUNNER_TEMP/source-archive.tar.gz"
+          git archive --format=tar.gz --prefix="gabbaboy-${RELEASE_TAG#v}/" -o "$archive" "$RELEASE_TAG"
+          python3 -I tests/scripts/verify-v02-source-archive.py --archive "$archive" \
+            --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json
+          python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json \
+            --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA"

@@ -2,21 +2,21 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_phase: 14
-current_phase_name: CGB-E Model Qualification and Corpus
-current_plan: 13
-status: complete
-stopped_at: Phase 14 automated UAT complete; paused before Phase 15
-last_updated: "2026-10-16T12:18:10.048952+00:00"
-last_activity: 2026-10-16
-last_activity_desc: Phase 14 automated UAT complete; 49/49 automated; next Phase 15 discussion
-state_head: 2bc7d6e23393200f47bed44ede66bce8f945a538
+current_phase: 15
+current_phase_name: CGB Acceptance, Support Ledger and v0.2.0 Release
+current_plan: 10
+status: executing
+stopped_at: Completed 15-09-PLAN.md; next 15-10 hosted exact-tag execution (not started)
+last_updated: "2026-10-20T04:02:12.340Z"
+last_activity: 2026-10-20
+last_activity_desc: Completed 15-04 adoption/notice claims; 5/10 plans complete; next 15-07, campaign parked
+state_head: 0c538043ad87c4af471271a6c59c0ecdd6b1fd53
 progress:
   total_phases: 9
-  completed_phases: 8
-  total_plans: 124
-  completed_plans: 124
-  percent: 89
+  completed_phases: 9
+  total_plans: 134
+  completed_plans: 133
+  percent: 99
 ---
 
 # Project State
@@ -26,9 +26,30 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-15)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 14 automated UAT complete; paused before Phase 15.
+**Current focus:** Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release
 
 ## Current Position
+
+Phase: 15 (CGB Acceptance, Support Ledger and v0.2.0 Release) — EXECUTING (stopped between plans)
+Status: Plans 15-01 through 15-09 are complete with committed SUMMARY files; 15-10 is the only remaining plan
+Current Plan: 10
+Total Plans in Phase: 10
+Last activity: 2026-10-20 — Completed 15-09 exact-tag evidence wiring and v02 contract registration
+Last Activity Description: Completed 15-09: release.yml now produces corpus, sidecar, fuzz, performance, consumer and source-archive evidence on the exact tag; eleven v02_* contracts registered; full CTest 1144/1144
+
+Completed workflow stage: **Phase 15 plan 15-09 execution**. Phase 15 is not complete and no phase advance is authorized. The new workflow jobs have only been verified locally (actionlint, gate self-test with 33 wiring controls, owner self-tests, full CTest); their first hosted execution is plan 15-10. Nothing is tagged, released, pushed or merged; v0.2.0 is not published; PR #70 is untouched.
+
+Next plan: **15-10 — hosted exact-tag execution, review and protected merge** of Phase 15 (CGB-11, SHIP-09, SHIP-10, SHIP-11 stay open until it completes). Exact command: `/gsd-execute-phase 15`. Read the 15-09 SUMMARY "Known Limitations and Hosted Risks" first.
+
+Fresh hosted run38947419636 at a175a394 passed native Linux/macOS/Windows, CMake floor and 1133 sanitizer CTests, then failed the actual campaign after 0.479s/4 executions. A 518-byte minimized input selects DMG speed scenario1, where the harness expects a CGB-only speed switch at tests/fuzz_core.c:789. The target has not been edited. Ignored receipt/input copies are preserved under build/phase15-pause-evidence with exact digests in the handoff. No human action is pending.
+
+Completed evidence: relocated C/C++ consumers (9 tests, six negative controls); current corpus 107/25/82 and 4959 assertions; paired v0.1.0 DMG measurement3 warmups/30 pairs, final recorded slowdown 23.96% (approximate95% margin3.55%), explicitly disclosed. Supplemental ledger fix3d451b3/7f38256 passed two actual 1138/1138 native streams (108 corpus tests) and a clean no-build self-test with15 schema/21 sidecar rejections. Physical CGB-E remains UNKNOWN/POLICY; no CGB game-level evidence exists.
+
+Both auto-advance flags remain false. All four phase requirements remain pending at phase level until complete release gates. No phase PR merge, version PR 70 merge, exact-tag release or publication occurred. Stop after Phase 15 with `/gsd-verify-work 15`; do not begin v0.3.
+
+Progress: [█████████░] 99%
+
+### Historical Phase 14 handoff (superseded route; preserved receipts)
 
 Phase: 14 — CGB-E Model Qualification and Corpus
 Status: Phase 14 automated UAT complete; paused for the owner
@@ -260,6 +281,11 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 13 P09 | 30 min | 2 tasks | 9 files |
 | Phase 13 P10 | 20min | 2 tasks | 7 files |
 | Phase 13 P11 | 9min+ | 2 tasks | 10 files |
+| Phase 15 P04 | 35 min | 2 tasks | 7 files |
+| Phase 15 P07 | 45 min | 2 tasks | 2 files |
+| Phase 15 P06 | 2h | 2 tasks | 5 files |
+| Phase 15 P08 | 60 min | 2 tasks | 3 files |
+| Phase 15 P09 | about 3 hours | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -485,6 +511,13 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 13]: Preserve the exact installed fixture child allow-list and reject SameSuite/Magen bytes under neutral filenames.
 - [Phase 13]: Run one all-surface native/player claim predicate against the checkout or exact-path JSON subject snapshots.
 - [Phase 13]: CGB-07 is closed by 37/37 goal verification; physical CGB-E remains UNKNOWN/POLICY, with no local libFuzzer campaign.
+- [Phase 15]: 15-04: adoption checker reuses the production CGB claim parser with a negation guard; fuzz and publication stay unclaimed; notices carry a recomputed manifest/LICENSE digest table for all 19 fixture dirs
+- [Phase 15]: 15-07: source archive bound to tag via embedded commit ID plus tagged tree blob IDs; --verify-final requires the source archive receipt as distinct evidence; --verify gains product fixture-leak check
+- [Phase 15]: 15-06: fuzz speed oracle scoped to CGB profile; hosted verifier no longer forwards credentials on redirect; exact-source campaign run 39357838513 validated
+- [Phase 15]: 15-08: producer reuse needs unaltered producer SHA, justification, covered-input Git-object equality and producer-checkout validation; published readback requires a distinct final download directory
+- [Phase 15]: 15-09: release evidence is transported through the unpublished draft; per-run receipts are attached once and reused on retry, never replaced
+- [Phase 15]: 15-09: v02_support_ledger is a receipt-free static ledger check; receipt-bound --check-current runs in the release corpus job after the receipt exists
+- [Phase 15]: 15-09: downloaded sidecars are verified with opt-in --evidence-only (no producer build tree); generation and --check-current are unrelaxed
 
 ### Pending Todos
 
@@ -523,14 +556,14 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-16
-Stopped at: Phase 14 automated UAT complete; paused before Phase 15 discussion. Phase 15 remains unstarted.
-Resume file: .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/continue.md
-Next command: /gsd-discuss-phase 15
+Last session: 2026-10-20T04:02:12.059Z
+Stopped at: Completed 15-09-PLAN.md; next 15-10 hosted exact-tag execution (not started)
+Resume file: None
+Next command: /gsd-execute-phase 15
 
 ## Operator Next Steps
 
-- Completed stage: **Phase 14 — CGB-E Model Qualification and Corpus, automated UAT complete**, 49/49 deliverables and 13/13 bounded commit windows.
-- Next stage: Phase 15 discussion; run `/gsd-discuss-phase 15`.
-- Reuse the completed UAT and source-bound evidence; exact-head hosted status and merge state are recorded on PR #71.
-- Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release** remains unstarted. Stop at the Phase 14 boundary.
+- Completed stage: **Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release, planning**; independent plan review passed and 28/28 requirement/decision items are covered.
+- Next stage: Phase 15 execution; run `/gsd-execute-phase 15`.
+- Reuse the overview, finalized plans, LIGHT research, patterns, validation and closed Phase 14 UAT. The Rebound cutoff is recorded; do not repeat the candidate hunt or relabel old evidence.
+- Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release**. Execution and four requirements remain pending. Both auto flags remain false; stop here. No automatic milestone advance.

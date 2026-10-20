@@ -24,6 +24,7 @@ CLAIM_DOCS = {
     "readme": "README.md",
     "preview": "docs/preview.md",
     "unreleased": "docs/support/unreleased.md",
+    "support": "docs/support/v0.2.0.md",
     "player": "src/player/limitations.h",
 }
 PROFILE_ROWS = {
@@ -68,6 +69,10 @@ REQUIRED_TEXT = {
         "cgb-corpus-inventory.json", "cgb-apu-dispositions.json",
         "verify-cgb-corpus-report.py",
         "SameBoy agreement is differential evidence; author-encoded targets",
+    ),
+    "support": (
+        "No CGB game-level evidence exists", "digital DAC inputs",
+        "Physical CGB-E remains UNKNOWN/POLICY", "matched expected failures",
     ),
 }
 UNQUALIFIED_CLAIM = re.compile(
@@ -271,9 +276,8 @@ def validate_ledger(block: str, inventory: dict[str, Any]) -> None:
 
 def validate_product_surfaces(surfaces: dict[str, str]) -> None:
     limits = {
-        "readme": "No physical CGB-E, analog audio, or general game compatibility claim follows",
         "preview": "No physical CGB-E audio, analog output, or general game compatibility claim follows",
-        "unreleased": "These tests do not qualify physical CGB-E, analog audio/color, or general game compatibility",
+        "support": "No physical DMG-CPU-B or CGB-CPU-E qualification",
         "player": "physical CGB-E remains UNKNOWN/POLICY",
     }
     for key, limit in limits.items():
@@ -289,9 +293,27 @@ def validate_product_surfaces(surfaces: dict[str, str]) -> None:
                           text, re.IGNORECASE) is not None,
                 f"product-playback-scope-missing:{key}")
         require(limit.lower() in text.lower(), f"product-limit-missing:{key}")
-    all_public = "\n".join(surfaces[key] for key in limits)
+    readme = " ".join(surfaces["readme"].split()).lower()
+    require(re.search(r"compatibility mode reads `?\$ff`?", readme, re.IGNORECASE) is not None,
+            "product-compatibility-policy-missing:readme")
+    require("physical cgb-e remains unknown/policy" in readme and
+            "cgb mode-3 timing is not claimed" in readme and
+            "general game compatibility is not claimed" in readme and
+            "software-model evidence, not game acceptance" in readme,
+            "product-limit-missing:readme")
+    all_public = "\n".join([surfaces["readme"], *(surfaces[key] for key in limits)])
     require(XFAIL_AS_PASS_CLAIM.search(all_public) is None,
             "xfail-inflated-public-claim")
+
+
+def validate_unreleased_pointer(text: str) -> None:
+    normalized = " ".join(text.split())
+    require("v0.2.0.md" in normalized and
+            "chronological" in normalized.lower() and
+            "reconciled" in normalized.lower(),
+            "unreleased-ledger-pointer-missing")
+    require("## CGB-CPU-E profile" not in text and "## CGB digital APU reads" not in text,
+            "unreleased-ledger-claims-not-folded")
 
 
 def validate_observation_counts(cases: list[dict[str, Any]], claimed: dict[str, Any]) -> None:
@@ -376,9 +398,11 @@ def validate_static(surfaces: dict[str, str] | None = None) -> tuple[dict[str, A
     registered_tests = set(re.findall(r"add_test\(NAME\s+([A-Za-z0-9_]+)", cmake))
     require(APU_TESTS <= registered_tests, "apu-test-registration-missing")
     for key, phrases in REQUIRED_TEXT.items():
-        block = " ".join({"profile": profile, "audio": audio, "corpus": corpus}[key].split())
+        block = " ".join({"profile": profile, "audio": audio, "corpus": corpus,
+                           "support": surfaces["support"]}[key].split())
         for phrase in phrases:
             require(phrase in block, f"claim-evidence-or-limit-missing:{key}:{phrase}")
+    validate_unreleased_pointer(surfaces["unreleased"])
     report = (ROOT / "tests/scripts/verify-cgb-corpus-report.py").read_text(encoding="utf-8")
     require('SCHEMA = "gabbaboy-cgb-corpus-receipt-v1"' in report,
             "receipt-schema-contract-mismatch")
@@ -404,7 +428,10 @@ def validate_static(surfaces: dict[str, str] | None = None) -> tuple[dict[str, A
     return inventory, dispositions
 
 
-def validate_receipt(path: Path, inventory: dict[str, Any]) -> dict[str, Any]:
+def validate_receipt(path: Path, inventory: dict[str, Any], *,
+                     source_revision: str | None = None, allow_ancestor: bool = False,
+                     repo_root: Path = ROOT, inventory_raw: bytes | None = None,
+                     input_bytes: dict[str, bytes] | None = None) -> dict[str, Any]:
     try:
         if path.stat().st_size > MAX_JSON_BYTES:
             raise ContractError("receipt-too-large")
@@ -424,15 +451,56 @@ def validate_receipt(path: Path, inventory: dict[str, Any]) -> dict[str, Any]:
             "receipt-case-membership-mismatch")
     require(identity.get("case_ids") == sorted(expected), "receipt-identity-membership-mismatch")
     require(identity.get("hardware_qualified") is False, "receipt-hardware-qualification-claim")
-    require(identity.get("inventory_sha256") == hashlib.sha256(
-        (ROOT / "tests/external/cgb-corpus-inventory.json").read_bytes()).hexdigest(),
+    tagged_inventory = inventory_raw
+    if tagged_inventory is None:
+        tagged_inventory = (repo_root / "tests/external/cgb-corpus-inventory.json").read_bytes()
+    require(identity.get("inventory_sha256") == hashlib.sha256(tagged_inventory).hexdigest(),
         "receipt-inventory-ancestry-mismatch")
     try:
-        current = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"],
+        current = subprocess.run(["git", "-C", str(repo_root), "rev-parse", "HEAD"],
                                  check=True, capture_output=True, text=True, timeout=5).stdout.strip()
     except (OSError, subprocess.SubprocessError) as error:
         raise ContractError("receipt-current-revision-unavailable") from error
-    require(identity.get("core_revision") == current, "receipt-not-current-revision")
+    target_revision = source_revision or current
+    if source_revision is not None:
+        require(current == source_revision, "receipt-target-revision-not-current")
+    if identity.get("core_revision") == target_revision:
+        pass
+    elif allow_ancestor:
+        try:
+            subprocess.run(["git", "-C", str(repo_root), "merge-base", "--is-ancestor",
+                            str(identity.get("core_revision", "")), target_revision],
+                           check=True, capture_output=True, timeout=5)
+        except (OSError, subprocess.SubprocessError) as error:
+            raise ContractError("receipt-not-source-ancestor") from error
+    else:
+        raise ContractError("receipt-not-current-revision")
+    input_rows = identity.get("input_hashes")
+    require(type(input_rows) is list and bool(input_rows), "receipt-source-inputs-missing")
+    for row in input_rows:
+        relative = row.get("path") if type(row) is dict else None
+        require(type(relative) is str and relative and len(relative) <= 4096 and
+                "\0" not in relative and not relative.startswith("/") and
+                re.match(r"^[A-Za-z]:", relative) is None and
+                "\\" not in relative and all(part not in ("", ".", "..")
+                                              for part in relative.split("/")),
+                "receipt-source-input-path-invalid")
+        if input_bytes is not None and relative in input_bytes:
+            raw = input_bytes[relative]
+        else:
+            try:
+                source_file = (repo_root / relative).resolve(strict=True)
+                source_file.relative_to(repo_root.resolve())
+                if source_file.stat().st_size > MAX_JSON_BYTES:
+                    raise ContractError("receipt-source-input-too-large")
+                raw = source_file.read_bytes()
+            except ContractError:
+                raise
+            except (OSError, ValueError) as error:
+                raise ContractError("receipt-source-input-unavailable") from error
+        require(type(row.get("sha256")) is str and
+                hashlib.sha256(raw).hexdigest() == row.get("sha256") and
+                len(raw) == row.get("size_bytes"), "receipt-source-input-stale")
     expected_names: dict[str, str] = {}
     for case_id, source_case in expected.items():
         binding = source_case.get("test_binding", {})
@@ -668,11 +736,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--receipt", type=Path)
+    parser.add_argument("--source-revision")
+    parser.add_argument("--allow-ancestor", action="store_true")
     args = parser.parse_args()
     try:
         inventory, _ = validate_static()
         if args.receipt:
-            receipt = validate_receipt(args.receipt, inventory)
+            if args.allow_ancestor and not args.source_revision:
+                parser.error("--allow-ancestor requires --source-revision")
+            receipt = validate_receipt(args.receipt, inventory,
+                                       source_revision=args.source_revision,
+                                       allow_ancestor=args.allow_ancestor)
             counts = receipt["counts"]
             print("cgb-corpus-claims pass receipt=" + str(args.receipt) +
                   " cases=" + str(counts["completed_cases"]) +

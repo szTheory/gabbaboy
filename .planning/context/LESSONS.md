@@ -786,3 +786,20 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** Phase 14 `verify-uat-contract.py --self-test` rejects 17 weakened closure records, ten stale handoff/auto-advance records and two invalid commit claims; the API matrix accepts the reasoned declaration and rejects missing-reason and undecided opt-out controls. Existing CI retains recurring behavioral, integration, e2e, seam, smoke, package and schema checks; no new dependency or duplicate lane.
 - **Source:** `14-UAT.md`, `COVERAGE.md` and `verify-uat-contract.py` in the Phase 14 directory.
 - **Status:** Adopted; D-069 remains the standing zero-routine-human-UAT default. Stop before Phase 15.
+
+### GB-RELEASE-002 / 2026-10-16 / Inspect evidence producers before treating reusable gates as release readiness
+
+- **Cause and evidence:** Phase 15 source inspection found a ledger validator fixed to one DMG model/three cases/four manifests, tag selection that can fall back to the old ledger, A/B receipts accepting unknown revision labels, and a fuzz helper that can succeed after reporting unsupported. An initial delivery recommendation overstated existing generic support/performance sidecars as v0.2 and v0.1-comparison evidence; the adversarial pass corrected it before context was adopted.
+- **Remedy:** Reuse the mechanisms while adding separate strict v0.2 validation, exact ledger selection, actual baseline/candidate binary/build identities and a real bounded Clang/libFuzzer campaign receipt. Preserve the old release validation and source-bound history. Local unavailability routes to eligible hosted execution; unsupported success cannot close a mandatory evidence requirement. Keep game absence as the specific CGB-11 alternative, not a general release waiver.
+- **Applies when:** A new release broadens supported models or evidence scope while reusing older CI, sidecar, benchmark and fuzz tooling. A successful helper exit is only as strong as the producer's actual contract.
+- **Verification:** Discussion uses local scope/reference/handoff contract checks and negative controls; implementation remains pending. Phase 15 plans must reject old-ledger fallback, xfail inflation, unknown/incompatible benchmark identities, unsupported/no-run campaigns and stale tag/source/package evidence through their real producers.
+- **Source:** `.planning/research/phase15-evidence-consumers.md`, `.planning/research/phase15-release-delivery.md` and `15-CONTEXT.md` D-08–D-23.
+- **Status:** Adopted planning lesson; no release qualification or product change is claimed. D-069/D-096 remain defaults; next command is `/gsd-plan-phase 15`.
+
+### GB-RELEASE-003 / 2026-10-16 / Separate a stable support claim from each execution receipt
+
+- **Cause and evidence:** Phase 15's first schema2 sidecar self-test read ignored local receipt/binary files, so clean Linux CI failed `receipt:unavailable`. Equality against the historical ledger also rejected valid independent runs and full-stream CTest totals.
+- **Remedy:** Keep the tracked producer snapshot historical. Compare stable membership, assertion outcomes and covered inputs; independently validate fresh source/build artifacts and place actual run/byte identity in the generated sidecar. Generate complete synthetic contract fixtures in an isolated repository, without weakening production inventory validators.
+- **Applies when:** One versioned support claim is qualified by different hosts, independent run nonces or a later exact tag. Synthetic fixtures test validators; they are not execution evidence.
+- **Verification:** Repair `3d451b3` passed two real 1138/1138 native streams with 108 selected corpus tests and independent accepted receipts; clean no-build clone self-test passed with 15 schema and 21 sidecar rejections. Actual hosted native Linux/macOS/Windows and floor jobs passed at `a175a39`; the separate campaign assertion remains unresolved.
+- **Source:** Phase 15 `15-02-SUMMARY.md` supplemental repair and pause handoff; `tests/scripts/verify-support-ledger.py`.

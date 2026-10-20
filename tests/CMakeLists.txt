@@ -1358,6 +1358,60 @@ set_tests_properties(cgb_corpus_report_tracer cgb_corpus_report_tracer_controls
   ENVIRONMENT "GBB_TEST_BUILD_DIR=${PROJECT_BINARY_DIR};GBB_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}")
 set_tests_properties(cgb_corpus_claims cgb_corpus_claims_controls
   cgb_corpus_red_evidence_privacy PROPERTIES TIMEOUT 60)
+
+# Phase 15 recurring v0.2 contracts. Each runs its production checker (or the checker's own positive and
+# negative controls) through expect_exit.cmake, which requires exit code 0 AND a success line with nonzero
+# positive and rejected-control counts, so a checker that silently selects nothing cannot pass.
+# The receipt-bound support-ledger check (--check-current) needs the complete corpus receipt that the
+# full CTest stream itself produces, so it runs after that stream in the release corpus job.
+function(gbb_add_v02_contract name timeout regex script)
+  set(command "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/${script}" ${ARGN})
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${command}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set(environment "GBB_TEST_BUILD_DIR=${PROJECT_BINARY_DIR}")
+  if(GABBABOY_ENABLE_SANITIZERS)
+    list(APPEND environment "GBB_SANITIZER_LINK_OPTIONS=-fsanitize=address,undefined")
+  endif()
+  set_tests_properties(${name} PROPERTIES TIMEOUT ${timeout} LABELS "v02"
+    ENVIRONMENT "${environment}")
+endfunction()
+gbb_add_v02_contract(v02_game_claims 60
+  [=["checks": [1-9][0-9]*, "mode": "check".*"positive_success": true.*"target": "game"]=]
+  verify-v02-adoption.py --check game)
+gbb_add_v02_contract(v02_game_claims_controls 60
+  [=["mode": "self-test", "negative_controls": [1-9][0-9]*, "positive_success": true, "rejected_controls": [1-9][0-9]*, "target": "game"]=]
+  verify-v02-adoption.py --self-test game)
+gbb_add_v02_contract(v02_adoption_docs 60
+  [=["checks": [1-9][0-9]*, "mode": "check".*"positive_success": true.*"target": "docs"]=]
+  verify-v02-adoption.py --check docs)
+gbb_add_v02_contract(v02_adoption_docs_controls 90
+  [=["mode": "self-test", "negative_controls": [1-9][0-9]*, "positive_success": true, "rejected_controls": [1-9][0-9]*, "target": "docs"]=]
+  verify-v02-adoption.py --self-test docs)
+gbb_add_v02_contract(v02_support_ledger 60
+  [=[support-ledger static pass version=0.2.0 cases=107 source-inputs=[1-9][0-9]*]=]
+  verify-support-ledger.py --check-ledger)
+gbb_add_v02_contract(v02_support_ledger_controls 120
+  [=[support ledger static self-test passed: positive=1 rejected_controls=3]=]
+  verify-support-ledger.py --self-test)
+gbb_add_v02_contract(v02_consumer_controls 360
+  [=["negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
+  verify-v02-consumers.py --self-test)
+gbb_add_v02_contract(v02_performance_controls 90
+  [=["negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
+  verify-v02-performance.py --self-test)
+gbb_add_v02_contract(v02_fuzz_controls 90
+  [=[self-test=pass positive_controls=[1-9][0-9]* negative_controls=[1-9][0-9]*]=]
+  verify-v02-fuzz.py --self-test)
+gbb_add_v02_contract(v02_source_archive_controls 90
+  [=[PASS: source archive checker accepted [1-9][0-9]* cases and rejected [1-9][0-9]* negative controls]=]
+  verify-v02-source-archive.py --self-test)
+gbb_add_v02_contract(v02_delivery_controls 90
+  [=[PASS: delivery checker positives=[1-9][0-9]* rejected_controls=[1-9][0-9]* real_owner_rejections=[1-9]]=]
+  verify-v02-delivery.py --self-test)
 set(GBB_AGE_PHASE14_CONTRACT "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py")
 set(GBB_AGE_PHASE14_GUEST_TIMEOUT 15)
 if(GABBABOY_ENABLE_SANITIZERS)

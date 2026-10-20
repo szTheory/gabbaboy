@@ -5,6 +5,12 @@ software profile. The rules here describe the implementation and its tests;
 they do not qualify a physical Game Boy, every MBC1/MBC2/MBC3/MBC5 board
 revision, or every ROM that declares one of the supported types.
 
+The CGB profile, ROM probe/info fields and RGB555 buffer contract are described
+in the [native integration guide](native-integration.md). Timer cartridges
+retain the same 21-byte `GBB_RTC_BLOCK_SIZE` clock block; the core never reads
+the host clock, and the host decides when to pass elapsed seconds to
+`gbb_rtc_catch_up`.
+
 ## Supported cartridge matrix
 
 The loader accepts exact ROM lengths and validates the header checksum before

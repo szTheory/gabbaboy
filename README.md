@@ -13,9 +13,11 @@ model through SDL3. The player runs DMG and CGB software with `--model auto|dmg|
 Native CGB guest code can read FF76/FF77 digital DAC inputs on the CGB-CPU-E
 software model; CGB compatibility mode reads `$FF`. Those guest register observations do not change the player's
 DMG APU playback model; current corpus results come from the versioned private
-receipt. No physical CGB-E, analog audio, or general game compatibility claim
-follows from these software tests. See the [CGB corpus contract](docs/cgb-corpus.md)
-and [audio and playback contract](docs/audio-and-playback.md).
+receipt. No CGB game-level evidence exists. CGB test-ROM corpus results are
+software-model evidence, not game acceptance. Physical CGB-E remains
+UNKNOWN/POLICY. No physical or perceptual audio/color qualification is claimed.
+See the [CGB corpus contract](docs/cgb-corpus.md), [audio and playback
+contract](docs/audio-and-playback.md), and [game acceptance evidence](docs/game-acceptance.md).
 
 ## Audio and playback evidence
 
@@ -34,9 +36,13 @@ The install exports `GabbaBoy::core` for C17 consumers. The
 [native integration guide](docs/native-integration.md) walks through the
 relocated C example, bounded stepping, timestamped input, caller-owned frame
 and audio buffers, and host-owned battery persistence. The
-[versioned support ledger](docs/support/v0.1.0.md) defines the exact DMG-CPU-B,
-cartridge, and eligible corpus scope; a release attaches a separate
-`support-ledger.json` bound to the tagged source and ledger blob.
+[versioned support ledger](docs/support/v0.2.0.md) defines the DMG-CPU-B and
+CGB-CPU-E software-model scope, the cartridge and save matrix, and the corpus
+evidence, with its known limits; the earlier [v0.1.0 ledger](docs/support/v0.1.0.md)
+remains the record for that release. A release attaches a separate
+`support-ledger.json` bound to the tagged source and ledger blob. The ledger
+makes no publication claim for v0.2.0; the repository's GitHub Releases page
+is the only record of what has been published.
 Playstead remains a future integration: its inspected adapter is currently
 GBA/mGBA through an external process.
 

@@ -49,7 +49,7 @@ Every requirement maps to exactly one phase. Completion needs implementation and
 
 - [ ] **SHIP-09**: The v0.2 support ledger names DMG-CPU-B and CGB-CPU-E, the mapper matrix, evidence class, corpus revisions, denominators, failures, exclusions and known issues.
 - [ ] **SHIP-10**: Installed C and C++ consumers exercise the new public API (profile selection, ROM probe, RGB555 frames, RTC catch-up), and API, cartridge/save, integration and third-party-notice documentation is current.
-- [ ] **SHIP-11**: A qualified exact-tag v0.2.0 release ships with refreshed fuzzing and performance baselines, including a measured DMG performance comparison against v0.1.
+- [x] **SHIP-11**: A qualified exact-tag v0.2.0 release ships with refreshed fuzzing and performance baselines, including a measured DMG performance comparison against v0.1.
 
 ## Future requirements
 
@@ -107,7 +107,7 @@ Every v0.2 requirement maps to exactly one phase in [ROADMAP.md](ROADMAP.md).
 | CGB-11 | Phase 15 | Pending |
 | SHIP-09 | Phase 15 | Pending |
 | SHIP-10 | Phase 15 | Pending |
-| SHIP-11 | Phase 15 | Pending |
+| SHIP-11 | Phase 15 | Complete |
 
 **Coverage:**
 - v0.2 requirements: 28 total

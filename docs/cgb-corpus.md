@@ -151,4 +151,30 @@ SameSuite corpus outputs, including the six AGE reference PNG digests. These
 workflow declarations are offline contract checks; they do not imply that a
 hosted workflow ran on this revision. Local configure/build and corpus timings
 and the measured reproduction elapsed times are recorded in the plan summary.
+
+## Latest local complete receipt
+
+The fresh nonce-bound producer run from source revision
+`a49a90ad897fe9130278747c6cad61288c1e4411` completed CTest `108/108`: 107
+required model cases plus the aggregate SameSuite APU stream. Across the
+required cases, all 107 were attempted and completed: 25 actual guest passes,
+82 actual guest failures matched to expected-failure dispositions, zero
+excluded, and zero not run. The 4,959 assertion rows contain 2,845 passes and
+2,114 failures. The 82 matched xfails remain guest failures. This receipt says
+nothing about physical hardware or CGB game compatibility.
+
+| Suite | Required cases | Guest passes | Matched xfails | Assertion rows | Assertion passes | Assertion failures |
+|---|---:|---:|---:|---:|---:|---:|
+| AGE | 19 | 2 | 17 | 148 | 43 | 105 |
+| MagenTests | 5 | 5 | 0 | 5 | 5 | 0 |
+| Mooneye CGB | 9 | 6 | 3 | 9 | 6 | 3 |
+| SameSuite APU and DMA | 74 | 12 | 62 | 4,797 | 2,791 | 2,006 |
+| **Total required cases** | **107** | **25** | **82** | **4,959** | **2,845** | **2,114** |
+
+The AGE image subset compared 138,240 pixels and recorded 18,208 mismatches.
+The complete private receipt has run id
+`27600bbb879d55bd2234df8c9c40ea9d2f663cedf20b8c99387668df201e7e21` and
+SHA-256 `da9770af0c78ed75458b05f881d9e43227ea53b8f2d186ac22deb4ec15a67a98`.
+These counts are local software-model evidence; the receipt does not imply a
+hosted workflow ran.
 <!-- cgb-corpus-inventory-end -->

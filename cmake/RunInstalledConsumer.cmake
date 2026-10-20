@@ -9,11 +9,17 @@ if(NOT EXISTS "${fixture}")
   message(FATAL_ERROR "Installed tracer fixture is missing: ${fixture}")
 endif()
 
+set(sanitizer_link_arguments "")
+if(DEFINED GBB_SANITIZER_LINK_OPTIONS AND NOT GBB_SANITIZER_LINK_OPTIONS STREQUAL "")
+  set(sanitizer_link_arguments "-DCMAKE_EXE_LINKER_FLAGS=${GBB_SANITIZER_LINK_OPTIONS}")
+endif()
+
 execute_process(
   COMMAND "${CMAKE_COMMAND}" -S "${GBB_CONSUMER_SOURCE}" -B "${GBB_CONSUMER_BINARY}"
     "-DCMAKE_PREFIX_PATH=${GBB_INSTALL_PREFIX}"
     "-DGabbaBoy_DIR=${GBB_INSTALL_PREFIX}/lib/cmake/GabbaBoy"
     "-DGBB_TRACER_ROM=${fixture}"
+    ${sanitizer_link_arguments}
   RESULT_VARIABLE configure_result OUTPUT_VARIABLE configure_output ERROR_VARIABLE configure_error)
 if(NOT configure_result EQUAL 0)
   message(FATAL_ERROR "${GBB_LANGUAGE} consumer configure failed (${configure_result}): ${configure_output}${configure_error}")
