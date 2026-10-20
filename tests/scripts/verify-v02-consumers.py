@@ -292,8 +292,14 @@ def source_identity(prefix: Path, project_root: Path) -> tuple[str, bool]:
     return match.group(1), match.group(2) == "true"
 
 
+def configured_build_dir(project_root: Path) -> Path:
+    """The configured build tree: CTest names its own (for example build-asan) through GBB_TEST_BUILD_DIR."""
+    override = os.environ.get("GBB_TEST_BUILD_DIR")
+    return Path(override) if override else project_root / "build"
+
+
 def install_package(project_root: Path, temp_root: Path, cmake: str) -> Path:
-    build = project_root / "build"
+    build = configured_build_dir(project_root)
     need(build.is_dir(), "configured-build-missing")
     staged = temp_root / "staged-prefix"
     relocated = temp_root / "relocated-prefix"
@@ -502,7 +508,7 @@ class ConsumerContractTests(unittest.TestCase):
         cls.prefix = cls.test_root / "relocated-prefix"
         staged = cls.test_root / "staged-prefix"
         run_command(
-            [cmake_executable(), "--install", str(ROOT / "build"), "--prefix", str(staged)],
+            [cmake_executable(), "--install", str(configured_build_dir(ROOT)), "--prefix", str(staged)],
             cwd=ROOT,
             env=clean_package_environment(),
             rejection="self-test-package-install-failed",

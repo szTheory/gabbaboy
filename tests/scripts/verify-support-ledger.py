@@ -910,10 +910,13 @@ def create_current_ledger(receipt_path: pathlib.Path) -> dict:
 
 
 def validate_source_bindings(data: dict, repo_root: pathlib.Path,
-                             source_bytes: dict[str, bytes] | None = None) -> None:
+                             source_bytes: dict[str, bytes] | None = None,
+                             include_build: bool = True) -> None:
     root = repo_root.resolve()
     for section, rows in (("source", data.get("source_inputs")),
                           ("build", data.get("receipt", {}).get("build_artifacts"))):
+        if section == "build" and not include_build:
+            continue
         if type(rows) is not list:
             fail(section + " input identities are missing")
         for row in rows:
@@ -978,6 +981,22 @@ def run_existing_receipt_validator(receipt_path: pathlib.Path, inventory: dict,
                                 input_bytes=input_bytes)
     except module.ContractError as error:
         fail("existing corpus report validator failed: " + str(error))
+
+
+def check_ledger_static(root: pathlib.Path = ROOT, run_inventory: bool = True) -> dict:
+    """Receipt-free currency check of the tracked v0.2.0 ledger.
+
+    The tracked ledger carries a historical producer snapshot, so its build-artifact digests are not
+    compared with the working tree here. Everything that the ledger claims about the covered source
+    inputs, the independent inventory and its own schema is. The receipt-bound check is --check-current,
+    which needs a complete corpus receipt and runs where that receipt is produced.
+    """
+    ledger = parse_ledger(bounded_file(root / "docs/support/v0.2.0.md", MAX_LEDGER_BYTES, "ledger"), "0.2.0")
+    if run_inventory:
+        run_inventory_validator(root)
+    validate_data_v2(ledger, "0.2.0")
+    validate_source_bindings(ledger, root, include_build=False)
+    return ledger
 
 
 def check_current(receipt_path: pathlib.Path) -> dict:
@@ -1565,6 +1584,53 @@ def self_test() -> None:
     print("support ledger self-test passed: tagged sidecar binding, newest-applicable ledger selection, scope, corpus order, digests, malformed UTF-8, duplicate keys, denominator and claim controls")
 
 
+def self_test_static_ledger() -> None:
+    """Drive check_ledger_static through its production entry over a private copy of the covered inputs."""
+    ledger_rel = "docs/support/v0.2.0.md"
+    ledger = parse_ledger(bounded_file(ROOT / ledger_rel, MAX_LEDGER_BYTES, "ledger"), "0.2.0")
+    rows = ledger["source_inputs"]
+    if not rows:
+        fail("static ledger self-test has no covered source inputs")
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-static-ledger-") as temporary:
+        copy_root = pathlib.Path(temporary)
+        for relative in [ledger_rel] + [row["path"] for row in rows]:
+            target = copy_root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((ROOT / relative).read_bytes())
+        check_ledger_static(copy_root, run_inventory=False)
+        controls = 0
+        victim = copy_root / rows[0]["path"]
+        original = victim.read_bytes()
+        victim.write_bytes(original + b"\n")
+        try:
+            check_ledger_static(copy_root, run_inventory=False)
+        except ValueError as error:
+            if "source input is stale" not in str(error):
+                fail("static ledger control rejected a changed covered input for the wrong reason: " + str(error))
+            controls += 1
+        else:
+            fail("static ledger accepted a changed covered source input")
+        victim.write_bytes(original)
+        victim.unlink()
+        try:
+            check_ledger_static(copy_root, run_inventory=False)
+        except (ValueError, OSError):
+            controls += 1
+        else:
+            fail("static ledger accepted a missing covered source input")
+        victim.write_bytes(original)
+        (copy_root / ledger_rel).write_bytes(b"not a ledger\n")
+        try:
+            check_ledger_static(copy_root, run_inventory=False)
+        except ValueError:
+            controls += 1
+        else:
+            fail("static ledger accepted an unparseable ledger")
+    if controls != 3:
+        fail("static ledger self-test did not run all of its controls")
+    print("support ledger static self-test passed: positive=1 rejected_controls=3 controls=changed-covered-input,missing-covered-input,unparseable-ledger")
+
+
 def self_test_v2_sidecar() -> None:
     """Exercise full-membership sidecars without relying on ignored build outputs."""
     global EVIDENCE_ONLY
@@ -1914,6 +1980,8 @@ def main() -> int:
     parser.add_argument("--output", type=pathlib.Path)
     parser.add_argument("--verify-sidecar", type=pathlib.Path)
     parser.add_argument("--check-current", action="store_true")
+    parser.add_argument("--check-ledger", action="store_true",
+                        help="receipt-free check of the tracked v0.2.0 ledger against its covered source inputs")
     parser.add_argument("--write-current", action="store_true")
     parser.add_argument("--receipt", type=pathlib.Path)
     parser.add_argument("--evidence-only", action="store_true",
@@ -1932,6 +2000,13 @@ def main() -> int:
             self_test()
             self_test_v2()
             self_test_v2_sidecar()
+            self_test_static_ledger()
+            return 0
+        if args.check_ledger:
+            data = check_ledger_static()
+            print("support-ledger static pass version=0.2.0 cases=" +
+                  str(data["receipt"]["counts"]["completed_cases"]) +
+                  " source-inputs=" + str(len(data["source_inputs"])))
             return 0
         if args.check_current:
             if not args.receipt:
