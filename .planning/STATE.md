@@ -6,10 +6,10 @@ current_phase: 15
 current_phase_name: CGB Acceptance, Support Ledger and v0.2.0 Release
 current_plan: 10/10 complete
 status: completed
-stopped_at: Phase 7 verification refresh complete; Phase 8 verification refresh next
-last_updated: "2026-10-20T17:14:58Z"
+stopped_at: Phase 8 verification refresh complete; Phase 9 verification refresh next
+last_updated: "2026-10-20T20:39:08Z"
 last_activity: 2026-10-20
-last_activity_desc: Refreshed Phase 7 verification; milestone close waits for Phases 8–14
+last_activity_desc: Refreshed Phase 8 verification; milestone close waits for Phases 9–14
 state_head: 15275d6b0856a60dd3f3d8cac84a254ed21b3ff4
 progress:
   total_phases: 9
@@ -30,17 +30,17 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 ## Current Position
 
-Completed stage: **Phase 7 — DMG Game Acceptance and Regression Baseline, verification refresh**. All 17 plans were already complete; implementation was not repeated. The refreshed [verification report](phases/GB-07-dmg-game-acceptance-and-regression-baseline/07-VERIFICATION.md) passes 122/122 must-haves (five roadmap goals plus 117 plan truths), 42 artifacts and 31 links. OpenGSD reports `passed` for the current covered inputs.
+Completed stage: **Phase 8 — Cartridge Seam, MBC5 and MBC2, verification refresh**. All 10 plans were already complete; implementation was not repeated. The refreshed [verification report](phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-VERIFICATION.md) passes 97/97 truths (four roadmap criteria plus 93 plan truths), 27 artifacts and 19 links, with CART-01, CART-02 and CART-03 satisfied. OpenGSD reports `passed` for the current covered inputs.
 
-Fresh evidence: focused CTest 84/84, extracted SDL player 98/98, configured full regression 1,144/1,144; admission mutation controls, 20 stall controls, unchanged frozen DMG baseline, and no-input predicate failure. Historical boundary checks read commit `175c9fce`. D-027, D-039 and hardware/perceptual limits remain explicit. Existing review and security reports were reused with zero open findings/threats; they were not newly produced.
+Fresh evidence: focused CTest 58/58, configured full regression 1,144/1,144, unchanged frozen DMG baseline, three historical differential runs with zero differences, and the automated player warning/status contract with five negative controls. Boundary-only facts are read from Phase 8 commits, including `96d5eec`; later Phase 9 persistence is preserved. Existing review, security and validation records were reused (zero open findings/threats), not newly produced. D-062's accepted ninth-bit test replacement is explicit; no new owner override was introduced.
 
-Milestone completion is **pending**. The closeout preflight found stale verification for Phases 7–14; Phase 7 is now refreshed, while Phases 8–14 still require their own refresh. The scanner additionally flags Phase 14's clean UAT review (zero pending scenarios) and Phase 13's deferred duplicate-library linker warning. The source-bound milestone audit remains `tech_debt` with 28/28 requirements and 21 retained debt items; this refresh does not accept or erase debt.
+Milestone completion is **pending**. Phases 7 and 8 verification are now refreshed; Phases 9–14 still require their own refresh. The closeout scanner additionally flags Phase 14's clean UAT review (zero pending scenarios) and Phase 13's deferred duplicate-library linker warning. The source-bound milestone audit remains `tech_debt` with 28/28 requirements and 21 retained debt items; this refresh does not accept or erase debt.
 
-Next stage: **Phase 8 — Cartridge Seam, MBC5 and MBC2, verification refresh**.
-Exact next command: `/gsd-execute-phase 8`.
-Stop after Phase 7. Both automatic advance flags remain false. No milestone archive, tag, release or merge was performed. v0.3 — States & Integration remains provisional, unnumbered and unstarted.
+Next stage: **Phase 9 — MBC3, Deterministic RTC and Cartridge Persistence, verification refresh**.
+Exact next command: `/gsd-execute-phase 9`.
+Stop after Phase 8. Both automatic advance flags remain false. No milestone archive, tag, release or merge was performed. v0.3 — States & Integration remains provisional, unnumbered and unstarted.
 
-Review stack: this refresh builds on draft PR #82. Preserve pre-existing config/state.json edits. Required remote checks must pass at the exact reviewed head before merging; local results do not establish remote readiness.
+Review stack: this refresh builds on PR #83 (`gsd/phase-7-verification-refresh`). Preserve pre-existing config/state.json edits. Required remote checks must pass at the exact reviewed head before merging; local results do not establish remote readiness.
 
 ### Historical Phase 14 handoff (superseded route; preserved receipts)
 
