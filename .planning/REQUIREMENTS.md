@@ -43,12 +43,12 @@ Every requirement maps to exactly one phase. Completion needs implementation and
 - [x] **CGB-08**: CGB-E specific APU and I/O differences (PCM12/PCM34, `FF72-FF75`, IR port stub) are implemented with per-test model applicability and named expected failures.
 - [x] **CGB-09**: The SDL3 player can run software as `--model auto|dmg|cgb` with colour presentation and passes an automated CGB smoke.
 - [x] **CGB-10**: A headless CGB-E corpus (AGE, SameSuite, MagenTests and the CGB-applicable Mooneye subset; acid2/Mealybug only if font rights clear) reports per-suite denominators with failure and exclusion reasons.
-- [ ] **CGB-11**: One rights-clear CGB game passes a game-level acceptance run in the same style as GAME-02, or the ledger explicitly states that no CGB game-level evidence exists.
+- [x] **CGB-11**: One rights-clear CGB game passes a game-level acceptance run in the same style as GAME-02, or the ledger explicitly states that no CGB game-level evidence exists.
 
 ### Qualified release
 
-- [ ] **SHIP-09**: The v0.2 support ledger names DMG-CPU-B and CGB-CPU-E, the mapper matrix, evidence class, corpus revisions, denominators, failures, exclusions and known issues.
-- [ ] **SHIP-10**: Installed C and C++ consumers exercise the new public API (profile selection, ROM probe, RGB555 frames, RTC catch-up), and API, cartridge/save, integration and third-party-notice documentation is current.
+- [x] **SHIP-09**: The v0.2 support ledger names DMG-CPU-B and CGB-CPU-E, the mapper matrix, evidence class, corpus revisions, denominators, failures, exclusions and known issues.
+- [x] **SHIP-10**: Installed C and C++ consumers exercise the new public API (profile selection, ROM probe, RGB555 frames, RTC catch-up), and API, cartridge/save, integration and third-party-notice documentation is current.
 - [x] **SHIP-11**: A qualified exact-tag v0.2.0 release ships with refreshed fuzzing and performance baselines, including a measured DMG performance comparison against v0.1.
 
 ## Future requirements
@@ -104,9 +104,9 @@ Every v0.2 requirement maps to exactly one phase in [ROADMAP.md](ROADMAP.md).
 | CGB-08 | Phase 14 | Complete |
 | CGB-09 | Phase 11 | Complete |
 | CGB-10 | Phase 14 | Complete |
-| CGB-11 | Phase 15 | Pending |
-| SHIP-09 | Phase 15 | Pending |
-| SHIP-10 | Phase 15 | Pending |
+| CGB-11 | Phase 15 | Complete |
+| SHIP-09 | Phase 15 | Complete |
+| SHIP-10 | Phase 15 | Complete |
 | SHIP-11 | Phase 15 | Complete |
 
 **Coverage:**

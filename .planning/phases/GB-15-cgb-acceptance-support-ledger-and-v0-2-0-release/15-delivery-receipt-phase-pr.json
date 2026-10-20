@@ -1,0 +1,57 @@
+{
+  "phase_pr": {
+    "head_sha": "6b83695aeec9926162814521beedc53bf01147c6",
+    "merge_commit_sha": "04fe3c61188851db5d68488fce731061ee3dedb3",
+    "merge_method": "squash",
+    "number": 72
+  },
+  "required_checks": [
+    "fixture-repro",
+    "preview-package-smoke",
+    "required-native"
+  ],
+  "schema_version": 1,
+  "stage": "phase-pr",
+  "superseded_attempts": [
+    {
+      "attempt": 1,
+      "conclusion": "failure",
+      "id": 39385131354,
+      "reason": "player-package-smoke-macos exact-head wait hit its 1800 s deadline while the ASan lane (about 35 min on the hosted runner) was still running; attempt 2 re-ran the failed jobs against the then-complete exact-head CI"
+    }
+  ],
+  "workflow_run_names": {
+    "39382972145": "ci (push)",
+    "39382972201": "fixture-repro (push)",
+    "39382974145": "release-rehearsal (push)",
+    "39385131354": "preview-package-smoke (pull_request)",
+    "39385131364": "ci (pull_request)",
+    "39385131440": "fixture-repro (pull_request)"
+  },
+  "workflow_runs": [
+    {
+      "attempt": 1,
+      "id": 39385131364
+    },
+    {
+      "attempt": 2,
+      "id": 39385131354
+    },
+    {
+      "attempt": 1,
+      "id": 39385131440
+    },
+    {
+      "attempt": 1,
+      "id": 39382972145
+    },
+    {
+      "attempt": 1,
+      "id": 39382972201
+    },
+    {
+      "attempt": 1,
+      "id": 39382974145
+    }
+  ]
+}

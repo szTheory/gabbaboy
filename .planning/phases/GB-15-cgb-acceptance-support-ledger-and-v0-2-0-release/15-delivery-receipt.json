@@ -1,0 +1,221 @@
+{
+  "asset_readback": {
+    "assets": [
+      {
+        "name": "SHA256SUMS",
+        "sha256": "ca156b6987661c3a3ce842224439132ab58ce334e2f1f675d271cac45d383edc",
+        "size": 1926
+      },
+      {
+        "name": "build-receipt.json",
+        "sha256": "46cf96098a804251fbe30972c82dac95fffd95beca26ce2319b5ad5350bb1938",
+        "size": 1008
+      },
+      {
+        "name": "candidate-platform-manifest.json",
+        "sha256": "7ca9fb339d4143ca44a09304416098c7fcd4bc11a7467d50bfab0b4c6ccda667",
+        "size": 4677
+      },
+      {
+        "name": "candidate-receipt.json",
+        "sha256": "d9165757efdd9e65028ac4f046aee4f3f30341c5e38cbcc1f83515b0d9084306",
+        "size": 8542
+      },
+      {
+        "name": "cgb-corpus-receipt.json",
+        "sha256": "c9fbb22c37dc3f273cd94264d24cb29ea0493a496b9c1e8b001a53972dbc6bfa",
+        "size": 1469831
+      },
+      {
+        "name": "gabbaboy-build-receipt-macos-arm64.json",
+        "sha256": "80655f2e914c226bc38b27b00971439ce726015701c7f0df5614419f73872dcd",
+        "size": 340
+      },
+      {
+        "name": "gabbaboy-build-receipt-windows-x64.json",
+        "sha256": "c008972df382cce70c29b7ba0d4ecf7b2e2eda0fdef2cd10113c0b8309284ba8",
+        "size": 427
+      },
+      {
+        "name": "gabbaboy-core-linux-x64.tar.gz",
+        "sha256": "fb5bcc5d015d06351520f57c1b7e89010cb9a066ec39a3d87efbed589950392a",
+        "size": 147377
+      },
+      {
+        "name": "gabbaboy-core-macos-arm64.tar.gz",
+        "sha256": "f02c54ef4a82b3a7e6efd7a2c7845f9101ff94cd20f774582b72525e454be926",
+        "size": 121538
+      },
+      {
+        "name": "gabbaboy-core-macos-arm64.tar.gz.sha256",
+        "sha256": "604e050ccbb1f3b31534d7d84ede9de01ffad3c001131507d8a3720d29630603",
+        "size": 65
+      },
+      {
+        "name": "gabbaboy-core-windows-x64.tar.gz",
+        "sha256": "ee386086f0084649f02920f8cd2ff4b85ba8be39c239ae583a88337a6da2d446",
+        "size": 141196
+      },
+      {
+        "name": "gabbaboy-core-windows-x64.tar.gz.sha256",
+        "sha256": "ba6571d1cd75721bbad2d764f544267da7ab931c555ef226269ee01a9de59f0c",
+        "size": 65
+      },
+      {
+        "name": "gabbaboy-notices.txt",
+        "sha256": "9b8ffb09e0f0c1feea000e809bfe210f948e866d99b968bb9b7f580b1bd323f9",
+        "size": 1078
+      },
+      {
+        "name": "gabbaboy-preview-macos-arm64-build-receipt.json",
+        "sha256": "236d6ba8fea9e798fcda45c558a5865009d102fc36f77372572c948461e8587b",
+        "size": 1060
+      },
+      {
+        "name": "gabbaboy-preview-macos-arm64.tar.gz",
+        "sha256": "03bc445aedcefc5b6d5afa0b0b47cd2922be3dc50279c0285f888ff1e7c233da",
+        "size": 1152472
+      },
+      {
+        "name": "release-receipt.json",
+        "sha256": "f56f3877230bee7b4bf789354fed8166ccaf809bb5707e4d6c97f40bc19b5837",
+        "size": 6244
+      },
+      {
+        "name": "source-archive-receipt.json",
+        "sha256": "6bd05b89fad60a9469a8f39aaf3380d3f482475bc7b57bd952434cb90a3c3266",
+        "size": 5574
+      },
+      {
+        "name": "source-receipt.json",
+        "sha256": "a7a418ab719f80c79934220ebfcb951cb5607dfaa23f02e8101d57b3a86202a3",
+        "size": 7352
+      },
+      {
+        "name": "support-ledger.json",
+        "sha256": "335a5be3d4a8bd5493e3d69337b17a1c109e6a8382dd804b386926d6ffbf92ca",
+        "size": 32221
+      },
+      {
+        "name": "v02-consumer-receipt.json",
+        "sha256": "c72a5dd16fa6f95c45ca9075a6a72e63037f789fe6b3e4853feaf1d59d3c1efb",
+        "size": 1497
+      },
+      {
+        "name": "v02-fuzz-receipt.json",
+        "sha256": "7200b34a09ecb941850b39d5f1fbc96a535cebfbb9d7545a99b5c06ceb773ecb",
+        "size": 6883
+      },
+      {
+        "name": "v02-performance-receipt.json",
+        "sha256": "c59d052bc4e86ae8003f942a8460656ceadcbf41946c0c5b6de6b4c9506795d3",
+        "size": 14260
+      }
+    ]
+  },
+  "first_release_run": {
+    "attempt": 1,
+    "conclusion": "failure",
+    "failed_step": "Write or revalidate downloaded-byte candidate receipt",
+    "id": 39400383894,
+    "reason": "tagged product-package check rejected the unwrapped core archive layout; resumed on the same draft after main-side fix"
+  },
+  "intermediate_pull_requests": [
+    {
+      "head_sha": "56eaf1ba1aa385feef0fb9a15ae3f128d2b2a191",
+      "merge_commit_sha": "4b092a90fb1f50e76da83dfefcdf30c56369b693",
+      "number": 73
+    },
+    {
+      "head_sha": "d6f74b5dba707b76a0c348f8fea84f13d93b753a",
+      "merge_commit_sha": "08e7309aab699333d73f7ffeae58a5332133f242",
+      "number": 74
+    }
+  ],
+  "phase_pr": {
+    "head_sha": "6b83695aeec9926162814521beedc53bf01147c6",
+    "merge_commit_sha": "04fe3c61188851db5d68488fce731061ee3dedb3",
+    "merge_method": "squash",
+    "number": 72
+  },
+  "publication": {
+    "published_at": "2026-10-20T10:25:34Z",
+    "workflow_run": {
+      "attempt": 1,
+      "event": "workflow_dispatch",
+      "head_sha": "08e7309aab699333d73f7ffeae58a5332133f242",
+      "id": 39406047351,
+      "retry": true
+    }
+  },
+  "release_id": 418219852,
+  "required_checks": [
+    "fixture-repro",
+    "preview-package-smoke",
+    "required-native"
+  ],
+  "schema_version": 1,
+  "sidecars": {
+    "cgb-corpus-receipt.json": "c9fbb22c37dc3f273cd94264d24cb29ea0493a496b9c1e8b001a53972dbc6bfa",
+    "source-archive-receipt.json": "6bd05b89fad60a9469a8f39aaf3380d3f482475bc7b57bd952434cb90a3c3266",
+    "support-ledger.json": "335a5be3d4a8bd5493e3d69337b17a1c109e6a8382dd804b386926d6ffbf92ca",
+    "v02-consumer-receipt.json": "c72a5dd16fa6f95c45ca9075a6a72e63037f789fe6b3e4853feaf1d59d3c1efb",
+    "v02-fuzz-receipt.json": "7200b34a09ecb941850b39d5f1fbc96a535cebfbb9d7545a99b5c06ceb773ecb",
+    "v02-performance-receipt.json": "c59d052bc4e86ae8003f942a8460656ceadcbf41946c0c5b6de6b4c9506795d3"
+  },
+  "source_archive": {
+    "receipt_sha256": "6bd05b89fad60a9469a8f39aaf3380d3f482475bc7b57bd952434cb90a3c3266",
+    "sha256": "5d96f3cf45625a3a02a9f04749c813e766a4092fb1b78eb5287a6e887bb7db0c"
+  },
+  "source_sha": "ab301aa69b1f085050fd66bf7b1378863a0821f2",
+  "stage": "published",
+  "superseded_attempts": [
+    {
+      "attempt": 1,
+      "conclusion": "failure",
+      "id": 39385131354,
+      "reason": "player-package-smoke-macos exact-head wait hit its 1800 s deadline while the ASan lane (about 35 min on the hosted runner) was still running; attempt 2 re-ran the failed jobs against the then-complete exact-head CI"
+    }
+  ],
+  "tag": "v0.2.0",
+  "version_pr": {
+    "head_sha": "b53d82e2667980a21006cea8b521521df1825a04",
+    "merge_commit_sha": "ab301aa69b1f085050fd66bf7b1378863a0821f2",
+    "merge_method": "squash",
+    "number": 70
+  },
+  "workflow_run_names": {
+    "39382972145": "ci (push)",
+    "39382972201": "fixture-repro (push)",
+    "39382974145": "release-rehearsal (push)",
+    "39385131354": "preview-package-smoke (pull_request)",
+    "39385131364": "ci (pull_request)",
+    "39385131440": "fixture-repro (pull_request)"
+  },
+  "workflow_runs": [
+    {
+      "attempt": 1,
+      "id": 39385131364
+    },
+    {
+      "attempt": 2,
+      "id": 39385131354
+    },
+    {
+      "attempt": 1,
+      "id": 39385131440
+    },
+    {
+      "attempt": 1,
+      "id": 39382972145
+    },
+    {
+      "attempt": 1,
+      "id": 39382972201
+    },
+    {
+      "attempt": 1,
+      "id": 39382974145
+    }
+  ]
+}
