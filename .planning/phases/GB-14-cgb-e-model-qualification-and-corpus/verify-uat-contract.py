@@ -79,6 +79,12 @@ def check(root):
     return len(seen)
 
 
+# The handoff is a point-in-time record: read it as merged with Phase 14 (PR #71),
+# not from the live tree, which later phases legitimately advance.
+HANDOFF_COMMIT = 'c771b1b9c143d7589f8bb40c163c2e9f89ca1168'
+PHASE_HEAD = '8c09f9697aabc96424280aa14544ba68ff3f2fd4'
+
+
 def commit_window(content):
     def value(pattern):
         match = re.search(pattern, content, re.M)
@@ -88,7 +94,9 @@ def commit_window(content):
     after = value(r'^plan_head_after: ([0-9a-f]{40})$')
     claimed = int(value(r'^commits: (\d+)$') if re.search(r'^commits:', content, re.M)
                   else value(r'^  commits: (\d+)$'))
-    for left, right in ((before, after), (after, 'HEAD')):
+    # Squash merges leave plan commits only on the phase branch, so bound the window
+    # by the merged PR #71 head rather than the current HEAD.
+    for left, right in ((before, after), (after, PHASE_HEAD)):
         result = subprocess.run(['git', '-C', str(ROOT), 'merge-base', '--is-ancestor', left, right],
                                 capture_output=True, timeout=10)
         assert result.returncode == 0, 'unreachable commit window'
@@ -96,6 +104,13 @@ def commit_window(content):
                             capture_output=True, text=True, timeout=10)
     assert result.returncode == 0 and int(result.stdout) == claimed, 'commit claim mismatch'
     return claimed
+
+
+
+
+def boundary_text(root, path):
+    return subprocess.run(['git', '-C', str(root), 'show', f'{HANDOFF_COMMIT}:{path}'],
+                          check=True, capture_output=True, text=True).stdout
 
 
 def handoff_values(state, continuation, project, config):
@@ -125,18 +140,18 @@ def projection_values(data):
 
 
 def check_handoff(root):
-    projection_values(json.loads((root / '.planning/state.json').read_text()))
-    handoff_values((root / '.planning/STATE.md').read_text(),
-                   (root / PHASE / 'continue.md').read_text(),
-                   (root / '.planning/PROJECT.md').read_text(),
-                   json.loads((root / '.planning/config.json').read_text()))
+    projection_values(json.loads(boundary_text(root, '.planning/state.json')))
+    handoff_values(boundary_text(root, '.planning/STATE.md'),
+                   boundary_text(root, f'{PHASE}/continue.md'),
+                   boundary_text(root, '.planning/PROJECT.md'),
+                   json.loads(boundary_text(root, '.planning/config.json')))
 
 
 def handoff_self_test(root):
-    state = (root / '.planning/STATE.md').read_text()
-    continuation = (root / PHASE / 'continue.md').read_text()
-    project = (root / '.planning/PROJECT.md').read_text()
-    config = json.loads((root / '.planning/config.json').read_text())
+    state = boundary_text(root, '.planning/STATE.md')
+    continuation = boundary_text(root, f'{PHASE}/continue.md')
+    project = boundary_text(root, '.planning/PROJECT.md')
+    config = json.loads(boundary_text(root, '.planning/config.json'))
     handoff_values(state, continuation, project, config)
     controls = [
         (state.replace('/gsd-discuss-phase 15', '/gsd-verify-work 14'), continuation, project, config),
@@ -156,7 +171,7 @@ def handoff_self_test(root):
         except AssertionError:
             continue
         raise AssertionError('accepted stale handoff or automatic phase advance')
-    projection = json.loads((root / '.planning/state.json').read_text())
+    projection = json.loads(boundary_text(root, '.planning/state.json'))
     projection_values(projection)
     for field in ('route', 'phase-pause'):
         altered = json.loads(json.dumps(projection))

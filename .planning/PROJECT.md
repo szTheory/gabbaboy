@@ -6,7 +6,7 @@ GabbaBoy is an original, portable C17 emulator core for Game Boy (DMG) and Game 
 
 ## Current State
 
-**Phase 15 execution is paused by the owner at 4/10 plans complete** (15-01/02/03/05). Public evidence scope, current support ledger, relocated native consumers and paired performance are implemented. The hosted native/floor jobs and 1133 sanitizer tests pass at a175a394; the real fuzz campaign hit a DMG/CGB test-harness applicability assertion and remains incomplete. The owner requested emulator/product progress rather than further security-oriented work: next 15-04 then 15-07, with the campaign parked. Resume with `/gsd-resume-work`; underlying phase command `/gsd-execute-phase 15`. Read [the checkpoint](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/.continue-here.md). No merge, release publication or phase completion is claimed; both auto flags remain false.
+**Phase 15 is complete; v0.2.0 is published.** All 10 plans are executed. [Goal verification](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-VERIFICATION.md) passes 12/12, and CGB-11, SHIP-09, SHIP-10 and SHIP-11 are complete. Security closes 21/21 threats, and Nyquist validation is compliant. [Automated UAT](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-UAT.md) closes 42/42 deliverables and 10/10 commit windows with zero human checkpoints. Release [`v0.2.0`](https://github.com/szTheory/gabbaboy/releases/tag/v0.2.0) was published from tag source `ab301aa` with 22 assets after the exact-tag gates passed. A fresh download matches the live release. It is unsigned and not notarized. No CGB game-level evidence exists; the release says so. The hosted DMG paired benchmark is +14.86% (±1.62%) slower than v0.1.0, which is disclosed in the receipt and docs/release.md. Eight advisory code-review warnings remain open in [15-REVIEW-DISPOSITION.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-REVIEW-DISPOSITION.md) for v0.2.1. Release-please PR #75 (0.2.1) is open and not merged. Next: `/gsd-audit-milestone`. Do not start v0.3; both auto flags remain false.
 
 **Phase 14 is a completed prerequisite:** [14-UAT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md) closes 49 deliverables and 13 bounded commit windows with zero human checkpoints; [goal verification](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41 and CGB-08/CGB-10 are complete. PR #71 merged at `c771b1b9c143d7589f8bb40c163c2e9f89ca1168`. Reuse its source-qualified receipts and completed UAT. The software corpus contains 107 cases, 25 actual passes and 82 matched expected failures. Physical CGB-E remains UNKNOWN/POLICY; analog/perceptual output and general game compatibility remain unqualified.
 
@@ -64,11 +64,13 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 
 - ✓ CGB-E digital PCM/I/O behavior and a pinned headless corpus with independent denominators (CGB-08, CGB-10) — Phase 14, goal verification 41/41; 107 complete cases, 25 actual passes and 82 matched expected failures. Physical CGB-E remains UNKNOWN/POLICY.
 
+- ✓ An explicit record that no CGB game-level evidence exists, a current v0.2.0 support ledger with docs and relocated consumers, and an exact-tag qualified v0.2.0 release with corpus, fuzz, performance, consumer and source-archive receipts (CGB-11, SHIP-09..11) — Phase 15, goal verification 12/12, automated UAT 42/42; the release is unsigned and not notarized.
+
 ### Active
 
 v0.2 Color & Cartridge Breadth (scoped in [REQUIREMENTS.md](REQUIREMENTS.md)):
 
-- [ ] CGB acceptance or explicit absence, current support ledger/docs/consumers, and an exact-tag qualified v0.2.0 release (CGB-11, SHIP-09, SHIP-10, SHIP-11, Phase 15).
+- No active v0.2 requirement remains; the milestone audit is next.
 
 Next (v0.3, provisional): transactional versioned native save states (STATE-01) and a qualified Playstead adapter (INT-01).
 
@@ -127,6 +129,7 @@ Ongoing project principles: dependency-light C API with explicit contracts; head
 | RTC advances only from emulated time; wall-clock catch-up is an explicit host call | Replays must not depend on the machine running them; import never advances the clock, so a host cannot apply time twice by accident | ✓ Good — Phase 9 (rtc3test pass, no-host-clock source and object proof; owner may still veto signed `int64_t` D-14 and the appended block D-15/D-17 before merge) |
 | Persist the CGB speed-switch stall in destination-speed CPU T | Device work must continue during the switch pause and survive run partitions | Verified in Phase 12 at `0x20004`, with measured window and explicit model uncertainty (D-084) |
 | Preserve measured oracle failures as exact-signature dispositions | A two-case pass cannot substantiate all admitted AGE behavior | Verified in Phase 12: DIV/STOP-prefetch pass, eleven qualified expected failures; M28 mode-0 sensitivity retained |
+| Rehearse exact-tag release producers on the version PR tree before tagging | Release-only jobs never run in ordinary CI | ✓ Good — Phase 15: the rehearsal found three defects before the tag; a fourth (assumed package wrapper) failed the first tagged run and was fixed before publishing, without replacing assets |
 | Insert a debt-closure phase before closing a milestone | The first audit returned `tech_debt`; closing it first gave a clean `passed` re-audit | ✓ Good — Phase 06.1 |
 
 ## Evolution
@@ -136,4 +139,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-10-16 after Phase 15 planning; /gsd-execute-phase 15 is next.
+Last updated: 2026-10-20 after Phase 15 UAT; /gsd-audit-milestone is next.
