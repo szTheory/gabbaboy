@@ -962,7 +962,8 @@ jobs:
     name: exact-tag-clang-libfuzzer-campaign
     needs: [release, candidate]
     if: ${{ always() && needs.candidate.result == 'success' }}
-    runs-on: ubuntu-22.04
+    # Clang 18 is preinstalled on ubuntu-24.04 (the runner ci.yml's sanitizer lane uses), not on 22.04.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: write

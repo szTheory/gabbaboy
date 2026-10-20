@@ -78,7 +78,7 @@ jobs:
 
   fuzz:
     name: rehearse-clang-libfuzzer-campaign
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       CC: clang-18
@@ -172,21 +172,18 @@ jobs:
             build/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"
           python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" \
             --output build/v02-consumer-receipt.json
-      - name: Inspect a real GitHub-generated tag archive (the published v0.1.0 tag)
+      - name: Inspect a git-generated source archive of the rehearsed tree
         shell: bash
         run: |
           set -euo pipefail
-          # A commit-SHA archive has a different root than a tag archive, so exercise the checker on
-          # the one real tag archive that exists. This rehearses archive handling, not v0.2.0 bytes.
-          tag=v0.1.0
-          sha=$(git rev-parse "$tag^{commit}")
+          # GitHub's tag archive is `git archive` with a <name>-<version>/ root. The real tag archive
+          # does not exist yet, so build the equivalent from the local-only tag and run the same checker.
           archive="$RUNNER_TEMP/source-archive.tar.gz"
-          curl --fail --silent --show-error --location --proto '=https' --max-filesize 1073741824 \
-            --output "$archive" "https://github.com/$GH_REPO/archive/refs/tags/$tag.tar.gz"
+          git archive --format=tar.gz --prefix="gabbaboy-${RELEASE_TAG#v}/" -o "$archive" "$RELEASE_TAG"
           python3 -I tests/scripts/verify-v02-source-archive.py --archive "$archive" \
-            --tag "$tag" --source-sha "$sha" --repo . --output build/source-archive-receipt.json
+            --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json
           python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json \
-            --archive "$archive" --tag "$tag" --source-sha "$sha"
+            --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA"
       - name: Check the open version PR's release notes against the v0.2 adoption contract
         shell: bash
         run: |
