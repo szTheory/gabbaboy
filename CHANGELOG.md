@@ -9,6 +9,55 @@
 * **Battery image:** timer cartridges (`$0F`, `$10`) export cartridge RAM followed by a versioned 21-byte clock block, and importing an image never advances the clock; other battery types and MBC1 images are unchanged.
 * **Player persistence:** the macOS player saves MBC1, MBC2, MBC3 (with the game clock) and MBC5 battery cartridges, reads ROMs up to 8 MiB, and catches a timer cartridge's clock up from the save time on reopen. Save envelope version 2 is used for every battery type except MBC1 `$03`, whose v0.1 file is unchanged. Time spent paused while the player stays open is not recovered.
 
+## [0.2.0](https://github.com/szTheory/gabbaboy/compare/v0.1.2...v0.2.0) (2026-10-20)
+
+
+### Features
+
+* **13-01:** implement bounded CGB HBlank HDMA tracer ([aab4a86](https://github.com/szTheory/gabbaboy/commit/aab4a865c325f21a86f0b989ee527eb202ce7e00))
+* **13-02:** bound HDMA source maps and overflow ([b257ac8](https://github.com/szTheory/gabbaboy/commit/b257ac8d0400fbe325b2eb8859ad72e3a07855a3))
+* **13-02:** implement bounded CGB HDMA policies ([736d785](https://github.com/szTheory/gabbaboy/commit/736d785bb1d16a57cc5ee5c0dd18377c9dfa0c20))
+* **13-03:** add public CGB HALT and DMA guest tests ([8aee46a](https://github.com/szTheory/gabbaboy/commit/8aee46acfdaaa30e0ccc08facc8b2a308678fc2b))
+* **13-03:** preserve HDMA and speed pause independently ([22a35ba](https://github.com/szTheory/gabbaboy/commit/22a35bade8550d8978fa67f154313cc965e96874))
+* **13-05:** add bounded HDMA runtime fault pairs ([4f1e3df](https://github.com/szTheory/gabbaboy/commit/4f1e3dfcacdfc63d2eaf4bee31c5351006716449))
+* **13-05:** enable runtime no-steal mask ([cebca68](https://github.com/szTheory/gabbaboy/commit/cebca682c86350a906b9d4220f4ed1273678608d))
+* **13-06:** admit remaining SameSuite DMA cases ([3f6f58e](https://github.com/szTheory/gabbaboy/commit/3f6f58e5bc463e339157e6c89b22e8f5dba6802b))
+* **13-06:** pin first SameSuite DMA fixture ([903dfff](https://github.com/szTheory/gabbaboy/commit/903dfffbee241cfb6fc4a0764c474d9dff6f1209))
+* **13-07:** add source-derived Magen HDMA oracle ([75f4547](https://github.com/szTheory/gabbaboy/commit/75f4547ae58cab700fba83ee5b7385f9aac4751d))
+* **13-07:** admit pinned Magen HDMA fixture ([d481d7b](https://github.com/szTheory/gabbaboy/commit/d481d7b1b6284648cbf53dd2d1c4bf26e45694cc))
+* **13-08:** add reproducible original CGB HDMA guest ([af88ae4](https://github.com/szTheory/gabbaboy/commit/af88ae44be0d85d3d5db9642eb6e0c0a08890c8d))
+* **13-08:** validate original HDMA fixture in player ([eb87c27](https://github.com/szTheory/gabbaboy/commit/eb87c27fb2abfa380342579b6f20eb6398faa30b))
+* **13-09:** execute all CGB HDMA disposition cases ([12a5a63](https://github.com/szTheory/gabbaboy/commit/12a5a63eb1f4884eb742c12c20b66018c4e968ae))
+* **13-09:** verify CGB HDMA tracer disposition ([293621b](https://github.com/szTheory/gabbaboy/commit/293621b40a42cef6e358a0fb5bea8dae3918ebfb))
+* **13-10:** pin relocated consumer package resolution ([0cbac03](https://github.com/szTheory/gabbaboy/commit/0cbac03632ebeacc96f6b9a8f45c75d7ea0c2499))
+* **13-10:** scan CGB DMA package boundaries ([d33d967](https://github.com/szTheory/gabbaboy/commit/d33d967ff6267201fef0033427a29514c5199c45))
+* **13-11:** align player HDMA scope claims ([d271508](https://github.com/szTheory/gabbaboy/commit/d271508cee8c4740de782586d17e4c02481a1903))
+* **13-11:** document bounded CGB HDMA behavior ([5774aca](https://github.com/szTheory/gabbaboy/commit/5774aca78ac92331af4174eb0229823addd49c33))
+* **13-12:** close HDMA prohibition proof and lane inventory ([16c9d53](https://github.com/szTheory/gabbaboy/commit/16c9d534a834396c9eb2f0bcb4d904cfd3b833e1))
+* CGB KEY1/STOP double-speed switching with bounded stalls ([#68](https://github.com/szTheory/gabbaboy/issues/68)) ([8091fb5](https://github.com/szTheory/gabbaboy/commit/8091fb591de7fb68e666be01d344f5f26ebedc5c))
+* qualify CGB acceptance outcome, v0.2.0 support ledger and exact-tag release evidence ([#72](https://github.com/szTheory/gabbaboy/issues/72)) ([04fe3c6](https://github.com/szTheory/gabbaboy/commit/04fe3c61188851db5d68488fce731061ee3dedb3))
+* qualify CGB-E model and corpus ([#71](https://github.com/szTheory/gabbaboy/issues/71)) ([c771b1b](https://github.com/szTheory/gabbaboy/commit/c771b1b9c143d7589f8bb40c163c2e9f89ca1168))
+
+
+### Bug Fixes
+
+* **13-04:** guard finite HDMA work against time overflow ([f8aeaca](https://github.com/szTheory/gabbaboy/commit/f8aeacae7b6a10888e90143d311e8f353ee7c196))
+* **13-07:** preserve reproducer executable mode ([225a260](https://github.com/szTheory/gabbaboy/commit/225a260653ea3e0767dc51af3dedf8367ab01047))
+* **13-11:** preserve double-speed support phrase ([074249a](https://github.com/szTheory/gabbaboy/commit/074249a8f85a0474f9d99ca6f5c5b75172426985))
+* **13-12:** launch SameSuite self-check through bash on Windows ([7413a64](https://github.com/szTheory/gabbaboy/commit/7413a64a50ab9eac10039cb14fadc7bd66619ce4))
+* **13-12:** pass configured bash to SameSuite self-check ([690c081](https://github.com/szTheory/gabbaboy/commit/690c081e3714aa1039263255d572b6d0d06dad8e))
+* **13-12:** preflight claim subjects before semantic target ([4eab951](https://github.com/szTheory/gabbaboy/commit/4eab9514b350a0e8b506561619c1858f02d224fb))
+* **13-12:** preserve HDMA fixture bytes on Windows ([e9bc47e](https://github.com/szTheory/gabbaboy/commit/e9bc47ed30f5eb4ee1303c06153303c2deb6bea3))
+* **13-12:** scope premature Phase 14 detection ([0d5bb9c](https://github.com/szTheory/gabbaboy/commit/0d5bb9cbfc5dcc730c2d9ce45c6358b79154aaa9))
+* **13-12:** strengthen missing requirement control ([41bb9bf](https://github.com/szTheory/gabbaboy/commit/41bb9bf9258f529e394ac14cf1396928281cdee0))
+* **13:** accept verified execution handoff without advancing phase ([3cdcef2](https://github.com/szTheory/gabbaboy/commit/3cdcef2831ae71564b75186e976296275f59b68d))
+* **13:** CR-01 validate exact PR check evidence ([ec54205](https://github.com/szTheory/gabbaboy/commit/ec54205aedcabc07b08e073b56aeec73d84cd1d7))
+* **13:** reject unparsed UAT rows and conflicting handoffs ([eeb1ce9](https://github.com/szTheory/gabbaboy/commit/eeb1ce94dec208b1baf7b1aae1b4c966f1b290ee))
+* **13:** require an exact completed stage for handoff routing ([0f1bb34](https://github.com/szTheory/gabbaboy/commit/0f1bb34340d8aa4a1c71cb5f913170dd9d3fa9da))
+* **13:** WR-01 split player CGB help claims ([f052ea3](https://github.com/szTheory/gabbaboy/commit/f052ea3806bb34fc531bb176755bab99822de53f))
+* bind the real fuzz receipt run id and rehearse the aggregate v0.2 evidence gate ([#73](https://github.com/szTheory/gabbaboy/issues/73)) ([4b092a9](https://github.com/szTheory/gabbaboy/commit/4b092a90fb1f50e76da83dfefcdf30c56369b693))
+* **phase-13:** reject untested behavior and evidence inputs ([5459b7c](https://github.com/szTheory/gabbaboy/commit/5459b7ce227016b36e2e8f65172e97f5134e59f0))
+
 ## [0.1.2](https://github.com/szTheory/gabbaboy/compare/v0.1.0...v0.1.2) (2026-10-10)
 
 

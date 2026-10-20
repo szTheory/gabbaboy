@@ -208,6 +208,16 @@ jobs:
           else
             gh release upload "$RELEASE_TAG" build/source-receipt.json --repo "$GH_REPO"
           fi
+      - name: Overlay the trusted release-candidate verifiers from the workflow commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          # These control-plane verifiers judge the tagged data but must not be frozen at the tag: the
+          # v0.2.0 tag shipped a product-package check that rejected the real package layout and could
+          # not be repaired afterwards. Run the workflow commit's copies; the producers stay tagged.
+          for path in tests/scripts/verify-release-candidate.sh tests/scripts/verify-v02-source-archive.py cmake/VerifyReleaseReceipt.cmake; do
+            git show "${GITHUB_SHA}:${path}" > "$path"
+          done
       - name: Revalidate a previously qualified candidate before retry
         env:
           RELEASE_ID: ${{ steps.identity.outputs.release_id }}

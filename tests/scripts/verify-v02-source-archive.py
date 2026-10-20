@@ -83,7 +83,10 @@ class Entry:
 
 
 class Inspection:
-    def __init__(self):
+    def __init__(self, unwrapped=False):
+        # A source archive is wrapped in one <name>-<version>/ directory. The installed core package is
+        # not: it is `tar -C <stage> include lib bin share`, so its members sit at the archive top level.
+        self.unwrapped = unwrapped
         self.root = None
         self.entries = []
         self.kept = {}
@@ -151,16 +154,23 @@ def register(inspection, seen, raw, kind, size, target, reader, mode, limits, wa
     if parts in seen:
         raise Reject("path-duplicate", f"archive contains a duplicate path: {raw!r}")
     seen.add(parts)
-    if inspection.root is None:
-        inspection.root = parts[0]
-    elif parts[0] != inspection.root:
-        raise Reject("root-mismatch", "archive has more than one top-level entry")
-    account(inspection, len(seen), size, limits)
-    rel = "/".join(parts[1:])
-    if kind == "dir":
-        return
-    if not rel:
-        raise Reject("root-mismatch", "archive root is not a directory")
+    if inspection.unwrapped:
+        inspection.root = ""
+        account(inspection, len(seen), size, limits)
+        rel = "/".join(parts)
+        if kind == "dir":
+            return
+    else:
+        if inspection.root is None:
+            inspection.root = parts[0]
+        elif parts[0] != inspection.root:
+            raise Reject("root-mismatch", "archive has more than one top-level entry")
+        account(inspection, len(seen), size, limits)
+        rel = "/".join(parts[1:])
+        if kind == "dir":
+            return
+        if not rel:
+            raise Reject("root-mismatch", "archive root is not a directory")
     if kind == "symlink":
         # Without a tagged tree to compare against, only a relative link that stays inside the
         # archive root is tolerated; with --repo the exact tree comparison decides.
@@ -180,8 +190,8 @@ def register(inspection, seen, raw, kind, size, target, reader, mode, limits, wa
         inspection.kept[rel] = kept
 
 
-def inspect_tar(path, limits, want_git):
-    inspection, seen = Inspection(), set()
+def inspect_tar(path, limits, want_git, unwrapped=False):
+    inspection, seen = Inspection(unwrapped), set()
     try:
         with tarfile.open(path, "r:gz") as bundle:
             for member in bundle:
@@ -206,8 +216,8 @@ def inspect_tar(path, limits, want_git):
     return inspection
 
 
-def inspect_zip(path, limits, want_git):
-    inspection, seen = Inspection(), set()
+def inspect_zip(path, limits, want_git, unwrapped=False):
+    inspection, seen = Inspection(unwrapped), set()
     try:
         with zipfile.ZipFile(path) as bundle:
             infos = bundle.infolist()
@@ -240,14 +250,14 @@ def inspect_zip(path, limits, want_git):
     return inspection
 
 
-def inspect_archive(path, limits, want_git=False):
+def inspect_archive(path, limits, want_git=False, unwrapped=False):
     try:
         if os.path.getsize(path) > limits.total:
             raise Reject("archive-oversize", "archive file is larger than the uncompressed-size limit")
         kind = open_kind(path)
     except OSError as error:
         raise Reject("archive-unreadable", f"archive cannot be opened: {error.strerror or error}")
-    inspection = (inspect_tar if kind == "tar.gz" else inspect_zip)(path, limits, want_git)
+    inspection = (inspect_tar if kind == "tar.gz" else inspect_zip)(path, limits, want_git, unwrapped)
     if inspection.root is None:
         raise Reject("archive-unreadable", "archive has no entries")
     return inspection
@@ -442,7 +452,7 @@ def collect_third_party_digests(repo_root):
 
 
 def check_product(archive, repo_root, limits):
-    inspection = inspect_archive(archive, limits)
+    inspection = inspect_archive(archive, limits, unwrapped=True)
     if any(e.kind == "symlink" for e in inspection.entries):
         raise Reject("product-link-not-allowed", "product package contains a link")
     files = inspection.files()
@@ -472,13 +482,15 @@ def tar_bytes(members, commit, root="gabbaboy-0.0.1", fmt=tarfile.PAX_FORMAT):
     raw = io.BytesIO()
     headers = {"comment": commit} if commit else {}
     with tarfile.open(fileobj=raw, mode="w", format=fmt, pax_headers=headers) as bundle:
-        top = tarfile.TarInfo(root)
-        top.type = tarfile.DIRTYPE
-        top.mode = 0o755
-        bundle.addfile(top)
+        if root is not None:
+            top = tarfile.TarInfo(root)
+            top.type = tarfile.DIRTYPE
+            top.mode = 0o755
+            bundle.addfile(top)
         for name, value in members.items():
             # A leading "@" supplies the raw member name (traversal, absolute and second-root controls).
-            info = tarfile.TarInfo(name[1:] if name.startswith("@") else f"{root}/{name}")
+            # root=None builds the installed product layout, whose members sit at the archive top level.
+            info = tarfile.TarInfo(name[1:] if name.startswith("@") else (name if root is None else f"{root}/{name}"))
             if isinstance(value, tuple):
                 info.type = {"symlink": tarfile.SYMTYPE, "hardlink": tarfile.LNKTYPE, "device": tarfile.CHRTYPE}[value[0]]
                 info.linkname = value[1]
@@ -677,9 +689,9 @@ def self_test():
             "share/gabbaboy/fixtures/mbc1-continuation/manifest.json": b"{}\n",
         }
 
-        def expect_product(label, files, expected, root_files=None):
+        def expect_product(label, files, expected, root_name=None):
             nonlocal positives, negatives
-            archive = write(f"{label}.tar.gz", tar_bytes(files, None, root="stage"))
+            archive = write(f"{label}.tar.gz", tar_bytes(files, None, root=root_name))
             code, err, _ = run_cli(script, "--check-product-archive", str(archive))
             if expected is None:
                 if code != 0:
@@ -693,6 +705,7 @@ def self_test():
                 print(f"rejected: {label} ({expected})")
 
         expect_product("product-fixture-free", good_product, None)
+        expect_product("product-wrapped-in-a-source-style-root", good_product, "product-fixture-leak", root_name="stage")
         expect_product("product-with-third-party-fixture", {**good_product, "share/gabbaboy/fixtures/libbet/libbet.gb": b"\x00L"}, "product-fixture-leak")
         expect_product("product-with-renamed-rom", {**good_product, "share/gabbaboy/renamed.gb": b"\x00L"}, "product-fixture-leak")
         expect_product("product-with-notice-table", {**good_product, NOTICE_NAME: b"x"}, "product-fixture-leak")
