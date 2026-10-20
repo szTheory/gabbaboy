@@ -6,11 +6,11 @@ current_phase: 15
 current_phase_name: CGB Acceptance, Support Ledger and v0.2.0 Release
 current_plan: 10/10 complete
 status: completed
-stopped_at: Phase 9 verification refresh complete; Phase 10 verification refresh next
-last_updated: "2026-10-20T21:06:41Z"
+stopped_at: Phase 10 verification refresh complete; Phase 11 verification refresh next
+last_updated: "2026-10-20T22:14:40Z"
 last_activity: 2026-10-20
-last_activity_desc: Refreshed Phase 9 verification and closed two concurrency backstops; Phases 10–14 remain
-state_head: 15275d6b0856a60dd3f3d8cac84a254ed21b3ff4
+last_activity_desc: Refreshed Phase 10 verification and repaired fixture-output and preview-exclusion guards; Phases 11–14 remain
+state_head: 1ba23463cf1beec9930abd54d19e226ef5e33f7b
 progress:
   total_phases: 9
   completed_phases: 9
@@ -30,17 +30,17 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 ## Current Position
 
-Completed stage: **Phase 9 — MBC3, Deterministic RTC and Cartridge Persistence, verification refresh**. All 18 plans were already complete. The refreshed [verification report](phases/GB-09-mbc3-deterministic-rtc-and-cartridge-persistence/09-VERIFICATION.md) passes 115/115 truths (five roadmap criteria and 110 plan truths), 47 artifact references and 27 links. CART-04, CART-05, CART-06 and RTC-01, RTC-02, RTC-03 are satisfied; OpenGSD covered-input status is `passed`.
+Completed stage: **Phase 10 — CGB Profile, Banking and Register Visibility, verification refresh**. All 20 plans were already complete. The refreshed [verification report](phases/GB-10-cgb-profile-banking-and-register-visibility/10-VERIFICATION.md) passes 143/143 truths (four roadmap criteria and 139 plan truths), 25/25 prohibition guards, 38 artifact references and 24 links. CGB-01, CGB-02 and CGB-03 are satisfied; OpenGSD covered-input status is `passed` across 111 files.
 
-Fresh evidence: configured full regression 1,144/1,144 in 375.09 seconds and focused SDL player 28/28 in 1.03 seconds. The verifier found two indirect concurrency backstops; the existing concurrency harness now directly exercises 128 rounds of independent MBC3 loads, guest execution and distinct RTC catch-up on two threads, with a neighbour-clock contamination control. After that test-only addition, concurrency and source-bound ledger checks passed 4/4 in 16.18 seconds. The full-suite receipt predates the harness addition; no emulator source changed. Test registration/inventory changes were reverted after the pinned release-ledger check correctly rejected them. The new checks run through the existing inventory entry. The focused harness review found no defect. Prior validation/security/review records and completed 14-row automated UAT were reused with their limits; legacy SUMMARY formatting was not rewritten. Boundary facts come from Phase 9 commits, never current mutable routes.
+Fresh final-source evidence: configured full regression 1,144/1,144 in 377.12 seconds, zero skips; focused rebuilt SDL player 19/19 in 2.55 seconds. The refresh repaired two guard gaps: rejected fixture build/evidence paths no longer create in-tree directories (including symlink, `..` and TMPDIR cases), and the extracted preview scan now includes CGB Mooneye digests with a planted renamed-ROM control. Both fixes have observed failing controls and independent bounded reviews. Source commits are `b56b97f` and `1ba2346`; no emulator source or test inventory changed. Prior audits and completed 12-row automated UAT are reused with explicit limits in [10-REFRESH-GATES.md](phases/GB-10-cgb-profile-banking-and-register-visibility/10-REFRESH-GATES.md). Legacy SUMMARY formatting remains unchanged. Historical boundary facts come from Phase 10 commits. The degraded review-scope resolver and owned GATE-01 analog/release evidence limitation remain explicit; no full current-source review or new hardware/perceptual qualification is claimed.
 
-Milestone completion remains **pending**. Phases 7–9 verification are refreshed; Phases 10–14 still require their own refresh. The closeout scanner also flags Phase 14's clean UAT review and Phase 13's deferred duplicate-library warning. The milestone audit retains 28/28 satisfied requirements and 21 debt items; this refresh does not accept debt.
+Milestone completion remains **pending**. Phases 7–10 verification are refreshed; Phases 11–14 still require their own refresh. The closeout scanner also flags Phase 14's clean UAT review and Phase 13's deferred duplicate-library warning. The milestone audit retains 28/28 satisfied requirements and 21 debt items; this refresh does not accept debt.
 
-Next stage: **Phase 10 — CGB Profile, Banking and Register Visibility, verification refresh**.
-Exact next command: `/gsd-execute-phase 10`.
-Stop after Phase 9. Both automatic advance flags remain false. No milestone archive, tag, release or merge was performed. v0.3 — States & Integration remains provisional, unnumbered and unstarted.
+Next stage: **Phase 11 — CGB Colour Rendering and Player Colour, verification refresh**.
+Exact next command: `/gsd-execute-phase 11`.
+Stop after Phase 10. Both automatic advance flags remain false. No milestone archive, tag, release or merge was performed. v0.3 — States & Integration remains provisional, unnumbered and unstarted.
 
-Review stack: branch `gsd/phase-9-verification-refresh` builds on Phase 8 refresh PR #84. Preserve pre-existing config/state.json edits. Required remote checks must pass at the exact reviewed head before merging; local results do not establish remote readiness. Boundary triage found no open issues; PRs #78–84 remain in the review stack and release-please PR #75 remains unmerged.
+Review stack: branch `gsd/phase-10-verification-refresh` builds on Phase 9 refresh PR #85. Preserve pre-existing config/state.json edits. Required remote checks must pass at the exact reviewed head before merging; local results do not establish remote readiness. Boundary triage found no open issues; PRs #78–85 remain in the existing review stack and release-please PR #75 remains unmerged.
 
 ### Historical Phase 14 handoff (superseded route; preserved receipts)
 

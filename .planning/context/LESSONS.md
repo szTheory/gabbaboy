@@ -829,3 +829,19 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** `acceptance_stall_diagnosis` passes two real dropped-START runs; its automatic checker self-test rejects 19 malformed reports plus a byte mismatch. Focused native 97/97, player 98/98 and packaged input/PCM/no-input controls pass. The frozen DMG baseline is unchanged; no emulator implementation changed.
 - **Source:** Phase 7 `07-VALIDATION.md`; `tests/scripts/verify-stall-report.py`; test revision `5f9bfbd`.
 - **Status:** Adopted; Phase 11/13 completion metadata and milestone re-audit remain separate owner-selected work.
+
+### GB-FIXTURE-001 / 2026-10-20 / Validate output paths before creating directories
+
+- **Cause and evidence:** Phase 10's fixture rebuild script called `mkdir` before rejecting an in-tree build path. Its first repair covered explicit destinations but still called `mktemp` before checking an in-tree `TMPDIR`. Disposable-repository tests reproduced both rejected-write side effects.
+- **Remedy:** Canonicalize missing destinations and existing symlink parents before directory creation; validate both build and evidence destinations, including the temporary root. Keep the offline checks in the existing registered guard test so the release-bound test inventory stays unchanged.
+- **Applies when:** Build, fixture or evidence tooling promises to keep generated artifacts outside a checkout. A refusal exit alone does not prove absence of side effects.
+- **Verification:** The expanded offline guard passes nested, symlink, `..`, evidence-override and both default-TMPDIR rejection cases, and accepts missing external destinations up to a deliberate pre-network stop. The same guard fails against the original script with `refused output created a directory`. Independent bounded review also passes.
+- **Source:** Phase 10 `10-REFRESH-GATES.md`; `tests/scripts/reproduce-mooneye-cgb.sh`; `tests/scripts/test-reproduce-mooneye-cgb-guard.sh`.
+
+### GB-FIXTURE-002 / 2026-10-20 / Test exclusions through the actual package scan
+
+- **Cause and evidence:** Phase 10's CGB ROM exclusion scanned the install tree, while preview smoke supplied only the MBC manifest. A clean package and an isolated scanner self-test both passed, yet a renamed CGB ROM in the extracted preview passed its actual scan.
+- **Remedy:** Supply both manifests to one preview scan command. Exercise that same command against a planted CGB ROM outside the fixture-directory allowlist, require its exact digest-based rejection, and remove the control file before consumers run.
+- **Applies when:** A prohibition spans several distribution trees or a new fixture family reuses an older package check. Scanner capability alone does not prove every producer invokes it with the required inputs.
+- **Verification:** The new control failed with the original MBC-only scan accepting the payload. The combined-manifest scan passed the focused package/install/ledger selection 6/6; independent bounded review found no defect. Existing test registration and inventory are unchanged.
+- **Source:** Phase 10 plan 10-15 G1; `10-REFRESH-GATES.md`; `cmake/PreviewPackageSmoke.cmake`.
