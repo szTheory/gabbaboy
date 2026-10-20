@@ -118,6 +118,18 @@ def validate_v02_producers(text):
         position = text.find(producer)
         if position < 0 or position > publish or position > first_gate:
             raise ValueError(f"evidence producer {producer} is not upstream of the final gate")
+V02_CONTRACTS = ("v02_game_claims", "v02_game_claims_controls", "v02_support_ledger", "v02_support_ledger_controls",
+                 "v02_adoption_docs", "v02_adoption_docs_controls", "v02_consumer_controls", "v02_performance_controls",
+                 "v02_fuzz_controls", "v02_source_archive_controls", "v02_delivery_controls")
+def validate_v02_inventory(cmake_text, expected_text):
+    registered = re.findall(r"(?m)^gbb_add_v02_contract\((v02_[a-z_]+) ", cmake_text)
+    required = [line.strip() for line in expected_text.splitlines() if line.strip().startswith("v02_")]
+    if sorted(registered) != sorted(V02_CONTRACTS):
+        raise ValueError("the configured CTest set must register each of the eleven v0.2 contracts exactly once")
+    if sorted(required) != sorted(V02_CONTRACTS):
+        raise ValueError("the required inventory must name each of the eleven v0.2 contracts exactly once")
+    if "-DGBB_EXPECT_CODE=0" not in cmake_text or "[1-9][0-9]*" not in cmake_text:
+        raise ValueError("v0.2 contracts must require exit code 0 and a nonzero success count")
 def validate_retained_platforms(text):
     macos = text[text.find("\n  candidate-macos:\n"):text.find("\n  candidate-windows:\n")]
     windows = text[text.find("\n  candidate-windows:\n"):text.find("\n  candidate-corpus:\n")]
@@ -158,6 +170,9 @@ try:
     validate_extractor_destinations(workflow)
     validate_v02_producers(workflow)
     validate_retained_platforms(workflow)
+    cmake_tests = (root / "tests/CMakeLists.txt").read_text()
+    required_inventory = (root / "tests/expected-tests.txt").read_text()
+    validate_v02_inventory(cmake_tests, required_inventory)
     validate_downloaded_sidecars(workflow)
     validate_isolated_release_readbacks(workflow)
 except ValueError as error:
@@ -207,7 +222,21 @@ for needle, label in (("verify-phase3-player.sh --verify-package", "player smoke
         mutation_count += 1
     else:
         raise SystemExit(f"release workflow self-test accepted a workflow without the retained {label}")
-if mutation_count < len(V02_PRODUCER_CALLS) + 4 or not V02_PRODUCER_CALLS:
+inventory_mutations = {
+    "unregistered contract": (cmake_tests.replace("gbb_add_v02_contract(v02_delivery_controls", "gbb_add_v02_contract(v02_delivery_gone", 1), required_inventory),
+    "duplicated registration": (cmake_tests + "\ngbb_add_v02_contract(v02_game_claims 60 x y)\n", required_inventory),
+    "missing required name": (cmake_tests, required_inventory.replace("v02_fuzz_controls\n", "", 1)),
+    "duplicated required name": (cmake_tests, required_inventory + "v02_support_ledger\n"),
+    "exit code not asserted": (cmake_tests.replace("-DGBB_EXPECT_CODE=0", "-DGBB_EXPECT_CODE=none"), required_inventory),
+}
+for label, (mutated_cmake, mutated_expected) in inventory_mutations.items():
+    try:
+        validate_v02_inventory(mutated_cmake, mutated_expected)
+    except ValueError:
+        mutation_count += 1
+    else:
+        raise SystemExit(f"release workflow self-test accepted a v0.2 inventory with {label}")
+if mutation_count < len(V02_PRODUCER_CALLS) + 4 + len(inventory_mutations) or not V02_PRODUCER_CALLS:
     raise SystemExit("release workflow self-test did not execute its v0.2 wiring controls")
 print(f"workflow-wiring-controls={mutation_count}")
 try:
