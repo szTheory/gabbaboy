@@ -1,3 +1,7 @@
+# Digest-bound text (docs, manifests, dispositions) must be byte-identical on Windows checkouts;
+# later, more specific rules below override this default.
+* text=auto eol=lf
+
 # The runner admits this pinned manifest by its exact Git blob SHA-256.
 fixtures/mooneye/manifest.json -text
 

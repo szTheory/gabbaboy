@@ -1372,8 +1372,12 @@ function(gbb_add_v02_contract name timeout regex script)
       -DGBB_EXPECT_CODE=0
       "-DGBB_EXPECT_REGEX=${regex}"
       -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set(environment "GBB_TEST_BUILD_DIR=${PROJECT_BINARY_DIR}")
+  if(GABBABOY_ENABLE_SANITIZERS)
+    list(APPEND environment "GBB_SANITIZER_LINK_OPTIONS=-fsanitize=address,undefined")
+  endif()
   set_tests_properties(${name} PROPERTIES TIMEOUT ${timeout} LABELS "v02"
-    ENVIRONMENT "GBB_TEST_BUILD_DIR=${PROJECT_BINARY_DIR}")
+    ENVIRONMENT "${environment}")
 endfunction()
 gbb_add_v02_contract(v02_game_claims 60
   [=["checks": [1-9][0-9]*, "mode": "check".*"positive_success": true.*"target": "game"]=]

@@ -246,6 +246,26 @@ def compiler_identity(build_dir: Path, language: str) -> dict[str, str]:
     return {"id": identifier, "version": version}
 
 
+CONFIGURATION_NAMES = {"debug": "Debug", "release": "Release",
+                       "relwithdebinfo": "RelWithDebInfo", "minsizerel": "MinSizeRel"}
+
+
+def installed_configuration(prefix: Path) -> str:
+    """Multi-config generators (the Windows default) need the installed package's configuration.
+
+    Single-config generators ignore it, so it is only derived on Windows from the one
+    GabbaBoyTargets-<config>.cmake the package installed; anything else stays empty.
+    """
+    if os.name != "nt":
+        return ""
+    names = sorted({
+        path.stem.split("-", 1)[1].lower()
+        for path in prefix.rglob("GabbaBoyTargets-*.cmake")
+    })
+    need(len(names) == 1 and names[0] in CONFIGURATION_NAMES, "package-configuration-ambiguous")
+    return CONFIGURATION_NAMES[names[0]]
+
+
 def run_consumer(language: str, prefix: Path, config: Path, build_dir: Path,
                  project_root: Path, cmake: str) -> tuple[dict[str, object], dict[str, str]]:
     language_build = build_dir / language
@@ -260,9 +280,14 @@ def run_consumer(language: str, prefix: Path, config: Path, build_dir: Path,
         f"-DGBB_CONSUMER_BINARY={language_build}",
         f"-DGBB_LANGUAGE={language}",
         f"-DGBB_EXECUTABLE_SUFFIX={'.exe' if os.name == 'nt' else ''}",
-        "-DGBB_CONFIGURATION=",
-        "-P", str(script),
+        f"-DGBB_CONFIGURATION={installed_configuration(prefix)}",
     ]
+    # A sanitizer-built package references the sanitizer runtime; the consumer must link it too,
+    # or the linker emits one undefined-reference line per instrumented function.
+    sanitizer_link = os.environ.get("GBB_SANITIZER_LINK_OPTIONS", "")
+    if sanitizer_link:
+        command.append(f"-DGBB_SANITIZER_LINK_OPTIONS={sanitizer_link}")
+    command += ["-P", str(script)]
     stdout, _stderr = run_command(command, cwd=build_dir, env=environment,
                                   rejection=f"consumer-failed:{language}")
     compiler = compiler_identity(language_build, language)
