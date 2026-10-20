@@ -221,6 +221,8 @@ Plans:
 **Research**: Moderate (CGB-E post-boot DIV/LY/STAT; compat-mode register readability per Mooneye `unused_hwio-C` and AGE).
 **Plans**: 20/20 plans complete
 
+**Verification refresh (2026-10-20):** [10-VERIFICATION.md](phases/GB-10-cgb-profile-banking-and-register-visibility/10-VERIFICATION.md) passes 143/143 truths and 25/25 prohibition guards; CGB-01/02/03 remain satisfied. Final-source regression passed 1,144/1,144 and the focused player passed 19/19. Fixture output-path and preview CGB-ROM exclusion gaps are repaired with failing controls; historical UAT/audits and explicit evidence limits are preserved. Paused before Phase 11 verification refresh: `/gsd-execute-phase 11`.
+
 Plans (serial waves: every plan edits `tests/expected-tests.txt` and `tests/CMakeLists.txt`, most also `src/core/gabbaboy.c`):
 - [x] 10-01-PLAN.md — Wave 1: model-gate scanner (R1-R5, --release, self-test mutants) and docs/model-gates.md skeleton
 - [x] 10-02-PLAN.md — Wave 2: tag every core function and model-differing branch (comment-only), gate table, real-file controls
