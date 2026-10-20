@@ -2,15 +2,15 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_phase: 13
-current_phase_name: DMG Game Acceptance and Regression Baseline
-current_plan: 12/12 complete
+current_phase: 15
+current_phase_name: CGB Acceptance, Support Ledger and v0.2.0 Release
+current_plan: 10/10 complete
 status: completed
-stopped_at: Quick task 261020-hr8 complete; milestone re-audit next
-last_updated: "2026-10-20T16:48:43.142Z"
+stopped_at: v0.2 milestone re-audit complete (tech_debt); milestone completion review next
+last_updated: "2026-10-20T17:14:58Z"
 last_activity: 2026-10-20
-last_activity_desc: Completed quick task 261020-hr8; three CGB SUMMARY claims reconciled
-state_head: ba27c4b63c5a12f94c1129e9ce57da1f47ada4bc
+last_activity_desc: Completed v0.2 re-audit; 28/28 satisfied, debt review remains
+state_head: 15275d6b0856a60dd3f3d8cac84a254ed21b3ff4
 progress:
   total_phases: 9
   completed_phases: 9
@@ -26,25 +26,23 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** v0.2 milestone re-audit after Phase 7 validation and Phase 11/13 SUMMARY trace reconciliation
+**Current focus:** v0.2 milestone completion review after re-audit (tech_debt)
 
 ## Current Position
 
-Stage: Quick task 261020-hr8 — SUMMARY requirement trace reconciliation
-Status: Complete; paused for the owner
-Last activity: 2026-10-20 — Completed quick task 261020-hr8
+Stage: v0.2 milestone re-audit
+Status: Complete (tech_debt); paused for the owner
+Last activity: 2026-10-20 — Completed re-audit across Phases 7–15
 
-Completed workflow stage: **SUMMARY reconciliation for Phase 11 — CGB Colour Rendering and Player Colour, and Phase 13 — CGB HDMA**. Closing summaries 11-15 and 13-12 now claim CGB-05/CGB-09 and CGB-07 respectively, supported by their existing passed goal reports, completed automated UAT and central checked Complete requirements. Execution-time handoffs, coverage and producer SHAs remain historical. Reconciliation commit: `ba27c4b`.
+Completed stage: **v0.2 milestone re-audit**, following **Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release**, automated UAT. [Audit](v0.2-MILESTONE-AUDIT.md): **28/28 requirements satisfied**, 9/9 goal reports, 9/9 Nyquist-compliant phases, zero orphans and no critical blocker. [Integration](v0.2-INTEGRATION-AUDIT.md): **9/9 connections, 6/6 flows**, fresh builds and 63/63 focused checks; separate stall diagnosis 1/1 and 20 negative controls. Live release/consumer readback matches published v0.2.0 evidence. Audit source boundary: `15275d6b0856a60dd3f3d8cac84a254ed21b3ff4`.
 
-Fresh metadata check: **28/28** current requirement traces agree across SUMMARY, goal verification and central requirements; **3/3** requested claims are present. The check rejects **10** weakened records. Phase 11 legacy UAT remains **11/11** automated groups with **91/91** coverage entries accepted by OpenGSD; Phase 13 shared UAT check passes **45/45**, rejecting **19** controls. The shared checker cannot parse Phase 11's older grouped format; no schema migration or behavioral rerun is claimed. See the [quick SUMMARY](quick/261020-hr8-reconcile-phase-11-and-13-summary-comple/261020-hr8-SUMMARY.md).
+Phase 7 validation and Phase 11/13 SUMMARY closure discrepancies are resolved. The prior 25/28 audit is superseded and preserved in Git history. Accounting reads the recorded boundary, preserving original producer SHAs. The audit retains **21 deferred items across three phases**, including Phase 15's 16 open advisories, performance visibility and D-027/D-039 historical limits; none is silently accepted or fixed.
 
-The earlier [v0.2-MILESTONE-AUDIT.md](v0.2-MILESTONE-AUDIT.md) remains an unchanged point-in-time `gaps_found` record: 25/28 satisfied, three partial SUMMARY traces and the then-unresolved Phase 7 flag. Its boundary accounting passes with **16** negative controls. Current metadata reconciliation does not rewrite that historical verdict or certify milestone closure. Phase 7 validation is reconciled with native 97/97, player 98/98 and 20 diagnostic controls at the recorded producer revisions; see [07-VALIDATION.md](phases/GB-07-dmg-game-acceptance-and-regression-baseline/07-VALIDATION.md).
+Next stage: **v0.2 milestone completion and explicit debt review**.
+Next command: `/gsd-complete-milestone v0.2`.
+No next numbered phase exists in v0.2. **v0.3 — States & Integration** remains provisional, unnumbered and unstarted. Stop here; both auto flags remain false. The owner may instead request a cleanup phase before completion.
 
-Next stage: **v0.2 milestone re-audit**, reusing completed evidence for Phases 7–15.
-Next command: `/gsd-audit-milestone`.
-There is no next numbered phase in v0.2. **v0.3 — States & Integration** remains provisional and unnumbered. No new phase or milestone has started. Stop here; both auto-advance flags remain false.
-
-Boundary triage: zero open issues. PR #75 release 0.2.1 remains intentionally unmerged; #78 Phase 15 UAT/shared tooling, #79 milestone audit and #80 Phase 7 reconciliation remain open. This quick branch stacks on #80. Required checks must pass at the exact reviewed head before merge. Phase 15's 16 advisory findings remain before v0.2.1; D-027/D-039 historical limits remain. Preserve pre-existing config/state.json edits.
+Boundary triage: zero open issues; #75, #78, #79, #80 and #81 open at the snapshot. This audit branch stacks on #81. PR #75 release 0.2.1 stays intentionally unmerged. Required checks must pass at the exact reviewed head before any merge; in-progress checks are not green. Preserve pre-existing config/state.json edits.
 
 Latest phase evidence: **Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release, automated UAT complete**. [15-UAT.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-UAT.md) closes all 42 deliverables across 10 plans automatically. It has zero issues, zero pending, skipped or blocked rows, and zero human checkpoints. All 10 bounded commit windows reconcile; the 15-06 window interleaves other plans, and a manual recount gives 9/9 tagged commits. The shared `tests/scripts/verify-uat-closure.py --self-test` rejects 19 weakened closures. Earlier gates: [15-VERIFICATION.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-VERIFICATION.md) (passed 12/12, read back against live v0.2.0), [15-SECURITY.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-SECURITY.md) (21/21 closed), [15-VALIDATION.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-VALIDATION.md) (Nyquist-compliant, 20/20 green), [15-REVIEW.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-REVIEW.md) (0 critical, 8 warnings, 8 info; all open/advisory in 15-REVIEW-DISPOSITION.md — schedule before v0.2.1), [15-DELIVERY.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-DELIVERY.md). v0.2.0 is published (tag ab301aa, 22 assets).
 
@@ -560,13 +558,13 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-20T15:35:29.000Z
-Stopped at: Phase 15 automated UAT complete (42/42); next /gsd-audit-milestone
-Resume file: None
-Next command: /gsd-verify-work 15
+Last session: 2026-10-20T17:14:58Z
+Stopped at: v0.2 milestone re-audit complete (tech_debt)
+Resume file: .planning/.continue-here.md
+Next command: /gsd-complete-milestone v0.2
 
 ## Operator Next Steps
 
-- Completed stage: **Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release, execution** (plan 15-10: protected delivery, v0.2.0 published and read back).
-- Next stage: Phase 15 verification; run `/gsd-verify-work 15`. Verification has zero human checkpoints by default: every deliverable has an automated check with a negative control; the remaining physical and perceptual limits are recorded in 15-DELIVERY.md.
-- Next phase after verification: none planned in this milestone; both auto flags remain false. Do not start v0.3 automatically.
+- Completed stage: **v0.2 milestone re-audit** after Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release, automated UAT.
+- Next stage: milestone completion with explicit debt review; run `/gsd-complete-milestone v0.2` when chosen by the owner.
+- No next numbered phase exists. v0.3 remains provisional and unstarted; both auto flags remain false.

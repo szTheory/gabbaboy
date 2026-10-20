@@ -74,10 +74,11 @@ def facts():
         n = int(phase)
         p = phases[n]
         ver_rows = [r for r in p['verification'].splitlines() if re.match(r'^\| ' + rid + r' \|', r)]
-        verified = p['status'] == 'passed' and any('SATISFIED' in r for r in ver_rows)
+        verified = p['status'] == 'passed' and any(re.search(r'\bSATISFIED\b', r) for r in ver_rows)
         claimed = p['completed'].get(rid, [])
         checked = bool(re.search(r'^- \[x\] \*\*' + rid + r'\*\*:', req, re.M))
-        status = ('satisfied' if verified and claimed and checked and central == 'Complete'
+        status = ('unsatisfied' if p['status'] == 'gaps_found' or not ver_rows
+                  else 'satisfied' if verified and claimed and checked and central == 'Complete'
                   else 'partial' if verified or claimed else 'unsatisfied')
         requirements.append(dict(id=rid, phase=n, verification='SATISFIED' if verified else 'missing',
                                  summaries=claimed, checked=checked, central=central, status=status))
@@ -113,24 +114,25 @@ def check(text, data):
         require(text.count(phase_row(n, p)) == 1, f'phase row {n}')
     expected_gaps = {r['id'] for r in data['requirements'] if r['status'] != 'satisfied'}
     require(set(re.findall(r'^    - id: ([A-Z]+-\d+)$', fm, re.M)) == expected_gaps, 'structured requirement gaps')
-    require('  partial_phases:\n    - 7\n' in fm and '  overall: partial\n' in fm, 'Nyquist discovery')
-    require(scalar(fm, 'next_command') == '/gsd-validate-phase 7', 'next route')
+    require('  partial_phases: []\n' in fm and '  overall: compliant\n' in fm
+            and all(p['nyquist'] == 'COMPLIANT' for p in data['phases'].values()), 'Nyquist discovery')
+    require(scalar(fm, 'next_command') == '/gsd-complete-milestone v0.2', 'next route')
     require('[v0.2-INTEGRATION-AUDIT.md](v0.2-INTEGRATION-AUDIT.md)' in text, 'integration evidence link')
     require('63/63' in text and '25 actual passes and 82 matched expected failures' in text, 'bounded evidence claims')
     return errors
 
 
 def self_test(text, data):
-    mutations = [text.replace('status: gaps_found', 'status: passed', 1),
-                 text.replace('  requirements: 25/28', '  requirements: 28/28', 1),
+    mutations = [text.replace('status: tech_debt', 'status: passed', 1),
+                 text.replace('  requirements: 28/28', '  requirements: 25/28', 1),
                  text.replace('  phases: 9/9', '  phases: 8/9', 1),
                  text.replace('  integration: 9/9', '  integration: 8/9', 1),
-                 text.replace('  overall: partial', '  overall: compliant', 1),
-                 text.replace('\nnext_command: /gsd-validate-phase 7', '\nnext_command: /gsd-new-milestone', 1),
-                 text.replace('    - id: CGB-07', '    - id: CGB-99', 1)]
+                 text.replace('  overall: compliant', '  overall: partial', 1),
+                 text.replace('\nnext_command: /gsd-complete-milestone v0.2', '\nnext_command: /gsd-new-milestone', 1),
+                 text.replace('  requirements: []', '  requirements:\n    - id: CGB-99', 1)]
     for rid in ('CGB-05', 'CGB-07', 'CGB-09'):
         row = next(requirement_row(r) for r in data['requirements'] if r['id'] == rid)
-        mutations.extend([text.replace(row, '', 1), text.replace(row, row.replace('partial', 'satisfied'), 1)])
+        mutations.extend([text.replace(row, '', 1), text.replace(row, row.replace('satisfied', 'partial'), 1)])
     for altered in mutations:
         assert altered != text and check(altered, data), 'weakened report accepted'
     for change in ('verification', 'checkbox', 'summary'):
@@ -143,7 +145,18 @@ def self_test(text, data):
         else:
             row['summaries'] = []
         assert check(text, altered), 'changed source accepted'
-    return len(mutations) + 3
+    # A discovered requirement gap must override the otherwise clean score;
+    # a validation regression must likewise prevent a compliant verdict.
+    for change in ('unsatisfied', 'orphaned', 'nyquist'):
+        altered = copy.deepcopy(data)
+        if change == 'nyquist':
+            altered['phases'][7]['nyquist'] = 'PARTIAL'
+        else:
+            altered['requirements'][0]['status'] = 'unsatisfied'
+            if change == 'orphaned':
+                altered['requirements'][0]['verification'] = 'missing'
+        assert check(text, altered), 'gap hidden by clean report'
+    return len(mutations) + 6
 
 
 def main():
@@ -158,7 +171,7 @@ def main():
     text = REPORT.read_text()
     errors = check(text, data)
     assert not errors, '; '.join(errors)
-    print('PASS: audit reconciles 28 requirements, 134 summaries and 9 phase reports; 25 satisfied, 3 partial')
+    print('PASS: audit reconciles 28 requirements, 134 summaries and 9 phase reports; 28 satisfied, 0 partial')
     if args.self_test:
         print(f'PASS: {self_test(text, data)} negative controls rejected')
 
