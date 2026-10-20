@@ -49,7 +49,7 @@ Milestone-wide rules:
 - [x] **Phase 12: CGB Double Speed** - KEY1/STOP speed switching with a modelled pause and a CPU-stall run-loop branch (completed 2026-10-14)
 - [x] **Phase 13: CGB HDMA** - General-purpose and HBlank VRAM DMA with stall, cancel, readback and HALT interaction (completed 2026-10-14)
 - [x] **Phase 14: CGB-E Model Qualification and Corpus** - CGB-E APU/I/O deltas and a headless CGB-E corpus with per-suite denominators (completed 2026-10-15)
-- [ ] **Phase 15: CGB Acceptance, Support Ledger and v0.2.0 Release** - CGB game-level evidence (or an explicit absence), current docs and consumers, and a qualified exact-tag release
+- [x] **Phase 15: CGB Acceptance, Support Ledger and v0.2.0 Release** - CGB game-level evidence (or an explicit absence), current docs and consumers, and a qualified exact-tag release (completed 2026-10-20)
 
 ## Phase Details
 
@@ -479,7 +479,7 @@ Plans:
 
 **Rights gates**: Per-candidate rights audit for the CGB game (Rebound, Rex Runner, GBHack, Aevilia); none is admitted without the GAME-01 manifest checklist.
 **Research**: Light.
-**Plans**: 10/10 plans executed
+**Plans**: 10/10 plans complete
 
 Plans:
 **Wave 1**
@@ -519,4 +519,4 @@ Plans:
 | 12. CGB Double Speed | v0.2 | 19/19 | Complete    | 2026-10-14 |
 | 13. CGB HDMA | v0.2 | 12/12 | Complete    | 2026-10-14 |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 13/13 | Complete    | 2026-10-15 |
-| 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 10/10 | In Progress | - |
+| 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 10/10 | Complete    | 2026-10-20 |
