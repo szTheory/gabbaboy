@@ -609,6 +609,17 @@ def validate_receipt(path: Path, *, expected_sha: str | None = None, verify_sour
     return value
 
 
+class _DropCredentialsOnRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected is not None:
+            redirected.remove_header("Authorization")
+        return redirected
+
+
+_NO_CREDENTIAL_FORWARDING = urllib.request.build_opener(_DropCredentialsOnRedirect)
+
+
 def api_request(url: str, *, token: str | None = None, maximum: int = MAX_ARTIFACT_ZIP_BYTES) -> bytes:
     headers = {
         "Accept": "application/vnd.github+json",
@@ -618,7 +629,9 @@ def api_request(url: str, *, token: str | None = None, maximum: int = MAX_ARTIFA
     if token:
         headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(request, timeout=30) as response:
+    # Artifact downloads redirect to signed blob storage; urllib would forward the bearer token
+    # there, which the storage service rejects (HTTP 401) and which leaks the credential.
+    with _NO_CREDENTIAL_FORWARDING.open(request, timeout=30) as response:
         data = response.read(maximum + 1)
     if len(data) > maximum:
         raise ReceiptError("GitHub response exceeds configured size limit")
@@ -709,7 +722,7 @@ def verify_hosted(expected_sha: str, *, poll_seconds: int = 2700, interval_secon
         try:
             runs_data = parse_api_json(
                 api,
-                f"repos/{owner_repo}/actions/runs?per_page=100",
+                f"repos/{owner_repo}/actions/runs?head_sha={expected_sha}&event=push&per_page=100",
                 token,
             )
             runs = runs_data.get("workflow_runs", []) if isinstance(runs_data, dict) else []
