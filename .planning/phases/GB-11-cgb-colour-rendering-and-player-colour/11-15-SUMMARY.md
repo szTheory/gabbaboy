@@ -13,7 +13,9 @@ provides:
   - "phase COVERAGE.md no-external-API declaration (verify:pre passes)"
   - "STATE.md and .continue-here.md handoff to /gsd-verify-work 11, Phase 12 named and not started"
 affects: []
-requirements-completed: []
+requirements-completed:
+  - CGB-05
+  - CGB-09
 plan_head_before: 155686f622bf39ced996c56f4a654937da9df309
 plan_head_after: f224ae17449f1d869e02847829f935ede49719d3
 actuals:
@@ -88,3 +90,8 @@ None. Only repo-relative paths and commit SHAs were written (T-11-41), and the h
 ## Self-Check: PASSED
 - Files exist: DECISIONS.md, INDEX.md, LESSONS.md, COVERAGE.md, STATE.md and .continue-here.md.
 - Commits af8d63d and f224ae1 are on the branch.
+
+
+## Post-verification requirement reconciliation — 2026-10-20
+
+The `requirements-completed` field now records CGB-05, CGB-09 as phase-level closure claims. [11-VERIFICATION.md](11-VERIFICATION.md) marks each SATISFIED with `status: passed`; [11-UAT.md](11-UAT.md) is complete and automated, and the central REQUIREMENTS.md checks each Complete. These existing phase closure results supersede the execution-time decision to leave claims pending. The original execution receipts, coverage blocks and handoff prose above remain historical; this update does not claim a new behavioral test run or physical hardware qualification.
