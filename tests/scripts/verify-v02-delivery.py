@@ -191,9 +191,14 @@ def check_evidence(evidence: Path, tag: str, source: str, repo: Path, archive: P
     workflow = fuzz.get("workflow")
     if not isinstance(workflow, dict):
         reject("fuzz-binding", "fuzz receipt has no workflow identity")
-    for field in ("run_id", "attempt"):
-        if type(workflow.get(field)) is not int or workflow[field] < 1:
-            reject("fuzz-binding", f"fuzz workflow {field} is not a positive integer")
+    # The fuzz producer records GITHUB_RUN_ID verbatim, a decimal string (verify-v02-fuzz.py compares it
+    # as text); the attempt is an integer. A hosted rehearsal showed the real receipt carries the string.
+    run_id = workflow.get("run_id")
+    if not (type(run_id) is int and run_id >= 1) and not (
+            isinstance(run_id, str) and run_id.isascii() and run_id.isdigit() and int(run_id) >= 1):
+        reject("fuzz-binding", "fuzz workflow run_id is not a positive integer or decimal run identifier")
+    if type(workflow.get("attempt")) is not int or workflow["attempt"] < 1:
+        reject("fuzz-binding", "fuzz workflow attempt is not a positive integer")
     perf_sha = (docs[PERFORMANCE].get("source") or {}).get("candidate", {}).get("sha")
     fuzz_sha = fuzz.get("source_sha")
     reuse = {"performance": None, "fuzz": None}
@@ -522,7 +527,7 @@ def make_evidence(directory: Path, source: str) -> Path:
     write_json(directory / PERFORMANCE, {"result": "passed", "workload": {"id": WORKLOAD_ID},
                                          "source": {"candidate": {"sha": source}}})
     write_json(directory / FUZZ, {"status": "complete", "mode": "explore", "source_sha": source,
-                                  "workflow": {"run_id": 4242, "attempt": 1, "event": "push"}})
+                                  "workflow": {"run_id": "4242", "attempt": 1, "event": "push"}})
     archive = directory.parent / "source-archive.tar.gz"
     archive.write_bytes(b"generated archive bytes\n")
     write_json(directory / ARCHIVE_RECEIPT, {"archive_sha256": sha256_bytes(archive.read_bytes()),
@@ -572,6 +577,8 @@ def evidence_controls(base: Path, repo: Path, producer: str, source: str) -> tup
            lambda w: edit(w / SIDECAR, lambda d: d.update(ledger_blob="0" * 40)))
     mutate("fuzz receipt for another SHA", "fuzz-binding",
            lambda w: edit(w / FUZZ, lambda d: d.update(source_sha="b" * 40)))
+    mutate("fuzz workflow run id is the local placeholder", "fuzz-binding",
+           lambda w: edit(w / FUZZ, lambda d: d["workflow"].update(run_id="local")))
     mutate("fuzz workflow attempt zero", "fuzz-binding",
            lambda w: edit(w / FUZZ, lambda d: d["workflow"].update(attempt=0)))
     mutate("unsupported campaign", "owner-fuzz", lambda w: edit(w / FUZZ, lambda d: d.update(status="unsupported")))
