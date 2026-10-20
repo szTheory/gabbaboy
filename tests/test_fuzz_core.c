@@ -166,6 +166,28 @@ static int run_speed_seed(void) {
     static const uint8_t seed_lcd_off[] = {0x90u, 0x05u, 0x0Fu};
     static const uint8_t seed_compat_twin[] = {0x90u, 0x06u, 0x0Fu};
     static const uint8_t seed_dmg_twin[] = {0x10u, 0x07u, 0x0Fu};
+    /* DMG-profile KEY1 scenarios: hosted fuzz run 38947419636 minimized to a 518-byte input
+     * (sha256 532b3bf198c578ebf2b97e05415208187a34a8aa5ecd0e5fc96b6609f12f8263) whose decoded
+     * prefix is data[0]=0x10 (DMG speed) data[1]=1. The oracle demanded a speed switch on a DMG
+     * cartridge. These hand-built equivalents must now fall back to the DMG twin, not fail. */
+    static const uint8_t seed_dmg_minimized_prefix[] = {0x10u, 0x01u, 0x00u, 0x02u, 0x03u, 0x04u};
+    static const uint8_t seed_dmg_s0[] = {0x10u, 0x00u, 0x0Fu};
+    static const uint8_t seed_dmg_s2[] = {0x10u, 0x02u, 0x0Fu};
+    static const uint8_t seed_dmg_s4[] = {0x10u, 0x04u, 0x0Fu};
+    static const uint8_t seed_dmg_s5[] = {0x10u, 0x05u, 0x0Fu};
+    static const uint8_t seed_dmg_s6[] = {0x10u, 0x06u, 0x0Fu};
+    static const uint8_t *const dmg_seeds[] = {seed_dmg_minimized_prefix, seed_dmg_s0, seed_dmg_s2,
+                                               seed_dmg_s4, seed_dmg_s5, seed_dmg_s6};
+    static const size_t dmg_sizes[] = {sizeof(seed_dmg_minimized_prefix), sizeof(seed_dmg_s0),
+                                       sizeof(seed_dmg_s2), sizeof(seed_dmg_s4),
+                                       sizeof(seed_dmg_s5), sizeof(seed_dmg_s6)};
+    for (size_t i = 0u; i < sizeof(dmg_seeds) / sizeof(dmg_seeds[0]); ++i) {
+        if (run_speed_seed_case(dmg_seeds[i], dmg_sizes[i], 7u, GBB_MODE_DMG,
+                                GBB_PROFILE_DMG_CPU_B, 0u, 0u, 0u, 0u, 0, 0u, 0x00u, 0, 0) != 0) {
+            fprintf(stderr, "DMG-profile speed seed %zu failed\n", i);
+            return 1;
+        }
+    }
 
     if (run_speed_seed_case(seed_arm_and_switch, sizeof(seed_arm_and_switch), 0u,
                             GBB_MODE_CGB, GBB_PROFILE_CGB_CPU_E, 1u, 1u, 1u, 0u,
