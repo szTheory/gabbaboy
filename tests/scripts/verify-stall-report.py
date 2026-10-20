@@ -295,6 +295,7 @@ def main() -> int:
         if args.self_test:
             run_self_test()
         elif all((args.runner, args.cases, args.workdir, args.failure_dir)):
+            run_self_test()
             run_integration(args)
         else:
             parser.error("use --self-test or provide --runner, --cases, --workdir and --failure-dir")

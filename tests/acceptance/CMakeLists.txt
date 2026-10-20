@@ -282,9 +282,6 @@ add_test(NAME acceptance_stall_diagnosis
     --workdir ${PROJECT_SOURCE_DIR}
     --failure-dir ${GBB_STALL_FAIL_DIR})
 set_tests_properties(acceptance_stall_diagnosis PROPERTIES TIMEOUT 600 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
-add_test(NAME acceptance_stall_report_selftest
-  COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-stall-report.py --self-test)
-set_tests_properties(acceptance_stall_report_selftest PROPERTIES TIMEOUT 30)
 
 # Core mutant (D-14): a copy of the core whose JOYP direction/button select test is inverted, built into a
 # test-only static library and runner. The source line is the single anchor guaranteed by Plans 07-03 and

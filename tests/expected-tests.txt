@@ -399,7 +399,6 @@ acceptance_libbet-select_raw
 acceptance_libbet_drop_start
 acceptance_sgb_tolerance
 acceptance_stall_diagnosis
-acceptance_stall_report_selftest
 acceptance_core_mutant
 acceptance_suite_declared_exclusion
 acceptance_suite_undeclared_exclusion
