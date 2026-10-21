@@ -438,6 +438,62 @@ static int case_predicate_anchors(const char *rom_path) {
     PASS("acceptance_predicate_anchors");
 }
 
+static int case_drive_dense_queue(void) {
+    size_t rom_length = 0;
+    uint8_t *rom = read_file("fixtures/libbet/libbet.gb", 32768u, &rom_length);
+    REQUIRE(rom != NULL && rom_length == 32768u);
+    char digest[65];
+    gbb_accept_sha256_hex(rom, rom_length, digest);
+    const gbb_accept_predicate *predicate =
+        gbb_accept_predicate_find("libbet-tutorial-cleared", digest);
+    REQUIRE(predicate != NULL);
+
+    int failed = 0;
+    for (unsigned scenario = 0; scenario < 2u; ++scenario) {
+        gbb_input_event events[65];
+        for (size_t i = 0; i < sizeof(events) / sizeof(events[0]); ++i) {
+            events[i].at_half_dots = scenario == 0u ? 0u : 1u;
+            events[i].kind = (i & 1u) == 0u ? GBB_INPUT_BUTTON_PRESS : GBB_INPUT_BUTTON_RELEASE;
+            events[i].value = GBB_BUTTON_A;
+        }
+        gbb_accept_script script;
+        memset(&script, 0, sizeof(script));
+        script.events = events;
+        script.event_count = sizeof(events) / sizeof(events[0]);
+        script.end_half_dots = 64u;
+
+        gbb_instance *instance = NULL;
+        REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) == GBB_OK);
+        REQUIRE(gbb_load_rom(instance, rom, rom_length) == GBB_OK);
+        gbb_accept_stepper stepper;
+        gbb_accept_stepper_init(&stepper, instance, NULL, NULL);
+        gbb_accept_drive_config config;
+        memset(&config, 0, sizeof(config));
+        config.stepper = &stepper;
+        config.script = &script;
+        config.predicate = predicate;
+        config.budget_half_dots = script.end_half_dots;
+        config.max_batch = 64u;
+        gbb_accept_drive_result result;
+        gbb_accept_drive(&config, &result);
+        if (result.status != GBB_ACCEPT_DRIVE_NOT_REACHED ||
+            result.end_half_dots != script.end_half_dots ||
+            stepper.actual_half_dots > script.end_half_dots ||
+            script.end_half_dots - stepper.actual_half_dots > 48u) {
+            fprintf(stderr,
+                    "dense input scenario=%s status=%d end=%llu actual=%llu; expected logical completion at 64 half-dots with at most 48 half-dots carried\n",
+                    scenario == 0u ? "equal-time" : "inside-instruction",
+                    (int)result.status, (unsigned long long)result.end_half_dots,
+                    (unsigned long long)stepper.actual_half_dots);
+            failed = 1;
+        }
+        gbb_destroy(instance);
+    }
+    free(rom);
+    if (failed) return 1;
+    PASS("acceptance_drive_dense_queue");
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) { fprintf(stderr, "usage: test_acceptance_lib <case> [args]\n"); return 2; }
     if (strcmp(argv[1], "acceptance_lib_libbet_replay") == 0) {
@@ -451,6 +507,7 @@ int main(int argc, char **argv) {
         REQUIRE(argc == 3);
         return case_predicate_anchors(argv[2]);
     }
+    if (strcmp(argv[1], "acceptance_drive_dense_queue") == 0) return case_drive_dense_queue();
     fprintf(stderr, "unknown case %s\n", argv[1]);
     return 2;
 }
