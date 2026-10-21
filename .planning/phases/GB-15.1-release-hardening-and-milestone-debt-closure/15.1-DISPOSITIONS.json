@@ -955,13 +955,13 @@
     },
     {
       "id": "LIM-ASAN-STALL-TIMING",
-      "title": "The hosted ASan/UBSan stall-report replay needed about 265 s on main and exceeded the fixed 300 s deadline on the Phase 15.1 head. The deadline is now sanitizer-scaled; whether the core change made the replay slower is not diagnosed.",
+      "title": "The hosted ASan/UBSan lane is slower on this phase: one stall-report replay took 186 s on main and 204 s on the new core in a quiet Linux ASan container (one sample each, +9.7 percent), the stall test now runs two replays where main ran one, and the dense-input observation is now full length (107 s in the same container). The hosted lane took about 41 minutes with three tests timing out at the old budgets, so the lane timeout, three test timeouts and the replay deadline were raised. No cause of the single-replay slowdown is established beyond that measurement.",
       "kind": "owner_decision",
       "affects": [
         "P7-01"
       ],
-      "evidence": "PR 93 linux-asan-ubsan run on head e630999 (acceptance_stall_diagnosis timed out on repetition 1); main run 39438514017 (529 s for two replays)",
-      "owner_decision": "Request a before and after timing of the replay, or accept the scaled deadline.",
+      "evidence": "PR 93 linux-asan-ubsan run 39663037019 (v02_consumer_controls, acceptance_dense_script_delivered and acceptance_stall_diagnosis timed out); main run 39438514017 (stall diagnosis 529 s for one replay); local container timings in the 15.1-17 SUMMARY",
+      "owner_decision": "Request a proper paired measurement of the core change (this ties into LIM-PERF-REVIEW), or accept the longer sanitizer lane.",
       "status": "open",
       "counts_as_pass": false,
       "owner_accepted": false
