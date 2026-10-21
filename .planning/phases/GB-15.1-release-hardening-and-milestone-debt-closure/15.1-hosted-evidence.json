@@ -9,7 +9,10 @@
     "gh api repos/szTheory/gabbaboy/actions/runs/39633868728",
     "gh api repos/szTheory/gabbaboy/actions/runs/39633868728/attempts/1/jobs",
     "gh api repos/szTheory/gabbaboy/actions/runs/39633868728/artifacts",
-    "gh run view 39633868728 --log"
+    "gh run view 39633868728 --log",
+    "gh api repos/szTheory/gabbaboy/actions/runs/39634983581",
+    "gh api repos/szTheory/gabbaboy/actions/runs/39634983581/attempts/1/jobs",
+    "gh api repos/szTheory/gabbaboy/actions/runs/39634983581/artifacts"
   ],
   "workflows": [
     {
@@ -54,13 +57,9 @@
     {
       "id": "release-rehearsal",
       "workflow_path": ".github/workflows/release-rehearsal.yml",
-      "run_id": null,
+      "run_id": 39634983581,
       "claim": "not_verified",
-      "dispatch_attempt": {
-        "command": "gh workflow run release-rehearsal.yml --ref gsd/phase-15.1-release-hardening-and-milestone-debt-closure",
-        "result": "HTTP 422: Workflow does not have 'workflow_dispatch' trigger"
-      },
-      "limitation": "No hosted rehearsal exists for this source. The workflow triggers only on push to rehearsal/** branches and has no workflow_dispatch, and this plan was authorized to push only the phase branch. Earlier rehearsal runs (e.g. 39396554673) ran on other commits and are not evidence for this source. Smallest action: push a rehearsal/** branch at the final exact SHA (release.yml, tags and releases untouched), then read its run, jobs and artifacts. The judge job may still fail until the policy script is on the default branch; that must be recorded as such, not passed.",
+      "limitation": "Rehearsal run 39634983581 at 6674ea8 completed with conclusion failure. Defects found: (a) cgb_samesuite_apu_membership/controls fail producer-object-missing because the frozen producer commit b46bfc9 is not in any public ref; (b) the package job calls verify-v02-consumers.py without the candidate manifest the hardened contract requires; (c) paired performance qualification is pending by design (median_ratio_pct=135.55, review_trigger=true) and needs an owner, receipt-bound review decision; (d) the trusted judge was skipped. Only the clang libfuzzer campaign job passed. A rehearsal at a later source is required.",
       "historic_runs_not_counted": [
         {
           "run_id": 39396554673,
@@ -68,7 +67,101 @@
           "branch": "rehearsal/v0-2-0-final",
           "conclusion": "success"
         }
-      ]
+      ],
+      "run_attempt": 1,
+      "event": "push",
+      "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
+      "head_branch": "rehearsal/phase-15.1-6674ea8",
+      "status": "completed",
+      "conclusion": "failure",
+      "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/39634983581",
+      "created_at": "2026-10-21T16:27:48Z",
+      "updated_at": "2026-10-21T16:46:38Z",
+      "jobs": [
+        {
+          "id": 119342920539,
+          "name": "rehearse-v02-evidence-aggregate",
+          "status": "completed",
+          "conclusion": "failure",
+          "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
+          "failed_steps": [
+            "Corpus receipt and support sidecar"
+          ],
+          "log_sha256": "9d720c1b619a9717cd37f250c028073a889e2c430c8be7d1eb4ddfb1e079f248",
+          "log_bytes": 323581,
+          "observed": "CTest 1166/1168 in Corpus receipt and support sidecar step; same two APU failures (producer-object-missing)"
+        },
+        {
+          "id": 119342920622,
+          "name": "rehearse-package-consumers-and-archive",
+          "status": "completed",
+          "conclusion": "failure",
+          "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
+          "failed_steps": [
+            "Prove relocated C and C++ consumer behavior on the extracted package bytes"
+          ],
+          "log_sha256": "403a187e41f287a59cb38234d83a028214514e3719bed55f95104e19354cdf24",
+          "log_bytes": 28318,
+          "observed": "verify-v02-consumers: rejected:candidate-manifest-required"
+        },
+        {
+          "id": 119342920685,
+          "name": "rehearse-clang-libfuzzer-campaign",
+          "status": "completed",
+          "conclusion": "success",
+          "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
+          "failed_steps": [],
+          "log_sha256": "20760dc8d40f3dcf69b758425db34aa4eba988a8285d9396b9bc49ae98dfb774",
+          "log_bytes": 65261,
+          "observed": "success"
+        },
+        {
+          "id": 119342920811,
+          "name": "rehearse-corpus-and-support-sidecar",
+          "status": "completed",
+          "conclusion": "failure",
+          "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
+          "failed_steps": [
+            "Verify public CGB claims, the current support ledger and the required test inventory"
+          ],
+          "log_sha256": "a9b1f8b12660bf25988ff73b0f13524c913e5f873136939b342f9cd12dc942a3",
+          "log_bytes": 326347,
+          "observed": "CTest 1166/1168; failing cgb_samesuite_apu_membership and cgb_samesuite_apu_controls: cgb-apu-dispositions mismatch: producer-object-missing"
+        },
+        {
+          "id": 119342920826,
+          "name": "rehearse-paired-performance-qualification",
+          "status": "completed",
+          "conclusion": "failure",
+          "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
+          "failed_steps": [
+            "Measure the clean paired v0.1.0 baseline and candidate"
+          ],
+          "log_sha256": "a6c2a92fc4a7f4cac0fff72858ecb4497f58719142e67d183b59a4f2565f821d",
+          "log_bytes": 22302,
+          "observed": "30 samples, median_ratio_pct=135.55, review_trigger=true; pending receipt written, exit 1 by design (owner decision required)"
+        },
+        {
+          "id": 119353024945,
+          "name": "rehearse-trusted-judge",
+          "status": "completed",
+          "conclusion": "skipped",
+          "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
+          "failed_steps": [],
+          "log_sha256": "babde81583f62c9d777bc0d74e16cff9b1108fc49e3ac378294e5c74b6ea192c",
+          "log_bytes": 215,
+          "observed": "skipped (needs the failed producer jobs)"
+        }
+      ],
+      "artifacts": [
+        {
+          "name": "rehearsal-fuzz-39634983581-1",
+          "id": 12360478654,
+          "size": 2505,
+          "digest": "sha256:2a1f6e7c9fd2d746225d8e545c3e1eb1646de7ba2a5192dbaa60dcea2bcb2de9"
+        }
+      ],
+      "log_command": "gh api --allow-escape-sequences repos/szTheory/gabbaboy/actions/jobs/<id>/logs (ANSI stripped)"
     }
   ]
 }
