@@ -227,7 +227,7 @@ def _check_checkout_credentials(workflow: str, tree: dict, job_ids) -> None:
                 raise Reject("checkout-credentials", f"{_where(workflow, job_id)} checkout must set persist-credentials: false")
 
 
-def _upload(job: dict, workflow: str, job_id: str, name: str, must_contain: tuple[str, ...]) -> None:
+def _upload(job: dict, workflow: str, job_id: str, name: str, must_contain: tuple[str, ...], retain_on_failure: bool = False) -> None:
     uploads = _artifact_steps(job, "upload")
     matching = [step for step in uploads if step.get("with", {}).get("name") == name]
     if len(matching) != 1:
@@ -235,7 +235,8 @@ def _upload(job: dict, workflow: str, job_id: str, name: str, must_contain: tupl
     inputs = matching[0]["with"]
     if inputs.get("if-no-files-found") != "error" or any(item not in str(inputs.get("path", "")) for item in must_contain):
         raise Reject("artifact-flow", f"{_where(workflow, job_id)} artifact {name} must fail on a missing file and carry {must_contain}")
-    if str(matching[0].get("if", "")).strip() not in ("", "${{ success() }}"):
+    allowed = ("", "${{ success() }}") + (("always()", "${{ always() }}") if retain_on_failure else ())
+    if str(matching[0].get("if", "")).strip() not in allowed:
         raise Reject("artifact-flow", f"{_where(workflow, job_id)} artifact upload must not be conditional")
 
 
@@ -258,9 +259,12 @@ def _check_unprivileged(workflow: str, tree: dict, job_id: str) -> None:
         raise Reject("producer-write-command", f"{_where(workflow, job_id)} runs a repository-write or API command")
 
 
-def _check_trusted_checkout(workflow: str, job_id: str, job: dict, expected_ref: str, expected_path: str) -> None:
+def _check_trusted_checkout(workflow: str, job_id: str, job: dict, expected_ref: str, expected_path: str,
+                            optional: bool = False) -> None:
     """A judge, reader or attacher checks out only the trusted workflow revision, never the subject ref."""
     steps = _checkouts(job)
+    if optional and not steps:
+        return
     if len(steps) != 1:
         raise Reject("judge-trust", f"{_where(workflow, job_id)} needs exactly one trusted checkout")
     inputs = steps[0].get("with", {})
@@ -352,7 +356,7 @@ def check_ci(root: Path) -> None:
         raise Reject("fuzz-producer-permissions", "ci.linux-sanitizers must hold only actions: read and contents: read")
     _check_checkout_credentials(name, tree, ("linux-sanitizers",))
     _upload(job, name, "linux-sanitizers", "v02-fuzz-${{ github.run_id }}-${{ github.run_attempt }}",
-            ("build-asan/v02-fuzz-receipt.json", "build-asan/fuzz-artifacts/"))
+            ("build-asan/v02-fuzz-receipt.json", "build-asan/fuzz-artifacts/"), retain_on_failure=True)
     if any(_writes(_permissions(item, tree["permissions"])) for item in tree["jobs"].values()):
         raise Reject("producer-write-authority", "ci must not grant write authority to any job")
 
@@ -393,7 +397,7 @@ def check_release(root: Path) -> None:
             if perms != {"contents": "write"}:
                 raise Reject("attacher-permissions", f"{_where(name, job_id)} must hold exactly contents: write")
             _check_checkout_credentials(name, tree, (job_id,))
-            _check_trusted_checkout(name, job_id, job, TRUSTED_SHA_REF, "trusted")
+            _check_trusted_checkout(name, job_id, job, TRUSTED_SHA_REF, "trusted", optional=True)
             _require_needs(name, job_id, job, {"release", "candidate", "candidate-corpus", "candidate-fuzz", "candidate-performance"}, "attacher-dependencies")
             for producer in ("candidate-corpus", "candidate-fuzz", "candidate-performance"):
                 _download(job, name, job_id, RELEASE_ARTIFACTS[producer][0])
@@ -430,61 +434,50 @@ def _run_cli(fixture: Path, cwd: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _mutations(root: Path) -> list[tuple[str, str, str, str, str]]:
-    """(label, workflow, old, new, expected diagnostic code). Each anchor must exist in the production file."""
+def _mutations() -> list[tuple[str, str, str, str, str, str]]:
+    """(label, workflow, after, old, new, expected code): replace the first `old` following `after` (or the file start)."""
+    reh = "release-rehearsal.yml"
+    rel = "release.yml"
     return [
-        ("rehearsal fuzz producer gains contents: write", "release-rehearsal.yml",
-         "  fuzz:\n    name: rehearse-clang-libfuzzer-campaign\n    runs-on: ubuntu-24.04\n",
-         "  fuzz:\n    name: rehearse-clang-libfuzzer-campaign\n    runs-on: ubuntu-24.04\n    permissions:\n      contents: write\n",
-         "producer-write-authority"),
-        ("rehearsal top-level write", "release-rehearsal.yml", "permissions:\n  contents: read\n",
-         "permissions:\n  contents: write\n", "workflow-permissions"),
-        ("rehearsal judge reads judge code from the subject", "release-rehearsal.yml",
-         f"ref: {DEFAULT_BRANCH_REF}", f"ref: {TRUSTED_SHA_REF}", "judge-trust"),
-        ("rehearsal judge runs a path inside the subject tree", "release-rehearsal.yml",
+        ("rehearsal fuzz producer gains contents: write", reh, "  fuzz:\n", "    runs-on: ubuntu-24.04\n",
+         "    runs-on: ubuntu-24.04\n    permissions:\n      contents: write\n", "producer-write-authority"),
+        ("rehearsal top-level write", reh, "", "permissions:\n  contents: read\n", "permissions:\n  contents: write\n",
+         "workflow-permissions"),
+        ("rehearsal judge reads judge code from the subject", reh, "  judge:\n", f"ref: {DEFAULT_BRANCH_REF}",
+         f"ref: {TRUSTED_SHA_REF}", "judge-trust"),
+        ("rehearsal judge runs a path inside the subject tree", reh, "  judge:\n",
          "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject",
          "python3 -I subject/.github/scripts/verify-workflow-policy.py --check --root subject", "judge-subject-execution"),
-        ("rehearsal judge stops waiting for the fuzz producer", "release-rehearsal.yml",
+        ("rehearsal judge stops waiting for the fuzz producer", reh, "  judge:\n",
          "needs: [corpus, fuzz, performance, package, aggregate]", "needs: [corpus, performance, package, aggregate]",
          "workflow-dependency"),
-        ("rehearsal fuzz artifact no longer retained", "release-rehearsal.yml",
-         "name: " + REHEARSAL_FUZZ_ARTIFACT, "name: renamed-" + REHEARSAL_FUZZ_ARTIFACT, "artifact-flow"),
-        ("rehearsal checkout persists credentials", "release-rehearsal.yml",
-         "          fetch-depth: 0\n      - name: Create the local-only rehearsal tag\n",
-         "          fetch-depth: 0\n          persist-credentials: true\n      - name: Create the local-only rehearsal tag\n",
-         "checkout-credentials"),
-        ("unpinned action", "release-rehearsal.yml", "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+        ("rehearsal fuzz artifact no longer retained", reh, "  fuzz:\n", "name: " + REHEARSAL_FUZZ_ARTIFACT,
+         "name: renamed-" + REHEARSAL_FUZZ_ARTIFACT, "artifact-flow"),
+        ("rehearsal checkout persists credentials", reh, "  corpus:\n", "persist-credentials: false",
+         "persist-credentials: true", "checkout-credentials"),
+        ("unpinned action", reh, "", "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
          "actions/upload-artifact@v4", "workflow-unpinned-action"),
-        ("YAML anchor", "release-rehearsal.yml", "env:\n  REHEARSAL_TAG: v0.2.0\n", "env:\n  REHEARSAL_TAG: &tag v0.2.0\n",
-         "workflow-unsupported-yaml"),
-        ("release corpus producer gains contents: write", "release.yml",
-         "  candidate-corpus:\n    name: exact-tag-corpus-and-support-sidecar\n    needs: [release, candidate]\n    if: ${{ always() && needs.candidate.result == 'success' }}\n    runs-on: ubuntu-22.04\n    timeout-minutes: 60\n    permissions:\n      contents: read\n",
-         "  candidate-corpus:\n    name: exact-tag-corpus-and-support-sidecar\n    needs: [release, candidate]\n    if: ${{ always() && needs.candidate.result == 'success' }}\n    runs-on: ubuntu-22.04\n    timeout-minutes: 60\n    permissions:\n      contents: write\n",
-         "producer-write-authority"),
-        ("release corpus producer receives the job token", "release.yml",
-         "  candidate-corpus:\n    name: exact-tag-corpus-and-support-sidecar\n",
-         "  candidate-corpus:\n    env:\n      GH_TOKEN: ${{ github.token }}\n    name: exact-tag-corpus-and-support-sidecar\n",
-         "producer-token"),
-        ("release performance checkout persists credentials", "release.yml",
-         "          ref: ${{ env.SOURCE_SHA }}\n          fetch-depth: 0\n          persist-credentials: false\n      - name: Measure",
-         "          ref: ${{ env.SOURCE_SHA }}\n          fetch-depth: 0\n          persist-credentials: true\n      - name: Measure",
-         "checkout-credentials"),
-        ("release fuzz reader checks out the tagged subject", "release.yml",
-         "          ref: ${{ github.sha }}\n          path: trusted\n          persist-credentials: false\n      - name: Require trusted main and read the exact CI campaign",
-         "          ref: ${{ env.SOURCE_SHA }}\n          path: trusted\n          persist-credentials: false\n      - name: Require trusted main and read the exact CI campaign",
+        ("YAML anchor", reh, "", "REHEARSAL_TAG: v0.2.0\n", "REHEARSAL_TAG: &tag v0.2.0\n", "workflow-unsupported-yaml"),
+        ("release corpus producer gains contents: write", rel, "  candidate-corpus:\n", "      contents: read\n",
+         "      contents: write\n", "producer-write-authority"),
+        ("release corpus producer receives the job token", rel, "  candidate-corpus:\n", "    env:\n",
+         "    env:\n      GH_TOKEN: ${{ github.token }}\n", "producer-token"),
+        ("release performance checkout persists credentials", rel, "  candidate-performance:\n",
+         "persist-credentials: false", "persist-credentials: true", "checkout-credentials"),
+        ("release fuzz reader checks out the tagged subject", rel, "  candidate-fuzz:\n", "ref: ${{ github.sha }}",
+         "ref: ${{ env.SOURCE_SHA }}", "judge-trust"),
+        ("release attacher checks out the tagged subject", rel, "  attach-v02-evidence:\n", "    steps:\n",
+         "    steps:\n      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2\n        with:\n          ref: ${{ env.SOURCE_SHA }}\n          persist-credentials: false\n",
          "judge-trust"),
-        ("release attacher checks out the tagged subject", "release.yml",
-         "          ref: ${{ github.sha }}\n          path: trusted\n          persist-credentials: false\n      - name: Require the draft and attach",
-         "          ref: ${{ env.SOURCE_SHA }}\n          path: trusted\n          persist-credentials: false\n      - name: Require the draft and attach",
-         "judge-trust"),
-        ("release attacher stops waiting for the corpus producer", "release.yml",
+        ("release attacher stops waiting for the corpus producer", rel, "  attach-v02-evidence:\n",
          "needs: [release, candidate, candidate-corpus, candidate-fuzz, candidate-performance]",
          "needs: [release, candidate, candidate-fuzz, candidate-performance]", "attacher-dependencies"),
-        ("release manifest no longer waits for the attacher", "release.yml",
-         "needs: [release, candidate, candidate-macos, candidate-windows, attach-v02-evidence]",
-         "needs: [release, candidate, candidate-macos, candidate-windows]", "workflow-dependency"),
-        ("new unclassified release job", "release.yml", "\njobs:\n", "\njobs:\n  surprise:\n    runs-on: ubuntu-22.04\n    steps:\n      - run: true\n",
-         "job-unclassified"),
+        ("release attacher gains a second permission", rel, "  attach-v02-evidence:\n", "      contents: write\n",
+         "      contents: write\n      actions: write\n", "attacher-permissions"),
+        ("release manifest no longer waits for the attacher", rel, "  candidate-platform-manifest:\n",
+         "candidate-performance, attach-v02-evidence]", "candidate-performance]", "workflow-dependency"),
+        ("new unclassified release job", rel, "", "\njobs:\n",
+         "\njobs:\n  surprise:\n    runs-on: ubuntu-22.04\n    steps:\n      - run: true\n", "job-unclassified"),
     ]
 
 
@@ -499,11 +492,14 @@ def self_test(root: Path) -> None:
         if positive.returncode != 0 or "PASS: workflow privilege and trust wiring" not in positive.stdout:
             raise SystemExit(f"self-test positive control failed: exit={positive.returncode} stderr={positive.stderr.strip()!r}")
         baselines = {item: (fixture / ".github/workflows" / item).read_text(encoding="utf-8") for item in WORKFLOWS}
-        for label, workflow, old, new, expected in _mutations(root):
-            if old not in baselines[workflow]:
+        for label, workflow, after, old, new, expected in _mutations():
+            text = baselines[workflow]
+            split = text.find(after) if after else 0
+            if split < 0 or text.find(old, split) < 0:
                 raise SystemExit(f"self-test anchor missing for {label!r} in {workflow}")
+            position = text.find(old, split)
             path = fixture / ".github/workflows" / workflow
-            path.write_text(baselines[workflow].replace(old, new, 1), encoding="utf-8")
+            path.write_text(text[:position] + new + text[position + len(old):], encoding="utf-8")
             result = _run_cli(fixture, work)
             diagnostic = result.stderr.strip()
             if result.returncode != 1 or f"REJECT {expected}:" not in diagnostic or "PASS:" in result.stdout:

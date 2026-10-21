@@ -83,16 +83,13 @@ V02_PRODUCER_CALLS = {
     "verify-support-ledger.py --check-current": 1,
     "--output build/support-ledger.json": 1,
     "--verify-sidecar build/support-ledger.json": 1,
-    "run-bounded-fuzz.sh --explore --receipt": 1,
-    "verify-v02-fuzz.py --verify": 2,
+    "verify-v02-fuzz.py --verify-hosted": 1,
     "measure-release-baseline.sh --qualify-v02 --output": 1,
-    "verify-v02-performance.py --verify": 2,
+    "verify-v02-performance.py --verify": 1,
     "--check-v02-evidence": 1,
     'gh release upload "$RELEASE_TAG" build/v02-consumer-receipt.json': 1,
     'gh release upload "$RELEASE_TAG" build/source-archive-receipt.json': 1,
-    'gh release upload "$RELEASE_TAG" build/v02-fuzz-receipt.json': 1,
-    'gh release upload "$RELEASE_TAG" build/v02-performance-receipt.json': 1,
-    "for name in support-ledger.json cgb-corpus-receipt.json; do": 1,
+    'gh release upload "$RELEASE_TAG" "$1/$2"': 1,
 }
 PRODUCER_JOBS = ("candidate-corpus", "candidate-fuzz", "candidate-performance")
 def validate_v02_producers(text):
@@ -114,7 +111,7 @@ def validate_v02_producers(text):
     if "candidate-platform-manifest" not in publish_needs:
         raise ValueError("publication does not wait for the aggregate manifest")
     first_gate = text.find("--check-draft-final")
-    for producer in ("verify-cgb-corpus-report.py --from-ctest", "run-bounded-fuzz.sh --explore", "--qualify-v02"):
+    for producer in ("verify-cgb-corpus-report.py --from-ctest", "verify-v02-fuzz.py --verify-hosted", "--qualify-v02"):
         position = text.find(producer)
         if position < 0 or position > publish or position > first_gate:
             raise ValueError(f"evidence producer {producer} is not upstream of the final gate")
@@ -152,18 +149,14 @@ def validate_downloaded_sidecars(text):
     if "sha256sum --check" in text or any(call not in text for call in required):
         raise ValueError("every downloaded Mac/Windows digest-only sidecar must use the strict byte-check helper")
 def validate_isolated_release_readbacks(text):
-    start = text.find("\n  candidate-corpus:\n")
-    end = text.find("\n  publish-qualified-release:\n")
+    start = text.find("\n  attach-v02-evidence:\n")
+    end = text.find("\n  candidate-platform-manifest:\n")
     if start < 0 or end < start:
         raise ValueError("release evidence attachment/readback section is missing")
     section = text[start:end]
-    destinations = re.findall(r"gh release download[^\n]*?--dir (\S+)|--dir (\S+)\n", section)
-    downloads = []
-    for match in re.finditer(r"gh release download \"\$RELEASE_TAG\"(?:[^\n]|\\\n)*?--dir (\S+)", section):
-        downloads.append(match.group(1))
-    if len(downloads) < 5:
-        raise ValueError("the evidence jobs no longer download their attached assets for readback")
-    if len(downloads) != len(set(downloads)):
+    # The one readback helper derives its directory from the asset name, so every asset has its own directory.
+    downloads = re.findall(r"gh release download \"\$RELEASE_TAG\"[^\n]*--dir (\S+)", section)
+    if downloads != ['"build/readback-$2"']:
         raise ValueError("each release evidence download must use its own readback directory")
 try:
     validate_verifier_invocations(workflow)
@@ -209,7 +202,8 @@ else:
     raise SystemExit("release workflow self-test accepted producers that run after publication")
 for job in PRODUCER_JOBS:
     try:
-        validate_v02_producers(workflow.replace(f", {job}", "", 1))
+        manifest_at = workflow.find("\n  candidate-platform-manifest:\n")
+        validate_v02_producers(workflow[:manifest_at] + workflow[manifest_at:].replace(f", {job}", "", 1))
     except ValueError:
         mutation_count += 1
     else:
@@ -246,7 +240,7 @@ except ValueError:
 else:
     raise SystemExit("release workflow self-test accepted sha256sum --check for a digest-only sidecar")
 try:
-    validate_isolated_release_readbacks(workflow.replace("--dir build/fuzz-readback", "--dir build/corpus-readback", 1))
+    validate_isolated_release_readbacks(workflow.replace('--dir "build/readback-$2"', "--dir build/readback", 1))
 except ValueError:
     pass
 else:
@@ -610,6 +604,9 @@ case "$mode" in
   --self-test)
     [[ $# -eq 1 ]] || fail 'usage: verify-release-gates.sh --self-test'
     check_config
+    # Executable privilege/trust wiring is judged by the bounded policy reader, not by counting text above.
+    python3 -I "$ROOT/.github/scripts/verify-workflow-policy.py" --check --root "$ROOT"
+    python3 -I "$ROOT/.github/scripts/verify-workflow-policy.py" --self-test
     python3 "$ROOT/.github/scripts/verify-release-source-proof.py" --self-test
     temp=$(mktemp -d "${TMPDIR:-/tmp}/gb-release-gates.XXXXXX")
     trap 'rm -rf "$temp"' EXIT HUP INT TERM

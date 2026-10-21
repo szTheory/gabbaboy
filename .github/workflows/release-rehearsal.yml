@@ -32,6 +32,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Create the local-only rehearsal tag
         shell: bash
         run: |
@@ -90,6 +91,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Confirm pinned Clang 18 toolchain
         run: |
           clang-18 --version
@@ -110,6 +112,13 @@ jobs:
           GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --explore --receipt build-asan/v02-fuzz-receipt.json
           python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json
           GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --self-test
+      - name: Retain the producer campaign receipt for the separate trusted judge
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rehearsal-fuzz-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build-asan/v02-fuzz-receipt.json
+          if-no-files-found: error
+          retention-days: 3
 
   performance:
     name: rehearse-paired-performance-qualification
@@ -125,6 +134,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Measure the clean paired v0.1.0 baseline and candidate
         shell: bash
         run: |
@@ -143,6 +153,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Create the local-only rehearsal tag
         shell: bash
         run: |
@@ -195,6 +206,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Create the local-only rehearsal tag
         shell: bash
         run: |
@@ -273,3 +285,34 @@ jobs:
           done
           git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > "$RUNNER_TEMP/verify-release-gates.sh"
           bash "$RUNNER_TEMP/verify-release-gates.sh" --check-v02-evidence build/evidence "$RELEASE_TAG" "$SOURCE_SHA" "$RUNNER_TEMP/source-archive.tar.gz"
+
+  # Trust split: every job above runs code from the rehearsed branch with a read-only token. This
+  # job runs only after all of them completed, takes its judge code from the repository's default
+  # branch (never from the rehearsed commit) and reads the rehearsed commit and the retained
+  # producer bytes as data. A rehearsal run proves nothing until the judge exists on that branch.
+  judge:
+    name: rehearse-trusted-judge
+    needs: [corpus, fuzz, performance, package, aggregate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the trusted judge code from the default branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: trusted-judge
+          persist-credentials: false
+      - name: Check out the rehearsed commit as data only
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: subject
+          persist-credentials: false
+      - name: Read back the retained fuzz producer artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: rehearsal-fuzz-${{ github.run_id }}-${{ github.run_attempt }}
+          path: rehearsal-evidence
+      - name: Judge workflow privilege and trust wiring from the trusted checkout
+        run: python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject
+      - name: Verify the retained rehearsal campaign receipt with the trusted validator
+        run: python3 -I trusted-judge/tests/scripts/verify-v02-fuzz.py --verify rehearsal-evidence/v02-fuzz-receipt.json
