@@ -415,7 +415,7 @@ jobs:
           python3 -I tests/scripts/verify-v02-source-archive.py --archive "$archive" \
             --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json
           python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json \
-            --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA"
+            --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo .
           # The archive receipt is deterministic for the same archive bytes, so an existing asset must be identical.
           count=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100" | jq '[.[] | select(.name == "source-archive-receipt.json")] | length')
           [[ "$count" -le 1 ]] || { echo "Draft has duplicate source archive receipts." >&2; exit 1; }

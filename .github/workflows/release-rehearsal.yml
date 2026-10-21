@@ -193,7 +193,7 @@ jobs:
           python3 -I tests/scripts/verify-v02-source-archive.py --archive "$archive" \
             --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json
           python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json \
-            --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA"
+            --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo .
 
   aggregate:
     name: rehearse-v02-evidence-aggregate

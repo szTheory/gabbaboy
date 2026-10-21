@@ -774,7 +774,7 @@ REHEARSAL_REQUIRED = {
         'python3 -I tests/scripts/verify-v02-consumers.py --write-candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --archive build/gabbaboy-core-linux-x64.tar.gz --source-sha "$SOURCE_SHA" --build-receipt build/release/CMakeCache.txt',
         'python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" --archive build/gabbaboy-core-linux-x64.tar.gz --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --output build/v02-consumer-receipt.json',
         'python3 -I tests/scripts/verify-v02-source-archive.py --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json',
-        'python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA"',
+        'python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo .',
     ),
     "aggregate": (
         _REHEARSAL_TAG,
@@ -1158,6 +1158,8 @@ def _mutations():
         # Run 39634983581: the consumer verifier needs a candidate manifest, so the stale prefix-only call must not pass.
         _m("package consumer call without a candidate manifest", reh, "  package:\n", " --candidate-manifest \"$RUNNER_TEMP/candidate-manifest.json\"", "", "required-command-not-executed"),
         _m("package candidate manifest never written", reh, "  package:\n", "--write-candidate-manifest", "--no-manifest", "required-command-not-executed"),
+        # Run 39641384657: --check-receipt refuses to qualify a receipt without an independent Git-tree repo.
+        _m("source archive receipt check without a repo", reh, "  package:\n", " --source-sha \"$SOURCE_SHA\" --repo .\n", " --source-sha \"$SOURCE_SHA\"\n", "required-command-not-executed"),
         _m("comment instead of the judge call", "release-rehearsal.yml", "  judge:\n", JUDGE_CALL, "# " + JUDGE_CALL, "required-command-not-executed"),
         _m("echo instead of the judge call", "release-rehearsal.yml", "  judge:\n", JUDGE_CALL, "echo " + JUDGE_CALL, "required-command-not-executed"),
         ("dead if false branch", "release-rehearsal.yml", [("  judge:\n", JUDGE_CALL, "if false; then\n{I}  " + JUDGE_CALL + "\n{I}fi")], "required-command-not-executed"),

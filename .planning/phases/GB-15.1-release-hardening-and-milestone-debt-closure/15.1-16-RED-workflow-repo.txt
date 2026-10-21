@@ -1,0 +1,1 @@
+RED: REJECT required-command-not-executed: release-rehearsal.package does not run a reachable, fatal: python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SO
