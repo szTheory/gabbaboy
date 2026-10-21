@@ -497,7 +497,11 @@ def tar_bytes(members, commit, root="gabbaboy-0.0.1", fmt=tarfile.PAX_FORMAT):
             # A leading "@" supplies the raw member name (traversal, absolute and second-root controls).
             # root=None builds the installed product layout, whose members sit at the archive top level.
             info = tarfile.TarInfo(name[1:] if name.startswith("@") else (name if root is None else f"{root}/{name}"))
-            if isinstance(value, tuple):
+            if isinstance(value, tuple) and value[0] == "file":
+                info.size = len(value[1])
+                info.mode = value[2]
+                bundle.addfile(info, io.BytesIO(value[1]))
+            elif isinstance(value, tuple):
                 info.type = {"symlink": tarfile.SYMTYPE, "hardlink": tarfile.LNKTYPE, "device": tarfile.CHRTYPE}[value[0]]
                 info.linkname = value[1]
                 bundle.addfile(info)
@@ -515,6 +519,7 @@ def synthetic_tree():
     files = {
         "README.md": b"synthetic original tree\n",
         "src/a.c": b"int a(void) { return 1; }\n",
+        "src/nested/link": ("symlink", "../../README.md"),
     }
     rows = []
     for name, rom in (("alpha", b"\x00ALPHA-ROM\x01"), ("beta", b"\x00BETA-ROM\x02")):
@@ -607,7 +612,10 @@ def self_test():
         for name, data in base.items():
             target = repo / name
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(data)
+            if isinstance(data, tuple):
+                target.symlink_to(data[1])
+            else:
+                target.write_bytes(data)
         private_git("add", "-A", cwd=repo)
         private_git("commit", "-q", "-m", "synthetic tagged tree", cwd=repo)
         real_sha = private_git("rev-parse", "HEAD", cwd=repo).decode().strip()
@@ -700,13 +708,15 @@ def self_test():
         def expect_product(label, files, expected, root_name=None):
             nonlocal positives, negatives
             archive = write(f"{label}.tar.gz", tar_bytes(files, None, root=root_name))
-            code, err, _ = run_cli(script, "--check-product-archive", str(archive))
+            code, err, stdout = run_cli(script, "--check-product-archive", str(archive))
             if expected is None:
                 if code != 0:
                     raise SystemExit(f"self-test product positive {label} failed: {err}")
                 positives += 1
                 print(f"accepted: {label}")
             else:
+                if stdout:
+                    raise SystemExit(f"self-test product negative {label} printed success output: {stdout!r}")
                 if code != 1 or not err.startswith(f"REJECT {expected}:"):
                     raise SystemExit(f"self-test product negative {label}: expected {expected}, got {code}: {err!r}")
                 negatives += 1
@@ -810,6 +820,48 @@ def self_test():
                 raise SystemExit(f"self-test receipt negative {label} printed success output: {stdout!r}")
             negatives += 1
             print(f"rejected: receipt {label}")
+
+        reencoded = write("git-source-reencoded.tar.gz", gzip.compress(git_tar.read_bytes(), compresslevel=1, mtime=123))
+        if sha256_path(reencoded) == sha256_path(git_tgz):
+            raise SystemExit("self-test: gzip re-encoding did not change the compressed archive bytes")
+        expect_receipt_pass("same Git tree with different gzip bytes", bound_receipt, reencoded, repo)
+
+        mode_changed = write("git-source-executable-mode.tar.gz", tar_bytes(
+            variant(src__a_dot_c=("file", base["src/a.c"], 0o755)), real_sha))
+        mode_receipt = scratch / "git-source-executable-mode.receipt.json"
+        code, err, _ = run_cli(script, "--archive", str(mode_changed), "--tag", tag, "--source-sha", real_sha,
+                               "--output", str(mode_receipt))
+        if code != 0:
+            raise SystemExit(f"self-test: could not create a receipt for the executable-mode control: {err!r}")
+        mode_data = json.loads(mode_receipt.read_text())
+        mode_data["tree_bound_to_git"] = True
+        mode_receipt.write_text(json.dumps(mode_data))
+        expect_receipt_reject("executable-mode change under same tag", "tree-mismatch", mode_receipt,
+                              mode_changed, repo)
+
+        changed_link_tree = variant(src__nested__link=("symlink", "../README.md"))
+        changed_link = write("git-source-symlink-target.tar.gz", tar_bytes(changed_link_tree, real_sha))
+        changed_link_receipt = scratch / "git-source-symlink-target.receipt.json"
+        code, err, _ = run_cli(script, "--archive", str(changed_link), "--tag", tag, "--source-sha", real_sha,
+                               "--output", str(changed_link_receipt))
+        if code != 0:
+            raise SystemExit(f"self-test: could not create a receipt for the symlink-target control: {err!r}")
+        changed_link_data = json.loads(changed_link_receipt.read_text())
+        changed_link_data["tree_bound_to_git"] = True
+        changed_link_receipt.write_text(json.dumps(changed_link_data))
+        expect_receipt_reject("symlink target change under same tag", "tree-mismatch", changed_link_receipt,
+                              changed_link, repo)
+
+        nested_link = write("nested-in-root-link.tar.gz", tar_bytes(
+            {**base, "src/nested/second-link": ("symlink", "../../README.md")}, sha))
+        expect_pass("nested source link resolves within archive root", nested_link)
+        nested_escape = write("nested-root-escape.tar.gz", tar_bytes(
+            {**base, "src/nested/escape": ("symlink", "../../../outside")}, sha))
+        expect_reject("nested source link escapes archive root", "link-not-allowed", nested_escape)
+        expect_product("product-nested-in-root-link", {**good_product, "nested/link": ("symlink", "../README.md")},
+                       "product-link-not-allowed")
+        expect_product("product-nested-root-escape", {**good_product, "nested/link": ("symlink", "../../outside")},
+                       "link-not-allowed")
 
         # Real tree: archive the committed repository at a private tag in a private clone.
         root = script.parents[2]
