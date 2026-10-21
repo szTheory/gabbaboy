@@ -295,6 +295,12 @@ def read_bounded(root: Path, relative: str, limit: int = MAX_DOCUMENT_BYTES) -> 
 DOCUMENT_LIMITS = {LEDGER: 8 * 1_048_576}
 
 
+def write_lf(path: Path, text: str) -> None:
+    """Write text with LF endings on every platform; the digest-bound documents are LF by attribute and
+    Path.write_text would turn each newline into CRLF on Windows, which no row pattern or digest expects."""
+    path.write_bytes(text.encode("utf-8"))
+
+
 def read_document(root: Path, relative: str) -> str:
     return read_bounded(root, relative, DOCUMENT_LIMITS.get(relative, MAX_DOCUMENT_BYTES))
 
@@ -621,7 +627,7 @@ def run_self_test_game(root: Path) -> tuple[int, int]:
         test_root = Path(temp)
         guide_path = test_root / GAME_GUIDE
         guide_path.parent.mkdir(parents=True, exist_ok=True)
-        guide_path.write_text(baseline, encoding="utf-8")
+        write_lf(guide_path, baseline)
         child_result(test_root, "game")
 
         mutations = (
@@ -634,9 +640,9 @@ def run_self_test_game(root: Path) -> tuple[int, int]:
         )
         for name, changed, reason in mutations:
             require(changed != baseline, f"self-test-mutation-no-op:{name}")
-            guide_path.write_text(changed, encoding="utf-8")
+            write_lf(guide_path, changed)
             child_result(test_root, "game", reason)
-        guide_path.write_text(baseline, encoding="utf-8")
+        write_lf(guide_path, baseline)
         child_result(test_root, "game")
     return 2, 2
 
@@ -671,7 +677,7 @@ GabbaBoy v0.2.0 adds the selected CGB-CPU-E software model beside DMG-CPU-B.
 def run_self_test_release_notes() -> tuple[int, int]:
     with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-notes-") as temp:
         notes = Path(temp) / "release-notes.md"
-        notes.write_text(VALID_RELEASE_NOTES, encoding="utf-8")
+        write_lf(notes, VALID_RELEASE_NOTES)
         expect_pass(["--release-notes", str(notes)])
         mutations = (
             ("wrong-version", ("0.2.0", "0.1.0"),
@@ -701,9 +707,9 @@ def run_self_test_release_notes() -> tuple[int, int]:
                 changed = VALID_RELEASE_NOTES.replace(edit[0], edit[1])
             require(changed != VALID_RELEASE_NOTES,
                     f"self-test-mutation-no-op:{name}")
-            notes.write_text(changed, encoding="utf-8")
+            write_lf(notes, changed)
             expect_reject(["--release-notes", str(notes)], reason)
-        notes.write_text(VALID_RELEASE_NOTES, encoding="utf-8")
+        write_lf(notes, VALID_RELEASE_NOTES)
         expect_pass(["--release-notes", str(notes)])
     return len(mutations), len(mutations)
 
@@ -875,9 +881,9 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             changed = edit(original)
             require(changed != original, f"self-test-mutation-no-op:{name}")
             target = test_root / relative
-            target.write_text(changed, encoding="utf-8")
+            write_lf(target, changed)
             child_result(test_root, "docs", reason)
-            target.write_text(original, encoding="utf-8")
+            write_lf(target, original)
             rejected += 1
         child_result(test_root, "docs")
 
@@ -891,9 +897,9 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             original = originals[relative]
             changed = replace_all(original, key_phrase, "", "marker")
             target = test_root / relative
-            target.write_text(changed, encoding="utf-8")
+            write_lf(target, changed)
             child_result(test_root, "docs", reason)
-            target.write_text(original, encoding="utf-8")
+            write_lf(target, original)
             rejected += 1
 
         # A header symbol removed must make dependent prose fail to resolve.
@@ -901,10 +907,10 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         header_text = read_document(root, HEADER)
         changed = re.sub(r"\bgbb_queue_events\b", "gbb_queue_removed", header_text)
         require(changed != header_text, "self-test-mutation-no-op:header-symbol")
-        header.write_text(changed, encoding="utf-8")
+        write_lf(header, changed)
         child_result(test_root, "docs",
                      f"undeclared-public-symbol:{README}:gbb_queue_events")
-        header.write_text(header_text, encoding="utf-8")
+        write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
     controls = len(mutations) + 4

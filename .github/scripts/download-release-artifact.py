@@ -342,11 +342,13 @@ def self_test() -> None:
 
             cap = ["--max-bytes", str(1 << 20)]
             reject("unknown-length stream passes the byte cap", "size-limit", [base + "/endless", str(out), *common, *cap])
-            # The server may run ahead of the client by the kernel socket buffers, but it must stop once the client leaves.
+            # The server may run ahead of the client by the kernel socket buffers (a hosted Linux runner queued about 8 MB
+            # on loopback), but it must stop once the client leaves: an endless stream that kept being read would
+            # grow without bound, so the allowance is a generous fixed ceiling, not a statement about buffer size.
             time.sleep(0.3)
             settled = fixture.sent.get("/endless", 0)
             time.sleep(0.3)
-            if fixture.sent.get("/endless", 0) != settled or settled > (1 << 20) + (4 << 20):
+            if fixture.sent.get("/endless", 0) != settled or settled > (1 << 20) + (63 << 20):
                 raise SystemExit(f"the endless stream was read far past the cap: {fixture.sent['/endless']} bytes")
             reject("declared length above the cap", "size-limit", [base + "/declared-huge", str(out), *common, *cap], within=1.5)
             reject("stalled response", "timeout", [base + "/stall", str(out), "--allow-http-loopback", "--total-timeout", "10",

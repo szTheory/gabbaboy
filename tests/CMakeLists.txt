@@ -1459,7 +1459,7 @@ set_tests_properties(historical_limitations_controls PROPERTIES TIMEOUT 60
 add_test(NAME closeout_dispositions_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-closeout-dispositions.py" --self-test)
 set_tests_properties(closeout_dispositions_controls PROPERTIES TIMEOUT 120
-  PASS_REGULAR_EXPRESSION "closeout-dispositions self-test pass positives=2 rejected_controls=[1-9][0-9]*")
+  PASS_REGULAR_EXPRESSION "closeout-dispositions self-test pass positives=3 rejected_controls=[1-9][0-9]*")
 set(GBB_AGE_PHASE14_CONTRACT "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py")
 set(GBB_AGE_PHASE14_GUEST_TIMEOUT 15)
 if(GABBABOY_ENABLE_SANITIZERS)

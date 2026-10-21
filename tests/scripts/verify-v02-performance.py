@@ -833,6 +833,8 @@ class PerformanceReceiptContractTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("performance receipt verified", result.stdout)
 
+    @unittest.skipIf(os.name == "nt", "the controlled producer fixture builds a shell-script cmake and a script as the measurement "
+                                     "binary, which cannot be a Windows executable; the paired producer runs on the Linux evidence runner")
     def test_triggered_producer_rejects_copied_acceptance_prose(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gabbaboy-performance-pending-") as temp:
             path = Path(temp) / "measurement.json"

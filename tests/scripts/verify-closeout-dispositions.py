@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -79,6 +80,12 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def digest_lf(data: bytes) -> str:
+    """SHA-256 of a text record with CRLF read as LF. A Windows checkout may rewrite line endings of
+    records that carry no eol attribute; the pins were taken over LF bytes and no other byte difference is ignored."""
+    return sha256_bytes(data.replace(b"\r\n", b"\n"))
+
+
 def load_json(path: pathlib.Path, code: str = "schema-malformed"):
     def pairs(items):
         seen = {}
@@ -109,7 +116,7 @@ def git_show(root: pathlib.Path, commit: str, path: str) -> str:
 
 def audit_debts(root: pathlib.Path, commit: str) -> list[str]:
     """The 21 audit debt strings exactly as the milestone audit recorded them at the audit commit."""
-    audit = git_show(root, commit, ".planning/v0.2-MILESTONE-AUDIT.md")
+    audit = git_show(root, commit, ".planning/v0.2-MILESTONE-AUDIT.md").replace("\r\n", "\n")
     return [json.loads(m) for m in re.findall(r'^      - (".*")$', audit.split("---")[1], re.M)]
 
 
@@ -120,7 +127,7 @@ def check_scope(doc: dict, scope_path: pathlib.Path, root: pathlib.Path) -> dict
     pin = doc.get("scope")
     if not isinstance(pin, dict):
         reject("schema-malformed", "scope pin is missing")
-    if sha256_bytes(scope_path.read_bytes()) != pin.get("sha256"):
+    if digest_lf(scope_path.read_bytes()) != pin.get("sha256"):
         reject("scope-pin-mismatch", "the scope inventory differs from the digest recorded when it was dispositioned")
     scope = load_json(scope_path)
     commit = scope.get("source_head")
@@ -149,7 +156,7 @@ def check_evidence_files(doc: dict, base: pathlib.Path) -> dict[str, dict]:
     loaded = {}
     for name, digest in pins.items():
         path = base / name
-        if not path.is_file() or sha256_bytes(path.read_bytes()) != digest:
+        if not path.is_file() or digest_lf(path.read_bytes()) != digest:
             reject("evidence-pin-mismatch", f"{name} differs from the digest this disposition was written against")
         loaded[name] = load_json(path)
     return loaded
@@ -287,7 +294,7 @@ def check_shipped_and_checks(doc: dict, root: pathlib.Path) -> None:
     if shipped.get("republished") is not False:
         reject("shipped-release-altered", "v0.2.0 must not be recorded as republished")
     receipt = root / SHIPPED["published_receipt"]
-    if not receipt.is_file() or sha256_bytes(receipt.read_bytes()) != shipped.get("published_receipt_sha256"):
+    if not receipt.is_file() or digest_lf(receipt.read_bytes()) != shipped.get("published_receipt_sha256"):
         reject("shipped-release-altered", "the published delivery receipt differs from the digest recorded for it")
     published = load_json(receipt, "shipped-release-altered")
     if (published.get("tag"), published.get("source_sha"), published.get("release_id")) != \
@@ -351,7 +358,7 @@ def check(dispositions: pathlib.Path, scope_path: pathlib.Path | None, root: pat
 # Self-test: drive this CLI over a private fixture repository
 # --------------------------------------------------------------------------------------------
 def write_json(path: pathlib.Path, value) -> None:
-    path.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    path.write_bytes((json.dumps(value, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
 
 
 def edit_json(path: pathlib.Path, fn) -> None:
@@ -361,9 +368,10 @@ def edit_json(path: pathlib.Path, fn) -> None:
 
 
 def git(root: pathlib.Path, *args: str) -> str:
-    env = {"GIT_AUTHOR_NAME": "fixture", "GIT_AUTHOR_EMAIL": "fixture@example.invalid",
-           "GIT_COMMITTER_NAME": "fixture", "GIT_COMMITTER_EMAIL": "fixture@example.invalid", "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
-           "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+    env = dict(os.environ)
+    env.update({"GIT_AUTHOR_NAME": "fixture", "GIT_AUTHOR_EMAIL": "fixture@example.invalid",
+                "GIT_COMMITTER_NAME": "fixture", "GIT_COMMITTER_EMAIL": "fixture@example.invalid",
+                "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull})
     done = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, env=env, timeout=60)
     if done.returncode != 0:
         raise RuntimeError(f"fixture git {args[0]} failed: {done.stderr.strip()}")
@@ -381,7 +389,7 @@ def build_fixture(base: pathlib.Path) -> pathlib.Path:
     debts = [i["description"] for i in real_scope["items"] if DEBT_ID.match(i["id"])]
     audit = "---\ndebt:\n" + "".join(f"      - {json.dumps(d)}\n" for d in debts) + "---\naudit body\n"
     (root / ".planning").mkdir(exist_ok=True)
-    (root / ".planning/v0.2-MILESTONE-AUDIT.md").write_text(audit, encoding="utf-8")
+    (root / ".planning/v0.2-MILESTONE-AUDIT.md").write_bytes(audit.encode("utf-8"))
     for item in real_scope["items"]:
         if not DEBT_ID.match(item["id"]):
             target = root / item["source"]
@@ -405,7 +413,7 @@ def build_fixture(base: pathlib.Path) -> pathlib.Path:
         for plan in item["plans"]:
             (phase / f"{plan}-SUMMARY.md").write_text("fixture summary\n", encoding="utf-8")
     real["scope"]["source_head"] = commit
-    real["scope"]["sha256"] = sha256_bytes((phase / "15.1-SCOPE.json").read_bytes())
+    real["scope"]["sha256"] = digest_lf((phase / "15.1-SCOPE.json").read_bytes())
     write_json(phase / "15.1-DISPOSITIONS.json", real)
     shutil.copyfile(DEFAULT_DISPOSITIONS.with_suffix(".md"), phase / "15.1-DISPOSITIONS.md")
     head = "a" * 40
@@ -436,7 +444,7 @@ def controls(root: pathlib.Path):
     items = lambda fn: (lambda r: edit_json(d(r), lambda v: fn(v)))
 
     def repin_scope(r):
-        edit_json(d(r), lambda v: v["scope"].update(sha256=sha256_bytes(s(r).read_bytes())))
+        edit_json(d(r), lambda v: v["scope"].update(sha256=digest_lf(s(r).read_bytes())))
 
     def rewrite_scope_text(r):
         edit_json(s(r), lambda v: v["items"][0].update(description="weakened finding"))
@@ -553,6 +561,18 @@ def self_test() -> int:
         bare = run_cli(fixture)
         if bare.returncode != 0 or "closeout-dispositions pass items=24" not in bare.stdout:
             raise SystemExit(f"self-test positive without receipt failed: {bare.stderr.strip()}")
+        # A Windows checkout may rewrite line endings of records without an eol attribute; that alone is no defect.
+        crlf = base / "crlf"
+        shutil.copytree(fixture, crlf, symlinks=True)
+        phase = crlf / PHASE_REL
+        for name in ("15.1-SCOPE.json", "15.1-hosted-evidence.json", "15.1-local-evidence.json",
+                     "15.1-historical-limitations.json"):
+            (phase / name).write_bytes((phase / name).read_bytes().replace(b"\n", b"\r\n"))
+        receipt = crlf / SHIPPED["published_receipt"]
+        receipt.write_bytes(receipt.read_bytes().replace(b"\n", b"\r\n"))
+        converted = run_cli(crlf)
+        if converted.returncode != 0 or "closeout-dispositions pass items=24" not in converted.stdout:
+            raise SystemExit(f"self-test CRLF-rewritten records were rejected: {converted.stderr.strip()}")
         for index, (label, code, mutate) in enumerate(controls(fixture)):
             case = base / f"case{index}"
             shutil.copytree(fixture, case, symlinks=True)
@@ -563,7 +583,7 @@ def self_test() -> int:
             if f"REJECT {code}:" not in result.stderr:
                 raise SystemExit(f"self-test {label}: expected REJECT {code}, got: {result.stderr.strip()[:200]}")
             rejected += 1
-    print(f"closeout-dispositions self-test pass positives=2 rejected_controls={rejected}")
+    print(f"closeout-dispositions self-test pass positives=3 rejected_controls={rejected}")
     return 0
 
 

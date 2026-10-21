@@ -1094,6 +1094,8 @@ class ConsumerContractTests(unittest.TestCase):
         result = self.run_cli([*self.candidate_args(self.prefix), "--output", str(output)])
         self.assert_rejected(result, "output-owned", output)
 
+    @unittest.skipIf(os.name == "nt", "Process.terminate() on Windows kills the child without delivering a signal, so the "
+                                     "interrupt cleanup path cannot be exercised there; it runs on the POSIX evidence runners")
     def test_interrupted_extraction_removes_partial_tree_and_retries(self) -> None:
         output_dir = self.test_root / "interrupted-extraction"
         output_dir.mkdir()
@@ -1129,6 +1131,8 @@ class ConsumerContractTests(unittest.TestCase):
         self.assertEqual(retry.returncode, 0, retry.stdout + retry.stderr)
         self.assertEqual(parse_receipt(retry, output).get("result"), "passed")
 
+    @unittest.skipIf(os.name == "nt", "Process.terminate() on Windows kills the child without delivering a signal, so the "
+                                     "interrupt cleanup path cannot be exercised there; it runs on the POSIX evidence runners")
     def test_interrupted_run_retries_without_partial_receipt(self) -> None:
         output_dir = self.test_root / "interrupted"
         output_dir.mkdir()
