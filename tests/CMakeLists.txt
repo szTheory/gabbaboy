@@ -1410,6 +1410,8 @@ gbb_add_v02_contract(v02_support_ledger_controls 120
 gbb_add_v02_contract(v02_consumer_controls 900
   [=["negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
   verify-v02-consumers.py --self-test)
+# Start this long test first in a parallel run (see the stall replay note in tests/acceptance/CMakeLists.txt).
+set_tests_properties(v02_consumer_controls PROPERTIES COST 900)
 gbb_add_v02_contract(v02_performance_controls 90
   [=["negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
   verify-v02-performance.py --self-test)

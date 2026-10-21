@@ -194,7 +194,7 @@ add_test(NAME acceptance_dense_script_delivered
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # The dense script is now delivered in full, so this is a full-length observation (107 s under ASan in a quiet
 # Linux container), not the quick failure it used to be; a hosted sanitizer runner under parallel load needs far more.
-set_tests_properties(acceptance_dense_script_delivered PROPERTIES TIMEOUT 400 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+set_tests_properties(acceptance_dense_script_delivered PROPERTIES TIMEOUT 400 COST 400 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 add_test(NAME acceptance_dense_input_controls
   COMMAND ${CMAKE_COMMAND}
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-dense-input.py;--self-test;--build-dir;${PROJECT_BINARY_DIR}"
@@ -203,7 +203,7 @@ add_test(NAME acceptance_dense_input_controls
     "-DGBB_FORBID_REGEX=no-refill-mutant=passed"
     -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
-set_tests_properties(acceptance_dense_input_controls PROPERTIES TIMEOUT 600 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+set_tests_properties(acceptance_dense_input_controls PROPERTIES TIMEOUT 600 COST 600 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 # Private borrowed-span controls from plans 15.1-02 (core fixes 929ce2e and 73d8a53). They drive the
 # private run entry points through the real core, so each one is registered here and is paired below with a
@@ -409,7 +409,9 @@ add_test(NAME acceptance_stall_diagnosis
     --cases ${PROJECT_SOURCE_DIR}/${GBB_CASES}
     --workdir ${PROJECT_SOURCE_DIR}
     --failure-dir ${GBB_STALL_FAIL_DIR})
-set_tests_properties(acceptance_stall_diagnosis PROPERTIES TIMEOUT 1200 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+# COST makes a parallel ctest start the longest tests first, so a sanitizer lane with a 45 minute job limit does
+# not leave the two stall replays as its tail (they ended the lane at about 41 minutes when they started last).
+set_tests_properties(acceptance_stall_diagnosis PROPERTIES TIMEOUT 1200 COST 1200 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 # Core mutant (D-14): a copy of the core whose JOYP direction/button select test is inverted, built into a
 # test-only static library and runner. The source line is the single anchor guaranteed by Plans 07-03 and
