@@ -262,6 +262,11 @@ def check_evidence(evidence: Path, tag: str, source: str, judge_root: Path,
             reject("evidence-invalid", f"{name} is not a JSON object")
     if archive is None or not archive.is_file():
         reject("evidence-missing", "the generated source archive is required beside its receipt")
+    try:
+        evidence = evidence.resolve(strict=True)
+        archive = archive.resolve(strict=True)
+    except OSError as error:
+        raise Reject("evidence-missing", "evidence directory or source archive is unavailable") from error
 
     sidecar = docs[SIDECAR]
     if (sidecar.get("schema_version") != 2 or sidecar.get("tag") != tag or sidecar.get("source_sha") != source
@@ -321,7 +326,15 @@ def check_evidence(evidence: Path, tag: str, source: str, judge_root: Path,
                   "--verify-sidecar", str(evidence / SIDECAR), "--evidence-only")
         for family, option, name in (("performance", "--verify", PERFORMANCE), ("fuzz", "--verify", FUZZ)):
             if reuse[family] is None:
-                run_owner(family, judge_root, source_root, source, trusted_source, option, str(evidence / name))
+                if family == "fuzz":
+                    run_owner(
+                        family, judge_root, source_root, source, trusted_source,
+                        "--verify-hosted", "--source-sha", source,
+                        "--run-id", str(int(run_id)), "--attempt", str(workflow["attempt"]),
+                        "--receipt", str((evidence / name).resolve(strict=True)),
+                    )
+                else:
+                    run_owner(family, judge_root, source_root, source, trusted_source, option, str(evidence / name))
             else:
                 with trusted_validator_checkout(judge_root, reuse[family]) as historical_source:
                     run_owner(family, judge_root, source_root, reuse[family], historical_source,
