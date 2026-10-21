@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import ast
 import hashlib
+import http.server
 import io
 import json
 import os
@@ -13,6 +14,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 import urllib.error
@@ -907,11 +909,126 @@ def check_workflow_contract(
 
 
 class ReceiptContractTests(unittest.TestCase):
-    def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
+    def run_cli(self, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+        environment = os.environ.copy()
+        if env:
+            environment.update(env)
         return subprocess.run(
             [sys.executable, "-I", str(SCRIPT), *args], cwd=ROOT,
-            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
+            env=environment, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
         )
+
+    def hosted_fixture_receipt(self, head: str, run_id: int, attempt: int, job_id: int) -> bytes:
+        receipt = {
+            "schema_version": SCHEMA_VERSION,
+            "status": "complete",
+            "mode": "explore",
+            "source_sha": head,
+            "source_tree": git_output("rev-parse", f"{head}^{{tree}}"),
+            "source_inputs": source_manifest(head, compare_worktree=False),
+            "compiler": {
+                "label": "clang-18", "version": "clang version 18.1.0", "major": 18,
+                "cmake_compiler_id": "Clang", "libfuzzer": True, "asan": True, "ubsan": True,
+                "compiler_sha256": "a" * 64, "cmake_cache_sha256": "b" * 64,
+                "build_ninja_sha256": "c" * 64, "binary_sha256": "d" * 64,
+            },
+            "dictionary_sha256": sha256_file(ROOT / "tests/fuzz/fuzz_core.dict"),
+            "seeds": expected_seed_records(),
+            "limits": REQUIRED_LIMITS,
+            "result": {
+                "outcome": "passed", "execution_count": 1, "elapsed_seconds": 60,
+                "exit_code": 0, "synthetic": False, "arguments": list(FUZZ_ARGS),
+                "output_sha256": "e" * 64, "diagnostics": [],
+            },
+            "minimized_artifacts": [],
+            "workflow": {
+                "event": "push", "run_id": str(run_id), "attempt": attempt,
+                "job": "linux-sanitizers", "job_id": job_id, "workflow_path": WORKFLOW,
+            },
+        }
+        return (json.dumps(receipt, sort_keys=True) + "\n").encode("utf-8")
+
+    def hosted_fixture_server(self, head: str, *, repo: str) -> tuple[http.server.ThreadingHTTPServer, threading.Thread]:
+        run_id, attempt, job_id = 17001, 1, 27001
+        receipt_bytes = self.hosted_fixture_receipt(head, run_id, attempt, job_id)
+        archive_buffer = io.BytesIO()
+        with zipfile.ZipFile(archive_buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("build-asan/v02-fuzz-receipt.json", receipt_bytes)
+        artifact_zip = archive_buffer.getvalue()
+        run = {
+            "id": run_id, "run_number": 1, "run_attempt": attempt,
+            "status": "completed", "conclusion": "success", "head_sha": head,
+            "head_branch": repository_branch(), "event": "push", "path": WORKFLOW,
+            "workflow_id": 999999,
+            "repository": {"full_name": "attacker/fork", "id": 91},
+            "head_repository": {"full_name": "attacker/fork", "id": 91},
+        }
+        job = {
+            "id": job_id, "run_id": run_id, "head_sha": head,
+            "name": "linux-asan-ubsan", "status": "completed", "conclusion": "success",
+        }
+        artifact = {
+            "id": 37001, "name": f"v02-fuzz-{run_id}-{attempt}", "expired": False,
+            "workflow_run": {
+                "id": run_id, "repository_id": 91, "head_repository_id": 91,
+                "head_branch": repository_branch(), "head_sha": head,
+            },
+        }
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *_args: object) -> None:
+                pass
+
+            def do_GET(self) -> None:
+                path = urllib.parse.urlsplit(self.path).path
+                if path.endswith("/actions/runs"):
+                    payload, content_type = {"total_count": 1, "workflow_runs": [run]}, "application/json"
+                elif path.endswith(f"/actions/runs/{run_id}/attempts/{attempt}/jobs"):
+                    payload, content_type = {"total_count": 1, "jobs": [job]}, "application/json"
+                elif path.endswith(f"/actions/runs/{run_id}/artifacts"):
+                    payload, content_type = {"total_count": 1, "artifacts": [dict(artifact, archive_download_url=f"http://127.0.0.1:{self.server.server_port}/blob")]}, "application/json"
+                elif path == "/blob":
+                    payload, content_type = artifact_zip, "application/zip"
+                else:
+                    payload, content_type = {"message": "Not Found"}, "application/json"
+                    self.send_response(404)
+                body = payload if isinstance(payload, bytes) else json.dumps(payload).encode("utf-8")
+                if not self.wfile.closed:
+                    if not getattr(self, "_headers_buffer", None):
+                        self.send_response(200)
+                    self.send_header("Content-Type", content_type)
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        return server, thread
+
+    def test_hosted_cli_rejects_foreign_run_identity_even_with_matching_sha(self) -> None:
+        head = git_output("rev-parse", "HEAD")
+        server, thread = self.hosted_fixture_server(head, repo="attacker/fork")
+        try:
+            result = self.run_cli(
+                "--verify-hosted", "--source-sha", head,
+                "--poll-seconds", "1", "--poll-interval-seconds", "1",
+                env={
+                    "GITHUB_API_URL": f"http://127.0.0.1:{server.server_port}",
+                    "GITHUB_REPOSITORY": "attacker/fork",
+                    "GH_TOKEN": "fixture-token",
+                },
+            )
+            self.assertNotEqual(
+                result.returncode, 0,
+                "production hosted CLI accepted a same-SHA run with a foreign repository and workflow ID",
+            )
+            self.assertIn("repository identity", result.stdout, result.stdout)
+            self.assertNotIn("hosted_campaign=pass", result.stdout)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
 
     def verify_rejects(self, path: Path, payload: dict[str, object], reason: str) -> None:
         path.write_text(json.dumps(payload), encoding="utf-8")
