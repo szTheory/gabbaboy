@@ -55,6 +55,60 @@ patch release (for example v0.1.1 or v0.1.2) binds the unchanged
 The source ledger intentionally does not contain its future commit SHA, so its
 own source can be reviewed before tagging without a self-reference.
 
+## Performance measurement and qualification
+
+The v0.2.0 DMG paired performance comparison is historical evidence: it reported
+the candidate as **+14.86% slower than v0.1.0 with a ±1.62% margin**. Keep that
+result separate from any fresh measurement; it is not a current approval or a
+substitute for rerunning the benchmark on the candidate source.
+
+Start a fresh measurement from the checkout being evaluated:
+
+```sh
+bash tests/scripts/measure-release-baseline.sh --qualify-v02 \
+  --output /tmp/v02-performance-measurement.json
+```
+
+The receipt records baseline and candidate revisions, build and compiler
+identities, hardware class, the frozen workload and output digest, warmups,
+paired samples, and uncertainty. The existing regression trigger is unchanged:
+the median must exceed 105% of baseline and remain above 100% after subtracting
+the approximate 95% mean margin. If it does not fire, the producer exits zero
+and writes an untriggered receipt. If it fires, the producer writes a schema-v2
+`pending-investigation` measurement and exits nonzero. A supplied
+`--review-regression` note is retained only as a compatibility argument for
+existing callers; its prose is untrusted and cannot qualify a triggered result.
+
+Only a separately recorded decision from an actual independent reviewer can
+turn that exact pending measurement into a qualifying receipt. Keep the review
+record outside the source checkout. It must identify the decision and reviewer,
+link the review record, state its timestamp and rationale, and bind the full
+canonical measurement receipt digest, source pair, workload, measured summary,
+and uncertainty. After the independent reviewer has recorded a decision, apply
+that file and verify the resulting receipt:
+
+```sh
+python3 -I tests/scripts/verify-v02-performance.py --apply-decision \
+  --measurement /tmp/v02-performance-measurement.json \
+  --decision /secure/review/performance-decision.json \
+  --output /tmp/v02-performance-qualified.json
+python3 -I tests/scripts/verify-v02-performance.py --verify \
+  /tmp/v02-performance-qualified.json
+```
+
+The qualified receipt retains the original pending measurement and checks that
+the decision still matches its receipt digest and evidence. The verifier checks
+the supplied review record's shape and bindings; it cannot authenticate the
+reviewer's identity or prove that an external link represents a real
+independent review. Do not create a review record on a reviewer's behalf or use
+a self-test fixture as approval.
+
+Schema-v1 receipts can be inspected only with
+`python3 -I tests/scripts/verify-v02-performance.py --verify-historical PATH`.
+That mode identifies legacy evidence as historical and pins it to the original
+v0.2.0 source; it cannot satisfy current qualification. The regular `--verify`
+mode accepts current schema-v2 receipts only.
+
 Extract an archive into a new directory. Keep the core's `include`, `lib`, and
 CMake package metadata together; configure consumers with
 `-DCMAKE_PREFIX_PATH=<that-prefix>` and link `GabbaBoy::core`. The installed C

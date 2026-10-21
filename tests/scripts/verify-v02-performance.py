@@ -128,9 +128,9 @@ def verify_privacy(value: object) -> None:
             verify_privacy(item)
     elif isinstance(value, str):
         # URLs are references to external evidence, not host-local absolute file paths. Keep
-        # hostname/email checks on the full value while excluding HTTPS URL paths from the
+        # hostname/email checks on the full value while excluding URL paths from the
         # local-path detector.
-        local_path_text = re.sub(r"https://[^\s\"']+", " ", value, flags=re.IGNORECASE)
+        local_path_text = re.sub(r"https?://[^\s\"']+", " ", value, flags=re.IGNORECASE)
         require(PRIVATE_PATH.search(local_path_text) is None and WINDOWS_PATH.search(value) is None and
                 EMAIL.search(value) is None and PRIVATE_HOSTNAME.search(value) is None,
                 "receipt-private-data")
@@ -681,16 +681,16 @@ def decision_fixture(receipt: dict[str, object]) -> dict[str, object]:
         "schema_version": 1,
         "decision_id": "fixture-review-001",
         "reviewer_identity": "synthetic-independent-reviewer-fixture",
-        "review_reference": "https://reviews.gabbaboy.org/performance/fixture-001",
+        "review_reference": "https://reviews.invalid/performance/fixture-001",
         "reviewed_at": datetime.now().astimezone().isoformat(),
         "review_type": "independent",
         "decision": "accepted-with-disclosed-regression",
         "rationale": "Self-test fixture only; this record is not an owner or reviewer approval.",
         "measurement_receipt_sha256": canonical_sha(receipt),
-        "source_pair": receipt["source"],
-        "workload": receipt["workload"],
+        "source_pair": json.loads(json.dumps(receipt["source"])),
+        "workload": json.loads(json.dumps(receipt["workload"])),
         "measurement_sha256": canonical_sha(measurement),
-        "measurement_summary": summary,
+        "measurement_summary": json.loads(json.dumps(summary)),
         "uncertainty": {
             "method": measurement["uncertainty_method"],
             "sample_standard_deviation_percent": summary["sample_standard_deviation_percent"],
@@ -706,6 +706,20 @@ class PerformanceReceiptContractTests(unittest.TestCase):
             path.write_text(json.dumps(receipt, sort_keys=True), encoding="utf-8")
             return subprocess.run(
                 [sys.executable, "-I", str(SCRIPT), "--verify", str(path)],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                check=False,
+            )
+
+    def run_historical_cli(self, receipt: dict[str, object], *, historical: bool) -> subprocess.CompletedProcess[str]:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-performance-history-") as temp:
+            path = Path(temp) / "receipt.json"
+            path.write_text(json.dumps(receipt, sort_keys=True), encoding="utf-8")
+            flag = "--verify-historical" if historical else "--verify"
+            return subprocess.run(
+                [sys.executable, "-I", str(SCRIPT), flag, str(path)],
                 cwd=ROOT,
                 text=True,
                 stdout=subprocess.PIPE,
@@ -853,6 +867,140 @@ class PerformanceReceiptContractTests(unittest.TestCase):
                              "accepted-with-disclosed-regression")
             verify = self.run_cli(qualified)
             self.assertEqual(verify.returncode, 0, verify.stdout)
+
+    def test_triggered_copy_of_acceptance_prose_is_not_a_decision(self) -> None:
+        receipt = triggered_pending_fixture()
+        receipt["result"] = "passed"
+        receipt["regression_disposition"].update({
+            "decision": "accepted-with-disclosed-regression",
+            "investigation": "The hosted DMG paired benchmark is +14.86% (±1.62%) slower than v0.1.0.",
+            "release_disposition": "accepted-with-disclosed-regression",
+        })
+        receipt["measurement_receipt_sha256"] = canonical_sha(triggered_pending_fixture())
+        result = self.run_cli(receipt)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("reviewed-disposition-missing", result.stdout)
+
+    def test_stale_decision_receipt_digest_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-stale-review-") as temp:
+            directory = Path(temp)
+            receipt = triggered_pending_fixture()
+            decision = decision_fixture(receipt)
+            receipt["measurement"]["review_note"] = "changed after the review record"
+            measurement, decision_path, output = directory / "measurement.json", directory / "decision.json", directory / "out.json"
+            measurement.write_text(json.dumps(receipt, sort_keys=True), encoding="utf-8")
+            decision_path.write_text(json.dumps(decision), encoding="utf-8")
+            result = self.run_apply_decision(measurement, decision_path, output)
+            self.assertEqual(result.returncode, 1, result.stdout)
+            self.assertIn("review-measurement-receipt-mismatch", result.stdout)
+            self.assertFalse(output.exists())
+
+    def test_decision_must_bind_source_workload_and_measurement(self) -> None:
+        mutations = (
+            ("source", lambda receipt: receipt["source"]["candidate"].update(review_context="changed"),
+             "review-source-pair-mismatch"),
+            ("workload", lambda receipt: receipt["workload"].update(review_context="changed"),
+             "review-workload-mismatch"),
+            ("measurement", lambda receipt: self._change_triggered_measurement(receipt),
+             "review-measurement-mismatch"),
+        )
+        for name, mutate, expected in mutations:
+            with self.subTest(name=name), tempfile.TemporaryDirectory(prefix="gabbaboy-review-binding-") as temp:
+                directory = Path(temp)
+                receipt = triggered_pending_fixture()
+                decision = decision_fixture(receipt)
+                mutate(receipt)
+                decision["measurement_receipt_sha256"] = canonical_sha(receipt)
+                measurement, decision_path, output = directory / "measurement.json", directory / "decision.json", directory / "out.json"
+                measurement.write_text(json.dumps(receipt, sort_keys=True), encoding="utf-8")
+                decision_path.write_text(json.dumps(decision), encoding="utf-8")
+                result = self.run_apply_decision(measurement, decision_path, output)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn(expected, result.stdout)
+                self.assertFalse(output.exists())
+
+    @staticmethod
+    def _change_triggered_measurement(receipt: dict[str, object]) -> None:
+        measurement = receipt["measurement"]
+        for pair in measurement["pairs"]:
+            pair["candidate_ns"] = 11_100_000
+        measurement["summary"] = summarize_ratios([111.0] * EXPECTED_PAIRS)
+        disposition = receipt["regression_disposition"]
+        disposition["estimate_percent"] = 11.0
+        disposition["uncertainty_margin_percent"] = measurement["summary"]["approx_95_percent_mean_margin"]
+
+    def test_review_requires_uncertainty_and_independent_decision(self) -> None:
+        cases = (
+            ("missing-uncertainty", lambda decision: decision.pop("uncertainty"), "review-uncertainty-mismatch"),
+            ("non-independent", lambda decision: decision.update(review_type="same-person"), "independent-review-required"),
+            ("malformed-reference", lambda decision: decision.update(review_reference="http://review.invalid/id"),
+             "review-reference-invalid"),
+        )
+        for name, mutate, expected in cases:
+            with self.subTest(name=name), tempfile.TemporaryDirectory(prefix="gabbaboy-malformed-review-") as temp:
+                directory = Path(temp)
+                receipt = triggered_pending_fixture()
+                decision = decision_fixture(receipt)
+                mutate(decision)
+                measurement, decision_path, output = directory / "measurement.json", directory / "decision.json", directory / "out.json"
+                measurement.write_text(json.dumps(receipt, sort_keys=True), encoding="utf-8")
+                decision_path.write_text(json.dumps(decision), encoding="utf-8")
+                result = self.run_apply_decision(measurement, decision_path, output)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn(expected, result.stdout)
+                self.assertFalse(output.exists())
+
+    def test_existing_review_output_is_not_reused_or_overwritten(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-review-output-") as temp:
+            directory = Path(temp)
+            receipt = triggered_pending_fixture()
+            decision = decision_fixture(receipt)
+            measurement, decision_path, output = directory / "measurement.json", directory / "decision.json", directory / "out.json"
+            measurement.write_text(json.dumps(receipt, sort_keys=True), encoding="utf-8")
+            decision_path.write_text(json.dumps(decision), encoding="utf-8")
+            output.write_text("existing", encoding="utf-8")
+            result = self.run_apply_decision(measurement, decision_path, output)
+            self.assertEqual(result.returncode, 1, result.stdout)
+            self.assertIn("review-output-exists", result.stdout)
+            self.assertEqual(output.read_text(encoding="utf-8"), "existing")
+
+    def test_legacy_receipt_requires_explicit_historical_parser(self) -> None:
+        revision = git_text("rev-parse", "v0.2.0^{commit}")
+        receipt = valid_fixture(candidate_revision=revision, schema_version=1)
+        normal = self.run_historical_cli(receipt, historical=False)
+        self.assertEqual(normal.returncode, 1, normal.stdout)
+        self.assertIn("legacy-receipt-requires-historical-mode", normal.stdout)
+        historical = self.run_historical_cli(receipt, historical=True)
+        self.assertEqual(historical.returncode, 0, historical.stdout)
+        self.assertIn("historical performance receipt parsed", historical.stdout)
+        self.assertIn("not current qualification", historical.stdout)
+
+    def test_final_receipt_detects_tampered_reviewed_workload_and_measurements(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-final-review-") as temp:
+            directory = Path(temp)
+            pending = triggered_pending_fixture()
+            measurement, decision_path, output = directory / "measurement.json", directory / "decision.json", directory / "out.json"
+            measurement.write_text(json.dumps(pending, sort_keys=True), encoding="utf-8")
+            decision_path.write_text(json.dumps(decision_fixture(pending)), encoding="utf-8")
+            applied = self.run_apply_decision(measurement, decision_path, output)
+            self.assertEqual(applied.returncode, 0, applied.stdout)
+            qualified = json.loads(output.read_text(encoding="utf-8"))
+
+        changed_workload = json.loads(json.dumps(qualified))
+        changed_workload["workload"]["review_context"] = "changed after review"
+        workload_result = self.run_cli(changed_workload)
+        self.assertEqual(workload_result.returncode, 1, workload_result.stdout)
+        self.assertIn("review-workload-mismatch", workload_result.stdout)
+
+        changed_numbers = json.loads(json.dumps(qualified))
+        self._change_triggered_measurement(changed_numbers)
+        summary = changed_numbers["measurement"]["summary"]
+        disposition = changed_numbers["regression_disposition"]
+        disposition["estimate_percent"] = 11.0
+        disposition["uncertainty_margin_percent"] = summary["approx_95_percent_mean_margin"]
+        numbers_result = self.run_cli(changed_numbers)
+        self.assertEqual(numbers_result.returncode, 1, numbers_result.stdout)
+        self.assertIn("review-measurement-mismatch", numbers_result.stdout)
 
     def assert_rejected(self, mutation: object, reason: str) -> None:
         receipt = valid_fixture()
