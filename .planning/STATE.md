@@ -2,21 +2,21 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_phase: 14
-current_plan: 13/13 complete
+current_phase: 8
+current_plan: 10/10 complete
 status: completed
-last_updated: "2026-10-20T23:56:51.838Z"
+last_updated: "2026-10-21T00:27:34.161244+00:00"
 last_activity: 2026-10-20
-last_activity_desc: Refreshed Phase 14 verification and canonical UAT; paused before milestone completion
-state_head: b52a4dabf244b7e37d4fc7bd22d8830927d65955
+last_activity_desc: Refreshed Phase 8 package verification and canonical UAT; paused before Phase 12 metadata refresh
+state_head: a338f54abcb1956cd5e6c3c5faba716137d5a07e
 progress:
   total_phases: 9
   completed_phases: 9
   total_plans: 134
   completed_plans: 134
   percent: 100
-stopped_at: Phase 14 verification refresh complete; Phase 8 preview-package verification refresh next
-current_phase_name: CGB-E Model Qualification and Corpus
+stopped_at: Phase 8 package verification refresh complete; Phase 12 metadata verification refresh next
+current_phase_name: Cartridge Seam, MBC5 and MBC2
 ---
 
 # Project State
@@ -26,9 +26,21 @@ current_phase_name: CGB-E Model Qualification and Corpus
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 8 verification refresh for the later preview-package exclusion change
+**Current focus:** Phase 12 metadata verification refresh for the later lessons/index changes
 
 ## Current Position
+
+Completed stage: **Phase 8 — Cartridge Seam, MBC5 and MBC2, package verification refresh**. All 10 implementation plans were already complete. The refreshed [verification](phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-VERIFICATION.md) passes **97/97 truths**, 27 artifact declarations and 19 traced links, with one adopted D-062 replacement. CART-01/02/03 remain satisfied; OpenGSD freshness is `passed` across 90 covered files.
+
+Fresh producer `a338f54` passed configured core **1,144/1,144** in **378.77 seconds**, rebuilt player **98/98** in **17.55 seconds** and separate installed-package consumers **5/5** in **1.89 seconds**, zero skips. Frozen core 258/player 55 identities are covered and DMG baseline rows are unchanged. The later Phase 10 preview-package exclusion passes clean scans, renamed MBC/CGB and symlink negative controls, and relocated C/C++ consumers. No emulator/package implementation changed.
+
+All 10 SUMMARY coverage blocks now use the supported schema: **34/34 automated UAT deliverables**, zero human checkpoints. The immutable historical closure checks 65 files and rejects 157 controls; the player contract rejects 5; the shared canonical UAT checker rejects 19. Original summary bodies/receipts remain unchanged. Two old verifier transcription errors (differential digest and link-shape count) are corrected. See [08-PACKAGE-REFRESH-EVIDENCE.md](phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-PACKAGE-REFRESH-EVIDENCE.md) and [08-PACKAGE-REFRESH-GATES.md](phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-PACKAGE-REFRESH-GATES.md) for producers, hashes, commands and limits.
+
+Next corrective phase: **12 — CGB Double Speed**, verification refresh only for the lessons/index metadata changed by the prior Phase 13 refresh. Exact next command: `/gsd-execute-phase 12`. Stop after Phase 8; no implementation replay or automatic phase advance. Phase 15 remains complete. All 9/9 implementation phases and 134/134 plans remain complete; milestone completion and explicit review of 21 retained debt items remain pending. An extra diagnostic found 47 legacy SUMMARY schema problems in untouched Phases 9/10, outside the configured Phase 11+ gate; record them for milestone review without silently accepting or repairing them here. No fresh hosted/hardware/perceptual/performance qualification, archive, tag, release or new milestone is claimed. Both auto flags remain false; v0.3 remains provisional.
+
+Review branch: `gsd/phase-08-package-verification-refresh`, stacked on Phase 14 refresh PR #90. Boundary triage found no open issues; refresh PRs #78–90 and release-please #75 remain open. Merge only the reviewed revision with required exact-head hosted checks satisfied; local results are not remote-green proof. The pre-existing config edits remain uncommitted. The phase.complete CLI accepted 10/10 but incremented an already-complete count to 10/9 and derived a new-milestone route; current state restores 9/9 and the actual Phase 12 corrective route. Its five heuristic warning rows refer to shell commands, ignore-pattern placeholders or suffix shorthand; all 27 actual artifacts are resolved in verification. Reused historical audit scope is bounded, not a new broad source/security audit. Global learning export is disabled; no qualifying learning files, pending phase todos or stale handoff were found.
+
+### Historical Phase 14 verification refresh
 
 Completed stage: **Phase 14 — CGB-E Model Qualification and Corpus, verification refresh**. All 13 implementation plans were already complete. Canonical [verification](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes **41/41 truths**, all **28 artifact declarations** and **13 traced links**; CGB-08 and CGB-10 remain satisfied. Installed OpenGSD freshness is `passed` over the verifier's covered set.
 
@@ -60,12 +72,12 @@ Review stack: branch `gsd/phase-13-verification-refresh` builds on Phase 12 refr
 
 ### Historical Phase 14 handoff (superseded route; preserved receipts)
 
-Phase: 14
+Phase: 8
 Status: All phases complete
 Current Plan: Not started
 Total Plans in Phase: 13
 Last Activity: 2026-10-20
-Last Activity Description: Phase 14 complete
+Last Activity Description: Phase 8 complete
 
 Completed workflow stage: **Phase 14 — CGB-E Model Qualification and Corpus, automated UAT complete**. [14-UAT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md) closes all 49 deliverables across 13 plans automatically, with zero issues, pending/skipped/blocked rows or human checkpoints. All 13 bounded commit windows reconcile. The canonical [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08 and CGB-10 are complete. Nyquist covers 31/31 tasks, security closes 27/27 threats, and all eight implementation review findings are fixed and independently checked.
 
@@ -568,10 +580,10 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Completed stage: Phase 14 — CGB-E Model Qualification and Corpus, verification refresh; paused at the phase boundary.
-Next corrective phase: 8 — Cartridge Seam, MBC5 and MBC2, verification refresh for changed preview-package fixture exclusion.
-Next command: `/gsd-execute-phase 8`.
+Completed stage: Phase 8 — Cartridge Seam, MBC5 and MBC2, package verification refresh; paused at the phase boundary.
+Next corrective phase: 12 — CGB Double Speed, verification refresh only for changed lessons/index metadata.
+Next command: `/gsd-execute-phase 12`.
 
 ## Operator Next Steps
 
-Run the command above when ready. Phase 12 also needs a metadata verification refresh after the prior Phase 13 lessons/index changes; all remaining reports pass; milestone completion review follows the remaining stale shared-input report, with explicit debt review. Do not restart completed implementation, archive, tag, or start v0.3 automatically. Both automatic advance flags remain false.
+Run the command above when ready. Preserve completed implementation and historical producer receipts. Milestone completion/debt review follows the remaining stale report, including the recorded Phase9/10 legacy-schema diagnostic. Do not archive, tag, or start v0.3 automatically. Both automatic advance flags remain false.

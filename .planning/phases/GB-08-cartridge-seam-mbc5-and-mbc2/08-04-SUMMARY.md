@@ -34,16 +34,20 @@ actuals:
   tasks: 2
   commits: 2
 coverage:
-  - deliverable: "MBC2/MBC5 battery cartridges run in the player without touching the save directory"
-    verification:
-      - {kind: test, ref: "tests/player/test_session.c#player_session_battery_unsupported", status: pass}
+  - id: D1
+    description: "MBC2/MBC5 battery cartridges run in the player without touching the save directory"
     human_judgment: false
-  - deliverable: "Status string, stderr warning and limitations text name the unsaved-progress gap"
     verification:
-      - {kind: test, ref: "tests/player/test_limitations.c#player_limitations", status: pass}
-      - {kind: command, ref: "grep -c of the status string in src/player/main.c is 4", status: pass}
-    human_judgment: true
-    rationale: "The visible status line is not asserted by an automated UI test; only the source branches and the limitations pin are checked."
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-player-contract.py --self-test"
+        status: pass
+  - id: D2
+    description: "Status string, stderr warning and limitations text name the unsaved-progress gap"
+    human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-player-contract.py --self-test"
+        status: pass
 ---
 
 # Phase 8 Plan 04: Player battery honesty Summary

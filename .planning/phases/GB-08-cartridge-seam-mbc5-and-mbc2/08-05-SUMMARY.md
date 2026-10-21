@@ -50,6 +50,28 @@ requirements-completed: [CART-02, CART-03]
 duration: 40min
 completed: 2026-10-11
 status: complete
+coverage:
+  - id: D1
+    description: "15 digest-pinned Mooneye MBC2/MBC5 derivative ROMs with redistribution notices"
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build -R ^mooneye_mbc_ --output-on-failure"
+        status: pass
+  - id: D2
+    description: "Bounded multi-suite runner selects admitted manifest digests and records callback results"
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build -R ^mooneye_mbc_ --output-on-failure"
+        status: pass
+  - id: D3
+    description: "Fixture reproduction recipe and provenance retain builder pins and measured 7/7 MBC2, 8/8 MBC5 historical receipt"
+    human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-closure-contract.py --self-test"
+        status: pass
 ---
 
 # Phase 8 Plan 05: Mooneye mbc2/mbc5 admission and multi-suite runner Summary

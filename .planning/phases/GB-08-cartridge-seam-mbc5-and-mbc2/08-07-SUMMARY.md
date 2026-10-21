@@ -35,6 +35,28 @@ key-decisions:
   - "Scan is a CMake script (Open Question 4); expected fixture list stays tracer, visible-demo, mbc1-continuation (Open Question 7)"
   - "Ninth-bit mutant (D-29) NOT landed: measured premise failure, see Blocker"
 requirements-completed: []
+coverage:
+  - id: D1
+    description: "Name and digest redistribution guard rejects planted fixtures and wrong fixture lists"
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build -R ^mooneye_mbc_ --output-on-failure"
+        status: pass
+  - id: D2
+    description: "Install and extracted preview/player packaging exclude admitted Mooneye MBC fixtures"
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build -R ^(mooneye_mbc_|preview_package_smoke) --output-on-failure"
+        status: pass
+  - id: D3
+    description: "Historical exact-head Linux rebuild and CI receipts remain attributed to their original producer"
+    human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-closure-contract.py --self-test"
+        status: pass
 ---
 
 # Phase 8 Plan 07: Repository-only scan, hosted rebuild leg, exact-head CI Summary

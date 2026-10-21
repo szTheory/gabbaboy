@@ -115,6 +115,8 @@ Plans:
 
 ### Phase 8: Cartridge Seam, MBC5 and MBC2
 
+**Package verification refresh (2026-10-20):** [08-VERIFICATION.md](phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-VERIFICATION.md) passes 97/97 truths, 27 artifact declarations and 19 traced links; CART-01/02/03 remain satisfied. Later Phase 10 package exclusion passes clean/renamed/symlink controls. Fresh core 1,144/1,144, player 98/98 and separate installed 5/5 pass, zero skips; DMG rows unchanged. Canonical UAT closes 34/34 deliverables with 19 controls; immutable closure/player contracts reject 157/5 controls. No implementation replay or new qualification. Next corrective phase: **12 — CGB Double Speed**, metadata verification refresh only: `/gsd-execute-phase 12`. Both auto flags remain false; milestone closure/debt review stays pending.
+
 **Goal**: Cartridge behavior lives behind one type-table mapper seam with no observable DMG change, and callers can run MBC5 and MBC2 cartridges.
 **Depends on**: Phase 7 (DMG baseline)
 **Requirements**: CART-01, CART-02, CART-03
