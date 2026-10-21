@@ -1129,6 +1129,15 @@ jobs:
         with:
           ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 0
+          persist-credentials: false
+      # The judge is the trusted workflow revision, never the tagged tree: the tagged checkout above is data.
+      - name: Check out the trusted workflow revision as the judge
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          path: trusted
+          fetch-depth: 0
+          persist-credentials: false
       - name: Validate the attached v0.2 evidence families through their owner validators
         shell: bash
         run: |
@@ -1139,7 +1148,6 @@ jobs:
           [[ $(jq --arg tag "$RELEASE_TAG" '[.[] | select(.tag_name == $tag and .draft == true)] | length' <<<"$release_json") == 1 ]] || exit 1
           release_id=$(jq --arg tag "$RELEASE_TAG" -r '.[] | select(.tag_name == $tag) | .id' <<<"$release_json")
           if [[ -n "$RELEASE_ID" ]]; then [[ "$release_id" == "$RELEASE_ID" ]] || exit 1; fi
-          git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > "$RUNNER_TEMP/verify-release-gates.sh"
           mkdir -p build/evidence-validation
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" \
             --pattern cgb-corpus-receipt.json --pattern support-ledger.json --pattern v02-performance-receipt.json \
@@ -1147,7 +1155,7 @@ jobs:
             --dir build/evidence-validation
           curl --fail --silent --show-error --location --proto '=https' --max-filesize 1073741824 \
             --output "$RUNNER_TEMP/source-archive.tar.gz" "https://github.com/$GH_REPO/archive/refs/tags/$RELEASE_TAG.tar.gz"
-          bash "$RUNNER_TEMP/verify-release-gates.sh" --check-v02-evidence \
+          bash trusted/.github/scripts/verify-release-gates.sh --check-v02-evidence \
             build/evidence-validation "$RELEASE_TAG" "$SOURCE_SHA" "$RUNNER_TEMP/source-archive.tar.gz"
       - name: Validate the exact candidate asset set after platform smoke
         shell: bash
@@ -1295,23 +1303,30 @@ jobs:
         with:
           ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 0
+          persist-credentials: false
+      # The judge is the trusted workflow revision, never the tagged tree: the tagged checkout above is data.
+      - name: Check out the trusted workflow revision as the judge
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          path: trusted
+          fetch-depth: 0
+          persist-credentials: false
       - name: Load trusted release evidence verifiers
         shell: bash
         run: |
           set -euo pipefail
-          git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > "$RUNNER_TEMP/verify-release-gates.sh"
           git show "${GITHUB_SHA}:.github/scripts/verify-release-source-proof.py" > "$RUNNER_TEMP/verify-release-source-proof.py"
-          chmod +x "$RUNNER_TEMP/verify-release-gates.sh"
       - name: Validate draft candidate and all downloaded platform bytes
         shell: bash
         run: |
           set -euo pipefail
-          bash "$RUNNER_TEMP/verify-release-gates.sh" --check-draft "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"
+          bash trusted/.github/scripts/verify-release-gates.sh --check-draft "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"
           mkdir -p build/release-final
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" --dir build/release-final
           api_assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
           printf '%s\n' "$api_assets" > build/release-final/api-assets.json
-          bash "$RUNNER_TEMP/verify-release-gates.sh" --check-merged-source "$SOURCE_SHA" "$RELEASE_TAG" "$RELEASE_ID" \
+          bash trusted/.github/scripts/verify-release-gates.sh --check-merged-source "$SOURCE_SHA" "$RELEASE_TAG" "$RELEASE_ID" \
             build/release-final/source-receipt.json "$RUNNER_TEMP/verify-release-source-proof.py"
           # shellcheck disable=SC2016
           python3 - "$api_assets" build/release-final "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" <<'PY'
@@ -1370,7 +1385,7 @@ jobs:
             fi
           done
       - name: Recheck final API inventory and downloaded receipts
-        run: bash .github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"
+        run: bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"
       - name: Publish the one qualified draft
         shell: bash
         run: |
@@ -1386,5 +1401,5 @@ jobs:
             echo "Published release readback did not preserve tag/draft transition." >&2; exit 1;
           }
           assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
-          python3 .github/scripts/verify-published-release-assets.py "$assets" build/release-final/api-assets.json
+          python3 -I trusted/.github/scripts/verify-published-release-assets.py "$assets" build/release-final/api-assets.json
           echo "Published the exact qualified release $RELEASE_TAG ($SOURCE_SHA) with unsigned status recorded."

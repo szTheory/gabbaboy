@@ -1,0 +1,5 @@
+PASS: workflow privilege and trust wiring residual_write_jobs=5
+check_exit=0
+rejected: subject-supplied judge and shadowed modules cannot approve a mutated workflow
+PASS: workflow policy self-test negative_controls=49 positive_controls=4
+release_gate_exit=0

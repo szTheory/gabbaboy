@@ -313,6 +313,12 @@ jobs:
           name: rehearsal-fuzz-${{ github.run_id }}-${{ github.run_attempt }}
           path: rehearsal-evidence
       - name: Judge workflow privilege and trust wiring from the trusted checkout
-        run: python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject
       - name: Verify the retained rehearsal campaign receipt with the trusted validator
-        run: python3 -I trusted-judge/tests/scripts/verify-v02-fuzz.py --verify rehearsal-evidence/v02-fuzz-receipt.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I trusted-judge/tests/scripts/verify-v02-fuzz.py --verify rehearsal-evidence/v02-fuzz-receipt.json

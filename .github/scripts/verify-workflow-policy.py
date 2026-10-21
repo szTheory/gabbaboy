@@ -285,6 +285,416 @@ def _require_job(workflow: str, tree: dict, job_id: str) -> dict:
     return job
 
 
+
+# --------------------------------------------------------------------------- shell intent
+# A bounded reader for the plain bash these workflows use. It recovers commands, their enclosing
+# if/loop/function/group frames, list connectors and `|| ...` guards so that a required command can be
+# proved reachable and fatal. Anything it cannot place (case, background jobs, unterminated quotes) is
+# rejected as ambiguous rather than guessed.
+_WORD_END = set(" \t\n;&|()<>")
+_REDIRECTS = {">", ">>", "<", "<<", "<<-", "<<<", ">&", "<&", "&>"}
+
+
+def _ambiguous(what: str) -> Reject:
+    return Reject("shell-unsupported", what)
+
+
+def _match(text: str, start: int, opener: str, closer: str) -> int:
+    depth = 0
+    i = start
+    while i < len(text):
+        c = text[i]
+        if c in "'\"":
+            end = text.find(c, i + 1)
+            if end < 0:
+                raise _ambiguous("unterminated quote")
+            i = end
+        elif c == opener:
+            depth += 1
+        elif c == closer:
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    raise _ambiguous(f"unterminated {opener}{closer}")
+
+
+def _tokens(script: str) -> list[tuple[str, str]]:
+    out: list[tuple[str, str]] = []
+    heredocs: list[tuple[str, bool]] = []
+    i, n = 0, len(script)
+    while i < n:
+        c = script[i]
+        if c == "\\" and script[i + 1 : i + 2] == "\n":
+            i += 2
+        elif c in " \t":
+            i += 1
+        elif c == "\n":
+            out.append(("op", "\n"))
+            i += 1
+            for delimiter, strip in heredocs:
+                while i < n:
+                    end = script.find("\n", i)
+                    line = script[i : end if end >= 0 else n]
+                    i = end + 1 if end >= 0 else n
+                    if (line.strip() if strip else line) == delimiter:
+                        break
+            heredocs = []
+        elif c == "#":
+            while i < n and script[i] != "\n":
+                i += 1
+        elif c in ";&|<>()":
+            op = next((cand for cand in ("<<<", "<<-", "&&", "||", ";;", ">>", "<<", ">&", "<&", "&>") if script.startswith(cand, i)), c)
+            out.append(("op", op))
+            i += len(op)
+            if op in ("<<", "<<-"):
+                j = i
+                while j < n and script[j] in " \t":
+                    j += 1
+                k = j
+                while k < n and script[k] not in " \t\n;&|()<>":
+                    k += 1
+                heredocs.append((script[j:k].strip("'\""), op == "<<-"))
+        else:
+            parts: list[str] = []
+            while i < n:
+                c = script[i]
+                if c == "'":
+                    end = script.find("'", i + 1)
+                    if end < 0:
+                        raise _ambiguous("unterminated quote")
+                    parts.append(script[i + 1 : end])
+                    i = end + 1
+                elif c == '"':
+                    j = i + 1
+                    while j < n and script[j] != '"':
+                        if script[j] == "\\" and j + 1 < n:
+                            parts.append(script[j + 1] if script[j + 1] in '"\\$`' else script[j : j + 2])
+                            j += 2
+                        elif script[j] == "$" and script[j + 1 : j + 2] in ("(", "{"):
+                            opener, closer = ("(", ")") if script[j + 1] == "(" else ("{", "}")
+                            k = _match(script, j + 1, opener, closer)
+                            parts.append(script[j : k + 1])
+                            j = k + 1
+                        else:
+                            parts.append(script[j])
+                            j += 1
+                    if j >= n:
+                        raise _ambiguous("unterminated quote")
+                    i = j + 1
+                elif c == "\\" and i + 1 < n:
+                    parts.append(script[i + 1])
+                    i += 2
+                elif c == "$" and script[i + 1 : i + 2] in ("(", "{"):
+                    opener, closer = ("(", ")") if script[i + 1] == "(" else ("{", "}")
+                    k = _match(script, i + 1, opener, closer)
+                    parts.append(script[i : k + 1])
+                    i = k + 1
+                elif c == "`":
+                    end = script.find("`", i + 1)
+                    if end < 0:
+                        raise _ambiguous("unterminated backtick")
+                    parts.append(script[i : end + 1])
+                    i = end + 1
+                elif c in _WORD_END:
+                    break
+                else:
+                    parts.append(c)
+                    i += 1
+            word = "".join(parts)
+            if word.isdigit() and i < n and script[i] in "<>":
+                continue  # file-descriptor prefix of a redirection
+            out.append(("w", word))
+    return out
+
+
+class Event:
+    __slots__ = ("words", "assigns", "frames", "connector", "guard", "index", "line_end")
+
+    def __init__(self, words, assigns, frames, connector, index):
+        self.words, self.assigns, self.frames, self.connector, self.index = words, assigns, frames, connector, index
+        self.guard: list[list[str]] = []  # commands on the right of `||` that decide what a failure does
+
+
+def _const(words: list[str]):
+    """True/False for a literal condition, None when it depends on runtime state."""
+    if words in (["true"], [":"]):
+        return True
+    if words == ["false"]:
+        return False
+    body = words
+    if body and body[0] in ("[[", "[", "test"):
+        body = body[1:-1] if body[0] in ("[[", "[") else body[1:]
+        if len(body) == 3 and not any("$" in w or "`" in w for w in body):
+            left, op, right = body
+            if op in ("==", "=", "-eq"):
+                return left == right
+            if op in ("!=", "-ne"):
+                return left != right
+    return None
+
+
+def shell_events(script: str) -> list[Event]:
+    tokens = _tokens(script)
+    events: list[Event] = []
+    frames: list[dict] = []
+    state = {"cur": [], "connector": None, "last": None, "or_owner": None, "or_depth": 0, "func": None, "skip": False,
+             "force_conn": None}
+
+    def snapshot():
+        return tuple((f["kind"], f["phase"], f["dead"], f.get("name", "")) for f in frames)
+
+    def emit(words: list[str], connector):
+        assigns = []
+        while words and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", words[0]):
+            assigns.append(words.pop(0))
+        if not words and not assigns:
+            return
+        if connector is None and state["force_conn"]:
+            connector, state["force_conn"] = state["force_conn"], None
+        event = Event(list(words), assigns, snapshot(), connector, len(events))
+        events.append(event)
+        state["last"] = event
+        if connector == "||" and state["or_owner"] is None and state["prev"] is not None:
+            state["or_owner"], state["or_depth"] = state["prev"], len(frames)
+        if state["or_owner"] is not None and event is not state["or_owner"] and words:
+            state["or_owner"].guard.append(list(words))
+        if frames and frames[-1]["kind"] in ("if", "loop") and frames[-1]["phase"] in ("cond", "header") and words:
+            frames[-1].setdefault("cond", []).append(list(words))
+
+    state["prev"] = None
+
+    def command(words: list[str], connector):
+        if not words:
+            return
+        head = words[0]
+        if head in ("case", "function", "select", "coproc"):
+            raise _ambiguous(f"unsupported shell construct {head}")
+        if head == "if":
+            frames.append({"kind": "if", "phase": "cond", "dead": False, "const": None})
+            return command(words[1:], connector) if len(words) > 1 else None
+        if head == "elif":
+            frames[-1].update(phase="cond", dead=False, const=None, cond=[])
+            return command(words[1:], connector) if len(words) > 1 else None
+        if head == "then":
+            frame = frames[-1]
+            conds = frame.get("cond", [])
+            frame["const"] = _const(conds[0]) if len(conds) == 1 else None
+            frame.update(phase="then", dead=frame["const"] is False)
+            return command(words[1:], connector) if len(words) > 1 else None
+        if head == "else":
+            frame = frames[-1]
+            frame.update(phase="else", dead=frame["const"] is True)
+            return command(words[1:], connector) if len(words) > 1 else None
+        if head == "fi":
+            frames.pop()
+            return
+        if head in ("for", "while", "until"):
+            frames.append({"kind": "loop", "phase": "header", "dead": False})
+            if head != "for" and len(words) > 1:
+                emit(list(words[1:]), connector)
+            return
+        if head == "do":
+            frames[-1]["phase"] = "body"
+            return command(words[1:], connector) if len(words) > 1 else None
+        if head == "done":
+            frames.pop()
+            return
+        if head == "{":
+            name = state["func"]
+            frames.append({"kind": "func" if name else "group", "phase": "body", "dead": False, "name": name or ""})
+            state["func"] = None
+            if len(words) == 1 and connector == "||":
+                state["force_conn"] = connector
+            return command(words[1:], connector) if len(words) > 1 else None
+        if head == "}":
+            frames.pop()
+            return
+        emit(list(words), connector)
+
+    def flush(next_connector):
+        words, connector = state["cur"], state["connector"]
+        state["cur"] = []
+        command(words, connector)
+        state["prev"] = state["last"]
+        state["connector"] = next_connector
+
+    i = 0
+    while i < len(tokens):
+        kind, value = tokens[i]
+        if state["skip"]:
+            state["skip"] = False
+            i += 1
+            continue
+        if kind == "w":
+            state["cur"].append(value)
+        elif value in _REDIRECTS:
+            state["skip"] = True
+        elif value == "(":
+            if len(state["cur"]) == 1 and tokens[i + 1 : i + 2] == [("op", ")")]:
+                state["func"] = state["cur"][0]
+                state["cur"] = []
+                i += 1
+            else:
+                raise _ambiguous("subshells are unsupported")
+        elif value in ("&&", "||", "|"):
+            flush(value)
+        elif value in ("\n", ";"):
+            flush(None)
+            state["last"] = None if value == "\n" or True else state["last"]
+            state["prev"] = None
+            if state["or_owner"] is not None and len(frames) <= state["or_depth"]:
+                state["or_owner"] = None
+        elif value in ("&", ";;", ")", "&>"):
+            raise _ambiguous(f"unsupported shell operator {value}")
+        i += 1
+    flush(None)
+    if frames:
+        raise _ambiguous("unterminated shell block")
+    return events
+
+
+_ERREXIT_OFF = re.compile(r"^\+[a-zA-Z]*e[a-zA-Z]*$")
+
+
+def _ignores_failure(event: Event) -> bool:
+    if not event.guard:
+        return False
+    return not any(words[0] in ("exit", "return") and len(words) > 1 and words[1] != "0" for words in event.guard) \
+        and not any(words == ["false"] for words in event.guard)
+
+
+def _reachable(event: Event, events: list[Event], conditional: bool, errexit_off: bool, _seen=()) -> bool:
+    for kind, phase, dead, name in event.frames:
+        if dead:
+            return False
+        if kind == "func":
+            if name in _seen or not any(
+                other.words and other.words[0] == name and other is not event
+                and _reachable(other, events, conditional, errexit_off, _seen + (name,)) for other in events
+            ):
+                return False
+        elif kind in ("if", "loop"):
+            if not conditional or phase in ("cond", "header"):
+                return False
+        elif kind == "group" and not conditional:
+            return False
+    if event.connector in ("&&", "||") or _ignores_failure(event):
+        return False
+    for earlier in events[: event.index]:
+        if earlier.frames or earlier.connector:
+            continue
+        if earlier.words[:1] in (["exit"], ["return"]):
+            return False
+        if not errexit_off and earlier.words[:1] == ["set"] and any(_ERREXIT_OFF.match(w) or w == "+o" for w in earlier.words[1:]):
+            return False
+    return True
+
+
+def expected_command(text: str) -> tuple[list[str], list[str]]:
+    events = shell_events(text)
+    return events[0].words, events[0].assigns
+
+
+def _const_false(expression) -> bool:
+    text = re.sub(r"^\$\{\{|\}\}$", "", str(expression).strip()).strip()
+    return text in ("false", "0", "''", '""', "null") or bool(re.match(r"^false\s*&&", text))
+
+
+def _check_disabled(workflow: str, tree: dict) -> None:
+    for job_id, job in tree["jobs"].items():
+        if _const_false(job["if"]) if "if" in job else False:
+            raise Reject("disabled-gate", f"{_where(workflow, job_id)} is disabled by a constant-false condition")
+        for step in job.get("steps", []):
+            if "if" in step and _const_false(step["if"]):
+                raise Reject("disabled-gate", f"{_where(workflow, job_id)} step {step.get('name', '?')!r} is disabled by a constant-false condition")
+
+
+def _runs_under_errexit(step: dict) -> bool:
+    shell = str(step.get("shell", "bash")).strip()
+    return shell in ("bash", "bash -e {0}", "bash --noprofile --norc -eo pipefail {0}") and str(step.get("continue-on-error", "false")).lower() in ("", "false")
+
+
+def _step_events(step: dict) -> list[Event]:
+    try:
+        return shell_events(step.get("run", ""))
+    except Reject:
+        return []
+
+
+def require_call(workflow: str, job_id: str, job: dict, command_text: str, *, conditional: bool = False,
+                 errexit_off: bool = False, status_var: str = "", after_step: int = 0, allow_always: bool = False,
+                 contains: tuple[str, ...] = ()) -> tuple[int, int]:
+    """Prove the job runs `command_text` as a reachable, fatal statement; return its (step, statement) position."""
+    words, assigns = expected_command(command_text)
+    for number, step in enumerate(job.get("steps", [])):
+        always = allow_always and str(step.get("if", "")).strip() in ("always()", "${{ always() }}")
+        if number < after_step or ("if" in step and not always) or not _runs_under_errexit(step) or not step.get("run"):
+            continue
+        events = _step_events(step)
+        for event in events:
+            if event.words[: len(words)] != words or not set(assigns) <= set(event.assigns):
+                continue
+            if not set(contains) <= set(event.words):
+                continue
+            if not _reachable(event, events, conditional, errexit_off):
+                continue
+            if status_var:
+                following = events[event.index + 1] if event.index + 1 < len(events) else None
+                if not (following and not following.words and f"{status_var}=$?" in following.assigns):
+                    continue
+                if not any(e.words[:3] == ["test", f"${status_var}", "-eq"] and e.words[3:4] == ["0"]
+                           and _reachable(e, events, False, True) for e in events[event.index + 1 :]):
+                    continue
+            return number, event.index
+    raise Reject("required-command-not-executed", f"{_where(workflow, job_id)} does not run a reachable, fatal: {command_text}")
+
+
+def _check_ignored_failures(workflow: str, tree: dict) -> None:
+    for job_id, job in tree["jobs"].items():
+        if str(job.get("continue-on-error", "false")).lower() not in ("", "false"):
+            raise Reject("ignored-gate", f"{_where(workflow, job_id)} ignores job failure with continue-on-error")
+        for number, step in enumerate(job.get("steps", [])):
+            if str(step.get("continue-on-error", "false")).lower() in ("", "false"):
+                continue
+            step_id = step.get("id", "")
+            gate_vars = [key for later in job["steps"][number + 1 :] for key, value in later.get("env", {}).items()
+                         if step_id and value == "${{ steps." + step_id + ".outcome }}"]
+            gated = False
+            for var in gate_vars:
+                try:
+                    require_call(workflow, job_id, job, f'test "${var}" = success', after_step=number + 1, allow_always=True)
+                    gated = True
+                except Reject:
+                    continue
+            if not gated:
+                raise Reject("ignored-gate", f"{_where(workflow, job_id)} step {step.get('name', '?')!r} continues on error without a fatal outcome gate")
+
+
+
+_TRUSTED_OPERANDS = ("trusted/", "$RUNNER_TEMP/", "build/verify-release-gates.sh")
+_BUILD_TOOLS = {"cmake", "ctest", "make", "ninja", "cc", "gcc", "clang"}
+
+
+def _check_no_subject_execution(workflow: str, job_id: str, job: dict) -> None:
+    """A write-holding judge runs interpreters only on trusted-checkout files, inline stdin, or files cut from
+    the trusted workflow revision; never on a script or build tool from the tagged workspace."""
+    for step in job.get("steps", []):
+        for event in shell_events(step.get("run", "")):
+            if not event.words:
+                continue
+            head = event.words[0]
+            if head in _BUILD_TOOLS or head.startswith((".", "tests/", ".github/", "build/")):
+                raise Reject("subject-judge-execution", f"{_where(workflow, job_id)} executes {head!r} from the tagged workspace under write authority")
+            if head in ("bash", "sh", "python3", "python"):
+                if any(word in ("-c", "-m") for word in event.words[1:]):
+                    continue
+                operands = [word for word in event.words[1:] if word == "-" or not word.startswith("-")]
+                script = operands[0] if operands else "-"
+                if script != "-" and not script.startswith(_TRUSTED_OPERANDS):
+                    raise Reject("subject-judge-execution", f"{_where(workflow, job_id)} runs {script!r}, which is not trusted judge code")
+
+
 # --------------------------------------------------------------------------- policy
 REHEARSAL_PRODUCERS = ("corpus", "fuzz", "performance", "package", "aggregate")
 REHEARSAL_FUZZ_ARTIFACT = "rehearsal-fuzz-${{ github.run_id }}-${{ github.run_attempt }}"
@@ -309,6 +719,97 @@ RELEASE_ARTIFACTS = {
     "candidate-fuzz": ("release-evidence-fuzz", ("build/ci-fuzz/v02-fuzz-receipt.json",)),
 }
 SUBJECT_REF = "${{ env.SOURCE_SHA }}"
+JUDGE_CALL_POLICY = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject"
+_LEDGER_BASE = 'python3 -I tests/scripts/verify-support-ledger.py --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --receipt build/cgb-corpus-receipt.json'
+REHEARSAL_REQUIRED = {
+    "corpus": (
+        "python3 -I tests/scripts/verify-cgb-corpus-report.py --begin-run --build-dir build --receipt build/cgb-corpus-receipt.json",
+        "python3 -I tests/scripts/verify-cgb-corpus-report.py --from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json",
+        "python3 -I tests/scripts/verify-cgb-corpus-claims.py --receipt build/cgb-corpus-receipt.json",
+        "python3 -I tests/scripts/verify-support-ledger.py --check-current --receipt build/cgb-corpus-receipt.json",
+        "bash .github/scripts/verify-test-inventory.sh",
+        _LEDGER_BASE + " --output build/support-ledger.json",
+        _LEDGER_BASE + " --verify-sidecar build/support-ledger.json",
+    ),
+    "fuzz": (
+        "GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --explore --receipt build-asan/v02-fuzz-receipt.json",
+        "python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json",
+        "GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --self-test",
+    ),
+    "performance": (
+        "bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json",
+        "python3 -I tests/scripts/verify-v02-performance.py --verify build/v02-performance-receipt.json",
+    ),
+    "package": (
+        'bash tests/scripts/verify-release-candidate.sh --extract build/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"',
+        'python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" --output build/v02-consumer-receipt.json',
+        'python3 -I tests/scripts/verify-v02-source-archive.py --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json',
+        'python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA"',
+    ),
+    "aggregate": (
+        "python3 -I tests/scripts/verify-cgb-corpus-claims.py --receipt build/cgb-corpus-receipt.json",
+        "GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --explore --receipt build-asan/v02-fuzz-receipt.json",
+        "python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json",
+        "python3 -I tests/scripts/verify-v02-performance.py --verify build/v02-performance-receipt.json",
+        'bash "$RUNNER_TEMP/verify-release-gates.sh" --check-v02-evidence build/evidence "$RELEASE_TAG" "$SOURCE_SHA" "$RUNNER_TEMP/source-archive.tar.gz"',
+    ),
+    "judge": (
+        JUDGE_CALL_POLICY,
+        "python3 -I trusted-judge/tests/scripts/verify-v02-fuzz.py --verify rehearsal-evidence/v02-fuzz-receipt.json",
+    ),
+}
+RELEASE_REQUIRED = {
+    "candidate-corpus": REHEARSAL_REQUIRED["corpus"],
+    "candidate-performance": REHEARSAL_REQUIRED["performance"],
+    "candidate-fuzz": (
+        'gh run download "$run_id" --repo "$GH_REPO" --name "v02-fuzz-$run_id-$attempt" --dir build/ci-fuzz',
+        'python3 -I tests/scripts/verify-v02-fuzz.py --verify-hosted --source-sha "$SOURCE_SHA" --run-id "$run_id" --attempt "$attempt" --receipt build/ci-fuzz/v02-fuzz-receipt.json',
+    ),
+    "candidate-platform-manifest": (
+        'bash trusted/.github/scripts/verify-release-gates.sh --check-v02-evidence build/evidence-validation "$RELEASE_TAG" "$SOURCE_SHA" "$RUNNER_TEMP/source-archive.tar.gz"',
+    ),
+    "publish-qualified-release": (
+        'bash trusted/.github/scripts/verify-release-gates.sh --check-draft "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"',
+        'bash trusted/.github/scripts/verify-release-gates.sh --check-merged-source "$SOURCE_SHA" "$RELEASE_TAG" "$RELEASE_ID" build/release-final/source-receipt.json "$RUNNER_TEMP/verify-release-source-proof.py"',
+        'bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"',
+        "python3 -I trusted/.github/scripts/verify-published-release-assets.py",
+        'gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag',
+    ),
+}
+# Downloaded-byte platform smoke in the residual candidate jobs: (command prefix, words that must also appear).
+RELEASE_SMOKE_REQUIRED = {
+    "candidate": (
+        ("bash tests/scripts/verify-release-candidate.sh --verify", ()),
+        ("bash tests/scripts/verify-release-candidate.sh --verify-final", ()),
+        ("cmake", ("-P", "cmake/VerifyInstalledPackage.cmake")),
+    ),
+    "candidate-macos": (
+        ('bash "$RUNNER_TEMP/verify-release-gates.sh" --check-digest-sidecar build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz.sha256 build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz', ()),
+        ("bash tests/scripts/verify-release-candidate.sh --extract build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz build/extracted-core", ()),
+        ("cmake", ("-P", "cmake/VerifyInstalledPackage.cmake")),
+        ('GBB_VERIFIED_OUTPUT_DIR="$RUNNER_TEMP/release-player-downloaded" bash tests/scripts/verify-phase3-player.sh --verify-package build/downloaded-player', ()),
+    ),
+    "candidate-windows": (
+        ("bash build/verify-release-gates.sh --check-digest-sidecar build/downloaded/gabbaboy-core-windows-x64.tar.gz.sha256 build/downloaded/gabbaboy-core-windows-x64.tar.gz", ()),
+        ("bash tests/scripts/verify-release-candidate.sh --extract build/downloaded/gabbaboy-core-windows-x64.tar.gz build/extracted", ()),
+        ("cmake", ("-P", "cmake/VerifyInstalledPackage.cmake")),
+    ),
+}
+CI_REQUIRED = (
+    "cmake --preset phase1-asan -DGBB_TEST_INSTALL_PREFIX=",
+    "cmake --build --preset phase1-asan",
+    "ctest --preset phase1-asan --parallel 4 --output-on-failure --no-tests=error --output-junit ctest.xml",
+    "bash .github/scripts/verify-test-inventory.sh build-asan/ctest.xml tests/expected-tests.txt",
+    "GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --fast",
+)
+# (command, status variable, conditional by design): the sanitizer step runs under set +e so it can always retain
+# evidence, then must assert every recorded status after errexit is restored.
+CI_STATUS_CALLS = (
+    ("GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --explore --receipt build-asan/v02-fuzz-receipt.json", "campaign_status", False),
+    ("python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json", "verify_status", True),
+    ("GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --self-test", "self_test_status", True),
+)
+CI_REQUIRED_NATIVE_NEEDS = {"native-linux", "native-macos", "native-windows", "linux-sanitizers", "cmake-floor-3-25-3", "player-gate", "macos-player-package"}
 
 
 def check_rehearsal(root: Path) -> None:
@@ -317,6 +818,8 @@ def check_rehearsal(root: Path) -> None:
     if tree.get("permissions") != {"contents": "read"}:
         raise Reject("workflow-permissions", f"{name} must declare only top-level contents: read")
     _check_actions(name, tree)
+    _check_disabled(name, tree)
+    _check_ignored_failures(name, tree)
     _check_checkout_credentials(name, tree, tree["jobs"])
     for job_id, job in tree["jobs"].items():
         if _writes(_permissions(job, tree["permissions"])):
@@ -342,6 +845,9 @@ def check_rehearsal(root: Path) -> None:
     for step in judge.get("steps", []):
         if re.search(r"(?:^|[\s=\"'])\.?/?subject/", step.get("run", "")):
             raise Reject("judge-subject-execution", f"{_where(name, 'judge')} names a path inside the subject tree; subject files are data only")
+    for job_id, commands in REHEARSAL_REQUIRED.items():
+        for command in commands:
+            require_call(name, job_id, tree["jobs"][job_id], command)
 
 
 def check_ci(root: Path) -> None:
@@ -350,6 +856,8 @@ def check_ci(root: Path) -> None:
     if tree.get("permissions") != {"contents": "read"}:
         raise Reject("workflow-permissions", "ci must declare only top-level contents: read")
     _check_actions(name, tree)
+    _check_disabled(name, tree)
+    _check_ignored_failures(name, tree)
     job = _require_job(name, tree, "linux-sanitizers")
     perms = _permissions(job, tree["permissions"])
     if perms != {"actions": "read", "contents": "read"}:
@@ -359,6 +867,19 @@ def check_ci(root: Path) -> None:
             ("build-asan/v02-fuzz-receipt.json", "build-asan/fuzz-artifacts/"), retain_on_failure=True)
     if any(_writes(_permissions(item, tree["permissions"])) for item in tree["jobs"].values()):
         raise Reject("producer-write-authority", "ci must not grant write authority to any job")
+    gate = _require_job(name, tree, "required-native")
+    _require_needs(name, "required-native", gate, CI_REQUIRED_NATIVE_NEEDS, "workflow-dependency")
+    if str(gate.get("if", "")).strip() != "always()":
+        raise Reject("workflow-dependency", "ci.required-native must run always() so skipped or failed lanes are rejected, not skipped")
+    for var, lane in (("LINUX_SANITIZERS", "linux-sanitizers"), ("NATIVE_LINUX", "native-linux"), ("CMAKE_FLOOR", "cmake-floor-3-25-3")):
+        mapped = [step.get("env", {}).get(var) for step in gate.get("steps", [])]
+        if "${{ needs." + lane + ".result }}" not in mapped:
+            raise Reject("workflow-dependency", f"ci.required-native must read the {lane} result")
+    require_call(name, "required-native", gate, 'bash .github/scripts/check-player-result.sh "$PLAYER_GATE" "$PLAYER_REQUIRED" "$PLAYER_RESULT"')
+    for command in CI_REQUIRED:
+        require_call(name, "linux-sanitizers", job, command)
+    for command, var, conditional in CI_STATUS_CALLS:
+        require_call(name, "linux-sanitizers", job, command, conditional=conditional, errexit_off=True, status_var=var)
 
 
 def check_release(root: Path) -> None:
@@ -367,6 +888,8 @@ def check_release(root: Path) -> None:
     if tree.get("permissions") != {"contents": "read"}:
         raise Reject("workflow-permissions", "release must declare only top-level contents: read")
     _check_actions(name, tree)
+    _check_disabled(name, tree)
+    _check_ignored_failures(name, tree)
     jobs = tree["jobs"]
     for job_id in jobs:
         if job_id not in RELEASE_ROLES:
@@ -406,6 +929,28 @@ def check_release(root: Path) -> None:
             if any(re.search(r"(?m)(?:^|[\s;&|(])(?:cmake|ctest|make|ninja)\s|(?:^|[\s\"'=])(?:\./)?tests/scripts/", step.get("run", "")) for step in job.get("steps", [])):
                 raise Reject("attacher-subject-execution", f"{_where(name, job_id)} must execute trusted code only")
     _require_needs(name, "candidate-platform-manifest", jobs["candidate-platform-manifest"], {"attach-v02-evidence"}, "workflow-dependency")
+    _require_needs(name, "publish-qualified-release", jobs["publish-qualified-release"], {"candidate-platform-manifest"}, "workflow-dependency")
+    for job_id in ("candidate-platform-manifest", "publish-qualified-release"):
+        job = jobs[job_id]
+        _check_checkout_credentials(name, tree, (job_id,))
+        trusted = [step for step in _checkouts(job) if step.get("with", {}).get("path") == "trusted"]
+        if len(trusted) != 1 or trusted[0]["with"].get("ref") != TRUSTED_SHA_REF:
+            raise Reject("judge-trust", f"{_where(name, job_id)} needs one trusted checkout of ref {TRUSTED_SHA_REF} at path trusted")
+        _check_no_subject_execution(name, job_id, job)
+    for job_id, commands in RELEASE_REQUIRED.items():
+        for command in commands:
+            require_call(name, job_id, jobs[job_id], command)
+    publisher = jobs["publish-qualified-release"]
+    gate_at = require_call(name, "publish-qualified-release", publisher, RELEASE_REQUIRED["publish-qualified-release"][2])
+    publish_at = require_call(name, "publish-qualified-release", publisher, RELEASE_REQUIRED["publish-qualified-release"][4])
+    if gate_at >= publish_at:
+        raise Reject("publication-order", f"{_where(name, 'publish-qualified-release')} must run the final downloaded-byte gate before the one publication transition")
+    for job_id, calls in RELEASE_SMOKE_REQUIRED.items():
+        for command, extra in calls:
+            require_call(name, job_id, jobs[job_id], command, contains=extra, conditional=True)
+    attach = jobs["attach-v02-evidence"]
+    require_call(name, "attach-v02-evidence", attach, 'gh release upload "$RELEASE_TAG" "$1/$2" --repo "$GH_REPO"', conditional=True)
+    require_call(name, "attach-v02-evidence", attach, 'attach "$dir" "$name"', conditional=True)
 
 
 def check_all(root: Path) -> dict[str, int]:
@@ -527,9 +1072,18 @@ def _mutations():
            'run: bash .github/scripts/verify-release-gates.sh --check-draft-final', "subject-judge-execution"),
         _m("release publisher published-asset verifier taken from the subject checkout", "release.yml", "  publish-qualified-release:\n", "python3 -I trusted/.github/scripts/verify-published-release-assets.py",
            "python3 .github/scripts/verify-published-release-assets.py", "subject-judge-execution"),
+        ("release publication runs before the final downloaded-byte gate", "release.yml", [
+            ("  publish-qualified-release:\n", 'run: bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"', "run: true"),
+            ("  publish-qualified-release:\n", 'echo "Published the exact qualified release', 'bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"\n{I}echo "Published the exact qualified release')],
+         "publication-order"),
         _m("release publisher does not wait for the manifest judge", "release.yml", "  publish-qualified-release:\n", "candidate-windows, candidate-platform-manifest]",
            "candidate-windows]", "workflow-dependency"),
         _m("required-native stops waiting for the sanitizer lane", "ci.yml", "  required-native:\n", "      - linux-sanitizers\n", "", "workflow-dependency"),
+        _m("windows downloaded consumer behavior no longer verified", "release.yml", "  candidate-windows:\n", "-P cmake/VerifyInstalledPackage.cmake",
+           "-P cmake/Renamed.cmake", "required-command-not-executed"),
+        _m("macos downloaded player smoke commented out", "release.yml", "  candidate-macos:\n",
+           'GBB_VERIFIED_OUTPUT_DIR="$RUNNER_TEMP/release-player-downloaded" bash',
+           '# GBB_VERIFIED_OUTPUT_DIR="$RUNNER_TEMP/release-player-downloaded" bash', "required-command-not-executed"),
         _m("ci campaign status no longer asserted", "ci.yml", "  linux-sanitizers:\n", 'test "$verify_status" -eq 0', 'echo test "$verify_status" -eq 0', "required-command-not-executed"),
         _m("ci campaign verifier removed", "ci.yml", "  linux-sanitizers:\n", "python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json\n            verify_status=$?",
            "true\n            verify_status=$?", "required-command-not-executed"),

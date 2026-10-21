@@ -69,52 +69,8 @@ def validate_verifier_invocations(text):
 def validate_extractor_destinations(text):
     if re.search(r"(?m)^\s*mkdir(?:\s+-p)?\s+[^\n]*\bbuild/extracted(?:-core)?(?:\s|$)", text):
         raise ValueError("safe release extractor destination must not be pre-created")
-# Each real producer must be invoked, in the exact-tag workflow, as many times as it is needed. The counts make
-# deleting one invocation observable even where the same owner validator is also used for a downloaded readback.
-V02_PRODUCER_CALLS = {
-    "verify-v02-adoption.py --release-notes": 1,
-    "verify-v02-consumers.py --prefix": 1,
-    "verify-v02-source-archive.py --archive": 1,
-    "verify-v02-source-archive.py --check-receipt": 1,
-    "verify-release-candidate.sh --verify-final": 1,
-    "verify-cgb-corpus-report.py --begin-run": 1,
-    "verify-cgb-corpus-report.py --from-ctest": 1,
-    "verify-cgb-corpus-claims.py --receipt": 1,
-    "verify-support-ledger.py --check-current": 1,
-    "--output build/support-ledger.json": 1,
-    "--verify-sidecar build/support-ledger.json": 1,
-    "verify-v02-fuzz.py --verify-hosted": 1,
-    "measure-release-baseline.sh --qualify-v02 --output": 1,
-    "verify-v02-performance.py --verify": 1,
-    "--check-v02-evidence": 1,
-    'gh release upload "$RELEASE_TAG" build/v02-consumer-receipt.json': 1,
-    'gh release upload "$RELEASE_TAG" build/source-archive-receipt.json': 1,
-    'gh release upload "$RELEASE_TAG" "$1/$2"': 1,
-}
-PRODUCER_JOBS = ("candidate-corpus", "candidate-fuzz", "candidate-performance")
-def validate_v02_producers(text):
-    for call, expected in V02_PRODUCER_CALLS.items():
-        if text.count(call) != expected:
-            raise ValueError(f"release workflow does not invoke the real v0.2 producer or transfer exactly as required: {call}")
-    publish = text.find("\n  publish-qualified-release:\n")
-    if publish < 0:
-        raise ValueError("release workflow has no qualified publication job")
-    for call in V02_PRODUCER_CALLS:
-        if text.rfind(call) > publish and not call.startswith("--check") and "RELEASE_TAG" not in call:
-            raise ValueError(f"v0.2 producer runs only after publication: {call}")
-    manifest = text.find("\n  candidate-platform-manifest:\n")
-    manifest_needs = text[manifest:text.find("\n    if:", manifest)]
-    for job in PRODUCER_JOBS:
-        if f"\n  {job}:\n" not in text or job not in manifest_needs:
-            raise ValueError(f"the aggregate manifest does not wait for the {job} evidence producer")
-    publish_needs = text[publish:text.find("\n    if:", publish + 1)]
-    if "candidate-platform-manifest" not in publish_needs:
-        raise ValueError("publication does not wait for the aggregate manifest")
-    first_gate = text.find("--check-draft-final")
-    for producer in ("verify-cgb-corpus-report.py --from-ctest", "verify-v02-fuzz.py --verify-hosted", "--qualify-v02"):
-        position = text.find(producer)
-        if position < 0 or position > publish or position > first_gate:
-            raise ValueError(f"evidence producer {producer} is not upstream of the final gate")
+# Executable wiring of the evidence producers, judges, attacher and gates (which job runs which command, with what
+# authority, after which dependency) is judged by .github/scripts/verify-workflow-policy.py, not by counting text here.
 V02_CONTRACTS = ("v02_game_claims", "v02_game_claims_controls", "v02_support_ledger", "v02_support_ledger_controls",
                  "v02_adoption_docs", "v02_adoption_docs_controls", "v02_consumer_controls", "v02_performance_controls",
                  "v02_fuzz_controls", "v02_source_archive_controls", "v02_delivery_controls")
@@ -128,16 +84,8 @@ def validate_v02_inventory(cmake_text, expected_text):
     if "-DGBB_EXPECT_CODE=0" not in cmake_text or "[1-9][0-9]*" not in cmake_text:
         raise ValueError("v0.2 contracts must require exit code 0 and a nonzero success count")
 def validate_retained_platforms(text):
-    macos = text[text.find("\n  candidate-macos:\n"):text.find("\n  candidate-windows:\n")]
-    windows = text[text.find("\n  candidate-windows:\n"):text.find("\n  candidate-corpus:\n")]
-    if "-P cmake/VerifyInstalledPackage.cmake" not in macos or 'consumer-$language' not in macos:
-        raise ValueError("macOS arm64 downloaded C/C++ consumer behavior is not retained")
-    if "verify-phase3-player.sh --verify-package" not in macos:
-        raise ValueError("macOS arm64 downloaded player smoke is not retained")
-    if "-P cmake/VerifyInstalledPackage.cmake" not in windows or "consumer-$language.exe" not in windows:
-        raise ValueError("Windows x64 downloaded C/C++ consumer behavior is not retained")
-    if "-P cmake/VerifyInstalledPackage.cmake" not in text[:text.find("\n  candidate-macos:\n")]:
-        raise ValueError("Linux x64 downloaded C/C++ consumer behavior is not retained")
+    # Downloaded-byte consumer and player smoke are required-call checks in verify-workflow-policy.py; only the
+    # unsigned/not-notarized declaration literal is data and stays here.
     if text.count('"signed": False') < 2 or text.count('"notarized": False') < 2:
         raise ValueError("the unsigned and not-notarized declaration is not preserved")
 def validate_downloaded_sidecars(text):
@@ -148,26 +96,14 @@ def validate_downloaded_sidecars(text):
     )
     if "sha256sum --check" in text or any(call not in text for call in required):
         raise ValueError("every downloaded Mac/Windows digest-only sidecar must use the strict byte-check helper")
-def validate_isolated_release_readbacks(text):
-    start = text.find("\n  attach-v02-evidence:\n")
-    end = text.find("\n  candidate-platform-manifest:\n")
-    if start < 0 or end < start:
-        raise ValueError("release evidence attachment/readback section is missing")
-    section = text[start:end]
-    # The one readback helper derives its directory from the asset name, so every asset has its own directory.
-    downloads = re.findall(r"gh release download \"\$RELEASE_TAG\"[^\n]*--dir (\S+)", section)
-    if downloads != ['"build/readback-$2"']:
-        raise ValueError("each release evidence download must use its own readback directory")
 try:
     validate_verifier_invocations(workflow)
     validate_extractor_destinations(workflow)
-    validate_v02_producers(workflow)
     validate_retained_platforms(workflow)
     cmake_tests = (root / "tests/CMakeLists.txt").read_text()
     required_inventory = (root / "tests/expected-tests.txt").read_text()
     validate_v02_inventory(cmake_tests, required_inventory)
     validate_downloaded_sidecars(workflow)
-    validate_isolated_release_readbacks(workflow)
 except ValueError as error:
     raise SystemExit(str(error))
 mutated_workflow = workflow.replace("bash tests/scripts/verify-release-candidate.sh", "python tests/scripts/verify-release-candidate.sh", 1)
@@ -186,36 +122,6 @@ except ValueError:
 else:
     raise SystemExit("release workflow self-test accepted a pre-created safe-extractor destination")
 mutation_count = 0
-for call, expected in V02_PRODUCER_CALLS.items():
-    mutated = workflow.replace(call, "true # removed", 1)
-    try:
-        validate_v02_producers(mutated)
-    except ValueError:
-        mutation_count += 1
-    else:
-        raise SystemExit(f"release workflow self-test accepted a workflow without the required v0.2 invocation or transfer: {call}")
-try:
-    validate_v02_producers("\n  publish-qualified-release:\n" + workflow.replace("\n  publish-qualified-release:\n", "\n", 1))
-except ValueError:
-    mutation_count += 1
-else:
-    raise SystemExit("release workflow self-test accepted producers that run after publication")
-for job in PRODUCER_JOBS:
-    try:
-        manifest_at = workflow.find("\n  candidate-platform-manifest:\n")
-        validate_v02_producers(workflow[:manifest_at] + workflow[manifest_at:].replace(f", {job}", "", 1))
-    except ValueError:
-        mutation_count += 1
-    else:
-        raise SystemExit(f"release workflow self-test accepted an aggregate manifest that does not wait for {job}")
-for needle, label in (("verify-phase3-player.sh --verify-package", "player smoke"),
-                      ("consumer-$language.exe", "Windows consumer"), ('"notarized": False', "unsigned declaration")):
-    try:
-        validate_retained_platforms(workflow.replace(needle, "removed", 1))
-    except ValueError:
-        mutation_count += 1
-    else:
-        raise SystemExit(f"release workflow self-test accepted a workflow without the retained {label}")
 inventory_mutations = {
     "unregistered contract": (cmake_tests.replace("gbb_add_v02_contract(v02_delivery_controls", "gbb_add_v02_contract(v02_delivery_gone", 1), required_inventory),
     "duplicated registration": (cmake_tests + "\ngbb_add_v02_contract(v02_game_claims 60 x y)\n", required_inventory),
@@ -230,7 +136,7 @@ for label, (mutated_cmake, mutated_expected) in inventory_mutations.items():
         mutation_count += 1
     else:
         raise SystemExit(f"release workflow self-test accepted a v0.2 inventory with {label}")
-if mutation_count < len(V02_PRODUCER_CALLS) + 4 + len(inventory_mutations) or not V02_PRODUCER_CALLS:
+if mutation_count < len(inventory_mutations):
     raise SystemExit("release workflow self-test did not execute its v0.2 wiring controls")
 print(f"workflow-wiring-controls={mutation_count}")
 try:
@@ -239,12 +145,6 @@ except ValueError:
     pass
 else:
     raise SystemExit("release workflow self-test accepted sha256sum --check for a digest-only sidecar")
-try:
-    validate_isolated_release_readbacks(workflow.replace('--dir "build/readback-$2"', "--dir build/readback", 1))
-except ValueError:
-    pass
-else:
-    raise SystemExit("release workflow self-test accepted a shared release evidence readback directory")
 for output in ("release_created", "tag_name", "sha"):
     if f"${{{{ steps.release.outputs.{output} }}}}" not in workflow:
         raise SystemExit(f"same-workflow output is missing: {output}")
@@ -458,8 +358,11 @@ check_v02_evidence() {
   local directory=$1 tag=$2 source_sha=$3 archive=$4 repo_root
   repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || fail 'v0.2 evidence validation must run in the exact tag checkout'
   [[ $(git -C "$repo_root" rev-parse HEAD) == "$source_sha" ]] || fail 'checkout HEAD differs from the frozen source SHA'
-  python3 -I "$repo_root/tests/scripts/verify-v02-delivery.py" --check-evidence "$directory" \
-    --tag "$tag" --source-sha "$source_sha" --source-archive "$archive" --repo-root "$repo_root"
+  # The entry point and every delegated validator come from this script's own checkout (the judge); the exact
+  # tag checkout in the current directory is only the subject whose bytes are judged (Plan 05 separation).
+  python3 -I "$ROOT/tests/scripts/verify-v02-delivery.py" --check-evidence "$directory" \
+    --tag "$tag" --source-sha "$source_sha" --source-archive "$archive" \
+    --judge-root "$ROOT" --source-root "$repo_root"
 }
 
 fetch_source_archive() {

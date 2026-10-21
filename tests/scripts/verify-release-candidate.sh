@@ -137,11 +137,11 @@ for required in ("SDL_AUDIO_DRIVER=dummy", "SDL_VIDEO_DRIVER=dummy", "--smoke-pa
 if "pull_request_target:" in workflow or "release: {" in workflow:
     raise SystemExit("candidate workflow contains a privileged PR route")
 def validate_publication_contract(text):
-    gate = text.find('bash .github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"')
+    gate = text.find('bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"')
     publish = text.find('gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag')
     if gate < 0 or publish < 0 or gate > publish:
         raise ValueError("publication must occur only after the final downloaded-byte gate")
-    if 'python3 .github/scripts/verify-published-release-assets.py "$assets" build/release-final/api-assets.json' not in text:
+    if 'python3 -I trusted/.github/scripts/verify-published-release-assets.py "$assets" build/release-final/api-assets.json' not in text:
         raise ValueError("published API response must use the tested direct-JSON inventory verifier")
     if "json.loads(after_json)" not in published_asset_verifier or "Path(after_json).is_file" in published_asset_verifier:
         raise ValueError("published API asset verifier must parse response JSON directly, not treat it as a path")
@@ -149,7 +149,7 @@ try:
     validate_publication_contract(workflow)
 except ValueError as error:
     raise SystemExit(str(error))
-gate_call = 'bash .github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"'
+gate_call = 'bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"'
 publish_call = 'gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag'
 mutated_publication = workflow.replace(gate_call, "", 1).replace(publish_call, publish_call + "\n          " + gate_call, 1)
 try:
