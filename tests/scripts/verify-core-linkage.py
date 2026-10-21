@@ -39,10 +39,14 @@ MUTANT_CORE = re.compile(r"^libgabbaboy_core_[A-Za-z0-9_]+\.a$")
 ACCEPT_LIB = re.compile(r"^libgabbaboy_accept(_bare)?\.a$")
 # A target name that announces a mutant core. Only enforced for executables that link the acceptance
 # helpers, because some standalone drivers carry a mutant in their own driver code and use the normal core.
-MUTANT_NAME = re.compile(r"(mutant|_p12$)")
+MUTANT_NAME = re.compile(r"(mutant|_p1[0-9]$)")
+# A core compiled straight into the executable (a generated mutant source) also counts as a core.
+CORE_OBJECT = re.compile(r"^gabbaboy(?:_[A-Za-z0-9_]*)?\.c\.o$")
 LINK_LINE = re.compile(r"^: && (?P<command>.*) && :$")
 
 MUTANT_SOURCE = re.compile(rb"gabbaboy_[A-Za-z0-9_]*mutant[A-Za-z0-9_]*\.c")
+# Any compilation-unit record at all: proves the binary carries debug records that could have named a core.
+ANY_UNIT = re.compile(rb"[A-Za-z0-9_]+\.c(?:\.o\)?|\x00)")
 NORMAL_SOURCE = re.compile(rb"src/core/(?:\x00)?|libgabbaboy_core\.a\(gabbaboy\.c\.o\)")
 
 # One behavioural pair: a mutant colour-core target that must fail one case, and the same cases on the
@@ -105,14 +109,23 @@ def link_lines(commands: str) -> dict[str, list[str]]:
         output = tokens[tokens.index("-o") + 1]
         if output.endswith((".a", ".so", ".dylib")):
             continue
-        lines[output] = [Path(token).name for token in tokens if token.endswith(".a")]
+        lines[output] = [Path(token).name for token in tokens
+                         if token.endswith(".a") or CORE_OBJECT.match(Path(token).name)]
     return lines
 
 
+def is_core(name: str) -> bool:
+    return name == NORMAL_CORE or bool(MUTANT_CORE.match(name)) or bool(CORE_OBJECT.match(name))
+
+
+def is_normal_core(name: str) -> bool:
+    return name in (NORMAL_CORE, "gabbaboy.c.o")
+
+
 def classify(archives: list[str]) -> tuple[list[str], list[str], list[str]]:
-    cores = [name for name in archives if name == NORMAL_CORE or MUTANT_CORE.match(name)]
+    cores = [name for name in archives if is_core(name)]
     accepts = [name for name in archives if ACCEPT_LIB.match(name)]
-    return cores, accepts, [name for name in cores if name != NORMAL_CORE]
+    return cores, accepts, [name for name in cores if not is_normal_core(name)]
 
 
 def check_line(target: str, archives: list[str]) -> str | None:
@@ -142,12 +155,15 @@ def identity_of(path: Path) -> tuple[str, str] | None:
         return "mutant", ",".join(mutants)
     if NORMAL_SOURCE.search(data):
         return "normal", "gabbaboy.c"
+    if ANY_UNIT.search(data):
+        # Debug records exist and none names a core: the executable never pulled a core member.
+        return "none", "no core member linked"
     return None
 
 
-def check_identities(build_dir: Path, lines: dict[str, list[str]]) -> tuple[int, int, int, list[str]]:
-    """Return (normal_checked, mutant_checked, unsupported, problems)."""
-    normal = mutant = unsupported = 0
+def check_identities(build_dir: Path, lines: dict[str, list[str]]) -> tuple[int, int, int, int, list[str]]:
+    """Return (normal_checked, mutant_checked, no_core_linked, unsupported, problems)."""
+    normal = mutant = unsupported = none = 0
     problems: list[str] = []
     for target, archives in sorted(lines.items()):
         cores, accepts, mutants = classify(archives)
@@ -163,13 +179,16 @@ def check_identities(build_dir: Path, lines: dict[str, list[str]]) -> tuple[int,
             continue
         kind, label = found
         expected = "mutant" if mutants else "normal"
-        if kind != expected:
+        if kind == "none" and expected == "normal":
+            # A normal target whose code never reaches the core links no core member; nothing to mismatch.
+            none += 1
+        elif kind != expected:
             problems.append(f"identity-mismatch: {target} link line says {expected} but the binary holds the {kind} core ({label})")
         elif kind == "mutant":
             mutant += 1
         else:
             normal += 1
-    return normal, mutant, unsupported, problems
+    return normal, mutant, none, unsupported, problems
 
 
 def check(build_dir: Path, commands_file: Path | None) -> tuple[dict[str, int], list[str]]:
@@ -179,12 +198,14 @@ def check(build_dir: Path, commands_file: Path | None) -> tuple[dict[str, int], 
                 if (message := check_line(target, archives))]
     counts = {"targets": len(scoped),
               "mutant_targets": sum(1 for archives in scoped.values() if classify(archives)[2]),
-              "identity_normal": 0, "identity_mutant": 0, "unsupported": 0}
+              "identity_normal": 0, "identity_mutant": 0, "identity_no_core": 0,
+              "unsupported": 0}
     if not scoped:
         problems.append("no-targets: no acceptance-linked executable was found, so nothing was proven")
     if commands_file is None and not problems:
-        normal, mutant, unsupported, identity_problems = check_identities(build_dir, scoped)
-        counts.update(identity_normal=normal, identity_mutant=mutant, unsupported=unsupported)
+        normal, mutant, none, unsupported, identity_problems = check_identities(build_dir, scoped)
+        counts.update(identity_normal=normal, identity_mutant=mutant, identity_no_core=none,
+                      unsupported=unsupported)
         problems.extend(identity_problems)
     return counts, problems
 
@@ -207,7 +228,8 @@ def run_cli(args: argparse.Namespace) -> int:
               file=sys.stderr)
         return 3
     print("core-linkage pass targets={targets} mutant_targets={mutant_targets} "
-          "identity_normal={identity_normal} identity_mutant={identity_mutant}".format(**counts))
+          "identity_normal={identity_normal} identity_mutant={identity_mutant} "
+          "no_core_linked={identity_no_core}".format(**counts))
     return 0
 
 
@@ -269,24 +291,25 @@ def self_test(build_dir: Path) -> int:
         require(needed in lines, f"expected link line for {needed}")
 
     rejected = 0
+    normal_core = archive_path(lines_tokens(commands, "tests/test_age"), NORMAL_CORE)
     with tempfile.TemporaryDirectory(prefix="core-linkage-") as temp_name:
         temp = Path(temp_name)
         # Duplicate library: the normal core named a second time on a normal link line.
         def duplicate(tokens: list[str]) -> list[str]:
-            return tokens + [archive_path(tokens, NORMAL_CORE)]
+            return tokens + [normal_core]
         expect_rejection(script, build_dir, mutate_line(commands, "tests/test_age", duplicate),
                          "duplicate-core", "duplicate-core", temp)
         rejected += 1
         # Wrong-core substitution: the normal core slips into a mutant link line.
         def mixed(tokens: list[str]) -> list[str]:
-            return tokens + [archive_path(tokens, NORMAL_CORE)]
+            return tokens + [normal_core]
         expect_rejection(script, build_dir, mutate_line(commands, "tests/test_age_p12", mixed),
                          "mixed-core", "mixed-core", temp)
         rejected += 1
         # Wrong-core substitution: a mutant target whose mutant core is replaced by the normal core.
         def swap_to_normal(tokens: list[str]) -> list[str]:
             return [token if not MUTANT_CORE.match(Path(token).name) else
-                    str(Path(token).parent / NORMAL_CORE) for token in tokens]
+                    normal_core for token in tokens]
         expect_rejection(script, build_dir, mutate_line(commands, "tests/test_age_p12", swap_to_normal),
                          "wrong-core", "wrong-core-normal-for-mutant", temp)
         rejected += 1
@@ -321,7 +344,7 @@ def self_test(build_dir: Path) -> int:
         shutil.copy2(normal_binary, swapped / BEHAVIOUR_MUTANT)
         scoped = {key: value for key, value in link_lines(commands).items()
                   if key in (BEHAVIOUR_NORMAL, BEHAVIOUR_MUTANT)}
-        _, _, _, swap_problems = check_identities(swapped, scoped)
+        _, _, _, _, swap_problems = check_identities(swapped, scoped)
         require(len(swap_problems) == 2 and all(p.startswith("identity-mismatch:") for p in swap_problems),
                 f"swapped binaries were not rejected as identity mismatches: {swap_problems}")
         rejected += 1
@@ -330,7 +353,7 @@ def self_test(build_dir: Path) -> int:
         (bare / "tests").mkdir(parents=True)
         (bare / BEHAVIOUR_NORMAL).write_bytes(b"\x7fELF no debug records here")
         (bare / BEHAVIOUR_MUTANT).write_bytes(b"\x7fELF no debug records here")
-        _, _, bare_unsupported, bare_problems = check_identities(bare, scoped)
+        _, _, _, bare_unsupported, bare_problems = check_identities(bare, scoped)
         require(bare_unsupported == 2 and not bare_problems,
                 f"a binary without records must be reported unsupported (got {bare_unsupported}, {bare_problems})")
         rejected += 1
@@ -348,7 +371,8 @@ def self_test(build_dir: Path) -> int:
     rejected += 1
 
     print("core-linkage self-test pass targets={targets} mutant_targets={mutant_targets} "
-          "identity_normal={identity_normal} identity_mutant={identity_mutant} behavioural=3 "
+          "identity_normal={identity_normal} identity_mutant={identity_mutant} "
+          "no_core_linked={identity_no_core} behavioural=3 "
           "rejected_controls={rejected}".format(rejected=rejected, **counts))
     return 0
 

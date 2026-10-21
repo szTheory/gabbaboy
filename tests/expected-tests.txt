@@ -1147,3 +1147,5 @@ v02_performance_controls
 v02_fuzz_controls
 v02_source_archive_controls
 v02_delivery_controls
+core_linkage_links
+core_linkage_controls

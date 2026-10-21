@@ -1412,6 +1412,28 @@ gbb_add_v02_contract(v02_source_archive_controls 90
 gbb_add_v02_contract(v02_delivery_controls 90
   [=[PASS: delivery checker positives=[1-9][0-9]* rejected_controls=[1-9][0-9]* real_owner_rejections=[1-9]]=]
   verify-v02-delivery.py --self-test)
+# SCAN-LINK: every acceptance-linked executable must name exactly one intended core. The checker reads
+# the generated Ninja link lines and the finished binaries; its self-test feeds it duplicate-core and
+# wrong-core link lines and swapped binaries and requires the intended diagnostics. Link-line and
+# debug-record inspection is implemented for Ninja on ELF and Mach-O only, so it is not registered on
+# Windows rather than being counted as a pass there (see cmake/ExpectedTests.cmake).
+if(NOT WIN32)
+  set(GBB_CORE_LINKAGE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-core-linkage.py")
+  add_test(NAME core_linkage_links
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_CORE_LINKAGE_CHECKER};--check;--build-dir;${PROJECT_BINARY_DIR}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=core-linkage pass targets=[1-9][0-9]* mutant_targets=[1-9][0-9]* identity_normal=[1-9][0-9]* identity_mutant=[1-9][0-9]*"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  add_test(NAME core_linkage_controls
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_CORE_LINKAGE_CHECKER};--self-test;--build-dir;${PROJECT_BINARY_DIR}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=core-linkage self-test pass targets=[1-9][0-9]* .* behavioural=3 rejected_controls=[1-9][0-9]*"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(core_linkage_links PROPERTIES TIMEOUT 60)
+  set_tests_properties(core_linkage_controls PROPERTIES TIMEOUT 180)
+endif()
 set(GBB_AGE_PHASE14_CONTRACT "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py")
 set(GBB_AGE_PHASE14_GUEST_TIMEOUT 15)
 if(GABBABOY_ENABLE_SANITIZERS)
@@ -2760,8 +2782,9 @@ function(gbb_colour_mutant name test_source fail_test control_test anchor replac
     target_compile_definitions(${library} PRIVATE
       GBB_BUILD_REVISION="colour-mutant-${name}" GBB_BUILD_QUALIFIED=0)
     add_executable(${target} ${test_source})
-    # The acceptance helpers come after the mutant so every core symbol resolves to the mutated copy.
-    target_link_libraries(${target} PRIVATE ${library} gabbaboy_accept)
+    # The core-free acceptance helpers come first and the mutant last, so the mutant is the only core on the
+    # link line and every core symbol resolves to the mutated copy (no inherited normal core).
+    target_link_libraries(${target} PRIVATE gabbaboy_accept_bare ${library})
   endif()
   target_compile_features(${target} PRIVATE c_std_17)
   set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
@@ -3730,14 +3753,14 @@ set_tests_properties(cgb_speed_mutant_m31_stall_offset_noop PROPERTIES TIMEOUT 6
 # --- Phase 12 plan 12-09 begin ---
 add_executable(test_age test_age.c)
 target_include_directories(test_age PRIVATE "${PROJECT_SOURCE_DIR}/include")
-target_link_libraries(test_age PRIVATE GabbaBoy::core gabbaboy_accept)
+target_link_libraries(test_age PRIVATE gabbaboy_accept)
 target_compile_features(test_age PRIVATE c_std_17)
 set_target_properties(test_age PROPERTIES C_EXTENSIONS OFF)
 
 # Phase 14 Plan 09: bounded public-API AGE frame capture plus a standard-library PNG oracle.
 add_executable(test_age_m3 test_age_m3.c)
 target_include_directories(test_age_m3 PRIVATE "${PROJECT_SOURCE_DIR}/include")
-target_link_libraries(test_age_m3 PRIVATE GabbaBoy::core gabbaboy_accept)
+target_link_libraries(test_age_m3 PRIVATE gabbaboy_accept)
 target_compile_features(test_age_m3 PRIVATE c_std_17)
 set_target_properties(test_age_m3 PROPERTIES C_EXTENSIONS OFF)
 set(GBB_AGE_M3_PIXEL_ORACLE "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-m3-pixels.py")
@@ -3833,7 +3856,7 @@ add_executable(test_age_p12 test_age.c)
 target_include_directories(test_age_p12 PRIVATE "${PROJECT_SOURCE_DIR}/include")
 target_compile_features(test_age_p12 PRIVATE c_std_17)
 target_compile_definitions(test_age_p12 PRIVATE GBB_AGE_P12=1)
-target_link_libraries(test_age_p12 PRIVATE gabbaboy_core_p12_mutants gabbaboy_accept)
+target_link_libraries(test_age_p12 PRIVATE gabbaboy_accept_bare gabbaboy_core_p12_mutants)
 set_target_properties(test_age_p12 PROPERTIES C_EXTENSIONS OFF)
 
 # The Phase 14 timing control uses a private one-dot mode-3 startup mutant. The
@@ -3862,7 +3885,7 @@ target_include_directories(test_age_p14 PRIVATE
 target_compile_features(test_age_p14 PRIVATE c_std_17)
 target_compile_definitions(test_age_p14 PRIVATE
   GBB_AGE_P14=1 GBB_BUILD_REVISION="p14-age-mutant-control" GBB_BUILD_QUALIFIED=0)
-target_link_libraries(test_age_p14 PRIVATE gabbaboy_accept)
+target_link_libraries(test_age_p14 PRIVATE gabbaboy_accept_bare)
 set_target_properties(test_age_p14 PROPERTIES C_EXTENSIONS OFF)
 
 set(GBB_AGE_STAT_CGBE_FOUND OFF)
@@ -4195,7 +4218,7 @@ set_tests_properties(age_manifest_unknown_class PROPERTIES TIMEOUT 30)
 set(GBB_CGB_SPEED_DIR "${PROJECT_SOURCE_DIR}/fixtures/cgb-speed")
 add_executable(test_cgb_speed_fixture test_cgb_speed_fixture.c)
 target_include_directories(test_cgb_speed_fixture PRIVATE "${PROJECT_SOURCE_DIR}/src/accept")
-target_link_libraries(test_cgb_speed_fixture PRIVATE GabbaBoy::core gabbaboy_accept)
+target_link_libraries(test_cgb_speed_fixture PRIVATE gabbaboy_accept)
 target_compile_features(test_cgb_speed_fixture PRIVATE c_std_17)
 set_target_properties(test_cgb_speed_fixture PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME cgb_speed_fixture_digest
@@ -4265,7 +4288,7 @@ target_include_directories(test_cgb_speed_fixture_p12 PRIVATE
 target_compile_features(test_cgb_speed_fixture_p12 PRIVATE c_std_17)
 target_compile_definitions(test_cgb_speed_fixture_p12 PRIVATE GBB_P12_PUBLIC_MUTANT=1)
 target_link_libraries(test_cgb_speed_fixture_p12 PRIVATE
-  gabbaboy_core_p12_mutants gabbaboy_accept)
+  gabbaboy_accept_bare gabbaboy_core_p12_mutants)
 set_target_properties(test_cgb_speed_fixture_p12 PROPERTIES C_EXTENSIONS OFF)
 
 add_test(NAME cgb_speed_fixture_audio_digest
