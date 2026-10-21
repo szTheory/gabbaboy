@@ -1407,7 +1407,7 @@ gbb_add_v02_contract(v02_support_ledger 60
 gbb_add_v02_contract(v02_support_ledger_controls 120
   [=[support ledger static self-test passed: positive=1 rejected_controls=5 controls=changed-covered-input,missing-covered-input,added-case-inventory,removed-case-inventory,unparseable-ledger]=]
   verify-support-ledger.py --self-test)
-gbb_add_v02_contract(v02_consumer_controls 360
+gbb_add_v02_contract(v02_consumer_controls 900
   [=["negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
   verify-v02-consumers.py --self-test)
 gbb_add_v02_contract(v02_performance_controls 90

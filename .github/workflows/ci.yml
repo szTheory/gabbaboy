@@ -196,7 +196,9 @@ jobs:
   linux-sanitizers:
     name: linux-asan-ubsan
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # Phase 15.1 added a second stall replay, a full-length dense-input observation and its controls to the
+    # sanitizer lane; a hosted run took about 41 minutes with three tests timing out, so the budget doubles.
+    timeout-minutes: 90
     permissions:
       actions: read
       contents: read

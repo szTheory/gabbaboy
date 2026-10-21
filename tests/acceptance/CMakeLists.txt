@@ -192,7 +192,9 @@ add_test(NAME acceptance_dense_script_delivered
     "-DGBB_FORBID_REGEX=event-delivery-failed|drive-error|status=(fail|error)"
     -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
-set_tests_properties(acceptance_dense_script_delivered PROPERTIES TIMEOUT 120 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+# The dense script is now delivered in full, so this is a full-length observation (107 s under ASan in a quiet
+# Linux container), not the quick failure it used to be; a hosted sanitizer runner under parallel load needs far more.
+set_tests_properties(acceptance_dense_script_delivered PROPERTIES TIMEOUT 400 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 add_test(NAME acceptance_dense_input_controls
   COMMAND ${CMAKE_COMMAND}
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-dense-input.py;--self-test;--build-dir;${PROJECT_BINARY_DIR}"
@@ -392,12 +394,13 @@ gbb_add_acceptance_exit(acceptance_sgb_tolerance 0
 # (owner amendment of D-18: the cap applies to the text report, plus one 69,135-byte final-frame image).
 set(GBB_STALL_FAIL_DIR ${PROJECT_BINARY_DIR}/acceptance-failures/acceptance_stall_diagnosis)
 file(MAKE_DIRECTORY ${GBB_STALL_FAIL_DIR})
-# Each of the two replays has its own child deadline. A hosted ASan/UBSan runner needed about 265 s per replay on
-# main and exceeded 300 s on the Phase 15.1 head, so the deadline follows ScaleSanitizerTimeouts.cmake's factor of 3
-# (the TIMEOUT property below is scaled by the same factor); other builds keep 300 s.
+# Each of the two replays has its own child deadline. Main ran one replay in 529 s on a hosted ASan/UBSan runner;
+# on the Phase 15.1 head one replay exceeded 900 s under the sanitizer lane's parallel load (a quiet Linux ASan
+# container measured 186 s on main and 204 s here, one sample each). The sanitizer deadline is therefore 1800 s
+# and the TIMEOUT property below (scaled by 3 for sanitizers, two replays) leaves room for both; other builds keep 300 s.
 set(GBB_STALL_RUNNER_TIMEOUT 300)
 if(GABBABOY_ENABLE_SANITIZERS)
-  set(GBB_STALL_RUNNER_TIMEOUT 900)
+  set(GBB_STALL_RUNNER_TIMEOUT 1800)
 endif()
 add_test(NAME acceptance_stall_diagnosis
   COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-stall-report.py
@@ -406,7 +409,7 @@ add_test(NAME acceptance_stall_diagnosis
     --cases ${PROJECT_SOURCE_DIR}/${GBB_CASES}
     --workdir ${PROJECT_SOURCE_DIR}
     --failure-dir ${GBB_STALL_FAIL_DIR})
-set_tests_properties(acceptance_stall_diagnosis PROPERTIES TIMEOUT 600 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+set_tests_properties(acceptance_stall_diagnosis PROPERTIES TIMEOUT 1200 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 # Core mutant (D-14): a copy of the core whose JOYP direction/button select test is inverted, built into a
 # test-only static library and runner. The source line is the single anchor guaranteed by Plans 07-03 and
