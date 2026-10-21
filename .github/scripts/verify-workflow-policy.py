@@ -610,6 +610,18 @@ def _check_disabled(workflow: str, tree: dict) -> None:
                 raise Reject("disabled-gate", f"{_where(workflow, job_id)} step {step.get('name', '?')!r} is disabled by a constant-false condition")
 
 
+_DOWNLOAD_TOOLS = {"curl", "wget"}
+
+
+def _check_bounded_downloads(workflow: str, tree: dict) -> None:
+    """Artifact downloads go through the bounded streaming helper; a bare curl or wget has no time or byte contract."""
+    for job_id, job in tree["jobs"].items():
+        for step in job.get("steps", []):
+            for event in _step_events(step):
+                if event.words and event.words[0].rsplit("/", 1)[-1] in _DOWNLOAD_TOOLS:
+                    raise Reject("unbounded-download", f"{_where(workflow, job_id)} downloads with {event.words[0]!r}; use download-release-artifact.py")
+
+
 def _runs_under_errexit(step: dict) -> bool:
     shell = str(step.get("shell", "bash")).strip()
     return shell in ("bash", "bash -e {0}", "bash --noprofile --norc -eo pipefail {0}") and str(step.get("continue-on-error", "false")).lower() in ("", "false")
@@ -786,6 +798,13 @@ _ATTACH_INVENTORY = ('python3 -I trusted/.github/scripts/verify-published-releas
                      'build/evidence-fuzz/v02-fuzz-receipt.json build/evidence-performance/v02-performance-receipt.json')
 _ATTACH_RECOVERY = ('bash trusted/.github/scripts/verify-release-gates.sh --check-recovery "$release_id" "$RELEASE_TAG" "$SOURCE_SHA" '
                     '"$RUNNER_TEMP/expected-inventory.json" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" subset')
+# The GitHub-generated source archive is streamed with a byte and time cap by the standard-library helper; the
+# residual candidate job runs the copy cut from the workflow revision, the manifest job the trusted checkout.
+_DOWNLOAD_BOUNDS = '--max-bytes 1073741824 --total-timeout 600'
+_CANDIDATE_ARCHIVE_DOWNLOAD = ('python3 -I "$RUNNER_TEMP/download-release-artifact.py" "https://github.com/$GH_REPO/archive/refs/tags/$RELEASE_TAG.tar.gz" "$archive" '
+                               + _DOWNLOAD_BOUNDS)
+_MANIFEST_ARCHIVE_DOWNLOAD = ('python3 -I trusted/.github/scripts/download-release-artifact.py "https://github.com/$GH_REPO/archive/refs/tags/$RELEASE_TAG.tar.gz" '
+                              '"$RUNNER_TEMP/source-archive.tar.gz" ' + _DOWNLOAD_BOUNDS)
 RELEASE_REQUIRED = {
     "candidate-corpus": (_RELEASE_SUBJECT, _CORPUS_BUILD) + REHEARSAL_REQUIRED["corpus"][2:],
     "candidate-performance": (_RELEASE_SUBJECT,) + REHEARSAL_REQUIRED["performance"],
@@ -794,6 +813,7 @@ RELEASE_REQUIRED = {
         'python3 -I tests/scripts/verify-v02-fuzz.py --verify-hosted --source-sha "$SOURCE_SHA" --run-id "$run_id" --attempt "$attempt" --receipt build/ci-fuzz/v02-fuzz-receipt.json',
     ),
     "candidate-platform-manifest": (
+        _MANIFEST_ARCHIVE_DOWNLOAD,
         'bash trusted/.github/scripts/verify-release-gates.sh --check-v02-evidence build/evidence-validation "$RELEASE_TAG" "$SOURCE_SHA" "$RUNNER_TEMP/source-archive.tar.gz"',
     ),
     "publish-qualified-release": (
@@ -806,6 +826,7 @@ RELEASE_REQUIRED = {
         _PUBLISH_RECOVERY,
     ),
     "attach-v02-evidence": (_ATTACH_INVENTORY, _ATTACH_RECOVERY),
+    "candidate": (_CANDIDATE_ARCHIVE_DOWNLOAD,),
 }
 # Downloaded-byte platform smoke in the residual candidate jobs: (command prefix, words that must also appear).
 RELEASE_SMOKE_REQUIRED = {
@@ -895,6 +916,7 @@ def check_rehearsal(root: Path) -> None:
         raise Reject("workflow-permissions", f"{name} must declare only top-level contents: read")
     _check_actions(name, tree)
     _check_disabled(name, tree)
+    _check_bounded_downloads(name, tree)
     _check_ignored_failures(name, tree)
     _check_no_duplicate_setup(name, tree)
     _check_checkout_credentials(name, tree, tree["jobs"])
@@ -934,6 +956,7 @@ def check_ci(root: Path) -> None:
         raise Reject("workflow-permissions", "ci must declare only top-level contents: read")
     _check_actions(name, tree)
     _check_disabled(name, tree)
+    _check_bounded_downloads(name, tree)
     _check_ignored_failures(name, tree)
     job = _require_job(name, tree, "linux-sanitizers")
     perms = _permissions(job, tree["permissions"])
@@ -966,6 +989,7 @@ def check_release(root: Path) -> None:
         raise Reject("workflow-permissions", "release must declare only top-level contents: read")
     _check_actions(name, tree)
     _check_disabled(name, tree)
+    _check_bounded_downloads(name, tree)
     _check_ignored_failures(name, tree)
     jobs = tree["jobs"]
     for job_id in jobs:

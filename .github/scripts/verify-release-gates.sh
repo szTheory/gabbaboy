@@ -558,6 +558,7 @@ case "$mode" in
     python3 -I "$ROOT/.github/scripts/verify-workflow-policy.py" --check --root "$ROOT"
     python3 -I "$ROOT/.github/scripts/verify-workflow-policy.py" --self-test
     bash "$ROOT/.github/scripts/produce-release-evidence.sh" --self-test
+    python3 -I "$ROOT/.github/scripts/download-release-artifact.py" --self-test
     python3 "$ROOT/.github/scripts/verify-release-source-proof.py" --self-test
     temp=$(mktemp -d "${TMPDIR:-/tmp}/gb-release-gates.XXXXXX")
     trap 'rm -rf "$temp"' EXIT HUP INT TERM
