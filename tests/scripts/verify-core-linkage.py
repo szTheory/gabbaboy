@@ -54,7 +54,9 @@ NORMAL_SOURCE = re.compile(rb"src/core/(?:\x00)?|libgabbaboy_core\.a\(gabbaboy\.
 BEHAVIOUR_MUTANT = "tests/test_cgb_colour_mutant_palette_mask_bit15"
 BEHAVIOUR_NORMAL = "tests/test_cgb_colour"
 BEHAVIOUR_FAIL_CASE = "palette_compat_api_reject"
-BEHAVIOUR_FAIL_TEXT = "not ok"
+# The failing REQUIRE writes the assertion text to stderr and "not ok" to stdout. A sanitizer build exits through
+# LeakSanitizer before stdout is flushed, so only the stderr line is present in every build type.
+BEHAVIOUR_FAIL_TEXT = "gbb_set_compat_palette(m, &bad) == GBB_INVALID_ARGUMENT"
 BEHAVIOUR_CONTROL_CASE = "palette_compat_api_default"
 
 

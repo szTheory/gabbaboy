@@ -392,8 +392,16 @@ gbb_add_acceptance_exit(acceptance_sgb_tolerance 0
 # (owner amendment of D-18: the cap applies to the text report, plus one 69,135-byte final-frame image).
 set(GBB_STALL_FAIL_DIR ${PROJECT_BINARY_DIR}/acceptance-failures/acceptance_stall_diagnosis)
 file(MAKE_DIRECTORY ${GBB_STALL_FAIL_DIR})
+# Each of the two replays has its own child deadline. A hosted ASan/UBSan runner needed about 265 s per replay on
+# main and exceeded 300 s on the Phase 15.1 head, so the deadline follows ScaleSanitizerTimeouts.cmake's factor of 3
+# (the TIMEOUT property below is scaled by the same factor); other builds keep 300 s.
+set(GBB_STALL_RUNNER_TIMEOUT 300)
+if(GABBABOY_ENABLE_SANITIZERS)
+  set(GBB_STALL_RUNNER_TIMEOUT 900)
+endif()
 add_test(NAME acceptance_stall_diagnosis
   COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-stall-report.py
+    --runner-timeout ${GBB_STALL_RUNNER_TIMEOUT}
     --runner $<TARGET_FILE:gabbaboy-runner>
     --cases ${PROJECT_SOURCE_DIR}/${GBB_CASES}
     --workdir ${PROJECT_SOURCE_DIR}
