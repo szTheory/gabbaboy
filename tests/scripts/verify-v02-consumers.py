@@ -760,6 +760,9 @@ class ConsumerContractTests(unittest.TestCase):
         cls.archive = cls.test_root / "candidate.tar.gz"
         archive_sha = create_product_archive(cls.prefix, cls.archive)
         cls.candidate_source_sha = candidate_source_revision(ROOT)
+        cls.build_receipt = cls.test_root / "build-receipt.json"
+        cls.build_receipt.write_text(json.dumps({"source_sha": cls.candidate_source_sha,
+                                                 "asset_sha256": archive_sha}), encoding="utf-8")
         cls.candidate_manifest = cls.test_root / "candidate-manifest.json"
         manifest = make_candidate_manifest(cls.candidate_source_sha, archive_sha, "a" * 64)
         cls.candidate_manifest.write_text(
@@ -882,6 +885,59 @@ class ConsumerContractTests(unittest.TestCase):
             "--output", str(output),
         ])
         self.assert_rejected(result, "installed-tree-mismatch", output)
+
+    def write_manifest(self, out: Path, *, archive: Path | None = None, source: str | None = None,
+                       receipt: Path | None = None) -> subprocess.CompletedProcess[str]:
+        return self.run_cli([
+            "--write-candidate-manifest", str(out), "--archive", str(archive or self.archive),
+            "--source-sha", source or self.candidate_source_sha,
+            "--build-receipt", str(receipt or self.build_receipt),
+        ])
+
+    def test_workflow_command_without_candidate_manifest_is_rejected(self) -> None:
+        # The release rehearsal (run 39634983581) called the verifier with only --prefix and --output.
+        output = self.test_root / "no-manifest.json"
+        result = self.run_cli(["--prefix", str(self.prefix), "--output", str(output)])
+        self.assert_rejected(result, "candidate-manifest-required", output)
+
+    def test_written_manifest_binds_archive_and_build_receipt_and_qualifies(self) -> None:
+        manifest = self.test_root / "written-manifest.json"
+        written = self.write_manifest(manifest)
+        self.assertEqual(written.returncode, 0, written.stdout + written.stderr)
+        loaded, _digest = read_candidate_manifest(manifest)
+        self.assertEqual(loaded["archive_sha256"], hash_file(self.archive))
+        self.assertEqual(loaded["build_receipt_sha256"], hash_file(self.build_receipt))
+        self.assertEqual(loaded["candidate_source_sha"], self.candidate_source_sha)
+        output = self.test_root / "written-qualifies.json"
+        result = self.run_cli([*self.candidate_args(self.prefix, manifest=manifest), "--output", str(output)])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(parse_receipt(result, output).get("result"), "passed")
+
+    def test_manifest_writer_rejects_unbound_inputs(self) -> None:
+        cases = {
+            "candidate-manifest-source-invalid": dict(source="not-a-sha"),
+            "candidate-build-receipt-missing": dict(receipt=self.test_root / "absent-receipt.json"),
+            "candidate-build-receipt-asset-mismatch": dict(receipt=self.json_receipt(asset="0" * 64)),
+            "candidate-build-receipt-source-mismatch": dict(receipt=self.json_receipt(source="1" * 40)),
+            "archive-file-invalid": dict(archive=self.test_root / "absent.tar.gz"),
+        }
+        for reason, options in cases.items():
+            out = self.test_root / f"writer-{reason}.json"
+            result = self.write_manifest(out, **options)
+            self.assertNotEqual(result.returncode, 0, reason)
+            self.assertIn(f"verify-v02-consumers: rejected:{reason}", result.stderr, reason)
+            self.assertFalse(out.exists(), f"{reason} must not leave a manifest")
+        existing = self.test_root / "writer-existing.json"
+        existing.write_text("keep\n", encoding="utf-8")
+        result = self.write_manifest(existing)
+        self.assertIn("verify-v02-consumers: rejected:candidate-manifest-exists", result.stderr)
+        self.assertEqual(existing.read_text(encoding="utf-8"), "keep\n")
+
+    def json_receipt(self, *, asset: str | None = None, source: str | None = None) -> Path:
+        path = self.test_root / f"receipt-{asset or 'ok'}-{source or 'ok'}.json"
+        path.write_text(json.dumps({"source_sha": source or self.candidate_source_sha,
+                                    "asset_sha256": asset or hash_file(self.archive)}), encoding="utf-8")
+        return path
 
     def test_changed_archive_does_not_match_stale_candidate_manifest(self) -> None:
         changed_archive = self.test_root / "changed-candidate.tar.gz"
@@ -1086,10 +1142,10 @@ class ConsumerContractTests(unittest.TestCase):
 def self_test() -> int:
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(ConsumerContractTests)
     result = unittest.TextTestRunner(stream=sys.stderr, verbosity=2).run(suite)
-    controls = 9
+    controls = 12
     summary = {
         "status": "passed" if result.wasSuccessful() else "failed",
-        "positive_successes": 7 if result.wasSuccessful() else 0,
+        "positive_successes": 8 if result.wasSuccessful() else 0,
         "negative_controls": controls,
         "tests_run": result.testsRun,
     }
