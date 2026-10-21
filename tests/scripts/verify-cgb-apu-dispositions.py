@@ -97,8 +97,34 @@ def read_git_core_source(root: Path, revision: str) -> bytes:
     return source.stdout
 
 
-def read_producer_core(root: Path, revision: str, git_reader=None) -> bytes:
-    return read_git_core_source(root, revision)  # RED stub: still needs the Git object
+def read_git_core_source_if_present(root: Path, revision: str) -> bytes | None:
+    """The producer commit when this checkout has it; None when it does not (for example a hosted
+    checkout, where the commit is on no public ref). Any other failure still raises."""
+    try:
+        return read_git_core_source(root, revision)
+    except Mismatch as exc:
+        if str(exc) == "producer-object-missing":
+            return None
+        raise
+
+
+def read_producer_core(root: Path, revision: str, git_reader=read_git_core_source_if_present) -> bytes:
+    """The frozen producer core, from the retained bytes pinned by digest.
+
+    Git is corroboration only: when the commit is present its blob must equal the retained bytes, and
+    when it is absent nothing is relaxed, because the digest pin and the report's own digest still bind
+    the same bytes."""
+    need(revision == APU_PRODUCER_REVISION, "producer-revision")
+    path = root / APU_PRODUCER_CORE_RETAINED
+    need(path.is_file() and not path.is_symlink(), "producer-object-missing")
+    size = path.stat().st_size
+    need(0 < size <= MAX_PRODUCER_CORE_BYTES, "producer-object-size")
+    data = path.read_bytes()
+    need(len(data) == size, "producer-object-size")
+    need(hashlib.sha256(data).hexdigest() == APU_PRODUCER_CORE_SHA256, "producer-core-pin")
+    in_git = git_reader(root, revision)
+    need(in_git is None or in_git == data, "producer-object-mismatch")
+    return data
 
 
 def ctest_name(alias: str) -> str:
@@ -468,7 +494,7 @@ def main() -> int:
             ROOT, args.build_dir, args.ctest_command)
         if args.self_test:
             self_test(ROOT, manifest, report, inventory, registered_tests)
-            print("cgb-apu-dispositions self-test pass controls=17")
+            print("cgb-apu-dispositions self-test pass controls=16")
         else:
             counts = validate(ROOT, manifest, report, inventory, registered_tests)
             print("cgb-apu-dispositions membership pass cases={cases} author_expectation=pass observed_pass={pass} xfail={xfail} assertions={assertions}".format(**counts))
