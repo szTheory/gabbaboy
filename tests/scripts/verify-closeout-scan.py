@@ -89,7 +89,7 @@ def _runtime_command() -> tuple[list[str], dict[str, object]]:
     try:
         runtime_revision = "sha256:" + hashlib.sha256(tool.read_bytes()).hexdigest()
     except OSError as exc:
-        raise ScanError("runtime-revision", "could not hash the installed runtime entry point") from exc
+        raise ScanError("runtime-revision", "could not hash the installed runtime entry point", raw=identity_raw) from exc
     return [node, str(tool)], {
         "package_name": identity["packageName"],
         "version": identity["version"],
@@ -122,11 +122,28 @@ def _read_review_verdict(root: Path, item: dict[str, object]) -> tuple[bool, str
     if not isinstance(phase, str) or Path(phase).name != phase or not isinstance(filename, str) or Path(filename).name != filename:
         return False, "invalid-source-identity", None
 
-    bases = [root / ".planning/phases"]
-    milestones = root / ".planning/milestones"
-    if milestones.is_dir():
-        bases.extend(sorted(milestones.glob("*-phases")))
-    candidates = [base / phase / filename for base in bases]
+    archive_label = item.get("archived_milestone")
+    if archive_label is None:
+        candidates = [root / ".planning/phases" / phase / filename]
+    elif isinstance(archive_label, str):
+        parts = archive_label.split("/")
+        if len(parts) == 1 and re.fullmatch(r"v[0-9.]+", parts[0]):
+            candidates = [root / ".planning/milestones" / f"{parts[0]}-phases" / phase / filename]
+        elif len(parts) == 1 and re.fullmatch(r"ws-[A-Za-z0-9._-]+", parts[0]):
+            candidates = [root / ".planning/milestones" / parts[0] / "phases" / phase / filename]
+        elif len(parts) == 2 and all(re.fullmatch(r"[A-Za-z0-9._-]+", part) for part in parts):
+            workstream, version = parts
+            base = root / ".planning/workstreams" / workstream / "milestones"
+            if re.fullmatch(r"v[0-9.]+", version):
+                candidates = [base / f"{version}-phases" / phase / filename]
+            elif version.startswith("ws-"):
+                candidates = [base / version / "phases" / phase / filename]
+            else:
+                candidates = []
+        else:
+            candidates = []
+    else:
+        candidates = []
     source = None
     for candidate in candidates:
         try:
@@ -285,8 +302,9 @@ def _scan(root: Path) -> dict[str, object]:
             "project_revision_status": "bound" if project_revision is not None else "unavailable",
             "error": {"code": exc.code, "diagnostic": str(exc)},
             "runtime": raw_identity,
+            "raw_runtime_identity": exc.raw if exc.code.startswith(("runtime-identity", "runtime-revision")) else raw_identity.get("identity_command"),
             "raw_limitation": "The installed runtime output could not be classified; raw output is retained when available.",
-            "raw_audit_open": exc.raw if exc.raw else raw_audit,
+            "raw_audit_open": exc.raw if exc.code.startswith("runtime-audit") else raw_audit,
             "records": [],
             "counts": {"raw_uat_gaps": None, "clean_reviews": 0, "blocking_records": None},
             "clean_review_false_positive_observed": False,
