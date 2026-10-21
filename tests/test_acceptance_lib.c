@@ -1,6 +1,8 @@
 #include "gbb_accept.h"
 #include "../src/core/gbb_accept_input.h"
 
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -738,6 +740,214 @@ static int case_accept_input_span_edges(void) {
     PASS("acceptance_input_span_edges");
 }
 
+static int case_accept_drive_stop_wake_deadline(void) {
+    static const uint8_t stop_program[] = {0x10,0x00,0x00,0x18,0xfe};
+    uint8_t rom[32768];
+    make_accept_test_rom(rom, stop_program, sizeof(stop_program));
+    gbb_instance *instance = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) == GBB_OK);
+    REQUIRE(gbb_load_rom(instance, rom, sizeof(rom)) == GBB_OK);
+
+    gbb_input_event wake = {100u, GBB_INPUT_STOP_WAKE, 1u};
+    gbb_accept_script script;
+    memset(&script, 0, sizeof(script));
+    script.events = &wake;
+    script.event_count = 1u;
+    script.end_half_dots = 100u;
+    gbb_accept_stepper stepper;
+    gbb_accept_stepper_init(&stepper, instance, NULL, NULL);
+    gbb_accept_predicate predicate;
+    memset(&predicate, 0, sizeof(predicate));
+    gbb_accept_drive_config config;
+    memset(&config, 0, sizeof(config));
+    config.stepper = &stepper;
+    config.script = &script;
+    config.predicate = &predicate;
+    config.budget_half_dots = script.end_half_dots;
+    config.max_batch = 64u;
+    gbb_accept_drive_result driven;
+    gbb_accept_drive(&config, &driven);
+    if (driven.status != GBB_ACCEPT_DRIVE_NOT_REACHED || driven.end_half_dots != 100u ||
+        driven.stop_reason != GBB_STOP_BUDGET || stepper.actual_half_dots != 100u) {
+        fprintf(stderr, "wake-at-deadline status=%d stop=%d end=%llu actual=%llu\n",
+                (int)driven.status, (int)driven.stop_reason,
+                (unsigned long long)driven.end_half_dots,
+                (unsigned long long)stepper.actual_half_dots);
+        gbb_destroy(instance);
+        return 1;
+    }
+    gbb_run_result next_tick = gbb_run(instance, 48u, NULL, 0u);
+    REQUIRE(next_tick.reason != GBB_STOP_STOPPED && next_tick.consumed_half_dots != 0u);
+    gbb_destroy(instance);
+
+    /* A wake at the final half-dot of the first private run must complete that
+     * budget, and explicit continuation must execute the next CPU tick. */
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) == GBB_OK);
+    REQUIRE(gbb_load_rom(instance, rom, sizeof(rom)) == GBB_OK);
+    size_t cursor = 0u, frame_count = 0u;
+    const gbb_accept_input_span span = {&wake, 1u, &cursor};
+    gbb_audio_frame frames[GBB_ACCEPT_PCM_FRAMES];
+    gbb_run_result first = gbb_run(instance, 99u, NULL, 0u);
+    if (first.reason != GBB_STOP_STOPPED || first.consumed_half_dots >= 99u || cursor != 0u) {
+        fprintf(stderr, "stop setup reason=%d consumed=%llu cursor=%zu\n", (int)first.reason,
+                (unsigned long long)first.consumed_half_dots, cursor);
+        gbb_destroy(instance);
+        return 1;
+    }
+    gbb_run_result boundary = gbb_accept_run_audio(instance, 100u - first.consumed_half_dots,
+                                                    &span, frames,
+                                                    GBB_ACCEPT_PCM_FRAMES, &frame_count);
+    REQUIRE(boundary.reason == GBB_STOP_BUDGET &&
+            boundary.consumed_half_dots == 100u - first.consumed_half_dots && cursor == 1u);
+    next_tick = gbb_run(instance, 48u, NULL, 0u);
+    REQUIRE(next_tick.reason != GBB_STOP_STOPPED && next_tick.consumed_half_dots != 0u);
+    gbb_destroy(instance);
+
+    /* Without a due wake the guest remains stopped, including after a zero
+     * budget poll; a later positive budget reports STOPPED, not a wake. */
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) == GBB_OK);
+    REQUIRE(gbb_load_rom(instance, rom, sizeof(rom)) == GBB_OK);
+    memset(&script, 0, sizeof(script));
+    script.end_half_dots = 100u;
+    gbb_accept_stepper_init(&stepper, instance, NULL, NULL);
+    config.script = &script;
+    config.stepper = &stepper;
+    config.budget_half_dots = 100u;
+    gbb_accept_drive(&config, &driven);
+    if (driven.status != GBB_ACCEPT_DRIVE_STOPPED || driven.stop_reason != GBB_STOP_STOPPED) {
+        fprintf(stderr, "no-wake status=%d stop=%d end=%llu actual=%llu\n", (int)driven.status,
+                (int)driven.stop_reason, (unsigned long long)driven.end_half_dots,
+                (unsigned long long)stepper.actual_half_dots);
+        gbb_destroy(instance);
+        return 1;
+    }
+    gbb_run_result zero = gbb_run(instance, 0u, NULL, 0u);
+    REQUIRE(zero.reason == GBB_STOP_BUDGET && zero.consumed_half_dots == 0u);
+    gbb_run_result still_stopped = gbb_run(instance, 16u, NULL, 0u);
+    REQUIRE(still_stopped.reason == GBB_STOP_STOPPED && still_stopped.consumed_half_dots == 16u);
+    gbb_destroy(instance);
+    PASS("acceptance_drive_stop_wake_deadline");
+}
+
+static uintptr_t align_test_address(uintptr_t address, size_t alignment) {
+    const size_t remainder = (size_t)(address % alignment);
+    return remainder == 0u ? address : address + alignment - remainder;
+}
+
+static int span_alias_was_rejected(const char *name, gbb_run_result result,
+                                   const gbb_accept_input_span *span, size_t count_before,
+                                   size_t cursor_before, const gbb_input_event *events,
+                                   const gbb_input_event *saved_events, size_t event_count) {
+    if (result.reason != GBB_STOP_INVALID_STATE || result.consumed_half_dots != 0u ||
+        span->count != count_before || *span->cursor != cursor_before ||
+        memcmp(events, saved_events, event_count * sizeof(*events)) != 0) {
+        fprintf(stderr, "span-output alias=%s reason=%d consumed=%llu count=%zu cursor=%zu\n",
+                name, (int)result.reason, (unsigned long long)result.consumed_half_dots,
+                span->count, *span->cursor);
+        return 0;
+    }
+    return 1;
+}
+
+static int case_accept_input_span_output_alias(void) {
+    const size_t storage_size = 4096u;
+    uint8_t *storage = malloc(storage_size);
+    REQUIRE(storage != NULL);
+    gbb_accept_input_span *span = (gbb_accept_input_span *)(void *)(storage + 128u);
+    size_t *cursor = (size_t *)(void *)(storage + 256u);
+    gbb_input_event *events = (gbb_input_event *)(void *)(storage + 1024u);
+    gbb_input_event saved_events[4];
+    for (size_t i = 0; i < 4u; ++i) {
+        events[i] = (gbb_input_event){8u, (i & 1u) == 0u ? GBB_INPUT_BUTTON_PRESS : GBB_INPUT_BUTTON_RELEASE,
+                                     GBB_BUTTON_A};
+    }
+    memcpy(saved_events, events, sizeof(saved_events));
+    *cursor = 0u;
+    *span = (gbb_accept_input_span){events, 4u, cursor};
+
+    uint8_t rom[32768];
+    static const uint8_t loop_program[] = {0x18,0xfe};
+    make_accept_test_rom(rom, loop_program, sizeof(loop_program));
+    gbb_instance *instance = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) == GBB_OK);
+    REQUIRE(gbb_load_rom(instance, rom, sizeof(rom)) == GBB_OK);
+    gbb_audio_frame *partial_frame = (gbb_audio_frame *)(void *)align_test_address(
+        (uintptr_t)(void *)(events + 1u) + offsetof(gbb_input_event, kind), _Alignof(gbb_audio_frame));
+    gbb_trace_record *partial_trace = (gbb_trace_record *)(void *)align_test_address(
+        (uintptr_t)(void *)(events + 1u) + offsetof(gbb_input_event, kind), _Alignof(gbb_trace_record));
+    gbb_diagnostic_record *partial_diagnostic = (gbb_diagnostic_record *)(void *)align_test_address(
+        (uintptr_t)(void *)(events + 1u) + offsetof(gbb_input_event, kind), _Alignof(gbb_diagnostic_record));
+    REQUIRE((uintptr_t)(void *)partial_frame < (uintptr_t)(void *)(events + 2u));
+    REQUIRE((uintptr_t)(void *)partial_trace < (uintptr_t)(void *)(events + 2u));
+    REQUIRE((uintptr_t)(void *)partial_diagnostic < (uintptr_t)(void *)(events + 2u));
+
+    int failures = 0;
+    const uint64_t alias_budget = 32u;
+    size_t frame_count = 7u;
+    gbb_run_result result = gbb_accept_run_audio(instance, alias_budget, span, partial_frame, 1u, &frame_count);
+    if (!span_alias_was_rejected("partial-frame/events", result, span, 4u, 0u,
+                                 events, saved_events, 4u) || frame_count != 7u) ++failures;
+
+    frame_count = 7u;
+    result = gbb_accept_run_audio(instance, alias_budget, span, (gbb_audio_frame *)(void *)span, 1u, &frame_count);
+    if (!span_alias_was_rejected("frame/span-descriptor", result, span, 4u, 0u,
+                                 events, saved_events, 4u) || frame_count != 7u) ++failures;
+
+    *cursor = 1u;
+    result = gbb_accept_run_audio(instance, alias_budget, span, NULL, 0u, cursor);
+    if (!span_alias_was_rejected("frame-count/cursor", result, span, 4u, 1u,
+                                 events, saved_events, 4u)) ++failures;
+    *cursor = 0u;
+
+    result = gbb_accept_run_audio(instance, alias_budget, span, NULL, 0u, &span->count);
+    if (!span_alias_was_rejected("frame-count/span-descriptor", result, span, 4u, 0u,
+                                 events, saved_events, 4u)) ++failures;
+    span->count = 4u;
+
+    result = gbb_accept_run_diagnostic(instance, alias_budget, span, partial_trace, 1u, NULL, 0u);
+    if (!span_alias_was_rejected("partial-trace/events", result, span, 4u, 0u,
+                                 events, saved_events, 4u)) ++failures;
+    result = gbb_accept_run_diagnostic(instance, alias_budget, span,
+                                       (gbb_trace_record *)(void *)cursor, 1u, NULL, 0u);
+    if (!span_alias_was_rejected("trace/cursor", result, span, 4u, 0u,
+                                 events, saved_events, 4u)) ++failures;
+    result = gbb_accept_run_diagnostic(instance, alias_budget, span,
+                                       (gbb_trace_record *)(void *)span, 1u, NULL, 0u);
+    if (!span_alias_was_rejected("trace/span-descriptor", result, span, 4u, 0u,
+                                 events, saved_events, 4u)) ++failures;
+
+    result = gbb_accept_run_diagnostic(instance, alias_budget, span, NULL, 0u, partial_diagnostic, 1u);
+    if (!span_alias_was_rejected("partial-diagnostic/events", result, span, 4u, 0u,
+                                 events, saved_events, 4u)) ++failures;
+    result = gbb_accept_run_diagnostic(instance, alias_budget, span, NULL, 0u,
+                                       (gbb_diagnostic_record *)(void *)cursor, 1u);
+    if (!span_alias_was_rejected("diagnostic/cursor", result, span, 4u, 0u,
+                                 events, saved_events, 4u)) ++failures;
+    result = gbb_accept_run_diagnostic(instance, alias_budget, span, NULL, 0u,
+                                       (gbb_diagnostic_record *)(void *)span, 1u);
+    if (!span_alias_was_rejected("diagnostic/span-descriptor", result, span, 4u, 0u,
+                                 events, saved_events, 4u)) ++failures;
+
+    gbb_audio_frame frames[GBB_ACCEPT_PCM_FRAMES];
+    frame_count = 7u;
+    result = gbb_accept_run_audio(instance, 0u, span, frames, GBB_ACCEPT_PCM_FRAMES, &frame_count);
+    if (result.reason != GBB_STOP_BUDGET || result.consumed_half_dots != 0u ||
+        frame_count != 0u || *cursor != 0u || span->count != 4u) {
+        fprintf(stderr, "valid zero-budget span reason=%d consumed=%llu cursor=%zu count=%zu frames=%zu\n",
+                (int)result.reason, (unsigned long long)result.consumed_half_dots,
+                *cursor, span->count, frame_count);
+        ++failures;
+    }
+
+    gbb_destroy(instance);
+    free(storage);
+    if (failures != 0) {
+        fprintf(stderr, "span-output alias rejected=%d/10\n", 10 - failures);
+        return 1;
+    }
+    PASS("acceptance_input_span_output_alias");
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) { fprintf(stderr, "usage: test_acceptance_lib <case> [args]\n"); return 2; }
     if (strcmp(argv[1], "acceptance_lib_libbet_replay") == 0) {
@@ -755,6 +965,8 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "acceptance_drive_batch_order") == 0) return case_accept_drive_batch_order();
     if (strcmp(argv[1], "acceptance_drive_stop_guard_failure") == 0) return case_accept_drive_stop_guard_failure();
     if (strcmp(argv[1], "acceptance_input_span_edges") == 0) return case_accept_input_span_edges();
+    if (strcmp(argv[1], "acceptance_drive_stop_wake_deadline") == 0) return case_accept_drive_stop_wake_deadline();
+    if (strcmp(argv[1], "acceptance_input_span_output_alias") == 0) return case_accept_input_span_output_alias();
     fprintf(stderr, "unknown case %s\n", argv[1]);
     return 2;
 }

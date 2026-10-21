@@ -3427,6 +3427,28 @@ static int validate_accept_input_span(const gbb_instance *instance,
     return 1;
 }
 
+/* Reject writable output ranges that could corrupt a borrowed span or its
+ * cursor while the run consumes events. The span itself must already have
+ * passed validate_accept_input_span(). */
+/* MODEL: BOTH GATE-00 basis="model-neutral borrowed-span output validation" */
+static int accept_span_output_is_disjoint(const gbb_accept_input_span *span,
+                                          const void *output, size_t output_size) {
+    if (span == NULL) return 1;
+    if (span->count > SIZE_MAX / sizeof(*span->events)) return 0;
+    const uintptr_t output_address = (uintptr_t)output;
+    const uintptr_t span_address = (uintptr_t)(const void *)span;
+    const uintptr_t cursor_address = (uintptr_t)(const void *)span->cursor;
+    if (ranges_overlap(output_address, output_size, span_address, sizeof(*span)) ||
+        ranges_overlap(output_address, output_size, cursor_address, sizeof(*span->cursor)))
+        return 0;
+    if (span->count != 0u) {
+        const uintptr_t events_address = (uintptr_t)(const void *)span->events;
+        const size_t events_size = span->count * sizeof(*span->events);
+        if (ranges_overlap(output_address, output_size, events_address, events_size)) return 0;
+    }
+    return 1;
+}
+
 /* MODEL: BOTH GATE-00 basis="model-neutral event scheduling" */
 static int next_input_deadline(const gbb_instance *instance, uint64_t *deadline) {
     if (instance->input_event_count != 0u) {
@@ -4608,7 +4630,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 return result;
             }
             if (result.consumed_half_dots == budget_half_dots) {
-                result.reason = GBB_STOP_NO_PROGRESS;
+                result.reason = GBB_STOP_BUDGET;
                 return result;
             }
             continue;
@@ -4877,7 +4899,15 @@ static gbb_run_result gbb_run_ex_common(gbb_instance *instance, uint64_t budget_
     if ((diagnostics == NULL && diagnostic_capacity != 0) ||
         (instance != NULL && (instance->diagnostic_output != NULL ||
                               instance->accept_input_span != NULL))) return invalid;
-    if (span != NULL && !validate_accept_input_span(instance, span)) return invalid;
+    if (span != NULL) {
+        if (!validate_accept_input_span(instance, span) ||
+            trace_capacity > SIZE_MAX / sizeof(*trace) ||
+            diagnostic_capacity > SIZE_MAX / sizeof(*diagnostics)) return invalid;
+        const size_t trace_bytes = trace_capacity * sizeof(*trace);
+        const size_t diagnostic_bytes = diagnostic_capacity * sizeof(*diagnostics);
+        if (!accept_span_output_is_disjoint(span, trace, trace_bytes) ||
+            !accept_span_output_is_disjoint(span, diagnostics, diagnostic_bytes)) return invalid;
+    }
     if (instance != NULL) {
         instance->accept_input_span = span;
         instance->diagnostic_output = diagnostics;
@@ -4927,12 +4957,19 @@ static gbb_run_result gbb_run_audio_common(gbb_instance *instance, uint64_t budg
                                            size_t *out_frame_count) {
     gbb_run_result invalid = {0, GBB_STOP_INVALID_STATE, 0, 0, 0, 0};
     if (out_frame_count == NULL) return invalid;
+    if (span != NULL) {
+        if (!validate_accept_input_span(instance, span) ||
+            frame_capacity > SIZE_MAX / sizeof(*frames)) return invalid;
+        const size_t frame_bytes = frame_capacity * sizeof(*frames);
+        if (!accept_span_output_is_disjoint(span, frames, frame_bytes) ||
+            !accept_span_output_is_disjoint(span, out_frame_count, sizeof(*out_frame_count)))
+            return invalid;
+    }
     *out_frame_count = 0u;
     if ((frames == NULL && frame_capacity != 0u) || instance == NULL ||
         instance->audio_run_active || instance->diagnostic_output != NULL ||
         instance->accept_input_span != NULL)
         return invalid;
-    if (span != NULL && !validate_accept_input_span(instance, span)) return invalid;
     if (frames != NULL && frame_capacity != 0u) {
         if (frame_capacity > SIZE_MAX / sizeof(*frames)) return invalid;
         const uintptr_t frame_begin = (uintptr_t)(void *)frames;
