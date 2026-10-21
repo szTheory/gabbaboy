@@ -4,9 +4,9 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: "15.1"
 current_phase_name: Release Hardening and Milestone Debt Closure
-current_plan: "11/19 summarized; Wave 1 integration pending; next 15.1-04"
+current_plan: "12/19 summarized; Wave 2 integration has 4 known failures; next 15.1-05"
 status: executing
-stopped_at: "Phase 15.1 Wave 1 plans executed; integration gaps assigned to Plans 07/10; next Wave 2 plan04"
+stopped_at: "Phase 15.1 Wave 2 plan04 complete; known integration gaps assigned07/10; next Wave 3 plan05"
 last_updated: "2026-10-21T02:27:12.638Z"
 last_activity: 2026-10-20
 last_activity_desc: Phase 15.1 execution started
@@ -32,10 +32,10 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 Phase: 15.1 (Release Hardening and Milestone Debt Closure) — EXECUTING
 Status: Executing Phase 15.1
-Current Plan: 11/19 summarized; Wave 1 integration pending; next 15.1-04
+Current Plan: 12/19 summarized; Wave 2 integration has 4 known failures; next 15.1-05
 Total Plans in Phase: 19
 
-Completed stage: **Phase 15.1 execution in progress — Wave 1's 11 plans executed and summarized (01, 02, 03, 06, 11–15, 18, 19)**. Task commits and focused negative controls are present. Narrow integration repairs fix private-header scanning, missing model annotations, immutable APU receipt source binding, and adoption documentation. The initial configured 1,144-test gate timed out at 600 seconds after 733 completed tests; its separate remainder completed 411/412 with the stale malformed-summary fixture failing. No full-suite pass is claimed. Remaining known integration failures are assigned to Plan 07 (current ledger evidence) and Plan 10 (obsolete dense-input failure expectation and live malformed-summary fixture). Eight plans and phase-wide verification remain. No fresh hosted qualification, release mutation or debt acceptance is claimed.
+Completed stage: **Phase 15.1 execution in progress — Waves 1–2 plans executed and summarized (12/19)**. Plan 04 now binds installed consumers to independent candidate/archive/tree identities. The configured Wave 2 core gate completed1144 tests:1140 pass,4 known failures assigned to Plans07/10. An independent early review found and closed deadline/alias issues through `929ce2e` and public-contract correction `73d8a53`; their focused tests pass, but that core change postdates the full gate and requires a later rebuild. Seven plans and phase-wide verification remain. No phase completion, fresh hosted qualification, publication or debt acceptance is claimed.
 
 Next phase: **15.1 — Release Hardening and Milestone Debt Closure**. Exact next command: `/gsd-execute-phase 15.1`.
 
