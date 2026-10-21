@@ -1444,6 +1444,13 @@ if(NOT WIN32)
   set_tests_properties(core_linkage_links PROPERTIES TIMEOUT 60)
   set_tests_properties(core_linkage_controls PROPERTIES TIMEOUT 180)
 endif()
+# P7-03 / P12-01 / P7-02: fresh evidence must never claim to recover a missing historic red run or M7
+# diagnostic, nor a hosted run that did not happen. The self-test mutates valid records one fact at a
+# time and rejects each defect with its own diagnostic, and proves a failing attempt keeps its diagnostic.
+add_test(NAME historical_limitations_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-historical-limitations.py" --self-test)
+set_tests_properties(historical_limitations_controls PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "historical-limitations self-test pass positives=2 rejected_controls=[1-9][0-9]* retention_fixture=1")
 set(GBB_AGE_PHASE14_CONTRACT "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py")
 set(GBB_AGE_PHASE14_GUEST_TIMEOUT 15)
 if(GABBABOY_ENABLE_SANITIZERS)

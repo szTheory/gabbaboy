@@ -136,10 +136,208 @@ class LiveContext:
 
 
 # --------------------------------------------------------------------------------------------
-# Validation (RED stub: the intended-defect controls below must fail against it)
+# Validation
 # --------------------------------------------------------------------------------------------
+HISTORIC_KEYS = {
+    "P7-03": ("historic_red", "recovered_historic_red", "fresh_sensitivity",
+              "historic_unknown_fresh_sensitivity", {"fresh_sensitivity"}),
+    "P12-01": ("historic_diagnostic", "recovered_historic_diagnostic", "fresh_repeat",
+               "historic_unknown_fresh_controls", {"fresh_repeat", "failure_retention_fixture"}),
+}
+
+
+def validate_item(item_id: str, item: dict | None, doc: dict, local: dict | None, ctx) -> list[str]:
+    problems: list[str] = []
+    if item is None:
+        return [f"missing_item:{item_id}: scope item has no disposition record"]
+    original = ctx.scope.get(item_id)
+    if item.get("original_text") != original or item.get("original_sha256") != sha256_text(original or ""):
+        problems.append(f"original_changed:{item_id}: the recorded audit text differs from the scope original")
+    facts = {f.get("ref"): f.get("sha256") for f in item.get("facts", [])}
+    for _, ref in FACT_SOURCES[item_id]:
+        if facts.get(ref) != ctx.facts.get(ref):
+            problems.append(f"fact_digest:{item_id}: {ref} digest differs from the live original")
+    if item_id == "P7-02":
+        if item.get("historic_status") != "unverified":
+            problems.append("historic_status:P7-02: a Linux reproduction is unverified until a hosted run proves it")
+        if item.get("disposition") not in ("hosted_verified", "external_limitation"):
+            problems.append("disposition:P7-02: must be hosted_verified or external_limitation")
+        return problems
+    status_key, recovered_key, _, disposition, allowed = HISTORIC_KEYS[item_id]
+    if item.get("historic_status") != "unknown" or item.get(status_key) != "unknown":
+        problems.append(f"historic_status:{item_id}: the old failing run or diagnostic must stay unknown")
+    if item.get(recovered_key) is not False or any(
+            k.startswith("recovered") and item.get(k) is not False for k in item):
+        problems.append(f"recovered_historic:{item_id}: a fresh run cannot claim to recover missing history")
+    if item.get("disposition") != disposition:
+        problems.append(f"disposition:{item_id}: must be {disposition}")
+    fresh = item.get("fresh_evidence", [])
+    kinds = set()
+    for entry in fresh:
+        kind = entry.get("kind")
+        if kind not in allowed:
+            problems.append(f"fresh_kind:{item_id}: {kind!r} is not fresh evidence for this item")
+            continue
+        kinds.add(kind)
+        control = ((local or {}).get("controls") or {}).get(entry.get("local_ref"))
+        if not control or control.get("kind") != kind:
+            problems.append(f"fresh_ref:{item_id}: {entry.get('local_ref')!r} is not a {kind} control in the local record")
+    for missing in sorted(allowed - kinds):
+        problems.append(f"fresh_missing:{item_id}: no {missing} evidence is referenced")
+    return problems
+
+
+def validate_local(local: dict | None, doc: dict) -> list[str]:
+    if local is None:
+        return ["local_missing: the local evidence record is required"]
+    problems: list[str] = []
+    if local.get("schema") != SCHEMA:
+        problems.append("local_schema: unsupported schema")
+    if not SHA40.match(str(local.get("source_sha", ""))) or local.get("source_sha") != doc.get("source_sha"):
+        problems.append("local_source: local evidence is not bound to the recorded tested source")
+    if local.get("tracked_clean") is not True:
+        problems.append("local_dirty: the run was not made on a clean tracked tree")
+    toolchain = local.get("toolchain") or {}
+    if not all(toolchain.get(k) for k in ("cmake", "cc", "python", "system")):
+        problems.append("local_toolchain: toolchain identity is incomplete")
+    commands = {c.get("id"): c for c in local.get("commands", [])}
+    suite = commands.get("ctest_full")
+    if not suite:
+        problems.append("ctest_missing: the full suite run is absent")
+    else:
+        if suite.get("exit") != 0 or suite.get("result") != "pass":
+            problems.append("ctest_failed: the full suite did not pass")
+        if suite.get("tests_failed") != 0:
+            problems.append("ctest_failed: failing tests are recorded")
+        total, passed = suite.get("tests_total"), suite.get("tests_passed")
+        if not isinstance(total, int) or total < 1 or passed != total:
+            problems.append(f"ctest_count: passed {passed!r} of {total!r}")
+        if suite.get("tests_not_run") != 0:
+            problems.append("ctest_not_run: skipped or not-run tests are recorded")
+        if not HEX64.match(str(suite.get("log_sha256", ""))) or not suite.get("seconds", 0) > 0:
+            problems.append("ctest_log: log digest or duration is missing")
+    baseline = commands.get("dmg_baseline")
+    if not baseline or baseline.get("exit") != 0 or baseline.get("result") != "pass" \
+            or not HEX64.match(str(baseline.get("log_sha256", ""))):
+        problems.append("dmg_baseline: the frozen DMG baseline did not pass with a retained log")
+    controls = local.get("controls") or {}
+    audio = controls.get("audio_saturation") or {}
+    if audio.get("kind") != "fresh_sensitivity" or not audio.get("mutation"):
+        problems.append("audio_control: the saturation sensitivity record is missing or unlabelled")
+    if audio.get("control_exit") != 0:
+        problems.append("audio_control: the unmutated source did not pass the saturation test")
+    if audio.get("mutant_exit") in (0, None):
+        problems.append("audio_mutant_survived: reintroducing the pre-fix scaling did not fail the test")
+    if SAT_DIAG not in str(audio.get("mutant_diagnostic", "")):
+        problems.append("audio_mutant_diagnostic: the mutant did not fail on the headroom assertion")
+    if audio.get("mutant_success_output_absent") is not True:
+        problems.append("audio_success_output: the mutant printed the success line")
+    repeats = controls.get("m7_repeats") or {}
+    entries = repeats.get("entries") or []
+    if repeats.get("kind") != "fresh_repeat" or repeats.get("attempts") != M7_ATTEMPTS \
+            or len(entries) != M7_ATTEMPTS \
+            or repeats.get("passed") != sum(1 for e in entries if e.get("exit") == 0) \
+            or repeats.get("passed", 0) + repeats.get("failed", 0) != M7_ATTEMPTS:
+        problems.append(f"m7_attempts: need {M7_ATTEMPTS} consistently recorded attempts")
+    if repeats.get("failed") != 0:
+        problems.append("m7_failed: a fresh M7 attempt failed; the pass disposition does not hold")
+    for entry in entries:
+        if entry.get("exit") != 0 and not (entry.get("retained") and HEX64.match(str(entry.get("retained_sha256", "")))
+                                           and entry.get("retained_bytes", 0) > 0):
+            problems.append(f"m7_unretained: failing attempt {entry.get('attempt')} kept no diagnostic")
+    retention = controls.get("m7_retention") or {}
+    if retention.get("kind") != "failure_retention_fixture" or retention.get("diagnostic_retained") is not True \
+            or retention.get("retained_contains_marker") is not True \
+            or not HEX64.match(str(retention.get("retained_sha256", ""))) \
+            or not isinstance(retention.get("failed_attempt"), int) \
+            or not 1 <= retention["failed_attempt"] <= retention.get("attempts", 0):
+        problems.append("m7_retention_fixture: a provoked failure did not retain its diagnostic")
+    return problems
+
+
+def validate_workflow(rec: dict, hosted: dict, ctx) -> list[str]:
+    wid = rec.get("id")
+    problems: list[str] = []
+    if rec.get("claim") == "verified":
+        if rec.get("status") != "completed" or rec.get("conclusion") != "success":
+            problems.append(f"hosted_conclusion:{wid}: run is {rec.get('status')}/{rec.get('conclusion')}, not completed/success")
+        if not isinstance(rec.get("run_id"), int) or rec.get("run_id", 0) < 1:
+            problems.append(f"hosted_run:{wid}: run id is missing")
+        if not isinstance(rec.get("run_attempt"), int) or rec.get("run_attempt", 0) < 1:
+            problems.append(f"hosted_attempt:{wid}: run attempt is missing")
+        if rec.get("head_sha") != hosted.get("source_sha"):
+            problems.append(f"hosted_head:{wid}: run head differs from the pushed source")
+        jobs = rec.get("jobs") or []
+        if not jobs or any(j.get("status") != "completed" or j.get("conclusion") != "success" for j in jobs):
+            problems.append(f"hosted_job:{wid}: a job is absent, skipped or not successful")
+        if not HEX64.match(str(rec.get("log_sha256", ""))):
+            problems.append(f"hosted_log:{wid}: downloaded log digest is missing")
+        if wid == "libbet-repro":
+            match = LIBBET_LINE.match(str(rec.get("result_line", "")))
+            if not match or match.group(1) != ctx.rom_sha256:
+                problems.append("hosted_result:libbet-repro: log result is not an identical rebuild of the vendored ROM")
+        if wid == "release-rehearsal":
+            artifacts = rec.get("artifacts") or []
+            if not artifacts or any(not re.fullmatch(r"sha256:[0-9a-f]{64}", str(a.get("digest", "")))
+                                    or not a.get("id") for a in artifacts):
+                problems.append("hosted_artifact:release-rehearsal: producer artifacts lack identity or digest")
+    elif rec.get("claim") == "not_verified":
+        if not str(rec.get("limitation", "")).strip():
+            problems.append(f"limitation_empty:{wid}: an unverified hosted record must state why")
+        if rec.get("status") == "completed" and rec.get("conclusion") == "success":
+            problems.append(f"limitation_claims_pass:{wid}: a successful run cannot be recorded as unverified")
+    else:
+        problems.append(f"hosted_claim:{wid}: claim must be verified or not_verified")
+    return problems
+
+
 def validate(doc: dict, local: dict | None, hosted: dict | None, ctx) -> list[str]:
-    return []
+    problems: list[str] = []
+    if doc.get("schema") != SCHEMA:
+        problems.append("schema: unsupported historical-limitations schema")
+    if not SHA40.match(str(doc.get("source_sha", ""))):
+        problems.append("source_sha: tested source must be a full commit id")
+    elif not ctx.is_ancestor(doc["source_sha"]):
+        problems.append("source_sha: tested source is not an ancestor of HEAD")
+    items = {i.get("id"): i for i in doc.get("items", [])}
+    for item_id in ITEM_IDS:
+        problems += validate_item(item_id, items.get(item_id), doc, local, ctx)
+    problems += validate_local(local, doc)
+
+    libbet_item = items.get("P7-02") or {}
+    if hosted is None:
+        problems.append("hosted_missing: the hosted evidence record is required")
+        return problems
+    if hosted.get("obtained_via") != "gh_api":
+        problems.append("hosted_obtained: identities must be read from the hosting API, not a submitted receipt")
+    if hosted.get("receipt_labels_used") is not False:
+        problems.append("hosted_receipt_label: run identity was taken from a receipt label")
+    if not SHA40.match(str(hosted.get("source_sha", ""))):
+        problems.append("hosted_source: pushed source must be a full commit id")
+    else:
+        if hosted.get("tested_source_sha") != doc.get("source_sha"):
+            problems.append("hosted_tested_source: hosted record is not bound to the locally tested source")
+        elif hosted["source_sha"] != doc.get("source_sha"):
+            drift = [p for p in ctx.changed_paths(doc["source_sha"], hosted["source_sha"])
+                     if not p.startswith(".planning/")]
+            if drift:
+                problems.append(f"covered_drift: {len(drift)} covered path(s) changed between the tested and pushed source")
+    records = {w.get("id"): w for w in hosted.get("workflows", [])}
+    for wid in ("libbet-repro", "release-rehearsal"):
+        if wid not in records:
+            problems.append(f"hosted_missing:{wid}: no record, not even an unverified one")
+        else:
+            problems += validate_workflow(records[wid], hosted, ctx)
+    record = records.get(libbet_item.get("hosted_ref"))
+    if libbet_item.get("disposition") == "hosted_verified":
+        if not record or record.get("claim") != "verified":
+            problems.append("limitation_not_hosted: hosted_verified needs a verified libbet-repro record")
+    elif libbet_item.get("disposition") == "external_limitation":
+        if not str(libbet_item.get("limitation", "")).strip():
+            problems.append("limitation_empty:P7-02: an external limitation must say what blocks qualification")
+        if record and record.get("claim") == "verified":
+            problems.append("limitation_claims_pass:P7-02: limitation cites a record that claims a pass")
+    return problems
 
 
 # --------------------------------------------------------------------------------------------
@@ -167,12 +365,168 @@ def run_attempts(command: list[str], count: int, retain_dir: pathlib.Path) -> di
             "failed": sum(1 for a in attempts if a["exit"] != 0), "entries": attempts}
 
 
+def retention_fixture(tmp: pathlib.Path) -> dict:
+    """Provoke a failure on attempt 2 of 3 and prove the sanitized diagnostic stays on disk."""
+    marker = tmp / "count"
+    script = ("import pathlib,sys\n"
+              f"p=pathlib.Path({str(marker)!r}); n=int(p.read_text())+1 if p.exists() else 1\n"
+              "p.write_text(str(n))\n"
+              "if n==2: print('DIAG-MARKER failure on attempt 2'); sys.exit(1)\n")
+    result = run_attempts([sys.executable, "-I", "-c", script], 3, tmp / "retained")
+    failed = [e for e in result["entries"] if e["exit"] != 0]
+    if len(failed) != 1 or failed[0]["attempt"] != 2 or "retained" not in failed[0]:
+        raise Rejected(f"retention fixture did not keep the failing attempt: {result}")
+    text = (tmp / "retained" / failed[0]["retained"]).read_text(encoding="utf-8")
+    if "DIAG-MARKER" not in text or sha256_text(text) != failed[0]["retained_sha256"]:
+        raise Rejected("retained diagnostic is missing its marker or digest")
+    if any("retained" in e for e in result["entries"] if e["exit"] == 0):
+        raise Rejected("a passing attempt retained output")
+    return {"kind": "failure_retention_fixture", "attempts": 3, "failed_attempt": 2,
+            "diagnostic_retained": True, "retained_sha256": failed[0]["retained_sha256"],
+            "retained_contains_marker": True}
+
+
+def audio_saturation_sensitivity() -> dict:
+    """Reintroduce the pre-fix mixer scaling in a scratch copy and require the saturation test to fail.
+
+    This is fresh sensitivity evidence about the current test. It is not the missing pre-fix red run
+    from 07-03 (D-043): that run never happened and cannot be recovered."""
+    compiler = shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")
+    if not compiler:
+        raise Rejected("no C compiler for the saturation mutation")
+    source = (ROOT / "src/core/gabbaboy.c").read_text(encoding="utf-8")
+    fixed = "#define GBB_AUDIO_MIX_HEADROOM_DIV 16\n"
+    if source.count(fixed) != 1:
+        raise Rejected("the headroom divisor definition is not unique; update the mutation anchor")
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = pathlib.Path(tmp)
+        results = {}
+        for name, text in (("control", source),
+                           ("mutant", source.replace(fixed, "#define GBB_AUDIO_MIX_HEADROOM_DIV 1\n"))):
+            core = tmp_path / f"{name}.c"
+            core.write_text(text, encoding="utf-8")
+            exe = tmp_path / f"test_audio_{name}"
+            build = subprocess.run([compiler, "-std=c17", f"-I{ROOT / 'include'}", f"-I{ROOT / 'src/core'}",
+                                    str(ROOT / "tests/test_audio.c"), str(core), "-o", str(exe)],
+                                   capture_output=True, text=True)
+            if build.returncode != 0:
+                raise Rejected(f"saturation {name} did not compile: {sanitize(build.stderr)[:400]}")
+            run = subprocess.run([str(exe), "audio_saturation"], capture_output=True, text=True, cwd=ROOT)
+            results[name] = (run.returncode, sanitize(run.stdout + run.stderr))
+    diagnostic = next((line for line in results["mutant"][1].splitlines() if SAT_DIAG in line), "")
+    return {
+        "kind": "fresh_sensitivity",
+        "mutation": "GBB_AUDIO_MIX_HEADROOM_DIV 16 -> 1",
+        "control_exit": results["control"][0], "control_success_line": SAT_SUCCESS in results["control"][1],
+        "mutant_exit": results["mutant"][0], "mutant_diagnostic": diagnostic,
+        "mutant_success_output_absent": SAT_SUCCESS not in results["mutant"][1],
+    }
+
+
+def tool_version(command: list[str]) -> str:
+    try:
+        out = subprocess.run(command, capture_output=True, text=True).stdout
+    except OSError:
+        return ""
+    return sanitize(out.splitlines()[0]) if out else ""
+
+
+def parse_ctest(text: str) -> dict:
+    summary = re.search(r"(\d+)% tests passed, (\d+) tests failed out of (\d+)", text)
+    if not summary:
+        raise Rejected("ctest summary line not found in the log")
+    failed, total = int(summary.group(2)), int(summary.group(3))
+    seconds = re.search(r"Total Test time \(real\) =\s+([0-9.]+) sec", text)
+    return {"tests_total": total, "tests_failed": failed, "tests_passed": total - failed,
+            "tests_not_run": len(re.findall(r"\*\*\*(?:Not Run|Skipped)", text)),
+            "ctest_seconds": float(seconds.group(1)) if seconds else 0.0}
+
+
 def produce_local(args) -> int:
-    raise Rejected("--produce-local is not implemented yet")
+    if not (args.build_dir and args.out and args.source_sha and args.retain_dir):
+        raise Rejected("--produce-local requires --build-dir, --source-sha, --out and --retain-dir")
+    head = git("rev-parse", "HEAD").strip()
+    if args.source_sha != head:
+        raise Rejected("the tested source must be the current HEAD")
+    dirty = [line for line in git("status", "--porcelain", "--untracked-files=no").splitlines()
+             if not line[3:].startswith(".planning/")]
+    if dirty:
+        raise Rejected(f"tracked non-planning files are modified: {len(dirty)}")
+    commands = []
+    for spec in args.command:
+        cid, _, log = spec.partition("=")
+        log_path = pathlib.Path(log)
+        meta = json.loads(pathlib.Path(str(log_path) + ".meta").read_text(encoding="utf-8"))
+        text = log_path.read_text(encoding="utf-8", errors="replace")
+        entry = {"id": cid, "command": sanitize(meta["command"]), "exit": meta["exit"],
+                 "seconds": meta["seconds"], "log_sha256": sha256_bytes(log_path.read_bytes())}
+        if cid == "ctest_full":
+            parsed = parse_ctest(text)
+            entry.update(parsed)
+            entry["seconds"] = parsed["ctest_seconds"] or entry["seconds"]
+            entry["result"] = "pass" if meta["exit"] == 0 and parsed["tests_failed"] == 0 else "fail"
+        else:
+            entry["result"] = "pass" if meta["exit"] == 0 else "fail"
+        commands.append(entry)
+    audio = audio_saturation_sensitivity()
+    if audio["control_exit"] != 0:
+        raise Rejected("the unmutated saturation control failed")
+    repeats = run_attempts(
+        ["ctest", "--test-dir", str(args.build_dir), "-R", M7_TESTS, "--no-tests=error", "--output-on-failure"],
+        M7_ATTEMPTS, args.retain_dir)
+    repeats.update(kind="fresh_repeat", tests=M7_TESTS)
+    with tempfile.TemporaryDirectory() as tmp:
+        retention = retention_fixture(pathlib.Path(tmp))
+    record = {
+        "schema": SCHEMA, "source_sha": head, "tracked_clean": True,
+        "toolchain": {"cmake": tool_version(["cmake", "--version"]), "cc": tool_version(["cc", "--version"]),
+                      "python": platform.python_version(),
+                      "system": f"{platform.system()} {platform.machine()}"},
+        "commands": commands,
+        "controls": {"audio_saturation": audio, "m7_repeats": repeats, "m7_retention": retention},
+        "historic_claims": "none: fresh runs prove the current source only",
+    }
+    args.out.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    print(f"local-evidence written source={head[:12]} m7_passed={repeats['passed']}/{repeats['attempts']} "
+          f"audio_mutant_exit={audio['mutant_exit']}")
+    return 0
 
 
 def produce_historical(args) -> int:
-    raise Rejected("--produce-historical is not implemented yet")
+    if not (args.local and args.hosted and args.out):
+        raise Rejected("--produce-historical requires --local, --hosted and --out")
+    ctx = LiveContext()
+    local = json.loads(args.local.read_text(encoding="utf-8"))
+    hosted = json.loads(args.hosted.read_text(encoding="utf-8"))
+    libbet = next(w for w in hosted["workflows"] if w["id"] == "libbet-repro")
+    items = []
+    for item_id in ITEM_IDS:
+        item = {"id": item_id, "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+                "original_text": ctx.scope[item_id], "original_sha256": sha256_text(ctx.scope[item_id]),
+                "facts": [{"ref": ref, "sha256": ctx.facts[ref]} for _, ref in FACT_SOURCES[item_id]]}
+        if item_id == "P7-02":
+            item["historic_status"] = "unverified"
+            item["hosted_ref"] = "libbet-repro"
+            if libbet["claim"] == "verified":
+                item["disposition"] = "hosted_verified"
+            else:
+                item["disposition"] = "external_limitation"
+                item["limitation"] = libbet["limitation"]
+        elif item_id == "P7-03":
+            item.update(historic_status="unknown", historic_red="unknown", recovered_historic_red=False,
+                        disposition="historic_unknown_fresh_sensitivity",
+                        fresh_evidence=[{"kind": "fresh_sensitivity", "local_ref": "audio_saturation"}])
+        else:
+            item.update(historic_status="unknown", historic_diagnostic="unknown",
+                        recovered_historic_diagnostic=False, disposition="historic_unknown_fresh_controls",
+                        fresh_evidence=[{"kind": "fresh_repeat", "local_ref": "m7_repeats"},
+                                        {"kind": "failure_retention_fixture", "local_ref": "m7_retention"}])
+        items.append(item)
+    doc = {"schema": SCHEMA, "plan": "15.1-16", "source_sha": local["source_sha"],
+           "local_evidence": args.local.name, "hosted_evidence": args.hosted.name, "items": items}
+    args.out.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+    print(f"historical-limitations written items={len(items)}")
+    return 0
 
 
 # --------------------------------------------------------------------------------------------
@@ -378,9 +732,7 @@ def self_test() -> int:
         ("hosted_receipt_label", hosted_(lambda h: h.update(receipt_labels_used=True)), True),
         ("hosted_obtained", hosted_(lambda h: h.update(obtained_via="receipt")), True),
         ("hosted_attempt", hosted_(lambda h: wf(h, "libbet-repro").update(run_attempt=0)), True),
-        ("covered_drift", hosted_(lambda h: h.update(source_sha=PUSHED)), False),  # replaced below
     ]
-    controls.pop()  # drift is exercised through the context, not a record edit
     rejected = 0
     for code, mutate, _ in controls:
         d, l, h = synthetic_historical(True), synthetic_local(), synthetic_hosted(True)
@@ -414,20 +766,7 @@ def self_test() -> int:
 
     # the retention plumbing: a failing attempt must keep its sanitized diagnostic on disk
     with tempfile.TemporaryDirectory() as tmp:
-        marker = pathlib.Path(tmp) / "count"
-        script = ("import pathlib,sys\n"
-                  f"p=pathlib.Path({str(marker)!r}); n=int(p.read_text() or 0)+1 if p.exists() else 1\n"
-                  "p.write_text(str(n))\n"
-                  "if n==2: print('DIAG-MARKER failure at '+sys.argv[0]); sys.exit(1)\n")
-        result = run_attempts([sys.executable, "-I", "-c", script], 3, pathlib.Path(tmp) / "retained")
-        failed = [e for e in result["entries"] if e["exit"] != 0]
-        if len(failed) != 1 or failed[0]["attempt"] != 2 or "retained" not in failed[0]:
-            raise Rejected(f"retention fixture did not keep the failing attempt: {result}")
-        text = (pathlib.Path(tmp) / "retained" / failed[0]["retained"]).read_text(encoding="utf-8")
-        if "DIAG-MARKER" not in text or sha256_text(text) != failed[0]["retained_sha256"]:
-            raise Rejected("retained diagnostic is missing its marker or digest")
-        if any("retained" in e for e in result["entries"] if e["exit"] == 0):
-            raise Rejected("a passing attempt retained output")
+        retention_fixture(pathlib.Path(tmp))
 
     print(f"historical-limitations self-test pass positives={positives} rejected_controls={rejected} "
           "retention_fixture=1")
