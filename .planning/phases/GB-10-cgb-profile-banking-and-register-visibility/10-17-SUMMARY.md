@@ -36,20 +36,32 @@ duration: 35 min
 completed: 2026-10-12
 coverage:
   - id: D1
-    description: "--ab mode proves both builds print the frozen digest and writes a validated receipt, from CTest without asserting time"
+    description: "The current A/B benchmark self-test writes a validated receipt while checking the frozen output digest"
     human_judgment: false
     verification:
-      - {kind: ctest, ref: "cgb_bench_ab_selftest", status: pass}
+      - kind: unit
+        ref: "CTest cgb_bench_ab_selftest"
+        status: pass
   - id: D2
-    description: "Wrong digest and a receipt missing a field fail with their named reasons"
+    description: "Wrong-digest and missing-field controls reject their malformed benchmark receipts"
     human_judgment: false
     verification:
-      - {kind: ctest, ref: "cgb_bench_ab_wrong_digest", status: pass}
-      - {kind: ctest, ref: "cgb_bench_ab_missing_field", status: pass}
+      - kind: unit
+        ref: "CTest cgb_bench_ab_wrong_digest"
+        status: pass
+      - kind: unit
+        ref: "CTest cgb_bench_ab_missing_field"
+        status: pass
   - id: D3
-    description: "Banking-indirection DMG cost recorded against the Phase 7 baseline with uncertainty and attribution"
-    human_judgment: true
-    rationale: "Whether a roughly 6 to 7 percent advisory cost needs performance work is an owner decision under D-016"
+    description: "The historical Phase 10 benchmark receipt records its cost, uncertainty and attribution; it does not approve optimization or close the D-016 owner decision"
+    human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I -m json.tool .planning/phases/GB-10-cgb-profile-banking-and-register-visibility/10-BENCH.json"
+        status: pass
+      - kind: unit
+        ref: "CTest cgb_bench_ab_selftest"
+        status: pass
 ---
 
 # Phase 10 Plan 17: DMG banking-indirection A/B benchmark Summary
@@ -84,3 +96,13 @@ None.
 None. T-10-24 mitigated: receipt records only `uname`-class hardware and CPU brand, validated against home paths.
 
 ## Self-Check: PASSED
+
+## 15.1-19 Fresh Applicability Evidence
+
+On 2026-10-21, the benchmark harness and its malformed-input controls passed:
+
+```text
+ctest --test-dir build --output-on-failure -R '^cgb_bench_ab_(selftest|wrong_digest|missing_field)$'
+```
+
+Result: 3/3 tests passed. The receipt parsed as valid JSON. A fresh receipt validation found four recorded runs, three headline runs with the review trigger fired, and the attribution comparison within noise. The recorded receipt retains the frozen digest, sample/warm-up counts, and uncertainty. This verifies the historical measurement record only; it does not approve optimization or resolve the D-016 owner decision. The original host and timing details above remain historical, not a new benchmark claim.

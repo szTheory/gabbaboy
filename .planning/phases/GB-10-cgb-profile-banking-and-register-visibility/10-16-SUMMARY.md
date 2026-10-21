@@ -37,39 +37,58 @@ duration: 40 min
 completed: 2026-10-12
 coverage:
   - id: D1
-    description: "boot_regs-cgb and boot_div-cgbABCDE run on CGB-CPU-E in compat mode and report status=pass with a CGB label through the existing Mooneye predicate"
+    description: "The qualified CGB corpus reports boot_regs_cgb and boot_div_cgbABCDE as passing CGB-CPU-E cases"
     requirement: CGB-01
-    verification:
-      - {kind: unit, ref: "ctest cgb_mooneye_case_boot_regs-cgb", status: pass}
-      - {kind: unit, ref: "ctest cgb_mooneye_case_boot_div-cgbABCDE", status: pass}
     human_judgment: false
+    verification:
+      - kind: unit
+        ref: "CTest cgb_corpus_mooneye_boot_regs_cgb"
+        status: pass
+      - kind: unit
+        ref: "CTest cgb_corpus_mooneye_boot_div_cgbABCDE"
+        status: pass
   - id: D2
-    description: "boot_hwio-C and unused_hwio-C report status=expected-unsupported stop=unsupported-bus address=ff76, exit 0 only on that exact stop"
+    description: "The current qualified corpus retains boot_hwio_C and unused_hwio_C as exact expected-failure rows, separate from Phase 10 expected-unsupported results"
     requirement: CGB-02
-    verification:
-      - {kind: unit, ref: "ctest cgb_mooneye_case_boot_hwio-C and cgb_mooneye_case_unused_hwio-C", status: pass}
-      - {kind: unit, ref: "ctest cgb_mooneye_required_suite (suite eligible=4 executed=4 status=pass, expected-unsupported=2/2)", status: pass}
     human_judgment: false
+    verification:
+      - kind: unit
+        ref: "CTest cgb_corpus_mooneye_boot_hwio_C and cgb_corpus_mooneye_unused_hwio_C"
+        status: pass
+      - kind: unit
+        ref: "CTest cgb_mooneye_required_suite"
+        status: pass
   - id: D3
-    description: "Negative controls: unknown manifest, tampered pass expectation, wrong stop address, passing ROM declared expected-unsupported, pc-table tamper"
-    verification:
-      - {kind: unit, ref: "ctest cgb_mooneye_unknown_manifest (exit 2, invalid-manifest)", status: pass}
-      - {kind: unit, ref: "ctest cgb_mooneye_expected_unsupported_tamper (three controls)", status: pass}
-      - {kind: unit, ref: "ctest cgb_mooneye_pc_table_tamper (exit 1, pc-table-mismatch ... result_pc)", status: pass}
+    description: "Current corpus controls reject unknown manifests, digest, inventory and PC-table tampering"
     human_judgment: false
+    verification:
+      - kind: unit
+        ref: "CTest cgb_mooneye_unknown_manifest, cgb_mooneye_digest_tamper, cgb_mooneye_inventory_tamper, and cgb_mooneye_pc_table_tamper"
+        status: pass
+      - kind: unit
+        ref: "CTest cgb_corpus_mooneye_controls"
+        status: pass
   - id: D4
-    description: "--observe prints mooneye.<alias>.frame not-applicable for CGB rows; DMG baseline unchanged"
-    verification:
-      - {kind: unit, ref: "ctest cgb_mooneye_observe_not_applicable", status: pass}
-      - {kind: command, ref: "bash tests/scripts/verify-dmg-baseline.sh -> baseline status=pass", status: pass}
+    description: "CGB Mooneye observation remains not-applicable and the frozen DMG baseline has no changed rows"
     human_judgment: false
+    verification:
+      - kind: unit
+        ref: "CTest cgb_mooneye_observe_not_applicable"
+        status: pass
+      - kind: other
+        ref: "bash tests/scripts/verify-dmg-baseline.sh"
+        status: pass
   - id: D5
-    description: "A1: the real boot_div-cgbABCDE ROM passes for divider_counter 0x2678..0x267B only, both divider phases"
+    description: "The real CGB boot_div ROM keeps the exact divider window in both phases, and a shifted window is rejected"
     requirement: CGB-01
-    verification:
-      - {kind: unit, ref: "ctest cgb_postboot_div_real_rom_sweep", status: pass}
-      - {kind: unit, ref: "ctest cgb_postboot_div_real_rom_sweep_shifted (exit 1, passing set mismatch)", status: pass}
     human_judgment: false
+    verification:
+      - kind: unit
+        ref: "CTest cgb_postboot_div_real_rom_sweep"
+        status: pass
+      - kind: unit
+        ref: "CTest cgb_postboot_div_real_rom_sweep_shifted"
+        status: pass
 ---
 
 # Phase 10 Plan 16: Mooneye CGB Runner Suite and Real-ROM DIV Sweep Summary
@@ -116,3 +135,15 @@ Ready for 10-17 (CGB-03) per the phase plan order; phase-level stop rules in AGE
 ## Self-Check: PASSED
 
 Files exist (`tests/test_mooneye_cgb_div_sweep.c`, `fixtures/mooneye-cgb/manifest.json`, `cmake/VerifyMooneyeCgb.cmake`); commits f4c60ce, 2d8ae33, 63bb82b are ancestors of HEAD; all task acceptance criteria and the full suite re-ran green after the last code change.
+
+## 15.1-19 Fresh Applicability Evidence
+
+The Phase 10 verification and producer record above is preserved as historical evidence. Phase 14 commit `c771b1b` replaced the older four-case Mooneye CTest naming with the inventory-bound CGB corpus. In the current model, `boot_hwio-C` and `unused_hwio-C` remain expected-failure (`xfail`) dispositions; this does not rewrite the Phase 10 expected-unsupported results as current guest passes.
+
+On 2026-10-21, the focused current corpus, suite, negative controls, observation check, and real-ROM DIV checks passed 13/13:
+
+```text
+ctest --test-dir build --output-on-failure -R '^(cgb_corpus_mooneye_(boot_regs_cgb|boot_div_cgbABCDE|boot_hwio_C|unused_hwio_C|controls)|cgb_mooneye_(required_suite|observe_not_applicable|unknown_manifest|pc_table_tamper|digest_tamper|inventory_tamper)|cgb_postboot_div_real_rom_sweep(_shifted)?)$'
+```
+
+The passing suite includes the explicit expected-failure corpus rows, unknown-manifest and digest/inventory/PC-table rejection, observation-not-applicable behavior, the exact real-ROM DIV window, and its shifted-window negative control. `bash tests/scripts/verify-dmg-baseline.sh` also passed with zero changed rows. These checks establish current applicability for the normalized mappings; the earlier Phase 10 run details remain the original historical record.
