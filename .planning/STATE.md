@@ -2,21 +2,21 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_phase: 8
-current_plan: 10/10 complete
+current_phase: 12
+current_plan: 19/19 complete
 status: completed
-last_updated: "2026-10-21T00:27:34.161244+00:00"
+last_updated: "2026-10-21T00:33:29.573533+00:00"
 last_activity: 2026-10-20
-last_activity_desc: Refreshed Phase 8 package verification and canonical UAT; paused before Phase 12 metadata refresh
-state_head: a338f54abcb1956cd5e6c3c5faba716137d5a07e
+last_activity_desc: Phase 12 metadata verification refresh complete; milestone completion/debt review next
+state_head: 45add7e43c185029f2ec31240b2e3402f00dbe41
 progress:
   total_phases: 9
   completed_phases: 9
   total_plans: 134
   completed_plans: 134
   percent: 100
-stopped_at: Phase 8 package verification refresh complete; Phase 12 metadata verification refresh next
-current_phase_name: Cartridge Seam, MBC5 and MBC2
+stopped_at: Phase 12 metadata verification refresh; paused before milestone completion
+current_phase_name: CGB Double Speed
 ---
 
 # Project State
@@ -26,19 +26,17 @@ current_phase_name: Cartridge Seam, MBC5 and MBC2
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 12 metadata verification refresh for the later lessons/index changes
+**Current focus:** v0.2 milestone completion and explicit debt review
 
 ## Current Position
 
-Completed stage: **Phase 8 — Cartridge Seam, MBC5 and MBC2, package verification refresh**. All 10 implementation plans were already complete. The refreshed [verification](phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-VERIFICATION.md) passes **97/97 truths**, 27 artifact declarations and 19 traced links, with one adopted D-062 replacement. CART-01/02/03 remain satisfied; OpenGSD freshness is `passed` across 90 covered files.
+Completed stage: **Phase 12 — CGB Double Speed, metadata verification refresh**. All 19 implementation plans were already complete. The only stale covered inputs were later Phase 13 additions to `LESSONS.md` and `research/INDEX.md`; they preserve the Phase 12 contract. Canonical goal verification and automated UAT retain their bounded software-model scope. No emulator implementation changed.
 
-Fresh producer `a338f54` passed configured core **1,144/1,144** in **378.77 seconds**, rebuilt player **98/98** in **17.55 seconds** and separate installed-package consumers **5/5** in **1.89 seconds**, zero skips. Frozen core 258/player 55 identities are covered and DMG baseline rows are unchanged. The later Phase 10 preview-package exclusion passes clean scans, renamed MBC/CGB and symlink negative controls, and relocated C/C++ consumers. No emulator/package implementation changed.
+Fresh producer `45add7e` configured/rebuilt the core and SDL player: core **1,144/1,144** in **396.40 seconds**, player **98/98** in **18.78 seconds**, and separate existing-installed consumers **5/5** in **0.65 seconds**, zero skips. Current receipts, hashes, counts and limitations are recorded in [12-METADATA-REFRESH-EVIDENCE.md](phases/GB-12-cgb-double-speed/12-METADATA-REFRESH-EVIDENCE.md). Canonical UAT closes 73 automated deliverables with 19 rejected controls; all 19 bounded task windows reconcile. Immutable `da98d56` closeout rejects 17 controls. Historical review/security/Nyquist/UI reports are reused with fresh bounded applicability controls; this is not a new broad audit or hosted/hardware/perceptual qualification.
 
-All 10 SUMMARY coverage blocks now use the supported schema: **34/34 automated UAT deliverables**, zero human checkpoints. The immutable historical closure checks 65 files and rejects 157 controls; the player contract rejects 5; the shared canonical UAT checker rejects 19. Original summary bodies/receipts remain unchanged. Two old verifier transcription errors (differential digest and link-shape count) are corrected. See [08-PACKAGE-REFRESH-EVIDENCE.md](phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-PACKAGE-REFRESH-EVIDENCE.md) and [08-PACKAGE-REFRESH-GATES.md](phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-PACKAGE-REFRESH-GATES.md) for producers, hashes, commands and limits.
+Next stage: **v0.2 Color & Cartridge Breadth milestone completion and explicit debt review**. Exact next command: `/gsd-complete-milestone v0.2`. No next numbered implementation phase exists; v0.3 remains provisional and unstarted. All 9/9 implementation phases and 134/134 plans remain complete. The audit retains 28/28 satisfied requirements and 21 debt items; none is accepted here. The inherited 47 legacy SUMMARY schema problems in untouched Phases 9/10 remain recorded for milestone review. Stop after Phase 12; both automatic advance flags remain false. No archive, tag, release, merge or next milestone starts.
 
-Next corrective phase: **12 — CGB Double Speed**, verification refresh only for the lessons/index metadata changed by the prior Phase 13 refresh. Exact next command: `/gsd-execute-phase 12`. Stop after Phase 8; no implementation replay or automatic phase advance. Phase 15 remains complete. All 9/9 implementation phases and 134/134 plans remain complete; milestone completion and explicit review of 21 retained debt items remain pending. An extra diagnostic found 47 legacy SUMMARY schema problems in untouched Phases 9/10, outside the configured Phase 11+ gate; record them for milestone review without silently accepting or repairing them here. No fresh hosted/hardware/perceptual/performance qualification, archive, tag, release or new milestone is claimed. Both auto flags remain false; v0.3 remains provisional.
-
-Review branch: `gsd/phase-08-package-verification-refresh`, stacked on Phase 14 refresh PR #90. Boundary triage found no open issues; refresh PRs #78–90 and release-please #75 remain open. Merge only the reviewed revision with required exact-head hosted checks satisfied; local results are not remote-green proof. The pre-existing config edits remain uncommitted. The phase.complete CLI accepted 10/10 but incremented an already-complete count to 10/9 and derived a new-milestone route; current state restores 9/9 and the actual Phase 12 corrective route. Its five heuristic warning rows refer to shell commands, ignore-pattern placeholders or suffix shorthand; all 27 actual artifacts are resolved in verification. Reused historical audit scope is bounded, not a new broad source/security audit. Global learning export is disabled; no qualifying learning files, pending phase todos or stale handoff were found.
+Review branch: `gsd/phase-12-metadata-verification-refresh`, stacked on Phase 8 package-refresh PR #91. Boundary triage found zero open issues; PRs #78–91 and release-please #75 remain open. Any merge requires required checks on the exact reviewed remote revision; local passes do not establish hosted readiness. Preserve the pre-existing uncommitted `.planning/config.json` edits.
 
 ### Historical Phase 14 verification refresh
 
@@ -580,10 +578,11 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Completed stage: Phase 8 — Cartridge Seam, MBC5 and MBC2, package verification refresh; paused at the phase boundary.
-Next corrective phase: 12 — CGB Double Speed, verification refresh only for changed lessons/index metadata.
-Next command: `/gsd-execute-phase 12`.
+Completed stage: Phase 12 — CGB Double Speed, metadata verification refresh; paused at the phase boundary.
+Next stage: v0.2 milestone completion and explicit review of 21 retained debt items.
+Next command: `/gsd-complete-milestone v0.2`.
+No next numbered implementation phase exists; v0.3 remains provisional.
 
 ## Operator Next Steps
 
-Run the command above when ready. Preserve completed implementation and historical producer receipts. Milestone completion/debt review follows the remaining stale report, including the recorded Phase9/10 legacy-schema diagnostic. Do not archive, tag, or start v0.3 automatically. Both automatic advance flags remain false.
+Run the command above when ready. Preserve completed implementation and historical producer receipts. Do not archive, tag, release or start v0.3 automatically. Both automatic advance flags remain false.

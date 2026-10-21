@@ -2,11 +2,15 @@
 status: complete
 phase: GB-12-cgb-double-speed
 source: 12-01-SUMMARY.md, 12-02-SUMMARY.md, 12-03-SUMMARY.md, 12-04-SUMMARY.md, 12-05-SUMMARY.md, 12-06-SUMMARY.md, 12-07-SUMMARY.md, 12-08-SUMMARY.md, 12-09-SUMMARY.md, 12-10-SUMMARY.md, 12-11-SUMMARY.md, 12-12-SUMMARY.md, 12-13-SUMMARY.md, 12-14-SUMMARY.md, 12-15-SUMMARY.md, 12-16-SUMMARY.md, 12-17-SUMMARY.md, 12-18-SUMMARY.md, 12-19-SUMMARY.md
-started: 2026-10-20T22:58:55.431967+00:00
-updated: 2026-10-20T22:58:55.431967+00:00
+started: 2026-10-21T00:38:07.007899+00:00
+updated: 2026-10-21T00:38:07.007899+00:00
 ---
 
 ## Automated Evidence
+
+Fresh metadata refresh at producer `45add7e`: core 1144/1144, zero skips, 396.40 seconds; player 98/98, zero skips, 18.78 seconds; consumers 5/5, zero skips, 0.65 seconds. Configured core and player builds succeeded; DMG baseline unchanged. All 19 bounded windows reconcile; immutable `da98d56` closeout rejects 17 controls. Canonical closure accepts 73 rows and rejects 19 controls. See `12-METADATA-REFRESH-EVIDENCE.md` for separate receipt streams and limits. Next owner-selected stage is `/gsd-complete-milestone v0.2` with explicit review of 21 retained debt items; no next numbered implementation phase exists. Both auto flags remain false.
+
+The following earlier receipts retain their original producers and historical scope.
 
 Fresh verification refresh at unchanged source `3930668`: configure/build succeeded; complete configured core regression passed **1,144/1,144**, zero skips, **414.22 seconds**. Rebuilt SDL player passed **98/98**, zero skips, **25.28 seconds**. Frozen DMG baseline reports zero changed rows. All 19 bounded plan windows reconcile using their recorded before/after revisions. The original closeout checker passes 17 controls against `git archive da98d56`; no live route/tree fact is used as a historical boundary assertion. The shared canonical closure self-test passes 73 rows and rejects 19 controls. Local ROM rebuild remains unavailable (RGBDS 1.0.4 installed vs 1.0.1 required); original pinned-tool hosted receipts below remain historical.
 
