@@ -1771,6 +1771,25 @@ def self_test_static_ledger() -> None:
         else:
             fail("static ledger accepted a missing covered source input")
         victim.write_bytes(original)
+        # Added-case and removed-case inventory controls: the denominator is exact, so a ledger that claims
+        # one more or one fewer required case than the independent inventory must be rejected by the
+        # production entry for the membership reason, never by an unrelated parse error.
+        ledger_bytes = (ROOT / ledger_rel).read_bytes()
+        denominator = b'"required_case_count": %d' % V2_REQUIRED_CASES
+        if ledger_bytes.count(denominator) != 1:
+            fail("static ledger self-test: the required-case denominator must appear exactly once")
+        for label, count in (("added-case-inventory", V2_REQUIRED_CASES + 1),
+                             ("removed-case-inventory", V2_REQUIRED_CASES - 1)):
+            (copy_root / ledger_rel).write_bytes(
+                ledger_bytes.replace(denominator, b'"required_case_count": %d' % count))
+            try:
+                check_ledger_static(copy_root, run_inventory=False)
+            except ValueError as error:
+                if "required inventory membership is incomplete or narrowed" not in str(error):
+                    fail("static ledger control " + label + " was rejected for the wrong reason: " + str(error))
+                controls += 1
+            else:
+                fail("static ledger accepted a " + label + " denominator")
         (copy_root / ledger_rel).write_bytes(b"not a ledger\n")
         try:
             check_ledger_static(copy_root, run_inventory=False)
@@ -1778,9 +1797,9 @@ def self_test_static_ledger() -> None:
             controls += 1
         else:
             fail("static ledger accepted an unparseable ledger")
-    if controls != 3:
+    if controls != 5:
         fail("static ledger self-test did not run all of its controls")
-    print("support ledger static self-test passed: positive=1 rejected_controls=3 controls=changed-covered-input,missing-covered-input,unparseable-ledger")
+    print("support ledger static self-test passed: positive=1 rejected_controls=5 controls=changed-covered-input,missing-covered-input,added-case-inventory,removed-case-inventory,unparseable-ledger")
 
 
 def self_test_v2_sidecar() -> None:

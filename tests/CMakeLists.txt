@@ -815,6 +815,16 @@ add_test(NAME cgb_fuzz_profile_select COMMAND test_fuzz_core cgb_profile_select)
 add_test(NAME cgb_fuzz_palette_regressions COMMAND test_fuzz_core cgb_palette)
 add_test(NAME cgb_fuzz_speed_regressions COMMAND test_fuzz_core cgb_speed)
 set_tests_properties(cgb_fuzz_speed_regressions PROPERTIES TIMEOUT 60)
+# Plan 15.1-03: DMG scenario 3 holds RIGHT, retires STOP through the explicit STOP_WAKE seam event and
+# must show post-wake guest progress without any KEY1 access. The mutation controls reject a wrong route,
+# a missing held observation, a missing wake observation, a profile twin, and empty or truncated input,
+# each with its own named diagnostic inside the harness bounds. This does not model physical button wake.
+add_test(NAME cgb_fuzz_dmg_held COMMAND test_fuzz_core cgb_speed_dmg_held)
+add_test(NAME cgb_fuzz_dmg_held_mutation_controls COMMAND test_fuzz_core cgb_speed_dmg_held_mutation_controls)
+set_tests_properties(cgb_fuzz_dmg_held cgb_fuzz_dmg_held_mutation_controls PROPERTIES TIMEOUT 60)
+set_tests_properties(cgb_fuzz_dmg_held PROPERTIES PASS_REGULAR_EXPRESSION "ok 1 - cgb_speed_dmg_held")
+set_tests_properties(cgb_fuzz_dmg_held_mutation_controls PROPERTIES
+  PASS_REGULAR_EXPRESSION "ok 1 - cgb_speed_dmg_held_mutation_controls")
 
 # Invert only the speed harness's guest KEY1 consistency oracle. The speed seed must make it fail,
 # while an existing CGB seed that never selects cgb_speed stays quiet in the same executable.
@@ -1392,10 +1402,10 @@ gbb_add_v02_contract(v02_adoption_docs_controls 90
   [=["mode": "self-test", "negative_controls": [1-9][0-9]*, "positive_success": true, "rejected_controls": [1-9][0-9]*, "target": "docs"]=]
   verify-v02-adoption.py --self-test docs)
 gbb_add_v02_contract(v02_support_ledger 60
-  [=[support-ledger static pass version=0.2.0 cases=107 source-inputs=[1-9][0-9]*]=]
+  [=[support-ledger static pass version=0.2.0 cases=[1-9][0-9]* source-inputs=[1-9][0-9]*]=]
   verify-support-ledger.py --check-ledger)
 gbb_add_v02_contract(v02_support_ledger_controls 120
-  [=[support ledger static self-test passed: positive=1 rejected_controls=3]=]
+  [=[support ledger static self-test passed: positive=1 rejected_controls=5 controls=changed-covered-input,missing-covered-input,added-case-inventory,removed-case-inventory,unparseable-ledger]=]
   verify-support-ledger.py --self-test)
 gbb_add_v02_contract(v02_consumer_controls 360
   [=["negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
@@ -2611,10 +2621,11 @@ gbb_add_model_gate_test(model_gates_real_doc_mismatch 1 "gate-doc-mismatch"
 gbb_add_model_gate_test(model_gates_release_blocked 1 "gate-unresolved-unknown"
   --release --source "${GBB_MODEL_GATE_REAL_SOURCE}" --doc "${GBB_MODEL_GATE_REAL_DOC}")
 
-# Plan SUMMARY coverage blocks (DECISIONS D-069, LESSONS GB-GSD-015): from Phase 11 on, every
-# entry must be in the GSD classifier's block schema and auto-passable, so /gsd-verify-work never
-# hands an automated deliverable to the owner. Phases 9-10 used a rejected shape; Phase 10 is the
-# negative control.
+# Plan SUMMARY coverage blocks (DECISIONS D-069, LESSONS GB-GSD-015): every entry from Phase 9 on must be in
+# the GSD classifier's block schema and auto-passable, so /gsd-verify-work never hands an automated
+# deliverable to the owner. The live summaries are checked strictly (--since 9) and must pass. The rejection
+# control is the immutable, deliberately malformed tests/data/invalid-summary-coverage.md, not a live
+# summary, so correcting a live summary can never invalidate the negative control.
 set(GBB_SUMMARY_COVERAGE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-summary-coverage.py")
 function(gbb_add_summary_coverage_test name code regex)
   set(command "${Python3_EXECUTABLE}" -I "${GBB_SUMMARY_COVERAGE_CHECKER}"
@@ -2629,9 +2640,47 @@ function(gbb_add_summary_coverage_test name code regex)
   set_tests_properties(${name} PROPERTIES TIMEOUT 60)
 endfunction()
 gbb_add_summary_coverage_test(summary_coverage_selftest 0 "summary-coverage self-test pass mutants=1[2-9]" --self-test)
-gbb_add_summary_coverage_test(summary_coverage 0 "summary-coverage pass files=[0-9]+" --since 11)
-gbb_add_summary_coverage_test(summary_coverage_phase10_rejected 1
-  "summary-coverage-invalid: 10-01-SUMMARY.md: flow-style-not-supported" --since 10)
+gbb_add_summary_coverage_test(summary_coverage 0 "summary-coverage pass files=[0-9]+" --since 9)
+
+set(GBB_INVALID_SUMMARY_FIXTURE "${PROJECT_SOURCE_DIR}/tests/data/invalid-summary-coverage.md")
+set(GBB_INVALID_SUMMARY_FIXTURE_SHA256 "1c8e301b33cd1a2312564f95416d860eb9c1fd30c2d75ec103287db9a2317d31")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_INVALID_SUMMARY_FIXTURE}")
+file(SHA256 "${GBB_INVALID_SUMMARY_FIXTURE}" gbb_invalid_summary_sha256)
+if(NOT gbb_invalid_summary_sha256 STREQUAL GBB_INVALID_SUMMARY_FIXTURE_SHA256)
+  message(FATAL_ERROR "tests/data/invalid-summary-coverage.md is immutable test data: its SHA-256 is "
+    "${gbb_invalid_summary_sha256}, expected ${GBB_INVALID_SUMMARY_FIXTURE_SHA256}. Do not repair the fixture; "
+    "fix the checker or add a second fixture.")
+endif()
+add_test(NAME summary_coverage_invalid_fixture_rejected
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_SUMMARY_COVERAGE_CHECKER};--file;${GBB_INVALID_SUMMARY_FIXTURE}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=summary-coverage-invalid: invalid-summary-coverage[.]md: flow-style-not-supported.*summary-coverage FAIL files=1 problems=1"
+    "-DGBB_FORBID_REGEX=summary-coverage pass"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# The same fixture with only the malformed verification item rewritten in block style must pass, so the
+# rejection above is caused by that item and not by anything else in the file or by a checker that rejects all.
+file(READ "${GBB_INVALID_SUMMARY_FIXTURE}" gbb_invalid_summary_text)
+set(gbb_invalid_summary_item "      - {kind: ctest, ref: \"ctest -R '^fixture$'\", status: pass}")
+string(FIND "${gbb_invalid_summary_text}" "${gbb_invalid_summary_item}" gbb_invalid_summary_first)
+string(FIND "${gbb_invalid_summary_text}" "${gbb_invalid_summary_item}" gbb_invalid_summary_last REVERSE)
+if(gbb_invalid_summary_first EQUAL -1 OR NOT gbb_invalid_summary_first EQUAL gbb_invalid_summary_last)
+  message(FATAL_ERROR "invalid summary fixture: the flow-style item must occur exactly once")
+endif()
+string(REPLACE "${gbb_invalid_summary_item}"
+  "      - kind: integration\n        ref: \"ctest -R '^fixture$'\"\n        status: pass"
+  gbb_invalid_summary_repaired "${gbb_invalid_summary_text}")
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/summary-coverage")
+file(WRITE "${PROJECT_BINARY_DIR}/summary-coverage/repaired-summary-coverage.md" "${gbb_invalid_summary_repaired}")
+add_test(NAME summary_coverage_invalid_fixture_repaired_passes
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_SUMMARY_COVERAGE_CHECKER};--file;${PROJECT_BINARY_DIR}/summary-coverage/repaired-summary-coverage.md"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=summary-coverage pass files=1 entries=1"
+    "-DGBB_FORBID_REGEX=summary-coverage-invalid"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(summary_coverage_invalid_fixture_rejected summary_coverage_invalid_fixture_repaired_passes
+  PROPERTIES TIMEOUT 60)
 
 # Post-boot table mirror (D-06): docs/cgb-profile.md must equal post_boot[] and obey the provenance
 # rules. White-box like test_mbc5_internal, so it includes the core and must not link it.
