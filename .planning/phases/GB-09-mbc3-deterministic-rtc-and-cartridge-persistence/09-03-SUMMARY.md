@@ -17,6 +17,14 @@ key-files:
 key-decisions:
   - "D-28: residue (data[0] & 3u) == 2u selects synthesised-length mode; 0 keeps loader, 1/3 keep stateful"
 requirements-completed: [CART-05]
+coverage:
+  - id: D1
+    description: "Deterministic fuzz regression tests cover synthetic ROM length bounds and API boundary behavior"
+    verification:
+      - kind: integration
+        ref: "Fresh Phase 15.1-11 focused CTest: fuzz_core_regressions, loader_boundary_fuzz, and battery_api_fuzz (3/3 passed)"
+        status: pass
+    human_judgment: false
 status: complete
 commits: 2
 plan_head_before: cbc7633
@@ -57,3 +65,7 @@ None.
 ## Self-Check: PASSED
 
 tests/fuzz_core.c and tests/test_fuzz_core.c exist; commits b1a8f69 and f0e12fa are on the branch.
+
+## Current Verification — 15.1-11
+
+The three deterministic fuzz regression CTests passed in the focused batch. `run-bounded-fuzz.sh --self-test` remains only the recorded script self-test: it reports `libfuzzer_runtime=unsupported` and requires a hosted campaign; no local libFuzzer campaign or campaign receipt is claimed.

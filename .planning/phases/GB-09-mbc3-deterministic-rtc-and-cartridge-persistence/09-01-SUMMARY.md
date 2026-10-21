@@ -19,6 +19,14 @@ key-decisions:
   - "Selections $04-$07 and $0D-$FF map nothing; labelled a software-model decision in source, not hardware-qualified"
   - "RAM code $05 on $10/$12/$13 is accepted by the RAM rule only as an MBC30 marker, so it reaches the variant slot after length and checksum"
 requirements-completed: [CART-04]
+coverage:
+  - id: D1
+    description: "MBC3 cartridge types, banking, RAM gate, reset, and battery generation behavior pass the focused mapper suite"
+    verification:
+      - kind: integration
+        ref: "Fresh Phase 15.1-11 run: ctest --test-dir build --output-on-failure -R '^mbc3_(tracer|header_matrix|rom_banking|ram_banking|ram_gate|unmapped_select|absent_ram|reset|battery_generation)$' (9/9 passed)"
+        status: pass
+    human_judgment: false
 status: complete
 commits: 2
 plan_head_before: f26d3ad320c3690d8f41c2da5834ab83527ee720
@@ -73,3 +81,7 @@ None.
 ## Self-Check: PASSED
 
 - tests/test_mbc3.c present; commits 3f3ac79 and 0aed690 on HEAD; acceptance greps pass; full CTest 329/329.
+
+## Current Verification — 15.1-11
+
+The focused nine-test MBC3 mapper batch passed on the current checkout. This is current local regression evidence; it does not upgrade the historical software-model choices to hardware-backed claims.
