@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""Contract checks for the repository's OpenGSD closeout scan wrapper."""
+"""Classify closeout findings while retaining the installed OpenGSD audit."""
 
 from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timezone
 import unittest
 
 
@@ -17,7 +20,10 @@ REVIEW_SOURCE = (
     ROOT
     / ".planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT-REVIEW.md"
 )
-DEFAULT_TOOLS = Path.home() / ".codex/gsd-core/bin/gsd-tools.cjs"
+CLASSIFIER_VERSION = "1"
+DEFAULT_TOOLS = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "gsd-core/bin/gsd-tools.cjs"
+REVIEW_NAME = re.compile(r"^\d+(?:\.\d+)*-UAT-REVIEW\.md$")
+CANONICAL_UAT_NAME = re.compile(r"^\d+(?:\.\d+)*-UAT\.md$")
 
 
 def installed_tools() -> Path:
@@ -42,23 +48,242 @@ def make_fixture(root: Path) -> None:
     )
 
 
+class ScanError(RuntimeError):
+    def __init__(self, code: str, message: str, *, raw: dict[str, object] | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.raw = raw or {}
+
+
+def _run(command: list[str], root: Path) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(command, cwd=root, text=True, capture_output=True, check=False)
+    except OSError as exc:
+        raise ScanError("runtime-launch", f"could not launch installed OpenGSD: {exc}") from exc
+
+
+def _runtime_command() -> tuple[list[str], dict[str, object]]:
+    node = shutil.which("node")
+    tool = installed_tools()
+    if node is None:
+        raise ScanError("runtime-launch", "Node.js was not found on PATH")
+    if not tool.is_file():
+        raise ScanError("runtime-missing", "installed gsd-tools.cjs was not found")
+
+    command = [node, str(tool), "runtime-identity", "--raw"]
+    result = _run(command, ROOT)
+    identity_raw: dict[str, object] = {
+        "exit_code": result.returncode,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+    }
+    if result.returncode != 0:
+        raise ScanError("runtime-identity", "installed runtime identity command failed", raw=identity_raw)
+    try:
+        identity = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise ScanError("runtime-identity", "installed runtime identity was not JSON", raw=identity_raw) from exc
+    if not isinstance(identity, dict) or identity.get("packageName") != "@opengsd/gsd-core" or not isinstance(identity.get("version"), str):
+        raise ScanError("runtime-identity", "installed runtime identity did not prove @opengsd/gsd-core", raw=identity_raw)
+    return [node, str(tool)], {
+        "package_name": identity["packageName"],
+        "version": identity["version"],
+        "identity_command": identity_raw,
+    }
+
+
+def _read_review_verdict(root: Path, item: dict[str, object]) -> tuple[bool, str, str | None]:
+    phase = item.get("phase")
+    filename = item.get("file")
+    if not isinstance(phase, str) or Path(phase).name != phase or not isinstance(filename, str) or Path(filename).name != filename:
+        return False, "invalid-source-identity", None
+
+    bases = [root / ".planning/phases"]
+    milestones = root / ".planning/milestones"
+    if milestones.is_dir():
+        bases.extend(sorted(milestones.glob("*-phases")))
+    candidates = [base / phase / filename for base in bases]
+    source = None
+    for candidate in candidates:
+        try:
+            candidate.resolve().relative_to(root.resolve())
+        except (OSError, ValueError):
+            continue
+        if candidate.is_file():
+            source = candidate
+            break
+    if source is None:
+        return False, "review-source-missing", None
+    relative_source = source.relative_to(root).as_posix()
+    try:
+        if source.stat().st_size > 2 * 1024 * 1024:
+            return False, "review-source-exceeds-read-limit", relative_source
+        text = source.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return False, "review-source-unreadable", relative_source
+
+    match = re.match(r"\A---\r?\n(.*?)\r?\n---(?:\r?\n|\Z)", text, flags=re.DOTALL)
+    if match is None:
+        return False, "review-frontmatter-malformed", relative_source
+    frontmatter = match.group(1).splitlines()
+    statuses = [m.group(1).strip().lower() for line in frontmatter if (m := re.match(r"^status:\s*(.*?)\s*$", line))]
+    if statuses != ["clean"]:
+        return False, "review-verdict-not-clean-or-ambiguous", relative_source
+
+    findings_index = next((index for index, line in enumerate(frontmatter) if line == "findings:"), None)
+    if findings_index is None:
+        return False, "review-findings-missing", relative_source
+    counts: dict[str, list[int]] = {name: [] for name in ("critical", "warning", "info", "total")}
+    for line in frontmatter[findings_index + 1 :]:
+        if line and not line[0].isspace():
+            break
+        count_match = re.match(r"^\s+(critical|warning|info|total):\s*(\d+)\s*$", line)
+        if count_match:
+            counts[count_match.group(1)].append(int(count_match.group(2)))
+    if any(len(values) != 1 for values in counts.values()):
+        return False, "review-findings-malformed-or-ambiguous", relative_source
+    clean = all(values[0] == 0 for values in counts.values())
+    if not clean:
+        return False, "review-has-findings", relative_source
+    if counts["total"][0] != sum(counts[key][0] for key in ("critical", "warning", "info")):
+        return False, "review-findings-total-mismatch", relative_source
+    return True, "clean-review-verdict-and-zero-findings", relative_source
+
+
+def _record_for(category: str, item: object, root: Path, index: int) -> dict[str, object]:
+    if not isinstance(item, dict):
+        return {"category": category, "index": index, "classification": "malformed-runtime-item", "blocking": True, "raw_item": item}
+    record: dict[str, object] = {"category": category, "index": index, "raw_item": item}
+    if category != "uat_gaps":
+        record.update(classification=f"open-{category}", blocking=True, reason="installed audit-open reported an open item")
+        return record
+
+    filename = item.get("file")
+    if isinstance(filename, str) and CANONICAL_UAT_NAME.fullmatch(filename):
+        record.update(
+            classification="pending-canonical-uat",
+            blocking=True,
+            reason="installed audit-open reported a canonical UAT artifact as incomplete",
+        )
+        return record
+    if isinstance(filename, str) and REVIEW_NAME.fullmatch(filename):
+        clean, reason, source = _read_review_verdict(root, item)
+        record["source_file"] = source
+        if (
+            clean
+            and item.get("status") == "clean"
+            and type(item.get("open_scenario_count")) is int
+            and item.get("open_scenario_count") == 0
+        ):
+            record.update(classification="clean-review", blocking=False, reason=reason)
+        else:
+            record.update(classification="ambiguous-or-dirty-review", blocking=True, reason=reason)
+        return record
+    record.update(
+        classification="unclassified-uat-artifact",
+        blocking=True,
+        reason="UAT finding did not match an exact canonical UAT or review filename",
+    )
+    return record
+
+
+def _scan(root: Path) -> dict[str, object]:
+    raw_identity: dict[str, object] = {}
+    raw_audit: dict[str, object] = {"exit_code": None, "stdout": "", "stderr": "", "payload": None}
+    try:
+        command_prefix, runtime = _runtime_command()
+        raw_identity = runtime
+        audit = _run([*command_prefix, "audit-open", "--json"], root)
+        raw_audit = {"exit_code": audit.returncode, "stdout": audit.stdout, "stderr": audit.stderr, "payload": None}
+        if audit.returncode != 0:
+            raise ScanError("runtime-audit-open", "installed audit-open returned a nonzero exit", raw=raw_audit)
+        try:
+            payload = json.loads(audit.stdout)
+        except json.JSONDecodeError as exc:
+            raise ScanError("runtime-audit-json", "installed audit-open stdout was not JSON", raw=raw_audit) from exc
+        if not isinstance(payload, dict) or not isinstance(payload.get("items"), dict):
+            raw_audit["payload"] = payload
+            raise ScanError("runtime-audit-shape", "installed audit-open JSON did not contain an items object", raw=raw_audit)
+        raw_audit["payload"] = payload
+        records: list[dict[str, object]] = []
+        for category, items in payload["items"].items():
+            if not isinstance(items, list):
+                records.append({"category": category, "index": 0, "classification": "malformed-runtime-category", "blocking": True, "raw_item": items})
+                continue
+            for index, item in enumerate(items):
+                if isinstance(item, dict) and item.get("scan_error") is True:
+                    records.append({"category": category, "index": index, "classification": "scan-error", "blocking": True, "reason": "installed audit-open could not inspect this category", "raw_item": item})
+                else:
+                    records.append(_record_for(category, item, root, index))
+        clean_review = any(record["classification"] == "clean-review" for record in records)
+        return {
+            "schema": "gabbaboy.closeout-scan.v1",
+            "status": "blocked" if any(record["blocking"] for record in records) else "clear",
+            "classifier_version": CLASSIFIER_VERSION,
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "runtime": {"package_name": raw_identity["package_name"], "version": raw_identity["version"]},
+            "raw_limitation": (
+                "The installed audit-open result is retained unchanged. A clean review may appear in its raw uat_gaps list; only the exact review filename with a clean verdict and four zero finding counts is classified as non-blocking."
+            ),
+            "raw_audit_open": raw_audit,
+            "records": records,
+            "counts": {
+                "raw_uat_gaps": len(payload["items"].get("uat_gaps", [])) if isinstance(payload["items"].get("uat_gaps", []), list) else None,
+                "clean_reviews": sum(record["classification"] == "clean-review" for record in records),
+                "blocking_records": sum(bool(record["blocking"]) for record in records),
+            },
+            "clean_review_false_positive_observed": clean_review,
+        }
+    except ScanError as exc:
+        return {
+            "schema": "gabbaboy.closeout-scan.v1",
+            "status": "error",
+            "classifier_version": CLASSIFIER_VERSION,
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "error": {"code": exc.code, "diagnostic": str(exc)},
+            "runtime": raw_identity,
+            "raw_limitation": "The installed runtime output could not be classified; raw output is retained when available.",
+            "raw_audit_open": exc.raw if exc.raw else raw_audit,
+            "records": [],
+            "counts": {"raw_uat_gaps": None, "clean_reviews": 0, "blocking_records": None},
+            "clean_review_false_positive_observed": False,
+        }
+
+
+def _write_report(path: Path, report: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 class CloseoutScanTests(unittest.TestCase):
-    def test_clean_review_is_not_reported_as_canonical_uat_debt(self) -> None:
+    def test_clean_review_is_nonblocking_but_pending_canonical_uat_blocks(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gabbaboy-closeout-red-") as temp_dir:
-            fixture = Path(temp_dir)
+            fixture = Path(temp_dir) / "project"
+            fixture.mkdir()
             make_fixture(fixture)
-            command = ["node", str(installed_tools()), "audit-open", "--json"]
-            result = subprocess.run(command, cwd=fixture, text=True, capture_output=True, check=False)
-            self.assertEqual(result.returncode, 0, f"installed audit-open failed: {result.stderr}")
-            payload = json.loads(result.stdout)
-            uat_files = [item["file"] for item in payload["items"]["uat_gaps"]]
-            self.assertIn("14-UAT.md", uat_files, "the incomplete canonical UAT must remain visible")
-            self.assertNotIn(
-                "14-UAT-REVIEW.md",
-                uat_files,
-                "clean review was misclassified as canonical UAT debt; raw audit-open payload="
-                + json.dumps(payload, sort_keys=True),
+            output = Path(temp_dir) / "closeout.json"
+            result = subprocess.run(
+                [sys.executable, str(Path(__file__).resolve()), "--check", "--root", str(fixture), "--output", str(output)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
             )
+            self.assertEqual(result.returncode, 1, f"pending canonical UAT must block: {result.stdout}\n{result.stderr}")
+            report = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(report["status"], "blocked")
+            raw_payload = report["raw_audit_open"]["payload"]
+            raw_names = [item["file"] for item in raw_payload["items"]["uat_gaps"]]
+            self.assertEqual(raw_names, ["14-UAT-REVIEW.md", "14-UAT.md"])
+            self.assertIn("14-UAT-REVIEW.md", report["raw_audit_open"]["stdout"])
+            review = next(record for record in report["records"] if record["classification"] == "clean-review")
+            canonical = next(record for record in report["records"] if record["classification"] == "pending-canonical-uat")
+            self.assertFalse(review["blocking"])
+            self.assertEqual(review["source_file"], ".planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT-REVIEW.md")
+            self.assertTrue(canonical["blocking"])
+            self.assertEqual(canonical["raw_item"]["open_scenario_count"], 1)
+            self.assertIn("BLOCKED", result.stdout)
+            self.assertNotIn("CLEAR", result.stdout)
 
 
 def run_self_test() -> int:
@@ -70,4 +295,35 @@ def run_self_test() -> int:
 if __name__ == "__main__":
     if sys.argv[1:] == ["--self-test"]:
         raise SystemExit(run_self_test())
-    raise SystemExit("usage: verify-closeout-scan.py --self-test")
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", help="run installed audit-open and classify its findings")
+    parser.add_argument("--self-test", action="store_true", help="run real-CLI contract controls")
+    parser.add_argument("--root", type=Path, default=ROOT, help=argparse.SUPPRESS)
+    parser.add_argument("--output", type=Path, help="write the complete scan record, including raw runtime output")
+    args = parser.parse_args()
+    if args.self_test:
+        raise SystemExit(run_self_test())
+    if not args.check:
+        parser.error("--check is required")
+    root = args.root.resolve()
+    if not root.is_dir() or not (root / ".planning").is_dir():
+        parser.error("--root must be a directory containing .planning/")
+    report = _scan(root)
+    if args.output:
+        try:
+            _write_report(args.output, report)
+        except OSError as exc:
+            print(f"REJECT output-write: could not retain scan record: {exc}", file=sys.stderr)
+            raise SystemExit(2)
+    else:
+        print(json.dumps(report, indent=2, sort_keys=True))
+    if report["status"] == "error":
+        error = report.get("error", {})
+        print(f"REJECT {error.get('code', 'closeout-scan')}: {error.get('diagnostic', 'scan failed')}", file=sys.stderr)
+        raise SystemExit(2)
+    if report["status"] == "blocked":
+        print(f"BLOCKED closeout scan: {report['counts']['blocking_records']} classified finding(s)")
+        raise SystemExit(1)
+    print("CLOSEOUT SCAN CLEAR: no unresolved classified findings")
