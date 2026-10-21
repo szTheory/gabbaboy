@@ -778,6 +778,14 @@ REHEARSAL_REQUIRED = {
         "python3 -I trusted-judge/tests/scripts/verify-v02-fuzz.py --verify rehearsal-evidence/v02-fuzz-receipt.json",
     ),
 }
+_PUBLISH_INVENTORY = 'python3 -I trusted/.github/scripts/verify-published-release-assets.py --inventory "$RUNNER_TEMP/expected-inventory.json" build/release-final'
+_PUBLISH_RECOVERY = ('bash trusted/.github/scripts/verify-release-gates.sh --check-recovery "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA" '
+                     '"$RUNNER_TEMP/expected-inventory.json" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" full')
+_ATTACH_INVENTORY = ('python3 -I trusted/.github/scripts/verify-published-release-assets.py --inventory "$RUNNER_TEMP/expected-inventory.json" '
+                     'build/evidence-corpus/support-ledger.json build/evidence-corpus/cgb-corpus-receipt.json '
+                     'build/evidence-fuzz/v02-fuzz-receipt.json build/evidence-performance/v02-performance-receipt.json')
+_ATTACH_RECOVERY = ('bash trusted/.github/scripts/verify-release-gates.sh --check-recovery "$release_id" "$RELEASE_TAG" "$SOURCE_SHA" '
+                    '"$RUNNER_TEMP/expected-inventory.json" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" subset')
 RELEASE_REQUIRED = {
     "candidate-corpus": (_RELEASE_SUBJECT, _CORPUS_BUILD) + REHEARSAL_REQUIRED["corpus"][2:],
     "candidate-performance": (_RELEASE_SUBJECT,) + REHEARSAL_REQUIRED["performance"],
@@ -794,7 +802,10 @@ RELEASE_REQUIRED = {
         'bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"',
         "python3 -I trusted/.github/scripts/verify-published-release-assets.py",
         'gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag',
+        _PUBLISH_INVENTORY,
+        _PUBLISH_RECOVERY,
     ),
+    "attach-v02-evidence": (_ATTACH_INVENTORY, _ATTACH_RECOVERY),
 }
 # Downloaded-byte platform smoke in the residual candidate jobs: (command prefix, words that must also appear).
 RELEASE_SMOKE_REQUIRED = {
@@ -1011,12 +1022,27 @@ def check_release(root: Path) -> None:
     publish_at = require_call(name, "publish-qualified-release", publisher, RELEASE_REQUIRED["publish-qualified-release"][4])
     if gate_at >= publish_at:
         raise Reject("publication-order", f"{_where(name, 'publish-qualified-release')} must run the final downloaded-byte gate before the one publication transition")
+    # Recovery decides from independently read live state BEFORE any retry write (P15-09): inventory, then the decision,
+    # then the upload; and the published-asset readback only after the one publication transition.
+    upload = 'gh release upload "$RELEASE_TAG" "build/release-final/$name" --repo "$GH_REPO"'
+    inventory_at = require_call(name, "publish-qualified-release", publisher, _PUBLISH_INVENTORY)
+    recovery_at = require_call(name, "publish-qualified-release", publisher, _PUBLISH_RECOVERY)
+    upload_at = require_call(name, "publish-qualified-release", publisher, upload, conditional=True)
+    if not inventory_at < recovery_at < upload_at:
+        raise Reject("recovery-order", f"{_where(name, 'publish-qualified-release')} must decide recovery from live state before any final-metadata upload")
+    readback_at = require_call(name, "publish-qualified-release", publisher, RELEASE_REQUIRED["publish-qualified-release"][3] + ' "$assets" build/release-final/api-assets.json')
+    if readback_at <= publish_at:
+        raise Reject("publication-order", f"{_where(name, 'publish-qualified-release')} must read published assets back after the publication transition")
     for job_id, calls in RELEASE_SMOKE_REQUIRED.items():
         for command, extra in calls:
             require_call(name, job_id, jobs[job_id], command, contains=extra, conditional=True)
     attach = jobs["attach-v02-evidence"]
     require_call(name, "attach-v02-evidence", attach, 'gh release upload "$RELEASE_TAG" "$1/$2" --repo "$GH_REPO"', conditional=True)
-    require_call(name, "attach-v02-evidence", attach, 'attach "$dir" "$name"', conditional=True)
+    attach_call = require_call(name, "attach-v02-evidence", attach, 'attach "$dir" "$name"', conditional=True)
+    attach_inventory_at = require_call(name, "attach-v02-evidence", attach, _ATTACH_INVENTORY)
+    attach_recovery_at = require_call(name, "attach-v02-evidence", attach, _ATTACH_RECOVERY)
+    if not attach_inventory_at < attach_recovery_at < attach_call:
+        raise Reject("recovery-order", f"{_where(name, 'attach-v02-evidence')} must decide recovery from live state before any evidence upload")
 
 
 def check_all(root: Path) -> dict[str, int]:

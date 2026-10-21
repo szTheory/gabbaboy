@@ -448,59 +448,100 @@ for index, (name, data) in enumerate(sorted(content.items()), start=1):
 PY
 }
 
-# Drive recovery_decision with a simulated gh and prove live release state is read first.
+# Drive the real --check-recovery CLI with an executable fake gh on PATH. The fake serves raw API-shaped documents and
+# applies the caller's --jq, so the production queries are exercised; every call is logged to prove that live release
+# state is read first, that nothing writes to GitHub, and that the scratch directory is removed on every exit path.
 recovery_self_test() {
-  local dir=$1 log="$1/gh-calls.log" sha
+  local dir=$1 sha
   sha=$(printf 'c%.0s' {1..40})
-  mkdir -p "$dir"
-  python3 - "$dir" <<'PY' || return $?
+  mkdir -p "$dir/bin" "$dir/tmp"
+  python3 - "$dir" "$sha" <<'PY' || return $?
 import hashlib, json, pathlib, sys
 root = pathlib.Path(sys.argv[1])
+sha = sys.argv[2]
+other = "d" * 40
 rows, expected = [], []
 for index, name in enumerate(("a.tar.gz", "b.json"), 1):
     data = f"{name} bytes".encode()
-    sha = hashlib.sha256(data).hexdigest()
-    rows.append({"id": index, "name": name, "size": len(data), "digest": "sha256:" + sha})
-    expected.append({"name": name, "size": len(data), "sha256": sha})
-(root / "assets-complete.json").write_text(json.dumps(rows))
-(root / "assets-changed.json").write_text(json.dumps([dict(rows[0], digest="sha256:" + "0" * 64), rows[1]]))
-(root / "assets-partial.json").write_text(json.dumps(rows[:1]))
-(root / "expected.json").write_text(json.dumps(expected))
-(root / "runs-quiet.json").write_text(json.dumps([{"id": 7, "run_attempt": 1, "status": "completed"}]))
-(root / "runs-active.json").write_text(json.dumps([{"id": 7, "run_attempt": 1, "status": "completed"},
-                                                     {"id": 9, "run_attempt": 1, "status": "in_progress"}]))
+    digest = hashlib.sha256(data).hexdigest()
+    rows.append({"id": index, "name": name, "size": len(data), "digest": "sha256:" + digest})
+    expected.append({"name": name, "size": len(data), "sha256": digest})
+final = []
+for index, name in ((90, "SHA256SUMS"), (91, "release-receipt.json")):
+    data = f"{name} bytes".encode()
+    final.append({"id": index, "name": name, "size": len(data), "digest": "sha256:" + hashlib.sha256(data).hexdigest()})
+def dump(name, value): (root / name).write_text(json.dumps(value))
+dump("assets-complete.json", rows)
+dump("assets-changed.json", [dict(rows[0], digest="sha256:" + "0" * 64), rows[1]])
+dump("assets-partial.json", rows[:1])
+dump("assets-published.json", rows + final)
+dump("assets-published-changed.json", [dict(rows[0], digest="sha256:" + "0" * 64), rows[1]] + final)
+dump("expected.json", expected)
+dump("commit.json", {"sha": sha})
+dump("repo.json", {"nameWithOwner": "szTheory/gabbaboy"})
+dump("release-draft.json", {"tag_name": "v0.2.0", "draft": True})
+dump("release-published.json", {"tag_name": "v0.2.0", "draft": False})
+RP = ".github/workflows/release-please.yml"
+def run(index, status="completed", attempt=1, path=RP, head=sha, event="push"):
+    return {"id": index, "run_attempt": attempt, "status": status, "path": path, "head_sha": head, "event": event}
+def runs(*items): return {"total_count": len(items), "workflow_runs": list(items)}
+dump("runs-quiet.json", runs(run(7)))
+dump("runs-ci.json", runs(run(7), run(8, "in_progress", path=".github/workflows/ci.yml"), run(9, "queued", path=".github/workflows/ci.yml")))
+dump("runs-other-push.json", runs(run(7), run(10, "in_progress", head=other)))
+dump("runs-active.json", runs(run(7), run(11, "in_progress")))
+dump("runs-dispatch.json", runs(run(7), run(12, "queued", head=other, event="workflow_dispatch")))
+dump("runs-stale.json", runs(run(7, attempt=2)))
+dump("runs-absent.json", runs(run(13)))
 PY
-  printf '%s\n' '{"tag_name": "v0.2.0", "draft": true}' > "$dir/release-draft.json"
-  printf '%s\n' '{"tag_name": "v0.2.0", "draft": false}' > "$dir/release-published.json"
-  local scenario outcome expected_text s_release s_assets s_runs status
-  for scenario in "draft assets-complete runs-quiet draft-reuse" "draft assets-complete runs-quiet draft-reuse" \
-                  "draft assets-partial runs-quiet draft-upload-missing:b.json" \
-                  "draft assets-changed runs-quiet REJECT" "draft assets-complete runs-active REJECT" \
-                  "published assets-changed runs-quiet REJECT"; do
-    read -r s_release s_assets s_runs expected_text <<<"$scenario"
+  cat > "$dir/bin/gh" <<'GH'
+#!/usr/bin/env bash
+# Fake GitHub CLI: serves fixture documents and applies --jq, like the real one.
+printf '%s\n' "$*" >> "$FAKE_LOG"
+args=("$@"); jq_filter=''
+for ((i = 0; i < ${#args[@]}; i++)); do [[ ${args[i]} == --jq ]] && jq_filter=${args[i+1]}; done
+[[ -z "${FAKE_FAIL:-}" || "$*" != *"$FAKE_FAIL"* ]] || exit 1
+case "$*" in
+  'repo view'*) file=repo.json ;;
+  *"/releases/424242/assets"*) file="$FAKE_ASSETS.json" ;;
+  *"/releases/424242") file="release-$FAKE_RELEASE.json" ;;
+  *"/commits/v0.2.0"*) file=commit.json ;;
+  *"/actions/workflows/release-please.yml/runs"*) file="$FAKE_RUNS.json" ;;
+  *) exit 1 ;;
+esac
+if [[ -n "$jq_filter" ]]; then jq -c "$jq_filter" "$FAKE_DIR/$file"; else cat "$FAKE_DIR/$file"; fi
+GH
+  chmod +x "$dir/bin/gh"
+  local row release assets runs outcome reason status log="$dir/gh-calls.log" fail_on
+  # release | assets | runs | outcome (decision text or REJECT) | reason fragment | gh call that fails
+  for row in "draft|assets-complete|runs-quiet|draft-reuse||" "draft|assets-complete|runs-quiet|draft-reuse||" \
+             "draft|assets-complete|runs-ci|draft-reuse||" "draft|assets-complete|runs-other-push|draft-reuse||" \
+             "draft|assets-partial|runs-quiet|draft-upload-missing:b.json||" \
+             "published|assets-published|runs-quiet|published-verified||" \
+             "draft|assets-changed|runs-quiet|REJECT|never overwritten|" \
+             "draft|assets-complete|runs-active|REJECT|concurrent publication|" \
+             "draft|assets-complete|runs-dispatch|REJECT|concurrent publication|" \
+             "draft|assets-complete|runs-stale|REJECT|stale|" \
+             "draft|assets-complete|runs-absent|REJECT|not in the live|" \
+             "published|assets-published-changed|runs-quiet|REJECT|published release does not carry|" \
+             "draft|assets-complete|runs-quiet|REJECT|live release assets could not be read|/releases/424242/assets" \
+             "draft|assets-complete|runs-quiet|REJECT|live workflow runs could not be read|/actions/workflows/"; do
+    IFS='|' read -r release assets runs outcome reason fail_on <<<"$row"
     : > "$log"
-    gh() {
-      printf '%s\n' "$*" >> "$log"
-      case "$*" in
-        'repo view'*) printf 'szTheory/gabbaboy\n' ;;
-        *"/releases/424242/assets"*) cat "$dir/$s_assets.json" ;;
-        *"/releases/424242") cat "$dir/release-$s_release.json" ;;
-        *"/commits/v0.2.0"*) printf '%s\n' "$sha" ;;
-        *"/actions/runs"*) cat "$dir/$s_runs.json" ;;
-        *) return 1 ;;
-      esac
-    }
-    outcome=$(recovery_decision 424242 v0.2.0 "$sha" "$dir/expected.json" 7 1 2>&1) && status=0 || status=$?
-    if [[ "$expected_text" == REJECT ]]; then
-      [[ $status -ne 0 && "$outcome" == *'REJECT recovery:'* ]] || fail "recovery accepted $scenario: $outcome"
+    rm -rf "$dir/tmp" && mkdir -p "$dir/tmp"
+    output=$(PATH="$dir/bin:$PATH" FAKE_DIR="$dir" FAKE_LOG="$log" FAKE_RELEASE="$release" FAKE_ASSETS="$assets" FAKE_RUNS="$runs" \
+             FAKE_FAIL="$fail_on" TMPDIR="$dir/tmp" \
+             bash "$ROOT/.github/scripts/verify-release-gates.sh" --check-recovery 424242 v0.2.0 "$sha" "$dir/expected.json" 7 1 2>&1) && status=0 || status=$?
+    if [[ $outcome == REJECT ]]; then
+      [[ $status -ne 0 && "$output" == *"$reason"* && "$output" != *PASS* ]] || fail "recovery accepted or mis-diagnosed $row: $output"
     else
-      [[ $status -eq 0 && "$outcome" == "$expected_text" ]] || fail "recovery decided wrongly for $scenario: $outcome"
+      [[ $status -eq 0 && "$output" == "$outcome" ]] || fail "recovery decided wrongly for $row: $output"
     fi
-    [[ $(sed -n 2p "$log") == *'/releases/424242' ]] || fail "recovery did not read live release state first for $scenario"
-    unset -f gh
+    [[ $(sed -n 2p "$log") == *'/releases/424242' ]] || fail "recovery did not read live release state first for $row"
+    ! grep -Eq 'release (upload|edit|delete|create)|-X |--method|-f |--field|-F ' "$log" || fail "recovery wrote to GitHub for $row"
+    ! compgen -G "$dir/tmp/*" >/dev/null || fail "recovery left scratch files behind for $row"
   done
-  printf 'PASS: recovery reads live release state first; identical draft bytes are reused, partial drafts upload only the missing asset\n'
-  printf 'rejected: changed attachment, concurrent attempt, changed published assets\n'
+  printf 'PASS: recovery CLI reads live release state first, writes nothing, ignores unrelated CI and cleans up on every exit\n'
+  printf 'rejected: changed attachment, concurrent eligible release, concurrent retry dispatch, stale and absent attempt, changed published assets, unreadable live state\n'
 }
 
 case "$mode" in

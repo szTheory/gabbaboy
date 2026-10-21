@@ -144,26 +144,45 @@ def recovery_self_test() -> None:
     draft = {"draft": True}
     published = {"draft": False}
     published_rows = live_rows + [row(90, "SHA256SUMS", "sums"), row(91, "release-receipt.json", "final")]
-    quiet = [{"id": 7, "run_attempt": 1, "status": "completed"}]
+    src = "c" * 40
+    other = "d" * 40
+
+    def run(index: int, status: str = "completed", attempt: int = 1, *, path: str = RELEASE_WORKFLOW,
+            sha: str = src, event: str = "push") -> dict[str, Any]:
+        return {"id": index, "run_attempt": attempt, "status": status, "path": path, "head_sha": sha, "event": event}
+
+    quiet = [run(7)]
     controls = 0
     positives = 0
+
+    def call(release: Any, assets: Any, rows: Any, runs: Any, attempt: int = 1) -> str:
+        return decide(release, assets, rows, runs, 7, attempt, RELEASE_WORKFLOW, src)
+
     # Identical unpublished bytes validate repeatedly and identically.
-    first = decide(draft, live_rows, expected, quiet, 7, 1)
-    again = decide(json.loads(json.dumps(draft)), json.loads(json.dumps(live_rows)), expected, quiet, 7, 1)
+    first = call(draft, live_rows, expected, quiet)
+    again = call(json.loads(json.dumps(draft)), json.loads(json.dumps(live_rows)), expected, quiet)
     if first != again or first != "draft-reuse":
         raise SystemExit("identical draft bytes were not idempotently reused")
     positives += 1
-    if decide(draft, live_rows[:1], expected, quiet, 7, 1) != "draft-upload-missing:b.json,c.json":
+    if call(draft, live_rows[:1], expected, quiet) != "draft-upload-missing:b.json,c.json":
         raise SystemExit("a partial upload was not reduced to uploading only the missing assets")
     positives += 1
-    if decide(published, published_rows, expected, quiet, 7, 1) != "published-verified":
+    if call(published, published_rows, expected, quiet) != "published-verified":
         raise SystemExit("an already-published release was not verified as published")
+    positives += 1
+    # Unrelated active CI on the same commit, an active release-workflow run for another commit, and a finished
+    # sibling attempt are not release writers and must never block recovery.
+    unrelated = quiet + [run(8, "in_progress", path=".github/workflows/ci.yml"),
+                         run(9, "queued", path=".github/workflows/ci.yml@refs/heads/main"),
+                         run(10, "in_progress", sha=other), run(11, "completed")]
+    if call(draft, live_rows, expected, unrelated) != "draft-reuse":
+        raise SystemExit("unrelated active runs blocked an otherwise safe recovery")
     positives += 1
 
     def must_reject(label: str, reason: str, *args: Any) -> None:
         nonlocal controls
         try:
-            decide(*args)
+            call(*args)
         except ValueError as error:
             if reason not in str(error):
                 raise SystemExit(f"recovery self-test rejected {label} for the wrong reason: {error}")
@@ -173,22 +192,27 @@ def recovery_self_test() -> None:
 
     changed = json.loads(json.dumps(live_rows))
     changed[1]["digest"] = "sha256:" + "0" * 64
-    must_reject("a changed attachment", "never overwritten", draft, changed, expected, quiet, 7, 1)
+    must_reject("a changed attachment", "never overwritten", draft, changed, expected, quiet)
     resized = json.loads(json.dumps(live_rows))
     resized[0]["size"] += 1
-    must_reject("a resized attachment", "never overwritten", draft, resized, expected, quiet, 7, 1)
-    must_reject("a duplicate asset name", "duplicate asset name", draft, live_rows + [dict(live_rows[0], id=99)], expected, quiet, 7, 1)
-    must_reject("an unexpected asset", "unexpected assets", draft, live_rows + [row(98, "x.bin", "x")], expected, quiet, 7, 1)
-    must_reject("a missing digest", "no SHA-256 digest", draft, [{"id": 1, "name": "a.tar.gz", "size": 1}], expected, quiet, 7, 1)
-    must_reject("a concurrent active attempt", "concurrent publication", draft, live_rows, expected,
-                quiet + [{"id": 8, "run_attempt": 1, "status": "in_progress"}], 7, 1)
-    must_reject("a stale run attempt", "stale", draft, live_rows, expected, [{"id": 7, "run_attempt": 2, "status": "completed"}], 7, 1)
+    must_reject("a resized attachment", "never overwritten", draft, resized, expected, quiet)
+    must_reject("a duplicate asset name", "duplicate asset name", draft, live_rows + [dict(live_rows[0], id=99)], expected, quiet)
+    must_reject("an unexpected asset", "unexpected assets", draft, live_rows + [row(98, "x.bin", "x")], expected, quiet)
+    must_reject("a missing digest", "no SHA-256 digest", draft, [{"id": 1, "name": "a.tar.gz", "size": 1}], expected, quiet)
+    must_reject("a concurrent eligible push release", "concurrent publication", draft, live_rows, expected, quiet + [run(8, "in_progress")])
+    must_reject("a concurrent queued release", "concurrent publication", draft, live_rows, expected, quiet + [run(8, "queued")])
+    must_reject("a concurrent retry dispatch for another commit", "concurrent publication", draft, live_rows, expected,
+                quiet + [run(8, "waiting", sha=other, event="workflow_dispatch")])
+    must_reject("a stale run attempt", "stale", draft, live_rows, expected, [run(7, attempt=2)])
+    must_reject("a run absent from the live listing", "not in the live", draft, live_rows, expected, [run(8)])
+    must_reject("a rerun that is not the latest attempt", "not the latest", draft, live_rows, expected, [run(7, attempt=1)], 2)
+    must_reject("a malformed run row", "malformed", draft, live_rows, expected, quiet + [{"id": "x"}])
     must_reject("a published release with a changed asset", "published release does not carry",
-                published, [dict(published_rows[0], digest="sha256:" + "1" * 64)] + published_rows[1:], expected, quiet, 7, 1)
-    must_reject("a published release missing final receipts", "published release does not carry", published, live_rows, expected, quiet, 7, 1)
-    must_reject("a published release with no readback inventory", "non-empty", published, published_rows, [], quiet, 7, 1)
-    must_reject("a forged expected inventory", "duplicate names", draft, live_rows, expected + [expected[0]], quiet, 7, 1)
-    if positives != 3 or controls != 11:
+                published, [dict(published_rows[0], digest="sha256:" + "1" * 64)] + published_rows[1:], expected, quiet)
+    must_reject("a published release missing final receipts", "published release does not carry", published, live_rows, expected, quiet)
+    must_reject("a published release with no readback inventory", "non-empty", published, published_rows, [], quiet)
+    must_reject("a forged expected inventory", "duplicate names", draft, live_rows, expected + [expected[0]], quiet)
+    if positives != 4 or controls != 16:
         raise SystemExit("recovery self-test inventory changed unexpectedly")
     print(f"PASS: recovery decisions positives={positives} rejected_controls={controls}")
 
