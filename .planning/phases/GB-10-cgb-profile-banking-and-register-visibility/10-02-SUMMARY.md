@@ -35,25 +35,38 @@ actuals:
   tasks: 2
   commits: 2
 coverage:
-  - deliverable: "Every function and model-differing branch in the core is tagged and the doc mirrors the code"
-    human_judgment: false
+  - id: D1
+    description: "Current core function and model-branch annotations match the model-gate documentation."
+    requirement: CGB-02
     verification:
-      - {kind: ctest, ref: "model_gates", status: pass}
-  - deliverable: "Core diff is comment-only and the DMG behaviour is unchanged"
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_13 -R '^model_gates$' --output-on-failure"
+        status: pass
     human_judgment: false
+  - id: D2
+    description: "The frozen DMG regression outputs remain byte-identical under the current core."
+    requirement: CGB-02
     verification:
-      - {kind: script, ref: "tests/scripts/verify-dmg-baseline.sh (baseline status=pass)", status: pass}
-      - {kind: ctest, ref: "full suite 419/419", status: pass}
-  - deliverable: "Mutations of the real source and doc are rejected with named tokens"
+      - kind: integration
+        ref: "bash tests/scripts/verify-dmg-baseline.sh"
+        status: pass
     human_judgment: false
+  - id: D3
+    description: "Mutations of the real model-gate source and documentation are rejected with named diagnostics."
+    requirement: CGB-02
     verification:
-      - {kind: ctest, ref: "model_gates_real_deleted_tag", status: pass}
-      - {kind: ctest, ref: "model_gates_real_untagged_function", status: pass}
-      - {kind: ctest, ref: "model_gates_real_doc_mismatch", status: pass}
-  - deliverable: "Release mode records the open research items"
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_13 -R '^(model_gates_real_deleted_tag|model_gates_real_untagged_function|model_gates_real_doc_mismatch)$' --output-on-failure"
+        status: pass
     human_judgment: false
+  - id: D4
+    description: "Release mode continues to reject model behaviors that remain research-limited."
+    requirement: CGB-02
     verification:
-      - {kind: ctest, ref: "model_gates_release_blocked", status: pass}
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_13 -R '^model_gates_release_blocked$' --output-on-failure"
+        status: pass
+    human_judgment: false
 ---
 
 # Phase 10 Plan 02: Tag the core by model Summary

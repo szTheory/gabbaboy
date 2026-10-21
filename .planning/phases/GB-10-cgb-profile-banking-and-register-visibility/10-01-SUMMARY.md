@@ -34,15 +34,22 @@ actuals:
   tasks: 2
   commits: 1
 coverage:
-  - deliverable: "Scanner rejects every D-08 mutant with its named token"
-    human_judgment: false
+  - id: D1
+    description: "The D-08 scanner rejects malformed tags, declarations, and source with named findings."
+    requirement: CGB-02
     verification:
-      - {kind: ctest, ref: "model_gates_selftest", status: pass}
-  - deliverable: "Tracer verdicts (pass and doc mismatch) reach CTest through expect_exit"
+      - kind: unit
+        ref: "ctest --test-dir build/phase15_1_13 -R '^model_gates_selftest$' --output-on-failure"
+        status: pass
     human_judgment: false
+  - id: D2
+    description: "Clean and mismatched-document scanner verdicts reach CTest through exact exit and diagnostic checks."
+    requirement: CGB-02
     verification:
-      - {kind: ctest, ref: "model_gates_tracer_pass", status: pass}
-      - {kind: ctest, ref: "model_gates_tracer_doc_mismatch", status: pass}
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_13 -R '^(model_gates_tracer_pass|model_gates_tracer_doc_mismatch)$' --output-on-failure"
+        status: pass
+    human_judgment: false
 ---
 
 # Phase 10 Plan 01: Model-gate scanner Summary
