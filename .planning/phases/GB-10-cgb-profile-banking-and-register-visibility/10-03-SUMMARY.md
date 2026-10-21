@@ -39,21 +39,25 @@ actuals:
   tasks: 2
   commits: 2
 coverage:
-  - deliverable: "One mapping drives every runner create call and label; CGB requests are excluded under a CGB label and never carry a DMG label"
-    human_judgment: false
+  - id: D1
+    description: "The runner uses one model-profile mapping and excludes unsupported CGB requests with CGB labels."
+    requirement: CGB-01
     verification:
-      - kind: ctest
-        ref: "cgb_runner_profile_manifest_cgb_excluded, cgb_runner_profile_acceptance_cgb_excluded, cgb_runner_profile_unknown, cgb_runner_profile_model_conflict"
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_13 -R '^(cgb_runner_profile_manifest_cgb_excluded|cgb_runner_profile_acceptance_cgb_excluded|cgb_runner_profile_unknown|cgb_runner_profile_model_conflict)$' --output-on-failure"
         status: pass
-  - deliverable: "DMG runner output is byte-identical with and without --profile dmg"
     human_judgment: false
+  - id: D2
+    description: "DMG runner output remains byte-identical with and without --profile dmg, and comparison controls detect a mismatch."
+    requirement: CGB-01
     verification:
-      - kind: ctest
-        ref: "cgb_runner_profile_dmg_identity_mooneye, cgb_runner_profile_dmg_identity_acceptance, cgb_runner_profile_dmg_identity_negative"
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_13 -R '^(cgb_runner_profile_dmg_identity_mooneye|cgb_runner_profile_dmg_identity_acceptance|cgb_runner_profile_dmg_identity_negative)$' --output-on-failure"
         status: pass
-      - kind: command
-        ref: "bash tests/scripts/verify-dmg-baseline.sh (baseline status=pass)"
+      - kind: integration
+        ref: "bash tests/scripts/verify-dmg-baseline.sh"
         status: pass
+    human_judgment: false
 ---
 
 # Phase 10 Plan 03: Runner Model-Profile Mapping Summary

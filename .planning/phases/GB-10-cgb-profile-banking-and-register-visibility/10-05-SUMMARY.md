@@ -39,14 +39,22 @@ actuals:
   tasks: 3
   commits: 1
 coverage:
-  - deliverable: "Appended public API (profile, error, enums, flags, gbb_info, probe, get_info) with the D-04 contract"
-    human_judgment: false
+  - id: D1
+    description: "The profile and info API preserves its probe, lifecycle, argument, and sized-structure contract."
+    requirement: CGB-01
     verification:
-      - {kind: ctest, ref: "tests/test_cgb_profile.c#probe_tracer,info_no_rom,info_after_load,info_reset_constant,info_failed_load_unchanged,info_struct_size,cgb_only_on_dmg,probe_args,profile_unknown", status: pass}
-  - deliverable: "$143 mapping, PGB rejection and probe/load parity with a skewed-probe negative control"
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_13 -R '^(cgb_probe_tracer|cgb_info_no_rom|cgb_info_after_load|cgb_info_reset_constant|cgb_info_failed_load_unchanged|cgb_info_struct_size|cgb_profile_unknown|cgb_probe_args)$' --output-on-failure"
+        status: pass
     human_judgment: false
+  - id: D2
+    description: "The $143 mapping and PGB rejection agree between probe and load, and a skewed-validator control is detected."
+    requirement: CGB-01
     verification:
-      - {kind: ctest, ref: "tests/test_cgb_profile.c#probe_matrix,probe_pgb,probe_parity", status: pass}
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_13 -R '^(cgb_probe_matrix|cgb_probe_pgb|cgb_probe_parity)$' --output-on-failure"
+        status: pass
+    human_judgment: false
 ---
 
 # Phase 10 Plan 05: CGB profile probe and info API Summary

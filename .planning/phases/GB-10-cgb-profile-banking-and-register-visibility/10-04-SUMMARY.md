@@ -35,21 +35,28 @@ actuals:
   tasks: 2
   commits: 2
 coverage:
-  - deliverable: "DMG post-boot state (10 CPU fields, 43 I/O reads, both F branches) pinned through the public API against typed literals, with negative controls"
-    human_judgment: false
+  - id: D1
+    description: "The public-API DMG post-boot pin checks CPU fields, I/O reads, both F branches, and flipped-value controls."
+    requirement: CGB-01
     verification:
-      - kind: ctest
-        ref: "cgb_postboot_dmg_pin, cgb_postboot_dmg_pin_checksum_zero, cgb_postboot_dmg_pin_flipped, cgb_postboot_dmg_pin_flipped_io"
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_13 -R '^(cgb_postboot_dmg_pin|cgb_postboot_dmg_pin_checksum_zero|cgb_postboot_dmg_pin_flipped|cgb_postboot_dmg_pin_flipped_io)$' --output-on-failure"
         status: pass
-  - deliverable: "reset_state takes DMG post-boot values from post_boot[] with provenance; DMG output byte-identical"
     human_judgment: false
+  - id: D2
+    description: "The post-boot provenance table matches its documentation and the DMG regression outputs stay byte-identical."
+    requirement: CGB-01
     verification:
-      - kind: command
-        ref: "bash tests/scripts/verify-dmg-baseline.sh (baseline status=pass)"
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_13 -R '^cgb_tables_postboot$' --output-on-failure"
         status: pass
-      - kind: ctest
-        ref: "full phase1 suite 430/430 including model_gates*"
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_13 -R '^cgb_tables_postboot_selftest$' --output-on-failure"
         status: pass
+      - kind: integration
+        ref: "bash tests/scripts/verify-dmg-baseline.sh"
+        status: pass
+    human_judgment: false
 ---
 
 # Phase 10 Plan 04: DMG Post-Boot Pin and Provenance Table Summary
