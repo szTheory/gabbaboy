@@ -25,6 +25,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unittest
 from pathlib import Path
 from typing import Any, Callable
 
@@ -407,6 +408,7 @@ def check_stage(stage: str, receipt: Any, reader: Any, published_dir: Path | Non
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--self-test-subject-trust", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--check-evidence", type=Path)
     parser.add_argument("--tag")
     parser.add_argument("--source-sha")
@@ -421,6 +423,8 @@ def main(argv: list[str]) -> int:
     try:
         if args.self_test:
             return run_self_test()
+        if args.self_test_subject_trust:
+            return subject_trust_self_test()
         if args.check_evidence:
             if not (args.tag and args.source_sha):
                 parser.error("--check-evidence needs --tag and --source-sha")
@@ -517,11 +521,11 @@ def write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
 
 
-def make_evidence(directory: Path, source: str) -> Path:
+def make_evidence(directory: Path, source: str, repo: Path | None = None) -> Path:
     directory.mkdir(parents=True)
     corpus = b'{"corpus": "complete"}\n'
     (directory / CORPUS).write_bytes(corpus)
-    oid = git(directory.parent / "repo", "rev-parse", "v0.2.0:docs/support/v0.2.0.md")
+    oid = git(repo or directory.parent / "repo", "rev-parse", "v0.2.0:docs/support/v0.2.0.md")
     write_json(directory / SIDECAR, {"schema_version": 2, "version": "0.2.0", "tag": "v0.2.0", "source_sha": source,
                                      "ledger_blob": oid, "corpus_receipt_sha256": sha256_bytes(corpus)})
     write_json(directory / PERFORMANCE, {"result": "passed", "workload": {"id": WORKLOAD_ID},
@@ -542,6 +546,48 @@ def edit(path: Path, change: Callable[[dict[str, Any]], None]) -> None:
     value = json.loads(path.read_text())
     change(value)
     write_json(path, value)
+
+
+class SubjectValidatorTrustTests(unittest.TestCase):
+    def test_subject_supplied_owners_cannot_approve_malformed_evidence(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gb-delivery-subject-trust.") as name:
+            base = Path(name)
+            subject = base / "subject"
+            cloned = subprocess.run(["git", "clone", "-q", "--no-hardlinks", str(ROOT), str(subject)],
+                                    capture_output=True, text=True, timeout=120)
+            self.assertEqual(cloned.returncode, 0, cloned.stderr)
+            source = git(subject, "rev-parse", "v0.2.0^{commit}")
+            checked_out = subprocess.run(["git", "-C", str(subject), "checkout", "-q", "--detach", source],
+                                          capture_output=True, text=True, timeout=120)
+            self.assertEqual(checked_out.returncode, 0, checked_out.stderr)
+
+            # A supplied subject checkout may contain deliberately permissive owner scripts.
+            for relative in (*OWNERS.values(), "tests/scripts/verify-cgb-corpus-inventory.py",
+                             "tests/scripts/verify-cgb-corpus-claims.py"):
+                owner = subject / relative
+                owner.parent.mkdir(parents=True, exist_ok=True)
+                owner.write_text("import sys\nprint('subject validator approved forged input')\n", encoding="utf-8")
+
+            evidence = base / "evidence"
+            archive = make_evidence(evidence, source, subject)
+            malformed_corpus = b'{"schema_version": 99}\n'
+            (evidence / CORPUS).write_bytes(malformed_corpus)
+            edit(evidence / SIDECAR, lambda value: value.update(
+                corpus_receipt_sha256=sha256_bytes(malformed_corpus)))
+            edit(evidence / CONSUMER, lambda value: value.update(results={"c": None, "cpp": None}))
+
+            result = run_cli("--check-evidence", str(evidence), "--tag", "v0.2.0", "--source-sha", source,
+                             "--repo-root", str(subject), "--source-archive", str(archive))
+            self.assertNotEqual(result.returncode, 0,
+                                "delivery accepted malformed evidence using subject-supplied owner validators")
+            self.assertIn("REJECT owner-ledger:", result.stderr,
+                          f"malformed corpus was rejected for the wrong reason: {result.stderr}")
+
+
+def subject_trust_self_test() -> int:
+    suite = unittest.defaultTestLoader.loadTestsFromTestCase(SubjectValidatorTrustTests)
+    result = unittest.TextTestRunner(verbosity=2).run(suite)
+    return 0 if result.wasSuccessful() else 1
 
 
 def evidence_controls(base: Path, repo: Path, producer: str, source: str) -> tuple[int, int]:
