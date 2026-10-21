@@ -266,6 +266,17 @@ def check_limitations(doc: dict, evidence: dict) -> int:
     return len(rows)
 
 
+def check_markdown(doc: dict, dispositions: pathlib.Path) -> None:
+    """The human-readable companion must name every ID and limitation so a reader sees none vanish."""
+    md = dispositions.with_suffix(".md")
+    if not md.is_file():
+        reject("markdown-incomplete", f"{md.name} is missing")
+    body = md.read_text(encoding="utf-8")
+    for key in [i["id"] for i in doc["items"]] + [row["id"] for row in doc["limitations"]]:
+        if f"`{key}`" not in body:
+            reject("markdown-incomplete", f"{md.name} does not mention {key}")
+
+
 def check_shipped_and_checks(doc: dict, root: pathlib.Path) -> None:
     shipped = doc.get("shipped_release")
     if not isinstance(shipped, dict):
@@ -321,8 +332,6 @@ def check_receipt(receipt_path: pathlib.Path, doc: dict) -> str:
 def check(dispositions: pathlib.Path, scope_path: pathlib.Path | None, root: pathlib.Path,
           receipt: pathlib.Path | None) -> str:
     doc = load_json(dispositions)
-    if isinstance(doc, dict):  # RED stub: only parses the record, binds nothing
-        return "closeout-dispositions pass items=%d closed=0 closed_with_residual=0 limitation_open=0 limitations=0 owner_accepted=0" % len(doc.get("items", []))
     if not isinstance(doc, dict) or doc.get("schema") != SCHEMA or doc.get("plan") != "15.1-17":
         reject("schema-malformed", "not a version 1 plan 15.1-17 disposition record")
     scope_file = scope_path or (root / text((doc.get("scope") or {}).get("file"), "scope file"))
@@ -331,6 +340,7 @@ def check(dispositions: pathlib.Path, scope_path: pathlib.Path | None, root: pat
     check_shipped_and_checks(doc, root)
     counts = check_items(doc, scope_items, root, evidence)
     limitations = check_limitations(doc, evidence)
+    check_markdown(doc, dispositions)
     tail = f" {check_receipt(receipt, doc)}" if receipt else ""
     return (f"closeout-dispositions pass items={len(doc['items'])} closed={counts['closed']} "
             f"closed_with_residual={counts['closed_with_residual']} limitation_open={counts['limitation_open']} "
@@ -397,6 +407,7 @@ def build_fixture(base: pathlib.Path) -> pathlib.Path:
     real["scope"]["source_head"] = commit
     real["scope"]["sha256"] = sha256_bytes((phase / "15.1-SCOPE.json").read_bytes())
     write_json(phase / "15.1-DISPOSITIONS.json", real)
+    shutil.copyfile(DEFAULT_DISPOSITIONS.with_suffix(".md"), phase / "15.1-DISPOSITIONS.md")
     head = "a" * 40
     write_json(root / "receipt.json", {
         "schema_version": 1, "stage": "phase-pr", "obtained_via": "gh_api", "required_checks": sorted(REQUIRED_CHECKS),
@@ -522,6 +533,8 @@ def controls(root: pathlib.Path):
                                                     owner_decision_required=False))),
         ("a limitation counted as a pass", "limitation-accepted", items(accept_limitation)),
         ("a dropped SHIP-11 flagged assumption", "limitation-missing", items(drop_limitation)),
+        ("a companion document that drops an ID", "markdown-incomplete",
+         lambda r: (d(r).with_suffix(".md")).write_text("# empty\n", encoding="utf-8")),
         ("an item without a negative control", "evidence-missing",
          items(lambda v: v["items"][4].update(negative_evidence=[]))),
         ("an item naming source that does not exist", "affected-source-missing",

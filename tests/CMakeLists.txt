@@ -1451,6 +1451,15 @@ add_test(NAME historical_limitations_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-historical-limitations.py" --self-test)
 set_tests_properties(historical_limitations_controls PROPERTIES TIMEOUT 60
   PASS_REGULAR_EXPRESSION "historical-limitations self-test pass positives=2 rejected_controls=[1-9][0-9]* retention_fixture=1")
+# Plan 15.1-17: every scope ID keeps an individual disposition bound to the immutable audit commit. The
+# self-test drives the real CLI over a private fixture repository and rejects each named defect (dropped ID,
+# changed original text, fabricated historic pass, receipt-only hosted identity, mismatched source, skipped
+# required check, altered shipped release) with its own diagnostic and no success line. Fixtures are not
+# hosted, hardware or historical proof.
+add_test(NAME closeout_dispositions_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-closeout-dispositions.py" --self-test)
+set_tests_properties(closeout_dispositions_controls PROPERTIES TIMEOUT 120
+  PASS_REGULAR_EXPRESSION "closeout-dispositions self-test pass positives=2 rejected_controls=[1-9][0-9]*")
 set(GBB_AGE_PHASE14_CONTRACT "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py")
 set(GBB_AGE_PHASE14_GUEST_TIMEOUT 15)
 if(GABBABOY_ENABLE_SANITIZERS)

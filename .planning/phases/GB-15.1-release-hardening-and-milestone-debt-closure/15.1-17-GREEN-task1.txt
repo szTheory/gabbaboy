@@ -1,0 +1,9 @@
+# GREEN: real checker, same real-CLI controls
+closeout-dispositions self-test pass positives=2 rejected_controls=30
+exit=0
+closeout-dispositions pass items=24 closed=11 closed_with_residual=11 limitation_open=2 limitations=10 owner_accepted=0
+exit=0
+
+100% tests passed out of 1
+
+Total Test time (real) =   5.85 sec
