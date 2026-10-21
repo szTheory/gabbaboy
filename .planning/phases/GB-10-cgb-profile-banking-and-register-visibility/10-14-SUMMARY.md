@@ -21,22 +21,37 @@ actuals:
 duration: 25 min
 completed: 2026-10-12
 coverage:
-  - deliverable: "Four Mooneye CGB derivatives rebuilt byte-identically from pinned Mooneye 31510e12 and WLA-DX 91c52b1f with the parent patch (fuzz=0) and zero font"
-    verification:
-      - {kind: script, ref: "bash tests/scripts/reproduce-mooneye-cgb.sh --compare fixtures/mooneye-cgb (result=byte-identical roms=4)", status: pass}
+  - id: 10-14-mooneye-rebuild
+    description: "Four Mooneye CGB derivatives rebuilt byte-identically from pinned Mooneye 31510e12 and WLA-DX 91c52b1f with the parent patch (fuzz=0) and zero font"
     human_judgment: false
-  - deliverable: "Manifest sha256 equals each committed ROM; original_sha256 recomputed by the script"
     verification:
-      - {kind: script, ref: "python3 -I manifest digest check (manifest digests ok 4) plus DIFFERENT-ORIGINAL check inside --compare", status: pass}
+      - kind: other
+        ref: "bash tests/scripts/reproduce-mooneye-cgb.sh --compare fixtures/mooneye-cgb"
+        status: pass
+  - id: 10-14-manifest-digests
+    description: "Manifest sha256 equals each committed ROM; original_sha256 recomputed by the script"
     human_judgment: false
-  - deliverable: "Compat-mode check: every ROM has $143 bit 7 clear"
     verification:
-      - {kind: script, ref: "header143 lines in --compare output (all 00); build aborts if bit 7 set", status: pass}
+      - kind: unit
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_mooneye_fixture_digest$'"
+        status: pass
+      - kind: other
+        ref: "bash tests/scripts/reproduce-mooneye-cgb.sh --compare fixtures/mooneye-cgb"
+        status: pass
+  - id: 10-14-compat-header
+    description: "Compat-mode check: every ROM has $143 bit 7 clear"
     human_judgment: false
-  - deliverable: "Negative control: a flipped byte in a committed ROM makes --compare print DIFFERENT and result=different, exit 1"
     verification:
-      - {kind: script, ref: "manual tamper-and-restore run, Task 1", status: pass}
+      - kind: other
+        ref: "bash tests/scripts/reproduce-mooneye-cgb.sh --compare fixtures/mooneye-cgb"
+        status: pass
+  - id: 10-14-tamper-control
+    description: "Historical reference 'manual tamper-and-restore run, Task 1' remains recorded; the current digest tamper control is separate because --compare accepts only the canonical fixture directory"
     human_judgment: false
+    verification:
+      - kind: unit
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_mooneye_digest_tamper$'"
+        status: pass
 ---
 
 # Phase 10 Plan 14: Mooneye CGB fixtures Summary
@@ -80,6 +95,10 @@ Four Mooneye CGB-profile derivatives (boot_regs-cgb, boot_div-cgbABCDE, boot_hwi
 - Negative control: flipping one byte in the committed boot_regs-cgb.gb made `--compare` print `DIFFERENT ...` and `result=different` (exit 1); file restored and verified with `cmp`.
 - Full suite after the last change: `ctest --preset phase1` 506 of 506 passed. No CTest names were added (registered in Plan 10-15), so `tests/expected-tests.txt` is unchanged.
 - Hosted Linux rebuild is not yet recorded: the digests come from a local Darwin/arm64 build; the CI leg is added in Plan 10-15 (as with the mbc fixtures, D-25 provenance status: local rebuild only).
+
+## Fresh evidence recheck (2026-10-21)
+
+The current `--compare` run reported `result=byte-identical roms=9`; it included all four Plan 10-14 fixture IDs, and all nine current ROM headers reported `$143=00`. The current manifest digest CTest and the separate digest-tamper CTest passed. A fresh raw-ROM byte-flip attempt on a temporary copy was refused before comparison because the script requires the canonical `fixtures/mooneye-cgb` directory. The original Task 1 byte-flip result above remains historical; no fresh raw-ROM mutation or hosted/hardware result is claimed.
 
 ## Known Stubs
 
