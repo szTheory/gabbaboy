@@ -2,21 +2,21 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_phase: 12
-current_plan: 19/19 complete
-status: completed
-last_updated: "2026-10-21T00:33:29.573533+00:00"
+current_phase: "15.1"
+current_phase_name: Release Hardening and Milestone Debt Closure
+current_plan: Not started (19 plans ready)
+status: executing
+stopped_at: Phase 15.1 planning verified; ready to execute 19 plans
+last_updated: "2026-10-21T02:22:09.183Z"
 last_activity: 2026-10-20
-last_activity_desc: Phase 12 metadata verification refresh complete; milestone completion/debt review next
-state_head: 45add7e43c185029f2ec31240b2e3402f00dbe41
+last_activity_desc: Phase 15.1 planning complete — 19 plans ready
+state_head: a185fa66bda8563418ee090d58406668c0c2bf8e
 progress:
-  total_phases: 9
+  total_phases: 10
   completed_phases: 9
-  total_plans: 134
+  total_plans: 153
   completed_plans: 134
-  percent: 100
-stopped_at: Phase 12 metadata verification refresh; paused before milestone completion
-current_phase_name: CGB Double Speed
+  percent: 88
 ---
 
 # Project State
@@ -26,9 +26,22 @@ current_phase_name: CGB Double Speed
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** v0.2 milestone completion and explicit debt review
+**Current focus:** Phase 15.1 release hardening before v0.2 milestone completion
 
 ## Current Position
+
+Phase: 15.1 (Release Hardening and Milestone Debt Closure) — READY TO EXECUTE
+Status: Ready to execute
+Current Plan: Not started (19 plans ready)
+Total Plans in Phase: 19
+
+Completed stage: **Phase 15.1 planning and independent plan verification**. All 19 plans, 39 tasks and seven waves are ready to execute; the final checker reports zero blockers and warnings. All 24 scope items and four follow-up requirements have executable coverage. No Phase 15.1 implementation or hosted qualification has run. Nine original phases and 134 plans remain complete; v0.2 stays open. Historical unknowns and spec-less verification flags remain explicit; debt is not accepted by planning.
+
+Next phase: **15.1 — Release Hardening and Milestone Debt Closure**. Exact next command: `/gsd-execute-phase 15.1`.
+
+Scope: [15.1-SCOPE.md](phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-SCOPE.md) and its machine-readable inventory track all 21 audit debts, both closeout scan items and the inherited SUMMARY schema caveat. Validate each finding before fixing; preserve historical unknowns and all v0.2.0 producer receipts. Reuse existing research and completed implementation. Both automatic advance flags remain false; v0.3 is provisional and unstarted.
+
+### Historical Phase 12 metadata verification refresh
 
 Completed stage: **Phase 12 — CGB Double Speed, metadata verification refresh**. All 19 implementation plans were already complete. The only stale covered inputs were later Phase 13 additions to `LESSONS.md` and `research/INDEX.md`; they preserve the Phase 12 contract. Canonical goal verification and automated UAT retain their bounded software-model scope. No emulator implementation changed.
 
@@ -71,18 +84,18 @@ Review stack: branch `gsd/phase-13-verification-refresh` builds on Phase 12 refr
 ### Historical Phase 14 handoff (superseded route; preserved receipts)
 
 Phase: 8
-Status: All phases complete
+Status: planning
 Current Plan: Not started
 Total Plans in Phase: 13
 Last Activity: 2026-10-20
-Last Activity Description: Phase 8 complete
+Last Activity Description: Phase 15.1 planning complete — 19 plans ready
 
 Completed workflow stage: **Phase 14 — CGB-E Model Qualification and Corpus, automated UAT complete**. [14-UAT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md) closes all 49 deliverables across 13 plans automatically, with zero issues, pending/skipped/blocked rows or human checkpoints. All 13 bounded commit windows reconcile. The canonical [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08 and CGB-10 are complete. Nyquist covers 31/31 tasks, security closes 27/27 threats, and all eight implementation review findings are fixed and independently checked.
 
 [14-CLOSURE.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-CLOSURE.md) preserves the execution receipts at their actual producers. Execution head `9c5b32dc4c75ad5f9eba44ff1c7b0a15ba0f9c7f` passed all 19 hosted jobs, including native Windows, Linux ASan/UBSan, fixture reproduction and packages. Final UAT metadata requires its own exact-head checks before the pre-authorized PR #71 merge; GitHub holds the current head and merge receipt. The complete software corpus contains 107 cases: 25 actual passes and 82 matched expected failures. Physical CGB-E remains UNKNOWN/POLICY; no analog, perceptual or general game qualification is claimed.
 
 Next stage: **Phase 15 discussion**.
-Next command: `/gsd-discuss-phase 15`.
+Next command: /gsd-execute-phase 15.1
 Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release** remains unstarted. Release PR #70 belongs to that phase. Stop at the Phase 14 boundary.
 
 Both auto-advance flags remain false. Preserve D-069 automated checks with meaningful negative controls, strict SUMMARY coverage, D-096 small/flat dependencies and D-099 independent corpus membership. Reuse completed UAT and research unless covered behavior changes, contrary evidence appears, or evidence is stale/unavailable; do not repeat execution or invent a confirmation-only checkpoint. Boundary-only closure and handoff checks stay local while recurring checks remain in existing CI.
@@ -571,6 +584,7 @@ None outside the roadmap.
 
 - Phase 06.1 inserted after Phase 6: Address v0.1 tech debt: CI workflow info items and audio consumer coverage (URGENT)
 - 2026-10-10: v0.2 roadmap created — Phases 7–15 continue v0.1 numbering. Order follows research/v0.2/SUMMARY.md: acceptance + DMG baseline (7); seam merged with MBC5 and MBC2 (8, MBC5/MBC2 plans parallel after the seam plan); MBC3 + RTC + loader matrix + new-mapper continuation (9); CGB profile/banking (10); colour PPU + player colour (11); double speed (12) and HDMA (13) kept separate and sequential; CGB-E qualification + corpus (14); CGB acceptance, ledger and release (15). Deep phase research flagged for 9, 11, 12, 13, 14. Rights gates: G5/G2 on 7; G1 on 9, 11, 14; G3 on 9; G4 on 11.
+- Phase 15.1 inserted after Phase 15: Release Hardening and Milestone Debt Closure; owner chose recommended resolve-first closeout (URGENT)
 
 ## Deferred Items
 
@@ -578,11 +592,16 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Completed stage: Phase 12 — CGB Double Speed, metadata verification refresh; paused at the phase boundary.
-Next stage: v0.2 milestone completion and explicit review of 21 retained debt items.
-Next command: `/gsd-complete-milestone v0.2`.
-No next numbered implementation phase exists; v0.3 remains provisional.
+**Last session:** 2026-10-21T02:21:20.043Z
+**Stopped at:** Phase 15.1 planning verified; ready to execute 19 plans
+**Resume file:** .planning/.continue-here.md
+
+Completed stage: **Phase 15.1 planning and independent plan verification**. All 19 plans, 39 tasks and seven waves are ready to execute; the final checker reports zero blockers and warnings. All 24 scope items and four follow-up requirements have executable coverage. No Phase 15.1 implementation or hosted qualification has run. Nine original phases and 134 plans remain complete; v0.2 stays open. Historical unknowns and spec-less verification flags remain explicit; debt is not accepted by planning.
+
+Next phase: **15.1 — Release Hardening and Milestone Debt Closure**. Exact next command: `/gsd-execute-phase 15.1`.
+
+Scope: [15.1-SCOPE.md](phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-SCOPE.md) and its machine-readable inventory track all 21 audit debts, both closeout scan items and the inherited SUMMARY schema caveat. Validate each finding before fixing; preserve historical unknowns and all v0.2.0 producer receipts. Reuse existing research and completed implementation. Both automatic advance flags remain false; v0.3 is provisional and unstarted.
 
 ## Operator Next Steps
 
-Run the command above when ready. Preserve completed implementation and historical producer receipts. Do not archive, tag, release or start v0.3 automatically. Both automatic advance flags remain false.
+Run `/gsd-execute-phase 15.1`. Milestone completion remains deferred until cleanup and renewed audit. Preserve the pre-existing config edits.

@@ -64,3 +64,7 @@ When a contradiction matters, inspect the actual primary source or current faile
 Current corrections to retain: GlueyNeo CPU admission is pending after review; Nesturbator's synthetic seam is not real-console execution; Playstead's continuation result is blocked and its GBA fixtures cannot qualify GB; Blargg redistribution remains unresolved; Acid2 is limited composition evidence; CGB-C/D goldens do not automatically qualify CGB-E; current GitHub bot-PR approval and check-event rules supersede older blanket token assumptions. See the source-linked corrections in [SUMMARY.md](SUMMARY.md).
 
 Keep exported lessons concise and public-safe. No private fixture bytes, saves, paths, credentials or personal machine metadata belong here. Initialization and each completed phase end at an explicit pause; neither a research link nor a future-scope entry authorizes advancing.
+
+## Phase 15.1 release hardening planning
+
+[Source-grounded research](../phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-RESEARCH.md), [plan inventory](../phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-PLAN-INVENTORY.md) and [independent plan check](../phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-PLAN-CHECK.md). Planning only: 19 plans / 39 tasks / seven waves; execution and exact-head hosted qualification remain pending.
