@@ -55,9 +55,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-execute-phase 12",
-    "label": "Refresh Phase 12 CGB Double Speed metadata verification",
-    "reason": "Phase 8 package refresh passed; Phase 12 remains stale over lessons/index metadata changed by the prior Phase 13 refresh. Verification refresh only before milestone completion and explicit debt review."
+    "command": "/gsd-complete-milestone v0.2",
+    "label": "Review v0.2 milestone completion and retained debt",
+    "reason": "Phase 12 metadata verification refresh complete; all nine phase reports refreshed. Explicit review of 21 retained debt items is pending. No next numbered implementation phase exists; v0.3 is provisional."
   },
-  "updated_at": "2026-10-21T00:27:34.161244+00:00"
+  "updated_at": "2026-10-21T00:35:16.161897+00:00"
 }

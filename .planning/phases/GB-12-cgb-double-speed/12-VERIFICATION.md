@@ -1,15 +1,21 @@
 ---
 phase: GB-12-cgb-double-speed
-verified: 2026-10-20T23:12:06Z
+verified: 2026-10-21T00:43:25Z
 status: passed
 score: 109/109 must-haves verified
 covered_files:
+  - ".github/scripts/test-inventory-cleanup.sh"
+  - ".github/scripts/verify-test-inventory.sh"
+  - ".github/workflows/ci.yml"
   - ".github/workflows/fixture-repro.yml"
   - ".github/workflows/preview.yml"
+  - ".gitignore"
   - ".planning/.continue-here.md"
+  - ".planning/PROJECT.md"
   - ".planning/REQUIREMENTS.md"
   - ".planning/ROADMAP.md"
   - ".planning/STATE.md"
+  - ".planning/config.json"
   - ".planning/context/DECISIONS.md"
   - ".planning/context/LESSONS.md"
   - ".planning/phases/GB-12-cgb-double-speed/12-01-PLAN.md"
@@ -52,6 +58,7 @@ covered_files:
   - ".planning/phases/GB-12-cgb-double-speed/12-19-SUMMARY.md"
   - ".planning/phases/GB-12-cgb-double-speed/12-BENCH.md"
   - ".planning/phases/GB-12-cgb-double-speed/12-CONTEXT.md"
+  - ".planning/phases/GB-12-cgb-double-speed/12-METADATA-REFRESH-EVIDENCE.md"
   - ".planning/phases/GB-12-cgb-double-speed/12-REFRESH-GATES.md"
   - ".planning/phases/GB-12-cgb-double-speed/12-RESEARCH.md"
   - ".planning/phases/GB-12-cgb-double-speed/12-REVIEW-DISPOSITION.md"
@@ -62,11 +69,15 @@ covered_files:
   - ".planning/phases/GB-12-cgb-double-speed/12-UAT.md"
   - ".planning/phases/GB-12-cgb-double-speed/12-UI-REVIEW.md"
   - ".planning/phases/GB-12-cgb-double-speed/COVERAGE.md"
+  - ".planning/phases/GB-12-cgb-double-speed/continue.md"
+  - ".planning/phases/GB-12-cgb-double-speed/verify-closeout-contract.py"
   - ".planning/research/INDEX.md"
+  - ".planning/state.json"
   - "README.md"
   - "THIRD_PARTY_NOTICES.md"
   - "cmake/ExpectedTests.cmake"
   - "cmake/P12Mutants.cmake"
+  - "cmake/ScaleSanitizerTimeouts.cmake"
   - "docs/cartridge-and-saves.md"
   - "docs/cgb-profile.md"
   - "docs/mbc3-rtc-evidence.md"
@@ -107,6 +118,7 @@ covered_files:
   - "tests/CMakeLists.txt"
   - "tests/check_no_phase12_rows.cmake"
   - "tests/check_no_stale_speed_claims.cmake"
+  - "tests/check_sanitizer_timeout_policy.cmake"
   - "tests/consumers/c/main.c"
   - "tests/consumers/cpp/main.cpp"
   - "tests/data/cgb-speed-expectations.txt"
@@ -136,9 +148,13 @@ covered_files:
   - "tests/test_cgb_tables.c"
   - "tests/test_cgb_visibility.c"
   - "tests/test_fuzz_core.c"
-covered_digest: "v3:sha256:0a9709e3d12825c9a5790e9ed0e914e4ee995a9a24bf616a4a55960a8958cb36"
+covered_digest: "v3:sha256:f5e2fd5eae9a7eebe4bc88b0849d41e02e02d8bef703774c2b96dcdb74ddff90"
 behavior_unverified: 0
 overrides_applied: 0
+decision_coverage:
+  honored: 45
+  total: 45
+  not_honored: []
 re_verification:
   previous_status: passed
   previous_score: 109/109
@@ -149,15 +165,17 @@ re_verification:
 # Phase 12: CGB Double Speed Verification Report
 
 **Phase Goal:** CGB software can switch speed through KEY1 and STOP, with CPU-side devices running at twice the rate while PPU and APU timing are unchanged.
-**Verified:** 2026-10-20T23:12:06Z
+**Verified:** 2026-10-21T00:43:25Z
 **Status:** passed
-**Refresh:** Existing passed report was stale; this refresh checks current implementation at 3930668cb49dba7289dff34696d8de2ee96492ed and records later-phase scope changes separately.
+**Refresh:** Metadata re-verification at producer `45add7e43c185029f2ec31240b2e3402f00dbe41`, with only local handoff/evidence changes. All 19 implementation plans were already complete. The prior report initially became stale over later Phase 13 additions to `LESSONS.md` and `research/INDEX.md`; the refresh also updates its gates and canonical UAT evidence. No emulator implementation changed. Historical receipts below retain their actual producer and boundary scope.
 
 ## Goal Achievement
 
 The current core implements the CGB KEY1/STOP transition in src/core/gabbaboy.c. The transition retires at the executing speed, resets DIV before toggling speed, clears KEY1 arm, and loads named stall state. The run loop consumes that stall in bounded M-cycle steps while CPU-clocked devices progress; the PPU/APU master timeline remains tied to half-dot time. STOP, master-time, partition, fixture, AGE and mutation tests are wired through CTest. Current Phase 13 HDMA integration remains in the core and its interaction with the speed pause is covered by current regression.
 
-The three roadmap criteria and all plan assertions were checked against source, test wiring, current test results, historical boundary evidence where later work superseded a Phase 12 fact, and saved closeout receipts. SUMMARY coverage was only a map from assertions to named tests, never proof by itself.
+The three roadmap criteria and all 106 plan assertions were reconciled with the 19 PLAN/SUMMARY pairs, actual source, registered tests, fresh executed results and immutable boundary evidence where later work superseded a Phase 12 fact. All plans declare CGB-06. SUMMARY coverage supplies the assertion-to-test map; it is not proof by itself.
+
+Independent `git diff` checks found all 41 implementation paths in the prior covered set byte-identical between `3930668` and the current producer. The broader `src/`, `include/`, `cmake/`, `.github/`, root-build and `tests/` comparison differs only by the unrelated Phase 8 historical closure checker. Fresh XML hashes, counts and zero-skip results were independently checked. This is a bounded applicability refresh, not a new broad source audit; the evaluation-scope resolver remains degraded (`no-reachable-task-commits`).
 
 ### Roadmap Success Criteria (3/3)
 
@@ -268,8 +286,8 @@ Every plan truth is listed below with an evidence-package reference. E01–E19 i
 | T17.1 | D-24: tests/external/cgb-speed-dispositions.json holds a row for every named expected failure in CONTEXT and plan 12-08, each with suite, case, disposition, reason, owner_phase, decision, flip_rule and pinned_by (the CTest that asserts the exact current behaviour the row refers to) plus signature_sha256 where a ROM signature exists; the mapping is: speed-switch-stall-direction-asymmetry -> cgb_speed_stall_length; speed-switch-pause-ppu-output -> cgb_speed_xfail_pause_ppu_output; speed-switch-odd-mode-alignment -> cgb_speed_realign; apu-lc-delay-after-switch -> age_spsw_ch2_lc_delay_cgbBCE; cgb-dma-restart-oracle-only -> cgb_speed_xfail_dma_restart; cgb-e-div-reset-immediate-increment-delay -> age_spsw_tima_cgbE (and age_spsw_interrupts_cgbE); unarmed-stop-held-button -> cgb_speed_dmg_unarmed_unchanged; speed-switch-hdma-hblank-across-stall -> cgb_speed_xfail_hdma_fails_closed; speed-switch-stop-oam-bug -> cgb_speed_xfail_stop_oam_unchanged; ds-lcd-cpu-alignment -> age_spsw_mode0_cgbBCE; cgb-mode3-length -> age_stat_mode_cgbE; speed-switch-held-button-oracle-only and speed-switch-pending-irq-oracle-only -> cgb_speed_stop_cases; speed-switch-wake-oracle-only -> cgb_speed_wake_ime_off; if plan 12-16 measured a referenced AGE ROM as pass, its row says so and names that passing test | ✓ VERIFIED | E17; Phase 12 boundary da98d56; later scope supersession noted |
 | T17.2 | D-24 new pins of current behaviour, each with a negative control: cgb_speed_xfail_pause_ppu_output (the RGB555 frame rendered across a speed-switch stall equals the frame of the same guest that busy-waits the same master time without switching: the PPU draws normally during the pause; the M7 devices-frozen mutant fails it), cgb_speed_xfail_dma_restart (an OAM DMA restarted in double speed restarts at index 0 and completes 160 CPU M-cycles of 4 half-dots after the restart write with the second page in OAM, values recorded from the committed core; the M14 DMA-period mutant fails it), cgb_speed_xfail_hdma_fails_closed (an HDMA5 write at $FF55 in double speed after a switch still stops with GBB_STOP_UNSUPPORTED_BUS at $FF55 and cpu_stall_kind has no HDMA value; its --write-ff54 targeted negative writes the accepted $FF54 instead and must fail the case), cgb_speed_xfail_stop_oam_unchanged (OAM filled with a pattern is byte-identical after a switching STOP executed during PPU mode 2; its --poke-oam targeted negative changes one OAM byte white-box after the STOP and must fail the case) | ✓ VERIFIED | E17; Phase 12 boundary da98d56; later scope supersession noted |
 | T17.3 | D-24 verifier: tests/scripts/verify-cgb-speed-dispositions.py (stdlib, python3 -I) validates the schema, the pinned commit, every reason name against the docs mirror block between <!-- cgb-speed-dispositions-begin --> and <!-- cgb-speed-dispositions-end --> in docs/cgb-profile.md, that vendored AGE rows match fixtures/age/manifest.json, that every expected-failure name in docs/cgb-profile.md and docs/model-gates.md has a row, and that every pinned_by names a test listed in tests/expected-tests.txt or tests/player/expected-tests.txt; cgb_speed_dispositions passes, cgb_speed_dispositions_mutated (one reason edited in a configure-time copy) fails, and cgb_speed_dispositions_pinned_by_missing (one pinned_by renamed to an absent test in a configure-time copy) fails with 'disposition-mismatch pinned_by' | ✓ VERIFIED | E17 |
-| T17.4 | D-23: SameSuite KEY1/APU ROMs are one aggregate expected-unsupported row with reason pcm-registers-unbuilt owned by Phase 14, nothing vendored; Gambatte speedchange is a not-admitted row (GPL-2.0, CGB-C); spsw-interrupts-cgbBC is a digest-only, not-vendored row; Mooneye, Blargg and the acid2 tests are recorded as not applicable; the Phase 11 dispositions file and verifier are unchanged | ✓ VERIFIED | E17 |
-| T17.5 | D-21: the stall sensitivity sweep runs the admitted AGE ROMs against mutants M6 (+1 M), M21 (-1 M), M28 (+1 half-dot to double) and M27 (DIV reset not applied) through test_age_p12 (plan 12-09), records which ROMs discriminate each mutant in the dispositions file, and fails if spsw-div stops discriminating M6, M21 or M27; M28 is recorded as undetected by AGE (low-bit insensitivity, D-37); results are read together with the D-35 rows so no quirk row is 'fixed' by a stall change | ✓ VERIFIED | E17 |
+| T17.4 | D-23: SameSuite KEY1/APU ROMs are one aggregate expected-unsupported row with reason pcm-registers-unbuilt owned by Phase 14, nothing vendored; Gambatte speedchange is a not-admitted row (GPL-2.0, CGB-C); spsw-interrupts-cgbBC is a digest-only, not-vendored row; Mooneye, Blargg and the acid2 tests are recorded as not applicable; the Phase 11 dispositions file and verifier are unchanged | ✓ VERIFIED | E17; Phase 12 boundary da98d56; later Phase 14 scope is separately attributed |
+| T17.5 | D-21: the stall sensitivity sweep runs the admitted AGE ROMs against mutants M6 (+1 M), M21 (-1 M), M28 (+1 half-dot to double) and M27 (DIV reset not applied) through test_age_p12 (plan 12-09), records which ROMs discriminate each mutant in the dispositions file, and fails if spsw-div stops discriminating M6, M21 or M27; M28 sensitivity is recorded from measurement (mode-0 discriminates it; DIV remains insensitive to its low-bit change); results are read together with the D-35 rows so no quirk row is 'fixed' by a stall change | ✓ VERIFIED | E17; corrected Phase 12 measurement supersedes the original blanket-undetected forecast, without changing the stall constant |
 | T18.1 | D-17: docs/native-integration.md drops 'no double speed' from its limitations, states that budgets and consumed_half_dots are master half-dots at both speeds (a frame is 140448 half-dots at both speeds), that the speed-switch pause returns GBB_STOP_BUDGET with progress and never an idle reason, and keeps every existing cgb_native_guide_contract phrase (including the GBB_STOP_UNSUPPORTED_BUS phrase for the remaining deferred registers) | ✓ VERIFIED | E18 |
 | T18.2 | D-17: docs/support/unreleased.md, docs/preview.md, docs/cartridge-and-saves.md and docs/mbc3-rtc-evidence.md no longer say double speed is planned, absent or unasserted; mbc3-rtc-evidence.md cites cgb_speed_ppu_apu_rtc_unscaled and the M12 mutant as the RTC speed-independence evidence; HDMA and CGB mode-3 timing remain listed as not implemented | ✓ VERIFIED | E18; Phase 12 boundary da98d56; later scope supersession noted |
 | T18.3 | D-14: include/gabbaboy/gabbaboy.h changes in comments only (STOP semantics, budgets in master time at both speeds, the stall reports GBB_STOP_BUDGET); no declaration, enum value or struct field changes and cgb_consumer_symbol_coverage passes | ✓ VERIFIED | E18 |
@@ -282,6 +300,8 @@ Every plan truth is listed below with an evidence-package reference. E01–E19 i
 | T19.5 | D-31: every Phase 12 plan SUMMARY carries a coverage block in the GSD block schema and summary_coverage passes | ✓ VERIFIED | E19 |
 | T19.6 | COVERAGE.md holds exactly one 'No external API integration: <reason>' line (reason <= 200 characters) for the verify:pre api-coverage gate | ✓ VERIFIED | E19 |
 
+**Measured plan correction:** T17.5 retains D-21's requirement to record observed sensitivity. The original plan forecast that all AGE ROMs would miss M28 was disproved during Phase 12: after restricting M28 to double-speed destinations, `spsw-mode0-cgbBCE` changes and `spsw-div-cgbBCE` does not. The shipped disposition, verifier, docs and `age_sensitivity_m28_reference_mutated` control preserve both results. The table states that corrected measurement rather than repeating the false blanket forecast.
+
 ### Evidence Packages
 
 | Ref | Inspected implementation and test wiring | Named checks / direct evidence | Coverage mapping and scope |
@@ -293,7 +313,7 @@ Every plan truth is listed below with an evidence-package reference. E01–E19 i
 | E05 | src/core/gabbaboy.c, tests/scripts/verify-speed-domains.py, tests/test_cgb_speed_internal.c | cgb_speed_timer_scaling; cgb_speed_serial_scaling; cgb_speed_dma_scaling; cgb_speed_apu_tap; cgb_speed_ppu_apu_rtc_unscaled | GB-12-05-01, GB-12-05-02, GB-12-05-03, GB-12-05-04; Current device tick paths and verify-speed-domains.py; timer, serial, DMA, APU/remainder, PPU/APU/RTC tests and M1/M2/M3/M4/M11/M12/M14/M15/M17 controls. |
 | E06 | src/core/gabbaboy.c, tests/test_cgb_speed_internal.c | cgb_speed_stop_cases; cgb_speed_stop_cost; cgb_speed_key1_readback; cgb_speed_key0_no_switch; cgb_speed_stop_prefetch_ff04_negative | GB-12-06-STOP, GB-12-06-FETCH, GB-12-06-SPEED; STOP decision/fetch/cost, KEY1/KEY0 and DMG/compat paths; case tests and operand, FF04, KEY0 and speed-gate negative controls. |
 | E07 | src/core/gabbaboy.c, tests/test_cgb_speed_internal.c | cgb_speed_wake_ime_on; cgb_speed_wake_ime_off; cgb_speed_realign; cgb_speed_stall_length; cgb_speed_budget_semantics; cgb_speed_headroom | GB-12-07-WAKE, GB-12-07-REALIGN, GB-12-07-LENGTH-BUDGET, GB-12-07-DEVICES, GB-12-07-HEADROOM, GB-12-07-REGRESSION; Stall/wake/realignment/headroom implementation; named tests and M6/M9/M13/M16/M21-M23/M28/M31-M34 controls. |
-| E08 | tests/check_no_phase12_rows.cmake, docs/model-gates.md, docs/cgb-profile.md | model_gates; model_gates_no_phase12_rows; model_gates_no_phase12_rows_mutated; cgb_speed_profile_contract | GB-12-08-GATES, GB-12-08-STOP-DOC, GB-12-08-BUILD; Source model tags, docs/model-gates.md, CMake tag guard and verify-model-gates.py correspondence checks. |
+| E08 | tests/check_no_phase12_rows.cmake, docs/model-gates.md, docs/cgb-profile.md | model_gates; model_gates_no_phase12_rows; model_gates_no_phase12_rows_mutated_doc; cgb_speed_profile_contract | GB-12-08-GATES, GB-12-08-STOP-DOC, GB-12-08-BUILD; Source model tags, docs/model-gates.md, CMake tag guard and verify-model-gates.py correspondence checks. |
 | E09 | tests/test_age.c, tests/CMakeLists.txt, docs/cgb-profile.md | age_spsw_div_cgbBCE; age_stall_window; cgb_speed_mutant_m31_stall_offset_noop | GB-12-09-AGE, GB-12-09-WINDOW, GB-12-09-DOCS, GB-12-09-REGRESSION; AGE runner, public --stall-offset-t mutant seam, manifest verdict rows, DIV case and stall-window tests. |
 | E10 | fixtures/cgb-speed/manifest.json, tests/scripts/derive-cgb-speed-expectations.py, tests/test_cgb_speed_fixture.c | cgb_speed_fixture_digest; cgb_speed_expectations_derive; cgb_speed_expectations_tampered; cgb_speed_expectations_factor3; cgb_speed_fixture_audio_digest; cgb_speed_fixture_frame_digest | D1, D2, D3; Original CGB guest, independently derived expectation table, public-core execution, PCM/frame digests and tamper/factor-3 controls. |
 | E11 | fixtures/cgb-speed/speed-hostile.asm, tests/test_cgb_speed_fixture.c | cgb_speed_fixture_hostile; cgb_speed_expectations_hostile_tampered | GB-12-11-HOSTILE, GB-12-11-EXPECTATIONS, GB-12-11-TAMPER, GB-12-11-PROVENANCE; Hostile selector guest and in-memory patch path, ten selector outcomes, unchanged committed bytes and tampered expectations control. |
@@ -306,13 +326,15 @@ Every plan truth is listed below with an evidence-package reference. E01–E19 i
 | E18 | tests/check_no_stale_speed_claims.cmake, docs/native-integration.md | cgb_native_guide_contract; cgb_native_guide_contract_missing_selftest; cgb_speed_docs_no_stale_claims; cgb_speed_docs_no_stale_claims_mutated; cgb_consumer_symbol_coverage | CGB-06-HOST-SPEED-CONTRACT, CGB-06-PUBLIC-DOCS-STALE-CLAIMS, CGB-06-AGE-EVIDENCE-SCOPE, CGB-06-FULL-INVENTORY; Native guide/header contracts, stale-claim scanner and public-symbol check; HDMA limitation wording is a Phase 12 boundary fact superseded in Phase 13. |
 | E19 | .planning/phases/GB-12-cgb-double-speed/12-BENCH.md, .planning/context/DECISIONS.md, .planning/.continue-here.md | summary_coverage; summary_coverage_selftest; UAT closure self-test; boundary closeout checker + 17 controls | CGB-06-MEMORY, CGB-06-BENCHMARK, CGB-06-FIXTURE-RECEIPTS, CGB-06-WINDOWS-INVENTORY, CGB-06-COVERAGE-AND-HANDOFF; Boundary closeout checker on immutable da98d56 archive (positive + 17 mutation controls), 19 plan-window reconciliations, decision/coverage/handoff artifacts and preserved benchmark/CI receipts. |
 
-**Fresh execution evidence:** Source remained at 3930668cb49dba7289dff34696d8de2ee96492ed. Rebuilt core passed **1,144/1,144 CTests, zero skipped, 414.22 s** (configure/build/regression receipts: /tmp/gabbaboy-phase12-configure.log, /tmp/gabbaboy-phase12-build.log, /tmp/gabbaboy-phase12-regression.log). Rebuilt SDL player passed **98/98, zero skipped, 25.28 s** (/tmp/gabbaboy-phase12-player-build.log, /tmp/gabbaboy-phase12-player.log). I independently reran 9 named CTests covering switch tracer, STOP cases, timer/APU scaling, stall device progress, hostile guest, M7 mutant/control, and current HDMA competing stalls: **9/9 passed in 0.52 s**. The separate refresh selections covered 16 switch/scale/stall/AGE cases and 9 partition/fuzz/HDMA-mutant cases; all passed.
+**Current execution evidence:** At producer `45add7e`, the parent configured/rebuilt the core and player, then executed three separate streams: core **1,144/1,144, zero skips, 396.40 s**; player **98/98, zero skips, 18.78 s**; existing relocated installed consumers **5/5, zero skips, 0.65 s**. I independently parsed their JUnit results and reproduced all three SHA-256 hashes in [12-METADATA-REFRESH-EVIDENCE.md](12-METADATA-REFRESH-EVIDENCE.md). The consumer stream uses the prior Phase 8 installed package with unchanged implementation inputs; it is not a newly generated package receipt. The combined core/consumer XML is an inventory-only union covering 258 frozen identities; it is not represented as one test run. The player covers all 55 frozen player identities.
 
-The frozen DMG baseline freshly passed with inventory 313, Mooneye 15, acceptance 20 and benchmark observations 2, with zero changed rows. Expectation derivation/check passed for 119 rows; speed-domain scan passed across 44 functions; disposition verifier passed 34 rows. Canonical UAT closure reports 73 automated rows and rejects 19 weakened controls. The source scope resolver reported degraded phase-range/no-reachable-task-commits; the refresh therefore used the bounded audit scope recorded in 12-REFRESH-GATES.md, not an unproven broad changed-file range.
+In this verifier process, eight separately named CTests passed: `cgb_speed_tracer_switch`, `cgb_speed_ppu_apu_rtc_unscaled`, both real-constant `cgb_partition_stall_end_window_to_{double,normal}` cases, M7 devices-frozen negative/control, `cgb_speed_headroom`, and `cgb_hdma_competing_stalls`. Each completed in less than one second; no full suite was rerun. Fresh direct checks passed the 119-row independent expectation table, 44-function speed-domain scan, 34 disposition rows, zero changed DMG baseline rows, canonical UAT closure (73 deliverables, 19 rejected controls), and current six-surface handoff (10 rejected controls). All 19 original bounded task windows and the positive plus 17-control immutable `da98d56` closeout are independently recorded in the current receipt logs.
+
+**Preserved earlier refresh evidence:** Source `3930668cb49dba7289dff34696d8de2ee96492ed` passed rebuilt core **1,144/1,144, zero skips, 414.22 s** and rebuilt player **98/98, zero skips, 25.28 s**. Its verifier selection passed **9/9 in 0.52 s**, with additional 16-case and 9-case refresh selections. Those earlier results remain attributed to `3930668`; they are not substituted for the current producer's streams.
 
 ### Required Artifacts (46/46 plan declarations)
 
-OpenGSD query verify.artifacts returned passing, substantive declarations for all 46 artifact entries. Repeated declarations are listed under each plan. Wiring is traced in E01–E19 and the key-link table.
+Fresh OpenGSD `query verify.artifacts` calls returned exit 0 and passing, substantive declarations for all 46 artifact entries across all 19 plans. Repeated declarations are listed under each plan. Wiring is traced in E01–E19 and the key-link table.
 
 | ID / Plan | Artifact | Expected | Status | Evidence |
 |---|---|---|---|---|
@@ -364,6 +386,8 @@ OpenGSD query verify.artifacts returned passing, substantive declarations for al
 | A46 / P19 | .planning/.continue-here.md | Fresh-context handoff naming /gsd-verify-work 12 and Phase 13: CGB HDMA | ✓ VERIFIED | OpenGSD artifact query; E19 source/test wiring. No artifact issues. |
 
 ### Key Link Verification (30/30)
+
+Fresh `query verify.key-links` recognized 7/30 links automatically. The other 23 declarations describe function-level or narrative connections that the generic path/pattern matcher cannot interpret; its negative results are not treated as wiring proof. Their explicit source traces below were checked for regression against the unchanged implementation and fresh executed predicates. Historical handoff and superseded implementation-scope links use the immutable Phase 12 boundary.
 
 OpenGSD mechanically verified 8 links. It could not parse the remaining descriptive from labels as source paths; I manually traced those links from source to destination and checked current test/build registration. No target was missing or orphaned. K30 is evaluated at the Phase 12 boundary because its handoff has since advanced.
 
@@ -459,7 +483,7 @@ The plan declarations use legacy {statement, requirement} form with no verificat
 | P16.3 | The AGE ROMs are never installed or packaged | ✓ VERIFIED — not violated | E16 |
 | P17.1 | No expected-failure row exists without a pinned_by test that asserts current behaviour | ✓ VERIFIED — not violated | E17; Phase 12 boundary da98d56 |
 | P17.2 | The stall constant and divider_reset are never changed by this plan | ✓ VERIFIED — not violated | E17 |
-| P17.3 | Nothing from Gambatte or SameSuite is vendored or derived into the repository | ✓ VERIFIED — not violated | E17 |
+| P17.3 | Nothing from Gambatte or SameSuite is vendored or derived into the repository | ✓ VERIFIED — not violated | E17; Phase 12 boundary da98d56, before later SameSuite admission |
 | P18.1 | No doc claims HDMA, CGB mode-3 timing or any unpinned AGE row as implemented or passing | ✓ VERIFIED — not violated | E18; Phase 12 boundary da98d56 |
 | P18.2 | No public declaration changes | ✓ VERIFIED — not violated | E18 |
 | P19.1 | Phase 13 is not started: no Phase 13 directory, CONTEXT or plan is created and no auto-advance flag is set | ✓ VERIFIED — not violated | E19; Phase 12 boundary da98d56 |
@@ -469,15 +493,23 @@ The plan declarations use legacy {statement, requirement} form with no verificat
 
 | Behavior | Command / evidence | Result | Status |
 |---|---|---|---|
-| Speed switch, STOP decisions, CPU device scaling, stall progress, hostile guest, M7 negative/control, Phase 13 HDMA interaction | ctest --test-dir build -R '^(cgb_speed_tracer_switch|cgb_speed_timer_scaling|cgb_speed_apu_tap|cgb_speed_stall_devices_advance|cgb_speed_stop_cases|cgb_speed_fixture_hostile|cgb_speed_mutant_m7_devices_frozen|cgb_speed_mutant_m7_devices_frozen_control|cgb_hdma_competing_stalls)$' --output-on-failure --no-tests=error -j1 | 9/9 selected tests passed | ✓ PASS |
-| All configured core behaviors and registered controls | Parent rebuild receipt /tmp/gabbaboy-phase12-regression.log | 1,144/1,144 passed; zero skips | ✓ PASS |
-| Player speed smoke and controls | Parent rebuild receipt /tmp/gabbaboy-phase12-player.log | 98/98 passed; zero skips | ✓ PASS |
-| Frozen DMG compatibility baseline | bash tests/scripts/verify-dmg-baseline.sh | Inventory 313, Mooneye 15, acceptance 20, bench 2; zero changes | ✓ PASS |
-| Independent speed expectation and domain checks | python3 -I tests/scripts/derive-cgb-speed-expectations.py --check tests/data/cgb-speed-expectations.txt; python3 -I tests/scripts/verify-speed-domains.py src/core/gabbaboy.c | 119 expectation rows; 44 functions checked | ✓ PASS |
-| Disposition schema/mirror | python3 -I tests/scripts/verify-cgb-speed-dispositions.py | 34 rows pass | ✓ PASS |
-| Automated UAT closure | python3 tests/scripts/verify-uat-closure.py .planning/phases/GB-12-cgb-double-speed --self-test | 73 automated rows; 19 weakened controls rejected | ✓ PASS |
-| Boundary closeout checker | Run against git archive of immutable da98d56ef8fadadf34ae951b337dcdecce495936 | Positive closeout and 17 mutation controls pass | ✓ PASS |
-| API integration gate | gsd_run check api-coverage.verify-pre .planning/phases/GB-12-cgb-double-speed | COVERAGE.md explicitly records no external API integration; pre-coverage gate passes | ✓ PASS |
+| KEY1/STOP speed transition | `ctest --test-dir build -R '^cgb_speed_tracer_switch$' --output-on-failure --no-tests=error -j1` | 1/1 passed in this verifier process; <1 s | ✓ PASS |
+| PPU/APU/RTC remain on master time | `ctest --test-dir build -R '^cgb_speed_ppu_apu_rtc_unscaled$' --output-on-failure --no-tests=error -j1` | 1/1 passed in this verifier process; <1 s | ✓ PASS |
+| Real-constant stall-end partitions to double speed | `ctest --test-dir build -R '^cgb_partition_stall_end_window_to_double$' --output-on-failure --no-tests=error -j1` | 1/1 passed in this verifier process; <1 s | ✓ PASS |
+| Real-constant stall-end partitions to normal speed | `ctest --test-dir build -R '^cgb_partition_stall_end_window_to_normal$' --output-on-failure --no-tests=error -j1` | 1/1 passed in this verifier process; <1 s | ✓ PASS |
+| M7 frozen-device mutant is rejected | `ctest --test-dir build -R '^cgb_speed_mutant_m7_devices_frozen$' --output-on-failure --no-tests=error -j1` | 1/1 passed in this verifier process; <1 s | ✓ PASS |
+| M7 zero-mask control passes | `ctest --test-dir build -R '^cgb_speed_mutant_m7_devices_frozen_control$' --output-on-failure --no-tests=error -j1` | 1/1 passed in this verifier process; <1 s | ✓ PASS |
+| Insufficient time headroom rejects without mutation | `ctest --test-dir build -R '^cgb_speed_headroom$' --output-on-failure --no-tests=error -j1` | 1/1 passed in this verifier process; <1 s | ✓ PASS |
+| Later HDMA interaction with the speed pause | `ctest --test-dir build -R '^cgb_hdma_competing_stalls$' --output-on-failure --no-tests=error -j1` | 1/1 passed in this verifier process; <1 s | ✓ PASS |
+| Complete configured core stream | `ctest --preset phase1 --output-on-failure --no-tests=error`; `build/12-metadata-refresh-core.xml` and `.log` | 1,144/1,144; zero skips; 396.40 s; XML/hash independently checked | ✓ PASS |
+| Rebuilt player stream | `ctest --test-dir build-player -R '^player_' --output-on-failure --no-tests=error`; `build-player/12-metadata-refresh-player.xml` and `.log` | 98/98; zero skips; 18.78 s; XML/hash independently checked | ✓ PASS |
+| Existing relocated installed-consumer stream | Separate installed consumer/runner selection; `build/12-metadata-refresh-consumers.xml` and `.log` | 5/5; zero skips; 0.65 s; unchanged prior package, no new package-generation claim | ✓ PASS |
+| Frozen DMG compatibility baseline | `bash tests/scripts/verify-dmg-baseline.sh` | Inventory 313, Mooneye 15, acceptance 20, bench 2; zero changes | ✓ PASS |
+| Independent speed expectations and domain checks | `python3 -I tests/scripts/derive-cgb-speed-expectations.py --check tests/data/cgb-speed-expectations.txt`; `python3 -I tests/scripts/verify-speed-domains.py src/core/gabbaboy.c` | 119 expectation rows; 44 functions checked | ✓ PASS |
+| Disposition schema/mirror | `python3 -I tests/scripts/verify-cgb-speed-dispositions.py` | 34 rows pass | ✓ PASS |
+| Automated UAT closure | `python3 -I tests/scripts/verify-uat-closure.py .planning/phases/GB-12-cgb-double-speed --self-test` | 73 automated rows; 19 weakened controls rejected | ✓ PASS |
+| Boundary closeout checker | Run against git archive of immutable `da98d56ef8fadadf34ae951b337dcdecce495936` | Positive closeout and 17 mutation controls pass | ✓ PASS |
+| API integration gate | Owning CLI `check api-coverage.verify-pre .planning/phases/GB-12-cgb-double-speed` | COVERAGE.md explicitly records no external API integration; pre-coverage gate passes | ✓ PASS |
 
 **Probe execution:** SKIPPED — no plan or summary declares a probe-*.sh path, and no conventional scripts/*/tests/probe-*.sh exists.
 
@@ -491,7 +523,24 @@ The plan declarations use legacy {statement, requirement} form with no verificat
 
 | File set | Result | Severity | Impact |
 |---|---|---|---|
-| Phase plan-modified and SUMMARY key-file union (79 existing paths) | No TBD/FIXME/XXX, TODO/HACK/PLACEHOLDER, placeholder text, empty implementations/returns, hardcoded empty-data stubs, or console.log implementations found | — | No unresolved debt marker or implementation stub identified. The phase has no React/Vue/Svelte surface. |
+| Phase plan-modified and SUMMARY key-file union (87 existing paths) | No unresolved debt-marker comments, cleanup placeholders or implementation stubs found | — | Literal `XXX` matches are temporary-file templates or hex-width notation; `.pending` fields and `SystemExit` are not disabled-test declarations. No React/Vue/Svelte surface. |
+
+### Decision Coverage
+
+The fresh non-blocking owning gate reports **45/45** trackable CONTEXT decisions honored, with `not_honored: []`: “All trackable CONTEXT.md decisions are honored by shipped artifacts.” This heuristic corroborates the source/test mapping; it does not replace behavioral evidence.
+
+### Test Quality Audit
+
+The regression scan covers 25 requirement-linked test/script files. There are zero disabled test declarations, zero circular expected-output generators, and no assertion-strength gap found in the bounded Phase 12 contract. Scratch-manifest writes in the reproduction negative control deliberately remove a pin; they do not generate expected emulator output.
+
+| Test files / evidence family | Linked requirement | Assertion strength and provenance | Verdict |
+|---|---|---|---|
+| `tests/test_cgb_speed_internal.c`, `tests/test_cgb_speed_fixture.c` | CGB-06 | State transitions, values, guest-memory timing samples, independent formula bounds and detected mutations; identity/frame/PCM digests are explicitly regression pins | ✓ VERIFIED |
+| `tests/test_cgb_partition.c` | CGB-06 | Full explicit state and output-stream digests, real-constant windows in both directions, faithful snapshot restore and digest-input sensitivity | ✓ VERIFIED |
+| `tests/test_age.c`, AGE manifest/dispositions | CGB-06 | External rights-qualified bytes, exact row masks/signatures and bounded timeout; two passes and eleven expected failures remain distinct from hardware qualification | ✓ VERIFIED |
+| `tests/fuzz_core.c`, deterministic seed regressions | CGB-06 | Per-call budget/time/speed invariants with an inverted KEY1 oracle and non-speed control; no libFuzzer campaign inference | ✓ VERIFIED |
+| C/C++ consumers and player speed smoke | CGB-06 | Public guest execution, armed/unarmed twins, RGBA/title pin and PPU-rate/wrong-digest controls | ✓ VERIFIED |
+| Expectation/domain/disposition and closure scripts | CGB-06 | Independent timing derivation and structural/schema contracts with tamper/weakening controls | ✓ VERIFIED |
 
 ### Historical Scope and Evidence Limits
 
@@ -500,6 +549,14 @@ The plan declarations use legacy {statement, requirement} form with no verificat
 - Historical closeout records 34 closed security threats and Nyquist coverage for 49 tasks. This refresh rechecked only two review-linked timeout/TMPDIR mitigations and the bounded speed/HDMA integration; it is not a new full security audit. The historical UI review applies because this phase adds no browser UI. No visual-perceptual, physical-hardware, local libFuzzer, fresh sanitizer runtime, hosted CI, benchmark or new ROM byte-rebuild qualification is claimed.
 - Local RGBDS is 1.0.4 while fixture recipes require digest-pinned 1.0.1. Fixture provenance and historical pinned reproduction receipts remain evidence; current local byte-identical rebuild was unavailable and is not claimed.
 - The refresh-gates supplement records degraded source-range resolution and its bounded scope. Parent regression logs provide current suite evidence. The original closeout checker was run against the archived boundary only, not live HEAD.
+
+### Current Handoff
+
+The fresh six-surface contract accepts the completed **Phase 12 — CGB Double Speed, metadata verification refresh** and rejects ten route/count/auto-flag mutations. Next owner-selected stage: **v0.2 Color & Cartridge Breadth milestone completion and explicit review of 21 retained debt items**. Exact next command: `/gsd-complete-milestone v0.2`. All 9/9 implementation phases and 134/134 plans remain complete; no next numbered implementation phase exists and v0.3 remains provisional. Both automatic-advance flags remain false. The 47 inherited Phase 9/10 legacy SUMMARY-schema problems remain recorded for milestone review. No debt acceptance, archive, tag, release, merge or next milestone is performed here.
+
+### Advisory (New Scope, Unevidenced)
+
+None. This bounded metadata refresh found no new implementation regression or unresolved debt marker.
 
 ### Human Verification Required
 
@@ -511,5 +568,5 @@ None. All 109 plan/roadmap truths are verified, all 46 artifacts pass, all 30 ke
 
 ---
 
-_Verified: 2026-10-20T23:12:06Z_
+_Verified: 2026-10-21T00:43:25Z_
 _Verifier: the agent (gsd-verifier)_
