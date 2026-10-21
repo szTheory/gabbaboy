@@ -1,7 +1,7 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v0.2 \u2014 Color & Cartridge Breadth",
+  "milestone": "v0.2 — Color & Cartridge Breadth",
   "phases": [
     {
       "number": "7",
@@ -55,10 +55,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-execute-phase 15.1",
-    "label": "Resume Phase 15.1 \u2014 Release Hardening and Milestone Debt Closure",
-    "reason": "Owner pause: 14/19 summaries; resume Plan 08 task 1/3 and preserved incomplete policy checker"
+    "command": "/gsd-progress --next",
+    "label": "Advance to the next step",
+    "reason": "Phase 10 of 10 · 90% · executing"
   },
-  "updated_at": "2026-10-21T14:21:46.842Z",
-  "status": "paused"
+  "updated_at": "2026-10-21T14:35:17.502Z"
 }

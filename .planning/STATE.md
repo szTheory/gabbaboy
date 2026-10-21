@@ -4,19 +4,19 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: "15.1"
 current_phase_name: Release Hardening and Milestone Debt Closure
-current_plan: "Paused in 15.1-08 task 1/3; 14/19 summaries complete"
-status: paused
-stopped_at: "Owner pause during Plan08 task1; preserve incomplete policy checker; resume /gsd-execute-phase 15.1"
-last_updated: "2026-10-21T14:21:46.842Z"
+current_plan: 8
+status: executing
+stopped_at: Owner pause during Plan08 task1; preserve incomplete policy checker; resume /gsd-execute-phase 15.1
+last_updated: "2026-10-21T14:35:17.490Z"
 last_activity: 2026-10-21
 last_activity_desc: Owner-requested pause during Phase 15.1 Plan 08
-state_head: 842ee3944e8eceda5aed069ddc891913830202fb
+state_head: c8a04820a7f6ed80a669d83018d9b792785d2645
 progress:
   total_phases: 10
   completed_phases: 9
   total_plans: 153
-  completed_plans: 134
-  percent: 88
+  completed_plans: 148
+  percent: 90
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 ## Current Position
 
-Phase: 15.1 (Release Hardening and Milestone Debt Closure) — PAUSED
-Status: Paused at owner request
-Current Plan: Paused in 15.1-08 task 1/3; 14/19 committed summaries
+Phase: 15.1 (Release Hardening and Milestone Debt Closure) — EXECUTING
+Status: Executing Phase 15.1
+Current Plan: 8
 Total Plans in Phase: 19
 
 Completed stage: **Phase 15.1 execution paused at owner request — 14/19 plans executed and summarized**. Plan 07 is complete at `842ee39`; Plan 08 task 1 has an incomplete, unstaged policy checker and no task commit or SUMMARY. Waves 1–3 and Plan 07 focused evidence are retained; Wave 4 integration has not run. The latest complete core gate tested source `8174104`: 1,140/1,144 passed in 397.51 seconds. Plan 07 subsequently repaired the ledger checks in focused verification; a new full gate is still required. Plan 10 owns the obsolete dense-failure expectation and live malformed-summary negative. Five plans plus final phase qualification remain. No phase completion, live hosted qualification, PR/merge, publication, or debt acceptance is claimed.
@@ -87,7 +87,7 @@ Phase: 8
 Status: planning
 Current Plan: Not started
 Total Plans in Phase: 13
-Last Activity: 2026-10-20
+Last Activity: 2026-10-21
 Last Activity Description: Phase 15.1 execution started
 
 Completed workflow stage: **Phase 14 — CGB-E Model Qualification and Corpus, automated UAT complete**. [14-UAT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md) closes all 49 deliverables across 13 plans automatically, with zero issues, pending/skipped/blocked rows or human checkpoints. All 13 bounded commit windows reconcile. The canonical [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08 and CGB-10 are complete. Nyquist covers 31/31 tasks, security closes 27/27 threats, and all eight implementation review findings are fixed and independently checked.
