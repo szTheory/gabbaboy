@@ -411,7 +411,9 @@ def build_receipt(archive, tag, source_sha, repo, limits):
     }
 
 
-def check_receipt(receipt_path, archive, tag, source_sha, limits):
+def check_receipt(receipt_path, archive, tag, source_sha, repo, limits):
+    if not repo:
+        raise Reject("receipt-unbound", "receipt qualification requires --repo for an independent Git-tree check")
     try:
         if os.path.getsize(receipt_path) > KEEP_LIMIT:
             raise ValueError("receipt is too large")
@@ -422,16 +424,20 @@ def check_receipt(receipt_path, archive, tag, source_sha, limits):
         raise Reject("receipt-invalid", "receipt is not a version 1 source archive receipt (a source or build receipt cannot stand in)")
     if receipt.get("tag") != tag or receipt.get("source_sha") != source_sha:
         raise Reject("receipt-invalid", "receipt tag or source SHA differs from the frozen release identity")
+    if receipt.get("tree_bound_to_git") is not True:
+        raise Reject("receipt-unbound", "receipt was not produced with a Git-tree binding")
     for field in ("archive_sha256", "source_tree_sha256", "notice_sha256"):
         if not isinstance(receipt.get(field), str) or not SHA256_RE.match(receipt[field]):
             raise Reject("receipt-invalid", f"receipt {field} is missing or malformed")
     if not receipt.get("admitted_fixture_identities") or not isinstance(receipt.get("inspected_members"), int) or receipt["inspected_members"] <= 0:
         raise Reject("receipt-invalid", "receipt carries no admitted fixture identities or inspected members")
-    fresh = build_receipt(archive, tag, source_sha, None, limits)
-    for field in ("archive_sha256", "source_tree_sha256", "notice_sha256", "archive_root",
+    # The archive byte digest is retained as download provenance. Re-encoded gzip
+    # archives may have different bytes while representing the same qualified tree.
+    fresh = build_receipt(archive, tag, source_sha, repo, limits)
+    for field in ("source_tree_sha256", "notice_sha256", "archive_root",
                   "admitted_fixture_identities", "inspected_members"):
         if receipt.get(field) != fresh[field]:
-            raise Reject("receipt-invalid", f"receipt {field} does not match the archive bytes")
+            raise Reject("receipt-invalid", f"receipt {field} does not match the independently qualified source tree")
     return receipt
 
 
@@ -725,7 +731,7 @@ def self_test():
         print("rejected: fixture-free product package substituted for a source archive")
 
         # Receipt consumption: the final release gate reads this receipt, not the build receipt.
-        good = scratch / "generated-without-repo.receipt.json"
+        good = scratch / "git-tar-bound-to-tag.receipt.json"
         def expect_receipt_pass(label, receipt, archive, repo_path):
             nonlocal positives
             code, err, stdout = run_cli(script, "--check-receipt", str(receipt), "--archive", str(archive),
@@ -750,14 +756,16 @@ def self_test():
             "wrong-kind": lambda r: r.update(kind="gabbaboy-build-receipt"),
             "wrong-tag": lambda r: r.update(tag="v9.9.9"),
             "wrong-sha": lambda r: r.update(source_sha="d" * 40),
-            "altered-archive-digest": lambda r: r.update(archive_sha256="0" * 64),
+            "malformed-archive-digest": lambda r: r.update(archive_sha256="z" * 64),
             "no-fixture-identities": lambda r: r.update(admitted_fixture_identities=[]),
             "altered-notice-digest": lambda r: r.update(notice_sha256="0" * 64),
         }
-        plain = scratch / "plain.tar.gz"
-        code, err, _ = run_cli(script, "--check-receipt", str(good), "--archive", str(plain), "--tag", tag, "--source-sha", sha)
+        code, err, stdout = run_cli(script, "--check-receipt", str(good), "--archive", str(git_tgz),
+                                    "--tag", tag, "--source-sha", real_sha, "--repo", str(repo))
         if code != 0:
-            raise SystemExit(f"self-test receipt positive failed: {err}")
+            raise SystemExit(f"self-test receipt positive failed: {err!r}")
+        if not stdout.startswith("PASS: source archive receipt"):
+            raise SystemExit(f"self-test receipt positive omitted success output: {stdout!r}")
         positives += 1
         print("accepted: receipt bound to the archive bytes")
 
@@ -794,9 +802,12 @@ def self_test():
             receipt = json.loads(good.read_text())
             mutate(receipt)
             path = write(f"receipt-{label}.json", json.dumps(receipt).encode())
-            code, err, _ = run_cli(script, "--check-receipt", str(path), "--archive", str(plain), "--tag", tag, "--source-sha", sha)
+            code, err, stdout = run_cli(script, "--check-receipt", str(path), "--archive", str(git_tgz),
+                                        "--tag", tag, "--source-sha", real_sha, "--repo", str(repo))
             if code != 1 or not err.startswith("REJECT receipt-invalid:"):
                 raise SystemExit(f"self-test receipt negative {label}: got {code}: {err!r}")
+            if stdout:
+                raise SystemExit(f"self-test receipt negative {label} printed success output: {stdout!r}")
             negatives += 1
             print(f"rejected: receipt {label}")
 
@@ -861,7 +872,7 @@ def main(argv):
         elif args.check_receipt:
             if not (args.archive and args.tag and args.source_sha):
                 parser.error("--check-receipt needs --archive, --tag and --source-sha")
-            check_receipt(args.check_receipt, args.archive, args.tag, args.source_sha, limits)
+            check_receipt(args.check_receipt, args.archive, args.tag, args.source_sha, args.repo, limits)
             print("PASS: source archive receipt matches the archive bytes")
         elif args.archive:
             if not (args.tag and args.source_sha and args.output):
