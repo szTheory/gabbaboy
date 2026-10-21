@@ -51,13 +51,13 @@
     {
       "number": "15.1",
       "name": "Release Hardening and Milestone Debt Closure",
-      "status": "planned"
+      "status": "in_progress"
     }
   ],
   "next": {
     "command": "/gsd-execute-phase 15.1",
-    "label": "Execute Phase 15.1 release hardening",
-    "reason": "19 plans / 39 tasks / seven waves independently checked; implementation and hosted evidence pending."
+    "label": "Continue Phase 15.1 \u2014 Release Hardening and Milestone Debt Closure",
+    "reason": "Execution in progress: 11/19 summaries; next Wave 2 plan04; integration pending Plans07/10"
   },
-  "updated_at": "2026-10-21T02:21:19.736078+00:00"
+  "updated_at": "2026-10-21T06:07:28.588205+00:00"
 }

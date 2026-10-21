@@ -4,13 +4,13 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: "15.1"
 current_phase_name: Release Hardening and Milestone Debt Closure
-current_plan: Not started (19 plans ready)
-status: Ready to execute
-stopped_at: Phase 15.1 planning verified; ready to execute 19 plans
-last_updated: "2026-10-21T02:22:40.752Z"
+current_plan: "11/19 summarized; Wave 1 integration pending; next 15.1-04"
+status: executing
+stopped_at: "Phase 15.1 Wave 1 plans executed; integration gaps assigned to Plans 07/10; next Wave 2 plan04"
+last_updated: "2026-10-21T02:27:12.638Z"
 last_activity: 2026-10-20
-last_activity_desc: Phase 15.1 planning complete — 19 plans ready
-state_head: ded1b5ce849ee66639d6b21c839d398f90d25183
+last_activity_desc: Phase 15.1 execution started
+state_head: 97339e62b1f59b59cc79c46ffb7164a9b3f144c1
 progress:
   total_phases: 10
   completed_phases: 9
@@ -26,16 +26,16 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 15.1 release hardening before v0.2 milestone completion
+**Current focus:** Phase 15.1 — Release Hardening and Milestone Debt Closure
 
 ## Current Position
 
-Phase: 15.1 (Release Hardening and Milestone Debt Closure) — READY TO EXECUTE
-Status: Ready to execute
-Current Plan: Not started (19 plans ready)
+Phase: 15.1 (Release Hardening and Milestone Debt Closure) — EXECUTING
+Status: Executing Phase 15.1
+Current Plan: 11/19 summarized; Wave 1 integration pending; next 15.1-04
 Total Plans in Phase: 19
 
-Completed stage: **Phase 15.1 planning and independent plan verification**. All 19 plans, 39 tasks and seven waves are ready to execute; the final checker reports zero blockers and warnings. All 24 scope items and four follow-up requirements have executable coverage. No Phase 15.1 implementation or hosted qualification has run. Nine original phases and 134 plans remain complete; v0.2 stays open. Historical unknowns and spec-less verification flags remain explicit; debt is not accepted by planning.
+Completed stage: **Phase 15.1 execution in progress — Wave 1's 11 plans executed and summarized (01, 02, 03, 06, 11–15, 18, 19)**. Task commits and focused negative controls are present. Narrow integration repairs fix private-header scanning, missing model annotations, immutable APU receipt source binding, and adoption documentation. The initial configured 1,144-test gate timed out at 600 seconds after 733 completed tests; its separate remainder completed 411/412 with the stale malformed-summary fixture failing. No full-suite pass is claimed. Remaining known integration failures are assigned to Plan 07 (current ledger evidence) and Plan 10 (obsolete dense-input failure expectation and live malformed-summary fixture). Eight plans and phase-wide verification remain. No fresh hosted qualification, release mutation or debt acceptance is claimed.
 
 Next phase: **15.1 — Release Hardening and Milestone Debt Closure**. Exact next command: `/gsd-execute-phase 15.1`.
 
@@ -88,7 +88,7 @@ Status: planning
 Current Plan: Not started
 Total Plans in Phase: 13
 Last Activity: 2026-10-20
-Last Activity Description: Phase 15.1 planning complete — 19 plans ready
+Last Activity Description: Phase 15.1 execution started
 
 Completed workflow stage: **Phase 14 — CGB-E Model Qualification and Corpus, automated UAT complete**. [14-UAT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md) closes all 49 deliverables across 13 plans automatically, with zero issues, pending/skipped/blocked rows or human checkpoints. All 13 bounded commit windows reconcile. The canonical [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08 and CGB-10 are complete. Nyquist covers 31/31 tasks, security closes 27/27 threats, and all eight implementation review findings are fixed and independently checked.
 
