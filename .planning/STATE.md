@@ -4,9 +4,9 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: "15.1"
 current_phase_name: Release Hardening and Milestone Debt Closure
-current_plan: "12/19 summarized; Wave 2 integration has 4 known failures; next 15.1-05"
+current_plan: "13/19 summarized; Wave 3 integration has 4 known failures; next 15.1-07"
 status: executing
-stopped_at: "Phase 15.1 Wave 2 plan04 complete; known integration gaps assigned07/10; next Wave 3 plan05"
+stopped_at: "Phase 15.1 Wave 3 plan05 complete; known integration gaps assigned07/10; next Wave 4 plan07"
 last_updated: "2026-10-21T02:27:12.638Z"
 last_activity: 2026-10-20
 last_activity_desc: Phase 15.1 execution started
@@ -32,10 +32,10 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 Phase: 15.1 (Release Hardening and Milestone Debt Closure) — EXECUTING
 Status: Executing Phase 15.1
-Current Plan: 12/19 summarized; Wave 2 integration has 4 known failures; next 15.1-05
+Current Plan: 13/19 summarized; Wave 3 integration has 4 known failures; next 15.1-07
 Total Plans in Phase: 19
 
-Completed stage: **Phase 15.1 execution in progress — Waves 1–2 plans executed and summarized (12/19)**. Plan 04 now binds installed consumers to independent candidate/archive/tree identities. The configured Wave 2 core gate completed1144 tests:1140 pass,4 known failures assigned to Plans07/10. An independent early review found and closed deadline/alias issues through `929ce2e` and public-contract correction `73d8a53`; their focused tests pass, but that core change postdates the full gate and requires a later rebuild. Seven plans and phase-wide verification remain. No phase completion, fresh hosted qualification, publication or debt acceptance is claimed.
+Completed stage: **Phase 15.1 execution in progress — Waves 1–3 plans executed and summarized (13/19)**. Plan 05 separates trusted validators from subject data and binds new hosted fuzz claims to independently read CI identities and downloaded bytes. Fresh configured Wave 3 integration rebuilt source `8174104` and completed 1,144 tests in 397.51 seconds: 1,140 passed and four known failures remain assigned to Plans 07/10. Six plans and phase-wide verification remain. No phase completion, fresh hosted qualification, publication or debt acceptance is claimed.
 
 Next phase: **15.1 — Release Hardening and Milestone Debt Closure**. Exact next command: `/gsd-execute-phase 15.1`.
 

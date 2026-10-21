@@ -1,13 +1,5 @@
-# Continue Phase 15.1
+# Phase 15.1 continuation
 
-Completed stage: **Phase 15.1 execution in progress — Waves 1–2 plans executed and summarized (12/19)**: 01,02,03,04,06,11–15,18,19. Wave 1 integration is incomplete; see `15.1-WAVE1-EVIDENCE.md` and `15.1-WAVE1-REPAIRS.md`.
+Completed stage: **Phase 15.1 execution in progress — Waves 1–3 plans executed and summarized (13/19)**. Plan 05 separates trusted validators from subject data and binds new hosted fuzz claims to independently read CI identities and downloaded bytes. Fresh configured Wave 3 integration rebuilt source `8174104` and completed 1,144 tests in 397.51 seconds: 1,140 passed and four known failures remain assigned to Plans 07/10. Six plans and phase-wide verification remain. No phase completion, fresh hosted qualification, publication or debt acceptance is claimed.
 
-Next phase: **15.1 — Release Hardening and Milestone Debt Closure** (continue current phase). Exact resume command: `/gsd-execute-phase 15.1`. Next ready plan05 in Wave 3; follow remaining declared dependencies. Do not replay completed plans.
-
-Known integration failures: Plan 07 owns current support-ledger digest reconciliation; Plan 10 owns obsolete dense-script expected failure and live malformed-summary negative fixture. Initial core gate timed out600s after733/1144 completions; separate remainder411/412 pass. No unified fullpass. Approved focused performance rerun passes1/1; APU/docs repairs `f53106a` pass focused checks while preserving original producer bytes. Use a larger bound for final unified suite. Strict summary coverage since9 passes118 files/436 entries and12 malformed controls.
-
-Branch `gsd/phase-15.1-release-hardening-and-milestone-debt-closure`; OpenGSD1.18.0 verified, use `GSD_RUNTIME=codex` without changing persisted user config. Isolation degraded to sequential none because origin/HEAD is unresolved. Git/test fixture writes need approved escalation. Preserve pre-existing config edits. Verified RGBDS1.0.1 tools retained at `/private/tmp/gabbaboy-phase15_1/rgbds-v1.0.1/tools`; archive SHA256 `2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645`. Current isolated builds phase15_1_13/14 are available; shared build reconfigured at Wave 1 integration.
-
-Both auto flags false. Stop after Phase 15.1; no milestone completion or next milestone starts. v0.2 remains open. No fresh hosted qualification, publication, or debt acceptance yet.
-
-Wave 2 evidence `15.1-WAVE2-EVIDENCE.md`: full configured core gate1140/1144 pass in1008.14s, exactly4 known07/10 failures. Corrected core73d8a53 postdates that gate; rebuild in next gate. Independent dense review findings closed after focused public/private/alias checks, see15.1-DENSE-REVIEW-FIXES.md.
+Next phase: **15.1 — Release Hardening and Milestone Debt Closure**. Exact next command: `/gsd-execute-phase 15.1`. Next ready plan is 07, then 08 sequentially in Wave 4. Preserve completed plans 01–06,11–15,18,19. Both automatic advance flags remain false. Preserve the pre-existing config changes and historical receipts.
