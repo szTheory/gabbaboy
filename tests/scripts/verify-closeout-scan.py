@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -85,11 +86,34 @@ def _runtime_command() -> tuple[list[str], dict[str, object]]:
         raise ScanError("runtime-identity", "installed runtime identity was not JSON", raw=identity_raw) from exc
     if not isinstance(identity, dict) or identity.get("packageName") != "@opengsd/gsd-core" or not isinstance(identity.get("version"), str):
         raise ScanError("runtime-identity", "installed runtime identity did not prove @opengsd/gsd-core", raw=identity_raw)
+    try:
+        runtime_revision = "sha256:" + hashlib.sha256(tool.read_bytes()).hexdigest()
+    except OSError as exc:
+        raise ScanError("runtime-revision", "could not hash the installed runtime entry point") from exc
     return [node, str(tool)], {
         "package_name": identity["packageName"],
         "version": identity["version"],
+        "revision": runtime_revision,
+        "revision_kind": "installed-entrypoint-sha256",
         "identity_command": identity_raw,
     }
+
+
+def _project_revision(root: Path) -> str | None:
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--verify", "HEAD"],
+            text=True,
+            capture_output=True,
+            check=False,
+            env=environment,
+            timeout=3,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    revision = result.stdout.strip()
+    return revision if result.returncode == 0 and re.fullmatch(r"[0-9a-fA-F]{40,64}", revision) else None
 
 
 def _read_review_verdict(root: Path, item: dict[str, object]) -> tuple[bool, str, str | None]:
@@ -190,6 +214,7 @@ def _record_for(category: str, item: object, root: Path, index: int) -> dict[str
 def _scan(root: Path) -> dict[str, object]:
     raw_identity: dict[str, object] = {}
     raw_audit: dict[str, object] = {"exit_code": None, "stdout": "", "stderr": "", "payload": None}
+    project_revision = _project_revision(root)
     try:
         command_prefix, runtime = _runtime_command()
         raw_identity = runtime
@@ -216,15 +241,31 @@ def _scan(root: Path) -> dict[str, object]:
                 else:
                     records.append(_record_for(category, item, root, index))
         clean_review = any(record["classification"] == "clean-review" for record in records)
+        if project_revision is None:
+            records.append(
+                {
+                    "category": "provenance",
+                    "index": 0,
+                    "classification": "project-revision-unavailable",
+                    "blocking": True,
+                    "reason": "project root is not bound to a Git HEAD revision",
+                }
+            )
+        limitation = (
+            f"Installed OpenGSD {runtime['version']} reported an exact clean review under raw uat_gaps. The raw output is retained unchanged; only an exact review filename with a clean verdict and four zero finding counts is classified as non-blocking."
+            if clean_review
+            else "The installed audit-open result is retained unchanged. Only an exact review filename with a clean verdict and four zero finding counts can be classified as non-blocking."
+        )
         return {
             "schema": "gabbaboy.closeout-scan.v1",
             "status": "blocked" if any(record["blocking"] for record in records) else "clear",
             "classifier_version": CLASSIFIER_VERSION,
             "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "runtime": {"package_name": raw_identity["package_name"], "version": raw_identity["version"]},
-            "raw_limitation": (
-                "The installed audit-open result is retained unchanged. A clean review may appear in its raw uat_gaps list; only the exact review filename with a clean verdict and four zero finding counts is classified as non-blocking."
-            ),
+            "project_revision": project_revision,
+            "project_revision_status": "bound" if project_revision is not None else "unavailable",
+            "runtime": {key: value for key, value in raw_identity.items() if key != "identity_command"},
+            "raw_runtime_identity": raw_identity["identity_command"],
+            "raw_limitation": limitation,
             "raw_audit_open": raw_audit,
             "records": records,
             "counts": {
@@ -240,6 +281,8 @@ def _scan(root: Path) -> dict[str, object]:
             "status": "error",
             "classifier_version": CLASSIFIER_VERSION,
             "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "project_revision": project_revision,
+            "project_revision_status": "bound" if project_revision is not None else "unavailable",
             "error": {"code": exc.code, "diagnostic": str(exc)},
             "runtime": raw_identity,
             "raw_limitation": "The installed runtime output could not be classified; raw output is retained when available.",
@@ -355,6 +398,29 @@ class CloseoutScanTests(unittest.TestCase):
             canonical = [record for record in report["records"] if record.get("raw_item", {}).get("file") == "14-UAT.md"]
             self.assertEqual(len(canonical), 2)
             self.assertTrue(all(record["blocking"] for record in canonical))
+
+    def test_archived_review_is_checked_at_its_exact_archive_source(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-closeout-archive-review-") as temp_dir:
+            root = Path(temp_dir) / "project"
+            root.mkdir()
+            make_fixture(root)
+            archived = root / ".planning/milestones/v0.2-phases/GB-14-cgb-e-model-qualification-and-corpus"
+            archived.mkdir(parents=True)
+            (archived / "14-UAT-REVIEW.md").write_text(
+                "---\nstatus: clean\nfindings:\n  critical: 0\n  warning: 1\n  info: 0\n  total: 1\n---\n",
+                encoding="utf-8",
+            )
+            output = Path(temp_dir) / "closeout.json"
+            result = self.run_wrapper(root, output)
+            self.assertEqual(result.returncode, 1)
+            report = json.loads(output.read_text(encoding="utf-8"))
+            reviews = [record for record in report["records"] if record.get("raw_item", {}).get("file") == "14-UAT-REVIEW.md"]
+            active = next(record for record in reviews if "archived_milestone" not in record["raw_item"])
+            archived_review = next(record for record in reviews if record["raw_item"].get("archived_milestone") == "v0.2")
+            self.assertEqual(active["classification"], "clean-review")
+            self.assertTrue(active["blocking"] is False)
+            self.assertEqual(archived_review["classification"], "ambiguous-or-dirty-review")
+            self.assertTrue(archived_review["blocking"])
 
     def test_runtime_failure_retains_diagnostics_without_success_output(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gabbaboy-closeout-runtime-error-") as temp_dir:
