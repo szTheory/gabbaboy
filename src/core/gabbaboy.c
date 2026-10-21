@@ -2546,6 +2546,7 @@ static int input_event_valid(const gbb_input_event *event) {
               event->kind != GBB_INPUT_BUTTON_PRESS && event->kind != GBB_INPUT_BUTTON_RELEASE));
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void apply_input_event(gbb_instance *m, const gbb_input_event *event) {
     /* MODEL: UNKNOWN GATE-41 research:14 -- STOP wake conditions */
     if (event->kind == GBB_INPUT_STOP_WAKE) {
@@ -2563,6 +2564,7 @@ static void apply_input_event(gbb_instance *m, const gbb_input_event *event) {
     }
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void apply_queued_input_events_now(gbb_instance *m, size_t *private_applied) {
     while (m->input_event_count != 0 &&
            m->input_events[0].at_half_dots == m->time_half_dots) {
@@ -2576,6 +2578,7 @@ static void apply_queued_input_events_now(gbb_instance *m, size_t *private_appli
     }
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void apply_input_events_now(gbb_instance *m) {
     if (m->accept_input_span == NULL) {
         apply_queued_input_events_now(m, NULL);
@@ -3381,6 +3384,7 @@ gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events
     return GBB_OK;
 }
 
+/* MODEL: BOTH GATE-00 basis="model-neutral range validation" */
 static int ranges_overlap(uintptr_t a, size_t a_size, uintptr_t b, size_t b_size) {
     if (a_size > UINTPTR_MAX - a || b_size > UINTPTR_MAX - b) return 1;
     return a < b + b_size && b < a + a_size;
@@ -3389,6 +3393,7 @@ static int ranges_overlap(uintptr_t a, size_t a_size, uintptr_t b, size_t b_size
 /* Validate the complete immutable span before attaching it to the instance or
  * allowing any guest state to change. Events before cursor are historical; the
  * remaining suffix must not precede the instance's current clock. */
+/* MODEL: BOTH GATE-00 basis="model-neutral event-span validation" */
 static int validate_accept_input_span(const gbb_instance *instance,
                                       const gbb_accept_input_span *span) {
     if (instance == NULL || span == NULL || span->cursor == NULL ||
@@ -3422,6 +3427,7 @@ static int validate_accept_input_span(const gbb_instance *instance,
     return 1;
 }
 
+/* MODEL: BOTH GATE-00 basis="model-neutral event scheduling" */
 static int next_input_deadline(const gbb_instance *instance, uint64_t *deadline) {
     if (instance->input_event_count != 0u) {
         *deadline = instance->input_events[0].at_half_dots;
@@ -4861,6 +4867,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
     return result;
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static gbb_run_result gbb_run_ex_common(gbb_instance *instance, uint64_t budget_half_dots,
                                         gbb_trace_record *trace, size_t trace_capacity,
                                         gbb_diagnostic_record *diagnostics,
@@ -4897,6 +4904,7 @@ gbb_run_result gbb_run_ex(gbb_instance *instance, uint64_t budget_half_dots,
                              diagnostic_capacity, NULL);
 }
 
+/* MODEL: BOTH GATE-00 basis="model-neutral acceptance wrapper" */
 gbb_run_result gbb_accept_run_diagnostic(gbb_instance *instance, uint64_t budget_half_dots,
                                          const gbb_accept_input_span *span,
                                          gbb_trace_record *trace, size_t trace_capacity,
@@ -4912,6 +4920,7 @@ gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
     return gbb_run_ex(instance, budget_half_dots, trace, trace_capacity, NULL, 0);
 }
 
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static gbb_run_result gbb_run_audio_common(gbb_instance *instance, uint64_t budget_half_dots,
                                            const gbb_accept_input_span *span,
                                            gbb_audio_frame *frames, size_t frame_capacity,
@@ -4959,6 +4968,7 @@ gbb_run_result gbb_run_audio(gbb_instance *instance, uint64_t budget_half_dots,
                                 out_frame_count);
 }
 
+/* MODEL: BOTH GATE-00 basis="model-neutral acceptance wrapper" */
 gbb_run_result gbb_accept_run_audio(gbb_instance *instance, uint64_t budget_half_dots,
                                     const gbb_accept_input_span *span,
                                     gbb_audio_frame *frames, size_t frame_capacity,
