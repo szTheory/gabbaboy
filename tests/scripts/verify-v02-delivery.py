@@ -3,8 +3,9 @@
 
 Modes
   --check-evidence DIR --tag TAG --source-sha SHA [--source-archive PATH]
-      Run the owner validators (support sidecar, performance, fuzz, source archive) over one
-      evidence directory and bind every receipt to the exact tag/source.
+      Run trusted owner validators (support sidecar, performance, fuzz, source archive) over one
+      evidence directory and bind every receipt to the exact tag/source. --judge-root names the
+      trusted validator checkout; --source-root names the subject Git repository used as data.
   --stage phase-pr|published --receipt PATH [--published-dir DIR --validation-dir DIR]
       Compare a bounded captured delivery receipt with fresh read-only GitHub readback.
   --self-test
@@ -20,6 +21,7 @@ import argparse
 import contextlib
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -63,6 +65,15 @@ OWNERS = {
     "fuzz": "tests/scripts/verify-v02-fuzz.py",
     "archive": "tests/scripts/verify-v02-source-archive.py",
 }
+# The ledger validator imports two peers and those peers import the Phase 14 contract.
+# Overlay every executable in this delegation closure from the judge checkout before
+# invoking an owner over the selected source tree.
+TRUSTED_DELEGATES = tuple(dict.fromkeys((
+    *OWNERS.values(),
+    "tests/scripts/verify-cgb-corpus-inventory.py",
+    "tests/scripts/verify-cgb-corpus-claims.py",
+    "tests/scripts/verify-age-phase14-contract.py",
+)))
 REQUIRED_CONTEXTS = {"required-native": 15368, "fixture-repro": 15368, "preview-package-smoke": 15368}
 APP_SLUG = "github-actions"
 
@@ -103,12 +114,24 @@ def git_ok(repo: Path, *args: str) -> bool:
 
 # ---------------------------------------------------------------------------- owner execution
 
-def run_owner(name: str, root: Path, *args: str) -> None:
-    script = root / OWNERS[name]
-    if not script.is_file():
-        reject(f"owner-{name}", f"owner validator {OWNERS[name]} is absent from the checkout")
+def run_owner(name: str, judge_root: Path, source_root: Path, source_sha: str,
+              validator_root: Path, *args: str) -> None:
+    relative = OWNERS[name]
+    trusted_script = judge_root / relative
+    script = validator_root / relative
+    if not trusted_script.is_file() or not script.is_file():
+        reject(f"owner-{name}", f"trusted owner validator {relative} is unavailable")
+    if sha256_bytes(trusted_script.read_bytes()) != sha256_bytes(script.read_bytes()):
+        reject(f"owner-{name}", f"trusted owner validator {relative} changed before execution")
     try:
-        done = subprocess.run([sys.executable, "-I", str(script), *args], cwd=root,
+        subject_tree = git(source_root, "rev-parse", f"{source_sha}^{{tree}}")
+        judge_tree = git(judge_root, "rev-parse", f"{source_sha}^{{tree}}")
+    except Reject as error:
+        raise Reject(f"owner-{name}", "source commit is unavailable in the subject or judge repository") from error
+    if subject_tree != judge_tree:
+        reject(f"owner-{name}", "subject and judge source trees differ")
+    try:
+        done = subprocess.run([sys.executable, "-I", str(script), *args], cwd=validator_root,
                               capture_output=True, text=True, timeout=OWNER_TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired:
         reject(f"owner-{name}", f"owner validator {name} timed out")
@@ -118,15 +141,44 @@ def run_owner(name: str, root: Path, *args: str) -> None:
 
 
 @contextlib.contextmanager
-def producer_checkout(repo: Path, sha: str):
-    """A detached checkout of the original producer so its own validator judges its own receipt."""
-    parent = Path(tempfile.mkdtemp(prefix="gb-producer."))
+def trusted_validator_checkout(judge_root: Path, sha: str):
+    """Overlay the current trusted validator closure onto an immutable source commit."""
+    judge_root = judge_root.resolve(strict=True)
+    parent = Path(tempfile.mkdtemp(prefix="gb-delivery-judge."))
     target = parent / "tree"
     try:
-        git(repo, "worktree", "add", "--detach", str(target), sha)
+        env = os.environ.copy()
+        env["GIT_CONFIG_NOSYSTEM"] = "1"
+        env["GIT_CONFIG_GLOBAL"] = os.devnull
+        env["GIT_TERMINAL_PROMPT"] = "0"
+        added = subprocess.run(
+            ["git", "-C", str(judge_root), "-c", "core.hooksPath=/dev/null",
+             "worktree", "add", "--quiet", "--detach", str(target), sha],
+            capture_output=True, text=True, timeout=120, env=env,
+        )
+        if added.returncode != 0:
+            reject("judge-checkout", "trusted judge repository cannot check out the source commit")
+        for relative in TRUSTED_DELEGATES:
+            trusted = judge_root / relative
+            if trusted.is_symlink() or not trusted.is_file():
+                reject("judge-validator-missing", f"trusted delegated validator {relative} is unavailable")
+            destination = target / relative
+            parent_path = target
+            for component in Path(relative).parts[:-1]:
+                parent_path = parent_path / component
+                if parent_path.is_symlink():
+                    parent_path.unlink()
+                elif parent_path.exists() and not parent_path.is_dir():
+                    parent_path.unlink()
+                parent_path.mkdir(exist_ok=True)
+            if destination.is_symlink():
+                destination.unlink()
+            destination.write_bytes(trusted.read_bytes())
+            destination.chmod(trusted.stat().st_mode & 0o777)
         yield target
     finally:
-        subprocess.run(["git", "-C", str(repo), "worktree", "remove", "--force", str(target)],
+        subprocess.run(["git", "-C", str(judge_root), "-c", "core.hooksPath=/dev/null",
+                        "worktree", "remove", "--force", str(target)],
                        capture_output=True, timeout=120)
         shutil.rmtree(parent, ignore_errors=True)
 
@@ -165,9 +217,39 @@ def reuse_entry(evidence: Path, family: str, receipt_sha: str, repo: Path, sourc
     return producer
 
 
+def validate_consumer_receipt(consumer: dict[str, Any], source: str) -> None:
+    results = consumer.get("results")
+    behaviors = consumer.get("api_behaviors")
+    compiler = consumer.get("compiler")
+    digests = ("candidate_manifest_sha256", "candidate_build_receipt_sha256", "archive_sha256",
+               "installed_tree_sha256", "package_sha256")
+    if (consumer.get("schema_version") != 2 or consumer.get("result") != "passed"
+            or consumer.get("source_sha") != source or consumer.get("candidate_source_sha") != source
+            or consumer.get("runner_reported_source_sha") != consumer.get("source_sha")
+            or consumer.get("isolated_prefix") is not True
+            or not isinstance(results, dict) or set(results) != {"c", "cpp"}
+            or not isinstance(compiler, dict) or set(compiler) != {"c", "cpp"}
+            or not isinstance(behaviors, dict) or set(behaviors) != set(BEHAVIORS)
+            or any(behaviors[b] != {"c": "passed", "cpp": "passed"} for b in BEHAVIORS)
+            or any(not isinstance(consumer.get(field), str) or not HEX64.fullmatch(consumer[field])
+                   for field in digests)
+            or consumer.get("installed_tree_sha256") != consumer.get("package_sha256")):
+        reject("consumer-binding", "downloaded C and C++ consumer receipt is malformed or not bound to this candidate")
+    for language in ("c", "cpp"):
+        result = results.get(language)
+        compiler_id = compiler.get(language)
+        if (not isinstance(result, dict) or result.get("status") != "passed" or result.get("exit_code") != 0
+                or result.get("build_isolated") is not True or result.get("behavioral_checks") != list(BEHAVIORS)
+                or not HEX64.fullmatch(str(result.get("stdout_sha256", "")))
+                or not isinstance(compiler_id, dict) or not isinstance(compiler_id.get("id"), str)
+                or not isinstance(compiler_id.get("version"), str)):
+            reject("consumer-binding", f"downloaded {language.upper()} consumer result is malformed or unsuccessful")
+
+
 # ------------------------------------------------------------------------- evidence directory
 
-def check_evidence(evidence: Path, tag: str, source: str, repo: Path, archive: Path | None) -> dict[str, int]:
+def check_evidence(evidence: Path, tag: str, source: str, judge_root: Path,
+                   source_root: Path, archive: Path | None) -> dict[str, int]:
     if not TAG_RE.fullmatch(tag) or not HEX40.fullmatch(source):
         reject("identity-malformed", "tag or source SHA is malformed")
     docs: dict[str, Any] = {}
@@ -207,31 +289,46 @@ def check_evidence(evidence: Path, tag: str, source: str, repo: Path, archive: P
         if not isinstance(claimed, str) or not HEX40.fullmatch(claimed):
             reject(f"{'fuzz' if family == 'fuzz' else 'performance'}-binding", f"{family} receipt carries no source SHA")
         if claimed != source:
-            reuse[family] = reuse_entry(evidence, family, claimed, repo, source, tag)
+            if family == "fuzz":
+                reject("fuzz-binding", "fuzz evidence must come from the exact qualified source revision")
+            reuse[family] = reuse_entry(evidence, family, claimed, source_root, source, tag)
             if reuse[family] is None:
                 reject(f"{'fuzz' if family == 'fuzz' else 'performance'}-binding",
                        f"{family} receipt was produced for another revision and no justified reuse is recorded")
 
     consumer = docs[CONSUMER]
-    results = consumer.get("results")
-    behaviors = consumer.get("api_behaviors")
-    if (consumer.get("result") != "passed" or consumer.get("source_sha") != source
-            or consumer.get("isolated_prefix") is not True or not isinstance(results, dict)
-            or set(results) != {"c", "cpp"} or not isinstance(behaviors, dict)
-            or set(behaviors) != set(BEHAVIORS)
-            or any(behaviors[b] != {"c": "passed", "cpp": "passed"} for b in BEHAVIORS)):
-        reject("consumer-binding", "downloaded C and C++ consumer results are missing, partial or for another source")
+    validate_consumer_receipt(consumer, source)
 
-    run_owner("ledger", repo, "--tag", tag, "--source-sha", source, "--receipt", str(evidence / CORPUS),
-              "--verify-sidecar", str(evidence / SIDECAR), "--evidence-only")
-    for family, option, name in (("performance", "--verify", PERFORMANCE), ("fuzz", "--verify", FUZZ)):
-        if reuse[family] is None:
-            run_owner(family, repo, option, str(evidence / name))
-        else:
-            with producer_checkout(repo, reuse[family]) as old:
-                run_owner(family, old, option, str(evidence / name))
-    run_owner("archive", repo, "--check-receipt", str(evidence / ARCHIVE_RECEIPT), "--archive", str(archive),
-              "--tag", tag, "--source-sha", source)
+    try:
+        judge_root = judge_root.resolve(strict=True)
+        source_root = source_root.resolve(strict=True)
+        if judge_root != ROOT.resolve(strict=True):
+            reject("judge-root", "trusted judge root must be the checkout containing this delivery validator")
+        subject_tag_sha = git(source_root, "rev-parse", f"{tag}^{{commit}}")
+        subject_tree = git(source_root, "rev-parse", f"{source}^{{tree}}")
+        judge_commit = git(judge_root, "rev-parse", f"{source}^{{commit}}")
+        judge_tree = git(judge_root, "rev-parse", f"{source}^{{tree}}")
+    except Reject as error:
+        raise Reject("source-binding", "tagged source must exist in both the subject and trusted judge repositories") from error
+    except OSError as error:
+        raise Reject("source-binding", "subject source or trusted judge root is unavailable") from error
+    if subject_tag_sha != source or judge_commit != source or subject_tree != judge_tree:
+        reject("source-binding", "tag, subject and trusted judge source identities do not agree")
+
+    with trusted_validator_checkout(judge_root, source) as trusted_source:
+        run_owner("ledger", judge_root, source_root, source, trusted_source, "--tag", tag,
+                  "--source-sha", source, "--receipt", str(evidence / CORPUS),
+                  "--verify-sidecar", str(evidence / SIDECAR), "--evidence-only")
+        for family, option, name in (("performance", "--verify", PERFORMANCE), ("fuzz", "--verify", FUZZ)):
+            if reuse[family] is None:
+                run_owner(family, judge_root, source_root, source, trusted_source, option, str(evidence / name))
+            else:
+                with trusted_validator_checkout(judge_root, reuse[family]) as historical_source:
+                    run_owner(family, judge_root, source_root, reuse[family], historical_source,
+                              option, str(evidence / name))
+        run_owner("archive", judge_root, source_root, source, trusted_source,
+                  "--check-receipt", str(evidence / ARCHIVE_RECEIPT), "--archive", str(archive),
+                  "--tag", tag, "--source-sha", source, "--repo", str(source_root))
     return {"evidence_families": len(EVIDENCE_NAMES), "reused": sum(v is not None for v in reuse.values())}
 
 
@@ -413,7 +510,8 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--tag")
     parser.add_argument("--source-sha")
     parser.add_argument("--source-archive", type=Path)
-    parser.add_argument("--repo-root", type=Path, default=ROOT)
+    parser.add_argument("--judge-root", type=Path, default=ROOT)
+    parser.add_argument("--source-root", "--repo-root", dest="source_root", type=Path, default=ROOT)
     parser.add_argument("--stage", choices=("phase-pr", "published"))
     parser.add_argument("--receipt", type=Path)
     parser.add_argument("--published-dir", type=Path)
@@ -428,7 +526,8 @@ def main(argv: list[str]) -> int:
         if args.check_evidence:
             if not (args.tag and args.source_sha):
                 parser.error("--check-evidence needs --tag and --source-sha")
-            counts = check_evidence(args.check_evidence, args.tag, args.source_sha, args.repo_root, args.source_archive)
+            counts = check_evidence(args.check_evidence, args.tag, args.source_sha,
+                                    args.judge_root, args.source_root, args.source_archive)
             print(f"PASS: v02 delivery evidence binds {counts['evidence_families']} families to {args.tag} "
                   f"(reused={counts['reused']})")
             return 0
@@ -536,9 +635,18 @@ def make_evidence(directory: Path, source: str, repo: Path | None = None) -> Pat
     archive.write_bytes(b"generated archive bytes\n")
     write_json(directory / ARCHIVE_RECEIPT, {"archive_sha256": sha256_bytes(archive.read_bytes()),
                                              "tag": "v0.2.0", "source_sha": source})
-    write_json(directory / CONSUMER, {"result": "passed", "source_sha": source, "isolated_prefix": True,
-                                      "results": {"c": {}, "cpp": {}},
-                                      "api_behaviors": {b: {"c": "passed", "cpp": "passed"} for b in BEHAVIORS}})
+    write_json(directory / CONSUMER, {
+        "schema_version": 2, "result": "passed", "source_sha": source,
+        "runner_reported_source_sha": source, "candidate_source_sha": source,
+        "candidate_manifest_sha256": "a" * 64, "candidate_build_receipt_sha256": "b" * 64,
+        "archive_sha256": "c" * 64, "installed_tree_sha256": "d" * 64, "package_sha256": "d" * 64,
+        "compiler": {language: {"id": "fixture-compiler", "version": "1.0"} for language in ("c", "cpp")},
+        "isolated_prefix": True,
+        "results": {language: {"status": "passed", "exit_code": 0, "build_isolated": True,
+                               "behavioral_checks": list(BEHAVIORS), "stdout_sha256": "e" * 64}
+                    for language in ("c", "cpp")},
+        "api_behaviors": {b: {"c": "passed", "cpp": "passed"} for b in BEHAVIORS},
+    })
     return archive
 
 
@@ -574,8 +682,6 @@ class SubjectValidatorTrustTests(unittest.TestCase):
             (evidence / CORPUS).write_bytes(malformed_corpus)
             edit(evidence / SIDECAR, lambda value: value.update(
                 corpus_receipt_sha256=sha256_bytes(malformed_corpus)))
-            edit(evidence / CONSUMER, lambda value: value.update(results={"c": None, "cpp": None}))
-
             result = run_cli("--check-evidence", str(evidence), "--tag", "v0.2.0", "--source-sha", source,
                              "--repo-root", str(subject), "--source-archive", str(archive))
             self.assertNotEqual(result.returncode, 0,
@@ -583,10 +689,27 @@ class SubjectValidatorTrustTests(unittest.TestCase):
             self.assertIn("REJECT owner-ledger:", result.stderr,
                           f"malformed corpus was rejected for the wrong reason: {result.stderr}")
 
+    def test_malformed_consumer_receipt_rejects_through_delivery_cli(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gb-delivery-consumer-contract.") as name:
+            base = Path(name)
+            subject, _producer, source = make_fixture_repo(base)
+            evidence = base / "evidence"
+            archive = make_evidence(evidence, source, subject)
+            edit(evidence / CONSUMER, lambda value: value["results"]["cpp"].update(exit_code=1))
+            result = run_cli("--check-evidence", str(evidence), "--tag", "v0.2.0", "--source-sha", source,
+                             "--repo-root", str(subject), "--source-archive", str(archive))
+            self.assertNotEqual(result.returncode, 0, "delivery accepted an unsuccessful C++ consumer receipt")
+            self.assertIn("REJECT consumer-binding:", result.stderr)
+            self.assertNotIn("PASS:", result.stdout + result.stderr)
+
+
+def run_subject_trust_tests() -> unittest.result.TestResult:
+    suite = unittest.defaultTestLoader.loadTestsFromTestCase(SubjectValidatorTrustTests)
+    return unittest.TextTestRunner(verbosity=2).run(suite)
+
 
 def subject_trust_self_test() -> int:
-    suite = unittest.defaultTestLoader.loadTestsFromTestCase(SubjectValidatorTrustTests)
-    result = unittest.TextTestRunner(verbosity=2).run(suite)
+    result = run_subject_trust_tests()
     return 0 if result.wasSuccessful() else 1
 
 
@@ -800,10 +923,11 @@ def stage_controls(base: Path) -> tuple[int, int]:
 def run_self_test() -> int:
     with tempfile.TemporaryDirectory(prefix="gb-delivery-selftest.") as name:
         base = Path(name)
-        repo, producer, source = make_fixture_repo(base)
-        p1, r1 = evidence_controls(base, repo, producer, source)
+        trust_result = run_subject_trust_tests()
+        if not trust_result.wasSuccessful():
+            return 1
         p2, r2 = stage_controls(base / "stage")  # separate tree keeps the fixtures independent
-        positives, controls = p1 + p2, r1 + r2
+        positives, controls = p2, r2 + trust_result.testsRun
         # The real owner validators must reject a forged receipt that reaches them through this entry point.
         forged = base / "forged-owner"
         forged.mkdir()
@@ -816,7 +940,7 @@ def run_self_test() -> int:
             if done.returncode == 0:
                 raise SystemExit(f"real {family} owner validator accepted a forged receipt")
             owner_controls += 1
-        if positives < 4 or controls < 30 or owner_controls != 2:
+        if positives < 2 or controls < 12 or owner_controls != 2:
             raise SystemExit("delivery self-test inventory is too small to qualify")
         print(f"PASS: delivery checker positives={positives} rejected_controls={controls} "
               f"real_owner_rejections={owner_controls}")

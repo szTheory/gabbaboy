@@ -16,6 +16,7 @@ REQUIRED_CONTEXTS = {
     "preview-package-smoke": 15368,
 }
 EXPECTED_APP_SLUG = "github-actions"
+EXPECTED_REPOSITORY = "szTheory/gabbaboy"
 
 
 def validate(receipt: dict[str, Any], pr: dict[str, Any], checks: dict[str, Any],
@@ -38,7 +39,9 @@ def validate(receipt: dict[str, Any], pr: dict[str, Any], checks: dict[str, Any]
         raise ValueError("source receipt contains stale or incomplete protected-PR proof fields")
     if (pr.get("number") != pr_number or pr.get("state") != "closed" or not pr.get("merged_at")
             or pr.get("base", {}).get("ref") != "main" or pr.get("merge_commit_sha") != source_sha
-            or pr.get("head", {}).get("sha") != head_sha):
+            or pr.get("head", {}).get("sha") != head_sha
+            or pr.get("base", {}).get("repo", {}).get("full_name") != EXPECTED_REPOSITORY
+            or pr.get("head", {}).get("repo", {}).get("full_name") != EXPECTED_REPOSITORY):
         raise ValueError("live pull request does not match the source receipt's merged main PR")
 
     observed: dict[str, list[dict[str, Any]]] = {}
@@ -52,6 +55,8 @@ def validate(receipt: dict[str, Any], pr: dict[str, Any], checks: dict[str, Any]
         for run in runs:
             if run.get("head_sha") != head_sha:
                 raise ValueError(f"protected context {context!r} has stale check evidence")
+            if run.get("repository", {}).get("full_name") != EXPECTED_REPOSITORY:
+                raise ValueError(f"protected context {context!r} belongs to the wrong repository")
             if run.get("status") != "completed" or run.get("conclusion") != "success":
                 raise ValueError(f"protected context {context!r} is incomplete or unsuccessful")
             app = run.get("app") or {}
@@ -67,9 +72,12 @@ def fixture() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
                "prior_pr_proof": {"pr_number": 13, "head_sha": head,
                                   "merge_commit_sha": source, "required_checks": "passed"}}
     pr = {"number": 13, "state": "closed", "merged_at": "2026-10-08T00:00:00Z",
-          "base": {"ref": "main"}, "head": {"sha": head}, "merge_commit_sha": source}
+          "base": {"ref": "main", "repo": {"full_name": EXPECTED_REPOSITORY}},
+          "head": {"sha": head, "repo": {"full_name": EXPECTED_REPOSITORY}},
+          "merge_commit_sha": source}
     checks = {"check_runs": [
         {"name": name, "head_sha": head, "status": "completed", "conclusion": "success",
+         "repository": {"full_name": EXPECTED_REPOSITORY},
          "app": {"id": 15368, "slug": EXPECTED_APP_SLUG}}
         for name in REQUIRED_CONTEXTS
     ]}
@@ -90,6 +98,9 @@ def run_self_test() -> None:
         "stale required context": lambda r, p, c: c["check_runs"][0].update(head_sha="c" * 40),
         "wrong required-check App": lambda r, p, c: c["check_runs"][0]["app"].update(id=1),
         "wrong required-check App identity": lambda r, p, c: c["check_runs"][0]["app"].update(slug="other-app"),
+        "wrong base repository": lambda r, p, c: p["base"]["repo"].update(full_name="other/repository"),
+        "wrong head repository": lambda r, p, c: p["head"]["repo"].update(full_name="other/repository"),
+        "wrong check-run repository": lambda r, p, c: c["check_runs"][0]["repository"].update(full_name="other/repository"),
         "mixed duplicate records": lambda r, p, c: c["check_runs"].append(
             {**c["check_runs"][0], "conclusion": "failure"}),
     }
