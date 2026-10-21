@@ -720,9 +720,17 @@ RELEASE_ARTIFACTS = {
 }
 SUBJECT_REF = "${{ env.SOURCE_SHA }}"
 JUDGE_CALL_POLICY = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject"
+PRODUCER_SCRIPT = ".github/scripts/produce-release-evidence.sh"
+PRODUCER_SCRIPT_REQUIRED = ()  # filled with the reviewed contract once the script exists
+_SHARED = "bash " + PRODUCER_SCRIPT
+_REHEARSAL_TAG = _SHARED + ' verify-subject --subject . --source-sha "$GITHUB_SHA" --tag "$REHEARSAL_TAG" --local-tag'
+_RELEASE_SUBJECT = _SHARED + ' verify-subject --subject . --source-sha "$SOURCE_SHA" --tag "$RELEASE_TAG"'
+_CORPUS_BUILD = _SHARED + " corpus-build --subject ."
 _LEDGER_BASE = 'python3 -I tests/scripts/verify-support-ledger.py --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --receipt build/cgb-corpus-receipt.json'
 REHEARSAL_REQUIRED = {
     "corpus": (
+        _REHEARSAL_TAG,
+        _CORPUS_BUILD,
         "python3 -I tests/scripts/verify-cgb-corpus-report.py --begin-run --build-dir build --receipt build/cgb-corpus-receipt.json",
         "python3 -I tests/scripts/verify-cgb-corpus-report.py --from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json",
         "python3 -I tests/scripts/verify-cgb-corpus-claims.py --receipt build/cgb-corpus-receipt.json",
@@ -741,17 +749,21 @@ REHEARSAL_REQUIRED = {
         "python3 -I tests/scripts/verify-v02-performance.py --verify build/v02-performance-receipt.json",
     ),
     "package": (
+        _REHEARSAL_TAG,
         'bash tests/scripts/verify-release-candidate.sh --extract build/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"',
         'python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" --output build/v02-consumer-receipt.json',
         'python3 -I tests/scripts/verify-v02-source-archive.py --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json',
         'python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA"',
     ),
     "aggregate": (
+        _REHEARSAL_TAG,
+        _CORPUS_BUILD,
+        _SHARED + " collect --subject . --output build/evidence",
+        _SHARED + ' verify --judge . --subject . --source-sha "$SOURCE_SHA" --tag "$RELEASE_TAG" --evidence build/evidence --archive "$RUNNER_TEMP/source-archive.tar.gz"',
         "python3 -I tests/scripts/verify-cgb-corpus-claims.py --receipt build/cgb-corpus-receipt.json",
         "GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --explore --receipt build-asan/v02-fuzz-receipt.json",
         "python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json",
         "python3 -I tests/scripts/verify-v02-performance.py --verify build/v02-performance-receipt.json",
-        'bash "$RUNNER_TEMP/verify-release-gates.sh" --check-v02-evidence build/evidence "$RELEASE_TAG" "$SOURCE_SHA" "$RUNNER_TEMP/source-archive.tar.gz"',
     ),
     "judge": (
         JUDGE_CALL_POLICY,
@@ -759,8 +771,8 @@ REHEARSAL_REQUIRED = {
     ),
 }
 RELEASE_REQUIRED = {
-    "candidate-corpus": REHEARSAL_REQUIRED["corpus"],
-    "candidate-performance": REHEARSAL_REQUIRED["performance"],
+    "candidate-corpus": (_RELEASE_SUBJECT, _CORPUS_BUILD) + REHEARSAL_REQUIRED["corpus"][2:],
+    "candidate-performance": (_RELEASE_SUBJECT,) + REHEARSAL_REQUIRED["performance"],
     "candidate-fuzz": (
         'gh run download "$run_id" --repo "$GH_REPO" --name "v02-fuzz-$run_id-$attempt" --dir build/ci-fuzz',
         'python3 -I tests/scripts/verify-v02-fuzz.py --verify-hosted --source-sha "$SOURCE_SHA" --run-id "$run_id" --attempt "$attempt" --receipt build/ci-fuzz/v02-fuzz-receipt.json',
@@ -812,6 +824,51 @@ CI_STATUS_CALLS = (
 CI_REQUIRED_NATIVE_NEEDS = {"native-linux", "native-macos", "native-windows", "linux-sanitizers", "cmake-floor-3-25-3", "player-gate", "macos-player-package"}
 
 
+_FORBIDDEN_PRODUCER_HEADS = {"gh", "curl", "wget", "ssh", "scp"}
+_PRODUCER_GIT_WRITES = {"push", "remote", "credential", "config", "send-email"}
+
+
+def check_producer_script(root: Path) -> None:
+    """The shared producer runs under the same read-only authority as the jobs that call it: no token, no network
+    publication, no remote or credential edits, fail-fast from its first statement."""
+    path = root / PRODUCER_SCRIPT
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        raise Reject("producer-script-missing", f"{PRODUCER_SCRIPT} is missing") from None
+    if _TOKEN.search(text):
+        raise Reject("producer-token", f"{PRODUCER_SCRIPT} references a GitHub token or secret")
+    events = shell_events(text)
+    if not events or events[0].words != ["set", "-euo", "pipefail"]:
+        raise Reject("producer-script-failfast", f"{PRODUCER_SCRIPT} must begin with set -euo pipefail")
+    for event in events:
+        words = event.words
+        if words[:1] and (words[0] in _FORBIDDEN_PRODUCER_HEADS):
+            raise Reject("producer-write-command", f"{PRODUCER_SCRIPT} runs {words[0]}, which can publish or change repository state")
+        if words[:1] == ["git"]:
+            subcommand = next((w for w in words[1:] if not w.startswith("-") and w != "-C" and not w.startswith(("$", '"'))), "")
+            if any(w in _PRODUCER_GIT_WRITES for w in words[1:3]) or subcommand in _PRODUCER_GIT_WRITES:
+                raise Reject("producer-write-command", f"{PRODUCER_SCRIPT} runs git {subcommand}, which can publish or change credentials")
+    for command in PRODUCER_SCRIPT_REQUIRED:
+        require_script_call(command, text)
+
+
+def require_script_call(command_text: str, text: str) -> None:
+    words, assigns = expected_command(command_text)
+    events = shell_events(text)
+    if not any(e.words[: len(words)] == words and set(assigns) <= set(e.assigns) and _reachable(e, events, True, False) for e in events):
+        raise Reject("required-command-not-executed", f"{PRODUCER_SCRIPT} does not run a reachable, fatal: {command_text}")
+
+
+def _check_no_duplicate_setup(workflow: str, tree: dict) -> None:
+    """Rehearsal tag setup lives only in the shared producer; an inline copy would drift from it."""
+    for job_id, job in tree["jobs"].items():
+        for step in job.get("steps", []):
+            for event in shell_events(step.get("run", "")):
+                if event.words[:1] == ["git"] and "tag" in event.words[1:3]:
+                    raise Reject("duplicate-rehearsal-setup", f"{_where(workflow, job_id)} sets up a tag inline; use {PRODUCER_SCRIPT} verify-subject")
+
+
 def check_rehearsal(root: Path) -> None:
     name = "release-rehearsal"
     tree = read_workflow(root / ".github/workflows/release-rehearsal.yml")
@@ -820,6 +877,7 @@ def check_rehearsal(root: Path) -> None:
     _check_actions(name, tree)
     _check_disabled(name, tree)
     _check_ignored_failures(name, tree)
+    _check_no_duplicate_setup(name, tree)
     _check_checkout_credentials(name, tree, tree["jobs"])
     for job_id, job in tree["jobs"].items():
         if _writes(_permissions(job, tree["permissions"])):
@@ -954,6 +1012,7 @@ def check_release(root: Path) -> None:
 
 
 def check_all(root: Path) -> dict[str, int]:
+    check_producer_script(root)
     check_rehearsal(root)
     check_ci(root)
     check_release(root)
@@ -970,6 +1029,9 @@ def _copy_fixture(root: Path, target: Path) -> None:
         destination = target / ".github/workflows" / item
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes((root / ".github/workflows" / item).read_bytes())
+    script = target / PRODUCER_SCRIPT
+    script.parent.mkdir(parents=True, exist_ok=True)
+    script.write_bytes((root / PRODUCER_SCRIPT).read_bytes()) if (root / PRODUCER_SCRIPT).is_file() else None
 
 
 def _run_cli(fixture: Path, cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -984,6 +1046,7 @@ def _m(label: str, workflow: str, after: str, old: str, new: str, expected: str)
 
 
 JUDGE_CALL = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject"
+_REHEARSAL_TAG_LINE = "bash .github/scripts/produce-release-evidence.sh verify-subject --subject . --source-sha \"$GITHUB_SHA\" --tag \"$REHEARSAL_TAG\" --local-tag"
 JUDGE_STEP = "      - name: Judge workflow privilege and trust wiring from the trusted checkout\n"
 
 
@@ -1079,6 +1142,31 @@ def _mutations():
         _m("release publisher does not wait for the manifest judge", "release.yml", "  publish-qualified-release:\n", "candidate-windows, candidate-platform-manifest]",
            "candidate-windows]", "workflow-dependency"),
         _m("required-native stops waiting for the sanitizer lane", "ci.yml", "  required-native:\n", "      - linux-sanitizers\n", "", "workflow-dependency"),
+        # Shared unprivileged producer contract (P15-15).
+        _m("rehearsal corpus re-inlines the local tag setup", "release-rehearsal.yml", "  corpus:\n", _REHEARSAL_TAG_LINE,
+           'git tag -f "$REHEARSAL_TAG" "$GITHUB_SHA"', "duplicate-rehearsal-setup"),
+        _m("rehearsal tag setup receives a mismatched source", "release-rehearsal.yml", "  package:\n", '--source-sha "$GITHUB_SHA"',
+           '--source-sha "$GITHUB_REF"', "required-command-not-executed"),
+        _m("rehearsal tag setup loses its local-only flag", "release-rehearsal.yml", "  package:\n", " --local-tag", "",
+           "required-command-not-executed"),
+        _m("rehearsal aggregate judge root is not explicit", "release-rehearsal.yml", "  aggregate:\n", " --judge . --subject .", " --subject .",
+           "required-command-not-executed"),
+        _m("rehearsal aggregate evidence collection replaced by echo", "release-rehearsal.yml", "  aggregate:\n",
+           "bash .github/scripts/produce-release-evidence.sh collect", "echo bash .github/scripts/produce-release-evidence.sh collect",
+           "required-command-not-executed"),
+        _m("release corpus drops the shared subject check", "release.yml", "  candidate-corpus:\n", "bash .github/scripts/produce-release-evidence.sh verify-subject",
+           "true bash .github/scripts/produce-release-evidence.sh verify-subject", "required-command-not-executed"),
+        _m("release performance subject check source mismatch", "release.yml", "  candidate-performance:\n", '--source-sha "$SOURCE_SHA"',
+           '--source-sha "$RELEASE_TAG"', "required-command-not-executed"),
+        ("producer script publishes with gh", "script", [("", "corpus-build)\n", "corpus-build)\n{I}gh release upload v0.0.0 x\n")],
+         "producer-write-command"),
+        ("producer script pushes the rehearsal tag", "script", [("", 'git -C "$subject" tag -f', 'git -C "$subject" push origin tag -f')],
+         "producer-write-command"),
+        ("producer script reads the job token", "script", [("", "set -euo pipefail\n", "set -euo pipefail\ntoken=$GH_TOKEN\n")],
+         "producer-token"),
+        ("producer script is not fail-fast", "script", [("", "set -euo pipefail\n", "set -u\n")], "producer-script-failfast"),
+        ("producer script loses its tag-binding check", "script", [("", 'git -C "$subject" rev-parse HEAD', "true git rev-parse HEAD")],
+         "required-command-not-executed"),
         _m("windows downloaded consumer behavior no longer verified", "release.yml", "  candidate-windows:\n", "-P cmake/VerifyInstalledPackage.cmake",
            "-P cmake/Renamed.cmake", "required-command-not-executed"),
         _m("macos downloaded player smoke commented out", "release.yml", "  candidate-macos:\n",
@@ -1101,6 +1189,11 @@ def self_test(root: Path) -> None:
         if positive.returncode != 0 or "PASS: workflow privilege and trust wiring" not in positive.stdout:
             raise SystemExit(f"self-test positive control failed: exit={positive.returncode} stderr={positive.stderr.strip()!r}")
         baselines = {item: (fixture / ".github/workflows" / item).read_text(encoding="utf-8") for item in WORKFLOWS}
+        baselines["script"] = (fixture / PRODUCER_SCRIPT).read_text(encoding="utf-8")
+
+        def target(workflow: str) -> Path:
+            return fixture / (PRODUCER_SCRIPT if workflow == "script" else f".github/workflows/{workflow}")
+
         for label, workflow, edits, expected in _mutations():
             text = baselines[workflow]
             for after, old, replacement in edits:
@@ -1111,7 +1204,7 @@ def self_test(root: Path) -> None:
                 line_start = text.rfind("\n", 0, position) + 1
                 indent = text[line_start:len(text[line_start:]) - len(text[line_start:].lstrip(" ")) + line_start]
                 text = text[:position] + replacement.replace("{I}", indent) + text[position + len(old):]
-            path = fixture / ".github/workflows" / workflow
+            path = target(workflow)
             path.write_text(text, encoding="utf-8")
             result = _run_cli(fixture, work)
             diagnostic = result.stderr.strip()

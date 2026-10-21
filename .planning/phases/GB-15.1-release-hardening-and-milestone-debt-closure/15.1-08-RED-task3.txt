@@ -1,0 +1,6 @@
+REJECT producer-script-missing: .github/scripts/produce-release-evidence.sh is missing
+check_exit=1
+self-test positive control failed: exit=1 stderr='REJECT producer-script-missing: .github/scripts/produce-release-evidence.sh is missing'
+selftest_exit=1
+bash: .github/scripts/produce-release-evidence.sh: No such file or directory
+bash_n_exit=127
