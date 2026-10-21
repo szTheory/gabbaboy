@@ -21,33 +21,67 @@ actuals:
 duration: 40 min
 completed: 2026-10-12
 coverage:
-  - deliverable: "CGB OAM DMA source map (ROM/cart RAM via shared cart_read, banked VRAM, banked WRAM, E0-FF=$FF); DMG envelope frozen"
-    verification:
-      - {kind: ctest, ref: "banking_dma_wram_bank", status: pass}
-      - {kind: ctest, ref: "banking_dma_vram_bank", status: pass}
-      - {kind: ctest, ref: "banking_dma_rom_page", status: pass}
-      - {kind: ctest, ref: "banking_dma_cart_ram", status: pass}
-      - {kind: ctest, ref: "banking_dma_high_pages", status: pass}
-      - {kind: ctest, ref: "dma_source_mapping", status: pass}
+  - id: 10-12-cgb-dma-map
+    description: "CGB OAM DMA source map (ROM/cart RAM via shared cart_read, banked VRAM, banked WRAM, E0-FF=$FF); DMG envelope frozen"
     human_judgment: false
-  - deliverable: "VBK/SVBK independence, read-back, and echo RAM following the selected WRAM bank, through guest code"
     verification:
-      - {kind: ctest, ref: "banking_vbk_independence", status: pass}
-      - {kind: ctest, ref: "banking_svbk_readback", status: pass}
-      - {kind: ctest, ref: "banking_echo_follows_bank", status: pass}
-      - {kind: ctest, ref: "banking_dmg_banks_frozen", status: pass}
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^banking_dma_wram_bank$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^banking_dma_vram_bank$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^banking_dma_rom_page$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^banking_dma_cart_ram$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^banking_dma_high_pages$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^dma_source_mapping$'"
+        status: pass
+  - id: 10-12-banking-echo
+    description: "VBK/SVBK independence, read-back, and echo RAM following the selected WRAM bank, through guest code"
     human_judgment: false
-  - deliverable: "D-17 DMG bus-conflict rule kept on CGB, pinned and documented as expected-failure:cgb-separate-buses"
     verification:
-      - {kind: ctest, ref: "banking_bus_conflict_cgb_pin", status: pass}
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^banking_vbk_independence$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^banking_svbk_readback$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^banking_echo_follows_bank$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^banking_dmg_banks_frozen$'"
+        status: pass
+  - id: 10-12-dmg-conflict
+    description: "D-17 DMG bus-conflict rule kept on CGB, pinned and documented as expected-failure:cgb-separate-buses"
     human_judgment: false
-  - deliverable: "Core-mutant controls for echo bank and DMA bank"
     verification:
-      - {kind: ctest, ref: "banking_mutant_echo_ignores_bank", status: pass}
-      - {kind: ctest, ref: "banking_mutant_echo_control", status: pass}
-      - {kind: ctest, ref: "banking_mutant_dma_wrong_bank", status: pass}
-      - {kind: ctest, ref: "banking_mutant_dma_control", status: pass}
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^banking_bus_conflict_cgb_pin$'"
+        status: pass
+  - id: 10-12-mutant-controls
+    description: "Core-mutant controls for echo bank and DMA bank"
     human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^banking_mutant_echo_ignores_bank$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^banking_mutant_echo_control$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^banking_mutant_dma_wrong_bank$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^banking_mutant_dma_control$'"
+        status: pass
 ---
 
 # Phase 10 Plan 12: CGB OAM DMA sources, echo and banking proofs Summary
@@ -67,6 +101,10 @@ The cartridge read switch is now a shared `cart_read`, the CGB profile (both mod
 - Full suite (`ctest --preset phase1`): 499/499 pass, including all 14 new `banking_*` tests, `dma_*`, `bus_*`, `cgb_tables_*` and `model_gates*`.
 - `bash tests/scripts/verify-dmg-baseline.sh`: `baseline status=pass`, rows=0. `python3 -I tests/scripts/verify-model-gates.py`: pass.
 - Extra negative control (not committed): making the CGB branch return `$FF` for ROM/cart addresses failed exactly `banking_dma_rom_page` and `banking_dma_cart_ram` and nothing else; source restored byte-identical before commit.
+
+## Fresh behavior recheck (2026-10-21)
+
+Configured the isolated `build/phase15_1_14` tree from the current checkout and built the current core, guest-test executables, and configure-time echo/DMA mutant cores. The 15 mapped banking and DMA CTests plus the eight STOP/KEY0 controls passed in the focused 23/23 run. This is current software-model evidence; the original full-suite and producer statements above remain historical.
 
 ## Deviations from Plan
 
