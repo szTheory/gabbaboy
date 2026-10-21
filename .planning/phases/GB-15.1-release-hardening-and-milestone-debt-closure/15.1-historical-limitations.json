@@ -18,8 +18,7 @@
       ],
       "historic_status": "unverified",
       "hosted_ref": "libbet-repro",
-      "disposition": "external_limitation",
-      "limitation": "No hosted run exists yet for the current source; the earlier run is superseded because covered inputs changed."
+      "disposition": "hosted_verified"
     },
     {
       "id": "P7-03",
