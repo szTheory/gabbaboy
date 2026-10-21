@@ -4630,7 +4630,8 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 return result;
             }
             if (result.consumed_half_dots == budget_half_dots) {
-                result.reason = GBB_STOP_BUDGET;
+                result.reason = instance->accept_input_span != NULL
+                    ? GBB_STOP_BUDGET : GBB_STOP_NO_PROGRESS;
                 return result;
             }
             continue;
