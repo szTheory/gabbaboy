@@ -1002,6 +1002,23 @@ class PerformanceReceiptContractTests(unittest.TestCase):
         self.assertEqual(numbers_result.returncode, 1, numbers_result.stdout)
         self.assertIn("review-measurement-mismatch", numbers_result.stdout)
 
+    def test_release_docs_describe_the_two_stage_review_flow(self) -> None:
+        docs = (ROOT / "docs/release.md").read_text(encoding="utf-8")
+        required = (
+            "--qualify-v02",
+            "pending-investigation",
+            "--apply-decision",
+            "--measurement",
+            "--decision",
+            "--verify-historical",
+            "+14.86%",
+            "±1.62%",
+            "cannot authenticate the",
+        )
+        self.assertTrue(all(item in docs for item in required))
+        self.assertFalse(all(item in docs.replace("--apply-decision", "--decision", 1)
+                             for item in required))
+
     def assert_rejected(self, mutation: object, reason: str) -> None:
         receipt = valid_fixture()
         mutation(receipt)
