@@ -534,31 +534,31 @@ Plans:
   3. Canonical UAT and strict coverage pass; relevant DMG baseline and exact-head remote checks pass before merge.
   4. Re-audit is the next stage after this phase; no automatic archive, tag, publication or v0.3 start.
 
-**Plans:** 19 plans
+**Plans:** 15/19 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 15.1-01-PLAN.md — Bind source receipts to independently read Git trees
-- [ ] 15.1-02-PLAN.md — Deliver dense input scripts without exhausting the bounded queue
-- [ ] 15.1-03-PLAN.md — Make held-button DMG fuzz coverage sensitive to real behavior
-- [ ] 15.1-06-PLAN.md — Make performance regression decisions measurement-bound
-- [ ] 15.1-11-PLAN.md — Normalize Phase 9 summary coverage 1–9
-- [ ] 15.1-12-PLAN.md — Normalize Phase 9 summary coverage 10–18
-- [ ] 15.1-13-PLAN.md — Normalize Phase 10 summary coverage 1–5
-- [ ] 15.1-14-PLAN.md — Normalize Phase 10 summary coverage 11–15
-- [ ] 15.1-15-PLAN.md — Classify canonical UAT separately from clean review files
-- [ ] 15.1-18-PLAN.md — Normalize Phase 10 summary coverage 6–10
-- [ ] 15.1-19-PLAN.md — Normalize Phase 10 summary coverage 16–20
+- [x] 15.1-01-PLAN.md — Bind source receipts to independently read Git trees
+- [x] 15.1-02-PLAN.md — Deliver dense input scripts without exhausting the bounded queue
+- [x] 15.1-03-PLAN.md — Make held-button DMG fuzz coverage sensitive to real behavior
+- [x] 15.1-06-PLAN.md — Make performance regression decisions measurement-bound
+- [x] 15.1-11-PLAN.md — Normalize Phase 9 summary coverage 1–9
+- [x] 15.1-12-PLAN.md — Normalize Phase 9 summary coverage 10–18
+- [x] 15.1-13-PLAN.md — Normalize Phase 10 summary coverage 1–5
+- [x] 15.1-14-PLAN.md — Normalize Phase 10 summary coverage 11–15
+- [x] 15.1-15-PLAN.md — Classify canonical UAT separately from clean review files
+- [x] 15.1-18-PLAN.md — Normalize Phase 10 summary coverage 6–10
+- [x] 15.1-19-PLAN.md — Normalize Phase 10 summary coverage 16–20
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 15.1-04-PLAN.md — Bind installed consumers to independently identified archive bytes
+- [x] 15.1-04-PLAN.md — Bind installed consumers to independently identified archive bytes
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 15.1-05-PLAN.md — Separate trusted judges and independently verify hosted provenance
+- [x] 15.1-05-PLAN.md — Separate trusted judges and independently verify hosted provenance
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 15.1-07-PLAN.md — Make ledger evidence scope and known limitations explicit
-- [ ] 15.1-08-PLAN.md — Run untrusted producers read-only and judge executable workflow wiring
+- [x] 15.1-07-PLAN.md — Make ledger evidence scope and known limitations explicit
+- [x] 15.1-08-PLAN.md — Run untrusted producers read-only and judge executable workflow wiring
 
 **Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 15.1-09-PLAN.md — Wire safe retry recovery and bound real downloads
@@ -586,4 +586,4 @@ Plans:
 | 13. CGB HDMA | v0.2 | 12/12 | Complete    | 2026-10-14 |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 13/13 | Complete    | 2026-10-15 |
 | 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 10/10 | Complete    | 2026-10-20 |
-| 15.1. Release Hardening and Milestone Debt Closure | v0.2 | 0/17 | Planned | - |
+| 15.1. Release Hardening and Milestone Debt Closure | v0.2 | 15/19 | In Progress | - |

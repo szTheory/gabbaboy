@@ -4,18 +4,18 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: "15.1"
 current_phase_name: Release Hardening and Milestone Debt Closure
-current_plan: 8
+current_plan: 9
 status: executing
-stopped_at: Owner pause during Plan08 task1; preserve incomplete policy checker; resume /gsd-execute-phase 15.1
-last_updated: "2026-10-21T14:35:17.490Z"
+stopped_at: Completed 15.1-08-PLAN.md
+last_updated: "2026-10-21T15:04:20.547Z"
 last_activity: 2026-10-21
-last_activity_desc: Owner-requested pause during Phase 15.1 Plan 08
-state_head: c8a04820a7f6ed80a669d83018d9b792785d2645
+last_activity_desc: Completed Phase 15.1 Plan 08 (read-only producers, trusted workflow judge, shared producer contract)
+state_head: b353efe9aee8230b3acf418a45ed9a1419f72750
 progress:
   total_phases: 10
   completed_phases: 9
   total_plans: 153
-  completed_plans: 148
+  completed_plans: 149
   percent: 90
 ---
 
@@ -35,7 +35,7 @@ Status: Executing Phase 15.1
 Current Plan: 8
 Total Plans in Phase: 19
 
-Completed stage: **Phase 15.1 execution paused at owner request — 14/19 plans executed and summarized**. Plan 07 is complete at `842ee39`; Plan 08 task 1 has an incomplete, unstaged policy checker and no task commit or SUMMARY. Waves 1–3 and Plan 07 focused evidence are retained; Wave 4 integration has not run. The latest complete core gate tested source `8174104`: 1,140/1,144 passed in 397.51 seconds. Plan 07 subsequently repaired the ledger checks in focused verification; a new full gate is still required. Plan 10 owns the obsolete dense-failure expectation and live malformed-summary negative. Five plans plus final phase qualification remain. No phase completion, live hosted qualification, PR/merge, publication, or debt acceptance is claimed.
+Completed stage: **Phase 15.1 execution resumed; Plan 08 complete - 15 of 19 plans executed and summarized**. Plan 08 (`15.1-08-SUMMARY.md`, commits `0b835ac`..`b353efe`) split read-only evidence producers from a trusted judge and a write-only attacher, added the bounded workflow policy judge with 61 intended-defect controls, and moved the write-holding manifest and publisher onto a trusted checkout. Five source-executing write jobs remain a named, exactly-enforced residual; nothing has run on GitHub. The full core gate has not run since Plan 07; Plans 09 and 10 (Wave 5) are next, then Plan 16 (hosted reproduction), Plan 17 (closure) and the phase gates. No phase completion, live hosted qualification, PR/merge, publication, or debt acceptance is claimed. Both auto flags stay false. **Next:** Plan 09 (retry/download bounds) of Phase 15.1 - `/gsd-execute-phase 15.1`; this stops at the Phase 15.1 boundary and routes to `/gsd-audit-milestone` only after Plan 17.
 
 Next phase: **15.1 — Release Hardening and Milestone Debt Closure**. Exact next command: `/gsd-execute-phase 15.1`.
 
@@ -319,6 +319,7 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 15 P08 | 60 min | 2 tasks | 3 files |
 | Phase 15 P09 | about 3 hours | 2 tasks | 9 files |
 | Phase 15 P10 | 9h | 2 tasks | 20 files |
+| Phase 15.1 P08 | 105min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -552,6 +553,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 15]: 15-09: v02_support_ledger is a receipt-free static ledger check; receipt-bound --check-current runs in the release corpus job after the receipt exists
 - [Phase 15]: 15-09: downloaded sidecars are verified with opt-in --evidence-only (no producer build tree); generation and --check-current are unrelaxed
 - [Phase 15]: Merge the version PR only after the non-publishing hosted rehearsal is green on its exact tree; resume a failed release run on the same unpublished draft and run control-plane verifiers from the workflow commit
+- [Phase 15.1]: 15.1-08: replaced the unverified partial policy checker; five source-executing write jobs remain a named, exactly-enforced residual (P15-01 repaired for corpus/fuzz/performance only)
+- [Phase 15.1]: 15.1-08: release fuzz evidence is the completed exact-source ci.yml push campaign read through the trusted hosted verifier; release/rehearsal campaigns stay non-qualifying
 
 ### Pending Todos
 
@@ -592,9 +595,9 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-**Last session:** 2026-10-21T02:21:20.043Z
-**Stopped at:** Phase 15.1 planning verified; ready to execute 19 plans
-**Resume file:** .planning/.continue-here.md
+**Last session:** 2026-10-21T15:04:20.079Z
+**Stopped at:** Completed 15.1-08-PLAN.md
+**Resume file:** None
 
 Completed stage: **Phase 15.1 planning and independent plan verification**. All 19 plans, 39 tasks and seven waves are ready to execute; the final checker reports zero blockers and warnings. All 24 scope items and four follow-up requirements have executable coverage. No Phase 15.1 implementation or hosted qualification has run. Nine original phases and 134 plans remain complete; v0.2 stays open. Historical unknowns and spec-less verification flags remain explicit; debt is not accepted by planning.
 
