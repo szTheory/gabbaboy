@@ -51,13 +51,13 @@
     {
       "number": "15",
       "name": "CGB Acceptance, Support Ledger and v0.2.0 Release",
-      "status": "in_progress"
+      "status": "complete"
     }
   ],
   "next": {
-    "command": "/gsd-execute-phase 15",
-    "label": "Execute Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release",
-    "reason": "Phase 15 planning complete: 10 plans / 20 tasks / 7 waves; all four requirements pending; execution unstarted; both auto flags false."
+    "command": "/gsd-execute-phase 8",
+    "label": "Refresh Phase 8 preview-package verification",
+    "reason": "Phase 14 refresh passed; final cross-phase status found Phase 8 stale over cmake/PreviewPackageSmoke.cmake after Phase 10 fixture exclusion hardening. Refresh only before milestone completion/debt review."
   },
-  "updated_at": "2026-10-14T18:09:23.510605+00:00"
+  "updated_at": "2026-10-20T23:57:45.274544+00:00"
 }

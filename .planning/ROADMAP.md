@@ -474,6 +474,8 @@ Plans:
 **Wave 11** *(blocked on Wave 10 completion)*
 - [x] 14-13-PLAN.md — Atomic claims, automated documentation and durable evidence handoff
 
+**Verification refresh (2026-10-20):** [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41 truths, 28 artifact declarations and 13 traced links. CGB-08/10 remain satisfied. Fresh core 1,144/1,144, player 98/98, separate installed-package 5/5 and relocated C/C++ checks pass, zero skips; canonical UAT closes 49/49 with 19 rejected controls. Nonce-bound selected corpus stream 108/108 yields 107 cases, 25 observed passes and 82 matched expected failures; frozen DMG rows unchanged. Historical audit/tool/hardware limits remain. Phase 15 is already complete/currently verified. Final cross-phase freshness finds Phase 8 stale over the later Phase 10 `cmake/PreviewPackageSmoke.cmake` change; Phase 12 also remains stale over lessons/index metadata from the prior Phase 13 refresh; all remaining reports pass. Paused before corrective Phase 8 verification refresh: `/gsd-execute-phase 8`. Milestone completion review follows; 21 debt items remain for explicit review.
+
 ### Phase 15: CGB Acceptance, Support Ledger and v0.2.0 Release
 
 **Goal**: Adopters get a qualified v0.2.0 release whose ledger, docs and consumers accurately state what DMG-CPU-B and CGB-CPU-E support has been proven.

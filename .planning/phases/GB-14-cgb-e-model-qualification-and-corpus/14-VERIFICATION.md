@@ -1,6 +1,6 @@
 ---
 phase: GB-14-cgb-e-model-qualification-and-corpus
-verified: "2026-10-16T12:32:37Z"
+verified: "2026-10-21T00:00:22Z"
 status: passed
 score: 41/41 must-haves verified
 covered_files:
@@ -45,6 +45,8 @@ covered_files:
   - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-HISTORY-REDACTION.md
   - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-PATTERNS.md
   - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-PLAN-CHECK.md
+  - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-REFRESH-EVIDENCE.md
+  - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-REFRESH-GATES.md
   - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-RESEARCH.md
   - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-REVIEW-DISPOSITION.md
   - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-REVIEW-FIX.iter2.md
@@ -67,6 +69,12 @@ covered_files:
   - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/continue.md
   - .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/verify-uat-contract.py
   - README.md
+  - build-player/14-refresh-player.xml
+  - build/14-refresh-consumers.xml
+  - build/14-refresh-core-and-consumers.xml
+  - build/14-refresh-corpus-receipt.json
+  - build/14-refresh-regression.xml
+  - build/14-refresh-v02-consumers.json
   - cmake/AgeFixtureProtocol.cmake
   - cmake/ScanForbiddenFixtures.cmake
   - cmake/VerifyMooneyeCgb.cmake
@@ -194,6 +202,7 @@ covered_files:
   - tests/scripts/test-cgb-corpus-report.py
   - tests/scripts/test-cgb-red-evidence-privacy.py
   - tests/scripts/test-reproduce-age.sh
+  - tests/scripts/test-reproduce-mooneye-cgb-guard.sh
   - tests/scripts/test_age_phase14_contract.py
   - tests/scripts/test_age_phase14_inherited_contract.py
   - tests/scripts/verify-age-m3-pixels.py
@@ -218,23 +227,23 @@ covered_files:
   - tests/test_samesuite_apu.c
   - tests/test_samesuite_apu_membership.py
   - tests/test_samesuite_hdma.c
-covered_digest: "v3:sha256:187635d0be89d8ee67cbd14affabc4c2a4a7ebf558eb7123dc781fd5691945d6"
+covered_digest: "v3:sha256:63a73140a6bad2b5e30f8b6f2a9410c87f2f2b667f04cf8dc494815565a6e342"
 behavior_unverified: 0
 overrides_applied: 0
-re_verification:
-  previous_status: passed
-  previous_score: 41/41
-  gaps_closed: []
-  gaps_remaining: []
-  regressions: []
+decision_coverage:
+  honored: 25
+  total: 25
+  not_honored: []
 ---
 
-# Phase 14: CGB-E Model Qualification and Corpus Verification Report
+# Phase 14: CGB-E Model Qualification and Corpus — Verification Report
 
-**Phase Goal:** CGB-E specific APU and I/O differences are implemented under declared per-test applicability, and a headless CGB-E corpus reports honest denominators.
-**Verified:** 2026-10-16T12:32:37Z
+**Phase Goal:** CGB-E-specific APU and I/O differences are implemented under declared per-test applicability, and a headless CGB-E corpus reports honest denominators.
+**Verified:** 2026-10-21T00:00:22Z
 **Status:** passed
-**Re-verification:** Yes — refreshed the prior passing 41/41 goal verification after automated UAT closure and a fresh local regression.
+**Re-verification:** No — the previous report had no gaps. Step 0 therefore routes this as an initial-mode audit; all current roadmap and plan truths were re-established.
+
+The installed runtime identifies as @opengsd/gsd-core 1.18.0. Current source producer and HEAD are b52a4dabf244b7e37d4fc7bd22d8830927d65955. The working tree has no uncommitted source, test, fixture, CI, or public-document changes. The prior verification contained three ROADMAP success criteria and 38 plan truths, for 41 total must-haves. No PLAN declares a must-have prohibition or override.
 
 ## Goal Achievement
 
@@ -242,160 +251,163 @@ re_verification:
 
 | # | Truth | Status | Evidence |
 |---|---|---|---|
-| R1 | PCM12/PCM34, FF72–FF75 masked registers and the IR port stub behave as specified on CGB-E, with per-test model applicability and named expected failures in the manifests. | ✓ VERIFIED | src/core/gabbaboy.c routes guest FF76/FF77 reads through timed CGB I/O; the bus tests cover PCM values, FF72–FF75, FF56 and compatibility mode. Corpus manifests bind applicability and exact outcomes, including channel_4_freq_change. |
-| R2 | A headless CGB-E corpus reports per-suite passed/executed denominators with each failure and exclusion reason, and Mealybug m3_* cases are recorded as unsupported-model. | ✓ VERIFIED | Fresh nonce-bound receipt from producer cd3f6856c48df99a43665a96d99176d9557a6578: 107/107 required cases completed, 25 observed passes and 82 matched xfails; AGE 2/19, MagenTests 5/5, Mooneye 6/9 and SameSuite 12/74. The pinned inventory and public profile preserve optional rights/model exclusions and 30 Mealybug m3_* unsupported-model entries. |
-| R3 | The DMG baseline remains byte-identical after the CGB-E deltas land. | ✓ VERIFIED | The fresh regression JUnit includes a passing `dmg_baseline`; `bash tests/scripts/verify-dmg-baseline.sh --junit build/phase14-uat-regression.xml --inventory core` passes with all 258 frozen names. |
-| 1 | 14-01: CGB-native guest reads FF76/FF77 as CH2:CH1 and CH4:CH3 digital nibbles at the timed bus boundary. | ✓ VERIFIED | tests/test_cgb_apu.c guest programs read the nibbles and assert exact values; cgb_pcm_tracer passed in the focused run and full producer suite. |
-| 2 | 14-01: Changing host routing, volume, mute, sample capacity or drain does not change digital PCM observations. | ✓ VERIFIED | The guest PCM host-invariance and routing controls assert identical values across host configurations; all corresponding CTests pass in the refreshed 1138-test producer run. |
-| 3 | 14-01: The DMG output baseline remains byte-identical. | ✓ VERIFIED | Frozen baseline check passed; its 258-name core JUnit inventory matches the producer XML. |
-| 4 | 14-02: Native CGB FF56 deterministically stores LED/reception enable and reports a disconnected receiver. | ✓ VERIFIED | src/core/gabbaboy.c stores the instance FF56 latch; tests/test_cgb_visibility.c exercises guest writes and reads, disconnected-receiver policy, reset and lifecycle controls. |
-| 5 | 14-02: Guest FF72/73/75 stored/masked compatibility behavior and absent compatibility FF74 remain preserved. | ✓ VERIFIED | The I/O policy table specifies stored/masked reads, and independent test_cgb_tables and guest-bus tests cover native and compatibility behavior. |
-| 6 | 14-02: Every claimed FF56/72–77 model/mode cell is exercised through guest bus access. | ✓ VERIFIED | CMake registers the visibility cases against the public core, and test_cgb_visibility drives the guest bus for each declared model/mode cell. |
-| 7 | 14-03: CH3 trigger retains the prior buffered sample until an actual fetch, with output observed by a real guest. | ✓ VERIFIED | test_cgb_apu contains separate guest trigger and fetch sequences; cgb_apu_wave_latch, cgb_apu_wave_fetch and direct-RAM mutation control passed. |
-| 8 | 14-03: NR52, DAC, length, sweep, DIV and active wave-RAM transitions have independent assertions or exact named case limitations. | ✓ VERIFIED | tests/test_cgb_apu.c includes named transition cases and exact controls; the final CTest run passed all registered transition tests. |
-| 9 | 14-03: Model-gate and audio claims change with behavior while DMG remains byte-identical. | ✓ VERIFIED | CGB audio/profile claim contracts and negative controls pass; player limitation copy check passes; frozen DMG baseline remains unchanged. |
-| 10 | 14-04: Split and uninterrupted CGB runs agree across digital sample/fetch, power and speed events. | ✓ VERIFIED | tests/test_cgb_partition.c includes the core source for white-box partition tests; split-run stream and state comparisons pass in the full CTest output. |
-| 11 | 14-04: Create/reset/load/failure and separate instances preserve the declared APU/I/O state contract. | ✓ VERIFIED | APU lifecycle, snapshot fidelity, reset, load/failure and instance-isolation cases are registered as CTests and pass in the producer run. |
-| 12 | 14-04: Tiny budgets, host-buffer variations and hostile inputs remain bounded without losing sample or fetch remainder. | ✓ VERIFIED | Bounded pressure, tiny-budget, buffer/drain and hostile-seed controls assert exact remainder and work limits; all are included in the passing producer run. |
-| 13 | 14-05: Every source candidate at the four pinned trees has explicit family, model/mode, rights, build, oracle and inclusion/exclusion metadata. | ✓ VERIFIED | Current inventory binding validation passes over 181 source candidates and 109 output rows; eligibility/source documents and fail-closed validators bind rights, model/mode and provenance. |
-| 14 | 14-05: The required set is frozen independently of execution outcomes: SameSuite70 APU plus existing4 DMA, Mooneye9, AGE13 existing plus6 new and five Magen CGB cases. | ✓ VERIFIED | The inventory fixes 107 required cases across AGE19, SameSuite74, Mooneye9 and MagenTests5; manifest membership controls and exact CTest bindings pass. |
-| 15 | 14-05: Rights-blocked or unsupported-model sources remain visible without being counted as executed. | ✓ VERIFIED | Optional G1 records remain outside the 107-case denominator; absent Mealybug bytes are listed as not-run and its 30 m3_* entries are unsupported-model. |
-| 16 | 14-06: Five new Mooneye outputs reproduce from the unchanged pinned source/tool/zero-font recipe. | ✓ VERIFIED | A fresh reproduce-mooneye-cgb.sh --compare rebuilt all nine selected ROMs from pinned source/tool commits; all nine matched byte-for-byte. |
-| 17 | 14-06: All nine selected Mooneye cases execute with author pass/fail semantics and per-case reasons. | ✓ VERIFIED | The source-bound receipt records nine executed cases, six observed passes and three exact matched xfails; author expectations remain separate from guest observations. |
-| 18 | 14-06: Missing required bytes, changed callbacks or result-only denominator selection fail qualification. | ✓ VERIFIED | Mooneye digest, callback, membership and wrong-result negative controls are registered and passed in the full CTest run. |
-| 19 | 14-07: All seventy pinned APU sources are admitted and executed, independent of current success and revision suffix. | ✓ VERIFIED | A fresh pinned SameSuite reproduction matched all 74 outputs; the 70 APU case roster is frozen and its required CTests execute as a single bounded cohort. |
-| 20 | 14-07: Author CGB-E expectations remain independent from software-model or SameBoy observations. | ✓ VERIFIED | Source pass expectations, evaluator outcomes, and matched xfails occupy distinct manifest/receipt fields; current checks reject altered expectations and result-selected membership. |
-| 21 | 14-07: Each mismatch is precise and every required APU family has passing independent contract evidence. | ✓ VERIFIED | Case-level assertions and mismatch signatures are retained; the guest PCM and APU contract tests pass independently of the 62 SameSuite matched xfails. |
-| 22 | 14-08: All six AGE m3 programs and their six CGB-E reference PNGs are rights/digest/source/tool bound and reproducible. | ✓ VERIFIED | A fresh AGE source comparison rebuilt the six admitted ROMs and confirmed all six reference PNGs byte-identical to their pinned upstream images. |
-| 23 | 14-08: Native/compat normal-speed targets and double-speed siblings have separate identities before execution. | ✓ VERIFIED | Manifest rows bind each ROM, model/mode, speed and reference identity; AGE membership and execution checks preserve the four normal and two DS roles. |
-| 24 | 14-09: Six admitted AGE m3 guests execute and compare against independently pinned source images. | ✓ VERIFIED | The final receipt includes all six pixel cases and the comparator emits exact source-bound per-pixel results from pinned PNGs. |
-| 25 | 14-09: Four normal targets and two DS siblings are separately classified without tolerance fitted to emulator output. | ✓ VERIFIED | AGE manifest identities and independent CGB-PPU disposition signatures classify all six cases; no fitted tolerance or emulator-generated reference is used. |
-| 26 | 14-09: Pixel corruption and malformed image controls fail exact predicates. | ✓ VERIFIED | Pixel bit-flip, all-white frame, CRC, malformed chunk, truncated and oversized PNG controls are registered and passed as expected rejection tests. |
-| 27 | 14-10: Inherited AGE normal/DS and SCX/LY assertion families retain independent expected values and exact observed dispositions. | ✓ VERIFIED | The disposition file carries independent source rows, expected masks and exact failure signatures; all inherited AGE assertion and membership controls pass. |
-| 28 | 14-10: Only source-backed, positive-and-negative-tested timing seams change; unresolved physical behavior stays precisely owned. | ✓ VERIFIED | Timing changes have paired boundary controls; 31 research14 gate rows remain traceable, with 27 unresolved items explicitly documented as evidence limitations. |
-| 29 | 14-10: Every inherited research14 gate has a tested resolution or named evidence limitation. | ✓ VERIFIED | model_gates and cgb_research14_dispositions validate all 31 gate IDs; their positive and negative controls pass. |
-| 30 | 14-11: One execution stream produces both a versioned machine receipt and concise per-suite terminal summary. | ✓ VERIFIED | One CTest XML stream is parsed into the versioned JSON receipt and terminal suite summary; the producer receipt is complete and source-bound. |
-| 31 | 14-11: Actual passed/executed and completed/eligible case counts reconcile independently from assertion totals and evaluator status. | ✓ VERIFIED | The receipt reports separate reconciled case, assertion and evaluator counts; 107 eligible/attempted/completed cases reconcile independently of 2845/4959 passing assertions. |
-| 32 | 14-11: Partial, stale, malformed, wrong-identity and unexpected result streams yield an incomplete failed receipt and nonzero exit. | ✓ VERIFIED | Report-contract tests pass controls for partial, stale, malformed, wrong-identity, membership and unexpected results; current metadata-head stale-revision rejection also behaved as specified. |
-| 33 | 14-12: Existing native and sanitizer jobs verify exact corpus/report inventory and preserve DMG identity. | ✓ VERIFIED | CI wires full-stream receipt and claims checks on native Linux, exact inventory and DMG checks across native jobs, and inventory checks in sanitizers; the refreshed source-bound regression passed all 1,138 required identities and the frozen 258-name DMG inventory. Exact-head hosted jobs remain a separate pending delivery check. |
-| 34 | 14-12: New admitted outputs reproduce in the existing fixture job with measured cost and tamper controls. | ✓ VERIFIED | Fixture reproduction remains wired in CI. The byte-preserving missing-ROM manifest control, portable AGE row identities/deadlines and pinned-source line-ending guard are included in required CTests; the refreshed regression passed. Previously verified pinned source rebuilds remain unchanged. |
-| 35 | 14-12: Existing installed/package consumers remain valid without installing qualification fixtures. | ✓ VERIFIED | Package scan and renamed-fixture negative controls are wired in CMake/CI; final CTest and required installed-inventory checks pass without fixture installation. |
-| 36 | 14-13: Public CGB/audio/preview claims agree with exact executed software-model evidence and named limitations. | ✓ VERIFIED | Public claims bind to inventory/dispositions and the producer receipt; the static claim contract passed 15 negative controls and retains physical, analog, peer and game limits. |
-| 37 | 14-13: Source, required membership, observed results, gate ownership and evidence ancestry remain navigable and automatically checked. | ✓ VERIFIED | Public docs link to inventory, receipts and gate ownership; corpus claims, inventory, privacy and source identity validators pass. |
-| 38 | 14-13: Phase14 ends at its verification/handoff boundary with both automatic-advance flags false and Phase15 unstarted. | ✓ VERIFIED | `verify-uat-contract.py` passes 49/49 deliverables and 13/13 bounded commit windows; its self-test passes 29 negative controls. `.planning/state.json` records Phase 14 complete, Phase 15 pending and `/gsd-discuss-phase 15`; both auto-advance flags remain false. |
+| 1 | ROADMAP: PCM12/PCM34, FF72–FF75 masked registers, and the IR port stub behave as specified on CGB-E, with per-test model applicability and named expected failures. | ✓ VERIFIED | Current source maps FF76/77 to digital channel reads, model/mode policies to the I/O table, and FF56 to an instance latch. Guest CTest selections pass; the current corpus claim check validates the declared model cells and named outcomes, including channel_4_freq_change. |
+| 2 | ROADMAP: The headless AGE, SameSuite, MagenTests, and CGB-applicable Mooneye corpus reports per-suite denominators, failures and exclusion reasons, and Mealybug m3_* is unsupported-model. | ✓ VERIFIED | The current nonce-bound stream contains 108 CTests and produces a complete receipt for 107 required cases: 25 observed passes and 82 matched expected failures. AGE 2/19, MagenTests 5/5, Mooneye 6/9, SameSuite 12/74. Current inventory and claims validators pass; rights-gated acid2/Mealybug bytes are excluded, and 30 Mealybug m3_* entries remain unsupported-model. |
+| 3 | ROADMAP: The frozen DMG baseline remains byte-identical after the CGB-E changes. | ✓ VERIFIED | Current baseline check reports zero changed rows; all 258 frozen core inventory names are present. |
+| 4 | 14-01: CGB guests read FF76/FF77 as CH2:CH1 and CH4:CH3 digital nibbles at the timed bus boundary. | ✓ VERIFIED | tests/test_cgb_apu.c guest reads assert exact nibble values; cgb_pcm_tracer and cgb_pcm_channels are registered against GabbaBoy::core and pass in the current CTest stream. |
+| 5 | 14-01: Host routing, volume, mute, sample capacity, and drain do not change digital PCM observations. | ✓ VERIFIED | cgb_pcm_host_invariance passes; the compile-time routing and writable-register mutants are separately rejected by their controls. |
+| 6 | 14-01: The DMG output baseline remains byte-identical. | ✓ VERIFIED | The fresh baseline checker reports zero changed rows; the current core JUnit retains all 258 frozen baseline names. |
+| 7 | 14-02: Native CGB FF56 stores LED/reception enable and reports a disconnected receiver deterministically. | ✓ VERIFIED | tests/test_cgb_visibility.c uses guest bus writes/reads; cgb_ir_tracer, cgb_ir_controls, and cgb_ir_modes pass. The latch is instance-owned and reset by the production lifecycle path. |
+| 8 | 14-02: FF72/73/75 stored and masked compatibility behavior, and absent compatibility FF74, remain preserved. | ✓ VERIFIED | The production I/O policy table and independent literal table oracle agree; current CGB, compatibility, and DMG visibility matrices pass. |
+| 9 | 14-02: Every claimed FF56/72–77 model/mode cell is exercised through guest bus access. | ✓ VERIFIED | The visibility matrix runs guest programs for native CGB, compatibility, and DMG columns; all three matrices and the IR boundary checks pass. |
+| 10 | 14-03: CH3 retains its prior buffered sample after trigger until a real timed fetch, observed by a guest. | ✓ VERIFIED | cgb_apu_wave_latch and cgb_apu_wave_fetch pass; the direct-wave-RAM mutant control is registered and included in the fresh full CTest run. |
+| 11 | 14-03: NR52, DAC, length, sweep, DIV, and active wave-RAM transitions have independent assertions or exact named limitations. | ✓ VERIFIED | Separate transition CTests are registered in tests/CMakeLists.txt and pass in the 1,144-test current regression; the APU test file asserts each transition through guest observations. |
+| 12 | 14-03: Model-gate/audio claims change with behavior while DMG remains byte-identical. | ✓ VERIFIED | Current claim, model-gate, player-copy, and DMG baseline checks pass. Physical and analog conclusions remain excluded. |
+| 13 | 14-04: Split and uninterrupted CGB runs agree across digital sample/fetch, power, and speed events. | ✓ VERIFIED | cgb_apu_partition_fetch passes as a named current test; the full current CTest stream includes the fetch, speed, and partition controls with no failures or skips. |
+| 14 | 14-04: Create/reset/load/failure and separate instances preserve the declared APU/I/O state contract. | ✓ VERIFIED | cgb_apu_lifecycle passes; current CTest also includes its negative controls and the FF56 lifecycle/isolation guest checks. |
+| 15 | 14-04: Tiny budgets, host-buffer variation, and hostile inputs stay bounded without losing sample/fetch remainder. | ✓ VERIFIED | Bounded-output, hostile-seed, and partition remainder tests are registered and pass in the current full CTest stream; no fixture or evaluator result is used to filter the required roster. |
+| 16 | 14-05: Every candidate at the four pinned trees has family, model/mode, rights, build, oracle, and inclusion/exclusion metadata. | ✓ VERIFIED | verify-cgb-corpus-inventory.py --bindings passes: 181 source candidates, 109 admitted outputs, and 107 required cases. |
+| 17 | 14-05: The required set is frozen independently of outcomes: 70 SameSuite APU plus 4 DMA, 9 Mooneye, 19 AGE, and 5 MagenTests cases. | ✓ VERIFIED | Inventory binding and current receipt agree on the fixed 107-case set: 74 SameSuite, 9 Mooneye, 19 AGE, and 5 MagenTests. |
+| 18 | 14-05: Rights-blocked and unsupported-model candidates remain visible without entering executed denominators. | ✓ VERIFIED | Inventory and public corpus documentation retain optional rights-gated candidates and unsupported-model classifications separately from the required executed set; Mealybug m3_* is not counted as run. |
+| 19 | 14-06: The five new Mooneye outputs reproduce from the unchanged pinned source/tool/zero-font recipe. | ✓ VERIFIED | The phase’s pinned reproduction evidence records byte-identical output for the nine selected ROMs. The build recipe and fixture digests remain pinned. This refresh did not claim a fresh rebuild because installed RGBDS is 1.0.4 while the recipe requires 1.0.1. The only later Mooneye reproducer edit adds output-path safety checks; its current registered cgb_mooneye_repro_requires_manifest test passes. |
+| 20 | 14-06: All nine selected Mooneye cases execute with author pass/fail semantics and per-case reasons. | ✓ VERIFIED | The current receipt includes nine Mooneye cases, six observed passes and three exact matched failures. Manifest author expectations remain separate from evaluator outcomes. |
+| 21 | 14-06: Missing bytes, changed callbacks, and result-selected denominators fail qualification. | ✓ VERIFIED | Mooneye digest, callback, membership, wrong-result and missing-manifest controls pass in the fresh core stream; the named current reproducer guard test also passes. |
+| 22 | 14-07: All 70 pinned SameSuite APU sources are admitted and executed independent of current success or revision suffix. | ✓ VERIFIED | The receipt includes the fixed 70 APU cases plus four DMA cases; all 74 SameSuite entries complete. No outcome-based membership filtering occurs. |
+| 23 | 14-07: Author CGB-E expectations remain independent from software-model or SameBoy observations. | ✓ VERIFIED | The manifest holds author expectation, observed result, and evaluator disposition separately; inventory and receipt controls reject altered expectations and result-selected membership. |
+| 24 | 14-07: Every mismatch is precise and each required APU family has independent contract evidence. | ✓ VERIFIED | Per-case SameSuite outcomes and assertion rows are recorded; current APU guest tests and disposition controls pass independently of the 62 matched SameSuite failures. |
+| 25 | 14-08: Six AGE m3 programs and six CGB-E reference PNGs are bound to rights, digests, source, tool, and reproducible recipes. | ✓ VERIFIED | Current manifests, inventory bindings, fixture digests, and six receipt image cases agree. Historical pinned rebuilds matched ROMs and source PNGs byte-for-byte. No fresh RGBDS 1.0.1 rebuild is claimed in this refresh. |
+| 26 | 14-08: Native/compatibility normal-speed targets and double-speed siblings have distinct identities before execution. | ✓ VERIFIED | The manifest and receipt bind each image case to model, mode, speed, ROM, reference, and source identity; the current AGE membership controls pass. |
+| 27 | 14-09: Six admitted AGE guests execute and compare against independently pinned source images. | ✓ VERIFIED | The current selected stream executes all six image cases; the comparator reads guest RGB555 frames and independently pinned PNGs. The receipt records their exact per-pixel outcomes. |
+| 28 | 14-09: Four normal-speed cases and two double-speed siblings are separately classified without fitted tolerance. | ✓ VERIFIED | Current manifest and receipt preserve separate normal/double identities and exact expected dispositions; no emulator-derived tolerance or reference is used. |
+| 29 | 14-09: Pixel corruption and malformed-image controls fail exact predicates. | ✓ VERIFIED | cgb_age_m3_pixel_controls passes its current corruption, malformed, truncation, and bounds controls. |
+| 30 | 14-10: Inherited AGE normal/double-speed and SCX/LY families retain independent expected values and exact dispositions. | ✓ VERIFIED | The current age assertion identity test passes 13 named cases/142 rows; source-labelled row-value and signature controls also pass. |
+| 31 | 14-10: Only source-backed, positive/negative-tested timing seams change; unresolved physical behavior stays precisely owned. | ✓ VERIFIED | Current AGE and research disposition predicates pass; model-gate documentation preserves the open physical uncertainty without promoting it to a hardware claim. |
+| 32 | 14-10: Every inherited research14 gate has a tested resolution or named evidence limitation. | ✓ VERIFIED | All 31 gate IDs remain in model-gate documentation. The current research14 controls reject missing/duplicate gates, missing ownership/applicability, removed DMG obligations, and false promotion. |
+| 33 | 14-11: One execution stream produces a versioned receipt and per-suite summary. | ✓ VERIFIED | A fresh nonce-bound selected stream ran its exact 108 CTest names and produced the complete current receipt from that CTest stream; the claims validator accepts the receipt. |
+| 34 | 14-11: Case counts reconcile independently from assertion totals and evaluator status. | ✓ VERIFIED | Current receipt counts are 107 eligible/attempted/completed cases, 25 passes, 82 matched xfails, and 2,845/4,959 passing assertions; image totals are separately 18,208/138,240 mismatches. |
+| 35 | 14-11: Partial, stale, malformed, wrong-identity, and unexpected streams produce an incomplete failed receipt and nonzero exit. | ✓ VERIFIED | The current 13-test report-contract selection and 5-test report negative-control suite pass; they include stale receipt, identity, duplicate/omitted membership, malformed input, and unexpected-result controls. |
+| 36 | 14-12: Existing native and sanitizer jobs verify exact corpus/report inventory and preserve DMG identity. | ✓ VERIFIED | CI configuration wires inventory and baseline checks into native/sanitizer lanes; the fresh local core stream passes all 1,144 tests with zero skips and current baseline checks pass. No hosted or sanitizer-runtime result is claimed for this refresh. |
+| 37 | 14-12: New admitted outputs reproduce in the fixture job with measured cost and tamper controls. | ✓ VERIFIED | The fixture workflow remains wired to pinned reproduction and tamper checks. Existing pinned rebuild receipts remain at their actual revisions; the current Mooneye path-safety control passes. The local CMake/RGBDS version mismatch prevents a fresh pinned rebuild claim. |
+| 38 | 14-12: Installed/package consumers remain valid without installing qualification fixtures. | ✓ VERIFIED | A fresh install into an isolated prefix and separately configured consumer build pass 5/5 tests. The current package-exclusion and consumer-contract controls also pass in the core stream. |
+| 39 | 14-13: Public CGB/audio/preview claims agree with exact executed software-model evidence and named limitations. | ✓ VERIFIED | Current claims validation succeeds against the nonce-bound receipt and rejects 15 mutations. Public claims retain physical, analog, IR-peer, and game-compatibility limits. |
+| 40 | 14-13: Source, membership, observed results, gate ownership, and evidence ancestry are navigable and checked automatically. | ✓ VERIFIED | Inventory, claims, privacy, source stamp, and current receipt checks pass; the receipt identifies source revision b52a... and its nonce-bound event stream. |
+| 41 | 14-13: At the Phase14 boundary both auto-advance flags were false and Phase15 was unstarted. | ✓ VERIFIED | The contract reads immutable boundary commit c771b1b9c143d7589f8bb40c163c2e9f89ca1168: Phase15 was pending and the boundary route was /gsd-discuss-phase 15. The phase-local self-test passes 10 boundary controls and 2 commit controls; all 13 task windows reconcile. Current state is later, after Phase15 completion, and is not used as evidence for this historical boundary truth. |
 
 **Score:** 41/41 truths verified (0 present, behavior-unverified).
 
 ## Required Artifacts
 
-The 13 plans declare 28 artifact instances. The installed OpenGSD artifact verifier reports all 28 present and substantive. Additional wiring was checked manually below.
+OpenGSD’s artifact query reports all 28 plan artifact declarations present and substantive. The following 14 unique paths cover those declarations; CMake/tests and validators provide the wiring described.
 
 | Artifact | Expected | Status | Details |
 |---|---|---|---|
-| src/core/gabbaboy.c | CGB-E PCM and I/O behavior | ✓ VERIFIED | Guest read/write dispatch, register policy table, PCM nibble reads and instance FF56 latch are implemented. |
-| tests/test_cgb_apu.c | Guest-observed APU behavior and controls | ✓ VERIFIED | Timed guest reads, transition cases, host-output invariance, bounded runs and mutation controls. |
-| tests/test_cgb_visibility.c | Guest bus model/mode coverage | ✓ VERIFIED | Wired through CMake to GabbaBoy::core; checks native and compatibility cells. |
-| tests/test_cgb_partition.c | Split-run APU and I/O state behavior | ✓ VERIFIED | White-box test includes the core source and registers partition/lifecycle cases. |
-| tests/test_cgb_tables.c | Independent literal register oracle | ✓ VERIFIED | CMake registers table checks against the documented profile contract. |
-| tests/test_age.c and tests/test_age_m3.c | AGE row and pixel guests | ✓ VERIFIED | CMake registers source-bound row tests and six image cases through the comparator. |
-| tests/test_samesuite_apu.c | Frozen APU corpus execution | ✓ VERIFIED | CMake links the core, binds exact membership and registers cohort/assertion checks. |
-| tests/external/cgb-corpus-inventory.json | Frozen source/output/case roster | ✓ VERIFIED | Binding validator passes: 181 candidates, 109 output rows, 107 required cases. |
-| tests/external/cgb-apu-dispositions.json and tests/external/cgb-speed-dispositions.json | Independent expected outcomes and limitations | ✓ VERIFIED | Consumed by CMake and their validators; mutation controls reject omissions and altered expectations. |
-| fixtures/age/manifest.json and fixtures/mooneye-cgb/manifest.json | Source/tool/digest/model identity | ✓ VERIFIED | Pinned source comparison rebuilt AGE and Mooneye outputs byte-identically. |
-| tests/scripts/verify-cgb-corpus-inventory.py | Fail-closed inventory and membership checks | ✓ VERIFIED | Current --bindings check passes; self-test and negative controls pass. |
-| tests/scripts/verify-age-m3-pixels.py | Exact independent image comparison | ✓ VERIFIED | Receives test_age_m3 RGB555 frames through CMake; pins source images and exact mismatch signatures. |
-| tests/scripts/verify-cgb-corpus-report.py and tests/scripts/test-cgb-corpus-report.py | Versioned identity-bound receipt | ✓ VERIFIED | Parses runner/CTest events, reconciles case/assertion counts and rejects stale or malformed streams; report controls pass. |
-| tests/scripts/test-cgb-apu-source-eol.py and tests/scripts/verify-cmake-floor.sh | Cross-platform source identity and early floor controls | ✓ VERIFIED | Required CTests prove the two raw-digested sources stay LF under autocrlf, reject an unpinned CRLF negative control, and run the platform adapter controls early in the floor job. |
-| tests/scripts/verify-cgb-corpus-claims.py and docs/cgb-corpus.md | Public claims and corpus contract | ✓ VERIFIED | Docs are loaded by the claims validator; static claims and 15 mutation controls pass. |
+| src/core/gabbaboy.c | CGB-E PCM and I/O behavior | ✓ VERIFIED | Production I/O table gates FF56 and FF72–FF77 by model/mode; FF76/77 read digital channel values. |
+| tests/test_cgb_apu.c | Timed guest APU behavior | ✓ VERIFIED | Guest reads, transition, host-invariance, bounded-run, and mutation controls are implemented. |
+| tests/external/cgb-corpus-inventory.json | Frozen source/output/case roster | ✓ VERIFIED | Current bindings validate all 181 sources, 109 outputs, and 107 required cases. |
+| tests/scripts/verify-cgb-corpus-inventory.py | Inventory, rights, and membership contract | ✓ VERIFIED | Current --bindings and named negative controls pass. |
+| docs/cgb-corpus.md | Public corpus denominators and exclusions | ✓ VERIFIED | The current claim validator consumes this documentation and matches it to the receipt. |
+| fixtures/age/manifest.json | Six AGE ROM/image identities | ✓ VERIFIED | Source, model/mode, speed, rights, and output digests are bound; current tests consume those rows. |
+| tests/test_samesuite_apu.c | Frozen APU suite execution | ✓ VERIFIED | Exact case membership and assertion rows feed the receipt. |
+| tests/external/cgb-apu-dispositions.json | Independent SameSuite expectations | ✓ VERIFIED | Consumed by CMake, receipt checks, and the disposition validator. |
+| tests/scripts/verify-cgb-corpus-report.py | Identity-bound receipt producer | ✓ VERIFIED | Parses runner/CTest events, reconciles outcomes, and rejects invalid streams. |
+| tests/scripts/test-cgb-corpus-report.py | Report-contract tests | ✓ VERIFIED | Current named contract and negative-control CTests pass. |
+| tests/external/cgb-speed-dispositions.json | Independent AGE row expectations | ✓ VERIFIED | Supplied to the AGE harness for exact row values and failure signatures. |
+| tests/test_age_m3.c | Guest RGB555 image capture | ✓ VERIFIED | Registered guest emits bounded RGB555 frames for the comparator. |
+| tests/scripts/verify-age-m3-pixels.py | Independent PNG pixel comparison | ✓ VERIFIED | Reads captured frames and pinned source PNGs, with corruption controls. |
+| tests/scripts/verify-cgb-corpus-claims.py | Public-claim/receipt contract | ✓ VERIFIED | Current receipt validation passes; the mutation suite rejects weakened claims. |
 
 ## Key Link Verification
 
-The generic literal-reference checker marked 12 of 13 links false because several links are mediated by CMake or executable streams. I traced each actual path directly; the sole heuristic positive also checks out.
+The generic literal-reference query recognized 1/13 links; it marks the rest false because links flow through CMake, build-time JSON inputs, and runner/CTest event streams. Manual traces below confirm all 13 intended links.
 
 | From | To | Via | Status | Details |
 |---|---|---|---|---|
-| src/core/gabbaboy.c | tests/test_cgb_apu.c | CMake target links test to core | ✓ WIRED | Test guest reads exercise the production public bus/API behavior. |
-| src/core/gabbaboy.c | tests/test_cgb_visibility.c | CMake target links test to core | ✓ WIRED | Guest FF56 and FF72–FF77 native/compatibility access cases are registered. |
-| src/core/gabbaboy.c | tests/test_cgb_apu.c | CMake cases for independent transition assertions | ✓ WIRED | Wave latch/fetch, power, DIV, DAC and controls run against the core. |
-| src/core/gabbaboy.c | tests/test_cgb_partition.c | White-box source include | ✓ WIRED | The test includes the core implementation and verifies split-run state/output. |
-| tests/external/cgb-corpus-inventory.json | tests/scripts/verify-cgb-corpus-inventory.py | Validator loads frozen JSON | ✓ WIRED | --bindings verifies source, output, required case and CTest identities. |
-| fixtures/mooneye-cgb/manifest.json | tests/scripts/reproduce-mooneye-cgb.sh | Pinned source/output comparison | ✓ WIRED | Fresh nine-ROM source rebuild matched committed bytes. |
-| fixtures/samesuite/manifest.json | tests/scripts/reproduce-samesuite.sh | Manifest-driven pinned source comparison | ✓ WIRED | Fresh build matched 74 outputs; exact membership is also used by the test cohort. |
-| fixtures/age/manifest.json | tests/scripts/reproduce-age.sh | Manifest-driven ROM/image source comparison | ✓ WIRED | Fresh build matched six new ROMs and six reference PNGs. |
-| tests/test_age_m3.c | tests/scripts/verify-age-m3-pixels.py | CMake passes generated frame to pixel comparator | ✓ WIRED | The comparator validates metadata and exact pixels against pinned PNGs. |
-| tests/external/cgb-speed-dispositions.json | tests/test_age.c | CMake reads JSON and supplies exact values/signature/mask | ✓ WIRED | The harness exercises independent expected rows and rejects altered signatures. |
-| src/runner/main.c | tests/scripts/verify-cgb-corpus-report.py | Runner case/assertion event stream | ✓ WIRED | Runner emits structured case/assertion lines; parser produces the receipt and reconciles identity/counts. |
-| .github/workflows/ci.yml | tests/CMakeLists.txt | Configure/build/full CTest and exact test inventory | ✓ WIRED | Linux additionally builds the receipt/claims/privacy outputs; native jobs check the frozen DMG JUnit inventory. |
-| tests/scripts/test-cgb-apu-source-eol.py | .gitattributes | Temporary Git repo with core.autocrlf=true | ✓ WIRED | Required CTest checks indexed and checked-out bytes for both pinned sources and verifies the unpinned CRLF negative control. |
-| tests/CMakeLists.txt | tests/expected-tests.txt and .github/scripts/verify-cmake-floor.sh | Required full-run inventory and anchored early floor selection | ✓ WIRED | Both new prevention CTests are required by exact inventory; the platform-control suite also runs before the full hosted floor suite. |
-| docs/cgb-profile.md | tests/scripts/verify-cgb-corpus-claims.py | Claims validator reads marked documentation blocks | ✓ WIRED | Current claims contract validates the documented model outcomes and explicit limitations. |
+| src/core/gabbaboy.c | tests/test_cgb_apu.c | CMake target links GabbaBoy::core | ✓ WIRED | The test drives guest bus reads and compares exact FF76/77 values. |
+| src/core/gabbaboy.c | tests/test_cgb_visibility.c | CMake target links GabbaBoy::core | ✓ WIRED | Guest cases exercise FF56 and FF72–FF77 across CGB, compatibility, and DMG cells. |
+| src/core/gabbaboy.c | tests/test_cgb_apu.c | CMake APU transition targets | ✓ WIRED | Named wave latch/fetch, power, DIV, DAC, and control cases invoke the production core. |
+| src/core/gabbaboy.c | tests/test_cgb_partition.c | White-box source include | ✓ WIRED | The test includes core implementation state and compares split-run fields/guest observations. |
+| tests/external/cgb-corpus-inventory.json | tests/scripts/verify-cgb-corpus-inventory.py | Validator reads frozen JSON | ✓ WIRED | Current --bindings validates source, output, model/mode, rights, and test identity. |
+| fixtures/mooneye-cgb/manifest.json | tests/scripts/reproduce-mooneye-cgb.sh | Manifest-driven reproduction | ✓ WIRED | Script pins manifest/source/tool inputs; current path-safety test passes and historical pinned rebuild evidence remains. |
+| fixtures/samesuite/manifest.json | tests/scripts/reproduce-samesuite.sh | Manifest-driven reproduction | ✓ WIRED | The reproducer reads exact source/output aliases; current corpus receipt executes the fixed APU cohort. |
+| fixtures/age/manifest.json | tests/scripts/reproduce-age.sh | Manifest-driven ROM/PNG reproduction | ✓ WIRED | The script binds source/tool/digests; current image run uses the same manifest identities. |
+| tests/test_age_m3.c | tests/scripts/verify-age-m3-pixels.py | CMake frame output to comparator | ✓ WIRED | Guest RGB555 output is compared against source PNG pixels and metadata. |
+| tests/external/cgb-speed-dispositions.json | tests/test_age.c | CMake-provided JSON values | ✓ WIRED | The test checks literal source-row values/signatures; current AGE identity and control checks pass. |
+| src/runner/main.c | tests/scripts/verify-cgb-corpus-report.py | Structured case/assertion event stream | ✓ WIRED | The runner emits observations consumed by the report producer, which reconciles CTest identity/counts. |
+| .github/workflows/ci.yml | tests/CMakeLists.txt | Configure/build/CTest and exact inventory | ✓ WIRED | Current CI declares native/sanitizer checks; current full local stream passes the same configured CTest inventory. |
+| docs/cgb-profile.md | tests/scripts/verify-cgb-corpus-claims.py | Marked documentation blocks | ✓ WIRED | The validator reads profile/audio/corpus/gate claims and checks them against the receipt and code/test contract. |
 
 ## Data-Flow Trace (Level 4)
 
 | Artifact | Data Variable | Source | Produces Real Data | Status |
 |---|---|---|---|---|
-| Guest PCM tests | FF76/FF77 read values | Timed CGB APU state in gabbaboy.c | Yes; guest bus reads are compared with exact nibble expectations | ✓ FLOWING |
-| Corpus receipt | Case and assertion rows | Structured output from gabbaboy-runner and CTest XML | Yes; fresh source-bound receipt contains 107 terminal cases and 4,959 reconciled assertions | ✓ FLOWING |
-| Inventory bindings | Case identities | Four pinned manifests and source/output digests | Yes; validator reports 181 candidates, 109 outputs and 107 fixed cases | ✓ FLOWING |
-| AGE pixel results | RGB555 frame pixels | test_age_m3 guest execution; expected pixels decoded from pinned upstream PNG | Yes; per-pixel comparison reports exact mismatches and signatures | ✓ FLOWING |
+| PCM bus reads | FF76/FF77 value | Per-instance digital APU channel state through the production bus decoder | Yes; guest reads compare exact nibbles and timestamps | ✓ FLOWING |
+| Corpus receipt | Case, assertion, and image rows | Current CTest XML plus structured runner observations | Yes; nonce-bound receipt includes 107 terminal cases and independently reconciled assertion/image totals | ✓ FLOWING |
+| Inventory bindings | Source/output/case identities | Four pinned suite manifests and fixture digests | Yes; validator resolves 181 source candidates, 109 outputs, and the fixed 107-case denominator | ✓ FLOWING |
+| AGE pixel results | Actual RGB555 pixels and expected PNG pixels | Headless AGE guests and independently pinned source PNGs | Yes; exact pixel counts and mismatch signatures are included in the current receipt | ✓ FLOWING |
 
 ## Behavioral Spot-Checks
 
-| Behavior | Command/evidence | Result | Status |
+| Behavior | Command or evidence | Result | Status |
 |---|---|---|---|
-| Fresh source-bound full regression | build/phase14-uat-regression.xml; SHA-256 7b1ececc5221becf764b7c6fecd4da1e2ac2d4d805884739218e8ee9d39f192d | Producer cd3f6856c48df99a43665a96d99176d9557a6578; 1,138/1,138 passed, 0 failures/errors/skips; installed inventory 1,138/1,138 and DMG inventory 258/258 | ✓ PASS |
-| Final automated UAT closure | `python3 .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/verify-uat-contract.py`; `python3 .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/verify-uat-contract.py --self-test` | 49/49 deliverables, 13/13 commit windows and 29 negative controls pass (17 closure, 10 handoff, 2 commit) | ✓ PASS |
-| CGB PCM and CH3 latch/fetch | Fresh full regression JUnit: `cgb_pcm_tracer`, `cgb_pcm_tracer_control`, `cgb_apu_wave_latch`, `cgb_apu_wave_fetch`, `cgb_apu_wave_direct_ram_control` | 5/5 passed, including negative controls | ✓ PASS |
-| Corpus inventory/report controls | Fresh full regression JUnit: `cgb_corpus_inventory`, `cgb_corpus_inventory_controls`, `cgb_corpus_report_contract`, `cgb_corpus_report_controls`, `cgb_corpus_ci_contract` | 5/5 passed | ✓ PASS |
-| Fresh configured corpus checks | `verify-cgb-corpus-inventory.py --bindings`; `verify-cgb-corpus-artifacts.py --check --build-dir build`; `verify-cgb-corpus-claims.py --receipt build/cgb-corpus-receipt.json` | 181 sources, 109 outputs and 107 required cases bind; privacy allowlist and claim checks pass | ✓ PASS |
-| Pinned AGE reproduction | reproduce-age.sh --compare with pinned RGBDS 1.0.1 | Six ROMs and six source PNGs byte-identical | ✓ PASS |
-| Pinned SameSuite reproduction | reproduce-samesuite.sh --compare-pinned with pinned RGBDS 1.0.1 | 74 fixture outputs byte-identical | ✓ PASS |
-| Pinned Mooneye CGB reproduction | reproduce-mooneye-cgb.sh --compare fixtures/mooneye-cgb | All nine ROMs byte-identical | ✓ PASS |
-| Post-portability prevention controls | `cgb_samesuite_apu_source_eol_controls`, `cgb_corpus_report_platform_controls` in the refreshed JUnit | Both required cases appear and pass; includes pinned LF/CRLF controls and all eight Windows executable/pipe regression methods | ✓ PASS |
-| Source-bound CGB receipt | build/cgb-corpus-receipt.json; SHA-256 f14198a579f2cc8b1577a136a5998f2835a4fc65d3021096974a28d9758292de | Producer cd3f6856c48df99a43665a96d99176d9557a6578, nonce d6c53ece9cb5aa28f15ab663d1539b24; 107/107 complete (25 observed pass, 82 matched xfail); 2,845/4,959 assertions pass; 18,208/138,240 image pixels mismatch | ✓ PASS |
-| Stale stream/report controls | Refreshed corpus-report contract/control tests in the producer JUnit | Missing, duplicate, stale, malformed, wrong-identity, membership and unexpected-result controls remain required and pass | ✓ PASS |
-| Frozen DMG inventory | `bash tests/scripts/verify-dmg-baseline.sh --junit build/phase14-uat-regression.xml --inventory core` | All 258 expected identities pass, including `dmg_baseline` | ✓ PASS |
-
-The corpus receipt reports suite results separately: AGE 2/19 observed pass and 17 exact xfails; MagenTests 5/5 pass; Mooneye 6/9 pass and 3 exact xfails; SameSuite 12/74 pass and 62 exact xfails (the 74 comprise 70 APU plus four DMA cases). These are software-model observations. Matched xfails do not inflate pass counts.
-
-The receipt's `identity.core_revision` is producer `cd3f6856c48df99a43665a96d99176d9557a6578`, matching the full local regression JUnit and current source HEAD. No core, CI or product inputs changed after hosted execution head `9c5b32dc4c75ad5f9eba44ff1c7b0a15ba0f9c7f`; the later commits add UAT closure and handoff metadata. The hosted green receipt remains attached to `9c5b32dc4c75ad5f9eba44ff1c7b0a15ba0f9c7f`, and the final metadata head still requires its own exact-head hosted checks. The local checks do not claim final hosted Windows, CMake-floor or sanitizer results.
+| Fresh configured core regression | build/14-refresh-regression.xml; source b52a4dabf244b7e37d4fc7bd22d8830927d65955 | 1,144/1,144; 0 failures/errors/skips; 385.46 s | ✓ PASS |
+| Player regression | ctest --test-dir build-player -R '^player_' --output-on-failure --no-tests=error | 98/98; 0 skips; 17.10 s | ✓ PASS |
+| Relocated installed consumers | ctest --test-dir build/14-refresh-consumers -R '^installed_(consumer|runner)' --output-on-failure --no-tests=error | 5/5 in a separate run; 1.80 s. Combined XML is explicitly concatenated, not one 1,149-test stream. | ✓ PASS |
+| Fresh PCM/APU behavior selection | ctest --test-dir build -R '^(cgb_pcm_tracer|cgb_pcm_host_invariance|cgb_apu_wave_latch|cgb_apu_wave_fetch|cgb_apu_lifecycle|cgb_apu_partition_fetch)$' --output-on-failure --no-tests=error | 6/6; 0.03 s | ✓ PASS |
+| Guest register and IR policy selection | ctest --test-dir build -R '^(cgb_visibility_matrix_(cgb|compat|dmg)|cgb_ir_tracer|cgb_ir_controls|cgb_ir_modes|cgb_visibility_boundaries)$' --output-on-failure --no-tests=error | 7/7; 0.05 s | ✓ PASS |
+| Corpus, report, and AGE controls | ctest --test-dir build -R '^(cgb_corpus_inventory|cgb_corpus_inventory_controls|cgb_corpus_report_contract|cgb_corpus_report_controls|cgb_corpus_claims|cgb_corpus_claims_controls|cgb_age_assertion_identity|cgb_age_assertion_controls|cgb_age_m3_pixel_controls)$' --output-on-failure --no-tests=error | 9/9; 5.70 s | ✓ PASS |
+| Current Mooneye reproducer safety | ctest --test-dir build -R '^cgb_mooneye_repro_requires_manifest$' --output-on-failure --no-tests=error | 1/1; 0.71 s | ✓ PASS |
+| Current nonce-bound CGB-E corpus | --begin-run; selected CTest metadata; ctest -T Test; --from-ctest; verify-cgb-corpus-claims.py --receipt build/14-refresh-corpus-receipt.json | 108/108 selected CTests; 107 required cases; 25 passes, 82 matched xfails; 2,845/4,959 assertions; 18,208/138,240 pixel mismatches. Receipt and claim checker pass. | ✓ PASS |
+| Frozen DMG baseline | bash tests/scripts/verify-dmg-baseline.sh --build-dir build | 0 changed rows; 258 frozen core IDs present | ✓ PASS |
+| Canonical automated UAT closure | python3 -I tests/scripts/verify-uat-closure.py .planning/phases/GB-14-cgb-e-model-qualification-and-corpus --self-test | 49/49 deliverables; 19 weakened controls rejected; zero human rows | ✓ PASS |
+| Immutable boundary and commit windows | python3 -I .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/verify-uat-contract.py --self-test | 17 closure, 10 boundary, 2 commit controls pass; 13 windows reconcile; four legacy nested-count warnings | ✓ PASS |
 
 ## Probe Execution
 
-No probe is declared in Phase 14 plans or success criteria, and no phase-specific conventional probe path was found. Not applicable.
+No conventional scripts/tests/probe-*.sh files or Phase14-declared probe paths were found. The current nonce-bound CTest corpus run is recorded above; there is no separate probe command to execute.
 
 ## Requirements Coverage
 
-| Requirement | Source plans | Description | Status | Evidence |
+| Requirement | Source Plan | Description | Status | Evidence |
 |---|---|---|---|---|
-| CGB-08 | 14-01, 14-02, 14-03, 14-04, 14-06, 14-07, 14-09, 14-10, 14-12, 14-13 | CGB-E APU/I/O behavior with per-test applicability and named expected failures | ✓ SATISFIED | Timed PCM guest reads, FF72–FF75 policy, disconnected FF56 stub, positive/negative controls and exact corpus dispositions are implemented and exercised. |
-| CGB-10 | 14-05, 14-06, 14-07, 14-08, 14-09, 14-10, 14-11, 14-12, 14-13 | Headless corpus with per-suite denominators, failure/exclusion reasons and rights/model gates | ✓ SATISFIED | Source-bound receipt and inventory report all four suite denominators and terminal outcomes; optional rights/model exclusions remain explicit. |
+| CGB-08 | 14-01 through 14-04, 14-06 through 14-13 | CGB-E PCM, FF72–FF75, IR stub, per-test applicability, and named expected failures | ✓ SATISFIED | Production bus implementation, current named guest tests, model/mode controls, and current corpus receipt/claims validation. |
+| CGB-10 | 14-05 through 14-13 | Headless AGE, SameSuite, MagenTests and applicable Mooneye corpus with per-suite counts, failures, and exclusions | ✓ SATISFIED | Current 107-case receipt; fixed source/membership validator; rights and unsupported-model exclusions remain documented. |
 
-Both requirement IDs assigned to Phase 14 are claimed by plans; there are no orphaned Phase 14 requirements. The central ledger now records CGB-08 and CGB-10 as Complete after the parent workflow's phase completion.
+Both Phase14 requirement IDs appear in plan frontmatter and REQUIREMENTS.md; no Phase14 requirement is orphaned.
 
 ## Test Quality Audit
 
-The required-test scan found no disabled/skipped requirement-linked tests. No circular expected-output generation was found: SameSuite/Mooneye outputs rebuild from pinned source, AGE references rebuild/match against pinned source PNGs, and emulator observations are compared with separately held source expectations. Exact negative controls cover changed identities, omitted membership, tampered expectations, receipt shape and image corruption. The 14-12 task 3 missing pre-implementation RED is disclosed in its summary/history record; no RED claim is reconstructed. All eight historical code-review findings now have fixed dispositions and independent clean rechecks; the refreshed 1,138-test producer run includes the two newly required portability-prevention CTests.
+- No disabled or skipped requirement-linked tests were found by the current test-source scan.
+- The source-reproduction checks use pinned upstream source/tool revisions and digests; AGE pixels compare guest output with separately pinned images; SameSuite author expectations are kept separately from observed evaluator results. The current report-contract, inventory, pixel, and source-label controls reject altered expectations and result-selected membership.
+- The current 13-test report-contract selection and associated controls pass. No circular expected-output generation was found.
+- Reproduction limitation: RGBDS 1.0.4 is installed while the pinned Phase14 recipe requires 1.0.1. This refresh relies on preserved prior source-reproduction evidence and current digest/membership checks; it makes no fresh fixture rebuild claim.
 
 ## Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |---|---|---|---|---|
-| None | — | No unreferenced TBD/FIXME/XXX markers, stubs or debt placeholders found in changed implementation inputs | — | No blocker |
+| None | — | No unreferenced TBD/FIXME/XXX markers, placeholder implementations, or empty production paths found. grep matches for return NULL are explicit error/unknown-register paths; $XX/$XXXX in docs are format notation. | — | None |
+
+## Evidence Limits
+
+The refresh includes a fresh complete local core run, local player run, isolated installed-consumer run, focused controls, and a nonce-bound selected corpus stream. It does not claim a fresh full standard code review across the historical 70-path review scope, a new 27-threat security audit, native Windows or sanitizer-runtime execution, a new CMake 3.25 floor build, hosted exact-head checks, or fresh RGBDS 1.0.1 fixture reconstruction. Simulated Windows controls do not establish native Windows execution. Physical CGB-E, analog sound, perceptual output, real IR-peer behavior, performance qualification, and general game compatibility remain outside the verified claim.
+
+## Current Delivery Boundary
+
+Phase 15 is already complete and currently verified. A final cross-phase freshness audit found Phase 8 stale over `cmake/PreviewPackageSmoke.cmake`, changed by Phase 10 commit `1ba2346`, and Phase 12 stale over lessons/index metadata from the prior Phase 13 refresh. These are cross-phase verification-refresh items, not Phase14 gaps or new source changes; all other phase reports pass. The exact next action is `/gsd-execute-phase 8`, limited to refreshing Phase 8 verification. The owner can address Phase 12 afterward, before the v0.2 milestone completion review. No milestone advance or debt acceptance is part of this Phase14 verification.
 
 ## Human Verification Required
 
-None. Decidable deliverables are automated per D-069. Physical CGB-E remains UNKNOWN/POLICY; analog/perceptual output, real IR peers, general game compatibility and hardware measurements remain explicit exclusions, not invented UAT. The separate exact-head hosted CI and native Windows run remain delivery checks; this report does not claim they ran.
+None. Phase14 success criteria are observable through current automated checks; excluded physical/perceptual questions remain explicit limits and are not acceptance requirements for this phase.
 
 ## Decision Coverage
 
-The installed decision-coverage verifier found 25/25 trackable CONTEXT.md decisions honored in shipped artifacts. This gate is non-blocking and reports no unhonored decisions.
+All 25 trackable CONTEXT.md decisions are honored by shipped artifacts. This check is non-blocking and records zero unhonored decisions.
 
 ## Gaps Summary
 
-No must-have gap was found. Fresh receipt-backed local evidence at source cd3f6856c48df99a43665a96d99176d9557a6578 confirms the 107-case software corpus and its declared pass/xfail denominators, while the full 1,138-test regression and 258-name frozen DMG inventory pass. The 49/49 automated UAT contract closes all 13 bounded windows with 29 passing negative controls and keeps the Phase 15 pause explicit. Hosted green remains bound to execution head 9c5b32dc4c75ad5f9eba44ff1c7b0a15ba0f9c7f; exact-head hosted checks for final UAT metadata are still a separate delivery check.
+None. All three roadmap success criteria, all 38 plan truths, all 28 artifact declarations, and all 13 key links are verified. CGB-08 and CGB-10 are satisfied. The 107-case corpus is accurately described as 25 observed software-model passes and 82 matched expected failures, not as 107 hardware passes.
 
 ---
 
-_Verified: 2026-10-16T12:32:37Z_
+_Verified: 2026-10-21T00:00:22Z_
 _Verifier: the agent (gsd-verifier)_
