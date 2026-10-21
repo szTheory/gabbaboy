@@ -567,9 +567,9 @@ def self_test() -> int:
         phase = crlf / PHASE_REL
         for name in ("15.1-SCOPE.json", "15.1-hosted-evidence.json", "15.1-local-evidence.json",
                      "15.1-historical-limitations.json"):
-            (phase / name).write_bytes((phase / name).read_bytes().replace(b"\n", b"\r\n"))
+            (phase / name).write_bytes((phase / name).read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
         receipt = crlf / SHIPPED["published_receipt"]
-        receipt.write_bytes(receipt.read_bytes().replace(b"\n", b"\r\n"))
+        receipt.write_bytes(receipt.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
         converted = run_cli(crlf)
         if converted.returncode != 0 or "closeout-dispositions pass items=24" not in converted.stdout:
             raise SystemExit(f"self-test CRLF-rewritten records were rejected: {converted.stderr.strip()}")
