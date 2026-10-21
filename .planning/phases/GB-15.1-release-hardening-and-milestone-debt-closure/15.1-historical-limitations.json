@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "plan": "15.1-16",
+  "source_sha": "8eb55d33b1e7b2b585486a002717fbd2ffcaa73a",
+  "local_evidence": "15.1-local-evidence.json",
+  "hosted_evidence": "15.1-hosted-evidence.json",
+  "items": [
+    {
+      "id": "P7-02",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "Libbet hosted Linux reproduction remains unverified (D-039); local macOS reproduction is recorded.",
+      "original_sha256": "10542a5ed52fbb4d28fe30f949cde5340a2523481b8dcc9d040c32ac71b0196e",
+      "facts": [
+        {
+          "ref": "D-039",
+          "sha256": "6ccc57c9265dc2aabb8955deca3a0025ce1d304198db65ec8d311384ab196d50"
+        }
+      ],
+      "historic_status": "unverified",
+      "hosted_ref": "libbet-repro",
+      "disposition": "external_limitation",
+      "limitation": "No hosted run has been dispatched or read yet; Task 2 owns that. Local reproduction is not a substitute."
+    },
+    {
+      "id": "P7-03",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "Audio-saturation regression test was not proven red against the pre-fix core (D-027).",
+      "original_sha256": "8fd39e09d557b128476e5530730692048774ad642bf1af007aacc580511c5300",
+      "facts": [
+        {
+          "ref": "D-027",
+          "sha256": "c43d57afc5c6b7998b97bbcdc011cdee64532381e44def33ce6159b5cb59fcd1"
+        },
+        {
+          "ref": "D-043",
+          "sha256": "d0aadf6a899e1bead3d4f7be2ac5026944f82065450e9cc0ce14c7ba182afef2"
+        }
+      ],
+      "historic_status": "unknown",
+      "historic_red": "unknown",
+      "recovered_historic_red": false,
+      "disposition": "historic_unknown_fresh_sensitivity",
+      "fresh_evidence": [
+        {
+          "kind": "fresh_sensitivity",
+          "local_ref": "audio_saturation"
+        }
+      ]
+    },
+    {
+      "id": "P12-01",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "One isolated M7 control failure had no retained diagnostic; 100 repeats and the full suite passed without changing pins.",
+      "original_sha256": "72c8b4132f1aa0d04d2de71a62e9b67c7fd9a9afda2517822ef3dc295910efe1",
+      "facts": [
+        {
+          "ref": "12-REVIEW-FOLLOWUP",
+          "sha256": "1f684d452518427a87de8ffc8fd41b4b78722d97e67cb2e5636ac7b0ca1a9dc3"
+        }
+      ],
+      "historic_status": "unknown",
+      "historic_diagnostic": "unknown",
+      "recovered_historic_diagnostic": false,
+      "disposition": "historic_unknown_fresh_controls",
+      "fresh_evidence": [
+        {
+          "kind": "fresh_repeat",
+          "local_ref": "m7_repeats"
+        },
+        {
+          "kind": "failure_retention_fixture",
+          "local_ref": "m7_retention"
+        }
+      ]
+    }
+  ]
+}

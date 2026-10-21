@@ -1,0 +1,664 @@
+{
+  "schema": 1,
+  "source_sha": "8eb55d33b1e7b2b585486a002717fbd2ffcaa73a",
+  "tracked_clean": true,
+  "toolchain": {
+    "cmake": "cmake version 4.4.3",
+    "cc": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+    "python": "3.14.4",
+    "system": "Darwin arm64"
+  },
+  "commands": [
+    {
+      "id": "ctest_full",
+      "command": "ctest --preset phase1 --output-on-failure --no-tests=error",
+      "exit": 0,
+      "seconds": 439.37,
+      "log_sha256": "dc6779e7d0e7f142b3590b0d7ea7b70ab394d202ef0fa27cd3564687ed510181",
+      "tests_total": 1163,
+      "tests_failed": 0,
+      "tests_passed": 1163,
+      "tests_not_run": 0,
+      "ctest_seconds": 439.37,
+      "result": "pass"
+    },
+    {
+      "id": "dmg_baseline",
+      "command": "bash tests/scripts/verify-dmg-baseline.sh --build-dir build",
+      "exit": 0,
+      "seconds": 4.6,
+      "log_sha256": "3e0e1108d4edb2dfee50d42452001b2ac855e3eefee77dcde58257b905067413",
+      "result": "pass"
+    }
+  ],
+  "controls": {
+    "audio_saturation": {
+      "kind": "fresh_sensitivity",
+      "mutation": "GBB_AUDIO_MIX_HEADROOM_DIV 16 -> 1",
+      "control_exit": 0,
+      "control_success_line": true,
+      "mutant_exit": 1,
+      "mutant_diagnostic": "<repo>/tests/test_audio.c:378: loud_peak >= 8192 && loud_peak < INT16_MAX",
+      "mutant_success_output_absent": true
+    },
+    "m7_repeats": {
+      "attempts": 100,
+      "passed": 100,
+      "failed": 0,
+      "entries": [
+        {
+          "attempt": 1,
+          "exit": 0,
+          "seconds": 0.043,
+          "output_sha256": "d1bd4373f0c69c192614bcdfe57405c9b61dbdc7160f5b2ad3bf190cdd98ff5f"
+        },
+        {
+          "attempt": 2,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 3,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 4,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 5,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 6,
+          "exit": 0,
+          "seconds": 0.039,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 7,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 8,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 9,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 10,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 11,
+          "exit": 0,
+          "seconds": 0.047,
+          "output_sha256": "d1bd4373f0c69c192614bcdfe57405c9b61dbdc7160f5b2ad3bf190cdd98ff5f"
+        },
+        {
+          "attempt": 12,
+          "exit": 0,
+          "seconds": 0.041,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 13,
+          "exit": 0,
+          "seconds": 0.041,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 14,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 15,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 16,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 17,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 18,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 19,
+          "exit": 0,
+          "seconds": 0.046,
+          "output_sha256": "bfb79cb8ad7efbde2f18fffde64c8752688ce68b2859019c34506102fea96299"
+        },
+        {
+          "attempt": 20,
+          "exit": 0,
+          "seconds": 0.044,
+          "output_sha256": "d1bd4373f0c69c192614bcdfe57405c9b61dbdc7160f5b2ad3bf190cdd98ff5f"
+        },
+        {
+          "attempt": 21,
+          "exit": 0,
+          "seconds": 0.043,
+          "output_sha256": "d1bd4373f0c69c192614bcdfe57405c9b61dbdc7160f5b2ad3bf190cdd98ff5f"
+        },
+        {
+          "attempt": 22,
+          "exit": 0,
+          "seconds": 0.041,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 23,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 24,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 25,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 26,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 27,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 28,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 29,
+          "exit": 0,
+          "seconds": 0.041,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 30,
+          "exit": 0,
+          "seconds": 0.042,
+          "output_sha256": "d1bd4373f0c69c192614bcdfe57405c9b61dbdc7160f5b2ad3bf190cdd98ff5f"
+        },
+        {
+          "attempt": 31,
+          "exit": 0,
+          "seconds": 0.042,
+          "output_sha256": "d1bd4373f0c69c192614bcdfe57405c9b61dbdc7160f5b2ad3bf190cdd98ff5f"
+        },
+        {
+          "attempt": 32,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 33,
+          "exit": 0,
+          "seconds": 0.041,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 34,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 35,
+          "exit": 0,
+          "seconds": 0.042,
+          "output_sha256": "d1bd4373f0c69c192614bcdfe57405c9b61dbdc7160f5b2ad3bf190cdd98ff5f"
+        },
+        {
+          "attempt": 36,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 37,
+          "exit": 0,
+          "seconds": 0.042,
+          "output_sha256": "d1bd4373f0c69c192614bcdfe57405c9b61dbdc7160f5b2ad3bf190cdd98ff5f"
+        },
+        {
+          "attempt": 38,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 39,
+          "exit": 0,
+          "seconds": 0.039,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 40,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 41,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 42,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 43,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 44,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 45,
+          "exit": 0,
+          "seconds": 0.039,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 46,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 47,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 48,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 49,
+          "exit": 0,
+          "seconds": 0.039,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 50,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 51,
+          "exit": 0,
+          "seconds": 0.041,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 52,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 53,
+          "exit": 0,
+          "seconds": 0.041,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 54,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 55,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 56,
+          "exit": 0,
+          "seconds": 0.039,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 57,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 58,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 59,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 60,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 61,
+          "exit": 0,
+          "seconds": 0.041,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 62,
+          "exit": 0,
+          "seconds": 0.044,
+          "output_sha256": "bfb79cb8ad7efbde2f18fffde64c8752688ce68b2859019c34506102fea96299"
+        },
+        {
+          "attempt": 63,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 64,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 65,
+          "exit": 0,
+          "seconds": 0.039,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 66,
+          "exit": 0,
+          "seconds": 0.039,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 67,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 68,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 69,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 70,
+          "exit": 0,
+          "seconds": 0.039,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 71,
+          "exit": 0,
+          "seconds": 0.039,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 72,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 73,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 74,
+          "exit": 0,
+          "seconds": 0.039,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 75,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 76,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 77,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 78,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 79,
+          "exit": 0,
+          "seconds": 0.039,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 80,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 81,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 82,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 83,
+          "exit": 0,
+          "seconds": 0.057,
+          "output_sha256": "4624e96d897ea9339b8de1c3110dc732255cc7d76e77e90678f4f3476524f63d"
+        },
+        {
+          "attempt": 84,
+          "exit": 0,
+          "seconds": 0.041,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 85,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 86,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 87,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 88,
+          "exit": 0,
+          "seconds": 0.039,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 89,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 90,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 91,
+          "exit": 0,
+          "seconds": 0.039,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 92,
+          "exit": 0,
+          "seconds": 0.041,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 93,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 94,
+          "exit": 0,
+          "seconds": 0.039,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 95,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 96,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 97,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 98,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 99,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        },
+        {
+          "attempt": 100,
+          "exit": 0,
+          "seconds": 0.04,
+          "output_sha256": "46fe4edd2390e03ad467ce1906a0693537f58ac8aa9d93059cc0a7137799ad80"
+        }
+      ],
+      "kind": "fresh_repeat",
+      "tests": "^cgb_speed_mutant_m7_xfail_ppu(_control)?$",
+      "tests_matched": 2
+    },
+    "m7_retention": {
+      "kind": "failure_retention_fixture",
+      "attempts": 3,
+      "failed_attempt": 2,
+      "diagnostic_retained": true,
+      "retained_sha256": "df3bfe34d10f0ce7c60405465d0751cfb107a66089f12e4c60ff73152ff097b3",
+      "retained_contains_marker": true
+    }
+  },
+  "historic_claims": "none: fresh runs prove the current source only"
+}

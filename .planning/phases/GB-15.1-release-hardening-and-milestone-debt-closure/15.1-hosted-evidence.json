@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "source_sha": "8eb55d33b1e7b2b585486a002717fbd2ffcaa73a",
+  "tested_source_sha": "8eb55d33b1e7b2b585486a002717fbd2ffcaa73a",
+  "obtained_via": "gh_api",
+  "receipt_labels_used": false,
+  "workflows": [
+    {
+      "id": "libbet-repro",
+      "workflow_path": ".github/workflows/libbet-repro.yml",
+      "run_id": null,
+      "claim": "not_verified",
+      "limitation": "No hosted run has been dispatched or read yet; Task 2 owns that. Local reproduction is not a substitute."
+    },
+    {
+      "id": "release-rehearsal",
+      "workflow_path": ".github/workflows/release-rehearsal.yml",
+      "run_id": null,
+      "claim": "not_verified",
+      "limitation": "No hosted run has been dispatched or read yet; Task 2 owns that. Local reproduction is not a substitute."
+    }
+  ]
+}
