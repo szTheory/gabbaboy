@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "plan": "15.1-16",
-  "source_sha": "8eb55d33b1e7b2b585486a002717fbd2ffcaa73a",
+  "source_sha": "0a18f1cde6a70a8dc7e983046d3fdc2ca042912a",
   "local_evidence": "15.1-local-evidence.json",
   "hosted_evidence": "15.1-hosted-evidence.json",
   "items": [
@@ -18,7 +18,8 @@
       ],
       "historic_status": "unverified",
       "hosted_ref": "libbet-repro",
-      "disposition": "hosted_verified"
+      "disposition": "external_limitation",
+      "limitation": "No hosted run exists yet for the current source; the earlier run is superseded because covered inputs changed."
     },
     {
       "id": "P7-03",

@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "source_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
-  "tested_source_sha": "8eb55d33b1e7b2b585486a002717fbd2ffcaa73a",
+  "source_sha": "0a18f1cde6a70a8dc7e983046d3fdc2ca042912a",
+  "tested_source_sha": "0a18f1cde6a70a8dc7e983046d3fdc2ca042912a",
   "branch": "gsd/phase-15.1-release-hardening-and-milestone-debt-closure",
   "obtained_via": "gh_api",
   "receipt_labels_used": false,
@@ -18,150 +18,173 @@
     {
       "id": "libbet-repro",
       "workflow_path": ".github/workflows/libbet-repro.yml",
-      "run_id": 39633868728,
-      "run_attempt": 1,
-      "event": "workflow_dispatch",
-      "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
-      "head_branch": "gsd/phase-15.1-release-hardening-and-milestone-debt-closure",
-      "status": "completed",
-      "conclusion": "success",
-      "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/39633868728",
-      "created_at": "2026-10-21T16:20:26Z",
-      "updated_at": "2026-10-21T16:20:41Z",
-      "jobs": [
-        {
-          "id": 119338997351,
-          "name": "libbet-repro",
-          "status": "completed",
-          "conclusion": "success",
-          "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
-          "runner_image": "ubuntu-22.04",
-          "step_conclusions": [
-            "success",
-            "success",
-            "success",
-            "success",
-            "success"
-          ]
-        }
-      ],
-      "artifacts_total": 0,
-      "log_command": "gh run view 39633868728 --log",
-      "log_bytes": 22496,
-      "log_sha256": "39d12e5d0593df13b1cf56098fa63b454ccad6ccd96289c575d3a95ef847b6c1",
-      "result_line": "libbet reproduction: identical sha256=3607412031c8287cf878299ce96e581e85b852dde703806343b95576fa3ff1a9",
-      "toolchain_in_log": "rgbasm v0.7.0; Pillow 12.3.0 provenance verified by the pinned script",
-      "claim": "verified",
-      "scope": "Ubuntu 22.04 hosted rebuild is byte-identical to the vendored ROM. No wrong-ROM or wrong-pin run was dispatched on the host; the local script and this checker reject a differing digest."
+      "run_id": null,
+      "claim": "not_verified",
+      "limitation": "No hosted run exists yet for the current source; the earlier run is superseded because covered inputs changed."
     },
     {
       "id": "release-rehearsal",
       "workflow_path": ".github/workflows/release-rehearsal.yml",
-      "run_id": 39634983581,
+      "run_id": null,
       "claim": "not_verified",
-      "limitation": "Rehearsal run 39634983581 at 6674ea8 completed with conclusion failure. Defects found: (a) cgb_samesuite_apu_membership/controls fail producer-object-missing because the frozen producer commit b46bfc9 is not in any public ref; (b) the package job calls verify-v02-consumers.py without the candidate manifest the hardened contract requires; (c) paired performance qualification is pending by design (median_ratio_pct=135.55, review_trigger=true) and needs an owner, receipt-bound review decision; (d) the trusted judge was skipped. Only the clang libfuzzer campaign job passed. A rehearsal at a later source is required.",
-      "historic_runs_not_counted": [
+      "limitation": "No hosted run exists yet for the current source; the earlier run is superseded because covered inputs changed."
+    }
+  ],
+  "superseded_runs": [
+    {
+      "reason": "source changed after these runs (tests, workflows and policy under test); not evidence for the current source",
+      "tested_source_sha": "8eb55d33b1e7b2b585486a002717fbd2ffcaa73a",
+      "pushed_source_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
+      "workflows": [
         {
-          "run_id": 39396554673,
-          "head_sha": "b53d82e2667980a21006cea8b521521df1825a04",
-          "branch": "rehearsal/v0-2-0-final",
-          "conclusion": "success"
-        }
-      ],
-      "run_attempt": 1,
-      "event": "push",
-      "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
-      "head_branch": "rehearsal/phase-15.1-6674ea8",
-      "status": "completed",
-      "conclusion": "failure",
-      "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/39634983581",
-      "created_at": "2026-10-21T16:27:48Z",
-      "updated_at": "2026-10-21T16:46:38Z",
-      "jobs": [
-        {
-          "id": 119342920539,
-          "name": "rehearse-v02-evidence-aggregate",
-          "status": "completed",
-          "conclusion": "failure",
+          "id": "libbet-repro",
+          "workflow_path": ".github/workflows/libbet-repro.yml",
+          "run_id": 39633868728,
+          "run_attempt": 1,
+          "event": "workflow_dispatch",
           "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
-          "failed_steps": [
-            "Corpus receipt and support sidecar"
-          ],
-          "log_sha256": "9d720c1b619a9717cd37f250c028073a889e2c430c8be7d1eb4ddfb1e079f248",
-          "log_bytes": 323581,
-          "observed": "CTest 1166/1168 in Corpus receipt and support sidecar step; same two APU failures (producer-object-missing)"
-        },
-        {
-          "id": 119342920622,
-          "name": "rehearse-package-consumers-and-archive",
-          "status": "completed",
-          "conclusion": "failure",
-          "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
-          "failed_steps": [
-            "Prove relocated C and C++ consumer behavior on the extracted package bytes"
-          ],
-          "log_sha256": "403a187e41f287a59cb38234d83a028214514e3719bed55f95104e19354cdf24",
-          "log_bytes": 28318,
-          "observed": "verify-v02-consumers: rejected:candidate-manifest-required"
-        },
-        {
-          "id": 119342920685,
-          "name": "rehearse-clang-libfuzzer-campaign",
+          "head_branch": "gsd/phase-15.1-release-hardening-and-milestone-debt-closure",
           "status": "completed",
           "conclusion": "success",
-          "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
-          "failed_steps": [],
-          "log_sha256": "20760dc8d40f3dcf69b758425db34aa4eba988a8285d9396b9bc49ae98dfb774",
-          "log_bytes": 65261,
-          "observed": "success"
+          "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/39633868728",
+          "created_at": "2026-10-21T16:20:26Z",
+          "updated_at": "2026-10-21T16:20:41Z",
+          "jobs": [
+            {
+              "id": 119338997351,
+              "name": "libbet-repro",
+              "status": "completed",
+              "conclusion": "success",
+              "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
+              "runner_image": "ubuntu-22.04",
+              "step_conclusions": [
+                "success",
+                "success",
+                "success",
+                "success",
+                "success"
+              ]
+            }
+          ],
+          "artifacts_total": 0,
+          "log_command": "gh run view 39633868728 --log",
+          "log_bytes": 22496,
+          "log_sha256": "39d12e5d0593df13b1cf56098fa63b454ccad6ccd96289c575d3a95ef847b6c1",
+          "result_line": "libbet reproduction: identical sha256=3607412031c8287cf878299ce96e581e85b852dde703806343b95576fa3ff1a9",
+          "toolchain_in_log": "rgbasm v0.7.0; Pillow 12.3.0 provenance verified by the pinned script",
+          "claim": "verified",
+          "scope": "Ubuntu 22.04 hosted rebuild is byte-identical to the vendored ROM. No wrong-ROM or wrong-pin run was dispatched on the host; the local script and this checker reject a differing digest."
         },
         {
-          "id": 119342920811,
-          "name": "rehearse-corpus-and-support-sidecar",
+          "id": "release-rehearsal",
+          "workflow_path": ".github/workflows/release-rehearsal.yml",
+          "run_id": 39634983581,
+          "claim": "not_verified",
+          "limitation": "Rehearsal run 39634983581 at 6674ea8 completed with conclusion failure. Defects found: (a) cgb_samesuite_apu_membership/controls fail producer-object-missing because the frozen producer commit b46bfc9 is not in any public ref; (b) the package job calls verify-v02-consumers.py without the candidate manifest the hardened contract requires; (c) paired performance qualification is pending by design (median_ratio_pct=135.55, review_trigger=true) and needs an owner, receipt-bound review decision; (d) the trusted judge was skipped. Only the clang libfuzzer campaign job passed. A rehearsal at a later source is required.",
+          "historic_runs_not_counted": [
+            {
+              "run_id": 39396554673,
+              "head_sha": "b53d82e2667980a21006cea8b521521df1825a04",
+              "branch": "rehearsal/v0-2-0-final",
+              "conclusion": "success"
+            }
+          ],
+          "run_attempt": 1,
+          "event": "push",
+          "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
+          "head_branch": "rehearsal/phase-15.1-6674ea8",
           "status": "completed",
           "conclusion": "failure",
-          "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
-          "failed_steps": [
-            "Verify public CGB claims, the current support ledger and the required test inventory"
+          "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/39634983581",
+          "created_at": "2026-10-21T16:27:48Z",
+          "updated_at": "2026-10-21T16:46:38Z",
+          "jobs": [
+            {
+              "id": 119342920539,
+              "name": "rehearse-v02-evidence-aggregate",
+              "status": "completed",
+              "conclusion": "failure",
+              "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
+              "failed_steps": [
+                "Corpus receipt and support sidecar"
+              ],
+              "log_sha256": "9d720c1b619a9717cd37f250c028073a889e2c430c8be7d1eb4ddfb1e079f248",
+              "log_bytes": 323581,
+              "observed": "CTest 1166/1168 in Corpus receipt and support sidecar step; same two APU failures (producer-object-missing)"
+            },
+            {
+              "id": 119342920622,
+              "name": "rehearse-package-consumers-and-archive",
+              "status": "completed",
+              "conclusion": "failure",
+              "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
+              "failed_steps": [
+                "Prove relocated C and C++ consumer behavior on the extracted package bytes"
+              ],
+              "log_sha256": "403a187e41f287a59cb38234d83a028214514e3719bed55f95104e19354cdf24",
+              "log_bytes": 28318,
+              "observed": "verify-v02-consumers: rejected:candidate-manifest-required"
+            },
+            {
+              "id": 119342920685,
+              "name": "rehearse-clang-libfuzzer-campaign",
+              "status": "completed",
+              "conclusion": "success",
+              "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
+              "failed_steps": [],
+              "log_sha256": "20760dc8d40f3dcf69b758425db34aa4eba988a8285d9396b9bc49ae98dfb774",
+              "log_bytes": 65261,
+              "observed": "success"
+            },
+            {
+              "id": 119342920811,
+              "name": "rehearse-corpus-and-support-sidecar",
+              "status": "completed",
+              "conclusion": "failure",
+              "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
+              "failed_steps": [
+                "Verify public CGB claims, the current support ledger and the required test inventory"
+              ],
+              "log_sha256": "a9b1f8b12660bf25988ff73b0f13524c913e5f873136939b342f9cd12dc942a3",
+              "log_bytes": 326347,
+              "observed": "CTest 1166/1168; failing cgb_samesuite_apu_membership and cgb_samesuite_apu_controls: cgb-apu-dispositions mismatch: producer-object-missing"
+            },
+            {
+              "id": 119342920826,
+              "name": "rehearse-paired-performance-qualification",
+              "status": "completed",
+              "conclusion": "failure",
+              "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
+              "failed_steps": [
+                "Measure the clean paired v0.1.0 baseline and candidate"
+              ],
+              "log_sha256": "a6c2a92fc4a7f4cac0fff72858ecb4497f58719142e67d183b59a4f2565f821d",
+              "log_bytes": 22302,
+              "observed": "30 samples, median_ratio_pct=135.55, review_trigger=true; pending receipt written, exit 1 by design (owner decision required)"
+            },
+            {
+              "id": 119353024945,
+              "name": "rehearse-trusted-judge",
+              "status": "completed",
+              "conclusion": "skipped",
+              "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
+              "failed_steps": [],
+              "log_sha256": "babde81583f62c9d777bc0d74e16cff9b1108fc49e3ac378294e5c74b6ea192c",
+              "log_bytes": 215,
+              "observed": "skipped (needs the failed producer jobs)"
+            }
           ],
-          "log_sha256": "a9b1f8b12660bf25988ff73b0f13524c913e5f873136939b342f9cd12dc942a3",
-          "log_bytes": 326347,
-          "observed": "CTest 1166/1168; failing cgb_samesuite_apu_membership and cgb_samesuite_apu_controls: cgb-apu-dispositions mismatch: producer-object-missing"
-        },
-        {
-          "id": 119342920826,
-          "name": "rehearse-paired-performance-qualification",
-          "status": "completed",
-          "conclusion": "failure",
-          "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
-          "failed_steps": [
-            "Measure the clean paired v0.1.0 baseline and candidate"
+          "artifacts": [
+            {
+              "name": "rehearsal-fuzz-39634983581-1",
+              "id": 12360478654,
+              "size": 2505,
+              "digest": "sha256:2a1f6e7c9fd2d746225d8e545c3e1eb1646de7ba2a5192dbaa60dcea2bcb2de9"
+            }
           ],
-          "log_sha256": "a6c2a92fc4a7f4cac0fff72858ecb4497f58719142e67d183b59a4f2565f821d",
-          "log_bytes": 22302,
-          "observed": "30 samples, median_ratio_pct=135.55, review_trigger=true; pending receipt written, exit 1 by design (owner decision required)"
-        },
-        {
-          "id": 119353024945,
-          "name": "rehearse-trusted-judge",
-          "status": "completed",
-          "conclusion": "skipped",
-          "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
-          "failed_steps": [],
-          "log_sha256": "babde81583f62c9d777bc0d74e16cff9b1108fc49e3ac378294e5c74b6ea192c",
-          "log_bytes": 215,
-          "observed": "skipped (needs the failed producer jobs)"
+          "log_command": "gh api --allow-escape-sequences repos/szTheory/gabbaboy/actions/jobs/<id>/logs (ANSI stripped)"
         }
-      ],
-      "artifacts": [
-        {
-          "name": "rehearsal-fuzz-39634983581-1",
-          "id": 12360478654,
-          "size": 2505,
-          "digest": "sha256:2a1f6e7c9fd2d746225d8e545c3e1eb1646de7ba2a5192dbaa60dcea2bcb2de9"
-        }
-      ],
-      "log_command": "gh api --allow-escape-sequences repos/szTheory/gabbaboy/actions/jobs/<id>/logs (ANSI stripped)"
+      ]
     }
   ]
 }
