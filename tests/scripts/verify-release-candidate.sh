@@ -12,7 +12,7 @@ sha256_file() {
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 MODE=${1:-}
 SOURCE_ARCHIVE_CHECKER="$ROOT_DIR/tests/scripts/verify-v02-source-archive.py"
-USAGE='usage: verify-release-candidate.sh --self-test | --verify RECEIPT ASSET VERSION TAG SOURCE_SHA RELEASE_ID NOTICE_FILE SOURCE_RECEIPT BUILD_RECEIPT | --verify-final <the --verify arguments> SOURCE_ARCHIVE SOURCE_ARCHIVE_RECEIPT'
+USAGE='usage: verify-release-candidate.sh --self-test | --verify RECEIPT ASSET VERSION TAG SOURCE_SHA RELEASE_ID NOTICE_FILE SOURCE_RECEIPT BUILD_RECEIPT | --verify-final <the --verify arguments> SOURCE_ARCHIVE SOURCE_ARCHIVE_RECEIPT [SOURCE_REPOSITORY]'
 safe_extract() {
   python3 -I "$ROOT_DIR/tests/scripts/verify-v02-consumers.py" --extract "$1" "$2"
 }
@@ -65,21 +65,17 @@ if [[ "$MODE" == --verify || "$MODE" == --verify-final ]]; then
   if [[ "$MODE" == --verify ]]; then
     [[ $# -eq 10 ]] || fail "$USAGE"
   else
-    [[ $# -eq 12 ]] || fail "--verify-final requires the source archive and its receipt as distinct final evidence; $USAGE"
+    [[ $# -eq 12 || $# -eq 13 ]] || fail "--verify-final requires the source archive and its receipt as distinct final evidence; $USAGE"
   fi
   command -v python3 >/dev/null || fail 'Python 3 is required'
   python3 -I "$SOURCE_ARCHIVE_CHECKER" --check-product-archive "$3" --repo-root "$ROOT_DIR" || fail 'product package fixture-leak check failed'
   if [[ "$MODE" == --verify-final ]]; then
-    cmake \
-      "-DGBB_RECEIPT=$2" "-DGBB_ASSET=$3" "-DGBB_EXPECTED_VERSION=$4" \
-      "-DGBB_EXPECTED_TAG=$5" "-DGBB_EXPECTED_SOURCE_SHA=$6" \
-      "-DGBB_EXPECTED_RELEASE_ID=$7" "-DGBB_NOTICE_FILE=$8" \
-      "-DGBB_SOURCE_RECEIPT=$9" "-DGBB_BUILD_RECEIPT=${10}" \
-      -P "$ROOT_DIR/cmake/VerifyReleaseReceipt.cmake"
     bash "$ROOT_DIR/tests/scripts/verify-release-candidate.sh" --verify \
       "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9" "${10}" \
       || fail 'candidate product qualification failed'
-    exec python3 -I "$SOURCE_ARCHIVE_CHECKER" --check-receipt "${12}" --archive "${11}" --tag "$5" --source-sha "$6"
+    SOURCE_REPOSITORY=${13:-$ROOT_DIR}
+    exec python3 -I "$SOURCE_ARCHIVE_CHECKER" --check-receipt "${12}" --archive "${11}" \
+      --tag "$5" --source-sha "$6" --repo "$SOURCE_REPOSITORY"
   fi
   cmake \
     "-DGBB_RECEIPT=$2" "-DGBB_ASSET=$3" "-DGBB_EXPECTED_VERSION=$4" \
@@ -434,18 +430,19 @@ git -C "$CLONE" archive --format=tar "--prefix=gabbaboy-$VERSION/" "$SOURCE_TAG"
 ARCHIVE_RECEIPT="$TEMP_ROOT/source-archive-receipt.json"
 python3 -I "$SOURCE_ARCHIVE_CHECKER" --archive "$SOURCE_ARCHIVE" --tag "$SOURCE_TAG" --source-sha "$SOURCE_SHA" --repo "$CLONE" --output "$ARCHIVE_RECEIPT"
 final_args=("$RECEIPT" "$ARCHIVE" "$VERSION" "$SOURCE_TAG" "$SOURCE_SHA" self-test-release "$NOTICE" "$SOURCE_RECEIPT" "$BUILD_RECEIPT")
-entry_accept final-source-archive-and-product --verify-final "${final_args[@]}" "$SOURCE_ARCHIVE" "$ARCHIVE_RECEIPT"
+final_repo_args=("$SOURCE_ARCHIVE" "$ARCHIVE_RECEIPT" "$CLONE")
+entry_accept final-source-archive-and-product --verify-final "${final_args[@]}" "${final_repo_args[@]}"
 
 # The final gate requires the source archive receipt as its own evidence item.
 entry_reject final-without-source-archive-receipt 'distinct final evidence' --verify-final "${final_args[@]}"
-entry_reject final-with-source-receipt-as-archive-receipt 'REJECT receipt-invalid' --verify-final "${final_args[@]}" "$SOURCE_ARCHIVE" "$SOURCE_RECEIPT"
-entry_reject final-with-build-receipt-as-archive-receipt 'REJECT receipt-invalid' --verify-final "${final_args[@]}" "$SOURCE_ARCHIVE" "$BUILD_RECEIPT"
+entry_reject final-with-source-receipt-as-archive-receipt 'REJECT receipt-invalid' --verify-final "${final_args[@]}" "$SOURCE_ARCHIVE" "$SOURCE_RECEIPT" "$CLONE"
+entry_reject final-with-build-receipt-as-archive-receipt 'REJECT receipt-invalid' --verify-final "${final_args[@]}" "$SOURCE_ARCHIVE" "$BUILD_RECEIPT" "$CLONE"
 python3 - "$ARCHIVE_RECEIPT" "$TEMP_ROOT" <<'PY'
 import json, pathlib, sys
 source, out = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 base = json.loads(source.read_text())
 for name, mutate in {
-    "stale-archive-digest": lambda v: v.update(archive_sha256="0" * 64),
+    "stale-source-tree-digest": lambda v: v.update(source_tree_sha256="0" * 64),
     "other-tag": lambda v: v.update(tag="v9.9.9"),
     "other-source": lambda v: v.update(source_sha="0" * 40),
     "no-fixtures": lambda v: v.update(admitted_fixture_identities=[]),
@@ -453,12 +450,12 @@ for name, mutate in {
     value = json.loads(json.dumps(base)); mutate(value)
     (out / f"archive-receipt-{name}.json").write_text(json.dumps(value))
 PY
-for negative in stale-archive-digest other-tag other-source no-fixtures; do
-  entry_reject "final-archive-receipt-$negative" 'REJECT receipt-invalid' --verify-final "${final_args[@]}" "$SOURCE_ARCHIVE" "$TEMP_ROOT/archive-receipt-$negative.json"
+for negative in stale-source-tree-digest other-tag other-source no-fixtures; do
+  entry_reject "final-archive-receipt-$negative" 'REJECT receipt-invalid' --verify-final "${final_args[@]}" "$SOURCE_ARCHIVE" "$TEMP_ROOT/archive-receipt-$negative.json" "$CLONE"
 done
 
 # Substitution in both directions.
-entry_reject final-product-package-as-source-archive 'REJECT' --verify-final "${final_args[@]}" "$ARCHIVE" "$ARCHIVE_RECEIPT"
+entry_reject final-product-package-as-source-archive 'REJECT' --verify-final "${final_args[@]}" "$ARCHIVE" "$ARCHIVE_RECEIPT" "$CLONE"
 python3 - "$ARCHIVE" "$TEMP_ROOT/product-as-source.tar.gz" "$VERSION" "$SOURCE_SHA" <<'PY'
 import sys, tarfile
 src, dst, version, sha = sys.argv[1:]
