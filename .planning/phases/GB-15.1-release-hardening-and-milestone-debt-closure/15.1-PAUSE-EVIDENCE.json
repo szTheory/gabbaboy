@@ -1,0 +1,52 @@
+{
+  "schema": "gabbaboy-phase-pause-evidence-v1",
+  "timestamp": "2026-10-21T14:21:46.842Z",
+  "phase": "15.1",
+  "status": "paused",
+  "head_before_pause_commit": "842ee3944e8eceda5aed069ddc891913830202fb",
+  "completed_plans": [
+    "01",
+    "02",
+    "03",
+    "04",
+    "05",
+    "06",
+    "07",
+    "11",
+    "12",
+    "13",
+    "14",
+    "15",
+    "18",
+    "19"
+  ],
+  "incomplete_plans": [
+    "08",
+    "09",
+    "10",
+    "16",
+    "17"
+  ],
+  "partial_file": ".github/scripts/verify-workflow-policy.py",
+  "partial_file_sha256": "eb20cc11fd80bbe52242542d0328cb5744177365960246f8984587ab7d6b253b",
+  "partial_file_state": "untracked, unstaged, incomplete; syntax parses only; no functional qualification",
+  "plan08_red": {
+    "description": "Disposable rehearsal fuzz producer mutated to contents: write was accepted by existing production shell gate",
+    "command": "bash .github/scripts/verify-release-gates.sh --self-test",
+    "exit_code": 0,
+    "intended_rejection_missing": true,
+    "raw_output_sha256": "b752aafc90811c21116438b8feacb303732b8ef4c89695f9a9e129e93bc6c9ce",
+    "sanitized_output": ".planning/phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-08-PAUSE-RED.txt",
+    "sanitized_output_sha256": "b752aafc90811c21116438b8feacb303732b8ef4c89695f9a9e129e93bc6c9ce"
+  },
+  "processes": "All owned synchronous calls completed; no active owned session reported. ps/pgrep inspection unavailable in sandbox.",
+  "wave3_gate": {
+    "source": "8174104",
+    "completed_tests": 1144,
+    "passed": 1140,
+    "failed": 4,
+    "seconds": 397.51,
+    "scope": "Before Plan07 repair; no Wave4 full gate run."
+  },
+  "next_command": "/gsd-execute-phase 15.1"
+}

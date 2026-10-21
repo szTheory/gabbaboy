@@ -4,13 +4,13 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: "15.1"
 current_phase_name: Release Hardening and Milestone Debt Closure
-current_plan: "13/19 summarized; Wave 3 integration has 4 known failures; next 15.1-07"
-status: executing
-stopped_at: "Phase 15.1 Wave 3 plan05 complete; known integration gaps assigned07/10; next Wave 4 plan07"
-last_updated: "2026-10-21T02:27:12.638Z"
-last_activity: 2026-10-20
-last_activity_desc: Phase 15.1 execution started
-state_head: 97339e62b1f59b59cc79c46ffb7164a9b3f144c1
+current_plan: "Paused in 15.1-08 task 1/3; 14/19 summaries complete"
+status: paused
+stopped_at: "Owner pause during Plan08 task1; preserve incomplete policy checker; resume /gsd-execute-phase 15.1"
+last_updated: "2026-10-21T14:21:46.842Z"
+last_activity: 2026-10-21
+last_activity_desc: Owner-requested pause during Phase 15.1 Plan 08
+state_head: 842ee3944e8eceda5aed069ddc891913830202fb
 progress:
   total_phases: 10
   completed_phases: 9
@@ -30,12 +30,12 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 ## Current Position
 
-Phase: 15.1 (Release Hardening and Milestone Debt Closure) — EXECUTING
-Status: Executing Phase 15.1
-Current Plan: 13/19 summarized; Wave 3 integration has 4 known failures; next 15.1-07
+Phase: 15.1 (Release Hardening and Milestone Debt Closure) — PAUSED
+Status: Paused at owner request
+Current Plan: Paused in 15.1-08 task 1/3; 14/19 committed summaries
 Total Plans in Phase: 19
 
-Completed stage: **Phase 15.1 execution in progress — Waves 1–3 plans executed and summarized (13/19)**. Plan 05 separates trusted validators from subject data and binds new hosted fuzz claims to independently read CI identities and downloaded bytes. Fresh configured Wave 3 integration rebuilt source `8174104` and completed 1,144 tests in 397.51 seconds: 1,140 passed and four known failures remain assigned to Plans 07/10. Six plans and phase-wide verification remain. No phase completion, fresh hosted qualification, publication or debt acceptance is claimed.
+Completed stage: **Phase 15.1 execution paused at owner request — 14/19 plans executed and summarized**. Plan 07 is complete at `842ee39`; Plan 08 task 1 has an incomplete, unstaged policy checker and no task commit or SUMMARY. Waves 1–3 and Plan 07 focused evidence are retained; Wave 4 integration has not run. The latest complete core gate tested source `8174104`: 1,140/1,144 passed in 397.51 seconds. Plan 07 subsequently repaired the ledger checks in focused verification; a new full gate is still required. Plan 10 owns the obsolete dense-failure expectation and live malformed-summary negative. Five plans plus final phase qualification remain. No phase completion, live hosted qualification, PR/merge, publication, or debt acceptance is claimed.
 
 Next phase: **15.1 — Release Hardening and Milestone Debt Closure**. Exact next command: `/gsd-execute-phase 15.1`.
 

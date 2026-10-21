@@ -6,7 +6,7 @@ GabbaBoy is an original, portable C17 emulator core for Game Boy (DMG) and Game 
 
 ## Current State
 
-Completed stage: **Phase 15.1 execution in progress — Waves 1–3 plans executed and summarized (13/19)**. Plan 05 separates trusted validators from subject data and binds new hosted fuzz claims to independently read CI identities and downloaded bytes. Fresh configured Wave 3 integration rebuilt source `8174104` and completed 1,144 tests in 397.51 seconds: 1,140 passed and four known failures remain assigned to Plans 07/10. Six plans and phase-wide verification remain. No phase completion, fresh hosted qualification, publication or debt acceptance is claimed.
+Completed stage: **Phase 15.1 execution paused at owner request — 14/19 plans executed and summarized**. Plan 07 is complete at `842ee39`; Plan 08 task 1 has an incomplete, unstaged policy checker and no task commit or SUMMARY. Waves 1–3 and Plan 07 focused evidence are retained; Wave 4 integration has not run. The latest complete core gate tested source `8174104`: 1,140/1,144 passed in 397.51 seconds. Plan 07 subsequently repaired the ledger checks in focused verification; a new full gate is still required. Plan 10 owns the obsolete dense-failure expectation and live malformed-summary negative. Five plans plus final phase qualification remain. No phase completion, live hosted qualification, PR/merge, publication, or debt acceptance is claimed.
 
 Next phase: **15.1 — Release Hardening and Milestone Debt Closure**. Exact next command: `/gsd-execute-phase 15.1`.
 
