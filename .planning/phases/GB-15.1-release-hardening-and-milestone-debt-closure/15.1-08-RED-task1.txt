@@ -1,0 +1,4 @@
+REJECT checkout-credentials: release-rehearsal.corpus checkout must set persist-credentials: false
+check_exit=1
+self-test positive control failed: exit=1 stderr='REJECT checkout-credentials: release-rehearsal.corpus checkout must set persist-credentials: false'
+selftest_exit=1
