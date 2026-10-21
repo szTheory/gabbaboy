@@ -432,10 +432,16 @@ def tool_version(command: list[str]) -> str:
 
 
 def parse_ctest(text: str) -> dict:
-    summary = re.search(r"(\d+)% tests passed, (\d+) tests failed out of (\d+)", text)
-    if not summary:
+    # CTest prints "100% tests passed out of N" when nothing failed and
+    # "P% tests passed, F tests failed out of N" otherwise; accept exactly those two forms.
+    clean = re.search(r"^100% tests passed out of (\d+)$", text, re.M)
+    summary = re.search(r"^(\d+)% tests passed, (\d+) tests failed out of (\d+)$", text, re.M)
+    if clean:
+        failed, total = 0, int(clean.group(1))
+    elif summary:
+        failed, total = int(summary.group(2)), int(summary.group(3))
+    else:
         raise Rejected("ctest summary line not found in the log")
-    failed, total = int(summary.group(2)), int(summary.group(3))
     seconds = re.search(r"Total Test time \(real\) =\s+([0-9.]+) sec", text)
     return {"tests_total": total, "tests_failed": failed, "tests_passed": total - failed,
             "tests_not_run": len(re.findall(r"\*\*\*(?:Not Run|Skipped)", text)),
@@ -763,6 +769,20 @@ def self_test() -> int:
         if not any(p.startswith(code) for p in problems):
             raise Rejected(f"intended defect {code!r} was not rejected with its own diagnostic: {problems}")
         rejected += 1
+
+    # the suite log parser: both CTest summary forms, and nothing else, count as a result
+    clean = parse_ctest("100% tests passed out of 12\nTotal Test time (real) =   3.50 sec\n")
+    failing = parse_ctest("99% tests passed, 1 tests failed out of 12\n   1 - x (Failed)\n")
+    notrun = parse_ctest("100% tests passed out of 12\n  3/12 Test #3: a ...***Skipped\n")
+    if (clean["tests_total"], clean["tests_failed"], clean["tests_passed"]) != (12, 0, 12) \
+            or (failing["tests_failed"], failing["tests_passed"]) != (1, 11) or notrun["tests_not_run"] != 1:
+        raise Rejected(f"suite log parser misread a summary: {clean} {failing} {notrun}")
+    for bad in ("", "tests passed\n", "50% tests passed\n"):
+        try:
+            parse_ctest(bad)
+        except Rejected:
+            continue
+        raise Rejected(f"suite log parser accepted a log without a summary line: {bad!r}")
 
     # the retention plumbing: a failing attempt must keep its sanitized diagnostic on disk
     with tempfile.TemporaryDirectory() as tmp:
