@@ -4,18 +4,18 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: "15.1"
 current_phase_name: Release Hardening and Milestone Debt Closure
-current_plan: 10
+current_plan: 17
 status: executing
-stopped_at: Completed 15.1-16-PLAN.md (rehearsal follow-up)
-last_updated: "2026-10-21T18:00:56.808Z"
+stopped_at: Completed 15.1-17-PLAN.md (dispositions closed; phase PR opened)
+last_updated: "2026-10-21T20:30:00.000Z"
 last_activity: 2026-10-21
-last_activity_desc: Completed Phase 15.1 Plan 10 (one intended core per acceptance-linked target; dense, deadline, overlap and DMG held controls registered; immutable malformed summary fixture; Wave 5 gate 1162/1162)
+last_activity_desc: Completed Phase 15.1 Plan 17 (24 individual dispositions bound to the audit commit, 10 open limitations, review and security records, full gate 1164/1164)
 state_head: 7a3d2fddc355f1cf642ef653d6e74f9adf7d7c25
 progress:
   total_phases: 10
   completed_phases: 9
   total_plans: 153
-  completed_plans: 152
+  completed_plans: 153
   percent: 90
 ---
 
@@ -31,13 +31,13 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 ## Current Position
 
 Phase: 15.1 (Release Hardening and Milestone Debt Closure) — EXECUTING
-Status: Executing Phase 15.1
-Current Plan: 8
+Status: Executing Phase 15.1 (all plans summarized; verification pending)
+Current Plan: 17
 Total Plans in Phase: 19
 
-Completed stage: **Phase 15.1 execution resumed; Plan 08 complete - 15 of 19 plans executed and summarized**. Plan 08 (`15.1-08-SUMMARY.md`, commits `0b835ac`..`b353efe`) split read-only evidence producers from a trusted judge and a write-only attacher, added the bounded workflow policy judge with 61 intended-defect controls, and moved the write-holding manifest and publisher onto a trusted checkout. Five source-executing write jobs remain a named, exactly-enforced residual; nothing has run on GitHub. The full core gate has not run since Plan 07; Plans 09 and 10 (Wave 5) are next, then Plan 16 (hosted reproduction), Plan 17 (closure) and the phase gates. No phase completion, live hosted qualification, PR/merge, publication, or debt acceptance is claimed. Both auto flags stay false. **Next:** Plan 09 (retry/download bounds) of Phase 15.1 - `/gsd-execute-phase 15.1`; this stops at the Phase 15.1 boundary and routes to `/gsd-audit-milestone` only after Plan 17.
+Completed stage: **Phase 15.1 execution - all 19 plans executed and summarized; Plan 17 closed the 24 dispositions**. `15.1-DISPOSITIONS.json` gives every scope item an individual source-backed disposition (11 closed, 11 closed with a named residual, 2 open historical unknowns) checked by `verify-closeout-dispositions.py` (30 real-CLI rejection controls). Ten limitations stay open and are neither passes nor owner acceptances: support-ledger pin drift, the performance review trigger, the unexercised trusted rehearsal judge, the pre-fix audio_saturation RED and isolated M7 unknowns, the SHIP-11 unclassified edge (flagged unresolved assumption), five residual write jobs, the failed hosted rehearsal, no hosted wrong-ROM run, and two descriptor-less prohibition flags. Full gate 1164/1164 at `785d55c`. The review is not independent (recorded). The phase PR, exact head, required check runs and merge are recorded from live API readback in `15.1-delivery-receipt.json`. Both auto flags stay false; no tag, release, archive or v0.3 work. **Next:** standard Phase 15.1 verification, `/gsd-verify-work 15.1`; after that the owner chooses `/gsd-audit-milestone`.
 
-Next phase: **15.1 — Release Hardening and Milestone Debt Closure**. Exact next command: `/gsd-execute-phase 15.1`.
+Next stage: **15.1 post-plan verification**. Exact next command: `/gsd-verify-work 15.1`; then the owner chooses `/gsd-audit-milestone`.
 
 Scope: [15.1-SCOPE.md](phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-SCOPE.md) and its machine-readable inventory track all 21 audit debts, both closeout scan items and the inherited SUMMARY schema caveat. Validate each finding before fixing; preserve historical unknowns and all v0.2.0 producer receipts. Reuse existing research and completed implementation. Both automatic advance flags remain false; v0.3 is provisional and unstarted.
 
