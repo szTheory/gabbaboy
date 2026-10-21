@@ -1639,7 +1639,9 @@ def self_test_v2_sidecar() -> None:
     data = parse_ledger(ledger_raw, "0.2.0")
     validate_data_v2(data, "0.2.0")
     receipt_path = pathlib.Path("build/cgb-corpus-receipt.json")
-    base_revision = current_git_revision()
+    # The tracked ledger is a frozen producer snapshot. Its source identity must
+    # be read from that receipt's immutable producer commit, not today's HEAD.
+    base_revision = data["receipt"]["producer_revision"]
     source_bytes = {}
     for row in data["source_inputs"]:
         raw = git("show", f"{base_revision}:{row['path']}")
@@ -1815,6 +1817,28 @@ def self_test_v2_sidecar() -> None:
             expect_rejected("absent-build-without-evidence-only",
                             lambda: build_sidecar("v0.2.0", source_sha, repository, outside_receipt),
                             "receipt path must stay inside the tagged repository")
+            cli_script = repository / "tests/scripts/verify-support-ledger.py"
+            cli_script.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(pathlib.Path(__file__).resolve(), cli_script)
+            retained_sidecar_path = temp_root / "retained-build-sidecar.json"
+            retained_sidecar_path.write_text(
+                json.dumps(second_sidecar, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            command = [sys.executable, "-I", str(cli_script), "--tag", "v0.2.0",
+                       "--source-sha", source_sha, "--receipt", str(outside_receipt),
+                       "--verify-sidecar", str(retained_sidecar_path), "--evidence-only"]
+            completed = subprocess.run(command, cwd=repository, env=author_env,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                       text=True, check=False, timeout=120)
+            if completed.returncode == 0:
+                fail("evidence-only CLI qualified a retained-build sidecar after all build artifacts "
+                     f"were absent: exit={completed.returncode}; stdout={completed.stdout.strip()!r}; "
+                     f"stderr={completed.stderr.strip()!r}")
+            if "build-evidence-unavailable" not in completed.stderr:
+                fail("evidence-only CLI rejected all-missing build evidence for the wrong reason: " +
+                     completed.stderr.strip())
+            if "verified source-bound support sidecar" in completed.stdout:
+                fail("evidence-only CLI emitted qualifying success after every build artifact was absent")
+            controls.append("cli-all-build-artifacts-absent-is-nonqualifying")
             EVIDENCE_ONLY = True
             downloaded = build_sidecar("v0.2.0", source_sha, repository, outside_receipt)
             if downloaded != second_sidecar:
