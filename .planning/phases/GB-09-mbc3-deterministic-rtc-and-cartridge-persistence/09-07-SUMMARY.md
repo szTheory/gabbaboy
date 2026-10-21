@@ -23,6 +23,14 @@ key-decisions:
   - "Frame budget is 16 frames of 140448 half-dots (past the white frames 1-3); negative control forces [0x149]=0x03 with recomputed header checksum and requires shade 3 on all three ROMs"
   - "GBB_FORBIDDEN_LABEL defaults to mooneye and keeps the mooneye-mbc success line byte-identical; other labels print '<label> absent from scanned tree files=N'"
 requirements-completed: [CART-04]
+coverage:
+  - id: D1
+    description: "MagenTests screen-oracle behavior, adversarial negative control, fixture digest, and install exclusion pass focused checks"
+    verification:
+      - kind: integration
+        ref: "Fresh Phase 15.1-11 focused CTest: magentests_fixture_digest, magentests_oob_sram_mbc1/mbc3/mbc5, magentests_oob_sram_negative_control, magentests_not_installed, magentests_not_installed_selftest (7 relevant tests passed)"
+        status: pass
+    human_judgment: false
 duration: 20 min
 completed: 2026-10-11
 status: complete
@@ -61,3 +69,7 @@ None.
 ## Self-Check: PASSED
 
 Files tests/test_magentests.c and this summary exist; commits 1334ae3, a601b51, ebda934 are on the branch.
+
+## Current Verification — 15.1-11
+
+The focused screen oracle, forced nonblank-screen negative control, fixture digest, and install-exclusion tests passed in the current 45-test batch.
