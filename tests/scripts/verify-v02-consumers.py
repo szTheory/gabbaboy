@@ -13,6 +13,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
 import unittest
@@ -621,6 +622,33 @@ class ConsumerContractTests(unittest.TestCase):
         output = self.test_root / "missing-config.json"
         result = self.run_cli(["--prefix", str(broken), "--output", str(output)])
         self.assert_rejected(result, "package-config-count:expected-one-found-0", output)
+
+    def test_forged_runner_source_does_not_qualify_changed_package(self) -> None:
+        expected_source, _qualified = source_identity(self.prefix, ROOT)
+        archive = self.test_root / "candidate.tar.gz"
+        with tarfile.open(archive, "w:gz") as bundle:
+            for path in sorted(self.prefix.rglob("*")):
+                bundle.add(path, arcname=path.relative_to(self.prefix).as_posix(), recursive=False)
+        candidate_manifest = self.test_root / "candidate-manifest.json"
+        candidate_manifest.write_text(json.dumps({
+            "schema_version": 1,
+            "candidate_source_sha": expected_source,
+            "archive_sha256": hash_file(archive),
+            "build_receipt_sha256": "a" * 64,
+        }, sort_keys=True) + "\n", encoding="utf-8")
+
+        forged = self.test_root / "forged-source-package"
+        shutil.copytree(self.prefix, forged)
+        header = forged / "include" / "gabbaboy" / "gabbaboy.h"
+        header.write_bytes(header.read_bytes() + b"\n/* changed package bytes */\n")
+        reported_source, _qualified = source_identity(forged, ROOT)
+        self.assertEqual(reported_source, expected_source)
+        self.assertNotEqual(hash_package(forged), hash_package(self.prefix))
+        self.assertTrue(candidate_manifest.is_file())
+
+        output = self.test_root / "forged-source.json"
+        result = self.run_cli(["--prefix", str(forged), "--output", str(output)])
+        self.assert_rejected(result, "candidate-manifest-required", output)
 
     def failing_project(self, language: str) -> Path:
         project = self.test_root / f"failing-{language}"
