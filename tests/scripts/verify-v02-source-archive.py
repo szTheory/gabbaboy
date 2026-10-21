@@ -174,14 +174,25 @@ def register(inspection, seen, raw, kind, size, target, reader, mode, limits, wa
     if kind == "symlink":
         # Without a tagged tree to compare against, only a relative link that stays inside the
         # archive root is tolerated; with --repo the exact tree comparison decides.
-        depth = len(parts) - 2
+        target_bytes = target.encode("utf-8", "surrogateescape")
+        if not target_bytes or len(target_bytes) > limits.path:
+            raise Reject("path-too-long", f"symbolic link target for {raw!r} is empty or exceeds {limits.path} bytes")
+        if target.startswith("/") or "\x00" in target or "\\" in target or re.match(r"^[A-Za-z]:", target):
+            raise Reject("link-not-allowed", f"symbolic link {raw!r} has an absolute or non-portable target")
+        # `parts` includes the wrapped archive root for source archives, but no synthetic
+        # root for product archives. Resolve from the link's parent within that boundary.
+        depth = len(parts) - (1 if inspection.unwrapped else 2)
         for step in target.split("/"):
-            depth += -1 if step == ".." else (0 if step in ("", ".") else 1)
+            if step == "..":
+                depth -= 1
+            elif step not in ("", "."):
+                depth += 1
             if depth < 0:
-                break
-        if target.startswith("/") or "\x00" in target or depth < 0:
-            raise Reject("link-not-allowed", f"symbolic link {raw!r} points outside the archive root")
-        oid = hashlib.sha1(b"blob %d\x00" % len(target.encode()) + target.encode()).hexdigest()
+                raise Reject("link-not-allowed", f"symbolic link {raw!r} points outside the archive root")
+        inspection.total += len(target_bytes)
+        if inspection.total > limits.total:
+            raise Reject("archive-oversize", f"archive declares more than {limits.total} uncompressed bytes")
+        oid = hashlib.sha1(b"blob %d\x00" % len(target_bytes) + target_bytes).hexdigest()
         inspection.entries.append(Entry(rel, "symlink", size, target, None, oid, mode))
         return
     sha256, oid, kept = stream_hash(reader, size, want_git)
@@ -314,8 +325,10 @@ def check_tree(inspection, repo, tag, source_sha):
         raise Reject("tree-mismatch", f"archive differs from tagged tree: missing {missing[:3]} extra {extra[:3]}")
     for name, (mode, oid) in expected.items():
         entry = actual[name]
-        if (mode == "120000") != (entry.kind == "symlink") or entry.git_oid != oid:
-            raise Reject("tree-mismatch", f"{name} differs from the tagged tree blob")
+        actual_mode = ("120000" if entry.kind == "symlink" else
+                       ("100755" if entry.mode & 0o111 else "100644"))
+        if mode != actual_mode or entry.git_oid != oid:
+            raise Reject("tree-mismatch", f"{name} differs from the tagged tree mode or blob")
 
 
 def parse_notice_table(text):
@@ -375,10 +388,21 @@ def check_fixtures(inspection):
 
 
 def tree_digest(inspection):
-    lines = []
-    for entry in sorted(inspection.entries, key=lambda e: e.path):
-        lines.append(f"{entry.path}\t{entry.sha256}\n" if entry.kind == "file" else f"{entry.path}\t->{entry.target}\n")
-    return hashlib.sha256("".join(lines).encode("utf-8", "surrogateescape")).hexdigest()
+    digest = hashlib.sha256(b"gabbaboy-source-tree-v2\x00")
+    entries = sorted(inspection.entries, key=lambda e: e.path.encode("utf-8", "surrogateescape"))
+    for entry in entries:
+        path = entry.path.encode("utf-8", "surrogateescape")
+        if entry.kind == "symlink":
+            kind, mode = b"symlink", b"120000"
+            payload = entry.target.encode("utf-8", "surrogateescape")
+        else:
+            kind = b"file"
+            mode = b"100755" if entry.mode & 0o111 else b"100644"
+            payload = bytes.fromhex(entry.sha256)
+        for field in (path, kind, mode, payload):
+            digest.update(len(field).to_bytes(8, "big"))
+            digest.update(field)
+    return digest.hexdigest()
 
 
 def build_receipt(archive, tag, source_sha, repo, limits):
@@ -777,7 +801,7 @@ def self_test():
         if not stdout.startswith("PASS: source archive receipt"):
             raise SystemExit(f"self-test receipt positive omitted success output: {stdout!r}")
         positives += 1
-        print("accepted: receipt bound to the archive bytes")
+        print("accepted: receipt recomputed against the immutable Git tree")
 
         # Receipt qualification must consume the real immutable tag tree, not trust a
         # producer's tree_bound_to_git boolean. Each control enters through --check-receipt.
