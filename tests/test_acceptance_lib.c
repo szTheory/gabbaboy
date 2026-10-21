@@ -495,6 +495,173 @@ static int case_drive_dense_queue(void) {
     PASS("acceptance_drive_dense_queue");
 }
 
+static void make_accept_test_rom(uint8_t rom[32768], const uint8_t *program, size_t program_size) {
+    memset(rom, 0, 32768u);
+    memcpy(rom + 0x100u, program, program_size);
+    uint8_t checksum = 0u;
+    for (size_t i = 0x134u; i <= 0x14cu; ++i) checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14du] = checksum;
+}
+
+typedef struct {
+    size_t calls;
+    size_t delivered;
+    gbb_instance *instance;
+} delivery_stats;
+
+static bool deliver_and_count(void *context, const gbb_input_event *events, size_t count) {
+    delivery_stats *stats = (delivery_stats *)context;
+    stats->calls++;
+    stats->delivered += count;
+    return gbb_queue_events(stats->instance, events, count) == GBB_OK;
+}
+
+static bool reject_delivery(void *context, const gbb_input_event *events, size_t count) {
+    (void)events;
+    (void)count;
+    ((delivery_stats *)context)->calls++;
+    return false;
+}
+
+static int case_accept_drive_batch_order(void) {
+    static const uint8_t program[] = {
+        0x3e,0x00,0xe0,0x01, 0x3e,0x80,0xe0,0x02,
+        0xf0,0x01,0xea,0x00,0xc0, 0xf0,0x02,0xea,0x01,0xc0,
+        0xf0,0x0f,0xea,0x02,0xc0
+    };
+    uint8_t rom[32768];
+    make_accept_test_rom(rom, program, sizeof(program));
+    gbb_input_event edges[8];
+    static const uint8_t bits[8] = {1u,0u,1u,0u,0u,1u,0u,1u};
+    for (size_t i = 0; i < 8u; ++i)
+        edges[i] = (gbb_input_event){80u, GBB_INPUT_SERIAL_EDGE, bits[i]};
+
+    for (size_t pass = 0; pass < 2u; ++pass) {
+        gbb_instance *instance = NULL;
+        REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) == GBB_OK);
+        REQUIRE(gbb_load_rom(instance, rom, sizeof(rom)) == GBB_OK);
+        gbb_run_result started = gbb_run(instance, 80u, NULL, 0u);
+        REQUIRE(started.reason == GBB_STOP_BUDGET && started.consumed_half_dots == 80u);
+
+        gbb_accept_script script;
+        memset(&script, 0, sizeof(script));
+        script.events = edges;
+        script.event_count = sizeof(edges) / sizeof(edges[0]);
+        script.end_half_dots = 248u;
+        gbb_accept_stepper stepper;
+        gbb_accept_stepper_init(&stepper, instance, NULL, NULL);
+        stepper.actual_half_dots = 80u;
+        gbb_accept_predicate predicate;
+        memset(&predicate, 0, sizeof(predicate));
+        delivery_stats stats = {0u, 0u, instance};
+        gbb_accept_drive_config config;
+        memset(&config, 0, sizeof(config));
+        config.stepper = &stepper;
+        config.script = &script;
+        config.predicate = &predicate;
+        config.budget_half_dots = script.end_half_dots;
+        config.max_batch = pass == 0u ? 1u : 64u;
+        config.deliver = deliver_and_count;
+        config.context = &stats;
+        gbb_accept_drive_result result;
+        gbb_accept_drive(&config, &result);
+        if (result.status != GBB_ACCEPT_DRIVE_NOT_REACHED || result.end_half_dots != 248u ||
+            stats.delivered != 8u || stats.calls != (pass == 0u ? 8u : 1u) ||
+            gbb_peek_ram(instance, 0xc000u) != 0xa5u ||
+            (gbb_peek_ram(instance, 0xc001u) & 0x80u) != 0u ||
+            (gbb_peek_ram(instance, 0xc002u) & 0x08u) == 0u) {
+            fprintf(stderr, "batch replay batch=%zu status=%d calls=%zu delivered=%zu ram=%02x/%02x/%02x\n",
+                    config.max_batch, (int)result.status, stats.calls, stats.delivered,
+                    gbb_peek_ram(instance, 0xc000u), gbb_peek_ram(instance, 0xc001u),
+                    gbb_peek_ram(instance, 0xc002u));
+            gbb_destroy(instance);
+            return 1;
+        }
+        gbb_destroy(instance);
+    }
+    PASS("acceptance_drive_batch_order");
+}
+
+static int case_accept_drive_stop_guard_failure(void) {
+    static const uint8_t stop_program[] = {0x10,0x00,0x00,0x18,0xfe};
+    uint8_t rom[32768];
+    make_accept_test_rom(rom, stop_program, sizeof(stop_program));
+    gbb_instance *instance = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) == GBB_OK);
+    REQUIRE(gbb_load_rom(instance, rom, sizeof(rom)) == GBB_OK);
+    gbb_accept_predicate predicate;
+    memset(&predicate, 0, sizeof(predicate));
+    gbb_accept_stepper stepper;
+    gbb_accept_stepper_init(&stepper, instance, NULL, NULL);
+
+    gbb_input_event wake = {20u, GBB_INPUT_STOP_WAKE, 1u};
+    gbb_accept_script script;
+    memset(&script, 0, sizeof(script));
+    script.events = &wake;
+    script.event_count = 1u;
+    script.end_half_dots = 64u;
+    gbb_accept_drive_config config;
+    memset(&config, 0, sizeof(config));
+    config.stepper = &stepper;
+    config.script = &script;
+    config.predicate = &predicate;
+    config.max_batch = 64u;
+    config.budget_half_dots = script.end_half_dots;
+    gbb_accept_drive_result result;
+    gbb_accept_drive(&config, &result);
+    REQUIRE(result.status == GBB_ACCEPT_DRIVE_NOT_REACHED && result.end_half_dots == 64u);
+    REQUIRE(stepper.actual_half_dots >= wake.at_half_dots && stepper.last_stop == GBB_STOP_BUDGET);
+
+    /* A stopped guest with 1,992 non-waking deadlines inside a short replay
+     * deadline forces the stepper's iteration guard without a mock core. */
+    REQUIRE(gbb_reset(instance) == GBB_OK);
+    gbb_input_event deadlines[2000];
+    for (size_t i = 0; i < sizeof(deadlines) / sizeof(deadlines[0]); ++i) {
+        deadlines[i].at_half_dots = 8u + i;
+        deadlines[i].kind = (i & 1u) == 0u ? GBB_INPUT_BUTTON_PRESS : GBB_INPUT_BUTTON_RELEASE;
+        deadlines[i].value = GBB_BUTTON_A;
+    }
+    script.events = deadlines;
+    script.event_count = sizeof(deadlines) / sizeof(deadlines[0]);
+    script.end_half_dots = 2000u;
+    gbb_accept_stepper_init(&stepper, instance, NULL, NULL);
+    config.budget_half_dots = script.end_half_dots;
+    gbb_accept_drive(&config, &result);
+    if (result.status != GBB_ACCEPT_DRIVE_GUARD || result.stop_reason != GBB_STOP_STOPPED ||
+        stepper.actual_half_dots <= 8u || stepper.actual_half_dots >= script.end_half_dots) {
+        fprintf(stderr, "guard replay status=%d stop=%d actual=%llu end=%llu\n", (int)result.status,
+                (int)result.stop_reason, (unsigned long long)stepper.actual_half_dots,
+                (unsigned long long)result.end_half_dots);
+        gbb_destroy(instance);
+        return 1;
+    }
+    gbb_destroy(instance);
+
+    /* Delivery failure must stop before stepping and remain distinguishable
+     * from successful or stopped replay results. */
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) == GBB_OK);
+    REQUIRE(gbb_load_rom(instance, rom, sizeof(rom)) == GBB_OK);
+    gbb_input_event event = {0u, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_A};
+    script.events = &event;
+    script.event_count = 1u;
+    script.end_half_dots = 64u;
+    gbb_accept_stepper_init(&stepper, instance, NULL, NULL);
+    memset(&config, 0, sizeof(config));
+    config.stepper = &stepper;
+    config.script = &script;
+    config.predicate = &predicate;
+    config.max_batch = 1u;
+    config.budget_half_dots = script.end_half_dots;
+    delivery_stats stats = {0u, 0u, instance};
+    config.deliver = reject_delivery;
+    config.context = &stats;
+    gbb_accept_drive(&config, &result);
+    REQUIRE(result.status == GBB_ACCEPT_DRIVE_DELIVER_FAILED && result.end_half_dots == 0u);
+    REQUIRE(stats.calls == 1u && stepper.actual_half_dots == 0u);
+    gbb_destroy(instance);
+    PASS("acceptance_drive_stop_guard_failure");
+}
+
 static int case_accept_input_span_edges(void) {
     size_t rom_length = 0;
     uint8_t *rom = read_file("fixtures/libbet/libbet.gb", 32768u, &rom_length);
@@ -585,6 +752,8 @@ int main(int argc, char **argv) {
         return case_predicate_anchors(argv[2]);
     }
     if (strcmp(argv[1], "acceptance_drive_dense_queue") == 0) return case_drive_dense_queue();
+    if (strcmp(argv[1], "acceptance_drive_batch_order") == 0) return case_accept_drive_batch_order();
+    if (strcmp(argv[1], "acceptance_drive_stop_guard_failure") == 0) return case_accept_drive_stop_guard_failure();
     if (strcmp(argv[1], "acceptance_input_span_edges") == 0) return case_accept_input_span_edges();
     fprintf(stderr, "unknown case %s\n", argv[1]);
     return 2;
