@@ -940,6 +940,33 @@
       "owner_accepted": false
     },
     {
+      "id": "LIM-WINDOWS-POSIX-CONTROLS",
+      "title": "Three controls (two consumer interrupt-cleanup tests that need signal delivery, and the controlled paired-performance producer that needs a script as the measurement binary) are skipped on Windows only, so those paths are unexercised there. They run on the POSIX evidence runners.",
+      "kind": "external_limitation",
+      "affects": [
+        "P15-04",
+        "P15-08"
+      ],
+      "evidence": "verify-v02-consumers.py and verify-v02-performance.py unittest.skipIf(os.name == \"nt\") with reasons in code; hosted native-windows-x64 run for PR 93",
+      "owner_decision": "Accept the POSIX-only coverage or rework the controls for Windows (for example CTRL_BREAK_EVENT and an .exe fixture).",
+      "status": "open",
+      "counts_as_pass": false,
+      "owner_accepted": false
+    },
+    {
+      "id": "LIM-ASAN-STALL-TIMING",
+      "title": "The hosted ASan/UBSan stall-report replay needed about 265 s on main and exceeded the fixed 300 s deadline on the Phase 15.1 head. The deadline is now sanitizer-scaled; whether the core change made the replay slower is not diagnosed.",
+      "kind": "owner_decision",
+      "affects": [
+        "P7-01"
+      ],
+      "evidence": "PR 93 linux-asan-ubsan run on head e630999 (acceptance_stall_diagnosis timed out on repetition 1); main run 39438514017 (529 s for two replays)",
+      "owner_decision": "Request a before and after timing of the replay, or accept the scaled deadline.",
+      "status": "open",
+      "counts_as_pass": false,
+      "owner_accepted": false
+    },
+    {
       "id": "LIM-PROHIBITION-FLAGS",
       "title": "Two descriptor-less prohibitions remain flagged-unverified: never turn absent historical RED, M7 or hardware evidence into a passing release claim, and never treat resolve-first authorization as owner acceptance or permission to republish v0.2.0.",
       "kind": "flagged_assumption",

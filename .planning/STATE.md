@@ -9,7 +9,7 @@ status: executing
 stopped_at: Completed 15.1-17-PLAN.md (dispositions closed; phase PR opened)
 last_updated: "2026-10-21T20:30:00.000Z"
 last_activity: 2026-10-21
-last_activity_desc: Completed Phase 15.1 Plan 17 (24 individual dispositions bound to the audit commit, 10 open limitations, review and security records, full gate 1164/1164)
+last_activity_desc: Completed Phase 15.1 Plan 17 (24 individual dispositions bound to the audit commit, 12 open limitations, review and security records, full gate 1164/1164)
 state_head: 7a3d2fddc355f1cf642ef653d6e74f9adf7d7c25
 progress:
   total_phases: 10
@@ -35,7 +35,7 @@ Status: Executing Phase 15.1 (all plans summarized; verification pending)
 Current Plan: 17
 Total Plans in Phase: 19
 
-Completed stage: **Phase 15.1 execution - all 19 plans executed and summarized; Plan 17 closed the 24 dispositions**. `15.1-DISPOSITIONS.json` gives every scope item an individual source-backed disposition (11 closed, 11 closed with a named residual, 2 open historical unknowns) checked by `verify-closeout-dispositions.py` (30 real-CLI rejection controls). Ten limitations stay open and are neither passes nor owner acceptances: support-ledger pin drift, the performance review trigger, the unexercised trusted rehearsal judge, the pre-fix audio_saturation RED and isolated M7 unknowns, the SHIP-11 unclassified edge (flagged unresolved assumption), five residual write jobs, the failed hosted rehearsal, no hosted wrong-ROM run, and two descriptor-less prohibition flags. Full gate 1164/1164 at `785d55c`. The review is not independent (recorded). The phase PR, exact head, required check runs and merge are recorded from live API readback in `15.1-delivery-receipt.json`. Both auto flags stay false; no tag, release, archive or v0.3 work. **Next:** standard Phase 15.1 verification, `/gsd-verify-work 15.1`; after that the owner chooses `/gsd-audit-milestone`.
+Completed stage: **Phase 15.1 execution - all 19 plans executed and summarized; Plan 17 closed the 24 dispositions**. `15.1-DISPOSITIONS.json` gives every scope item an individual source-backed disposition (11 closed, 11 closed with a named residual, 2 open historical unknowns) checked by `verify-closeout-dispositions.py` (30 real-CLI rejection controls). Twelve limitations stay open and are neither passes nor owner acceptances: support-ledger pin drift, the performance review trigger, the unexercised trusted rehearsal judge, the pre-fix audio_saturation RED and isolated M7 unknowns, the SHIP-11 unclassified edge (flagged unresolved assumption), five residual write jobs, the failed hosted rehearsal, no hosted wrong-ROM run, two descriptor-less prohibition flags, three Windows-skipped POSIX controls and an undiagnosed hosted ASan stall timing. Full gate 1164/1164 at `785d55c`. The review is not independent (recorded). The phase PR, exact head, required check runs and merge are recorded from live API readback in `15.1-delivery-receipt.json`. Both auto flags stay false; no tag, release, archive or v0.3 work. **Next:** standard Phase 15.1 verification, `/gsd-verify-work 15.1`; after that the owner chooses `/gsd-audit-milestone`.
 
 Next stage: **15.1 post-plan verification**. Exact next command: `/gsd-verify-work 15.1`; then the owner chooses `/gsd-audit-milestone`.
 
