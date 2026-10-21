@@ -2,7 +2,7 @@
 
 Completed stage: **Phase 15.1 execution - all 19 plans executed and summarized** (Plan 17 closes the 24 dispositions and opens the exact-head phase PR). No UAT or VERIFICATION exists yet; the post-plan verifier creates them. Both automatic advance flags remain false.
 
-Next stage in this phase: the standard post-plan verification (`/gsd-verify-work 15.1`), run by the orchestrator, which derives the plan set from `15.1-PLAN-INVENTORY.md` and writes canonical UAT with `tests/scripts/verify-uat-closure.py`.
+Next stage in this phase: verification ran on 2026-10-21 and returned **gaps_found** (`15.1-VERIFICATION.md`): review warnings WR-01..WR-07 are open and the hosted historical-limitations evidence is stale at the final source. Exact next command: `/gsd-plan-phase 15.1 --gaps`, then `/gsd-execute-phase 15.1 --gaps-only`.
 
 Next phase after Phase 15.1: none is numbered. The milestone stays open and the route is the milestone re-audit: `/gsd-audit-milestone`. Do not run it, archive, tag, release, republish v0.2.0 or start v0.3 until the owner chooses.
 

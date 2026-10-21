@@ -6,7 +6,7 @@ current_phase: "15.1"
 current_phase_name: Release Hardening and Milestone Debt Closure
 current_plan: 17
 status: executing
-stopped_at: Completed 15.1-17-PLAN.md (dispositions closed; phase PR opened)
+stopped_at: Phase 15.1 verification gaps_found (PR #93 merged; gap closure pending)
 last_updated: "2026-10-21T20:30:00.000Z"
 last_activity: 2026-10-21
 last_activity_desc: Completed Phase 15.1 Plan 17 (24 individual dispositions bound to the audit commit, 12 open limitations, review and security records, full gate 1164/1164)
@@ -31,13 +31,15 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 ## Current Position
 
 Phase: 15.1 (Release Hardening and Milestone Debt Closure) — EXECUTING
-Status: Executing Phase 15.1 (all plans summarized; verification pending)
+Status: Phase 15.1 verification found gaps; phase remains open
 Current Plan: 17
 Total Plans in Phase: 19
 
 Completed stage: **Phase 15.1 execution - all 19 plans executed and summarized; Plan 17 closed the 24 dispositions**. `15.1-DISPOSITIONS.json` gives every scope item an individual source-backed disposition (11 closed, 11 closed with a named residual, 2 open historical unknowns) checked by `verify-closeout-dispositions.py` (30 real-CLI rejection controls). Twelve limitations stay open and are neither passes nor owner acceptances: support-ledger pin drift, the performance review trigger, the unexercised trusted rehearsal judge, the pre-fix audio_saturation RED and isolated M7 unknowns, the SHIP-11 unclassified edge (flagged unresolved assumption), five residual write jobs, the failed hosted rehearsal, no hosted wrong-ROM run, two descriptor-less prohibition flags, three Windows-skipped POSIX controls and an undiagnosed hosted ASan stall timing. Full gate 1164/1164 at `785d55c`. The review is not independent (recorded). The phase PR, exact head, required check runs and merge are recorded from live API readback in `15.1-delivery-receipt.json`. Both auto flags stay false; no tag, release, archive or v0.3 work. **Next:** standard Phase 15.1 verification, `/gsd-verify-work 15.1`; after that the owner chooses `/gsd-audit-milestone`.
 
-Next stage: **15.1 post-plan verification**. Exact next command: `/gsd-verify-work 15.1`; then the owner chooses `/gsd-audit-milestone`.
+Verification (2026-10-21): PR #93 squash-merged as `09805f3` at reviewed head `34b8939` with required-native, fixture-repro and preview-package-smoke success on that head. Regression gate 1164/1164 at `32ca3f9` (main-equal source). Nyquist 37/39 green (15-2 GB-13 deferred note blocks the closeout scan; 16-2 strict-head hosted evidence stale). Independent security audit 20/20 plan threats closed, threats_open 0. Independent code review: 0 critical, 7 warning (WR-01 persisted write credentials in candidate jobs, WR-02 Windows backslash archive escape, WR-03 replay STOP mismatch, WR-04 retry cannot publish after main moves, WR-05 assert-based verifier, WR-06 textual release gates, WR-07 token sent to unvalidated API URL), 8 info, all open. `15.1-VERIFICATION.md` status **gaps_found** (3/4 criteria): open review warnings and hosted evidence stale at the final source. Owner decisions still pending: support-ledger route, performance review, residual write jobs, GB-13 linker note.
+
+Next stage: **Phase 15.1 gap closure planning** (Phase 15.1 is not complete). Exact next command: `/gsd-plan-phase 15.1 --gaps`; then `/gsd-execute-phase 15.1 --gaps-only`. Only after verification passes does the owner choose `/gsd-audit-milestone`.
 
 Scope: [15.1-SCOPE.md](phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-SCOPE.md) and its machine-readable inventory track all 21 audit debts, both closeout scan items and the inherited SUMMARY schema caveat. Validate each finding before fixing; preserve historical unknowns and all v0.2.0 producer receipts. Reuse existing research and completed implementation. Both automatic advance flags remain false; v0.3 is provisional and unstarted.
 
