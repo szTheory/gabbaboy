@@ -14,6 +14,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime
+from urllib.parse import urlparse
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -125,7 +127,11 @@ def verify_privacy(value: object) -> None:
         for item in value:
             verify_privacy(item)
     elif isinstance(value, str):
-        require(PRIVATE_PATH.search(value) is None and WINDOWS_PATH.search(value) is None and
+        # URLs are references to external evidence, not host-local absolute file paths. Keep
+        # hostname/email checks on the full value while excluding HTTPS URL paths from the
+        # local-path detector.
+        local_path_text = re.sub(r"https://[^\s\"']+", " ", value, flags=re.IGNORECASE)
+        require(PRIVATE_PATH.search(local_path_text) is None and WINDOWS_PATH.search(value) is None and
                 EMAIL.search(value) is None and PRIVATE_HOSTNAME.search(value) is None,
                 "receipt-private-data")
 
@@ -135,11 +141,86 @@ def close_number(actual: object, expected: float) -> bool:
         actual, expected, rel_tol=1e-10, abs_tol=1e-9)
 
 
-def verify_receipt(receipt: object) -> dict[str, object]:
+def verify_reviewed_disposition(receipt: dict[str, object], decision: object,
+                                measurement_receipt_sha256: str) -> dict[str, object]:
+    require(isinstance(decision, dict), "reviewed-disposition-missing")
+    verify_privacy(decision)
+    require(decision.get("schema_version") == 1, "review-decision-schema-unsupported")
+    decision_id = decision.get("decision_id")
+    require(isinstance(decision_id, str) and decision_id.strip() and len(decision_id) <= 256 and
+            not any(ord(char) < 32 for char in decision_id), "review-decision-identity-missing")
+    reviewer = decision.get("reviewer_identity")
+    require(isinstance(reviewer, str) and reviewer.strip() and len(reviewer) <= 256,
+            "reviewer-identity-missing")
+    reference = decision.get("review_reference")
+    parsed_reference = urlparse(reference) if isinstance(reference, str) else None
+    require(parsed_reference is not None and parsed_reference.scheme == "https" and
+            parsed_reference.hostname and parsed_reference.path not in ("", "/"),
+            "review-reference-invalid")
+    reviewed_at = decision.get("reviewed_at")
+    try:
+        parsed_time = datetime.fromisoformat(reviewed_at.replace("Z", "+00:00")) if isinstance(reviewed_at, str) else None
+    except ValueError:
+        parsed_time = None
+    require(parsed_time is not None and parsed_time.tzinfo is not None,
+            "review-timestamp-invalid")
+    require(decision.get("review_type") == "independent", "independent-review-required")
+    require(decision.get("decision") == "accepted-with-disclosed-regression",
+            "review-decision-not-accepted")
+    rationale = decision.get("rationale")
+    require(isinstance(rationale, str) and rationale.strip(), "review-rationale-missing")
+    require(decision.get("measurement_receipt_sha256") == measurement_receipt_sha256,
+            "review-measurement-receipt-mismatch")
+    require(decision.get("source_pair") == receipt.get("source"), "review-source-pair-mismatch")
+    require(decision.get("workload") == receipt.get("workload"), "review-workload-mismatch")
+
+    measurement = receipt.get("measurement")
+    require(isinstance(measurement, dict), "measurement-missing")
+    summary = measurement.get("summary")
+    require(isinstance(summary, dict), "measurement-summary-missing")
+    require(decision.get("measurement_sha256") == canonical_sha(measurement),
+            "review-measurement-mismatch")
+    require(decision.get("measurement_summary") == summary, "review-measurement-summary-mismatch")
+    uncertainty = decision.get("uncertainty")
+    expected_uncertainty = {
+        "method": measurement.get("uncertainty_method"),
+        "sample_standard_deviation_percent": summary.get("sample_standard_deviation_percent"),
+        "approx_95_percent_mean_margin": summary.get("approx_95_percent_mean_margin"),
+    }
+    deviation = expected_uncertainty["sample_standard_deviation_percent"]
+    margin = expected_uncertainty["approx_95_percent_mean_margin"]
+    require(isinstance(uncertainty, dict) and uncertainty == expected_uncertainty and
+            isinstance(expected_uncertainty["method"], str) and
+            isinstance(deviation, (int, float)) and not isinstance(deviation, bool) and
+            math.isfinite(deviation) and isinstance(margin, (int, float)) and
+            not isinstance(margin, bool) and math.isfinite(margin),
+            "review-uncertainty-mismatch")
+    return decision
+
+
+def verify_reviewed_measurement_basis(receipt: dict[str, object], digest: str) -> None:
+    measurement_basis = receipt.get("measurement_receipt")
+    require(isinstance(measurement_basis, dict), "review-measurement-receipt-missing")
+    require(canonical_sha(measurement_basis) == digest, "review-measurement-receipt-mismatch")
+    pending = verify_receipt(measurement_basis, allow_pending=True)
+    expected = json.loads(json.dumps(receipt))
+    for field in ("measurement_receipt", "measurement_receipt_sha256", "reviewed_disposition",
+                  "reviewed_disposition_sha256"):
+        expected.pop(field, None)
+    expected["result"] = pending["result"]
+    expected["regression_disposition"] = pending["regression_disposition"]
+    require(canonical_sha(expected) == canonical_sha(pending),
+            "review-measurement-receipt-mismatch")
+
+
+def verify_receipt(receipt: object, *, allow_pending: bool = False) -> dict[str, object]:
     require(isinstance(receipt, dict), "receipt-not-object")
-    require(receipt.get("schema_version") == 1, "schema-version-unsupported")
+    schema_version = receipt.get("schema_version")
+    require(schema_version in (1, 2), "schema-version-unsupported")
+    legacy = schema_version == 1
     verify_privacy(receipt)
-    require(receipt.get("result") == "passed", "receipt-not-passed")
+    if allow_pending:
+        require(not legacy, "review-decision-legacy-receipt")
 
     source = receipt.get("source")
     require(isinstance(source, dict), "source-identity-missing")
@@ -148,6 +229,9 @@ def verify_receipt(receipt: object) -> dict[str, object]:
     require(isinstance(baseline, dict) and isinstance(candidate, dict), "source-identity-missing")
     require(baseline.get("tag") == "v0.1.0" and baseline.get("sha") == BASELINE_SHA,
             "baseline-source-unknown")
+    if legacy:
+        require(candidate.get("sha") == git_text("rev-parse", "v0.2.0^{commit}"),
+                "legacy-receipt-not-v0.2.0-source")
     require(git_text("rev-parse", "v0.1.0^{commit}") == BASELINE_SHA, "baseline-tag-mismatch")
     for label, identity in (("baseline", baseline), ("candidate", candidate)):
         revision = identity.get("sha")
@@ -288,14 +372,54 @@ def verify_receipt(receipt: object) -> dict[str, object]:
     investigation = disposition.get("investigation")
     require(isinstance(investigation, str) and investigation.strip(),
             "regression-investigation-missing")
-    if recomputed["review_trigger"]:
+    if legacy:
+        require(receipt.get("result") == "passed", "legacy-receipt-not-passed")
+        require("reviewed_disposition" not in receipt and "measurement_receipt" not in receipt and
+                "measurement_receipt_sha256" not in receipt,
+                "legacy-receipt-has-new-review-fields")
+        if recomputed["review_trigger"]:
+            require(disposition.get("decision") == "accepted-with-disclosed-regression" and
+                    disposition.get("release_disposition") == "accepted-with-disclosed-regression",
+                    "legacy-regression-disposition-invalid")
+        else:
+            require(disposition.get("decision") == "no-review-trigger" and
+                    disposition.get("release_disposition") == "qualified-no-trigger",
+                    "legacy-regression-disposition-invalid")
+    elif recomputed["review_trigger"] and disposition.get("decision") == "investigation-required":
+        require(allow_pending, "regression-review-pending")
+        require(receipt.get("result") == "pending-investigation" and
+                disposition.get("release_disposition") == "pending-investigation",
+                "pending-regression-disposition-invalid")
+        require("reviewed_disposition" not in receipt and
+                "reviewed_disposition_sha256" not in receipt and
+                "measurement_receipt" not in receipt and
+                "measurement_receipt_sha256" not in receipt,
+                "pending-receipt-has-review-fields")
+    elif recomputed["review_trigger"]:
         require(disposition.get("decision") == "accepted-with-disclosed-regression" and
-                disposition.get("release_disposition") == "accepted-with-disclosed-regression",
+                disposition.get("release_disposition") == "accepted-with-disclosed-regression" and
+                receipt.get("result") == "passed",
                 "regression-review-pending")
+        measurement_receipt_sha = receipt.get("measurement_receipt_sha256")
+        require(isinstance(measurement_receipt_sha, str) and
+                HEX64.fullmatch(measurement_receipt_sha) is not None,
+                "review-measurement-receipt-missing")
+        reviewed = verify_reviewed_disposition(
+            receipt, receipt.get("reviewed_disposition"), measurement_receipt_sha)
+        verify_reviewed_measurement_basis(receipt, measurement_receipt_sha)
+        require(receipt.get("reviewed_disposition_sha256") == canonical_sha(reviewed),
+                "reviewed-disposition-digest-mismatch")
+        require(investigation == reviewed.get("rationale"), "review-investigation-mismatch")
     else:
         require(disposition.get("decision") == "no-review-trigger" and
-                disposition.get("release_disposition") == "qualified-no-trigger",
+                disposition.get("release_disposition") == "qualified-no-trigger" and
+                receipt.get("result") == "passed",
                 "regression-disposition-inconsistent")
+        require("reviewed_disposition" not in receipt and
+                "reviewed_disposition_sha256" not in receipt and
+                "measurement_receipt" not in receipt and
+                "measurement_receipt_sha256" not in receipt,
+                "unexpected-review-disposition")
 
     resources = receipt.get("resource_observations")
     require(isinstance(resources, dict), "resource-observations-missing")
@@ -360,6 +484,60 @@ def verify_receipt(receipt: object) -> dict[str, object]:
     return receipt
 
 
+def apply_reviewed_disposition(measurement_path: Path, decision_path: Path,
+                               output_path: Path) -> dict[str, object]:
+    measurement_path = measurement_path.resolve(strict=True)
+    decision_path = decision_path.resolve(strict=True)
+    output_path = output_path.resolve()
+    try:
+        decision_path.relative_to(ROOT)
+    except ValueError:
+        pass
+    else:
+        raise ReceiptError("review-decision-must-be-outside-source-tree")
+    require(measurement_path != output_path and decision_path != output_path,
+            "review-output-path-collision")
+    require(not output_path.exists(), "review-output-exists")
+    measurement_bytes = measurement_path.read_bytes()
+    try:
+        measurement = json.loads(measurement_bytes)
+        decision = json.loads(decision_path.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ReceiptError("review-input-json-invalid") from error
+    verified = verify_receipt(measurement, allow_pending=True)
+    summary = verified["measurement"]["summary"]
+    require(summary.get("review_trigger") is True, "review-decision-not-required")
+    measurement_digest = canonical_sha(verified)
+    reviewed = verify_reviewed_disposition(verified, decision, measurement_digest)
+
+    qualified = json.loads(json.dumps(verified))
+    qualified["result"] = "passed"
+    qualified["measurement_receipt"] = verified
+    qualified["measurement_receipt_sha256"] = measurement_digest
+    qualified["reviewed_disposition"] = reviewed
+    qualified["reviewed_disposition_sha256"] = canonical_sha(reviewed)
+    disposition = qualified["regression_disposition"]
+    disposition["decision"] = "accepted-with-disclosed-regression"
+    disposition["investigation"] = reviewed["rationale"]
+    disposition["release_disposition"] = "accepted-with-disclosed-regression"
+    verify_receipt(qualified)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(qualified, indent=2, sort_keys=True) + "\n"
+    temporary_path = output_path.with_name(output_path.name + f".tmp-{os.getpid()}")
+    with open(temporary_path, "x", encoding="utf-8") as stream:
+        stream.write(payload)
+        stream.flush()
+        os.fsync(stream.fileno())
+    try:
+        os.link(temporary_path, output_path)
+    except FileExistsError as error:
+        temporary_path.unlink(missing_ok=True)
+        raise ReceiptError("review-output-exists") from error
+    temporary_path.unlink()
+    return qualified
+
+
 def build_record(source: dict[str, str], marker: str) -> dict[str, object]:
     compiler = {
         "id": "TestClang",
@@ -383,9 +561,9 @@ def build_record(source: dict[str, str], marker: str) -> dict[str, object]:
     return record
 
 
-def valid_fixture() -> dict[str, object]:
+def valid_fixture(candidate_revision: str | None = None, schema_version: int = 2) -> dict[str, object]:
     baseline_tree = git_text("rev-parse", f"{BASELINE_SHA}^{{tree}}")
-    candidate_sha = git_text("rev-parse", "HEAD")
+    candidate_sha = candidate_revision or git_text("rev-parse", "HEAD")
     candidate_tree = git_text("rev-parse", f"{candidate_sha}^{{tree}}")
     baseline_harness = sha256(git_bytes(BASELINE_SHA, "tests/measure_core.c"))
     candidate_harness = sha256(git_bytes(candidate_sha, "tests/measure_core.c"))
@@ -414,7 +592,7 @@ def valid_fixture() -> dict[str, object]:
     fixture = git_bytes(candidate_sha, "fixtures/tracer/tracer.gb")
     manifest = git_bytes(candidate_sha, "fixtures/tracer/manifest.json")
     return {
-        "schema_version": 1,
+        "schema_version": schema_version,
         "result": "passed",
         "source": {"baseline": baseline, "candidate": candidate},
         "builds": builds,
@@ -478,6 +656,49 @@ def valid_fixture() -> dict[str, object]:
     }
 
 
+def triggered_pending_fixture() -> dict[str, object]:
+    receipt = valid_fixture()
+    measurement = receipt["measurement"]
+    for pair in measurement["pairs"]:
+        pair["candidate_ns"] = 11_000_000
+    measurement["summary"] = summarize_ratios([110.0] * EXPECTED_PAIRS)
+    disposition = receipt["regression_disposition"]
+    disposition.update({
+        "estimate_percent": 10.0,
+        "uncertainty_margin_percent": 0.0,
+        "decision": "investigation-required",
+        "investigation": "A separately recorded independent review decision is required for this exact measurement.",
+        "release_disposition": "pending-investigation",
+    })
+    receipt["result"] = "pending-investigation"
+    return receipt
+
+
+def decision_fixture(receipt: dict[str, object]) -> dict[str, object]:
+    measurement = receipt["measurement"]
+    summary = measurement["summary"]
+    return {
+        "schema_version": 1,
+        "decision_id": "fixture-review-001",
+        "reviewer_identity": "synthetic-independent-reviewer-fixture",
+        "review_reference": "https://reviews.gabbaboy.org/performance/fixture-001",
+        "reviewed_at": datetime.now().astimezone().isoformat(),
+        "review_type": "independent",
+        "decision": "accepted-with-disclosed-regression",
+        "rationale": "Self-test fixture only; this record is not an owner or reviewer approval.",
+        "measurement_receipt_sha256": canonical_sha(receipt),
+        "source_pair": receipt["source"],
+        "workload": receipt["workload"],
+        "measurement_sha256": canonical_sha(measurement),
+        "measurement_summary": summary,
+        "uncertainty": {
+            "method": measurement["uncertainty_method"],
+            "sample_standard_deviation_percent": summary["sample_standard_deviation_percent"],
+            "approx_95_percent_mean_margin": summary["approx_95_percent_mean_margin"],
+        },
+    }
+
+
 class PerformanceReceiptContractTests(unittest.TestCase):
     def run_cli(self, receipt: dict[str, object]) -> subprocess.CompletedProcess[str]:
         with tempfile.TemporaryDirectory(prefix="gabbaboy-performance-test-") as temp:
@@ -521,10 +742,117 @@ class PerformanceReceiptContractTests(unittest.TestCase):
             self.assertEqual(path.read_text(encoding="utf-8"), "existing")
             return result
 
+    def write_controlled_build_tools(self, bin_dir: Path) -> dict[str, str]:
+        bin_dir.mkdir(parents=True)
+        compiler = bin_dir / "cc"
+        compiler.write_text("#!/bin/sh\nprintf '%s\\n' 'test compiler 1.0'\n", encoding="utf-8")
+        compiler.chmod(0o755)
+        cmake = bin_dir / "cmake"
+        cmake.write_text(
+            "#!/bin/sh\n"
+            "if [ \"${1:-}\" = \"--version\" ]; then echo 'cmake version 3.29.0'; exit 0; fi\n"
+            "if [ \"${1:-}\" = \"--build\" ]; then\n"
+            "  build=$2; mkdir -p \"$build/measure_core-dir\"\n"
+            "  cat > \"$build/measure_core\" <<'PYBIN'\n"
+            "#!/usr/bin/env python3\n"
+            "import pathlib, sys\n"
+            "mode = next((arg[2:] for arg in sys.argv[1:] if arg.startswith('--')), '')\n"
+            "cgb = '--profile' in sys.argv and 'cgb' in sys.argv\n"
+            "elapsed = 110000000 if 'candidate-build' in str(pathlib.Path(sys.argv[0])) else 100000000\n"
+            "fields = ['mode=' + mode, 'workload=original-wram-tracer-1m-half-dots-v1',\n"
+            "          'elapsed_ns=' + str(elapsed), 'peak_rss_bytes=2000000',\n"
+            "          'correctness_digest_fnv1a64=4c7a57ff3d50d228']\n"
+            "if cgb: fields.append('profile=cgb-cpu-e')\n"
+            "print(' '.join(fields))\n"
+            "PYBIN\n"
+            "  chmod +x \"$build/measure_core\"; exit 0\n"
+            "fi\n"
+            "build=\n"
+            "while [ $# -gt 0 ]; do if [ \"$1\" = \"-B\" ]; then shift; build=$1; fi; shift; done\n"
+            "[ -n \"$build\" ] || exit 2\n"
+            "mkdir -p \"$build/CMakeFiles/3.29.0\"\n"
+            "cat > \"$build/CMakeCache.txt\" <<EOF\n"
+            "CMAKE_BUILD_TYPE:STRING=Release\n"
+            f"CMAKE_C_COMPILER:FILEPATH={compiler}\n"
+            "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG\n"
+            "CMAKE_GENERATOR:INTERNAL=Unix Makefiles\n"
+            "EOF\n"
+            "cat > \"$build/CMakeFiles/3.29.0/CMakeCCompiler.cmake\" <<'EOF'\n"
+            "set(CMAKE_C_COMPILER_ID \"TestCC\")\n"
+            "set(CMAKE_C_COMPILER_VERSION \"1.0\")\n"
+            "EOF\n",
+            encoding="utf-8",
+        )
+        cmake.chmod(0o755)
+        return {"PATH": str(bin_dir) + os.pathsep + os.environ.get("PATH", ""), "CC": "cc"}
+
+    def run_controlled_producer(self, output_path: Path) -> subprocess.CompletedProcess[str]:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-performance-tools-") as temp:
+            env = os.environ.copy()
+            env.update(self.write_controlled_build_tools(Path(temp) / "bin"))
+            return subprocess.run(
+                [self.bash_executable(), (ROOT / "tests/scripts/measure-release-baseline.sh").as_posix(),
+                 "--qualify-v02", "--output", str(output_path), "--review-regression",
+                 "The hosted DMG paired benchmark is +14.86% (±1.62%) slower than v0.1.0, "
+                 "which is disclosed in the receipt and docs/release.md."],
+                cwd=ROOT,
+                env=env,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                check=False,
+            )
+
+    def run_apply_decision(self, measurement: Path, decision: Path, output: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, "-I", str(SCRIPT), "--apply-decision", "--measurement", str(measurement),
+             "--decision", str(decision), "--output", str(output)],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+
     def test_valid_receipt_is_accepted(self) -> None:
         result = self.run_cli(valid_fixture())
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("performance receipt verified", result.stdout)
+
+    def test_triggered_producer_rejects_copied_acceptance_prose(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-performance-pending-") as temp:
+            path = Path(temp) / "measurement.json"
+            result = self.run_controlled_producer(path)
+            self.assertEqual(result.returncode, 1, result.stdout)
+            self.assertIn("qualify-v02-review-trigger-fired", result.stdout)
+            self.assertIn("not an independent decision", result.stdout)
+            self.assertIn("wrote pending performance measurement", result.stdout)
+            self.assertNotIn("wrote untriggered performance receipt", result.stdout)
+            receipt = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(receipt["schema_version"], 2)
+            self.assertEqual(receipt["result"], "pending-investigation")
+            self.assertTrue(receipt["measurement"]["summary"]["review_trigger"])
+            self.assertNotIn("reviewed_disposition", receipt)
+            self.assertNotIn("The hosted DMG paired benchmark", path.read_text(encoding="utf-8"))
+
+    def test_bound_review_decision_qualifies_exact_pending_measurement(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-performance-decision-") as temp:
+            directory = Path(temp)
+            measurement = directory / "pending.json"
+            decision = directory / "decision.json"
+            output = directory / "qualified.json"
+            receipt = triggered_pending_fixture()
+            receipt_bytes = (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode("utf-8")
+            measurement.write_bytes(receipt_bytes)
+            decision.write_text(json.dumps(decision_fixture(receipt), indent=2), encoding="utf-8")
+            result = self.run_apply_decision(measurement, decision, output)
+            self.assertEqual(result.returncode, 0, result.stdout)
+            qualified = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(qualified["result"], "passed")
+            self.assertEqual(qualified["regression_disposition"]["decision"],
+                             "accepted-with-disclosed-regression")
+            verify = self.run_cli(qualified)
+            self.assertEqual(verify.returncode, 0, verify.stdout)
 
     def assert_rejected(self, mutation: object, reason: str) -> None:
         receipt = valid_fixture()
@@ -649,6 +977,8 @@ def main(argv: list[str]) -> int:
     if len(argv) == 2 and argv[0] == "--verify":
         try:
             receipt = json.loads(Path(argv[1]).read_text(encoding="utf-8"))
+            require(isinstance(receipt, dict) and receipt.get("schema_version") != 1,
+                    "legacy-receipt-requires-historical-mode")
             verified = verify_receipt(receipt)
             print(f"performance receipt verified samples={verified['measurement']['paired_samples']} "
                   f"warmups={verified['measurement']['warmups']}")
@@ -657,7 +987,33 @@ def main(argv: list[str]) -> int:
             reason = str(error) if isinstance(error, ReceiptError) else f"receipt-read-failed:{type(error).__name__}"
             print(f"verify-v02-performance: rejected:{reason}", file=sys.stderr)
             return 1
-    print("usage: verify-v02-performance.py --verify PATH | --self-test", file=sys.stderr)
+    if len(argv) == 2 and argv[0] == "--verify-historical":
+        try:
+            receipt = json.loads(Path(argv[1]).read_text(encoding="utf-8"))
+            require(isinstance(receipt, dict) and receipt.get("schema_version") == 1,
+                    "historical-receipt-schema-required")
+            verified = verify_receipt(receipt)
+            print(f"historical performance receipt parsed samples={verified['measurement']['paired_samples']} "
+                  f"warmups={verified['measurement']['warmups']}; not current qualification")
+            return 0
+        except (OSError, json.JSONDecodeError, ReceiptError, KeyError, TypeError) as error:
+            reason = str(error) if isinstance(error, ReceiptError) else f"receipt-read-failed:{type(error).__name__}"
+            print(f"verify-v02-performance: rejected:{reason}", file=sys.stderr)
+            return 1
+    if len(argv) == 7 and argv[0] == "--apply-decision" and argv[1] == "--measurement" and \
+            argv[3] == "--decision" and argv[5] == "--output":
+        try:
+            qualified = apply_reviewed_disposition(Path(argv[2]), Path(argv[4]), Path(argv[6]))
+            print("receipt-bound independent review decision applied; performance receipt verified "
+                  f"samples={qualified['measurement']['paired_samples']} "
+                  f"warmups={qualified['measurement']['warmups']}")
+            return 0
+        except (OSError, json.JSONDecodeError, ReceiptError, KeyError, TypeError) as error:
+            reason = str(error) if isinstance(error, ReceiptError) else f"review-input-failed:{type(error).__name__}"
+            print(f"verify-v02-performance: rejected:{reason}", file=sys.stderr)
+            return 1
+    print("usage: verify-v02-performance.py --verify PATH | --verify-historical PATH | "
+          "--apply-decision --measurement PATH --decision PATH --output PATH | --self-test", file=sys.stderr)
     return 2
 
 
