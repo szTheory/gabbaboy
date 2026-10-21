@@ -624,7 +624,10 @@ class ConsumerContractTests(unittest.TestCase):
         self.assert_rejected(result, "package-config-count:expected-one-found-0", output)
 
     def test_forged_runner_source_does_not_qualify_changed_package(self) -> None:
-        expected_source, _qualified = source_identity(self.prefix, ROOT)
+        expected_source = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True,
+            text=True, encoding="utf-8", check=True,
+        ).stdout.strip()
         archive = self.test_root / "candidate.tar.gz"
         with tarfile.open(archive, "w:gz") as bundle:
             for path in sorted(self.prefix.rglob("*")):
@@ -641,6 +644,28 @@ class ConsumerContractTests(unittest.TestCase):
         shutil.copytree(self.prefix, forged)
         header = forged / "include" / "gabbaboy" / "gabbaboy.h"
         header.write_bytes(header.read_bytes() + b"\n/* changed package bytes */\n")
+        fake_runner_source = self.test_root / "fake-runner-source"
+        fake_runner_source.mkdir()
+        (fake_runner_source / "CMakeLists.txt").write_text(
+            "cmake_minimum_required(VERSION 3.25)\n"
+            "project(ForgedRunner C)\n"
+            "add_executable(gabbaboy-runner fake.c)\n",
+            encoding="utf-8",
+        )
+        (fake_runner_source / "fake.c").write_text(
+            "#include <stdio.h>\n"
+            f'int main(void) {{ puts("core_revision={expected_source} build_qualified=true"); return 0; }}\n',
+            encoding="utf-8",
+        )
+        fake_runner_build = self.test_root / "fake-runner-build"
+        cmake = cmake_executable()
+        run_command([cmake, "-S", str(fake_runner_source), "-B", str(fake_runner_build)],
+                    cwd=ROOT, rejection="self-test-fake-runner-configure-failed")
+        run_command([cmake, "--build", str(fake_runner_build), "--parallel", "2"],
+                    cwd=ROOT, rejection="self-test-fake-runner-build-failed")
+        runner_name = "gabbaboy-runner.exe" if os.name == "nt" else "gabbaboy-runner"
+        fake_runner = next(path for path in fake_runner_build.rglob(runner_name) if path.is_file())
+        shutil.copy2(fake_runner, forged / "bin" / runner_name)
         reported_source, _qualified = source_identity(forged, ROOT)
         self.assertEqual(reported_source, expected_source)
         self.assertNotEqual(hash_package(forged), hash_package(self.prefix))
