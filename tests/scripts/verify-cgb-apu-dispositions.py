@@ -6,6 +6,7 @@ import argparse
 import copy
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -18,6 +19,10 @@ DISPOSITIONS = ROOT / "tests/external/cgb-apu-dispositions.json"
 INVENTORY = ROOT / "tests/external/cgb-corpus-inventory.json"
 EXPECTED_TESTS = ROOT / "tests/expected-tests.txt"
 MAX_INPUT_BYTES = 2_000_000
+MAX_PRODUCER_CORE_BYTES = 2_000_000
+GIT_OBJECT_TIMEOUT_SECONDS = 10
+APU_PRODUCER_REVISION = "b46bfc9e8a6ae5a8bd93d2289445bf5179080443"
+APU_PRODUCER_REVISION_SHORT = "b46bfc9"
 REQUIRED_COUNTS = {"cases": 70, "pass": 8, "xfail": 62, "assertions": 4784}
 REQUIRED_CTESTS = {
     "cgb_samesuite_apu_membership",
@@ -46,6 +51,45 @@ def read_json(path: Path) -> dict:
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def read_git_core_source(root: Path, revision: str) -> bytes:
+    need(re.fullmatch(r"[0-9a-f]{40}", revision) is not None,
+         "producer-revision-format")
+    object_name = f"{revision}:src/core/gabbaboy.c"
+    environment = os.environ.copy()
+    environment.update({
+        "GIT_NO_LAZY_FETCH": "1",
+        "GIT_NO_REPLACE_OBJECTS": "1",
+        "GIT_OPTIONAL_LOCKS": "0",
+        "GIT_TERMINAL_PROMPT": "0",
+    })
+
+    try:
+        size = subprocess.run(
+            ["git", "cat-file", "-s", object_name], cwd=root,
+            stdin=subprocess.DEVNULL, capture_output=True, text=True,
+            timeout=GIT_OBJECT_TIMEOUT_SECONDS, env=environment, check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise Mismatch("producer-object-timeout") from exc
+    need(size.returncode == 0, "producer-object-missing")
+    size_text = size.stdout.strip()
+    need(re.fullmatch(r"[0-9]+", size_text) is not None, "producer-object-size")
+    byte_count = int(size_text)
+    need(0 < byte_count <= MAX_PRODUCER_CORE_BYTES, "producer-object-size")
+
+    try:
+        source = subprocess.run(
+            ["git", "cat-file", "blob", object_name], cwd=root,
+            stdin=subprocess.DEVNULL, capture_output=True,
+            timeout=GIT_OBJECT_TIMEOUT_SECONDS, env=environment, check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise Mismatch("producer-object-timeout") from exc
+    need(source.returncode == 0, "producer-object-missing")
+    need(len(source.stdout) == byte_count, "producer-object-size")
+    return source.stdout
 
 
 def ctest_name(alias: str) -> str:
@@ -137,7 +181,10 @@ def validate(root: Path, manifest: dict, report: dict, inventory: dict,
          "manifest-digest")
     need(config.get("harness_source_sha256") == sha256(root / "tests/test_samesuite_apu.c"),
          "harness-digest")
-    need(config.get("core_source_sha256") == sha256(root / "src/core/gabbaboy.c"),
+    need(config.get("core_revision") == APU_PRODUCER_REVISION_SHORT,
+         "producer-revision")
+    producer_core = read_git_core_source(root, APU_PRODUCER_REVISION)
+    need(config.get("core_source_sha256") == hashlib.sha256(producer_core).hexdigest(),
          "core-digest")
     need(report.get("schema") == "gabbaboy-cgb-apu-dispositions-v1", "report-schema")
 
@@ -319,6 +366,20 @@ def self_test(root: Path, manifest: dict, report: dict, inventory: dict,
         "inventory-execution:apu/channel_1/channel_1_align.asm")
     rejected("altered-author-expectation", lambda m, r, i: r["cases"][0]["author_expectation"].update(
         {"value": "fail"}), "author-contract:apu/channel_1/channel_1_align.asm")
+    rejected("forged-producer-revision", lambda m, r, i: r["configuration"].update(
+        {"core_revision": "0000000"}), "producer-revision")
+    rejected("altered-producer-digest", lambda m, r, i: r["configuration"].update(
+        {"core_source_sha256": "0" * 64}), "core-digest")
+
+    try:
+        read_git_core_source(root, "0" * 40)
+    except Mismatch as exc:
+        need(str(exc) == "producer-object-missing",
+             f"control-diagnostic:missing-producer-object:{exc}")
+        print("negative-control=pass id=missing-producer-object diagnostic=producer-object-missing")
+    else:
+        raise Mismatch("control-accepted:missing-producer-object")
+
     rejected("changed-signature", lambda m, r, i: next(
         row for row in i["cases"] if row.get("source_id") ==
         "samesuite:apu/channel_1/channel_1_align.asm")["execution"].update(
@@ -362,7 +423,7 @@ def main() -> int:
             ROOT, args.build_dir, args.ctest_command)
         if args.self_test:
             self_test(ROOT, manifest, report, inventory, registered_tests)
-            print("cgb-apu-dispositions self-test pass controls=8")
+            print("cgb-apu-dispositions self-test pass controls=11")
         else:
             counts = validate(ROOT, manifest, report, inventory, registered_tests)
             print("cgb-apu-dispositions membership pass cases={cases} author_expectation=pass observed_pass={pass} xfail={xfail} assertions={assertions}".format(**counts))

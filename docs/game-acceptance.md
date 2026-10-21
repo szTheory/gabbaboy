@@ -71,7 +71,7 @@ The packaged player runs the same script and predicate with dummy SDL drivers an
 
 Dense input delivery uses a private, immutable event span and caller-owned cursor shared by acceptance driving and diagnostic replay. The parser's 16,384-event limit bounds the span. During each run the core refills its existing 64-event queue with due events at the current timestamp, preserving script order and applying every same-time transition before the next guest tick. Future events remain in the caller's span and set the next STOP/idle deadline. The core clears the borrowed reference on every return; the adapter explicitly resumes with its cursor. This does not increase the public queue, alter public ABI or saved-state format, or retain event pointers.
 
-Custom `gbb_accept_drive` delivery callbacks remain caller-managed batches of at most 64 events, and the public queue stays bounded. `verify-dense-input.py` replays a 67-event same-time START burst through the actual runner, compares hit timing plus frame and PCM digests with the frozen DMG ledger, requires a bounded failure diagnostic when START is removed, and proves a temporary no-refill source mutant fails.
+Within the acceptance adapter, custom delivery callbacks remain caller-managed batches of at most 64 events, and the public queue stays bounded. `verify-dense-input.py` replays a 67-event same-time START burst through the actual runner, compares hit timing plus frame and PCM digests with the frozen DMG ledger, requires a bounded failure diagnostic when START is removed, and proves a temporary no-refill source mutant fails.
 
 ## Limitations
 
