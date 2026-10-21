@@ -21,27 +21,34 @@ actuals:
 duration: 35 min
 completed: 2026-10-12
 coverage:
-  - deliverable: "Compat column of the matrix, one cell per address, run through the public API"
-    verification:
-      - {kind: ctest, ref: "cgb_visibility_matrix_compat", status: pass}
-      - {kind: ctest, ref: "cgb_visibility_flip_control", status: pass}
+  - id: "10-10-compat-matrix"
+    description: "Compatibility register matrix runs through the public API with a flip control"
     human_judgment: false
-  - deliverable: "CGB and DMG columns (DMG FF4C-FF7F fail closed on read, silent on write)"
     verification:
-      - {kind: ctest, ref: "cgb_visibility_matrix_cgb", status: pass}
-      - {kind: ctest, ref: "cgb_visibility_matrix_dmg", status: pass}
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_18 -R '^(cgb_visibility_matrix_compat|cgb_visibility_flip_control)$' --output-on-failure --no-tests=error"
+        status: pass
+  - id: "10-10-cgb-dmg-matrices"
+    description: "CGB and DMG visibility matrices preserve profile-specific behavior"
     human_judgment: false
-  - deliverable: "Cross-column and sweep negative controls"
     verification:
-      - {kind: ctest, ref: "cgb_visibility_cross_column_control", status: pass}
-      - {kind: ctest, ref: "cgb_visibility_sweep_control", status: pass}
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_18 -R '^(cgb_visibility_matrix_cgb|cgb_visibility_matrix_dmg)$' --output-on-failure --no-tests=error"
+        status: pass
+  - id: "10-10-matrix-negative-controls"
+    description: "Cross-column and address-sweep controls reject mismatched visibility rows"
     human_judgment: false
-  - deliverable: "Published matrix mirrors io_visibility[] two ways, with mutated-doc control"
     verification:
-      - {kind: ctest, ref: "cgb_tables_io", status: pass}
-      - {kind: ctest, ref: "cgb_tables_io_mutated_doc", status: pass}
-      - {kind: ctest, ref: "cgb_tables_postboot_selftest", status: pass}
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_18 -R '^(cgb_visibility_cross_column_control|cgb_visibility_sweep_control)$' --output-on-failure --no-tests=error"
+        status: pass
+  - id: "10-10-published-matrix"
+    description: "Published register matrix matches the implementation and rejects a mutated document"
     human_judgment: false
+    verification:
+      - kind: unit
+        ref: "ctest --test-dir build/phase15_1_18 -R '^(cgb_tables_io|cgb_tables_io_mutated_doc|cgb_tables_postboot_selftest)$' --output-on-failure --no-tests=error"
+        status: pass
 ---
 
 # Phase 10 Plan 10: Register visibility matrix Summary
@@ -84,3 +91,7 @@ CGB-02 is not marked complete in REQUIREMENTS.md: plans 10-11, 10-14, 10-15, 10-
 ## Self-Check: PASSED
 
 - tests/test_cgb_visibility.c, tests/test_cgb_tables.c, docs/cgb-profile.md exist; commits 266a33e, c9f3de3, 48dc25e are ancestors of HEAD; all eight new CTest names are in tests/expected-tests.txt.
+
+## Fresh Coverage Verification (15.1-18)
+
+At source `65e69ca2dc6f51515ebba002361b0966e3b45a17`, the plan-specific Debug build `build/phase15_1_18` freshly passed all nine mapped CTests: the three visibility matrices and their controls, the published matrix comparison, mutated-document rejection, and post-boot provenance self-test. No live Phase 10 producer claim was rewritten.
