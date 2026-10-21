@@ -1,0 +1,957 @@
+{
+  "schema": 1,
+  "plan": "15.1-17",
+  "phase": "15.1",
+  "scope": {
+    "file": ".planning/phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-SCOPE.json",
+    "sha256": "cdf7dca71f14027b2a71dc0e432c70b70987b091e36f13dc3de0ac06162a549d",
+    "source_head": "a185fa66bda8563418ee090d58406668c0c2bf8e",
+    "item_count": 24
+  },
+  "evidence_pins": {
+    "15.1-hosted-evidence.json": "9b087299755146ae2097778082bbd7ba1846cd831c1a1f75f1ef4f21c1b77acc",
+    "15.1-local-evidence.json": "9fe96932c81707d2c5e999a585e2872f49650621248fe9c83020c3e8a5cadc24",
+    "15.1-historical-limitations.json": "27f3853135433200fd50387ea78093f195a393285decdabbecea44770c1a7586"
+  },
+  "shipped_release": {
+    "tag": "v0.2.0",
+    "source_sha": "ab301aa69b1f085050fd66bf7b1378863a0821f2",
+    "release_id": 418219852,
+    "published_at": "2026-10-20T10:25:34Z",
+    "published_receipt": ".planning/phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-delivery-receipt.json",
+    "published_receipt_sha256": "cd3b354ed0cc8128056b6f70e87199e9a12d421e4e9950a961cd16232156178e",
+    "republished": false
+  },
+  "required_checks": [
+    "required-native",
+    "fixture-repro",
+    "preview-package-smoke"
+  ],
+  "owner_acceptance": "none",
+  "items": [
+    {
+      "id": "P7-01",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "WR-01: dense input scripts fail loudly at the 64-event queue; back-pressure deferred.",
+      "original_sha256": "be514b9aa2c33b9050e8ee8b76f8576d033a594ac36d8777671368c7960b605d",
+      "classification": "repaired_defect",
+      "closure": "closed",
+      "plans": [
+        "15.1-02"
+      ],
+      "affected_source": [
+        "src/core/gbb_accept_input.h",
+        "src/core/gabbaboy.c",
+        "src/accept/stepper.c",
+        "src/runner/acceptance.c",
+        "tests/scripts/verify-dense-input.py"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "integration",
+          "ref": "ctest --test-dir build -R '^(acceptance_dense|acceptance_drive_|acceptance_input_span)' --output-on-failure --no-tests=error"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 tests/scripts/verify-dense-input.py --self-test --build-dir build (no-refill mutant is rejected)"
+        }
+      ],
+      "remaining_uncertainty": "The frozen Libbet timing, frame and PCM output is unchanged; no new game or hardware claim is made.",
+      "owner_decision_required": false,
+      "owner_decision": null,
+      "owner_accepted": false
+    },
+    {
+      "id": "P7-02",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "Libbet hosted Linux reproduction remains unverified (D-039); local macOS reproduction is recorded.",
+      "original_sha256": "10542a5ed52fbb4d28fe30f949cde5340a2523481b8dcc9d040c32ac71b0196e",
+      "classification": "fresh_evidence",
+      "closure": "closed_with_residual",
+      "plans": [
+        "15.1-16"
+      ],
+      "affected_source": [
+        "tests/scripts/reproduce-libbet.sh",
+        ".github/workflows/libbet-repro.yml",
+        "tests/scripts/verify-historical-limitations.py"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "integration",
+          "ref": "python3 -I tests/scripts/verify-historical-limitations.py --check --strict-head --evidence .planning/phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-historical-limitations.json"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-historical-limitations.py --self-test (receipt-labelled, mismatched, skipped and covered-drift hosted records are rejected)"
+        }
+      ],
+      "remaining_uncertainty": "The hosted rebuild is byte-identical to the vendored ROM on ubuntu-22.04 at a10ddf8. No wrong-ROM or wrong-pin run was dispatched on the host (that control is local). The run binds a10ddf8, not the final merged head; any covered-path change invalidates it.",
+      "owner_decision_required": true,
+      "owner_decision": "Owner may accept the local-only wrong-ROM control or ask for a hosted negative dispatch; the hosted success is not extended to other ROMs or the release rehearsal.",
+      "owner_accepted": false,
+      "hosted": {
+        "workflow": "libbet-repro",
+        "run_id": 39645778111,
+        "run_attempt": 1,
+        "head_sha": "a10ddf8551c6aebdea43ee6909fbbaa6fec0d4cf",
+        "conclusion": "success",
+        "obtained_via": "gh_api",
+        "receipt_labels_used": false
+      }
+    },
+    {
+      "id": "P7-03",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "Audio-saturation regression test was not proven red against the pre-fix core (D-027).",
+      "original_sha256": "8fd39e09d557b128476e5530730692048774ad642bf1af007aacc580511c5300",
+      "classification": "historical_unknown",
+      "closure": "limitation_open",
+      "plans": [
+        "15.1-16"
+      ],
+      "affected_source": [
+        "tests/test_audio.c",
+        "src/core/gabbaboy.c",
+        "tests/scripts/verify-historical-limitations.py"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "integration",
+          "ref": "python3 -I tests/scripts/verify-historical-limitations.py --check --evidence .planning/phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-historical-limitations.json"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-historical-limitations.py --self-test (a recovered historic red run is rejected)"
+        }
+      ],
+      "remaining_uncertainty": "The pre-fix red run of audio_saturation (D-043) was never retained and cannot be recreated. Fresh evidence at 9a6cb4b shows the mixer-scaling mutant fails audio_saturation on the headroom assertion without a success line; that is sensitivity evidence, not recovery.",
+      "owner_decision_required": true,
+      "owner_decision": "Owner decides at milestone re-audit whether fresh sensitivity evidence is an acceptable substitute. No acceptance is recorded here.",
+      "owner_accepted": false,
+      "historic": {
+        "status": "unknown",
+        "recovered": false
+      }
+    },
+    {
+      "id": "P12-01",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "One isolated M7 control failure had no retained diagnostic; 100 repeats and the full suite passed without changing pins.",
+      "original_sha256": "72c8b4132f1aa0d04d2de71a62e9b67c7fd9a9afda2517822ef3dc295910efe1",
+      "classification": "historical_unknown",
+      "closure": "limitation_open",
+      "plans": [
+        "15.1-16"
+      ],
+      "affected_source": [
+        "tests/scripts/verify-historical-limitations.py"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "integration",
+          "ref": "python3 -I tests/scripts/verify-historical-limitations.py --check --evidence .planning/phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-historical-limitations.json"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-historical-limitations.py --self-test (short, unretained or recovered M7 diagnostics are rejected)"
+        }
+      ],
+      "remaining_uncertainty": "The diagnostic of the isolated M7 control failure was never retained. 100 of 100 fresh attempts passed with per-attempt digests and a provoked failure keeps its sanitized diagnostic; the original cause remains unknown.",
+      "owner_decision_required": true,
+      "owner_decision": "Owner decides at milestone re-audit whether 100 fresh repeats and the retention fixture suffice. No acceptance is recorded here.",
+      "owner_accepted": false,
+      "historic": {
+        "status": "unknown",
+        "recovered": false
+      }
+    },
+    {
+      "id": "P15-01",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "WR-01: Evidence jobs run tagged source (build, full CTest, fuzz binary) with a job-level `contents: write` token",
+      "original_sha256": "7bcb847c98d3b97ac50c5b2b8a6b381d9531d5a3c4a25bb157f283b529959c31",
+      "classification": "repaired_defect",
+      "closure": "closed_with_residual",
+      "plans": [
+        "15.1-08"
+      ],
+      "affected_source": [
+        ".github/workflows/release.yml",
+        ".github/workflows/release-rehearsal.yml",
+        ".github/workflows/ci.yml",
+        ".github/scripts/verify-workflow-policy.py",
+        ".github/scripts/produce-release-evidence.sh"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I .github/scripts/verify-workflow-policy.py --check"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I .github/scripts/verify-workflow-policy.py --self-test (80 intended-defect controls, including a producer mutated to contents write)"
+        }
+      ],
+      "remaining_uncertainty": "Corpus, fuzz and performance producers run read-only. Five source-executing jobs still hold write authority and are enforced as an exact named set, not split: candidate, candidate-macos, candidate-windows, candidate-platform-manifest, publish-qualified-release. No workflow has run on the release path.",
+      "owner_decision_required": true,
+      "owner_decision": "Owner decides whether to split the five residual write jobs before the next release or accept the named, exactly-enforced set.",
+      "owner_accepted": false
+    },
+    {
+      "id": "P15-02",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "WR-02: `--check-receipt` accepts a source-archive receipt that was never bound to the Git tree",
+      "original_sha256": "4016620f8e4754c81d6be01b01108ceb52da8bcc88cab0e886c1629858947488",
+      "classification": "repaired_defect",
+      "closure": "closed",
+      "plans": [
+        "15.1-01"
+      ],
+      "affected_source": [
+        "tests/scripts/verify-v02-source-archive.py"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-v02-source-archive.py --self-test"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-v02-source-archive.py --self-test (57 negative controls: unbound and tampered archives are rejected)"
+        }
+      ],
+      "remaining_uncertainty": null,
+      "owner_decision_required": false,
+      "owner_decision": null,
+      "owner_accepted": false
+    },
+    {
+      "id": "P15-03",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "WR-03: Fuzz receipt is self-attested, so the \"forged evidence\" checks are shape-only",
+      "original_sha256": "5b6bda2284ae967df8dad2bc58510779c5ec6fbade2c570306f92d9f00111bdb",
+      "classification": "repaired_defect",
+      "closure": "closed_with_residual",
+      "plans": [
+        "15.1-05"
+      ],
+      "affected_source": [
+        "tests/scripts/verify-v02-fuzz.py",
+        "tests/scripts/verify-v02-delivery.py",
+        ".github/scripts/verify-release-source-proof.py"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-v02-fuzz.py --self-test"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-v02-delivery.py --self-test (a forged or shape-only fuzz receipt is rejected)"
+        }
+      ],
+      "remaining_uncertainty": "Qualification now reads the exact CI run and downloaded artifact bytes. The path is exercised by fixtures; the hosted rehearsal fuzz producer job succeeded at a10ddf8 but a release-time hosted verification has not run.",
+      "owner_decision_required": true,
+      "owner_decision": "Owner sees the first real hosted verification only at the next release run.",
+      "owner_accepted": false
+    },
+    {
+      "id": "P15-04",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "WR-04: Performance regression gate can never fail (standing pre-written \"review\")",
+      "original_sha256": "f130921b408514dfff57b016bca8784a40787684fb6310aaab26ecbcd0e9eee3",
+      "classification": "repaired_defect",
+      "closure": "closed_with_residual",
+      "plans": [
+        "15.1-06"
+      ],
+      "affected_source": [
+        "tests/scripts/measure-release-baseline.sh",
+        "tests/scripts/verify-v02-performance.py",
+        "docs/release.md"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-v02-performance.py --self-test"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-v02-performance.py --self-test (copied acceptance prose and stale decisions are rejected)"
+        }
+      ],
+      "remaining_uncertainty": "The gate can now fail and stays pending until a separate receipt-bound review. On the hosted rehearsal at a10ddf8 it did trigger (median_ratio_pct=135.31, 30 samples) and no review has been recorded.",
+      "owner_decision_required": true,
+      "owner_decision": "Owner must record a separate receipt-bound independent review decision; none is fabricated here (LIM-PERF-REVIEW).",
+      "owner_accepted": false
+    },
+    {
+      "id": "P15-05",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "WR-05: Source-archive receipt depends on GitHub producing byte-identical tarballs across downloads",
+      "original_sha256": "213be08b6796404f130fe8b805c257798feef90286278c9f5c408ad0141af7dd",
+      "classification": "repaired_defect",
+      "closure": "closed",
+      "plans": [
+        "15.1-01"
+      ],
+      "affected_source": [
+        "tests/scripts/verify-v02-source-archive.py"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-v02-source-archive.py --self-test"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-v02-source-archive.py --self-test (equivalent gzip encodings keep identity, tree changes are rejected)"
+        }
+      ],
+      "remaining_uncertainty": null,
+      "owner_decision_required": false,
+      "owner_decision": null,
+      "owner_accepted": false
+    },
+    {
+      "id": "P15-06",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "WR-06: Trust-boundary overlay covers three files, but the gate delegates to many more tagged files",
+      "original_sha256": "2ea7681a1cb381f32963a3afb9e7b9f1c098f675bd41f5bcf9820f37a436c369",
+      "classification": "repaired_defect",
+      "closure": "closed_with_residual",
+      "plans": [
+        "15.1-05",
+        "15.1-08"
+      ],
+      "affected_source": [
+        "tests/scripts/verify-v02-delivery.py",
+        ".github/scripts/verify-workflow-policy.py",
+        ".github/workflows/release-rehearsal.yml"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I .github/scripts/verify-workflow-policy.py --check"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I .github/scripts/verify-workflow-policy.py --self-test (subject-supplied judge and shadowed modules are rejected)"
+        }
+      ],
+      "remaining_uncertainty": "The rehearsal judge reads judge code from the default branch, so it has not run on a hosted rehearsal: the trusted-judge job was skipped at a10ddf8 because its producers failed.",
+      "owner_decision_required": true,
+      "owner_decision": "Owner decides after the policy script is on the default branch and a rehearsal runs end to end (LIM-TRUSTED-JUDGE).",
+      "owner_accepted": false
+    },
+    {
+      "id": "P15-07",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "WR-07: DMG KEY1 oracle fix leaves scenario 3 (held button) exposed to the same failure and the new DMG seeds are weak controls",
+      "original_sha256": "465ccb3d822b1bc4270565427cc351b8c0107ce316e82989293ec844e0c24c85",
+      "classification": "repaired_defect",
+      "closure": "closed_with_residual",
+      "plans": [
+        "15.1-03",
+        "15.1-10"
+      ],
+      "affected_source": [
+        "tests/fuzz_core.c",
+        "tests/test_fuzz_core.c"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "integration",
+          "ref": "ctest --test-dir build -R '^cgb_fuzz_dmg_held' --output-on-failure --no-tests=error"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "build/tests/test_fuzz_core cgb_speed_dmg_held_mutation_controls"
+        }
+      ],
+      "remaining_uncertainty": "The STOP wake is driven through the software input seam. Physical DMG button-wake behavior and hardware timing are not established.",
+      "owner_decision_required": true,
+      "owner_decision": "No decision needed for the software claim; any hardware claim stays UNKNOWN.",
+      "owner_accepted": false
+    },
+    {
+      "id": "P15-08",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "WR-08: Consumer receipt `source_sha` is self-reported by the package under test",
+      "original_sha256": "a572117bb398fa5d18077e3bf1b013d90e470e1fb80d8cf46a535fd42c67bab0",
+      "classification": "repaired_defect",
+      "closure": "closed",
+      "plans": [
+        "15.1-04"
+      ],
+      "affected_source": [
+        "tests/scripts/verify-v02-consumers.py",
+        "tests/scripts/verify-release-candidate.sh"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "integration",
+          "ref": "ctest --test-dir build -R '^v02_consumer_controls$' --output-on-failure --no-tests=error"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-v02-consumers.py --self-test (package-reported source identity is not trusted)"
+        }
+      ],
+      "remaining_uncertainty": null,
+      "owner_decision_required": false,
+      "owner_decision": null,
+      "owner_accepted": false
+    },
+    {
+      "id": "P15-09",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "IN-01: `--check-recovery` and `--decide` are not wired into any workflow",
+      "original_sha256": "5325cec164a06656375e2ae62cd29bfec4ba9a7c0585ffd8197674bc67b3d7e6",
+      "classification": "repaired_defect",
+      "closure": "closed_with_residual",
+      "plans": [
+        "15.1-09"
+      ],
+      "affected_source": [
+        ".github/scripts/verify-release-gates.sh",
+        ".github/scripts/verify-published-release-assets.py",
+        ".github/workflows/release.yml"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "unit",
+          "ref": "bash .github/scripts/verify-release-gates.sh --self-test"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I .github/scripts/verify-workflow-policy.py --self-test (decoy, swallowed failure and lost attempt are rejected)"
+        }
+      ],
+      "remaining_uncertainty": "Retry decisions use live state, but a published release stops the publisher rather than being re-verified end to end, and the four early candidate jobs keep their older refusals. Fixtures and policy only; no hosted retry ran.",
+      "owner_decision_required": true,
+      "owner_decision": "Owner may later ask for published-state verification in the workflow.",
+      "owner_accepted": false
+    },
+    {
+      "id": "P15-10",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "IN-02: Wiring validators rely on substring counts, which comments and echoes can satisfy",
+      "original_sha256": "c157117fdb88c6bafbf4efb4fb6a5419c45bd19b53a12795c6d6ade7c318bb13",
+      "classification": "repaired_defect",
+      "closure": "closed",
+      "plans": [
+        "15.1-08"
+      ],
+      "affected_source": [
+        ".github/scripts/verify-workflow-policy.py",
+        ".github/workflows/release.yml",
+        ".github/workflows/release-rehearsal.yml"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I .github/scripts/verify-workflow-policy.py --check"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I .github/scripts/verify-workflow-policy.py --self-test (comments, echoes, dead branches and disabled steps are rejected)"
+        }
+      ],
+      "remaining_uncertainty": null,
+      "owner_decision_required": false,
+      "owner_decision": null,
+      "owner_accepted": false
+    },
+    {
+      "id": "P15-11",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "IN-03: `--evidence-only` skips build-artifact digest checks for any absent path",
+      "original_sha256": "c7d10c44fba3792ea0ae6edda1e008a6e0d2bc8e84a756a324c6e9f9292260aa",
+      "classification": "qualified_advisory",
+      "closure": "closed",
+      "plans": [
+        "15.1-07"
+      ],
+      "affected_source": [
+        "tests/scripts/verify-support-ledger.py",
+        "docs/support/v0.2.0.md"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-support-ledger.py --self-test-v2"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-support-ledger.py --self-test (receipt-only evidence is distinguished from retained build bytes)"
+        }
+      ],
+      "remaining_uncertainty": null,
+      "owner_decision_required": false,
+      "owner_decision": null,
+      "owner_accepted": false
+    },
+    {
+      "id": "P15-12",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "IN-04: `check_tree` does not compare file modes; unwrapped-symlink depth math is off by one",
+      "original_sha256": "161394bd870e26e67b90944e30c134926a632ec486478ef03326a1a8d35ee309",
+      "classification": "repaired_defect",
+      "closure": "closed",
+      "plans": [
+        "15.1-01"
+      ],
+      "affected_source": [
+        "tests/scripts/verify-v02-source-archive.py"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-v02-source-archive.py --self-test"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-v02-source-archive.py --self-test (mode and symlink-target changes are rejected)"
+        }
+      ],
+      "remaining_uncertainty": null,
+      "owner_decision_required": false,
+      "owner_decision": null,
+      "owner_accepted": false
+    },
+    {
+      "id": "P15-13",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "IN-05: `curl --max-filesize` does not bound chunked downloads",
+      "original_sha256": "7ffb2218d676256ebd995cf944f33dc1b643652ff61c686c5f5a9351ed98fa50",
+      "classification": "repaired_defect",
+      "closure": "closed_with_residual",
+      "plans": [
+        "15.1-09"
+      ],
+      "affected_source": [
+        ".github/scripts/download-release-artifact.py",
+        ".github/workflows/release.yml"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 .github/scripts/download-release-artifact.py --self-test"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I .github/scripts/verify-workflow-policy.py --self-test (bare curl or wget and a lost byte or time cap are rejected)"
+        }
+      ],
+      "remaining_uncertainty": "Only the three source-archive fetches use the bounded helper; gh release download calls are unchanged.",
+      "owner_decision_required": true,
+      "owner_decision": "Owner decides whether the gh release download calls need the same bound.",
+      "owner_accepted": false
+    },
+    {
+      "id": "P15-14",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "IN-06: `check_runs` binds workflow runs only to head SHA and success, not to a workflow",
+      "original_sha256": "721aa34dc24e88e2ae3b780f725c0285cd2c46a4c29c7178c66eaa1ed16a6280",
+      "classification": "repaired_defect",
+      "closure": "closed",
+      "plans": [
+        "15.1-05"
+      ],
+      "affected_source": [
+        "tests/scripts/verify-v02-delivery.py"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-v02-delivery.py --self-test"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-v02-delivery.py --self-test (a successful run of another workflow, a stale attempt and a foreign app are rejected)"
+        }
+      ],
+      "remaining_uncertainty": null,
+      "owner_decision_required": false,
+      "owner_decision": null,
+      "owner_accepted": false
+    },
+    {
+      "id": "P15-15",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "IN-07: Duplicate `Create the local-only rehearsal tag` and corpus scripts across rehearsal and release jobs",
+      "original_sha256": "14025fdb813bed012c8892f768ee125795de0c4ce15dd006203ea0cc07455e9d",
+      "classification": "repaired_defect",
+      "closure": "closed",
+      "plans": [
+        "15.1-08"
+      ],
+      "affected_source": [
+        ".github/scripts/produce-release-evidence.sh",
+        ".github/workflows/release.yml",
+        ".github/workflows/release-rehearsal.yml"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I .github/scripts/verify-workflow-policy.py --check"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I .github/scripts/verify-workflow-policy.py --self-test (source, argument and repeated-run mismatches of the shared producer are rejected)"
+        }
+      ],
+      "remaining_uncertainty": null,
+      "owner_decision_required": false,
+      "owner_decision": null,
+      "owner_accepted": false
+    },
+    {
+      "id": "P15-16",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "IN-08: `.gitattributes` forces `eol=lf` on whole globs and `gbb_add_v02_contract` embeds counts in regex",
+      "original_sha256": "b19b9b004c41392041ef0e23f78d0ca0e5abdcf2f831082000ee8b3339a2576d",
+      "classification": "repaired_defect",
+      "closure": "closed",
+      "plans": [
+        "15.1-10"
+      ],
+      "affected_source": [
+        ".gitattributes",
+        "tests/CMakeLists.txt",
+        "tests/scripts/verify-support-ledger.py"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "integration",
+          "ref": "ctest --test-dir build -R '^v02_support_ledger(_controls)?$' --output-on-failure --no-tests=error"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-support-ledger.py --self-test-v2 (an added and a removed required-case denominator are rejected)"
+        }
+      ],
+      "remaining_uncertainty": null,
+      "owner_decision_required": false,
+      "owner_decision": null,
+      "owner_accepted": false
+    },
+    {
+      "id": "P15-17",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "original_text": "Measured DMG slowdown (+14.86%, margin 1.62%) is disclosed in the receipt and docs/release.md; visibility in release notes and ledger prose is deferred.",
+      "original_sha256": "b90678108249d0adf6d090a57855a63fa3e6511d7c55daca8c49a084cde54536",
+      "classification": "qualified_advisory",
+      "closure": "closed_with_residual",
+      "plans": [
+        "15.1-07",
+        "15.1-06"
+      ],
+      "affected_source": [
+        "docs/release.md",
+        "docs/support/v0.2.0.md",
+        "tests/scripts/verify-v02-adoption.py"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-v02-adoption.py --check docs"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-v02-adoption.py --self-test docs"
+        }
+      ],
+      "remaining_uncertainty": "The +14.86% slowdown (margin 1.62%) is tied to its original v0.2.0 source pair and workload and labelled historical. It does not describe current source, where the hosted pair triggered review at a10ddf8.",
+      "owner_decision_required": true,
+      "owner_decision": "Owner records the current-source performance review (LIM-PERF-REVIEW) before any new release notes quote a slowdown.",
+      "owner_accepted": false
+    },
+    {
+      "id": "SCAN-UAT",
+      "source": ".planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT-REVIEW.md",
+      "original_text": "Resolve audit-open misclassification of clean review as incomplete UAT; preserve canonical UAT verdict and do not acknowledge a false gap.",
+      "original_sha256": "b66550e32c20bfaf946cdb0b2c12e7ec4c02fe35f76bdd8cc652febe807638a1",
+      "classification": "repaired_defect",
+      "closure": "closed_with_residual",
+      "plans": [
+        "15.1-15"
+      ],
+      "affected_source": [
+        "tests/scripts/verify-closeout-scan.py",
+        "docs/planning-closeout.md"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 tests/scripts/verify-closeout-scan.py --check --output build/closeout-scan.json"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 tests/scripts/verify-closeout-scan.py --self-test (6 controls: a true incomplete UAT stays blocking)"
+        }
+      ],
+      "remaining_uncertainty": "The installed audit-open scanner still lists the clean Phase 14 review in its raw UAT-gap list; the repository wrapper classifies it nonblocking and keeps the raw finding. No upstream scanner change was made.",
+      "owner_decision_required": true,
+      "owner_decision": "Owner may report the classification upstream; nothing is acknowledged as technical debt.",
+      "owner_accepted": false
+    },
+    {
+      "id": "SCAN-LINK",
+      "source": ".planning/phases/GB-13-cgb-hdma/deferred-items.md",
+      "original_text": "Locate deferred duplicate core-library linker warning; reproduce and fix owning target wiring if still present, with negative control.",
+      "original_sha256": "ff1bc4f4e03af6384860d948f1fe95b57ec08786d59fbd531cecf14d9141168b",
+      "classification": "repaired_defect",
+      "closure": "closed_with_residual",
+      "plans": [
+        "15.1-10"
+      ],
+      "affected_source": [
+        "tests/scripts/verify-core-linkage.py",
+        "CMakeLists.txt",
+        "tests/CMakeLists.txt",
+        "tests/acceptance/CMakeLists.txt"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-core-linkage.py --check --build-dir build"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-core-linkage.py --self-test --build-dir build (duplicate, mixed, wrong and missing core link lines are rejected)"
+        }
+      ],
+      "remaining_uncertainty": "The generated link lines no longer repeat the core. The Phase 13 deferred-items.md text is kept unedited, so the installed audit-open scan still lists it as one blocking record until the owner resolves or removes it.",
+      "owner_decision_required": true,
+      "owner_decision": "Owner closes or acknowledges the Phase 13 deferred note during milestone re-audit.",
+      "owner_accepted": false
+    },
+    {
+      "id": "SUMMARY-SCHEMA",
+      "source": ".planning/STATE.md",
+      "original_text": "Triage the 47 inherited Phase 9/10 legacy SUMMARY schema problems recorded at Phase 12 handoff; canonical coverage must auto-pass without changing historical behavioral claims.",
+      "original_sha256": "437ba9a6c9779f5ccb52f9f5be50be99b4b339e2fdf77f42f5a8857f440f7092",
+      "classification": "repaired_defect",
+      "closure": "closed",
+      "plans": [
+        "15.1-10",
+        "15.1-11",
+        "15.1-12",
+        "15.1-13",
+        "15.1-14",
+        "15.1-18",
+        "15.1-19"
+      ],
+      "affected_source": [
+        "tests/scripts/verify-summary-coverage.py",
+        "tests/data/invalid-summary-coverage.md"
+      ],
+      "positive_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-summary-coverage.py --since 9"
+        }
+      ],
+      "negative_evidence": [
+        {
+          "kind": "unit",
+          "ref": "python3 -I tests/scripts/verify-summary-coverage.py --self-test (flow-style and malformed coverage are rejected)"
+        }
+      ],
+      "remaining_uncertainty": null,
+      "owner_decision_required": false,
+      "owner_decision": null,
+      "owner_accepted": false
+    }
+  ],
+  "limitations": [
+    {
+      "id": "LIM-SUPPORT-LEDGER-PIN",
+      "title": "Support-ledger pin drift: docs/support/v0.2.0.md pins digests of src/core/gabbaboy.c, tests/CMakeLists.txt and tests/expected-tests.txt, which Phase 15.1 changed, so verify-support-ledger.py --check-current fails on the hosted rehearsal (\"v0.2 ledger stable evidence differs\").",
+      "kind": "external_limitation",
+      "affects": [
+        "P15-11",
+        "P15-16"
+      ],
+      "evidence": "hosted rehearsal run 39645769068 jobs 119380812600 and 119380813257 (failure)",
+      "owner_decision": "Choose between a new release ledger for post-0.2.0 source and rewriting published v0.2.0 text. Published v0.2.0 documents and receipts must not be rewritten; this phase made neither choice.",
+      "status": "open",
+      "counts_as_pass": false,
+      "owner_accepted": false
+    },
+    {
+      "id": "LIM-PERF-REVIEW",
+      "title": "Performance review trigger: the paired hosted measurement at a10ddf8 gave median_ratio_pct=135.31 over 30 samples and the receipt stays pending by design.",
+      "kind": "owner_decision",
+      "affects": [
+        "P15-04",
+        "P15-17"
+      ],
+      "evidence": "hosted rehearsal run 39645769068 job 119380813157 (failure by design)",
+      "owner_decision": "Record a separate receipt-bound independent review decision. None exists and none is fabricated.",
+      "status": "open",
+      "counts_as_pass": false,
+      "owner_accepted": false
+    },
+    {
+      "id": "LIM-TRUSTED-JUDGE",
+      "title": "The trusted rehearsal judge was skipped on the host (its producers failed), so the Plan 08 caveat that the rehearsal judge reads judge code from the default branch is untested, not passed.",
+      "kind": "external_limitation",
+      "affects": [
+        "P15-06"
+      ],
+      "evidence": "hosted rehearsal run 39645769068 job 119390758628 (skipped)",
+      "owner_decision": "Rerun the rehearsal once the policy script is on the default branch and the ledger and performance decisions are made.",
+      "status": "open",
+      "counts_as_pass": false,
+      "owner_accepted": false
+    },
+    {
+      "id": "LIM-HIST-AUDIO-RED",
+      "title": "The pre-fix red run of audio_saturation (D-043) was never retained and cannot be recreated.",
+      "kind": "historical_unknown",
+      "affects": [
+        "P7-03"
+      ],
+      "evidence": "15.1-historical-limitations.json P7-03 (recovered_historic_red=false)",
+      "owner_decision": "Decide at milestone re-audit whether fresh sensitivity evidence substitutes.",
+      "status": "open",
+      "counts_as_pass": false,
+      "owner_accepted": false
+    },
+    {
+      "id": "LIM-HIST-M7",
+      "title": "The isolated M7 control failure kept no diagnostic and cannot be recreated.",
+      "kind": "historical_unknown",
+      "affects": [
+        "P12-01"
+      ],
+      "evidence": "15.1-historical-limitations.json P12-01 (recovered_historic_diagnostic=false)",
+      "owner_decision": "Decide at milestone re-audit whether 100 fresh repeats and the retention fixture substitute.",
+      "status": "open",
+      "counts_as_pass": false,
+      "owner_accepted": false
+    },
+    {
+      "id": "LIM-SHIP11-UNCLASSIFIED",
+      "title": "SHIP-11 flagged unresolved assumption: the deterministic unclassified edge has no defensible semantic predicate, so nothing here resolves or dismisses it.",
+      "kind": "flagged_assumption",
+      "affects": [
+        "P15-01",
+        "P15-03",
+        "P15-04",
+        "P15-09"
+      ],
+      "evidence": "15.1-VALIDATION.md and 15.1-PLAN-INVENTORY.md edge coverage fallback",
+      "owner_decision": "Supply a semantic predicate or accept the edge explicitly at milestone re-audit.",
+      "status": "open",
+      "counts_as_pass": false,
+      "owner_accepted": false
+    },
+    {
+      "id": "LIM-RESIDUAL-WRITE-JOBS",
+      "title": "Five source-executing release jobs keep write authority as an exactly enforced named set.",
+      "kind": "residual",
+      "affects": [
+        "P15-01"
+      ],
+      "evidence": "15.1-08-SUMMARY.md; verify-workflow-policy.py --check residual_write_jobs=5",
+      "owner_decision": "Split them or accept the named set.",
+      "status": "open",
+      "counts_as_pass": false,
+      "owner_accepted": false
+    },
+    {
+      "id": "LIM-REHEARSAL-FAILED",
+      "title": "The latest hosted release rehearsal at a10ddf8 is a failure: libfuzzer and package-consumers passed; corpus-and-support-sidecar, v02-evidence-aggregate and paired-performance failed; trusted-judge was skipped. The rehearsal is not a required check and is never counted as a pass.",
+      "kind": "external_limitation",
+      "affects": [
+        "P15-01",
+        "P15-04",
+        "P15-06",
+        "P15-11"
+      ],
+      "evidence": "15.1-hosted-evidence.json release-rehearsal run 39645769068",
+      "owner_decision": "Resolve LIM-SUPPORT-LEDGER-PIN and LIM-PERF-REVIEW, then rerun the rehearsal before any release.",
+      "status": "open",
+      "counts_as_pass": false,
+      "owner_accepted": false
+    },
+    {
+      "id": "LIM-NO-HOST-WRONG-ROM",
+      "title": "No wrong-ROM or wrong-pin Libbet run was dispatched on the host; that negative control is local only.",
+      "kind": "external_limitation",
+      "affects": [
+        "P7-02"
+      ],
+      "evidence": "15.1-hosted-evidence.json libbet-repro scope",
+      "owner_decision": "Accept the local control or request a hosted negative dispatch.",
+      "status": "open",
+      "counts_as_pass": false,
+      "owner_accepted": false
+    },
+    {
+      "id": "LIM-PROHIBITION-FLAGS",
+      "title": "Two descriptor-less prohibitions remain flagged-unverified: never turn absent historical RED, M7 or hardware evidence into a passing release claim, and never treat resolve-first authorization as owner acceptance or permission to republish v0.2.0.",
+      "kind": "flagged_assumption",
+      "affects": [
+        "P7-03",
+        "P12-01"
+      ],
+      "evidence": "15.1-17-PLAN.md must_haves.prohibitions (status unresolved)",
+      "owner_decision": "Supply enforcement descriptors or keep them as explicit reviewer flags.",
+      "status": "open",
+      "counts_as_pass": false,
+      "owner_accepted": false
+    }
+  ]
+}
