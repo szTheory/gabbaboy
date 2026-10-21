@@ -534,7 +534,7 @@ Plans:
   3. Canonical UAT and strict coverage pass; relevant DMG baseline and exact-head remote checks pass before merge.
   4. Re-audit is the next stage after this phase; no automatic archive, tag, publication or v0.3 start.
 
-**Plans:** 16/19 plans executed
+**Plans:** 17/19 plans executed
 
 Plans:
 **Wave 1**
@@ -562,7 +562,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 - [x] 15.1-09-PLAN.md — Wire safe retry recovery and bound real downloads
-- [ ] 15.1-10-PLAN.md — Integrate exact native link, corpus and coverage contracts
+- [x] 15.1-10-PLAN.md — Integrate exact native link, corpus and coverage contracts
 
 **Wave 6** *(blocked on Wave 5 completion)*
 - [ ] 15.1-16-PLAN.md — Retain fresh baseline, historical-limit and hosted reproduction evidence
@@ -586,4 +586,4 @@ Plans:
 | 13. CGB HDMA | v0.2 | 12/12 | Complete    | 2026-10-14 |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 13/13 | Complete    | 2026-10-15 |
 | 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 10/10 | Complete    | 2026-10-20 |
-| 15.1. Release Hardening and Milestone Debt Closure | v0.2 | 16/19 | In Progress | - |
+| 15.1. Release Hardening and Milestone Debt Closure | v0.2 | 17/19 | In Progress | - |

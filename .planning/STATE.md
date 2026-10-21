@@ -4,18 +4,18 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: "15.1"
 current_phase_name: Release Hardening and Milestone Debt Closure
-current_plan: 9
+current_plan: 10
 status: executing
-stopped_at: Completed 15.1-09-PLAN.md
-last_updated: "2026-10-21T15:27:32.375Z"
+stopped_at: Completed 15.1-10-PLAN.md
+last_updated: "2026-10-21T15:55:06.645Z"
 last_activity: 2026-10-21
-last_activity_desc: Completed Phase 15.1 Plan 09 (retry recovery decided from live state before writes; bounded streamed downloads)
-state_head: 4683a4e847804b5afab37ed1a04264e852546e70
+last_activity_desc: Completed Phase 15.1 Plan 10 (one intended core per acceptance-linked target; dense, deadline, overlap and DMG held controls registered; immutable malformed summary fixture; Wave 5 gate 1162/1162)
+state_head: 01dd42627cf3b52198014a7a48d35af5924d0422
 progress:
   total_phases: 10
   completed_phases: 9
   total_plans: 153
-  completed_plans: 150
+  completed_plans: 151
   percent: 90
 ---
 
@@ -321,6 +321,7 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 15 P10 | 9h | 2 tasks | 20 files |
 | Phase 15.1 P08 | 105min | 3 tasks | 8 files |
 | Phase 15.1 P09 | 75min | 2 tasks | 5 files |
+| Phase 15.1 P10 | 140min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -556,6 +557,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 15]: Merge the version PR only after the non-publishing hosted rehearsal is green on its exact tree; resume a failed release run on the same unpublished draft and run control-plane verifiers from the workflow commit
 - [Phase 15.1]: 15.1-08: replaced the unverified partial policy checker; five source-executing write jobs remain a named, exactly-enforced residual (P15-01 repaired for corpus/fuzz/performance only)
 - [Phase 15.1]: 15.1-08: release fuzz evidence is the completed exact-source ci.yml push campaign read through the trusted hosted verifier; release/rehearsal campaigns stay non-qualifying
+- [Phase 15.1]: Plan 15.1-10: acceptance helpers split into core-free gabbaboy_accept_bare; mutants link only their own core, verified by verify-core-linkage.py
+- [Phase 15.1]: Plan 15.1-10: summary_coverage_phase10_rejected replaced by digest-pinned immutable fixture tests plus repaired-twin control; strict coverage from Phase 9
 
 ### Pending Todos
 
@@ -596,8 +599,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-**Last session:** 2026-10-21T15:27:31.900Z
-**Stopped at:** Completed 15.1-09-PLAN.md
+**Last session:** 2026-10-21T15:55:06.138Z
+**Stopped at:** Completed 15.1-10-PLAN.md
 **Resume file:** None
 
 Completed stage: **Phase 15.1 planning and independent plan verification**. All 19 plans, 39 tasks and seven waves are ready to execute; the final checker reports zero blockers and warnings. All 24 scope items and four follow-up requirements have executable coverage. No Phase 15.1 implementation or hosted qualification has run. Nine original phases and 134 plans remain complete; v0.2 stays open. Historical unknowns and spec-less verification flags remain explicit; debt is not accepted by planning.
