@@ -123,7 +123,8 @@ static int run_speed_seed_case(const uint8_t *seed, size_t seed_size,
                                unsigned min_reads, uint8_t expected_speed,
                                uint8_t expected_armed, int check_key1,
                                uint8_t expected_key1, uint32_t required_flags,
-                               int require_dma_stop, int require_lcd_off) {
+                               int require_dma_stop, int require_lcd_off,
+                               int require_no_key1_reads) {
     const int failures_before = gbb_fuzz_core_contract_failures();
     if (gbb_fuzz_core_one_input(seed, seed_size) != 0) {
         fprintf(stderr, "speed seed %u was rejected\n", expected_scenario);
@@ -138,6 +139,12 @@ static int run_speed_seed_case(const uint8_t *seed, size_t seed_size,
                                    &speed, &armed, &key1, &stall, &mode, &profile,
                                    &consumed, &master_time, &last_trace_time, &path_flags,
                                    &saw_dma_stop, &saw_lcd_off);
+    if (expected_profile == GBB_PROFILE_DMG_CPU_B && expected_scenario == 3u) {
+        if ((path_flags & 0x20u) == 0u)
+            fprintf(stderr, "DMG held input was not observed at the joypad read\n");
+        if ((path_flags & 0x40u) == 0u)
+            fprintf(stderr, "DMG held-button STOP did not show guest progress after wake\n");
+    }
     if (gbb_fuzz_core_contract_failures() != failures_before || !selected ||
         scenario != expected_scenario || stops == 0u || calls == 0u ||
         switches < min_switches || reads < min_reads || speed != expected_speed ||
@@ -145,7 +152,10 @@ static int run_speed_seed_case(const uint8_t *seed, size_t seed_size,
         consumed != master_time || consumed > UINT64_C(600000) ||
         last_trace_time > master_time || (path_flags & required_flags) != required_flags ||
         (require_dma_stop && !saw_dma_stop) || (require_lcd_off && !saw_lcd_off) ||
-        (check_key1 && key1 != expected_key1)) {
+        (check_key1 && key1 != expected_key1) ||
+        (require_no_key1_reads && reads != 0u)) {
+        if (require_no_key1_reads && reads != 0u)
+            fprintf(stderr, "DMG held input used invalid CGB-only KEY1 (%u reads)\n", reads);
         fprintf(stderr, "speed seed %u positive control failed: selected=%d switches=%u reads=%u "
                         "stops=%u speed=%u armed=%u KEY1=%02X mode=%u profile=%u "
                         "flags=0x%X time=%llu/%llu\n",
@@ -166,6 +176,7 @@ static int run_speed_seed(void) {
     static const uint8_t seed_lcd_off[] = {0x90u, 0x05u, 0x0Fu};
     static const uint8_t seed_compat_twin[] = {0x90u, 0x06u, 0x0Fu};
     static const uint8_t seed_dmg_twin[] = {0x10u, 0x07u, 0x0Fu};
+    static const uint8_t seed_dmg_held_button[] = {0x10u, 0x03u, 0x0Fu};
     /* DMG-profile KEY1 scenarios: hosted fuzz run 38947419636 minimized to a 518-byte input
      * (sha256 532b3bf198c578ebf2b97e05415208187a34a8aa5ecd0e5fc96b6609f12f8263) whose decoded
      * prefix is data[0]=0x10 (DMG speed) data[1]=1. The oracle demanded a speed switch on a DMG
@@ -183,36 +194,40 @@ static int run_speed_seed(void) {
                                        sizeof(seed_dmg_s5), sizeof(seed_dmg_s6)};
     for (size_t i = 0u; i < sizeof(dmg_seeds) / sizeof(dmg_seeds[0]); ++i) {
         if (run_speed_seed_case(dmg_seeds[i], dmg_sizes[i], 7u, GBB_MODE_DMG,
-                                GBB_PROFILE_DMG_CPU_B, 0u, 0u, 0u, 0u, 0, 0u, 0x00u, 0, 0) != 0) {
+                                GBB_PROFILE_DMG_CPU_B, 0u, 0u, 0u, 0u, 0, 0u, 0x00u, 0, 0, 0) != 0) {
             fprintf(stderr, "DMG-profile speed seed %zu failed\n", i);
             return 1;
         }
     }
+    if (run_speed_seed_case(seed_dmg_held_button, sizeof(seed_dmg_held_button), 3u,
+                            GBB_MODE_DMG, GBB_PROFILE_DMG_CPU_B, 0u, 0u, 0u, 0u,
+                            0, 0u, 0x68u, 0, 0, 1) != 0)
+        return 1;
 
     if (run_speed_seed_case(seed_arm_and_switch, sizeof(seed_arm_and_switch), 0u,
                             GBB_MODE_CGB, GBB_PROFILE_CGB_CPU_E, 1u, 1u, 1u, 0u,
-                            1, 0xFEu, 0x01u, 0, 0) != 0 ||
+                            1, 0xFEu, 0x01u, 0, 0, 0) != 0 ||
         run_speed_seed_case(seed_switch_every_four, sizeof(seed_switch_every_four), 1u,
                             GBB_MODE_CGB, GBB_PROFILE_CGB_CPU_E, 2u, 1u, 0u, 0u,
-                            0, 0u, 0x01u, 0, 0) != 0 ||
+                            0, 0u, 0x01u, 0, 0, 0) != 0 ||
         run_speed_seed_case(seed_pending_if, sizeof(seed_pending_if), 2u,
                             GBB_MODE_CGB, GBB_PROFILE_CGB_CPU_E, 1u, 1u, 1u, 0u,
-                            0, 0u, 0x07u, 0, 0) != 0 ||
+                            0, 0u, 0x07u, 0, 0, 0) != 0 ||
         run_speed_seed_case(seed_held_button, sizeof(seed_held_button), 3u,
                             GBB_MODE_CGB, GBB_PROFILE_CGB_CPU_E, 0u, 0u, 0u, 1u,
-                            0, 0u, 0x0Fu, 0, 0) != 0 ||
+                            0, 0u, 0x0Fu, 0, 0, 0) != 0 ||
         run_speed_seed_case(seed_oam_dma, sizeof(seed_oam_dma), 4u,
                             GBB_MODE_CGB, GBB_PROFILE_CGB_CPU_E, 1u, 1u, 1u, 0u,
-                            0, 0u, 0x11u, 1, 0) != 0 ||
+                            0, 0u, 0x11u, 1, 0, 0) != 0 ||
         run_speed_seed_case(seed_lcd_off, sizeof(seed_lcd_off), 5u,
                             GBB_MODE_CGB, GBB_PROFILE_CGB_CPU_E, 1u, 1u, 1u, 0u,
-                            0, 0u, 0x01u, 0, 1) != 0 ||
+                            0, 0u, 0x01u, 0, 1, 0) != 0 ||
         run_speed_seed_case(seed_compat_twin, sizeof(seed_compat_twin), 6u,
                             GBB_MODE_CGB_DMG_COMPAT, GBB_PROFILE_CGB_CPU_E, 0u, 1u, 0u, 0u,
-                            1, 0xFFu, 0x01u, 0, 0) != 0 ||
+                            1, 0xFFu, 0x01u, 0, 0, 0) != 0 ||
         run_speed_seed_case(seed_dmg_twin, sizeof(seed_dmg_twin), 7u,
                             GBB_MODE_DMG, GBB_PROFILE_DMG_CPU_B, 0u, 0u, 0u, 0u,
-                            0, 0u, 0x00u, 0, 0) != 0)
+                            0, 0u, 0x00u, 0, 0, 0) != 0)
         return 1;
     printf("ok 1 - cgb_fuzz_speed_regressions\n");
     return 0;
