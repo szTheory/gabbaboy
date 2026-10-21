@@ -256,19 +256,26 @@ def _write_report(path: Path, report: dict[str, object]) -> None:
 
 
 class CloseoutScanTests(unittest.TestCase):
+    def run_wrapper(self, root: Path, output: Path, *, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+        child_env = os.environ.copy()
+        if env:
+            child_env.update(env)
+        return subprocess.run(
+            [sys.executable, str(Path(__file__).resolve()), "--check", "--root", str(root), "--output", str(output)],
+            cwd=ROOT,
+            env=child_env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
     def test_clean_review_is_nonblocking_but_pending_canonical_uat_blocks(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gabbaboy-closeout-red-") as temp_dir:
             fixture = Path(temp_dir) / "project"
             fixture.mkdir()
             make_fixture(fixture)
             output = Path(temp_dir) / "closeout.json"
-            result = subprocess.run(
-                [sys.executable, str(Path(__file__).resolve()), "--check", "--root", str(fixture), "--output", str(output)],
-                cwd=ROOT,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
+            result = self.run_wrapper(fixture, output)
             self.assertEqual(result.returncode, 1, f"pending canonical UAT must block: {result.stdout}\n{result.stderr}")
             report = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(report["status"], "blocked")
@@ -284,6 +291,95 @@ class CloseoutScanTests(unittest.TestCase):
             self.assertEqual(canonical["raw_item"]["open_scenario_count"], 1)
             self.assertIn("BLOCKED", result.stdout)
             self.assertNotIn("CLEAR", result.stdout)
+
+    def test_check_output_records_project_and_runtime_revisions(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-closeout-revision-") as temp_dir:
+            output = Path(temp_dir) / "closeout.json"
+            result = self.run_wrapper(ROOT, output)
+            self.assertIn(result.returncode, (0, 1), f"scan command failed instead of classifying findings: {result.stdout}\n{result.stderr}")
+            report = json.loads(output.read_text(encoding="utf-8"))
+            expected_project = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, capture_output=True, check=True
+            ).stdout.strip()
+            self.assertIn("project_revision", report, "scan record must bind findings to the project revision")
+            self.assertEqual(report["project_revision"], expected_project)
+            self.assertIn("revision", report["runtime"], "scan record must bind findings to an installed runtime revision")
+            self.assertRegex(report["runtime"]["revision"], r"^(?:git:[0-9a-f]{40}|sha256:[0-9a-f]{64})$")
+
+    def test_unknown_dirty_and_malformed_reviews_remain_blocking(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-closeout-review-controls-") as temp_dir:
+            root = Path(temp_dir) / "project"
+            root.mkdir()
+            planning = root / ".planning/phases"
+            review_rows = (
+                (
+                    "GB-15-dirty",
+                    "15-UAT-REVIEW.md",
+                    "---\nstatus: clean\nfindings:\n  critical: 0\n  warning: 1\n  info: 0\n  total: 1\n---\n",
+                ),
+                ("GB-16-malformed", "16-UAT-REVIEW.md", "---\nstatus: clean\n---\n"),
+                ("GB-17-unknown", "17-UAT-REVIEW-EXTRA.md", "---\nstatus: pending\n---\n"),
+            )
+            for phase_name, filename, content in review_rows:
+                phase = planning / phase_name
+                phase.mkdir(parents=True)
+                (phase / filename).write_text(content, encoding="utf-8")
+            output = Path(temp_dir) / "closeout.json"
+            result = self.run_wrapper(root, output)
+            self.assertEqual(result.returncode, 1)
+            report = json.loads(output.read_text(encoding="utf-8"))
+            controls = [record for record in report["records"] if record["category"] == "uat_gaps"]
+            self.assertEqual(len(controls), 3)
+            self.assertTrue(all(record["blocking"] for record in controls))
+            self.assertCountEqual(
+                [record["classification"] for record in controls],
+                ["ambiguous-or-dirty-review", "ambiguous-or-dirty-review", "unclassified-uat-artifact"],
+            )
+
+    def test_duplicate_runtime_findings_are_retained_as_blocking_records(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-closeout-duplicates-") as temp_dir:
+            root = Path(temp_dir) / "project"
+            root.mkdir()
+            make_fixture(root)
+            archived = root / ".planning/milestones/v0.2-phases/GB-14-cgb-e-model-qualification-and-corpus"
+            archived.mkdir(parents=True)
+            (archived / "14-UAT.md").write_text(
+                "---\nstatus: pending\n---\n\nresult: pending\n", encoding="utf-8"
+            )
+            output = Path(temp_dir) / "closeout.json"
+            result = self.run_wrapper(root, output)
+            self.assertEqual(result.returncode, 1)
+            report = json.loads(output.read_text(encoding="utf-8"))
+            raw_uat = report["raw_audit_open"]["payload"]["items"]["uat_gaps"]
+            self.assertEqual(sum(item["file"] == "14-UAT.md" for item in raw_uat), 2)
+            canonical = [record for record in report["records"] if record.get("raw_item", {}).get("file") == "14-UAT.md"]
+            self.assertEqual(len(canonical), 2)
+            self.assertTrue(all(record["blocking"] for record in canonical))
+
+    def test_runtime_failure_retains_diagnostics_without_success_output(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-closeout-runtime-error-") as temp_dir:
+            root = Path(temp_dir) / "project"
+            root.mkdir()
+            (root / ".planning").mkdir()
+            fake_tools = Path(temp_dir) / "failing-tools.cjs"
+            fake_tools.write_text(
+                "const args = process.argv.slice(2);\n"
+                "if (args[0] === 'runtime-identity') { console.log(JSON.stringify({packageName:'@opengsd/gsd-core',version:'test'})); process.exit(0); }\n"
+                "process.stdout.write('raw audit stdout marker\\n');\n"
+                "process.stderr.write('raw audit stderr marker\\n');\n"
+                "process.exit(17);\n",
+                encoding="utf-8",
+            )
+            output = Path(temp_dir) / "closeout.json"
+            result = self.run_wrapper(root, output, env={"GSD_TOOLS": str(fake_tools)})
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("REJECT runtime-audit-open", result.stderr)
+            self.assertNotIn("CLOSEOUT SCAN CLEAR", result.stdout)
+            report = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(report["status"], "error")
+            self.assertEqual(report["raw_audit_open"]["exit_code"], 17)
+            self.assertEqual(report["raw_audit_open"]["stdout"], "raw audit stdout marker\n")
+            self.assertEqual(report["raw_audit_open"]["stderr"], "raw audit stderr marker\n")
 
 
 def run_self_test() -> int:
