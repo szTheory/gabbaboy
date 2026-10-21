@@ -10,6 +10,7 @@ fixtures/*/*.patch text eol=lf
 fixtures/*/*.asm text eol=lf
 fixtures/*/*.inc text eol=lf
 tests/external/*.json text eol=lf
+tests/external/cgb-apu-producer-*.src -text
 tests/expected-tests.txt text eol=lf
 tests/CMakeLists.txt text eol=lf
 tests/scripts/*.py text eol=lf
