@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "source_sha": "0a18f1cde6a70a8dc7e983046d3fdc2ca042912a",
-  "tested_source_sha": "0a18f1cde6a70a8dc7e983046d3fdc2ca042912a",
+  "source_sha": "9a6cb4b8894780de02c881f3e304beebc8fc74bd",
+  "tested_source_sha": "9a6cb4b8894780de02c881f3e304beebc8fc74bd",
   "branch": "gsd/phase-15.1-release-hardening-and-milestone-debt-closure",
   "obtained_via": "gh_api",
   "receipt_labels_used": false,
