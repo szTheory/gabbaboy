@@ -6,16 +6,16 @@ current_phase: "15.1"
 current_phase_name: Release Hardening and Milestone Debt Closure
 current_plan: 10
 status: executing
-stopped_at: Completed 15.1-10-PLAN.md
-last_updated: "2026-10-21T15:55:06.645Z"
+stopped_at: Completed 15.1-16-PLAN.md
+last_updated: "2026-10-21T16:26:38.106Z"
 last_activity: 2026-10-21
 last_activity_desc: Completed Phase 15.1 Plan 10 (one intended core per acceptance-linked target; dense, deadline, overlap and DMG held controls registered; immutable malformed summary fixture; Wave 5 gate 1162/1162)
-state_head: 01dd42627cf3b52198014a7a48d35af5924d0422
+state_head: 081a0dc84660bdc5f93f64f03340ce1bad5ab437
 progress:
   total_phases: 10
   completed_phases: 9
   total_plans: 153
-  completed_plans: 151
+  completed_plans: 152
   percent: 90
 ---
 
@@ -322,6 +322,7 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 15.1 P08 | 105min | 3 tasks | 8 files |
 | Phase 15.1 P09 | 75min | 2 tasks | 5 files |
 | Phase 15.1 P10 | 140min | 2 tasks | 10 files |
+| Phase 15.1 P16 | 270min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -559,6 +560,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 15.1]: 15.1-08: release fuzz evidence is the completed exact-source ci.yml push campaign read through the trusted hosted verifier; release/rehearsal campaigns stay non-qualifying
 - [Phase 15.1]: Plan 15.1-10: acceptance helpers split into core-free gabbaboy_accept_bare; mutants link only their own core, verified by verify-core-linkage.py
 - [Phase 15.1]: Plan 15.1-10: summary_coverage_phase10_rejected replaced by digest-pinned immutable fixture tests plus repaired-twin control; strict coverage from Phase 9
+- [Phase 15.1]: Plan 16: P7-03/P12-01 historic red run and M7 diagnostic stay unknown beside fresh sensitivity; P7-02 hosted_verified for Libbet run 39633868728 only; release rehearsal not_verified (no workflow_dispatch)
 
 ### Pending Todos
 
@@ -599,8 +601,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-**Last session:** 2026-10-21T15:55:06.138Z
-**Stopped at:** Completed 15.1-10-PLAN.md
+**Last session:** 2026-10-21T16:26:37.600Z
+**Stopped at:** Completed 15.1-16-PLAN.md
 **Resume file:** None
 
 Completed stage: **Phase 15.1 planning and independent plan verification**. All 19 plans, 39 tasks and seven waves are ready to execute; the final checker reports zero blockers and warnings. All 24 scope items and four follow-up requirements have executable coverage. No Phase 15.1 implementation or hosted qualification has run. Nine original phases and 134 plans remain complete; v0.2 stays open. Historical unknowns and spec-less verification flags remain explicit; debt is not accepted by planning.
