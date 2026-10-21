@@ -373,23 +373,28 @@ fetch_source_archive() {
 
 # Recovery after a publication or readback error. Live release state is read BEFORE any decision, and
 # the only outcomes are: verify a published release, reuse an identical draft, or upload only the
-# missing assets. Nothing here writes to GitHub.
-recovery_decision() {
-  local release_id=$1 tag=$2 source_sha=$3 expected=$4 run_id=$5 run_attempt=$6 repo tmp
-  repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+# missing assets. Nothing here writes to GitHub. Only runs of the release workflow can block it; unrelated
+# CI on the same commit never does. Runs in a subshell so the scratch directory trap is scoped to this call.
+RELEASE_WORKFLOW_PATH=.github/workflows/release-please.yml
+recovery_decision() (
+  local release_id=$1 tag=$2 source_sha=$3 expected=$4 run_id=$5 run_attempt=$6 scope=$7 repo
+  [[ "$release_id" =~ ^[0-9]+$ && "$run_id" =~ ^[0-9]+$ && "$run_attempt" =~ ^[0-9]+$ ]] || fail 'release, run and attempt identifiers must be numeric'
+  [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$source_sha" =~ ^[0-9a-f]{40}$ ]] || fail 'release tag or source SHA is malformed'
+  [[ "$scope" == full || "$scope" == subset ]] || fail 'recovery scope must be full or subset'
+  [[ -s "$expected" ]] || fail 'the trusted expected inventory is missing'
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/gb-recovery.XXXXXX")
-  gh api "repos/$repo/releases/$release_id" > "$tmp/release.json" || { rm -rf "$tmp"; fail 'live release state could not be read'; }
-  [[ $(jq -r .tag_name "$tmp/release.json") == "$tag" ]] || { rm -rf "$tmp"; fail 'live release tag differs from the frozen tag'; }
-  gh api "repos/$repo/releases/$release_id/assets?per_page=100" > "$tmp/assets.json" || { rm -rf "$tmp"; fail 'live release assets could not be read'; }
-  [[ $(gh api "repos/$repo/commits/$tag" --jq .sha) == "$source_sha" ]] || { rm -rf "$tmp"; fail 'live tag does not resolve to the frozen source SHA'; }
-  gh api "repos/$repo/actions/runs?head_sha=$source_sha&per_page=100" \
-    --jq '[.workflow_runs[] | {id, run_attempt, status}]' > "$tmp/runs.json" || { rm -rf "$tmp"; fail 'live workflow runs could not be read'; }
+  trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+  repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) || fail 'repository identity could not be read'
+  gh api "repos/$repo/releases/$release_id" > "$tmp/release.json" || fail 'live release state could not be read'
+  [[ $(jq -r .tag_name "$tmp/release.json") == "$tag" ]] || fail 'live release tag differs from the frozen tag'
+  gh api "repos/$repo/releases/$release_id/assets?per_page=100" > "$tmp/assets.json" || fail 'live release assets could not be read'
+  [[ $(gh api "repos/$repo/commits/$tag" --jq .sha) == "$source_sha" ]] || fail 'live tag does not resolve to the frozen source SHA'
+  gh api "repos/$repo/actions/workflows/${RELEASE_WORKFLOW_PATH##*/}/runs?per_page=100" \
+    --jq '[.workflow_runs[] | {id, run_attempt, status, head_sha, path, event}]' > "$tmp/runs.json" || fail 'live workflow runs could not be read'
   python3 -I "$ROOT/.github/scripts/verify-published-release-assets.py" --decide \
-    "$tmp/release.json" "$tmp/assets.json" "$expected" "$tmp/runs.json" "$run_id" "$run_attempt"
-  local status=$?
-  rm -rf "$tmp"
-  return $status
-}
+    "$tmp/release.json" "$tmp/assets.json" "$expected" "$tmp/runs.json" "$run_id" "$run_attempt" \
+    "$RELEASE_WORKFLOW_PATH" "$source_sha" "$scope"
+)
 
 check_required_asset_sidecars() {
   local directory=$1 platform
@@ -508,7 +513,8 @@ case "$*" in
   *"/actions/workflows/release-please.yml/runs"*) file="$FAKE_RUNS.json" ;;
   *) exit 1 ;;
 esac
-if [[ -n "$jq_filter" ]]; then jq -c "$jq_filter" "$FAKE_DIR/$file"; else cat "$FAKE_DIR/$file"; fi
+# Like gh --jq: strings print raw, other values print as compact JSON.
+if [[ -n "$jq_filter" ]]; then jq -r "($jq_filter) | if type == \"string\" then . else tojson end" "$FAKE_DIR/$file"; else cat "$FAKE_DIR/$file"; fi
 GH
   chmod +x "$dir/bin/gh"
   local row release assets runs outcome reason status log="$dir/gh-calls.log" fail_on
@@ -530,7 +536,7 @@ GH
     rm -rf "$dir/tmp" && mkdir -p "$dir/tmp"
     output=$(PATH="$dir/bin:$PATH" FAKE_DIR="$dir" FAKE_LOG="$log" FAKE_RELEASE="$release" FAKE_ASSETS="$assets" FAKE_RUNS="$runs" \
              FAKE_FAIL="$fail_on" TMPDIR="$dir/tmp" \
-             bash "$ROOT/.github/scripts/verify-release-gates.sh" --check-recovery 424242 v0.2.0 "$sha" "$dir/expected.json" 7 1 2>&1) && status=0 || status=$?
+             bash "$ROOT/.github/scripts/verify-release-gates.sh" --check-recovery 424242 v0.2.0 "$sha" "$dir/expected.json" 7 1 full 2>&1) && status=0 || status=$?
     if [[ $outcome == REJECT ]]; then
       [[ $status -ne 0 && "$output" == *"$reason"* && "$output" != *PASS* ]] || fail "recovery accepted or mis-diagnosed $row: $output"
     else
@@ -795,9 +801,10 @@ PY
     check_v02_evidence "$2" "$3" "$4" "$5"
     ;;
   --check-recovery)
-    [[ $# -eq 7 ]] || fail 'usage: verify-release-gates.sh --check-recovery RELEASE_ID TAG SOURCE_SHA EXPECTED_INVENTORY_JSON RUN_ID RUN_ATTEMPT'
+    [[ $# -eq 8 ]] || fail 'usage: verify-release-gates.sh --check-recovery RELEASE_ID TAG SOURCE_SHA EXPECTED_INVENTORY_JSON RUN_ID RUN_ATTEMPT full|subset'
     command -v gh >/dev/null || fail 'GitHub CLI is required'
-    recovery_decision "$2" "$3" "$4" "$5" "$6" "$7"
+    command -v jq >/dev/null || fail 'jq is required'
+    recovery_decision "$2" "$3" "$4" "$5" "$6" "$7" "$8"
     ;;
   --check-runner-evidence)
     [[ $# -eq 6 ]] || fail 'usage: verify-release-gates.sh --check-runner-evidence CANDIDATE_RECEIPT BUILD_RECEIPT TAG SOURCE_SHA SMOKE_RUNNER'
@@ -809,5 +816,5 @@ PY
     check_digest_sidecar "$2" "$3"
     printf 'PASS: downloaded archive matches its one-line digest sidecar\n'
     ;;
-  *) fail 'usage: verify-release-gates.sh --self-test | --check-pr PR_NUMBER EXPECTED_HEAD_SHA | --check-merged-source SOURCE_SHA TAG RELEASE_ID SOURCE_RECEIPT PROOF_VERIFIER | --check-draft RELEASE_ID TAG SOURCE_SHA | --check-draft-final RELEASE_ID TAG SOURCE_SHA | --check-v02-evidence EVIDENCE_DIR TAG SOURCE_SHA SOURCE_ARCHIVE | --check-recovery RELEASE_ID TAG SOURCE_SHA EXPECTED_INVENTORY_JSON RUN_ID RUN_ATTEMPT | --check-runner-evidence CANDIDATE_RECEIPT BUILD_RECEIPT TAG SOURCE_SHA SMOKE_RUNNER | --check-digest-sidecar SIDECAR ARCHIVE' ;;
+  *) fail 'usage: verify-release-gates.sh --self-test | --check-pr PR_NUMBER EXPECTED_HEAD_SHA | --check-merged-source SOURCE_SHA TAG RELEASE_ID SOURCE_RECEIPT PROOF_VERIFIER | --check-draft RELEASE_ID TAG SOURCE_SHA | --check-draft-final RELEASE_ID TAG SOURCE_SHA | --check-v02-evidence EVIDENCE_DIR TAG SOURCE_SHA SOURCE_ARCHIVE | --check-recovery RELEASE_ID TAG SOURCE_SHA EXPECTED_INVENTORY_JSON RUN_ID RUN_ATTEMPT full|subset | --check-runner-evidence CANDIDATE_RECEIPT BUILD_RECEIPT TAG SOURCE_SHA SMOKE_RUNNER | --check-digest-sidecar SIDECAR ARCHIVE' ;;
 esac
