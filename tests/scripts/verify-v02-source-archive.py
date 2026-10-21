@@ -578,6 +578,65 @@ def run_cli(script, *args):
     return result.returncode, result.stderr, result.stdout
 
 
+# --------------------------------------------------------------------------- notice attribute scope
+
+# Digest-bound notice text must keep LF endings on every checkout, but the rule must name only the paths the
+# notice table admits: the root LICENSE, the root notice file and each admitted fixture's LICENSE.txt. A
+# basename wildcard such as `LICENSE*` also rewrites unrelated files at any depth, which changes bytes that no
+# digest covers.
+UNRELATED_PATHS = ("LICENSE.bin", "NOTICE", "docs/NOTICE.bin", "vendor/LICENSE-APACHE", "THIRD_PARTY_blob.bin")
+EOL_LINE_RE = re.compile(r"^i/(\S+)\s+w/(\S+)\s+attr/(.*?)\s*\t(.+)$")
+
+
+def attribute_scope_problems(attributes_text, fixture_names):
+    """Add CRLF files to a scratch repository under the given .gitattributes and report what the index did."""
+    pinned = ["LICENSE", NOTICE_NAME] + [f"fixtures/{name}/LICENSE.txt" for name in fixture_names]
+    env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+    problems = []
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-attributes-") as name:
+        repo = pathlib.Path(name)
+
+        def git(*args):
+            return subprocess.run(["git", "-c", "core.autocrlf=false", "-c", "core.safecrlf=false", *args],
+                                  cwd=repo, env=env, capture_output=True, text=True, check=False)
+
+        if git("init", "-q").returncode != 0:
+            raise SystemExit("self-test: could not create the scratch attribute repository")
+        (repo / ".gitattributes").write_bytes(attributes_text.encode("utf-8"))
+        for rel in pinned + list(UNRELATED_PATHS):
+            target = repo / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(b"line one\r\nline two\r\n")
+        if git("add", "--", *pinned, *UNRELATED_PATHS).returncode != 0:
+            raise SystemExit("self-test: could not stage the scratch attribute files")
+        listing = git("ls-files", "--eol", "--", *pinned, *UNRELATED_PATHS).stdout
+        index_eol = {}
+        for line in listing.splitlines():
+            found = EOL_LINE_RE.match(line)
+            if found:
+                index_eol[found.group(4)] = found.group(1)
+    for rel in pinned:
+        if index_eol.get(rel) != "lf":
+            problems.append(f"notice-not-pinned: {rel} is stored {index_eol.get(rel)!r}, not lf")
+    for rel in UNRELATED_PATHS:
+        if index_eol.get(rel) != "crlf":
+            problems.append(f"attribute-scope-broad: unrelated {rel} was rewritten to {index_eol.get(rel)!r}")
+    return problems
+
+
+def notice_digest_problems(root, table):
+    """Compare each fixture's committed manifest and notice bytes with the notice digest table."""
+    problems = []
+    for name, (manifest_sha, license_sha) in sorted(table.items()):
+        for label, expected in (("manifest.json", manifest_sha), ("LICENSE.txt", license_sha)):
+            path = root / "fixtures" / name / label
+            if not path.is_file():
+                problems.append(f"digest-file-missing: fixtures/{name}/{label}")
+            elif hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+                problems.append(f"digest-mismatch: fixtures/{name}/{label}")
+    return problems
+
+
 def self_test():
     script = pathlib.Path(__file__).resolve()
     positives = negatives = 0
@@ -886,6 +945,53 @@ def self_test():
                        "product-link-not-allowed")
         expect_product("product-nested-root-escape", {**good_product, "nested/link": ("symlink", "../../outside")},
                        "link-not-allowed")
+
+        # Notice attribute scope and digest stability, on the real repository files. Unrelated CRLF bytes must
+        # survive staging, pinned notice bytes must be stored as LF, and the committed notice digests must match.
+        root_dir = script.parents[2]
+        attributes_path = root_dir / ".gitattributes"
+        notice_path = root_dir / NOTICE_NAME
+        if attributes_path.is_file() and notice_path.is_file():
+            real_attributes = attributes_path.read_text(encoding="utf-8")
+            real_table = parse_notice_table(notice_path.read_text(encoding="utf-8"))
+            names = sorted(real_table)
+            if not names:
+                raise SystemExit("self-test: the real notice file has no digest table")
+            problems = attribute_scope_problems(real_attributes, names)
+            if problems:
+                raise SystemExit("self-test: the real .gitattributes scope is wrong: " + "; ".join(problems))
+            positives += 1
+            print("accepted: real-attribute-scope")
+            digest_problems = notice_digest_problems(root_dir, real_table)
+            if digest_problems:
+                raise SystemExit("self-test: real notice digests are not stable: " + "; ".join(digest_problems))
+            positives += 1
+            print("accepted: real-notice-digests")
+            broad = real_attributes + "LICENSE* text eol=lf\nNOTICE* text eol=lf\nTHIRD_PARTY* text eol=lf\n"
+            expect_scope = {
+                "broad-basename-wildcards": (broad, "attribute-scope-broad:"),
+                "root-notice-unpinned": (real_attributes.replace("\n/LICENSE text eol=lf", "\n")
+                                         .replace("\n/THIRD_PARTY_NOTICES.md text eol=lf", "\n"), "notice-not-pinned:"),
+                "fixture-license-unpinned": (real_attributes.replace("fixtures/*/LICENSE.txt text eol=lf", ""),
+                                             "notice-not-pinned:"),
+            }
+            for label, (attributes, reason) in expect_scope.items():
+                if attributes == real_attributes:
+                    raise SystemExit(f"self-test: attribute mutant {label} did not change .gitattributes")
+                found = attribute_scope_problems(attributes, names)
+                if not any(item.startswith(reason) for item in found):
+                    raise SystemExit(f"self-test: attribute mutant {label} was not rejected for {reason} (got {found})")
+                negatives += 1
+                print(f"rejected: {label}")
+            altered = dict(real_table)
+            first = names[0]
+            altered[first] = ("0" * 64, altered[first][1])
+            if not notice_digest_problems(root_dir, altered):
+                raise SystemExit("self-test: an altered notice digest row was not rejected")
+            negatives += 1
+            print("rejected: altered-notice-digest-row")
+        else:
+            raise SystemExit("self-test: .gitattributes and the notice file are required in the source tree")
 
         # Real tree: archive the committed repository at a private tag in a private clone.
         root = script.parents[2]
