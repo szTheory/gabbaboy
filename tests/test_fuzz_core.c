@@ -5,7 +5,14 @@
 
 #include "gabbaboy/gabbaboy.h"
 
+#define GBB_FUZZ_SPEED_MUTATION_DMG_ROUTE 1u
+#define GBB_FUZZ_SPEED_MUTATION_DROP_HELD_OBSERVATION 2u
+#define GBB_FUZZ_SPEED_MUTATION_DROP_WAKE_OBSERVATION 3u
+
+static const uint8_t dmg_held_seed[] = {0x10u, 0x03u, 0x0Fu};
+
 int gbb_fuzz_core_one_input(const uint8_t *data, size_t size);
+void gbb_fuzz_core_set_speed_mutation(unsigned mutation);
 extern void gbb_test_bank_state(const gbb_instance *, uint8_t *, uint8_t *);
 
 /* cgb_fuzz_io_regressions (D-27): CGB-profile seeds only. data[0] bit 7 selects the CGB profile,
@@ -153,9 +160,11 @@ static int run_speed_seed_case(const uint8_t *seed, size_t seed_size,
         last_trace_time > master_time || (path_flags & required_flags) != required_flags ||
         (require_dma_stop && !saw_dma_stop) || (require_lcd_off && !saw_lcd_off) ||
         (check_key1 && key1 != expected_key1) ||
-        (require_no_key1_reads && reads != 0u)) {
-        if (require_no_key1_reads && reads != 0u)
-            fprintf(stderr, "DMG held input used invalid CGB-only KEY1 (%u reads)\n", reads);
+        (require_no_key1_reads && (reads != 0u || (path_flags & 0x01u) != 0u))) {
+        if (require_no_key1_reads && (reads != 0u || (path_flags & 0x01u) != 0u))
+            fprintf(stderr, "DMG held input observed the forbidden CGB-only KEY1 path "
+                            "(armed=%u reads=%u)\n",
+                    (path_flags & 0x01u) != 0u, reads);
         fprintf(stderr, "speed seed %u positive control failed: selected=%d switches=%u reads=%u "
                         "stops=%u speed=%u armed=%u KEY1=%02X mode=%u profile=%u "
                         "flags=0x%X time=%llu/%llu\n",
@@ -176,7 +185,6 @@ static int run_speed_seed(void) {
     static const uint8_t seed_lcd_off[] = {0x90u, 0x05u, 0x0Fu};
     static const uint8_t seed_compat_twin[] = {0x90u, 0x06u, 0x0Fu};
     static const uint8_t seed_dmg_twin[] = {0x10u, 0x07u, 0x0Fu};
-    static const uint8_t seed_dmg_held_button[] = {0x10u, 0x03u, 0x0Fu};
     /* DMG-profile KEY1 scenarios: hosted fuzz run 38947419636 minimized to a 518-byte input
      * (sha256 532b3bf198c578ebf2b97e05415208187a34a8aa5ecd0e5fc96b6609f12f8263) whose decoded
      * prefix is data[0]=0x10 (DMG speed) data[1]=1. The oracle demanded a speed switch on a DMG
@@ -199,7 +207,7 @@ static int run_speed_seed(void) {
             return 1;
         }
     }
-    if (run_speed_seed_case(seed_dmg_held_button, sizeof(seed_dmg_held_button), 3u,
+    if (run_speed_seed_case(dmg_held_seed, sizeof(dmg_held_seed), 3u,
                             GBB_MODE_DMG, GBB_PROFILE_DMG_CPU_B, 0u, 0u, 0u, 0u,
                             0, 0u, 0x68u, 0, 0, 1) != 0)
         return 1;
@@ -230,6 +238,151 @@ static int run_speed_seed(void) {
                             0, 0u, 0x00u, 0, 0, 0) != 0)
         return 1;
     printf("ok 1 - cgb_fuzz_speed_regressions\n");
+    return 0;
+}
+
+typedef enum {
+    DMG_HELD_ACCEPTED = 0,
+    DMG_HELD_REJECTED_INPUT_SHAPE,
+    DMG_HELD_REJECTED_EXECUTION,
+    DMG_HELD_REJECTED_PROFILE,
+    DMG_HELD_REJECTED_ROUTE,
+    DMG_HELD_REJECTED_KEY1,
+    DMG_HELD_REJECTED_HELD_OBSERVATION,
+    DMG_HELD_REJECTED_WAKE_OBSERVATION,
+    DMG_HELD_REJECTED_OTHER
+} dmg_held_result;
+
+static dmg_held_result check_dmg_held_seed(const uint8_t *seed, size_t seed_size) {
+    if (seed == NULL || seed_size != sizeof(dmg_held_seed))
+        return DMG_HELD_REJECTED_INPUT_SHAPE;
+
+    const int failures_before = gbb_fuzz_core_contract_failures();
+    const int result = run_speed_seed_case(seed, seed_size, 3u, GBB_MODE_DMG,
+                                           GBB_PROFILE_DMG_CPU_B, 0u, 0u, 0u, 0u,
+                                           0, 0u, 0x68u, 0, 0, 1);
+    if (result == 0) return DMG_HELD_ACCEPTED;
+
+    int selected = 0;
+    uint8_t scenario = 0u;
+    unsigned key1_reads = 0u;
+    uint32_t mode = 0u, profile = 0u, path_flags = 0u;
+    gbb_fuzz_core_speed_observation(&selected, &scenario, NULL, NULL, NULL, NULL,
+                                    NULL, NULL, NULL, NULL, &mode, &profile,
+                                    NULL, NULL, NULL, &path_flags, NULL, NULL);
+    if (!selected || mode != GBB_MODE_DMG || profile != GBB_PROFILE_DMG_CPU_B)
+        return DMG_HELD_REJECTED_PROFILE;
+    if (scenario != 3u) return DMG_HELD_REJECTED_ROUTE;
+    gbb_fuzz_core_speed_observation(NULL, NULL, NULL, &key1_reads, NULL, NULL,
+                                    NULL, NULL, NULL, NULL, NULL, NULL,
+                                    NULL, NULL, NULL, NULL, NULL, NULL);
+    if (key1_reads != 0u || (path_flags & 0x01u) != 0u)
+        return DMG_HELD_REJECTED_KEY1;
+    if ((path_flags & 0x20u) == 0u) return DMG_HELD_REJECTED_HELD_OBSERVATION;
+    if ((path_flags & 0x40u) == 0u) return DMG_HELD_REJECTED_WAKE_OBSERVATION;
+    if (gbb_fuzz_core_contract_failures() != failures_before)
+        return DMG_HELD_REJECTED_EXECUTION;
+    return DMG_HELD_REJECTED_OTHER;
+}
+
+static const char *dmg_held_result_name(dmg_held_result result) {
+    switch (result) {
+    case DMG_HELD_ACCEPTED: return "accepted";
+    case DMG_HELD_REJECTED_INPUT_SHAPE: return "input shape";
+    case DMG_HELD_REJECTED_EXECUTION: return "harness execution";
+    case DMG_HELD_REJECTED_PROFILE: return "profile";
+    case DMG_HELD_REJECTED_ROUTE: return "scenario route";
+    case DMG_HELD_REJECTED_KEY1: return "CGB-only KEY1";
+    case DMG_HELD_REJECTED_HELD_OBSERVATION: return "held-button observation";
+    case DMG_HELD_REJECTED_WAKE_OBSERVATION: return "post-STOP wake observation";
+    default: return "other positive-control assertion";
+    }
+}
+
+static int run_dmg_held_cli(void) {
+    const dmg_held_result result = check_dmg_held_seed(dmg_held_seed,
+                                                       sizeof(dmg_held_seed));
+    if (result != DMG_HELD_ACCEPTED) {
+        fprintf(stderr, "DMG held-button seed rejected: %s\n", dmg_held_result_name(result));
+        return 1;
+    }
+    printf("ok 1 - cgb_speed_dmg_held\n");
+    return 0;
+}
+
+static int run_dmg_held_mutation_controls(void) {
+    if (check_dmg_held_seed(dmg_held_seed, sizeof(dmg_held_seed)) != DMG_HELD_ACCEPTED) {
+        fprintf(stderr, "DMG held-button mutation controls require a passing base seed\n");
+        return 1;
+    }
+
+    static const struct {
+        unsigned mutation;
+        dmg_held_result expected;
+        const char *name;
+    } mutants[] = {
+        {GBB_FUZZ_SPEED_MUTATION_DMG_ROUTE, DMG_HELD_REJECTED_KEY1, "DMG scenario route"},
+        {GBB_FUZZ_SPEED_MUTATION_DROP_HELD_OBSERVATION,
+         DMG_HELD_REJECTED_HELD_OBSERVATION, "held-button observation"},
+        {GBB_FUZZ_SPEED_MUTATION_DROP_WAKE_OBSERVATION,
+         DMG_HELD_REJECTED_WAKE_OBSERVATION, "STOP wake observation"},
+    };
+    for (size_t i = 0u; i < sizeof(mutants) / sizeof(mutants[0]); ++i) {
+        gbb_fuzz_core_set_speed_mutation(mutants[i].mutation);
+        const dmg_held_result result = check_dmg_held_seed(dmg_held_seed,
+                                                           sizeof(dmg_held_seed));
+        gbb_fuzz_core_set_speed_mutation(0u);
+        if (result != mutants[i].expected) {
+            fprintf(stderr, "%s mutant rejected as %s; expected %s\n",
+                    mutants[i].name, dmg_held_result_name(result),
+                    dmg_held_result_name(mutants[i].expected));
+            return 1;
+        }
+    }
+
+    uint8_t ambiguous_profile[sizeof(dmg_held_seed)];
+    memcpy(ambiguous_profile, dmg_held_seed, sizeof(ambiguous_profile));
+    ambiguous_profile[0] |= 0x80u;
+    if (check_dmg_held_seed(ambiguous_profile, sizeof(ambiguous_profile)) !=
+        DMG_HELD_REJECTED_PROFILE) {
+        fprintf(stderr, "CGB-profile twin was not rejected as an ambiguous DMG seed\n");
+        return 1;
+    }
+
+    static const uint8_t one_byte[] = {0x10u};
+    static const uint8_t truncated[] = {0x10u, 0x03u};
+    const struct { const uint8_t *data; size_t size; const char *name; } bounded_inputs[] = {
+        {NULL, 0u, "empty"},
+        {one_byte, sizeof(one_byte), "one-byte"},
+        {truncated, sizeof(truncated), "truncated"},
+    };
+    for (size_t i = 0u; i < sizeof(bounded_inputs) / sizeof(bounded_inputs[0]); ++i) {
+        const int failures_before = gbb_fuzz_core_contract_failures();
+        if (gbb_fuzz_core_one_input(bounded_inputs[i].data, bounded_inputs[i].size) != 0 ||
+            gbb_fuzz_core_contract_failures() != failures_before) {
+            fprintf(stderr, "%s fuzz input failed execution\n", bounded_inputs[i].name);
+            return 1;
+        }
+        int selected = 0;
+        unsigned calls = 0u;
+        uint64_t consumed = 0u;
+        gbb_fuzz_core_speed_observation(&selected, NULL, NULL, NULL, NULL, &calls,
+                                        NULL, NULL, NULL, NULL, NULL, NULL,
+                                        &consumed, NULL, NULL, NULL, NULL, NULL);
+        if (calls > 2048u || consumed > UINT64_C(600000) ||
+            check_dmg_held_seed(bounded_inputs[i].data, bounded_inputs[i].size) !=
+                DMG_HELD_REJECTED_INPUT_SHAPE) {
+            fprintf(stderr, "%s fuzz input escaped its bound or qualified as the DMG seed\n",
+                    bounded_inputs[i].name);
+            return 1;
+        }
+        if (bounded_inputs[i].size == 0u && (selected || calls != 0u || consumed != 0u)) {
+            fprintf(stderr, "empty input retained a stale speed observation\n");
+            return 1;
+        }
+    }
+
+    printf("ok 1 - cgb_speed_dmg_held_mutation_controls\n");
     return 0;
 }
 
@@ -296,6 +449,10 @@ static int run_palette_white_word(void) {
 static int run(int argc, char **argv) {
     if (argc > 1 && strcmp(argv[1], "cgb_profile_select") == 0) return run_profile_select();
     if (argc > 1 && strcmp(argv[1], "cgb") == 0) return run_cgb_seeds();
+    if (argc > 1 && strcmp(argv[1], "cgb_speed_dmg_held") == 0)
+        return run_dmg_held_cli();
+    if (argc > 1 && strcmp(argv[1], "cgb_speed_dmg_held_mutation_controls") == 0)
+        return run_dmg_held_mutation_controls();
     if (argc > 1 && strcmp(argv[1], "cgb_speed") == 0) return run_speed_seed();
     if (argc > 1 && strcmp(argv[1], "cgb_palette") == 0) {
         const int rc = run_palette_seeds();

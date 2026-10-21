@@ -98,6 +98,14 @@ static struct {
 } last_apu_observation;
 
 #ifdef GBB_FUZZ_STANDALONE_TEST
+#define GBB_FUZZ_SPEED_MUTATION_DMG_ROUTE 1u
+#define GBB_FUZZ_SPEED_MUTATION_DROP_HELD_OBSERVATION 2u
+#define GBB_FUZZ_SPEED_MUTATION_DROP_WAKE_OBSERVATION 3u
+static unsigned speed_mutation;
+void gbb_fuzz_core_set_speed_mutation(unsigned mutation) { speed_mutation = mutation; }
+#endif
+
+#ifdef GBB_FUZZ_STANDALONE_TEST
 void gbb_fuzz_core_speed_observation(int *selected, uint8_t *scenario,
                                      unsigned *switches, unsigned *key1_reads,
                                      unsigned *stop_count, unsigned *run_calls,
@@ -538,6 +546,10 @@ static void fuzz_speed(gbb_instance *machine, const uint8_t *data, size_t size,
      * twin; held-button scenario 3 has its own DMG STOP/wake program without KEY1 accesses. */
     if (!cgb_profile && scenario != 3u) scenario = 7u;
     const int switch_expected = cgb_profile && scenario != 3u && scenario != 6u && scenario != 7u;
+    int dmg_held_path = !cgb_profile && scenario == 3u;
+#ifdef GBB_FUZZ_STANDALONE_TEST
+    if (speed_mutation == GBB_FUZZ_SPEED_MUTATION_DMG_ROUTE) dmg_held_path = 0;
+#endif
 
     memset(&last_speed_observation, 0, sizeof(last_speed_observation));
     last_speed_observation.selected = 1;
@@ -558,7 +570,7 @@ static void fuzz_speed(gbb_instance *machine, const uint8_t *data, size_t size,
         at = speed_emit_ldh_write(rom, at, 0x4Du);
         rom[at++] = 0x10u; rom[at++] = 0x00u;
         (void)speed_emit_loop_jump(rom, at, loop);
-    } else if (scenario == 3u && !cgb_profile) {
+    } else if (dmg_held_path) {
         at = speed_emit_a(rom, at, 0x20u); /* select the direction-button row */
         joyp_write_pc = at;
         at = speed_emit_ldh_write(rom, at, 0x00u);
@@ -719,7 +731,13 @@ static void fuzz_speed(gbb_instance *machine, const uint8_t *data, size_t size,
                          (run.reason == GBB_STOP_TRACE_FULL) ||
                          (run.reason == GBB_STOP_HALTED_IDLE) ||
                          (run.reason == GBB_STOP_STOPPED) ||
-                         (run.reason == GBB_STOP_NO_PROGRESS));
+                         (run.reason == GBB_STOP_NO_PROGRESS)
+#ifdef GBB_FUZZ_STANDALONE_TEST
+                         || (speed_mutation == GBB_FUZZ_SPEED_MUTATION_DMG_ROUTE &&
+                             !cgb_profile && scenario == 3u && !dmg_held_path &&
+                             run.reason == GBB_STOP_UNSUPPORTED_BUS)
+#endif
+                         );
 
         unsigned stop_in_run = 0u;
         for (size_t i = 0u; i < run.trace_count; ++i) {
@@ -754,11 +772,20 @@ static void fuzz_speed(gbb_instance *machine, const uint8_t *data, size_t size,
             if (scenario == 3u && record->pc == joyp_write_pc &&
                 record->opcode[0] == 0xE0u && record->opcode[1] == 0x00u && record->a == 0x20u)
                 last_speed_observation.path_flags |= 0x08u;
-            if (scenario == 3u && record->pc == joyp_read_pc &&
+#ifdef GBB_FUZZ_STANDALONE_TEST
+            const int record_held_observation =
+                speed_mutation != GBB_FUZZ_SPEED_MUTATION_DROP_HELD_OBSERVATION;
+            const int record_wake_observation =
+                speed_mutation != GBB_FUZZ_SPEED_MUTATION_DROP_WAKE_OBSERVATION;
+#else
+            const int record_held_observation = 1;
+            const int record_wake_observation = 1;
+#endif
+            if (record_held_observation && scenario == 3u && record->pc == joyp_read_pc &&
                 record->opcode[0] == 0xF0u && record->opcode[1] == 0x00u &&
                 (record->a & 0x01u) == 0u)
                 last_speed_observation.path_flags |= 0x20u;
-            if (scenario == 3u && !cgb_profile && stop_seen &&
+            if (record_wake_observation && scenario == 3u && dmg_held_path && stop_seen &&
                 record->pc == post_wake_store_pc && record->opcode[0] == 0xEAu &&
                 record->opcode[1] == 0x00u && record->opcode[2] == 0xC0u)
                 last_speed_observation.path_flags |= 0x40u;
@@ -1013,6 +1040,8 @@ int gbb_fuzz_core_last_profile_cgb(void) { return last_profile_cgb; }
 #endif
 
 int gbb_fuzz_core_one_input(const uint8_t *data, size_t size) {
+    memset(&last_speed_observation, 0, sizeof(last_speed_observation));
+    last_profile_cgb = -1;
     if (data == NULL || size == 0u || size > FUZZ_INPUT_LIMIT) return 0;
     memset(&last_hdma_observation, 0, sizeof(last_hdma_observation));
     memset(&last_apu_observation, 0, sizeof(last_apu_observation));
