@@ -106,6 +106,28 @@ FALSE_FUZZ_CLAIM = re.compile(
 )
 REBOUND_ATTRIBUTION = re.compile(r"\bRebound\b")
 
+HISTORICAL_PERFORMANCE_REQUIRED = (
+    ("historical evidence", "historical-performance-disclosure-missing"),
+    ("candidate source `ab301aa69b1f085050fd66bf7b1378863a0821f2`",
+     "historical-performance-disclosure-missing"),
+    ("baseline source `e30d168f7fc61de8db0a3801e7b1736362912cb7`",
+     "historical-performance-disclosure-missing"),
+    ("`original-wram-tracer-1m-half-dots-v1`", "historical-performance-disclosure-missing"),
+    ("DMG-CPU-B", "historical-performance-disclosure-missing"),
+    ("`fixtures/tracer/tracer.gb`", "historical-performance-disclosure-missing"),
+    ("`ded6a499118b57539710892d58b4d7ced2269f08d447eed1451201d8ad65ec8d`",
+     "historical-performance-disclosure-missing"),
+    ("1,000,000 half-dot budget", "historical-performance-disclosure-missing"),
+    ("correctness digest `4c7a57ff3d50d228`", "historical-performance-disclosure-missing"),
+    ("Linux x86_64", "historical-performance-disclosure-missing"),
+    ("30 paired samples after 3 warmups", "historical-performance-disclosure-missing"),
+    ("+14.86% slower", "historical-performance-disclosure-missing"),
+    ("±1.62%", "historical-performance-disclosure-missing"),
+    ("`accepted-with-disclosed-regression`", "historical-performance-disclosure-missing"),
+    ("not a current approval, fresh result, or equivalent-speed claim",
+     "historical-performance-disclosure-missing"),
+)
+
 # (phrase, failure reason) pairs.  Phrases match whitespace-normalized prose.
 REQUIRED: dict[str, tuple[tuple[str, str], ...]] = {
     README: (
@@ -138,6 +160,7 @@ REQUIRED: dict[str, tuple[tuple[str, str], ...]] = {
         ("caller-owned buffers", "caller-ownership-missing"),
     ),
     LEDGER: (
+        *HISTORICAL_PERFORMANCE_REQUIRED,
         (ABSENCE_STATEMENT, "absence-statement-missing"),
         ("Physical CGB-E remains UNKNOWN/POLICY", "physical-cgb-limit-missing"),
         ("Boot ROMs are skipped", "boot-path-limit-missing"),
@@ -177,6 +200,9 @@ REQUIRED: dict[str, tuple[tuple[str, str], ...]] = {
         ("[native integration guide](native-integration.md)", "native-guide-link-missing"),
     ),
     RELEASE: (
+        *HISTORICAL_PERFORMANCE_REQUIRED,
+        ("**+14.86% slower than v0.1.0 with a ±1.62% margin**",
+         "historical-performance-disclosure-missing"),
         ("tested runner/configuration combinations, not minimum OS versions, "
          "all-architecture promises, or general platform support floors",
          "runner-label-limit-missing"),
@@ -251,11 +277,18 @@ def read_bounded(root: Path, relative: str, limit: int = MAX_DOCUMENT_BYTES) -> 
         resolved.relative_to(root)
         if resolved.stat().st_size > limit:
             raise ContractError(f"document-too-large:{relative}")
-        return resolved.read_text(encoding="utf-8")
+        raw = resolved.read_bytes()
     except ContractError:
         raise
-    except (OSError, UnicodeError, ValueError) as error:
+    except (OSError, ValueError) as error:
         raise ContractError(f"document-unavailable:{relative}") from error
+    try:
+        text = raw.decode("utf-8", errors="strict")
+    except UnicodeError as error:
+        raise ContractError(f"document-encoding-invalid:{relative}") from error
+    if text.encode("utf-8", errors="strict") != raw:
+        raise ContractError(f"document-utf8-byte-roundtrip-failed:{relative}")
+    return text
 
 
 # The ledger embeds the full historical corpus receipt, so it is larger.
@@ -702,6 +735,13 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         test_root = Path(temp)
         copy_inputs(root, test_root)
         child_result(test_root, "docs")
+        release_copy = test_root / RELEASE
+        release_bytes = release_copy.read_bytes()
+        release_copy.write_bytes(b"\xff")
+        child_result(test_root, "docs", f"document-encoding-invalid:{RELEASE}")
+        release_copy.write_bytes(release_bytes)
+        rejected += 1
+        child_result(test_root, "docs")
 
         def comment_out(phrase: str) -> Callable[[str], str]:
             return lambda text: comment_all(text, phrase, "comment-only")
@@ -805,6 +845,30 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             ("missing-historical-slowdown", RELEASE,
              drop("**+14.86% slower than v0.1.0 with a ±1.62% margin**", "slowdown"),
              f"historical-performance-disclosure-missing:{RELEASE}"),
+            ("changed-historical-margin", RELEASE,
+             swap("±1.62%", "±1.63%", "margin"),
+             f"historical-performance-disclosure-missing:{RELEASE}"),
+            ("changed-historical-slowdown", RELEASE,
+             swap("+14.86% slower", "+14.85% slower", "slowdown-number"),
+             f"historical-performance-disclosure-missing:{RELEASE}"),
+            ("removed-historical-qualification", RELEASE,
+             swap("historical evidence", "fresh evidence", "history"),
+             f"historical-performance-disclosure-missing:{RELEASE}"),
+            ("misattributed-performance-source", RELEASE,
+             swap("ab301aa69b1f085050fd66bf7b1378863a0821f2",
+                  "e30d168f7fc61de8db0a3801e7b1736362912cb7", "source"),
+             f"historical-performance-disclosure-missing:{RELEASE}"),
+            ("changed-performance-workload", RELEASE,
+             swap("original-wram-tracer-1m-half-dots-v1",
+                  "original-wram-tracer-2m-half-dots-v1", "workload"),
+             f"historical-performance-disclosure-missing:{RELEASE}"),
+            ("removed-ledger-slowdown", LEDGER,
+             drop("**+14.86% slower**", "ledger-slowdown"),
+             f"historical-performance-disclosure-missing:{LEDGER}"),
+            ("changed-ledger-fixture-bytes", LEDGER,
+             swap("ded6a499118b57539710892d58b4d7ced2269f08d447eed1451201d8ad65ec8d",
+                  "0" * 64, "fixture"),
+             f"historical-performance-disclosure-missing:{LEDGER}"),
         )
         for name, relative, edit, reason in mutations:
             original = originals[relative]
@@ -843,7 +907,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         header.write_text(header_text, encoding="utf-8")
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 3
+    controls = len(mutations) + 4
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     return controls + notes_controls, rejected + notes_rejected

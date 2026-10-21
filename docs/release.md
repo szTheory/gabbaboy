@@ -62,6 +62,19 @@ the candidate as **+14.86% slower than v0.1.0 with a ±1.62% margin**. Keep that
 result separate from any fresh measurement; it is not a current approval or a
 substitute for rerunning the benchmark on the candidate source.
 
+The archived v0.2.0 performance receipt compares candidate source
+`ab301aa69b1f085050fd66bf7b1378863a0821f2` with baseline source
+`e30d168f7fc61de8db0a3801e7b1736362912cb7`. It measures workload
+`original-wram-tracer-1m-half-dots-v1` on DMG-CPU-B using
+`fixtures/tracer/tracer.gb` (SHA-256
+`ded6a499118b57539710892d58b4d7ced2269f08d447eed1451201d8ad65ec8d`), a
+1,000,000 half-dot budget, and correctness digest `4c7a57ff3d50d228`. The
+Linux x86_64 run used 30 paired samples after 3 warmups and recorded
+**+14.86% slower** with an approximate 95% mean margin of ±1.62%; its
+historical disposition was `accepted-with-disclosed-regression`. This
+source-bound result describes that historical comparison only. It is not a
+current approval, fresh result, or equivalent-speed claim.
+
 Start a fresh measurement from the checkout being evaluated:
 
 ```sh
