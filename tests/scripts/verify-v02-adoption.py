@@ -802,6 +802,9 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
              "notice-fixture-unknown:ghost-rom"),
             ("missing-ledger-absence", LEDGER, drop(ABSENCE_STATEMENT, "n"),
              f"absence-statement-missing:{LEDGER}"),
+            ("missing-historical-slowdown", RELEASE,
+             drop("**+14.86% slower than v0.1.0 with a ±1.62% margin**", "slowdown"),
+             f"historical-performance-disclosure-missing:{RELEASE}"),
         )
         for name, relative, edit, reason in mutations:
             original = originals[relative]
