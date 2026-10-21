@@ -1,0 +1,8 @@
+bash_n_exit=0
+PASS: workflow policy self-test negative_controls=61 positive_controls=4
+PASS: workflow privilege and trust wiring residual_write_jobs=5
+check_exit=0
+PASS: producer contract self-test negative_controls=15
+release_gate_exit=0
+actionlint_exit=0
+shellcheck_exit=0

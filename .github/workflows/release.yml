@@ -887,16 +887,12 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$GITHUB_REPOSITORY" == szTheory/gabbaboy && "$GITHUB_REF" == refs/heads/main ]] || { echo "Corpus evidence runs only from trusted main workflow runs." >&2; exit 1; }
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Malformed release tag or source SHA." >&2; exit 1; }
-          [[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" && "$(git rev-parse "$RELEASE_TAG^{commit}")" == "$SOURCE_SHA" ]] || { echo "Checkout is not the exact tagged source." >&2; exit 1; }
+          bash .github/scripts/produce-release-evidence.sh verify-subject --subject . --source-sha "$SOURCE_SHA" --tag "$RELEASE_TAG" > /dev/null
       - name: Configure and build the exact tag with the native preset
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p build/package-prefix
-          cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$GITHUB_WORKSPACE/build/package-prefix"
-          cmake --build --preset phase1
-          cmake --install build --prefix build/package-prefix
+          bash .github/scripts/produce-release-evidence.sh corpus-build --subject .
       - name: Begin exact CGB corpus receipt run
         id: corpus_run
         run: python3 -I tests/scripts/verify-cgb-corpus-report.py --begin-run --build-dir build --receipt build/cgb-corpus-receipt.json >> "$GITHUB_OUTPUT"
@@ -1023,8 +1019,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$GITHUB_REPOSITORY" == szTheory/gabbaboy && "$GITHUB_REF" == refs/heads/main ]] || { echo "Performance evidence runs only from trusted main workflow runs." >&2; exit 1; }
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Malformed release tag or source SHA." >&2; exit 1; }
-          [[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" && "$(git rev-parse "$RELEASE_TAG^{commit}")" == "$SOURCE_SHA" ]] || { echo "Checkout is not the exact tagged source." >&2; exit 1; }
+          bash .github/scripts/produce-release-evidence.sh verify-subject --subject . --source-sha "$SOURCE_SHA" --tag "$RELEASE_TAG" > /dev/null
       - name: Measure the clean paired v0.1.0 baseline and exact-tag candidate
         shell: bash
         run: |

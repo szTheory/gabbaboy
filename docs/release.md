@@ -211,6 +211,27 @@ download, attach, final gate or publish steps. The fuzz producer takes the
 qualified commit from an explicit source-commit variable because `GITHUB_SHA` is
 runner-owned and cannot be overridden by a step.
 
+Privilege is split so tagged code never holds release write authority for the
+v0.2 evidence. The corpus and performance producers run tagged build, test and
+measurement code with `contents: read`, no GitHub token in their environment and
+no persisted checkout credential, and retain their receipts as run artifacts.
+The fuzz job executes no tagged code: it reads the completed exact-source
+`ci.yml` push campaign through the trusted validator, and fails with a named
+limitation when no such completed campaign exists. A separate attacher holds the
+only write token for that evidence, runs no checked-out code, and attaches the
+retained bytes without replacing an asset. The manifest and publisher jobs run
+the release gate and delivery validators from a trusted checkout of the workflow
+revision, with the tagged tree as data. The Linux, macOS and Windows candidate
+jobs, the manifest job and the publisher still hold write authority while they
+build, download or judge the tagged tree; that residual is named in
+`.github/scripts/verify-workflow-policy.py`, which is enforced as an exact set
+and is not a claim of closure. The policy judge, which reads workflows as data
+and proves each required command is reachable and fatal (comments, `echo`, dead
+branches, `|| true` and `continue-on-error` do not count), runs from the
+default branch in the rehearsal `judge` job and as part of
+`bash .github/scripts/verify-release-gates.sh --self-test`. Shared unprivileged
+setup is `.github/scripts/produce-release-evidence.sh`.
+
 The version PR is the final review point for `CHANGELOG.md`; release-please may
 update it there. Its rendered release notes are checked with
 `python3 -I tests/scripts/verify-v02-adoption.py --release-notes PATH`, which

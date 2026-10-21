@@ -721,7 +721,15 @@ RELEASE_ARTIFACTS = {
 SUBJECT_REF = "${{ env.SOURCE_SHA }}"
 JUDGE_CALL_POLICY = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject"
 PRODUCER_SCRIPT = ".github/scripts/produce-release-evidence.sh"
-PRODUCER_SCRIPT_REQUIRED = ()  # filled with the reviewed contract once the script exists
+PRODUCER_SCRIPT_REQUIRED = (
+    'same_commit "$head" "$source_sha"',
+    'same_commit "$tagged" "$source_sha"',
+    'git -C "$subject" tag -f "$tag" "$source_sha"',
+    "cmake --preset phase1",
+    "cmake --build --preset phase1",
+    "cmake --install build --prefix build/package-prefix",
+    'bash "$gate" --check-v02-evidence "$evidence" "$tag" "$source_sha" "$archive"',
+)
 _SHARED = "bash " + PRODUCER_SCRIPT
 _REHEARSAL_TAG = _SHARED + ' verify-subject --subject . --source-sha "$GITHUB_SHA" --tag "$REHEARSAL_TAG" --local-tag'
 _RELEASE_SUBJECT = _SHARED + ' verify-subject --subject . --source-sha "$SOURCE_SHA" --tag "$RELEASE_TAG"'
@@ -1147,7 +1155,7 @@ def _mutations():
            'git tag -f "$REHEARSAL_TAG" "$GITHUB_SHA"', "duplicate-rehearsal-setup"),
         _m("rehearsal tag setup receives a mismatched source", "release-rehearsal.yml", "  package:\n", '--source-sha "$GITHUB_SHA"',
            '--source-sha "$GITHUB_REF"', "required-command-not-executed"),
-        _m("rehearsal tag setup loses its local-only flag", "release-rehearsal.yml", "  package:\n", " --local-tag", "",
+        _m("rehearsal tag setup loses its local-only flag", "release-rehearsal.yml", "  package:\n", '"$REHEARSAL_TAG" --local-tag', '"$REHEARSAL_TAG"',
            "required-command-not-executed"),
         _m("rehearsal aggregate judge root is not explicit", "release-rehearsal.yml", "  aggregate:\n", " --judge . --subject .", " --subject .",
            "required-command-not-executed"),
@@ -1158,14 +1166,14 @@ def _mutations():
            "true bash .github/scripts/produce-release-evidence.sh verify-subject", "required-command-not-executed"),
         _m("release performance subject check source mismatch", "release.yml", "  candidate-performance:\n", '--source-sha "$SOURCE_SHA"',
            '--source-sha "$RELEASE_TAG"', "required-command-not-executed"),
-        ("producer script publishes with gh", "script", [("", "corpus-build)\n", "corpus-build)\n{I}gh release upload v0.0.0 x\n")],
+        ("producer script publishes with gh", "script", [("", "cmd_corpus_build() {\n", "cmd_corpus_build() {\n  gh release upload v0.0.0 x\n")],
          "producer-write-command"),
         ("producer script pushes the rehearsal tag", "script", [("", 'git -C "$subject" tag -f', 'git -C "$subject" push origin tag -f')],
          "producer-write-command"),
         ("producer script reads the job token", "script", [("", "set -euo pipefail\n", "set -euo pipefail\ntoken=$GH_TOKEN\n")],
          "producer-token"),
         ("producer script is not fail-fast", "script", [("", "set -euo pipefail\n", "set -u\n")], "producer-script-failfast"),
-        ("producer script loses its tag-binding check", "script", [("", 'git -C "$subject" rev-parse HEAD', "true git rev-parse HEAD")],
+        ("producer script loses its source-binding check", "script", [("", 'same_commit "$head" "$source_sha"', 'true same_commit "$head" "$source_sha"')],
          "required-command-not-executed"),
         _m("windows downloaded consumer behavior no longer verified", "release.yml", "  candidate-windows:\n", "-P cmake/VerifyInstalledPackage.cmake",
            "-P cmake/Renamed.cmake", "required-command-not-executed"),
