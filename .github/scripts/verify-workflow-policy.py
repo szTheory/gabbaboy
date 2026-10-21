@@ -434,50 +434,105 @@ def _run_cli(fixture: Path, cwd: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _mutations() -> list[tuple[str, str, str, str, str, str]]:
-    """(label, workflow, after, old, new, expected code): replace the first `old` following `after` (or the file start)."""
+def _m(label: str, workflow: str, after: str, old: str, new: str, expected: str):
+    return (label, workflow, [(after, old, new)], expected)
+
+
+JUDGE_CALL = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject"
+JUDGE_STEP = "      - name: Judge workflow privilege and trust wiring from the trusted checkout\n"
+
+
+def _mutations():
+    """(label, workflow, [(after, old, new)], expected code). Each edit replaces the first `old` following `after`
+    (or the file start); `{I}` in `new` stands for the indentation of the line that holds `old`."""
     reh = "release-rehearsal.yml"
     rel = "release.yml"
     return [
-        ("rehearsal fuzz producer gains contents: write", reh, "  fuzz:\n", "    runs-on: ubuntu-24.04\n",
+        _m("rehearsal fuzz producer gains contents: write", reh, "  fuzz:\n", "    runs-on: ubuntu-24.04\n",
          "    runs-on: ubuntu-24.04\n    permissions:\n      contents: write\n", "producer-write-authority"),
-        ("rehearsal top-level write", reh, "", "permissions:\n  contents: read\n", "permissions:\n  contents: write\n",
+        _m("rehearsal top-level write", reh, "", "permissions:\n  contents: read\n", "permissions:\n  contents: write\n",
          "workflow-permissions"),
-        ("rehearsal judge reads judge code from the subject", reh, "  judge:\n", f"ref: {DEFAULT_BRANCH_REF}",
+        _m("rehearsal judge reads judge code from the subject", reh, "  judge:\n", f"ref: {DEFAULT_BRANCH_REF}",
          f"ref: {TRUSTED_SHA_REF}", "judge-trust"),
-        ("rehearsal judge runs a path inside the subject tree", reh, "  judge:\n",
+        _m("rehearsal judge runs a path inside the subject tree", reh, "  judge:\n",
          "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject",
          "python3 -I subject/.github/scripts/verify-workflow-policy.py --check --root subject", "judge-subject-execution"),
-        ("rehearsal judge stops waiting for the fuzz producer", reh, "  judge:\n",
+        _m("rehearsal judge stops waiting for the fuzz producer", reh, "  judge:\n",
          "needs: [corpus, fuzz, performance, package, aggregate]", "needs: [corpus, performance, package, aggregate]",
          "workflow-dependency"),
-        ("rehearsal fuzz artifact no longer retained", reh, "  fuzz:\n", "name: " + REHEARSAL_FUZZ_ARTIFACT,
+        _m("rehearsal fuzz artifact no longer retained", reh, "  fuzz:\n", "name: " + REHEARSAL_FUZZ_ARTIFACT,
          "name: renamed-" + REHEARSAL_FUZZ_ARTIFACT, "artifact-flow"),
-        ("rehearsal checkout persists credentials", reh, "  corpus:\n", "persist-credentials: false",
+        _m("rehearsal checkout persists credentials", reh, "  corpus:\n", "persist-credentials: false",
          "persist-credentials: true", "checkout-credentials"),
-        ("unpinned action", reh, "", "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+        _m("unpinned action", reh, "", "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
          "actions/upload-artifact@v4", "workflow-unpinned-action"),
-        ("YAML anchor", reh, "", "REHEARSAL_TAG: v0.2.0\n", "REHEARSAL_TAG: &tag v0.2.0\n", "workflow-unsupported-yaml"),
-        ("release corpus producer gains contents: write", rel, "  candidate-corpus:\n", "      contents: read\n",
+        _m("YAML anchor", reh, "", "REHEARSAL_TAG: v0.2.0\n", "REHEARSAL_TAG: &tag v0.2.0\n", "workflow-unsupported-yaml"),
+        _m("release corpus producer gains contents: write", rel, "  candidate-corpus:\n", "      contents: read\n",
          "      contents: write\n", "producer-write-authority"),
-        ("release corpus producer receives the job token", rel, "  candidate-corpus:\n", "    env:\n",
+        _m("release corpus producer receives the job token", rel, "  candidate-corpus:\n", "    env:\n",
          "    env:\n      GH_TOKEN: ${{ github.token }}\n", "producer-token"),
-        ("release performance checkout persists credentials", rel, "  candidate-performance:\n",
+        _m("release performance checkout persists credentials", rel, "  candidate-performance:\n",
          "persist-credentials: false", "persist-credentials: true", "checkout-credentials"),
-        ("release fuzz reader checks out the tagged subject", rel, "  candidate-fuzz:\n", "ref: ${{ github.sha }}",
+        _m("release fuzz reader checks out the tagged subject", rel, "  candidate-fuzz:\n", "ref: ${{ github.sha }}",
          "ref: ${{ env.SOURCE_SHA }}", "judge-trust"),
-        ("release attacher checks out the tagged subject", rel, "  attach-v02-evidence:\n", "    steps:\n",
+        _m("release attacher checks out the tagged subject", rel, "  attach-v02-evidence:\n", "    steps:\n",
          "    steps:\n      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2\n        with:\n          ref: ${{ env.SOURCE_SHA }}\n          persist-credentials: false\n",
          "judge-trust"),
-        ("release attacher stops waiting for the corpus producer", rel, "  attach-v02-evidence:\n",
+        _m("release attacher stops waiting for the corpus producer", rel, "  attach-v02-evidence:\n",
          "needs: [release, candidate, candidate-corpus, candidate-fuzz, candidate-performance]",
          "needs: [release, candidate, candidate-fuzz, candidate-performance]", "attacher-dependencies"),
-        ("release attacher gains a second permission", rel, "  attach-v02-evidence:\n", "      contents: write\n",
+        _m("release attacher gains a second permission", rel, "  attach-v02-evidence:\n", "      contents: write\n",
          "      contents: write\n      actions: write\n", "attacher-permissions"),
-        ("release manifest no longer waits for the attacher", rel, "  candidate-platform-manifest:\n",
+        _m("release manifest no longer waits for the attacher", rel, "  candidate-platform-manifest:\n",
          "candidate-performance, attach-v02-evidence]", "candidate-performance]", "workflow-dependency"),
-        ("new unclassified release job", rel, "", "\njobs:\n",
+        _m("new unclassified release job", rel, "", "\njobs:\n",
          "\njobs:\n  surprise:\n    runs-on: ubuntu-22.04\n    steps:\n      - run: true\n", "job-unclassified"),
+        # Textual decoys and disabled gates (P15-10): the required call is present as text but never runs.
+        _m("comment instead of the judge call", "release-rehearsal.yml", "  judge:\n", JUDGE_CALL, "# " + JUDGE_CALL, "required-command-not-executed"),
+        _m("echo instead of the judge call", "release-rehearsal.yml", "  judge:\n", JUDGE_CALL, "echo " + JUDGE_CALL, "required-command-not-executed"),
+        ("dead if false branch", "release-rehearsal.yml", [("  judge:\n", JUDGE_CALL, "if false; then\n{I}  " + JUDGE_CALL + "\n{I}fi")], "required-command-not-executed"),
+        ("dead constant comparison branch", "release-rehearsal.yml", [("  judge:\n", JUDGE_CALL, "if [[ 0 == 1 ]]; then\n{I}  " + JUDGE_CALL + "\n{I}fi")], "required-command-not-executed"),
+        _m("failure swallowed with || true", "release-rehearsal.yml", "  judge:\n", JUDGE_CALL, JUDGE_CALL + " || true", "required-command-not-executed"),
+        _m("guarded by a false && list", "release-rehearsal.yml", "  judge:\n", JUDGE_CALL, "false && " + JUDGE_CALL, "required-command-not-executed"),
+        _m("errexit disabled before the call", "release-rehearsal.yml", "  judge:\n", JUDGE_CALL, "set +e\n{I}" + JUDGE_CALL, "required-command-not-executed"),
+        _m("exit before the call", "release-rehearsal.yml", "  judge:\n", JUDGE_CALL, "exit 0\n{I}" + JUDGE_CALL, "required-command-not-executed"),
+        _m("continue-on-error on the judge step", "release-rehearsal.yml", "  judge:\n", JUDGE_STEP, JUDGE_STEP + "        continue-on-error: true\n", "ignored-gate"),
+        _m("step disabled with if false", "release-rehearsal.yml", "  judge:\n", JUDGE_STEP, JUDGE_STEP + "        if: ${{ false }}\n", "disabled-gate"),
+        _m("judge job disabled with if false", "release-rehearsal.yml", "  judge:\n", "    runs-on: ubuntu-24.04\n", "    if: ${{ false }}\n    runs-on: ubuntu-24.04\n", "disabled-gate"),
+        ("call moved to the wrong job", "release-rehearsal.yml", [
+            ("  judge:\n", JUDGE_CALL, "true"),
+            ("  package:\n", "# does not exist yet, so build the equivalent from the local-only tag and run the same checker.\n",
+             "# does not exist yet, so build the equivalent from the local-only tag and run the same checker.\n{I}" + JUDGE_CALL + "\n")],
+         "required-command-not-executed"),
+        _m("fuzz verifier replaced by echo", "release-rehearsal.yml", "  fuzz:\n", "python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan",
+           "echo python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan", "required-command-not-executed"),
+        _m("release corpus claims verifier commented out", "release.yml", "  candidate-corpus:\n", "python3 -I tests/scripts/verify-cgb-corpus-claims.py",
+           "# python3 -I tests/scripts/verify-cgb-corpus-claims.py", "required-command-not-executed"),
+        _m("release corpus CTest failure no longer gated", "release.yml", "  candidate-corpus:\n", 'run: test "$FULL_CTEST_OUTCOME" = success',
+           'run: echo "$FULL_CTEST_OUTCOME"', "ignored-gate"),
+        _m("release hosted fuzz verifier loses its run identity", "release.yml", "  candidate-fuzz:\n", '--run-id "$run_id" --attempt "$attempt"',
+           '--attempt "$attempt"', "required-command-not-executed"),
+        _m("release performance verifier skipped by if false", "release.yml", "  candidate-performance:\n",
+           "      - name: Measure the clean paired v0.1.0 baseline and exact-tag candidate\n",
+           "      - name: Measure the clean paired v0.1.0 baseline and exact-tag candidate\n        if: ${{ false }}\n", "disabled-gate"),
+        _m("release attacher upload commented out", "release.yml", "  attach-v02-evidence:\n", 'gh release upload "$RELEASE_TAG" "$1/$2"',
+           '# gh release upload "$RELEASE_TAG" "$1/$2"', "required-command-not-executed"),
+        _m("release manifest judge call replaced by echo", "release.yml", "  candidate-platform-manifest:\n", 'bash trusted/.github/scripts/verify-release-gates.sh --check-v02-evidence',
+           'echo bash trusted/.github/scripts/verify-release-gates.sh --check-v02-evidence', "required-command-not-executed"),
+        _m("release manifest judge taken from the subject checkout", "release.yml", "  candidate-platform-manifest:\n", 'bash trusted/.github/scripts/verify-release-gates.sh --check-v02-evidence',
+           'bash .github/scripts/verify-release-gates.sh --check-v02-evidence', "subject-judge-execution"),
+        _m("release manifest trusted checkout points at the tag", "release.yml", "  candidate-platform-manifest:\n", "          ref: ${{ github.sha }}\n          path: trusted",
+           "          ref: ${{ env.SOURCE_SHA }}\n          path: trusted", "judge-trust"),
+        _m("release publisher final gate taken from the subject checkout", "release.yml", "  publish-qualified-release:\n", 'run: bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final',
+           'run: bash .github/scripts/verify-release-gates.sh --check-draft-final', "subject-judge-execution"),
+        _m("release publisher published-asset verifier taken from the subject checkout", "release.yml", "  publish-qualified-release:\n", "python3 -I trusted/.github/scripts/verify-published-release-assets.py",
+           "python3 .github/scripts/verify-published-release-assets.py", "subject-judge-execution"),
+        _m("release publisher does not wait for the manifest judge", "release.yml", "  publish-qualified-release:\n", "candidate-windows, candidate-platform-manifest]",
+           "candidate-windows]", "workflow-dependency"),
+        _m("required-native stops waiting for the sanitizer lane", "ci.yml", "  required-native:\n", "      - linux-sanitizers\n", "", "workflow-dependency"),
+        _m("ci campaign status no longer asserted", "ci.yml", "  linux-sanitizers:\n", 'test "$verify_status" -eq 0', 'echo test "$verify_status" -eq 0', "required-command-not-executed"),
+        _m("ci campaign verifier removed", "ci.yml", "  linux-sanitizers:\n", "python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json\n            verify_status=$?",
+           "true\n            verify_status=$?", "required-command-not-executed"),
     ]
 
 
@@ -492,14 +547,18 @@ def self_test(root: Path) -> None:
         if positive.returncode != 0 or "PASS: workflow privilege and trust wiring" not in positive.stdout:
             raise SystemExit(f"self-test positive control failed: exit={positive.returncode} stderr={positive.stderr.strip()!r}")
         baselines = {item: (fixture / ".github/workflows" / item).read_text(encoding="utf-8") for item in WORKFLOWS}
-        for label, workflow, after, old, new, expected in _mutations():
+        for label, workflow, edits, expected in _mutations():
             text = baselines[workflow]
-            split = text.find(after) if after else 0
-            if split < 0 or text.find(old, split) < 0:
-                raise SystemExit(f"self-test anchor missing for {label!r} in {workflow}")
-            position = text.find(old, split)
+            for after, old, replacement in edits:
+                split = text.find(after) if after else 0
+                position = text.find(old, split) if split >= 0 else -1
+                if position < 0:
+                    raise SystemExit(f"self-test anchor missing for {label!r} in {workflow}: {old[:60]!r}")
+                line_start = text.rfind("\n", 0, position) + 1
+                indent = text[line_start:len(text[line_start:]) - len(text[line_start:].lstrip(" ")) + line_start]
+                text = text[:position] + replacement.replace("{I}", indent) + text[position + len(old):]
             path = fixture / ".github/workflows" / workflow
-            path.write_text(text[:position] + new + text[position + len(old):], encoding="utf-8")
+            path.write_text(text, encoding="utf-8")
             result = _run_cli(fixture, work)
             diagnostic = result.stderr.strip()
             if result.returncode != 1 or f"REJECT {expected}:" not in diagnostic or "PASS:" in result.stdout:
@@ -508,6 +567,25 @@ def self_test(root: Path) -> None:
             rejected += 1
             print(f"rejected: {label}: {diagnostic}")
             path.write_text(baselines[workflow], encoding="utf-8")
+        # Equivalent shell formatting of a required call stays valid: continuation, quoting, extra spaces,
+        # interleaved comments and blank lines do not change what runs.
+        path = fixture / ".github/workflows/release-rehearsal.yml"
+        accepted = 0
+        for variant in (
+            "python3  -I \\\n{I}  trusted-judge/.github/scripts/verify-workflow-policy.py \\\n{I}  --check --root subject",
+            'python3 -I "trusted-judge/.github/scripts/verify-workflow-policy.py" --check --root \'subject\'',
+            "# the judge\n{I}\n{I}python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject  # trailing",
+        ):
+            text = baselines["release-rehearsal.yml"]
+            position = text.find(JUDGE_CALL, text.find("  judge:\n"))
+            line_start = text.rfind("\n", 0, position) + 1
+            indent = " " * (position - line_start)
+            path.write_text(text[:position] + variant.replace("{I}", indent) + text[position + len(JUDGE_CALL):], encoding="utf-8")
+            result = _run_cli(fixture, work)
+            if result.returncode != 0 or "PASS:" not in result.stdout:
+                raise SystemExit(f"self-test equivalent formatting {variant!r} was rejected: {result.stderr.strip()!r}")
+            accepted += 1
+        path.write_text(baselines["release-rehearsal.yml"], encoding="utf-8")
         # A subject that ships its own judge, and shadows standard-library modules, cannot change the verdict:
         # the trusted script ignores the subject tree except as workflow text.
         bad = baselines["release-rehearsal.yml"].replace("permissions:\n  contents: read\n", "permissions:\n  contents: write\n", 1)
@@ -522,7 +600,7 @@ def self_test(root: Path) -> None:
             raise SystemExit(f"self-test hostile subject judge was not ignored: exit={result.returncode} stderr={result.stderr.strip()!r}")
         rejected += 1
         print("rejected: subject-supplied judge and shadowed modules cannot approve a mutated workflow")
-    print(f"PASS: workflow policy self-test negative_controls={rejected} positive_controls=1")
+    print(f"PASS: workflow policy self-test negative_controls={rejected} positive_controls={1 + accepted}")
 
 
 def main() -> int:

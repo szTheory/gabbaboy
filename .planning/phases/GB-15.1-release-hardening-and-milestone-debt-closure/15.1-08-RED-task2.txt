@@ -1,0 +1,20 @@
+rejected: rehearsal fuzz producer gains contents: write: REJECT producer-write-authority: release-rehearsal.fuzz holds write authority in a non-publishing rehearsal
+rejected: rehearsal top-level write: REJECT workflow-permissions: release-rehearsal must declare only top-level contents: read
+rejected: rehearsal judge reads judge code from the subject: REJECT judge-trust: release-rehearsal.judge judge code must come from the default branch, not the rehearsed subject
+rejected: rehearsal judge runs a path inside the subject tree: REJECT judge-subject-execution: release-rehearsal.judge names a path inside the subject tree; subject files are data only
+rejected: rehearsal judge stops waiting for the fuzz producer: REJECT workflow-dependency: release-rehearsal.judge must depend on ['fuzz']
+rejected: rehearsal fuzz artifact no longer retained: REJECT artifact-flow: release-rehearsal.fuzz must retain exactly one artifact named rehearsal-fuzz-${{ github.run_id }}-${{ github.run_attempt }}
+rejected: rehearsal checkout persists credentials: REJECT checkout-credentials: release-rehearsal.corpus checkout must set persist-credentials: false
+rejected: unpinned action: REJECT workflow-unpinned-action: release-rehearsal.fuzz uses an action not pinned to a full commit: actions/upload-artifact@v4
+rejected: YAML anchor: REJECT workflow-unsupported-yaml: release-rehearsal.yml: unsupported value '&tag v0.2.0'
+rejected: release corpus producer gains contents: write: REJECT producer-write-authority: release.candidate-corpus runs producer work with write authority
+rejected: release corpus producer receives the job token: REJECT producer-token: release.candidate-corpus references the job token or a secret
+rejected: release performance checkout persists credentials: REJECT checkout-credentials: release.candidate-performance checkout must set persist-credentials: false
+rejected: release fuzz reader checks out the tagged subject: REJECT judge-trust: release.candidate-fuzz trusted checkout must be ref ${{ github.sha }} at path trusted
+rejected: release attacher checks out the tagged subject: REJECT judge-trust: release.attach-v02-evidence trusted checkout must be ref ${{ github.sha }} at path trusted
+rejected: release attacher stops waiting for the corpus producer: REJECT attacher-dependencies: release.attach-v02-evidence must depend on ['candidate-corpus']
+rejected: release attacher gains a second permission: REJECT attacher-permissions: release.attach-v02-evidence must hold exactly contents: write
+rejected: release manifest no longer waits for the attacher: REJECT workflow-dependency: release.candidate-platform-manifest must depend on ['attach-v02-evidence']
+rejected: new unclassified release job: REJECT job-unclassified: release.surprise has no declared trust role; classify it in the policy
+self-test negative 'comment instead of the judge call' failed: want REJECT required-command-not-executed, exit=0, stdout='PASS: workflow privilege and trust wiring residual_write_jobs=5\n', stderr=''
+selftest_exit=1
