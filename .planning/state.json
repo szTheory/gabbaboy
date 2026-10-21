@@ -1,7 +1,7 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v0.2 — Color & Cartridge Breadth",
+  "milestone": "v0.2 \u2014 Color & Cartridge Breadth",
   "phases": [
     {
       "number": "1",
@@ -55,9 +55,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-execute-phase 8",
-    "label": "Refresh Phase 8 preview-package verification",
-    "reason": "Phase 14 refresh passed; final cross-phase status found Phase 8 stale over cmake/PreviewPackageSmoke.cmake after Phase 10 fixture exclusion hardening. Refresh only before milestone completion/debt review."
+    "command": "/gsd-execute-phase 12",
+    "label": "Refresh Phase 12 CGB Double Speed metadata verification",
+    "reason": "Phase 8 package refresh passed; Phase 12 remains stale over lessons/index metadata changed by the prior Phase 13 refresh. Verification refresh only before milestone completion and explicit debt review."
   },
-  "updated_at": "2026-10-20T23:57:45.274544+00:00"
+  "updated_at": "2026-10-21T00:27:34.161244+00:00"
 }

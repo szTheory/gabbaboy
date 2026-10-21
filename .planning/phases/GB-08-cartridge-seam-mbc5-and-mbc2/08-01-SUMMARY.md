@@ -31,11 +31,23 @@ actuals:
   tasks: 3
   commits: 2
 coverage:
-  - deliverable: "Table-driven Cartridge mapper seam with no observable DMG change"
-    verification:
-      - {kind: command, ref: "run-differential.sh", status: pass}
-      - {kind: command, ref: "ctest -R ^(cartridge_|battery_|loader_|mbc1_continuation|dmg_baseline)", status: pass}
+  - id: D1
+    description: "Cartridge mapper seam preserves the historical DMG behavior against its old-core oracle"
     human_judgment: false
+    verification:
+      - kind: other
+        ref: "Historical differential .planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/differential/run-differential.sh receipts in .planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-01-SUMMARY.md and docs/mbc2-mbc5-evidence.md at 96d5eec977bee99a0629499b89c737415e24184c; python3 -I tests/scripts/verify-phase8-closure-contract.py --self-test"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build -R ^(cartridge_|battery_|loader_|mbc1_continuation|dmg_baseline) --output-on-failure"
+        status: pass
+  - id: D2
+    description: "Reusable differential harness supports explicit changed-type exclusions"
+    human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-closure-contract.py --self-test"
+        status: pass
 ---
 
 # Phase 8 Plan 01: Cartridge Seam Summary

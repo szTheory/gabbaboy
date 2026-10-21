@@ -36,13 +36,22 @@ actuals:
   tasks: 3
   commits: 3
 coverage:
-  - deliverable: "MBC2 mapper: bit-8 decode, echoed 512-cell nibble RAM, 512-byte canonical battery image"
-    verification:
-      - {kind: test, ref: "tests/test_mbc2.c#mbc2_register_decode", status: pass}
-      - {kind: test, ref: "tests/test_mbc2.c#mbc2_ram_echo", status: pass}
-      - {kind: test, ref: "tests/test_mbc2.c#mbc2_battery_idempotent", status: pass}
-      - {kind: test, ref: "tests/test_mbc2.c#mbc2_two_instance_roundtrip", status: pass}
+  - id: D1
+    description: "MBC2 mapper: bit-8 decode, echoed 512-cell nibble RAM, 512-byte canonical battery image"
     human_judgment: false
+    verification:
+      - kind: unit
+        ref: "tests/test_mbc2.c#mbc2_register_decode"
+        status: pass
+      - kind: unit
+        ref: "tests/test_mbc2.c#mbc2_ram_echo"
+        status: pass
+      - kind: unit
+        ref: "tests/test_mbc2.c#mbc2_battery_idempotent"
+        status: pass
+      - kind: unit
+        ref: "tests/test_mbc2.c#mbc2_two_instance_roundtrip"
+        status: pass
 ---
 
 # Phase 8 Plan 02: MBC2 Summary
