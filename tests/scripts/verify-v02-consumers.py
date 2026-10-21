@@ -225,6 +225,36 @@ def make_candidate_manifest(source_sha: str, archive_sha: str,
     }
 
 
+def write_candidate_manifest(archive: Path, source_sha: str, build_receipt: Path, output: Path) -> dict[str, object]:
+    """Bind a candidate archive to its source and build receipt, for a workflow that built both itself.
+
+    The release rehearsal builds its archive in the same job, so it has no validator-supplied manifest.
+    A JSON build receipt that names a source or an asset digest must agree with the inputs; any other
+    receipt (for example a CMake cache) is bound by its digest alone, as --run does."""
+    need(re.fullmatch(r"[0-9a-f]{40,64}", source_sha) is not None, "candidate-manifest-source-invalid")
+    archive_sha = hash_archive(archive)
+    need(build_receipt.is_file() and not build_receipt.is_symlink(), "candidate-build-receipt-missing")
+    try:
+        receipt_bytes = build_receipt.read_bytes()
+    except OSError as error:
+        raise ContractError("candidate-build-receipt-missing") from error
+    need(0 < len(receipt_bytes) <= 16_777_216, "candidate-build-receipt-size-invalid")
+    try:
+        parsed = json.loads(receipt_bytes.decode("utf-8"))
+    except (UnicodeError, ValueError):
+        parsed = None
+    if isinstance(parsed, dict):
+        need(parsed.get("source_sha", source_sha) == source_sha, "candidate-build-receipt-source-mismatch")
+        need(parsed.get("asset_sha256", archive_sha) == archive_sha, "candidate-build-receipt-asset-mismatch")
+    manifest = make_candidate_manifest(source_sha, archive_sha, hashlib.sha256(receipt_bytes).hexdigest())
+    try:
+        with output.open("x", encoding="utf-8") as stream:
+            stream.write(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    except FileExistsError as error:
+        raise ContractError("candidate-manifest-exists") from error
+    return manifest
+
+
 def read_candidate_manifest(path: Path) -> tuple[dict[str, object], str]:
     need(path.is_file() and not path.is_symlink(), "candidate-manifest-missing")
     try:
@@ -760,9 +790,6 @@ class ConsumerContractTests(unittest.TestCase):
         cls.archive = cls.test_root / "candidate.tar.gz"
         archive_sha = create_product_archive(cls.prefix, cls.archive)
         cls.candidate_source_sha = candidate_source_revision(ROOT)
-        cls.build_receipt = cls.test_root / "build-receipt.json"
-        cls.build_receipt.write_text(json.dumps({"source_sha": cls.candidate_source_sha,
-                                                 "asset_sha256": archive_sha}), encoding="utf-8")
         cls.candidate_manifest = cls.test_root / "candidate-manifest.json"
         manifest = make_candidate_manifest(cls.candidate_source_sha, archive_sha, "a" * 64)
         cls.candidate_manifest.write_text(
@@ -891,7 +918,8 @@ class ConsumerContractTests(unittest.TestCase):
         return self.run_cli([
             "--write-candidate-manifest", str(out), "--archive", str(archive or self.archive),
             "--source-sha", source or self.candidate_source_sha,
-            "--build-receipt", str(receipt or self.build_receipt),
+            # test_forged_runner_source rewrites the shared archive, so bind the archive as it is now.
+            "--build-receipt", str(receipt or self.json_receipt()),
         ])
 
     def test_workflow_command_without_candidate_manifest_is_rejected(self) -> None:
@@ -902,11 +930,12 @@ class ConsumerContractTests(unittest.TestCase):
 
     def test_written_manifest_binds_archive_and_build_receipt_and_qualifies(self) -> None:
         manifest = self.test_root / "written-manifest.json"
-        written = self.write_manifest(manifest)
+        receipt = self.json_receipt()
+        written = self.write_manifest(manifest, receipt=receipt)
         self.assertEqual(written.returncode, 0, written.stdout + written.stderr)
         loaded, _digest = read_candidate_manifest(manifest)
         self.assertEqual(loaded["archive_sha256"], hash_file(self.archive))
-        self.assertEqual(loaded["build_receipt_sha256"], hash_file(self.build_receipt))
+        self.assertEqual(loaded["build_receipt_sha256"], hash_file(receipt))
         self.assertEqual(loaded["candidate_source_sha"], self.candidate_source_sha)
         output = self.test_root / "written-qualifies.json"
         result = self.run_cli([*self.candidate_args(self.prefix, manifest=manifest), "--output", str(output)])
@@ -1167,7 +1196,19 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--extract", nargs=2, metavar=("ARCHIVE", "DESTINATION"),
                         help="safely extract a product archive into a new destination")
     parser.add_argument("--output", type=Path, help="write the success receipt atomically")
+    parser.add_argument("--write-candidate-manifest", type=Path, metavar="MANIFEST",
+                        help="write a candidate manifest binding --archive, --source-sha and --build-receipt")
+    parser.add_argument("--source-sha", help="candidate source commit for --write-candidate-manifest")
+    parser.add_argument("--build-receipt", type=Path, help="build receipt bound by --write-candidate-manifest")
     args = parser.parse_args(argv)
+    if args.write_candidate_manifest:
+        if args.run or args.self_test or args.prefix or args.extract or args.output or args.candidate_manifest:
+            parser.error("--write-candidate-manifest accepts only --archive, --source-sha and --build-receipt")
+        if not (args.archive and args.source_sha and args.build_receipt):
+            parser.error("--write-candidate-manifest requires --archive, --source-sha and --build-receipt")
+        return args
+    if args.source_sha or args.build_receipt:
+        parser.error("--source-sha and --build-receipt are only for --write-candidate-manifest")
     if args.extract:
         if args.run or args.self_test or args.prefix or args.archive or args.candidate_manifest or args.output:
             parser.error("--extract does not accept consumer qualification options")
@@ -1191,6 +1232,12 @@ def main(argv: list[str]) -> int:
         args = parse_args(argv)
         if args.extract:
             safe_extract_archive(Path(args.extract[0]), Path(args.extract[1]))
+            return 0
+        if args.write_candidate_manifest:
+            manifest = write_candidate_manifest(args.archive.expanduser(), args.source_sha,
+                                                args.build_receipt.expanduser(),
+                                                args.write_candidate_manifest.expanduser())
+            print(json.dumps(manifest, sort_keys=True))
             return 0
         receipt = run_driver(
             project_root=ROOT,

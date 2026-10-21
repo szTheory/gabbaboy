@@ -1,0 +1,22 @@
+test_active_output_collision_is_rejected (__main__.ConsumerContractTests.test_active_output_collision_is_rejected) ... ok
+test_changed_archive_does_not_match_stale_candidate_manifest (__main__.ConsumerContractTests.test_changed_archive_does_not_match_stale_candidate_manifest) ... ok
+test_concurrent_runs_use_distinct_build_and_output_roots (__main__.ConsumerContractTests.test_concurrent_runs_use_distinct_build_and_output_roots) ... ok
+test_empty_archive_with_matching_manifest_is_rejected (__main__.ConsumerContractTests.test_empty_archive_with_matching_manifest_is_rejected) ... ok
+test_failing_c_consumer_is_rejected (__main__.ConsumerContractTests.test_failing_c_consumer_is_rejected) ... ok
+test_failing_cpp_consumer_is_rejected (__main__.ConsumerContractTests.test_failing_cpp_consumer_is_rejected) ... ok
+test_forged_runner_source_does_not_qualify_changed_package (__main__.ConsumerContractTests.test_forged_runner_source_does_not_qualify_changed_package) ... ok
+test_interrupted_extraction_removes_partial_tree_and_retries (__main__.ConsumerContractTests.test_interrupted_extraction_removes_partial_tree_and_retries) ... ok
+test_interrupted_run_retries_without_partial_receipt (__main__.ConsumerContractTests.test_interrupted_run_retries_without_partial_receipt) ... ok
+test_manifest_writer_rejects_unbound_inputs (__main__.ConsumerContractTests.test_manifest_writer_rejects_unbound_inputs) ... ok
+test_missing_prefix_is_rejected (__main__.ConsumerContractTests.test_missing_prefix_is_rejected) ... ok
+test_relocated_prefix_runs_both_consumers (__main__.ConsumerContractTests.test_relocated_prefix_runs_both_consumers) ... ok
+test_removed_package_config_is_rejected (__main__.ConsumerContractTests.test_removed_package_config_is_rejected) ... ok
+test_repeated_runs_keep_behavior_and_package_identity (__main__.ConsumerContractTests.test_repeated_runs_keep_behavior_and_package_identity) ... ok
+test_workflow_command_without_candidate_manifest_is_rejected (__main__.ConsumerContractTests.test_workflow_command_without_candidate_manifest_is_rejected) ... ok
+test_written_manifest_binds_archive_and_build_receipt_and_qualifies (__main__.ConsumerContractTests.test_written_manifest_binds_archive_and_build_receipt_and_qualifies) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 49.688s
+
+OK
+{"negative_controls": 12, "positive_successes": 8, "status": "passed", "tests_run": 16}

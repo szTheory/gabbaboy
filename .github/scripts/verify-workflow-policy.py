@@ -771,7 +771,8 @@ REHEARSAL_REQUIRED = {
     "package": (
         _REHEARSAL_TAG,
         'bash tests/scripts/verify-release-candidate.sh --extract build/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"',
-        'python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" --output build/v02-consumer-receipt.json',
+        'python3 -I tests/scripts/verify-v02-consumers.py --write-candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --archive build/gabbaboy-core-linux-x64.tar.gz --source-sha "$SOURCE_SHA" --build-receipt build/release/CMakeCache.txt',
+        'python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" --archive build/gabbaboy-core-linux-x64.tar.gz --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --output build/v02-consumer-receipt.json',
         'python3 -I tests/scripts/verify-v02-source-archive.py --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json',
         'python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA"',
     ),
@@ -1154,6 +1155,9 @@ def _mutations():
         _m("new unclassified release job", rel, "", "\njobs:\n",
          "\njobs:\n  surprise:\n    runs-on: ubuntu-22.04\n    steps:\n      - run: true\n", "job-unclassified"),
         # Textual decoys and disabled gates (P15-10): the required call is present as text but never runs.
+        # Run 39634983581: the consumer verifier needs a candidate manifest, so the stale prefix-only call must not pass.
+        _m("package consumer call without a candidate manifest", reh, "  package:\n", " --candidate-manifest \"$RUNNER_TEMP/candidate-manifest.json\"", "", "required-command-not-executed"),
+        _m("package candidate manifest never written", reh, "  package:\n", "--write-candidate-manifest", "--no-manifest", "required-command-not-executed"),
         _m("comment instead of the judge call", "release-rehearsal.yml", "  judge:\n", JUDGE_CALL, "# " + JUDGE_CALL, "required-command-not-executed"),
         _m("echo instead of the judge call", "release-rehearsal.yml", "  judge:\n", JUDGE_CALL, "echo " + JUDGE_CALL, "required-command-not-executed"),
         ("dead if false branch", "release-rehearsal.yml", [("  judge:\n", JUDGE_CALL, "if false; then\n{I}  " + JUDGE_CALL + "\n{I}fi")], "required-command-not-executed"),
