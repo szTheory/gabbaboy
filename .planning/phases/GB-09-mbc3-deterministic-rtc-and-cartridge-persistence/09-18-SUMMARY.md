@@ -29,6 +29,29 @@ key-decisions:
   - "The byte-identical rebuild claim for MagenTests and rtc3test is made only from the hosted result line (run 38189871131 at fb8972d, repeated at the evidence head)"
   - "The evidence head is the head that carries the claim text (04c7759), so the claim and its proof are read from one green head"
 requirements-completed: [CART-04, CART-05, CART-06, RTC-01, RTC-02, RTC-03]
+coverage:
+  - id: D1
+    description: Bounded current local Phase 9 behavior probes
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build --output-on-failure --no-tests=error -R '^(rtc_block_roundtrip|rtc_catch_up_.*|rtc_import_never_advances|rtc_block_corruption_matrix|rtc_block_reset_roundtrip|rtc_block_generation|rtc_battery_size_types|catch_up_policy_table|mbc3_rtc_continuation_fixture_digest|continuation_guest_.*|rtc3test_(fixture_digest|basic|range|subsecond|negative_control))$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build --output-on-failure --no-tests=error -R '^(loader_(contradiction_mbc[235]|mbc30_variant|type_byte_sweep|bad_checksum)|rtc_mutant_.*)$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase3-player/gabbaboy --output-on-failure --no-tests=error -R '^(player_session_v2_.*|player_session_v1_(corpus_load|mbc1_write_identical)|player_session_classification_drift|player_session_rom_cap_8mib|player_continuation_mbc3_.*|player_continuation_mbc2_resume|player_continuation_mbc5_resume|player_session_clock_flag_scope)$'"
+        status: pass
+      - kind: e2e
+        ref: "build/14-refresh-consumers/consumer-c/consumer-c fixtures/tracer/tracer.gb"
+        status: pass
+      - kind: e2e
+        ref: "build/14-refresh-consumers/consumer-cpp/consumer-cpp fixtures/tracer/tracer.gb"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build --output-on-failure --no-tests=error -R '^native_guide_rtc_contract$'"
+        status: pass
 status: complete
 commits: 4
 plan_head_before: 6e5303ff0204c17554e3bd884f704f5800c403d0
@@ -91,6 +114,12 @@ None.
 ## Threat Flags
 
 None. T-09-36 is mitigated by reading only exact-head results (the stale local `main` and the deadline failures were not counted as green), T-09-37 by the privacy scan and a PR-body scan, T-09-38 by not merging and not touching branch protection.
+
+## Fresh Focused Evidence (15.1-12)
+
+- Reused existing build outputs. Current focused selections passed: core RTC/continuation/rtc3test 27/27 (54.71 seconds), loader/RTC mutants 16/16 (1.17 seconds), player persistence/continuation 22/22 (1.43 seconds), and native-guide contract 1/1. Existing C and C++ consumer binaries both exited successfully against `fixtures/tracer/tracer.gb`.
+- Three pinned RGBDS 1.0.1 continuation fixture reproductions each printed `result=byte-identical`; their digests are recorded in the fresh evidence for Plan 15.1-12's Phase 9 summaries 10–14. The archive SHA-256 was verified before use.
+- The hosted exact-head CI, fixture-reproduction runs, preview package job, PR #65 state, full 401-case suite, and live source-bound support-ledger self-test were not revalidated. They remain historical producer claims. The point-in-time boundary at commit `0ca424f89810408101f15d11dd4b0e3601a3882b` recorded `/gsd-verify-work 9` as the next command in its STATE and continuation note; this statement does not assert a current route or ancestry. Current CI/PR state is unknown.
 
 ## Self-Check: PASSED
 

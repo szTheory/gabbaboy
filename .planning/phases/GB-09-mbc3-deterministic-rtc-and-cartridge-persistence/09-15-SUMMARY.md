@@ -14,6 +14,14 @@ provides:
   - "Five configure-time RTC mutants with paired in-mutant controls (10 rtc_mutant_* CTests)"
 affects: [09-17, 09-18]
 requirements-completed: [RTC-01]
+coverage:
+  - id: D1
+    description: Loader precedence matrix and paired RTC mutation controls
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build --output-on-failure --no-tests=error -R '^(loader_(contradiction_mbc[235]|mbc30_variant|type_byte_sweep|bad_checksum)|rtc_mutant_.*)$'"
+        status: pass
 key-decisions:
   - "Oracle typed from D-27 and docs/cartridge-and-saves.md tables; it neither includes nor calls the core validator"
   - "Mutant anchors are full tagged statement lines; the clamp mutant adds the untagged M and H store lines as extra exactly-once anchors"
@@ -75,3 +83,8 @@ None. T-09-28 (guard plus twin after every rejection), T-09-29 (single reused 8 
 ## Self-Check: PASSED
 
 - `tests/test_loader_matrix.c` exists; commits 7589de1, 97c478d, 07e579c are ancestors of HEAD; 16 new names are in `tests/expected-tests.txt` and in the executed inventory.
+
+## Fresh Focused Evidence (15.1-12)
+
+- Reused the existing `build` tree. The loader and RTC mutant/control selection passed 16/16 CTest cases in 1.17 seconds.
+- The historical full-suite and sanitizer statements above remain producer evidence; this plan did not rerun the full suite or sanitizer leg and makes no new hardware claim.

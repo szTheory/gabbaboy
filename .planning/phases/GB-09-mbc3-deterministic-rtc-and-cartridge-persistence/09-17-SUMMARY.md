@@ -40,6 +40,14 @@ actuals:
   commits: 2
 duration: 60 min
 completed: 2026-10-12
+coverage:
+  - id: D1
+    description: Evidence-ledger name inventory and native integration RTC contract
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build --output-on-failure --no-tests=error -R '^(mbc3_rtc_evidence_ledger_names|mbc3_rtc_evidence_ledger_selftest|native_guide_rtc_contract)$'"
+        status: pass
 ---
 
 # Phase 9 Plan 17: Evidence ledger, contract docs and capability text Summary
@@ -92,3 +100,8 @@ None. T-09-34 is mitigated by the evidence-class labels, the automated name chec
 ## Self-Check: PASSED
 
 - docs/mbc3-rtc-evidence.md exists; commits 8d2a1e0 and b339a72 are ancestors of HEAD.
+
+## Fresh Focused Evidence (15.1-12)
+
+- The evidence-ledger name, evidence-ledger self-test, and native-guide contract CTests passed 3/3 in 0.08 seconds.
+- The historical `verify-support-ledger.py --self-test` pass above was not reproduced at the current HEAD. The command exited 1 at `self-test tagged source differs from the tracked ledger:src/core/gabbaboy.c`; the current source bytes do not match the v0.2.0 ledger's recorded source input. This plan leaves the unowned ledger and checker unchanged; exact current source reconciliation remains unresolved for Plan 15.1-07. Earlier successful self-test output and hosted claims remain historical producer evidence.
