@@ -1,23 +1,74 @@
 {
   "schema": 1,
-  "source_sha": "8eb55d33b1e7b2b585486a002717fbd2ffcaa73a",
+  "source_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
   "tested_source_sha": "8eb55d33b1e7b2b585486a002717fbd2ffcaa73a",
+  "branch": "gsd/phase-15.1-release-hardening-and-milestone-debt-closure",
   "obtained_via": "gh_api",
   "receipt_labels_used": false,
+  "api_calls": [
+    "gh api repos/szTheory/gabbaboy/actions/runs/39633868728",
+    "gh api repos/szTheory/gabbaboy/actions/runs/39633868728/attempts/1/jobs",
+    "gh api repos/szTheory/gabbaboy/actions/runs/39633868728/artifacts",
+    "gh run view 39633868728 --log"
+  ],
   "workflows": [
     {
       "id": "libbet-repro",
       "workflow_path": ".github/workflows/libbet-repro.yml",
-      "run_id": null,
-      "claim": "not_verified",
-      "limitation": "No hosted run has been dispatched or read yet; Task 2 owns that. Local reproduction is not a substitute."
+      "run_id": 39633868728,
+      "run_attempt": 1,
+      "event": "workflow_dispatch",
+      "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
+      "head_branch": "gsd/phase-15.1-release-hardening-and-milestone-debt-closure",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/39633868728",
+      "created_at": "2026-10-21T16:20:26Z",
+      "updated_at": "2026-10-21T16:20:41Z",
+      "jobs": [
+        {
+          "id": 119338997351,
+          "name": "libbet-repro",
+          "status": "completed",
+          "conclusion": "success",
+          "head_sha": "6674ea80c8e211dd380f86fb355b7e490ae73149",
+          "runner_image": "ubuntu-22.04",
+          "step_conclusions": [
+            "success",
+            "success",
+            "success",
+            "success",
+            "success"
+          ]
+        }
+      ],
+      "artifacts_total": 0,
+      "log_command": "gh run view 39633868728 --log",
+      "log_bytes": 22496,
+      "log_sha256": "39d12e5d0593df13b1cf56098fa63b454ccad6ccd96289c575d3a95ef847b6c1",
+      "result_line": "libbet reproduction: identical sha256=3607412031c8287cf878299ce96e581e85b852dde703806343b95576fa3ff1a9",
+      "toolchain_in_log": "rgbasm v0.7.0; Pillow 12.3.0 provenance verified by the pinned script",
+      "claim": "verified",
+      "scope": "Ubuntu 22.04 hosted rebuild is byte-identical to the vendored ROM. No wrong-ROM or wrong-pin run was dispatched on the host; the local script and this checker reject a differing digest."
     },
     {
       "id": "release-rehearsal",
       "workflow_path": ".github/workflows/release-rehearsal.yml",
       "run_id": null,
       "claim": "not_verified",
-      "limitation": "No hosted run has been dispatched or read yet; Task 2 owns that. Local reproduction is not a substitute."
+      "dispatch_attempt": {
+        "command": "gh workflow run release-rehearsal.yml --ref gsd/phase-15.1-release-hardening-and-milestone-debt-closure",
+        "result": "HTTP 422: Workflow does not have 'workflow_dispatch' trigger"
+      },
+      "limitation": "No hosted rehearsal exists for this source. The workflow triggers only on push to rehearsal/** branches and has no workflow_dispatch, and this plan was authorized to push only the phase branch. Earlier rehearsal runs (e.g. 39396554673) ran on other commits and are not evidence for this source. Smallest action: push a rehearsal/** branch at the final exact SHA (release.yml, tags and releases untouched), then read its run, jobs and artifacts. The judge job may still fail until the policy script is on the default branch; that must be recorded as such, not passed.",
+      "historic_runs_not_counted": [
+        {
+          "run_id": 39396554673,
+          "head_sha": "b53d82e2667980a21006cea8b521521df1825a04",
+          "branch": "rehearsal/v0-2-0-final",
+          "conclusion": "success"
+        }
+      ]
     }
   ]
 }

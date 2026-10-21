@@ -18,8 +18,7 @@
       ],
       "historic_status": "unverified",
       "hosted_ref": "libbet-repro",
-      "disposition": "external_limitation",
-      "limitation": "No hosted run has been dispatched or read yet; Task 2 owns that. Local reproduction is not a substitute."
+      "disposition": "hosted_verified"
     },
     {
       "id": "P7-03",
