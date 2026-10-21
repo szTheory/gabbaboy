@@ -14,39 +14,43 @@ MODE=${1:-}
 SOURCE_ARCHIVE_CHECKER="$ROOT_DIR/tests/scripts/verify-v02-source-archive.py"
 USAGE='usage: verify-release-candidate.sh --self-test | --verify RECEIPT ASSET VERSION TAG SOURCE_SHA RELEASE_ID NOTICE_FILE SOURCE_RECEIPT BUILD_RECEIPT | --verify-final <the --verify arguments> SOURCE_ARCHIVE SOURCE_ARCHIVE_RECEIPT'
 safe_extract() {
-  python3 - "$1" "$2" <<'PY'
-import pathlib, shutil, sys, tarfile
-archive, destination = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
-with tarfile.open(archive, "r:gz") as bundle:
-    members = bundle.getmembers()
-    if not members or len(members) > 1000:
-        raise SystemExit("candidate archive is empty or has too many entries")
-    seen, total_size = set(), 0
-    for member in members:
-        name = pathlib.PurePosixPath(member.name)
-        parts = tuple(part for part in name.parts if part not in ("", "."))
-        if name.is_absolute() or ".." in parts or not parts or parts[0].endswith(":"):
-            raise SystemExit(f"unsafe archive path: {member.name}")
-        if not (member.isdir() or member.isfile()):
-            raise SystemExit(f"archive contains a link or special file: {member.name}")
-        if member.name in seen:
-            raise SystemExit(f"archive contains a duplicate path: {member.name}")
-        seen.add(member.name)
-        total_size += member.size
-        if member.size < 0 or total_size > 64 * 1024 * 1024:
-            raise SystemExit("candidate archive exceeds the uncompressed size limit")
-    destination.mkdir()
-    for member in members:
-        parts = tuple(part for part in pathlib.PurePosixPath(member.name).parts if part not in ("", "."))
-        target = destination.joinpath(*parts)
-        if member.isdir():
-            target.mkdir(parents=True, exist_ok=True)
-        else:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with bundle.extractfile(member) as source, target.open("xb") as output:
-                shutil.copyfileobj(source, output)
-            target.chmod(member.mode & 0o777 & ~0o6000)
+  python3 -I "$ROOT_DIR/tests/scripts/verify-v02-consumers.py" --extract "$1" "$2"
+}
+candidate_consumer_verify() {
+  local build_receipt=$1 asset=$2 expected_source=$3 temp_root=$4
+  local candidate_manifest="$temp_root/candidate-manifest.json"
+  local consumer_output="$temp_root/consumer-receipt.json"
+  python3 - "$build_receipt" "$asset" "$expected_source" "$candidate_manifest" <<'PY'
+import hashlib, json, pathlib, re, sys
+build_path, asset_path, expected_source, manifest_path = map(pathlib.Path, sys.argv[1:])
+expected_source = sys.argv[3]
+try:
+    build_bytes = build_path.read_bytes()
+    build = json.loads(build_bytes.decode("utf-8"))
+    digest = hashlib.sha256()
+    with asset_path.open("rb") as stream:
+        while True:
+            chunk = stream.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+except (OSError, UnicodeError, ValueError) as error:
+    raise SystemExit(f"candidate manifest input is unreadable: {type(error).__name__}")
+archive_sha = digest.hexdigest()
+if not re.fullmatch(r"[0-9a-f]{40,64}", expected_source):
+    raise SystemExit("candidate source SHA is malformed")
+if build.get("source_sha") != expected_source or build.get("asset_sha256") != archive_sha:
+    raise SystemExit("validated build receipt identity differs from candidate inputs")
+manifest = {
+    "schema_version": 1,
+    "candidate_source_sha": expected_source,
+    "archive_sha256": archive_sha,
+    "build_receipt_sha256": hashlib.sha256(build_bytes).hexdigest(),
+}
+manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
+  python3 -I "$ROOT_DIR/tests/scripts/verify-v02-consumers.py" \
+    --archive "$asset" --candidate-manifest "$candidate_manifest" --output "$consumer_output"
 }
 if [[ "$MODE" == --extract ]]; then
   [[ $# -eq 3 ]] || fail 'usage: verify-release-candidate.sh --extract ARCHIVE DESTINATION'
@@ -72,14 +76,21 @@ if [[ "$MODE" == --verify || "$MODE" == --verify-final ]]; then
       "-DGBB_EXPECTED_RELEASE_ID=$7" "-DGBB_NOTICE_FILE=$8" \
       "-DGBB_SOURCE_RECEIPT=$9" "-DGBB_BUILD_RECEIPT=${10}" \
       -P "$ROOT_DIR/cmake/VerifyReleaseReceipt.cmake"
+    bash "$ROOT_DIR/tests/scripts/verify-release-candidate.sh" --verify \
+      "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9" "${10}" \
+      || fail 'candidate product qualification failed'
     exec python3 -I "$SOURCE_ARCHIVE_CHECKER" --check-receipt "${12}" --archive "${11}" --tag "$5" --source-sha "$6"
   fi
-  exec cmake \
+  cmake \
     "-DGBB_RECEIPT=$2" "-DGBB_ASSET=$3" "-DGBB_EXPECTED_VERSION=$4" \
     "-DGBB_EXPECTED_TAG=$5" "-DGBB_EXPECTED_SOURCE_SHA=$6" \
     "-DGBB_EXPECTED_RELEASE_ID=$7" "-DGBB_NOTICE_FILE=$8" \
     "-DGBB_SOURCE_RECEIPT=$9" "-DGBB_BUILD_RECEIPT=${10}" \
     -P "$ROOT_DIR/cmake/VerifyReleaseReceipt.cmake"
+  TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/gabbaboy-release-consumer.XXXXXX")
+  trap 'rm -rf "$TEMP_ROOT"' EXIT HUP INT TERM
+  candidate_consumer_verify "${10}" "$3" "$6" "$TEMP_ROOT" || fail 'installed consumer qualification failed'
+  exit 0
 fi
 [[ "$MODE" == --self-test && $# -eq 1 ]] || fail "$USAGE"
 command -v tar >/dev/null || fail 'tar is required'
