@@ -179,11 +179,130 @@ gbb_add_acceptance_exit(acceptance_unknown_model 2
 gbb_add_acceptance_exit(acceptance_observe_only_flag 2
   "reason=observe-only-flag" 30
   "--acceptance;${GBB_CASES};--case;libbet;--pcm-digest")
-# A parser-valid script denser than the core's 64-event queue can drain (80 one-half-dot taps) is
-# reported with a named delivery reason, not an anonymous drive-error (review WR-01).
-gbb_add_acceptance_exit(acceptance_dense_script_delivery_failed 3
-  "reason=event-delivery-failed detail=core-queue-full-or-invalid" 60
-  "--acceptance;${GBB_CASES};--case;libbet;--observe;--input-script;tests/acceptance/inputs/dense-taps.input")
+# A parser-valid script denser than the core's 64-event queue (80 one-half-dot taps) used to stop with
+# event-delivery-failed (exit 3). Plan 15.1-02 lends the adapter's immutable event span to the core, so the
+# same script is now delivered in full: the observation completes and neither delivery nor drive failure
+# is reported. The no-refill source mutant, the frozen-baseline comparison and the stale-limit control are
+# executed by acceptance_dense_input_controls below, which is what makes this test discriminating.
+add_test(NAME acceptance_dense_script_delivered
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=$<TARGET_FILE:gabbaboy-runner>;--acceptance;${GBB_CASES};--case;libbet;--observe;--input-script;tests/acceptance/inputs/dense-taps.input"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=acceptance[.]libbet[.]class\tregression"
+    "-DGBB_FORBID_REGEX=event-delivery-failed|drive-error|status=(fail|error)"
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# The dense script is now delivered in full, so this is a full-length observation (107 s under ASan in a quiet
+# Linux container), not the quick failure it used to be; a hosted sanitizer runner under parallel load needs far more.
+set_tests_properties(acceptance_dense_script_delivered PROPERTIES TIMEOUT 400 COST 400 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+add_test(NAME acceptance_dense_input_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-dense-input.py;--self-test;--build-dir;${PROJECT_BINARY_DIR}"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=dense-input status=pass.*dense-input baseline=pass.*documentation-contract=pass stale-limit-control=pass.*failure-diagnostic=pass.*no-refill-mutant=failed-as-expected reason=predicate-not-reached"
+    "-DGBB_FORBID_REGEX=no-refill-mutant=passed"
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(acceptance_dense_input_controls PROPERTIES TIMEOUT 600 COST 600 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
+# Private borrowed-span controls from plans 15.1-02 (core fixes 929ce2e and 73d8a53). They drive the
+# private run entry points through the real core, so each one is registered here and is paired below with a
+# core source mutant that removes exactly the fix it guards.
+foreach(gbb_span_case acceptance_drive_dense_queue acceptance_drive_batch_order
+    acceptance_drive_stop_guard_failure acceptance_input_span_edges
+    acceptance_drive_stop_wake_deadline acceptance_input_span_output_alias)
+  add_test(NAME ${gbb_span_case} COMMAND test_acceptance_lib ${gbb_span_case})
+  set_tests_properties(${gbb_span_case} PROPERTIES TIMEOUT 60 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    PASS_REGULAR_EXPRESSION "PASS ${gbb_span_case}")
+endforeach()
+
+# Each mutant is the real core with one anchored source edit. The core-free helper library comes first and
+# the mutant is the only core on the link line (verify-core-linkage.py checks that). The failing run must
+# exit 1 with the intended diagnostic; a sibling control on the same executable must still pass, so a
+# mutant that simply fails to run cannot satisfy the pair.
+set(GBB_SPAN_CORE_PATH "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GBB_SPAN_CORE_PATH})
+file(READ ${GBB_SPAN_CORE_PATH} gbb_span_core_text)
+function(gbb_span_core_mutant name anchor replacement)
+  string(FIND "${gbb_span_core_text}" "${anchor}" first)
+  string(FIND "${gbb_span_core_text}" "${anchor}" final REVERSE)
+  if(first EQUAL -1 OR NOT first EQUAL final)
+    message(FATAL_ERROR "span mutant ${name}: anchor must occur exactly once in ${GBB_SPAN_CORE_PATH} "
+      "(first=${first} last=${final})")
+  endif()
+  string(REPLACE "${anchor}" "${replacement}" text "${gbb_span_core_text}")
+  set(source ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_span_mutant_${name}.c)
+  file(WRITE ${source} "${text}")
+  set(library gabbaboy_core_span_mutant_${name})
+  add_library(${library} STATIC ${source})
+  target_include_directories(${library}
+    PUBLIC ${PROJECT_SOURCE_DIR}/include
+    PRIVATE ${PROJECT_SOURCE_DIR}/src/core)
+  target_compile_features(${library} PUBLIC c_std_17)
+  set_target_properties(${library} PROPERTIES C_EXTENSIONS OFF)
+  target_compile_definitions(${library} PRIVATE
+    GBB_BUILD_REVISION="span-mutant-${name}" GBB_BUILD_QUALIFIED=0)
+endfunction()
+function(gbb_span_mutant_test target_name driver_source uses_accept fail_test control_test
+    failing_case failing_regex control_case)
+  add_executable(${target_name} ${driver_source})
+  target_compile_features(${target_name} PRIVATE c_std_17)
+  set_target_properties(${target_name} PROPERTIES C_EXTENSIONS OFF)
+  set(library ${ARGV8})
+  set(control_regex ${ARGV9})
+  if(uses_accept)
+    target_link_libraries(${target_name} PRIVATE gabbaboy_accept_bare ${library})
+  else()
+    target_link_libraries(${target_name} PRIVATE ${library})
+  endif()
+  add_test(NAME ${fail_test}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:${target_name}>;${failing_case}"
+      -DGBB_EXPECT_CODE=1
+      "-DGBB_EXPECT_REGEX=${failing_regex}"
+      "-DGBB_FORBID_REGEX=PASS ${failing_case}"
+      -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  add_test(NAME ${control_test}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:${target_name}>;${control_case}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=${control_regex}"
+      "-DGBB_FORBID_REGEX=not ok"
+      -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${fail_test} ${control_test} PROPERTIES TIMEOUT 60)
+  # The mutant trips a REQUIRE that returns early without destroying its instance; leak detection stays
+  # on for the controls and for every other test.
+  set_tests_properties(${fail_test} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+endfunction()
+
+# 929ce2e/73d8a53: a STOP wake that lands exactly on a private run's deadline reports GBB_STOP_BUDGET only
+# while a span is borrowed. Dropping the private result restores the pre-fix classification (stopped).
+set(GBB_SPAN_WAKE_ANCHOR "result.reason = instance->accept_input_span != NULL\n                    ? GBB_STOP_BUDGET : GBB_STOP_NO_PROGRESS;")
+gbb_span_core_mutant(wake_private_result "${GBB_SPAN_WAKE_ANCHOR}" "result.reason = GBB_STOP_NO_PROGRESS;")
+gbb_span_mutant_test(test_acceptance_lib_mutant_wake_private_result
+  ${CMAKE_CURRENT_LIST_DIR}/../test_acceptance_lib.c TRUE
+  acceptance_drive_mutant_wake_private_result acceptance_drive_mutant_wake_private_result_control
+  acceptance_drive_stop_wake_deadline "wake-at-deadline" acceptance_input_span_edges
+  gabbaboy_core_span_mutant_wake_private_result "PASS acceptance_input_span_edges")
+# The public contract (tests/test_events.c event_stop_wake) keeps GBB_STOP_NO_PROGRESS at the boundary; a
+# core that returns the budget result for every caller breaks it and must be caught by that unchanged test.
+gbb_span_core_mutant(wake_all_budget "${GBB_SPAN_WAKE_ANCHOR}" "result.reason = GBB_STOP_BUDGET;")
+gbb_span_mutant_test(test_events_mutant_wake_all_budget
+  ${PROJECT_SOURCE_DIR}/tests/test_events.c FALSE
+  event_stop_wake_mutant_all_budget event_stop_wake_mutant_all_budget_control
+  event_stop_wake "r[.]reason == GBB_STOP_NO_PROGRESS" event_boundary
+  gabbaboy_core_span_mutant_wake_all_budget ".*")
+# 929ce2e: borrowed-span outputs must not overlap the span, its events or its cursor. Treating every
+# non-null output as disjoint removes the check, and the 10 aliasing calls are then all accepted.
+gbb_span_core_mutant(output_alias "    if (span == NULL) return 1;"
+  "    if (span == NULL || output != NULL) return 1;")
+gbb_span_mutant_test(test_acceptance_lib_mutant_output_alias
+  ${CMAKE_CURRENT_LIST_DIR}/../test_acceptance_lib.c TRUE
+  acceptance_drive_mutant_output_alias acceptance_drive_mutant_output_alias_control
+  acceptance_input_span_output_alias "span-output alias rejected=[0-9]/10" acceptance_input_span_edges
+  gabbaboy_core_span_mutant_output_alias "PASS acceptance_input_span_edges")
 gbb_add_acceptance_exit(acceptance_suite_invalid_expect_excluded 2
   "reason=invalid-expect-excluded" 30
   "--acceptance;${GBB_CASES};--suite;--expect-excluded;x1")
@@ -275,17 +394,24 @@ gbb_add_acceptance_exit(acceptance_sgb_tolerance 0
 # (owner amendment of D-18: the cap applies to the text report, plus one 69,135-byte final-frame image).
 set(GBB_STALL_FAIL_DIR ${PROJECT_BINARY_DIR}/acceptance-failures/acceptance_stall_diagnosis)
 file(MAKE_DIRECTORY ${GBB_STALL_FAIL_DIR})
+# Each of the two replays has its own child deadline. Main ran one replay in 529 s on a hosted ASan/UBSan runner;
+# on the Phase 15.1 head one replay exceeded 900 s under the sanitizer lane's parallel load (a quiet Linux ASan
+# container measured 186 s on main and 204 s here, one sample each). The sanitizer deadline is therefore 1800 s
+# and the TIMEOUT property below (scaled by 3 for sanitizers, two replays) leaves room for both; other builds keep 300 s.
+set(GBB_STALL_RUNNER_TIMEOUT 300)
+if(GABBABOY_ENABLE_SANITIZERS)
+  set(GBB_STALL_RUNNER_TIMEOUT 1800)
+endif()
 add_test(NAME acceptance_stall_diagnosis
-  COMMAND ${CMAKE_COMMAND}
-    "-DGBB_CMD=$<TARGET_FILE:gabbaboy-runner>;--acceptance;${GBB_CASES};--case;libbet;--mutate;drop:START;--failure-dir;${GBB_STALL_FAIL_DIR}"
-    -DGBB_EXPECT_CODE=1
-    "-DGBB_EXPECT_REGEX=reason=predicate-not-reached"
-    -DGBB_EXPECT_FILE=${GBB_STALL_FAIL_DIR}/libbet.stall.txt
-    -DGBB_EXPECT_FILE_MAX_SIZE=65536
-    -DGBB_EXPECT_FILE_FRESH=1
-    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
-    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
-set_tests_properties(acceptance_stall_diagnosis PROPERTIES TIMEOUT 300 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+  COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-stall-report.py
+    --runner-timeout ${GBB_STALL_RUNNER_TIMEOUT}
+    --runner $<TARGET_FILE:gabbaboy-runner>
+    --cases ${PROJECT_SOURCE_DIR}/${GBB_CASES}
+    --workdir ${PROJECT_SOURCE_DIR}
+    --failure-dir ${GBB_STALL_FAIL_DIR})
+# COST makes a parallel ctest start the longest tests first, so a sanitizer lane with a 45 minute job limit does
+# not leave the two stall replays as its tail (they ended the lane at about 41 minutes when they started last).
+set_tests_properties(acceptance_stall_diagnosis PROPERTIES TIMEOUT 1200 COST 1200 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 # Core mutant (D-14): a copy of the core whose JOYP direction/button select test is inverted, built into a
 # test-only static library and runner. The source line is the single anchor guaranteed by Plans 07-03 and

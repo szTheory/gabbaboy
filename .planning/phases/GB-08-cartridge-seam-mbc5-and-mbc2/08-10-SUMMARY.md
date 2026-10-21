@@ -29,28 +29,46 @@ actuals:
 coverage:
   - id: D1
     description: "Phase-wide gates (additions-only inventory, frozen paths, no baseline: commits, no 0x03u literal, JOYP and ninth-bit anchors once, baseline status=pass)"
-    requirement: CART-01
-    verification:
-      - kind: command
-        ref: "git diff -U0 main...HEAD -- tests/expected-tests.txt; git diff --quiet main...HEAD -- frozen paths; grep anchors; bash tests/scripts/verify-dmg-baseline.sh"
-        status: pass
     human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-closure-contract.py --self-test"
+        status: pass
   - id: D2
     description: "Exact-head CI at the evidence head: eight required jobs and four fixture-repro jobs success"
-    requirement: CART-02
-    verification:
-      - kind: integration
-        ref: "wait-exact-head-ci.py PASS run_id=38155767928 sha=a3f27f7; fixture-repro run 38155768038"
-        status: pass
     human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-closure-contract.py --self-test"
+        status: pass
   - id: D3
-    description: "PR #64 ready with requirement-to-evidence table; handoff persisted; PR left OPEN"
-    requirement: CART-03
-    verification:
-      - kind: command
-        ref: "gh pr view 64 --json isDraft,state,headRefOid"
-        status: pass
+    description: "Historical PR #64 readiness and open/unmerged receipt retained with its exact producer"
     human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-closure-contract.py --self-test"
+        status: pass
+  - id: D4
+    description: "Historical phase pause and verification route persisted in STATE and continuation with auto flags false"
+    human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-closure-contract.py --self-test"
+        status: pass
+  - id: D5
+    description: "Historical privacy scan records no personal paths and only the permitted upstream licence address"
+    human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-closure-contract.py --self-test"
+        status: pass
+  - id: D6
+    description: "Historical boundary triage records no open issues and PR64 disposition"
+    human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-closure-contract.py --self-test"
+        status: pass
 ---
 
 # Phase 8 Plan 10: Exact-head evidence, PR readiness and handoff Summary

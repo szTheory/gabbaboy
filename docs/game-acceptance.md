@@ -67,11 +67,16 @@ The core mutant is built only in the test tree; configure fails unless the ancho
 
 The packaged player runs the same script and predicate with dummy SDL drivers and must produce a PCM digest equal to the headless runner's. The ROM and script are read from the checkout and are not shipped; the package scan fails if either appears in the package. A no-input control must fail, and a registered check keeps the diagnostic path free of environment, network, file-write and save-persistence use. This runs only in the macOS packaged player job.
 
+## Dense input delivery
+
+Dense input delivery uses a private, immutable event span and caller-owned cursor shared by acceptance driving and diagnostic replay. The parser's 16,384-event limit bounds the span. During each run the core refills its existing 64-event queue with due events at the current timestamp, preserving script order and applying every same-time transition before the next guest tick. Future events remain in the caller's span and set the next STOP/idle deadline. The core clears the borrowed reference on every return; the adapter explicitly resumes with its cursor. This does not increase the public queue, alter public ABI or saved-state format, or retain event pointers.
+
+Within the acceptance adapter, custom delivery callbacks remain caller-managed batches of at most 64 events, and the public queue stays bounded. `verify-dense-input.py` replays a 67-event same-time START burst through the actual runner, compares hit timing plus frame and PCM digests with the frozen DMG ledger, requires a bounded failure diagnostic when START is removed, and proves a temporary no-refill source mutant fails.
+
 ## Limitations
 
 - Packaged-player game smoke is macOS only; there is no Linux or Windows player packaging. Headless acceptance runs on Linux, macOS and Windows. See [unreleased support-ledger entries](support/unreleased.md).
 - `libbet-repro` is `workflow_dispatch` only and the workflow file is not on the default branch, so no hosted reproduction run URL exists yet. The reproduction script was verified byte-identical on macOS arm64 only; the Linux path and the dispatch workflow are unverified.
-- Input scripts denser than the core's 64-event queue can drain are not supported. The parser accepts them, but the driver has no back-pressure, so a run fails with `reason=event-delivery-failed` (covered by `acceptance_dense_script_delivery_failed`). Real scripts are far below this: the Libbet scripts use a few dozen events over minutes of play.
 - Physical hardware, perceptual audio quality and other games are unqualified. The frame inspection behind the baseline freeze was an agent inspection of coarse content only.
 
 ## Using the baseline in later phases

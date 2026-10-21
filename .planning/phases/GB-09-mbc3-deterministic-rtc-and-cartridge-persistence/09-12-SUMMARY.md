@@ -52,7 +52,7 @@ coverage:
     requirement: RTC-01
     verification:
       - kind: integration
-        ref: "ctest -R ^rtc3test_ (rtc3test_basic, rtc3test_range, rtc3test_subsecond)"
+        ref: "ctest --test-dir build --output-on-failure --no-tests=error -R '^rtc3test_(basic|range|subsecond)$'"
         status: pass
     human_judgment: false
   - id: D2
@@ -60,7 +60,7 @@ coverage:
     requirement: RTC-01
     verification:
       - kind: other
-        ref: "tests.md source-comparison check prints stated-expectations match []"
+        ref: "ctest --test-dir build --output-on-failure --no-tests=error -R '^rtc3test_(basic|range|subsecond)$' (asserts parsed tests.md expectations against displayed values)"
         status: pass
     human_judgment: false
   - id: D3
@@ -68,7 +68,7 @@ coverage:
     requirement: RTC-01
     verification:
       - kind: integration
-        ref: "ctest -R ^rtc3test_negative_control$"
+        ref: "ctest --test-dir build --output-on-failure --no-tests=error -R '^rtc3test_negative_control$'"
         status: pass
     human_judgment: false
   - id: D4
@@ -76,7 +76,7 @@ coverage:
     requirement: RTC-03
     verification:
       - kind: integration
-        ref: "ctest -R ^continuation_guest_ (mbc3_rtc, mbc3_rtc_halted, mbc3_rtc_carry, mbc2, mbc5)"
+        ref: "ctest --test-dir build --output-on-failure --no-tests=error -R '^continuation_guest_(mbc3_rtc|mbc3_rtc_halted|mbc3_rtc_carry|mbc2|mbc5)$'"
         status: pass
     human_judgment: false
   - id: D5
@@ -84,7 +84,7 @@ coverage:
     requirement: CART-06
     verification:
       - kind: integration
-        ref: "tests/test_continuation_guests.c continuation_guest_mbc3_rtc adjacency edge"
+        ref: "ctest --test-dir build --output-on-failure --no-tests=error -R '^continuation_guest_mbc3_rtc$'"
         status: pass
     human_judgment: false
 duration: 55min
@@ -197,3 +197,8 @@ Plan 09-16 can build the macOS player continuation on these core-level guests; w
 ## Self-Check: PASSED
 
 All created files exist and commits be21190, e3ef853, 7345024 are ancestors of HEAD.
+
+## Fresh Focused Evidence (15.1-12)
+
+- The available focused core CTest invocation passed 27/27 selected cases, including all three rtc3test suites, the no-tap negative control, the five continuation guest cases, and the RTC battery and catch-up controls.
+- The rtc3test cases still compare decoded millisecond values with the digest-checked tests.md expectations. The historical screen-oracle and author-attested evidence classification above is unchanged; no hardware result is inferred.

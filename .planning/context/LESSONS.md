@@ -803,3 +803,55 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Applies when:** One versioned support claim is qualified by different hosts, independent run nonces or a later exact tag. Synthetic fixtures test validators; they are not execution evidence.
 - **Verification:** Repair `3d451b3` passed two real 1138/1138 native streams with 108 selected corpus tests and independent accepted receipts; clean no-build clone self-test passed with 15 schema and 21 sidecar rejections. Actual hosted native Linux/macOS/Windows and floor jobs passed at `a175a39`; the separate campaign assertion remains unresolved.
 - **Source:** Phase 15 `15-02-SUMMARY.md` supplemental repair and pause handoff; `tests/scripts/verify-support-ledger.py`.
+
+### GB-GSD-024 / 2026-10-20 / One shared UAT closure tool; boundary checks must not read live state
+
+- **Cause and evidence:** Phases 12-14 each copied and hand-edited a phase-local `verify-uat-contract.py`, and Phase 15 verify-work did it again: a throwaway generator, then sed edits to the Phase 13 checker. The Phase 14 checker had also gone red on main. It compared the live STATE.md and `state.json` route with `/gsd-discuss-phase 15`, and required plan commits to be ancestors of HEAD. Both facts change legitimately after the boundary: later handoffs advance the route, and squash merges leave plan commits only on the phase branch.
+- **Remedy:** `tests/scripts/verify-uat-closure.py <phase-dir>` does the work for any phase. `--write <evidence-file>` builds `{N}-UAT.md` from the SUMMARY coverage blocks and refuses while any deliverable needs a human or has a schema error, listing each one. The default mode checks the closure, and `--self-test` runs 19 negative controls plus a regeneration round trip. The Phase 14 checker now reads its handoff from merge commit `c771b1b` and bounds its windows by the PR #71 head `8c09f96`. Every one of its controls still fails. Commit windows and routes are reconciled once at verify-work and recorded in the UAT prose; they are not re-asserted against HEAD.
+- **Applies when:** Running `/gsd-verify-work`, or writing any check that encodes a phase-boundary fact.
+- **Verification:** The shared tool's self-test passes on the Phase 13, 14 and 15 UAT records (45, 49 and 42 deliverables, 19 controls each), and `--write` refuses a SUMMARY with `human_judgment: true`. The Phase 14 checker passes again, keeping all 29 of its controls. It stays local, not CI: the recurring SUMMARY side already runs in CI through `summary_coverage`, and the tool is exercised at every verify-work.
+- **Refresh verification (2026-10-20, Phase 12):** The shared checker rejected the old UAT prelude with `unparsed test prelude`; canonical `--write` preserved its revision-qualified receipts and produced 73 accepted rows with 19 controls. Running the original closeout checker against a `git archive` of boundary `da98d56` passed all 17 controls, without reading live phase routes or requiring later phases to be absent from HEAD.
+- **Refresh verification (2026-10-20, Phase 13):** Canonical closure accepts 45 rows and rejects 19 controls. The completed `e7ba52c` archive's pure handoff contract passes with four route/flag controls, while its full wrapper cannot execute under OpenGSD 1.18.0 because it pins 1.16.0. Preserve that limitation. The current actual prohibition producer can be independently invoked with the saved parsed/projected descriptor and must prove fail-first/clean/live behavior; this passed without changing the historical wrapper. Current routes remain a separate handoff contract; the Phase 13 refresh handoff passes with six stale-route/stage/auto-flag rejection controls.
+- **Source:** Phase 15 verify-work, owner automation directive.
+
+
+### GB-GSD-025 / 2026-10-20 / Passing verification does not repair completion metadata
+
+- **Cause and evidence:** The v0.2 milestone audit read all 134 SUMMARY fields and nine goal reports. CGB-05, CGB-09 and CGB-07 were SATISFIED centrally and in verification but absent from every completing SUMMARY. Phase 7's validated record retained `nyquist_compliant: false` while its sign-off claimed true.
+- **Remedy:** Cross-reference all three independent sources at closure; record partial traceability without relabeling passing behavior as missing implementation. Reconcile validated/false records through validate-phase, then update the relevant closing metadata from actual evidence. Keep immutable producer and boundary facts distinct from current routes.
+- **Applies when:** Requirements close only after the final execution SUMMARY, or generated status fields and prose are maintained separately.
+- **Verification:** `.planning/verify-v02-milestone-audit.py --self-test` reconciles 28 central rows, 134 summary lists and nine phase reports; 16 controls reject inflated scores, hidden partials, false Nyquist claims, changed source rows and premature milestone routing. Independent focused core/player checks passed 63/63; no new human UAT.
+- **Source:** `.planning/v0.2-MILESTONE-AUDIT.md`; closure-record corrections remain pending, with `/gsd-validate-phase 7` as the next command.
+
+### GB-TEST-006 / 2026-10-20 / Existence and size do not prove useful diagnostics
+
+- **Cause and evidence:** Phase 7's stall-report CTest checked fresh file existence and a 64 KiB cap, so an empty report satisfied its file assertions. The validation frontmatter also contradicted its checked sign-off; rediscovery from all 17 plans / 40 tasks found the supporting task's unasserted sections and determinism contract.
+- **Remedy:** Check the actual failing producer twice, require complete count-matched trace/I/O/histogram sections with declared caps, expected identity/reason and fresh bounded artifacts, then compare repeated bytes. Run cheap malformed-report controls automatically inside the existing registered CTest, with a direct fast self-test command. Preserve an inventory pinned by release evidence: the first separate CTest entry failed the hosted support-ledger binding, so the repair retained the original inventory byte for byte and passed the full ledger self-test. Reconcile metadata only after executable evidence passes.
+- **Applies when:** Diagnostic, receipt or failure-artifact tests currently assert only file existence, size or successful command exit. Keep historical evidence limitations separate from missing behavioral assertions.
+- **Verification:** `acceptance_stall_diagnosis` passes two real dropped-START runs; its automatic checker self-test rejects 19 malformed reports plus a byte mismatch. Focused native 97/97, player 98/98 and packaged input/PCM/no-input controls pass. The frozen DMG baseline is unchanged; no emulator implementation changed.
+- **Source:** Phase 7 `07-VALIDATION.md`; `tests/scripts/verify-stall-report.py`; test revision `5f9bfbd`.
+- **Status:** Adopted; Phase 11/13 completion metadata and milestone re-audit remain separate owner-selected work.
+
+### GB-FIXTURE-001 / 2026-10-20 / Validate output paths before creating directories
+
+- **Cause and evidence:** Phase 10's fixture rebuild script called `mkdir` before rejecting an in-tree build path. Its first repair covered explicit destinations but still called `mktemp` before checking an in-tree `TMPDIR`. Disposable-repository tests reproduced both rejected-write side effects.
+- **Remedy:** Canonicalize missing destinations and existing symlink parents before directory creation; validate both build and evidence destinations, including the temporary root. Keep the offline checks in the existing registered guard test so the release-bound test inventory stays unchanged.
+- **Applies when:** Build, fixture or evidence tooling promises to keep generated artifacts outside a checkout. A refusal exit alone does not prove absence of side effects.
+- **Verification:** The expanded offline guard passes nested, symlink, `..`, evidence-override and both default-TMPDIR rejection cases, and accepts missing external destinations up to a deliberate pre-network stop. The same guard fails against the original script with `refused output created a directory`. Independent bounded review also passes.
+- **Source:** Phase 10 `10-REFRESH-GATES.md`; `tests/scripts/reproduce-mooneye-cgb.sh`; `tests/scripts/test-reproduce-mooneye-cgb-guard.sh`.
+
+### GB-FIXTURE-002 / 2026-10-20 / Test exclusions through the actual package scan
+
+- **Cause and evidence:** Phase 10's CGB ROM exclusion scanned the install tree, while preview smoke supplied only the MBC manifest. A clean package and an isolated scanner self-test both passed, yet a renamed CGB ROM in the extracted preview passed its actual scan.
+- **Remedy:** Supply both manifests to one preview scan command. Exercise that same command against a planted CGB ROM outside the fixture-directory allowlist, require its exact digest-based rejection, and remove the control file before consumers run.
+- **Applies when:** A prohibition spans several distribution trees or a new fixture family reuses an older package check. Scanner capability alone does not prove every producer invokes it with the required inputs.
+- **Verification:** The new control failed with the original MBC-only scan accepting the payload. The combined-manifest scan passed the focused package/install/ledger selection 6/6; independent bounded review found no defect. Existing test registration and inventory are unchanged.
+- **Source:** Phase 10 plan 10-15 G1; `10-REFRESH-GATES.md`; `cmake/PreviewPackageSmoke.cmake`.
+
+### GB-EVID-001 / 2026-10-21 / A closeout record must be bound to the original, not to a claim about it
+
+- **Cause and evidence:** Phase 15.1 had to disposition 24 inherited items without rewriting them. A record that only restated each item could drop an ID, soften its text, count a hosted receipt label as a run, count a skipped required check as a pass, or fold an unrecoverable historical fact into a green row, and a stub checker that only parsed the JSON accepted all of them (`15.1-17-RED-task1.txt`).
+- **Remedy:** Pin the scope inventory by digest, re-read the original text at the immutable audit commit, require hosted identities to equal API-read run records, keep limitations as open rows that cannot count as passes or owner acceptance, and pin the shipped release identity. Drive every defect through the real CLI over a private fixture repository.
+- **Applies when:** A phase closes inherited debt, historical unknowns or external limitations, or a receipt-style record could be edited together with the text it vouches for.
+- **Verification:** `verify-closeout-dispositions.py --self-test` rejects 30 defects, each with its own REJECT code and no success line; `--check` passes over the real records. The merge receipt is read from the hosting API, never written from memory.
+- **Source:** Phase 15.1 plan 17; `tests/scripts/verify-closeout-dispositions.py`; `15.1-DISPOSITIONS.json`.

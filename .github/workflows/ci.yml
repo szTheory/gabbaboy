@@ -209,6 +209,7 @@ jobs:
         with:
           # v02 performance self-tests read the v0.1.0 baseline commit and tag.
           fetch-depth: 0
+          persist-credentials: false
       - name: Confirm pinned Clang 18 toolchain
         run: |
           clang-18 --version

@@ -21,20 +21,38 @@ actuals:
 duration: 25 min
 completed: 2026-10-12
 coverage:
-  - deliverable: "STOP with KEY1 armed latches UNSUPPORTED_BUS at FF4D on CGB mode; unarmed, compat and DMG still STOP"
-    verification:
-      - {kind: ctest, ref: "cgb_stop_armed_cgb", status: pass}
-      - {kind: ctest, ref: "cgb_stop_unarmed_cgb", status: pass}
-      - {kind: ctest, ref: "cgb_stop_compat_ignores_key1", status: pass}
-      - {kind: ctest, ref: "cgb_stop_dmg_control", status: pass}
+  - id: 10-11-stop-key1
+    description: "STOP with KEY1 armed latches UNSUPPORTED_BUS at FF4D on CGB mode; unarmed, compat and DMG still STOP"
     human_judgment: false
-  - deliverable: "KEY0 locked after boot, probed by behaviour, with cross-column and idempotency checks"
     verification:
-      - {kind: ctest, ref: "cgb_key0_lock_cgb", status: pass}
-      - {kind: ctest, ref: "cgb_key0_lock_compat", status: pass}
-      - {kind: ctest, ref: "cgb_key0_lock_cross_column", status: pass}
-      - {kind: ctest, ref: "cgb_key0_lock_reset_idempotent", status: pass}
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_stop_armed_cgb$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_stop_unarmed_cgb$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_stop_compat_ignores_key1$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_stop_dmg_control$'"
+        status: pass
+  - id: 10-11-key0-lock
+    description: "KEY0 locked after boot, probed by behaviour, with cross-column and idempotency checks"
     human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_key0_lock_cgb$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_key0_lock_compat$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_key0_lock_cross_column$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_key0_lock_reset_idempotent$'"
+        status: pass
 ---
 
 # Phase 10 Plan 11: KEY0 lock and armed STOP Summary
@@ -51,6 +69,10 @@ STOP with KEY1 armed on the CGB profile in CGB mode now retires and reports `GBB
 
 - Full suite 485/485 pass; `verify-dmg-baseline.sh` prints `baseline status=pass`, rows=0.
 - Negative control: replacing the KEY1-armed condition with `0` made `cgb_stop_armed_cgb` fail (others still passed); source restored before commit. model_gates tests green with the new tag.
+
+## Fresh behavior recheck (2026-10-21)
+
+Configured the isolated `build/phase15_1_14` tree from the current checkout and built `test_cgb_visibility` against the current core. All eight mapped STOP and KEY0 CTests passed in a focused run (included in the 23/23 Phase 10 coverage batch). This is current software-model evidence; the original full-suite and producer statements above remain historical.
 
 ## Deviations from Plan
 

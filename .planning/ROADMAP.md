@@ -7,7 +7,7 @@ GabbaBoy is an original portable C17 core for Game Boy and Game Boy Color. v0.1 
 ## Milestones
 
 - ✅ **v0.1 Limited DMG Preview** — Phases 1–6 plus inserted 06.1 (shipped 2026-10-10; release `v0.1.0` published 2026-10-09)
-- 🚧 **v0.2 Color & Cartridge Breadth** — Phases 7–15 (in progress; Phase 7 not started)
+- 🚧 **v0.2 Color & Cartridge Breadth** — Phases 7–15 plus inserted 15.1 (nine original phases complete; release-hardening cleanup pending; next `/gsd-plan-phase 15.1`)
 - 📋 **v0.3 States & Integration** (provisional) — save states (STATE-01) and a qualified Playstead adapter (INT-01)
 
 ## Phases
@@ -50,6 +50,8 @@ Milestone-wide rules:
 - [x] **Phase 13: CGB HDMA** - General-purpose and HBlank VRAM DMA with stall, cancel, readback and HALT interaction (completed 2026-10-14)
 - [x] **Phase 14: CGB-E Model Qualification and Corpus** - CGB-E APU/I/O deltas and a headless CGB-E corpus with per-suite denominators (completed 2026-10-15)
 - [x] **Phase 15: CGB Acceptance, Support Ledger and v0.2.0 Release** - CGB game-level evidence (or an explicit absence), current docs and consumers, and a qualified exact-tag release (completed 2026-10-20)
+
+- [ ] **Phase 15.1: Release Hardening and Milestone Debt Closure (INSERTED)** - Resolve actionable closeout findings before milestone archival; preserve published v0.2.0 evidence
 
 ## Phase Details
 
@@ -114,6 +116,8 @@ Plans:
 - [x] 07-16-PLAN.md — Acceptance docs, support-ledger entry, recorded refinements and lessons, PR ready, triage and handoff
 
 ### Phase 8: Cartridge Seam, MBC5 and MBC2
+
+**Package verification refresh (2026-10-20):** [08-VERIFICATION.md](phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-VERIFICATION.md) passes 97/97 truths, 27 artifact declarations and 19 traced links; CART-01/02/03 remain satisfied. Later Phase 10 package exclusion passes clean/renamed/symlink controls. Fresh core 1,144/1,144, player 98/98 and separate installed 5/5 pass, zero skips; DMG rows unchanged. Canonical UAT closes 34/34 deliverables with 19 controls; immutable closure/player contracts reject 157/5 controls. No implementation replay or new qualification. Next corrective phase: **12 — CGB Double Speed**, metadata verification refresh only: `/gsd-execute-phase 12`. Both auto flags remain false; milestone closure/debt review stays pending.
 
 **Goal**: Cartridge behavior lives behind one type-table mapper seam with no observable DMG change, and callers can run MBC5 and MBC2 cartridges.
 **Depends on**: Phase 7 (DMG baseline)
@@ -221,6 +225,8 @@ Plans:
 **Research**: Moderate (CGB-E post-boot DIV/LY/STAT; compat-mode register readability per Mooneye `unused_hwio-C` and AGE).
 **Plans**: 20/20 plans complete
 
+**Verification refresh (2026-10-20):** [10-VERIFICATION.md](phases/GB-10-cgb-profile-banking-and-register-visibility/10-VERIFICATION.md) passes 143/143 truths and 25/25 prohibition guards; CGB-01/02/03 remain satisfied. Final-source regression passed 1,144/1,144 and the focused player passed 19/19. Fixture output-path and preview CGB-ROM exclusion gaps are repaired with failing controls; historical UAT/audits and explicit evidence limits are preserved. Paused before Phase 11 verification refresh: `/gsd-execute-phase 11`.
+
 Plans (serial waves: every plan edits `tests/expected-tests.txt` and `tests/CMakeLists.txt`, most also `src/core/gabbaboy.c`):
 - [x] 10-01-PLAN.md — Wave 1: model-gate scanner (R1-R5, --release, self-test mutants) and docs/model-gates.md skeleton
 - [x] 10-02-PLAN.md — Wave 2: tag every core function and model-differing branch (comment-only), gate table, real-file controls
@@ -252,6 +258,8 @@ Plans (serial waves: every plan edits `tests/expected-tests.txt` and `tests/CMak
   1. CGB software renders with tile attributes, BG/OBJ colour palette RAM (auto-increment, mode-3 lockout) and CGB priority rules through `gbb_copy_frame_rgb555`, checked by an exhaustive priority truth table and AGE/MagenTests CGB PPU ROMs plus original attribute-bit fixtures; `gbb_copy_frame` stays byte-identical for DMG.
   2. DMG software on the CGB profile renders through a fixed, original, documented compatibility palette that a host can override; no boot-ROM palette table ships.
   3. The SDL3 player runs software with `--model auto|dmg|cgb` and colour presentation and passes an automated CGB smoke in CI.
+
+**Verification refresh (2026-10-20):** [11-VERIFICATION.md](phases/GB-11-cgb-colour-rendering-and-player-colour/11-VERIFICATION.md) passes 112/112 truths and all 35 prohibitions; CGB-04/05/09 remain satisfied. Current regression passed 1,144/1,144 and rebuilt player 98/98. Canonical UAT closes 91 individual deliverables with 19 negative controls, preserving original receipt limits. No source change. Paused before Phase 12 verification refresh: `/gsd-execute-phase 12`.
 
 **Rights gates**: G1 (mgblib font) gates vendoring cgb-acid2/dmg-acid2 into required CI (digest-pinned optional local runs otherwise); G4 excludes title-hash compatibility palettes.
 **Research**: DEEP (LCDC bit 0 in CGB mode, OPRI timing, CGB mode-3 length, blocked-write palette auto-increment).
@@ -315,6 +323,10 @@ Plans:
 
 **Research**: DEEP (interrupts, DIV and PPU during the pause; applicable test list).
 **Plans**: 19/19 plans complete
+
+**Verification refresh (2026-10-20):** [12-VERIFICATION.md](phases/GB-12-cgb-double-speed/12-VERIFICATION.md) passes 109/109 truths and 48 prohibitions; CGB-06 remains satisfied. Current regression passed 1,144/1,144 and rebuilt player 98/98, zero skips. Canonical UAT closes 73 deliverables with 19 negative controls. Immutable boundary closeout passes 17 controls; later Phase 13 HDMA promotion stays separately attributed. No source change or new hardware/hosted qualification. Paused before Phase 13 verification refresh: `/gsd-execute-phase 13`.
+
+**Phase 12 metadata verification refresh (2026-10-21):** Later lessons/index additions preserve the completed software contract; all 19 plans remain complete. See [12-METADATA-REFRESH-EVIDENCE.md](phases/GB-12-cgb-double-speed/12-METADATA-REFRESH-EVIDENCE.md) for fresh core/player/consumer receipts, canonical UAT and negative controls. Next stage: `/gsd-complete-milestone v0.2` with explicit review of 21 retained debt items. No next numbered implementation phase exists; v0.3 remains provisional. Stop after Phase 12; both auto flags remain false. Earlier refresh routes below and above remain historical.
 
 Plans:
 **Wave 1**
@@ -416,6 +428,8 @@ Plans:
 
 Phase 13 automated UAT completed 2026-10-15: 45/45 deliverables, zero human checkpoints or gaps ([13-UAT.md](phases/GB-13-cgb-hdma/13-UAT.md)). Reuse this closed receipt unless covered behavior or evidence changes. Next owner-selected command: `/gsd-discuss-phase 14`.
 
+**Verification refresh (2026-10-20):** [13-VERIFICATION.md](phases/GB-13-cgb-hdma/13-VERIFICATION.md) passes 37/37 truths, 49 artifact declarations, 12 traced links and one prohibition; CGB-07 remains satisfied. Current core 1,144/1,144, player 98/98, zero skips; canonical UAT 45/45 with 19 rejected controls. No source change or new hardware/hosted qualification; deferred duplicate-library warning and old-wrapper/tool compatibility limits remain. Paused before Phase 14 refresh: `/gsd-execute-phase 14`.
+
 ### Phase 14: CGB-E Model Qualification and Corpus
 
 **Goal**: CGB-E specific APU and I/O differences are implemented under declared per-test applicability, and a headless CGB-E corpus reports honest denominators.
@@ -466,6 +480,8 @@ Plans:
 **Wave 11** *(blocked on Wave 10 completion)*
 - [x] 14-13-PLAN.md — Atomic claims, automated documentation and durable evidence handoff
 
+**Verification refresh (2026-10-20):** [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41 truths, 28 artifact declarations and 13 traced links. CGB-08/10 remain satisfied. Fresh core 1,144/1,144, player 98/98, separate installed-package 5/5 and relocated C/C++ checks pass, zero skips; canonical UAT closes 49/49 with 19 rejected controls. Nonce-bound selected corpus stream 108/108 yields 107 cases, 25 observed passes and 82 matched expected failures; frozen DMG rows unchanged. Historical audit/tool/hardware limits remain. Phase 15 is already complete/currently verified. Final cross-phase freshness finds Phase 8 stale over the later Phase 10 `cmake/PreviewPackageSmoke.cmake` change; Phase 12 also remains stale over lessons/index metadata from the prior Phase 13 refresh; all remaining reports pass. Paused before corrective Phase 8 verification refresh: `/gsd-execute-phase 8`. Milestone completion review follows; 21 debt items remain for explicit review.
+
 ### Phase 15: CGB Acceptance, Support Ledger and v0.2.0 Release
 
 **Goal**: Adopters get a qualified v0.2.0 release whose ledger, docs and consumers accurately state what DMG-CPU-B and CGB-CPU-E support has been proven.
@@ -506,11 +522,61 @@ Plans:
 **Wave 7** *(blocked on Wave 6 completion)*
 - [x] 15-10-PLAN.md — Complete protected delivery and verify the published exact-tag release
 
+### Phase 15.1: Release Hardening and Milestone Debt Closure (INSERTED)
+
+**Goal:** Resolve actionable release-hardening and closeout findings with independent negative-controlled evidence, preserving historical limitations and the shipped v0.2.0 release.
+**Requirements**: SHIP-09, SHIP-10, SHIP-11 and EVID-02 follow-up; original 28 requirements remain historically satisfied.
+**Depends on:** Phase 15
+**Scope:** [15.1-SCOPE.md](phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-SCOPE.md); all 21 audit debts plus scan/schema issues individually tracked.
+**Success Criteria**:
+  1. Each inventory item has a source-backed disposition and meaningful negative-controlled check, or an explicit historical/external limitation for owner review.
+  2. Changed release trust boundaries, provenance and performance checks reject forged or weakened evidence through actual entry points.
+  3. Canonical UAT and strict coverage pass; relevant DMG baseline and exact-head remote checks pass before merge.
+  4. Re-audit is the next stage after this phase; no automatic archive, tag, publication or v0.3 start.
+
+**Plans:** 19/19 plans executed
+
+Plans:
+**Wave 1**
+- [x] 15.1-01-PLAN.md — Bind source receipts to independently read Git trees
+- [x] 15.1-02-PLAN.md — Deliver dense input scripts without exhausting the bounded queue
+- [x] 15.1-03-PLAN.md — Make held-button DMG fuzz coverage sensitive to real behavior
+- [x] 15.1-06-PLAN.md — Make performance regression decisions measurement-bound
+- [x] 15.1-11-PLAN.md — Normalize Phase 9 summary coverage 1–9
+- [x] 15.1-12-PLAN.md — Normalize Phase 9 summary coverage 10–18
+- [x] 15.1-13-PLAN.md — Normalize Phase 10 summary coverage 1–5
+- [x] 15.1-14-PLAN.md — Normalize Phase 10 summary coverage 11–15
+- [x] 15.1-15-PLAN.md — Classify canonical UAT separately from clean review files
+- [x] 15.1-18-PLAN.md — Normalize Phase 10 summary coverage 6–10
+- [x] 15.1-19-PLAN.md — Normalize Phase 10 summary coverage 16–20
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [x] 15.1-04-PLAN.md — Bind installed consumers to independently identified archive bytes
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [x] 15.1-05-PLAN.md — Separate trusted judges and independently verify hosted provenance
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [x] 15.1-07-PLAN.md — Make ledger evidence scope and known limitations explicit
+- [x] 15.1-08-PLAN.md — Run untrusted producers read-only and judge executable workflow wiring
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [x] 15.1-09-PLAN.md — Wire safe retry recovery and bound real downloads
+- [x] 15.1-10-PLAN.md — Integrate exact native link, corpus and coverage contracts
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [x] 15.1-16-PLAN.md — Retain fresh baseline, historical-limit and hosted reproduction evidence
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [x] 15.1-17-PLAN.md — Close every debt disposition under independent exact-head review
+
+**Cross-cutting constraints:**
+- Historical behavioral and producer claims are preserved while strict coverage representation is machine-readable.
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1–6, 06.1 | v0.1 | 64/64 | Complete | 2026-10-10 |
 | 7. DMG Game Acceptance and Regression Baseline | v0.2 | 17/17 | Complete    | 2026-10-11 |
 | 8. Cartridge Seam, MBC5 and MBC2 | v0.2 | 10/10 | Complete    | 2026-10-11 |
 | 9. MBC3, Deterministic RTC and Cartridge Persistence | v0.2 | 18/18 | Complete    | 2026-10-11 |
@@ -520,3 +586,4 @@ Plans:
 | 13. CGB HDMA | v0.2 | 12/12 | Complete    | 2026-10-14 |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 13/13 | Complete    | 2026-10-15 |
 | 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 10/10 | Complete    | 2026-10-20 |
+| 15.1. Release Hardening and Milestone Debt Closure | v0.2 | 19/19 | In Progress | - |

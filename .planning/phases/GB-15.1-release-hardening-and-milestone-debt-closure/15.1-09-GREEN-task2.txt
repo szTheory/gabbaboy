@@ -1,0 +1,23 @@
+$ python3 .github/scripts/download-release-artifact.py --self-test
+rejected: unknown-length stream passes the byte cap: REJECT download-size-limit: the stream passed the 1048576 byte cap
+rejected: declared length above the cap: REJECT download-size-limit: the server declares 1099511627776 bytes, above the 1048576 byte cap
+rejected: stalled response: REJECT download-timeout: the server stalled past the 1s stall deadline
+rejected: slow drip beyond the total deadline: REJECT download-timeout: the 2s total deadline passed
+rejected: truncated fixed-length response: REJECT download-truncated: received 100 of the 1000 declared bytes
+rejected: truncated chunked response: REJECT download-truncated: the chunked response ended before its final chunk
+rejected: redirect loop: REJECT download-redirect: more than 3 redirects
+rejected: redirect to a non-http scheme: REJECT download-scheme: only https downloads are allowed, not ftp
+rejected: missing artifact: REJECT download-status: the server answered HTTP 404
+rejected: plain http to a non-loopback host: REJECT download-scheme: only https downloads are allowed, not http
+rejected: plain http without the loopback flag: REJECT download-scheme: only https downloads are allowed, not http
+rejected: file URL: REJECT download-scheme: only https downloads are allowed, not file
+rejected: unset bearer variable: REJECT download-auth: environment variable SELFTEST_TOKEN is empty or unset
+PASS: bounded download self-test negative_controls=13 positive_controls=3 credential_controls=2
+$ bash .github/scripts/verify-release-gates.sh --self-test: exit 0 (tail)
+PASS: recovery CLI reads live release state first, writes nothing, ignores unrelated CI and cleans up on every exit
+rejected: changed attachment, concurrent eligible release, concurrent retry dispatch, stale and absent attempt, changed published assets, unreadable live state
+PASS: release configuration and exact-head required-check gate
+$ python3 -I .github/scripts/verify-workflow-policy.py --check
+PASS: workflow privilege and trust wiring residual_write_jobs=5
+
+Defect found by the control during GREEN: reading with response.read(64 KiB) blocked on a slow drip past the total deadline (the CLI subprocess hit the 60s harness timeout); read1 fixed it.

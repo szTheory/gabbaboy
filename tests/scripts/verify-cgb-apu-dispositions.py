@@ -6,8 +6,10 @@ import argparse
 import copy
 import hashlib
 import json
+import os
 import re
 import subprocess
+import tempfile
 import sys
 from pathlib import Path, PurePosixPath
 
@@ -18,6 +20,14 @@ DISPOSITIONS = ROOT / "tests/external/cgb-apu-dispositions.json"
 INVENTORY = ROOT / "tests/external/cgb-corpus-inventory.json"
 EXPECTED_TESTS = ROOT / "tests/expected-tests.txt"
 MAX_INPUT_BYTES = 2_000_000
+MAX_PRODUCER_CORE_BYTES = 2_000_000
+GIT_OBJECT_TIMEOUT_SECONDS = 10
+APU_PRODUCER_REVISION = "b46bfc9e8a6ae5a8bd93d2289445bf5179080443"
+APU_PRODUCER_REVISION_SHORT = "b46bfc9"
+# The frozen producer commit lives only on a local backup branch, so a hosted checkout cannot read it
+# from Git. Its src/core/gabbaboy.c bytes are retained verbatim and pinned by digest.
+APU_PRODUCER_CORE_RETAINED = "tests/external/cgb-apu-producer-b46bfc9-gabbaboy.src"
+APU_PRODUCER_CORE_SHA256 = "a0a064ac5d0d3fe7221f726bd4525c649636c3c24133293bcac2324a36085d99"
 REQUIRED_COUNTS = {"cases": 70, "pass": 8, "xfail": 62, "assertions": 4784}
 REQUIRED_CTESTS = {
     "cgb_samesuite_apu_membership",
@@ -46,6 +56,75 @@ def read_json(path: Path) -> dict:
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def read_git_core_source(root: Path, revision: str) -> bytes:
+    need(re.fullmatch(r"[0-9a-f]{40}", revision) is not None,
+         "producer-revision-format")
+    object_name = f"{revision}:src/core/gabbaboy.c"
+    environment = os.environ.copy()
+    environment.update({
+        "GIT_NO_LAZY_FETCH": "1",
+        "GIT_NO_REPLACE_OBJECTS": "1",
+        "GIT_OPTIONAL_LOCKS": "0",
+        "GIT_TERMINAL_PROMPT": "0",
+    })
+
+    try:
+        size = subprocess.run(
+            ["git", "cat-file", "-s", object_name], cwd=root,
+            stdin=subprocess.DEVNULL, capture_output=True, text=True,
+            timeout=GIT_OBJECT_TIMEOUT_SECONDS, env=environment, check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise Mismatch("producer-object-timeout") from exc
+    need(size.returncode == 0, "producer-object-missing")
+    size_text = size.stdout.strip()
+    need(re.fullmatch(r"[0-9]+", size_text) is not None, "producer-object-size")
+    byte_count = int(size_text)
+    need(0 < byte_count <= MAX_PRODUCER_CORE_BYTES, "producer-object-size")
+
+    try:
+        source = subprocess.run(
+            ["git", "cat-file", "blob", object_name], cwd=root,
+            stdin=subprocess.DEVNULL, capture_output=True,
+            timeout=GIT_OBJECT_TIMEOUT_SECONDS, env=environment, check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise Mismatch("producer-object-timeout") from exc
+    need(source.returncode == 0, "producer-object-missing")
+    need(len(source.stdout) == byte_count, "producer-object-size")
+    return source.stdout
+
+
+def read_git_core_source_if_present(root: Path, revision: str) -> bytes | None:
+    """The producer commit when this checkout has it; None when it does not (for example a hosted
+    checkout, where the commit is on no public ref). Any other failure still raises."""
+    try:
+        return read_git_core_source(root, revision)
+    except Mismatch as exc:
+        if str(exc) == "producer-object-missing":
+            return None
+        raise
+
+
+def read_producer_core(root: Path, revision: str, git_reader=read_git_core_source_if_present) -> bytes:
+    """The frozen producer core, from the retained bytes pinned by digest.
+
+    Git is corroboration only: when the commit is present its blob must equal the retained bytes, and
+    when it is absent nothing is relaxed, because the digest pin and the report's own digest still bind
+    the same bytes."""
+    need(revision == APU_PRODUCER_REVISION, "producer-revision")
+    path = root / APU_PRODUCER_CORE_RETAINED
+    need(path.is_file() and not path.is_symlink(), "producer-object-missing")
+    size = path.stat().st_size
+    need(0 < size <= MAX_PRODUCER_CORE_BYTES, "producer-object-size")
+    data = path.read_bytes()
+    need(len(data) == size, "producer-object-size")
+    need(hashlib.sha256(data).hexdigest() == APU_PRODUCER_CORE_SHA256, "producer-core-pin")
+    in_git = git_reader(root, revision)
+    need(in_git is None or in_git == data, "producer-object-mismatch")
+    return data
 
 
 def ctest_name(alias: str) -> str:
@@ -137,7 +216,10 @@ def validate(root: Path, manifest: dict, report: dict, inventory: dict,
          "manifest-digest")
     need(config.get("harness_source_sha256") == sha256(root / "tests/test_samesuite_apu.c"),
          "harness-digest")
-    need(config.get("core_source_sha256") == sha256(root / "src/core/gabbaboy.c"),
+    need(config.get("core_revision") == APU_PRODUCER_REVISION_SHORT,
+         "producer-revision")
+    producer_core = read_producer_core(root, APU_PRODUCER_REVISION)
+    need(config.get("core_source_sha256") == hashlib.sha256(producer_core).hexdigest(),
          "core-digest")
     need(report.get("schema") == "gabbaboy-cgb-apu-dispositions-v1", "report-schema")
 
@@ -319,6 +401,56 @@ def self_test(root: Path, manifest: dict, report: dict, inventory: dict,
         "inventory-execution:apu/channel_1/channel_1_align.asm")
     rejected("altered-author-expectation", lambda m, r, i: r["cases"][0]["author_expectation"].update(
         {"value": "fail"}), "author-contract:apu/channel_1/channel_1_align.asm")
+    rejected("forged-producer-revision", lambda m, r, i: r["configuration"].update(
+        {"core_revision": "0000000"}), "producer-revision")
+    rejected("altered-producer-digest", lambda m, r, i: r["configuration"].update(
+        {"core_source_sha256": "0" * 64}), "core-digest")
+
+    try:
+        read_git_core_source(root, "0" * 40)
+    except Mismatch as exc:
+        need(str(exc) == "producer-object-missing",
+             f"control-diagnostic:missing-producer-object:{exc}")
+        print("negative-control=pass id=missing-producer-object diagnostic=producer-object-missing")
+    else:
+        raise Mismatch("control-accepted:missing-producer-object")
+
+    # A hosted checkout has no producer commit: the retained bytes alone must satisfy the contract,
+    # and weakening them (absent, altered, oversize or disagreeing with Git) must each be refused.
+    retained = (root / APU_PRODUCER_CORE_RETAINED).read_bytes()
+    with tempfile.TemporaryDirectory() as tmp:
+        hosted = Path(tmp)
+        target = hosted / APU_PRODUCER_CORE_RETAINED
+        target.parent.mkdir(parents=True)
+
+        def producer_refused(name: str, expected: str, git_reader=None) -> None:
+            try:
+                read_producer_core(hosted, APU_PRODUCER_REVISION, git_reader)
+            except Mismatch as exc:
+                need(str(exc) == expected, f"control-diagnostic:{name}:{exc}")
+                print(f"negative-control=pass id={name} diagnostic={expected}")
+                return
+            raise Mismatch(f"control-accepted:{name}")
+
+        producer_refused("producer-retained-absent", "producer-object-missing")
+        target.write_bytes(retained)
+        need(read_producer_core(hosted, APU_PRODUCER_REVISION, lambda *_: None) == retained,
+             "hosted-producer-core-readable")
+        print("clean-twin=pass id=hosted-producer-core-without-git-object")
+        target.write_bytes(retained[:-1] + b"X")
+        producer_refused("producer-retained-altered", "producer-core-pin")
+        target.write_bytes(b"x" * (MAX_PRODUCER_CORE_BYTES + 1))
+        producer_refused("producer-retained-oversize", "producer-object-size")
+        target.write_bytes(retained)
+        producer_refused("producer-git-disagrees", "producer-object-mismatch", lambda *_: retained + b"\n")
+        try:
+            read_producer_core(hosted, "0" * 40, lambda *_: None)
+        except Mismatch as exc:
+            need(str(exc) == "producer-revision", f"control-diagnostic:forged-revision:{exc}")
+            print("negative-control=pass id=producer-forged-revision diagnostic=producer-revision")
+        else:
+            raise Mismatch("control-accepted:producer-forged-revision")
+
     rejected("changed-signature", lambda m, r, i: next(
         row for row in i["cases"] if row.get("source_id") ==
         "samesuite:apu/channel_1/channel_1_align.asm")["execution"].update(
@@ -362,7 +494,7 @@ def main() -> int:
             ROOT, args.build_dir, args.ctest_command)
         if args.self_test:
             self_test(ROOT, manifest, report, inventory, registered_tests)
-            print("cgb-apu-dispositions self-test pass controls=8")
+            print("cgb-apu-dispositions self-test pass controls=16")
         else:
             counts = validate(ROOT, manifest, report, inventory, registered_tests)
             print("cgb-apu-dispositions membership pass cases={cases} author_expectation=pass observed_pass={pass} xfail={xfail} assertions={assertions}".format(**counts))

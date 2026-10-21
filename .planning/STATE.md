@@ -2,61 +2,100 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_phase: 15
-current_plan: Not started
-status: completed
-stopped_at: Phase 15 execution and phase verification complete; next /gsd-verify-work 15
-last_updated: "2026-10-20T12:00:58.767Z"
-last_activity: 2026-10-20
-last_activity_desc: Phase 15 complete
-state_head: ea39f2c028cf1ded16e45a1dc1978edd4d6a7def
+current_phase: "15.1"
+current_phase_name: Release Hardening and Milestone Debt Closure
+current_plan: 17
+status: executing
+stopped_at: Completed 15.1-17-PLAN.md (dispositions closed; phase PR opened)
+last_updated: "2026-10-21T20:30:00.000Z"
+last_activity: 2026-10-21
+last_activity_desc: Completed Phase 15.1 Plan 17 (24 individual dispositions bound to the audit commit, 12 open limitations, review and security records, full gate 1164/1164)
+state_head: 7a3d2fddc355f1cf642ef653d6e74f9adf7d7c25
 progress:
-  total_phases: 9
+  total_phases: 10
   completed_phases: 9
-  total_plans: 134
-  completed_plans: 134
-  percent: 100
+  total_plans: 153
+  completed_plans: 153
+  percent: 90
 ---
 
 # Project State
 
 ## Project Reference
 
-See: [PROJECT.md](PROJECT.md) (updated 2026-10-15)
+See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release
+**Current focus:** Phase 15.1 — Release Hardening and Milestone Debt Closure
 
 ## Current Position
 
-Phase: 15
-Status: Phase 15 executed and verified (15-VERIFICATION.md passed 12/12); awaiting /gsd-verify-work 15
-Current Plan: 10/10 complete
-Total Plans in Phase: 10
-Last activity: 2026-10-20 — Phase 15 complete
-Last Activity Description: Phase 15 complete
+Phase: 15.1 (Release Hardening and Milestone Debt Closure) — EXECUTING
+Status: Executing Phase 15.1 (all plans summarized; verification pending)
+Current Plan: 17
+Total Plans in Phase: 19
 
-Completed workflow stage: **Phase 15 execution (all 10 plans) and execute-phase verification gates**. Evidence: [15-VERIFICATION.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-VERIFICATION.md) (passed 12/12, read back against live v0.2.0), [15-SECURITY.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-SECURITY.md) (21/21 closed), [15-VALIDATION.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-VALIDATION.md) (Nyquist-compliant, 20/20 green), [15-REVIEW.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-REVIEW.md) (0 critical, 8 warnings, 8 info; all open/advisory in 15-REVIEW-DISPOSITION.md — schedule before v0.2.1), [15-DELIVERY.md](phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-DELIVERY.md). v0.2.0 is published (tag ab301aa, 22 assets).
+Completed stage: **Phase 15.1 execution - all 19 plans executed and summarized; Plan 17 closed the 24 dispositions**. `15.1-DISPOSITIONS.json` gives every scope item an individual source-backed disposition (11 closed, 11 closed with a named residual, 2 open historical unknowns) checked by `verify-closeout-dispositions.py` (30 real-CLI rejection controls). Twelve limitations stay open and are neither passes nor owner acceptances: support-ledger pin drift, the performance review trigger, the unexercised trusted rehearsal judge, the pre-fix audio_saturation RED and isolated M7 unknowns, the SHIP-11 unclassified edge (flagged unresolved assumption), five residual write jobs, the failed hosted rehearsal, no hosted wrong-ROM run, two descriptor-less prohibition flags, three Windows-skipped POSIX controls and an undiagnosed hosted ASan stall timing. Full gate 1164/1164 at `785d55c`. The review is not independent (recorded). The phase PR, exact head, required check runs and merge are recorded from live API readback in `15.1-delivery-receipt.json`. Both auto flags stay false; no tag, release, archive or v0.3 work. **Next:** standard Phase 15.1 verification, `/gsd-verify-work 15.1`; after that the owner chooses `/gsd-audit-milestone`.
 
-Next phase action: **Phase 15 UAT** — `/gsd-verify-work 15` (automated by default per D-069). Phase 15 is the last v0.2 phase; after UAT the milestone route is `/gsd-audit-milestone`. Do not begin v0.3; both auto-advance flags remain false. Open: PR #75 `release 0.2.1` (release-please, intentionally not merged).
+Next stage: **15.1 post-plan verification**. Exact next command: `/gsd-verify-work 15.1`; then the owner chooses `/gsd-audit-milestone`.
 
-Progress: [██████████] 100%
+Scope: [15.1-SCOPE.md](phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-SCOPE.md) and its machine-readable inventory track all 21 audit debts, both closeout scan items and the inherited SUMMARY schema caveat. Validate each finding before fixing; preserve historical unknowns and all v0.2.0 producer receipts. Reuse existing research and completed implementation. Both automatic advance flags remain false; v0.3 is provisional and unstarted.
+
+### Historical Phase 12 metadata verification refresh
+
+Completed stage: **Phase 12 — CGB Double Speed, metadata verification refresh**. All 19 implementation plans were already complete. The only stale covered inputs were later Phase 13 additions to `LESSONS.md` and `research/INDEX.md`; they preserve the Phase 12 contract. Canonical goal verification and automated UAT retain their bounded software-model scope. No emulator implementation changed.
+
+Fresh producer `45add7e` configured/rebuilt the core and SDL player: core **1,144/1,144** in **396.40 seconds**, player **98/98** in **18.78 seconds**, and separate existing-installed consumers **5/5** in **0.65 seconds**, zero skips. Current receipts, hashes, counts and limitations are recorded in [12-METADATA-REFRESH-EVIDENCE.md](phases/GB-12-cgb-double-speed/12-METADATA-REFRESH-EVIDENCE.md). Canonical UAT closes 73 automated deliverables with 19 rejected controls; all 19 bounded task windows reconcile. Immutable `da98d56` closeout rejects 17 controls. Historical review/security/Nyquist/UI reports are reused with fresh bounded applicability controls; this is not a new broad audit or hosted/hardware/perceptual qualification.
+
+Next stage: **v0.2 Color & Cartridge Breadth milestone completion and explicit debt review**. Exact next command: `/gsd-complete-milestone v0.2`. No next numbered implementation phase exists; v0.3 remains provisional and unstarted. All 9/9 implementation phases and 134/134 plans remain complete. The audit retains 28/28 satisfied requirements and 21 debt items; none is accepted here. The inherited 47 legacy SUMMARY schema problems in untouched Phases 9/10 remain recorded for milestone review. Stop after Phase 12; both automatic advance flags remain false. No archive, tag, release, merge or next milestone starts.
+
+Review branch: `gsd/phase-12-metadata-verification-refresh`, stacked on Phase 8 package-refresh PR #91. Boundary triage found zero open issues; PRs #78–91 and release-please #75 remain open. Any merge requires required checks on the exact reviewed remote revision; local passes do not establish hosted readiness. Preserve the pre-existing uncommitted `.planning/config.json` edits.
+
+### Historical Phase 14 verification refresh
+
+Completed stage: **Phase 14 — CGB-E Model Qualification and Corpus, verification refresh**. All 13 implementation plans were already complete. Canonical [verification](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes **41/41 truths**, all **28 artifact declarations** and **13 traced links**; CGB-08 and CGB-10 remain satisfied. Installed OpenGSD freshness is `passed` over the verifier's covered set.
+
+Fresh source `b52a4da` passed configured core regression **1,144/1,144** in **385.46 seconds**, rebuilt player **98/98** in **17.10 seconds**, and separate installed-package **5/5** in **1.80 seconds**, all zero skips. Relocated C/C++ consumers pass profile/probe/RGB555/RTC behavior. The inherited core cache omitted five optional installed-package rows; their separate fresh run plus the original stream covers **258/258** frozen core identities. Frozen DMG baseline: zero changed rows.
+
+A separately identified nonce-bound **108/108** CTest stream produces **107/107 cases: 25 observed passes, 82 matched expected failures**, accepted by the claim checker. Canonical [14-UAT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md) closes **49/49** automated deliverables with **19 rejected controls**, zero human checkpoints. All **13** bounded historical task windows reconcile; immutable handoff controls read their completed boundary, not live routes. See [14-REFRESH-EVIDENCE.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-REFRESH-EVIDENCE.md) for receipt hashes and separation of producers.
+
+[14-REFRESH-GATES.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-REFRESH-GATES.md) preserves historical audit applicability, eight fixed findings, selected current positive/negative controls and the degraded squash-history scope resolver. No fresh full security audit, RGBDS 1.0.1 rebuild, CMake-floor build, hosted Windows/sanitizer run, performance, hardware or perceptual qualification is claimed. Physical CGB-E remains UNKNOWN/POLICY. Historical release and hosted receipts retain their actual producer revisions.
+
+Next corrective phase: **8 — Cartridge Seam, MBC5 and MBC2, verification refresh only**. The final owner check found its report stale over `cmake/PreviewPackageSmoke.cmake`, changed later by Phase 10 commit `1ba2346` to enforce CGB fixture exclusion. Exact next command: `/gsd-execute-phase 8`. This is a concrete changed-input gap; do not replay its completed implementation. Phase 12 also remains stale over the lessons/index metadata changed by the prior Phase 13 refresh; all remaining reports pass. Phase 15 is already complete/currently verified. Milestone completion review remains pending after Phase 8; the audit retains **28/28 satisfied requirements and 21 debt items**, none accepted here. No archive, tag, release or next milestone starts; both auto flags remain false. v0.3 remains provisional.
+
+Review stack: `gsd/phase-14-verification-refresh` builds on Phase 13 refresh PR #89. Boundary triage: no open issues; PRs #78–89 and release-please #75 remain open. Required exact reviewed-head checks must pass before any merge. Preserve the pre-existing config/state.json changes. The completion CLI accepted 13/13 but again incremented already-complete phase count to 10/9 and derived last-phase routing; current artifacts restore 9/9 and the explicit completion-review route. The final six-surface live handoff check passes ten rejected controls (stale prose/machine routes, either auto flag, excess phase count and incomplete Phase 15). Its seven heuristic path warnings are commands, upstream source names, brace shorthand, diagnostic prose or historical locks; all 28 actual artifact declarations pass. Global learning export is disabled; no qualifying LEARNINGS files, pending phase todos or stale handoff were found.
+
+### Historical Phase 13 verification refresh
+
+Completed stage: **Phase 13 — CGB HDMA, verification refresh**. All 12 implementation plans were already complete. The refreshed [verification report](phases/GB-13-cgb-hdma/13-VERIFICATION.md) passes **37/37 truths**, 49 artifact declarations, 12 independently traced links and one test-tier prohibition. CGB-07 remains satisfied; OpenGSD freshness is `passed` over 107 covered files. The generic key-link detector could not interpret the narrative declarations; the verifier traced actual wiring and executed predicates.
+
+Fresh unchanged source `a5f0d59` passed configured core regression **1,144/1,144** in **438.76 seconds** and rebuilt SDL player **98/98** in **19.87 seconds**, zero skips. Independent focused behavioral checks passed 21/21. Frozen DMG baseline has zero changed rows; all 12 bounded plan task windows reconcile. Canonical [13-UAT.md](phases/GB-13-cgb-hdma/13-UAT.md) closes **45/45 automated deliverables** with **19 rejected controls**, zero human checkpoints.
+
+[13-REFRESH-GATES.md](phases/GB-13-cgb-hdma/13-REFRESH-GATES.md) retains historical review/security/Nyquist/UI applicability. Four historical review fixes remain closed; the duplicate-library warning persists as deferred debt. At immutable completed boundary `e7ba52c`, original pure handoff checks pass with four rejected route/flag controls. The original full wrapper pins OpenGSD 1.16.0 and refuses current 1.18.0; the actual current producer separately passes saved-prohibition fail-first/clean/live proof. Local pinned fixture rebuild is unavailable (RGBDS 1.0.4 versus required 1.0.1). Historical hosted receipts retain actual revisions; no new hosted, sanitizer runtime, hardware, perceptual or benchmark qualification is claimed.
+
+Milestone completion remains **pending**. Phases 7–13 verification are refreshed; Phase 14 still requires refresh, including its clean UAT review. The milestone audit retains 28/28 satisfied requirements and 21 debt items; no debt acceptance occurs here. v0.3 remains provisional, unnumbered and unstarted.
+
+Next phase: **14 — CGB-E Model Qualification and Corpus**, verification refresh only.
+Exact next command: `/gsd-execute-phase 14`.
+Stop after Phase 13. Both automatic advance flags remain false. No archive, tag, release or merge was performed.
+
+Review stack: branch `gsd/phase-13-verification-refresh` builds on Phase 12 refresh PR #88. Boundary triage found no open issues; PRs #78–88 and release-please #75 remain unmerged. Required checks must pass at the exact reviewed head before merge; local results do not establish remote readiness. Preserve pre-existing config/state.json edits. The phase.complete CLI returned an incorrect last-phase route and incremented the already-complete phase count; the recorded current artifacts override that derived route without replaying completed phases. Its missing-path warnings include two command strings and historical `.planning/milestone.lock`; current artifact verification passes 49/49.
 
 ### Historical Phase 14 handoff (superseded route; preserved receipts)
 
-Phase: 14 — CGB-E Model Qualification and Corpus
-Status: Phase 14 automated UAT complete; paused for the owner
-Current Plan: 13
+Phase: 8
+Status: planning
+Current Plan: Not started
 Total Plans in Phase: 13
-Last Activity: 2026-10-16
-Last Activity Description: Phase 14 automated UAT complete; 49/49 automated; next Phase 15 discussion
+Last Activity: 2026-10-21
+Last Activity Description: Phase 15.1 execution started
 
 Completed workflow stage: **Phase 14 — CGB-E Model Qualification and Corpus, automated UAT complete**. [14-UAT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md) closes all 49 deliverables across 13 plans automatically, with zero issues, pending/skipped/blocked rows or human checkpoints. All 13 bounded commit windows reconcile. The canonical [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08 and CGB-10 are complete. Nyquist covers 31/31 tasks, security closes 27/27 threats, and all eight implementation review findings are fixed and independently checked.
 
 [14-CLOSURE.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-CLOSURE.md) preserves the execution receipts at their actual producers. Execution head `9c5b32dc4c75ad5f9eba44ff1c7b0a15ba0f9c7f` passed all 19 hosted jobs, including native Windows, Linux ASan/UBSan, fixture reproduction and packages. Final UAT metadata requires its own exact-head checks before the pre-authorized PR #71 merge; GitHub holds the current head and merge receipt. The complete software corpus contains 107 cases: 25 actual passes and 82 matched expected failures. Physical CGB-E remains UNKNOWN/POLICY; no analog, perceptual or general game qualification is claimed.
 
 Next stage: **Phase 15 discussion**.
-Next command: `/gsd-discuss-phase 15`.
+Next command: /gsd-execute-phase 15.1
 Next phase: **15 — CGB Acceptance, Support Ledger and v0.2.0 Release** remains unstarted. Release PR #70 belongs to that phase. Stop at the Phase 14 boundary.
 
 Both auto-advance flags remain false. Preserve D-069 automated checks with meaningful negative controls, strict SUMMARY coverage, D-096 small/flat dependencies and D-099 independent corpus membership. Reuse completed UAT and research unless covered behavior changes, contrary evidence appears, or evidence is stale/unavailable; do not repeat execution or invent a confirmation-only checkpoint. Boundary-only closure and handoff checks stay local while recurring checks remain in existing CI.
@@ -280,6 +319,10 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 15 P08 | 60 min | 2 tasks | 3 files |
 | Phase 15 P09 | about 3 hours | 2 tasks | 9 files |
 | Phase 15 P10 | 9h | 2 tasks | 20 files |
+| Phase 15.1 P08 | 105min | 3 tasks | 8 files |
+| Phase 15.1 P09 | 75min | 2 tasks | 5 files |
+| Phase 15.1 P10 | 140min | 2 tasks | 10 files |
+| Phase 15.1 P16 | 270min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -513,6 +556,12 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 15]: 15-09: v02_support_ledger is a receipt-free static ledger check; receipt-bound --check-current runs in the release corpus job after the receipt exists
 - [Phase 15]: 15-09: downloaded sidecars are verified with opt-in --evidence-only (no producer build tree); generation and --check-current are unrelaxed
 - [Phase 15]: Merge the version PR only after the non-publishing hosted rehearsal is green on its exact tree; resume a failed release run on the same unpublished draft and run control-plane verifiers from the workflow commit
+- [Phase 15.1]: 15.1-08: replaced the unverified partial policy checker; five source-executing write jobs remain a named, exactly-enforced residual (P15-01 repaired for corpus/fuzz/performance only)
+- [Phase 15.1]: 15.1-08: release fuzz evidence is the completed exact-source ci.yml push campaign read through the trusted hosted verifier; release/rehearsal campaigns stay non-qualifying
+- [Phase 15.1]: Plan 15.1-10: acceptance helpers split into core-free gabbaboy_accept_bare; mutants link only their own core, verified by verify-core-linkage.py
+- [Phase 15.1]: Plan 15.1-10: summary_coverage_phase10_rejected replaced by digest-pinned immutable fixture tests plus repaired-twin control; strict coverage from Phase 9
+- [Phase 15.1]: Plan 16: P7-03/P12-01 historic red run and M7 diagnostic stay unknown beside fresh sensitivity; P7-02 hosted_verified for Libbet run 39633868728 only; release rehearsal not_verified (no workflow_dispatch)
+- [Phase 15.1]: Plan 16 follow-up: frozen APU producer core retained as pinned bytes (b46bfc9 is on no public ref); rehearsal workflows now write a candidate manifest and pass --repo; remaining rehearsal failures (ledger pin drift, pending performance review, unexercised judge) are explicit limitations
 
 ### Pending Todos
 
@@ -539,11 +588,13 @@ None outside the roadmap.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
+| 261020-hr8 | Reconcile Phase 11 and 13 SUMMARY claims for CGB-05, CGB-09 and CGB-07 | 2026-10-20 | ba27c4b | [261020-hr8-reconcile-phase-11-and-13-summary-comple](./quick/261020-hr8-reconcile-phase-11-and-13-summary-comple/) |
 
 ### Roadmap Evolution
 
 - Phase 06.1 inserted after Phase 6: Address v0.1 tech debt: CI workflow info items and audio consumer coverage (URGENT)
 - 2026-10-10: v0.2 roadmap created — Phases 7–15 continue v0.1 numbering. Order follows research/v0.2/SUMMARY.md: acceptance + DMG baseline (7); seam merged with MBC5 and MBC2 (8, MBC5/MBC2 plans parallel after the seam plan); MBC3 + RTC + loader matrix + new-mapper continuation (9); CGB profile/banking (10); colour PPU + player colour (11); double speed (12) and HDMA (13) kept separate and sequential; CGB-E qualification + corpus (14); CGB acceptance, ledger and release (15). Deep phase research flagged for 9, 11, 12, 13, 14. Rights gates: G5/G2 on 7; G1 on 9, 11, 14; G3 on 9; G4 on 11.
+- Phase 15.1 inserted after Phase 15: Release Hardening and Milestone Debt Closure; owner chose recommended resolve-first closeout (URGENT)
 
 ## Deferred Items
 
@@ -551,13 +602,16 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Last session: 2026-10-20T10:34:32.507Z
-Stopped at: Phase 15 execution and phase verification complete; next /gsd-verify-work 15
-Resume file: None
-Next command: /gsd-verify-work 15
+**Last session:** 2026-10-21T18:00:56.269Z
+**Stopped at:** Completed 15.1-16-PLAN.md (rehearsal follow-up)
+**Resume file:** None
+
+Completed stage: **Phase 15.1 planning and independent plan verification**. All 19 plans, 39 tasks and seven waves are ready to execute; the final checker reports zero blockers and warnings. All 24 scope items and four follow-up requirements have executable coverage. No Phase 15.1 implementation or hosted qualification has run. Nine original phases and 134 plans remain complete; v0.2 stays open. Historical unknowns and spec-less verification flags remain explicit; debt is not accepted by planning.
+
+Next phase: **15.1 — Release Hardening and Milestone Debt Closure**. Exact next command: `/gsd-execute-phase 15.1`.
+
+Scope: [15.1-SCOPE.md](phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-SCOPE.md) and its machine-readable inventory track all 21 audit debts, both closeout scan items and the inherited SUMMARY schema caveat. Validate each finding before fixing; preserve historical unknowns and all v0.2.0 producer receipts. Reuse existing research and completed implementation. Both automatic advance flags remain false; v0.3 is provisional and unstarted.
 
 ## Operator Next Steps
 
-- Completed stage: **Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release, execution** (plan 15-10: protected delivery, v0.2.0 published and read back).
-- Next stage: Phase 15 verification; run `/gsd-verify-work 15`. Verification has zero human checkpoints by default: every deliverable has an automated check with a negative control; the remaining physical and perceptual limits are recorded in 15-DELIVERY.md.
-- Next phase after verification: none planned in this milestone; both auto flags remain false. Do not start v0.3 automatically.
+Run `/gsd-execute-phase 15.1`. Milestone completion remains deferred until cleanup and renewed audit. Preserve the pre-existing config edits.

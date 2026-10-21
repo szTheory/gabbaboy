@@ -174,14 +174,25 @@ def register(inspection, seen, raw, kind, size, target, reader, mode, limits, wa
     if kind == "symlink":
         # Without a tagged tree to compare against, only a relative link that stays inside the
         # archive root is tolerated; with --repo the exact tree comparison decides.
-        depth = len(parts) - 2
+        target_bytes = target.encode("utf-8", "surrogateescape")
+        if not target_bytes or len(target_bytes) > limits.path:
+            raise Reject("path-too-long", f"symbolic link target for {raw!r} is empty or exceeds {limits.path} bytes")
+        if target.startswith("/") or "\x00" in target or "\\" in target or re.match(r"^[A-Za-z]:", target):
+            raise Reject("link-not-allowed", f"symbolic link {raw!r} has an absolute or non-portable target")
+        # `parts` includes the wrapped archive root for source archives, but no synthetic
+        # root for product archives. Resolve from the link's parent within that boundary.
+        depth = len(parts) - (1 if inspection.unwrapped else 2)
         for step in target.split("/"):
-            depth += -1 if step == ".." else (0 if step in ("", ".") else 1)
+            if step == "..":
+                depth -= 1
+            elif step not in ("", "."):
+                depth += 1
             if depth < 0:
-                break
-        if target.startswith("/") or "\x00" in target or depth < 0:
-            raise Reject("link-not-allowed", f"symbolic link {raw!r} points outside the archive root")
-        oid = hashlib.sha1(b"blob %d\x00" % len(target.encode()) + target.encode()).hexdigest()
+                raise Reject("link-not-allowed", f"symbolic link {raw!r} points outside the archive root")
+        inspection.total += len(target_bytes)
+        if inspection.total > limits.total:
+            raise Reject("archive-oversize", f"archive declares more than {limits.total} uncompressed bytes")
+        oid = hashlib.sha1(b"blob %d\x00" % len(target_bytes) + target_bytes).hexdigest()
         inspection.entries.append(Entry(rel, "symlink", size, target, None, oid, mode))
         return
     sha256, oid, kept = stream_hash(reader, size, want_git)
@@ -314,8 +325,10 @@ def check_tree(inspection, repo, tag, source_sha):
         raise Reject("tree-mismatch", f"archive differs from tagged tree: missing {missing[:3]} extra {extra[:3]}")
     for name, (mode, oid) in expected.items():
         entry = actual[name]
-        if (mode == "120000") != (entry.kind == "symlink") or entry.git_oid != oid:
-            raise Reject("tree-mismatch", f"{name} differs from the tagged tree blob")
+        actual_mode = ("120000" if entry.kind == "symlink" else
+                       ("100755" if entry.mode & 0o111 else "100644"))
+        if mode != actual_mode or entry.git_oid != oid:
+            raise Reject("tree-mismatch", f"{name} differs from the tagged tree mode or blob")
 
 
 def parse_notice_table(text):
@@ -375,10 +388,21 @@ def check_fixtures(inspection):
 
 
 def tree_digest(inspection):
-    lines = []
-    for entry in sorted(inspection.entries, key=lambda e: e.path):
-        lines.append(f"{entry.path}\t{entry.sha256}\n" if entry.kind == "file" else f"{entry.path}\t->{entry.target}\n")
-    return hashlib.sha256("".join(lines).encode("utf-8", "surrogateescape")).hexdigest()
+    digest = hashlib.sha256(b"gabbaboy-source-tree-v2\x00")
+    entries = sorted(inspection.entries, key=lambda e: e.path.encode("utf-8", "surrogateescape"))
+    for entry in entries:
+        path = entry.path.encode("utf-8", "surrogateescape")
+        if entry.kind == "symlink":
+            kind, mode = b"symlink", b"120000"
+            payload = entry.target.encode("utf-8", "surrogateescape")
+        else:
+            kind = b"file"
+            mode = b"100755" if entry.mode & 0o111 else b"100644"
+            payload = bytes.fromhex(entry.sha256)
+        for field in (path, kind, mode, payload):
+            digest.update(len(field).to_bytes(8, "big"))
+            digest.update(field)
+    return digest.hexdigest()
 
 
 def build_receipt(archive, tag, source_sha, repo, limits):
@@ -411,7 +435,9 @@ def build_receipt(archive, tag, source_sha, repo, limits):
     }
 
 
-def check_receipt(receipt_path, archive, tag, source_sha, limits):
+def check_receipt(receipt_path, archive, tag, source_sha, repo, limits):
+    if not repo:
+        raise Reject("receipt-unbound", "receipt qualification requires --repo for an independent Git-tree check")
     try:
         if os.path.getsize(receipt_path) > KEEP_LIMIT:
             raise ValueError("receipt is too large")
@@ -422,16 +448,20 @@ def check_receipt(receipt_path, archive, tag, source_sha, limits):
         raise Reject("receipt-invalid", "receipt is not a version 1 source archive receipt (a source or build receipt cannot stand in)")
     if receipt.get("tag") != tag or receipt.get("source_sha") != source_sha:
         raise Reject("receipt-invalid", "receipt tag or source SHA differs from the frozen release identity")
+    if receipt.get("tree_bound_to_git") is not True:
+        raise Reject("receipt-unbound", "receipt was not produced with a Git-tree binding")
     for field in ("archive_sha256", "source_tree_sha256", "notice_sha256"):
         if not isinstance(receipt.get(field), str) or not SHA256_RE.match(receipt[field]):
             raise Reject("receipt-invalid", f"receipt {field} is missing or malformed")
     if not receipt.get("admitted_fixture_identities") or not isinstance(receipt.get("inspected_members"), int) or receipt["inspected_members"] <= 0:
         raise Reject("receipt-invalid", "receipt carries no admitted fixture identities or inspected members")
-    fresh = build_receipt(archive, tag, source_sha, None, limits)
-    for field in ("archive_sha256", "source_tree_sha256", "notice_sha256", "archive_root",
+    # The archive byte digest is retained as download provenance. Re-encoded gzip
+    # archives may have different bytes while representing the same qualified tree.
+    fresh = build_receipt(archive, tag, source_sha, repo, limits)
+    for field in ("source_tree_sha256", "notice_sha256", "archive_root",
                   "admitted_fixture_identities", "inspected_members"):
         if receipt.get(field) != fresh[field]:
-            raise Reject("receipt-invalid", f"receipt {field} does not match the archive bytes")
+            raise Reject("receipt-invalid", f"receipt {field} does not match the independently qualified source tree")
     return receipt
 
 
@@ -491,7 +521,11 @@ def tar_bytes(members, commit, root="gabbaboy-0.0.1", fmt=tarfile.PAX_FORMAT):
             # A leading "@" supplies the raw member name (traversal, absolute and second-root controls).
             # root=None builds the installed product layout, whose members sit at the archive top level.
             info = tarfile.TarInfo(name[1:] if name.startswith("@") else (name if root is None else f"{root}/{name}"))
-            if isinstance(value, tuple):
+            if isinstance(value, tuple) and value[0] == "file":
+                info.size = len(value[1])
+                info.mode = value[2]
+                bundle.addfile(info, io.BytesIO(value[1]))
+            elif isinstance(value, tuple):
                 info.type = {"symlink": tarfile.SYMTYPE, "hardlink": tarfile.LNKTYPE, "device": tarfile.CHRTYPE}[value[0]]
                 info.linkname = value[1]
                 bundle.addfile(info)
@@ -509,6 +543,7 @@ def synthetic_tree():
     files = {
         "README.md": b"synthetic original tree\n",
         "src/a.c": b"int a(void) { return 1; }\n",
+        "src/nested/link": ("symlink", "../../README.md"),
     }
     rows = []
     for name, rom in (("alpha", b"\x00ALPHA-ROM\x01"), ("beta", b"\x00BETA-ROM\x02")):
@@ -543,6 +578,65 @@ def run_cli(script, *args):
     return result.returncode, result.stderr, result.stdout
 
 
+# --------------------------------------------------------------------------- notice attribute scope
+
+# Digest-bound notice text must keep LF endings on every checkout, but the rule must name only the paths the
+# notice table admits: the root LICENSE, the root notice file and each admitted fixture's LICENSE.txt. A
+# basename wildcard such as `LICENSE*` also rewrites unrelated files at any depth, which changes bytes that no
+# digest covers.
+UNRELATED_PATHS = ("LICENSE.bin", "NOTICE", "docs/NOTICE.bin", "vendor/LICENSE-APACHE", "THIRD_PARTY_blob.bin")
+EOL_LINE_RE = re.compile(r"^i/(\S+)\s+w/(\S+)\s+attr/(.*?)\s*\t(.+)$")
+
+
+def attribute_scope_problems(attributes_text, fixture_names):
+    """Add CRLF files to a scratch repository under the given .gitattributes and report what the index did."""
+    pinned = ["LICENSE", NOTICE_NAME] + [f"fixtures/{name}/LICENSE.txt" for name in fixture_names]
+    env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+    problems = []
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-attributes-") as name:
+        repo = pathlib.Path(name)
+
+        def git(*args):
+            return subprocess.run(["git", "-c", "core.autocrlf=false", "-c", "core.safecrlf=false", *args],
+                                  cwd=repo, env=env, capture_output=True, text=True, check=False)
+
+        if git("init", "-q").returncode != 0:
+            raise SystemExit("self-test: could not create the scratch attribute repository")
+        (repo / ".gitattributes").write_bytes(attributes_text.encode("utf-8"))
+        for rel in pinned + list(UNRELATED_PATHS):
+            target = repo / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(b"line one\r\nline two\r\n")
+        if git("add", "--", *pinned, *UNRELATED_PATHS).returncode != 0:
+            raise SystemExit("self-test: could not stage the scratch attribute files")
+        listing = git("ls-files", "--eol", "--", *pinned, *UNRELATED_PATHS).stdout
+        index_eol = {}
+        for line in listing.splitlines():
+            found = EOL_LINE_RE.match(line)
+            if found:
+                index_eol[found.group(4)] = found.group(1)
+    for rel in pinned:
+        if index_eol.get(rel) != "lf":
+            problems.append(f"notice-not-pinned: {rel} is stored {index_eol.get(rel)!r}, not lf")
+    for rel in UNRELATED_PATHS:
+        if index_eol.get(rel) != "crlf":
+            problems.append(f"attribute-scope-broad: unrelated {rel} was rewritten to {index_eol.get(rel)!r}")
+    return problems
+
+
+def notice_digest_problems(root, table):
+    """Compare each fixture's committed manifest and notice bytes with the notice digest table."""
+    problems = []
+    for name, (manifest_sha, license_sha) in sorted(table.items()):
+        for label, expected in (("manifest.json", manifest_sha), ("LICENSE.txt", license_sha)):
+            path = root / "fixtures" / name / label
+            if not path.is_file():
+                problems.append(f"digest-file-missing: fixtures/{name}/{label}")
+            elif hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+                problems.append(f"digest-mismatch: fixtures/{name}/{label}")
+    return problems
+
+
 def self_test():
     script = pathlib.Path(__file__).resolve()
     positives = negatives = 0
@@ -572,9 +666,11 @@ def self_test():
         def expect_reject(label, code_expected, archive, *extra, tag_arg=tag, sha_arg=sha):
             nonlocal negatives
             out = scratch / f"{label}.receipt.json"
-            code, err, _ = run_cli(script, "--archive", str(archive), "--tag", tag_arg, "--source-sha", sha_arg, "--output", str(out), *extra)
+            code, err, stdout = run_cli(script, "--archive", str(archive), "--tag", tag_arg, "--source-sha", sha_arg, "--output", str(out), *extra)
             if code != 1 or not err.startswith(f"REJECT {code_expected}:"):
                 raise SystemExit(f"self-test negative {label}: expected REJECT {code_expected}, got exit {code}: {err!r}")
+            if stdout:
+                raise SystemExit(f"self-test negative {label} printed success output: {stdout!r}")
             if out.exists():
                 raise SystemExit(f"self-test negative {label} left a receipt behind")
             negatives += 1
@@ -599,7 +695,10 @@ def self_test():
         for name, data in base.items():
             target = repo / name
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(data)
+            if isinstance(data, tuple):
+                target.symlink_to(data[1])
+            else:
+                target.write_bytes(data)
         private_git("add", "-A", cwd=repo)
         private_git("commit", "-q", "-m", "synthetic tagged tree", cwd=repo)
         real_sha = private_git("rev-parse", "HEAD", cwd=repo).decode().strip()
@@ -692,13 +791,15 @@ def self_test():
         def expect_product(label, files, expected, root_name=None):
             nonlocal positives, negatives
             archive = write(f"{label}.tar.gz", tar_bytes(files, None, root=root_name))
-            code, err, _ = run_cli(script, "--check-product-archive", str(archive))
+            code, err, stdout = run_cli(script, "--check-product-archive", str(archive))
             if expected is None:
                 if code != 0:
                     raise SystemExit(f"self-test product positive {label} failed: {err}")
                 positives += 1
                 print(f"accepted: {label}")
             else:
+                if stdout:
+                    raise SystemExit(f"self-test product negative {label} printed success output: {stdout!r}")
                 if code != 1 or not err.startswith(f"REJECT {expected}:"):
                     raise SystemExit(f"self-test product negative {label}: expected {expected}, got {code}: {err!r}")
                 negatives += 1
@@ -723,30 +824,174 @@ def self_test():
         print("rejected: fixture-free product package substituted for a source archive")
 
         # Receipt consumption: the final release gate reads this receipt, not the build receipt.
-        good = scratch / "generated-without-repo.receipt.json"
+        good = scratch / "git-tar-bound-to-tag.receipt.json"
+        def expect_receipt_pass(label, receipt, archive, repo_path):
+            nonlocal positives
+            code, err, stdout = run_cli(script, "--check-receipt", str(receipt), "--archive", str(archive),
+                                        "--tag", tag, "--source-sha", real_sha, "--repo", str(repo_path))
+            if code != 0 or not stdout.startswith("PASS: source archive receipt"):
+                raise SystemExit(f"self-test receipt positive {label} failed: exit {code}, {err!r}, {stdout!r}")
+            positives += 1
+            print(f"accepted: receipt {label}")
+
+        def expect_receipt_reject(label, code_expected, receipt, archive, repo_path):
+            nonlocal negatives
+            code, err, stdout = run_cli(script, "--check-receipt", str(receipt), "--archive", str(archive),
+                                        "--tag", tag, "--source-sha", real_sha, "--repo", str(repo_path))
+            if code != 1 or not err.startswith(f"REJECT {code_expected}:"):
+                raise SystemExit(f"self-test receipt negative {label}: expected REJECT {code_expected}, got exit {code}: {err!r}")
+            if stdout:
+                raise SystemExit(f"self-test receipt negative {label} printed success output: {stdout!r}")
+            negatives += 1
+            print(f"rejected: receipt {label} ({code_expected})")
+
         receipt_cases = {
             "wrong-kind": lambda r: r.update(kind="gabbaboy-build-receipt"),
             "wrong-tag": lambda r: r.update(tag="v9.9.9"),
             "wrong-sha": lambda r: r.update(source_sha="d" * 40),
-            "altered-archive-digest": lambda r: r.update(archive_sha256="0" * 64),
+            "malformed-archive-digest": lambda r: r.update(archive_sha256="z" * 64),
             "no-fixture-identities": lambda r: r.update(admitted_fixture_identities=[]),
             "altered-notice-digest": lambda r: r.update(notice_sha256="0" * 64),
         }
-        plain = scratch / "plain.tar.gz"
-        code, err, _ = run_cli(script, "--check-receipt", str(good), "--archive", str(plain), "--tag", tag, "--source-sha", sha)
+        code, err, stdout = run_cli(script, "--check-receipt", str(good), "--archive", str(git_tgz),
+                                    "--tag", tag, "--source-sha", real_sha, "--repo", str(repo))
         if code != 0:
-            raise SystemExit(f"self-test receipt positive failed: {err}")
+            raise SystemExit(f"self-test receipt positive failed: {err!r}")
+        if not stdout.startswith("PASS: source archive receipt"):
+            raise SystemExit(f"self-test receipt positive omitted success output: {stdout!r}")
         positives += 1
-        print("accepted: receipt bound to the archive bytes")
+        print("accepted: receipt recomputed against the immutable Git tree")
+
+        # Receipt qualification must consume the real immutable tag tree, not trust a
+        # producer's tree_bound_to_git boolean. Each control enters through --check-receipt.
+        bound_receipt = scratch / "git-tar-bound-to-tag.receipt.json"
+        expect_receipt_pass("bound to immutable Git tree", bound_receipt, git_tgz, repo)
+        unbound_source_receipt = scratch / "generated-matches-git-tree-unbound.receipt.json"
+        code, err, _ = run_cli(script, "--archive", str(generated), "--tag", tag, "--source-sha", real_sha,
+                               "--output", str(unbound_source_receipt))
+        if code != 0:
+            raise SystemExit(f"self-test: could not create an unbound receipt for the real tagged tree: {err!r}")
+        expect_receipt_reject("historical unbound receipt", "receipt-unbound", unbound_source_receipt, generated, repo)
+
+        flipped = json.loads(bound_receipt.read_text())
+        flipped["tree_bound_to_git"] = False
+        flipped_path = write("receipt-flipped-tree-binding.json", json.dumps(flipped).encode())
+        expect_receipt_reject("cleared Git-binding boolean", "receipt-unbound", flipped_path, git_tgz, repo)
+
+        modified_source = write("modified-source-claiming-tag.tar.gz",
+                                tar_bytes(variant(src__a_dot_c=b"int a(void) { return 2; }\n"), real_sha))
+        modified_receipt = scratch / "modified-source-receipt.json"
+        code, err, _ = run_cli(script, "--archive", str(modified_source), "--tag", tag,
+                               "--source-sha", real_sha, "--output", str(modified_receipt))
+        if code != 0:
+            raise SystemExit(f"self-test: could not create an unbound receipt for the modified-tree control: {err!r}")
+        modified_data = json.loads(modified_receipt.read_text())
+        modified_data["tree_bound_to_git"] = True
+        modified_receipt.write_text(json.dumps(modified_data))
+        expect_receipt_reject("modified archive claiming tagged commit", "tree-mismatch", modified_receipt,
+                              modified_source, repo)
+
         for label, mutate in receipt_cases.items():
             receipt = json.loads(good.read_text())
             mutate(receipt)
             path = write(f"receipt-{label}.json", json.dumps(receipt).encode())
-            code, err, _ = run_cli(script, "--check-receipt", str(path), "--archive", str(plain), "--tag", tag, "--source-sha", sha)
+            code, err, stdout = run_cli(script, "--check-receipt", str(path), "--archive", str(git_tgz),
+                                        "--tag", tag, "--source-sha", real_sha, "--repo", str(repo))
             if code != 1 or not err.startswith("REJECT receipt-invalid:"):
                 raise SystemExit(f"self-test receipt negative {label}: got {code}: {err!r}")
+            if stdout:
+                raise SystemExit(f"self-test receipt negative {label} printed success output: {stdout!r}")
             negatives += 1
             print(f"rejected: receipt {label}")
+
+        reencoded = write("git-source-reencoded.tar.gz", gzip.compress(git_tar.read_bytes(), compresslevel=1, mtime=123))
+        if sha256_path(reencoded) == sha256_path(git_tgz):
+            raise SystemExit("self-test: gzip re-encoding did not change the compressed archive bytes")
+        expect_receipt_pass("same Git tree with different gzip bytes", bound_receipt, reencoded, repo)
+
+        mode_changed = write("git-source-executable-mode.tar.gz", tar_bytes(
+            variant(src__a_dot_c=("file", base["src/a.c"], 0o755)), real_sha))
+        mode_receipt = scratch / "git-source-executable-mode.receipt.json"
+        code, err, _ = run_cli(script, "--archive", str(mode_changed), "--tag", tag, "--source-sha", real_sha,
+                               "--output", str(mode_receipt))
+        if code != 0:
+            raise SystemExit(f"self-test: could not create a receipt for the executable-mode control: {err!r}")
+        mode_data = json.loads(mode_receipt.read_text())
+        mode_data["tree_bound_to_git"] = True
+        mode_receipt.write_text(json.dumps(mode_data))
+        expect_receipt_reject("executable-mode change under same tag", "tree-mismatch", mode_receipt,
+                              mode_changed, repo)
+
+        changed_link_tree = variant(src__nested__link=("symlink", "../README.md"))
+        changed_link = write("git-source-symlink-target.tar.gz", tar_bytes(changed_link_tree, real_sha))
+        changed_link_receipt = scratch / "git-source-symlink-target.receipt.json"
+        code, err, _ = run_cli(script, "--archive", str(changed_link), "--tag", tag, "--source-sha", real_sha,
+                               "--output", str(changed_link_receipt))
+        if code != 0:
+            raise SystemExit(f"self-test: could not create a receipt for the symlink-target control: {err!r}")
+        changed_link_data = json.loads(changed_link_receipt.read_text())
+        changed_link_data["tree_bound_to_git"] = True
+        changed_link_receipt.write_text(json.dumps(changed_link_data))
+        expect_receipt_reject("symlink target change under same tag", "tree-mismatch", changed_link_receipt,
+                              changed_link, repo)
+
+        nested_link = write("nested-in-root-link.tar.gz", tar_bytes(
+            {**base, "src/nested/second-link": ("symlink", "../../README.md")}, sha))
+        expect_pass("nested source link resolves within archive root", nested_link)
+        nested_escape = write("nested-root-escape.tar.gz", tar_bytes(
+            {**base, "src/nested/escape": ("symlink", "../../../outside")}, sha))
+        expect_reject("nested source link escapes archive root", "link-not-allowed", nested_escape)
+        expect_product("product-nested-in-root-link", {**good_product, "nested/link": ("symlink", "../README.md")},
+                       "product-link-not-allowed")
+        expect_product("product-nested-root-escape", {**good_product, "nested/link": ("symlink", "../../outside")},
+                       "link-not-allowed")
+
+        # Notice attribute scope and digest stability, on the real repository files. Unrelated CRLF bytes must
+        # survive staging, pinned notice bytes must be stored as LF, and the committed notice digests must match.
+        root_dir = script.parents[2]
+        attributes_path = root_dir / ".gitattributes"
+        notice_path = root_dir / NOTICE_NAME
+        if attributes_path.is_file() and notice_path.is_file():
+            real_attributes = attributes_path.read_text(encoding="utf-8")
+            real_table = parse_notice_table(notice_path.read_text(encoding="utf-8"))
+            names = sorted(real_table)
+            if not names:
+                raise SystemExit("self-test: the real notice file has no digest table")
+            problems = attribute_scope_problems(real_attributes, names)
+            if problems:
+                raise SystemExit("self-test: the real .gitattributes scope is wrong: " + "; ".join(problems))
+            positives += 1
+            print("accepted: real-attribute-scope")
+            digest_problems = notice_digest_problems(root_dir, real_table)
+            if digest_problems:
+                raise SystemExit("self-test: real notice digests are not stable: " + "; ".join(digest_problems))
+            positives += 1
+            print("accepted: real-notice-digests")
+            broad = real_attributes + "LICENSE* text eol=lf\nNOTICE* text eol=lf\nTHIRD_PARTY* text eol=lf\n"
+            expect_scope = {
+                "broad-basename-wildcards": (broad, "attribute-scope-broad:"),
+                "root-notice-unpinned": (real_attributes.replace("\n/LICENSE text eol=lf", "\n")
+                                         .replace("\n/THIRD_PARTY_NOTICES.md text eol=lf", "\n"), "notice-not-pinned:"),
+                "fixture-license-unpinned": (real_attributes.replace("fixtures/*/LICENSE.txt text eol=lf", ""),
+                                             "notice-not-pinned:"),
+            }
+            for label, (attributes, reason) in expect_scope.items():
+                if attributes == real_attributes:
+                    raise SystemExit(f"self-test: attribute mutant {label} did not change .gitattributes")
+                found = attribute_scope_problems(attributes, names)
+                if not any(item.startswith(reason) for item in found):
+                    raise SystemExit(f"self-test: attribute mutant {label} was not rejected for {reason} (got {found})")
+                negatives += 1
+                print(f"rejected: {label}")
+            altered = dict(real_table)
+            first = names[0]
+            altered[first] = ("0" * 64, altered[first][1])
+            if not notice_digest_problems(root_dir, altered):
+                raise SystemExit("self-test: an altered notice digest row was not rejected")
+            negatives += 1
+            print("rejected: altered-notice-digest-row")
+        else:
+            raise SystemExit("self-test: .gitattributes and the notice file are required in the source tree")
 
         # Real tree: archive the committed repository at a private tag in a private clone.
         root = script.parents[2]
@@ -809,7 +1054,7 @@ def main(argv):
         elif args.check_receipt:
             if not (args.archive and args.tag and args.source_sha):
                 parser.error("--check-receipt needs --archive, --tag and --source-sha")
-            check_receipt(args.check_receipt, args.archive, args.tag, args.source_sha, limits)
+            check_receipt(args.check_receipt, args.archive, args.tag, args.source_sha, args.repo, limits)
             print("PASS: source archive receipt matches the archive bytes")
         elif args.archive:
             if not (args.tag and args.source_sha and args.output):

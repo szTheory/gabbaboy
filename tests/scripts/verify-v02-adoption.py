@@ -106,6 +106,28 @@ FALSE_FUZZ_CLAIM = re.compile(
 )
 REBOUND_ATTRIBUTION = re.compile(r"\bRebound\b")
 
+HISTORICAL_PERFORMANCE_REQUIRED = (
+    ("historical evidence", "historical-performance-disclosure-missing"),
+    ("candidate source `ab301aa69b1f085050fd66bf7b1378863a0821f2`",
+     "historical-performance-disclosure-missing"),
+    ("baseline source `e30d168f7fc61de8db0a3801e7b1736362912cb7`",
+     "historical-performance-disclosure-missing"),
+    ("`original-wram-tracer-1m-half-dots-v1`", "historical-performance-disclosure-missing"),
+    ("DMG-CPU-B", "historical-performance-disclosure-missing"),
+    ("`fixtures/tracer/tracer.gb`", "historical-performance-disclosure-missing"),
+    ("`ded6a499118b57539710892d58b4d7ced2269f08d447eed1451201d8ad65ec8d`",
+     "historical-performance-disclosure-missing"),
+    ("1,000,000 half-dot budget", "historical-performance-disclosure-missing"),
+    ("correctness digest `4c7a57ff3d50d228`", "historical-performance-disclosure-missing"),
+    ("Linux x86_64", "historical-performance-disclosure-missing"),
+    ("30 paired samples after 3 warmups", "historical-performance-disclosure-missing"),
+    ("+14.86% slower", "historical-performance-disclosure-missing"),
+    ("±1.62%", "historical-performance-disclosure-missing"),
+    ("`accepted-with-disclosed-regression`", "historical-performance-disclosure-missing"),
+    ("not a current approval, fresh result, or equivalent-speed claim",
+     "historical-performance-disclosure-missing"),
+)
+
 # (phrase, failure reason) pairs.  Phrases match whitespace-normalized prose.
 REQUIRED: dict[str, tuple[tuple[str, str], ...]] = {
     README: (
@@ -138,6 +160,7 @@ REQUIRED: dict[str, tuple[tuple[str, str], ...]] = {
         ("caller-owned buffers", "caller-ownership-missing"),
     ),
     LEDGER: (
+        *HISTORICAL_PERFORMANCE_REQUIRED,
         (ABSENCE_STATEMENT, "absence-statement-missing"),
         ("Physical CGB-E remains UNKNOWN/POLICY", "physical-cgb-limit-missing"),
         ("Boot ROMs are skipped", "boot-path-limit-missing"),
@@ -177,6 +200,9 @@ REQUIRED: dict[str, tuple[tuple[str, str], ...]] = {
         ("[native integration guide](native-integration.md)", "native-guide-link-missing"),
     ),
     RELEASE: (
+        *HISTORICAL_PERFORMANCE_REQUIRED,
+        ("**+14.86% slower than v0.1.0 with a ±1.62% margin**",
+         "historical-performance-disclosure-missing"),
         ("tested runner/configuration combinations, not minimum OS versions, "
          "all-architecture promises, or general platform support floors",
          "runner-label-limit-missing"),
@@ -251,15 +277,28 @@ def read_bounded(root: Path, relative: str, limit: int = MAX_DOCUMENT_BYTES) -> 
         resolved.relative_to(root)
         if resolved.stat().st_size > limit:
             raise ContractError(f"document-too-large:{relative}")
-        return resolved.read_text(encoding="utf-8")
+        raw = resolved.read_bytes()
     except ContractError:
         raise
-    except (OSError, UnicodeError, ValueError) as error:
+    except (OSError, ValueError) as error:
         raise ContractError(f"document-unavailable:{relative}") from error
+    try:
+        text = raw.decode("utf-8", errors="strict")
+    except UnicodeError as error:
+        raise ContractError(f"document-encoding-invalid:{relative}") from error
+    if text.encode("utf-8", errors="strict") != raw:
+        raise ContractError(f"document-utf8-byte-roundtrip-failed:{relative}")
+    return text
 
 
 # The ledger embeds the full historical corpus receipt, so it is larger.
 DOCUMENT_LIMITS = {LEDGER: 8 * 1_048_576}
+
+
+def write_lf(path: Path, text: str) -> None:
+    """Write text with LF endings on every platform; the digest-bound documents are LF by attribute and
+    Path.write_text would turn each newline into CRLF on Windows, which no row pattern or digest expects."""
+    path.write_bytes(text.encode("utf-8"))
 
 
 def read_document(root: Path, relative: str) -> str:
@@ -588,7 +627,7 @@ def run_self_test_game(root: Path) -> tuple[int, int]:
         test_root = Path(temp)
         guide_path = test_root / GAME_GUIDE
         guide_path.parent.mkdir(parents=True, exist_ok=True)
-        guide_path.write_text(baseline, encoding="utf-8")
+        write_lf(guide_path, baseline)
         child_result(test_root, "game")
 
         mutations = (
@@ -601,9 +640,9 @@ def run_self_test_game(root: Path) -> tuple[int, int]:
         )
         for name, changed, reason in mutations:
             require(changed != baseline, f"self-test-mutation-no-op:{name}")
-            guide_path.write_text(changed, encoding="utf-8")
+            write_lf(guide_path, changed)
             child_result(test_root, "game", reason)
-        guide_path.write_text(baseline, encoding="utf-8")
+        write_lf(guide_path, baseline)
         child_result(test_root, "game")
     return 2, 2
 
@@ -638,7 +677,7 @@ GabbaBoy v0.2.0 adds the selected CGB-CPU-E software model beside DMG-CPU-B.
 def run_self_test_release_notes() -> tuple[int, int]:
     with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-notes-") as temp:
         notes = Path(temp) / "release-notes.md"
-        notes.write_text(VALID_RELEASE_NOTES, encoding="utf-8")
+        write_lf(notes, VALID_RELEASE_NOTES)
         expect_pass(["--release-notes", str(notes)])
         mutations = (
             ("wrong-version", ("0.2.0", "0.1.0"),
@@ -668,9 +707,9 @@ def run_self_test_release_notes() -> tuple[int, int]:
                 changed = VALID_RELEASE_NOTES.replace(edit[0], edit[1])
             require(changed != VALID_RELEASE_NOTES,
                     f"self-test-mutation-no-op:{name}")
-            notes.write_text(changed, encoding="utf-8")
+            write_lf(notes, changed)
             expect_reject(["--release-notes", str(notes)], reason)
-        notes.write_text(VALID_RELEASE_NOTES, encoding="utf-8")
+        write_lf(notes, VALID_RELEASE_NOTES)
         expect_pass(["--release-notes", str(notes)])
     return len(mutations), len(mutations)
 
@@ -701,6 +740,13 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
     with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-docs-") as temp:
         test_root = Path(temp)
         copy_inputs(root, test_root)
+        child_result(test_root, "docs")
+        release_copy = test_root / RELEASE
+        release_bytes = release_copy.read_bytes()
+        release_copy.write_bytes(b"\xff")
+        child_result(test_root, "docs", f"document-encoding-invalid:{RELEASE}")
+        release_copy.write_bytes(release_bytes)
+        rejected += 1
         child_result(test_root, "docs")
 
         def comment_out(phrase: str) -> Callable[[str], str]:
@@ -802,15 +848,42 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
              "notice-fixture-unknown:ghost-rom"),
             ("missing-ledger-absence", LEDGER, drop(ABSENCE_STATEMENT, "n"),
              f"absence-statement-missing:{LEDGER}"),
+            ("missing-historical-slowdown", RELEASE,
+             drop("**+14.86% slower than v0.1.0 with a ±1.62% margin**", "slowdown"),
+             f"historical-performance-disclosure-missing:{RELEASE}"),
+            ("changed-historical-margin", RELEASE,
+             swap("±1.62%", "±1.63%", "margin"),
+             f"historical-performance-disclosure-missing:{RELEASE}"),
+            ("changed-historical-slowdown", RELEASE,
+             swap("+14.86% slower", "+14.85% slower", "slowdown-number"),
+             f"historical-performance-disclosure-missing:{RELEASE}"),
+            ("removed-historical-qualification", RELEASE,
+             swap("historical evidence", "fresh evidence", "history"),
+             f"historical-performance-disclosure-missing:{RELEASE}"),
+            ("misattributed-performance-source", RELEASE,
+             swap("ab301aa69b1f085050fd66bf7b1378863a0821f2",
+                  "e30d168f7fc61de8db0a3801e7b1736362912cb7", "source"),
+             f"historical-performance-disclosure-missing:{RELEASE}"),
+            ("changed-performance-workload", RELEASE,
+             swap("original-wram-tracer-1m-half-dots-v1",
+                  "original-wram-tracer-2m-half-dots-v1", "workload"),
+             f"historical-performance-disclosure-missing:{RELEASE}"),
+            ("removed-ledger-slowdown", LEDGER,
+             drop("**+14.86% slower**", "ledger-slowdown"),
+             f"historical-performance-disclosure-missing:{LEDGER}"),
+            ("changed-ledger-fixture-bytes", LEDGER,
+             swap("ded6a499118b57539710892d58b4d7ced2269f08d447eed1451201d8ad65ec8d",
+                  "0" * 64, "fixture"),
+             f"historical-performance-disclosure-missing:{LEDGER}"),
         )
         for name, relative, edit, reason in mutations:
             original = originals[relative]
             changed = edit(original)
             require(changed != original, f"self-test-mutation-no-op:{name}")
             target = test_root / relative
-            target.write_text(changed, encoding="utf-8")
+            write_lf(target, changed)
             child_result(test_root, "docs", reason)
-            target.write_text(original, encoding="utf-8")
+            write_lf(target, original)
             rejected += 1
         child_result(test_root, "docs")
 
@@ -824,9 +897,9 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             original = originals[relative]
             changed = replace_all(original, key_phrase, "", "marker")
             target = test_root / relative
-            target.write_text(changed, encoding="utf-8")
+            write_lf(target, changed)
             child_result(test_root, "docs", reason)
-            target.write_text(original, encoding="utf-8")
+            write_lf(target, original)
             rejected += 1
 
         # A header symbol removed must make dependent prose fail to resolve.
@@ -834,13 +907,13 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         header_text = read_document(root, HEADER)
         changed = re.sub(r"\bgbb_queue_events\b", "gbb_queue_removed", header_text)
         require(changed != header_text, "self-test-mutation-no-op:header-symbol")
-        header.write_text(changed, encoding="utf-8")
+        write_lf(header, changed)
         child_result(test_root, "docs",
                      f"undeclared-public-symbol:{README}:gbb_queue_events")
-        header.write_text(header_text, encoding="utf-8")
+        write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 3
+    controls = len(mutations) + 4
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     return controls + notes_controls, rejected + notes_rejected

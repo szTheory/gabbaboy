@@ -22,6 +22,15 @@ key-files:
 key-decisions:
   - "Marker bytes are written as hex literals ($52 $54 $43) because RGBDS 1.0.1 warns that string-as-number is obsolete"
 requirements-completed: [CART-06, RTC-03]
+coverage:
+  - id: D1
+    description: "The project-authored MBC3 RTC continuation guest rebuilds byte-identically with pinned RGBDS 1.0.1"
+    requirement: RTC-03
+    verification:
+      - kind: other
+        ref: "Fresh Phase 15.1-11 run with the manifest-pinned RGBDS 1.0.1 archive: tests/scripts/reproduce-mbc3-rtc-continuation.sh; result=byte-identical, ROM SHA-256 2a6e1922440d6af43a21e65bce579f1d0962f891f308afbe2268395fdbd644a9"
+        status: pass
+    human_judgment: false
 duration: 20 min
 completed: 2026-10-11
 status: complete
@@ -62,3 +71,7 @@ None.
 ## Self-Check: PASSED
 
 All five created files exist; commits dbc1e3f and b19cefc are on the branch.
+
+## Current Verification — 15.1-11
+
+Rebuilt with pinned RGBDS 1.0.1. The result was byte-identical to the committed continuation ROM with the manifest SHA-256; this fixture rebuild does not claim emulator guest behavior or hardware execution.

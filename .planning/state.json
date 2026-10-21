@@ -4,11 +4,6 @@
   "milestone": "v0.2 — Color & Cartridge Breadth",
   "phases": [
     {
-      "number": "1",
-      "name": "6, 06.1",
-      "status": "complete"
-    },
-    {
       "number": "7",
       "name": "DMG Game Acceptance and Regression Baseline",
       "status": "complete"
@@ -51,13 +46,18 @@
     {
       "number": "15",
       "name": "CGB Acceptance, Support Ledger and v0.2.0 Release",
+      "status": "complete"
+    },
+    {
+      "number": "15.1",
+      "name": "Release Hardening and Milestone Debt Closure",
       "status": "in_progress"
     }
   ],
   "next": {
-    "command": "/gsd-execute-phase 15",
-    "label": "Execute Phase 15 — CGB Acceptance, Support Ledger and v0.2.0 Release",
-    "reason": "Phase 15 planning complete: 10 plans / 20 tasks / 7 waves; all four requirements pending; execution unstarted; both auto flags false."
+    "command": "/gsd-progress --next",
+    "label": "Advance to the next step",
+    "reason": "Phase 10 of 10 · 90% · executing"
   },
-  "updated_at": "2026-10-14T18:09:23.510605+00:00"
+  "updated_at": "2026-10-21T14:35:17.502Z"
 }

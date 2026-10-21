@@ -43,26 +43,45 @@ coverage:
     description: "Half-dot timeline numbers are compile-time facts in the core; DMG output byte-identical"
     human_judgment: false
     verification:
-      - {kind: ctest, ref: "cgb_adr_half_dot_static_assert_mutant", status: pass}
-      - {kind: command, ref: "bash tests/scripts/verify-dmg-baseline.sh (baseline status=pass)", status: pass}
+      - kind: unit
+        ref: "CTest cgb_adr_half_dot_static_assert_mutant"
+        status: pass
+      - kind: other
+        ref: "bash tests/scripts/verify-dmg-baseline.sh"
+        status: pass
   - id: D2
     description: "ADR doc section names only declared macros and keeps each rule"
     human_judgment: false
     verification:
-      - {kind: ctest, ref: "cgb_adr_half_dot_contract", status: pass}
-      - {kind: ctest, ref: "cgb_adr_half_dot_contract_undeclared_selftest", status: pass}
-      - {kind: ctest, ref: "cgb_adr_half_dot_contract_missing_selftest", status: pass}
+      - kind: unit
+        ref: "CTest cgb_adr_half_dot_contract"
+        status: pass
+      - kind: unit
+        ref: "CTest cgb_adr_half_dot_contract_undeclared_selftest"
+        status: pass
+      - kind: unit
+        ref: "CTest cgb_adr_half_dot_contract_missing_selftest"
+        status: pass
   - id: D3
     description: "CGB integration guide names only declared symbols and keeps the info API, PGB, frame-copy, banking and deferred-register promises"
     human_judgment: false
     verification:
-      - {kind: ctest, ref: "cgb_native_guide_contract", status: pass}
-      - {kind: ctest, ref: "cgb_native_guide_contract_missing_selftest", status: pass}
+      - kind: unit
+        ref: "CTest cgb_native_guide_contract"
+        status: pass
+      - kind: unit
+        ref: "CTest cgb_native_guide_contract_missing_selftest"
+        status: pass
   - id: D4
-    description: "Support ledger and decisions describe Phase 10 honestly (no colour, no double speed, no game claim; D-22 cost and macOS sanitizer limits stated)"
+    description: "The immutable Phase 10 support entry and D-071..D-075 preserve its historical limits; later CGB support-ledger migration is recorded separately"
     human_judgment: false
     verification:
-      - {kind: command, ref: "grep acceptance criteria for unreleased.md section and D-071..D-075 rows", status: pass}
+      - kind: other
+        ref: "git show ffa090a8cd20ee0568940ee9fc1bdaf1b054ac88:docs/support/unreleased.md and git show ffa090a8cd20ee0568940ee9fc1bdaf1b054ac88:.planning/context/DECISIONS.md"
+        status: pass
+      - kind: unit
+        ref: "CTest cgb_speed_docs_no_stale_claims and cgb_speed_docs_no_stale_claims_mutated"
+        status: pass
 ---
 
 # Phase 10 Plan 19: Half-dot ADR, CGB guide, support ledger and decisions Summary
@@ -114,3 +133,9 @@ None.
 None. No new endpoints, file access or trust boundaries.
 
 ## Self-Check: PASSED
+
+## 15.1-19 Fresh Applicability Evidence
+
+On 2026-10-21, the half-dot static-assert mutant, ADR and integration-guide contracts, their missing/undeclared negative controls, and stale-claim checks passed 8/8. The frozen DMG baseline check also passed with zero changed rows.
+
+The Phase 10 support prose and D-071..D-075 decisions remain present in immutable commit `ffa090a8cd20ee0568940ee9fc1bdaf1b054ac88`. Later commit `04fe3c61188851db5d68488fce731061ee3dedb3` moved the chronological Phase 8–14 support notes into the versioned `docs/support/v0.2.0.md` ledger; the current unreleased summary reflects later CGB colour, speed, HDMA, and APU work. The historical Phase 10 limits above are therefore boundary-specific and are not presented as today's support statement.

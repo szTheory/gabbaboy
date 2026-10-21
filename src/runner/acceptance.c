@@ -2,6 +2,7 @@
 #include "gbb_accept.h"
 
 #include "gabbaboy/gabbaboy.h"
+#include "../core/gbb_accept_input.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -385,12 +386,11 @@ static int fail_run(const gbb_case *c, const gbb_acceptance_options *options, co
 /* ---- Bounded diagnostics replay (D-17, D-18) ----
  * A second, deterministic pass on a fresh instance. The main run never traces: it stays on the
  * gbb_run_audio path, and this pass runs the same ROM and the same (possibly mutated) script
- * events with gbb_run_ex, so it cannot disturb the main instance or its PCM stream. Windows end on
- * frame boundaries like the shared drive, events are queued up to 64 at a time before the window
- * that contains them, and the 4096-record buffers are refilled on GBB_STOP_OUTPUT_FULL. */
+ * through the private borrowed-span seam, so it cannot disturb the main instance or its PCM stream.
+ * Windows end on frame boundaries like the shared drive, and the 4096-record buffers are refilled
+ * on GBB_STOP_OUTPUT_FULL. */
 
 #define DIAG_RECORDS 4096u
-#define DIAG_BATCH 64u
 #define MAX_INSTRUCTION_HALF_DOTS UINT64_C(48)
 
 typedef void (*replay_visit_fn)(void *context, const gbb_trace_record *trace, size_t trace_count,
@@ -425,6 +425,7 @@ static int replay_diag(const replay_request *rq, gbb_instance **out_instance, ui
     const gbb_accept_script *script = rq->script;
     uint64_t actual = 0, logical = 0;
     size_t next_event = 0;
+    const gbb_accept_input_span input_span = {script->events, script->event_count, &next_event};
     bool observing = false;
     status = 0;
     while (logical < rq->end_half_dots && status == 0) {
@@ -436,23 +437,6 @@ static int replay_diag(const replay_request *rq, gbb_instance **out_instance, ui
         if (deadline > rq->end_half_dots) deadline = rq->end_half_dots;
         if (!observing && rq->observe_from < deadline) deadline = rq->observe_from;
 
-        size_t batch_end = next_event;
-        while (batch_end < script->event_count && script->events[batch_end].at_half_dots <= deadline &&
-               batch_end - next_event < DIAG_BATCH) {
-            batch_end++;
-        }
-        if (batch_end < script->event_count && batch_end - next_event == DIAG_BATCH &&
-            script->events[batch_end].at_half_dots <= deadline) {
-            deadline = script->events[batch_end - 1u].at_half_dots;
-        }
-        if (batch_end > next_event) {
-            if (gbb_queue_events(instance, script->events + next_event, batch_end - next_event) != GBB_OK) {
-                status = 2;
-                break;
-            }
-            next_event = batch_end;
-        }
-
         uint64_t guard = (deadline - logical) / 4u + 1024u;
         while (actual < deadline) {
             if (guard-- == 0) {
@@ -462,13 +446,15 @@ static int replay_diag(const replay_request *rq, gbb_instance **out_instance, ui
             uint64_t budget = deadline - actual;
             gbb_run_result r;
             if (observing) {
-                r = gbb_run_ex(instance, budget, rq->want_trace ? trace : NULL,
-                               rq->want_trace ? DIAG_RECORDS : 0u, diag, DIAG_RECORDS);
+                r = gbb_accept_run_diagnostic(instance, budget, &input_span,
+                                              rq->want_trace ? trace : NULL,
+                                              rq->want_trace ? DIAG_RECORDS : 0u,
+                                              diag, DIAG_RECORDS);
                 if (rq->visit != NULL && (r.trace_count != 0 || r.diagnostic_count != 0)) {
                     rq->visit(rq->context, trace, r.trace_count, diag, r.diagnostic_count);
                 }
             } else {
-                r = gbb_run_ex(instance, budget, NULL, 0, NULL, 0);
+                r = gbb_accept_run_diagnostic(instance, budget, &input_span, NULL, 0, NULL, 0);
             }
             actual += r.consumed_half_dots;
             if (r.reason == GBB_STOP_BUDGET) {

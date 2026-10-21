@@ -19,7 +19,8 @@ function(gabbaboy_verify_registered_tests)
       cgb_bench_ab_missing_field cgb_bench_ab_missing_elapsed cgb_mooneye_repro_requires_manifest
       cgb_colour_repro_tool_failure cgb_colour_repro_missing_pin
       cgb_speed_repro_tool_failure cgb_speed_repro_missing_pin
-      age_repro_selfcheck age_repro_selfcheck_tampered age_repro_compare_tampered)
+      age_repro_selfcheck age_repro_selfcheck_tampered age_repro_compare_tampered
+      core_linkage_links core_linkage_controls)
   endif()
   list(SORT expected_tests)
   if(NOT registered_tests STREQUAL expected_tests)

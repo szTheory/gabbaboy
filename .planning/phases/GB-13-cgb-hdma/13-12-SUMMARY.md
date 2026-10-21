@@ -42,7 +42,8 @@ key-files:
 key-decisions:
   - "Keep all five recurring Python contracts independent of Node and OpenGSD; run local prohibition closure separately."
   - "Resolve the Windows SameSuite launcher through CMake and convert drive paths for MSYS Bash without changing pinned bytes or expectations."
-requirements-completed: []
+requirements-completed:
+  - CGB-07
 coverage:
   - id: D1
     description: "Current source revision has machine-proven HDMA claim prohibition and fail-first/clean/live-checkout evidence."
@@ -260,3 +261,8 @@ Plan 13-12 execution is complete; Phase 13 automated goal verification and paren
 Security found one stale-source binding defect, fixed by RED `03292b1` / GREEN `5459b7c`, with 26 controls. Code review found incomplete optional remote receipts, fixed by RED `42e330f` / GREEN `ec54205`, with one positive and 16 negative controls. Help scanability was fixed by `f052ea3`. Independent re-audits closed all findings; the original reports remain preserved. Completed-stage handoff RED `1d45145` / GREEN `3cdcef2` preserves `/gsd-verify-work 13` and the Phase 14 pause. Fresh local evidence at `3cdcef2` is 994/994 native, 1,087/1,087 player and 6/6 installed/package; original measurements above remain source `690c081`. Goal verification and final published-head hosted checks remain pending at this record.
 
 Hosted follow-up: reviewed head `0f15a05` passed PR-event CI run `38671449176` (8/8 jobs, ASan/UBSan 989 cases), fixture run `38671449191` (7/7) and preview run `38671449197` (4/4). The 96 added sanitizer cases total 16.86 s aggregate, one sample with unquantified uncertainty. These exact-head results resolve the initial 36/37 verifier's sole D-21 evidence gap; the goal verifier must regenerate its verdict/fingerprint. Later metadata heads retain their own required CI gate. See BENCH for run and artifact identities.
+
+
+## Post-verification requirement reconciliation — 2026-10-20
+
+The `requirements-completed` field now records CGB-07 as phase-level closure claims. [13-VERIFICATION.md](13-VERIFICATION.md) marks each SATISFIED with `status: passed`; [13-UAT.md](13-UAT.md) is complete and automated, and the central REQUIREMENTS.md checks each Complete. These existing phase closure results supersede the execution-time decision to leave claims pending. The original execution receipts, coverage blocks and handoff prose above remain historical; this update does not claim a new behavioral test run or physical hardware qualification.

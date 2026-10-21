@@ -55,6 +55,73 @@ patch release (for example v0.1.1 or v0.1.2) binds the unchanged
 The source ledger intentionally does not contain its future commit SHA, so its
 own source can be reviewed before tagging without a self-reference.
 
+## Performance measurement and qualification
+
+The v0.2.0 DMG paired performance comparison is historical evidence: it reported
+the candidate as **+14.86% slower than v0.1.0 with a ±1.62% margin**. Keep that
+result separate from any fresh measurement; it is not a current approval or a
+substitute for rerunning the benchmark on the candidate source.
+
+The archived v0.2.0 performance receipt compares candidate source
+`ab301aa69b1f085050fd66bf7b1378863a0821f2` with baseline source
+`e30d168f7fc61de8db0a3801e7b1736362912cb7`. It measures workload
+`original-wram-tracer-1m-half-dots-v1` on DMG-CPU-B using
+`fixtures/tracer/tracer.gb` (SHA-256
+`ded6a499118b57539710892d58b4d7ced2269f08d447eed1451201d8ad65ec8d`), a
+1,000,000 half-dot budget, and correctness digest `4c7a57ff3d50d228`. The
+Linux x86_64 run used 30 paired samples after 3 warmups and recorded
+**+14.86% slower** with an approximate 95% mean margin of ±1.62%; its
+historical disposition was `accepted-with-disclosed-regression`. This
+source-bound result describes that historical comparison only. It is not a
+current approval, fresh result, or equivalent-speed claim.
+
+Start a fresh measurement from the checkout being evaluated:
+
+```sh
+bash tests/scripts/measure-release-baseline.sh --qualify-v02 \
+  --output /tmp/v02-performance-measurement.json
+```
+
+The receipt records baseline and candidate revisions, build and compiler
+identities, hardware class, the frozen workload and output digest, warmups,
+paired samples, and uncertainty. The existing regression trigger is unchanged:
+the median must exceed 105% of baseline and remain above 100% after subtracting
+the approximate 95% mean margin. If it does not fire, the producer exits zero
+and writes an untriggered receipt. If it fires, the producer writes a schema-v2
+`pending-investigation` measurement and exits nonzero. A supplied
+`--review-regression` note is retained only as a compatibility argument for
+existing callers; its prose is untrusted and cannot qualify a triggered result.
+
+Only a separately recorded decision from an actual independent reviewer can
+turn that exact pending measurement into a qualifying receipt. Keep the review
+record outside the source checkout. It must identify the decision and reviewer,
+link the review record, state its timestamp and rationale, and bind the full
+canonical measurement receipt digest, source pair, workload, measured summary,
+and uncertainty. After the independent reviewer has recorded a decision, apply
+that file and verify the resulting receipt:
+
+```sh
+python3 -I tests/scripts/verify-v02-performance.py --apply-decision \
+  --measurement /tmp/v02-performance-measurement.json \
+  --decision /secure/review/performance-decision.json \
+  --output /tmp/v02-performance-qualified.json
+python3 -I tests/scripts/verify-v02-performance.py --verify \
+  /tmp/v02-performance-qualified.json
+```
+
+The qualified receipt retains the original pending measurement and checks that
+the decision still matches its receipt digest and evidence. The verifier checks
+the supplied review record's shape and bindings; it cannot authenticate the
+reviewer's identity or prove that an external link represents a real
+independent review. Do not create a review record on a reviewer's behalf or use
+a self-test fixture as approval.
+
+Schema-v1 receipts can be inspected only with
+`python3 -I tests/scripts/verify-v02-performance.py --verify-historical PATH`.
+That mode identifies legacy evidence as historical and pins it to the original
+v0.2.0 source; it cannot satisfy current qualification. The regular `--verify`
+mode accepts current schema-v2 receipts only.
+
 Extract an archive into a new directory. Keep the core's `include`, `lib`, and
 CMake package metadata together; configure consumers with
 `-DCMAKE_PREFIX_PATH=<that-prefix>` and link `GabbaBoy::core`. The installed C
@@ -143,6 +210,27 @@ never creates a tag, release or upload. It does not exercise the draft-bound
 download, attach, final gate or publish steps. The fuzz producer takes the
 qualified commit from an explicit source-commit variable because `GITHUB_SHA` is
 runner-owned and cannot be overridden by a step.
+
+Privilege is split so tagged code never holds release write authority for the
+v0.2 evidence. The corpus and performance producers run tagged build, test and
+measurement code with `contents: read`, no GitHub token in their environment and
+no persisted checkout credential, and retain their receipts as run artifacts.
+The fuzz job executes no tagged code: it reads the completed exact-source
+`ci.yml` push campaign through the trusted validator, and fails with a named
+limitation when no such completed campaign exists. A separate attacher holds the
+only write token for that evidence, runs no checked-out code, and attaches the
+retained bytes without replacing an asset. The manifest and publisher jobs run
+the release gate and delivery validators from a trusted checkout of the workflow
+revision, with the tagged tree as data. The Linux, macOS and Windows candidate
+jobs, the manifest job and the publisher still hold write authority while they
+build, download or judge the tagged tree; that residual is named in
+`.github/scripts/verify-workflow-policy.py`, which is enforced as an exact set
+and is not a claim of closure. The policy judge, which reads workflows as data
+and proves each required command is reachable and fatal (comments, `echo`, dead
+branches, `|| true` and `continue-on-error` do not count), runs from the
+default branch in the rehearsal `judge` job and as part of
+`bash .github/scripts/verify-release-gates.sh --self-test`. Shared unprivileged
+setup is `.github/scripts/produce-release-evidence.sh`.
 
 The version PR is the final review point for `CHANGELOG.md`; release-please may
 update it there. Its rendered release notes are checked with

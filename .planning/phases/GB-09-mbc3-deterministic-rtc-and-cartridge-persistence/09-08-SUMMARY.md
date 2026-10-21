@@ -44,25 +44,24 @@ coverage:
     requirement: RTC-01
     verification:
       - kind: other
-        ref: "cmake -DMANIFEST=fixtures/rtc3test/manifest.json -P cmake/VerifyFixtureManifest.cmake (fixture-ok rtc3test.gb, tests.md) and header=ok"
+        ref: "Fresh Phase 15.1-11 manifest verification: rtc3test ROM and tests.md both fixture-ok; header=ok"
         status: pass
     human_judgment: false
   - id: D2
-    description: "Legacy-toolchain reproduction scripts for rtc3test (RGBDS 0.4.2) and MagenTests (RGBDS 0.6.1)"
+    description: "Offline self-checks for the rtc3test and MagenTests legacy-toolchain reproduction scripts"
     requirement: CART-04
     verification:
       - kind: other
-        ref: "both --self-check print self-check=pass; Docker ubuntu:22.04 --compare printed result=byte-identical for each"
+        ref: "Fresh Phase 15.1-11 run: tests/scripts/reproduce-rtc3test.sh --self-check and tests/scripts/reproduce-magentests.sh --self-check (both self-check=pass)"
         status: pass
     human_judgment: false
   - id: D3
-    description: "Hosted fixture-repro jobs magentests-repro and rtc3test-repro"
+    description: "The fixture-repro workflow definitions retain both reproduction jobs and pass local syntax validation"
     verification:
       - kind: other
-        ref: "actionlint clean; hosted execution deferred to Plan 09-09"
+        ref: "Fresh Phase 15.1-11 run: actionlint .github/workflows/fixture-repro.yml (exit 0)"
         status: pass
-    human_judgment: true
-    rationale: "Workflow jobs cannot run locally; proven in CI at Plan 09-09 and read in 09-18"
+    human_judgment: false
 duration: 25min
 completed: 2026-10-11
 status: complete
@@ -128,3 +127,7 @@ Plan 09-09 proves the two jobs on hosted CI; Plan 09-12 consumes `fixtures/rtc3t
 ## Self-Check: PASSED
 
 Files, commits (edf53be, 71ba14e, 72aa368, 9701c45) and digests verified present.
+
+## Current Verification — 15.1-11
+
+The manifest, both offline script self-checks, and workflow syntax passed locally. Historical Docker byte-comparison and hosted exact-head job results remain in the original summary body; no new hosted workflow run is claimed by this batch.

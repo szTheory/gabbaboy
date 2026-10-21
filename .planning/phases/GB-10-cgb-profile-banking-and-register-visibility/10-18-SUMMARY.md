@@ -42,29 +42,43 @@ coverage:
     description: "CGB-profile fuzz path: random LDH reads/writes over FF00-FF7F plus VBK/SVBK end in budget, idle or unsupported-bus stops, bank state stays bounded; DMG banks stay 0/1"
     human_judgment: false
     verification:
-      - {kind: ctest, ref: "cgb_fuzz_io_regressions", status: pass}
-      - {kind: ctest, ref: "fuzz_core_regressions", status: pass}
+      - kind: integration
+        ref: "CTest cgb_fuzz_io_regressions"
+        status: pass
+      - kind: integration
+        ref: "CTest fuzz_core_regressions"
+        status: pass
   - id: D2
     description: "Header cases x both profiles through the loader matrix, with a skewed oracle that must be detected"
     human_judgment: false
     verification:
-      - {kind: ctest, ref: "cgb_loader_matrix", status: pass}
+      - kind: integration
+        ref: "CTest cgb_loader_matrix"
+        status: pass
   - id: D3
     description: "Probe/load parity over a deterministic fuzz corpus on both profiles, with a skewed probe that must be detected"
     human_judgment: false
     verification:
-      - {kind: ctest, ref: "cgb_loader_fuzz_parity", status: pass}
+      - kind: integration
+        ref: "CTest cgb_loader_fuzz_parity"
+        status: pass
   - id: D4
     description: "DMG trace digest unchanged beside a CGB instance, interleaved and on two threads"
     human_judgment: false
     verification:
-      - {kind: ctest, ref: "cgb_instance_isolation", status: pass}
+      - kind: integration
+        ref: "CTest cgb_instance_isolation"
+        status: pass
   - id: D5
     description: "Installed C and C++ consumers exercise every new public symbol"
     human_judgment: false
     verification:
-      - {kind: ctest, ref: "installed_consumer_c", status: pass}
-      - {kind: ctest, ref: "installed_consumer_cpp", status: pass}
+      - kind: integration
+        ref: "build/consumer-c/consumer-c fixtures/tracer/tracer.gb"
+        status: pass
+      - kind: integration
+        ref: "build/consumer-cpp/consumer-cpp fixtures/tracer/tracer.gb"
+        status: pass
 ---
 
 # Phase 10 Plan 18: CGB fuzz, loader, consumer and isolation coverage Summary
@@ -124,3 +138,20 @@ Ready for 10-19.
 - Modified files present on disk (9 files listed in key-files).
 - Commits 4a08747, 00eeb99, d69645b are ancestors of HEAD.
 - Acceptance greps: `FUZZ_INPUT_LIMIT 65536u` count 1; `GBB_UNSUPPORTED_EXECUTION_MODE` in fuzz_core.c at least 1; `^cgb_fuzz_io_regressions$` 1; the three `cgb_` loader/isolation names 3; `GBB_PROFILE_CGB_CPU_E` in both consumers; `gbb_get_info` in the C++ consumer.
+
+## 15.1-19 Fresh Applicability Evidence
+
+On 2026-10-21, current focused fuzz, loader, parity, and instance-isolation checks passed 5/5:
+
+```text
+ctest --test-dir build --output-on-failure -R '^(cgb_fuzz_io_regressions|fuzz_core_regressions|cgb_loader_matrix|cgb_loader_fuzz_parity|cgb_instance_isolation)$'
+```
+
+Both existing installed-package consumer executables also passed when run with the tracer fixture:
+
+```text
+build/consumer-c/consumer-c fixtures/tracer/tracer.gb
+build/consumer-cpp/consumer-cpp fixtures/tracer/tracer.gb
+```
+
+These are focused current-source checks. The Phase 10 sanitizer and full-suite record above remains historical; this note does not claim a new sanitizer run.

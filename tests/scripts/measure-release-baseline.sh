@@ -16,14 +16,14 @@ if [[ "${1:-}" == "--qualify-v02" ]]; then
           "${4}" == "--review-regression" && -n "${5}" ]]; then
     QUALIFY_MODE=true; QUALIFY_OUTPUT="$3"; QUALIFY_REVIEW="$5"; shift 5
   else
-    echo "usage: $0 --qualify-v02 --output <receipt.json> [--review-regression <evidence>]" >&2; exit 2
+    echo "usage: $0 --qualify-v02 --output <measurement.json> [--review-regression <untrusted-note>]" >&2; exit 2
   fi
 elif [[ "${1:-}" == "--self-test" ]]; then SELF_TEST=true; shift
 elif [[ "${1:-}" == "--ab" ]]; then
   [[ $# -eq 3 && -x "${2}" && -x "${3}" ]] || { echo "usage: $0 --ab <base-measure_core> <head-measure_core>" >&2; exit 2; }
   AB_MODE=true; AB_BASE="$2"; AB_HEAD="$3"; shift 3
 fi
-[[ $# -eq 0 ]] || { echo "usage: $0 [--self-test | --ab <base-measure_core> <head-measure_core> | --qualify-v02 --output <receipt.json> [--review-regression <evidence>] ]" >&2; exit 2; }
+[[ $# -eq 0 ]] || { echo "usage: $0 [--self-test | --ab <base-measure_core> <head-measure_core> | --qualify-v02 --output <measurement.json> [--review-regression <untrusted-note>] ]" >&2; exit 2; }
 BUILD_DIR="${GBB_RELEASE_MEASURE_BUILD_DIR:-${ROOT_DIR}/build/release-measure}"
 ROM="${ROOT_DIR}/fixtures/tracer/tracer.gb"
 MANIFEST="${ROOT_DIR}/fixtures/tracer/manifest.json"
@@ -471,28 +471,21 @@ with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-pair-") as temporary:
             "review_trigger": ab["review_trigger"],
         }
         triggered = bool(ab["review_trigger"])
-        if review_notes and ("\n" in review_notes or "\r" in review_notes or
-                             re.search(r"/(Users|home|private|tmp)/|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+", review_notes)):
-            raise SystemExit("qualify-v02-review-notes-not-private")
         estimate = ab["ratio"]["median"] - 100.0
         margin = ab["uncertainty"]["margin_95"]
-        reviewed_trigger = triggered and bool(review_notes)
         disposition = {
             "review_trigger_percent": 5.0,
             "estimate_percent": estimate,
             "uncertainty_margin_percent": margin,
-            "decision": "accepted-with-disclosed-regression" if reviewed_trigger else
-                        ("investigation-required" if triggered else "no-review-trigger"),
-            "investigation": review_notes if reviewed_trigger else
-                             ("The +5% trigger fired; automated qualification remains pending until a source and measurement review is recorded."
-                              if triggered else
-                              "The median estimate did not clear +5% after accounting for the approximate 95% mean margin."),
-            "release_disposition": "accepted-with-disclosed-regression" if reviewed_trigger else
-                                  ("pending-investigation" if triggered else "qualified-no-trigger"),
+            "decision": "investigation-required" if triggered else "no-review-trigger",
+            "investigation": "A separately recorded independent review decision is required for this exact measurement."
+                            if triggered else
+                            "The median estimate did not clear +5% after accounting for the approximate 95% mean margin.",
+            "release_disposition": "pending-investigation" if triggered else "qualified-no-trigger",
         }
         receipt = {
-            "schema_version": 1,
-            "result": "passed" if not triggered or reviewed_trigger else "pending-investigation",
+            "schema_version": 2,
+            "result": "pending-investigation" if triggered else "passed",
             "source": {"baseline": base_source, "candidate": candidate_source},
             "builds": builds,
             "hardware_class": f"{platform.system()} {platform.machine()}",
@@ -542,9 +535,11 @@ with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-pair-") as temporary:
             temp_output.unlink(missing_ok=True)
             raise SystemExit(f"qualify-v02-output-exists: {output.name}")
         temp_output.unlink()
-        print(f"wrote provenance-bound candidate receipt: {output.name}")
-        if triggered and not reviewed_trigger:
-            raise SystemExit("qualify-v02-review-trigger-fired: receipt remains pending-investigation")
+        if triggered:
+            print(f"wrote pending performance measurement: {output.name}")
+            note = "; --review-regression text is not an independent decision" if review_notes else ""
+            raise SystemExit("qualify-v02-review-trigger-fired: measurement remains pending until a separately recorded, receipt-bound independent review decision is applied" + note)
+        print(f"wrote untriggered performance receipt: {output.name}")
     finally:
         if candidate_worktree:
             subprocess.run(["git", "worktree", "remove", "--force", str(candidate_src)], cwd=root,

@@ -24,26 +24,43 @@ actuals:
 duration: 15 min
 completed: 2026-10-12
 coverage:
-  - deliverable: "Digest verifier: every committed CGB Mooneye ROM is size- and SHA-256-checked against its manifest row, plus parent-reference digests and suite pin"
-    verification:
-      - {kind: ctest, ref: "cgb_mooneye_fixture_digest", status: pass}
-      - {kind: ctest, ref: "cgb_mooneye_digest_tamper (exit 1, 'Fixture mooneye-misc-boot-regs-cgb mismatch')", status: pass}
+  - id: 10-15-digest-verifier
+    description: "Digest verifier: every committed CGB Mooneye ROM is size- and SHA-256-checked against its manifest row, plus parent-reference digests and suite pin"
     human_judgment: false
-  - deliverable: "Inventory verifier: exact four ids, categories, expect values and 0xFF76 stop address on the two expected-unsupported rows"
     verification:
-      - {kind: ctest, ref: "cgb_mooneye_inventory", status: pass}
-      - {kind: ctest, ref: "cgb_mooneye_inventory_tamper (exit 1, 'Duplicate fixture id')", status: pass}
+      - kind: unit
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_mooneye_fixture_digest$'"
+        status: pass
+      - kind: unit
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_mooneye_digest_tamper$'"
+        status: pass
+  - id: 10-15-inventory
+    description: "Inventory verifier: exact four ids, categories, expect values and 0xFF76 stop address on the two expected-unsupported rows"
     human_judgment: false
-  - deliverable: "Install-exclusion scan over the install tree with a planted-ROM control"
     verification:
-      - {kind: ctest, ref: "cgb_mooneye_not_installed", status: pass}
-      - {kind: ctest, ref: "cgb_mooneye_not_installed_selftest (exit 1, 'mooneye-installed: share/payload.bin')", status: pass}
+      - kind: unit
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_mooneye_inventory$'"
+        status: pass
+      - kind: unit
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_mooneye_inventory_tamper$'"
+        status: pass
+  - id: 10-15-install-exclusion
+    description: "Install-exclusion scan over the install tree with a planted-ROM control"
     human_judgment: false
-  - deliverable: "fixture-repro.yml job mooneye-cgb-repro running the byte-identical compare"
     verification:
-      - {kind: script, ref: "workflow YAML parses (ruby YAML, job listed); grep for job and compare command", status: pass}
-    human_judgment: true
-    rationale: "The hosted run cannot be proven locally; green CI is proven on the phase PR (Plan 10-20)."
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_mooneye_not_installed$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_mooneye_not_installed_selftest$'"
+        status: pass
+  - id: 10-15-ci-wiring
+    description: "fixture-repro.yml parses and contains the mooneye-cgb-repro job and compare command; hosted execution remains unverified"
+    human_judgment: false
+    verification:
+      - kind: other
+        ref: "/usr/bin/ruby -e 'require \"yaml\"; source=File.read(\".github/workflows/fixture-repro.yml\"); YAML.parse(source); abort unless [\"mooneye-cgb-repro:\", \"bash tests/scripts/reproduce-mooneye-cgb.sh --compare fixtures/mooneye-cgb\"].all? { |item| source.include?(item) }'"
+        status: pass
 ---
 
 # Phase 10 Plan 15: Mooneye CGB Verification Wiring Summary
@@ -62,6 +79,10 @@ A fail-closed CMake verifier for the four Mooneye CGB derivatives, an install-tr
 
 - Full suite `ctest --preset phase1`: 100% passed, 512 of 512 (169.9 s).
 - The hosted `mooneye-cgb-repro` job has NOT been run; only YAML syntax and structure were validated locally. Hosted proof is left to the phase PR (10-20).
+
+## Fresh evidence recheck (2026-10-21)
+
+All six mapped `cgb_mooneye_*` CTests passed in the isolated build, including digest and inventory rejection controls and the install-tree scan. `/usr/bin/ruby` parsed the current workflow YAML, and the expected job and compare command are present. The hosted `mooneye-cgb-repro` job remains unrun; the checks here establish local configuration only.
 
 ## Deviations from Plan
 

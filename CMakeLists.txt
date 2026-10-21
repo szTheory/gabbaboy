@@ -30,16 +30,21 @@ set_target_properties(gabbaboy_core PROPERTIES C_EXTENSIONS OFF)
 set_target_properties(gabbaboy_core PROPERTIES EXPORT_NAME core)
 
 # Shared acceptance library (runner and player smoke). Internal: never installed or exported.
-add_library(gabbaboy_accept STATIC
+# The helpers are compiled once into gabbaboy_accept_bare, which names no core. A normal target links
+# gabbaboy_accept, which adds the normal core exactly once. A mutant target links gabbaboy_accept_bare
+# and its own mutant core, so no link line ever names two cores (verify-core-linkage.py checks this).
+add_library(gabbaboy_accept_bare STATIC
   src/accept/sha256.c
   src/accept/input_script.c
   src/accept/stepper.c
   src/accept/predicate.c
   src/accept/digest.c)
-target_include_directories(gabbaboy_accept PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/accept")
-target_link_libraries(gabbaboy_accept PUBLIC GabbaBoy::core)
-target_compile_features(gabbaboy_accept PUBLIC c_std_17)
-set_target_properties(gabbaboy_accept PROPERTIES C_EXTENSIONS OFF)
+target_include_directories(gabbaboy_accept_bare PUBLIC
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/accept" "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_compile_features(gabbaboy_accept_bare PUBLIC c_std_17)
+set_target_properties(gabbaboy_accept_bare PROPERTIES C_EXTENSIONS OFF)
+add_library(gabbaboy_accept INTERFACE)
+target_link_libraries(gabbaboy_accept INTERFACE gabbaboy_accept_bare GabbaBoy::core)
 
 # Case-file parser and acceptance orchestration for the runner. Internal: never installed or exported.
 add_library(gabbaboy_runner_support STATIC

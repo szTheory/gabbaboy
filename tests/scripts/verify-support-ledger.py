@@ -194,7 +194,63 @@ def relative_path(value: object, code: str = "input-path-invalid") -> str:
             "\\" in value or value.startswith("/") or re.match(r"^[A-Za-z]:", value) or
             any(part in ("", ".", "..") for part in value.split("/"))):
         fail(code)
+    try:
+        value.encode("utf-8", errors="strict")
+    except UnicodeEncodeError:
+        fail(code + ":not-utf8")
     return value
+
+
+def path_content_identity(rows: list[dict], contents: dict[str, bytes], domain: bytes) -> str:
+    """Hash exact UTF-8 path bytes and exact file bytes with unambiguous framing."""
+    digest = hashlib.sha256()
+    digest.update(domain + b"\0")
+    for row in sorted(rows, key=lambda item: relative_path(item.get("path")).encode("utf-8")):
+        name = relative_path(row.get("path"))
+        path_raw = name.encode("utf-8", errors="strict")
+        if name not in contents:
+            fail("build-evidence-identity-incomplete")
+        raw = contents[name]
+        digest.update(len(path_raw).to_bytes(8, "big"))
+        digest.update(path_raw)
+        digest.update(len(raw).to_bytes(8, "big"))
+        digest.update(sha256(raw).encode("ascii"))
+    return digest.hexdigest()
+
+
+def immutable_git_file(repo_root: pathlib.Path, revision: str, relative: str,
+                       limit: int = MAX_INPUT_BYTES) -> bytes:
+    """Read a bounded file blob from a recorded producer commit, ignoring replace refs."""
+    relative_path(relative, "source-input-path-invalid")
+    if re.fullmatch(r"[0-9a-f]{40,64}", revision or "") is None:
+        fail("source producer revision is malformed")
+    environment = os.environ.copy()
+    environment.update({
+        "GIT_NO_LAZY_FETCH": "1",
+        "GIT_NO_REPLACE_OBJECTS": "1",
+        "GIT_OPTIONAL_LOCKS": "0",
+        "GIT_TERMINAL_PROMPT": "0",
+    })
+    object_name = f"{revision}:{relative}"
+    try:
+        size = subprocess.run(["git", "cat-file", "-s", object_name], cwd=repo_root,
+                              stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, text=True, check=False, timeout=10,
+                              env=environment)
+        if size.returncode != 0 or re.fullmatch(r"[0-9]+\n?", size.stdout) is None:
+            fail("source producer object unavailable:" + relative)
+        byte_count = int(size.stdout.strip())
+        if byte_count > limit:
+            fail("source producer object too large:" + relative)
+        content = subprocess.run(["git", "cat-file", "blob", object_name], cwd=repo_root,
+                                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE, check=False, timeout=10,
+                                 env=environment)
+    except (OSError, subprocess.TimeoutExpired):
+        fail("source producer object unavailable:" + relative)
+    if content.returncode != 0 or len(content.stdout) != byte_count:
+        fail("source producer object unavailable:" + relative)
+    return content.stdout
 
 
 def bounded_file(path: pathlib.Path, limit: int, code: str) -> bytes:
@@ -911,6 +967,7 @@ def create_current_ledger(receipt_path: pathlib.Path) -> dict:
 
 def validate_source_bindings(data: dict, repo_root: pathlib.Path,
                              source_bytes: dict[str, bytes] | None = None,
+                             source_revision: str | None = None,
                              include_build: bool = True) -> None:
     root = repo_root.resolve()
     for section, rows in (("source", data.get("source_inputs")),
@@ -928,6 +985,9 @@ def validate_source_bindings(data: dict, repo_root: pathlib.Path,
                 name, raw = row["path"], source_bytes[row["path"]]
                 if len(raw) > MAX_INPUT_BYTES:
                     fail(section + "-input:too-large")
+            elif section == "source" and source_revision is not None:
+                name = relative_path(row.get("path"), "source-input-path-invalid")
+                raw = immutable_git_file(root, source_revision, name)
             else:
                 if (section == "build" and EVIDENCE_ONLY and type(row.get("path")) is str
                         and not (root / row["path"]).exists()):
@@ -935,6 +995,61 @@ def validate_source_bindings(data: dict, repo_root: pathlib.Path,
                 name, raw = read_repo_file(root, row.get("path"), MAX_INPUT_BYTES, section + "-input")
             if sha256(raw) != row.get("sha256") or len(raw) != row.get("size_bytes"):
                 fail(section + " input is stale:" + name)
+
+
+def build_evidence_scope(receipt: dict, repo_root: pathlib.Path) -> dict:
+    rows = receipt.get("identity", {}).get("build_artifacts")
+    if type(rows) is not list or not rows:
+        fail("build-evidence-identities-empty")
+    contents: dict[str, bytes] = {}
+    missing = []
+    for row in rows:
+        if type(row) is not dict:
+            fail("build-evidence-identity-malformed")
+        name = relative_path(row.get("path"), "build-evidence-path-invalid")
+        path = (repo_root.resolve() / name).resolve()
+        try:
+            path.relative_to(repo_root.resolve())
+        except ValueError:
+            fail("build-evidence-path-outside-root")
+        if not path.exists():
+            missing.append(name)
+            continue
+        if not path.is_file():
+            fail("build input is stale:" + name)
+        raw = bounded_file(path, MAX_INPUT_BYTES, "build-input")
+        if sha256(raw) != row.get("sha256") or len(raw) != row.get("size_bytes"):
+            fail("build input is stale:" + name)
+        contents[name] = raw
+
+    required = len(rows)
+    observed = len(contents)
+    skipped = len(missing)
+    if skipped and not EVIDENCE_ONLY:
+        fail(f"build-evidence-unavailable: observed={observed} skipped={skipped}")
+    if skipped and observed:
+        fail(f"build-evidence-partial: observed={observed} skipped={skipped}")
+    # Declared rows are bound using the receipt's size and content digest, not synthetic bytes.
+    declared = hashlib.sha256(b"gabbaboy-build-declared-identity-v1\0")
+    for row in sorted(rows, key=lambda item: relative_path(item.get("path")).encode("utf-8")):
+        path_raw = relative_path(row.get("path")).encode("utf-8", errors="strict")
+        declared.update(len(path_raw).to_bytes(8, "big"))
+        declared.update(path_raw)
+        declared.update(row["size_bytes"].to_bytes(8, "big"))
+        declared.update(row["sha256"].encode("ascii"))
+    declared_identity = declared.hexdigest()
+    retained_identity = (path_content_identity(rows, contents,
+                                              b"gabbaboy-build-retained-identity-v1")
+                         if observed == required else None)
+    return {
+        "scope": "retained-build" if observed == required else "receipt-only",
+        "qualification_status": "qualified" if observed == required else "not-established",
+        "required_count": required,
+        "observed_count": observed,
+        "skipped_count": skipped,
+        "receipt_declared_identity_sha256": declared_identity,
+        "retained_build_identity_sha256": retained_identity,
+    }
 
 
 def current_git_revision() -> str:
@@ -986,16 +1101,16 @@ def run_existing_receipt_validator(receipt_path: pathlib.Path, inventory: dict,
 def check_ledger_static(root: pathlib.Path = ROOT, run_inventory: bool = True) -> dict:
     """Receipt-free currency check of the tracked v0.2.0 ledger.
 
-    The tracked ledger carries a historical producer snapshot, so its build-artifact digests are not
-    compared with the working tree here. Everything that the ledger claims about the covered source
-    inputs, the independent inventory and its own schema is. The receipt-bound check is --check-current,
-    which needs a complete corpus receipt and runs where that receipt is produced.
+    The tracked ledger carries a historical producer snapshot. Source digests are checked against
+    that immutable producer revision, not today's checkout; build artifacts require the full receipt-
+    bound check where they were produced.
     """
     ledger = parse_ledger(bounded_file(root / "docs/support/v0.2.0.md", MAX_LEDGER_BYTES, "ledger"), "0.2.0")
     if run_inventory:
         run_inventory_validator(root)
     validate_data_v2(ledger, "0.2.0")
-    validate_source_bindings(ledger, root, include_build=False)
+    revision = ledger["receipt"]["producer_revision"] if root.resolve() == ROOT.resolve() else None
+    validate_source_bindings(ledger, root, source_revision=revision, include_build=False)
     return ledger
 
 
@@ -1126,6 +1241,7 @@ def build_v2_sidecar(tag: str, source_sha: str, repo_root: pathlib.Path,
     if stable_v2_evidence(derived) != stable_v2_evidence(data):
         fail("tagged ledger stable evidence differs from complete receipt or tagged source inputs")
     validate_source_bindings(derived, repo_root, tagged_inputs)
+    build_evidence = build_evidence_scope(receipt, repo_root)
     head = git("rev-parse", "HEAD", cwd=repo_root).decode("ascii", "strict").strip()
     if head == source_sha:
         run_inventory_validator(repo_root)
@@ -1153,6 +1269,7 @@ def build_v2_sidecar(tag: str, source_sha: str, repo_root: pathlib.Path,
         "corpus_receipt_run_id": derived["receipt"]["run_id"],
         "corpus_run": derived["receipt"]["run"],
         "corpus_receipt_build_artifacts": derived["receipt"]["build_artifacts"],
+        "build_evidence": build_evidence,
         "covered_source_inputs": data["source_inputs"],
         "suite_model_mode_counts": data["receipt"]["suite_model_mode_counts"],
         "case_counts": data["receipt"]["counts"],
@@ -1203,6 +1320,16 @@ def build_sidecar(tag: str, source_sha: str, repo_root: pathlib.Path = ROOT,
 
 
 def verify_sidecar_data(observed: dict, expected: dict) -> None:
+    expected_build = expected.get("build_evidence", {})
+    observed_build = observed.get("build_evidence", {}) if type(observed) is dict else {}
+    if expected_build.get("scope") == "receipt-only":
+        if (type(observed_build) is not dict or observed_build.get("scope") != "receipt-only" or
+                observed_build != expected_build):
+            fail("build-evidence-unavailable: retained-build qualification requires every artifact; "
+                 f"observed={expected_build.get('observed_count')} "
+                 f"skipped={expected_build.get('skipped_count')}")
+    elif expected_build.get("scope") == "retained-build" and observed_build != expected_build:
+        fail("retained build-evidence identity differs from independently observed bytes")
     if not isinstance(observed, dict) or observed != expected:
         fail("sidecar source SHA, tagged ledger blob, or fixture/corpus identity differs from the tag")
 
@@ -1386,6 +1513,10 @@ def self_test_v2() -> None:
              "duplicated")
     rejected("missing-required-case", lambda value: value["receipt"]["case_observations"].pop(),
              "case membership")
+    rejected("empty-build-evidence", lambda value: value["receipt"].update(build_artifacts=[]),
+             "receipt build artifact identities are missing")
+    rejected("null-build-evidence", lambda value: value["receipt"].update(build_artifacts=None),
+             "receipt build artifact identities are missing")
 
     def xfail_as_pass(value: dict) -> None:
         row = value["receipt"]["case_observations"][1]
@@ -1443,6 +1574,21 @@ def self_test_v2() -> None:
         fail("self-test Unicode identity was normalized")
     if _sorted_unique_strings(sorted([composed, decomposed]), "Unicode IDs changed") != sorted([composed, decomposed]):
         fail("self-test exact decoded IDs were changed")
+    composed_path, decomposed_path = "fixtures/caf\u00e9.gb", "fixtures/cafe\u0301.gb"
+    one_row = [{"path": composed_path}]
+    if (relative_path(composed_path) != composed_path or
+            path_content_identity(one_row, {composed_path: b"fixture\0bytes"}, b"utf8-fixture") ==
+            path_content_identity([{"path": decomposed_path}],
+                                  {decomposed_path: b"fixture\0bytes"}, b"utf8-fixture")):
+        fail("self-test UTF-8 path identity normalized distinct byte paths")
+    try:
+        relative_path("fixtures/invalid-\udcff.gb")
+    except ValueError as error:
+        if "not-utf8" not in str(error):
+            fail("invalid UTF-8 path produced the wrong diagnostic")
+        controls.append("invalid-utf8-path")
+    else:
+        fail("self-test accepted a path that cannot be represented as UTF-8 bytes")
     positive_checks.append("exact-unicode-id-and-byte-digest")
 
     with tempfile.TemporaryDirectory(prefix="gabbaboy-support-ledger-inputs-") as temporary:
@@ -1591,12 +1737,18 @@ def self_test_static_ledger() -> None:
     rows = ledger["source_inputs"]
     if not rows:
         fail("static ledger self-test has no covered source inputs")
+    producer = ledger["receipt"]["producer_revision"]
     with tempfile.TemporaryDirectory(prefix="gabbaboy-static-ledger-") as temporary:
         copy_root = pathlib.Path(temporary)
-        for relative in [ledger_rel] + [row["path"] for row in rows]:
+        for relative in [ledger_rel]:
             target = copy_root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((ROOT / relative).read_bytes())
+        for row in rows:
+            relative = row["path"]
+            target = copy_root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(immutable_git_file(ROOT, producer, relative))
         check_ledger_static(copy_root, run_inventory=False)
         controls = 0
         victim = copy_root / rows[0]["path"]
@@ -1619,6 +1771,25 @@ def self_test_static_ledger() -> None:
         else:
             fail("static ledger accepted a missing covered source input")
         victim.write_bytes(original)
+        # Added-case and removed-case inventory controls: the denominator is exact, so a ledger that claims
+        # one more or one fewer required case than the independent inventory must be rejected by the
+        # production entry for the membership reason, never by an unrelated parse error.
+        ledger_bytes = (ROOT / ledger_rel).read_bytes()
+        denominator = b'"required_case_count": %d' % V2_REQUIRED_CASES
+        if ledger_bytes.count(denominator) != 1:
+            fail("static ledger self-test: the required-case denominator must appear exactly once")
+        for label, count in (("added-case-inventory", V2_REQUIRED_CASES + 1),
+                             ("removed-case-inventory", V2_REQUIRED_CASES - 1)):
+            (copy_root / ledger_rel).write_bytes(
+                ledger_bytes.replace(denominator, b'"required_case_count": %d' % count))
+            try:
+                check_ledger_static(copy_root, run_inventory=False)
+            except ValueError as error:
+                if "required inventory membership is incomplete or narrowed" not in str(error):
+                    fail("static ledger control " + label + " was rejected for the wrong reason: " + str(error))
+                controls += 1
+            else:
+                fail("static ledger accepted a " + label + " denominator")
         (copy_root / ledger_rel).write_bytes(b"not a ledger\n")
         try:
             check_ledger_static(copy_root, run_inventory=False)
@@ -1626,9 +1797,9 @@ def self_test_static_ledger() -> None:
             controls += 1
         else:
             fail("static ledger accepted an unparseable ledger")
-    if controls != 3:
+    if controls != 5:
         fail("static ledger self-test did not run all of its controls")
-    print("support ledger static self-test passed: positive=1 rejected_controls=3 controls=changed-covered-input,missing-covered-input,unparseable-ledger")
+    print("support ledger static self-test passed: positive=1 rejected_controls=5 controls=changed-covered-input,missing-covered-input,added-case-inventory,removed-case-inventory,unparseable-ledger")
 
 
 def self_test_v2_sidecar() -> None:
@@ -1639,7 +1810,9 @@ def self_test_v2_sidecar() -> None:
     data = parse_ledger(ledger_raw, "0.2.0")
     validate_data_v2(data, "0.2.0")
     receipt_path = pathlib.Path("build/cgb-corpus-receipt.json")
-    base_revision = current_git_revision()
+    # The tracked ledger is a frozen producer snapshot. Its source identity must
+    # be read from that receipt's immutable producer commit, not today's HEAD.
+    base_revision = data["receipt"]["producer_revision"]
     source_bytes = {}
     for row in data["source_inputs"]:
         raw = git("show", f"{base_revision}:{row['path']}")
@@ -1815,11 +1988,74 @@ def self_test_v2_sidecar() -> None:
             expect_rejected("absent-build-without-evidence-only",
                             lambda: build_sidecar("v0.2.0", source_sha, repository, outside_receipt),
                             "receipt path must stay inside the tagged repository")
+            cli_script = repository / "tests/scripts/verify-support-ledger.py"
+            cli_script.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(pathlib.Path(__file__).resolve(), cli_script)
+            retained_sidecar_path = temp_root / "retained-build-sidecar.json"
+            retained_sidecar_path.write_text(
+                json.dumps(second_sidecar, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            command = [sys.executable, "-I", str(cli_script), "--tag", "v0.2.0",
+                       "--source-sha", source_sha, "--receipt", str(outside_receipt),
+                       "--verify-sidecar", str(retained_sidecar_path), "--evidence-only"]
+            completed = subprocess.run(command, cwd=repository, env=author_env,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                       text=True, check=False, timeout=120)
+            if completed.returncode == 0:
+                fail("evidence-only CLI qualified a retained-build sidecar after all build artifacts "
+                     f"were absent: exit={completed.returncode}; stdout={completed.stdout.strip()!r}; "
+                     f"stderr={completed.stderr.strip()!r}")
+            if "build-evidence-unavailable" not in completed.stderr:
+                fail("evidence-only CLI rejected all-missing build evidence for the wrong reason: " +
+                     completed.stderr.strip())
+            if "verified source-bound support sidecar" in completed.stdout:
+                fail("evidence-only CLI emitted qualifying success after every build artifact was absent")
+            controls.append("cli-all-build-artifacts-absent-is-nonqualifying")
             EVIDENCE_ONLY = True
             downloaded = build_sidecar("v0.2.0", source_sha, repository, outside_receipt)
-            if downloaded != second_sidecar:
-                fail("downloaded-evidence verification did not reproduce the producer's sidecar")
-            positive_checks.append("downloaded-evidence-without-build")
+            expected_receipt_only = {
+                "scope": "receipt-only",
+                "qualification_status": "not-established",
+                "required_count": len(build_files),
+                "observed_count": 0,
+                "skipped_count": len(build_files),
+                "receipt_declared_identity_sha256": second_sidecar["build_evidence"][
+                    "receipt_declared_identity_sha256"],
+                "retained_build_identity_sha256": None,
+            }
+            if (downloaded.get("build_evidence") != expected_receipt_only or
+                    downloaded.get("corpus_receipt_sha256") != second_sidecar.get("corpus_receipt_sha256") or
+                    downloaded.get("corpus_receipt_build_artifacts") !=
+                    second_sidecar.get("corpus_receipt_build_artifacts")):
+                fail("downloaded receipt-only evidence overstated absent build bytes or changed receipt identity")
+            receipt_only_path = temp_root / "receipt-only-sidecar.json"
+            receipt_only_path.write_text(json.dumps(downloaded, indent=2, sort_keys=True) + "\n",
+                                         encoding="utf-8")
+            receipt_only_command = [sys.executable, "-I", str(cli_script), "--tag", "v0.2.0",
+                                    "--source-sha", source_sha, "--receipt", str(outside_receipt),
+                                    "--verify-sidecar", str(receipt_only_path), "--evidence-only"]
+            completed = subprocess.run(receipt_only_command, cwd=repository, env=author_env,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                       text=True, check=False, timeout=120)
+            if (completed.returncode != 0 or
+                    "qualification=not-established observed=0 skipped=" not in completed.stdout or
+                    "verified source-bound support sidecar" in completed.stdout):
+                fail("receipt-only CLI did not emit a scoped nonqualification result: "
+                     f"exit={completed.returncode}; stdout={completed.stdout.strip()!r}; "
+                     f"stderr={completed.stderr.strip()!r}")
+            positive_checks.append("cli-receipt-only-scope-explicitly-nonqualifying")
+            partial_name = sorted(build_files)[0]
+            (repository / partial_name).parent.mkdir(parents=True, exist_ok=True)
+            (repository / partial_name).write_bytes(build_files[partial_name])
+            completed = subprocess.run(receipt_only_command, cwd=repository, env=author_env,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                       text=True, check=False, timeout=120)
+            if (completed.returncode == 0 or "build-evidence-partial" not in completed.stderr or
+                    "verified source-bound support sidecar" in completed.stdout):
+                fail("evidence-only CLI did not reject partial build evidence with its intended diagnostic: "
+                     f"exit={completed.returncode}; stdout={completed.stdout.strip()!r}; "
+                     f"stderr={completed.stderr.strip()!r}")
+            controls.append("cli-partial-build-evidence-rejected")
+            (repository / partial_name).unlink()
             tampered = sorted(build_files)[0]
             (repository / tampered).parent.mkdir(parents=True, exist_ok=True)
             (repository / tampered).write_bytes(build_files[tampered] + b"tampered\n")
@@ -2037,7 +2273,14 @@ def main() -> int:
             observed = strict_json(bounded_file(args.verify_sidecar, MAX_LEDGER_BYTES,
                                                 "sidecar"), "sidecar")
             verify_sidecar_data(observed, sidecar)
-            print(f"verified source-bound support sidecar for {args.tag} ({args.source_sha})")
+            scope = sidecar.get("build_evidence", {})
+            if scope.get("qualification_status") == "not-established":
+                print("verified receipt-only support evidence; qualification=not-established "
+                      f"observed={scope['observed_count']} skipped={scope['skipped_count']}")
+            else:
+                print(f"verified source-bound support sidecar for {args.tag} ({args.source_sha}) "
+                      f"qualification=qualified build-evidence={scope.get('scope')} "
+                      f"observed={scope.get('observed_count')} skipped={scope.get('skipped_count')}")
         else:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(json.dumps(sidecar, indent=2, sort_keys=True) + "\n", encoding="utf-8")

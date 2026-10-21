@@ -1,0 +1,11 @@
+cgb-apu-dispositions mismatch: producer-object-missing
+clean-twin=pass id=frozen-apu-membership
+negative-control=pass id=omitted-source diagnostic=manifest-apu-count
+negative-control=pass id=filtered-revision-suffix diagnostic=inventory-case-membership
+negative-control=pass id=bogus-green-process-exit diagnostic=inventory-execution:apu/channel_1/channel_1_align.asm
+negative-control=pass id=altered-author-expectation diagnostic=author-contract:apu/channel_1/channel_1_align.asm
+negative-control=pass id=forged-producer-revision diagnostic=producer-revision
+negative-control=pass id=altered-producer-digest diagnostic=core-digest
+negative-control=pass id=missing-producer-object diagnostic=producer-object-missing
+negative-control=pass id=producer-retained-absent diagnostic=producer-object-missing
+rc=1

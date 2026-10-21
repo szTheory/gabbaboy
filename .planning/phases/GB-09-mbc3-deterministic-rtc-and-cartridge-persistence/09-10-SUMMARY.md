@@ -35,6 +35,14 @@ actuals:
   tokens: 9000
   tasks: 2
   commits: 2
+coverage:
+  - id: D1
+    description: "MBC2, MBC3+RTC and MBC5 continuation ROMs rebuild byte-identically from project-owned sources with the pinned RGBDS version"
+    verification:
+      - kind: integration
+        ref: "bash tests/scripts/reproduce-mbc2-continuation.sh && bash tests/scripts/reproduce-mbc3-rtc-continuation.sh && bash tests/scripts/reproduce-mbc5-continuation.sh with RGBDS 1.0.1 on PATH"
+        status: pass
+    human_judgment: false
 ---
 
 # Phase 9 Plan 10: MBC5 Continuation Guest and Hosted Fixture Reproduction Summary
@@ -77,3 +85,8 @@ None.
 ## Self-Check: PASSED
 
 Files exist (mbc5-continuation asm/gb/manifest/LICENSE, reproduce script); commits 5f9f866 and 28bb5b0 are on the branch; acceptance criteria and plan verification re-run and passing.
+
+## Fresh Focused Evidence (15.1-12)
+
+- Re-ran all three continuation reproduction scripts with RGBDS 1.0.1 from the previously SHA-verified tool archive. Each printed `result=byte-identical`; rebuilt ROM digests were MBC2 `314e05b419c07f1823983932d4e70ce57f0c366f44ec9ee86baf322f8dad50aa`, MBC3+RTC `2a6e1922440d6af43a21e65bce579f1d0962f891f308afbe2268395fdbd644a9`, and MBC5 `34e80d0c4a0c1edb6d8b2a2cda31e9f0cdcc672aa9579f86a9ec5a328aaca667`.
+- The original hosted fixture-reproduction workflow claim remains attached to its recorded producer and was not re-run here.

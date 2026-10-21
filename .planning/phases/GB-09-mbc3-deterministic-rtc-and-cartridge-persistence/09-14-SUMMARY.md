@@ -35,7 +35,7 @@ coverage:
     requirement: RTC-02
     verification:
       - kind: integration
-        ref: "ctest installed_consumer_c"
+        ref: "build/14-refresh-consumers/consumer-c/consumer-c fixtures/tracer/tracer.gb"
         status: pass
     human_judgment: false
   - id: D2
@@ -43,15 +43,17 @@ coverage:
     requirement: RTC-03
     verification:
       - kind: integration
-        ref: "ctest installed_consumer_cpp"
+        ref: "build/14-refresh-consumers/consumer-cpp/consumer-cpp fixtures/tracer/tracer.gb"
         status: pass
     human_judgment: false
   - id: D3
     description: "Integration guide tells hosts how to apply catch-up and persist the battery image"
     requirement: RTC-02
-    verification: []
-    human_judgment: true
-    rationale: "Documentation wording adequacy is a reading judgment; presence of gbb_rtc_catch_up is grep-checked"
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build --output-on-failure --no-tests=error -R '^native_guide_rtc_contract$'"
+        status: pass
+    human_judgment: false
 duration: 12min
 completed: 2026-10-11
 status: complete
@@ -107,3 +109,8 @@ Files present; commits 6e32f6e and 1b5cadd are ancestors of HEAD.
 ---
 *Phase: 09-mbc3-deterministic-rtc-and-cartridge-persistence*
 *Completed: 2026-10-11*
+
+## Fresh Focused Evidence (15.1-12)
+
+- Reused C and C++ installed-consumer binaries both returned success with the tracer fixture argument. Their RTC assertions cover block size/layout, catch-up, import round trip, GBB_NO_RTC and invalid-argument cases.
+- The native integration guide contract check passed 1/1. The consumer binaries were reused without rebuilding; no fresh package archive or remote consumer receipt is claimed.

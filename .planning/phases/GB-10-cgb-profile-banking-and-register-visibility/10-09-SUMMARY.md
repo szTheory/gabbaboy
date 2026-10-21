@@ -21,39 +21,65 @@ actuals:
 duration: 40 min
 completed: 2026-10-12
 coverage:
-  - deliverable: "VBK row drives decode and pre-flight: CGB guest switches VRAM banks, compat reads $FE and stays on bank 0, DMG read stops atomically and write is a no-op"
-    verification:
-      - {kind: ctest, ref: "cgb_visibility_vbk_tracer", status: pass}
+  - id: "10-09-vbk-decode"
+    description: "VBK selects CGB VRAM banks while compatibility and DMG behavior stay bounded"
     human_judgment: false
-  - deliverable: "SVBK selects WRAM banks (raw 3 bits, 0 -> 1), compat ignores, DMG unchanged"
     verification:
-      - {kind: ctest, ref: "cgb_visibility_svbk_select", status: pass}
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_18 -R '^cgb_visibility_vbk_tracer$' --output-on-failure --no-tests=error"
+        status: pass
+  - id: "10-09-svbk-decode"
+    description: "SVBK selects CGB WRAM banks and is ignored in compatibility mode"
     human_judgment: false
-  - deliverable: "50 unused addresses read $FF and ignore writes on both CGB columns; DMG still stops (control)"
     verification:
-      - {kind: ctest, ref: "cgb_visibility_unmapped_cgb", status: pass}
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_18 -R '^cgb_visibility_svbk_select$' --output-on-failure --no-tests=error"
+        status: pass
+  - id: "10-09-unmapped-addresses"
+    description: "Unused CGB addresses read as $FF while the DMG fail-closed control remains"
     human_judgment: false
-  - deliverable: "Boundaries FF4B/4C, 4F/50, 74-76, 77/78, 7F/80 asserted on both sides per column"
     verification:
-      - {kind: ctest, ref: "cgb_visibility_boundaries", status: pass}
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_18 -R '^cgb_visibility_unmapped_cgb$' --output-on-failure --no-tests=error"
+        status: pass
+  - id: "10-09-register-boundaries"
+    description: "Register visibility boundaries are checked on both sides in each profile"
     human_judgment: false
-  - deliverable: "DEFERRED reads stop atomically; DEFERRED writes drop and stop after retire with seam address"
     verification:
-      - {kind: ctest, ref: "cgb_visibility_deferred_stop", status: pass}
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_18 -R '^cgb_visibility_boundaries$' --output-on-failure --no-tests=error"
+        status: pass
+  - id: "10-09-deferred-access"
+    description: "Deferred reads stop atomically and deferred writes report their stop address"
     human_judgment: false
-  - deliverable: "IE gate per profile; dispatch still masks with $1F (negative control IE=$E0)"
     verification:
-      - {kind: ctest, ref: "cgb_visibility_ie_gate", status: pass}
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_18 -R '^cgb_visibility_deferred_stop$' --output-on-failure --no-tests=error"
+        status: pass
+  - id: "10-09-ie-gate"
+    description: "IE visibility is profile-specific and the interrupt mask retains its negative control"
     human_judgment: false
-  - deliverable: "Latch survives interrupts (write before dispatch; push during entry)"
     verification:
-      - {kind: ctest, ref: "cgb_visibility_deferred_latch_interrupt", status: pass}
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_18 -R '^cgb_visibility_ie_gate$' --output-on-failure --no-tests=error"
+        status: pass
+  - id: "10-09-current-ir-interrupt-continuation"
+    description: "Implemented FF56 IR writes and interrupt-entry stack pushes continue to the vector"
     human_judgment: false
-  - deliverable: "Post-boot rows mirrored in docs, DMG baseline and bus_/serial_ tests unchanged"
     verification:
-      - {kind: ctest, ref: "cgb_tables_postboot", status: pass}
-      - {kind: command, ref: "bash tests/scripts/verify-dmg-baseline.sh", status: pass}
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_18 -R '^cgb_ir_interrupt_continuation$' --output-on-failure --no-tests=error"
+        status: pass
+  - id: "10-09-postboot-and-baseline"
+    description: "Post-boot documentation mirror and frozen DMG baseline remain consistent"
     human_judgment: false
+    verification:
+      - kind: unit
+        ref: "ctest --test-dir build/phase15_1_18 -R '^cgb_tables_postboot$' --output-on-failure --no-tests=error"
+        status: pass
+      - kind: other
+        ref: "bash tests/scripts/verify-dmg-baseline.sh --build-dir build/phase15_1_18"
+        status: pass
 ---
 
 # Phase 10 Plan 09: CGB register visibility Summary
@@ -97,3 +123,7 @@ None. T-10-14 (bank indices masked `& 7` / `& 1`, CGB mode only), T-10-15 (defer
 ## Self-Check: PASSED
 
 - tests/test_cgb_visibility.c exists; commit 47b4c27 is an ancestor of HEAD; acceptance greps re-run.
+
+## Fresh Coverage Verification (15.1-18)
+
+At source `65e69ca2dc6f51515ebba002361b0966e3b45a17`, the fresh build passed the seven currently registered Phase 10-09 behavior and table checks plus `cgb_ir_interrupt_continuation` (8 current cases total). The original `cgb_visibility_deferred_latch_interrupt` selector is absent now: it existed at immutable Phase 10 commit `47b4c27` and was replaced in `24f07c7` after FF56 became implemented. The current replacement passes and checks that the implemented IR write and interrupt-entry push continue to the vector without an unsupported-bus stop. The old deferred-FF56 latch semantics remain historical evidence only; this plan does not claim a fresh pass for them. The frozen DMG baseline also passes with zero changed rows.

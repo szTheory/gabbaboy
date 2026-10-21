@@ -1,0 +1,217 @@
+#!/usr/bin/env python3
+"""Write or check a phase's automated UAT closure (D-069), for any phase.
+
+--write builds {N}-UAT.md from the phase SUMMARY coverage blocks: every
+deliverable becomes an automated pass that keeps its exact criterion and cited
+evidence. It refuses when any deliverable still needs a human, and lists those,
+so only real checkpoints reach the owner. The default mode checks an existing
+closure; --self-test also proves that weakened copies are rejected.
+
+Only the closure record is checked. Live routes and commit ancestry change after
+the phase (later handoffs, squash merges), so verify-work reconciles them at the
+boundary and the UAT prose records the result; asserting them here would turn
+this check red for reasons that are not regressions.
+"""
+
+import argparse
+import datetime
+import importlib.util
+import json
+from pathlib import Path
+import re
+import shutil
+import sys
+import tempfile
+
+ROOT = Path(__file__).resolve().parents[2]
+spec = importlib.util.spec_from_file_location(
+    'coverage_rules', ROOT / 'tests/scripts/verify-summary-coverage.py')
+rules = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(rules)
+
+FIELDS = ('expected', 'result', 'source', 'summary_file', 'coverage_id', 'evidence')
+
+
+def phase_number(directory):
+    match = re.match(r'^[A-Z]+-(\d+(?:\.\d+)?)-', directory.name)
+    assert match, f'unrecognized phase directory {directory.name}'
+    return match[1]
+
+
+def deliverables(directory, problems=None):
+    """Return the summaries and (summary, id) -> entry for every coverage entry.
+
+    Schema errors fail the check, or are collected into problems when given.
+    """
+    summaries = sorted(directory.glob('*-SUMMARY.md'))
+    assert summaries, 'no plan summaries'
+    expected = {}
+    for summary in summaries:
+        content = summary.read_text(encoding='utf-8')
+        _, errors = rules.check_text(content)
+        if problems is None:
+            assert not errors, f'{summary.name}: {errors}'
+        else:
+            problems.extend(f'{summary.name}: schema {error}' for error in errors or [])
+        for entry in rules.coverage_entries(content):
+            # The schema checker truncates quoted refs, so read the full scalars here.
+            block = re.search(r'^  - id: ' + re.escape(entry['id']) +
+                              r'\n(.*?)(?=^  - id: |^\S|\Z)', content, re.M | re.S)
+            assert block, 'missing coverage block'
+            refs = re.findall(r'^\s+ref: (.+)$', block[1], re.M)
+            entry['uat_refs'] = [v[1:-1] if v[:1] in ('"', "'") and v[-1:] == v[:1] else v
+                                 for v in refs]
+            key = (summary.name, entry['id'])
+            assert key not in expected, f'duplicate coverage id {key}'
+            expected[key] = entry
+    assert expected, 'no coverage entries'
+    return summaries, expected
+
+
+def human_needed(entry):
+    if entry['human_judgment'] is not False:
+        return 'human_judgment'
+    if not entry['uat_refs']:
+        return 'no_verification'
+    if any(item.get('status') != 'pass' for item in entry.get('verification', [])):
+        return 'verification_not_passing'
+    return None
+
+
+def write(directory, evidence):
+    problems = []
+    summaries, expected = deliverables(directory, problems)
+    problems += [f'{summary}: {cid} needs a human checkpoint ({reason})'
+                 for (summary, cid), entry in expected.items() if (reason := human_needed(entry))]
+    if problems:
+        for problem in problems:
+            print(problem, file=sys.stderr)
+        raise SystemExit('refusing to write an automated closure; resolve the items above')
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    total = len(expected)
+    out = ['---', 'status: complete', f'phase: {directory.name}',
+           'source: ' + ', '.join(s.name for s in summaries), f'started: {now}', f'updated: {now}',
+           '---', '', '## Automated Evidence', '', evidence.strip(), '',
+           '## Current Test', '', '[testing complete]', '', '## Tests', '']
+    for number, ((summary, cid), entry) in enumerate(expected.items(), 1):
+        out += [f"### {number}. {entry['description']}", f"expected: {json.dumps(entry['description'])}",
+                'result: pass', 'source: automated', f'summary_file: {summary}',
+                f'coverage_id: {cid}', f"evidence: {json.dumps(entry['uat_refs'])}", '']
+    out += ['## Summary', '', f'total: {total}', f'passed: {total}', 'issues: 0', 'pending: 0',
+            'skipped: 0', 'blocked: 0', '', '## Gaps', '', '[none]', '']
+    path = directory / f'{phase_number(directory)}-UAT.md'
+    path.write_text('\n'.join(out), encoding='utf-8')
+    return path, total
+
+
+def check(directory):
+    summaries, expected = deliverables(directory)
+    total = len(expected)
+    text = (directory / f'{phase_number(directory)}-UAT.md').read_text(encoding='utf-8')
+    frontmatter = '\n'.join(rules.frontmatter_lines(text))
+    assert re.search(r'^status: complete$', frontmatter, re.M), 'session incomplete'
+    assert re.search(r'^phase: ' + re.escape(directory.name) + '$', frontmatter, re.M), 'wrong phase'
+    sources = re.search(r'^source: (.+)$', frontmatter, re.M)
+    assert sources and sources[1].split(', ') == [s.name for s in summaries], 'missing source summary'
+    assert text.split('## Current Test\n', 1)[1].split('## Tests\n', 1)[0].strip() == '[testing complete]', 'pending checkpoint'
+    tests = text.split('## Tests\n', 1)[1].split('## Summary\n', 1)[0]
+    headings = re.findall(r'^#{1,6} .+$', tests, re.M)
+    numbers = [re.match(r'^### (\d+)\. ', heading) for heading in headings]
+    assert all(numbers) and [int(m[1]) for m in numbers] == list(range(1, total + 1)), 'unparsed or misnumbered test heading'
+    prelude, *blocks = re.split(r'^### \d+\. ', tests, flags=re.M)
+    assert not prelude.strip(), 'unparsed test prelude'
+    seen = set()
+    for block in blocks:
+        for line in block.splitlines()[1:]:
+            assert not line.strip() or line.partition(':')[0] in FIELDS, 'unparsed test content'
+
+        def field(name):
+            matches = re.findall(r'^' + name + r': (.+)$', block, re.M)
+            assert len(matches) == 1, f'missing or duplicate {name}'
+            return matches[0]
+        key = (field('summary_file'), field('coverage_id'))
+        assert key in expected and key not in seen, 'missing, unknown or duplicate coverage'
+        seen.add(key)
+        entry = expected[key]
+        assert human_needed(entry) is None, 'deliverable needs a human checkpoint'
+        assert field('result') == 'pass' and field('source') == 'automated', 'not an automated pass'
+        assert json.loads(field('expected')) == entry['description'], 'changed acceptance criterion'
+        assert json.loads(field('evidence')) == entry['uat_refs'], 'weaker evidence'
+    assert seen == set(expected), 'incomplete coverage'
+    summary = text.split('## Summary\n', 1)[1].split('## Gaps\n', 1)[0]
+    for name, value in [('total', total), ('passed', total), ('issues', 0), ('pending', 0),
+                        ('skipped', 0), ('blocked', 0)]:
+        assert re.search(r'^' + name + ': ' + str(value) + r'$', summary, re.M), 'incorrect totals'
+    assert text.split('## Gaps\n', 1)[1].strip() == '[none]', 'unresolved gap'
+    return total
+
+
+def self_test(directory):
+    total = check(directory)
+    first = sorted(directory.glob('*-SUMMARY.md'))[0].name
+    uat_mutations = {
+        'missing-row': lambda t: re.sub(r'^### 1\..*?(?=^### 2\.)', '', t, count=1, flags=re.M | re.S),
+        'manual-source': lambda t: t.replace('source: automated', 'source: human', 1),
+        'pending-result': lambda t: t.replace('result: pass', 'result: [pending]', 1),
+        'wrong-coverage': lambda t: re.sub(r'^coverage_id: .+$', 'coverage_id: missing', t, count=1, flags=re.M),
+        'missing-evidence': lambda t: re.sub(r'^evidence: .+$', 'evidence: []', t, count=1, flags=re.M),
+        'changed-criterion': lambda t: re.sub(r'^expected: .+$', 'expected: "weaker"', t, count=1, flags=re.M),
+        'false-complete': lambda t: t.replace('status: complete', 'status: testing', 1),
+        'stale-count': lambda t: t.replace(f'total: {total}', f'total: {total - 1}', 1),
+        'missing-source': lambda t: t.replace(first + ', ', '', 1),
+        'duplicate-row': lambda t: t.replace('## Summary\n', re.search(r'^### 1\..*?(?=^### 2\.)', t, re.M | re.S)[0] + '## Summary\n', 1),
+        'wrong-phase': lambda t: t.replace(f'phase: {directory.name}', 'phase: GB-0-other', 1),
+        'unnumbered-human-checkpoint': lambda t: t.replace('## Summary\n', '### Manual checkpoint\nresult: pending\nsource: human\n\n## Summary\n', 1),
+        'extra-section': lambda t: t.replace('## Summary\n', '## Manual checks\n\n## Summary\n', 1),
+        'unparsed-field': lambda t: t.replace('result: pass', 'manual_checkpoint: pending\nresult: pass', 1),
+        'unparsed-prelude': lambda t: t.replace('## Tests\n', '## Tests\n\nManual checkpoint: pending\n', 1),
+        'misnumbered-row': lambda t: t.replace('### 2. ', '### 99. ', 1),
+        'open-gap': lambda t: t.replace('## Gaps\n\n[none]', '## Gaps\n\n- status: failed'),
+    }
+    # A SUMMARY that later routes a deliverable to a human must reopen the closure.
+    summary_mutations = {
+        'summary-human-judgment': lambda t: t.replace('human_judgment: false', 'human_judgment: true', 1),
+    }
+    uat_name = f'{phase_number(directory)}-UAT.md'
+    controls = [(uat_name, k, m) for k, m in uat_mutations.items()] + \
+               [(first, k, m) for k, m in summary_mutations.items()]
+    for filename, label, mutate in controls:
+        with tempfile.TemporaryDirectory(prefix='gbb-uat-closure-') as name:
+            scratch = Path(name) / directory.name
+            shutil.copytree(directory, scratch)
+            path = scratch / filename
+            original = path.read_text(encoding='utf-8')
+            changed = mutate(original)
+            assert changed != original, f'{label}: inactive mutation'
+            path.write_text(changed, encoding='utf-8')
+            try:
+                check(scratch)
+            except AssertionError:
+                continue
+            raise AssertionError(f'{label}: accepted weakened closure')
+    # Regenerating from the same SUMMARYs must reproduce an accepted closure.
+    with tempfile.TemporaryDirectory(prefix='gbb-uat-closure-') as name:
+        scratch = Path(name) / directory.name
+        shutil.copytree(directory, scratch)
+        write(scratch, 'self-test')
+        assert check(scratch) == total, 'regenerated closure rejected'
+    print(f'uat-closure self-test pass automated={total} controls={len(controls) + 1}')
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('phase_dir', type=Path)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--write', metavar='EVIDENCE_FILE', type=Path,
+                      help='write {N}-UAT.md with this Automated Evidence prose')
+    mode.add_argument('--self-test', action='store_true')
+    args = parser.parse_args()
+    directory = args.phase_dir.resolve()
+    if args.write:
+        path, total = write(directory, args.write.read_text(encoding='utf-8'))
+        print(f'uat-closure wrote {path.name} automated={total} human=0')
+    elif args.self_test:
+        self_test(directory)
+    else:
+        print(f'uat-closure pass automated={check(directory)} human=0 gaps=0')

@@ -44,15 +44,13 @@ key-decisions:
 duration: 70 min
 completed: 2026-10-11
 coverage:
-  - deliverable: "Once-per-open catch-up with D-22 status text"
-    verification: [{kind: ctest, ref: "tests/player/test_continuation.c#player_continuation_mbc3_rtc_resume,_delta,_rollback,_halted,_no_clock", status: pass}]
+  - id: D1
+    description: Catch-up, fresh-process continuation, and injected-clock flag scope
     human_judgment: false
-  - deliverable: "Wrong-ROM adjacency edge and MBC2/MBC5 continuation"
-    verification: [{kind: ctest, ref: "tests/player/test_continuation.c#player_continuation_mbc3_wrong_rom,player_continuation_mbc2_resume,player_continuation_mbc5_resume", status: pass}]
-    human_judgment: false
-  - deliverable: "--clock-unix confined to battery smoke modes"
-    verification: [{kind: ctest, ref: "tests/player/clock_flag_scope.cmake#player_session_clock_flag_scope", status: pass}]
-    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build/phase3-player/gabbaboy --output-on-failure --no-tests=error -R '^(player_session_v2_.*|player_session_v1_(corpus_load|mbc1_write_identical)|player_session_classification_drift|player_session_rom_cap_8mib|player_continuation_mbc3_.*|player_continuation_mbc2_resume|player_continuation_mbc5_resume|player_session_clock_flag_scope)$'"
+        status: pass
 ---
 
 # Phase 9 Plan 16: Catch-up on reopen, --clock-unix scope and fresh-process continuation Summary
@@ -112,3 +110,8 @@ RTC-03, CART-06 and RTC-02 are not marked complete here because sibling plans 09
 ## Self-Check: PASSED
 
 Modified files exist; commits 3ba4ac0 and 5477099 are on the branch.
+
+## Fresh Focused Evidence (15.1-12)
+
+- Reused the existing player build tree. The referenced catch-up, continuation, and clock-scope selection passed 22/22 CTest cases in 1.43 seconds.
+- No full suite, package rebuild, hosted check, or hardware result was rerun or inferred.

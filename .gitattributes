@@ -10,6 +10,7 @@ fixtures/*/*.patch text eol=lf
 fixtures/*/*.asm text eol=lf
 fixtures/*/*.inc text eol=lf
 tests/external/*.json text eol=lf
+tests/external/cgb-apu-producer-*.src -text
 tests/expected-tests.txt text eol=lf
 tests/CMakeLists.txt text eol=lf
 tests/scripts/*.py text eol=lf
@@ -21,9 +22,10 @@ src/runner/main.c text eol=lf
 docs/*.md text eol=lf
 docs/support/*.md text eol=lf
 README.md text eol=lf
-LICENSE* text eol=lf
-NOTICE* text eol=lf
-THIRD_PARTY* text eol=lf
+# Digest-bound notice text: only the exact admitted paths (the fixtures' LICENSE.txt rules are above). A
+# basename wildcard would also rewrite unrelated files at any depth, which no digest covers.
+/LICENSE text eol=lf
+/THIRD_PARTY_NOTICES.md text eol=lf
 CHANGELOG.md text eol=lf
 
 # The runner admits this pinned manifest by its exact Git blob SHA-256.
@@ -44,6 +46,8 @@ fixtures/libbet/SOURCES.md text eol=lf
 # Acceptance cases, input scripts, negative files and the DMG baseline ledger are digested text.
 tests/acceptance/** text eol=lf
 tests/baseline/** text eol=lf
+# The immutable malformed summary-coverage fixture is digest-pinned in tests/CMakeLists.txt.
+tests/data/invalid-summary-coverage.md text eol=lf
 
 # Mooneye mbc2/mbc5 derivatives: ROM bytes are binary; the manifest is admitted by the SHA-256 of its raw bytes.
 fixtures/mooneye-mbc/*.gb binary

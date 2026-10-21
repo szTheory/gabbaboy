@@ -69,55 +69,8 @@ def validate_verifier_invocations(text):
 def validate_extractor_destinations(text):
     if re.search(r"(?m)^\s*mkdir(?:\s+-p)?\s+[^\n]*\bbuild/extracted(?:-core)?(?:\s|$)", text):
         raise ValueError("safe release extractor destination must not be pre-created")
-# Each real producer must be invoked, in the exact-tag workflow, as many times as it is needed. The counts make
-# deleting one invocation observable even where the same owner validator is also used for a downloaded readback.
-V02_PRODUCER_CALLS = {
-    "verify-v02-adoption.py --release-notes": 1,
-    "verify-v02-consumers.py --prefix": 1,
-    "verify-v02-source-archive.py --archive": 1,
-    "verify-v02-source-archive.py --check-receipt": 1,
-    "verify-release-candidate.sh --verify-final": 1,
-    "verify-cgb-corpus-report.py --begin-run": 1,
-    "verify-cgb-corpus-report.py --from-ctest": 1,
-    "verify-cgb-corpus-claims.py --receipt": 1,
-    "verify-support-ledger.py --check-current": 1,
-    "--output build/support-ledger.json": 1,
-    "--verify-sidecar build/support-ledger.json": 1,
-    "run-bounded-fuzz.sh --explore --receipt": 1,
-    "verify-v02-fuzz.py --verify": 2,
-    "measure-release-baseline.sh --qualify-v02 --output": 1,
-    "verify-v02-performance.py --verify": 2,
-    "--check-v02-evidence": 1,
-    'gh release upload "$RELEASE_TAG" build/v02-consumer-receipt.json': 1,
-    'gh release upload "$RELEASE_TAG" build/source-archive-receipt.json': 1,
-    'gh release upload "$RELEASE_TAG" build/v02-fuzz-receipt.json': 1,
-    'gh release upload "$RELEASE_TAG" build/v02-performance-receipt.json': 1,
-    "for name in support-ledger.json cgb-corpus-receipt.json; do": 1,
-}
-PRODUCER_JOBS = ("candidate-corpus", "candidate-fuzz", "candidate-performance")
-def validate_v02_producers(text):
-    for call, expected in V02_PRODUCER_CALLS.items():
-        if text.count(call) != expected:
-            raise ValueError(f"release workflow does not invoke the real v0.2 producer or transfer exactly as required: {call}")
-    publish = text.find("\n  publish-qualified-release:\n")
-    if publish < 0:
-        raise ValueError("release workflow has no qualified publication job")
-    for call in V02_PRODUCER_CALLS:
-        if text.rfind(call) > publish and not call.startswith("--check") and "RELEASE_TAG" not in call:
-            raise ValueError(f"v0.2 producer runs only after publication: {call}")
-    manifest = text.find("\n  candidate-platform-manifest:\n")
-    manifest_needs = text[manifest:text.find("\n    if:", manifest)]
-    for job in PRODUCER_JOBS:
-        if f"\n  {job}:\n" not in text or job not in manifest_needs:
-            raise ValueError(f"the aggregate manifest does not wait for the {job} evidence producer")
-    publish_needs = text[publish:text.find("\n    if:", publish + 1)]
-    if "candidate-platform-manifest" not in publish_needs:
-        raise ValueError("publication does not wait for the aggregate manifest")
-    first_gate = text.find("--check-draft-final")
-    for producer in ("verify-cgb-corpus-report.py --from-ctest", "run-bounded-fuzz.sh --explore", "--qualify-v02"):
-        position = text.find(producer)
-        if position < 0 or position > publish or position > first_gate:
-            raise ValueError(f"evidence producer {producer} is not upstream of the final gate")
+# Executable wiring of the evidence producers, judges, attacher and gates (which job runs which command, with what
+# authority, after which dependency) is judged by .github/scripts/verify-workflow-policy.py, not by counting text here.
 V02_CONTRACTS = ("v02_game_claims", "v02_game_claims_controls", "v02_support_ledger", "v02_support_ledger_controls",
                  "v02_adoption_docs", "v02_adoption_docs_controls", "v02_consumer_controls", "v02_performance_controls",
                  "v02_fuzz_controls", "v02_source_archive_controls", "v02_delivery_controls")
@@ -131,16 +84,8 @@ def validate_v02_inventory(cmake_text, expected_text):
     if "-DGBB_EXPECT_CODE=0" not in cmake_text or "[1-9][0-9]*" not in cmake_text:
         raise ValueError("v0.2 contracts must require exit code 0 and a nonzero success count")
 def validate_retained_platforms(text):
-    macos = text[text.find("\n  candidate-macos:\n"):text.find("\n  candidate-windows:\n")]
-    windows = text[text.find("\n  candidate-windows:\n"):text.find("\n  candidate-corpus:\n")]
-    if "-P cmake/VerifyInstalledPackage.cmake" not in macos or 'consumer-$language' not in macos:
-        raise ValueError("macOS arm64 downloaded C/C++ consumer behavior is not retained")
-    if "verify-phase3-player.sh --verify-package" not in macos:
-        raise ValueError("macOS arm64 downloaded player smoke is not retained")
-    if "-P cmake/VerifyInstalledPackage.cmake" not in windows or "consumer-$language.exe" not in windows:
-        raise ValueError("Windows x64 downloaded C/C++ consumer behavior is not retained")
-    if "-P cmake/VerifyInstalledPackage.cmake" not in text[:text.find("\n  candidate-macos:\n")]:
-        raise ValueError("Linux x64 downloaded C/C++ consumer behavior is not retained")
+    # Downloaded-byte consumer and player smoke are required-call checks in verify-workflow-policy.py; only the
+    # unsigned/not-notarized declaration literal is data and stays here.
     if text.count('"signed": False') < 2 or text.count('"notarized": False') < 2:
         raise ValueError("the unsigned and not-notarized declaration is not preserved")
 def validate_downloaded_sidecars(text):
@@ -151,30 +96,14 @@ def validate_downloaded_sidecars(text):
     )
     if "sha256sum --check" in text or any(call not in text for call in required):
         raise ValueError("every downloaded Mac/Windows digest-only sidecar must use the strict byte-check helper")
-def validate_isolated_release_readbacks(text):
-    start = text.find("\n  candidate-corpus:\n")
-    end = text.find("\n  publish-qualified-release:\n")
-    if start < 0 or end < start:
-        raise ValueError("release evidence attachment/readback section is missing")
-    section = text[start:end]
-    destinations = re.findall(r"gh release download[^\n]*?--dir (\S+)|--dir (\S+)\n", section)
-    downloads = []
-    for match in re.finditer(r"gh release download \"\$RELEASE_TAG\"(?:[^\n]|\\\n)*?--dir (\S+)", section):
-        downloads.append(match.group(1))
-    if len(downloads) < 5:
-        raise ValueError("the evidence jobs no longer download their attached assets for readback")
-    if len(downloads) != len(set(downloads)):
-        raise ValueError("each release evidence download must use its own readback directory")
 try:
     validate_verifier_invocations(workflow)
     validate_extractor_destinations(workflow)
-    validate_v02_producers(workflow)
     validate_retained_platforms(workflow)
     cmake_tests = (root / "tests/CMakeLists.txt").read_text()
     required_inventory = (root / "tests/expected-tests.txt").read_text()
     validate_v02_inventory(cmake_tests, required_inventory)
     validate_downloaded_sidecars(workflow)
-    validate_isolated_release_readbacks(workflow)
 except ValueError as error:
     raise SystemExit(str(error))
 mutated_workflow = workflow.replace("bash tests/scripts/verify-release-candidate.sh", "python tests/scripts/verify-release-candidate.sh", 1)
@@ -193,35 +122,6 @@ except ValueError:
 else:
     raise SystemExit("release workflow self-test accepted a pre-created safe-extractor destination")
 mutation_count = 0
-for call, expected in V02_PRODUCER_CALLS.items():
-    mutated = workflow.replace(call, "true # removed", 1)
-    try:
-        validate_v02_producers(mutated)
-    except ValueError:
-        mutation_count += 1
-    else:
-        raise SystemExit(f"release workflow self-test accepted a workflow without the required v0.2 invocation or transfer: {call}")
-try:
-    validate_v02_producers("\n  publish-qualified-release:\n" + workflow.replace("\n  publish-qualified-release:\n", "\n", 1))
-except ValueError:
-    mutation_count += 1
-else:
-    raise SystemExit("release workflow self-test accepted producers that run after publication")
-for job in PRODUCER_JOBS:
-    try:
-        validate_v02_producers(workflow.replace(f", {job}", "", 1))
-    except ValueError:
-        mutation_count += 1
-    else:
-        raise SystemExit(f"release workflow self-test accepted an aggregate manifest that does not wait for {job}")
-for needle, label in (("verify-phase3-player.sh --verify-package", "player smoke"),
-                      ("consumer-$language.exe", "Windows consumer"), ('"notarized": False', "unsigned declaration")):
-    try:
-        validate_retained_platforms(workflow.replace(needle, "removed", 1))
-    except ValueError:
-        mutation_count += 1
-    else:
-        raise SystemExit(f"release workflow self-test accepted a workflow without the retained {label}")
 inventory_mutations = {
     "unregistered contract": (cmake_tests.replace("gbb_add_v02_contract(v02_delivery_controls", "gbb_add_v02_contract(v02_delivery_gone", 1), required_inventory),
     "duplicated registration": (cmake_tests + "\ngbb_add_v02_contract(v02_game_claims 60 x y)\n", required_inventory),
@@ -236,7 +136,7 @@ for label, (mutated_cmake, mutated_expected) in inventory_mutations.items():
         mutation_count += 1
     else:
         raise SystemExit(f"release workflow self-test accepted a v0.2 inventory with {label}")
-if mutation_count < len(V02_PRODUCER_CALLS) + 4 + len(inventory_mutations) or not V02_PRODUCER_CALLS:
+if mutation_count < len(inventory_mutations):
     raise SystemExit("release workflow self-test did not execute its v0.2 wiring controls")
 print(f"workflow-wiring-controls={mutation_count}")
 try:
@@ -245,12 +145,6 @@ except ValueError:
     pass
 else:
     raise SystemExit("release workflow self-test accepted sha256sum --check for a digest-only sidecar")
-try:
-    validate_isolated_release_readbacks(workflow.replace("--dir build/fuzz-readback", "--dir build/corpus-readback", 1))
-except ValueError:
-    pass
-else:
-    raise SystemExit("release workflow self-test accepted a shared release evidence readback directory")
 for output in ("release_created", "tag_name", "sha"):
     if f"${{{{ steps.release.outputs.{output} }}}}" not in workflow:
         raise SystemExit(f"same-workflow output is missing: {output}")
@@ -464,35 +358,43 @@ check_v02_evidence() {
   local directory=$1 tag=$2 source_sha=$3 archive=$4 repo_root
   repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || fail 'v0.2 evidence validation must run in the exact tag checkout'
   [[ $(git -C "$repo_root" rev-parse HEAD) == "$source_sha" ]] || fail 'checkout HEAD differs from the frozen source SHA'
-  python3 -I "$repo_root/tests/scripts/verify-v02-delivery.py" --check-evidence "$directory" \
-    --tag "$tag" --source-sha "$source_sha" --source-archive "$archive" --repo-root "$repo_root"
+  # The entry point and every delegated validator come from this script's own checkout (the judge); the exact
+  # tag checkout in the current directory is only the subject whose bytes are judged (Plan 05 separation).
+  python3 -I "$ROOT/tests/scripts/verify-v02-delivery.py" --check-evidence "$directory" \
+    --tag "$tag" --source-sha "$source_sha" --source-archive "$archive" \
+    --judge-root "$ROOT" --source-root "$repo_root"
 }
 
 fetch_source_archive() {
   local repo=$1 tag=$2 destination=$3
-  curl --fail --silent --show-error --location --proto '=https' --max-filesize 1073741824 \
-    --output "$destination" "https://github.com/$repo/archive/refs/tags/$tag.tar.gz"
+  python3 -I "$ROOT/.github/scripts/download-release-artifact.py" "https://github.com/$repo/archive/refs/tags/$tag.tar.gz" "$destination" \
+    --max-bytes 1073741824 --total-timeout 600
 }
 
 # Recovery after a publication or readback error. Live release state is read BEFORE any decision, and
 # the only outcomes are: verify a published release, reuse an identical draft, or upload only the
-# missing assets. Nothing here writes to GitHub.
-recovery_decision() {
-  local release_id=$1 tag=$2 source_sha=$3 expected=$4 run_id=$5 run_attempt=$6 repo tmp
-  repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+# missing assets. Nothing here writes to GitHub. Only runs of the release workflow can block it; unrelated
+# CI on the same commit never does. Runs in a subshell so the scratch directory trap is scoped to this call.
+RELEASE_WORKFLOW_PATH=.github/workflows/release-please.yml
+recovery_decision() (
+  local release_id=$1 tag=$2 source_sha=$3 expected=$4 run_id=$5 run_attempt=$6 scope=$7 repo
+  [[ "$release_id" =~ ^[0-9]+$ && "$run_id" =~ ^[0-9]+$ && "$run_attempt" =~ ^[0-9]+$ ]] || fail 'release, run and attempt identifiers must be numeric'
+  [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$source_sha" =~ ^[0-9a-f]{40}$ ]] || fail 'release tag or source SHA is malformed'
+  [[ "$scope" == full || "$scope" == subset ]] || fail 'recovery scope must be full or subset'
+  [[ -s "$expected" ]] || fail 'the trusted expected inventory is missing'
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/gb-recovery.XXXXXX")
-  gh api "repos/$repo/releases/$release_id" > "$tmp/release.json" || { rm -rf "$tmp"; fail 'live release state could not be read'; }
-  [[ $(jq -r .tag_name "$tmp/release.json") == "$tag" ]] || { rm -rf "$tmp"; fail 'live release tag differs from the frozen tag'; }
-  gh api "repos/$repo/releases/$release_id/assets?per_page=100" > "$tmp/assets.json" || { rm -rf "$tmp"; fail 'live release assets could not be read'; }
-  [[ $(gh api "repos/$repo/commits/$tag" --jq .sha) == "$source_sha" ]] || { rm -rf "$tmp"; fail 'live tag does not resolve to the frozen source SHA'; }
-  gh api "repos/$repo/actions/runs?head_sha=$source_sha&per_page=100" \
-    --jq '[.workflow_runs[] | {id, run_attempt, status}]' > "$tmp/runs.json" || { rm -rf "$tmp"; fail 'live workflow runs could not be read'; }
+  trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+  repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) || fail 'repository identity could not be read'
+  gh api "repos/$repo/releases/$release_id" > "$tmp/release.json" || fail 'live release state could not be read'
+  [[ $(jq -r .tag_name "$tmp/release.json") == "$tag" ]] || fail 'live release tag differs from the frozen tag'
+  gh api "repos/$repo/releases/$release_id/assets?per_page=100" > "$tmp/assets.json" || fail 'live release assets could not be read'
+  [[ $(gh api "repos/$repo/commits/$tag" --jq .sha) == "$source_sha" ]] || fail 'live tag does not resolve to the frozen source SHA'
+  gh api "repos/$repo/actions/workflows/${RELEASE_WORKFLOW_PATH##*/}/runs?per_page=100" \
+    --jq '[.workflow_runs[] | {id, run_attempt, status, head_sha, path, event}]' > "$tmp/runs.json" || fail 'live workflow runs could not be read'
   python3 -I "$ROOT/.github/scripts/verify-published-release-assets.py" --decide \
-    "$tmp/release.json" "$tmp/assets.json" "$expected" "$tmp/runs.json" "$run_id" "$run_attempt"
-  local status=$?
-  rm -rf "$tmp"
-  return $status
-}
+    "$tmp/release.json" "$tmp/assets.json" "$expected" "$tmp/runs.json" "$run_id" "$run_attempt" \
+    "$RELEASE_WORKFLOW_PATH" "$source_sha" "$scope"
+)
 
 check_required_asset_sidecars() {
   local directory=$1 platform
@@ -551,68 +453,136 @@ for index, (name, data) in enumerate(sorted(content.items()), start=1):
 PY
 }
 
-# Drive recovery_decision with a simulated gh and prove live release state is read first.
+# Drive the real --check-recovery CLI with an executable fake gh on PATH. The fake serves raw API-shaped documents and
+# applies the caller's --jq, so the production queries are exercised; every call is logged to prove that live release
+# state is read first, that nothing writes to GitHub, and that the scratch directory is removed on every exit path.
 recovery_self_test() {
-  local dir=$1 log="$1/gh-calls.log" sha
+  local dir=$1 sha
   sha=$(printf 'c%.0s' {1..40})
-  mkdir -p "$dir"
-  python3 - "$dir" <<'PY' || return $?
+  mkdir -p "$dir/bin" "$dir/tmp"
+  python3 - "$dir" "$sha" <<'PY' || return $?
 import hashlib, json, pathlib, sys
 root = pathlib.Path(sys.argv[1])
+sha = sys.argv[2]
+other = "d" * 40
 rows, expected = [], []
 for index, name in enumerate(("a.tar.gz", "b.json"), 1):
     data = f"{name} bytes".encode()
-    sha = hashlib.sha256(data).hexdigest()
-    rows.append({"id": index, "name": name, "size": len(data), "digest": "sha256:" + sha})
-    expected.append({"name": name, "size": len(data), "sha256": sha})
-(root / "assets-complete.json").write_text(json.dumps(rows))
-(root / "assets-changed.json").write_text(json.dumps([dict(rows[0], digest="sha256:" + "0" * 64), rows[1]]))
-(root / "assets-partial.json").write_text(json.dumps(rows[:1]))
-(root / "expected.json").write_text(json.dumps(expected))
-(root / "runs-quiet.json").write_text(json.dumps([{"id": 7, "run_attempt": 1, "status": "completed"}]))
-(root / "runs-active.json").write_text(json.dumps([{"id": 7, "run_attempt": 1, "status": "completed"},
-                                                     {"id": 9, "run_attempt": 1, "status": "in_progress"}]))
+    digest = hashlib.sha256(data).hexdigest()
+    rows.append({"id": index, "name": name, "size": len(data), "digest": "sha256:" + digest})
+    expected.append({"name": name, "size": len(data), "sha256": digest})
+final = []
+for index, name in ((90, "SHA256SUMS"), (91, "release-receipt.json")):
+    data = f"{name} bytes".encode()
+    final.append({"id": index, "name": name, "size": len(data), "digest": "sha256:" + hashlib.sha256(data).hexdigest()})
+def dump(name, value): (root / name).write_text(json.dumps(value))
+dump("assets-complete.json", rows)
+dump("assets-changed.json", [dict(rows[0], digest="sha256:" + "0" * 64), rows[1]])
+dump("assets-partial.json", rows[:1])
+dump("assets-published.json", rows + final)
+dump("assets-published-changed.json", [dict(rows[0], digest="sha256:" + "0" * 64), rows[1]] + final)
+dump("expected.json", expected)
+dump("commit.json", {"sha": sha})
+dump("repo.json", {"nameWithOwner": "szTheory/gabbaboy"})
+dump("release-draft.json", {"tag_name": "v0.2.0", "draft": True})
+dump("release-published.json", {"tag_name": "v0.2.0", "draft": False})
+RP = ".github/workflows/release-please.yml"
+def run(index, status="completed", attempt=1, path=RP, head=sha, event="push"):
+    return {"id": index, "run_attempt": attempt, "status": status, "path": path, "head_sha": head, "event": event}
+def runs(*items): return {"total_count": len(items), "workflow_runs": list(items)}
+dump("runs-quiet.json", runs(run(7)))
+dump("runs-ci.json", runs(run(7), run(8, "in_progress", path=".github/workflows/ci.yml"), run(9, "queued", path=".github/workflows/ci.yml")))
+dump("runs-other-push.json", runs(run(7), run(10, "in_progress", head=other)))
+dump("runs-active.json", runs(run(7), run(11, "in_progress")))
+dump("runs-dispatch.json", runs(run(7), run(12, "queued", head=other, event="workflow_dispatch")))
+dump("runs-stale.json", runs(run(7, attempt=2)))
+dump("runs-absent.json", runs(run(13)))
 PY
-  printf '%s\n' '{"tag_name": "v0.2.0", "draft": true}' > "$dir/release-draft.json"
-  printf '%s\n' '{"tag_name": "v0.2.0", "draft": false}' > "$dir/release-published.json"
-  local scenario outcome expected_text s_release s_assets s_runs status
-  for scenario in "draft assets-complete runs-quiet draft-reuse" "draft assets-complete runs-quiet draft-reuse" \
-                  "draft assets-partial runs-quiet draft-upload-missing:b.json" \
-                  "draft assets-changed runs-quiet REJECT" "draft assets-complete runs-active REJECT" \
-                  "published assets-changed runs-quiet REJECT"; do
-    read -r s_release s_assets s_runs expected_text <<<"$scenario"
+  cat > "$dir/bin/gh" <<'GH'
+#!/usr/bin/env bash
+# Fake GitHub CLI: serves fixture documents and applies --jq, like the real one.
+printf '%s\n' "$*" >> "$FAKE_LOG"
+args=("$@"); jq_filter=''
+for ((i = 0; i < ${#args[@]}; i++)); do [[ ${args[i]} == --jq ]] && jq_filter=${args[i+1]}; done
+[[ -z "${FAKE_FAIL:-}" || "$*" != *"$FAKE_FAIL"* ]] || exit 1
+case "$*" in
+  'repo view'*) file=repo.json ;;
+  *"/releases/424242/assets"*) file="$FAKE_ASSETS.json" ;;
+  *"/releases/424242") file="release-$FAKE_RELEASE.json" ;;
+  *"/commits/v0.2.0"*) file=commit.json ;;
+  *"/actions/workflows/release-please.yml/runs"*) file="$FAKE_RUNS.json" ;;
+  *) exit 1 ;;
+esac
+# Like gh --jq: strings print raw, other values print as compact JSON.
+if [[ -n "$jq_filter" ]]; then jq -r "($jq_filter) | if type == \"string\" then . else tojson end" "$FAKE_DIR/$file"; else cat "$FAKE_DIR/$file"; fi
+GH
+  chmod +x "$dir/bin/gh"
+  local row release assets runs outcome reason status log="$dir/gh-calls.log" fail_on
+  # release | assets | runs | outcome (decision text or REJECT) | reason fragment | gh call that fails
+  for row in "draft|assets-complete|runs-quiet|draft-reuse||" "draft|assets-complete|runs-quiet|draft-reuse||" \
+             "draft|assets-complete|runs-ci|draft-reuse||" "draft|assets-complete|runs-other-push|draft-reuse||" \
+             "draft|assets-partial|runs-quiet|draft-upload-missing:b.json||" \
+             "published|assets-published|runs-quiet|published-verified||" \
+             "draft|assets-changed|runs-quiet|REJECT|never overwritten|" \
+             "draft|assets-complete|runs-active|REJECT|concurrent publication|" \
+             "draft|assets-complete|runs-dispatch|REJECT|concurrent publication|" \
+             "draft|assets-complete|runs-stale|REJECT|stale|" \
+             "draft|assets-complete|runs-absent|REJECT|not in the live|" \
+             "published|assets-published-changed|runs-quiet|REJECT|published release does not carry|" \
+             "draft|assets-complete|runs-quiet|REJECT|live release assets could not be read|/releases/424242/assets" \
+             "draft|assets-complete|runs-quiet|REJECT|live workflow runs could not be read|/actions/workflows/"; do
+    IFS='|' read -r release assets runs outcome reason fail_on <<<"$row"
     : > "$log"
-    gh() {
-      printf '%s\n' "$*" >> "$log"
-      case "$*" in
-        'repo view'*) printf 'szTheory/gabbaboy\n' ;;
-        *"/releases/424242/assets"*) cat "$dir/$s_assets.json" ;;
-        *"/releases/424242") cat "$dir/release-$s_release.json" ;;
-        *"/commits/v0.2.0"*) printf '%s\n' "$sha" ;;
-        *"/actions/runs"*) cat "$dir/$s_runs.json" ;;
-        *) return 1 ;;
-      esac
-    }
-    outcome=$(recovery_decision 424242 v0.2.0 "$sha" "$dir/expected.json" 7 1 2>&1) && status=0 || status=$?
-    if [[ "$expected_text" == REJECT ]]; then
-      [[ $status -ne 0 && "$outcome" == *'REJECT recovery:'* ]] || fail "recovery accepted $scenario: $outcome"
+    rm -rf "$dir/tmp" && mkdir -p "$dir/tmp"
+    output=$(PATH="$dir/bin:$PATH" FAKE_DIR="$dir" FAKE_LOG="$log" FAKE_RELEASE="$release" FAKE_ASSETS="$assets" FAKE_RUNS="$runs" \
+             FAKE_FAIL="$fail_on" TMPDIR="$dir/tmp" \
+             bash "$ROOT/.github/scripts/verify-release-gates.sh" --check-recovery 424242 v0.2.0 "$sha" "$dir/expected.json" 7 1 full 2>&1) && status=0 || status=$?
+    if [[ $outcome == REJECT ]]; then
+      [[ $status -ne 0 && "$output" == *"$reason"* && "$output" != *PASS* ]] || fail "recovery accepted or mis-diagnosed $row: $output"
     else
-      [[ $status -eq 0 && "$outcome" == "$expected_text" ]] || fail "recovery decided wrongly for $scenario: $outcome"
+      [[ $status -eq 0 && "$output" == "$outcome" ]] || fail "recovery decided wrongly for $row: $output"
     fi
-    [[ $(sed -n 2p "$log") == *'/releases/424242' ]] || fail "recovery did not read live release state first for $scenario"
-    unset -f gh
+    [[ $(sed -n 2p "$log") == *'/releases/424242' ]] || fail "recovery did not read live release state first for $row"
+    ! grep -Eq 'release (upload|edit|delete|create)|-X |--method|-f |--field|-F ' "$log" || fail "recovery wrote to GitHub for $row"
+    ! compgen -G "$dir/tmp/*" >/dev/null || fail "recovery left scratch files behind for $row"
   done
-  printf 'PASS: recovery reads live release state first; identical draft bytes are reused, partial drafts upload only the missing asset\n'
-  printf 'rejected: changed attachment, concurrent attempt, changed published assets\n'
+  printf 'PASS: recovery CLI reads live release state first, writes nothing, ignores unrelated CI and cleans up on every exit\n'
+  printf 'rejected: changed attachment, concurrent eligible release, concurrent retry dispatch, stale and absent attempt, changed published assets, unreadable live state\n'
+}
+
+# The gate's own source-archive fetch must go through the bounded helper with the byte and time caps. A shim python3
+# records what the real fetch_source_archive runs; nothing here touches the network.
+fetch_source_archive_self_test() {
+  local dir=$1 log expect_text
+  mkdir -p "$dir/bin"
+  log="$dir/fetch-calls.log"
+  cat > "$dir/bin/python3" <<'SHIM'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$FETCH_LOG"
+SHIM
+  chmod +x "$dir/bin/python3"
+  : > "$log"
+  PATH="$dir/bin:$PATH" FETCH_LOG="$log" fetch_source_archive szTheory/gabbaboy v0.2.0 "$dir/source.tar.gz"
+  [[ $(wc -l < "$log") -eq 1 ]] || fail 'source archive fetch did not run exactly one download'
+  expect_text=$(cat "$log")
+  [[ "$expect_text" == "-I $ROOT/.github/scripts/download-release-artifact.py https://github.com/szTheory/gabbaboy/archive/refs/tags/v0.2.0.tar.gz $dir/source.tar.gz --max-bytes 1073741824 --total-timeout 600" ]] \
+    || fail "source archive fetch bypassed the bounded helper: $expect_text"
+  printf 'PASS: source archive fetch runs the bounded download helper with byte and time caps\n'
 }
 
 case "$mode" in
   --self-test)
     [[ $# -eq 1 ]] || fail 'usage: verify-release-gates.sh --self-test'
     check_config
+    # Executable privilege/trust wiring is judged by the bounded policy reader, not by counting text above.
+    python3 -I "$ROOT/.github/scripts/verify-workflow-policy.py" --check --root "$ROOT"
+    python3 -I "$ROOT/.github/scripts/verify-workflow-policy.py" --self-test
+    bash "$ROOT/.github/scripts/produce-release-evidence.sh" --self-test
+    python3 -I "$ROOT/.github/scripts/download-release-artifact.py" --self-test
     python3 "$ROOT/.github/scripts/verify-release-source-proof.py" --self-test
     temp=$(mktemp -d "${TMPDIR:-/tmp}/gb-release-gates.XXXXXX")
     trap 'rm -rf "$temp"' EXIT HUP INT TERM
+    fetch_source_archive_self_test "$temp/fetch"
     python3 - "$temp" <<'PY'
 import json, pathlib, sys
 root = pathlib.Path(sys.argv[1])
@@ -853,9 +823,10 @@ PY
     check_v02_evidence "$2" "$3" "$4" "$5"
     ;;
   --check-recovery)
-    [[ $# -eq 7 ]] || fail 'usage: verify-release-gates.sh --check-recovery RELEASE_ID TAG SOURCE_SHA EXPECTED_INVENTORY_JSON RUN_ID RUN_ATTEMPT'
+    [[ $# -eq 8 ]] || fail 'usage: verify-release-gates.sh --check-recovery RELEASE_ID TAG SOURCE_SHA EXPECTED_INVENTORY_JSON RUN_ID RUN_ATTEMPT full|subset'
     command -v gh >/dev/null || fail 'GitHub CLI is required'
-    recovery_decision "$2" "$3" "$4" "$5" "$6" "$7"
+    command -v jq >/dev/null || fail 'jq is required'
+    recovery_decision "$2" "$3" "$4" "$5" "$6" "$7" "$8"
     ;;
   --check-runner-evidence)
     [[ $# -eq 6 ]] || fail 'usage: verify-release-gates.sh --check-runner-evidence CANDIDATE_RECEIPT BUILD_RECEIPT TAG SOURCE_SHA SMOKE_RUNNER'
@@ -867,5 +838,5 @@ PY
     check_digest_sidecar "$2" "$3"
     printf 'PASS: downloaded archive matches its one-line digest sidecar\n'
     ;;
-  *) fail 'usage: verify-release-gates.sh --self-test | --check-pr PR_NUMBER EXPECTED_HEAD_SHA | --check-merged-source SOURCE_SHA TAG RELEASE_ID SOURCE_RECEIPT PROOF_VERIFIER | --check-draft RELEASE_ID TAG SOURCE_SHA | --check-draft-final RELEASE_ID TAG SOURCE_SHA | --check-v02-evidence EVIDENCE_DIR TAG SOURCE_SHA SOURCE_ARCHIVE | --check-recovery RELEASE_ID TAG SOURCE_SHA EXPECTED_INVENTORY_JSON RUN_ID RUN_ATTEMPT | --check-runner-evidence CANDIDATE_RECEIPT BUILD_RECEIPT TAG SOURCE_SHA SMOKE_RUNNER | --check-digest-sidecar SIDECAR ARCHIVE' ;;
+  *) fail 'usage: verify-release-gates.sh --self-test | --check-pr PR_NUMBER EXPECTED_HEAD_SHA | --check-merged-source SOURCE_SHA TAG RELEASE_ID SOURCE_RECEIPT PROOF_VERIFIER | --check-draft RELEASE_ID TAG SOURCE_SHA | --check-draft-final RELEASE_ID TAG SOURCE_SHA | --check-v02-evidence EVIDENCE_DIR TAG SOURCE_SHA SOURCE_ARCHIVE | --check-recovery RELEASE_ID TAG SOURCE_SHA EXPECTED_INVENTORY_JSON RUN_ID RUN_ATTEMPT full|subset | --check-runner-evidence CANDIDATE_RECEIPT BUILD_RECEIPT TAG SOURCE_SHA SMOKE_RUNNER | --check-digest-sidecar SIDECAR ARCHIVE' ;;
 esac

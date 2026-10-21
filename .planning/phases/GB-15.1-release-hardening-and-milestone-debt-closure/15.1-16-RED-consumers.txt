@@ -1,0 +1,32 @@
+test_workflow_command_without_candidate_manifest_is_rejected (c.ConsumerContractTests.test_workflow_command_without_candidate_manifest_is_rejected) ... ok
+test_written_manifest_binds_archive_and_build_receipt_and_qualifies (c.ConsumerContractTests.test_written_manifest_binds_archive_and_build_receipt_and_qualifies) ... FAIL
+test_manifest_writer_rejects_unbound_inputs (c.ConsumerContractTests.test_manifest_writer_rejects_unbound_inputs) ... FAIL
+
+======================================================================
+FAIL: test_written_manifest_binds_archive_and_build_receipt_and_qualifies (c.ConsumerContractTests.test_written_manifest_binds_archive_and_build_receipt_and_qualifies)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<home>/projects/gabbaboy/tests/scripts/verify-v02-consumers.py", line 906, in test_written_manifest_binds_archive_and_build_receipt_and_qualifies
+    self.assertEqual(written.returncode, 0, written.stdout + written.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 0 : usage: verify-v02-consumers.py [-h] [--run | --self-test] [--prefix PREFIX]
+                               [--archive ARCHIVE]
+                               [--candidate-manifest CANDIDATE_MANIFEST]
+                               [--extract ARCHIVE DESTINATION]
+                               [--output OUTPUT]
+verify-v02-consumers.py: error: unrecognized arguments: --write-candidate-manifest <tmp> --source-sha 42b389bca4150a4c0b81bae364ce9137298bef01 --build-receipt <tmp>
+
+
+======================================================================
+FAIL: test_manifest_writer_rejects_unbound_inputs (c.ConsumerContractTests.test_manifest_writer_rejects_unbound_inputs)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<home>/projects/gabbaboy/tests/scripts/verify-v02-consumers.py", line 928, in test_manifest_writer_rejects_unbound_inputs
+    self.assertIn(f"verify-v02-consumers: rejected:{reason}", result.stderr, reason)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'verify-v02-consumers: rejected:candidate-manifest-source-invalid' not found in 'usage: verify-v02-consumers.py [-h] [--run | --self-test] [--prefix PREFIX]\n                               [--archive ARCHIVE]\n                               [--candidate-manifest CANDIDATE_MANIFEST]\n                               [--extract ARCHIVE DESTINATION]\n                               [--output OUTPUT]\nverify-v02-consumers.py: error: unrecognized arguments: --write-candidate-manifest <tmp> --source-sha not-a-sha --build-receipt <tmp> : candidate-manifest-source-invalid
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.229s
+
+FAILED (failures=2)

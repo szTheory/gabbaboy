@@ -1,0 +1,7 @@
+$ python3 .github/scripts/verify-published-release-assets.py --self-test
+    def run(index: int, status: str = "completed", attempt: int = 1, *, path: str = RELEASE_WORKFLOW,
+                                                                                    ^^^^^^^^^^^^^^^^
+NameError: name 'RELEASE_WORKFLOW' is not defined
+$ python3 -I .github/scripts/verify-workflow-policy.py --check
+REJECT required-command-not-executed: release.publish-qualified-release does not run a reachable, fatal: python3 -I trusted/.github/scripts/verify-published-release-assets.py --inventory "$RUNNER_TEMP/expected-inventory.json" build/release-final
+self-test exits nonzero (NameError: the recovery contract is not implemented)

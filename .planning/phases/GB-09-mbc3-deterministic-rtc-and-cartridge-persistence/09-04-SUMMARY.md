@@ -34,10 +34,11 @@ actuals:
   tasks: 2
   commits: 2
 coverage:
-  - deliverable: "v0.1.2-written 8 KiB and 32 KiB envelopes committed with provenance manifest"
+  - id: D1
+    description: "v0.1.2-written 8 KiB and 32 KiB envelopes remain digest-checked and field-decoded"
     verification:
-      - kind: command
-        ref: "bash tests/scripts/generate-save-envelope-v1.sh --check"
+      - kind: other
+        ref: "Fresh Phase 15.1-11 run: bash tests/scripts/generate-save-envelope-v1.sh --check (check=pass)"
         status: pass
     human_judgment: false
 ---
@@ -75,3 +76,7 @@ None.
 None.
 
 ## Self-Check: PASSED
+
+## Current Verification — 15.1-11
+
+The offline save-envelope decoder returned `check=pass`; original producer provenance and prior byte-identical regeneration claims are retained above.

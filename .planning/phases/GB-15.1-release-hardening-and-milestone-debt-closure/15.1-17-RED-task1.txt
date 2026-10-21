@@ -1,0 +1,5 @@
+# RED: stub --check only parses JSON; real CLI self-test must show defects accepted
+self-test accepted a dropped scope ID
+exit=1
+closeout-dispositions pass items=24 closed=0 closed_with_residual=0 limitation_open=0 limitations=0 owner_accepted=0
+exit=0

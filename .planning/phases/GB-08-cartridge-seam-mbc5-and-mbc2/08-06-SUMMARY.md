@@ -48,6 +48,28 @@ requirements-completed: [CART-02, CART-03]
 duration: 30min
 completed: 2026-10-11
 status: complete
+coverage:
+  - id: D1
+    description: "Digest, inventory and runner-PC agreement verifier"
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build -R ^mooneye_mbc_ --output-on-failure"
+        status: pass
+  - id: D2
+    description: "15 per-case receipts and fail-closed manifest/type/PC controls"
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build -R ^mooneye_mbc_ --output-on-failure"
+        status: pass
+  - id: D3
+    description: "Sibling fixture rights, eligibility and notices document the named software profile"
+    human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-closure-contract.py --self-test"
+        status: pass
 ---
 
 # Phase 8 Plan 06: Mooneye mbc2/mbc5 verifier, CTests and provenance Summary

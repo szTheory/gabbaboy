@@ -18,7 +18,7 @@ usage() { echo "usage: $0 --build OUTDIR | --compare fixtures/mooneye-cgb | --fa
 mode=$1
 case "$mode" in --build|--compare|--facts) ;; *) usage ;; esac
 
-repo_root=$(git rev-parse --show-toplevel)
+repo_root=$(cd "$(git rev-parse --show-toplevel)" && pwd -P)
 parent_dir="$repo_root/fixtures/mooneye"
 sha256_file() { shasum -a 256 "$1" | cut -d ' ' -f 1; }
 pin_sha() {
@@ -26,8 +26,19 @@ pin_sha() {
   actual=$(sha256_file "$1")
   [[ "$actual" == "$2" ]] || { echo "SHA-256 pin failure: $1 expected $2 actual $actual" >&2; exit 1; }
 }
+# Resolve existing symlinks and missing path suffixes before mkdir can mutate the checkout.
+canonical_path() {
+  python3 -I -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"
+}
 outside_repo() {
   case "$1/" in "$repo_root"/*) echo "refusing to write build products inside the working tree: $1" >&2; exit 2 ;; esac
+}
+
+make_temp_dir() {
+  local temp_root
+  temp_root=$(canonical_path "${TMPDIR:-/tmp}")
+  outside_repo "$temp_root"
+  mktemp -d "$temp_root/$1.XXXXXXXX"
 }
 
 # alias = file stem of the committed ROM; the source path is inside the pinned Mooneye tree.
@@ -98,23 +109,23 @@ font_digest=$(jq -r '.replacement_asset.sha256' "$manifest")
 # No sibling patch: the parent headless-report patch is applied unchanged (--fuzz=0, so a reject stops the build).
 
 if [[ "$mode" == --build ]]; then
-  mkdir -p "$2"
-  build_dir=$(cd "$2" && pwd -P)
+  build_dir=$(canonical_path "$2")
+  outside_repo "$build_dir"
 else
   fixture_dir=$(cd "$2" && pwd -P)
   [[ "$fixture_dir" == "$repo_root/fixtures/mooneye-cgb" ]] || { echo 'unexpected fixture directory' >&2; exit 2; }
   # The manifest binds each ROM to its original_sha256; without it the comparison would be weaker than
   # it claims, so refuse before any temp directory or network fetch.
   [[ -f "$fixture_dir/manifest.json" ]] || { echo "missing fixture manifest: $fixture_dir/manifest.json" >&2; exit 1; }
-  build_dir=$(mktemp -d "${TMPDIR:-/tmp}/gabbaboy-mooneye-cgb-roms.XXXXXXXX")
+  build_dir=$(make_temp_dir gabbaboy-mooneye-cgb-roms)
   trap 'rm -rf -- "$build_dir"' EXIT
   build_dir=$(cd "$build_dir" && pwd -P)
 fi
 outside_repo "$build_dir"
-work_dir=${GBB_REPRO_OUTPUT_DIR:-$(mktemp -d "${TMPDIR:-/tmp}/gabbaboy-mooneye-cgb.XXXXXXXX")}
-mkdir -p "$work_dir"
-work_dir=$(cd "$work_dir" && pwd -P)
+work_dir=${GBB_REPRO_OUTPUT_DIR:-$(make_temp_dir gabbaboy-mooneye-cgb)}
+work_dir=$(canonical_path "$work_dir")
 outside_repo "$work_dir"
+mkdir -p "$build_dir" "$work_dir"
 echo "Evidence directory: $work_dir"
 strategy=${GBB_WLA_ORDERING_STRATEGY:-source-order}
 [[ "$strategy" == source-order ]] || { echo "unknown deterministic WLA-DX strategy: $strategy" >&2; exit 2; }

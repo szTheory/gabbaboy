@@ -39,15 +39,55 @@ actuals:
   tasks: 2
   commits: 2
 coverage:
-  - deliverable: "Public cartridge docs, README and preview text match Phase 8 behavior and limits"
-    verification:
-      - {kind: command, ref: "Task 1 automated verify and acceptance greps", status: pass}
-    human_judgment: true
-    rationale: "Prose accuracy is checked against the SUMMARYs and source by grep, not by a test that asserts the wording."
-  - deliverable: "Support entry, capability text, decisions, lessons and deferred direction recorded"
-    verification:
-      - {kind: command, ref: "verify-support-ledger.py --self-test; actionlint preview.yml", status: pass}
+  - id: D1
+    description: "Historical public cartridge matrix, allocation bounds, battery and rumble API match Phase8 scope"
     human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-closure-contract.py --self-test"
+        status: pass
+  - id: D2
+    description: "Historical evidence ledger distinguishes oracle classes, ninth-bit proof and game/hardware exclusions"
+    human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-closure-contract.py --self-test"
+        status: pass
+  - id: D3
+    description: "Historical README and preview text state player persistence and size limits"
+    human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-closure-contract.py --self-test"
+        status: pass
+  - id: D4
+    description: "Historical support entry states profile, denominators, player persistence gap and source-archive limits"
+    human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-closure-contract.py --self-test"
+        status: pass
+  - id: D5
+    description: "Historical package capability text states the cartridge scope and persistence limit"
+    human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-closure-contract.py --self-test"
+        status: pass
+  - id: D6
+    description: "Phase8 decisions are adopted, concrete lessons retained and research index links preserved"
+    human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-closure-contract.py --self-test"
+        status: pass
+  - id: D7
+    description: "Deferred MBC1 backfill, cartridge split, region decode, verifier, haptics and packed save directions are recorded"
+    human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-closure-contract.py --self-test"
+        status: pass
 ---
 
 # Phase 8 Plan 09: Documentation and durable records Summary

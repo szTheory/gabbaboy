@@ -19,6 +19,22 @@ key-decisions:
   - "Latching on exactly $00 then $01 and the $04-$07 / $0D-$FF unmapped selections are project decisions, labelled as such in source, not hardware-confirmed"
   - "rtc_step_field splits n before adding so a 64-bit second count can never wrap"
   - "CI prints the no_host_clock result on each build leg (extra ctest -V step) so the tool name is in the job log"
+coverage:
+  - id: D1
+    description: "The 17 deterministic MBC3 RTC behavioral regression cases pass on the current build"
+    requirement: RTC-01
+    verification:
+      - kind: integration
+        ref: "Fresh Phase 15.1-11 focused CTest: rtc_tracer and rtc_* behavioral cases (17/17 passed)"
+        status: pass
+    human_judgment: false
+  - id: D2
+    description: "Source and object scans exclude host clocks while existing negative controls reject forbidden host dependencies"
+    verification:
+      - kind: integration
+        ref: "Fresh Phase 15.1-11 focused CTest: no_host_clock, no_host_clock_selftest, no_host_clock_symbol_selftest, no_host_clock_comment_selftest (4/4 passed)"
+        status: pass
+    human_judgment: false
 status: complete
 commits: 4
 plan_head_before: 5ea612fec75d2e3719e18cf42cd36202421e5f99
@@ -135,3 +151,7 @@ None. Mitigations T-09-09 (overflow-safe split, `rtc_time_near_max`, differentia
 
 - `src/core/gabbaboy.c`, `tests/test_mbc3_rtc.c`, `tests/test_mbc3_rtc_internal.c`, `cmake/CheckCoreNoHostClock.cmake` exist; commits 14caf9d, 3b80276, 9d905b7, 2b4c220 are ancestors of HEAD.
 - Local: full CTest 356/356 and `verify-test-inventory.sh` reported 356 executed, none skipped; all five mutation tags occur once; acceptance greps (17 `rtc_` names, 3 `no_host_clock` names, no `GabbaBoy::core` on the white-box target, `no-host-clock-tool-missing` present, PR is a draft) pass.
+
+## Current Verification — 15.1-11
+
+The 17 RTC behavior tests and all four no-host-clock checks passed in the focused 45-test batch. The scanner now permits only the exact private host-independent `gbb_accept_input.h` include in addition to its existing headers; its `<time.h>`/`time(NULL)`, `_time`, and `clock()` controls still reject forbidden dependencies. Historical exact-head hosted CI claims above are preserved as historical evidence, not recast as a current run.

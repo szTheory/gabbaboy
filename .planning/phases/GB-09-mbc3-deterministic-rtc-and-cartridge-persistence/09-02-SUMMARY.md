@@ -42,14 +42,14 @@ coverage:
     requirement: CART-04
     verification:
       - kind: other
-        ref: "cmake -DMANIFEST=fixtures/magentests/manifest.json -P cmake/VerifyFixtureManifest.cmake (3 fixture-ok lines)"
+        ref: "Fresh Phase 15.1-11 run: magentests_fixture_digest, magentests_manifest_self_check and manifest verification (three fixture-ok entries)"
         status: pass
     human_judgment: false
   - id: D2
     description: "Manifest check fails on a tampered ROM and on an empty fixtures array"
     verification:
       - kind: other
-        ref: "scratch-dir tampered copy: fixture-digest-mismatch, exit 1; empty array: fixture-manifest-empty"
+        ref: "Fresh Phase 15.1-11 scratch controls: tampered ROM rejected with fixture-digest-mismatch; empty fixtures array rejected with fixture-manifest-empty; focused CTest negative controls passed"
         status: pass
     human_judgment: false
 duration: 15min
@@ -113,3 +113,7 @@ Plan 09-07 can build the screen oracle on these ROMs once 09-01 (done) is in pla
 
 ## Self-Check: PASSED
 All created files exist; commits 8205991 and 6fb0289 are ancestors of HEAD.
+
+## Current Verification — 15.1-11
+
+The current focused CTest batch passed fixture-digest, manifest self-check, screen-oracle, negative-control, and install-exclusion checks. Separate scratch controls rejected a tampered ROM with `fixture-digest-mismatch` and an empty fixtures array with `fixture-manifest-empty`; the original MIT licence, upstream pin, and digest provenance remain unchanged.

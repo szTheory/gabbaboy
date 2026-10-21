@@ -1,0 +1,154 @@
+{
+  "phase": "15.1",
+  "name": "Release Hardening and Milestone Debt Closure",
+  "source_head": "a185fa66bda8563418ee090d58406668c0c2bf8e",
+  "decision": "resolve-first",
+  "audit_debt_count": 21,
+  "items": [
+    {
+      "id": "P7-01",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "WR-01: dense input scripts fail loudly at the 64-event queue; back-pressure deferred.",
+      "status": "open"
+    },
+    {
+      "id": "P7-02",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "Libbet hosted Linux reproduction remains unverified (D-039); local macOS reproduction is recorded.",
+      "status": "open"
+    },
+    {
+      "id": "P7-03",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "Audio-saturation regression test was not proven red against the pre-fix core (D-027).",
+      "status": "open"
+    },
+    {
+      "id": "P12-01",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "One isolated M7 control failure had no retained diagnostic; 100 repeats and the full suite passed without changing pins.",
+      "status": "open"
+    },
+    {
+      "id": "P15-01",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "WR-01: Evidence jobs run tagged source (build, full CTest, fuzz binary) with a job-level `contents: write` token",
+      "status": "open"
+    },
+    {
+      "id": "P15-02",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "WR-02: `--check-receipt` accepts a source-archive receipt that was never bound to the Git tree",
+      "status": "open"
+    },
+    {
+      "id": "P15-03",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "WR-03: Fuzz receipt is self-attested, so the \"forged evidence\" checks are shape-only",
+      "status": "open"
+    },
+    {
+      "id": "P15-04",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "WR-04: Performance regression gate can never fail (standing pre-written \"review\")",
+      "status": "open"
+    },
+    {
+      "id": "P15-05",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "WR-05: Source-archive receipt depends on GitHub producing byte-identical tarballs across downloads",
+      "status": "open"
+    },
+    {
+      "id": "P15-06",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "WR-06: Trust-boundary overlay covers three files, but the gate delegates to many more tagged files",
+      "status": "open"
+    },
+    {
+      "id": "P15-07",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "WR-07: DMG KEY1 oracle fix leaves scenario 3 (held button) exposed to the same failure and the new DMG seeds are weak controls",
+      "status": "open"
+    },
+    {
+      "id": "P15-08",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "WR-08: Consumer receipt `source_sha` is self-reported by the package under test",
+      "status": "open"
+    },
+    {
+      "id": "P15-09",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "IN-01: `--check-recovery` and `--decide` are not wired into any workflow",
+      "status": "open"
+    },
+    {
+      "id": "P15-10",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "IN-02: Wiring validators rely on substring counts, which comments and echoes can satisfy",
+      "status": "open"
+    },
+    {
+      "id": "P15-11",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "IN-03: `--evidence-only` skips build-artifact digest checks for any absent path",
+      "status": "open"
+    },
+    {
+      "id": "P15-12",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "IN-04: `check_tree` does not compare file modes; unwrapped-symlink depth math is off by one",
+      "status": "open"
+    },
+    {
+      "id": "P15-13",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "IN-05: `curl --max-filesize` does not bound chunked downloads",
+      "status": "open"
+    },
+    {
+      "id": "P15-14",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "IN-06: `check_runs` binds workflow runs only to head SHA and success, not to a workflow",
+      "status": "open"
+    },
+    {
+      "id": "P15-15",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "IN-07: Duplicate `Create the local-only rehearsal tag` and corpus scripts across rehearsal and release jobs",
+      "status": "open"
+    },
+    {
+      "id": "P15-16",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "IN-08: `.gitattributes` forces `eol=lf` on whole globs and `gbb_add_v02_contract` embeds counts in regex",
+      "status": "open"
+    },
+    {
+      "id": "P15-17",
+      "source": ".planning/v0.2-MILESTONE-AUDIT.md",
+      "description": "Measured DMG slowdown (+14.86%, margin 1.62%) is disclosed in the receipt and docs/release.md; visibility in release notes and ledger prose is deferred.",
+      "status": "open"
+    },
+    {
+      "id": "SCAN-UAT",
+      "source": ".planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT-REVIEW.md",
+      "description": "Resolve audit-open misclassification of clean review as incomplete UAT; preserve canonical UAT verdict and do not acknowledge a false gap.",
+      "status": "open"
+    },
+    {
+      "id": "SCAN-LINK",
+      "source": ".planning/phases/GB-13-cgb-hdma/deferred-items.md",
+      "description": "Locate deferred duplicate core-library linker warning; reproduce and fix owning target wiring if still present, with negative control.",
+      "status": "open"
+    },
+    {
+      "id": "SUMMARY-SCHEMA",
+      "source": ".planning/STATE.md",
+      "description": "Triage the 47 inherited Phase 9/10 legacy SUMMARY schema problems recorded at Phase 12 handoff; canonical coverage must auto-pass without changing historical behavioral claims.",
+      "status": "open"
+    }
+  ],
+  "next_command": "/gsd-plan-phase 15.1"
+}

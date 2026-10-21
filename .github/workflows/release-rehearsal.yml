@@ -32,23 +32,19 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Create the local-only rehearsal tag
         shell: bash
         run: |
           set -euo pipefail
-          # -f: once the real release tag exists the full-history checkout already holds a copy of it;
-          # this only repoints the runner's local ref and never pushes.
-          git tag -f "$REHEARSAL_TAG" "$GITHUB_SHA"
-          echo "SOURCE_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"
-          echo "RELEASE_TAG=$REHEARSAL_TAG" >> "$GITHUB_ENV"
+          # --local-tag repoints the runner's copy of the tag (the real release tag may already exist in a
+          # full-history checkout) and never pushes; the shared producer prints the SOURCE_SHA/RELEASE_TAG lines.
+          bash .github/scripts/produce-release-evidence.sh verify-subject --subject . --source-sha "$GITHUB_SHA" --tag "$REHEARSAL_TAG" --local-tag >> "$GITHUB_ENV"
       - name: Configure and build the source with the native preset
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p build/package-prefix
-          cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$GITHUB_WORKSPACE/build/package-prefix"
-          cmake --build --preset phase1
-          cmake --install build --prefix build/package-prefix
+          bash .github/scripts/produce-release-evidence.sh corpus-build --subject .
       - name: Begin exact CGB corpus receipt run
         id: corpus_run
         run: python3 -I tests/scripts/verify-cgb-corpus-report.py --begin-run --build-dir build --receipt build/cgb-corpus-receipt.json >> "$GITHUB_OUTPUT"
@@ -90,6 +86,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Confirm pinned Clang 18 toolchain
         run: |
           clang-18 --version
@@ -110,6 +107,13 @@ jobs:
           GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --explore --receipt build-asan/v02-fuzz-receipt.json
           python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json
           GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --self-test
+      - name: Retain the producer campaign receipt for the separate trusted judge
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rehearsal-fuzz-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build-asan/v02-fuzz-receipt.json
+          if-no-files-found: error
+          retention-days: 3
 
   performance:
     name: rehearse-paired-performance-qualification
@@ -125,6 +129,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Measure the clean paired v0.1.0 baseline and candidate
         shell: bash
         run: |
@@ -143,15 +148,14 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Create the local-only rehearsal tag
         shell: bash
         run: |
           set -euo pipefail
-          # -f: once the real release tag exists the full-history checkout already holds a copy of it;
-          # this only repoints the runner's local ref and never pushes.
-          git tag -f "$REHEARSAL_TAG" "$GITHUB_SHA"
-          echo "SOURCE_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"
-          echo "RELEASE_TAG=$REHEARSAL_TAG" >> "$GITHUB_ENV"
+          # --local-tag repoints the runner's copy of the tag (the real release tag may already exist in a
+          # full-history checkout) and never pushes; the shared producer prints the SOURCE_SHA/RELEASE_TAG lines.
+          bash .github/scripts/produce-release-evidence.sh verify-subject --subject . --source-sha "$GITHUB_SHA" --tag "$REHEARSAL_TAG" --local-tag >> "$GITHUB_ENV"
       - name: Configure and build the cache-free release core package
         shell: bash
         run: |
@@ -171,7 +175,12 @@ jobs:
           set -euo pipefail
           bash tests/scripts/verify-release-candidate.sh --extract \
             build/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"
+          # The hardened verifier needs a candidate manifest binding the archive to the source and build; the
+          # rehearsal built both itself, so it writes one (the release gate gets its own from the build receipt).
+          python3 -I tests/scripts/verify-v02-consumers.py --write-candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" \
+            --archive build/gabbaboy-core-linux-x64.tar.gz --source-sha "$SOURCE_SHA" --build-receipt build/release/CMakeCache.txt
           python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" \
+            --archive build/gabbaboy-core-linux-x64.tar.gz --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" \
             --output build/v02-consumer-receipt.json
       - name: Inspect a git-generated source archive of the rehearsed tree
         shell: bash
@@ -184,7 +193,7 @@ jobs:
           python3 -I tests/scripts/verify-v02-source-archive.py --archive "$archive" \
             --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json
           python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json \
-            --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA"
+            --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo .
 
   aggregate:
     name: rehearse-v02-evidence-aggregate
@@ -195,24 +204,20 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Create the local-only rehearsal tag
         shell: bash
         run: |
           set -euo pipefail
-          # -f: once the real release tag exists the full-history checkout already holds a copy of it;
-          # this only repoints the runner's local ref and never pushes.
-          git tag -f "$REHEARSAL_TAG" "$GITHUB_SHA"
-          echo "SOURCE_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"
-          echo "RELEASE_TAG=$REHEARSAL_TAG" >> "$GITHUB_ENV"
+          # --local-tag repoints the runner's copy of the tag (the real release tag may already exist in a
+          # full-history checkout) and never pushes; the shared producer prints the SOURCE_SHA/RELEASE_TAG lines.
+          bash .github/scripts/produce-release-evidence.sh verify-subject --subject . --source-sha "$GITHUB_SHA" --tag "$REHEARSAL_TAG" --local-tag >> "$GITHUB_ENV"
       - name: Corpus receipt and support sidecar
         id: corpus_run
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p build/package-prefix
-          cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$GITHUB_WORKSPACE/build/package-prefix"
-          cmake --build --preset phase1
-          cmake --install build --prefix build/package-prefix
+          bash .github/scripts/produce-release-evidence.sh corpus-build --subject .
           nonce=$(python3 -I tests/scripts/verify-cgb-corpus-report.py --begin-run --build-dir build --receipt build/cgb-corpus-receipt.json | sed -n 's/^run_nonce=//p')
           ctest --test-dir build -T Test --no-compress-output --test-output-size-passed 16777216 --output-on-failure --no-tests=error --output-junit "cgb-corpus-ctest-$nonce.xml"
           python3 -I tests/scripts/verify-cgb-corpus-report.py --from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json
@@ -258,7 +263,8 @@ jobs:
           # The product-package fixture-leak check judges the real package layout (members at the archive top level).
           python3 -I tests/scripts/verify-v02-source-archive.py --check-product-archive build/gabbaboy-core-linux-x64.tar.gz --repo-root .
           bash tests/scripts/verify-release-candidate.sh --extract build/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"
-          python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" --output build/v02-consumer-receipt.json
+          python3 -I tests/scripts/verify-v02-consumers.py --write-candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --archive build/gabbaboy-core-linux-x64.tar.gz --source-sha "$SOURCE_SHA" --build-receipt build/release/CMakeCache.txt
+          python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" --archive build/gabbaboy-core-linux-x64.tar.gz --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --output build/v02-consumer-receipt.json
           git archive --format=tar.gz --prefix="gabbaboy-${RELEASE_TAG#v}/" -o "$RUNNER_TEMP/source-archive.tar.gz" "$RELEASE_TAG"
           python3 -I tests/scripts/verify-v02-source-archive.py --archive "$RUNNER_TEMP/source-archive.tar.gz" \
             --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json
@@ -266,10 +272,42 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p build/evidence
-          for name in cgb-corpus-receipt.json support-ledger.json v02-performance-receipt.json v02-fuzz-receipt.json \
-                      source-archive-receipt.json v02-consumer-receipt.json; do
-            cp "build/$name" "build/evidence/$name"
-          done
-          git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > "$RUNNER_TEMP/verify-release-gates.sh"
-          bash "$RUNNER_TEMP/verify-release-gates.sh" --check-v02-evidence build/evidence "$RELEASE_TAG" "$SOURCE_SHA" "$RUNNER_TEMP/source-archive.tar.gz"
+          bash .github/scripts/produce-release-evidence.sh collect --subject . --output build/evidence
+          bash .github/scripts/produce-release-evidence.sh verify --judge . --subject . --source-sha "$SOURCE_SHA" --tag "$RELEASE_TAG" --evidence build/evidence --archive "$RUNNER_TEMP/source-archive.tar.gz"
+
+  # Trust split: every job above runs code from the rehearsed branch with a read-only token. This
+  # job runs only after all of them completed, takes its judge code from the repository's default
+  # branch (never from the rehearsed commit) and reads the rehearsed commit and the retained
+  # producer bytes as data. A rehearsal run proves nothing until the judge exists on that branch.
+  judge:
+    name: rehearse-trusted-judge
+    needs: [corpus, fuzz, performance, package, aggregate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the trusted judge code from the default branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: trusted-judge
+          persist-credentials: false
+      - name: Check out the rehearsed commit as data only
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: subject
+          persist-credentials: false
+      - name: Read back the retained fuzz producer artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: rehearsal-fuzz-${{ github.run_id }}-${{ github.run_attempt }}
+          path: rehearsal-evidence
+      - name: Judge workflow privilege and trust wiring from the trusted checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject
+      - name: Verify the retained rehearsal campaign receipt with the trusted validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I trusted-judge/tests/scripts/verify-v02-fuzz.py --verify rehearsal-evidence/v02-fuzz-receipt.json

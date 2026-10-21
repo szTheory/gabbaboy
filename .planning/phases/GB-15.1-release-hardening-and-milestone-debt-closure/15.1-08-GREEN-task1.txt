@@ -1,0 +1,7 @@
+PASS: workflow privilege and trust wiring residual_write_jobs=5
+check_exit=0
+rejected: new unclassified release job: REJECT job-unclassified: release.surprise has no declared trust role; classify it in the policy
+rejected: subject-supplied judge and shadowed modules cannot approve a mutated workflow
+PASS: workflow policy self-test negative_controls=19 positive_controls=1
+selftest_exit=
+release_gate_selftest_exit=0

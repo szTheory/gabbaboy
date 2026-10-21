@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import ast
 import hashlib
+import http.server
+import ipaddress
 import io
 import json
 import os
@@ -13,6 +15,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 import urllib.error
@@ -26,6 +29,10 @@ from pathlib import Path, PurePosixPath
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = Path(__file__).resolve()
 WORKFLOW = ".github/workflows/ci.yml"
+EXPECTED_REPOSITORY = "szTheory/gabbaboy"
+EXPECTED_BRANCH = "main"
+EXPECTED_JOB_KEY = "linux-sanitizers"
+EXPECTED_JOB_NAME = "linux-asan-ubsan"
 SCHEMA_VERSION = 1
 CAMPAIGN_SECONDS = 60
 SOURCE_FILES = (
@@ -513,7 +520,13 @@ def produce_campaign(build_dir: Path, receipt_path: Path) -> int:
         return 2
 
 
-def validate_receipt(path: Path, *, expected_sha: str | None = None, verify_source: bool = True) -> dict[str, object]:
+def validate_receipt(
+    path: Path,
+    *,
+    expected_sha: str | None = None,
+    verify_source: bool = True,
+    source_commit_only: bool = False,
+) -> dict[str, object]:
     if not path.is_file():
         raise ReceiptError("receipt not found")
     if path.stat().st_size > MAX_RECEIPT_BYTES:
@@ -594,7 +607,7 @@ def validate_receipt(path: Path, *, expected_sha: str | None = None, verify_sour
         if not isinstance(expected, str) or not HEX_256.fullmatch(expected):
             raise ReceiptError(f"source input digest invalid: {relative}")
     if verify_source:
-        actual_inputs = source_manifest(commit, compare_worktree=True)
+        actual_inputs = source_manifest(commit, compare_worktree=not source_commit_only)
         if source_inputs != actual_inputs:
             raise ReceiptError("source input identities do not match the exact source SHA")
     minimized = value.get("minimized_artifacts")
@@ -710,63 +723,256 @@ def repository_branch() -> str:
     return git_output("rev-parse", "--abbrev-ref", "HEAD")
 
 
-def verify_hosted(expected_sha: str, *, poll_seconds: int = 2700, interval_seconds: int = 15) -> dict[str, object]:
+def api_base_url(*, test_fixture: bool) -> str:
+    if test_fixture:
+        configured = os.environ.get("GITHUB_API_URL", "")
+        parsed = urllib.parse.urlsplit(configured)
+        host = parsed.hostname or ""
+        try:
+            loopback = host == "localhost" or ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            loopback = False
+        if parsed.scheme not in {"http", "https"} or not loopback or parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ReceiptError("hosted test fixture API must use a loopback URL")
+        return configured.rstrip("/")
+    # Qualification always reads the public GitHub control plane. GITHUB_API_URL is commonly
+    # supplied by a caller or runner and therefore cannot select the authority being judged.
+    return "https://api.github.com"
+
+
+def api_json(base: str, route: str, token: str | None) -> dict[str, object]:
+    payload = parse_api_json(base, route, token)
+    if not isinstance(payload, dict):
+        raise ReceiptError("GitHub API returned an unexpected object")
+    return payload
+
+
+def positive_api_int(value: object, label: str) -> int:
+    if type(value) is not int or value < 1:
+        raise ReceiptError(f"hosted {label} identity is malformed")
+    return value
+
+
+def page_items(payload: dict[str, object], key: str, label: str) -> list[dict[str, object]]:
+    values = payload.get(key)
+    total = payload.get("total_count")
+    if (not isinstance(values, list) or len(values) > 100 or type(total) is not int
+            or total != len(values)):
+        raise ReceiptError(f"hosted {label} response is incomplete or malformed")
+    if any(not isinstance(value, dict) for value in values):
+        raise ReceiptError(f"hosted {label} response contains a malformed record")
+    return values
+
+
+def workflow_run_path_matches(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    return value in {
+        WORKFLOW,
+        f"{WORKFLOW}@{EXPECTED_BRANCH}",
+        f"{WORKFLOW}@refs/heads/{EXPECTED_BRANCH}",
+    }
+
+
+def validate_hosted_run(
+    run: dict[str, object], *, repository_id: int, workflow_id: int, expected_sha: str,
+    expected_run_id: int | None = None,
+) -> None:
+    run_id = positive_api_int(run.get("id"), "run")
+    positive_api_int(run.get("run_number"), "run number")
+    positive_api_int(run.get("run_attempt"), "run attempt")
+    repository = run.get("repository")
+    head_repository = run.get("head_repository")
+    if (type(run.get("workflow_id")) is not int or run.get("workflow_id") != workflow_id
+            or not workflow_run_path_matches(run.get("path"))
+            or run.get("event") != "push" or run.get("head_branch") != EXPECTED_BRANCH
+            or run.get("head_sha") != expected_sha
+            or not isinstance(repository, dict) or repository.get("full_name") != EXPECTED_REPOSITORY
+            or type(repository.get("id")) is not int or repository.get("id") != repository_id
+            or not isinstance(head_repository, dict) or head_repository.get("full_name") != EXPECTED_REPOSITORY
+            or type(head_repository.get("id")) is not int or head_repository.get("id") != repository_id):
+        raise ReceiptError("hosted run repository/workflow/event/branch/source identity does not match trusted policy")
+    if expected_run_id is not None and run_id != expected_run_id:
+        raise ReceiptError("receipt run ID is not the newest eligible hosted run")
+
+
+def validate_attempt_summary(
+    attempt_run: dict[str, object], *, repository_id: int, workflow_id: int,
+    expected_sha: str, expected_run_id: int, expected_attempt: int,
+) -> None:
+    validate_hosted_run(attempt_run, repository_id=repository_id, workflow_id=workflow_id,
+                        expected_sha=expected_sha, expected_run_id=expected_run_id)
+    if attempt_run.get("run_attempt") != expected_attempt:
+        raise ReceiptError("hosted run attempt differs from the receipt's latest attempt")
+
+
+def validate_artifact_download_url(url: object, base: str, artifact_id: int) -> str:
+    if not isinstance(url, str):
+        raise ReceiptError("hosted artifact download URL is missing")
+    parsed = urllib.parse.urlsplit(url)
+    base_parts = urllib.parse.urlsplit(base)
+    expected_path = (
+        f"{base_parts.path.rstrip('/')}/repos/{EXPECTED_REPOSITORY}/actions/artifacts/{artifact_id}/zip"
+    )
+    if (parsed.scheme != base_parts.scheme or parsed.netloc != base_parts.netloc
+            or parsed.path != expected_path or parsed.username or parsed.password
+            or parsed.query or parsed.fragment):
+        raise ReceiptError("hosted artifact download URL is outside the trusted GitHub API route")
+    return url
+
+
+def verify_hosted(
+    expected_sha: str,
+    *,
+    expected_run_id: str,
+    expected_attempt: int,
+    receipt_path: Path,
+    poll_seconds: int = 2700,
+    interval_seconds: int = 15,
+    test_fixture: bool = False,
+) -> dict[str, object]:
     if not HEX_160.fullmatch(expected_sha):
         raise ReceiptError("--source-sha must be a full commit ID")
     if git_output("rev-parse", "HEAD") != expected_sha:
         raise ReceiptError("requested source SHA does not match the current checkout")
-    repo = repository_name()
-    owner_repo = urllib.parse.quote(repo, safe="/")
-    api = os.environ.get("GITHUB_API_URL", "https://api.github.com").rstrip("/")
-    token = github_api_token()
+    if not isinstance(expected_run_id, str) or not re.fullmatch(r"[1-9][0-9]{0,19}", expected_run_id):
+        raise ReceiptError("--run-id must be a positive decimal GitHub run ID")
+    run_id_claim = int(expected_run_id)
+    if type(expected_attempt) is not int or expected_attempt < 1:
+        raise ReceiptError("--attempt must be a positive integer")
+    api = api_base_url(test_fixture=test_fixture)
+    owner_repo = urllib.parse.quote(EXPECTED_REPOSITORY, safe="/")
+    token = None if test_fixture else github_api_token()
+    if not receipt_path.is_file() or receipt_path.stat().st_size > MAX_RECEIPT_BYTES:
+        raise ReceiptError("supplied campaign receipt is missing or exceeds the size limit")
+    try:
+        supplied_receipt_bytes = receipt_path.read_bytes()
+    except OSError as exc:
+        raise ReceiptError("supplied campaign receipt is unavailable") from exc
+    with tempfile.TemporaryDirectory(prefix="gbb-v02-fuzz-supplied-") as directory:
+        supplied_path = Path(directory) / "v02-fuzz-receipt.json"
+        supplied_path.write_bytes(supplied_receipt_bytes)
+        supplied_receipt = validate_receipt(
+            supplied_path, expected_sha=expected_sha, source_commit_only=True,
+        )
+    check_workflow_contract(
+        ROOT / WORKFLOW,
+        runner_source=ROOT / "tests/scripts/run-bounded-fuzz.sh",
+        validator_source=SCRIPT,
+    )
+    receipt_workflow = supplied_receipt["workflow"]
+    if (str(receipt_workflow.get("run_id")) != expected_run_id
+            or receipt_workflow.get("attempt") != expected_attempt
+            or receipt_workflow.get("event") != "push"
+            or receipt_workflow.get("job") != EXPECTED_JOB_KEY
+            or receipt_workflow.get("workflow_path") != WORKFLOW):
+        raise ReceiptError("supplied receipt run/attempt/event/job does not match trusted CI policy")
+    expected_receipt_job_id = receipt_workflow.get("job_id")
+    if type(expected_receipt_job_id) is not int or expected_receipt_job_id < 1:
+        raise ReceiptError("supplied receipt has no valid hosted producer job ID")
+
     deadline = time.monotonic() + poll_seconds
-    last_state = "no exact push run is visible yet"
+    last_state = "no eligible exact-source CI run is visible yet"
     while time.monotonic() < deadline:
         try:
-            runs_data = parse_api_json(
+            repository = api_json(api, f"repos/{owner_repo}", token)
+            repository_id = positive_api_int(repository.get("id"), "repository")
+            if repository.get("full_name") != EXPECTED_REPOSITORY:
+                raise ReceiptError("GitHub repository identity does not match trusted policy")
+            workflow = api_json(api, f"repos/{owner_repo}/actions/workflows/ci.yml", token)
+            workflow_id = positive_api_int(workflow.get("id"), "workflow")
+            if workflow.get("path") != WORKFLOW or workflow.get("state") != "active":
+                raise ReceiptError("GitHub workflow path/state does not match trusted ci.yml policy")
+            runs_data = api_json(
                 api,
-                f"repos/{owner_repo}/actions/runs?head_sha={expected_sha}&event=push&per_page=100",
+                f"repos/{owner_repo}/actions/workflows/{workflow_id}/runs?head_sha={expected_sha}&event=push&branch={EXPECTED_BRANCH}&per_page=100",
                 token,
             )
-            runs = runs_data.get("workflow_runs", []) if isinstance(runs_data, dict) else []
-            eligible = [run for run in runs if run.get("head_sha") == expected_sha
-                        and run.get("event") == "push" and run.get("path") == WORKFLOW
-                        and run.get("head_branch") == repository_branch()]
-            if not eligible:
+            runs = page_items(runs_data, "workflow_runs", "workflow run")
+            same_source = [run for run in runs if run.get("head_sha") == expected_sha]
+            if not same_source:
                 last_state = "no exact-source ci.yml push run is visible"
             else:
-                run = max(eligible, key=lambda item: (int(item.get("id", 0)), int(item.get("run_attempt", 1))))
-                run_id = int(run["id"])
-                attempt = int(run.get("run_attempt", 1))
-                if run.get("status") != "completed":
-                    last_state = f"run {run_id} attempt {attempt} is {run.get('status')}"
+                for candidate in same_source:
+                    validate_hosted_run(candidate, repository_id=repository_id,
+                                         workflow_id=workflow_id, expected_sha=expected_sha)
+                run = max(same_source, key=lambda item: (positive_api_int(item.get("run_number"), "run number"),
+                                                        positive_api_int(item.get("id"), "run")))
+                newest_run_id = positive_api_int(run.get("id"), "run")
+                newest_attempt = positive_api_int(run.get("run_attempt"), "run attempt")
+                if newest_run_id != run_id_claim:
+                    raise ReceiptError("receipt run ID is not the newest eligible hosted run")
+                if newest_attempt != expected_attempt:
+                    raise ReceiptError("receipt attempt is stale; it is not the latest hosted attempt")
+                latest_run = api_json(api, f"repos/{owner_repo}/actions/runs/{newest_run_id}", token)
+                validate_hosted_run(latest_run, repository_id=repository_id,
+                                    workflow_id=workflow_id, expected_sha=expected_sha,
+                                    expected_run_id=newest_run_id)
+                if latest_run.get("run_attempt") != expected_attempt:
+                    raise ReceiptError("receipt attempt is stale; current hosted run has a newer attempt")
+                if latest_run.get("status") != "completed":
+                    last_state = f"run {newest_run_id} attempt {expected_attempt} is {latest_run.get('status')}"
                 else:
-                    jobs_data = parse_api_json(
-                        api,
-                        f"repos/{owner_repo}/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100",
-                        token,
+                    attempt_run = api_json(
+                        api, f"repos/{owner_repo}/actions/runs/{newest_run_id}/attempts/{expected_attempt}", token,
                     )
-                    jobs = jobs_data.get("jobs", []) if isinstance(jobs_data, dict) else []
-                    job = next((item for item in jobs if item.get("name") == "linux-asan-ubsan"), None)
-                    if job is None:
-                        last_state = f"run {run_id} attempt {attempt} has no eligible linux-asan-ubsan job"
-                    elif job.get("conclusion") != "success":
-                        raise ReceiptError(f"exact-source sanitizer job {job.get('id')} concluded {job.get('conclusion')}")
+                    validate_attempt_summary(
+                        attempt_run, repository_id=repository_id, workflow_id=workflow_id,
+                        expected_sha=expected_sha, expected_run_id=newest_run_id,
+                        expected_attempt=expected_attempt,
+                    )
+                    if attempt_run.get("status") != "completed":
+                        last_state = f"run {newest_run_id} attempt {expected_attempt} is {attempt_run.get('status')}"
                     else:
-                        artifacts_data = parse_api_json(
+                        if attempt_run.get("conclusion") != "success":
+                            raise ReceiptError("exact-source latest producer attempt did not complete successfully")
+                        jobs_data = api_json(
                             api,
-                            f"repos/{owner_repo}/actions/runs/{run_id}/artifacts?per_page=100",
+                            f"repos/{owner_repo}/actions/runs/{newest_run_id}/attempts/{expected_attempt}/jobs?per_page=100",
                             token,
                         )
-                        artifacts = artifacts_data.get("artifacts", []) if isinstance(artifacts_data, dict) else []
-                        artifact_name = f"v02-fuzz-{run_id}-{attempt}"
-                        artifact = next((item for item in artifacts if item.get("name") == artifact_name), None)
-                        if artifact is None:
-                            last_state = f"run {run_id} attempt {attempt} has no {artifact_name} artifact yet"
-                        elif artifact.get("expired"):
-                            raise ReceiptError("exact-source fuzz receipt artifact has expired")
+                        jobs = page_items(jobs_data, "jobs", "attempt job")
+                        selected = [item for item in jobs if item.get("name") == EXPECTED_JOB_NAME]
+                        if len(selected) != 1:
+                            raise ReceiptError("latest attempt must contain exactly one linux-asan-ubsan job")
+                        job = selected[0]
+                        job_id = positive_api_int(job.get("id"), "producer job")
+                        if (job.get("run_id") != newest_run_id or job.get("head_sha") != expected_sha
+                                or job.get("status") != "completed" or job.get("conclusion") != "success"):
+                            raise ReceiptError("exact-source linux-asan-ubsan producer job identity/status is invalid")
+                        if job_id != expected_receipt_job_id:
+                            raise ReceiptError("receipt producer job ID differs from the exact hosted sanitizer job")
+                        artifacts_data = api_json(
+                            api,
+                            f"repos/{owner_repo}/actions/runs/{newest_run_id}/artifacts?per_page=100",
+                            token,
+                        )
+                        artifacts = page_items(artifacts_data, "artifacts", "run artifact")
+                        artifact_name = f"v02-fuzz-{newest_run_id}-{expected_attempt}"
+                        matching = [item for item in artifacts if item.get("name") == artifact_name]
+                        if not matching:
+                            last_state = f"run {newest_run_id} attempt {expected_attempt} has no {artifact_name} artifact yet"
+                        elif len(matching) != 1:
+                            raise ReceiptError("hosted fuzz artifact name is ambiguous")
                         else:
-                            zip_bytes = api_request(artifact["archive_download_url"], token=token)
+                            artifact = matching[0]
+                            if artifact.get("expired") is not False:
+                                raise ReceiptError("exact-source fuzz receipt artifact is expired or has unknown expiry")
+                            artifact_id = positive_api_int(artifact.get("id"), "artifact")
+                            artifact_run = artifact.get("workflow_run")
+                            if (not isinstance(artifact_run, dict) or type(artifact_run.get("id")) is not int
+                                    or artifact_run.get("id") != newest_run_id
+                                    or type(artifact_run.get("repository_id")) is not int
+                                    or artifact_run.get("repository_id") != repository_id
+                                    or type(artifact_run.get("head_repository_id")) is not int
+                                    or artifact_run.get("head_repository_id") != repository_id
+                                    or artifact_run.get("head_branch") != EXPECTED_BRANCH
+                                    or artifact_run.get("head_sha") != expected_sha):
+                                raise ReceiptError("hosted artifact repository/run/source identity is invalid")
+                            archive_url = validate_artifact_download_url(
+                                artifact.get("archive_download_url"), api, artifact_id,
+                            )
+                            zip_bytes = api_request(archive_url, token=token)
                             members = safe_zip_members(zip_bytes)
                             receipt_matches = [name for name in members if PurePosixPath(name).name == "v02-fuzz-receipt.json"]
                             if len(receipt_matches) != 1:
@@ -774,14 +980,19 @@ def verify_hosted(expected_sha: str, *, poll_seconds: int = 2700, interval_secon
                             receipt_bytes = members[receipt_matches[0]]
                             if len(receipt_bytes) > MAX_RECEIPT_BYTES:
                                 raise ReceiptError("hosted fuzz receipt exceeds the size limit")
+                            if receipt_bytes != supplied_receipt_bytes:
+                                raise ReceiptError("downloaded hosted receipt bytes differ from the supplied campaign receipt")
                             with tempfile.TemporaryDirectory(prefix="gbb-v02-fuzz-verify-") as directory:
                                 receipt_path = Path(directory) / "v02-fuzz-receipt.json"
                                 receipt_path.write_bytes(receipt_bytes)
-                                receipt = validate_receipt(receipt_path, expected_sha=expected_sha)
+                                receipt = validate_receipt(
+                                    receipt_path, expected_sha=expected_sha, source_commit_only=True,
+                                )
                             wf = receipt["workflow"]
-                            if wf.get("event") != "push" or str(wf.get("run_id")) != str(run_id) or wf.get("attempt") != attempt:
+                            if (wf.get("event") != "push" or str(wf.get("run_id")) != str(newest_run_id)
+                                    or wf.get("attempt") != expected_attempt):
                                 raise ReceiptError("receipt run/attempt identity differs from its exact hosted run")
-                            if wf.get("job") != "linux-sanitizers" or wf.get("job_id") != job.get("id"):
+                            if wf.get("job") != EXPECTED_JOB_KEY or wf.get("job_id") != job_id:
                                 raise ReceiptError("receipt job identity differs from the eligible sanitizer job")
                             actual_artifacts = {
                                 PurePosixPath(name).name: blob for name, blob in members.items()
@@ -793,10 +1004,12 @@ def verify_hosted(expected_sha: str, *, poll_seconds: int = 2700, interval_secon
                             for name, blob in actual_artifacts.items():
                                 if sha256_bytes(blob) != declared[name]["sha256"] or len(blob) != declared[name]["bytes"]:
                                     raise ReceiptError("downloaded minimized artifact bytes do not match their receipt digests")
-                            workflow_conclusion = str(run.get("conclusion") or "unknown")
-                            print(f"hosted_campaign=pass source_sha={expected_sha} run={run_id} attempt={attempt} job={job['id']} executions={receipt['result']['execution_count']} elapsed={receipt['result']['elapsed_seconds']}s ci_workflow_conclusion={workflow_conclusion}")
-                            return {"run_id": run_id, "attempt": attempt, "job_id": job["id"],
-                                    "workflow_conclusion": workflow_conclusion, "receipt": receipt}
+                            workflow_conclusion = str(latest_run.get("conclusion") or "unknown")
+                            prefix = "fixture_hosted=pass qualification=none" if test_fixture else "hosted_campaign=pass"
+                            print(f"{prefix} source_sha={expected_sha} run={newest_run_id} attempt={expected_attempt} job={job_id} executions={receipt['result']['execution_count']} elapsed={receipt['result']['elapsed_seconds']}s ci_workflow_conclusion={workflow_conclusion}")
+                            return {"run_id": newest_run_id, "attempt": expected_attempt, "job_id": job_id,
+                                    "workflow_conclusion": workflow_conclusion, "receipt": receipt,
+                                    "qualifying": not test_fixture}
         except urllib.error.HTTPError as exc:
             last_state = f"GitHub API returned HTTP {exc.code}"
         except urllib.error.URLError:
@@ -907,11 +1120,219 @@ def check_workflow_contract(
 
 
 class ReceiptContractTests(unittest.TestCase):
-    def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
+    def run_cli(self, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+        environment = os.environ.copy()
+        if env:
+            environment.update(env)
         return subprocess.run(
             [sys.executable, "-I", str(SCRIPT), *args], cwd=ROOT,
-            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
+            env=environment, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
         )
+
+    def hosted_fixture_receipt(self, head: str, run_id: int, attempt: int, job_id: int) -> bytes:
+        receipt = {
+            "schema_version": SCHEMA_VERSION,
+            "status": "complete",
+            "mode": "explore",
+            "source_sha": head,
+            "source_tree": git_output("rev-parse", f"{head}^{{tree}}"),
+            "source_inputs": source_manifest(head, compare_worktree=False),
+            "compiler": {
+                "label": "clang-18", "version": "clang version 18.1.0", "major": 18,
+                "cmake_compiler_id": "Clang", "libfuzzer": True, "asan": True, "ubsan": True,
+                "compiler_sha256": "a" * 64, "cmake_cache_sha256": "b" * 64,
+                "build_ninja_sha256": "c" * 64, "binary_sha256": "d" * 64,
+            },
+            "dictionary_sha256": sha256_file(ROOT / "tests/fuzz/fuzz_core.dict"),
+            "seeds": expected_seed_records(),
+            "limits": REQUIRED_LIMITS,
+            "result": {
+                "outcome": "passed", "execution_count": 1, "elapsed_seconds": 60,
+                "exit_code": 0, "synthetic": False, "arguments": list(FUZZ_ARGS),
+                "output_sha256": "e" * 64, "diagnostics": [],
+            },
+            "minimized_artifacts": [],
+            "workflow": {
+                "event": "push", "run_id": str(run_id), "attempt": attempt,
+                "job": "linux-sanitizers", "job_id": job_id, "workflow_path": WORKFLOW,
+            },
+        }
+        return (json.dumps(receipt, sort_keys=True) + "\n").encode("utf-8")
+
+    def hosted_fixture_server(
+        self, head: str, *, mutation: str | None = None,
+    ) -> tuple[http.server.ThreadingHTTPServer, threading.Thread]:
+        run_id, attempt, job_id = 17001, 1, 27001
+        receipt_bytes = self.hosted_fixture_receipt(head, run_id, attempt, job_id)
+        artifact_receipt_bytes = receipt_bytes
+        if mutation == "forged-receipt-bytes":
+            altered = json.loads(receipt_bytes)
+            altered["fixture_marker"] = "receipt differs from supplied bytes"
+            artifact_receipt_bytes = (json.dumps(altered, sort_keys=True) + "\n").encode("utf-8")
+        archive_buffer = io.BytesIO()
+        with zipfile.ZipFile(archive_buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("build-asan/v02-fuzz-receipt.json", artifact_receipt_bytes)
+        artifact_zip = archive_buffer.getvalue()
+        repository_id, workflow_id = 91, 9901
+        run = {
+            "id": run_id, "run_number": 1, "run_attempt": attempt,
+            "status": "completed", "conclusion": "success", "head_sha": head,
+            "head_branch": EXPECTED_BRANCH, "event": "push",
+            "path": f"{WORKFLOW}@refs/heads/{EXPECTED_BRANCH}",
+            "workflow_id": workflow_id,
+            "repository": {"full_name": EXPECTED_REPOSITORY, "id": repository_id},
+            "head_repository": {"full_name": EXPECTED_REPOSITORY, "id": repository_id},
+        }
+        if mutation == "foreign-repository-workflow-id":
+            run["workflow_id"] = workflow_id + 1
+            run["repository"] = {"full_name": "attacker/fork", "id": repository_id + 1}
+            run["head_repository"] = {"full_name": "attacker/fork", "id": repository_id + 1}
+        elif mutation == "wrong-event":
+            run["event"] = "workflow_dispatch"
+        elif mutation == "wrong-branch":
+            run["head_branch"] = "release/0.2"
+        elif mutation == "wrong-workflow-path":
+            run["path"] = ".github/workflows/release.yml@refs/heads/main"
+        elif mutation == "stale-attempt":
+            run["run_attempt"] = 2
+        job = {
+            "id": job_id, "run_id": run_id, "head_sha": head,
+            "name": "linux-asan-ubsan", "status": "completed", "conclusion": "success",
+        }
+        if mutation == "wrong-job":
+            job["name"] = "release-publish"
+        artifact = {
+            "id": 37001, "name": f"v02-fuzz-{run_id}-{attempt}", "expired": False,
+            "workflow_run": {
+                "id": run_id, "repository_id": repository_id, "head_repository_id": repository_id,
+                "head_branch": EXPECTED_BRANCH, "head_sha": head,
+            },
+            "archive_download_url": "",
+        }
+        if mutation == "expired-artifact":
+            artifact["expired"] = True
+        elif mutation == "wrong-artifact-run":
+            artifact["workflow_run"] = dict(artifact["workflow_run"], repository_id=repository_id + 1)
+
+        repository = {"id": repository_id, "full_name": EXPECTED_REPOSITORY}
+        if mutation == "foreign-repository-api":
+            repository = {"id": repository_id + 1, "full_name": "attacker/fork"}
+        workflow = {"id": workflow_id, "path": WORKFLOW, "state": "active"}
+        attempt_run = dict(run, run_attempt=2 if mutation == "stale-attempt" else attempt)
+        route_jobs = f"/repos/{EXPECTED_REPOSITORY}/actions/runs/{run_id}/attempts/{attempt}/jobs"
+        route_artifacts = f"/repos/{EXPECTED_REPOSITORY}/actions/runs/{run_id}/artifacts"
+        artifact_route = f"/repos/{EXPECTED_REPOSITORY}/actions/artifacts/37001/zip"
+        authorization_headers: list[str | None] = []
+        self._hosted_fixture_authorization_headers = authorization_headers
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *_args: object) -> None:
+                pass
+
+            def do_GET(self) -> None:
+                authorization_headers.append(self.headers.get("Authorization"))
+                path = urllib.parse.urlsplit(self.path).path
+                if path == f"/repos/{EXPECTED_REPOSITORY}":
+                    payload = repository
+                elif path == f"/repos/{EXPECTED_REPOSITORY}/actions/workflows/ci.yml":
+                    payload = workflow
+                elif path == f"/repos/{EXPECTED_REPOSITORY}/actions/workflows/{workflow_id}/runs":
+                    if mutation == "missing-run":
+                        runs = []
+                    elif mutation == "newer-run":
+                        runs = [run, dict(run, id=run_id + 1, run_number=2)]
+                    else:
+                        runs = [run]
+                    payload = {"total_count": len(runs), "workflow_runs": runs}
+                elif path == f"/repos/{EXPECTED_REPOSITORY}/actions/runs/{run_id}":
+                    payload = dict(run, head_sha="f" * 40) if mutation == "latest-head-sha" else run
+                elif path == f"/repos/{EXPECTED_REPOSITORY}/actions/runs/{run_id}/attempts/{attempt}":
+                    payload = attempt_run
+                elif path == route_jobs:
+                    jobs = [job, dict(job, id=job_id + 1)] if mutation == "duplicate-job" else [job]
+                    payload = {"total_count": len(jobs), "jobs": jobs}
+                elif path == route_artifacts:
+                    artifacts = [] if mutation == "missing-artifact" else [dict(
+                        artifact,
+                        archive_download_url=f"http://127.0.0.1:{self.server.server_port}{artifact_route}",
+                    )]
+                    payload = {"total_count": len(artifacts), "artifacts": artifacts}
+                elif path == artifact_route:
+                    payload, content_type = artifact_zip, "application/zip"
+                    body = payload
+                else:
+                    self.send_error(404)
+                    return
+                if path != artifact_route:
+                    content_type = "application/json"
+                    body = json.dumps(payload).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        return server, thread
+
+    def run_hosted_fixture_cli(self, mutation: str | None) -> subprocess.CompletedProcess[str]:
+        head = git_output("rev-parse", "HEAD")
+        server, thread = self.hosted_fixture_server(head, mutation=mutation)
+        with tempfile.TemporaryDirectory(prefix="gb-fuzz-hosted-fixture.") as directory:
+            receipt = Path(directory) / "supplied-receipt.json"
+            receipt.write_bytes(self.hosted_fixture_receipt(head, 17001, 1, 27001))
+            try:
+                result = self.run_cli(
+                    "--verify-hosted", "--hosted-test-fixture", "--source-sha", head,
+                    "--run-id", "17001", "--attempt", "1", "--receipt", str(receipt),
+                    "--poll-seconds", "1", "--poll-interval-seconds", "1",
+                    env={"GITHUB_API_URL": f"http://127.0.0.1:{server.server_port}",
+                         "GITHUB_TOKEN": "fixture-token-must-not-leak"},
+                )
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+        self.assertTrue(all(value is None for value in self._hosted_fixture_authorization_headers),
+                        "hosted fixture received a credential header")
+        return result
+
+    def test_hosted_cli_positive_fixture_is_explicitly_nonqualifying(self) -> None:
+        result = self.run_hosted_fixture_cli(None)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("fixture_hosted=pass qualification=none", result.stdout)
+        self.assertNotIn("hosted_campaign=pass", result.stdout)
+        print("positive-control=coherent-hosted-fixture-explicitly-nonqualifying")
+
+    def test_hosted_cli_rejects_forged_control_plane_and_artifact_facts(self) -> None:
+        cases = (
+            ("foreign-repository-api", "GitHub repository identity"),
+            ("foreign-repository-workflow-id", "hosted run repository/workflow/event/branch/source identity"),
+            ("wrong-workflow-path", "hosted run repository/workflow/event/branch/source identity"),
+            ("wrong-event", "hosted run repository/workflow/event/branch/source identity"),
+            ("wrong-branch", "hosted run repository/workflow/event/branch/source identity"),
+            ("newer-run", "not the newest eligible hosted run"),
+            ("latest-head-sha", "hosted run repository/workflow/event/branch/source identity"),
+            ("wrong-job", "exactly one linux-asan-ubsan job"),
+            ("duplicate-job", "exactly one linux-asan-ubsan job"),
+            ("stale-attempt", "receipt attempt is stale"),
+            ("missing-artifact", "artifact yet"),
+            ("expired-artifact", "artifact is expired"),
+            ("wrong-artifact-run", "artifact repository/run/source identity"),
+            ("forged-receipt-bytes", "downloaded hosted receipt bytes differ"),
+        )
+        for mutation, reason in cases:
+            with self.subTest(mutation=mutation):
+                result = self.run_hosted_fixture_cli(mutation)
+                self.assertNotEqual(
+                    result.returncode, 0,
+                    f"production hosted CLI accepted hosted fixture mutation: {mutation}",
+                )
+                self.assertIn(reason, result.stdout, result.stdout)
+                self.assertNotIn("hosted_campaign=pass", result.stdout)
+        print(f"negative-controls={len(cases)} rejected_mutations=hosted-run-job-artifact-receipt")
 
     def verify_rejects(self, path: Path, payload: dict[str, object], reason: str) -> None:
         path.write_text(json.dumps(payload), encoding="utf-8")
@@ -1068,7 +1489,7 @@ def self_test(receipt: Path | None) -> int:
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     # Tests are assertions; this inventory line makes a zero-control run visible in logs.
     state = "pass" if result.wasSuccessful() else "fail"
-    print(f"self-test={state} positive_controls=3 negative_controls=19 rejected_mutations={10 if result.wasSuccessful() else 0} skipped={len(result.skipped)}")
+    print(f"self-test={state} positive_controls=4 negative_controls={19 + 14} rejected_mutations={10 + 14 if result.wasSuccessful() else 0} skipped={len(result.skipped)} live_hosted_receipt=not-supplied")
     return 0 if result.wasSuccessful() else 1
 
 
@@ -1081,6 +1502,9 @@ def main() -> int:
     parser.add_argument("--self-test", action="store_true", help="run positive and negative production-contract controls")
     parser.add_argument("--verify-hosted", action="store_true", help="await and verify exact-source hosted push evidence")
     parser.add_argument("--source-sha", help="full commit SHA required by --verify-hosted")
+    parser.add_argument("--run-id", help="claimed campaign run ID that must equal the newest eligible run")
+    parser.add_argument("--attempt", type=int, help="claimed campaign attempt that must equal the latest attempt")
+    parser.add_argument("--hosted-test-fixture", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--check-workflow", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--runner-source", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--validator-source", type=Path, help=argparse.SUPPRESS)
@@ -1095,10 +1519,14 @@ def main() -> int:
             print(f"receipt=pass source_sha={receipt['source_sha']} executions={receipt['result']['execution_count']} elapsed={receipt['result']['elapsed_seconds']}s")
             return 0
         if args.verify_hosted:
-            if not args.source_sha:
-                raise ReceiptError("--verify-hosted requires --source-sha")
-            verify_hosted(args.source_sha, poll_seconds=max(1, args.poll_seconds),
-                          interval_seconds=max(1, args.poll_interval_seconds))
+            if not args.source_sha or not args.run_id or args.attempt is None or not args.receipt:
+                raise ReceiptError("--verify-hosted requires --source-sha, --run-id, --attempt and --receipt")
+            verify_hosted(
+                args.source_sha, expected_run_id=args.run_id, expected_attempt=args.attempt,
+                receipt_path=args.receipt, poll_seconds=min(2700, max(1, args.poll_seconds)),
+                interval_seconds=min(60, max(1, args.poll_interval_seconds)),
+                test_fixture=args.hosted_test_fixture,
+            )
             return 0
         if args.check_workflow:
             check_workflow_contract(
@@ -1112,7 +1540,7 @@ def main() -> int:
             if not args.build_dir or not args.receipt:
                 raise ReceiptError("--produce requires --build-dir and --receipt")
             return produce_campaign(args.build_dir, args.receipt)
-        parser.error("choose --produce, --verify PATH, --self-test, or --verify-hosted --source-sha SHA")
+        parser.error("choose --produce, --verify PATH, --self-test, or --verify-hosted with source/run/attempt/receipt identities")
     except ReceiptError as exc:
         print(f"receipt rejected: {redact_output(str(exc))}", file=sys.stderr)
         return 1

@@ -22,6 +22,14 @@ key-files:
 key-decisions:
   - "Pattern identity check on cells 0-2 (reads $F3 $FA $F1) selects store vs resume; fresh RAM never reads that, so a missing save is observable as C000=$01"
 requirements-completed: [CART-06]
+coverage:
+  - id: D1
+    description: "The project-authored MBC2 continuation guest rebuilds byte-identically with pinned RGBDS 1.0.1"
+    verification:
+      - kind: other
+        ref: "Fresh Phase 15.1-11 run with the manifest-pinned RGBDS 1.0.1 archive: tests/scripts/reproduce-mbc2-continuation.sh; result=byte-identical, ROM SHA-256 314e05b419c07f1823983932d4e70ce57f0c366f44ec9ee86baf322f8dad50aa"
+        status: pass
+    human_judgment: false
 duration: 12 min
 completed: 2026-10-11
 status: complete
@@ -63,3 +71,7 @@ None.
 ## Self-Check: PASSED
 
 All five created files exist; commits 45a2735 and b0b51a7 are on the branch.
+
+## Current Verification — 15.1-11
+
+Rebuilt with pinned RGBDS 1.0.1. The result was byte-identical to the committed continuation ROM with the manifest SHA-256; emulator guest behavior remains outside this fixture-rebuild evidence.

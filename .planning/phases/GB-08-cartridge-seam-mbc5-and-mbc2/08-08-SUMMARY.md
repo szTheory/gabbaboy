@@ -40,6 +40,35 @@ key-decisions:
   - "Harness stamps banks 0x101..0x103 with their low byte on the 8 MiB image so the nine-bit write-order checks stay valid; only C005 discriminates the ninth bit"
   - "Mutant test asserts the specific C005 REQUIRE text (exit 1) so an unrelated failure cannot satisfy it"
 requirements-completed: [CART-02]
+coverage:
+  - id: D1
+    description: "Original licensed RGBDS MBC5 guest has pinned bytes and a reproduction recipe"
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build -R ^mbc5_banking_ --output-on-failure"
+        status: pass
+  - id: D2
+    description: "Guest exercises banking through real CPU and bus, including harness-supplied bank 1FF marker"
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build -R ^mbc5_(banking_|bank_1ff) --output-on-failure"
+        status: pass
+  - id: D3
+    description: "Ninth-bit mutant fails the discriminator and passes its below-100 control"
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build -R ^mbc5_ninth_bit_mutant_ --output-on-failure"
+        status: pass
+  - id: D4
+    description: "Historical hosted reproduction step and fixture provenance remain explicitly bounded"
+    human_judgment: false
+    verification:
+      - kind: other
+        ref: "python3 -I tests/scripts/verify-phase8-closure-contract.py --self-test"
+        status: pass
 ---
 
 # Phase 8 Plan 08: Original MBC5 banking fixture and ninth-bit mutant Summary

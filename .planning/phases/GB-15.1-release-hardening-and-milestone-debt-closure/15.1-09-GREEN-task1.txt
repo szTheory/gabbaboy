@@ -1,0 +1,12 @@
+$ python3 .github/scripts/verify-published-release-assets.py --self-test
+inventory rows=2
+PASS: recovery decisions positives=5 rejected_controls=18
+$ bash .github/scripts/verify-release-gates.sh --self-test (tail)
+PASS: recovery decisions positives=5 rejected_controls=18
+PASS: recovery CLI reads live release state first, writes nothing, ignores unrelated CI and cleans up on every exit
+rejected: changed attachment, concurrent eligible release, concurrent retry dispatch, stale and absent attempt, changed published assets, unreadable live state
+PASS: release configuration and exact-head required-check gate
+$ python3 -I .github/scripts/verify-workflow-policy.py --check
+PASS: workflow privilege and trust wiring residual_write_jobs=5
+PASS: workflow policy self-test negative_controls=71 positive_controls=4
+negative control: removing the scratch-directory trap makes the gate self-test fail with: recovery left scratch files behind

@@ -1,5 +1,6 @@
 #include "gabbaboy/gabbaboy.h"
 #include "gabbaboy_test.h"
+#include "gbb_accept_input.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -473,6 +474,7 @@ struct gbb_instance {
     uint64_t time_half_dots;
     gbb_input_event input_events[GBB_INPUT_EVENT_CAPACITY];
     size_t input_event_count;
+    const gbb_accept_input_span *accept_input_span; /* borrowed only during a private acceptance run */
     uint16_t lockup_pc;
     uint8_t lockup_opcode;
     int locked;
@@ -2534,28 +2536,70 @@ static void shift_external_serial(gbb_instance *m, uint8_t bit) {
 }
 
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
-static void apply_input_events_now(gbb_instance *m) {
+static int input_event_valid(const gbb_input_event *event) {
+    if (event == NULL) return 0;
+    return !((event->kind == GBB_INPUT_STOP_WAKE && event->value != 1u) ||
+             (event->kind == GBB_INPUT_SERIAL_EDGE && event->value > 1u) ||
+             ((event->kind == GBB_INPUT_BUTTON_PRESS || event->kind == GBB_INPUT_BUTTON_RELEASE) &&
+              event->value > GBB_BUTTON_START) ||
+             (event->kind != GBB_INPUT_STOP_WAKE && event->kind != GBB_INPUT_SERIAL_EDGE &&
+              event->kind != GBB_INPUT_BUTTON_PRESS && event->kind != GBB_INPUT_BUTTON_RELEASE));
+}
+
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static void apply_input_event(gbb_instance *m, const gbb_input_event *event) {
+    /* MODEL: UNKNOWN GATE-41 research:14 -- STOP wake conditions */
+    if (event->kind == GBB_INPUT_STOP_WAKE) {
+        if (m->stopped && event->value == 1u) m->stopped = 0;
+    } else if (event->kind == GBB_INPUT_SERIAL_EDGE) {
+        shift_external_serial(m, event->value);
+    } else if (event->kind == GBB_INPUT_BUTTON_PRESS) {
+        uint8_t previous = (uint8_t)(joypad_value(m) & 0x0Fu);
+        m->joypad_buttons |= (uint8_t)(1u << event->value);
+        joypad_request_falling_edge(m, previous);
+    } else if (event->kind == GBB_INPUT_BUTTON_RELEASE) {
+        uint8_t previous = (uint8_t)(joypad_value(m) & 0x0Fu);
+        m->joypad_buttons &= (uint8_t)~(1u << event->value);
+        joypad_request_falling_edge(m, previous);
+    }
+}
+
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static void apply_queued_input_events_now(gbb_instance *m, size_t *private_applied) {
     while (m->input_event_count != 0 &&
            m->input_events[0].at_half_dots == m->time_half_dots) {
-        gbb_input_event event = m->input_events[0];
+        const gbb_input_event event = m->input_events[0];
         --m->input_event_count;
         if (m->input_event_count != 0)
             memmove(m->input_events, m->input_events + 1,
                     m->input_event_count * sizeof(m->input_events[0]));
-        /* MODEL: UNKNOWN GATE-41 research:14 -- STOP wake conditions */
-        if (event.kind == GBB_INPUT_STOP_WAKE) {
-            if (m->stopped && event.value == 1u) m->stopped = 0;
-        } else if (event.kind == GBB_INPUT_SERIAL_EDGE) {
-            shift_external_serial(m, event.value);
-        } else if (event.kind == GBB_INPUT_BUTTON_PRESS) {
-            uint8_t previous = (uint8_t)(joypad_value(m) & 0x0Fu);
-            m->joypad_buttons |= (uint8_t)(1u << event.value);
-            joypad_request_falling_edge(m, previous);
-        } else if (event.kind == GBB_INPUT_BUTTON_RELEASE) {
-            uint8_t previous = (uint8_t)(joypad_value(m) & 0x0Fu);
-            m->joypad_buttons &= (uint8_t)~(1u << event.value);
-            joypad_request_falling_edge(m, previous);
+        apply_input_event(m, &event);
+        if (private_applied != NULL) ++*private_applied;
+    }
+}
+
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static void apply_input_events_now(gbb_instance *m) {
+    if (m->accept_input_span == NULL) {
+        apply_queued_input_events_now(m, NULL);
+        return;
+    }
+
+    size_t *cursor = m->accept_input_span->cursor;
+    apply_queued_input_events_now(m, cursor);
+    while (*cursor < m->accept_input_span->count &&
+           m->accept_input_span->events[*cursor].at_half_dots == m->time_half_dots) {
+        size_t batch_count = 0;
+        while (batch_count < GBB_INPUT_EVENT_CAPACITY &&
+               *cursor + batch_count < m->accept_input_span->count &&
+               m->accept_input_span->events[*cursor + batch_count].at_half_dots == m->time_half_dots) {
+            m->input_events[batch_count] = m->accept_input_span->events[*cursor + batch_count];
+            ++batch_count;
         }
+        m->input_event_count = batch_count;
+        size_t applied = 0;
+        apply_queued_input_events_now(m, &applied);
+        *cursor += applied;
     }
 }
 
@@ -3329,14 +3373,8 @@ gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events
         previous = instance->input_events[instance->input_event_count - 1].at_half_dots;
     for (size_t i = 0; i < count; ++i) {
         const gbb_input_event *event = &events[i];
-        if (event->at_half_dots < instance->time_half_dots || event->at_half_dots < previous)
-            return GBB_INVALID_EVENT;
-        if ((event->kind == GBB_INPUT_STOP_WAKE && event->value != 1u) ||
-            (event->kind == GBB_INPUT_SERIAL_EDGE && event->value > 1u) ||
-            ((event->kind == GBB_INPUT_BUTTON_PRESS || event->kind == GBB_INPUT_BUTTON_RELEASE) &&
-             event->value > GBB_BUTTON_START) ||
-            (event->kind != GBB_INPUT_STOP_WAKE && event->kind != GBB_INPUT_SERIAL_EDGE &&
-             event->kind != GBB_INPUT_BUTTON_PRESS && event->kind != GBB_INPUT_BUTTON_RELEASE))
+        if (event->at_half_dots < instance->time_half_dots || event->at_half_dots < previous ||
+            !input_event_valid(event))
             return GBB_INVALID_EVENT;
         previous = event->at_half_dots;
     }
@@ -3344,6 +3382,85 @@ gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events
            count * sizeof(*events));
     instance->input_event_count += count;
     return GBB_OK;
+}
+
+/* MODEL: BOTH GATE-00 basis="model-neutral range validation" */
+static int ranges_overlap(uintptr_t a, size_t a_size, uintptr_t b, size_t b_size) {
+    if (a_size > UINTPTR_MAX - a || b_size > UINTPTR_MAX - b) return 1;
+    return a < b + b_size && b < a + a_size;
+}
+
+/* Validate the complete immutable span before attaching it to the instance or
+ * allowing any guest state to change. Events before cursor are historical; the
+ * remaining suffix must not precede the instance's current clock. */
+/* MODEL: BOTH GATE-00 basis="model-neutral event-span validation" */
+static int validate_accept_input_span(const gbb_instance *instance,
+                                      const gbb_accept_input_span *span) {
+    if (instance == NULL || span == NULL || span->cursor == NULL ||
+        span->count > GBB_ACCEPT_INPUT_SPAN_MAX_EVENTS ||
+        (span->events == NULL && span->count != 0u) ||
+        instance->input_event_count != 0u || instance->accept_input_span != NULL)
+        return 0;
+    if (span->count > SIZE_MAX / sizeof(*span->events)) return 0;
+    const size_t event_bytes = span->count * sizeof(*span->events);
+    const uintptr_t cursor_address = (uintptr_t)(const void *)span->cursor;
+    const uintptr_t span_address = (uintptr_t)(const void *)span;
+    const uintptr_t instance_address = (uintptr_t)(const void *)instance;
+    if (ranges_overlap(span_address, sizeof(*span), instance_address, sizeof(*instance)) ||
+        ranges_overlap(cursor_address, sizeof(*span->cursor), instance_address, sizeof(*instance)) ||
+        ranges_overlap(cursor_address, sizeof(*span->cursor), span_address, sizeof(*span))) return 0;
+    if (event_bytes != 0u) {
+        const uintptr_t events_address = (uintptr_t)(const void *)span->events;
+        if (ranges_overlap(events_address, event_bytes, instance_address, sizeof(*instance)) ||
+            ranges_overlap(events_address, event_bytes, span_address, sizeof(*span)) ||
+            ranges_overlap(cursor_address, sizeof(*span->cursor), events_address, event_bytes)) return 0;
+    }
+    if (*span->cursor > span->count) return 0;
+    uint64_t previous = 0u;
+    for (size_t i = 0; i < span->count; ++i) {
+        const gbb_input_event *event = &span->events[i];
+        if (!input_event_valid(event) || (i != 0u && event->at_half_dots < previous) ||
+            (i >= *span->cursor && event->at_half_dots < instance->time_half_dots))
+            return 0;
+        previous = event->at_half_dots;
+    }
+    return 1;
+}
+
+/* Reject writable output ranges that could corrupt a borrowed span or its
+ * cursor while the run consumes events. The span itself must already have
+ * passed validate_accept_input_span(). */
+/* MODEL: BOTH GATE-00 basis="model-neutral borrowed-span output validation" */
+static int accept_span_output_is_disjoint(const gbb_accept_input_span *span,
+                                          const void *output, size_t output_size) {
+    if (span == NULL) return 1;
+    if (span->count > SIZE_MAX / sizeof(*span->events)) return 0;
+    const uintptr_t output_address = (uintptr_t)output;
+    const uintptr_t span_address = (uintptr_t)(const void *)span;
+    const uintptr_t cursor_address = (uintptr_t)(const void *)span->cursor;
+    if (ranges_overlap(output_address, output_size, span_address, sizeof(*span)) ||
+        ranges_overlap(output_address, output_size, cursor_address, sizeof(*span->cursor)))
+        return 0;
+    if (span->count != 0u) {
+        const uintptr_t events_address = (uintptr_t)(const void *)span->events;
+        const size_t events_size = span->count * sizeof(*span->events);
+        if (ranges_overlap(output_address, output_size, events_address, events_size)) return 0;
+    }
+    return 1;
+}
+
+/* MODEL: BOTH GATE-00 basis="model-neutral event scheduling" */
+static int next_input_deadline(const gbb_instance *instance, uint64_t *deadline) {
+    if (instance->input_event_count != 0u) {
+        *deadline = instance->input_events[0].at_half_dots;
+        return 1;
+    }
+    if (instance->accept_input_span != NULL &&
+        *instance->accept_input_span->cursor < instance->accept_input_span->count) {
+        *deadline = instance->accept_input_span->events[*instance->accept_input_span->cursor].at_half_dots;
+        return 1;
+    }
+    return 0;
 }
 
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
@@ -4497,9 +4614,9 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             uint64_t remaining = budget_half_dots - result.consumed_half_dots;
             uint64_t available = UINT64_MAX - instance->time_half_dots;
             uint64_t step = remaining < available ? remaining : available;
-            if (instance->input_event_count != 0) {
-                uint64_t deadline = instance->input_events[0].at_half_dots;
-                uint64_t until_event = deadline - instance->time_half_dots;
+            uint64_t input_deadline = 0u;
+            if (next_input_deadline(instance, &input_deadline)) {
+                uint64_t until_event = input_deadline - instance->time_half_dots;
                 if (until_event <= step) step = until_event;
             }
             if (step != 0) {
@@ -4513,7 +4630,8 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 return result;
             }
             if (result.consumed_half_dots == budget_half_dots) {
-                result.reason = GBB_STOP_NO_PROGRESS;
+                result.reason = instance->accept_input_span != NULL
+                    ? GBB_STOP_BUDGET : GBB_STOP_NO_PROGRESS;
                 return result;
             }
             continue;
@@ -4772,14 +4890,27 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
     return result;
 }
 
-/* MODEL: BOTH GATE-00 basis=host-api */
-gbb_run_result gbb_run_ex(gbb_instance *instance, uint64_t budget_half_dots,
-                          gbb_trace_record *trace, size_t trace_capacity,
-                          gbb_diagnostic_record *diagnostics, size_t diagnostic_capacity) {
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static gbb_run_result gbb_run_ex_common(gbb_instance *instance, uint64_t budget_half_dots,
+                                        gbb_trace_record *trace, size_t trace_capacity,
+                                        gbb_diagnostic_record *diagnostics,
+                                        size_t diagnostic_capacity,
+                                        const gbb_accept_input_span *span) {
     gbb_run_result invalid={0, GBB_STOP_INVALID_STATE, 0, 0, 0, 0};
     if ((diagnostics == NULL && diagnostic_capacity != 0) ||
-        (instance != NULL && instance->diagnostic_output != NULL)) return invalid;
+        (instance != NULL && (instance->diagnostic_output != NULL ||
+                              instance->accept_input_span != NULL))) return invalid;
+    if (span != NULL) {
+        if (!validate_accept_input_span(instance, span) ||
+            trace_capacity > SIZE_MAX / sizeof(*trace) ||
+            diagnostic_capacity > SIZE_MAX / sizeof(*diagnostics)) return invalid;
+        const size_t trace_bytes = trace_capacity * sizeof(*trace);
+        const size_t diagnostic_bytes = diagnostic_capacity * sizeof(*diagnostics);
+        if (!accept_span_output_is_disjoint(span, trace, trace_bytes) ||
+            !accept_span_output_is_disjoint(span, diagnostics, diagnostic_bytes)) return invalid;
+    }
     if (instance != NULL) {
+        instance->accept_input_span = span;
         instance->diagnostic_output = diagnostics;
         instance->diagnostic_output_capacity = diagnostic_capacity;
         instance->diagnostic_output_count = 0;
@@ -4791,8 +4922,27 @@ gbb_run_result gbb_run_ex(gbb_instance *instance, uint64_t budget_half_dots,
         instance->diagnostic_output = NULL;
         instance->diagnostic_output_capacity = 0;
         instance->diagnostic_operation = NULL;
+        instance->accept_input_span = NULL;
     }
     return result;
+}
+
+/* MODEL: BOTH GATE-00 basis=host-api */
+gbb_run_result gbb_run_ex(gbb_instance *instance, uint64_t budget_half_dots,
+                          gbb_trace_record *trace, size_t trace_capacity,
+                          gbb_diagnostic_record *diagnostics, size_t diagnostic_capacity) {
+    return gbb_run_ex_common(instance, budget_half_dots, trace, trace_capacity, diagnostics,
+                             diagnostic_capacity, NULL);
+}
+
+/* MODEL: BOTH GATE-00 basis="model-neutral acceptance wrapper" */
+gbb_run_result gbb_accept_run_diagnostic(gbb_instance *instance, uint64_t budget_half_dots,
+                                         const gbb_accept_input_span *span,
+                                         gbb_trace_record *trace, size_t trace_capacity,
+                                         gbb_diagnostic_record *diagnostics,
+                                         size_t diagnostic_capacity) {
+    return gbb_run_ex_common(instance, budget_half_dots, trace, trace_capacity, diagnostics,
+                             diagnostic_capacity, span);
 }
 
 /* MODEL: BOTH GATE-00 basis=host-api */
@@ -4801,15 +4951,25 @@ gbb_run_result gbb_run(gbb_instance *instance, uint64_t budget_half_dots,
     return gbb_run_ex(instance, budget_half_dots, trace, trace_capacity, NULL, 0);
 }
 
-/* MODEL: BOTH GATE-00 basis=host-api */
-gbb_run_result gbb_run_audio(gbb_instance *instance, uint64_t budget_half_dots,
-                             gbb_audio_frame *frames, size_t frame_capacity,
-                             size_t *out_frame_count) {
+/* MODEL: BOTH GATE-00 basis=see-branch-gates */
+static gbb_run_result gbb_run_audio_common(gbb_instance *instance, uint64_t budget_half_dots,
+                                           const gbb_accept_input_span *span,
+                                           gbb_audio_frame *frames, size_t frame_capacity,
+                                           size_t *out_frame_count) {
     gbb_run_result invalid = {0, GBB_STOP_INVALID_STATE, 0, 0, 0, 0};
     if (out_frame_count == NULL) return invalid;
+    if (span != NULL) {
+        if (!validate_accept_input_span(instance, span) ||
+            frame_capacity > SIZE_MAX / sizeof(*frames)) return invalid;
+        const size_t frame_bytes = frame_capacity * sizeof(*frames);
+        if (!accept_span_output_is_disjoint(span, frames, frame_bytes) ||
+            !accept_span_output_is_disjoint(span, out_frame_count, sizeof(*out_frame_count)))
+            return invalid;
+    }
     *out_frame_count = 0u;
     if ((frames == NULL && frame_capacity != 0u) || instance == NULL ||
-        instance->audio_run_active || instance->diagnostic_output != NULL)
+        instance->audio_run_active || instance->diagnostic_output != NULL ||
+        instance->accept_input_span != NULL)
         return invalid;
     if (frames != NULL && frame_capacity != 0u) {
         if (frame_capacity > SIZE_MAX / sizeof(*frames)) return invalid;
@@ -4823,6 +4983,7 @@ gbb_run_result gbb_run_audio(gbb_instance *instance, uint64_t budget_half_dots,
         const uintptr_t count_end = count_begin + sizeof(*out_frame_count);
         if (frame_begin < count_end && count_begin < frame_end) return invalid;
     }
+    instance->accept_input_span = span;
     instance->audio_frames = frames;
     instance->audio_frame_capacity = frame_capacity;
     instance->audio_frame_count = 0u;
@@ -4833,7 +4994,25 @@ gbb_run_result gbb_run_audio(gbb_instance *instance, uint64_t budget_half_dots,
     instance->audio_frame_capacity = 0u;
     instance->audio_frame_count = 0u;
     instance->audio_run_active = 0;
+    instance->accept_input_span = NULL;
     return result;
+}
+
+/* MODEL: BOTH GATE-00 basis=host-api */
+gbb_run_result gbb_run_audio(gbb_instance *instance, uint64_t budget_half_dots,
+                             gbb_audio_frame *frames, size_t frame_capacity,
+                             size_t *out_frame_count) {
+    return gbb_run_audio_common(instance, budget_half_dots, NULL, frames, frame_capacity,
+                                out_frame_count);
+}
+
+/* MODEL: BOTH GATE-00 basis="model-neutral acceptance wrapper" */
+gbb_run_result gbb_accept_run_audio(gbb_instance *instance, uint64_t budget_half_dots,
+                                    const gbb_accept_input_span *span,
+                                    gbb_audio_frame *frames, size_t frame_capacity,
+                                    size_t *out_frame_count) {
+    return gbb_run_audio_common(instance, budget_half_dots, span, frames, frame_capacity,
+                                out_frame_count);
 }
 
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */

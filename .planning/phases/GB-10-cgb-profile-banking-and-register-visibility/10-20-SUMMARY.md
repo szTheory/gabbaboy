@@ -36,34 +36,37 @@ key-decisions:
 requirements-completed: [CGB-01, CGB-02, CGB-03]
 coverage:
   - id: D1
-    description: "Phase-wide gates at the evidence head: no removed inventory line, tests/baseline unchanged, frozen digest 4c7a57ff3d50d228, verify-model-gates pass, no research:10 tag line"
+    description: "Immutable Phase 10 boundary snapshots show no removed test-inventory line or baseline change; the evidence snapshot retains the frozen digest and has no active research:10 model-gate tag"
     requirement: "CGB-02"
     verification:
       - kind: other
-        ref: "git diff -U0 main...HEAD -- tests/expected-tests.txt | grep -E '^-[^-]' (empty); git diff --quiet main...HEAD -- tests/baseline; build/measure_core --no-trace fixtures/tracer/tracer.gb; python3 -I tests/scripts/verify-model-gates.py"
+        ref: "Fixed-boundary check on 5e2b32f16fa705043c5437fb63a08bd83a4d750b and 2fe078e8f08ed98ba0ac0e244971e7c0ead16b1e; see dated command evidence below"
+        status: pass
+      - kind: other
+        ref: "build/measure_core --no-trace fixtures/tracer/tracer.gb; python3 -I tests/scripts/verify-model-gates.py; bash tests/scripts/verify-dmg-baseline.sh"
         status: pass
     human_judgment: false
   - id: D2
-    description: "Exact-head green evidence head with eight required checks and seven fixture-repro jobs"
+    description: "Historical exact-head hosted checks remain green for the original evidence and handoff commits"
     requirement: "CGB-01"
     verification:
       - kind: integration
-        ref: "python3 .github/scripts/wait-exact-head-ci.py --sha 2fe078e8f08ed98ba0ac0e244971e7c0ead16b1e (PASS run_id=38299323863)"
+        ref: "gh run view 38299323863, 38299323969, 38302631119, 38302631195: success on exact historical SHAs 2fe078e and 260a9c"
         status: pass
     human_judgment: false
   - id: D3
-    description: "PR #66 ready, open, body naming the six veto items, the D-29 judgement and the evidence table"
+    description: "PR #66 retains the six owner-veto items and D-29 judgment; current lifecycle is merged at 783712c"
     requirement: "CGB-03"
     verification:
       - kind: other
-        ref: "gh pr view 66 --json isDraft,state,body (isDraft false, OPEN, body matches veto, gbb_info, GBB_UNSUPPORTED_EXECUTION_MODE, gbb_copy_frame, FF4C, review trigger, IE bits)"
+        ref: "gh pr view 66 --json state,isDraft,mergedAt,headRefOid,body"
         status: pass
     human_judgment: false
   - id: D4
-    description: "Handoff names /gsd-verify-work 10 as the single command and Phase 11 as named, not started"
+    description: "The immutable Phase 10 handoff commit names /gsd-verify-work 10 and Phase 11 as not started at that historical boundary"
     verification:
       - kind: other
-        ref: "test \"$(grep -o '`/gsd-[^`]*`' .planning/.continue-here.md | sort -u)\" = '`/gsd-verify-work 10`'"
+        ref: "git show 260a9c0:.planning/.continue-here.md"
         status: pass
     human_judgment: false
 status: complete
@@ -179,3 +182,11 @@ CGB-01..03 are not marked complete in `REQUIREMENTS.md`: the plan does not ask f
 Phase 10 verification. Next command in fresh context: `/gsd-verify-work 10`. Following phase (named, not started): Phase 11 - CGB Colour Rendering and Player Colour.
 
 ## Self-Check: PASSED
+
+## 15.1-19 Fresh Applicability Evidence
+
+Historical boundary checks used immutable commits. Comparing `tests/expected-tests.txt` and `tests/baseline` between Phase 10 start `5e2b32f16fa705043c5437fb63a08bd83a4d750b` and exact evidence head `2fe078e8f08ed98ba0ac0e244971e7c0ead16b1e` found no removed expected-test lines and identical baseline trees. At that evidence commit, active `research:10` model-gate tags were absent from the core and model-gate table. This avoids using current routes or current ancestry to make a historical claim. The check was an inline Python assertion over `git show` blobs at those exact commits; no live branch diff was used.
+
+On 2026-10-21, the current tracer workload printed `correctness_digest_fnv1a64=4c7a57ff3d50d228`; `verify-model-gates.py` passed with the current 196 functions, 100 gates, and 34 unknowns; and `verify-dmg-baseline.sh` passed with zero changed rows. Those counts are current-source evidence and do not replace the earlier recorded counts in this summary.
+
+Read-only hosted re-queries confirmed runs 38299323863 and 38299323969 succeeded on exact SHA `2fe078e8f08ed98ba0ac0e244971e7c0ead16b1e`, while runs 38302631119 and 38302631195 succeeded on exact SHA `260a9c0580c76afc31c0bf5be902e51af2f8f1de`. PR #66 is now merged at `783712c3b3f27933210b4ade2035613e9aa840f2` (2026-10-13); its current body retains the six owner-veto items and D-29 judgment. The original handoff at `260a9c0` still names exactly `/gsd-verify-work 10` and Phase 11 as not started at that historical point. Neither historical route is asserted as the current next step.

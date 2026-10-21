@@ -1,0 +1,4 @@
+$ python3 .github/scripts/download-release-artifact.py --self-test
+/opt/homebrew/Cellar/python@3.14/3.14.4/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python: can't open file '/Users/jon/projects/gabbaboy/.github/scripts/download-release-artifact.py': [Errno 2] No such file or directory
+$ python3 -I .github/scripts/verify-workflow-policy.py --check
+REJECT unbounded-download: release.candidate downloads with 'curl'; use download-release-artifact.py

@@ -1,0 +1,19 @@
+clean-twin=pass id=frozen-apu-membership
+negative-control=pass id=omitted-source diagnostic=manifest-apu-count
+negative-control=pass id=filtered-revision-suffix diagnostic=inventory-case-membership
+negative-control=pass id=bogus-green-process-exit diagnostic=inventory-execution:apu/channel_1/channel_1_align.asm
+negative-control=pass id=altered-author-expectation diagnostic=author-contract:apu/channel_1/channel_1_align.asm
+negative-control=pass id=forged-producer-revision diagnostic=producer-revision
+negative-control=pass id=altered-producer-digest diagnostic=core-digest
+negative-control=pass id=missing-producer-object diagnostic=producer-object-missing
+negative-control=pass id=producer-retained-absent diagnostic=producer-object-missing
+clean-twin=pass id=hosted-producer-core-without-git-object
+negative-control=pass id=producer-retained-altered diagnostic=producer-core-pin
+negative-control=pass id=producer-retained-oversize diagnostic=producer-object-size
+negative-control=pass id=producer-git-disagrees diagnostic=producer-object-mismatch
+negative-control=pass id=producer-forged-revision diagnostic=producer-revision
+negative-control=pass id=changed-signature diagnostic=inventory-execution:apu/channel_1/channel_1_align.asm
+negative-control=pass id=unexpected-pass diagnostic=unexpected-pass:apu/channel_1/channel_1_align.asm
+negative-control=pass id=all-xfail-cohort diagnostic=cohort-counts
+negative-control=pass id=empty-required-cohort diagnostic=inventory-case-membership
+cgb-apu-dispositions self-test pass controls=16

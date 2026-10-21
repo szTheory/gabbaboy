@@ -14,6 +14,8 @@ HEX64 = re.compile(r"[0-9a-f]{64}")
 
 
 EXPECTED_ADDITIONS = {"SHA256SUMS", "release-receipt.json"}
+# The workflow whose runs can write to a release. Runs of any other workflow (CI, for one) never block recovery.
+RELEASE_WORKFLOW = ".github/workflows/release-please.yml"
 
 
 def inventory(rows: list[dict[str, Any]]) -> list[tuple[int, str, str | None]]:
@@ -75,37 +77,82 @@ def live_inventory(rows: Any) -> dict[str, tuple[int, str]]:
     return result
 
 
-def decide(release: Any, assets: Any, expected_rows: Any, runs: Any, run_id: int, run_attempt: int) -> str:
+def check_runs(runs: Any, run_id: int, run_attempt: int, workflow: str, source_sha: str) -> None:
+    """Reject a stale attempt, an absent own run, or another unfinished run that could still write this release.
+
+    Only runs of the release workflow count, so unrelated active CI never blocks recovery. Another run is an
+    eligible writer when it is unfinished and either built the same source commit or is a manual retry dispatch
+    (a retry runs from the current main commit, not the release commit). The list API reports each run's latest attempt.
+    """
+    if not isinstance(runs, list):
+        raise ValueError("live workflow run list must be a JSON array")
+    seen_own = False
+    for run in runs:
+        if (not isinstance(run, dict) or type(run.get("id")) is not int or type(run.get("run_attempt")) is not int
+                or not isinstance(run.get("status"), str) or not isinstance(run.get("path"), str)
+                or not isinstance(run.get("head_sha"), str) or not isinstance(run.get("event"), str)):
+            raise ValueError("live workflow run list has a malformed row")
+        if run["path"].split("@", 1)[0] != workflow:
+            continue
+        if run["id"] == run_id:
+            if run["run_attempt"] > run_attempt:
+                raise ValueError("this attempt is stale: a later attempt of the same run exists")
+            if run["run_attempt"] < run_attempt:
+                raise ValueError("this attempt is not the latest attempt the live run list reports")
+            seen_own = True
+        elif run["status"] != "completed" and (run["head_sha"] == source_sha or run["event"] == "workflow_dispatch"):
+            raise ValueError(f"concurrent publication attempt: run {run['id']} ({run['status']}) could still write this release")
+    if not seen_own:
+        raise ValueError("this run is not in the live release workflow run list")
+
+
+def decide(release: Any, assets: Any, expected_rows: Any, runs: Any, run_id: int, run_attempt: int,
+           workflow: str = RELEASE_WORKFLOW, source_sha: str = "", scope: str = "full") -> str:
     """Choose the only safe next step from LIVE state: never overwrite, never re-draft a published release.
 
     Returns published-verified, draft-reuse, or draft-upload-missing:<names>; anything else rejects.
+    scope=full judges the whole release inventory. scope=subset judges only the named assets an early job attaches
+    (other jobs' assets are not this job's to judge) and refuses any published release.
     """
+    if scope not in ("full", "subset"):
+        raise ValueError("recovery scope must be full or subset")
     if not isinstance(release, dict) or not isinstance(release.get("draft"), bool):
         raise ValueError("live release state is missing or malformed")
     expected = expected_inventory(expected_rows)
     live = live_inventory(assets)
-    if not isinstance(runs, list):
-        raise ValueError("live workflow run list must be a JSON array")
-    for run in runs:
-        if not isinstance(run, dict) or type(run.get("id")) is not int or type(run.get("run_attempt")) is not int:
-            raise ValueError("live workflow run list has a malformed row")
-        if run["id"] == run_id and run["run_attempt"] > run_attempt:
-            raise ValueError("this attempt is stale: a later attempt of the same run exists")
-        if run["id"] != run_id and run.get("status") in ("queued", "in_progress", "waiting"):
-            raise ValueError(f"concurrent publication attempt: run {run['id']} is still active")
+    check_runs(runs, run_id, run_attempt, workflow, source_sha)
     if release["draft"] is False:
+        if scope == "subset":
+            raise ValueError("a published release never receives further attachments")
         additions = {name for name in live if name not in expected}
         if additions != EXPECTED_ADDITIONS or any(live.get(name) != value for name, value in expected.items()):
             raise ValueError("published release does not carry exactly the qualified bytes plus final receipts")
         return "published-verified"
     extra = sorted(set(live) - set(expected))
-    if extra:
+    if extra and scope == "full":
         raise ValueError(f"draft carries unexpected assets: {extra}")
-    changed = sorted(name for name, value in live.items() if value != expected[name])
+    changed = sorted(name for name, value in live.items() if name in expected and value != expected[name])
     if changed:
         raise ValueError(f"draft attachment differs from the qualified bytes and is never overwritten: {changed}")
     missing = sorted(set(expected) - set(live))
     return "draft-upload-missing:" + ",".join(missing) if missing else "draft-reuse"
+
+
+def write_inventory(output: str, paths: list[str]) -> int:
+    """Write name/size/sha256 rows for the bytes about to be attached; a directory contributes its regular files."""
+    files: list[pathlib.Path] = []
+    for item in paths:
+        path = pathlib.Path(item)
+        if path.is_dir():
+            files.extend(child for child in sorted(path.iterdir()) if child.is_file() and child.name != "api-assets.json")
+        elif path.is_file():
+            files.append(path)
+        else:
+            raise ValueError(f"inventory input is not a file or directory: {item}")
+    rows = [{"name": f.name, "size": f.stat().st_size, "sha256": hashlib.sha256(f.read_bytes()).hexdigest()} for f in files]
+    expected_inventory(rows)
+    pathlib.Path(output).write_text(json.dumps(rows, sort_keys=True) + "\n")
+    return len(rows)
 
 
 def self_test() -> None:
@@ -133,6 +180,32 @@ def self_test() -> None:
     recovery_self_test()
 
 
+def inventory_self_test() -> None:
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="gbb-inventory.") as directory:
+        root = pathlib.Path(directory)
+        (root / "one").mkdir()
+        (root / "two").mkdir()
+        (root / "one" / "a.json").write_bytes(b"alpha")
+        (root / "one" / "api-assets.json").write_bytes(b"[]")
+        (root / "two" / "b.json").write_bytes(b"beta")
+        out = root / "inventory.json"
+        if main(["--inventory", str(out), str(root / "one"), str(root / "two" / "b.json")]) != 0:
+            raise SystemExit("inventory of real files was rejected")
+        rows = json.loads(out.read_text())
+        want = [{"name": "a.json", "size": 5, "sha256": hashlib.sha256(b"alpha").hexdigest()},
+                {"name": "b.json", "size": 4, "sha256": hashlib.sha256(b"beta").hexdigest()}]
+        if rows != want:
+            raise SystemExit(f"inventory rows differ from the real bytes: {rows}")
+        (root / "two" / "a.json").write_bytes(b"other")
+        out.unlink()
+        if main(["--inventory", str(out), str(root / "one"), str(root / "two" / "a.json")]) != 1 or out.exists():
+            raise SystemExit("a duplicate asset name was inventoried")
+        if main(["--inventory", str(out), str(root / "missing")]) != 1:
+            raise SystemExit("a missing inventory input was accepted")
+
+
 def recovery_self_test() -> None:
     def row(index: int, name: str, text: str) -> dict[str, Any]:
         data = text.encode()
@@ -144,26 +217,51 @@ def recovery_self_test() -> None:
     draft = {"draft": True}
     published = {"draft": False}
     published_rows = live_rows + [row(90, "SHA256SUMS", "sums"), row(91, "release-receipt.json", "final")]
-    quiet = [{"id": 7, "run_attempt": 1, "status": "completed"}]
+    src = "c" * 40
+    other = "d" * 40
+
+    def run(index: int, status: str = "completed", attempt: int = 1, *, path: str = RELEASE_WORKFLOW,
+            sha: str = src, event: str = "push") -> dict[str, Any]:
+        return {"id": index, "run_attempt": attempt, "status": status, "path": path, "head_sha": sha, "event": event}
+
+    quiet = [run(7)]
     controls = 0
     positives = 0
+
+    def call(release: Any, assets: Any, rows: Any, runs: Any, attempt: int = 1, scope: str = "full") -> str:
+        return decide(release, assets, rows, runs, 7, attempt, RELEASE_WORKFLOW, src, scope)
+
     # Identical unpublished bytes validate repeatedly and identically.
-    first = decide(draft, live_rows, expected, quiet, 7, 1)
-    again = decide(json.loads(json.dumps(draft)), json.loads(json.dumps(live_rows)), expected, quiet, 7, 1)
+    first = call(draft, live_rows, expected, quiet)
+    again = call(json.loads(json.dumps(draft)), json.loads(json.dumps(live_rows)), expected, quiet)
     if first != again or first != "draft-reuse":
         raise SystemExit("identical draft bytes were not idempotently reused")
     positives += 1
-    if decide(draft, live_rows[:1], expected, quiet, 7, 1) != "draft-upload-missing:b.json,c.json":
+    if call(draft, live_rows[:1], expected, quiet) != "draft-upload-missing:b.json,c.json":
         raise SystemExit("a partial upload was not reduced to uploading only the missing assets")
     positives += 1
-    if decide(published, published_rows, expected, quiet, 7, 1) != "published-verified":
+    if call(published, published_rows, expected, quiet) != "published-verified":
         raise SystemExit("an already-published release was not verified as published")
     positives += 1
+    # Unrelated active CI on the same commit, an active release-workflow run for another commit, and a finished
+    # sibling attempt are not release writers and must never block recovery.
+    unrelated = quiet + [run(8, "in_progress", path=".github/workflows/ci.yml"),
+                         run(9, "queued", path=".github/workflows/ci.yml@refs/heads/main"),
+                         run(10, "in_progress", sha=other), run(11, "completed")]
+    if call(draft, live_rows, expected, unrelated) != "draft-reuse":
+        raise SystemExit("unrelated active runs blocked an otherwise safe recovery")
+    positives += 1
 
-    def must_reject(label: str, reason: str, *args: Any) -> None:
+    # An early job that attaches only its own assets judges just those; other jobs' assets are not its to judge.
+    if call(draft, live_rows, expected[:2], quiet, scope="subset") != "draft-reuse":
+        raise SystemExit("a subset attachment was blocked by another job's asset")
+    positives += 1
+    inventory_self_test()
+
+    def must_reject(label: str, reason: str, *args: Any, **kwargs: Any) -> None:
         nonlocal controls
         try:
-            decide(*args)
+            call(*args, **kwargs)
         except ValueError as error:
             if reason not in str(error):
                 raise SystemExit(f"recovery self-test rejected {label} for the wrong reason: {error}")
@@ -173,22 +271,29 @@ def recovery_self_test() -> None:
 
     changed = json.loads(json.dumps(live_rows))
     changed[1]["digest"] = "sha256:" + "0" * 64
-    must_reject("a changed attachment", "never overwritten", draft, changed, expected, quiet, 7, 1)
+    must_reject("a changed attachment", "never overwritten", draft, changed, expected, quiet)
     resized = json.loads(json.dumps(live_rows))
     resized[0]["size"] += 1
-    must_reject("a resized attachment", "never overwritten", draft, resized, expected, quiet, 7, 1)
-    must_reject("a duplicate asset name", "duplicate asset name", draft, live_rows + [dict(live_rows[0], id=99)], expected, quiet, 7, 1)
-    must_reject("an unexpected asset", "unexpected assets", draft, live_rows + [row(98, "x.bin", "x")], expected, quiet, 7, 1)
-    must_reject("a missing digest", "no SHA-256 digest", draft, [{"id": 1, "name": "a.tar.gz", "size": 1}], expected, quiet, 7, 1)
-    must_reject("a concurrent active attempt", "concurrent publication", draft, live_rows, expected,
-                quiet + [{"id": 8, "run_attempt": 1, "status": "in_progress"}], 7, 1)
-    must_reject("a stale run attempt", "stale", draft, live_rows, expected, [{"id": 7, "run_attempt": 2, "status": "completed"}], 7, 1)
+    must_reject("a resized attachment", "never overwritten", draft, resized, expected, quiet)
+    must_reject("a duplicate asset name", "duplicate asset name", draft, live_rows + [dict(live_rows[0], id=99)], expected, quiet)
+    must_reject("an unexpected asset", "unexpected assets", draft, live_rows + [row(98, "x.bin", "x")], expected, quiet)
+    must_reject("a missing digest", "no SHA-256 digest", draft, [{"id": 1, "name": "a.tar.gz", "size": 1}], expected, quiet)
+    must_reject("a concurrent eligible push release", "concurrent publication", draft, live_rows, expected, quiet + [run(8, "in_progress")])
+    must_reject("a concurrent queued release", "concurrent publication", draft, live_rows, expected, quiet + [run(8, "queued")])
+    must_reject("a concurrent retry dispatch for another commit", "concurrent publication", draft, live_rows, expected,
+                quiet + [run(8, "waiting", sha=other, event="workflow_dispatch")])
+    must_reject("a stale run attempt", "stale", draft, live_rows, expected, [run(7, attempt=2)])
+    must_reject("a run absent from the live listing", "not in the live", draft, live_rows, expected, [run(8)])
+    must_reject("a rerun that is not the latest attempt", "not the latest", draft, live_rows, expected, [run(7, attempt=1)], 2)
+    must_reject("a malformed run row", "malformed", draft, live_rows, expected, quiet + [{"id": "x"}])
+    must_reject("a subset attachment over a changed asset", "never overwritten", draft, changed, expected, quiet, scope="subset")
+    must_reject("a subset attachment on a published release", "never receives further", published, published_rows, expected, quiet, scope="subset")
     must_reject("a published release with a changed asset", "published release does not carry",
-                published, [dict(published_rows[0], digest="sha256:" + "1" * 64)] + published_rows[1:], expected, quiet, 7, 1)
-    must_reject("a published release missing final receipts", "published release does not carry", published, live_rows, expected, quiet, 7, 1)
-    must_reject("a published release with no readback inventory", "non-empty", published, published_rows, [], quiet, 7, 1)
-    must_reject("a forged expected inventory", "duplicate names", draft, live_rows, expected + [expected[0]], quiet, 7, 1)
-    if positives != 3 or controls != 11:
+                published, [dict(published_rows[0], digest="sha256:" + "1" * 64)] + published_rows[1:], expected, quiet)
+    must_reject("a published release missing final receipts", "published release does not carry", published, live_rows, expected, quiet)
+    must_reject("a published release with no readback inventory", "non-empty", published, published_rows, [], quiet)
+    must_reject("a forged expected inventory", "duplicate names", draft, live_rows, expected + [expected[0]], quiet)
+    if positives != 5 or controls != 18:
         raise SystemExit("recovery self-test inventory changed unexpectedly")
     print(f"PASS: recovery decisions positives={positives} rejected_controls={controls}")
 
@@ -197,18 +302,27 @@ def main(argv: list[str]) -> int:
     if argv == ["--self-test"]:
         self_test()
         return 0
+    if argv and argv[0] == "--inventory":
+        if len(argv) < 3:
+            raise SystemExit("usage: verify-published-release-assets.py --inventory OUTPUT_JSON FILE_OR_DIR...")
+        try:
+            print(f"inventory rows={write_inventory(argv[1], argv[2:])}")
+        except (ValueError, OSError) as error:
+            print(f"REJECT inventory: {error}", file=sys.stderr)
+            return 1
+        return 0
     if argv and argv[0] == "--decide":
-        if len(argv) != 7:
-            raise SystemExit("usage: verify-published-release-assets.py --decide RELEASE_JSON ASSETS_JSON EXPECTED_JSON RUNS_JSON RUN_ID RUN_ATTEMPT")
+        if len(argv) != 10:
+            raise SystemExit("usage: verify-published-release-assets.py --decide RELEASE_JSON ASSETS_JSON EXPECTED_JSON RUNS_JSON RUN_ID RUN_ATTEMPT WORKFLOW_PATH SOURCE_SHA full|subset")
         try:
             documents = [json.loads(pathlib.Path(path).read_text()) for path in argv[1:5]]
-            print(decide(*documents, int(argv[5]), int(argv[6])))
+            print(decide(*documents, int(argv[5]), int(argv[6]), argv[7], argv[8], argv[9]))
         except (ValueError, OSError) as error:
             print(f"REJECT recovery: {error}", file=sys.stderr)
             return 1
         return 0
     if len(argv) != 2:
-        raise SystemExit("usage: verify-published-release-assets.py API_ASSETS_JSON BASELINE_JSON | --decide ... | --self-test")
+        raise SystemExit("usage: verify-published-release-assets.py API_ASSETS_JSON BASELINE_JSON | --inventory ... | --decide ... | --self-test")
     before = json.loads(pathlib.Path(argv[1]).read_text())
     verify(argv[0], before)
     print("PASS: published release asset IDs, names, and digests match the qualified inventory")

@@ -21,18 +21,27 @@ actuals:
 duration: 12 min
 completed: 2026-10-12
 coverage:
-  - deliverable: "post-boot table mirror equals post_boot[] (129 rows)"
-    verification:
-      - {kind: ctest, ref: "cgb_tables_postboot", status: pass}
+  - id: "10-07-postboot-mirror"
+    description: "Published post-boot table mirrors the implementation"
     human_judgment: false
-  - deliverable: "single changed doc value is rejected"
     verification:
-      - {kind: ctest, ref: "cgb_tables_postboot_mutated_doc", status: pass}
+      - kind: unit
+        ref: "ctest --test-dir build/phase15_1_18 -R '^cgb_tables_postboot$' --output-on-failure --no-tests=error"
+        status: pass
+  - id: "10-07-mutated-document"
+    description: "A changed post-boot document value is rejected"
     human_judgment: false
-  - deliverable: "provenance rules reject mutated table copies"
     verification:
-      - {kind: ctest, ref: "cgb_tables_postboot_selftest", status: pass}
+      - kind: unit
+        ref: "ctest --test-dir build/phase15_1_18 -R '^cgb_tables_postboot_mutated_doc$' --output-on-failure --no-tests=error"
+        status: pass
+  - id: "10-07-provenance-mutants"
+    description: "Post-boot provenance rules reject mutated table copies"
     human_judgment: false
+    verification:
+      - kind: unit
+        ref: "ctest --test-dir build/phase15_1_18 -R '^cgb_tables_postboot_selftest$' --output-on-failure --no-tests=error"
+        status: pass
 ---
 
 # Phase 10 Plan 07: Post-boot doc mirror and provenance check Summary
@@ -64,3 +73,7 @@ None.
 ## Self-Check: PASSED
 
 docs/cgb-profile.md, tests/test_cgb_tables.c present; commit 623d7f9 is an ancestor of HEAD.
+
+## Fresh Coverage Verification (15.1-18)
+
+At source `65e69ca2dc6f51515ebba002361b0966e3b45a17`, the plan-specific Debug build `build/phase15_1_18` freshly passed the post-boot mirror comparison, mutated-document rejection, and all 14 provenance self-test mutants. This current run supplements the original Phase 10 evidence and does not change its producer claims.

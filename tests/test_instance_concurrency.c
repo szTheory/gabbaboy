@@ -208,6 +208,118 @@ static int cgb_instance_isolation(const char *path) {
     return ok ? 0 : 1;
 }
 
+/* Each thread owns its ROM and instance. Calls on one instance remain serial;
+ * the public contract permits independent instances to load and run together. */
+typedef struct {
+    gbb_instance *instance;
+    atomic_int *ready;
+    atomic_int *start;
+    unsigned lane;
+    unsigned seconds;
+    int passed;
+} rtc_worker;
+
+static int rtc_matches(const rtc_worker *w) {
+    uint8_t clock[GBB_RTC_BLOCK_SIZE];
+    if (gbb_copy_battery(w->instance, clock, sizeof(clock)) != GBB_OK ||
+        memcmp(clock, "GBRT", 4u) != 0 ||
+        clock[9] != w->seconds % 60u ||
+        clock[10] != w->seconds / 60u || clock[11] != 0u ||
+        gbb_peek_ram(w->instance, 0xC000u) != 0x31u + w->lane) {
+        fprintf(stderr, "mbc3-isolation-mismatch lane=%u seconds=%u\n",
+                w->lane, w->seconds);
+        return 0;
+    }
+    return 1;
+}
+
+static void *rtc_exercise(void *opaque) {
+    rtc_worker *w = opaque;
+    uint8_t rom[32768] = {0};
+    rom[0x147] = 0x0Fu; /* RTC and battery, no RAM. */
+    rom[0x100] = 0xC3u; rom[0x101] = 0x50u; rom[0x102] = 0x01u;
+    const uint8_t guest[] = {0x3Eu, (uint8_t)(0x31u + w->lane),
+                             0xEAu, 0x00u, 0xC0u, 0x18u, 0xFEu};
+    memcpy(rom + 0x150, guest, sizeof(guest));
+    uint8_t checksum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14D] = checksum;
+    atomic_fetch_add_explicit(w->ready, 1, memory_order_release);
+    while (!atomic_load_explicit(w->start, memory_order_acquire)) { }
+    w->passed = 0;
+    for (unsigned round = 0; round < 128u; ++round) {
+        if (gbb_load_rom(w->instance, rom, sizeof(rom)) != GBB_OK) return NULL;
+        const gbb_run_result r = gbb_run(w->instance, 128u, NULL, 0u);
+        if (r.reason != GBB_STOP_BUDGET || r.consumed_half_dots != 128u)
+            return NULL;
+        /* Distinct values catch both cross-load and cross-clock contamination.
+         * Repeated catch-up also proves the second call accumulates locally. */
+        w->seconds = 17u + 600u * w->lane + round;
+        if (gbb_rtc_catch_up(w->instance, w->seconds) != GBB_OK || !rtc_matches(w))
+            return NULL;
+        if (gbb_rtc_catch_up(w->instance, 3) != GBB_OK) return NULL;
+        w->seconds += 3u;
+        if (!rtc_matches(w)) return NULL;
+    }
+    w->passed = 1;
+    return NULL;
+}
+
+#ifdef _WIN32
+static DWORD WINAPI windows_rtc_worker(LPVOID opaque) {
+    (void)rtc_exercise(opaque);
+    return 0;
+}
+#endif
+
+static int mbc3_concurrency(int contaminate) {
+    atomic_int ready = 0, start = 0;
+    rtc_worker args[2] = {{NULL, &ready, &start, 0u, 0u, 0},
+                      {NULL, &ready, &start, 1u, 0u, 0}};
+    test_thread threads[2];
+    unsigned created = 0u;
+    int result = 2;
+    for (unsigned i = 0; i < 2u; ++i) {
+        if (gbb_create(GBB_PROFILE_DMG_CPU_B, &args[i].instance) != GBB_OK)
+            goto cleanup;
+#ifdef _WIN32
+        threads[i] = CreateThread(NULL, 0, windows_rtc_worker, &args[i], 0, NULL);
+        if (!threads[i]) goto cleanup;
+#else
+        if (pthread_create(&threads[i], NULL, rtc_exercise, &args[i]) != 0)
+            goto cleanup;
+#endif
+        ++created;
+    }
+    while (atomic_load_explicit(&ready, memory_order_acquire) != 2) { }
+    result = 0;
+cleanup:
+    atomic_store_explicit(&start, 1, memory_order_release);
+    for (unsigned i = 0; i < created; ++i) {
+#ifdef _WIN32
+        if (WaitForSingleObject(threads[i], INFINITE) != WAIT_OBJECT_0) result = 2;
+        CloseHandle(threads[i]);
+#else
+        if (pthread_join(threads[i], NULL) != 0) result = 2;
+#endif
+    }
+    if (!result && (!args[0].passed || !args[1].passed)) result = 2;
+    if (!result && contaminate) {
+        /* Deliberately inject the neighbour's clock after joining: no data race
+         * or out-of-contract shared-instance calls in the negative control. */
+        uint8_t clock[GBB_RTC_BLOCK_SIZE];
+        if (gbb_copy_battery(args[1].instance, clock, sizeof(clock)) != GBB_OK ||
+            gbb_import_battery(args[0].instance, clock, sizeof(clock)) != GBB_OK)
+            result = 2;
+    }
+    if (!result && (!rtc_matches(&args[0]) || !rtc_matches(&args[1]))) result = 1;
+    gbb_destroy(args[0].instance);
+    gbb_destroy(args[1].instance);
+    if (!result) puts("mbc3-concurrency pass rounds=128 lanes=2");
+    return result;
+}
+
 int main(int argc, char **argv) {
     if (argc == 3 && strcmp(argv[2], "cgb_instance_isolation") == 0)
         return cgb_instance_isolation(argv[1]);
@@ -290,5 +402,12 @@ int main(int argc, char **argv) {
         fprintf(stderr, "concurrent independent instance run diverged\n");
         return 1;
     }
+    if (mbc3_concurrency(0) != 0) return 1;
+    /* The same oracle must reject a neighbour's clock image. */
+    if (mbc3_concurrency(1) != 1) {
+        fprintf(stderr, "mbc3 contamination control did not detect isolation loss\n");
+        return 1;
+    }
+    puts("mbc3-concurrency control rejected neighbour clock");
     return 0;
 }

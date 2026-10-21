@@ -98,6 +98,14 @@ static struct {
 } last_apu_observation;
 
 #ifdef GBB_FUZZ_STANDALONE_TEST
+#define GBB_FUZZ_SPEED_MUTATION_DMG_ROUTE 1u
+#define GBB_FUZZ_SPEED_MUTATION_DROP_HELD_OBSERVATION 2u
+#define GBB_FUZZ_SPEED_MUTATION_DROP_WAKE_OBSERVATION 3u
+static unsigned speed_mutation;
+void gbb_fuzz_core_set_speed_mutation(unsigned mutation) { speed_mutation = mutation; }
+#endif
+
+#ifdef GBB_FUZZ_STANDALONE_TEST
 void gbb_fuzz_core_speed_observation(int *selected, uint8_t *scenario,
                                      unsigned *switches, unsigned *key1_reads,
                                      unsigned *stop_count, unsigned *run_calls,
@@ -532,12 +540,16 @@ static void fuzz_speed(gbb_instance *machine, const uint8_t *data, size_t size,
     size_t dma_stop_pc = 0u;
     size_t lcdc_write_pc = 0u;
     size_t ie_write_pc = 0u, if_write_pc = 0u, joyp_write_pc = 0u, dma_start_pc = 0u;
-    /* KEY1 is not a guest register on the DMG profile: the cartridge runs in DMG mode, STOP never
-     * switches speed, and a woken guest that touches $FF4D stops on an unsupported bus access by
-     * design. Scenarios built around KEY1 therefore apply only to the CGB profile; on DMG they
-     * fall back to the STOP/wake twin (scenario 7). Scenario 3 (held button) stays as is. */
+    size_t joyp_read_pc = 0u;
+    size_t post_wake_store_pc = 0u;
+    /* KEY1 is not a guest register on DMG. CGB-only speed scenarios fall back to the STOP/wake
+     * twin; held-button scenario 3 has its own DMG STOP/wake program without KEY1 accesses. */
     if (!cgb_profile && scenario != 3u) scenario = 7u;
     const int switch_expected = cgb_profile && scenario != 3u && scenario != 6u && scenario != 7u;
+    int dmg_held_path = !cgb_profile && scenario == 3u;
+#ifdef GBB_FUZZ_STANDALONE_TEST
+    if (speed_mutation == GBB_FUZZ_SPEED_MUTATION_DMG_ROUTE) dmg_held_path = 0;
+#endif
 
     memset(&last_speed_observation, 0, sizeof(last_speed_observation));
     last_speed_observation.selected = 1;
@@ -558,11 +570,31 @@ static void fuzz_speed(gbb_instance *machine, const uint8_t *data, size_t size,
         at = speed_emit_ldh_write(rom, at, 0x4Du);
         rom[at++] = 0x10u; rom[at++] = 0x00u;
         (void)speed_emit_loop_jump(rom, at, loop);
+    } else if (dmg_held_path) {
+        at = speed_emit_a(rom, at, 0x20u); /* select the direction-button row */
+        joyp_write_pc = at;
+        at = speed_emit_ldh_write(rom, at, 0x00u);
+        at = speed_emit_a(rom, at, 0x10u);
+        ie_write_pc = at;
+        at = speed_emit_absolute_write(rom, at, 0xFFFFu); /* enable the joypad interrupt */
+        at = speed_emit_a(rom, at, 0u);
+        if_write_pc = at;
+        at = speed_emit_ldh_write(rom, at, 0x0Fu); /* clear pending interrupts before STOP */
+        rom[at++] = 0x10u; rom[at++] = 0x00u;
+        joyp_read_pc = at;
+        rom[at++] = 0xF0u; rom[at++] = 0x00u; /* wake, then observe the held direction button */
+        post_wake_store_pc = at;
+        at = speed_emit_absolute_write(rom, at, 0xC000u);
+        const size_t loop = at;
+        rom[at++] = 0x00u;
+        (void)speed_emit_loop_jump(rom, at, loop);
     } else if (scenario == 2u || scenario == 3u) {
         if (scenario == 3u) {
             at = speed_emit_a(rom, at, 0x20u); /* select the direction-button row */
             joyp_write_pc = at;
             at = speed_emit_ldh_write(rom, at, 0x00u);
+            joyp_read_pc = at;
+            rom[at++] = 0xF0u; rom[at++] = 0x00u; /* observe the held direction button */
         }
         at = speed_emit_a(rom, at, 1u);
         ie_write_pc = at;
@@ -639,6 +671,10 @@ static void fuzz_speed(gbb_instance *machine, const uint8_t *data, size_t size,
     if (scenario == 3u) {
         const gbb_input_event press = {0u, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_RIGHT};
         require_contract(gbb_queue_events(machine, &press, 1u) == GBB_OK);
+        if (!cgb_profile) {
+            const gbb_input_event wake = {256u, GBB_INPUT_STOP_WAKE, 1u};
+            require_contract(gbb_queue_events(machine, &wake, 1u) == GBB_OK);
+        }
     } else if (scenario == 6u || scenario == 7u) {
         const gbb_input_event wake = {256u, GBB_INPUT_STOP_WAKE, 1u};
         require_contract(gbb_queue_events(machine, &wake, 1u) == GBB_OK);
@@ -654,6 +690,7 @@ static void fuzz_speed(gbb_instance *machine, const uint8_t *data, size_t size,
     uint64_t total_consumed = 0u, last_trace_time = 0u;
     unsigned calls = 0u;
     int key1_inversion_checked = 0;
+    int stop_seen = 0;
     const uint64_t initial_clock = gbb_test_master_time_half_dots(machine);
     require_contract(initial_clock == 0u);
 
@@ -694,7 +731,13 @@ static void fuzz_speed(gbb_instance *machine, const uint8_t *data, size_t size,
                          (run.reason == GBB_STOP_TRACE_FULL) ||
                          (run.reason == GBB_STOP_HALTED_IDLE) ||
                          (run.reason == GBB_STOP_STOPPED) ||
-                         (run.reason == GBB_STOP_NO_PROGRESS));
+                         (run.reason == GBB_STOP_NO_PROGRESS)
+#ifdef GBB_FUZZ_STANDALONE_TEST
+                         || (speed_mutation == GBB_FUZZ_SPEED_MUTATION_DMG_ROUTE &&
+                             !cgb_profile && scenario == 3u && !dmg_held_path &&
+                             run.reason == GBB_STOP_UNSUPPORTED_BUS)
+#endif
+                         );
 
         unsigned stop_in_run = 0u;
         for (size_t i = 0u; i < run.trace_count; ++i) {
@@ -712,6 +755,7 @@ static void fuzz_speed(gbb_instance *machine, const uint8_t *data, size_t size,
             if (record->opcode[0] == 0x10u) {
                 ++stop_in_run;
                 ++last_speed_observation.stop_count;
+                stop_seen = 1;
                 if (scenario == 4u && record->pc == dma_stop_pc)
                     last_speed_observation.saw_hram_dma_stop = 1;
             }
@@ -728,6 +772,23 @@ static void fuzz_speed(gbb_instance *machine, const uint8_t *data, size_t size,
             if (scenario == 3u && record->pc == joyp_write_pc &&
                 record->opcode[0] == 0xE0u && record->opcode[1] == 0x00u && record->a == 0x20u)
                 last_speed_observation.path_flags |= 0x08u;
+#ifdef GBB_FUZZ_STANDALONE_TEST
+            const int record_held_observation =
+                speed_mutation != GBB_FUZZ_SPEED_MUTATION_DROP_HELD_OBSERVATION;
+            const int record_wake_observation =
+                speed_mutation != GBB_FUZZ_SPEED_MUTATION_DROP_WAKE_OBSERVATION;
+#else
+            const int record_held_observation = 1;
+            const int record_wake_observation = 1;
+#endif
+            if (record_held_observation && scenario == 3u && record->pc == joyp_read_pc &&
+                record->opcode[0] == 0xF0u && record->opcode[1] == 0x00u &&
+                (record->a & 0x01u) == 0u)
+                last_speed_observation.path_flags |= 0x20u;
+            if (record_wake_observation && scenario == 3u && dmg_held_path && stop_seen &&
+                record->pc == post_wake_store_pc && record->opcode[0] == 0xEAu &&
+                record->opcode[1] == 0x00u && record->opcode[2] == 0xC0u)
+                last_speed_observation.path_flags |= 0x40u;
             if (scenario == 4u && record->pc == dma_start_pc &&
                 record->opcode[0] == 0xE0u && record->opcode[1] == 0x46u && record->a == 0xC0u)
                 last_speed_observation.path_flags |= 0x10u;
@@ -979,6 +1040,8 @@ int gbb_fuzz_core_last_profile_cgb(void) { return last_profile_cgb; }
 #endif
 
 int gbb_fuzz_core_one_input(const uint8_t *data, size_t size) {
+    memset(&last_speed_observation, 0, sizeof(last_speed_observation));
+    last_profile_cgb = -1;
     if (data == NULL || size == 0u || size > FUZZ_INPUT_LIMIT) return 0;
     memset(&last_hdma_observation, 0, sizeof(last_hdma_observation));
     memset(&last_apu_observation, 0, sizeof(last_apu_observation));

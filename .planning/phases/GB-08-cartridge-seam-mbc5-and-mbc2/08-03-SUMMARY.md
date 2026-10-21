@@ -40,24 +40,45 @@ actuals:
   tasks: 3
   commits: 3
 coverage:
-  - deliverable: "MBC5 mapper: 9-bit ROM banking, RAM enable/banking to 128 KiB, battery, no-RAM window"
-    verification:
-      - {kind: test, ref: "tests/test_mbc5.c#mbc5_rom_banking", status: pass}
-      - {kind: test, ref: "tests/test_mbc5.c#mbc5_ram_enable", status: pass}
-      - {kind: test, ref: "tests/test_mbc5.c#mbc5_ram_banking", status: pass}
-      - {kind: test, ref: "tests/test_mbc5.c#mbc5_battery", status: pass}
+  - id: D1
+    description: "MBC5 mapper: 9-bit ROM banking, RAM enable/banking to 128 KiB, battery, no-RAM window"
     human_judgment: false
-  - deliverable: "Type-aware 8 MiB ceiling that leaves every other type's loader result unchanged"
     verification:
-      - {kind: test, ref: "tests/test_mbc5.c#mbc5_rom_bound", status: pass}
-      - {kind: command, ref: "run-differential.sh --exclude-types 05,06,19,1A,1B,1C,1D,1E", status: pass}
+      - kind: unit
+        ref: "tests/test_mbc5.c#mbc5_rom_banking"
+        status: pass
+      - kind: unit
+        ref: "tests/test_mbc5.c#mbc5_ram_enable"
+        status: pass
+      - kind: unit
+        ref: "tests/test_mbc5.c#mbc5_ram_banking"
+        status: pass
+      - kind: unit
+        ref: "tests/test_mbc5.c#mbc5_battery"
+        status: pass
+  - id: D2
+    description: "Type-aware 8 MiB ceiling that leaves every other type's loader result unchanged"
     human_judgment: false
-  - deliverable: "gbb_rumble_state / GBB_NO_RUMBLE with exact reset, load and saturation semantics"
     verification:
-      - {kind: test, ref: "tests/test_mbc5.c#mbc5_rumble_reset_load", status: pass}
-      - {kind: test, ref: "tests/test_mbc5_internal.c#mbc5_rumble_saturation", status: pass}
-      - {kind: test, ref: "installed_consumer_c / installed_consumer_cpp", status: pass}
+      - kind: unit
+        ref: "tests/test_mbc5.c#mbc5_rom_bound"
+        status: pass
+      - kind: other
+        ref: "run-differential.sh --exclude-types 05,06,19,1A,1B,1C,1D,1E"
+        status: pass
+  - id: D3
+    description: "gbb_rumble_state / GBB_NO_RUMBLE with exact reset, load and saturation semantics"
     human_judgment: false
+    verification:
+      - kind: unit
+        ref: "tests/test_mbc5.c#mbc5_rumble_reset_load"
+        status: pass
+      - kind: unit
+        ref: "tests/test_mbc5_internal.c#mbc5_rumble_saturation"
+        status: pass
+      - kind: unit
+        ref: "installed_consumer_c / installed_consumer_cpp"
+        status: pass
 ---
 
 # Phase 8 Plan 03: MBC5 Summary

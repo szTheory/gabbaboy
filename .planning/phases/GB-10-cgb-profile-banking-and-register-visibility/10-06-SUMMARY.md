@@ -42,22 +42,34 @@ actuals:
   tasks: 3
   commits: 2
 coverage:
-  - deliverable: "Creatable CGB profile, column selection by mode, CPU rows, copy_frame gate"
+  - id: "10-06-profile-and-cpu"
+    description: "CGB and compatibility profile creation, probe parity, and CGB frame-copy gates"
     human_judgment: false
     verification:
-      - {kind: ctest, ref: "cgb_postboot_cgb_cpu_tracer, cgb_postboot_compat_cpu, cgb_postboot_compat_no_rom, cgb_profile_create, cgb_copy_frame_cgb, cgb_probe_parity", status: pass}
-  - deliverable: "Compat title-sum B/HL and I/O literals with flip controls"
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_18 -R '^(cgb_postboot_cgb_cpu_tracer|cgb_postboot_compat_cpu|cgb_postboot_compat_no_rom|cgb_profile_create|cgb_copy_frame_cgb|cgb_probe_parity)$' --output-on-failure --no-tests=error"
+        status: pass
+  - id: "10-06-compat-io"
+    description: "Compatibility title-sum registers and DMG/CGB I/O rows with flipped-field controls"
     human_judgment: false
     verification:
-      - {kind: ctest, ref: "cgb_postboot_compat_title_sum, cgb_postboot_compat_io, cgb_postboot_cgb_io, cgb_postboot_compat_io_flipped, cgb_postboot_cgb_io_flipped", status: pass}
-  - deliverable: "Channel 1 silent at hand-off with an audible retrigger control"
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_18 -R '^(cgb_postboot_compat_title_sum|cgb_postboot_compat_io|cgb_postboot_cgb_io|cgb_postboot_compat_io_flipped|cgb_postboot_cgb_io_flipped)$' --output-on-failure --no-tests=error"
+        status: pass
+  - id: "10-06-channel-1"
+    description: "Channel 1 is silent at hand-off and can be retriggered"
     human_judgment: false
     verification:
-      - {kind: ctest, ref: "cgb_postboot_ch1_silent (mutation with post-boot volume 15 made it fail)", status: pass}
-  - deliverable: "Compat DIV phase frozen at 0x2678 with a sweep"
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_18 -R '^cgb_postboot_ch1_silent$' --output-on-failure --no-tests=error"
+        status: pass
+  - id: "10-06-div-phase"
+    description: "Compatibility DIV phase is pinned by a phase sweep and default check"
     human_judgment: false
     verification:
-      - {kind: ctest, ref: "cgb_postboot_div_phase_sweep, cgb_postboot_div_compat_default", status: pass}
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_18 -R '^(cgb_postboot_div_phase_sweep|cgb_postboot_div_compat_default)$' --output-on-failure --no-tests=error"
+        status: pass
 ---
 
 # Phase 10 Plan 06: CGB post-boot columns and creatable CGB profile Summary
@@ -111,3 +123,7 @@ None.
 None. T-10-09 and T-10-10 mitigations are in place (volume-0 policy proven by test and mutation; HW_TEST only on compat cells with a named Mooneye source).
 
 ## Self-Check: PASSED
+
+## Fresh Coverage Verification (15.1-18)
+
+At source `65e69ca2dc6f51515ebba002361b0966e3b45a17`, the plan-specific Debug build `build/phase15_1_18` freshly passed all 14 mapped CTest cases: CGB/compat CPU and profile behavior, I/O flip controls, silent channel 1, and both DIV checks. This current run supplements the historical producer results above; no physical hardware result is claimed.

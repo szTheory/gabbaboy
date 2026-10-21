@@ -21,23 +21,37 @@ actuals:
 duration: 15 min
 completed: 2026-10-12
 coverage:
-  - deliverable: "DMG profile matches a flat 8 KiB WRAM + VRAM model over 200000 seeded steps; bank pins stay 0/1"
-    verification:
-      - {kind: ctest, ref: "banking_dmg_flat_reference", status: pass}
+  - id: "10-08-dmg-flat-model"
+    description: "DMG banks match a flat WRAM and VRAM reference over 200000 seeded steps"
     human_judgment: false
-  - deliverable: "Negative control: CGB with scrambled banks diverges from the flat model"
     verification:
-      - {kind: ctest, ref: "banking_cgb_diverges_from_flat", status: pass}
+      - kind: unit
+        ref: "ctest --test-dir build/phase15_1_18 -R '^banking_dmg_flat_reference$' --output-on-failure --no-tests=error"
+        status: pass
+  - id: "10-08-cgb-divergence-control"
+    description: "Scrambled CGB banks diverge from the DMG flat reference"
     human_judgment: false
-  - deliverable: "Bank pins survive reset and reload on DMG"
     verification:
-      - {kind: ctest, ref: "banking_dmg_bank_pins_after_reset", status: pass}
+      - kind: unit
+        ref: "ctest --test-dir build/phase15_1_18 -R '^banking_cgb_diverges_from_flat$' --output-on-failure --no-tests=error"
+        status: pass
+  - id: "10-08-dmg-bank-pins"
+    description: "DMG bank pins survive reset and reload"
     human_judgment: false
-  - deliverable: "Tracer correctness digest unchanged (4c7a57ff3d50d228) and DMG baseline pass"
     verification:
-      - {kind: ctest, ref: "banking_tracer_digest_unchanged", status: pass}
-      - {kind: command, ref: "bash tests/scripts/verify-dmg-baseline.sh", status: pass}
+      - kind: unit
+        ref: "ctest --test-dir build/phase15_1_18 -R '^banking_dmg_bank_pins_after_reset$' --output-on-failure --no-tests=error"
+        status: pass
+  - id: "10-08-tracer-and-baseline"
+    description: "Tracer digest and frozen DMG baseline remain unchanged"
     human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_18 -R '^banking_tracer_digest_unchanged$' --output-on-failure --no-tests=error"
+        status: pass
+      - kind: other
+        ref: "bash tests/scripts/verify-dmg-baseline.sh --build-dir build/phase15_1_18"
+        status: pass
 ---
 
 # Phase 10 Plan 08: Banked VRAM and WRAM storage Summary
@@ -72,3 +86,7 @@ None. T-10-12/T-10-13 mitigated: banks set only by reset in this plan, arrays si
 ## Self-Check: PASSED
 
 - tests/test_banking_internal.c exists; commit a554473 is an ancestor of HEAD; all acceptance criteria re-run and pass.
+
+## Fresh Coverage Verification (15.1-18)
+
+At source `65e69ca2dc6f51515ebba002361b0966e3b45a17`, the plan-specific Debug build `build/phase15_1_18` freshly passed all four mapped banking and tracer CTests. The baseline script reported 313 inventory keys, 15 Mooneye keys, 20 acceptance keys, 2 benchmark keys, zero changed rows, and `baseline status=pass`.

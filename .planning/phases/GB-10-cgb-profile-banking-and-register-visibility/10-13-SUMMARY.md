@@ -21,23 +21,42 @@ actuals:
 duration: 45 min
 completed: 2026-10-12
 coverage:
-  - deliverable: "Original fixtures/cgb-banking guest (two ROMs from one source) built with pinned RGBDS 1.0.1, digest-verified"
-    verification:
-      - {kind: ctest, ref: "cgb_banking_fixture_digest", status: pass}
-      - {kind: script, ref: "tests/scripts/reproduce-cgb-banking.sh (result=byte-identical roms=2)", status: pass}
+  - id: 10-13-banking-fixtures
+    description: "Original fixtures/cgb-banking guest (two ROMs from one source) built with pinned RGBDS 1.0.1, digest-verified"
     human_judgment: false
-  - deliverable: "All D-18 cells on CGB mode, compat mode and the DMG profile"
     verification:
-      - {kind: ctest, ref: "cgb_banking_guest_cgb", status: pass}
-      - {kind: ctest, ref: "cgb_banking_guest_compat", status: pass}
-      - {kind: ctest, ref: "cgb_banking_guest_dmg", status: pass}
+      - kind: unit
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_banking_fixture_digest$'"
+        status: pass
+      - kind: other
+        ref: 'PATH="/private/tmp/gabbaboy-phase15_1/rgbds-v1.0.1/tools:$PATH" bash tests/scripts/reproduce-cgb-banking.sh --compare fixtures/cgb-banking'
+        status: pass
+  - id: 10-13-profile-cells
+    description: "All D-18 cells on CGB mode, compat mode and the DMG profile"
     human_judgment: false
-  - deliverable: "Three negative controls (patched expected value, CGB build on DMG profile, skipped SVBK write)"
     verification:
-      - {kind: ctest, ref: "cgb_banking_patched_expected", status: pass}
-      - {kind: ctest, ref: "cgb_banking_cgb_on_dmg", status: pass}
-      - {kind: ctest, ref: "cgb_banking_skip_svbk", status: pass}
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_banking_guest_cgb$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_banking_guest_compat$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_banking_guest_dmg$'"
+        status: pass
+  - id: 10-13-negative-controls
+    description: "Three negative controls (patched expected value, CGB build on DMG profile, skipped SVBK write)"
     human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_banking_patched_expected$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_banking_cgb_on_dmg$'"
+        status: pass
+      - kind: integration
+        ref: "ctest --test-dir build/phase15_1_14 --output-on-failure -R '^cgb_banking_skip_svbk$'"
+        status: pass
 ---
 
 # Phase 10 Plan 13: Original CGB banking fixture Summary
@@ -56,6 +75,10 @@ One original `banking.asm` assembled into `banking-cgb.gb` (`$143 = $80`) and `b
 - `ctest -R '^cgb_banking_'`: 7/7 pass. Full suite `ctest --preset phase1`: 506/506 pass. `bash tests/scripts/verify-dmg-baseline.sh`: `baseline status=pass`, rows=0.
 - `reproduce-cgb-banking.sh` with the pinned toolchain: `result=byte-identical roms=2`. With the host's rgbasm 1.0.4 it refuses ("rgbasm version mismatch"), proving the version guard works.
 - Controls (all assert exact per-cell bytes, not just the verdict): (i) patching the `cp $10` operand at `0x01F1` gives C002 `$FF`, every other cell `$01`, verdict `$EE`; (ii) `banking-cgb.gb` on the DMG profile gives `$FF` for C002, C003, C004, C006, C007, C009, `$01` for C005 and C008, `$00` for C00A, verdict `$EE`; (iii) NOPing the SVBK write at `0x023A` gives C003 `$FF` only, verdict `$EE`. Offsets are asserted (opcode bytes) before patching, so layout drift fails loudly.
+
+## Fresh behavior recheck (2026-10-21)
+
+The current isolated build passed all seven mapped `cgb_banking_*` CTests. With the pinned RGBDS 1.0.1 tools, `reproduce-cgb-banking.sh --compare fixtures/cgb-banking` again reported `result=byte-identical roms=2`. These are current local software-fixture checks; the original full-suite and producer statements above remain historical.
 
 ## Toolchain note
 

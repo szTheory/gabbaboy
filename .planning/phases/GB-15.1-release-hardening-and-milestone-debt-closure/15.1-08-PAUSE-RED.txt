@@ -1,0 +1,36 @@
+workflow-wiring-controls=33
+PASS: saved source receipt binds merged PR and exact-head required checks
+PASS: source-proof self-tests reject stale, missing, failed and wrong-App evidence
+rejected: mixed duplicate required-check evidence
+rejected: stale required-check evidence
+rejected: failed required-check evidence
+rejected: omitted required-check evidence
+rejected: wrong-app required-check evidence
+rejected: runner evidence tag mismatch
+rejected: runner evidence source mismatch
+rejected: runner evidence digest mismatch
+PASS: distinct build/smoke runner identities and bound release evidence
+rejected: mismatched digest-only sidecar
+rejected: multiline digest-only sidecar
+rejected: malformed digest-only sidecar
+PASS: aggregate gate accepts Mac and Windows digest-only sidecars
+rejected: aggregate gate detects mismatched platform sidecar
+PASS: one-line downloaded archive digest sidecar verification
+PASS: complete v0.2 draft inventory reaches the aggregate gate
+rejected: 20 single-asset omissions from the draft inventory
+rejected: evidence bytes altered after the platform manifest
+rejected: schema-1 support sidecar
+PASS: final inventory binds every asset; rejected: incomplete final inventory
+test_malformed_consumer_receipt_rejects_through_delivery_cli (__main__.SubjectValidatorTrustTests.test_malformed_consumer_receipt_rejects_through_delivery_cli) ... ok
+test_subject_supplied_owners_cannot_approve_malformed_evidence (__main__.SubjectValidatorTrustTests.test_subject_supplied_owners_cannot_approve_malformed_evidence) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 2.070s
+
+OK
+PASS: delivery checker positives=2 rejected_controls=16 real_owner_rejections=2
+PASS: published asset verifier parses JSON responses directly and rejects changed/malformed inventory
+PASS: recovery decisions positives=3 rejected_controls=11
+PASS: recovery reads live release state first; identical draft bytes are reused, partial drafts upload only the missing asset
+rejected: changed attachment, concurrent attempt, changed published assets
+PASS: release configuration and exact-head required-check gate

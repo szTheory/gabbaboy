@@ -815,6 +815,16 @@ add_test(NAME cgb_fuzz_profile_select COMMAND test_fuzz_core cgb_profile_select)
 add_test(NAME cgb_fuzz_palette_regressions COMMAND test_fuzz_core cgb_palette)
 add_test(NAME cgb_fuzz_speed_regressions COMMAND test_fuzz_core cgb_speed)
 set_tests_properties(cgb_fuzz_speed_regressions PROPERTIES TIMEOUT 60)
+# Plan 15.1-03: DMG scenario 3 holds RIGHT, retires STOP through the explicit STOP_WAKE seam event and
+# must show post-wake guest progress without any KEY1 access. The mutation controls reject a wrong route,
+# a missing held observation, a missing wake observation, a profile twin, and empty or truncated input,
+# each with its own named diagnostic inside the harness bounds. This does not model physical button wake.
+add_test(NAME cgb_fuzz_dmg_held COMMAND test_fuzz_core cgb_speed_dmg_held)
+add_test(NAME cgb_fuzz_dmg_held_mutation_controls COMMAND test_fuzz_core cgb_speed_dmg_held_mutation_controls)
+set_tests_properties(cgb_fuzz_dmg_held cgb_fuzz_dmg_held_mutation_controls PROPERTIES TIMEOUT 60)
+set_tests_properties(cgb_fuzz_dmg_held PROPERTIES PASS_REGULAR_EXPRESSION "ok 1 - cgb_speed_dmg_held")
+set_tests_properties(cgb_fuzz_dmg_held_mutation_controls PROPERTIES
+  PASS_REGULAR_EXPRESSION "ok 1 - cgb_speed_dmg_held_mutation_controls")
 
 # Invert only the speed harness's guest KEY1 consistency oracle. The speed seed must make it fail,
 # while an existing CGB seed that never selects cgb_speed stays quiet in the same executable.
@@ -1392,14 +1402,16 @@ gbb_add_v02_contract(v02_adoption_docs_controls 90
   [=["mode": "self-test", "negative_controls": [1-9][0-9]*, "positive_success": true, "rejected_controls": [1-9][0-9]*, "target": "docs"]=]
   verify-v02-adoption.py --self-test docs)
 gbb_add_v02_contract(v02_support_ledger 60
-  [=[support-ledger static pass version=0.2.0 cases=107 source-inputs=[1-9][0-9]*]=]
+  [=[support-ledger static pass version=0.2.0 cases=[1-9][0-9]* source-inputs=[1-9][0-9]*]=]
   verify-support-ledger.py --check-ledger)
 gbb_add_v02_contract(v02_support_ledger_controls 120
-  [=[support ledger static self-test passed: positive=1 rejected_controls=3]=]
+  [=[support ledger static self-test passed: positive=1 rejected_controls=5 controls=changed-covered-input,missing-covered-input,added-case-inventory,removed-case-inventory,unparseable-ledger]=]
   verify-support-ledger.py --self-test)
-gbb_add_v02_contract(v02_consumer_controls 360
+gbb_add_v02_contract(v02_consumer_controls 900
   [=["negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
   verify-v02-consumers.py --self-test)
+# Start this long test first in a parallel run (see the stall replay note in tests/acceptance/CMakeLists.txt).
+set_tests_properties(v02_consumer_controls PROPERTIES COST 900)
 gbb_add_v02_contract(v02_performance_controls 90
   [=["negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
   verify-v02-performance.py --self-test)
@@ -1412,6 +1424,44 @@ gbb_add_v02_contract(v02_source_archive_controls 90
 gbb_add_v02_contract(v02_delivery_controls 90
   [=[PASS: delivery checker positives=[1-9][0-9]* rejected_controls=[1-9][0-9]* real_owner_rejections=[1-9]]=]
   verify-v02-delivery.py --self-test)
+# SCAN-LINK: every acceptance-linked executable must name exactly one intended core. The checker reads
+# the generated Ninja link lines and the finished binaries; its self-test feeds it duplicate-core and
+# wrong-core link lines and swapped binaries and requires the intended diagnostics. Link-line and
+# debug-record inspection is implemented for Ninja on ELF and Mach-O only, so it is not registered on
+# Windows rather than being counted as a pass there (see cmake/ExpectedTests.cmake).
+if(NOT WIN32)
+  set(GBB_CORE_LINKAGE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-core-linkage.py")
+  add_test(NAME core_linkage_links
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_CORE_LINKAGE_CHECKER};--check;--build-dir;${PROJECT_BINARY_DIR}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=core-linkage pass targets=[1-9][0-9]* mutant_targets=[1-9][0-9]* identity_normal=[1-9][0-9]* identity_mutant=[1-9][0-9]*"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  add_test(NAME core_linkage_controls
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_CORE_LINKAGE_CHECKER};--self-test;--build-dir;${PROJECT_BINARY_DIR}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=core-linkage self-test pass targets=[1-9][0-9]* .* behavioural=3 rejected_controls=[1-9][0-9]*"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(core_linkage_links PROPERTIES TIMEOUT 60)
+  set_tests_properties(core_linkage_controls PROPERTIES TIMEOUT 180)
+endif()
+# P7-03 / P12-01 / P7-02: fresh evidence must never claim to recover a missing historic red run or M7
+# diagnostic, nor a hosted run that did not happen. The self-test mutates valid records one fact at a
+# time and rejects each defect with its own diagnostic, and proves a failing attempt keeps its diagnostic.
+add_test(NAME historical_limitations_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-historical-limitations.py" --self-test)
+set_tests_properties(historical_limitations_controls PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "historical-limitations self-test pass positives=2 rejected_controls=[1-9][0-9]* retention_fixture=1")
+# Plan 15.1-17: every scope ID keeps an individual disposition bound to the immutable audit commit. The
+# self-test drives the real CLI over a private fixture repository and rejects each named defect (dropped ID,
+# changed original text, fabricated historic pass, receipt-only hosted identity, mismatched source, skipped
+# required check, altered shipped release) with its own diagnostic and no success line. Fixtures are not
+# hosted, hardware or historical proof.
+add_test(NAME closeout_dispositions_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-closeout-dispositions.py" --self-test)
+set_tests_properties(closeout_dispositions_controls PROPERTIES TIMEOUT 120
+  PASS_REGULAR_EXPRESSION "closeout-dispositions self-test pass positives=3 rejected_controls=[1-9][0-9]*")
 set(GBB_AGE_PHASE14_CONTRACT "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py")
 set(GBB_AGE_PHASE14_GUEST_TIMEOUT 15)
 if(GABBABOY_ENABLE_SANITIZERS)
@@ -2589,10 +2639,11 @@ gbb_add_model_gate_test(model_gates_real_doc_mismatch 1 "gate-doc-mismatch"
 gbb_add_model_gate_test(model_gates_release_blocked 1 "gate-unresolved-unknown"
   --release --source "${GBB_MODEL_GATE_REAL_SOURCE}" --doc "${GBB_MODEL_GATE_REAL_DOC}")
 
-# Plan SUMMARY coverage blocks (DECISIONS D-069, LESSONS GB-GSD-015): from Phase 11 on, every
-# entry must be in the GSD classifier's block schema and auto-passable, so /gsd-verify-work never
-# hands an automated deliverable to the owner. Phases 9-10 used a rejected shape; Phase 10 is the
-# negative control.
+# Plan SUMMARY coverage blocks (DECISIONS D-069, LESSONS GB-GSD-015): every entry from Phase 9 on must be in
+# the GSD classifier's block schema and auto-passable, so /gsd-verify-work never hands an automated
+# deliverable to the owner. The live summaries are checked strictly (--since 9) and must pass. The rejection
+# control is the immutable, deliberately malformed tests/data/invalid-summary-coverage.md, not a live
+# summary, so correcting a live summary can never invalidate the negative control.
 set(GBB_SUMMARY_COVERAGE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-summary-coverage.py")
 function(gbb_add_summary_coverage_test name code regex)
   set(command "${Python3_EXECUTABLE}" -I "${GBB_SUMMARY_COVERAGE_CHECKER}"
@@ -2607,9 +2658,47 @@ function(gbb_add_summary_coverage_test name code regex)
   set_tests_properties(${name} PROPERTIES TIMEOUT 60)
 endfunction()
 gbb_add_summary_coverage_test(summary_coverage_selftest 0 "summary-coverage self-test pass mutants=1[2-9]" --self-test)
-gbb_add_summary_coverage_test(summary_coverage 0 "summary-coverage pass files=[0-9]+" --since 11)
-gbb_add_summary_coverage_test(summary_coverage_phase10_rejected 1
-  "summary-coverage-invalid: 10-01-SUMMARY.md: flow-style-not-supported" --since 10)
+gbb_add_summary_coverage_test(summary_coverage 0 "summary-coverage pass files=[0-9]+" --since 9)
+
+set(GBB_INVALID_SUMMARY_FIXTURE "${PROJECT_SOURCE_DIR}/tests/data/invalid-summary-coverage.md")
+set(GBB_INVALID_SUMMARY_FIXTURE_SHA256 "1c8e301b33cd1a2312564f95416d860eb9c1fd30c2d75ec103287db9a2317d31")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_INVALID_SUMMARY_FIXTURE}")
+file(SHA256 "${GBB_INVALID_SUMMARY_FIXTURE}" gbb_invalid_summary_sha256)
+if(NOT gbb_invalid_summary_sha256 STREQUAL GBB_INVALID_SUMMARY_FIXTURE_SHA256)
+  message(FATAL_ERROR "tests/data/invalid-summary-coverage.md is immutable test data: its SHA-256 is "
+    "${gbb_invalid_summary_sha256}, expected ${GBB_INVALID_SUMMARY_FIXTURE_SHA256}. Do not repair the fixture; "
+    "fix the checker or add a second fixture.")
+endif()
+add_test(NAME summary_coverage_invalid_fixture_rejected
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_SUMMARY_COVERAGE_CHECKER};--file;${GBB_INVALID_SUMMARY_FIXTURE}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=summary-coverage-invalid: invalid-summary-coverage[.]md: flow-style-not-supported.*summary-coverage FAIL files=1 problems=1"
+    "-DGBB_FORBID_REGEX=summary-coverage pass"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# The same fixture with only the malformed verification item rewritten in block style must pass, so the
+# rejection above is caused by that item and not by anything else in the file or by a checker that rejects all.
+file(READ "${GBB_INVALID_SUMMARY_FIXTURE}" gbb_invalid_summary_text)
+set(gbb_invalid_summary_item "      - {kind: ctest, ref: \"ctest -R '^fixture$'\", status: pass}")
+string(FIND "${gbb_invalid_summary_text}" "${gbb_invalid_summary_item}" gbb_invalid_summary_first)
+string(FIND "${gbb_invalid_summary_text}" "${gbb_invalid_summary_item}" gbb_invalid_summary_last REVERSE)
+if(gbb_invalid_summary_first EQUAL -1 OR NOT gbb_invalid_summary_first EQUAL gbb_invalid_summary_last)
+  message(FATAL_ERROR "invalid summary fixture: the flow-style item must occur exactly once")
+endif()
+string(REPLACE "${gbb_invalid_summary_item}"
+  "      - kind: integration\n        ref: \"ctest -R '^fixture$'\"\n        status: pass"
+  gbb_invalid_summary_repaired "${gbb_invalid_summary_text}")
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/summary-coverage")
+file(WRITE "${PROJECT_BINARY_DIR}/summary-coverage/repaired-summary-coverage.md" "${gbb_invalid_summary_repaired}")
+add_test(NAME summary_coverage_invalid_fixture_repaired_passes
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_SUMMARY_COVERAGE_CHECKER};--file;${PROJECT_BINARY_DIR}/summary-coverage/repaired-summary-coverage.md"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=summary-coverage pass files=1 entries=1"
+    "-DGBB_FORBID_REGEX=summary-coverage-invalid"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(summary_coverage_invalid_fixture_rejected summary_coverage_invalid_fixture_repaired_passes
+  PROPERTIES TIMEOUT 60)
 
 # Post-boot table mirror (D-06): docs/cgb-profile.md must equal post_boot[] and obey the provenance
 # rules. White-box like test_mbc5_internal, so it includes the core and must not link it.
@@ -2760,8 +2849,9 @@ function(gbb_colour_mutant name test_source fail_test control_test anchor replac
     target_compile_definitions(${library} PRIVATE
       GBB_BUILD_REVISION="colour-mutant-${name}" GBB_BUILD_QUALIFIED=0)
     add_executable(${target} ${test_source})
-    # The acceptance helpers come after the mutant so every core symbol resolves to the mutated copy.
-    target_link_libraries(${target} PRIVATE ${library} gabbaboy_accept)
+    # The core-free acceptance helpers come first and the mutant last, so the mutant is the only core on the
+    # link line and every core symbol resolves to the mutated copy (no inherited normal core).
+    target_link_libraries(${target} PRIVATE gabbaboy_accept_bare ${library})
   endif()
   target_compile_features(${target} PRIVATE c_std_17)
   set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
@@ -3730,14 +3820,14 @@ set_tests_properties(cgb_speed_mutant_m31_stall_offset_noop PROPERTIES TIMEOUT 6
 # --- Phase 12 plan 12-09 begin ---
 add_executable(test_age test_age.c)
 target_include_directories(test_age PRIVATE "${PROJECT_SOURCE_DIR}/include")
-target_link_libraries(test_age PRIVATE GabbaBoy::core gabbaboy_accept)
+target_link_libraries(test_age PRIVATE gabbaboy_accept)
 target_compile_features(test_age PRIVATE c_std_17)
 set_target_properties(test_age PROPERTIES C_EXTENSIONS OFF)
 
 # Phase 14 Plan 09: bounded public-API AGE frame capture plus a standard-library PNG oracle.
 add_executable(test_age_m3 test_age_m3.c)
 target_include_directories(test_age_m3 PRIVATE "${PROJECT_SOURCE_DIR}/include")
-target_link_libraries(test_age_m3 PRIVATE GabbaBoy::core gabbaboy_accept)
+target_link_libraries(test_age_m3 PRIVATE gabbaboy_accept)
 target_compile_features(test_age_m3 PRIVATE c_std_17)
 set_target_properties(test_age_m3 PROPERTIES C_EXTENSIONS OFF)
 set(GBB_AGE_M3_PIXEL_ORACLE "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-m3-pixels.py")
@@ -3833,7 +3923,7 @@ add_executable(test_age_p12 test_age.c)
 target_include_directories(test_age_p12 PRIVATE "${PROJECT_SOURCE_DIR}/include")
 target_compile_features(test_age_p12 PRIVATE c_std_17)
 target_compile_definitions(test_age_p12 PRIVATE GBB_AGE_P12=1)
-target_link_libraries(test_age_p12 PRIVATE gabbaboy_core_p12_mutants gabbaboy_accept)
+target_link_libraries(test_age_p12 PRIVATE gabbaboy_accept_bare gabbaboy_core_p12_mutants)
 set_target_properties(test_age_p12 PROPERTIES C_EXTENSIONS OFF)
 
 # The Phase 14 timing control uses a private one-dot mode-3 startup mutant. The
@@ -3862,7 +3952,7 @@ target_include_directories(test_age_p14 PRIVATE
 target_compile_features(test_age_p14 PRIVATE c_std_17)
 target_compile_definitions(test_age_p14 PRIVATE
   GBB_AGE_P14=1 GBB_BUILD_REVISION="p14-age-mutant-control" GBB_BUILD_QUALIFIED=0)
-target_link_libraries(test_age_p14 PRIVATE gabbaboy_accept)
+target_link_libraries(test_age_p14 PRIVATE gabbaboy_accept_bare)
 set_target_properties(test_age_p14 PROPERTIES C_EXTENSIONS OFF)
 
 set(GBB_AGE_STAT_CGBE_FOUND OFF)
@@ -4195,7 +4285,7 @@ set_tests_properties(age_manifest_unknown_class PROPERTIES TIMEOUT 30)
 set(GBB_CGB_SPEED_DIR "${PROJECT_SOURCE_DIR}/fixtures/cgb-speed")
 add_executable(test_cgb_speed_fixture test_cgb_speed_fixture.c)
 target_include_directories(test_cgb_speed_fixture PRIVATE "${PROJECT_SOURCE_DIR}/src/accept")
-target_link_libraries(test_cgb_speed_fixture PRIVATE GabbaBoy::core gabbaboy_accept)
+target_link_libraries(test_cgb_speed_fixture PRIVATE gabbaboy_accept)
 target_compile_features(test_cgb_speed_fixture PRIVATE c_std_17)
 set_target_properties(test_cgb_speed_fixture PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME cgb_speed_fixture_digest
@@ -4265,7 +4355,7 @@ target_include_directories(test_cgb_speed_fixture_p12 PRIVATE
 target_compile_features(test_cgb_speed_fixture_p12 PRIVATE c_std_17)
 target_compile_definitions(test_cgb_speed_fixture_p12 PRIVATE GBB_P12_PUBLIC_MUTANT=1)
 target_link_libraries(test_cgb_speed_fixture_p12 PRIVATE
-  gabbaboy_core_p12_mutants gabbaboy_accept)
+  gabbaboy_accept_bare gabbaboy_core_p12_mutants)
 set_target_properties(test_cgb_speed_fixture_p12 PROPERTIES C_EXTENSIONS OFF)
 
 add_test(NAME cgb_speed_fixture_audio_digest
