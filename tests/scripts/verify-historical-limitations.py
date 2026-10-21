@@ -224,7 +224,7 @@ def validate_local(local: dict | None, doc: dict) -> list[str]:
     audio = controls.get("audio_saturation") or {}
     if audio.get("kind") != "fresh_sensitivity" or not audio.get("mutation"):
         problems.append("audio_control: the saturation sensitivity record is missing or unlabelled")
-    if audio.get("control_exit") != 0:
+    if audio.get("control_exit") != 0 or audio.get("control_success_line") is not True:
         problems.append("audio_control: the unmutated source did not pass the saturation test")
     if audio.get("mutant_exit") in (0, None):
         problems.append("audio_mutant_survived: reintroducing the pre-fix scaling did not fail the test")
@@ -239,6 +239,8 @@ def validate_local(local: dict | None, doc: dict) -> list[str]:
             or repeats.get("passed") != sum(1 for e in entries if e.get("exit") == 0) \
             or repeats.get("passed", 0) + repeats.get("failed", 0) != M7_ATTEMPTS:
         problems.append(f"m7_attempts: need {M7_ATTEMPTS} consistently recorded attempts")
+    if repeats.get("tests_matched") != 2:
+        problems.append("m7_attempts: the selector must match exactly the M7 mutant and its control")
     if repeats.get("failed") != 0:
         problems.append("m7_failed: a fresh M7 attempt failed; the pass disposition does not hold")
     for entry in entries:
@@ -386,6 +388,11 @@ def retention_fixture(tmp: pathlib.Path) -> dict:
             "retained_contains_marker": True}
 
 
+def has_success_line(text: str) -> bool:
+    """True only for the exact TAP success line; 'not ok 1 - ...' contains it as a substring."""
+    return any(line.strip() == SAT_SUCCESS for line in text.splitlines())
+
+
 def audio_saturation_sensitivity() -> dict:
     """Reintroduce the pre-fix mixer scaling in a scratch copy and require the saturation test to fail.
 
@@ -417,9 +424,9 @@ def audio_saturation_sensitivity() -> dict:
     return {
         "kind": "fresh_sensitivity",
         "mutation": "GBB_AUDIO_MIX_HEADROOM_DIV 16 -> 1",
-        "control_exit": results["control"][0], "control_success_line": SAT_SUCCESS in results["control"][1],
+        "control_exit": results["control"][0], "control_success_line": has_success_line(results["control"][1]),
         "mutant_exit": results["mutant"][0], "mutant_diagnostic": diagnostic,
-        "mutant_success_output_absent": SAT_SUCCESS not in results["mutant"][1],
+        "mutant_success_output_absent": not has_success_line(results["mutant"][1]),
     }
 
 
@@ -480,7 +487,10 @@ def produce_local(args) -> int:
     repeats = run_attempts(
         ["ctest", "--test-dir", str(args.build_dir), "-R", M7_TESTS, "--no-tests=error", "--output-on-failure"],
         M7_ATTEMPTS, args.retain_dir)
-    repeats.update(kind="fresh_repeat", tests=M7_TESTS)
+    listing = subprocess.run(["ctest", "--test-dir", str(args.build_dir), "-N", "-R", M7_TESTS],
+                             capture_output=True, text=True).stdout
+    repeats.update(kind="fresh_repeat", tests=M7_TESTS,
+                   tests_matched=int(re.search(r"Total Tests: (\d+)", listing).group(1)))
     with tempfile.TemporaryDirectory() as tmp:
         retention = retention_fixture(pathlib.Path(tmp))
     record = {
@@ -576,13 +586,14 @@ def synthetic_local() -> dict:
             "audio_saturation": {
                 "kind": "fresh_sensitivity",
                 "mutation": "GBB_AUDIO_MIX_HEADROOM_DIV 16 -> 1",
-                "control_exit": 0, "mutant_exit": 1,
+                "control_exit": 0, "control_success_line": True, "mutant_exit": 1,
                 "mutant_diagnostic": "tests/test_audio.c:378: " + SAT_DIAG,
                 "mutant_success_output_absent": True,
             },
             "m7_repeats": {
                 "kind": "fresh_repeat", "tests": M7_TESTS,
-                "attempts": M7_ATTEMPTS, "passed": M7_ATTEMPTS, "failed": 0, "entries": entries,
+                "tests_matched": 2, "attempts": M7_ATTEMPTS, "passed": M7_ATTEMPTS, "failed": 0,
+                "entries": entries,
             },
             "m7_retention": {
                 "kind": "failure_retention_fixture", "attempts": 3, "failed_attempt": 2,
@@ -716,6 +727,8 @@ def self_test() -> int:
         ("audio_success_output", local_(lambda l: ctl(l, "audio_saturation").update(
             mutant_success_output_absent=False)), True),
         ("audio_control", local_(lambda l: ctl(l, "audio_saturation").update(control_exit=1)), True),
+        ("audio_control", local_(lambda l: ctl(l, "audio_saturation").update(control_success_line=False)), True),
+        ("m7_attempts", local_(lambda l: ctl(l, "m7_repeats").update(tests_matched=0)), True),
         # M7 repeats and diagnostic retention
         ("m7_attempts", local_(lambda l: ctl(l, "m7_repeats").update(attempts=99)), True),
         ("m7_unretained", local_(lambda l: (
@@ -769,6 +782,11 @@ def self_test() -> int:
         if not any(p.startswith(code) for p in problems):
             raise Rejected(f"intended defect {code!r} was not rejected with its own diagnostic: {problems}")
         rejected += 1
+
+    # a failing TAP line must not pass for the success line it contains
+    if not has_success_line("1..1\nok 1 - audio_saturation\n") or has_success_line(
+            "1..1\nnot ok 1 - audio_saturation\n"):
+        raise Rejected("success-line detector confused 'not ok' with 'ok'")
 
     # the suite log parser: both CTest summary forms, and nothing else, count as a result
     clean = parse_ctest("100% tests passed out of 12\nTotal Test time (real) =   3.50 sec\n")
