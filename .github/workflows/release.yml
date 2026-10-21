@@ -403,8 +403,9 @@ jobs:
         run: |
           set -euo pipefail
           archive="$RUNNER_TEMP/source-archive.tar.gz"
-          curl --fail --silent --show-error --location --proto '=https' --max-filesize 1073741824 \
-            --output "$archive" "https://github.com/$GH_REPO/archive/refs/tags/$RELEASE_TAG.tar.gz"
+          # Bounded streaming download (bytes, total and stall time, redirects) from the workflow revision's helper.
+          git show "${GITHUB_SHA}:.github/scripts/download-release-artifact.py" > "$RUNNER_TEMP/download-release-artifact.py"
+          python3 -I "$RUNNER_TEMP/download-release-artifact.py" "https://github.com/$GH_REPO/archive/refs/tags/$RELEASE_TAG.tar.gz" "$archive" --max-bytes 1073741824 --total-timeout 600
           python3 -I tests/scripts/verify-v02-source-archive.py --archive "$archive" \
             --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json
           python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json \
@@ -1162,8 +1163,7 @@ jobs:
             --pattern cgb-corpus-receipt.json --pattern support-ledger.json --pattern v02-performance-receipt.json \
             --pattern v02-fuzz-receipt.json --pattern source-archive-receipt.json --pattern v02-consumer-receipt.json \
             --dir build/evidence-validation
-          curl --fail --silent --show-error --location --proto '=https' --max-filesize 1073741824 \
-            --output "$RUNNER_TEMP/source-archive.tar.gz" "https://github.com/$GH_REPO/archive/refs/tags/$RELEASE_TAG.tar.gz"
+          python3 -I trusted/.github/scripts/download-release-artifact.py "https://github.com/$GH_REPO/archive/refs/tags/$RELEASE_TAG.tar.gz" "$RUNNER_TEMP/source-archive.tar.gz" --max-bytes 1073741824 --total-timeout 600
           bash trusted/.github/scripts/verify-release-gates.sh --check-v02-evidence \
             build/evidence-validation "$RELEASE_TAG" "$SOURCE_SHA" "$RUNNER_TEMP/source-archive.tar.gz"
       - name: Validate the exact candidate asset set after platform smoke

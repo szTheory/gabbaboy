@@ -367,8 +367,8 @@ check_v02_evidence() {
 
 fetch_source_archive() {
   local repo=$1 tag=$2 destination=$3
-  curl --fail --silent --show-error --location --proto '=https' --max-filesize 1073741824 \
-    --output "$destination" "https://github.com/$repo/archive/refs/tags/$tag.tar.gz"
+  python3 -I "$ROOT/.github/scripts/download-release-artifact.py" "https://github.com/$repo/archive/refs/tags/$tag.tar.gz" "$destination" \
+    --max-bytes 1073741824 --total-timeout 600
 }
 
 # Recovery after a publication or readback error. Live release state is read BEFORE any decision, and
@@ -550,6 +550,26 @@ GH
   printf 'rejected: changed attachment, concurrent eligible release, concurrent retry dispatch, stale and absent attempt, changed published assets, unreadable live state\n'
 }
 
+# The gate's own source-archive fetch must go through the bounded helper with the byte and time caps. A shim python3
+# records what the real fetch_source_archive runs; nothing here touches the network.
+fetch_source_archive_self_test() {
+  local dir=$1 log expect_text
+  mkdir -p "$dir/bin"
+  log="$dir/fetch-calls.log"
+  cat > "$dir/bin/python3" <<'SHIM'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$FETCH_LOG"
+SHIM
+  chmod +x "$dir/bin/python3"
+  : > "$log"
+  PATH="$dir/bin:$PATH" FETCH_LOG="$log" fetch_source_archive szTheory/gabbaboy v0.2.0 "$dir/source.tar.gz"
+  [[ $(wc -l < "$log") -eq 1 ]] || fail 'source archive fetch did not run exactly one download'
+  expect_text=$(cat "$log")
+  [[ "$expect_text" == "-I $ROOT/.github/scripts/download-release-artifact.py https://github.com/szTheory/gabbaboy/archive/refs/tags/v0.2.0.tar.gz $dir/source.tar.gz --max-bytes 1073741824 --total-timeout 600" ]] \
+    || fail "source archive fetch bypassed the bounded helper: $expect_text"
+  printf 'PASS: source archive fetch runs the bounded download helper with byte and time caps\n'
+}
+
 case "$mode" in
   --self-test)
     [[ $# -eq 1 ]] || fail 'usage: verify-release-gates.sh --self-test'
@@ -562,6 +582,7 @@ case "$mode" in
     python3 "$ROOT/.github/scripts/verify-release-source-proof.py" --self-test
     temp=$(mktemp -d "${TMPDIR:-/tmp}/gb-release-gates.XXXXXX")
     trap 'rm -rf "$temp"' EXIT HUP INT TERM
+    fetch_source_archive_self_test "$temp/fetch"
     python3 - "$temp" <<'PY'
 import json, pathlib, sys
 root = pathlib.Path(sys.argv[1])
