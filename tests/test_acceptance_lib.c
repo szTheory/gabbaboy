@@ -1,4 +1,5 @@
 #include "gbb_accept.h"
+#include "../src/core/gbb_accept_input.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -494,6 +495,82 @@ static int case_drive_dense_queue(void) {
     PASS("acceptance_drive_dense_queue");
 }
 
+static int case_accept_input_span_edges(void) {
+    size_t rom_length = 0;
+    uint8_t *rom = read_file("fixtures/libbet/libbet.gb", 32768u, &rom_length);
+    REQUIRE(rom != NULL && rom_length == 32768u);
+    gbb_audio_frame frames[GBB_ACCEPT_PCM_FRAMES];
+
+    static const size_t event_counts[] = {0u, 1u, 63u, 64u, 65u};
+    for (size_t c = 0; c < sizeof(event_counts) / sizeof(event_counts[0]); ++c) {
+        gbb_input_event events[65];
+        const size_t count = event_counts[c];
+        for (size_t i = 0; i < count; ++i) {
+            events[i].at_half_dots = 0u;
+            events[i].kind = (i & 1u) == 0u ? GBB_INPUT_BUTTON_PRESS : GBB_INPUT_BUTTON_RELEASE;
+            events[i].value = GBB_BUTTON_A;
+        }
+
+        gbb_instance *instance = NULL;
+        REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) == GBB_OK);
+        REQUIRE(gbb_load_rom(instance, rom, rom_length) == GBB_OK);
+        size_t cursor = 0u, frame_count = 99u;
+        gbb_accept_input_span span = {events, count, &cursor};
+        gbb_run_result result = gbb_accept_run_audio(instance, 0u, &span, NULL, 0u, &frame_count);
+        REQUIRE(result.reason == GBB_STOP_BUDGET && result.consumed_half_dots == 0u);
+        REQUIRE(cursor == 0u && frame_count == 0u);
+
+        result = gbb_accept_run_audio(instance, 64u, &span, frames, GBB_ACCEPT_PCM_FRAMES, &frame_count);
+        if (result.reason != GBB_STOP_BUDGET || result.consumed_half_dots == 0u ||
+            result.consumed_half_dots > 64u || cursor != count) {
+            fprintf(stderr, "span edge count=%zu reason=%d consumed=%llu cursor=%zu\n", count,
+                    (int)result.reason, (unsigned long long)result.consumed_half_dots, cursor);
+            gbb_destroy(instance);
+            free(rom);
+            return 1;
+        }
+
+        /* A later public run and a new private borrow prove the prior cursor was
+         * not retained in the opaque instance after return. */
+        result = gbb_run(instance, 0u, NULL, 0u);
+        REQUIRE(result.reason == GBB_STOP_BUDGET && result.consumed_half_dots == 0u);
+        size_t empty_cursor = 0u;
+        const gbb_accept_input_span empty = {NULL, 0u, &empty_cursor};
+        result = gbb_accept_run_audio(instance, 0u, &empty, NULL, 0u, &frame_count);
+        REQUIRE(result.reason == GBB_STOP_BUDGET && result.consumed_half_dots == 0u);
+        REQUIRE(empty_cursor == 0u);
+        gbb_destroy(instance);
+    }
+
+    /* A malformed span and a span mixed with the public queue are rejected
+     * before either the guest or caller cursor changes. */
+    gbb_instance *instance = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) == GBB_OK);
+    REQUIRE(gbb_load_rom(instance, rom, rom_length) == GBB_OK);
+    gbb_input_event unordered[] = {
+        {8u, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_A},
+        {7u, GBB_INPUT_BUTTON_RELEASE, GBB_BUTTON_A}
+    };
+    size_t cursor = 0u, frame_count = 0u;
+    gbb_accept_input_span invalid_span = {unordered, 2u, &cursor};
+    gbb_run_result result = gbb_accept_run_audio(instance, 32u, &invalid_span, frames,
+                                                 GBB_ACCEPT_PCM_FRAMES, &frame_count);
+    REQUIRE(result.reason == GBB_STOP_INVALID_STATE && result.consumed_half_dots == 0u && cursor == 0u);
+
+    const gbb_input_event queued = {0u, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_A};
+    REQUIRE(gbb_queue_events(instance, &queued, 1u) == GBB_OK);
+    gbb_input_event span_event = {0u, GBB_INPUT_BUTTON_RELEASE, GBB_BUTTON_A};
+    gbb_accept_input_span mixed_span = {&span_event, 1u, &cursor};
+    result = gbb_accept_run_audio(instance, 32u, &mixed_span, frames, GBB_ACCEPT_PCM_FRAMES, &frame_count);
+    REQUIRE(result.reason == GBB_STOP_INVALID_STATE && result.consumed_half_dots == 0u && cursor == 0u);
+    result = gbb_run(instance, 32u, NULL, 0u);
+    REQUIRE(result.reason == GBB_STOP_BUDGET && result.consumed_half_dots > 0u &&
+            result.consumed_half_dots <= 32u);
+    gbb_destroy(instance);
+    free(rom);
+    PASS("acceptance_input_span_edges");
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) { fprintf(stderr, "usage: test_acceptance_lib <case> [args]\n"); return 2; }
     if (strcmp(argv[1], "acceptance_lib_libbet_replay") == 0) {
@@ -508,6 +585,7 @@ int main(int argc, char **argv) {
         return case_predicate_anchors(argv[2]);
     }
     if (strcmp(argv[1], "acceptance_drive_dense_queue") == 0) return case_drive_dense_queue();
+    if (strcmp(argv[1], "acceptance_input_span_edges") == 0) return case_accept_input_span_edges();
     fprintf(stderr, "unknown case %s\n", argv[1]);
     return 2;
 }

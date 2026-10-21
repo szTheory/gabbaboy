@@ -1,4 +1,5 @@
 #include "gbb_accept.h"
+#include "../core/gbb_accept_input.h"
 
 #include <string.h>
 
@@ -15,15 +16,18 @@ void gbb_accept_stepper_init(gbb_accept_stepper *stepper, gbb_instance *instance
     stepper->last_stop = GBB_STOP_BUDGET;
 }
 
-enum gbb_accept_step_status gbb_accept_advance_to(gbb_accept_stepper *s, uint64_t deadline) {
+static enum gbb_accept_step_status advance_to_span(gbb_accept_stepper *s, uint64_t deadline,
+                                                   const gbb_accept_input_span *span) {
     if (s->actual_half_dots >= deadline) return GBB_ACCEPT_STEP_OK;
     uint64_t guard = (deadline - s->actual_half_dots) / 4u + 1024u;
     while (s->actual_half_dots < deadline) {
         if (guard-- == 0) return GBB_ACCEPT_STEP_GUARD;
         uint64_t budget = deadline - s->actual_half_dots;
         size_t written = 0;
-        gbb_run_result r = gbb_run_audio(s->instance, budget, s->frames, GBB_ACCEPT_PCM_FRAMES,
-                                         &written);
+        gbb_run_result r = span == NULL
+            ? gbb_run_audio(s->instance, budget, s->frames, GBB_ACCEPT_PCM_FRAMES, &written)
+            : gbb_accept_run_audio(s->instance, budget, span, s->frames, GBB_ACCEPT_PCM_FRAMES,
+                                   &written);
         s->actual_half_dots += r.consumed_half_dots;
         s->last_stop = r.reason;
         if (written != 0 && s->sink != NULL) s->sink(s->sink_context, s->frames, written);
@@ -38,6 +42,13 @@ enum gbb_accept_step_status gbb_accept_advance_to(gbb_accept_stepper *s, uint64_
         case GBB_STOP_OUTPUT_FULL: /* PCM buffer filled; frames already sunk */
         case GBB_STOP_HALTED_IDLE: /* eligible idle ticks advanced; keep going */
             break;
+        case GBB_STOP_STOPPED:
+            if (span != NULL && *span->cursor < span->count &&
+                span->events[*span->cursor].at_half_dots <= deadline &&
+                r.consumed_half_dots < budget) {
+                break; /* resume stopped time only when the borrowed stream has a deadline */
+            }
+            return GBB_ACCEPT_STEP_STOPPED;
         default:
             return GBB_ACCEPT_STEP_STOPPED;
         }
@@ -45,12 +56,12 @@ enum gbb_accept_step_status gbb_accept_advance_to(gbb_accept_stepper *s, uint64_
     return GBB_ACCEPT_STEP_OK;
 }
 
-static uint8_t peek_instance(void *context, uint16_t address) {
-    return gbb_peek_ram((const gbb_instance *)context, address);
+enum gbb_accept_step_status gbb_accept_advance_to(gbb_accept_stepper *stepper, uint64_t deadline) {
+    return advance_to_span(stepper, deadline, NULL);
 }
 
-static bool queue_on_instance(gbb_instance *instance, const gbb_input_event *events, size_t count) {
-    return gbb_queue_events(instance, events, count) == GBB_OK;
+static uint8_t peek_instance(void *context, uint16_t address) {
+    return gbb_peek_ram((const gbb_instance *)context, address);
 }
 
 void gbb_accept_drive(const gbb_accept_drive_config *cfg, gbb_accept_drive_result *result) {
@@ -67,6 +78,7 @@ void gbb_accept_drive(const gbb_accept_drive_config *cfg, gbb_accept_drive_resul
 
     uint64_t logical = stepper->actual_half_dots;
     size_t next_event = 0, next_mark = 0;
+    gbb_accept_input_span input_span = {script->events, script->event_count, &next_event};
     uint64_t boundary_k = logical / GBB_ACCEPT_HALF_DOTS_PER_FRAME + 1u;
 
     for (;;) {
@@ -92,33 +104,35 @@ void gbb_accept_drive(const gbb_accept_drive_config *cfg, gbb_accept_drive_resul
             deadline = script->end_half_dots;
         }
 
-        /* Deliver pending events that fall in this window, at most max_batch
-         * at a time; a fuller window is shortened to the last batched event. */
-        size_t batch_end = next_event;
-        while (batch_end < script->event_count &&
-               script->events[batch_end].at_half_dots <= deadline &&
-               batch_end - next_event < cfg->max_batch) {
-            batch_end++;
-        }
-        if (batch_end < script->event_count && batch_end - next_event == cfg->max_batch &&
-            script->events[batch_end].at_half_dots <= deadline) {
-            deadline = script->events[batch_end - 1u].at_half_dots;
-        }
-        if (batch_end > next_event) {
-            const gbb_input_event *events = script->events + next_event;
-            size_t count = batch_end - next_event;
-            bool ok = cfg->deliver != NULL ? cfg->deliver(cfg->context, events, count)
-                                           : queue_on_instance(stepper->instance, events, count);
-            if (!ok) {
-                result->status = GBB_ACCEPT_DRIVE_DELIVER_FAILED;
-                result->end_half_dots = logical;
-                return;
+        /* Custom adopters keep their bounded delivery callback. The default
+         * acceptance path lends the immutable span to the core per run call,
+         * where due events are copied through the existing 64-entry queue. */
+        if (cfg->deliver != NULL) {
+            size_t batch_end = next_event;
+            while (batch_end < script->event_count &&
+                   script->events[batch_end].at_half_dots <= deadline &&
+                   batch_end - next_event < cfg->max_batch) {
+                batch_end++;
             }
-            next_event = batch_end;
+            if (batch_end < script->event_count && batch_end - next_event == cfg->max_batch &&
+                script->events[batch_end].at_half_dots <= deadline) {
+                deadline = script->events[batch_end - 1u].at_half_dots;
+            }
+            if (batch_end > next_event) {
+                const gbb_input_event *events = script->events + next_event;
+                size_t count = batch_end - next_event;
+                if (!cfg->deliver(cfg->context, events, count)) {
+                    result->status = GBB_ACCEPT_DRIVE_DELIVER_FAILED;
+                    result->end_half_dots = logical;
+                    return;
+                }
+                next_event = batch_end;
+            }
         }
 
         if (deadline > logical) {
-            enum gbb_accept_step_status st = gbb_accept_advance_to(stepper, deadline);
+            enum gbb_accept_step_status st = advance_to_span(stepper, deadline,
+                                                              cfg->deliver == NULL ? &input_span : NULL);
             if (st != GBB_ACCEPT_STEP_OK) {
                 result->status = st == GBB_ACCEPT_STEP_GUARD ? GBB_ACCEPT_DRIVE_GUARD
                                                              : GBB_ACCEPT_DRIVE_STOPPED;
