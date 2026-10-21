@@ -847,3 +847,11 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Applies when:** A prohibition spans several distribution trees or a new fixture family reuses an older package check. Scanner capability alone does not prove every producer invokes it with the required inputs.
 - **Verification:** The new control failed with the original MBC-only scan accepting the payload. The combined-manifest scan passed the focused package/install/ledger selection 6/6; independent bounded review found no defect. Existing test registration and inventory are unchanged.
 - **Source:** Phase 10 plan 10-15 G1; `10-REFRESH-GATES.md`; `cmake/PreviewPackageSmoke.cmake`.
+
+### GB-EVID-001 / 2026-10-21 / A closeout record must be bound to the original, not to a claim about it
+
+- **Cause and evidence:** Phase 15.1 had to disposition 24 inherited items without rewriting them. A record that only restated each item could drop an ID, soften its text, count a hosted receipt label as a run, count a skipped required check as a pass, or fold an unrecoverable historical fact into a green row, and a stub checker that only parsed the JSON accepted all of them (`15.1-17-RED-task1.txt`).
+- **Remedy:** Pin the scope inventory by digest, re-read the original text at the immutable audit commit, require hosted identities to equal API-read run records, keep limitations as open rows that cannot count as passes or owner acceptance, and pin the shipped release identity. Drive every defect through the real CLI over a private fixture repository.
+- **Applies when:** A phase closes inherited debt, historical unknowns or external limitations, or a receipt-style record could be edited together with the text it vouches for.
+- **Verification:** `verify-closeout-dispositions.py --self-test` rejects 30 defects, each with its own REJECT code and no success line; `--check` passes over the real records. The merge receipt is read from the hosting API, never written from memory.
+- **Source:** Phase 15.1 plan 17; `tests/scripts/verify-closeout-dispositions.py`; `15.1-DISPOSITIONS.json`.
