@@ -39,14 +39,26 @@ actuals:
 duration: 40 min
 completed: 2026-10-11
 coverage:
-  - deliverable: "Unified battery image with RTC block, validated import, never-advancing import"
-    verification: [{kind: ctest, ref: "tests/test_rtc_battery.c#rtc_block_roundtrip,rtc_block_corruption_matrix,rtc_import_never_advances,rtc_block_reset_roundtrip,rtc_block_generation,rtc_battery_size_types", status: pass}]
+  - id: D1
+    description: "Unified battery image with RTC block, validated import, never-advancing import"
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build --output-on-failure --no-tests=error -R '^(rtc_block_roundtrip|rtc_block_corruption_matrix|rtc_import_never_advances|rtc_block_reset_roundtrip|rtc_block_generation|rtc_battery_size_types)$'"
+        status: pass
     human_judgment: false
-  - deliverable: "gbb_rtc_catch_up with GBB_NO_RTC and exact modular semantics"
-    verification: [{kind: ctest, ref: "tests/test_rtc_battery.c#rtc_catch_up_*", status: pass}]
+  - id: D2
+    description: "gbb_rtc_catch_up with GBB_NO_RTC and exact modular semantics"
+    verification:
+      - kind: unit
+        ref: "ctest --test-dir build --output-on-failure --no-tests=error -R '^rtc_catch_up_.*$'"
+        status: pass
     human_judgment: false
-  - deliverable: "Pure host catch-up policy and formatter"
-    verification: [{kind: ctest, ref: "tests/test_catch_up_policy.c#catch_up_policy_table", status: pass}]
+  - id: D3
+    description: "Pure host catch-up policy and formatter"
+    verification:
+      - kind: unit
+        ref: "ctest --test-dir build --output-on-failure --no-tests=error -R '^catch_up_policy_table$'"
+        status: pass
     human_judgment: false
 ---
 
@@ -100,3 +112,8 @@ None beyond the plan's register (T-09-16..19 mitigated and tested).
 ## Self-Check: PASSED
 
 Files exist (test_rtc_battery.c, catch_up_policy.c/.h, test_catch_up_policy.c) and commits d1b3b7d, 54132d0, 2803615 are on the branch.
+
+## Fresh Focused Evidence (15.1-12)
+
+- The available focused core CTest invocation passed 27/27 selected RTC, policy, continuation-guest and rtc3test cases. This includes battery image round-trip/corruption cases, catch-up error and boundary cases, the policy table, continuation guests, transcript comparisons and the rtc3test negative control.
+- The full historical phase regression count in the original verification section is retained as producer evidence; no full suite was run for this refresh.

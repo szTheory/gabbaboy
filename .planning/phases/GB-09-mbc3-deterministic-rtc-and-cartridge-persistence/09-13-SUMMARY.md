@@ -41,14 +41,26 @@ key-decisions:
 duration: 55 min
 completed: 2026-10-11
 coverage:
-  - deliverable: "Envelope v2 codec, reject matrix, max size, seven fault points"
-    verification: [{kind: ctest, ref: "tests/player/test_session.c#player_session_v2_*", status: pass}]
+  - id: D1
+    description: "Envelope v2 codec, reject matrix, max size, seven fault points"
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build/phase3-player/gabbaboy --output-on-failure --no-tests=error -R '^(player_session_v2_.*|player_session_v1_(corpus_load|mbc1_write_identical)|player_session_classification_drift|player_session_rom_cap_8mib|player_continuation_mbc3_.*|player_continuation_mbc2_resume|player_continuation_mbc5_resume|player_session_clock_flag_scope)$'"
+        status: pass
     human_judgment: false
-  - deliverable: "v0.1 corpus loads and re-encodes byte-identically"
-    verification: [{kind: ctest, ref: "tests/player/test_session.c#player_session_v1_corpus_load,player_session_v1_mbc1_write_identical", status: pass}]
+  - id: D2
+    description: "v0.1 corpus loads and re-encodes byte-identically"
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build/phase3-player/gabbaboy --output-on-failure --no-tests=error -R '^(player_session_v2_.*|player_session_v1_(corpus_load|mbc1_write_identical)|player_session_classification_drift|player_session_rom_cap_8mib|player_continuation_mbc3_.*|player_continuation_mbc2_resume|player_continuation_mbc5_resume|player_session_clock_flag_scope)$'"
+        status: pass
     human_judgment: false
-  - deliverable: "Core-derived classification and 8 MiB cap"
-    verification: [{kind: ctest, ref: "tests/player/test_session.c#player_session_classification_drift,player_session_rom_cap_8mib", status: pass}]
+  - id: D3
+    description: "Core-derived classification and 8 MiB cap"
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build/phase3-player/gabbaboy --output-on-failure --no-tests=error -R '^(player_session_v2_.*|player_session_v1_(corpus_load|mbc1_write_identical)|player_session_classification_drift|player_session_rom_cap_8mib|player_continuation_mbc3_.*|player_continuation_mbc2_resume|player_continuation_mbc5_resume|player_session_clock_flag_scope)$'"
+        status: pass
     human_judgment: false
 ---
 
@@ -99,3 +111,8 @@ None beyond the register: T-09-24 (allow-lists, uint64 total, exact size), T-09-
 ## Self-Check: PASSED
 
 Modified files exist; commits ea827a0 and 7d262c1 are on the branch.
+
+## Fresh Focused Evidence (15.1-12)
+
+- The existing player CTest build passed 22/22 selected session and continuation tests, including v2 bounds/rejection/fault cases, v1 corpus compatibility, classification drift, the ROM size cap, and RTC/MBC2/MBC5 continuation controls.
+- The original hosted, sanitizer and package-receipt statements remain tied to their recorded producers; this refresh does not claim a new hosted or sanitizer run.
