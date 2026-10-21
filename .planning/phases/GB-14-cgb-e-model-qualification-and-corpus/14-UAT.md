@@ -2,41 +2,13 @@
 status: complete
 phase: GB-14-cgb-e-model-qualification-and-corpus
 source: 14-01-SUMMARY.md, 14-02-SUMMARY.md, 14-03-SUMMARY.md, 14-04-SUMMARY.md, 14-05-SUMMARY.md, 14-06-SUMMARY.md, 14-07-SUMMARY.md, 14-08-SUMMARY.md, 14-09-SUMMARY.md, 14-10-SUMMARY.md, 14-11-SUMMARY.md, 14-12-SUMMARY.md, 14-13-SUMMARY.md
-started: 2026-10-16T12:17:25.662739+00:00
-updated: 2026-10-16T12:23:07.844Z
+started: 2026-10-20T23:47:12.640225+00:00
+updated: 2026-10-20T23:47:12.640225+00:00
 ---
 
 ## Automated Evidence
 
-OpenGSD 1.16.0 classifies every one of the 49 structured SUMMARY deliverables across 13 plans as automated: zero present entries or errors. D-069 and the owner instruction authorize automated closure without a confirmation-only checkpoint. Both auto-advance flags remain false.
-
-All 13 bounded commit windows reconcile against reachable ancestors. Four SUMMARY files (14-05, 14-09, 14-10, 14-11) use the legacy `actuals.commits` location; these produce a top-level-field warning, and their exact base/after counts were independently checked. History-redaction mappings remain preserved; no lost task commit is inferred from an unbounded base-to-current-HEAD count.
-
-| Plan | Base | After | Claimed / measured |
-|---|---|---|---|
-| 14-01 | `e463512aae7ce03e2b429973b4baf2b40d67297d` | `1ddacb60962d32e23133ef72de4bc4d105037d60` | 12 / 12 |
-| 14-02 | `6c5b7040a40a25ca1f21aae11f97a8268d05c80b` | `01e1797a4720926a7ef843935fabb562360a4913` | 4 / 4 |
-| 14-03 | `72dd987ab214a888c5605d7a2e015ff8f7d82c3c` | `e6e89a8f1730c004df9c90829b583c4853d07003` | 4 / 4 |
-| 14-04 | `b7044289ccae28d48a02f70a51ef7ec791357c21` | `7635b3886664fb5f08e93bfb3aa842fc9dc10fc7` | 4 / 4 |
-| 14-05 | `f019f755f66f6b41fc00b39807df4bd32b19bf69` | `3cacf9822f2a36ce787920adaae56e996cf4ccc8` | 3 / 3 |
-| 14-06 | `74bad9a53867584190e7be66c32d6c387b9f03b3` | `4c927c4bf87dbabc41042c6757340d4e04f757ea` | 4 / 4 |
-| 14-07 | `e566a7fcd149ac7b6e801a61c0ed2ce15ca7044f` | `cb54cc62c2985eaef63d4f6f2d820d21ddde1c09` | 5 / 5 |
-| 14-08 | `b04f2378d8a4f931006d90b7415262a432baaf22` | `bc33b8941c3a4381681ff80921d1619fb815eaa7` | 6 / 6 |
-| 14-09 | `ff3367ca22eac6f87cf8bbcb542264dd0c50bafe` | `f3827cc56b9198edc38d8f3c6215697ccbe9c662` | 4 / 4 |
-| 14-10 | `affaa4f28665e2e5a4c655cf67b199bf8088c37a` | `7721a5cefe05eaf4ce43188441ac82f8c42c61c3` | 5 / 5 |
-| 14-11 | `b78ba07c2f36d1fa837a90cbcd7d1d13742805d2` | `8b1f120fa296ae1212bdf68e6147e0da3c5db47f` | 7 / 7 |
-| 14-12 | `30fcb3a9bb6b8ed36f3f4e29225807c298d3e993` | `e21112c259a10d1d6c6a049eddb852435104facc` | 12 / 12 |
-| 14-13 | `b1ff601e665a45816a9606f1af5c5035e5ee8668` | `a29f8c92c84e072cb23775bdfecd88a8a839bc39` | 6 / 6 |
-
-Execution head `9c5b32dc4c75ad5f9eba44ff1c7b0a15ba0f9c7f` has exact-head hosted receipts: [CI](https://github.com/szTheory/gabbaboy/actions/runs/38845800948) 8/8, [fixture reproduction](https://github.com/szTheory/gabbaboy/actions/runs/38845800952) 7/7, [package smoke](https://github.com/szTheory/gabbaboy/actions/runs/38845800953) 4/4, every job successful and none skipped. Linux passed 1,138/1,138, Windows 1,126/1,126 and Linux ASan/UBSan 1,133/1,133. These receipts belong to that execution revision; the final UAT revision requires its own exact-head checks before merge. GitHub holds the latest published head and merge receipt.
-
-The complete software corpus has 107 cases, 25 actual passes and 82 matched expected failures. Hardware CGB-E remains UNKNOWN/POLICY; analog/perceptual output, IR peers and game acceptance remain unqualified. Rights/model exclusions stay outside the executed denominator. Phase 15 owns acceptance and release, including release PR #70. No Phase 15 work is started here.
-
-The verify-pre API gate initially selected the hardware `14-SOURCE-COVERAGE.md` as an external API matrix. `COVERAGE.md` now records the existing no-external-integration decision; the enabled gate passes without a fake capability or disabled check. UI scope is limitation-copy only, already covered by executable copy contracts; there is no browser or perceptual checkpoint. Existing security has zero open threats, and completed security/Nyquist/UI hooks are reused.
-
-`python3 .planning/phases/GB-14-cgb-e-model-qualification-and-corpus/verify-uat-contract.py --self-test` preserves every SUMMARY/id/criterion/evidence mapping, exact commit windows, and the completed handoff, including the machine-readable state route and Phase 15 pause. It rejects weakened records and stale routes locally. Recurring behavior, mutations, summary schema, consumer, package and corpus checks already run in CI; this boundary-only check adds no dependency or duplicate CI lane. Reopen completed UAT only for a changed covered contract, a concrete regression, or stale/unavailable evidence. The next owner-selected command is `/gsd-discuss-phase 15`.
-
-Fresh local regression at producer/source `cd3f6856c48df99a43665a96d99176d9557a6578` completed the configure/build and full CTest run: 1,138/1,138 passed with zero failures, errors or skips. The installed required-test inventory verified all 1,138 cases, and the frozen DMG JUnit inventory verified 258 names. Nonce `d6c53ece9cb5aa28f15ab663d1539b24` produced a complete 107/107 required-case corpus receipt: 25 observed passes, 82 matched expected failures, and 4,959 assertions (2,845 passing; 2,114 failing observations within matched xfails), with zero excluded or unrun cases. The full-regression JUnit SHA-256 is `7b1ececc5221becf764b7c6fecd4da1e2ac2d4d805884739218e8ee9d39f192d`; the corpus-receipt SHA-256 is `f14198a579f2cc8b1577a136a5998f2835a4fc65d3021096974a28d9758292de`. Corpus inventory, report controls, privacy allowlist, claims and UAT checks pass; UAT closes 49/49 deliverables and 13/13 commit windows, with 29 negative controls passing (17 closure, 10 handoff, 2 commit). These are local receipts. Hosted green remains bound to `9c5b32dc4c75ad5f9eba44ff1c7b0a15ba0f9c7f`; exact-head hosted checks for final UAT metadata remain separate and pending.
+Fresh source b52a4dabf244b7e37d4fc7bd22d8830927d65955: core 1,144/1,144, player 98/98, separate installed-package 5/5 and relocated C/C++ behaviors pass. Nonce-bound selected 108-test stream produces 107 cases (25 observed passes, 82 exact expected failures), accepted by the claims checker. Frozen DMG baseline has zero changed rows; core 258/player 55 frozen identities covered. All 13 bounded historical windows reconcile with two commit and ten immutable-handoff controls. See 14-REFRESH-EVIDENCE.md and 14-REFRESH-GATES.md for receipt hashes, commands, scope and limitations. This refresh adds no hosted/hardware/perceptual qualification and accepts no audit debt.
 
 ## Current Test
 

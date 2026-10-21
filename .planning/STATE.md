@@ -2,21 +2,21 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_phase: 13
-current_phase_name: CGB HDMA
-current_plan: 12/12 complete
+current_phase: 14
+current_plan: 13/13 complete
 status: completed
-stopped_at: Phase 13 verification refresh complete; Phase 14 verification refresh next
-last_updated: "2026-10-20T23:32:42.226239+00:00"
+last_updated: "2026-10-20T23:56:51.838Z"
 last_activity: 2026-10-20
-last_activity_desc: Refreshed Phase 13 goal verification and canonical 45-row UAT; Phase 14 remains
-state_head: 3930668cb49dba7289dff34696d8de2ee96492ed
+last_activity_desc: Refreshed Phase 14 verification and canonical UAT; paused before milestone completion
+state_head: b52a4dabf244b7e37d4fc7bd22d8830927d65955
 progress:
   total_phases: 9
   completed_phases: 9
   total_plans: 134
   completed_plans: 134
   percent: 100
+stopped_at: Phase 14 verification refresh complete; Phase 8 preview-package verification refresh next
+current_phase_name: CGB-E Model Qualification and Corpus
 ---
 
 # Project State
@@ -26,9 +26,23 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Refresh stale phase verification before v0.2 milestone completion
+**Current focus:** Phase 8 verification refresh for the later preview-package exclusion change
 
 ## Current Position
+
+Completed stage: **Phase 14 — CGB-E Model Qualification and Corpus, verification refresh**. All 13 implementation plans were already complete. Canonical [verification](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes **41/41 truths**, all **28 artifact declarations** and **13 traced links**; CGB-08 and CGB-10 remain satisfied. Installed OpenGSD freshness is `passed` over the verifier's covered set.
+
+Fresh source `b52a4da` passed configured core regression **1,144/1,144** in **385.46 seconds**, rebuilt player **98/98** in **17.10 seconds**, and separate installed-package **5/5** in **1.80 seconds**, all zero skips. Relocated C/C++ consumers pass profile/probe/RGB555/RTC behavior. The inherited core cache omitted five optional installed-package rows; their separate fresh run plus the original stream covers **258/258** frozen core identities. Frozen DMG baseline: zero changed rows.
+
+A separately identified nonce-bound **108/108** CTest stream produces **107/107 cases: 25 observed passes, 82 matched expected failures**, accepted by the claim checker. Canonical [14-UAT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md) closes **49/49** automated deliverables with **19 rejected controls**, zero human checkpoints. All **13** bounded historical task windows reconcile; immutable handoff controls read their completed boundary, not live routes. See [14-REFRESH-EVIDENCE.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-REFRESH-EVIDENCE.md) for receipt hashes and separation of producers.
+
+[14-REFRESH-GATES.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-REFRESH-GATES.md) preserves historical audit applicability, eight fixed findings, selected current positive/negative controls and the degraded squash-history scope resolver. No fresh full security audit, RGBDS 1.0.1 rebuild, CMake-floor build, hosted Windows/sanitizer run, performance, hardware or perceptual qualification is claimed. Physical CGB-E remains UNKNOWN/POLICY. Historical release and hosted receipts retain their actual producer revisions.
+
+Next corrective phase: **8 — Cartridge Seam, MBC5 and MBC2, verification refresh only**. The final owner check found its report stale over `cmake/PreviewPackageSmoke.cmake`, changed later by Phase 10 commit `1ba2346` to enforce CGB fixture exclusion. Exact next command: `/gsd-execute-phase 8`. This is a concrete changed-input gap; do not replay its completed implementation. Phase 12 also remains stale over the lessons/index metadata changed by the prior Phase 13 refresh; all remaining reports pass. Phase 15 is already complete/currently verified. Milestone completion review remains pending after Phase 8; the audit retains **28/28 satisfied requirements and 21 debt items**, none accepted here. No archive, tag, release or next milestone starts; both auto flags remain false. v0.3 remains provisional.
+
+Review stack: `gsd/phase-14-verification-refresh` builds on Phase 13 refresh PR #89. Boundary triage: no open issues; PRs #78–89 and release-please #75 remain open. Required exact reviewed-head checks must pass before any merge. Preserve the pre-existing config/state.json changes. The completion CLI accepted 13/13 but again incremented already-complete phase count to 10/9 and derived last-phase routing; current artifacts restore 9/9 and the explicit completion-review route. The final six-surface live handoff check passes ten rejected controls (stale prose/machine routes, either auto flag, excess phase count and incomplete Phase 15). Its seven heuristic path warnings are commands, upstream source names, brace shorthand, diagnostic prose or historical locks; all 28 actual artifact declarations pass. Global learning export is disabled; no qualifying LEARNINGS files, pending phase todos or stale handoff were found.
+
+### Historical Phase 13 verification refresh
 
 Completed stage: **Phase 13 — CGB HDMA, verification refresh**. All 12 implementation plans were already complete. The refreshed [verification report](phases/GB-13-cgb-hdma/13-VERIFICATION.md) passes **37/37 truths**, 49 artifact declarations, 12 independently traced links and one test-tier prohibition. CGB-07 remains satisfied; OpenGSD freshness is `passed` over 107 covered files. The generic key-link detector could not interpret the narrative declarations; the verifier traced actual wiring and executed predicates.
 
@@ -46,12 +60,12 @@ Review stack: branch `gsd/phase-13-verification-refresh` builds on Phase 12 refr
 
 ### Historical Phase 14 handoff (superseded route; preserved receipts)
 
-Phase: 14 — CGB-E Model Qualification and Corpus
-Status: Phase 14 automated UAT complete; paused for the owner
-Current Plan: 13
+Phase: 14
+Status: All phases complete
+Current Plan: Not started
 Total Plans in Phase: 13
-Last Activity: 2026-10-16
-Last Activity Description: Phase 14 automated UAT complete; 49/49 automated; next Phase 15 discussion
+Last Activity: 2026-10-20
+Last Activity Description: Phase 14 complete
 
 Completed workflow stage: **Phase 14 — CGB-E Model Qualification and Corpus, automated UAT complete**. [14-UAT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md) closes all 49 deliverables across 13 plans automatically, with zero issues, pending/skipped/blocked rows or human checkpoints. All 13 bounded commit windows reconcile. The canonical [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08 and CGB-10 are complete. Nyquist covers 31/31 tasks, security closes 27/27 threats, and all eight implementation review findings are fixed and independently checked.
 
@@ -554,10 +568,10 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-Completed stage: Phase 13 — CGB HDMA, verification refresh; paused at the phase boundary.
-Next phase: 14 — CGB-E Model Qualification and Corpus (verification refresh only).
-Next command: `/gsd-execute-phase 14`.
+Completed stage: Phase 14 — CGB-E Model Qualification and Corpus, verification refresh; paused at the phase boundary.
+Next corrective phase: 8 — Cartridge Seam, MBC5 and MBC2, verification refresh for changed preview-package fixture exclusion.
+Next command: `/gsd-execute-phase 8`.
 
 ## Operator Next Steps
 
-Resume Phase 14 verification using the command above. Do not archive or tag v0.2 until its remaining verification refresh and audit items are resolved or explicitly overridden. Preserve both automatic advance flags as false.
+Run the command above when ready. Phase 12 also needs a metadata verification refresh after the prior Phase 13 lessons/index changes; all remaining reports pass; milestone completion review follows the remaining stale shared-input report, with explicit debt review. Do not restart completed implementation, archive, tag, or start v0.3 automatically. Both automatic advance flags remain false.
