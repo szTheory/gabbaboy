@@ -572,9 +572,11 @@ def self_test():
         def expect_reject(label, code_expected, archive, *extra, tag_arg=tag, sha_arg=sha):
             nonlocal negatives
             out = scratch / f"{label}.receipt.json"
-            code, err, _ = run_cli(script, "--archive", str(archive), "--tag", tag_arg, "--source-sha", sha_arg, "--output", str(out), *extra)
+            code, err, stdout = run_cli(script, "--archive", str(archive), "--tag", tag_arg, "--source-sha", sha_arg, "--output", str(out), *extra)
             if code != 1 or not err.startswith(f"REJECT {code_expected}:"):
                 raise SystemExit(f"self-test negative {label}: expected REJECT {code_expected}, got exit {code}: {err!r}")
+            if stdout:
+                raise SystemExit(f"self-test negative {label} printed success output: {stdout!r}")
             if out.exists():
                 raise SystemExit(f"self-test negative {label} left a receipt behind")
             negatives += 1
@@ -724,6 +726,26 @@ def self_test():
 
         # Receipt consumption: the final release gate reads this receipt, not the build receipt.
         good = scratch / "generated-without-repo.receipt.json"
+        def expect_receipt_pass(label, receipt, archive, repo_path):
+            nonlocal positives
+            code, err, stdout = run_cli(script, "--check-receipt", str(receipt), "--archive", str(archive),
+                                        "--tag", tag, "--source-sha", real_sha, "--repo", str(repo_path))
+            if code != 0 or not stdout.startswith("PASS: source archive receipt"):
+                raise SystemExit(f"self-test receipt positive {label} failed: exit {code}, {err!r}, {stdout!r}")
+            positives += 1
+            print(f"accepted: receipt {label}")
+
+        def expect_receipt_reject(label, code_expected, receipt, archive, repo_path):
+            nonlocal negatives
+            code, err, stdout = run_cli(script, "--check-receipt", str(receipt), "--archive", str(archive),
+                                        "--tag", tag, "--source-sha", real_sha, "--repo", str(repo_path))
+            if code != 1 or not err.startswith(f"REJECT {code_expected}:"):
+                raise SystemExit(f"self-test receipt negative {label}: expected REJECT {code_expected}, got exit {code}: {err!r}")
+            if stdout:
+                raise SystemExit(f"self-test receipt negative {label} printed success output: {stdout!r}")
+            negatives += 1
+            print(f"rejected: receipt {label} ({code_expected})")
+
         receipt_cases = {
             "wrong-kind": lambda r: r.update(kind="gabbaboy-build-receipt"),
             "wrong-tag": lambda r: r.update(tag="v9.9.9"),
@@ -738,6 +760,36 @@ def self_test():
             raise SystemExit(f"self-test receipt positive failed: {err}")
         positives += 1
         print("accepted: receipt bound to the archive bytes")
+
+        # Receipt qualification must consume the real immutable tag tree, not trust a
+        # producer's tree_bound_to_git boolean. Each control enters through --check-receipt.
+        bound_receipt = scratch / "git-tar-bound-to-tag.receipt.json"
+        expect_receipt_pass("bound to immutable Git tree", bound_receipt, git_tgz, repo)
+        unbound_source_receipt = scratch / "generated-matches-git-tree-unbound.receipt.json"
+        code, err, _ = run_cli(script, "--archive", str(generated), "--tag", tag, "--source-sha", real_sha,
+                               "--output", str(unbound_source_receipt))
+        if code != 0:
+            raise SystemExit(f"self-test: could not create an unbound receipt for the real tagged tree: {err!r}")
+        expect_receipt_reject("historical unbound receipt", "receipt-unbound", unbound_source_receipt, generated, repo)
+
+        flipped = json.loads(bound_receipt.read_text())
+        flipped["tree_bound_to_git"] = False
+        flipped_path = write("receipt-flipped-tree-binding.json", json.dumps(flipped).encode())
+        expect_receipt_reject("cleared Git-binding boolean", "receipt-unbound", flipped_path, git_tgz, repo)
+
+        modified_source = write("modified-source-claiming-tag.tar.gz",
+                                tar_bytes(variant(src__a_dot_c=b"int a(void) { return 2; }\n"), real_sha))
+        modified_receipt = scratch / "modified-source-receipt.json"
+        code, err, _ = run_cli(script, "--archive", str(modified_source), "--tag", tag,
+                               "--source-sha", real_sha, "--output", str(modified_receipt))
+        if code != 0:
+            raise SystemExit(f"self-test: could not create an unbound receipt for the modified-tree control: {err!r}")
+        modified_data = json.loads(modified_receipt.read_text())
+        modified_data["tree_bound_to_git"] = True
+        modified_receipt.write_text(json.dumps(modified_data))
+        expect_receipt_reject("modified archive claiming tagged commit", "tree-mismatch", modified_receipt,
+                              modified_source, repo)
+
         for label, mutate in receipt_cases.items():
             receipt = json.loads(good.read_text())
             mutate(receipt)
