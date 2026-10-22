@@ -304,6 +304,48 @@ gbb_span_mutant_test(test_acceptance_lib_mutant_output_alias
   acceptance_drive_mutant_output_alias acceptance_drive_mutant_output_alias_control
   acceptance_input_span_output_alias "span-output alias rejected=[0-9]/10" acceptance_input_span_edges
   gabbaboy_core_span_mutant_output_alias "PASS acceptance_input_span_edges")
+# WR-03: the diagnostic replay and the main stepper share gbb_accept_stop_resumable. The mutant is the real
+# stepper.c with exactly one anchored edit: the replay-side STOPPED decision inside gbb_accept_diag_advance is
+# replaced by the pre-fix hard stop. advance_to_span and the shared helper stay byte-identical, so the main drive
+# still resumes and only the replay diverges. The copy lives in the binary dir; its relative include of
+# ../core/gbb_accept_input.h resolves through the src/accept include directory (src/accept/../core), so the
+# copy carries no rewritten include line. The mutant library names the one core it links, so a mutant test
+# executable has exactly one core (verify-core-linkage.py checks that).
+set(GBB_STEPPER_PATH "${PROJECT_SOURCE_DIR}/src/accept/stepper.c")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GBB_STEPPER_PATH})
+file(READ ${GBB_STEPPER_PATH} gbb_stepper_text)
+function(gbb_accept_stepper_mutant name anchor replacement)
+  string(FIND "${gbb_stepper_text}" "${anchor}" first)
+  string(FIND "${gbb_stepper_text}" "${anchor}" final REVERSE)
+  if(first EQUAL -1 OR NOT first EQUAL final)
+    message(FATAL_ERROR "stepper mutant ${name}: anchor must occur exactly once in ${GBB_STEPPER_PATH} "
+      "(first=${first} last=${final})")
+  endif()
+  string(REPLACE "${anchor}" "${replacement}" text "${gbb_stepper_text}")
+  set(source ${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_stepper_mutant_${name}.c)
+  file(WRITE ${source} "${text}")
+  set(library gabbaboy_accept_bare_stepper_mutant_${name})
+  add_library(${library} STATIC
+    ${PROJECT_SOURCE_DIR}/src/accept/sha256.c
+    ${PROJECT_SOURCE_DIR}/src/accept/input_script.c
+    ${PROJECT_SOURCE_DIR}/src/accept/predicate.c
+    ${PROJECT_SOURCE_DIR}/src/accept/digest.c
+    ${source})
+  target_include_directories(${library}
+    PUBLIC "${PROJECT_SOURCE_DIR}/src/accept" "${PROJECT_SOURCE_DIR}/include")
+  target_compile_features(${library} PUBLIC c_std_17)
+  set_target_properties(${library} PROPERTIES C_EXTENSIONS OFF)
+  target_link_libraries(${library} PUBLIC GabbaBoy::core)
+endfunction()
+set(GBB_REPLAY_STOP_ANCHOR "if (gbb_accept_stop_resumable(span, deadline, r.consumed_half_dots, budget)) continue; /* replay: same STOP rule as advance_to_span */")
+gbb_accept_stepper_mutant(replay_stop_resume "${GBB_REPLAY_STOP_ANCHOR}"
+  "/* mutant: replay stops on STOPPED unconditionally (pre-fix divergence) */")
+gbb_span_mutant_test(test_acceptance_lib_mutant_replay_stop_resume
+  ${CMAKE_CURRENT_LIST_DIR}/../test_acceptance_lib.c FALSE
+  acceptance_replay_mutant_stop_resume acceptance_replay_mutant_stop_resume_control
+  acceptance_replay_stop_resume_parity "replay-stop-parity" acceptance_drive_stop_resume_main
+  gabbaboy_accept_bare_stepper_mutant_replay_stop_resume "PASS acceptance_drive_stop_resume_main")
+
 gbb_add_acceptance_exit(acceptance_suite_invalid_expect_excluded 2
   "reason=invalid-expect-excluded" 30
   "--acceptance;${GBB_CASES};--suite;--expect-excluded;x1")
