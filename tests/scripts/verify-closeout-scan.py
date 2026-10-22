@@ -465,6 +465,30 @@ class CloseoutScanTests(unittest.TestCase):
             self.assertEqual(report["raw_audit_open"]["stdout"], "raw audit stdout marker\n")
             self.assertEqual(report["raw_audit_open"]["stderr"], "raw audit stderr marker\n")
 
+    def test_missing_runtime_exits_distinctly_instead_of_crashing(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-closeout-no-runtime-") as temp_dir:
+            root = Path(temp_dir) / "project"
+            root.mkdir()
+            (root / ".planning").mkdir()
+            empty_home = Path(temp_dir) / "empty-home"
+            empty_home.mkdir()
+            output = Path(temp_dir) / "closeout.json"
+            result = self.run_wrapper(
+                root,
+                output,
+                env={
+                    "GSD_TOOLS": str(Path(temp_dir) / "absent-tools.cjs"),
+                    "HOME": str(empty_home),
+                    "CLAUDE_CONFIG_DIR": str(empty_home / "claude"),
+                    "CODEX_HOME": str(empty_home / "codex"),
+                },
+            )
+            self.assertEqual(result.returncode, 3, f"no runtime must exit 3: {result.stdout}\n{result.stderr}")
+            self.assertIn("runtime-unavailable", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertNotIn("CLOSEOUT SCAN CLEAR", result.stdout)
+            self.assertEqual(json.loads(output.read_text(encoding="utf-8"))["error"]["code"], "runtime-unavailable")
+
 
 def run_self_test() -> int:
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(CloseoutScanTests)

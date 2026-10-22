@@ -219,6 +219,9 @@ self_test() {
   mkdir -p "$work/evidence-extra"
   printf 'x\n' > "$work/evidence-extra/stray.json"
   expect_reject "unexpected file in the output" "unexpected file" collect --subject "$repo" --output "$work/evidence-extra"
+  mkdir -p "$work/evidence-hidden"
+  printf 'x\n' > "$work/evidence-hidden/.hidden"
+  expect_reject "unexpected dotfile in the output" "unexpected file in the evidence output: .hidden" collect --subject "$repo" --output "$work/evidence-hidden"
 
   mkdir -p "$work/no-judge"
   : > "$work/archive.tar.gz"

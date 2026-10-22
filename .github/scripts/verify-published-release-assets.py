@@ -194,8 +194,27 @@ def self_test() -> None:
             print("rejected: path-instead-of-json: a file path in place of API response text")
         else:
             raise SystemExit("published asset verifier accepted a file path in place of API response JSON")
+    legacy_cli_self_test(after)
     print("PASS: published asset verifier parses JSON responses directly and rejects changed/malformed inventory")
     recovery_self_test()
+
+
+def legacy_cli_self_test(after: str) -> None:
+    """Legacy mode must turn an unreadable or malformed baseline into a REJECT line and exit 1, never a traceback."""
+    import contextlib
+    import io
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="gbb-legacy-baseline.") as directory:
+        malformed = pathlib.Path(directory) / "baseline.json"
+        malformed.write_text("{not json")
+        for label, baseline in (("malformed", malformed), ("unreadable", pathlib.Path(directory) / "absent.json")):
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                status = main([after, str(baseline)])
+            if status != 1 or "REJECT published-assets:" not in stderr.getvalue() or "Traceback" in stderr.getvalue():
+                raise SystemExit(f"legacy mode did not reject a {label} baseline cleanly: status={status} stderr={stderr.getvalue()!r}")
+            print(f"rejected: legacy mode with a {label} baseline gives a REJECT line and exit 1")
 
 
 def inventory_self_test() -> None:
