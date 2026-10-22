@@ -12,7 +12,7 @@ sha256_file() {
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 MODE=${1:-}
 SOURCE_ARCHIVE_CHECKER="$ROOT_DIR/tests/scripts/verify-v02-source-archive.py"
-USAGE='usage: verify-release-candidate.sh --self-test | --verify RECEIPT ASSET VERSION TAG SOURCE_SHA RELEASE_ID NOTICE_FILE SOURCE_RECEIPT BUILD_RECEIPT | --verify-final <the --verify arguments> SOURCE_ARCHIVE SOURCE_ARCHIVE_RECEIPT [SOURCE_REPOSITORY]'
+USAGE='usage: verify-release-candidate.sh --self-test | --check-config | --verify RECEIPT ASSET VERSION TAG SOURCE_SHA RELEASE_ID NOTICE_FILE SOURCE_RECEIPT BUILD_RECEIPT | --verify-final <the --verify arguments> SOURCE_ARCHIVE SOURCE_ARCHIVE_RECEIPT [SOURCE_REPOSITORY]'
 safe_extract() {
   python3 -I "$ROOT_DIR/tests/scripts/verify-v02-consumers.py" --extract "$1" "$2"
 }
@@ -52,53 +52,11 @@ PY
   python3 -I "$ROOT_DIR/tests/scripts/verify-v02-consumers.py" \
     --archive "$asset" --candidate-manifest "$candidate_manifest" --output "$consumer_output"
 }
-if [[ "$MODE" == --extract ]]; then
-  [[ $# -eq 3 ]] || fail 'usage: verify-release-candidate.sh --extract ARCHIVE DESTINATION'
-  command -v python3 >/dev/null || fail 'Python 3 is required'
-  safe_extract "$2" "$3"
-  exit 0
-fi
-command -v cmake >/dev/null || fail 'CMake is required'
-if [[ "$MODE" == --verify || "$MODE" == --verify-final ]]; then
-  # The installed core archive is a product package: it must stay fixture-free. The licensed
-  # source archive is a different artifact and is proved by --verify-final, never by this check.
-  if [[ "$MODE" == --verify ]]; then
-    [[ $# -eq 10 ]] || fail "$USAGE"
-  else
-    [[ $# -eq 12 || $# -eq 13 ]] || fail "--verify-final requires the source archive and its receipt as distinct final evidence; $USAGE"
-  fi
-  command -v python3 >/dev/null || fail 'Python 3 is required'
-  python3 -I "$SOURCE_ARCHIVE_CHECKER" --check-product-archive "$3" --repo-root "$ROOT_DIR" || fail 'product package fixture-leak check failed'
-  if [[ "$MODE" == --verify-final ]]; then
-    bash "$ROOT_DIR/tests/scripts/verify-release-candidate.sh" --verify \
-      "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9" "${10}" \
-      || fail 'candidate product qualification failed'
-    SOURCE_REPOSITORY=${13:-$ROOT_DIR}
-    exec python3 -I "$SOURCE_ARCHIVE_CHECKER" --check-receipt "${12}" --archive "${11}" \
-      --tag "$5" --source-sha "$6" --repo "$SOURCE_REPOSITORY"
-  fi
-  cmake \
-    "-DGBB_RECEIPT=$2" "-DGBB_ASSET=$3" "-DGBB_EXPECTED_VERSION=$4" \
-    "-DGBB_EXPECTED_TAG=$5" "-DGBB_EXPECTED_SOURCE_SHA=$6" \
-    "-DGBB_EXPECTED_RELEASE_ID=$7" "-DGBB_NOTICE_FILE=$8" \
-    "-DGBB_SOURCE_RECEIPT=$9" "-DGBB_BUILD_RECEIPT=${10}" \
-    -P "$ROOT_DIR/cmake/VerifyReleaseReceipt.cmake"
-  TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/gabbaboy-release-consumer.XXXXXX")
-  trap 'rm -rf "$TEMP_ROOT"' EXIT HUP INT TERM
-  candidate_consumer_verify "${10}" "$3" "$6" "$TEMP_ROOT" || fail 'installed consumer qualification failed'
-  exit 0
-fi
-[[ "$MODE" == --self-test && $# -eq 1 ]] || fail "$USAGE"
-command -v tar >/dev/null || fail 'tar is required'
-command -v python3 >/dev/null || fail 'Python 3 is required'
-
-VERSION=$(sed -nE 's/^project\(GabbaBoy VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' "$ROOT_DIR/CMakeLists.txt" | head -n 1)
-[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail 'could not read a semver CMake project version'
-SOURCE_SHA=$(git -C "$ROOT_DIR" rev-parse HEAD)
-[[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'source revision is not a full Git SHA'
-if [[ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=no -- src include fixtures tests cmake ':!cmake/VerifyReleaseReceipt.cmake' ':!tests/scripts/verify-release-candidate.sh')" ]]; then
-  fail 'implementation source is dirty; release candidate requires a committed source tree'
-fi
+# The release configuration data contract: the release-please package settings and manifest version stay
+# data checks here, while the executable wiring of release.yml (which job runs which command, on which runner,
+# behind which guard) is judged from parsed workflow structure by .github/scripts/verify-workflow-policy.py.
+# It runs without cmake so that --check-config can be exercised on fixture trees.
+release_config_contract() {
 python3 - "$ROOT_DIR" <<'PY'
 import json, pathlib, re, sys
 root = pathlib.Path(sys.argv[1])
@@ -114,21 +72,6 @@ if not version or manifest.get(".") != version.group(1):
     raise SystemExit("release manifest and CMake PROJECT_VERSION do not match")
 if package.get("draft") is not True or package.get("force-tag-creation") is not True or package.get("include-component-in-tag") is not False or package.get("include-v-in-tag") is not True:
     raise SystemExit("manifest release must use matching v<version> tag plus draft and immediate tag")
-if not re.search(r"googleapis/release-please-action@[0-9a-f]{40}", workflow):
-    raise SystemExit("release-please action is not pinned to a full commit SHA")
-for required in ("outputs.release_created == 'true'", "api_commit", "draft", "commits/$SOURCE_SHA/pulls", "gh pr checks", "RETRY"):
-    if required not in workflow:
-        raise SystemExit(f"release route is missing fail-closed contract: {required}")
-for required in (
-    "runs-on: macos-14", "runs-on: windows-2022",
-    "gabbaboy-core-macos-arm64.tar.gz", "gabbaboy-core-windows-x64.tar.gz",
-    "gabbaboy-preview-macos-arm64.tar.gz", "candidate-platform-manifest.json",
-    "--verify-package", "Visual Studio 17 2022", "--check",
-    "REUSE_MACOS_CANDIDATE", "REUSE_WINDOWS_CANDIDATE",
-    "refusing to rebuild or replace bytes",
-):
-    if required not in workflow:
-        raise SystemExit(f"release route is missing downloaded platform qualification: {required}")
 if "needs: [release, candidate-macos]" not in workflow:
     raise SystemExit("Windows downloaded-archive verification must run after the existing native Linux and macOS lanes")
 for required in ("SDL_AUDIO_DRIVER=dummy", "SDL_VIDEO_DRIVER=dummy", "--smoke-package", "packaged MBC1 continuation fixture resumed in a fresh process"):
@@ -193,6 +136,62 @@ except ValueError as error:
 if "workflow_call:" not in workflow or "uses: ./.github/workflows/release.yml" not in entrypoint:
     raise SystemExit("release-please outputs and candidate jobs are not connected in one workflow run")
 PY
+}
+if [[ "$MODE" == --extract ]]; then
+  [[ $# -eq 3 ]] || fail 'usage: verify-release-candidate.sh --extract ARCHIVE DESTINATION'
+  command -v python3 >/dev/null || fail 'Python 3 is required'
+  safe_extract "$2" "$3"
+  exit 0
+fi
+if [[ "$MODE" == --check-config ]]; then
+  [[ $# -eq 1 ]] || fail 'usage: verify-release-candidate.sh --check-config'
+  command -v python3 >/dev/null || fail 'Python 3 is required'
+  release_config_contract
+  printf 'PASS: release configuration data contract\n'
+  exit 0
+fi
+command -v cmake >/dev/null || fail 'CMake is required'
+if [[ "$MODE" == --verify || "$MODE" == --verify-final ]]; then
+  # The installed core archive is a product package: it must stay fixture-free. The licensed
+  # source archive is a different artifact and is proved by --verify-final, never by this check.
+  if [[ "$MODE" == --verify ]]; then
+    [[ $# -eq 10 ]] || fail "$USAGE"
+  else
+    [[ $# -eq 12 || $# -eq 13 ]] || fail "--verify-final requires the source archive and its receipt as distinct final evidence; $USAGE"
+  fi
+  command -v python3 >/dev/null || fail 'Python 3 is required'
+  python3 -I "$SOURCE_ARCHIVE_CHECKER" --check-product-archive "$3" --repo-root "$ROOT_DIR" || fail 'product package fixture-leak check failed'
+  if [[ "$MODE" == --verify-final ]]; then
+    bash "$ROOT_DIR/tests/scripts/verify-release-candidate.sh" --verify \
+      "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9" "${10}" \
+      || fail 'candidate product qualification failed'
+    SOURCE_REPOSITORY=${13:-$ROOT_DIR}
+    exec python3 -I "$SOURCE_ARCHIVE_CHECKER" --check-receipt "${12}" --archive "${11}" \
+      --tag "$5" --source-sha "$6" --repo "$SOURCE_REPOSITORY"
+  fi
+  cmake \
+    "-DGBB_RECEIPT=$2" "-DGBB_ASSET=$3" "-DGBB_EXPECTED_VERSION=$4" \
+    "-DGBB_EXPECTED_TAG=$5" "-DGBB_EXPECTED_SOURCE_SHA=$6" \
+    "-DGBB_EXPECTED_RELEASE_ID=$7" "-DGBB_NOTICE_FILE=$8" \
+    "-DGBB_SOURCE_RECEIPT=$9" "-DGBB_BUILD_RECEIPT=${10}" \
+    -P "$ROOT_DIR/cmake/VerifyReleaseReceipt.cmake"
+  TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/gabbaboy-release-consumer.XXXXXX")
+  trap 'rm -rf "$TEMP_ROOT"' EXIT HUP INT TERM
+  candidate_consumer_verify "${10}" "$3" "$6" "$TEMP_ROOT" || fail 'installed consumer qualification failed'
+  exit 0
+fi
+[[ "$MODE" == --self-test && $# -eq 1 ]] || fail "$USAGE"
+command -v tar >/dev/null || fail 'tar is required'
+command -v python3 >/dev/null || fail 'Python 3 is required'
+
+VERSION=$(sed -nE 's/^project\(GabbaBoy VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' "$ROOT_DIR/CMakeLists.txt" | head -n 1)
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail 'could not read a semver CMake project version'
+SOURCE_SHA=$(git -C "$ROOT_DIR" rev-parse HEAD)
+[[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'source revision is not a full Git SHA'
+if [[ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=no -- src include fixtures tests cmake ':!cmake/VerifyReleaseReceipt.cmake' ':!tests/scripts/verify-release-candidate.sh')" ]]; then
+  fail 'implementation source is dirty; release candidate requires a committed source tree'
+fi
+release_config_contract
 
 TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/gabbaboy-release-candidate.XXXXXX")
 trap 'rm -rf "$TEMP_ROOT"' EXIT HUP INT TERM

@@ -583,6 +583,30 @@ case "$mode" in
     temp=$(mktemp -d "${TMPDIR:-/tmp}/gb-release-gates.XXXXXX")
     trap 'rm -rf "$temp"' EXIT HUP INT TERM
     fetch_source_archive_self_test "$temp/fetch"
+    # The release-candidate data contract runs standalone (no cmake): positive on this tree, negative on a fixture
+    # tree whose release-please package is not a draft.
+    bash "$ROOT/tests/scripts/verify-release-candidate.sh" --check-config
+    config_root="$temp/check-config"
+    for file in release-please-config.json .release-please-manifest.json CMakeLists.txt \
+        .github/workflows/release.yml .github/workflows/release-please.yml \
+        tests/scripts/verify-phase3-player.sh .github/scripts/verify-published-release-assets.py \
+        tests/scripts/verify-release-candidate.sh; do
+      mkdir -p "$config_root/$(dirname "$file")"
+      cp "$ROOT/$file" "$config_root/$file"
+    done
+    bash "$config_root/tests/scripts/verify-release-candidate.sh" --check-config >/dev/null
+    python3 - "$config_root/release-please-config.json" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+config = json.loads(path.read_text())
+config["packages"]["."]["draft"] = False
+path.write_text(json.dumps(config))
+PY
+    if config_output=$(bash "$config_root/tests/scripts/verify-release-candidate.sh" --check-config 2>&1); then
+      fail 'release candidate config contract accepted a release-please package that is not a draft'
+    fi
+    [[ "$config_output" == *'plus draft and immediate tag'* ]] || fail "release candidate config contract rejected the non-draft package for the wrong reason: $config_output"
+    printf 'rejected: release-please package that is not a draft (--check-config)\n'
     python3 - "$temp" <<'PY'
 import json, pathlib, sys
 root = pathlib.Path(sys.argv[1])

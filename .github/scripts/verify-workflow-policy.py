@@ -1024,6 +1024,45 @@ RELEASE_SMOKE_REQUIRED = {
         ("cmake", ("-P", "cmake/VerifyInstalledPackage.cmake")),
     ),
 }
+# Wiring facts of release.yml that no other table pins, judged from the parsed job: (kind, ...) items per job.
+#   ("env", key)                   the job env defines key
+#   ("if", fragment)               the job-level if: expression contains fragment
+#   ("step-if", step name, frag)   the named step is guarded by an if: expression containing fragment
+#   ("call", command, conditional) the job runs command as a reachable, fatal statement (conditional allows branches/loops)
+#   ("step-lines", step name, lines) the unconditional, errexit step runs these consecutive non-comment script lines; used only
+#                                  where the shell reader rejects the step (the candidate-selection steps use `(( ))`)
+_REUSE_MACOS_GUARD = "env.REUSE_MACOS_CANDIDATE != 'true'"
+_REUSE_WINDOWS_GUARD = "env.REUSE_WINDOWS_CANDIDATE != 'true'"
+RELEASE_PRESENCE = {
+    "candidate": (
+        ("if", "needs.release.outputs.release_created == 'true'"),
+        ("env", "RETRY"),
+        ("call", 'api_commit=$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq \'.sha\')', False),
+        ("call", 'draft=$(jq --arg tag "$RELEASE_TAG" -r \'.[] | select(.tag_name == $tag) | .draft\' <<<"$release_json")', False),
+        ("call", 'prs=$(gh api "repos/$GH_REPO/commits/$SOURCE_SHA/pulls")', False),
+        ("call", 'required=$(gh pr checks "$pr_number" --required --json name,bucket)', False),
+    ),
+    "candidate-macos": (
+        ("step-if", "Build and package macOS arm64 core once", _REUSE_MACOS_GUARD),
+        ("step-if", "Build pinned SDL player and verify extracted package", _REUSE_MACOS_GUARD),
+        ("step-if", "Attach macOS candidate bytes to the unpublished draft", _REUSE_MACOS_GUARD),
+        ("step-lines", "Select a complete existing macOS candidate or a clean build",
+         ('echo "Draft contains a partial macOS candidate asset set; refusing to rebuild or replace bytes." >&2', "exit 1")),
+        ("call", 'gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-preview-macos-arm64.tar.gz', False),
+    ),
+    "candidate-windows": (
+        ("step-if", "Build and package Windows x64 core once", _REUSE_WINDOWS_GUARD),
+        ("step-if", "Attach Windows bytes to the unpublished draft", _REUSE_WINDOWS_GUARD),
+        ("step-lines", "Select an existing Windows archive or a clean build",
+         ('echo "Draft contains a partial Windows candidate asset set; refusing to rebuild or replace bytes." >&2', "exit 1")),
+        ("call", 'cmake -S "tests/consumers/$language" -B "build/consumer-work/$language" -G "Visual Studio 17 2022" -A x64', True),
+    ),
+    "candidate-platform-manifest": (
+        ("call", 'gh release upload "$RELEASE_TAG" build/candidate-platform-manifest.json --repo "$GH_REPO"', True),
+    ),
+}
+# Hosted runner images of the native downloaded-archive lanes; a silently different image changes what was qualified.
+RELEASE_RUNNERS = {"candidate-macos": "macos-14", "candidate-windows": "windows-2022"}
 CI_REQUIRED = (
     "cmake --preset phase1-asan -DGBB_TEST_INSTALL_PREFIX=",
     "cmake --build --preset phase1-asan",
@@ -1194,6 +1233,42 @@ def _check_residual_classification(roles=None, subject=None, exempt=None, overla
         raise Reject("residual-classification", "TRUSTED_OVERLAYS may name only RESIDUAL_SUBJECT_JOBS")
 
 
+def _check_release_presence(workflow: str, tree: dict) -> None:
+    jobs = tree["jobs"]
+    for job_id, items in RELEASE_PRESENCE.items():
+        job = _require_job(workflow, tree, job_id)
+        for item in items:
+            kind = item[0]
+            if kind == "env":
+                if item[1] not in (job.get("env") or {}):
+                    raise Reject("release-presence", f"{_where(workflow, job_id)} does not define env {item[1]}")
+            elif kind == "if":
+                if item[1] not in str(job.get("if", "")):
+                    raise Reject("release-presence", f"{_where(workflow, job_id)} job if: lacks {item[1]}")
+            elif kind == "step-if":
+                guarded = [step for step in job.get("steps", []) if step.get("name") == item[1]]
+                if len(guarded) != 1 or item[2] not in str(guarded[0].get("if", "")):
+                    raise Reject("release-presence", f"{_where(workflow, job_id)} step {item[1]!r} is not guarded by {item[2]}")
+            elif kind == "step-lines":
+                named = [step for step in job.get("steps", []) if step.get("name") == item[1]]
+                lines = []
+                if len(named) == 1 and "if" not in named[0] and _runs_under_errexit(named[0]):
+                    lines = [line.strip() for line in str(named[0].get("run", "")).splitlines()
+                             if line.strip() and not line.strip().startswith("#")]
+                wanted = list(item[2])
+                if not any(lines[at:at + len(wanted)] == wanted for at in range(len(lines))):
+                    raise Reject("release-presence", f"{_where(workflow, job_id)} step {item[1]!r} does not refuse a partial candidate set")
+            else:
+                try:
+                    require_call(workflow, job_id, jobs[job_id], item[1], conditional=item[2])
+                except Reject as exc:
+                    raise Reject("release-presence", f"{_where(workflow, job_id)} lacks required wiring: {exc}") from exc
+    for job_id, runner in RELEASE_RUNNERS.items():
+        actual = str(_require_job(workflow, tree, job_id).get("runs-on", "")).strip()
+        if actual != runner:
+            raise Reject("runner-image", f"{_where(workflow, job_id)} must run on {runner}, not {actual or 'an unset image'}")
+
+
 def check_release(root: Path) -> None:
     name = "release"
     _check_residual_classification()
@@ -1283,6 +1358,7 @@ def check_release(root: Path) -> None:
     for job_id, calls in RELEASE_SMOKE_REQUIRED.items():
         for command, extra in calls:
             require_call(name, job_id, jobs[job_id], command, contains=extra, conditional=True)
+    _check_release_presence(name, tree)
     attach = jobs["attach-v02-evidence"]
     require_call(name, "attach-v02-evidence", attach, 'gh release upload "$RELEASE_TAG" "$1/$2" --repo "$GH_REPO"', conditional=True)
     attach_call = require_call(name, "attach-v02-evidence", attach, 'attach "$dir" "$name"', conditional=True)
@@ -1590,6 +1666,39 @@ def _mutations():
         _m("ci campaign status no longer asserted", "ci.yml", "  linux-sanitizers:\n", 'test "$verify_status" -eq 0', 'echo test "$verify_status" -eq 0', "required-command-not-executed"),
         _m("ci campaign verifier removed", "ci.yml", "  linux-sanitizers:\n", "python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json\n            verify_status=$?",
            "true\n            verify_status=$?", "required-command-not-executed"),
+        # Release-candidate wiring formerly pinned as text in verify-release-candidate.sh (WR-06, W6-03..W6-11).
+        _m("W6-03 release-please action unpinned", rel, "", "googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7",
+           "googleapis/release-please-action@v5", "workflow-unpinned-action"),
+        _m("W6-04 candidate drops gh pr checks", rel, "  candidate:\n", 'required=$(gh pr checks "$pr_number" --required --json name,bucket)',
+           "required='[]'", "release-presence"),
+        _m("W6-04b candidate drops the tag-to-source comparison input", rel, "  candidate:\n", 'api_commit=$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq \'.sha\')',
+           "api_commit=$SOURCE_SHA", "release-presence"),
+        _m("W6-04c candidate drops the merged-PR lookup", rel, "  candidate:\n", 'prs=$(gh api "repos/$GH_REPO/commits/$SOURCE_SHA/pulls")',
+           "prs='[]'", "release-presence"),
+        _m("W6-04d candidate stops requiring release_created", rel, "  candidate:\n", " && needs.release.outputs.release_created == 'true'",
+           "", "release-presence"),
+        _m("W6-04e candidate loses its retry input", rel, "  candidate:\n", "      RETRY: ${{ inputs.retry }}\n", "", "release-presence"),
+        _m("W6-05a candidate-macos runner changed", rel, "  candidate-macos:\n", "runs-on: macos-14", "runs-on: macos-latest", "runner-image"),
+        _m("W6-05b candidate-windows runner changed", rel, "  candidate-windows:\n", "runs-on: windows-2022", "runs-on: windows-latest", "runner-image"),
+        _m("W6-06 windows archive name changed in the extract call", rel, "  candidate-windows:\n",
+           "bash tests/scripts/verify-release-candidate.sh --extract build/downloaded/gabbaboy-core-windows-x64.tar.gz",
+           "bash tests/scripts/verify-release-candidate.sh --extract build/downloaded/gabbaboy-core-windows-arm64.tar.gz", "required-command-not-executed"),
+        _m("W6-07 platform manifest name changed", rel, "  candidate-platform-manifest:\n",
+           'gh release upload "$RELEASE_TAG" build/candidate-platform-manifest.json', 'gh release upload "$RELEASE_TAG" build/candidate-renamed-manifest.json',
+           "release-presence"),
+        _m("W6-07b macOS preview archive name changed in the player download", rel, "  candidate-macos:\n",
+           'gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-preview-macos-arm64.tar.gz',
+           'gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-preview-renamed.tar.gz', "release-presence"),
+        _m("W6-08 verify-package call neutered", rel, "  candidate-macos:\n",
+           "bash tests/scripts/verify-phase3-player.sh --verify-package build/downloaded-player",
+           "bash tests/scripts/verify-phase3-player.sh --help build/downloaded-player", "required-command-not-executed"),
+        _m("W6-09 windows generator changed", rel, "  candidate-windows:\n", '-G "Visual Studio 17 2022"', '-G "Ninja"', "release-presence"),
+        _m("W6-11a macOS build step loses its reuse guard", rel, "  candidate-macos:\n",
+           "      - name: Build and package macOS arm64 core once\n        if: env.REUSE_MACOS_CANDIDATE != 'true'\n",
+           "      - name: Build and package macOS arm64 core once\n", "release-presence"),
+        _m("W6-11b windows refusal message removed", rel, "  candidate-windows:\n",
+           'echo "Draft contains a partial Windows candidate asset set; refusing to rebuild or replace bytes." >&2',
+           'echo "Draft contains a partial Windows candidate asset set; continuing." >&2', "release-presence"),
     ]
 
 
