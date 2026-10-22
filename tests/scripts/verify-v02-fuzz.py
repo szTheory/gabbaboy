@@ -230,7 +230,22 @@ def compiler_contract(build: Path) -> dict[str, object]:
     }
 
 
-def read_fixture(relative: str) -> bytes:
+def commit_blob(commit: str, relative: str) -> bytes:
+    """Read one file from the commit tree; the commit, not the checkout, is the subject."""
+    if not HEX_160.fullmatch(commit):
+        raise ReceiptError("source SHA must be a full 40-character commit")
+    result = subprocess.run(
+        ["git", "show", f"{commit}:{relative}"], cwd=ROOT,
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False,
+    )
+    if result.returncode != 0:
+        raise ReceiptError(f"source input absent at source SHA: {relative}")
+    return result.stdout
+
+
+def read_fixture(relative: str, commit: str | None = None) -> bytes:
+    if commit is not None:
+        return commit_blob(commit, relative)
     try:
         return (ROOT / relative).read_bytes()
     except OSError as exc:
@@ -288,10 +303,10 @@ def prepare_seeds(corpus: Path) -> list[dict[str, object]]:
     return records
 
 
-def expected_seed_records() -> list[dict[str, object]]:
+def expected_seed_records(commit: str | None = None) -> list[dict[str, object]]:
     records: list[dict[str, object]] = []
     for label, source_path, selector in SEED_SPECS:
-        source = read_fixture(source_path)
+        source = read_fixture(source_path, commit)
         data = seed_bytes(source, selector)
         records.append({
             "label": label,
@@ -551,9 +566,13 @@ def validate_receipt(
         raise ReceiptError("receipt source SHA must be a full commit ID")
     if expected_sha and commit != expected_sha:
         raise ReceiptError("receipt source SHA does not match the requested source SHA")
-    current_head = git_output("rev-parse", "HEAD")
-    if commit != current_head:
-        raise ReceiptError("stale receipt source SHA does not match the current commit")
+    if not source_commit_only:
+        # The local (non-commit-bound) path judges the checkout it runs in, so a receipt for any
+        # other commit is stale. The commit-bound path (hosted verification) never reads HEAD: the
+        # subject is the boundary commit, bound above by expected_sha and below by its commit tree.
+        current_head = git_output("rev-parse", "HEAD")
+        if commit != current_head:
+            raise ReceiptError("stale receipt source SHA does not match the current commit")
     result = value.get("result")
     if not isinstance(result, dict):
         raise ReceiptError("receipt result must be an object")
@@ -587,10 +606,15 @@ def validate_receipt(
         raise ReceiptError("receipt must bind libFuzzer, ASan and UBSan")
     if not HEX_256.fullmatch(str(value.get("dictionary_sha256", ""))):
         raise ReceiptError("receipt dictionary SHA-256 is missing or invalid")
-    if value["dictionary_sha256"] != sha256_file(ROOT / "tests/fuzz/fuzz_core.dict"):
+    seed_commit = commit if source_commit_only else None
+    if source_commit_only:
+        dictionary_digest = sha256_bytes(commit_blob(commit, "tests/fuzz/fuzz_core.dict"))
+    else:
+        dictionary_digest = sha256_file(ROOT / "tests/fuzz/fuzz_core.dict")
+    if value["dictionary_sha256"] != dictionary_digest:
         raise ReceiptError("dictionary identity differs from the exact source input")
     seeds = value.get("seeds")
-    if not isinstance(seeds, list) or seeds != expected_seed_records():
+    if not isinstance(seeds, list) or seeds != expected_seed_records(seed_commit):
         raise ReceiptError("seed identities differ from deterministic admitted-fixture seeds")
     workflow = value.get("workflow")
     if not isinstance(workflow, dict) or workflow.get("workflow_path") != WORKFLOW:
@@ -833,8 +857,15 @@ def verify_hosted(
 ) -> dict[str, object]:
     if not HEX_160.fullmatch(expected_sha):
         raise ReceiptError("--source-sha must be a full commit ID")
-    if git_output("rev-parse", "HEAD") != expected_sha:
-        raise ReceiptError("requested source SHA does not match the current checkout")
+    # The judge is the trusted checkout (HEAD); the subject is the boundary commit. Subject identity
+    # never depends on HEAD: the trusted checkout moves with main, so a HEAD-derived verdict would
+    # change after the fact. Main membership is the API push-run record at the source SHA below.
+    resolved = subprocess.run(
+        ["git", "cat-file", "-e", f"{expected_sha}^{{commit}}"], cwd=ROOT,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    if resolved.returncode != 0:
+        raise ReceiptError("source-sha-not-in-history: requested source SHA is not a commit in the trusted checkout")
     if not isinstance(expected_run_id, str) or not re.fullmatch(r"[1-9][0-9]{0,19}", expected_run_id):
         raise ReceiptError("--run-id must be a positive decimal GitHub run ID")
     run_id_claim = int(expected_run_id)
@@ -1333,6 +1364,110 @@ class ReceiptContractTests(unittest.TestCase):
                 self.assertIn(reason, result.stdout, result.stdout)
                 self.assertNotIn("hosted_campaign=pass", result.stdout)
         print(f"negative-controls={len(cases)} rejected_mutations=hosted-run-job-artifact-receipt")
+
+    def moved_main_clone(self, directory: Path, source: str, verifier: bytes) -> Path:
+        """Clone the checkout and add one commit H on top of the source commit S (main moved on)."""
+        clone = directory / "clone"
+        subprocess.run(["git", "clone", "--quiet", "--no-hardlinks", str(ROOT), str(clone)],
+                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["git", "checkout", "--quiet", "--detach", source], cwd=clone, check=True)
+        (clone / "tests/scripts/verify-v02-fuzz.py").write_bytes(verifier)
+        (clone / ".gb-fixture-main-moved").write_text("main moved past the release commit\n", encoding="utf-8")
+        subprocess.run(["git", "add", "tests/scripts/verify-v02-fuzz.py", ".gb-fixture-main-moved"],
+                       cwd=clone, check=True)
+        subprocess.run(
+            ["git", "-c", "user.name=GabbaBoy fixture", "-c", "user.email=fixture@users.noreply.invalid",
+             "-c", "commit.gpgsign=false", "commit", "--quiet", "--no-verify", "-m", "fixture: main moved"],
+            cwd=clone, check=True, stdout=subprocess.DEVNULL,
+        )
+        return clone
+
+    def run_clone_hosted_cli(
+        self, clone: Path, source: str, verifier: bytes, expected_digest: str | None,
+    ) -> tuple[subprocess.CompletedProcess[str], str]:
+        """Place the verifier bytes in the clone (a checkout rewrites them), prove their digest, run the CLI."""
+        target = clone / "tests/scripts/verify-v02-fuzz.py"
+        target.write_bytes(verifier)
+        digest = sha256_bytes(target.read_bytes())
+        if expected_digest is not None and digest != expected_digest:
+            self.fail("head-independence: verifier bytes differ from fixed digest")
+        server, thread = self.hosted_fixture_server(source)
+        with tempfile.TemporaryDirectory(prefix="gb-fuzz-hosted-clone.") as directory:
+            receipt = Path(directory) / "supplied-receipt.json"
+            receipt.write_bytes(self.hosted_fixture_receipt(source, 17001, 1, 27001))
+            environment = os.environ.copy()
+            environment.update({"GITHUB_API_URL": f"http://127.0.0.1:{server.server_port}",
+                                "GITHUB_TOKEN": "fixture-token-must-not-leak"})
+            try:
+                result = subprocess.run(
+                    [sys.executable, "-I", str(target), "--verify-hosted", "--hosted-test-fixture",
+                     "--source-sha", source, "--run-id", "17001", "--attempt", "1",
+                     "--receipt", str(receipt), "--poll-seconds", "1", "--poll-interval-seconds", "1"],
+                    cwd=clone, env=environment, text=True, stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT, check=False,
+                )
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+        self.assertTrue(all(value is None for value in self._hosted_fixture_authorization_headers),
+                        "hosted fixture received a credential header")
+        return result, digest
+
+    def test_hosted_cli_accepts_source_after_main_moved(self) -> None:
+        fixed = SCRIPT.read_bytes()
+        fixed_digest = sha256_bytes(fixed)
+        source = git_output("rev-parse", "HEAD")
+        with tempfile.TemporaryDirectory(prefix="gb-fuzz-moved-main.") as directory:
+            clone = self.moved_main_clone(Path(directory), source, fixed)
+            moved_head = git_output("rev-parse", "HEAD", cwd=clone)
+            self.assertNotEqual(moved_head, source, "fixture did not move the trusted checkout past the source")
+            moved, moved_digest = self.run_clone_hosted_cli(clone, source, fixed, fixed_digest)
+            subprocess.run(["git", "checkout", "--quiet", "--detach", source], cwd=clone, check=True)
+            self.assertEqual(git_output("rev-parse", "HEAD", cwd=clone), source)
+            at_source, source_digest = self.run_clone_hosted_cli(clone, source, fixed, fixed_digest)
+        self.assertEqual(moved.returncode, 0, moved.stdout)
+        self.assertIn("fixture_hosted=pass qualification=none", moved.stdout)
+        self.assertEqual(at_source.returncode, 0, at_source.stdout)
+        self.assertEqual(moved.stdout, at_source.stdout, "hosted verdict depends on the trusted HEAD")
+        print(f"head-independence digest head=S sha256={source_digest} head=H sha256={moved_digest}",
+              file=sys.stderr)
+        print("positive-control=hosted-verdict-identical-at-source-and-after-main-moved")
+
+    def test_hosted_cli_head_check_mutant_rejects_moved_main(self) -> None:
+        fixed = SCRIPT.read_bytes()
+        # Built from pieces so the anchor does not occur in this test's own text (it must occur once).
+        anchor = ('raise ReceiptError("source-sha-not-in' + '-history: requested source SHA is not a commit'
+                  + ' in the trusted checkout")\n').encode("utf-8")
+        self.assertEqual(fixed.count(anchor), 1, "mutation anchor must occur exactly once")
+        reinserted = (anchor + b'    if git_output("rev-parse", "HEAD") != expected_sha:\n'
+                      b'        raise ReceiptError("requested source SHA does not match the current checkout")\n')
+        mutant = fixed.replace(anchor, reinserted, 1)
+        self.assertNotEqual(sha256_bytes(mutant), sha256_bytes(fixed))
+        source = git_output("rev-parse", "HEAD")
+        with tempfile.TemporaryDirectory(prefix="gb-fuzz-head-mutant.") as directory:
+            clone = self.moved_main_clone(Path(directory), source, fixed)
+            result, _digest = self.run_clone_hosted_cli(clone, source, mutant, sha256_bytes(mutant))
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("requested source SHA does not match the current checkout", result.stdout)
+        print("negative-control=head-equality-mutant-rejects-moved-main")
+
+    def test_hosted_cli_rejects_unknown_source(self) -> None:
+        unknown = "0123456789abcdef" * 2 + "01234567"
+        absent = subprocess.run(["git", "cat-file", "-e", f"{unknown}^{{commit}}"], cwd=ROOT,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        self.assertNotEqual(absent.returncode, 0, "random SHA unexpectedly names a commit")
+        with tempfile.TemporaryDirectory(prefix="gb-fuzz-unknown-source.") as directory:
+            receipt = Path(directory) / "supplied-receipt.json"
+            receipt.write_bytes(b"{}\n")
+            result = self.run_cli(
+                "--verify-hosted", "--hosted-test-fixture", "--source-sha", unknown,
+                "--run-id", "17001", "--attempt", "1", "--receipt", str(receipt),
+                "--poll-seconds", "1", "--poll-interval-seconds", "1",
+            )
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("source-sha-not-in-history", result.stdout)
+        print("negative-control=unknown-source-sha-rejected")
 
     def verify_rejects(self, path: Path, payload: dict[str, object], reason: str) -> None:
         path.write_text(json.dumps(payload), encoding="utf-8")
