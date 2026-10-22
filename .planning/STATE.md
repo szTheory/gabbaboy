@@ -6,16 +6,16 @@ current_phase: "15.1"
 current_phase_name: Release Hardening and Milestone Debt Closure (INSERTED)
 current_plan: 20
 status: executing
-stopped_at: Completed 15.1-21-PLAN.md
-last_updated: "2026-10-22T16:04:07.241Z"
+stopped_at: Completed 15.1-28-PLAN.md
+last_updated: "2026-10-22T16:09:03.578Z"
 last_activity: 2026-10-22
 last_activity_desc: Phase 15.1 execution started
-state_head: 10c57b36fcb03b1b90dba5f1a1ef0272e05c348a
+state_head: ef565c42328765cf2ced5a423116939376b1da48
 progress:
   total_phases: 10
   completed_phases: 9
   total_plans: 164
-  completed_plans: 157
+  completed_plans: 158
   percent: 90
 ---
 
@@ -331,6 +331,7 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 15.1 P22 | 25 min | 2 tasks | 2 files |
 | Phase 15.1 P30 | 10 min | 2 tasks | 1 files |
 | Phase 15.1 P21 | 20 min | 2 tasks | 4 files |
+| Phase 15.1 P28 | 15 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -573,6 +574,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 15.1]: 15.1-20: one shared gbb_accept_stop_resumable rule serves the main stepper and diagnostic replay; frame count zeroed only once proven outside the borrowed span (NULL or aliasing count returns invalid untouched)
 - [Phase 15.1]: 15.1-22: residual jobs classified as data (RESIDUAL_SUBJECT_JOBS vs reasoned TOKEN_SCOPE_EXEMPT); token only on gh steps; trusted verifier overlay by explicit per-path git show lines; LIM-RESIDUAL-WRITE-JOBS remains an owner decision
 - [Phase 15.1]: 15.1-30: BOM-prefixed ledger pinned to accept-with-different-digest; flip to rejecting must fail bom-ledger-identity
+- [Phase 15.1]: 15.1-28: release.yml run bodies take step outputs via env only; CREDENTIAL_EXEMPT empty; rehearsal run-expression (2 uses) deferred to 15.1-23
 
 ### Pending Todos
 
@@ -613,8 +615,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-**Last session:** 2026-10-22T16:04:06.642Z
-**Stopped at:** Completed 15.1-21-PLAN.md
+**Last session:** 2026-10-22T16:09:03.015Z
+**Stopped at:** Completed 15.1-28-PLAN.md
 **Resume file:** None
 
 Completed stage: **Phase 15.1 planning and independent plan verification**. All 19 plans, 39 tasks and seven waves are ready to execute; the final checker reports zero blockers and warnings. All 24 scope items and four follow-up requirements have executable coverage. No Phase 15.1 implementation or hosted qualification has run. Nine original phases and 134 plans remain complete; v0.2 stays open. Historical unknowns and spec-less verification flags remain explicit; debt is not accepted by planning.
