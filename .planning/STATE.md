@@ -6,16 +6,16 @@ current_phase: "15.1"
 current_phase_name: Release Hardening and Milestone Debt Closure (INSERTED)
 current_plan: 20
 status: executing
-stopped_at: Completed 15.1-29-PLAN.md
-last_updated: "2026-10-22T16:41:09.189Z"
+stopped_at: Completed 15.1-25-PLAN.md
+last_updated: "2026-10-22T21:46:33.941Z"
 last_activity: 2026-10-22
 last_activity_desc: Phase 15.1 execution started
-state_head: a17c3733798c2cec6526093109b2aec904c57d72
+state_head: b723f3dec2c630b7f21bddbd5774e2e08eba0330
 progress:
   total_phases: 10
   completed_phases: 9
   total_plans: 164
-  completed_plans: 161
+  completed_plans: 162
   percent: 90
 ---
 
@@ -34,6 +34,8 @@ Phase: 15.1 (Release Hardening and Milestone Debt Closure (INSERTED)) — EXECUT
 Status: Executing Phase 15.1
 
 Completed stage (2026-10-22): **Phase 15.1 gap-closure planning** (`/gsd-plan-phase 15.1 --gaps`). Eleven gap plans 15.1-20..30 in 8 waves close WR-01..WR-07 and IN-01..IN-08 with negative controls, add SHIP-09 ledger edge controls (15.1-30), merge the gap PR (15.1-25), refresh local and hosted evidence at the merge commit with strict-head verdicts recorded per boundary commit (15.1-26), and close the review disposition and stop (15.1-27). Plan check: three revision passes plus two owner-approved scoped fixes; final remaining items resolved and grep-confirmed. **Next:** `/gsd-execute-phase 15.1 --gaps-only`; after it, `/gsd-verify-work 15.1`. No tag, release, archive, audit or v0.3 work.
+Latest (2026-10-22): **15.1-25 complete** (gap PR delivery). PR #94 squash-merged to `main` as merge commit **M = `2d25a47f1b05844b4da829aa9d0978f2cb348df1`** at exact checked head `dbd4a36d0fb8a7dddc75bcf1634120d0aa4c9874` (required-native, fixture-repro, preview-package-smoke success, read from the check-runs API; tree identical to origin/main). Full local gate 1177/1177. A Windows-only fuzz-dictionary CRLF defect was found by the hosted lane and fixed (`.gitattributes` LF pin). Receipt `15.1-gap-delivery-receipt.json` passes `verify-v02-delivery.py --stage phase-pr` on branch `gsd/phase-15.1-gap-evidence` (not yet pushed; 15.1-27 opens that PR). **Next:** 15.1-26 (refresh evidence at M): `/gsd-execute-phase 15.1 --gaps-only`; then 15.1-27, then `/gsd-verify-work 15.1`. No tag, release, archive or v0.3 work.
+
 Current Plan: 20
 Total Plans in Phase: 30
 
@@ -335,6 +337,7 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 15.1 P23 | 75 min | 3 tasks | 4 files |
 | Phase 15.1 P24 | 40 min | 2 tasks | 3 files |
 | Phase 15.1 P29 | 25 min | 2 tasks | 5 files |
+| Phase 15.1 P25 | 5h 0m | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -581,6 +584,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 15.1]: 15.1-23: hosted fuzz verification judges the boundary commit (commit object, commit-tree manifest, dictionary and seeds from the tree); validate_receipt reads HEAD only on the non-commit-bound path. Ancestry against the moving main tip is not asserted; main membership is the API push-run record.
 - [Phase 15.1]: 15.1-24: release-candidate workflow pins W6-03..W6-11 live in parsed RELEASE_PRESENCE/RELEASE_RUNNERS; step-lines item used where the shell reader rejects (( )) steps; api_commit/draft pinned as assignments (one-line brace guard parser limit)
 - [Phase 15.1]: 15.1-29: W6-13 and W6-18 stay reasoned data pins; all other W6-12..W6-19 pins moved to parsed policy rules or executable controls; closeout scan exits 3 runtime-unavailable when no runtime exists
+- [Phase 15.1]: 15.1-25: final-head required-check IDs recorded in the delivery receipt, not the merged evidence file (self-reference would move the head forever)
+- [Phase 15.1]: 15.1-25: tests/fuzz/fuzz_core.dict pinned to LF in .gitattributes after hosted Windows lane exposed CRLF digest mismatch
 
 ### Pending Todos
 
@@ -621,8 +626,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-**Last session:** 2026-10-22T16:41:08.583Z
-**Stopped at:** Completed 15.1-29-PLAN.md
+**Last session:** 2026-10-22T21:46:33.508Z
+**Stopped at:** Completed 15.1-25-PLAN.md
 **Resume file:** None
 
 Completed stage: **Phase 15.1 planning and independent plan verification**. All 19 plans, 39 tasks and seven waves are ready to execute; the final checker reports zero blockers and warnings. All 24 scope items and four follow-up requirements have executable coverage. No Phase 15.1 implementation or hosted qualification has run. Nine original phases and 134 plans remain complete; v0.2 stays open. Historical unknowns and spec-less verification flags remain explicit; debt is not accepted by planning.
