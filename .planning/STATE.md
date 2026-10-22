@@ -6,16 +6,16 @@ current_phase: "15.1"
 current_phase_name: Release Hardening and Milestone Debt Closure (INSERTED)
 current_plan: 20
 status: executing
-stopped_at: Completed 15.1-24-PLAN.md
-last_updated: "2026-10-22T16:33:12.257Z"
+stopped_at: Completed 15.1-29-PLAN.md
+last_updated: "2026-10-22T16:41:09.189Z"
 last_activity: 2026-10-22
 last_activity_desc: Phase 15.1 execution started
-state_head: 426936258cf379359aa6467625e6e831012e60b0
+state_head: a17c3733798c2cec6526093109b2aec904c57d72
 progress:
   total_phases: 10
   completed_phases: 9
   total_plans: 164
-  completed_plans: 160
+  completed_plans: 161
   percent: 90
 ---
 
@@ -334,6 +334,7 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 15.1 P28 | 15 min | 2 tasks | 5 files |
 | Phase 15.1 P23 | 75 min | 3 tasks | 4 files |
 | Phase 15.1 P24 | 40 min | 2 tasks | 3 files |
+| Phase 15.1 P29 | 25 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -579,6 +580,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 15.1]: 15.1-28: release.yml run bodies take step outputs via env only; CREDENTIAL_EXEMPT empty; rehearsal run-expression (2 uses) deferred to 15.1-23
 - [Phase 15.1]: 15.1-23: hosted fuzz verification judges the boundary commit (commit object, commit-tree manifest, dictionary and seeds from the tree); validate_receipt reads HEAD only on the non-commit-bound path. Ancestry against the moving main tip is not asserted; main membership is the API push-run record.
 - [Phase 15.1]: 15.1-24: release-candidate workflow pins W6-03..W6-11 live in parsed RELEASE_PRESENCE/RELEASE_RUNNERS; step-lines item used where the shell reader rejects (( )) steps; api_commit/draft pinned as assignments (one-line brace guard parser limit)
+- [Phase 15.1]: 15.1-29: W6-13 and W6-18 stay reasoned data pins; all other W6-12..W6-19 pins moved to parsed policy rules or executable controls; closeout scan exits 3 runtime-unavailable when no runtime exists
 
 ### Pending Todos
 
@@ -619,8 +621,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-**Last session:** 2026-10-22T16:33:11.678Z
-**Stopped at:** Completed 15.1-24-PLAN.md
+**Last session:** 2026-10-22T16:41:08.583Z
+**Stopped at:** Completed 15.1-29-PLAN.md
 **Resume file:** None
 
 Completed stage: **Phase 15.1 planning and independent plan verification**. All 19 plans, 39 tasks and seven waves are ready to execute; the final checker reports zero blockers and warnings. All 24 scope items and four follow-up requirements have executable coverage. No Phase 15.1 implementation or hosted qualification has run. Nine original phases and 134 plans remain complete; v0.2 stays open. Historical unknowns and spec-less verification flags remain explicit; debt is not accepted by planning.
