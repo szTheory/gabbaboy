@@ -35,7 +35,9 @@ def verify(after_json: str, before_rows: list[dict[str, Any]]) -> None:
     try:
         after_rows = json.loads(after_json)
     except json.JSONDecodeError as error:
-        raise ValueError("published release API response is not valid JSON") from error
+        raise ValueError("published-assets-not-json: published release API response is not valid JSON") from error
+    if not isinstance(after_rows, list):
+        raise ValueError("published-assets-not-json: published release API response is not a JSON array")
     before = inventory(before_rows)
     after = inventory(after_rows)
     if not set(before).issubset(set(after)):
@@ -176,6 +178,22 @@ def self_test() -> None:
         except ValueError:
             continue
         raise SystemExit("published asset verifier self-test accepted invalid API evidence")
+    # Executable direct-JSON control: the first argument is response TEXT. A path naming a file that holds a valid
+    # response must be rejected, never read, so a caller cannot satisfy the verifier by saving the response first.
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="gbb-published-assets.") as directory:
+        response_file = pathlib.Path(directory) / "api-assets.json"
+        response_file.write_text(after)
+        verify(response_file.read_text(), before)
+        try:
+            verify(str(response_file), before)
+        except ValueError as error:
+            if "published-assets-not-json" not in str(error):
+                raise SystemExit(f"published asset verifier rejected a path for the wrong reason: {error}")
+            print("rejected: path-instead-of-json: a file path in place of API response text")
+        else:
+            raise SystemExit("published asset verifier accepted a file path in place of API response JSON")
     print("PASS: published asset verifier parses JSON responses directly and rejects changed/malformed inventory")
     recovery_self_test()
 

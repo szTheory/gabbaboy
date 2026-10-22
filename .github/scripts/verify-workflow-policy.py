@@ -1063,6 +1063,12 @@ RELEASE_PRESENCE = {
 }
 # Hosted runner images of the native downloaded-archive lanes; a silently different image changes what was qualified.
 RELEASE_RUNNERS = {"candidate-macos": "macos-14", "candidate-windows": "windows-2022"}
+# The only events that may start release.yml: it is a reusable workflow, so a privileged event of its own
+# (pull_request_target, release, push) would run the draft-writing jobs outside the release-please entrypoint.
+RELEASE_TRIGGERS = frozenset({"workflow_call"})
+# The one caller of release.yml, so that release-please outputs and the candidate jobs run in a single workflow run.
+RELEASE_ENTRYPOINT_WORKFLOW = "release-please.yml"
+RELEASE_LOCAL_PATH = "./.github/workflows/release.yml"
 CI_REQUIRED = (
     "cmake --preset phase1-asan -DGBB_TEST_INSTALL_PREFIX=",
     "cmake --build --preset phase1-asan",
@@ -1269,12 +1275,41 @@ def _check_release_presence(workflow: str, tree: dict) -> None:
             raise Reject("runner-image", f"{_where(workflow, job_id)} must run on {runner}, not {actual or 'an unset image'}")
 
 
+def _trigger_names(tree: dict) -> set[str]:
+    on = tree.get("on")
+    if isinstance(on, dict):
+        return set(on)
+    if isinstance(on, list):
+        return {str(item) for item in on}
+    if isinstance(on, str) and on:
+        return {on}
+    return set()
+
+
+def _check_release_triggers(workflow: str, tree: dict) -> None:
+    extra = _trigger_names(tree) - RELEASE_TRIGGERS
+    if extra:
+        raise Reject("workflow-trigger", f"{workflow} may only be started by {sorted(RELEASE_TRIGGERS)}, not {sorted(extra)}")
+
+
+def _check_release_entrypoint(root: Path) -> None:
+    """release.yml is reusable, and the release-please workflow must call it as a job so that the release outputs and
+    the candidate jobs live in one workflow run."""
+    release = read_workflow(root / ".github/workflows/release.yml")
+    if "workflow_call" not in _trigger_names(release):
+        raise Reject("release-entrypoint", "release.yml must be a reusable workflow (workflow_call)")
+    entry = read_workflow(root / ".github/workflows" / RELEASE_ENTRYPOINT_WORKFLOW)
+    if not any(job.get("uses") == RELEASE_LOCAL_PATH for job in entry["jobs"].values()):
+        raise Reject("release-entrypoint", f"{RELEASE_ENTRYPOINT_WORKFLOW} must call {RELEASE_LOCAL_PATH} from a job")
+
+
 def check_release(root: Path) -> None:
     name = "release"
     _check_residual_classification()
     tree = read_workflow(root / ".github/workflows/release.yml")
     if tree.get("permissions") != {"contents": "read"}:
         raise Reject("workflow-permissions", "release must declare only top-level contents: read")
+    _check_release_triggers(name, tree)
     _check_actions(name, tree)
     _check_disabled(name, tree)
     _check_bounded_downloads(name, tree)
@@ -1359,6 +1394,8 @@ def check_release(root: Path) -> None:
         for command, extra in calls:
             require_call(name, job_id, jobs[job_id], command, contains=extra, conditional=True)
     _check_release_presence(name, tree)
+    _require_needs(name, "candidate-windows", _require_job(name, tree, "candidate-windows"), {"release", "candidate-macos"}, "workflow-dependency")
+    _check_release_entrypoint(root)
     attach = jobs["attach-v02-evidence"]
     require_call(name, "attach-v02-evidence", attach, 'gh release upload "$RELEASE_TAG" "$1/$2" --repo "$GH_REPO"', conditional=True)
     attach_call = require_call(name, "attach-v02-evidence", attach, 'attach "$dir" "$name"', conditional=True)
@@ -1379,7 +1416,7 @@ def check_all(root: Path) -> dict[str, int]:
 
 
 # --------------------------------------------------------------------------- self-test
-WORKFLOWS = ("release-rehearsal.yml", "release.yml", "ci.yml", "fixture-repro.yml", "preview.yml")
+WORKFLOWS = ("release-rehearsal.yml", "release.yml", "release-please.yml", "ci.yml", "fixture-repro.yml", "preview.yml")
 
 
 def _copy_fixture(root: Path, target: Path) -> None:
@@ -1699,6 +1736,20 @@ def _mutations():
         _m("W6-11b windows refusal message removed", rel, "  candidate-windows:\n",
            'echo "Draft contains a partial Windows candidate asset set; refusing to rebuild or replace bytes." >&2',
            'echo "Draft contains a partial Windows candidate asset set; continuing." >&2', "release-presence"),
+        # Release-candidate wiring formerly pinned as text in verify-release-candidate.sh (WR-06, W6-12..W6-19).
+        _m("W6-12 windows no longer needs macOS", rel, "  candidate-windows:\n", "needs: [release, candidate-macos]", "needs: [release]", "workflow-dependency"),
+        _m("W6-14 release gains pull_request_target", rel, "", "  workflow_call:\n", "  pull_request_target:\n    branches: [main]\n  workflow_call:\n", "workflow-trigger"),
+        ("W6-15 final gate moved after publish", rel, [
+            ("  publish-qualified-release:\n", 'run: bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"', "run: true"),
+            ("  publish-qualified-release:\n", 'gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag',
+             'gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag\n{I}bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"')],
+         "publication-order"),
+        _m("W6-16 published asset verifier neutered", rel, "  publish-qualified-release:\n",
+           'python3 -I trusted/.github/scripts/verify-published-release-assets.py "$assets" build/release-final/api-assets.json',
+           'python3 -I trusted/.github/scripts/verify-published-release-assets.py --help "$assets" build/release-final/api-assets.json',
+           "required-command-not-executed"),
+        _m("W6-19 entrypoint stops calling release.yml", "release-please.yml", "", "uses: ./.github/workflows/release.yml",
+           "uses: ./.github/workflows/release-renamed.yml", "release-entrypoint"),
     ]
 
 
