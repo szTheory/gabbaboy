@@ -324,7 +324,9 @@ def limits_contract(value: object) -> None:
 
 
 def workflow_job_id(repository: str, run_id: int, attempt: int) -> int | None:
-    api = os.environ.get("GITHUB_API_URL", "https://api.github.com").rstrip("/")
+    # The job token goes only to the authority qualification judges (api_base_url with
+    # test_fixture=False); GITHUB_API_URL is caller-supplied and cannot select where it is sent.
+    api = api_base_url(test_fixture=False)
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if not token:
         return None
@@ -338,13 +340,15 @@ def workflow_job_id(repository: str, run_id: int, attempt: int) -> int | None:
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
             payload = json.loads(response.read(2 * 1024 * 1024))
-    except Exception:
+    except (OSError, ValueError, urllib.error.URLError):
+        return None
+    if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), list):
         return None
     wanted = os.environ.get("GITHUB_JOB", "")
     if wanted == "linux-sanitizers":
         wanted = "linux-asan-ubsan"
-    for job in payload.get("jobs", []):
-        if job.get("name") == wanted and isinstance(job.get("id"), int):
+    for job in payload["jobs"]:
+        if isinstance(job, dict) and job.get("name") == wanted and type(job.get("id")) is int:
             return job["id"]
     return None
 
@@ -1469,6 +1473,81 @@ class ReceiptContractTests(unittest.TestCase):
         self.assertIn("source-sha-not-in-history", result.stdout)
         print("negative-control=unknown-source-sha-rejected")
 
+    def call_workflow_job_id(
+        self, api_url: str, payload: bytes | None,
+    ) -> tuple[int | None, list[str]]:
+        """Call workflow_job_id with urlopen replaced by a recorder; no real network is used."""
+        seen: list[str] = []
+
+        class Response:
+            def __enter__(self) -> "Response":
+                return self
+
+            def __exit__(self, *_args: object) -> None:
+                return None
+
+            def read(self, _limit: int = -1) -> bytes:
+                return payload or b""
+
+        def recorder(request: urllib.request.Request, timeout: float | None = None) -> Response:
+            seen.append(request.full_url)
+            if payload is None or urllib.parse.urlsplit(request.full_url).hostname != "api.github.com":
+                raise urllib.error.URLError("fixture refuses the request")
+            return Response()
+
+        saved = {name: os.environ.get(name) for name in ("GITHUB_API_URL", "GITHUB_TOKEN", "GH_TOKEN", "GITHUB_JOB")}
+        original = urllib.request.urlopen
+        try:
+            os.environ.update({"GITHUB_API_URL": api_url, "GITHUB_TOKEN": "fixture-token-must-not-leak",
+                               "GITHUB_JOB": "linux-sanitizers"})
+            os.environ.pop("GH_TOKEN", None)
+            urllib.request.urlopen = recorder  # type: ignore[assignment]
+            result = workflow_job_id("szTheory/gabbaboy", 17001, 1)
+        finally:
+            urllib.request.urlopen = original  # type: ignore[assignment]
+            for name, value in saved.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+        return result, seen
+
+    def test_workflow_job_id_never_sends_token_to_foreign_api(self) -> None:
+        requests_seen: list[str | None] = []
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *_args: object) -> None:
+                pass
+
+            def do_GET(self) -> None:
+                requests_seen.append(self.headers.get("Authorization"))
+                self.send_error(404)
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            for foreign in (f"http://127.0.0.1:{server.server_port}", "https://evil.example"):
+                with self.subTest(api=foreign):
+                    result, seen = self.call_workflow_job_id(foreign, None)
+                    self.assertIsNone(result)
+                    self.assertTrue(seen, "workflow_job_id never attempted the qualifying API")
+                    self.assertTrue(all(url.startswith("https://api.github.com/") for url in seen),
+                                    f"token-bearing request left api.github.com: {seen}")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+        self.assertEqual(requests_seen, [], "loopback server received a request")
+        print("negative-control=job-id-token-never-leaves-api-github-com")
+
+    def test_workflow_job_id_parses_defensively(self) -> None:
+        good = json.dumps({"jobs": [{"name": "linux-asan-ubsan", "id": 27001}]}).encode()
+        self.assertEqual(self.call_workflow_job_id("https://api.github.com", good)[0], 27001)
+        for payload in (b'{"jobs": "not-a-list"}', b"[1, 2]", b"not json", b'{"jobs": [3, {"name": "linux-asan-ubsan"}]}'):
+            with self.subTest(payload=payload):
+                self.assertIsNone(self.call_workflow_job_id("https://api.github.com", payload)[0])
+
     def verify_rejects(self, path: Path, payload: dict[str, object], reason: str) -> None:
         path.write_text(json.dumps(payload), encoding="utf-8")
         result = self.run_cli("--verify", str(path))
@@ -1624,7 +1703,7 @@ def self_test(receipt: Path | None) -> int:
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     # Tests are assertions; this inventory line makes a zero-control run visible in logs.
     state = "pass" if result.wasSuccessful() else "fail"
-    print(f"self-test={state} positive_controls=4 negative_controls={19 + 14} rejected_mutations={10 + 14 if result.wasSuccessful() else 0} skipped={len(result.skipped)} live_hosted_receipt=not-supplied")
+    print(f"self-test={state} positive_controls=4 negative_controls={22 + 14} rejected_mutations={10 + 14 if result.wasSuccessful() else 0} skipped={len(result.skipped)} live_hosted_receipt=not-supplied")
     return 0 if result.wasSuccessful() else 1
 
 
