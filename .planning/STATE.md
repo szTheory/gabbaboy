@@ -6,7 +6,7 @@ current_phase: "15.1"
 current_phase_name: Release Hardening and Milestone Debt Closure (INSERTED)
 current_plan: 20
 status: executing
-stopped_at: Completed 15.1-26-PLAN.md
+stopped_at: "Phase 15.1 gap closure complete (plans 15.1-20..30); re-verification pending"
 last_updated: "2026-10-22T22:59:06.488Z"
 last_activity: 2026-10-22
 last_activity_desc: Phase 15.1 execution started
@@ -33,8 +33,11 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 Phase: 15.1 (Release Hardening and Milestone Debt Closure (INSERTED)) — EXECUTING
 Status: Executing Phase 15.1
 
-Completed stage (2026-10-22): **Phase 15.1 gap-closure planning** (`/gsd-plan-phase 15.1 --gaps`). Eleven gap plans 15.1-20..30 in 8 waves close WR-01..WR-07 and IN-01..IN-08 with negative controls, add SHIP-09 ledger edge controls (15.1-30), merge the gap PR (15.1-25), refresh local and hosted evidence at the merge commit with strict-head verdicts recorded per boundary commit (15.1-26), and close the review disposition and stop (15.1-27). Plan check: three revision passes plus two owner-approved scoped fixes; final remaining items resolved and grep-confirmed. **Next:** `/gsd-execute-phase 15.1 --gaps-only`; after it, `/gsd-verify-work 15.1`. No tag, release, archive, audit or v0.3 work.
-Latest (2026-10-22): **15.1-25 complete** (gap PR delivery). PR #94 squash-merged to `main` as merge commit **M = `2d25a47f1b05844b4da829aa9d0978f2cb348df1`** at exact checked head `dbd4a36d0fb8a7dddc75bcf1634120d0aa4c9874` (required-native, fixture-repro, preview-package-smoke success, read from the check-runs API; tree identical to origin/main). Full local gate 1177/1177. A Windows-only fuzz-dictionary CRLF defect was found by the hosted lane and fixed (`.gitattributes` LF pin). Receipt `15.1-gap-delivery-receipt.json` passes `verify-v02-delivery.py --stage phase-pr` on branch `gsd/phase-15.1-gap-evidence` (not yet pushed; 15.1-27 opens that PR). **Next:** 15.1-26 (refresh evidence at M): `/gsd-execute-phase 15.1 --gaps-only`; then 15.1-27, then `/gsd-verify-work 15.1`. No tag, release, archive or v0.3 work.
+Completed stage (2026-10-22): **Phase 15.1 gap closure (plans 15.1-20..30)**. Gap PR #94 squash-merged to `main` as M = `2d25a47f1b05844b4da829aa9d0978f2cb348df1`; evidence was refreshed at M (15.1-26) and strict-head passes at boundary commits `01ecebeddf0f2d85492ab9c77c7e40c32d70b2c7` (15.1-26) and `1ca0b26559b8c7a195ae2bf553086fbffd028c95` (15.1-27), recorded in `15.1-strict-head-boundaries.tsv`. SC2: WR-01..WR-07 and IN-01..IN-08 are all fixed in `15.1-REVIEW-DISPOSITION.md` (open 0 of 15), each with a negative control re-run at the docs-branch head (`15.1-GAP-CLOSURE-EVIDENCE.md`). SC1/SC3: strict-head pass at M. The docs PR (gap receipt, refreshed evidence, dispositions, route) is delivered by 15.1-27; its number and merge receipt are in `continue.md` and read live by PR number.
+**Phase 15.1 is still open.** Next stage: **Phase 15.1 re-verification** (no new numbered phase). Exact next command: `/gsd-verify-work 15.1`. After it passes, the owner chooses `/gsd-audit-milestone`; do not run it, tag, release, archive, republish v0.2.0 or start v0.3 automatically.
+Open owner decisions (none is a pass or owner acceptance; smallest action each): `LIM-SUPPORT-LEDGER-PIN` choose a release ledger for the post-0.2.0 source (published v0.2.0 text is not rewritten); `LIM-PERF-REVIEW` record a receipt-bound independent review decision for median_ratio_pct=129.13; `LIM-RESIDUAL-WRITE-JOBS` split or accept the five jobs; `LIM-TRUSTED-JUDGE` rerun the rehearsal after the two decisions above; `LIM-REHEARSAL-FAILED` same rerun; the GB-13 linker note, close or acknowledge it at re-audit; `LIM-HIST-AUDIO-RED` and `LIM-HIST-M7` decide at re-audit whether fresh evidence substitutes; `LIM-SHIP11-UNCLASSIFIED` supply a predicate or accept the edge; `LIM-NO-HOST-WRONG-ROM` accept the local control or request a hosted negative dispatch; `LIM-WINDOWS-POSIX-CONTROLS` accept POSIX-only coverage or add Windows controls; `LIM-ASAN-STALL-TIMING` decide on the slower ASan lane; `LIM-PROHIBITION-FLAGS` supply descriptors or keep the flags.
+Boundary triage (2026-10-22): 0 open issues; 15 open PRs (#75 release-please, #78-92 verification refresh stack), none touched.
+Deferred follow-ups: symlinked-checkout path portability defect in `cgb_corpus_report_platform_controls`; CTest 4.4 prints `100% tests passed out of N` (the 15.1-26 plan verify grep expects `, 0 tests failed`).
 
 Current Plan: 20
 Total Plans in Phase: 30
