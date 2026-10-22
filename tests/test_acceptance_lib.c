@@ -849,6 +849,11 @@ static int span_alias_was_rejected(const char *name, gbb_run_result result,
     return 1;
 }
 
+/* Number of span_alias_was_rejected sub-cases in case_accept_input_span_output_alias. The printed
+ * rejected=N/M line derives M from this constant, and the output_alias mutant regex in
+ * tests/acceptance/CMakeLists.txt matches it, so the denominator cannot drift from the sub-case count. */
+enum { SPAN_OUTPUT_ALIAS_CASES = 12 };
+
 static int case_accept_input_span_output_alias(void) {
     const size_t storage_size = 4096u;
     uint8_t *storage = malloc(storage_size);
@@ -881,52 +886,68 @@ static int case_accept_input_span_output_alias(void) {
     REQUIRE((uintptr_t)(void *)partial_trace < (uintptr_t)(void *)(events + 2u));
     REQUIRE((uintptr_t)(void *)partial_diagnostic < (uintptr_t)(void *)(events + 2u));
 
-    int failures = 0;
+    int failures = 0;        /* the valid zero-budget span check */
+    int alias_failures = 0;  /* span_alias_was_rejected sub-cases */
     const uint64_t alias_budget = 32u;
     size_t frame_count = 7u;
     gbb_run_result result = gbb_accept_run_audio(instance, alias_budget, span, partial_frame, 1u, &frame_count);
     if (!span_alias_was_rejected("partial-frame/events", result, span, 4u, 0u,
-                                 events, saved_events, 4u) || frame_count != 7u) ++failures;
+                                 events, saved_events, 4u) || frame_count != 0u) ++alias_failures;
 
     frame_count = 7u;
     result = gbb_accept_run_audio(instance, alias_budget, span, (gbb_audio_frame *)(void *)span, 1u, &frame_count);
     if (!span_alias_was_rejected("frame/span-descriptor", result, span, 4u, 0u,
-                                 events, saved_events, 4u) || frame_count != 7u) ++failures;
+                                 events, saved_events, 4u) || frame_count != 0u) ++alias_failures;
 
     *cursor = 1u;
     result = gbb_accept_run_audio(instance, alias_budget, span, NULL, 0u, cursor);
     if (!span_alias_was_rejected("frame-count/cursor", result, span, 4u, 1u,
-                                 events, saved_events, 4u)) ++failures;
+                                 events, saved_events, 4u)) ++alias_failures;
     *cursor = 0u;
 
     result = gbb_accept_run_audio(instance, alias_budget, span, NULL, 0u, &span->count);
     if (!span_alias_was_rejected("frame-count/span-descriptor", result, span, 4u, 0u,
-                                 events, saved_events, 4u)) ++failures;
+                                 events, saved_events, 4u)) ++alias_failures;
     span->count = 4u;
+
+    size_t *count_in_events = (size_t *)(void *)align_test_address((uintptr_t)(void *)(events + 1u),
+                                                                   _Alignof(size_t));
+    REQUIRE((uintptr_t)(void *)count_in_events + sizeof(*count_in_events) <= (uintptr_t)(void *)(events + 4u));
+    result = gbb_accept_run_audio(instance, alias_budget, span, NULL, 0u, count_in_events);
+    if (!span_alias_was_rejected("frame-count/events", result, span, 4u, 0u,
+                                 events, saved_events, 4u)) ++alias_failures;
+
+    /* The span itself is invalid (cursor above count), so validate_accept_input_span rejects it; the count
+     * aliases the cursor and must still not be written. */
+    *cursor = 5u;
+    result = gbb_accept_run_audio(instance, alias_budget, span, NULL, 0u, cursor);
+    if (!span_alias_was_rejected("frame-count/unvalidated-cursor", result, span, 4u, 5u,
+                                 events, saved_events, 4u)) ++alias_failures;
+    *cursor = 0u;
 
     result = gbb_accept_run_diagnostic(instance, alias_budget, span, partial_trace, 1u, NULL, 0u);
     if (!span_alias_was_rejected("partial-trace/events", result, span, 4u, 0u,
-                                 events, saved_events, 4u)) ++failures;
+                                 events, saved_events, 4u)) ++alias_failures;
     result = gbb_accept_run_diagnostic(instance, alias_budget, span,
                                        (gbb_trace_record *)(void *)cursor, 1u, NULL, 0u);
     if (!span_alias_was_rejected("trace/cursor", result, span, 4u, 0u,
-                                 events, saved_events, 4u)) ++failures;
+                                 events, saved_events, 4u)) ++alias_failures;
     result = gbb_accept_run_diagnostic(instance, alias_budget, span,
                                        (gbb_trace_record *)(void *)span, 1u, NULL, 0u);
     if (!span_alias_was_rejected("trace/span-descriptor", result, span, 4u, 0u,
-                                 events, saved_events, 4u)) ++failures;
+                                 events, saved_events, 4u)) ++alias_failures;
 
     result = gbb_accept_run_diagnostic(instance, alias_budget, span, NULL, 0u, partial_diagnostic, 1u);
     if (!span_alias_was_rejected("partial-diagnostic/events", result, span, 4u, 0u,
-                                 events, saved_events, 4u)) ++failures;
+                                 events, saved_events, 4u)) ++alias_failures;
     result = gbb_accept_run_diagnostic(instance, alias_budget, span, NULL, 0u,
                                        (gbb_diagnostic_record *)(void *)cursor, 1u);
     if (!span_alias_was_rejected("diagnostic/cursor", result, span, 4u, 0u,
-                                 events, saved_events, 4u)) ++failures;
+                                 events, saved_events, 4u)) ++alias_failures;
     result = gbb_accept_run_diagnostic(instance, alias_budget, span, NULL, 0u,
                                        (gbb_diagnostic_record *)(void *)span, 1u);
     if (!span_alias_was_rejected("diagnostic/span-descriptor", result, span, 4u, 0u,
-                                 events, saved_events, 4u)) ++failures;
+                                 events, saved_events, 4u)) ++alias_failures;
 
     gbb_audio_frame frames[GBB_ACCEPT_PCM_FRAMES];
     frame_count = 7u;
@@ -941,11 +962,259 @@ static int case_accept_input_span_output_alias(void) {
 
     gbb_destroy(instance);
     free(storage);
-    if (failures != 0) {
-        fprintf(stderr, "span-output alias rejected=%d/10\n", 10 - failures);
+    if (alias_failures != 0) {
+        fprintf(stderr, "span-output alias rejected=%d/%d\n", SPAN_OUTPUT_ALIAS_CASES - alias_failures,
+                SPAN_OUTPUT_ALIAS_CASES);
+    }
+    if (failures != 0 || alias_failures != 0) return 1;
+    PASS("acceptance_input_span_output_alias");
+}
+
+/* ---- WR-03: the diagnostic replay and the main stepper share one STOP-resume rule ---- */
+
+typedef struct {
+    const char *name;
+    gbb_input_event events[3];
+    size_t count;
+    int null_span;                          /* run without a borrowed span */
+    enum gbb_accept_step_status status;     /* expected in both paths */
+    size_t cursor;                          /* expected diagnostic-path cursor */
+    int woke;                               /* guest left STOP by the end of the window */
+} stop_parity_case;
+
+typedef struct {
+    enum gbb_accept_step_status status;
+    uint64_t actual;
+    int woke;
+} stop_parity_run;
+
+static int guest_left_stop(gbb_instance *instance) {
+    gbb_run_result next = gbb_run(instance, 48u, NULL, 0u);
+    return next.reason != GBB_STOP_STOPPED && next.consumed_half_dots != 0u;
+}
+
+/* The main path. The drive keeps its event cursor private, so the delivered events are observed
+ * through the guest: the wake only reaches it when the cursor passed the wake event. */
+static int stop_parity_main(const uint8_t *rom, const stop_parity_case *pc, uint64_t end,
+                            stop_parity_run *out) {
+    gbb_instance *instance = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) == GBB_OK);
+    REQUIRE(gbb_load_rom(instance, rom, 32768u) == GBB_OK);
+    gbb_accept_stepper stepper;
+    gbb_accept_stepper_init(&stepper, instance, NULL, NULL);
+    if (pc->null_span) {
+        out->status = gbb_accept_advance_to(&stepper, end);
+    } else {
+        gbb_input_event events[3];
+        memcpy(events, pc->events, sizeof(events));
+        gbb_accept_script script;
+        memset(&script, 0, sizeof(script));
+        script.events = pc->count != 0u ? events : NULL;
+        script.event_count = pc->count;
+        script.end_half_dots = end;
+        gbb_accept_predicate predicate;
+        memset(&predicate, 0, sizeof(predicate));
+        gbb_accept_drive_config config;
+        memset(&config, 0, sizeof(config));
+        config.stepper = &stepper;
+        config.script = &script;
+        config.predicate = &predicate;
+        config.budget_half_dots = end;
+        config.max_batch = 64u;
+        gbb_accept_drive_result driven;
+        gbb_accept_drive(&config, &driven);
+        out->status = driven.status == GBB_ACCEPT_DRIVE_NOT_REACHED ? GBB_ACCEPT_STEP_OK
+                    : driven.status == GBB_ACCEPT_DRIVE_STOPPED ? GBB_ACCEPT_STEP_STOPPED
+                                                                : GBB_ACCEPT_STEP_GUARD;
+    }
+    out->actual = stepper.actual_half_dots;
+    out->woke = guest_left_stop(instance);
+    gbb_destroy(instance);
+    return 0;
+}
+
+static int stop_parity_diag(const uint8_t *rom, const stop_parity_case *pc, uint64_t end,
+                            stop_parity_run *out, size_t *cursor_out) {
+    gbb_instance *instance = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) == GBB_OK);
+    REQUIRE(gbb_load_rom(instance, rom, 32768u) == GBB_OK);
+    size_t cursor = 0u;
+    const gbb_accept_input_span span = {pc->count != 0u ? pc->events : NULL, pc->count, &cursor};
+    uint64_t actual = 0u;
+    out->status = gbb_accept_diag_advance(instance, &actual, end, pc->null_span ? NULL : &span,
+                                          NULL, 0u, NULL, 0u, NULL, NULL, 0u);
+    out->actual = actual;
+    *cursor_out = cursor;
+    out->woke = guest_left_stop(instance);
+    gbb_destroy(instance);
+    return 0;
+}
+
+#define STOP_BTN(at) {(at), GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_A}
+#define STOP_WAKE(at) {(at), GBB_INPUT_STOP_WAKE, 1u}
+
+static int case_replay_stop_resume_parity(void) {
+    static const uint8_t stop_program[] = {0x10,0x00,0x00,0x18,0xfe};
+    uint8_t rom[32768];
+    make_accept_test_rom(rom, stop_program, sizeof(stop_program));
+    const uint64_t end = 100u;
+    /* A button press with the joypad interrupt masked does not end STOP: the first row proves that,
+     * so the wake rows below really exercise "resume past a non-waking event". */
+    static const stop_parity_case cases[] = {
+        {"non-wake-only", {STOP_BTN(40)}, 1u, 0, GBB_ACCEPT_STEP_STOPPED, 1u, 0},
+        {"press-then-wake", {STOP_BTN(40), STOP_WAKE(80)}, 2u, 0, GBB_ACCEPT_STEP_OK, 2u, 1},
+        {"wake-at-deadline", {STOP_BTN(40), STOP_WAKE(100)}, 2u, 0, GBB_ACCEPT_STEP_OK, 2u, 1},
+        {"wake-after-deadline", {STOP_BTN(40), STOP_WAKE(101)}, 2u, 0, GBB_ACCEPT_STEP_STOPPED, 1u, 0},
+        {"null-span", {STOP_WAKE(40)}, 0u, 1, GBB_ACCEPT_STEP_STOPPED, 0u, 0},
+        {"empty-span", {STOP_WAKE(40)}, 0u, 0, GBB_ACCEPT_STEP_STOPPED, 0u, 0},
+        {"equal-timestamps", {STOP_BTN(40), STOP_WAKE(40)}, 2u, 0, GBB_ACCEPT_STEP_OK, 2u, 1},
+    };
+    int failed = 0;
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        const stop_parity_case *pc = &cases[i];
+        stop_parity_run main_run, diag_run;
+        size_t cursor = 0u;
+        if (stop_parity_main(rom, pc, end, &main_run) != 0) return 1;
+        if (stop_parity_diag(rom, pc, end, &diag_run, &cursor) != 0) return 1;
+        if (main_run.status != diag_run.status || main_run.actual != diag_run.actual ||
+            main_run.woke != diag_run.woke || diag_run.status != pc->status ||
+            diag_run.woke != pc->woke || cursor != pc->cursor) {
+            fprintf(stderr,
+                    "replay-stop-parity sub=%s main(status=%d actual=%llu woke=%d) "
+                    "diag(status=%d actual=%llu woke=%d cursor=%zu) expected(status=%d woke=%d cursor=%zu)\n",
+                    pc->name, (int)main_run.status, (unsigned long long)main_run.actual, main_run.woke,
+                    (int)diag_run.status, (unsigned long long)diag_run.actual, diag_run.woke, cursor,
+                    (int)pc->status, pc->woke, pc->cursor);
+            failed = 1;
+        }
+    }
+
+    /* Truth table of the shared rule itself. */
+    size_t cursor = 0u;
+    const gbb_input_event at_deadline = STOP_WAKE(100);
+    const gbb_input_event past_deadline = STOP_WAKE(101);
+    const gbb_accept_input_span due = {&at_deadline, 1u, &cursor};
+    const gbb_accept_input_span late = {&past_deadline, 1u, &cursor};
+    const gbb_accept_input_span empty = {NULL, 0u, &cursor};
+    size_t spent = 1u;
+    const gbb_accept_input_span exhausted = {&at_deadline, 1u, &spent};
+    const struct {
+        const char *name;
+        int got;
+        int want;
+    } table[] = {
+        {"null-span", gbb_accept_stop_resumable(NULL, 100u, 0u, 10u), 0},
+        {"empty-span", gbb_accept_stop_resumable(&empty, 100u, 0u, 10u), 0},
+        {"cursor-at-count", gbb_accept_stop_resumable(&exhausted, 100u, 0u, 10u), 0},
+        {"event-at-deadline", gbb_accept_stop_resumable(&due, 100u, 0u, 10u), 1},
+        {"event-past-deadline", gbb_accept_stop_resumable(&late, 100u, 0u, 10u), 0},
+        {"consumed-equals-budget", gbb_accept_stop_resumable(&due, 100u, 10u, 10u), 0},
+        {"consumed-below-budget", gbb_accept_stop_resumable(&due, 100u, 9u, 10u), 1},
+    };
+    for (size_t i = 0; i < sizeof(table) / sizeof(table[0]); ++i) {
+        if (table[i].got != table[i].want) {
+            fprintf(stderr, "replay-stop-parity truth-table sub=%s got=%d want=%d\n", table[i].name,
+                    table[i].got, table[i].want);
+            failed = 1;
+        }
+    }
+    if (failed) return 1;
+    PASS("acceptance_replay_stop_resume_parity");
+}
+
+/* Main-drive-only sibling control: the same ROM and script as the first wake row, driven only through
+ * gbb_accept_drive, so a replay-side mutant leaves it untouched. */
+static int case_drive_stop_resume_main(void) {
+    static const uint8_t stop_program[] = {0x10,0x00,0x00,0x18,0xfe};
+    uint8_t rom[32768];
+    make_accept_test_rom(rom, stop_program, sizeof(stop_program));
+    static const stop_parity_case pc = {"press-then-wake", {STOP_BTN(40), STOP_WAKE(80)}, 2u, 0,
+                                        GBB_ACCEPT_STEP_OK, 2u, 1};
+    stop_parity_run run;
+    if (stop_parity_main(rom, &pc, 100u, &run) != 0) return 1;
+    if (run.status != GBB_ACCEPT_STEP_OK || run.actual < 80u || run.actual > 100u || !run.woke) {
+        fprintf(stderr, "main-stop-resume status=%d actual=%llu woke=%d\n", (int)run.status,
+                (unsigned long long)run.actual, run.woke);
         return 1;
     }
-    PASS("acceptance_input_span_output_alias");
+    PASS("acceptance_drive_stop_resume_main");
+}
+
+/* IN-06: a rejected call with a count that is provably outside the span leaves the count 0, whichever check
+ * rejected it. Every sub-case uses a count disjoint from the span, so none of them depends on the
+ * span-aliasing carve-out (that is covered by acceptance_input_span_output_alias). */
+static int stale_count_check(const char *sub, gbb_run_result result, size_t count,
+                             const gbb_accept_input_span *span, size_t count_before,
+                             size_t cursor_before, const gbb_input_event *events,
+                             const gbb_input_event *saved_events) {
+    int ok = 1;
+    if (result.reason != GBB_STOP_INVALID_STATE || result.consumed_half_dots != 0u) {
+        fprintf(stderr, "frame-count-stale sub=%s result reason=%d consumed=%llu\n", sub,
+                (int)result.reason, (unsigned long long)result.consumed_half_dots);
+        ok = 0;
+    }
+    if (count != 0u) {
+        fprintf(stderr, "frame-count-stale sub=%s count=%zu\n", sub, count);
+        ok = 0;
+    }
+    if (span->count != count_before || *span->cursor != cursor_before ||
+        memcmp(events, saved_events, 4u * sizeof(*events)) != 0) {
+        fprintf(stderr, "span-mutated-on-reject sub=%s count=%zu cursor=%zu\n", sub, span->count,
+                *span->cursor);
+        ok = 0;
+    }
+    return ok;
+}
+
+static int case_accept_input_span_invalid_zeroes_count(void) {
+    const size_t storage_size = 4096u;
+    uint8_t *storage = malloc(storage_size);
+    REQUIRE(storage != NULL);
+    gbb_accept_input_span *span = (gbb_accept_input_span *)(void *)(storage + 128u);
+    size_t *cursor = (size_t *)(void *)(storage + 256u);
+    gbb_input_event *events = (gbb_input_event *)(void *)(storage + 1024u);
+    gbb_input_event saved_events[4];
+    for (size_t i = 0; i < 4u; ++i) {
+        events[i] = (gbb_input_event){8u, (i & 1u) == 0u ? GBB_INPUT_BUTTON_PRESS : GBB_INPUT_BUTTON_RELEASE,
+                                     GBB_BUTTON_A};
+    }
+    memcpy(saved_events, events, sizeof(saved_events));
+    *cursor = 0u;
+    *span = (gbb_accept_input_span){events, 4u, cursor};
+
+    uint8_t rom[32768];
+    static const uint8_t loop_program[] = {0x18,0xfe};
+    make_accept_test_rom(rom, loop_program, sizeof(loop_program));
+    gbb_instance *instance = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) == GBB_OK);
+    REQUIRE(gbb_load_rom(instance, rom, sizeof(rom)) == GBB_OK);
+    gbb_audio_frame *partial_frame = (gbb_audio_frame *)(void *)align_test_address(
+        (uintptr_t)(void *)(events + 1u) + offsetof(gbb_input_event, kind), _Alignof(gbb_audio_frame));
+    gbb_audio_frame frames[4];
+
+    int ok = 1;
+    size_t count = 7u;
+    gbb_run_result result = gbb_accept_run_audio(instance, 32u, span, partial_frame, 1u, &count);
+    ok &= stale_count_check("frames/events", result, count, span, 4u, 0u, events, saved_events);
+
+    count = 7u;
+    result = gbb_accept_run_audio(instance, 32u, span, (gbb_audio_frame *)(void *)span, 1u, &count);
+    ok &= stale_count_check("frames/span-descriptor", result, count, span, 4u, 0u, events, saved_events);
+
+    count = 7u;
+    result = gbb_accept_run_audio(instance, 32u, span, frames, SIZE_MAX, &count);
+    ok &= stale_count_check("frame-capacity-SIZE_MAX", result, count, span, 4u, 0u, events, saved_events);
+
+    count = 7u;
+    *cursor = 5u;
+    result = gbb_accept_run_audio(instance, 32u, span, frames, 4u, &count);
+    ok &= stale_count_check("span-invalid", result, count, span, 4u, 5u, events, saved_events);
+    *cursor = 0u;
+
+    gbb_destroy(instance);
+    free(storage);
+    if (!ok) return 1;
+    PASS("acceptance_input_span_invalid_zeroes_count");
 }
 
 int main(int argc, char **argv) {
@@ -967,6 +1236,9 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "acceptance_input_span_edges") == 0) return case_accept_input_span_edges();
     if (strcmp(argv[1], "acceptance_drive_stop_wake_deadline") == 0) return case_accept_drive_stop_wake_deadline();
     if (strcmp(argv[1], "acceptance_input_span_output_alias") == 0) return case_accept_input_span_output_alias();
+    if (strcmp(argv[1], "acceptance_replay_stop_resume_parity") == 0) return case_replay_stop_resume_parity();
+    if (strcmp(argv[1], "acceptance_drive_stop_resume_main") == 0) return case_drive_stop_resume_main();
+    if (strcmp(argv[1], "acceptance_input_span_invalid_zeroes_count") == 0) return case_accept_input_span_invalid_zeroes_count();
     fprintf(stderr, "unknown case %s\n", argv[1]);
     return 2;
 }

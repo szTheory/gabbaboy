@@ -12,7 +12,7 @@ sha256_file() {
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 MODE=${1:-}
 SOURCE_ARCHIVE_CHECKER="$ROOT_DIR/tests/scripts/verify-v02-source-archive.py"
-USAGE='usage: verify-release-candidate.sh --self-test | --verify RECEIPT ASSET VERSION TAG SOURCE_SHA RELEASE_ID NOTICE_FILE SOURCE_RECEIPT BUILD_RECEIPT | --verify-final <the --verify arguments> SOURCE_ARCHIVE SOURCE_ARCHIVE_RECEIPT [SOURCE_REPOSITORY]'
+USAGE='usage: verify-release-candidate.sh --self-test | --check-config | --verify RECEIPT ASSET VERSION TAG SOURCE_SHA RELEASE_ID NOTICE_FILE SOURCE_RECEIPT BUILD_RECEIPT | --verify-final <the --verify arguments> SOURCE_ARCHIVE SOURCE_ARCHIVE_RECEIPT [SOURCE_REPOSITORY]'
 safe_extract() {
   python3 -I "$ROOT_DIR/tests/scripts/verify-v02-consumers.py" --extract "$1" "$2"
 }
@@ -52,10 +52,79 @@ PY
   python3 -I "$ROOT_DIR/tests/scripts/verify-v02-consumers.py" \
     --archive "$asset" --candidate-manifest "$candidate_manifest" --output "$consumer_output"
 }
+# The release configuration data contract. The release-please package settings and manifest version stay data
+# checks here, and so do two reasoned pins: the downloaded-player verifier source contract and the verified-output
+# value contract below. The executable wiring of release.yml (which job runs which command, on which runner, behind
+# which guard, in which publication order, from which triggers and entrypoint) is judged from parsed workflow
+# structure by .github/scripts/verify-workflow-policy.py, and the published-asset verifier's direct-JSON contract is
+# an executable control in its own --self-test. It runs without cmake so that --check-config can be exercised on
+# fixture trees.
+release_config_contract() {
+python3 - "$ROOT_DIR" <<'PY'
+import json, pathlib, re, sys
+root = pathlib.Path(sys.argv[1])
+config = json.loads((root / "release-please-config.json").read_text())
+manifest = json.loads((root / ".release-please-manifest.json").read_text())
+package = config.get("packages", {}).get(".", {})
+version = re.search(r"^project\(GabbaBoy VERSION ([0-9]+\.[0-9]+\.[0-9]+)", (root / "CMakeLists.txt").read_text(), re.M)
+workflow = (root / ".github/workflows/release.yml").read_text()
+player_verifier = (root / "tests/scripts/verify-phase3-player.sh").read_text()
+if not version or manifest.get(".") != version.group(1):
+    raise SystemExit("release manifest and CMake PROJECT_VERSION do not match")
+if package.get("draft") is not True or package.get("force-tag-creation") is not True or package.get("include-component-in-tag") is not False or package.get("include-v-in-tag") is not True:
+    raise SystemExit("manifest release must use matching v<version> tag plus draft and immediate tag")
+# Retained source pin: no CTest or other executable control runs the headless player lifecycle locally (the hosted
+# preview-package-smoke check exercises it), so the verifier script must keep naming its scripted lifecycle evidence.
+for required in ("SDL_AUDIO_DRIVER=dummy", "SDL_VIDEO_DRIVER=dummy", "--smoke-package", "packaged MBC1 continuation fixture resumed in a fresh process"):
+    if required not in player_verifier:
+        raise SystemExit(f"downloaded player verification is missing scripted lifecycle evidence: {required}")
+# Retained value contract: this judges every assignment of the output variable (a runner-temp root), which is neither an
+# ordering nor a presence pin, and the workflow policy does not judge env values.
+# A bare value may contain whole `${{ ... }}` expressions, whose spaces are part
+# of the value in an unquoted YAML env entry such as preview.yml's.
+VERIFIED_OUTPUT_VALUE = r"""(?:"([^"\n]*)"|'([^'\n]*)'|((?:\$\{\{[^}\n]*\}\}|[^\s"'])*))"""
+def validate_verified_output_contract(text):
+    # The player verifier helper rejects the checkout and its descendants, so a
+    # checkout-relative output only fails after the draft and tag already exist.
+    name = "GBB_VERIFIED_OUTPUT_DIR"
+    assignments = re.findall(name + r"\s*[:=]\s*" + VERIFIED_OUTPUT_VALUE, text)
+    if text.count(name) != len(assignments):
+        raise ValueError(f"{name} is used in a form the release contract cannot check; assign it explicitly under $RUNNER_TEMP")
+    for quoted_double, quoted_single, bare in assignments:
+        value = quoted_double or quoted_single or bare
+        if ".." in value.split("/") or not re.match(r"(\$RUNNER_TEMP|\$\{RUNNER_TEMP\}|\$\{\{\s*runner\.temp\s*\}\})(/|$)", value):
+            raise ValueError(f"{name} must be rooted at a runner temp location, not the checkout: {value!r}")
+try:
+    validate_verified_output_contract(workflow)
+except ValueError as error:
+    raise SystemExit(str(error))
+# Rewrite every existing assignment, or add one when the workflow relies on the verifier default.
+mutated_output = re.sub(r"(GBB_VERIFIED_OUTPUT_DIR\s*[:=]\s*)" + VERIFIED_OUTPUT_VALUE, lambda m: m.group(1) + "build/release-player-downloaded", workflow)
+if mutated_output == workflow:
+    mutated_output = workflow + "\nGBB_VERIFIED_OUTPUT_DIR=build/release-player-downloaded\n"
+try:
+    validate_verified_output_contract(mutated_output)
+except ValueError:
+    pass
+else:
+    raise SystemExit("release workflow self-test accepted a verified output directory inside the checkout")
+try:
+    validate_verified_output_contract("    env:\n      GBB_VERIFIED_OUTPUT_DIR: ${{ runner.temp }}/verified-player-artifact\n")
+except ValueError as error:
+    raise SystemExit(f"release workflow self-test rejected an unquoted runner.temp YAML value: {error}")
+PY
+}
 if [[ "$MODE" == --extract ]]; then
   [[ $# -eq 3 ]] || fail 'usage: verify-release-candidate.sh --extract ARCHIVE DESTINATION'
   command -v python3 >/dev/null || fail 'Python 3 is required'
   safe_extract "$2" "$3"
+  exit 0
+fi
+if [[ "$MODE" == --check-config ]]; then
+  [[ $# -eq 1 ]] || fail 'usage: verify-release-candidate.sh --check-config'
+  command -v python3 >/dev/null || fail 'Python 3 is required'
+  release_config_contract
+  printf 'PASS: release configuration data contract\n'
   exit 0
 fi
 command -v cmake >/dev/null || fail 'CMake is required'
@@ -99,100 +168,7 @@ SOURCE_SHA=$(git -C "$ROOT_DIR" rev-parse HEAD)
 if [[ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=no -- src include fixtures tests cmake ':!cmake/VerifyReleaseReceipt.cmake' ':!tests/scripts/verify-release-candidate.sh')" ]]; then
   fail 'implementation source is dirty; release candidate requires a committed source tree'
 fi
-python3 - "$ROOT_DIR" <<'PY'
-import json, pathlib, re, sys
-root = pathlib.Path(sys.argv[1])
-config = json.loads((root / "release-please-config.json").read_text())
-manifest = json.loads((root / ".release-please-manifest.json").read_text())
-package = config.get("packages", {}).get(".", {})
-version = re.search(r"^project\(GabbaBoy VERSION ([0-9]+\.[0-9]+\.[0-9]+)", (root / "CMakeLists.txt").read_text(), re.M)
-workflow = (root / ".github/workflows/release.yml").read_text()
-entrypoint = (root / ".github/workflows/release-please.yml").read_text()
-player_verifier = (root / "tests/scripts/verify-phase3-player.sh").read_text()
-published_asset_verifier = (root / ".github/scripts/verify-published-release-assets.py").read_text()
-if not version or manifest.get(".") != version.group(1):
-    raise SystemExit("release manifest and CMake PROJECT_VERSION do not match")
-if package.get("draft") is not True or package.get("force-tag-creation") is not True or package.get("include-component-in-tag") is not False or package.get("include-v-in-tag") is not True:
-    raise SystemExit("manifest release must use matching v<version> tag plus draft and immediate tag")
-if not re.search(r"googleapis/release-please-action@[0-9a-f]{40}", workflow):
-    raise SystemExit("release-please action is not pinned to a full commit SHA")
-for required in ("outputs.release_created == 'true'", "api_commit", "draft", "commits/$SOURCE_SHA/pulls", "gh pr checks", "RETRY"):
-    if required not in workflow:
-        raise SystemExit(f"release route is missing fail-closed contract: {required}")
-for required in (
-    "runs-on: macos-14", "runs-on: windows-2022",
-    "gabbaboy-core-macos-arm64.tar.gz", "gabbaboy-core-windows-x64.tar.gz",
-    "gabbaboy-preview-macos-arm64.tar.gz", "candidate-platform-manifest.json",
-    "--verify-package", "Visual Studio 17 2022", "--check",
-    "REUSE_MACOS_CANDIDATE", "REUSE_WINDOWS_CANDIDATE",
-    "refusing to rebuild or replace bytes",
-):
-    if required not in workflow:
-        raise SystemExit(f"release route is missing downloaded platform qualification: {required}")
-if "needs: [release, candidate-macos]" not in workflow:
-    raise SystemExit("Windows downloaded-archive verification must run after the existing native Linux and macOS lanes")
-for required in ("SDL_AUDIO_DRIVER=dummy", "SDL_VIDEO_DRIVER=dummy", "--smoke-package", "packaged MBC1 continuation fixture resumed in a fresh process"):
-    if required not in player_verifier:
-        raise SystemExit(f"downloaded player verification is missing scripted lifecycle evidence: {required}")
-if "pull_request_target:" in workflow or "release: {" in workflow:
-    raise SystemExit("candidate workflow contains a privileged PR route")
-def validate_publication_contract(text):
-    gate = text.find('bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"')
-    publish = text.find('gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag')
-    if gate < 0 or publish < 0 or gate > publish:
-        raise ValueError("publication must occur only after the final downloaded-byte gate")
-    if 'python3 -I trusted/.github/scripts/verify-published-release-assets.py "$assets" build/release-final/api-assets.json' not in text:
-        raise ValueError("published API response must use the tested direct-JSON inventory verifier")
-    if "json.loads(after_json)" not in published_asset_verifier or "Path(after_json).is_file" in published_asset_verifier:
-        raise ValueError("published API asset verifier must parse response JSON directly, not treat it as a path")
-try:
-    validate_publication_contract(workflow)
-except ValueError as error:
-    raise SystemExit(str(error))
-gate_call = 'bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"'
-publish_call = 'gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag'
-mutated_publication = workflow.replace(gate_call, "", 1).replace(publish_call, publish_call + "\n          " + gate_call, 1)
-try:
-    validate_publication_contract(mutated_publication)
-except ValueError:
-    pass
-else:
-    raise SystemExit("release workflow self-test accepted publication before the final downloaded-byte gate")
-# A bare value may contain whole `${{ ... }}` expressions, whose spaces are part
-# of the value in an unquoted YAML env entry such as preview.yml's.
-VERIFIED_OUTPUT_VALUE = r"""(?:"([^"\n]*)"|'([^'\n]*)'|((?:\$\{\{[^}\n]*\}\}|[^\s"'])*))"""
-def validate_verified_output_contract(text):
-    # The player verifier helper rejects the checkout and its descendants, so a
-    # checkout-relative output only fails after the draft and tag already exist.
-    name = "GBB_VERIFIED_OUTPUT_DIR"
-    assignments = re.findall(name + r"\s*[:=]\s*" + VERIFIED_OUTPUT_VALUE, text)
-    if text.count(name) != len(assignments):
-        raise ValueError(f"{name} is used in a form the release contract cannot check; assign it explicitly under $RUNNER_TEMP")
-    for quoted_double, quoted_single, bare in assignments:
-        value = quoted_double or quoted_single or bare
-        if ".." in value.split("/") or not re.match(r"(\$RUNNER_TEMP|\$\{RUNNER_TEMP\}|\$\{\{\s*runner\.temp\s*\}\})(/|$)", value):
-            raise ValueError(f"{name} must be rooted at a runner temp location, not the checkout: {value!r}")
-try:
-    validate_verified_output_contract(workflow)
-except ValueError as error:
-    raise SystemExit(str(error))
-# Rewrite every existing assignment, or add one when the workflow relies on the verifier default.
-mutated_output = re.sub(r"(GBB_VERIFIED_OUTPUT_DIR\s*[:=]\s*)" + VERIFIED_OUTPUT_VALUE, lambda m: m.group(1) + "build/release-player-downloaded", workflow)
-if mutated_output == workflow:
-    mutated_output = workflow + "\nGBB_VERIFIED_OUTPUT_DIR=build/release-player-downloaded\n"
-try:
-    validate_verified_output_contract(mutated_output)
-except ValueError:
-    pass
-else:
-    raise SystemExit("release workflow self-test accepted a verified output directory inside the checkout")
-try:
-    validate_verified_output_contract("    env:\n      GBB_VERIFIED_OUTPUT_DIR: ${{ runner.temp }}/verified-player-artifact\n")
-except ValueError as error:
-    raise SystemExit(f"release workflow self-test rejected an unquoted runner.temp YAML value: {error}")
-if "workflow_call:" not in workflow or "uses: ./.github/workflows/release.yml" not in entrypoint:
-    raise SystemExit("release-please outputs and candidate jobs are not connected in one workflow run")
-PY
+release_config_contract
 
 TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/gabbaboy-release-candidate.XXXXXX")
 trap 'rm -rf "$TEMP_ROOT"' EXIT HUP INT TERM

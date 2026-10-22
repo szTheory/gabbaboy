@@ -2660,6 +2660,27 @@ endfunction()
 gbb_add_summary_coverage_test(summary_coverage_selftest 0 "summary-coverage self-test pass mutants=1[2-9]" --self-test)
 gbb_add_summary_coverage_test(summary_coverage 0 "summary-coverage pass files=[0-9]+" --since 9)
 
+# UAT closure gate (DECISIONS D-069, review WR-05): the checker enforces its contract with ClosureError, never
+# assert, and refuses python -O. The controls run on a tracked closed phase; the second test proves through the
+# real CLI that an optimized interpreter is refused instead of silently passing.
+set(GBB_UAT_CLOSURE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-uat-closure.py")
+set(GBB_UAT_CLOSURE_PHASE "${PROJECT_SOURCE_DIR}/.planning/phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release")
+function(gbb_add_uat_closure_test name code regex)
+  set(command "${Python3_EXECUTABLE}" -I ${ARGN})
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 120)
+endfunction()
+gbb_add_uat_closure_test(uat_closure_controls 0 "uat-closure self-test pass automated=[0-9]+ controls=2[0-9]"
+  "${GBB_UAT_CLOSURE_CHECKER}" "${GBB_UAT_CLOSURE_PHASE}" --self-test)
+gbb_add_uat_closure_test(uat_closure_optimize_refused 1 "must not run with python -O"
+  -O "${GBB_UAT_CLOSURE_CHECKER}" "${GBB_UAT_CLOSURE_PHASE}")
+
 set(GBB_INVALID_SUMMARY_FIXTURE "${PROJECT_SOURCE_DIR}/tests/data/invalid-summary-coverage.md")
 set(GBB_INVALID_SUMMARY_FIXTURE_SHA256 "1c8e301b33cd1a2312564f95416d860eb9c1fd30c2d75ec103287db9a2317d31")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_INVALID_SUMMARY_FIXTURE}")

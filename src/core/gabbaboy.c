@@ -3449,6 +3449,26 @@ static int accept_span_output_is_disjoint(const gbb_accept_input_span *span,
     return 1;
 }
 
+/* A count whose storage is provably outside the borrowed span's memory may be zeroed on any invalid return.
+ * This needs no validated span: it only compares raw address ranges (the span descriptor, the cursor pointee and
+ * the event bytes) and reads the three span fields, never the cursor value or any event. Returns 0 when the
+ * count overlaps that memory or when the event extent is not representable, so disjointness cannot be proven;
+ * writing such a count would mutate caller input on a rejected call. */
+/* MODEL: BOTH GATE-00 basis="model-neutral borrowed-span output validation" */
+static int accept_span_count_is_outside(const gbb_accept_input_span *span, const size_t *count) {
+    if (!span) { return 1; }
+    if (span->count > SIZE_MAX / sizeof(*span->events)) return 0;
+    const uintptr_t count_address = (uintptr_t)(const void *)count;
+    if (ranges_overlap(count_address, sizeof(*count), (uintptr_t)(const void *)span, sizeof(*span))) return 0;
+    if (span->cursor != NULL &&
+        ranges_overlap(count_address, sizeof(*count), (uintptr_t)(const void *)span->cursor,
+                       sizeof(*span->cursor))) return 0;
+    if (span->events != NULL && span->count != 0u &&
+        ranges_overlap(count_address, sizeof(*count), (uintptr_t)(const void *)span->events,
+                       span->count * sizeof(*span->events))) return 0;
+    return 1;
+}
+
 /* MODEL: BOTH GATE-00 basis="model-neutral event scheduling" */
 static int next_input_deadline(const gbb_instance *instance, uint64_t *deadline) {
     if (instance->input_event_count != 0u) {
@@ -4958,6 +4978,11 @@ static gbb_run_result gbb_run_audio_common(gbb_instance *instance, uint64_t budg
                                            size_t *out_frame_count) {
     gbb_run_result invalid = {0, GBB_STOP_INVALID_STATE, 0, 0, 0, 0};
     if (out_frame_count == NULL) return invalid;
+    /* A rejected call must never write caller input. The count is zeroed only once its storage is proven
+     * outside the borrowed span, so every later invalid return (span validation, capacity overflow, frame
+     * overlap and the rest) leaves it 0; a count that may alias the span stays untouched. */
+    if (span != NULL && !accept_span_count_is_outside(span, out_frame_count)) return invalid;
+    *out_frame_count = 0u;
     if (span != NULL) {
         if (!validate_accept_input_span(instance, span) ||
             frame_capacity > SIZE_MAX / sizeof(*frames)) return invalid;
@@ -4966,7 +4991,6 @@ static gbb_run_result gbb_run_audio_common(gbb_instance *instance, uint64_t budg
             !accept_span_output_is_disjoint(span, out_frame_count, sizeof(*out_frame_count)))
             return invalid;
     }
-    *out_frame_count = 0u;
     if ((frames == NULL && frame_capacity != 0u) || instance == NULL ||
         instance->audio_run_active || instance->diagnostic_output != NULL ||
         instance->accept_input_span != NULL)

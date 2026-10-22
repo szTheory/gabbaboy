@@ -21,7 +21,14 @@ from pathlib import Path
 import re
 import shutil
 import sys
+import subprocess
 import tempfile
+
+# Contract rules raise ClosureError rather than using assertion statements, because python -O strips
+# assertions and would turn every check into a silent pass. Refuse optimized interpreters outright
+# before importing or checking anything.
+if not __debug__ or sys.flags.optimize:
+    raise SystemExit('verify-uat-closure must not run with python -O')
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location(
@@ -29,12 +36,23 @@ spec = importlib.util.spec_from_file_location(
 rules = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rules)
 
+
+
+class ClosureError(Exception):
+    """A UAT closure contract rule was violated."""
+
+
+def need(condition, message):
+    if not condition:
+        raise ClosureError(message)
+
+
 FIELDS = ('expected', 'result', 'source', 'summary_file', 'coverage_id', 'evidence')
 
 
 def phase_number(directory):
     match = re.match(r'^[A-Z]+-(\d+(?:\.\d+)?)-', directory.name)
-    assert match, f'unrecognized phase directory {directory.name}'
+    need(match, f'unrecognized phase directory {directory.name}')
     return match[1]
 
 
@@ -44,27 +62,27 @@ def deliverables(directory, problems=None):
     Schema errors fail the check, or are collected into problems when given.
     """
     summaries = sorted(directory.glob('*-SUMMARY.md'))
-    assert summaries, 'no plan summaries'
+    need(summaries, 'no plan summaries')
     expected = {}
     for summary in summaries:
         content = summary.read_text(encoding='utf-8')
         _, errors = rules.check_text(content)
         if problems is None:
-            assert not errors, f'{summary.name}: {errors}'
+            need(not errors, f'{summary.name}: {errors}')
         else:
             problems.extend(f'{summary.name}: schema {error}' for error in errors or [])
         for entry in rules.coverage_entries(content):
             # The schema checker truncates quoted refs, so read the full scalars here.
             block = re.search(r'^  - id: ' + re.escape(entry['id']) +
                               r'\n(.*?)(?=^  - id: |^\S|\Z)', content, re.M | re.S)
-            assert block, 'missing coverage block'
+            need(block, 'missing coverage block')
             refs = re.findall(r'^\s+ref: (.+)$', block[1], re.M)
             entry['uat_refs'] = [v[1:-1] if v[:1] in ('"', "'") and v[-1:] == v[:1] else v
                                  for v in refs]
             key = (summary.name, entry['id'])
-            assert key not in expected, f'duplicate coverage id {key}'
+            need(key not in expected, f'duplicate coverage id {key}')
             expected[key] = entry
-    assert expected, 'no coverage entries'
+    need(expected, 'no coverage entries')
     return summaries, expected
 
 
@@ -109,40 +127,40 @@ def check(directory):
     total = len(expected)
     text = (directory / f'{phase_number(directory)}-UAT.md').read_text(encoding='utf-8')
     frontmatter = '\n'.join(rules.frontmatter_lines(text))
-    assert re.search(r'^status: complete$', frontmatter, re.M), 'session incomplete'
-    assert re.search(r'^phase: ' + re.escape(directory.name) + '$', frontmatter, re.M), 'wrong phase'
+    need(re.search(r'^status: complete$', frontmatter, re.M), 'session incomplete')
+    need(re.search(r'^phase: ' + re.escape(directory.name) + '$', frontmatter, re.M), 'wrong phase')
     sources = re.search(r'^source: (.+)$', frontmatter, re.M)
-    assert sources and sources[1].split(', ') == [s.name for s in summaries], 'missing source summary'
-    assert text.split('## Current Test\n', 1)[1].split('## Tests\n', 1)[0].strip() == '[testing complete]', 'pending checkpoint'
+    need(sources and sources[1].split(', ') == [s.name for s in summaries], 'missing source summary')
+    need(text.split('## Current Test\n', 1)[1].split('## Tests\n', 1)[0].strip() == '[testing complete]', 'pending checkpoint')
     tests = text.split('## Tests\n', 1)[1].split('## Summary\n', 1)[0]
     headings = re.findall(r'^#{1,6} .+$', tests, re.M)
     numbers = [re.match(r'^### (\d+)\. ', heading) for heading in headings]
-    assert all(numbers) and [int(m[1]) for m in numbers] == list(range(1, total + 1)), 'unparsed or misnumbered test heading'
+    need(all(numbers) and [int(m[1]) for m in numbers] == list(range(1, total + 1)), 'unparsed or misnumbered test heading')
     prelude, *blocks = re.split(r'^### \d+\. ', tests, flags=re.M)
-    assert not prelude.strip(), 'unparsed test prelude'
+    need(not prelude.strip(), 'unparsed test prelude')
     seen = set()
     for block in blocks:
         for line in block.splitlines()[1:]:
-            assert not line.strip() or line.partition(':')[0] in FIELDS, 'unparsed test content'
+            need(not line.strip() or line.partition(':')[0] in FIELDS, 'unparsed test content')
 
         def field(name):
             matches = re.findall(r'^' + name + r': (.+)$', block, re.M)
-            assert len(matches) == 1, f'missing or duplicate {name}'
+            need(len(matches) == 1, f'missing or duplicate {name}')
             return matches[0]
         key = (field('summary_file'), field('coverage_id'))
-        assert key in expected and key not in seen, 'missing, unknown or duplicate coverage'
+        need(key in expected and key not in seen, 'missing, unknown or duplicate coverage')
         seen.add(key)
         entry = expected[key]
-        assert human_needed(entry) is None, 'deliverable needs a human checkpoint'
-        assert field('result') == 'pass' and field('source') == 'automated', 'not an automated pass'
-        assert json.loads(field('expected')) == entry['description'], 'changed acceptance criterion'
-        assert json.loads(field('evidence')) == entry['uat_refs'], 'weaker evidence'
-    assert seen == set(expected), 'incomplete coverage'
+        need(human_needed(entry) is None, 'deliverable needs a human checkpoint')
+        need(field('result') == 'pass' and field('source') == 'automated', 'not an automated pass')
+        need(json.loads(field('expected')) == entry['description'], 'changed acceptance criterion')
+        need(json.loads(field('evidence')) == entry['uat_refs'], 'weaker evidence')
+    need(seen == set(expected), 'incomplete coverage')
     summary = text.split('## Summary\n', 1)[1].split('## Gaps\n', 1)[0]
     for name, value in [('total', total), ('passed', total), ('issues', 0), ('pending', 0),
                         ('skipped', 0), ('blocked', 0)]:
-        assert re.search(r'^' + name + ': ' + str(value) + r'$', summary, re.M), 'incorrect totals'
-    assert text.split('## Gaps\n', 1)[1].strip() == '[none]', 'unresolved gap'
+        need(re.search(r'^' + name + ': ' + str(value) + r'$', summary, re.M), 'incorrect totals')
+    need(text.split('## Gaps\n', 1)[1].strip() == '[none]', 'unresolved gap')
     return total
 
 
@@ -182,23 +200,28 @@ def self_test(directory):
             path = scratch / filename
             original = path.read_text(encoding='utf-8')
             changed = mutate(original)
-            assert changed != original, f'{label}: inactive mutation'
+            need(changed != original, f'{label}: inactive mutation')
             path.write_text(changed, encoding='utf-8')
             try:
                 check(scratch)
-            except AssertionError:
+            except ClosureError:
                 continue
-            raise AssertionError(f'{label}: accepted weakened closure')
+            raise ClosureError(f'{label}: accepted weakened closure')
     # Regenerating from the same SUMMARYs must reproduce an accepted closure.
     with tempfile.TemporaryDirectory(prefix='gbb-uat-closure-') as name:
         scratch = Path(name) / directory.name
         shutil.copytree(directory, scratch)
         write(scratch, 'self-test')
-        assert check(scratch) == total, 'regenerated closure rejected'
-    print(f'uat-closure self-test pass automated={total} controls={len(controls) + 1}')
+        need(check(scratch) == total, 'regenerated closure rejected')
+    # The checker itself must refuse an optimized interpreter, through the real CLI.
+    refused = subprocess.run([sys.executable, '-O', str(Path(__file__).resolve()), str(directory)],
+                             capture_output=True, text=True, check=False)
+    need(refused.returncode != 0 and 'must not run with python -O' in refused.stderr,
+         'optimized interpreter was not refused')
+    print(f'uat-closure self-test pass automated={total} controls={len(controls) + 2}')
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('phase_dir', type=Path)
@@ -215,3 +238,11 @@ if __name__ == '__main__':
         self_test(directory)
     else:
         print(f'uat-closure pass automated={check(directory)} human=0 gaps=0')
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except ClosureError as error:
+        print(f'uat-closure rejected: {error}', file=sys.stderr)
+        sys.exit(1)

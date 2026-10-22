@@ -6,7 +6,10 @@ shape these workflows use (mappings, sequences, literal and folded block scalars
 simple flow lists), refuses everything else (anchors, aliases, tags, tabs, flow
 maps, duplicate keys, multi-line plain scalars) and then classifies every job by
 role: unprivileged producer, trusted reader, minimal attacher, or a named
-residual. Roles are enforced from jobs, permissions, needs, checkout inputs and
+residual. Residual jobs still keep write authority (an owner decision) but are not
+exempt from credential checks: every checkout is non-persisted, jobs that run tagged
+code hold the token only on gh steps and overlay the trusted verifiers, and the
+job-level token exemption is the named TOKEN_SCOPE_EXEMPT data with its reasons. Roles are enforced from jobs, permissions, needs, checkout inputs and
 artifact steps, never from substrings of the file.
 
 The judge never imports or executes anything from the tree it judges. Run it from
@@ -218,6 +221,117 @@ def _check_actions(workflow: str, tree: dict) -> None:
                 raise Reject("workflow-unpinned-action", f"{_where(workflow, job_id)} uses an action not pinned to a full commit: {uses}")
         if "uses" in job and not str(job["uses"]).startswith("./"):
             raise Reject("workflow-unpinned-action", f"{_where(workflow, job_id)} calls an unpinned reusable workflow")
+
+
+# A run body is shell text; an expression spliced into it bypasses shell quoting (IN-07). These three are
+# workflow-controlled, fixed-shape values and the only ones a run body may interpolate; every step output,
+# input or event field has to arrive through step-level env instead.
+RUN_EXPRESSION_ALLOWED = ("github.run_id", "github.run_attempt", "github.sha")
+_EXPRESSION = re.compile(r"\$\{\{(.*?)\}\}", re.S)
+
+
+def _check_run_expressions(workflow: str, tree: dict) -> None:
+    for job_id, job in tree["jobs"].items():
+        for step in job.get("steps", []):
+            for expression in _EXPRESSION.findall(str(step.get("run", ""))):
+                if expression.strip() not in RUN_EXPRESSION_ALLOWED:
+                    raise Reject("run-expression", f"{_where(workflow, job_id)} step {step.get('name', '?')!r} interpolates "
+                                 f"${{{{ {expression.strip()} }}}} into a run body; pass it through step-level env")
+
+
+def _substitutions(text: str) -> list[str]:
+    """Bodies of the `$(...)` command substitutions in one shell word (arithmetic `$((...))` holds no command)."""
+    bodies, i = [], 0
+    while True:
+        i = text.find("$(", i)
+        if i < 0:
+            return bodies
+        if text.startswith("$((", i):
+            i += 3
+            continue
+        k = _match(text, i + 1, "(", ")")
+        bodies.append(text[i + 2 : k])
+        i = k + 1
+
+
+def _commands(script: str) -> list[list[str]]:
+    """Every command the script runs, including those inside command substitutions, as word lists."""
+    found = []
+    for event in shell_events(script):
+        found.append(event.words)
+        for text in [*event.words, *event.assigns]:
+            for body in _substitutions(text):
+                found.extend(_commands(body))
+    return found
+
+
+def _head_operand(word: str) -> bool:
+    return word == "HEAD" or word.startswith(("HEAD^", "HEAD~"))
+
+
+def _check_fuzz_source_binding(workflow: str, tree: dict) -> None:
+    """The fuzz reader's judge is the trusted checkout (HEAD) and its subject is the release commit. The subject is
+    bound by the tag API check and the trusted hosted verifier; on a retry main has moved, so nothing may compare
+    the subject with HEAD or ask for its ancestry against HEAD (WR-04)."""
+    job = _require_job(workflow, tree, "candidate-fuzz")
+    for step in job.get("steps", []):
+        for words in _commands(str(step.get("run", ""))):
+            if words[:2] == ["git", "rev-parse"] and any(_head_operand(word) for word in words[2:]):
+                raise Reject("fuzz-source-binding", f"{_where(workflow, 'candidate-fuzz')} step {step.get('name', '?')!r} reads HEAD; "
+                             "source identity comes from the tag API check and the trusted verifier, never the moving checkout")
+            if words[:1] == ["git"] and ("merge-base" in words[1:3] or "--is-ancestor" in words[1:]):
+                raise Reject("fuzz-source-binding", f"{_where(workflow, 'candidate-fuzz')} step {step.get('name', '?')!r} asserts ancestry "
+                             "against the moving checkout; main membership is the API push-run record at the source SHA")
+
+
+FUZZ_BUDGET_NAMES = ("CI_RUN_WAIT_ATTEMPTS", "CI_RUN_WAIT_SECONDS", "CI_RUN_WAIT_DEADLINE_SECONDS",
+                     "CI_RUN_REQUEST_TIMEOUT_SECONDS", "HOSTED_POLL_SECONDS")
+# Checkout with full history, run download, artifact upload, verifier startup and the verifier's final-iteration overshoot.
+FUZZ_BUDGET_MARGIN_SECONDS = 900
+
+
+def _budget_value(env: dict, name: str, where: str) -> int:
+    """A positive integer literal; the workflow reader may hand scalars back as text."""
+    value = env.get(name)
+    if isinstance(value, bool) or not (isinstance(value, int) or (isinstance(value, str) and re.fullmatch(r"[0-9]+", value))) or int(value) <= 0:
+        raise Reject("fuzz-wait-budget", f"{where} {name} must be a positive integer literal")
+    return int(value)
+
+
+def _check_fuzz_wait_budget(workflow: str, tree: dict) -> None:
+    """The CI-run poll ends by an elapsed-time deadline plus one bounded request, and the whole job fits its timeout."""
+    job = _require_job(workflow, tree, "candidate-fuzz")
+    where = _where(workflow, "candidate-fuzz")
+    env = job.get("env", {}) if isinstance(job.get("env"), dict) else {}
+    attempts, interval, deadline, request, hosted = (_budget_value(env, name, where) for name in FUZZ_BUDGET_NAMES)
+    minutes = _budget_value(job, "timeout-minutes", where)
+    if deadline < attempts * interval:
+        raise Reject("fuzz-wait-budget", f"{where} deadline {deadline}s is below attempts x interval {attempts * interval}s, which would silently shorten the poll")
+    worst = deadline + request + interval + hosted + FUZZ_BUDGET_MARGIN_SECONDS
+    if worst > minutes * 60:
+        raise Reject("fuzz-wait-budget", f"{where} worst case {worst}s exceeds timeout-minutes {minutes} ({minutes * 60}s)")
+    guarded = lookups = 0
+    for step in job.get("steps", []):
+        script = str(step.get("run", ""))
+        events = shell_events(script)
+        for at, event in enumerate(events):
+            if (event.words[:1] in (["[["], ["["], ["test"]) and "-ge" in event.words
+                    and any(re.search(r"\$\(\(.*\bSECONDS\b", word) for word in event.words)
+                    and any(word in ("$CI_RUN_WAIT_DEADLINE_SECONDS", "${CI_RUN_WAIT_DEADLINE_SECONDS}") for word in event.words)
+                    and any(frame[0] == "loop" for frame in event.frames)
+                    and at + 1 < len(events) and events[at + 1].words == ["break"]):
+                guarded += 1
+        for words in _commands(script):
+            for position in range(len(words) - 1):
+                if words[position : position + 2] == ["gh", "api"] and any("actions/workflows/ci.yml/runs" in word for word in words):
+                    lookups += 1
+                    if not (position == 2 and words[0] == "timeout"
+                            and words[1] in ("$CI_RUN_REQUEST_TIMEOUT_SECONDS", "${CI_RUN_REQUEST_TIMEOUT_SECONDS}")):
+                        raise Reject("fuzz-wait-budget", f"{where} runs-lookup gh api call must run under timeout $CI_RUN_REQUEST_TIMEOUT_SECONDS")
+    if not guarded:
+        raise Reject("fuzz-wait-budget", f"{where} poll loop must break when elapsed SECONDS reaches CI_RUN_WAIT_DEADLINE_SECONDS")
+    if not lookups:
+        raise Reject("fuzz-wait-budget", f"{where} has no ci.yml runs lookup for the budget to bound")
 
 
 def _check_checkout_credentials(workflow: str, tree: dict, job_ids) -> None:
@@ -707,6 +821,47 @@ def _check_no_subject_execution(workflow: str, job_id: str, job: dict) -> None:
                     raise Reject("subject-judge-execution", f"{_where(workflow, job_id)} runs {script!r}, which is not trusted judge code")
 
 
+# A run body that builds or runs code from the tagged workspace: a build tool as a command, or a tests/scripts path.
+SUBJECT_EXECUTION = re.compile(r"(?m)(?:^|[\s;&|(])(?:cmake|ctest|make|ninja)\s|(?:^|[\s\"'=])(?:\./)?tests/scripts/")
+_TOKEN_NAMES = ("GH_TOKEN", "GITHUB_TOKEN")
+
+
+def _names_token(env) -> bool:
+    return isinstance(env, dict) and any(key in _TOKEN_NAMES or _TOKEN.search(str(value)) for key, value in env.items())
+
+
+def _check_token_scope(workflow: str, job_id: str, job: dict) -> None:
+    """A job that runs tagged-tree code must not hold the write token job-wide; only gh steps may carry it."""
+    if _names_token(job.get("env", {})):
+        raise Reject("token-scope", f"{_where(workflow, job_id)} declares GH_TOKEN or GITHUB_TOKEN at job level; scope it to the gh steps")
+
+
+def _check_token_subject_execution(workflow: str, job_id: str, job: dict, job_wide: bool = False) -> None:
+    """No step that holds the token (its own env, or every step when the job holds it) builds or runs tagged code."""
+    for step in job.get("steps", []):
+        if (job_wide or _names_token(step.get("env", {}))) and SUBJECT_EXECUTION.search(step.get("run", "")):
+            raise Reject("token-subject-execution", f"{_where(workflow, job_id)} step {step.get('name', '?')!r} holds the token and runs build or tagged-script commands")
+
+
+def _check_trusted_overlay(workflow: str, job_id: str, job: dict, paths: tuple[str, ...]) -> None:
+    """Each tagged-tree verifier in `paths` is replaced by the workflow commit's copy in an earlier, unconditional,
+    fatal step than the first step that invokes any of them. verify-release-candidate.sh runs the others, so
+    calling it counts as first use of every path."""
+    overlay_at = {}
+    for path in paths:
+        try:
+            overlay_at[path] = require_call(workflow, job_id, job, f'git show "${{GITHUB_SHA}}:{path}"')[0]
+        except Reject:
+            raise Reject("trusted-verifier-overlay", f"{_where(workflow, job_id)} must overlay {path} from GITHUB_SHA in an unconditional step") from None
+    for number, step in enumerate(job.get("steps", [])):
+        used = {path for event in _step_events(step) for word in event.words for path in paths if word in (path, "./" + path)}
+        if "tests/scripts/verify-release-candidate.sh" in used:
+            used = set(paths)
+        late = sorted(path for path in used if overlay_at[path] >= number)
+        if late:
+            raise Reject("trusted-verifier-overlay", f"{_where(workflow, job_id)} step {step.get('name', '?')!r} runs {late[0]} before the trusted overlay")
+
+
 # --------------------------------------------------------------------------- policy
 REHEARSAL_PRODUCERS = ("corpus", "fuzz", "performance", "package", "aggregate")
 REHEARSAL_FUZZ_ARTIFACT = "rehearsal-fuzz-${{ github.run_id }}-${{ github.run_attempt }}"
@@ -724,6 +879,26 @@ RELEASE_ROLES = {
     "candidate-performance": "producer",
     "candidate-fuzz": "trusted-reader",
     "attach-v02-evidence": "attacher",
+}
+# Residual jobs that build or run tagged-tree code while holding contents: write. The overlay paths are the
+# tagged-tree verifiers each one must replace with the workflow commit's copy before first use.
+_VERIFIER_PAIR = ("tests/scripts/verify-release-candidate.sh", "tests/scripts/verify-v02-consumers.py")
+TRUSTED_OVERLAYS = {
+    "candidate": ("tests/scripts/verify-release-candidate.sh", "tests/scripts/verify-v02-source-archive.py",
+                  "tests/scripts/verify-v02-consumers.py", "cmake/VerifyReleaseReceipt.cmake"),
+    # verify-release-candidate.sh --extract reaches verify-v02-consumers.py, so both are overlaid before either runs.
+    "candidate-macos": _VERIFIER_PAIR,
+    "candidate-windows": _VERIFIER_PAIR,
+}
+# Residual jobs that run tagged-tree code: no job-wide token, the token only on gh steps.
+RESIDUAL_SUBJECT_JOBS = ("candidate", "candidate-macos", "candidate-windows")
+# Residual jobs that keep a job-level token, with the reason. They are not exempt from the step rule: with the
+# token job-wide, none of their steps may build or run tagged code.
+TOKEN_SCOPE_EXEMPT = {
+    "candidate-platform-manifest": "runs only trusted judge code (_check_no_subject_execution and the trusted-checkout rule) "
+                                   "and needs the token across its gh-only steps",
+    "publish-qualified-release": "runs only trusted judge code (_check_no_subject_execution and the trusted-checkout rule) "
+                                 "and needs the token across its gh-only release steps",
 }
 RELEASE_ARTIFACTS = {
     "candidate-corpus": ("release-evidence-corpus", ("build/cgb-corpus-receipt.json", "build/support-ledger.json")),
@@ -810,8 +985,9 @@ RELEASE_REQUIRED = {
     "candidate-corpus": (_RELEASE_SUBJECT, _CORPUS_BUILD) + REHEARSAL_REQUIRED["corpus"][2:],
     "candidate-performance": (_RELEASE_SUBJECT,) + REHEARSAL_REQUIRED["performance"],
     "candidate-fuzz": (
+        '[[ "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" == "$SOURCE_SHA" ]]',
         'gh run download "$run_id" --repo "$GH_REPO" --name "v02-fuzz-$run_id-$attempt" --dir build/ci-fuzz',
-        'python3 -I tests/scripts/verify-v02-fuzz.py --verify-hosted --source-sha "$SOURCE_SHA" --run-id "$run_id" --attempt "$attempt" --receipt build/ci-fuzz/v02-fuzz-receipt.json',
+        'python3 -I tests/scripts/verify-v02-fuzz.py --verify-hosted --source-sha "$SOURCE_SHA" --run-id "$run_id" --attempt "$attempt" --receipt build/ci-fuzz/v02-fuzz-receipt.json --poll-seconds "$HOSTED_POLL_SECONDS"',
     ),
     "candidate-platform-manifest": (
         _MANIFEST_ARCHIVE_DOWNLOAD,
@@ -848,6 +1024,51 @@ RELEASE_SMOKE_REQUIRED = {
         ("cmake", ("-P", "cmake/VerifyInstalledPackage.cmake")),
     ),
 }
+# Wiring facts of release.yml that no other table pins, judged from the parsed job: (kind, ...) items per job.
+#   ("env", key)                   the job env defines key
+#   ("if", fragment)               the job-level if: expression contains fragment
+#   ("step-if", step name, frag)   the named step is guarded by an if: expression containing fragment
+#   ("call", command, conditional) the job runs command as a reachable, fatal statement (conditional allows branches/loops)
+#   ("step-lines", step name, lines) the unconditional, errexit step runs these consecutive non-comment script lines; used only
+#                                  where the shell reader rejects the step (the candidate-selection steps use `(( ))`)
+_REUSE_MACOS_GUARD = "env.REUSE_MACOS_CANDIDATE != 'true'"
+_REUSE_WINDOWS_GUARD = "env.REUSE_WINDOWS_CANDIDATE != 'true'"
+RELEASE_PRESENCE = {
+    "candidate": (
+        ("if", "needs.release.outputs.release_created == 'true'"),
+        ("env", "RETRY"),
+        ("call", 'api_commit=$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq \'.sha\')', False),
+        ("call", 'draft=$(jq --arg tag "$RELEASE_TAG" -r \'.[] | select(.tag_name == $tag) | .draft\' <<<"$release_json")', False),
+        ("call", 'prs=$(gh api "repos/$GH_REPO/commits/$SOURCE_SHA/pulls")', False),
+        ("call", 'required=$(gh pr checks "$pr_number" --required --json name,bucket)', False),
+    ),
+    "candidate-macos": (
+        ("step-if", "Build and package macOS arm64 core once", _REUSE_MACOS_GUARD),
+        ("step-if", "Build pinned SDL player and verify extracted package", _REUSE_MACOS_GUARD),
+        ("step-if", "Attach macOS candidate bytes to the unpublished draft", _REUSE_MACOS_GUARD),
+        ("step-lines", "Select a complete existing macOS candidate or a clean build",
+         ('echo "Draft contains a partial macOS candidate asset set; refusing to rebuild or replace bytes." >&2', "exit 1")),
+        ("call", 'gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-preview-macos-arm64.tar.gz', False),
+    ),
+    "candidate-windows": (
+        ("step-if", "Build and package Windows x64 core once", _REUSE_WINDOWS_GUARD),
+        ("step-if", "Attach Windows bytes to the unpublished draft", _REUSE_WINDOWS_GUARD),
+        ("step-lines", "Select an existing Windows archive or a clean build",
+         ('echo "Draft contains a partial Windows candidate asset set; refusing to rebuild or replace bytes." >&2', "exit 1")),
+        ("call", 'cmake -S "tests/consumers/$language" -B "build/consumer-work/$language" -G "Visual Studio 17 2022" -A x64', True),
+    ),
+    "candidate-platform-manifest": (
+        ("call", 'gh release upload "$RELEASE_TAG" build/candidate-platform-manifest.json --repo "$GH_REPO"', True),
+    ),
+}
+# Hosted runner images of the native downloaded-archive lanes; a silently different image changes what was qualified.
+RELEASE_RUNNERS = {"candidate-macos": "macos-14", "candidate-windows": "windows-2022"}
+# The only events that may start release.yml: it is a reusable workflow, so a privileged event of its own
+# (pull_request_target, release, push) would run the draft-writing jobs outside the release-please entrypoint.
+RELEASE_TRIGGERS = frozenset({"workflow_call"})
+# The one caller of release.yml, so that release-please outputs and the candidate jobs run in a single workflow run.
+RELEASE_ENTRYPOINT_WORKFLOW = "release-please.yml"
+RELEASE_LOCAL_PATH = "./.github/workflows/release.yml"
 CI_REQUIRED = (
     "cmake --preset phase1-asan -DGBB_TEST_INSTALL_PREFIX=",
     "cmake --build --preset phase1-asan",
@@ -919,6 +1140,7 @@ def check_rehearsal(root: Path) -> None:
     _check_disabled(name, tree)
     _check_bounded_downloads(name, tree)
     _check_ignored_failures(name, tree)
+    _check_run_expressions(name, tree)
     _check_no_duplicate_setup(name, tree)
     _check_checkout_credentials(name, tree, tree["jobs"])
     for job_id, job in tree["jobs"].items():
@@ -948,6 +1170,25 @@ def check_rehearsal(root: Path) -> None:
     for job_id, commands in REHEARSAL_REQUIRED.items():
         for command in commands:
             require_call(name, job_id, tree["jobs"][job_id], command)
+
+
+# Read-only workflows must not leave the checkout token in .git/config for later steps (IN-08). A job that truly
+# needs the persisted credential is listed here as (workflow file, job id) -> reason; none does today, because the
+# jobs authenticate gh through an explicit step-level token and fetch only public sources.
+READONLY_WORKFLOWS = ("ci.yml", "fixture-repro.yml", "preview.yml")
+CREDENTIAL_EXEMPT: dict[tuple[str, str], str] = {}
+
+
+def check_readonly_workflows(root: Path, exempt=None) -> None:
+    exempt = CREDENTIAL_EXEMPT if exempt is None else exempt
+    trees = {item: read_workflow(root / ".github/workflows" / item) for item in READONLY_WORKFLOWS}
+    for (workflow, job_id), reason in exempt.items():
+        if workflow not in trees or job_id not in trees[workflow]["jobs"]:
+            raise Reject("checkout-credentials", f"CREDENTIAL_EXEMPT names {workflow}.{job_id}, which does not exist")
+        if not str(reason).strip():
+            raise Reject("checkout-credentials", f"CREDENTIAL_EXEMPT entry {workflow}.{job_id} has no reason")
+    for workflow, tree in trees.items():
+        _check_checkout_credentials(workflow, tree, [job_id for job_id in tree["jobs"] if (workflow, job_id) not in exempt])
 
 
 def check_ci(root: Path) -> None:
@@ -983,15 +1224,97 @@ def check_ci(root: Path) -> None:
         require_call(name, "linux-sanitizers", job, command, conditional=conditional, errexit_off=True, status_var=var)
 
 
+def _check_residual_classification(roles=None, subject=None, exempt=None, overlays=None) -> None:
+    """Every residual job is named once: it runs tagged code (job token forbidden) or is a reasoned exemption."""
+    roles = RELEASE_ROLES if roles is None else roles
+    subject = RESIDUAL_SUBJECT_JOBS if subject is None else subject
+    exempt = TOKEN_SCOPE_EXEMPT if exempt is None else exempt
+    overlays = TRUSTED_OVERLAYS if overlays is None else overlays
+    residual = {job_id for job_id, role in roles.items() if role == "residual"}
+    if set(subject) & set(exempt) or residual != set(subject) | set(exempt) or len(set(subject)) != len(subject):
+        raise Reject("residual-classification", "every residual job must be in exactly one of RESIDUAL_SUBJECT_JOBS or TOKEN_SCOPE_EXEMPT")
+    if any(not isinstance(reason, str) or not reason.strip() for reason in exempt.values()):
+        raise Reject("residual-classification", "every TOKEN_SCOPE_EXEMPT job needs a non-empty reason")
+    if not set(overlays) <= set(subject):
+        raise Reject("residual-classification", "TRUSTED_OVERLAYS may name only RESIDUAL_SUBJECT_JOBS")
+
+
+def _check_release_presence(workflow: str, tree: dict) -> None:
+    jobs = tree["jobs"]
+    for job_id, items in RELEASE_PRESENCE.items():
+        job = _require_job(workflow, tree, job_id)
+        for item in items:
+            kind = item[0]
+            if kind == "env":
+                if item[1] not in (job.get("env") or {}):
+                    raise Reject("release-presence", f"{_where(workflow, job_id)} does not define env {item[1]}")
+            elif kind == "if":
+                if item[1] not in str(job.get("if", "")):
+                    raise Reject("release-presence", f"{_where(workflow, job_id)} job if: lacks {item[1]}")
+            elif kind == "step-if":
+                guarded = [step for step in job.get("steps", []) if step.get("name") == item[1]]
+                if len(guarded) != 1 or item[2] not in str(guarded[0].get("if", "")):
+                    raise Reject("release-presence", f"{_where(workflow, job_id)} step {item[1]!r} is not guarded by {item[2]}")
+            elif kind == "step-lines":
+                named = [step for step in job.get("steps", []) if step.get("name") == item[1]]
+                lines = []
+                if len(named) == 1 and "if" not in named[0] and _runs_under_errexit(named[0]):
+                    lines = [line.strip() for line in str(named[0].get("run", "")).splitlines()
+                             if line.strip() and not line.strip().startswith("#")]
+                wanted = list(item[2])
+                if not any(lines[at:at + len(wanted)] == wanted for at in range(len(lines))):
+                    raise Reject("release-presence", f"{_where(workflow, job_id)} step {item[1]!r} does not refuse a partial candidate set")
+            else:
+                try:
+                    require_call(workflow, job_id, jobs[job_id], item[1], conditional=item[2])
+                except Reject as exc:
+                    raise Reject("release-presence", f"{_where(workflow, job_id)} lacks required wiring: {exc}") from exc
+    for job_id, runner in RELEASE_RUNNERS.items():
+        actual = str(_require_job(workflow, tree, job_id).get("runs-on", "")).strip()
+        if actual != runner:
+            raise Reject("runner-image", f"{_where(workflow, job_id)} must run on {runner}, not {actual or 'an unset image'}")
+
+
+def _trigger_names(tree: dict) -> set[str]:
+    on = tree.get("on")
+    if isinstance(on, dict):
+        return set(on)
+    if isinstance(on, list):
+        return {str(item) for item in on}
+    if isinstance(on, str) and on:
+        return {on}
+    return set()
+
+
+def _check_release_triggers(workflow: str, tree: dict) -> None:
+    extra = _trigger_names(tree) - RELEASE_TRIGGERS
+    if extra:
+        raise Reject("workflow-trigger", f"{workflow} may only be started by {sorted(RELEASE_TRIGGERS)}, not {sorted(extra)}")
+
+
+def _check_release_entrypoint(root: Path) -> None:
+    """release.yml is reusable, and the release-please workflow must call it as a job so that the release outputs and
+    the candidate jobs live in one workflow run."""
+    release = read_workflow(root / ".github/workflows/release.yml")
+    if "workflow_call" not in _trigger_names(release):
+        raise Reject("release-entrypoint", "release.yml must be a reusable workflow (workflow_call)")
+    entry = read_workflow(root / ".github/workflows" / RELEASE_ENTRYPOINT_WORKFLOW)
+    if not any(job.get("uses") == RELEASE_LOCAL_PATH for job in entry["jobs"].values()):
+        raise Reject("release-entrypoint", f"{RELEASE_ENTRYPOINT_WORKFLOW} must call {RELEASE_LOCAL_PATH} from a job")
+
+
 def check_release(root: Path) -> None:
     name = "release"
+    _check_residual_classification()
     tree = read_workflow(root / ".github/workflows/release.yml")
     if tree.get("permissions") != {"contents": "read"}:
         raise Reject("workflow-permissions", "release must declare only top-level contents: read")
+    _check_release_triggers(name, tree)
     _check_actions(name, tree)
     _check_disabled(name, tree)
     _check_bounded_downloads(name, tree)
     _check_ignored_failures(name, tree)
+    _check_run_expressions(name, tree)
     jobs = tree["jobs"]
     for job_id in jobs:
         if job_id not in RELEASE_ROLES:
@@ -1018,6 +1341,13 @@ def check_release(root: Path) -> None:
             _require_needs(name, job_id, job, {"release", "candidate"}, "workflow-dependency")
             artifact, files = RELEASE_ARTIFACTS[job_id]
             _upload(job, name, job_id, artifact, files)
+        elif role == "residual":
+            _check_checkout_credentials(name, tree, (job_id,))
+            _check_token_subject_execution(name, job_id, job, job_wide=job_id in TOKEN_SCOPE_EXEMPT)
+            if job_id in RESIDUAL_SUBJECT_JOBS:
+                _check_token_scope(name, job_id, job)
+            if job_id in TRUSTED_OVERLAYS:
+                _check_trusted_overlay(name, job_id, job, TRUSTED_OVERLAYS[job_id])
         elif role == "attacher":
             if perms != {"contents": "write"}:
                 raise Reject("attacher-permissions", f"{_where(name, job_id)} must hold exactly contents: write")
@@ -1028,7 +1358,7 @@ def check_release(root: Path) -> None:
                 _download(job, name, job_id, RELEASE_ARTIFACTS[producer][0])
                 if f"needs.{producer}.result == 'success'" not in str(job.get("if", "")):
                     raise Reject("attacher-dependencies", f"{_where(name, job_id)} must run only after {producer} succeeded")
-            if any(re.search(r"(?m)(?:^|[\s;&|(])(?:cmake|ctest|make|ninja)\s|(?:^|[\s\"'=])(?:\./)?tests/scripts/", step.get("run", "")) for step in job.get("steps", [])):
+            if any(SUBJECT_EXECUTION.search(step.get("run", "")) for step in job.get("steps", [])):
                 raise Reject("attacher-subject-execution", f"{_where(name, job_id)} must execute trusted code only")
     _require_needs(name, "candidate-platform-manifest", jobs["candidate-platform-manifest"], {"attach-v02-evidence"}, "workflow-dependency")
     _require_needs(name, "publish-qualified-release", jobs["publish-qualified-release"], {"candidate-platform-manifest"}, "workflow-dependency")
@@ -1042,6 +1372,8 @@ def check_release(root: Path) -> None:
     for job_id, commands in RELEASE_REQUIRED.items():
         for command in commands:
             require_call(name, job_id, jobs[job_id], command)
+    _check_fuzz_source_binding(name, tree)
+    _check_fuzz_wait_budget(name, tree)
     publisher = jobs["publish-qualified-release"]
     gate_at = require_call(name, "publish-qualified-release", publisher, RELEASE_REQUIRED["publish-qualified-release"][2])
     publish_at = require_call(name, "publish-qualified-release", publisher, RELEASE_REQUIRED["publish-qualified-release"][4])
@@ -1061,6 +1393,9 @@ def check_release(root: Path) -> None:
     for job_id, calls in RELEASE_SMOKE_REQUIRED.items():
         for command, extra in calls:
             require_call(name, job_id, jobs[job_id], command, contains=extra, conditional=True)
+    _check_release_presence(name, tree)
+    _require_needs(name, "candidate-windows", _require_job(name, tree, "candidate-windows"), {"release", "candidate-macos"}, "workflow-dependency")
+    _check_release_entrypoint(root)
     attach = jobs["attach-v02-evidence"]
     require_call(name, "attach-v02-evidence", attach, 'gh release upload "$RELEASE_TAG" "$1/$2" --repo "$GH_REPO"', conditional=True)
     attach_call = require_call(name, "attach-v02-evidence", attach, 'attach "$dir" "$name"', conditional=True)
@@ -1074,13 +1409,14 @@ def check_all(root: Path) -> dict[str, int]:
     check_producer_script(root)
     check_rehearsal(root)
     check_ci(root)
+    check_readonly_workflows(root)
     check_release(root)
     residual = sorted(job_id for job_id, role in RELEASE_ROLES.items() if role == "residual")
     return {"residual": len(residual)}
 
 
 # --------------------------------------------------------------------------- self-test
-WORKFLOWS = ("release-rehearsal.yml", "release.yml", "ci.yml")
+WORKFLOWS = ("release-rehearsal.yml", "release.yml", "release-please.yml", "ci.yml", "fixture-repro.yml", "preview.yml")
 
 
 def _copy_fixture(root: Path, target: Path) -> None:
@@ -1107,6 +1443,7 @@ def _m(label: str, workflow: str, after: str, old: str, new: str, expected: str)
 JUDGE_CALL = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject"
 _REHEARSAL_TAG_LINE = "bash .github/scripts/produce-release-evidence.sh verify-subject --subject . --source-sha \"$GITHUB_SHA\" --tag \"$REHEARSAL_TAG\" --local-tag"
 JUDGE_STEP = "      - name: Judge workflow privilege and trust wiring from the trusted checkout\n"
+FUZZ_TAG_CHECK = '[[ "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" == "$SOURCE_SHA" ]] || {'
 
 
 def _mutations():
@@ -1184,6 +1521,26 @@ def _mutations():
            'run: echo "$FULL_CTEST_OUTCOME"', "ignored-gate"),
         _m("release hosted fuzz verifier loses its run identity", "release.yml", "  candidate-fuzz:\n", '--run-id "$run_id" --attempt "$attempt"',
            '--attempt "$attempt"', "required-command-not-executed"),
+        # Fuzz reader binds the release commit without the moving checkout and bounds its wait (WR-04).
+        _m("release fuzz reader compares HEAD with the source SHA", rel, "  candidate-fuzz:\n", FUZZ_TAG_CHECK,
+           '[[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" ]] || exit 1\n{I}' + FUZZ_TAG_CHECK, "fuzz-source-binding"),
+        _m("release fuzz reader asserts ancestry of the source against HEAD", rel, "  candidate-fuzz:\n", FUZZ_TAG_CHECK,
+           'git merge-base --is-ancestor "$SOURCE_SHA" HEAD || exit 1\n{I}' + FUZZ_TAG_CHECK, "fuzz-source-binding"),
+        _m("release fuzz reader tag API check replaced by a no-op", rel, "  candidate-fuzz:\n", FUZZ_TAG_CHECK,
+           "true || {", "required-command-not-executed"),
+        _m("release fuzz reader job timeout below its worst-case wait", rel, "  candidate-fuzz:\n", "timeout-minutes: 112",
+           "timeout-minutes: 95", "fuzz-wait-budget"),
+        _m("release fuzz reader attempts budget deleted", rel, "  candidate-fuzz:\n", "      CI_RUN_WAIT_ATTEMPTS: 90\n", "", "fuzz-wait-budget"),
+        _m("release fuzz reader elapsed-time deadline comparison deleted", rel, "  candidate-fuzz:\n",
+           '            if [[ $((SECONDS - poll_start)) -ge "$CI_RUN_WAIT_DEADLINE_SECONDS" ]]; then break; fi\n', "", "fuzz-wait-budget"),
+        _m("release fuzz reader deadline below attempts times interval", rel, "  candidate-fuzz:\n", "CI_RUN_WAIT_DEADLINE_SECONDS: 3000",
+           "CI_RUN_WAIT_DEADLINE_SECONDS: 2400", "fuzz-wait-budget"),
+        _m("release fuzz reader runs lookup loses its request timeout", rel, "  candidate-fuzz:\n",
+           'runs=$(timeout "$CI_RUN_REQUEST_TIMEOUT_SECONDS" gh api', "runs=$(gh api", "fuzz-wait-budget"),
+        _m("release fuzz reader hosted poll no longer takes the budget", rel, "  candidate-fuzz:\n",
+           ' \\\n            --poll-seconds "$HOSTED_POLL_SECONDS"', "", "required-command-not-executed"),
+        _m("rehearsal ctest step interpolates the run nonce into its run body", "release-rehearsal.yml",
+           "Run the full CTest stream once", '${RUN_NONCE}.xml"', '${{ steps.corpus_run.outputs.run_nonce }}.xml"', "run-expression"),
         _m("release performance verifier skipped by if false", "release.yml", "  candidate-performance:\n",
            "      - name: Measure the clean paired v0.1.0 baseline and exact-tag candidate\n",
            "      - name: Measure the clean paired v0.1.0 baseline and exact-tag candidate\n        if: ${{ false }}\n", "disabled-gate"),
@@ -1280,9 +1637,119 @@ def _mutations():
         _m("macos downloaded player smoke commented out", "release.yml", "  candidate-macos:\n",
            'GBB_VERIFIED_OUTPUT_DIR="$RUNNER_TEMP/release-player-downloaded" bash',
            '# GBB_VERIFIED_OUTPUT_DIR="$RUNNER_TEMP/release-player-downloaded" bash', "required-command-not-executed"),
+        # Residual write jobs: no persisted credential, no job-wide token, trusted verifier overlay (WR-01).
+        _m("windows residual checkout persists credentials", rel, "  candidate-windows:\n", "persist-credentials: false",
+           "persist-credentials: true", "checkout-credentials"),
+        _m("windows residual job env holds the write token", rel, "  candidate-windows:\n", "    env:\n",
+           "    env:\n      GH_TOKEN: ${{ github.token }}\n", "token-scope"),
+        _m("windows residual build step holds the write token", rel, "  candidate-windows:\n",
+           "      - name: Build and package Windows x64 core once\n        if: env.REUSE_WINDOWS_CANDIDATE != 'true'\n",
+           "      - name: Build and package Windows x64 core once\n        if: env.REUSE_WINDOWS_CANDIDATE != 'true'\n        env:\n          GH_TOKEN: ${{ github.token }}\n",
+           "token-subject-execution"),
+        _m("windows residual trusted verifier overlay removed", rel, "  candidate-windows:\n",
+           'git show "${GITHUB_SHA}:tests/scripts/verify-release-candidate.sh" > tests/scripts/verify-release-candidate.sh',
+           "true", "trusted-verifier-overlay"),
+        ("windows residual overlay runs only in the step that first uses the verifier", rel, [
+            ("  candidate-windows:\n", 'git show "${GITHUB_SHA}:tests/scripts/verify-release-candidate.sh" > tests/scripts/verify-release-candidate.sh', "true"),
+            ("  candidate-windows:\n", 'git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py', "true"),
+            ("  candidate-windows:\n", "bash tests/scripts/verify-release-candidate.sh --extract",
+             'git show "${GITHUB_SHA}:tests/scripts/verify-release-candidate.sh" > tests/scripts/verify-release-candidate.sh\n{I}git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py\n{I}bash tests/scripts/verify-release-candidate.sh --extract')],
+         "trusted-verifier-overlay"),
+        _m("candidate residual checkout persists credentials", rel, "  candidate:\n", "persist-credentials: false",
+           "persist-credentials: true", "checkout-credentials"),
+        _m("candidate residual job env holds the write token", rel, "  candidate:\n", "    env:\n",
+           "    env:\n      GH_TOKEN: ${{ github.token }}\n", "token-scope"),
+        _m("candidate residual cache-free build step holds the write token", rel, "  candidate:\n",
+           "      - name: Configure and build cache-free release core\n        if: env.CANDIDATE_REUSED != 'true'\n        env:\n",
+           "      - name: Configure and build cache-free release core\n        if: env.CANDIDATE_REUSED != 'true'\n        env:\n          GH_TOKEN: ${{ github.token }}\n",
+           "token-subject-execution"),
+        _m("candidate residual tokened step runs the consumer verifier", rel, "  candidate:\n",
+           "      - name: Prove downloaded relocated C and C++ consumer behavior\n        env:\n",
+           "      - name: Prove downloaded relocated C and C++ consumer behavior\n        env:\n          GH_TOKEN: ${{ github.token }}\n",
+           "token-subject-execution"),
+        _m("candidate residual trusted verifier overlay removed", rel, "  candidate:\n",
+           'git show "${GITHUB_SHA}:tests/scripts/verify-v02-source-archive.py" > tests/scripts/verify-v02-source-archive.py',
+           "true", "trusted-verifier-overlay"),
+        _m("candidate residual overlay omits the consumer verifier", rel, "  candidate:\n",
+           'git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py',
+           "true", "trusted-verifier-overlay"),
+        _m("macos residual checkout persists credentials", rel, "  candidate-macos:\n", "persist-credentials: false",
+           "persist-credentials: true", "checkout-credentials"),
+        _m("macos residual job env holds the write token", rel, "  candidate-macos:\n", "    env:\n",
+           "    env:\n      GH_TOKEN: ${{ github.token }}\n", "token-scope"),
+        _m("macos residual smoke step holds the write token", rel, "  candidate-macos:\n",
+           "      - name: Smoke the downloaded player archive and relocated C/C++ consumers\n",
+           "      - name: Smoke the downloaded player archive and relocated C/C++ consumers\n        env:\n          GH_TOKEN: ${{ github.token }}\n",
+           "token-subject-execution"),
+        _m("macos residual trusted verifier overlay removed", rel, "  candidate-macos:\n",
+           'git show "${GITHUB_SHA}:tests/scripts/verify-release-candidate.sh" > tests/scripts/verify-release-candidate.sh',
+           "true", "trusted-verifier-overlay"),
+        _m("macos residual overlay omits only the consumer verifier", rel, "  candidate-macos:\n",
+           'git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py',
+           "true", "trusted-verifier-overlay"),
+        _m("platform manifest exempt job gains a token step running tagged scripts", rel, "  candidate-platform-manifest:\n",
+           "    steps:\n", "    steps:\n      - name: Run a tagged script\n        run: python3 -I tests/scripts/verify-v02-consumers.py\n",
+           "token-subject-execution"),
+        _m("platform manifest checkout persists credentials", rel, "  candidate-platform-manifest:\n", "persist-credentials: false",
+           "persist-credentials: true", "checkout-credentials"),
+        _m("release source-version comparison interpolates a step output into its run body", "release.yml",
+           "Configure and build cache-free release core", '"$RELEASE_VERSION_OUT" ]]', '"${{ steps.identity.outputs.version }}" ]]', "run-expression"),
+        _m("release ctest step interpolates the run nonce into its run body", "release.yml",
+           "Run the full CTest stream once", '${RUN_NONCE}.xml"', '${{ steps.corpus_run.outputs.run_nonce }}.xml"', "run-expression"),
+        _m("ci native-linux checkout persists credentials", "ci.yml", "  native-linux:\n",
+           "          persist-credentials: false\n", "", "checkout-credentials"),
+        _m("preview installed-package-smoke checkout persists credentials", "preview.yml", "  installed-package-smoke-linux-x64:\n",
+           "          persist-credentials: false\n", "", "checkout-credentials"),
         _m("ci campaign status no longer asserted", "ci.yml", "  linux-sanitizers:\n", 'test "$verify_status" -eq 0', 'echo test "$verify_status" -eq 0', "required-command-not-executed"),
         _m("ci campaign verifier removed", "ci.yml", "  linux-sanitizers:\n", "python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json\n            verify_status=$?",
            "true\n            verify_status=$?", "required-command-not-executed"),
+        # Release-candidate wiring formerly pinned as text in verify-release-candidate.sh (WR-06, W6-03..W6-11).
+        _m("W6-03 release-please action unpinned", rel, "", "googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7",
+           "googleapis/release-please-action@v5", "workflow-unpinned-action"),
+        _m("W6-04 candidate drops gh pr checks", rel, "  candidate:\n", 'required=$(gh pr checks "$pr_number" --required --json name,bucket)',
+           "required='[]'", "release-presence"),
+        _m("W6-04b candidate drops the tag-to-source comparison input", rel, "  candidate:\n", 'api_commit=$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq \'.sha\')',
+           "api_commit=$SOURCE_SHA", "release-presence"),
+        _m("W6-04c candidate drops the merged-PR lookup", rel, "  candidate:\n", 'prs=$(gh api "repos/$GH_REPO/commits/$SOURCE_SHA/pulls")',
+           "prs='[]'", "release-presence"),
+        _m("W6-04d candidate stops requiring release_created", rel, "  candidate:\n", " && needs.release.outputs.release_created == 'true'",
+           "", "release-presence"),
+        _m("W6-04e candidate loses its retry input", rel, "  candidate:\n", "      RETRY: ${{ inputs.retry }}\n", "", "release-presence"),
+        _m("W6-05a candidate-macos runner changed", rel, "  candidate-macos:\n", "runs-on: macos-14", "runs-on: macos-latest", "runner-image"),
+        _m("W6-05b candidate-windows runner changed", rel, "  candidate-windows:\n", "runs-on: windows-2022", "runs-on: windows-latest", "runner-image"),
+        _m("W6-06 windows archive name changed in the extract call", rel, "  candidate-windows:\n",
+           "bash tests/scripts/verify-release-candidate.sh --extract build/downloaded/gabbaboy-core-windows-x64.tar.gz",
+           "bash tests/scripts/verify-release-candidate.sh --extract build/downloaded/gabbaboy-core-windows-arm64.tar.gz", "required-command-not-executed"),
+        _m("W6-07 platform manifest name changed", rel, "  candidate-platform-manifest:\n",
+           'gh release upload "$RELEASE_TAG" build/candidate-platform-manifest.json', 'gh release upload "$RELEASE_TAG" build/candidate-renamed-manifest.json',
+           "release-presence"),
+        _m("W6-07b macOS preview archive name changed in the player download", rel, "  candidate-macos:\n",
+           'gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-preview-macos-arm64.tar.gz',
+           'gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-preview-renamed.tar.gz', "release-presence"),
+        _m("W6-08 verify-package call neutered", rel, "  candidate-macos:\n",
+           "bash tests/scripts/verify-phase3-player.sh --verify-package build/downloaded-player",
+           "bash tests/scripts/verify-phase3-player.sh --help build/downloaded-player", "required-command-not-executed"),
+        _m("W6-09 windows generator changed", rel, "  candidate-windows:\n", '-G "Visual Studio 17 2022"', '-G "Ninja"', "release-presence"),
+        _m("W6-11a macOS build step loses its reuse guard", rel, "  candidate-macos:\n",
+           "      - name: Build and package macOS arm64 core once\n        if: env.REUSE_MACOS_CANDIDATE != 'true'\n",
+           "      - name: Build and package macOS arm64 core once\n", "release-presence"),
+        _m("W6-11b windows refusal message removed", rel, "  candidate-windows:\n",
+           'echo "Draft contains a partial Windows candidate asset set; refusing to rebuild or replace bytes." >&2',
+           'echo "Draft contains a partial Windows candidate asset set; continuing." >&2', "release-presence"),
+        # Release-candidate wiring formerly pinned as text in verify-release-candidate.sh (WR-06, W6-12..W6-19).
+        _m("W6-12 windows no longer needs macOS", rel, "  candidate-windows:\n", "needs: [release, candidate-macos]", "needs: [release]", "workflow-dependency"),
+        _m("W6-14 release gains pull_request_target", rel, "", "  workflow_call:\n", "  pull_request_target:\n    branches: [main]\n  workflow_call:\n", "workflow-trigger"),
+        ("W6-15 final gate moved after publish", rel, [
+            ("  publish-qualified-release:\n", 'run: bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"', "run: true"),
+            ("  publish-qualified-release:\n", 'gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag',
+             'gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag\n{I}bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"')],
+         "publication-order"),
+        _m("W6-16 published asset verifier neutered", rel, "  publish-qualified-release:\n",
+           'python3 -I trusted/.github/scripts/verify-published-release-assets.py "$assets" build/release-final/api-assets.json',
+           'python3 -I trusted/.github/scripts/verify-published-release-assets.py --help "$assets" build/release-final/api-assets.json',
+           "required-command-not-executed"),
+        _m("W6-19 entrypoint stops calling release.yml", "release-please.yml", "", "uses: ./.github/workflows/release.yml",
+           "uses: ./.github/workflows/release-renamed.yml", "release-entrypoint"),
     ]
 
 
@@ -1355,6 +1822,35 @@ def self_test(root: Path) -> None:
             raise SystemExit(f"self-test hostile subject judge was not ignored: exit={result.returncode} stderr={result.stderr.strip()!r}")
         rejected += 1
         print("rejected: subject-supplied judge and shadowed modules cannot approve a mutated workflow")
+        # Residual classification is data, so it is attacked in-process: a job in both sets, then a job in neither.
+        for label, kwargs in (
+            ("residual job listed in both the subject set and the exemption map", {"exempt": {**TOKEN_SCOPE_EXEMPT, "candidate": "claimed exempt"}}),
+            ("residual job missing from both sets", {"subject": tuple(job for job in RESIDUAL_SUBJECT_JOBS if job != "candidate")}),
+            ("exempt job without a reason", {"exempt": {**TOKEN_SCOPE_EXEMPT, "publish-qualified-release": " "}}),
+        ):
+            try:
+                _check_residual_classification(**kwargs)
+            except Reject as exc:
+                if exc.code != "residual-classification":
+                    raise SystemExit(f"self-test negative {label!r} failed: wrong code {exc.code}")
+                rejected += 1
+                print(f"rejected: {label}: {exc}")
+            else:
+                raise SystemExit(f"self-test negative {label!r} failed: accepted")
+        # The credential exemption is data too: a stale job name and a reasonless entry are both rejected.
+        for label, exempt in (
+            ("credential exemption names a job that does not exist", {("ci.yml", "no-such-job"): "claimed"}),
+            ("credential exemption without a reason", {("ci.yml", "native-linux"): " "}),
+        ):
+            try:
+                check_readonly_workflows(root, exempt)
+            except Reject as exc:
+                if exc.code != "checkout-credentials":
+                    raise SystemExit(f"self-test negative {label!r} failed: wrong code {exc.code}")
+                rejected += 1
+                print(f"rejected: {label}: {exc}")
+            else:
+                raise SystemExit(f"self-test negative {label!r} failed: accepted")
     print(f"PASS: workflow policy self-test negative_controls={rejected} positive_controls={1 + accepted}")
 
 

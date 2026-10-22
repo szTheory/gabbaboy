@@ -35,7 +35,9 @@ def verify(after_json: str, before_rows: list[dict[str, Any]]) -> None:
     try:
         after_rows = json.loads(after_json)
     except json.JSONDecodeError as error:
-        raise ValueError("published release API response is not valid JSON") from error
+        raise ValueError("published-assets-not-json: published release API response is not valid JSON") from error
+    if not isinstance(after_rows, list):
+        raise ValueError("published-assets-not-json: published release API response is not a JSON array")
     before = inventory(before_rows)
     after = inventory(after_rows)
     if not set(before).issubset(set(after)):
@@ -121,6 +123,9 @@ def decide(release: Any, assets: Any, expected_rows: Any, runs: Any, run_id: int
     expected = expected_inventory(expected_rows)
     live = live_inventory(assets)
     check_runs(runs, run_id, run_attempt, workflow, source_sha)
+    # The published branch is not reachable from publish-qualified-release, which decides before its one publication
+    # transition; only the self-test exercises it. It documents the published-state contract named in residual P15-09,
+    # which records published-state re-verification as a possible owner request, so it stays.
     if release["draft"] is False:
         if scope == "subset":
             raise ValueError("a published release never receives further attachments")
@@ -176,8 +181,43 @@ def self_test() -> None:
         except ValueError:
             continue
         raise SystemExit("published asset verifier self-test accepted invalid API evidence")
+    # Executable direct-JSON control: the first argument is response TEXT. A path naming a file that holds a valid
+    # response must be rejected, never read, so a caller cannot satisfy the verifier by saving the response first.
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="gbb-published-assets.") as directory:
+        response_file = pathlib.Path(directory) / "api-assets.json"
+        response_file.write_text(after)
+        verify(response_file.read_text(), before)
+        try:
+            verify(str(response_file), before)
+        except ValueError as error:
+            if "published-assets-not-json" not in str(error):
+                raise SystemExit(f"published asset verifier rejected a path for the wrong reason: {error}")
+            print("rejected: path-instead-of-json: a file path in place of API response text")
+        else:
+            raise SystemExit("published asset verifier accepted a file path in place of API response JSON")
+    legacy_cli_self_test(after)
     print("PASS: published asset verifier parses JSON responses directly and rejects changed/malformed inventory")
     recovery_self_test()
+
+
+def legacy_cli_self_test(after: str) -> None:
+    """Legacy mode must turn an unreadable or malformed baseline into a REJECT line and exit 1, never a traceback."""
+    import contextlib
+    import io
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="gbb-legacy-baseline.") as directory:
+        malformed = pathlib.Path(directory) / "baseline.json"
+        malformed.write_text("{not json")
+        for label, baseline in (("malformed", malformed), ("unreadable", pathlib.Path(directory) / "absent.json")):
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                status = main([after, str(baseline)])
+            if status != 1 or "REJECT published-assets:" not in stderr.getvalue() or "Traceback" in stderr.getvalue():
+                raise SystemExit(f"legacy mode did not reject a {label} baseline cleanly: status={status} stderr={stderr.getvalue()!r}")
+            print(f"rejected: legacy mode with a {label} baseline gives a REJECT line and exit 1")
 
 
 def inventory_self_test() -> None:
@@ -322,9 +362,13 @@ def main(argv: list[str]) -> int:
             return 1
         return 0
     if len(argv) != 2:
-        raise SystemExit("usage: verify-published-release-assets.py API_ASSETS_JSON BASELINE_JSON | --inventory ... | --decide ... | --self-test")
-    before = json.loads(pathlib.Path(argv[1]).read_text())
-    verify(argv[0], before)
+        raise SystemExit("usage: verify-published-release-assets.py API_ASSETS_JSON_TEXT BASELINE_PATH | --inventory ... | --decide ... | --self-test")
+    try:
+        before = json.loads(pathlib.Path(argv[1]).read_text())
+        verify(argv[0], before)
+    except (ValueError, OSError) as error:
+        print(f"REJECT published-assets: {error}", file=sys.stderr)
+        return 1
     print("PASS: published release asset IDs, names, and digests match the qualified inventory")
     return 0
 
