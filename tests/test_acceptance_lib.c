@@ -849,6 +849,11 @@ static int span_alias_was_rejected(const char *name, gbb_run_result result,
     return 1;
 }
 
+/* Number of span_alias_was_rejected sub-cases in case_accept_input_span_output_alias. The printed
+ * rejected=N/M line derives M from this constant, and the output_alias mutant regex in
+ * tests/acceptance/CMakeLists.txt matches it, so the denominator cannot drift from the sub-case count. */
+enum { SPAN_OUTPUT_ALIAS_CASES = 12 };
+
 static int case_accept_input_span_output_alias(void) {
     const size_t storage_size = 4096u;
     uint8_t *storage = malloc(storage_size);
@@ -881,52 +886,68 @@ static int case_accept_input_span_output_alias(void) {
     REQUIRE((uintptr_t)(void *)partial_trace < (uintptr_t)(void *)(events + 2u));
     REQUIRE((uintptr_t)(void *)partial_diagnostic < (uintptr_t)(void *)(events + 2u));
 
-    int failures = 0;
+    int failures = 0;        /* the valid zero-budget span check */
+    int alias_failures = 0;  /* span_alias_was_rejected sub-cases */
     const uint64_t alias_budget = 32u;
     size_t frame_count = 7u;
     gbb_run_result result = gbb_accept_run_audio(instance, alias_budget, span, partial_frame, 1u, &frame_count);
     if (!span_alias_was_rejected("partial-frame/events", result, span, 4u, 0u,
-                                 events, saved_events, 4u) || frame_count != 7u) ++failures;
+                                 events, saved_events, 4u) || frame_count != 0u) ++alias_failures;
 
     frame_count = 7u;
     result = gbb_accept_run_audio(instance, alias_budget, span, (gbb_audio_frame *)(void *)span, 1u, &frame_count);
     if (!span_alias_was_rejected("frame/span-descriptor", result, span, 4u, 0u,
-                                 events, saved_events, 4u) || frame_count != 7u) ++failures;
+                                 events, saved_events, 4u) || frame_count != 0u) ++alias_failures;
 
     *cursor = 1u;
     result = gbb_accept_run_audio(instance, alias_budget, span, NULL, 0u, cursor);
     if (!span_alias_was_rejected("frame-count/cursor", result, span, 4u, 1u,
-                                 events, saved_events, 4u)) ++failures;
+                                 events, saved_events, 4u)) ++alias_failures;
     *cursor = 0u;
 
     result = gbb_accept_run_audio(instance, alias_budget, span, NULL, 0u, &span->count);
     if (!span_alias_was_rejected("frame-count/span-descriptor", result, span, 4u, 0u,
-                                 events, saved_events, 4u)) ++failures;
+                                 events, saved_events, 4u)) ++alias_failures;
     span->count = 4u;
+
+    size_t *count_in_events = (size_t *)(void *)align_test_address((uintptr_t)(void *)(events + 1u),
+                                                                   _Alignof(size_t));
+    REQUIRE((uintptr_t)(void *)count_in_events + sizeof(*count_in_events) <= (uintptr_t)(void *)(events + 4u));
+    result = gbb_accept_run_audio(instance, alias_budget, span, NULL, 0u, count_in_events);
+    if (!span_alias_was_rejected("frame-count/events", result, span, 4u, 0u,
+                                 events, saved_events, 4u)) ++alias_failures;
+
+    /* The span itself is invalid (cursor above count), so validate_accept_input_span rejects it; the count
+     * aliases the cursor and must still not be written. */
+    *cursor = 5u;
+    result = gbb_accept_run_audio(instance, alias_budget, span, NULL, 0u, cursor);
+    if (!span_alias_was_rejected("frame-count/unvalidated-cursor", result, span, 4u, 5u,
+                                 events, saved_events, 4u)) ++alias_failures;
+    *cursor = 0u;
 
     result = gbb_accept_run_diagnostic(instance, alias_budget, span, partial_trace, 1u, NULL, 0u);
     if (!span_alias_was_rejected("partial-trace/events", result, span, 4u, 0u,
-                                 events, saved_events, 4u)) ++failures;
+                                 events, saved_events, 4u)) ++alias_failures;
     result = gbb_accept_run_diagnostic(instance, alias_budget, span,
                                        (gbb_trace_record *)(void *)cursor, 1u, NULL, 0u);
     if (!span_alias_was_rejected("trace/cursor", result, span, 4u, 0u,
-                                 events, saved_events, 4u)) ++failures;
+                                 events, saved_events, 4u)) ++alias_failures;
     result = gbb_accept_run_diagnostic(instance, alias_budget, span,
                                        (gbb_trace_record *)(void *)span, 1u, NULL, 0u);
     if (!span_alias_was_rejected("trace/span-descriptor", result, span, 4u, 0u,
-                                 events, saved_events, 4u)) ++failures;
+                                 events, saved_events, 4u)) ++alias_failures;
 
     result = gbb_accept_run_diagnostic(instance, alias_budget, span, NULL, 0u, partial_diagnostic, 1u);
     if (!span_alias_was_rejected("partial-diagnostic/events", result, span, 4u, 0u,
-                                 events, saved_events, 4u)) ++failures;
+                                 events, saved_events, 4u)) ++alias_failures;
     result = gbb_accept_run_diagnostic(instance, alias_budget, span, NULL, 0u,
                                        (gbb_diagnostic_record *)(void *)cursor, 1u);
     if (!span_alias_was_rejected("diagnostic/cursor", result, span, 4u, 0u,
-                                 events, saved_events, 4u)) ++failures;
+                                 events, saved_events, 4u)) ++alias_failures;
     result = gbb_accept_run_diagnostic(instance, alias_budget, span, NULL, 0u,
                                        (gbb_diagnostic_record *)(void *)span, 1u);
     if (!span_alias_was_rejected("diagnostic/span-descriptor", result, span, 4u, 0u,
-                                 events, saved_events, 4u)) ++failures;
+                                 events, saved_events, 4u)) ++alias_failures;
 
     gbb_audio_frame frames[GBB_ACCEPT_PCM_FRAMES];
     frame_count = 7u;
@@ -941,10 +962,11 @@ static int case_accept_input_span_output_alias(void) {
 
     gbb_destroy(instance);
     free(storage);
-    if (failures != 0) {
-        fprintf(stderr, "span-output alias rejected=%d/10\n", 10 - failures);
-        return 1;
+    if (alias_failures != 0) {
+        fprintf(stderr, "span-output alias rejected=%d/%d\n", SPAN_OUTPUT_ALIAS_CASES - alias_failures,
+                SPAN_OUTPUT_ALIAS_CASES);
     }
+    if (failures != 0 || alias_failures != 0) return 1;
     PASS("acceptance_input_span_output_alias");
 }
 
@@ -1118,6 +1140,83 @@ static int case_drive_stop_resume_main(void) {
     PASS("acceptance_drive_stop_resume_main");
 }
 
+/* IN-06: a rejected call with a count that is provably outside the span leaves the count 0, whichever check
+ * rejected it. Every sub-case uses a count disjoint from the span, so none of them depends on the
+ * span-aliasing carve-out (that is covered by acceptance_input_span_output_alias). */
+static int stale_count_check(const char *sub, gbb_run_result result, size_t count,
+                             const gbb_accept_input_span *span, size_t count_before,
+                             size_t cursor_before, const gbb_input_event *events,
+                             const gbb_input_event *saved_events) {
+    int ok = 1;
+    if (result.reason != GBB_STOP_INVALID_STATE || result.consumed_half_dots != 0u) {
+        fprintf(stderr, "frame-count-stale sub=%s result reason=%d consumed=%llu\n", sub,
+                (int)result.reason, (unsigned long long)result.consumed_half_dots);
+        ok = 0;
+    }
+    if (count != 0u) {
+        fprintf(stderr, "frame-count-stale sub=%s count=%zu\n", sub, count);
+        ok = 0;
+    }
+    if (span->count != count_before || *span->cursor != cursor_before ||
+        memcmp(events, saved_events, 4u * sizeof(*events)) != 0) {
+        fprintf(stderr, "span-mutated-on-reject sub=%s count=%zu cursor=%zu\n", sub, span->count,
+                *span->cursor);
+        ok = 0;
+    }
+    return ok;
+}
+
+static int case_accept_input_span_invalid_zeroes_count(void) {
+    const size_t storage_size = 4096u;
+    uint8_t *storage = malloc(storage_size);
+    REQUIRE(storage != NULL);
+    gbb_accept_input_span *span = (gbb_accept_input_span *)(void *)(storage + 128u);
+    size_t *cursor = (size_t *)(void *)(storage + 256u);
+    gbb_input_event *events = (gbb_input_event *)(void *)(storage + 1024u);
+    gbb_input_event saved_events[4];
+    for (size_t i = 0; i < 4u; ++i) {
+        events[i] = (gbb_input_event){8u, (i & 1u) == 0u ? GBB_INPUT_BUTTON_PRESS : GBB_INPUT_BUTTON_RELEASE,
+                                     GBB_BUTTON_A};
+    }
+    memcpy(saved_events, events, sizeof(saved_events));
+    *cursor = 0u;
+    *span = (gbb_accept_input_span){events, 4u, cursor};
+
+    uint8_t rom[32768];
+    static const uint8_t loop_program[] = {0x18,0xfe};
+    make_accept_test_rom(rom, loop_program, sizeof(loop_program));
+    gbb_instance *instance = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) == GBB_OK);
+    REQUIRE(gbb_load_rom(instance, rom, sizeof(rom)) == GBB_OK);
+    gbb_audio_frame *partial_frame = (gbb_audio_frame *)(void *)align_test_address(
+        (uintptr_t)(void *)(events + 1u) + offsetof(gbb_input_event, kind), _Alignof(gbb_audio_frame));
+    gbb_audio_frame frames[4];
+
+    int ok = 1;
+    size_t count = 7u;
+    gbb_run_result result = gbb_accept_run_audio(instance, 32u, span, partial_frame, 1u, &count);
+    ok &= stale_count_check("frames/events", result, count, span, 4u, 0u, events, saved_events);
+
+    count = 7u;
+    result = gbb_accept_run_audio(instance, 32u, span, (gbb_audio_frame *)(void *)span, 1u, &count);
+    ok &= stale_count_check("frames/span-descriptor", result, count, span, 4u, 0u, events, saved_events);
+
+    count = 7u;
+    result = gbb_accept_run_audio(instance, 32u, span, frames, SIZE_MAX, &count);
+    ok &= stale_count_check("frame-capacity-SIZE_MAX", result, count, span, 4u, 0u, events, saved_events);
+
+    count = 7u;
+    *cursor = 5u;
+    result = gbb_accept_run_audio(instance, 32u, span, frames, 4u, &count);
+    ok &= stale_count_check("span-invalid", result, count, span, 4u, 5u, events, saved_events);
+    *cursor = 0u;
+
+    gbb_destroy(instance);
+    free(storage);
+    if (!ok) return 1;
+    PASS("acceptance_input_span_invalid_zeroes_count");
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) { fprintf(stderr, "usage: test_acceptance_lib <case> [args]\n"); return 2; }
     if (strcmp(argv[1], "acceptance_lib_libbet_replay") == 0) {
@@ -1139,6 +1238,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "acceptance_input_span_output_alias") == 0) return case_accept_input_span_output_alias();
     if (strcmp(argv[1], "acceptance_replay_stop_resume_parity") == 0) return case_replay_stop_resume_parity();
     if (strcmp(argv[1], "acceptance_drive_stop_resume_main") == 0) return case_drive_stop_resume_main();
+    if (strcmp(argv[1], "acceptance_input_span_invalid_zeroes_count") == 0) return case_accept_input_span_invalid_zeroes_count();
     fprintf(stderr, "unknown case %s\n", argv[1]);
     return 2;
 }

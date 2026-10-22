@@ -3,6 +3,13 @@
 
 #include <string.h>
 
+/* The script loader may accept up to GBB_ACCEPT_SCRIPT_MAX_EVENTS events and the stepper lends them to the
+ * core as one span, which rejects more than GBB_ACCEPT_INPUT_SPAN_MAX_EVENTS. Tie the two limits so a
+ * script the loader accepts cannot become a run-time GBB_STOP_INVALID_STATE (IN-04). */
+_Static_assert(GBB_ACCEPT_SCRIPT_MAX_EVENTS <= GBB_ACCEPT_INPUT_SPAN_MAX_EVENTS,
+               "accept event limit link: a script the loader accepts must not become "
+               "GBB_STOP_INVALID_STATE at run time");
+
 /* Longest DMG instruction is 6 M-cycles = 48 half-dots. A zero-consume call
  * with no more than this remaining cannot start another instruction. */
 #define MAX_INSTRUCTION_HALF_DOTS UINT64_C(48)

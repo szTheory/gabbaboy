@@ -211,7 +211,8 @@ set_tests_properties(acceptance_dense_input_controls PROPERTIES TIMEOUT 600 COST
 foreach(gbb_span_case acceptance_drive_dense_queue acceptance_drive_batch_order
     acceptance_drive_stop_guard_failure acceptance_input_span_edges
     acceptance_drive_stop_wake_deadline acceptance_input_span_output_alias
-    acceptance_replay_stop_resume_parity acceptance_drive_stop_resume_main)
+    acceptance_replay_stop_resume_parity acceptance_drive_stop_resume_main
+    acceptance_input_span_invalid_zeroes_count)
   add_test(NAME ${gbb_span_case} COMMAND test_acceptance_lib ${gbb_span_case})
   set_tests_properties(${gbb_span_case} PROPERTIES TIMEOUT 60 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     PASS_REGULAR_EXPRESSION "PASS ${gbb_span_case}")
@@ -296,13 +297,15 @@ gbb_span_mutant_test(test_events_mutant_wake_all_budget
   event_stop_wake "r[.]reason == GBB_STOP_NO_PROGRESS" event_boundary
   gabbaboy_core_span_mutant_wake_all_budget ".*")
 # 929ce2e: borrowed-span outputs must not overlap the span, its events or its cursor. Treating every
-# non-null output as disjoint removes the check, and the 10 aliasing calls are then all accepted.
+# non-null output as disjoint removes the check. The 12 aliasing calls are then no longer all rejected; the count
+# aliases stay rejected by the validation-independent count pre-check, so the printed total only has to match
+# "rejected=N/12" (the denominator is SPAN_OUTPUT_ALIAS_CASES in tests/test_acceptance_lib.c).
 gbb_span_core_mutant(output_alias "    if (span == NULL) return 1;"
   "    if (span == NULL || output != NULL) return 1;")
 gbb_span_mutant_test(test_acceptance_lib_mutant_output_alias
   ${CMAKE_CURRENT_LIST_DIR}/../test_acceptance_lib.c TRUE
   acceptance_drive_mutant_output_alias acceptance_drive_mutant_output_alias_control
-  acceptance_input_span_output_alias "span-output alias rejected=[0-9]/10" acceptance_input_span_edges
+  acceptance_input_span_output_alias "span-output alias rejected=[0-9]+/12" acceptance_input_span_edges
   gabbaboy_core_span_mutant_output_alias "PASS acceptance_input_span_edges")
 # WR-03: the diagnostic replay and the main stepper share gbb_accept_stop_resumable. The mutant is the real
 # stepper.c with exactly one anchored edit: the replay-side STOPPED decision inside gbb_accept_diag_advance is
@@ -346,6 +349,78 @@ gbb_span_mutant_test(test_acceptance_lib_mutant_replay_stop_resume
   acceptance_replay_stop_resume_parity "replay-stop-parity" acceptance_drive_stop_resume_main
   gabbaboy_accept_bare_stepper_mutant_replay_stop_resume "PASS acceptance_drive_stop_resume_main")
 
+# IN-04: GBB_ACCEPT_SCRIPT_MAX_EVENTS must not exceed GBB_ACCEPT_INPUT_SPAN_MAX_EVENTS. stepper.c carries the
+# _Static_assert. Two scratch trees hold private copies of stepper.c, gbb_accept.h and gbb_accept_input.h in
+# accept/ and core/ so the relative include resolves inside each tree; only the violation tree raises the
+# script limit to 16385u. Both libraries are EXCLUDE_FROM_ALL and built by a CTest, so the normal build never
+# compiles the violating copy (same precedent as cgb_adr_half_dot_static_assert_mutant).
+set(GBB_LIMIT_LINK_DEFINE "#define GBB_ACCEPT_SCRIPT_MAX_EVENTS 16384u")
+set(GBB_LIMIT_LINK_SOURCES
+  "${PROJECT_SOURCE_DIR}/src/accept/stepper.c"
+  "${PROJECT_SOURCE_DIR}/src/accept/gbb_accept.h"
+  "${PROJECT_SOURCE_DIR}/src/core/gbb_accept_input.h")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GBB_LIMIT_LINK_SOURCES})
+file(READ "${PROJECT_SOURCE_DIR}/src/accept/gbb_accept.h" gbb_limit_link_header)
+string(FIND "${gbb_limit_link_header}" "${GBB_LIMIT_LINK_DEFINE}" gbb_limit_first)
+string(FIND "${gbb_limit_link_header}" "${GBB_LIMIT_LINK_DEFINE}" gbb_limit_last REVERSE)
+if(gbb_limit_first EQUAL -1 OR NOT gbb_limit_first EQUAL gbb_limit_last)
+  message(FATAL_ERROR "limit-link define '${GBB_LIMIT_LINK_DEFINE}' must occur exactly once in src/accept/gbb_accept.h "
+    "(first=${gbb_limit_first} last=${gbb_limit_last})")
+endif()
+string(REPLACE "${GBB_LIMIT_LINK_DEFINE}" "#define GBB_ACCEPT_SCRIPT_MAX_EVENTS 16385u"
+  gbb_limit_link_violating_header "${gbb_limit_link_header}")
+foreach(gbb_limit_tree limit-link-probe limit-link-violation)
+  set(gbb_limit_dir "${CMAKE_CURRENT_BINARY_DIR}/${gbb_limit_tree}")
+  configure_file("${PROJECT_SOURCE_DIR}/src/accept/stepper.c" "${gbb_limit_dir}/accept/stepper.c" COPYONLY)
+  configure_file("${PROJECT_SOURCE_DIR}/src/core/gbb_accept_input.h" "${gbb_limit_dir}/core/gbb_accept_input.h" COPYONLY)
+endforeach()
+configure_file("${PROJECT_SOURCE_DIR}/src/accept/gbb_accept.h"
+  "${CMAKE_CURRENT_BINARY_DIR}/limit-link-probe/accept/gbb_accept.h" COPYONLY)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/limit-link-violation/accept/gbb_accept.h" "${gbb_limit_link_violating_header}")
+foreach(gbb_limit_pair "probe|limit-link-probe" "violation|limit-link-violation")
+  string(REPLACE "|" ";" gbb_limit_parts "${gbb_limit_pair}")
+  list(GET gbb_limit_parts 0 gbb_limit_name)
+  list(GET gbb_limit_parts 1 gbb_limit_tree)
+  add_library(gabbaboy_accept_limit_link_${gbb_limit_name} STATIC EXCLUDE_FROM_ALL
+    "${CMAKE_CURRENT_BINARY_DIR}/${gbb_limit_tree}/accept/stepper.c")
+  target_include_directories(gabbaboy_accept_limit_link_${gbb_limit_name}
+    PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/${gbb_limit_tree}/accept" "${PROJECT_SOURCE_DIR}/include")
+  target_compile_features(gabbaboy_accept_limit_link_${gbb_limit_name} PUBLIC c_std_17)
+  set_target_properties(gabbaboy_accept_limit_link_${gbb_limit_name} PROPERTIES C_EXTENSIONS OFF)
+endforeach()
+add_test(NAME accept_event_limit_link_violation
+  COMMAND ${CMAKE_COMMAND} --build ${PROJECT_BINARY_DIR} --target gabbaboy_accept_limit_link_violation)
+set_tests_properties(accept_event_limit_link_violation PROPERTIES
+  PASS_REGULAR_EXPRESSION "accept event limit link:" TIMEOUT 180 RESOURCE_LOCK gbb_build_tree)
+add_test(NAME accept_event_limit_link_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};--build;${PROJECT_BINARY_DIR};--target;gabbaboy_accept_limit_link_probe"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=."
+    "-DGBB_FORBID_REGEX=accept event limit link:"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(accept_event_limit_link_control PROPERTIES TIMEOUT 180 RESOURCE_LOCK gbb_build_tree)
+
+# IN-06: the count is zeroed once it is proven outside the span, ahead of every later rejection. Moving the
+# zeroing back below the span block (the pre-fix order) leaves a stale count on span-validation, capacity and
+# frame-overlap rejections; the control proves the mutant core otherwise still runs.
+set(GBB_STALE_COUNT_ANCHOR "    *out_frame_count = 0u;\n    if (span != NULL) {\n        if (!validate_accept_input_span(instance, span) ||\n            frame_capacity > SIZE_MAX / sizeof(*frames)) return invalid;\n        const size_t frame_bytes = frame_capacity * sizeof(*frames);\n        if (!accept_span_output_is_disjoint(span, frames, frame_bytes) ||\n            !accept_span_output_is_disjoint(span, out_frame_count, sizeof(*out_frame_count)))\n            return invalid;\n    }\n")
+set(GBB_STALE_COUNT_REPLACEMENT "    if (span != NULL) {\n        if (!validate_accept_input_span(instance, span) ||\n            frame_capacity > SIZE_MAX / sizeof(*frames)) return invalid;\n        const size_t frame_bytes = frame_capacity * sizeof(*frames);\n        if (!accept_span_output_is_disjoint(span, frames, frame_bytes) ||\n            !accept_span_output_is_disjoint(span, out_frame_count, sizeof(*out_frame_count)))\n            return invalid;\n    }\n    *out_frame_count = 0u;\n")
+gbb_span_core_mutant(stale_frame_count "${GBB_STALE_COUNT_ANCHOR}" "${GBB_STALE_COUNT_REPLACEMENT}")
+gbb_span_mutant_test(test_acceptance_lib_mutant_stale_frame_count
+  ${CMAKE_CURRENT_LIST_DIR}/../test_acceptance_lib.c TRUE
+  acceptance_drive_mutant_stale_frame_count acceptance_drive_mutant_stale_frame_count_control
+  acceptance_input_span_invalid_zeroes_count "frame-count-stale" acceptance_input_span_edges
+  gabbaboy_core_span_mutant_stale_frame_count "PASS acceptance_input_span_edges")
+# Writing the count directly after the NULL check, ahead of the span-range check, rewrites caller input when the
+# count aliases the cursor, the span descriptor or the events. The control (disjoint counts only) still passes.
+gbb_span_core_mutant(count_write_before_disjoint "    if (out_frame_count == NULL) return invalid;\n"
+  "    if (out_frame_count == NULL) return invalid;\n    *out_frame_count = 0u;\n")
+gbb_span_mutant_test(test_acceptance_lib_mutant_count_write_before_disjoint
+  ${CMAKE_CURRENT_LIST_DIR}/../test_acceptance_lib.c TRUE
+  acceptance_drive_mutant_count_write_before_disjoint acceptance_drive_mutant_count_write_before_disjoint_control
+  acceptance_input_span_output_alias "span-output alias=frame-count/" acceptance_input_span_invalid_zeroes_count
+  gabbaboy_core_span_mutant_count_write_before_disjoint "PASS acceptance_input_span_invalid_zeroes_count")
 gbb_add_acceptance_exit(acceptance_suite_invalid_expect_excluded 2
   "reason=invalid-expect-excluded" 30
   "--acceptance;${GBB_CASES};--suite;--expect-excluded;x1")
