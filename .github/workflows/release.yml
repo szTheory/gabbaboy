@@ -726,13 +726,14 @@ jobs:
     permissions:
       contents: write
     env:
-      GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       RELEASE_TAG: ${{ inputs.retry && inputs.tag_name || needs.release.outputs.tag_name }}
       SOURCE_SHA: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
       RELEASE_ID: ${{ inputs.retry && inputs.release_id || '' }}
     steps:
       - name: Require trusted candidate identity and unpublished matching draft
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -749,6 +750,7 @@ jobs:
         with:
           ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 0
+          persist-credentials: false
       - name: Verify checked out source version
         shell: bash
         run: |
@@ -756,6 +758,8 @@ jobs:
           source_version=$(sed -nE 's/^project\(GabbaBoy VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt | head -n1)
           [[ "$source_version" == "${RELEASE_TAG#v}" ]] || exit 1
       - name: Select an existing Windows archive or a clean build
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -825,6 +829,8 @@ jobs:
           PY
       - name: Attach Windows bytes to the unpublished draft
         if: env.REUSE_WINDOWS_CANDIDATE != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -842,7 +848,9 @@ jobs:
               gh release upload "$RELEASE_TAG" "$file" --repo "$GH_REPO"
             fi
           done
-      - name: Download and qualify Windows release archive using the existing native consumer lane
+      - name: Download the attached Windows archive and digest sidecar
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -850,6 +858,17 @@ jobs:
           [[ $(jq -r .draft <<<"$current") == true && $(jq -r .tag_name <<<"$current") == "$RELEASE_TAG" ]] || exit 1
           mkdir -p build/downloaded build/consumer-work
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-windows-x64.tar.gz --pattern gabbaboy-core-windows-x64.tar.gz.sha256 --dir build/downloaded
+      - name: Overlay the trusted release-candidate verifiers from the workflow commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The tagged tree is data here: run the workflow commit's copies of the verifiers that judge the downloaded bytes.
+          git show "${GITHUB_SHA}:tests/scripts/verify-release-candidate.sh" > tests/scripts/verify-release-candidate.sh
+          git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py
+      - name: Qualify Windows release archive using the existing native consumer lane
+        shell: bash
+        run: |
+          set -euo pipefail
           git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > build/verify-release-gates.sh
           bash build/verify-release-gates.sh --check-digest-sidecar \
             build/downloaded/gabbaboy-core-windows-x64.tar.gz.sha256 \

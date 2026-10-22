@@ -707,6 +707,47 @@ def _check_no_subject_execution(workflow: str, job_id: str, job: dict) -> None:
                     raise Reject("subject-judge-execution", f"{_where(workflow, job_id)} runs {script!r}, which is not trusted judge code")
 
 
+# A run body that builds or runs code from the tagged workspace: a build tool as a command, or a tests/scripts path.
+SUBJECT_EXECUTION = re.compile(r"(?m)(?:^|[\s;&|(])(?:cmake|ctest|make|ninja)\s|(?:^|[\s\"'=])(?:\./)?tests/scripts/")
+_TOKEN_NAMES = ("GH_TOKEN", "GITHUB_TOKEN")
+
+
+def _names_token(env) -> bool:
+    return isinstance(env, dict) and any(key in _TOKEN_NAMES or _TOKEN.search(str(value)) for key, value in env.items())
+
+
+def _check_token_scope(workflow: str, job_id: str, job: dict) -> None:
+    """A job that runs tagged-tree code must not hold the write token job-wide; only gh steps may carry it."""
+    if _names_token(job.get("env", {})):
+        raise Reject("token-scope", f"{_where(workflow, job_id)} declares GH_TOKEN or GITHUB_TOKEN at job level; scope it to the gh steps")
+
+
+def _check_token_subject_execution(workflow: str, job_id: str, job: dict, job_wide: bool = False) -> None:
+    """No step that holds the token (its own env, or every step when the job holds it) builds or runs tagged code."""
+    for step in job.get("steps", []):
+        if (job_wide or _names_token(step.get("env", {}))) and SUBJECT_EXECUTION.search(step.get("run", "")):
+            raise Reject("token-subject-execution", f"{_where(workflow, job_id)} step {step.get('name', '?')!r} holds the token and runs build or tagged-script commands")
+
+
+def _check_trusted_overlay(workflow: str, job_id: str, job: dict, paths: tuple[str, ...]) -> None:
+    """Each tagged-tree verifier in `paths` is replaced by the workflow commit's copy in an earlier, unconditional,
+    fatal step than the first step that invokes any of them. verify-release-candidate.sh runs the others, so
+    calling it counts as first use of every path."""
+    overlay_at = {}
+    for path in paths:
+        try:
+            overlay_at[path] = require_call(workflow, job_id, job, f'git show "${{GITHUB_SHA}}:{path}"')[0]
+        except Reject:
+            raise Reject("trusted-verifier-overlay", f"{_where(workflow, job_id)} must overlay {path} from GITHUB_SHA in an unconditional step") from None
+    for number, step in enumerate(job.get("steps", [])):
+        used = {path for event in _step_events(step) for word in event.words for path in paths if word in (path, "./" + path)}
+        if "tests/scripts/verify-release-candidate.sh" in used:
+            used = set(paths)
+        late = sorted(path for path in used if overlay_at[path] >= number)
+        if late:
+            raise Reject("trusted-verifier-overlay", f"{_where(workflow, job_id)} step {step.get('name', '?')!r} runs {late[0]} before the trusted overlay")
+
+
 # --------------------------------------------------------------------------- policy
 REHEARSAL_PRODUCERS = ("corpus", "fuzz", "performance", "package", "aggregate")
 REHEARSAL_FUZZ_ARTIFACT = "rehearsal-fuzz-${{ github.run_id }}-${{ github.run_attempt }}"
@@ -724,6 +765,11 @@ RELEASE_ROLES = {
     "candidate-performance": "producer",
     "candidate-fuzz": "trusted-reader",
     "attach-v02-evidence": "attacher",
+}
+# Residual jobs that build or run tagged-tree code while holding contents: write. The overlay paths are the
+# tagged-tree verifiers each one must replace with the workflow commit's copy before first use.
+TRUSTED_OVERLAYS = {
+    "candidate-windows": ("tests/scripts/verify-release-candidate.sh", "tests/scripts/verify-v02-consumers.py"),
 }
 RELEASE_ARTIFACTS = {
     "candidate-corpus": ("release-evidence-corpus", ("build/cgb-corpus-receipt.json", "build/support-ledger.json")),
@@ -1018,6 +1064,11 @@ def check_release(root: Path) -> None:
             _require_needs(name, job_id, job, {"release", "candidate"}, "workflow-dependency")
             artifact, files = RELEASE_ARTIFACTS[job_id]
             _upload(job, name, job_id, artifact, files)
+        elif role == "residual" and job_id in TRUSTED_OVERLAYS:
+            _check_checkout_credentials(name, tree, (job_id,))
+            _check_token_subject_execution(name, job_id, job)
+            _check_token_scope(name, job_id, job)
+            _check_trusted_overlay(name, job_id, job, TRUSTED_OVERLAYS[job_id])
         elif role == "attacher":
             if perms != {"contents": "write"}:
                 raise Reject("attacher-permissions", f"{_where(name, job_id)} must hold exactly contents: write")
@@ -1028,7 +1079,7 @@ def check_release(root: Path) -> None:
                 _download(job, name, job_id, RELEASE_ARTIFACTS[producer][0])
                 if f"needs.{producer}.result == 'success'" not in str(job.get("if", "")):
                     raise Reject("attacher-dependencies", f"{_where(name, job_id)} must run only after {producer} succeeded")
-            if any(re.search(r"(?m)(?:^|[\s;&|(])(?:cmake|ctest|make|ninja)\s|(?:^|[\s\"'=])(?:\./)?tests/scripts/", step.get("run", "")) for step in job.get("steps", [])):
+            if any(SUBJECT_EXECUTION.search(step.get("run", "")) for step in job.get("steps", [])):
                 raise Reject("attacher-subject-execution", f"{_where(name, job_id)} must execute trusted code only")
     _require_needs(name, "candidate-platform-manifest", jobs["candidate-platform-manifest"], {"attach-v02-evidence"}, "workflow-dependency")
     _require_needs(name, "publish-qualified-release", jobs["publish-qualified-release"], {"candidate-platform-manifest"}, "workflow-dependency")
@@ -1280,6 +1331,24 @@ def _mutations():
         _m("macos downloaded player smoke commented out", "release.yml", "  candidate-macos:\n",
            'GBB_VERIFIED_OUTPUT_DIR="$RUNNER_TEMP/release-player-downloaded" bash',
            '# GBB_VERIFIED_OUTPUT_DIR="$RUNNER_TEMP/release-player-downloaded" bash', "required-command-not-executed"),
+        # Residual write jobs: no persisted credential, no job-wide token, trusted verifier overlay (WR-01).
+        _m("windows residual checkout persists credentials", rel, "  candidate-windows:\n", "persist-credentials: false",
+           "persist-credentials: true", "checkout-credentials"),
+        _m("windows residual job env holds the write token", rel, "  candidate-windows:\n", "    env:\n",
+           "    env:\n      GH_TOKEN: ${{ github.token }}\n", "token-scope"),
+        _m("windows residual build step holds the write token", rel, "  candidate-windows:\n",
+           "      - name: Build and package Windows x64 core once\n        if: env.REUSE_WINDOWS_CANDIDATE != 'true'\n",
+           "      - name: Build and package Windows x64 core once\n        if: env.REUSE_WINDOWS_CANDIDATE != 'true'\n        env:\n          GH_TOKEN: ${{ github.token }}\n",
+           "token-subject-execution"),
+        _m("windows residual trusted verifier overlay removed", rel, "  candidate-windows:\n",
+           'git show "${GITHUB_SHA}:tests/scripts/verify-release-candidate.sh" > tests/scripts/verify-release-candidate.sh',
+           "true", "trusted-verifier-overlay"),
+        ("windows residual overlay runs only in the step that first uses the verifier", rel, [
+            ("  candidate-windows:\n", 'git show "${GITHUB_SHA}:tests/scripts/verify-release-candidate.sh" > tests/scripts/verify-release-candidate.sh', "true"),
+            ("  candidate-windows:\n", 'git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py', "true"),
+            ("  candidate-windows:\n", "bash tests/scripts/verify-release-candidate.sh --extract",
+             'git show "${GITHUB_SHA}:tests/scripts/verify-release-candidate.sh" > tests/scripts/verify-release-candidate.sh\n{I}git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py\n{I}bash tests/scripts/verify-release-candidate.sh --extract')],
+         "trusted-verifier-overlay"),
         _m("ci campaign status no longer asserted", "ci.yml", "  linux-sanitizers:\n", 'test "$verify_status" -eq 0', 'echo test "$verify_status" -eq 0', "required-command-not-executed"),
         _m("ci campaign verifier removed", "ci.yml", "  linux-sanitizers:\n", "python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json\n            verify_status=$?",
            "true\n            verify_status=$?", "required-command-not-executed"),
