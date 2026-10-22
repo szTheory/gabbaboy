@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import errno
 import hashlib
+import io
 import json
 import os
 import pathlib
@@ -40,6 +41,14 @@ TIMEOUT_SCALE = 5 if os.environ.get("GBB_SANITIZER_LINK_OPTIONS") else 1
 COMMAND_TIMEOUT_SECONDS = 90 * TIMEOUT_SCALE
 TEST_PAUSE_ENV = "GABBABOY_V02_TEST_INSTALL_PAUSE"
 TEST_EXTRACT_PAUSE_ENV = "GABBABOY_V02_TEST_EXTRACT_PAUSE"
+# The release job extracts untrusted archives on windows-2022. There a backslash is a path separator, a
+# colon in a component can select an alternate data stream or another volume, and these names are device
+# files whatever their extension, so all of them must be refused before anything is created.
+WINDOWS_RESERVED_NAMES = frozenset(
+    ["CON", "PRN", "AUX", "NUL"]
+    + [f"COM{index}" for index in range(1, 10)]
+    + [f"LPT{index}" for index in range(1, 10)]
+)
 _ACTIVE_PROCESSES: list[subprocess.Popen[str]] = []
 
 
@@ -282,6 +291,17 @@ def read_candidate_manifest(path: Path) -> tuple[dict[str, object], str]:
     return manifest, hashlib.sha256(content).hexdigest()
 
 
+def windows_unsafe_member(raw_name: str, parts: tuple[str, ...]) -> bool:
+    if "\\" in raw_name:
+        return True
+    for part in parts:
+        if ":" in part or part.endswith((".", " ")):
+            return True
+        if part.split(".", 1)[0].rstrip(" ").upper() in WINDOWS_RESERVED_NAMES:
+            return True
+    return False
+
+
 def safe_extract_archive(archive: Path, destination: Path) -> Path:
     need(not destination.exists() and not destination.is_symlink(), "extract-destination-exists")
     need(archive.is_file() and not archive.is_symlink(), "archive-file-invalid")
@@ -303,7 +323,7 @@ def safe_extract_archive(archive: Path, destination: Path) -> Path:
                 name = pathlib.PurePosixPath(member.name)
                 parts = tuple(part for part in name.parts if part not in ("", "."))
                 need(not name.is_absolute() and bool(parts) and ".." not in parts and
-                     not parts[0].endswith(":"), "archive-path-unsafe")
+                     not windows_unsafe_member(member.name, parts), "archive-path-unsafe")
                 normalized = "/".join(parts)
                 need(normalized not in seen, "archive-duplicate-path")
                 seen.add(normalized)
@@ -1093,6 +1113,65 @@ class ConsumerContractTests(unittest.TestCase):
         lock.write_text(json.dumps({"pid": os.getpid(), "token": "held-by-test"}), encoding="utf-8")
         result = self.run_cli([*self.candidate_args(self.prefix), "--output", str(output)])
         self.assert_rejected(result, "output-owned", output)
+
+    def extract_cli(self, archive: Path, destination: Path) -> subprocess.CompletedProcess[str]:
+        return self.run_cli(["--extract", str(archive), str(destination)])
+
+    def test_extract_rejects_windows_unsafe_members(self) -> None:
+        cases = {
+            "backslash-traversal": "..\\..\\evil.txt",
+            "backslash-plain": "a\\b",
+            "colon-nested": "x/D:evil",
+            "reserved-con": "share/CON",
+            "reserved-nul-ext": "share/nul.txt",
+            "reserved-lpt": "share/LPT1",
+            "trailing-dot": "share/name.",
+        }
+        work = self.test_root / "windows-unsafe-members"
+        work.mkdir()
+        for label, member_name in cases.items():
+            with self.subTest(label):
+                archive = work / f"{label}.tar.gz"
+                payload = b"hostile\n"
+                with tarfile.open(archive, "w:gz") as bundle:
+                    info = tarfile.TarInfo("ok/file.txt")
+                    info.size = len(payload)
+                    bundle.addfile(info, io.BytesIO(payload))
+                    hostile = tarfile.TarInfo(member_name)
+                    hostile.size = len(payload)
+                    bundle.addfile(hostile, io.BytesIO(payload))
+                destination = work / f"{label}-dest"
+                result = self.extract_cli(archive, destination)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("rejected:archive-path-unsafe", result.stderr)
+                self.assertFalse(destination.exists(), "a rejected archive must not leave a destination")
+
+    def test_extract_accepts_nested_directories(self) -> None:
+        archive = self.test_root / "nested-ok.tar.gz"
+        payload = b"fine\n"
+        with tarfile.open(archive, "w:gz") as bundle:
+            directory = tarfile.TarInfo("top/inner")
+            directory.type = tarfile.DIRTYPE
+            bundle.addfile(directory)
+            info = tarfile.TarInfo("top/inner/file.txt")
+            info.size = len(payload)
+            bundle.addfile(info, io.BytesIO(payload))
+        destination = self.test_root / "nested-ok-dest"
+        result = self.extract_cli(archive, destination)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((destination / "top/inner/file.txt").read_bytes(), payload)
+
+    def test_extract_rejects_existing_destination(self) -> None:
+        destination = self.test_root / "idempotent-dest"
+        first = self.extract_cli(self.archive, destination)
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        listing = sorted(str(path.relative_to(destination)) for path in destination.rglob("*"))
+        self.assertTrue(listing)
+        second = self.extract_cli(self.archive, destination)
+        self.assertEqual(second.returncode, 1, second.stdout + second.stderr)
+        self.assertIn("rejected:extract-destination-exists", second.stderr)
+        after = sorted(str(path.relative_to(destination)) for path in destination.rglob("*"))
+        self.assertEqual(listing, after)
 
     @unittest.skipIf(os.name == "nt", "Process.terminate() on Windows kills the child without delivering a signal, so the "
                                      "interrupt cleanup path cannot be exercised there; it runs on the POSIX evidence runners")
