@@ -278,11 +278,13 @@ jobs:
           fi
       - name: Configure and build cache-free release core
         if: env.CANDIDATE_REUSED != 'true'
+        env:
+          RELEASE_VERSION_OUT: ${{ steps.identity.outputs.version }}
         run: |
           set -euo pipefail
           cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DGABBABOY_BUILD_PLAYER=OFF
           source_version=$(sed -nE 's/^project\(GabbaBoy VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt | head -n 1)
-          [[ "$source_version" == "${{ steps.identity.outputs.version }}" ]] || {
+          [[ "$source_version" == "$RELEASE_VERSION_OUT" ]] || {
             echo "CMake PROJECT_VERSION does not match the release tag." >&2
             exit 1
           }
@@ -352,7 +354,7 @@ jobs:
           else
             gh release upload "$RELEASE_TAG" build/build-receipt.json --repo "$GH_REPO"
           fi
-          assets=$(gh api "repos/$GH_REPO/releases/${{ steps.identity.outputs.release_id }}/assets?per_page=100")
+          assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
           count=$(jq '[.[] | select(.name == "gabbaboy-core-linux-x64.tar.gz")] | length' <<<"$assets")
           [[ "$count" -le 1 ]] || { echo "Draft has duplicate core archive assets." >&2; exit 1; }
           if [[ "$count" == 1 ]]; then
@@ -1015,16 +1017,20 @@ jobs:
       - name: Run the full CTest stream once
         id: full_ctest
         continue-on-error: true
-        run: ctest --test-dir build -T Test --no-compress-output --test-output-size-passed 16777216 --output-on-failure --no-tests=error --output-junit "cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml"
+        env:
+          RUN_NONCE: ${{ steps.corpus_run.outputs.run_nonce }}
+        run: ctest --test-dir build -T Test --no-compress-output --test-output-size-passed 16777216 --output-on-failure --no-tests=error --output-junit "cgb-corpus-ctest-${RUN_NONCE}.xml"
       - name: Build the CGB receipt from this CTest output
         run: python3 -I tests/scripts/verify-cgb-corpus-report.py --from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json
       - name: Verify public CGB claims, the current support ledger and the required test inventory
         shell: bash
+        env:
+          RUN_NONCE: ${{ steps.corpus_run.outputs.run_nonce }}
         run: |
           set -euo pipefail
           python3 -I tests/scripts/verify-cgb-corpus-claims.py --receipt build/cgb-corpus-receipt.json
           python3 -I tests/scripts/verify-support-ledger.py --check-current --receipt build/cgb-corpus-receipt.json
-          bash .github/scripts/verify-test-inventory.sh "build/cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml" tests/expected-tests.txt --installed
+          bash .github/scripts/verify-test-inventory.sh "build/cgb-corpus-ctest-${RUN_NONCE}.xml" tests/expected-tests.txt --installed
       - name: Require the full CTest run to pass
         env:
           FULL_CTEST_OUTCOME: ${{ steps.full_ctest.outcome }}

@@ -223,6 +223,22 @@ def _check_actions(workflow: str, tree: dict) -> None:
             raise Reject("workflow-unpinned-action", f"{_where(workflow, job_id)} calls an unpinned reusable workflow")
 
 
+# A run body is shell text; an expression spliced into it bypasses shell quoting (IN-07). These three are
+# workflow-controlled, fixed-shape values and the only ones a run body may interpolate; every step output,
+# input or event field has to arrive through step-level env instead.
+RUN_EXPRESSION_ALLOWED = ("github.run_id", "github.run_attempt", "github.sha")
+_EXPRESSION = re.compile(r"\$\{\{(.*?)\}\}", re.S)
+
+
+def _check_run_expressions(workflow: str, tree: dict) -> None:
+    for job_id, job in tree["jobs"].items():
+        for step in job.get("steps", []):
+            for expression in _EXPRESSION.findall(str(step.get("run", ""))):
+                if expression.strip() not in RUN_EXPRESSION_ALLOWED:
+                    raise Reject("run-expression", f"{_where(workflow, job_id)} step {step.get('name', '?')!r} interpolates "
+                                 f"${{{{ {expression.strip()} }}}} into a run body; pass it through step-level env")
+
+
 def _check_checkout_credentials(workflow: str, tree: dict, job_ids) -> None:
     for job_id in job_ids:
         for step in _checkouts(tree["jobs"][job_id]):
@@ -1072,6 +1088,7 @@ def check_release(root: Path) -> None:
     _check_disabled(name, tree)
     _check_bounded_downloads(name, tree)
     _check_ignored_failures(name, tree)
+    _check_run_expressions(name, tree)
     jobs = tree["jobs"]
     for job_id in jobs:
         if job_id not in RELEASE_ROLES:
@@ -1390,7 +1407,7 @@ def _mutations():
         _m("candidate residual job env holds the write token", rel, "  candidate:\n", "    env:\n",
            "    env:\n      GH_TOKEN: ${{ github.token }}\n", "token-scope"),
         _m("candidate residual cache-free build step holds the write token", rel, "  candidate:\n",
-           "      - name: Configure and build cache-free release core\n        if: env.CANDIDATE_REUSED != 'true'\n",
+           "      - name: Configure and build cache-free release core\n        if: env.CANDIDATE_REUSED != 'true'\n        env:\n",
            "      - name: Configure and build cache-free release core\n        if: env.CANDIDATE_REUSED != 'true'\n        env:\n          GH_TOKEN: ${{ github.token }}\n",
            "token-subject-execution"),
         _m("candidate residual tokened step runs the consumer verifier", rel, "  candidate:\n",
@@ -1422,6 +1439,10 @@ def _mutations():
            "token-subject-execution"),
         _m("platform manifest checkout persists credentials", rel, "  candidate-platform-manifest:\n", "persist-credentials: false",
            "persist-credentials: true", "checkout-credentials"),
+        _m("release source-version comparison interpolates a step output into its run body", "release.yml",
+           "Configure and build cache-free release core", '"$RELEASE_VERSION_OUT" ]]', '"${{ steps.identity.outputs.version }}" ]]', "run-expression"),
+        _m("release ctest step interpolates the run nonce into its run body", "release.yml",
+           "Run the full CTest stream once", '${RUN_NONCE}.xml"', '${{ steps.corpus_run.outputs.run_nonce }}.xml"', "run-expression"),
         _m("ci campaign status no longer asserted", "ci.yml", "  linux-sanitizers:\n", 'test "$verify_status" -eq 0', 'echo test "$verify_status" -eq 0', "required-command-not-executed"),
         _m("ci campaign verifier removed", "ci.yml", "  linux-sanitizers:\n", "python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json\n            verify_status=$?",
            "true\n            verify_status=$?", "required-command-not-executed"),
