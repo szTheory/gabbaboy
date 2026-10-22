@@ -534,7 +534,7 @@ Plans:
   3. Canonical UAT and strict coverage pass; relevant DMG baseline and exact-head remote checks pass before merge.
   4. Re-audit is the next stage after this phase; no automatic archive, tag, publication or v0.3 start.
 
-**Plans:** 19/19 plans executed
+**Plans:** 27 plans (19/19 original executed; 8 gap-closure plans 15.1-20..27 pending after verification gaps_found)
 
 Plans:
 **Wave 1**
@@ -569,6 +569,28 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 - [x] 15.1-17-PLAN.md — Close every debt disposition under independent exact-head review
+
+**Gap closure** *(from 15.1-VERIFICATION.md gaps_found and 15.1-REVIEW.md WR-01..WR-07, IN-01..IN-08)*
+
+**Gap Wave 1**
+- [ ] 15.1-20-PLAN.md — Share one STOP-resume rule between stepper and diagnostic replay (WR-03, IN-04, IN-06)
+- [ ] 15.1-22-PLAN.md — Scope release-job tokens, drop persisted credentials, forbid run-body expressions (WR-01, IN-07, IN-08)
+
+**Gap Wave 2** *(blocked on Gap Wave 1)*
+- [ ] 15.1-21-PLAN.md — Reject Windows-unsafe archive members and fail-closed UAT closure under -O (WR-02, WR-05)
+- [ ] 15.1-23-PLAN.md — Ancestor-bound fuzz retry, restricted job-id token, bounded wait, drop dead review input (WR-04, WR-07, IN-03)
+
+**Gap Wave 3** *(blocked on Gap Wave 2)*
+- [ ] 15.1-24-PLAN.md — Replace textual release gates with parsed and executable controls (WR-06, IN-01, IN-02, IN-05, IN-08)
+
+**Gap Wave 4** *(blocked on Gap Wave 3)*
+- [ ] 15.1-25-PLAN.md — Full gate, exact-head gap PR and squash merge with delivery receipt
+
+**Gap Wave 5** *(blocked on Gap Wave 4)*
+- [ ] 15.1-26-PLAN.md — Refresh local and hosted evidence at the merge commit; strict-head historical check
+
+**Gap Wave 6** *(blocked on Gap Wave 5)*
+- [ ] 15.1-27-PLAN.md — Close review dispositions, persist route /gsd-verify-work 15.1, docs PR, stop
 
 **Cross-cutting constraints:**
 - Historical behavioral and producer claims are preserved while strict coverage representation is machine-readable.
