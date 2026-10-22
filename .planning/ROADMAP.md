@@ -534,7 +534,7 @@ Plans:
   3. Canonical UAT and strict coverage pass; relevant DMG baseline and exact-head remote checks pass before merge.
   4. Re-audit is the next stage after this phase; no automatic archive, tag, publication or v0.3 start.
 
-**Plans:** 24/30 plans executed (19/19 original executed; 11 gap-closure plans 15.1-20..30 pending after verification gaps_found)
+**Plans:** 25/30 plans executed (19/19 original executed; 11 gap-closure plans 15.1-20..30 pending after verification gaps_found)
 
 Plans:
 **Wave 1**
@@ -582,7 +582,7 @@ Plans:
 - [x] 15.1-28-PLAN.md — Forbid run-body expressions and persisted read-only checkout credentials (IN-07, IN-08)
 
 **Gap Wave 3** *(blocked on Gap Wave 2)*
-- [ ] 15.1-23-PLAN.md — Boundary-commit-bound fuzz retry, restricted job-id token, bounded wait, drop dead review input (WR-04, WR-07, IN-03)
+- [x] 15.1-23-PLAN.md — Boundary-commit-bound fuzz retry, restricted job-id token, bounded wait, drop dead review input (WR-04, WR-07, IN-03)
 
 **Gap Wave 4** *(blocked on Gap Wave 3)*
 - [ ] 15.1-24-PLAN.md — --check-config mode, pins W6-01..W6-11 and check_config route counting to parsed and executable controls (WR-06 first half, IN-01)
@@ -615,4 +615,4 @@ Plans:
 | 13. CGB HDMA | v0.2 | 12/12 | Complete    | 2026-10-14 |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 13/13 | Complete    | 2026-10-15 |
 | 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 10/10 | Complete    | 2026-10-20 |
-| 15.1. Release Hardening and Milestone Debt Closure | v0.2 | 24/30 | In Progress | - |
+| 15.1. Release Hardening and Milestone Debt Closure | v0.2 | 25/30 | In Progress | - |
