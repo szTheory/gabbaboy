@@ -117,11 +117,11 @@ cmd_collect() {
   require_set subject output
   [[ -d "$subject/build" ]] || fail "subject has no build directory"
   mkdir -p "$output"
-  for entry in "$output"/*; do
-    [[ -e "$entry" ]] || continue
+  # find, not a glob: a glob skips dotfiles, so a hidden file could ride along in the evidence directory.
+  find "$output" -mindepth 1 -maxdepth 1 -print0 | while IFS= read -r -d '' entry; do
     known=0
     for name in $EVIDENCE_NAMES; do
-      [[ "$entry" == "$output/$name" ]] && known=1
+      [[ "${entry##*/}" == "$name" ]] && known=1
     done
     [[ "$known" == 1 ]] || fail "unexpected file in the evidence output: ${entry##*/}"
   done

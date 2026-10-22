@@ -123,6 +123,9 @@ def decide(release: Any, assets: Any, expected_rows: Any, runs: Any, run_id: int
     expected = expected_inventory(expected_rows)
     live = live_inventory(assets)
     check_runs(runs, run_id, run_attempt, workflow, source_sha)
+    # The published branch is not reachable from publish-qualified-release, which decides before its one publication
+    # transition; only the self-test exercises it. It documents the published-state contract named in residual P15-09,
+    # which records published-state re-verification as a possible owner request, so it stays.
     if release["draft"] is False:
         if scope == "subset":
             raise ValueError("a published release never receives further attachments")
@@ -359,9 +362,13 @@ def main(argv: list[str]) -> int:
             return 1
         return 0
     if len(argv) != 2:
-        raise SystemExit("usage: verify-published-release-assets.py API_ASSETS_JSON BASELINE_JSON | --inventory ... | --decide ... | --self-test")
-    before = json.loads(pathlib.Path(argv[1]).read_text())
-    verify(argv[0], before)
+        raise SystemExit("usage: verify-published-release-assets.py API_ASSETS_JSON_TEXT BASELINE_PATH | --inventory ... | --decide ... | --self-test")
+    try:
+        before = json.loads(pathlib.Path(argv[1]).read_text())
+        verify(argv[0], before)
+    except (ValueError, OSError) as error:
+        print(f"REJECT published-assets: {error}", file=sys.stderr)
+        return 1
     print("PASS: published release asset IDs, names, and digests match the qualified inventory")
     return 0
 

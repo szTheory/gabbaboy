@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Classify closeout findings while retaining the installed OpenGSD audit."""
+"""Classify closeout findings while retaining the installed OpenGSD audit.
+
+Runtime requirement: this check executes an installed OpenGSD (@opengsd/gsd-core) gsd-tools.cjs with node and
+verifies its identity before trusting any audit output. The runtime is resolved from, in order: GSD_TOOLS (a file),
+then gsd-core/bin/gsd-tools.cjs under CLAUDE_CONFIG_DIR or ~/.claude, then under CODEX_HOME or ~/.codex.
+
+Exit codes: 0 scan clear; 1 blocked by classified findings; 2 scan error (the runtime ran or launched and failed, or
+the record could not be written); 3 runtime-unavailable (no installed runtime was found, so nothing was classified).
+"""
 
 from __future__ import annotations
 
@@ -22,14 +30,31 @@ REVIEW_SOURCE = (
     / ".planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT-REVIEW.md"
 )
 CLASSIFIER_VERSION = "1"
-DEFAULT_TOOLS = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "gsd-core/bin/gsd-tools.cjs"
+RUNTIME_SUFFIX = "gsd-core/bin/gsd-tools.cjs"
 REVIEW_NAME = re.compile(r"^\d+(?:\.\d+)*-UAT-REVIEW\.md$")
 CANONICAL_UAT_NAME = re.compile(r"^\d+(?:\.\d+)*-UAT\.md$")
 
 
-def installed_tools() -> Path:
+def runtime_candidates() -> list[Path]:
+    candidates: list[Path] = []
     configured = os.environ.get("GSD_TOOLS")
-    return Path(configured).expanduser() if configured else DEFAULT_TOOLS
+    if configured:
+        candidates.append(Path(configured).expanduser())
+    for variable, fallback in (("CLAUDE_CONFIG_DIR", ".claude"), ("CODEX_HOME", ".codex")):
+        home = os.environ.get(variable)
+        candidates.append((Path(home).expanduser() if home else Path.home() / fallback) / RUNTIME_SUFFIX)
+    return candidates
+
+
+def installed_tools() -> Path:
+    candidates = runtime_candidates()
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    raise ScanError(
+        "runtime-unavailable",
+        "no installed OpenGSD runtime was found; set GSD_TOOLS or install under CLAUDE_CONFIG_DIR/~/.claude or CODEX_HOME/~/.codex",
+    )
 
 
 def make_fixture(root: Path) -> None:
@@ -65,11 +90,9 @@ def _run(command: list[str], root: Path) -> subprocess.CompletedProcess[str]:
 
 def _runtime_command() -> tuple[list[str], dict[str, object]]:
     node = shutil.which("node")
-    tool = installed_tools()
     if node is None:
         raise ScanError("runtime-launch", "Node.js was not found on PATH")
-    if not tool.is_file():
-        raise ScanError("runtime-missing", "installed gsd-tools.cjs was not found")
+    tool = installed_tools()
 
     command = [node, str(tool), "runtime-identity", "--raw"]
     result = _run(command, ROOT)
@@ -526,7 +549,7 @@ if __name__ == "__main__":
     if report["status"] == "error":
         error = report.get("error", {})
         print(f"REJECT {error.get('code', 'closeout-scan')}: {error.get('diagnostic', 'scan failed')}", file=sys.stderr)
-        raise SystemExit(2)
+        raise SystemExit(3 if error.get("code") == "runtime-unavailable" else 2)
     if report["status"] == "blocked":
         print(f"BLOCKED closeout scan: {report['counts']['blocking_records']} classified finding(s)")
         raise SystemExit(1)
