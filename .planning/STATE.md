@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: "15.1"
-current_phase_name: Release Hardening and Milestone Debt Closure
+current_phase_name: Release Hardening and Milestone Debt Closure (INSERTED)
 current_plan: 17
 status: executing
-stopped_at: Phase 15.1 verification gaps_found (PR #93 merged; gap closure pending)
-last_updated: "2026-10-21T20:30:00.000Z"
+stopped_at: "Phase 15.1 gap-closure planning complete (plans 20-30 checked); next /gsd-execute-phase 15.1 --gaps-only"
+last_updated: "2026-10-22T03:03:22.872Z"
 last_activity: 2026-10-21
-last_activity_desc: Completed Phase 15.1 Plan 17 (24 individual dispositions bound to the audit commit, 12 open limitations, review and security records, full gate 1164/1164)
-state_head: 7a3d2fddc355f1cf642ef653d6e74f9adf7d7c25
+last_activity_desc: Phase 15.1 planning complete — 30 plans ready
+state_head: 5e94d9d440ca96807664c057ae5833bc9b0f5776
 progress:
   total_phases: 10
   completed_phases: 9
-  total_plans: 153
+  total_plans: 164
   completed_plans: 153
   percent: 90
 ---
@@ -30,10 +30,12 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 ## Current Position
 
-Phase: 15.1 (Release Hardening and Milestone Debt Closure) — EXECUTING
-Status: Phase 15.1 verification found gaps; phase remains open
+Phase: 15.1 (Release Hardening and Milestone Debt Closure (INSERTED)) — READY TO EXECUTE
+Status: Phase 15.1 verification found gaps; gap-closure plans 15.1-20..30 planned and checked; phase remains open
+
+Completed stage (2026-10-22): **Phase 15.1 gap-closure planning** (`/gsd-plan-phase 15.1 --gaps`). Eleven gap plans 15.1-20..30 in 8 waves close WR-01..WR-07 and IN-01..IN-08 with negative controls, add SHIP-09 ledger edge controls (15.1-30), merge the gap PR (15.1-25), refresh local and hosted evidence at the merge commit with strict-head verdicts recorded per boundary commit (15.1-26), and close the review disposition and stop (15.1-27). Plan check: three revision passes plus two owner-approved scoped fixes; final remaining items resolved and grep-confirmed. **Next:** `/gsd-execute-phase 15.1 --gaps-only`; after it, `/gsd-verify-work 15.1`. No tag, release, archive, audit or v0.3 work.
 Current Plan: 17
-Total Plans in Phase: 19
+Total Plans in Phase: 30
 
 Completed stage: **Phase 15.1 execution - all 19 plans executed and summarized; Plan 17 closed the 24 dispositions**. `15.1-DISPOSITIONS.json` gives every scope item an individual source-backed disposition (11 closed, 11 closed with a named residual, 2 open historical unknowns) checked by `verify-closeout-dispositions.py` (30 real-CLI rejection controls). Twelve limitations stay open and are neither passes nor owner acceptances: support-ledger pin drift, the performance review trigger, the unexercised trusted rehearsal judge, the pre-fix audio_saturation RED and isolated M7 unknowns, the SHIP-11 unclassified edge (flagged unresolved assumption), five residual write jobs, the failed hosted rehearsal, no hosted wrong-ROM run, two descriptor-less prohibition flags, three Windows-skipped POSIX controls and an undiagnosed hosted ASan stall timing. Full gate 1164/1164 at `785d55c`. The review is not independent (recorded). The phase PR, exact head, required check runs and merge are recorded from live API readback in `15.1-delivery-receipt.json`. Both auto flags stay false; no tag, release, archive or v0.3 work. **Next:** standard Phase 15.1 verification, `/gsd-verify-work 15.1`; after that the owner chooses `/gsd-audit-milestone`.
 
@@ -90,7 +92,7 @@ Status: planning
 Current Plan: Not started
 Total Plans in Phase: 13
 Last Activity: 2026-10-21
-Last Activity Description: Phase 15.1 execution started
+Last Activity Description: Phase 15.1 planning complete — 30 plans ready
 
 Completed workflow stage: **Phase 14 — CGB-E Model Qualification and Corpus, automated UAT complete**. [14-UAT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md) closes all 49 deliverables across 13 plans automatically, with zero issues, pending/skipped/blocked rows or human checkpoints. All 13 bounded commit windows reconcile. The canonical [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08 and CGB-10 are complete. Nyquist covers 31/31 tasks, security closes 27/27 threats, and all eight implementation review findings are fixed and independently checked.
 
