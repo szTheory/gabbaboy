@@ -46,6 +46,9 @@ fixtures/libbet/SOURCES.md text eol=lf
 # Acceptance cases, input scripts, negative files and the DMG baseline ledger are digested text.
 tests/acceptance/** text eol=lf
 tests/baseline/** text eol=lf
+# The libFuzzer dictionary is hashed from the checkout by the producer and from the commit blob by the receipt
+# validator (verify-v02-fuzz.py), so a Windows CRLF checkout would make the two digests differ.
+tests/fuzz/fuzz_core.dict text eol=lf
 # The immutable malformed summary-coverage fixture is digest-pinned in tests/CMakeLists.txt.
 tests/data/invalid-summary-coverage.md text eol=lf
 
