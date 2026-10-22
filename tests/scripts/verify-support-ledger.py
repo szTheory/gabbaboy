@@ -1670,6 +1670,47 @@ def self_test_v2() -> None:
         controls.append("single-entry-below-required")
     else:
         fail("single-entry-below-required: a one-case ledger satisfied a two-case requirement")
+    # SHIP-09 encoding edges: ledger identity is the SHA-256 of the exact bytes, and the
+    # size bound counts bytes, not characters.
+    lf_raw = bounded_file(ROOT / "docs/support/v0.2.0.md", MAX_LEDGER_BYTES, "ledger")
+    lf_data = parse_ledger(lf_raw, "0.2.0")
+    lf_sidecar = {"tag": "v0.2.0", "ledger_sha256": sha256(lf_raw)}
+
+    def identity_rejected(name: str, variant_raw: bytes) -> None:
+        if sha256(variant_raw) == sha256(lf_raw):
+            fail(name + ": variant bytes have the same digest as the LF ledger")
+        if parse_ledger(variant_raw, "0.2.0") != lf_data:
+            fail(name + ": variant did not parse to data equal to the LF ledger")
+        try:
+            verify_sidecar_data({**lf_sidecar, "ledger_sha256": sha256(variant_raw)}, lf_sidecar)
+        except ValueError:
+            controls.append(name)
+        else:
+            fail(name + ": sidecar digest of a different byte encoding was accepted")
+
+    identity_rejected("crlf-ledger-identity-is-bytes", lf_raw.replace(b"\n", b"\r\n"))
+    # Pinned branch: parse_ledger decodes with plain utf-8, which keeps U+FEFF as text, and
+    # nothing rejects it. A BOM copy therefore parses equal but is a different byte identity.
+    # If parsing is changed to reject a BOM this control fails so the change is deliberate.
+    try:
+        identity_rejected("bom-ledger-identity", b"\xef\xbb\xbf" + lf_raw)
+    except ValueError as error:
+        if str(error).startswith("bom-ledger-identity:"):
+            raise
+        fail("bom-ledger-identity: parse_ledger rejected a BOM-prefixed ledger; "
+             "pinned branch is accept-with-different-digest (" + str(error) + ")")
+    two_byte = "\u00e9".encode("utf-8")
+    oversized = two_byte * (MAX_LEDGER_BYTES // 2) + b"x"
+    if len(oversized) != MAX_LEDGER_BYTES + 1 or len(oversized.decode("utf-8")) >= MAX_LEDGER_BYTES:
+        fail("byte-length-bound: fixture does not separate byte count from character count")
+    try:
+        parse_ledger(oversized, "0.2.0")
+    except ValueError as error:
+        if "bounded read size" not in str(error):
+            fail("byte-length-bound produced the wrong diagnostic: " + str(error))
+        controls.append("byte-length-bound")
+    else:
+        fail("byte-length-bound: parse_ledger accepted a ledger over the byte bound")
     if not controls:
         fail("self-test selected zero rejection controls")
     print("support ledger v0.2 self-test passed: positive=" + str(len(positive_checks)) +
