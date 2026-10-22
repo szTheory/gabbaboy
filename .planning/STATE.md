@@ -6,16 +6,16 @@ current_phase: "15.1"
 current_phase_name: Release Hardening and Milestone Debt Closure (INSERTED)
 current_plan: 20
 status: executing
-stopped_at: Completed 15.1-25-PLAN.md
-last_updated: "2026-10-22T21:46:33.941Z"
+stopped_at: Completed 15.1-26-PLAN.md
+last_updated: "2026-10-22T22:59:06.488Z"
 last_activity: 2026-10-22
 last_activity_desc: Phase 15.1 execution started
-state_head: b723f3dec2c630b7f21bddbd5774e2e08eba0330
+state_head: ae9481de9ba20630e8ddc20d1b8e38bb857e824f
 progress:
   total_phases: 10
   completed_phases: 9
   total_plans: 164
-  completed_plans: 162
+  completed_plans: 163
   percent: 90
 ---
 
@@ -338,6 +338,7 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 15.1 P24 | 40 min | 2 tasks | 3 files |
 | Phase 15.1 P29 | 25 min | 2 tasks | 5 files |
 | Phase 15.1 P25 | 5h 0m | 3 tasks | 4 files |
+| Phase 15.1 P26 | 3h | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -586,6 +587,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 15.1]: 15.1-29: W6-13 and W6-18 stay reasoned data pins; all other W6-12..W6-19 pins moved to parsed policy rules or executable controls; closeout scan exits 3 runtime-unavailable when no runtime exists
 - [Phase 15.1]: 15.1-25: final-head required-check IDs recorded in the delivery receipt, not the merged evidence file (self-reference would move the head forever)
 - [Phase 15.1]: 15.1-25: tests/fuzz/fuzz_core.dict pinned to LF in .gitattributes after hosted Windows lane exposed CRLF digest mismatch
+- [Phase 15.1]: 15.1-26: evidence bound to M 2d25a47; rehearsal failures all map to existing owner limitations; strict-head recorded at B 01ecebe
 
 ### Pending Todos
 
@@ -626,8 +628,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-**Last session:** 2026-10-22T21:46:33.508Z
-**Stopped at:** Completed 15.1-25-PLAN.md
+**Last session:** 2026-10-22T22:59:06.165Z
+**Stopped at:** Completed 15.1-26-PLAN.md
 **Resume file:** None
 
 Completed stage: **Phase 15.1 planning and independent plan verification**. All 19 plans, 39 tasks and seven waves are ready to execute; the final checker reports zero blockers and warnings. All 24 scope items and four follow-up requirements have executable coverage. No Phase 15.1 implementation or hosted qualification has run. Nine original phases and 134 plans remain complete; v0.2 stays open. Historical unknowns and spec-less verification flags remain explicit; debt is not accepted by planning.
