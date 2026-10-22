@@ -1,0 +1,131 @@
+{
+  "check_runs": [
+    {
+      "app_id": 15368,
+      "app_slug": "github-actions",
+      "conclusion": "success",
+      "head_sha": "dbd4a36d0fb8a7dddc75bcf1634120d0aa4c9874",
+      "id": 120040377654,
+      "name": "fixture-repro",
+      "status": "completed"
+    },
+    {
+      "app_id": 15368,
+      "app_slug": "github-actions",
+      "conclusion": "success",
+      "head_sha": "dbd4a36d0fb8a7dddc75bcf1634120d0aa4c9874",
+      "id": 120040406469,
+      "name": "fixture-repro",
+      "status": "completed"
+    },
+    {
+      "app_id": 15368,
+      "app_slug": "github-actions",
+      "conclusion": "success",
+      "head_sha": "dbd4a36d0fb8a7dddc75bcf1634120d0aa4c9874",
+      "id": 120105323861,
+      "name": "preview-package-smoke",
+      "status": "completed"
+    },
+    {
+      "app_id": 15368,
+      "app_slug": "github-actions",
+      "conclusion": "success",
+      "head_sha": "dbd4a36d0fb8a7dddc75bcf1634120d0aa4c9874",
+      "id": 120101427096,
+      "name": "required-native",
+      "status": "completed"
+    },
+    {
+      "app_id": 15368,
+      "app_slug": "github-actions",
+      "conclusion": "success",
+      "head_sha": "dbd4a36d0fb8a7dddc75bcf1634120d0aa4c9874",
+      "id": 120104307953,
+      "name": "required-native",
+      "status": "completed"
+    }
+  ],
+  "obtained_via": "gh_api",
+  "phase_pr": {
+    "head_sha": "dbd4a36d0fb8a7dddc75bcf1634120d0aa4c9874",
+    "merge_commit_sha": "2d25a47f1b05844b4da829aa9d0978f2cb348df1",
+    "merge_method": "squash",
+    "merged_at": "2026-10-22T21:43:13Z",
+    "number": 94
+  },
+  "required_checks": [
+    "fixture-repro",
+    "preview-package-smoke",
+    "required-native"
+  ],
+  "schema_version": 1,
+  "stage": "phase-pr",
+  "superseded_attempts": [
+    {
+      "attempt": 1,
+      "conclusion": "cancelled",
+      "id": 39840628631,
+      "name": "ci (push)"
+    },
+    {
+      "attempt": 2,
+      "conclusion": "cancelled",
+      "id": 39840628631,
+      "name": "ci (push)"
+    },
+    {
+      "attempt": 1,
+      "conclusion": "failure",
+      "id": 39840637489,
+      "name": "preview-package-smoke (pull_request)"
+    },
+    {
+      "attempt": 2,
+      "conclusion": "failure",
+      "id": 39840637489,
+      "name": "preview-package-smoke (pull_request)"
+    },
+    {
+      "attempt": 1,
+      "conclusion": "cancelled",
+      "id": 39840637526,
+      "name": "ci (pull_request)"
+    },
+    {
+      "attempt": 2,
+      "conclusion": "success",
+      "id": 39840637526,
+      "name": "ci (pull_request)"
+    }
+  ],
+  "workflow_run_names": {
+    "39840628608": "fixture-repro (push)",
+    "39840628631": "ci (push)",
+    "39840637485": "fixture-repro (pull_request)",
+    "39840637489": "preview-package-smoke (pull_request)",
+    "39840637526": "ci (pull_request)"
+  },
+  "workflow_runs": [
+    {
+      "attempt": 1,
+      "id": 39840628608
+    },
+    {
+      "attempt": 3,
+      "id": 39840628631
+    },
+    {
+      "attempt": 1,
+      "id": 39840637485
+    },
+    {
+      "attempt": 3,
+      "id": 39840637489
+    },
+    {
+      "attempt": 3,
+      "id": 39840637526
+    }
+  ]
+}
