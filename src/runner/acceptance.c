@@ -391,10 +391,8 @@ static int fail_run(const gbb_case *c, const gbb_acceptance_options *options, co
  * on GBB_STOP_OUTPUT_FULL. */
 
 #define DIAG_RECORDS 4096u
-#define MAX_INSTRUCTION_HALF_DOTS UINT64_C(48)
 
-typedef void (*replay_visit_fn)(void *context, const gbb_trace_record *trace, size_t trace_count,
-                                const gbb_diagnostic_record *diag, size_t diag_count);
+typedef gbb_accept_diag_visit_fn replay_visit_fn;
 
 typedef struct {
     const uint8_t *rom;
@@ -437,34 +435,13 @@ static int replay_diag(const replay_request *rq, gbb_instance **out_instance, ui
         if (deadline > rq->end_half_dots) deadline = rq->end_half_dots;
         if (!observing && rq->observe_from < deadline) deadline = rq->observe_from;
 
-        uint64_t guard = (deadline - logical) / 4u + 1024u;
-        while (actual < deadline) {
-            if (guard-- == 0) {
-                status = 2;
-                break;
-            }
-            uint64_t budget = deadline - actual;
-            gbb_run_result r;
-            if (observing) {
-                r = gbb_accept_run_diagnostic(instance, budget, &input_span,
-                                              rq->want_trace ? trace : NULL,
-                                              rq->want_trace ? DIAG_RECORDS : 0u,
-                                              diag, DIAG_RECORDS);
-                if (rq->visit != NULL && (r.trace_count != 0 || r.diagnostic_count != 0)) {
-                    rq->visit(rq->context, trace, r.trace_count, diag, r.diagnostic_count);
-                }
-            } else {
-                r = gbb_accept_run_diagnostic(instance, budget, &input_span, NULL, 0, NULL, 0);
-            }
-            actual += r.consumed_half_dots;
-            if (r.reason == GBB_STOP_BUDGET) {
-                if (r.consumed_half_dots == 0 && budget <= MAX_INSTRUCTION_HALF_DOTS) break; /* carried */
-                continue;
-            }
-            if (r.reason == GBB_STOP_OUTPUT_FULL || r.reason == GBB_STOP_HALTED_IDLE) continue;
-            status = 2;
-            break;
-        }
+        const bool record = observing;
+        enum gbb_accept_step_status step = gbb_accept_diag_advance(
+            instance, &actual, deadline, &input_span,
+            record && rq->want_trace ? trace : NULL, record && rq->want_trace ? DIAG_RECORDS : 0u,
+            record ? diag : NULL, record ? DIAG_RECORDS : 0u, record ? rq->visit : NULL, rq->context,
+            logical);
+        if (step != GBB_ACCEPT_STEP_OK) status = 2; /* stopped guest or iteration guard */
         if (status == 0) logical = deadline;
     }
 done:

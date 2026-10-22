@@ -16,6 +16,49 @@ void gbb_accept_stepper_init(gbb_accept_stepper *stepper, gbb_instance *instance
     stepper->last_stop = GBB_STOP_BUDGET;
 }
 
+bool gbb_accept_stop_resumable(const gbb_accept_input_span *span, uint64_t deadline,
+                               uint64_t consumed_half_dots, uint64_t budget_half_dots) {
+    return span != NULL && *span->cursor < span->count &&
+           span->events[*span->cursor].at_half_dots <= deadline &&
+           consumed_half_dots < budget_half_dots;
+}
+
+enum gbb_accept_step_status gbb_accept_diag_advance(
+    gbb_instance *instance, uint64_t *actual_half_dots, uint64_t deadline,
+    const gbb_accept_input_span *span, gbb_trace_record *trace, size_t trace_capacity,
+    gbb_diagnostic_record *diagnostics, size_t diagnostic_capacity,
+    gbb_accept_diag_visit_fn visit, void *visit_context, uint64_t guard_origin_half_dots) {
+    /* The guard base is the caller's logical time, not the actual counter: a carried instruction makes
+     * them differ and the diagnostic pass has always sized its guard from logical time. */
+    uint64_t guard = (deadline - guard_origin_half_dots) / 4u + 1024u;
+    while (*actual_half_dots < deadline) {
+        if (guard-- == 0) return GBB_ACCEPT_STEP_GUARD;
+        uint64_t budget = deadline - *actual_half_dots;
+        gbb_run_result r = gbb_accept_run_diagnostic(instance, budget, span, trace, trace_capacity,
+                                                      diagnostics, diagnostic_capacity);
+        if (visit != NULL && (r.trace_count != 0 || r.diagnostic_count != 0)) {
+            visit(visit_context, trace, r.trace_count, diagnostics, r.diagnostic_count);
+        }
+        *actual_half_dots += r.consumed_half_dots;
+        switch (r.reason) {
+        case GBB_STOP_BUDGET:
+            if (r.consumed_half_dots == 0 && budget <= MAX_INSTRUCTION_HALF_DOTS) {
+                return GBB_ACCEPT_STEP_OK; /* carried */
+            }
+            continue;
+        case GBB_STOP_OUTPUT_FULL:
+        case GBB_STOP_HALTED_IDLE:
+            continue;
+        case GBB_STOP_STOPPED:
+            if (gbb_accept_stop_resumable(span, deadline, r.consumed_half_dots, budget)) continue; /* replay: same STOP rule as advance_to_span */
+            return GBB_ACCEPT_STEP_STOPPED;
+        default:
+            return GBB_ACCEPT_STEP_STOPPED;
+        }
+    }
+    return GBB_ACCEPT_STEP_OK;
+}
+
 static enum gbb_accept_step_status advance_to_span(gbb_accept_stepper *s, uint64_t deadline,
                                                    const gbb_accept_input_span *span) {
     if (s->actual_half_dots >= deadline) return GBB_ACCEPT_STEP_OK;
@@ -43,9 +86,7 @@ static enum gbb_accept_step_status advance_to_span(gbb_accept_stepper *s, uint64
         case GBB_STOP_HALTED_IDLE: /* eligible idle ticks advanced; keep going */
             break;
         case GBB_STOP_STOPPED:
-            if (span != NULL && *span->cursor < span->count &&
-                span->events[*span->cursor].at_half_dots <= deadline &&
-                r.consumed_half_dots < budget) {
+            if (gbb_accept_stop_resumable(span, deadline, r.consumed_half_dots, budget)) {
                 break; /* resume stopped time only when the borrowed stream has a deadline */
             }
             return GBB_ACCEPT_STEP_STOPPED;

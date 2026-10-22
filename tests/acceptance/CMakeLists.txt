@@ -210,7 +210,8 @@ set_tests_properties(acceptance_dense_input_controls PROPERTIES TIMEOUT 600 COST
 # core source mutant that removes exactly the fix it guards.
 foreach(gbb_span_case acceptance_drive_dense_queue acceptance_drive_batch_order
     acceptance_drive_stop_guard_failure acceptance_input_span_edges
-    acceptance_drive_stop_wake_deadline acceptance_input_span_output_alias)
+    acceptance_drive_stop_wake_deadline acceptance_input_span_output_alias
+    acceptance_replay_stop_resume_parity acceptance_drive_stop_resume_main)
   add_test(NAME ${gbb_span_case} COMMAND test_acceptance_lib ${gbb_span_case})
   set_tests_properties(${gbb_span_case} PROPERTIES TIMEOUT 60 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     PASS_REGULAR_EXPRESSION "PASS ${gbb_span_case}")

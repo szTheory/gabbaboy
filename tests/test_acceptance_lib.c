@@ -948,6 +948,176 @@ static int case_accept_input_span_output_alias(void) {
     PASS("acceptance_input_span_output_alias");
 }
 
+/* ---- WR-03: the diagnostic replay and the main stepper share one STOP-resume rule ---- */
+
+typedef struct {
+    const char *name;
+    gbb_input_event events[3];
+    size_t count;
+    int null_span;                          /* run without a borrowed span */
+    enum gbb_accept_step_status status;     /* expected in both paths */
+    size_t cursor;                          /* expected diagnostic-path cursor */
+    int woke;                               /* guest left STOP by the end of the window */
+} stop_parity_case;
+
+typedef struct {
+    enum gbb_accept_step_status status;
+    uint64_t actual;
+    int woke;
+} stop_parity_run;
+
+static int guest_left_stop(gbb_instance *instance) {
+    gbb_run_result next = gbb_run(instance, 48u, NULL, 0u);
+    return next.reason != GBB_STOP_STOPPED && next.consumed_half_dots != 0u;
+}
+
+/* The main path. The drive keeps its event cursor private, so the delivered events are observed
+ * through the guest: the wake only reaches it when the cursor passed the wake event. */
+static int stop_parity_main(const uint8_t *rom, const stop_parity_case *pc, uint64_t end,
+                            stop_parity_run *out) {
+    gbb_instance *instance = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) == GBB_OK);
+    REQUIRE(gbb_load_rom(instance, rom, 32768u) == GBB_OK);
+    gbb_accept_stepper stepper;
+    gbb_accept_stepper_init(&stepper, instance, NULL, NULL);
+    if (pc->null_span) {
+        out->status = gbb_accept_advance_to(&stepper, end);
+    } else {
+        gbb_input_event events[3];
+        memcpy(events, pc->events, sizeof(events));
+        gbb_accept_script script;
+        memset(&script, 0, sizeof(script));
+        script.events = pc->count != 0u ? events : NULL;
+        script.event_count = pc->count;
+        script.end_half_dots = end;
+        gbb_accept_predicate predicate;
+        memset(&predicate, 0, sizeof(predicate));
+        gbb_accept_drive_config config;
+        memset(&config, 0, sizeof(config));
+        config.stepper = &stepper;
+        config.script = &script;
+        config.predicate = &predicate;
+        config.budget_half_dots = end;
+        config.max_batch = 64u;
+        gbb_accept_drive_result driven;
+        gbb_accept_drive(&config, &driven);
+        out->status = driven.status == GBB_ACCEPT_DRIVE_NOT_REACHED ? GBB_ACCEPT_STEP_OK
+                    : driven.status == GBB_ACCEPT_DRIVE_STOPPED ? GBB_ACCEPT_STEP_STOPPED
+                                                                : GBB_ACCEPT_STEP_GUARD;
+    }
+    out->actual = stepper.actual_half_dots;
+    out->woke = guest_left_stop(instance);
+    gbb_destroy(instance);
+    return 0;
+}
+
+static int stop_parity_diag(const uint8_t *rom, const stop_parity_case *pc, uint64_t end,
+                            stop_parity_run *out, size_t *cursor_out) {
+    gbb_instance *instance = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) == GBB_OK);
+    REQUIRE(gbb_load_rom(instance, rom, 32768u) == GBB_OK);
+    size_t cursor = 0u;
+    const gbb_accept_input_span span = {pc->count != 0u ? pc->events : NULL, pc->count, &cursor};
+    uint64_t actual = 0u;
+    out->status = gbb_accept_diag_advance(instance, &actual, end, pc->null_span ? NULL : &span,
+                                          NULL, 0u, NULL, 0u, NULL, NULL, 0u);
+    out->actual = actual;
+    *cursor_out = cursor;
+    out->woke = guest_left_stop(instance);
+    gbb_destroy(instance);
+    return 0;
+}
+
+#define STOP_BTN(at) {(at), GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_A}
+#define STOP_WAKE(at) {(at), GBB_INPUT_STOP_WAKE, 1u}
+
+static int case_replay_stop_resume_parity(void) {
+    static const uint8_t stop_program[] = {0x10,0x00,0x00,0x18,0xfe};
+    uint8_t rom[32768];
+    make_accept_test_rom(rom, stop_program, sizeof(stop_program));
+    const uint64_t end = 100u;
+    /* A button press with the joypad interrupt masked does not end STOP: the first row proves that,
+     * so the wake rows below really exercise "resume past a non-waking event". */
+    static const stop_parity_case cases[] = {
+        {"non-wake-only", {STOP_BTN(40)}, 1u, 0, GBB_ACCEPT_STEP_STOPPED, 1u, 0},
+        {"press-then-wake", {STOP_BTN(40), STOP_WAKE(80)}, 2u, 0, GBB_ACCEPT_STEP_OK, 2u, 1},
+        {"wake-at-deadline", {STOP_BTN(40), STOP_WAKE(100)}, 2u, 0, GBB_ACCEPT_STEP_OK, 2u, 1},
+        {"wake-after-deadline", {STOP_BTN(40), STOP_WAKE(101)}, 2u, 0, GBB_ACCEPT_STEP_STOPPED, 1u, 0},
+        {"null-span", {STOP_WAKE(40)}, 0u, 1, GBB_ACCEPT_STEP_STOPPED, 0u, 0},
+        {"empty-span", {STOP_WAKE(40)}, 0u, 0, GBB_ACCEPT_STEP_STOPPED, 0u, 0},
+        {"equal-timestamps", {STOP_BTN(40), STOP_WAKE(40)}, 2u, 0, GBB_ACCEPT_STEP_OK, 2u, 1},
+    };
+    int failed = 0;
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        const stop_parity_case *pc = &cases[i];
+        stop_parity_run main_run, diag_run;
+        size_t cursor = 0u;
+        if (stop_parity_main(rom, pc, end, &main_run) != 0) return 1;
+        if (stop_parity_diag(rom, pc, end, &diag_run, &cursor) != 0) return 1;
+        if (main_run.status != diag_run.status || main_run.actual != diag_run.actual ||
+            main_run.woke != diag_run.woke || diag_run.status != pc->status ||
+            diag_run.woke != pc->woke || cursor != pc->cursor) {
+            fprintf(stderr,
+                    "replay-stop-parity sub=%s main(status=%d actual=%llu woke=%d) "
+                    "diag(status=%d actual=%llu woke=%d cursor=%zu) expected(status=%d woke=%d cursor=%zu)\n",
+                    pc->name, (int)main_run.status, (unsigned long long)main_run.actual, main_run.woke,
+                    (int)diag_run.status, (unsigned long long)diag_run.actual, diag_run.woke, cursor,
+                    (int)pc->status, pc->woke, pc->cursor);
+            failed = 1;
+        }
+    }
+
+    /* Truth table of the shared rule itself. */
+    size_t cursor = 0u;
+    const gbb_input_event at_deadline = STOP_WAKE(100);
+    const gbb_input_event past_deadline = STOP_WAKE(101);
+    const gbb_accept_input_span due = {&at_deadline, 1u, &cursor};
+    const gbb_accept_input_span late = {&past_deadline, 1u, &cursor};
+    const gbb_accept_input_span empty = {NULL, 0u, &cursor};
+    size_t spent = 1u;
+    const gbb_accept_input_span exhausted = {&at_deadline, 1u, &spent};
+    const struct {
+        const char *name;
+        int got;
+        int want;
+    } table[] = {
+        {"null-span", gbb_accept_stop_resumable(NULL, 100u, 0u, 10u), 0},
+        {"empty-span", gbb_accept_stop_resumable(&empty, 100u, 0u, 10u), 0},
+        {"cursor-at-count", gbb_accept_stop_resumable(&exhausted, 100u, 0u, 10u), 0},
+        {"event-at-deadline", gbb_accept_stop_resumable(&due, 100u, 0u, 10u), 1},
+        {"event-past-deadline", gbb_accept_stop_resumable(&late, 100u, 0u, 10u), 0},
+        {"consumed-equals-budget", gbb_accept_stop_resumable(&due, 100u, 10u, 10u), 0},
+        {"consumed-below-budget", gbb_accept_stop_resumable(&due, 100u, 9u, 10u), 1},
+    };
+    for (size_t i = 0; i < sizeof(table) / sizeof(table[0]); ++i) {
+        if (table[i].got != table[i].want) {
+            fprintf(stderr, "replay-stop-parity truth-table sub=%s got=%d want=%d\n", table[i].name,
+                    table[i].got, table[i].want);
+            failed = 1;
+        }
+    }
+    if (failed) return 1;
+    PASS("acceptance_replay_stop_resume_parity");
+}
+
+/* Main-drive-only sibling control: the same ROM and script as the first wake row, driven only through
+ * gbb_accept_drive, so a replay-side mutant leaves it untouched. */
+static int case_drive_stop_resume_main(void) {
+    static const uint8_t stop_program[] = {0x10,0x00,0x00,0x18,0xfe};
+    uint8_t rom[32768];
+    make_accept_test_rom(rom, stop_program, sizeof(stop_program));
+    static const stop_parity_case pc = {"press-then-wake", {STOP_BTN(40), STOP_WAKE(80)}, 2u, 0,
+                                        GBB_ACCEPT_STEP_OK, 2u, 1};
+    stop_parity_run run;
+    if (stop_parity_main(rom, &pc, 100u, &run) != 0) return 1;
+    if (run.status != GBB_ACCEPT_STEP_OK || run.actual < 80u || run.actual > 100u || !run.woke) {
+        fprintf(stderr, "main-stop-resume status=%d actual=%llu woke=%d\n", (int)run.status,
+                (unsigned long long)run.actual, run.woke);
+        return 1;
+    }
+    PASS("acceptance_drive_stop_resume_main");
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) { fprintf(stderr, "usage: test_acceptance_lib <case> [args]\n"); return 2; }
     if (strcmp(argv[1], "acceptance_lib_libbet_replay") == 0) {
@@ -967,6 +1137,8 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "acceptance_input_span_edges") == 0) return case_accept_input_span_edges();
     if (strcmp(argv[1], "acceptance_drive_stop_wake_deadline") == 0) return case_accept_drive_stop_wake_deadline();
     if (strcmp(argv[1], "acceptance_input_span_output_alias") == 0) return case_accept_input_span_output_alias();
+    if (strcmp(argv[1], "acceptance_replay_stop_resume_parity") == 0) return case_replay_stop_resume_parity();
+    if (strcmp(argv[1], "acceptance_drive_stop_resume_main") == 0) return case_drive_stop_resume_main();
     fprintf(stderr, "unknown case %s\n", argv[1]);
     return 2;
 }

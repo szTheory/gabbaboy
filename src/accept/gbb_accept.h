@@ -8,6 +8,7 @@
  * state is used here; callers own every buffer. */
 
 #include "gabbaboy/gabbaboy.h"
+#include "../core/gbb_accept_input.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -92,6 +93,26 @@ void gbb_accept_stepper_init(gbb_accept_stepper *stepper, gbb_instance *instance
  * the next call, whose budget is computed from the actual instance time. */
 enum gbb_accept_step_status gbb_accept_advance_to(gbb_accept_stepper *stepper,
                                                   uint64_t deadline_half_dots);
+
+/* One STOP-resume rule serves both the main stepper and the diagnostic replay, so the two passes over
+ * the same ROM and script cannot disagree about whether time continues. On hardware a button press
+ * with the joypad interrupt masked does not end STOP, so a later wake event inside the same window must
+ * still be delivered: a stopped run is resumable when the borrowed stream still holds an event due at or
+ * before the deadline and the call consumed less than its budget. A NULL span is never resumable. */
+bool gbb_accept_stop_resumable(const gbb_accept_input_span *span, uint64_t deadline,
+                               uint64_t consumed_half_dots, uint64_t budget_half_dots);
+
+typedef void (*gbb_accept_diag_visit_fn)(void *context, const gbb_trace_record *trace,
+                                         size_t trace_count, const gbb_diagnostic_record *diag,
+                                         size_t diag_count);
+/* Diagnostic counterpart of the deadline stepper: runs the private diagnostic entry on *actual_half_dots
+ * until the deadline, applying the shared STOP rule. guard_origin_half_dots sizes the iteration guard
+ * ((deadline - origin) / 4 + 1024) and must not exceed deadline. Returns OK, GUARD or STOPPED. */
+enum gbb_accept_step_status gbb_accept_diag_advance(
+    gbb_instance *instance, uint64_t *actual_half_dots, uint64_t deadline,
+    const gbb_accept_input_span *span, gbb_trace_record *trace, size_t trace_capacity,
+    gbb_diagnostic_record *diagnostics, size_t diagnostic_capacity,
+    gbb_accept_diag_visit_fn visit, void *visit_context, uint64_t guard_origin_half_dots);
 
 /* ---- Compiled predicates (D-08, D-09) ---- */
 typedef uint8_t (*gbb_accept_peek_fn)(void *context, uint16_t address);
