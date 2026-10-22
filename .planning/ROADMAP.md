@@ -534,7 +534,7 @@ Plans:
   3. Canonical UAT and strict coverage pass; relevant DMG baseline and exact-head remote checks pass before merge.
   4. Re-audit is the next stage after this phase; no automatic archive, tag, publication or v0.3 start.
 
-**Plans:** 30 plans (19 original plus 11 gap closure), all executed; Phase 15.1 stays open pending re-verification (`/gsd-verify-work 15.1`)
+**Plans:** 30/30 plans executed (19 original plus 11 gap closure), all executed; Phase 15.1 stays open pending re-verification (`/gsd-verify-work 15.1`)
 
 Plans:
 **Wave 1**
@@ -615,4 +615,4 @@ Plans:
 | 13. CGB HDMA | v0.2 | 12/12 | Complete    | 2026-10-14 |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 13/13 | Complete    | 2026-10-15 |
 | 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 10/10 | Complete    | 2026-10-20 |
-| 15.1. Release Hardening and Milestone Debt Closure | v0.2 | 29/30 | In Progress | - |
+| 15.1. Release Hardening and Milestone Debt Closure | v0.2 | 30/30 | In Progress | - |
