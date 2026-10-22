@@ -4,7 +4,7 @@ Completed stage: **Phase 15.1 gap closure (plans 15.1-20..30)**. All 30 plans ar
 
 Exact next command (the only one): `/gsd-verify-work 15.1`. Do not run it from the executor; do not run `/gsd-audit-milestone`, tag, release, archive, republish v0.2.0 or start v0.3. Both auto flags stay false.
 
-Docs PR: opened by 15.1-27 from `gsd/phase-15.1-gap-evidence`; its number and merge receipt are read live from the GitHub API by PR number, because they cannot sit inside the head they describe. The remote branch `gsd/phase-15.1-gap-evidence` must stay (do not delete it): the squash merge leaves the strict-head boundary commits (01ecebe and 1ca0b26) off main, and verify-work re-evaluates strict-head in detached worktrees at those commits.
+Docs PR: **#95** (squash merge only at exact-head green required checks), opened by 15.1-27 from `gsd/phase-15.1-gap-evidence`; its number and merge receipt are read live from the GitHub API by PR number, because they cannot sit inside the head they describe. The remote branch `gsd/phase-15.1-gap-evidence` must stay (do not delete it): the squash merge leaves the strict-head boundary commits (01ecebe and 1ca0b26) off main, and verify-work re-evaluates strict-head in detached worktrees at those commits.
 
 Open owner decisions and the smallest action for each are listed in STATE.md (LIM-SUPPORT-LEDGER-PIN, LIM-PERF-REVIEW, LIM-RESIDUAL-WRITE-JOBS, LIM-TRUSTED-JUDGE, LIM-REHEARSAL-FAILED, the GB-13 linker note, and the remaining LIM rows of 15.1-DISPOSITIONS.md). The rehearsal run 39866157056 at M failed only on LIM-SUPPORT-LEDGER-PIN, LIM-PERF-REVIEW and LIM-TRUSTED-JUDGE; no owner decision was made.
 
