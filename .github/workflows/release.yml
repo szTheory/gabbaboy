@@ -73,7 +73,6 @@ jobs:
       contents: write
       pull-requests: read
     env:
-      GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       RETRY: ${{ inputs.retry }}
       INPUT_TAG: ${{ inputs.tag_name }}
@@ -85,6 +84,8 @@ jobs:
     steps:
       - name: Require trusted repository, main workflow ref, and exact tag identity
         id: identity
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -125,6 +126,7 @@ jobs:
         with:
           ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 0
+          persist-credentials: false
       - name: Load trusted control-plane receipt verifier
         shell: bash
         run: |
@@ -138,6 +140,8 @@ jobs:
         run: python3 -I tests/scripts/verify-v02-adoption.py --release-notes "$RELEASE_NOTES_FILE"
       - name: Verify merged PR exact-head required evidence
         id: proof
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -159,6 +163,7 @@ jobs:
           printf 'head_sha=%s\nmerge_commit_sha=%s\npr_number=%s\n' "$pr_head" "$pr_merge" "$pr_number" >> "$GITHUB_OUTPUT"
       - name: Record or revalidate source identity receipt
         env:
+          GH_TOKEN: ${{ github.token }}
           RELEASE_ID: ${{ steps.identity.outputs.release_id }}
           RELEASE_VERSION: ${{ steps.identity.outputs.version }}
           RELEASE_NOTES_FILE: ${{ steps.identity.outputs.release_notes_file }}
@@ -215,16 +220,14 @@ jobs:
           # These control-plane verifiers judge the tagged data but must not be frozen at the tag: the
           # v0.2.0 tag shipped a product-package check that rejected the real package layout and could
           # not be repaired afterwards. Run the workflow commit's copies; the producers stay tagged.
-          for path in tests/scripts/verify-release-candidate.sh tests/scripts/verify-v02-source-archive.py cmake/VerifyReleaseReceipt.cmake; do
-            git show "${GITHUB_SHA}:${path}" > "$path"
-          done
-      - name: Revalidate a previously qualified candidate before retry
+          git show "${GITHUB_SHA}:tests/scripts/verify-release-candidate.sh" > tests/scripts/verify-release-candidate.sh
+          git show "${GITHUB_SHA}:tests/scripts/verify-v02-source-archive.py" > tests/scripts/verify-v02-source-archive.py
+          git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py
+          git show "${GITHUB_SHA}:cmake/VerifyReleaseReceipt.cmake" > cmake/VerifyReleaseReceipt.cmake
+      - name: Fetch a previously qualified candidate before retry
         env:
+          GH_TOKEN: ${{ github.token }}
           RELEASE_ID: ${{ steps.identity.outputs.release_id }}
-          RELEASE_VERSION: ${{ steps.identity.outputs.version }}
-          RELEASE_NOTES_FILE: ${{ steps.identity.outputs.release_notes_file }}
-          PR_HEAD_SHA: ${{ steps.proof.outputs.head_sha }}
-          PR_MERGE_SHA: ${{ steps.proof.outputs.merge_commit_sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -241,6 +244,21 @@ jobs:
               --pattern candidate-receipt.json --pattern gabbaboy-core-linux-x64.tar.gz \
               --pattern gabbaboy-notices.txt --pattern source-receipt.json \
               --pattern build-receipt.json --dir build/reuse
+            echo CANDIDATE_REUSED=true >> "$GITHUB_ENV"
+          else
+            echo CANDIDATE_REUSED=false >> "$GITHUB_ENV"
+          fi
+      - name: Revalidate a previously qualified candidate before retry
+        env:
+          RELEASE_ID: ${{ steps.identity.outputs.release_id }}
+          RELEASE_VERSION: ${{ steps.identity.outputs.version }}
+          RELEASE_NOTES_FILE: ${{ steps.identity.outputs.release_notes_file }}
+          PR_HEAD_SHA: ${{ steps.proof.outputs.head_sha }}
+          PR_MERGE_SHA: ${{ steps.proof.outputs.merge_commit_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$CANDIDATE_REUSED" == true ]]; then
             bash tests/scripts/verify-release-candidate.sh --verify \
               build/reuse/candidate-receipt.json build/reuse/gabbaboy-core-linux-x64.tar.gz \
               "$RELEASE_VERSION" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
@@ -257,9 +275,6 @@ jobs:
           if receipt.get("release_notes_sha256") != notes_sha or receipt.get("notice_sha256") != notice_sha:
               raise SystemExit("Stored receipt does not match current release notes/notices.")
           PY
-            echo CANDIDATE_REUSED=true >> "$GITHUB_ENV"
-          else
-            echo CANDIDATE_REUSED=false >> "$GITHUB_ENV"
           fi
       - name: Configure and build cache-free release core
         if: env.CANDIDATE_REUSED != 'true'
@@ -279,7 +294,7 @@ jobs:
           export SOURCE_DATE_EPOCH
           tar --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --numeric-owner \
             -czf build/gabbaboy-core-linux-x64.tar.gz -C build/release-stage include lib bin share
-      - name: Append only byte-identical archive to the existing draft
+      - name: Write the build receipt for the cache-free archive
         if: env.CANDIDATE_REUSED != 'true'
         env:
           RELEASE_ID: ${{ steps.identity.outputs.release_id }}
@@ -320,6 +335,14 @@ jobs:
           }
           pathlib.Path("build/build-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
           PY
+      - name: Append only byte-identical archive to the existing draft
+        if: env.CANDIDATE_REUSED != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ steps.identity.outputs.release_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
           build_receipt_count=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100" --jq '[.[] | select(.name == "build-receipt.json")] | length')
           [[ "$build_receipt_count" -le 1 ]] || { echo "Draft has duplicate build receipts." >&2; exit 1; }
           if [[ "$build_receipt_count" == 1 ]]; then
@@ -352,7 +375,9 @@ jobs:
             cp LICENSE build/gabbaboy-notices.txt
             gh release upload "$RELEASE_TAG" build/gabbaboy-notices.txt --repo "$GH_REPO"
           fi
-      - name: Download exact draft bytes and smoke relocated C/C++ consumers
+      - name: Download the exact draft bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -360,6 +385,10 @@ jobs:
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" \
             --pattern gabbaboy-core-linux-x64.tar.gz --pattern gabbaboy-notices.txt \
             --pattern source-receipt.json --pattern build-receipt.json --dir build/downloaded
+      - name: Smoke relocated C/C++ consumers from the downloaded bytes
+        shell: bash
+        run: |
+          set -euo pipefail
           [[ $(sha256sum build/downloaded/gabbaboy-notices.txt | cut -d ' ' -f1) == $(sha256sum LICENSE | cut -d ' ' -f1) ]] || {
             echo "Downloaded notice bytes differ from the tagged source notice." >&2
             exit 1
@@ -379,7 +408,7 @@ jobs:
             "build/consumer-work/$language/consumer-$language" \
               "$prefix/share/gabbaboy/fixtures/tracer/tracer.gb"
           done
-      - name: Prove downloaded relocated C and C++ consumer behavior and attach the receipt
+      - name: Prove downloaded relocated C and C++ consumer behavior
         env:
           RELEASE_ID: ${{ steps.identity.outputs.release_id }}
         shell: bash
@@ -396,15 +425,20 @@ jobs:
           python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" \
             --archive build/downloaded/gabbaboy-core-linux-x64.tar.gz --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" \
             --output build/v02-consumer-receipt.json
+      - name: Attach the consumer receipt to the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ steps.identity.outputs.release_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
           # The receipt carries a per-run identifier, so a retry keeps the already attached receipt and never replaces it.
           count=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100" | jq '[.[] | select(.name == "v02-consumer-receipt.json")] | length')
           [[ "$count" -le 1 ]] || { echo "Draft has duplicate consumer receipts." >&2; exit 1; }
           if [[ "$count" == 0 ]]; then
             gh release upload "$RELEASE_TAG" build/v02-consumer-receipt.json --repo "$GH_REPO"
           fi
-      - name: Inspect the GitHub generated source archive and attach its receipt
-        env:
-          RELEASE_ID: ${{ steps.identity.outputs.release_id }}
+      - name: Inspect the GitHub generated source archive
         shell: bash
         run: |
           set -euo pipefail
@@ -416,6 +450,13 @@ jobs:
             --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json
           python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json \
             --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo .
+      - name: Attach the source archive receipt to the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ steps.identity.outputs.release_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
           # The archive receipt is deterministic for the same archive bytes, so an existing asset must be identical.
           count=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100" | jq '[.[] | select(.name == "source-archive-receipt.json")] | length')
           [[ "$count" -le 1 ]] || { echo "Draft has duplicate source archive receipts." >&2; exit 1; }
@@ -429,6 +470,23 @@ jobs:
             }
           else
             gh release upload "$RELEASE_TAG" build/source-archive-receipt.json --repo "$GH_REPO"
+          fi
+      - name: Fetch any existing downloaded-byte candidate receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ steps.identity.outputs.release_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
+          receipt_count=$(jq '[.[] | select(.name == "candidate-receipt.json")] | length' <<<"$assets")
+          [[ "$receipt_count" -le 1 ]] || { echo "Draft has duplicate candidate receipts." >&2; exit 1; }
+          if [[ "$receipt_count" == 1 ]]; then
+            mkdir -p build/existing
+            gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern candidate-receipt.json --dir build/existing
+            echo CANDIDATE_RECEIPT_EXISTS=true >> "$GITHUB_ENV"
+          else
+            echo CANDIDATE_RECEIPT_EXISTS=false >> "$GITHUB_ENV"
           fi
       - name: Write or revalidate downloaded-byte candidate receipt
         env:
@@ -452,12 +510,7 @@ jobs:
           smoke_runner=$(uname -a)
           build_runner=$(jq -er '.build.runner' build/downloaded/build-receipt.json)
           export asset_sha notice_sha source_receipt_sha build_receipt_sha tracer_sha battery_sha cmake_version compiler smoke_runner build_runner
-          assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
-          receipt_count=$(jq '[.[] | select(.name == "candidate-receipt.json")] | length' <<<"$assets")
-          [[ "$receipt_count" -le 1 ]] || { echo "Draft has duplicate candidate receipts." >&2; exit 1; }
-          if [[ "$receipt_count" == 1 ]]; then
-            mkdir -p build/existing
-            gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern candidate-receipt.json --dir build/existing
+          if [[ "$CANDIDATE_RECEIPT_EXISTS" == true ]]; then
             bash tests/scripts/verify-release-candidate.sh --verify \
               build/existing/candidate-receipt.json build/downloaded/gabbaboy-core-linux-x64.tar.gz \
               "$RELEASE_VERSION" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
@@ -519,6 +572,23 @@ jobs:
           }
           pathlib.Path("build/downloaded/candidate-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
           PY
+          bash tests/scripts/verify-release-candidate.sh --verify \
+            build/downloaded/candidate-receipt.json build/downloaded/gabbaboy-core-linux-x64.tar.gz \
+            "$RELEASE_VERSION" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
+            build/downloaded/gabbaboy-notices.txt build/downloaded/source-receipt.json \
+            build/downloaded/build-receipt.json
+          "$RUNNER_TEMP/verify-release-gates.sh" --check-runner-evidence \
+            build/downloaded/candidate-receipt.json build/downloaded/build-receipt.json \
+            "$RELEASE_TAG" "$SOURCE_SHA" "$smoke_runner"
+          fi
+      - name: Attach the downloaded-byte candidate receipt to the draft
+        if: env.CANDIDATE_RECEIPT_EXISTS != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ steps.identity.outputs.release_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
           current_release=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID")
           [[ $(jq -r '.draft' <<<"$current_release") == true && \
              $(jq -r '.tag_name' <<<"$current_release") == "$RELEASE_TAG" ]] || {
@@ -529,21 +599,14 @@ jobs:
             echo "Tag target changed during candidate qualification." >&2
             exit 1
           }
-          bash tests/scripts/verify-release-candidate.sh --verify \
-            build/downloaded/candidate-receipt.json build/downloaded/gabbaboy-core-linux-x64.tar.gz \
-            "$RELEASE_VERSION" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
-            build/downloaded/gabbaboy-notices.txt build/downloaded/source-receipt.json \
-            build/downloaded/build-receipt.json
-          "$RUNNER_TEMP/verify-release-gates.sh" --check-runner-evidence \
-            build/downloaded/candidate-receipt.json build/downloaded/build-receipt.json \
-            "$RELEASE_TAG" "$SOURCE_SHA" "$smoke_runner"
-            gh release upload "$RELEASE_TAG" build/downloaded/candidate-receipt.json --repo "$GH_REPO"
-          fi
-          echo "Candidate is qualified and remains a draft. Only the final 06-06 gate may publish it."
-      - name: Verify the attached candidate, product package and source archive receipt together
+          gh release upload "$RELEASE_TAG" build/downloaded/candidate-receipt.json --repo "$GH_REPO"
+      - name: Report the qualified candidate
+        shell: bash
+        run: echo "Candidate is qualified and remains a draft. Only the final 06-06 gate may publish it."
+      - name: Download the attached candidate, product package and source archive receipt
         env:
+          GH_TOKEN: ${{ github.token }}
           RELEASE_ID: ${{ steps.identity.outputs.release_id }}
-          RELEASE_VERSION: ${{ steps.identity.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
@@ -552,6 +615,13 @@ jobs:
             --pattern candidate-receipt.json --pattern gabbaboy-core-linux-x64.tar.gz \
             --pattern gabbaboy-notices.txt --pattern source-receipt.json \
             --pattern build-receipt.json --pattern source-archive-receipt.json --dir build/final-verify
+      - name: Verify the attached candidate, product package and source archive receipt together
+        env:
+          RELEASE_ID: ${{ steps.identity.outputs.release_id }}
+          RELEASE_VERSION: ${{ steps.identity.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
           bash tests/scripts/verify-release-candidate.sh --verify-final \
             build/final-verify/candidate-receipt.json build/final-verify/gabbaboy-core-linux-x64.tar.gz \
             "$RELEASE_VERSION" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
@@ -568,7 +638,6 @@ jobs:
     permissions:
       contents: write
     env:
-      GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       RELEASE_TAG: ${{ inputs.retry && inputs.tag_name || needs.release.outputs.tag_name }}
       SOURCE_SHA: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
@@ -577,6 +646,8 @@ jobs:
       SOURCE_REVISION: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
     steps:
       - name: Require trusted candidate identity and unpublished matching draft
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -595,6 +666,7 @@ jobs:
         with:
           ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 0
+          persist-credentials: false
       - name: Verify checked out source version
         shell: bash
         run: |
@@ -608,7 +680,17 @@ jobs:
           set -euo pipefail
           git show "${GITHUB_SHA}:.github/scripts/create-deterministic-archive.py" > "$RUNNER_TEMP/create-deterministic-archive.py"
           python3 "$RUNNER_TEMP/create-deterministic-archive.py" --self-test
+      - name: Overlay the trusted release-candidate verifiers from the workflow commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The tagged tree is data here: run the workflow commit's copies of the verifiers that judge the downloaded bytes.
+          # verify-release-candidate.sh --extract reaches verify-v02-consumers.py, so both are replaced before either runs.
+          git show "${GITHUB_SHA}:tests/scripts/verify-release-candidate.sh" > tests/scripts/verify-release-candidate.sh
+          git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py
       - name: Select a complete existing macOS candidate or a clean build
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -675,6 +757,8 @@ jobs:
           cp build/phase3-player/preview-candidate/build-receipt.json build/gabbaboy-preview-macos-arm64-build-receipt.json
       - name: Attach macOS candidate bytes to the unpublished draft
         if: env.REUSE_MACOS_CANDIDATE != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -692,7 +776,9 @@ jobs:
               gh release upload "$RELEASE_TAG" "$file" --repo "$GH_REPO"
             fi
           done
-      - name: Download and smoke the attached player archive
+      - name: Download the attached player archive and core archive
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -701,9 +787,13 @@ jobs:
           mkdir -p build/downloaded-player
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-preview-macos-arm64.tar.gz --pattern gabbaboy-preview-macos-arm64-build-receipt.json --dir build/downloaded-player
           cp build/downloaded-player/gabbaboy-preview-macos-arm64-build-receipt.json build/downloaded-player/build-receipt.json
-          GBB_VERIFIED_OUTPUT_DIR="$RUNNER_TEMP/release-player-downloaded" bash tests/scripts/verify-phase3-player.sh --verify-package build/downloaded-player
           mkdir -p build/downloaded-core build/consumer-work
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-macos-arm64.tar.gz --pattern gabbaboy-core-macos-arm64.tar.gz.sha256 --dir build/downloaded-core
+      - name: Smoke the downloaded player archive and relocated C/C++ consumers
+        shell: bash
+        run: |
+          set -euo pipefail
+          GBB_VERIFIED_OUTPUT_DIR="$RUNNER_TEMP/release-player-downloaded" bash tests/scripts/verify-phase3-player.sh --verify-package build/downloaded-player
           git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > "$RUNNER_TEMP/verify-release-gates.sh"
           bash "$RUNNER_TEMP/verify-release-gates.sh" --check-digest-sidecar \
             build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz.sha256 \

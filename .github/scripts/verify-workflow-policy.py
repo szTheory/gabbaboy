@@ -6,7 +6,10 @@ shape these workflows use (mappings, sequences, literal and folded block scalars
 simple flow lists), refuses everything else (anchors, aliases, tags, tabs, flow
 maps, duplicate keys, multi-line plain scalars) and then classifies every job by
 role: unprivileged producer, trusted reader, minimal attacher, or a named
-residual. Roles are enforced from jobs, permissions, needs, checkout inputs and
+residual. Residual jobs still keep write authority (an owner decision) but are not
+exempt from credential checks: every checkout is non-persisted, jobs that run tagged
+code hold the token only on gh steps and overlay the trusted verifiers, and the
+job-level token exemption is the named TOKEN_SCOPE_EXEMPT data with its reasons. Roles are enforced from jobs, permissions, needs, checkout inputs and
 artifact steps, never from substrings of the file.
 
 The judge never imports or executes anything from the tree it judges. Run it from
@@ -768,8 +771,23 @@ RELEASE_ROLES = {
 }
 # Residual jobs that build or run tagged-tree code while holding contents: write. The overlay paths are the
 # tagged-tree verifiers each one must replace with the workflow commit's copy before first use.
+_VERIFIER_PAIR = ("tests/scripts/verify-release-candidate.sh", "tests/scripts/verify-v02-consumers.py")
 TRUSTED_OVERLAYS = {
-    "candidate-windows": ("tests/scripts/verify-release-candidate.sh", "tests/scripts/verify-v02-consumers.py"),
+    "candidate": ("tests/scripts/verify-release-candidate.sh", "tests/scripts/verify-v02-source-archive.py",
+                  "tests/scripts/verify-v02-consumers.py", "cmake/VerifyReleaseReceipt.cmake"),
+    # verify-release-candidate.sh --extract reaches verify-v02-consumers.py, so both are overlaid before either runs.
+    "candidate-macos": _VERIFIER_PAIR,
+    "candidate-windows": _VERIFIER_PAIR,
+}
+# Residual jobs that run tagged-tree code: no job-wide token, the token only on gh steps.
+RESIDUAL_SUBJECT_JOBS = ("candidate", "candidate-macos", "candidate-windows")
+# Residual jobs that keep a job-level token, with the reason. They are not exempt from the step rule: with the
+# token job-wide, none of their steps may build or run tagged code.
+TOKEN_SCOPE_EXEMPT = {
+    "candidate-platform-manifest": "runs only trusted judge code (_check_no_subject_execution and the trusted-checkout rule) "
+                                   "and needs the token across its gh-only steps",
+    "publish-qualified-release": "runs only trusted judge code (_check_no_subject_execution and the trusted-checkout rule) "
+                                 "and needs the token across its gh-only release steps",
 }
 RELEASE_ARTIFACTS = {
     "candidate-corpus": ("release-evidence-corpus", ("build/cgb-corpus-receipt.json", "build/support-ledger.json")),
@@ -1029,8 +1047,24 @@ def check_ci(root: Path) -> None:
         require_call(name, "linux-sanitizers", job, command, conditional=conditional, errexit_off=True, status_var=var)
 
 
+def _check_residual_classification(roles=None, subject=None, exempt=None, overlays=None) -> None:
+    """Every residual job is named once: it runs tagged code (job token forbidden) or is a reasoned exemption."""
+    roles = RELEASE_ROLES if roles is None else roles
+    subject = RESIDUAL_SUBJECT_JOBS if subject is None else subject
+    exempt = TOKEN_SCOPE_EXEMPT if exempt is None else exempt
+    overlays = TRUSTED_OVERLAYS if overlays is None else overlays
+    residual = {job_id for job_id, role in roles.items() if role == "residual"}
+    if set(subject) & set(exempt) or residual != set(subject) | set(exempt) or len(set(subject)) != len(subject):
+        raise Reject("residual-classification", "every residual job must be in exactly one of RESIDUAL_SUBJECT_JOBS or TOKEN_SCOPE_EXEMPT")
+    if any(not isinstance(reason, str) or not reason.strip() for reason in exempt.values()):
+        raise Reject("residual-classification", "every TOKEN_SCOPE_EXEMPT job needs a non-empty reason")
+    if not set(overlays) <= set(subject):
+        raise Reject("residual-classification", "TRUSTED_OVERLAYS may name only RESIDUAL_SUBJECT_JOBS")
+
+
 def check_release(root: Path) -> None:
     name = "release"
+    _check_residual_classification()
     tree = read_workflow(root / ".github/workflows/release.yml")
     if tree.get("permissions") != {"contents": "read"}:
         raise Reject("workflow-permissions", "release must declare only top-level contents: read")
@@ -1064,11 +1098,13 @@ def check_release(root: Path) -> None:
             _require_needs(name, job_id, job, {"release", "candidate"}, "workflow-dependency")
             artifact, files = RELEASE_ARTIFACTS[job_id]
             _upload(job, name, job_id, artifact, files)
-        elif role == "residual" and job_id in TRUSTED_OVERLAYS:
+        elif role == "residual":
             _check_checkout_credentials(name, tree, (job_id,))
-            _check_token_subject_execution(name, job_id, job)
-            _check_token_scope(name, job_id, job)
-            _check_trusted_overlay(name, job_id, job, TRUSTED_OVERLAYS[job_id])
+            _check_token_subject_execution(name, job_id, job, job_wide=job_id in TOKEN_SCOPE_EXEMPT)
+            if job_id in RESIDUAL_SUBJECT_JOBS:
+                _check_token_scope(name, job_id, job)
+            if job_id in TRUSTED_OVERLAYS:
+                _check_trusted_overlay(name, job_id, job, TRUSTED_OVERLAYS[job_id])
         elif role == "attacher":
             if perms != {"contents": "write"}:
                 raise Reject("attacher-permissions", f"{_where(name, job_id)} must hold exactly contents: write")
@@ -1349,6 +1385,43 @@ def _mutations():
             ("  candidate-windows:\n", "bash tests/scripts/verify-release-candidate.sh --extract",
              'git show "${GITHUB_SHA}:tests/scripts/verify-release-candidate.sh" > tests/scripts/verify-release-candidate.sh\n{I}git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py\n{I}bash tests/scripts/verify-release-candidate.sh --extract')],
          "trusted-verifier-overlay"),
+        _m("candidate residual checkout persists credentials", rel, "  candidate:\n", "persist-credentials: false",
+           "persist-credentials: true", "checkout-credentials"),
+        _m("candidate residual job env holds the write token", rel, "  candidate:\n", "    env:\n",
+           "    env:\n      GH_TOKEN: ${{ github.token }}\n", "token-scope"),
+        _m("candidate residual cache-free build step holds the write token", rel, "  candidate:\n",
+           "      - name: Configure and build cache-free release core\n        if: env.CANDIDATE_REUSED != 'true'\n",
+           "      - name: Configure and build cache-free release core\n        if: env.CANDIDATE_REUSED != 'true'\n        env:\n          GH_TOKEN: ${{ github.token }}\n",
+           "token-subject-execution"),
+        _m("candidate residual tokened step runs the consumer verifier", rel, "  candidate:\n",
+           "      - name: Prove downloaded relocated C and C++ consumer behavior\n        env:\n",
+           "      - name: Prove downloaded relocated C and C++ consumer behavior\n        env:\n          GH_TOKEN: ${{ github.token }}\n",
+           "token-subject-execution"),
+        _m("candidate residual trusted verifier overlay removed", rel, "  candidate:\n",
+           'git show "${GITHUB_SHA}:tests/scripts/verify-v02-source-archive.py" > tests/scripts/verify-v02-source-archive.py',
+           "true", "trusted-verifier-overlay"),
+        _m("candidate residual overlay omits the consumer verifier", rel, "  candidate:\n",
+           'git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py',
+           "true", "trusted-verifier-overlay"),
+        _m("macos residual checkout persists credentials", rel, "  candidate-macos:\n", "persist-credentials: false",
+           "persist-credentials: true", "checkout-credentials"),
+        _m("macos residual job env holds the write token", rel, "  candidate-macos:\n", "    env:\n",
+           "    env:\n      GH_TOKEN: ${{ github.token }}\n", "token-scope"),
+        _m("macos residual smoke step holds the write token", rel, "  candidate-macos:\n",
+           "      - name: Smoke the downloaded player archive and relocated C/C++ consumers\n",
+           "      - name: Smoke the downloaded player archive and relocated C/C++ consumers\n        env:\n          GH_TOKEN: ${{ github.token }}\n",
+           "token-subject-execution"),
+        _m("macos residual trusted verifier overlay removed", rel, "  candidate-macos:\n",
+           'git show "${GITHUB_SHA}:tests/scripts/verify-release-candidate.sh" > tests/scripts/verify-release-candidate.sh',
+           "true", "trusted-verifier-overlay"),
+        _m("macos residual overlay omits only the consumer verifier", rel, "  candidate-macos:\n",
+           'git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py',
+           "true", "trusted-verifier-overlay"),
+        _m("platform manifest exempt job gains a token step running tagged scripts", rel, "  candidate-platform-manifest:\n",
+           "    steps:\n", "    steps:\n      - name: Run a tagged script\n        run: python3 -I tests/scripts/verify-v02-consumers.py\n",
+           "token-subject-execution"),
+        _m("platform manifest checkout persists credentials", rel, "  candidate-platform-manifest:\n", "persist-credentials: false",
+           "persist-credentials: true", "checkout-credentials"),
         _m("ci campaign status no longer asserted", "ci.yml", "  linux-sanitizers:\n", 'test "$verify_status" -eq 0', 'echo test "$verify_status" -eq 0', "required-command-not-executed"),
         _m("ci campaign verifier removed", "ci.yml", "  linux-sanitizers:\n", "python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json\n            verify_status=$?",
            "true\n            verify_status=$?", "required-command-not-executed"),
@@ -1424,6 +1497,21 @@ def self_test(root: Path) -> None:
             raise SystemExit(f"self-test hostile subject judge was not ignored: exit={result.returncode} stderr={result.stderr.strip()!r}")
         rejected += 1
         print("rejected: subject-supplied judge and shadowed modules cannot approve a mutated workflow")
+        # Residual classification is data, so it is attacked in-process: a job in both sets, then a job in neither.
+        for label, kwargs in (
+            ("residual job listed in both the subject set and the exemption map", {"exempt": {**TOKEN_SCOPE_EXEMPT, "candidate": "claimed exempt"}}),
+            ("residual job missing from both sets", {"subject": tuple(job for job in RESIDUAL_SUBJECT_JOBS if job != "candidate")}),
+            ("exempt job without a reason", {"exempt": {**TOKEN_SCOPE_EXEMPT, "publish-qualified-release": " "}}),
+        ):
+            try:
+                _check_residual_classification(**kwargs)
+            except Reject as exc:
+                if exc.code != "residual-classification":
+                    raise SystemExit(f"self-test negative {label!r} failed: wrong code {exc.code}")
+                rejected += 1
+                print(f"rejected: {label}: {exc}")
+            else:
+                raise SystemExit(f"self-test negative {label!r} failed: accepted")
     print(f"PASS: workflow policy self-test negative_controls={rejected} positive_controls={1 + accepted}")
 
 
