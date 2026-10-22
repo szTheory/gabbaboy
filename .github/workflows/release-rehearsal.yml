@@ -51,16 +51,20 @@ jobs:
       - name: Run the full CTest stream once
         id: full_ctest
         continue-on-error: true
-        run: ctest --test-dir build -T Test --no-compress-output --test-output-size-passed 16777216 --output-on-failure --no-tests=error --output-junit "cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml"
+        env:
+          RUN_NONCE: ${{ steps.corpus_run.outputs.run_nonce }}
+        run: ctest --test-dir build -T Test --no-compress-output --test-output-size-passed 16777216 --output-on-failure --no-tests=error --output-junit "cgb-corpus-ctest-${RUN_NONCE}.xml"
       - name: Build the CGB receipt from this CTest output
         run: python3 -I tests/scripts/verify-cgb-corpus-report.py --from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json
       - name: Verify public CGB claims, the current support ledger and the required test inventory
         shell: bash
+        env:
+          RUN_NONCE: ${{ steps.corpus_run.outputs.run_nonce }}
         run: |
           set -euo pipefail
           python3 -I tests/scripts/verify-cgb-corpus-claims.py --receipt build/cgb-corpus-receipt.json
           python3 -I tests/scripts/verify-support-ledger.py --check-current --receipt build/cgb-corpus-receipt.json
-          bash .github/scripts/verify-test-inventory.sh "build/cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml" tests/expected-tests.txt --installed
+          bash .github/scripts/verify-test-inventory.sh "build/cgb-corpus-ctest-${RUN_NONCE}.xml" tests/expected-tests.txt --installed
       - name: Require the full CTest run to pass
         env:
           FULL_CTEST_OUTCOME: ${{ steps.full_ctest.outcome }}
@@ -119,11 +123,6 @@ jobs:
     name: rehearse-paired-performance-qualification
     runs-on: ubuntu-22.04
     timeout-minutes: 45
-    env:
-      PERFORMANCE_REGRESSION_REVIEW: >-
-        Source delta reviewed: v0.2 adds CGB speed-switch, HDMA arbitration, unsupported-bus and output-boundary
-        checks to the shared run loop that the v0.1.0 baseline lacks; the slowdown is accepted and disclosed,
-        and no equivalent-speed claim is made.
     steps:
       - name: Check out the rehearsed source with full history
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -135,8 +134,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build
-          bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json \
-            --review-regression "$PERFORMANCE_REGRESSION_REVIEW"
+          bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json
           python3 -I tests/scripts/verify-v02-performance.py --verify build/v02-performance-receipt.json
 
   package:
@@ -244,8 +242,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json \
-            --review-regression "Source delta reviewed: v0.2 adds CGB speed-switch, HDMA arbitration, unsupported-bus and output-boundary checks to the shared run loop that the v0.1.0 baseline lacks; the slowdown is accepted and disclosed, and no equivalent-speed claim is made."
+          bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json
           python3 -I tests/scripts/verify-v02-performance.py --verify build/v02-performance-receipt.json
       - name: Relocated consumer receipt and source archive receipt
         shell: bash

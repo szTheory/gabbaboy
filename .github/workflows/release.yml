@@ -1058,7 +1058,9 @@ jobs:
     needs: [release, candidate]
     if: ${{ always() && needs.candidate.result == 'success' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    # Worst case 3000 (poll deadline) + 60 (request timeout) + 30 (interval) + 2700 (hosted poll) + 900
+    # (margin for checkout, run download, artifact upload, verifier startup and final-iteration overshoot) = 6690 s <= 6720 s.
+    timeout-minutes: 112
     permissions:
       actions: read
       contents: read
@@ -1066,6 +1068,11 @@ jobs:
       GH_REPO: ${{ github.repository }}
       RELEASE_TAG: ${{ inputs.retry && inputs.tag_name || needs.release.outputs.tag_name }}
       SOURCE_SHA: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
+      CI_RUN_WAIT_ATTEMPTS: 90
+      CI_RUN_WAIT_SECONDS: 30
+      CI_RUN_WAIT_DEADLINE_SECONDS: 3000
+      CI_RUN_REQUEST_TIMEOUT_SECONDS: 60
+      HOSTED_POLL_SECONDS: 2700
     steps:
       # Trusted workflow revision only. The release campaign is not executed here: this workflow's own
       # campaign never qualified, so the judge consumes the completed exact-source ci.yml push campaign.
@@ -1086,25 +1093,35 @@ jobs:
           set -euo pipefail
           [[ "$GH_REPO" == szTheory/gabbaboy && "$GITHUB_REF" == refs/heads/main ]] || { echo "Fuzz evidence runs only from trusted main workflow runs." >&2; exit 1; }
           [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Malformed release tag or source SHA." >&2; exit 1; }
-          [[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" ]] || {
-            echo "BLOCKING LIMITATION: the trusted workflow revision is not the release source, so the hosted campaign verifier cannot bind it. No local receipt is substituted." >&2
+          [[ "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" == "$SOURCE_SHA" ]] || {
+            echo "Release tag does not resolve to the source SHA." >&2
             exit 1
           }
-          [[ "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" == "$SOURCE_SHA" ]] || { echo "Release tag does not resolve to the source SHA." >&2; exit 1; }
+          # The source is bound by the tag API check above and by the trusted verifier below (commit object,
+          # commit-tree manifest, API push run on main at the source SHA). HEAD is the judge, never the subject:
+          # on a retry main may have moved past the release commit, so nothing here compares HEAD with SOURCE_SHA.
           run_id=""
-          for _ in $(seq 1 90); do
-            runs=$(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&branch=main&per_page=100")
+          poll_start=$SECONDS
+          attempts_made=0
+          for attempt_number in $(seq 1 "$CI_RUN_WAIT_ATTEMPTS"); do
+            if [[ $((SECONDS - poll_start)) -ge "$CI_RUN_WAIT_DEADLINE_SECONDS" ]]; then break; fi
+            attempts_made=$attempt_number
+            runs=$(timeout "$CI_RUN_REQUEST_TIMEOUT_SECONDS" gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&branch=main&per_page=100") || {
+              echo "BLOCKING LIMITATION: ci.yml run lookup failed or exceeded the request timeout (attempt $attempt_number, elapsed $((SECONDS - poll_start))s)." >&2
+              exit 1
+            }
             run_id=$(jq -r --arg sha "$SOURCE_SHA" '[.workflow_runs[] | select(.head_sha == $sha)] | max_by([.run_number, .id]) | select(. != null and .status == "completed") | .id' <<<"$runs")
             [[ -n "$run_id" && "$run_id" != null ]] && break
-            sleep 30
+            sleep "$CI_RUN_WAIT_SECONDS"
           done
-          [[ -n "$run_id" && "$run_id" != null ]] || { echo "BLOCKING LIMITATION: no completed exact-source ci.yml push campaign exists." >&2; exit 1; }
+          [[ -n "$run_id" && "$run_id" != null ]] || { echo "BLOCKING LIMITATION: no completed exact-source ci.yml push campaign exists after $attempts_made attempts and $((SECONDS - poll_start))s (deadline ${CI_RUN_WAIT_DEADLINE_SECONDS}s)." >&2; exit 1; }
           attempt=$(jq -r --arg id "$run_id" '.workflow_runs[] | select((.id | tostring) == $id) | .run_attempt' <<<"$runs")
           mkdir -p build/ci-fuzz
           gh run download "$run_id" --repo "$GH_REPO" --name "v02-fuzz-$run_id-$attempt" --dir build/ci-fuzz
           test -s build/ci-fuzz/v02-fuzz-receipt.json
           python3 -I tests/scripts/verify-v02-fuzz.py --verify-hosted --source-sha "$SOURCE_SHA" \
-            --run-id "$run_id" --attempt "$attempt" --receipt build/ci-fuzz/v02-fuzz-receipt.json
+            --run-id "$run_id" --attempt "$attempt" --receipt build/ci-fuzz/v02-fuzz-receipt.json \
+            --poll-seconds "$HOSTED_POLL_SECONDS"
       - name: Retain the verified campaign receipt for the separate attacher
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -1124,11 +1141,6 @@ jobs:
     env:
       RELEASE_TAG: ${{ inputs.retry && inputs.tag_name || needs.release.outputs.tag_name }}
       SOURCE_SHA: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
-      # Reviewed disposition for the shared-run-loop change; it is only recorded when the +5% trigger fires.
-      PERFORMANCE_REGRESSION_REVIEW: >-
-        Source delta reviewed: v0.2 adds CGB speed-switch, HDMA arbitration, unsupported-bus and output-boundary
-        checks to the shared run loop that the v0.1.0 baseline lacks; the slowdown is accepted and disclosed,
-        and no equivalent-speed claim is made.
     steps:
       - name: Check out exact tagged source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -1147,8 +1159,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build
-          bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json \
-            --review-regression "$PERFORMANCE_REGRESSION_REVIEW"
+          bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json
           python3 -I tests/scripts/verify-v02-performance.py --verify build/v02-performance-receipt.json
       - name: Retain the performance receipt for the separate attacher
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

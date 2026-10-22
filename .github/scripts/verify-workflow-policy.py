@@ -239,6 +239,101 @@ def _check_run_expressions(workflow: str, tree: dict) -> None:
                                  f"${{{{ {expression.strip()} }}}} into a run body; pass it through step-level env")
 
 
+def _substitutions(text: str) -> list[str]:
+    """Bodies of the `$(...)` command substitutions in one shell word (arithmetic `$((...))` holds no command)."""
+    bodies, i = [], 0
+    while True:
+        i = text.find("$(", i)
+        if i < 0:
+            return bodies
+        if text.startswith("$((", i):
+            i += 3
+            continue
+        k = _match(text, i + 1, "(", ")")
+        bodies.append(text[i + 2 : k])
+        i = k + 1
+
+
+def _commands(script: str) -> list[list[str]]:
+    """Every command the script runs, including those inside command substitutions, as word lists."""
+    found = []
+    for event in shell_events(script):
+        found.append(event.words)
+        for text in [*event.words, *event.assigns]:
+            for body in _substitutions(text):
+                found.extend(_commands(body))
+    return found
+
+
+def _head_operand(word: str) -> bool:
+    return word == "HEAD" or word.startswith(("HEAD^", "HEAD~"))
+
+
+def _check_fuzz_source_binding(workflow: str, tree: dict) -> None:
+    """The fuzz reader's judge is the trusted checkout (HEAD) and its subject is the release commit. The subject is
+    bound by the tag API check and the trusted hosted verifier; on a retry main has moved, so nothing may compare
+    the subject with HEAD or ask for its ancestry against HEAD (WR-04)."""
+    job = _require_job(workflow, tree, "candidate-fuzz")
+    for step in job.get("steps", []):
+        for words in _commands(str(step.get("run", ""))):
+            if words[:2] == ["git", "rev-parse"] and any(_head_operand(word) for word in words[2:]):
+                raise Reject("fuzz-source-binding", f"{_where(workflow, 'candidate-fuzz')} step {step.get('name', '?')!r} reads HEAD; "
+                             "source identity comes from the tag API check and the trusted verifier, never the moving checkout")
+            if words[:1] == ["git"] and ("merge-base" in words[1:3] or "--is-ancestor" in words[1:]):
+                raise Reject("fuzz-source-binding", f"{_where(workflow, 'candidate-fuzz')} step {step.get('name', '?')!r} asserts ancestry "
+                             "against the moving checkout; main membership is the API push-run record at the source SHA")
+
+
+FUZZ_BUDGET_NAMES = ("CI_RUN_WAIT_ATTEMPTS", "CI_RUN_WAIT_SECONDS", "CI_RUN_WAIT_DEADLINE_SECONDS",
+                     "CI_RUN_REQUEST_TIMEOUT_SECONDS", "HOSTED_POLL_SECONDS")
+# Checkout with full history, run download, artifact upload, verifier startup and the verifier's final-iteration overshoot.
+FUZZ_BUDGET_MARGIN_SECONDS = 900
+
+
+def _budget_value(env: dict, name: str, where: str) -> int:
+    """A positive integer literal; the workflow reader may hand scalars back as text."""
+    value = env.get(name)
+    if isinstance(value, bool) or not (isinstance(value, int) or (isinstance(value, str) and re.fullmatch(r"[0-9]+", value))) or int(value) <= 0:
+        raise Reject("fuzz-wait-budget", f"{where} {name} must be a positive integer literal")
+    return int(value)
+
+
+def _check_fuzz_wait_budget(workflow: str, tree: dict) -> None:
+    """The CI-run poll ends by an elapsed-time deadline plus one bounded request, and the whole job fits its timeout."""
+    job = _require_job(workflow, tree, "candidate-fuzz")
+    where = _where(workflow, "candidate-fuzz")
+    env = job.get("env", {}) if isinstance(job.get("env"), dict) else {}
+    attempts, interval, deadline, request, hosted = (_budget_value(env, name, where) for name in FUZZ_BUDGET_NAMES)
+    minutes = _budget_value(job, "timeout-minutes", where)
+    if deadline < attempts * interval:
+        raise Reject("fuzz-wait-budget", f"{where} deadline {deadline}s is below attempts x interval {attempts * interval}s, which would silently shorten the poll")
+    worst = deadline + request + interval + hosted + FUZZ_BUDGET_MARGIN_SECONDS
+    if worst > minutes * 60:
+        raise Reject("fuzz-wait-budget", f"{where} worst case {worst}s exceeds timeout-minutes {minutes} ({minutes * 60}s)")
+    guarded = lookups = 0
+    for step in job.get("steps", []):
+        script = str(step.get("run", ""))
+        events = shell_events(script)
+        for at, event in enumerate(events):
+            if (event.words[:1] in (["[["], ["["], ["test"]) and "-ge" in event.words
+                    and any(re.search(r"\$\(\(.*\bSECONDS\b", word) for word in event.words)
+                    and any(word in ("$CI_RUN_WAIT_DEADLINE_SECONDS", "${CI_RUN_WAIT_DEADLINE_SECONDS}") for word in event.words)
+                    and any(frame[0] == "loop" for frame in event.frames)
+                    and at + 1 < len(events) and events[at + 1].words == ["break"]):
+                guarded += 1
+        for words in _commands(script):
+            for position in range(len(words) - 1):
+                if words[position : position + 2] == ["gh", "api"] and any("actions/workflows/ci.yml/runs" in word for word in words):
+                    lookups += 1
+                    if not (position == 2 and words[0] == "timeout"
+                            and words[1] in ("$CI_RUN_REQUEST_TIMEOUT_SECONDS", "${CI_RUN_REQUEST_TIMEOUT_SECONDS}")):
+                        raise Reject("fuzz-wait-budget", f"{where} runs-lookup gh api call must run under timeout $CI_RUN_REQUEST_TIMEOUT_SECONDS")
+    if not guarded:
+        raise Reject("fuzz-wait-budget", f"{where} poll loop must break when elapsed SECONDS reaches CI_RUN_WAIT_DEADLINE_SECONDS")
+    if not lookups:
+        raise Reject("fuzz-wait-budget", f"{where} has no ci.yml runs lookup for the budget to bound")
+
+
 def _check_checkout_credentials(workflow: str, tree: dict, job_ids) -> None:
     for job_id in job_ids:
         for step in _checkouts(tree["jobs"][job_id]):
@@ -890,8 +985,9 @@ RELEASE_REQUIRED = {
     "candidate-corpus": (_RELEASE_SUBJECT, _CORPUS_BUILD) + REHEARSAL_REQUIRED["corpus"][2:],
     "candidate-performance": (_RELEASE_SUBJECT,) + REHEARSAL_REQUIRED["performance"],
     "candidate-fuzz": (
+        '[[ "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" == "$SOURCE_SHA" ]]',
         'gh run download "$run_id" --repo "$GH_REPO" --name "v02-fuzz-$run_id-$attempt" --dir build/ci-fuzz',
-        'python3 -I tests/scripts/verify-v02-fuzz.py --verify-hosted --source-sha "$SOURCE_SHA" --run-id "$run_id" --attempt "$attempt" --receipt build/ci-fuzz/v02-fuzz-receipt.json',
+        'python3 -I tests/scripts/verify-v02-fuzz.py --verify-hosted --source-sha "$SOURCE_SHA" --run-id "$run_id" --attempt "$attempt" --receipt build/ci-fuzz/v02-fuzz-receipt.json --poll-seconds "$HOSTED_POLL_SECONDS"',
     ),
     "candidate-platform-manifest": (
         _MANIFEST_ARCHIVE_DOWNLOAD,
@@ -999,6 +1095,7 @@ def check_rehearsal(root: Path) -> None:
     _check_disabled(name, tree)
     _check_bounded_downloads(name, tree)
     _check_ignored_failures(name, tree)
+    _check_run_expressions(name, tree)
     _check_no_duplicate_setup(name, tree)
     _check_checkout_credentials(name, tree, tree["jobs"])
     for job_id, job in tree["jobs"].items():
@@ -1165,6 +1262,8 @@ def check_release(root: Path) -> None:
     for job_id, commands in RELEASE_REQUIRED.items():
         for command in commands:
             require_call(name, job_id, jobs[job_id], command)
+    _check_fuzz_source_binding(name, tree)
+    _check_fuzz_wait_budget(name, tree)
     publisher = jobs["publish-qualified-release"]
     gate_at = require_call(name, "publish-qualified-release", publisher, RELEASE_REQUIRED["publish-qualified-release"][2])
     publish_at = require_call(name, "publish-qualified-release", publisher, RELEASE_REQUIRED["publish-qualified-release"][4])
@@ -1231,6 +1330,7 @@ def _m(label: str, workflow: str, after: str, old: str, new: str, expected: str)
 JUDGE_CALL = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject"
 _REHEARSAL_TAG_LINE = "bash .github/scripts/produce-release-evidence.sh verify-subject --subject . --source-sha \"$GITHUB_SHA\" --tag \"$REHEARSAL_TAG\" --local-tag"
 JUDGE_STEP = "      - name: Judge workflow privilege and trust wiring from the trusted checkout\n"
+FUZZ_TAG_CHECK = '[[ "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" == "$SOURCE_SHA" ]] || {'
 
 
 def _mutations():
@@ -1308,6 +1408,26 @@ def _mutations():
            'run: echo "$FULL_CTEST_OUTCOME"', "ignored-gate"),
         _m("release hosted fuzz verifier loses its run identity", "release.yml", "  candidate-fuzz:\n", '--run-id "$run_id" --attempt "$attempt"',
            '--attempt "$attempt"', "required-command-not-executed"),
+        # Fuzz reader binds the release commit without the moving checkout and bounds its wait (WR-04).
+        _m("release fuzz reader compares HEAD with the source SHA", rel, "  candidate-fuzz:\n", FUZZ_TAG_CHECK,
+           '[[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" ]] || exit 1\n{I}' + FUZZ_TAG_CHECK, "fuzz-source-binding"),
+        _m("release fuzz reader asserts ancestry of the source against HEAD", rel, "  candidate-fuzz:\n", FUZZ_TAG_CHECK,
+           'git merge-base --is-ancestor "$SOURCE_SHA" HEAD || exit 1\n{I}' + FUZZ_TAG_CHECK, "fuzz-source-binding"),
+        _m("release fuzz reader tag API check replaced by a no-op", rel, "  candidate-fuzz:\n", FUZZ_TAG_CHECK,
+           "true || {", "required-command-not-executed"),
+        _m("release fuzz reader job timeout below its worst-case wait", rel, "  candidate-fuzz:\n", "timeout-minutes: 112",
+           "timeout-minutes: 95", "fuzz-wait-budget"),
+        _m("release fuzz reader attempts budget deleted", rel, "  candidate-fuzz:\n", "      CI_RUN_WAIT_ATTEMPTS: 90\n", "", "fuzz-wait-budget"),
+        _m("release fuzz reader elapsed-time deadline comparison deleted", rel, "  candidate-fuzz:\n",
+           '            if [[ $((SECONDS - poll_start)) -ge "$CI_RUN_WAIT_DEADLINE_SECONDS" ]]; then break; fi\n', "", "fuzz-wait-budget"),
+        _m("release fuzz reader deadline below attempts times interval", rel, "  candidate-fuzz:\n", "CI_RUN_WAIT_DEADLINE_SECONDS: 3000",
+           "CI_RUN_WAIT_DEADLINE_SECONDS: 2400", "fuzz-wait-budget"),
+        _m("release fuzz reader runs lookup loses its request timeout", rel, "  candidate-fuzz:\n",
+           'runs=$(timeout "$CI_RUN_REQUEST_TIMEOUT_SECONDS" gh api', "runs=$(gh api", "fuzz-wait-budget"),
+        _m("release fuzz reader hosted poll no longer takes the budget", rel, "  candidate-fuzz:\n",
+           ' \\\n            --poll-seconds "$HOSTED_POLL_SECONDS"', "", "required-command-not-executed"),
+        _m("rehearsal ctest step interpolates the run nonce into its run body", "release-rehearsal.yml",
+           "Run the full CTest stream once", '${RUN_NONCE}.xml"', '${{ steps.corpus_run.outputs.run_nonce }}.xml"', "run-expression"),
         _m("release performance verifier skipped by if false", "release.yml", "  candidate-performance:\n",
            "      - name: Measure the clean paired v0.1.0 baseline and exact-tag candidate\n",
            "      - name: Measure the clean paired v0.1.0 baseline and exact-tag candidate\n        if: ${{ false }}\n", "disabled-gate"),
