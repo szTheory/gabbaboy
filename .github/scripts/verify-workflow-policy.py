@@ -1030,6 +1030,25 @@ def check_rehearsal(root: Path) -> None:
             require_call(name, job_id, tree["jobs"][job_id], command)
 
 
+# Read-only workflows must not leave the checkout token in .git/config for later steps (IN-08). A job that truly
+# needs the persisted credential is listed here as (workflow file, job id) -> reason; none does today, because the
+# jobs authenticate gh through an explicit step-level token and fetch only public sources.
+READONLY_WORKFLOWS = ("ci.yml", "fixture-repro.yml", "preview.yml")
+CREDENTIAL_EXEMPT: dict[tuple[str, str], str] = {}
+
+
+def check_readonly_workflows(root: Path, exempt=None) -> None:
+    exempt = CREDENTIAL_EXEMPT if exempt is None else exempt
+    trees = {item: read_workflow(root / ".github/workflows" / item) for item in READONLY_WORKFLOWS}
+    for (workflow, job_id), reason in exempt.items():
+        if workflow not in trees or job_id not in trees[workflow]["jobs"]:
+            raise Reject("checkout-credentials", f"CREDENTIAL_EXEMPT names {workflow}.{job_id}, which does not exist")
+        if not str(reason).strip():
+            raise Reject("checkout-credentials", f"CREDENTIAL_EXEMPT entry {workflow}.{job_id} has no reason")
+    for workflow, tree in trees.items():
+        _check_checkout_credentials(workflow, tree, [job_id for job_id in tree["jobs"] if (workflow, job_id) not in exempt])
+
+
 def check_ci(root: Path) -> None:
     name = "ci"
     tree = read_workflow(root / ".github/workflows/ci.yml")
@@ -1178,13 +1197,14 @@ def check_all(root: Path) -> dict[str, int]:
     check_producer_script(root)
     check_rehearsal(root)
     check_ci(root)
+    check_readonly_workflows(root)
     check_release(root)
     residual = sorted(job_id for job_id, role in RELEASE_ROLES.items() if role == "residual")
     return {"residual": len(residual)}
 
 
 # --------------------------------------------------------------------------- self-test
-WORKFLOWS = ("release-rehearsal.yml", "release.yml", "ci.yml")
+WORKFLOWS = ("release-rehearsal.yml", "release.yml", "ci.yml", "fixture-repro.yml", "preview.yml")
 
 
 def _copy_fixture(root: Path, target: Path) -> None:
@@ -1443,6 +1463,10 @@ def _mutations():
            "Configure and build cache-free release core", '"$RELEASE_VERSION_OUT" ]]', '"${{ steps.identity.outputs.version }}" ]]', "run-expression"),
         _m("release ctest step interpolates the run nonce into its run body", "release.yml",
            "Run the full CTest stream once", '${RUN_NONCE}.xml"', '${{ steps.corpus_run.outputs.run_nonce }}.xml"', "run-expression"),
+        _m("ci native-linux checkout persists credentials", "ci.yml", "  native-linux:\n",
+           "          persist-credentials: false\n", "", "checkout-credentials"),
+        _m("preview installed-package-smoke checkout persists credentials", "preview.yml", "  installed-package-smoke-linux-x64:\n",
+           "          persist-credentials: false\n", "", "checkout-credentials"),
         _m("ci campaign status no longer asserted", "ci.yml", "  linux-sanitizers:\n", 'test "$verify_status" -eq 0', 'echo test "$verify_status" -eq 0', "required-command-not-executed"),
         _m("ci campaign verifier removed", "ci.yml", "  linux-sanitizers:\n", "python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json\n            verify_status=$?",
            "true\n            verify_status=$?", "required-command-not-executed"),
@@ -1528,6 +1552,20 @@ def self_test(root: Path) -> None:
                 _check_residual_classification(**kwargs)
             except Reject as exc:
                 if exc.code != "residual-classification":
+                    raise SystemExit(f"self-test negative {label!r} failed: wrong code {exc.code}")
+                rejected += 1
+                print(f"rejected: {label}: {exc}")
+            else:
+                raise SystemExit(f"self-test negative {label!r} failed: accepted")
+        # The credential exemption is data too: a stale job name and a reasonless entry are both rejected.
+        for label, exempt in (
+            ("credential exemption names a job that does not exist", {("ci.yml", "no-such-job"): "claimed"}),
+            ("credential exemption without a reason", {("ci.yml", "native-linux"): " "}),
+        ):
+            try:
+                check_readonly_workflows(root, exempt)
+            except Reject as exc:
+                if exc.code != "checkout-credentials":
                     raise SystemExit(f"self-test negative {label!r} failed: wrong code {exc.code}")
                 rejected += 1
                 print(f"rejected: {label}: {exc}")
