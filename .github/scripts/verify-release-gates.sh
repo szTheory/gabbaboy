@@ -31,38 +31,8 @@ if excluded_path("src/gabbaboy.c") or excluded_path("CMakeLists.txt"):
 workflow = (root / ".github/workflows/release.yml").read_text()
 entrypoint = (root / ".github/workflows/release-please.yml").read_text()
 gate_source = (root / ".github/scripts/verify-release-gates.sh").read_text()
-aggregate_sidecar_route = '  check_required_asset_sidecars "$downloaded_dir"'
-def validate_aggregate_sidecar_route(text):
-    if aggregate_sidecar_route not in text:
-        raise ValueError("aggregate draft/final inventory must use the strict platform sidecar helper")
-try:
-    validate_aggregate_sidecar_route(gate_source)
-except ValueError as error:
-    raise SystemExit(str(error))
-try:
-    validate_aggregate_sidecar_route(gate_source.replace(aggregate_sidecar_route, ""))
-except ValueError:
-    pass
-else:
-    raise SystemExit("release gate self-test accepted an aggregate inventory without strict sidecar validation")
-v02_route = '\n    check_v02_evidence "$tmp" "$3" "$4" "$src/source.tar.gz"'
-def validate_v02_routes(text):
-    if text.count(v02_route) != 2:
-        raise ValueError("both the draft and the final gate must validate the v0.2 evidence through its owner validators")
-try:
-    validate_v02_routes(gate_source)
-except ValueError as error:
-    raise SystemExit(str(error))
-try:
-    validate_v02_routes(gate_source.replace(v02_route, "\n", 1))
-except ValueError:
-    pass
-else:
-    raise SystemExit("release gate self-test accepted a draft or final gate without v0.2 evidence validation")
-delivery_source = (root / "tests/scripts/verify-v02-delivery.py").read_text()
-for owner in ("verify-support-ledger.py", "verify-v02-performance.py", "verify-v02-fuzz.py", "verify-v02-source-archive.py"):
-    if f"tests/scripts/{owner}" not in delivery_source:
-        raise SystemExit(f"delivery checker does not call the owner validator {owner}")
+# Which gate runs which validator is proved by running the gates on defective fixtures in --self-test below,
+# not by counting call strings in this script's own source.
 def validate_verifier_invocations(text):
     if re.search(r"(?m)^\s*(?!bash\s)(?:python\S*\s+)?tests/scripts/verify-release-candidate\.sh\b", text):
         raise ValueError("release-candidate Bash verifier must be invoked explicitly with bash")
@@ -352,8 +322,9 @@ if expected != actual:
 PY
 }
 
-# Owner validators for the sidecar, performance, fuzz and source-archive receipts run from the tagged
-# checkout the caller is standing in (the performance and fuzz receipts bind that checkout's HEAD).
+# Owner validators for the sidecar, performance, fuzz and source-archive receipts run from this script's own
+# checkout (the judge, $ROOT). The exact tag checkout the caller is standing in is data: it is passed to the
+# delivery checker as --source-root, and the performance and fuzz receipts bind that checkout's HEAD.
 check_v02_evidence() {
   local directory=$1 tag=$2 source_sha=$3 archive=$4 repo_root
   repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || fail 'v0.2 evidence validation must run in the exact tag checkout'
@@ -432,6 +403,8 @@ content["support-ledger.json"] = json.dumps({"schema_version": 1 if defect == "s
                                              "ledger": {"git_blob_oid": "d" * 40}}).encode()
 for platform in ("macos-arm64", "windows-x64"):
     content[f"gabbaboy-core-{platform}.tar.gz.sha256"] = (digest(content[f"gabbaboy-core-{platform}.tar.gz"]) + "\n").encode()
+if defect == "sidecar":
+    content["gabbaboy-core-macos-arm64.tar.gz.sha256"] = ("0" * 64 + "\n").encode()
 content["candidate-platform-manifest.json"] = json.dumps({"source_sha": sha, "assets": [
     {"name": n, "sha256": digest(content[n])} for n in names if n != "candidate-platform-manifest.json"]}).encode()
 if defect == "stale":
@@ -736,6 +709,19 @@ PY
       fail 'aggregate release gate accepted a mismatched Mac digest sidecar'
     fi
     printf 'rejected: aggregate gate detects mismatched platform sidecar\n'
+    # Restore the valid sidecar first so the next rejection can only come from the sidecar being absent.
+    python3 - "$temp/aggregate" <<'PY'
+import hashlib, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+archive = root / "gabbaboy-core-macos-arm64.tar.gz"
+(root / (archive.name + ".sha256")).write_text(hashlib.sha256(archive.read_bytes()).hexdigest() + "\n")
+PY
+    check_required_asset_sidecars "$temp/aggregate"
+    rm "$temp/aggregate/gabbaboy-core-windows-x64.tar.gz.sha256"
+    if check_required_asset_sidecars "$temp/aggregate" >/dev/null 2>&1; then
+      fail 'aggregate release gate accepted a missing platform sidecar'
+    fi
+    printf 'rejected: aggregate gate detects missing platform sidecar\n'
     printf 'PASS: one-line downloaded archive digest sidecar verification\n'
     inventory_fixture "$temp/inventory" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
     check_asset_inventory "$temp/inventory/api.json" "$temp/inventory/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
@@ -756,6 +742,32 @@ PY
     expect_reject 'a schema-1 support sidecar' 'schema-2 support sidecar' \
       check_asset_inventory "$temp/schema1/api.json" "$temp/schema1/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
     printf 'rejected: schema-1 support sidecar\n'
+    # The draft and final gates reach the sidecar helper through the inventory check: a defective platform sidecar
+    # must stop the real inventory gate, and the same fixture without the defect must pass it.
+    inventory_fixture "$temp/bad-sidecar" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "" sidecar
+    expect_reject 'a platform sidecar that does not match its archive' 'digest sidecar does not match downloaded archive bytes' \
+      check_asset_inventory "$temp/bad-sidecar/api.json" "$temp/bad-sidecar/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    printf 'rejected: inventory gate routes platform sidecars through the strict byte check\n'
+    # The v0.2 evidence gate delegates to the owner validators from the judge checkout. Run its CLI from a real
+    # checkout on evidence missing one owner receipt, and prove the control bites: with the receipt present the
+    # failure must move past the missing-receipt reason.
+    evidence="$temp/v02-evidence"
+    mkdir -p "$evidence"
+    for receipt in cgb-corpus-receipt.json support-ledger.json v02-performance-receipt.json v02-fuzz-receipt.json source-archive-receipt.json v02-consumer-receipt.json; do
+      printf '{}\n' > "$evidence/$receipt"
+    done
+    printf 'archive stand-in\n' > "$temp/v02-source.tar.gz"
+    head_sha=$(git -C "$ROOT" rev-parse HEAD)
+    if v02_output=$(cd "$ROOT" && bash "$ROOT/.github/scripts/verify-release-gates.sh" --check-v02-evidence "$evidence" v0.2.0 "$head_sha" "$temp/v02-source.tar.gz" 2>&1); then
+      fail 'v0.2 evidence gate accepted placeholder evidence'
+    fi
+    [[ "$v02_output" != *'v02-fuzz-receipt.json is absent or empty'* ]] || fail 'v0.2 evidence control reported a receipt that is present as missing'
+    rm "$evidence/v02-fuzz-receipt.json"
+    if v02_output=$(cd "$ROOT" && bash "$ROOT/.github/scripts/verify-release-gates.sh" --check-v02-evidence "$evidence" v0.2.0 "$head_sha" "$temp/v02-source.tar.gz" 2>&1); then
+      fail 'v0.2 evidence gate accepted evidence without the fuzz owner receipt'
+    fi
+    [[ "$v02_output" == *'v02-fuzz-receipt.json is absent or empty'* ]] || fail "v0.2 evidence gate rejected the missing fuzz receipt for the wrong reason: $v02_output"
+    printf 'rejected: v0.2 evidence gate detects a missing owner receipt\n'
     inventory_fixture "$temp/final" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "" "" final
     check_final_receipt "$temp/final/api.json" "$temp/final/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
     inventory_fixture "$temp/final-short" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "" "" final-short
