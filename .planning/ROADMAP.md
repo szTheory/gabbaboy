@@ -534,7 +534,7 @@ Plans:
   3. Canonical UAT and strict coverage pass; relevant DMG baseline and exact-head remote checks pass before merge.
   4. Re-audit is the next stage after this phase; no automatic archive, tag, publication or v0.3 start.
 
-**Plans:** 20/30 plans executed (19/19 original executed; 11 gap-closure plans 15.1-20..30 pending after verification gaps_found)
+**Plans:** 21/30 plans executed (19/19 original executed; 11 gap-closure plans 15.1-20..30 pending after verification gaps_found)
 
 Plans:
 **Wave 1**
@@ -574,7 +574,7 @@ Plans:
 
 **Gap Wave 1**
 - [x] 15.1-20-PLAN.md — Share one STOP-resume rule between stepper and diagnostic replay (WR-03, IN-04, IN-06)
-- [ ] 15.1-22-PLAN.md — Scope release-job tokens, drop persisted credentials, classify residual jobs as data (WR-01)
+- [x] 15.1-22-PLAN.md — Scope release-job tokens, drop persisted credentials, classify residual jobs as data (WR-01)
 - [ ] 15.1-30-PLAN.md — SHIP-09 empty, single-entry and encoding ledger controls (SHIP-09)
 
 **Gap Wave 2** *(blocked on Gap Wave 1)*
@@ -615,4 +615,4 @@ Plans:
 | 13. CGB HDMA | v0.2 | 12/12 | Complete    | 2026-10-14 |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 13/13 | Complete    | 2026-10-15 |
 | 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 10/10 | Complete    | 2026-10-20 |
-| 15.1. Release Hardening and Milestone Debt Closure | v0.2 | 20/30 | In Progress | - |
+| 15.1. Release Hardening and Milestone Debt Closure | v0.2 | 21/30 | In Progress | - |
