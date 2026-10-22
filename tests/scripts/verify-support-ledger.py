@@ -1334,7 +1334,11 @@ def verify_sidecar_data(observed: dict, expected: dict) -> None:
         fail("sidecar source SHA, tagged ledger blob, or fixture/corpus identity differs from the tag")
 
 
-def _schema2_test_data() -> dict:
+def _schema2_test_data(cases: int = 2) -> dict:
+    # cases=2 is the historical fixture; cases=1 keeps only case-a for single-entry controls.
+    if cases not in (1, 2):
+        fail("schema-2 test fixture supports one or two cases")
+    case_ids = ["case-a", "case-b"][:cases]
     source_raw = b"input"
     binary_raw = b"binary"
     evidence_raw = b"identity"
@@ -1343,7 +1347,7 @@ def _schema2_test_data() -> dict:
     for case_id, expected_failure, observed, status, matched, signature, assertion_id in (
         ("case-a", False, "pass", "pass", False, None, "case-a:assertion-a"),
         ("case-b", True, "fail", "xfail", True, "1" * 64, "case-b:assertion-b"),
-    ):
+    )[:cases]:
         assertion = {
             "id": assertion_id,
             "expected_disposition": "pass",
@@ -1440,19 +1444,19 @@ def _schema2_test_data() -> dict:
         "disposition_identities": [row for row in identities if row["path"] in V2_DISPOSITION_PATHS],
         "inventory": {"path": "tests/external/cgb-corpus-inventory.json",
                       "sha256": sha256(evidence_raw),
-                      "required_case_count": 2, "case_ids": ["case-a", "case-b"],
+                      "required_case_count": cases, "case_ids": list(case_ids),
                       "case_bindings": bindings,
-                      "source_candidates_by_suite": {"age": {"discovered": 2, "required": 2, "excluded": 0}},
-                      "admitted_outputs": 2, "outputs_outside_required_case_set": 0},
+                      "source_candidates_by_suite": {"age": {"discovered": cases, "required": cases, "excluded": 0}},
+                      "admitted_outputs": cases, "outputs_outside_required_case_set": 0},
         "receipt": {"path": "build/cgb-corpus-receipt.json", "sha256": "f" * 64,
                     "identity_sha256": "0" * 64, "input_identity_sha256": "1" * 64,
                     "source_inputs_sha256": canonical_sha256(source_inputs), "run_id": "2" * 64,
                     "producer_revision": "5" * 40,
                     "model": "CGB-CPU-E selected software model", "hardware_qualified": False,
-                    "run": {"id": "2" * 64, "ctest_cases": 3, "ctest_total_cases": 1133,
+                    "run": {"id": "2" * 64, "ctest_cases": cases + 1, "ctest_total_cases": 1133,
                             "ctest_log_sha256": "3" * 64, "run_nonce_sha256": "4" * 64},
                     "counts": counts, "suite_model_mode_counts": suite_counts,
-                    "case_ids": ["case-a", "case-b"], "case_observations": observations,
+                    "case_ids": list(case_ids), "case_observations": observations,
                     "build_artifacts": [{"path": "build/bin.dat", "size_bytes": len(binary_raw),
                                          "sha256": sha256(binary_raw)}]},
     }
@@ -1623,6 +1627,49 @@ def self_test_v2() -> None:
             controls.append("stale-build-artifact")
         else:
             fail("self-test accepted stale build artifact")
+    # SHIP-09 empty and single-entry edges: an empty or one-entry ledger must not stand in
+    # for the required inventory.
+    try:
+        parse_ledger(b"", "0.2.0")
+    except ValueError as error:
+        if "exactly one delimited structured data block" not in str(error):
+            fail("empty-ledger-file produced the wrong diagnostic: " + str(error))
+        controls.append("empty-ledger-file")
+    else:
+        fail("empty-ledger-file: parse_ledger accepted a zero-byte ledger")
+    empty_block = (BEGIN + "\n```json\n{}\n```\n" + END + "\n").encode("utf-8")
+    try:
+        parse_ledger(empty_block, "0.2.0")
+    except ValueError as error:
+        if "unsupported ledger schema" not in str(error):
+            fail("empty-structured-block produced the wrong diagnostic: " + str(error))
+        controls.append("empty-structured-block")
+    else:
+        fail("empty-structured-block: parse_ledger accepted an empty JSON object")
+    empty_rows = copy.deepcopy(data)
+    empty_rows["inventory"].update(case_ids=[], case_bindings=[])
+    empty_rows["receipt"].update(case_ids=[], case_observations=[],
+                                 counts=_count_receipt_cases([]),
+                                 suite_model_mode_counts=_count_suite_model_modes([], []))
+    try:
+        validate_data_v2(empty_rows, "0.2.0", expected_case_count=2)
+    except ValueError as error:
+        if "required inventory membership" not in str(error):
+            fail("empty-ledger-rows produced the wrong diagnostic: " + str(error))
+        controls.append("empty-ledger-rows")
+    else:
+        fail("empty-ledger-rows: validate_data_v2 accepted a ledger with no case rows")
+    single = _schema2_test_data(cases=1)
+    validate_data_v2(single, "0.2.0", expected_case_count=1)
+    positive_checks.append("single-entry-schema2-fixture")
+    try:
+        validate_data_v2(single, "0.2.0", expected_case_count=2)
+    except ValueError as error:
+        if "incomplete or narrowed" not in str(error):
+            fail("single-entry-below-required produced the wrong diagnostic: " + str(error))
+        controls.append("single-entry-below-required")
+    else:
+        fail("single-entry-below-required: a one-case ledger satisfied a two-case requirement")
     if not controls:
         fail("self-test selected zero rejection controls")
     print("support ledger v0.2 self-test passed: positive=" + str(len(positive_checks)) +
