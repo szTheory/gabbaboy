@@ -10,6 +10,8 @@
 #   GBB_EXPECT_FILE_SIZE   optional exact byte size of GBB_EXPECT_FILE
 #   GBB_EXPECT_FILE_MAX_SIZE optional inclusive upper bound on the byte size of GBB_EXPECT_FILE
 #   GBB_EXPECT_FILE_FRESH  when set, GBB_EXPECT_FILE is removed before the run so a stale file cannot pass
+#   GBB_EXPECT_MIN_KEY / GBB_EXPECT_MIN_VALUE  optional parsed minimum: the combined output must contain
+#                     exactly one KEY=<digits>, and that number must be at least MIN_VALUE
 #
 # A different non-zero code is a failure, so a crash or a changed failure class is never mistaken
 # for the expected rejection. A result that is not a number (a signal or "Child aborted") never
@@ -43,6 +45,22 @@ if(NOT gbb_combined MATCHES "${GBB_EXPECT_REGEX}")
   message(FATAL_ERROR
     "exit code ${GBB_EXPECT_CODE} was right but the output did not match '${GBB_EXPECT_REGEX}'\n"
     "command: ${GBB_CMD}\noutput: ${gbb_combined}")
+endif()
+if(DEFINED GBB_EXPECT_MIN_KEY AND NOT "${GBB_EXPECT_MIN_KEY}" STREQUAL "")
+  if(NOT DEFINED GBB_EXPECT_MIN_VALUE OR NOT "${GBB_EXPECT_MIN_VALUE}" MATCHES "^[0-9]+$")
+    message(FATAL_ERROR "GBB_EXPECT_MIN_KEY needs a decimal GBB_EXPECT_MIN_VALUE")
+  endif()
+  string(REGEX MATCHALL "${GBB_EXPECT_MIN_KEY}=[0-9]+" gbb_min_matches "${gbb_combined}")
+  list(LENGTH gbb_min_matches gbb_min_count)
+  if(NOT gbb_min_count EQUAL 1)
+    message(FATAL_ERROR "expected exactly one ${GBB_EXPECT_MIN_KEY}=<number> but found ${gbb_min_count}\n"
+      "output: ${gbb_combined}")
+  endif()
+  string(REGEX REPLACE "^.*=" "" gbb_min_actual "${gbb_min_matches}")
+  if(gbb_min_actual LESS GBB_EXPECT_MIN_VALUE)
+    message(FATAL_ERROR "${GBB_EXPECT_MIN_KEY}=${gbb_min_actual} is below the minimum ${GBB_EXPECT_MIN_VALUE}\n"
+      "output: ${gbb_combined}")
+  endif()
 endif()
 if(DEFINED GBB_FORBID_REGEX AND NOT "${GBB_FORBID_REGEX}" STREQUAL "")
   if(gbb_combined MATCHES "${GBB_FORBID_REGEX}")
