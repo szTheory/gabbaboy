@@ -6,10 +6,10 @@ current_phase: "15.1"
 current_phase_name: Release Hardening and Milestone Debt Closure (INSERTED)
 current_plan: 30
 status: executing
-stopped_at: Phase 15.1 gap closure complete (plans 15.1-20..30); re-verification pending
+stopped_at: Phase 15.1 re-verification returned gaps_found (GR-CR-01); gap planning next
 last_updated: "2026-10-22T23:05:55.863Z"
-last_activity: 2026-10-22
-last_activity_desc: Phase 15.1 gap closure complete (15.1-27); re-verification pending - next /gsd-verify-work 15.1
+last_activity: 2026-10-23
+last_activity_desc: Phase 15.1 gap-closure verification gaps_found (GR-CR-01) - next /gsd-plan-phase 15.1 --gaps
 state_head: bf804d09d534553802529e6313a36d07989f31c0
 progress:
   total_phases: 10
@@ -31,10 +31,11 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 ## Current Position
 
 Phase: 15.1 (Release Hardening and Milestone Debt Closure (INSERTED)) — EXECUTING
-Status: Gap closure complete; Phase 15.1 re-verification pending (/gsd-verify-work 15.1)
+Status: Gap-closure verification returned gaps_found; next /gsd-plan-phase 15.1 --gaps
 
 Completed stage (2026-10-22): **Phase 15.1 gap closure (plans 15.1-20..30)**. Gap PR #94 squash-merged to `main` as M = `2d25a47f1b05844b4da829aa9d0978f2cb348df1`; evidence was refreshed at M (15.1-26) and strict-head passes at boundary commits `01ecebeddf0f2d85492ab9c77c7e40c32d70b2c7` (15.1-26) and `1ca0b26559b8c7a195ae2bf553086fbffd028c95` (15.1-27), recorded in `15.1-strict-head-boundaries.tsv`. SC2: WR-01..WR-07 and IN-01..IN-08 are all fixed in `15.1-REVIEW-DISPOSITION.md` (open 0 of 15), each with a negative control re-run at the docs-branch head (`15.1-GAP-CLOSURE-EVIDENCE.md`). SC1/SC3: strict-head pass at M. The docs PR #95 (gap receipt, refreshed evidence, dispositions, route) is delivered by 15.1-27; its merge receipt is read live by PR number.
-**Phase 15.1 is still open.** Next stage: **Phase 15.1 re-verification** (no new numbered phase). Exact next command: `/gsd-verify-work 15.1`. After it passes, the owner chooses `/gsd-audit-milestone`; do not run it, tag, release, archive, republish v0.2.0 or start v0.3 automatically.
+Completed stage (2026-10-23): **Phase 15.1 gap-closure execution and its post-execution verification**, run on branch `gsd/phase-15.1-verification`. Results: Nyquist 27/27 new rows green; security 40 threats, 0 open; regression gate 1177/1177 with the DMG baseline passing. The verifier returned **gaps_found** with 4 of 5 must-haves met, in `15.1-VERIFICATION.md`. The re-review `15.1-GAP-REVIEW.md` of the 24 gap-changed source files found 1 critical, GR-CR-01: `verify_hosted` in `tests/scripts/verify-v02-fuzz.py` judges the workflow contract against HEAD's `ci.yml` and `run-bounded-fuzz.sh`, not the source commit's, so the WR-04 fix is incomplete. It is latent at M because those files are identical at M and HEAD, and the recorded evidence and v0.2.0 are unaffected. The same review found 3 warnings and 5 info items. All 9 are open in `15.1-GAP-REVIEW-DISPOSITION.md`.
+**Phase 15.1 is still open.** Next stage: **Phase 15.1 gap planning for GR-CR-01**, which also triages GR-WR-01..03 and GR-IN-01..05 (no new numbered phase). Exact next command: `/gsd-plan-phase 15.1 --gaps`. Then run `/gsd-execute-phase 15.1 --gaps-only`, then `/gsd-verify-work 15.1`. After it passes, the owner chooses `/gsd-audit-milestone`; do not run it, tag, release, archive, republish v0.2.0 or start v0.3 automatically.
 Open owner decisions (none is a pass or owner acceptance; smallest action each): `LIM-SUPPORT-LEDGER-PIN` choose a release ledger for the post-0.2.0 source (published v0.2.0 text is not rewritten); `LIM-PERF-REVIEW` record a receipt-bound independent review decision for median_ratio_pct=129.13; `LIM-RESIDUAL-WRITE-JOBS` split or accept the five jobs; `LIM-TRUSTED-JUDGE` rerun the rehearsal after the two decisions above; `LIM-REHEARSAL-FAILED` same rerun; the GB-13 linker note, close or acknowledge it at re-audit; `LIM-HIST-AUDIO-RED` and `LIM-HIST-M7` decide at re-audit whether fresh evidence substitutes; `LIM-SHIP11-UNCLASSIFIED` supply a predicate or accept the edge; `LIM-NO-HOST-WRONG-ROM` accept the local control or request a hosted negative dispatch; `LIM-WINDOWS-POSIX-CONTROLS` accept POSIX-only coverage or add Windows controls; `LIM-ASAN-STALL-TIMING` decide on the slower ASan lane; `LIM-PROHIBITION-FLAGS` supply descriptors or keep the flags.
 Boundary triage (2026-10-22): 0 open issues; 15 open PRs (#75 release-please, #78-92 verification refresh stack), none touched.
 Deferred follow-ups: symlinked-checkout path portability defect in `cgb_corpus_report_platform_controls`; CTest 4.4 prints `100% tests passed out of N` (the 15.1-26 plan verify grep expects `, 0 tests failed`).

@@ -1,5 +1,17 @@
 # Phase 15.1 continuation
 
+Completed stage (2026-10-23): **Phase 15.1 gap-closure execution (plans 15.1-20..30) and its post-execution verification gates**. Nyquist: 27/27 new rows green. Security: 40 threats, 0 open. Regression: 1177/1177 tests and the DMG baseline pass. Verifier: **gaps_found** (4/5 must-haves). The remaining blocker is GR-CR-01 in `15.1-GAP-REVIEW.md`: `verify_hosted` judges the workflow contract against HEAD's `ci.yml` and fuzz runner rather than the source commit's. It is latent at M 2d25a47 and is closed by reading both files via `commit_blob(expected_sha, ...)`, with a moved-`ci.yml` negative control in both directions through the real `--verify-hosted` CLI. GR-WR-01..03 and GR-IN-01..05 are open in `15.1-GAP-REVIEW-DISPOSITION.md` and must be triaged.
+
+Exact next command (the only one): `/gsd-plan-phase 15.1 --gaps`. Do not run `/gsd-audit-milestone`, tag, release, archive, republish v0.2.0 or start v0.3. Both auto flags stay false. The owner decisions listed in STATE.md are unchanged, and none is a pass.
+
+The remote branch `gsd/phase-15.1-gap-evidence` must stay, because it holds the strict-head boundary commits.
+
+---
+
+Earlier history (superseded route, preserved):
+
+# Phase 15.1 continuation
+
 Completed stage: **Phase 15.1 gap closure (plans 15.1-20..30)**. All 30 plans are executed. Review findings WR-01..WR-07 and IN-01..IN-08 are fixed (15.1-REVIEW-DISPOSITION.md, open 0 of 15), evidence is refreshed at merge commit M = 2d25a47f1b05844b4da829aa9d0978f2cb348df1, and strict-head rows for boundary commits 01ecebe (15.1-26) and 1ca0b26 (15.1-27) are in 15.1-strict-head-boundaries.tsv. **Phase 15.1 is still open pending re-verification.**
 
 Exact next command (the only one): `/gsd-verify-work 15.1`. Do not run it from the executor; do not run `/gsd-audit-milestone`, tag, release, archive, republish v0.2.0 or start v0.3. Both auto flags stay false.
