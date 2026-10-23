@@ -604,7 +604,7 @@ Plans:
 **Gap2 Wave 1**
 - [ ] 15.1-31-PLAN.md — Judge the hosted fuzz workflow contract on the source commit with bidirectional --verify-hosted controls; http.client-safe job id; bounded commit_blob (GR-CR-01, GR-WR-01, GR-IN-05)
 - [ ] 15.1-32-PLAN.md — Guard diag-advance origin and NULL span members; parsed-minimum and exact count assertions (GR-WR-02, GR-IN-05, GR-IN-04)
-- [ ] 15.1-33-PLAN.md — Tokened-step command allowlist, basename overlay matching, exact guard expressions; Windows device names; no GSD_TOOLS fallback (GR-WR-03, GR-IN-01, GR-IN-02)
+- [ ] 15.1-33-PLAN.md — Residual-job tokened-step command judge (channels A-E recorded as residual under LIM-RESIDUAL-WRITE-JOBS), fail-closed basename overlay matching, exact guard expressions; Windows device names; no GSD_TOOLS fallback; decide() reachability comment (GR-WR-03, GR-IN-01, GR-IN-02, GR-IN-03 evidence)
 
 **Gap2 Wave 2** *(blocked on Gap2 Wave 1)*
 - [ ] 15.1-34-PLAN.md — Full gate, exact-head gap PR and squash merge with delivery receipt (M2)
