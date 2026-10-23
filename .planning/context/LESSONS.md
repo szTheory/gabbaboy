@@ -855,3 +855,19 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Applies when:** A phase closes inherited debt, historical unknowns or external limitations, or a receipt-style record could be edited together with the text it vouches for.
 - **Verification:** `verify-closeout-dispositions.py --self-test` rejects 30 defects, each with its own REJECT code and no success line; `--check` passes over the real records. The merge receipt is read from the hosting API, never written from memory.
 - **Source:** Phase 15.1 plan 17; `tests/scripts/verify-closeout-dispositions.py`; `15.1-DISPOSITIONS.json`.
+
+### GB-VERIFY-001 / 2026-10-22 / A verifier that uses assertion statements fails open under python -O
+
+- **Cause and evidence:** `verify-uat-closure.py` enforced its contract with 24 `assert` statements. Under `python3 -O` they are stripped, and the checker exited 0 printing `uat-closure pass automated=42` at HEAD without checking anything (review finding WR-05).
+- **Remedy:** Raise a named exception (`ClosureError`) for every rule and refuse optimize mode at module top, before any check, with exit 1 and a fixed message.
+- **Applies when:** Any gate, verifier or judge script whose pass depends on `assert`, or that can be launched under `-O` or `PYTHONOPTIMIZE`.
+- **Verification:** CTest `uat_closure_optimize_refused` requires exit 1 and `verify-uat-closure must not run with python -O`; an AST walk counts 0 `ast.Assert` nodes (baseline 24); `uat_closure_controls` keeps 18 weakened-closure rejections.
+- **Source:** Phase 15.1 plan 15.1-21; `tests/scripts/verify-uat-closure.py`.
+
+### GB-EVID-002 / 2026-10-22 / Bind evidence to the merge commit, not to a pre-merge branch commit
+
+- **Cause and evidence:** After the squash merge of gap PR 94, evidence bound to branch commits had no ancestry on `main`, so strict-head and hosted-run identities no longer matched the source of record (15.1-26).
+- **Remedy:** Bind hosted and historical evidence to the merge commit M on `main`, record strict-head as a row per boundary commit, and re-evaluate each row in a detached worktree at that commit.
+- **Applies when:** Evidence is produced on a branch that is later squash-merged, or a check compares against HEAD.
+- **Verification:** 15.1-strict-head-boundaries.tsv rows 15.1-26 and 15.1-27 reproduce byte for byte in detached worktrees; the historical `--check` rejects the old source until re-produced.
+- **Source:** Phase 15.1 plans 15.1-26 and 15.1-27; `tests/scripts/verify-historical-limitations.py`.

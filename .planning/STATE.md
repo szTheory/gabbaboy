@@ -4,18 +4,18 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: "15.1"
 current_phase_name: Release Hardening and Milestone Debt Closure (INSERTED)
-current_plan: 20
+current_plan: 30
 status: executing
-stopped_at: Completed 15.1-29-PLAN.md
-last_updated: "2026-10-22T16:41:09.189Z"
+stopped_at: Phase 15.1 gap closure complete (plans 15.1-20..30); re-verification pending
+last_updated: "2026-10-22T23:05:55.863Z"
 last_activity: 2026-10-22
-last_activity_desc: Phase 15.1 execution started
-state_head: a17c3733798c2cec6526093109b2aec904c57d72
+last_activity_desc: Phase 15.1 gap closure complete (15.1-27); re-verification pending - next /gsd-verify-work 15.1
+state_head: bf804d09d534553802529e6313a36d07989f31c0
 progress:
   total_phases: 10
   completed_phases: 9
   total_plans: 164
-  completed_plans: 161
+  completed_plans: 164
   percent: 90
 ---
 
@@ -31,10 +31,15 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 ## Current Position
 
 Phase: 15.1 (Release Hardening and Milestone Debt Closure (INSERTED)) — EXECUTING
-Status: Executing Phase 15.1
+Status: Gap closure complete; Phase 15.1 re-verification pending (/gsd-verify-work 15.1)
 
-Completed stage (2026-10-22): **Phase 15.1 gap-closure planning** (`/gsd-plan-phase 15.1 --gaps`). Eleven gap plans 15.1-20..30 in 8 waves close WR-01..WR-07 and IN-01..IN-08 with negative controls, add SHIP-09 ledger edge controls (15.1-30), merge the gap PR (15.1-25), refresh local and hosted evidence at the merge commit with strict-head verdicts recorded per boundary commit (15.1-26), and close the review disposition and stop (15.1-27). Plan check: three revision passes plus two owner-approved scoped fixes; final remaining items resolved and grep-confirmed. **Next:** `/gsd-execute-phase 15.1 --gaps-only`; after it, `/gsd-verify-work 15.1`. No tag, release, archive, audit or v0.3 work.
-Current Plan: 20
+Completed stage (2026-10-22): **Phase 15.1 gap closure (plans 15.1-20..30)**. Gap PR #94 squash-merged to `main` as M = `2d25a47f1b05844b4da829aa9d0978f2cb348df1`; evidence was refreshed at M (15.1-26) and strict-head passes at boundary commits `01ecebeddf0f2d85492ab9c77c7e40c32d70b2c7` (15.1-26) and `1ca0b26559b8c7a195ae2bf553086fbffd028c95` (15.1-27), recorded in `15.1-strict-head-boundaries.tsv`. SC2: WR-01..WR-07 and IN-01..IN-08 are all fixed in `15.1-REVIEW-DISPOSITION.md` (open 0 of 15), each with a negative control re-run at the docs-branch head (`15.1-GAP-CLOSURE-EVIDENCE.md`). SC1/SC3: strict-head pass at M. The docs PR #95 (gap receipt, refreshed evidence, dispositions, route) is delivered by 15.1-27; its merge receipt is read live by PR number.
+**Phase 15.1 is still open.** Next stage: **Phase 15.1 re-verification** (no new numbered phase). Exact next command: `/gsd-verify-work 15.1`. After it passes, the owner chooses `/gsd-audit-milestone`; do not run it, tag, release, archive, republish v0.2.0 or start v0.3 automatically.
+Open owner decisions (none is a pass or owner acceptance; smallest action each): `LIM-SUPPORT-LEDGER-PIN` choose a release ledger for the post-0.2.0 source (published v0.2.0 text is not rewritten); `LIM-PERF-REVIEW` record a receipt-bound independent review decision for median_ratio_pct=129.13; `LIM-RESIDUAL-WRITE-JOBS` split or accept the five jobs; `LIM-TRUSTED-JUDGE` rerun the rehearsal after the two decisions above; `LIM-REHEARSAL-FAILED` same rerun; the GB-13 linker note, close or acknowledge it at re-audit; `LIM-HIST-AUDIO-RED` and `LIM-HIST-M7` decide at re-audit whether fresh evidence substitutes; `LIM-SHIP11-UNCLASSIFIED` supply a predicate or accept the edge; `LIM-NO-HOST-WRONG-ROM` accept the local control or request a hosted negative dispatch; `LIM-WINDOWS-POSIX-CONTROLS` accept POSIX-only coverage or add Windows controls; `LIM-ASAN-STALL-TIMING` decide on the slower ASan lane; `LIM-PROHIBITION-FLAGS` supply descriptors or keep the flags.
+Boundary triage (2026-10-22): 0 open issues; 15 open PRs (#75 release-please, #78-92 verification refresh stack), none touched.
+Deferred follow-ups: symlinked-checkout path portability defect in `cgb_corpus_report_platform_controls`; CTest 4.4 prints `100% tests passed out of N` (the 15.1-26 plan verify grep expects `, 0 tests failed`).
+
+Current Plan: 30 (all executed)
 Total Plans in Phase: 30
 
 Completed stage: **Phase 15.1 execution - all 19 plans executed and summarized; Plan 17 closed the 24 dispositions**. `15.1-DISPOSITIONS.json` gives every scope item an individual source-backed disposition (11 closed, 11 closed with a named residual, 2 open historical unknowns) checked by `verify-closeout-dispositions.py` (30 real-CLI rejection controls). Twelve limitations stay open and are neither passes nor owner acceptances: support-ledger pin drift, the performance review trigger, the unexercised trusted rehearsal judge, the pre-fix audio_saturation RED and isolated M7 unknowns, the SHIP-11 unclassified edge (flagged unresolved assumption), five residual write jobs, the failed hosted rehearsal, no hosted wrong-ROM run, two descriptor-less prohibition flags, three Windows-skipped POSIX controls and an undiagnosed hosted ASan stall timing. Full gate 1164/1164 at `785d55c`. The review is not independent (recorded). The phase PR, exact head, required check runs and merge are recorded from live API readback in `15.1-delivery-receipt.json`. Both auto flags stay false; no tag, release, archive or v0.3 work. **Next:** standard Phase 15.1 verification, `/gsd-verify-work 15.1`; after that the owner chooses `/gsd-audit-milestone`.
@@ -335,6 +340,8 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 15.1 P23 | 75 min | 3 tasks | 4 files |
 | Phase 15.1 P24 | 40 min | 2 tasks | 3 files |
 | Phase 15.1 P29 | 25 min | 2 tasks | 5 files |
+| Phase 15.1 P25 | 5h 0m | 3 tasks | 4 files |
+| Phase 15.1 P26 | 3h | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -581,6 +588,9 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 15.1]: 15.1-23: hosted fuzz verification judges the boundary commit (commit object, commit-tree manifest, dictionary and seeds from the tree); validate_receipt reads HEAD only on the non-commit-bound path. Ancestry against the moving main tip is not asserted; main membership is the API push-run record.
 - [Phase 15.1]: 15.1-24: release-candidate workflow pins W6-03..W6-11 live in parsed RELEASE_PRESENCE/RELEASE_RUNNERS; step-lines item used where the shell reader rejects (( )) steps; api_commit/draft pinned as assignments (one-line brace guard parser limit)
 - [Phase 15.1]: 15.1-29: W6-13 and W6-18 stay reasoned data pins; all other W6-12..W6-19 pins moved to parsed policy rules or executable controls; closeout scan exits 3 runtime-unavailable when no runtime exists
+- [Phase 15.1]: 15.1-25: final-head required-check IDs recorded in the delivery receipt, not the merged evidence file (self-reference would move the head forever)
+- [Phase 15.1]: 15.1-25: tests/fuzz/fuzz_core.dict pinned to LF in .gitattributes after hosted Windows lane exposed CRLF digest mismatch
+- [Phase 15.1]: 15.1-26: evidence bound to M 2d25a47; rehearsal failures all map to existing owner limitations; strict-head recorded at B 01ecebe
 
 ### Pending Todos
 
@@ -621,8 +631,8 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 
 ## Session Continuity
 
-**Last session:** 2026-10-22T16:41:08.583Z
-**Stopped at:** Completed 15.1-29-PLAN.md
+**Last session:** 2026-10-22T23:05:55.490Z
+**Stopped at:** Phase 15.1 gap closure complete (plans 15.1-20..30); re-verification pending
 **Resume file:** None
 
 Completed stage: **Phase 15.1 planning and independent plan verification**. All 19 plans, 39 tasks and seven waves are ready to execute; the final checker reports zero blockers and warnings. All 24 scope items and four follow-up requirements have executable coverage. No Phase 15.1 implementation or hosted qualification has run. Nine original phases and 134 plans remain complete; v0.2 stays open. Historical unknowns and spec-less verification flags remain explicit; debt is not accepted by planning.
