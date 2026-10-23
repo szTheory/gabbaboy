@@ -1033,8 +1033,8 @@ static int stop_parity_main(const uint8_t *rom, const stop_parity_case *pc, uint
     return 0;
 }
 
-static int stop_parity_diag(const uint8_t *rom, const stop_parity_case *pc, uint64_t end,
-                            stop_parity_run *out, size_t *cursor_out) {
+static int stop_parity_diag_origin(const uint8_t *rom, const stop_parity_case *pc, uint64_t end,
+                                   uint64_t origin, stop_parity_run *out, size_t *cursor_out) {
     gbb_instance *instance = NULL;
     REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) == GBB_OK);
     REQUIRE(gbb_load_rom(instance, rom, 32768u) == GBB_OK);
@@ -1042,12 +1042,17 @@ static int stop_parity_diag(const uint8_t *rom, const stop_parity_case *pc, uint
     const gbb_accept_input_span span = {pc->count != 0u ? pc->events : NULL, pc->count, &cursor};
     uint64_t actual = 0u;
     out->status = gbb_accept_diag_advance(instance, &actual, end, pc->null_span ? NULL : &span,
-                                          NULL, 0u, NULL, 0u, NULL, NULL, 0u);
+                                          NULL, 0u, NULL, 0u, NULL, NULL, origin);
     out->actual = actual;
     *cursor_out = cursor;
     out->woke = guest_left_stop(instance);
     gbb_destroy(instance);
     return 0;
+}
+
+static int stop_parity_diag(const uint8_t *rom, const stop_parity_case *pc, uint64_t end,
+                            stop_parity_run *out, size_t *cursor_out) {
+    return stop_parity_diag_origin(rom, pc, end, 0u, out, cursor_out);
 }
 
 #define STOP_BTN(at) {(at), GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_A}
@@ -1089,6 +1094,30 @@ static int case_replay_stop_resume_parity(void) {
         }
     }
 
+    /* Guard-origin precondition (GR-WR-02): an origin past the deadline must be refused as GUARD with
+     * no core run; an origin equal to the deadline is still accepted. */
+    static const struct {
+        const char *name;
+        uint64_t origin;
+        enum gbb_accept_step_status status;
+    } origin_rows[] = {
+        {"origin-past-deadline", 101u, GBB_ACCEPT_STEP_GUARD},
+        {"origin-equals-deadline", 100u, GBB_ACCEPT_STEP_STOPPED},
+    };
+    static const stop_parity_case origin_case = {"origin", {STOP_WAKE(40)}, 0u, 1, GBB_ACCEPT_STEP_STOPPED, 0u, 0};
+    for (size_t i = 0; i < sizeof(origin_rows) / sizeof(origin_rows[0]); ++i) {
+        stop_parity_run run;
+        size_t ocursor = 0u;
+        if (stop_parity_diag_origin(rom, &origin_case, end, origin_rows[i].origin, &run, &ocursor) != 0) return 1;
+        const int guarded = origin_rows[i].status == GBB_ACCEPT_STEP_GUARD;
+        if (run.status != origin_rows[i].status || ocursor != 0u || (guarded && run.actual != 0u)) {
+            fprintf(stderr, "replay-stop-parity guard-origin sub=%s status=%d actual=%llu cursor=%zu want_status=%d\n",
+                    origin_rows[i].name, (int)run.status, (unsigned long long)run.actual, ocursor,
+                    (int)origin_rows[i].status);
+            failed = 1;
+        }
+    }
+
     /* Truth table of the shared rule itself. */
     size_t cursor = 0u;
     const gbb_input_event at_deadline = STOP_WAKE(100);
@@ -1096,6 +1125,8 @@ static int case_replay_stop_resume_parity(void) {
     const gbb_accept_input_span due = {&at_deadline, 1u, &cursor};
     const gbb_accept_input_span late = {&past_deadline, 1u, &cursor};
     const gbb_accept_input_span empty = {NULL, 0u, &cursor};
+    const gbb_accept_input_span null_cursor = {&at_deadline, 1u, NULL};
+    const gbb_accept_input_span null_events = {NULL, 1u, &cursor};
     size_t spent = 1u;
     const gbb_accept_input_span exhausted = {&at_deadline, 1u, &spent};
     const struct {
@@ -1105,6 +1136,8 @@ static int case_replay_stop_resume_parity(void) {
     } table[] = {
         {"null-span", gbb_accept_stop_resumable(NULL, 100u, 0u, 10u), 0},
         {"empty-span", gbb_accept_stop_resumable(&empty, 100u, 0u, 10u), 0},
+        {"null-cursor", gbb_accept_stop_resumable(&null_cursor, 100u, 0u, 10u), 0},
+        {"null-events", gbb_accept_stop_resumable(&null_events, 100u, 0u, 10u), 0},
         {"cursor-at-count", gbb_accept_stop_resumable(&exhausted, 100u, 0u, 10u), 0},
         {"event-at-deadline", gbb_accept_stop_resumable(&due, 100u, 0u, 10u), 1},
         {"event-past-deadline", gbb_accept_stop_resumable(&late, 100u, 0u, 10u), 0},
