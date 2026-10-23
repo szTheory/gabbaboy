@@ -4,13 +4,13 @@ milestone: v0.2
 milestone_name: Color & Cartridge Breadth
 current_phase: "15.1"
 current_phase_name: Release Hardening and Milestone Debt Closure (INSERTED)
-current_plan: 30
+current_plan: 31
 status: executing
 stopped_at: Phase 15.1 gap closure round 2 planned (plans 15.1-31..36); execution next
-last_updated: "2026-10-23T18:28:26.445Z"
+last_updated: "2026-10-23T18:33:44.253Z"
 last_activity: 2026-10-23
-last_activity_desc: Phase 15.1 planning complete — 36 plans ready
-state_head: 2fb9810809b8ae175e4b9266cc592f813290636c
+last_activity_desc: Phase 15.1 execution started
+state_head: 333019ffcd1e6c99fe86415f1b2c4cd2450f9b00
 progress:
   total_phases: 10
   completed_phases: 9
@@ -30,8 +30,8 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 
 ## Current Position
 
-Phase: 15.1 (Release Hardening and Milestone Debt Closure (INSERTED)) — READY TO EXECUTE
-Status: Gap closure round 2 planned (15.1-31..36); next /gsd-execute-phase 15.1 --gaps-only
+Phase: 15.1 (Release Hardening and Milestone Debt Closure (INSERTED)) — EXECUTING
+Status: Executing Phase 15.1
 
 Completed stage (2026-10-22): **Phase 15.1 gap closure (plans 15.1-20..30)**. Gap PR #94 squash-merged to `main` as M = `2d25a47f1b05844b4da829aa9d0978f2cb348df1`; evidence was refreshed at M (15.1-26) and strict-head passes at boundary commits `01ecebeddf0f2d85492ab9c77c7e40c32d70b2c7` (15.1-26) and `1ca0b26559b8c7a195ae2bf553086fbffd028c95` (15.1-27), recorded in `15.1-strict-head-boundaries.tsv`. SC2: WR-01..WR-07 and IN-01..IN-08 are all fixed in `15.1-REVIEW-DISPOSITION.md` (open 0 of 15), each with a negative control re-run at the docs-branch head (`15.1-GAP-CLOSURE-EVIDENCE.md`). SC1/SC3: strict-head pass at M. The docs PR #95 (gap receipt, refreshed evidence, dispositions, route) is delivered by 15.1-27; its merge receipt is read live by PR number.
 Completed stage (2026-10-23): **Phase 15.1 gap-closure execution and its post-execution verification**, run on branch `gsd/phase-15.1-verification`. Results: Nyquist 27/27 new rows green; security 40 threats, 0 open; regression gate 1177/1177 with the DMG baseline passing. The verifier returned **gaps_found** with 4 of 5 must-haves met, in `15.1-VERIFICATION.md`. The re-review `15.1-GAP-REVIEW.md` of the 24 gap-changed source files found 1 critical, GR-CR-01: `verify_hosted` in `tests/scripts/verify-v02-fuzz.py` judges the workflow contract against HEAD's `ci.yml` and `run-bounded-fuzz.sh`, not the source commit's, so the WR-04 fix is incomplete. It is latent at M because those files are identical at M and HEAD, and the recorded evidence and v0.2.0 are unaffected. The same review found 3 warnings and 5 info items. All 9 are open in `15.1-GAP-REVIEW-DISPOSITION.md`.
@@ -41,7 +41,7 @@ Open owner decisions (none is a pass or owner acceptance; smallest action each):
 Boundary triage (2026-10-22): 0 open issues; 15 open PRs (#75 release-please, #78-92 verification refresh stack), none touched.
 Deferred follow-ups: symlinked-checkout path portability defect in `cgb_corpus_report_platform_controls`; CTest 4.4 prints `100% tests passed out of N` (the 15.1-26 plan verify grep expects `, 0 tests failed`).
 
-Current Plan: 30 (all executed)
+Current Plan: 31
 Total Plans in Phase: 36
 
 Completed stage: **Phase 15.1 execution - all 19 plans executed and summarized; Plan 17 closed the 24 dispositions**. `15.1-DISPOSITIONS.json` gives every scope item an individual source-backed disposition (11 closed, 11 closed with a named residual, 2 open historical unknowns) checked by `verify-closeout-dispositions.py` (30 real-CLI rejection controls). Twelve limitations stay open and are neither passes nor owner acceptances: support-ledger pin drift, the performance review trigger, the unexercised trusted rehearsal judge, the pre-fix audio_saturation RED and isolated M7 unknowns, the SHIP-11 unclassified edge (flagged unresolved assumption), five residual write jobs, the failed hosted rehearsal, no hosted wrong-ROM run, two descriptor-less prohibition flags, three Windows-skipped POSIX controls and an undiagnosed hosted ASan stall timing. Full gate 1164/1164 at `785d55c`. The review is not independent (recorded). The phase PR, exact head, required check runs and merge are recorded from live API readback in `15.1-delivery-receipt.json`. Both auto flags stay false; no tag, release, archive or v0.3 work. **Next:** standard Phase 15.1 verification, `/gsd-verify-work 15.1`; after that the owner chooses `/gsd-audit-milestone`.
@@ -99,7 +99,7 @@ Status: planning
 Current Plan: Not started
 Total Plans in Phase: 13
 Last Activity: 2026-10-23
-Last Activity Description: Phase 15.1 planning complete — 36 plans ready
+Last Activity Description: Phase 15.1 execution started
 
 Completed workflow stage: **Phase 14 — CGB-E Model Qualification and Corpus, automated UAT complete**. [14-UAT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md) closes all 49 deliverables across 13 plans automatically, with zero issues, pending/skipped/blocked rows or human checkpoints. All 13 bounded commit windows reconcile. The canonical [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08 and CGB-10 are complete. Nyquist covers 31/31 tasks, security closes 27/27 threats, and all eight implementation review findings are fixed and independently checked.
 

@@ -534,7 +534,7 @@ Plans:
   3. Canonical UAT and strict coverage pass; relevant DMG baseline and exact-head remote checks pass before merge.
   4. Re-audit is the next stage after this phase; no automatic archive, tag, publication or v0.3 start.
 
-**Plans:** 36 plans (19 original, 11 gap closure, 6 gap closure round 2); 30/36 executed; round 2 (15.1-31..36) planned for GR-CR-01 and the gap re-review findings (`/gsd-execute-phase 15.1 --gaps-only`)
+**Plans:** 31/36 plans executed (19 original, 11 gap closure, 6 gap closure round 2); 30/36 executed; round 2 (15.1-31..36) planned for GR-CR-01 and the gap re-review findings (`/gsd-execute-phase 15.1 --gaps-only`)
 
 Plans:
 **Wave 1**
@@ -602,7 +602,7 @@ Plans:
 **Gap closure round 2** *(from 15.1-VERIFICATION.md gaps_found GR-CR-01 and 15.1-GAP-REVIEW.md GR-WR-01..03, GR-IN-01..05)*
 
 **Gap2 Wave 1**
-- [ ] 15.1-31-PLAN.md — Judge the hosted fuzz workflow contract on the source commit with bidirectional --verify-hosted controls; http.client-safe job id; bounded commit_blob (GR-CR-01, GR-WR-01, GR-IN-05)
+- [x] 15.1-31-PLAN.md — Judge the hosted fuzz workflow contract on the source commit with bidirectional --verify-hosted controls; http.client-safe job id; bounded commit_blob (GR-CR-01, GR-WR-01, GR-IN-05)
 - [ ] 15.1-32-PLAN.md — Guard diag-advance origin and NULL span members; parsed-minimum and exact count assertions (GR-WR-02, GR-IN-05, GR-IN-04)
 - [ ] 15.1-33-PLAN.md — Residual-job tokened-step command judge (channels A-E recorded as residual under LIM-RESIDUAL-WRITE-JOBS), fail-closed basename overlay matching, exact guard expressions; Windows device names; no GSD_TOOLS fallback; decide() reachability comment (GR-WR-03, GR-IN-01, GR-IN-02, GR-IN-03 evidence)
 
@@ -631,4 +631,4 @@ Plans:
 | 13. CGB HDMA | v0.2 | 12/12 | Complete    | 2026-10-14 |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 13/13 | Complete    | 2026-10-15 |
 | 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 10/10 | Complete    | 2026-10-20 |
-| 15.1. Release Hardening and Milestone Debt Closure | v0.2 | 30/30 | In Progress | - |
+| 15.1. Release Hardening and Milestone Debt Closure | v0.2 | 31/36 | In Progress | - |
