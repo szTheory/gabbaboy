@@ -433,9 +433,11 @@ def _match(text: str, start: int, opener: str, closer: str) -> int:
     raise _ambiguous(f"unterminated {opener}{closer}")
 
 
-def _tokens(script: str) -> list[tuple[str, str]]:
+def _tokens(script: str, *, extended: bool = False, heredoc_log: list | None = None) -> list[tuple[str, str]]:
+    """Shell words and operators. `extended` is used only by the token-step judge: it also reads `(( ))` commands and
+    `name=( ... )` arrays as single words and logs every heredoc as (delimiter, quoted, body) in `heredoc_log`."""
     out: list[tuple[str, str]] = []
-    heredocs: list[tuple[str, bool]] = []
+    heredocs: list[tuple[str, bool, bool]] = []
     i, n = 0, len(script)
     while i < n:
         c = script[i]
@@ -446,17 +448,27 @@ def _tokens(script: str) -> list[tuple[str, str]]:
         elif c == "\n":
             out.append(("op", "\n"))
             i += 1
-            for delimiter, strip in heredocs:
+            for delimiter, strip, quoted in heredocs:
+                body: list[str] = []
                 while i < n:
                     end = script.find("\n", i)
                     line = script[i : end if end >= 0 else n]
                     i = end + 1 if end >= 0 else n
                     if (line.strip() if strip else line) == delimiter:
                         break
+                    body.append(line)
+                if heredoc_log is not None:
+                    heredoc_log.append((delimiter, quoted, "\n".join(body)))
             heredocs = []
         elif c == "#":
             while i < n and script[i] != "\n":
                 i += 1
+        elif extended and script.startswith("((", i):
+            k = _match(script, i, "(", ")")
+            if script[k - 1] != ")":
+                raise _ambiguous("unreadable (( )) command")
+            out.append(("w", script[i : k + 1]))
+            i = k + 1
         elif c in ";&|<>()":
             op = next((cand for cand in ("<<<", "<<-", "&&", "||", ";;", ">>", "<<", ">&", "<&", "&>") if script.startswith(cand, i)), c)
             out.append(("op", op))
@@ -468,7 +480,8 @@ def _tokens(script: str) -> list[tuple[str, str]]:
                 k = j
                 while k < n and script[k] not in " \t\n;&|()<>":
                     k += 1
-                heredocs.append((script[j:k].strip("'\""), op == "<<-"))
+                raw = script[j:k]
+                heredocs.append((raw.strip("'\""), op == "<<-", any(ch in raw for ch in "'\"\\")))
         else:
             parts: list[str] = []
             while i < n:
@@ -510,6 +523,10 @@ def _tokens(script: str) -> list[tuple[str, str]]:
                         raise _ambiguous("unterminated backtick")
                     parts.append(script[i : end + 1])
                     i = end + 1
+                elif extended and c == "(" and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*\+?=", "".join(parts)):
+                    k = _match(script, i, "(", ")")
+                    parts.append(script[i : k + 1])
+                    i = k + 1
                 elif c in _WORD_END:
                     break
                 else:
@@ -548,8 +565,8 @@ def _const(words: list[str]):
     return None
 
 
-def shell_events(script: str) -> list[Event]:
-    tokens = _tokens(script)
+def shell_events(script: str, *, extended: bool = False) -> list[Event]:
+    tokens = _tokens(script, extended=extended)
     events: list[Event] = []
     frames: list[dict] = []
     state = {"cur": [], "connector": None, "last": None, "or_owner": None, "or_depth": 0, "func": None, "skip": False,
@@ -560,7 +577,7 @@ def shell_events(script: str) -> list[Event]:
 
     def emit(words: list[str], connector):
         assigns = []
-        while words and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", words[0]):
+        while words and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*\+?=.*" if extended else r"[A-Za-z_][A-Za-z0-9_]*=.*", words[0], re.S if extended else 0):
             assigns.append(words.pop(0))
         if not words and not assigns:
             return
@@ -841,6 +858,100 @@ def _check_token_subject_execution(workflow: str, job_id: str, job: dict, job_wi
     for step in job.get("steps", []):
         if (job_wide or _names_token(step.get("env", {}))) and SUBJECT_EXECUTION.search(step.get("run", "")):
             raise Reject("token-subject-execution", f"{_where(workflow, job_id)} step {step.get('name', '?')!r} holds the token and runs build or tagged-script commands")
+
+
+# Plain command words a tokened residual step may run. Enumerated from the real release.yml with the extended parser
+# (heads of every step that holds the token in the five residual-role jobs, plus the heads nested in $(...) and
+# backtick bodies). None of them runs a program named by its own operands: that rules out bash, sh, python*, node,
+# the build tools, eval, exec, source, env, xargs, command, builtin, timeout, nohup, find and any word that holds a
+# slash, a dollar sign or a backtick. `gh`, `jq` and `sed` can still execute code through their own features; that
+# is the residual GR-WR-03(a)-R, not judged here.
+TOKEN_STEP_COMMANDS = frozenset({
+    "gh", "jq", "cmp", "echo", "printf", "set", "exit", "mkdir", "cp", "cat", "read", "basename", "base64", "head", "sed",
+})
+# Operands a tokened residual step may hand to bash or python3: the trusted workflow checkout, and the one
+# verifier cut from the workflow revision into the build directory. The build/ entry is equality, not a prefix.
+TOKEN_STEP_TRUSTED_OPERANDS = ("trusted/", "build/verify-release-gates.sh")
+
+
+def _backticks(word: str) -> list[str]:
+    """Bodies of the backtick substitutions in one shell word; an unpaired backtick cannot be judged."""
+    parts = word.split("`")
+    if len(parts) % 2 == 0:
+        raise Reject("token-subject-execution", f"unpaired backtick in word {word!r}")
+    return parts[1::2]
+
+
+def _token_trusted_operand(word: str) -> bool:
+    if ".." in word.split("/"):
+        return False
+    return word == TOKEN_STEP_TRUSTED_OPERANDS[1] or word.startswith(TOKEN_STEP_TRUSTED_OPERANDS[0])
+
+
+def _token_command_allowed(words: list[str]) -> bool:
+    head = words[0]
+    if head in TOKEN_STEP_COMMANDS:
+        return True
+    if head == "git":
+        return (len(words) == 3 and words[1] == "show" and words[2].startswith("${GITHUB_SHA}:")) or words[1:2] in (["rev-parse"], ["status"])
+    if head == "bash":
+        return len(words) > 1 and _token_trusted_operand(words[1])
+    if head == "python3":
+        at = 1
+        while at < len(words) and words[at] == "-I":
+            at += 1
+        return at < len(words) and (words[at] == "-" or _token_trusted_operand(words[at]))
+    return False
+
+
+def _token_step_commands(script: str) -> list[list[str]]:
+    """Every command the script runs, including those nested in $(...) and backtick bodies of any word, as word lists.
+    Anything the reader cannot place is rejected (fail closed): the default reader's empty answer must not read as safe."""
+    heredocs: list[tuple[str, bool, str]] = []
+    try:
+        events = shell_events(script, extended=True)
+        tokens = _tokens(script, extended=True, heredoc_log=heredocs)
+    except Reject as exc:
+        raise Reject("token-subject-execution", f"a tokened step cannot be read, so it cannot be judged: {exc}") from None
+    found: list[list[str]] = []
+    in_conditional = False
+    for event in events:
+        words = event.words
+        if not words:
+            continue  # bare assignment
+        if in_conditional or words[0] == "[[":
+            # `[[ a && b ]]` arrives split at && and ||; the operands are not commands.
+            in_conditional = words[-1] != "]]"
+        elif not words[0].startswith("(("):
+            found.append(words)
+    if in_conditional:
+        raise Reject("token-subject-execution", "a tokened step opens [[ without closing it")
+    for delimiter, quoted, body in heredocs:
+        if not quoted and ("$(" in body or "`" in body):
+            raise Reject("token-subject-execution", f"unquoted heredoc {delimiter!r} expands a command substitution")
+    for kind, word in tokens:
+        if kind == "w":
+            for body in [*_substitutions(word), *_backticks(word)]:
+                found.extend(_token_step_commands(body))
+    return found
+
+
+# Defense in depth for the command-execution channel only. It judges which command heads a token-holding step runs,
+# not what an allowlisted program does with its own features (script sources read from data, writes into trusted
+# paths, environment hijack, gh alias or extension, arithmetic evaluation, sed e); those stay the owner-decided
+# residual LIM-RESIDUAL-WRITE-JOBS, whose structural fix is removing the token from jobs that read the tagged tree.
+def _check_token_step_commands(workflow: str, job_id: str, job: dict, job_wide: bool = False) -> None:
+    for step in job.get("steps", []):
+        if not ((job_wide or _names_token(step.get("env", {}))) and step.get("run")):
+            continue
+        where = f"{_where(workflow, job_id)} step {step.get('name', '?')!r} holds the token"
+        try:
+            commands = _token_step_commands(str(step["run"]))
+        except Reject as exc:
+            raise Reject("token-subject-execution", f"{where}: {exc}") from None
+        for words in commands:
+            if not _token_command_allowed(words):
+                raise Reject("token-subject-execution", f"{where} and runs {words[0]!r}, which is not an allowed tokened-step command")
 
 
 def _check_trusted_overlay(workflow: str, job_id: str, job: dict, paths: tuple[str, ...]) -> None:
@@ -1403,6 +1514,14 @@ def check_release(root: Path) -> None:
     attach_recovery_at = require_call(name, "attach-v02-evidence", attach, _ATTACH_RECOVERY)
     if not attach_inventory_at < attach_recovery_at < attach_call:
         raise Reject("recovery-order", f"{_where(name, 'attach-v02-evidence')} must decide recovery from live state before any evidence upload")
+    # Last, so every other rule's diagnostic keeps priority over this one.
+    # Scope: only these five jobs check out and build the tagged tree while a step holds the token. The
+    # trusted-reader (candidate-fuzz) and the attacher (attach-v02-evidence) check out only the trusted
+    # workflow revision (ref github.sha, path trusted, persist-credentials false, _check_trusted_checkout),
+    # never run the tagged tree, and read producer artifacts as data through trusted verifiers.
+    for job_id, role in RELEASE_ROLES.items():
+        if role == "residual":
+            _check_token_step_commands(name, job_id, jobs[job_id], job_wide=job_id in TOKEN_SCOPE_EXEMPT)
 
 
 def check_all(root: Path) -> dict[str, int]:
@@ -1444,6 +1563,34 @@ JUDGE_CALL = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py
 _REHEARSAL_TAG_LINE = "bash .github/scripts/produce-release-evidence.sh verify-subject --subject . --source-sha \"$GITHUB_SHA\" --tag \"$REHEARSAL_TAG\" --local-tag"
 JUDGE_STEP = "      - name: Judge workflow privilege and trust wiring from the trusted checkout\n"
 FUZZ_TAG_CHECK = '[[ "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" == "$SOURCE_SHA" ]] || {'
+
+
+_TOKEN_STEP_ANCHOR = "mkdir -p build/downloaded build/consumer-work"
+
+
+def _token_step_mutations():
+    """Fifteen forms inserted into the tokened candidate step "Download the exact draft bytes", each expected to be
+    refused as token-subject-execution. Only the command-head judge can reject them: none names a build tool or a
+    tests/scripts path, and the step already holds the token."""
+    cases = (
+        ("bare python3 on a tagged script", "python3 -I .github/scripts/x.py"),
+        ("bare bash on a tagged script", "bash build/consumer.sh"),
+        ("bare tagged binary", "./build/gabbaboy-cli --version"),
+        ("tagged binary inside an echo argument substitution", 'echo "$(./build/gabbaboy-cli --version)"'),
+        ("tagged script inside an assignment substitution", "x=$(bash build/consumer.sh)"),
+        ("tagged script inside a gh --jq substitution", 'gh api x --jq "$(python3 -I .github/scripts/x.py)"'),
+        ("tagged binary inside an arithmetic command", "(( $(./build/gabbaboy-cli --version) > 0 ))"),
+        ("tagged script inside a backtick substitution", "echo `bash build/consumer.sh`"),
+        ("tagged binary inside a here-string", 'jq . <<<"$(./build/gabbaboy-cli --version)"'),
+        ("tagged binary inside an unquoted heredoc body", "cat <<EOF\n{I}$(./build/gabbaboy-cli --version)\n{I}EOF"),
+        ("tagged binary inside a for list", 'for v in "$(./build/gabbaboy-cli --version)"; do echo "$v"; done'),
+        ("tagged binary inside an array element", 'names=( a "$(./build/gabbaboy-cli --version)" )'),
+        ("trusted operand escaped with a dot-dot segment", "bash trusted/../build/consumer.sh"),
+        ("variable command head", 'run=./build/gabbaboy-cli\n{I}"$run" --version'),
+        ("bare subshell the reader cannot place", "( ./build/gabbaboy-cli --version )"),
+    )
+    return [_m(f"release candidate tokened download step runs {label}", "release.yml", "Download the exact draft bytes", _TOKEN_STEP_ANCHOR,
+               f"{line}\n{{I}}{_TOKEN_STEP_ANCHOR}", "token-subject-execution") for label, line in cases]
 
 
 def _mutations():
@@ -1690,6 +1837,8 @@ def _mutations():
         _m("platform manifest exempt job gains a token step running tagged scripts", rel, "  candidate-platform-manifest:\n",
            "    steps:\n", "    steps:\n      - name: Run a tagged script\n        run: python3 -I tests/scripts/verify-v02-consumers.py\n",
            "token-subject-execution"),
+        # The tokened-step command judge (GR-WR-03a): every head, nested ones included, in the five residual-role jobs.
+        *_token_step_mutations(),
         _m("platform manifest checkout persists credentials", rel, "  candidate-platform-manifest:\n", "persist-credentials: false",
            "persist-credentials: true", "checkout-credentials"),
         _m("release source-version comparison interpolates a step output into its run body", "release.yml",
