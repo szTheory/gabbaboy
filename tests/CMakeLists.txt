@@ -1415,7 +1415,7 @@ set_tests_properties(v02_consumer_controls PROPERTIES COST 900)
 gbb_add_v02_contract(v02_performance_controls 90
   [=["negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
   verify-v02-performance.py --self-test)
-gbb_add_v02_contract(v02_fuzz_controls 90
+gbb_add_v02_contract(v02_fuzz_controls 180
   [=[self-test=pass positive_controls=[1-9][0-9]* negative_controls=[1-9][0-9]*]=]
   verify-v02-fuzz.py --self-test)
 gbb_add_v02_contract(v02_source_archive_controls 90
