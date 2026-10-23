@@ -964,13 +964,33 @@ def _check_trusted_overlay(workflow: str, job_id: str, job: dict, paths: tuple[s
             overlay_at[path] = require_call(workflow, job_id, job, f'git show "${{GITHUB_SHA}}:{path}"')[0]
         except Reject:
             raise Reject("trusted-verifier-overlay", f"{_where(workflow, job_id)} must overlay {path} from GITHUB_SHA in an unconditional step") from None
+    last_overlay = max(overlay_at.values())
+    names = {path: path.rsplit("/", 1)[-1] for path in paths}
     for number, step in enumerate(job.get("steps", [])):
-        used = {path for event in _step_events(step) for word in event.words for path in paths if word in (path, "./" + path)}
+        if number <= last_overlay:
+            # A step the default reader cannot place would hide a verifier call from it (it returns no events), so
+            # every step up to the last overlay is read with the extended reader and an unreadable one is refused.
+            try:
+                events = shell_events(str(step.get("run", "")), extended=True)
+            except Reject as exc:
+                raise Reject("trusted-verifier-overlay", f"{_where(workflow, job_id)} step {step.get('name', '?')!r} cannot be read, "
+                             f"so it cannot be shown to precede the trusted overlay: {exc}") from None
+        else:
+            events = _step_events(step)
+        # The overlay step's own `git show` operand names the verifier without running it.
+        used = {path for event in events if event.words[:2] != ["git", "show"] for word in event.words for path in paths
+                if word in (path, "./" + path) or _overlay_basename(word) == names[path]}
         if "tests/scripts/verify-release-candidate.sh" in used:
             used = set(paths)
         late = sorted(path for path in used if overlay_at[path] >= number)
         if late:
             raise Reject("trusted-verifier-overlay", f"{_where(workflow, job_id)} step {step.get('name', '?')!r} runs {late[0]} before the trusted overlay")
+
+
+def _overlay_basename(word: str) -> str:
+    """The file name a path word ends in, without quotes or a leading variable such as $DIR or ${DIR}."""
+    base = word.strip("'\"").rsplit("/", 1)[-1]
+    return re.sub(r"^(?:\$\{[^}]*\}|\$[A-Za-z_][A-Za-z0-9_]*)+", "", base)
 
 
 # --------------------------------------------------------------------------- policy
@@ -1144,6 +1164,28 @@ RELEASE_SMOKE_REQUIRED = {
 #                                  where the shell reader rejects the step (the candidate-selection steps use `(( ))`)
 _REUSE_MACOS_GUARD = "env.REUSE_MACOS_CANDIDATE != 'true'"
 _REUSE_WINDOWS_GUARD = "env.REUSE_WINDOWS_CANDIDATE != 'true'"
+# The guard expressions that decide whether a release job or a reuse-sensitive step runs, pinned in normalised form
+# (outer ${{ }} removed, whitespace collapsed) and compared for equality: a substring test accepts `|| true` or an
+# `always() || ...` rewrite that keeps the old text as a fragment. Key: (job id,) or (job id, step name).
+RELEASE_GUARD_EXPRESSIONS = {
+    ("candidate",): "always() && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true'))",
+    ("candidate-macos",): "always() && needs.candidate.result == 'success' && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true'))",
+    ("candidate-windows",): "always() && needs.candidate-macos.result == 'success' && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true'))",
+    ("publish-qualified-release",): "always() && needs.candidate.result == 'success' && needs.candidate-macos.result == 'success' && needs.candidate-windows.result == 'success' && needs.candidate-platform-manifest.result == 'success' && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true'))",
+    ("candidate-macos", "Build and package macOS arm64 core once"): _REUSE_MACOS_GUARD,
+    ("candidate-macos", "Build pinned SDL player and verify extracted package"): _REUSE_MACOS_GUARD,
+    ("candidate-macos", "Attach macOS candidate bytes to the unpublished draft"): _REUSE_MACOS_GUARD,
+    ("candidate-windows", "Build and package Windows x64 core once"): _REUSE_WINDOWS_GUARD,
+    ("candidate-windows", "Attach Windows bytes to the unpublished draft"): _REUSE_WINDOWS_GUARD,
+}
+
+
+def _normalise_if(expression) -> str:
+    text = str(expression).strip()
+    wrapped = re.fullmatch(r"\$\{\{(.*)\}\}", text, re.S)
+    return " ".join((wrapped.group(1) if wrapped else text).split())
+
+
 RELEASE_PRESENCE = {
     "candidate": (
         ("if", "needs.release.outputs.release_created == 'true'"),
@@ -1380,6 +1422,15 @@ def _check_release_presence(workflow: str, tree: dict) -> None:
                     require_call(workflow, job_id, jobs[job_id], item[1], conditional=item[2])
                 except Reject as exc:
                     raise Reject("release-presence", f"{_where(workflow, job_id)} lacks required wiring: {exc}") from exc
+    for key, expected in RELEASE_GUARD_EXPRESSIONS.items():
+        job = _require_job(workflow, tree, key[0])
+        if len(key) == 1:
+            actual, subject = job.get("if", ""), "job if:"
+        else:
+            named = [step for step in job.get("steps", []) if step.get("name") == key[1]]
+            actual, subject = (named[0].get("if", "") if len(named) == 1 else ""), f"step {key[1]!r} if:"
+        if _normalise_if(actual) != _normalise_if(expected):
+            raise Reject("release-presence", f"{_where(workflow, key[0])} {subject} is not exactly the pinned guard {expected!r}")
     for job_id, runner in RELEASE_RUNNERS.items():
         actual = str(_require_job(workflow, tree, job_id).get("runs-on", "")).strip()
         if actual != runner:
@@ -1839,6 +1890,22 @@ def _mutations():
            "token-subject-execution"),
         # The tokened-step command judge (GR-WR-03a): every head, nested ones included, in the five residual-role jobs.
         *_token_step_mutations(),
+        # Overlay first use is matched by basename and read fail-closed up to the last overlay step (GR-WR-03b); the
+        # inserted lines sit in untokened steps, so only the overlay rule can refuse them.
+        _m("candidate verifier called through cd and a bare file name before the overlay", rel, "Load trusted control-plane receipt verifier",
+           "set -euo pipefail", "set -euo pipefail\n{I}cd tests/scripts && bash verify-release-candidate.sh", "trusted-verifier-overlay"),
+        _m("candidate verifier called through a variable directory before the overlay", rel, "Load trusted control-plane receipt verifier",
+           "set -euo pipefail", 'set -euo pipefail\n{I}bash "$SCRIPTS/verify-release-candidate.sh"', "trusted-verifier-overlay"),
+        _m("windows verifier hidden behind an unreadable (( )) line before the overlay", rel, "Verify checked out source version",
+           "set -euo pipefail", "set -euo pipefail\n{I}(( 1 ))\n{I}bash tests/scripts/verify-release-candidate.sh --extract build/x build/y", "trusted-verifier-overlay"),
+        _m("windows verifier hidden in a bare subshell before the overlay", rel, "Verify checked out source version",
+           "set -euo pipefail", "set -euo pipefail\n{I}( bash tests/scripts/verify-release-candidate.sh --extract build/x build/y )", "trusted-verifier-overlay"),
+        # Guard expressions are compared exactly after normalisation (GR-WR-03c).
+        _m("macOS build reuse guard weakened with || true", rel, "Build and package macOS arm64 core once",
+           "if: env.REUSE_MACOS_CANDIDATE != 'true'\n", "if: env.REUSE_MACOS_CANDIDATE != 'true' || true\n", "release-presence"),
+        _m("candidate job guard rewritten as always() || ...", rel, "  candidate:\n",
+           "if: ${{ always() && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true')) }}",
+           "if: ${{ always() || needs.release.outputs.release_created == 'true' }}", "release-presence"),
         _m("platform manifest checkout persists credentials", rel, "  candidate-platform-manifest:\n", "persist-credentials: false",
            "persist-credentials: true", "checkout-credentials"),
         _m("release source-version comparison interpolates a step output into its run body", "release.yml",
