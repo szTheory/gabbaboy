@@ -1,5 +1,11 @@
 # Phase 15.1 continuation
 
+Completed stage (2026-10-24): **Phase 15.1 Nyquist validation** (`/gsd-validate-phase 15.1`) at main `31bc956` (after PR #99). `15.1-VALIDATION.md` is now `nyquist_compliant: true`, with 82 of 82 rows green. Plans 15.1-31..36 gained 16 rows: 14 pass as written, and 2 now read their facts from the boundary commit, with negative controls. Row 15.1-15-2 is green because the GB-13 deferred linker note is resolved with fresh-build evidence, so the closeout scan is CLEAR. Row 15.1-16-2 is green: the hosted fuzz receipt at c49e3ba is verified, and strict-head is replayed at every boundary commit. Warning: seven rows still read live state (listed in the VALIDATION sign-off). The milestone audit file is now stale; its gaps_found was based only on this Nyquist gap.
+
+Exact next command (owner's choice; not run automatically): `/gsd-audit-milestone` (re-audit v0.2); only after a clean re-audit, `/gsd-complete-milestone v0.2`. Both auto flags stay false; no tag, release, archive or v0.3.
+
+Superseded route (ran 2026-10-24):
+
 Completed stage (2026-10-24): **v0.2 milestone re-audit** at source `c49e3ba`: gaps_found. Requirements 28/28, phases 10/10, integration 14/15 (Phase 8 verifiers unwired, warning), flows 6/6. The only gap is Phase 15.1 Nyquist (rows 15.1-15-2, 15.1-16-2 partial; plans 31..36 unaudited). See `.planning/v0.2-MILESTONE-AUDIT.md`.
 
 Exact next command (owner's choice; not run automatically): `/gsd-validate-phase 15.1`, then `/gsd-audit-milestone` again. Both auto flags stay false; no tag, release, archive or v0.3.
