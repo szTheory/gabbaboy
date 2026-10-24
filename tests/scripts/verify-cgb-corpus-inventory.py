@@ -710,7 +710,7 @@ def check_ci_contract(root: Path, *, ci_text: str | None = None,
         "verify-cgb-corpus-artifacts.py --check --build-dir build")
     need(privacy_check > receipt and privacy_check < upload_start,
          "ci-contract-privacy-check-before-upload")
-    sanitizer_start = ci.find("  linux-sanitizers:")
+    sanitizer_start = ci.find("  linux-sanitizers-tests:")
     sanitizer_end = ci.find("\n  cmake-floor-", sanitizer_start)
     sanitizer = ci[sanitizer_start:sanitizer_end if sanitizer_end >= 0 else None]
     need(sanitizer_start >= 0 and "ctest --preset phase1-asan" in sanitizer and
