@@ -713,8 +713,10 @@ def check_ci_contract(root: Path, *, ci_text: str | None = None,
     sanitizer_start = ci.find("  linux-sanitizers-tests:")
     sanitizer_end = ci.find("\n  cmake-floor-", sanitizer_start)
     sanitizer = ci[sanitizer_start:sanitizer_end if sanitizer_end >= 0 else None]
-    need(sanitizer_start >= 0 and "ctest --preset phase1-asan" in sanitizer and
-         "verify-test-inventory.sh build-asan/ctest.xml tests/expected-tests.txt" in sanitizer,
+    # Two complementary ASan shards each check exactly their slice of the expected inventory (LESSONS GB-CI-010).
+    need(sanitizer_start >= 0 and
+         "ctest --preset phase1-asan --parallel 4 -E '^acceptance_' --output-on-failure --no-tests=error --output-junit ctest.xml" in sanitizer and "ctest --preset phase1-asan --parallel 4 -R '^acceptance_' --output-on-failure --no-tests=error --output-junit ctest.xml" in sanitizer and
+         sanitizer.count("verify-test-inventory.sh build-asan/ctest.xml build-asan/expected-shard.txt") == 2,
          "ci-contract-sanitizer-inventory")
     need("tests/scripts/reproduce-age.sh --compare" in repro and
          "test-reproduce-age.sh compare-tampered" in repro and

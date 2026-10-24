@@ -270,12 +270,13 @@ jobs:
           retention-days: 7
 
   linux-sanitizers-tests:
-    # The full ASan inventory runs here, apart from the bounded fuzz campaign above, whose 45-minute bound is a
-    # pinned policy. Four tests at once take 20-28 minutes on a normal runner and about 46 on a 1.5x slower one
-    # (LESSONS GB-CI-004, GB-CI-010).
+    # The ASan inventory runs apart from the bounded fuzz campaign, split by the complementary '^acceptance_'
+    # filter so each shard stays inside the original 45-minute bound and the whole ci run stays inside the preview
+    # and release waiters' budgets. Each shard checks exactly its slice of tests/expected-tests.txt; together the
+    # slices are the whole inventory (LESSONS GB-CI-004, GB-CI-010).
     name: linux-asan-ubsan-tests
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 45
     env:
       CC: clang-18
       CXX: clang++-18
@@ -296,10 +297,42 @@ jobs:
         run: cmake -LA -N build-asan | grep -q '^GABBABOY_ENABLE_SANITIZERS:BOOL=ON$'
       - name: Build
         run: cmake --build --preset phase1-asan
-      - name: Run and verify nonempty test inventory
+      - name: Run and verify nonempty test inventory shard
         run: |
-          ctest --preset phase1-asan --parallel 4 --output-on-failure --no-tests=error --output-junit ctest.xml
-          bash .github/scripts/verify-test-inventory.sh build-asan/ctest.xml tests/expected-tests.txt
+          ctest --preset phase1-asan --parallel 4 -E '^acceptance_' --output-on-failure --no-tests=error --output-junit ctest.xml
+          grep -vE '^acceptance_' tests/expected-tests.txt > build-asan/expected-shard.txt
+          bash .github/scripts/verify-test-inventory.sh build-asan/ctest.xml build-asan/expected-shard.txt
+
+  linux-sanitizers-acceptance:
+    # The '^acceptance_' shard of the ASan inventory (see linux-sanitizers-tests).
+    name: linux-asan-ubsan-acceptance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CC: clang-18
+      CXX: clang++-18
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # v02 performance self-tests read the v0.1.0 baseline commit and tag.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Confirm pinned Clang 18 toolchain
+        run: |
+          test "$(clang-18 -dumpversion | cut -d. -f1)" = 18
+          test "$(clang++-18 -dumpversion | cut -d. -f1)" = 18
+      - name: Configure ASan and UBSan
+        run: cmake --preset phase1-asan -DGBB_TEST_INSTALL_PREFIX=
+      - name: Confirm sanitizer cache option
+        run: cmake -LA -N build-asan | grep -q '^GABBABOY_ENABLE_SANITIZERS:BOOL=ON$'
+      - name: Build
+        run: cmake --build --preset phase1-asan
+      - name: Run and verify nonempty test inventory shard
+        run: |
+          ctest --preset phase1-asan --parallel 4 -R '^acceptance_' --output-on-failure --no-tests=error --output-junit ctest.xml
+          grep -E '^acceptance_' tests/expected-tests.txt > build-asan/expected-shard.txt
+          bash .github/scripts/verify-test-inventory.sh build-asan/ctest.xml build-asan/expected-shard.txt
 
   cmake-floor-3-25-3:
     name: cmake-floor-3.25.3
@@ -368,6 +401,7 @@ jobs:
       - native-windows
       - linux-sanitizers
       - linux-sanitizers-tests
+      - linux-sanitizers-acceptance
       - cmake-floor-3-25-3
       - player-gate
       - macos-player-package
@@ -385,12 +419,13 @@ jobs:
           NATIVE_WINDOWS: ${{ needs.native-windows.result }}
           LINUX_SANITIZERS: ${{ needs.linux-sanitizers.result }}
           LINUX_SANITIZER_TESTS: ${{ needs.linux-sanitizers-tests.result }}
+          LINUX_SANITIZER_ACCEPTANCE: ${{ needs.linux-sanitizers-acceptance.result }}
           CMAKE_FLOOR: ${{ needs.cmake-floor-3-25-3.result }}
           PLAYER_GATE: ${{ needs.player-gate.result }}
           PLAYER_REQUIRED: ${{ needs.player-gate.outputs.player_required }}
           PLAYER_RESULT: ${{ needs.macos-player-package.result }}
         run: |
-          for result in "$NATIVE_LINUX" "$NATIVE_MACOS" "$NATIVE_WINDOWS" "$LINUX_SANITIZERS" "$LINUX_SANITIZER_TESTS" "$CMAKE_FLOOR" "$PLAYER_GATE"; do
+          for result in "$NATIVE_LINUX" "$NATIVE_MACOS" "$NATIVE_WINDOWS" "$LINUX_SANITIZERS" "$LINUX_SANITIZER_TESTS" "$LINUX_SANITIZER_ACCEPTANCE" "$CMAKE_FLOOR" "$PLAYER_GATE"; do
             if [[ "$result" != success ]]; then
               echo "Required evidence job did not succeed: $result" >&2
               exit 1

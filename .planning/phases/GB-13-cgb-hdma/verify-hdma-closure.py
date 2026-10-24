@@ -129,7 +129,10 @@ def lane_contract(root: Path) -> None:
     require("--self-test" in claims and "--subject" in claims and "ALL_SURFACES" in claims,
             "claim checker must retain its complete-surface, subject and mutation controls")
 
-    require("ctest --preset phase1-asan --parallel 4" in ci,
+    # The ASan inventory runs as complementary shards (LESSONS GB-CI-010), so every inventory run must stay parallel.
+    asan_runs = [line for line in ci.splitlines()
+                 if "ctest --preset phase1-asan" in line and "--output-junit" in line]
+    require(asan_runs and all("ctest --preset phase1-asan --parallel 4 " in line for line in asan_runs),
             "Debug ASan CI parallel4 contract changed")
     asan_job = re.search(r"(?ms)^  linux-sanitizers:\n(?P<section>.*?)(?=^  [a-z0-9-]+:\n|\Z)", ci)
     require(asan_job is not None and
